@@ -106,14 +106,14 @@ func NewBlock(parentHash common.Hash, coinbase common.Address, root common.Hash,
 		GasUsed:    new(big.Int),
 		GasLimit:   new(big.Int),
 	}
-	header.setNonce(nonce)
+	header.SetNonce(nonce)
 
 	block := &Block{header: header, Reward: new(big.Int)}
 
 	return block
 }
 
-func (self *Header) setNonce(nonce uint64) {
+func (self *Header) SetNonce(nonce uint64) {
 	binary.BigEndian.PutUint64(self.Nonce[:], nonce)
 }
 
@@ -203,7 +203,7 @@ func (self *Block) Nonce() uint64 {
 	return binary.BigEndian.Uint64(self.header.Nonce[:])
 }
 func (self *Block) SetNonce(nonce uint64) {
-	self.header.setNonce(nonce)
+	self.header.SetNonce(nonce)
 }
 
 func (self *Block) Bloom() Bloom             { return self.header.Bloom }

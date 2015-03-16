@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -27,9 +28,9 @@ type section struct {
 	nodes  []*node
 
 	peer       *peer
-	parentHash []byte
+	parentHash common.Hash
 
-	blockHashes [][]byte
+	blockHashes []common.Hash
 
 	poolRootIndex int
 
@@ -115,7 +116,7 @@ func (self *section) addSectionToBlockChain(p *peer) {
 				break
 			}
 			self.poolRootIndex--
-			keys = append(keys, string(node.hash))
+			keys = append(keys, node.hash.Str())
 			blocks = append(blocks, block)
 		}
 
@@ -166,9 +167,9 @@ func (self *section) addSectionToBlockChain(p *peer) {
 
 		self.bp.status.lock.Lock()
 		if err == nil {
-			headKey := string(blocks[0].ParentHash())
+			headKey := blocks[0].ParentHash().Str()
 			height := self.bp.status.chain[headKey] + len(blocks)
-			self.bp.status.chain[string(blocks[len(blocks)-1].Hash())] = height
+			self.bp.status.chain[blocks[len(blocks)-1].Hash().Str()] = height
 			if height > self.bp.status.values.LongestChain {
 				self.bp.status.values.LongestChain = height
 			}
@@ -316,7 +317,7 @@ LOOP:
 						self.addSectionToBlockChain(self.peer)
 					}
 				} else {
-					if self.parentHash == nil && n == self.bottom {
+					if (self.parentHash == common.Hash{}) && n == self.bottom {
 						self.parentHash = block.ParentHash()
 						plog.DebugDetailf("[%s] got parent head block hash %s...checking", sectionhex(self), hex(self.parentHash))
 						self.blockHashesRequest()
@@ -456,7 +457,7 @@ func (self *section) blockHashesRequest() {
 			// a demoted peer's fork will be chosen over the best peer's chain
 			// because relinking the correct chain (activateChain) is overwritten here in
 			// demoted peer's section process just before the section is put to idle mode
-			if self.parentHash != nil {
+			if (self.parentHash != common.Hash{}) {
 				if parent := self.bp.get(self.parentHash); parent != nil {
 					parentSection = parent.section
 					plog.DebugDetailf("[%s] blockHashesRequest: parent section [%s] linked\n", sectionhex(self), sectionhex(parentSection))

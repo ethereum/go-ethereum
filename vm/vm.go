@@ -560,10 +560,10 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			self.Printf(" => [%d]", n)
 		case LOG0, LOG1, LOG2, LOG3, LOG4:
 			n := int(op - LOG0)
-			topics := make([][]byte, n)
+			topics := make([]common.Hash, n)
 			mStart, mSize := stack.pop(), stack.pop()
 			for i := 0; i < n; i++ {
-				topics[i] = common.LeftPadBytes(stack.pop().Bytes(), 32)
+				topics[i] = common.BigToHash(stack.pop()) //common.LeftPadBytes(stack.pop().Bytes(), 32)
 			}
 
 			data := mem.Get(mStart.Int64(), mSize.Int64())

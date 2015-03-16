@@ -24,6 +24,7 @@ func BytesToHash(b []byte) Hash {
 }
 func StringToHash(s string) Hash { return BytesToHash([]byte(s)) }
 func BigToHash(b *big.Int) Hash  { return BytesToHash(b.Bytes()) }
+func HexToHash(s string) Hash    { return BytesToHash(FromHex(s)) }
 
 // Don't use the default 'String' method in case we want to overwrite
 
@@ -62,11 +63,13 @@ func BytesToAddress(b []byte) Address {
 }
 func StringToAddress(s string) Address { return BytesToAddress([]byte(s)) }
 func BigToAddress(b *big.Int) Address  { return BytesToAddress(b.Bytes()) }
+func HexToAddress(s string) Address    { return BytesToAddress(FromHex(s)) }
 
 // Get the string representation of the underlying address
 func (a Address) Str() string   { return string(a[:]) }
 func (a Address) Bytes() []byte { return a[:] }
 func (a Address) Big() *big.Int { return Bytes2Big(a[:]) }
+func (a Address) Hash() Hash    { return BytesToHash(a[:]) }
 
 // Sets the address to the value of b. If b is larger than len(a) it will panic
 func (a *Address) SetBytes(b []byte) {

@@ -1,12 +1,12 @@
 package blockpool
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/errs"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
@@ -101,7 +101,7 @@ func (self *Config) init() {
 // node is the basic unit of the internal model of block chain/tree in the blockpool
 type node struct {
 	lock    sync.RWMutex
-	hash    []byte
+	hash    common.Hash
 	block   *types.Block
 	hashBy  string
 	blockBy string
@@ -123,7 +123,7 @@ type BlockPool struct {
 	Config *Config
 
 	// the minimal interface with blockchain
-	hasBlock    func(hash []byte) bool
+	hasBlock    func(hash common.Hash) bool
 	insertChain func(types.Blocks) error
 	verifyPoW   func(pow.Block) bool
 
@@ -133,7 +133,7 @@ type BlockPool struct {
 	lock      sync.RWMutex
 	chainLock sync.RWMutex
 	// alloc-easy pool of hash slices
-	hashSlicePool chan [][]byte
+	hashSlicePool chan []common.Hash
 
 	status *status
 
@@ -144,7 +144,7 @@ type BlockPool struct {
 
 // public constructor
 func New(
-	hasBlock func(hash []byte) bool,
+	hasBlock func(hash common.Hash) bool,
 	insertChain func(types.Blocks) error,
 	verifyPoW func(pow.Block) bool,
 ) *BlockPool {
@@ -176,7 +176,7 @@ func (self *BlockPool) Start() {
 	}
 
 	self.Config.init()
-	self.hashSlicePool = make(chan [][]byte, 150)
+	self.hashSlicePool = make(chan []common.Hash, 150)
 	self.status = newStatus()
 	self.quit = make(chan bool)
 	self.pool = make(map[string]*entry)
@@ -261,14 +261,13 @@ Peer info is currently not persisted across disconnects (or sessions)
 */
 func (self *BlockPool) AddPeer(
 
-	td *big.Int, currentBlockHash []byte,
+	td *big.Int, currentBlockHash common.Hash,
 	peerId string,
-	requestBlockHashes func([]byte) error,
-	requestBlocks func([][]byte) error,
+	requestBlockHashes func(common.Hash) error,
+	requestBlocks func([]common.Hash) error,
 	peerError func(*errs.Error),
 
 ) (best bool) {
-
 	return self.peers.addPeer(td, currentBlockHash, peerId, requestBlockHashes, requestBlocks, peerError)
 }
 
@@ -289,7 +288,7 @@ launches all block request processes on each chain section
 
 the first argument is an iterator function. Using this block hashes are decoded from the rlp message payload on demand. As a result, AddBlockHashes needs to run synchronously for one peer since the message is discarded if the caller thread returns.
 */
-func (self *BlockPool) AddBlockHashes(next func() ([]byte, bool), peerId string) {
+func (self *BlockPool) AddBlockHashes(next func() (common.Hash, bool), peerId string) {
 
 	bestpeer, best := self.peers.getPeer(peerId)
 	if !best {
@@ -306,7 +305,7 @@ func (self *BlockPool) AddBlockHashes(next func() ([]byte, bool), peerId string)
 	self.status.lock.Unlock()
 
 	var n int
-	var hash []byte
+	var hash common.Hash
 	var ok, headSection, peerswitch bool
 	var sec, child, parent *section
 	var entry *entry
@@ -318,7 +317,7 @@ func (self *BlockPool) AddBlockHashes(next func() ([]byte, bool), peerId string)
 	plog.Debugf("AddBlockHashes: peer <%s> starting from [%s] (peer head: %s)", peerId, hex(bestpeer.parentHash), hex(bestpeer.currentBlockHash))
 
 	// first check if we are building the head section of a peer's chain
-	if bytes.Equal(bestpeer.parentHash, hash) {
+	if bestpeer.parentHash == hash {
 		if self.hasBlock(bestpeer.currentBlockHash) {
 			return
 		}
@@ -561,7 +560,7 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 	entry := self.get(hash)
 
 	// a peer's current head block is appearing the first time
-	if bytes.Equal(hash, sender.currentBlockHash) {
+	if hash == sender.currentBlockHash {
 		if sender.currentBlock == nil {
 			plog.Debugf("AddBlock: add head block %s for peer <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
 			sender.setChainInfoFromBlock(block)
@@ -664,7 +663,7 @@ LOOP:
 		plog.DebugDetailf("activateChain: section [%s] activated by peer <%s>", sectionhex(sec), p.id)
 		sec.activate(p)
 		if i > 0 && connected != nil {
-			connected[string(sec.top.hash)] = sec
+			connected[sec.top.hash.Str()] = sec
 		}
 		/*
 		  we need to relink both complete and incomplete sections
@@ -696,7 +695,7 @@ LOOP:
 
 // must run in separate go routine, otherwise
 // switchpeer -> activateChain -> activate deadlocks on section process select and peers.lock
-func (self *BlockPool) requestBlocks(attempts int, hashes [][]byte) {
+func (self *BlockPool) requestBlocks(attempts int, hashes []common.Hash) {
 	self.wg.Add(1)
 	go func() {
 		self.peers.requestBlocks(attempts, hashes)
@@ -718,16 +717,16 @@ func (self *BlockPool) getChild(sec *section) *section {
 }
 
 // accessor and setter for entries in the pool
-func (self *BlockPool) get(hash []byte) *entry {
+func (self *BlockPool) get(hash common.Hash) *entry {
 	self.lock.RLock()
 	defer self.lock.RUnlock()
-	return self.pool[string(hash)]
+	return self.pool[hash.Str()]
 }
 
-func (self *BlockPool) set(hash []byte, e *entry) {
+func (self *BlockPool) set(hash common.Hash, e *entry) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	self.pool[string(hash)] = e
+	self.pool[hash.Str()] = e
 }
 
 func (self *BlockPool) remove(sec *section) {
@@ -736,7 +735,7 @@ func (self *BlockPool) remove(sec *section) {
 	defer self.lock.Unlock()
 
 	for _, node := range sec.nodes {
-		delete(self.pool, string(node.hash))
+		delete(self.pool, node.hash.Str())
 	}
 	if sec.initialised && sec.poolRootIndex != 0 {
 		self.status.lock.Lock()
@@ -745,17 +744,17 @@ func (self *BlockPool) remove(sec *section) {
 	}
 }
 
-func (self *BlockPool) getHashSlice() (s [][]byte) {
+func (self *BlockPool) getHashSlice() (s []common.Hash) {
 	select {
 	case s = <-self.hashSlicePool:
 	default:
-		s = make([][]byte, self.Config.BlockBatchSize)
+		s = make([]common.Hash, self.Config.BlockBatchSize)
 	}
 	return
 }
 
 // Return returns a Client to the pool.
-func (self *BlockPool) putHashSlice(s [][]byte) {
+func (self *BlockPool) putHashSlice(s []common.Hash) {
 	if len(s) == self.Config.BlockBatchSize {
 		select {
 		case self.hashSlicePool <- s:
@@ -765,8 +764,8 @@ func (self *BlockPool) putHashSlice(s [][]byte) {
 }
 
 // pretty prints hash (byte array) with first 4 bytes in hex
-func hex(hash []byte) (name string) {
-	if hash == nil {
+func hex(hash common.Hash) (name string) {
+	if (hash == common.Hash{}) {
 		name = ""
 	} else {
 		name = fmt.Sprintf("%x", hash[:4])

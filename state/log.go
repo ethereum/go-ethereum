@@ -2,15 +2,15 @@ package state
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type Log interface {
-	common.RlpEncodable
-
 	Address() common.Address
-	Topics() [][]byte
+	Topics() []common.Hash
 	Data() []byte
 
 	Number() uint64
@@ -18,12 +18,12 @@ type Log interface {
 
 type StateLog struct {
 	address common.Address
-	topics  [][]byte
+	topics  []common.Hash
 	data    []byte
 	number  uint64
 }
 
-func NewLog(address common.Address, topics [][]byte, data []byte, number uint64) *StateLog {
+func NewLog(address common.Address, topics []common.Hash, data []byte, number uint64) *StateLog {
 	return &StateLog{address, topics, data, number}
 }
 
@@ -31,7 +31,7 @@ func (self *StateLog) Address() common.Address {
 	return self.address
 }
 
-func (self *StateLog) Topics() [][]byte {
+func (self *StateLog) Topics() []common.Hash {
 	return self.topics
 }
 
@@ -63,9 +63,15 @@ func NewLogFromValue(decoder *common.Value) *StateLog {
 }
 */
 
+func (self *StateLog) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, []interface{}{self.address, self.topics, self.data})
+}
+
+/*
 func (self *StateLog) RlpData() interface{} {
 	return []interface{}{self.address, common.ByteSliceToInterface(self.topics), self.data}
 }
+*/
 
 func (self *StateLog) String() string {
 	return fmt.Sprintf(`log: %x %x %x`, self.address, self.topics, self.data)
@@ -73,6 +79,7 @@ func (self *StateLog) String() string {
 
 type Logs []Log
 
+/*
 func (self Logs) RlpData() interface{} {
 	data := make([]interface{}, len(self))
 	for i, log := range self {
@@ -81,6 +88,7 @@ func (self Logs) RlpData() interface{} {
 
 	return data
 }
+*/
 
 func (self Logs) String() (ret string) {
 	for _, log := range self {

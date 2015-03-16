@@ -12,8 +12,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/state"
 )
@@ -101,12 +102,12 @@ func (t *BlockTest) InsertPreState(db common.Database) error {
 	statedb := state.New(nil, db)
 	for addrString, acct := range t.preAccounts {
 		// XXX: is is worth it checking for errors here?
-		addr, _ := hex.DecodeString(addrString)
+		//addr, _ := hex.DecodeString(addrString)
 		code, _ := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
 		balance, _ := new(big.Int).SetString(acct.Balance, 0)
 		nonce, _ := strconv.ParseUint(acct.Nonce, 16, 64)
 
-		obj := statedb.NewStateObject(addr)
+		obj := statedb.NewStateObject(common.HexToAddress(addrString))
 		obj.SetCode(code)
 		obj.SetBalance(balance)
 		obj.SetNonce(nonce)
@@ -119,7 +120,7 @@ func (t *BlockTest) InsertPreState(db common.Database) error {
 	// sync trie to disk
 	statedb.Sync()
 
-	if !bytes.Equal(t.Genesis.Root(), statedb.Root()) {
+	if !bytes.Equal(t.Genesis.Root().Bytes(), statedb.Root()) {
 		return errors.New("computed state root does not match genesis block")
 	}
 	return nil
@@ -153,23 +154,25 @@ func mustConvertGenesis(testGenesis btHeader) *types.Block {
 
 func mustConvertHeader(in btHeader) *types.Header {
 	// hex decode these fields
-	return &types.Header{
+	header := &types.Header{
 		//SeedHash:    mustConvertBytes(in.SeedHash),
-		MixDigest:   mustConvertBytes(in.MixHash),
-		Bloom:       mustConvertBytes(in.Bloom),
-		ReceiptHash: mustConvertBytes(in.ReceiptTrie),
-		TxHash:      mustConvertBytes(in.TransactionsTrie),
-		Root:        mustConvertBytes(in.StateRoot),
-		Coinbase:    mustConvertBytes(in.Coinbase),
-		UncleHash:   mustConvertBytes(in.UncleHash),
-		ParentHash:  mustConvertBytes(in.ParentHash),
-		Nonce:       mustConvertBytes(in.Nonce),
+		MixDigest:   mustConvertHash(in.MixHash),
+		Bloom:       mustConvertBloom(in.Bloom),
+		ReceiptHash: mustConvertHash(in.ReceiptTrie),
+		TxHash:      mustConvertHash(in.TransactionsTrie),
+		Root:        mustConvertHash(in.StateRoot),
+		Coinbase:    mustConvertAddress(in.Coinbase),
+		UncleHash:   mustConvertHash(in.UncleHash),
+		ParentHash:  mustConvertHash(in.ParentHash),
 		Extra:       string(mustConvertBytes(in.ExtraData)),
 		GasUsed:     mustConvertBigInt10(in.GasUsed),
 		GasLimit:    mustConvertBigInt10(in.GasLimit),
 		Difficulty:  mustConvertBigInt10(in.Difficulty),
 		Time:        mustConvertUint(in.Timestamp),
 	}
+	// XXX cheats? :-)
+	header.SetNonce(common.BytesToHash(mustConvertBytes(in.Nonce)).Big().Uint64())
+	return header
 }
 
 func mustConvertBlocks(testBlocks []btBlock) []*types.Block {
@@ -191,6 +194,30 @@ func mustConvertBytes(in string) []byte {
 		panic(fmt.Errorf("invalid hex: %q", in))
 	}
 	return out
+}
+
+func mustConvertHash(in string) common.Hash {
+	out, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
+	if err != nil {
+		panic(fmt.Errorf("invalid hex: %q", in))
+	}
+	return common.BytesToHash(out)
+}
+
+func mustConvertAddress(in string) common.Address {
+	out, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
+	if err != nil {
+		panic(fmt.Errorf("invalid hex: %q", in))
+	}
+	return common.BytesToAddress(out)
+}
+
+func mustConvertBloom(in string) core.Bloom {
+	out, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
+	if err != nil {
+		panic(fmt.Errorf("invalid hex: %q", in))
+	}
+	return core.BytesToBloom(out)
 }
 
 func mustConvertBigInt10(in string) *big.Int {

@@ -20,15 +20,15 @@ func CreateBloom(receipts Receipts) Bloom {
 func LogsBloom(logs state.Logs) *big.Int {
 	bin := new(big.Int)
 	for _, log := range logs {
-		data := make([][]byte, len(log.Topics())+1)
-		data[0] = log.Address()
+		data := make([]common.Hash, len(log.Topics())+1)
+		data[0] = log.Address().Hash()
 
 		for i, topic := range log.Topics() {
 			data[i+1] = topic
 		}
 
 		for _, b := range data {
-			bin.Or(bin, common.BigD(bloom9(crypto.Sha3(b)).Bytes()))
+			bin.Or(bin, common.BigD(bloom9(crypto.Sha3(b[:])).Bytes()))
 		}
 	}
 

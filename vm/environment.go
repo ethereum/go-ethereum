@@ -3,9 +3,11 @@ package vm
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -54,7 +56,7 @@ func Transfer(from, to Account, amount *big.Int) error {
 
 type Log struct {
 	address common.Address
-	topics  [][]byte
+	topics  []common.Hash
 	data    []byte
 	log     uint64
 }
@@ -63,7 +65,7 @@ func (self *Log) Address() common.Address {
 	return self.address
 }
 
-func (self *Log) Topics() [][]byte {
+func (self *Log) Topics() []common.Hash {
 	return self.topics
 }
 
@@ -75,9 +77,15 @@ func (self *Log) Number() uint64 {
 	return self.log
 }
 
+func (self *Log) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, []interface{}{self.address, self.topics, self.data})
+}
+
+/*
 func (self *Log) RlpData() interface{} {
 	return []interface{}{self.address, common.ByteSliceToInterface(self.topics), self.data}
 }
+*/
 
 func (self *Log) String() string {
 	return fmt.Sprintf("[A=%x T=%x D=%x]", self.address, self.topics, self.data)

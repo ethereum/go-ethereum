@@ -1,16 +1,15 @@
 package blockpool
 
 import (
-	"bytes"
 	"math/big"
 	"math/rand"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/errs"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 type peer struct {
@@ -18,20 +17,20 @@ type peer struct {
 
 	// last known blockchain status
 	td               *big.Int
-	currentBlockHash []byte
+	currentBlockHash common.Hash
 	currentBlock     *types.Block
-	parentHash       []byte
+	parentHash       common.Hash
 	headSection      *section
 
 	id string
 
 	// peer callbacks
-	requestBlockHashes func([]byte) error
-	requestBlocks      func([][]byte) error
+	requestBlockHashes func(common.Hash) error
+	requestBlocks      func([]common.Hash) error
 	peerError          func(*errs.Error)
 	errors             *errs.Errors
 
-	sections [][]byte
+	sections []common.Hash
 
 	// channels to push new head block and head section for peer a
 	currentBlockC chan *types.Block
@@ -66,10 +65,10 @@ type peers struct {
 // peer constructor
 func (self *peers) newPeer(
 	td *big.Int,
-	currentBlockHash []byte,
+	currentBlockHash common.Hash,
 	id string,
-	requestBlockHashes func([]byte) error,
-	requestBlocks func([][]byte) error,
+	requestBlockHashes func(common.Hash) error,
+	requestBlocks func([]common.Hash) error,
 	peerError func(*errs.Error),
 ) (p *peer) {
 
@@ -107,7 +106,7 @@ func (self *peer) addError(code int, format string, params ...interface{}) {
 	self.peerError(err)
 }
 
-func (self *peer) setChainInfo(td *big.Int, c []byte) {
+func (self *peer) setChainInfo(td *big.Int, c common.Hash) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
@@ -115,7 +114,7 @@ func (self *peer) setChainInfo(td *big.Int, c []byte) {
 	self.currentBlockHash = c
 
 	self.currentBlock = nil
-	self.parentHash = nil
+	self.parentHash = common.Hash{}
 	self.headSection = nil
 }
 
@@ -139,7 +138,7 @@ func (self *peer) setChainInfoFromBlock(block *types.Block) {
 	}()
 }
 
-func (self *peers) requestBlocks(attempts int, hashes [][]byte) {
+func (self *peers) requestBlocks(attempts int, hashes []common.Hash) {
 	// distribute block request among known peers
 	self.lock.RLock()
 	defer self.lock.RUnlock()
@@ -178,18 +177,18 @@ func (self *peers) requestBlocks(attempts int, hashes [][]byte) {
 // returns true iff peer is promoted as best peer in the pool
 func (self *peers) addPeer(
 	td *big.Int,
-	currentBlockHash []byte,
+	currentBlockHash common.Hash,
 	id string,
-	requestBlockHashes func([]byte) error,
-	requestBlocks func([][]byte) error,
+	requestBlockHashes func(common.Hash) error,
+	requestBlocks func([]common.Hash) error,
 	peerError func(*errs.Error),
 ) (best bool) {
 
-	var previousBlockHash []byte
+	var previousBlockHash common.Hash
 	self.lock.Lock()
 	p, found := self.peers[id]
 	if found {
-		if !bytes.Equal(p.currentBlockHash, currentBlockHash) {
+		if p.currentBlockHash != currentBlockHash {
 			previousBlockHash = p.currentBlockHash
 			plog.Debugf("addPeer: Update peer <%s> with td %v and current block %s (was %v)", id, td, hex(currentBlockHash), hex(previousBlockHash))
 			p.setChainInfo(td, currentBlockHash)
@@ -221,7 +220,7 @@ func (self *peers) addPeer(
 		// new block update for active current best peer -> request hashes
 		plog.Debugf("addPeer: <%s> already the best peer. Request new head section info from %s", id, hex(currentBlockHash))
 
-		if previousBlockHash != nil {
+		if (previousBlockHash != common.Hash{}) {
 			if entry := self.bp.get(previousBlockHash); entry != nil {
 				p.headSectionC <- nil
 				self.bp.activateChain(entry.section, p, nil)
@@ -318,15 +317,15 @@ func (self *BlockPool) switchPeer(oldp, newp *peer) {
 		}
 
 		var connected = make(map[string]*section)
-		var sections [][]byte
+		var sections []common.Hash
 		for _, hash := range newp.sections {
 			plog.DebugDetailf("activate chain starting from section [%s]", hex(hash))
 			// if section not connected (ie, top of a contiguous sequence of sections)
-			if connected[string(hash)] == nil {
+			if connected[hash.Str()] == nil {
 				// if not deleted, then reread from pool (it can be orphaned top half of a split section)
 				if entry := self.get(hash); entry != nil {
 					self.activateChain(entry.section, newp, connected)
-					connected[string(hash)] = entry.section
+					connected[hash.Str()] = entry.section
 					sections = append(sections, hash)
 				}
 			}
@@ -396,7 +395,7 @@ func (self *peer) getCurrentBlock(currentBlock *types.Block) {
 			plog.DebugDetailf("HeadSection: <%s> head block %s found in blockpool", self.id, hex(self.currentBlockHash))
 		} else {
 			plog.DebugDetailf("HeadSection: <%s> head block %s not found... requesting it", self.id, hex(self.currentBlockHash))
-			self.requestBlocks([][]byte{self.currentBlockHash})
+			self.requestBlocks([]common.Hash{self.currentBlockHash})
 			self.blocksRequestTimer = time.After(self.bp.Config.BlocksRequestInterval)
 			return
 		}
@@ -427,9 +426,9 @@ func (self *peer) getBlockHashes() {
 			self.addError(ErrInvalidBlock, "%v", err)
 			self.bp.status.badPeers[self.id]++
 		} else {
-			headKey := string(self.parentHash)
+			headKey := self.parentHash.Str()
 			height := self.bp.status.chain[headKey] + 1
-			self.bp.status.chain[string(self.currentBlockHash)] = height
+			self.bp.status.chain[self.currentBlockHash.Str()] = height
 			if height > self.bp.status.values.LongestChain {
 				self.bp.status.values.LongestChain = height
 			}
