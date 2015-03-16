@@ -33,10 +33,7 @@ func New(env Environment) *Vm {
 }
 
 func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
-	//func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
-
-	//context := NewContext(caller, me, code, gas, price)
 	var (
 		caller = context.caller
 		code   = context.Code
@@ -57,7 +54,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				ret = context.Return(nil)
 
 				err = fmt.Errorf("%v", r)
-
 			}
 		}()
 	}
