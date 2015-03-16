@@ -331,42 +331,6 @@ func (args *Sha3Args) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
-// type FilterArgs struct {
-// 	FromBlock uint64
-// 	ToBlock   uint64
-// 	Limit     uint64
-// 	Offset    uint64
-// 	Address   string
-// 	Topics    []string
-// }
-
-// func (args *FilterArgs) UnmarshalJSON(b []byte) (err error) {
-// 	var obj []struct {
-// 		FromBlock string   `json:"fromBlock"`
-// 		ToBlock   string   `json:"toBlock"`
-// 		Limit     string   `json:"limit"`
-// 		Offset    string   `json:"offset"`
-// 		Address   string   `json:"address"`
-// 		Topics    []string `json:"topics"`
-// 	}
-
-// 	if err = json.Unmarshal(b, &obj); err != nil {
-// 		return errDecodeArgs
-// 	}
-
-// 	if len(obj) < 1 {
-// 		return errArguments
-// 	}
-// 	args.FromBlock = uint64(common.Big(obj[0].FromBlock).Int64())
-// 	args.ToBlock = uint64(common.Big(obj[0].ToBlock).Int64())
-// 	args.Limit = uint64(common.Big(obj[0].Limit).Int64())
-// 	args.Offset = uint64(common.Big(obj[0].Offset).Int64())
-// 	args.Address = obj[0].Address
-// 	args.Topics = obj[0].Topics
-
-// 	return nil
-// }
-
 type FilterOptions struct {
 	Earliest int64
 	Latest   int64
@@ -378,8 +342,8 @@ type FilterOptions struct {
 
 func (args *FilterOptions) UnmarshalJSON(b []byte) (err error) {
 	var obj []struct {
-		FromBlock string        `json:"fromBlock"`
-		ToBlock   string        `json:"toBlock"`
+		FromBlock interface{}   `json:"fromBlock"`
+		ToBlock   interface{}   `json:"toBlock"`
 		Limit     string        `json:"limit"`
 		Offset    string        `json:"offset"`
 		Address   string        `json:"address"`
@@ -394,8 +358,26 @@ func (args *FilterOptions) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	args.Earliest = int64(common.Big(obj[0].FromBlock).Int64())
-	args.Latest = int64(common.Big(obj[0].ToBlock).Int64())
+	fromstr, ok := obj[0].FromBlock.(string)
+	if ok {
+		if fromstr == "latest" {
+			args.Earliest = 0
+		} else {
+			args.Earliest = int64(common.Big(obj[0].FromBlock.(string)).Int64())
+		}
+	}
+
+	tostr, ok := obj[0].ToBlock.(string)
+	if ok {
+		if tostr == "latest" {
+			args.Latest = 0
+		} else if tostr == "pending" {
+			args.Latest = -1
+		} else {
+			args.Latest = int64(common.Big(obj[0].ToBlock.(string)).Int64())
+		}
+	}
+
 	args.Max = int(common.Big(obj[0].Limit).Int64())
 	args.Skip = int(common.Big(obj[0].Offset).Int64())
 	args.Address = obj[0].Address

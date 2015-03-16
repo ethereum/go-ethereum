@@ -286,6 +286,29 @@ func TestFilterOptions(t *testing.T) {
 	// }
 }
 
+func TestFilterOptionsWords(t *testing.T) {
+	input := `[{
+  "fromBlock": "latest",
+  "toBlock": "pending"
+  }]`
+	expected := new(FilterOptions)
+	expected.Earliest = 0
+	expected.Latest = -1
+
+	args := new(FilterOptions)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Earliest != args.Earliest {
+		t.Errorf("Earliest shoud be %#v but is %#v", expected.Earliest, args.Earliest)
+	}
+
+	if expected.Latest != args.Latest {
+		t.Errorf("Latest shoud be %#v but is %#v", expected.Latest, args.Latest)
+	}
+}
+
 func TestDbArgs(t *testing.T) {
 	input := `["0x74657374","0x6b6579","0x6d79537472696e67"]`
 	expected := new(DbArgs)
