@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -76,7 +76,7 @@ func (self *Log) Number() uint64 {
 }
 
 func (self *Log) RlpData() interface{} {
-	return []interface{}{self.address, ethutil.ByteSliceToInterface(self.topics), self.data}
+	return []interface{}{self.address, common.ByteSliceToInterface(self.topics), self.data}
 }
 
 func (self *Log) String() string {

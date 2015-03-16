@@ -14,7 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
@@ -65,7 +65,7 @@ type Config struct {
 
 	// NewDB is used to create databases.
 	// If nil, the default is to create leveldb databases on disk.
-	NewDB func(path string) (ethutil.Database, error)
+	NewDB func(path string) (common.Database, error)
 }
 
 func (cfg *Config) parseBootNodes() []*discover.Node {
@@ -113,9 +113,9 @@ type Ethereum struct {
 	shutdownChan chan bool
 
 	// DB interfaces
-	blockDb ethutil.Database // Block chain database
-	stateDb ethutil.Database // State changes database
-	extraDb ethutil.Database // Extra database (txs, etc)
+	blockDb common.Database // Block chain database
+	stateDb common.Database // State changes database
+	extraDb common.Database // Extra database (txs, etc)
 
 	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
@@ -146,7 +146,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	newdb := config.NewDB
 	if newdb == nil {
-		newdb = func(path string) (ethutil.Database, error) { return ethdb.NewLDBDatabase(path) }
+		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path) }
 	}
 	blockDb, err := newdb(path.Join(config.DataDir, "blockchain"))
 	if err != nil {
@@ -160,7 +160,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	// Perform database sanity checks
 	d, _ := blockDb.Get([]byte("ProtocolVersion"))
-	protov := ethutil.NewValue(d).Uint()
+	protov := common.NewValue(d).Uint()
 	if protov != ProtocolVersion && protov != 0 {
 		path := path.Join(config.DataDir, "blockchain")
 		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, path)
@@ -246,9 +246,9 @@ func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
 func (s *Ethereum) BlockPool() *blockpool.BlockPool      { return s.blockPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
-func (s *Ethereum) BlockDb() ethutil.Database            { return s.blockDb }
-func (s *Ethereum) StateDb() ethutil.Database            { return s.stateDb }
-func (s *Ethereum) ExtraDb() ethutil.Database            { return s.extraDb }
+func (s *Ethereum) BlockDb() common.Database            { return s.blockDb }
+func (s *Ethereum) StateDb() common.Database            { return s.stateDb }
+func (s *Ethereum) ExtraDb() common.Database            { return s.extraDb }
 func (s *Ethereum) IsListening() bool                    { return true } // Always listening
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
@@ -351,11 +351,11 @@ func (self *Ethereum) blockBroadcastLoop() {
 	}
 }
 
-func saveProtocolVersion(db ethutil.Database) {
+func saveProtocolVersion(db common.Database) {
 	d, _ := db.Get([]byte("ProtocolVersion"))
-	protocolVersion := ethutil.NewValue(d).Uint()
+	protocolVersion := common.NewValue(d).Uint()
 
 	if protocolVersion == 0 {
-		db.Put([]byte("ProtocolVersion"), ethutil.NewValue(ProtocolVersion).Bytes())
+		db.Put([]byte("ProtocolVersion"), common.NewValue(ProtocolVersion).Bytes())
 	}
 }

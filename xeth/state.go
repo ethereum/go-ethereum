@@ -1,7 +1,7 @@
 package xeth
 
 import (
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -19,7 +19,7 @@ func (self *State) State() *state.StateDB {
 }
 
 func (self *State) Get(addr string) *Object {
-	return &Object{self.state.GetStateObject(ethutil.FromHex(addr))}
+	return &Object{self.state.GetStateObject(common.FromHex(addr))}
 }
 
 func (self *State) SafeGet(addr string) *Object {
@@ -27,9 +27,9 @@ func (self *State) SafeGet(addr string) *Object {
 }
 
 func (self *State) safeGet(addr string) *state.StateObject {
-	object := self.state.GetStateObject(ethutil.FromHex(addr))
+	object := self.state.GetStateObject(common.FromHex(addr))
 	if object == nil {
-		object = state.NewStateObject(ethutil.FromHex(addr), self.xeth.eth.StateDb())
+		object = state.NewStateObject(common.FromHex(addr), self.xeth.eth.StateDb())
 	}
 
 	return object

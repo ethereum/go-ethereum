@@ -6,7 +6,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -17,7 +17,7 @@ func (self Code) String() string {
 	return string(self) //strings.Join(Disassemble(self), " ")
 }
 
-type Storage map[string]*ethutil.Value
+type Storage map[string]*common.Value
 
 func (self Storage) String() (str string) {
 	for key, value := range self {
@@ -39,7 +39,7 @@ func (self Storage) Copy() Storage {
 
 type StateObject struct {
 	// State database for storing state changes
-	db ethutil.Database
+	db common.Database
 	// The state object
 	State *StateDB
 
@@ -77,12 +77,12 @@ func (self *StateObject) Reset() {
 	self.State.Reset()
 }
 
-func NewStateObject(addr []byte, db ethutil.Database) *StateObject {
+func NewStateObject(addr []byte, db common.Database) *StateObject {
 	// This to ensure that it has 20 bytes (and not 0 bytes), thus left or right pad doesn't matter.
-	address := ethutil.Address(addr)
+	address := common.Address(addr)
 
 	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
-	object.State = New(nil, db) //New(trie.New(ethutil.Config.Db, ""))
+	object.State = New(nil, db) //New(trie.New(common.Config.Db, ""))
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
 	object.prepaid = new(big.Int)
@@ -90,7 +90,7 @@ func NewStateObject(addr []byte, db ethutil.Database) *StateObject {
 	return object
 }
 
-func NewStateObjectFromBytes(address, data []byte, db ethutil.Database) *StateObject {
+func NewStateObjectFromBytes(address, data []byte, db common.Database) *StateObject {
 	// TODO clean me up
 	var extobject struct {
 		Nonce    uint64
@@ -110,7 +110,7 @@ func NewStateObjectFromBytes(address, data []byte, db ethutil.Database) *StateOb
 	object.balance = extobject.Balance
 	object.codeHash = extobject.CodeHash
 	object.State = New(extobject.Root, db)
-	object.storage = make(map[string]*ethutil.Value)
+	object.storage = make(map[string]*common.Value)
 	object.gasPool = new(big.Int)
 	object.prepaid = new(big.Int)
 	object.code, _ = db.Get(extobject.CodeHash)
@@ -124,18 +124,18 @@ func (self *StateObject) MarkForDeletion() {
 	statelogger.Debugf("%x: #%d %v X\n", self.Address(), self.nonce, self.balance)
 }
 
-func (c *StateObject) getAddr(addr []byte) *ethutil.Value {
-	return ethutil.NewValueFromBytes([]byte(c.State.trie.Get(addr)))
+func (c *StateObject) getAddr(addr []byte) *common.Value {
+	return common.NewValueFromBytes([]byte(c.State.trie.Get(addr)))
 }
 
 func (c *StateObject) setAddr(addr []byte, value interface{}) {
-	c.State.trie.Update(addr, ethutil.Encode(value))
+	c.State.trie.Update(addr, common.Encode(value))
 }
 
-func (self *StateObject) GetStorage(key *big.Int) *ethutil.Value {
+func (self *StateObject) GetStorage(key *big.Int) *common.Value {
 	return self.GetState(key.Bytes())
 }
-func (self *StateObject) SetStorage(key *big.Int, value *ethutil.Value) {
+func (self *StateObject) SetStorage(key *big.Int, value *common.Value) {
 	self.SetState(key.Bytes(), value)
 }
 
@@ -143,8 +143,8 @@ func (self *StateObject) Storage() Storage {
 	return self.storage
 }
 
-func (self *StateObject) GetState(k []byte) *ethutil.Value {
-	key := ethutil.LeftPadBytes(k, 32)
+func (self *StateObject) GetState(k []byte) *common.Value {
+	key := common.LeftPadBytes(k, 32)
 
 	value := self.storage[string(key)]
 	if value == nil {
@@ -158,8 +158,8 @@ func (self *StateObject) GetState(k []byte) *ethutil.Value {
 	return value
 }
 
-func (self *StateObject) SetState(k []byte, value *ethutil.Value) {
-	key := ethutil.LeftPadBytes(k, 32)
+func (self *StateObject) SetState(k []byte, value *common.Value) {
+	key := common.LeftPadBytes(k, 32)
 	self.storage[string(key)] = value.Copy()
 	self.dirty = true
 }
@@ -176,12 +176,12 @@ func (self *StateObject) Sync() {
 	self.storage = make(Storage)
 }
 
-func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
+func (c *StateObject) GetInstr(pc *big.Int) *common.Value {
 	if int64(len(c.code)-1) < pc.Int64() {
-		return ethutil.NewValue(0)
+		return common.NewValue(0)
 	}
 
-	return ethutil.NewValueFromBytes([]byte{c.code[pc.Int64()]})
+	return common.NewValueFromBytes([]byte{c.code[pc.Int64()]})
 }
 
 func (c *StateObject) AddBalance(amount *big.Int) {
@@ -252,13 +252,13 @@ func (self *StateObject) RefundGas(gas, price *big.Int) {
 func (self *StateObject) Copy() *StateObject {
 	stateObject := NewStateObject(self.Address(), self.db)
 	stateObject.balance.Set(self.balance)
-	stateObject.codeHash = ethutil.CopyBytes(self.codeHash)
+	stateObject.codeHash = common.CopyBytes(self.codeHash)
 	stateObject.nonce = self.nonce
 	if self.State != nil {
 		stateObject.State = self.State.Copy()
 	}
-	stateObject.code = ethutil.CopyBytes(self.code)
-	stateObject.initCode = ethutil.CopyBytes(self.initCode)
+	stateObject.code = common.CopyBytes(self.code)
+	stateObject.initCode = common.CopyBytes(self.initCode)
 	stateObject.storage = self.storage.Copy()
 	stateObject.gasPool.Set(self.gasPool)
 	stateObject.remove = self.remove
@@ -330,19 +330,19 @@ func (self *StateObject) Nonce() uint64 {
 
 // State object encoding methods
 func (c *StateObject) RlpEncode() []byte {
-	return ethutil.Encode([]interface{}{c.nonce, c.balance, c.Root(), c.CodeHash()})
+	return common.Encode([]interface{}{c.nonce, c.balance, c.Root(), c.CodeHash()})
 }
 
-func (c *StateObject) CodeHash() ethutil.Bytes {
+func (c *StateObject) CodeHash() common.Bytes {
 	return crypto.Sha3(c.code)
 }
 
 func (c *StateObject) RlpDecode(data []byte) {
-	decoder := ethutil.NewValueFromBytes(data)
+	decoder := common.NewValueFromBytes(data)
 	c.nonce = decoder.Get(0).Uint()
 	c.balance = decoder.Get(1).BigInt()
-	c.State = New(decoder.Get(2).Bytes(), c.db) //New(trie.New(ethutil.Config.Db, decoder.Get(2).Interface()))
-	c.storage = make(map[string]*ethutil.Value)
+	c.State = New(decoder.Get(2).Bytes(), c.db) //New(trie.New(common.Config.Db, decoder.Get(2).Interface()))
+	c.storage = make(map[string]*common.Value)
 	c.gasPool = new(big.Int)
 
 	c.codeHash = decoder.Get(3).Bytes()

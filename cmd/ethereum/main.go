@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/peterh/liner"
@@ -200,7 +200,7 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 		}
 		am := eth.AccountManager()
 		// Attempt to unlock the account
-		err := am.Unlock(ethutil.FromHex(split[0]), split[1])
+		err := am.Unlock(common.FromHex(split[0]), split[1])
 		if err != nil {
 			utils.Fatalf("Unlock account failed '%v'", err)
 		}
@@ -284,7 +284,7 @@ func dump(ctx *cli.Context) {
 	for _, arg := range ctx.Args() {
 		var block *types.Block
 		if hashish(arg) {
-			block = chainmgr.GetBlock(ethutil.Hex2Bytes(arg))
+			block = chainmgr.GetBlock(common.Hex2Bytes(arg))
 		} else {
 			num, _ := strconv.Atoi(arg)
 			block = chainmgr.GetBlockByNumber(uint64(num))

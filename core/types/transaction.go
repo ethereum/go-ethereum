@@ -8,7 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -42,7 +42,7 @@ func NewTransactionFromBytes(data []byte) *Transaction {
 	return tx
 }
 
-func NewTransactionFromAmount(val *ethutil.Value) *Transaction {
+func NewTransactionFromAmount(val *common.Value) *Transaction {
 	tx := &Transaction{}
 	tx.RlpValueDecode(val)
 
@@ -52,7 +52,7 @@ func NewTransactionFromAmount(val *ethutil.Value) *Transaction {
 func (tx *Transaction) Hash() []byte {
 	data := []interface{}{tx.AccountNonce, tx.Price, tx.GasLimit, tx.Recipient, tx.Amount, tx.Payload}
 
-	return crypto.Sha3(ethutil.Encode(data))
+	return crypto.Sha3(common.Encode(data))
 }
 
 func (self *Transaction) Data() []byte {
@@ -89,8 +89,8 @@ func (self *Transaction) To() []byte {
 
 func (tx *Transaction) Curve() (v byte, r []byte, s []byte) {
 	v = byte(tx.V)
-	r = ethutil.LeftPadBytes(tx.R, 32)
-	s = ethutil.LeftPadBytes(tx.S, 32)
+	r = common.LeftPadBytes(tx.R, 32)
+	s = common.LeftPadBytes(tx.S, 32)
 
 	return
 }
@@ -159,14 +159,14 @@ func (tx *Transaction) RlpData() interface{} {
 }
 
 func (tx *Transaction) RlpEncode() []byte {
-	return ethutil.Encode(tx)
+	return common.Encode(tx)
 }
 
 func (tx *Transaction) RlpDecode(data []byte) {
 	rlp.Decode(bytes.NewReader(data), tx)
 }
 
-func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
+func (tx *Transaction) RlpValueDecode(decoder *common.Value) {
 	tx.AccountNonce = decoder.Get(0).Uint()
 	tx.Price = decoder.Get(1).BigInt()
 	tx.GasLimit = decoder.Get(2).BigInt()
@@ -206,7 +206,7 @@ func (tx *Transaction) String() string {
 		tx.V,
 		tx.R,
 		tx.S,
-		ethutil.Encode(tx),
+		common.Encode(tx),
 	)
 }
 
@@ -225,7 +225,7 @@ func (self Transactions) RlpData() interface{} {
 }
 func (s Transactions) Len() int            { return len(s) }
 func (s Transactions) Swap(i, j int)       { s[i], s[j] = s[j], s[i] }
-func (s Transactions) GetRlp(i int) []byte { return ethutil.Rlp(s[i]) }
+func (s Transactions) GetRlp(i int) []byte { return common.Rlp(s[i]) }
 
 type TxByNonce struct{ Transactions }
 

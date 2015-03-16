@@ -4,7 +4,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type ContextRef interface {
@@ -61,7 +61,7 @@ func (c *Context) GetRangeValue(x, size uint64) []byte {
 	x = uint64(math.Min(float64(x), float64(len(c.Code))))
 	y := uint64(math.Min(float64(x+size), float64(len(c.Code))))
 
-	return ethutil.RightPadBytes(c.Code[x:y], int(size))
+	return common.RightPadBytes(c.Code[x:y], int(size))
 }
 
 func (c *Context) GetCode(x, size uint64) []byte {

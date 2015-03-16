@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
@@ -63,13 +63,13 @@ func main() {
 	statedb := state.New(nil, db)
 	sender := statedb.NewStateObject([]byte("sender"))
 	receiver := statedb.NewStateObject([]byte("receiver"))
-	receiver.SetCode(ethutil.Hex2Bytes(*code))
+	receiver.SetCode(common.Hex2Bytes(*code))
 
-	vmenv := NewEnv(statedb, []byte("evmuser"), ethutil.Big(*value))
+	vmenv := NewEnv(statedb, []byte("evmuser"), common.Big(*value))
 
 	tstart := time.Now()
 
-	ret, e := vmenv.Call(sender, receiver.Address(), ethutil.Hex2Bytes(*data), ethutil.Big(*gas), ethutil.Big(*price), ethutil.Big(*value))
+	ret, e := vmenv.Call(sender, receiver.Address(), common.Hex2Bytes(*data), common.Big(*gas), common.Big(*price), common.Big(*value))
 
 	logger.Flush()
 	if e != nil {
@@ -117,11 +117,11 @@ func NewEnv(state *state.StateDB, transactor []byte, value *big.Int) *VMEnv {
 
 func (self *VMEnv) State() *state.StateDB { return self.state }
 func (self *VMEnv) Origin() []byte        { return self.transactor }
-func (self *VMEnv) BlockNumber() *big.Int { return ethutil.Big0 }
+func (self *VMEnv) BlockNumber() *big.Int { return common.Big0 }
 func (self *VMEnv) PrevHash() []byte      { return make([]byte, 32) }
 func (self *VMEnv) Coinbase() []byte      { return self.transactor }
 func (self *VMEnv) Time() int64           { return self.time }
-func (self *VMEnv) Difficulty() *big.Int  { return ethutil.Big1 }
+func (self *VMEnv) Difficulty() *big.Int  { return common.Big1 }
 func (self *VMEnv) BlockHash() []byte     { return make([]byte, 32) }
 func (self *VMEnv) Value() *big.Int       { return self.value }
 func (self *VMEnv) GasLimit() *big.Int    { return big.NewInt(1000000000) }

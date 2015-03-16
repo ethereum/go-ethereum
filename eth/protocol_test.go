@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/errs"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -223,7 +223,7 @@ func (self *ethProtocolTester) run() {
 func TestStatusMsgErrors(t *testing.T) {
 	logInit()
 	eth := newEth(t)
-	td := ethutil.Big1
+	td := common.Big1
 	currentBlock := []byte{1}
 	genesis := []byte{2}
 	eth.chainManager.status = func() (*big.Int, []byte, []byte) { return td, currentBlock, genesis }

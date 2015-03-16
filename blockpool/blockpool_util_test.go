@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/blockpool/test"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/errs"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
@@ -315,7 +315,7 @@ func (self *peerTester) sendBlocks(indexes ...int) {
 	hashes := self.hashPool.IndexesToHashes(indexes)
 	for i := 1; i < len(hashes); i++ {
 		fmt.Printf("adding block %v %x\n", indexes[i], hashes[i][:4])
-		self.blockPool.AddBlock(&types.Block{HeaderHash: ethutil.Bytes(hashes[i]), ParentHeaderHash: ethutil.Bytes(hashes[i-1])}, self.id)
+		self.blockPool.AddBlock(&types.Block{HeaderHash: common.Bytes(hashes[i]), ParentHeaderHash: common.Bytes(hashes[i-1])}, self.id)
 	}
 }
 

@@ -29,7 +29,7 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/ui/qt/webengine"
 	"github.com/obscuren/qml"
@@ -45,7 +45,7 @@ var (
 	assetPathFlag = cli.StringFlag{
 		Name:  "asset_path",
 		Usage: "absolute path to GUI assets directory",
-		Value: ethutil.DefaultAssetPath(),
+		Value: common.DefaultAssetPath(),
 	}
 )
 

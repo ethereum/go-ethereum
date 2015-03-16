@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -30,9 +30,9 @@ type Backend interface {
 	PeerCount() int
 	IsListening() bool
 	Peers() []*p2p.Peer
-	BlockDb() ethutil.Database
-	StateDb() ethutil.Database
-	ExtraDb() ethutil.Database
+	BlockDb() common.Database
+	StateDb() common.Database
+	ExtraDb() common.Database
 	EventMux() *event.TypeMux
 	Whisper() *whisper.Whisper
 
@@ -116,21 +116,21 @@ func (self *XEth) State() *State { return self.state }
 func (self *XEth) Whisper() *Whisper { return self.whisper }
 
 func (self *XEth) BlockByHash(strHash string) *Block {
-	hash := ethutil.FromHex(strHash)
+	hash := common.FromHex(strHash)
 	block := self.chainManager.GetBlock(hash)
 
 	return NewBlock(block)
 }
 
 func (self *XEth) EthBlockByHash(strHash string) *types.Block {
-	hash := ethutil.FromHex(strHash)
+	hash := common.FromHex(strHash)
 	block := self.chainManager.GetBlock(hash)
 
 	return block
 }
 
 func (self *XEth) EthTransactionByHash(hash string) *types.Transaction {
-	data, _ := self.eth.ExtraDb().Get(ethutil.FromHex(hash))
+	data, _ := self.eth.ExtraDb().Get(common.FromHex(hash))
 	if len(data) != 0 {
 		return types.NewTransactionFromBytes(data)
 	}
@@ -205,9 +205,9 @@ func (self *XEth) Coinbase() string {
 }
 
 func (self *XEth) NumberToHuman(balance string) string {
-	b := ethutil.Big(balance)
+	b := common.Big(balance)
 
-	return ethutil.CurrencyToString(b)
+	return common.CurrencyToString(b)
 }
 
 func (self *XEth) StorageAt(addr, storageAddr string) string {
@@ -233,7 +233,7 @@ func (self *XEth) IsContract(address string) bool {
 }
 
 func (self *XEth) SecretToAddress(key string) string {
-	pair, err := crypto.NewKeyPairFromSec(ethutil.FromHex(key))
+	pair, err := crypto.NewKeyPairFromSec(common.FromHex(key))
 	if err != nil {
 		return ""
 	}
@@ -263,29 +263,29 @@ func (self *XEth) EachStorage(addr string) string {
 }
 
 func (self *XEth) ToAscii(str string) string {
-	padded := ethutil.RightPadBytes([]byte(str), 32)
+	padded := common.RightPadBytes([]byte(str), 32)
 
 	return "0x" + toHex(padded)
 }
 
 func (self *XEth) FromAscii(str string) string {
-	if ethutil.IsHex(str) {
+	if common.IsHex(str) {
 		str = str[2:]
 	}
 
-	return string(bytes.Trim(ethutil.FromHex(str), "\x00"))
+	return string(bytes.Trim(common.FromHex(str), "\x00"))
 }
 
 func (self *XEth) FromNumber(str string) string {
-	if ethutil.IsHex(str) {
+	if common.IsHex(str) {
 		str = str[2:]
 	}
 
-	return ethutil.BigD(ethutil.FromHex(str)).String()
+	return common.BigD(common.FromHex(str)).String()
 }
 
 func (self *XEth) PushTx(encodedTx string) (string, error) {
-	tx := types.NewTransactionFromBytes(ethutil.FromHex(encodedTx))
+	tx := types.NewTransactionFromBytes(common.FromHex(encodedTx))
 	err := self.eth.TxPool().Add(tx)
 	if err != nil {
 		return "", err
@@ -306,12 +306,12 @@ var (
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	statedb := self.State().State() //self.chainManager.TransState()
 	msg := callmsg{
-		from:     statedb.GetOrNewStateObject(ethutil.FromHex(fromStr)),
-		to:       ethutil.FromHex(toStr),
-		gas:      ethutil.Big(gasStr),
-		gasPrice: ethutil.Big(gasPriceStr),
-		value:    ethutil.Big(valueStr),
-		data:     ethutil.FromHex(dataStr),
+		from:     statedb.GetOrNewStateObject(common.FromHex(fromStr)),
+		to:       common.FromHex(toStr),
+		gas:      common.Big(gasStr),
+		gasPrice: common.Big(gasPriceStr),
+		value:    common.Big(valueStr),
+		data:     common.FromHex(dataStr),
 	}
 	if msg.gas.Cmp(big.NewInt(0)) == 0 {
 		msg.gas = defaultGas
@@ -332,16 +332,16 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	var (
 		from             []byte
 		to               []byte
-		value            = ethutil.NewValue(valueStr)
-		gas              = ethutil.NewValue(gasStr)
-		price            = ethutil.NewValue(gasPriceStr)
+		value            = common.NewValue(valueStr)
+		gas              = common.NewValue(gasStr)
+		price            = common.NewValue(gasPriceStr)
 		data             []byte
 		contractCreation bool
 	)
 
-	from = ethutil.FromHex(fromStr)
-	data = ethutil.FromHex(codeStr)
-	to = ethutil.FromHex(toStr)
+	from = common.FromHex(fromStr)
+	data = common.FromHex(codeStr)
+	to = common.FromHex(toStr)
 	if len(to) == 0 {
 		contractCreation = true
 	}

@@ -2,7 +2,7 @@ package javascript
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/otto"
@@ -18,7 +18,7 @@ func (self *JSStateObject) EachStorage(call otto.FunctionCall) otto.Value {
 
 	it := self.Object.Trie().Iterator()
 	for it.Next() {
-		cb.Call(self.eth.toVal(self), self.eth.toVal(ethutil.Bytes2Hex(it.Key)), self.eth.toVal(ethutil.Bytes2Hex(it.Value)))
+		cb.Call(self.eth.toVal(self), self.eth.toVal(common.Bytes2Hex(it.Key)), self.eth.toVal(common.Bytes2Hex(it.Value)))
 	}
 
 	return otto.UndefinedValue()
@@ -44,10 +44,10 @@ type JSLog struct {
 
 func NewJSLog(log state.Log) JSLog {
 	return JSLog{
-		Address: ethutil.Bytes2Hex(log.Address()),
-		Topics:  nil, //ethutil.Bytes2Hex(log.Address()),
+		Address: common.Bytes2Hex(log.Address()),
+		Topics:  nil, //common.Bytes2Hex(log.Address()),
 		Number:  0,
-		Data:    ethutil.Bytes2Hex(log.Data()),
+		Data:    common.Bytes2Hex(log.Data()),
 	}
 }
 

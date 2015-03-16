@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
@@ -15,7 +15,7 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	code = ethutil.Hex2Bytes(string(code[:len(code)-1]))
+	code = common.Hex2Bytes(string(code[:len(code)-1]))
 	fmt.Printf("%x\n", code)
 
 	for pc := uint64(0); pc < uint64(len(code)); pc++ {

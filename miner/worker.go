@@ -9,7 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
@@ -155,10 +155,10 @@ func (self *worker) wait() {
 				self.current.block.Header().MixDigest = work.MixDigest
 
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
-					BlockHash:     ethutil.Bytes2Hex(block.Hash()),
+					BlockHash:     common.Bytes2Hex(block.Hash()),
 					BlockNumber:   block.Number(),
-					ChainHeadHash: ethutil.Bytes2Hex(block.ParentHeaderHash),
-					BlockPrevHash: ethutil.Bytes2Hex(block.ParentHeaderHash),
+					ChainHeadHash: common.Bytes2Hex(block.ParentHeaderHash),
+					BlockPrevHash: common.Bytes2Hex(block.ParentHeaderHash),
 				})
 
 				if err := self.chain.InsertChain(types.Blocks{self.current.block}); err == nil {
@@ -221,7 +221,7 @@ gasLimit:
 
 	self.current.state.AddBalance(self.coinbase, core.BlockReward)
 
-	self.current.state.Update(ethutil.Big0)
+	self.current.state.Update(common.Big0)
 	self.push()
 }
 

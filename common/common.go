@@ -1,4 +1,4 @@
-package ethutil
+package common
 
 import (
 	"fmt"

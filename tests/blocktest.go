@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/state"
 )
@@ -97,7 +97,7 @@ func LoadBlockTests(file string) (map[string]*BlockTest, error) {
 
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
-func (t *BlockTest) InsertPreState(db ethutil.Database) error {
+func (t *BlockTest) InsertPreState(db common.Database) error {
 	statedb := state.New(nil, db)
 	for addrString, acct := range t.preAccounts {
 		// XXX: is is worth it checking for errors here?

@@ -37,7 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/ui/qt/qwhisper"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -93,7 +93,7 @@ func NewWindow(ethereum *eth.Ethereum) *Gui {
 		plugins:       make(map[string]plugin),
 		serviceEvents: make(chan ServEv, 1),
 	}
-	data, _ := ethutil.ReadAllFile(path.Join(ethereum.DataDir, "plugins.json"))
+	data, _ := common.ReadAllFile(path.Join(ethereum.DataDir, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
 
 	return gui
@@ -200,7 +200,7 @@ func (gui *Gui) loadAddressBook() {
 			it := nameReg.Trie().Iterator()
 			for it.Next() {
 				if it.Key[0] != 0 {
-					view.Call("addAddress", struct{ Name, Address string }{string(it.Key), ethutil.Bytes2Hex(it.Value)})
+					view.Call("addAddress", struct{ Name, Address string }{string(it.Key), common.Bytes2Hex(it.Value)})
 				}
 
 			}
@@ -221,7 +221,7 @@ func (self *Gui) loadMergedMiningOptions() {
 					Checked       bool
 					Name, Address string
 					Id, ItemId    int
-				}{false, string(it.Key), ethutil.Bytes2Hex(it.Value), 0, i})
+				}{false, string(it.Key), common.Bytes2Hex(it.Value), 0, i})
 
 				i++
 
@@ -240,8 +240,8 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 
 	var (
 		ptx  = xeth.NewTx(tx)
-		send = ethutil.Bytes2Hex(tx.From())
-		rec  = ethutil.Bytes2Hex(tx.To())
+		send = common.Bytes2Hex(tx.From())
+		rec  = common.Bytes2Hex(tx.To())
 	)
 	ptx.Sender = send
 	ptx.Address = rec
@@ -265,7 +265,7 @@ func (gui *Gui) readPreviousTransactions() {
 }
 
 func (gui *Gui) processBlock(block *types.Block, initial bool) {
-	name := ethutil.Bytes2Hex(block.Coinbase())
+	name := common.Bytes2Hex(block.Coinbase())
 	b := xeth.NewBlock(block)
 	b.Name = name
 
@@ -279,10 +279,10 @@ func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
 		if unconfirmedFunds.Cmp(big.NewInt(0)) < 0 {
 			pos = "-"
 		}
-		val := ethutil.CurrencyToString(new(big.Int).Abs(ethutil.BigCopy(unconfirmedFunds)))
-		str = fmt.Sprintf("%v (%s %v)", ethutil.CurrencyToString(amount), pos, val)
+		val := common.CurrencyToString(new(big.Int).Abs(common.BigCopy(unconfirmedFunds)))
+		str = fmt.Sprintf("%v (%s %v)", common.CurrencyToString(amount), pos, val)
 	} else {
-		str = fmt.Sprintf("%v", ethutil.CurrencyToString(amount))
+		str = fmt.Sprintf("%v", common.CurrencyToString(amount))
 	}
 
 	gui.win.Root().Call("setWalletValue", str)

@@ -27,7 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -226,7 +226,7 @@ func (self *jsre) dump(call otto.FunctionCall) otto.Value {
 			block = self.ethereum.ChainManager().GetBlockByNumber(uint64(num))
 		} else if call.Argument(0).IsString() {
 			hash, _ := call.Argument(0).ToString()
-			block = self.ethereum.ChainManager().GetBlock(ethutil.Hex2Bytes(hash))
+			block = self.ethereum.ChainManager().GetBlock(common.Hex2Bytes(hash))
 		} else {
 			fmt.Println("invalid argument for dump. Either hex string or number")
 		}
@@ -285,7 +285,7 @@ func (self *jsre) export(call otto.FunctionCall) otto.Value {
 
 	data := self.ethereum.ChainManager().Export()
 
-	if err := ethutil.WriteFile(fn, data); err != nil {
+	if err := common.WriteFile(fn, data); err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}
