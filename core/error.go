@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
@@ -21,7 +23,7 @@ func (err *ParentErr) Error() string {
 	return err.Message
 }
 
-func ParentError(hash []byte) error {
+func ParentError(hash common.Hash) error {
 	return &ParentErr{Message: fmt.Sprintf("Block's parent unknown %x", hash)}
 }
 
@@ -136,7 +138,7 @@ func IsTDError(e error) bool {
 
 type KnownBlockError struct {
 	number *big.Int
-	hash   []byte
+	hash   common.Hash
 }
 
 func (self *KnownBlockError) Error() string {

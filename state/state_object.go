@@ -82,7 +82,7 @@ func NewStateObject(address common.Address, db common.Database) *StateObject {
 	//address := common.ToAddress(addr)
 
 	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
-	object.State = New(nil, db) //New(trie.New(common.Config.Db, ""))
+	object.State = New(common.Hash{}, db) //New(trie.New(common.Config.Db, ""))
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
 	object.prepaid = new(big.Int)
@@ -109,7 +109,7 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db common.Data
 	object.nonce = extobject.Nonce
 	object.balance = extobject.Balance
 	object.codeHash = extobject.CodeHash
-	object.State = New(extobject.Root[:], db)
+	object.State = New(extobject.Root, db)
 	object.storage = make(map[string]*common.Value)
 	object.gasPool = new(big.Int)
 	object.prepaid = new(big.Int)
@@ -339,7 +339,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 	decoder := common.NewValueFromBytes(data)
 	c.nonce = decoder.Get(0).Uint()
 	c.balance = decoder.Get(1).BigInt()
-	c.State = New(decoder.Get(2).Bytes(), c.db) //New(trie.New(common.Config.Db, decoder.Get(2).Interface()))
+	c.State = New(common.BytesToHash(decoder.Get(2).Bytes()), c.db) //New(trie.New(common.Config.Db, decoder.Get(2).Interface()))
 	c.storage = make(map[string]*common.Value)
 	c.gasPool = new(big.Int)
 

@@ -28,8 +28,8 @@ type StateDB struct {
 }
 
 // Create a new state from a given trie
-func New(root []byte, db common.Database) *StateDB {
-	trie := trie.NewSecure(common.CopyBytes(root), db)
+func New(root common.Hash, db common.Database) *StateDB {
+	trie := trie.NewSecure(root[:], db)
 	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: make(map[string]*big.Int)}
 }
 
@@ -222,7 +222,7 @@ func (s *StateDB) Cmp(other *StateDB) bool {
 }
 
 func (self *StateDB) Copy() *StateDB {
-	state := New(nil, self.db)
+	state := New(common.Hash{}, self.db)
 	state.trie = self.trie.Copy()
 	for k, stateObject := range self.stateObjects {
 		state.stateObjects[k] = stateObject.Copy()
@@ -247,8 +247,8 @@ func (self *StateDB) Set(state *StateDB) {
 	self.logs = state.logs
 }
 
-func (s *StateDB) Root() []byte {
-	return s.trie.Root()
+func (s *StateDB) Root() common.Hash {
+	return common.BytesToHash(s.trie.Root())
 }
 
 func (s *StateDB) Trie() *trie.SecureTrie {

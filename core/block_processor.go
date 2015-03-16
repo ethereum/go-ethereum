@@ -1,14 +1,13 @@
 package core
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
@@ -90,7 +89,7 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	statedb.Update(nil)
 
 	cumulative := new(big.Int).Set(usedGas.Add(usedGas, gas))
-	receipt := types.NewReceipt(statedb.Root(), cumulative)
+	receipt := types.NewReceipt(statedb.Root().Bytes(), cumulative)
 	receipt.SetLogs(statedb.Logs())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	chainlogger.Debugln(receipt)
@@ -190,7 +189,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
 	rbloom := types.CreateBloom(receipts)
-	if bytes.Compare(rbloom, header.Bloom) != 0 {
+	if rbloom != header.Bloom {
 		err = fmt.Errorf("unable to replicate block's bloom=%x", rbloom)
 		return
 	}
@@ -198,14 +197,14 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	// The transactions Trie's root (R = (Tr [[H1, T1], [H2, T2], ... [Hn, Tn]]))
 	// can be used by light clients to make sure they've received the correct Txs
 	txSha := types.DeriveSha(block.Transactions())
-	if bytes.Compare(txSha, header.TxHash) != 0 {
+	if txSha != header.TxHash {
 		err = fmt.Errorf("validating transaction root. received=%x got=%x", header.TxHash, txSha)
 		return
 	}
 
 	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, R1]]))
 	receiptSha := types.DeriveSha(receipts)
-	if bytes.Compare(receiptSha, header.ReceiptHash) != 0 {
+	if receiptSha != header.ReceiptHash {
 		err = fmt.Errorf("validating receipt root. received=%x got=%x", header.ReceiptHash, receiptSha)
 		return
 	}
@@ -218,7 +217,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	// Commit state objects/accounts to a temporary trie (does not save)
 	// used to calculate the state root.
 	state.Update(common.Big0)
-	if !bytes.Equal(header.Root, state.Root()) {
+	if header.Root != state.Root() {
 		err = fmt.Errorf("invalid merkle root. received=%x got=%x", header.Root, state.Root())
 		return
 	}
@@ -234,7 +233,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 		putTx(sm.extraDb, tx)
 	}
 
-	chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash()[0:4])
+	chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash().Bytes()[0:4])
 
 	return td, nil
 }
@@ -284,35 +283,34 @@ func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, paren
 
 	ancestors := set.New()
 	uncles := set.New()
-	ancestorHeaders := make(map[string]*types.Header)
+	ancestorHeaders := make(map[common.Hash]*types.Header)
 	for _, ancestor := range sm.bc.GetAncestors(block, 7) {
-		hash := string(ancestor.Hash())
-		ancestorHeaders[hash] = ancestor.Header()
-		ancestors.Add(hash)
+		ancestorHeaders[ancestor.Hash()] = ancestor.Header()
+		ancestors.Add(ancestor.Hash())
 		// Include ancestors uncles in the uncle set. Uncles must be unique.
 		for _, uncle := range ancestor.Uncles() {
-			uncles.Add(string(uncle.Hash()))
+			uncles.Add(uncle.Hash())
 		}
 	}
 
-	uncles.Add(string(block.Hash()))
+	uncles.Add(block.Hash())
 	for _, uncle := range block.Uncles() {
-		if uncles.Has(string(uncle.Hash())) {
+		if uncles.Has(uncle.Hash()) {
 			// Error not unique
 			return UncleError("Uncle not unique")
 		}
 
-		uncles.Add(string(uncle.Hash()))
+		uncles.Add(uncle.Hash())
 
-		if ancestors.Has(string(uncle.Hash())) {
+		if ancestors.Has(uncle.Hash()) {
 			return UncleError("Uncle is ancestor")
 		}
 
-		if !ancestors.Has(string(uncle.ParentHash)) {
+		if !ancestors.Has(uncle.ParentHash) {
 			return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
 		}
 
-		if err := sm.ValidateHeader(uncle, ancestorHeaders[string(uncle.ParentHash)]); err != nil {
+		if err := sm.ValidateHeader(uncle, ancestorHeaders[uncle.ParentHash]); err != nil {
 			return ValidationError(fmt.Sprintf("%v", err))
 		}
 
@@ -358,5 +356,5 @@ func putTx(db common.Database, tx *types.Transaction) {
 		statelogger.Infoln("Failed encoding tx", err)
 		return
 	}
-	db.Put(tx.Hash(), rlpEnc)
+	db.Put(tx.Hash().Bytes(), rlpEnc)
 }

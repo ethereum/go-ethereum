@@ -14,7 +14,7 @@ import (
 type Receipt struct {
 	PostState         []byte
 	CumulativeGasUsed *big.Int
-	Bloom             []byte
+	Bloom             Bloom
 	logs              state.Logs
 }
 

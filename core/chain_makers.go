@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/state"
@@ -29,7 +29,7 @@ var (
 
 // Utility functions for making chains on the fly
 // Exposed for sake of testing from other packages (eg. go-ethash)
-func NewBlockFromParent(addr []byte, parent *types.Block) *types.Block {
+func NewBlockFromParent(addr common.Address, parent *types.Block) *types.Block {
 	return newBlockFromParent(addr, parent)
 }
 
@@ -54,7 +54,7 @@ func NewCanonical(n int, db common.Database) (*BlockProcessor, error) {
 }
 
 // block time is fixed at 10 seconds
-func newBlockFromParent(addr []byte, parent *types.Block) *types.Block {
+func newBlockFromParent(addr common.Address, parent *types.Block) *types.Block {
 	block := types.NewBlock(parent.Hash(), addr, parent.Root(), common.BigPow(2, 32), 0, "")
 	block.SetUncles(nil)
 	block.SetTransactions(nil)
@@ -74,8 +74,8 @@ func newBlockFromParent(addr []byte, parent *types.Block) *types.Block {
 // Actually make a block by simulating what miner would do
 // we seed chains by the first byte of the coinbase
 func makeBlock(bman *BlockProcessor, parent *types.Block, i int, db common.Database, seed int) *types.Block {
-	addr := common.LeftPadBytes([]byte{byte(i)}, 20)
-	addr[0] = byte(seed)
+	var addr common.Address
+	addr[0], addr[19] = byte(seed), byte(i)
 	block := newBlockFromParent(addr, parent)
 	state := state.New(block.Root(), db)
 	cbase := state.GetOrNewStateObject(addr)
