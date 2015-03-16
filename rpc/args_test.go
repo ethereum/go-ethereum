@@ -159,6 +159,16 @@ func TestNewTxArgs(t *testing.T) {
 	}
 }
 
+func TestNewTxArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(NewTxArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+}
+
 func TestGetStorageArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "latest"]`
 	expected := new(GetStorageArgs)
@@ -180,6 +190,16 @@ func TestGetStorageArgs(t *testing.T) {
 
 	if expected.BlockNumber != args.BlockNumber {
 		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestGetStorageEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetStorageArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
 	}
 }
 
@@ -212,6 +232,16 @@ func TestGetStorageAtArgs(t *testing.T) {
 	}
 }
 
+func TestGetStorageAtEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetStorageAtArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+}
+
 func TestGetTxCountArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "latest"]`
 	expected := new(GetTxCountArgs)
@@ -236,6 +266,16 @@ func TestGetTxCountArgs(t *testing.T) {
 	}
 }
 
+func TestGetTxCountEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetTxCountArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+}
+
 func TestGetDataArgs(t *testing.T) {
 	input := `["0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8", "latest"]`
 	expected := new(GetDataArgs)
@@ -257,6 +297,16 @@ func TestGetDataArgs(t *testing.T) {
 
 	if expected.BlockNumber != args.BlockNumber {
 		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestGetDataEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetDataArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
 	}
 }
 
