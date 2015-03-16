@@ -27,27 +27,27 @@ func StringToAddress(s string) Address { return BytesToAddress([]byte(s)) }
 // Don't use the default 'String' method in case we want to overwrite
 
 // Get the string representation of the underlying hash
-func (h Hash) Str() string {
+func (h *Hash) Str() string {
 	return string(h[:])
 }
 
 // Sets the hash to the value of b. If b is larger than len(h) it will panic
-func (h Hash) SetBytes(b []byte) {
+func (h *Hash) SetBytes(b []byte) {
 	if len(b) > len(h) {
 		panic("unable to set bytes. too big")
 	}
 
 	// reverse loop
-	for i := len(b); i >= 0; i-- {
+	for i := len(b) - 1; i >= 0; i-- {
 		h[i] = b[i]
 	}
 }
 
 // Set string `s` to h. If s is larger than len(h) it will panic
-func (h Hash) SetString(s string) { h.SetBytes([]byte(s)) }
+func (h *Hash) SetString(s string) { h.SetBytes([]byte(s)) }
 
 // Sets h to other
-func (h Hash) Set(other Hash) {
+func (h *Hash) Set(other Hash) {
 	for i, v := range other {
 		h[i] = v
 	}

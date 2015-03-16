@@ -11,14 +11,15 @@ import (
 )
 
 func ParanoiaCheck(t1 *Trie, backend Backend) (bool, *Trie) {
-	t2 := New(nil, backend)
+	t2 := New(common.Hash{}, backend)
 
 	it := t1.Iterator()
 	for it.Next() {
 		t2.Update(it.Key, it.Value)
 	}
 
-	return bytes.Equal(t2.Hash(), t1.Hash()), t2
+	a, b := t2.Hash(), t1.Hash()
+	return bytes.Equal(a[:], b[:]), t2
 }
 
 type Trie struct {
@@ -38,8 +39,8 @@ func New(root common.Hash, backend Backend) *Trie {
 		trie.cache = NewCache(backend)
 	}
 
-	if root != nil {
-		value := common.NewValueFromBytes(trie.cache.Get(root))
+	if (root != common.Hash{}) {
+		value := common.NewValueFromBytes(trie.cache.Get(root[:]))
 		trie.root = trie.mknode(value)
 	}
 
@@ -51,12 +52,13 @@ func (self *Trie) Iterator() *Iterator {
 }
 
 func (self *Trie) Copy() *Trie {
+	//cpy := make([]byte, 32)
+	//copy(cpy, self.roothash)
+
 	// cheap copying method
 	var cpy common.Hash
-	cpy.Set(self.roothash[:])
-	cpy := make([]byte, 32)
-	copy(cpy, self.roothash)
-	trie := New(nil, nil)
+	cpy.Set(self.roothash)
+	trie := New(common.Hash{}, nil)
 	trie.cache = self.cache.Copy()
 	if self.root != nil {
 		trie.root = self.root.Copy(trie)
@@ -66,21 +68,21 @@ func (self *Trie) Copy() *Trie {
 }
 
 // Legacy support
-func (self *Trie) Root() []byte { return self.Hash() }
-func (self *Trie) Hash() []byte {
-	var hash []byte
+func (self *Trie) Root() common.Hash { return self.Hash() }
+func (self *Trie) Hash() common.Hash {
+	var hash common.Hash
 	if self.root != nil {
 		t := self.root.Hash()
-		if byts, ok := t.([]byte); ok && len(byts) > 0 {
-			hash = byts
+		if h, ok := t.(common.Hash); ok && (h != common.Hash{}) {
+			hash = h
 		} else {
-			hash = crypto.Sha3(common.Encode(self.root.RlpData()))
+			hash = common.BytesToHash(crypto.Sha3(common.Encode(self.root.RlpData())))
 		}
 	} else {
-		hash = crypto.Sha3(common.Encode(""))
+		hash = common.BytesToHash(crypto.Sha3(common.Encode("")))
 	}
 
-	if !bytes.Equal(hash, self.roothash) {
+	if hash != self.roothash {
 		self.revisions.PushBack(self.roothash)
 		self.roothash = hash
 	}
@@ -105,19 +107,21 @@ func (self *Trie) Reset() {
 	self.cache.Reset()
 
 	if self.revisions.Len() > 0 {
-		revision := self.revisions.Remove(self.revisions.Back()).([]byte)
+		revision := self.revisions.Remove(self.revisions.Back()).(common.Hash)
 		self.roothash = revision
 	}
-	value := common.NewValueFromBytes(self.cache.Get(self.roothash))
+	value := common.NewValueFromBytes(self.cache.Get(self.roothash[:]))
 	self.root = self.mknode(value)
 }
 
-func (self *Trie) UpdateString(key, value string) Node { return self.Update([]byte(key), []byte(value)) }
-func (self *Trie) Update(key, value []byte) Node {
+func (self *Trie) UpdateString(key, value string) Node {
+	return self.Update(common.StringToHash(key), []byte(value))
+}
+func (self *Trie) Update(key common.Hash, value []byte) Node {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	k := CompactHexDecode(string(key))
+	k := CompactHexDecode(key.Str())
 
 	if len(value) != 0 {
 		self.root = self.insert(self.root, k, &ValueNode{self, value})
@@ -128,12 +132,12 @@ func (self *Trie) Update(key, value []byte) Node {
 	return self.root
 }
 
-func (self *Trie) GetString(key string) []byte { return self.Get([]byte(key)) }
-func (self *Trie) Get(key []byte) []byte {
+func (self *Trie) GetString(key string) []byte { return self.Get(common.StringToHash(key)) }
+func (self *Trie) Get(key common.Hash) []byte {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	k := CompactHexDecode(string(key))
+	k := CompactHexDecode(key.Str())
 
 	n := self.get(self.root, k)
 	if n != nil {
@@ -143,12 +147,12 @@ func (self *Trie) Get(key []byte) []byte {
 	return nil
 }
 
-func (self *Trie) DeleteString(key string) Node { return self.Delete([]byte(key)) }
-func (self *Trie) Delete(key []byte) Node {
+func (self *Trie) DeleteString(key string) Node { return self.Delete(common.StringToHash(key)) }
+func (self *Trie) Delete(key common.Hash) Node {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	k := CompactHexDecode(string(key))
+	k := CompactHexDecode(key.Str())
 	self.root = self.delete(self.root, k)
 
 	return self.root
