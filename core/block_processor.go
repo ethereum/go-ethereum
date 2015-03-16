@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
@@ -24,8 +24,8 @@ type PendingBlockEvent struct {
 var statelogger = logger.NewLogger("BLOCK")
 
 type BlockProcessor struct {
-	db      ethutil.Database
-	extraDb ethutil.Database
+	db      common.Database
+	extraDb common.Database
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 	// Canonical block chain
@@ -47,7 +47,7 @@ type BlockProcessor struct {
 	eventMux *event.TypeMux
 }
 
-func NewBlockProcessor(db, extra ethutil.Database, pow pow.PoW, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+func NewBlockProcessor(db, extra common.Database, pow pow.PoW, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
 		db:       db,
 		extraDb:  extra,
@@ -217,7 +217,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 
 	// Commit state objects/accounts to a temporary trie (does not save)
 	// used to calculate the state root.
-	state.Update(ethutil.Big0)
+	state.Update(common.Big0)
 	if !bytes.Equal(header.Root, state.Root()) {
 		err = fmt.Errorf("invalid merkle root. received=%x got=%x", header.Root, state.Root())
 		return
@@ -352,7 +352,7 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 	return state.Logs(), nil
 }
 
-func putTx(db ethutil.Database, tx *types.Transaction) {
+func putTx(db common.Database, tx *types.Transaction) {
 	rlpEnc, err := rlp.EncodeToBytes(tx)
 	if err != nil {
 		statelogger.Infoln("Failed encoding tx", err)

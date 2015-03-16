@@ -8,7 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -19,21 +19,21 @@ import (
 var ZeroHash256 = make([]byte, 32)
 var ZeroHash160 = make([]byte, 20)
 var ZeroHash512 = make([]byte, 64)
-var EmptyShaList = crypto.Sha3(ethutil.Encode([]interface{}{}))
-var EmptyListRoot = crypto.Sha3(ethutil.Encode(""))
+var EmptyShaList = crypto.Sha3(common.Encode([]interface{}{}))
+var EmptyListRoot = crypto.Sha3(common.Encode(""))
 
 var GenesisDiff = big.NewInt(131072)
 var GenesisGasLimit = big.NewInt(3141592)
 
-func GenesisBlock(db ethutil.Database) *types.Block {
+func GenesisBlock(db common.Database) *types.Block {
 	genesis := types.NewBlock(ZeroHash256, ZeroHash160, nil, GenesisDiff, 42, "")
-	genesis.Header().Number = ethutil.Big0
+	genesis.Header().Number = common.Big0
 	genesis.Header().GasLimit = GenesisGasLimit
-	genesis.Header().GasUsed = ethutil.Big0
+	genesis.Header().GasUsed = common.Big0
 	genesis.Header().Time = 0
 	genesis.Header().MixDigest = make([]byte, 32)
 
-	genesis.Td = ethutil.Big0
+	genesis.Td = common.Big0
 
 	genesis.SetUncles([]*types.Header{})
 	genesis.SetTransactions(types.Transactions{})
@@ -48,9 +48,9 @@ func GenesisBlock(db ethutil.Database) *types.Block {
 
 	statedb := state.New(genesis.Root(), db)
 	for addr, account := range accounts {
-		codedAddr := ethutil.Hex2Bytes(addr)
+		codedAddr := common.Hex2Bytes(addr)
 		accountState := statedb.GetAccount(codedAddr)
-		accountState.SetBalance(ethutil.Big(account.Balance))
+		accountState.SetBalance(common.Big(account.Balance))
 		statedb.UpdateStateObject(accountState)
 	}
 	statedb.Sync()

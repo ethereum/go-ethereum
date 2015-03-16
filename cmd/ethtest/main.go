@@ -34,7 +34,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
@@ -48,13 +48,13 @@ type Log struct {
 	BloomF   string   `json:"bloom"`
 }
 
-func (self Log) Address() []byte      { return ethutil.Hex2Bytes(self.AddressF) }
-func (self Log) Data() []byte         { return ethutil.Hex2Bytes(self.DataF) }
+func (self Log) Address() []byte      { return common.Hex2Bytes(self.AddressF) }
+func (self Log) Data() []byte         { return common.Hex2Bytes(self.DataF) }
 func (self Log) RlpData() interface{} { return nil }
 func (self Log) Topics() [][]byte {
 	t := make([][]byte, len(self.TopicsF))
 	for i, topic := range self.TopicsF {
-		t[i] = ethutil.Hex2Bytes(topic)
+		t[i] = common.Hex2Bytes(topic)
 	}
 	return t
 }
@@ -66,15 +66,15 @@ type Account struct {
 	Storage map[string]string
 }
 
-func StateObjectFromAccount(db ethutil.Database, addr string, account Account) *state.StateObject {
-	obj := state.NewStateObject(ethutil.Hex2Bytes(addr), db)
-	obj.SetBalance(ethutil.Big(account.Balance))
+func StateObjectFromAccount(db common.Database, addr string, account Account) *state.StateObject {
+	obj := state.NewStateObject(common.Hex2Bytes(addr), db)
+	obj.SetBalance(common.Big(account.Balance))
 
-	if ethutil.IsHex(account.Code) {
+	if common.IsHex(account.Code) {
 		account.Code = account.Code[2:]
 	}
-	obj.SetCode(ethutil.Hex2Bytes(account.Code))
-	obj.SetNonce(ethutil.Big(account.Nonce).Uint64())
+	obj.SetCode(common.Hex2Bytes(account.Code))
+	obj.SetNonce(common.Big(account.Nonce).Uint64())
 
 	return obj
 }
@@ -147,8 +147,8 @@ func RunVmTest(r io.Reader) (failed int) {
 			}
 
 			if len(test.Exec) == 0 {
-				if obj.Balance().Cmp(ethutil.Big(account.Balance)) != 0 {
-					fmt.Printf("FAIL: %s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(ethutil.Big(account.Balance), obj.Balance()))
+				if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
+					fmt.Printf("FAIL: %s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
 					failed = 1
 				}
 			}
@@ -158,13 +158,13 @@ func RunVmTest(r io.Reader) (failed int) {
 				vexp := helper.FromHex(value)
 
 				if bytes.Compare(v, vexp) != 0 {
-					fmt.Printf("FAIL: %s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address()[0:4], addr, vexp, v, ethutil.BigD(vexp), ethutil.BigD(v))
+					fmt.Printf("FAIL: %s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address()[0:4], addr, vexp, v, common.BigD(vexp), common.BigD(v))
 					failed = 1
 				}
 			}
 		}
 
-		if !bytes.Equal(ethutil.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
+		if !bytes.Equal(common.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
 			fmt.Printf("FAIL: %s's : Post state root error. Expected %s, got %x\n", name, test.PostStateRoot, statedb.Root())
 			failed = 1
 		}
@@ -178,8 +178,8 @@ func RunVmTest(r io.Reader) (failed int) {
 					fmt.Println("A", test.Logs)
 					fmt.Println("B", logs)
 						for i, log := range test.Logs {
-							genBloom := ethutil.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
-							if !bytes.Equal(genBloom, ethutil.Hex2Bytes(log.BloomF)) {
+							genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
+							if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
 								t.Errorf("bloom mismatch")
 							}
 						}

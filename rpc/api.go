@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/state"
@@ -43,7 +43,7 @@ type EthereumApi struct {
 	regmut   sync.Mutex
 	register map[string][]*NewTxArgs
 
-	db ethutil.Database
+	db common.Database
 }
 
 func NewEthereumApi(eth *xeth.XEth, dataDir string) *EthereumApi {
@@ -241,7 +241,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 	//	p.register[args.From] = append(p.register[args.From], args)
 	//} else {
 	/*
-		account := accounts.Get(ethutil.FromHex(args.From))
+		account := accounts.Get(common.FromHex(args.From))
 		if account != nil {
 			if account.Unlocked() {
 				if !unlockAccount(account) {
@@ -249,7 +249,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 				}
 			}
 
-			result, _ := account.Transact(ethutil.FromHex(args.To), ethutil.FromHex(args.Value), ethutil.FromHex(args.Gas), ethutil.FromHex(args.GasPrice), ethutil.FromHex(args.Data))
+			result, _ := account.Transact(common.FromHex(args.To), common.FromHex(args.Value), common.FromHex(args.Gas), common.FromHex(args.GasPrice), common.FromHex(args.Data))
 			if len(result) > 0 {
 				*reply = toHex(result)
 			}
@@ -258,7 +258,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 		}
 	*/
 	// TODO: align default values to have the same type, e.g. not depend on
-	// ethutil.Value conversions later on
+	// common.Value conversions later on
 	if args.Gas.Cmp(big.NewInt(0)) == 0 {
 		args.Gas = defaultGas
 	}
@@ -316,7 +316,7 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 	} else {
 		// Convert the incoming string (which is a bigint) into hex
 		i, _ := new(big.Int).SetString(args.Key, 10)
-		hx = ethutil.Bytes2Hex(i.Bytes())
+		hx = common.Bytes2Hex(i.Bytes())
 	}
 	rpclogger.Debugf("GetStateAt(%s, %s)\n", args.Address, hx)
 	*reply = map[string]string{args.Key: value.Str()}
@@ -480,7 +480,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = toHex(crypto.Sha3(ethutil.FromHex(args.Data)))
+		*reply = toHex(crypto.Sha3(common.FromHex(args.Data)))
 	case "web3_clientVersion":
 		*reply = p.xeth().Backend().Version()
 	case "net_version":
@@ -821,12 +821,12 @@ func toFilterOptions(options *FilterOptions) core.FilterOptions {
 
 	// Convert optional address slice/string to byte slice
 	if str, ok := options.Address.(string); ok {
-		opts.Address = [][]byte{ethutil.FromHex(str)}
+		opts.Address = [][]byte{common.FromHex(str)}
 	} else if slice, ok := options.Address.([]interface{}); ok {
 		bslice := make([][]byte, len(slice))
 		for i, addr := range slice {
 			if saddr, ok := addr.(string); ok {
-				bslice[i] = ethutil.FromHex(saddr)
+				bslice[i] = common.FromHex(saddr)
 			}
 		}
 		opts.Address = bslice
@@ -840,11 +840,11 @@ func toFilterOptions(options *FilterOptions) core.FilterOptions {
 		if slice, ok := topicDat.([]interface{}); ok {
 			topics[i] = make([][]byte, len(slice))
 			for j, topic := range slice {
-				topics[i][j] = ethutil.FromHex(topic.(string))
+				topics[i][j] = common.FromHex(topic.(string))
 			}
 		} else if str, ok := topicDat.(string); ok {
 			topics[i] = make([][]byte, 1)
-			topics[i][0] = ethutil.FromHex(str)
+			topics[i][0] = common.FromHex(str)
 		}
 	}
 	opts.Topics = topics

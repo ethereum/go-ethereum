@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type Summer interface {
@@ -67,7 +67,7 @@ func (v vectorSummer) Sum(i int) *big.Int { return v.by(v.vectors[i]) }
 
 func GasSum(v Vector) *big.Int { return v.Gas }
 
-var etherInWei = new(big.Rat).SetInt(ethutil.String2Big("1000000000000000000"))
+var etherInWei = new(big.Rat).SetInt(common.String2Big("1000000000000000000"))
 
 func GasPrice(bp, gl, ep *big.Int) *big.Int {
 	BP := new(big.Rat).SetInt(bp)

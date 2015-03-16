@@ -7,7 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/errs"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -167,7 +167,7 @@ func (self *ethProtocol) handle() error {
 		}
 		for _, tx := range txs {
 			jsonlogger.LogJson(&logger.EthTxReceived{
-				TxHash:   ethutil.Bytes2Hex(tx.Hash()),
+				TxHash:   common.Bytes2Hex(tx.Hash()),
 				RemoteId: self.peer.ID().String(),
 			})
 		}
@@ -183,7 +183,7 @@ func (self *ethProtocol) handle() error {
 			request.Amount = maxHashes
 		}
 		hashes := self.chainManager.GetBlockHashesFromHash(request.Hash, request.Amount)
-		return p2p.EncodeMsg(self.rw, BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
+		return p2p.EncodeMsg(self.rw, BlockHashesMsg, common.ByteSliceToInterface(hashes)...)
 
 	case BlockHashesMsg:
 		msgStream := rlp.NewStream(msg.Payload)
@@ -259,10 +259,10 @@ func (self *ethProtocol) handle() error {
 		_, chainHead, _ := self.chainManager.Status()
 
 		jsonlogger.LogJson(&logger.EthChainReceivedNewBlock{
-			BlockHash:     ethutil.Bytes2Hex(hash),
+			BlockHash:     common.Bytes2Hex(hash),
 			BlockNumber:   request.Block.Number(), // this surely must be zero
-			ChainHeadHash: ethutil.Bytes2Hex(chainHead),
-			BlockPrevHash: ethutil.Bytes2Hex(request.Block.ParentHash()),
+			ChainHeadHash: common.Bytes2Hex(chainHead),
+			BlockPrevHash: common.Bytes2Hex(request.Block.ParentHash()),
 			RemoteId:      self.peer.ID().String(),
 		})
 		// to simplify backend interface adding a new block
@@ -351,7 +351,7 @@ func (self *ethProtocol) requestBlockHashes(from []byte) error {
 
 func (self *ethProtocol) requestBlocks(hashes [][]byte) error {
 	self.peer.Debugf("fetching %v blocks", len(hashes))
-	return p2p.EncodeMsg(self.rw, GetBlocksMsg, ethutil.ByteSliceToInterface(hashes)...)
+	return p2p.EncodeMsg(self.rw, GetBlocksMsg, common.ByteSliceToInterface(hashes)...)
 }
 
 func (self *ethProtocol) protoError(code int, format string, params ...interface{}) (err *errs.Error) {

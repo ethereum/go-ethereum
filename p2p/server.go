@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -46,7 +46,7 @@ type Server struct {
 	MaxPeers int
 
 	// Name sets the node name of this server.
-	// Use ethutil.MakeName to create a name that follows existing conventions.
+	// Use common.MakeName to create a name that follows existing conventions.
 	Name string
 
 	// Bootstrap nodes are used to establish connectivity
@@ -132,7 +132,7 @@ func (srv *Server) SuggestPeer(n *discover.Node) {
 func (srv *Server) Broadcast(protocol string, code uint64, data ...interface{}) {
 	var payload []byte
 	if data != nil {
-		payload = ethutil.Encode(data)
+		payload = common.Encode(data)
 	}
 	srv.lock.RLock()
 	defer srv.lock.RUnlock()

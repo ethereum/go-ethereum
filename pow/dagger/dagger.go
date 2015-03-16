@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 )
 
@@ -50,7 +50,7 @@ func (dag *Dagger) Search(hash, diff *big.Int) ([]byte, []byte, []byte) {
 
 	dag.hash = hash
 
-	obj := ethutil.BigPow(2, 256)
+	obj := common.BigPow(2, 256)
 	obj = obj.Div(obj, diff)
 
 	Found = false
@@ -75,7 +75,7 @@ func (dag *Dagger) Search(hash, diff *big.Int) ([]byte, []byte, []byte) {
 func (dag *Dagger) Verify(hash, diff, nonce *big.Int) bool {
 	dag.hash = hash
 
-	obj := ethutil.BigPow(2, 256)
+	obj := common.BigPow(2, 256)
 	obj = obj.Div(obj, diff)
 
 	return dag.Eval(nonce).Cmp(obj) < 0
@@ -85,7 +85,7 @@ func DaggerVerify(hash, diff, nonce *big.Int) bool {
 	dagger := &Dagger{}
 	dagger.hash = hash
 
-	obj := ethutil.BigPow(2, 256)
+	obj := common.BigPow(2, 256)
 	obj = obj.Div(obj, diff)
 
 	return dagger.Eval(nonce).Cmp(obj) < 0
@@ -133,7 +133,7 @@ func Sum(sha hash.Hash) []byte {
 }
 
 func (dag *Dagger) Eval(N *big.Int) *big.Int {
-	pow := ethutil.BigPow(2, 26)
+	pow := common.BigPow(2, 26)
 	dag.xn = pow.Div(N, pow)
 
 	sha := sha3.NewKeccak256()

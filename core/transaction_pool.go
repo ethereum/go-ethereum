@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 )
@@ -113,13 +113,13 @@ func (self *TxPool) add(tx *types.Transaction) error {
 
 	var to string
 	if len(tx.To()) > 0 {
-		to = ethutil.Bytes2Hex(tx.To()[:4])
+		to = common.Bytes2Hex(tx.To()[:4])
 	} else {
 		to = "[NEW_CONTRACT]"
 	}
 	var from string
 	if len(tx.From()) > 0 {
-		from = ethutil.Bytes2Hex(tx.From()[:4])
+		from = common.Bytes2Hex(tx.From()[:4])
 	} else {
 		return errors.New(fmt.Sprintf("FROM ADDRESS MUST BE POSITIVE (was %v)", tx.From()))
 	}

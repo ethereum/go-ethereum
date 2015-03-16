@@ -7,13 +7,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/state"
 )
 
 // State query interface
-type stateQuery struct{ db ethutil.Database }
+type stateQuery struct{ db common.Database }
 
 func SQ() stateQuery {
 	db, _ := ethdb.NewMemDatabase()
@@ -25,7 +25,7 @@ func (self stateQuery) GetAccount(addr []byte) *state.StateObject {
 }
 
 func transaction() *types.Transaction {
-	return types.NewTransactionMessage(make([]byte, 20), ethutil.Big0, ethutil.Big0, ethutil.Big0, nil)
+	return types.NewTransactionMessage(make([]byte, 20), common.Big0, common.Big0, common.Big0, nil)
 }
 
 func setup() (*TxPool, *ecdsa.PrivateKey) {

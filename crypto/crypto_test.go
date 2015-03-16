@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // These tests are sanity checks.
@@ -53,7 +53,7 @@ func BenchmarkSha3(b *testing.B) {
 
 func Test0Key(t *testing.T) {
 	t.Skip()
-	key := ethutil.Hex2Bytes("1111111111111111111111111111111111111111111111111111111111111111")
+	key := common.Hex2Bytes("1111111111111111111111111111111111111111111111111111111111111111")
 
 	p, err := secp256k1.GeneratePubKey(key)
 	addr := Sha3(p[1:])[12:]

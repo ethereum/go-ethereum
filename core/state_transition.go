@@ -5,7 +5,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
@@ -58,7 +58,7 @@ type Message interface {
 
 func AddressFromMessage(msg Message) []byte {
 	// Generate a new address
-	return crypto.Sha3(ethutil.NewValue([]interface{}{msg.From(), msg.Nonce()}).Encode())[12:]
+	return crypto.Sha3(common.NewValue([]interface{}{msg.From(), msg.Nonce()}).Encode())[12:]
 }
 
 func MessageCreatesContract(msg Message) bool {
@@ -226,9 +226,9 @@ func (self *StateTransition) refundGas() {
 	remaining := new(big.Int).Mul(self.gas, self.msg.GasPrice())
 	sender.AddBalance(remaining)
 
-	uhalf := new(big.Int).Div(self.gasUsed(), ethutil.Big2)
+	uhalf := new(big.Int).Div(self.gasUsed(), common.Big2)
 	for addr, ref := range self.state.Refunds() {
-		refund := ethutil.BigMin(uhalf, ref)
+		refund := common.BigMin(uhalf, ref)
 		self.gas.Add(self.gas, refund)
 		self.state.AddBalance([]byte(addr), refund.Mul(refund, self.msg.GasPrice()))
 	}
