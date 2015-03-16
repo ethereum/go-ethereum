@@ -27,7 +27,7 @@ type Header struct {
 	// Receipt sha
 	ReceiptHash common.Hash
 	// Bloom
-	Bloom [256]byte
+	Bloom Bloom
 	// Difficulty for the current block
 	Difficulty *big.Int
 	// The block number
@@ -73,28 +73,30 @@ func (self *Header) RlpData() interface{} {
 	return self.rlpData(true)
 }
 
-func (self *Header) Hash() []byte {
-	return crypto.Sha3(common.Encode(self.rlpData(true)))
+func (self *Header) Hash() common.Hash {
+	return common.BytesToHash(crypto.Sha3(common.Encode(self.rlpData(true))))
 }
 
-func (self *Header) HashNoNonce() []byte {
-	return crypto.Sha3(common.Encode(self.rlpData(false)))
+func (self *Header) HashNoNonce() common.Hash {
+	return common.BytesToHash(crypto.Sha3(common.Encode(self.rlpData(false))))
 }
 
 type Block struct {
-	// Preset Hash for mock
-	HeaderHash       []byte
-	ParentHeaderHash []byte
-	header           *Header
-	uncles           []*Header
-	transactions     Transactions
-	Td               *big.Int
+	// Preset Hash for mock (Tests)
+	HeaderHash       common.Hash
+	ParentHeaderHash common.Hash
+	// ^^^^ ignore ^^^^
+
+	header       *Header
+	uncles       []*Header
+	transactions Transactions
+	Td           *big.Int
 
 	receipts Receipts
 	Reward   *big.Int
 }
 
-func NewBlock(parentHash []byte, coinbase []byte, root []byte, difficulty *big.Int, nonce uint64, extra string) *Block {
+func NewBlock(parentHash common.Hash, coinbase common.Address, root common.Hash, difficulty *big.Int, nonce uint64, extra string) *Block {
 	header := &Header{
 		Root:       root,
 		ParentHash: parentHash,
@@ -113,8 +115,7 @@ func NewBlock(parentHash []byte, coinbase []byte, root []byte, difficulty *big.I
 }
 
 func (self *Header) setNonce(nonce uint64) {
-	self.Nonce = make([]byte, 8)
-	binary.BigEndian.PutUint64(self.Nonce, nonce)
+	binary.BigEndian.PutUint64(self.Nonce[:], nonce)
 }
 
 func NewBlockWithHeader(header *Header) *Block {
@@ -148,7 +149,7 @@ func (self *Block) Uncles() []*Header {
 
 func (self *Block) SetUncles(uncleHeaders []*Header) {
 	self.uncles = uncleHeaders
-	self.header.UncleHash = crypto.Sha3(common.Encode(uncleHeaders))
+	self.header.UncleHash = common.BytesToHash(crypto.Sha3(common.Encode(uncleHeaders)))
 }
 
 func (self *Block) Transactions() Transactions {
@@ -196,23 +197,23 @@ func (self *Block) RlpDataForStorage() interface{} {
 }
 
 // Header accessors (add as you need them)
-func (self *Block) Number() *big.Int  { return self.header.Number }
-func (self *Block) NumberU64() uint64 { return self.header.Number.Uint64() }
-func (self *Block) MixDigest() []byte { return self.header.MixDigest }
+func (self *Block) Number() *big.Int       { return self.header.Number }
+func (self *Block) NumberU64() uint64      { return self.header.Number.Uint64() }
+func (self *Block) MixDigest() common.Hash { return self.header.MixDigest }
 func (self *Block) Nonce() uint64 {
-	return binary.BigEndian.Uint64(self.header.Nonce)
+	return binary.BigEndian.Uint64(self.header.Nonce[:])
 }
 func (self *Block) SetNonce(nonce uint64) {
 	self.header.setNonce(nonce)
 }
 
-func (self *Block) Bloom() []byte            { return self.header.Bloom }
-func (self *Block) Coinbase() []byte         { return self.header.Coinbase }
+func (self *Block) Bloom() Bloom             { return self.header.Bloom }
+func (self *Block) Coinbase() common.Address { return self.header.Coinbase }
 func (self *Block) Time() int64              { return int64(self.header.Time) }
 func (self *Block) GasLimit() *big.Int       { return self.header.GasLimit }
 func (self *Block) GasUsed() *big.Int        { return self.header.GasUsed }
-func (self *Block) Root() []byte             { return self.header.Root }
-func (self *Block) SetRoot(root []byte)      { self.header.Root = root }
+func (self *Block) Root() common.Hash        { return self.header.Root }
+func (self *Block) SetRoot(root common.Hash) { self.header.Root = root }
 func (self *Block) Size() common.StorageSize { return common.StorageSize(len(common.Encode(self))) }
 func (self *Block) GetTransaction(i int) *Transaction {
 	if len(self.transactions) > i {
@@ -228,19 +229,19 @@ func (self *Block) GetUncle(i int) *Header {
 }
 
 // Implement pow.Block
-func (self *Block) Difficulty() *big.Int { return self.header.Difficulty }
-func (self *Block) HashNoNonce() []byte  { return self.header.HashNoNonce() }
+func (self *Block) Difficulty() *big.Int     { return self.header.Difficulty }
+func (self *Block) HashNoNonce() common.Hash { return self.header.HashNoNonce() }
 
-func (self *Block) Hash() []byte {
-	if self.HeaderHash != nil {
+func (self *Block) Hash() common.Hash {
+	if (self.HeaderHash != common.Hash{}) {
 		return self.HeaderHash
 	} else {
 		return self.header.Hash()
 	}
 }
 
-func (self *Block) ParentHash() []byte {
-	if self.ParentHeaderHash != nil {
+func (self *Block) ParentHash() common.Hash {
+	if (self.ParentHeaderHash != common.Hash{}) {
 		return self.ParentHeaderHash
 	} else {
 		return self.header.ParentHash

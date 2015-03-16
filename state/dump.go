@@ -28,7 +28,6 @@ func (self *StateDB) RawDump() World {
 
 	it := self.trie.Iterator()
 	for it.Next() {
-		fmt.Printf("%x\n", it.Key, len(it.Key))
 		stateObject := NewStateObjectFromBytes(common.BytesToAddress(it.Key), it.Value, self.db)
 
 		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.nonce, Root: common.Bytes2Hex(stateObject.Root()), CodeHash: common.Bytes2Hex(stateObject.codeHash)}
