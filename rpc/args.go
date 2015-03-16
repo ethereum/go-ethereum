@@ -359,23 +359,29 @@ func (args *FilterOptions) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	fromstr, ok := obj[0].FromBlock.(string)
-	if ok {
-		if fromstr == "latest" {
-			args.Earliest = 0
-		} else {
-			args.Earliest = int64(common.Big(obj[0].FromBlock.(string)).Int64())
-		}
+	if !ok {
+		return NewDecodeParamError("FromBlock is not a string")
+	}
+
+	switch fromstr {
+	case "latest":
+		args.Earliest = 0
+	default:
+		args.Earliest = int64(common.Big(obj[0].FromBlock.(string)).Int64())
 	}
 
 	tostr, ok := obj[0].ToBlock.(string)
-	if ok {
-		if tostr == "latest" {
-			args.Latest = 0
-		} else if tostr == "pending" {
-			args.Latest = -1
-		} else {
-			args.Latest = int64(common.Big(obj[0].ToBlock.(string)).Int64())
-		}
+	if !ok {
+		return NewDecodeParamError("ToBlock is not a string")
+	}
+
+	switch tostr {
+	case "latest":
+		args.Latest = 0
+	case "pending":
+		args.Latest = -1
+	default:
+		args.Latest = int64(common.Big(obj[0].ToBlock.(string)).Int64())
 	}
 
 	args.Max = int(common.Big(obj[0].Limit).Int64())
