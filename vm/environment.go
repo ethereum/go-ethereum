@@ -12,7 +12,7 @@ import (
 type Environment interface {
 	State() *state.StateDB
 
-	Origin() []byte
+	Origin() common.Address
 	BlockNumber() *big.Int
 	GetHash(n uint64) []byte
 	Coinbase() []byte
@@ -27,9 +27,9 @@ type Environment interface {
 	Depth() int
 	SetDepth(i int)
 
-	Call(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
-	CallCode(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
-	Create(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
+	Call(me ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
+	CallCode(me ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
+	Create(me ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
 }
 
 type Account interface {
@@ -53,13 +53,13 @@ func Transfer(from, to Account, amount *big.Int) error {
 }
 
 type Log struct {
-	address []byte
+	address common.Address
 	topics  [][]byte
 	data    []byte
 	log     uint64
 }
 
-func (self *Log) Address() []byte {
+func (self *Log) Address() common.Address {
 	return self.address
 }
 

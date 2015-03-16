@@ -1,13 +1,13 @@
 package types
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// XXX Tests doesn't really do anything. This tests exists while working on the fixed size conversions
 func TestConversion(t *testing.T) {
 	var (
 		parent   common.Hash
@@ -15,6 +15,5 @@ func TestConversion(t *testing.T) {
 		hash     common.Hash
 	)
 
-	block := NewBlock(parent, coinbase, hash, big.NewInt(0), 0, "")
-	fmt.Println(block)
+	NewBlock(parent, coinbase, hash, big.NewInt(0), 0, "")
 }

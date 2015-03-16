@@ -1,8 +1,16 @@
 package common
 
-import "fmt"
+import "math/big"
 
-type Hash [32]byte
+const (
+	hashLength    = 32
+	addressLength = 20
+)
+
+type (
+	Hash    [hashLength]byte
+	Address [addressLength]byte
+)
 
 var (
 	zeroHash    Hash
@@ -15,25 +23,19 @@ func BytesToHash(b []byte) Hash {
 	return h
 }
 func StringToHash(s string) Hash { return BytesToHash([]byte(s)) }
-
-func BytesToAddress(b []byte) Address {
-	var a Address
-	a.SetBytes(b)
-	return a
-}
-func StringToAddress(s string) Address { return BytesToAddress([]byte(s)) }
+func BigToHash(b *big.Int) Hash  { return BytesToHash(b.Bytes()) }
 
 // Don't use the default 'String' method in case we want to overwrite
 
 // Get the string representation of the underlying hash
-func (h Hash) Str() string {
-	return string(h[:])
-}
+func (h Hash) Str() string   { return string(h[:]) }
+func (h Hash) Bytes() []byte { return h[:] }
+func (h Hash) Big() *big.Int { return Bytes2Big(h[:]) }
 
 // Sets the hash to the value of b. If b is larger than len(h) it will panic
 func (h *Hash) SetBytes(b []byte) {
 	if len(b) > len(h) {
-		panic(fmt.Sprintf("unable to set bytes. too big = %d", len(b)))
+		b = b[len(b)-hashLength:]
 	}
 
 	// reverse loop
@@ -52,17 +54,24 @@ func (h *Hash) Set(other Hash) {
 	}
 }
 
-type Address [20]byte
+/////////// Address
+func BytesToAddress(b []byte) Address {
+	var a Address
+	a.SetBytes(b)
+	return a
+}
+func StringToAddress(s string) Address { return BytesToAddress([]byte(s)) }
+func BigToAddress(b *big.Int) Address  { return BytesToAddress(b.Bytes()) }
 
 // Get the string representation of the underlying address
-func (a Address) Str() string {
-	return string(a[:])
-}
+func (a Address) Str() string   { return string(a[:]) }
+func (a Address) Bytes() []byte { return a[:] }
+func (a Address) Big() *big.Int { return Bytes2Big(a[:]) }
 
 // Sets the address to the value of b. If b is larger than len(a) it will panic
 func (a *Address) SetBytes(b []byte) {
 	if len(b) > len(a) {
-		panic(fmt.Sprintf("unable to set bytes. too big = %d", len(b)))
+		b = b[len(b)-addressLength:]
 	}
 
 	// reverse loop

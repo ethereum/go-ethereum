@@ -9,7 +9,7 @@ import (
 type Log interface {
 	common.RlpEncodable
 
-	Address() []byte
+	Address() common.Address
 	Topics() [][]byte
 	Data() []byte
 
@@ -17,17 +17,17 @@ type Log interface {
 }
 
 type StateLog struct {
-	address []byte
+	address common.Address
 	topics  [][]byte
 	data    []byte
 	number  uint64
 }
 
-func NewLog(address []byte, topics [][]byte, data []byte, number uint64) *StateLog {
+func NewLog(address common.Address, topics [][]byte, data []byte, number uint64) *StateLog {
 	return &StateLog{address, topics, data, number}
 }
 
-func (self *StateLog) Address() []byte {
+func (self *StateLog) Address() common.Address {
 	return self.address
 }
 
@@ -43,7 +43,12 @@ func (self *StateLog) Number() uint64 {
 	return self.number
 }
 
+/*
 func NewLogFromValue(decoder *common.Value) *StateLog {
+	var extlog struct {
+
+	}
+
 	log := &StateLog{
 		address: decoder.Get(0).Bytes(),
 		data:    decoder.Get(2).Bytes(),
@@ -56,6 +61,7 @@ func NewLogFromValue(decoder *common.Value) *StateLog {
 
 	return log
 }
+*/
 
 func (self *StateLog) RlpData() interface{} {
 	return []interface{}{self.address, common.ByteSliceToInterface(self.topics), self.data}
