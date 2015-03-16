@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func ParanoiaCheck(t1 *Trie, backend Backend) (bool, *Trie) {
@@ -24,13 +24,13 @@ func ParanoiaCheck(t1 *Trie, backend Backend) (bool, *Trie) {
 type Trie struct {
 	mu       sync.Mutex
 	root     Node
-	roothash []byte
+	roothash common.Hash
 	cache    *Cache
 
 	revisions *list.List
 }
 
-func New(root []byte, backend Backend) *Trie {
+func New(root common.Hash, backend Backend) *Trie {
 	trie := &Trie{}
 	trie.revisions = list.New()
 	trie.roothash = root
@@ -51,6 +51,9 @@ func (self *Trie) Iterator() *Iterator {
 }
 
 func (self *Trie) Copy() *Trie {
+	// cheap copying method
+	var cpy common.Hash
+	cpy.Set(self.roothash[:])
 	cpy := make([]byte, 32)
 	copy(cpy, self.roothash)
 	trie := New(nil, nil)

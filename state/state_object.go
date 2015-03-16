@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -44,7 +44,7 @@ type StateObject struct {
 	State *StateDB
 
 	// Address belonging to this account
-	address []byte
+	address common.Address
 	// The balance of the account
 	balance *big.Int
 	// The nonce of the account
@@ -77,9 +77,9 @@ func (self *StateObject) Reset() {
 	self.State.Reset()
 }
 
-func NewStateObject(addr []byte, db common.Database) *StateObject {
+func NewStateObject(address common.Address, db common.Database) *StateObject {
 	// This to ensure that it has 20 bytes (and not 0 bytes), thus left or right pad doesn't matter.
-	address := common.Address(addr)
+	//address := common.ToAddress(addr)
 
 	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
 	object.State = New(nil, db) //New(trie.New(common.Config.Db, ""))
@@ -90,12 +90,12 @@ func NewStateObject(addr []byte, db common.Database) *StateObject {
 	return object
 }
 
-func NewStateObjectFromBytes(address, data []byte, db common.Database) *StateObject {
+func NewStateObjectFromBytes(address common.Address, data []byte, db common.Database) *StateObject {
 	// TODO clean me up
 	var extobject struct {
 		Nonce    uint64
 		Balance  *big.Int
-		Root     []byte
+		Root     common.Hash
 		CodeHash []byte
 	}
 	err := rlp.Decode(bytes.NewReader(data), &extobject)
@@ -284,7 +284,7 @@ func (c *StateObject) N() *big.Int {
 }
 
 // Returns the address of the contract/account
-func (c *StateObject) Address() []byte {
+func (c *StateObject) Address() common.Address {
 	return c.address
 }
 

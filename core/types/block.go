@@ -8,26 +8,26 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type Header struct {
 	// Hash to the previous block
-	ParentHash []byte
+	ParentHash common.Hash
 	// Uncles of this block
-	UncleHash []byte
+	UncleHash common.Hash
 	// The coin base address
-	Coinbase []byte
+	Coinbase common.Address
 	// Block Trie state
-	Root []byte
+	Root common.Hash
 	// Tx sha
-	TxHash []byte
+	TxHash common.Hash
 	// Receipt sha
-	ReceiptHash []byte
+	ReceiptHash common.Hash
 	// Bloom
-	Bloom []byte
+	Bloom [256]byte
 	// Difficulty for the current block
 	Difficulty *big.Int
 	// The block number
@@ -41,9 +41,9 @@ type Header struct {
 	// Extra data
 	Extra string
 	// Mix digest for quick checking to prevent DOS
-	MixDigest []byte
+	MixDigest common.Hash
 	// Nonce
-	Nonce []byte
+	Nonce [8]byte
 }
 
 func (self *Header) rlpData(withNonce bool) []interface{} {
@@ -206,13 +206,13 @@ func (self *Block) SetNonce(nonce uint64) {
 	self.header.setNonce(nonce)
 }
 
-func (self *Block) Bloom() []byte             { return self.header.Bloom }
-func (self *Block) Coinbase() []byte          { return self.header.Coinbase }
-func (self *Block) Time() int64               { return int64(self.header.Time) }
-func (self *Block) GasLimit() *big.Int        { return self.header.GasLimit }
-func (self *Block) GasUsed() *big.Int         { return self.header.GasUsed }
-func (self *Block) Root() []byte              { return self.header.Root }
-func (self *Block) SetRoot(root []byte)       { self.header.Root = root }
+func (self *Block) Bloom() []byte            { return self.header.Bloom }
+func (self *Block) Coinbase() []byte         { return self.header.Coinbase }
+func (self *Block) Time() int64              { return int64(self.header.Time) }
+func (self *Block) GasLimit() *big.Int       { return self.header.GasLimit }
+func (self *Block) GasUsed() *big.Int        { return self.header.GasUsed }
+func (self *Block) Root() []byte             { return self.header.Root }
+func (self *Block) SetRoot(root []byte)      { self.header.Root = root }
 func (self *Block) Size() common.StorageSize { return common.StorageSize(len(common.Encode(self))) }
 func (self *Block) GetTransaction(i int) *Transaction {
 	if len(self.transactions) > i {

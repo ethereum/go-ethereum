@@ -211,7 +211,7 @@ func RightPadString(str string, l int) string {
 
 }
 
-func Address(slice []byte) (addr []byte) {
+func ToAddress(slice []byte) (addr []byte) {
 	if len(slice) < 20 {
 		addr = LeftPadBytes(slice, 20)
 	} else if len(slice) > 20 {
