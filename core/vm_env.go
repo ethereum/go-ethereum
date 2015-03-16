@@ -3,6 +3,7 @@ package core
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
@@ -27,18 +28,18 @@ func NewEnv(state *state.StateDB, chain *ChainManager, msg Message, block *types
 	}
 }
 
-func (self *VMEnv) Origin() []byte        { return self.msg.From() }
-func (self *VMEnv) BlockNumber() *big.Int { return self.block.Number() }
-func (self *VMEnv) Coinbase() []byte      { return self.block.Coinbase() }
-func (self *VMEnv) Time() int64           { return self.block.Time() }
-func (self *VMEnv) Difficulty() *big.Int  { return self.block.Difficulty() }
-func (self *VMEnv) GasLimit() *big.Int    { return self.block.GasLimit() }
-func (self *VMEnv) Value() *big.Int       { return self.msg.Value() }
-func (self *VMEnv) State() *state.StateDB { return self.state }
-func (self *VMEnv) Depth() int            { return self.depth }
-func (self *VMEnv) SetDepth(i int)        { self.depth = i }
-func (self *VMEnv) VmType() vm.Type       { return self.typ }
-func (self *VMEnv) SetVmType(t vm.Type)   { self.typ = t }
+func (self *VMEnv) Origin() common.Address { return self.msg.From() }
+func (self *VMEnv) BlockNumber() *big.Int  { return self.block.Number() }
+func (self *VMEnv) Coinbase() []byte       { return self.block.Coinbase() }
+func (self *VMEnv) Time() int64            { return self.block.Time() }
+func (self *VMEnv) Difficulty() *big.Int   { return self.block.Difficulty() }
+func (self *VMEnv) GasLimit() *big.Int     { return self.block.GasLimit() }
+func (self *VMEnv) Value() *big.Int        { return self.msg.Value() }
+func (self *VMEnv) State() *state.StateDB  { return self.state }
+func (self *VMEnv) Depth() int             { return self.depth }
+func (self *VMEnv) SetDepth(i int)         { self.depth = i }
+func (self *VMEnv) VmType() vm.Type        { return self.typ }
+func (self *VMEnv) SetVmType(t vm.Type)    { self.typ = t }
 func (self *VMEnv) GetHash(n uint64) []byte {
 	if block := self.chain.GetBlockByNumber(n); block != nil {
 		return block.Hash()
@@ -57,16 +58,16 @@ func (self *VMEnv) vm(addr, data []byte, gas, price, value *big.Int) *Execution 
 	return NewExecution(self, addr, data, gas, price, value)
 }
 
-func (self *VMEnv) Call(me vm.ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *VMEnv) Call(me vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
 	exe := self.vm(addr, data, gas, price, value)
 	return exe.Call(addr, me)
 }
-func (self *VMEnv) CallCode(me vm.ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *VMEnv) CallCode(me vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
 	exe := self.vm(me.Address(), data, gas, price, value)
 	return exe.Call(addr, me)
 }
 
-func (self *VMEnv) Create(me vm.ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
-	exe := self.vm(addr, data, gas, price, value)
+func (self *VMEnv) Create(me vm.ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
+	exe := self.vm(common.Address{}, data, gas, price, value)
 	return exe.Create(me)
 }

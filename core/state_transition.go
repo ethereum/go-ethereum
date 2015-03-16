@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
@@ -45,8 +45,8 @@ type StateTransition struct {
 }
 
 type Message interface {
-	From() []byte
-	To() []byte
+	From() common.Address
+	To() common.Address
 
 	GasPrice() *big.Int
 	Gas() *big.Int
