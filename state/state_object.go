@@ -109,7 +109,7 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db common.Data
 	object.nonce = extobject.Nonce
 	object.balance = extobject.Balance
 	object.codeHash = extobject.CodeHash
-	object.State = New(extobject.Root, db)
+	object.State = New(extobject.Root[:], db)
 	object.storage = make(map[string]*common.Value)
 	object.gasPool = new(big.Int)
 	object.prepaid = new(big.Int)
@@ -124,8 +124,8 @@ func (self *StateObject) MarkForDeletion() {
 	statelogger.Debugf("%x: #%d %v X\n", self.Address(), self.nonce, self.balance)
 }
 
-func (c *StateObject) getAddr(addr []byte) *common.Value {
-	return common.NewValueFromBytes([]byte(c.State.trie.Get(addr)))
+func (c *StateObject) getAddr(addr common.Hash) *common.Value {
+	return common.NewValueFromBytes([]byte(c.State.trie.Get(addr[:])))
 }
 
 func (c *StateObject) setAddr(addr []byte, value interface{}) {
@@ -133,34 +133,32 @@ func (c *StateObject) setAddr(addr []byte, value interface{}) {
 }
 
 func (self *StateObject) GetStorage(key *big.Int) *common.Value {
-	return self.GetState(key.Bytes())
+	return self.GetState(common.BytesToHash(key.Bytes()))
 }
 func (self *StateObject) SetStorage(key *big.Int, value *common.Value) {
-	self.SetState(key.Bytes(), value)
+	self.SetState(common.BytesToHash(key.Bytes()), value)
 }
 
 func (self *StateObject) Storage() Storage {
 	return self.storage
 }
 
-func (self *StateObject) GetState(k []byte) *common.Value {
-	key := common.LeftPadBytes(k, 32)
-
-	value := self.storage[string(key)]
+func (self *StateObject) GetState(key common.Hash) *common.Value {
+	strkey := key.Str()
+	value := self.storage[strkey]
 	if value == nil {
 		value = self.getAddr(key)
 
 		if !value.IsNil() {
-			self.storage[string(key)] = value
+			self.storage[strkey] = value
 		}
 	}
 
 	return value
 }
 
-func (self *StateObject) SetState(k []byte, value *common.Value) {
-	key := common.LeftPadBytes(k, 32)
-	self.storage[string(key)] = value.Copy()
+func (self *StateObject) SetState(k common.Hash, value *common.Value) {
+	self.storage[k.Str()] = value.Copy()
 	self.dirty = true
 }
 

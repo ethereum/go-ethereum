@@ -88,7 +88,7 @@ func (self *StateDB) GetCode(addr common.Address) []byte {
 	return nil
 }
 
-func (self *StateDB) GetState(a common.Adress, b common.Hash) []byte {
+func (self *StateDB) GetState(a common.Address, b common.Hash) []byte {
 	stateObject := self.GetStateObject(a)
 	if stateObject != nil {
 		return stateObject.GetState(b).Bytes()
@@ -150,14 +150,16 @@ func (self *StateDB) UpdateStateObject(stateObject *StateObject) {
 		self.db.Put(stateObject.CodeHash(), stateObject.code)
 	}
 
-	self.trie.Update(stateObject.Address(), stateObject.RlpEncode())
+	addr := stateObject.Address()
+	self.trie.Update(addr[:], stateObject.RlpEncode())
 }
 
 // Delete the given state object and delete it from the state trie
 func (self *StateDB) DeleteStateObject(stateObject *StateObject) {
-	self.trie.Delete(stateObject.Address())
+	addr := stateObject.Address()
+	self.trie.Delete(addr[:])
 
-	delete(self.stateObjects, stateObject.Address().Str())
+	delete(self.stateObjects, addr.Str())
 }
 
 // Retrieve a state object given my the address. Nil if not found
@@ -169,7 +171,7 @@ func (self *StateDB) GetStateObject(addr common.Address) *StateObject {
 		return stateObject
 	}
 
-	data := self.trie.Get(addr)
+	data := self.trie.Get(addr[:])
 	if len(data) == 0 {
 		return nil
 	}
@@ -201,13 +203,13 @@ func (self *StateDB) NewStateObject(addr common.Address) *StateObject {
 	statelogger.Debugf("(+) %x\n", addr)
 
 	stateObject := NewStateObject(addr, self.db)
-	self.stateObjects[string(addr)] = stateObject
+	self.stateObjects[addr.Str()] = stateObject
 
 	return stateObject
 }
 
 // Deprecated
-func (self *StateDB) GetAccount(addr []byte) *StateObject {
+func (self *StateDB) GetAccount(addr common.Address) *StateObject {
 	return self.GetOrNewStateObject(addr)
 }
 

@@ -6,15 +6,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var addr = common.Address([]byte("test"))
+var addr = common.BytesToAddress([]byte("test"))
 
 func create() (*ManagedState, *account) {
 	ms := ManageState(&StateDB{stateObjects: make(map[string]*StateObject)})
 	so := &StateObject{address: addr, nonce: 100}
-	ms.StateDB.stateObjects[string(addr)] = so
-	ms.accounts[string(addr)] = newAccount(so)
+	ms.StateDB.stateObjects[addr.Str()] = so
+	ms.accounts[addr.Str()] = newAccount(so)
 
-	return ms, ms.accounts[string(addr)]
+	return ms, ms.accounts[addr.Str()]
 }
 
 func TestNewNonce(t *testing.T) {
@@ -73,7 +73,7 @@ func TestRemoteNonceChange(t *testing.T) {
 	account.nonces = append(account.nonces, nn...)
 	nonce := ms.NewNonce(addr)
 
-	ms.StateDB.stateObjects[string(addr)].nonce = 200
+	ms.StateDB.stateObjects[addr.Str()].nonce = 200
 	nonce = ms.NewNonce(addr)
 	if nonce != 200 {
 		t.Error("expected nonce after remote update to be", 201, "got", nonce)
@@ -81,7 +81,7 @@ func TestRemoteNonceChange(t *testing.T) {
 	ms.NewNonce(addr)
 	ms.NewNonce(addr)
 	ms.NewNonce(addr)
-	ms.StateDB.stateObjects[string(addr)].nonce = 200
+	ms.StateDB.stateObjects[addr.Str()].nonce = 200
 	nonce = ms.NewNonce(addr)
 	if nonce != 204 {
 		t.Error("expected nonce after remote update to be", 201, "got", nonce)

@@ -1,5 +1,7 @@
 package common
 
+import "fmt"
+
 type Hash [32]byte
 
 var (
@@ -31,7 +33,7 @@ func (h Hash) Str() string {
 // Sets the hash to the value of b. If b is larger than len(h) it will panic
 func (h *Hash) SetBytes(b []byte) {
 	if len(b) > len(h) {
-		panic("unable to set bytes. too big")
+		panic(fmt.Sprintf("unable to set bytes. too big = %d", len(b)))
 	}
 
 	// reverse loop
@@ -60,11 +62,11 @@ func (a Address) Str() string {
 // Sets the address to the value of b. If b is larger than len(a) it will panic
 func (a *Address) SetBytes(b []byte) {
 	if len(b) > len(a) {
-		panic("unable to set bytes. too big")
+		panic(fmt.Sprintf("unable to set bytes. too big = %d", len(b)))
 	}
 
 	// reverse loop
-	for i := len(b); i >= 0; i-- {
+	for i := len(b) - 1; i >= 0; i-- {
 		a[i] = b[i]
 	}
 }
