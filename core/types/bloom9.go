@@ -3,18 +3,18 @@ package types
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/state"
 )
 
-func CreateBloom(receipts Receipts) []byte {
+func CreateBloom(receipts Receipts) Bloom {
 	bin := new(big.Int)
 	for _, receipt := range receipts {
 		bin.Or(bin, LogsBloom(receipt.logs))
 	}
 
-	return common.LeftPadBytes(bin.Bytes(), 256)
+	return BytesToBloom(bin.Bytes())
 }
 
 func LogsBloom(logs state.Logs) *big.Int {
