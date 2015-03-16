@@ -22,7 +22,7 @@ func TestIterator(t *testing.T) {
 
 	it := trie.Iterator()
 	for it.Next() {
-		v[it.Key.Str()] = true
+		v[string(it.Key)] = true
 	}
 
 	for k, found := range v {

@@ -2,19 +2,17 @@ package trie
 
 import (
 	"bytes"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 type Iterator struct {
 	trie *Trie
 
-	Key   common.Hash
+	Key   []byte
 	Value []byte
 }
 
 func NewIterator(trie *Trie) *Iterator {
-	return &Iterator{trie: trie}
+	return &Iterator{trie: trie, Key: nil}
 }
 
 func (self *Iterator) Next() bool {
@@ -22,15 +20,15 @@ func (self *Iterator) Next() bool {
 	defer self.trie.mu.Unlock()
 
 	isIterStart := false
-	if (self.Key == common.Hash{}) {
+	if self.Key == nil {
 		isIterStart = true
-		//self.Key = make([]byte, 32)
+		self.Key = make([]byte, 32)
 	}
 
-	key := RemTerm(CompactHexDecode(self.Key.Str()))
+	key := RemTerm(CompactHexDecode(string(self.Key)))
 	k := self.next(self.trie.root, key, isIterStart)
 
-	self.Key = common.StringToHash(DecodeCompact(k))
+	self.Key = []byte(DecodeCompact(k))
 
 	return len(k) > 0
 }
