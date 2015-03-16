@@ -1,9 +1,6 @@
 package common
 
-type (
-	Hash    [32]byte
-	Address [20]byte
-)
+type Hash [32]byte
 
 var (
 	zeroHash    Hash
@@ -27,7 +24,7 @@ func StringToAddress(s string) Address { return BytesToAddress([]byte(s)) }
 // Don't use the default 'String' method in case we want to overwrite
 
 // Get the string representation of the underlying hash
-func (h *Hash) Str() string {
+func (h Hash) Str() string {
 	return string(h[:])
 }
 
@@ -53,13 +50,15 @@ func (h *Hash) Set(other Hash) {
 	}
 }
 
+type Address [20]byte
+
 // Get the string representation of the underlying address
 func (a Address) Str() string {
 	return string(a[:])
 }
 
 // Sets the address to the value of b. If b is larger than len(a) it will panic
-func (a Address) SetBytes(b []byte) {
+func (a *Address) SetBytes(b []byte) {
 	if len(b) > len(a) {
 		panic("unable to set bytes. too big")
 	}
@@ -71,10 +70,10 @@ func (a Address) SetBytes(b []byte) {
 }
 
 // Set string `s` to a. If s is larger than len(a) it will panic
-func (a Address) SetString(s string) { a.SetBytes([]byte(s)) }
+func (a *Address) SetString(s string) { a.SetBytes([]byte(s)) }
 
 // Sets a to other
-func (a Address) Set(other Address) {
+func (a *Address) Set(other Address) {
 	for i, v := range other {
 		a[i] = v
 	}
