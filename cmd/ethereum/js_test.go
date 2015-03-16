@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 var port = 30300
@@ -29,7 +29,7 @@ func testJEthRE(t *testing.T) (repl *jsre, ethereum *eth.Ethereum, err error) {
 	}
 	// FIXME: this does not work ATM
 	ks := crypto.NewKeyStorePlain("/tmp/eth/keys")
-	ethutil.WriteFile("/tmp/eth/keys/e273f01c99144c438695e10f24926dc1f9fbf62d/e273f01c99144c438695e10f24926dc1f9fbf62d",
+	common.WriteFile("/tmp/eth/keys/e273f01c99144c438695e10f24926dc1f9fbf62d/e273f01c99144c438695e10f24926dc1f9fbf62d",
 		[]byte(`{"Id":"RhRXD+fNRKS4jx+7ZfEsNA==","Address":"4nPwHJkUTEOGleEPJJJtwfn79i0=","PrivateKey":"h4ACVpe74uIvi5Cg/2tX/Yrm2xdr3J7QoMbMtNX2CNc="}`))
 
 	port++
@@ -224,44 +224,6 @@ func TestMining(t *testing.T) {
 	}
 	if mining {
 		t.Errorf("expected false (not mining), got true")
-	}
-
-	val, err = repl.re.Run("admin.startMining(4)")
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
-	mining, _ = val.ToBoolean()
-	if !mining {
-		t.Errorf("expected true (mining), got false")
-	}
-	val, err = repl.re.Run("eth.mining")
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
-	mining, err = val.ToBoolean()
-	if err != nil {
-		t.Errorf("expected boolean, got %v", err)
-	}
-	if !mining {
-		t.Errorf("expected true (mining), got false")
-	}
-
-	val, err = repl.re.Run("admin.startMining(4)")
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
-	mining, _ = val.ToBoolean()
-	if !mining {
-		t.Errorf("expected true (mining), got false")
-	}
-
-	val, err = repl.re.Run("admin.stopMining()")
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
-	mining, _ = val.ToBoolean()
-	if !mining {
-		t.Errorf("expected true (mining), got false")
 	}
 
 }

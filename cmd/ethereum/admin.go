@@ -9,7 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/state"
@@ -121,11 +121,11 @@ func (js *jsre) unlock(call otto.FunctionCall) otto.Value {
 		}
 	}
 	am := js.ethereum.AccountManager()
-	// err := am.Unlock(ethutil.FromHex(split[0]), split[1])
+	// err := am.Unlock(common.FromHex(split[0]), split[1])
 	// if err != nil {
 	// 	utils.Fatalf("Unlock account failed '%v'", err)
 	// }
-	err = am.TimedUnlock(ethutil.FromHex(addr), passphrase, time.Duration(seconds)*time.Second)
+	err = am.TimedUnlock(common.FromHex(addr), passphrase, time.Duration(seconds)*time.Second)
 	if err != nil {
 		fmt.Printf("Unlock account failed '%v'\n", err)
 		return otto.FalseValue()
@@ -164,7 +164,7 @@ func (js *jsre) newAccount(call otto.FunctionCall) otto.Value {
 		fmt.Printf("Could not create the account: %v", err)
 		return otto.UndefinedValue()
 	}
-	return js.re.ToVal(ethutil.Bytes2Hex(acct.Address))
+	return js.re.ToVal(common.Bytes2Hex(acct.Address))
 }
 
 func (js *jsre) nodeInfo(call otto.FunctionCall) otto.Value {
@@ -223,7 +223,7 @@ func (js *jsre) exportChain(call otto.FunctionCall) otto.Value {
 	}
 
 	data := js.ethereum.ChainManager().Export()
-	if err := ethutil.WriteFile(fn, data); err != nil {
+	if err := common.WriteFile(fn, data); err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}
@@ -239,7 +239,7 @@ func (js *jsre) dumpBlock(call otto.FunctionCall) otto.Value {
 			block = js.ethereum.ChainManager().GetBlockByNumber(uint64(num))
 		} else if call.Argument(0).IsString() {
 			hash, _ := call.Argument(0).ToString()
-			block = js.ethereum.ChainManager().GetBlock(ethutil.Hex2Bytes(hash))
+			block = js.ethereum.ChainManager().GetBlock(common.Hex2Bytes(hash))
 		} else {
 			fmt.Println("invalid argument for dump. Either hex string or number")
 		}
