@@ -74,6 +74,16 @@ func TestGetBlockByHashArgs(t *testing.T) {
 	}
 }
 
+func TestGetBlockByHashEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(GetBlockByHashArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+}
+
 func TestGetBlockByNumberArgs(t *testing.T) {
 	input := `["0x1b4", false]`
 	expected := new(GetBlockByNumberArgs)
@@ -91,6 +101,16 @@ func TestGetBlockByNumberArgs(t *testing.T) {
 
 	if args.Transactions != expected.Transactions {
 		t.Errorf("Transactions should be %v but is %v", expected.Transactions, args.Transactions)
+	}
+}
+
+func TestGetBlockByNumberEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(GetBlockByNumberArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
 	}
 }
 
@@ -306,6 +326,33 @@ func TestFilterOptionsWords(t *testing.T) {
 
 	if expected.Latest != args.Latest {
 		t.Errorf("Latest shoud be %#v but is %#v", expected.Latest, args.Latest)
+	}
+}
+
+func TestFilterOptionsNums(t *testing.T) {
+	input := `[{
+  "fromBlock": 2,
+  "toBlock": 3
+  }]`
+
+	args := new(FilterOptions)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Should have *DecodeParamError but instead have %T", err)
+	}
+
+}
+
+func TestFilterOptionsEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(FilterOptions)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
 	}
 }
 
