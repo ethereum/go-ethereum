@@ -8,10 +8,10 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -170,7 +170,7 @@ func (self *XEth) Accounts() []string {
 	accounts, _ := self.eth.AccountManager().Accounts()
 	accountAddresses := make([]string, len(accounts))
 	for i, ac := range accounts {
-		accountAddresses[i] = toHex(ac.Address)
+		accountAddresses[i] = common.ToHex(ac.Address)
 	}
 	return accountAddresses
 }
@@ -201,7 +201,7 @@ func (self *XEth) IsListening() bool {
 
 func (self *XEth) Coinbase() string {
 	cb, _ := self.eth.AccountManager().Coinbase()
-	return toHex(cb)
+	return common.ToHex(cb)
 }
 
 func (self *XEth) NumberToHuman(balance string) string {
@@ -213,7 +213,7 @@ func (self *XEth) NumberToHuman(balance string) string {
 func (self *XEth) StorageAt(addr, storageAddr string) string {
 	storage := self.State().SafeGet(addr).StorageString(storageAddr)
 
-	return toHex(storage.Bytes())
+	return common.ToHex(storage.Bytes())
 }
 
 func (self *XEth) BalanceAt(addr string) string {
@@ -225,7 +225,7 @@ func (self *XEth) TxCountAt(address string) int {
 }
 
 func (self *XEth) CodeAt(address string) string {
-	return toHex(self.State().SafeGet(address).Code())
+	return common.ToHex(self.State().SafeGet(address).Code())
 }
 
 func (self *XEth) IsContract(address string) bool {
@@ -238,7 +238,7 @@ func (self *XEth) SecretToAddress(key string) string {
 		return ""
 	}
 
-	return toHex(pair.Address())
+	return common.ToHex(pair.Address())
 }
 
 type KeyVal struct {
@@ -251,7 +251,7 @@ func (self *XEth) EachStorage(addr string) string {
 	object := self.State().SafeGet(addr)
 	it := object.Trie().Iterator()
 	for it.Next() {
-		values = append(values, KeyVal{toHex(it.Key), toHex(it.Value)})
+		values = append(values, KeyVal{common.ToHex(it.Key), common.ToHex(it.Value)})
 	}
 
 	valuesJson, err := json.Marshal(values)
@@ -265,7 +265,7 @@ func (self *XEth) EachStorage(addr string) string {
 func (self *XEth) ToAscii(str string) string {
 	padded := common.RightPadBytes([]byte(str), 32)
 
-	return "0x" + toHex(padded)
+	return "0x" + common.ToHex(padded)
 }
 
 func (self *XEth) FromAscii(str string) string {
@@ -293,9 +293,9 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 
 	if tx.To() == nil {
 		addr := core.AddressFromMessage(tx)
-		return toHex(addr), nil
+		return common.ToHex(addr), nil
 	}
-	return toHex(tx.Hash()), nil
+	return common.ToHex(tx.Hash()), nil
 }
 
 var (
@@ -325,7 +325,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	vmenv := core.NewEnv(statedb, self.chainManager, msg, block)
 
 	res, err := vmenv.Call(msg.from, msg.to, msg.data, msg.gas, msg.gasPrice, msg.value)
-	return toHex(res), err
+	return common.ToHex(res), err
 }
 
 func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
@@ -371,9 +371,9 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	}
 
 	if types.IsContractAddr(to) {
-		return toHex(core.AddressFromMessage(tx)), nil
+		return common.ToHex(core.AddressFromMessage(tx)), nil
 	}
-	return toHex(tx.Hash()), nil
+	return common.ToHex(tx.Hash()), nil
 }
 
 func (self *XEth) sign(tx *types.Transaction, from []byte, didUnlock bool) error {

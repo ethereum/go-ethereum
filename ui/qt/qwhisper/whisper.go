@@ -4,16 +4,14 @@ package qwhisper
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/whisper"
 	"github.com/obscuren/qml"
 )
 
 var qlogger = logger.NewLogger("QSHH")
-
-func toHex(b []byte) string { return "0x" + common.Bytes2Hex(b) }
 
 type Whisper struct {
 	*whisper.Whisper
@@ -66,7 +64,7 @@ func (self *Whisper) Post(payload []string, to, from string, topics []string, pr
 func (self *Whisper) NewIdentity() string {
 	key := self.Whisper.NewIdentity()
 
-	return toHex(crypto.FromECDSAPub(&key.PublicKey))
+	return common.ToHex(crypto.FromECDSAPub(&key.PublicKey))
 }
 
 func (self *Whisper) HasIdentity(key string) bool {
