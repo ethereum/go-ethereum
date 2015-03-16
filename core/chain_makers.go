@@ -5,7 +5,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/state"
@@ -33,36 +33,36 @@ func NewBlockFromParent(addr []byte, parent *types.Block) *types.Block {
 	return newBlockFromParent(addr, parent)
 }
 
-func MakeBlock(bman *BlockProcessor, parent *types.Block, i int, db ethutil.Database, seed int) *types.Block {
+func MakeBlock(bman *BlockProcessor, parent *types.Block, i int, db common.Database, seed int) *types.Block {
 	return makeBlock(bman, parent, i, db, seed)
 }
 
-func MakeChain(bman *BlockProcessor, parent *types.Block, max int, db ethutil.Database, seed int) types.Blocks {
+func MakeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Database, seed int) types.Blocks {
 	return makeChain(bman, parent, max, db, seed)
 }
 
-func NewChainMan(block *types.Block, eventMux *event.TypeMux, db ethutil.Database) *ChainManager {
+func NewChainMan(block *types.Block, eventMux *event.TypeMux, db common.Database) *ChainManager {
 	return newChainManager(block, eventMux, db)
 }
 
-func NewBlockProc(db ethutil.Database, txpool *TxPool, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+func NewBlockProc(db common.Database, txpool *TxPool, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	return newBlockProcessor(db, txpool, cman, eventMux)
 }
 
-func NewCanonical(n int, db ethutil.Database) (*BlockProcessor, error) {
+func NewCanonical(n int, db common.Database) (*BlockProcessor, error) {
 	return newCanonical(n, db)
 }
 
 // block time is fixed at 10 seconds
 func newBlockFromParent(addr []byte, parent *types.Block) *types.Block {
-	block := types.NewBlock(parent.Hash(), addr, parent.Root(), ethutil.BigPow(2, 32), 0, "")
+	block := types.NewBlock(parent.Hash(), addr, parent.Root(), common.BigPow(2, 32), 0, "")
 	block.SetUncles(nil)
 	block.SetTransactions(nil)
 	block.SetReceipts(nil)
 
 	header := block.Header()
 	header.Difficulty = CalcDifficulty(block.Header(), parent.Header())
-	header.Number = new(big.Int).Add(parent.Header().Number, ethutil.Big1)
+	header.Number = new(big.Int).Add(parent.Header().Number, common.Big1)
 	header.Time = parent.Header().Time + 10
 	header.GasLimit = CalcGasLimit(parent, block)
 
@@ -73,22 +73,22 @@ func newBlockFromParent(addr []byte, parent *types.Block) *types.Block {
 
 // Actually make a block by simulating what miner would do
 // we seed chains by the first byte of the coinbase
-func makeBlock(bman *BlockProcessor, parent *types.Block, i int, db ethutil.Database, seed int) *types.Block {
-	addr := ethutil.LeftPadBytes([]byte{byte(i)}, 20)
+func makeBlock(bman *BlockProcessor, parent *types.Block, i int, db common.Database, seed int) *types.Block {
+	addr := common.LeftPadBytes([]byte{byte(i)}, 20)
 	addr[0] = byte(seed)
 	block := newBlockFromParent(addr, parent)
 	state := state.New(block.Root(), db)
 	cbase := state.GetOrNewStateObject(addr)
 	cbase.SetGasPool(CalcGasLimit(parent, block))
 	cbase.AddBalance(BlockReward)
-	state.Update(ethutil.Big0)
+	state.Update(common.Big0)
 	block.SetRoot(state.Root())
 	return block
 }
 
 // Make a chain with real blocks
 // Runs ProcessWithParent to get proper state roots
-func makeChain(bman *BlockProcessor, parent *types.Block, max int, db ethutil.Database, seed int) types.Blocks {
+func makeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Database, seed int) types.Blocks {
 	bman.bc.currentBlock = parent
 	blocks := make(types.Blocks, max)
 	for i := 0; i < max; i++ {
@@ -107,7 +107,7 @@ func makeChain(bman *BlockProcessor, parent *types.Block, max int, db ethutil.Da
 
 // Create a new chain manager starting from given block
 // Effectively a fork factory
-func newChainManager(block *types.Block, eventMux *event.TypeMux, db ethutil.Database) *ChainManager {
+func newChainManager(block *types.Block, eventMux *event.TypeMux, db common.Database) *ChainManager {
 	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: GenesisBlock(db), eventMux: eventMux}
 	if block == nil {
 		bc.Reset()
@@ -119,14 +119,14 @@ func newChainManager(block *types.Block, eventMux *event.TypeMux, db ethutil.Dat
 }
 
 // block processor with fake pow
-func newBlockProcessor(db ethutil.Database, txpool *TxPool, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+func newBlockProcessor(db common.Database, txpool *TxPool, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	bman := NewBlockProcessor(db, db, FakePow{}, txpool, newChainManager(nil, eventMux, db), eventMux)
 	return bman
 }
 
 // Make a new, deterministic canonical chain by running InsertChain
 // on result of makeChain
-func newCanonical(n int, db ethutil.Database) (*BlockProcessor, error) {
+func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
 	eventMux := &event.TypeMux{}
 	txpool := NewTxPool(eventMux)
 

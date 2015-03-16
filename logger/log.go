@@ -6,11 +6,11 @@ import (
 	"log"
 	"os"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func openLogFile(datadir string, filename string) *os.File {
-	path := ethutil.AbsolutePath(datadir, filename)
+	path := common.AbsolutePath(datadir, filename)
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		panic(fmt.Sprintf("error opening log file '%s': %v", filename, err))

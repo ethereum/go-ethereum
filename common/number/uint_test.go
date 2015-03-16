@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func TestSet(t *testing.T) {
@@ -15,7 +15,7 @@ func TestSet(t *testing.T) {
 		t.Error("didn't compare", a, b)
 	}
 
-	c := Uint(0).SetBytes(ethutil.Hex2Bytes("0a"))
+	c := Uint(0).SetBytes(common.Hex2Bytes("0a"))
 	if c.num.Cmp(big.NewInt(10)) != 0 {
 		t.Error("c set bytes failed.")
 	}

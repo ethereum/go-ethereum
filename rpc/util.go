@@ -25,7 +25,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -120,7 +120,7 @@ func (self JsonWrapper) ParseRequestBody(req *http.Request) (RpcRequest, error) 
 }
 
 func toHex(b []byte) string {
-	hex := ethutil.Bytes2Hex(b)
+	hex := common.Bytes2Hex(b)
 	// Prefer output of "0x0" instead of "0x"
 	if len(hex) == 0 {
 		hex = "0"

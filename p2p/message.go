@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -30,7 +30,7 @@ type Msg struct {
 
 // NewMsg creates an RLP-encoded message with the given code.
 func NewMsg(code uint64, params ...interface{}) Msg {
-	p := bytes.NewReader(ethutil.Encode(params))
+	p := bytes.NewReader(common.Encode(params))
 	return Msg{Code: code, Size: uint32(p.Len()), Payload: p}
 }
 

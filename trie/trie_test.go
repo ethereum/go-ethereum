@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type Db map[string][]byte
@@ -26,7 +26,7 @@ func NewEmptySecure() *SecureTrie {
 func TestEmptyTrie(t *testing.T) {
 	trie := NewEmpty()
 	res := trie.Hash()
-	exp := crypto.Sha3(ethutil.Encode(""))
+	exp := crypto.Sha3(common.Encode(""))
 	if !bytes.Equal(res, exp) {
 		t.Errorf("expected %x got %x", exp, res)
 	}
@@ -39,7 +39,7 @@ func TestInsert(t *testing.T) {
 	trie.UpdateString("dog", "puppy")
 	trie.UpdateString("dogglesworth", "cat")
 
-	exp := ethutil.Hex2Bytes("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3")
+	exp := common.Hex2Bytes("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3")
 	root := trie.Hash()
 	if !bytes.Equal(root, exp) {
 		t.Errorf("exp %x got %x", exp, root)
@@ -48,7 +48,7 @@ func TestInsert(t *testing.T) {
 	trie = NewEmpty()
 	trie.UpdateString("A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
-	exp = ethutil.Hex2Bytes("d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab")
+	exp = common.Hex2Bytes("d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab")
 	root = trie.Hash()
 	if !bytes.Equal(root, exp) {
 		t.Errorf("exp %x got %x", exp, root)
@@ -95,7 +95,7 @@ func TestDelete(t *testing.T) {
 	}
 
 	hash := trie.Hash()
-	exp := ethutil.Hex2Bytes("5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84")
+	exp := common.Hex2Bytes("5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84")
 	if !bytes.Equal(hash, exp) {
 		t.Errorf("expected %x got %x", exp, hash)
 	}
@@ -119,7 +119,7 @@ func TestEmptyValues(t *testing.T) {
 	}
 
 	hash := trie.Hash()
-	exp := ethutil.Hex2Bytes("5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84")
+	exp := common.Hex2Bytes("5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84")
 	if !bytes.Equal(hash, exp) {
 		t.Errorf("expected %x got %x", exp, hash)
 	}
@@ -168,7 +168,7 @@ func TestReset(t *testing.T) {
 	}
 	trie.Commit()
 
-	before := ethutil.CopyBytes(trie.roothash)
+	before := common.CopyBytes(trie.roothash)
 	trie.UpdateString("should", "revert")
 	trie.Hash()
 	// Should have no effect
@@ -177,7 +177,7 @@ func TestReset(t *testing.T) {
 	// ###
 
 	trie.Reset()
-	after := ethutil.CopyBytes(trie.roothash)
+	after := common.CopyBytes(trie.roothash)
 
 	if !bytes.Equal(before, after) {
 		t.Errorf("expected roots to be equal. %x - %x", before, after)
@@ -272,8 +272,8 @@ func TestLargeData(t *testing.T) {
 	vals := make(map[string]*kv)
 
 	for i := byte(0); i < 255; i++ {
-		value := &kv{ethutil.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
-		value2 := &kv{ethutil.LeftPadBytes([]byte{10, i}, 32), []byte{i}, false}
+		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
+		value2 := &kv{common.LeftPadBytes([]byte{10, i}, 32), []byte{i}, false}
 		trie.Update(value.k, value.v)
 		trie.Update(value2.k, value2.v)
 		vals[string(value.k)] = value
@@ -322,7 +322,7 @@ func TestSecureDelete(t *testing.T) {
 	}
 
 	hash := trie.Hash()
-	exp := ethutil.Hex2Bytes("29b235a58c3c25ab83010c327d5932bcf05324b7d6b1185e650798034783ca9d")
+	exp := common.Hex2Bytes("29b235a58c3c25ab83010c327d5932bcf05324b7d6b1185e650798034783ca9d")
 	if !bytes.Equal(hash, exp) {
 		t.Errorf("expected %x got %x", exp, hash)
 	}

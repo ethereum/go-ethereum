@@ -3,11 +3,11 @@ package state
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type Log interface {
-	ethutil.RlpEncodable
+	common.RlpEncodable
 
 	Address() []byte
 	Topics() [][]byte
@@ -43,7 +43,7 @@ func (self *StateLog) Number() uint64 {
 	return self.number
 }
 
-func NewLogFromValue(decoder *ethutil.Value) *StateLog {
+func NewLogFromValue(decoder *common.Value) *StateLog {
 	log := &StateLog{
 		address: decoder.Get(0).Bytes(),
 		data:    decoder.Get(2).Bytes(),
@@ -58,7 +58,7 @@ func NewLogFromValue(decoder *ethutil.Value) *StateLog {
 }
 
 func (self *StateLog) RlpData() interface{} {
-	return []interface{}{self.address, ethutil.ByteSliceToInterface(self.topics), self.data}
+	return []interface{}{self.address, common.ByteSliceToInterface(self.topics), self.data}
 }
 
 func (self *StateLog) String() string {

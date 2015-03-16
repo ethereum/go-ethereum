@@ -5,7 +5,7 @@ import (
 	"github.com/obscuren/otto"
 	"io/ioutil"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 /*
@@ -37,7 +37,7 @@ func New(assetPath string) *JSRE {
 // Exec(file) loads and runs the contents of a file
 // if a relative path is given, the jsre's assetPath is used
 func (self *JSRE) Exec(file string) error {
-	return self.exec(ethutil.AbsolutePath(self.assetPath, file))
+	return self.exec(common.AbsolutePath(self.assetPath, file))
 }
 
 func (self *JSRE) exec(path string) error {

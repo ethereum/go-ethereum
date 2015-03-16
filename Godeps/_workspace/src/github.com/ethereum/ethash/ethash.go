@@ -32,7 +32,7 @@ import (
 	"unsafe"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
 )
@@ -337,7 +337,7 @@ func (pow *Ethash) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte
 			pow.HashRate = int64(hashes)
 
 			C.ethash_full(&ret, pow.dag.dag, pow.dag.paramsAndCache.params, cMiningHash, C.uint64_t(nonce))
-			result := ethutil.Bytes2Big(C.GoBytes(unsafe.Pointer(&ret.result[0]), C.int(32)))
+			result := common.Bytes2Big(C.GoBytes(unsafe.Pointer(&ret.result[0]), C.int(32)))
 
 			// TODO: disagrees with the spec https://github.com/ethereum/wiki/wiki/Ethash#mining
 			if result.Cmp(target) <= 0 {
@@ -402,7 +402,7 @@ func (pow *Ethash) verify(hash []byte, mixDigest []byte, difficulty *big.Int, bl
 
 	C.ethash_light(ret, pAc.cache, pAc.params, chash, cnonce)
 
-	result := ethutil.Bytes2Big(C.GoBytes(unsafe.Pointer(&ret.result[0]), C.int(32)))
+	result := common.Bytes2Big(C.GoBytes(unsafe.Pointer(&ret.result[0]), C.int(32)))
 	return result.Cmp(target) <= 0
 }
 

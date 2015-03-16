@@ -3,7 +3,7 @@ package number
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var tt256 = new(big.Int).Lsh(big.NewInt(1), 256)
@@ -171,7 +171,7 @@ var (
 	Zero       = Uint(0)
 	One        = Uint(1)
 	Two        = Uint(2)
-	MaxUint256 = Uint(0).SetBytes(ethutil.Hex2Bytes("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+	MaxUint256 = Uint(0).SetBytes(common.Hex2Bytes("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
 
 	MinOne = Int(-1)
 

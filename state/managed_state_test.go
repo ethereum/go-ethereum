@@ -3,10 +3,10 @@ package state
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
-var addr = ethutil.Address([]byte("test"))
+var addr = common.Address([]byte("test"))
 
 func create() (*ManagedState, *account) {
 	ms := ManageState(&StateDB{stateObjects: make(map[string]*StateObject)})

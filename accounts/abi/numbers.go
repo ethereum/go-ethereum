@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var big_t = reflect.TypeOf(&big.Int{})
@@ -38,13 +38,13 @@ var big_ts = reflect.TypeOf([]*big.Int(nil))
 
 // U256 will ensure unsigned 256bit on big nums
 func U256(n *big.Int) []byte {
-	return ethutil.LeftPadBytes(ethutil.U256(n).Bytes(), 32)
+	return common.LeftPadBytes(common.U256(n).Bytes(), 32)
 }
 
 func S256(n *big.Int) []byte {
-	sint := ethutil.S256(n)
-	ret := ethutil.LeftPadBytes(sint.Bytes(), 32)
-	if sint.Cmp(ethutil.Big0) < 0 {
+	sint := common.S256(n)
+	ret := common.LeftPadBytes(sint.Bytes(), 32)
+	if sint.Cmp(common.Big0) < 0 {
 		for i, b := range ret {
 			if b == 0 {
 				ret[i] = 1
