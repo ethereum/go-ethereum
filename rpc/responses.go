@@ -5,6 +5,7 @@ import (
 	// "fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -56,23 +57,23 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 	}
 
 	// convert strict types to hexified strings
-	ext.BlockNumber = toHex(big.NewInt(b.BlockNumber).Bytes())
-	ext.BlockHash = toHex(b.BlockHash)
-	ext.ParentHash = toHex(b.ParentHash)
-	ext.Nonce = toHex(b.Nonce)
-	ext.Sha3Uncles = toHex(b.Sha3Uncles)
-	ext.LogsBloom = toHex(b.LogsBloom)
-	ext.TransactionRoot = toHex(b.TransactionRoot)
-	ext.StateRoot = toHex(b.StateRoot)
-	ext.Miner = toHex(b.Miner)
-	ext.Difficulty = toHex(big.NewInt(b.Difficulty).Bytes())
-	ext.TotalDifficulty = toHex(big.NewInt(b.TotalDifficulty).Bytes())
-	ext.Size = toHex(big.NewInt(b.Size).Bytes())
-	// ext.ExtraData = toHex(b.ExtraData)
-	ext.GasLimit = toHex(big.NewInt(b.GasLimit).Bytes())
-	// ext.MinGasPrice = toHex(big.NewInt(b.MinGasPrice).Bytes())
-	ext.GasUsed = toHex(big.NewInt(b.GasUsed).Bytes())
-	ext.UnixTimestamp = toHex(big.NewInt(b.UnixTimestamp).Bytes())
+	ext.BlockNumber = common.ToHex(big.NewInt(b.BlockNumber).Bytes())
+	ext.BlockHash = common.ToHex(b.BlockHash)
+	ext.ParentHash = common.ToHex(b.ParentHash)
+	ext.Nonce = common.ToHex(b.Nonce)
+	ext.Sha3Uncles = common.ToHex(b.Sha3Uncles)
+	ext.LogsBloom = common.ToHex(b.LogsBloom)
+	ext.TransactionRoot = common.ToHex(b.TransactionRoot)
+	ext.StateRoot = common.ToHex(b.StateRoot)
+	ext.Miner = common.ToHex(b.Miner)
+	ext.Difficulty = common.ToHex(big.NewInt(b.Difficulty).Bytes())
+	ext.TotalDifficulty = common.ToHex(big.NewInt(b.TotalDifficulty).Bytes())
+	ext.Size = common.ToHex(big.NewInt(b.Size).Bytes())
+	// ext.ExtraData = common.ToHex(b.ExtraData)
+	ext.GasLimit = common.ToHex(big.NewInt(b.GasLimit).Bytes())
+	// ext.MinGasPrice = common.ToHex(big.NewInt(b.MinGasPrice).Bytes())
+	ext.GasUsed = common.ToHex(big.NewInt(b.GasUsed).Bytes())
+	ext.UnixTimestamp = common.ToHex(big.NewInt(b.UnixTimestamp).Bytes())
 	ext.Transactions = make([]interface{}, len(b.Transactions))
 	if b.fullTx {
 		for i, tx := range b.Transactions {
@@ -80,12 +81,12 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 		}
 	} else {
 		for i, tx := range b.Transactions {
-			ext.Transactions[i] = toHex(tx.Hash)
+			ext.Transactions[i] = common.ToHex(tx.Hash)
 		}
 	}
 	ext.Uncles = make([]string, len(b.Uncles))
 	for i, v := range b.Uncles {
-		ext.Uncles[i] = toHex(v)
+		ext.Uncles[i] = common.ToHex(v)
 	}
 
 	return json.Marshal(ext)
@@ -160,17 +161,17 @@ func (t *TransactionRes) MarshalJSON() ([]byte, error) {
 		Input       string `json:"input"`
 	}
 
-	ext.Hash = toHex(t.Hash)
-	ext.Nonce = toHex(big.NewInt(t.Nonce).Bytes())
-	ext.BlockHash = toHex(t.BlockHash)
-	ext.BlockNumber = toHex(big.NewInt(t.BlockNumber).Bytes())
-	ext.TxIndex = toHex(big.NewInt(t.TxIndex).Bytes())
-	ext.From = toHex(t.From)
-	ext.To = toHex(t.To)
-	ext.Value = toHex(big.NewInt(t.Value).Bytes())
-	ext.Gas = toHex(big.NewInt(t.Gas).Bytes())
-	ext.GasPrice = toHex(big.NewInt(t.GasPrice).Bytes())
-	ext.Input = toHex(t.Input)
+	ext.Hash = common.ToHex(t.Hash)
+	ext.Nonce = common.ToHex(big.NewInt(t.Nonce).Bytes())
+	ext.BlockHash = common.ToHex(t.BlockHash)
+	ext.BlockNumber = common.ToHex(big.NewInt(t.BlockNumber).Bytes())
+	ext.TxIndex = common.ToHex(big.NewInt(t.TxIndex).Bytes())
+	ext.From = common.ToHex(t.From)
+	ext.To = common.ToHex(t.To)
+	ext.Value = common.ToHex(big.NewInt(t.Value).Bytes())
+	ext.Gas = common.ToHex(big.NewInt(t.Gas).Bytes())
+	ext.GasPrice = common.ToHex(big.NewInt(t.GasPrice).Bytes())
+	ext.Input = common.ToHex(t.Input)
 
 	return json.Marshal(ext)
 }
