@@ -1,6 +1,6 @@
-package javascript
+package jsre
 
-const jsLib = `
+const pp_js = `
 function pp(object) {
     var str = "";
 
@@ -34,7 +34,7 @@ function pp(object) {
     } else if(typeof(object) === "function") {
 	str += "\033[35m[Function]";
     } else {
-        str += object;                    
+        str += object;
     }
 
     str += "\033[0m";

@@ -219,6 +219,64 @@ func New(config *Config) (*Ethereum, error) {
 	return eth, nil
 }
 
+type NodeInfo struct {
+	Name       string
+	NodeUrl    string
+	NodeID     string
+	IP         string
+	DiscPort   int // UDP listening port for discovery protocol
+	TCPPort    int // TCP listening port for RLPx
+	Td         string
+	ListenAddr string
+}
+
+func (s *Ethereum) NodeInfo() *NodeInfo {
+	node := s.net.Self()
+
+	return &NodeInfo{
+		Name:       s.Name(),
+		NodeUrl:    node.String(),
+		NodeID:     node.ID.String(),
+		IP:         node.IP.String(),
+		DiscPort:   node.DiscPort,
+		TCPPort:    node.TCPPort,
+		ListenAddr: s.net.ListenAddr,
+		Td:         s.ChainManager().Td().String(),
+	}
+}
+
+type PeerInfo struct {
+	ID            string
+	Name          string
+	Caps          string
+	RemoteAddress string
+	LocalAddress  string
+}
+
+func newPeerInfo(peer *p2p.Peer) *PeerInfo {
+	var caps []string
+	for _, cap := range peer.Caps() {
+		caps = append(caps, cap.String())
+	}
+	return &PeerInfo{
+		ID:            peer.ID().String(),
+		Name:          peer.Name(),
+		Caps:          strings.Join(caps, ", "),
+		RemoteAddress: peer.RemoteAddr().String(),
+		LocalAddress:  peer.LocalAddr().String(),
+	}
+}
+
+// PeersInfo returns an array of PeerInfo objects describing connected peers
+func (s *Ethereum) PeersInfo() (peersinfo []*PeerInfo) {
+	for _, peer := range s.net.Peers() {
+		if peer != nil {
+			peersinfo = append(peersinfo, newPeerInfo(peer))
+		}
+	}
+	return
+}
+
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.chainManager.ResetWithGenesisBlock(gb)
 	s.pow.UpdateCache(true)
@@ -251,6 +309,7 @@ func (s *Ethereum) StateDb() common.Database            { return s.stateDb }
 func (s *Ethereum) ExtraDb() common.Database            { return s.extraDb }
 func (s *Ethereum) IsListening() bool                    { return true } // Always listening
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
+func (s *Ethereum) PeerInfo() int                        { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
 func (s *Ethereum) MaxPeers() int                        { return s.net.MaxPeers }
 func (s *Ethereum) Version() string                      { return s.version }
@@ -262,9 +321,11 @@ func (s *Ethereum) Start() error {
 		ProtocolVersion: ProtocolVersion,
 	})
 
-	err := s.net.Start()
-	if err != nil {
-		return err
+	if s.net.MaxPeers > 0 {
+		err := s.net.Start()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Start services
@@ -311,6 +372,7 @@ func (s *Ethereum) Stop() {
 	// Close the database
 	defer s.blockDb.Close()
 	defer s.stateDb.Close()
+	defer s.extraDb.Close()
 
 	s.txSub.Unsubscribe()    // quits txBroadcastLoop
 	s.blockSub.Unsubscribe() // quits blockBroadcastLoop
