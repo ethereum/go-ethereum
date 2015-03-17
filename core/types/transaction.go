@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -27,12 +28,12 @@ type Transaction struct {
 	R, S         []byte
 }
 
-func NewContractCreationTx(Amount, gasAmount, price *big.Int, data []byte) *Transaction {
-	return NewTransactionMessage(common.Address{}, Amount, gasAmount, price, data)
+func NewContractCreationTx(amount, gasAmount, price *big.Int, data []byte) *Transaction {
+	return NewTransactionMessage(common.Address{}, amount, gasAmount, price, data)
 }
 
-func NewTransactionMessage(to common.Address, Amount, gasAmount, price *big.Int, data []byte) *Transaction {
-	return &Transaction{Recipient: to, Amount: Amount, Price: price, GasLimit: gasAmount, Payload: data}
+func NewTransactionMessage(to common.Address, amount, gasAmount, price *big.Int, data []byte) *Transaction {
+	return &Transaction{Recipient: to, Amount: amount, Price: price, GasLimit: gasAmount, Payload: data}
 }
 
 func NewTransactionFromBytes(data []byte) *Transaction {
@@ -44,7 +45,7 @@ func NewTransactionFromBytes(data []byte) *Transaction {
 func (tx *Transaction) Hash() (a common.Hash) {
 	h := sha3.NewKeccak256()
 	rlp.Encode(h, []interface{}{tx.AccountNonce, tx.Price, tx.GasLimit, tx.Recipient, tx.Amount, tx.Payload})
-	h.Sum(a[:])
+	h.Sum(a[:0])
 	return a
 }
 
@@ -84,7 +85,6 @@ func (tx *Transaction) Curve() (v byte, r []byte, s []byte) {
 	v = byte(tx.V)
 	r = common.LeftPadBytes(tx.R, 32)
 	s = common.LeftPadBytes(tx.S, 32)
-
 	return
 }
 
@@ -122,6 +122,19 @@ func (tx *Transaction) SetSignatureValues(sig []byte) error {
 	tx.S = sig[32:64]
 	tx.V = sig[64] + 27
 	return nil
+}
+
+func (tx Transaction) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, []interface{}{
+		tx.AccountNonce,
+		tx.Price, tx.GasLimit,
+		tx.Recipient,
+		tx.Amount,
+		tx.Payload,
+		tx.V,
+		tx.R,
+		tx.S,
+	})
 }
 
 // TODO: remove
