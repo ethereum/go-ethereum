@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/state"
@@ -370,6 +370,11 @@ func (p *EthereumApi) NewWhisperIdentity(reply *interface{}) error {
 	*reply = p.xeth().Whisper().NewIdentity()
 	return nil
 }
+
+// func (p *EthereumApi) RemoveWhisperIdentity(args *WhisperIdentityArgs, reply *interface{}) error {
+// 	*reply = p.xeth().Whisper().RemoveIdentity(args.Identity)
+// 	return nil
+// }
 
 func (p *EthereumApi) NewWhisperFilter(args *WhisperFilterArgs, reply *interface{}) error {
 	var id int
@@ -751,6 +756,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		return p.WhisperPost(args, reply)
 	case "shh_newIdentity":
 		return p.NewWhisperIdentity(reply)
+	// case "shh_removeIdentity":
+	// 	args := new(WhisperIdentityArgs)
+	// 	if err := json.Unmarshal(req.Params, &args); err != nil {
+	// 		return err
+	// 	}
+	// 	return p.RemoveWhisperIdentity(args, reply)
 	case "shh_hasIdentity":
 		args := new(WhisperIdentityArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {

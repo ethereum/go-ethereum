@@ -20,18 +20,16 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/javascript"
-	"github.com/ethereum/go-ethereum/state"
+	re "github.com/ethereum/go-ethereum/jsre"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
-	"github.com/obscuren/otto"
 	"github.com/peterh/liner"
 )
 
@@ -59,7 +57,7 @@ func (r dumbterm) PasswordPrompt(p string) (string, error) {
 func (r dumbterm) AppendHistory(string) {}
 
 type jsre struct {
-	re       *javascript.JSRE
+	re       *re.JSRE
 	ethereum *eth.Ethereum
 	xeth     *xeth.XEth
 	ps1      string
@@ -68,11 +66,12 @@ type jsre struct {
 	prompter
 }
 
-func newJSRE(ethereum *eth.Ethereum) *jsre {
+func newJSRE(ethereum *eth.Ethereum, libPath string) *jsre {
 	js := &jsre{ethereum: ethereum, ps1: "> "}
 	js.xeth = xeth.New(ethereum, js)
-	js.re = javascript.NewJSRE(js.xeth)
-	js.initStdFuncs()
+	js.re = re.New(libPath)
+	js.apiBindings()
+	js.adminBindings()
 
 	if !liner.TerminalSupported() {
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
@@ -87,6 +86,49 @@ func newJSRE(ethereum *eth.Ethereum) *jsre {
 		}
 	}
 	return js
+}
+
+func (js *jsre) apiBindings() {
+
+	ethApi := rpc.NewEthereumApi(js.xeth, js.ethereum.DataDir)
+	js.re.Bind("jeth", rpc.NewJeth(ethApi, js.re.ToVal))
+
+	_, err := js.re.Eval(re.BigNumber_JS)
+
+	if err != nil {
+		utils.Fatalf("Error loading bignumber.js: %v", err)
+	}
+
+	// we need to declare a dummy setTimeout. Otto does not support it
+	_, err = js.re.Eval("setTimeout = function(cb, delay) {};")
+	if err != nil {
+		utils.Fatalf("Error defining setTimeout: %v", err)
+	}
+
+	_, err = js.re.Eval(re.Ethereum_JS)
+	if err != nil {
+		utils.Fatalf("Error loading ethereum.js: %v", err)
+	}
+
+	_, err = js.re.Eval("var web3 = require('web3');")
+	if err != nil {
+		utils.Fatalf("Error requiring web3: %v", err)
+	}
+
+	_, err = js.re.Eval("web3.setProvider(jeth)")
+	if err != nil {
+		utils.Fatalf("Error setting web3 provider: %v", err)
+	}
+	_, err = js.re.Eval(`
+	var eth = web3.eth;
+  var shh = web3.shh;
+  var db  = web3.db;
+  var net = web3.net;
+  `)
+	if err != nil {
+		utils.Fatalf("Error setting namespaces: %v", err)
+	}
+
 }
 
 func (self *jsre) ConfirmTransaction(tx *types.Transaction) bool {
@@ -111,15 +153,7 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 }
 
 func (self *jsre) exec(filename string) error {
-	file, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	content, err := ioutil.ReadAll(file)
-	if err != nil {
-		return err
-	}
-	if _, err := self.re.Run(string(content)); err != nil {
+	if err := self.re.Exec(filename); err != nil {
 		return fmt.Errorf("Javascript Error: %v", err)
 	}
 	return nil
@@ -193,102 +227,8 @@ func (self *jsre) setIndent() {
 }
 
 func (self *jsre) printValue(v interface{}) {
-	method, _ := self.re.Vm.Get("prettyPrint")
-	v, err := self.re.Vm.ToValue(v)
+	val, err := self.re.PrettyPrint(v)
 	if err == nil {
-		val, err := method.Call(method, v)
-		if err == nil {
-			fmt.Printf("%v", val)
-		}
+		fmt.Printf("%v", val)
 	}
-}
-
-func (self *jsre) initStdFuncs() {
-	t, _ := self.re.Vm.Get("eth")
-	eth := t.Object()
-	eth.Set("connect", self.connect)
-	eth.Set("stopMining", self.stopMining)
-	eth.Set("startMining", self.startMining)
-	eth.Set("dump", self.dump)
-	eth.Set("export", self.export)
-}
-
-/*
- * The following methods are natively implemented javascript functions.
- */
-
-func (self *jsre) dump(call otto.FunctionCall) otto.Value {
-	var block *types.Block
-
-	if len(call.ArgumentList) > 0 {
-		if call.Argument(0).IsNumber() {
-			num, _ := call.Argument(0).ToInteger()
-			block = self.ethereum.ChainManager().GetBlockByNumber(uint64(num))
-		} else if call.Argument(0).IsString() {
-			hash, _ := call.Argument(0).ToString()
-			block = self.ethereum.ChainManager().GetBlock(common.Hex2Bytes(hash))
-		} else {
-			fmt.Println("invalid argument for dump. Either hex string or number")
-		}
-
-		if block == nil {
-			fmt.Println("block not found")
-
-			return otto.UndefinedValue()
-		}
-
-	} else {
-		block = self.ethereum.ChainManager().CurrentBlock()
-	}
-
-	statedb := state.New(block.Root(), self.ethereum.StateDb())
-
-	v, _ := self.re.Vm.ToValue(statedb.RawDump())
-
-	return v
-}
-
-func (self *jsre) stopMining(call otto.FunctionCall) otto.Value {
-	self.ethereum.StopMining()
-	return otto.TrueValue()
-}
-
-func (self *jsre) startMining(call otto.FunctionCall) otto.Value {
-	if err := self.ethereum.StartMining(); err != nil {
-		return otto.FalseValue()
-	}
-	return otto.TrueValue()
-}
-
-func (self *jsre) connect(call otto.FunctionCall) otto.Value {
-	nodeURL, err := call.Argument(0).ToString()
-	if err != nil {
-		return otto.FalseValue()
-	}
-	if err := self.ethereum.SuggestPeer(nodeURL); err != nil {
-		return otto.FalseValue()
-	}
-	return otto.TrueValue()
-}
-
-func (self *jsre) export(call otto.FunctionCall) otto.Value {
-	if len(call.ArgumentList) == 0 {
-		fmt.Println("err: require file name")
-		return otto.FalseValue()
-	}
-
-	fn, err := call.Argument(0).ToString()
-	if err != nil {
-		fmt.Println(err)
-		return otto.FalseValue()
-	}
-
-	data := self.ethereum.ChainManager().Export()
-
-	if err := common.WriteFile(fn, data); err != nil {
-		fmt.Println(err)
-		return otto.FalseValue()
-	}
-
-	return otto.TrueValue()
 }
