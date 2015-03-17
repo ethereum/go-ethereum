@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
-	"github.com/ethereum/go-ethereum/vm"
 )
 
 type Account struct {
@@ -81,11 +80,6 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		helper.Logger.SetLogLevel(5)
-		vm.Debug = true
-		if name != "TransactionCreateSuicideContract" {
-			continue
-		}
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(common.Hash{}, db)
 		for addr, account := range test.Pre {

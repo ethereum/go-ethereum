@@ -31,7 +31,7 @@ type Environment interface {
 
 	Call(me ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
 	CallCode(me ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
-	Create(me ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
+	Create(me ContextRef, addr *common.Address, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
 }
 
 type Account interface {

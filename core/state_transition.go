@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
@@ -195,9 +196,9 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 	vmenv := self.env
 	var ref vm.ContextRef
 	if MessageCreatesContract(msg) {
-		//contract := makeContract(msg, self.state)
-		//addr := contract.Address()
-		ret, err, ref = vmenv.Create(sender, self.msg.Data(), self.gas, self.gasPrice, self.value)
+		contract := makeContract(msg, self.state)
+		addr := contract.Address()
+		ret, err, ref = vmenv.Create(sender, &addr, self.msg.Data(), self.gas, self.gasPrice, self.value)
 		if err == nil {
 			dataGas := big.NewInt(int64(len(ret)))
 			dataGas.Mul(dataGas, vm.GasCreateByte)
@@ -243,13 +244,11 @@ func (self *StateTransition) gasUsed() *big.Int {
 
 // Converts an message in to a state object
 func makeContract(msg Message, state *state.StateDB) *state.StateObject {
-	/*
-		addr := AddressFromMessage(msg)
+	faddr, _ := msg.From()
+	addr := crypto.CreateAddress(faddr, msg.Nonce())
 
-		contract := state.GetOrNewStateObject(addr)
-		contract.SetInitCode(msg.Data())
+	contract := state.GetOrNewStateObject(addr)
+	contract.SetInitCode(msg.Data())
 
-		return contract
-	*/
-	return nil
+	return contract
 }
