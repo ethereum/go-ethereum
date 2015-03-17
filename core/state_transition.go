@@ -44,9 +44,10 @@ type StateTransition struct {
 	env vm.Environment
 }
 
+// Message represents a message sent to a contract.
 type Message interface {
-	From() common.Address
-	To() common.Address
+	From() (common.Address, error)
+	To() *common.Address
 
 	GasPrice() *big.Int
 	Gas() *big.Int
