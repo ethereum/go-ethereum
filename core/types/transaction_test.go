@@ -19,8 +19,9 @@ var (
 		nil,
 	)
 
-	rightvrsTx = &Transaction{
-		Recipient:    common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"),
+	rightvrsRecipient = common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b")
+	rightvrsTx        = &Transaction{
+		Recipient:    &rightvrsRecipient,
 		AccountNonce: 3,
 		Price:        big.NewInt(1),
 		GasLimit:     big.NewInt(2000),
