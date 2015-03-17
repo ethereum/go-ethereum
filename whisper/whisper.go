@@ -116,14 +116,14 @@ func (self *Whisper) GetIdentity(key *ecdsa.PublicKey) *ecdsa.PrivateKey {
 	return self.keys[string(crypto.FromECDSAPub(key))]
 }
 
-func (self *Whisper) RemoveIdentity(key *ecdsa.PublicKey) bool {
-	k := string(crypto.FromECDSAPub(key))
-	if _, ok := self.keys[k]; ok {
-		delete(self.keys, k)
-		return true
-	}
-	return false
-}
+// func (self *Whisper) RemoveIdentity(key *ecdsa.PublicKey) bool {
+// 	k := string(crypto.FromECDSAPub(key))
+// 	if _, ok := self.keys[k]; ok {
+// 		delete(self.keys, k)
+// 		return true
+// 	}
+// 	return false
+// }
 
 func (self *Whisper) Watch(opts Filter) int {
 	return self.filters.Install(filter.Generic{
