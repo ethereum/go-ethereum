@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"net/http"
+	// "net/http"
 	"reflect"
 	"time"
 
@@ -104,24 +104,6 @@ func (self JsonWrapper) Send(writer io.Writer, v interface{}) (n int, err error)
 	rpclogger.DebugDetailf("Sending payload: %s", payload)
 
 	return writer.Write(payload)
-}
-
-func (self JsonWrapper) ParseRequestBody(req *http.Request) (RpcRequest, error) {
-	var reqParsed RpcRequest
-
-	// Convert JSON to native types
-	d := json.NewDecoder(req.Body)
-	defer req.Body.Close()
-	err := d.Decode(&reqParsed)
-
-	if err != nil {
-		rpclogger.Errorln("Error decoding JSON: ", err)
-		return reqParsed, err
-	}
-
-	rpclogger.DebugDetailf("Parsed request: %s", reqParsed)
-
-	return reqParsed, nil
 }
 
 func toHex(b []byte) string {
