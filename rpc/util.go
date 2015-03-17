@@ -45,6 +45,11 @@ func UnmarshalRawMessages(b []byte, iface interface{}, number *int64) (err error
 		return NewDecodeParamError(err.Error())
 	}
 
+	// Hrm... Occurs when no params
+	if len(data) == 0 {
+		return NewDecodeParamError("No data")
+	}
+
 	// Number index determines the index in the array for a possible block number
 	numberIndex := 0
 

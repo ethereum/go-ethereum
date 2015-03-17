@@ -74,6 +74,16 @@ func TestGetBlockByHashArgs(t *testing.T) {
 	}
 }
 
+func TestGetBlockByHashEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(GetBlockByHashArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+}
+
 func TestGetBlockByNumberArgs(t *testing.T) {
 	input := `["0x1b4", false]`
 	expected := new(GetBlockByNumberArgs)
@@ -91,6 +101,16 @@ func TestGetBlockByNumberArgs(t *testing.T) {
 
 	if args.Transactions != expected.Transactions {
 		t.Errorf("Transactions should be %v but is %v", expected.Transactions, args.Transactions)
+	}
+}
+
+func TestGetBlockByNumberEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(GetBlockByNumberArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
 	}
 }
 
@@ -139,6 +159,16 @@ func TestNewTxArgs(t *testing.T) {
 	}
 }
 
+func TestNewTxArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(NewTxArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+}
+
 func TestGetStorageArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "latest"]`
 	expected := new(GetStorageArgs)
@@ -160,6 +190,16 @@ func TestGetStorageArgs(t *testing.T) {
 
 	if expected.BlockNumber != args.BlockNumber {
 		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestGetStorageEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetStorageArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
 	}
 }
 
@@ -192,6 +232,16 @@ func TestGetStorageAtArgs(t *testing.T) {
 	}
 }
 
+func TestGetStorageAtEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetStorageAtArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+}
+
 func TestGetTxCountArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "latest"]`
 	expected := new(GetTxCountArgs)
@@ -216,6 +266,16 @@ func TestGetTxCountArgs(t *testing.T) {
 	}
 }
 
+func TestGetTxCountEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetTxCountArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+}
+
 func TestGetDataArgs(t *testing.T) {
 	input := `["0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8", "latest"]`
 	expected := new(GetDataArgs)
@@ -237,6 +297,16 @@ func TestGetDataArgs(t *testing.T) {
 
 	if expected.BlockNumber != args.BlockNumber {
 		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestGetDataEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetDataArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
 	}
 }
 
@@ -284,6 +354,56 @@ func TestFilterOptions(t *testing.T) {
 	// if expected.Topics != args.Topics {
 	// 	t.Errorf("Topic shoud be %#v but is %#v", expected.Topic, args.Topic)
 	// }
+}
+
+func TestFilterOptionsWords(t *testing.T) {
+	input := `[{
+  "fromBlock": "latest",
+  "toBlock": "pending"
+  }]`
+	expected := new(FilterOptions)
+	expected.Earliest = 0
+	expected.Latest = -1
+
+	args := new(FilterOptions)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Earliest != args.Earliest {
+		t.Errorf("Earliest shoud be %#v but is %#v", expected.Earliest, args.Earliest)
+	}
+
+	if expected.Latest != args.Latest {
+		t.Errorf("Latest shoud be %#v but is %#v", expected.Latest, args.Latest)
+	}
+}
+
+func TestFilterOptionsNums(t *testing.T) {
+	input := `[{
+  "fromBlock": 2,
+  "toBlock": 3
+  }]`
+
+	args := new(FilterOptions)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Should have *DecodeParamError but instead have %T", err)
+	}
+
+}
+
+func TestFilterOptionsEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(FilterOptions)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
 }
 
 func TestDbArgs(t *testing.T) {
