@@ -28,7 +28,7 @@ func LogsBloom(logs state.Logs) *big.Int {
 		}
 
 		for _, b := range data {
-			bin.Or(bin, common.BigD(bloom9(crypto.Sha3(b[:])).Bytes()))
+			bin.Or(bin, bloom9(crypto.Sha3(b[:])))
 		}
 	}
 
@@ -38,9 +38,10 @@ func LogsBloom(logs state.Logs) *big.Int {
 func bloom9(b []byte) *big.Int {
 	r := new(big.Int)
 
-	for i := 0; i < 16; i += 2 {
+	for i := 0; i < 6; i += 2 {
 		t := big.NewInt(1)
-		b := uint(b[i+1]) + 1024*(uint(b[i])&1)
+		//b := uint(b[i+1]) + 512*(uint(b[i])&1)
+		b := (uint(b[i+1]) + (uint(b[i]) << 8)) & 511
 		r.Or(r, t.Lsh(t, b))
 	}
 

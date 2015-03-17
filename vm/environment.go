@@ -88,5 +88,5 @@ func (self *Log) RlpData() interface{} {
 */
 
 func (self *Log) String() string {
-	return fmt.Sprintf("[A=%x T=%x D=%x]", self.address, self.topics, self.data)
+	return fmt.Sprintf("{%x %x %x}", self.address, self.data, self.topics)
 }

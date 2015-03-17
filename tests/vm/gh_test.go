@@ -2,11 +2,13 @@ package vm
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
@@ -80,6 +82,9 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
+		if name != "log2_nonEmptyMem" {
+			continue
+		}
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(common.Hash{}, db)
 		for addr, account := range test.Pre {
@@ -167,16 +172,16 @@ func RunVmTest(p string, t *testing.T) {
 			if len(test.Logs) != len(logs) {
 				t.Errorf("log length mismatch. Expected %d, got %d", len(test.Logs), len(logs))
 			} else {
-				/*
-					fmt.Println("A", test.Logs)
-					fmt.Println("B", logs)
-						for i, log := range test.Logs {
-							genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
-							if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
-								t.Errorf("bloom mismatch")
-							}
-						}
-				*/
+				fmt.Println("A", test.Logs)
+				fmt.Println("B", logs)
+				for i, log := range test.Logs {
+					genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
+					fmt.Println("A BLOOM", log.BloomF)
+					fmt.Printf("B BLOOM %x\n", genBloom)
+					if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
+						t.Errorf("'%s' bloom mismatch", name)
+					}
+				}
 			}
 		}
 		//statedb.Trie().PrintRoot()
