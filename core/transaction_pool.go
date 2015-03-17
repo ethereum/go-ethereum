@@ -91,8 +91,9 @@ func (self *TxPool) addTx(tx *types.Transaction) {
 }
 
 func (self *TxPool) add(tx *types.Transaction) error {
-	if self.txs[tx.Hash()] != nil {
-		return fmt.Errorf("Known transaction (%x)", tx.Hash()[0:4])
+	hash := tx.Hash()
+	if self.txs[hash] != nil {
+		return fmt.Errorf("Known transaction (%x)", hash[0:4])
 	}
 	err := self.ValidateTransaction(tx)
 	if err != nil {
@@ -102,7 +103,7 @@ func (self *TxPool) add(tx *types.Transaction) error {
 	self.addTx(tx)
 
 	var toname string
-	if to, valid := tx.To(); valid {
+	if to := tx.To(); to != nil {
 		toname = common.Bytes2Hex(to[:4])
 	} else {
 		toname = "[NEW_CONTRACT]"
@@ -111,7 +112,7 @@ func (self *TxPool) add(tx *types.Transaction) error {
 	// verified in ValidateTransaction.
 	f, _ := tx.From()
 	from := common.Bytes2Hex(f[:4])
-	txplogger.Debugf("(t) %x => %s (%v) %x\n", from, to, tx.Value, tx.Hash())
+	txplogger.Debugf("(t) %x => %s (%v) %x\n", from, toname, tx.Value, tx.Hash())
 
 	// Notify the subscribers
 	go self.eventMux.Post(TxPreEvent{tx})
@@ -137,7 +138,8 @@ func (self *TxPool) AddTransactions(txs []*types.Transaction) {
 		if err := self.add(tx); err != nil {
 			txplogger.Debugln(err)
 		} else {
-			txplogger.Debugf("tx %x\n", tx.Hash()[0:4])
+			h := tx.Hash()
+			txplogger.Debugf("tx %x\n", h[:4])
 		}
 	}
 }
@@ -161,7 +163,8 @@ func (pool *TxPool) RemoveInvalid(query StateQuery) {
 
 	var removedTxs types.Transactions
 	for _, tx := range pool.txs {
-		sender := query.GetAccount(tx.From())
+		from, _ := tx.From()
+		sender := query.GetAccount(from[:])
 		err := pool.ValidateTransaction(tx)
 		if err != nil || sender.Nonce() >= tx.Nonce() {
 			removedTxs = append(removedTxs, tx)

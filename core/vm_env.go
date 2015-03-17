@@ -28,7 +28,7 @@ func NewEnv(state *state.StateDB, chain *ChainManager, msg Message, block *types
 	}
 }
 
-func (self *VMEnv) Origin() common.Address   { return self.msg.From() }
+func (self *VMEnv) Origin() common.Address   { f, _ := self.msg.From(); return f }
 func (self *VMEnv) BlockNumber() *big.Int    { return self.block.Number() }
 func (self *VMEnv) Coinbase() common.Address { return self.block.Coinbase() }
 func (self *VMEnv) Time() int64              { return self.block.Time() }

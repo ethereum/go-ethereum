@@ -5,7 +5,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
@@ -57,13 +56,8 @@ type Message interface {
 	Data() []byte
 }
 
-func AddressFromMessage(msg Message) []byte {
-	// Generate a new address
-	return crypto.Sha3(common.NewValue([]interface{}{msg.From(), msg.Nonce()}).Encode())[12:]
-}
-
 func MessageCreatesContract(msg Message) bool {
-	return len(msg.To()) == 0
+	return msg.To() == nil
 }
 
 func MessageGasValue(msg Message) *big.Int {
@@ -93,13 +87,18 @@ func (self *StateTransition) Coinbase() *state.StateObject {
 	return self.state.GetOrNewStateObject(self.coinbase)
 }
 func (self *StateTransition) From() *state.StateObject {
-	return self.state.GetOrNewStateObject(self.msg.From())
+	f, _ := self.msg.From()
+	return self.state.GetOrNewStateObject(f)
 }
 func (self *StateTransition) To() *state.StateObject {
-	if self.msg != nil && MessageCreatesContract(self.msg) {
+	if self.msg == nil {
 		return nil
 	}
-	return self.state.GetOrNewStateObject(self.msg.To())
+	to := self.msg.To()
+	if to == nil {
+		return nil // contract creation
+	}
+	return self.state.GetOrNewStateObject(*to)
 }
 
 func (self *StateTransition) UseGas(amount *big.Int) error {
