@@ -12,11 +12,6 @@ type (
 	Address [addressLength]byte
 )
 
-var (
-	zeroHash    Hash
-	zeroAddress Address
-)
-
 func BytesToHash(b []byte) Hash {
 	var h Hash
 	h.SetBytes(b)
@@ -41,7 +36,7 @@ func (h *Hash) SetBytes(b []byte) {
 
 	// reverse loop
 	for i := len(b) - 1; i >= 0; i-- {
-		h[i] = b[i]
+		h[hashLength-len(b)+i] = b[i]
 	}
 }
 
@@ -79,7 +74,7 @@ func (a *Address) SetBytes(b []byte) {
 
 	// reverse loop
 	for i := len(b) - 1; i >= 0; i-- {
-		a[i] = b[i]
+		a[addressLength-len(b)+i] = b[i]
 	}
 }
 

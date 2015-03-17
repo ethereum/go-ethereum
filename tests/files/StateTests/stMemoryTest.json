@@ -2682,21 +2682,21 @@
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "22000",
+                "balance" : "26036",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "429496707590",
+                "balance" : "429496703554",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
                 }
             }
         },
-        "postStateRoot" : "bf38e7c8442426c0c0df74b74c1c6a6b044720e89b68cfb3c7bd4e0c2bdd5255",
+        "postStateRoot" : "68d0d02b58a7f988070b0e7f1a256be642aaccfd8bd91e18996c35611cfa054d",
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "1000000000000000000",
@@ -2715,7 +2715,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "22000",
+            "gasLimit" : "220000",
             "gasPrice" : "1",
             "nonce" : "0",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
