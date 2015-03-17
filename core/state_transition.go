@@ -31,7 +31,7 @@ var ()
  * 6) Derive new state root
  */
 type StateTransition struct {
-	coinbase      []byte
+	coinbase      common.Address
 	msg           Message
 	gas, gasPrice *big.Int
 	initialGas    *big.Int
@@ -120,7 +120,7 @@ func (self *StateTransition) BuyGas() error {
 
 	sender := self.From()
 	if sender.Balance().Cmp(MessageGasValue(self.msg)) < 0 {
-		return fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", sender.Address()[:4], MessageGasValue(self.msg), sender.Balance())
+		return fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", sender.Address().Bytes()[:4], MessageGasValue(self.msg), sender.Balance())
 	}
 
 	coinbase := self.Coinbase()
@@ -196,8 +196,9 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 	vmenv := self.env
 	var ref vm.ContextRef
 	if MessageCreatesContract(msg) {
-		contract := makeContract(msg, self.state)
-		ret, err, ref = vmenv.Create(sender, contract.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+		//contract := makeContract(msg, self.state)
+		//addr := contract.Address()
+		ret, err, ref = vmenv.Create(sender, self.msg.Data(), self.gas, self.gasPrice, self.value)
 		if err == nil {
 			dataGas := big.NewInt(int64(len(ret)))
 			dataGas.Mul(dataGas, vm.GasCreateByte)
@@ -231,7 +232,7 @@ func (self *StateTransition) refundGas() {
 	for addr, ref := range self.state.Refunds() {
 		refund := common.BigMin(uhalf, ref)
 		self.gas.Add(self.gas, refund)
-		self.state.AddBalance([]byte(addr), refund.Mul(refund, self.msg.GasPrice()))
+		self.state.AddBalance(common.StringToAddress(addr), refund.Mul(refund, self.msg.GasPrice()))
 	}
 
 	coinbase.RefundGas(self.gas, self.msg.GasPrice())
@@ -243,10 +244,13 @@ func (self *StateTransition) gasUsed() *big.Int {
 
 // Converts an message in to a state object
 func makeContract(msg Message, state *state.StateDB) *state.StateObject {
-	addr := AddressFromMessage(msg)
+	/*
+		addr := AddressFromMessage(msg)
 
-	contract := state.GetOrNewStateObject(addr)
-	contract.SetInitCode(msg.Data())
+		contract := state.GetOrNewStateObject(addr)
+		contract.SetInitCode(msg.Data())
 
-	return contract
+		return contract
+	*/
+	return nil
 }

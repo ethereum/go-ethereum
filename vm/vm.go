@@ -58,8 +58,10 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		}()
 	}
 
-	if p := Precompiled[context.CodeAddr.Str()]; p != nil {
-		return self.RunPrecompiled(p, callData, context)
+	if context.CodeAddr != nil {
+		if p := Precompiled[context.CodeAddr.Str()]; p != nil {
+			return self.RunPrecompiled(p, callData, context)
+		}
 	}
 
 	var (
@@ -500,7 +502,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			n := new(big.Int).Sub(self.env.BlockNumber(), common.Big257)
 			if num.Cmp(n) > 0 && num.Cmp(self.env.BlockNumber()) < 0 {
-				stack.push(common.BigD(self.env.GetHash(num.Uint64())))
+				stack.push(self.env.GetHash(num.Uint64()).Big())
 			} else {
 				stack.push(common.Big0)
 			}
@@ -509,7 +511,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		case COINBASE:
 			coinbase := self.env.Coinbase()
 
-			stack.push(common.BigD(coinbase))
+			stack.push(coinbase.Big())
 
 			self.Printf(" => 0x%x", coinbase)
 		case TIMESTAMP:

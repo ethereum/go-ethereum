@@ -47,9 +47,9 @@ func bloom9(b []byte) *big.Int {
 	return r
 }
 
-func BloomLookup(bin, topic []byte) bool {
-	bloom := common.BigD(bin)
-	cmp := bloom9(crypto.Sha3(topic))
+func BloomLookup(bin Bloom, topic common.Hash) bool {
+	bloom := bin.Big()
+	cmp := bloom9(crypto.Sha3(topic[:]))
 
 	return bloom.And(bloom, cmp).Cmp(cmp) == 0
 }

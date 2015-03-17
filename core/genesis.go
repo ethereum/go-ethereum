@@ -6,9 +6,9 @@ import (
 	"math/big"
 	"os"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -26,12 +26,11 @@ var GenesisDiff = big.NewInt(131072)
 var GenesisGasLimit = big.NewInt(3141592)
 
 func GenesisBlock(db common.Database) *types.Block {
-	genesis := types.NewBlock(ZeroHash256, ZeroHash160, nil, GenesisDiff, 42, "")
+	genesis := types.NewBlock(common.Hash{}, common.Address{}, common.Hash{}, GenesisDiff, 42, "")
 	genesis.Header().Number = common.Big0
 	genesis.Header().GasLimit = GenesisGasLimit
 	genesis.Header().GasUsed = common.Big0
 	genesis.Header().Time = 0
-	genesis.Header().MixDigest = make([]byte, 32)
 
 	genesis.Td = common.Big0
 
@@ -49,7 +48,7 @@ func GenesisBlock(db common.Database) *types.Block {
 	statedb := state.New(genesis.Root(), db)
 	for addr, account := range accounts {
 		codedAddr := common.Hex2Bytes(addr)
-		accountState := statedb.GetAccount(codedAddr)
+		accountState := statedb.GetAccount(common.BytesToAddress(codedAddr))
 		accountState.SetBalance(common.Big(account.Balance))
 		statedb.UpdateStateObject(accountState)
 	}
