@@ -7,7 +7,7 @@ cd ~/testout
 export EVMJIT="-cache=0"
 while [ 1 ]
 do	
-	TEST="$(docker run --rm --entrypoint=\"/cpp-ethereum/build/test/createRandomTest\" ethereum/cppjit-testrunner)"
+	TEST="$(docker run --rm --entrypoint=\"/cpp-ethereum/build/test/createRandomStateTest\" ethereum/cppjit-testrunner)"
 	# echo "$TEST"
 	
 	# test pyethereum
