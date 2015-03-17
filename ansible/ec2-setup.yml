@@ -1,6 +1,6 @@
 ---
 - name: Provision EC2 instances
-  hosts: local
+  hosts: localhost
   gather_facts: false
   roles:
     - ec2 
