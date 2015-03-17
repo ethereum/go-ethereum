@@ -1,6 +1,10 @@
 package types
 
-import "math/big"
+import (
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 type BlockProcessor interface {
 	Process(*Block) (*big.Int, error)
@@ -23,4 +27,8 @@ func (b *Bloom) SetBytes(d []byte) {
 	for i := len(d) - 1; i >= 0; i-- {
 		b[i] = b[i]
 	}
+}
+
+func (b Bloom) Big() *big.Int {
+	return common.Bytes2Big(b[:])
 }

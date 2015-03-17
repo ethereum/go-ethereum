@@ -16,8 +16,8 @@ type Environment interface {
 
 	Origin() common.Address
 	BlockNumber() *big.Int
-	GetHash(n uint64) []byte
-	Coinbase() []byte
+	GetHash(n uint64) common.Hash
+	Coinbase() common.Address
 	Time() int64
 	Difficulty() *big.Int
 	GasLimit() *big.Int
@@ -38,7 +38,7 @@ type Account interface {
 	SubBalance(amount *big.Int)
 	AddBalance(amount *big.Int)
 	Balance() *big.Int
-	Address() []byte
+	Address() common.Address
 }
 
 // generic transfer method

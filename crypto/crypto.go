@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/ripemd160"
 )
@@ -47,8 +48,10 @@ func Sha3Hash(data ...[]byte) (h common.Hash) {
 }
 
 // Creates an ethereum address given the bytes and the nonce
-func CreateAddress(b []byte, nonce uint64) []byte {
-	return Sha3(common.NewValue([]interface{}{b, nonce}).Encode())[12:]
+func CreateAddress(b common.Address, nonce uint64) common.Address {
+	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
+	return common.BytesToAddress(Sha3(data)[12:])
+	//return Sha3(common.NewValue([]interface{}{b, nonce}).Encode())[12:]
 }
 
 func Sha256(data []byte) []byte {

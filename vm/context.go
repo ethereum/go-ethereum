@@ -18,7 +18,7 @@ type Context struct {
 	self   ContextRef
 
 	Code     []byte
-	CodeAddr common.Address
+	CodeAddr *common.Address
 
 	value, Gas, UsedGas, Price *big.Int
 
@@ -108,7 +108,7 @@ func (self *Context) SetCode(code []byte) {
 	self.Code = code
 }
 
-func (self *Context) SetCallCode(addr common.Address, code []byte) {
+func (self *Context) SetCallCode(addr *common.Address, code []byte) {
 	self.Code = code
 	self.CodeAddr = addr
 }
