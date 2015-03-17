@@ -13,8 +13,10 @@ import "../ext/http.js" as Http
 ApplicationWindow {
     id: root
     
-    //flags: Qt.FramelessWindowHint
+    flags: Qt.FramelessWindowHint
+    //flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint
     // Use this to make the window frameless. But then you'll need to do move and resize by hand
+    color: "transparent"
 
     property var ethx : Eth.ethx
     property var catalog;
@@ -23,6 +25,10 @@ ApplicationWindow {
     height: 820
     minimumHeight: 600
     minimumWidth: 800
+    x: 50 
+    y: 50 
+
+    // You can use (Screen.desktopAvailableHeight - height)/2 but that would keep
 
     title: "Mist"
 
@@ -262,11 +268,327 @@ ApplicationWindow {
         id: blockModel
     }
 
+    
+
+            
+
+    Rectangle {
+        id: windowChrome
+        color: "#EBE8E8"
+        anchors.fill: parent
+        radius: 3
+
+
+        
+
+
+
+
+        /************************/
+        /*                      */
+        /*  Resizeable Borders  */
+        /*                      */
+        /************************/
+
+        MouseArea { 
+            id: rightResizableBar
+            anchors {
+                top: parent.top
+                bottom: parent.bottom
+                right: parent.right
+            }
+            width: 5
+            cursorShape: Qt.SizeHorCursor; 
+
+            property real lastMouseX: 0
+            onPressed: {
+                lastMouseX = mouseX
+            }
+            onPositionChanged: {
+                if (!(root.width + mouseX - lastMouseX < root.minimumWidth)) {
+                     root.width += (mouseX - lastMouseX)
+                }
+            }
+        }        
+
+        MouseArea { 
+            id: leftResizableBar
+            anchors {
+                top: parent.top
+                bottom: parent.bottom
+                left: parent.left
+            }
+            width: 5
+            cursorShape: Qt.SizeHorCursor; 
+
+            property real lastMouseX: 0
+            property real lastRight: root.x + root.width
+            onPressed: {
+                lastMouseX = mouseX
+                lastRight = root.x + root.width
+            }
+            onPositionChanged: {            
+                if (!(root.width - mouseX + lastMouseX < root.minimumWidth)) {
+                    root.width -= (mouseX - lastMouseX)
+                    root.x = lastRight - root.width
+                }
+            }
+        }
+
+        MouseArea { 
+            id: bottomResizableBar
+            anchors {
+                bottom: parent.bottom
+                right: parent.right
+                left: parent.left
+            }
+            height: 5
+            cursorShape: Qt.SizeVerCursor; 
+
+            property real lastMouseY: 0
+            onPressed: {
+                lastMouseY = mouseY
+            }
+            onPositionChanged: {
+                if (!(root.height + mouseY - lastMouseY < root.minimumHeight)) {
+                     root.height += (mouseY - lastMouseY)
+                }
+            }
+        }        
+
+        MouseArea { 
+            id: bottomRightResizableHandle
+            anchors {
+                bottom: parent.bottom
+                right: parent.right
+            }
+            width: 5
+            height: 5
+            cursorShape: Qt.SizeFDiagCursor; 
+
+            property real lastMouseX: 0
+            property real lastMouseY: 0
+            onPressed: {
+                lastMouseX = mouseX
+                lastMouseY = mouseY
+            }
+            onPositionChanged: {
+                if (!(root.width + mouseX - lastMouseX < root.minimumWidth)) {
+                     root.width += (mouseX - lastMouseX)
+                }
+
+                if (!(root.height + mouseY - lastMouseY < root.minimumHeight)) {
+                     root.height += (mouseY - lastMouseY)
+                }
+            }
+        } 
+    }
+
+    Rectangle {
+        id: topBar
+        anchors {
+            top: parent.top
+            left: parent.left
+            right: parent.right
+        }
+        height: 18.4
+        z: 100
+        color: "transparent"
+
+        MouseArea {
+            id: menuMouseArea
+            anchors.fill: parent
+            property real lastMouseX: 0
+            property real lastMouseY: 0
+            hoverEnabled: true
+            onPressed: {
+                lastMouseX = mouseX
+                lastMouseY = mouseY
+            }
+            onPositionChanged: {
+                if (menuMouseArea.pressed){
+                    root.x += (mouseX - lastMouseX)
+                    root.y += (mouseY - lastMouseY)    
+                }
+                
+            }
+            onEntered: {
+                topBar.state = "hovered"
+            }
+            onExited: {
+                topBar.state = "normal"
+            }
+        }
+
+        // gradient: Gradient {
+        //      GradientStop { position: 0.0; color: "#FFFFFFFF" }
+        //      GradientStop { position: 1.0; color: "#00FFFFFF" }
+        // }
+
+ 
+
+        Rectangle {
+            anchors {
+                top: parent.top
+                right: parent.right
+                bottom: parent.bottom
+                left: parent.left
+                leftMargin: 194
+            }
+            radius: 3
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "#FFFFFFFF" }
+                GradientStop { position: 1.0; color: "#00FFFFFF" }
+            }
+        }
+
+        Rectangle {
+            id: topbarBackground
+            anchors.fill: parent
+            opacity: 0.0
+            radius: 3
+            color: "#AAA0A0"
+        }
+        
+
+        states: [
+        State {
+            name: "normal"
+            when: menuMouseArea.hovered
+            PropertyChanges { 
+                target: topbarBackground
+                opacity: 0
+            }
+        },
+        State {
+            name: "hovered"
+            when: menuMouseArea.hovered
+            PropertyChanges { 
+                target: topbarBackground
+                opacity: 1
+            }
+        }]
+
+
+        transitions: Transition {
+            NumberAnimation { 
+                properties: "opacity"
+                duration: 250
+                easing.type: Easing.InOutQuad 
+            }
+        }
+
+        /************************/
+        /*   Semafor Buttons    */
+        /************************/
+
+         Rectangle {
+            id: semaforButtons
+            color: "transparent"
+            height: 32
+            
+            anchors {
+                top: parent.top
+                left: parent.left
+                right: parent.right
+            }
+
+            Rectangle {
+                    color: 'transparent'
+                    width: 13
+                    height: 20
+                    x: 3
+                    
+                    Image {
+                         height: 13
+                         width: 13
+                         source: toolbarCloseButton.containsMouse ?  "../window-control/window-close.png" :  "../window-control/window-close-hover.png"
+                         anchors.centerIn: parent
+                         
+                         MouseArea {
+                            id: toolbarCloseButton
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: Qt.quit() //gui.stop();
+
+                            onEntered: {
+                                topBar.state = "hovered"
+                            }
+                        }
+                     }  
+                }
+                Rectangle {
+                    color: 'transparent'
+                    width: 13
+                    height: 20
+                    x: 21
+                    
+                    Image {
+                         height: 13
+                         width: 13
+                         source: toolbarminimizeButton.containsMouse ?  "../window-control/window-minimize.png" :  "../window-control/window-minimize-hover.png"
+                         anchors.centerIn: parent
+                         
+                         MouseArea {
+                            id: toolbarminimizeButton
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                console.log("Minimize");
+                                // Neither works..
+                                //root.visibility = QWindow.minimized;
+                                // root.showMinimized();
+                            }
+                            onEntered: {
+                                topBar.state = "hovered"
+                                console.log(topBar.state )
+                            }
+                        }
+                     }  
+                }
+
+                Rectangle {
+                    color: 'transparent'
+                    width: 13
+                    height: 20
+                    x: 40
+
+                    Image {
+                         height: 13
+                         width: 13
+                         source: toolbarzoomButton.containsMouse ?  "../window-control/window-zoom.png" :  "../window-control/window-zoom-hover.png"
+                         anchors.centerIn: parent
+                         
+                         MouseArea {
+                            id: toolbarzoomButton
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                console.log("Maximize");
+                                // Neither works..
+                                //root.visibility = QWindow.maximized;
+                                //root.showMaximized();
+                            } 
+                            onEntered: {
+                                topBar.state = "hovered"
+                            }                           
+                        }
+                    }  
+            }
+        }
+    }
+
+
     SplitView {
         property var views: [];
 
         id: mainSplit
-        anchors.fill: parent
+        anchors.fill: windowChrome
+        anchors.margins: 2
+        z: 50
+        //color: "brown"
+        //radius: 5
+
         //resizing: false  // this is NOT where we remove that damning resizing handle..
         handleDelegate: Item {
             //This handle is a way to remove the line between the split views
@@ -305,6 +627,8 @@ ApplicationWindow {
             return {view: view, menuItem: menuItem}
         }
 
+
+
         /*********************
          * Main menu.
          ********************/
@@ -312,6 +636,7 @@ ApplicationWindow {
              id: menu
              Layout.minimumWidth: 192
              Layout.maximumWidth: 192
+             anchors.top: parent.top
 
             FontLoader { 
                id: sourceSansPro
@@ -338,7 +663,7 @@ ApplicationWindow {
             }
 
             Rectangle {
-                color: "steelblue"
+                id: sideMenuInteractions
                 anchors.fill: parent
 
                 MouseArea {
@@ -353,16 +678,9 @@ ApplicationWindow {
                         root.x += (mouseX - lastMouseX)
                         root.y += (mouseY - lastMouseY)
                     }
-                    /*onDoubleClicked: {
-                        //!maximized ? view.set_max() : view.set_normal()}
-                        visibility = "Minimized"
-                    }*/
                 }
             }
 
-
-
-             anchors.top: parent.top
              Rectangle {
                      width: parent.height
                      height: parent.width
@@ -678,15 +996,18 @@ ApplicationWindow {
                  return comp
              }
 
-             ColumnLayout {
-                 id: menuColumn
-                 y: 10
-                 width: parent.width
-                 anchors.left: parent.left
-                 anchors.right: parent.right
-                 spacing: 3
-                
 
+             ColumnLayout {
+                id: menuColumn
+                y: 10
+                width: parent.width
+                anchors.left: parent.left
+                anchors.right: parent.right
+                spacing: 3
+                
+                Rectangle {
+                    height: 18.4
+                }
 
                 ColumnLayout {
                      id: menuBegin
@@ -777,55 +1098,6 @@ ApplicationWindow {
               anchors.top: parent.top
               color: "#00000000"             
 
-              /*Rectangle {
-                  id: urlPane
-                  height: 40
-                  color: "#00000000"
-                  anchors {
-                      left: parent.left
-                      right: parent.right
-                      leftMargin: 5
-                      rightMargin: 5
-                      top: parent.top
-                      topMargin: 5
-                  }
-                  TextField {
-                      id: url
-                      objectName: "url"
-                      placeholderText: "DApp URL"
-                      anchors {
-                          left: parent.left
-                          right: parent.right
-                          top: parent.top
-                          topMargin: 5
-                          rightMargin: 5
-                          leftMargin: 5
-                      }
-
-                      Keys.onReturnPressed: {
-                          if(/^https?/.test(this.text)) {
-                              newBrowserTab(this.text);
-                          } else {
-                              addPlugin(this.text, {close: true, section: "apps"})
-                          }
-                      }
-                  }
-
-              }
-
-              // Border
-              Rectangle {
-                  id: divider
-                  anchors {
-                      left: parent.left
-                      right: parent.right
-                      top: urlPane.bottom
-                  }
-                  z: -1
-                  height: 1
-                  color: "#CCCCCC"
-              }*/
-
               Rectangle {
                   id: mainView
                   color: "#00000000"
@@ -839,8 +1111,8 @@ ApplicationWindow {
 
                       return view;
                   }
-              }
-          }
+            }
+        }
       }
 
 
