@@ -31,9 +31,9 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/peterh/liner"
@@ -89,16 +89,20 @@ Use "ethereum dump 0" to dump the genesis block.
 `,
 		},
 		{
-			Action: runjs,
-			Name:   "js",
-			Usage:  `interactive JavaScript console`,
+			Action: console,
+			Name:   "console",
+			Usage:  `Ethereum Console: interactive JavaScript environment`,
 			Description: `
-In the console, you can use the eth object to interact
-with the running ethereum stack. The API does not match
-ethereum.js.
-
-A JavaScript file can be provided as the argument. The
-runtime will execute the file and exit.
+Console is an interactive shell for the Ethereum JavaScript runtime environment which exposes a node admin interface as well as the DAPP JavaScript API.
+See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
+`,
+		},
+		{
+			Action: execJSFiles,
+			Name:   "js",
+			Usage:  `executes the given JavaScript files in the Ethereum Frontier JavaScript VM`,
+			Description: `
+The Ethereum JavaScript VM exposes a node admin interface as well as the DAPP JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
 `,
 		},
 		{
@@ -116,6 +120,7 @@ runtime will execute the file and exit.
 		utils.UnlockedAccountFlag,
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
+		utils.JSpathFlag,
 		utils.ListenPortFlag,
 		utils.LogFileFlag,
 		utils.LogFormatFlag,
@@ -131,6 +136,7 @@ runtime will execute the file and exit.
 		utils.RPCPortFlag,
 		utils.UnencryptedKeysFlag,
 		utils.VMDebugFlag,
+
 		//utils.VMTypeFlag,
 	}
 
@@ -168,7 +174,7 @@ func run(ctx *cli.Context) {
 	ethereum.WaitForShutdown()
 }
 
-func runjs(ctx *cli.Context) {
+func console(ctx *cli.Context) {
 	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
@@ -176,14 +182,26 @@ func runjs(ctx *cli.Context) {
 	}
 
 	startEth(ctx, ethereum)
-	repl := newJSRE(ethereum)
-	if len(ctx.Args()) == 0 {
-		repl.interactive()
-	} else {
-		for _, file := range ctx.Args() {
-			repl.exec(file)
-		}
+	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name))
+	repl.interactive()
+
+	ethereum.Stop()
+	ethereum.WaitForShutdown()
+}
+
+func execJSFiles(ctx *cli.Context) {
+	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	ethereum, err := eth.New(cfg)
+	if err != nil {
+		utils.Fatalf("%v", err)
 	}
+
+	startEth(ctx, ethereum)
+	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name))
+	for _, file := range ctx.Args() {
+		repl.exec(file)
+	}
+
 	ethereum.Stop()
 	ethereum.WaitForShutdown()
 }
