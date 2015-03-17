@@ -2,7 +2,6 @@ package vm
 
 import (
 	"bytes"
-	"fmt"
 	"math/big"
 	"strconv"
 	"testing"
@@ -82,9 +81,6 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		if name != "log2_nonEmptyMem" {
-			continue
-		}
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(common.Hash{}, db)
 		for addr, account := range test.Pre {
@@ -172,12 +168,26 @@ func RunVmTest(p string, t *testing.T) {
 			if len(test.Logs) != len(logs) {
 				t.Errorf("log length mismatch. Expected %d, got %d", len(test.Logs), len(logs))
 			} else {
-				fmt.Println("A", test.Logs)
-				fmt.Println("B", logs)
 				for i, log := range test.Logs {
+					if common.HexToAddress(log.AddressF) != logs[i].Address() {
+						t.Errorf("'%s' log address expected %v got %x", name, log.AddressF, logs[i].Address())
+					}
+
+					if !bytes.Equal(logs[i].Data(), helper.FromHex(log.DataF)) {
+						t.Errorf("'%s' log data expected %v got %x", name, log.DataF, logs[i].Data())
+					}
+
+					if len(log.TopicsF) != len(logs[i].Topics()) {
+						t.Errorf("'%s' log topics length expected %d got %d", name, len(log.TopicsF), logs[i].Topics())
+					} else {
+						for j, topic := range log.TopicsF {
+							if common.HexToHash(topic) != logs[i].Topics()[j] {
+								t.Errorf("'%s' log topic[%d] expected %v got %x", name, j, topic, logs[i].Topics()[j])
+							}
+						}
+					}
 					genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
-					fmt.Println("A BLOOM", log.BloomF)
-					fmt.Printf("B BLOOM %x\n", genBloom)
+
 					if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
 						t.Errorf("'%s' bloom mismatch", name)
 					}
