@@ -41,7 +41,7 @@ import (
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.9.0"
+	Version          = "0.9.1"
 )
 
 var (
