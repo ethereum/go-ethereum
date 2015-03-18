@@ -42,7 +42,7 @@ import (
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.9.1"
+	Version          = "Frontier - 0.9.1"
 )
 
 var (
@@ -148,8 +148,8 @@ The Ethereum JavaScript VM exposes a node admin interface as well as the DAPP Ja
 		utils.RPCPortFlag,
 		utils.UnencryptedKeysFlag,
 		utils.VMDebugFlag,
-
-		//utils.VMTypeFlag,
+		utils.ProtocolVersionFlag,
+		utils.NetworkIdFlag,
 	}
 
 	// missing:
@@ -348,7 +348,7 @@ GO: %s
 OS: %s
 GOPATH=%s
 GOROOT=%s
-`, ClientIdentifier, Version, eth.ProtocolVersion, eth.NetworkId, runtime.Version(), runtime.GOOS, os.Getenv("GOPATH"), runtime.GOROOT())
+`, ClientIdentifier, Version, c.GlobalInt(utils.ProtocolVersionFlag.Name), c.GlobalInt(utils.NetworkIdFlag.Name), runtime.Version(), runtime.GOOS, os.Getenv("GOPATH"), runtime.GOROOT())
 }
 
 // hashish returns true for strings that look like hashes.
