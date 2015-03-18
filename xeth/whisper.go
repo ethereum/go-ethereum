@@ -56,7 +56,7 @@ func (self *Whisper) Post(payload string, to, from string, topics []string, prio
 func (self *Whisper) NewIdentity() string {
 	key := self.Whisper.NewIdentity()
 
-	return toHex(crypto.FromECDSAPub(&key.PublicKey))
+	return common.ToHex(crypto.FromECDSAPub(&key.PublicKey))
 }
 
 func (self *Whisper) HasIdentity(key string) bool {
@@ -112,9 +112,9 @@ type WhisperMessage struct {
 func NewWhisperMessage(msg *whisper.Message) WhisperMessage {
 	return WhisperMessage{
 		ref:     msg,
-		Payload: toHex(msg.Payload),
-		From:    toHex(crypto.FromECDSAPub(msg.Recover())),
-		To:      toHex(crypto.FromECDSAPub(msg.To)),
+		Payload: common.ToHex(msg.Payload),
+		From:    common.ToHex(crypto.FromECDSAPub(msg.Recover())),
+		To:      common.ToHex(crypto.FromECDSAPub(msg.To)),
 		Sent:    msg.Sent,
 	}
 }

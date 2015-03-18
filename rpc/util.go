@@ -90,17 +90,8 @@ func UnmarshalRawMessages(b []byte, iface interface{}, number *int64) (err error
 	return nil
 }
 
-func toHex(b []byte) string {
-	hex := common.Bytes2Hex(b)
-	// Prefer output of "0x0" instead of "0x"
-	if len(hex) == 0 {
-		hex = "0"
-	}
-	return "0x" + hex
-}
-
 func i2hex(n int) string {
-	return toHex(big.NewInt(int64(n)).Bytes())
+	return common.ToHex(big.NewInt(int64(n)).Bytes())
 }
 
 type RpcServer interface {
@@ -121,11 +112,11 @@ func toLogs(logs state.Logs) (ls []Log) {
 	for i, log := range logs {
 		var l Log
 		l.Topic = make([]string, len(log.Topics()))
-		l.Address = toHex(log.Address())
-		l.Data = toHex(log.Data())
+		l.Address = common.ToHex(log.Address())
+		l.Data = common.ToHex(log.Data())
 		l.Number = log.Number()
 		for j, topic := range log.Topics() {
-			l.Topic[j] = toHex(topic)
+			l.Topic[j] = common.ToHex(topic)
 		}
 		ls[i] = l
 	}
