@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"math/big"
 	"sync"
 
@@ -254,22 +255,20 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 	bc.currentBlock = bc.genesisBlock
 }
 
-func (self *ChainManager) Export() []byte {
+// Export writes the active chain to the given writer.
+func (self *ChainManager) Export(w io.Writer) error {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
-
 	chainlogger.Infof("exporting %v blocks...\n", self.currentBlock.Header().Number)
-
-	blocks := make([]*types.Block, int(self.currentBlock.NumberU64())+1)
 	for block := self.currentBlock; block != nil; block = self.GetBlock(block.Header().ParentHash) {
-		blocks[block.NumberU64()] = block
+		if err := block.EncodeRLP(w); err != nil {
+			return err
+		}
 	}
-
-	return common.Encode(blocks)
+	return nil
 }
 
 func (bc *ChainManager) insert(block *types.Block) {
-	//encodedBlock := common.Encode(block)
 	bc.blockDb.Put([]byte("LastBlock"), block.Hash().Bytes())
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
@@ -279,10 +278,9 @@ func (bc *ChainManager) insert(block *types.Block) {
 }
 
 func (bc *ChainManager) write(block *types.Block) {
-	encodedBlock := common.Encode(block.RlpDataForStorage())
-
+	enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
 	key := append(blockHashPre, block.Hash().Bytes()...)
-	bc.blockDb.Put(key, encodedBlock)
+	bc.blockDb.Put(key, enc)
 }
 
 // Accessors
@@ -324,13 +322,12 @@ func (self *ChainManager) GetBlock(hash common.Hash) *types.Block {
 	if len(data) == 0 {
 		return nil
 	}
-	var block types.Block
+	var block types.StorageBlock
 	if err := rlp.Decode(bytes.NewReader(data), &block); err != nil {
-		fmt.Println(err)
+		chainlogger.Errorf("invalid block RLP for hash %x: %v", hash, err)
 		return nil
 	}
-
-	return &block
+	return (*types.Block)(&block)
 }
 
 func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {

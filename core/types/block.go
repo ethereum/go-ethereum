@@ -3,12 +3,13 @@ package types
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math/big"
 	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -45,6 +46,14 @@ type Header struct {
 	Nonce [8]byte
 }
 
+func (self *Header) Hash() common.Hash {
+	return rlpHash(self.rlpData(true))
+}
+
+func (self *Header) HashNoNonce() common.Hash {
+	return rlpHash(self.rlpData(false))
+}
+
 func (self *Header) rlpData(withNonce bool) []interface{} {
 	fields := []interface{}{
 		self.ParentHash,
@@ -64,7 +73,6 @@ func (self *Header) rlpData(withNonce bool) []interface{} {
 	if withNonce {
 		fields = append(fields, self.MixDigest, self.Nonce)
 	}
-
 	return fields
 }
 
@@ -72,12 +80,11 @@ func (self *Header) RlpData() interface{} {
 	return self.rlpData(true)
 }
 
-func (self *Header) Hash() common.Hash {
-	return common.BytesToHash(crypto.Sha3(common.Encode(self.rlpData(true))))
-}
-
-func (self *Header) HashNoNonce() common.Hash {
-	return common.BytesToHash(crypto.Sha3(common.Encode(self.rlpData(false))))
+func rlpHash(x interface{}) (h common.Hash) {
+	hw := sha3.NewKeccak256()
+	rlp.Encode(hw, x)
+	hw.Sum(h[:0])
+	return h
 }
 
 type Block struct {
@@ -95,6 +102,26 @@ type Block struct {
 	Reward   *big.Int
 }
 
+// StorageBlock defines the RLP encoding of a Block stored in the
+// state database. The StorageBlock encoding contains fields that
+// would otherwise need to be recomputed.
+type StorageBlock Block
+
+// "external" block encoding. used for eth protocol, etc.
+type extblock struct {
+	Header *Header
+	Txs    []*Transaction
+	Uncles []*Header
+}
+
+// "storage" block encoding. used for database.
+type storageblock struct {
+	Header *Header
+	Txs    []*Transaction
+	Uncles []*Header
+	TD     *big.Int
+}
+
 func NewBlock(parentHash common.Hash, coinbase common.Address, root common.Hash, difficulty *big.Int, nonce uint64, extra string) *Block {
 	header := &Header{
 		Root:       root,
@@ -107,9 +134,7 @@ func NewBlock(parentHash common.Hash, coinbase common.Address, root common.Hash,
 		GasLimit:   new(big.Int),
 	}
 	header.SetNonce(nonce)
-
 	block := &Block{header: header, Reward: new(big.Int)}
-
 	return block
 }
 
@@ -122,20 +147,38 @@ func NewBlockWithHeader(header *Header) *Block {
 }
 
 func (self *Block) DecodeRLP(s *rlp.Stream) error {
-	var extblock struct {
-		Header *Header
-		Txs    []*Transaction
-		Uncles []*Header
-		TD     *big.Int // optional
-	}
-	if err := s.Decode(&extblock); err != nil {
+	var eb extblock
+	if err := s.Decode(&eb); err != nil {
 		return err
 	}
-	self.header = extblock.Header
-	self.uncles = extblock.Uncles
-	self.transactions = extblock.Txs
-	self.Td = extblock.TD
+	self.header, self.uncles, self.transactions = eb.Header, eb.Uncles, eb.Txs
 	return nil
+}
+
+func (self Block) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, extblock{
+		Header: self.header,
+		Txs:    self.transactions,
+		Uncles: self.uncles,
+	})
+}
+
+func (self *StorageBlock) DecodeRLP(s *rlp.Stream) error {
+	var sb storageblock
+	if err := s.Decode(&sb); err != nil {
+		return err
+	}
+	self.header, self.uncles, self.transactions, self.Td = sb.Header, sb.Uncles, sb.Txs, sb.TD
+	return nil
+}
+
+func (self StorageBlock) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, storageblock{
+		Header: self.header,
+		Txs:    self.transactions,
+		Uncles: self.uncles,
+		TD:     self.Td,
+	})
 }
 
 func (self *Block) Header() *Header {
@@ -148,7 +191,7 @@ func (self *Block) Uncles() []*Header {
 
 func (self *Block) SetUncles(uncleHeaders []*Header) {
 	self.uncles = uncleHeaders
-	self.header.UncleHash = common.BytesToHash(crypto.Sha3(common.Encode(uncleHeaders)))
+	self.header.UncleHash = rlpHash(uncleHeaders)
 }
 
 func (self *Block) Transactions() Transactions {
@@ -213,7 +256,6 @@ func (self *Block) GasLimit() *big.Int       { return self.header.GasLimit }
 func (self *Block) GasUsed() *big.Int        { return self.header.GasUsed }
 func (self *Block) Root() common.Hash        { return self.header.Root }
 func (self *Block) SetRoot(root common.Hash) { self.header.Root = root }
-func (self *Block) Size() common.StorageSize { return common.StorageSize(len(common.Encode(self))) }
 func (self *Block) GetTransaction(i int) *Transaction {
 	if len(self.transactions) > i {
 		return self.transactions[i]
@@ -225,6 +267,19 @@ func (self *Block) GetUncle(i int) *Header {
 		return self.uncles[i]
 	}
 	return nil
+}
+
+func (self *Block) Size() common.StorageSize {
+	c := writeCounter(0)
+	rlp.Encode(&c, self)
+	return common.StorageSize(c)
+}
+
+type writeCounter common.StorageSize
+
+func (c *writeCounter) Write(b []byte) (int, error) {
+	*c += writeCounter(len(b))
+	return len(b), nil
 }
 
 // Implement pow.Block

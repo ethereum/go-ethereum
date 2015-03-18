@@ -63,7 +63,7 @@ func NewTxPool(eventMux *event.TypeMux) *TxPool {
 func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	// Validate sender
 	if _, err := tx.From(); err != nil {
-		return err
+		return ErrInvalidSender
 	}
 	// Validate curve param
 	v, _, _ := tx.Curve()

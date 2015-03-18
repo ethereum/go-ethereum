@@ -1,16 +1,14 @@
 package types
 
 import (
-	"bytes"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -38,16 +36,18 @@ func NewTransactionMessage(to common.Address, amount, gasAmount, gasPrice *big.I
 }
 
 func NewTransactionFromBytes(data []byte) *Transaction {
+	// TODO: remove this function if possible. callers would
+	// much better off decoding into transaction directly.
+	// it's not that hard.
 	tx := new(Transaction)
-	rlp.Decode(bytes.NewReader(data), tx)
+	rlp.DecodeBytes(data, tx)
 	return tx
 }
 
-func (tx *Transaction) Hash() (a common.Hash) {
-	h := sha3.NewKeccak256()
-	rlp.Encode(h, []interface{}{tx.AccountNonce, tx.Price, tx.GasLimit, tx.Recipient, tx.Amount, tx.Payload})
-	h.Sum(a[:0])
-	return a
+func (tx *Transaction) Hash() common.Hash {
+	return rlpHash([]interface{}{
+		tx.AccountNonce, tx.Price, tx.GasLimit, tx.Recipient, tx.Amount, tx.Payload,
+	})
 }
 
 func (self *Transaction) Data() []byte {
@@ -122,28 +122,20 @@ func (tx *Transaction) SetSignatureValues(sig []byte) error {
 	return nil
 }
 
-func (tx Transaction) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{
-		tx.AccountNonce,
-		tx.Price, tx.GasLimit,
-		tx.Recipient,
-		tx.Amount,
-		tx.Payload,
-		tx.V,
-		tx.R,
-		tx.S,
-	})
+func (tx *Transaction) SignECDSA(prv *ecdsa.PrivateKey) error {
+	h := tx.Hash()
+	sig, err := crypto.Sign(h[:], prv)
+	if err != nil {
+		return err
+	}
+	tx.SetSignatureValues(sig)
+	return nil
 }
 
 // TODO: remove
 func (tx *Transaction) RlpData() interface{} {
 	data := []interface{}{tx.AccountNonce, tx.Price, tx.GasLimit, tx.Recipient, tx.Amount, tx.Payload}
 	return append(data, tx.V, new(big.Int).SetBytes(tx.R).Bytes(), new(big.Int).SetBytes(tx.S).Bytes())
-}
-
-// TODO: remove
-func (tx *Transaction) RlpEncode() []byte {
-	return common.Encode(tx)
 }
 
 func (tx *Transaction) String() string {
@@ -158,6 +150,7 @@ func (tx *Transaction) String() string {
 	} else {
 		to = fmt.Sprintf("%x", t[:])
 	}
+	enc, _ := rlp.EncodeToBytes(tx)
 	return fmt.Sprintf(`
 	TX(%x)
 	Contract: %v
@@ -185,7 +178,7 @@ func (tx *Transaction) String() string {
 		tx.V,
 		tx.R,
 		tx.S,
-		common.Encode(tx),
+		enc,
 	)
 }
 
@@ -204,9 +197,13 @@ func (self Transactions) RlpData() interface{} {
 	return enc
 }
 
-func (s Transactions) Len() int            { return len(s) }
-func (s Transactions) Swap(i, j int)       { s[i], s[j] = s[j], s[i] }
-func (s Transactions) GetRlp(i int) []byte { return common.Rlp(s[i]) }
+func (s Transactions) Len() int      { return len(s) }
+func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+func (s Transactions) GetRlp(i int) []byte {
+	enc, _ := rlp.EncodeToBytes(s[i])
+	return enc
+}
 
 type TxByNonce struct{ Transactions }
 

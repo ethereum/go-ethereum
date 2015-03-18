@@ -386,7 +386,12 @@ func writeUint(val reflect.Value, w *encbuf) error {
 }
 
 func writeBigIntPtr(val reflect.Value, w *encbuf) error {
-	return writeBigInt(val.Interface().(*big.Int), w)
+	ptr := val.Interface().(*big.Int)
+	if ptr == nil {
+		w.str = append(w.str, 0x80)
+		return nil
+	}
+	return writeBigInt(ptr, w)
 }
 
 func writeBigIntNoPtr(val reflect.Value, w *encbuf) error {
