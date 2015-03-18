@@ -8,7 +8,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -19,9 +18,6 @@ import (
 var ZeroHash256 = make([]byte, 32)
 var ZeroHash160 = make([]byte, 20)
 var ZeroHash512 = make([]byte, 64)
-var EmptyShaList = crypto.Sha3(common.Encode([]interface{}{}))
-var EmptyListRoot = crypto.Sha3(common.Encode(""))
-
 var GenesisDiff = big.NewInt(131072)
 var GenesisGasLimit = big.NewInt(3141592)
 
