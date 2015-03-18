@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/state"
@@ -239,7 +239,7 @@ func (js *jsre) dumpBlock(call otto.FunctionCall) otto.Value {
 			block = js.ethereum.ChainManager().GetBlockByNumber(uint64(num))
 		} else if call.Argument(0).IsString() {
 			hash, _ := call.Argument(0).ToString()
-			block = js.ethereum.ChainManager().GetBlock(common.Hex2Bytes(hash))
+			block = js.ethereum.ChainManager().GetBlock(common.HexToHash(hash))
 		} else {
 			fmt.Println("invalid argument for dump. Either hex string or number")
 		}

@@ -1,13 +1,12 @@
 package eth
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/errs"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -76,15 +75,15 @@ type txPool interface {
 }
 
 type chainManager interface {
-	GetBlockHashesFromHash(hash []byte, amount uint64) (hashes [][]byte)
-	GetBlock(hash []byte) (block *types.Block)
-	Status() (td *big.Int, currentBlock []byte, genesisBlock []byte)
+	GetBlockHashesFromHash(hash common.Hash, amount uint64) (hashes []common.Hash)
+	GetBlock(hash common.Hash) (block *types.Block)
+	Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash)
 }
 
 type blockPool interface {
-	AddBlockHashes(next func() ([]byte, bool), peerId string)
+	AddBlockHashes(next func() (common.Hash, bool), peerId string)
 	AddBlock(block *types.Block, peerId string)
-	AddPeer(td *big.Int, currentBlock []byte, peerId string, requestHashes func([]byte) error, requestBlocks func([][]byte) error, peerError func(*errs.Error)) (best bool)
+	AddPeer(td *big.Int, currentBlock common.Hash, peerId string, requestHashes func(common.Hash) error, requestBlocks func([]common.Hash) error, peerError func(*errs.Error)) (best bool)
 	RemovePeer(peerId string)
 }
 
@@ -95,7 +94,7 @@ type newBlockMsgData struct {
 }
 
 type getBlockHashesMsgData struct {
-	Hash   []byte
+	Hash   common.Hash
 	Amount uint64
 }
 
@@ -167,7 +166,7 @@ func (self *ethProtocol) handle() error {
 		}
 		for _, tx := range txs {
 			jsonlogger.LogJson(&logger.EthTxReceived{
-				TxHash:   common.Bytes2Hex(tx.Hash()),
+				TxHash:   tx.Hash().Hex(),
 				RemoteId: self.peer.ID().String(),
 			})
 		}
@@ -183,7 +182,7 @@ func (self *ethProtocol) handle() error {
 			request.Amount = maxHashes
 		}
 		hashes := self.chainManager.GetBlockHashesFromHash(request.Hash, request.Amount)
-		return p2p.EncodeMsg(self.rw, BlockHashesMsg, common.ByteSliceToInterface(hashes)...)
+		return p2p.EncodeMsg(self.rw, BlockHashesMsg, rlp.Flat(hashes))
 
 	case BlockHashesMsg:
 		msgStream := rlp.NewStream(msg.Payload)
@@ -192,14 +191,16 @@ func (self *ethProtocol) handle() error {
 		}
 
 		var i int
-		iter := func() (hash []byte, ok bool) {
-			hash, err := msgStream.Bytes()
+		iter := func() (hash common.Hash, ok bool) {
+			var h common.Hash
+			err := msgStream.Decode(&h)
 			if err == rlp.EOL {
-				return nil, false
+				return common.Hash{}, false
 			} else if err != nil {
 				self.protoError(ErrDecode, "msg %v: after %v hashes : %v", msg, i, err)
-				return nil, false
+				return common.Hash{}, false
 			}
+
 			i++
 			return hash, true
 		}
@@ -215,14 +216,14 @@ func (self *ethProtocol) handle() error {
 		var i int
 		for {
 			i++
-			var hash []byte
-			if err := msgStream.Decode(&hash); err != nil {
-				if err == rlp.EOL {
-					break
-				} else {
-					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
-				}
+			var hash common.Hash
+			err := msgStream.Decode(&hash)
+			if err == rlp.EOL {
+				break
+			} else {
+				return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 			}
+
 			block := self.chainManager.GetBlock(hash)
 			if block != nil {
 				blocks = append(blocks, block)
@@ -259,10 +260,10 @@ func (self *ethProtocol) handle() error {
 		_, chainHead, _ := self.chainManager.Status()
 
 		jsonlogger.LogJson(&logger.EthChainReceivedNewBlock{
-			BlockHash:     common.Bytes2Hex(hash),
+			BlockHash:     hash.Hex(),
 			BlockNumber:   request.Block.Number(), // this surely must be zero
-			ChainHeadHash: common.Bytes2Hex(chainHead),
-			BlockPrevHash: common.Bytes2Hex(request.Block.ParentHash()),
+			ChainHeadHash: chainHead.Hex(),
+			BlockPrevHash: request.Block.ParentHash().Hex(),
 			RemoteId:      self.peer.ID().String(),
 		})
 		// to simplify backend interface adding a new block
@@ -282,8 +283,8 @@ type statusMsgData struct {
 	ProtocolVersion uint32
 	NetworkId       uint32
 	TD              *big.Int
-	CurrentBlock    []byte
-	GenesisBlock    []byte
+	CurrentBlock    common.Hash
+	GenesisBlock    common.Hash
 }
 
 func (self *ethProtocol) statusMsg() p2p.Msg {
@@ -325,7 +326,7 @@ func (self *ethProtocol) handleStatus() error {
 
 	_, _, genesisBlock := self.chainManager.Status()
 
-	if !bytes.Equal(status.GenesisBlock, genesisBlock) {
+	if status.GenesisBlock != genesisBlock {
 		return self.protoError(ErrGenesisBlockMismatch, "%x (!= %x)", status.GenesisBlock, genesisBlock)
 	}
 
@@ -344,14 +345,14 @@ func (self *ethProtocol) handleStatus() error {
 	return nil
 }
 
-func (self *ethProtocol) requestBlockHashes(from []byte) error {
+func (self *ethProtocol) requestBlockHashes(from common.Hash) error {
 	self.peer.Debugf("fetching hashes (%d) %x...\n", maxHashes, from[0:4])
 	return p2p.EncodeMsg(self.rw, GetBlockHashesMsg, interface{}(from), uint64(maxHashes))
 }
 
-func (self *ethProtocol) requestBlocks(hashes [][]byte) error {
+func (self *ethProtocol) requestBlocks(hashes []common.Hash) error {
 	self.peer.Debugf("fetching %v blocks", len(hashes))
-	return p2p.EncodeMsg(self.rw, GetBlocksMsg, common.ByteSliceToInterface(hashes)...)
+	return p2p.EncodeMsg(self.rw, GetBlocksMsg, rlp.Flat(hashes))
 }
 
 func (self *ethProtocol) protoError(code int, format string, params ...interface{}) (err *errs.Error) {

@@ -155,11 +155,11 @@ func toLogs(logs state.Logs) (ls []Log) {
 	for i, log := range logs {
 		var l Log
 		l.Topic = make([]string, len(log.Topics()))
-		l.Address = toHex(log.Address())
+		l.Address = log.Address().Hex()
 		l.Data = toHex(log.Data())
 		l.Number = log.Number()
 		for j, topic := range log.Topics() {
-			l.Topic[j] = toHex(topic)
+			l.Topic[j] = topic.Hex()
 		}
 		ls[i] = l
 	}

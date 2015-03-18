@@ -8,10 +8,10 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -116,14 +116,14 @@ func (self *XEth) State() *State { return self.state }
 func (self *XEth) Whisper() *Whisper { return self.whisper }
 
 func (self *XEth) BlockByHash(strHash string) *Block {
-	hash := common.FromHex(strHash)
+	hash := common.HexToHash(strHash)
 	block := self.chainManager.GetBlock(hash)
 
 	return NewBlock(block)
 }
 
 func (self *XEth) EthBlockByHash(strHash string) *types.Block {
-	hash := common.FromHex(strHash)
+	hash := common.HexToHash(strHash)
 	block := self.chainManager.GetBlock(hash)
 
 	return block
@@ -293,9 +293,9 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 
 	if tx.To() == nil {
 		addr := core.AddressFromMessage(tx)
-		return toHex(addr), nil
+		return addr.Hex(), nil
 	}
-	return toHex(tx.Hash()), nil
+	return tx.Hash().Hex(), nil
 }
 
 var (
@@ -306,8 +306,8 @@ var (
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	statedb := self.State().State() //self.chainManager.TransState()
 	msg := callmsg{
-		from:     statedb.GetOrNewStateObject(common.FromHex(fromStr)),
-		to:       common.FromHex(toStr),
+		from:     statedb.GetOrNewStateObject(common.HexToAddress(fromStr)),
+		to:       common.HexToAddress(toStr),
 		gas:      common.Big(gasStr),
 		gasPrice: common.Big(gasPriceStr),
 		value:    common.Big(valueStr),
@@ -330,8 +330,8 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 
 func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 	var (
-		from             []byte
-		to               []byte
+		from             = common.HexToAddress(fromStr)
+		to               = common.HexToAddress(toStr)
 		value            = common.NewValue(valueStr)
 		gas              = common.NewValue(gasStr)
 		price            = common.NewValue(gasPriceStr)
@@ -339,10 +339,8 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 		contractCreation bool
 	)
 
-	from = common.FromHex(fromStr)
 	data = common.FromHex(codeStr)
-	to = common.FromHex(toStr)
-	if len(to) == 0 {
+	if len(toStr) == 0 {
 		contractCreation = true
 	}
 
@@ -368,21 +366,19 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	if contractCreation {
 		addr := core.AddressFromMessage(tx)
 		pipelogger.Infof("Contract addr %x\n", addr)
-	}
 
-	if types.IsContractAddr(to) {
-		return toHex(core.AddressFromMessage(tx)), nil
+		return core.AddressFromMessage(tx).Hex(), nil
 	}
-	return toHex(tx.Hash()), nil
+	return tx.Hash().Hex(), nil
 }
 
-func (self *XEth) sign(tx *types.Transaction, from []byte, didUnlock bool) error {
-	sig, err := self.accountManager.Sign(accounts.Account{Address: from}, tx.Hash())
+func (self *XEth) sign(tx *types.Transaction, from common.Address, didUnlock bool) error {
+	sig, err := self.accountManager.Sign(accounts.Account{Address: from.Bytes()}, tx.Hash().Bytes())
 	if err == accounts.ErrLocked {
 		if didUnlock {
 			return fmt.Errorf("sender account still locked after successful unlock")
 		}
-		if !self.frontend.UnlockAccount(from) {
+		if !self.frontend.UnlockAccount(from.Bytes()) {
 			return fmt.Errorf("could not unlock sender account")
 		}
 		// retry signing, the account should now be unlocked.
@@ -397,17 +393,17 @@ func (self *XEth) sign(tx *types.Transaction, from []byte, didUnlock bool) error
 // callmsg is the message type used for call transations.
 type callmsg struct {
 	from          *state.StateObject
-	to            []byte
+	to            common.Address
 	gas, gasPrice *big.Int
 	value         *big.Int
 	data          []byte
 }
 
 // accessor boilerplate to implement core.Message
-func (m callmsg) From() []byte       { return m.from.Address() }
-func (m callmsg) Nonce() uint64      { return m.from.Nonce() }
-func (m callmsg) To() []byte         { return m.to }
-func (m callmsg) GasPrice() *big.Int { return m.gasPrice }
-func (m callmsg) Gas() *big.Int      { return m.gas }
-func (m callmsg) Value() *big.Int    { return m.value }
-func (m callmsg) Data() []byte       { return m.data }
+func (m callmsg) From() (common.Address, error) { return m.from.Address(), nil }
+func (m callmsg) Nonce() uint64                 { return m.from.Nonce() }
+func (m callmsg) To() *common.Address           { return &m.to }
+func (m callmsg) GasPrice() *big.Int            { return m.gasPrice }
+func (m callmsg) Gas() *big.Int                 { return m.gas }
+func (m callmsg) Value() *big.Int               { return m.value }
+func (m callmsg) Data() []byte                  { return m.data }

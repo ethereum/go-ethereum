@@ -142,9 +142,9 @@ func NewTx(tx *types.Transaction) *Transaction {
 	hash := tx.Hash().Hex()
 	receiver := tx.To().Hex()
 	if len(receiver) == 0 {
-		receiver = toHex(core.AddressFromMessage(tx))
+		receiver = core.AddressFromMessage(tx).Hex()
 	}
-	sender := toHex(tx.From())
+	sender, _ := tx.From()
 	createsContract := core.MessageCreatesContract(tx)
 
 	var data string
@@ -154,7 +154,7 @@ func NewTx(tx *types.Transaction) *Transaction {
 		data = toHex(tx.Data())
 	}
 
-	return &Transaction{ref: tx, Hash: hash, Value: common.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: toHex(tx.Data())}
+	return &Transaction{ref: tx, Hash: hash, Value: common.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender.Hex(), CreatesContract: createsContract, RawData: toHex(tx.Data())}
 }
 
 func (self *Transaction) ToString() string {
