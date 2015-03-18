@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/errs"
-	"github.com/ethereum/go-ethereum/common"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -235,8 +235,8 @@ func TestStatusMsgErrors(t *testing.T) {
 	var status statusMsgData
 	eth.checkMsg(0, StatusMsg, &status) // first outgoing msg should be StatusMsg
 	if status.TD.Cmp(td) != 0 ||
-		status.ProtocolVersion != ProtocolVersion ||
-		status.NetworkId != NetworkId ||
+		status.ProtocolVersion != eth.ProtocolVersion ||
+		status.NetworkId != eth.NetworkId ||
 		status.TD.Cmp(td) != 0 ||
 		bytes.Compare(status.CurrentBlock, currentBlock) != 0 ||
 		bytes.Compare(status.GenesisBlock, genesis) != 0 {
