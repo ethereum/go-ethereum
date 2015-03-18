@@ -19,9 +19,7 @@ package rpc
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/big"
-	"net/http"
 	"reflect"
 	"time"
 
@@ -32,8 +30,6 @@ import (
 )
 
 var rpclogger = logger.NewLogger("RPC")
-
-type JsonWrapper struct{}
 
 // Unmarshal state is a helper method which has the ability to decode messsages
 // that use the `defaultBlock` (https://github.com/ethereum/wiki/wiki/JSON-RPC#the-default-block-parameter)
@@ -92,36 +88,6 @@ func UnmarshalRawMessages(b []byte, iface interface{}, number *int64) (err error
 	}
 
 	return nil
-}
-
-func (self JsonWrapper) Send(writer io.Writer, v interface{}) (n int, err error) {
-	var payload []byte
-	payload, err = json.MarshalIndent(v, "", "\t")
-	if err != nil {
-		rpclogger.Fatalln("Error marshalling JSON", err)
-		return 0, err
-	}
-	rpclogger.DebugDetailf("Sending payload: %s", payload)
-
-	return writer.Write(payload)
-}
-
-func (self JsonWrapper) ParseRequestBody(req *http.Request) (RpcRequest, error) {
-	var reqParsed RpcRequest
-
-	// Convert JSON to native types
-	d := json.NewDecoder(req.Body)
-	defer req.Body.Close()
-	err := d.Decode(&reqParsed)
-
-	if err != nil {
-		rpclogger.Errorln("Error decoding JSON: ", err)
-		return reqParsed, err
-	}
-
-	rpclogger.DebugDetailf("Parsed request: %s", reqParsed)
-
-	return reqParsed, nil
 }
 
 func i2hex(n int) string {
