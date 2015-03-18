@@ -216,7 +216,7 @@ func (self *ethProtocolTester) checkMsg(i int, code uint64, val interface{}) (ms
 }
 
 func (self *ethProtocolTester) run() {
-	err := runEthProtocol(self.txPool, self.chainManager, self.blockPool, testPeer(), self.rw)
+	err := runEthProtocol(ProtocolVersion, NetworkId, self.txPool, self.chainManager, self.blockPool, testPeer(), self.rw)
 	self.quit <- err
 }
 
@@ -235,8 +235,8 @@ func TestStatusMsgErrors(t *testing.T) {
 	var status statusMsgData
 	eth.checkMsg(0, StatusMsg, &status) // first outgoing msg should be StatusMsg
 	if status.TD.Cmp(td) != 0 ||
-		status.ProtocolVersion != eth.ProtocolVersion ||
-		status.NetworkId != eth.NetworkId ||
+		status.ProtocolVersion != ProtocolVersion ||
+		status.NetworkId != NetworkId ||
 		status.TD.Cmp(td) != 0 ||
 		bytes.Compare(status.CurrentBlock, currentBlock) != 0 ||
 		bytes.Compare(status.GenesisBlock, genesis) != 0 {
