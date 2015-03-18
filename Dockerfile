@@ -26,12 +26,11 @@ RUN tar -C /usr/local -xzf go*.tar.gz && go version
 ADD https://api.github.com/repos/ethereum/go-ethereum/git/refs/heads/develop file_does_not_exist
 
 ## Fetch and install go-ethereum
-RUN go get github.com/tools/godep
-RUN go get -d github.com/ethereum/go-ethereum/...
+RUN mkdir -p $GOPATH/src/github.com/ethereum/
+RUN git clone https://github.com/ethereum/go-ethereum $GOPATH/src/github.com/ethereum/go-ethereum
 WORKDIR $GOPATH/src/github.com/ethereum/go-ethereum
 RUN git checkout develop
-RUN godep restore
-RUN go install -v ./cmd/ethereum
+RUN GOPATH=$GOPATH:$GOPATH/src/github.com/ethereum/go-ethereum/Godeps/_workspace go install -v ./cmd/ethereum
 
 ## Run & expose JSON RPC
 ENTRYPOINT ["ethereum", "-rpc=true", "-rpcport=8545"]

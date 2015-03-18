@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/errs"
-	"github.com/ethereum/go-ethereum/common"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -216,7 +216,7 @@ func (self *ethProtocolTester) checkMsg(i int, code uint64, val interface{}) (ms
 }
 
 func (self *ethProtocolTester) run() {
-	err := runEthProtocol(self.txPool, self.chainManager, self.blockPool, testPeer(), self.rw)
+	err := runEthProtocol(ProtocolVersion, NetworkId, self.txPool, self.chainManager, self.blockPool, testPeer(), self.rw)
 	self.quit <- err
 }
 

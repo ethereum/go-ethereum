@@ -28,8 +28,8 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/ui/qt/webengine"
 	"github.com/obscuren/qml"
@@ -66,6 +66,8 @@ func init() {
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
 		utils.JSpathFlag,
+		utils.ProtocolVersionFlag,
+		utils.NetworkIdFlag,
 	}
 }
 
