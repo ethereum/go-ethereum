@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"net/http"
 
@@ -18,7 +19,6 @@ const (
 
 // JSONRPC returns a handler that implements the Ethereum JSON-RPC API.
 func JSONRPC(pipe *xeth.XEth, dataDir string) http.Handler {
-	var jsw JsonWrapper
 	api := NewEthereumApi(pipe, dataDir)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -28,22 +28,23 @@ func JSONRPC(pipe *xeth.XEth, dataDir string) http.Handler {
 		// Limit request size to resist DoS
 		if req.ContentLength > maxSizeReqLength {
 			jsonerr := &RpcErrorObject{-32700, "Request too large"}
-			jsw.Send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
+			Send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
 			return
 		}
 
+		// Read request body
 		defer req.Body.Close()
 		body, err := ioutil.ReadAll(req.Body)
 		if err != nil {
 			jsonerr := &RpcErrorObject{-32700, "Could not read request body"}
-			jsw.Send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
+			Send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
 		}
 
 		// Try to parse the request as a single
 		var reqSingle RpcRequest
 		if err := json.Unmarshal(body, &reqSingle); err == nil {
 			response := RpcResponse(api, &reqSingle)
-			jsw.Send(w, &response)
+			Send(w, &response)
 			return
 		}
 
@@ -56,13 +57,13 @@ func JSONRPC(pipe *xeth.XEth, dataDir string) http.Handler {
 				response := RpcResponse(api, &request)
 				resBatch[i] = response
 			}
-			jsw.Send(w, resBatch)
+			Send(w, resBatch)
 			return
 		}
 
 		// Not a batch or single request, error
 		jsonerr := &RpcErrorObject{-32600, "Could not decode request"}
-		jsw.Send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
+		Send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
 	})
 }
 
@@ -85,4 +86,16 @@ func RpcResponse(api *EthereumApi, request *RpcRequest) *interface{} {
 
 	rpchttplogger.DebugDetailf("Generated response: %T %s", response, response)
 	return &response
+}
+
+func Send(writer io.Writer, v interface{}) (n int, err error) {
+	var payload []byte
+	payload, err = json.MarshalIndent(v, "", "\t")
+	if err != nil {
+		rpclogger.Fatalln("Error marshalling JSON", err)
+		return 0, err
+	}
+	rpclogger.DebugDetailf("Sending payload: %s", payload)
+
+	return writer.Write(payload)
 }
