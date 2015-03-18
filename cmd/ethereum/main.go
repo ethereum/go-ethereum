@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -54,6 +55,17 @@ func init() {
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
 		blocktestCmd,
+		{
+			Action: makedag,
+			Name:   "makedag",
+			Usage:  "generate ethash dag (for testing)",
+			Description: `
+The makedag command generates an ethash DAG in /tmp/dag.
+
+This command exists to support the system testing project.
+Regular users do not need to execute it.
+`,
+		},
 		{
 			Action: version,
 			Name:   "version",
@@ -316,6 +328,15 @@ func dump(ctx *cli.Context) {
 			// fmt.Println(block)
 		}
 	}
+}
+
+func makedag(ctx *cli.Context) {
+	chain, _, _ := utils.GetChain(ctx)
+	pow := ethash.New(chain)
+	fmt.Println("making cache")
+	pow.UpdateCache(true)
+	fmt.Println("making DAG")
+	pow.UpdateDAG()
 }
 
 func version(c *cli.Context) {
