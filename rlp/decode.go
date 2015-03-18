@@ -2,6 +2,7 @@ package rlp
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -71,6 +72,12 @@ type Decoder interface {
 // functions.
 func Decode(r io.Reader, val interface{}) error {
 	return NewStream(r).Decode(val)
+}
+
+// DecodeBytes parses RLP data from b into val.
+// Please see the documentation of Decode for the decoding rules.
+func DecodeBytes(b []byte, val interface{}) error {
+	return NewStream(bytes.NewReader(b)).Decode(val)
 }
 
 type decodeError struct {
