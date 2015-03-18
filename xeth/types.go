@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/state"
@@ -59,19 +59,19 @@ func (self *Object) Storage() (storage map[string]string) {
 type Block struct {
 	//Transactions string `json:"transactions"`
 	ref          *types.Block
-	Size         string        `json:"size"`
-	Number       int           `json:"number"`
-	Hash         string        `json:"hash"`
+	Size         string       `json:"size"`
+	Number       int          `json:"number"`
+	Hash         string       `json:"hash"`
 	Transactions *common.List `json:"transactions"`
 	Uncles       *common.List `json:"uncles"`
-	Time         int64         `json:"time"`
-	Coinbase     string        `json:"coinbase"`
-	Name         string        `json:"name"`
-	GasLimit     string        `json:"gasLimit"`
-	GasUsed      string        `json:"gasUsed"`
-	PrevHash     string        `json:"prevHash"`
-	Bloom        string        `json:"bloom"`
-	Raw          string        `json:"raw"`
+	Time         int64        `json:"time"`
+	Coinbase     string       `json:"coinbase"`
+	Name         string       `json:"name"`
+	GasLimit     string       `json:"gasLimit"`
+	GasUsed      string       `json:"gasUsed"`
+	PrevHash     string       `json:"prevHash"`
+	Bloom        string       `json:"bloom"`
+	Raw          string       `json:"raw"`
 }
 
 // Creates a new QML Block from a chain block
@@ -95,12 +95,12 @@ func NewBlock(block *types.Block) *Block {
 	return &Block{
 		ref: block, Size: block.Size().String(),
 		Number: int(block.NumberU64()), GasUsed: block.GasUsed().String(),
-		GasLimit: block.GasLimit().String(), Hash: toHex(block.Hash()),
+		GasLimit: block.GasLimit().String(), Hash: toHex(block.Hash().Bytes()),
 		Transactions: txlist, Uncles: ulist,
 		Time:     block.Time(),
-		Coinbase: toHex(block.Coinbase()),
-		PrevHash: toHex(block.ParentHash()),
-		Bloom:    toHex(block.Bloom()),
+		Coinbase: toHex(block.Coinbase().Bytes()),
+		PrevHash: toHex(block.ParentHash().Bytes()),
+		Bloom:    toHex(block.Bloom().Bytes()),
 		Raw:      block.String(),
 	}
 }
@@ -114,7 +114,7 @@ func (self *Block) ToString() string {
 }
 
 func (self *Block) GetTransaction(hash string) *Transaction {
-	tx := self.ref.Transaction(common.FromHex(hash))
+	tx := self.ref.Transaction(common.HexToHash(hash))
 	if tx == nil {
 		return nil
 	}
@@ -139,12 +139,12 @@ type Transaction struct {
 }
 
 func NewTx(tx *types.Transaction) *Transaction {
-	hash := toHex(tx.Hash())
-	receiver := toHex(tx.To())
+	hash := tx.Hash().Hex()
+	receiver := tx.To().Hex()
 	if len(receiver) == 0 {
-		receiver = toHex(core.AddressFromMessage(tx))
+		receiver = core.AddressFromMessage(tx).Hex()
 	}
-	sender := toHex(tx.From())
+	sender, _ := tx.From()
 	createsContract := core.MessageCreatesContract(tx)
 
 	var data string
@@ -154,7 +154,7 @@ func NewTx(tx *types.Transaction) *Transaction {
 		data = toHex(tx.Data())
 	}
 
-	return &Transaction{ref: tx, Hash: hash, Value: common.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: toHex(tx.Data())}
+	return &Transaction{ref: tx, Hash: hash, Value: common.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender.Hex(), CreatesContract: createsContract, RawData: toHex(tx.Data())}
 }
 
 func (self *Transaction) ToString() string {

@@ -57,6 +57,12 @@ type Message interface {
 	Data() []byte
 }
 
+func AddressFromMessage(msg Message) common.Address {
+	from, _ := msg.From()
+
+	return crypto.CreateAddress(from, msg.Nonce())
+}
+
 func MessageCreatesContract(msg Message) bool {
 	return msg.To() == nil
 }

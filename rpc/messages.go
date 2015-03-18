@@ -83,21 +83,21 @@ func NewValidationError(param string, msg string) error {
 }
 
 type RpcRequest struct {
-	ID      interface{}     `json:"id"`
-	JsonRpc string          `json:"jsonrpc"`
+	Id      interface{}     `json:"id"`
+	Jsonrpc string          `json:"jsonrpc"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params"`
 }
 
 type RpcSuccessResponse struct {
-	ID      interface{} `json:"id"`
-	JsonRpc string      `json:"jsonrpc"`
+	Id      interface{} `json:"id"`
+	Jsonrpc string      `json:"jsonrpc"`
 	Result  interface{} `json:"result"`
 }
 
 type RpcErrorResponse struct {
-	ID      interface{}     `json:"id"`
-	JsonRpc string          `json:"jsonrpc"`
+	Id      interface{}     `json:"id"`
+	Jsonrpc string          `json:"jsonrpc"`
 	Error   *RpcErrorObject `json:"error"`
 }
 

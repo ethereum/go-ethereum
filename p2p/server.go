@@ -180,7 +180,7 @@ func (srv *Server) Start() (err error) {
 	srv.ntab = ntab
 
 	// handshake
-	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: ntab.Self()}
+	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: ntab.Self().ID}
 	for _, p := range srv.Protocols {
 		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
 	}
@@ -298,7 +298,7 @@ func (srv *Server) dialLoop() {
 			srv.lock.Lock()
 			_, isconnected := srv.peers[dest.ID]
 			srv.lock.Unlock()
-			if isconnected || dialing[dest.ID] || dest.ID == srv.ntab.Self() {
+			if isconnected || dialing[dest.ID] || dest.ID == srv.Self().ID {
 				continue
 			}
 
@@ -332,12 +332,16 @@ func (srv *Server) dialNode(dest *discover.Node) {
 	srv.startPeer(conn, dest)
 }
 
+func (srv *Server) Self() *discover.Node {
+	return srv.ntab.Self()
+}
+
 func (srv *Server) findPeers() {
-	far := srv.ntab.Self()
+	far := srv.Self().ID
 	for i := range far {
 		far[i] = ^far[i]
 	}
-	closeToSelf := srv.ntab.Lookup(srv.ntab.Self())
+	closeToSelf := srv.ntab.Lookup(srv.Self().ID)
 	farFromSelf := srv.ntab.Lookup(far)
 
 	for i := 0; i < len(closeToSelf) || i < len(farFromSelf); i++ {
@@ -402,7 +406,7 @@ func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
 		return false, DiscTooManyPeers
 	case srv.peers[id] != nil:
 		return false, DiscAlreadyConnected
-	case id == srv.ntab.Self():
+	case id == srv.Self().ID:
 		return false, DiscSelf
 	}
 	srv.peers[id] = p

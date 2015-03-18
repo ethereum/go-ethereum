@@ -45,6 +45,11 @@ func UnmarshalRawMessages(b []byte, iface interface{}, number *int64) (err error
 		return NewDecodeParamError(err.Error())
 	}
 
+	// Hrm... Occurs when no params
+	if len(data) == 0 {
+		return NewDecodeParamError("No data")
+	}
+
 	// Number index determines the index in the array for a possible block number
 	numberIndex := 0
 
@@ -150,11 +155,11 @@ func toLogs(logs state.Logs) (ls []Log) {
 	for i, log := range logs {
 		var l Log
 		l.Topic = make([]string, len(log.Topics()))
-		l.Address = toHex(log.Address())
+		l.Address = log.Address().Hex()
 		l.Data = toHex(log.Data())
 		l.Number = log.Number()
 		for j, topic := range log.Topics() {
-			l.Topic[j] = toHex(topic)
+			l.Topic[j] = topic.Hex()
 		}
 		ls[i] = l
 	}

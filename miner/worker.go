@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
@@ -39,7 +39,7 @@ func env(block *types.Block, eth core.Backend) *environment {
 		coinbase:     state.GetOrNewStateObject(block.Coinbase()),
 	}
 	for _, ancestor := range eth.ChainManager().GetAncestors(block, 7) {
-		env.ancestors.Add(string(ancestor.Hash()))
+		env.ancestors.Add(ancestor.Hash())
 	}
 
 	return env
@@ -71,14 +71,14 @@ type worker struct {
 	eth      core.Backend
 	chain    *core.ChainManager
 	proc     *core.BlockProcessor
-	coinbase []byte
+	coinbase common.Address
 
 	current *environment
 
 	mining bool
 }
 
-func newWorker(coinbase []byte, eth core.Backend) *worker {
+func newWorker(coinbase common.Address, eth core.Backend) *worker {
 	return &worker{
 		eth:      eth,
 		mux:      eth.EventMux(),
@@ -152,13 +152,13 @@ func (self *worker) wait() {
 			block := self.current.block
 			if block.Number().Uint64() == work.Number && block.Nonce() == 0 {
 				self.current.block.SetNonce(work.Nonce)
-				self.current.block.Header().MixDigest = work.MixDigest
+				self.current.block.Header().MixDigest = common.BytesToHash(work.MixDigest)
 
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
-					BlockHash:     common.Bytes2Hex(block.Hash()),
+					BlockHash:     block.Hash().Hex(),
 					BlockNumber:   block.Number(),
-					ChainHeadHash: common.Bytes2Hex(block.ParentHeaderHash),
-					BlockPrevHash: common.Bytes2Hex(block.ParentHeaderHash),
+					ChainHeadHash: block.ParentHeaderHash.Hex(),
+					BlockPrevHash: block.ParentHeaderHash.Hex(),
 				})
 
 				if err := self.chain.InsertChain(types.Blocks{self.current.block}); err == nil {
@@ -208,9 +208,10 @@ gasLimit:
 			fallthrough
 		case core.IsInvalidTxErr(err):
 			// Remove invalid transactions
-			self.chain.TxState().RemoveNonce(tx.From(), tx.Nonce())
+			from, _ := tx.From()
+			self.chain.TxState().RemoveNonce(from, tx.Nonce())
 			remove = append(remove, tx)
-			minerlogger.Infof("TX (%x) failed. Transaction will be removed\n", tx.Hash()[:4])
+			minerlogger.Infof("TX (%x) failed. Transaction will be removed\n", tx.Hash().Bytes()[:4])
 		case state.IsGasLimitErr(err):
 			minerlogger.Infof("Gas limit reached for block. %d TXs included in this block\n", i)
 			// Break on gas limit
@@ -232,13 +233,13 @@ var (
 )
 
 func (self *worker) commitUncle(uncle *types.Header) error {
-	if self.current.uncles.Has(string(uncle.Hash())) {
+	if self.current.uncles.Has(uncle.Hash()) {
 		// Error not unique
 		return core.UncleError("Uncle not unique")
 	}
-	self.current.uncles.Add(string(uncle.Hash()))
+	self.current.uncles.Add(uncle.Hash())
 
-	if !self.current.ancestors.Has(string(uncle.ParentHash)) {
+	if !self.current.ancestors.Has(uncle.ParentHash) {
 		return core.UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
 	}
 

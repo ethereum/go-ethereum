@@ -35,3 +35,7 @@ func (b *Bloom) SetBytes(d []byte) {
 func (b Bloom) Big() *big.Int {
 	return common.Bytes2Big(b[:])
 }
+
+func (b Bloom) Bytes() []byte {
+	return b[:]
+}

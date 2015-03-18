@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/state"
@@ -371,6 +371,11 @@ func (p *EthereumApi) NewWhisperIdentity(reply *interface{}) error {
 	return nil
 }
 
+// func (p *EthereumApi) RemoveWhisperIdentity(args *WhisperIdentityArgs, reply *interface{}) error {
+// 	*reply = p.xeth().Whisper().RemoveIdentity(args.Identity)
+// 	return nil
+// }
+
 func (p *EthereumApi) NewWhisperFilter(args *WhisperFilterArgs, reply *interface{}) error {
 	var id int
 	opts := new(xeth.Options)
@@ -663,7 +668,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return NewValidationError("Index", "does not exist")
 		}
 
-		uncle, err := p.GetBlockByHash(toHex(v.Uncles[args.Index]), false)
+		uncle, err := p.GetBlockByHash(v.Uncles[args.Index].Hex(), false)
 		if err != nil {
 			return err
 		}
@@ -682,7 +687,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return NewValidationError("Index", "does not exist")
 		}
 
-		uncle, err := p.GetBlockByHash(toHex(v.Uncles[args.Index]), false)
+		uncle, err := p.GetBlockByHash(v.Uncles[args.Index].Hex(), false)
 		if err != nil {
 			return err
 		}
@@ -751,6 +756,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		return p.WhisperPost(args, reply)
 	case "shh_newIdentity":
 		return p.NewWhisperIdentity(reply)
+	// case "shh_removeIdentity":
+	// 	args := new(WhisperIdentityArgs)
+	// 	if err := json.Unmarshal(req.Params, &args); err != nil {
+	// 		return err
+	// 	}
+	// 	return p.RemoveWhisperIdentity(args, reply)
 	case "shh_hasIdentity":
 		args := new(WhisperIdentityArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -821,12 +832,12 @@ func toFilterOptions(options *FilterOptions) core.FilterOptions {
 
 	// Convert optional address slice/string to byte slice
 	if str, ok := options.Address.(string); ok {
-		opts.Address = [][]byte{common.FromHex(str)}
+		opts.Address = []common.Address{common.HexToAddress(str)}
 	} else if slice, ok := options.Address.([]interface{}); ok {
-		bslice := make([][]byte, len(slice))
+		bslice := make([]common.Address, len(slice))
 		for i, addr := range slice {
 			if saddr, ok := addr.(string); ok {
-				bslice[i] = common.FromHex(saddr)
+				bslice[i] = common.HexToAddress(saddr)
 			}
 		}
 		opts.Address = bslice
@@ -835,16 +846,15 @@ func toFilterOptions(options *FilterOptions) core.FilterOptions {
 	opts.Earliest = options.Earliest
 	opts.Latest = options.Latest
 
-	topics := make([][][]byte, len(options.Topics))
+	topics := make([][]common.Hash, len(options.Topics))
 	for i, topicDat := range options.Topics {
 		if slice, ok := topicDat.([]interface{}); ok {
-			topics[i] = make([][]byte, len(slice))
+			topics[i] = make([]common.Hash, len(slice))
 			for j, topic := range slice {
-				topics[i][j] = common.FromHex(topic.(string))
+				topics[i][j] = common.HexToHash(topic.(string))
 			}
 		} else if str, ok := topicDat.(string); ok {
-			topics[i] = make([][]byte, 1)
-			topics[i][0] = common.FromHex(str)
+			topics[i] = []common.Hash{common.HexToHash(str)}
 		}
 	}
 	opts.Topics = topics

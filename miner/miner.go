@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/ethash"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
@@ -32,7 +33,7 @@ func (self *Miner) Mining() bool {
 	return self.mining
 }
 
-func (self *Miner) Start(coinbase []byte) {
+func (self *Miner) Start(coinbase common.Address) {
 	self.mining = true
 	self.worker = newWorker(coinbase, self.eth)
 	self.worker.register(NewCpuMiner(0, self.pow))

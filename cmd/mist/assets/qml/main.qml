@@ -12,7 +12,7 @@ import "../ext/http.js" as Http
 
 ApplicationWindow {
     id: root
-    
+
     //flags: Qt.FramelessWindowHint
     // Use this to make the window frameless. But then you'll need to do move and resize by hand
 
@@ -53,7 +53,7 @@ ApplicationWindow {
         whisperTab.view.url = "http://ethereum-dapp-whisper-client.meteor.com/";
         whisperTab.menuItem.title = "Whisper Chat";
 */
-        addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "legacy"});        
+        addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/whisper.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/chain.qml", {noAdd: true, close: false, section: "legacy"});
@@ -126,7 +126,7 @@ ApplicationWindow {
     }
 
     function newBrowserTab(url) {
-        
+
         var urlMatches = url.toString().match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
         var requestedDomain = urlMatches && urlMatches[1];
 
@@ -138,24 +138,23 @@ ApplicationWindow {
                 var existingDomain = matches && matches[1];
                 if (requestedDomain == existingDomain) {
                     domainAlreadyOpen = true;
-                    
+
                     if (mainSplit.views[i].view.url != url){
                         mainSplit.views[i].view.url = url;
                     }
-                    
+
                     activeView(mainSplit.views[i].view, mainSplit.views[i].menuItem);
                 }
             }
-        }  
+        }
 
-        if (!domainAlreadyOpen) {            
+        if (!domainAlreadyOpen) {
             var window = addPlugin("./views/browser.qml", {noAdd: true, close: true, section: "apps", active: true});
             window.view.url = url;
             window.menuItem.title = "Mist";
             activeView(window.view, window.menuItem);
         }
     }
-
 
 
     menuBar: MenuBar {
@@ -165,7 +164,7 @@ ApplicationWindow {
                 text: "New tab"
                 shortcut: "Ctrl+t"
                 onTriggered: {
-	            activeView(catalog.view, catalog.menuItem);
+                activeView(catalog.view, catalog.menuItem);
                 }
             }
 
@@ -203,15 +202,6 @@ ApplicationWindow {
                 text: "Import Tx"
                 onTriggered: {
                     txImportDialog.visible = true
-                }
-            }
-
-            MenuItem {
-                text: "Run JS file"
-                onTriggered: {
-                    generalFileDialog.show(true, function(path) {
-                        eth.evalJavascriptFile(path)
-                    })
                 }
             }
 
@@ -313,28 +303,28 @@ ApplicationWindow {
              Layout.minimumWidth: 192
              Layout.maximumWidth: 192
 
-            FontLoader { 
+            FontLoader {
                id: sourceSansPro
-               source: "fonts/SourceSansPro-Regular.ttf" 
+               source: "fonts/SourceSansPro-Regular.ttf"
             }
-            FontLoader { 
-               source: "fonts/SourceSansPro-Semibold.ttf" 
-            }            
-            FontLoader { 
-               source: "fonts/SourceSansPro-Bold.ttf" 
-            } 
-            FontLoader { 
-               source: "fonts/SourceSansPro-Black.ttf" 
-            }            
-            FontLoader { 
-               source: "fonts/SourceSansPro-Light.ttf" 
-            }              
-            FontLoader { 
-               source: "fonts/SourceSansPro-ExtraLight.ttf" 
-            }  
-            FontLoader { 
+            FontLoader {
+               source: "fonts/SourceSansPro-Semibold.ttf"
+            }
+            FontLoader {
+               source: "fonts/SourceSansPro-Bold.ttf"
+            }
+            FontLoader {
+               source: "fonts/SourceSansPro-Black.ttf"
+            }
+            FontLoader {
+               source: "fonts/SourceSansPro-Light.ttf"
+            }
+            FontLoader {
+               source: "fonts/SourceSansPro-ExtraLight.ttf"
+            }
+            FontLoader {
                id: simpleLineIcons
-               source: "fonts/Simple-Line-Icons.ttf" 
+               source: "fonts/Simple-Line-Icons.ttf"
             }
 
             Rectangle {
@@ -393,7 +383,7 @@ ApplicationWindow {
 
                      function setSelection(on) {
                          sel.visible = on
-                         
+
                          if (this.closable == true) {
                                 closeIcon.visible = on
                          }
@@ -404,7 +394,7 @@ ApplicationWindow {
                         label.visible = !on
                         buttonLabel.visible = on
                      }
- 
+
                      width: 192
                      height: 55
                      color: "#00000000"
@@ -417,7 +407,7 @@ ApplicationWindow {
                      Rectangle {
                          // New App Button
                          id: newAppButton
-                         visible: false 
+                         visible: false
                          anchors.fill: parent
                          anchors.rightMargin: 8
                          border.width: 0
@@ -504,16 +494,16 @@ ApplicationWindow {
                         id: buttonLabel
                         visible: false
                         text: "GO TO NEW APP"
-                        font.family: sourceSansPro.name 
+                        font.family: sourceSansPro.name
                         font.weight: Font.DemiBold
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.verticalCenter: parent.verticalCenter
                         color: "#AAA0A0"
-                     }   
+                     }
 
                     Text {
                          id: label
-                         font.family: sourceSansPro.name 
+                         font.family: sourceSansPro.name
                          font.weight: Font.DemiBold
                          elide: Text.ElideRight
                          x:250
@@ -529,15 +519,15 @@ ApplicationWindow {
                          }
 
 
-                         
-                         
+
+
                      }
 
                      Text {
                          id: secondary
                          //only shows secondary title if there's no badge
                          visible: (badgeContent == "icon" || badgeContent == "number" )? false : true
-                         font.family: sourceSansPro.name 
+                         font.family: sourceSansPro.name
                          font.weight: Font.Light
                          anchors {
                              left: icon.right
@@ -566,8 +556,8 @@ ApplicationWindow {
                          }
 
                         Text {
-                             
-                             font.family: simpleLineIcons.name 
+
+                             font.family: simpleLineIcons.name
                              anchors {
                                  centerIn: parent
                              }
@@ -575,11 +565,11 @@ ApplicationWindow {
                              font.pixelSize: 20
                              text: "\ue082"
                          }
-                     }                     
+                     }
 
                      Rectangle {
                         id: badge
-                        visible: (badgeContent == "icon" || badgeContent == "number" )? true : false 
+                        visible: (badgeContent == "icon" || badgeContent == "number" )? true : false
                         width: 32
                         color: "#05000000"
                         anchors {
@@ -588,11 +578,11 @@ ApplicationWindow {
                             bottom: parent.bottom;
                             rightMargin: 4;
                         }
-                                      
+
                         Text {
                              id: badgeIconLabel
                              visible: (badgeContent == "icon") ? true : false;
-                             font.family: simpleLineIcons.name 
+                             font.family: simpleLineIcons.name
                              anchors {
                                  centerIn: parent
                              }
@@ -600,7 +590,7 @@ ApplicationWindow {
                              color: "#AAA0A0"
                              font.pixelSize: 20
                              text: badgeIcon
-                         }                       
+                         }
 
                         Text {
                              id: badgeNumberLabel
@@ -609,14 +599,14 @@ ApplicationWindow {
                                  centerIn: parent
                              }
                              horizontalAlignment: Text.AlignCenter
-                             font.family: sourceSansPro.name 
+                             font.family: sourceSansPro.name
                              font.weight: Font.Light
                              color: "#AAA0A0"
                              font.pixelSize: 18
                              text: badgeNumber
                          }
                      }
-                     
+
 
 
                      function closeApp() {
@@ -685,7 +675,7 @@ ApplicationWindow {
                  anchors.left: parent.left
                  anchors.right: parent.right
                  spacing: 3
-                
+
 
 
                 ColumnLayout {
@@ -702,7 +692,7 @@ ApplicationWindow {
                      color: "transparent"
                      Text {
                          text: "ETHEREUM"
-                         font.family: sourceSansPro.name 
+                         font.family: sourceSansPro.name
                          font.weight: Font.Regular
                          // anchors.top:  20
                          // anchors.left:  16
@@ -711,10 +701,10 @@ ApplicationWindow {
                             topMargin: 4
                             fill: parent
                         }
-                         // anchors.leftMargin: 16 
-                         // anchors.topMargin: 16 
+                         // anchors.leftMargin: 16
+                         // anchors.topMargin: 16
                         // anchors.verticalCenterOffset: 50
-                         color: "#AAA0A0" 
+                         color: "#AAA0A0"
                      }
                  }
 
@@ -735,7 +725,7 @@ ApplicationWindow {
 
                      Text {
                          text: "APPS"
-                         font.family: sourceSansPro.name 
+                         font.family: sourceSansPro.name
                          font.weight: Font.Regular
                          anchors.fill: parent
                          anchors.leftMargin: 16
@@ -775,7 +765,7 @@ ApplicationWindow {
               anchors.left: menu.right
               anchors.bottom: parent.bottom
               anchors.top: parent.top
-              color: "#00000000"             
+              color: "#00000000"
 
               /*Rectangle {
                   id: urlPane
