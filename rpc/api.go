@@ -251,7 +251,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 
 			result, _ := account.Transact(common.FromHex(args.To), common.FromHex(args.Value), common.FromHex(args.Gas), common.FromHex(args.GasPrice), common.FromHex(args.Data))
 			if len(result) > 0 {
-				*reply = toHex(result)
+				*reply = common.ToHex(result)
 			}
 		} else if _, exists := p.register[args.From]; exists {
 			p.register[ags.From] = append(p.register[args.From], args)
@@ -291,7 +291,7 @@ func (p *EthereumApi) GetBalance(args *GetBalanceArgs, reply *interface{}) error
 		return err
 	}
 	state := p.getStateWithNum(args.BlockNumber).SafeGet(args.Address)
-	*reply = toHex(state.Balance().Bytes())
+	*reply = common.ToHex(state.Balance().Bytes())
 	return nil
 }
 
@@ -389,7 +389,7 @@ func (p *EthereumApi) NewWhisperFilter(args *WhisperFilterArgs, reply *interface
 	}
 	id = p.xeth().Whisper().Watch(opts)
 	p.messages[id] = &whisperFilter{timeout: time.Now()}
-	*reply = toHex(big.NewInt(int64(id)).Bytes())
+	*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
 	return nil
 }
 
@@ -485,7 +485,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = toHex(crypto.Sha3(common.FromHex(args.Data)))
+		*reply = common.ToHex(crypto.Sha3(common.FromHex(args.Data)))
 	case "web3_clientVersion":
 		*reply = p.xeth().Backend().Version()
 	case "net_version":
@@ -493,7 +493,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	case "net_listening":
 		*reply = p.xeth().IsListening()
 	case "net_peerCount":
-		*reply = toHex(big.NewInt(int64(p.xeth().PeerCount())).Bytes())
+		*reply = common.ToHex(big.NewInt(int64(p.xeth().PeerCount())).Bytes())
 	case "eth_coinbase":
 		// TODO handling of empty coinbase due to lack of accounts
 		res := p.xeth().Coinbase()
@@ -505,11 +505,11 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	case "eth_mining":
 		*reply = p.xeth().IsMining()
 	case "eth_gasPrice":
-		*reply = toHex(defaultGasPrice.Bytes())
+		*reply = common.ToHex(defaultGasPrice.Bytes())
 	case "eth_accounts":
 		*reply = p.xeth().Accounts()
 	case "eth_blockNumber":
-		*reply = toHex(p.xeth().Backend().ChainManager().CurrentBlock().Number().Bytes())
+		*reply = common.ToHex(p.xeth().Backend().ChainManager().CurrentBlock().Number().Bytes())
 	case "eth_getBalance":
 		args := new(GetBalanceArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -544,7 +544,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err != nil {
 			return err
 		}
-		*reply = toHex(big.NewInt(v).Bytes())
+		*reply = common.ToHex(big.NewInt(v).Bytes())
 	case "eth_getBlockTransactionCountByNumber":
 		args := new(GetBlockByNumberArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -555,7 +555,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err != nil {
 			return err
 		}
-		*reply = toHex(big.NewInt(v).Bytes())
+		*reply = common.ToHex(big.NewInt(v).Bytes())
 	case "eth_getUncleCountByBlockHash":
 		args := new(GetBlockByHashArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -566,7 +566,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err != nil {
 			return err
 		}
-		*reply = toHex(big.NewInt(v).Bytes())
+		*reply = common.ToHex(big.NewInt(v).Bytes())
 	case "eth_getUncleCountByBlockNumber":
 		args := new(GetBlockByNumberArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -577,7 +577,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err != nil {
 			return err
 		}
-		*reply = toHex(big.NewInt(v).Bytes())
+		*reply = common.ToHex(big.NewInt(v).Bytes())
 	case "eth_getData", "eth_getCode":
 		args := new(GetDataArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
