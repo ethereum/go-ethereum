@@ -94,11 +94,6 @@ func i2hex(n int) string {
 	return common.ToHex(big.NewInt(int64(n)).Bytes())
 }
 
-type RpcServer interface {
-	Start()
-	Stop()
-}
-
 type Log struct {
 	Address string   `json:"address"`
 	Topic   []string `json:"topic"`
