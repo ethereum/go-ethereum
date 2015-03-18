@@ -19,7 +19,6 @@ package rpc
 import (
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"reflect"
 	"time"
 
@@ -88,10 +87,6 @@ func UnmarshalRawMessages(b []byte, iface interface{}, number *int64) (err error
 	}
 
 	return nil
-}
-
-func i2hex(n int) string {
-	return common.ToHex(big.NewInt(int64(n)).Bytes())
 }
 
 type Log struct {
