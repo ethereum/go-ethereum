@@ -19,7 +19,7 @@ func (self *State) State() *state.StateDB {
 }
 
 func (self *State) Get(addr string) *Object {
-	return &Object{self.state.GetStateObject(common.FromHex(addr))}
+	return &Object{self.state.GetStateObject(common.HexToAddress(addr))}
 }
 
 func (self *State) SafeGet(addr string) *Object {
@@ -27,9 +27,9 @@ func (self *State) SafeGet(addr string) *Object {
 }
 
 func (self *State) safeGet(addr string) *state.StateObject {
-	object := self.state.GetStateObject(common.FromHex(addr))
+	object := self.state.GetStateObject(common.HexToAddress(addr))
 	if object == nil {
-		object = state.NewStateObject(common.FromHex(addr), self.xeth.eth.StateDb())
+		object = state.NewStateObject(common.HexToAddress(addr), self.xeth.eth.StateDb())
 	}
 
 	return object
