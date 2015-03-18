@@ -161,7 +161,7 @@ func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) erro
 	id = self.filterManager.InstallFilter(filter)
 	self.logs[id] = &logFilter{timeout: time.Now()}
 
-	*reply = i2hex(id)
+	*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
 
 	return nil
 }
@@ -198,7 +198,7 @@ func (self *EthereumApi) NewFilterString(args *FilterStringArgs, reply *interfac
 
 	id = self.filterManager.InstallFilter(filter)
 	self.logs[id] = &logFilter{timeout: time.Now()}
-	*reply = i2hex(id)
+	*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
 
 	return nil
 }

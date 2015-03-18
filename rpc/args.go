@@ -8,10 +8,18 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func blockNumber(raw json.RawMessage, number *int64) (err error) {
-	var str string
-	if err = json.Unmarshal(raw, &str); err != nil {
-		return NewDecodeParamError(err.Error())
+func blockAge(raw interface{}, number *int64) (err error) {
+	// Parse as integer
+	num, ok := raw.(float64)
+	if ok {
+		*number = int64(num)
+		return nil
+	}
+
+	// Parse as string/hexstring
+	str, ok := raw.(string)
+	if !ok {
+		return NewDecodeParamError("BlockNumber is not a string")
 	}
 
 	switch str {
@@ -22,6 +30,7 @@ func blockNumber(raw json.RawMessage, number *int64) (err error) {
 	default:
 		*number = common.String2Big(str).Int64()
 	}
+
 	return nil
 }
 
@@ -95,17 +104,43 @@ type NewTxArgs struct {
 }
 
 func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj struct{ From, To, Value, Gas, GasPrice, Data string }
-	if err = UnmarshalRawMessages(b, &obj, &args.BlockNumber); err != nil {
-		return err
+	var obj []json.RawMessage
+	var ext struct{ From, To, Value, Gas, GasPrice, Data string }
+
+	// Decode byte slice to array of RawMessages
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return NewDecodeParamError(err.Error())
 	}
 
-	args.From = obj.From
-	args.To = obj.To
-	args.Value = common.Big(obj.Value)
-	args.Gas = common.Big(obj.Gas)
-	args.GasPrice = common.Big(obj.GasPrice)
-	args.Data = obj.Data
+	// Check for sufficient params
+	if len(obj) < 1 {
+		return NewInsufficientParamsError(len(obj), 1)
+	}
+
+	// Decode 0th RawMessage to temporary struct
+	if err := json.Unmarshal(obj[0], &ext); err != nil {
+		return NewDecodeParamError(err.Error())
+	}
+
+	// var ok bool
+	args.From = ext.From
+	args.To = ext.To
+	args.Value = common.String2Big(ext.Value)
+	args.Gas = common.String2Big(ext.Gas)
+	args.GasPrice = common.String2Big(ext.GasPrice)
+	args.Data = ext.Data
+
+	// Check for optional BlockNumber param
+	if len(obj) > 1 {
+		var raw interface{}
+		if err = json.Unmarshal(obj[1], &raw); err != nil {
+			return NewDecodeParamError(err.Error())
+		}
+
+		if err := blockAge(raw, &args.BlockNumber); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -116,8 +151,25 @@ type GetStorageArgs struct {
 }
 
 func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
-	if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return NewInsufficientParamsError(len(obj), 1)
+	}
+
+	addstr, ok := obj[0].(string)
+	if !ok {
+		return NewDecodeParamError("Address is not a string")
+	}
+	args.Address = addstr
+
+	if len(obj) > 1 {
+		if err := blockAge(obj[1], &args.BlockNumber); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -137,16 +189,32 @@ type GetStorageAtArgs struct {
 }
 
 func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []string
-	if err = UnmarshalRawMessages(b, &obj, &args.BlockNumber); err != nil {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
+
 	if len(obj) < 2 {
 		return NewInsufficientParamsError(len(obj), 2)
 	}
 
-	args.Address = obj[0]
-	args.Key = obj[1]
+	addstr, ok := obj[0].(string)
+	if !ok {
+		return NewDecodeParamError("Address is not a string")
+	}
+	args.Address = addstr
+
+	keystr, ok := obj[1].(string)
+	if !ok {
+		return NewDecodeParamError("Key is not a string")
+	}
+	args.Key = keystr
+
+	if len(obj) > 2 {
+		if err := blockAge(obj[2], &args.BlockNumber); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -168,8 +236,25 @@ type GetTxCountArgs struct {
 }
 
 func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
-	if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return NewInsufficientParamsError(len(obj), 1)
+	}
+
+	addstr, ok := obj[0].(string)
+	if !ok {
+		return NewDecodeParamError("Address is not a string")
+	}
+	args.Address = addstr
+
+	if len(obj) > 1 {
+		if err := blockAge(obj[1], &args.BlockNumber); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -189,8 +274,7 @@ type GetBalanceArgs struct {
 
 func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
 
@@ -205,16 +289,10 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = addstr
 
 	if len(obj) > 1 {
-		if obj[1].(string) == "latest" {
-			args.BlockNumber = -1
-		} else {
-			args.BlockNumber = common.Big(obj[1].(string)).Int64()
+		if err := blockAge(obj[1], &args.BlockNumber); err != nil {
+			return err
 		}
 	}
-
-	// if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
-	// 	return NewDecodeParamError(err.Error())
-	// }
 
 	return nil
 }
@@ -232,8 +310,25 @@ type GetDataArgs struct {
 }
 
 func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
-	if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return NewInsufficientParamsError(len(obj), 1)
+	}
+
+	addstr, ok := obj[0].(string)
+	if !ok {
+		return NewDecodeParamError("Address is not a string")
+	}
+	args.Address = addstr
+
+	if len(obj) > 1 {
+		if err := blockAge(obj[1], &args.BlockNumber); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -391,10 +486,6 @@ func (args *FilterOptions) UnmarshalJSON(b []byte) (err error) {
 
 	return nil
 }
-
-// type FilterChangedArgs struct {
-// 	n int
-// }
 
 type DbArgs struct {
 	Database string
@@ -578,31 +669,3 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 
 	return nil
 }
-
-// func (req *RpcRequest) ToRegisterArgs() (string, error) {
-// 	if len(req.Params) < 1 {
-// 		return "", errArguments
-// 	}
-
-// 	var args string
-// 	err := json.Unmarshal(req.Params, &args)
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	return args, nil
-// }
-
-// func (req *RpcRequest) ToWatchTxArgs() (string, error) {
-// 	if len(req.Params) < 1 {
-// 		return "", errArguments
-// 	}
-
-// 	var args string
-// 	err := json.Unmarshal(req.Params, &args)
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	return args, nil
-// }
