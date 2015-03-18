@@ -564,7 +564,7 @@ LOOP:
 
 		// quit
 		case <-quit:
-			self.peerError(self.bp.peers.errors.New(ErrIdleTooLong, "timed out without providing new blocks (td: %v, head: %s)...quitting", self.td, self.currentBlockHash))
+			self.peerError(self.bp.peers.errors.New(ErrIdleTooLong, "timed out without providing new blocks (td: %v, head: %s)...quitting", self.td, hex(self.currentBlockHash)))
 
 			self.bp.status.lock.Lock()
 			self.bp.status.badPeers[self.id]++
