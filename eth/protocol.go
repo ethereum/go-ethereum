@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/errs"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -59,13 +59,15 @@ var errorToString = map[int]string{
 // ethProtocol represents the ethereum wire protocol
 // instance is running on each peer
 type ethProtocol struct {
-	txPool       txPool
-	chainManager chainManager
-	blockPool    blockPool
-	peer         *p2p.Peer
-	id           string
-	rw           p2p.MsgReadWriter
-	errors       *errs.Errors
+	txPool          txPool
+	chainManager    chainManager
+	blockPool       blockPool
+	peer            *p2p.Peer
+	id              string
+	rw              p2p.MsgReadWriter
+	errors          *errs.Errors
+	protocolVersion int
+	networkId       int
 }
 
 // backend is the interface the ethereum protocol backend should implement
@@ -102,27 +104,29 @@ type getBlockHashesMsgData struct {
 // main entrypoint, wrappers starting a server running the eth protocol
 // use this constructor to attach the protocol ("class") to server caps
 // the Dev p2p layer then runs the protocol instance on each peer
-func EthProtocol(txPool txPool, chainManager chainManager, blockPool blockPool) p2p.Protocol {
+func EthProtocol(protocolVersion, networkId int, txPool txPool, chainManager chainManager, blockPool blockPool) p2p.Protocol {
 	return p2p.Protocol{
 		Name:    "eth",
-		Version: ProtocolVersion,
+		Version: uint(protocolVersion),
 		Length:  ProtocolLength,
 		Run: func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return runEthProtocol(txPool, chainManager, blockPool, peer, rw)
+			return runEthProtocol(protocolVersion, networkId, txPool, chainManager, blockPool, peer, rw)
 		},
 	}
 }
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runEthProtocol(txPool txPool, chainManager chainManager, blockPool blockPool, peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func runEthProtocol(protocolVersion, networkId int, txPool txPool, chainManager chainManager, blockPool blockPool, peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 	id := peer.ID()
 	self := &ethProtocol{
-		txPool:       txPool,
-		chainManager: chainManager,
-		blockPool:    blockPool,
-		rw:           rw,
-		peer:         peer,
+		txPool:          txPool,
+		chainManager:    chainManager,
+		blockPool:       blockPool,
+		rw:              rw,
+		peer:            peer,
+		protocolVersion: protocolVersion,
+		networkId:       networkId,
 		errors: &errs.Errors{
 			Package: "ETH",
 			Errors:  errorToString,
@@ -290,8 +294,8 @@ func (self *ethProtocol) statusMsg() p2p.Msg {
 	td, currentBlock, genesisBlock := self.chainManager.Status()
 
 	return p2p.NewMsg(StatusMsg,
-		uint32(ProtocolVersion),
-		uint32(NetworkId),
+		uint32(self.protocolVersion),
+		uint32(self.networkId),
 		td,
 		currentBlock,
 		genesisBlock,
@@ -329,12 +333,12 @@ func (self *ethProtocol) handleStatus() error {
 		return self.protoError(ErrGenesisBlockMismatch, "%x (!= %x)", status.GenesisBlock, genesisBlock)
 	}
 
-	if status.NetworkId != NetworkId {
-		return self.protoError(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, NetworkId)
+	if int(status.NetworkId) != self.networkId {
+		return self.protoError(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, self.networkId)
 	}
 
-	if ProtocolVersion != status.ProtocolVersion {
-		return self.protoError(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, ProtocolVersion)
+	if int(status.ProtocolVersion) != self.protocolVersion {
+		return self.protoError(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, self.protocolVersion)
 	}
 
 	self.peer.Infof("Peer is [eth] capable (%d/%d). TD=%v H=%x\n", status.ProtocolVersion, status.NetworkId, status.TD, status.CurrentBlock[:4])
