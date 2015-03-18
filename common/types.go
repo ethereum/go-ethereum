@@ -27,6 +27,7 @@ func HexToHash(s string) Hash    { return BytesToHash(FromHex(s)) }
 func (h Hash) Str() string   { return string(h[:]) }
 func (h Hash) Bytes() []byte { return h[:] }
 func (h Hash) Big() *big.Int { return Bytes2Big(h[:]) }
+func (h Hash) Hex() string   { return "0x" + Bytes2Hex(h[:]) }
 
 // Sets the hash to the value of b. If b is larger than len(h) it will panic
 func (h *Hash) SetBytes(b []byte) {
@@ -65,6 +66,7 @@ func (a Address) Str() string   { return string(a[:]) }
 func (a Address) Bytes() []byte { return a[:] }
 func (a Address) Big() *big.Int { return Bytes2Big(a[:]) }
 func (a Address) Hash() Hash    { return BytesToHash(a[:]) }
+func (a Address) Hex() string   { return "0x" + Bytes2Hex(a[:]) }
 
 // Sets the address to the value of b. If b is larger than len(a) it will panic
 func (a *Address) SetBytes(b []byte) {
