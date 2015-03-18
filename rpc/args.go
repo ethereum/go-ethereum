@@ -10,9 +10,9 @@ import (
 
 func blockAge(raw interface{}, number *int64) (err error) {
 	// Parse as integer
-	num, ok := raw.(int64)
+	num, ok := raw.(float64)
 	if ok {
-		*number = num
+		*number = int64(num)
 		return nil
 	}
 
