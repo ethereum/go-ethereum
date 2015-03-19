@@ -219,6 +219,34 @@ func TestNewTxArgsEmpty(t *testing.T) {
 	}
 }
 
+func TestNewTxArgsReqs(t *testing.T) {
+	args := new(NewTxArgs)
+	args.From = "0xb60e8dd61c5d32be8058bb8eb970870f07233155"
+
+	err := args.requirements()
+	switch err.(type) {
+	case nil:
+		break
+	default:
+		t.Errorf("Get %T", err)
+	}
+}
+
+func TestNewTxArgsReqsFromBlank(t *testing.T) {
+	args := new(NewTxArgs)
+	args.From = ""
+
+	err := args.requirements()
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *ValidationError:
+		break
+	default:
+		t.Error("Wrong type of error")
+	}
+}
+
 func TestGetStorageArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "latest"]`
 	expected := new(GetStorageArgs)

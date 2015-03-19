@@ -257,6 +257,11 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 			p.register[ags.From] = append(p.register[args.From], args)
 		}
 	*/
+
+	if err := args.requirements(); err != nil {
+		return err
+	}
+
 	// TODO: align default values to have the same type, e.g. not depend on
 	// common.Value conversions later on
 	if args.Gas.Cmp(big.NewInt(0)) == 0 {

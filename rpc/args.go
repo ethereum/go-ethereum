@@ -145,6 +145,13 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
+func (args *NewTxArgs) requirements() error {
+	if len(args.From) == 0 {
+		return NewValidationError("From", "Is required")
+	}
+	return nil
+}
+
 type GetStorageArgs struct {
 	Address     string
 	BlockNumber int64
