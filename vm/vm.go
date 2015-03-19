@@ -445,14 +445,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				cOff = stack.pop()
 				l    = stack.pop()
 			)
-			var data []byte
-			if cOff.Cmp(big.NewInt(int64(len(callData)))) <= 0 {
-				data = getData(callData, cOff.Uint64(), l.Uint64())
-			}
+			data := getData(callData, cOff, l)
 
 			mem.Set(mOff.Uint64(), l.Uint64(), data)
 
-			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, data)
+			self.Printf(" => [%v, %v, %v]", mOff, cOff, l)
 		case CODESIZE, EXTCODESIZE:
 			var code []byte
 			if op == EXTCODESIZE {
@@ -482,10 +479,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				l    = stack.pop()
 			)
 
-			var codeCopy []byte
-			if cOff.Cmp(big.NewInt(int64(len(code)))) <= 0 {
-				codeCopy = getData(code, cOff.Uint64(), l.Uint64())
-			}
+			codeCopy := getData(code, cOff, l)
 
 			mem.Set(mOff.Uint64(), l.Uint64(), codeCopy)
 
@@ -585,11 +579,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			self.Printf(" => 0x%x", val)
 		case MSTORE8:
-			off, val := stack.pop(), stack.pop()
+			off, val := stack.pop().Int64(), stack.pop().Int64()
 
-			mem.store[off.Int64()] = byte(val.Int64() & 0xff)
+			mem.store[off] = byte(val & 0xff)
 
-			self.Printf(" => [%v] 0x%x", off, val)
+			self.Printf(" => [%v] 0x%x", off, mem.store[off])
 		case SLOAD:
 			loc := common.BigToHash(stack.pop())
 			val := common.Bytes2Big(statedb.GetState(context.Address(), loc))

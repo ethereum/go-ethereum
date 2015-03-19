@@ -24,7 +24,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -210,7 +209,7 @@ func RunVmTest(r io.Reader) (failed int) {
 		}
 
 		if failed == 1 {
-			fmt.Println(string(statedb.Dump()))
+			helper.Log.Infoln(string(statedb.Dump()))
 		}
 
 		logger.Flush()

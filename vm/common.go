@@ -73,9 +73,10 @@ func toValue(val *big.Int) interface{} {
 	return val
 }
 
-func getData(data []byte, start, size uint64) []byte {
-	x := uint64(math.Min(float64(start), float64(len(data))))
-	y := uint64(math.Min(float64(x+size), float64(len(data))))
+func getData(data []byte, start, size *big.Int) []byte {
+	dlen := big.NewInt(int64(len(data)))
 
-	return common.RightPadBytes(data[x:y], int(size))
+	s := common.BigMin(start, dlen)
+	e := common.BigMin(new(big.Int).Add(s, size), dlen)
+	return common.RightPadBytes(data[s.Uint64():e.Uint64()], int(size.Uint64()))
 }

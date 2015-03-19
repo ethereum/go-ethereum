@@ -64,10 +64,6 @@ func (c *Context) GetRangeValue(x, size uint64) []byte {
 	return common.RightPadBytes(c.Code[x:y], int(size))
 }
 
-func (c *Context) GetCode(x, size uint64) []byte {
-	return getData(c.Code, x, size)
-}
-
 func (c *Context) Return(ret []byte) []byte {
 	// Return the remaining gas to the caller
 	c.caller.ReturnGas(c.Gas, c.Price)
