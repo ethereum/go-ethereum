@@ -65,7 +65,7 @@ func (c *Context) GetRangeValue(x, size uint64) []byte {
 }
 
 func (c *Context) GetCode(x, size uint64) []byte {
-	return getCode(c.Code, x, size)
+	return getData(c.Code, x, size)
 }
 
 func (c *Context) Return(ret []byte) []byte {

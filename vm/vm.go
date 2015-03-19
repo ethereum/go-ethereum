@@ -443,24 +443,15 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			self.Printf(" => %d", l)
 		case CALLDATACOPY:
 			var (
-				size = uint64(len(callData))
 				mOff = stack.pop().Uint64()
 				cOff = stack.pop().Uint64()
 				l    = stack.pop().Uint64()
 			)
+			data := getData(callData, cOff, l)
 
-			if cOff > size {
-				cOff = 0
-				l = 0
-			} else if cOff+l > size {
-				l = 0
-			}
+			mem.Set(mOff, l, data)
 
-			code := callData[cOff : cOff+l]
-
-			mem.Set(mOff, l, code)
-
-			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, callData[cOff:cOff+l])
+			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, data)
 		case CODESIZE, EXTCODESIZE:
 			var code []byte
 			if op == EXTCODESIZE {
@@ -487,7 +478,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				cOff = stack.pop().Uint64()
 				l    = stack.pop().Uint64()
 			)
-			codeCopy := getCode(code, cOff, l)
+			codeCopy := getData(code, cOff, l)
 
 			mem.Set(mOff, l, codeCopy)
 

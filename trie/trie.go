@@ -302,12 +302,17 @@ func (self *Trie) mknode(value *common.Value) Node {
 	case 2:
 		// A value node may consists of 2 bytes.
 		if value.Get(0).Len() != 0 {
-			return NewShortNode(self, CompactDecode(string(value.Get(0).Bytes())), self.mknode(value.Get(1)))
+			key := CompactDecode(string(value.Get(0).Bytes()))
+			if key[len(key)-1] == 16 {
+				return NewShortNode(self, key, &ValueNode{self, value.Get(1).Bytes()})
+			} else {
+				return NewShortNode(self, key, self.mknode(value.Get(1)))
+			}
 		}
 	case 17:
 		if len(value.Bytes()) != 17 {
 			fnode := NewFullNode(self)
-			for i := 0; i < l; i++ {
+			for i := 0; i < 16; i++ {
 				fnode.set(byte(i), self.mknode(value.Get(i)))
 			}
 			return fnode
