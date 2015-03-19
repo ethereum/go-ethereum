@@ -117,7 +117,7 @@ func (self *section) addSectionToBlockChain(p *peer) {
 				break
 			}
 			self.poolRootIndex--
-			keys = append(keys, node.hash.Str())
+			keys = append(keys, n.hash.Str())
 			blocks = append(blocks, block)
 			nodes = append(nodes, n)
 		}

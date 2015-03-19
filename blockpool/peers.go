@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/errs"
 )
@@ -471,6 +472,7 @@ func (self *peer) getBlockHashes() {
 				}
 			}
 			headKey := self.parentHash.Str()
+			height := self.bp.status.chain[headKey] + 1
 			self.bp.status.chain[self.currentBlockHash.Str()] = height
 			if height > self.bp.status.values.LongestChain {
 				self.bp.status.values.LongestChain = height

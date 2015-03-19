@@ -170,8 +170,8 @@ func TestPeerPromotionByOptionalTdOnBlock(t *testing.T) {
 	hashes := blockPoolTester.hashPool.IndexesToHashes([]int{2, 3})
 	peer1.waitBlocksRequests(3)
 	blockPool.AddBlock(&types.Block{
-		HeaderHash:       common.Bytes(hashes[1]),
-		ParentHeaderHash: common.Bytes(hashes[0]),
+		HeaderHash:       common.Hash(hashes[1]),
+		ParentHeaderHash: common.Hash(hashes[0]),
 		Td:               common.Big3,
 	}, "peer1")
 
