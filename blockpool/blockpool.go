@@ -603,7 +603,6 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 		if sender.currentBlock == nil {
 			plog.Debugf("AddBlock: add head block %s for peer <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
 			sender.setChainInfoFromBlock(block)
-			// sender.currentBlockC <- block
 
 			self.status.lock.Lock()
 			self.status.values.BlockHashes++
