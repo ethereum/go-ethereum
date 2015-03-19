@@ -83,9 +83,9 @@ func (self *BlockPool) newSection(nodes []*node) *section {
 		offC:          make(chan bool),
 	}
 
-	for i, node := range nodes {
-		entry := &entry{node: node, section: sec, index: &index{i}}
-		self.set(node.hash, entry)
+	for i, n := range nodes {
+		entry := &entry{node: n, section: sec, index: &index{i}}
+		self.set(n.hash, entry)
 	}
 
 	plog.DebugDetailf("[%s] setup section process", sectionhex(sec))
@@ -104,20 +104,22 @@ func (self *section) addSectionToBlockChain(p *peer) {
 			self.bp.wg.Done()
 		}()
 
-		var node *node
+		var nodes []*node
+		var n *node
 		var keys []string
 		var blocks []*types.Block
 		for self.poolRootIndex > 0 {
-			node = self.nodes[self.poolRootIndex-1]
-			node.lock.RLock()
-			block := node.block
-			node.lock.RUnlock()
+			n = self.nodes[self.poolRootIndex-1]
+			n.lock.RLock()
+			block := n.block
+			n.lock.RUnlock()
 			if block == nil {
 				break
 			}
 			self.poolRootIndex--
 			keys = append(keys, node.hash.Str())
 			blocks = append(blocks, block)
+			nodes = append(nodes, n)
 		}
 
 		if len(blocks) == 0 {
@@ -134,13 +136,20 @@ func (self *section) addSectionToBlockChain(p *peer) {
 		err := self.bp.insertChain(blocks)
 		if err != nil {
 			self.invalid = true
-			self.bp.peers.peerError(node.blockBy, ErrInvalidBlock, "%v", err)
-			plog.Warnf("invalid block %x", node.hash)
-			plog.Warnf("penalise peers %v (hash), %v (block)", node.hashBy, node.blockBy)
+			self.bp.peers.peerError(n.blockBy, ErrInvalidBlock, "%v", err)
+			plog.Warnf("invalid block %x", n.hash)
+			plog.Warnf("penalise peers %v (hash), %v (block)", n.hashBy, n.blockBy)
 
 			// or invalid block and the entire chain needs to be removed
 			self.removeChain()
 		} else {
+			// check tds
+			self.bp.wg.Add(1)
+			go func() {
+				plog.DebugDetailf("checking td")
+				self.bp.checkTD(nodes...)
+				self.bp.wg.Done()
+			}()
 			// if all blocks inserted in this section
 			// then need to try to insert blocks in child section
 			if self.poolRootIndex == 0 {
@@ -178,7 +187,7 @@ func (self *section) addSectionToBlockChain(p *peer) {
 		self.bp.status.values.BlocksInChain += len(blocks)
 		self.bp.status.values.BlocksInPool -= len(blocks)
 		if err != nil {
-			self.bp.status.badPeers[node.blockBy]++
+			self.bp.status.badPeers[n.blockBy]++
 		}
 		self.bp.status.lock.Unlock()
 

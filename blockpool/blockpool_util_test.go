@@ -40,6 +40,7 @@ type blockPoolTester struct {
 	blockPool         *BlockPool
 	t                 *testing.T
 	chainEvents       *event.TypeMux
+	tds               map[int]int
 }
 
 func newTestBlockPool(t *testing.T) (hashPool *test.TestHashPool, blockPool *BlockPool, b *blockPoolTester) {
@@ -84,6 +85,14 @@ func (self *blockPoolTester) insertChain(blocks types.Blocks) error {
 	var ok bool
 	for _, block := range blocks {
 		child = self.hashPool.HashesToIndexes([]common.Hash{block.Hash()})[0]
+		var td int
+		if self.tds != nil {
+			td, ok = self.tds[child]
+		}
+		if !ok {
+			td = child
+		}
+		block.Td = big.NewInt(int64(td))
 		_, ok = self.blockChain[child]
 		if ok {
 			fmt.Printf("block %v already in blockchain\n", child)

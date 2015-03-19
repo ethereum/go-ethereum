@@ -51,9 +51,11 @@ func TestPeerPromotionByOptionalTdOnBlock(t *testing.T) {
 	blockPoolTester.initRefBlockChain(4)
 	peer0 := blockPoolTester.newPeer("peer0", 2, 2)
 	peer1 := blockPoolTester.newPeer("peer1", 1, 1)
-	peer2 := blockPoolTester.newPeer("peer2", 3, 4)
+	peer2 := blockPoolTester.newPeer("peer2", 4, 4)
 
 	blockPool.Start()
+	blockPoolTester.tds = make(map[int]int)
+	blockPoolTester.tds[3] = 3
 
 	// pool
 	peer0.AddPeer()
@@ -94,7 +96,7 @@ func TestSimpleChain(t *testing.T) {
 
 	blockPool.Start()
 
-	peer1 := blockPoolTester.newPeer("peer1", 1, 2)
+	peer1 := blockPoolTester.newPeer("peer1", 2, 2)
 	peer1.AddPeer()
 	peer1.serveBlocks(1, 2)
 	go peer1.serveBlockHashes(2, 1, 0)
@@ -114,7 +116,7 @@ func TestChainConnectingWithParentHash(t *testing.T) {
 
 	blockPool.Start()
 
-	peer1 := blockPoolTester.newPeer("peer1", 1, 3)
+	peer1 := blockPoolTester.newPeer("peer1", 3, 3)
 	peer1.AddPeer()
 	go peer1.serveBlocks(2, 3)
 	go peer1.serveBlockHashes(3, 2, 1)
@@ -134,7 +136,7 @@ func TestMultiSectionChain(t *testing.T) {
 
 	blockPool.Start()
 
-	peer1 := blockPoolTester.newPeer("peer1", 1, 5)
+	peer1 := blockPoolTester.newPeer("peer1", 5, 5)
 
 	peer1.AddPeer()
 	go peer1.serveBlocks(4, 5)
@@ -156,14 +158,16 @@ func TestNewBlocksOnPartialChain(t *testing.T) {
 	blockPoolTester.initRefBlockChain(7)
 	blockPool.Start()
 
-	peer1 := blockPoolTester.newPeer("peer1", 1, 5)
+	peer1 := blockPoolTester.newPeer("peer1", 5, 5)
+	blockPoolTester.tds = make(map[int]int)
+	blockPoolTester.tds[5] = 5
 
 	peer1.AddPeer()
 	go peer1.serveBlocks(4, 5) // partially complete section
 	go peer1.serveBlockHashes(5, 4, 3)
 	peer1.serveBlocks(3, 4) // partially complete section
 	// peer1 found new blocks
-	peer1.td = 2
+	peer1.td = 7
 	peer1.currentBlock = 7
 	peer1.AddPeer()
 	peer1.sendBlocks(6, 7)
@@ -188,16 +192,15 @@ func TestPeerSwitchUp(t *testing.T) {
 
 	blockPool.Start()
 
-	peer1 := blockPoolTester.newPeer("peer1", 1, 6)
-	peer2 := blockPoolTester.newPeer("peer2", 2, 7)
+	peer1 := blockPoolTester.newPeer("peer1", 6, 6)
+	peer2 := blockPoolTester.newPeer("peer2", 7, 7)
 
 	peer1.AddPeer()
 	go peer1.serveBlocks(5, 6)
 	go peer1.serveBlockHashes(6, 5, 4, 3) //
 	peer1.serveBlocks(2, 3)               // section partially complete, block 3 will be preserved after peer demoted
 	peer2.AddPeer()                       // peer2 is promoted as best peer, peer1 is demoted
-	go peer2.serveBlocks(6, 7)
-	// go peer2.serveBlockHashes(7, 6)       //
+	go peer2.serveBlocks(6, 7)            //
 	go peer2.serveBlocks(4, 5)            // tests that block request for earlier section is remembered
 	go peer1.serveBlocks(3, 4)            // tests that connecting section by demoted peer is remembered and blocks are accepted from demoted peer
 	go peer2.serveBlockHashes(3, 2, 1, 0) // tests that known chain section is activated, hash requests from 3 is remembered
@@ -216,8 +219,8 @@ func TestPeerSwitchDownOverlapSectionWithoutRootBlock(t *testing.T) {
 	blockPoolTester.initRefBlockChain(6)
 	blockPool.Start()
 
-	peer1 := blockPoolTester.newPeer("peer1", 1, 4)
-	peer2 := blockPoolTester.newPeer("peer2", 2, 6)
+	peer1 := blockPoolTester.newPeer("peer1", 4, 4)
+	peer2 := blockPoolTester.newPeer("peer2", 6, 6)
 
 	peer2.AddPeer()
 	peer2.serveBlocks(5, 6)                  // partially complete, section will be preserved
@@ -242,8 +245,8 @@ func TestPeerSwitchDownOverlapSectionWithRootBlock(t *testing.T) {
 	blockPoolTester.initRefBlockChain(6)
 	blockPool.Start()
 
-	peer1 := blockPoolTester.newPeer("peer1", 1, 4)
-	peer2 := blockPoolTester.newPeer("peer2", 2, 6)
+	peer1 := blockPoolTester.newPeer("peer1", 4, 4)
+	peer2 := blockPoolTester.newPeer("peer2", 6, 6)
 
 	peer2.AddPeer()
 	peer2.serveBlocks(5, 6)                  // partially complete, section will be preserved
@@ -269,8 +272,8 @@ func TestPeerSwitchDownDisjointSection(t *testing.T) {
 	blockPoolTester.initRefBlockChain(3)
 	blockPool.Start()
 
-	peer1 := blockPoolTester.newPeer("peer1", 1, 3)
-	peer2 := blockPoolTester.newPeer("peer2", 2, 6)
+	peer1 := blockPoolTester.newPeer("peer1", 3, 3)
+	peer2 := blockPoolTester.newPeer("peer2", 6, 6)
 
 	peer2.AddPeer()
 	peer2.serveBlocks(5, 6)            // partially complete, section will be preserved
@@ -297,8 +300,8 @@ func TestPeerSwitchBack(t *testing.T) {
 
 	blockPool.Start()
 
-	peer1 := blockPoolTester.newPeer("peer1", 2, 11)
-	peer2 := blockPoolTester.newPeer("peer2", 1, 8)
+	peer1 := blockPoolTester.newPeer("peer1", 11, 11)
+	peer2 := blockPoolTester.newPeer("peer2", 8, 8)
 
 	peer2.AddPeer()
 	go peer2.serveBlocks(7, 8)
@@ -328,9 +331,10 @@ func TestForkSimple(t *testing.T) {
 	delete(blockPoolTester.refBlockChain, 6)
 
 	blockPool.Start()
-
-	peer1 := blockPoolTester.newPeer("peer1", 1, 9)
-	peer2 := blockPoolTester.newPeer("peer2", 2, 6)
+	blockPoolTester.tds = make(map[int]int)
+	blockPoolTester.tds[6] = 10
+	peer1 := blockPoolTester.newPeer("peer1", 9, 9)
+	peer2 := blockPoolTester.newPeer("peer2", 10, 6)
 
 	peer1.AddPeer()
 	go peer1.serveBlocks(8, 9)
@@ -363,9 +367,10 @@ func TestForkSwitchBackByNewBlocks(t *testing.T) {
 	delete(blockPoolTester.refBlockChain, 6)
 
 	blockPool.Start()
-
-	peer1 := blockPoolTester.newPeer("peer1", 1, 9)
-	peer2 := blockPoolTester.newPeer("peer2", 2, 6)
+	blockPoolTester.tds = make(map[int]int)
+	blockPoolTester.tds[6] = 10
+	peer1 := blockPoolTester.newPeer("peer1", 9, 9)
+	peer2 := blockPoolTester.newPeer("peer2", 10, 6)
 
 	peer1.AddPeer()
 	go peer1.serveBlocks(8, 9)               //
@@ -378,7 +383,7 @@ func TestForkSwitchBackByNewBlocks(t *testing.T) {
 	peer2.serveBlocks(1, 2, 3, 4, 5)         //
 
 	// peer1 finds new blocks
-	peer1.td = 3
+	peer1.td = 11
 	peer1.currentBlock = 11
 	peer1.AddPeer()
 	go peer1.serveBlocks(10, 11)
@@ -410,8 +415,14 @@ func TestForkSwitchBackByPeerSwitchBack(t *testing.T) {
 
 	blockPool.Start()
 
-	peer1 := blockPoolTester.newPeer("peer1", 1, 9)
-	peer2 := blockPoolTester.newPeer("peer2", 2, 6)
+	blockPoolTester.tds = make(map[int]int)
+	blockPoolTester.tds[6] = 10
+
+	blockPoolTester.tds = make(map[int]int)
+	blockPoolTester.tds[6] = 10
+
+	peer1 := blockPoolTester.newPeer("peer1", 9, 9)
+	peer2 := blockPoolTester.newPeer("peer2", 10, 6)
 
 	peer1.AddPeer()
 	go peer1.serveBlocks(8, 9)
@@ -448,8 +459,11 @@ func TestForkCompleteSectionSwitchBackByPeerSwitchBack(t *testing.T) {
 
 	blockPool.Start()
 
-	peer1 := blockPoolTester.newPeer("peer1", 1, 9)
-	peer2 := blockPoolTester.newPeer("peer2", 2, 6)
+	blockPoolTester.tds = make(map[int]int)
+	blockPoolTester.tds[6] = 10
+
+	peer1 := blockPoolTester.newPeer("peer1", 9, 9)
+	peer2 := blockPoolTester.newPeer("peer2", 10, 6)
 
 	peer1.AddPeer()
 	go peer1.serveBlocks(8, 9)

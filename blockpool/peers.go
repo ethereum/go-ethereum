@@ -452,8 +452,12 @@ func (self *peer) getBlockHashes() {
 			self.addError(ErrInvalidBlock, "%v", err)
 			self.bp.status.badPeers[self.id]++
 		} else {
+			if self.currentBlock.Td != nil {
+				if self.td.Cmp(self.currentBlock.Td) != 0 {
+					self.addError(ErrIncorrectTD, "on block %x", self.currentBlockHash)
+				}
+			}
 			headKey := self.parentHash.Str()
-			height := self.bp.status.chain[headKey] + 1
 			self.bp.status.chain[self.currentBlockHash.Str()] = height
 			if height > self.bp.status.values.LongestChain {
 				self.bp.status.values.LongestChain = height
@@ -471,6 +475,7 @@ func (self *peer) getBlockHashes() {
 					block:   self.currentBlock,
 					hashBy:  self.id,
 					blockBy: self.id,
+					td:      self.td,
 				}
 				self.bp.newSection([]*node{n}).activate(self)
 			} else {

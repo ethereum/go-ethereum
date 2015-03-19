@@ -62,6 +62,7 @@ const (
 	ErrUnrequestedBlock
 	ErrInsufficientChainInfo
 	ErrIdleTooLong
+	ErrIncorrectTD
 )
 
 var errorToString = map[int]string{
@@ -70,6 +71,7 @@ var errorToString = map[int]string{
 	ErrUnrequestedBlock:      "Unrequested block",
 	ErrInsufficientChainInfo: "Insufficient chain info",
 	ErrIdleTooLong:           "Idle too long",
+	ErrIncorrectTD:           "Incorrect Total Difficulty",
 }
 
 // init initialises all your laundry
@@ -373,6 +375,7 @@ func (self *BlockPool) AddBlockHashes(next func() (common.Hash, bool), peerId st
 				block:   bestpeer.currentBlock,
 				hashBy:  peerId,
 				blockBy: peerId,
+				td:      bestpeer.td,
 			}
 			// nodes is a list of nodes in one section ordered top-bottom (old to young)
 			nodes = append(nodes, node)
@@ -725,6 +728,17 @@ LOOP:
 		case <-self.quit:
 			break LOOP
 		default:
+		}
+	}
+}
+
+func (self *BlockPool) checkTD(nodes ...*node) {
+	for _, n := range nodes {
+		if n.td != nil {
+			plog.DebugDetailf("peer td %v =?= block td %v", n.td, n.block.Td)
+			if n.td.Cmp(n.block.Td) != 0 {
+				self.peers.peerError(n.blockBy, ErrIncorrectTD, "on block %x", n.hash)
+			}
 		}
 	}
 }
