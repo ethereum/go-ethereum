@@ -441,13 +441,16 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			self.Printf(" => %d", l)
 		case CALLDATACOPY:
 			var (
-				mOff = stack.pop().Uint64()
-				cOff = stack.pop().Uint64()
-				l    = stack.pop().Uint64()
+				mOff = stack.pop()
+				cOff = stack.pop()
+				l    = stack.pop()
 			)
-			data := getData(callData, cOff, l)
+			var data []byte
+			if cOff.Cmp(big.NewInt(int64(len(callData)))) <= 0 {
+				data = getData(callData, cOff.Uint64(), l.Uint64())
+			}
 
-			mem.Set(mOff, l, data)
+			mem.Set(mOff.Uint64(), l.Uint64(), data)
 
 			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, data)
 		case CODESIZE, EXTCODESIZE:
@@ -472,14 +475,19 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			} else {
 				code = context.Code
 			}
-			var (
-				mOff = stack.pop().Uint64()
-				cOff = stack.pop().Uint64()
-				l    = stack.pop().Uint64()
-			)
-			codeCopy := getData(code, cOff, l)
 
-			mem.Set(mOff, l, codeCopy)
+			var (
+				mOff = stack.pop()
+				cOff = stack.pop()
+				l    = stack.pop()
+			)
+
+			var codeCopy []byte
+			if cOff.Cmp(big.NewInt(int64(len(code)))) <= 0 {
+				codeCopy = getData(code, cOff.Uint64(), l.Uint64())
+			}
+
+			mem.Set(mOff.Uint64(), l.Uint64(), codeCopy)
 
 			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, codeCopy)
 		case GASPRICE:
