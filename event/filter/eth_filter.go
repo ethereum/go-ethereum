@@ -63,7 +63,7 @@ func (self *FilterManager) filterLoop() {
 	// Subscribe to events
 	events := self.eventMux.Subscribe(
 		core.PendingBlockEvent{},
-		//core.ChainEvent{},
+		core.ChainEvent{},
 		state.Logs(nil))
 
 out:
@@ -77,7 +77,7 @@ out:
 				self.filterMu.RLock()
 				for _, filter := range self.filters {
 					if filter.BlockCallback != nil {
-						filter.BlockCallback(event.Block)
+						filter.BlockCallback(event.Block, event.Logs)
 					}
 				}
 				self.filterMu.RUnlock()
@@ -86,7 +86,7 @@ out:
 				self.filterMu.RLock()
 				for _, filter := range self.filters {
 					if filter.PendingCallback != nil {
-						filter.PendingCallback(event.Block)
+						filter.PendingCallback(event.Block, event.Logs)
 					}
 				}
 				self.filterMu.RUnlock()

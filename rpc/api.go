@@ -86,7 +86,7 @@ func (self *EthereumApi) getStateWithNum(num int64) *xeth.State {
 }
 
 func (self *EthereumApi) start() {
-	timer := time.NewTicker(filterTickerTime)
+	timer := time.NewTicker(2 * time.Second)
 done:
 	for {
 		select {
@@ -94,20 +94,20 @@ done:
 			self.logMut.Lock()
 			self.messagesMut.Lock()
 			for id, filter := range self.logs {
-				if time.Since(filter.timeout) > 20*time.Second {
+				if time.Since(filter.timeout) > filterTickerTime {
 					self.filterManager.UninstallFilter(id)
 					delete(self.logs, id)
 				}
 			}
 
 			for id, filter := range self.messages {
-				if time.Since(filter.timeout) > 20*time.Second {
+				if time.Since(filter.timeout) > filterTickerTime {
 					self.xeth().Whisper().Unwatch(id)
 					delete(self.messages, id)
 				}
 			}
-			self.logMut.Unlock()
 			self.messagesMut.Unlock()
+			self.logMut.Unlock()
 		case <-self.quit:
 			break done
 		}
@@ -161,7 +161,7 @@ func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) erro
 	id = self.filterManager.InstallFilter(filter)
 	self.logs[id] = &logFilter{timeout: time.Now()}
 
-	*reply = i2hex(id)
+	*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
 
 	return nil
 }
@@ -180,10 +180,13 @@ func (self *EthereumApi) NewFilterString(args *FilterStringArgs, reply *interfac
 	var id int
 	filter := core.NewFilter(self.xeth().Backend())
 
-	callback := func(block *types.Block) {
+	callback := func(block *types.Block, logs state.Logs) {
 		self.logMut.Lock()
 		defer self.logMut.Unlock()
 
+		for _, log := range logs {
+			self.logs[id].add(log)
+		}
 		self.logs[id].add(&state.StateLog{})
 	}
 
@@ -198,7 +201,7 @@ func (self *EthereumApi) NewFilterString(args *FilterStringArgs, reply *interfac
 
 	id = self.filterManager.InstallFilter(filter)
 	self.logs[id] = &logFilter{timeout: time.Now()}
-	*reply = i2hex(id)
+	*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
 
 	return nil
 }
@@ -257,6 +260,11 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 			p.register[ags.From] = append(p.register[args.From], args)
 		}
 	*/
+
+	if err := args.requirements(); err != nil {
+		return err
+	}
+
 	// TODO: align default values to have the same type, e.g. not depend on
 	// common.Value conversions later on
 	if args.Gas.Cmp(big.NewInt(0)) == 0 {
@@ -478,7 +486,7 @@ func (p *EthereumApi) GetBlockUncleCountByNumber(blocknum int64) (int64, error) 
 
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
-	rpclogger.Debugf("%s %s", req.Method, req.Params)
+	rpclogger.Infof("%s %s", req.Method, req.Params)
 	switch req.Method {
 	case "web3_sha3":
 		args := new(Sha3Args)
