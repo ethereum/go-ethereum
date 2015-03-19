@@ -192,35 +192,3 @@ func TestNewPeer(t *testing.T) {
 
 	p.Disconnect(DiscAlreadyConnected) // Should not hang
 }
-
-// expectMsg reads a message from r and verifies that its
-// code and encoded RLP content match the provided values.
-// If content is nil, the payload is discarded and not verified.
-func expectMsg(r MsgReader, code uint64, content interface{}) error {
-	msg, err := r.ReadMsg()
-	if err != nil {
-		return err
-	}
-	if msg.Code != code {
-		return fmt.Errorf("message code mismatch: got %d, expected %d", msg.Code, code)
-	}
-	if content == nil {
-		return msg.Discard()
-	} else {
-		contentEnc, err := rlp.EncodeToBytes(content)
-		if err != nil {
-			panic("content encode error: " + err.Error())
-		}
-		if int(msg.Size) != len(contentEnc) {
-			return fmt.Errorf("message size mismatch: got %d, want %d", msg.Size, len(contentEnc))
-		}
-		actualContent, err := ioutil.ReadAll(msg.Payload)
-		if err != nil {
-			return err
-		}
-		if !bytes.Equal(actualContent, contentEnc) {
-			return fmt.Errorf("message payload mismatch:\ngot:  %x\nwant: %x", actualContent, contentEnc)
-		}
-	}
-	return nil
-}
