@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/errs"
+	"github.com/ethereum/go-ethereum/event"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
 )
@@ -32,8 +34,9 @@ var (
 	blockHashesTimeout = 60 * time.Second
 	// timeout interval: max time allowed for peer without sending a block
 	blocksTimeout = 60 * time.Second
-	//
-	idleBestPeerTimeout    = 120 * time.Second
+	// timeout interval: max time allowed for best peer to remain idle (not send new block after sync complete)
+	idleBestPeerTimeout = 120 * time.Second
+	// duration of suspension after peer fatal error during which peer is not allowed to reconnect
 	peerSuspensionInterval = 300 * time.Second
 )
 
@@ -131,6 +134,10 @@ type BlockPool struct {
 	hasBlock    func(hash common.Hash) bool
 	insertChain func(types.Blocks) error
 	verifyPoW   func(pow.Block) bool
+	chainEvents *event.TypeMux
+
+	tdSub event.Subscription
+	td    *big.Int
 
 	pool  map[string]*entry
 	peers *peers
@@ -152,6 +159,8 @@ func New(
 	hasBlock func(hash common.Hash) bool,
 	insertChain func(types.Blocks) error,
 	verifyPoW func(pow.Block) bool,
+	chainEvents *event.TypeMux,
+	td *big.Int,
 ) *BlockPool {
 
 	return &BlockPool{
@@ -159,6 +168,8 @@ func New(
 		hasBlock:    hasBlock,
 		insertChain: insertChain,
 		verifyPoW:   verifyPoW,
+		chainEvents: chainEvents,
+		td:          td,
 	}
 }
 
@@ -198,12 +209,29 @@ func (self *BlockPool) Start() {
 		status:    self.status,
 		bp:        self,
 	}
+
+	self.tdSub = self.chainEvents.Subscribe(core.ChainHeadEvent{})
 	timer := time.NewTicker(3 * time.Second)
 	go func() {
 		for {
 			select {
 			case <-self.quit:
 				return
+			case event := <-self.tdSub.Chan():
+				if ev, ok := event.(core.ChainHeadEvent); ok {
+					td := ev.Block.Td
+					plog.DebugDetailf("td: %v", td)
+					self.setTD(td)
+					self.peers.lock.Lock()
+
+					if best := self.peers.best; best != nil {
+						if td.Cmp(best.td) >= 0 {
+							self.peers.best = nil
+							self.switchPeer(best, nil)
+						}
+					}
+					self.peers.lock.Unlock()
+				}
 			case <-timer.C:
 				plog.DebugDetailf("status:\n%v", self.Status())
 			}
@@ -224,6 +252,7 @@ func (self *BlockPool) Stop() {
 
 	plog.Infoln("Stopping...")
 
+	self.tdSub.Unsubscribe()
 	close(self.quit)
 
 	self.lock.Lock()
@@ -734,6 +763,19 @@ func (self *BlockPool) set(hash common.Hash, e *entry) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	self.pool[hash.Str()] = e
+}
+
+// accessor and setter for total difficulty
+func (self *BlockPool) getTD() *big.Int {
+	self.lock.RLock()
+	defer self.lock.RUnlock()
+	return self.td
+}
+
+func (self *BlockPool) setTD(td *big.Int) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	self.td = td
 }
 
 func (self *BlockPool) remove(sec *section) {

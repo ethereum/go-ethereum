@@ -5,11 +5,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/blockpool/test"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 func TestBlockPoolConfig(t *testing.T) {
 	test.LogInit()
-	blockPool := &BlockPool{Config: &Config{}}
+	blockPool := &BlockPool{Config: &Config{}, chainEvents: &event.TypeMux{}}
 	blockPool.Start()
 	c := blockPool.Config
 	test.CheckInt("BlockHashesBatchSize", c.BlockHashesBatchSize, blockHashesBatchSize, t)
@@ -26,7 +27,7 @@ func TestBlockPoolConfig(t *testing.T) {
 
 func TestBlockPoolOverrideConfig(t *testing.T) {
 	test.LogInit()
-	blockPool := &BlockPool{Config: &Config{}}
+	blockPool := &BlockPool{Config: &Config{}, chainEvents: &event.TypeMux{}}
 	c := &Config{128, 32, 1, 0, 300 * time.Millisecond, 100 * time.Millisecond, 90 * time.Second, 0, 30 * time.Second, 30 * time.Second}
 
 	blockPool.Config = c

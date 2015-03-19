@@ -3,8 +3,12 @@ package blockpool
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/blockpool/test"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // the actual tests
@@ -115,6 +119,26 @@ func TestAddPeer(t *testing.T) {
 	}
 	peer0.waitBlocksRequests(3)
 
-	blockPool.Stop()
+	newblock := &types.Block{Td: common.Big3}
+	blockPool.chainEvents.Post(core.ChainHeadEvent{newblock})
+	time.Sleep(100 * time.Millisecond)
+	if blockPool.peers.best != nil {
+		t.Errorf("no peer should be ahead of self")
+	}
+	best = peer1.AddPeer()
+	if blockPool.peers.best != nil {
+		t.Errorf("still no peer should be ahead of self")
+	}
 
+	best = peer2.AddPeer()
+	if !best {
+		t.Errorf("peer2 (TD=4) not accepted as best")
+	}
+
+	blockPool.RemovePeer("peer2")
+	if blockPool.peers.best != nil {
+		t.Errorf("no peer should be ahead of self")
+	}
+
+	blockPool.Stop()
 }

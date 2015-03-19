@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/errs"
 )
@@ -256,7 +255,7 @@ func (self *peers) addPeer(
 		}
 		best = true
 	} else {
-		currentTD := common.Big0
+		currentTD := self.bp.getTD()
 		if self.best != nil {
 			currentTD = self.best.td
 		}
@@ -264,7 +263,7 @@ func (self *peers) addPeer(
 			self.status.lock.Lock()
 			self.status.bestPeers[p.id]++
 			self.status.lock.Unlock()
-			plog.Debugf("addPeer: peer <%v> promoted best peer", id)
+			plog.Debugf("addPeer: peer <%v> (td: %v > current td %v) promoted best peer", id, td, currentTD)
 			self.bp.switchPeer(self.best, p)
 			self.best = p
 			best = true
@@ -275,10 +274,8 @@ func (self *peers) addPeer(
 
 // removePeer is called (via RemovePeer) by the eth protocol when the peer disconnects
 func (self *peers) removePeer(id string) {
-	plog.Debugf("addPeer: remove peer 0 <%v>", id)
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	plog.Debugf("addPeer: remove peer 1 <%v>", id)
 
 	p, found := self.peers[id]
 	if !found {
@@ -286,13 +283,13 @@ func (self *peers) removePeer(id string) {
 	}
 
 	delete(self.peers, id)
-	plog.Debugf("addPeer: remove peer <%v>", id)
+	plog.Debugf("addPeer: remove peer <%v> (td: %v)", id, p.td)
 
 	// if current best peer is removed, need to find a better one
 	if self.best == p {
 		var newp *peer
-		// FIXME: own TD
-		max := common.Big0
+		// only peers that are ahead of us are considered
+		max := self.bp.getTD()
 		// peer with the highest self-acclaimed TD is chosen
 		for _, pp := range self.peers {
 			if pp.td.Cmp(max) > 0 {
@@ -304,7 +301,7 @@ func (self *peers) removePeer(id string) {
 			self.status.lock.Lock()
 			self.status.bestPeers[p.id]++
 			self.status.lock.Unlock()
-			plog.Debugf("addPeer: peer <%v> with td %v promoted best peer", newp.id, newp.td)
+			plog.Debugf("addPeer: peer <%v> (td: %v) promoted best peer", newp.id, newp.td)
 		} else {
 			plog.Warnln("addPeer: no suitable peers found")
 		}
