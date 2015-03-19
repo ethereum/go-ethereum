@@ -5,33 +5,17 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestNewMsg(t *testing.T) {
-	msg := NewMsg(3, 1, "000")
-	if msg.Code != 3 {
-		t.Errorf("incorrect code %d, want %d", msg.Code)
-	}
-	expect := unhex("c50183303030")
-	if msg.Size != uint32(len(expect)) {
-		t.Errorf("incorrect size %d, want %d", msg.Size, len(expect))
-	}
-	pl, _ := ioutil.ReadAll(msg.Payload)
-	if !bytes.Equal(pl, expect) {
-		t.Errorf("incorrect payload content, got %x, want %x", pl, expect)
-	}
-}
-
 func ExampleMsgPipe() {
 	rw1, rw2 := MsgPipe()
 	go func() {
-		EncodeMsg(rw1, 8, []byte{0, 0})
-		EncodeMsg(rw1, 5, []byte{1, 1})
+		Send(rw1, 8, [][]byte{{0, 0}})
+		Send(rw1, 5, [][]byte{{1, 1}})
 		rw1.Close()
 	}()
 
@@ -40,7 +24,7 @@ func ExampleMsgPipe() {
 		if err != nil {
 			break
 		}
-		var data [1][]byte
+		var data [][]byte
 		msg.Decode(&data)
 		fmt.Printf("msg: %d, %x\n", msg.Code, data[0])
 	}
@@ -55,7 +39,7 @@ loop:
 		rw1, rw2 := MsgPipe()
 		done := make(chan struct{})
 		go func() {
-			if err := EncodeMsg(rw1, 1); err == nil {
+			if err := SendItems(rw1, 1); err == nil {
 				t.Error("EncodeMsg returned nil error")
 			} else if err != ErrPipeClosed {
 				t.Error("EncodeMsg returned wrong error: got %v, want %v", err, ErrPipeClosed)

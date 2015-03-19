@@ -4,13 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"reflect"
 	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var discard = Protocol{
@@ -55,13 +52,13 @@ func TestPeerProtoReadMsg(t *testing.T) {
 		Name:   "a",
 		Length: 5,
 		Run: func(peer *Peer, rw MsgReadWriter) error {
-			if err := expectMsg(rw, 2, []uint{1}); err != nil {
+			if err := ExpectMsg(rw, 2, []uint{1}); err != nil {
 				t.Error(err)
 			}
-			if err := expectMsg(rw, 3, []uint{2}); err != nil {
+			if err := ExpectMsg(rw, 3, []uint{2}); err != nil {
 				t.Error(err)
 			}
-			if err := expectMsg(rw, 4, []uint{3}); err != nil {
+			if err := ExpectMsg(rw, 4, []uint{3}); err != nil {
 				t.Error(err)
 			}
 			close(done)
@@ -72,9 +69,9 @@ func TestPeerProtoReadMsg(t *testing.T) {
 	closer, rw, _, errc := testPeer([]Protocol{proto})
 	defer closer.Close()
 
-	EncodeMsg(rw, baseProtocolLength+2, 1)
-	EncodeMsg(rw, baseProtocolLength+3, 2)
-	EncodeMsg(rw, baseProtocolLength+4, 3)
+	Send(rw, baseProtocolLength+2, []uint{1})
+	Send(rw, baseProtocolLength+3, []uint{2})
+	Send(rw, baseProtocolLength+4, []uint{3})
 
 	select {
 	case <-done:
@@ -92,10 +89,10 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 		Name:   "a",
 		Length: 2,
 		Run: func(peer *Peer, rw MsgReadWriter) error {
-			if err := EncodeMsg(rw, 2); err == nil {
+			if err := SendItems(rw, 2); err == nil {
 				t.Error("expected error for out-of-range msg code, got nil")
 			}
-			if err := EncodeMsg(rw, 1, "foo", "bar"); err != nil {
+			if err := SendItems(rw, 1, "foo", "bar"); err != nil {
 				t.Errorf("write error: %v", err)
 			}
 			return nil
@@ -104,7 +101,7 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 	closer, rw, _, _ := testPeer([]Protocol{proto})
 	defer closer.Close()
 
-	if err := expectMsg(rw, 17, []string{"foo", "bar"}); err != nil {
+	if err := ExpectMsg(rw, 17, []string{"foo", "bar"}); err != nil {
 		t.Error(err)
 	}
 }
@@ -115,11 +112,15 @@ func TestPeerWriteForBroadcast(t *testing.T) {
 	closer, rw, peer, peerErr := testPeer([]Protocol{discard})
 	defer closer.Close()
 
+	emptymsg := func(code uint64) Msg {
+		return Msg{Code: code, Size: 0, Payload: bytes.NewReader(nil)}
+	}
+
 	// test write errors
-	if err := peer.writeProtoMsg("b", NewMsg(3)); err == nil {
+	if err := peer.writeProtoMsg("b", emptymsg(3)); err == nil {
 		t.Errorf("expected error for unknown protocol, got nil")
 	}
-	if err := peer.writeProtoMsg("discard", NewMsg(8)); err == nil {
+	if err := peer.writeProtoMsg("discard", emptymsg(8)); err == nil {
 		t.Errorf("expected error for out-of-range msg code, got nil")
 	} else if perr, ok := err.(*peerError); !ok || perr.Code != errInvalidMsgCode {
 		t.Errorf("wrong error for out-of-range msg code, got %#v", err)
@@ -128,14 +129,14 @@ func TestPeerWriteForBroadcast(t *testing.T) {
 	// setup for reading the message on the other end
 	read := make(chan struct{})
 	go func() {
-		if err := expectMsg(rw, 16, nil); err != nil {
+		if err := ExpectMsg(rw, 16, nil); err != nil {
 			t.Error(err)
 		}
 		close(read)
 	}()
 
 	// test successful write
-	if err := peer.writeProtoMsg("discard", NewMsg(0)); err != nil {
+	if err := peer.writeProtoMsg("discard", emptymsg(0)); err != nil {
 		t.Errorf("expect no error for known protocol: %v", err)
 	}
 	select {
@@ -150,10 +151,10 @@ func TestPeerPing(t *testing.T) {
 
 	closer, rw, _, _ := testPeer(nil)
 	defer closer.Close()
-	if err := EncodeMsg(rw, pingMsg); err != nil {
+	if err := SendItems(rw, pingMsg); err != nil {
 		t.Fatal(err)
 	}
-	if err := expectMsg(rw, pongMsg, nil); err != nil {
+	if err := ExpectMsg(rw, pongMsg, nil); err != nil {
 		t.Error(err)
 	}
 }
@@ -163,10 +164,10 @@ func TestPeerDisconnect(t *testing.T) {
 
 	closer, rw, _, disc := testPeer(nil)
 	defer closer.Close()
-	if err := EncodeMsg(rw, discMsg, DiscQuitting); err != nil {
+	if err := SendItems(rw, discMsg, DiscQuitting); err != nil {
 		t.Fatal(err)
 	}
-	if err := expectMsg(rw, discMsg, []interface{}{DiscRequested}); err != nil {
+	if err := ExpectMsg(rw, discMsg, []interface{}{DiscRequested}); err != nil {
 		t.Error(err)
 	}
 	closer.Close() // make test end faster
