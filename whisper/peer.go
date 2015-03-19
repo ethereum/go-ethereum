@@ -77,12 +77,11 @@ func (self *peer) broadcast(envelopes []*Envelope) error {
 	}
 
 	if i > 0 {
-		if err := p2p.EncodeMsg(self.ws, envelopesMsg, envs[:i]...); err != nil {
+		if err := p2p.Send(self.ws, envelopesMsg, envs[:i]); err != nil {
 			return err
 		}
 		self.peer.DebugDetailln("broadcasted", i, "message(s)")
 	}
-
 	return nil
 }
 
@@ -92,7 +91,7 @@ func (self *peer) addKnown(envelope *Envelope) {
 
 func (self *peer) handleStatus() error {
 	ws := self.ws
-	if err := ws.WriteMsg(self.statusMsg()); err != nil {
+	if err := p2p.SendItems(ws, statusMsg, protocolVersion); err != nil {
 		return err
 	}
 	msg, err := ws.ReadMsg()
@@ -114,8 +113,4 @@ func (self *peer) handleStatus() error {
 		return fmt.Errorf("protocol version mismatch %d != %d", pv, protocolVersion)
 	}
 	return msg.Discard() // ignore anything after protocol version
-}
-
-func (self *peer) statusMsg() p2p.Msg {
-	return p2p.NewMsg(statusMsg, protocolVersion)
 }

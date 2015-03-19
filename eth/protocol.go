@@ -89,7 +89,7 @@ type blockPool interface {
 	RemovePeer(peerId string)
 }
 
-// message structs used for rlp decoding
+// message structs used for RLP serialization
 type newBlockMsgData struct {
 	Block *types.Block
 	TD    *big.Int
@@ -98,6 +98,14 @@ type newBlockMsgData struct {
 type getBlockHashesMsgData struct {
 	Hash   common.Hash
 	Amount uint64
+}
+
+type statusMsgData struct {
+	ProtocolVersion uint32
+	NetworkId       uint32
+	TD              *big.Int
+	CurrentBlock    common.Hash
+	GenesisBlock    common.Hash
 }
 
 // main entrypoint, wrappers starting a server running the eth protocol
@@ -132,18 +140,25 @@ func runEthProtocol(protocolVersion, networkId int, txPool txPool, chainManager 
 		},
 		id: fmt.Sprintf("%x", id[:8]),
 	}
-	err = self.handleStatus()
-	if err == nil {
-		self.propagateTxs()
-		for {
-			err = self.handle()
-			if err != nil {
-				self.blockPool.RemovePeer(self.id)
-				break
-			}
+
+	// handshake.
+	if err := self.handleStatus(); err != nil {
+		return err
+	}
+	defer self.blockPool.RemovePeer(self.id)
+
+	// propagate existing transactions. new transactions appearing
+	// after this will be sent via broadcasts.
+	if err := p2p.Send(rw, TxMsg, txPool.GetTransactions()); err != nil {
+		return err
+	}
+
+	// main loop. handle incoming messages.
+	for {
+		if err := self.handle(); err != nil {
+			return err
 		}
 	}
-	return
 }
 
 func (self *ethProtocol) handle() error {
@@ -186,7 +201,7 @@ func (self *ethProtocol) handle() error {
 			request.Amount = maxHashes
 		}
 		hashes := self.chainManager.GetBlockHashesFromHash(request.Hash, request.Amount)
-		return p2p.EncodeMsg(self.rw, BlockHashesMsg, rlp.Flat(hashes))
+		return p2p.Send(self.rw, BlockHashesMsg, hashes)
 
 	case BlockHashesMsg:
 		msgStream := rlp.NewStream(msg.Payload)
@@ -216,7 +231,7 @@ func (self *ethProtocol) handle() error {
 			return err
 		}
 
-		var blocks []interface{}
+		var blocks []*types.Block
 		var i int
 		for {
 			i++
@@ -224,7 +239,7 @@ func (self *ethProtocol) handle() error {
 			err := msgStream.Decode(&hash)
 			if err == rlp.EOL {
 				break
-			} else {
+			} else if err != nil {
 				return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 			}
 
@@ -236,7 +251,7 @@ func (self *ethProtocol) handle() error {
 				break
 			}
 		}
-		return p2p.EncodeMsg(self.rw, BlocksMsg, blocks...)
+		return p2p.Send(self.rw, BlocksMsg, blocks)
 
 	case BlocksMsg:
 		msgStream := rlp.NewStream(msg.Payload)
@@ -283,29 +298,8 @@ func (self *ethProtocol) handle() error {
 	return nil
 }
 
-type statusMsgData struct {
-	ProtocolVersion uint32
-	NetworkId       uint32
-	TD              *big.Int
-	CurrentBlock    common.Hash
-	GenesisBlock    common.Hash
-}
-
-func (self *ethProtocol) statusMsg() p2p.Msg {
-	td, currentBlock, genesisBlock := self.chainManager.Status()
-
-	return p2p.NewMsg(StatusMsg,
-		uint32(self.protocolVersion),
-		uint32(self.networkId),
-		td,
-		currentBlock,
-		genesisBlock,
-	)
-}
-
 func (self *ethProtocol) handleStatus() error {
-	// send precanned status message
-	if err := self.rw.WriteMsg(self.statusMsg()); err != nil {
+	if err := self.sendStatus(); err != nil {
 		return err
 	}
 
@@ -314,11 +308,9 @@ func (self *ethProtocol) handleStatus() error {
 	if err != nil {
 		return err
 	}
-
 	if msg.Code != StatusMsg {
 		return self.protoError(ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, StatusMsg)
 	}
-
 	if msg.Size > ProtocolMaxMsgSize {
 		return self.protoError(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 	}
@@ -351,12 +343,12 @@ func (self *ethProtocol) handleStatus() error {
 
 func (self *ethProtocol) requestBlockHashes(from common.Hash) error {
 	self.peer.Debugf("fetching hashes (%d) %x...\n", maxHashes, from[0:4])
-	return p2p.EncodeMsg(self.rw, GetBlockHashesMsg, interface{}(from), uint64(maxHashes))
+	return p2p.Send(self.rw, GetBlockHashesMsg, getBlockHashesMsgData{from, maxHashes})
 }
 
 func (self *ethProtocol) requestBlocks(hashes []common.Hash) error {
 	self.peer.Debugf("fetching %v blocks", len(hashes))
-	return p2p.EncodeMsg(self.rw, GetBlocksMsg, rlp.Flat(hashes))
+	return p2p.Send(self.rw, GetBlocksMsg, hashes)
 }
 
 func (self *ethProtocol) protoError(code int, format string, params ...interface{}) (err *errs.Error) {
@@ -365,19 +357,20 @@ func (self *ethProtocol) protoError(code int, format string, params ...interface
 	return
 }
 
+func (self *ethProtocol) sendStatus() error {
+	td, currentBlock, genesisBlock := self.chainManager.Status()
+	return p2p.Send(self.rw, StatusMsg, &statusMsgData{
+		ProtocolVersion: uint32(self.protocolVersion),
+		NetworkId:       uint32(self.networkId),
+		TD:              td,
+		CurrentBlock:    currentBlock,
+		GenesisBlock:    genesisBlock,
+	})
+}
+
 func (self *ethProtocol) protoErrorDisconnect(err *errs.Error) {
 	err.Log(self.peer.Logger)
 	if err.Fatal() {
 		self.peer.Disconnect(p2p.DiscSubprotocolError)
 	}
-}
-
-func (self *ethProtocol) propagateTxs() {
-	transactions := self.txPool.GetTransactions()
-	iface := make([]interface{}, len(transactions))
-	for i, transaction := range transactions {
-		iface[i] = transaction
-	}
-
-	self.rw.WriteMsg(p2p.NewMsg(TxMsg, iface...))
 }
