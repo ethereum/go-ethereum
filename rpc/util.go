@@ -19,38 +19,12 @@ package rpc
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
 var rpclogger = logger.NewLogger("RPC")
-
-type Log struct {
-	Address string   `json:"address"`
-	Topic   []string `json:"topic"`
-	Data    string   `json:"data"`
-	Number  uint64   `json:"number"`
-}
-
-func toLogs(logs state.Logs) (ls []Log) {
-	ls = make([]Log, len(logs))
-
-	for i, log := range logs {
-		var l Log
-		l.Topic = make([]string, len(log.Topics()))
-		l.Address = common.ToHex(log.Address())
-		l.Data = common.ToHex(log.Data())
-		l.Number = log.Number()
-		for j, topic := range log.Topics() {
-			l.Topic[j] = common.ToHex(topic)
-		}
-		ls[i] = l
-	}
-
-	return
-}
 
 type whisperFilter struct {
 	messages []xeth.WhisperMessage

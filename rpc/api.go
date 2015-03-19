@@ -208,7 +208,7 @@ func (self *EthereumApi) FilterChanged(id int, reply *interface{}) error {
 	defer self.logMut.Unlock()
 
 	if self.logs[id] != nil {
-		*reply = toLogs(self.logs[id].get())
+		*reply = NewLogsRes(self.logs[id].get())
 	}
 
 	return nil
@@ -220,7 +220,7 @@ func (self *EthereumApi) Logs(id int, reply *interface{}) error {
 
 	filter := self.filterManager.GetFilter(id)
 	if filter != nil {
-		*reply = toLogs(filter.Find())
+		*reply = NewLogsRes(filter.Find())
 	}
 
 	return nil
@@ -230,7 +230,7 @@ func (self *EthereumApi) AllLogs(args *FilterOptions, reply *interface{}) error 
 	filter := core.NewFilter(self.xeth().Backend())
 	filter.SetOptions(toFilterOptions(args))
 
-	*reply = toLogs(filter.Find())
+	*reply = NewLogsRes(filter.Find())
 
 	return nil
 }
