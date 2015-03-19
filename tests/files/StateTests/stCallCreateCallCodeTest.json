@@ -68,7 +68,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "0xffffffffffffffffffffffffffffff",
+            "gasLimit" : "17592186099592",
             "gasPrice" : "1",
             "nonce" : "",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
@@ -147,7 +147,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "0xffffffffffffffffffffffffffffff",
+            "gasLimit" : "15720826",
             "gasPrice" : "1",
             "nonce" : "",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
@@ -381,7 +381,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "0xffffffffffffffffffffffffffffff",
+            "gasLimit" : "15720826",
             "gasPrice" : "1",
             "nonce" : "",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
@@ -459,7 +459,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "0xffffffffffffffffffffffffffffff",
+            "gasLimit" : "166262",
             "gasPrice" : "1",
             "nonce" : "",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",

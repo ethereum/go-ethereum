@@ -35,6 +35,7 @@ func (self *StateDB) RawDump() World {
 
 		storageIt := stateObject.State.trie.Iterator()
 		for storageIt.Next() {
+			fmt.Println("value", storageIt.Value)
 			account.Storage[common.Bytes2Hex(storageIt.Key)] = common.Bytes2Hex(storageIt.Value)
 		}
 		world.Accounts[common.Bytes2Hex(it.Key)] = account

@@ -119,9 +119,9 @@ func toValue(val *big.Int) interface{} {
 	return val
 }
 
-func getCode(code []byte, start, size uint64) []byte {
-	x := uint64(math.Min(float64(start), float64(len(code))))
-	y := uint64(math.Min(float64(x+size), float64(len(code))))
+func getData(data []byte, start, size uint64) []byte {
+	x := uint64(math.Min(float64(start), float64(len(data))))
+	y := uint64(math.Min(float64(x+size), float64(len(data))))
 
-	return common.RightPadBytes(code[x:y], int(size))
+	return common.RightPadBytes(data[x:y], int(size))
 }
