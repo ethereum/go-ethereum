@@ -198,6 +198,7 @@ func (p *Peer) handle(msg Msg) error {
 		// no need to discard or for error checking, we'll close the
 		// connection after this.
 		rlp.Decode(msg.Payload, &reason)
+		p.Debugf("Disconnect requested: %v\n", reason[0])
 		p.Disconnect(DiscRequested)
 		return discRequestedError(reason[0])
 	case msg.Code < baseProtocolLength:
