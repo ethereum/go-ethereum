@@ -81,10 +81,6 @@ func (self *EthereumApi) xethWithStateNum(num int64) *xeth.XEth {
 	return self.xeth().WithState(st)
 }
 
-func (self *EthereumApi) getStateWithNum(num int64) *xeth.State {
-	return self.xethWithStateNum(num).State()
-}
-
 func (self *EthereumApi) start() {
 	timer := time.NewTicker(filterTickerTime)
 done:
@@ -290,8 +286,7 @@ func (p *EthereumApi) GetBalance(args *GetBalanceArgs, reply *interface{}) error
 	if err := args.requirements(); err != nil {
 		return err
 	}
-	state := p.getStateWithNum(args.BlockNumber).SafeGet(args.Address)
-	*reply = common.ToHex(state.Balance().Bytes())
+	*reply = common.ToHex(p.xethWithStateNum(args.BlockNumber).State().SafeGet(args.Address).Balance().Bytes())
 	return nil
 }
 
@@ -299,7 +294,7 @@ func (p *EthereumApi) GetStorage(args *GetStorageArgs, reply *interface{}) error
 	if err := args.requirements(); err != nil {
 		return err
 	}
-	*reply = p.getStateWithNum(args.BlockNumber).SafeGet(args.Address).Storage()
+	*reply = p.xethWithStateNum(args.BlockNumber).State().SafeGet(args.Address).Storage()
 	return nil
 }
 
@@ -307,9 +302,10 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 	if err := args.requirements(); err != nil {
 		return err
 	}
-	state := p.getStateWithNum(args.BlockNumber).SafeGet(args.Address)
 
+	state := p.xethWithStateNum(args.BlockNumber).State().SafeGet(args.Address)
 	value := state.StorageString(args.Key)
+
 	var hx string
 	if strings.Index(args.Key, "0x") == 0 {
 		hx = string([]byte(args.Key)[2:])
