@@ -1,6 +1,9 @@
 package core
 
-import "github.com/ethereum/go-ethereum/core/types"
+import (
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/state"
+)
 
 // TxPreEvent is posted when a transaction enters the transaction pool.
 type TxPreEvent struct{ Tx *types.Transaction }
@@ -15,11 +18,25 @@ type NewBlockEvent struct{ Block *types.Block }
 type NewMinedBlockEvent struct{ Block *types.Block }
 
 // ChainSplit is posted when a new head is detected
-type ChainSplitEvent struct{ Block *types.Block }
+type ChainSplitEvent struct {
+	Block *types.Block
+	Logs  state.Logs
+}
 
-type ChainEvent struct{ Block *types.Block }
+type ChainEvent struct {
+	Block *types.Block
+	Logs  state.Logs
+}
 
-type ChainSideEvent struct{ Block *types.Block }
+type ChainSideEvent struct {
+	Block *types.Block
+	Logs  state.Logs
+}
+
+type PendingBlockEvent struct {
+	Block *types.Block
+	Logs  state.Logs
+}
 
 type ChainHeadEvent struct{ Block *types.Block }
 

@@ -6,8 +6,8 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -411,7 +411,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	for i, block := range chain {
 		// Call in to the block processor and check for errors. It's likely that if one block fails
 		// all others will fail too (unless a known block is returned).
-		td, err := self.processor.Process(block)
+		td, logs, err := self.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
@@ -437,7 +437,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, common.Big1)) < 0 {
 					chainlogger.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, block.Hash()[:4], td, cblock.Header().Number, cblock.Hash()[:4], self.td)
 
-					queue[i] = ChainSplitEvent{block}
+					queue[i] = ChainSplitEvent{block, logs}
 					queueEvent.splitCount++
 				}
 
@@ -456,10 +456,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				self.setTransState(state.New(block.Root(), self.stateDb))
 				self.setTxState(state.New(block.Root(), self.stateDb))
 
-				queue[i] = ChainEvent{block}
+				queue[i] = ChainEvent{block, logs}
 				queueEvent.canonicalCount++
 			} else {
-				queue[i] = ChainSideEvent{block}
+				queue[i] = ChainSideEvent{block, logs}
 				queueEvent.sideCount++
 			}
 		}

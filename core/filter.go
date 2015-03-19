@@ -33,8 +33,8 @@ type Filter struct {
 	max      int
 	topics   [][][]byte
 
-	BlockCallback   func(*types.Block)
-	PendingCallback func(*types.Block)
+	BlockCallback   func(*types.Block, state.Logs)
+	PendingCallback func(*types.Block, state.Logs)
 	LogsCallback    func(state.Logs)
 }
 
