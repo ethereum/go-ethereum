@@ -103,12 +103,18 @@ var encTests = []encTest{
 
 	// byte slices, strings
 	{val: []byte{}, output: "80"},
+	{val: []byte{0x7E}, output: "7E"},
+	{val: []byte{0x7F}, output: "7F"},
+	{val: []byte{0x80}, output: "8180"},
 	{val: []byte{1, 2, 3}, output: "83010203"},
 
 	{val: []namedByteType{1, 2, 3}, output: "83010203"},
 	{val: [...]namedByteType{1, 2, 3}, output: "83010203"},
 
 	{val: "", output: "80"},
+	{val: "\x7E", output: "7E"},
+	{val: "\x7F", output: "7F"},
+	{val: "\x80", output: "8180"},
 	{val: "dog", output: "83646F67"},
 	{
 		val:    "Lorem ipsum dolor sit amet, consectetur adipisicing eli",

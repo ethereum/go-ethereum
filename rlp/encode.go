@@ -203,8 +203,13 @@ func (w *encbuf) encodeStringHeader(size int) {
 }
 
 func (w *encbuf) encodeString(b []byte) {
-	w.encodeStringHeader(len(b))
-	w.str = append(w.str, b...)
+	if len(b) == 1 && b[0] <= 0x7F {
+		// fits single byte, no string header
+		w.str = append(w.str, b[0])
+	} else {
+		w.encodeStringHeader(len(b))
+		w.str = append(w.str, b...)
+	}
 }
 
 func (w *encbuf) list() *listhead {
@@ -404,9 +409,6 @@ func writeBigInt(i *big.Int, w *encbuf) error {
 		return fmt.Errorf("rlp: cannot encode negative *big.Int")
 	} else if cmp == 0 {
 		w.str = append(w.str, 0x80)
-	} else if bits := i.BitLen(); bits < 8 {
-		// fits single byte
-		w.str = append(w.str, byte(i.Uint64()))
 	} else {
 		w.encodeString(i.Bytes())
 	}
@@ -434,8 +436,13 @@ func writeByteArray(val reflect.Value, w *encbuf) error {
 
 func writeString(val reflect.Value, w *encbuf) error {
 	s := val.String()
-	w.encodeStringHeader(len(s))
-	w.str = append(w.str, s...)
+	if len(s) == 1 && s[0] <= 0x7f {
+		// fits single byte, no string header
+		w.str = append(w.str, s[0])
+	} else {
+		w.encodeStringHeader(len(s))
+		w.str = append(w.str, s...)
+	}
 	return nil
 }
 
