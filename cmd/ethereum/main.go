@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -41,7 +42,7 @@ import (
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.9.1"
+	Version          = "Frontier - 0.9.1"
 )
 
 var (
@@ -54,6 +55,17 @@ func init() {
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
 		blocktestCmd,
+		{
+			Action: makedag,
+			Name:   "makedag",
+			Usage:  "generate ethash dag (for testing)",
+			Description: `
+The makedag command generates an ethash DAG in /tmp/dag.
+
+This command exists to support the system testing project.
+Regular users do not need to execute it.
+`,
+		},
 		{
 			Action: version,
 			Name:   "version",
@@ -136,8 +148,8 @@ The Ethereum JavaScript VM exposes a node admin interface as well as the DAPP Ja
 		utils.RPCPortFlag,
 		utils.UnencryptedKeysFlag,
 		utils.VMDebugFlag,
-
-		//utils.VMTypeFlag,
+		utils.ProtocolVersionFlag,
+		utils.NetworkIdFlag,
 	}
 
 	// missing:
@@ -318,6 +330,15 @@ func dump(ctx *cli.Context) {
 	}
 }
 
+func makedag(ctx *cli.Context) {
+	chain, _, _ := utils.GetChain(ctx)
+	pow := ethash.New(chain)
+	fmt.Println("making cache")
+	pow.UpdateCache(true)
+	fmt.Println("making DAG")
+	pow.UpdateDAG()
+}
+
 func version(c *cli.Context) {
 	fmt.Printf(`%v
 Version: %v
@@ -327,7 +348,7 @@ GO: %s
 OS: %s
 GOPATH=%s
 GOROOT=%s
-`, ClientIdentifier, Version, eth.ProtocolVersion, eth.NetworkId, runtime.Version(), runtime.GOOS, os.Getenv("GOPATH"), runtime.GOROOT())
+`, ClientIdentifier, Version, c.GlobalInt(utils.ProtocolVersionFlag.Name), c.GlobalInt(utils.NetworkIdFlag.Name), runtime.Version(), runtime.GOOS, os.Getenv("GOPATH"), runtime.GOROOT())
 }
 
 // hashish returns true for strings that look like hashes.

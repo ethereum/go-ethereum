@@ -38,7 +38,10 @@ var (
 )
 
 type Config struct {
-	Name      string
+	Name            string
+	ProtocolVersion int
+	NetworkId       int
+
 	DataDir   string
 	LogFile   string
 	LogLevel  int
@@ -135,14 +138,16 @@ type Ethereum struct {
 
 	logger logger.LogSystem
 
-	Mining  bool
-	DataDir string
-	version string
+	Mining          bool
+	DataDir         string
+	version         string
+	ProtocolVersion int
+	NetworkId       int
 }
 
 func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
-	servlogger := logger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
+	servlogsystem := logger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
 
 	newdb := config.NewDB
 	if newdb == nil {
@@ -159,13 +164,14 @@ func New(config *Config) (*Ethereum, error) {
 	extraDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "extra"))
 
 	// Perform database sanity checks
-	d, _ := blockDb.Get([]byte("ProtocolVersion"))
-	protov := common.NewValue(d).Uint()
-	if protov != ProtocolVersion && protov != 0 {
+	d, _ := extraDb.Get([]byte("ProtocolVersion"))
+	protov := int(common.NewValue(d).Uint())
+	if protov != config.ProtocolVersion && protov != 0 {
 		path := path.Join(config.DataDir, "blockchain")
-		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, path)
+		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
 	}
-	saveProtocolVersion(extraDb)
+	saveProtocolVersion(extraDb, config.ProtocolVersion)
+	servlogger.Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
 
 	eth := &Ethereum{
 		shutdownChan:   make(chan bool),
@@ -173,7 +179,7 @@ func New(config *Config) (*Ethereum, error) {
 		stateDb:        stateDb,
 		extraDb:        extraDb,
 		eventMux:       &event.TypeMux{},
-		logger:         servlogger,
+		logger:         servlogsystem,
 		accountManager: config.AccountManager,
 		DataDir:        config.DataDir,
 		version:        config.Name, // TODO should separate from Name
@@ -195,7 +201,8 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
+
+	ethProto := EthProtocol(config.ProtocolVersion, config.NetworkId, eth.txPool, eth.chainManager, eth.blockPool)
 	protocols := []p2p.Protocol{ethProto}
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
@@ -309,7 +316,6 @@ func (s *Ethereum) StateDb() common.Database             { return s.stateDb }
 func (s *Ethereum) ExtraDb() common.Database             { return s.extraDb }
 func (s *Ethereum) IsListening() bool                    { return true } // Always listening
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
-func (s *Ethereum) PeerInfo() int                        { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
 func (s *Ethereum) MaxPeers() int                        { return s.net.MaxPeers }
 func (s *Ethereum) Version() string                      { return s.version }
@@ -413,11 +419,11 @@ func (self *Ethereum) blockBroadcastLoop() {
 	}
 }
 
-func saveProtocolVersion(db common.Database) {
+func saveProtocolVersion(db common.Database, protov int) {
 	d, _ := db.Get([]byte("ProtocolVersion"))
 	protocolVersion := common.NewValue(d).Uint()
 
 	if protocolVersion == 0 {
-		db.Put([]byte("ProtocolVersion"), common.NewValue(ProtocolVersion).Bytes())
+		db.Put([]byte("ProtocolVersion"), common.NewValue(protov).Bytes())
 	}
 }

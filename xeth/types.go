@@ -14,10 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/state"
 )
 
-func toHex(b []byte) string {
-	return "0x" + common.Bytes2Hex(b)
-}
-
 type Object struct {
 	*state.StateObject
 }
@@ -49,7 +45,7 @@ func (self *Object) Storage() (storage map[string]string) {
 	for it.Next() {
 		var data []byte
 		rlp.Decode(bytes.NewReader(it.Value), &data)
-		storage[toHex(it.Key)] = toHex(data)
+		storage[common.ToHex(it.Key)] = common.ToHex(data)
 	}
 
 	return
@@ -95,12 +91,12 @@ func NewBlock(block *types.Block) *Block {
 	return &Block{
 		ref: block, Size: block.Size().String(),
 		Number: int(block.NumberU64()), GasUsed: block.GasUsed().String(),
-		GasLimit: block.GasLimit().String(), Hash: toHex(block.Hash().Bytes()),
+		GasLimit: block.GasLimit().String(), Hash: block.Hash().Hex(),
 		Transactions: txlist, Uncles: ulist,
 		Time:     block.Time(),
-		Coinbase: toHex(block.Coinbase().Bytes()),
-		PrevHash: toHex(block.ParentHash().Bytes()),
-		Bloom:    toHex(block.Bloom().Bytes()),
+		Coinbase: block.Coinbase().Hex(),
+		PrevHash: block.ParentHash().Hex(),
+		Bloom:    common.ToHex(block.Bloom().Bytes()),
 		Raw:      block.String(),
 	}
 }
@@ -151,10 +147,10 @@ func NewTx(tx *types.Transaction) *Transaction {
 	if createsContract {
 		data = strings.Join(core.Disassemble(tx.Data()), "\n")
 	} else {
-		data = toHex(tx.Data())
+		data = common.ToHex(tx.Data())
 	}
 
-	return &Transaction{ref: tx, Hash: hash, Value: common.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender.Hex(), CreatesContract: createsContract, RawData: toHex(tx.Data())}
+	return &Transaction{ref: tx, Hash: hash, Value: common.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender.Hex(), CreatesContract: createsContract, RawData: common.ToHex(tx.Data())}
 }
 
 func (self *Transaction) ToString() string {
@@ -168,7 +164,7 @@ type Key struct {
 }
 
 func NewKey(key *crypto.KeyPair) *Key {
-	return &Key{toHex(key.Address()), toHex(key.PrivateKey), toHex(key.PublicKey)}
+	return &Key{common.ToHex(key.Address()), common.ToHex(key.PrivateKey), common.ToHex(key.PublicKey)}
 }
 
 type PReceipt struct {
@@ -181,9 +177,9 @@ type PReceipt struct {
 func NewPReciept(contractCreation bool, creationAddress, hash, address []byte) *PReceipt {
 	return &PReceipt{
 		contractCreation,
-		toHex(creationAddress),
-		toHex(hash),
-		toHex(address),
+		common.ToHex(creationAddress),
+		common.ToHex(hash),
+		common.ToHex(address),
 	}
 }
 
@@ -220,8 +216,8 @@ type Receipt struct {
 func NewReciept(contractCreation bool, creationAddress, hash, address []byte) *Receipt {
 	return &Receipt{
 		contractCreation,
-		toHex(creationAddress),
-		toHex(hash),
-		toHex(address),
+		common.ToHex(creationAddress),
+		common.ToHex(hash),
+		common.ToHex(address),
 	}
 }

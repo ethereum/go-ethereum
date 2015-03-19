@@ -57,23 +57,23 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 	}
 
 	// convert strict types to hexified strings
-	ext.BlockNumber = toHex(big.NewInt(b.BlockNumber).Bytes())
+	ext.BlockNumber = common.ToHex(big.NewInt(b.BlockNumber).Bytes())
 	ext.BlockHash = b.BlockHash.Hex()
 	ext.ParentHash = b.ParentHash.Hex()
-	ext.Nonce = toHex(b.Nonce[:])
+	ext.Nonce = common.ToHex(b.Nonce[:])
 	ext.Sha3Uncles = b.Sha3Uncles.Hex()
-	ext.LogsBloom = toHex(b.LogsBloom[:])
+	ext.LogsBloom = common.ToHex(b.LogsBloom[:])
 	ext.TransactionRoot = b.TransactionRoot.Hex()
 	ext.StateRoot = b.StateRoot.Hex()
 	ext.Miner = b.Miner.Hex()
-	ext.Difficulty = toHex(big.NewInt(b.Difficulty).Bytes())
-	ext.TotalDifficulty = toHex(big.NewInt(b.TotalDifficulty).Bytes())
-	ext.Size = toHex(big.NewInt(b.Size).Bytes())
-	// ext.ExtraData = toHex(b.ExtraData)
-	ext.GasLimit = toHex(big.NewInt(b.GasLimit).Bytes())
-	// ext.MinGasPrice = toHex(big.NewInt(b.MinGasPrice).Bytes())
-	ext.GasUsed = toHex(big.NewInt(b.GasUsed).Bytes())
-	ext.UnixTimestamp = toHex(big.NewInt(b.UnixTimestamp).Bytes())
+	ext.Difficulty = common.ToHex(big.NewInt(b.Difficulty).Bytes())
+	ext.TotalDifficulty = common.ToHex(big.NewInt(b.TotalDifficulty).Bytes())
+	ext.Size = common.ToHex(big.NewInt(b.Size).Bytes())
+	// ext.ExtraData = common.ToHex(b.ExtraData)
+	ext.GasLimit = common.ToHex(big.NewInt(b.GasLimit).Bytes())
+	// ext.MinGasPrice = common.ToHex(big.NewInt(b.MinGasPrice).Bytes())
+	ext.GasUsed = common.ToHex(big.NewInt(b.GasUsed).Bytes())
+	ext.UnixTimestamp = common.ToHex(big.NewInt(b.UnixTimestamp).Bytes())
 	ext.Transactions = make([]interface{}, len(b.Transactions))
 	if b.fullTx {
 		for i, tx := range b.Transactions {
@@ -162,20 +162,20 @@ func (t *TransactionRes) MarshalJSON() ([]byte, error) {
 	}
 
 	ext.Hash = t.Hash.Hex()
-	ext.Nonce = toHex(big.NewInt(t.Nonce).Bytes())
+	ext.Nonce = common.ToHex(big.NewInt(t.Nonce).Bytes())
 	ext.BlockHash = t.BlockHash.Hex()
-	ext.BlockNumber = toHex(big.NewInt(t.BlockNumber).Bytes())
-	ext.TxIndex = toHex(big.NewInt(t.TxIndex).Bytes())
+	ext.BlockNumber = common.ToHex(big.NewInt(t.BlockNumber).Bytes())
+	ext.TxIndex = common.ToHex(big.NewInt(t.TxIndex).Bytes())
 	ext.From = t.From.Hex()
 	if t.To == nil {
 		ext.To = "0x00"
 	} else {
 		ext.To = t.To.Hex()
 	}
-	ext.Value = toHex(big.NewInt(t.Value).Bytes())
-	ext.Gas = toHex(big.NewInt(t.Gas).Bytes())
-	ext.GasPrice = toHex(big.NewInt(t.GasPrice).Bytes())
-	ext.Input = toHex(t.Input)
+	ext.Value = common.ToHex(big.NewInt(t.Value).Bytes())
+	ext.Gas = common.ToHex(big.NewInt(t.Gas).Bytes())
+	ext.GasPrice = common.ToHex(big.NewInt(t.GasPrice).Bytes())
+	ext.Input = common.ToHex(t.Input)
 
 	return json.Marshal(ext)
 }

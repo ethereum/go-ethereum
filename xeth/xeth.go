@@ -170,7 +170,7 @@ func (self *XEth) Accounts() []string {
 	accounts, _ := self.eth.AccountManager().Accounts()
 	accountAddresses := make([]string, len(accounts))
 	for i, ac := range accounts {
-		accountAddresses[i] = toHex(ac.Address)
+		accountAddresses[i] = common.ToHex(ac.Address)
 	}
 	return accountAddresses
 }
@@ -201,7 +201,7 @@ func (self *XEth) IsListening() bool {
 
 func (self *XEth) Coinbase() string {
 	cb, _ := self.eth.AccountManager().Coinbase()
-	return toHex(cb)
+	return common.ToHex(cb)
 }
 
 func (self *XEth) NumberToHuman(balance string) string {
@@ -213,7 +213,7 @@ func (self *XEth) NumberToHuman(balance string) string {
 func (self *XEth) StorageAt(addr, storageAddr string) string {
 	storage := self.State().SafeGet(addr).StorageString(storageAddr)
 
-	return toHex(storage.Bytes())
+	return common.ToHex(storage.Bytes())
 }
 
 func (self *XEth) BalanceAt(addr string) string {
@@ -225,7 +225,7 @@ func (self *XEth) TxCountAt(address string) int {
 }
 
 func (self *XEth) CodeAt(address string) string {
-	return toHex(self.State().SafeGet(address).Code())
+	return common.ToHex(self.State().SafeGet(address).Code())
 }
 
 func (self *XEth) IsContract(address string) bool {
@@ -238,7 +238,7 @@ func (self *XEth) SecretToAddress(key string) string {
 		return ""
 	}
 
-	return toHex(pair.Address())
+	return common.ToHex(pair.Address())
 }
 
 type KeyVal struct {
@@ -251,7 +251,7 @@ func (self *XEth) EachStorage(addr string) string {
 	object := self.State().SafeGet(addr)
 	it := object.Trie().Iterator()
 	for it.Next() {
-		values = append(values, KeyVal{toHex(it.Key), toHex(it.Value)})
+		values = append(values, KeyVal{common.ToHex(it.Key), common.ToHex(it.Value)})
 	}
 
 	valuesJson, err := json.Marshal(values)
@@ -265,7 +265,7 @@ func (self *XEth) EachStorage(addr string) string {
 func (self *XEth) ToAscii(str string) string {
 	padded := common.RightPadBytes([]byte(str), 32)
 
-	return "0x" + toHex(padded)
+	return "0x" + common.ToHex(padded)
 }
 
 func (self *XEth) FromAscii(str string) string {
@@ -325,7 +325,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	vmenv := core.NewEnv(statedb, self.chainManager, msg, block)
 
 	res, err := vmenv.Call(msg.from, msg.to, msg.data, msg.gas, msg.gasPrice, msg.value)
-	return toHex(res), err
+	return common.ToHex(res), err
 }
 
 func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {

@@ -38,8 +38,8 @@ func CalcDifficulty(block, parent *types.Header) *big.Int {
 		diff.Sub(parent.Difficulty, adjust)
 	}
 
-	if diff.Cmp(GenesisDiff) < 0 {
-		return GenesisDiff
+	if diff.Cmp(min) < 0 {
+		return min
 	}
 
 	return diff
