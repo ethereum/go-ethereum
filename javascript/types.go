@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
-	"github.com/obscuren/otto"
+	"github.com/robertkrimen/otto"
 )
 
 type JSStateObject struct {

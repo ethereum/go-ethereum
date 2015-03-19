@@ -16,7 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
-	"github.com/obscuren/otto"
+	"github.com/robertkrimen/otto"
 )
 
 var jsrelogger = logger.NewLogger("JSRE")
