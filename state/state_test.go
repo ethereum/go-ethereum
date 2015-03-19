@@ -1,7 +1,9 @@
 package state
 
 import (
+	"fmt"
 	"math/big"
+	"testing"
 
 	checker "gopkg.in/check.v1"
 
@@ -60,6 +62,22 @@ func (s *StateSuite) TestDump(c *checker.C) {
 func (s *StateSuite) SetUpTest(c *checker.C) {
 	db, _ := ethdb.NewMemDatabase()
 	s.state = New(nil, db)
+}
+
+func TestNull(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	state := New(nil, db)
+
+	address := common.FromHex("0x823140710bf13990e4500136726d8b55")
+	state.NewStateObject(address)
+	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
+	value := make([]byte, 16)
+	fmt.Println("test it here", common.NewValue(value))
+	state.SetState(address, []byte{0}, value)
+	state.Update(nil)
+	state.Sync()
+	value = state.GetState(address, []byte{0})
+	fmt.Printf("res: %x\n", value)
 }
 
 func (s *StateSuite) TestSnapshot(c *checker.C) {
