@@ -61,7 +61,7 @@ func newTestBlockPool(t *testing.T) (hashPool *test.TestHashPool, blockPool *Blo
 }
 
 func (self *blockPoolTester) Errorf(format string, params ...interface{}) {
-	fmt.Printf(format+"\n", params...)
+	// fmt.Printf(format+"\n", params...)
 	self.t.Errorf(format, params...)
 }
 
@@ -73,7 +73,7 @@ func (self *blockPoolTester) hasBlock(block common.Hash) (ok bool) {
 	indexes := self.hashPool.HashesToIndexes([]common.Hash{block})
 	i := indexes[0]
 	_, ok = self.blockChain[i]
-	fmt.Printf("has block %v (%x...): %v\n", i, block[0:4], ok)
+	// fmt.Printf("has block %v (%x...): %v\n", i, block[0:4], ok)
 	return
 }
 
@@ -95,7 +95,7 @@ func (self *blockPoolTester) insertChain(blocks types.Blocks) error {
 		block.Td = big.NewInt(int64(td))
 		_, ok = self.blockChain[child]
 		if ok {
-			fmt.Printf("block %v already in blockchain\n", child)
+			// fmt.Printf("block %v already in blockchain\n", child)
 			continue // already in chain
 		}
 		parent = self.hashPool.HashesToIndexes([]common.Hash{block.ParentHeaderHash})[0]
@@ -120,7 +120,6 @@ func (self *blockPoolTester) insertChain(blocks types.Blocks) error {
 		}
 		if ok {
 			// accept any blocks if parent not in refBlockChain
-			fmt.Errorf("blockchain insert %v -> %v\n", parent, child)
 			self.blockChain[parent] = append(children, child)
 			self.blockChain[child] = nil
 		}
@@ -136,12 +135,12 @@ func (self *blockPoolTester) verifyPoW(pblock pow.Block) bool {
 func (self *blockPoolTester) checkBlockChain(blockChain map[int][]int) {
 	self.lock.RLock()
 	defer self.lock.RUnlock()
-	for k, v := range self.blockChain {
-		fmt.Printf("got: %v -> %v\n", k, v)
-	}
-	for k, v := range blockChain {
-		fmt.Printf("expected: %v -> %v\n", k, v)
-	}
+	// for k, v := range self.blockChain {
+	// 	fmt.Printf("got: %v -> %v\n", k, v)
+	// }
+	// for k, v := range blockChain {
+	// 	fmt.Printf("expected: %v -> %v\n", k, v)
+	// }
 	if len(blockChain) != len(self.blockChain) {
 		self.Errorf("blockchain incorrect (zlength differ)")
 	}
@@ -188,7 +187,7 @@ func (self *blockPoolTester) newPeer(id string, td int, cb int) *peerTester {
 }
 
 func (self *peerTester) Errorf(format string, params ...interface{}) {
-	fmt.Printf(format+"\n", params...)
+	// fmt.Printf(format+"\n", params...)
 	self.t.Errorf(format, params...)
 }
 
@@ -232,7 +231,7 @@ func (self *peerTester) waitBlocksRequests(blocksRequest ...int) {
 	for {
 		self.lock.RLock()
 		r := self.blocksRequestsMap
-		fmt.Printf("[%s] blocks request check %v (%v)\n", self.id, rr, r)
+		// fmt.Printf("[%s] blocks request check %v (%v)\n", self.id, rr, r)
 		i := 0
 		for i = 0; i < len(rr); i++ {
 			_, ok := r[rr[i]]
@@ -263,7 +262,7 @@ func (self *peerTester) waitBlockHashesRequests(blocksHashesRequest int) {
 		self.lock.RLock()
 		r := self.blockHashesRequests
 		self.lock.RUnlock()
-		fmt.Printf("[%s] block hash request check %v (%v)\n", self.id, rr, r)
+		// fmt.Printf("[%s] block hash request check %v (%v)\n", self.id, rr, r)
 		for ; i < len(r); i++ {
 			if rr == r[i] {
 				return
@@ -294,14 +293,14 @@ func (self *peerTester) AddPeer() (best bool) {
 
 // peer sends blockhashes if and when gets a request
 func (self *peerTester) serveBlockHashes(indexes ...int) {
-	fmt.Printf("ready to serve block hashes %v\n", indexes)
+	// fmt.Printf("ready to serve block hashes %v\n", indexes)
 
 	self.waitBlockHashesRequests(indexes[0])
 	self.sendBlockHashes(indexes...)
 }
 
 func (self *peerTester) sendBlockHashes(indexes ...int) {
-	fmt.Printf("adding block hashes %v\n", indexes)
+	// fmt.Printf("adding block hashes %v\n", indexes)
 	hashes := self.hashPool.IndexesToHashes(indexes)
 	i := 1
 	next := func() (hash common.Hash, ok bool) {
@@ -318,16 +317,16 @@ func (self *peerTester) sendBlockHashes(indexes ...int) {
 // peer sends blocks if and when there is a request
 // (in the shared request store, not necessarily to a person)
 func (self *peerTester) serveBlocks(indexes ...int) {
-	fmt.Printf("ready to serve blocks %v\n", indexes[1:])
+	// fmt.Printf("ready to serve blocks %v\n", indexes[1:])
 	self.waitBlocksRequests(indexes[1:]...)
 	self.sendBlocks(indexes...)
 }
 
 func (self *peerTester) sendBlocks(indexes ...int) {
-	fmt.Printf("adding blocks %v \n", indexes)
+	// fmt.Printf("adding blocks %v \n", indexes)
 	hashes := self.hashPool.IndexesToHashes(indexes)
 	for i := 1; i < len(hashes); i++ {
-		fmt.Printf("adding block %v %x\n", indexes[i], hashes[i][:4])
+		// fmt.Printf("adding block %v %x\n", indexes[i], hashes[i][:4])
 		self.blockPool.AddBlock(&types.Block{HeaderHash: hashes[i], ParentHeaderHash: hashes[i-1]}, self.id)
 	}
 }
@@ -337,7 +336,7 @@ func (self *peerTester) sendBlocks(indexes ...int) {
 // records block hashes requests by the blockPool
 func (self *peerTester) requestBlockHashes(hash common.Hash) error {
 	indexes := self.hashPool.HashesToIndexes([]common.Hash{hash})
-	fmt.Printf("[%s] block hash request %v %x\n", self.id, indexes[0], hash[:4])
+	// fmt.Printf("[%s] block hash request %v %x\n", self.id, indexes[0], hash[:4])
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	self.blockHashesRequests = append(self.blockHashesRequests, indexes[0])
@@ -347,7 +346,7 @@ func (self *peerTester) requestBlockHashes(hash common.Hash) error {
 // records block requests by the blockPool
 func (self *peerTester) requestBlocks(hashes []common.Hash) error {
 	indexes := self.hashPool.HashesToIndexes(hashes)
-	fmt.Printf("blocks request %v %x...\n", indexes, hashes[0][:4])
+	// fmt.Printf("blocks request %v %x...\n", indexes, hashes[0][:4])
 	self.bt.reqlock.Lock()
 	defer self.bt.reqlock.Unlock()
 	self.blocksRequests = append(self.blocksRequests, indexes)
@@ -360,9 +359,7 @@ func (self *peerTester) requestBlocks(hashes []common.Hash) error {
 // records the error codes of all the peerErrors found the blockPool
 func (self *peerTester) peerError(err *errs.Error) {
 	self.peerErrors = append(self.peerErrors, err.Code)
-	fmt.Printf("Error %v on peer %v\n", err, self.id)
 	if err.Fatal() {
-		fmt.Printf("Error %v is fatal, removing peer %v\n", err, self.id)
 		self.blockPool.RemovePeer(self.id)
 	}
 }

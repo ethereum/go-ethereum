@@ -1,7 +1,7 @@
 package blockpool
 
 import (
-	"fmt"
+	// "fmt"
 	"testing"
 	"time"
 
@@ -53,7 +53,7 @@ func checkStatus(t *testing.T, bp *BlockPool, syncing bool, expected []int) (err
 			continue //hack
 		}
 		err = test.CheckInt(statusFields[i], got[i], v, t)
-		fmt.Printf("%v: %v (%v)\n", statusFields[i], got[i], v)
+		// fmt.Printf("%v: %v (%v)\n", statusFields[i], got[i], v)
 		if err != nil {
 			return err
 		}
