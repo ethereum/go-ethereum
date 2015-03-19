@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+// miscellaneous test helpers
+
 func CheckInt(name string, got int, expected int, t *testing.T) (err error) {
 	if got != expected {
 		t.Errorf("status for %v incorrect. expected %v, got %v", name, expected, got)

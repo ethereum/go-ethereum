@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/errs"
 )
 
+// the blockpool's model of a peer
 type peer struct {
 	lock sync.RWMutex
 
@@ -104,12 +105,14 @@ func (self *peers) peerError(id string, code int, format string, params ...inter
 	self.addToBlacklist(id)
 }
 
+// record time of offence in blacklist to implement suspension for PeerSuspensionInterval
 func (self *peers) addToBlacklist(id string) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	self.blacklist[id] = time.Now()
 }
 
+// suspended checks if peer is still suspended
 func (self *peers) suspended(id string) (s bool) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -160,8 +163,8 @@ func (self *peer) setChainInfoFromBlock(block *types.Block) {
 	}()
 }
 
+// distribute block request among known peers
 func (self *peers) requestBlocks(attempts int, hashes []common.Hash) {
-	// distribute block request among known peers
 	self.lock.RLock()
 	defer self.lock.RUnlock()
 	peerCount := len(self.peers)
@@ -196,7 +199,9 @@ func (self *peers) requestBlocks(attempts int, hashes []common.Hash) {
 }
 
 // addPeer implements the logic for blockpool.AddPeer
-// returns true iff peer is promoted as best peer in the pool
+// returns 2 bool values
+// 1. true iff peer is promoted as best peer in the pool
+// 2. true iff peer is still suspended
 func (self *peers) addPeer(
 	td *big.Int,
 	currentBlockHash common.Hash,
@@ -214,10 +219,13 @@ func (self *peers) addPeer(
 	self.lock.Lock()
 	p, found := self.peers[id]
 	if found {
+		// when called on an already connected peer, it means a newBlockMsg is received
+		// peer head info is updated
 		if p.currentBlockHash != currentBlockHash {
 			previousBlockHash = p.currentBlockHash
 			plog.Debugf("addPeer: Update peer <%s> with td %v and current block %s (was %v)", id, td, hex(currentBlockHash), hex(previousBlockHash))
 			p.setChainInfo(td, currentBlockHash)
+
 			self.status.lock.Lock()
 			self.status.values.NewBlocks++
 			self.status.lock.Unlock()
@@ -235,7 +243,7 @@ func (self *peers) addPeer(
 	}
 	self.lock.Unlock()
 
-	// check peer current head
+	// check if peer's current head block is known
 	if self.bp.hasBlock(currentBlockHash) {
 		// peer not ahead
 		plog.Debugf("addPeer: peer <%v> with td %v and current block %s is behind", id, td, hex(currentBlockHash))
@@ -255,6 +263,7 @@ func (self *peers) addPeer(
 		}
 		best = true
 	} else {
+		// baseline is our own TD
 		currentTD := self.bp.getTD()
 		if self.best != nil {
 			currentTD = self.best.td
@@ -314,6 +323,7 @@ func (self *peers) removePeer(id string) {
 func (self *BlockPool) switchPeer(oldp, newp *peer) {
 
 	// first quit AddBlockHashes, requestHeadSection and activateChain
+	// by closing the old peer's switchC channel
 	if oldp != nil {
 		plog.DebugDetailf("<%s> quit peer processes", oldp.id)
 		close(oldp.switchC)
@@ -366,11 +376,12 @@ func (self *BlockPool) switchPeer(oldp, newp *peer) {
 	// newp activating section process changes the quit channel for this reason
 	if oldp != nil {
 		plog.DebugDetailf("<%s> quit section processes", oldp.id)
-		//
 		close(oldp.idleC)
 	}
 }
 
+// getPeer looks up peer by id, returns peer and a bool value
+// that is true iff peer is current best peer
 func (self *peers) getPeer(id string) (p *peer, best bool) {
 	self.lock.RLock()
 	defer self.lock.RUnlock()
@@ -380,6 +391,8 @@ func (self *peers) getPeer(id string) (p *peer, best bool) {
 	p = self.peers[id]
 	return
 }
+
+// head section process
 
 func (self *peer) handleSection(sec *section) {
 	self.lock.Lock()
@@ -516,7 +529,7 @@ func (self *peer) run() {
 LOOP:
 	for {
 		select {
-		// to minitor section process behaviou
+		// to minitor section process behaviour
 		case <-ping.C:
 			plog.Debugf("HeadSection: <%s> section with head %s, idle: %v", self.id, hex(self.currentBlockHash), self.idle)
 

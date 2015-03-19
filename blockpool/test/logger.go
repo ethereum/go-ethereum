@@ -9,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 )
 
+// logging in tests
+
 var once sync.Once
 
 /* usage:

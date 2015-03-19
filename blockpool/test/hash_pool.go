@@ -7,8 +7,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// test helpers
-// TODO: move into common test helper package (see p2p/crypto etc.)
+// hashPool is a test helper, that allows random hashes to be referred to by integers
+type TestHashPool struct {
+	intToHash
+	hashToInt
+	lock sync.Mutex
+}
 
 func NewHashPool() *TestHashPool {
 	return &TestHashPool{intToHash: make(intToHash), hashToInt: make(hashToInt)}
@@ -17,13 +21,6 @@ func NewHashPool() *TestHashPool {
 type intToHash map[int]common.Hash
 
 type hashToInt map[common.Hash]int
-
-// hashPool is a test helper, that allows random hashes to be referred to by integers
-type TestHashPool struct {
-	intToHash
-	hashToInt
-	lock sync.Mutex
-}
 
 func newHash(i int) common.Hash {
 	return common.BytesToHash(crypto.Sha3([]byte(string(i))))

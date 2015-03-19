@@ -9,6 +9,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// using the mock framework in blockpool_util_test
+// we test various scenarios here
+
 func TestPeerWithKnownBlock(t *testing.T) {
 	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
@@ -41,50 +44,6 @@ func TestPeerWithKnownParentBlock(t *testing.T) {
 	peer0.checkBlocksRequests([]int{1})
 	peer0.checkBlockHashesRequests()
 	blockPoolTester.refBlockChain[1] = []int{}
-	blockPoolTester.checkBlockChain(blockPoolTester.refBlockChain)
-}
-
-func TestPeerPromotionByOptionalTdOnBlock(t *testing.T) {
-	test.LogInit()
-	_, blockPool, blockPoolTester := newTestBlockPool(t)
-	blockPoolTester.blockChain[0] = nil
-	blockPoolTester.initRefBlockChain(4)
-	peer0 := blockPoolTester.newPeer("peer0", 2, 2)
-	peer1 := blockPoolTester.newPeer("peer1", 1, 1)
-	peer2 := blockPoolTester.newPeer("peer2", 4, 4)
-
-	blockPool.Start()
-	blockPoolTester.tds = make(map[int]int)
-	blockPoolTester.tds[3] = 3
-
-	// pool
-	peer0.AddPeer()
-	peer0.serveBlocks(1, 2)
-	best := peer1.AddPeer()
-	// this tests that peer1 is not promoted over peer0 yet
-	if best {
-		t.Errorf("peer1 (TD=1) should not be set as best")
-	}
-	best = peer2.AddPeer()
-	peer2.serveBlocks(3, 4)
-	peer2.serveBlockHashes(4, 3, 2, 1)
-	hashes := blockPoolTester.hashPool.IndexesToHashes([]int{2, 3})
-	peer1.waitBlocksRequests(3)
-	blockPool.AddBlock(&types.Block{
-		HeaderHash:       common.Hash(hashes[1]),
-		ParentHeaderHash: common.Hash(hashes[0]),
-		Td:               common.Big3,
-	}, "peer1")
-
-	blockPool.RemovePeer("peer2")
-	if blockPool.peers.best.id != "peer1" {
-		t.Errorf("peer1 (TD=3) should be set as best")
-	}
-	peer1.serveBlocks(0, 1, 2)
-
-	blockPool.Wait(waitTimeout)
-	blockPool.Stop()
-	blockPoolTester.refBlockChain[4] = []int{}
 	blockPoolTester.checkBlockChain(blockPoolTester.refBlockChain)
 }
 
@@ -166,6 +125,7 @@ func TestNewBlocksOnPartialChain(t *testing.T) {
 	go peer1.serveBlocks(4, 5) // partially complete section
 	go peer1.serveBlockHashes(5, 4, 3)
 	peer1.serveBlocks(3, 4) // partially complete section
+
 	// peer1 found new blocks
 	peer1.td = 7
 	peer1.currentBlock = 7
@@ -176,7 +136,6 @@ func TestNewBlocksOnPartialChain(t *testing.T) {
 	go peer1.serveBlocks(5, 6)
 	go peer1.serveBlockHashes(3, 2, 1) // tests that hash request from known chain root is remembered
 	peer1.serveBlocks(0, 1, 2)
-	// blockPool.RemovePeer("peer1")
 
 	blockPool.Wait(waitTimeout)
 	blockPool.Stop()
@@ -468,8 +427,8 @@ func TestForkCompleteSectionSwitchBackByPeerSwitchBack(t *testing.T) {
 	peer1.AddPeer()
 	go peer1.serveBlocks(8, 9)
 	go peer1.serveBlockHashes(9, 8, 7)
-	peer1.serveBlocks(3, 7, 8) // make sure this section is complete
-	time.Sleep(1 * time.Second)
+	peer1.serveBlocks(3, 7, 8)               // make sure this section is complete
+	time.Sleep(1 * time.Second)              //
 	go peer1.serveBlockHashes(7, 3, 2)       // block 3/7 is section boundary
 	peer1.serveBlocks(2, 3)                  // partially complete sections block 2 missing
 	peer2.AddPeer()                          //
@@ -477,8 +436,7 @@ func TestForkCompleteSectionSwitchBackByPeerSwitchBack(t *testing.T) {
 	go peer2.serveBlockHashes(6, 5, 4, 3, 2) // peer2 forks on block 3
 	peer2.serveBlocks(2, 3, 4, 5)            // block 2 still missing.
 	blockPool.RemovePeer("peer2")            // peer2 disconnects, peer1 is promoted again as best peer
-	// peer1.serveBlockHashes(7, 3)             // tests that hash request from fork root is remembered even though section process completed
-	go peer1.serveBlockHashes(2, 1, 0) //
+	go peer1.serveBlockHashes(2, 1, 0)       //
 	peer1.serveBlocks(0, 1, 2)
 
 	blockPool.Wait(waitTimeout)

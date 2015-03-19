@@ -142,3 +142,47 @@ func TestAddPeer(t *testing.T) {
 
 	blockPool.Stop()
 }
+
+func TestPeerPromotionByOptionalTdOnBlock(t *testing.T) {
+	test.LogInit()
+	_, blockPool, blockPoolTester := newTestBlockPool(t)
+	blockPoolTester.blockChain[0] = nil
+	blockPoolTester.initRefBlockChain(4)
+	peer0 := blockPoolTester.newPeer("peer0", 2, 2)
+	peer1 := blockPoolTester.newPeer("peer1", 1, 1)
+	peer2 := blockPoolTester.newPeer("peer2", 4, 4)
+
+	blockPool.Start()
+	blockPoolTester.tds = make(map[int]int)
+	blockPoolTester.tds[3] = 3
+
+	// pool
+	peer0.AddPeer()
+	peer0.serveBlocks(1, 2)
+	best := peer1.AddPeer()
+	// this tests that peer1 is not promoted over peer0 yet
+	if best {
+		t.Errorf("peer1 (TD=1) should not be set as best")
+	}
+	best = peer2.AddPeer()
+	peer2.serveBlocks(3, 4)
+	peer2.serveBlockHashes(4, 3, 2, 1)
+	hashes := blockPoolTester.hashPool.IndexesToHashes([]int{2, 3})
+	peer1.waitBlocksRequests(3)
+	blockPool.AddBlock(&types.Block{
+		HeaderHash:       common.Bytes(hashes[1]),
+		ParentHeaderHash: common.Bytes(hashes[0]),
+		Td:               common.Big3,
+	}, "peer1")
+
+	blockPool.RemovePeer("peer2")
+	if blockPool.peers.best.id != "peer1" {
+		t.Errorf("peer1 (TD=3) should be set as best")
+	}
+	peer1.serveBlocks(0, 1, 2)
+
+	blockPool.Wait(waitTimeout)
+	blockPool.Stop()
+	blockPoolTester.refBlockChain[4] = []int{}
+	blockPoolTester.checkBlockChain(blockPoolTester.refBlockChain)
+}
