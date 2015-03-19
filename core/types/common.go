@@ -1,14 +1,16 @@
 package types
 
 import (
-	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/common"
+
+	"fmt"
 )
 
 type BlockProcessor interface {
-	Process(*Block) (*big.Int, error)
+	Process(*Block) (*big.Int, state.Logs, error)
 }
 
 const bloomLength = 256

@@ -43,6 +43,30 @@ func TestGetBalanceArgs(t *testing.T) {
 	}
 }
 
+func TestGetBalanceArgsLatest(t *testing.T) {
+	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "latest"]`
+	expected := new(GetBalanceArgs)
+	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
+	expected.BlockNumber = -1
+
+	args := new(GetBalanceArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if err := args.requirements(); err != nil {
+		t.Error(err)
+	}
+
+	if args.Address != expected.Address {
+		t.Errorf("Address should be %v but is %v", expected.Address, args.Address)
+	}
+
+	if args.BlockNumber != expected.BlockNumber {
+		t.Errorf("BlockNumber should be %v but is %v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
 func TestGetBalanceEmptyArgs(t *testing.T) {
 	input := `[]`
 
@@ -120,7 +144,8 @@ func TestNewTxArgs(t *testing.T) {
   "gas": "0x76c0",
   "gasPrice": "0x9184e72a000",
   "value": "0x9184e72a000",
-  "data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"}]`
+  "data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"},
+  "0x10"]`
 	expected := new(NewTxArgs)
 	expected.From = "0xb60e8dd61c5d32be8058bb8eb970870f07233155"
 	expected.To = "0xd46e8dd67c5d32be8058bb8eb970870f072445675"
@@ -128,6 +153,7 @@ func TestNewTxArgs(t *testing.T) {
 	expected.GasPrice = big.NewInt(10000000000000)
 	expected.Value = big.NewInt(10000000000000)
 	expected.Data = "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"
+	expected.BlockNumber = big.NewInt(16).Int64()
 
 	args := new(NewTxArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -157,6 +183,30 @@ func TestNewTxArgs(t *testing.T) {
 	if expected.Data != args.Data {
 		t.Errorf("Data shoud be %#v but is %#v", expected.Data, args.Data)
 	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestNewTxArgsBlockInt(t *testing.T) {
+	input := `[{"from": "0xb60e8dd61c5d32be8058bb8eb970870f07233155"}, 5]`
+	expected := new(NewTxArgs)
+	expected.From = "0xb60e8dd61c5d32be8058bb8eb970870f07233155"
+	expected.BlockNumber = big.NewInt(5).Int64()
+
+	args := new(NewTxArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.From != args.From {
+		t.Errorf("From shoud be %#v but is %#v", expected.From, args.From)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
 }
 
 func TestNewTxArgsEmpty(t *testing.T) {
@@ -166,6 +216,34 @@ func TestNewTxArgsEmpty(t *testing.T) {
 	err := json.Unmarshal([]byte(input), &args)
 	if err == nil {
 		t.Error("Expected error but didn't get one")
+	}
+}
+
+func TestNewTxArgsReqs(t *testing.T) {
+	args := new(NewTxArgs)
+	args.From = "0xb60e8dd61c5d32be8058bb8eb970870f07233155"
+
+	err := args.requirements()
+	switch err.(type) {
+	case nil:
+		break
+	default:
+		t.Errorf("Get %T", err)
+	}
+}
+
+func TestNewTxArgsReqsFromBlank(t *testing.T) {
+	args := new(NewTxArgs)
+	args.From = ""
+
+	err := args.requirements()
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *ValidationError:
+		break
+	default:
+		t.Error("Wrong type of error")
 	}
 }
 
