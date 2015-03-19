@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/blockpool/test"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/errs"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
@@ -63,10 +63,10 @@ func (self *blockPoolTester) Errorf(format string, params ...interface{}) {
 
 // blockPoolTester implements the 3 callbacks needed by the blockPool:
 // hasBlock, insetChain, verifyPoW
-func (self *blockPoolTester) hasBlock(block []byte) (ok bool) {
+func (self *blockPoolTester) hasBlock(block common.Hash) (ok bool) {
 	self.lock.RLock()
 	defer self.lock.RUnlock()
-	indexes := self.hashPool.HashesToIndexes([][]byte{block})
+	indexes := self.hashPool.HashesToIndexes([]common.Hash{block})
 	i := indexes[0]
 	_, ok = self.blockChain[i]
 	fmt.Printf("has block %v (%x...): %v\n", i, block[0:4], ok)
@@ -80,13 +80,13 @@ func (self *blockPoolTester) insertChain(blocks types.Blocks) error {
 	var children, refChildren []int
 	var ok bool
 	for _, block := range blocks {
-		child = self.hashPool.HashesToIndexes([][]byte{block.Hash()})[0]
+		child = self.hashPool.HashesToIndexes([]common.Hash{block.Hash()})[0]
 		_, ok = self.blockChain[child]
 		if ok {
 			fmt.Printf("block %v already in blockchain\n", child)
 			continue // already in chain
 		}
-		parent = self.hashPool.HashesToIndexes([][]byte{block.ParentHeaderHash})[0]
+		parent = self.hashPool.HashesToIndexes([]common.Hash{block.ParentHeaderHash})[0]
 		children, ok = self.blockChain[parent]
 		if !ok {
 			return fmt.Errorf("parent %v not in blockchain ", parent)
@@ -274,9 +274,10 @@ func (self *blockPoolTester) initRefBlockChain(n int) {
 
 // peerTester functions that mimic protocol calls to the blockpool
 //  registers the peer with the blockPool
-func (self *peerTester) AddPeer() bool {
+func (self *peerTester) AddPeer() (best bool) {
 	hash := self.hashPool.IndexesToHashes([]int{self.currentBlock})[0]
-	return self.blockPool.AddPeer(big.NewInt(int64(self.td)), hash, self.id, self.requestBlockHashes, self.requestBlocks, self.peerError)
+	best, _ = self.blockPool.AddPeer(big.NewInt(int64(self.td)), hash, self.id, self.requestBlockHashes, self.requestBlocks, self.peerError)
+	return
 }
 
 // peer sends blockhashes if and when gets a request
@@ -291,7 +292,7 @@ func (self *peerTester) sendBlockHashes(indexes ...int) {
 	fmt.Printf("adding block hashes %v\n", indexes)
 	hashes := self.hashPool.IndexesToHashes(indexes)
 	i := 1
-	next := func() (hash []byte, ok bool) {
+	next := func() (hash common.Hash, ok bool) {
 		if i < len(hashes) {
 			hash = hashes[i]
 			ok = true
@@ -315,15 +316,15 @@ func (self *peerTester) sendBlocks(indexes ...int) {
 	hashes := self.hashPool.IndexesToHashes(indexes)
 	for i := 1; i < len(hashes); i++ {
 		fmt.Printf("adding block %v %x\n", indexes[i], hashes[i][:4])
-		self.blockPool.AddBlock(&types.Block{HeaderHash: common.Bytes(hashes[i]), ParentHeaderHash: common.Bytes(hashes[i-1])}, self.id)
+		self.blockPool.AddBlock(&types.Block{HeaderHash: hashes[i], ParentHeaderHash: hashes[i-1]}, self.id)
 	}
 }
 
 // peer callbacks
 // -1 is special: not found (a hash never seen)
 // records block hashes requests by the blockPool
-func (self *peerTester) requestBlockHashes(hash []byte) error {
-	indexes := self.hashPool.HashesToIndexes([][]byte{hash})
+func (self *peerTester) requestBlockHashes(hash common.Hash) error {
+	indexes := self.hashPool.HashesToIndexes([]common.Hash{hash})
 	fmt.Printf("[%s] block hash request %v %x\n", self.id, indexes[0], hash[:4])
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -332,7 +333,7 @@ func (self *peerTester) requestBlockHashes(hash []byte) error {
 }
 
 // records block requests by the blockPool
-func (self *peerTester) requestBlocks(hashes [][]byte) error {
+func (self *peerTester) requestBlocks(hashes []common.Hash) error {
 	indexes := self.hashPool.HashesToIndexes(hashes)
 	fmt.Printf("blocks request %v %x...\n", indexes, hashes[0][:4])
 	self.bt.reqlock.Lock()
@@ -347,4 +348,9 @@ func (self *peerTester) requestBlocks(hashes [][]byte) error {
 // records the error codes of all the peerErrors found the blockPool
 func (self *peerTester) peerError(err *errs.Error) {
 	self.peerErrors = append(self.peerErrors, err.Code)
+	fmt.Printf("Error %v on peer %v\n", err, self.id)
+	if err.Fatal() {
+		fmt.Printf("Error %v is fatal, removing peer %v\n", err, self.id)
+		self.blockPool.RemovePeer(self.id)
+	}
 }

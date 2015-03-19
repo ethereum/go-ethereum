@@ -21,12 +21,13 @@ func TestBlockPoolConfig(t *testing.T) {
 	test.CheckDuration("BlockHashesTimeout", c.BlockHashesTimeout, blockHashesTimeout, t)
 	test.CheckDuration("BlocksTimeout", c.BlocksTimeout, blocksTimeout, t)
 	test.CheckDuration("IdleBestPeerTimeout", c.IdleBestPeerTimeout, idleBestPeerTimeout, t)
+	test.CheckDuration("PeerSuspensionInterval", c.PeerSuspensionInterval, peerSuspensionInterval, t)
 }
 
 func TestBlockPoolOverrideConfig(t *testing.T) {
 	test.LogInit()
 	blockPool := &BlockPool{Config: &Config{}}
-	c := &Config{128, 32, 1, 0, 300 * time.Millisecond, 100 * time.Millisecond, 90 * time.Second, 0, 30 * time.Second}
+	c := &Config{128, 32, 1, 0, 300 * time.Millisecond, 100 * time.Millisecond, 90 * time.Second, 0, 30 * time.Second, 30 * time.Second}
 
 	blockPool.Config = c
 	blockPool.Start()
@@ -39,4 +40,5 @@ func TestBlockPoolOverrideConfig(t *testing.T) {
 	test.CheckDuration("BlockHashesTimeout", c.BlockHashesTimeout, 90*time.Second, t)
 	test.CheckDuration("BlocksTimeout", c.BlocksTimeout, blocksTimeout, t)
 	test.CheckDuration("IdleBestPeerTimeout", c.IdleBestPeerTimeout, 30*time.Second, t)
+	test.CheckDuration("PeerSuspensionInterval", c.PeerSuspensionInterval, 30*time.Second, t)
 }

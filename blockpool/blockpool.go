@@ -33,7 +33,8 @@ var (
 	// timeout interval: max time allowed for peer without sending a block
 	blocksTimeout = 60 * time.Second
 	//
-	idleBestPeerTimeout = 120 * time.Second
+	idleBestPeerTimeout    = 120 * time.Second
+	peerSuspensionInterval = 300 * time.Second
 )
 
 // config embedded in components, by default fall back to constants
@@ -48,6 +49,7 @@ type Config struct {
 	BlockHashesTimeout         time.Duration
 	BlocksTimeout              time.Duration
 	IdleBestPeerTimeout        time.Duration
+	PeerSuspensionInterval     time.Duration
 }
 
 // blockpool errors
@@ -95,6 +97,9 @@ func (self *Config) init() {
 	}
 	if self.IdleBestPeerTimeout == 0 {
 		self.IdleBestPeerTimeout = idleBestPeerTimeout
+	}
+	if self.PeerSuspensionInterval == 0 {
+		self.PeerSuspensionInterval = peerSuspensionInterval
 	}
 }
 
@@ -188,9 +193,10 @@ func (self *BlockPool) Start() {
 			Errors:  errorToString,
 			Level:   severity,
 		},
-		peers:  make(map[string]*peer),
-		status: self.status,
-		bp:     self,
+		peers:     make(map[string]*peer),
+		blacklist: make(map[string]time.Time),
+		status:    self.status,
+		bp:        self,
 	}
 	timer := time.NewTicker(3 * time.Second)
 	go func() {
@@ -267,7 +273,8 @@ func (self *BlockPool) AddPeer(
 	requestBlocks func([]common.Hash) error,
 	peerError func(*errs.Error),
 
-) (best bool) {
+) (best bool, suspended bool) {
+
 	return self.peers.addPeer(td, currentBlockHash, peerId, requestBlockHashes, requestBlocks, peerError)
 }
 

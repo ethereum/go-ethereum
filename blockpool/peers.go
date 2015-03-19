@@ -47,6 +47,8 @@ type peer struct {
 	blocksRequestTimer      <-chan time.Time
 	suicideC                <-chan time.Time
 
+	addToBlacklist func(id string)
+
 	idle bool
 }
 
@@ -55,11 +57,12 @@ type peer struct {
 type peers struct {
 	lock sync.RWMutex
 
-	bp     *BlockPool
-	errors *errs.Errors
-	peers  map[string]*peer
-	best   *peer
-	status *status
+	bp        *BlockPool
+	errors    *errs.Errors
+	peers     map[string]*peer
+	best      *peer
+	status    *status
+	blacklist map[string]time.Time
 }
 
 // peer constructor
@@ -84,26 +87,46 @@ func (self *peers) newPeer(
 		headSectionC:       make(chan *section),
 		bp:                 self.bp,
 		idle:               true,
+		addToBlacklist:     self.addToBlacklist,
 	}
 	// at creation the peer is recorded in the peer pool
 	self.peers[id] = p
 	return
 }
 
-// dispatches an error to a peer if still connected
+// dispatches an error to a peer if still connected, adds it to the blacklist
 func (self *peers) peerError(id string, code int, format string, params ...interface{}) {
 	self.lock.RLock()
-	defer self.lock.RUnlock()
 	peer, ok := self.peers[id]
+	self.lock.RUnlock()
 	if ok {
 		peer.addError(code, format, params)
 	}
-	// blacklisting comes here
+	self.addToBlacklist(id)
+}
+
+func (self *peers) addToBlacklist(id string) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	self.blacklist[id] = time.Now()
+}
+
+func (self *peers) suspended(id string) (s bool) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	if suspendedAt, ok := self.blacklist[id]; ok {
+		if s = suspendedAt.Add(self.bp.Config.PeerSuspensionInterval).After(time.Now()); !s {
+			// no longer suspended, delete entry
+			delete(self.blacklist, id)
+		}
+	}
+	return
 }
 
 func (self *peer) addError(code int, format string, params ...interface{}) {
 	err := self.errors.New(code, format, params...)
 	self.peerError(err)
+	self.addToBlacklist(self.id)
 }
 
 func (self *peer) setChainInfo(td *big.Int, c common.Hash) {
@@ -182,9 +205,13 @@ func (self *peers) addPeer(
 	requestBlockHashes func(common.Hash) error,
 	requestBlocks func([]common.Hash) error,
 	peerError func(*errs.Error),
-) (best bool) {
+) (best bool, suspended bool) {
 
 	var previousBlockHash common.Hash
+	if self.suspended(id) {
+		suspended = true
+		return
+	}
 	self.lock.Lock()
 	p, found := self.peers[id]
 	if found {
@@ -213,7 +240,7 @@ func (self *peers) addPeer(
 	if self.bp.hasBlock(currentBlockHash) {
 		// peer not ahead
 		plog.Debugf("addPeer: peer <%v> with td %v and current block %s is behind", id, td, hex(currentBlockHash))
-		return false
+		return false, false
 	}
 
 	if self.best == p {
@@ -248,8 +275,10 @@ func (self *peers) addPeer(
 
 // removePeer is called (via RemovePeer) by the eth protocol when the peer disconnects
 func (self *peers) removePeer(id string) {
+	plog.Debugf("addPeer: remove peer 0 <%v>", id)
 	self.lock.Lock()
 	defer self.lock.Unlock()
+	plog.Debugf("addPeer: remove peer 1 <%v>", id)
 
 	p, found := self.peers[id]
 	if !found {
