@@ -33,6 +33,10 @@ func New(root common.Hash, db common.Database) *StateDB {
 	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: make(map[string]*big.Int)}
 }
 
+func (self *StateDB) PrintRoot() {
+	self.trie.Trie.PrintRoot()
+}
+
 func (self *StateDB) EmptyLogs() {
 	self.logs = nil
 }

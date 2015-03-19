@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type Db map[string][]byte
@@ -30,6 +30,15 @@ func TestEmptyTrie(t *testing.T) {
 	if !bytes.Equal(res, exp) {
 		t.Errorf("expected %x got %x", exp, res)
 	}
+}
+
+func TestNull(t *testing.T) {
+	trie := NewEmpty()
+
+	key := make([]byte, 32)
+	value := common.FromHex("0x823140710bf13990e4500136726d8b55")
+	trie.Update(key, value)
+	value = trie.Get(key)
 }
 
 func TestInsert(t *testing.T) {
