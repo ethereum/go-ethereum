@@ -466,7 +466,6 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 	}
 
-	// XXX put this in a goroutine?
 	go self.eventMux.Post(queueEvent)
 
 	return nil
