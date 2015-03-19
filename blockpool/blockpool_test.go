@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/blockpool/test"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // using the mock framework in blockpool_util_test
