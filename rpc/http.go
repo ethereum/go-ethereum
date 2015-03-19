@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
-var rpchttplogger = logger.NewLogger("RPC-HTTP")
+var rpclogger = logger.NewLogger("RPC")
 
 const (
 	jsonrpcver       = "2.0"
@@ -84,7 +84,7 @@ func RpcResponse(api *EthereumApi, request *RpcRequest) *interface{} {
 		response = &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: request.Id, Error: jsonerr}
 	}
 
-	rpchttplogger.DebugDetailf("Generated response: %T %s", response, response)
+	rpclogger.DebugDetailf("Generated response: %T %s", response, response)
 	return &response
 }
 

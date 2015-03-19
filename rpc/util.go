@@ -19,12 +19,9 @@ package rpc
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 )
-
-var rpclogger = logger.NewLogger("RPC")
 
 type whisperFilter struct {
 	messages []xeth.WhisperMessage
