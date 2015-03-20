@@ -213,8 +213,7 @@ func (self *ethProtocol) handle() error {
 
 		var i int
 		iter := func() (hash common.Hash, ok bool) {
-			var h common.Hash
-			err := msgStream.Decode(&h)
+			err := msgStream.Decode(&hash)
 			if err == rlp.EOL {
 				return common.Hash{}, false
 			} else if err != nil {
