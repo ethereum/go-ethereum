@@ -278,7 +278,7 @@ func accountCreate(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
-	fmt.Printf("Address: %#x\n", acct.Address)
+	fmt.Printf("Address: %x\n", acct.Address)
 }
 
 func importchain(ctx *cli.Context) {
