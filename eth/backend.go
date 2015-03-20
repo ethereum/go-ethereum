@@ -195,7 +195,8 @@ func New(config *Config) (*Ethereum, error) {
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
-	eth.blockPool = blockpool.New(hasBlock, insertChain, eth.pow.Verify)
+	td := eth.chainManager.Td()
+	eth.blockPool = blockpool.New(hasBlock, insertChain, eth.pow.Verify, eth.EventMux(), td)
 
 	netprv, err := config.nodeKey()
 	if err != nil {
