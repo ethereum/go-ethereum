@@ -303,16 +303,6 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 	return nil
 }
 
-func (p *EthereumApi) DbGet(args *DbArgs, reply *interface{}) error {
-	if err := args.requirements(); err != nil {
-		return err
-	}
-
-	res, _ := p.db.Get([]byte(args.Database + args.Key))
-	*reply = string(res)
-	return nil
-}
-
 func (p *EthereumApi) NewWhisperIdentity(reply *interface{}) error {
 	*reply = p.xeth().Whisper().NewIdentity()
 	return nil
@@ -713,7 +703,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.DbGet(args, reply)
+		if err := args.requirements(); err != nil {
+			return err
+		}
+
+		res, _ := p.db.Get([]byte(args.Database + args.Key))
+		*reply = string(res)
 	case "db_putHex", "db_getHex":
 		return NewNotImplementedError(req.Method)
 	case "shh_post":
