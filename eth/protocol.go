@@ -42,6 +42,7 @@ const (
 	ErrGenesisBlockMismatch
 	ErrNoStatusMsg
 	ErrExtraStatusMsg
+	ErrSuspendedPeer
 )
 
 var errorToString = map[int]string{
@@ -53,6 +54,7 @@ var errorToString = map[int]string{
 	ErrGenesisBlockMismatch:    "Genesis block mismatch",
 	ErrNoStatusMsg:             "No status message",
 	ErrExtraStatusMsg:          "Extra status message",
+	ErrSuspendedPeer:           "Suspended peer",
 }
 
 // ethProtocol represents the ethereum wire protocol
@@ -85,7 +87,7 @@ type chainManager interface {
 type blockPool interface {
 	AddBlockHashes(next func() (common.Hash, bool), peerId string)
 	AddBlock(block *types.Block, peerId string)
-	AddPeer(td *big.Int, currentBlock common.Hash, peerId string, requestHashes func(common.Hash) error, requestBlocks func([]common.Hash) error, peerError func(*errs.Error)) (best bool)
+	AddPeer(td *big.Int, currentBlock common.Hash, peerId string, requestHashes func(common.Hash) error, requestBlocks func([]common.Hash) error, peerError func(*errs.Error)) (best bool, suspended bool)
 	RemovePeer(peerId string)
 }
 
@@ -288,7 +290,7 @@ func (self *ethProtocol) handle() error {
 		// to simplify backend interface adding a new block
 		// uses AddPeer followed by AddBlock only if peer is the best peer
 		// (or selected as new best peer)
-		if self.blockPool.AddPeer(request.TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect) {
+		if best, _ := self.blockPool.AddPeer(request.TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect); best {
 			self.blockPool.AddBlock(request.Block, self.id)
 		}
 
@@ -334,9 +336,12 @@ func (self *ethProtocol) handleStatus() error {
 		return self.protoError(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, self.protocolVersion)
 	}
 
-	self.peer.Infof("Peer is [eth] capable (%d/%d). TD=%v H=%x\n", status.ProtocolVersion, status.NetworkId, status.TD, status.CurrentBlock[:4])
+	_, suspended := self.blockPool.AddPeer(status.TD, status.CurrentBlock, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect)
+	if suspended {
+		return self.protoError(ErrSuspendedPeer, "")
+	}
 
-	self.blockPool.AddPeer(status.TD, status.CurrentBlock, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect)
+	self.peer.Infof("Peer is [eth] capable (%d/%d). TD=%v H=%x\n", status.ProtocolVersion, status.NetworkId, status.TD, status.CurrentBlock[:4])
 
 	return nil
 }

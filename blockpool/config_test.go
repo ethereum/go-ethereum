@@ -5,11 +5,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/blockpool/test"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 func TestBlockPoolConfig(t *testing.T) {
 	test.LogInit()
-	blockPool := &BlockPool{Config: &Config{}}
+	blockPool := &BlockPool{Config: &Config{}, chainEvents: &event.TypeMux{}}
 	blockPool.Start()
 	c := blockPool.Config
 	test.CheckInt("BlockHashesBatchSize", c.BlockHashesBatchSize, blockHashesBatchSize, t)
@@ -21,12 +22,14 @@ func TestBlockPoolConfig(t *testing.T) {
 	test.CheckDuration("BlockHashesTimeout", c.BlockHashesTimeout, blockHashesTimeout, t)
 	test.CheckDuration("BlocksTimeout", c.BlocksTimeout, blocksTimeout, t)
 	test.CheckDuration("IdleBestPeerTimeout", c.IdleBestPeerTimeout, idleBestPeerTimeout, t)
+	test.CheckDuration("PeerSuspensionInterval", c.PeerSuspensionInterval, peerSuspensionInterval, t)
+	test.CheckDuration("StatusUpdateInterval", c.StatusUpdateInterval, statusUpdateInterval, t)
 }
 
 func TestBlockPoolOverrideConfig(t *testing.T) {
 	test.LogInit()
-	blockPool := &BlockPool{Config: &Config{}}
-	c := &Config{128, 32, 1, 0, 300 * time.Millisecond, 100 * time.Millisecond, 90 * time.Second, 0, 30 * time.Second}
+	blockPool := &BlockPool{Config: &Config{}, chainEvents: &event.TypeMux{}}
+	c := &Config{128, 32, 1, 0, 300 * time.Millisecond, 100 * time.Millisecond, 90 * time.Second, 0, 30 * time.Second, 30 * time.Second, 4 * time.Second}
 
 	blockPool.Config = c
 	blockPool.Start()
@@ -39,4 +42,6 @@ func TestBlockPoolOverrideConfig(t *testing.T) {
 	test.CheckDuration("BlockHashesTimeout", c.BlockHashesTimeout, 90*time.Second, t)
 	test.CheckDuration("BlocksTimeout", c.BlocksTimeout, blocksTimeout, t)
 	test.CheckDuration("IdleBestPeerTimeout", c.IdleBestPeerTimeout, 30*time.Second, t)
+	test.CheckDuration("PeerSuspensionInterval", c.PeerSuspensionInterval, 30*time.Second, t)
+	test.CheckDuration("StatusUpdateInterval", c.StatusUpdateInterval, 4*time.Second, t)
 }

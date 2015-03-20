@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/blockpool/test"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/pow"
 )
@@ -45,7 +46,7 @@ func TestVerifyPoW(t *testing.T) {
 	first := false
 	blockPoolTester.blockPool.verifyPoW = func(b pow.Block) bool {
 		bb, _ := b.(*types.Block)
-		indexes := blockPoolTester.hashPool.HashesToIndexes([][]byte{bb.Hash()})
+		indexes := blockPoolTester.hashPool.HashesToIndexes([]common.Hash{bb.Hash()})
 		if indexes[0] == 2 && !first {
 			first = true
 			return false
@@ -92,7 +93,6 @@ func TestUnrequestedBlock(t *testing.T) {
 	peer1.AddPeer()
 	peer1.sendBlocks(1, 2)
 
-	// blockPool.Wait(waitTimeout)
 	blockPool.Stop()
 	if len(peer1.peerErrors) == 1 {
 		if peer1.peerErrors[0] != ErrUnrequestedBlock {
@@ -121,4 +121,61 @@ func TestErrInsufficientChainInfo(t *testing.T) {
 	} else {
 		t.Errorf("expected %v error, got %v", ErrInsufficientChainInfo, peer1.peerErrors)
 	}
+}
+
+func TestIncorrectTD(t *testing.T) {
+	test.LogInit()
+	_, blockPool, blockPoolTester := newTestBlockPool(t)
+	blockPoolTester.blockChain[0] = nil
+	blockPoolTester.initRefBlockChain(3)
+
+	blockPool.Start()
+
+	peer1 := blockPoolTester.newPeer("peer1", 1, 3)
+	peer1.AddPeer()
+	go peer1.serveBlocks(2, 3)
+	go peer1.serveBlockHashes(3, 2, 1, 0)
+	peer1.serveBlocks(0, 1, 2)
+
+	blockPool.Wait(waitTimeout)
+	blockPool.Stop()
+	blockPoolTester.refBlockChain[3] = []int{}
+	blockPoolTester.checkBlockChain(blockPoolTester.refBlockChain)
+	if len(peer1.peerErrors) == 1 {
+		if peer1.peerErrors[0] != ErrIncorrectTD {
+			t.Errorf("wrong error, got %v, expected %v", peer1.peerErrors[0], ErrIncorrectTD)
+		}
+	} else {
+		t.Errorf("expected %v error, got %v", ErrIncorrectTD, peer1.peerErrors)
+	}
+}
+
+func TestPeerSuspension(t *testing.T) {
+	test.LogInit()
+	_, blockPool, blockPoolTester := newTestBlockPool(t)
+	blockPool.Config.PeerSuspensionInterval = 100 * time.Millisecond
+
+	blockPool.Start()
+
+	peer1 := blockPoolTester.newPeer("peer1", 1, 3)
+	peer1.AddPeer()
+	blockPool.peers.peerError("peer1", 0, "")
+	bestpeer, _ := blockPool.peers.getPeer("peer1")
+	if bestpeer != nil {
+		t.Errorf("peer1 not removed on error")
+	}
+	peer1.AddPeer()
+	bestpeer, _ = blockPool.peers.getPeer("peer1")
+	if bestpeer != nil {
+		t.Errorf("peer1 not removed on reconnect")
+	}
+	time.Sleep(100 * time.Millisecond)
+	peer1.AddPeer()
+	bestpeer, _ = blockPool.peers.getPeer("peer1")
+	if bestpeer == nil {
+		t.Errorf("peer1 not connected after PeerSuspensionInterval")
+	}
+	// blockPool.Wait(waitTimeout)
+	blockPool.Stop()
+
 }

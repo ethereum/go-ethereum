@@ -41,16 +41,9 @@ type testChainManager struct {
 type testBlockPool struct {
 	addBlockHashes func(next func() (common.Hash, bool), peerId string)
 	addBlock       func(block *types.Block, peerId string) (err error)
-	addPeer        func(td *big.Int, currentBlock common.Hash, peerId string, requestHashes func(common.Hash) error, requestBlocks func([]common.Hash) error, peerError func(*errs.Error)) (best bool)
+	addPeer        func(td *big.Int, currentBlock common.Hash, peerId string, requestHashes func(common.Hash) error, requestBlocks func([]common.Hash) error, peerError func(*errs.Error)) (best bool, suspended bool)
 	removePeer     func(peerId string)
 }
-
-// func (self *testTxPool) GetTransactions() (txs []*types.Transaction) {
-// 	if self.getTransactions != nil {
-// 		txs = self.getTransactions()
-// 	}
-// 	return
-// }
 
 func (self *testTxPool) AddTransactions(txs []*types.Transaction) {
 	if self.addTransactions != nil {
@@ -93,9 +86,9 @@ func (self *testBlockPool) AddBlock(block *types.Block, peerId string) {
 	}
 }
 
-func (self *testBlockPool) AddPeer(td *big.Int, currentBlock common.Hash, peerId string, requestBlockHashes func(common.Hash) error, requestBlocks func([]common.Hash) error, peerError func(*errs.Error)) (best bool) {
+func (self *testBlockPool) AddPeer(td *big.Int, currentBlock common.Hash, peerId string, requestBlockHashes func(common.Hash) error, requestBlocks func([]common.Hash) error, peerError func(*errs.Error)) (best bool, suspended bool) {
 	if self.addPeer != nil {
-		best = self.addPeer(td, currentBlock, peerId, requestBlockHashes, requestBlocks, peerError)
+		best, suspended = self.addPeer(td, currentBlock, peerId, requestBlockHashes, requestBlocks, peerError)
 	}
 	return
 }
