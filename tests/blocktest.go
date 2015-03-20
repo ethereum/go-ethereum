@@ -134,9 +134,9 @@ func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 		nonce, _ := strconv.ParseUint(acct.Nonce, 16, 64)
 
 		// address is indirectly verified by the other fields, as it's the db key
-		code2    := statedb.GetCode(addr)
+		code2 := statedb.GetCode(addr)
 		balance2 := statedb.GetBalance(addr)
-		nonce2   := statedb.GetNonce(addr)
+		nonce2 := statedb.GetNonce(addr)
 		if !bytes.Equal(code2, code) {
 			return fmt.Errorf("account code mismatch, addr, found, expected: ", addrString, hex.EncodeToString(code2), hex.EncodeToString(code))
 		}
@@ -146,8 +146,6 @@ func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 		if nonce2 != nonce {
 			return fmt.Errorf("account nonce mismatch, addr, found, expected: ", addrString, nonce2, nonce)
 		}
-
->>>>>>> Add validation of post state accounts to block tests
 	}
 	return nil
 }
