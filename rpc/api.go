@@ -180,21 +180,24 @@ func (self *EthereumApi) NewFilterString(args *FilterStringArgs, reply *interfac
 	var id int
 	filter := core.NewFilter(self.xeth().Backend())
 
-	callback := func(block *types.Block, logs state.Logs) {
-		self.logMut.Lock()
-		defer self.logMut.Unlock()
-
-		for _, log := range logs {
-			self.logs[id].add(log)
-		}
-		self.logs[id].add(&state.StateLog{})
-	}
-
 	switch args.Word {
 	case "pending":
-		filter.PendingCallback = callback
+		filter.PendingCallback = func(tx *types.Transaction) {
+			self.logMut.Lock()
+			defer self.logMut.Unlock()
+
+			self.logs[id].add(&state.StateLog{})
+		}
 	case "latest":
-		filter.BlockCallback = callback
+		filter.BlockCallback = func(block *types.Block, logs state.Logs) {
+			self.logMut.Lock()
+			defer self.logMut.Unlock()
+
+			for _, log := range logs {
+				self.logs[id].add(log)
+			}
+			self.logs[id].add(&state.StateLog{})
+		}
 	default:
 		return NewValidationError("Word", "Must be `latest` or `pending`")
 	}

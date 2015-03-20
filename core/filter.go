@@ -34,7 +34,7 @@ type Filter struct {
 	topics   [][][]byte
 
 	BlockCallback   func(*types.Block, state.Logs)
-	PendingCallback func(*types.Block, state.Logs)
+	PendingCallback func(*types.Transaction)
 	LogsCallback    func(state.Logs)
 }
 
