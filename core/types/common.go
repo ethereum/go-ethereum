@@ -1,14 +1,16 @@
 package types
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/state"
+
+	"fmt"
 )
 
 type BlockProcessor interface {
-	Process(*Block) (*big.Int, error)
+	Process(*Block) (*big.Int, state.Logs, error)
 }
 
 const bloomLength = 256
@@ -26,10 +28,7 @@ func (b *Bloom) SetBytes(d []byte) {
 		panic(fmt.Sprintf("bloom bytes too big %d %d", len(b), len(d)))
 	}
 
-	// reverse loop
-	for i := len(d) - 1; i >= 0; i-- {
-		b[bloomLength-len(d)+i] = b[i]
-	}
+	copy(b[bloomLength-len(d):], d)
 }
 
 func (b Bloom) Big() *big.Int {

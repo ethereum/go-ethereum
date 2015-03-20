@@ -104,7 +104,7 @@ func BigCopy(src *big.Int) *big.Int {
 //
 // Returns the maximum size big integer
 func BigMax(x, y *big.Int) *big.Int {
-	if x.Cmp(y) <= 0 {
+	if x.Cmp(y) < 0 {
 		return y
 	}
 
@@ -115,7 +115,7 @@ func BigMax(x, y *big.Int) *big.Int {
 //
 // Returns the minimum size big integer
 func BigMin(x, y *big.Int) *big.Int {
-	if x.Cmp(y) >= 0 {
+	if x.Cmp(y) > 0 {
 		return y
 	}
 

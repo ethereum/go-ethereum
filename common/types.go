@@ -35,10 +35,7 @@ func (h *Hash) SetBytes(b []byte) {
 		b = b[len(b)-hashLength:]
 	}
 
-	// reverse loop
-	for i := len(b) - 1; i >= 0; i-- {
-		h[hashLength-len(b)+i] = b[i]
-	}
+	copy(h[hashLength-len(b):], b)
 }
 
 // Set string `s` to h. If s is larger than len(h) it will panic
@@ -73,11 +70,7 @@ func (a *Address) SetBytes(b []byte) {
 	if len(b) > len(a) {
 		b = b[len(b)-addressLength:]
 	}
-
-	// reverse loop
-	for i := len(b) - 1; i >= 0; i-- {
-		a[addressLength-len(b)+i] = b[i]
-	}
+	copy(a[addressLength-len(b):], b)
 }
 
 // Set string `s` to a. If s is larger than len(a) it will panic

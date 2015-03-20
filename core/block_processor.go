@@ -16,10 +16,6 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-type PendingBlockEvent struct {
-	Block *types.Block
-}
-
 var statelogger = logger.NewLogger("BLOCK")
 
 type BlockProcessor struct {
@@ -137,7 +133,7 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 	block.Header().GasUsed = totalUsedGas
 
 	if transientProcess {
-		go self.eventMux.Post(PendingBlockEvent{block})
+		go self.eventMux.Post(PendingBlockEvent{block, statedb.Logs()})
 	}
 
 	return receipts, handled, unhandled, erroneous, err
@@ -146,25 +142,25 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 // Process block will attempt to process the given block's transactions and applies them
 // on top of the block's parent state (given it exists) and will return wether it was
 // successful or not.
-func (sm *BlockProcessor) Process(block *types.Block) (td *big.Int, err error) {
+func (sm *BlockProcessor) Process(block *types.Block) (td *big.Int, logs state.Logs, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
 	header := block.Header()
 	if sm.bc.HasBlock(header.Hash()) {
-		return nil, &KnownBlockError{header.Number, header.Hash()}
+		return nil, nil, &KnownBlockError{header.Number, header.Hash()}
 	}
 
 	if !sm.bc.HasBlock(header.ParentHash) {
-		return nil, ParentError(header.ParentHash)
+		return nil, nil, ParentError(header.ParentHash)
 	}
 	parent := sm.bc.GetBlock(header.ParentHash)
 
 	return sm.processWithParent(block, parent)
 }
 
-func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big.Int, err error) {
+func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big.Int, logs state.Logs, err error) {
 	sm.lastAttemptedBlock = block
 
 	// Create a new state based on the parent's root (e.g., create copy)
@@ -177,7 +173,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 
 	// There can be at most two uncles
 	if len(block.Uncles()) > 2 {
-		return nil, ValidationError("Block can only contain one uncle (contained %v)", len(block.Uncles()))
+		return nil, nil, ValidationError("Block can only contain one uncle (contained %v)", len(block.Uncles()))
 	}
 
 	receipts, err := sm.TransitionState(state, parent, block, false)
@@ -236,7 +232,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 
 	chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash().Bytes()[0:4])
 
-	return td, nil
+	return td, state.Logs(), nil
 }
 
 // Validates the current block. Returns an error if the block was invalid,

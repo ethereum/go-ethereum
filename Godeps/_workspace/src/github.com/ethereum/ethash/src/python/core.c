@@ -58,7 +58,7 @@ mkcache_bytes(PyObject *self, PyObject *args) {
     }
 
     ethash_params params;
-    params.cache_size = (size_t) cache_size;
+    params.cache_size = (uint64_t) cache_size;
     ethash_cache cache;
     cache.mem = malloc(cache_size);
     ethash_mkcache(&cache, &params, (uint8_t *) seed);
@@ -92,8 +92,8 @@ calc_dataset_bytes(PyObject *self, PyObject *args) {
     }
 
     ethash_params params;
-    params.cache_size = (size_t) cache_size;
-    params.full_size = (size_t) full_size;
+    params.cache_size = (uint64_t) cache_size;
+    params.full_size = (uint64_t) full_size;
     ethash_cache cache;
     cache.mem = (void *) cache_bytes;
     void *mem = malloc(params.full_size);
@@ -138,8 +138,8 @@ hashimoto_light(PyObject *self, PyObject *args) {
 
     ethash_return_value out;
     ethash_params params;
-    params.cache_size = (size_t) cache_size;
-    params.full_size = (size_t) full_size;
+    params.cache_size = (uint64_t) cache_size;
+    params.full_size = (uint64_t) full_size;
     ethash_cache cache;
     cache.mem = (void *) cache_bytes;
     ethash_light(&out, &cache, &params, (uint8_t *) header, nonce);
@@ -175,7 +175,7 @@ hashimoto_full(PyObject *self, PyObject *args) {
 
     ethash_return_value out;
     ethash_params params;
-    params.full_size = (size_t) full_size;
+    params.full_size = (uint64_t) full_size;
     ethash_full(&out, (void *) full_bytes, &params, (uint8_t *) header, nonce);
     return Py_BuildValue("{s:s#, s:s#}",
             "mix digest", out.mix_hash, 32,
@@ -216,7 +216,7 @@ mine(PyObject *self, PyObject *args) {
 
     ethash_return_value out;
     ethash_params params;
-    params.full_size = (size_t) full_size;
+    params.full_size = (uint64_t) full_size;
 
     // TODO: Multi threading?
     do {
