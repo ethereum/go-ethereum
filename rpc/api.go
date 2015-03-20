@@ -97,13 +97,6 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 	return nil
 }
 
-func (p *EthereumApi) GetBlockByNumber(blocknum int64, includetx bool) (*BlockRes, error) {
-	block := p.xeth().EthBlockByNumber(blocknum)
-	br := NewBlockRes(block)
-	br.fullTx = includetx
-	return br, nil
-}
-
 // func (self *EthereumApi) Register(args string, reply *interface{}) error {
 // 	self.regmut.Lock()
 // 	defer self.regmut.Unlock()
@@ -284,11 +277,11 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		v, err := p.GetBlockByNumber(args.BlockNumber, args.IncludeTxs)
-		if err != nil {
-			return err
-		}
-		*reply = v
+		block := p.xeth().EthBlockByNumber(args.BlockNumber)
+		br := NewBlockRes(block)
+		br.fullTx = args.IncludeTxs
+
+		*reply = br
 	case "eth_getTransactionByHash":
 		// HashIndexArgs used, but only the "Hash" part we need.
 		args := new(HashIndexArgs)
@@ -318,10 +311,10 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		v, err := p.GetBlockByNumber(args.BlockNumber, true)
-		if err != nil {
-			return err
-		}
+		block := p.xeth().EthBlockByNumber(args.BlockNumber)
+		v := NewBlockRes(block)
+		v.fullTx = true
+
 		if args.Index > int64(len(v.Transactions)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
 		}
@@ -348,10 +341,10 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		v, err := p.GetBlockByNumber(args.BlockNumber, true)
-		if err != nil {
-			return err
-		}
+		block := p.xeth().EthBlockByNumber(args.BlockNumber)
+		v := NewBlockRes(block)
+		v.fullTx = true
+
 		if args.Index > int64(len(v.Uncles)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
 		}
