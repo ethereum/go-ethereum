@@ -331,16 +331,6 @@ func (self *EthereumApi) MessagesChanged(id int, reply *interface{}) error {
 	return nil
 }
 
-func (p *EthereumApi) WhisperPost(args *WhisperMessageArgs, reply *interface{}) error {
-	err := p.xeth().Whisper().Post(args.Payload, args.To, args.From, args.Topics, args.Priority, args.Ttl)
-	if err != nil {
-		return err
-	}
-
-	*reply = true
-	return nil
-}
-
 func (p *EthereumApi) GetBlockByHash(blockhash string, includetx bool) (*BlockRes, error) {
 	block := p.xeth().EthBlockByHash(blockhash)
 	br := NewBlockRes(block)
@@ -659,7 +649,13 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.WhisperPost(args, reply)
+
+		err := p.xeth().Whisper().Post(args.Payload, args.To, args.From, args.Topics, args.Priority, args.Ttl)
+		if err != nil {
+			return err
+		}
+
+		*reply = true
 	case "shh_newIdentity":
 		*reply = p.xeth().Whisper().NewIdentity()
 	// case "shh_removeIdentity":
