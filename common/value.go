@@ -26,10 +26,7 @@ import (
 // Value is useful whenever you feel that Go's types limit your
 // ability to express yourself. In these situations, use Value and
 // forget about this strong typing nonsense.
-type Value struct {
-	Val  interface{}
-	kind reflect.Value
-}
+type Value struct{ Val interface{} }
 
 func (val *Value) String() string {
 	return fmt.Sprintf("%x", val.Val)
@@ -53,7 +50,6 @@ func (val *Value) IsNil() bool {
 }
 
 func (val *Value) Len() int {
-	//return val.kind.Len()
 	if data, ok := val.Val.([]interface{}); ok {
 		return len(data)
 	}
