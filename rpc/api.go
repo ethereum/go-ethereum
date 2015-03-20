@@ -37,6 +37,10 @@ func (self *EthereumApi) xeth() *xeth.XEth {
 	return self.eth
 }
 
+func (self *EthereumApi) xethAtStateNum(num int64) *xeth.XEth {
+	return self.xeth().AtStateNum(num)
+}
+
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
 	rpclogger.DebugDetailf("%s %s", req.Method, req.Params)
@@ -84,7 +88,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		v := p.xeth().AtStateNum(args.BlockNumber).State().SafeGet(args.Address).Balance()
+		v := p.xethAtStateNum(args.BlockNumber).State().SafeGet(args.Address).Balance()
 		*reply = common.ToHex(v.Bytes())
 	case "eth_getStorage", "eth_storageAt":
 		args := new(GetStorageArgs)
@@ -96,7 +100,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		*reply = p.xeth().AtStateNum(args.BlockNumber).State().SafeGet(args.Address).Storage()
+		*reply = p.xethAtStateNum(args.BlockNumber).State().SafeGet(args.Address).Storage()
 	case "eth_getStorageAt":
 		args := new(GetStorageAtArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -106,7 +110,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		state := p.xeth().AtStateNum(args.BlockNumber).State().SafeGet(args.Address)
+		state := p.xethAtStateNum(args.BlockNumber).State().SafeGet(args.Address)
 		value := state.StorageString(args.Key)
 
 		*reply = common.Bytes2Hex(value.Bytes())
@@ -121,7 +125,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		*reply = p.xeth().AtStateNum(args.BlockNumber).TxCountAt(args.Address)
+		*reply = p.xethAtStateNum(args.BlockNumber).TxCountAt(args.Address)
 	case "eth_getBlockTransactionCountByHash":
 		args := new(GetBlockByHashArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -164,7 +168,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := args.requirements(); err != nil {
 			return err
 		}
-		*reply = p.xeth().AtStateNum(args.BlockNumber).CodeAt(args.Address)
+		*reply = p.xethAtStateNum(args.BlockNumber).CodeAt(args.Address)
 	case "eth_sendTransaction", "eth_transact":
 		args := new(NewTxArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -186,7 +190,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		v, err := p.xeth().AtStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+		v, err := p.xethAtStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 		if err != nil {
 			return err
 		}
