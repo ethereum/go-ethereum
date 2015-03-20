@@ -98,12 +98,6 @@ func (self *EthereumApi) getStateWithNum(num int64) *xeth.State {
 // 	return nil
 // }
 
-func (self *EthereumApi) Logs(id int, reply *interface{}) error {
-	*reply = NewLogsRes(self.xeth().Logs(id))
-
-	return nil
-}
-
 func (self *EthereumApi) AllLogs(args *FilterOptions, reply *interface{}) error {
 	opts := toFilterOptions(args)
 	*reply = NewLogsRes(self.xeth().AllLogs(opts))
@@ -494,7 +488,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.Logs(args.Id, reply)
+		*reply = NewLogsRes(p.xeth().Logs(args.Id))
 	case "eth_getLogs":
 		args := new(FilterOptions)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
