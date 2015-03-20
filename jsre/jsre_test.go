@@ -50,7 +50,7 @@ func TestBind(t *testing.T) {
 
 	jsre.Bind("no", &testNativeObjectBinding{jsre.ToVal})
 
-	val, err := jsre.Run(`no.testMethod("testMsg")`)
+	val, err := jsre.Run(`no.TestMethod("testMsg")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
