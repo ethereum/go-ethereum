@@ -3,6 +3,8 @@ package blockpool
 import (
 	"fmt"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type statusValues struct {
@@ -26,7 +28,7 @@ type statusValues struct {
 type status struct {
 	lock        sync.Mutex
 	values      statusValues
-	chain       map[string]int
+	chain       map[common.Hash]int
 	peers       map[string]int
 	bestPeers   map[string]int
 	badPeers    map[string]int
@@ -35,7 +37,7 @@ type status struct {
 
 func newStatus() *status {
 	return &status{
-		chain:       make(map[string]int),
+		chain:       make(map[common.Hash]int),
 		peers:       make(map[string]int),
 		bestPeers:   make(map[string]int),
 		badPeers:    make(map[string]int),

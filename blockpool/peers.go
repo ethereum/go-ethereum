@@ -46,7 +46,8 @@ type peer struct {
 	// timers for head section process
 	blockHashesRequestTimer <-chan time.Time
 	blocksRequestTimer      <-chan time.Time
-	suicideC                <-chan time.Time
+	headInfoTimer           <-chan time.Time
+	bestIdleTimer           <-chan time.Time
 
 	addToBlacklist func(id string)
 
@@ -256,8 +257,10 @@ func (self *peers) addPeer(
 		plog.Debugf("addPeer: <%s> already the best peer. Request new head section info from %s", id, hex(currentBlockHash))
 
 		if (previousBlockHash != common.Hash{}) {
+			plog.DebugDetailf("addPeer: <%s> head changed: %s -> %s ", id, hex(previousBlockHash), hex(currentBlockHash))
+			p.headSectionC <- nil
 			if entry := self.bp.get(previousBlockHash); entry != nil {
-				p.headSectionC <- nil
+				plog.DebugDetailf("addPeer: <%s> previous head : %v found in pool, activate", id, hex(previousBlockHash))
 				self.bp.activateChain(entry.section, p, nil)
 				p.sections = append(p.sections, previousBlockHash)
 			}
@@ -410,7 +413,8 @@ func (self *peer) handleSection(sec *section) {
 			self.bp.syncing()
 		}
 
-		self.suicideC = time.After(self.bp.Config.BlockHashesTimeout)
+		self.headInfoTimer = time.After(self.bp.Config.BlockHashesTimeout)
+		self.bestIdleTimer = nil
 
 		plog.DebugDetailf("HeadSection: <%s> head block hash changed (mined block received). New head %s", self.id, hex(self.currentBlockHash))
 	} else {
@@ -418,8 +422,10 @@ func (self *peer) handleSection(sec *section) {
 			self.idle = true
 			self.bp.wg.Done()
 		}
-		plog.DebugDetailf("HeadSection: <%s> (head: %s) head section [%s] created", self.id, hex(self.currentBlockHash), sectionhex(sec))
-		self.suicideC = time.After(self.bp.Config.IdleBestPeerTimeout)
+
+		self.headInfoTimer = nil
+		self.bestIdleTimer = time.After(self.bp.Config.IdleBestPeerTimeout)
+		plog.DebugDetailf("HeadSection: <%s> (head: %s) head section [%s] created. Idle...", self.id, hex(self.currentBlockHash), sectionhex(sec))
 	}
 }
 
@@ -452,14 +458,13 @@ func (self *peer) getCurrentBlock(currentBlock *types.Block) {
 	self.blocksRequestTimer = nil
 }
 
-func (self *peer) getBlockHashes() {
+func (self *peer) getBlockHashes() bool {
 	//if connecting parent is found
 	if self.bp.hasBlock(self.parentHash) {
 		plog.DebugDetailf("HeadSection: <%s> parent block %s found in blockchain", self.id, hex(self.parentHash))
 		err := self.bp.insertChain(types.Blocks([]*types.Block{self.currentBlock}))
 
 		self.bp.status.lock.Lock()
-		self.bp.status.badPeers[self.id]++
 		self.bp.status.values.BlocksInChain++
 		self.bp.status.values.BlocksInPool--
 		if err != nil {
@@ -469,18 +474,18 @@ func (self *peer) getBlockHashes() {
 			if self.currentBlock.Td != nil {
 				if self.td.Cmp(self.currentBlock.Td) != 0 {
 					self.addError(ErrIncorrectTD, "on block %x", self.currentBlockHash)
+					self.bp.status.badPeers[self.id]++
 				}
 			}
-			headKey := self.parentHash.Str()
+			headKey := self.parentHash
 			height := self.bp.status.chain[headKey] + 1
-			self.bp.status.chain[self.currentBlockHash.Str()] = height
+			self.bp.status.chain[self.currentBlockHash] = height
 			if height > self.bp.status.values.LongestChain {
 				self.bp.status.values.LongestChain = height
 			}
 			delete(self.bp.status.chain, headKey)
 		}
 		self.bp.status.lock.Unlock()
-
 	} else {
 		if parent := self.bp.get(self.parentHash); parent != nil {
 			if self.bp.get(self.currentBlockHash) == nil {
@@ -501,15 +506,17 @@ func (self *peer) getBlockHashes() {
 			plog.DebugDetailf("HeadSection: <%s> section [%s] requestBlockHashes", self.id, sectionhex(self.headSection))
 			self.requestBlockHashes(self.currentBlockHash)
 			self.blockHashesRequestTimer = time.After(self.bp.Config.BlockHashesRequestInterval)
-			return
+			return false
 		}
 	}
 	self.blockHashesRequestTimer = nil
 	if !self.idle {
 		self.idle = true
-		self.suicideC = nil
+		self.headInfoTimer = nil
+		self.bestIdleTimer = time.After(self.bp.Config.IdleBestPeerTimeout)
 		self.bp.wg.Done()
 	}
+	return true
 }
 
 // main loop for head section process
@@ -522,9 +529,7 @@ func (self *peer) run() {
 	self.blockHashesRequestTimer = nil
 
 	self.blocksRequestTimer = time.After(0)
-	self.suicideC = time.After(self.bp.Config.BlockHashesTimeout)
-
-	var quit <-chan time.Time
+	self.headInfoTimer = time.After(self.bp.Config.BlockHashesTimeout)
 
 	var ping = time.NewTicker(5 * time.Second)
 
@@ -539,13 +544,6 @@ LOOP:
 		// if sec == nil, it signals that chain info has updated (new block message)
 		case sec := <-self.headSectionC:
 			self.handleSection(sec)
-			if sec == nil {
-				plog.Debugf("HeadSection: <%s> (headsection [%s], received: [%s]) quit channel set to nil, catchup happening", self.id, sectionhex(self.headSection), sectionhex(sec))
-				quit = nil
-			} else {
-				plog.Debugf("HeadSection: <%s> (headsection [%s], received: [%s]) quit channel set to go off in IdleBestPeerTimeout", self.id, sectionhex(self.headSection), sectionhex(sec))
-				quit = time.After(self.bp.Config.IdleBestPeerTimeout)
-			}
 
 		// periodic check for block hashes or parent block/section
 		case <-self.blockHashesRequestTimer:
@@ -560,7 +558,7 @@ LOOP:
 			self.getCurrentBlock(nil)
 
 		// quitting on timeout
-		case <-self.suicideC:
+		case <-self.headInfoTimer:
 			self.peerError(self.bp.peers.errors.New(ErrInsufficientChainInfo, "timed out without providing block hashes or head block (td: %v, head: %s)", self.td, hex(self.currentBlockHash)))
 
 			self.bp.status.lock.Lock()
@@ -583,7 +581,7 @@ LOOP:
 			break LOOP
 
 		// quit
-		case <-quit:
+		case <-self.bestIdleTimer:
 			self.peerError(self.bp.peers.errors.New(ErrIdleTooLong, "timed out without providing new blocks (td: %v, head: %s)...quitting", self.td, hex(self.currentBlockHash)))
 
 			self.bp.status.lock.Lock()
