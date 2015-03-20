@@ -16,12 +16,7 @@ import (
 type EthereumApi struct {
 	eth    *xeth.XEth
 	xethMu sync.RWMutex
-
-	// // Register keeps a list of accounts and transaction data
-	// regmut   sync.Mutex
-	// register map[string][]*NewTxArgs
-
-	db common.Database
+	db     common.Database
 }
 
 func NewEthereumApi(eth *xeth.XEth, dataDir string) *EthereumApi {
@@ -42,39 +37,9 @@ func (self *EthereumApi) xeth() *xeth.XEth {
 	return self.eth
 }
 
-// func (self *EthereumApi) Register(args string, reply *interface{}) error {
-// 	self.regmut.Lock()
-// 	defer self.regmut.Unlock()
-
-// 	if _, ok := self.register[args]; ok {
-// 		self.register[args] = nil // register with empty
-// 	}
-// 	return nil
-// }
-
-// func (self *EthereumApi) Unregister(args string, reply *interface{}) error {
-// 	self.regmut.Lock()
-// 	defer self.regmut.Unlock()
-
-// 	delete(self.register, args)
-
-// 	return nil
-// }
-
-// func (self *EthereumApi) WatchTx(args string, reply *interface{}) error {
-// 	self.regmut.Lock()
-// 	defer self.regmut.Unlock()
-
-// 	txs := self.register[args]
-// 	self.register[args] = nil
-
-// 	*reply = txs
-// 	return nil
-// }
-
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
-	rpclogger.Infof("%s %s", req.Method, req.Params)
+	rpclogger.DebugDetailf("%s %s", req.Method, req.Params)
 	switch req.Method {
 	case "web3_sha3":
 		args := new(Sha3Args)
@@ -458,23 +423,24 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		*reply = p.xeth().Whisper().Messages(args.Id)
 	// case "eth_register":
-	// 	args, err := req.ToRegisterArgs()
-	// 	if err != nil {
+	// 	// Placeholder for actual type
+	// 	args := new(HashIndexArgs)
+	// 	if err := json.Unmarshal(req.Params, &args); err != nil {
 	// 		return err
 	// 	}
-	// 	return p.Register(args, reply)
+	// 	*reply = p.xeth().Register(args.Hash)
 	// case "eth_unregister":
-	// 	args, err := req.ToRegisterArgs()
-	// 	if err != nil {
+	// 	args := new(HashIndexArgs)
+	// 	if err := json.Unmarshal(req.Params, &args); err != nil {
 	// 		return err
 	// 	}
-	// 	return p.Unregister(args, reply)
+	// 	*reply = p.xeth().Unregister(args.Hash)
 	// case "eth_watchTx":
-	// 	args, err := req.ToWatchTxArgs()
-	// 	if err != nil {
+	// 	args := new(HashIndexArgs)
+	// 	if err := json.Unmarshal(req.Params, &args); err != nil {
 	// 		return err
 	// 	}
-	// 	return p.WatchTx(args, reply)
+	// 	*reply = p.xeth().PullWatchTx(args.Hash)
 	default:
 		return NewNotImplementedError(req.Method)
 	}
