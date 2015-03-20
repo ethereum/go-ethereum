@@ -488,3 +488,11 @@ func toFilterOptions(options *BlockFilterArgs) *core.FilterOptions {
 
 	return &opts
 }
+
+/*
+	Work() chan<- *types.Block
+	SetWorkCh(chan<- Work)
+	Stop()
+	Start()
+	Rate() uint64
+*/

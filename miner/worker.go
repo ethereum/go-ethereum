@@ -57,7 +57,7 @@ type Agent interface {
 	SetWorkCh(chan<- Work)
 	Stop()
 	Start()
-	Pow() pow.PoW
+	GetHashRate() int64
 }
 
 type worker struct {
@@ -272,7 +272,7 @@ func (self *worker) commitTransaction(tx *types.Transaction) error {
 func (self *worker) HashRate() int64 {
 	var tot int64
 	for _, agent := range self.agents {
-		tot += agent.Pow().GetHashrate()
+		tot += agent.GetHashRate()
 	}
 
 	return tot
