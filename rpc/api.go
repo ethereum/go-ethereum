@@ -406,7 +406,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	case "eth_compileSolidity", "eth_compileLLL", "eth_compileSerpent":
 		return NewNotImplementedError(req.Method)
 	case "eth_newFilter":
-		args := new(FilterOptions)
+		args := new(BlockFilterArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
@@ -444,7 +444,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		*reply = NewLogsRes(p.xeth().Logs(args.Id))
 	case "eth_getLogs":
-		args := new(FilterOptions)
+		args := new(BlockFilterArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
@@ -561,7 +561,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	return nil
 }
 
-func toFilterOptions(options *FilterOptions) *core.FilterOptions {
+func toFilterOptions(options *BlockFilterArgs) *core.FilterOptions {
 	var opts core.FilterOptions
 
 	// Convert optional address slice/string to byte slice

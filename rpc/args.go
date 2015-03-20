@@ -433,7 +433,7 @@ func (args *Sha3Args) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
-type FilterOptions struct {
+type BlockFilterArgs struct {
 	Earliest int64
 	Latest   int64
 	Address  interface{}
@@ -442,7 +442,7 @@ type FilterOptions struct {
 	Max      int
 }
 
-func (args *FilterOptions) UnmarshalJSON(b []byte) (err error) {
+func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []struct {
 		FromBlock interface{}   `json:"fromBlock"`
 		ToBlock   interface{}   `json:"toBlock"`
