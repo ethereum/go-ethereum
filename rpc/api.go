@@ -347,11 +347,6 @@ func (p *EthereumApi) WhisperPost(args *WhisperMessageArgs, reply *interface{}) 
 	return nil
 }
 
-func (p *EthereumApi) WhisperMessages(id int, reply *interface{}) error {
-	*reply = p.xeth().Whisper().Messages(id)
-	return nil
-}
-
 func (p *EthereumApi) GetBlockByHash(blockhash string, includetx bool) (*BlockRes, error) {
 	block := p.xeth().EthBlockByHash(blockhash)
 	br := NewBlockRes(block)
@@ -742,7 +737,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.WhisperMessages(args.Id, reply)
+		*reply = p.xeth().Whisper().Messages(id)
 	// case "eth_register":
 	// 	args, err := req.ToRegisterArgs()
 	// 	if err != nil {
