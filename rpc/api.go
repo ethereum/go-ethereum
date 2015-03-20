@@ -303,14 +303,6 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 	return nil
 }
 
-func (p *EthereumApi) GetData(args *GetDataArgs, reply *interface{}) error {
-	if err := args.requirements(); err != nil {
-		return err
-	}
-	*reply = p.xethWithStateNum(args.BlockNumber).CodeAt(args.Address)
-	return nil
-}
-
 func (p *EthereumApi) GetCompilers(reply *interface{}) error {
 	c := []string{""}
 	*reply = c
@@ -565,7 +557,10 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.GetData(args, reply)
+		if err := args.requirements(); err != nil {
+			return err
+		}
+		*reply = p.xethWithStateNum(args.BlockNumber).CodeAt(args.Address)
 	case "eth_sendTransaction", "eth_transact":
 		args := new(NewTxArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
