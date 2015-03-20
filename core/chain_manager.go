@@ -23,6 +23,8 @@ var (
 	blockNumPre  = []byte("block-num-")
 )
 
+const blockCacheLimit = 10000
+
 type StateQuery interface {
 	GetAccount(addr []byte) *state.StateObject
 }
@@ -92,15 +94,25 @@ type ChainManager struct {
 	transState *state.StateDB
 	txState    *state.ManagedState
 
+	cache *BlockCache
+
 	quit chan struct{}
 }
 
 func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *ChainManager {
-	bc := &ChainManager{blockDb: blockDb, stateDb: stateDb, genesisBlock: GenesisBlock(stateDb), eventMux: mux, quit: make(chan struct{})}
+	bc := &ChainManager{blockDb: blockDb, stateDb: stateDb, genesisBlock: GenesisBlock(stateDb), eventMux: mux, quit: make(chan struct{}), cache: NewBlockCache(blockCacheLimit)}
 	bc.setLastBlock()
 	bc.transState = bc.State().Copy()
 	// Take ownership of this particular state
 	bc.txState = state.ManageState(bc.State().Copy())
+
+	// load in last `blockCacheLimit` - 1 blocks. Last block is the current.
+	ancestors := bc.GetAncestors(bc.currentBlock, blockCacheLimit-1)
+	ancestors = append(ancestors, bc.currentBlock)
+	for _, block := range ancestors {
+		bc.cache.Push(block)
+	}
+
 	go bc.update()
 
 	return bc
@@ -275,6 +287,8 @@ func (bc *ChainManager) insert(block *types.Block) {
 
 	key := append(blockNumPre, block.Number().Bytes()...)
 	bc.blockDb.Put(key, bc.lastBlockHash.Bytes())
+	// Push block to cache
+	bc.cache.Push(block)
 }
 
 func (bc *ChainManager) write(block *types.Block) {
@@ -318,6 +332,10 @@ func (self *ChainManager) GetBlockHashesFromHash(hash common.Hash, max uint64) (
 }
 
 func (self *ChainManager) GetBlock(hash common.Hash) *types.Block {
+	if block := self.cache.Get(hash); block != nil {
+		return block
+	}
+
 	data, _ := self.blockDb.Get(append(blockHashPre, hash[:]...))
 	if len(data) == 0 {
 		return nil
