@@ -444,14 +444,12 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				self.setTotalDifficulty(td)
 				self.insert(block)
 
-				/* XXX crashes
 				jsonlogger.LogJson(&logger.EthChainNewHead{
 					BlockHash:     common.Bytes2Hex(block.Hash()),
 					BlockNumber:   block.Number(),
 					ChainHeadHash: common.Bytes2Hex(cblock.Hash()),
 					BlockPrevHash: common.Bytes2Hex(block.ParentHash()),
 				})
-				*/
 
 				self.setTransState(state.New(block.Root(), self.stateDb))
 				self.setTxState(state.New(block.Root(), self.stateDb))
