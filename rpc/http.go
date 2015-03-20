@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
-var rpchttplogger = logger.NewLogger("RPC-HTTP")
+var rpclogger = logger.NewLogger("RPC")
 
 const (
 	jsonrpcver       = "2.0"
@@ -28,7 +28,7 @@ func JSONRPC(pipe *xeth.XEth, dataDir string) http.Handler {
 		// Limit request size to resist DoS
 		if req.ContentLength > maxSizeReqLength {
 			jsonerr := &RpcErrorObject{-32700, "Request too large"}
-			Send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
+			send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
 			return
 		}
 
@@ -37,14 +37,14 @@ func JSONRPC(pipe *xeth.XEth, dataDir string) http.Handler {
 		body, err := ioutil.ReadAll(req.Body)
 		if err != nil {
 			jsonerr := &RpcErrorObject{-32700, "Could not read request body"}
-			Send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
+			send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
 		}
 
 		// Try to parse the request as a single
 		var reqSingle RpcRequest
 		if err := json.Unmarshal(body, &reqSingle); err == nil {
 			response := RpcResponse(api, &reqSingle)
-			Send(w, &response)
+			send(w, &response)
 			return
 		}
 
@@ -57,13 +57,13 @@ func JSONRPC(pipe *xeth.XEth, dataDir string) http.Handler {
 				response := RpcResponse(api, &request)
 				resBatch[i] = response
 			}
-			Send(w, resBatch)
+			send(w, resBatch)
 			return
 		}
 
 		// Not a batch or single request, error
 		jsonerr := &RpcErrorObject{-32600, "Could not decode request"}
-		Send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
+		send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
 	})
 }
 
@@ -84,11 +84,11 @@ func RpcResponse(api *EthereumApi, request *RpcRequest) *interface{} {
 		response = &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: request.Id, Error: jsonerr}
 	}
 
-	rpchttplogger.DebugDetailf("Generated response: %T %s", response, response)
+	rpclogger.DebugDetailf("Generated response: %T %s", response, response)
 	return &response
 }
 
-func Send(writer io.Writer, v interface{}) (n int, err error) {
+func send(writer io.Writer, v interface{}) (n int, err error) {
 	var payload []byte
 	payload, err = json.MarshalIndent(v, "", "\t")
 	if err != nil {
