@@ -25,6 +25,8 @@ import (
 var (
 	pipelogger       = logger.NewLogger("XETH")
 	filterTickerTime = 5 * time.Minute
+	defaultGasPrice  = big.NewInt(10000000000000) //150000000000
+	defaultGas       = big.NewInt(90000)          //500000
 )
 
 // to resolve the import cycle
@@ -153,6 +155,9 @@ done:
 func (self *XEth) stop() {
 	close(self.quit)
 }
+
+func (self *XEth) DefaultGas() *big.Int      { return defaultGas }
+func (self *XEth) DefaultGasPrice() *big.Int { return defaultGasPrice }
 
 func (self *XEth) AtStateNum(num int64) *XEth {
 	chain := self.Backend().ChainManager()
@@ -485,11 +490,6 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 	}
 	return common.ToHex(tx.Hash()), nil
 }
-
-var (
-	defaultGasPrice = big.NewInt(10000000000000)
-	defaultGas      = big.NewInt(90000)
-)
 
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	statedb := self.State().State() //self.chainManager.TransState()

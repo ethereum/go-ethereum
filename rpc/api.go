@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"path"
 	"strings"
@@ -13,11 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/xeth"
-)
-
-var (
-	defaultGasPrice = big.NewInt(150000000000)
-	defaultGas      = big.NewInt(500000)
 )
 
 type EthereumApi struct {
@@ -109,16 +103,15 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 	// TODO: align default values to have the same type, e.g. not depend on
 	// common.Value conversions later on
 	if args.Gas.Cmp(big.NewInt(0)) == 0 {
-		args.Gas = defaultGas
+		args.Gas = p.xeth().DefaultGas()
 	}
 
 	if args.GasPrice.Cmp(big.NewInt(0)) == 0 {
-		args.GasPrice = defaultGasPrice
+		args.GasPrice = p.xeth().DefaultGasPrice()
 	}
 
 	*reply, err = p.xeth().Transact(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 	if err != nil {
-		fmt.Println("err:", err)
 		return err
 	}
 
@@ -199,7 +192,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	case "eth_mining":
 		*reply = p.xeth().IsMining()
 	case "eth_gasPrice":
-		*reply = common.ToHex(defaultGasPrice.Bytes())
+		*reply = common.ToHex(p.xeth().DefaultGas().Bytes())
 	case "eth_accounts":
 		*reply = p.xeth().Accounts()
 	case "eth_blockNumber":
