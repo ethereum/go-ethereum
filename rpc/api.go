@@ -361,12 +361,6 @@ func (p *EthereumApi) GetBlockTransactionCountByHash(blockhash string) (int64, e
 	return int64(len(br.Transactions)), nil
 }
 
-func (p *EthereumApi) GetBlockTransactionCountByNumber(blocknum int64) (int64, error) {
-	block := p.xeth().EthBlockByNumber(blocknum)
-	br := NewBlockRes(block)
-	return int64(len(br.Transactions)), nil
-}
-
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
 	rpclogger.Debugf("%s %s", req.Method, req.Params)
@@ -458,11 +452,9 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		v, err := p.GetBlockTransactionCountByNumber(args.BlockNumber)
-		if err != nil {
-			return err
-		}
-		*reply = common.ToHex(big.NewInt(v).Bytes())
+		block := p.xeth().EthBlockByNumber(args.BlockNumber)
+		br := NewBlockRes(block)
+		*reply = common.ToHex(big.NewInt(int64(len(br.Transactions))).Bytes())
 	case "eth_getUncleCountByBlockHash":
 		args := new(GetBlockByHashArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
