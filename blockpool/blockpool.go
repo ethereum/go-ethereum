@@ -157,8 +157,8 @@ type BlockPool struct {
 	tdSub event.Subscription // subscription to core.ChainHeadEvent
 	td    *big.Int           // our own total difficulty
 
-	pool  map[string]*entry // the actual blockpool
-	peers *peers            // peers manager in peers.go
+	pool  map[common.Hash]*entry // the actual blockpool
+	peers *peers                 // peers manager in peers.go
 
 	status *status // info about blockpool (UI interface) in status.go
 
@@ -210,7 +210,7 @@ func (self *BlockPool) Start() {
 	self.hashSlicePool = make(chan []common.Hash, 150)
 	self.status = newStatus()
 	self.quit = make(chan bool)
-	self.pool = make(map[string]*entry)
+	self.pool = make(map[common.Hash]*entry)
 	self.running = true
 
 	self.peers = &peers{
@@ -789,13 +789,13 @@ func (self *BlockPool) getChild(sec *section) *section {
 func (self *BlockPool) get(hash common.Hash) *entry {
 	self.lock.RLock()
 	defer self.lock.RUnlock()
-	return self.pool[hash.Str()]
+	return self.pool[hash]
 }
 
 func (self *BlockPool) set(hash common.Hash, e *entry) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	self.pool[hash.Str()] = e
+	self.pool[hash] = e
 }
 
 // accessor and setter for total difficulty
@@ -817,7 +817,7 @@ func (self *BlockPool) remove(sec *section) {
 	defer self.lock.Unlock()
 
 	for _, node := range sec.nodes {
-		delete(self.pool, node.hash.Str())
+		delete(self.pool, node.hash)
 	}
 	if sec.initialised && sec.poolRootIndex != 0 {
 		self.status.lock.Lock()

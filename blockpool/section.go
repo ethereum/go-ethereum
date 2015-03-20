@@ -106,7 +106,7 @@ func (self *section) addSectionToBlockChain(p *peer) {
 
 		var nodes []*node
 		var n *node
-		var keys []string
+		var keys []common.Hash
 		var blocks []*types.Block
 		for self.poolRootIndex > 0 {
 			n = self.nodes[self.poolRootIndex-1]
@@ -117,7 +117,7 @@ func (self *section) addSectionToBlockChain(p *peer) {
 				break
 			}
 			self.poolRootIndex--
-			keys = append(keys, n.hash.Str())
+			keys = append(keys, n.hash)
 			blocks = append(blocks, block)
 			nodes = append(nodes, n)
 		}
