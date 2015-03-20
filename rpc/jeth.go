@@ -3,22 +3,29 @@ package rpc
 import (
 	"encoding/json"
 	// "fmt"
-	"github.com/obscuren/otto"
+	"github.com/ethereum/go-ethereum/jsre"
+	"github.com/robertkrimen/otto"
 )
 
 type Jeth struct {
 	ethApi *EthereumApi
 	toVal  func(interface{}) otto.Value
+	re     *jsre.JSRE
 }
 
-func NewJeth(ethApi *EthereumApi, toVal func(interface{}) otto.Value) *Jeth {
-	return &Jeth{ethApi, toVal}
+func NewJeth(ethApi *EthereumApi, toVal func(interface{}) otto.Value, re *jsre.JSRE) *Jeth {
+	return &Jeth{ethApi, toVal, re}
 }
 
-func (self *Jeth) err(code int, msg string, id interface{}) otto.Value {
+func (self *Jeth) err(code int, msg string, id interface{}) (response otto.Value) {
 	rpcerr := &RpcErrorObject{code, msg}
-	rpcresponse := &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: id, Error: rpcerr}
-	return self.toVal(rpcresponse)
+	self.re.Set("ret_jsonrpc", jsonrpcver)
+	self.re.Set("ret_id", id)
+	self.re.Set("ret_error", rpcerr)
+	response, _ = self.re.Run(`
+		ret_response = { jsonrpc: ret_jsonrpc, id: ret_id, error: ret_error };
+	`)
+	return
 }
 
 func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
@@ -37,7 +44,11 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 	if err != nil {
 		return self.err(-32603, err.Error(), req.Id)
 	}
-	rpcresponse := &RpcSuccessResponse{Jsonrpc: jsonrpcver, Id: req.Id, Result: respif}
-	response = self.toVal(rpcresponse)
+	self.re.Set("ret_jsonrpc", jsonrpcver)
+	self.re.Set("ret_id", req.Id)
+	self.re.Set("ret_result", respif)
+	response, err = self.re.Run(`
+		ret_response = { jsonrpc: ret_jsonrpc, id: ret_id, result: ret_result };
+	`)
 	return
 }

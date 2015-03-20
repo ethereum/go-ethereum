@@ -1,7 +1,7 @@
 package jsre
 
 import (
-	"github.com/obscuren/otto"
+	"github.com/robertkrimen/otto"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"

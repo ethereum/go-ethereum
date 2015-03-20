@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
-	"github.com/obscuren/otto"
+	"github.com/robertkrimen/otto"
 )
 
 /*
