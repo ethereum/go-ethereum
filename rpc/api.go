@@ -303,15 +303,6 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 	return nil
 }
 
-func (p *EthereumApi) GetTxCountAt(args *GetTxCountArgs, reply *interface{}) error {
-	err := args.requirements()
-	if err != nil {
-		return err
-	}
-	*reply = p.xethWithStateNum(args.BlockNumber).TxCountAt(args.Address)
-	return nil
-}
-
 func (p *EthereumApi) GetData(args *GetDataArgs, reply *interface{}) error {
 	if err := args.requirements(); err != nil {
 		return err
@@ -518,7 +509,13 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.GetTxCountAt(args, reply)
+
+		err := args.requirements()
+		if err != nil {
+			return err
+		}
+
+		*reply = p.xethWithStateNum(args.BlockNumber).TxCountAt(args.Address)
 	case "eth_getBlockTransactionCountByHash":
 		args := new(GetBlockByHashArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
