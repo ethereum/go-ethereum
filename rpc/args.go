@@ -35,8 +35,8 @@ func blockAge(raw interface{}, number *int64) (err error) {
 }
 
 type GetBlockByHashArgs struct {
-	BlockHash    string
-	Transactions bool
+	BlockHash  string
+	IncludeTxs bool
 }
 
 func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
@@ -57,15 +57,15 @@ func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 	args.BlockHash = argstr
 
 	if len(obj) > 1 {
-		args.Transactions = obj[1].(bool)
+		args.IncludeTxs = obj[1].(bool)
 	}
 
 	return nil
 }
 
 type GetBlockByNumberArgs struct {
-	BlockNumber  int64
-	Transactions bool
+	BlockNumber int64
+	IncludeTxs  bool
 }
 
 func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
@@ -86,7 +86,7 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	if len(obj) > 1 {
-		args.Transactions = obj[1].(bool)
+		args.IncludeTxs = obj[1].(bool)
 	}
 
 	return nil

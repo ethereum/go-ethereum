@@ -46,6 +46,13 @@ func NewEthereumApi(eth *xeth.XEth, dataDir string) *EthereumApi {
 	return api
 }
 
+func (self *EthereumApi) xeth() *xeth.XEth {
+	self.xethMu.RLock()
+	defer self.xethMu.RUnlock()
+
+	return self.eth
+}
+
 func (self *EthereumApi) xethWithStateNum(num int64) *xeth.XEth {
 	chain := self.xeth().Backend().ChainManager()
 	var block *types.Block
@@ -328,7 +335,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		v, err := p.GetBlockByHash(args.BlockHash, args.Transactions)
+		v, err := p.GetBlockByHash(args.BlockHash, args.IncludeTxs)
 		if err != nil {
 			return err
 		}
@@ -339,7 +346,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		v, err := p.GetBlockByNumber(args.BlockNumber, args.Transactions)
+		v, err := p.GetBlockByNumber(args.BlockNumber, args.IncludeTxs)
 		if err != nil {
 			return err
 		}
@@ -578,13 +585,6 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 
 	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)
 	return nil
-}
-
-func (self *EthereumApi) xeth() *xeth.XEth {
-	self.xethMu.RLock()
-	defer self.xethMu.RUnlock()
-
-	return self.eth
 }
 
 func toFilterOptions(options *FilterOptions) *core.FilterOptions {

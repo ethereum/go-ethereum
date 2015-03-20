@@ -82,7 +82,7 @@ func TestGetBlockByHashArgs(t *testing.T) {
 	input := `["0xe670ec64341771606e55d6b4ca35a1a6b75ee3d5145a99d05921026d1527331", true]`
 	expected := new(GetBlockByHashArgs)
 	expected.BlockHash = "0xe670ec64341771606e55d6b4ca35a1a6b75ee3d5145a99d05921026d1527331"
-	expected.Transactions = true
+	expected.IncludeTxs = true
 
 	args := new(GetBlockByHashArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -93,8 +93,8 @@ func TestGetBlockByHashArgs(t *testing.T) {
 		t.Errorf("BlockHash should be %v but is %v", expected.BlockHash, args.BlockHash)
 	}
 
-	if args.Transactions != expected.Transactions {
-		t.Errorf("Transactions should be %v but is %v", expected.Transactions, args.Transactions)
+	if args.IncludeTxs != expected.IncludeTxs {
+		t.Errorf("IncludeTxs should be %v but is %v", expected.IncludeTxs, args.IncludeTxs)
 	}
 }
 
@@ -112,7 +112,7 @@ func TestGetBlockByNumberArgs(t *testing.T) {
 	input := `["0x1b4", false]`
 	expected := new(GetBlockByNumberArgs)
 	expected.BlockNumber = 436
-	expected.Transactions = false
+	expected.IncludeTxs = false
 
 	args := new(GetBlockByNumberArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -123,8 +123,8 @@ func TestGetBlockByNumberArgs(t *testing.T) {
 		t.Errorf("BlockHash should be %v but is %v", expected.BlockNumber, args.BlockNumber)
 	}
 
-	if args.Transactions != expected.Transactions {
-		t.Errorf("Transactions should be %v but is %v", expected.Transactions, args.Transactions)
+	if args.IncludeTxs != expected.IncludeTxs {
+		t.Errorf("IncludeTxs should be %v but is %v", expected.IncludeTxs, args.IncludeTxs)
 	}
 }
 
