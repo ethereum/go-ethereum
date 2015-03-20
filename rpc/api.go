@@ -416,11 +416,6 @@ func (p *EthereumApi) WhisperPost(args *WhisperMessageArgs, reply *interface{}) 
 	return nil
 }
 
-func (p *EthereumApi) HasWhisperIdentity(args string, reply *interface{}) error {
-	*reply = p.xeth().Whisper().HasIdentity(args)
-	return nil
-}
-
 func (p *EthereumApi) WhisperMessages(id int, reply *interface{}) error {
 	*reply = p.xeth().Whisper().Messages(id)
 	return nil
@@ -763,7 +758,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.HasWhisperIdentity(args.Identity, reply)
+		*reply = p.xeth().Whisper().HasIdentity(args.Identity)
 	case "shh_newGroup", "shh_addToGroup":
 		return NewNotImplementedError(req.Method)
 	case "shh_newFilter":
