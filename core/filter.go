@@ -34,7 +34,7 @@ type Filter struct {
 	topics   [][]common.Hash
 
 	BlockCallback   func(*types.Block, state.Logs)
-	PendingCallback func(*types.Block, state.Logs)
+	PendingCallback func(*types.Transaction)
 	LogsCallback    func(state.Logs)
 }
 
@@ -46,7 +46,7 @@ func NewFilter(eth Backend) *Filter {
 
 // SetOptions copies the filter options to the filter it self. The reason for this "silly" copy
 // is simply because named arguments in this case is extremely nice and readable.
-func (self *Filter) SetOptions(options FilterOptions) {
+func (self *Filter) SetOptions(options *FilterOptions) {
 	self.earliest = options.Earliest
 	self.latest = options.Latest
 	self.skip = options.Skip

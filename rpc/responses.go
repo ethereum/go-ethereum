@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 type BlockRes struct {
@@ -214,4 +215,29 @@ type FilterWhisperRes struct {
 	Topics     string `json:"topics"`
 	Payload    string `json:"payload"`
 	WorkProved string `json:"workProved"`
+}
+
+type LogRes struct {
+	Address string   `json:"address"`
+	Topic   []string `json:"topic"`
+	Data    string   `json:"data"`
+	Number  uint64   `json:"number"`
+}
+
+func NewLogsRes(logs state.Logs) (ls []LogRes) {
+	ls = make([]LogRes, len(logs))
+
+	for i, log := range logs {
+		var l LogRes
+		l.Topic = make([]string, len(log.Topics()))
+		l.Address = log.Address().Hex()
+		l.Data = common.ToHex(log.Data())
+		l.Number = log.Number()
+		for j, topic := range log.Topics() {
+			l.Topic[j] = topic.Hex()
+		}
+		ls[i] = l
+	}
+
+	return
 }
