@@ -18,26 +18,31 @@ const (
 
 type Envelope struct {
 	Expiry uint32 // Whisper protocol specifies int32, really should be int64
-	Ttl    uint32 // ^^^^^^
+	TTL    uint32 // ^^^^^^
 	Topics [][]byte
 	Data   []byte
 	Nonce  uint32
 
-	hash Hash
+	hash common.Hash
 }
 
-func (self *Envelope) Hash() Hash {
-	if self.hash == EmptyHash {
+func (self *Envelope) Hash() common.Hash {
+	if (self.hash == common.Hash{}) {
 		enc, _ := rlp.EncodeToBytes(self)
-		self.hash = H(crypto.Sha3(enc))
+		self.hash = crypto.Sha3Hash(enc)
 	}
 	return self.hash
 }
 
 func NewEnvelope(ttl time.Duration, topics [][]byte, data *Message) *Envelope {
 	exp := time.Now().Add(ttl)
-
-	return &Envelope{uint32(exp.Unix()), uint32(ttl.Seconds()), topics, data.Bytes(), 0, Hash{}}
+	return &Envelope{
+		Expiry: uint32(exp.Unix()),
+		TTL:    uint32(ttl.Seconds()),
+		Topics: topics,
+		Data:   data.Bytes(),
+		Nonce:  0,
+	}
 }
 
 func (self *Envelope) Seal(pow time.Duration) {
@@ -104,7 +109,7 @@ func (self *Envelope) valid() bool {
 }
 
 func (self *Envelope) withoutNonce() interface{} {
-	return []interface{}{self.Expiry, self.Ttl, self.Topics, self.Data}
+	return []interface{}{self.Expiry, self.TTL, self.Topics, self.Data}
 }
 
 // rlpenv is an Envelope but is not an rlp.Decoder.
@@ -119,6 +124,6 @@ func (self *Envelope) DecodeRLP(s *rlp.Stream) error {
 	if err := rlp.DecodeBytes(raw, (*rlpenv)(self)); err != nil {
 		return err
 	}
-	self.hash = H(crypto.Sha3(raw))
+	self.hash = crypto.Sha3Hash(raw)
 	return nil
 }
