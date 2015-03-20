@@ -352,14 +352,6 @@ func (p *EthereumApi) WhisperMessages(id int, reply *interface{}) error {
 	return nil
 }
 
-func (p *EthereumApi) GetTransactionByHash(hash string, reply *interface{}) error {
-	tx := p.xeth().EthTransactionByHash(hash)
-	if tx != nil {
-		*reply = NewTransactionRes(tx)
-	}
-	return nil
-}
-
 func (p *EthereumApi) GetBlockByHash(blockhash string, includetx bool) (*BlockRes, error) {
 	block := p.xeth().EthBlockByHash(blockhash)
 	br := NewBlockRes(block)
@@ -566,7 +558,10 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		args := new(HashIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 		}
-		return p.GetTransactionByHash(args.Hash, reply)
+		tx := p.xeth().EthTransactionByHash(hash)
+		if tx != nil {
+			*reply = NewTransactionRes(tx)
+		}
 	case "eth_getTransactionByBlockHashAndIndex":
 		args := new(HashIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
