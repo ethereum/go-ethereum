@@ -211,7 +211,7 @@ func (self *EthereumApi) FilterChanged(id int, reply *interface{}) error {
 	defer self.logMut.Unlock()
 
 	if self.logs[id] != nil {
-		*reply = toLogs(self.logs[id].get())
+		*reply = NewLogsRes(self.logs[id].get())
 	}
 
 	return nil
@@ -223,7 +223,7 @@ func (self *EthereumApi) Logs(id int, reply *interface{}) error {
 
 	filter := self.filterManager.GetFilter(id)
 	if filter != nil {
-		*reply = toLogs(filter.Find())
+		*reply = NewLogsRes(filter.Find())
 	}
 
 	return nil
@@ -233,7 +233,7 @@ func (self *EthereumApi) AllLogs(args *FilterOptions, reply *interface{}) error 
 	filter := core.NewFilter(self.xeth().Backend())
 	filter.SetOptions(toFilterOptions(args))
 
-	*reply = toLogs(filter.Find())
+	*reply = NewLogsRes(filter.Find())
 
 	return nil
 }
@@ -869,4 +869,37 @@ func toFilterOptions(options *FilterOptions) core.FilterOptions {
 	opts.Topics = topics
 
 	return opts
+}
+
+type whisperFilter struct {
+	messages []xeth.WhisperMessage
+	timeout  time.Time
+	id       int
+}
+
+func (w *whisperFilter) add(msgs ...xeth.WhisperMessage) {
+	w.messages = append(w.messages, msgs...)
+}
+func (w *whisperFilter) get() []xeth.WhisperMessage {
+	w.timeout = time.Now()
+	tmp := w.messages
+	w.messages = nil
+	return tmp
+}
+
+type logFilter struct {
+	logs    state.Logs
+	timeout time.Time
+	id      int
+}
+
+func (l *logFilter) add(logs ...state.Log) {
+	l.logs = append(l.logs, logs...)
+}
+
+func (l *logFilter) get() state.Logs {
+	l.timeout = time.Now()
+	tmp := l.logs
+	l.logs = nil
+	return tmp
 }
