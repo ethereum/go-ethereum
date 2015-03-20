@@ -22,8 +22,8 @@
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",
-			"Comment": "v23.1-25-gc0429f2",
-			"Rev": "c0429f268b62e2238b684d4b5495f8ff24115424"
+			"Comment": "v23.1-26-g934bb4f",
+			"Rev": "934bb4f5060ab69d96fb6eba4b9a57facc4e160b"
 		},
 		{
 			"ImportPath": "github.com/ethereum/serpent-go",
