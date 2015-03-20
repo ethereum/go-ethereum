@@ -195,7 +195,8 @@ func New(config *Config) (*Ethereum, error) {
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
-	eth.blockPool = blockpool.New(hasBlock, insertChain, eth.pow.Verify)
+	td := eth.chainManager.Td()
+	eth.blockPool = blockpool.New(hasBlock, insertChain, eth.pow.Verify, eth.EventMux(), td)
 
 	netprv, err := config.nodeKey()
 	if err != nil {
@@ -205,7 +206,7 @@ func New(config *Config) (*Ethereum, error) {
 	ethProto := EthProtocol(config.ProtocolVersion, config.NetworkId, eth.txPool, eth.chainManager, eth.blockPool)
 	protocols := []p2p.Protocol{ethProto}
 	if config.Shh {
-		protocols = append(protocols, eth.whisper.Protocol())
+		//protocols = append(protocols, eth.whisper.Protocol())
 	}
 
 	eth.net = &p2p.Server{

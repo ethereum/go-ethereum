@@ -69,7 +69,7 @@ func printChain(bc *ChainManager) {
 func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 	td := new(big.Int)
 	for _, block := range chainB {
-		td2, err := bman.bc.processor.Process(block)
+		td2, _, err := bman.bc.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue

@@ -35,8 +35,8 @@ func blockAge(raw interface{}, number *int64) (err error) {
 }
 
 type GetBlockByHashArgs struct {
-	BlockHash    string
-	Transactions bool
+	BlockHash  string
+	IncludeTxs bool
 }
 
 func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
@@ -57,15 +57,15 @@ func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 	args.BlockHash = argstr
 
 	if len(obj) > 1 {
-		args.Transactions = obj[1].(bool)
+		args.IncludeTxs = obj[1].(bool)
 	}
 
 	return nil
 }
 
 type GetBlockByNumberArgs struct {
-	BlockNumber  int64
-	Transactions bool
+	BlockNumber int64
+	IncludeTxs  bool
 }
 
 func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
@@ -86,7 +86,7 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	if len(obj) > 1 {
-		args.Transactions = obj[1].(bool)
+		args.IncludeTxs = obj[1].(bool)
 	}
 
 	return nil
@@ -433,7 +433,7 @@ func (args *Sha3Args) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
-type FilterOptions struct {
+type BlockFilterArgs struct {
 	Earliest int64
 	Latest   int64
 	Address  interface{}
@@ -442,7 +442,7 @@ type FilterOptions struct {
 	Max      int
 }
 
-func (args *FilterOptions) UnmarshalJSON(b []byte) (err error) {
+func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []struct {
 		FromBlock interface{}   `json:"fromBlock"`
 		ToBlock   interface{}   `json:"toBlock"`
@@ -606,6 +606,16 @@ func (args *FilterStringArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 	args.Word = argstr
 
+	return nil
+}
+
+func (args *FilterStringArgs) requirements() error {
+	switch args.Word {
+	case "latest", "pending":
+		break
+	default:
+		return NewValidationError("Word", "Must be `latest` or `pending`")
+	}
 	return nil
 }
 

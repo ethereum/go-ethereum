@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,13 +15,19 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
-var pipelogger = logger.NewLogger("XETH")
+var (
+	pipelogger       = logger.NewLogger("XETH")
+	filterTickerTime = 5 * time.Minute
+	defaultGasPrice  = big.NewInt(10000000000000) //150000000000
+	defaultGas       = big.NewInt(90000)          //500000
+)
 
 // to resolve the import cycle
 type Backend interface {
@@ -62,6 +70,13 @@ type Frontend interface {
 	ConfirmTransaction(tx *types.Transaction) bool
 }
 
+// dummyFrontend is a non-interactive frontend that allows all
+// transactions but cannot not unlock any keys.
+type dummyFrontend struct{}
+
+func (dummyFrontend) UnlockAccount([]byte) bool                  { return false }
+func (dummyFrontend) ConfirmTransaction(*types.Transaction) bool { return true }
+
 type XEth struct {
 	eth            Backend
 	blockProcessor *core.BlockProcessor
@@ -71,14 +86,19 @@ type XEth struct {
 	whisper        *Whisper
 
 	frontend Frontend
+
+	quit          chan struct{}
+	filterManager *filter.FilterManager
+
+	logMut sync.RWMutex
+	logs   map[int]*logFilter
+
+	messagesMut sync.RWMutex
+	messages    map[int]*whisperFilter
+
+	// regmut   sync.Mutex
+	// register map[string][]*interface{} // TODO improve return type
 }
-
-// dummyFrontend is a non-interactive frontend that allows all
-// transactions but cannot not unlock any keys.
-type dummyFrontend struct{}
-
-func (dummyFrontend) UnlockAccount([]byte) bool                  { return false }
-func (dummyFrontend) ConfirmTransaction(*types.Transaction) bool { return true }
 
 // New creates an XEth that uses the given frontend.
 // If a nil Frontend is provided, a default frontend which
@@ -90,13 +110,74 @@ func New(eth Backend, frontend Frontend) *XEth {
 		chainManager:   eth.ChainManager(),
 		accountManager: eth.AccountManager(),
 		whisper:        NewWhisper(eth.Whisper()),
+		quit:           make(chan struct{}),
+		filterManager:  filter.NewFilterManager(eth.EventMux()),
 		frontend:       frontend,
+		logs:           make(map[int]*logFilter),
+		messages:       make(map[int]*whisperFilter),
 	}
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}
 	xeth.state = NewState(xeth, xeth.chainManager.TransState())
+	go xeth.start()
+	go xeth.filterManager.Start()
+
 	return xeth
+}
+
+func (self *XEth) start() {
+	timer := time.NewTicker(2 * time.Second)
+done:
+	for {
+		select {
+		case <-timer.C:
+			self.logMut.Lock()
+			self.messagesMut.Lock()
+			for id, filter := range self.logs {
+				if time.Since(filter.timeout) > filterTickerTime {
+					self.filterManager.UninstallFilter(id)
+					delete(self.logs, id)
+				}
+			}
+
+			for id, filter := range self.messages {
+				if time.Since(filter.timeout) > filterTickerTime {
+					self.Whisper().Unwatch(id)
+					delete(self.messages, id)
+				}
+			}
+			self.messagesMut.Unlock()
+			self.logMut.Unlock()
+		case <-self.quit:
+			break done
+		}
+	}
+}
+
+func (self *XEth) stop() {
+	close(self.quit)
+}
+
+func (self *XEth) DefaultGas() *big.Int      { return defaultGas }
+func (self *XEth) DefaultGasPrice() *big.Int { return defaultGasPrice }
+
+func (self *XEth) AtStateNum(num int64) *XEth {
+	chain := self.Backend().ChainManager()
+	var block *types.Block
+
+	if num < 0 {
+		num = chain.CurrentBlock().Number().Int64() + num + 1
+	}
+	block = chain.GetBlockByNumber(uint64(num))
+
+	var st *state.StateDB
+	if block != nil {
+		st = state.New(block.Root(), self.Backend().StateDb())
+	} else {
+		st = chain.State()
+	}
+	return self.WithState(st)
 }
 
 func (self *XEth) Backend() Backend { return self.eth }
@@ -241,6 +322,157 @@ func (self *XEth) SecretToAddress(key string) string {
 	return common.ToHex(pair.Address())
 }
 
+func (self *XEth) RegisterFilter(args *core.FilterOptions) int {
+	var id int
+	filter := core.NewFilter(self.Backend())
+	filter.SetOptions(args)
+	filter.LogsCallback = func(logs state.Logs) {
+		self.logMut.Lock()
+		defer self.logMut.Unlock()
+
+		self.logs[id].add(logs...)
+	}
+	id = self.filterManager.InstallFilter(filter)
+	self.logs[id] = &logFilter{timeout: time.Now()}
+
+	return id
+}
+
+func (self *XEth) UninstallFilter(id int) bool {
+	if _, ok := self.logs[id]; ok {
+		delete(self.logs, id)
+		self.filterManager.UninstallFilter(id)
+		return true
+	}
+
+	return false
+}
+
+func (self *XEth) NewFilterString(word string) int {
+	var id int
+	filter := core.NewFilter(self.Backend())
+
+	switch word {
+	case "pending":
+		filter.PendingCallback = func(tx *types.Transaction) {
+			self.logMut.Lock()
+			defer self.logMut.Unlock()
+
+			self.logs[id].add(&state.StateLog{})
+		}
+	case "latest":
+		filter.BlockCallback = func(block *types.Block, logs state.Logs) {
+			self.logMut.Lock()
+			defer self.logMut.Unlock()
+
+			for _, log := range logs {
+				self.logs[id].add(log)
+			}
+			self.logs[id].add(&state.StateLog{})
+		}
+	}
+
+	id = self.filterManager.InstallFilter(filter)
+	self.logs[id] = &logFilter{timeout: time.Now()}
+
+	return id
+}
+
+func (self *XEth) FilterChanged(id int) state.Logs {
+	self.logMut.Lock()
+	defer self.logMut.Unlock()
+
+	if self.logs[id] != nil {
+		return self.logs[id].get()
+	}
+
+	return nil
+}
+
+func (self *XEth) Logs(id int) state.Logs {
+	self.logMut.Lock()
+	defer self.logMut.Unlock()
+
+	filter := self.filterManager.GetFilter(id)
+	if filter != nil {
+		return filter.Find()
+	}
+
+	return nil
+}
+
+func (self *XEth) AllLogs(args *core.FilterOptions) state.Logs {
+	filter := core.NewFilter(self.Backend())
+	filter.SetOptions(args)
+
+	return filter.Find()
+}
+
+func (p *XEth) NewWhisperFilter(opts *Options) int {
+	var id int
+	opts.Fn = func(msg WhisperMessage) {
+		p.messagesMut.Lock()
+		defer p.messagesMut.Unlock()
+		p.messages[id].add(msg) // = append(p.messages[id], msg)
+	}
+	id = p.Whisper().Watch(opts)
+	p.messages[id] = &whisperFilter{timeout: time.Now()}
+	return id
+}
+
+func (p *XEth) UninstallWhisperFilter(id int) bool {
+	if _, ok := p.messages[id]; ok {
+		delete(p.messages, id)
+		return true
+	}
+
+	return false
+}
+
+func (self *XEth) MessagesChanged(id int) []WhisperMessage {
+	self.messagesMut.Lock()
+	defer self.messagesMut.Unlock()
+
+	if self.messages[id] != nil {
+		return self.messages[id].get()
+	}
+
+	return nil
+}
+
+// func (self *XEth) Register(args string) bool {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
+
+// 	if _, ok := self.register[args]; ok {
+// 		self.register[args] = nil // register with empty
+// 	}
+// 	return true
+// }
+
+// func (self *XEth) Unregister(args string) bool {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
+
+// 	if _, ok := self.register[args]; ok {
+// 		delete(self.register, args)
+// 		return true
+// 	}
+
+// 	return false
+// }
+
+// // TODO improve return type
+// func (self *XEth) PullWatchTx(args string) []*interface{} {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
+
+// 	txs := self.register[args]
+// 	self.register[args] = nil
+
+// 	return txs
+// }
+
 type KeyVal struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
@@ -298,11 +530,6 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 	return tx.Hash().Hex(), nil
 }
 
-var (
-	defaultGasPrice = big.NewInt(10000000000000)
-	defaultGas      = big.NewInt(90000)
-)
-
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	statedb := self.State().State() //self.chainManager.TransState()
 	msg := callmsg{
@@ -333,11 +560,43 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 		from             = common.HexToAddress(fromStr)
 		to               = common.HexToAddress(toStr)
 		value            = common.NewValue(valueStr)
-		gas              = common.NewValue(gasStr)
-		price            = common.NewValue(gasPriceStr)
+		gas              = common.Big(gasStr)
+		price            = common.Big(gasPriceStr)
 		data             []byte
 		contractCreation bool
 	)
+
+	// TODO if no_private_key then
+	//if _, exists := p.register[args.From]; exists {
+	//	p.register[args.From] = append(p.register[args.From], args)
+	//} else {
+	/*
+		account := accounts.Get(common.FromHex(args.From))
+		if account != nil {
+			if account.Unlocked() {
+				if !unlockAccount(account) {
+					return
+				}
+			}
+
+			result, _ := account.Transact(common.FromHex(args.To), common.FromHex(args.Value), common.FromHex(args.Gas), common.FromHex(args.GasPrice), common.FromHex(args.Data))
+			if len(result) > 0 {
+				*reply = common.ToHex(result)
+			}
+		} else if _, exists := p.register[args.From]; exists {
+			p.register[ags.From] = append(p.register[args.From], args)
+		}
+	*/
+
+	// TODO: align default values to have the same type, e.g. not depend on
+	// common.Value conversions later on
+	if gas.Cmp(big.NewInt(0)) == 0 {
+		gas = defaultGas
+	}
+
+	if price.Cmp(big.NewInt(0)) == 0 {
+		price = defaultGasPrice
+	}
 
 	data = common.FromHex(codeStr)
 	if len(toStr) == 0 {
@@ -346,9 +605,9 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 
 	var tx *types.Transaction
 	if contractCreation {
-		tx = types.NewContractCreationTx(value.BigInt(), gas.BigInt(), price.BigInt(), data)
+		tx = types.NewContractCreationTx(value.BigInt(), gas, price, data)
 	} else {
-		tx = types.NewTransactionMessage(to, value.BigInt(), gas.BigInt(), price.BigInt(), data)
+		tx = types.NewTransactionMessage(to, value.BigInt(), gas, price, data)
 	}
 
 	state := self.chainManager.TxState()
@@ -407,3 +666,36 @@ func (m callmsg) GasPrice() *big.Int            { return m.gasPrice }
 func (m callmsg) Gas() *big.Int                 { return m.gas }
 func (m callmsg) Value() *big.Int               { return m.value }
 func (m callmsg) Data() []byte                  { return m.data }
+
+type whisperFilter struct {
+	messages []WhisperMessage
+	timeout  time.Time
+	id       int
+}
+
+func (w *whisperFilter) add(msgs ...WhisperMessage) {
+	w.messages = append(w.messages, msgs...)
+}
+func (w *whisperFilter) get() []WhisperMessage {
+	w.timeout = time.Now()
+	tmp := w.messages
+	w.messages = nil
+	return tmp
+}
+
+type logFilter struct {
+	logs    state.Logs
+	timeout time.Time
+	id      int
+}
+
+func (l *logFilter) add(logs ...state.Log) {
+	l.logs = append(l.logs, logs...)
+}
+
+func (l *logFilter) get() state.Logs {
+	l.timeout = time.Now()
+	tmp := l.logs
+	l.logs = nil
+	return tmp
+}
