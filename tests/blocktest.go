@@ -19,11 +19,11 @@ import (
 )
 
 // Block Test JSON Format
-
 type btJSON struct {
 	Blocks             []btBlock
 	GenesisBlockHeader btHeader
 	Pre                map[string]btAccount
+	PostState          map[string]btAccount
 }
 
 type btAccount struct {
@@ -97,7 +97,7 @@ func LoadBlockTests(file string) (map[string]*BlockTest, error) {
 
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
-func (t *BlockTest) InsertPreState(db common.Database) error {
+func (t *BlockTest) InsertPreState(db common.Database) (*state.StateDB, error) {
 	statedb := state.New(common.Hash{}, db)
 	for addrString, acct := range t.preAccounts {
 		// XXX: is is worth it checking for errors here?
@@ -119,8 +119,35 @@ func (t *BlockTest) InsertPreState(db common.Database) error {
 	// sync trie to disk
 	statedb.Sync()
 
-	if t.Genesis.Root() != statedb.Root() {
-		return errors.New("computed state root does not match genesis block")
+	if !bytes.Equal(t.Genesis.Root(), statedb.Root()) {
+		return nil, errors.New("computed state root does not match genesis block")
+	}
+	return statedb, nil
+}
+
+func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
+	for addrString, acct := range t.preAccounts {
+		// XXX: is is worth it checking for errors here?
+		addr, _ := hex.DecodeString(addrString)
+		code, _ := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
+		balance, _ := new(big.Int).SetString(acct.Balance, 0)
+		nonce, _ := strconv.ParseUint(acct.Nonce, 16, 64)
+
+		// address is indirectly verified by the other fields, as it's the db key
+		code2    := statedb.GetCode(addr)
+		balance2 := statedb.GetBalance(addr)
+		nonce2   := statedb.GetNonce(addr)
+		if !bytes.Equal(code2, code) {
+			return fmt.Errorf("account code mismatch, addr, found, expected: ", addrString, hex.EncodeToString(code2), hex.EncodeToString(code))
+		}
+		if balance2.Cmp(balance) != 0 {
+			return fmt.Errorf("account balance mismatch, addr, found, expected: ", addrString, balance2, balance)
+		}
+		if nonce2 != nonce {
+			return fmt.Errorf("account nonce mismatch, addr, found, expected: ", addrString, nonce2, nonce)
+		}
+
+>>>>>>> Add validation of post state accounts to block tests
 	}
 	return nil
 }

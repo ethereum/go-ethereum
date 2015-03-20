@@ -52,7 +52,8 @@ func runblocktest(ctx *cli.Context) {
 	ethereum.ResetWithGenesisBlock(test.Genesis)
 
 	// import pre accounts
-	if err := test.InsertPreState(ethereum.StateDb()); err != nil {
+	statedb, err := test.InsertPreState(ethereum.StateDb())
+	if err != nil {
 		utils.Fatalf("could not insert genesis accounts: %v", err)
 	}
 
@@ -61,8 +62,14 @@ func runblocktest(ctx *cli.Context) {
 	if err := chain.InsertChain(test.Blocks); err != nil {
 		utils.Fatalf("Block Test load error: %v", err)
 	} else {
-		fmt.Println("Block Test chain loaded, starting ethereum.")
+		fmt.Println("Block Test chain loaded")
 	}
+
+	if err := test.ValidatePostState(statedb); err != nil {
+		utils.Fatalf("post state validation failed: %v", err)
+	}
+	fmt.Println("Block Test post state validated, starting ethereum.")
+
 	if startrpc == "rpc" {
 		startEth(ctx, ethereum)
 		utils.StartRPC(ethereum, ctx)
