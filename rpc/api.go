@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"math/big"
 	"path"
-	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,27 +40,6 @@ func (self *EthereumApi) xeth() *xeth.XEth {
 	defer self.xethMu.RUnlock()
 
 	return self.eth
-}
-
-func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) error {
-	if err := args.requirements(); err != nil {
-		return err
-	}
-
-	state := p.xeth().AtStateNum(args.BlockNumber).State().SafeGet(args.Address)
-	value := state.StorageString(args.Key)
-
-	var hx string
-	if strings.Index(args.Key, "0x") == 0 {
-		hx = string([]byte(args.Key)[2:])
-	} else {
-		// Convert the incoming string (which is a bigint) into hex
-		i, _ := new(big.Int).SetString(args.Key, 10)
-		hx = common.Bytes2Hex(i.Bytes())
-	}
-	rpclogger.Debugf("GetStateAt(%s, %s)\n", args.Address, hx)
-	*reply = map[string]string{args.Key: value.Str()}
-	return nil
 }
 
 // func (self *EthereumApi) Register(args string, reply *interface{}) error {
@@ -159,7 +137,14 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.GetStorageAt(args, reply)
+		if err := args.requirements(); err != nil {
+			return err
+		}
+
+		state := p.xeth().AtStateNum(args.BlockNumber).State().SafeGet(args.Address)
+		value := state.StorageString(args.Key)
+
+		*reply = common.Bytes2Hex(value.Bytes())
 	case "eth_getTransactionCount":
 		args := new(GetTxCountArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
