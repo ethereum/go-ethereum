@@ -98,12 +98,6 @@ func (self *EthereumApi) getStateWithNum(num int64) *xeth.State {
 // 	return nil
 // }
 
-func (self *EthereumApi) UninstallFilter(id int, reply *interface{}) error {
-	*reply = self.xeth().UninstallFilter(id)
-
-	return nil
-}
-
 func (self *EthereumApi) NewFilterString(args *FilterStringArgs, reply *interface{}) error {
 	if err := args.requirements(); err != nil {
 		return err
@@ -498,7 +492,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.UninstallFilter(args.Id, reply)
+		*reply = p.xeth().UninstallFilter(args.Id)
 	case "eth_getFilterChanges":
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
