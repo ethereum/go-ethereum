@@ -43,19 +43,6 @@ func (self *EthereumApi) xeth() *xeth.XEth {
 	return self.eth
 }
 
-func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) {
-	if err := args.requirements(); err != nil {
-		return err
-	}
-
-	*reply, err = p.xeth().Transact(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) error {
 	if err := args.requirements(); err != nil {
 		return err
@@ -231,7 +218,16 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.Transact(args, reply)
+
+		if err := args.requirements(); err != nil {
+			return err
+		}
+
+		v, err := p.xeth().Transact(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+		if err != nil {
+			return err
+		}
+		*reply = v
 	case "eth_call":
 		args := new(NewTxArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
