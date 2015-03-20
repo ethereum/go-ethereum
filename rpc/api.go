@@ -303,12 +303,6 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 	return nil
 }
 
-func (p *EthereumApi) GetCompilers(reply *interface{}) error {
-	c := []string{""}
-	*reply = c
-	return nil
-}
-
 func (p *EthereumApi) DbPut(args *DbArgs, reply *interface{}) error {
 	if err := args.requirements(); err != nil {
 		return err
@@ -670,7 +664,8 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		*reply = uncle
 	case "eth_getCompilers":
-		return p.GetCompilers(reply)
+		c := []string{""}
+		*reply = c
 	case "eth_compileSolidity", "eth_compileLLL", "eth_compileSerpent":
 		return NewNotImplementedError(req.Method)
 	case "eth_newFilter":
