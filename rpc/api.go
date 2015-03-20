@@ -547,7 +547,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		args := new(HashIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 		}
-		tx := p.xeth().EthTransactionByHash(hash)
+		tx := p.xeth().EthTransactionByHash(args.Hash)
 		if tx != nil {
 			*reply = NewTransactionRes(tx)
 		}
@@ -736,7 +736,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = p.xeth().Whisper().Messages(id)
+		*reply = p.xeth().Whisper().Messages(args.Id)
 	// case "eth_register":
 	// 	args, err := req.ToRegisterArgs()
 	// 	if err != nil {
