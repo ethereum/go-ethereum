@@ -66,16 +66,6 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 	return nil
 }
 
-func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
-	result, err := p.xeth().AtStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
-	if err != nil {
-		return err
-	}
-
-	*reply = result
-	return nil
-}
-
 func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) error {
 	if err := args.requirements(); err != nil {
 		return err
@@ -257,7 +247,13 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.Call(args, reply)
+
+		result, err := p.xeth().AtStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+		if err != nil {
+			return err
+		}
+
+		*reply = result
 	case "eth_flush":
 		return NewNotImplementedError(req.Method)
 	case "eth_getBlockByHash":
