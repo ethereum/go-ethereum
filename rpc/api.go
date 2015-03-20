@@ -175,11 +175,6 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 	return nil
 }
 
-func (p *EthereumApi) UninstallWhisperFilter(id int, reply *interface{}) error {
-	*reply = p.xeth().UninstallWhisperFilter(id)
-	return nil
-}
-
 func (self *EthereumApi) MessagesChanged(id int, reply *interface{}) error {
 	*reply = self.xeth().MessagesChanged(id)
 	return nil
@@ -551,8 +546,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-
-		return p.UninstallWhisperFilter(args.Id, reply)
+		*reply = p.xeth().UninstallWhisperFilter(args.Id)
 	case "shh_getFilterChanges":
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
