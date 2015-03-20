@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	protocolVersion = 0x02
+	protocolVersion uint64 = 0x02
 )
 
 type peer struct {
@@ -66,21 +66,18 @@ out:
 }
 
 func (self *peer) broadcast(envelopes []*Envelope) error {
-	envs := make([]interface{}, len(envelopes))
-	i := 0
-	for _, envelope := range envelopes {
-		if !self.known.Has(envelope.Hash()) {
-			envs[i] = envelope
-			self.known.Add(envelope.Hash())
-			i++
+	envs := make([]*Envelope, 0, len(envelopes))
+	for _, env := range envelopes {
+		if !self.known.Has(env.Hash()) {
+			envs = append(envs, env)
+			self.known.Add(env.Hash())
 		}
 	}
-
-	if i > 0 {
-		if err := p2p.Send(self.ws, envelopesMsg, envs[:i]); err != nil {
+	if len(envs) > 0 {
+		if err := p2p.Send(self.ws, envelopesMsg, envs); err != nil {
 			return err
 		}
-		self.peer.DebugDetailln("broadcasted", i, "message(s)")
+		self.peer.DebugDetailln("broadcasted", len(envs), "message(s)")
 	}
 	return nil
 }
