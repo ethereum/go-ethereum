@@ -175,16 +175,6 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 	return nil
 }
 
-func (p *EthereumApi) NewWhisperFilter(args *WhisperFilterArgs, reply *interface{}) error {
-	opts := new(xeth.Options)
-	opts.From = args.From
-	opts.To = args.To
-	opts.Topics = args.Topics
-	id := p.xeth().NewWhisperFilter(opts)
-	*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
-	return nil
-}
-
 func (p *EthereumApi) UninstallWhisperFilter(id int, reply *interface{}) error {
 	*reply = p.xeth().UninstallWhisperFilter(id)
 	return nil
@@ -550,7 +540,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.NewWhisperFilter(args, reply)
+		opts := new(xeth.Options)
+		opts.From = args.From
+		opts.To = args.To
+		opts.Topics = args.Topics
+		id := p.xeth().NewWhisperFilter(opts)
+		*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
 	case "shh_uninstallFilter":
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
