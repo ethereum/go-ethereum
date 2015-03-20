@@ -10,11 +10,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -51,28 +49,6 @@ func (self *EthereumApi) xeth() *xeth.XEth {
 	defer self.xethMu.RUnlock()
 
 	return self.eth
-}
-
-func (self *EthereumApi) xethWithStateNum(num int64) *xeth.XEth {
-	chain := self.xeth().Backend().ChainManager()
-	var block *types.Block
-
-	if num < 0 {
-		num = chain.CurrentBlock().Number().Int64() + num + 1
-	}
-	block = chain.GetBlockByNumber(uint64(num))
-
-	var st *state.StateDB
-	if block != nil {
-		st = state.New(block.Root(), self.xeth().Backend().StateDb())
-	} else {
-		st = chain.State()
-	}
-	return self.xeth().WithState(st)
-}
-
-func (self *EthereumApi) getStateWithNum(num int64) *xeth.State {
-	return self.xethWithStateNum(num).State()
 }
 
 // func (self *EthereumApi) Register(args string, reply *interface{}) error {
@@ -152,7 +128,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 }
 
 func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
-	result, err := p.xethWithStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+	result, err := p.xeth().AtStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 	if err != nil {
 		return err
 	}
@@ -166,7 +142,7 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 		return err
 	}
 
-	state := p.xethWithStateNum(args.BlockNumber).State().SafeGet(args.Address)
+	state := p.xeth().AtStateNum(args.BlockNumber).State().SafeGet(args.Address)
 	value := state.StorageString(args.Key)
 
 	var hx string
@@ -240,7 +216,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		*reply = common.ToHex(p.xethWithStateNum(args.BlockNumber).State().SafeGet(args.Address).Balance().Bytes())
+		*reply = common.ToHex(p.xeth().AtStateNum(args.BlockNumber).State().SafeGet(args.Address).Balance().Bytes())
 	case "eth_getStorage", "eth_storageAt":
 		args := new(GetStorageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -251,7 +227,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		*reply = p.xethWithStateNum(args.BlockNumber).State().SafeGet(args.Address).Storage()
+		*reply = p.xeth().AtStateNum(args.BlockNumber).State().SafeGet(args.Address).Storage()
 	case "eth_getStorageAt":
 		args := new(GetStorageAtArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -269,7 +245,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		*reply = p.xethWithStateNum(args.BlockNumber).TxCountAt(args.Address)
+		*reply = p.xeth().AtStateNum(args.BlockNumber).TxCountAt(args.Address)
 	case "eth_getBlockTransactionCountByHash":
 		args := new(GetBlockByHashArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -314,7 +290,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := args.requirements(); err != nil {
 			return err
 		}
-		*reply = p.xethWithStateNum(args.BlockNumber).CodeAt(args.Address)
+		*reply = p.xeth().AtStateNum(args.BlockNumber).CodeAt(args.Address)
 	case "eth_sendTransaction", "eth_transact":
 		args := new(NewTxArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {

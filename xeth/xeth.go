@@ -154,6 +154,24 @@ func (self *XEth) stop() {
 	close(self.quit)
 }
 
+func (self *XEth) AtStateNum(num int64) *XEth {
+	chain := self.Backend().ChainManager()
+	var block *types.Block
+
+	if num < 0 {
+		num = chain.CurrentBlock().Number().Int64() + num + 1
+	}
+	block = chain.GetBlockByNumber(uint64(num))
+
+	var st *state.StateDB
+	if block != nil {
+		st = state.New(block.Root(), self.Backend().StateDb())
+	} else {
+		st = chain.State()
+	}
+	return self.WithState(st)
+}
+
 func (self *XEth) Backend() Backend { return self.eth }
 func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 	xeth := &XEth{
