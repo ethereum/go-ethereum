@@ -521,8 +521,8 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 		from             []byte
 		to               []byte
 		value            = common.NewValue(valueStr)
-		gas              = common.NewValue(gasStr)
-		price            = common.NewValue(gasPriceStr)
+		gas              = common.Big(gasStr)
+		price            = common.Big(gasPriceStr)
 		data             []byte
 		contractCreation bool
 	)
@@ -549,6 +549,16 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 		}
 	*/
 
+	// TODO: align default values to have the same type, e.g. not depend on
+	// common.Value conversions later on
+	if gas.Cmp(big.NewInt(0)) == 0 {
+		gas = defaultGas
+	}
+
+	if price.Cmp(big.NewInt(0)) == 0 {
+		price = defaultGasPrice
+	}
+
 	from = common.FromHex(fromStr)
 	data = common.FromHex(codeStr)
 	to = common.FromHex(toStr)
@@ -558,9 +568,9 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 
 	var tx *types.Transaction
 	if contractCreation {
-		tx = types.NewContractCreationTx(value.BigInt(), gas.BigInt(), price.BigInt(), data)
+		tx = types.NewContractCreationTx(value.BigInt(), gas, price, data)
 	} else {
-		tx = types.NewTransactionMessage(to, value.BigInt(), gas.BigInt(), price.BigInt(), data)
+		tx = types.NewTransactionMessage(to, value.BigInt(), gas, price, data)
 	}
 
 	state := self.chainManager.TxState()

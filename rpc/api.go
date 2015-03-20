@@ -48,16 +48,6 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 		return err
 	}
 
-	// TODO: align default values to have the same type, e.g. not depend on
-	// common.Value conversions later on
-	if args.Gas.Cmp(big.NewInt(0)) == 0 {
-		args.Gas = p.xeth().DefaultGas()
-	}
-
-	if args.GasPrice.Cmp(big.NewInt(0)) == 0 {
-		args.GasPrice = p.xeth().DefaultGasPrice()
-	}
-
 	*reply, err = p.xeth().Transact(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 	if err != nil {
 		return err
