@@ -3,8 +3,8 @@ package crypto
 import (
 	"strings"
 
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
 type KeyPair struct {
@@ -47,12 +47,4 @@ func (k *KeyPair) Mnemonic() string {
 
 func (k *KeyPair) AsStrings() (string, string, string, string) {
 	return k.Mnemonic(), common.Bytes2Hex(k.Address()), common.Bytes2Hex(k.PrivateKey), common.Bytes2Hex(k.PublicKey)
-}
-
-func (k *KeyPair) RlpEncode() []byte {
-	return k.RlpValue().Encode()
-}
-
-func (k *KeyPair) RlpValue() *common.Value {
-	return common.NewValue(k.PrivateKey)
 }
