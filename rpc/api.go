@@ -303,16 +303,6 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 	return nil
 }
 
-func (p *EthereumApi) DbPut(args *DbArgs, reply *interface{}) error {
-	if err := args.requirements(); err != nil {
-		return err
-	}
-
-	p.db.Put([]byte(args.Database+args.Key), []byte(args.Value))
-	*reply = true
-	return nil
-}
-
 func (p *EthereumApi) DbGet(args *DbArgs, reply *interface{}) error {
 	if err := args.requirements(); err != nil {
 		return err
@@ -711,7 +701,13 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.DbPut(args, reply)
+
+		if err := args.requirements(); err != nil {
+			return err
+		}
+
+		p.db.Put([]byte(args.Database+args.Key), []byte(args.Value))
+		*reply = true
 	case "db_getString":
 		args := new(DbArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
