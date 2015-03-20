@@ -282,14 +282,6 @@ func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
 	return nil
 }
 
-func (p *EthereumApi) GetStorage(args *GetStorageArgs, reply *interface{}) error {
-	if err := args.requirements(); err != nil {
-		return err
-	}
-	*reply = p.xethWithStateNum(args.BlockNumber).State().SafeGet(args.Address).Storage()
-	return nil
-}
-
 func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) error {
 	if err := args.requirements(); err != nil {
 		return err
@@ -509,7 +501,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.GetStorage(args, reply)
+
+		if err := args.requirements(); err != nil {
+			return err
+		}
+
+		*reply = p.xethWithStateNum(args.BlockNumber).State().SafeGet(args.Address).Storage()
 	case "eth_getStorageAt":
 		args := new(GetStorageAtArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
