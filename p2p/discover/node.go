@@ -143,12 +143,12 @@ type NodeID [nodeIDBits / 8]byte
 
 // NodeID prints as a long hexadecimal number.
 func (n NodeID) String() string {
-	return fmt.Sprintf("%#x", n[:])
+	return fmt.Sprintf("%x", n[:])
 }
 
 // The Go syntax representation of a NodeID is a call to HexID.
 func (n NodeID) GoString() string {
-	return fmt.Sprintf("discover.HexID(\"%#x\")", n[:])
+	return fmt.Sprintf("discover.HexID(\"%x\")", n[:])
 }
 
 // HexID converts a hex string to a NodeID.

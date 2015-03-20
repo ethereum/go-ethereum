@@ -251,7 +251,7 @@ func accountList(ctx *cli.Context) {
 		utils.Fatalf("Could not list accounts: %v", err)
 	}
 	for _, acct := range accts {
-		fmt.Printf("Address: %#x\n", acct)
+		fmt.Printf("Address: %x\n", acct)
 	}
 }
 
