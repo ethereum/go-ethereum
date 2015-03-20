@@ -165,6 +165,20 @@ func TestStreamList(t *testing.T) {
 	}
 }
 
+func TestStreamRaw(t *testing.T) {
+	s := NewStream(bytes.NewReader(unhex("C58401010101")))
+	s.List()
+
+	want := unhex("8401010101")
+	raw, err := s.Raw()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(want, raw) {
+		t.Errorf("raw mismatch: got %x, want %x", raw, want)
+	}
+}
+
 func TestDecodeErrors(t *testing.T) {
 	r := bytes.NewReader(nil)
 
@@ -331,7 +345,7 @@ var decodeTests = []decodeTest{
 	{input: "C109", ptr: new(*[]uint), value: &[]uint{9}},
 	{input: "C58403030303", ptr: new(*[][]byte), value: &[][]byte{{3, 3, 3, 3}}},
 
-	// check that input position is advanced also empty values.
+	// check that input position is advanced also for empty values.
 	{input: "C3808005", ptr: new([]*uint), value: []*uint{nil, nil, uintp(5)}},
 
 	// pointer should be reset to nil
