@@ -112,7 +112,7 @@ func Encode(object interface{}) []byte {
 	if object != nil {
 		switch t := object.(type) {
 		case *Value:
-			buff.Write(Encode(t.Raw()))
+			buff.Write(Encode(t.Val))
 		case RlpEncodable:
 			buff.Write(Encode(t.RlpData()))
 		// Code dup :-/

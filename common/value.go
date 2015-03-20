@@ -57,14 +57,6 @@ func (val *Value) Len() int {
 	return len(val.Bytes())
 }
 
-func (val *Value) Raw() interface{} {
-	return val.Val
-}
-
-func (val *Value) Interface() interface{} {
-	return val.Val
-}
-
 func (val *Value) Uint() uint64 {
 	if Val, ok := val.Val.(uint8); ok {
 		return uint64(Val)

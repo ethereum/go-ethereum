@@ -49,7 +49,7 @@ func (db *MemDatabase) Print() {
 	for key, val := range db.db {
 		fmt.Printf("%x(%d): ", key, len(key))
 		node := common.NewValueFromBytes(val)
-		fmt.Printf("%q\n", node.Interface())
+		fmt.Printf("%q\n", node.Val)
 	}
 }
 
