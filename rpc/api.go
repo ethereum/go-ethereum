@@ -303,11 +303,6 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 	return nil
 }
 
-// func (p *EthereumApi) RemoveWhisperIdentity(args *WhisperIdentityArgs, reply *interface{}) error {
-// 	*reply = p.xeth().Whisper().RemoveIdentity(args.Identity)
-// 	return nil
-// }
-
 func (p *EthereumApi) NewWhisperFilter(args *WhisperFilterArgs, reply *interface{}) error {
 	var id int
 	opts := new(xeth.Options)
@@ -720,7 +715,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	// 	if err := json.Unmarshal(req.Params, &args); err != nil {
 	// 		return err
 	// 	}
-	// 	return p.RemoveWhisperIdentity(args, reply)
+	// 	*reply = p.xeth().Whisper().RemoveIdentity(args.Identity)
 	case "shh_hasIdentity":
 		args := new(WhisperIdentityArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
