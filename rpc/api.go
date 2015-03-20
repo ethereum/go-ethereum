@@ -7,7 +7,6 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -15,15 +14,13 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
 var (
-	defaultGasPrice  = big.NewInt(150000000000)
-	defaultGas       = big.NewInt(500000)
-	filterTickerTime = 5 * time.Minute
+	defaultGasPrice = big.NewInt(150000000000)
+	defaultGas      = big.NewInt(500000)
 )
 
 type EthereumApi struct {
@@ -31,17 +28,9 @@ type EthereumApi struct {
 	xethMu sync.RWMutex
 	mux    *event.TypeMux
 
-	quit          chan struct{}
-	filterManager *filter.FilterManager
-
-	logMut sync.RWMutex
-	logs   map[int]*logFilter
-
-	messagesMut sync.RWMutex
-	messages    map[int]*whisperFilter
-	// Register keeps a list of accounts and transaction data
-	regmut   sync.Mutex
-	register map[string][]*NewTxArgs
+	// // Register keeps a list of accounts and transaction data
+	// regmut   sync.Mutex
+	// register map[string][]*NewTxArgs
 
 	db common.Database
 }
@@ -49,16 +38,10 @@ type EthereumApi struct {
 func NewEthereumApi(eth *xeth.XEth, dataDir string) *EthereumApi {
 	db, _ := ethdb.NewLDBDatabase(path.Join(dataDir, "dapps"))
 	api := &EthereumApi{
-		eth:           eth,
-		mux:           eth.Backend().EventMux(),
-		quit:          make(chan struct{}),
-		filterManager: filter.NewFilterManager(eth.Backend().EventMux()),
-		logs:          make(map[int]*logFilter),
-		messages:      make(map[int]*whisperFilter),
-		db:            db,
+		eth: eth,
+		mux: eth.Backend().EventMux(),
+		db:  db,
 	}
-	go api.filterManager.Start()
-	go api.start()
 
 	return api
 }
@@ -83,39 +66,6 @@ func (self *EthereumApi) xethWithStateNum(num int64) *xeth.XEth {
 
 func (self *EthereumApi) getStateWithNum(num int64) *xeth.State {
 	return self.xethWithStateNum(num).State()
-}
-
-func (self *EthereumApi) start() {
-	timer := time.NewTicker(2 * time.Second)
-done:
-	for {
-		select {
-		case <-timer.C:
-			self.logMut.Lock()
-			self.messagesMut.Lock()
-			for id, filter := range self.logs {
-				if time.Since(filter.timeout) > filterTickerTime {
-					self.filterManager.UninstallFilter(id)
-					delete(self.logs, id)
-				}
-			}
-
-			for id, filter := range self.messages {
-				if time.Since(filter.timeout) > filterTickerTime {
-					self.xeth().Whisper().Unwatch(id)
-					delete(self.messages, id)
-				}
-			}
-			self.messagesMut.Unlock()
-			self.logMut.Unlock()
-		case <-self.quit:
-			break done
-		}
-	}
-}
-
-func (self *EthereumApi) stop() {
-	close(self.quit)
 }
 
 // func (self *EthereumApi) Register(args string, reply *interface{}) error {
@@ -149,91 +99,43 @@ func (self *EthereumApi) stop() {
 // }
 
 func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) error {
-	var id int
-	filter := core.NewFilter(self.xeth().Backend())
-	filter.SetOptions(toFilterOptions(args))
-	filter.LogsCallback = func(logs state.Logs) {
-		self.logMut.Lock()
-		defer self.logMut.Unlock()
-
-		self.logs[id].add(logs...)
-	}
-	id = self.filterManager.InstallFilter(filter)
-	self.logs[id] = &logFilter{timeout: time.Now()}
-
+	opts := toFilterOptions(args)
+	id := self.xeth().RegisterFilter(opts)
 	*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
 
 	return nil
 }
 
 func (self *EthereumApi) UninstallFilter(id int, reply *interface{}) error {
-	if _, ok := self.logs[id]; ok {
-		delete(self.logs, id)
-	}
+	*reply = self.xeth().UninstallFilter(id)
 
-	self.filterManager.UninstallFilter(id)
-	*reply = true
 	return nil
 }
 
 func (self *EthereumApi) NewFilterString(args *FilterStringArgs, reply *interface{}) error {
-	var id int
-	filter := core.NewFilter(self.xeth().Backend())
-
-	callback := func(block *types.Block, logs state.Logs) {
-		self.logMut.Lock()
-		defer self.logMut.Unlock()
-
-		for _, log := range logs {
-			self.logs[id].add(log)
-		}
-		self.logs[id].add(&state.StateLog{})
+	if err := args.requirements(); err != nil {
+		return err
 	}
 
-	switch args.Word {
-	case "pending":
-		filter.PendingCallback = callback
-	case "latest":
-		filter.BlockCallback = callback
-	default:
-		return NewValidationError("Word", "Must be `latest` or `pending`")
-	}
-
-	id = self.filterManager.InstallFilter(filter)
-	self.logs[id] = &logFilter{timeout: time.Now()}
+	id := self.xeth().NewFilterString(args.Word)
 	*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
-
 	return nil
 }
 
 func (self *EthereumApi) FilterChanged(id int, reply *interface{}) error {
-	self.logMut.Lock()
-	defer self.logMut.Unlock()
-
-	if self.logs[id] != nil {
-		*reply = NewLogsRes(self.logs[id].get())
-	}
-
+	*reply = NewLogsRes(self.xeth().FilterChanged(id))
 	return nil
 }
 
 func (self *EthereumApi) Logs(id int, reply *interface{}) error {
-	self.logMut.Lock()
-	defer self.logMut.Unlock()
-
-	filter := self.filterManager.GetFilter(id)
-	if filter != nil {
-		*reply = NewLogsRes(filter.Find())
-	}
+	*reply = NewLogsRes(self.xeth().Logs(id))
 
 	return nil
 }
 
 func (self *EthereumApi) AllLogs(args *FilterOptions, reply *interface{}) error {
-	filter := core.NewFilter(self.xeth().Backend())
-	filter.SetOptions(toFilterOptions(args))
-
-	*reply = NewLogsRes(filter.Find())
+	opts := toFilterOptions(args)
+	*reply = NewLogsRes(self.xeth().AllLogs(opts))
 
 	return nil
 }
@@ -385,36 +287,22 @@ func (p *EthereumApi) NewWhisperIdentity(reply *interface{}) error {
 // }
 
 func (p *EthereumApi) NewWhisperFilter(args *WhisperFilterArgs, reply *interface{}) error {
-	var id int
 	opts := new(xeth.Options)
 	opts.From = args.From
 	opts.To = args.To
 	opts.Topics = args.Topics
-	opts.Fn = func(msg xeth.WhisperMessage) {
-		p.messagesMut.Lock()
-		defer p.messagesMut.Unlock()
-		p.messages[id].add(msg) // = append(p.messages[id], msg)
-	}
-	id = p.xeth().Whisper().Watch(opts)
-	p.messages[id] = &whisperFilter{timeout: time.Now()}
+	id := p.xeth().NewWhisperFilter(opts)
 	*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
 	return nil
 }
 
 func (p *EthereumApi) UninstallWhisperFilter(id int, reply *interface{}) error {
-	delete(p.messages, id)
-	*reply = true
+	*reply = p.xeth().UninstallWhisperFilter(id)
 	return nil
 }
 
 func (self *EthereumApi) MessagesChanged(id int, reply *interface{}) error {
-	self.messagesMut.Lock()
-	defer self.messagesMut.Unlock()
-
-	if self.messages[id] != nil {
-		*reply = self.messages[id].get()
-	}
-
+	*reply = self.xeth().MessagesChanged(id)
 	return nil
 }
 
@@ -835,7 +723,7 @@ func (self *EthereumApi) xeth() *xeth.XEth {
 	return self.eth
 }
 
-func toFilterOptions(options *FilterOptions) core.FilterOptions {
+func toFilterOptions(options *FilterOptions) *core.FilterOptions {
 	var opts core.FilterOptions
 
 	// Convert optional address slice/string to byte slice
@@ -868,38 +756,5 @@ func toFilterOptions(options *FilterOptions) core.FilterOptions {
 	}
 	opts.Topics = topics
 
-	return opts
-}
-
-type whisperFilter struct {
-	messages []xeth.WhisperMessage
-	timeout  time.Time
-	id       int
-}
-
-func (w *whisperFilter) add(msgs ...xeth.WhisperMessage) {
-	w.messages = append(w.messages, msgs...)
-}
-func (w *whisperFilter) get() []xeth.WhisperMessage {
-	w.timeout = time.Now()
-	tmp := w.messages
-	w.messages = nil
-	return tmp
-}
-
-type logFilter struct {
-	logs    state.Logs
-	timeout time.Time
-	id      int
-}
-
-func (l *logFilter) add(logs ...state.Log) {
-	l.logs = append(l.logs, logs...)
-}
-
-func (l *logFilter) get() state.Logs {
-	l.timeout = time.Now()
-	tmp := l.logs
-	l.logs = nil
-	return tmp
+	return &opts
 }

@@ -609,6 +609,16 @@ func (args *FilterStringArgs) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
+func (args *FilterStringArgs) requirements() error {
+	switch args.Word {
+	case "latest", "pending":
+		break
+	default:
+		return NewValidationError("Word", "Must be `latest` or `pending`")
+	}
+	return nil
+}
+
 type FilterIdArgs struct {
 	Id int
 }
