@@ -175,11 +175,6 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 	return nil
 }
 
-func (self *EthereumApi) MessagesChanged(id int, reply *interface{}) error {
-	*reply = self.xeth().MessagesChanged(id)
-	return nil
-}
-
 func (p *EthereumApi) GetBlockByHash(blockhash string, includetx bool) (*BlockRes, error) {
 	block := p.xeth().EthBlockByHash(blockhash)
 	br := NewBlockRes(block)
@@ -552,7 +547,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.MessagesChanged(args.Id, reply)
+		*reply = p.xeth().MessagesChanged(args.Id)
 	case "shh_getMessages":
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
