@@ -70,6 +70,13 @@ type Frontend interface {
 	ConfirmTransaction(tx *types.Transaction) bool
 }
 
+// dummyFrontend is a non-interactive frontend that allows all
+// transactions but cannot not unlock any keys.
+type dummyFrontend struct{}
+
+func (dummyFrontend) UnlockAccount([]byte) bool                  { return false }
+func (dummyFrontend) ConfirmTransaction(*types.Transaction) bool { return true }
+
 type XEth struct {
 	eth            Backend
 	blockProcessor *core.BlockProcessor
@@ -89,13 +96,6 @@ type XEth struct {
 	messagesMut sync.RWMutex
 	messages    map[int]*whisperFilter
 }
-
-// dummyFrontend is a non-interactive frontend that allows all
-// transactions but cannot not unlock any keys.
-type dummyFrontend struct{}
-
-func (dummyFrontend) UnlockAccount([]byte) bool                  { return false }
-func (dummyFrontend) ConfirmTransaction(*types.Transaction) bool { return true }
 
 // New creates an XEth that uses the given frontend.
 // If a nil Frontend is provided, a default frontend which
@@ -526,6 +526,28 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 		data             []byte
 		contractCreation bool
 	)
+
+	// TODO if no_private_key then
+	//if _, exists := p.register[args.From]; exists {
+	//	p.register[args.From] = append(p.register[args.From], args)
+	//} else {
+	/*
+		account := accounts.Get(common.FromHex(args.From))
+		if account != nil {
+			if account.Unlocked() {
+				if !unlockAccount(account) {
+					return
+				}
+			}
+
+			result, _ := account.Transact(common.FromHex(args.To), common.FromHex(args.Value), common.FromHex(args.Gas), common.FromHex(args.GasPrice), common.FromHex(args.Data))
+			if len(result) > 0 {
+				*reply = common.ToHex(result)
+			}
+		} else if _, exists := p.register[args.From]; exists {
+			p.register[ags.From] = append(p.register[args.From], args)
+		}
+	*/
 
 	from = common.FromHex(fromStr)
 	data = common.FromHex(codeStr)

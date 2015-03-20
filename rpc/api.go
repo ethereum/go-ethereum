@@ -43,59 +43,7 @@ func (self *EthereumApi) xeth() *xeth.XEth {
 	return self.eth
 }
 
-// func (self *EthereumApi) Register(args string, reply *interface{}) error {
-// 	self.regmut.Lock()
-// 	defer self.regmut.Unlock()
-
-// 	if _, ok := self.register[args]; ok {
-// 		self.register[args] = nil // register with empty
-// 	}
-// 	return nil
-// }
-
-// func (self *EthereumApi) Unregister(args string, reply *interface{}) error {
-// 	self.regmut.Lock()
-// 	defer self.regmut.Unlock()
-
-// 	delete(self.register, args)
-
-// 	return nil
-// }
-
-// func (self *EthereumApi) WatchTx(args string, reply *interface{}) error {
-// 	self.regmut.Lock()
-// 	defer self.regmut.Unlock()
-
-// 	txs := self.register[args]
-// 	self.register[args] = nil
-
-// 	*reply = txs
-// 	return nil
-// }
-
 func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) {
-	// TODO if no_private_key then
-	//if _, exists := p.register[args.From]; exists {
-	//	p.register[args.From] = append(p.register[args.From], args)
-	//} else {
-	/*
-		account := accounts.Get(common.FromHex(args.From))
-		if account != nil {
-			if account.Unlocked() {
-				if !unlockAccount(account) {
-					return
-				}
-			}
-
-			result, _ := account.Transact(common.FromHex(args.To), common.FromHex(args.Value), common.FromHex(args.Gas), common.FromHex(args.GasPrice), common.FromHex(args.Data))
-			if len(result) > 0 {
-				*reply = common.ToHex(result)
-			}
-		} else if _, exists := p.register[args.From]; exists {
-			p.register[ags.From] = append(p.register[args.From], args)
-		}
-	*/
-
 	if err := args.requirements(); err != nil {
 		return err
 	}
@@ -162,6 +110,36 @@ func (p *EthereumApi) GetBlockByNumber(blocknum int64, includetx bool) (*BlockRe
 	br.fullTx = includetx
 	return br, nil
 }
+
+// func (self *EthereumApi) Register(args string, reply *interface{}) error {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
+
+// 	if _, ok := self.register[args]; ok {
+// 		self.register[args] = nil // register with empty
+// 	}
+// 	return nil
+// }
+
+// func (self *EthereumApi) Unregister(args string, reply *interface{}) error {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
+
+// 	delete(self.register, args)
+
+// 	return nil
+// }
+
+// func (self *EthereumApi) WatchTx(args string, reply *interface{}) error {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
+
+// 	txs := self.register[args]
+// 	self.register[args] = nil
+
+// 	*reply = txs
+// 	return nil
+// }
 
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
