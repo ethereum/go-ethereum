@@ -119,7 +119,7 @@ func (t *BlockTest) InsertPreState(db common.Database) (*state.StateDB, error) {
 	// sync trie to disk
 	statedb.Sync()
 
-	if !bytes.Equal(t.Genesis.Root(), statedb.Root()) {
+	if !bytes.Equal(t.Genesis.Root().Bytes(), statedb.Root().Bytes()) {
 		return nil, errors.New("computed state root does not match genesis block")
 	}
 	return statedb, nil
@@ -134,9 +134,9 @@ func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 		nonce, _ := strconv.ParseUint(acct.Nonce, 16, 64)
 
 		// address is indirectly verified by the other fields, as it's the db key
-		code2 := statedb.GetCode(addr)
-		balance2 := statedb.GetBalance(addr)
-		nonce2 := statedb.GetNonce(addr)
+		code2 := statedb.GetCode(common.BytesToAddress(addr))
+		balance2 := statedb.GetBalance(common.BytesToAddress(addr))
+		nonce2 := statedb.GetNonce(common.BytesToAddress(addr))
 		if !bytes.Equal(code2, code) {
 			return fmt.Errorf("account code mismatch, addr, found, expected: ", addrString, hex.EncodeToString(code2), hex.EncodeToString(code))
 		}

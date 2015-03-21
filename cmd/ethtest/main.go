@@ -219,7 +219,7 @@ func RunVmTest(r io.Reader) (failed int) {
 }
 
 func main() {
-	helper.Logger.SetLogLevel(5)
+	//helper.Logger.SetLogLevel(5)
 	vm.Debug = true
 
 	if len(os.Args) > 1 {
