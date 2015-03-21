@@ -140,7 +140,7 @@ func TestTable_closest(t *testing.T) {
 			t.Errorf("result contains duplicates")
 			return false
 		}
-		if !sortedByDistanceTo(test.Target, result) {
+		if !sortedByDistanceTo(test.TargetHash, result) {
 			t.Errorf("result is not sorted by distance to target")
 			return false
 		}
@@ -163,8 +163,8 @@ func TestTable_closest(t *testing.T) {
 				if contains(result, n.ID) {
 					continue // don't run the check below for nodes in result
 				}
-				farthestResult := result[len(result)-1].ID
-				if distcmp(test.Target, n.ID, farthestResult) < 0 {
+				farthestResult := result[len(result)-1].idHash
+				if distcmp(test.TargetHash, n.idHash, farthestResult) < 0 {
 					t.Errorf("table contains node that is closer to target but it's not in result")
 					t.Logf("  Target:          %v", test.Target)
 					t.Logf("  Farthest Result: %v", farthestResult)
@@ -183,8 +183,12 @@ func TestTable_closest(t *testing.T) {
 type closeTest struct {
 	Self   NodeID
 	Target NodeID
-	All    []*Node
-	N      int
+
+	SelfHash   nodeIDHash
+	TargetHash nodeIDHash
+
+	All []*Node
+	N   int
 }
 
 func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
@@ -193,8 +197,12 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 		Target: gen(NodeID{}, rand).(NodeID),
 		N:      rand.Intn(bucketSize),
 	}
+
+	t.SelfHash = hashNodeID(t.Self)
+	t.TargetHash = hashNodeID(t.Target)
+
 	for _, id := range gen([]NodeID{}, rand).([]NodeID) {
-		t.All = append(t.All, &Node{ID: id})
+		t.All = append(t.All, &Node{ID: id, idHash: hashNodeID(id)})
 	}
 	return reflect.ValueOf(t)
 }
@@ -202,6 +210,7 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 func TestTable_Lookup(t *testing.T) {
 	self := gen(NodeID{}, quickrand).(NodeID)
 	target := randomID(self, 200)
+	targetHash := hashNodeID(target)
 	transport := findnodeOracle{t, target}
 	tab := newTable(transport, self, &net.UDPAddr{})
 
@@ -215,7 +224,7 @@ func TestTable_Lookup(t *testing.T) {
 	results := tab.Lookup(target)
 	t.Logf("results:")
 	for _, e := range results {
-		t.Logf("  ld=%d, %v", logdist(target, e.ID), e.ID)
+		t.Logf("  ld=%d, %v", logdist(targetHash, e.idHash), e.ID)
 	}
 	if len(results) != bucketSize {
 		t.Errorf("wrong number of results: got %d, want %d", len(results), bucketSize)
@@ -223,7 +232,7 @@ func TestTable_Lookup(t *testing.T) {
 	if hasDuplicates(results) {
 		t.Errorf("result set contains duplicate entries")
 	}
-	if !sortedByDistanceTo(target, results) {
+	if !sortedByDistanceTo(targetHash, results) {
 		t.Errorf("result set not sorted by distance to target")
 	}
 	if !contains(results, target) {
@@ -272,13 +281,13 @@ func hasDuplicates(slice []*Node) bool {
 	return false
 }
 
-func sortedByDistanceTo(distbase NodeID, slice []*Node) bool {
-	var last NodeID
+func sortedByDistanceTo(distbase nodeIDHash, slice []*Node) bool {
+	var last nodeIDHash
 	for i, e := range slice {
-		if i > 0 && distcmp(distbase, e.ID, last) < 0 {
+		if i > 0 && distcmp(distbase, e.idHash, last) < 0 {
 			return false
 		}
-		last = e.ID
+		last = e.idHash
 	}
 	return true
 }

@@ -151,13 +151,17 @@ func TestNodeID_distcmp(t *testing.T) {
 func TestNodeID_distcmpEqual(t *testing.T) {
 	base := NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	x := NodeID{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
-	if distcmp(base, x, x) != 0 {
-		t.Errorf("distcmp(base, x, x) != 0")
+
+	baseHash := hashNodeID(base)
+	xHash := hashNodeID(x)
+
+	if distcmp(baseHash, xHash, xHash) != 0 {
+		t.Errorf("distcmp(baseHash, xHash, xHash) != 0")
 	}
 }
 
 func TestNodeID_logdist(t *testing.T) {
-	logdistBig := func(a, b NodeID) int {
+	logdistBig := func(a, b nodeIDHash) int {
 		abig, bbig := new(big.Int).SetBytes(a[:]), new(big.Int).SetBytes(b[:])
 		return new(big.Int).Xor(abig, bbig).BitLen()
 	}
@@ -169,8 +173,9 @@ func TestNodeID_logdist(t *testing.T) {
 // the random tests is likely to miss the case where they're equal.
 func TestNodeID_logdistEqual(t *testing.T) {
 	x := NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	if logdist(x, x) != 0 {
-		t.Errorf("logdist(x, x) != 0")
+	xHash := hashNodeID(x)
+	if logdist(xHash, xHash) != 0 {
+		t.Errorf("logdist(xHash, xHash) != 0")
 	}
 }
 
@@ -181,7 +186,11 @@ func TestNodeID_randomID(t *testing.T) {
 		a := gen(NodeID{}, quickrand).(NodeID)
 		dist := quickrand.Intn(len(NodeID{}) * 8)
 		result := randomID(a, dist)
-		actualdist := logdist(result, a)
+
+		resultHash := hashNodeID(result)
+		aHash := hashNodeID(a)
+
+		actualdist := logdist(resultHash, aHash)
 
 		if dist != actualdist {
 			t.Log("a:     ", a)

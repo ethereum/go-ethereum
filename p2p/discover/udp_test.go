@@ -57,7 +57,7 @@ func TestUDP_findnode(t *testing.T) {
 	// matter much, altough we need to take care not to overflow
 	// any bucket.
 	target := randomID(n1.self.ID, 100)
-	nodes := &nodesByDistance{target: target}
+	nodes := &nodesByDistance{target: hashNodeID(target)}
 	for i := 0; i < bucketSize; i++ {
 		n2.add([]*Node{&Node{
 			IP:       net.IP{1, 2, 3, byte(i)},

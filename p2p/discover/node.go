@@ -15,10 +15,21 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const nodeIDBits = 512
+
+// nodeIDHash is the hash of a NodeID
+type nodeIDHash []byte
+
+// hashNodeID generates a nodeIDHash from a NodeID by hashing it using sha3-256
+func hashNodeID(id NodeID) nodeIDHash {
+	h := sha3.NewKeccak256()
+	h.Write(id[:])
+	return nodeIDHash(h.Sum(nil))
+}
 
 // Node represents a host on the network.
 type Node struct {
@@ -29,6 +40,7 @@ type Node struct {
 	TCPPort  int // TCP listening port for RLPx
 
 	active time.Time
+	idHash []byte
 }
 
 func newNode(id NodeID, addr *net.UDPAddr) *Node {
@@ -38,6 +50,7 @@ func newNode(id NodeID, addr *net.UDPAddr) *Node {
 		DiscPort: addr.Port,
 		TCPPort:  addr.Port,
 		active:   time.Now(),
+		idHash:   hashNodeID(id),
 	}
 }
 
@@ -206,7 +219,7 @@ func recoverNodeID(hash, sig []byte) (id NodeID, err error) {
 // distcmp compares the distances a->target and b->target.
 // Returns -1 if a is closer to target, 1 if b is closer to target
 // and 0 if they are equal.
-func distcmp(target, a, b NodeID) int {
+func distcmp(target, a, b nodeIDHash) int {
 	for i := range target {
 		da := a[i] ^ target[i]
 		db := b[i] ^ target[i]
@@ -256,14 +269,14 @@ var lzcount = [256]int{
 }
 
 // logdist returns the logarithmic distance between a and b, log2(a ^ b).
-func logdist(a, b NodeID) int {
+func logdist(a, b nodeIDHash) int {
+
 	lz := 0
 	for i := range a {
 		x := a[i] ^ b[i]
-		if x == 0 {
-			lz += 8
-		} else {
-			lz += lzcount[x]
+		lz += lzcount[x]
+
+		if x != 0 {
 			break
 		}
 	}

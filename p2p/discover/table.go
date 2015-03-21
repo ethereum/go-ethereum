@@ -86,7 +86,9 @@ func (tab *Table) Lookup(target NodeID) []*Node {
 		seen           = make(map[NodeID]bool)
 		reply          = make(chan []*Node, alpha)
 		pendingQueries = 0
+		targetHash     = hashNodeID(target)
 	)
+
 	// don't query further if we hit the target or ourself.
 	// unlikely to happen often in practice.
 	asked[target] = true
@@ -94,7 +96,7 @@ func (tab *Table) Lookup(target NodeID) []*Node {
 
 	tab.mutex.Lock()
 	// update last lookup stamp (for refresh logic)
-	tab.buckets[logdist(tab.self.ID, target)].lastLookup = time.Now()
+	tab.buckets[logdist(tab.self.idHash, targetHash)].lastLookup = time.Now()
 	// generate initial result set
 	result := tab.closest(target, bucketSize)
 	tab.mutex.Unlock()
@@ -160,7 +162,7 @@ func (tab *Table) closest(target NodeID, nresults int) *nodesByDistance {
 	// This is a very wasteful way to find the closest nodes but
 	// obviously correct. I believe that tree-based buckets would make
 	// this easier to implement efficiently.
-	close := &nodesByDistance{target: target}
+	close := &nodesByDistance{target: hashNodeID(target)}
 	for _, b := range tab.buckets {
 		for _, n := range b.entries {
 			close.push(n, nresults)
@@ -180,7 +182,7 @@ func (tab *Table) len() (n int) {
 // attempts to insert the node into a bucket. The returned Node might
 // not be part of the table. The caller must hold tab.mutex.
 func (tab *Table) bumpOrAdd(node NodeID, from *net.UDPAddr) (n *Node) {
-	b := tab.buckets[logdist(tab.self.ID, node)]
+	b := tab.buckets[logdist(tab.self.idHash, hashNodeID(node))]
 	if n = b.bump(node); n == nil {
 		n = newNode(node, from)
 		if len(b.entries) == bucketSize {
@@ -214,7 +216,7 @@ func (tab *Table) pingReplace(n *Node, b *bucket) {
 // bump updates the activity timestamp for the given node.
 // The caller must hold tab.mutex.
 func (tab *Table) bump(node NodeID) {
-	tab.buckets[logdist(tab.self.ID, node)].bump(node)
+	tab.buckets[logdist(tab.self.idHash, hashNodeID(node))].bump(node)
 }
 
 // add puts the entries into the table if their corresponding
@@ -227,7 +229,7 @@ outer:
 			// input lists.
 			continue
 		}
-		bucket := tab.buckets[logdist(tab.self.ID, n.ID)]
+		bucket := tab.buckets[logdist(tab.self.idHash, n.idHash)]
 		for i := range bucket.entries {
 			if bucket.entries[i].ID == n.ID {
 				// already in bucket
@@ -257,13 +259,13 @@ func (b *bucket) bump(id NodeID) *Node {
 // distance to target.
 type nodesByDistance struct {
 	entries []*Node
-	target  NodeID
+	target  nodeIDHash
 }
 
 // push adds the given node to the list, keeping the total size below maxElems.
 func (h *nodesByDistance) push(n *Node, maxElems int) {
 	ix := sort.Search(len(h.entries), func(i int) bool {
-		return distcmp(h.target, h.entries[i].ID, n.ID) > 0
+		return distcmp(h.target, h.entries[i].idHash, n.idHash) > 0
 	})
 	if len(h.entries) < maxElems {
 		h.entries = append(h.entries, n)
