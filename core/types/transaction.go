@@ -80,7 +80,7 @@ func (self *Transaction) From() (common.Address, error) {
 		return common.Address{}, errors.New("invalid public key")
 	}
 	var addr common.Address
-	copy(addr[:], crypto.Sha3(pubkey[1:]))
+	copy(addr[:], crypto.Sha3(pubkey[1:])[12:])
 	return addr, nil
 }
 
