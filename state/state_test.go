@@ -1,7 +1,6 @@
 package state
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -61,23 +60,21 @@ func (s *StateSuite) TestDump(c *checker.C) {
 
 func (s *StateSuite) SetUpTest(c *checker.C) {
 	db, _ := ethdb.NewMemDatabase()
-	s.state = New(nil, db)
+	s.state = New(common.Hash{}, db)
 }
 
 func TestNull(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	state := New(nil, db)
+	state := New(common.Hash{}, db)
 
-	address := common.FromHex("0x823140710bf13990e4500136726d8b55")
+	address := common.HexToAddress("0x823140710bf13990e4500136726d8b55")
 	state.NewStateObject(address)
 	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
 	value := make([]byte, 16)
-	fmt.Println("test it here", common.NewValue(value))
-	state.SetState(address, []byte{0}, value)
+	state.SetState(address, common.Hash{}, value)
 	state.Update(nil)
 	state.Sync()
-	value = state.GetState(address, []byte{0})
-	fmt.Printf("res: %x\n", value)
+	value = state.GetState(address, common.Hash{})
 }
 
 func (s *StateSuite) TestSnapshot(c *checker.C) {
