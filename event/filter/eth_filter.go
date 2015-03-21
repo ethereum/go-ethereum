@@ -48,7 +48,9 @@ func (self *FilterManager) InstallFilter(filter *core.Filter) (id int) {
 func (self *FilterManager) UninstallFilter(id int) {
 	self.filterMu.Lock()
 	defer self.filterMu.Unlock()
-	delete(self.filters, id)
+	if _, ok := self.filters[id]; ok {
+		delete(self.filters, id)
+	}
 }
 
 // GetFilter retrieves a filter installed using InstallFilter.
