@@ -61,3 +61,27 @@ func (t *rawLogSystem) SetLogLevel(i LogLevel) {
 func (t *rawLogSystem) GetLogLevel() LogLevel {
 	return LogLevel(atomic.LoadUint32(&t.level))
 }
+
+// NewRawLogSystem creates a LogSystem that prints to the given writer without
+// adding extra information. Suitable for preformatted output
+func NewJsonLogSystem(writer io.Writer, flags int, level LogLevel) LogSystem {
+	logger := log.New(writer, "", 0)
+	return &jsonLogSystem{logger, uint32(level)}
+}
+
+type jsonLogSystem struct {
+	logger *log.Logger
+	level  uint32
+}
+
+func (t *jsonLogSystem) LogPrint(level LogLevel, msg string) {
+	t.logger.Print(msg)
+}
+
+func (t *jsonLogSystem) SetLogLevel(i LogLevel) {
+	atomic.StoreUint32(&t.level, uint32(i))
+}
+
+func (t *jsonLogSystem) GetLogLevel() LogLevel {
+	return LogLevel(atomic.LoadUint32(&t.level))
+}

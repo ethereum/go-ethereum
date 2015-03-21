@@ -30,6 +30,8 @@ func New(datadir string, logFile string, logLevel int, logFormat string) LogSyst
 	switch logFormat {
 	case "raw":
 		sys = NewRawLogSystem(writer, 0, LogLevel(logLevel))
+	case "json":
+		sys = NewJsonLogSystem(writer, 0, LogLevel(logLevel))
 	default:
 		sys = NewStdLogSystem(writer, log.LstdFlags, LogLevel(logLevel))
 	}
