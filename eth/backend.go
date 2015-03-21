@@ -42,11 +42,11 @@ type Config struct {
 	ProtocolVersion int
 	NetworkId       int
 
-	DataDir   string
-	LogFile   string
-	LogLevel  int
-	LogFormat string
-	VmDebug   bool
+	DataDir  string
+	LogFile  string
+	LogLevel int
+	LogJSON  string
+	VmDebug  bool
 
 	MaxPeers int
 	Port     string
@@ -136,7 +136,7 @@ type Ethereum struct {
 	blockSub event.Subscription
 	miner    *miner.Miner
 
-	logger logger.LogSystem
+	// logger logger.LogSystem
 
 	Mining          bool
 	DataDir         string
@@ -147,7 +147,10 @@ type Ethereum struct {
 
 func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
-	servlogsystem := logger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
+	logger.New(config.DataDir, config.LogFile, config.LogLevel)
+	if len(config.LogJSON) > 0 {
+		logger.NewJSONsystem(config.DataDir, config.LogJSON)
+	}
 
 	newdb := config.NewDB
 	if newdb == nil {
@@ -174,12 +177,12 @@ func New(config *Config) (*Ethereum, error) {
 	servlogger.Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
 
 	eth := &Ethereum{
-		shutdownChan:   make(chan bool),
-		blockDb:        blockDb,
-		stateDb:        stateDb,
-		extraDb:        extraDb,
-		eventMux:       &event.TypeMux{},
-		logger:         servlogsystem,
+		shutdownChan: make(chan bool),
+		blockDb:      blockDb,
+		stateDb:      stateDb,
+		extraDb:      extraDb,
+		eventMux:     &event.TypeMux{},
+		// logger:         servlogsystem,
 		accountManager: config.AccountManager,
 		DataDir:        config.DataDir,
 		version:        config.Name, // TODO should separate from Name
@@ -303,7 +306,7 @@ func (s *Ethereum) StartMining() error {
 func (s *Ethereum) StopMining()    { s.miner.Stop() }
 func (s *Ethereum) IsMining() bool { return s.miner.Mining() }
 
-func (s *Ethereum) Logger() logger.LogSystem             { return s.logger }
+// func (s *Ethereum) Logger() logger.LogSystem             { return s.logger }
 func (s *Ethereum) Name() string                         { return s.net.Name }
 func (s *Ethereum) AccountManager() *accounts.Manager    { return s.accountManager }
 func (s *Ethereum) ChainManager() *core.ChainManager     { return s.chainManager }
