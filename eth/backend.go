@@ -206,7 +206,7 @@ func New(config *Config) (*Ethereum, error) {
 	ethProto := EthProtocol(config.ProtocolVersion, config.NetworkId, eth.txPool, eth.chainManager, eth.blockPool)
 	protocols := []p2p.Protocol{ethProto}
 	if config.Shh {
-		//protocols = append(protocols, eth.whisper.Protocol())
+		protocols = append(protocols, eth.whisper.Protocol())
 	}
 
 	eth.net = &p2p.Server{

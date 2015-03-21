@@ -367,7 +367,12 @@ func makePtrDecoder(typ reflect.Type) (decoder, error) {
 	dec := func(s *Stream, val reflect.Value) (err error) {
 		_, size, err := s.Kind()
 		if err != nil || size == 0 && s.byteval == 0 {
-			val.Set(reflect.Zero(typ)) // set to nil
+			// rearm s.Kind. This is important because the input
+			// position must advance to the next value even though
+			// we don't read anything.
+			s.kind = -1
+			// set the pointer to nil.
+			val.Set(reflect.Zero(typ))
 			return err
 		}
 		newval := val
@@ -533,6 +538,31 @@ func (s *Stream) Bytes() ([]byte, error) {
 	default:
 		return nil, ErrExpectedString
 	}
+}
+
+// Raw reads a raw encoded value including RLP type information.
+func (s *Stream) Raw() ([]byte, error) {
+	kind, size, err := s.Kind()
+	if err != nil {
+		return nil, err
+	}
+	if kind == Byte {
+		s.kind = -1 // rearm Kind
+		return []byte{s.byteval}, nil
+	}
+	// the original header has already been read and is no longer
+	// available. read content and put a new header in front of it.
+	start := headsize(size)
+	buf := make([]byte, uint64(start)+size)
+	if err := s.readFull(buf[start:]); err != nil {
+		return nil, err
+	}
+	if kind == String {
+		puthead(buf, 0x80, 0xB8, size)
+	} else {
+		puthead(buf, 0xC0, 0xF7, size)
+	}
+	return buf, nil
 }
 
 var errUintOverflow = errors.New("rlp: uint overflow")

@@ -35,7 +35,7 @@ func (s *ValueSuite) TestValueTypes(c *checker.C) {
 
 	c.Assert(str.Str(), checker.Equals, strExp)
 	c.Assert(num.Uint(), checker.Equals, numExp)
-	c.Assert(NewValue(inter.Interface()).Cmp(NewValue(interExp)), checker.Equals, true)
+	c.Assert(NewValue(inter.Val).Cmp(NewValue(interExp)), checker.Equals, true)
 	c.Assert(byt.Bytes(), checker.DeepEquals, bytExp)
 	c.Assert(bigInt.BigInt(), checker.DeepEquals, bigExp)
 }

@@ -18,26 +18,31 @@ const (
 
 type Envelope struct {
 	Expiry uint32 // Whisper protocol specifies int32, really should be int64
-	Ttl    uint32 // ^^^^^^
+	TTL    uint32 // ^^^^^^
 	Topics [][]byte
 	Data   []byte
 	Nonce  uint32
 
-	hash Hash
+	hash common.Hash
 }
 
-func (self *Envelope) Hash() Hash {
-	if self.hash == EmptyHash {
-		self.hash = H(crypto.Sha3(common.Encode(self)))
+func (self *Envelope) Hash() common.Hash {
+	if (self.hash == common.Hash{}) {
+		enc, _ := rlp.EncodeToBytes(self)
+		self.hash = crypto.Sha3Hash(enc)
 	}
-
 	return self.hash
 }
 
 func NewEnvelope(ttl time.Duration, topics [][]byte, data *Message) *Envelope {
 	exp := time.Now().Add(ttl)
-
-	return &Envelope{uint32(exp.Unix()), uint32(ttl.Seconds()), topics, data.Bytes(), 0, Hash{}}
+	return &Envelope{
+		Expiry: uint32(exp.Unix()),
+		TTL:    uint32(ttl.Seconds()),
+		Topics: topics,
+		Data:   data.Bytes(),
+		Nonce:  0,
+	}
 }
 
 func (self *Envelope) Seal(pow time.Duration) {
@@ -76,7 +81,8 @@ func (self *Envelope) Open(prv *ecdsa.PrivateKey) (msg *Message, err error) {
 func (self *Envelope) proveWork(dura time.Duration) {
 	var bestBit int
 	d := make([]byte, 64)
-	copy(d[:32], common.Encode(self.withoutNonce()))
+	enc, _ := rlp.EncodeToBytes(self.withoutNonce())
+	copy(d[:32], enc)
 
 	then := time.Now().Add(dura).UnixNano()
 	for n := uint32(0); time.Now().UnixNano() < then; {
@@ -96,39 +102,28 @@ func (self *Envelope) proveWork(dura time.Duration) {
 
 func (self *Envelope) valid() bool {
 	d := make([]byte, 64)
-	copy(d[:32], common.Encode(self.withoutNonce()))
+	enc, _ := rlp.EncodeToBytes(self.withoutNonce())
+	copy(d[:32], enc)
 	binary.BigEndian.PutUint32(d[60:], self.Nonce)
 	return common.FirstBitSet(common.BigD(crypto.Sha3(d))) > 0
 }
 
 func (self *Envelope) withoutNonce() interface{} {
-	return []interface{}{self.Expiry, self.Ttl, common.ByteSliceToInterface(self.Topics), self.Data}
+	return []interface{}{self.Expiry, self.TTL, self.Topics, self.Data}
 }
 
-func (self *Envelope) RlpData() interface{} {
-	return []interface{}{self.Expiry, self.Ttl, common.ByteSliceToInterface(self.Topics), self.Data, self.Nonce}
-}
+// rlpenv is an Envelope but is not an rlp.Decoder.
+// It is used for decoding because we need to
+type rlpenv Envelope
 
 func (self *Envelope) DecodeRLP(s *rlp.Stream) error {
-	var extenv struct {
-		Expiry uint32
-		Ttl    uint32
-		Topics [][]byte
-		Data   []byte
-		Nonce  uint32
-	}
-	if err := s.Decode(&extenv); err != nil {
+	raw, err := s.Raw()
+	if err != nil {
 		return err
 	}
-
-	self.Expiry = extenv.Expiry
-	self.Ttl = extenv.Ttl
-	self.Topics = extenv.Topics
-	self.Data = extenv.Data
-	self.Nonce = extenv.Nonce
-
-	// TODO We should use the stream directly here.
-	self.hash = H(crypto.Sha3(common.Encode(self)))
-
+	if err := rlp.DecodeBytes(raw, (*rlpenv)(self)); err != nil {
+		return err
+	}
+	self.hash = crypto.Sha3Hash(raw)
 	return nil
 }
