@@ -211,7 +211,8 @@ gasLimit:
 			from, _ := tx.From()
 			self.chain.TxState().RemoveNonce(from, tx.Nonce())
 			remove = append(remove, tx)
-			minerlogger.Infof("TX (%x) failed. Transaction will be removed\n", tx.Hash().Bytes()[:4])
+			minerlogger.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
+			minerlogger.Infoln(tx)
 		case state.IsGasLimitErr(err):
 			minerlogger.Infof("Gas limit reached for block. %d TXs included in this block\n", i)
 			// Break on gas limit
