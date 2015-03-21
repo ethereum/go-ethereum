@@ -33,7 +33,7 @@ type Msg struct {
 // For the decoding rules, please see package rlp.
 func (msg Msg) Decode(val interface{}) error {
 	if err := rlp.Decode(msg.Payload, val); err != nil {
-		return newPeerError(errInvalidMsg, "(code %#x) (size %d) %v", msg.Code, msg.Size, err)
+		return newPeerError(errInvalidMsg, "(code %x) (size %d) %v", msg.Code, msg.Size, err)
 	}
 	return nil
 }
