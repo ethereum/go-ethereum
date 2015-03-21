@@ -22,13 +22,13 @@ import (
 const nodeIDBits = 512
 
 // nodeIDHash is the hash of a NodeID
-type nodeIDHash []byte
+type NodeIDHash []byte
 
 // hashNodeID generates a nodeIDHash from a NodeID by hashing it using sha3-256
-func hashNodeID(id NodeID) nodeIDHash {
+func hashNodeID(id NodeID) NodeIDHash {
 	h := sha3.NewKeccak256()
 	h.Write(id[:])
-	return nodeIDHash(h.Sum(nil))
+	return NodeIDHash(h.Sum(nil))
 }
 
 // Node represents a host on the network.
@@ -219,7 +219,7 @@ func recoverNodeID(hash, sig []byte) (id NodeID, err error) {
 // distcmp compares the distances a->target and b->target.
 // Returns -1 if a is closer to target, 1 if b is closer to target
 // and 0 if they are equal.
-func distcmp(target, a, b nodeIDHash) int {
+func distcmp(target, a, b NodeIDHash) int {
 	for i := range target {
 		da := a[i] ^ target[i]
 		db := b[i] ^ target[i]
@@ -269,7 +269,7 @@ var lzcount = [256]int{
 }
 
 // logdist returns the logarithmic distance between a and b, log2(a ^ b).
-func logdist(a, b nodeIDHash) int {
+func logdist(a, b NodeIDHash) int {
 
 	lz := 0
 	for i := range a {

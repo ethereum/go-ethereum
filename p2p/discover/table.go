@@ -259,7 +259,7 @@ func (b *bucket) bump(id NodeID) *Node {
 // distance to target.
 type nodesByDistance struct {
 	entries []*Node
-	target  nodeIDHash
+	target  NodeIDHash
 }
 
 // push adds the given node to the list, keeping the total size below maxElems.

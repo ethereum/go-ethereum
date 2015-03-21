@@ -184,8 +184,8 @@ type closeTest struct {
 	Self   NodeID
 	Target NodeID
 
-	SelfHash   nodeIDHash
-	TargetHash nodeIDHash
+	SelfHash   NodeIDHash
+	TargetHash NodeIDHash
 
 	All []*Node
 	N   int
@@ -281,8 +281,8 @@ func hasDuplicates(slice []*Node) bool {
 	return false
 }
 
-func sortedByDistanceTo(distbase nodeIDHash, slice []*Node) bool {
-	var last nodeIDHash
+func sortedByDistanceTo(distbase NodeIDHash, slice []*Node) bool {
+	var last NodeIDHash
 	for i, e := range slice {
 		if i > 0 && distcmp(distbase, e.idHash, last) < 0 {
 			return false

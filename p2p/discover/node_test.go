@@ -161,7 +161,7 @@ func TestNodeID_distcmpEqual(t *testing.T) {
 }
 
 func TestNodeID_logdist(t *testing.T) {
-	logdistBig := func(a, b nodeIDHash) int {
+	logdistBig := func(a, b NodeIDHash) int {
 		abig, bbig := new(big.Int).SetBytes(a[:]), new(big.Int).SetBytes(b[:])
 		return new(big.Int).Xor(abig, bbig).BitLen()
 	}
