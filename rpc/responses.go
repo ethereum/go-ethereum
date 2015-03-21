@@ -219,7 +219,7 @@ type FilterWhisperRes struct {
 
 type LogRes struct {
 	Address string   `json:"address"`
-	Topic   []string `json:"topic"`
+	Topics  []string `json:"topics"`
 	Data    string   `json:"data"`
 	Number  uint64   `json:"number"`
 }
@@ -229,12 +229,12 @@ func NewLogsRes(logs state.Logs) (ls []LogRes) {
 
 	for i, log := range logs {
 		var l LogRes
-		l.Topic = make([]string, len(log.Topics()))
+		l.Topics = make([]string, len(log.Topics()))
 		l.Address = log.Address().Hex()
 		l.Data = common.ToHex(log.Data())
 		l.Number = log.Number()
 		for j, topic := range log.Topics() {
-			l.Topic[j] = topic.Hex()
+			l.Topics[j] = topic.Hex()
 		}
 		ls[i] = l
 	}
