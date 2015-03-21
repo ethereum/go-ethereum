@@ -40,7 +40,7 @@ type Node struct {
 	TCPPort  int // TCP listening port for RLPx
 
 	active time.Time
-	idHash []byte
+	IDHash []byte
 }
 
 func newNode(id NodeID, addr *net.UDPAddr) *Node {
@@ -50,7 +50,7 @@ func newNode(id NodeID, addr *net.UDPAddr) *Node {
 		DiscPort: addr.Port,
 		TCPPort:  addr.Port,
 		active:   time.Now(),
-		idHash:   hashNodeID(id),
+		IDHash:   hashNodeID(id),
 	}
 }
 
