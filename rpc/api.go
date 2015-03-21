@@ -270,7 +270,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return NewValidationError("Index", "does not exist")
 		}
 
-		uhash := common.ToHex(br.Uncles[args.Index])
+		uhash := br.Uncles[args.Index].Hex()
 		uncle := NewBlockRes(p.xeth().EthBlockByHash(uhash))
 
 		*reply = uncle
@@ -288,7 +288,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return NewValidationError("Index", "does not exist")
 		}
 
-		uhash := common.ToHex(v.Uncles[args.Index])
+		uhash := v.Uncles[args.Index].Hex()
 		uncle := NewBlockRes(p.xeth().EthBlockByHash(uhash))
 
 		*reply = uncle
@@ -459,12 +459,12 @@ func toFilterOptions(options *BlockFilterArgs) *core.FilterOptions {
 
 	// Convert optional address slice/string to byte slice
 	if str, ok := options.Address.(string); ok {
-		opts.Address = [][]byte{common.FromHex(str)}
+		opts.Address = []common.Address{common.HexToAddress(str)}
 	} else if slice, ok := options.Address.([]interface{}); ok {
-		bslice := make([][]byte, len(slice))
+		bslice := make([]common.Address, len(slice))
 		for i, addr := range slice {
 			if saddr, ok := addr.(string); ok {
-				bslice[i] = common.FromHex(saddr)
+				bslice[i] = common.HexToAddress(saddr)
 			}
 		}
 		opts.Address = bslice
@@ -473,19 +473,26 @@ func toFilterOptions(options *BlockFilterArgs) *core.FilterOptions {
 	opts.Earliest = options.Earliest
 	opts.Latest = options.Latest
 
-	topics := make([][][]byte, len(options.Topics))
+	topics := make([][]common.Hash, len(options.Topics))
 	for i, topicDat := range options.Topics {
 		if slice, ok := topicDat.([]interface{}); ok {
-			topics[i] = make([][]byte, len(slice))
+			topics[i] = make([]common.Hash, len(slice))
 			for j, topic := range slice {
-				topics[i][j] = common.FromHex(topic.(string))
+				topics[i][j] = common.HexToHash(topic.(string))
 			}
 		} else if str, ok := topicDat.(string); ok {
-			topics[i] = make([][]byte, 1)
-			topics[i][0] = common.FromHex(str)
+			topics[i] = []common.Hash{common.HexToHash(str)}
 		}
 	}
 	opts.Topics = topics
 
 	return &opts
 }
+
+/*
+	Work() chan<- *types.Block
+	SetWorkCh(chan<- Work)
+	Stop()
+	Start()
+	Rate() uint64
+*/

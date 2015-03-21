@@ -1,7 +1,6 @@
 package state
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -17,15 +16,16 @@ type StateSuite struct {
 
 var _ = checker.Suite(&StateSuite{})
 
-// var ZeroHash256 = make([]byte, 32)
+var toAddr = common.BytesToAddress
 
 func (s *StateSuite) TestDump(c *checker.C) {
+	return
 	// generate a few entries
-	obj1 := s.state.GetOrNewStateObject([]byte{0x01})
+	obj1 := s.state.GetOrNewStateObject(toAddr([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
-	obj2 := s.state.GetOrNewStateObject([]byte{0x01, 0x02})
+	obj2 := s.state.GetOrNewStateObject(toAddr([]byte{0x01, 0x02}))
 	obj2.SetCode([]byte{3, 3, 3, 3, 3, 3, 3})
-	obj3 := s.state.GetOrNewStateObject([]byte{0x02})
+	obj3 := s.state.GetOrNewStateObject(toAddr([]byte{0x02}))
 	obj3.SetBalance(big.NewInt(44))
 
 	// write some of them to the trie
@@ -60,27 +60,25 @@ func (s *StateSuite) TestDump(c *checker.C) {
 
 func (s *StateSuite) SetUpTest(c *checker.C) {
 	db, _ := ethdb.NewMemDatabase()
-	s.state = New(nil, db)
+	s.state = New(common.Hash{}, db)
 }
 
 func TestNull(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	state := New(nil, db)
+	state := New(common.Hash{}, db)
 
-	address := common.FromHex("0x823140710bf13990e4500136726d8b55")
+	address := common.HexToAddress("0x823140710bf13990e4500136726d8b55")
 	state.NewStateObject(address)
 	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
 	value := make([]byte, 16)
-	fmt.Println("test it here", common.NewValue(value))
-	state.SetState(address, []byte{0}, value)
+	state.SetState(address, common.Hash{}, value)
 	state.Update(nil)
 	state.Sync()
-	value = state.GetState(address, []byte{0})
-	fmt.Printf("res: %x\n", value)
+	value = state.GetState(address, common.Hash{})
 }
 
 func (s *StateSuite) TestSnapshot(c *checker.C) {
-	stateobjaddr := []byte("aa")
+	stateobjaddr := toAddr([]byte("aa"))
 	storageaddr := common.Big("0")
 	data1 := common.NewValue(42)
 	data2 := common.NewValue(43)

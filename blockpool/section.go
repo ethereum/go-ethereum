@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -27,9 +28,9 @@ type section struct {
 	nodes  []*node
 
 	peer       *peer
-	parentHash []byte
+	parentHash common.Hash
 
-	blockHashes [][]byte
+	blockHashes []common.Hash
 
 	poolRootIndex int
 
@@ -82,9 +83,9 @@ func (self *BlockPool) newSection(nodes []*node) *section {
 		offC:          make(chan bool),
 	}
 
-	for i, node := range nodes {
-		entry := &entry{node: node, section: sec, index: &index{i}}
-		self.set(node.hash, entry)
+	for i, n := range nodes {
+		entry := &entry{node: n, section: sec, index: &index{i}}
+		self.set(n.hash, entry)
 	}
 
 	plog.DebugDetailf("[%s] setup section process", sectionhex(sec))
@@ -103,20 +104,22 @@ func (self *section) addSectionToBlockChain(p *peer) {
 			self.bp.wg.Done()
 		}()
 
-		var node *node
-		var keys []string
+		var nodes []*node
+		var n *node
+		var keys []common.Hash
 		var blocks []*types.Block
 		for self.poolRootIndex > 0 {
-			node = self.nodes[self.poolRootIndex-1]
-			node.lock.RLock()
-			block := node.block
-			node.lock.RUnlock()
+			n = self.nodes[self.poolRootIndex-1]
+			n.lock.RLock()
+			block := n.block
+			n.lock.RUnlock()
 			if block == nil {
 				break
 			}
 			self.poolRootIndex--
-			keys = append(keys, string(node.hash))
+			keys = append(keys, n.hash)
 			blocks = append(blocks, block)
+			nodes = append(nodes, n)
 		}
 
 		if len(blocks) == 0 {
@@ -133,13 +136,20 @@ func (self *section) addSectionToBlockChain(p *peer) {
 		err := self.bp.insertChain(blocks)
 		if err != nil {
 			self.invalid = true
-			self.bp.peers.peerError(node.blockBy, ErrInvalidBlock, "%v", err)
-			plog.Warnf("invalid block %x", node.hash)
-			plog.Warnf("penalise peers %v (hash), %v (block)", node.hashBy, node.blockBy)
+			self.bp.peers.peerError(n.blockBy, ErrInvalidBlock, "%v", err)
+			plog.Warnf("invalid block %x", n.hash)
+			plog.Warnf("penalise peers %v (hash), %v (block)", n.hashBy, n.blockBy)
 
 			// or invalid block and the entire chain needs to be removed
 			self.removeChain()
 		} else {
+			// check tds
+			self.bp.wg.Add(1)
+			go func() {
+				plog.DebugDetailf("checking td")
+				self.bp.checkTD(nodes...)
+				self.bp.wg.Done()
+			}()
 			// if all blocks inserted in this section
 			// then need to try to insert blocks in child section
 			if self.poolRootIndex == 0 {
@@ -166,9 +176,9 @@ func (self *section) addSectionToBlockChain(p *peer) {
 
 		self.bp.status.lock.Lock()
 		if err == nil {
-			headKey := string(blocks[0].ParentHash())
+			headKey := blocks[0].ParentHash().Str()
 			height := self.bp.status.chain[headKey] + len(blocks)
-			self.bp.status.chain[string(blocks[len(blocks)-1].Hash())] = height
+			self.bp.status.chain[blocks[len(blocks)-1].Hash().Str()] = height
 			if height > self.bp.status.values.LongestChain {
 				self.bp.status.values.LongestChain = height
 			}
@@ -177,7 +187,7 @@ func (self *section) addSectionToBlockChain(p *peer) {
 		self.bp.status.values.BlocksInChain += len(blocks)
 		self.bp.status.values.BlocksInPool -= len(blocks)
 		if err != nil {
-			self.bp.status.badPeers[node.blockBy]++
+			self.bp.status.badPeers[n.blockBy]++
 		}
 		self.bp.status.lock.Unlock()
 
@@ -316,7 +326,7 @@ LOOP:
 						self.addSectionToBlockChain(self.peer)
 					}
 				} else {
-					if self.parentHash == nil && n == self.bottom {
+					if (self.parentHash == common.Hash{}) && n == self.bottom {
 						self.parentHash = block.ParentHash()
 						plog.DebugDetailf("[%s] got parent head block hash %s...checking", sectionhex(self), hex(self.parentHash))
 						self.blockHashesRequest()
@@ -456,7 +466,7 @@ func (self *section) blockHashesRequest() {
 			// a demoted peer's fork will be chosen over the best peer's chain
 			// because relinking the correct chain (activateChain) is overwritten here in
 			// demoted peer's section process just before the section is put to idle mode
-			if self.parentHash != nil {
+			if (self.parentHash != common.Hash{}) {
 				if parent := self.bp.get(self.parentHash); parent != nil {
 					parentSection = parent.section
 					plog.DebugDetailf("[%s] blockHashesRequest: parent section [%s] linked\n", sectionhex(self), sectionhex(parentSection))

@@ -33,10 +33,7 @@ func New(env Environment) *Vm {
 }
 
 func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
-	//func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
-
-	//context := NewContext(caller, me, code, gas, price)
 	var (
 		caller = context.caller
 		code   = context.Code
@@ -44,7 +41,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		price  = context.Price
 	)
 
-	self.Printf("(%d) (%x) %x (code=%d) gas: %v (d) %x", self.env.Depth(), caller.Address()[:4], context.Address(), len(code), context.Gas, callData).Endl()
+	self.Printf("(%d) (%x) %x (code=%d) gas: %v (d) %x", self.env.Depth(), caller.Address().Bytes()[:4], context.Address(), len(code), context.Gas, callData).Endl()
 
 	if self.Recoverable {
 		// Recover from any require exception
@@ -57,13 +54,14 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				ret = context.Return(nil)
 
 				err = fmt.Errorf("%v", r)
-
 			}
 		}()
 	}
 
-	if p := Precompiled[string(context.CodeAddr)]; p != nil {
-		return self.RunPrecompiled(p, callData, context)
+	if context.CodeAddr != nil {
+		if p := Precompiled[context.CodeAddr.Str()]; p != nil {
+			return self.RunPrecompiled(p, callData, context)
+		}
 	}
 
 	var (
@@ -394,11 +392,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			self.Printf(" => (%v) %x", size, data)
 			// 0x30 range
 		case ADDRESS:
-			stack.push(common.BigD(context.Address()))
+			stack.push(common.Bytes2Big(context.Address().Bytes()))
 
 			self.Printf(" => %x", context.Address())
 		case BALANCE:
-			addr := stack.pop().Bytes()
+			addr := common.BigToAddress(stack.pop())
 			balance := statedb.GetBalance(addr)
 
 			stack.push(balance)
@@ -407,12 +405,12 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		case ORIGIN:
 			origin := self.env.Origin()
 
-			stack.push(common.BigD(origin))
+			stack.push(origin.Big())
 
 			self.Printf(" => %x", origin)
 		case CALLER:
 			caller := context.caller.Address()
-			stack.push(common.BigD(caller))
+			stack.push(common.Bytes2Big(caller.Bytes()))
 
 			self.Printf(" => %x", caller)
 		case CALLVALUE:
@@ -447,18 +445,15 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				cOff = stack.pop()
 				l    = stack.pop()
 			)
-			var data []byte
-			if cOff.Cmp(big.NewInt(int64(len(callData)))) <= 0 {
-				data = getData(callData, cOff.Uint64(), l.Uint64())
-			}
+			data := getData(callData, cOff, l)
 
 			mem.Set(mOff.Uint64(), l.Uint64(), data)
 
-			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, data)
+			self.Printf(" => [%v, %v, %v]", mOff, cOff, l)
 		case CODESIZE, EXTCODESIZE:
 			var code []byte
 			if op == EXTCODESIZE {
-				addr := stack.pop().Bytes()
+				addr := common.BigToAddress(stack.pop())
 
 				code = statedb.GetCode(addr)
 			} else {
@@ -472,7 +467,8 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		case CODECOPY, EXTCODECOPY:
 			var code []byte
 			if op == EXTCODECOPY {
-				code = statedb.GetCode(stack.pop().Bytes())
+				addr := common.BigToAddress(stack.pop())
+				code = statedb.GetCode(addr)
 			} else {
 				code = context.Code
 			}
@@ -483,10 +479,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				l    = stack.pop()
 			)
 
-			var codeCopy []byte
-			if cOff.Cmp(big.NewInt(int64(len(code)))) <= 0 {
-				codeCopy = getData(code, cOff.Uint64(), l.Uint64())
-			}
+			codeCopy := getData(code, cOff, l)
 
 			mem.Set(mOff.Uint64(), l.Uint64(), codeCopy)
 
@@ -502,7 +495,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			n := new(big.Int).Sub(self.env.BlockNumber(), common.Big257)
 			if num.Cmp(n) > 0 && num.Cmp(self.env.BlockNumber()) < 0 {
-				stack.push(common.BigD(self.env.GetHash(num.Uint64())))
+				stack.push(self.env.GetHash(num.Uint64()).Big())
 			} else {
 				stack.push(common.Big0)
 			}
@@ -511,7 +504,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		case COINBASE:
 			coinbase := self.env.Coinbase()
 
-			stack.push(common.BigD(coinbase))
+			stack.push(coinbase.Big())
 
 			self.Printf(" => 0x%x", coinbase)
 		case TIMESTAMP:
@@ -562,10 +555,10 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			self.Printf(" => [%d]", n)
 		case LOG0, LOG1, LOG2, LOG3, LOG4:
 			n := int(op - LOG0)
-			topics := make([][]byte, n)
+			topics := make([]common.Hash, n)
 			mStart, mSize := stack.pop(), stack.pop()
 			for i := 0; i < n; i++ {
-				topics[i] = common.LeftPadBytes(stack.pop().Bytes(), 32)
+				topics[i] = common.BigToHash(stack.pop()) //common.LeftPadBytes(stack.pop().Bytes(), 32)
 			}
 
 			data := mem.Get(mStart.Int64(), mSize.Int64())
@@ -586,22 +579,24 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			self.Printf(" => 0x%x", val)
 		case MSTORE8:
-			off, val := stack.pop(), stack.pop()
+			off, val := stack.pop().Int64(), stack.pop().Int64()
 
-			mem.store[off.Int64()] = byte(val.Int64() & 0xff)
+			mem.store[off] = byte(val & 0xff)
 
-			self.Printf(" => [%v] 0x%x", off, val)
+			self.Printf(" => [%v] 0x%x", off, mem.store[off])
 		case SLOAD:
-			loc := stack.pop()
-			val := common.BigD(statedb.GetState(context.Address(), loc.Bytes()))
+			loc := common.BigToHash(stack.pop())
+			val := common.Bytes2Big(statedb.GetState(context.Address(), loc))
 			stack.push(val)
 
-			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
+			self.Printf(" {0x%x : 0x%x}", loc, val.Bytes())
 		case SSTORE:
-			loc, val := stack.pop(), stack.pop()
-			statedb.SetState(context.Address(), loc.Bytes(), val)
+			loc := common.BigToHash(stack.pop())
+			val := stack.pop()
 
-			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
+			statedb.SetState(context.Address(), loc, val)
+
+			self.Printf(" {0x%x : 0x%x}", loc, val.Bytes())
 		case JUMP:
 			jump(pc, stack.pop())
 
@@ -634,7 +629,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				offset, size = stack.pop(), stack.pop()
 				input        = mem.Get(offset.Int64(), size.Int64())
 				gas          = new(big.Int).Set(context.Gas)
-				addr         []byte
+				addr         common.Address
 			)
 			self.Endl()
 
@@ -654,7 +649,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				}
 				addr = ref.Address()
 
-				stack.push(common.BigD(addr))
+				stack.push(addr.Big())
 
 			}
 
@@ -668,7 +663,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			// pop return size and offset
 			retOffset, retSize := stack.pop(), stack.pop()
 
-			address := common.Address(addr.Bytes())
+			address := common.BigToAddress(addr)
 			self.Printf(" => %x", address).Endl()
 
 			// Get the arguments from the memory
@@ -706,10 +701,10 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			return context.Return(ret), nil
 		case SUICIDE:
-			receiver := statedb.GetOrNewStateObject(stack.pop().Bytes())
+			receiver := statedb.GetOrNewStateObject(common.BigToAddress(stack.pop()))
 			balance := statedb.GetBalance(context.Address())
 
-			self.Printf(" => (%x) %v", receiver.Address()[:4], balance)
+			self.Printf(" => (%x) %v", receiver.Address().Bytes()[:4], balance)
 
 			receiver.AddBalance(balance)
 
@@ -769,7 +764,7 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 
 		var g *big.Int
 		y, x := stack.data[stack.len()-2], stack.data[stack.len()-1]
-		val := statedb.GetState(context.Address(), x.Bytes())
+		val := statedb.GetState(context.Address(), common.BigToHash(x))
 		if len(val) == 0 && len(y.Bytes()) > 0 {
 			// 0 => non 0
 			g = GasStorageAdd
@@ -821,7 +816,7 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		gas.Add(gas, stack.data[stack.len()-1])
 
 		if op == CALL {
-			if self.env.State().GetStateObject(stack.data[stack.len()-2].Bytes()) == nil {
+			if self.env.State().GetStateObject(common.BigToAddress(stack.data[stack.len()-2])) == nil {
 				gas.Add(gas, GasCallNewAccount)
 			}
 		}

@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
 	"os"
@@ -35,7 +34,7 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 	// asert the bmans have the same block at i
 	bi1 := bman.bc.GetBlockByNumber(uint64(i)).Hash()
 	bi2 := bman2.bc.GetBlockByNumber(uint64(i)).Hash()
-	if bytes.Compare(bi1, bi2) != 0 {
+	if bi1 != bi2 {
 		t.Fatal("chains do not have the same hash at height", i)
 	}
 
@@ -70,7 +69,7 @@ func printChain(bc *ChainManager) {
 func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 	td := new(big.Int)
 	for _, block := range chainB {
-		td2, err := bman.bc.processor.Process(block)
+		td2, _, err := bman.bc.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
@@ -270,11 +269,11 @@ func TestChainInsertions(t *testing.T) {
 		<-done
 	}
 
-	if bytes.Equal(chain2[len(chain2)-1].Hash(), chainMan.CurrentBlock().Hash()) {
+	if chain2[len(chain2)-1].Hash() != chainMan.CurrentBlock().Hash() {
 		t.Error("chain2 is canonical and shouldn't be")
 	}
 
-	if !bytes.Equal(chain1[len(chain1)-1].Hash(), chainMan.CurrentBlock().Hash()) {
+	if chain1[len(chain1)-1].Hash() != chainMan.CurrentBlock().Hash() {
 		t.Error("chain1 isn't canonical and should be")
 	}
 }
@@ -320,7 +319,7 @@ func TestChainMultipleInsertions(t *testing.T) {
 		<-done
 	}
 
-	if !bytes.Equal(chains[longest][len(chains[longest])-1].Hash(), chainMan.CurrentBlock().Hash()) {
+	if chains[longest][len(chains[longest])-1].Hash() != chainMan.CurrentBlock().Hash() {
 		t.Error("Invalid canonical chain")
 	}
 }

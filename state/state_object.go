@@ -44,7 +44,7 @@ type StateObject struct {
 	State *StateDB
 
 	// Address belonging to this account
-	address []byte
+	address common.Address
 	// The balance of the account
 	balance *big.Int
 	// The nonce of the account
@@ -77,12 +77,12 @@ func (self *StateObject) Reset() {
 	self.State.Reset()
 }
 
-func NewStateObject(addr []byte, db common.Database) *StateObject {
+func NewStateObject(address common.Address, db common.Database) *StateObject {
 	// This to ensure that it has 20 bytes (and not 0 bytes), thus left or right pad doesn't matter.
-	address := common.Address(addr)
+	//address := common.ToAddress(addr)
 
 	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
-	object.State = New(nil, db) //New(trie.New(common.Config.Db, ""))
+	object.State = New(common.Hash{}, db) //New(trie.New(common.Config.Db, ""))
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
 	object.prepaid = new(big.Int)
@@ -90,12 +90,12 @@ func NewStateObject(addr []byte, db common.Database) *StateObject {
 	return object
 }
 
-func NewStateObjectFromBytes(address, data []byte, db common.Database) *StateObject {
+func NewStateObjectFromBytes(address common.Address, data []byte, db common.Database) *StateObject {
 	// TODO clean me up
 	var extobject struct {
 		Nonce    uint64
 		Balance  *big.Int
-		Root     []byte
+		Root     common.Hash
 		CodeHash []byte
 	}
 	err := rlp.Decode(bytes.NewReader(data), &extobject)
@@ -124,8 +124,8 @@ func (self *StateObject) MarkForDeletion() {
 	statelogger.Debugf("%x: #%d %v X\n", self.Address(), self.nonce, self.balance)
 }
 
-func (c *StateObject) getAddr(addr []byte) *common.Value {
-	return common.NewValueFromBytes([]byte(c.State.trie.Get(addr)))
+func (c *StateObject) getAddr(addr common.Hash) *common.Value {
+	return common.NewValueFromBytes([]byte(c.State.trie.Get(addr[:])))
 }
 
 func (c *StateObject) setAddr(addr []byte, value interface{}) {
@@ -133,34 +133,32 @@ func (c *StateObject) setAddr(addr []byte, value interface{}) {
 }
 
 func (self *StateObject) GetStorage(key *big.Int) *common.Value {
-	return self.GetState(key.Bytes())
+	return self.GetState(common.BytesToHash(key.Bytes()))
 }
 func (self *StateObject) SetStorage(key *big.Int, value *common.Value) {
-	self.SetState(key.Bytes(), value)
+	self.SetState(common.BytesToHash(key.Bytes()), value)
 }
 
 func (self *StateObject) Storage() Storage {
 	return self.storage
 }
 
-func (self *StateObject) GetState(k []byte) *common.Value {
-	key := common.LeftPadBytes(k, 32)
-
-	value := self.storage[string(key)]
+func (self *StateObject) GetState(key common.Hash) *common.Value {
+	strkey := key.Str()
+	value := self.storage[strkey]
 	if value == nil {
 		value = self.getAddr(key)
 
 		if !value.IsNil() {
-			self.storage[string(key)] = value
+			self.storage[strkey] = value
 		}
 	}
 
 	return value
 }
 
-func (self *StateObject) SetState(k []byte, value *common.Value) {
-	key := common.LeftPadBytes(k, 32)
-	self.storage[string(key)] = value.Copy()
+func (self *StateObject) SetState(k common.Hash, value *common.Value) {
+	self.storage[k.Str()] = value.Copy()
 	self.dirty = true
 }
 
@@ -284,7 +282,7 @@ func (c *StateObject) N() *big.Int {
 }
 
 // Returns the address of the contract/account
-func (c *StateObject) Address() []byte {
+func (c *StateObject) Address() common.Address {
 	return c.address
 }
 
@@ -341,7 +339,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 	decoder := common.NewValueFromBytes(data)
 	c.nonce = decoder.Get(0).Uint()
 	c.balance = decoder.Get(1).BigInt()
-	c.State = New(decoder.Get(2).Bytes(), c.db) //New(trie.New(common.Config.Db, decoder.Get(2).Interface()))
+	c.State = New(common.BytesToHash(decoder.Get(2).Bytes()), c.db) //New(trie.New(common.Config.Db, decoder.Get(2).Interface()))
 	c.storage = make(map[string]*common.Value)
 	c.gasPool = new(big.Int)
 

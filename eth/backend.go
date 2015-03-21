@@ -195,7 +195,8 @@ func New(config *Config) (*Ethereum, error) {
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
-	eth.blockPool = blockpool.New(hasBlock, insertChain, eth.pow.Verify)
+	td := eth.chainManager.Td()
+	eth.blockPool = blockpool.New(hasBlock, insertChain, eth.pow.Verify, eth.EventMux(), td)
 
 	netprv, err := config.nodeKey()
 	if err != nil {
@@ -295,7 +296,7 @@ func (s *Ethereum) StartMining() error {
 		servlogger.Errorf("Cannot start mining without coinbase: %v\n", err)
 		return fmt.Errorf("no coinbase: %v", err)
 	}
-	s.miner.Start(cb)
+	s.miner.Start(common.BytesToAddress(cb))
 	return nil
 }
 
@@ -405,7 +406,7 @@ func (self *Ethereum) txBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.txSub.Chan() {
 		event := obj.(core.TxPreEvent)
-		self.net.Broadcast("eth", TxMsg, event.Tx.RlpData())
+		self.net.Broadcast("eth", TxMsg, []*types.Transaction{event.Tx})
 	}
 }
 
@@ -414,7 +415,7 @@ func (self *Ethereum) blockBroadcastLoop() {
 	for obj := range self.blockSub.Chan() {
 		switch ev := obj.(type) {
 		case core.NewMinedBlockEvent:
-			self.net.Broadcast("eth", NewBlockMsg, ev.Block.RlpData(), ev.Block.Td)
+			self.net.Broadcast("eth", NewBlockMsg, []interface{}{ev.Block, ev.Block.Td})
 		}
 	}
 }

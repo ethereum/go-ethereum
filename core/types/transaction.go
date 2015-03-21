@@ -1,14 +1,14 @@
 package types
 
 import (
-	"bytes"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -20,39 +20,34 @@ type Transaction struct {
 	AccountNonce uint64
 	Price        *big.Int
 	GasLimit     *big.Int
-	Recipient    []byte
+	Recipient    *common.Address // nil means contract creation
 	Amount       *big.Int
 	Payload      []byte
 	V            byte
 	R, S         []byte
 }
 
-func NewContractCreationTx(Amount, gasAmount, price *big.Int, data []byte) *Transaction {
-	return NewTransactionMessage(nil, Amount, gasAmount, price, data)
+func NewContractCreationTx(amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
+	return &Transaction{Recipient: nil, Amount: amount, GasLimit: gasLimit, Price: gasPrice, Payload: data}
 }
 
-func NewTransactionMessage(to []byte, Amount, gasAmount, price *big.Int, data []byte) *Transaction {
-	return &Transaction{Recipient: to, Amount: Amount, Price: price, GasLimit: gasAmount, Payload: data}
+func NewTransactionMessage(to common.Address, amount, gasAmount, gasPrice *big.Int, data []byte) *Transaction {
+	return &Transaction{Recipient: &to, Amount: amount, GasLimit: gasAmount, Price: gasPrice, Payload: data}
 }
 
 func NewTransactionFromBytes(data []byte) *Transaction {
-	tx := &Transaction{}
-	tx.RlpDecode(data)
-
+	// TODO: remove this function if possible. callers would
+	// much better off decoding into transaction directly.
+	// it's not that hard.
+	tx := new(Transaction)
+	rlp.DecodeBytes(data, tx)
 	return tx
 }
 
-func NewTransactionFromAmount(val *common.Value) *Transaction {
-	tx := &Transaction{}
-	tx.RlpValueDecode(val)
-
-	return tx
-}
-
-func (tx *Transaction) Hash() []byte {
-	data := []interface{}{tx.AccountNonce, tx.Price, tx.GasLimit, tx.Recipient, tx.Amount, tx.Payload}
-
-	return crypto.Sha3(common.Encode(data))
+func (tx *Transaction) Hash() common.Hash {
+	return rlpHash([]interface{}{
+		tx.AccountNonce, tx.Price, tx.GasLimit, tx.Recipient, tx.Amount, tx.Payload,
+	})
 }
 
 func (self *Transaction) Data() []byte {
@@ -79,66 +74,45 @@ func (self *Transaction) SetNonce(AccountNonce uint64) {
 	self.AccountNonce = AccountNonce
 }
 
-func (self *Transaction) From() []byte {
-	return self.sender()
+func (self *Transaction) From() (common.Address, error) {
+	pubkey := self.PublicKey()
+	if len(pubkey) == 0 || pubkey[0] != 4 {
+		return common.Address{}, errors.New("invalid public key")
+	}
+	var addr common.Address
+	copy(addr[:], crypto.Sha3(pubkey[1:])[12:])
+	return addr, nil
 }
 
-func (self *Transaction) To() []byte {
-	return self.Recipient
+// To returns the recipient of the transaction.
+// If transaction is a contract creation (with no recipient address)
+// To returns nil.
+func (tx *Transaction) To() *common.Address {
+	return tx.Recipient
 }
 
 func (tx *Transaction) Curve() (v byte, r []byte, s []byte) {
 	v = byte(tx.V)
 	r = common.LeftPadBytes(tx.R, 32)
 	s = common.LeftPadBytes(tx.S, 32)
-
 	return
 }
 
 func (tx *Transaction) Signature(key []byte) []byte {
 	hash := tx.Hash()
-
-	sig, _ := secp256k1.Sign(hash, key)
-
+	sig, _ := secp256k1.Sign(hash[:], key)
 	return sig
 }
 
 func (tx *Transaction) PublicKey() []byte {
 	hash := tx.Hash()
-
 	v, r, s := tx.Curve()
-
 	sig := append(r, s...)
 	sig = append(sig, v-27)
 
 	//pubkey := crypto.Ecrecover(append(hash, sig...))
-	pubkey, _ := secp256k1.RecoverPubkey(hash, sig)
-
+	pubkey, _ := secp256k1.RecoverPubkey(hash[:], sig)
 	return pubkey
-}
-
-func (tx *Transaction) sender() []byte {
-	pubkey := tx.PublicKey()
-
-	// Validate the returned key.
-	// Return nil if public key isn't in full format
-	if len(pubkey) == 0 || pubkey[0] != 4 {
-		return nil
-	}
-
-	return crypto.Sha3(pubkey[1:])[12:]
-}
-
-// TODO: deprecate after new accounts & key stores are integrated
-func (tx *Transaction) Sign(privk []byte) error {
-
-	sig := tx.Signature(privk)
-
-	tx.R = sig[:32]
-	tx.S = sig[32:64]
-	tx.V = sig[64] + 27
-
-	return nil
 }
 
 func (tx *Transaction) SetSignatureValues(sig []byte) error {
@@ -148,42 +122,40 @@ func (tx *Transaction) SetSignatureValues(sig []byte) error {
 	return nil
 }
 
-func (tx *Transaction) SignECDSA(key *ecdsa.PrivateKey) error {
-	return tx.Sign(crypto.FromECDSA(key))
+func (tx *Transaction) SignECDSA(prv *ecdsa.PrivateKey) error {
+	h := tx.Hash()
+	sig, err := crypto.Sign(h[:], prv)
+	if err != nil {
+		return err
+	}
+	tx.SetSignatureValues(sig)
+	return nil
 }
 
+// TODO: remove
 func (tx *Transaction) RlpData() interface{} {
 	data := []interface{}{tx.AccountNonce, tx.Price, tx.GasLimit, tx.Recipient, tx.Amount, tx.Payload}
-
 	return append(data, tx.V, new(big.Int).SetBytes(tx.R).Bytes(), new(big.Int).SetBytes(tx.S).Bytes())
 }
 
-func (tx *Transaction) RlpEncode() []byte {
-	return common.Encode(tx)
-}
-
-func (tx *Transaction) RlpDecode(data []byte) {
-	rlp.Decode(bytes.NewReader(data), tx)
-}
-
-func (tx *Transaction) RlpValueDecode(decoder *common.Value) {
-	tx.AccountNonce = decoder.Get(0).Uint()
-	tx.Price = decoder.Get(1).BigInt()
-	tx.GasLimit = decoder.Get(2).BigInt()
-	tx.Recipient = decoder.Get(3).Bytes()
-	tx.Amount = decoder.Get(4).BigInt()
-	tx.Payload = decoder.Get(5).Bytes()
-	tx.V = decoder.Get(6).Byte()
-	tx.R = decoder.Get(7).Bytes()
-	tx.S = decoder.Get(8).Bytes()
-}
-
 func (tx *Transaction) String() string {
+	var from, to string
+	if f, err := tx.From(); err != nil {
+		from = "[invalid sender]"
+	} else {
+		from = fmt.Sprintf("%x", f[:])
+	}
+	if t := tx.To(); t == nil {
+		to = "[contract creation]"
+	} else {
+		to = fmt.Sprintf("%x", t[:])
+	}
+	enc, _ := rlp.EncodeToBytes(tx)
 	return fmt.Sprintf(`
 	TX(%x)
 	Contract: %v
-	From:     %x
-	To:       %x
+	From:     %s
+	To:       %s
 	Nonce:    %v
 	GasPrice: %v
 	GasLimit  %v
@@ -196,8 +168,8 @@ func (tx *Transaction) String() string {
 `,
 		tx.Hash(),
 		len(tx.Recipient) == 0,
-		tx.From(),
-		tx.To(),
+		from,
+		to,
 		tx.AccountNonce,
 		tx.Price,
 		tx.GasLimit,
@@ -206,13 +178,14 @@ func (tx *Transaction) String() string {
 		tx.V,
 		tx.R,
 		tx.S,
-		common.Encode(tx),
+		enc,
 	)
 }
 
 // Transaction slice type for basic sorting
 type Transactions []*Transaction
 
+// TODO: remove
 func (self Transactions) RlpData() interface{} {
 	// Marshal the transactions of this block
 	enc := make([]interface{}, len(self))
@@ -223,9 +196,14 @@ func (self Transactions) RlpData() interface{} {
 
 	return enc
 }
-func (s Transactions) Len() int            { return len(s) }
-func (s Transactions) Swap(i, j int)       { s[i], s[j] = s[j], s[i] }
-func (s Transactions) GetRlp(i int) []byte { return common.Rlp(s[i]) }
+
+func (s Transactions) Len() int      { return len(s) }
+func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+func (s Transactions) GetRlp(i int) []byte {
+	enc, _ := rlp.EncodeToBytes(s[i])
+	return enc
+}
 
 type TxByNonce struct{ Transactions }
 

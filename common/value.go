@@ -3,18 +3,30 @@ package common
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"math/big"
 	"reflect"
 	"strconv"
+
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// Data values are returned by the rlp decoder. The data values represents
-// one item within the rlp data structure. It's responsible for all the casting
-// It always returns something valid
-type Value struct {
-	Val  interface{}
-	kind reflect.Value
-}
+// Value can hold values of certain basic types and provides ways to
+// convert between types without bothering to check whether the
+// conversion is actually meaningful.
+//
+// It currently supports the following types:
+//
+//    - int{,8,16,32,64}
+//    - uint{,8,16,32,64}
+//    - *big.Int
+//    - []byte, string
+//    - []interface{}
+//
+// Value is useful whenever you feel that Go's types limit your
+// ability to express yourself. In these situations, use Value and
+// forget about this strong typing nonsense.
+type Value struct{ Val interface{} }
 
 func (val *Value) String() string {
 	return fmt.Sprintf("%x", val.Val)
@@ -38,20 +50,11 @@ func (val *Value) IsNil() bool {
 }
 
 func (val *Value) Len() int {
-	//return val.kind.Len()
 	if data, ok := val.Val.([]interface{}); ok {
 		return len(data)
 	}
 
 	return len(val.Bytes())
-}
-
-func (val *Value) Raw() interface{} {
-	return val.Val
-}
-
-func (val *Value) Interface() interface{} {
-	return val.Val
 }
 
 func (val *Value) Uint() uint64 {
@@ -260,26 +263,34 @@ func (self *Value) DeepCmp(o *Value) bool {
 	return bytes.Compare(self.Bytes(), o.Bytes()) == 0
 }
 
-func (val *Value) Encode() []byte {
-	return Encode(val.Val)
-}
-
-// Assume that the data we have is encoded
-func (self *Value) Decode() {
-	v, _ := Decode(self.Bytes(), 0)
-	self.Val = v
-	//self.Val = DecodeWithReader(bytes.NewBuffer(self.Bytes()))
-}
-
-func NewValueFromBytes(data []byte) *Value {
-	if len(data) != 0 {
-		value := NewValue(data)
-		value.Decode()
-
-		return value
+func (self *Value) DecodeRLP(s *rlp.Stream) error {
+	var v interface{}
+	if err := s.Decode(&v); err != nil {
+		return err
 	}
+	self.Val = v
+	return nil
+}
 
-	return NewValue(nil)
+func (self *Value) EncodeRLP(w io.Writer) error {
+	if self == nil {
+		w.Write(rlp.EmptyList)
+		return nil
+	} else {
+		return rlp.Encode(w, self.Val)
+	}
+}
+
+// NewValueFromBytes decodes RLP data.
+// The contained value will be nil if data contains invalid RLP.
+func NewValueFromBytes(data []byte) *Value {
+	v := new(Value)
+	if len(data) != 0 {
+		if err := rlp.DecodeBytes(data, v); err != nil {
+			v.Val = nil
+		}
+	}
+	return v
 }
 
 // Value setters

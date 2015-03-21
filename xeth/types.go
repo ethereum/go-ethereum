@@ -91,12 +91,12 @@ func NewBlock(block *types.Block) *Block {
 	return &Block{
 		ref: block, Size: block.Size().String(),
 		Number: int(block.NumberU64()), GasUsed: block.GasUsed().String(),
-		GasLimit: block.GasLimit().String(), Hash: common.ToHex(block.Hash()),
+		GasLimit: block.GasLimit().String(), Hash: block.Hash().Hex(),
 		Transactions: txlist, Uncles: ulist,
 		Time:     block.Time(),
-		Coinbase: common.ToHex(block.Coinbase()),
-		PrevHash: common.ToHex(block.ParentHash()),
-		Bloom:    common.ToHex(block.Bloom()),
+		Coinbase: block.Coinbase().Hex(),
+		PrevHash: block.ParentHash().Hex(),
+		Bloom:    common.ToHex(block.Bloom().Bytes()),
 		Raw:      block.String(),
 	}
 }
@@ -110,7 +110,7 @@ func (self *Block) ToString() string {
 }
 
 func (self *Block) GetTransaction(hash string) *Transaction {
-	tx := self.ref.Transaction(common.FromHex(hash))
+	tx := self.ref.Transaction(common.HexToHash(hash))
 	if tx == nil {
 		return nil
 	}
@@ -135,12 +135,12 @@ type Transaction struct {
 }
 
 func NewTx(tx *types.Transaction) *Transaction {
-	hash := common.ToHex(tx.Hash())
-	receiver := common.ToHex(tx.To())
+	hash := tx.Hash().Hex()
+	receiver := tx.To().Hex()
 	if len(receiver) == 0 {
-		receiver = common.ToHex(core.AddressFromMessage(tx))
+		receiver = core.AddressFromMessage(tx).Hex()
 	}
-	sender := common.ToHex(tx.From())
+	sender, _ := tx.From()
 	createsContract := core.MessageCreatesContract(tx)
 
 	var data string
@@ -150,7 +150,7 @@ func NewTx(tx *types.Transaction) *Transaction {
 		data = common.ToHex(tx.Data())
 	}
 
-	return &Transaction{ref: tx, Hash: hash, Value: common.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: common.ToHex(tx.Data())}
+	return &Transaction{ref: tx, Hash: hash, Value: common.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender.Hex(), CreatesContract: createsContract, RawData: common.ToHex(tx.Data())}
 }
 
 func (self *Transaction) ToString() string {

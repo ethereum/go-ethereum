@@ -9,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 )
 
+// logging in tests
+
 var once sync.Once
 
 /* usage:
@@ -19,7 +21,7 @@ func TestFunc(t *testing.T) {
 */
 func LogInit() {
 	once.Do(func() {
-		var logsys = logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.LogLevel(logger.DebugDetailLevel))
+		var logsys = logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.LogLevel(logger.WarnLevel))
 		logger.AddLogSystem(logsys)
 	})
 }

@@ -28,8 +28,8 @@ type StateDB struct {
 }
 
 // Create a new state from a given trie
-func New(root []byte, db common.Database) *StateDB {
-	trie := trie.NewSecure(common.CopyBytes(root), db)
+func New(root common.Hash, db common.Database) *StateDB {
+	trie := trie.NewSecure(root[:], db)
 	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: make(map[string]*big.Int)}
 }
 
@@ -49,15 +49,16 @@ func (self *StateDB) Logs() Logs {
 	return self.logs
 }
 
-func (self *StateDB) Refund(addr []byte, gas *big.Int) {
-	if self.refund[string(addr)] == nil {
-		self.refund[string(addr)] = new(big.Int)
+func (self *StateDB) Refund(address common.Address, gas *big.Int) {
+	addr := address.Str()
+	if self.refund[addr] == nil {
+		self.refund[addr] = new(big.Int)
 	}
-	self.refund[string(addr)].Add(self.refund[string(addr)], gas)
+	self.refund[addr].Add(self.refund[addr], gas)
 }
 
 // Retrieve the balance from the given address or 0 if object not found
-func (self *StateDB) GetBalance(addr []byte) *big.Int {
+func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		return stateObject.balance
@@ -66,14 +67,14 @@ func (self *StateDB) GetBalance(addr []byte) *big.Int {
 	return common.Big0
 }
 
-func (self *StateDB) AddBalance(addr []byte, amount *big.Int) {
+func (self *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount)
 	}
 }
 
-func (self *StateDB) GetNonce(addr []byte) uint64 {
+func (self *StateDB) GetNonce(addr common.Address) uint64 {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		return stateObject.nonce
@@ -82,7 +83,7 @@ func (self *StateDB) GetNonce(addr []byte) uint64 {
 	return 0
 }
 
-func (self *StateDB) GetCode(addr []byte) []byte {
+func (self *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		return stateObject.code
@@ -91,7 +92,7 @@ func (self *StateDB) GetCode(addr []byte) []byte {
 	return nil
 }
 
-func (self *StateDB) GetState(a, b []byte) []byte {
+func (self *StateDB) GetState(a common.Address, b common.Hash) []byte {
 	stateObject := self.GetStateObject(a)
 	if stateObject != nil {
 		return stateObject.GetState(b).Bytes()
@@ -100,28 +101,28 @@ func (self *StateDB) GetState(a, b []byte) []byte {
 	return nil
 }
 
-func (self *StateDB) SetNonce(addr []byte, nonce uint64) {
+func (self *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
 	}
 }
 
-func (self *StateDB) SetCode(addr, code []byte) {
+func (self *StateDB) SetCode(addr common.Address, code []byte) {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCode(code)
 	}
 }
 
-func (self *StateDB) SetState(addr, key []byte, value interface{}) {
+func (self *StateDB) SetState(addr common.Address, key common.Hash, value interface{}) {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetState(key, common.NewValue(value))
 	}
 }
 
-func (self *StateDB) Delete(addr []byte) bool {
+func (self *StateDB) Delete(addr common.Address) bool {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.MarkForDeletion()
@@ -133,7 +134,7 @@ func (self *StateDB) Delete(addr []byte) bool {
 	return false
 }
 
-func (self *StateDB) IsDeleted(addr []byte) bool {
+func (self *StateDB) IsDeleted(addr common.Address) bool {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		return stateObject.remove
@@ -147,32 +148,34 @@ func (self *StateDB) IsDeleted(addr []byte) bool {
 
 // Update the given state object and apply it to state trie
 func (self *StateDB) UpdateStateObject(stateObject *StateObject) {
-	addr := stateObject.Address()
+	//addr := stateObject.Address()
 
 	if len(stateObject.CodeHash()) > 0 {
 		self.db.Put(stateObject.CodeHash(), stateObject.code)
 	}
 
-	self.trie.Update(addr, stateObject.RlpEncode())
+	addr := stateObject.Address()
+	self.trie.Update(addr[:], stateObject.RlpEncode())
 }
 
 // Delete the given state object and delete it from the state trie
 func (self *StateDB) DeleteStateObject(stateObject *StateObject) {
-	self.trie.Delete(stateObject.Address())
+	addr := stateObject.Address()
+	self.trie.Delete(addr[:])
 
-	delete(self.stateObjects, string(stateObject.Address()))
+	delete(self.stateObjects, addr.Str())
 }
 
 // Retrieve a state object given my the address. Nil if not found
-func (self *StateDB) GetStateObject(addr []byte) *StateObject {
-	addr = common.Address(addr)
+func (self *StateDB) GetStateObject(addr common.Address) *StateObject {
+	//addr = common.Address(addr)
 
-	stateObject := self.stateObjects[string(addr)]
+	stateObject := self.stateObjects[addr.Str()]
 	if stateObject != nil {
 		return stateObject
 	}
 
-	data := self.trie.Get(addr)
+	data := self.trie.Get(addr[:])
 	if len(data) == 0 {
 		return nil
 	}
@@ -184,11 +187,11 @@ func (self *StateDB) GetStateObject(addr []byte) *StateObject {
 }
 
 func (self *StateDB) SetStateObject(object *StateObject) {
-	self.stateObjects[string(object.address)] = object
+	self.stateObjects[object.Address().Str()] = object
 }
 
 // Retrieve a state object or create a new state object if nil
-func (self *StateDB) GetOrNewStateObject(addr []byte) *StateObject {
+func (self *StateDB) GetOrNewStateObject(addr common.Address) *StateObject {
 	stateObject := self.GetStateObject(addr)
 	if stateObject == nil {
 		stateObject = self.NewStateObject(addr)
@@ -198,19 +201,19 @@ func (self *StateDB) GetOrNewStateObject(addr []byte) *StateObject {
 }
 
 // Create a state object whether it exist in the trie or not
-func (self *StateDB) NewStateObject(addr []byte) *StateObject {
-	addr = common.Address(addr)
+func (self *StateDB) NewStateObject(addr common.Address) *StateObject {
+	//addr = common.Address(addr)
 
 	statelogger.Debugf("(+) %x\n", addr)
 
 	stateObject := NewStateObject(addr, self.db)
-	self.stateObjects[string(addr)] = stateObject
+	self.stateObjects[addr.Str()] = stateObject
 
 	return stateObject
 }
 
 // Deprecated
-func (self *StateDB) GetAccount(addr []byte) *StateObject {
+func (self *StateDB) GetAccount(addr common.Address) *StateObject {
 	return self.GetOrNewStateObject(addr)
 }
 
@@ -223,7 +226,7 @@ func (s *StateDB) Cmp(other *StateDB) bool {
 }
 
 func (self *StateDB) Copy() *StateDB {
-	state := New(nil, self.db)
+	state := New(common.Hash{}, self.db)
 	state.trie = self.trie.Copy()
 	for k, stateObject := range self.stateObjects {
 		state.stateObjects[k] = stateObject.Copy()
@@ -248,8 +251,8 @@ func (self *StateDB) Set(state *StateDB) {
 	self.logs = state.logs
 }
 
-func (s *StateDB) Root() []byte {
-	return s.trie.Root()
+func (s *StateDB) Root() common.Hash {
+	return common.BytesToHash(s.trie.Root())
 }
 
 func (s *StateDB) Trie() *trie.SecureTrie {

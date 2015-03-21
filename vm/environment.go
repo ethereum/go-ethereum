@@ -3,19 +3,21 @@ package vm
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/state"
 )
 
 type Environment interface {
 	State() *state.StateDB
 
-	Origin() []byte
+	Origin() common.Address
 	BlockNumber() *big.Int
-	GetHash(n uint64) []byte
-	Coinbase() []byte
+	GetHash(n uint64) common.Hash
+	Coinbase() common.Address
 	Time() int64
 	Difficulty() *big.Int
 	GasLimit() *big.Int
@@ -27,16 +29,16 @@ type Environment interface {
 	Depth() int
 	SetDepth(i int)
 
-	Call(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
-	CallCode(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
-	Create(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
+	Call(me ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
+	CallCode(me ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
+	Create(me ContextRef, addr *common.Address, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
 }
 
 type Account interface {
 	SubBalance(amount *big.Int)
 	AddBalance(amount *big.Int)
 	Balance() *big.Int
-	Address() []byte
+	Address() common.Address
 }
 
 // generic transfer method
@@ -53,17 +55,17 @@ func Transfer(from, to Account, amount *big.Int) error {
 }
 
 type Log struct {
-	address []byte
-	topics  [][]byte
+	address common.Address
+	topics  []common.Hash
 	data    []byte
 	log     uint64
 }
 
-func (self *Log) Address() []byte {
+func (self *Log) Address() common.Address {
 	return self.address
 }
 
-func (self *Log) Topics() [][]byte {
+func (self *Log) Topics() []common.Hash {
 	return self.topics
 }
 
@@ -75,10 +77,16 @@ func (self *Log) Number() uint64 {
 	return self.log
 }
 
+func (self *Log) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, []interface{}{self.address, self.topics, self.data})
+}
+
+/*
 func (self *Log) RlpData() interface{} {
 	return []interface{}{self.address, common.ByteSliceToInterface(self.topics), self.data}
 }
+*/
 
 func (self *Log) String() string {
-	return fmt.Sprintf("[A=%x T=%x D=%x]", self.address, self.topics, self.data)
+	return fmt.Sprintf("{%x %x %x}", self.address, self.data, self.topics)
 }

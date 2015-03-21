@@ -79,3 +79,7 @@ func (self *CpuMiner) mine(block *types.Block) {
 		self.returnCh <- Work{block.Number().Uint64(), nonce, mixDigest, seedHash}
 	}
 }
+
+func (self *CpuMiner) GetHashRate() int64 {
+	return self.pow.GetHashrate()
+}

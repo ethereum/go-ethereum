@@ -2,36 +2,36 @@ package state
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type Log interface {
-	common.RlpEncodable
-
-	Address() []byte
-	Topics() [][]byte
+	Address() common.Address
+	Topics() []common.Hash
 	Data() []byte
 
 	Number() uint64
 }
 
 type StateLog struct {
-	address []byte
-	topics  [][]byte
+	address common.Address
+	topics  []common.Hash
 	data    []byte
 	number  uint64
 }
 
-func NewLog(address []byte, topics [][]byte, data []byte, number uint64) *StateLog {
+func NewLog(address common.Address, topics []common.Hash, data []byte, number uint64) *StateLog {
 	return &StateLog{address, topics, data, number}
 }
 
-func (self *StateLog) Address() []byte {
+func (self *StateLog) Address() common.Address {
 	return self.address
 }
 
-func (self *StateLog) Topics() [][]byte {
+func (self *StateLog) Topics() []common.Hash {
 	return self.topics
 }
 
@@ -43,7 +43,12 @@ func (self *StateLog) Number() uint64 {
 	return self.number
 }
 
+/*
 func NewLogFromValue(decoder *common.Value) *StateLog {
+	var extlog struct {
+
+	}
+
 	log := &StateLog{
 		address: decoder.Get(0).Bytes(),
 		data:    decoder.Get(2).Bytes(),
@@ -56,10 +61,17 @@ func NewLogFromValue(decoder *common.Value) *StateLog {
 
 	return log
 }
+*/
 
+func (self *StateLog) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, []interface{}{self.address, self.topics, self.data})
+}
+
+/*
 func (self *StateLog) RlpData() interface{} {
 	return []interface{}{self.address, common.ByteSliceToInterface(self.topics), self.data}
 }
+*/
 
 func (self *StateLog) String() string {
 	return fmt.Sprintf(`log: %x %x %x`, self.address, self.topics, self.data)
@@ -67,6 +79,7 @@ func (self *StateLog) String() string {
 
 type Logs []Log
 
+/*
 func (self Logs) RlpData() interface{} {
 	data := make([]interface{}, len(self))
 	for i, log := range self {
@@ -75,6 +88,7 @@ func (self Logs) RlpData() interface{} {
 
 	return data
 }
+*/
 
 func (self Logs) String() (ret string) {
 	for _, log := range self {

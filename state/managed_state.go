@@ -1,6 +1,10 @@
 package state
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 type account struct {
 	stateObject *StateObject
@@ -29,7 +33,7 @@ func (ms *ManagedState) SetState(statedb *StateDB) {
 	ms.StateDB = statedb
 }
 
-func (ms *ManagedState) RemoveNonce(addr []byte, n uint64) {
+func (ms *ManagedState) RemoveNonce(addr common.Address, n uint64) {
 	if ms.hasAccount(addr) {
 		ms.mu.Lock()
 		defer ms.mu.Unlock()
@@ -43,7 +47,7 @@ func (ms *ManagedState) RemoveNonce(addr []byte, n uint64) {
 	}
 }
 
-func (ms *ManagedState) NewNonce(addr []byte) uint64 {
+func (ms *ManagedState) NewNonce(addr common.Address) uint64 {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 
@@ -57,26 +61,27 @@ func (ms *ManagedState) NewNonce(addr []byte) uint64 {
 	return uint64(len(account.nonces)) + account.nstart
 }
 
-func (ms *ManagedState) hasAccount(addr []byte) bool {
-	_, ok := ms.accounts[string(addr)]
+func (ms *ManagedState) hasAccount(addr common.Address) bool {
+	_, ok := ms.accounts[addr.Str()]
 	return ok
 }
 
-func (ms *ManagedState) getAccount(addr []byte) *account {
-	if account, ok := ms.accounts[string(addr)]; !ok {
+func (ms *ManagedState) getAccount(addr common.Address) *account {
+	straddr := addr.Str()
+	if account, ok := ms.accounts[straddr]; !ok {
 		so := ms.GetOrNewStateObject(addr)
-		ms.accounts[string(addr)] = newAccount(so)
+		ms.accounts[straddr] = newAccount(so)
 	} else {
 		// Always make sure the state account nonce isn't actually higher
 		// than the tracked one.
 		so := ms.StateDB.GetStateObject(addr)
 		if so != nil && uint64(len(account.nonces))+account.nstart < so.nonce {
-			ms.accounts[string(addr)] = newAccount(so)
+			ms.accounts[straddr] = newAccount(so)
 		}
 
 	}
 
-	return ms.accounts[string(addr)]
+	return ms.accounts[straddr]
 }
 
 func newAccount(so *StateObject) *account {

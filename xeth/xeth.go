@@ -197,14 +197,14 @@ func (self *XEth) State() *State { return self.state }
 func (self *XEth) Whisper() *Whisper { return self.whisper }
 
 func (self *XEth) BlockByHash(strHash string) *Block {
-	hash := common.FromHex(strHash)
+	hash := common.HexToHash(strHash)
 	block := self.chainManager.GetBlock(hash)
 
 	return NewBlock(block)
 }
 
 func (self *XEth) EthBlockByHash(strHash string) *types.Block {
-	hash := common.FromHex(strHash)
+	hash := common.HexToHash(strHash)
 	block := self.chainManager.GetBlock(hash)
 
 	return block
@@ -525,16 +525,16 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 
 	if tx.To() == nil {
 		addr := core.AddressFromMessage(tx)
-		return common.ToHex(addr), nil
+		return addr.Hex(), nil
 	}
-	return common.ToHex(tx.Hash()), nil
+	return tx.Hash().Hex(), nil
 }
 
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	statedb := self.State().State() //self.chainManager.TransState()
 	msg := callmsg{
-		from:     statedb.GetOrNewStateObject(common.FromHex(fromStr)),
-		to:       common.FromHex(toStr),
+		from:     statedb.GetOrNewStateObject(common.HexToAddress(fromStr)),
+		to:       common.HexToAddress(toStr),
 		gas:      common.Big(gasStr),
 		gasPrice: common.Big(gasPriceStr),
 		value:    common.Big(valueStr),
@@ -557,8 +557,8 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 
 func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 	var (
-		from             []byte
-		to               []byte
+		from             = common.HexToAddress(fromStr)
+		to               = common.HexToAddress(toStr)
 		value            = common.NewValue(valueStr)
 		gas              = common.Big(gasStr)
 		price            = common.Big(gasPriceStr)
@@ -598,10 +598,8 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 		price = defaultGasPrice
 	}
 
-	from = common.FromHex(fromStr)
 	data = common.FromHex(codeStr)
-	to = common.FromHex(toStr)
-	if len(to) == 0 {
+	if len(toStr) == 0 {
 		contractCreation = true
 	}
 
@@ -613,7 +611,7 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	}
 
 	state := self.chainManager.TxState()
-	nonce := state.NewNonce(from) //state.GetNonce(from)
+	nonce := state.NewNonce(from)
 	tx.SetNonce(nonce)
 
 	if err := self.sign(tx, from, false); err != nil {
@@ -622,26 +620,23 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	if err := self.eth.TxPool().Add(tx); err != nil {
 		return "", err
 	}
-	//state.IncrementNonce(from)
 
 	if contractCreation {
 		addr := core.AddressFromMessage(tx)
 		pipelogger.Infof("Contract addr %x\n", addr)
-	}
 
-	if types.IsContractAddr(to) {
-		return common.ToHex(core.AddressFromMessage(tx)), nil
+		return core.AddressFromMessage(tx).Hex(), nil
 	}
-	return common.ToHex(tx.Hash()), nil
+	return tx.Hash().Hex(), nil
 }
 
-func (self *XEth) sign(tx *types.Transaction, from []byte, didUnlock bool) error {
-	sig, err := self.accountManager.Sign(accounts.Account{Address: from}, tx.Hash())
+func (self *XEth) sign(tx *types.Transaction, from common.Address, didUnlock bool) error {
+	sig, err := self.accountManager.Sign(accounts.Account{Address: from.Bytes()}, tx.Hash().Bytes())
 	if err == accounts.ErrLocked {
 		if didUnlock {
 			return fmt.Errorf("sender account still locked after successful unlock")
 		}
-		if !self.frontend.UnlockAccount(from) {
+		if !self.frontend.UnlockAccount(from.Bytes()) {
 			return fmt.Errorf("could not unlock sender account")
 		}
 		// retry signing, the account should now be unlocked.
@@ -656,20 +651,20 @@ func (self *XEth) sign(tx *types.Transaction, from []byte, didUnlock bool) error
 // callmsg is the message type used for call transations.
 type callmsg struct {
 	from          *state.StateObject
-	to            []byte
+	to            common.Address
 	gas, gasPrice *big.Int
 	value         *big.Int
 	data          []byte
 }
 
 // accessor boilerplate to implement core.Message
-func (m callmsg) From() []byte       { return m.from.Address() }
-func (m callmsg) Nonce() uint64      { return m.from.Nonce() }
-func (m callmsg) To() []byte         { return m.to }
-func (m callmsg) GasPrice() *big.Int { return m.gasPrice }
-func (m callmsg) Gas() *big.Int      { return m.gas }
-func (m callmsg) Value() *big.Int    { return m.value }
-func (m callmsg) Data() []byte       { return m.data }
+func (m callmsg) From() (common.Address, error) { return m.from.Address(), nil }
+func (m callmsg) Nonce() uint64                 { return m.from.Nonce() }
+func (m callmsg) To() *common.Address           { return &m.to }
+func (m callmsg) GasPrice() *big.Int            { return m.gasPrice }
+func (m callmsg) Gas() *big.Int                 { return m.gas }
+func (m callmsg) Value() *big.Int               { return m.value }
+func (m callmsg) Data() []byte                  { return m.data }
 
 type whisperFilter struct {
 	messages []WhisperMessage

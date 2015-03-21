@@ -9,7 +9,7 @@ import (
 
 type ContextRef interface {
 	ReturnGas(*big.Int, *big.Int)
-	Address() []byte
+	Address() common.Address
 	SetCode([]byte)
 }
 
@@ -18,7 +18,7 @@ type Context struct {
 	self   ContextRef
 
 	Code     []byte
-	CodeAddr []byte
+	CodeAddr *common.Address
 
 	value, Gas, UsedGas, Price *big.Int
 
@@ -64,10 +64,6 @@ func (c *Context) GetRangeValue(x, size uint64) []byte {
 	return common.RightPadBytes(c.Code[x:y], int(size))
 }
 
-func (c *Context) GetCode(x, size uint64) []byte {
-	return getData(c.Code, x, size)
-}
-
 func (c *Context) Return(ret []byte) []byte {
 	// Return the remaining gas to the caller
 	c.caller.ReturnGas(c.Gas, c.Price)
@@ -100,7 +96,7 @@ func (c *Context) ReturnGas(gas, price *big.Int) {
 /*
  * Set / Get
  */
-func (c *Context) Address() []byte {
+func (c *Context) Address() common.Address {
 	return c.self.Address()
 }
 
@@ -108,7 +104,7 @@ func (self *Context) SetCode(code []byte) {
 	self.Code = code
 }
 
-func (self *Context) SetCallCode(addr, code []byte) {
+func (self *Context) SetCallCode(addr *common.Address, code []byte) {
 	self.Code = code
 	self.CodeAddr = addr
 }

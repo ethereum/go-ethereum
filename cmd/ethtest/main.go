@@ -33,6 +33,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
@@ -66,7 +67,7 @@ type Account struct {
 }
 
 func StateObjectFromAccount(db common.Database, addr string, account Account) *state.StateObject {
-	obj := state.NewStateObject(common.Hex2Bytes(addr), db)
+	obj := state.NewStateObject(common.HexToAddress(addr), db)
 	obj.SetBalance(common.Big(account.Balance))
 
 	if common.IsHex(account.Code) {
@@ -112,7 +113,7 @@ func RunVmTest(r io.Reader) (failed int) {
 
 	for name, test := range tests {
 		db, _ := ethdb.NewMemDatabase()
-		statedb := state.New(nil, db)
+		statedb := state.New(common.Hash{}, db)
 		for addr, account := range test.Pre {
 			obj := StateObjectFromAccount(db, addr, account)
 			statedb.SetStateObject(obj)
@@ -135,61 +136,80 @@ func RunVmTest(r io.Reader) (failed int) {
 
 		rexp := helper.FromHex(test.Out)
 		if bytes.Compare(rexp, ret) != 0 {
-			helper.Log.Infof("FAIL: %s's return failed. Expected %x, got %x\n", name, rexp, ret)
+			helper.Log.Infof("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
 			failed = 1
 		}
 
 		for addr, account := range test.Post {
-			obj := statedb.GetStateObject(helper.FromHex(addr))
+			obj := statedb.GetStateObject(common.HexToAddress(addr))
 			if obj == nil {
 				continue
 			}
 
 			if len(test.Exec) == 0 {
 				if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
-					helper.Log.Infof("FAIL: %s's : (%x) balance failed. Expected %v, got %v => %v\n",
-						name,
-						obj.Address()[:4],
-						account.Balance,
-						obj.Balance(),
-						new(big.Int).Sub(common.Big(account.Balance), obj.Balance()),
-					)
+					helper.Log.Infof("%s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
 					failed = 1
 				}
 			}
 
 			for addr, value := range account.Storage {
-				v := obj.GetState(helper.FromHex(addr)).Bytes()
+				v := obj.GetState(common.HexToHash(addr)).Bytes()
 				vexp := helper.FromHex(value)
 
 				if bytes.Compare(v, vexp) != 0 {
-					helper.Log.Infof("FAIL: %s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address()[0:4], addr, vexp, v, common.BigD(vexp), common.BigD(v))
+					helper.Log.Infof("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address().Bytes()[0:4], addr, vexp, v, common.BigD(vexp), common.BigD(v))
 					failed = 1
 				}
 			}
 		}
 
-		if !bytes.Equal(common.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
-			helper.Log.Infof("FAIL: %s's : Post state root error. Expected %s, got %x\n", name, test.PostStateRoot, statedb.Root())
+		statedb.Sync()
+		//if !bytes.Equal(common.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
+		if common.HexToHash(test.PostStateRoot) != statedb.Root() {
+			helper.Log.Infof("%s's : Post state root failed. Expected %s, got %x", name, test.PostStateRoot, statedb.Root())
 			failed = 1
 		}
 
 		if len(test.Logs) > 0 {
 			if len(test.Logs) != len(logs) {
-				helper.Log.Infof("FAIL: log length mismatch. Expected %d, got %d", len(test.Logs), len(logs))
+				helper.Log.Infof("log length failed. Expected %d, got %d", len(test.Logs), len(logs))
 				failed = 1
 			} else {
-				/*
-					fmt.Println("A", test.Logs)
-					fmt.Println("B", logs)
-						for i, log := range test.Logs {
-							genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
-							if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
-								t.Errorf("bloom mismatch")
+				for i, log := range test.Logs {
+					if common.HexToAddress(log.AddressF) != logs[i].Address() {
+						helper.Log.Infof("'%s' log address failed. Expected %v got %x", name, log.AddressF, logs[i].Address())
+						failed = 1
+					}
+
+					if !bytes.Equal(logs[i].Data(), helper.FromHex(log.DataF)) {
+						helper.Log.Infof("'%s' log data failed. Expected %v got %x", name, log.DataF, logs[i].Data())
+						failed = 1
+					}
+
+					if len(log.TopicsF) != len(logs[i].Topics()) {
+						helper.Log.Infof("'%s' log topics length failed. Expected %d got %d", name, len(log.TopicsF), logs[i].Topics())
+						failed = 1
+					} else {
+						for j, topic := range log.TopicsF {
+							if common.HexToHash(topic) != logs[i].Topics()[j] {
+								helper.Log.Infof("'%s' log topic[%d] failed. Expected %v got %x", name, j, topic, logs[i].Topics()[j])
+								failed = 1
 							}
 						}
-				*/
+					}
+					genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
+
+					if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
+						helper.Log.Infof("'%s' bloom failed.", name)
+						failed = 1
+					}
+				}
 			}
+		}
+
+		if failed == 1 {
+			helper.Log.Infoln(string(statedb.Dump()))
 		}
 
 		logger.Flush()

@@ -1,6 +1,10 @@
 package vm
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 type Memory struct {
 	store []byte
@@ -11,21 +15,21 @@ func NewMemory() *Memory {
 }
 
 func (m *Memory) Set(offset, size uint64, value []byte) {
-	if len(value) > 0 {
-		totSize := offset + size
-		lenSize := uint64(len(m.store) - 1)
-		if totSize > lenSize {
-			// Calculate the diff between the sizes
-			diff := totSize - lenSize
-			if diff > 0 {
-				// Create a new empty slice and append it
-				newSlice := make([]byte, diff-1)
-				// Resize slice
-				m.store = append(m.store, newSlice...)
-			}
+	value = common.RightPadBytes(value, int(size))
+
+	totSize := offset + size
+	lenSize := uint64(len(m.store) - 1)
+	if totSize > lenSize {
+		// Calculate the diff between the sizes
+		diff := totSize - lenSize
+		if diff > 0 {
+			// Create a new empty slice and append it
+			newSlice := make([]byte, diff-1)
+			// Resize slice
+			m.store = append(m.store, newSlice...)
 		}
-		copy(m.store[offset:offset+size], value)
 	}
+	copy(m.store[offset:offset+size], value)
 }
 
 func (m *Memory) Resize(size uint64) {
