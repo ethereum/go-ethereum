@@ -21,8 +21,7 @@ func TestFunc(t *testing.T) {
 */
 func LogInit() {
 	once.Do(func() {
-		var logsys = logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.LogLevel(logger.WarnLevel))
-		logger.AddLogSystem(logsys)
+		logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.LogLevel(logger.DebugDetailLevel))
 	})
 }
 
@@ -41,11 +40,8 @@ func Testlog(t *testing.T) testLogger {
 	return l
 }
 
-func (testLogger) GetLogLevel() logger.LogLevel { return logger.DebugLevel }
-func (testLogger) SetLogLevel(logger.LogLevel)  {}
-
-func (l testLogger) LogPrint(level logger.LogLevel, msg string) {
-	l.t.Logf("%s", msg)
+func (l testLogger) LogPrint(msg logger.LogMsg) {
+	l.t.Log(msg.String())
 }
 
 func (testLogger) Detach() {
@@ -68,12 +64,10 @@ func Benchlog(b *testing.B) benchLogger {
 	return l
 }
 
-func (benchLogger) GetLogLevel() logger.LogLevel { return logger.Silence }
-
-func (benchLogger) SetLogLevel(logger.LogLevel) {}
-func (l benchLogger) LogPrint(level logger.LogLevel, msg string) {
-	l.b.Logf("%s", msg)
+func (l benchLogger) LogPrint(msg logger.LogMsg) {
+	l.b.Log(msg.String())
 }
+
 func (benchLogger) Detach() {
 	logger.Flush()
 	logger.Reset()
