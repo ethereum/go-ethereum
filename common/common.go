@@ -3,16 +3,8 @@ package common
 import (
 	"fmt"
 	"math/big"
-	"runtime"
 	"time"
 )
-
-// MakeName creates a node name that follows the ethereum convention
-// for such names. It adds the operation system name and Go runtime version
-// the name.
-func MakeName(name, version string) string {
-	return fmt.Sprintf("%s/v%s/%s/%s", name, version, runtime.GOOS, runtime.Version())
-}
 
 // Common big integers often used
 var (
