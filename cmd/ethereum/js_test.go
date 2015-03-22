@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/obscuren/otto"
+	"github.com/robertkrimen/otto"
 	"os"
 	"path"
 	"testing"

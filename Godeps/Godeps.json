@@ -47,8 +47,8 @@
 			"Rev": "ccfcd0245381f0c94c68f50626665eed3c6b726a"
 		},
 		{
-			"ImportPath": "github.com/obscuren/otto",
-			"Rev": "cf13cc4228c5e5ce0fe27a7aea90bc10091c4f19"
+			"ImportPath": "github.com/robertkrimen/otto",
+			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
 		},
 		{
 			"ImportPath": "github.com/obscuren/qml",

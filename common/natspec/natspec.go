@@ -2,7 +2,7 @@ package natspec
 
 import (
 	"fmt"
-	"github.com/obscuren/otto"
+	"github.com/robertkrimen/otto"
 )
 
 type NatSpec struct {

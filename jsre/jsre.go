@@ -2,7 +2,7 @@ package jsre
 
 import (
 	"fmt"
-	"github.com/obscuren/otto"
+	"github.com/robertkrimen/otto"
 	"io/ioutil"
 
 	"github.com/ethereum/go-ethereum/common"
