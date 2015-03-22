@@ -55,7 +55,7 @@ out:
 }
 
 func (a *Agent) GetWork() common.Hash {
-	// XXX Wait here untill work != nil ?
+	// XXX Wait here untill work != nil ?.
 	if a.work != nil {
 		return a.work.HashNoNonce()
 	}
@@ -64,7 +64,7 @@ func (a *Agent) GetWork() common.Hash {
 
 func (a *Agent) SetResult(nonce uint64, mixDigest, seedHash common.Hash) {
 	// Make sure the external miner was working on the right hash
-	if a.currentWork.Hash() == a.work.Hash() {
+	if a.currentWork != nil && a.work != nil && a.currentWork.Hash() == a.work.Hash() {
 		a.returnCh <- miner.Work{a.currentWork.Number().Uint64(), nonce, mixDigest.Bytes(), seedHash.Bytes()}
 	}
 }
