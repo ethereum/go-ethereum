@@ -17,15 +17,20 @@ type EthereumApi struct {
 	eth    *xeth.XEth
 	xethMu sync.RWMutex
 	db     common.Database
+
+	// Miner agent
+	agent *Agent
 }
 
 func NewEthereumApi(eth *xeth.XEth, dataDir string) *EthereumApi {
 	// What about when dataDir is empty?
 	db, _ := ethdb.NewLDBDatabase(path.Join(dataDir, "dapps"))
 	api := &EthereumApi{
-		eth: eth,
-		db:  db,
+		eth:   eth,
+		db:    db,
+		agent: NewAgent(),
 	}
+	eth.Backend().Miner().Register(api.agent)
 
 	return api
 }
@@ -342,7 +347,13 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		opts := toFilterOptions(args)
 		*reply = NewLogsRes(p.xeth().AllLogs(opts))
-	case "eth_getWork", "eth_submitWork":
+	case "eth_getWork":
+		*reply = p.getWork()
+	case "eth_submitWork":
+		// TODO what is the reply here?
+		// TODO what are the arguments?
+		p.agent.SetResult(0, common.Hash{}, common.Hash{})
+
 		return NewNotImplementedError(req.Method)
 	case "db_putString":
 		args := new(DbArgs)
@@ -427,6 +438,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		*reply = p.xeth().Whisper().Messages(args.Id)
+
 	// case "eth_register":
 	// 	// Placeholder for actual type
 	// 	args := new(HashIndexArgs)
@@ -452,6 +464,11 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 
 	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)
 	return nil
+}
+
+func (p *EthereumApi) getWork() string {
+	p.xeth().SetMining(true)
+	return p.agent.GetWork().Hex()
 }
 
 func toFilterOptions(options *BlockFilterArgs) *core.FilterOptions {

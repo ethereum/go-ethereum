@@ -300,9 +300,9 @@ func (s *Ethereum) StartMining() error {
 	return nil
 }
 
-func (s *Ethereum) StopMining()    { s.miner.Stop() }
-func (s *Ethereum) IsMining() bool { return s.miner.Mining() }
-
+func (s *Ethereum) StopMining()                          { s.miner.Stop() }
+func (s *Ethereum) IsMining() bool                       { return s.miner.Mining() }
+func (s *Ethereum) Miner() *miner.Miner                  { return s.miner }
 func (s *Ethereum) Logger() logger.LogSystem             { return s.logger }
 func (s *Ethereum) Name() string                         { return s.net.Name }
 func (s *Ethereum) AccountManager() *accounts.Manager    { return s.accountManager }

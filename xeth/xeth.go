@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/whisper"
@@ -43,6 +44,7 @@ type Backend interface {
 	ExtraDb() common.Database
 	EventMux() *event.TypeMux
 	Whisper() *whisper.Whisper
+	Miner() *miner.Miner
 
 	IsMining() bool
 	StartMining() error
