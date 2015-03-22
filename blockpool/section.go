@@ -176,9 +176,9 @@ func (self *section) addSectionToBlockChain(p *peer) {
 
 		self.bp.status.lock.Lock()
 		if err == nil {
-			headKey := blocks[0].ParentHash().Str()
+			headKey := blocks[0].ParentHash()
 			height := self.bp.status.chain[headKey] + len(blocks)
-			self.bp.status.chain[blocks[len(blocks)-1].Hash().Str()] = height
+			self.bp.status.chain[blocks[len(blocks)-1].Hash()] = height
 			if height > self.bp.status.values.LongestChain {
 				self.bp.status.values.LongestChain = height
 			}
