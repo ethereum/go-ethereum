@@ -9,6 +9,28 @@ import (
 	"strings"
 )
 
+func ToHex(b []byte) string {
+	hex := Bytes2Hex(b)
+	// Prefer output of "0x0" instead of "0x"
+	if len(hex) == 0 {
+		hex = "0"
+	}
+	return "0x" + hex
+}
+
+func FromHex(s string) []byte {
+	if len(s) > 1 {
+		if s[0:2] == "0x" {
+			s = s[2:]
+		}
+		if len(s)%2 == 1 {
+			s = "0" + s
+		}
+		return Hex2Bytes(s)
+	}
+	return nil
+}
+
 type Bytes []byte
 
 func (self Bytes) String() string {

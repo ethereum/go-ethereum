@@ -1,10 +1,8 @@
 package common
 
 import (
-	"bytes"
 	"math/big"
 	"os"
-	"testing"
 
 	checker "gopkg.in/check.v1"
 )
@@ -67,23 +65,4 @@ func (s *CommonSuite) TestLarge(c *checker.C) {
 	c.Assert(douglaslarge, checker.Equals, "10000E298 Douglas")
 	c.Assert(adalarge, checker.Equals, "10000E7 Einstein")
 	c.Assert(weilarge, checker.Equals, "100 Babbage")
-}
-
-//fromHex
-func TestFromHex(t *testing.T) {
-	input := "0x01"
-	expected := []byte{1}
-	result := FromHex(input)
-	if bytes.Compare(expected, result) != 0 {
-		t.Errorf("Expected % x got % x", expected, result)
-	}
-}
-
-func TestFromHexOddLength(t *testing.T) {
-	input := "0x1"
-	expected := []byte{1}
-	result := FromHex(input)
-	if bytes.Compare(expected, result) != 0 {
-		t.Errorf("Expected % x got % x", expected, result)
-	}
 }
