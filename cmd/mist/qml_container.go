@@ -25,7 +25,6 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/qml"
 )
@@ -68,7 +67,7 @@ func (app *QmlApplication) NewWatcher(quitChan chan bool) {
 
 // Events
 func (app *QmlApplication) NewBlock(block *types.Block) {
-	pblock := &xeth.Block{Number: int(block.NumberU64()), Hash: common.Bytes2Hex(block.Hash())}
+	pblock := &xeth.Block{Number: int(block.NumberU64()), Hash: block.Hash().Hex()}
 	app.win.Call("onNewBlockCb", pblock)
 }
 

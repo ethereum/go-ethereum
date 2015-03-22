@@ -67,7 +67,7 @@ func (self *Gui) DumpState(hash, path string) {
 			i, _ := strconv.Atoi(hash[1:])
 			block = self.eth.ChainManager().GetBlockByNumber(uint64(i))
 		} else {
-			block = self.eth.ChainManager().GetBlock(common.Hex2Bytes(hash))
+			block = self.eth.ChainManager().GetBlock(common.HexToHash(hash))
 		}
 
 		if block == nil {
