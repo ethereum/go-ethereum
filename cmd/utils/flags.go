@@ -117,10 +117,10 @@ var (
 		Usage: "0-5 (silent, error, warn, info, debug, debug detail)",
 		Value: int(logger.InfoLevel),
 	}
-	LogFormatFlag = cli.StringFlag{
-		Name:  "logformat",
-		Usage: `"std" or "raw"`,
-		Value: "std",
+	LogJSONFlag = cli.StringFlag{
+		Name:  "logjson",
+		Usage: "Send json structured log output to a file or '-' for standard output (default: no json output)",
+		Value: "",
 	}
 	VMDebugFlag = cli.BoolFlag{
 		Name:  "vmdebug",
@@ -213,7 +213,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		NetworkId:       ctx.GlobalInt(NetworkIdFlag.Name),
 		LogFile:         ctx.GlobalString(LogFileFlag.Name),
 		LogLevel:        ctx.GlobalInt(LogLevelFlag.Name),
-		LogFormat:       ctx.GlobalString(LogFormatFlag.Name),
+		LogJSON:         ctx.GlobalString(LogJSONFlag.Name),
 		MinerThreads:    ctx.GlobalInt(MinerThreadsFlag.Name),
 		AccountManager:  GetAccountManager(ctx),
 		VmDebug:         ctx.GlobalBool(VMDebugFlag.Name),
