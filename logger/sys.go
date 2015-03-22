@@ -1,16 +1,40 @@
 package logger
 
 import (
+	"fmt"
 	"sync"
 )
 
-type message struct {
+type stdMsg struct {
 	level LogLevel
 	msg   string
 }
 
+type jsonMsg []byte
+
+func (m jsonMsg) Level() LogLevel {
+	return 0
+}
+
+func (m jsonMsg) String() string {
+	return string(m)
+}
+
+type LogMsg interface {
+	Level() LogLevel
+	fmt.Stringer
+}
+
+func (m stdMsg) Level() LogLevel {
+	return m.level
+}
+
+func (m stdMsg) String() string {
+	return m.msg
+}
+
 var (
-	logMessageC = make(chan message)
+	logMessageC = make(chan LogMsg)
 	addSystemC  = make(chan LogSystem)
 	flushC      = make(chan chan struct{})
 	resetC      = make(chan chan struct{})
@@ -27,11 +51,11 @@ const sysBufferSize = 500
 func dispatchLoop() {
 	var (
 		systems  []LogSystem
-		systemIn []chan message
+		systemIn []chan LogMsg
 		systemWG sync.WaitGroup
 	)
 	bootSystem := func(sys LogSystem) {
-		in := make(chan message, sysBufferSize)
+		in := make(chan LogMsg, sysBufferSize)
 		systemIn = append(systemIn, in)
 		systemWG.Add(1)
 		go sysLoop(sys, in, &systemWG)
@@ -73,18 +97,9 @@ func dispatchLoop() {
 	}
 }
 
-func sysLoop(sys LogSystem, in <-chan message, wg *sync.WaitGroup) {
+func sysLoop(sys LogSystem, in <-chan LogMsg, wg *sync.WaitGroup) {
 	for msg := range in {
-		switch sys.(type) {
-		case *jsonLogSystem:
-			if msg.level == JsonLevel {
-				sys.LogPrint(msg.level, msg.msg)
-			}
-		default:
-			if sys.GetLogLevel() >= msg.level {
-				sys.LogPrint(msg.level, msg.msg)
-			}
-		}
+		sys.LogPrint(msg)
 	}
 	wg.Done()
 }

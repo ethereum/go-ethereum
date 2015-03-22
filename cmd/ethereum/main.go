@@ -135,7 +135,7 @@ The Ethereum JavaScript VM exposes a node admin interface as well as the DAPP Ja
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
 		utils.LogFileFlag,
-		utils.LogFormatFlag,
+		utils.LogJSONFlag,
 		utils.LogLevelFlag,
 		utils.MaxPeersFlag,
 		utils.MinerThreadsFlag,

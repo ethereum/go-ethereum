@@ -15,9 +15,11 @@ type TestLogSystem struct {
 	level  LogLevel
 }
 
-func (ls *TestLogSystem) LogPrint(level LogLevel, msg string) {
+func (ls *TestLogSystem) LogPrint(msg LogMsg) {
 	ls.mutex.Lock()
-	ls.output += msg
+	if ls.level >= msg.Level() {
+		ls.output += msg.String()
+	}
 	ls.mutex.Unlock()
 }
 
@@ -47,9 +49,9 @@ type blockedLogSystem struct {
 	unblock chan struct{}
 }
 
-func (ls blockedLogSystem) LogPrint(level LogLevel, msg string) {
+func (ls blockedLogSystem) LogPrint(msg LogMsg) {
 	<-ls.unblock
-	ls.LogSystem.LogPrint(level, msg)
+	ls.LogSystem.LogPrint(msg)
 }
 
 func TestLoggerFlush(t *testing.T) {
