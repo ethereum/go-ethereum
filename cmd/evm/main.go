@@ -30,10 +30,10 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
@@ -60,12 +60,12 @@ func main() {
 	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.LogLevel(*loglevel)))
 
 	db, _ := ethdb.NewMemDatabase()
-	statedb := state.New(nil, db)
-	sender := statedb.NewStateObject([]byte("sender"))
-	receiver := statedb.NewStateObject([]byte("receiver"))
+	statedb := state.New(common.Hash{}, db)
+	sender := statedb.NewStateObject(common.StringToAddress("sender"))
+	receiver := statedb.NewStateObject(common.StringToAddress("receiver"))
 	receiver.SetCode(common.Hex2Bytes(*code))
 
-	vmenv := NewEnv(statedb, []byte("evmuser"), common.Big(*value))
+	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(*value))
 
 	tstart := time.Now()
 
@@ -98,7 +98,7 @@ type VMEnv struct {
 	state *state.StateDB
 	block *types.Block
 
-	transactor []byte
+	transactor *common.Address
 	value      *big.Int
 
 	depth int
@@ -106,33 +106,32 @@ type VMEnv struct {
 	time  int64
 }
 
-func NewEnv(state *state.StateDB, transactor []byte, value *big.Int) *VMEnv {
+func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int) *VMEnv {
 	return &VMEnv{
 		state:      state,
-		transactor: transactor,
+		transactor: &transactor,
 		value:      value,
 		time:       time.Now().Unix(),
 	}
 }
 
-func (self *VMEnv) State() *state.StateDB { return self.state }
-func (self *VMEnv) Origin() []byte        { return self.transactor }
-func (self *VMEnv) BlockNumber() *big.Int { return common.Big0 }
-func (self *VMEnv) PrevHash() []byte      { return make([]byte, 32) }
-func (self *VMEnv) Coinbase() []byte      { return self.transactor }
-func (self *VMEnv) Time() int64           { return self.time }
-func (self *VMEnv) Difficulty() *big.Int  { return common.Big1 }
-func (self *VMEnv) BlockHash() []byte     { return make([]byte, 32) }
-func (self *VMEnv) Value() *big.Int       { return self.value }
-func (self *VMEnv) GasLimit() *big.Int    { return big.NewInt(1000000000) }
-func (self *VMEnv) VmType() vm.Type       { return vm.StdVmTy }
-func (self *VMEnv) Depth() int            { return 0 }
-func (self *VMEnv) SetDepth(i int)        { self.depth = i }
-func (self *VMEnv) GetHash(n uint64) []byte {
+func (self *VMEnv) State() *state.StateDB    { return self.state }
+func (self *VMEnv) Origin() common.Address   { return *self.transactor }
+func (self *VMEnv) BlockNumber() *big.Int    { return common.Big0 }
+func (self *VMEnv) Coinbase() common.Address { return *self.transactor }
+func (self *VMEnv) Time() int64              { return self.time }
+func (self *VMEnv) Difficulty() *big.Int     { return common.Big1 }
+func (self *VMEnv) BlockHash() []byte        { return make([]byte, 32) }
+func (self *VMEnv) Value() *big.Int          { return self.value }
+func (self *VMEnv) GasLimit() *big.Int       { return big.NewInt(1000000000) }
+func (self *VMEnv) VmType() vm.Type          { return vm.StdVmTy }
+func (self *VMEnv) Depth() int               { return 0 }
+func (self *VMEnv) SetDepth(i int)           { self.depth = i }
+func (self *VMEnv) GetHash(n uint64) common.Hash {
 	if self.block.Number().Cmp(big.NewInt(int64(n))) == 0 {
 		return self.block.Hash()
 	}
-	return nil
+	return common.Hash{}
 }
 func (self *VMEnv) AddLog(log state.Log) {
 	self.state.AddLog(log)
@@ -141,23 +140,24 @@ func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
 	return vm.Transfer(from, to, amount)
 }
 
-func (self *VMEnv) vm(addr, data []byte, gas, price, value *big.Int) *core.Execution {
+func (self *VMEnv) vm(addr *common.Address, data []byte, gas, price, value *big.Int) *core.Execution {
 	return core.NewExecution(self, addr, data, gas, price, value)
 }
 
-func (self *VMEnv) Call(caller vm.ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	exe := self.vm(addr, data, gas, price, value)
+func (self *VMEnv) Call(caller vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+	exe := self.vm(&addr, data, gas, price, value)
 	ret, err := exe.Call(addr, caller)
 	self.Gas = exe.Gas
 
 	return ret, err
 }
-func (self *VMEnv) CallCode(caller vm.ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	exe := self.vm(caller.Address(), data, gas, price, value)
+func (self *VMEnv) CallCode(caller vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+	a := caller.Address()
+	exe := self.vm(&a, data, gas, price, value)
 	return exe.Call(addr, caller)
 }
 
-func (self *VMEnv) Create(caller vm.ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
+func (self *VMEnv) Create(caller vm.ContextRef, addr *common.Address, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
 	exe := self.vm(addr, data, gas, price, value)
 	return exe.Create(caller)
 }
