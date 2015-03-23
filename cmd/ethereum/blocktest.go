@@ -5,9 +5,9 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/tests"
 )
 
@@ -26,10 +26,10 @@ be able to interact with the chain defined by the test.
 }
 
 func runblocktest(ctx *cli.Context) {
-	if len(ctx.Args()) != 2 {
-		utils.Fatalf("This command requires two arguments.")
+	if len(ctx.Args()) != 3 {
+		utils.Fatalf("Usage: ethereum blocktest <path-to-test-file> <test-name> {rpc, norpc}")
 	}
-	file, testname := ctx.Args()[0], ctx.Args()[1]
+	file, testname, startrpc := ctx.Args()[0], ctx.Args()[1], ctx.Args()[2]
 
 	bt, err := tests.LoadBlockTests(file)
 	if err != nil {
@@ -42,6 +42,7 @@ func runblocktest(ctx *cli.Context) {
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
 	cfg.NewDB = func(path string) (common.Database, error) { return ethdb.NewMemDatabase() }
+	cfg.MaxPeers = 0 // disable network
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -51,7 +52,8 @@ func runblocktest(ctx *cli.Context) {
 	ethereum.ResetWithGenesisBlock(test.Genesis)
 
 	// import pre accounts
-	if err := test.InsertPreState(ethereum.StateDb()); err != nil {
+	statedb, err := test.InsertPreState(ethereum.StateDb())
+	if err != nil {
 		utils.Fatalf("could not insert genesis accounts: %v", err)
 	}
 
@@ -60,7 +62,19 @@ func runblocktest(ctx *cli.Context) {
 	if err := chain.InsertChain(test.Blocks); err != nil {
 		utils.Fatalf("Block Test load error: %v", err)
 	} else {
-		fmt.Println("Block Test chain loaded, starting ethereum.")
+		fmt.Println("Block Test chain loaded")
 	}
-	startEth(ctx, ethereum)
+
+	if err := test.ValidatePostState(statedb); err != nil {
+		utils.Fatalf("post state validation failed: %v", err)
+	}
+	fmt.Println("Block Test post state validated, starting ethereum.")
+
+	if startrpc == "rpc" {
+		startEth(ctx, ethereum)
+		utils.StartRPC(ethereum, ctx)
+		ethereum.WaitForShutdown()
+	} else {
+		startEth(ctx, ethereum)
+	}
 }

@@ -176,9 +176,12 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 	chain := self.Backend().ChainManager()
 	var block *types.Block
 
+	// -1 generally means "latest"
+	// -2 means "pending", which has no blocknum
 	if num < 0 {
-		num = chain.CurrentBlock().Number().Int64() + num + 1
+		num = chain.CurrentBlock().Number().Int64()
 	}
+
 	block = chain.GetBlockByNumber(uint64(num))
 
 	var st *state.StateDB
@@ -229,6 +232,11 @@ func (self *XEth) EthTransactionByHash(hash string) *types.Transaction {
 }
 
 func (self *XEth) BlockByNumber(num int64) *Block {
+	if num == -2 {
+		// "pending" is non-existant
+		return &Block{}
+	}
+
 	if num == -1 {
 		return NewBlock(self.chainManager.CurrentBlock())
 	}
@@ -237,6 +245,11 @@ func (self *XEth) BlockByNumber(num int64) *Block {
 }
 
 func (self *XEth) EthBlockByNumber(num int64) *types.Block {
+	if num == -2 {
+		// "pending" is non-existant
+		return &types.Block{}
+	}
+
 	if num == -1 {
 		return self.chainManager.CurrentBlock()
 	}

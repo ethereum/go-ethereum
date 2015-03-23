@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func blockAge(raw interface{}, number *int64) (err error) {
+func blockHeight(raw interface{}, number *int64) (err error) {
 	// Parse as integer
 	num, ok := raw.(float64)
 	if ok {
@@ -26,7 +26,7 @@ func blockAge(raw interface{}, number *int64) (err error) {
 	case "latest":
 		*number = -1
 	case "pending":
-		*number = 0
+		*number = -2
 	default:
 		*number = common.String2Big(str).Int64()
 	}
@@ -137,7 +137,7 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 			return NewDecodeParamError(err.Error())
 		}
 
-		if err := blockAge(raw, &args.BlockNumber); err != nil {
+		if err := blockHeight(raw, &args.BlockNumber); err != nil {
 			return err
 		}
 	}
@@ -174,7 +174,7 @@ func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = addstr
 
 	if len(obj) > 1 {
-		if err := blockAge(obj[1], &args.BlockNumber); err != nil {
+		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
 	}
@@ -218,7 +218,7 @@ func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Key = keystr
 
 	if len(obj) > 2 {
-		if err := blockAge(obj[2], &args.BlockNumber); err != nil {
+		if err := blockHeight(obj[2], &args.BlockNumber); err != nil {
 			return err
 		}
 	}
@@ -259,7 +259,7 @@ func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = addstr
 
 	if len(obj) > 1 {
-		if err := blockAge(obj[1], &args.BlockNumber); err != nil {
+		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
 	}
@@ -296,7 +296,7 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = addstr
 
 	if len(obj) > 1 {
-		if err := blockAge(obj[1], &args.BlockNumber); err != nil {
+		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
 	}
@@ -333,7 +333,7 @@ func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = addstr
 
 	if len(obj) > 1 {
-		if err := blockAge(obj[1], &args.BlockNumber); err != nil {
+		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
 	}
