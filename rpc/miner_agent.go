@@ -54,14 +54,19 @@ out:
 	}
 }
 
-func (a *Agent) GetWork() common.Hash {
+func (a *Agent) GetWork() []string {
 	// TODO return HashNoNonce, DAGSeedHash, Difficulty
+	var res = []string{}
 
 	// XXX Wait here untill work != nil ?.
 	if a.work != nil {
-		return a.work.HashNoNonce()
+		// Ideally append in 1 call once params are determined
+		res = append(res, a.work.HashNoNonce().Hex()) // Header Hash No Nonce
+		res = append(res, common.Hash{}.Hex())        // DAG Seed
+		res = append(res, common.Hash{}.Hex())        // Difficulty
 	}
-	return common.Hash{}
+
+	return res
 }
 
 func (a *Agent) SetResult(nonce uint64, mixDigest, seedHash common.Hash) bool {

@@ -349,7 +349,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		*reply = NewLogsRes(p.xeth().AllLogs(opts))
 	case "eth_getWork":
 		p.xeth().SetMining(true)
-		*reply = p.agent.GetWork().Hex()
+		*reply = p.agent.GetWork()
 	case "eth_submitWork":
 		args := new(SubmitWorkArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
