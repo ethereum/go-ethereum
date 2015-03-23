@@ -54,16 +54,15 @@ out:
 	}
 }
 
-func (a *Agent) GetWork() []string {
+func (a *Agent) GetWork() [3]string {
 	// TODO return HashNoNonce, DAGSeedHash, Difficulty
-	var res = []string{}
+	var res [3]string
 
 	// XXX Wait here untill work != nil ?.
 	if a.work != nil {
-		// Ideally append in 1 call once params are determined
-		res = append(res, a.work.HashNoNonce().Hex()) // Header Hash No Nonce
-		res = append(res, common.Hash{}.Hex())        // DAG Seed
-		res = append(res, common.Hash{}.Hex())        // Difficulty
+		res[0] = a.work.HashNoNonce().Hex() // Header Hash No Nonce
+		res[1] = common.Hash{}.Hex()        // DAG Seed
+		res[2] = common.Hash{}.Hex()        // Difficulty
 	}
 
 	return res
