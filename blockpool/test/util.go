@@ -10,16 +10,20 @@ import (
 
 func CheckInt(name string, got int, expected int, t *testing.T) (err error) {
 	if got != expected {
-		t.Errorf("status for %v incorrect. expected %v, got %v", name, expected, got)
-		err = fmt.Errorf("")
+		err = fmt.Errorf("status for %v incorrect. expected %v, got %v", name, expected, got)
+		if t != nil {
+			t.Error(err)
+		}
 	}
 	return
 }
 
 func CheckDuration(name string, got time.Duration, expected time.Duration, t *testing.T) (err error) {
 	if got != expected {
-		t.Errorf("status for %v incorrect. expected %v, got %v", name, expected, got)
-		err = fmt.Errorf("")
+		err = fmt.Errorf("status for %v incorrect. expected %v, got %v", name, expected, got)
+		if t != nil {
+			t.Error(err)
+		}
 	}
 	return
 }
