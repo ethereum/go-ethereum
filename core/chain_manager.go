@@ -455,8 +455,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			}
 
 			h := block.Header()
-			chainlogger.Infof("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes()[:4])
-			chainlogger.Infoln(err)
+			chainlogger.Errorf("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes()[:4])
+			chainlogger.Errorln(err)
 			chainlogger.Debugln(block)
 			return err
 		}
@@ -542,10 +542,3 @@ out:
 		}
 	}
 }
-
-/*
-// Satisfy state query interface
-func (self *ChainManager) GetAccount(addr common.Hash) *state.StateObject {
-	return self.State().GetAccount(addr)
-}
-*/
