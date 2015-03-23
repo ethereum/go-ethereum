@@ -21,7 +21,10 @@ type EthereumApi struct {
 
 func NewEthereumApi(xeth *xeth.XEth, dataDir string) *EthereumApi {
 	// What about when dataDir is empty?
-	db, _ := ethdb.NewLDBDatabase(path.Join(dataDir, "dapps"))
+	db, err := ethdb.NewLDBDatabase(path.Join(dataDir, "dapps"))
+	if err != nil {
+		panic(err)
+	}
 	api := &EthereumApi{
 		eth: xeth,
 		db:  db,
@@ -361,7 +364,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		api.db.Put([]byte(args.Database+args.Key), []byte(args.Value))
+		api.db.Put([]byte(args.Database+args.Key), args.Value)
 		*reply = true
 	case "db_getString":
 		args := new(DbArgs)
@@ -375,8 +378,30 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		res, _ := api.db.Get([]byte(args.Database + args.Key))
 		*reply = string(res)
-	case "db_putHex", "db_getHex":
-		return NewNotImplementedError(req.Method)
+	case "db_putHex":
+		args := new(DbHexArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		if err := args.requirements(); err != nil {
+			return err
+		}
+
+		api.db.Put([]byte(args.Database+args.Key), args.Value)
+		*reply = true
+	case "db_getHex":
+		args := new(DbHexArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		if err := args.requirements(); err != nil {
+			return err
+		}
+
+		res, _ := api.db.Get([]byte(args.Database + args.Key))
+		*reply = common.ToHex(res)
 	case "shh_post":
 		args := new(WhisperMessageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
