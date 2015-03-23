@@ -5,6 +5,8 @@ import (
 	// "sync"
 	"testing"
 	// "time"
+
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
 func TestWeb3Sha3(t *testing.T) {
@@ -17,6 +19,50 @@ func TestWeb3Sha3(t *testing.T) {
 	json.Unmarshal([]byte(jsonstr), &req)
 
 	var response interface{}
+	_ = api.GetRequestReply(&req, &response)
+
+	if response.(string) != expected {
+		t.Errorf("Expected %s got %s", expected, response)
+	}
+}
+
+func TestDbStr(t *testing.T) {
+	jsonput := `{"jsonrpc":"2.0","method":"db_putString","params":["testDB","myKey","myString"],"id":64}`
+	jsonget := `{"jsonrpc":"2.0","method":"db_getString","params":["testDB","myKey"],"id":64}`
+	expected := "myString"
+
+	xeth := &xeth.XEth{}
+	api := NewEthereumApi(xeth, "")
+	defer api.db.Close()
+	var response interface{}
+
+	var req RpcRequest
+	json.Unmarshal([]byte(jsonput), &req)
+	_ = api.GetRequestReply(&req, &response)
+
+	json.Unmarshal([]byte(jsonget), &req)
+	_ = api.GetRequestReply(&req, &response)
+
+	if response.(string) != expected {
+		t.Errorf("Expected %s got %s", expected, response)
+	}
+}
+
+func TestDbHexStr(t *testing.T) {
+	jsonput := `{"jsonrpc":"2.0","method":"db_putHex","params":["testDB","beefKey","0xbeef"],"id":64}`
+	jsonget := `{"jsonrpc":"2.0","method":"db_getHex","params":["testDB","beefKey"],"id":64}`
+	expected := "0xbeef"
+
+	xeth := &xeth.XEth{}
+	api := NewEthereumApi(xeth, "")
+	defer api.db.Close()
+	var response interface{}
+
+	var req RpcRequest
+	json.Unmarshal([]byte(jsonput), &req)
+	_ = api.GetRequestReply(&req, &response)
+
+	json.Unmarshal([]byte(jsonget), &req)
 	_ = api.GetRequestReply(&req, &response)
 
 	if response.(string) != expected {

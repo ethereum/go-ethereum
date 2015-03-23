@@ -485,11 +485,11 @@ func TestBlockFilterArgsEmptyArgs(t *testing.T) {
 }
 
 func TestDbArgs(t *testing.T) {
-	input := `["0x74657374","0x6b6579","0x6d79537472696e67"]`
+	input := `["testDB","myKey","0xbeef"]`
 	expected := new(DbArgs)
-	expected.Database = "0x74657374"
-	expected.Key = "0x6b6579"
-	expected.Value = "0x6d79537472696e67"
+	expected.Database = "testDB"
+	expected.Key = "myKey"
+	expected.Value = []byte("0xbeef")
 
 	args := new(DbArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -508,7 +508,36 @@ func TestDbArgs(t *testing.T) {
 		t.Errorf("Key shoud be %#v but is %#v", expected.Key, args.Key)
 	}
 
-	if expected.Value != args.Value {
+	if bytes.Compare(expected.Value, args.Value) != 0 {
+		t.Errorf("Value shoud be %#v but is %#v", expected.Value, args.Value)
+	}
+}
+
+func TestDbHexArgs(t *testing.T) {
+	input := `["testDB","myKey","0xbeef"]`
+	expected := new(DbHexArgs)
+	expected.Database = "testDB"
+	expected.Key = "myKey"
+	expected.Value = []byte{0xbe, 0xef}
+
+	args := new(DbHexArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if err := args.requirements(); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Database != args.Database {
+		t.Errorf("Database shoud be %#v but is %#v", expected.Database, args.Database)
+	}
+
+	if expected.Key != args.Key {
+		t.Errorf("Key shoud be %#v but is %#v", expected.Key, args.Key)
+	}
+
+	if bytes.Compare(expected.Value, args.Value) != 0 {
 		t.Errorf("Value shoud be %#v but is %#v", expected.Value, args.Value)
 	}
 }
