@@ -26,11 +26,11 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -83,11 +83,62 @@ The output of this command is supposed to be machine-readable.
 					Action: accountList,
 					Name:   "list",
 					Usage:  "print account addresses",
+					Description: `
+
+`,
 				},
 				{
 					Action: accountCreate,
 					Name:   "new",
 					Usage:  "create a new account",
+					Description: `
+
+    ethereum account new
+
+Creates a new accountThe account is saved in encrypted format, you are prompted for a passphrase.
+You must remember this passphrase to unlock your account in future.
+For non-interactive use the passphrase can be specified with the --password flag:
+
+    ethereum --password <passwordfile> account new
+
+					`,
+				},
+				{
+					Action: accountImport,
+					Name:   "import",
+					Usage:  "import a private key into a new account",
+					Description: `
+
+    ethereum account import <keyfile>
+
+Imports a private key from <keyfile> and creates a new account with the address derived from the key.
+The keyfile is assumed to contain an unencrypted private key in canonical EC format.
+
+The account is saved in encrypted format, you are prompted for a passphrase.
+You must remember this passphrase to unlock your account in future.
+For non-interactive use the passphrase can be specified with the --password flag:
+
+    ethereum --password <passwordfile> account import <keyfile>
+
+					`,
+				},
+				{
+					Action: accountExport,
+					Name:   "export",
+					Usage:  "export an account into key file",
+					Description: `
+
+    ethereum account export <address> <keyfile>
+
+Exports the given account's private key into keyfile using the canonical EC format.
+The account needs to be unlocked, if it is not the user is prompted for a passphrase to unlock it.
+For non-interactive use, the password can be specified with the --unlock flag:
+
+    ethereum --unlock <passwrdfile> account export <address> <keyfile>
+
+Note:
+Since you can directly copy your encrypted accounts to another ethereum instance, this import/export mechanism is not needed when you transfer an account between nodes.
+					`,
 				},
 			},
 		},
@@ -130,6 +181,7 @@ The Ethereum JavaScript VM exposes a node admin interface as well as the DAPP Ja
 	}
 	app.Flags = []cli.Flag{
 		utils.UnlockedAccountFlag,
+		utils.PasswordFileFlag,
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.JSpathFlag,
@@ -218,22 +270,42 @@ func execJSFiles(ctx *cli.Context) {
 	ethereum.WaitForShutdown()
 }
 
-func startEth(ctx *cli.Context, eth *eth.Ethereum) {
-	utils.StartEthereum(eth)
-
-	// Load startup keys. XXX we are going to need a different format
-	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
-	if len(account) > 0 {
-		split := strings.Split(account, ":")
-		if len(split) != 2 {
-			utils.Fatalf("Illegal 'unlock' format (address:password)")
-		}
-		am := eth.AccountManager()
+func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (passphrase string) {
+	if !ctx.GlobalBool(utils.UnencryptedKeysFlag.Name) {
+		var err error
+		// Load startup keys. XXX we are going to need a different format
 		// Attempt to unlock the account
-		err := am.Unlock(common.FromHex(split[0]), split[1])
+		passfile := ctx.GlobalString(utils.PasswordFileFlag.Name)
+		if len(passfile) == 0 {
+			fmt.Println("Please enter a passphrase now.")
+			auth, err := readPassword("Passphrase: ", true)
+			if err != nil {
+				utils.Fatalf("%v", err)
+			}
+
+			passphrase = auth
+
+		} else {
+			if passphrase, err = common.ReadAllFile(passfile); err != nil {
+				utils.Fatalf("Unable to read password file '%s': %v", passfile, err)
+			}
+		}
+
+		err = am.Unlock(common.FromHex(account), passphrase)
 		if err != nil {
 			utils.Fatalf("Unlock account failed '%v'", err)
 		}
+	}
+	return
+}
+
+func startEth(ctx *cli.Context, eth *eth.Ethereum) {
+	utils.StartEthereum(eth)
+	am := eth.AccountManager()
+
+	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
+	if len(account) > 0 {
+		unlockAccount(ctx, am, account)
 	}
 	// Start auxiliary services if enabled.
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
@@ -255,30 +327,74 @@ func accountList(ctx *cli.Context) {
 	}
 }
 
+func getPassPhrase(ctx *cli.Context) (passphrase string) {
+	if !ctx.GlobalBool(utils.UnencryptedKeysFlag.Name) {
+		passfile := ctx.GlobalString(utils.PasswordFileFlag.Name)
+		if len(passfile) == 0 {
+			fmt.Println("The new account will be encrypted with a passphrase.")
+			fmt.Println("Please enter a passphrase now.")
+			auth, err := readPassword("Passphrase: ", true)
+			if err != nil {
+				utils.Fatalf("%v", err)
+			}
+			confirm, err := readPassword("Repeat Passphrase: ", false)
+			if err != nil {
+				utils.Fatalf("%v", err)
+			}
+			if auth != confirm {
+				utils.Fatalf("Passphrases did not match.")
+			}
+			passphrase = auth
+
+		} else {
+			var err error
+			if passphrase, err = common.ReadAllFile(passfile); err != nil {
+				utils.Fatalf("Unable to read password file '%s': %v", passfile, err)
+			}
+		}
+	}
+	return
+}
+
 func accountCreate(ctx *cli.Context) {
 	am := utils.GetAccountManager(ctx)
-	passphrase := ""
-	if !ctx.GlobalBool(utils.UnencryptedKeysFlag.Name) {
-		fmt.Println("The new account will be encrypted with a passphrase.")
-		fmt.Println("Please enter a passphrase now.")
-		auth, err := readPassword("Passphrase: ", true)
-		if err != nil {
-			utils.Fatalf("%v", err)
-		}
-		confirm, err := readPassword("Repeat Passphrase: ", false)
-		if err != nil {
-			utils.Fatalf("%v", err)
-		}
-		if auth != confirm {
-			utils.Fatalf("Passphrases did not match.")
-		}
-		passphrase = auth
-	}
+	passphrase := getPassPhrase(ctx)
 	acct, err := am.NewAccount(passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
-	fmt.Printf("Address: %x\n", acct.Address)
+	fmt.Printf("Address: %x\n", acct)
+}
+
+func accountImport(ctx *cli.Context) {
+	keyfile := ctx.Args().First()
+	if len(keyfile) == 0 {
+		utils.Fatalf("keyfile must be given as argument")
+	}
+	am := utils.GetAccountManager(ctx)
+	passphrase := getPassPhrase(ctx)
+	acct, err := am.Import(keyfile, passphrase)
+	if err != nil {
+		utils.Fatalf("Could not create the account: %v", err)
+	}
+	fmt.Printf("Address: %x\n", acct)
+}
+
+func accountExport(ctx *cli.Context) {
+	account := ctx.Args().First()
+	if len(account) == 0 {
+		utils.Fatalf("account address must be given as first argument")
+	}
+	keyfile := ctx.Args().Get(1)
+	if len(keyfile) == 0 {
+		utils.Fatalf("keyfile must be given as second argument")
+	}
+	am := utils.GetAccountManager(ctx)
+	auth := unlockAccount(ctx, am, account)
+	err := am.Export(keyfile, common.FromHex(account), auth)
+	if err != nil {
+		utils.Fatalf("Account export failed: %v", err)
+	}
 }
 
 func importchain(ctx *cli.Context) {

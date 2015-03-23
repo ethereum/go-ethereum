@@ -208,3 +208,23 @@ func zeroKey(k *ecdsa.PrivateKey) {
 		b[i] = 0
 	}
 }
+
+func (am *Manager) Export(path string, addr []byte, keyAuth string) error {
+	key, err := am.keyStore.GetKey(addr, keyAuth)
+	if err != nil {
+		return err
+	}
+	return crypto.SaveECDSA(path, key.PrivateKey)
+}
+
+func (am *Manager) Import(path string, keyAuth string) (Account, error) {
+	privateKeyECDSA, err := crypto.LoadECDSA(path)
+	if err != nil {
+		return Account{}, err
+	}
+	key := crypto.NewKeyFromECDSA(privateKeyECDSA)
+	if err = am.keyStore.StoreKey(key, keyAuth); err != nil {
+		return Account{}, err
+	}
+	return Account{Address: key.Address}, nil
+}

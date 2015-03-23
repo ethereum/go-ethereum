@@ -104,7 +104,13 @@ var (
 	}
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
-		Usage: "Unlock a given account untill this programs exits (address:password)",
+		Usage: "unlock the account given until this program exits (prompts for password).",
+		Value: "",
+	}
+	PasswordFileFlag = cli.StringFlag{
+		Name:  "password",
+		Usage: "Password used when saving a new account and unlocking an existing account. If you create a new account make sure you remember this password.",
+		Value: "",
 	}
 
 	// logging and debug settings

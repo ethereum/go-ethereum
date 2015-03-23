@@ -85,6 +85,16 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 	return err
 }
 
+func NewKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
+	id := uuid.NewRandom()
+	key := &Key{
+		Id:         id,
+		Address:    PubkeyToAddress(privateKeyECDSA.PublicKey),
+		PrivateKey: privateKeyECDSA,
+	}
+	return key
+}
+
 func NewKey(rand io.Reader) *Key {
 	randBytes := make([]byte, 64)
 	_, err := rand.Read(randBytes)
@@ -97,11 +107,5 @@ func NewKey(rand io.Reader) *Key {
 		panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
 	}
 
-	id := uuid.NewRandom()
-	key := &Key{
-		Id:         id,
-		Address:    PubkeyToAddress(privateKeyECDSA.PublicKey),
-		PrivateKey: privateKeyECDSA,
-	}
-	return key
+	return NewKeyFromECDSA(privateKeyECDSA)
 }

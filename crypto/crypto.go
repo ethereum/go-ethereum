@@ -139,6 +139,11 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 	return ToECDSA(buf), nil
 }
 
+// SaveECDSA saves a secp256k1 private key from the given file.
+func SaveECDSA(file string, key *ecdsa.PrivateKey) error {
+	return common.WriteFile(file, FromECDSA(key))
+}
+
 func GenerateKey() (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(S256(), rand.Reader)
 }
