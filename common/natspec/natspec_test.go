@@ -72,7 +72,7 @@ func TestNotice(t *testing.T) {
 	badDesc := "Will multiply `e` by 7 and return `a * 7`."
 	notice, err = ns.Notice(tx, abi, method, badDesc)
 
-	expected = "natspec.js error evaluating expression: Error: Natspec evaluation failed, wrong input params"
+	expected = "natspec.js error evaluating expression: Natspec evaluation failed, wrong input params"
 
 	if err == nil {
 		t.Errorf("expected error, got nothing (notice: '%v')", notice)
@@ -84,7 +84,7 @@ func TestNotice(t *testing.T) {
 
 	notice, err = ns.Notice(tx, abi, "missing_method", desc)
 
-	expected = "natspec.js error evaluating expression: Error: Natspec evaluation failed, method does not exist"
+	expected = "natspec.js error evaluating expression: Natspec evaluation failed, method does not exist"
 
 	if err == nil {
 		t.Errorf("expected error, got nothing (notice: '%v')", notice)
