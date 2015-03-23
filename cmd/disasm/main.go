@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/vm"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 func main() {

@@ -2,7 +2,7 @@ package core
 
 import (
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/core/state"
 )
 
 // TxPreEvent is posted when a transaction enters the transaction pool.
