@@ -14,17 +14,17 @@ type LogSystem interface {
 
 // NewStdLogSystem creates a LogSystem that prints to the given writer.
 // The flag values are defined package log.
-func NewStdLogSystem(writer io.Writer, flags int, level LogLevel) LogSystem {
+func NewStdLogSystem(writer io.Writer, flags int, level LogLevel) *StdLogSystem {
 	logger := log.New(writer, "", flags)
-	return &stdLogSystem{logger, uint32(level)}
+	return &StdLogSystem{logger, uint32(level)}
 }
 
-type stdLogSystem struct {
+type StdLogSystem struct {
 	logger *log.Logger
 	level  uint32
 }
 
-func (t *stdLogSystem) LogPrint(msg LogMsg) {
+func (t *StdLogSystem) LogPrint(msg LogMsg) {
 	stdmsg, ok := msg.(stdMsg)
 	if ok {
 		if t.GetLogLevel() >= stdmsg.Level() {
@@ -33,11 +33,11 @@ func (t *stdLogSystem) LogPrint(msg LogMsg) {
 	}
 }
 
-func (t *stdLogSystem) SetLogLevel(i LogLevel) {
+func (t *StdLogSystem) SetLogLevel(i LogLevel) {
 	atomic.StoreUint32(&t.level, uint32(i))
 }
 
-func (t *stdLogSystem) GetLogLevel() LogLevel {
+func (t *StdLogSystem) GetLogLevel() LogLevel {
 	return LogLevel(atomic.LoadUint32(&t.level))
 }
 

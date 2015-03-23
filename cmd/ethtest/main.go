@@ -33,12 +33,12 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 type Log struct {
@@ -80,8 +80,7 @@ func StateObjectFromAccount(db common.Database, addr string, account Account) *s
 }
 
 type VmTest struct {
-	Callcreates interface{}
-	//Env         map[string]string
+	Callcreates   interface{}
 	Env           Env
 	Exec          map[string]string
 	Transaction   map[string]string
@@ -219,7 +218,7 @@ func RunVmTest(r io.Reader) (failed int) {
 }
 
 func main() {
-	//helper.Logger.SetLogLevel(5)
+	helper.Logger.SetLogLevel(5)
 	vm.Debug = true
 
 	if len(os.Args) > 1 {
