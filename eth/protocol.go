@@ -210,7 +210,7 @@ func (self *ethProtocol) handle() error {
 		return p2p.Send(self.rw, BlockHashesMsg, hashes)
 
 	case BlockHashesMsg:
-		msgStream := rlp.NewStream(msg.Payload)
+		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
 			return err
 		}
@@ -231,7 +231,7 @@ func (self *ethProtocol) handle() error {
 		self.blockPool.AddBlockHashes(iter, self.id)
 
 	case GetBlocksMsg:
-		msgStream := rlp.NewStream(msg.Payload)
+		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
 			return err
 		}
@@ -259,7 +259,7 @@ func (self *ethProtocol) handle() error {
 		return p2p.Send(self.rw, BlocksMsg, blocks)
 
 	case BlocksMsg:
-		msgStream := rlp.NewStream(msg.Payload)
+		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
 			return err
 		}
