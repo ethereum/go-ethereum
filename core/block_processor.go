@@ -61,7 +61,7 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 	coinbase.SetGasPool(block.Header().GasLimit)
 
 	// Process the transactions on to parent state
-	receipts, _, _, _, err = sm.ApplyTransactions(coinbase, statedb, block, block.Transactions(), transientProcess)
+	receipts, err = sm.ApplyTransactions(coinbase, statedb, block, block.Transactions(), transientProcess)
 	if err != nil {
 		return nil, err
 	}
@@ -104,39 +104,38 @@ func (self *BlockProcessor) ChainManager() *ChainManager {
 	return self.bc
 }
 
-func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
+func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, error) {
 	var (
-		receipts           types.Receipts
-		handled, unhandled types.Transactions
-		erroneous          types.Transactions
-		totalUsedGas       = big.NewInt(0)
-		err                error
-		cumulativeSum      = new(big.Int)
+		receipts      types.Receipts
+		totalUsedGas  = big.NewInt(0)
+		err           error
+		cumulativeSum = new(big.Int)
 	)
 
 	for _, tx := range txs {
 		receipt, txGas, err := self.ApplyTransaction(coinbase, statedb, block, tx, totalUsedGas, transientProcess)
 		if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
-			return nil, nil, nil, nil, err
+			return nil, err
 		}
 
 		if err != nil {
 			statelogger.Infoln("TX err:", err)
 		}
 		receipts = append(receipts, receipt)
-		handled = append(handled, tx)
 
 		cumulativeSum.Add(cumulativeSum, new(big.Int).Mul(txGas, tx.GasPrice()))
 	}
 
 	block.Reward = cumulativeSum
-	block.Header().GasUsed = totalUsedGas
+	if block.GasUsed().Cmp(totalUsedGas) != 0 {
+		return nil, ValidationError(fmt.Sprintf("gas used error (%v / %v)", block.GasUsed(), totalUsedGas))
+	}
 
 	if transientProcess {
 		go self.eventMux.Post(PendingBlockEvent{block, statedb.Logs()})
 	}
 
-	return receipts, handled, unhandled, erroneous, err
+	return receipts, err
 }
 
 // Process block will attempt to process the given block's transactions and applies them
