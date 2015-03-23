@@ -106,12 +106,7 @@ func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *Chai
 	// Take ownership of this particular state
 	bc.txState = state.ManageState(bc.State().Copy())
 
-	// load in last `blockCacheLimit` - 1 blocks. Last block is the current.
-	ancestors := bc.GetAncestors(bc.currentBlock, blockCacheLimit-1)
-	ancestors = append(ancestors, bc.currentBlock)
-	for _, block := range ancestors {
-		bc.cache.Push(block)
-	}
+	bc.makeCache()
 
 	go bc.update()
 
@@ -194,6 +189,18 @@ func (bc *ChainManager) setLastBlock() {
 	chainlogger.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
 }
 
+func (bc *ChainManager) makeCache() {
+	if bc.cache == nil {
+		bc.cache = NewBlockCache(blockCacheLimit)
+	}
+	// load in last `blockCacheLimit` - 1 blocks. Last block is the current.
+	ancestors := bc.GetAncestors(bc.currentBlock, blockCacheLimit-1)
+	ancestors = append(ancestors, bc.currentBlock)
+	for _, block := range ancestors {
+		bc.cache.Push(block)
+	}
+}
+
 // Block creation & chain handling
 func (bc *ChainManager) NewBlock(coinbase common.Address) *types.Block {
 	bc.mu.RLock()
@@ -240,10 +247,15 @@ func (bc *ChainManager) Reset() {
 		bc.removeBlock(block)
 	}
 
+	if bc.cache == nil {
+		bc.cache = NewBlockCache(blockCacheLimit)
+	}
+
 	// Prepare the genesis block
 	bc.write(bc.genesisBlock)
 	bc.insert(bc.genesisBlock)
 	bc.currentBlock = bc.genesisBlock
+	bc.makeCache()
 
 	bc.setTotalDifficulty(common.Big("0"))
 }
@@ -265,6 +277,7 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 	bc.write(bc.genesisBlock)
 	bc.insert(bc.genesisBlock)
 	bc.currentBlock = bc.genesisBlock
+	bc.makeCache()
 }
 
 // Export writes the active chain to the given writer.
