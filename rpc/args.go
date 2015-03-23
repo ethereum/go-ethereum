@@ -467,7 +467,7 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 
 	switch fromstr {
 	case "latest":
-		args.Earliest = 0
+		args.Earliest = -1
 	default:
 		args.Earliest = int64(common.Big(obj[0].FromBlock.(string)).Int64())
 	}
@@ -479,9 +479,9 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 
 	switch tostr {
 	case "latest":
-		args.Latest = 0
-	case "pending":
 		args.Latest = -1
+	case "pending":
+		args.Latest = -2
 	default:
 		args.Latest = int64(common.Big(obj[0].ToBlock.(string)).Int64())
 	}
@@ -775,8 +775,7 @@ func (args *SubmitWorkArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewDecodeParamError("Nonce is not a string")
 	}
 
-	args.Nonce = common.BytesToNumber(common.Hex2Bytes(objstr))
-
+	args.Nonce = common.String2Big(objstr).Uint64()
 	if objstr, ok = obj[1].(string); !ok {
 		return NewDecodeParamError("Header is not a string")
 	}
