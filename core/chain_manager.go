@@ -32,8 +32,10 @@ type StateQuery interface {
 func CalcDifficulty(block, parent *types.Header) *big.Int {
 	diff := new(big.Int)
 
-	min := big.NewInt(2048)
-	adjust := new(big.Int).Div(parent.Difficulty, min)
+	diffBoundDiv := big.NewInt(2048)
+	min := big.NewInt(131072)
+
+	adjust := new(big.Int).Div(parent.Difficulty, diffBoundDiv)
 	if (block.Time - parent.Time) < 8 {
 		diff.Add(parent.Difficulty, adjust)
 	} else {
