@@ -99,7 +99,6 @@ type Block struct {
 	Td           *big.Int
 
 	receipts Receipts
-	Reward   *big.Int
 }
 
 // StorageBlock defines the RLP encoding of a Block stored in the
@@ -134,7 +133,7 @@ func NewBlock(parentHash common.Hash, coinbase common.Address, root common.Hash,
 		GasLimit:   new(big.Int),
 	}
 	header.SetNonce(nonce)
-	block := &Block{header: header, Reward: new(big.Int)}
+	block := &Block{header: header}
 	return block
 }
 

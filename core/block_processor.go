@@ -126,7 +126,6 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 		cumulativeSum.Add(cumulativeSum, new(big.Int).Mul(txGas, tx.GasPrice()))
 	}
 
-	block.Reward = cumulativeSum
 	if block.GasUsed().Cmp(totalUsedGas) != 0 {
 		return nil, ValidationError(fmt.Sprintf("gas used error (%v / %v)", block.GasUsed(), totalUsedGas))
 	}

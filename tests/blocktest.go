@@ -13,9 +13,9 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/core/state"
 )
 
 // Block Test JSON Format
@@ -172,7 +172,6 @@ func mustConvertGenesis(testGenesis btHeader) *types.Block {
 	hdr.Number = big.NewInt(0)
 	b := types.NewBlockWithHeader(hdr)
 	b.Td = new(big.Int)
-	b.Reward = new(big.Int)
 	return b
 }
 
