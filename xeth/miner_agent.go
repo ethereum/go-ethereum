@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 )
 
-type Agent struct {
+type RemoteAgent struct {
 	work        *types.Block
 	currentWork *types.Block
 
@@ -16,34 +16,34 @@ type Agent struct {
 	returnCh chan<- miner.Work
 }
 
-func NewAgent() *Agent {
-	agent := &Agent{}
+func NewRemoteAgent() *RemoteAgent {
+	agent := &RemoteAgent{}
 	go agent.run()
 
 	return agent
 }
 
-func (a *Agent) Work() chan<- *types.Block {
+func (a *RemoteAgent) Work() chan<- *types.Block {
 	return a.workCh
 }
 
-func (a *Agent) SetWorkCh(returnCh chan<- miner.Work) {
+func (a *RemoteAgent) SetWorkCh(returnCh chan<- miner.Work) {
 	a.returnCh = returnCh
 }
 
-func (a *Agent) Start() {
+func (a *RemoteAgent) Start() {
 	a.quit = make(chan struct{})
 	a.workCh = make(chan *types.Block, 1)
 }
 
-func (a *Agent) Stop() {
+func (a *RemoteAgent) Stop() {
 	close(a.quit)
 	close(a.workCh)
 }
 
-func (a *Agent) GetHashRate() int64 { return 0 }
+func (a *RemoteAgent) GetHashRate() int64 { return 0 }
 
-func (a *Agent) run() {
+func (a *RemoteAgent) run() {
 out:
 	for {
 		select {
@@ -55,7 +55,7 @@ out:
 	}
 }
 
-func (a *Agent) GetWork() [3]string {
+func (a *RemoteAgent) GetWork() [3]string {
 	var res [3]string
 
 	// XXX Wait here until work != nil ?
@@ -69,7 +69,7 @@ func (a *Agent) GetWork() [3]string {
 	return res
 }
 
-func (a *Agent) SubmitWork(nonce uint64, mixDigest, seedHash common.Hash) bool {
+func (a *RemoteAgent) SubmitWork(nonce uint64, mixDigest, seedHash common.Hash) bool {
 	// Return true or false, but does not indicate if the PoW was correct
 
 	// Make sure the external miner was working on the right hash

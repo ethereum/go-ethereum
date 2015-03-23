@@ -102,7 +102,7 @@ type XEth struct {
 	// register map[string][]*interface{} // TODO improve return type
 
 	// Miner agent
-	agent *Agent
+	agent *RemoteAgent
 }
 
 // New creates an XEth that uses the given frontend.
@@ -120,7 +120,7 @@ func New(eth Backend, frontend Frontend) *XEth {
 		frontend:       frontend,
 		logs:           make(map[int]*logFilter),
 		messages:       make(map[int]*whisperFilter),
-		agent:          NewAgent(),
+		agent:          NewRemoteAgent(),
 	}
 	eth.Miner().Register(xeth.agent)
 
@@ -170,7 +170,7 @@ func (self *XEth) stop() {
 func (self *XEth) DefaultGas() *big.Int      { return defaultGas }
 func (self *XEth) DefaultGasPrice() *big.Int { return defaultGasPrice }
 
-func (self *XEth) RemoteMining() *Agent { return self.agent }
+func (self *XEth) RemoteMining() *RemoteAgent { return self.agent }
 
 func (self *XEth) AtStateNum(num int64) *XEth {
 	chain := self.Backend().ChainManager()
