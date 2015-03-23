@@ -256,7 +256,7 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
 	addr := ctx.GlobalString(RPCListenAddrFlag.Name)
 	port := ctx.GlobalInt(RPCPortFlag.Name)
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
-
+	fmt.Println("Starting RPC on port: ", port)
 	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
 	if err != nil {
 		Fatalf("Can't listen on %s:%d: %v", addr, port, err)
