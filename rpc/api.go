@@ -44,6 +44,10 @@ func (api *EthereumApi) xethAtStateNum(num int64) *xeth.XEth {
 	return api.xeth().AtStateNum(num)
 }
 
+func (api *EthereumApi) Close() {
+	api.db.Close()
+}
+
 func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
 	rpclogger.Debugf("%s %s", req.Method, req.Params)
