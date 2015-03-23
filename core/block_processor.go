@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/core/state"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -243,7 +243,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 		chainlogger.Infof("found possible uncle block #%d (%x...)\n", header.Number, block.Hash().Bytes()[0:4])
 		return td, nil, BlockEqualTSErr
 	} else {
-		chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash().Bytes()[0:4])
+		chainlogger.Infof("processed block #%d (%d TXs %d UNCs) (%x...)\n", header.Number, len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
 	}
 
 	return td, state.Logs(), nil

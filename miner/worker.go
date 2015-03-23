@@ -9,11 +9,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
-	"github.com/ethereum/go-ethereum/core/state"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -199,6 +199,8 @@ func (self *worker) push() {
 func (self *worker) commitNewWork() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
+	self.uncleMu.Lock()
+	defer self.uncleMu.Unlock()
 
 	block := self.chain.NewBlock(self.coinbase)
 
@@ -241,7 +243,10 @@ gasLimit:
 	}
 	self.eth.TxPool().RemoveSet(remove)
 
-	var uncles []*types.Header
+	var (
+		uncles    []*types.Header
+		badUncles []common.Hash
+	)
 	for hash, uncle := range self.possibleUncles {
 		if len(uncles) == 2 {
 			break
@@ -250,12 +255,16 @@ gasLimit:
 		if err := self.commitUncle(uncle.Header()); err != nil {
 			minerlogger.Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
 			minerlogger.Debugln(uncle)
+			badUncles = append(badUncles, hash)
 		} else {
 			minerlogger.Infof("commiting %x as uncle\n", hash[:4])
 			uncles = append(uncles, uncle.Header())
 		}
 	}
 	minerlogger.Infof("commit new work with %d txs & %d uncles\n", tcount, len(uncles))
+	for _, hash := range badUncles {
+		delete(self.possibleUncles, hash)
+	}
 
 	self.current.block.SetUncles(uncles)
 

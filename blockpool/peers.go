@@ -471,7 +471,8 @@ func (self *peer) getBlockHashes() bool {
 			self.addError(ErrInvalidBlock, "%v", err)
 			self.bp.status.badPeers[self.id]++
 		} else {
-			if self.currentBlock.Td != nil {
+			// XXX added currentBlock check (?)
+			if self.currentBlock != nil && self.currentBlock.Td != nil {
 				if self.td.Cmp(self.currentBlock.Td) != 0 {
 					self.addError(ErrIncorrectTD, "on block %x", self.currentBlockHash)
 					self.bp.status.badPeers[self.id]++
