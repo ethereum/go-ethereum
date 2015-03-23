@@ -15,11 +15,8 @@ func testlog(t *testing.T) testLogger {
 	return l
 }
 
-func (testLogger) GetLogLevel() logger.LogLevel { return logger.DebugDetailLevel }
-func (testLogger) SetLogLevel(logger.LogLevel)  {}
-
-func (l testLogger) LogPrint(level logger.LogLevel, msg string) {
-	l.t.Logf("%s", msg)
+func (l testLogger) LogPrint(msg logger.LogMsg) {
+	l.t.Logf("%s", msg.String())
 }
 
 func (testLogger) detach() {
