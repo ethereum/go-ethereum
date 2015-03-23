@@ -62,7 +62,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 	case "web3_clientVersion":
 		*reply = api.xeth().Backend().Version()
 	case "net_version":
-		return NewNotImplementedError(req.Method)
+		*reply = string(api.xeth().Backend().ProtocolVersion())
 	case "net_listening":
 		*reply = api.xeth().IsListening()
 	case "net_peerCount":

@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -21,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -141,8 +141,8 @@ type Ethereum struct {
 	Mining          bool
 	DataDir         string
 	version         string
-	ProtocolVersion int
-	NetworkId       int
+	protocolVersion int
+	networkId       int
 }
 
 func New(config *Config) (*Ethereum, error) {
@@ -185,8 +185,8 @@ func New(config *Config) (*Ethereum, error) {
 		accountManager:  config.AccountManager,
 		DataDir:         config.DataDir,
 		version:         config.Name, // TODO should separate from Name
-		ProtocolVersion: config.ProtocolVersion,
-		NetworkId:       config.NetworkId,
+		protocolVersion: config.ProtocolVersion,
+		networkId:       config.NetworkId,
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
@@ -325,6 +325,8 @@ func (s *Ethereum) PeerCount() int                       { return s.net.PeerCoun
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
 func (s *Ethereum) MaxPeers() int                        { return s.net.MaxPeers }
 func (s *Ethereum) Version() string                      { return s.version }
+func (s *Ethereum) ProtocolVersion() int                 { return s.protocolVersion }
+func (s *Ethereum) NetworkId() int                       { return s.networkId }
 
 // Start the ethereum
 func (s *Ethereum) Start() error {
