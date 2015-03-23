@@ -17,7 +17,6 @@ type RemoteAgent struct {
 
 func NewRemoteAgent() *RemoteAgent {
 	agent := &RemoteAgent{}
-	go agent.run()
 
 	return agent
 }
@@ -33,6 +32,7 @@ func (a *RemoteAgent) SetWorkCh(returnCh chan<- Work) {
 func (a *RemoteAgent) Start() {
 	a.quit = make(chan struct{})
 	a.workCh = make(chan *types.Block, 1)
+	go a.run()
 }
 
 func (a *RemoteAgent) Stop() {

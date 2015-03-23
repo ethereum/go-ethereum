@@ -213,9 +213,11 @@ func (self *worker) commitNewWork() {
 	transactions := self.eth.TxPool().GetTransactions()
 	sort.Sort(types.TxByNonce{transactions})
 
-	minerlogger.Infof("committing new work with %d txs\n", len(transactions))
 	// Keep track of transactions which return errors so they can be removed
-	var remove types.Transactions
+	var (
+		remove types.Transactions
+		tcount = 0
+	)
 gasLimit:
 	for i, tx := range transactions {
 		err := self.commitTransaction(tx)
@@ -233,6 +235,8 @@ gasLimit:
 			minerlogger.Infof("Gas limit reached for block. %d TXs included in this block\n", i)
 			// Break on gas limit
 			break gasLimit
+		default:
+			tcount++
 		}
 	}
 	self.eth.TxPool().RemoveSet(remove)
@@ -251,7 +255,8 @@ gasLimit:
 			uncles = append(uncles, uncle.Header())
 		}
 	}
-	minerlogger.Infoln("Included", len(uncles), "uncle(s)")
+	minerlogger.Infof("commit new work with %d txs & %d uncles\n", tcount, len(uncles))
+
 	self.current.block.SetUncles(uncles)
 
 	self.current.state.AddBalance(self.coinbase, core.BlockReward)
