@@ -17,20 +17,15 @@ type EthereumApi struct {
 	eth    *xeth.XEth
 	xethMu sync.RWMutex
 	db     common.Database
-
-	// Miner agent
-	agent *Agent
 }
 
 func NewEthereumApi(xeth *xeth.XEth, dataDir string) *EthereumApi {
 	// What about when dataDir is empty?
 	db, _ := ethdb.NewLDBDatabase(path.Join(dataDir, "dapps"))
 	api := &EthereumApi{
-		eth:   xeth,
-		db:    db,
-		agent: NewAgent(),
+		eth: xeth,
+		db:  db,
 	}
-	xeth.Backend().Miner().Register(api.agent)
 
 	return api
 }
@@ -349,13 +344,13 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		*reply = NewLogsRes(api.xeth().AllLogs(opts))
 	case "eth_getWork":
 		api.xeth().SetMining(true)
-		*reply = api.agent.GetWork()
+		*reply = api.xeth().RemoteMining().GetWork()
 	case "eth_submitWork":
 		args := new(SubmitWorkArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = api.agent.SetResult(args.Nonce, args.Digest, args.Header)
+		*reply = api.xeth().RemoteMining().SubmitWork(args.Nonce, args.Digest, args.Header)
 	case "db_putString":
 		args := new(DbArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
