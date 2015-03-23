@@ -31,11 +31,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/ui/qt/qwhisper"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -230,7 +230,8 @@ func (self *Gui) loadMergedMiningOptions() {
 
 func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	var inout string
-	if gui.eth.AccountManager().HasAccount(tx.From()) {
+	from, _ := tx.From()
+	if gui.eth.AccountManager().HasAccount(common.Hex2Bytes(from.Hex())) {
 		inout = "send"
 	} else {
 		inout = "recv"
@@ -238,8 +239,8 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 
 	var (
 		ptx  = xeth.NewTx(tx)
-		send = common.Bytes2Hex(tx.From())
-		rec  = common.Bytes2Hex(tx.To())
+		send = from.Hex()
+		rec  = tx.To().Hex()
 	)
 	ptx.Sender = send
 	ptx.Address = rec
@@ -263,7 +264,7 @@ func (gui *Gui) readPreviousTransactions() {
 }
 
 func (gui *Gui) processBlock(block *types.Block, initial bool) {
-	name := common.Bytes2Hex(block.Coinbase())
+	name := block.Coinbase().Hex()
 	b := xeth.NewBlock(block)
 	b.Name = name
 
