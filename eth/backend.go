@@ -177,15 +177,16 @@ func New(config *Config) (*Ethereum, error) {
 	servlogger.Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
 
 	eth := &Ethereum{
-		shutdownChan: make(chan bool),
-		blockDb:      blockDb,
-		stateDb:      stateDb,
-		extraDb:      extraDb,
-		eventMux:     &event.TypeMux{},
-		// logger:         servlogsystem,
-		accountManager: config.AccountManager,
-		DataDir:        config.DataDir,
-		version:        config.Name, // TODO should separate from Name
+		shutdownChan:    make(chan bool),
+		blockDb:         blockDb,
+		stateDb:         stateDb,
+		extraDb:         extraDb,
+		eventMux:        &event.TypeMux{},
+		accountManager:  config.AccountManager,
+		DataDir:         config.DataDir,
+		version:         config.Name, // TODO should separate from Name
+		ProtocolVersion: config.ProtocolVersion,
+		NetworkId:       config.NetworkId,
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
