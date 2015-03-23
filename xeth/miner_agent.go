@@ -1,6 +1,7 @@
 package xeth
 
 import (
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/miner"
@@ -55,14 +56,14 @@ out:
 }
 
 func (a *Agent) GetWork() [3]string {
-	// TODO return HashNoNonce, DAGSeedHash, Difficulty
 	var res [3]string
 
-	// XXX Wait here untill work != nil ?.
+	// XXX Wait here until work != nil ?
 	if a.work != nil {
-		res[0] = a.work.HashNoNonce().Hex() // Header Hash No Nonce
-		res[1] = common.Hash{}.Hex()        // DAG Seed
-		res[2] = common.Hash{}.Hex()        // Difficulty
+		res[0] = a.work.HashNoNonce().Hex()
+		seedHash, _ := ethash.GetSeedHash(a.currentWork.NumberU64())
+		res[1] = common.Bytes2Hex(seedHash)
+		res[2] = common.Bytes2Hex(a.work.Difficulty().Bytes())
 	}
 
 	return res
