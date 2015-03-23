@@ -66,3 +66,8 @@ func (bc *BlockCache) Get(hash common.Hash) *types.Block {
 
 	return nil
 }
+
+func (bc *BlockCache) Has(hash common.Hash) bool {
+	_, ok := bc.blocks[hash]
+	return ok
+}

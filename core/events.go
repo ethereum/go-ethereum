@@ -38,6 +38,10 @@ type PendingBlockEvent struct {
 	Logs  state.Logs
 }
 
+type ChainUncleEvent struct {
+	Block *types.Block
+}
+
 type ChainHeadEvent struct{ Block *types.Block }
 
 // Mining operation events

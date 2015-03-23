@@ -24,7 +24,7 @@ type environment struct {
 	state        *state.StateDB
 	coinbase     *state.StateObject
 	block        *types.Block
-	ancestors    *set.Set
+	family       *set.Set
 	uncles       *set.Set
 }
 
@@ -34,12 +34,9 @@ func env(block *types.Block, eth core.Backend) *environment {
 		totalUsedGas: new(big.Int),
 		state:        state,
 		block:        block,
-		ancestors:    set.New(),
+		family:       set.New(),
 		uncles:       set.New(),
 		coinbase:     state.GetOrNewStateObject(block.Coinbase()),
-	}
-	for _, ancestor := range eth.ChainManager().GetAncestors(block, 7) {
-		env.ancestors.Add(ancestor.Hash())
 	}
 
 	return env
@@ -75,17 +72,21 @@ type worker struct {
 
 	current *environment
 
+	uncleMu        sync.Mutex
+	possibleUncles map[common.Hash]*types.Block
+
 	mining bool
 }
 
 func newWorker(coinbase common.Address, eth core.Backend) *worker {
 	return &worker{
-		eth:      eth,
-		mux:      eth.EventMux(),
-		recv:     make(chan Work),
-		chain:    eth.ChainManager(),
-		proc:     eth.BlockProcessor(),
-		coinbase: coinbase,
+		eth:            eth,
+		mux:            eth.EventMux(),
+		recv:           make(chan Work),
+		chain:          eth.ChainManager(),
+		proc:           eth.BlockProcessor(),
+		possibleUncles: make(map[common.Hash]*types.Block),
+		coinbase:       coinbase,
 	}
 }
 
@@ -115,7 +116,7 @@ func (self *worker) register(agent Agent) {
 }
 
 func (self *worker) update() {
-	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.NewMinedBlockEvent{})
+	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.NewMinedBlockEvent{}, core.ChainSideEvent{})
 
 	timer := time.NewTicker(2 * time.Second)
 
@@ -130,6 +131,10 @@ out:
 				}
 			case core.NewMinedBlockEvent:
 				self.commitNewWork()
+			case core.ChainSplitEvent:
+				self.uncleMu.Lock()
+				self.possibleUncles[ev.Block.Hash()] = ev.Block
+				self.uncleMu.Unlock()
 			}
 		case <-self.quit:
 			// stop all agents
@@ -143,6 +148,9 @@ out:
 	}
 
 	events.Unsubscribe()
+}
+
+func (self *worker) addUncle(uncle *types.Block) {
 }
 
 func (self *worker) wait() {
@@ -191,6 +199,10 @@ func (self *worker) commitNewWork() {
 	block := self.chain.NewBlock(self.coinbase)
 
 	self.current = env(block, self.eth)
+	for _, ancestor := range self.chain.GetAncestors(block, 7) {
+		self.current.family.Add(ancestor.Hash())
+	}
+
 	parent := self.chain.GetBlock(self.current.block.ParentHash())
 	self.current.coinbase.SetGasPool(core.CalcGasLimit(parent, self.current.block))
 
@@ -221,6 +233,22 @@ gasLimit:
 	}
 	self.eth.TxPool().RemoveSet(remove)
 
+	ucount := 0
+	for hash, uncle := range self.possibleUncles {
+		if ucount == 2 {
+			break
+		}
+
+		if err := self.commitUncle(uncle.Header()); err != nil {
+			minerlogger.Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
+			minerlogger.Debugln(uncle)
+		} else {
+			minerlogger.Infof("Commiting %x as uncle\n", hash[:4])
+			ucount++
+		}
+	}
+	minerlogger.Infoln("Included %d uncle(s)")
+
 	self.current.state.AddBalance(self.coinbase, core.BlockReward)
 
 	self.current.state.Update(common.Big0)
@@ -240,12 +268,12 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 	}
 	self.current.uncles.Add(uncle.Hash())
 
-	if !self.current.ancestors.Has(uncle.ParentHash) {
+	if !self.current.family.Has(uncle.ParentHash) {
 		return core.UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
 	}
 
-	if !self.pow.Verify(types.NewBlockWithHeader(uncle)) {
-		return core.ValidationError("Uncle's nonce is invalid (= %x)", uncle.Nonce)
+	if self.current.family.Has(uncle.Hash()) {
+		return core.UncleError(fmt.Sprintf("Uncle already in family (%x)", uncle.Hash()))
 	}
 
 	uncleAccount := self.current.state.GetAccount(uncle.Coinbase)
