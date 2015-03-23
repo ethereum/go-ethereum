@@ -36,7 +36,8 @@ func TestStreamKind(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		s := NewStream(bytes.NewReader(unhex(test.input)))
+		// using plainReader to inhibit input limit errors.
+		s := NewStream(newPlainReader(unhex(test.input)), 0)
 		kind, len, err := s.Kind()
 		if err != nil {
 			t.Errorf("test %d: Kind returned error: %v", i, err)
@@ -70,29 +71,63 @@ func TestNewListStream(t *testing.T) {
 }
 
 func TestStreamErrors(t *testing.T) {
+	withoutInputLimit := func(b []byte) *Stream {
+		return NewStream(newPlainReader(b), 0)
+	}
+	withCustomInputLimit := func(limit uint64) func([]byte) *Stream {
+		return func(b []byte) *Stream {
+			return NewStream(bytes.NewReader(b), limit)
+		}
+	}
+
 	type calls []string
 	tests := []struct {
 		string
 		calls
+		newStream func([]byte) *Stream // uses bytes.Reader if nil
 		error
 	}{
-		{"", calls{"Kind"}, io.EOF},
-		{"", calls{"List"}, io.EOF},
-		{"", calls{"Uint"}, io.EOF},
-		{"C0", calls{"Bytes"}, ErrExpectedString},
-		{"C0", calls{"Uint"}, ErrExpectedString},
-		{"81", calls{"Bytes"}, io.ErrUnexpectedEOF},
-		{"81", calls{"Uint"}, io.ErrUnexpectedEOF},
-		{"BFFFFFFFFFFFFFFF", calls{"Bytes"}, io.ErrUnexpectedEOF},
-		{"89000000000000000001", calls{"Uint"}, errUintOverflow},
-		{"00", calls{"List"}, ErrExpectedList},
-		{"80", calls{"List"}, ErrExpectedList},
-		{"C0", calls{"List", "Uint"}, EOL},
-		{"C801", calls{"List", "Uint", "Uint"}, io.ErrUnexpectedEOF},
-		{"C8C9", calls{"List", "Kind"}, ErrElemTooLarge},
-		{"C3C2010201", calls{"List", "List", "Uint", "Uint", "ListEnd", "Uint"}, EOL},
-		{"00", calls{"ListEnd"}, errNotInList},
-		{"C40102", calls{"List", "Uint", "ListEnd"}, errNotAtEOL},
+		{"C0", calls{"Bytes"}, nil, ErrExpectedString},
+		{"C0", calls{"Uint"}, nil, ErrExpectedString},
+		{"89000000000000000001", calls{"Uint"}, nil, errUintOverflow},
+		{"00", calls{"List"}, nil, ErrExpectedList},
+		{"80", calls{"List"}, nil, ErrExpectedList},
+		{"C0", calls{"List", "Uint"}, nil, EOL},
+		{"C8C9010101010101010101", calls{"List", "Kind"}, nil, ErrElemTooLarge},
+		{"C3C2010201", calls{"List", "List", "Uint", "Uint", "ListEnd", "Uint"}, nil, EOL},
+		{"00", calls{"ListEnd"}, nil, errNotInList},
+		{"C401020304", calls{"List", "Uint", "ListEnd"}, nil, errNotAtEOL},
+
+		// Expected EOF
+		{"", calls{"Kind"}, nil, io.EOF},
+		{"", calls{"Uint"}, nil, io.EOF},
+		{"", calls{"List"}, nil, io.EOF},
+		{"8105", calls{"Uint", "Uint"}, nil, io.EOF},
+		{"C0", calls{"List", "ListEnd", "List"}, nil, io.EOF},
+
+		// Input limit errors.
+		{"81", calls{"Bytes"}, nil, ErrValueTooLarge},
+		{"81", calls{"Uint"}, nil, ErrValueTooLarge},
+		{"81", calls{"Raw"}, nil, ErrValueTooLarge},
+		{"BFFFFFFFFFFFFFFFFFFF", calls{"Bytes"}, nil, ErrValueTooLarge},
+		{"C801", calls{"List"}, nil, ErrValueTooLarge},
+
+		// Test for input limit overflow. Since we are counting the limit
+		// down toward zero in Stream.remaining, reading too far can overflow
+		// remaining to a large value, effectively disabling the limit.
+		{"C40102030401", calls{"Raw", "Uint"}, withCustomInputLimit(5), io.EOF},
+		{"C4010203048102", calls{"Raw", "Uint"}, withCustomInputLimit(6), ErrValueTooLarge},
+
+		// Check that the same calls are fine without a limit.
+		{"C40102030401", calls{"Raw", "Uint"}, withoutInputLimit, nil},
+		{"C4010203048102", calls{"Raw", "Uint"}, withoutInputLimit, nil},
+
+		// Unexpected EOF. This only happens when there is
+		// no input limit, so the reader needs to be 'dumbed down'.
+		{"81", calls{"Bytes"}, withoutInputLimit, io.ErrUnexpectedEOF},
+		{"81", calls{"Uint"}, withoutInputLimit, io.ErrUnexpectedEOF},
+		{"BFFFFFFFFFFFFFFF", calls{"Bytes"}, withoutInputLimit, io.ErrUnexpectedEOF},
+		{"C801", calls{"List", "Uint", "Uint"}, withoutInputLimit, io.ErrUnexpectedEOF},
 
 		// This test verifies that the input position is advanced
 		// correctly when calling Bytes for empty strings. Kind can be called
@@ -109,12 +144,15 @@ func TestStreamErrors(t *testing.T) {
 
 			"Bytes", // past final element
 			"Bytes", // this one should fail
-		}, EOL},
+		}, nil, EOL},
 	}
 
 testfor:
 	for i, test := range tests {
-		s := NewStream(bytes.NewReader(unhex(test.string)))
+		if test.newStream == nil {
+			test.newStream = func(b []byte) *Stream { return NewStream(bytes.NewReader(b), 0) }
+		}
+		s := test.newStream(unhex(test.string))
 		rs := reflect.ValueOf(s)
 		for j, call := range test.calls {
 			fval := rs.MethodByName(call)
@@ -124,8 +162,12 @@ testfor:
 				err = lastret.(error).Error()
 			}
 			if j == len(test.calls)-1 {
-				if err != test.error.Error() {
-					t.Errorf("test %d: last call (%s) error mismatch\ngot:  %s\nwant: %v",
+				want := "<nil>"
+				if test.error != nil {
+					want = test.error.Error()
+				}
+				if err != want {
+					t.Errorf("test %d: last call (%s) error mismatch\ngot:  %s\nwant: %s",
 						i, call, err, test.error)
 				}
 			} else if err != "<nil>" {
@@ -137,7 +179,7 @@ testfor:
 }
 
 func TestStreamList(t *testing.T) {
-	s := NewStream(bytes.NewReader(unhex("C80102030405060708")))
+	s := NewStream(bytes.NewReader(unhex("C80102030405060708")), 0)
 
 	len, err := s.List()
 	if err != nil {
@@ -166,7 +208,7 @@ func TestStreamList(t *testing.T) {
 }
 
 func TestStreamRaw(t *testing.T) {
-	s := NewStream(bytes.NewReader(unhex("C58401010101")))
+	s := NewStream(bytes.NewReader(unhex("C58401010101")), 0)
 	s.List()
 
 	want := unhex("8401010101")
@@ -284,11 +326,6 @@ var decodeTests = []decodeTest{
 		ptr:   new([5]byte),
 		error: "rlp: input string too long for [5]uint8",
 	},
-	{
-		input: "850101",
-		ptr:   new([5]byte),
-		error: io.ErrUnexpectedEOF.Error(),
-	},
 
 	// byte array reuse (should be zeroed)
 	{input: "850102030405", ptr: &sharedByteArray, value: [5]byte{1, 2, 3, 4, 5}},
@@ -401,11 +438,17 @@ func TestDecodeWithByteReader(t *testing.T) {
 	})
 }
 
-// dumbReader reads from a byte slice but does not
-// implement ReadByte.
-type dumbReader []byte
+// plainReader reads from a byte slice but does not
+// implement ReadByte. It is also not recognized by the
+// size validation. This is useful to test how the decoder
+// behaves on a non-buffered input stream.
+type plainReader []byte
 
-func (r *dumbReader) Read(buf []byte) (n int, err error) {
+func newPlainReader(b []byte) io.Reader {
+	return (*plainReader)(&b)
+}
+
+func (r *plainReader) Read(buf []byte) (n int, err error) {
 	if len(*r) == 0 {
 		return 0, io.EOF
 	}
@@ -416,15 +459,14 @@ func (r *dumbReader) Read(buf []byte) (n int, err error) {
 
 func TestDecodeWithNonByteReader(t *testing.T) {
 	runTests(t, func(input []byte, into interface{}) error {
-		r := dumbReader(input)
-		return Decode(&r, into)
+		return Decode(newPlainReader(input), into)
 	})
 }
 
 func TestDecodeStreamReset(t *testing.T) {
-	s := NewStream(nil)
+	s := NewStream(nil, 0)
 	runTests(t, func(input []byte, into interface{}) error {
-		s.Reset(bytes.NewReader(input))
+		s.Reset(bytes.NewReader(input), 0)
 		return s.Decode(into)
 	})
 }
@@ -518,7 +560,7 @@ func ExampleDecode() {
 
 func ExampleStream() {
 	input, _ := hex.DecodeString("C90A1486666F6F626172")
-	s := NewStream(bytes.NewReader(input))
+	s := NewStream(bytes.NewReader(input), 0)
 
 	// Check what kind of value lies ahead
 	kind, size, _ := s.Kind()
