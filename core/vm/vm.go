@@ -5,8 +5,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type Vm struct {
@@ -34,6 +34,8 @@ func New(env Environment) *Vm {
 
 func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
+	defer self.env.SetDepth(self.env.Depth() - 1)
+
 	var (
 		caller = context.caller
 		code   = context.Code
