@@ -1,10 +1,9 @@
-package xeth
+package miner
 
 import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/miner"
 )
 
 type RemoteAgent struct {
@@ -13,7 +12,7 @@ type RemoteAgent struct {
 
 	quit     chan struct{}
 	workCh   chan *types.Block
-	returnCh chan<- miner.Work
+	returnCh chan<- Work
 }
 
 func NewRemoteAgent() *RemoteAgent {
@@ -27,7 +26,7 @@ func (a *RemoteAgent) Work() chan<- *types.Block {
 	return a.workCh
 }
 
-func (a *RemoteAgent) SetWorkCh(returnCh chan<- miner.Work) {
+func (a *RemoteAgent) SetWorkCh(returnCh chan<- Work) {
 	a.returnCh = returnCh
 }
 
@@ -74,7 +73,7 @@ func (a *RemoteAgent) SubmitWork(nonce uint64, mixDigest, seedHash common.Hash) 
 
 	// Make sure the external miner was working on the right hash
 	if a.currentWork != nil && a.work != nil && a.currentWork.Hash() == a.work.Hash() {
-		a.returnCh <- miner.Work{a.currentWork.Number().Uint64(), nonce, mixDigest.Bytes(), seedHash.Bytes()}
+		a.returnCh <- Work{a.currentWork.Number().Uint64(), nonce, mixDigest.Bytes(), seedHash.Bytes()}
 		return true
 	}
 
