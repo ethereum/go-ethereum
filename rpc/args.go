@@ -686,3 +686,42 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 
 	return nil
 }
+
+type SubmitWorkArgs struct {
+	Nonce  uint64
+	Header common.Hash
+	Digest common.Hash
+}
+
+func (args *SubmitWorkArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err = json.Unmarshal(b, &obj); err != nil {
+		return NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 3 {
+		return NewInsufficientParamsError(len(obj), 3)
+	}
+
+	var objstr string
+	var ok bool
+	if objstr, ok = obj[0].(string); !ok {
+		return NewDecodeParamError("Nonce is not a string")
+	}
+
+	args.Nonce = common.BytesToNumber(common.Hex2Bytes(objstr))
+
+	if objstr, ok = obj[1].(string); !ok {
+		return NewDecodeParamError("Header is not a string")
+	}
+
+	args.Header = common.HexToHash(objstr)
+
+	if objstr, ok = obj[2].(string); !ok {
+		return NewDecodeParamError("Digest is not a string")
+	}
+
+	args.Digest = common.HexToHash(objstr)
+
+	return nil
+}

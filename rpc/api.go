@@ -348,13 +348,14 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		opts := toFilterOptions(args)
 		*reply = NewLogsRes(p.xeth().AllLogs(opts))
 	case "eth_getWork":
-		*reply = p.getWork()
+		p.xeth().SetMining(true)
+		*reply = p.agent.GetWork().Hex()
 	case "eth_submitWork":
-		// TODO what is the reply here?
-		// TODO what are the arguments?
-		p.agent.SetResult(0, common.Hash{}, common.Hash{})
-
-		return NewNotImplementedError(req.Method)
+		args := new(SubmitWorkArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+		*reply = p.agent.SetResult(args.Nonce, args.Digest, args.Header)
 	case "db_putString":
 		args := new(DbArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -464,11 +465,6 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 
 	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)
 	return nil
-}
-
-func (p *EthereumApi) getWork() string {
-	p.xeth().SetMining(true)
-	return p.agent.GetWork().Hex()
 }
 
 func toFilterOptions(options *BlockFilterArgs) *core.FilterOptions {

@@ -55,6 +55,8 @@ out:
 }
 
 func (a *Agent) GetWork() common.Hash {
+	// TODO return HashNoNonce, DAGSeedHash, Difficulty
+
 	// XXX Wait here untill work != nil ?.
 	if a.work != nil {
 		return a.work.HashNoNonce()
@@ -62,9 +64,14 @@ func (a *Agent) GetWork() common.Hash {
 	return common.Hash{}
 }
 
-func (a *Agent) SetResult(nonce uint64, mixDigest, seedHash common.Hash) {
+func (a *Agent) SetResult(nonce uint64, mixDigest, seedHash common.Hash) bool {
+	// Return true or false, but does not indicate if the PoW was correct
+
 	// Make sure the external miner was working on the right hash
 	if a.currentWork != nil && a.work != nil && a.currentWork.Hash() == a.work.Hash() {
 		a.returnCh <- miner.Work{a.currentWork.Number().Uint64(), nonce, mixDigest.Bytes(), seedHash.Bytes()}
+		return true
 	}
+
+	return false
 }
