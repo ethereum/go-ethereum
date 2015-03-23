@@ -26,7 +26,7 @@ func blockHeight(raw interface{}, number *int64) (err error) {
 	case "latest":
 		*number = -1
 	case "pending":
-		*number = 0
+		*number = -2
 	default:
 		*number = common.String2Big(str).Int64()
 	}
