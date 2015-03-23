@@ -7,7 +7,7 @@ import (
 	logpkg "github.com/ethereum/go-ethereum/logger"
 )
 
-var Logger logpkg.LogSystem
+var Logger *logpkg.StdLogSystem
 var Log = logpkg.NewLogger("TEST")
 
 func init() {

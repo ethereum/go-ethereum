@@ -44,6 +44,10 @@ func (api *EthereumApi) xethAtStateNum(num int64) *xeth.XEth {
 	return api.xeth().AtStateNum(num)
 }
 
+func (api *EthereumApi) Close() {
+	api.db.Close()
+}
+
 func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
 	rpclogger.Debugf("%s %s", req.Method, req.Params)
@@ -58,7 +62,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 	case "web3_clientVersion":
 		*reply = api.xeth().Backend().Version()
 	case "net_version":
-		return NewNotImplementedError(req.Method)
+		*reply = string(api.xeth().Backend().ProtocolVersion())
 	case "net_listening":
 		*reply = api.xeth().IsListening()
 	case "net_peerCount":

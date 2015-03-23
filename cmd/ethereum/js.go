@@ -91,6 +91,7 @@ func newJSRE(ethereum *eth.Ethereum, libPath string) *jsre {
 func (js *jsre) apiBindings() {
 
 	ethApi := rpc.NewEthereumApi(js.xeth, js.ethereum.DataDir)
+	ethApi.Close()
 	//js.re.Bind("jeth", rpc.NewJeth(ethApi, js.re.ToVal))
 
 	jeth := rpc.NewJeth(ethApi, js.re.ToVal, js.re)

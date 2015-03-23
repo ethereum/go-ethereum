@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"math/big"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func TestSha3(t *testing.T) {
@@ -440,8 +442,8 @@ func TestBlockFilterArgsWords(t *testing.T) {
   "toBlock": "pending"
   }]`
 	expected := new(BlockFilterArgs)
-	expected.Earliest = 0
-	expected.Latest = -1
+	expected.Earliest = -1
+	expected.Latest = -2
 
 	args := new(BlockFilterArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -651,6 +653,10 @@ func TestFilterStringArgs(t *testing.T) {
 		t.Error(err)
 	}
 
+	if err := args.requirements(); err != nil {
+		t.Error(err)
+	}
+
 	if expected.Word != args.Word {
 		t.Errorf("Word shoud be %#v but is %#v", expected.Word, args.Word)
 	}
@@ -718,5 +724,30 @@ func TestHashIndexArgs(t *testing.T) {
 
 	if expected.Index != args.Index {
 		t.Errorf("Index shoud be %#v but is %#v", expected.Index, args.Index)
+	}
+}
+
+func TestSubmitWorkArgs(t *testing.T) {
+	input := `["0x0000000000000001", "0x1234567890abcdef1234567890abcdef", "0xD1GE5700000000000000000000000000"]`
+	expected := new(SubmitWorkArgs)
+	expected.Nonce = 1
+	expected.Header = common.HexToHash("0x1234567890abcdef1234567890abcdef")
+	expected.Digest = common.HexToHash("0xD1GE5700000000000000000000000000")
+
+	args := new(SubmitWorkArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Nonce != args.Nonce {
+		t.Errorf("Nonce shoud be %d but is %d", expected.Nonce, args.Nonce)
+	}
+
+	if expected.Header != args.Header {
+		t.Errorf("Header shoud be %#v but is %#v", expected.Header, args.Header)
+	}
+
+	if expected.Digest != args.Digest {
+		t.Errorf("Digest shoud be %#v but is %#v", expected.Digest, args.Digest)
 	}
 }
