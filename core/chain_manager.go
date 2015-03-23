@@ -8,11 +8,11 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/core/state"
 )
 
 var (
@@ -523,7 +523,7 @@ out:
 					case ChainEvent:
 						// We need some control over the mining operation. Acquiring locks and waiting for the miner to create new block takes too long
 						// and in most cases isn't even necessary.
-						if i == ev.canonicalCount {
+						if i+1 == ev.canonicalCount {
 							self.eventMux.Post(ChainHeadEvent{event.Block})
 						}
 					case ChainSplitEvent:

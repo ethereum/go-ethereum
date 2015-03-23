@@ -355,7 +355,7 @@ func (s *Ethereum) Start() error {
 	go s.txBroadcastLoop()
 
 	// broadcast mined blocks
-	s.blockSub = s.eventMux.Subscribe(core.NewMinedBlockEvent{})
+	s.blockSub = s.eventMux.Subscribe(core.ChainHeadEvent{})
 	go s.blockBroadcastLoop()
 
 	servlogger.Infoln("Server started")
@@ -421,7 +421,7 @@ func (self *Ethereum) blockBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.blockSub.Chan() {
 		switch ev := obj.(type) {
-		case core.NewMinedBlockEvent:
+		case core.ChainHeadEvent:
 			self.net.Broadcast("eth", NewBlockMsg, []interface{}{ev.Block, ev.Block.Td})
 		}
 	}
