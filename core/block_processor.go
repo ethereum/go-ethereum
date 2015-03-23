@@ -166,9 +166,15 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	// Create a new state based on the parent's root (e.g., create copy)
 	state := state.New(parent.Root(), sm.db)
 
+	// track (possible) uncle block
+	var uncle bool
 	// Block validation
 	if err = sm.ValidateHeader(block.Header(), parent.Header()); err != nil {
-		return
+		if err != BlockEqualTSErr {
+			return
+		}
+		err = nil
+		uncle = true
 	}
 
 	// There can be at most two uncles
@@ -223,14 +229,22 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	td = CalculateTD(block, parent)
 	// Sync the current block's state to the database
 	state.Sync()
-	// Remove transactions from the pool
-	sm.txpool.RemoveSet(block.Transactions())
+
+	if !uncle {
+		// Remove transactions from the pool
+		sm.txpool.RemoveSet(block.Transactions())
+	}
 
 	for _, tx := range block.Transactions() {
 		putTx(sm.extraDb, tx)
 	}
 
-	chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash().Bytes()[0:4])
+	if uncle {
+		chainlogger.Infof("found possible uncle block #%d (%x...)\n", header.Number, block.Hash().Bytes()[0:4])
+		return td, nil, BlockEqualTSErr
+	} else {
+		chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash().Bytes()[0:4])
+	}
 
 	return td, state.Logs(), nil
 }
@@ -255,10 +269,6 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
 	}
 
-	if block.Time <= parent.Time {
-		return ValidationError("Block timestamp equal or less than previous block (%v - %v)", block.Time, parent.Time)
-	}
-
 	if int64(block.Time) > time.Now().Unix() {
 		return BlockFutureErr
 	}
@@ -270,6 +280,10 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 	// Verify the nonce of the block. Return an error if it's not valid
 	if !sm.Pow.Verify(types.NewBlockWithHeader(block)) {
 		return ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
+	}
+
+	if block.Time <= parent.Time {
+		return BlockEqualTSErr //ValidationError("Block timestamp equal or less than previous block (%v - %v)", block.Time, parent.Time)
 	}
 
 	return nil
@@ -307,12 +321,8 @@ func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, paren
 			return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
 		}
 
-		if err := sm.ValidateHeader(uncle, ancestorHeaders[uncle.ParentHash]); err != nil {
+		if err := sm.ValidateHeader(uncle, ancestorHeaders[uncle.ParentHash]); err != nil && err != BlockEqualTSErr {
 			return ValidationError(fmt.Sprintf("%v", err))
-		}
-
-		if !sm.Pow.Verify(types.NewBlockWithHeader(uncle)) {
-			return ValidationError("Uncle's nonce is invalid (= %x)", uncle.Nonce)
 		}
 
 		r := new(big.Int)

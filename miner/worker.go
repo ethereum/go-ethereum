@@ -131,7 +131,7 @@ out:
 				}
 			case core.NewMinedBlockEvent:
 				self.commitNewWork()
-			case core.ChainSplitEvent:
+			case core.ChainSideEvent:
 				self.uncleMu.Lock()
 				self.possibleUncles[ev.Block.Hash()] = ev.Block
 				self.uncleMu.Unlock()
@@ -170,6 +170,10 @@ func (self *worker) wait() {
 				})
 
 				if err := self.chain.InsertChain(types.Blocks{self.current.block}); err == nil {
+					for _, uncle := range self.current.block.Uncles() {
+						delete(self.possibleUncles, uncle.Hash())
+					}
+
 					self.mux.Post(core.NewMinedBlockEvent{self.current.block})
 				} else {
 					self.commitNewWork()
@@ -233,9 +237,9 @@ gasLimit:
 	}
 	self.eth.TxPool().RemoveSet(remove)
 
-	ucount := 0
+	var uncles []*types.Header
 	for hash, uncle := range self.possibleUncles {
-		if ucount == 2 {
+		if len(uncles) == 2 {
 			break
 		}
 
@@ -243,11 +247,12 @@ gasLimit:
 			minerlogger.Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
 			minerlogger.Debugln(uncle)
 		} else {
-			minerlogger.Infof("Commiting %x as uncle\n", hash[:4])
-			ucount++
+			minerlogger.Infof("commiting %x as uncle\n", hash[:4])
+			uncles = append(uncles, uncle.Header())
 		}
 	}
-	minerlogger.Infoln("Included %d uncle(s)")
+	minerlogger.Infoln("Included", len(uncles), "uncle(s)")
+	self.current.block.SetUncles(uncles)
 
 	self.current.state.AddBalance(self.coinbase, core.BlockReward)
 
@@ -276,10 +281,8 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 		return core.UncleError(fmt.Sprintf("Uncle already in family (%x)", uncle.Hash()))
 	}
 
-	uncleAccount := self.current.state.GetAccount(uncle.Coinbase)
-	uncleAccount.AddBalance(uncleReward)
-
-	self.current.coinbase.AddBalance(uncleReward)
+	self.current.state.AddBalance(uncle.Coinbase, uncleReward)
+	self.current.state.AddBalance(self.coinbase, inclusionReward)
 
 	return nil
 }

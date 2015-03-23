@@ -447,6 +447,11 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				continue
 			}
 
+			if err == BlockEqualTSErr {
+				queue[i] = ChainSideEvent{block, logs}
+				continue
+			}
+
 			h := block.Header()
 			chainlogger.Infof("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes()[:4])
 			chainlogger.Infoln(err)
