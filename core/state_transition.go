@@ -195,14 +195,10 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 		return nil, nil, InvalidTxError(err)
 	}
 
-	// Increment the nonce for the next transaction
-
 	vmenv := self.env
 	var ref vm.ContextRef
 	if MessageCreatesContract(msg) {
-		//contract := makeContract(msg, self.state)
-		//addr := contract.Address()
-		ret, err, ref = vmenv.Create(sender, nil, self.msg.Data(), self.gas, self.gasPrice, self.value)
+		ret, err, ref = vmenv.Create(sender, self.msg.Data(), self.gas, self.gasPrice, self.value)
 		if err == nil {
 			dataGas := big.NewInt(int64(len(ret)))
 			dataGas.Mul(dataGas, vm.GasCreateByte)
@@ -213,6 +209,7 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 			}
 		}
 	} else {
+		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), sender.Nonce()+1)
 		ret, err = vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
 	}

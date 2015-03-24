@@ -119,8 +119,8 @@ func (self *Env) CallCode(caller vm.ContextRef, addr common.Address, data []byte
 	return exe.Call(addr, caller)
 }
 
-func (self *Env) Create(caller vm.ContextRef, addr *common.Address, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
-	exe := self.vm(addr, data, gas, price, value)
+func (self *Env) Create(caller vm.ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
+	exe := self.vm(nil, data, gas, price, value)
 	if self.vmTest {
 		caller.ReturnGas(gas, price)
 

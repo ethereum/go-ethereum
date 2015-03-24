@@ -31,7 +31,7 @@ type Environment interface {
 
 	Call(me ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
 	CallCode(me ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
-	Create(me ContextRef, addr *common.Address, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
+	Create(me ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
 }
 
 type Account interface {
@@ -43,7 +43,6 @@ type Account interface {
 
 // generic transfer method
 func Transfer(from, to Account, amount *big.Int) error {
-	//fmt.Printf(":::%x::: %v < %v\n", from.Address(), from.Balance(), amount)
 	if from.Balance().Cmp(amount) < 0 {
 		return errors.New("Insufficient balance in account")
 	}

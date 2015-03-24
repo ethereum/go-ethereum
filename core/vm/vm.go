@@ -636,7 +636,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			self.Endl()
 
 			context.UseGas(context.Gas)
-			ret, suberr, ref := self.env.Create(context, nil, input, gas, price, value)
+			ret, suberr, ref := self.env.Create(context, input, gas, price, value)
 			if suberr != nil {
 				stack.push(common.BigFalse)
 
