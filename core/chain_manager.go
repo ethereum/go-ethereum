@@ -399,7 +399,7 @@ func (self *ChainManager) GetAncestors(block *types.Block, length int) (blocks [
 
 func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
 	bc.blockDb.Put([]byte("LTD"), td.Bytes())
-	bc.td = td
+	bc.td.Set(td)
 }
 
 func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
