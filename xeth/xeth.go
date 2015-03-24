@@ -204,7 +204,7 @@ func (self *XEth) BlockByNumber(num int64) *Block {
 	}
 
 	if num == -1 {
-		return NewBlock(self.backend.ChainManager().CurrentBlock())
+		return NewBlock(self.CurrentBlock())
 	}
 
 	return NewBlock(self.backend.ChainManager().GetBlockByNumber(uint64(num)))
@@ -217,7 +217,7 @@ func (self *XEth) EthBlockByNumber(num int64) *types.Block {
 	}
 
 	if num == -1 {
-		return self.backend.ChainManager().CurrentBlock()
+		return self.CurrentBlock()
 	}
 
 	return self.backend.ChainManager().GetBlockByNumber(uint64(num))
@@ -549,7 +549,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		msg.gasPrice = defaultGasPrice
 	}
 
-	block := self.backend.ChainManager().CurrentBlock()
+	block := self.CurrentBlock()
 	vmenv := core.NewEnv(statedb, self.backend.ChainManager(), msg, block)
 
 	res, err := vmenv.Call(msg.from, msg.to, msg.data, msg.gas, msg.gasPrice, msg.value)
