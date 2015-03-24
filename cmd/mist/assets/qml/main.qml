@@ -182,6 +182,14 @@ ApplicationWindow {
             }
 
             MenuItem {
+                text: "Onboarding Wizard..."
+                shortcut: "Ctrl+shift+i"
+                onTriggered: {
+                    onboardingWizard.visible = true;
+                }
+            }
+
+            MenuItem {
                 text: "Export keys"
                 shortcut: "Ctrl+e"
                 onTriggered: {
@@ -993,6 +1001,18 @@ ApplicationWindow {
              Component.onCompleted: {
                  addrField.focus = true
              }
+         }
+
+         Window {
+            id: onboardingWizard
+            visible: false
+            width: 990
+            height: 680
+            title: "Welcome to Ethereum"
+
+            Wizard {
+                id: onboardingWindow
+            }
          }
 
          Window {
