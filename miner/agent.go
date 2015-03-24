@@ -1,6 +1,7 @@
 package miner
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/pow"
 )
@@ -9,7 +10,7 @@ type CpuMiner struct {
 	c             chan *types.Block
 	quit          chan struct{}
 	quitCurrentOp chan struct{}
-	returnCh      chan<- Work
+	returnCh      chan<- *types.Block
 
 	index int
 	pow   pow.PoW
@@ -24,9 +25,9 @@ func NewCpuMiner(index int, pow pow.PoW) *CpuMiner {
 	return miner
 }
 
-func (self *CpuMiner) Work() chan<- *types.Block { return self.c }
-func (self *CpuMiner) Pow() pow.PoW              { return self.pow }
-func (self *CpuMiner) SetWorkCh(ch chan<- Work)  { self.returnCh = ch }
+func (self *CpuMiner) Work() chan<- *types.Block          { return self.c }
+func (self *CpuMiner) Pow() pow.PoW                       { return self.pow }
+func (self *CpuMiner) SetReturnCh(ch chan<- *types.Block) { self.returnCh = ch }
 
 func (self *CpuMiner) Stop() {
 	close(self.quit)
@@ -74,9 +75,12 @@ done:
 
 func (self *CpuMiner) mine(block *types.Block) {
 	minerlogger.Infof("(re)started agent[%d]. mining...\n", self.index)
-	nonce, mixDigest, seedHash := self.pow.Search(block, self.quitCurrentOp)
+	nonce, mixDigest, _ := self.pow.Search(block, self.quitCurrentOp)
 	if nonce != 0 {
-		self.returnCh <- Work{block.Number().Uint64(), nonce, mixDigest, seedHash}
+		block.SetNonce(nonce)
+		block.Header().MixDigest = common.BytesToHash(mixDigest)
+		self.returnCh <- block
+		//self.returnCh <- Work{block.Number().Uint64(), nonce, mixDigest, seedHash}
 	}
 }
 

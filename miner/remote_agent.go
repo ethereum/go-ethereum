@@ -12,7 +12,7 @@ type RemoteAgent struct {
 
 	quit     chan struct{}
 	workCh   chan *types.Block
-	returnCh chan<- Work
+	returnCh chan<- *types.Block
 }
 
 func NewRemoteAgent() *RemoteAgent {
@@ -25,7 +25,7 @@ func (a *RemoteAgent) Work() chan<- *types.Block {
 	return a.workCh
 }
 
-func (a *RemoteAgent) SetWorkCh(returnCh chan<- Work) {
+func (a *RemoteAgent) SetReturnCh(returnCh chan<- *types.Block) {
 	a.returnCh = returnCh
 }
 
@@ -72,8 +72,11 @@ func (a *RemoteAgent) SubmitWork(nonce uint64, mixDigest, seedHash common.Hash) 
 	// Return true or false, but does not indicate if the PoW was correct
 
 	// Make sure the external miner was working on the right hash
-	if a.currentWork != nil && a.work != nil && a.currentWork.Hash() == a.work.Hash() {
-		a.returnCh <- Work{a.currentWork.Number().Uint64(), nonce, mixDigest.Bytes(), seedHash.Bytes()}
+	if a.currentWork != nil && a.work != nil {
+		a.currentWork.SetNonce(nonce)
+		a.currentWork.Header().MixDigest = mixDigest
+		a.returnCh <- a.currentWork
+		//a.returnCh <- Work{a.currentWork.Number().Uint64(), nonce, mixDigest.Bytes(), seedHash.Bytes()}
 		return true
 	}
 

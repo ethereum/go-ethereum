@@ -51,7 +51,7 @@ type Work struct {
 
 type Agent interface {
 	Work() chan<- *types.Block
-	SetWorkCh(chan<- Work)
+	SetReturnCh(chan<- *types.Block)
 	Stop()
 	Start()
 	GetHashRate() int64
@@ -60,7 +60,7 @@ type Agent interface {
 type worker struct {
 	mu     sync.Mutex
 	agents []Agent
-	recv   chan Work
+	recv   chan *types.Block
 	mux    *event.TypeMux
 	quit   chan struct{}
 	pow    pow.PoW
@@ -82,7 +82,7 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 	return &worker{
 		eth:            eth,
 		mux:            eth.EventMux(),
-		recv:           make(chan Work),
+		recv:           make(chan *types.Block),
 		chain:          eth.ChainManager(),
 		proc:           eth.BlockProcessor(),
 		possibleUncles: make(map[common.Hash]*types.Block),
@@ -112,7 +112,7 @@ func (self *worker) stop() {
 
 func (self *worker) register(agent Agent) {
 	self.agents = append(self.agents, agent)
-	agent.SetWorkCh(self.recv)
+	agent.SetReturnCh(self.recv)
 }
 
 func (self *worker) update() {
@@ -155,30 +155,30 @@ func (self *worker) addUncle(uncle *types.Block) {
 
 func (self *worker) wait() {
 	for {
-		for work := range self.recv {
+		for block := range self.recv {
 			// Someone Successfully Mined!
-			block := self.current.block
-			if block.Number().Uint64() == work.Number && block.Nonce() == 0 {
-				self.current.block.SetNonce(work.Nonce)
-				self.current.block.Header().MixDigest = common.BytesToHash(work.MixDigest)
+			//block := self.current.block
+			//if block.Number().Uint64() == work.Number && block.Nonce() == 0 {
+			//self.current.block.SetNonce(work.Nonce)
+			//self.current.block.Header().MixDigest = common.BytesToHash(work.MixDigest)
 
-				jsonlogger.LogJson(&logger.EthMinerNewBlock{
-					BlockHash:     block.Hash().Hex(),
-					BlockNumber:   block.Number(),
-					ChainHeadHash: block.ParentHeaderHash.Hex(),
-					BlockPrevHash: block.ParentHeaderHash.Hex(),
-				})
+			jsonlogger.LogJson(&logger.EthMinerNewBlock{
+				BlockHash:     block.Hash().Hex(),
+				BlockNumber:   block.Number(),
+				ChainHeadHash: block.ParentHeaderHash.Hex(),
+				BlockPrevHash: block.ParentHeaderHash.Hex(),
+			})
 
-				if err := self.chain.InsertChain(types.Blocks{self.current.block}); err == nil {
-					for _, uncle := range self.current.block.Uncles() {
-						delete(self.possibleUncles, uncle.Hash())
-					}
-
-					self.mux.Post(core.NewMinedBlockEvent{self.current.block})
-				} else {
-					self.commitNewWork()
+			if err := self.chain.InsertChain(types.Blocks{block}); err == nil {
+				for _, uncle := range block.Uncles() {
+					delete(self.possibleUncles, uncle.Hash())
 				}
+
+				self.mux.Post(core.NewMinedBlockEvent{block})
+			} else {
+				self.commitNewWork()
 			}
+			//}
 			break
 		}
 	}
@@ -191,7 +191,7 @@ func (self *worker) push() {
 
 		// push new work to agents
 		for _, agent := range self.agents {
-			agent.Work() <- self.current.block
+			agent.Work() <- self.current.block.Copy()
 		}
 	}
 }

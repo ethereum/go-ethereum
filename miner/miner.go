@@ -26,7 +26,11 @@ type Miner struct {
 func New(eth core.Backend, pow pow.PoW, minerThreads int) *Miner {
 	// note: minerThreads is currently ignored because
 	// ethash is not thread safe.
-	return &Miner{eth: eth, pow: pow, worker: newWorker(common.Address{}, eth)}
+	miner := &Miner{eth: eth, pow: pow, worker: newWorker(common.Address{}, eth)}
+	for i := 0; i < minerThreads; i++ {
+		miner.worker.register(NewCpuMiner(i, pow))
+	}
+	return miner
 }
 
 func (self *Miner) Mining() bool {
@@ -36,7 +40,6 @@ func (self *Miner) Mining() bool {
 func (self *Miner) Start(coinbase common.Address) {
 	self.mining = true
 	self.worker.coinbase = coinbase
-	self.worker.register(NewCpuMiner(0, self.pow))
 
 	self.pow.(*ethash.Ethash).UpdateDAG()
 
