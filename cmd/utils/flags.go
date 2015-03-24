@@ -109,7 +109,7 @@ var (
 	}
 	PasswordFileFlag = cli.StringFlag{
 		Name:  "password",
-		Usage: "Password used when saving a new account and unlocking an existing account. If you create a new account make sure you remember this password.",
+		Usage: "Path to password file for (un)locking an existing account.",
 		Value: "",
 	}
 

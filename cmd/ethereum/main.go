@@ -83,9 +83,6 @@ The output of this command is supposed to be machine-readable.
 					Action: accountList,
 					Name:   "list",
 					Usage:  "print account addresses",
-					Description: `
-
-`,
 				},
 				{
 					Action: accountCreate,
@@ -111,12 +108,14 @@ For non-interactive use the passphrase can be specified with the --password flag
 
     ethereum account import <keyfile>
 
-Imports a private key from <keyfile> and creates a new account with the address derived from the key.
-The keyfile is assumed to contain an unencrypted private key in canonical EC format.
+Imports a private key from <keyfile> and creates a new account with the address
+derived from the key.
+The keyfile is assumed to contain an unencrypted private key in canonical EC
+format.
 
 The account is saved in encrypted format, you are prompted for a passphrase.
 You must remember this passphrase to unlock your account in future.
-For non-interactive use the passphrase can be specified with the --password flag:
+For non-interactive use the passphrase can be specified with the -password flag:
 
     ethereum --password <passwordfile> account import <keyfile>
 
@@ -130,14 +129,18 @@ For non-interactive use the passphrase can be specified with the --password flag
 
     ethereum account export <address> <keyfile>
 
-Exports the given account's private key into keyfile using the canonical EC format.
-The account needs to be unlocked, if it is not the user is prompted for a passphrase to unlock it.
-For non-interactive use, the password can be specified with the --unlock flag:
+Exports the given account's private key into keyfile using the canonical EC
+format.
+The account needs to be unlocked, if it is not the user is prompted for a
+passphrase to unlock it.
+For non-interactive use, the passphrase can be specified with the --unlock flag:
 
     ethereum --password <passwrdfile> account export <address> <keyfile>
 
 Note:
-Since you can directly copy your encrypted accounts to another ethereum instance, this import/export mechanism is not needed when you transfer an account between nodes.
+As you can directly copy your encrypted accounts to another ethereum instance,
+this import/export mechanism is not needed when you transfer an account between
+nodes.
 					`,
 				},
 			},
@@ -156,16 +159,18 @@ Use "ethereum dump 0" to dump the genesis block.
 			Name:   "console",
 			Usage:  `Ethereum Console: interactive JavaScript environment`,
 			Description: `
-Console is an interactive shell for the Ethereum JavaScript runtime environment which exposes a node admin interface as well as the DAPP JavaScript API.
+Console is an interactive shell for the Ethereum JavaScript runtime environment
+which exposes a node admin interface as well as the DAPP JavaScript API.
 See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
 `,
 		},
 		{
 			Action: execJSFiles,
 			Name:   "js",
-			Usage:  `executes the given JavaScript files in the Ethereum Frontier JavaScript VM`,
+			Usage:  `executes the given JavaScript files in the Ethereum JavaScript VM`,
 			Description: `
-The Ethereum JavaScript VM exposes a node admin interface as well as the DAPP JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
+The Ethereum JavaScript VM exposes a node admin interface as well as the DAPP
+JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
 `,
 		},
 		{
