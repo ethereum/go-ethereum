@@ -132,7 +132,7 @@ loop:
 		select {
 		case <-ping.C:
 			go func() {
-				if err := EncodeMsg(p.rw, pingMsg, nil); err != nil {
+				if err := SendItems(p.rw, pingMsg); err != nil {
 					p.protoErr <- err
 					return
 				}
@@ -161,7 +161,7 @@ loop:
 func (p *Peer) politeDisconnect(reason DiscReason) {
 	done := make(chan struct{})
 	go func() {
-		EncodeMsg(p.rw, discMsg, uint(reason))
+		SendItems(p.rw, discMsg, uint(reason))
 		// Wait for the other side to close the connection.
 		// Discard any data that they send until then.
 		io.Copy(ioutil.Discard, p.conn)
@@ -192,12 +192,13 @@ func (p *Peer) handle(msg Msg) error {
 	switch {
 	case msg.Code == pingMsg:
 		msg.Discard()
-		go EncodeMsg(p.rw, pongMsg)
+		go SendItems(p.rw, pongMsg)
 	case msg.Code == discMsg:
 		var reason [1]DiscReason
 		// no need to discard or for error checking, we'll close the
 		// connection after this.
 		rlp.Decode(msg.Payload, &reason)
+		p.Debugf("Disconnect requested: %v\n", reason[0])
 		p.Disconnect(DiscRequested)
 		return discRequestedError(reason[0])
 	case msg.Code < baseProtocolLength:

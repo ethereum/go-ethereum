@@ -1,11 +1,11 @@
 package core
 
 import (
-	"bytes"
 	"math"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/core/state"
 )
 
 type AccountChange struct {
@@ -16,8 +16,8 @@ type FilterOptions struct {
 	Earliest int64
 	Latest   int64
 
-	Address [][]byte
-	Topics  [][][]byte
+	Address []common.Address
+	Topics  [][]common.Hash
 
 	Skip int
 	Max  int
@@ -29,12 +29,12 @@ type Filter struct {
 	earliest int64
 	latest   int64
 	skip     int
-	address  [][]byte
+	address  []common.Address
 	max      int
-	topics   [][][]byte
+	topics   [][]common.Hash
 
-	BlockCallback   func(*types.Block)
-	PendingCallback func(*types.Block)
+	BlockCallback   func(*types.Block, state.Logs)
+	PendingCallback func(*types.Transaction)
 	LogsCallback    func(state.Logs)
 }
 
@@ -46,7 +46,7 @@ func NewFilter(eth Backend) *Filter {
 
 // SetOptions copies the filter options to the filter it self. The reason for this "silly" copy
 // is simply because named arguments in this case is extremely nice and readable.
-func (self *Filter) SetOptions(options FilterOptions) {
+func (self *Filter) SetOptions(options *FilterOptions) {
 	self.earliest = options.Earliest
 	self.latest = options.Latest
 	self.skip = options.Skip
@@ -67,11 +67,11 @@ func (self *Filter) SetLatestBlock(latest int64) {
 	self.latest = latest
 }
 
-func (self *Filter) SetAddress(addr [][]byte) {
+func (self *Filter) SetAddress(addr []common.Address) {
 	self.address = addr
 }
 
-func (self *Filter) SetTopics(topics [][][]byte) {
+func (self *Filter) SetTopics(topics [][]common.Hash) {
 	self.topics = topics
 }
 
@@ -131,9 +131,9 @@ func (self *Filter) Find() state.Logs {
 	return logs[skip:]
 }
 
-func includes(addresses [][]byte, a []byte) bool {
+func includes(addresses []common.Address, a common.Address) bool {
 	for _, addr := range addresses {
-		if !bytes.Equal(addr, a) {
+		if addr != a {
 			return false
 		}
 	}
@@ -151,13 +151,13 @@ Logs:
 			continue
 		}
 
-		logTopics := make([][]byte, len(self.topics))
+		logTopics := make([]common.Hash, len(self.topics))
 		copy(logTopics, log.Topics())
 
 		for i, topics := range self.topics {
 			for _, topic := range topics {
 				var match bool
-				if bytes.Equal(log.Topics()[i], topic) {
+				if log.Topics()[i] == topic {
 					match = true
 				}
 				if !match {
@@ -176,7 +176,7 @@ func (self *Filter) bloomFilter(block *types.Block) bool {
 	if len(self.address) > 0 {
 		var included bool
 		for _, addr := range self.address {
-			if types.BloomLookup(block.Bloom(), addr) {
+			if types.BloomLookup(block.Bloom(), addr.Hash()) {
 				included = true
 				break
 			}

@@ -1,20 +1,19 @@
 package eth
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/errs"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
-	ProtocolVersion    = 56
+	ProtocolVersion    = 58
 	NetworkId          = 0
 	ProtocolLength     = uint64(8)
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
@@ -43,6 +42,7 @@ const (
 	ErrGenesisBlockMismatch
 	ErrNoStatusMsg
 	ErrExtraStatusMsg
+	ErrSuspendedPeer
 )
 
 var errorToString = map[int]string{
@@ -54,18 +54,21 @@ var errorToString = map[int]string{
 	ErrGenesisBlockMismatch:    "Genesis block mismatch",
 	ErrNoStatusMsg:             "No status message",
 	ErrExtraStatusMsg:          "Extra status message",
+	ErrSuspendedPeer:           "Suspended peer",
 }
 
 // ethProtocol represents the ethereum wire protocol
 // instance is running on each peer
 type ethProtocol struct {
-	txPool       txPool
-	chainManager chainManager
-	blockPool    blockPool
-	peer         *p2p.Peer
-	id           string
-	rw           p2p.MsgReadWriter
-	errors       *errs.Errors
+	txPool          txPool
+	chainManager    chainManager
+	blockPool       blockPool
+	peer            *p2p.Peer
+	id              string
+	rw              p2p.MsgReadWriter
+	errors          *errs.Errors
+	protocolVersion int
+	networkId       int
 }
 
 // backend is the interface the ethereum protocol backend should implement
@@ -76,71 +79,88 @@ type txPool interface {
 }
 
 type chainManager interface {
-	GetBlockHashesFromHash(hash []byte, amount uint64) (hashes [][]byte)
-	GetBlock(hash []byte) (block *types.Block)
-	Status() (td *big.Int, currentBlock []byte, genesisBlock []byte)
+	GetBlockHashesFromHash(hash common.Hash, amount uint64) (hashes []common.Hash)
+	GetBlock(hash common.Hash) (block *types.Block)
+	Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash)
 }
 
 type blockPool interface {
-	AddBlockHashes(next func() ([]byte, bool), peerId string)
+	AddBlockHashes(next func() (common.Hash, bool), peerId string)
 	AddBlock(block *types.Block, peerId string)
-	AddPeer(td *big.Int, currentBlock []byte, peerId string, requestHashes func([]byte) error, requestBlocks func([][]byte) error, peerError func(*errs.Error)) (best bool)
+	AddPeer(td *big.Int, currentBlock common.Hash, peerId string, requestHashes func(common.Hash) error, requestBlocks func([]common.Hash) error, peerError func(*errs.Error)) (best bool, suspended bool)
 	RemovePeer(peerId string)
 }
 
-// message structs used for rlp decoding
+// message structs used for RLP serialization
 type newBlockMsgData struct {
 	Block *types.Block
 	TD    *big.Int
 }
 
 type getBlockHashesMsgData struct {
-	Hash   []byte
+	Hash   common.Hash
 	Amount uint64
+}
+
+type statusMsgData struct {
+	ProtocolVersion uint32
+	NetworkId       uint32
+	TD              *big.Int
+	CurrentBlock    common.Hash
+	GenesisBlock    common.Hash
 }
 
 // main entrypoint, wrappers starting a server running the eth protocol
 // use this constructor to attach the protocol ("class") to server caps
 // the Dev p2p layer then runs the protocol instance on each peer
-func EthProtocol(txPool txPool, chainManager chainManager, blockPool blockPool) p2p.Protocol {
+func EthProtocol(protocolVersion, networkId int, txPool txPool, chainManager chainManager, blockPool blockPool) p2p.Protocol {
 	return p2p.Protocol{
 		Name:    "eth",
-		Version: ProtocolVersion,
+		Version: uint(protocolVersion),
 		Length:  ProtocolLength,
 		Run: func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return runEthProtocol(txPool, chainManager, blockPool, peer, rw)
+			return runEthProtocol(protocolVersion, networkId, txPool, chainManager, blockPool, peer, rw)
 		},
 	}
 }
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runEthProtocol(txPool txPool, chainManager chainManager, blockPool blockPool, peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func runEthProtocol(protocolVersion, networkId int, txPool txPool, chainManager chainManager, blockPool blockPool, peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 	id := peer.ID()
 	self := &ethProtocol{
-		txPool:       txPool,
-		chainManager: chainManager,
-		blockPool:    blockPool,
-		rw:           rw,
-		peer:         peer,
+		txPool:          txPool,
+		chainManager:    chainManager,
+		blockPool:       blockPool,
+		rw:              rw,
+		peer:            peer,
+		protocolVersion: protocolVersion,
+		networkId:       networkId,
 		errors: &errs.Errors{
 			Package: "ETH",
 			Errors:  errorToString,
 		},
 		id: fmt.Sprintf("%x", id[:8]),
 	}
-	err = self.handleStatus()
-	if err == nil {
-		self.propagateTxs()
-		for {
-			err = self.handle()
-			if err != nil {
-				self.blockPool.RemovePeer(self.id)
-				break
-			}
+
+	// handshake.
+	if err := self.handleStatus(); err != nil {
+		return err
+	}
+	defer self.blockPool.RemovePeer(self.id)
+
+	// propagate existing transactions. new transactions appearing
+	// after this will be sent via broadcasts.
+	if err := p2p.Send(rw, TxMsg, txPool.GetTransactions()); err != nil {
+		return err
+	}
+
+	// main loop. handle incoming messages.
+	for {
+		if err := self.handle(); err != nil {
+			return err
 		}
 	}
-	return
 }
 
 func (self *ethProtocol) handle() error {
@@ -167,7 +187,7 @@ func (self *ethProtocol) handle() error {
 		}
 		for _, tx := range txs {
 			jsonlogger.LogJson(&logger.EthTxReceived{
-				TxHash:   ethutil.Bytes2Hex(tx.Hash()),
+				TxHash:   tx.Hash().Hex(),
 				RemoteId: self.peer.ID().String(),
 			})
 		}
@@ -183,7 +203,7 @@ func (self *ethProtocol) handle() error {
 			request.Amount = maxHashes
 		}
 		hashes := self.chainManager.GetBlockHashesFromHash(request.Hash, request.Amount)
-		return p2p.EncodeMsg(self.rw, BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
+		return p2p.Send(self.rw, BlockHashesMsg, hashes)
 
 	case BlockHashesMsg:
 		msgStream := rlp.NewStream(msg.Payload)
@@ -192,14 +212,15 @@ func (self *ethProtocol) handle() error {
 		}
 
 		var i int
-		iter := func() (hash []byte, ok bool) {
-			hash, err := msgStream.Bytes()
+		iter := func() (hash common.Hash, ok bool) {
+			err := msgStream.Decode(&hash)
 			if err == rlp.EOL {
-				return nil, false
+				return common.Hash{}, false
 			} else if err != nil {
 				self.protoError(ErrDecode, "msg %v: after %v hashes : %v", msg, i, err)
-				return nil, false
+				return common.Hash{}, false
 			}
+
 			i++
 			return hash, true
 		}
@@ -211,18 +232,18 @@ func (self *ethProtocol) handle() error {
 			return err
 		}
 
-		var blocks []interface{}
+		var blocks []*types.Block
 		var i int
 		for {
 			i++
-			var hash []byte
-			if err := msgStream.Decode(&hash); err != nil {
-				if err == rlp.EOL {
-					break
-				} else {
-					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
-				}
+			var hash common.Hash
+			err := msgStream.Decode(&hash)
+			if err == rlp.EOL {
+				break
+			} else if err != nil {
+				return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 			}
+
 			block := self.chainManager.GetBlock(hash)
 			if block != nil {
 				blocks = append(blocks, block)
@@ -231,7 +252,7 @@ func (self *ethProtocol) handle() error {
 				break
 			}
 		}
-		return p2p.EncodeMsg(self.rw, BlocksMsg, blocks...)
+		return p2p.Send(self.rw, BlocksMsg, blocks)
 
 	case BlocksMsg:
 		msgStream := rlp.NewStream(msg.Payload)
@@ -259,16 +280,16 @@ func (self *ethProtocol) handle() error {
 		_, chainHead, _ := self.chainManager.Status()
 
 		jsonlogger.LogJson(&logger.EthChainReceivedNewBlock{
-			BlockHash:     ethutil.Bytes2Hex(hash),
+			BlockHash:     hash.Hex(),
 			BlockNumber:   request.Block.Number(), // this surely must be zero
-			ChainHeadHash: ethutil.Bytes2Hex(chainHead),
-			BlockPrevHash: ethutil.Bytes2Hex(request.Block.ParentHash()),
+			ChainHeadHash: chainHead.Hex(),
+			BlockPrevHash: request.Block.ParentHash().Hex(),
 			RemoteId:      self.peer.ID().String(),
 		})
 		// to simplify backend interface adding a new block
 		// uses AddPeer followed by AddBlock only if peer is the best peer
 		// (or selected as new best peer)
-		if self.blockPool.AddPeer(request.TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect) {
+		if best, _ := self.blockPool.AddPeer(request.TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect); best {
 			self.blockPool.AddBlock(request.Block, self.id)
 		}
 
@@ -278,29 +299,8 @@ func (self *ethProtocol) handle() error {
 	return nil
 }
 
-type statusMsgData struct {
-	ProtocolVersion uint32
-	NetworkId       uint32
-	TD              *big.Int
-	CurrentBlock    []byte
-	GenesisBlock    []byte
-}
-
-func (self *ethProtocol) statusMsg() p2p.Msg {
-	td, currentBlock, genesisBlock := self.chainManager.Status()
-
-	return p2p.NewMsg(StatusMsg,
-		uint32(ProtocolVersion),
-		uint32(NetworkId),
-		td,
-		currentBlock,
-		genesisBlock,
-	)
-}
-
 func (self *ethProtocol) handleStatus() error {
-	// send precanned status message
-	if err := self.rw.WriteMsg(self.statusMsg()); err != nil {
+	if err := self.sendStatus(); err != nil {
 		return err
 	}
 
@@ -309,11 +309,9 @@ func (self *ethProtocol) handleStatus() error {
 	if err != nil {
 		return err
 	}
-
 	if msg.Code != StatusMsg {
 		return self.protoError(ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, StatusMsg)
 	}
-
 	if msg.Size > ProtocolMaxMsgSize {
 		return self.protoError(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 	}
@@ -325,33 +323,36 @@ func (self *ethProtocol) handleStatus() error {
 
 	_, _, genesisBlock := self.chainManager.Status()
 
-	if !bytes.Equal(status.GenesisBlock, genesisBlock) {
+	if status.GenesisBlock != genesisBlock {
 		return self.protoError(ErrGenesisBlockMismatch, "%x (!= %x)", status.GenesisBlock, genesisBlock)
 	}
 
-	if status.NetworkId != NetworkId {
-		return self.protoError(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, NetworkId)
+	if int(status.NetworkId) != self.networkId {
+		return self.protoError(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, self.networkId)
 	}
 
-	if ProtocolVersion != status.ProtocolVersion {
-		return self.protoError(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, ProtocolVersion)
+	if int(status.ProtocolVersion) != self.protocolVersion {
+		return self.protoError(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, self.protocolVersion)
+	}
+
+	_, suspended := self.blockPool.AddPeer(status.TD, status.CurrentBlock, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect)
+	if suspended {
+		return self.protoError(ErrSuspendedPeer, "")
 	}
 
 	self.peer.Infof("Peer is [eth] capable (%d/%d). TD=%v H=%x\n", status.ProtocolVersion, status.NetworkId, status.TD, status.CurrentBlock[:4])
 
-	self.blockPool.AddPeer(status.TD, status.CurrentBlock, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect)
-
 	return nil
 }
 
-func (self *ethProtocol) requestBlockHashes(from []byte) error {
+func (self *ethProtocol) requestBlockHashes(from common.Hash) error {
 	self.peer.Debugf("fetching hashes (%d) %x...\n", maxHashes, from[0:4])
-	return p2p.EncodeMsg(self.rw, GetBlockHashesMsg, interface{}(from), uint64(maxHashes))
+	return p2p.Send(self.rw, GetBlockHashesMsg, getBlockHashesMsgData{from, maxHashes})
 }
 
-func (self *ethProtocol) requestBlocks(hashes [][]byte) error {
+func (self *ethProtocol) requestBlocks(hashes []common.Hash) error {
 	self.peer.Debugf("fetching %v blocks", len(hashes))
-	return p2p.EncodeMsg(self.rw, GetBlocksMsg, ethutil.ByteSliceToInterface(hashes)...)
+	return p2p.Send(self.rw, GetBlocksMsg, hashes)
 }
 
 func (self *ethProtocol) protoError(code int, format string, params ...interface{}) (err *errs.Error) {
@@ -360,19 +361,20 @@ func (self *ethProtocol) protoError(code int, format string, params ...interface
 	return
 }
 
+func (self *ethProtocol) sendStatus() error {
+	td, currentBlock, genesisBlock := self.chainManager.Status()
+	return p2p.Send(self.rw, StatusMsg, &statusMsgData{
+		ProtocolVersion: uint32(self.protocolVersion),
+		NetworkId:       uint32(self.networkId),
+		TD:              td,
+		CurrentBlock:    currentBlock,
+		GenesisBlock:    genesisBlock,
+	})
+}
+
 func (self *ethProtocol) protoErrorDisconnect(err *errs.Error) {
 	err.Log(self.peer.Logger)
 	if err.Fatal() {
 		self.peer.Disconnect(p2p.DiscSubprotocolError)
 	}
-}
-
-func (self *ethProtocol) propagateTxs() {
-	transactions := self.txPool.GetTransactions()
-	iface := make([]interface{}, len(transactions))
-	for i, transaction := range transactions {
-		iface[i] = transaction
-	}
-
-	self.rw.WriteMsg(p2p.NewMsg(TxMsg, iface...))
 }

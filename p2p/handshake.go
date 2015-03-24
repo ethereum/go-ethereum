@@ -92,7 +92,7 @@ func setupInboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake) (
 		return nil, errors.New("node ID in protocol handshake does not match encryption handshake")
 	}
 	// TODO: validate that handshake node ID matches
-	if err := writeProtocolHandshake(rw, our); err != nil {
+	if err := Send(rw, handshakeMsg, our); err != nil {
 		return nil, fmt.Errorf("protocol write error: %v", err)
 	}
 	return &conn{rw, rhs}, nil
@@ -106,7 +106,7 @@ func setupOutboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, 
 
 	// Run the protocol handshake using authenticated messages.
 	rw := newRlpxFrameRW(fd, secrets)
-	if err := writeProtocolHandshake(rw, our); err != nil {
+	if err := Send(rw, handshakeMsg, our); err != nil {
 		return nil, fmt.Errorf("protocol write error: %v", err)
 	}
 	rhs, err := readProtocolHandshake(rw, our)
@@ -396,10 +396,6 @@ func xor(one, other []byte) (xor []byte) {
 		xor[i] = one[i] ^ other[i]
 	}
 	return xor
-}
-
-func writeProtocolHandshake(w MsgWriter, our *protoHandshake) error {
-	return EncodeMsg(w, handshakeMsg, our.Version, our.Name, our.Caps, our.ListenPort, our.ID[:])
 }
 
 func readProtocolHandshake(r MsgReader, our *protoHandshake) (*protoHandshake, error) {

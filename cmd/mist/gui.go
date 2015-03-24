@@ -25,19 +25,17 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
-	"os"
 	"path"
 	"runtime"
 	"sort"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/ui/qt/qwhisper"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -93,13 +91,13 @@ func NewWindow(ethereum *eth.Ethereum) *Gui {
 		plugins:       make(map[string]plugin),
 		serviceEvents: make(chan ServEv, 1),
 	}
-	data, _ := ethutil.ReadAllFile(path.Join(ethereum.DataDir, "plugins.json"))
+	data, _ := common.ReadAllFile(path.Join(ethereum.DataDir, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
 
 	return gui
 }
 
-func (gui *Gui) Start(assetPath string) {
+func (gui *Gui) Start(assetPath, libPath string) {
 	defer gui.txDb.Close()
 
 	guilogger.Infoln("Starting GUI")
@@ -117,7 +115,7 @@ func (gui *Gui) Start(assetPath string) {
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
 	context := gui.engine.Context()
-	gui.uiLib = NewUiLib(gui.engine, gui.eth, assetPath)
+	gui.uiLib = NewUiLib(gui.engine, gui.eth, assetPath, libPath)
 	gui.whisper = qwhisper.New(gui.eth.Whisper())
 
 	// Expose the eth library and the ui library to QML
@@ -200,7 +198,7 @@ func (gui *Gui) loadAddressBook() {
 			it := nameReg.Trie().Iterator()
 			for it.Next() {
 				if it.Key[0] != 0 {
-					view.Call("addAddress", struct{ Name, Address string }{string(it.Key), ethutil.Bytes2Hex(it.Value)})
+					view.Call("addAddress", struct{ Name, Address string }{string(it.Key), common.Bytes2Hex(it.Value)})
 				}
 
 			}
@@ -221,7 +219,7 @@ func (self *Gui) loadMergedMiningOptions() {
 					Checked       bool
 					Name, Address string
 					Id, ItemId    int
-				}{false, string(it.Key), ethutil.Bytes2Hex(it.Value), 0, i})
+				}{false, string(it.Key), common.Bytes2Hex(it.Value), 0, i})
 
 				i++
 
@@ -232,7 +230,8 @@ func (self *Gui) loadMergedMiningOptions() {
 
 func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	var inout string
-	if gui.eth.AccountManager().HasAccount(tx.From()) {
+	from, _ := tx.From()
+	if gui.eth.AccountManager().HasAccount(common.Hex2Bytes(from.Hex())) {
 		inout = "send"
 	} else {
 		inout = "recv"
@@ -240,8 +239,8 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 
 	var (
 		ptx  = xeth.NewTx(tx)
-		send = ethutil.Bytes2Hex(tx.From())
-		rec  = ethutil.Bytes2Hex(tx.To())
+		send = from.Hex()
+		rec  = tx.To().Hex()
 	)
 	ptx.Sender = send
 	ptx.Address = rec
@@ -265,7 +264,7 @@ func (gui *Gui) readPreviousTransactions() {
 }
 
 func (gui *Gui) processBlock(block *types.Block, initial bool) {
-	name := ethutil.Bytes2Hex(block.Coinbase())
+	name := block.Coinbase().Hex()
 	b := xeth.NewBlock(block)
 	b.Name = name
 
@@ -279,10 +278,10 @@ func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
 		if unconfirmedFunds.Cmp(big.NewInt(0)) < 0 {
 			pos = "-"
 		}
-		val := ethutil.CurrencyToString(new(big.Int).Abs(ethutil.BigCopy(unconfirmedFunds)))
-		str = fmt.Sprintf("%v (%s %v)", ethutil.CurrencyToString(amount), pos, val)
+		val := common.CurrencyToString(new(big.Int).Abs(common.BigCopy(unconfirmedFunds)))
+		str = fmt.Sprintf("%v (%s %v)", common.CurrencyToString(amount), pos, val)
 	} else {
-		str = fmt.Sprintf("%v", ethutil.CurrencyToString(amount))
+		str = fmt.Sprintf("%v", common.CurrencyToString(amount))
 	}
 
 	gui.win.Root().Call("setWalletValue", str)
@@ -290,25 +289,6 @@ func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
 
 func (self *Gui) getObjectByName(objectName string) qml.Object {
 	return self.win.Root().ObjectByName(objectName)
-}
-
-func loadJavascriptAssets(gui *Gui) (jsfiles string) {
-	for _, fn := range []string{"ext/q.js", "ext/eth.js/main.js", "ext/eth.js/qt.js", "ext/setup.js"} {
-		f, err := os.Open(gui.uiLib.AssetPath(fn))
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		content, err := ioutil.ReadAll(f)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-		jsfiles += string(content)
-	}
-
-	return
 }
 
 func (gui *Gui) SendCommand(cmd ServEv) {

@@ -4,11 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
-	BlockNumberErr = errors.New("block number invalid")
-	BlockFutureErr = errors.New("block time is in the future")
+	BlockNumberErr  = errors.New("block number invalid")
+	BlockFutureErr  = errors.New("block time is in the future")
+	BlockEqualTSErr = errors.New("block time stamp equal to previous")
 )
 
 // Parent error. In case a parent is unknown this error will be thrown
@@ -21,7 +24,7 @@ func (err *ParentErr) Error() string {
 	return err.Message
 }
 
-func ParentError(hash []byte) error {
+func ParentError(hash common.Hash) error {
 	return &ParentErr{Message: fmt.Sprintf("Block's parent unknown %x", hash)}
 }
 
@@ -78,7 +81,7 @@ func (err *NonceErr) Error() string {
 }
 
 func NonceError(is, exp uint64) *NonceErr {
-	return &NonceErr{Message: fmt.Sprintf("Nonce err. Is %d, expected %d", is, exp), Is: is, Exp: exp}
+	return &NonceErr{Message: fmt.Sprintf("Transaction w/ invalid nonce (%d / %d)", is, exp), Is: is, Exp: exp}
 }
 
 func IsNonceErr(err error) bool {
@@ -136,7 +139,7 @@ func IsTDError(e error) bool {
 
 type KnownBlockError struct {
 	number *big.Int
-	hash   []byte
+	hash   common.Hash
 }
 
 func (self *KnownBlockError) Error() string {

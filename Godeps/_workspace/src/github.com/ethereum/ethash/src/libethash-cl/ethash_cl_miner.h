@@ -40,4 +40,5 @@ private:
 	cl::Buffer m_hash_buf[c_num_buffers];
 	cl::Buffer m_search_buf[c_num_buffers];
 	unsigned m_workgroup_size;
+	bool m_opencl_1_1;
 };

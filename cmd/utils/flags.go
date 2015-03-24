@@ -11,11 +11,11 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -70,25 +70,23 @@ func NewApp(version, usage string) *cli.App {
 
 var (
 	// General settings
-	/*
-		VMTypeFlag = cli.IntFlag{
-			Name:  "vm",
-			Usage: "Virtual Machine type: 0 is standard VM, 1 is debug VM",
-		}
-	*/
-	UnlockedAccountFlag = cli.StringFlag{
-		Name:  "unlock",
-		Usage: "Unlock a given account untill this programs exits (address:password)",
-	}
-	VMDebugFlag = cli.BoolFlag{
-		Name:  "vmdebug",
-		Usage: "Virtual Machine debug output",
-	}
 	DataDirFlag = cli.StringFlag{
 		Name:  "datadir",
 		Usage: "Data directory to be used",
-		Value: ethutil.DefaultDataDir(),
+		Value: common.DefaultDataDir(),
 	}
+	ProtocolVersionFlag = cli.IntFlag{
+		Name:  "protocolversion",
+		Usage: "ETH protocol version",
+		Value: eth.ProtocolVersion,
+	}
+	NetworkIdFlag = cli.IntFlag{
+		Name:  "networkid",
+		Usage: "Network Id",
+		Value: eth.NetworkId,
+	}
+
+	// miner settings
 	MinerThreadsFlag = cli.IntFlag{
 		Name:  "minerthreads",
 		Usage: "Number of miner threads",
@@ -98,11 +96,18 @@ var (
 		Name:  "mine",
 		Usage: "Enable mining",
 	}
+
+	// key settings
 	UnencryptedKeysFlag = cli.BoolFlag{
 		Name:  "unencrypted-keys",
 		Usage: "disable private key disk encryption (for testing)",
 	}
+	UnlockedAccountFlag = cli.StringFlag{
+		Name:  "unlock",
+		Usage: "Unlock a given account untill this programs exits (address:password)",
+	}
 
+	// logging and debug settings
 	LogFileFlag = cli.StringFlag{
 		Name:  "logfile",
 		Usage: "Send log output to a file",
@@ -112,10 +117,14 @@ var (
 		Usage: "0-5 (silent, error, warn, info, debug, debug detail)",
 		Value: int(logger.InfoLevel),
 	}
-	LogFormatFlag = cli.StringFlag{
-		Name:  "logformat",
-		Usage: `"std" or "raw"`,
-		Value: "std",
+	LogJSONFlag = cli.StringFlag{
+		Name:  "logjson",
+		Usage: "Send json structured log output to a file or '-' for standard output (default: no json output)",
+		Value: "",
+	}
+	VMDebugFlag = cli.BoolFlag{
+		Name:  "vmdebug",
+		Usage: "Virtual Machine debug output",
 	}
 
 	// RPC settings
@@ -163,6 +172,11 @@ var (
 		Usage: "Port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
 		Value: "any",
 	}
+	JSpathFlag = cli.StringFlag{
+		Name:  "jspath",
+		Usage: "JS library path to be used with console and js subcommands",
+		Value: ".",
+	}
 )
 
 func GetNAT(ctx *cli.Context) nat.Interface {
@@ -191,27 +205,29 @@ func GetNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 	return key
 }
 
-func GetEthereum(clientID, version string, ctx *cli.Context) (*eth.Ethereum, error) {
-	return eth.New(&eth.Config{
-		Name:           ethutil.MakeName(clientID, version),
-		DataDir:        ctx.GlobalString(DataDirFlag.Name),
-		LogFile:        ctx.GlobalString(LogFileFlag.Name),
-		LogLevel:       ctx.GlobalInt(LogLevelFlag.Name),
-		LogFormat:      ctx.GlobalString(LogFormatFlag.Name),
-		MinerThreads:   ctx.GlobalInt(MinerThreadsFlag.Name),
-		AccountManager: GetAccountManager(ctx),
-		VmDebug:        ctx.GlobalBool(VMDebugFlag.Name),
-		MaxPeers:       ctx.GlobalInt(MaxPeersFlag.Name),
-		Port:           ctx.GlobalString(ListenPortFlag.Name),
-		NAT:            GetNAT(ctx),
-		NodeKey:        GetNodeKey(ctx),
-		Shh:            true,
-		Dial:           true,
-		BootNodes:      ctx.GlobalString(BootnodesFlag.Name),
-	})
+func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
+	return &eth.Config{
+		Name:            common.MakeName(clientID, version),
+		DataDir:         ctx.GlobalString(DataDirFlag.Name),
+		ProtocolVersion: ctx.GlobalInt(ProtocolVersionFlag.Name),
+		NetworkId:       ctx.GlobalInt(NetworkIdFlag.Name),
+		LogFile:         ctx.GlobalString(LogFileFlag.Name),
+		LogLevel:        ctx.GlobalInt(LogLevelFlag.Name),
+		LogJSON:         ctx.GlobalString(LogJSONFlag.Name),
+		MinerThreads:    ctx.GlobalInt(MinerThreadsFlag.Name),
+		AccountManager:  GetAccountManager(ctx),
+		VmDebug:         ctx.GlobalBool(VMDebugFlag.Name),
+		MaxPeers:        ctx.GlobalInt(MaxPeersFlag.Name),
+		Port:            ctx.GlobalString(ListenPortFlag.Name),
+		NAT:             GetNAT(ctx),
+		NodeKey:         GetNodeKey(ctx),
+		Shh:             true,
+		Dial:            true,
+		BootNodes:       ctx.GlobalString(BootnodesFlag.Name),
+	}
 }
 
-func GetChain(ctx *cli.Context) (*core.ChainManager, ethutil.Database, ethutil.Database) {
+func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Database) {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
 	blockDb, err := ethdb.NewLDBDatabase(path.Join(dataDir, "blockchain"))
 	if err != nil {
@@ -240,7 +256,7 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
 	addr := ctx.GlobalString(RPCListenAddrFlag.Name)
 	port := ctx.GlobalInt(RPCPortFlag.Name)
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
-
+	fmt.Println("Starting RPC on port: ", port)
 	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
 	if err != nil {
 		Fatalf("Can't listen on %s:%d: %v", addr, port, err)

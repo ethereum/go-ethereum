@@ -3,7 +3,7 @@
 #include "endian.h"
 #include "ethash.h"
 
-#define ENABLE_SSE 1
+#define ENABLE_SSE 0
 
 #if defined(_M_X64) && ENABLE_SSE
 #include <smmintrin.h>
@@ -30,9 +30,9 @@ typedef union node {
 
 } node;
 
-void ethash_calculate_dag_item(
+int ethash_calculate_dag_item(
         node *const ret,
-        const unsigned node_index,
+        const uint64_t node_index,
         ethash_params const *params,
         ethash_cache const *cache
 );

@@ -14,6 +14,6 @@ TEST_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 [ -d $TEST_DIR/python-virtual-env ] || virtualenv --system-site-packages $TEST_DIR/python-virtual-env
 source $TEST_DIR/python-virtual-env/bin/activate
 pip install -r $TEST_DIR/requirements.txt > /dev/null
-pip install -e $TEST_DIR/../.. > /dev/null
+pip install --upgrade --no-deps --force-reinstall -e $TEST_DIR/../..
 cd $TEST_DIR
-nosetests --with-doctest -v
+nosetests --with-doctest -v --nocapture

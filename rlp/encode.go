@@ -70,7 +70,7 @@ func (e flatenc) EncodeRLP(out io.Writer) error {
 	newhead := eb.lheads[prevnheads]
 	copy(eb.lheads[prevnheads:], eb.lheads[prevnheads+1:])
 	eb.lheads = eb.lheads[:len(eb.lheads)-1]
-	eb.lhsize -= newhead.tagsize()
+	eb.lhsize -= headsize(uint64(newhead.size))
 	return nil
 }
 
@@ -155,21 +155,29 @@ type listhead struct {
 // encode writes head to the given buffer, which must be at least
 // 9 bytes long. It returns the encoded bytes.
 func (head *listhead) encode(buf []byte) []byte {
-	if head.size < 56 {
-		buf[0] = 0xC0 + byte(head.size)
-		return buf[:1]
-	} else {
-		sizesize := putint(buf[1:], uint64(head.size))
-		buf[0] = 0xF7 + byte(sizesize)
-		return buf[:sizesize+1]
-	}
+	return buf[:puthead(buf, 0xC0, 0xF7, uint64(head.size))]
 }
 
-func (head *listhead) tagsize() int {
-	if head.size < 56 {
+// headsize returns the size of a list or string header
+// for a value of the given size.
+func headsize(size uint64) int {
+	if size < 56 {
 		return 1
 	}
-	return 1 + intsize(uint64(head.size))
+	return 1 + intsize(size)
+}
+
+// puthead writes a list or string header to buf.
+// buf must be at least 9 bytes long.
+func puthead(buf []byte, smalltag, largetag byte, size uint64) int {
+	if size < 56 {
+		buf[0] = smalltag + byte(size)
+		return 1
+	} else {
+		sizesize := putint(buf[1:], size)
+		buf[0] = largetag + byte(sizesize)
+		return sizesize + 1
+	}
 }
 
 func newencbuf() *encbuf {
@@ -203,8 +211,13 @@ func (w *encbuf) encodeStringHeader(size int) {
 }
 
 func (w *encbuf) encodeString(b []byte) {
-	w.encodeStringHeader(len(b))
-	w.str = append(w.str, b...)
+	if len(b) == 1 && b[0] <= 0x7F {
+		// fits single byte, no string header
+		w.str = append(w.str, b[0])
+	} else {
+		w.encodeStringHeader(len(b))
+		w.str = append(w.str, b...)
+	}
 }
 
 func (w *encbuf) list() *listhead {
@@ -386,7 +399,12 @@ func writeUint(val reflect.Value, w *encbuf) error {
 }
 
 func writeBigIntPtr(val reflect.Value, w *encbuf) error {
-	return writeBigInt(val.Interface().(*big.Int), w)
+	ptr := val.Interface().(*big.Int)
+	if ptr == nil {
+		w.str = append(w.str, 0x80)
+		return nil
+	}
+	return writeBigInt(ptr, w)
 }
 
 func writeBigIntNoPtr(val reflect.Value, w *encbuf) error {
@@ -399,9 +417,6 @@ func writeBigInt(i *big.Int, w *encbuf) error {
 		return fmt.Errorf("rlp: cannot encode negative *big.Int")
 	} else if cmp == 0 {
 		w.str = append(w.str, 0x80)
-	} else if bits := i.BitLen(); bits < 8 {
-		// fits single byte
-		w.str = append(w.str, byte(i.Uint64()))
 	} else {
 		w.encodeString(i.Bytes())
 	}
@@ -429,8 +444,13 @@ func writeByteArray(val reflect.Value, w *encbuf) error {
 
 func writeString(val reflect.Value, w *encbuf) error {
 	s := val.String()
-	w.encodeStringHeader(len(s))
-	w.str = append(w.str, s...)
+	if len(s) == 1 && s[0] <= 0x7f {
+		// fits single byte, no string header
+		w.str = append(w.str, s[0])
+	} else {
+		w.encodeStringHeader(len(s))
+		w.str = append(w.str, s...)
+	}
 	return nil
 }
 

@@ -149,7 +149,7 @@ func TestServerBroadcast(t *testing.T) {
 	connected.Wait()
 
 	// broadcast one message
-	srv.Broadcast("discard", 0, "foo")
+	srv.Broadcast("discard", 0, []string{"foo"})
 	golden := unhex("66e94d166f0a2c3b884cfa59ca34")
 
 	// check that the message has been written everywhere

@@ -1,6 +1,9 @@
 package xeth
 
-import "github.com/ethereum/go-ethereum/state"
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
+)
 
 type State struct {
 	xeth  *XEth
@@ -16,7 +19,7 @@ func (self *State) State() *state.StateDB {
 }
 
 func (self *State) Get(addr string) *Object {
-	return &Object{self.state.GetStateObject(fromHex(addr))}
+	return &Object{self.state.GetStateObject(common.HexToAddress(addr))}
 }
 
 func (self *State) SafeGet(addr string) *Object {
@@ -24,9 +27,9 @@ func (self *State) SafeGet(addr string) *Object {
 }
 
 func (self *State) safeGet(addr string) *state.StateObject {
-	object := self.state.GetStateObject(fromHex(addr))
+	object := self.state.GetStateObject(common.HexToAddress(addr))
 	if object == nil {
-		object = state.NewStateObject(fromHex(addr), self.xeth.eth.StateDb())
+		object = state.NewStateObject(common.HexToAddress(addr), self.xeth.eth.StateDb())
 	}
 
 	return object

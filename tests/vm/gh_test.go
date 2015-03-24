@@ -6,10 +6,11 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
 )
 
@@ -27,26 +28,26 @@ type Log struct {
 	BloomF   string   `json:"bloom"`
 }
 
-func (self Log) Address() []byte      { return ethutil.Hex2Bytes(self.AddressF) }
-func (self Log) Data() []byte         { return ethutil.Hex2Bytes(self.DataF) }
+func (self Log) Address() []byte      { return common.Hex2Bytes(self.AddressF) }
+func (self Log) Data() []byte         { return common.Hex2Bytes(self.DataF) }
 func (self Log) RlpData() interface{} { return nil }
 func (self Log) Topics() [][]byte {
 	t := make([][]byte, len(self.TopicsF))
 	for i, topic := range self.TopicsF {
-		t[i] = ethutil.Hex2Bytes(topic)
+		t[i] = common.Hex2Bytes(topic)
 	}
 	return t
 }
 
-func StateObjectFromAccount(db ethutil.Database, addr string, account Account) *state.StateObject {
-	obj := state.NewStateObject(ethutil.Hex2Bytes(addr), db)
-	obj.SetBalance(ethutil.Big(account.Balance))
+func StateObjectFromAccount(db common.Database, addr string, account Account) *state.StateObject {
+	obj := state.NewStateObject(common.HexToAddress(addr), db)
+	obj.SetBalance(common.Big(account.Balance))
 
-	if ethutil.IsHex(account.Code) {
+	if common.IsHex(account.Code) {
 		account.Code = account.Code[2:]
 	}
-	obj.SetCode(ethutil.Hex2Bytes(account.Code))
-	obj.SetNonce(ethutil.Big(account.Nonce).Uint64())
+	obj.SetCode(common.Hex2Bytes(account.Code))
+	obj.SetNonce(common.Big(account.Nonce).Uint64())
 
 	return obj
 }
@@ -81,12 +82,12 @@ func RunVmTest(p string, t *testing.T) {
 
 	for name, test := range tests {
 		db, _ := ethdb.NewMemDatabase()
-		statedb := state.New(nil, db)
+		statedb := state.New(common.Hash{}, db)
 		for addr, account := range test.Pre {
 			obj := StateObjectFromAccount(db, addr, account)
 			statedb.SetStateObject(obj)
 			for a, v := range account.Storage {
-				obj.SetState(helper.FromHex(a), ethutil.NewValue(helper.FromHex(v)))
+				obj.SetState(common.HexToHash(a), common.NewValue(helper.FromHex(v)))
 			}
 		}
 
@@ -116,7 +117,6 @@ func RunVmTest(p string, t *testing.T) {
 		} else {
 			ret, logs, gas, err = helper.RunState(statedb, env, test.Transaction)
 		}
-		statedb.Sync()
 
 		rexp := helper.FromHex(test.Out)
 		if bytes.Compare(rexp, ret) != 0 {
@@ -127,7 +127,7 @@ func RunVmTest(p string, t *testing.T) {
 			if len(test.Gas) == 0 && err == nil {
 				t.Errorf("%s's gas unspecified, indicating an error. VM returned (incorrectly) successfull", name)
 			} else {
-				gexp := ethutil.Big(test.Gas)
+				gexp := common.Big(test.Gas)
 				if gexp.Cmp(gas) != 0 {
 					t.Errorf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
 				}
@@ -135,29 +135,31 @@ func RunVmTest(p string, t *testing.T) {
 		}
 
 		for addr, account := range test.Post {
-			obj := statedb.GetStateObject(helper.FromHex(addr))
+			obj := statedb.GetStateObject(common.HexToAddress(addr))
 			if obj == nil {
 				continue
 			}
 
 			if len(test.Exec) == 0 {
-				if obj.Balance().Cmp(ethutil.Big(account.Balance)) != 0 {
-					t.Errorf("%s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(ethutil.Big(account.Balance), obj.Balance()))
+				if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
+					t.Errorf("%s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
 				}
 			}
 
 			for addr, value := range account.Storage {
-				v := obj.GetState(helper.FromHex(addr)).Bytes()
+				v := obj.GetState(common.HexToHash(addr)).Bytes()
 				vexp := helper.FromHex(value)
 
 				if bytes.Compare(v, vexp) != 0 {
-					t.Errorf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address()[0:4], addr, vexp, v, ethutil.BigD(vexp), ethutil.BigD(v))
+					t.Errorf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address().Bytes()[0:4], addr, vexp, v, common.BigD(vexp), common.BigD(v))
 				}
 			}
 		}
 
 		if !isVmTest {
-			if !bytes.Equal(ethutil.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
+			statedb.Sync()
+			//if !bytes.Equal(common.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
+			if common.HexToHash(test.PostStateRoot) != statedb.Root() {
 				t.Errorf("%s's : Post state root error. Expected %s, got %x", name, test.PostStateRoot, statedb.Root())
 			}
 		}
@@ -166,16 +168,30 @@ func RunVmTest(p string, t *testing.T) {
 			if len(test.Logs) != len(logs) {
 				t.Errorf("log length mismatch. Expected %d, got %d", len(test.Logs), len(logs))
 			} else {
-				/*
-					fmt.Println("A", test.Logs)
-					fmt.Println("B", logs)
-						for i, log := range test.Logs {
-							genBloom := ethutil.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
-							if !bytes.Equal(genBloom, ethutil.Hex2Bytes(log.BloomF)) {
-								t.Errorf("bloom mismatch")
+				for i, log := range test.Logs {
+					if common.HexToAddress(log.AddressF) != logs[i].Address() {
+						t.Errorf("'%s' log address expected %v got %x", name, log.AddressF, logs[i].Address())
+					}
+
+					if !bytes.Equal(logs[i].Data(), helper.FromHex(log.DataF)) {
+						t.Errorf("'%s' log data expected %v got %x", name, log.DataF, logs[i].Data())
+					}
+
+					if len(log.TopicsF) != len(logs[i].Topics()) {
+						t.Errorf("'%s' log topics length expected %d got %d", name, len(log.TopicsF), logs[i].Topics())
+					} else {
+						for j, topic := range log.TopicsF {
+							if common.HexToHash(topic) != logs[i].Topics()[j] {
+								t.Errorf("'%s' log topic[%d] expected %v got %x", name, j, topic, logs[i].Topics()[j])
 							}
 						}
-				*/
+					}
+					genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
+
+					if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
+						t.Errorf("'%s' bloom mismatch", name)
+					}
+				}
 			}
 		}
 		//statedb.Trie().PrintRoot()

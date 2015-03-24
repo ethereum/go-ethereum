@@ -21,15 +21,13 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"path"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event/filter"
-	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/qml"
 )
@@ -49,15 +47,19 @@ type UiLib struct {
 	// The main application window
 	win *qml.Window
 
-	jsEngine *javascript.JSRE
-
 	filterCallbacks map[int][]int
 	filterManager   *filter.FilterManager
 }
 
-func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
+func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath, libPath string) *UiLib {
 	x := xeth.New(eth, nil)
-	lib := &UiLib{XEth: x, engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(x), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
+	lib := &UiLib{
+		XEth:            x,
+		engine:          engine,
+		eth:             eth,
+		assetPath:       assetPath,
+		filterCallbacks: make(map[int][]int),
+	}
 	lib.filterManager = filter.NewFilterManager(eth.EventMux())
 	go lib.filterManager.Start()
 
@@ -69,24 +71,11 @@ func (self *UiLib) Notef(args []interface{}) {
 }
 
 func (self *UiLib) ImportTx(rlpTx string) {
-	tx := types.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
+	tx := types.NewTransactionFromBytes(common.Hex2Bytes(rlpTx))
 	err := self.eth.TxPool().Add(tx)
 	if err != nil {
 		guilogger.Infoln("import tx failed ", err)
 	}
-}
-
-func (self *UiLib) EvalJavascriptFile(path string) {
-	self.jsEngine.LoadExtFile(path[7:])
-}
-
-func (self *UiLib) EvalJavascriptString(str string) string {
-	value, err := self.jsEngine.Run(str)
-	if err != nil {
-		return err.Error()
-	}
-
-	return fmt.Sprintf("%v", value)
 }
 
 func (ui *UiLib) Muted(content string) {
@@ -137,19 +126,11 @@ func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
 	)
 }
 
-func (self *UiLib) Compile(code string) (string, error) {
-	bcode, err := ethutil.Compile(code, false)
-	if err != nil {
-		return err.Error(), err
-	}
-
-	return ethutil.Bytes2Hex(bcode), err
-}
-
 func (self *UiLib) Call(params map[string]interface{}) (string, error) {
 	object := mapToTxParams(params)
 
-	return self.XEth.Execute(
+	return self.XEth.Call(
+		object["from"],
 		object["to"],
 		object["value"],
 		object["gas"],
@@ -162,8 +143,8 @@ func (self *UiLib) AddLocalTransaction(to, data, gas, gasPrice, value string) in
 	return 0
 	/*
 		return self.miner.AddLocalTx(&miner.LocalTx{
-			To:       ethutil.Hex2Bytes(to),
-			Data:     ethutil.Hex2Bytes(data),
+			To:       common.Hex2Bytes(to),
+			Data:     common.Hex2Bytes(data),
 			Gas:      gas,
 			GasPrice: gasPrice,
 			Value:    value,
@@ -186,7 +167,7 @@ func (self *UiLib) ToggleMining() bool {
 }
 
 func (self *UiLib) ToHex(data string) string {
-	return "0x" + ethutil.Bytes2Hex([]byte(data))
+	return "0x" + common.Bytes2Hex([]byte(data))
 }
 
 func (self *UiLib) ToAscii(data string) string {
@@ -194,7 +175,7 @@ func (self *UiLib) ToAscii(data string) string {
 	if len(data) > 1 && data[0:2] == "0x" {
 		start = 2
 	}
-	return string(ethutil.Hex2Bytes(data[start:]))
+	return string(common.Hex2Bytes(data[start:]))
 }
 
 /// Ethereum filter methods
@@ -222,7 +203,7 @@ func (self *UiLib) NewFilterString(typ string, view *qml.Common) (id int) {
 	return 0
 }
 
-func (self *UiLib) Messages(id int) *ethutil.List {
+func (self *UiLib) Messages(id int) *common.List {
 	/* TODO remove me
 	filter := self.filterManager.GetFilter(id)
 	if filter != nil {
@@ -232,7 +213,7 @@ func (self *UiLib) Messages(id int) *ethutil.List {
 	}
 	*/
 
-	return ethutil.EmptyList()
+	return common.EmptyList()
 }
 
 func (self *UiLib) ReadFile(p string) string {
@@ -274,14 +255,14 @@ func mapToTxParams(object map[string]interface{}) map[string]string {
 	}
 
 	for _, str := range data {
-		if ethutil.IsHex(str) {
+		if common.IsHex(str) {
 			str = str[2:]
 
 			if len(str) != 64 {
-				str = ethutil.LeftPadString(str, 64)
+				str = common.LeftPadString(str, 64)
 			}
 		} else {
-			str = ethutil.Bytes2Hex(ethutil.LeftPadBytes(ethutil.Big(str).Bytes(), 32))
+			str = common.Bytes2Hex(common.LeftPadBytes(common.Big(str).Bytes(), 32))
 		}
 
 		dataStr += str

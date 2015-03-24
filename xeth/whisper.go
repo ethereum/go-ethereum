@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/whisper"
@@ -28,12 +29,12 @@ func (self *Whisper) Post(payload string, to, from string, topics []string, prio
 		ttl = 100
 	}
 
-	pk := crypto.ToECDSAPub(fromHex(from))
+	pk := crypto.ToECDSAPub(common.FromHex(from))
 	if key := self.Whisper.GetIdentity(pk); key != nil || len(from) == 0 {
-		msg := whisper.NewMessage(fromHex(payload))
+		msg := whisper.NewMessage(common.FromHex(payload))
 		envelope, err := msg.Seal(time.Duration(priority*100000), whisper.Opts{
 			Ttl:    time.Duration(ttl) * time.Second,
-			To:     crypto.ToECDSAPub(fromHex(to)),
+			To:     crypto.ToECDSAPub(common.FromHex(to)),
 			From:   key,
 			Topics: whisper.TopicsFromString(topics...),
 		})
@@ -55,17 +56,21 @@ func (self *Whisper) Post(payload string, to, from string, topics []string, prio
 func (self *Whisper) NewIdentity() string {
 	key := self.Whisper.NewIdentity()
 
-	return toHex(crypto.FromECDSAPub(&key.PublicKey))
+	return common.ToHex(crypto.FromECDSAPub(&key.PublicKey))
 }
 
 func (self *Whisper) HasIdentity(key string) bool {
-	return self.Whisper.HasIdentity(crypto.ToECDSAPub(fromHex(key)))
+	return self.Whisper.HasIdentity(crypto.ToECDSAPub(common.FromHex(key)))
 }
+
+// func (self *Whisper) RemoveIdentity(key string) bool {
+// 	return self.Whisper.RemoveIdentity(crypto.ToECDSAPub(common.FromHex(key)))
+// }
 
 func (self *Whisper) Watch(opts *Options) int {
 	filter := whisper.Filter{
-		To:     crypto.ToECDSAPub(fromHex(opts.To)),
-		From:   crypto.ToECDSAPub(fromHex(opts.From)),
+		To:     crypto.ToECDSAPub(common.FromHex(opts.To)),
+		From:   crypto.ToECDSAPub(common.FromHex(opts.From)),
 		Topics: whisper.TopicsFromString(opts.Topics...),
 	}
 
@@ -107,9 +112,9 @@ type WhisperMessage struct {
 func NewWhisperMessage(msg *whisper.Message) WhisperMessage {
 	return WhisperMessage{
 		ref:     msg,
-		Payload: toHex(msg.Payload),
-		From:    toHex(crypto.FromECDSAPub(msg.Recover())),
-		To:      toHex(crypto.FromECDSAPub(msg.To)),
+		Payload: common.ToHex(msg.Payload),
+		From:    common.ToHex(crypto.FromECDSAPub(msg.Recover())),
+		To:      common.ToHex(crypto.FromECDSAPub(msg.To)),
 		Sent:    msg.Sent,
 	}
 }

@@ -1,7 +1,7 @@
 package core
 
 import (
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 )
@@ -13,7 +13,7 @@ type Backend interface {
 	PeerCount() int
 	IsListening() bool
 	Peers() []*p2p.Peer
-	BlockDb() ethutil.Database
-	StateDb() ethutil.Database
+	BlockDb() common.Database
+	StateDb() common.Database
 	EventMux() *event.TypeMux
 }

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 func ParanoiaCheck(t1 *Trie, backend Backend) (bool, *Trie) {
@@ -39,7 +39,7 @@ func New(root []byte, backend Backend) *Trie {
 	}
 
 	if root != nil {
-		value := ethutil.NewValueFromBytes(trie.cache.Get(root))
+		value := common.NewValueFromBytes(trie.cache.Get(root))
 		trie.root = trie.mknode(value)
 	}
 
@@ -71,10 +71,10 @@ func (self *Trie) Hash() []byte {
 		if byts, ok := t.([]byte); ok && len(byts) > 0 {
 			hash = byts
 		} else {
-			hash = crypto.Sha3(ethutil.Encode(self.root.RlpData()))
+			hash = crypto.Sha3(common.Encode(self.root.RlpData()))
 		}
 	} else {
-		hash = crypto.Sha3(ethutil.Encode(""))
+		hash = crypto.Sha3(common.Encode(""))
 	}
 
 	if !bytes.Equal(hash, self.roothash) {
@@ -105,7 +105,7 @@ func (self *Trie) Reset() {
 		revision := self.revisions.Remove(self.revisions.Back()).([]byte)
 		self.roothash = revision
 	}
-	value := ethutil.NewValueFromBytes(self.cache.Get(self.roothash))
+	value := common.NewValueFromBytes(self.cache.Get(self.roothash))
 	self.root = self.mknode(value)
 }
 
@@ -294,7 +294,7 @@ func (self *Trie) delete(node Node, key []byte) Node {
 }
 
 // casting functions and cache storing
-func (self *Trie) mknode(value *ethutil.Value) Node {
+func (self *Trie) mknode(value *common.Value) Node {
 	l := value.Len()
 	switch l {
 	case 0:
@@ -302,14 +302,21 @@ func (self *Trie) mknode(value *ethutil.Value) Node {
 	case 2:
 		// A value node may consists of 2 bytes.
 		if value.Get(0).Len() != 0 {
-			return NewShortNode(self, CompactDecode(string(value.Get(0).Bytes())), self.mknode(value.Get(1)))
+			key := CompactDecode(string(value.Get(0).Bytes()))
+			if key[len(key)-1] == 16 {
+				return NewShortNode(self, key, &ValueNode{self, value.Get(1).Bytes()})
+			} else {
+				return NewShortNode(self, key, self.mknode(value.Get(1)))
+			}
 		}
 	case 17:
-		fnode := NewFullNode(self)
-		for i := 0; i < l; i++ {
-			fnode.set(byte(i), self.mknode(value.Get(i)))
+		if len(value.Bytes()) != 17 {
+			fnode := NewFullNode(self)
+			for i := 0; i < 16; i++ {
+				fnode.set(byte(i), self.mknode(value.Get(i)))
+			}
+			return fnode
 		}
-		return fnode
 	case 32:
 		return &HashNode{value.Bytes(), self}
 	}
@@ -320,7 +327,7 @@ func (self *Trie) mknode(value *ethutil.Value) Node {
 func (self *Trie) trans(node Node) Node {
 	switch node := node.(type) {
 	case *HashNode:
-		value := ethutil.NewValueFromBytes(self.cache.Get(node.key))
+		value := common.NewValueFromBytes(self.cache.Get(node.key))
 		return self.mknode(value)
 	default:
 		return node
@@ -328,7 +335,7 @@ func (self *Trie) trans(node Node) Node {
 }
 
 func (self *Trie) store(node Node) interface{} {
-	data := ethutil.Encode(node)
+	data := common.Encode(node)
 	if len(data) >= 32 {
 		key := crypto.Sha3(data)
 		self.cache.Put(key, data)

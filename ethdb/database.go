@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/compression/rle"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
@@ -82,7 +82,7 @@ func (self *LDBDatabase) Print() {
 		value := iter.Value()
 
 		fmt.Printf("%x(%d): ", key, len(key))
-		node := ethutil.NewValueFromBytes(value)
+		node := common.NewValueFromBytes(value)
 		fmt.Printf("%v\n", node)
 	}
 }

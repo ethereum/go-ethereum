@@ -30,18 +30,19 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/peterh/liner"
 )
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.9.0"
+	Version          = "0.9.2"
 )
 
 var (
@@ -53,6 +54,18 @@ func init() {
 	app.Action = run
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
+		blocktestCmd,
+		{
+			Action: makedag,
+			Name:   "makedag",
+			Usage:  "generate ethash dag (for testing)",
+			Description: `
+The makedag command generates an ethash DAG in /tmp/dag.
+
+This command exists to support the system testing project.
+Regular users do not need to execute it.
+`,
+		},
 		{
 			Action: version,
 			Name:   "version",
@@ -88,16 +101,20 @@ Use "ethereum dump 0" to dump the genesis block.
 `,
 		},
 		{
-			Action: runjs,
-			Name:   "js",
-			Usage:  `interactive JavaScript console`,
+			Action: console,
+			Name:   "console",
+			Usage:  `Ethereum Console: interactive JavaScript environment`,
 			Description: `
-In the console, you can use the eth object to interact
-with the running ethereum stack. The API does not match
-ethereum.js.
-
-A JavaScript file can be provided as the argument. The
-runtime will execute the file and exit.
+Console is an interactive shell for the Ethereum JavaScript runtime environment which exposes a node admin interface as well as the DAPP JavaScript API.
+See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
+`,
+		},
+		{
+			Action: execJSFiles,
+			Name:   "js",
+			Usage:  `executes the given JavaScript files in the Ethereum Frontier JavaScript VM`,
+			Description: `
+The Ethereum JavaScript VM exposes a node admin interface as well as the DAPP JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
 `,
 		},
 		{
@@ -115,9 +132,10 @@ runtime will execute the file and exit.
 		utils.UnlockedAccountFlag,
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
+		utils.JSpathFlag,
 		utils.ListenPortFlag,
 		utils.LogFileFlag,
-		utils.LogFormatFlag,
+		utils.LogJSONFlag,
 		utils.LogLevelFlag,
 		utils.MaxPeersFlag,
 		utils.MinerThreadsFlag,
@@ -130,7 +148,8 @@ runtime will execute the file and exit.
 		utils.RPCPortFlag,
 		utils.UnencryptedKeysFlag,
 		utils.VMDebugFlag,
-		//utils.VMTypeFlag,
+		utils.ProtocolVersionFlag,
+		utils.NetworkIdFlag,
 	}
 
 	// missing:
@@ -156,33 +175,47 @@ func main() {
 func run(ctx *cli.Context) {
 	fmt.Printf("Welcome to the FRONTIER\n")
 	utils.HandleInterrupt()
-	eth, err := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
 
-	startEth(ctx, eth)
+	startEth(ctx, ethereum)
 	// this blocks the thread
-	eth.WaitForShutdown()
+	ethereum.WaitForShutdown()
 }
 
-func runjs(ctx *cli.Context) {
-	eth, err := utils.GetEthereum(ClientIdentifier, Version, ctx)
+func console(ctx *cli.Context) {
+	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
 
-	startEth(ctx, eth)
-	repl := newJSRE(eth)
-	if len(ctx.Args()) == 0 {
-		repl.interactive()
-	} else {
-		for _, file := range ctx.Args() {
-			repl.exec(file)
-		}
+	startEth(ctx, ethereum)
+	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name))
+	repl.interactive()
+
+	ethereum.Stop()
+	ethereum.WaitForShutdown()
+}
+
+func execJSFiles(ctx *cli.Context) {
+	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	ethereum, err := eth.New(cfg)
+	if err != nil {
+		utils.Fatalf("%v", err)
 	}
-	eth.Stop()
-	eth.WaitForShutdown()
+
+	startEth(ctx, ethereum)
+	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name))
+	for _, file := range ctx.Args() {
+		repl.exec(file)
+	}
+
+	ethereum.Stop()
+	ethereum.WaitForShutdown()
 }
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
@@ -197,7 +230,7 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 		}
 		am := eth.AccountManager()
 		// Attempt to unlock the account
-		err := am.Unlock(ethutil.Hex2Bytes(split[0]), split[1])
+		err := am.Unlock(common.FromHex(split[0]), split[1])
 		if err != nil {
 			utils.Fatalf("Unlock account failed '%v'", err)
 		}
@@ -218,7 +251,7 @@ func accountList(ctx *cli.Context) {
 		utils.Fatalf("Could not list accounts: %v", err)
 	}
 	for _, acct := range accts {
-		fmt.Printf("Address: %#x\n", acct)
+		fmt.Printf("Address: %x\n", acct)
 	}
 }
 
@@ -245,7 +278,7 @@ func accountCreate(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
-	fmt.Printf("Address: %#x\n", acct.Address)
+	fmt.Printf("Address: %x\n", acct.Address)
 }
 
 func importchain(ctx *cli.Context) {
@@ -281,7 +314,7 @@ func dump(ctx *cli.Context) {
 	for _, arg := range ctx.Args() {
 		var block *types.Block
 		if hashish(arg) {
-			block = chainmgr.GetBlock(ethutil.Hex2Bytes(arg))
+			block = chainmgr.GetBlock(common.HexToHash(arg))
 		} else {
 			num, _ := strconv.Atoi(arg)
 			block = chainmgr.GetBlockByNumber(uint64(num))
@@ -297,6 +330,15 @@ func dump(ctx *cli.Context) {
 	}
 }
 
+func makedag(ctx *cli.Context) {
+	chain, _, _ := utils.GetChain(ctx)
+	pow := ethash.New(chain)
+	fmt.Println("making cache")
+	pow.UpdateCache(true)
+	fmt.Println("making DAG")
+	pow.UpdateDAG()
+}
+
 func version(c *cli.Context) {
 	fmt.Printf(`%v
 Version: %v
@@ -306,7 +348,7 @@ GO: %s
 OS: %s
 GOPATH=%s
 GOROOT=%s
-`, ClientIdentifier, Version, eth.ProtocolVersion, eth.NetworkId, runtime.Version(), runtime.GOOS, os.Getenv("GOPATH"), runtime.GOROOT())
+`, ClientIdentifier, Version, c.GlobalInt(utils.ProtocolVersionFlag.Name), c.GlobalInt(utils.NetworkIdFlag.Name), runtime.Version(), runtime.GOOS, os.Getenv("GOPATH"), runtime.GOROOT())
 }
 
 // hashish returns true for strings that look like hashes.

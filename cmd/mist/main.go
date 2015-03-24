@@ -28,7 +28,8 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/ui/qt/webengine"
 	"github.com/obscuren/qml"
@@ -44,7 +45,7 @@ var (
 	assetPathFlag = cli.StringFlag{
 		Name:  "asset_path",
 		Usage: "absolute path to GUI assets directory",
-		Value: ethutil.DefaultAssetPath(),
+		Value: common.DefaultAssetPath(),
 	}
 )
 
@@ -64,6 +65,9 @@ func init() {
 		utils.NodeKeyFileFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
+		utils.JSpathFlag,
+		utils.ProtocolVersionFlag,
+		utils.NetworkIdFlag,
 	}
 }
 
@@ -95,7 +99,8 @@ func run(ctx *cli.Context) {
 	tstart := time.Now()
 
 	// TODO: show qml popup instead of exiting if initialization fails.
-	ethereum, err := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
@@ -109,7 +114,7 @@ func run(ctx *cli.Context) {
 		gui := NewWindow(ethereum)
 		utils.RegisterInterrupt(func(os.Signal) { gui.Stop() })
 		// gui blocks the main thread
-		gui.Start(ctx.GlobalString(assetPathFlag.Name))
+		gui.Start(ctx.GlobalString(assetPathFlag.Name), ctx.GlobalString(utils.JSpathFlag.Name))
 		return nil
 	})
 }

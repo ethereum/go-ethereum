@@ -4,22 +4,14 @@ package qwhisper
 import (
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/whisper"
 	"github.com/obscuren/qml"
 )
 
 var qlogger = logger.NewLogger("QSHH")
-
-func fromHex(s string) []byte {
-	if len(s) > 1 {
-		return ethutil.Hex2Bytes(s[2:])
-	}
-	return nil
-}
-func toHex(b []byte) string { return "0x" + ethutil.Bytes2Hex(b) }
 
 type Whisper struct {
 	*whisper.Whisper
@@ -39,15 +31,15 @@ func (self *Whisper) SetView(view qml.Object) {
 func (self *Whisper) Post(payload []string, to, from string, topics []string, priority, ttl uint32) {
 	var data []byte
 	for _, d := range payload {
-		data = append(data, fromHex(d)...)
+		data = append(data, common.FromHex(d)...)
 	}
 
-	pk := crypto.ToECDSAPub(fromHex(from))
+	pk := crypto.ToECDSAPub(common.FromHex(from))
 	if key := self.Whisper.GetIdentity(pk); key != nil {
 		msg := whisper.NewMessage(data)
 		envelope, err := msg.Seal(time.Duration(priority*100000), whisper.Opts{
 			Ttl:    time.Duration(ttl) * time.Second,
-			To:     crypto.ToECDSAPub(fromHex(to)),
+			To:     crypto.ToECDSAPub(common.FromHex(to)),
 			From:   key,
 			Topics: whisper.TopicsFromString(topics...),
 		})
@@ -72,11 +64,11 @@ func (self *Whisper) Post(payload []string, to, from string, topics []string, pr
 func (self *Whisper) NewIdentity() string {
 	key := self.Whisper.NewIdentity()
 
-	return toHex(crypto.FromECDSAPub(&key.PublicKey))
+	return common.ToHex(crypto.FromECDSAPub(&key.PublicKey))
 }
 
 func (self *Whisper) HasIdentity(key string) bool {
-	return self.Whisper.HasIdentity(crypto.ToECDSAPub(fromHex(key)))
+	return self.Whisper.HasIdentity(crypto.ToECDSAPub(common.FromHex(key)))
 }
 
 func (self *Whisper) Watch(opts map[string]interface{}, view *qml.Common) int {
@@ -94,9 +86,9 @@ func (self *Whisper) Watch(opts map[string]interface{}, view *qml.Common) int {
 	return i
 }
 
-func (self *Whisper) Messages(id int) (messages *ethutil.List) {
+func (self *Whisper) Messages(id int) (messages *common.List) {
 	msgs := self.Whisper.Messages(id)
-	messages = ethutil.EmptyList()
+	messages = common.EmptyList()
 	for _, message := range msgs {
 		messages.Append(ToQMessage(message))
 	}
@@ -106,10 +98,10 @@ func (self *Whisper) Messages(id int) (messages *ethutil.List) {
 
 func filterFromMap(opts map[string]interface{}) (f whisper.Filter) {
 	if to, ok := opts["to"].(string); ok {
-		f.To = crypto.ToECDSAPub(fromHex(to))
+		f.To = crypto.ToECDSAPub(common.FromHex(to))
 	}
 	if from, ok := opts["from"].(string); ok {
-		f.From = crypto.ToECDSAPub(fromHex(from))
+		f.From = crypto.ToECDSAPub(common.FromHex(from))
 	}
 	if topicList, ok := opts["topics"].(*qml.List); ok {
 		var topics []string

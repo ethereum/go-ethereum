@@ -1,6 +1,6 @@
 package trie
 
-import "github.com/ethereum/go-ethereum/ethutil"
+import "github.com/ethereum/go-ethereum/common"
 
 type ShortNode struct {
 	trie  *Trie
@@ -19,7 +19,7 @@ func (self *ShortNode) Value() Node {
 func (self *ShortNode) Dirty() bool { return true }
 func (self *ShortNode) Copy(t *Trie) Node {
 	node := &ShortNode{t, nil, self.value.Copy(t)}
-	node.key = ethutil.CopyBytes(self.key)
+	node.key = common.CopyBytes(self.key)
 	return node
 }
 

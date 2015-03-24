@@ -205,7 +205,7 @@ Rectangle {
 						itemSelector.popup()
 					}
 				}
-				experimental.userScripts: ["../ext/q.js", "../ext/ethereum.js/lib/web3.js", "../ext/ethereum.js/lib/qt.js", "../ext/setup.js"]
+				experimental.userScripts: ["../ext/q.js", "../ext/ethereum.js/dist/ethereum.min.js", "../ext/setup.js"]
 				experimental.onMessageReceived: {
 					//console.log("[onMessageReceived]: ", message.data)
 					var data = JSON.parse(message.data)

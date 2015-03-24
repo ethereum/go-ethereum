@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"math/big"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func TestSha3(t *testing.T) {
@@ -43,11 +45,46 @@ func TestGetBalanceArgs(t *testing.T) {
 	}
 }
 
+func TestGetBalanceArgsLatest(t *testing.T) {
+	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "latest"]`
+	expected := new(GetBalanceArgs)
+	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
+	expected.BlockNumber = -1
+
+	args := new(GetBalanceArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if err := args.requirements(); err != nil {
+		t.Error(err)
+	}
+
+	if args.Address != expected.Address {
+		t.Errorf("Address should be %v but is %v", expected.Address, args.Address)
+	}
+
+	if args.BlockNumber != expected.BlockNumber {
+		t.Errorf("BlockNumber should be %v but is %v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestGetBalanceEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetBalanceArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+
+}
+
 func TestGetBlockByHashArgs(t *testing.T) {
 	input := `["0xe670ec64341771606e55d6b4ca35a1a6b75ee3d5145a99d05921026d1527331", true]`
 	expected := new(GetBlockByHashArgs)
 	expected.BlockHash = "0xe670ec64341771606e55d6b4ca35a1a6b75ee3d5145a99d05921026d1527331"
-	expected.Transactions = true
+	expected.IncludeTxs = true
 
 	args := new(GetBlockByHashArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -58,8 +95,18 @@ func TestGetBlockByHashArgs(t *testing.T) {
 		t.Errorf("BlockHash should be %v but is %v", expected.BlockHash, args.BlockHash)
 	}
 
-	if args.Transactions != expected.Transactions {
-		t.Errorf("Transactions should be %v but is %v", expected.Transactions, args.Transactions)
+	if args.IncludeTxs != expected.IncludeTxs {
+		t.Errorf("IncludeTxs should be %v but is %v", expected.IncludeTxs, args.IncludeTxs)
+	}
+}
+
+func TestGetBlockByHashEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(GetBlockByHashArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
 	}
 }
 
@@ -67,7 +114,7 @@ func TestGetBlockByNumberArgs(t *testing.T) {
 	input := `["0x1b4", false]`
 	expected := new(GetBlockByNumberArgs)
 	expected.BlockNumber = 436
-	expected.Transactions = false
+	expected.IncludeTxs = false
 
 	args := new(GetBlockByNumberArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -78,8 +125,18 @@ func TestGetBlockByNumberArgs(t *testing.T) {
 		t.Errorf("BlockHash should be %v but is %v", expected.BlockNumber, args.BlockNumber)
 	}
 
-	if args.Transactions != expected.Transactions {
-		t.Errorf("Transactions should be %v but is %v", expected.Transactions, args.Transactions)
+	if args.IncludeTxs != expected.IncludeTxs {
+		t.Errorf("IncludeTxs should be %v but is %v", expected.IncludeTxs, args.IncludeTxs)
+	}
+}
+
+func TestGetBlockByNumberEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(GetBlockByNumberArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
 	}
 }
 
@@ -89,7 +146,8 @@ func TestNewTxArgs(t *testing.T) {
   "gas": "0x76c0",
   "gasPrice": "0x9184e72a000",
   "value": "0x9184e72a000",
-  "data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"}]`
+  "data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"},
+  "0x10"]`
 	expected := new(NewTxArgs)
 	expected.From = "0xb60e8dd61c5d32be8058bb8eb970870f07233155"
 	expected.To = "0xd46e8dd67c5d32be8058bb8eb970870f072445675"
@@ -97,6 +155,7 @@ func TestNewTxArgs(t *testing.T) {
 	expected.GasPrice = big.NewInt(10000000000000)
 	expected.Value = big.NewInt(10000000000000)
 	expected.Data = "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"
+	expected.BlockNumber = big.NewInt(16).Int64()
 
 	args := new(NewTxArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -126,6 +185,68 @@ func TestNewTxArgs(t *testing.T) {
 	if expected.Data != args.Data {
 		t.Errorf("Data shoud be %#v but is %#v", expected.Data, args.Data)
 	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestNewTxArgsBlockInt(t *testing.T) {
+	input := `[{"from": "0xb60e8dd61c5d32be8058bb8eb970870f07233155"}, 5]`
+	expected := new(NewTxArgs)
+	expected.From = "0xb60e8dd61c5d32be8058bb8eb970870f07233155"
+	expected.BlockNumber = big.NewInt(5).Int64()
+
+	args := new(NewTxArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.From != args.From {
+		t.Errorf("From shoud be %#v but is %#v", expected.From, args.From)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestNewTxArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(NewTxArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+}
+
+func TestNewTxArgsReqs(t *testing.T) {
+	args := new(NewTxArgs)
+	args.From = "0xb60e8dd61c5d32be8058bb8eb970870f07233155"
+
+	err := args.requirements()
+	switch err.(type) {
+	case nil:
+		break
+	default:
+		t.Errorf("Get %T", err)
+	}
+}
+
+func TestNewTxArgsReqsFromBlank(t *testing.T) {
+	args := new(NewTxArgs)
+	args.From = ""
+
+	err := args.requirements()
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *ValidationError:
+		break
+	default:
+		t.Error("Wrong type of error")
+	}
 }
 
 func TestGetStorageArgs(t *testing.T) {
@@ -149,6 +270,16 @@ func TestGetStorageArgs(t *testing.T) {
 
 	if expected.BlockNumber != args.BlockNumber {
 		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestGetStorageEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetStorageArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
 	}
 }
 
@@ -181,6 +312,16 @@ func TestGetStorageAtArgs(t *testing.T) {
 	}
 }
 
+func TestGetStorageAtEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetStorageAtArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+}
+
 func TestGetTxCountArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "latest"]`
 	expected := new(GetTxCountArgs)
@@ -202,6 +343,16 @@ func TestGetTxCountArgs(t *testing.T) {
 
 	if expected.BlockNumber != args.BlockNumber {
 		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestGetTxCountEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetTxCountArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
 	}
 }
 
@@ -229,7 +380,17 @@ func TestGetDataArgs(t *testing.T) {
 	}
 }
 
-func TestFilterOptions(t *testing.T) {
+func TestGetDataEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetDataArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+}
+
+func TestBlockFilterArgs(t *testing.T) {
 	input := `[{
   "fromBlock": "0x1",
   "toBlock": "0x2",
@@ -237,7 +398,7 @@ func TestFilterOptions(t *testing.T) {
   "offset": "0x0",
   "address": "0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8",
   "topics": ["0x12341234"]}]`
-	expected := new(FilterOptions)
+	expected := new(BlockFilterArgs)
 	expected.Earliest = 1
 	expected.Latest = 2
 	expected.Max = 3
@@ -245,7 +406,7 @@ func TestFilterOptions(t *testing.T) {
 	expected.Address = "0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8"
 	// expected.Topics = []string{"0x12341234"}
 
-	args := new(FilterOptions)
+	args := new(BlockFilterArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
 		t.Error(err)
 	}
@@ -275,12 +436,62 @@ func TestFilterOptions(t *testing.T) {
 	// }
 }
 
+func TestBlockFilterArgsWords(t *testing.T) {
+	input := `[{
+  "fromBlock": "latest",
+  "toBlock": "pending"
+  }]`
+	expected := new(BlockFilterArgs)
+	expected.Earliest = -1
+	expected.Latest = -2
+
+	args := new(BlockFilterArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Earliest != args.Earliest {
+		t.Errorf("Earliest shoud be %#v but is %#v", expected.Earliest, args.Earliest)
+	}
+
+	if expected.Latest != args.Latest {
+		t.Errorf("Latest shoud be %#v but is %#v", expected.Latest, args.Latest)
+	}
+}
+
+func TestBlockFilterArgsNums(t *testing.T) {
+	input := `[{
+  "fromBlock": 2,
+  "toBlock": 3
+  }]`
+
+	args := new(BlockFilterArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Should have *DecodeParamError but instead have %T", err)
+	}
+
+}
+
+func TestBlockFilterArgsEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(BlockFilterArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+}
+
 func TestDbArgs(t *testing.T) {
-	input := `["0x74657374","0x6b6579","0x6d79537472696e67"]`
+	input := `["testDB","myKey","0xbeef"]`
 	expected := new(DbArgs)
-	expected.Database = "0x74657374"
-	expected.Key = "0x6b6579"
-	expected.Value = "0x6d79537472696e67"
+	expected.Database = "testDB"
+	expected.Key = "myKey"
+	expected.Value = []byte("0xbeef")
 
 	args := new(DbArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -299,7 +510,36 @@ func TestDbArgs(t *testing.T) {
 		t.Errorf("Key shoud be %#v but is %#v", expected.Key, args.Key)
 	}
 
-	if expected.Value != args.Value {
+	if bytes.Compare(expected.Value, args.Value) != 0 {
+		t.Errorf("Value shoud be %#v but is %#v", expected.Value, args.Value)
+	}
+}
+
+func TestDbHexArgs(t *testing.T) {
+	input := `["testDB","myKey","0xbeef"]`
+	expected := new(DbHexArgs)
+	expected.Database = "testDB"
+	expected.Key = "myKey"
+	expected.Value = []byte{0xbe, 0xef}
+
+	args := new(DbHexArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if err := args.requirements(); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Database != args.Database {
+		t.Errorf("Database shoud be %#v but is %#v", expected.Database, args.Database)
+	}
+
+	if expected.Key != args.Key {
+		t.Errorf("Key shoud be %#v but is %#v", expected.Key, args.Key)
+	}
+
+	if bytes.Compare(expected.Value, args.Value) != 0 {
 		t.Errorf("Value shoud be %#v but is %#v", expected.Value, args.Value)
 	}
 }
@@ -413,8 +653,22 @@ func TestFilterStringArgs(t *testing.T) {
 		t.Error(err)
 	}
 
+	if err := args.requirements(); err != nil {
+		t.Error(err)
+	}
+
 	if expected.Word != args.Word {
 		t.Errorf("Word shoud be %#v but is %#v", expected.Word, args.Word)
+	}
+}
+
+func TestFilterStringEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(FilterStringArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
 	}
 }
 
@@ -430,5 +684,70 @@ func TestWhisperIdentityArgs(t *testing.T) {
 
 	if expected.Identity != args.Identity {
 		t.Errorf("Identity shoud be %#v but is %#v", expected.Identity, args.Identity)
+	}
+}
+
+func TestBlockNumIndexArgs(t *testing.T) {
+	input := `["0x29a", "0x0"]`
+	expected := new(BlockNumIndexArgs)
+	expected.BlockNumber = 666
+	expected.Index = 0
+
+	args := new(BlockNumIndexArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+
+	if expected.Index != args.Index {
+		t.Errorf("Index shoud be %#v but is %#v", expected.Index, args.Index)
+	}
+}
+
+func TestHashIndexArgs(t *testing.T) {
+	input := `["0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b", "0x1"]`
+	expected := new(HashIndexArgs)
+	expected.Hash = "0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b"
+	expected.Index = 1
+
+	args := new(HashIndexArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Hash != args.Hash {
+		t.Errorf("Hash shoud be %#v but is %#v", expected.Hash, args.Hash)
+	}
+
+	if expected.Index != args.Index {
+		t.Errorf("Index shoud be %#v but is %#v", expected.Index, args.Index)
+	}
+}
+
+func TestSubmitWorkArgs(t *testing.T) {
+	input := `["0x0000000000000001", "0x1234567890abcdef1234567890abcdef", "0xD1GE5700000000000000000000000000"]`
+	expected := new(SubmitWorkArgs)
+	expected.Nonce = 1
+	expected.Header = common.HexToHash("0x1234567890abcdef1234567890abcdef")
+	expected.Digest = common.HexToHash("0xD1GE5700000000000000000000000000")
+
+	args := new(SubmitWorkArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Nonce != args.Nonce {
+		t.Errorf("Nonce shoud be %d but is %d", expected.Nonce, args.Nonce)
+	}
+
+	if expected.Header != args.Header {
+		t.Errorf("Header shoud be %#v but is %#v", expected.Header, args.Header)
+	}
+
+	if expected.Digest != args.Digest {
+		t.Errorf("Digest shoud be %#v but is %#v", expected.Digest, args.Digest)
 	}
 }

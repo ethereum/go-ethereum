@@ -6,11 +6,11 @@ import (
 	"log"
 	"os"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func openLogFile(datadir string, filename string) *os.File {
-	path := ethutil.AbsolutePath(datadir, filename)
+	path := common.AbsolutePath(datadir, filename)
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		panic(fmt.Sprintf("error opening log file '%s': %v", filename, err))
@@ -18,7 +18,7 @@ func openLogFile(datadir string, filename string) *os.File {
 	return file
 }
 
-func New(datadir string, logFile string, logLevel int, logFormat string) LogSystem {
+func New(datadir string, logFile string, logLevel int) LogSystem {
 	var writer io.Writer
 	if logFile == "" {
 		writer = os.Stdout
@@ -27,12 +27,22 @@ func New(datadir string, logFile string, logLevel int, logFormat string) LogSyst
 	}
 
 	var sys LogSystem
-	switch logFormat {
-	case "raw":
-		sys = NewRawLogSystem(writer, 0, LogLevel(logLevel))
-	default:
-		sys = NewStdLogSystem(writer, log.LstdFlags, LogLevel(logLevel))
+	sys = NewStdLogSystem(writer, log.LstdFlags, LogLevel(logLevel))
+	AddLogSystem(sys)
+
+	return sys
+}
+
+func NewJSONsystem(datadir string, logFile string) LogSystem {
+	var writer io.Writer
+	if logFile == "-" {
+		writer = os.Stdout
+	} else {
+		writer = openLogFile(datadir, logFile)
 	}
+
+	var sys LogSystem
+	sys = NewJsonLogSystem(writer)
 	AddLogSystem(sys)
 
 	return sys

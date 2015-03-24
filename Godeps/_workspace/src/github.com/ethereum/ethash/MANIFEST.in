@@ -1,0 +1,17 @@
+include setup.py
+
+# C sources
+include src/libethash/internal.c
+include src/libethash/sha3.c
+include src/libethash/util.c
+include src/python/core.c
+
+# Headers
+include src/libethash/compiler.h
+include src/libethash/data_sizes.h
+include src/libethash/endian.h
+include src/libethash/ethash.h
+include src/libethash/fnv.h
+include src/libethash/internal.h
+include src/libethash/sha3.h
+include src/libethash/util.h

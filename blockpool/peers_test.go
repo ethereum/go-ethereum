@@ -3,17 +3,21 @@ package blockpool
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/blockpool/test"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // the actual tests
 func TestAddPeer(t *testing.T) {
 	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
-	peer0 := blockPoolTester.newPeer("peer0", 1, 0)
-	peer1 := blockPoolTester.newPeer("peer1", 2, 1)
-	peer2 := blockPoolTester.newPeer("peer2", 3, 2)
+	peer0 := blockPoolTester.newPeer("peer0", 1, 1)
+	peer1 := blockPoolTester.newPeer("peer1", 2, 2)
+	peer2 := blockPoolTester.newPeer("peer2", 3, 3)
 	var bestpeer *peer
 
 	blockPool.Start()
@@ -34,7 +38,7 @@ func TestAddPeer(t *testing.T) {
 	if blockPool.peers.best.id != "peer2" {
 		t.Errorf("peer2 (TD=3) not set as best")
 	}
-	peer2.waitBlocksRequests(2)
+	peer2.waitBlocksRequests(3)
 
 	best = peer1.AddPeer()
 	if best {
@@ -48,7 +52,7 @@ func TestAddPeer(t *testing.T) {
 	}
 
 	peer2.td = 4
-	peer2.currentBlock = 3
+	peer2.currentBlock = 4
 	best = peer2.AddPeer()
 	if !best {
 		t.Errorf("peer2 (TD=4) not accepted as best")
@@ -59,10 +63,10 @@ func TestAddPeer(t *testing.T) {
 	if blockPool.peers.best.td.Cmp(big.NewInt(int64(4))) != 0 {
 		t.Errorf("peer2 TD not updated")
 	}
-	peer2.waitBlocksRequests(3)
+	peer2.waitBlocksRequests(4)
 
 	peer1.td = 3
-	peer1.currentBlock = 2
+	peer1.currentBlock = 3
 	best = peer1.AddPeer()
 	if best {
 		t.Errorf("peer1 (TD=3) should not be set as best")
@@ -84,7 +88,7 @@ func TestAddPeer(t *testing.T) {
 	if blockPool.peers.best.id != "peer1" {
 		t.Errorf("existing peer1 (TD=3) should be set as best peer")
 	}
-	peer1.waitBlocksRequests(2)
+	peer1.waitBlocksRequests(3)
 
 	blockPool.RemovePeer("peer1")
 	bestpeer, best = blockPool.peers.getPeer("peer1")
@@ -95,7 +99,7 @@ func TestAddPeer(t *testing.T) {
 	if blockPool.peers.best.id != "peer0" {
 		t.Errorf("existing peer0 (TD=1) should be set as best peer")
 	}
-	peer0.waitBlocksRequests(0)
+	peer0.waitBlocksRequests(1)
 
 	blockPool.RemovePeer("peer0")
 	bestpeer, best = blockPool.peers.getPeer("peer0")
@@ -115,6 +119,70 @@ func TestAddPeer(t *testing.T) {
 	}
 	peer0.waitBlocksRequests(3)
 
-	blockPool.Stop()
+	newblock := &types.Block{Td: common.Big3}
+	blockPool.chainEvents.Post(core.ChainHeadEvent{newblock})
+	time.Sleep(100 * time.Millisecond)
+	if blockPool.peers.best != nil {
+		t.Errorf("no peer should be ahead of self")
+	}
+	best = peer1.AddPeer()
+	if blockPool.peers.best != nil {
+		t.Errorf("still no peer should be ahead of self")
+	}
 
+	best = peer2.AddPeer()
+	if !best {
+		t.Errorf("peer2 (TD=4) not accepted as best")
+	}
+
+	blockPool.RemovePeer("peer2")
+	if blockPool.peers.best != nil {
+		t.Errorf("no peer should be ahead of self")
+	}
+
+	blockPool.Stop()
+}
+
+func TestPeerPromotionByOptionalTdOnBlock(t *testing.T) {
+	test.LogInit()
+	_, blockPool, blockPoolTester := newTestBlockPool(t)
+	blockPoolTester.blockChain[0] = nil
+	blockPoolTester.initRefBlockChain(4)
+	peer0 := blockPoolTester.newPeer("peer0", 2, 2)
+	peer1 := blockPoolTester.newPeer("peer1", 1, 1)
+	peer2 := blockPoolTester.newPeer("peer2", 4, 4)
+
+	blockPool.Start()
+	blockPoolTester.tds = make(map[int]int)
+	blockPoolTester.tds[3] = 3
+
+	// pool
+	peer0.AddPeer()
+	peer0.serveBlocks(1, 2)
+	best := peer1.AddPeer()
+	// this tests that peer1 is not promoted over peer0 yet
+	if best {
+		t.Errorf("peer1 (TD=1) should not be set as best")
+	}
+	best = peer2.AddPeer()
+	peer2.serveBlocks(3, 4)
+	peer2.serveBlockHashes(4, 3, 2, 1)
+	hashes := blockPoolTester.hashPool.IndexesToHashes([]int{2, 3})
+	peer1.waitBlocksRequests(3)
+	blockPool.AddBlock(&types.Block{
+		HeaderHash:       common.Hash(hashes[1]),
+		ParentHeaderHash: common.Hash(hashes[0]),
+		Td:               common.Big3,
+	}, "peer1")
+
+	blockPool.RemovePeer("peer2")
+	if blockPool.peers.best.id != "peer1" {
+		t.Errorf("peer1 (TD=3) should be set as best")
+	}
+	peer1.serveBlocks(0, 1, 2)
+
+	blockPool.Wait(waitTimeout)
+	blockPool.Stop()
+	blockPoolTester.refBlockChain[4] = []int{}
+	blockPoolTester.checkBlockChain(blockPoolTester.refBlockChain)
 }

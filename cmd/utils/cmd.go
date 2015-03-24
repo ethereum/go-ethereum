@@ -23,14 +23,15 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"regexp"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -62,7 +63,7 @@ func RunInterruptCallbacks(sig os.Signal) {
 }
 
 func openLogFile(Datadir string, filename string) *os.File {
-	path := ethutil.AbsolutePath(Datadir, filename)
+	path := common.AbsolutePath(Datadir, filename)
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		panic(fmt.Sprintf("error opening log file '%s': %v", filename, err))
@@ -132,10 +133,10 @@ func StartEthereumForTest(ethereum *eth.Ethereum) {
 }
 
 func FormatTransactionData(data string) []byte {
-	d := ethutil.StringToByteFunc(data, func(s string) (ret []byte) {
+	d := common.StringToByteFunc(data, func(s string) (ret []byte) {
 		slice := regexp.MustCompile("\\n|\\s").Split(s, 1000000000)
 		for _, dataItem := range slice {
-			d := ethutil.FormatData(dataItem)
+			d := common.FormatData(dataItem)
 			ret = append(ret, d...)
 		}
 		return
@@ -152,29 +153,34 @@ func ImportChain(chainmgr *core.ChainManager, fn string) error {
 	}
 	defer fh.Close()
 
-	var blocks types.Blocks
-	if err := rlp.Decode(fh, &blocks); err != nil {
-		return err
-	}
-
 	chainmgr.Reset()
-	if err := chainmgr.InsertChain(blocks); err != nil {
-		return err
+	stream := rlp.NewStream(fh)
+	var i int
+	for ; ; i++ {
+		var b types.Block
+		if err := stream.Decode(&b); err == io.EOF {
+			break
+		} else if err != nil {
+			return fmt.Errorf("at block %d: %v", i, err)
+		}
+		if err := chainmgr.InsertChain(types.Blocks{&b}); err != nil {
+			return fmt.Errorf("invalid block %d: %v", i, err)
+		}
 	}
-	fmt.Printf("imported %d blocks\n", len(blocks))
-
+	fmt.Printf("imported %d blocks\n", i)
 	return nil
 }
 
 func ExportChain(chainmgr *core.ChainManager, fn string) error {
 	fmt.Printf("exporting blockchain '%s'\n", fn)
-
-	data := chainmgr.Export()
-
-	if err := ethutil.WriteFile(fn, data); err != nil {
+	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+	if err := chainmgr.Export(fh); err != nil {
 		return err
 	}
 	fmt.Printf("exported blockchain\n")
-
 	return nil
 }

@@ -22,8 +22,8 @@
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",
-			"Comment": "v17-64-ga323708",
-			"Rev": "a323708b8c4d253b8567bf6c72727d1aec302225"
+			"Comment": "v23.1-26-g934bb4f",
+			"Rev": "934bb4f5060ab69d96fb6eba4b9a57facc4e160b"
 		},
 		{
 			"ImportPath": "github.com/ethereum/serpent-go",
@@ -47,8 +47,8 @@
 			"Rev": "ccfcd0245381f0c94c68f50626665eed3c6b726a"
 		},
 		{
-			"ImportPath": "github.com/obscuren/otto",
-			"Rev": "cf13cc4228c5e5ce0fe27a7aea90bc10091c4f19"
+			"ImportPath": "github.com/robertkrimen/otto",
+			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
 		},
 		{
 			"ImportPath": "github.com/obscuren/qml",

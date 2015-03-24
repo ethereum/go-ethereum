@@ -10,17 +10,18 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/blockpool"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/vm"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -37,12 +38,15 @@ var (
 )
 
 type Config struct {
-	Name      string
-	DataDir   string
-	LogFile   string
-	LogLevel  int
-	LogFormat string
-	VmDebug   bool
+	Name            string
+	ProtocolVersion int
+	NetworkId       int
+
+	DataDir  string
+	LogFile  string
+	LogLevel int
+	LogJSON  string
+	VmDebug  bool
 
 	MaxPeers int
 	Port     string
@@ -61,6 +65,10 @@ type Config struct {
 
 	MinerThreads   int
 	AccountManager *accounts.Manager
+
+	// NewDB is used to create databases.
+	// If nil, the default is to create leveldb databases on disk.
+	NewDB func(path string) (common.Database, error)
 }
 
 func (cfg *Config) parseBootNodes() []*discover.Node {
@@ -107,9 +115,10 @@ type Ethereum struct {
 	// Channel for shutting down the ethereum
 	shutdownChan chan bool
 
-	// DB interface
-	blockDb ethutil.Database
-	stateDb ethutil.Database
+	// DB interfaces
+	blockDb common.Database // Block chain database
+	stateDb common.Database // State changes database
+	extraDb common.Database // Extra database (txs, etc)
 
 	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
@@ -119,6 +128,7 @@ type Ethereum struct {
 	blockPool      *blockpool.BlockPool
 	accountManager *accounts.Manager
 	whisper        *whisper.Whisper
+	pow            *ethash.Ethash
 
 	net      *p2p.Server
 	eventMux *event.TypeMux
@@ -126,63 +136,78 @@ type Ethereum struct {
 	blockSub event.Subscription
 	miner    *miner.Miner
 
-	logger logger.LogSystem
+	// logger logger.LogSystem
 
-	Mining  bool
-	DataDir string
+	Mining          bool
+	DataDir         string
+	version         string
+	protocolVersion int
+	networkId       int
 }
 
 func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
-	servlogger := logger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
+	logger.New(config.DataDir, config.LogFile, config.LogLevel)
+	if len(config.LogJSON) > 0 {
+		logger.NewJSONsystem(config.DataDir, config.LogJSON)
+	}
 
-	blockDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "blockchain"))
+	newdb := config.NewDB
+	if newdb == nil {
+		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path) }
+	}
+	blockDb, err := newdb(path.Join(config.DataDir, "blockchain"))
 	if err != nil {
 		return nil, err
 	}
-	stateDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "state"))
+	stateDb, err := newdb(path.Join(config.DataDir, "state"))
 	if err != nil {
 		return nil, err
 	}
+	extraDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "extra"))
 
 	// Perform database sanity checks
-	d, _ := blockDb.Get([]byte("ProtocolVersion"))
-	protov := ethutil.NewValue(d).Uint()
-	if protov != ProtocolVersion && protov != 0 {
+	d, _ := extraDb.Get([]byte("ProtocolVersion"))
+	protov := int(common.NewValue(d).Uint())
+	if protov != config.ProtocolVersion && protov != 0 {
 		path := path.Join(config.DataDir, "blockchain")
-		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, path)
+		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
 	}
-
-	saveProtocolVersion(blockDb)
-	//ethutil.Config.Db = db
+	saveProtocolVersion(extraDb, config.ProtocolVersion)
+	servlogger.Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
 
 	eth := &Ethereum{
-		shutdownChan:   make(chan bool),
-		blockDb:        blockDb,
-		stateDb:        stateDb,
-		eventMux:       &event.TypeMux{},
-		logger:         servlogger,
-		accountManager: config.AccountManager,
-		DataDir:        config.DataDir,
+		shutdownChan:    make(chan bool),
+		blockDb:         blockDb,
+		stateDb:         stateDb,
+		extraDb:         extraDb,
+		eventMux:        &event.TypeMux{},
+		accountManager:  config.AccountManager,
+		DataDir:         config.DataDir,
+		version:         config.Name, // TODO should separate from Name
+		protocolVersion: config.ProtocolVersion,
+		networkId:       config.NetworkId,
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
-	pow := ethash.New(eth.chainManager)
+	eth.pow = ethash.New(eth.chainManager)
 	eth.txPool = core.NewTxPool(eth.EventMux())
-	eth.blockProcessor = core.NewBlockProcessor(stateDb, pow, eth.txPool, eth.chainManager, eth.EventMux())
+	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
-	eth.miner = miner.New(eth, pow, config.MinerThreads)
+	eth.miner = miner.New(eth, eth.pow, config.MinerThreads)
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
-	eth.blockPool = blockpool.New(hasBlock, insertChain, pow.Verify)
+	td := eth.chainManager.Td()
+	eth.blockPool = blockpool.New(hasBlock, insertChain, eth.pow.Verify, eth.EventMux(), td)
 
 	netprv, err := config.nodeKey()
 	if err != nil {
 		return nil, err
 	}
-	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
+
+	ethProto := EthProtocol(config.ProtocolVersion, config.NetworkId, eth.txPool, eth.chainManager, eth.blockPool)
 	protocols := []p2p.Protocol{ethProto}
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
@@ -206,20 +231,84 @@ func New(config *Config) (*Ethereum, error) {
 	return eth, nil
 }
 
+type NodeInfo struct {
+	Name       string
+	NodeUrl    string
+	NodeID     string
+	IP         string
+	DiscPort   int // UDP listening port for discovery protocol
+	TCPPort    int // TCP listening port for RLPx
+	Td         string
+	ListenAddr string
+}
+
+func (s *Ethereum) NodeInfo() *NodeInfo {
+	node := s.net.Self()
+
+	return &NodeInfo{
+		Name:       s.Name(),
+		NodeUrl:    node.String(),
+		NodeID:     node.ID.String(),
+		IP:         node.IP.String(),
+		DiscPort:   node.DiscPort,
+		TCPPort:    node.TCPPort,
+		ListenAddr: s.net.ListenAddr,
+		Td:         s.ChainManager().Td().String(),
+	}
+}
+
+type PeerInfo struct {
+	ID            string
+	Name          string
+	Caps          string
+	RemoteAddress string
+	LocalAddress  string
+}
+
+func newPeerInfo(peer *p2p.Peer) *PeerInfo {
+	var caps []string
+	for _, cap := range peer.Caps() {
+		caps = append(caps, cap.String())
+	}
+	return &PeerInfo{
+		ID:            peer.ID().String(),
+		Name:          peer.Name(),
+		Caps:          strings.Join(caps, ", "),
+		RemoteAddress: peer.RemoteAddr().String(),
+		LocalAddress:  peer.LocalAddr().String(),
+	}
+}
+
+// PeersInfo returns an array of PeerInfo objects describing connected peers
+func (s *Ethereum) PeersInfo() (peersinfo []*PeerInfo) {
+	for _, peer := range s.net.Peers() {
+		if peer != nil {
+			peersinfo = append(peersinfo, newPeerInfo(peer))
+		}
+	}
+	return
+}
+
+func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
+	s.chainManager.ResetWithGenesisBlock(gb)
+	s.pow.UpdateCache(true)
+}
+
 func (s *Ethereum) StartMining() error {
 	cb, err := s.accountManager.Coinbase()
 	if err != nil {
 		servlogger.Errorf("Cannot start mining without coinbase: %v\n", err)
 		return fmt.Errorf("no coinbase: %v", err)
 	}
-	s.miner.Start(cb)
+	s.miner.Start(common.BytesToAddress(cb))
 	return nil
 }
 
-func (s *Ethereum) StopMining()    { s.miner.Stop() }
-func (s *Ethereum) IsMining() bool { return s.miner.Mining() }
+func (s *Ethereum) StopMining()         { s.miner.Stop() }
+func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
+func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 
-func (s *Ethereum) Logger() logger.LogSystem             { return s.logger }
+// func (s *Ethereum) Logger() logger.LogSystem             { return s.logger }
 func (s *Ethereum) Name() string                         { return s.net.Name }
 func (s *Ethereum) AccountManager() *accounts.Manager    { return s.accountManager }
 func (s *Ethereum) ChainManager() *core.ChainManager     { return s.chainManager }
@@ -228,12 +317,16 @@ func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
 func (s *Ethereum) BlockPool() *blockpool.BlockPool      { return s.blockPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
-func (s *Ethereum) BlockDb() ethutil.Database            { return s.blockDb }
-func (s *Ethereum) StateDb() ethutil.Database            { return s.stateDb }
+func (s *Ethereum) BlockDb() common.Database             { return s.blockDb }
+func (s *Ethereum) StateDb() common.Database             { return s.stateDb }
+func (s *Ethereum) ExtraDb() common.Database             { return s.extraDb }
 func (s *Ethereum) IsListening() bool                    { return true } // Always listening
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
 func (s *Ethereum) MaxPeers() int                        { return s.net.MaxPeers }
+func (s *Ethereum) Version() string                      { return s.version }
+func (s *Ethereum) ProtocolVersion() int                 { return s.protocolVersion }
+func (s *Ethereum) NetworkId() int                       { return s.networkId }
 
 // Start the ethereum
 func (s *Ethereum) Start() error {
@@ -242,9 +335,11 @@ func (s *Ethereum) Start() error {
 		ProtocolVersion: ProtocolVersion,
 	})
 
-	err := s.net.Start()
-	if err != nil {
-		return err
+	if s.net.MaxPeers > 0 {
+		err := s.net.Start()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Start services
@@ -260,7 +355,7 @@ func (s *Ethereum) Start() error {
 	go s.txBroadcastLoop()
 
 	// broadcast mined blocks
-	s.blockSub = s.eventMux.Subscribe(core.NewMinedBlockEvent{})
+	s.blockSub = s.eventMux.Subscribe(core.ChainHeadEvent{})
 	go s.blockBroadcastLoop()
 
 	servlogger.Infoln("Server started")
@@ -291,6 +386,7 @@ func (s *Ethereum) Stop() {
 	// Close the database
 	defer s.blockDb.Close()
 	defer s.stateDb.Close()
+	defer s.extraDb.Close()
 
 	s.txSub.Unsubscribe()    // quits txBroadcastLoop
 	s.blockSub.Unsubscribe() // quits blockBroadcastLoop
@@ -317,7 +413,7 @@ func (self *Ethereum) txBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.txSub.Chan() {
 		event := obj.(core.TxPreEvent)
-		self.net.Broadcast("eth", TxMsg, event.Tx.RlpData())
+		self.net.Broadcast("eth", TxMsg, []*types.Transaction{event.Tx})
 	}
 }
 
@@ -325,17 +421,17 @@ func (self *Ethereum) blockBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.blockSub.Chan() {
 		switch ev := obj.(type) {
-		case core.NewMinedBlockEvent:
-			self.net.Broadcast("eth", NewBlockMsg, ev.Block.RlpData(), ev.Block.Td)
+		case core.ChainHeadEvent:
+			self.net.Broadcast("eth", NewBlockMsg, []interface{}{ev.Block, ev.Block.Td})
 		}
 	}
 }
 
-func saveProtocolVersion(db ethutil.Database) {
+func saveProtocolVersion(db common.Database, protov int) {
 	d, _ := db.Get([]byte("ProtocolVersion"))
-	protocolVersion := ethutil.NewValue(d).Uint()
+	protocolVersion := common.NewValue(d).Uint()
 
 	if protocolVersion == 0 {
-		db.Put([]byte("ProtocolVersion"), ethutil.NewValue(ProtocolVersion).Bytes())
+		db.Put([]byte("ProtocolVersion"), common.NewValue(protov).Bytes())
 	}
 }
