@@ -5,9 +5,9 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const tryJit = false
@@ -182,10 +182,6 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 		return nil, nil, InvalidTxError(err)
 	}
 
-	// Increment the nonce for the next transaction
-	self.state.SetNonce(sender.Address(), sender.Nonce()+1)
-	//sender.Nonce += 1
-
 	// Pay data gas
 	var dgas int64
 	for _, byt := range self.data {
@@ -199,12 +195,15 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 		return nil, nil, InvalidTxError(err)
 	}
 
+	// Increment the nonce for the next transaction
+	self.state.SetNonce(sender.Address(), sender.Nonce()+1)
+
 	vmenv := self.env
 	var ref vm.ContextRef
 	if MessageCreatesContract(msg) {
-		contract := makeContract(msg, self.state)
-		addr := contract.Address()
-		ret, err, ref = vmenv.Create(sender, &addr, self.msg.Data(), self.gas, self.gasPrice, self.value)
+		//contract := makeContract(msg, self.state)
+		//addr := contract.Address()
+		ret, err, ref = vmenv.Create(sender, nil, self.msg.Data(), self.gas, self.gasPrice, self.value)
 		if err == nil {
 			dataGas := big.NewInt(int64(len(ret)))
 			dataGas.Mul(dataGas, vm.GasCreateByte)

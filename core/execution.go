@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type Execution struct {
@@ -29,6 +29,8 @@ func (self *Execution) Call(codeAddr common.Address, caller vm.ContextRef) ([]by
 }
 
 func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.ContextRef) (ret []byte, err error) {
+	start := time.Now()
+
 	env := self.env
 	evm := vm.NewVm(env)
 	if env.Depth() == vm.MaxCallDepth {
@@ -37,7 +39,7 @@ func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.
 		return nil, vm.DepthError{}
 	}
 
-	vsnapshot := env.State().Copy()
+	snapshot := env.State().Copy()
 	if self.address == nil {
 		// Generate a new address
 		nonce := env.State().GetNonce(caller.Address())
@@ -49,21 +51,17 @@ func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.
 	from, to := env.State().GetStateObject(caller.Address()), env.State().GetOrNewStateObject(*self.address)
 	err = env.Transfer(from, to, self.value)
 	if err != nil {
-		env.State().Set(vsnapshot)
-
-		caller.ReturnGas(self.Gas, self.price)
+		env.State().Set(snapshot)
+		//caller.ReturnGas(self.Gas, self.price)
 
 		return nil, ValueTransferErr("insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance())
 	}
 
-	snapshot := env.State().Copy()
-	start := time.Now()
-
 	context := vm.NewContext(caller, to, self.value, self.Gas, self.price)
 	context.SetCallCode(contextAddr, code)
 
-	ret, err = evm.Run(context, self.input) //self.value, self.Gas, self.price, self.input)
-	chainlogger.Debugf("vm took %v\n", time.Since(start))
+	ret, err = evm.Run(context, self.input)
+	evm.Printf("message call took %v", time.Since(start)).Endl()
 	if err != nil {
 		env.State().Set(snapshot)
 	}
