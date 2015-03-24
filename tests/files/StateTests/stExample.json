@@ -13,29 +13,28 @@
         "out" : "0x",
         "post" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
-                "balance" : "1000000000000100000",
+                "balance" : "1000000000000000000",
                 "code" : "0x6001600101600055",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : "0x02"
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "41012",
+                "balance" : "400000",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "999999999999858988",
+                "balance" : "999999999999600000",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
                 }
             }
         },
-        "postStateRoot" : "17454a767e5f04461256f3812ffca930443c04a47d05ce3f38940c4a14b8c479",
+        "postStateRoot" : "3d0b7c83da4ae1c5eb6964cbfb1ffb248498ce6560113458ce7d963fff8cb449",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000000000000000",

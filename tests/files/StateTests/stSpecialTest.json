@@ -54,7 +54,7 @@
         "out" : "0x",
         "post" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
-                "balance" : "1000000000000000010",
+                "balance" : "1000000000000000000",
                 "code" : "0x7b601080600c6000396000f200600035541560095700602035600035556000526000600060006000601773aaaaaaaaace5edbc8e2a8697c15331677e6ebf0b7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffecf1",
                 "nonce" : "0",
                 "storage" : {
@@ -68,7 +68,7 @@
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "771490",
+                "balance" : "771500",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
@@ -82,7 +82,7 @@
                 }
             }
         },
-        "postStateRoot" : "245eba29e8bf8b37dd3bcd5fdd66996b250fbbeb25006e3e4a3fa61d4b26e734",
+        "postStateRoot" : "deecad9edcf67263e8e8f56c4db89a1620a964da88dac1734461ebc1126682cf",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000000000000000",
