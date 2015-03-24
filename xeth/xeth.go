@@ -56,7 +56,7 @@ func (dummyFrontend) UnlockAccount([]byte) bool                  { return false 
 func (dummyFrontend) ConfirmTransaction(*types.Transaction) bool { return true }
 
 type XEth struct {
-	eth            *eth.Ethereum
+	backend        *eth.Ethereum
 	blockProcessor *core.BlockProcessor
 	chainManager   *core.ChainManager
 	accountManager *accounts.Manager
@@ -86,7 +86,7 @@ type XEth struct {
 // confirms all transactions will be used.
 func New(eth *eth.Ethereum, frontend Frontend) *XEth {
 	xeth := &XEth{
-		eth:            eth,
+		backend:        eth,
 		blockProcessor: eth.BlockProcessor(),
 		chainManager:   eth.ChainManager(),
 		accountManager: eth.AccountManager(),
@@ -169,10 +169,10 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 	return self.WithState(st)
 }
 
-func (self *XEth) Backend() *eth.Ethereum { return self.eth }
+func (self *XEth) Backend() *eth.Ethereum { return self.backend }
 func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 	xeth := &XEth{
-		eth:            self.eth,
+		backend:        self.backend,
 		blockProcessor: self.blockProcessor,
 		chainManager:   self.chainManager,
 		whisper:        self.whisper,
@@ -200,7 +200,7 @@ func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 }
 
 func (self *XEth) EthTransactionByHash(hash string) *types.Transaction {
-	data, _ := self.eth.ExtraDb().Get(common.FromHex(hash))
+	data, _ := self.backend.ExtraDb().Get(common.FromHex(hash))
 	if len(data) != 0 {
 		return types.NewTransactionFromBytes(data)
 	}
@@ -247,7 +247,7 @@ func (self *XEth) Block(v interface{}) *Block {
 
 func (self *XEth) Accounts() []string {
 	// TODO: check err?
-	accounts, _ := self.eth.AccountManager().Accounts()
+	accounts, _ := self.backend.AccountManager().Accounts()
 	accountAddresses := make([]string, len(accounts))
 	for i, ac := range accounts {
 		accountAddresses[i] = common.ToHex(ac.Address)
@@ -256,31 +256,31 @@ func (self *XEth) Accounts() []string {
 }
 
 func (self *XEth) PeerCount() int {
-	return self.eth.PeerCount()
+	return self.backend.PeerCount()
 }
 
 func (self *XEth) IsMining() bool {
-	return self.eth.IsMining()
+	return self.backend.IsMining()
 }
 
 func (self *XEth) SetMining(shouldmine bool) bool {
-	ismining := self.eth.IsMining()
+	ismining := self.backend.IsMining()
 	if shouldmine && !ismining {
-		err := self.eth.StartMining()
+		err := self.backend.StartMining()
 		return err == nil
 	}
 	if ismining && !shouldmine {
-		self.eth.StopMining()
+		self.backend.StopMining()
 	}
-	return self.eth.IsMining()
+	return self.backend.IsMining()
 }
 
 func (self *XEth) IsListening() bool {
-	return self.eth.IsListening()
+	return self.backend.IsListening()
 }
 
 func (self *XEth) Coinbase() string {
-	cb, _ := self.eth.AccountManager().Coinbase()
+	cb, _ := self.backend.AccountManager().Coinbase()
 	return common.ToHex(cb)
 }
 
@@ -517,7 +517,7 @@ func (self *XEth) FromNumber(str string) string {
 
 func (self *XEth) PushTx(encodedTx string) (string, error) {
 	tx := types.NewTransactionFromBytes(common.FromHex(encodedTx))
-	err := self.eth.TxPool().Add(tx)
+	err := self.backend.TxPool().Add(tx)
 	if err != nil {
 		return "", err
 	}
@@ -616,7 +616,7 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	if err := self.sign(tx, from, false); err != nil {
 		return "", err
 	}
-	if err := self.eth.TxPool().Add(tx); err != nil {
+	if err := self.backend.TxPool().Add(tx); err != nil {
 		return "", err
 	}
 
