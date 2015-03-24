@@ -126,11 +126,9 @@ out:
 		case event := <-events.Chan():
 			switch ev := event.(type) {
 			case core.ChainHeadEvent:
-				if self.current.block != ev.Block {
-					self.commitNewWork()
-				}
-			case core.NewMinedBlockEvent:
 				self.commitNewWork()
+			case core.NewMinedBlockEvent:
+				//self.commitNewWork()
 			case core.ChainSideEvent:
 				self.uncleMu.Lock()
 				self.possibleUncles[ev.Block.Hash()] = ev.Block
@@ -261,7 +259,7 @@ gasLimit:
 			uncles = append(uncles, uncle.Header())
 		}
 	}
-	minerlogger.Infof("commit new work with %d txs & %d uncles\n", tcount, len(uncles))
+	minerlogger.Infof("commit new work on block %v with %d txs & %d uncles\n", self.current.block.Number(), tcount, len(uncles))
 	for _, hash := range badUncles {
 		delete(self.possibleUncles, hash)
 	}
