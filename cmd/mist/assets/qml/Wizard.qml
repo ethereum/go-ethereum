@@ -1,13 +1,19 @@
 // Button.qml
 import QtQuick 2.0
+import QtGraphicalEffects 1.0
 
 
 Rectangle {              
+    id: wizardWindow
      anchors.fill: parent
      color: "blue"
-
-
-
+     state: "State-Initial"
+    
+    Timer {
+        interval: 1000
+        running: true
+        onTriggered: wizardWindow.state = "State-0"
+    }
 
      Image {
         anchors.centerIn: parent
@@ -42,12 +48,28 @@ Rectangle {
      }
 
      Image {
+        id: iceberg
         source: "../wizard/iceberg.png"
         width: 344
         height: 376
         x: 25
         y: 190
      }
+
+     FastBlur {
+        id: icebergBlur
+        anchors.fill: iceberg
+        source: iceberg
+        radius: 32
+        transparentBorder: true
+        transform: Scale { 
+            origin.x: 172 
+            origin.y: 188
+            xScale: 0.75
+            yScale: 0.75
+        }
+
+    }
 
      Image {
         source: "../wizard/Mist-title.png"
@@ -58,7 +80,73 @@ Rectangle {
      }
 
 
+     states: [
+        State {
+            name: "State-Initial"
+            PropertyChanges {
+                target: iceberg
+                opacity: 0.0
+            }
+            PropertyChanges {
+                target: icebergBlur
+                opacity: 0.1
+                radius: 64
+                //transform: Scale {  xScale: 1;   yScale: 1; }                
+            }
+            
+        },
+        State {
+            name: "State-0"
+            PropertyChanges {
+                target: iceberg
+                opacity: 0.0
+            }
+            PropertyChanges {
+                target: icebergBlur
+                opacity: 1.0
+                radius: 0
+                // transform: Scale { 
+                //     origin.x: 150; 
+                //     origin.y: 150; 
+                //     xScale: 1
+                //     yScale: 1
+                // } 
+            }
+        }
+     ]
+
+    transitions: [
+       Transition {
+           from: "State-Initial"; to: "State-0"
+           PropertyAnimation { 
+            target: iceberg
+            properties: "opacity"
+            duration: 2000 
+           }
+           PropertyAnimation { 
+            target: icebergBlur 
+            properties: "opacity, radius"
+            duration: 2000 
+           }
+       },
+       Transition {
+           from: "State-0"; to: "State-Initial"
+           PropertyAnimation { 
+                target: iceberg            
+                properties: "opacity"; 
+                duration: 1000 
+            }
+            PropertyAnimation { 
+                target: icebergBlur 
+                properties: "opacity, radius"
+                duration: 1000 
+           }
+       }
+    ]
+
+
      Rectangle {
+         id: step0
          x: 500
          y: 0
          width: 475
@@ -122,6 +210,13 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 x: 80
              } 
+
+             MouseArea {
+                anchors.fill: parent
+                onClicked: {
+                    wizardWindow.state = "State-Initial"
+                }
+             }
          }
          
          Rectangle {
@@ -151,6 +246,9 @@ Rectangle {
 
              MouseArea {
                 anchors.fill: parent
+                onClicked: {
+                    wizardWindow.state = "State-0"
+                }
              }
          }
 
