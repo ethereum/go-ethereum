@@ -116,22 +116,13 @@ func (self *XEth) DefaultGasPrice() *big.Int { return defaultGasPrice }
 func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }
 
 func (self *XEth) AtStateNum(num int64) *XEth {
-	chain := self.backend.ChainManager()
-	var block *types.Block
-
-	// -1 generally means "latest"
-	// -2 means "pending", which has no blocknum
-	if num < 0 {
-		num = chain.CurrentBlock().Number().Int64()
-	}
-
-	block = chain.GetBlockByNumber(uint64(num))
+	block := self.getBlockByHeight(num)
 
 	var st *state.StateDB
 	if block != nil {
 		st = state.New(block.Root(), self.backend.StateDb())
 	} else {
-		st = chain.State()
+		st = self.backend.ChainManager().State()
 	}
 	return self.WithState(st)
 }
@@ -148,6 +139,22 @@ func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 func (self *XEth) State() *State { return self.state }
 
 func (self *XEth) Whisper() *Whisper { return self.whisper }
+
+func (self *XEth) getBlockByHeight(height int64) *types.Block {
+	var num uint64
+
+	// -1 means "latest"
+	// -2 means "pending", which has no blocknum
+	if height <= -2 {
+		return &types.Block{}
+	} else if height == -1 {
+		num = self.CurrentBlock().NumberU64()
+	} else {
+		num = uint64(height)
+	}
+
+	return self.backend.ChainManager().GetBlockByNumber(num)
+}
 
 func (self *XEth) BlockByHash(strHash string) *Block {
 	hash := common.HexToHash(strHash)
@@ -172,29 +179,11 @@ func (self *XEth) EthTransactionByHash(hash string) *types.Transaction {
 }
 
 func (self *XEth) BlockByNumber(num int64) *Block {
-	if num == -2 {
-		// "pending" is non-existant
-		return &Block{}
-	}
-
-	if num == -1 {
-		return NewBlock(self.CurrentBlock())
-	}
-
-	return NewBlock(self.backend.ChainManager().GetBlockByNumber(uint64(num)))
+	return NewBlock(self.getBlockByHeight(num))
 }
 
 func (self *XEth) EthBlockByNumber(num int64) *types.Block {
-	if num == -2 {
-		// "pending" is non-existant
-		return &types.Block{}
-	}
-
-	if num == -1 {
-		return self.CurrentBlock()
-	}
-
-	return self.backend.ChainManager().GetBlockByNumber(uint64(num))
+	return self.getBlockByHeight(num)
 }
 
 func (self *XEth) CurrentBlock() *types.Block {
