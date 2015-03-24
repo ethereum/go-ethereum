@@ -47,7 +47,7 @@ func testJEthRE(t *testing.T) (repl *jsre, ethereum *eth.Ethereum, err error) {
 		return
 	}
 	assetPath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
-	repl = newJSRE(ethereum, assetPath)
+	repl = newJSRE(ethereum, assetPath, false)
 	return
 }
 
