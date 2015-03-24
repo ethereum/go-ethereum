@@ -46,9 +46,11 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 	}
 	self.re.Set("ret_jsonrpc", jsonrpcver)
 	self.re.Set("ret_id", req.Id)
-	self.re.Set("ret_result", respif)
+
+	res, _ := json.Marshal(respif)
+	self.re.Set("ret_result", string(res))
 	response, err = self.re.Run(`
-		ret_response = { jsonrpc: ret_jsonrpc, id: ret_id, result: ret_result };
+		ret_response = { jsonrpc: ret_jsonrpc, id: ret_id, result: JSON.parse(ret_result) };
 	`)
 	return
 }
