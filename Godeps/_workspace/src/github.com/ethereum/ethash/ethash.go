@@ -85,7 +85,7 @@ func makeParamsAndCache(chainManager pow.ChainManager, blockNum uint64) (*Params
 		Epoch:  blockNum / epochLength,
 	}
 	C.ethash_params_init(paramsAndCache.params, C.uint32_t(uint32(blockNum)))
-	paramsAndCache.cache.mem = C.malloc(paramsAndCache.params.cache_size)
+	paramsAndCache.cache.mem = C.malloc(C.size_t(paramsAndCache.params.cache_size))
 
 	seedHash, err := GetSeedHash(blockNum)
 	if err != nil {
@@ -118,7 +118,7 @@ func (pow *Ethash) UpdateCache(force bool) error {
 
 func makeDAG(p *ParamsAndCache) *DAG {
 	d := &DAG{
-		dag:            C.malloc(p.params.full_size),
+		dag:            C.malloc(C.size_t(p.params.full_size)),
 		file:           false,
 		paramsAndCache: p,
 	}

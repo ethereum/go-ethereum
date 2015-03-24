@@ -17,13 +17,13 @@
 		},
 		{
 			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-81-g3e09053",
-			"Rev": "3e0905345cd2c5366530dbcdce62457f2ce16e7c"
+			"Comment": "1.2.0-95-g9b2bd2b",
+			"Rev": "9b2bd2b3489748d4d0a204fa4eb2ee9e89e0ebc6"
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",
-			"Comment": "v23-16-g7ec1d23",
-			"Rev": "7ec1d23bece027001acc81e791911c65db9d8ae9"
+			"Comment": "v23.1-30-gf8a0565",
+			"Rev": "f8a0565cc3a20c5ad82dec3ec612645356069641"
 		},
 		{
 			"ImportPath": "github.com/ethereum/serpent-go",
