@@ -17,7 +17,7 @@
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 
-std::string bytesToHexString(const uint8_t *str, const uint32_t s) {
+std::string bytesToHexString(const uint8_t *str, const size_t s) {
     std::ostringstream ret;
 
     for (int i = 0; i < s; ++i)
@@ -80,11 +80,9 @@ BOOST_AUTO_TEST_CASE(ethash_params_init_genesis_check) {
 
 BOOST_AUTO_TEST_CASE(ethash_params_init_genesis_calcifide_check) {
     ethash_params params;
-    BOOST_REQUIRE_MESSAGE(ethash_params_init(&params, 0),
-            "Params could not be initialized");
-    const uint32_t
-            expected_full_size = 1073739904,
-            expected_cache_size = 16776896;
+    ethash_params_init(&params, 0);
+    const uint32_t expected_full_size = 1073739904;
+    const uint32_t expected_cache_size = 16776896;
     BOOST_REQUIRE_MESSAGE(params.full_size == expected_full_size,
             "\nexpected: " << expected_cache_size << "\n"
                     << "actual: " << params.full_size << "\n");
