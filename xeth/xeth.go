@@ -124,10 +124,11 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 	} else {
 		st = self.backend.ChainManager().State()
 	}
-	return self.WithState(st)
+
+	return self.withState(st)
 }
 
-func (self *XEth) WithState(statedb *state.StateDB) *XEth {
+func (self *XEth) withState(statedb *state.StateDB) *XEth {
 	xeth := &XEth{
 		backend: self.backend,
 	}
