@@ -60,9 +60,9 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 		*reply = common.ToHex(crypto.Sha3(common.FromHex(args.Data)))
 	case "web3_clientVersion":
-		*reply = api.xeth().Backend().Version()
+		*reply = api.xeth().ClientVersion()
 	case "net_version":
-		*reply = string(api.xeth().Backend().ProtocolVersion())
+		*reply = api.xeth().NetworkVersion()
 	case "net_listening":
 		*reply = api.xeth().IsListening()
 	case "net_peerCount":
@@ -84,7 +84,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 	case "eth_accounts":
 		*reply = api.xeth().Accounts()
 	case "eth_blockNumber":
-		v := api.xeth().Backend().ChainManager().CurrentBlock().Number()
+		v := api.xeth().CurrentBlock().Number()
 		*reply = common.ToHex(v.Bytes())
 	case "eth_getBalance":
 		args := new(GetBalanceArgs)

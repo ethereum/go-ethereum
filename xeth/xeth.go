@@ -143,7 +143,7 @@ func (self *XEth) DefaultGasPrice() *big.Int { return defaultGasPrice }
 func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }
 
 func (self *XEth) AtStateNum(num int64) *XEth {
-	chain := self.Backend().ChainManager()
+	chain := self.backend.ChainManager()
 	var block *types.Block
 
 	// -1 generally means "latest"
@@ -156,14 +156,13 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 
 	var st *state.StateDB
 	if block != nil {
-		st = state.New(block.Root(), self.Backend().StateDb())
+		st = state.New(block.Root(), self.backend.StateDb())
 	} else {
 		st = chain.State()
 	}
 	return self.WithState(st)
 }
 
-func (self *XEth) Backend() *eth.Ethereum { return self.backend }
 func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 	xeth := &XEth{
 		backend: self.backend,
@@ -224,6 +223,10 @@ func (self *XEth) EthBlockByNumber(num int64) *types.Block {
 	return self.backend.ChainManager().GetBlockByNumber(uint64(num))
 }
 
+func (self *XEth) CurrentBlock() *types.Block {
+	return self.backend.ChainManager().CurrentBlock()
+}
+
 func (self *XEth) Block(v interface{}) *Block {
 	if n, ok := v.(int32); ok {
 		return self.BlockByNumber(int64(n))
@@ -252,6 +255,14 @@ func (self *XEth) PeerCount() int {
 
 func (self *XEth) IsMining() bool {
 	return self.backend.IsMining()
+}
+
+func (self *XEth) NetworkVersion() string {
+	return string(self.backend.ProtocolVersion())
+}
+
+func (self *XEth) ClientVersion() string {
+	return self.backend.Version()
 }
 
 func (self *XEth) SetMining(shouldmine bool) bool {
@@ -314,7 +325,7 @@ func (self *XEth) SecretToAddress(key string) string {
 
 func (self *XEth) RegisterFilter(args *core.FilterOptions) int {
 	var id int
-	filter := core.NewFilter(self.Backend())
+	filter := core.NewFilter(self.backend)
 	filter.SetOptions(args)
 	filter.LogsCallback = func(logs state.Logs) {
 		self.logMut.Lock()
@@ -340,7 +351,7 @@ func (self *XEth) UninstallFilter(id int) bool {
 
 func (self *XEth) NewFilterString(word string) int {
 	var id int
-	filter := core.NewFilter(self.Backend())
+	filter := core.NewFilter(self.backend)
 
 	switch word {
 	case "pending":
@@ -392,7 +403,7 @@ func (self *XEth) Logs(id int) state.Logs {
 }
 
 func (self *XEth) AllLogs(args *core.FilterOptions) state.Logs {
-	filter := core.NewFilter(self.Backend())
+	filter := core.NewFilter(self.backend)
 	filter.SetOptions(args)
 
 	return filter.Find()
