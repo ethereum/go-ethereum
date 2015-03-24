@@ -301,6 +301,23 @@ func (self *Block) ParentHash() common.Hash {
 	}
 }
 
+func (self *Block) Copy() *Block {
+	block := NewBlock(self.ParentHash(), self.Coinbase(), self.Root(), self.Difficulty(), self.Nonce(), self.header.Extra)
+	block.header.Bloom = self.header.Bloom
+	block.header.TxHash = self.header.TxHash
+	block.transactions = self.transactions
+	block.header.UncleHash = self.header.UncleHash
+	block.uncles = self.uncles
+	block.header.GasLimit.Set(self.header.GasLimit)
+	block.header.GasUsed.Set(self.header.GasUsed)
+	block.header.ReceiptHash = self.header.ReceiptHash
+	block.header.Difficulty.Set(self.header.Difficulty)
+	block.header.Number = self.header.Number
+	block.header.Time = self.header.Time
+	block.header.MixDigest = self.header.MixDigest
+	return block
+}
+
 func (self *Block) String() string {
 	return fmt.Sprintf(`BLOCK(%x): Size: %v TD: %v {
 NoNonce: %x
