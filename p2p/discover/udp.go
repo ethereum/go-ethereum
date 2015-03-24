@@ -16,11 +16,14 @@ import (
 
 var log = logger.NewLogger("P2P Discovery")
 
+const Version = 3
+
 // Errors
 var (
 	errPacketTooSmall = errors.New("too small")
 	errBadHash        = errors.New("bad hash")
 	errExpired        = errors.New("expired")
+	errBadVersion     = errors.New("version mismatch")
 	errTimeout        = errors.New("RPC timeout")
 	errClosed         = errors.New("socket closed")
 )
@@ -45,6 +48,7 @@ const (
 // RPC request structures
 type (
 	ping struct {
+		Version    uint   // must match Version
 		IP         string // our IP
 		Port       uint16 // our port
 		Expiration uint64
@@ -169,6 +173,7 @@ func (t *udp) ping(e *Node) error {
 	// TODO: maybe check for ReplyTo field in callback to measure RTT
 	errc := t.pending(e.ID, pongPacket, func(interface{}) bool { return true })
 	t.send(e, pingPacket, ping{
+		Version:    Version,
 		IP:         t.self.IP.String(),
 		Port:       uint16(t.self.TCPPort),
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
@@ -370,6 +375,9 @@ func (t *udp) packetIn(from *net.UDPAddr, buf []byte) error {
 func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
 	if expired(req.Expiration) {
 		return errExpired
+	}
+	if req.Version != Version {
+		return errBadVersion
 	}
 	t.mutex.Lock()
 	// Note: we're ignoring the provided IP address right now
