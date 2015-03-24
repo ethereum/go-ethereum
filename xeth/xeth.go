@@ -56,12 +56,9 @@ func (dummyFrontend) UnlockAccount([]byte) bool                  { return false 
 func (dummyFrontend) ConfirmTransaction(*types.Transaction) bool { return true }
 
 type XEth struct {
-	backend        *eth.Ethereum
-	blockProcessor *core.BlockProcessor
-	chainManager   *core.ChainManager
-	accountManager *accounts.Manager
-	state          *State
-	whisper        *Whisper
+	backend *eth.Ethereum
+	state   *State
+	whisper *Whisper
 
 	frontend Frontend
 
@@ -86,24 +83,21 @@ type XEth struct {
 // confirms all transactions will be used.
 func New(eth *eth.Ethereum, frontend Frontend) *XEth {
 	xeth := &XEth{
-		backend:        eth,
-		blockProcessor: eth.BlockProcessor(),
-		chainManager:   eth.ChainManager(),
-		accountManager: eth.AccountManager(),
-		whisper:        NewWhisper(eth.Whisper()),
-		quit:           make(chan struct{}),
-		filterManager:  filter.NewFilterManager(eth.EventMux()),
-		frontend:       frontend,
-		logs:           make(map[int]*logFilter),
-		messages:       make(map[int]*whisperFilter),
-		agent:          miner.NewRemoteAgent(),
+		backend:       eth,
+		whisper:       NewWhisper(eth.Whisper()),
+		quit:          make(chan struct{}),
+		filterManager: filter.NewFilterManager(eth.EventMux()),
+		frontend:      frontend,
+		logs:          make(map[int]*logFilter),
+		messages:      make(map[int]*whisperFilter),
+		agent:         miner.NewRemoteAgent(),
 	}
 	eth.Miner().Register(xeth.agent)
 
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}
-	xeth.state = NewState(xeth, xeth.chainManager.TransState())
+	xeth.state = NewState(xeth, xeth.backend.ChainManager().TransState())
 	go xeth.start()
 	go xeth.filterManager.Start()
 
@@ -172,10 +166,7 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 func (self *XEth) Backend() *eth.Ethereum { return self.backend }
 func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 	xeth := &XEth{
-		backend:        self.backend,
-		blockProcessor: self.blockProcessor,
-		chainManager:   self.chainManager,
-		whisper:        self.whisper,
+		backend: self.backend,
 	}
 
 	xeth.state = NewState(xeth, statedb)
@@ -187,14 +178,14 @@ func (self *XEth) Whisper() *Whisper { return self.whisper }
 
 func (self *XEth) BlockByHash(strHash string) *Block {
 	hash := common.HexToHash(strHash)
-	block := self.chainManager.GetBlock(hash)
+	block := self.backend.ChainManager().GetBlock(hash)
 
 	return NewBlock(block)
 }
 
 func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 	hash := common.HexToHash(strHash)
-	block := self.chainManager.GetBlock(hash)
+	block := self.backend.ChainManager().GetBlock(hash)
 
 	return block
 }
@@ -214,10 +205,10 @@ func (self *XEth) BlockByNumber(num int64) *Block {
 	}
 
 	if num == -1 {
-		return NewBlock(self.chainManager.CurrentBlock())
+		return NewBlock(self.backend.ChainManager().CurrentBlock())
 	}
 
-	return NewBlock(self.chainManager.GetBlockByNumber(uint64(num)))
+	return NewBlock(self.backend.ChainManager().GetBlockByNumber(uint64(num)))
 }
 
 func (self *XEth) EthBlockByNumber(num int64) *types.Block {
@@ -227,10 +218,10 @@ func (self *XEth) EthBlockByNumber(num int64) *types.Block {
 	}
 
 	if num == -1 {
-		return self.chainManager.CurrentBlock()
+		return self.backend.ChainManager().CurrentBlock()
 	}
 
-	return self.chainManager.GetBlockByNumber(uint64(num))
+	return self.backend.ChainManager().GetBlockByNumber(uint64(num))
 }
 
 func (self *XEth) Block(v interface{}) *Block {
@@ -530,7 +521,7 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 }
 
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
-	statedb := self.State().State() //self.chainManager.TransState()
+	statedb := self.State().State() //self.eth.ChainManager().TransState()
 	msg := callmsg{
 		from:     statedb.GetOrNewStateObject(common.HexToAddress(fromStr)),
 		to:       common.HexToAddress(toStr),
@@ -547,8 +538,8 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		msg.gasPrice = defaultGasPrice
 	}
 
-	block := self.chainManager.CurrentBlock()
-	vmenv := core.NewEnv(statedb, self.chainManager, msg, block)
+	block := self.backend.ChainManager().CurrentBlock()
+	vmenv := core.NewEnv(statedb, self.backend.ChainManager(), msg, block)
 
 	res, err := vmenv.Call(msg.from, msg.to, msg.data, msg.gas, msg.gasPrice, msg.value)
 	return common.ToHex(res), err
@@ -609,7 +600,7 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 		tx = types.NewTransactionMessage(to, value.BigInt(), gas, price, data)
 	}
 
-	state := self.chainManager.TxState()
+	state := self.backend.ChainManager().TxState()
 	nonce := state.NewNonce(from)
 	tx.SetNonce(nonce)
 
@@ -630,7 +621,7 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 }
 
 func (self *XEth) sign(tx *types.Transaction, from common.Address, didUnlock bool) error {
-	sig, err := self.accountManager.Sign(accounts.Account{Address: from.Bytes()}, tx.Hash().Bytes())
+	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from.Bytes()}, tx.Hash().Bytes())
 	if err == accounts.ErrLocked {
 		if didUnlock {
 			return fmt.Errorf("sender account still locked after successful unlock")
