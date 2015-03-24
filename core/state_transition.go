@@ -196,7 +196,6 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 	}
 
 	// Increment the nonce for the next transaction
-	self.state.SetNonce(sender.Address(), sender.Nonce()+1)
 
 	vmenv := self.env
 	var ref vm.ContextRef
@@ -214,6 +213,7 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 			}
 		}
 	} else {
+		self.state.SetNonce(sender.Address(), sender.Nonce()+1)
 		ret, err = vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
 	}
 

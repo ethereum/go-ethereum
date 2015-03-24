@@ -39,20 +39,22 @@ func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.
 		return nil, vm.DepthError{}
 	}
 
-	snapshot := env.State().Copy()
+	vsnapshot := env.State().Copy()
 	if self.address == nil {
 		// Generate a new address
 		nonce := env.State().GetNonce(caller.Address())
 		addr := crypto.CreateAddress(caller.Address(), nonce)
-		self.address = &addr
 		env.State().SetNonce(caller.Address(), nonce+1)
+		self.address = &addr
 	}
+	snapshot := env.State().Copy()
 
 	from, to := env.State().GetStateObject(caller.Address()), env.State().GetOrNewStateObject(*self.address)
 	err = env.Transfer(from, to, self.value)
 	if err != nil {
-		env.State().Set(snapshot)
-		//caller.ReturnGas(self.Gas, self.price)
+		env.State().Set(vsnapshot)
+
+		caller.ReturnGas(self.Gas, self.price)
 
 		return nil, ValueTransferErr("insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance())
 	}
