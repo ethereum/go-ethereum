@@ -4,9 +4,9 @@
 /*jslint node: true, shadow:true */
 "use strict";
 
-var ethash = require('../ethash');
-var util = require('../util');
-var Keccak = require('../keccak');
+var ethash = require('./ethash');
+var util = require('./util');
+var Keccak = require('./keccak');
 
 // sanity check hash functions
 var src = util.stringToBytes("");
@@ -31,22 +31,23 @@ var ethashParams = ethash.defaultParams();
 var seed = util.hexStringToBytes("9410b944535a83d9adf6bbdcc80e051f30676173c16ca0d32d6f1263fc246466")
 var startTime = new Date().getTime();
 var hasher = new ethash.Ethash(ethashParams, seed);
-console.log('Ethash startup took: ' + (new Date().getTime() - startTime) + "ms");
+console.log('Ethash startup took: '+(new Date().getTime() - startTime) + "ms");
 console.log('Ethash cache hash: ' + util.bytesToHexString(hasher.cacheDigest()));
 
 var testHexString = "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470";
 if (testHexString != util.bytesToHexString(util.hexStringToBytes(testHexString)))
-  throw Error("bytesToHexString or hexStringToBytes broken");
+	throw Error("bytesToHexString or hexStringToBytes broken");
 
-
+		
 var header = util.hexStringToBytes("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
 var nonce = util.hexStringToBytes("0000000000000000");
 var hash;
 
 startTime = new Date().getTime();
 var trials = 10;
-for (var i = 0; i < trials; ++i) {
-  hash = hasher.hash(header, nonce);
+for (var i = 0; i < trials; ++i)
+{
+	hash = hasher.hash(header, nonce);
 }
-console.log("Light client hashes averaged: " + (new Date().getTime() - startTime) / trials + "ms");
+console.log("Light client hashes averaged: " + (new Date().getTime() - startTime)/trials + "ms");
 console.log("Hash = " + util.bytesToHexString(hash));
