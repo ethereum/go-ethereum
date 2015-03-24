@@ -246,7 +246,7 @@ func console(ctx *cli.Context) {
 	}
 
 	startEth(ctx, ethereum)
-	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name))
+	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), true)
 	repl.interactive()
 
 	ethereum.Stop()
@@ -261,7 +261,7 @@ func execJSFiles(ctx *cli.Context) {
 	}
 
 	startEth(ctx, ethereum)
-	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name))
+	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), false)
 	for _, file := range ctx.Args() {
 		repl.exec(file)
 	}
