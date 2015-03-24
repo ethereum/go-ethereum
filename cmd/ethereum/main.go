@@ -23,6 +23,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"runtime"
 	"strconv"
@@ -73,6 +74,19 @@ Regular users do not need to execute it.
 			Description: `
 The output of this command is supposed to be machine-readable.
 `,
+		},
+
+		{
+			Action: accountList,
+			Name:   "wallet",
+			Usage:  "ethereum presale wallet",
+			Subcommands: []cli.Command{
+				{
+					Action: importWallet,
+					Name:   "import",
+					Usage:  "import ethereum presale wallet",
+				},
+			},
 		},
 		{
 			Action: accountList,
@@ -280,22 +294,7 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 		var err error
 		// Load startup keys. XXX we are going to need a different format
 		// Attempt to unlock the account
-		passfile := ctx.GlobalString(utils.PasswordFileFlag.Name)
-		if len(passfile) == 0 {
-			fmt.Println("Please enter a passphrase now.")
-			auth, err := readPassword("Passphrase: ", true)
-			if err != nil {
-				utils.Fatalf("%v", err)
-			}
-
-			passphrase = auth
-
-		} else {
-			if passphrase, err = common.ReadAllFile(passfile); err != nil {
-				utils.Fatalf("Unable to read password file '%s': %v", passfile, err)
-			}
-		}
-
+		passphrase := getPassPhrase(ctx, "", false)
 		err = am.Unlock(common.FromHex(account), passphrase)
 		if err != nil {
 			utils.Fatalf("Unlock account failed '%v'", err)
@@ -335,22 +334,23 @@ func accountList(ctx *cli.Context) {
 	}
 }
 
-func getPassPhrase(ctx *cli.Context) (passphrase string) {
+func getPassPhrase(ctx *cli.Context, desc string, confirmation bool) (passphrase string) {
 	if !ctx.GlobalBool(utils.UnencryptedKeysFlag.Name) {
 		passfile := ctx.GlobalString(utils.PasswordFileFlag.Name)
 		if len(passfile) == 0 {
-			fmt.Println("The new account will be encrypted with a passphrase.")
-			fmt.Println("Please enter a passphrase now.")
+			fmt.Println(desc)
 			auth, err := readPassword("Passphrase: ", true)
 			if err != nil {
 				utils.Fatalf("%v", err)
 			}
-			confirm, err := readPassword("Repeat Passphrase: ", false)
-			if err != nil {
-				utils.Fatalf("%v", err)
-			}
-			if auth != confirm {
-				utils.Fatalf("Passphrases did not match.")
+			if confirmation {
+				confirm, err := readPassword("Repeat Passphrase: ", false)
+				if err != nil {
+					utils.Fatalf("%v", err)
+				}
+				if auth != confirm {
+					utils.Fatalf("Passphrases did not match.")
+				}
 			}
 			passphrase = auth
 
@@ -366,8 +366,28 @@ func getPassPhrase(ctx *cli.Context) (passphrase string) {
 
 func accountCreate(ctx *cli.Context) {
 	am := utils.GetAccountManager(ctx)
-	passphrase := getPassPhrase(ctx)
+	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true)
 	acct, err := am.NewAccount(passphrase)
+	if err != nil {
+		utils.Fatalf("Could not create the account: %v", err)
+	}
+	fmt.Printf("Address: %x\n", acct)
+}
+
+func importWallet(ctx *cli.Context) {
+	keyfile := ctx.Args().First()
+	if len(keyfile) == 0 {
+		utils.Fatalf("keyfile must be given as argument")
+	}
+	keyJson, err := ioutil.ReadFile(keyfile)
+	if err != nil {
+		utils.Fatalf("Could not read wallet file: %v", err)
+	}
+
+	am := utils.GetAccountManager(ctx)
+	passphrase := getPassPhrase(ctx, "", false)
+
+	acct, err := am.ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
@@ -380,7 +400,7 @@ func accountImport(ctx *cli.Context) {
 		utils.Fatalf("keyfile must be given as argument")
 	}
 	am := utils.GetAccountManager(ctx)
-	passphrase := getPassPhrase(ctx)
+	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true)
 	acct, err := am.Import(keyfile, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)

@@ -239,3 +239,15 @@ func (am *Manager) Import(path string, keyAuth string) (Account, error) {
 	}
 	return Account{Address: key.Address}, nil
 }
+
+func (am *Manager) ImportPreSaleKey(keyJSON []byte, password string) (acc Account, err error) {
+	var key *crypto.Key
+	key, err = crypto.ImportPreSaleKey(am.keyStore, keyJSON, password)
+	if err != nil {
+		return
+	}
+	if err = am.keyStore.StoreKey(key, password); err != nil {
+		return
+	}
+	return Account{Address: key.Address}, nil
+}
