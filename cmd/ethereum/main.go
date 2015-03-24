@@ -134,7 +134,7 @@ Exports the given account's private key into keyfile using the canonical EC form
 The account needs to be unlocked, if it is not the user is prompted for a passphrase to unlock it.
 For non-interactive use, the password can be specified with the --unlock flag:
 
-    ethereum --unlock <passwrdfile> account export <address> <keyfile>
+    ethereum --password <passwrdfile> account export <address> <keyfile>
 
 Note:
 Since you can directly copy your encrypted accounts to another ethereum instance, this import/export mechanism is not needed when you transfer an account between nodes.
@@ -305,6 +305,9 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	if len(account) > 0 {
+		if account == "coinbase" {
+			account = ""
+		}
 		unlockAccount(ctx, am, account)
 	}
 	// Start auxiliary services if enabled.
