@@ -29,11 +29,11 @@ var (
 )
 
 type XEth struct {
-	backend *eth.Ethereum
+	backend  *eth.Ethereum
+	frontend Frontend
+
 	state   *State
 	whisper *Whisper
-
-	frontend Frontend
 
 	quit          chan struct{}
 	filterManager *filter.FilterManager
@@ -47,7 +47,6 @@ type XEth struct {
 	// regmut   sync.Mutex
 	// register map[string][]*interface{} // TODO improve return type
 
-	// Miner agent
 	agent *miner.RemoteAgent
 }
 
@@ -57,10 +56,10 @@ type XEth struct {
 func New(eth *eth.Ethereum, frontend Frontend) *XEth {
 	xeth := &XEth{
 		backend:       eth,
+		frontend:      frontend,
 		whisper:       NewWhisper(eth.Whisper()),
 		quit:          make(chan struct{}),
 		filterManager: filter.NewFilterManager(eth.EventMux()),
-		frontend:      frontend,
 		logs:          make(map[int]*logFilter),
 		messages:      make(map[int]*whisperFilter),
 		agent:         miner.NewRemoteAgent(),
@@ -71,6 +70,7 @@ func New(eth *eth.Ethereum, frontend Frontend) *XEth {
 		xeth.frontend = dummyFrontend{}
 	}
 	xeth.state = NewState(xeth, xeth.backend.ChainManager().TransState())
+
 	go xeth.start()
 	go xeth.filterManager.Start()
 
@@ -144,6 +144,7 @@ func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 	xeth.state = NewState(xeth, statedb)
 	return xeth
 }
+
 func (self *XEth) State() *State { return self.state }
 
 func (self *XEth) Whisper() *Whisper { return self.whisper }
