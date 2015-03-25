@@ -87,6 +87,8 @@ func (e flatenc) EncodeRLP(out io.Writer) error {
 // To encode a pointer, the value being pointed to is encoded. For nil
 // pointers, Encode will encode the zero value of the type. A nil
 // pointer to a struct type always encodes as an empty RLP list.
+// A nil pointer to an array encodes as an empty list (or empty string
+// if the array has element type byte).
 //
 // Struct values are encoded as an RLP list of all their encoded
 // public fields. Recursive struct types are supported.
@@ -532,19 +534,35 @@ func makePtrWriter(typ reflect.Type) (writer, error) {
 	if err != nil {
 		return nil, err
 	}
-	zero := reflect.Zero(typ.Elem())
+
+	// determine nil pointer handler
+	var nilfunc func(*encbuf) error
 	kind := typ.Elem().Kind()
-	writer := func(val reflect.Value, w *encbuf) error {
-		switch {
-		case !val.IsNil():
-			return etypeinfo.writer(val.Elem(), w)
-		case kind == reflect.Struct:
-			// encoding the zero value of a struct could trigger
+	switch {
+	case kind == reflect.Array && isByte(typ.Elem().Elem()):
+		nilfunc = func(w *encbuf) error {
+			w.str = append(w.str, 0x80)
+			return nil
+		}
+	case kind == reflect.Struct || kind == reflect.Array:
+		nilfunc = func(w *encbuf) error {
+			// encoding the zero value of a struct/array could trigger
 			// infinite recursion, avoid that.
 			w.listEnd(w.list())
 			return nil
-		default:
+		}
+	default:
+		zero := reflect.Zero(typ.Elem())
+		nilfunc = func(w *encbuf) error {
 			return etypeinfo.writer(zero, w)
+		}
+	}
+
+	writer := func(val reflect.Value, w *encbuf) error {
+		if val.IsNil() {
+			return nilfunc(w)
+		} else {
+			return etypeinfo.writer(val.Elem(), w)
 		}
 	}
 	return writer, err
