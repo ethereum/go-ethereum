@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	statusMsg    = 0x0
-	envelopesMsg = 0x01
+	statusMsg      = 0x0
+	envelopesMsg   = 0x01
+	whisperVersion = 0x02
 )
 
 type MessageEvent struct {
@@ -56,12 +57,16 @@ func New() *Whisper {
 	// p2p whisper sub protocol handler
 	whisper.protocol = p2p.Protocol{
 		Name:    "shh",
-		Version: 2,
+		Version: uint(whisperVersion),
 		Length:  2,
 		Run:     whisper.msgHandler,
 	}
 
 	return whisper
+}
+
+func (self *Whisper) Version() uint {
+	return self.protocol.Version
 }
 
 func (self *Whisper) Start() {

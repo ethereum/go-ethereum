@@ -138,11 +138,12 @@ type Ethereum struct {
 
 	// logger logger.LogSystem
 
-	Mining          bool
-	DataDir         string
-	version         string
-	protocolVersion int
-	networkId       int
+	Mining        bool
+	DataDir       string
+	clientVersion string
+	ethVersionId  int
+	netVersionId  int
+	shhVersionId  int
 }
 
 func New(config *Config) (*Ethereum, error) {
@@ -177,16 +178,16 @@ func New(config *Config) (*Ethereum, error) {
 	servlogger.Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
 
 	eth := &Ethereum{
-		shutdownChan:    make(chan bool),
-		blockDb:         blockDb,
-		stateDb:         stateDb,
-		extraDb:         extraDb,
-		eventMux:        &event.TypeMux{},
-		accountManager:  config.AccountManager,
-		DataDir:         config.DataDir,
-		version:         config.Name, // TODO should separate from Name
-		protocolVersion: config.ProtocolVersion,
-		networkId:       config.NetworkId,
+		shutdownChan:   make(chan bool),
+		blockDb:        blockDb,
+		stateDb:        stateDb,
+		extraDb:        extraDb,
+		eventMux:       &event.TypeMux{},
+		accountManager: config.AccountManager,
+		DataDir:        config.DataDir,
+		clientVersion:  config.Name, // TODO should separate from Name
+		ethVersionId:   config.ProtocolVersion,
+		netVersionId:   config.NetworkId,
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
@@ -195,6 +196,7 @@ func New(config *Config) (*Ethereum, error) {
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
+	eth.shhVersionId = int(eth.whisper.Version())
 	eth.miner = miner.New(eth, eth.pow, config.MinerThreads)
 
 	hasBlock := eth.chainManager.HasBlock
@@ -324,9 +326,10 @@ func (s *Ethereum) IsListening() bool                    { return true } // Alwa
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
 func (s *Ethereum) MaxPeers() int                        { return s.net.MaxPeers }
-func (s *Ethereum) Version() string                      { return s.version }
-func (s *Ethereum) ProtocolVersion() int                 { return s.protocolVersion }
-func (s *Ethereum) NetworkId() int                       { return s.networkId }
+func (s *Ethereum) ClientVersion() string                { return s.clientVersion }
+func (s *Ethereum) EthVersion() int                      { return s.ethVersionId }
+func (s *Ethereum) NetVersion() int                      { return s.netVersionId }
+func (s *Ethereum) ShhVersion() int                      { return s.shhVersionId }
 
 // Start the ethereum
 func (s *Ethereum) Start() error {

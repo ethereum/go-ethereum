@@ -15,12 +15,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/whisper"
 )
 
 var (
@@ -30,66 +28,12 @@ var (
 	defaultGas       = big.NewInt(90000)          //500000
 )
 
-// to resolve the import cycle
-type Backend interface {
-	BlockProcessor() *core.BlockProcessor
-	ChainManager() *core.ChainManager
-	AccountManager() *accounts.Manager
-	TxPool() *core.TxPool
-	PeerCount() int
-	IsListening() bool
-	Peers() []*p2p.Peer
-	BlockDb() common.Database
-	StateDb() common.Database
-	ExtraDb() common.Database
-	EventMux() *event.TypeMux
-	Whisper() *whisper.Whisper
-	Miner() *miner.Miner
-
-	IsMining() bool
-	StartMining() error
-	StopMining()
-	Version() string
-	ProtocolVersion() int
-	NetworkId() int
-}
-
-// Frontend should be implemented by users of XEth. Its methods are
-// called whenever XEth makes a decision that requires user input.
-type Frontend interface {
-	// UnlockAccount is called when a transaction needs to be signed
-	// but the key corresponding to the transaction's sender is
-	// locked.
-	//
-	// It should unlock the account with the given address and return
-	// true if unlocking succeeded.
-	UnlockAccount(address []byte) bool
-
-	// This is called for all transactions inititated through
-	// Transact. It should prompt the user to confirm the transaction
-	// and return true if the transaction was acknowledged.
-	//
-	// ConfirmTransaction is not used for Call transactions
-	// because they cannot change any state.
-	ConfirmTransaction(tx *types.Transaction) bool
-}
-
-// dummyFrontend is a non-interactive frontend that allows all
-// transactions but cannot not unlock any keys.
-type dummyFrontend struct{}
-
-func (dummyFrontend) UnlockAccount([]byte) bool                  { return false }
-func (dummyFrontend) ConfirmTransaction(*types.Transaction) bool { return true }
-
 type XEth struct {
-	eth            Backend
-	blockProcessor *core.BlockProcessor
-	chainManager   *core.ChainManager
-	accountManager *accounts.Manager
-	state          *State
-	whisper        *Whisper
-
+	backend  *eth.Ethereum
 	frontend Frontend
+
+	state   *State
+	whisper *Whisper
 
 	quit          chan struct{}
 	filterManager *filter.FilterManager
@@ -103,33 +47,30 @@ type XEth struct {
 	// regmut   sync.Mutex
 	// register map[string][]*interface{} // TODO improve return type
 
-	// Miner agent
 	agent *miner.RemoteAgent
 }
 
 // New creates an XEth that uses the given frontend.
 // If a nil Frontend is provided, a default frontend which
 // confirms all transactions will be used.
-func New(eth Backend, frontend Frontend) *XEth {
+func New(eth *eth.Ethereum, frontend Frontend) *XEth {
 	xeth := &XEth{
-		eth:            eth,
-		blockProcessor: eth.BlockProcessor(),
-		chainManager:   eth.ChainManager(),
-		accountManager: eth.AccountManager(),
-		whisper:        NewWhisper(eth.Whisper()),
-		quit:           make(chan struct{}),
-		filterManager:  filter.NewFilterManager(eth.EventMux()),
-		frontend:       frontend,
-		logs:           make(map[int]*logFilter),
-		messages:       make(map[int]*whisperFilter),
-		agent:          miner.NewRemoteAgent(),
+		backend:       eth,
+		frontend:      frontend,
+		whisper:       NewWhisper(eth.Whisper()),
+		quit:          make(chan struct{}),
+		filterManager: filter.NewFilterManager(eth.EventMux()),
+		logs:          make(map[int]*logFilter),
+		messages:      make(map[int]*whisperFilter),
+		agent:         miner.NewRemoteAgent(),
 	}
 	eth.Miner().Register(xeth.agent)
 
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}
-	xeth.state = NewState(xeth, xeth.chainManager.TransState())
+	xeth.state = NewState(xeth, xeth.backend.ChainManager().TransState())
+
 	go xeth.start()
 	go xeth.filterManager.Start()
 
@@ -175,58 +116,63 @@ func (self *XEth) DefaultGasPrice() *big.Int { return defaultGasPrice }
 func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }
 
 func (self *XEth) AtStateNum(num int64) *XEth {
-	chain := self.Backend().ChainManager()
-	var block *types.Block
-
-	// -1 generally means "latest"
-	// -2 means "pending", which has no blocknum
-	if num < 0 {
-		num = chain.CurrentBlock().Number().Int64()
-	}
-
-	block = chain.GetBlockByNumber(uint64(num))
+	block := self.getBlockByHeight(num)
 
 	var st *state.StateDB
 	if block != nil {
-		st = state.New(block.Root(), self.Backend().StateDb())
+		st = state.New(block.Root(), self.backend.StateDb())
 	} else {
-		st = chain.State()
+		st = self.backend.ChainManager().State()
 	}
-	return self.WithState(st)
+
+	return self.withState(st)
 }
 
-func (self *XEth) Backend() Backend { return self.eth }
-func (self *XEth) WithState(statedb *state.StateDB) *XEth {
+func (self *XEth) withState(statedb *state.StateDB) *XEth {
 	xeth := &XEth{
-		eth:            self.eth,
-		blockProcessor: self.blockProcessor,
-		chainManager:   self.chainManager,
-		whisper:        self.whisper,
+		backend: self.backend,
 	}
 
 	xeth.state = NewState(xeth, statedb)
 	return xeth
 }
+
 func (self *XEth) State() *State { return self.state }
 
 func (self *XEth) Whisper() *Whisper { return self.whisper }
 
+func (self *XEth) getBlockByHeight(height int64) *types.Block {
+	var num uint64
+
+	// -1 means "latest"
+	// -2 means "pending", which has no blocknum
+	if height <= -2 {
+		return &types.Block{}
+	} else if height == -1 {
+		num = self.CurrentBlock().NumberU64()
+	} else {
+		num = uint64(height)
+	}
+
+	return self.backend.ChainManager().GetBlockByNumber(num)
+}
+
 func (self *XEth) BlockByHash(strHash string) *Block {
 	hash := common.HexToHash(strHash)
-	block := self.chainManager.GetBlock(hash)
+	block := self.backend.ChainManager().GetBlock(hash)
 
 	return NewBlock(block)
 }
 
 func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 	hash := common.HexToHash(strHash)
-	block := self.chainManager.GetBlock(hash)
+	block := self.backend.ChainManager().GetBlock(hash)
 
 	return block
 }
 
 func (self *XEth) EthTransactionByHash(hash string) *types.Transaction {
-	data, _ := self.eth.ExtraDb().Get(common.FromHex(hash))
+	data, _ := self.backend.ExtraDb().Get(common.FromHex(hash))
 	if len(data) != 0 {
 		return types.NewTransactionFromBytes(data)
 	}
@@ -234,29 +180,15 @@ func (self *XEth) EthTransactionByHash(hash string) *types.Transaction {
 }
 
 func (self *XEth) BlockByNumber(num int64) *Block {
-	if num == -2 {
-		// "pending" is non-existant
-		return &Block{}
-	}
-
-	if num == -1 {
-		return NewBlock(self.chainManager.CurrentBlock())
-	}
-
-	return NewBlock(self.chainManager.GetBlockByNumber(uint64(num)))
+	return NewBlock(self.getBlockByHeight(num))
 }
 
 func (self *XEth) EthBlockByNumber(num int64) *types.Block {
-	if num == -2 {
-		// "pending" is non-existant
-		return &types.Block{}
-	}
+	return self.getBlockByHeight(num)
+}
 
-	if num == -1 {
-		return self.chainManager.CurrentBlock()
-	}
-
-	return self.chainManager.GetBlockByNumber(uint64(num))
+func (self *XEth) CurrentBlock() *types.Block {
+	return self.backend.ChainManager().CurrentBlock()
 }
 
 func (self *XEth) Block(v interface{}) *Block {
@@ -273,7 +205,7 @@ func (self *XEth) Block(v interface{}) *Block {
 
 func (self *XEth) Accounts() []string {
 	// TODO: check err?
-	accounts, _ := self.eth.AccountManager().Accounts()
+	accounts, _ := self.backend.AccountManager().Accounts()
 	accountAddresses := make([]string, len(accounts))
 	for i, ac := range accounts {
 		accountAddresses[i] = common.ToHex(ac.Address)
@@ -282,31 +214,47 @@ func (self *XEth) Accounts() []string {
 }
 
 func (self *XEth) PeerCount() int {
-	return self.eth.PeerCount()
+	return self.backend.PeerCount()
 }
 
 func (self *XEth) IsMining() bool {
-	return self.eth.IsMining()
+	return self.backend.IsMining()
+}
+
+func (self *XEth) EthVersion() string {
+	return string(self.backend.EthVersion())
+}
+
+func (self *XEth) NetworkVersion() string {
+	return string(self.backend.NetVersion())
+}
+
+func (self *XEth) WhisperVersion() string {
+	return string(self.backend.ShhVersion())
+}
+
+func (self *XEth) ClientVersion() string {
+	return self.backend.ClientVersion()
 }
 
 func (self *XEth) SetMining(shouldmine bool) bool {
-	ismining := self.eth.IsMining()
+	ismining := self.backend.IsMining()
 	if shouldmine && !ismining {
-		err := self.eth.StartMining()
+		err := self.backend.StartMining()
 		return err == nil
 	}
 	if ismining && !shouldmine {
-		self.eth.StopMining()
+		self.backend.StopMining()
 	}
-	return self.eth.IsMining()
+	return self.backend.IsMining()
 }
 
 func (self *XEth) IsListening() bool {
-	return self.eth.IsListening()
+	return self.backend.IsListening()
 }
 
 func (self *XEth) Coinbase() string {
-	cb, _ := self.eth.AccountManager().Coinbase()
+	cb, _ := self.backend.AccountManager().Coinbase()
 	return common.ToHex(cb)
 }
 
@@ -349,7 +297,7 @@ func (self *XEth) SecretToAddress(key string) string {
 
 func (self *XEth) RegisterFilter(args *core.FilterOptions) int {
 	var id int
-	filter := core.NewFilter(self.Backend())
+	filter := core.NewFilter(self.backend)
 	filter.SetOptions(args)
 	filter.LogsCallback = func(logs state.Logs) {
 		self.logMut.Lock()
@@ -375,7 +323,7 @@ func (self *XEth) UninstallFilter(id int) bool {
 
 func (self *XEth) NewFilterString(word string) int {
 	var id int
-	filter := core.NewFilter(self.Backend())
+	filter := core.NewFilter(self.backend)
 
 	switch word {
 	case "pending":
@@ -427,7 +375,7 @@ func (self *XEth) Logs(id int) state.Logs {
 }
 
 func (self *XEth) AllLogs(args *core.FilterOptions) state.Logs {
-	filter := core.NewFilter(self.Backend())
+	filter := core.NewFilter(self.backend)
 	filter.SetOptions(args)
 
 	return filter.Find()
@@ -543,7 +491,7 @@ func (self *XEth) FromNumber(str string) string {
 
 func (self *XEth) PushTx(encodedTx string) (string, error) {
 	tx := types.NewTransactionFromBytes(common.FromHex(encodedTx))
-	err := self.eth.TxPool().Add(tx)
+	err := self.backend.TxPool().Add(tx)
 	if err != nil {
 		return "", err
 	}
@@ -556,7 +504,7 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 }
 
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
-	statedb := self.State().State() //self.chainManager.TransState()
+	statedb := self.State().State() //self.eth.ChainManager().TransState()
 	msg := callmsg{
 		from:     statedb.GetOrNewStateObject(common.HexToAddress(fromStr)),
 		to:       common.HexToAddress(toStr),
@@ -573,8 +521,8 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		msg.gasPrice = defaultGasPrice
 	}
 
-	block := self.chainManager.CurrentBlock()
-	vmenv := core.NewEnv(statedb, self.chainManager, msg, block)
+	block := self.CurrentBlock()
+	vmenv := core.NewEnv(statedb, self.backend.ChainManager(), msg, block)
 
 	res, err := vmenv.Call(msg.from, msg.to, msg.data, msg.gas, msg.gasPrice, msg.value)
 	return common.ToHex(res), err
@@ -635,14 +583,14 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 		tx = types.NewTransactionMessage(to, value.BigInt(), gas, price, data)
 	}
 
-	state := self.chainManager.TxState()
+	state := self.backend.ChainManager().TxState()
 	nonce := state.NewNonce(from)
 	tx.SetNonce(nonce)
 
 	if err := self.sign(tx, from, false); err != nil {
 		return "", err
 	}
-	if err := self.eth.TxPool().Add(tx); err != nil {
+	if err := self.backend.TxPool().Add(tx); err != nil {
 		return "", err
 	}
 
@@ -656,7 +604,7 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 }
 
 func (self *XEth) sign(tx *types.Transaction, from common.Address, didUnlock bool) error {
-	sig, err := self.accountManager.Sign(accounts.Account{Address: from.Bytes()}, tx.Hash().Bytes())
+	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from.Bytes()}, tx.Hash().Bytes())
 	if err == accounts.ErrLocked {
 		if didUnlock {
 			return fmt.Errorf("sender account still locked after successful unlock")

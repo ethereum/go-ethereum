@@ -49,7 +49,7 @@ func (api *EthereumApi) Close() {
 }
 
 func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
-	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
+	// Spec at https://github.com/ethereum/wiki/wiki/JSON-RPC
 	rpclogger.Debugf("%s %s", req.Method, req.Params)
 
 	switch req.Method {
@@ -60,14 +60,16 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 		*reply = common.ToHex(crypto.Sha3(common.FromHex(args.Data)))
 	case "web3_clientVersion":
-		*reply = api.xeth().Backend().Version()
+		*reply = api.xeth().ClientVersion()
 	case "net_version":
-		*reply = string(api.xeth().Backend().ProtocolVersion())
+		*reply = api.xeth().NetworkVersion()
 	case "net_listening":
 		*reply = api.xeth().IsListening()
 	case "net_peerCount":
 		v := api.xeth().PeerCount()
 		*reply = common.ToHex(big.NewInt(int64(v)).Bytes())
+	case "eth_version":
+		*reply = api.xeth().EthVersion()
 	case "eth_coinbase":
 		// TODO handling of empty coinbase due to lack of accounts
 		res := api.xeth().Coinbase()
@@ -84,7 +86,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 	case "eth_accounts":
 		*reply = api.xeth().Accounts()
 	case "eth_blockNumber":
-		v := api.xeth().Backend().ChainManager().CurrentBlock().Number()
+		v := api.xeth().CurrentBlock().Number()
 		*reply = common.ToHex(v.Bytes())
 	case "eth_getBalance":
 		args := new(GetBalanceArgs)
@@ -406,6 +408,8 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		res, _ := api.db.Get([]byte(args.Database + args.Key))
 		*reply = common.ToHex(res)
+	case "shh_version":
+		*reply = api.xeth().WhisperVersion()
 	case "shh_post":
 		args := new(WhisperMessageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
