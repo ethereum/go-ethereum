@@ -102,7 +102,7 @@ func (js *jsre) apiBindings() {
 	jethObj := t.Object()
 	jethObj.Set("send", jeth.Send)
 
-	err := js.re.Compile("bignum.js", re.BigNumber_JS)
+	err := js.re.Compile("bignumber.js", re.BigNumber_JS)
 	if err != nil {
 		utils.Fatalf("Error loading bignumber.js: %v", err)
 	}
