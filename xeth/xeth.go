@@ -456,7 +456,7 @@ func (self *XEth) EachStorage(addr string) string {
 	object := self.State().SafeGet(addr)
 	it := object.Trie().Iterator()
 	for it.Next() {
-		values = append(values, KeyVal{common.ToHex(it.Key), common.ToHex(it.Value)})
+		values = append(values, KeyVal{common.ToHex(object.Trie().GetKey(it.Key)), common.ToHex(it.Value)})
 	}
 
 	valuesJson, err := json.Marshal(values)
