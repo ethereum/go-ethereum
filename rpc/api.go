@@ -49,7 +49,7 @@ func (api *EthereumApi) Close() {
 }
 
 func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
-	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
+	// Spec at https://github.com/ethereum/wiki/wiki/JSON-RPC
 	rpclogger.Debugf("%s %s", req.Method, req.Params)
 
 	switch req.Method {
@@ -68,6 +68,8 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 	case "net_peerCount":
 		v := api.xeth().PeerCount()
 		*reply = common.ToHex(big.NewInt(int64(v)).Bytes())
+	case "eth_version":
+		*reply = api.xeth().EthVersion()
 	case "eth_coinbase":
 		// TODO handling of empty coinbase due to lack of accounts
 		res := api.xeth().Coinbase()
@@ -406,6 +408,8 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		res, _ := api.db.Get([]byte(args.Database + args.Key))
 		*reply = common.ToHex(res)
+	case "shh_version":
+		*reply = api.xeth().WhisperVersion()
 	case "shh_post":
 		args := new(WhisperMessageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {

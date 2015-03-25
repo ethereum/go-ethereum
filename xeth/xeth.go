@@ -221,12 +221,20 @@ func (self *XEth) IsMining() bool {
 	return self.backend.IsMining()
 }
 
+func (self *XEth) EthVersion() string {
+	return string(self.backend.EthVersion())
+}
+
 func (self *XEth) NetworkVersion() string {
-	return string(self.backend.ProtocolVersion())
+	return string(self.backend.NetVersion())
+}
+
+func (self *XEth) WhisperVersion() string {
+	return string(self.backend.ShhVersion())
 }
 
 func (self *XEth) ClientVersion() string {
-	return self.backend.Version()
+	return self.backend.ClientVersion()
 }
 
 func (self *XEth) SetMining(shouldmine bool) bool {
