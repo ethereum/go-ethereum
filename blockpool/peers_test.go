@@ -14,7 +14,7 @@ import (
 // the actual tests
 func TestAddPeer(t *testing.T) {
 	test.LogInit()
-	_, blockPool, blockPoolTester := newTestBlockPool(t)
+	hashPool, blockPool, blockPoolTester := newTestBlockPool(t)
 	peer0 := blockPoolTester.newPeer("peer0", 1, 1)
 	peer1 := blockPoolTester.newPeer("peer1", 2, 2)
 	peer2 := blockPoolTester.newPeer("peer2", 3, 3)
@@ -119,7 +119,8 @@ func TestAddPeer(t *testing.T) {
 	}
 	peer0.waitBlocksRequests(3)
 
-	newblock := &types.Block{Td: common.Big3}
+	hash := hashPool.IndexesToHashes([]int{0})[0]
+	newblock := &types.Block{Td: common.Big3, HeaderHash: hash}
 	blockPool.chainEvents.Post(core.ChainHeadEvent{newblock})
 	time.Sleep(100 * time.Millisecond)
 	if blockPool.peers.best != nil {
