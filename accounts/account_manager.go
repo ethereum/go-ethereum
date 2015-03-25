@@ -36,9 +36,8 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	crand "crypto/rand"
-	"os"
-
 	"errors"
+	"os"
 	"sync"
 	"time"
 
@@ -101,17 +100,6 @@ func (am *Manager) firstAddr() ([]byte, error) {
 	return addrs[0], nil
 }
 
-func (am *Manager) getKey(addr []byte, keyAuth string) (*crypto.Key, error) {
-	if len(addr) == 0 {
-		var err error
-		addr, err = am.firstAddr()
-		if err != nil {
-			return nil, err
-		}
-	}
-	return am.keyStore.GetKey(addr, keyAuth)
-}
-
 func (am *Manager) DeleteAccount(address []byte, auth string) error {
 	return am.keyStore.DeleteKey(address, auth)
 }
@@ -130,7 +118,7 @@ func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) 
 // TimedUnlock unlocks the account with the given address.
 // When timeout has passed, the account will be locked again.
 func (am *Manager) TimedUnlock(addr []byte, keyAuth string, timeout time.Duration) error {
-	key, err := am.getKey(addr, keyAuth)
+	key, err := am.keyStore.GetKey(addr, keyAuth)
 	if err != nil {
 		return err
 	}
@@ -143,7 +131,7 @@ func (am *Manager) TimedUnlock(addr []byte, keyAuth string, timeout time.Duratio
 // stays unlocked until the program exits or until a TimedUnlock
 // timeout (started after the call to Unlock) expires.
 func (am *Manager) Unlock(addr []byte, keyAuth string) error {
-	key, err := am.getKey(addr, keyAuth)
+	key, err := am.keyStore.GetKey(addr, keyAuth)
 	if err != nil {
 		return err
 	}

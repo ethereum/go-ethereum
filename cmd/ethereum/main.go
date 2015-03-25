@@ -294,7 +294,7 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 		var err error
 		// Load startup keys. XXX we are going to need a different format
 		// Attempt to unlock the account
-		passphrase := getPassPhrase(ctx, "", false)
+		passphrase = getPassPhrase(ctx, "", false)
 		err = am.Unlock(common.FromHex(account), passphrase)
 		if err != nil {
 			utils.Fatalf("Unlock account failed '%v'", err)
@@ -310,7 +310,11 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	if len(account) > 0 {
 		if account == "coinbase" {
-			account = ""
+			accbytes, err := am.Coinbase()
+			if err != nil {
+				utils.Fatalf("no coinbase account: %v", err)
+			}
+			account = common.ToHex(accbytes)
 		}
 		unlockAccount(ctx, am, account)
 	}
@@ -420,6 +424,7 @@ func accountExport(ctx *cli.Context) {
 	}
 	am := utils.GetAccountManager(ctx)
 	auth := unlockAccount(ctx, am, account)
+
 	err := am.Export(keyfile, common.FromHex(account), auth)
 	if err != nil {
 		utils.Fatalf("Account export failed: %v", err)
