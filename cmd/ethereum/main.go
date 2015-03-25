@@ -295,7 +295,11 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 		// Load startup keys. XXX we are going to need a different format
 		// Attempt to unlock the account
 		passphrase = getPassPhrase(ctx, "", false)
-		err = am.Unlock(common.FromHex(account), passphrase)
+		accbytes := common.FromHex(account)
+		if len(accbytes) == 0 {
+			utils.Fatalf("Invalid account address '%s'", account)
+		}
+		err = am.Unlock(accbytes, passphrase)
 		if err != nil {
 			utils.Fatalf("Unlock account failed '%v'", err)
 		}
