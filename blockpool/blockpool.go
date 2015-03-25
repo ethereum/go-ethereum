@@ -238,12 +238,13 @@ func (self *BlockPool) Start() {
 			case event := <-self.tdSub.Chan():
 				if ev, ok := event.(core.ChainHeadEvent); ok {
 					td := ev.Block.Td
-					plog.DebugDetailf("td: %v", td)
+					plog.DebugDetailf("ChainHeadEvent: height: %v, td: %v, hash: %s", ev.Block.Number(), td, hex(ev.Block.Hash()))
 					self.setTD(td)
 					self.peers.lock.Lock()
 
 					if best := self.peers.best; best != nil {
-						if td.Cmp(best.td) >= 0 {
+						// only switch if we strictly go above otherwise we may stall if only
+						if td.Cmp(best.td) > 0 {
 							self.peers.best = nil
 							self.switchPeer(best, nil)
 						}
@@ -706,7 +707,7 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
   It activates the section process on incomplete sections with peer.
   It relinks orphaned sections with their parent if root block (and its parent hash) is known.
 */
-func (self *BlockPool) activateChain(sec *section, p *peer, connected map[string]*section) {
+func (self *BlockPool) activateChain(sec *section, p *peer, connected map[common.Hash]*section) {
 
 	p.lock.RLock()
 	switchC := p.switchC
@@ -720,7 +721,7 @@ LOOP:
 		plog.DebugDetailf("activateChain: section [%s] activated by peer <%s>", sectionhex(sec), p.id)
 		sec.activate(p)
 		if i > 0 && connected != nil {
-			connected[sec.top.hash.Str()] = sec
+			connected[sec.top.hash] = sec
 		}
 		/*
 		  Need to relink both complete and incomplete sections
