@@ -2,10 +2,12 @@ package types
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -54,5 +56,56 @@ func TestTransactionEncode(t *testing.T) {
 	should := common.FromHex("f86103018207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a8255441ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3")
 	if !bytes.Equal(txb, should) {
 		t.Errorf("encoded RLP mismatch, got %x", txb)
+	}
+}
+
+func decodeTx(data []byte) (*Transaction, error) {
+	var tx Transaction
+	return &tx, rlp.Decode(bytes.NewReader(data), &tx)
+}
+
+func defaultTestKey() (*ecdsa.PrivateKey, []byte) {
+	key := crypto.ToECDSA(common.Hex2Bytes("45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8"))
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	return key, addr
+}
+
+func TestRecipientEmpty(t *testing.T) {
+	_, addr := defaultTestKey()
+
+	tx, err := decodeTx(common.Hex2Bytes("f8498080808080011ca09b16de9d5bdee2cf56c28d16275a4da68cd30273e2525f3959f5d62557489921a0372ebd8fb3345f7db7b5a86d42e24d36e983e259b0664ceb8c227ec9af572f3d"))
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+
+	from, err := tx.From()
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+
+	if !bytes.Equal(addr, from.Bytes()) {
+		t.Error("derived address doesn't match")
+	}
+}
+
+func TestRecipientNormal(t *testing.T) {
+	_, addr := defaultTestKey()
+
+	tx, err := decodeTx(common.Hex2Bytes("f85d80808094000000000000000000000000000000000000000080011ca0527c0d8f5c63f7b9f41324a7c8a563ee1190bcbf0dac8ab446291bdbf32f5c79a0552c4ef0a09a04395074dab9ed34d3fbfb843c2f2546cc30fe89ec143ca94ca6"))
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+
+	from, err := tx.From()
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+
+	if !bytes.Equal(addr, from.Bytes()) {
+		t.Error("derived address doesn't match")
 	}
 }
