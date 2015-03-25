@@ -33,16 +33,16 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/peterh/liner"
 )
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.9.2"
+	Version          = "0.9.3"
 )
 
 var (
