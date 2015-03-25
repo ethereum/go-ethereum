@@ -355,10 +355,11 @@ func getPassPhrase(ctx *cli.Context, desc string, confirmation bool) (passphrase
 			passphrase = auth
 
 		} else {
-			var err error
-			if passphrase, err = common.ReadAllFile(passfile); err != nil {
+			passbytes, err := ioutil.ReadFile(passfile)
+			if err != nil {
 				utils.Fatalf("Unable to read password file '%s': %v", passfile, err)
 			}
+			passphrase = string(passbytes)
 		}
 	}
 	return
