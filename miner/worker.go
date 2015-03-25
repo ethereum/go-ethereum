@@ -64,6 +64,7 @@ type worker struct {
 	mux    *event.TypeMux
 	quit   chan struct{}
 	pow    pow.PoW
+	atWork int
 
 	eth      core.Backend
 	chain    *core.ChainManager
@@ -106,6 +107,7 @@ func (self *worker) start() {
 
 func (self *worker) stop() {
 	self.mining = false
+	self.atWork = 0
 
 	close(self.quit)
 }
@@ -116,7 +118,7 @@ func (self *worker) register(agent Agent) {
 }
 
 func (self *worker) update() {
-	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.NewMinedBlockEvent{}, core.ChainSideEvent{})
+	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{})
 
 	timer := time.NewTicker(2 * time.Second)
 
@@ -127,12 +129,14 @@ out:
 			switch ev := event.(type) {
 			case core.ChainHeadEvent:
 				self.commitNewWork()
-			case core.NewMinedBlockEvent:
-				//self.commitNewWork()
 			case core.ChainSideEvent:
 				self.uncleMu.Lock()
 				self.possibleUncles[ev.Block.Hash()] = ev.Block
 				self.uncleMu.Unlock()
+			}
+
+			if self.atWork == 0 {
+				self.commitNewWork()
 			}
 		case <-self.quit:
 			// stop all agents
@@ -148,36 +152,25 @@ out:
 	events.Unsubscribe()
 }
 
-func (self *worker) addUncle(uncle *types.Block) {
-}
-
 func (self *worker) wait() {
 	for {
 		for block := range self.recv {
-			// Someone Successfully Mined!
-			//block := self.current.block
-			//if block.Number().Uint64() == work.Number && block.Nonce() == 0 {
-			//self.current.block.SetNonce(work.Nonce)
-			//self.current.block.Header().MixDigest = common.BytesToHash(work.MixDigest)
-
-			jsonlogger.LogJson(&logger.EthMinerNewBlock{
-				BlockHash:     block.Hash().Hex(),
-				BlockNumber:   block.Number(),
-				ChainHeadHash: block.ParentHeaderHash.Hex(),
-				BlockPrevHash: block.ParentHeaderHash.Hex(),
-			})
-
 			if err := self.chain.InsertChain(types.Blocks{block}); err == nil {
 				for _, uncle := range block.Uncles() {
 					delete(self.possibleUncles, uncle.Hash())
 				}
-
 				self.mux.Post(core.NewMinedBlockEvent{block})
+
+				jsonlogger.LogJson(&logger.EthMinerNewBlock{
+					BlockHash:     block.Hash().Hex(),
+					BlockNumber:   block.Number(),
+					ChainHeadHash: block.ParentHeaderHash.Hex(),
+					BlockPrevHash: block.ParentHeaderHash.Hex(),
+				})
 			} else {
 				self.commitNewWork()
 			}
-			//}
-			break
+			self.atWork--
 		}
 	}
 }
@@ -190,6 +183,7 @@ func (self *worker) push() {
 		// push new work to agents
 		for _, agent := range self.agents {
 			agent.Work() <- self.current.block.Copy()
+			self.atWork++
 		}
 	}
 }
