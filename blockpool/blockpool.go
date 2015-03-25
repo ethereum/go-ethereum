@@ -238,7 +238,11 @@ func (self *BlockPool) Start() {
 			case event := <-self.tdSub.Chan():
 				if ev, ok := event.(core.ChainHeadEvent); ok {
 					td := ev.Block.Td
-					plog.DebugDetailf("ChainHeadEvent: height: %v, td: %v, hash: %s", ev.Block.Number(), td, hex(ev.Block.Hash()))
+					var height *big.Int
+					if (ev.Block.HeaderHash == common.Hash{}) {
+						height = ev.Block.Header().Number
+					}
+					plog.DebugDetailf("ChainHeadEvent: height: %v, td: %v, hash: %s", height, td, hex(ev.Block.Hash()))
 					self.setTD(td)
 					self.peers.lock.Lock()
 
