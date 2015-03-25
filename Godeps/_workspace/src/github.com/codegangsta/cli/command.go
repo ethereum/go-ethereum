@@ -10,8 +10,10 @@ import (
 type Command struct {
 	// The name of the command
 	Name string
-	// short name of the command. Typically one character
+	// short name of the command. Typically one character (deprecated, use `Aliases`)
 	ShortName string
+	// A list of aliases for the command
+	Aliases []string
 	// A short description of the usage of this command
 	Usage string
 	// A longer explanation of how the command works
@@ -117,9 +119,24 @@ func (c Command) Run(ctx *Context) error {
 	return nil
 }
 
+func (c Command) Names() []string {
+	names := []string{c.Name}
+
+	if c.ShortName != "" {
+		names = append(names, c.ShortName)
+	}
+
+	return append(names, c.Aliases...)
+}
+
 // Returns true if Command.Name or Command.ShortName matches given name
 func (c Command) HasName(name string) bool {
-	return c.Name == name || (c.ShortName != "" && c.ShortName == name)
+	for _, n := range c.Names() {
+		if n == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (c Command) startApp(ctx *Context) error {

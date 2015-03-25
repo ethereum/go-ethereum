@@ -356,16 +356,16 @@ func (self *BlockPool) switchPeer(oldp, newp *peer) {
 
 		}
 
-		var connected = make(map[string]*section)
+		var connected = make(map[common.Hash]*section)
 		var sections []common.Hash
 		for _, hash := range newp.sections {
 			plog.DebugDetailf("activate chain starting from section [%s]", hex(hash))
 			// if section not connected (ie, top of a contiguous sequence of sections)
-			if connected[hash.Str()] == nil {
+			if connected[hash] == nil {
 				// if not deleted, then reread from pool (it can be orphaned top half of a split section)
 				if entry := self.get(hash); entry != nil {
 					self.activateChain(entry.section, newp, connected)
-					connected[hash.Str()] = entry.section
+					connected[hash] = entry.section
 					sections = append(sections, hash)
 				}
 			}
@@ -531,6 +531,7 @@ func (self *peer) run() {
 
 	self.blocksRequestTimer = time.After(0)
 	self.headInfoTimer = time.After(self.bp.Config.BlockHashesTimeout)
+	self.bestIdleTimer = nil
 
 	var ping = time.NewTicker(5 * time.Second)
 
@@ -581,7 +582,7 @@ LOOP:
 		case <-self.bp.quit:
 			break LOOP
 
-		// quit
+		// best
 		case <-self.bestIdleTimer:
 			self.peerError(self.bp.peers.errors.New(ErrIdleTooLong, "timed out without providing new blocks (td: %v, head: %s)...quitting", self.td, hex(self.currentBlockHash)))
 

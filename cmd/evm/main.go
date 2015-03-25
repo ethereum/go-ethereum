@@ -32,11 +32,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 var (
@@ -157,7 +157,7 @@ func (self *VMEnv) CallCode(caller vm.ContextRef, addr common.Address, data []by
 	return exe.Call(addr, caller)
 }
 
-func (self *VMEnv) Create(caller vm.ContextRef, addr *common.Address, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
-	exe := self.vm(addr, data, gas, price, value)
+func (self *VMEnv) Create(caller vm.ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
+	exe := self.vm(nil, data, gas, price, value)
 	return exe.Create(caller)
 }

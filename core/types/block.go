@@ -131,9 +131,12 @@ func NewBlock(parentHash common.Hash, coinbase common.Address, root common.Hash,
 		Extra:      extra,
 		GasUsed:    new(big.Int),
 		GasLimit:   new(big.Int),
+		Number:     new(big.Int),
 	}
 	header.SetNonce(nonce)
 	block := &Block{header: header}
+	block.Td = new(big.Int)
+
 	return block
 }
 
@@ -302,7 +305,7 @@ func (self *Block) ParentHash() common.Hash {
 }
 
 func (self *Block) Copy() *Block {
-	block := NewBlock(self.ParentHash(), self.Coinbase(), self.Root(), self.Difficulty(), self.Nonce(), self.header.Extra)
+	block := NewBlock(self.header.ParentHash, self.Coinbase(), self.Root(), new(big.Int), self.Nonce(), self.header.Extra)
 	block.header.Bloom = self.header.Bloom
 	block.header.TxHash = self.header.TxHash
 	block.transactions = self.transactions
@@ -312,9 +315,13 @@ func (self *Block) Copy() *Block {
 	block.header.GasUsed.Set(self.header.GasUsed)
 	block.header.ReceiptHash = self.header.ReceiptHash
 	block.header.Difficulty.Set(self.header.Difficulty)
-	block.header.Number = self.header.Number
+	block.header.Number.Set(self.header.Number)
 	block.header.Time = self.header.Time
 	block.header.MixDigest = self.header.MixDigest
+	if self.Td != nil {
+		block.Td.Set(self.Td)
+	}
+
 	return block
 }
 

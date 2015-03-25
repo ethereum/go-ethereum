@@ -210,7 +210,7 @@ Subcommands can be defined for a more git-like command line app.
 app.Commands = []cli.Command{
   {
     Name:      "add",
-    ShortName: "a",
+    Aliases:     []string{"a"},
     Usage:     "add a task to the list",
     Action: func(c *cli.Context) {
       println("added task: ", c.Args().First())
@@ -218,7 +218,7 @@ app.Commands = []cli.Command{
   },
   {
     Name:      "complete",
-    ShortName: "c",
+    Aliases:     []string{"c"},
     Usage:     "complete a task on the list",
     Action: func(c *cli.Context) {
       println("completed task: ", c.Args().First())
@@ -226,7 +226,7 @@ app.Commands = []cli.Command{
   },
   {
     Name:      "template",
-    ShortName: "r",
+    Aliases:     []string{"r"},
     Usage:     "options for task templates",
     Subcommands: []cli.Command{
       {
@@ -244,7 +244,7 @@ app.Commands = []cli.Command{
         },
       },
     },
-  },     
+  },
 }
 ...
 ```
@@ -262,8 +262,8 @@ app := cli.NewApp()
 app.EnableBashCompletion = true
 app.Commands = []cli.Command{
   {
-    Name: "complete",
-    ShortName: "c",
+    Name:  "complete",
+    Aliases: []string{"c"},
     Usage: "complete a task on the list",
     Action: func(c *cli.Context) {
        println("completed task: ", c.Args().First())

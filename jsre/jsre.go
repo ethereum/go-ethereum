@@ -2,8 +2,9 @@ package jsre
 
 import (
 	"fmt"
-	"github.com/robertkrimen/otto"
 	"io/ioutil"
+
+	"github.com/robertkrimen/otto"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -112,4 +113,13 @@ func (self *JSRE) Eval(code string) (s string, err error) {
 		return
 	}
 	return fmt.Sprintf("%v", val), nil
+}
+
+func (self *JSRE) Compile(fn string, src interface{}) error {
+	script, err := self.vm.Compile(fn, src)
+	if err != nil {
+		return err
+	}
+	self.vm.Run(script)
+	return nil
 }

@@ -449,7 +449,7 @@
         "out" : "0x",
         "post" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
-                "balance" : "1000000000000000010",
+                "balance" : "1000000000000000000",
                 "code" : "0x6000600060006000600073aaae7baea6a6c7c4c2dfeb977efac326af552aaa611770f1600055",
                 "nonce" : "0",
                 "storage" : {
@@ -464,7 +464,7 @@
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "268921",
+                "balance" : "268931",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
@@ -479,7 +479,7 @@
                 }
             }
         },
-        "postStateRoot" : "0a5891c787268e22d32f003c909cd79f1f7f9079a5aa6356b73aa861e3a575f0",
+        "postStateRoot" : "ca233b283fda9c6080af30a12f19b13f117d75d3c06ef83671fd881e0c52db6a",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000000000000000",
@@ -1024,14 +1024,14 @@
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "99978988",
+                "balance" : "99978998",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
                 }
             },
             "aaae7baea6a6c7c4c2dfeb977efac326af552aaa" : {
-                "balance" : "1000000000000000010",
+                "balance" : "1000000000000000000",
                 "code" : "0x73095e7baea6a6c7c4c2dfeb977efac326af552d87ff",
                 "nonce" : "0",
                 "storage" : {
@@ -1039,7 +1039,7 @@
                 }
             }
         },
-        "postStateRoot" : "c31edffd0696efc0a58e88b084042ddf0a0200723ac7a8c40b84b72f04f0a89a",
+        "postStateRoot" : "7c2147eefb0539a33353f7f1d753dd0d1185993a327c2e6c3a2334fca5ac0f26",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "100000000",

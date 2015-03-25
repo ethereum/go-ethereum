@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"text/template"
 	"time"
@@ -72,17 +73,14 @@ func NewApp() *App {
 		BashComplete: DefaultAppComplete,
 		Action:       helpCommand.Action,
 		Compiled:     compileTime(),
-		Author:       "Dr. James",
-		Email:        "who@gmail.com",
-		Authors:      []Author{{"Jim", "jim@corporate.com"}, {"Hank", "hank@indiepalace.com"}},
 		Writer:       os.Stdout,
 	}
 }
 
 // Entry point to the cli app. Parses the arguments slice and routes to the proper flag/args combination
 func (a *App) Run(arguments []string) (err error) {
-	if a.Author != "" && a.Author != "" {
-		a.Authors = append(a.Authors, Author{a.Author, a.Email})
+	if a.Author != "" || a.Email != "" {
+		a.Authors = append(a.Authors, Author{Name: a.Author, Email: a.Email})
 	}
 
 	if HelpPrinter == nil {
@@ -91,8 +89,12 @@ func (a *App) Run(arguments []string) (err error) {
 		}()
 
 		HelpPrinter = func(templ string, data interface{}) {
+			funcMap := template.FuncMap{
+				"join": strings.Join,
+			}
+
 			w := tabwriter.NewWriter(a.Writer, 0, 8, 1, '\t', 0)
-			t := template.Must(template.New("help").Parse(templ))
+			t := template.Must(template.New("help").Funcs(funcMap).Parse(templ))
 			err := t.Execute(w, data)
 			if err != nil {
 				panic(err)

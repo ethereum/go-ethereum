@@ -1,13 +1,22 @@
 package jsre
 
 const pp_js = `
-function pp(object) {
+function pp(object, indent) {
     var str = "";
+    /*
+    var o = object;
+    try {
+	object = JSON.stringify(object)
+	object = JSON.parse(object);
+   } catch(e) {
+	object = o;
+   }
+   */
 
     if(object instanceof Array) {
-        str += "[ ";
+        str += "[";
         for(var i = 0, l = object.length; i < l; i++) {
-            str += pp(object[i]);
+            str += pp(object[i], indent);
 
             if(i < l-1) {
                 str += ", ";
@@ -15,16 +24,18 @@ function pp(object) {
         }
         str += " ]";
     } else if(typeof(object) === "object") {
-        str += "{ ";
+        str += "{\n";
+	indent += "  ";
         var last = Object.keys(object).pop()
         for(var k in object) {
-            str += k + ": " + pp(object[k]);
+            str += indent + k + ": " + pp(object[k], indent);
 
             if(k !== last) {
-                str += ", ";
+                str += ",";
             }
+	    str += "\n";
         }
-        str += " }";
+        str += indent.substr(2, indent.length) + "}";
     } else if(typeof(object) === "string") {
         str += "\033[32m'" + object + "'";
     } else if(typeof(object) === "undefined") {
@@ -46,7 +57,7 @@ function prettyPrint(/* */) {
     var args = arguments;
     var ret = "";
     for(var i = 0, l = args.length; i < l; i++) {
-	    ret += pp(args[i]) + "\n";
+	    ret += pp(args[i], "") + "\n";
     }
     return ret;
 }
