@@ -167,13 +167,13 @@ func New(config *Config) (*Ethereum, error) {
 	extraDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "extra"))
 
 	// Perform database sanity checks
-	d, _ := extraDb.Get([]byte("ProtocolVersion"))
+	d, _ := blockDb.Get([]byte("ProtocolVersion"))
 	protov := int(common.NewValue(d).Uint())
 	if protov != config.ProtocolVersion && protov != 0 {
 		path := path.Join(config.DataDir, "blockchain")
 		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
 	}
-	saveProtocolVersion(extraDb, config.ProtocolVersion)
+	saveProtocolVersion(blockDb, config.ProtocolVersion)
 	servlogger.Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
 
 	eth := &Ethereum{
