@@ -23,8 +23,6 @@ function pp(object, indent) {
             }
         }
         str += " ]";
-    } else if(object instanceof BigNumber) {
-	    return pp(object.toString(), indent);
     } else if(typeof(object) === "object") {
         str += "{\n";
 	indent += "  ";
