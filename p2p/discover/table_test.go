@@ -2,79 +2,68 @@ package discover
 
 import (
 	"crypto/ecdsa"
-	"errors"
 	"fmt"
 	"math/rand"
 	"net"
 	"reflect"
 	"testing"
 	"testing/quick"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-func TestTable_bumpOrAddBucketAssign(t *testing.T) {
-	tab := newTable(nil, NodeID{}, &net.UDPAddr{})
-	for i := 1; i < len(tab.buckets); i++ {
-		tab.bumpOrAdd(randomID(tab.self.ID, i), &net.UDPAddr{})
-	}
-	for i, b := range tab.buckets {
-		if i > 0 && len(b.entries) != 1 {
-			t.Errorf("bucket %d has %d entries, want 1", i, len(b.entries))
+func TestTable_pingReplace(t *testing.T) {
+	doit := func(newNodeIsResponding, lastInBucketIsResponding bool) {
+		transport := newPingRecorder()
+		tab := newTable(transport, NodeID{}, &net.UDPAddr{})
+		last := fillBucket(tab, 200)
+		pingSender := randomID(tab.self.ID, 200)
+
+		// this gotPing should replace the last node
+		// if the last node is not responding.
+		transport.responding[last.ID] = lastInBucketIsResponding
+		transport.responding[pingSender] = newNodeIsResponding
+		tab.bond(true, pingSender, &net.UDPAddr{}, 0)
+
+		// first ping goes to sender (bonding pingback)
+		if !transport.pinged[pingSender] {
+			t.Error("table did not ping back sender")
+		}
+		if newNodeIsResponding {
+			// second ping goes to oldest node in bucket
+			// to see whether it is still alive.
+			if !transport.pinged[last.ID] {
+				t.Error("table did not ping last node in bucket")
+			}
+		}
+
+		tab.mutex.Lock()
+		defer tab.mutex.Unlock()
+		if l := len(tab.buckets[200].entries); l != bucketSize {
+			t.Errorf("wrong bucket size after gotPing: got %d, want %d", bucketSize, l)
+		}
+
+		if lastInBucketIsResponding || !newNodeIsResponding {
+			if !contains(tab.buckets[200].entries, last.ID) {
+				t.Error("last entry was removed")
+			}
+			if contains(tab.buckets[200].entries, pingSender) {
+				t.Error("new entry was added")
+			}
+		} else {
+			if contains(tab.buckets[200].entries, last.ID) {
+				t.Error("last entry was not removed")
+			}
+			if !contains(tab.buckets[200].entries, pingSender) {
+				t.Error("new entry was not added")
+			}
 		}
 	}
-}
 
-func TestTable_bumpOrAddPingReplace(t *testing.T) {
-	pingC := make(pingC)
-	tab := newTable(pingC, NodeID{}, &net.UDPAddr{})
-	last := fillBucket(tab, 200)
-
-	// this bumpOrAdd should not replace the last node
-	// because the node replies to ping.
-	new := tab.bumpOrAdd(randomID(tab.self.ID, 200), &net.UDPAddr{})
-
-	pinged := <-pingC
-	if pinged != last.ID {
-		t.Fatalf("pinged wrong node: %v\nwant %v", pinged, last.ID)
-	}
-
-	tab.mutex.Lock()
-	defer tab.mutex.Unlock()
-	if l := len(tab.buckets[200].entries); l != bucketSize {
-		t.Errorf("wrong bucket size after bumpOrAdd: got %d, want %d", bucketSize, l)
-	}
-	if !contains(tab.buckets[200].entries, last.ID) {
-		t.Error("last entry was removed")
-	}
-	if contains(tab.buckets[200].entries, new.ID) {
-		t.Error("new entry was added")
-	}
-}
-
-func TestTable_bumpOrAddPingTimeout(t *testing.T) {
-	tab := newTable(pingC(nil), NodeID{}, &net.UDPAddr{})
-	last := fillBucket(tab, 200)
-
-	// this bumpOrAdd should replace the last node
-	// because the node does not reply to ping.
-	new := tab.bumpOrAdd(randomID(tab.self.ID, 200), &net.UDPAddr{})
-
-	// wait for async bucket update. damn. this needs to go away.
-	time.Sleep(2 * time.Millisecond)
-
-	tab.mutex.Lock()
-	defer tab.mutex.Unlock()
-	if l := len(tab.buckets[200].entries); l != bucketSize {
-		t.Errorf("wrong bucket size after bumpOrAdd: got %d, want %d", bucketSize, l)
-	}
-	if contains(tab.buckets[200].entries, last.ID) {
-		t.Error("last entry was not removed")
-	}
-	if !contains(tab.buckets[200].entries, new.ID) {
-		t.Error("new entry was not added")
-	}
+	doit(true, true)
+	doit(false, true)
+	doit(false, true)
+	doit(false, false)
 }
 
 func fillBucket(tab *Table, ld int) (last *Node) {
@@ -85,44 +74,27 @@ func fillBucket(tab *Table, ld int) (last *Node) {
 	return b.entries[bucketSize-1]
 }
 
-type pingC chan NodeID
+type pingRecorder struct{ responding, pinged map[NodeID]bool }
 
-func (t pingC) findnode(n *Node, target NodeID) ([]*Node, error) {
+func newPingRecorder() *pingRecorder {
+	return &pingRecorder{make(map[NodeID]bool), make(map[NodeID]bool)}
+}
+
+func (t *pingRecorder) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
 	panic("findnode called on pingRecorder")
 }
-func (t pingC) close() {
+func (t *pingRecorder) close() {
 	panic("close called on pingRecorder")
 }
-func (t pingC) ping(n *Node) error {
-	if t == nil {
-		return errTimeout
-	}
-	t <- n.ID
-	return nil
+func (t *pingRecorder) waitping(from NodeID) error {
+	return nil // remote always pings
 }
-
-func TestTable_bump(t *testing.T) {
-	tab := newTable(nil, NodeID{}, &net.UDPAddr{})
-
-	// add an old entry and two recent ones
-	oldactive := time.Now().Add(-2 * time.Minute)
-	old := &Node{ID: randomID(tab.self.ID, 200), active: oldactive}
-	others := []*Node{
-		&Node{ID: randomID(tab.self.ID, 200), active: time.Now()},
-		&Node{ID: randomID(tab.self.ID, 200), active: time.Now()},
-	}
-	tab.add(append(others, old))
-	if tab.buckets[200].entries[0] == old {
-		t.Fatal("old entry is at front of bucket")
-	}
-
-	// bumping the old entry should move it to the front
-	tab.bump(old.ID)
-	if old.active == oldactive {
-		t.Error("activity timestamp not updated")
-	}
-	if tab.buckets[200].entries[0] != old {
-		t.Errorf("bumped entry did not move to the front of bucket")
+func (t *pingRecorder) ping(toid NodeID, toaddr *net.UDPAddr) error {
+	t.pinged[toid] = true
+	if t.responding[toid] {
+		return nil
+	} else {
+		return errTimeout
 	}
 }
 
@@ -210,7 +182,7 @@ func TestTable_Lookup(t *testing.T) {
 		t.Fatalf("lookup on empty table returned %d results: %#v", len(results), results)
 	}
 	// seed table with initial node (otherwise lookup will terminate immediately)
-	tab.bumpOrAdd(randomID(target, 200), &net.UDPAddr{Port: 200})
+	tab.add([]*Node{newNode(randomID(target, 200), &net.UDPAddr{Port: 200})})
 
 	results := tab.Lookup(target)
 	t.Logf("results:")
@@ -238,16 +210,16 @@ type findnodeOracle struct {
 	target NodeID
 }
 
-func (t findnodeOracle) findnode(n *Node, target NodeID) ([]*Node, error) {
-	t.t.Logf("findnode query at dist %d", n.DiscPort)
+func (t findnodeOracle) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
+	t.t.Logf("findnode query at dist %d", toaddr.Port)
 	// current log distance is encoded in port number
 	var result []*Node
-	switch n.DiscPort {
+	switch toaddr.Port {
 	case 0:
 		panic("query to node at distance 0")
 	default:
 		// TODO: add more randomness to distances
-		next := n.DiscPort - 1
+		next := toaddr.Port - 1
 		for i := 0; i < bucketSize; i++ {
 			result = append(result, &Node{ID: randomID(t.target, next), DiscPort: next})
 		}
@@ -255,11 +227,9 @@ func (t findnodeOracle) findnode(n *Node, target NodeID) ([]*Node, error) {
 	return result, nil
 }
 
-func (t findnodeOracle) close() {}
-
-func (t findnodeOracle) ping(n *Node) error {
-	return errors.New("ping is not supported by this transport")
-}
+func (t findnodeOracle) close()                                      {}
+func (t findnodeOracle) waitping(from NodeID) error                  { return nil }
+func (t findnodeOracle) ping(toid NodeID, toaddr *net.UDPAddr) error { return nil }
 
 func hasDuplicates(slice []*Node) bool {
 	seen := make(map[NodeID]bool)
