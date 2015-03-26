@@ -1370,3 +1370,51 @@ func TestSubmitWorkArgs(t *testing.T) {
 		t.Errorf("Digest shoud be %#v but is %#v", expected.Digest, args.Digest)
 	}
 }
+
+func TestSubmitWorkArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(SubmitWorkArgs)
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestSubmitWorkArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(SubmitWorkArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestSubmitWorkArgsNonceInt(t *testing.T) {
+	input := `[1, "0x1234567890abcdef1234567890abcdef", "0xD1GE5700000000000000000000000000"]`
+
+	args := new(SubmitWorkArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+func TestSubmitWorkArgsHeaderInt(t *testing.T) {
+	input := `["0x0000000000000001", 1, "0xD1GE5700000000000000000000000000"]`
+
+	args := new(SubmitWorkArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+func TestSubmitWorkArgsDigestInt(t *testing.T) {
+	input := `["0x0000000000000001", "0x1234567890abcdef1234567890abcdef", 1]`
+
+	args := new(SubmitWorkArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
