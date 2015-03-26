@@ -159,10 +159,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		if err := args.requirements(); err != nil {
-			return err
-		}
-		*reply = api.xethAtStateNum(args.BlockNumber).CodeAt(args.Address)
+		*reply = api.xethAtStateNum(args.BlockNumber).CodeAt(args.Address.Hex())
 	case "eth_sendTransaction", "eth_transact":
 		args := new(NewTxArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {

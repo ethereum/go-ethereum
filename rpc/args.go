@@ -281,7 +281,7 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type GetDataArgs struct {
-	Address     string
+	Address     common.Address
 	BlockNumber int64
 }
 
@@ -299,7 +299,7 @@ func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return NewInvalidTypeError("address", "not a string")
 	}
-	args.Address = addstr
+	args.Address = common.HexToAddress(addstr)
 
 	if len(obj) > 1 {
 		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
@@ -307,13 +307,6 @@ func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 		}
 	}
 
-	return nil
-}
-
-func (args *GetDataArgs) requirements() error {
-	if len(args.Address) == 0 {
-		return NewValidationError("Address", "cannot be blank")
-	}
 	return nil
 }
 

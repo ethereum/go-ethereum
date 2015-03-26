@@ -682,15 +682,11 @@ func TestGetTxCountBlockheightInvalid(t *testing.T) {
 func TestGetDataArgs(t *testing.T) {
 	input := `["0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8", "latest"]`
 	expected := new(GetDataArgs)
-	expected.Address = "0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8"
+	expected.Address = common.HexToAddress("0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8")
 	expected.BlockNumber = -1
 
 	args := new(GetDataArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
-		t.Error(err)
-	}
-
-	if err := args.requirements(); err != nil {
 		t.Error(err)
 	}
 
@@ -703,13 +699,63 @@ func TestGetDataArgs(t *testing.T) {
 	}
 }
 
-func TestGetDataEmptyArgs(t *testing.T) {
+func TestGetDataArgsEmpty(t *testing.T) {
 	input := `[]`
 
 	args := new(GetDataArgs)
 	err := json.Unmarshal([]byte(input), &args)
-	if err == nil {
+	switch err.(type) {
+	case nil:
 		t.Error("Expected error but didn't get one")
+	case *InsufficientParamsError:
+		break
+	default:
+		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestGetDataArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(GetDataArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestGetDataArgsAddressNotString(t *testing.T) {
+	input := `[12, "latest"]`
+
+	args := new(GetDataArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *InvalidTypeError:
+		break
+	default:
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestGetDataArgsBlocknumberNotString(t *testing.T) {
+	input := `["0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8", false]`
+
+	args := new(GetDataArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *InvalidTypeError:
+		break
+	default:
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
 	}
 }
 
