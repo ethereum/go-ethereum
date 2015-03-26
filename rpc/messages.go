@@ -21,6 +21,22 @@ import (
 	"fmt"
 )
 
+type InvalidTypeError struct {
+	method string
+	msg    string
+}
+
+func (e *InvalidTypeError) Error() string {
+	return fmt.Sprintf("invalid type on field %s: %s", e.method, e.msg)
+}
+
+func NewInvalidTypeError(method, msg string) *InvalidTypeError {
+	return &InvalidTypeError{
+		method: method,
+		msg:    msg,
+	}
+}
+
 type InsufficientParamsError struct {
 	have int
 	want int
