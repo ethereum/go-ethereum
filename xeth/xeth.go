@@ -250,8 +250,8 @@ func (self *XEth) IsListening() bool {
 }
 
 func (self *XEth) Coinbase() string {
-	cb, _ := self.backend.AccountManager().Coinbase()
-	return common.ToHex(cb)
+	eb, _ := self.backend.Etherbase()
+	return eb.Hex()
 }
 
 func (self *XEth) NumberToHuman(balance string) string {

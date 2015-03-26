@@ -96,10 +96,15 @@ var (
 		Name:  "mine",
 		Usage: "Enable mining",
 	}
+	EtherbaseFlag = cli.StringFlag{
+		Name:  "Etherbase",
+		Usage: "public address for block mining rewards. By default the address of your primary account is used",
+		Value: "primary",
+	}
 
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
-		Usage: "unlock the account given until this program exits (prompts for password). '--unlock coinbase' unlocks the primary (coinbase) account",
+		Usage: "unlock the account given until this program exits (prompts for password). '--unlock primary' unlocks the primary account",
 		Value: "",
 	}
 	PasswordFileFlag = cli.StringFlag{
@@ -215,6 +220,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		LogFile:         ctx.GlobalString(LogFileFlag.Name),
 		LogLevel:        ctx.GlobalInt(LogLevelFlag.Name),
 		LogJSON:         ctx.GlobalString(LogJSONFlag.Name),
+		Etherbase:       ctx.GlobalString(EtherbaseFlag.Name),
 		MinerThreads:    ctx.GlobalInt(MinerThreadsFlag.Name),
 		AccountManager:  GetAccountManager(ctx),
 		VmDebug:         ctx.GlobalBool(VMDebugFlag.Name),
