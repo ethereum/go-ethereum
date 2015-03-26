@@ -326,11 +326,9 @@ func (args *BlockNumIndexArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	arg0, ok := obj[0].(string)
-	if !ok {
-		return NewInvalidTypeError("blockNumber", "not a string")
+	if err := blockHeight(obj[0], &args.BlockNumber); err != nil {
+		return err
 	}
-	args.BlockNumber = common.Big(arg0).Int64()
 
 	if len(obj) > 1 {
 		arg1, ok := obj[1].(string)

@@ -1076,6 +1076,66 @@ func TestBlockNumIndexArgs(t *testing.T) {
 	}
 }
 
+func TestBlockNumIndexArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(BlockNumIndexArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *InsufficientParamsError:
+		break
+	default:
+		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestBlockNumIndexArgsInvalid(t *testing.T) {
+	input := `"foo"`
+
+	args := new(BlockNumIndexArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestBlockNumIndexArgsBlocknumInvalid(t *testing.T) {
+	input := `[{}, "0x1"]`
+
+	args := new(BlockNumIndexArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *InvalidTypeError:
+		break
+	default:
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestBlockNumIndexArgsIndexInvalid(t *testing.T) {
+	input := `["0x29a", 1]`
+
+	args := new(BlockNumIndexArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *InvalidTypeError:
+		break
+	default:
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	}
+}
+
 func TestHashIndexArgs(t *testing.T) {
 	input := `["0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b", "0x1"]`
 	expected := new(HashIndexArgs)
