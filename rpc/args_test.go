@@ -145,7 +145,27 @@ func TestGetBlockByHashArgsHashInt(t *testing.T) {
 	}
 }
 
-func TestGetBlockByNumberArgs(t *testing.T) {
+func TestGetBlockByNumberArgsBlockNum(t *testing.T) {
+	input := `[436, false]`
+	expected := new(GetBlockByNumberArgs)
+	expected.BlockNumber = 436
+	expected.IncludeTxs = false
+
+	args := new(GetBlockByNumberArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if args.BlockNumber != expected.BlockNumber {
+		t.Errorf("BlockNumber should be %v but is %v", expected.BlockNumber, args.BlockNumber)
+	}
+
+	if args.IncludeTxs != expected.IncludeTxs {
+		t.Errorf("IncludeTxs should be %v but is %v", expected.IncludeTxs, args.IncludeTxs)
+	}
+}
+
+func TestGetBlockByNumberArgsBlockHex(t *testing.T) {
 	input := `["0x1b4", false]`
 	expected := new(GetBlockByNumberArgs)
 	expected.BlockNumber = 436
@@ -157,7 +177,7 @@ func TestGetBlockByNumberArgs(t *testing.T) {
 	}
 
 	if args.BlockNumber != expected.BlockNumber {
-		t.Errorf("BlockHash should be %v but is %v", expected.BlockNumber, args.BlockNumber)
+		t.Errorf("BlockNumber should be %v but is %v", expected.BlockNumber, args.BlockNumber)
 	}
 
 	if args.IncludeTxs != expected.IncludeTxs {
@@ -170,8 +190,42 @@ func TestGetBlockByNumberEmpty(t *testing.T) {
 
 	args := new(GetBlockByNumberArgs)
 	err := json.Unmarshal([]byte(input), &args)
-	if err == nil {
+	switch err.(type) {
+	case nil:
 		t.Error("Expected error but didn't get one")
+	case *InsufficientParamsError:
+		break
+	default:
+		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestGetBlockByNumberBool(t *testing.T) {
+	input := `[true, true]`
+
+	args := new(GetBlockByNumberArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	}
+}
+func TestGetBlockByNumberBlockObject(t *testing.T) {
+	input := `{}`
+
+	args := new(GetBlockByNumberArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
 	}
 }
 

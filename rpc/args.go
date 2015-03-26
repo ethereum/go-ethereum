@@ -81,8 +81,10 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 
 	if v, ok := obj[0].(float64); ok {
 		args.BlockNumber = int64(v)
+	} else if v, ok := obj[0].(string); ok {
+		args.BlockNumber = common.Big(v).Int64()
 	} else {
-		args.BlockNumber = common.Big(obj[0].(string)).Int64()
+		return NewDecodeParamError("blockNumber must be number or string")
 	}
 
 	if len(obj) > 1 {
