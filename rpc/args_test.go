@@ -83,7 +83,7 @@ func TestGetBalanceEmptyArgs(t *testing.T) {
 func TestGetBlockByHashArgs(t *testing.T) {
 	input := `["0xe670ec64341771606e55d6b4ca35a1a6b75ee3d5145a99d05921026d1527331", true]`
 	expected := new(GetBlockByHashArgs)
-	expected.BlockHash = "0xe670ec64341771606e55d6b4ca35a1a6b75ee3d5145a99d05921026d1527331"
+	expected.BlockHash = common.HexToHash("0xe670ec64341771606e55d6b4ca35a1a6b75ee3d5145a99d05921026d1527331")
 	expected.IncludeTxs = true
 
 	args := new(GetBlockByHashArgs)

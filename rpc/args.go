@@ -35,7 +35,7 @@ func blockHeight(raw interface{}, number *int64) (err error) {
 }
 
 type GetBlockByHashArgs struct {
-	BlockHash  string
+	BlockHash  common.Hash
 	IncludeTxs bool
 }
 
@@ -54,7 +54,7 @@ func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return NewDecodeParamError("BlockHash not a string")
 	}
-	args.BlockHash = argstr
+	args.BlockHash = common.HexToHash(argstr)
 
 	if len(obj) > 1 {
 		args.IncludeTxs = obj[1].(bool)
