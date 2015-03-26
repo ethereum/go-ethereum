@@ -919,6 +919,84 @@ func TestDbHexArgs(t *testing.T) {
 	}
 }
 
+func TestDbHexArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(DbHexArgs)
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestDbHexArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(DbHexArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestDbHexArgsDatabaseType(t *testing.T) {
+	input := `[true, "keyval", "valval"]`
+
+	args := new(DbHexArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestDbHexArgsKeyType(t *testing.T) {
+	input := `["dbval", 3, "valval"]`
+
+	args := new(DbHexArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestDbHexArgsValType(t *testing.T) {
+	input := `["dbval", "keyval", {}]`
+
+	args := new(DbHexArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestDbHexArgsDatabaseEmpty(t *testing.T) {
+	input := `["", "keyval", "valval"]`
+
+	args := new(DbHexArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err.Error())
+	}
+
+	str := ExpectValidationError(args.requirements())
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestDbHexArgsKeyEmpty(t *testing.T) {
+	input := `["dbval", "", "valval"]`
+
+	args := new(DbHexArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err.Error())
+	}
+
+	str := ExpectValidationError(args.requirements())
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
 func TestWhisperMessageArgs(t *testing.T) {
 	input := `[{"from":"0xc931d93e97ab07fe42d923478ba2465f2",
   "topics": ["0x68656c6c6f20776f726c64"],

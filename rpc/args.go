@@ -567,10 +567,10 @@ func (args *DbHexArgs) UnmarshalJSON(b []byte) (err error) {
 
 func (a *DbHexArgs) requirements() error {
 	if len(a.Database) == 0 {
-		return NewInvalidTypeError("Database", "cannot be blank")
+		return NewValidationError("Database", "cannot be blank")
 	}
 	if len(a.Key) == 0 {
-		return NewInvalidTypeError("Key", "cannot be blank")
+		return NewValidationError("Key", "cannot be blank")
 	}
 	return nil
 }
