@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 func ExpectValidationError(err error) string {
@@ -106,7 +104,7 @@ func TestSha3ArgsDataInvalid(t *testing.T) {
 func TestGetBalanceArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "0x1f"]`
 	expected := new(GetBalanceArgs)
-	expected.Address = common.HexToAddress("0x407d73d8a49eeb85d32cf465507dd71d507100c1")
+	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
 	expected.BlockNumber = 31
 
 	args := new(GetBalanceArgs)
@@ -126,7 +124,7 @@ func TestGetBalanceArgs(t *testing.T) {
 func TestGetBalanceArgsLatest(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "latest"]`
 	expected := new(GetBalanceArgs)
-	expected.Address = common.HexToAddress("0x407d73d8a49eeb85d32cf465507dd71d507100c1")
+	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
 	expected.BlockNumber = -1
 
 	args := new(GetBalanceArgs)
@@ -316,8 +314,8 @@ func TestNewTxArgs(t *testing.T) {
   "data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"},
   "0x10"]`
 	expected := new(NewTxArgs)
-	expected.From = common.HexToAddress("0xb60e8dd61c5d32be8058bb8eb970870f07233155")
-	expected.To = common.HexToAddress("0xd46e8dd67c5d32be8058bb8eb970870f072445675")
+	expected.From = "0xb60e8dd61c5d32be8058bb8eb970870f07233155"
+	expected.To = "0xd46e8dd67c5d32be8058bb8eb970870f072445675"
 	expected.Gas = big.NewInt(30400)
 	expected.GasPrice = big.NewInt(10000000000000)
 	expected.Value = big.NewInt(10000000000000)
@@ -361,7 +359,7 @@ func TestNewTxArgs(t *testing.T) {
 func TestNewTxArgsBlockInt(t *testing.T) {
 	input := `[{"from": "0xb60e8dd61c5d32be8058bb8eb970870f07233155"}, 5]`
 	expected := new(NewTxArgs)
-	expected.From = common.HexToAddress("0xb60e8dd61c5d32be8058bb8eb970870f07233155")
+	expected.From = "0xb60e8dd61c5d32be8058bb8eb970870f07233155"
 	expected.BlockNumber = big.NewInt(5).Int64()
 
 	args := new(NewTxArgs)
@@ -381,7 +379,7 @@ func TestNewTxArgsBlockInt(t *testing.T) {
 func TestNewTxArgsBlockInvalid(t *testing.T) {
 	input := `[{"from": "0xb60e8dd61c5d32be8058bb8eb970870f07233155"}, false]`
 	expected := new(NewTxArgs)
-	expected.From = common.HexToAddress("0xb60e8dd61c5d32be8058bb8eb970870f07233155")
+	expected.From = "0xb60e8dd61c5d32be8058bb8eb970870f07233155"
 	expected.BlockNumber = big.NewInt(5).Int64()
 
 	args := new(NewTxArgs)
@@ -438,7 +436,7 @@ func TestNewTxArgsFromEmpty(t *testing.T) {
 func TestGetStorageArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "latest"]`
 	expected := new(GetStorageArgs)
-	expected.Address = common.HexToAddress("0x407d73d8a49eeb85d32cf465507dd71d507100c1")
+	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
 	expected.BlockNumber = -1
 
 	args := new(GetStorageArgs)
@@ -498,8 +496,8 @@ func TestGetStorageAddressInt(t *testing.T) {
 func TestGetStorageAtArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "0x0", "0x2"]`
 	expected := new(GetStorageAtArgs)
-	expected.Address = common.HexToAddress("0x407d73d8a49eeb85d32cf465507dd71d507100c1")
-	expected.Key = common.HexToHash("0x0")
+	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
+	expected.Key = "0x0"
 	expected.BlockNumber = 2
 
 	args := new(GetStorageAtArgs)
@@ -573,7 +571,7 @@ func TestGetStorageAtArgsValueNotString(t *testing.T) {
 func TestGetTxCountArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "pending"]`
 	expected := new(GetTxCountArgs)
-	expected.Address = common.HexToAddress("0x407d73d8a49eeb85d32cf465507dd71d507100c1")
+	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
 	expected.BlockNumber = -2
 
 	args := new(GetTxCountArgs)
@@ -633,7 +631,7 @@ func TestGetTxCountBlockheightInvalid(t *testing.T) {
 func TestGetDataArgs(t *testing.T) {
 	input := `["0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8", "latest"]`
 	expected := new(GetDataArgs)
-	expected.Address = common.HexToAddress("0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8")
+	expected.Address = "0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8"
 	expected.BlockNumber = -1
 
 	args := new(GetDataArgs)
@@ -1505,8 +1503,8 @@ func TestSubmitWorkArgs(t *testing.T) {
 	input := `["0x0000000000000001", "0x1234567890abcdef1234567890abcdef", "0xD1GE5700000000000000000000000000"]`
 	expected := new(SubmitWorkArgs)
 	expected.Nonce = 1
-	expected.Header = common.HexToHash("0x1234567890abcdef1234567890abcdef")
-	expected.Digest = common.HexToHash("0xD1GE5700000000000000000000000000")
+	expected.Header = "0x1234567890abcdef1234567890abcdef"
+	expected.Digest = "0xD1GE5700000000000000000000000000"
 
 	args := new(SubmitWorkArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {

@@ -121,8 +121,8 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type NewTxArgs struct {
-	From     common.Address
-	To       common.Address
+	From     string
+	To       string
 	Value    *big.Int
 	Gas      *big.Int
 	GasPrice *big.Int
@@ -154,8 +154,8 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewValidationError("from", "is required")
 	}
 
-	args.From = common.HexToAddress(ext.From)
-	args.To = common.HexToAddress(ext.To)
+	args.From = ext.From
+	args.To = ext.To
 	args.Value = common.String2Big(ext.Value)
 	args.Gas = common.String2Big(ext.Gas)
 	args.GasPrice = common.String2Big(ext.GasPrice)
@@ -172,7 +172,7 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type GetStorageArgs struct {
-	Address     common.Address
+	Address     string
 	BlockNumber int64
 }
 
@@ -190,7 +190,7 @@ func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return NewInvalidTypeError("address", "not a string")
 	}
-	args.Address = common.HexToAddress(addstr)
+	args.Address = addstr
 
 	if len(obj) > 1 {
 		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
@@ -202,8 +202,8 @@ func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type GetStorageAtArgs struct {
-	Address     common.Address
-	Key         common.Hash
+	Address     string
+	Key         string
 	BlockNumber int64
 }
 
@@ -221,13 +221,13 @@ func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return NewInvalidTypeError("address", "not a string")
 	}
-	args.Address = common.HexToAddress(addstr)
+	args.Address = addstr
 
 	keystr, ok := obj[1].(string)
 	if !ok {
 		return NewInvalidTypeError("key", "not a string")
 	}
-	args.Key = common.HexToHash(keystr)
+	args.Key = keystr
 
 	if len(obj) > 2 {
 		if err := blockHeight(obj[2], &args.BlockNumber); err != nil {
@@ -239,7 +239,7 @@ func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type GetTxCountArgs struct {
-	Address     common.Address
+	Address     string
 	BlockNumber int64
 }
 
@@ -257,7 +257,7 @@ func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return NewInvalidTypeError("address", "not a string")
 	}
-	args.Address = common.HexToAddress(addstr)
+	args.Address = addstr
 
 	if len(obj) > 1 {
 		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
@@ -269,7 +269,7 @@ func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type GetBalanceArgs struct {
-	Address     common.Address
+	Address     string
 	BlockNumber int64
 }
 
@@ -287,7 +287,7 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return NewInvalidTypeError("address", "not a string")
 	}
-	args.Address = common.HexToAddress(addstr)
+	args.Address = addstr
 
 	if len(obj) > 1 {
 		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
@@ -299,7 +299,7 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type GetDataArgs struct {
-	Address     common.Address
+	Address     string
 	BlockNumber int64
 }
 
@@ -317,7 +317,7 @@ func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return NewInvalidTypeError("address", "not a string")
 	}
-	args.Address = common.HexToAddress(addstr)
+	args.Address = addstr
 
 	if len(obj) > 1 {
 		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
@@ -763,8 +763,8 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 
 type SubmitWorkArgs struct {
 	Nonce  uint64
-	Header common.Hash
-	Digest common.Hash
+	Header string
+	Digest string
 }
 
 func (args *SubmitWorkArgs) UnmarshalJSON(b []byte) (err error) {
@@ -788,13 +788,13 @@ func (args *SubmitWorkArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInvalidTypeError("header", "not a string")
 	}
 
-	args.Header = common.HexToHash(objstr)
+	args.Header = objstr
 
 	if objstr, ok = obj[2].(string); !ok {
 		return NewInvalidTypeError("digest", "not a string")
 	}
 
-	args.Digest = common.HexToHash(objstr)
+	args.Digest = objstr
 
 	return nil
 }
