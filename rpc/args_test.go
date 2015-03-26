@@ -1106,10 +1106,6 @@ func TestFilterStringArgs(t *testing.T) {
 		t.Error(err)
 	}
 
-	if err := args.requirements(); err != nil {
-		t.Error(err)
-	}
-
 	if expected.Word != args.Word {
 		t.Errorf("Word shoud be %#v but is %#v", expected.Word, args.Word)
 	}
@@ -1119,9 +1115,39 @@ func TestFilterStringEmptyArgs(t *testing.T) {
 	input := `[]`
 
 	args := new(FilterStringArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	if err == nil {
-		t.Error("Expected error but didn't get one")
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Errorf(str)
+	}
+}
+
+func TestFilterStringInvalidArgs(t *testing.T) {
+	input := `{}`
+
+	args := new(FilterStringArgs)
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Errorf(str)
+	}
+}
+
+func TestFilterStringWordInt(t *testing.T) {
+	input := `[7]`
+
+	args := new(FilterStringArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Errorf(str)
+	}
+}
+
+func TestFilterStringWordWrong(t *testing.T) {
+	input := `["foo"]`
+
+	args := new(FilterStringArgs)
+	str := ExpectValidationError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Errorf(str)
 	}
 }
 

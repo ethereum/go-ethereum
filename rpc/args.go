@@ -649,18 +649,13 @@ func (args *FilterStringArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return NewInvalidTypeError("filter", "not a string")
 	}
-	args.Word = argstr
-
-	return nil
-}
-
-func (args *FilterStringArgs) requirements() error {
-	switch args.Word {
+	switch argstr {
 	case "latest", "pending":
 		break
 	default:
 		return NewValidationError("Word", "Must be `latest` or `pending`")
 	}
+	args.Word = argstr
 	return nil
 }
 

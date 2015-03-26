@@ -297,10 +297,6 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		if err := args.requirements(); err != nil {
-			return err
-		}
-
 		id := api.xeth().NewFilterString(args.Word)
 		*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
 	case "eth_uninstallFilter":
