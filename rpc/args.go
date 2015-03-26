@@ -617,14 +617,18 @@ type CompileArgs struct {
 
 func (args *CompileArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
 
-	if len(obj) > 0 {
-		args.Source = obj[0].(string)
+	if len(obj) < 1 {
+		return NewInsufficientParamsError(len(obj), 1)
 	}
+	argstr, ok := obj[0].(string)
+	if !ok {
+		return NewInvalidTypeError("arg0", "is not a string")
+	}
+	args.Source = argstr
 
 	return nil
 }

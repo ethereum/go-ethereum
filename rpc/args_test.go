@@ -1126,6 +1126,36 @@ func TestCompileArgs(t *testing.T) {
 	}
 }
 
+func TestCompileArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(CompileArgs)
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestCompileArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(CompileArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestCompileArgsBool(t *testing.T) {
+	input := `[false]`
+
+	args := new(CompileArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
 func TestFilterStringArgs(t *testing.T) {
 	input := `["pending"]`
 	expected := new(FilterStringArgs)
