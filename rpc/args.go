@@ -8,7 +8,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func blockHeight(raw interface{}, number *int64) (err error) {
+func blockHeightFromJson(msg json.RawMessage, number *int64) error {
+	var raw interface{}
+	if err := json.Unmarshal(msg, &raw); err != nil {
+		return NewDecodeParamError(err.Error())
+	}
+	return blockHeight(raw, number)
+}
+
+func blockHeight(raw interface{}, number *int64) error {
 	// Parse as integer
 	num, ok := raw.(float64)
 	if ok {
@@ -19,7 +27,7 @@ func blockHeight(raw interface{}, number *int64) (err error) {
 	// Parse as string/hexstring
 	str, ok := raw.(string)
 	if !ok {
-		return NewDecodeParamError("BlockNumber is not a string")
+		return NewDecodeParamError("BlockNumber is not a number or string")
 	}
 
 	switch str {
