@@ -1196,6 +1196,36 @@ func TestWhisperIdentityArgs(t *testing.T) {
 	}
 }
 
+func TestWhisperIdentityArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(WhisperIdentityArgs)
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Errorf(str)
+	}
+}
+
+func TestWhisperIdentityArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(WhisperIdentityArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Errorf(str)
+	}
+}
+
+func TestWhisperIdentityArgsInt(t *testing.T) {
+	input := `[4]`
+
+	args := new(WhisperIdentityArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Errorf(str)
+	}
+}
+
 func TestBlockNumIndexArgs(t *testing.T) {
 	input := `["0x29a", "0x0"]`
 	expected := new(BlockNumIndexArgs)

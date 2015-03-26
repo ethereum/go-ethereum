@@ -687,9 +687,8 @@ type WhisperIdentityArgs struct {
 }
 
 func (args *WhisperIdentityArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []string
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
 
@@ -697,7 +696,14 @@ func (args *WhisperIdentityArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	args.Identity = obj[0]
+	argstr, ok := obj[0].(string)
+	if !ok {
+		return NewInvalidTypeError("arg0", "not a string")
+	}
+	// if !common.IsHex(argstr) {
+	// 	return NewValidationError("arg0", "not a hexstring")
+	// }
+	args.Identity = argstr
 
 	return nil
 }
