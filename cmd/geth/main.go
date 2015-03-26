@@ -42,7 +42,7 @@ import (
 )
 
 const (
-	ClientIdentifier = "Ethereum(G)"
+	ClientIdentifier = "Geth"
 	Version          = "0.9.4"
 )
 
@@ -183,9 +183,9 @@ Use "ethereum dump 0" to dump the genesis block.
 		{
 			Action: console,
 			Name:   "console",
-			Usage:  `Ethereum Console: interactive JavaScript environment`,
+			Usage:  `Geth Console: interactive JavaScript environment`,
 			Description: `
-Console is an interactive shell for the Ethereum JavaScript runtime environment
+The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the DAPP JavaScript API.
 See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
 `,
@@ -193,9 +193,9 @@ See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
 		{
 			Action: execJSFiles,
 			Name:   "js",
-			Usage:  `executes the given JavaScript files in the Ethereum JavaScript VM`,
+			Usage:  `executes the given JavaScript files in the Geth JavaScript VM`,
 			Description: `
-The Ethereum JavaScript VM exposes a node admin interface as well as the DAPP
+The JavaScript VM exposes a node admin interface as well as the DAPP
 JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
 `,
 		},
