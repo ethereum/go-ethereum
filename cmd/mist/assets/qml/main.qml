@@ -186,6 +186,9 @@ ApplicationWindow {
                 shortcut: "Ctrl+shift+i"
                 onTriggered: {
                     onboardingWizard.visible = true;
+                    wizardWindow.state = "State-Initial";
+                    startTimerAnimation.running = true;
+                    startTimerAnimation.start();
                 }
             }
 

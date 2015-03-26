@@ -10,17 +10,11 @@ Rectangle {
      state: "State-Initial"
     
     Timer {
+        id: startTimerAnimation
         interval: 1000
         running: true
         onTriggered: wizardWindow.state = "State-0"
     }
-
-     Image {
-        anchors.centerIn: parent
-        source: "../wizard/illustration-wizard.png"
-        height: 680
-        width: 993
-     }
 
      Rectangle {
         id: skyGradient
@@ -36,6 +30,7 @@ Rectangle {
      }
 
      Rectangle {
+        id: oceanGradient
         anchors.left: parent.left
         anchors.top: skyGradient.bottom
         anchors.right: parent.right
@@ -47,6 +42,28 @@ Rectangle {
         }
      }
 
+    Image {
+        id: mistTitle
+        source: "../wizard/Mist-title.png"
+        width: 144
+        height: 56
+        x: 135
+        y: 120
+     }
+
+     Rectangle {
+        height: 124
+        anchors.bottom: skyGradient.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+
+
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: "transparent" }
+            GradientStop { position: 1.0; color: "#FFFFFF" }
+        }
+     }
+
      Image {
         id: iceberg
         source: "../wizard/iceberg.png"
@@ -54,6 +71,7 @@ Rectangle {
         height: 376
         x: 25
         y: 190
+        visible: false
      }
 
      FastBlur {
@@ -62,23 +80,41 @@ Rectangle {
         source: iceberg
         radius: 32
         transparentBorder: true
-        transform: Scale { 
-            origin.x: 172 
-            origin.y: 188
-            xScale: 0.75
-            yScale: 0.75
-        }
+    }     
 
-    }
-
-     Image {
-        source: "../wizard/Mist-title.png"
-        width: 144
-        height: 56
-        x: 155
-        y: 120
+    Image {
+        id: icebergFront
+        source: "../wizard/iceberg-front.png"
+        width: 344
+        height: 376
+        x: 25
+        y: 190
+        visible: false
      }
 
+    FastBlur {
+        id: icebergFrontBlur
+        width: 344
+        height: 376
+        x: 25
+        y: 190
+        source: icebergFront
+        radius: 32
+        transparentBorder: true
+        visible: true
+    }
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.top: skyGradient.bottom
+        anchors.right: parent.right
+        height: oceanGradient.height / 10
+            
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: "#385399" }
+            GradientStop { position: 1.0; color: "transparent" }
+        }
+     }    
 
      states: [
         State {
@@ -86,12 +122,34 @@ Rectangle {
             PropertyChanges {
                 target: iceberg
                 opacity: 0.0
+                width: 1854
+                height: 2256
+                x: -147
+                y: -260
             }
             PropertyChanges {
                 target: icebergBlur
-                opacity: 0.1
+                opacity: 1.0
                 radius: 64
-                //transform: Scale {  xScale: 1;   yScale: 1; }                
+            }
+            PropertyChanges {
+                target: icebergFrontBlur
+                opacity: 1.0
+                radius: 64
+                width: 2472
+                height: 3008
+                x: -256
+                y: -440
+            }
+            PropertyChanges {
+                target: mistTitle
+                y: 280
+                opacity: 0.1
+            }
+            PropertyChanges {
+                target: step0
+                opacity: 0.0
+                x: 600
             }
             
         },
@@ -100,17 +158,78 @@ Rectangle {
             PropertyChanges {
                 target: iceberg
                 opacity: 0.0
+                width: 344
+                height: 376
+                x: 25
+                y: 190
+            }
+            PropertyChanges {
+                target: icebergFrontBlur
+                opacity: 1.0
+                radius: 0
+                width: 344
+                height: 376
+                x: 25
+                y: 190
             }
             PropertyChanges {
                 target: icebergBlur
                 opacity: 1.0
                 radius: 0
-                // transform: Scale { 
-                //     origin.x: 150; 
-                //     origin.y: 150; 
-                //     xScale: 1
-                //     yScale: 1
-                // } 
+            }
+            PropertyChanges {
+                target: mistTitle
+                y: 120
+                opacity: 1.0
+            }
+            PropertyChanges {
+                target: step0
+                opacity: 1.0
+                x: 500
+            }
+        },
+        State {
+            name: "State-Presale-01"
+            PropertyChanges {
+                target: iceberg
+                opacity: 0.0
+                width: 344
+                height: 376
+                x: 25
+                y: 510
+            }
+            PropertyChanges {
+                target: icebergFrontBlur
+                opacity: 1.0
+                radius: 0
+                width: 344
+                height: 376
+                x: 25
+                y: 510
+            }
+            PropertyChanges {
+                target: icebergBlur
+                opacity: 1.0
+                radius: 0
+            }
+            PropertyChanges {
+                target: mistTitle
+                y: 610
+                opacity: 0.2
+            }
+            PropertyChanges {
+                target: step0
+                opacity: 0.0
+                x: 500
+            } 
+            PropertyChanges {
+                target: skyGradient
+                height: 600
+            }
+            PropertyChanges { 
+                target: stepPresale1
+                visible: true
+                opacity: 1
             }
         }
      ]
@@ -118,32 +237,86 @@ Rectangle {
     transitions: [
        Transition {
            from: "State-Initial"; to: "State-0"
-           PropertyAnimation { 
-            target: iceberg
-            properties: "opacity"
-            duration: 2000 
+           
+           SequentialAnimation {
+
+            ParallelAnimation {
+               PropertyAnimation { 
+                    target: iceberg
+                    properties: "opacity, width, height, x, y"
+                    duration: 2000 
+                    easing.type: Easing.OutExpo
+               }
+               PropertyAnimation { 
+                    target: icebergBlur 
+                    properties: "opacity, radius"
+                    duration: 2000 
+                    easing.type: Easing.OutExpo
+               }
+               PropertyAnimation { 
+                    target: icebergFrontBlur 
+                    properties: "opacity, radius, width, height, x, y"
+                    duration: 2000 
+                    easing.type: Easing.OutExpo
+               }
+                }
+            
+            ParallelAnimation {
+               PropertyAnimation { 
+                    target: mistTitle 
+                    properties: "opacity, y"
+                    duration: 1000 
+                    easing.type: Easing.OutExpo
+               }
+               PropertyAnimation { 
+                    target: step0 
+                    properties: "opacity, x"
+                    duration: 2000 
+                    easing.type: Easing.OutElastic
+               }
+              }
            }
-           PropertyAnimation { 
-            target: icebergBlur 
-            properties: "opacity, radius"
-            duration: 2000 
-           }
-       },
+       }, 
        Transition {
-           from: "State-0"; to: "State-Initial"
+          // from: "State-0"; to: "State-Presale-01"
+
            PropertyAnimation { 
-                target: iceberg            
-                properties: "opacity"; 
+                target: skyGradient 
+                properties: "height"
                 duration: 1000 
-            }
-            PropertyAnimation { 
-                target: icebergBlur 
-                properties: "opacity, radius"
-                duration: 1000 
+                easing.type: Easing.InOutQuart
            }
+           PropertyAnimation { 
+                target: step0 
+                properties: "opacity, x"
+                duration: 1000 
+                easing.type: Easing.InOutQuart
+           }
+           PropertyAnimation { 
+                target: iceberg 
+                properties: "x, y"
+                duration: 1000 
+                easing.type: Easing.InOutQuart
+           } 
+           PropertyAnimation { 
+                target: icebergFrontBlur 
+                properties: "x, y"
+                duration: 1000 
+                easing.type: Easing.InOutQuart
+           }
+           PropertyAnimation {
+                target: mistTitle
+                properties: "opacity, y"
+                duration: 1500 
+                easing.type: Easing.InOutQuart                
+           }
+           
        }
     ]
 
+    //
+    //   STEPS
+    //
 
      Rectangle {
          id: step0
@@ -152,6 +325,7 @@ Rectangle {
          width: 475
          height: 670
          color: "transparent"
+
          
          Text {
             text: "Mist is a Navigator for Ethereum, a decentralized"
@@ -214,7 +388,7 @@ Rectangle {
              MouseArea {
                 anchors.fill: parent
                 onClicked: {
-                    wizardWindow.state = "State-Initial"
+                    //wizardWindow.state = "State-1"
                 }
              }
          }
@@ -247,7 +421,7 @@ Rectangle {
              MouseArea {
                 anchors.fill: parent
                 onClicked: {
-                    wizardWindow.state = "State-0"
+                    wizardWindow.state = "State-Presale-01"
                 }
              }
          }
@@ -337,48 +511,124 @@ Rectangle {
 
          
     }
+
+     Rectangle {
+         id: stepPresale1
+         anchors.fill: parent
+         color: "transparent"
+         opacity: 0
+         visible: false
+
+
+         Behavior on opacity { PropertyAnimation { duration: 2000 } }
+
+         Rectangle {
+            // Content
+             x: 350
+             y: 0
+             color: "transparent"
+
+            Text {
+                text: "Import your Presale Wallet"
+                font.family: sourceSansPro.name 
+                font.weight: Font.Light
+                font.pixelSize: 30
+                color: "#57637B"
+                x: 0
+                y: 90
+             } 
+             Text {
+                text: "When you bought ether, you were given a wallet file with a name similar to  wallet-SOMEADDRESS.json. 
+
+Find it and drag it to this box."
+                font.family: sourceSansPro.name 
+                font.weight: Font.Light
+                font.pixelSize: 18
+                wrapMode: Text.WordWrap
+                width: 320
+                color: "#57637B"
+                x: 260
+                y: 200
+             } 
+
+             Rectangle {
+                width: 220
+                height: 150
+                color: "#FFFFFF"
+                border.width: 4
+                border.color: "#E1D9D9"
+                radius: 4
+                y: 200
+
+                Rectangle {
+                    id: dropIcon
+                    anchors {
+                        top: parent.top
+                        left: parent.left
+                        right: parent.right
+                    }
+                    height: 100
+                    color: "transparent"
+                    
+                    Image {
+                        anchors.centerIn: parent
+                        source: "../wizard/drop-icon.png"
+                    }
+
+                }
+
+                Text {
+                   anchors {
+                        top: dropIcon.bottom
+                        left: parent.left
+                        right: parent.right
+                        bottom: parent.bottom
+                    }
+                    text: "DROP OR OPEN YOUR WALLET.JSON HERE"
+                    font.family: sourceSansPro.name 
+                    font.weight: Font.Bold
+                    font.pixelSize: 14
+                    font.italic: true
+                    wrapMode: Text.WordWrap
+                    color: "#4A90E2"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignTop
+
+                }
+             }
+         }
+
+         Rectangle {
+            //bottom buttons
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            height: 80
+            color: "transparent"
+
+            MouseArea {
+                anchors.verticalCenter: parent.verticalCenter
+                x: 60 
+                height: 60
+                width: 120
+
+                Text {
+                    text: "BACK"
+                    font.family: sourceSansPro.name 
+                    font.weight: Font.Light
+                    font.pixelSize: 24
+                    color: "#FFFFFF"
+                    anchors.fill: parent
+                    horizontalAlignment: Text.AlignLeft
+                    verticalAlignment: Text.AlignVCenter
+                 }
+
+                 onClicked: {
+                    wizardWindow.state = "State-0";
+                    console.log( "state-0 bak")
+                 }
+
+            }
+         }
+     }
  }
-
- // Rectangle {              
- //                 anchors.fill: parent
- //                 color: "blue"
-
- //                 Image {
- //                    anchors.centerIn: parent
- //                    source: "../wizard/illustration-wizard.png"
- //                    height: 680
- //                    width: 993
- //                 }
-
- //                 Rectangle {
- //                     x: 520
- //                     y: 0
- //                     width: 475
- //                     height: 670
-                     
- //                     ColumnLayout{
- //                        anchors.fill: parent
-
- //                        Rectangle {
- //                            color: "red"
- //                            Layout.preferredHeight: 280
- //                            Layout.fillWidth : true
- //                        }
-
- //                        Rectangle {
- //                            color: "green"
- //                            Layout.preferredHeight: 70
- //                            Layout.fillWidth : true
-
- //                        }
-
- //                        Rectangle {
- //                            color: "blue"
- //                            Layout.preferredHeight: 40
- //                            Layout.fillWidth : true
- //                            Layout.fillHeight: true
-
- //                        }
- //                    }
- //                }
- //             }
