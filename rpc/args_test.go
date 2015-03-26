@@ -1086,20 +1086,15 @@ func TestFilterIdArgsBool(t *testing.T) {
 	}
 }
 
-func TestWhsiperFilterArgs(t *testing.T) {
+func TestWhisperFilterArgs(t *testing.T) {
 	input := `[{"topics": ["0x68656c6c6f20776f726c64"], "to": "0x34ag445g3455b34"}]`
 	expected := new(WhisperFilterArgs)
-	expected.From = ""
 	expected.To = "0x34ag445g3455b34"
 	expected.Topics = []string{"0x68656c6c6f20776f726c64"}
 
 	args := new(WhisperFilterArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
 		t.Error(err)
-	}
-
-	if expected.From != args.From {
-		t.Errorf("From shoud be %#v but is %#v", expected.From, args.From)
 	}
 
 	if expected.To != args.To {
@@ -1109,6 +1104,46 @@ func TestWhsiperFilterArgs(t *testing.T) {
 	// if expected.Topics != args.Topics {
 	// 	t.Errorf("Topics shoud be %#v but is %#v", expected.Topics, args.Topics)
 	// }
+}
+
+func TestWhisperFilterArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(WhisperFilterArgs)
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestWhisperFilterArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(WhisperFilterArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestWhisperFilterArgsToBool(t *testing.T) {
+	input := `[{"topics": ["0x68656c6c6f20776f726c64"], "to": false}]`
+
+	args := new(WhisperFilterArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestWhisperFilterArgsTopicInt(t *testing.T) {
+	input := `[{"topics": [6], "to": "0x34ag445g3455b34"}]`
+
+	args := new(WhisperFilterArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
 }
 
 func TestCompileArgs(t *testing.T) {

@@ -417,7 +417,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 		opts := new(xeth.Options)
-		opts.From = args.From
+		// opts.From = args.From
 		opts.To = args.To
 		opts.Topics = args.Topics
 		id := api.xeth().NewWhisperFilter(opts)

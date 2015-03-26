@@ -720,9 +720,8 @@ type WhisperFilterArgs struct {
 
 func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []struct {
-		To     string
-		From   string
-		Topics []string
+		To     interface{}
+		Topics []interface{}
 	}
 
 	if err = json.Unmarshal(b, &obj); err != nil {
@@ -733,9 +732,22 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	args.To = obj[0].To
-	args.From = obj[0].From
-	args.Topics = obj[0].Topics
+	var argstr string
+	argstr, ok := obj[0].To.(string)
+	if !ok {
+		return NewInvalidTypeError("to", "is not a string")
+	}
+	args.To = argstr
+
+	t := make([]string, len(obj[0].Topics))
+	for i, j := range obj[0].Topics {
+		argstr, ok := j.(string)
+		if !ok {
+			return NewInvalidTypeError("topics["+string(i)+"]", "is not a string")
+		}
+		t[i] = argstr
+	}
+	args.Topics = t
 
 	return nil
 }
