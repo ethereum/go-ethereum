@@ -1680,3 +1680,12 @@ func TestSubmitWorkArgsDigestInt(t *testing.T) {
 		t.Error(str)
 	}
 }
+
+func TestBlockHeightFromJsonInvalid(t *testing.T) {
+	var num int64
+	var msg json.RawMessage = []byte(`}{`)
+	str := ExpectDecodeParamError(blockHeightFromJson(msg, &num))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
