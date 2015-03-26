@@ -99,10 +99,10 @@ func TestGetBalanceArgsBlockInvalid(t *testing.T) {
 	switch err.(type) {
 	case nil:
 		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
+	case *InvalidTypeError:
 		break
 	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message %s", err, err.Error())
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message %s", err, err.Error())
 	}
 }
 
@@ -114,10 +114,10 @@ func TestGetBalanceArgsAddressInvalid(t *testing.T) {
 	switch err.(type) {
 	case nil:
 		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
+	case *InvalidTypeError:
 		break
 	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message %s", err, err.Error())
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message %s", err, err.Error())
 	}
 }
 
@@ -179,10 +179,10 @@ func TestGetBlockByHashArgsHashInt(t *testing.T) {
 	switch err.(type) {
 	case nil:
 		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
+	case *InvalidTypeError:
 		break
 	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message %s", err, err.Error())
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message %s", err, err.Error())
 	}
 }
 
@@ -249,10 +249,10 @@ func TestGetBlockByNumberBool(t *testing.T) {
 	switch err.(type) {
 	case nil:
 		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
+	case *InvalidTypeError:
 		break
 	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
 	}
 }
 func TestGetBlockByNumberBlockObject(t *testing.T) {
@@ -352,10 +352,10 @@ func TestNewTxArgsBlockInvalid(t *testing.T) {
 	switch err.(type) {
 	case nil:
 		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
+	case *InvalidTypeError:
 		break
 	default:
-		t.Errorf("Expeted *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+		t.Errorf("Expeted *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
 	}
 
 }
@@ -462,10 +462,10 @@ func TestGetStorageInvalidBlockheight(t *testing.T) {
 	switch err.(type) {
 	case nil:
 		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
+	case *InvalidTypeError:
 		break
 	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
 	}
 }
 
@@ -492,10 +492,10 @@ func TestGetStorageAddressInt(t *testing.T) {
 	switch err.(type) {
 	case nil:
 		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
+	case *InvalidTypeError:
 		break
 	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
 	}
 }
 
@@ -562,10 +562,10 @@ func TestGetStorageAtArgsAddressNotString(t *testing.T) {
 	switch err.(type) {
 	case nil:
 		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
+	case *InvalidTypeError:
 		break
 	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
 	}
 }
 
@@ -577,10 +577,10 @@ func TestGetStorageAtArgsKeyNotString(t *testing.T) {
 	switch err.(type) {
 	case nil:
 		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
+	case *InvalidTypeError:
 		break
 	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
 	}
 }
 
@@ -592,10 +592,10 @@ func TestGetStorageAtArgsValueNotString(t *testing.T) {
 	switch err.(type) {
 	case nil:
 		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
+	case *InvalidTypeError:
 		break
 	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
 	}
 }
 
@@ -657,10 +657,10 @@ func TestGetTxCountAddressNotString(t *testing.T) {
 	switch err.(type) {
 	case nil:
 		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
+	case *InvalidTypeError:
 		break
 	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
 	}
 }
 
@@ -672,10 +672,10 @@ func TestGetTxCountBlockheightInvalid(t *testing.T) {
 	switch err.(type) {
 	case nil:
 		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
+	case *InvalidTypeError:
 		break
 	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
 	}
 }
 
@@ -791,10 +791,10 @@ func TestBlockFilterArgsNums(t *testing.T) {
 	args := new(BlockFilterArgs)
 	err := json.Unmarshal([]byte(input), &args)
 	switch err.(type) {
-	case *DecodeParamError:
+	case *InvalidTypeError:
 		break
 	default:
-		t.Errorf("Should have *DecodeParamError but instead have %T", err)
+		t.Errorf("Should have *rpc.InvalidTypeError but instead have %T", err)
 	}
 
 }

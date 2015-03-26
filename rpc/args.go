@@ -27,7 +27,7 @@ func blockHeight(raw interface{}, number *int64) error {
 	// Parse as string/hexstring
 	str, ok := raw.(string)
 	if !ok {
-		return NewDecodeParamError("BlockNumber is not a number or string")
+		return NewInvalidTypeError("blockNumber", "not a number or string")
 	}
 
 	switch str {
@@ -60,7 +60,7 @@ func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 
 	argstr, ok := obj[0].(string)
 	if !ok {
-		return NewDecodeParamError("BlockHash not a string")
+		return NewInvalidTypeError("blockHash", "not a string")
 	}
 	args.BlockHash = common.HexToHash(argstr)
 
@@ -92,7 +92,7 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 	} else if v, ok := obj[0].(string); ok {
 		args.BlockNumber = common.Big(v).Int64()
 	} else {
-		return NewDecodeParamError("blockNumber must be number or string")
+		return NewInvalidTypeError("blockNumber", "not a number or string")
 	}
 
 	if len(obj) > 1 {
@@ -170,7 +170,7 @@ func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 
 	addstr, ok := obj[0].(string)
 	if !ok {
-		return NewDecodeParamError("address is not a string")
+		return NewInvalidTypeError("address", "not a string")
 	}
 	args.Address = common.HexToAddress(addstr)
 
@@ -201,13 +201,13 @@ func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 
 	addstr, ok := obj[0].(string)
 	if !ok {
-		return NewDecodeParamError("Address is not a string")
+		return NewInvalidTypeError("address", "not a string")
 	}
 	args.Address = common.HexToAddress(addstr)
 
 	keystr, ok := obj[1].(string)
 	if !ok {
-		return NewDecodeParamError("Key is not a string")
+		return NewInvalidTypeError("key", "not a string")
 	}
 	args.Key = common.HexToHash(keystr)
 
@@ -237,7 +237,7 @@ func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 
 	addstr, ok := obj[0].(string)
 	if !ok {
-		return NewDecodeParamError("Address is not a string")
+		return NewInvalidTypeError("address", "not a string")
 	}
 	args.Address = common.HexToAddress(addstr)
 
@@ -267,7 +267,7 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 
 	addstr, ok := obj[0].(string)
 	if !ok {
-		return NewDecodeParamError("Address is not a string")
+		return NewInvalidTypeError("address", "not a string")
 	}
 	args.Address = common.HexToAddress(addstr)
 
@@ -297,7 +297,7 @@ func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 
 	addstr, ok := obj[0].(string)
 	if !ok {
-		return NewDecodeParamError("Address is not a string")
+		return NewInvalidTypeError("address", "not a string")
 	}
 	args.Address = addstr
 
@@ -335,14 +335,14 @@ func (args *BlockNumIndexArgs) UnmarshalJSON(b []byte) (err error) {
 
 	arg0, ok := obj[0].(string)
 	if !ok {
-		return NewDecodeParamError("BlockNumber is not string")
+		return NewInvalidTypeError("blockNumber", "not a string")
 	}
 	args.BlockNumber = common.Big(arg0).Int64()
 
 	if len(obj) > 1 {
 		arg1, ok := obj[1].(string)
 		if !ok {
-			return NewDecodeParamError("Index not a string")
+			return NewInvalidTypeError("index", "not a string")
 		}
 		args.Index = common.Big(arg1).Int64()
 	}
@@ -368,14 +368,14 @@ func (args *HashIndexArgs) UnmarshalJSON(b []byte) (err error) {
 
 	arg0, ok := obj[0].(string)
 	if !ok {
-		return NewDecodeParamError("Hash not a string")
+		return NewInvalidTypeError("hash", "not a string")
 	}
 	args.Hash = arg0
 
 	if len(obj) > 1 {
 		arg1, ok := obj[1].(string)
 		if !ok {
-			return NewDecodeParamError("Index not a string")
+			return NewInvalidTypeError("index", "not a string")
 		}
 		args.Index = common.Big(arg1).Int64()
 	}
@@ -431,7 +431,7 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 
 	fromstr, ok := obj[0].FromBlock.(string)
 	if !ok {
-		return NewDecodeParamError("FromBlock is not a string")
+		return NewInvalidTypeError("fromBlock", "is not a string")
 	}
 
 	switch fromstr {
@@ -443,7 +443,7 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 
 	tostr, ok := obj[0].ToBlock.(string)
 	if !ok {
-		return NewDecodeParamError("ToBlock is not a string")
+		return NewInvalidTypeError("toBlock", "not a string")
 	}
 
 	switch tostr {
@@ -483,19 +483,19 @@ func (args *DbArgs) UnmarshalJSON(b []byte) (err error) {
 	var ok bool
 
 	if objstr, ok = obj[0].(string); !ok {
-		return NewDecodeParamError("Database is not a string")
+		return NewInvalidTypeError("database", "not a string")
 	}
 	args.Database = objstr
 
 	if objstr, ok = obj[1].(string); !ok {
-		return NewDecodeParamError("Key is not a string")
+		return NewInvalidTypeError("key", "not a string")
 	}
 	args.Key = objstr
 
 	if len(obj) > 2 {
 		objstr, ok = obj[2].(string)
 		if !ok {
-			return NewDecodeParamError("Value is not a string")
+			return NewInvalidTypeError("value", "not a string")
 		}
 
 		args.Value = []byte(objstr)
@@ -534,19 +534,19 @@ func (args *DbHexArgs) UnmarshalJSON(b []byte) (err error) {
 	var ok bool
 
 	if objstr, ok = obj[0].(string); !ok {
-		return NewDecodeParamError("Database is not a string")
+		return NewInvalidTypeError("database", "not a string")
 	}
 	args.Database = objstr
 
 	if objstr, ok = obj[1].(string); !ok {
-		return NewDecodeParamError("Key is not a string")
+		return NewInvalidTypeError("key", "not a string")
 	}
 	args.Key = objstr
 
 	if len(obj) > 2 {
 		objstr, ok = obj[2].(string)
 		if !ok {
-			return NewDecodeParamError("Value is not a string")
+			return NewInvalidTypeError("value", "not a string")
 		}
 
 		args.Value = common.FromHex(objstr)
@@ -557,10 +557,10 @@ func (args *DbHexArgs) UnmarshalJSON(b []byte) (err error) {
 
 func (a *DbHexArgs) requirements() error {
 	if len(a.Database) == 0 {
-		return NewValidationError("Database", "cannot be blank")
+		return NewInvalidTypeError("Database", "cannot be blank")
 	}
 	if len(a.Key) == 0 {
-		return NewValidationError("Key", "cannot be blank")
+		return NewInvalidTypeError("Key", "cannot be blank")
 	}
 	return nil
 }
@@ -637,7 +637,7 @@ func (args *FilterStringArgs) UnmarshalJSON(b []byte) (err error) {
 	var argstr string
 	argstr, ok := obj[0].(string)
 	if !ok {
-		return NewDecodeParamError("Filter is not a string")
+		return NewInvalidTypeError("filter", "not a string")
 	}
 	args.Word = argstr
 
@@ -741,18 +741,18 @@ func (args *SubmitWorkArgs) UnmarshalJSON(b []byte) (err error) {
 	var objstr string
 	var ok bool
 	if objstr, ok = obj[0].(string); !ok {
-		return NewDecodeParamError("Nonce is not a string")
+		return NewInvalidTypeError("nonce", "not a string")
 	}
 
 	args.Nonce = common.String2Big(objstr).Uint64()
 	if objstr, ok = obj[1].(string); !ok {
-		return NewDecodeParamError("Header is not a string")
+		return NewInvalidTypeError("header", "not a string")
 	}
 
 	args.Header = common.HexToHash(objstr)
 
 	if objstr, ok = obj[2].(string); !ok {
-		return NewDecodeParamError("Digest is not a string")
+		return NewInvalidTypeError("digest", "not a string")
 	}
 
 	args.Digest = common.HexToHash(objstr)
