@@ -759,10 +759,10 @@ func TestBlockFilterArgsWords(t *testing.T) {
 	}
 }
 
-func TestBlockFilterArgsNums(t *testing.T) {
+func TestBlockFilterArgsBool(t *testing.T) {
 	input := `[{
-  "fromBlock": 2,
-  "toBlock": 3
+  "fromBlock": true,
+  "toBlock": false
   }]`
 
 	args := new(BlockFilterArgs)

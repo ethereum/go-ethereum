@@ -424,17 +424,20 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	fromstr, ok := obj[0].FromBlock.(string)
-	if !ok {
-		return NewInvalidTypeError("fromBlock", "is not a string")
+	var num int64
+	if err := blockHeight(obj[0].FromBlock, &num); err != nil {
+		return err
+	}
+	if num < 0 {
+		args.Earliest = -1 //latest block
+	} else {
+		args.Earliest = num
 	}
 
-	switch fromstr {
-	case "latest":
-		args.Earliest = -1
-	default:
-		args.Earliest = int64(common.Big(obj[0].FromBlock.(string)).Int64())
+	if err := blockHeight(obj[0].ToBlock, &num); err != nil {
+		return err
 	}
+	args.Latest = num
 
 	tostr, ok := obj[0].ToBlock.(string)
 	if !ok {
