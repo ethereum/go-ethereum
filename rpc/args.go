@@ -388,8 +388,12 @@ func (args *Sha3Args) UnmarshalJSON(b []byte) (err error) {
 	if len(obj) < 1 {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
-	args.Data = obj[0].(string)
 
+	argstr, ok := obj[0].(string)
+	if !ok {
+		return NewInvalidTypeError("data", "is not a string")
+	}
+	args.Data = argstr
 	return nil
 }
 
