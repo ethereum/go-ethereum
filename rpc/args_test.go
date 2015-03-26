@@ -300,13 +300,66 @@ func TestNewTxArgsBlockInt(t *testing.T) {
 	}
 }
 
+func TestNewTxArgsBlockInvalid(t *testing.T) {
+	input := `[{"from": "0xb60e8dd61c5d32be8058bb8eb970870f07233155"}, false]`
+	expected := new(NewTxArgs)
+	expected.From = common.HexToAddress("0xb60e8dd61c5d32be8058bb8eb970870f07233155")
+	expected.BlockNumber = big.NewInt(5).Int64()
+
+	args := new(NewTxArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expeted *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	}
+
+}
+
 func TestNewTxArgsEmpty(t *testing.T) {
 	input := `[]`
 
 	args := new(NewTxArgs)
 	err := json.Unmarshal([]byte(input), &args)
-	if err == nil {
+	switch err.(type) {
+	case nil:
 		t.Error("Expected error but didn't get one")
+	case *InsufficientParamsError:
+		break
+	default:
+		t.Errorf("Expeted *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestNewTxArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(NewTxArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expeted *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	}
+}
+func TestNewTxArgsNotStrings(t *testing.T) {
+	input := `[{"from":6}]`
+
+	args := new(NewTxArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expeted *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
 	}
 }
 

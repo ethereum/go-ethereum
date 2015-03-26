@@ -145,12 +145,7 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 
 	// Check for optional BlockNumber param
 	if len(obj) > 1 {
-		var raw interface{}
-		if err = json.Unmarshal(obj[1], &raw); err != nil {
-			return NewDecodeParamError(err.Error())
-		}
-
-		if err := blockHeight(raw, &args.BlockNumber); err != nil {
+		if err := blockHeightFromJson(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
 	}
