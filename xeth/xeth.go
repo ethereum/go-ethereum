@@ -144,12 +144,8 @@ func (self *XEth) Whisper() *Whisper { return self.whisper }
 func (self *XEth) getBlockByHeight(height int64) *types.Block {
 	var num uint64
 
-	// -1 means "latest"
-	// -2 means "pending", which has no blocknum
-	if height <= -2 {
-		return &types.Block{}
-	} else if height == -1 {
-		num = self.CurrentBlock().NumberU64()
+	if height < 0 {
+		num = self.CurrentBlock().NumberU64() + uint64(-1*height)
 	} else {
 		num = uint64(height)
 	}
