@@ -482,7 +482,7 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	args.Earliest, err = toNumber(obj[0].FromBlock)
+	args.Earliest, err = toNumber(obj[0].ToBlock)
 	if err != nil {
 		return NewDecodeParamError(fmt.Sprintf("FromBlock %v", err))
 	}
