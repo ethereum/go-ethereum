@@ -184,8 +184,8 @@ func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type GetStorageAtArgs struct {
-	Address     string
-	Key         string
+	Address     common.Address
+	Key         common.Hash
 	BlockNumber int64
 }
 
@@ -203,13 +203,13 @@ func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return NewDecodeParamError("Address is not a string")
 	}
-	args.Address = addstr
+	args.Address = common.HexToAddress(addstr)
 
 	keystr, ok := obj[1].(string)
 	if !ok {
 		return NewDecodeParamError("Key is not a string")
 	}
-	args.Key = keystr
+	args.Key = common.HexToHash(keystr)
 
 	if len(obj) > 2 {
 		if err := blockHeight(obj[2], &args.BlockNumber); err != nil {
@@ -217,17 +217,6 @@ func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 		}
 	}
 
-	return nil
-}
-
-func (args *GetStorageAtArgs) requirements() error {
-	if len(args.Address) == 0 {
-		return NewValidationError("Address", "cannot be blank")
-	}
-
-	if len(args.Key) == 0 {
-		return NewValidationError("Key", "cannot be blank")
-	}
 	return nil
 }
 

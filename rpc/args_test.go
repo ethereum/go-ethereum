@@ -461,16 +461,12 @@ func TestGetStorageAddressInt(t *testing.T) {
 func TestGetStorageAtArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "0x0", "0x2"]`
 	expected := new(GetStorageAtArgs)
-	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
-	expected.Key = "0x0"
+	expected.Address = common.HexToAddress("0x407d73d8a49eeb85d32cf465507dd71d507100c1")
+	expected.Key = common.HexToHash("0x0")
 	expected.BlockNumber = 2
 
 	args := new(GetStorageAtArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
-		t.Error(err)
-	}
-
-	if err := args.requirements(); err != nil {
 		t.Error(err)
 	}
 
@@ -492,8 +488,73 @@ func TestGetStorageAtEmptyArgs(t *testing.T) {
 
 	args := new(GetStorageAtArgs)
 	err := json.Unmarshal([]byte(input), &args)
-	if err == nil {
+	switch err.(type) {
+	case nil:
 		t.Error("Expected error but didn't get one")
+	case *InsufficientParamsError:
+		break
+	default:
+		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestGetStorageAtArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(GetStorageAtArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestGetStorageAtArgsAddressNotString(t *testing.T) {
+	input := `[true, "0x0", "0x2"]`
+
+	args := new(GetStorageAtArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestGetStorageAtArgsKeyNotString(t *testing.T) {
+	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", true, "0x2"]`
+
+	args := new(GetStorageAtArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestGetStorageAtArgsValueNotString(t *testing.T) {
+	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "0x1", true]`
+
+	args := new(GetStorageAtArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
 	}
 }
 
