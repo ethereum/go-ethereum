@@ -50,7 +50,7 @@ func (api *EthereumApi) Close() {
 
 func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/JSON-RPC
-	rpclogger.Infof("%s %s", req.Method, req.Params)
+	rpclogger.Debugf("%s %s", req.Method, req.Params)
 
 	switch req.Method {
 	case "web3_sha3":
