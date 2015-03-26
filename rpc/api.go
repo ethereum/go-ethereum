@@ -212,7 +212,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		args := new(HashIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 		}
-		tx := api.xeth().EthTransactionByHash(args.Hash.Hex())
+		tx := api.xeth().EthTransactionByHash(args.Hash)
 		if tx != nil {
 			*reply = NewTransactionRes(tx)
 		}
