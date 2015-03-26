@@ -2,9 +2,9 @@ package jsre
 
 import (
 	"github.com/robertkrimen/otto"
+	"io/ioutil"
+	"os"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 type testNativeObjectBinding struct {
@@ -26,7 +26,7 @@ func (no *testNativeObjectBinding) TestMethod(call otto.FunctionCall) otto.Value
 func TestExec(t *testing.T) {
 	jsre := New("/tmp")
 
-	common.WriteFile("/tmp/test.js", []byte(`msg = "testMsg"`))
+	ioutil.WriteFile("/tmp/test.js", []byte(`msg = "testMsg"`), os.ModePerm)
 	err := jsre.Exec("test.js")
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -64,7 +64,7 @@ func TestBind(t *testing.T) {
 func TestLoadScript(t *testing.T) {
 	jsre := New("/tmp")
 
-	common.WriteFile("/tmp/test.js", []byte(`msg = "testMsg"`))
+	ioutil.WriteFile("/tmp/test.js", []byte(`msg = "testMsg"`), os.ModePerm)
 	_, err := jsre.Run(`loadScript("test.js")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)

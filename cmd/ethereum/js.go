@@ -67,14 +67,14 @@ type jsre struct {
 	prompter
 }
 
-func newJSRE(ethereum *eth.Ethereum, libPath string) *jsre {
+func newJSRE(ethereum *eth.Ethereum, libPath string, interactive bool) *jsre {
 	js := &jsre{ethereum: ethereum, ps1: "> "}
 	js.xeth = xeth.New(ethereum, js)
 	js.re = re.New(libPath)
 	js.apiBindings()
 	js.adminBindings()
 
-	if !liner.TerminalSupported() {
+	if !liner.TerminalSupported() || !interactive {
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
 	} else {
 		lr := liner.NewLiner()
@@ -102,7 +102,7 @@ func (js *jsre) apiBindings() {
 	jethObj := t.Object()
 	jethObj.Set("send", jeth.Send)
 
-	err := js.re.Compile("bignum.js", re.BigNumber_JS)
+	err := js.re.Compile("bignumber.js", re.BigNumber_JS)
 	if err != nil {
 		utils.Fatalf("Error loading bignumber.js: %v", err)
 	}
