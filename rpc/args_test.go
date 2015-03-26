@@ -24,15 +24,11 @@ func TestSha3(t *testing.T) {
 func TestGetBalanceArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "0x1f"]`
 	expected := new(GetBalanceArgs)
-	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
+	expected.Address = common.HexToAddress("0x407d73d8a49eeb85d32cf465507dd71d507100c1")
 	expected.BlockNumber = 31
 
 	args := new(GetBalanceArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
-		t.Error(err)
-	}
-
-	if err := args.requirements(); err != nil {
 		t.Error(err)
 	}
 
@@ -48,15 +44,11 @@ func TestGetBalanceArgs(t *testing.T) {
 func TestGetBalanceArgsLatest(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "latest"]`
 	expected := new(GetBalanceArgs)
-	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
+	expected.Address = common.HexToAddress("0x407d73d8a49eeb85d32cf465507dd71d507100c1")
 	expected.BlockNumber = -1
 
 	args := new(GetBalanceArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
-		t.Error(err)
-	}
-
-	if err := args.requirements(); err != nil {
 		t.Error(err)
 	}
 
@@ -69,15 +61,64 @@ func TestGetBalanceArgsLatest(t *testing.T) {
 	}
 }
 
-func TestGetBalanceEmptyArgs(t *testing.T) {
+func TestGetBalanceArgsEmpty(t *testing.T) {
 	input := `[]`
 
 	args := new(GetBalanceArgs)
 	err := json.Unmarshal([]byte(input), &args)
-	if err == nil {
+	switch err.(type) {
+	case nil:
 		t.Error("Expected error but didn't get one")
+	case *InsufficientParamsError:
+		break
+	default:
+		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message %s", err, err.Error())
 	}
+}
 
+func TestGetBalanceArgsInvalid(t *testing.T) {
+	input := `6`
+
+	args := new(GetBalanceArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message %s", err, err.Error())
+	}
+}
+
+func TestGetBalanceArgsBlockInvalid(t *testing.T) {
+	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", false]`
+
+	args := new(GetBalanceArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message %s", err, err.Error())
+	}
+}
+
+func TestGetBalanceArgsAddressInvalid(t *testing.T) {
+	input := `[-9, "latest"]`
+
+	args := new(GetBalanceArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message %s", err, err.Error())
+	}
 }
 
 func TestGetBlockByHashArgs(t *testing.T) {
