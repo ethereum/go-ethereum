@@ -100,13 +100,48 @@ func TestGetBlockByHashArgs(t *testing.T) {
 	}
 }
 
-func TestGetBlockByHashEmpty(t *testing.T) {
+func TestGetBlockByHashArgsEmpty(t *testing.T) {
 	input := `[]`
 
 	args := new(GetBlockByHashArgs)
 	err := json.Unmarshal([]byte(input), &args)
-	if err == nil {
+	switch err.(type) {
+	case nil:
 		t.Error("Expected error but didn't get one")
+	case *InsufficientParamsError:
+		break
+	default:
+		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message %s", err, err.Error())
+	}
+}
+
+func TestGetBlockByHashArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(GetBlockByHashArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message %s", err, err.Error())
+	}
+}
+
+func TestGetBlockByHashArgsHashInt(t *testing.T) {
+	input := `[8]`
+
+	args := new(GetBlockByHashArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message %s", err, err.Error())
 	}
 }
 
