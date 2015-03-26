@@ -97,14 +97,9 @@ var (
 		Usage: "Enable mining",
 	}
 
-	// key settings
-	UnencryptedKeysFlag = cli.BoolFlag{
-		Name:  "unencrypted-keys",
-		Usage: "disable private key disk encryption (for testing)",
-	}
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
-		Usage: "unlock the account given until this program exits (prompts for password).",
+		Usage: "unlock the account given until this program exits (prompts for password). '--unlock coinbase' unlocks the primary (coinbase) account",
 		Value: "",
 	}
 	PasswordFileFlag = cli.StringFlag{
@@ -249,12 +244,7 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Dat
 
 func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
-	var ks crypto.KeyStore2
-	if ctx.GlobalBool(UnencryptedKeysFlag.Name) {
-		ks = crypto.NewKeyStorePlain(path.Join(dataDir, "plainkeys"))
-	} else {
-		ks = crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
-	}
+	ks := crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
 	return accounts.NewManager(ks)
 }
 

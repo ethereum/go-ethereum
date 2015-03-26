@@ -208,6 +208,8 @@ func zeroKey(k *ecdsa.PrivateKey) {
 	}
 }
 
+// USE WITH CAUTION = this will save an unencrypted private key on disk
+// no cli or js interface
 func (am *Manager) Export(path string, addr []byte, keyAuth string) error {
 	key, err := am.keyStore.GetKey(addr, keyAuth)
 	if err != nil {
