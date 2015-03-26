@@ -166,7 +166,14 @@ type NewTxArgs struct {
 
 func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []json.RawMessage
-	var ext struct{ From, To, Value, Gas, GasPrice, Data string }
+	var ext struct {
+		From     string
+		To       string
+		Value    interface{}
+		Gas      interface{}
+		GasPrice interface{}
+		Data     string
+	}
 
 	// Decode byte slice to array of RawMessages
 	if err := json.Unmarshal(b, &obj); err != nil {
@@ -189,10 +196,35 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 
 	args.From = ext.From
 	args.To = ext.To
-	args.Value = common.String2Big(ext.Value)
-	args.Gas = common.String2Big(ext.Gas)
-	args.GasPrice = common.String2Big(ext.GasPrice)
 	args.Data = ext.Data
+
+	var num int64
+	if ext.Value == nil {
+		return NewValidationError("value", "is required")
+	} else {
+		if err := numString(ext.Value, &num); err != nil {
+			return err
+		}
+	}
+	args.Value = big.NewInt(num)
+
+	if ext.Gas == nil {
+		return NewValidationError("gas", "is required")
+	} else {
+		if err := numString(ext.Gas, &num); err != nil {
+			return err
+		}
+	}
+	args.Gas = big.NewInt(num)
+
+	if ext.GasPrice == nil {
+		return NewValidationError("gasprice", "is required")
+	} else {
+		if err := numString(ext.GasPrice, &num); err != nil {
+			return err
+		}
+	}
+	args.GasPrice = big.NewInt(num)
 
 	// Check for optional BlockNumber param
 	if len(obj) > 1 {
