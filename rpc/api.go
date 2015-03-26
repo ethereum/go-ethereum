@@ -123,12 +123,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		err := args.requirements()
-		if err != nil {
-			return err
-		}
-
-		*reply = api.xethAtStateNum(args.BlockNumber).TxCountAt(args.Address)
+		*reply = api.xethAtStateNum(args.BlockNumber).TxCountAt(args.Address.Hex())
 	case "eth_getBlockTransactionCountByHash":
 		args := new(GetBlockByHashArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
