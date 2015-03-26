@@ -155,14 +155,9 @@ func TestGetBalanceArgsInvalid(t *testing.T) {
 	input := `6`
 
 	args := new(GetBalanceArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
-		break
-	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message %s", err, err.Error())
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 

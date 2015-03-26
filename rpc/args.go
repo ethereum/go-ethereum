@@ -29,7 +29,7 @@ func blockHeight(raw interface{}, number *int64) error {
 	// Parse as string/hexstring
 	str, ok := raw.(string)
 	if !ok {
-		return NewInvalidTypeError("blockNumber", "not a number or string")
+		return NewInvalidTypeError("", "not a number or string")
 	}
 
 	switch str {
@@ -80,6 +80,17 @@ func numString(raw interface{}, number *int64) error {
 // 	default:
 // 		return int64(common.Big(v.(string)).Int64()), nil
 // 	}
+// }
+
+// func hashString(raw interface{}, hash *string) error {
+// 	argstr, ok := raw.(string)
+// 	if !ok {
+// 		return NewInvalidTypeError("", "not a string")
+// 	}
+// 	v := common.IsHex(argstr)
+// 	hash = &argstr
+
+// 	return nil
 // }
 
 type GetBlockByHashArgs struct {
