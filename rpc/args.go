@@ -3,6 +3,8 @@ package rpc
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -442,6 +444,26 @@ type BlockFilterArgs struct {
 	Max      int
 }
 
+func toNumber(v interface{}) (int64, error) {
+	var str string
+	if v != nil {
+		var ok bool
+		str, ok = v.(string)
+		if !ok {
+			return 0, errors.New("is not a string or undefined")
+		}
+	} else {
+		str = "latest"
+	}
+
+	switch str {
+	case "latest":
+		return -1, nil
+	default:
+		return int64(common.Big(v.(string)).Int64()), nil
+	}
+}
+
 func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []struct {
 		FromBlock interface{}   `json:"fromBlock"`
@@ -460,30 +482,13 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	fromstr, ok := obj[0].FromBlock.(string)
-	if !ok {
-		return NewDecodeParamError("FromBlock is not a string")
+	args.Earliest, err = toNumber(obj[0].FromBlock)
+	if err != nil {
+		return NewDecodeParamError(fmt.Sprintf("FromBlock %v", err))
 	}
-
-	switch fromstr {
-	case "latest":
-		args.Earliest = -1
-	default:
-		args.Earliest = int64(common.Big(obj[0].FromBlock.(string)).Int64())
-	}
-
-	tostr, ok := obj[0].ToBlock.(string)
-	if !ok {
-		return NewDecodeParamError("ToBlock is not a string")
-	}
-
-	switch tostr {
-	case "latest":
-		args.Latest = -1
-	case "pending":
-		args.Latest = -2
-	default:
-		args.Latest = int64(common.Big(obj[0].ToBlock.(string)).Int64())
+	args.Latest, err = toNumber(obj[0].FromBlock)
+	if err != nil {
+		return NewDecodeParamError(fmt.Sprintf("ToBlock %v", err))
 	}
 
 	args.Max = int(common.Big(obj[0].Limit).Int64())
