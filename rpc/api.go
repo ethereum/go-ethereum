@@ -212,7 +212,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		args := new(HashIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 		}
-		tx := api.xeth().EthTransactionByHash(args.Hash.Hex())
+		tx := api.xeth().EthTransactionByHash(args.Hash)
 		if tx != nil {
 			*reply = NewTransactionRes(tx)
 		}
@@ -257,7 +257,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		uhash := br.Uncles[args.Index].Hex()
-		uncle := NewBlockRes(api.xeth().EthBlockByHexstring(uhash))
+		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash))
 
 		*reply = uncle
 	case "eth_getUncleByBlockNumberAndIndex":
@@ -275,7 +275,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		uhash := v.Uncles[args.Index].Hex()
-		uncle := NewBlockRes(api.xeth().EthBlockByHexstring(uhash))
+		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash))
 
 		*reply = uncle
 	case "eth_getCompilers":

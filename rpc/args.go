@@ -61,7 +61,7 @@ func numString(raw interface{}, number *int64) error {
 }
 
 type GetBlockByHashArgs struct {
-	BlockHash  common.Hash
+	BlockHash  string
 	IncludeTxs bool
 }
 
@@ -80,7 +80,7 @@ func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return NewInvalidTypeError("blockHash", "not a string")
 	}
-	args.BlockHash = common.HexToHash(argstr)
+	args.BlockHash = argstr
 
 	if len(obj) > 1 {
 		args.IncludeTxs = obj[1].(bool)
@@ -360,7 +360,7 @@ func (args *BlockNumIndexArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type HashIndexArgs struct {
-	Hash  common.Hash
+	Hash  string
 	Index int64
 }
 
@@ -379,7 +379,7 @@ func (args *HashIndexArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return NewInvalidTypeError("hash", "not a string")
 	}
-	args.Hash = common.HexToHash(arg0)
+	args.Hash = arg0
 
 	if len(obj) > 1 {
 		arg1, ok := obj[1].(string)

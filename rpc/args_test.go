@@ -191,7 +191,7 @@ func TestGetBalanceArgsAddressInvalid(t *testing.T) {
 func TestGetBlockByHashArgs(t *testing.T) {
 	input := `["0xe670ec64341771606e55d6b4ca35a1a6b75ee3d5145a99d05921026d1527331", true]`
 	expected := new(GetBlockByHashArgs)
-	expected.BlockHash = common.HexToHash("0xe670ec64341771606e55d6b4ca35a1a6b75ee3d5145a99d05921026d1527331")
+	expected.BlockHash = "0xe670ec64341771606e55d6b4ca35a1a6b75ee3d5145a99d05921026d1527331"
 	expected.IncludeTxs = true
 
 	args := new(GetBlockByHashArgs)
@@ -1444,7 +1444,7 @@ func TestBlockNumIndexArgsIndexInvalid(t *testing.T) {
 func TestHashIndexArgs(t *testing.T) {
 	input := `["0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b", "0x1"]`
 	expected := new(HashIndexArgs)
-	expected.Hash = common.HexToHash("0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b")
+	expected.Hash = "0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b"
 	expected.Index = 1
 
 	args := new(HashIndexArgs)
