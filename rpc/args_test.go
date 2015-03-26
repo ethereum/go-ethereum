@@ -239,15 +239,11 @@ func TestNewTxArgsFromEmpty(t *testing.T) {
 func TestGetStorageArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "latest"]`
 	expected := new(GetStorageArgs)
-	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
+	expected.Address = common.HexToAddress("0x407d73d8a49eeb85d32cf465507dd71d507100c1")
 	expected.BlockNumber = -1
 
 	args := new(GetStorageArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
-		t.Error(err)
-	}
-
-	if err := args.requirements(); err != nil {
 		t.Error(err)
 	}
 
@@ -260,13 +256,63 @@ func TestGetStorageArgs(t *testing.T) {
 	}
 }
 
+func TestGetStorageInvalidArgs(t *testing.T) {
+	input := `{}`
+
+	args := new(GetStorageArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestGetStorageInvalidBlockheight(t *testing.T) {
+	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", {}]`
+
+	args := new(GetStorageArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	}
+}
+
 func TestGetStorageEmptyArgs(t *testing.T) {
 	input := `[]`
 
 	args := new(GetStorageArgs)
 	err := json.Unmarshal([]byte(input), &args)
-	if err == nil {
+	switch err.(type) {
+	case nil:
 		t.Error("Expected error but didn't get one")
+	case *InsufficientParamsError:
+		break
+	default:
+		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	}
+}
+
+func TestGetStorageAddressInt(t *testing.T) {
+	input := `[32456785432456, "latest"]`
+
+	args := new(GetStorageArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	switch err.(type) {
+	case nil:
+		t.Error("Expected error but didn't get one")
+	case *DecodeParamError:
+		break
+	default:
+		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
 	}
 }
 

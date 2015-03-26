@@ -106,11 +106,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		if err := args.requirements(); err != nil {
-			return err
-		}
-
-		*reply = api.xethAtStateNum(args.BlockNumber).State().SafeGet(args.Address).Storage()
+		*reply = api.xethAtStateNum(args.BlockNumber).State().SafeGet(args.Address.Hex()).Storage()
 	case "eth_getStorageAt":
 		args := new(GetStorageAtArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
