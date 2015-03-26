@@ -590,8 +590,8 @@ func (args *WhisperMessageArgs) UnmarshalJSON(b []byte) (err error) {
 		To       string
 		From     string
 		Topics   []string
-		Priority string
-		Ttl      string
+		Priority interface{}
+		Ttl      interface{}
 	}
 
 	if err = json.Unmarshal(b, &obj); err != nil {
@@ -605,8 +605,17 @@ func (args *WhisperMessageArgs) UnmarshalJSON(b []byte) (err error) {
 	args.To = obj[0].To
 	args.From = obj[0].From
 	args.Topics = obj[0].Topics
-	args.Priority = uint32(common.Big(obj[0].Priority).Int64())
-	args.Ttl = uint32(common.Big(obj[0].Ttl).Int64())
+
+	var num int64
+	if err := numString(obj[0].Priority, &num); err != nil {
+		return err
+	}
+	args.Priority = uint32(num)
+
+	if err := numString(obj[0].Ttl, &num); err != nil {
+		return err
+	}
+	args.Ttl = uint32(num)
 
 	return nil
 }

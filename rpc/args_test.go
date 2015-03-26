@@ -1009,7 +1009,7 @@ func TestWhisperMessageArgs(t *testing.T) {
 	expected.Payload = "0x68656c6c6f20776f726c64"
 	expected.Priority = 100
 	expected.Ttl = 100
-	expected.Topics = []string{"0x68656c6c6f20776f726c64"}
+	// expected.Topics = []string{"0x68656c6c6f20776f726c64"}
 
 	args := new(WhisperMessageArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -1039,6 +1039,96 @@ func TestWhisperMessageArgs(t *testing.T) {
 	// if expected.Topics != args.Topics {
 	// 	t.Errorf("Topic shoud be %#v but is %#v", expected.Topic, args.Topic)
 	// }
+}
+
+func TestWhisperMessageArgsInt(t *testing.T) {
+	input := `[{"from":"0xc931d93e97ab07fe42d923478ba2465f2",
+  "topics": ["0x68656c6c6f20776f726c64"],
+  "payload":"0x68656c6c6f20776f726c64",
+  "ttl": 12,
+  "priority": 16}]`
+	expected := new(WhisperMessageArgs)
+	expected.From = "0xc931d93e97ab07fe42d923478ba2465f2"
+	expected.To = ""
+	expected.Payload = "0x68656c6c6f20776f726c64"
+	expected.Priority = 16
+	expected.Ttl = 12
+	// expected.Topics = []string{"0x68656c6c6f20776f726c64"}
+
+	args := new(WhisperMessageArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.From != args.From {
+		t.Errorf("From shoud be %#v but is %#v", expected.From, args.From)
+	}
+
+	if expected.To != args.To {
+		t.Errorf("To shoud be %#v but is %#v", expected.To, args.To)
+	}
+
+	if expected.Payload != args.Payload {
+		t.Errorf("Value shoud be %#v but is %#v", expected.Payload, args.Payload)
+	}
+
+	if expected.Ttl != args.Ttl {
+		t.Errorf("Ttl shoud be %v but is %v", expected.Ttl, args.Ttl)
+	}
+
+	if expected.Priority != args.Priority {
+		t.Errorf("Priority shoud be %v but is %v", expected.Priority, args.Priority)
+	}
+
+	// if expected.Topics != args.Topics {
+	// 	t.Errorf("Topic shoud be %#v but is %#v", expected.Topic, args.Topic)
+	// }
+}
+
+func TestWhisperMessageArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(WhisperMessageArgs)
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestWhisperMessageArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(WhisperMessageArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestWhisperMessageArgsTtlBool(t *testing.T) {
+	input := `[{"from":"0xc931d93e97ab07fe42d923478ba2465f2",
+  "topics": ["0x68656c6c6f20776f726c64"],
+  "payload":"0x68656c6c6f20776f726c64",
+  "ttl": true,
+  "priority": "0x64"}]`
+	args := new(WhisperMessageArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestWhisperMessageArgsPriorityBool(t *testing.T) {
+	input := `[{"from":"0xc931d93e97ab07fe42d923478ba2465f2",
+  "topics": ["0x68656c6c6f20776f726c64"],
+  "payload":"0x68656c6c6f20776f726c64",
+  "ttl": "0x12",
+  "priority": true}]`
+	args := new(WhisperMessageArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
 }
 
 func TestFilterIdArgs(t *testing.T) {
