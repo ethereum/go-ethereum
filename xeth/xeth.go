@@ -160,14 +160,11 @@ func (self *XEth) BlockByHash(strHash string) *Block {
 	return NewBlock(block)
 }
 
-func (self *XEth) EthBlockByHash(hash common.Hash) *types.Block {
+func (self *XEth) EthBlockByHash(strHash string) *types.Block {
+	hash := common.HexToHash(strHash)
 	block := self.backend.ChainManager().GetBlock(hash)
 
 	return block
-}
-
-func (self *XEth) EthBlockByHexstring(strHash string) *types.Block {
-	return self.EthBlockByHash(common.HexToHash(strHash))
 }
 
 func (self *XEth) EthTransactionByHash(hash string) *types.Transaction {

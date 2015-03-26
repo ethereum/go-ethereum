@@ -126,7 +126,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		block := NewBlockRes(api.xeth().EthBlockByHash(args.BlockHash))
+		block := NewBlockRes(api.xeth().EthBlockByHash(args.BlockHash.Hex()))
 		*reply = common.ToHex(big.NewInt(int64(len(block.Transactions))).Bytes())
 	case "eth_getBlockTransactionCountByNumber":
 		args := new(GetBlockByNumberArgs)
@@ -142,7 +142,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		block := api.xeth().EthBlockByHash(args.BlockHash)
+		block := api.xeth().EthBlockByHash(args.BlockHash.Hex())
 		br := NewBlockRes(block)
 		*reply = common.ToHex(big.NewInt(int64(len(br.Uncles))).Bytes())
 	case "eth_getUncleCountByBlockNumber":
@@ -191,7 +191,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		block := api.xeth().EthBlockByHash(args.BlockHash)
+		block := api.xeth().EthBlockByHash(args.BlockHash.Hex())
 		br := NewBlockRes(block)
 		br.fullTx = args.IncludeTxs
 
@@ -222,7 +222,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		block := api.xeth().EthBlockByHash(args.Hash)
+		block := api.xeth().EthBlockByHash(args.Hash.Hex())
 		br := NewBlockRes(block)
 		br.fullTx = true
 
@@ -250,14 +250,14 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		br := NewBlockRes(api.xeth().EthBlockByHash(args.Hash))
+		br := NewBlockRes(api.xeth().EthBlockByHash(args.Hash.Hex()))
 
 		if args.Index > int64(len(br.Uncles)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
 		}
 
 		uhash := br.Uncles[args.Index].Hex()
-		uncle := NewBlockRes(api.xeth().EthBlockByHexstring(uhash))
+		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash))
 
 		*reply = uncle
 	case "eth_getUncleByBlockNumberAndIndex":
@@ -275,7 +275,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		uhash := v.Uncles[args.Index].Hex()
-		uncle := NewBlockRes(api.xeth().EthBlockByHexstring(uhash))
+		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash))
 
 		*reply = uncle
 	case "eth_getCompilers":
