@@ -5,6 +5,8 @@ import (
 	"math/big"
 )
 
+const maxStack = 1024
+
 func newStack() *stack {
 	return &stack{}
 }
@@ -15,6 +17,10 @@ type stack struct {
 }
 
 func (st *stack) push(d *big.Int) {
+	if len(st.data) == maxStack {
+		panic(fmt.Sprintf("stack limit reached (%d)", maxStack))
+	}
+
 	stackItem := new(big.Int).Set(d)
 	if len(st.data) > st.ptr {
 		st.data[st.ptr] = stackItem

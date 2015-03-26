@@ -36,9 +36,8 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	crand "crypto/rand"
-	"os"
-
 	"errors"
+	"os"
 	"sync"
 	"time"
 
@@ -207,4 +206,38 @@ func zeroKey(k *ecdsa.PrivateKey) {
 	for i := range b {
 		b[i] = 0
 	}
+}
+
+// USE WITH CAUTION = this will save an unencrypted private key on disk
+// no cli or js interface
+func (am *Manager) Export(path string, addr []byte, keyAuth string) error {
+	key, err := am.keyStore.GetKey(addr, keyAuth)
+	if err != nil {
+		return err
+	}
+	return crypto.SaveECDSA(path, key.PrivateKey)
+}
+
+func (am *Manager) Import(path string, keyAuth string) (Account, error) {
+	privateKeyECDSA, err := crypto.LoadECDSA(path)
+	if err != nil {
+		return Account{}, err
+	}
+	key := crypto.NewKeyFromECDSA(privateKeyECDSA)
+	if err = am.keyStore.StoreKey(key, keyAuth); err != nil {
+		return Account{}, err
+	}
+	return Account{Address: key.Address}, nil
+}
+
+func (am *Manager) ImportPreSaleKey(keyJSON []byte, password string) (acc Account, err error) {
+	var key *crypto.Key
+	key, err = crypto.ImportPreSaleKey(am.keyStore, keyJSON, password)
+	if err != nil {
+		return
+	}
+	if err = am.keyStore.StoreKey(key, password); err != nil {
+		return
+	}
+	return Account{Address: key.Address}, nil
 }

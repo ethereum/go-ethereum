@@ -23,14 +23,15 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -41,8 +42,8 @@ import (
 )
 
 const (
-	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.9.3"
+	ClientIdentifier = "Geth"
+	Version          = "0.9.4"
 )
 
 var (
@@ -74,10 +75,44 @@ Regular users do not need to execute it.
 The output of this command is supposed to be machine-readable.
 `,
 		},
+
+		{
+			Name:  "wallet",
+			Usage: "ethereum presale wallet",
+			Subcommands: []cli.Command{
+				{
+					Action: importWallet,
+					Name:   "import",
+					Usage:  "import ethereum presale wallet",
+				},
+			},
+		},
 		{
 			Action: accountList,
 			Name:   "account",
 			Usage:  "manage accounts",
+			Description: `
+
+Manage accounts lets you create new accounts, list all existing accounts,
+import a private key into a new account.
+
+It supports interactive mode, when you are prompted for password as well as
+non-interactive mode where passwords are supplied via a given password file.
+Non-interactive mode is only meant for scripted use on test networks or known
+safe environments.
+
+Make sure you remember the password you gave when creating a new account (with
+either new or import). Without it you are not able to unlock your account.
+
+Note that exporting your key in unencrypted format is NOT supported.
+
+Keys are stored under <DATADIR>/keys.
+It is safe to transfer the entire directory or the individual keys therein
+between ethereum nodes.
+Make sure you backup your keys regularly.
+
+And finally. DO NOT FORGET YOUR PASSWORD.
+`,
 			Subcommands: []cli.Command{
 				{
 					Action: accountList,
@@ -88,6 +123,51 @@ The output of this command is supposed to be machine-readable.
 					Action: accountCreate,
 					Name:   "new",
 					Usage:  "create a new account",
+					Description: `
+
+    ethereum account new
+
+Creates a new account. Prints the address.
+
+The account is saved in encrypted format, you are prompted for a passphrase.
+
+You must remember this passphrase to unlock your account in the future.
+
+For non-interactive use the passphrase can be specified with the --password flag:
+
+    ethereum --password <passwordfile> account new
+
+Note, this is meant to be used for testing only, it is a bad idea to save your
+password to file or expose in any other way.
+					`,
+				},
+				{
+					Action: accountImport,
+					Name:   "import",
+					Usage:  "import a private key into a new account",
+					Description: `
+
+    ethereum account import <keyfile>
+
+Imports an unencrypted private key from <keyfile> and creates a new account.
+Prints the address.
+
+The keyfile is assumed to contain an unencrypted private key in canonical EC
+raw bytes format.
+
+The account is saved in encrypted format, you are prompted for a passphrase.
+
+You must remember this passphrase to unlock your account in the future.
+
+For non-interactive use the passphrase can be specified with the -password flag:
+
+    ethereum --password <passwordfile> account import <keyfile>
+
+Note:
+As you can directly copy your encrypted accounts to another ethereum instance,
+this import mechanism is not needed when you transfer an account between
+nodes.
+					`,
 				},
 			},
 		},
@@ -103,18 +183,20 @@ Use "ethereum dump 0" to dump the genesis block.
 		{
 			Action: console,
 			Name:   "console",
-			Usage:  `Ethereum Console: interactive JavaScript environment`,
+			Usage:  `Geth Console: interactive JavaScript environment`,
 			Description: `
-Console is an interactive shell for the Ethereum JavaScript runtime environment which exposes a node admin interface as well as the DAPP JavaScript API.
+The Geth console is an interactive shell for the JavaScript runtime environment
+which exposes a node admin interface as well as the DAPP JavaScript API.
 See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
 `,
 		},
 		{
 			Action: execJSFiles,
 			Name:   "js",
-			Usage:  `executes the given JavaScript files in the Ethereum Frontier JavaScript VM`,
+			Usage:  `executes the given JavaScript files in the Geth JavaScript VM`,
 			Description: `
-The Ethereum JavaScript VM exposes a node admin interface as well as the DAPP JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
+The JavaScript VM exposes a node admin interface as well as the DAPP
+JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
 `,
 		},
 		{
@@ -130,6 +212,7 @@ The Ethereum JavaScript VM exposes a node admin interface as well as the DAPP Ja
 	}
 	app.Flags = []cli.Flag{
 		utils.UnlockedAccountFlag,
+		utils.PasswordFileFlag,
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.JSpathFlag,
@@ -146,7 +229,6 @@ The Ethereum JavaScript VM exposes a node admin interface as well as the DAPP Ja
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
-		utils.UnencryptedKeysFlag,
 		utils.VMDebugFlag,
 		utils.ProtocolVersionFlag,
 		utils.NetworkIdFlag,
@@ -194,7 +276,7 @@ func console(ctx *cli.Context) {
 	}
 
 	startEth(ctx, ethereum)
-	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name))
+	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), true)
 	repl.interactive()
 
 	ethereum.Stop()
@@ -209,7 +291,7 @@ func execJSFiles(ctx *cli.Context) {
 	}
 
 	startEth(ctx, ethereum)
-	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name))
+	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), false)
 	for _, file := range ctx.Args() {
 		repl.exec(file)
 	}
@@ -218,22 +300,36 @@ func execJSFiles(ctx *cli.Context) {
 	ethereum.WaitForShutdown()
 }
 
+func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (passphrase string) {
+	var err error
+	// Load startup keys. XXX we are going to need a different format
+	// Attempt to unlock the account
+	passphrase = getPassPhrase(ctx, "", false)
+	accbytes := common.FromHex(account)
+	if len(accbytes) == 0 {
+		utils.Fatalf("Invalid account address '%s'", account)
+	}
+	err = am.Unlock(accbytes, passphrase)
+	if err != nil {
+		utils.Fatalf("Unlock account failed '%v'", err)
+	}
+	return
+}
+
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	utils.StartEthereum(eth)
+	am := eth.AccountManager()
 
-	// Load startup keys. XXX we are going to need a different format
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	if len(account) > 0 {
-		split := strings.Split(account, ":")
-		if len(split) != 2 {
-			utils.Fatalf("Illegal 'unlock' format (address:password)")
+		if account == "coinbase" {
+			accbytes, err := am.Coinbase()
+			if err != nil {
+				utils.Fatalf("no coinbase account: %v", err)
+			}
+			account = common.ToHex(accbytes)
 		}
-		am := eth.AccountManager()
-		// Attempt to unlock the account
-		err := am.Unlock(common.FromHex(split[0]), split[1])
-		if err != nil {
-			utils.Fatalf("Unlock account failed '%v'", err)
-		}
+		unlockAccount(ctx, am, account)
 	}
 	// Start auxiliary services if enabled.
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
@@ -255,30 +351,77 @@ func accountList(ctx *cli.Context) {
 	}
 }
 
-func accountCreate(ctx *cli.Context) {
-	am := utils.GetAccountManager(ctx)
-	passphrase := ""
-	if !ctx.GlobalBool(utils.UnencryptedKeysFlag.Name) {
-		fmt.Println("The new account will be encrypted with a passphrase.")
-		fmt.Println("Please enter a passphrase now.")
+func getPassPhrase(ctx *cli.Context, desc string, confirmation bool) (passphrase string) {
+	passfile := ctx.GlobalString(utils.PasswordFileFlag.Name)
+	if len(passfile) == 0 {
+		fmt.Println(desc)
 		auth, err := readPassword("Passphrase: ", true)
 		if err != nil {
 			utils.Fatalf("%v", err)
 		}
-		confirm, err := readPassword("Repeat Passphrase: ", false)
-		if err != nil {
-			utils.Fatalf("%v", err)
-		}
-		if auth != confirm {
-			utils.Fatalf("Passphrases did not match.")
+		if confirmation {
+			confirm, err := readPassword("Repeat Passphrase: ", false)
+			if err != nil {
+				utils.Fatalf("%v", err)
+			}
+			if auth != confirm {
+				utils.Fatalf("Passphrases did not match.")
+			}
 		}
 		passphrase = auth
+
+	} else {
+		passbytes, err := ioutil.ReadFile(passfile)
+		if err != nil {
+			utils.Fatalf("Unable to read password file '%s': %v", passfile, err)
+		}
+		passphrase = string(passbytes)
 	}
+	return
+}
+
+func accountCreate(ctx *cli.Context) {
+	am := utils.GetAccountManager(ctx)
+	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true)
 	acct, err := am.NewAccount(passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
-	fmt.Printf("Address: %x\n", acct.Address)
+	fmt.Printf("Address: %x\n", acct)
+}
+
+func importWallet(ctx *cli.Context) {
+	keyfile := ctx.Args().First()
+	if len(keyfile) == 0 {
+		utils.Fatalf("keyfile must be given as argument")
+	}
+	keyJson, err := ioutil.ReadFile(keyfile)
+	if err != nil {
+		utils.Fatalf("Could not read wallet file: %v", err)
+	}
+
+	am := utils.GetAccountManager(ctx)
+	passphrase := getPassPhrase(ctx, "", false)
+
+	acct, err := am.ImportPreSaleKey(keyJson, passphrase)
+	if err != nil {
+		utils.Fatalf("Could not create the account: %v", err)
+	}
+	fmt.Printf("Address: %x\n", acct)
+}
+
+func accountImport(ctx *cli.Context) {
+	keyfile := ctx.Args().First()
+	if len(keyfile) == 0 {
+		utils.Fatalf("keyfile must be given as argument")
+	}
+	am := utils.GetAccountManager(ctx)
+	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true)
+	acct, err := am.Import(keyfile, passphrase)
+	if err != nil {
+		utils.Fatalf("Could not create the account: %v", err)
+	}
+	fmt.Printf("Address: %x\n", acct)
 }
 
 func importchain(ctx *cli.Context) {

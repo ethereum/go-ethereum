@@ -3,6 +3,8 @@ package rpc
 import (
 	"bytes"
 	"encoding/json"
+	// "errors"
+	// "fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -59,6 +61,26 @@ func numString(raw interface{}, number *int64) error {
 
 	return nil
 }
+
+// func toNumber(v interface{}) (int64, error) {
+// 	var str string
+// 	if v != nil {
+// 		var ok bool
+// 		str, ok = v.(string)
+// 		if !ok {
+// 			return 0, errors.New("is not a string or undefined")
+// 		}
+// 	} else {
+// 		str = "latest"
+// 	}
+
+// 	switch str {
+// 	case "latest":
+// 		return -1, nil
+// 	default:
+// 		return int64(common.Big(v.(string)).Int64()), nil
+// 	}
+// }
 
 type GetBlockByHashArgs struct {
 	BlockHash  string
@@ -442,6 +464,14 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
+	// args.Earliest, err = toNumber(obj[0].ToBlock)
+	// if err != nil {
+	// 	return NewDecodeParamError(fmt.Sprintf("FromBlock %v", err))
+	// }
+	// args.Latest, err = toNumber(obj[0].FromBlock)
+	// if err != nil {
+	// 	return NewDecodeParamError(fmt.Sprintf("ToBlock %v", err))
+
 	var num int64
 	if err := blockHeight(obj[0].FromBlock, &num); err != nil {
 		return err
@@ -464,6 +494,7 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 
 	if err := numString(obj[0].Offset, &num); err != nil {
 		return err
+
 	}
 	args.Skip = int(num)
 

@@ -50,6 +50,7 @@ out:
 			break out
 		case work := <-a.workCh:
 			a.work = work
+			a.returnCh <- nil
 		}
 	}
 }
