@@ -1056,6 +1056,36 @@ func TestFilterIdArgs(t *testing.T) {
 	}
 }
 
+func TestFilterIdArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(FilterIdArgs)
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Errorf(str)
+	}
+}
+
+func TestFilterIdArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(FilterIdArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Errorf(str)
+	}
+}
+
+func TestFilterIdArgsBool(t *testing.T) {
+	input := `[true]`
+
+	args := new(FilterIdArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Errorf(str)
+	}
+}
+
 func TestWhsiperFilterArgs(t *testing.T) {
 	input := `[{"topics": ["0x68656c6c6f20776f726c64"], "to": "0x34ag445g3455b34"}]`
 	expected := new(WhisperFilterArgs)

@@ -664,9 +664,8 @@ type FilterIdArgs struct {
 }
 
 func (args *FilterIdArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []string
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
 
@@ -674,7 +673,11 @@ func (args *FilterIdArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	args.Id = int(common.Big(obj[0]).Int64())
+	var num int64
+	if err := numString(obj[0], &num); err != nil {
+		return err
+	}
+	args.Id = int(num)
 
 	return nil
 }
