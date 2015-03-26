@@ -212,7 +212,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		args := new(HashIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 		}
-		tx := api.xeth().EthTransactionByHash(args.Hash)
+		tx := api.xeth().EthTransactionByHash(args.Hash.Hex())
 		if tx != nil {
 			*reply = NewTransactionRes(tx)
 		}
@@ -222,7 +222,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		block := api.xeth().EthBlockByHexstring(args.Hash)
+		block := api.xeth().EthBlockByHash(args.Hash)
 		br := NewBlockRes(block)
 		br.fullTx = true
 
@@ -250,7 +250,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		br := NewBlockRes(api.xeth().EthBlockByHexstring(args.Hash))
+		br := NewBlockRes(api.xeth().EthBlockByHash(args.Hash))
 
 		if args.Index > int64(len(br.Uncles)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")

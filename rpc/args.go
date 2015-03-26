@@ -342,7 +342,7 @@ func (args *BlockNumIndexArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type HashIndexArgs struct {
-	Hash  string
+	Hash  common.Hash
 	Index int64
 }
 
@@ -361,7 +361,7 @@ func (args *HashIndexArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return NewInvalidTypeError("hash", "not a string")
 	}
-	args.Hash = arg0
+	args.Hash = common.HexToHash(arg0)
 
 	if len(obj) > 1 {
 		arg1, ok := obj[1].(string)
