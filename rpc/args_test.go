@@ -3,6 +3,7 @@ package rpc
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -19,6 +20,58 @@ func TestSha3(t *testing.T) {
 	if args.Data != expected {
 		t.Error("got %s expected %s", input, expected)
 	}
+}
+
+func ExpectValidationError(err error) string {
+	var str string
+	switch err.(type) {
+	case nil:
+		str = "Expected error but didn't get one"
+	case *ValidationError:
+		break
+	default:
+		str = fmt.Sprintf("Expected *rpc.ValidationError but got %T with message `%s`", err, err.Error())
+	}
+	return str
+}
+
+func ExpectInvalidTypeError(err error) string {
+	var str string
+	switch err.(type) {
+	case nil:
+		str = "Expected error but didn't get one"
+	case *InvalidTypeError:
+		break
+	default:
+		str = fmt.Sprintf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	}
+	return str
+}
+
+func ExpectInsufficientParamsError(err error) string {
+	var str string
+	switch err.(type) {
+	case nil:
+		str = "Expected error but didn't get one"
+	case *InsufficientParamsError:
+		break
+	default:
+		str = fmt.Sprintf("Expected *rpc.InsufficientParamsError but got %T with message %s", err, err.Error())
+	}
+	return str
+}
+
+func ExpectDecodeParamError(err error) string {
+	var str string
+	switch err.(type) {
+	case nil:
+		str = "Expected error but didn't get one"
+	case *DecodeParamError:
+		break
+	default:
+		str = fmt.Sprintf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	}
+	return str
 }
 
 func TestGetBalanceArgs(t *testing.T) {
@@ -65,14 +118,7 @@ func TestGetBalanceArgsEmpty(t *testing.T) {
 	input := `[]`
 
 	args := new(GetBalanceArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InsufficientParamsError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message %s", err, err.Error())
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
 	}
 }
 
@@ -95,14 +141,9 @@ func TestGetBalanceArgsBlockInvalid(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", false]`
 
 	args := new(GetBalanceArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message %s", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -110,14 +151,9 @@ func TestGetBalanceArgsAddressInvalid(t *testing.T) {
 	input := `[-9, "latest"]`
 
 	args := new(GetBalanceArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message %s", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -145,14 +181,9 @@ func TestGetBlockByHashArgsEmpty(t *testing.T) {
 	input := `[]`
 
 	args := new(GetBlockByHashArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InsufficientParamsError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message %s", err, err.Error())
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -160,14 +191,9 @@ func TestGetBlockByHashArgsInvalid(t *testing.T) {
 	input := `{}`
 
 	args := new(GetBlockByHashArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
-		break
-	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message %s", err, err.Error())
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -175,14 +201,9 @@ func TestGetBlockByHashArgsHashInt(t *testing.T) {
 	input := `[8]`
 
 	args := new(GetBlockByHashArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message %s", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -230,14 +251,9 @@ func TestGetBlockByNumberEmpty(t *testing.T) {
 	input := `[]`
 
 	args := new(GetBlockByNumberArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InsufficientParamsError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -245,28 +261,18 @@ func TestGetBlockByNumberBool(t *testing.T) {
 	input := `[true, true]`
 
 	args := new(GetBlockByNumberArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 func TestGetBlockByNumberBlockObject(t *testing.T) {
 	input := `{}`
 
 	args := new(GetBlockByNumberArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
-		break
-	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -348,30 +354,19 @@ func TestNewTxArgsBlockInvalid(t *testing.T) {
 	expected.BlockNumber = big.NewInt(5).Int64()
 
 	args := new(NewTxArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expeted *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
-
 }
 
 func TestNewTxArgsEmpty(t *testing.T) {
 	input := `[]`
 
 	args := new(NewTxArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InsufficientParamsError:
-		break
-	default:
-		t.Errorf("Expeted *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -379,28 +374,18 @@ func TestNewTxArgsInvalid(t *testing.T) {
 	input := `{}`
 
 	args := new(NewTxArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
-		break
-	default:
-		t.Errorf("Expeted *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 func TestNewTxArgsNotStrings(t *testing.T) {
 	input := `[{"from":6}]`
 
 	args := new(NewTxArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
-		break
-	default:
-		t.Errorf("Expeted *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -443,14 +428,9 @@ func TestGetStorageInvalidArgs(t *testing.T) {
 	input := `{}`
 
 	args := new(GetStorageArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
-		break
-	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -458,14 +438,9 @@ func TestGetStorageInvalidBlockheight(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", {}]`
 
 	args := new(GetStorageArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -473,14 +448,9 @@ func TestGetStorageEmptyArgs(t *testing.T) {
 	input := `[]`
 
 	args := new(GetStorageArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InsufficientParamsError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -488,14 +458,9 @@ func TestGetStorageAddressInt(t *testing.T) {
 	input := `[32456785432456, "latest"]`
 
 	args := new(GetStorageArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -528,14 +493,9 @@ func TestGetStorageAtEmptyArgs(t *testing.T) {
 	input := `[]`
 
 	args := new(GetStorageAtArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InsufficientParamsError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -543,14 +503,9 @@ func TestGetStorageAtArgsInvalid(t *testing.T) {
 	input := `{}`
 
 	args := new(GetStorageAtArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
-		break
-	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -558,14 +513,9 @@ func TestGetStorageAtArgsAddressNotString(t *testing.T) {
 	input := `[true, "0x0", "0x2"]`
 
 	args := new(GetStorageAtArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -573,14 +523,9 @@ func TestGetStorageAtArgsKeyNotString(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", true, "0x2"]`
 
 	args := new(GetStorageAtArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -588,14 +533,9 @@ func TestGetStorageAtArgsValueNotString(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "0x1", true]`
 
 	args := new(GetStorageAtArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -623,14 +563,9 @@ func TestGetTxCountEmptyArgs(t *testing.T) {
 	input := `[]`
 
 	args := new(GetTxCountArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InsufficientParamsError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -638,14 +573,9 @@ func TestGetTxCountEmptyArgsInvalid(t *testing.T) {
 	input := `false`
 
 	args := new(GetTxCountArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
-		break
-	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -653,14 +583,9 @@ func TestGetTxCountAddressNotString(t *testing.T) {
 	input := `[false, "pending"]`
 
 	args := new(GetTxCountArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -668,14 +593,9 @@ func TestGetTxCountBlockheightInvalid(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", {}]`
 
 	args := new(GetTxCountArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -703,14 +623,9 @@ func TestGetDataArgsEmpty(t *testing.T) {
 	input := `[]`
 
 	args := new(GetDataArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InsufficientParamsError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -718,14 +633,9 @@ func TestGetDataArgsInvalid(t *testing.T) {
 	input := `{}`
 
 	args := new(GetDataArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
-		break
-	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -733,14 +643,9 @@ func TestGetDataArgsAddressNotString(t *testing.T) {
 	input := `[12, "latest"]`
 
 	args := new(GetDataArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -748,14 +653,9 @@ func TestGetDataArgsBlocknumberNotString(t *testing.T) {
 	input := `["0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8", false]`
 
 	args := new(GetDataArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -835,14 +735,10 @@ func TestBlockFilterArgsNums(t *testing.T) {
   }]`
 
 	args := new(BlockFilterArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Should have *rpc.InvalidTypeError but instead have %T", err)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
-
 }
 
 func TestBlockFilterArgsEmptyArgs(t *testing.T) {
@@ -1080,14 +976,9 @@ func TestBlockNumIndexArgsEmpty(t *testing.T) {
 	input := `[]`
 
 	args := new(BlockNumIndexArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InsufficientParamsError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -1095,14 +986,9 @@ func TestBlockNumIndexArgsInvalid(t *testing.T) {
 	input := `"foo"`
 
 	args := new(BlockNumIndexArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
-		break
-	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -1110,14 +996,9 @@ func TestBlockNumIndexArgsBlocknumInvalid(t *testing.T) {
 	input := `[{}, "0x1"]`
 
 	args := new(BlockNumIndexArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -1125,14 +1006,9 @@ func TestBlockNumIndexArgsIndexInvalid(t *testing.T) {
 	input := `["0x29a", 1]`
 
 	args := new(BlockNumIndexArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -1160,14 +1036,9 @@ func TestHashIndexArgsEmpty(t *testing.T) {
 	input := `[]`
 
 	args := new(HashIndexArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InsufficientParamsError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InsufficientParamsError but got %T with message `%s`", err, err.Error())
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -1175,14 +1046,9 @@ func TestHashIndexArgsInvalid(t *testing.T) {
 	input := `{}`
 
 	args := new(HashIndexArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *DecodeParamError:
-		break
-	default:
-		t.Errorf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -1190,14 +1056,9 @@ func TestHashIndexArgsInvalidHash(t *testing.T) {
 	input := `[7, "0x1"]`
 
 	args := new(HashIndexArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
@@ -1205,14 +1066,9 @@ func TestHashIndexArgsInvalidIndex(t *testing.T) {
 	input := `["0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b", false]`
 
 	args := new(HashIndexArgs)
-	err := json.Unmarshal([]byte(input), &args)
-	switch err.(type) {
-	case nil:
-		t.Error("Expected error but didn't get one")
-	case *InvalidTypeError:
-		break
-	default:
-		t.Errorf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
 	}
 }
 
