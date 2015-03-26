@@ -54,7 +54,7 @@ func NewApp(version, usage string) *cli.App {
 	app := cli.NewApp()
 	app.Name = path.Base(os.Args[0])
 	app.Author = ""
-	app.Authors = nil
+	//app.Authors = nil
 	app.Email = ""
 	app.Version = version
 	app.Usage = usage
