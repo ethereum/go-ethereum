@@ -36,6 +36,26 @@ func blockHeight(raw interface{}, number *int64) (err error) {
 	return nil
 }
 
+func toNumber(v interface{}) (int64, error) {
+	var str string
+	if v != nil {
+		var ok bool
+		str, ok = v.(string)
+		if !ok {
+			return 0, errors.New("is not a string or undefined")
+		}
+	} else {
+		str = "latest"
+	}
+
+	switch str {
+	case "latest":
+		return -1, nil
+	default:
+		return int64(common.Big(v.(string)).Int64()), nil
+	}
+}
+
 type GetBlockByHashArgs struct {
 	BlockHash  string
 	IncludeTxs bool
@@ -442,26 +462,6 @@ type BlockFilterArgs struct {
 	Topics   []interface{}
 	Skip     int
 	Max      int
-}
-
-func toNumber(v interface{}) (int64, error) {
-	var str string
-	if v != nil {
-		var ok bool
-		str, ok = v.(string)
-		if !ok {
-			return 0, errors.New("is not a string or undefined")
-		}
-	} else {
-		str = "latest"
-	}
-
-	switch str {
-	case "latest":
-		return -1, nil
-	default:
-		return int64(common.Big(v.(string)).Int64()), nil
-	}
 }
 
 func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
