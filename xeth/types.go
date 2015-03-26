@@ -7,11 +7,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/core/state"
 )
 
 type Object struct {
@@ -45,7 +45,7 @@ func (self *Object) Storage() (storage map[string]string) {
 	for it.Next() {
 		var data []byte
 		rlp.Decode(bytes.NewReader(it.Value), &data)
-		storage[common.ToHex(it.Key)] = common.ToHex(data)
+		storage[common.ToHex(self.Trie().GetKey(it.Key))] = common.ToHex(data)
 	}
 
 	return

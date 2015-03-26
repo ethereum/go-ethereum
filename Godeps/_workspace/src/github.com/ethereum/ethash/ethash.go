@@ -85,7 +85,7 @@ func makeParamsAndCache(chainManager pow.ChainManager, blockNum uint64) (*Params
 		Epoch:  blockNum / epochLength,
 	}
 	C.ethash_params_init(paramsAndCache.params, C.uint32_t(uint32(blockNum)))
-	paramsAndCache.cache.mem = C.malloc(C.size_t(paramsAndCache.params.cache_size))
+	paramsAndCache.cache.mem = C.malloc(paramsAndCache.params.cache_size)
 
 	seedHash, err := GetSeedHash(blockNum)
 	if err != nil {
@@ -118,7 +118,7 @@ func (pow *Ethash) UpdateCache(force bool) error {
 
 func makeDAG(p *ParamsAndCache) *DAG {
 	d := &DAG{
-		dag:            C.malloc(C.size_t(p.params.full_size)),
+		dag:            C.malloc(p.params.full_size),
 		file:           false,
 		paramsAndCache: p,
 	}
@@ -360,10 +360,11 @@ func (pow *Ethash) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte
 }
 
 func (pow *Ethash) Verify(block pow.Block) bool {
-	return pow.verify(block.HashNoNonce().Bytes(), block.MixDigest().Bytes(), block.Difficulty(), block.NumberU64(), block.Nonce())
+
+	return pow.verify(block.HashNoNonce(), block.MixDigest(), block.Difficulty(), block.NumberU64(), block.Nonce())
 }
 
-func (pow *Ethash) verify(hash []byte, mixDigest []byte, difficulty *big.Int, blockNum uint64, nonce uint64) bool {
+func (pow *Ethash) verify(hash common.Hash, mixDigest common.Hash, difficulty *big.Int, blockNum uint64, nonce uint64) bool {
 	// Make sure the block num is valid
 	if blockNum >= epochLength*2048 {
 		powlogger.Infoln(fmt.Sprintf("Block number exceeds limit, invalid (value is %v, limit is %v)",

@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/robertkrimen/otto"
 	"os"
 	"path"
 	"testing"
+
+	"github.com/robertkrimen/otto"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -141,10 +142,19 @@ func TestAccounts(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
-	addrs, ok := exp.([]string)
+	interfaceAddr, ok := exp.([]interface{})
 	if !ok {
-		t.Errorf("expected []string, got %v", err)
+		t.Errorf("expected []string, got %T", exp)
 	}
+
+	addrs := make([]string, len(interfaceAddr))
+	for i, addr := range interfaceAddr {
+		var ok bool
+		if addrs[i], ok = addr.(string); !ok {
+			t.Errorf("expected addrs[%d] to be string. Got %T instead", i, addr)
+		}
+	}
+
 	if len(addrs) != 2 || (addr != addrs[0][2:] && addr != addrs[1][2:]) {
 		t.Errorf("expected addrs == [<default>, <new>], got %v (%v)", addrs, addr)
 	}

@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
 )
 
@@ -144,6 +144,11 @@ func RunVmTest(p string, t *testing.T) {
 				if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
 					t.Errorf("%s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
 				}
+
+				if obj.Nonce() != common.String2Big(account.Nonce).Uint64() {
+					t.Errorf("%s's : (%x) nonce failed. Expected %v, got %v\n", name, obj.Address().Bytes()[:4], account.Nonce, obj.Nonce())
+				}
+
 			}
 
 			for addr, value := range account.Storage {
@@ -194,7 +199,7 @@ func RunVmTest(p string, t *testing.T) {
 				}
 			}
 		}
-		//statedb.Trie().PrintRoot()
+		//fmt.Println(string(statedb.Dump()))
 	}
 	logger.Flush()
 }

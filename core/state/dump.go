@@ -28,17 +28,17 @@ func (self *StateDB) RawDump() World {
 
 	it := self.trie.Iterator()
 	for it.Next() {
-		stateObject := NewStateObjectFromBytes(common.BytesToAddress(it.Key), it.Value, self.db)
+		addr := self.trie.GetKey(it.Key)
+		stateObject := NewStateObjectFromBytes(common.BytesToAddress(addr), it.Value, self.db)
 
 		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.nonce, Root: common.Bytes2Hex(stateObject.Root()), CodeHash: common.Bytes2Hex(stateObject.codeHash)}
 		account.Storage = make(map[string]string)
 
 		storageIt := stateObject.State.trie.Iterator()
 		for storageIt.Next() {
-			fmt.Println("value", storageIt.Value)
-			account.Storage[common.Bytes2Hex(storageIt.Key)] = common.Bytes2Hex(storageIt.Value)
+			account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
 		}
-		world.Accounts[common.Bytes2Hex(it.Key)] = account
+		world.Accounts[common.Bytes2Hex(addr)] = account
 	}
 	return world
 }

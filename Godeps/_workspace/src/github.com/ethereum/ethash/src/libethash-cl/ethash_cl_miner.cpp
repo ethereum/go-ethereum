@@ -250,11 +250,10 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 		m_queue.enqueueBarrierWithWaitList(NULL, &pre_return_event);
 	}
 	else
-#else
+#endif
 	{
 		m_queue.finish();
 	}
-#endif
 
 	/*
 	__kernel void ethash_combined_search(

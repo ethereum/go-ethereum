@@ -79,6 +79,7 @@ func (self *Transaction) From() (common.Address, error) {
 	if len(pubkey) == 0 || pubkey[0] != 4 {
 		return common.Address{}, errors.New("invalid public key")
 	}
+
 	var addr common.Address
 	copy(addr[:], crypto.Sha3(pubkey[1:])[12:])
 	return addr, nil
@@ -110,8 +111,9 @@ func (tx *Transaction) PublicKey() []byte {
 	sig := append(r, s...)
 	sig = append(sig, v-27)
 
-	//pubkey := crypto.Ecrecover(append(hash, sig...))
-	pubkey, _ := secp256k1.RecoverPubkey(hash[:], sig)
+	//pubkey := crypto.Ecrecover(append(hash[:], sig...))
+	//pubkey, _ := secp256k1.RecoverPubkey(hash[:], sig)
+	pubkey := crypto.FromECDSAPub(crypto.SigToPub(hash[:], sig))
 	return pubkey
 }
 

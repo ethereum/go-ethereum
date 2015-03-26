@@ -74,7 +74,7 @@ done:
 }
 
 func (self *CpuMiner) mine(block *types.Block) {
-	minerlogger.Infof("(re)started agent[%d]. mining...\n", self.index)
+	minerlogger.Debugf("(re)started agent[%d]. mining...\n", self.index)
 	nonce, mixDigest, _ := self.pow.Search(block, self.quitCurrentOp)
 	if nonce != 0 {
 		block.SetNonce(nonce)

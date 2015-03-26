@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/peterh/liner"
+	"github.com/robertkrimen/otto"
 )
 
 type prompter interface {
@@ -101,8 +102,7 @@ func (js *jsre) apiBindings() {
 	jethObj := t.Object()
 	jethObj.Set("send", jeth.Send)
 
-	_, err := js.re.Eval(re.BigNumber_JS)
-
+	err := js.re.Compile("bignum.js", re.BigNumber_JS)
 	if err != nil {
 		utils.Fatalf("Error loading bignumber.js: %v", err)
 	}
@@ -113,12 +113,12 @@ func (js *jsre) apiBindings() {
 		utils.Fatalf("Error defining setTimeout: %v", err)
 	}
 
-	_, err = js.re.Eval(re.Ethereum_JS)
+	err = js.re.Compile("ethereum.js", re.Ethereum_JS)
 	if err != nil {
 		utils.Fatalf("Error loading ethereum.js: %v", err)
 	}
 
-	_, err = js.re.Eval("var web3 = require('web3');")
+	_, err = js.re.Eval("var web3 = require('ethereum.js');")
 	if err != nil {
 		utils.Fatalf("Error requiring web3: %v", err)
 	}
@@ -128,10 +128,10 @@ func (js *jsre) apiBindings() {
 		utils.Fatalf("Error setting web3 provider: %v", err)
 	}
 	_, err = js.re.Eval(`
-	var eth = web3.eth;
-  var shh = web3.shh;
-  var db  = web3.db;
-  var net = web3.net;
+var eth = web3.eth;
+var shh = web3.shh;
+var db  = web3.db;
+var net = web3.net;
   `)
 	if err != nil {
 		utils.Fatalf("Error setting namespaces: %v", err)
@@ -211,7 +211,11 @@ func (self *jsre) parseInput(code string) {
 	}()
 	value, err := self.re.Run(code)
 	if err != nil {
-		fmt.Println(err)
+		if ottoErr, ok := err.(*otto.Error); ok {
+			fmt.Println(ottoErr.String())
+		} else {
+			fmt.Println(err)
+		}
 		return
 	}
 	self.printValue(value)

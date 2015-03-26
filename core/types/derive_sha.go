@@ -16,7 +16,7 @@ func DeriveSha(list DerivableList) common.Hash {
 	db, _ := ethdb.NewMemDatabase()
 	trie := trie.New(nil, db)
 	for i := 0; i < list.Len(); i++ {
-		key, _ := rlp.EncodeToBytes(i)
+		key, _ := rlp.EncodeToBytes(uint(i))
 		trie.Update(key, list.GetRlp(i))
 	}
 

@@ -195,7 +195,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 		return
 	}
 
-	// The transactions Trie's root (R = (Tr [[H1, T1], [H2, T2], ... [Hn, Tn]]))
+	// The transactions Trie's root (R = (Tr [[i, RLP(T1)], [i, RLP(T2)], ... [n, RLP(Tn)]]))
 	// can be used by light clients to make sure they've received the correct Txs
 	txSha := types.DeriveSha(block.Transactions())
 	if txSha != header.TxHash {
