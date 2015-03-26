@@ -93,8 +93,8 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type NewTxArgs struct {
-	From     string
-	To       string
+	From     common.Address
+	To       common.Address
 	Value    *big.Int
 	Gas      *big.Int
 	GasPrice *big.Int
@@ -122,9 +122,12 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewDecodeParamError(err.Error())
 	}
 
-	// var ok bool
-	args.From = ext.From
-	args.To = ext.To
+	if len(ext.From) == 0 {
+		return NewValidationError("from", "is required")
+	}
+
+	args.From = common.HexToAddress(ext.From)
+	args.To = common.HexToAddress(ext.To)
 	args.Value = common.String2Big(ext.Value)
 	args.Gas = common.String2Big(ext.Gas)
 	args.GasPrice = common.String2Big(ext.GasPrice)
@@ -142,13 +145,6 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 		}
 	}
 
-	return nil
-}
-
-func (args *NewTxArgs) requirements() error {
-	if len(args.From) == 0 {
-		return NewValidationError("From", "Is required")
-	}
 	return nil
 }
 

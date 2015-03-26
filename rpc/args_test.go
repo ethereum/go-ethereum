@@ -149,8 +149,8 @@ func TestNewTxArgs(t *testing.T) {
   "data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"},
   "0x10"]`
 	expected := new(NewTxArgs)
-	expected.From = "0xb60e8dd61c5d32be8058bb8eb970870f07233155"
-	expected.To = "0xd46e8dd67c5d32be8058bb8eb970870f072445675"
+	expected.From = common.HexToAddress("0xb60e8dd61c5d32be8058bb8eb970870f07233155")
+	expected.To = common.HexToAddress("0xd46e8dd67c5d32be8058bb8eb970870f072445675")
 	expected.Gas = big.NewInt(30400)
 	expected.GasPrice = big.NewInt(10000000000000)
 	expected.Value = big.NewInt(10000000000000)
@@ -194,7 +194,7 @@ func TestNewTxArgs(t *testing.T) {
 func TestNewTxArgsBlockInt(t *testing.T) {
 	input := `[{"from": "0xb60e8dd61c5d32be8058bb8eb970870f07233155"}, 5]`
 	expected := new(NewTxArgs)
-	expected.From = "0xb60e8dd61c5d32be8058bb8eb970870f07233155"
+	expected.From = common.HexToAddress("0xb60e8dd61c5d32be8058bb8eb970870f07233155")
 	expected.BlockNumber = big.NewInt(5).Int64()
 
 	args := new(NewTxArgs)
@@ -221,31 +221,18 @@ func TestNewTxArgsEmpty(t *testing.T) {
 	}
 }
 
-func TestNewTxArgsReqs(t *testing.T) {
+func TestNewTxArgsFromEmpty(t *testing.T) {
+	input := `[{"to": "0xb60e8dd61c5d32be8058bb8eb970870f07233155"}]`
+
 	args := new(NewTxArgs)
-	args.From = "0xb60e8dd61c5d32be8058bb8eb970870f07233155"
-
-	err := args.requirements()
-	switch err.(type) {
-	case nil:
-		break
-	default:
-		t.Errorf("Get %T", err)
-	}
-}
-
-func TestNewTxArgsReqsFromBlank(t *testing.T) {
-	args := new(NewTxArgs)
-	args.From = ""
-
-	err := args.requirements()
+	err := json.Unmarshal([]byte(input), &args)
 	switch err.(type) {
 	case nil:
 		t.Error("Expected error but didn't get one")
 	case *ValidationError:
 		break
 	default:
-		t.Error("Wrong type of error")
+		t.Errorf("Expected *rpc.ValidationError, but got %T with message `%s`", err, err.Error())
 	}
 }
 
