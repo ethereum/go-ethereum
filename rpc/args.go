@@ -42,6 +42,24 @@ func blockHeight(raw interface{}, number *int64) error {
 	return nil
 }
 
+func numString(raw interface{}, number *int64) error {
+	// Parse as integer
+	num, ok := raw.(float64)
+	if ok {
+		*number = int64(num)
+		return nil
+	}
+
+	// Parse as string/hexstring
+	str, ok := raw.(string)
+	if !ok {
+		return NewInvalidTypeError("", "not a number or string")
+	}
+	*number = common.String2Big(str).Int64()
+
+	return nil
+}
+
 type GetBlockByHashArgs struct {
 	BlockHash  common.Hash
 	IncludeTxs bool
@@ -410,8 +428,8 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []struct {
 		FromBlock interface{}   `json:"fromBlock"`
 		ToBlock   interface{}   `json:"toBlock"`
-		Limit     string        `json:"limit"`
-		Offset    string        `json:"offset"`
+		Limit     interface{}   `json:"limit"`
+		Offset    interface{}   `json:"offset"`
 		Address   string        `json:"address"`
 		Topics    []interface{} `json:"topics"`
 	}
@@ -439,22 +457,16 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 	args.Latest = num
 
-	tostr, ok := obj[0].ToBlock.(string)
-	if !ok {
-		return NewInvalidTypeError("toBlock", "not a string")
+	if err := numString(obj[0].Limit, &num); err != nil {
+		return err
 	}
+	args.Max = int(num)
 
-	switch tostr {
-	case "latest":
-		args.Latest = -1
-	case "pending":
-		args.Latest = -2
-	default:
-		args.Latest = int64(common.Big(obj[0].ToBlock.(string)).Int64())
+	if err := numString(obj[0].Offset, &num); err != nil {
+		return err
 	}
+	args.Skip = int(num)
 
-	args.Max = int(common.Big(obj[0].Limit).Int64())
-	args.Skip = int(common.Big(obj[0].Offset).Int64())
 	args.Address = obj[0].Address
 	args.Topics = obj[0].Topics
 
