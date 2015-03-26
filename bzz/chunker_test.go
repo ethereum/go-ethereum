@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/bzz/test"
+	"github.com/ethereum/go-ethereum/blockpool/test"
 )
 
 /*

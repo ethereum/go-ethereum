@@ -239,8 +239,7 @@ func (self *bzzProtocol) handleStatus() (err error) {
 		Caps:      []p2p.Cap{},
 	}
 
-	//if err := self.rw.WriteMsg(self.statusMsg()); err != nil {
-	if err = p2p.EncodeMsg(self.rw, statusMsg, handshake); err != nil {
+	if err = p2p.Send(self.rw, statusMsg, handshake); err != nil {
 		return err
 	}
 
@@ -282,19 +281,32 @@ func (self *bzzProtocol) handleStatus() (err error) {
 // outgoing messages
 func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
 	dpaLogger.Debugf("Request message: %#v", req)
-	err := p2p.EncodeMsg(self.rw, retrieveRequestMsg, req.Key, req.Id, req.MaxSize)
+	err := p2p.Send(self.rw, retrieveRequestMsg, req)
 	if err != nil {
 		dpaLogger.Errorf("EncodeMsg error: %v", err)
 	}
 }
 
 func (self *bzzProtocol) store(req *storeRequestMsgData) {
-	p2p.EncodeMsg(self.rw, storeRequestMsg, req.Key, req.SData, req.Id)
+	p2p.Send(self.rw, storeRequestMsg, req)
 }
 
 func (self *bzzProtocol) peers(req *peersMsgData) {
-	p2p.EncodeMsg(self.rw, peersMsg, req)
+	p2p.Send(self.rw, peersMsg, req)
 }
+
+// func (self *ethProtocol) protoError(code int, format string, params ...interface{}) (err *errs.Error) {
+// 	err = self.errors.New(code, format, params...)
+// 	err.Log(self.peer.Logger)
+// 	return
+// }
+
+// func (self *ethProtocol) protoErrorDisconnect(err *errs.Error) {
+// 	err.Log(self.peer.Logger)
+// 	if err.Fatal() {
+// 		self.peer.Disconnect(p2p.DiscSubprotocolError)
+// 	}
+// }
 
 // errors
 // TODO: should be reworked using errs pkg

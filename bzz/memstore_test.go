@@ -3,7 +3,7 @@ package bzz
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/bzz/test"
+	"github.com/ethereum/go-ethereum/blockpool/test"
 )
 
 func testMemStore(l int64, branches int64, t *testing.T) {

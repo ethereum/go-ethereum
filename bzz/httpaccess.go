@@ -6,7 +6,7 @@ package bzz
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"net/http"
 	"regexp"
@@ -116,7 +116,7 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 		if uriMatcher.MatchString(uri) {
 			dpaLogger.Debugf("Swarm: Raw GET request %s received", uri)
 			name := uri[5:69]
-			key := ethutil.Hex2Bytes(name)
+			key := common.Hex2Bytes(name)
 			reader := dpa.Retrieve(key)
 			dpaLogger.Debugf("Swarm: Reading %d bytes.", reader.Size())
 			mimeType := "application/octet-stream"
@@ -131,7 +131,7 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 			name := uri[1:65]
 			path := uri[65:] // typically begins with a /
 			dpaLogger.Debugf("Swarm: path \"%s\" requested.", path)
-			key := ethutil.Hex2Bytes(name)
+			key := common.Hex2Bytes(name)
 		MANIFEST_RESOLUTION:
 			for {
 				manifestReader := dpa.Retrieve(key)
@@ -180,7 +180,7 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 					if len(path) >= pathLen && path[:pathLen] == entry.Path && prefix <= pathLen {
 						dpaLogger.Debugf("Swarm: \"%s\" matches \"%s\".", path, entry.Path)
 						prefix = pathLen
-						key = ethutil.Hex2Bytes(entry.Hash)
+						key = common.Hex2Bytes(entry.Hash)
 						dpaLogger.Debugf("Swarm: Payload hash %064x", key)
 						mimeType = entry.ContentType
 						status = entry.Status

@@ -2,12 +2,13 @@ package bzz
 
 import (
 	"bytes"
-	"github.com/ethereum/go-ethereum/bzz/test"
 	"io"
 	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/blockpool/test"
 )
 
 const testDataSize = 0x1000000
