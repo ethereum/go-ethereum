@@ -218,15 +218,15 @@ func (self *XEth) IsMining() bool {
 }
 
 func (self *XEth) EthVersion() string {
-	return string(self.backend.EthVersion())
+	return fmt.Sprintf("%d", self.backend.EthVersion())
 }
 
 func (self *XEth) NetworkVersion() string {
-	return string(self.backend.NetVersion())
+	return fmt.Sprintf("%d", self.backend.NetVersion())
 }
 
 func (self *XEth) WhisperVersion() string {
-	return string(self.backend.ShhVersion())
+	return fmt.Sprintf("%d", self.backend.ShhVersion())
 }
 
 func (self *XEth) ClientVersion() string {
