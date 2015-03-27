@@ -4,10 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	// "errors"
-	// "fmt"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+)
+
+const (
+	defaultLogLimit  = 100
+	defaultLogOffset = 0
 )
 
 func blockHeightFromJson(msg json.RawMessage, number *int64) error {
@@ -483,20 +488,20 @@ func (args *Sha3Args) UnmarshalJSON(b []byte) (err error) {
 type BlockFilterArgs struct {
 	Earliest int64
 	Latest   int64
-	Address  interface{}
-	Topics   []interface{}
+	Address  []string
+	Topics   [][]string
 	Skip     int
 	Max      int
 }
 
 func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []struct {
-		FromBlock interface{}   `json:"fromBlock"`
-		ToBlock   interface{}   `json:"toBlock"`
-		Limit     interface{}   `json:"limit"`
-		Offset    interface{}   `json:"offset"`
-		Address   string        `json:"address"`
-		Topics    []interface{} `json:"topics"`
+		FromBlock interface{} `json:"fromBlock"`
+		ToBlock   interface{} `json:"toBlock"`
+		Limit     interface{} `json:"limit"`
+		Offset    interface{} `json:"offset"`
+		Address   interface{} `json:"address"`
+		Topics    interface{} `json:"topics"`
 	}
 
 	if err = json.Unmarshal(b, &obj); err != nil {
@@ -516,33 +521,104 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	// 	return NewDecodeParamError(fmt.Sprintf("ToBlock %v", err))
 
 	var num int64
-	if err := blockHeight(obj[0].FromBlock, &num); err != nil {
-		return err
+
+	// if blank then latest
+	if obj[0].FromBlock == nil {
+		num = -1
+	} else {
+		if err := blockHeight(obj[0].FromBlock, &num); err != nil {
+			return err
+		}
 	}
+	// if -2 or other "silly" number, use latest
 	if num < 0 {
 		args.Earliest = -1 //latest block
 	} else {
 		args.Earliest = num
 	}
 
-	if err := blockHeight(obj[0].ToBlock, &num); err != nil {
-		return err
+	// if blank than latest
+	if obj[0].ToBlock == nil {
+		num = -1
+	} else {
+		if err := blockHeight(obj[0].ToBlock, &num); err != nil {
+			return err
+		}
 	}
 	args.Latest = num
 
-	if err := numString(obj[0].Limit, &num); err != nil {
-		return err
+	if obj[0].Limit == nil {
+		num = defaultLogLimit
+	} else {
+		if err := numString(obj[0].Limit, &num); err != nil {
+			return err
+		}
 	}
 	args.Max = int(num)
 
-	if err := numString(obj[0].Offset, &num); err != nil {
-		return err
-
+	if obj[0].Offset == nil {
+		num = defaultLogOffset
+	} else {
+		if err := numString(obj[0].Offset, &num); err != nil {
+			return err
+		}
 	}
 	args.Skip = int(num)
 
-	args.Address = obj[0].Address
-	args.Topics = obj[0].Topics
+	if obj[0].Address != nil {
+		marg, ok := obj[0].Address.([]interface{})
+		if ok {
+			v := make([]string, len(marg))
+			for i, arg := range marg {
+				argstr, ok := arg.(string)
+				if !ok {
+					return NewInvalidTypeError(fmt.Sprintf("address[%d]", i), "is not a string")
+				}
+				v[i] = argstr
+			}
+			args.Address = v
+		} else {
+			argstr, ok := obj[0].Address.(string)
+			if ok {
+				v := make([]string, 1)
+				v[0] = argstr
+				args.Address = v
+			} else {
+				return NewInvalidTypeError("address", "is not a string or array")
+			}
+		}
+	}
+
+	if obj[0].Topics != nil {
+		other, ok := obj[0].Topics.([]interface{})
+		if ok {
+			topicdbl := make([][]string, len(other))
+			for i, iv := range other {
+				if argstr, ok := iv.(string); ok {
+					// Found a string, push into first element of array
+					topicsgl := make([]string, 1)
+					topicsgl[0] = argstr
+					topicdbl[i] = topicsgl
+				} else if argarray, ok := iv.([]interface{}); ok {
+					// Found an array of other
+					topicdbl[i] = make([]string, len(argarray))
+					for j, jv := range argarray {
+						if v, ok := jv.(string); ok {
+							topicdbl[i][j] = v
+						} else {
+							return NewInvalidTypeError(fmt.Sprintf("topic[%d][%d]", i, j), "is not a string")
+						}
+					}
+				} else {
+					return NewInvalidTypeError(fmt.Sprintf("topic[%d]", i), "not a string or array")
+				}
+			}
+			args.Topics = topicdbl
+			return nil
+		} else {
+			return NewInvalidTypeError("topic", "is not a string or array")
+		}
+	}
 
 	return nil
 }

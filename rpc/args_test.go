@@ -804,14 +804,23 @@ func TestBlockFilterArgs(t *testing.T) {
   "limit": "0x3",
   "offset": "0x0",
   "address": "0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8",
-  "topics": ["0x12341234"]}]`
+  "topics":
+  [
+  	["0xAA", "0xBB"],
+  	["0xCC", "0xDD"]
+  ]
+  }]`
+
 	expected := new(BlockFilterArgs)
 	expected.Earliest = 1
 	expected.Latest = 2
 	expected.Max = 3
 	expected.Skip = 0
-	expected.Address = "0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8"
-	// expected.Topics = []string{"0x12341234"}
+	expected.Address = []string{"0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8"}
+	expected.Topics = [][]string{
+		[]string{"0xAA", "0xBB"},
+		[]string{"0xCC", "0xDD"},
+	}
 
 	args := new(BlockFilterArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -834,17 +843,73 @@ func TestBlockFilterArgs(t *testing.T) {
 		t.Errorf("Skip shoud be %#v but is %#v", expected.Skip, args.Skip)
 	}
 
-	if expected.Address != args.Address {
+	if expected.Address[0] != args.Address[0] {
 		t.Errorf("Address shoud be %#v but is %#v", expected.Address, args.Address)
 	}
 
-	// if expected.Topics != args.Topics {
-	// 	t.Errorf("Topic shoud be %#v but is %#v", expected.Topic, args.Topic)
-	// }
+	if expected.Topics[0][0] != args.Topics[0][0] {
+		t.Errorf("Topics shoud be %#v but is %#v", expected.Topics, args.Topics)
+	}
+	if expected.Topics[0][1] != args.Topics[0][1] {
+		t.Errorf("Topics shoud be %#v but is %#v", expected.Topics, args.Topics)
+	}
+	if expected.Topics[1][0] != args.Topics[1][0] {
+		t.Errorf("Topics shoud be %#v but is %#v", expected.Topics, args.Topics)
+	}
+	if expected.Topics[1][1] != args.Topics[1][1] {
+		t.Errorf("Topics shoud be %#v but is %#v", expected.Topics, args.Topics)
+	}
+
+}
+
+func TestBlockFilterArgsDefaults(t *testing.T) {
+	input := `[{
+  "address": ["0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8"],
+  "topics": ["0xAA","0xBB"]
+  }]`
+	expected := new(BlockFilterArgs)
+	expected.Earliest = -1
+	expected.Latest = -1
+	expected.Max = 100
+	expected.Skip = 0
+	expected.Address = []string{"0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8"}
+	expected.Topics = [][]string{[]string{"0xAA"}, []string{"0xBB"}}
+
+	args := new(BlockFilterArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Earliest != args.Earliest {
+		t.Errorf("Earliest shoud be %#v but is %#v", expected.Earliest, args.Earliest)
+	}
+
+	if expected.Latest != args.Latest {
+		t.Errorf("Latest shoud be %#v but is %#v", expected.Latest, args.Latest)
+	}
+
+	if expected.Max != args.Max {
+		t.Errorf("Max shoud be %#v but is %#v", expected.Max, args.Max)
+	}
+
+	if expected.Skip != args.Skip {
+		t.Errorf("Skip shoud be %#v but is %#v", expected.Skip, args.Skip)
+	}
+
+	if expected.Address[0] != args.Address[0] {
+		t.Errorf("Address shoud be %#v but is %#v", expected.Address, args.Address)
+	}
+
+	if expected.Topics[0][0] != args.Topics[0][0] {
+		t.Errorf("Topics shoud be %#v but is %#v", expected.Topics, args.Topics)
+	}
+
+	if expected.Topics[1][0] != args.Topics[1][0] {
+		t.Errorf("Topics shoud be %#v but is %#v", expected.Topics, args.Topics)
+	}
 }
 
 func TestBlockFilterArgsWords(t *testing.T) {
-	t.Skip()
 	input := `[{
   "fromBlock": "latest",
   "toBlock": "pending"
@@ -867,10 +932,33 @@ func TestBlockFilterArgsWords(t *testing.T) {
 	}
 }
 
-func TestBlockFilterArgsBool(t *testing.T) {
+func TestBlockFilterArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(BlockFilterArgs)
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestBlockFilterArgsFromBool(t *testing.T) {
 	input := `[{
   "fromBlock": true,
-  "toBlock": false
+  "toBlock": "pending"
+  }]`
+
+	args := new(BlockFilterArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestBlockFilterArgsToBool(t *testing.T) {
+	input := `[{
+  "fromBlock": "pending",
+  "toBlock": true
   }]`
 
 	args := new(BlockFilterArgs)
@@ -887,6 +975,112 @@ func TestBlockFilterArgsEmptyArgs(t *testing.T) {
 	err := json.Unmarshal([]byte(input), &args)
 	if err == nil {
 		t.Error("Expected error but didn't get one")
+	}
+}
+
+func TestBlockFilterArgsLimitInvalid(t *testing.T) {
+	input := `[{"limit": false}]`
+
+	args := new(BlockFilterArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestBlockFilterArgsOffsetInvalid(t *testing.T) {
+	input := `[{"offset": true}]`
+
+	args := new(BlockFilterArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestBlockFilterArgsAddressInt(t *testing.T) {
+	input := `[{
+  "address": 1,
+  "topics": "0x12341234"}]`
+
+	args := new(BlockFilterArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestBlockFilterArgsAddressSliceInt(t *testing.T) {
+	input := `[{
+  "address": [1],
+  "topics": "0x12341234"}]`
+
+	args := new(BlockFilterArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestBlockFilterArgsTopicInt(t *testing.T) {
+	input := `[{
+  "address": ["0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8"],
+  "topics": 1}]`
+
+	args := new(BlockFilterArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestBlockFilterArgsTopicSliceInt(t *testing.T) {
+	input := `[{
+  "address": "0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8",
+  "topics": [1]}]`
+
+	args := new(BlockFilterArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestBlockFilterArgsTopicSliceInt2(t *testing.T) {
+	input := `[{
+  "address": "0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8",
+  "topics": ["0xAA", [1]]}]`
+
+	args := new(BlockFilterArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestBlockFilterArgsTopicComplex(t *testing.T) {
+	input := `[{
+	"address": "0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8",
+  "topics": ["0xAA", ["0xBB", "0xCC"]]
+  }]`
+
+	args := new(BlockFilterArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+		fmt.Printf("%v\n", args)
+		return
+	}
+
+	if args.Topics[0][0] != "0xAA" {
+		t.Errorf("Topic should be %s but is %s", "0xAA", args.Topics[0][0])
+	}
+
+	if args.Topics[1][0] != "0xBB" {
+		t.Errorf("Topic should be %s but is %s", "0xBB", args.Topics[0][0])
+	}
+
+	if args.Topics[1][1] != "0xCC" {
+		t.Errorf("Topic should be %s but is %s", "0xCC", args.Topics[0][0])
 	}
 }
 

@@ -471,42 +471,29 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 func toFilterOptions(options *BlockFilterArgs) *core.FilterOptions {
 	var opts core.FilterOptions
 
-	// Convert optional address slice/string to byte slice
-	if str, ok := options.Address.(string); ok {
-		opts.Address = []common.Address{common.HexToAddress(str)}
-	} else if slice, ok := options.Address.([]interface{}); ok {
-		bslice := make([]common.Address, len(slice))
-		for i, addr := range slice {
-			if saddr, ok := addr.(string); ok {
-				bslice[i] = common.HexToAddress(saddr)
-			}
-		}
-		opts.Address = bslice
-	}
+	opts.Address = cAddress(options.Address)
+	opts.Topics = cTopics(options.Topics)
 
 	opts.Earliest = options.Earliest
 	opts.Latest = options.Latest
 
-	topics := make([][]common.Hash, len(options.Topics))
-	for i, topicDat := range options.Topics {
-		if slice, ok := topicDat.([]interface{}); ok {
-			topics[i] = make([]common.Hash, len(slice))
-			for j, topic := range slice {
-				topics[i][j] = common.HexToHash(topic.(string))
-			}
-		} else if str, ok := topicDat.(string); ok {
-			topics[i] = []common.Hash{common.HexToHash(str)}
-		}
-	}
-	opts.Topics = topics
-
 	return &opts
 }
 
-/*
-	Work() chan<- *types.Block
-	SetWorkCh(chan<- Work)
-	Stop()
-	Start()
-	Rate() uint64
-*/
+func cAddress(a []string) []common.Address {
+	bslice := make([]common.Address, len(a))
+	for i, addr := range a {
+		bslice[i] = common.HexToAddress(addr)
+	}
+	return bslice
+}
+
+func cTopics(t [][]string) [][]common.Hash {
+	topics := make([][]common.Hash, len(t))
+	for i, iv := range t {
+		for j, jv := range iv {
+			topics[i][j] = common.HexToHash(jv)
+		}
+	}
+	return topics
+}
