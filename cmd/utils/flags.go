@@ -97,7 +97,7 @@ var (
 		Usage: "Enable mining",
 	}
 	EtherbaseFlag = cli.StringFlag{
-		Name:  "Etherbase",
+		Name:  "etherbase",
 		Usage: "public address for block mining rewards. By default the address of your primary account is used",
 		Value: "primary",
 	}
