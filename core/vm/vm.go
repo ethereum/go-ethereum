@@ -45,20 +45,32 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 	self.Printf("(%d) (%x) %x (code=%d) gas: %v (d) %x", self.env.Depth(), caller.Address().Bytes()[:4], context.Address(), len(code), context.Gas, callData).Endl()
 
-	if self.Recoverable {
-		// Recover from any require exception
-		defer func() {
-			if r := recover(); r != nil {
-				self.Printf(" %v", r).Endl()
+	/*
+		if self.Recoverable {
+			// Recover from any require exception
+			defer func() {
+				if r := recover(); r != nil {
+					self.Printf(" %v", r).Endl()
 
-				context.UseGas(context.Gas)
+					context.UseGas(context.Gas)
 
-				ret = context.Return(nil)
+					ret = context.Return(nil)
 
-				err = fmt.Errorf("%v", r)
-			}
-		}()
-	}
+					err = fmt.Errorf("%v", r)
+				}
+			}()
+		}
+	*/
+
+	defer func() {
+		if err != nil {
+			self.Printf(" %v", err).Endl()
+			// In case of a VM exception (known exceptions) all gas consumed (panics NOT included).
+			context.UseGas(context.Gas)
+
+			ret = context.Return(nil)
+		}
+	}()
 
 	if context.CodeAddr != nil {
 		if p := Precompiled[context.CodeAddr.Str()]; p != nil {
@@ -76,18 +88,20 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		step                = 0
 		statedb             = self.env.State()
 
-		jump = func(from uint64, to *big.Int) {
+		jump = func(from uint64, to *big.Int) error {
 			p := to.Uint64()
 
 			nop := context.GetOp(p)
 			if !destinations.Has(p) {
-				panic(fmt.Sprintf("invalid jump destination (%v) %v", nop, p))
+				return fmt.Errorf("invalid jump destination (%v) %v", nop, p)
 			}
 
 			self.Printf(" ~> %v", to)
 			pc = to.Uint64()
 
 			self.Endl()
+
+			return nil
 		}
 	)
 
@@ -105,7 +119,10 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		op = context.GetOp(pc)
 
 		self.Printf("(pc) %-3d -o- %-14s (m) %-4d (s) %-4d ", pc, op.String(), mem.Len(), stack.len())
-		newMemSize, gas := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
+		newMemSize, gas, err := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
+		if err != nil {
+			return nil, err
+		}
 
 		self.Printf("(g) %-3v (%v)", gas, context.Gas)
 
@@ -600,14 +617,18 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			self.Printf(" {0x%x : 0x%x}", loc, val.Bytes())
 		case JUMP:
-			jump(pc, stack.pop())
+			if err := jump(pc, stack.pop()); err != nil {
+				return nil, err
+			}
 
 			continue
 		case JUMPI:
 			pos, cond := stack.pop(), stack.pop()
 
 			if cond.Cmp(common.BigTrue) >= 0 {
-				jump(pc, pos)
+				if err := jump(pc, pos); err != nil {
+					return nil, err
+				}
 
 				continue
 			}
@@ -720,7 +741,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		default:
 			self.Printf("(pc) %-3v Invalid opcode %x\n", pc, op).Endl()
 
-			panic(fmt.Errorf("Invalid opcode %x", op))
+			return nil, fmt.Errorf("Invalid opcode %x", op)
 		}
 
 		pc++
@@ -729,28 +750,38 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 	}
 }
 
-func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *stack) (*big.Int, *big.Int) {
+func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *stack) (*big.Int, *big.Int, error) {
 	var (
 		gas                 = new(big.Int)
 		newMemSize *big.Int = new(big.Int)
 	)
-	baseCheck(op, stack, gas)
+	err := baseCheck(op, stack, gas)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	// stack Check, memory resize & gas phase
 	switch op {
-	case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
-		gas.Set(GasFastestStep)
 	case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
 		n := int(op - SWAP1 + 2)
-		stack.require(n)
+		err := stack.require(n)
+		if err != nil {
+			return nil, nil, err
+		}
 		gas.Set(GasFastestStep)
 	case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
 		n := int(op - DUP1 + 1)
-		stack.require(n)
+		err := stack.require(n)
+		if err != nil {
+			return nil, nil, err
+		}
 		gas.Set(GasFastestStep)
 	case LOG0, LOG1, LOG2, LOG3, LOG4:
 		n := int(op - LOG0)
-		stack.require(n + 2)
+		err := stack.require(n + 2)
+		if err != nil {
+			return nil, nil, err
+		}
 
 		mSize, mStart := stack.data[stack.len()-2], stack.data[stack.len()-1]
 
@@ -762,7 +793,10 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 	case EXP:
 		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(len(stack.data[stack.len()-2].Bytes()))), GasExpByte))
 	case SSTORE:
-		stack.require(2)
+		err := stack.require(2)
+		if err != nil {
+			return nil, nil, err
+		}
 
 		var g *big.Int
 		y, x := stack.data[stack.len()-2], stack.data[stack.len()-1]
@@ -853,7 +887,7 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		}
 	}
 
-	return newMemSize, gas
+	return newMemSize, gas, nil
 }
 
 func (self *Vm) RunPrecompiled(p *PrecompiledAccount, callData []byte, context *Context) (ret []byte, err error) {
@@ -869,7 +903,7 @@ func (self *Vm) RunPrecompiled(p *PrecompiledAccount, callData []byte, context *
 
 		tmp := new(big.Int).Set(context.Gas)
 
-		panic(OOG(gas, tmp).Error())
+		return nil, OOG(gas, tmp)
 	}
 }
 
