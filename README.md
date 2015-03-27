@@ -20,7 +20,7 @@ Mist (GUI):
 
 `go get github.com/ethereum/go-ethereum/cmd/mist`
 
-Ethereum (CLI):
+Geth (CLI):
 
 `go get github.com/ethereum/go-ethereum/cmd/ethereum`
 
@@ -32,10 +32,10 @@ Mist (GUI):
 godep go build -v ./cmd/mist
 ```
 
-Ethereum (CLI):
+Geth (CLI):
 
 ```
-godep go build -v ./cmd/ethereum
+godep go build -v ./cmd/geth
 ```
 
 Instead of `build`, you can use `install` which will also install the resulting binary.
@@ -61,7 +61,7 @@ Go Ethereum comes with several wrappers/executables found in
 [the `cmd` directory](https://github.com/ethereum/go-ethereum/tree/develop/cmd):
 
 * `mist` Official Ethereum Browser (ethereum GUI client)
-* `ethereum` Ethereum CLI (ethereum command line interface client)
+* `geth` Ethereum CLI (ethereum command line interface client)
 * `bootnode` runs a bootstrap node for the Discovery Protocol
 * `ethtest` test tool which runs with the [tests](https://github.com/ethereum/testes) suite: 
   `cat file | ethtest`.
@@ -73,12 +73,12 @@ Go Ethereum comes with several wrappers/executables found in
 Command line options
 ============================
 
-Both `mist` and `ethereum` can be configured via command line options, environment variables and config files.
+Both `mist` and `geth` can be configured via command line options, environment variables and config files.
 
 To get the options available:
 
 ```
-ethereum -help
+geth -help
 ```
 
 For further details on options, see the [wiki](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options)

@@ -209,6 +209,16 @@ func (self *XEth) Accounts() []string {
 	return accountAddresses
 }
 
+func (self *XEth) DbPut(key, val []byte) bool {
+	self.backend.ExtraDb().Put(key, val)
+	return true
+}
+
+func (self *XEth) DbGet(key []byte) ([]byte, error) {
+	val, err := self.backend.ExtraDb().Get(key)
+	return val, err
+}
+
 func (self *XEth) PeerCount() int {
 	return self.backend.PeerCount()
 }
@@ -250,8 +260,8 @@ func (self *XEth) IsListening() bool {
 }
 
 func (self *XEth) Coinbase() string {
-	cb, _ := self.backend.AccountManager().Coinbase()
-	return common.ToHex(cb)
+	eb, _ := self.backend.Etherbase()
+	return eb.Hex()
 }
 
 func (self *XEth) NumberToHuman(balance string) string {

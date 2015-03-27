@@ -18,8 +18,8 @@ const (
 )
 
 // JSONRPC returns a handler that implements the Ethereum JSON-RPC API.
-func JSONRPC(pipe *xeth.XEth, dataDir string) http.Handler {
-	api := NewEthereumApi(pipe, dataDir)
+func JSONRPC(pipe *xeth.XEth) http.Handler {
+	api := NewEthereumApi(pipe)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// TODO this needs to be configurable
