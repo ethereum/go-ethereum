@@ -63,6 +63,7 @@ type Config struct {
 	Shh  bool
 	Dial bool
 
+	Etherbase      string
 	MinerThreads   int
 	AccountManager *accounts.Manager
 
@@ -140,6 +141,7 @@ type Ethereum struct {
 
 	Mining        bool
 	DataDir       string
+	etherbase     common.Address
 	clientVersion string
 	ethVersionId  int
 	netVersionId  int
@@ -185,6 +187,7 @@ func New(config *Config) (*Ethereum, error) {
 		eventMux:       &event.TypeMux{},
 		accountManager: config.AccountManager,
 		DataDir:        config.DataDir,
+		etherbase:      common.HexToAddress(config.Etherbase),
 		clientVersion:  config.Name, // TODO should separate from Name
 		ethVersionId:   config.ProtocolVersion,
 		netVersionId:   config.NetworkId,
@@ -297,13 +300,29 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 }
 
 func (s *Ethereum) StartMining() error {
-	cb, err := s.accountManager.Coinbase()
+	eb, err := s.Etherbase()
 	if err != nil {
-		servlogger.Errorf("Cannot start mining without coinbase: %v\n", err)
-		return fmt.Errorf("no coinbase: %v", err)
+		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
+		servlogger.Errorln(err)
+		return err
+
 	}
-	s.miner.Start(common.BytesToAddress(cb))
+
+	s.miner.Start(eb)
 	return nil
+}
+
+func (s *Ethereum) Etherbase() (eb common.Address, err error) {
+	eb = s.etherbase
+	if (eb == common.Address{}) {
+		var ebbytes []byte
+		ebbytes, err = s.accountManager.Primary()
+		eb = common.BytesToAddress(ebbytes)
+		if (eb == common.Address{}) {
+			err = fmt.Errorf("no accounts found")
+		}
+	}
+	return
 }
 
 func (s *Ethereum) StopMining()         { s.miner.Stop() }
