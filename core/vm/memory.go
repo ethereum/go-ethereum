@@ -26,21 +26,6 @@ func (m *Memory) Set(offset, size uint64, value []byte) {
 	if size > 0 {
 		copy(m.store[offset:offset+size], common.RightPadBytes(value, int(size)))
 	}
-
-	/*
-		totSize := offset + size
-		lenSize := uint64(len(m.store) - 1)
-		if totSize > lenSize {
-			// Calculate the diff between the sizes
-			diff := totSize - lenSize
-			if diff > 0 {
-				// Create a new empty slice and append it
-				newSlice := make([]byte, diff-1)
-				// Resize slice
-				m.store = append(m.store, newSlice...)
-			}
-		}
-	*/
 }
 
 func (m *Memory) Resize(size uint64) {
