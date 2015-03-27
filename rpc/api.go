@@ -3,13 +3,11 @@ package rpc
 import (
 	"encoding/json"
 	"math/big"
-	"path"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -19,15 +17,9 @@ type EthereumApi struct {
 	db     common.Database
 }
 
-func NewEthereumApi(xeth *xeth.XEth, dataDir string) *EthereumApi {
-	// What about when dataDir is empty?
-	db, err := ethdb.NewLDBDatabase(path.Join(dataDir, "dapps"))
-	if err != nil {
-		panic(err)
-	}
+func NewEthereumApi(xeth *xeth.XEth) *EthereumApi {
 	api := &EthereumApi{
 		eth: xeth,
-		db:  db,
 	}
 
 	return api
@@ -42,10 +34,6 @@ func (api *EthereumApi) xeth() *xeth.XEth {
 
 func (api *EthereumApi) xethAtStateNum(num int64) *xeth.XEth {
 	return api.xeth().AtStateNum(num)
-}
-
-func (api *EthereumApi) Close() {
-	api.db.Close()
 }
 
 func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
@@ -370,7 +358,8 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		api.db.Put([]byte(args.Database+args.Key), args.Value)
+		api.xeth().DbPut([]byte(args.Database+args.Key), args.Value)
+
 		*reply = true
 	case "db_getString":
 		args := new(DbArgs)
@@ -382,7 +371,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		res, _ := api.db.Get([]byte(args.Database + args.Key))
+		res, _ := api.xeth().DbGet([]byte(args.Database + args.Key))
 		*reply = string(res)
 	case "db_putHex":
 		args := new(DbHexArgs)
@@ -394,7 +383,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		api.db.Put([]byte(args.Database+args.Key), args.Value)
+		api.xeth().DbPut([]byte(args.Database+args.Key), args.Value)
 		*reply = true
 	case "db_getHex":
 		args := new(DbHexArgs)
@@ -406,7 +395,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		res, _ := api.db.Get([]byte(args.Database + args.Key))
+		res, _ := api.xeth().DbGet([]byte(args.Database + args.Key))
 		*reply = common.ToHex(res)
 	case "shh_version":
 		*reply = api.xeth().WhisperVersion()
