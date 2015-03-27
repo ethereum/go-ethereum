@@ -45,23 +45,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 	self.Printf("(%d) (%x) %x (code=%d) gas: %v (d) %x", self.env.Depth(), caller.Address().Bytes()[:4], context.Address(), len(code), context.Gas, callData).Endl()
 
-	/*
-		if self.Recoverable {
-			// Recover from any require exception
-			defer func() {
-				if r := recover(); r != nil {
-					self.Printf(" %v", r).Endl()
-
-					context.UseGas(context.Gas)
-
-					ret = context.Return(nil)
-
-					err = fmt.Errorf("%v", r)
-				}
-			}()
-		}
-	*/
-
+	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
 	defer func() {
 		if err != nil {
 			self.Printf(" %v", err).Endl()

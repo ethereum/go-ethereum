@@ -61,8 +61,8 @@ func baseCheck(op OpCode, stack *stack, gas *big.Int) error {
 	if op >= PUSH1 && op <= PUSH32 {
 		op = PUSH1
 	}
-	if op >= SWAP1 && op <= SWAP16 {
-		op = SWAP1
+	if op >= DUP1 && op <= DUP16 {
+		op = DUP1
 	}
 
 	if r, ok := _baseCheck[op]; ok {
@@ -71,7 +71,7 @@ func baseCheck(op OpCode, stack *stack, gas *big.Int) error {
 			return err
 		}
 
-		if r.stackPush && len(stack.data)-r.stackPop == 1024 {
+		if r.stackPush && len(stack.data)-r.stackPop+1 > 1024 {
 			return fmt.Errorf("stack limit reached (%d)", maxStack)
 		}
 
@@ -154,6 +154,6 @@ var _baseCheck = map[OpCode]req{
 	JUMPDEST:     {0, GasJumpDest, false},
 	SUICIDE:      {1, Zero, false},
 	RETURN:       {2, Zero, false},
-	PUSH1:        {0, GasFastStep, true},
+	PUSH1:        {0, GasFastestStep, true},
 	DUP1:         {0, Zero, true},
 }
