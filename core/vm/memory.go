@@ -15,10 +15,17 @@ func NewMemory() *Memory {
 }
 
 func (m *Memory) Set(offset, size uint64, value []byte) {
+	// If the length of the store is 0 this is a complete failure
+	// memory size is set prior to calling this method so enough size
+	// should always be available.
+	if len(m.store) == 0 {
+		panic("INVALID memory: store empty")
+	}
+
 	value = common.RightPadBytes(value, int(size))
 
 	totSize := offset + size
-	lenSize := uint64(len(m.store) - 1)
+	lenSize := int64(len(m.store) - 1)
 	if totSize > lenSize {
 		// Calculate the diff between the sizes
 		diff := totSize - lenSize
