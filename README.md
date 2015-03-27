@@ -22,7 +22,7 @@ Mist (GUI):
 
 Geth (CLI):
 
-`go get github.com/ethereum/go-ethereum/cmd/ethereum`
+`go get github.com/ethereum/go-ethereum/cmd/geth`
 
 As of POC-8, go-ethereum uses [Godep](https://github.com/tools/godep) to manage dependencies. Assuming you have [your environment all set up](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum), switch to the go-ethereum repository root folder, and build/install the executable you need:
 
