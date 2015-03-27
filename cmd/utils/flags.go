@@ -96,10 +96,15 @@ var (
 		Name:  "mine",
 		Usage: "Enable mining",
 	}
+	EtherbaseFlag = cli.StringFlag{
+		Name:  "etherbase",
+		Usage: "public address for block mining rewards. By default the address of your primary account is used",
+		Value: "primary",
+	}
 
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
-		Usage: "unlock the account given until this program exits (prompts for password). '--unlock coinbase' unlocks the primary (coinbase) account",
+		Usage: "unlock the account given until this program exits (prompts for password). '--unlock primary' unlocks the primary account",
 		Value: "",
 	}
 	PasswordFileFlag = cli.StringFlag{
@@ -215,6 +220,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		LogFile:         ctx.GlobalString(LogFileFlag.Name),
 		LogLevel:        ctx.GlobalInt(LogLevelFlag.Name),
 		LogJSON:         ctx.GlobalString(LogJSONFlag.Name),
+		Etherbase:       ctx.GlobalString(EtherbaseFlag.Name),
 		MinerThreads:    ctx.GlobalInt(MinerThreadsFlag.Name),
 		AccountManager:  GetAccountManager(ctx),
 		VmDebug:         ctx.GlobalBool(VMDebugFlag.Name),
@@ -251,11 +257,10 @@ func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
 	addr := ctx.GlobalString(RPCListenAddrFlag.Name)
 	port := ctx.GlobalInt(RPCPortFlag.Name)
-	dataDir := ctx.GlobalString(DataDirFlag.Name)
 	fmt.Println("Starting RPC on port: ", port)
 	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
 	if err != nil {
 		Fatalf("Can't listen on %s:%d: %v", addr, port, err)
 	}
-	go http.Serve(l, rpc.JSONRPC(xeth.New(eth, nil), dataDir))
+	go http.Serve(l, rpc.JSONRPC(xeth.New(eth, nil)))
 }

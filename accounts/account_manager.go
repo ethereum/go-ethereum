@@ -81,13 +81,7 @@ func (am *Manager) HasAccount(addr []byte) bool {
 	return false
 }
 
-// Coinbase returns the account address that mining rewards are sent to.
-func (am *Manager) Coinbase() (addr []byte, err error) {
-	// TODO: persist coinbase address on disk
-	return am.firstAddr()
-}
-
-func (am *Manager) firstAddr() ([]byte, error) {
+func (am *Manager) Primary() (addr []byte, err error) {
 	addrs, err := am.keyStore.GetKeyAddresses()
 	if os.IsNotExist(err) {
 		return nil, ErrNoKeys

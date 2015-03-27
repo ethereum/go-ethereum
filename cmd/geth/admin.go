@@ -9,10 +9,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/robertkrimen/otto"
 )
@@ -69,14 +69,13 @@ func (js *jsre) startRPC(call otto.FunctionCall) otto.Value {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}
-	dataDir := js.ethereum.DataDir
 
 	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
 	if err != nil {
 		fmt.Printf("Can't listen on %s:%d: %v", addr, port, err)
 		return otto.FalseValue()
 	}
-	go http.Serve(l, rpc.JSONRPC(xeth.New(js.ethereum, nil), dataDir))
+	go http.Serve(l, rpc.JSONRPC(xeth.New(js.ethereum, nil)))
 	return otto.TrueValue()
 }
 

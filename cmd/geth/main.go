@@ -221,6 +221,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.LogJSONFlag,
 		utils.LogLevelFlag,
 		utils.MaxPeersFlag,
+		utils.EtherbaseFlag,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
 		utils.NATFlag,
@@ -322,10 +323,10 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	if len(account) > 0 {
-		if account == "coinbase" {
-			accbytes, err := am.Coinbase()
+		if account == "primary" {
+			accbytes, err := am.Primary()
 			if err != nil {
-				utils.Fatalf("no coinbase account: %v", err)
+				utils.Fatalf("no primary account: %v", err)
 			}
 			account = common.ToHex(accbytes)
 		}
@@ -468,7 +469,6 @@ func dump(ctx *cli.Context) {
 		} else {
 			statedb := state.New(block.Root(), stateDb)
 			fmt.Printf("%s\n", statedb.Dump())
-			// fmt.Println(block)
 		}
 	}
 }
