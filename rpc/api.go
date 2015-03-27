@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -277,8 +276,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		opts := toFilterOptions(args)
-		id := api.xeth().RegisterFilter(opts)
+		id := api.xeth().RegisterFilter(args.Earliest, args.Latest, args.Skip, args.Max, args.Address, args.Topics)
 		*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
 	case "eth_newBlockFilter":
 		args := new(FilterStringArgs)
@@ -310,8 +308,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		opts := toFilterOptions(args)
-		*reply = NewLogsRes(api.xeth().AllLogs(opts))
+		*reply = NewLogsRes(api.xeth().AllLogs(args.Earliest, args.Latest, args.Skip, args.Max, args.Address, args.Topics))
 	case "eth_getWork":
 		api.xeth().SetMining(true)
 		*reply = api.xeth().RemoteMining().GetWork()
@@ -455,34 +452,4 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)
 	return nil
-}
-
-func toFilterOptions(options *BlockFilterArgs) *core.FilterOptions {
-	var opts core.FilterOptions
-
-	opts.Address = cAddress(options.Address)
-	opts.Topics = cTopics(options.Topics)
-
-	opts.Earliest = options.Earliest
-	opts.Latest = options.Latest
-
-	return &opts
-}
-
-func cAddress(a []string) []common.Address {
-	bslice := make([]common.Address, len(a))
-	for i, addr := range a {
-		bslice[i] = common.HexToAddress(addr)
-	}
-	return bslice
-}
-
-func cTopics(t [][]string) [][]common.Hash {
-	topics := make([][]common.Hash, len(t))
-	for i, iv := range t {
-		for j, jv := range iv {
-			topics[i][j] = common.HexToHash(jv)
-		}
-	}
-	return topics
 }

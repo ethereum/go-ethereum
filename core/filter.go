@@ -12,17 +12,6 @@ type AccountChange struct {
 	Address, StateAddress []byte
 }
 
-type FilterOptions struct {
-	Earliest int64
-	Latest   int64
-
-	Address []common.Address
-	Topics  [][]common.Hash
-
-	Skip int
-	Max  int
-}
-
 // Filtering interface
 type Filter struct {
 	eth      Backend
@@ -42,18 +31,6 @@ type Filter struct {
 // is interesting or not.
 func NewFilter(eth Backend) *Filter {
 	return &Filter{eth: eth}
-}
-
-// SetOptions copies the filter options to the filter it self. The reason for this "silly" copy
-// is simply because named arguments in this case is extremely nice and readable.
-func (self *Filter) SetOptions(options *FilterOptions) {
-	self.earliest = options.Earliest
-	self.latest = options.Latest
-	self.skip = options.Skip
-	self.max = options.Max
-	self.address = options.Address
-	self.topics = options.Topics
-
 }
 
 // Set the earliest and latest block for filtering.
