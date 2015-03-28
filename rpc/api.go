@@ -13,7 +13,6 @@ import (
 type EthereumApi struct {
 	eth    *xeth.XEth
 	xethMu sync.RWMutex
-	db     common.Database
 }
 
 func NewEthereumApi(xeth *xeth.XEth) *EthereumApi {
