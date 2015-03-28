@@ -110,6 +110,24 @@ func (self *XEth) stop() {
 	close(self.quit)
 }
 
+func cAddress(a []string) []common.Address {
+	bslice := make([]common.Address, len(a))
+	for i, addr := range a {
+		bslice[i] = common.HexToAddress(addr)
+	}
+	return bslice
+}
+
+func cTopics(t [][]string) [][]common.Hash {
+	topics := make([][]common.Hash, len(t))
+	for i, iv := range t {
+		for j, jv := range iv {
+			topics[i][j] = common.HexToHash(jv)
+		}
+	}
+	return topics
+}
+
 func (self *XEth) DefaultGas() *big.Int      { return defaultGas }
 func (self *XEth) DefaultGasPrice() *big.Int { return defaultGasPrice }
 
@@ -228,15 +246,15 @@ func (self *XEth) IsMining() bool {
 }
 
 func (self *XEth) EthVersion() string {
-	return string(self.backend.EthVersion())
+	return fmt.Sprintf("%d", self.backend.EthVersion())
 }
 
 func (self *XEth) NetworkVersion() string {
-	return string(self.backend.NetVersion())
+	return fmt.Sprintf("%d", self.backend.NetVersion())
 }
 
 func (self *XEth) WhisperVersion() string {
-	return string(self.backend.ShhVersion())
+	return fmt.Sprintf("%d", self.backend.ShhVersion())
 }
 
 func (self *XEth) ClientVersion() string {
@@ -301,10 +319,15 @@ func (self *XEth) SecretToAddress(key string) string {
 	return common.ToHex(pair.Address())
 }
 
-func (self *XEth) RegisterFilter(args *core.FilterOptions) int {
+func (self *XEth) RegisterFilter(earliest, latest int64, skip, max int, address []string, topics [][]string) int {
 	var id int
 	filter := core.NewFilter(self.backend)
-	filter.SetOptions(args)
+	filter.SetEarliestBlock(earliest)
+	filter.SetLatestBlock(latest)
+	filter.SetSkip(skip)
+	filter.SetMax(max)
+	filter.SetAddress(cAddress(address))
+	filter.SetTopics(cTopics(topics))
 	filter.LogsCallback = func(logs state.Logs) {
 		self.logMut.Lock()
 		defer self.logMut.Unlock()
@@ -380,9 +403,14 @@ func (self *XEth) Logs(id int) state.Logs {
 	return nil
 }
 
-func (self *XEth) AllLogs(args *core.FilterOptions) state.Logs {
+func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []string, topics [][]string) state.Logs {
 	filter := core.NewFilter(self.backend)
-	filter.SetOptions(args)
+	filter.SetEarliestBlock(earliest)
+	filter.SetLatestBlock(latest)
+	filter.SetSkip(skip)
+	filter.SetMax(max)
+	filter.SetAddress(cAddress(address))
+	filter.SetTopics(cTopics(topics))
 
 	return filter.Find()
 }
