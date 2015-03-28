@@ -243,8 +243,8 @@ func (l *LogRes) MarshalJSON() ([]byte, error) {
 	}
 
 	ext.Address = l.Address.Hex()
-	ext.Data = common.Bytes2Hex(l.Data)
-	ext.Number = common.Bytes2Hex(big.NewInt(int64(l.Number)).Bytes())
+	ext.Data = common.ToHex(l.Data)
+	ext.Number = common.ToHex(big.NewInt(int64(l.Number)).Bytes())
 	ext.Topics = make([]string, len(l.Topics))
 	for i, v := range l.Topics {
 		ext.Topics[i] = v.Hex()
