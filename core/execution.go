@@ -11,14 +11,18 @@ import (
 )
 
 type Execution struct {
-	env               vm.Environment
-	address           *common.Address
-	input             []byte
+	env     vm.Environment
+	address *common.Address
+	input   []byte
+	evm     vm.VirtualMachine
+
 	Gas, price, value *big.Int
 }
 
 func NewExecution(env vm.Environment, address *common.Address, input []byte, gas, gasPrice, value *big.Int) *Execution {
-	return &Execution{env: env, address: address, input: input, Gas: gas, price: gasPrice, value: value}
+	exe := &Execution{env: env, address: address, input: input, Gas: gas, price: gasPrice, value: value}
+	exe.evm = vm.NewVm(env)
+	return exe
 }
 
 func (self *Execution) Call(codeAddr common.Address, caller vm.ContextRef) ([]byte, error) {
@@ -28,11 +32,17 @@ func (self *Execution) Call(codeAddr common.Address, caller vm.ContextRef) ([]by
 	return self.exec(&codeAddr, code, caller)
 }
 
+func (self *Execution) Create(caller vm.ContextRef) (ret []byte, err error, account *state.StateObject) {
+	ret, err = self.exec(nil, self.input, caller)
+	account = self.env.State().GetStateObject(*self.address)
+	return
+}
+
 func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.ContextRef) (ret []byte, err error) {
 	start := time.Now()
 
 	env := self.env
-	evm := vm.NewVm(env)
+	evm := self.evm
 	if env.Depth() == vm.MaxCallDepth {
 		caller.ReturnGas(self.Gas, self.price)
 
@@ -67,13 +77,6 @@ func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.
 	if err != nil {
 		env.State().Set(snapshot)
 	}
-
-	return
-}
-
-func (self *Execution) Create(caller vm.ContextRef) (ret []byte, err error, account *state.StateObject) {
-	ret, err = self.exec(nil, self.input, caller)
-	account = self.env.State().GetStateObject(*self.address)
 
 	return
 }

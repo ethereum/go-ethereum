@@ -80,3 +80,13 @@ func getData(data []byte, start, size *big.Int) []byte {
 	e := common.BigMin(new(big.Int).Add(s, size), dlen)
 	return common.RightPadBytes(data[s.Uint64():e.Uint64()], int(size.Uint64()))
 }
+
+func UseGas(gas, amount *big.Int) bool {
+	if gas.Cmp(amount) < 0 {
+		return false
+	}
+
+	// Sub the amount of gas from the remaining
+	gas.Sub(gas, amount)
+	return true
+}

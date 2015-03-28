@@ -24,6 +24,9 @@ type Vm struct {
 	Fn          string
 
 	Recoverable bool
+
+	// Will be called before the vm returns
+	After func(*Context, error)
 }
 
 func New(env Environment) *Vm {
@@ -47,6 +50,10 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
 	defer func() {
+		if self.After != nil {
+			self.After(context, err)
+		}
+
 		if err != nil {
 			self.Printf(" %v", err).Endl()
 			// In case of a VM exception (known exceptions) all gas consumed (panics NOT included).
@@ -647,7 +654,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 				self.Printf(" (*) 0x0 %v", suberr)
 			} else {
-
 				// gas < len(ret) * CreateDataGas == NO_CODE
 				dataGas := big.NewInt(int64(len(ret)))
 				dataGas.Mul(dataGas, GasCreateByte)

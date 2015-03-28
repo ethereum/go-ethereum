@@ -74,16 +74,12 @@ func (c *Context) Return(ret []byte) []byte {
 /*
  * Gas functions
  */
-func (c *Context) UseGas(gas *big.Int) bool {
-	if c.Gas.Cmp(gas) < 0 {
-		return false
+func (c *Context) UseGas(gas *big.Int) (ok bool) {
+	ok = UseGas(c.Gas, gas)
+	if ok {
+		c.UsedGas.Add(c.UsedGas, gas)
 	}
-
-	// Sub the amount of gas from the remaining
-	c.Gas.Sub(c.Gas, gas)
-	c.UsedGas.Add(c.UsedGas, gas)
-
-	return true
+	return
 }
 
 // Implement the caller interface
