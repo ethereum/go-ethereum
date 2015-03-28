@@ -33,6 +33,7 @@ var (
 	S256 = common.S256
 
 	Zero = common.Big0
+	One  = common.Big1
 
 	max = big.NewInt(math.MaxInt64)
 )

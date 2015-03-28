@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,27 +40,16 @@ func NewContext(caller ContextRef, object ContextRef, value, gas, price *big.Int
 	return c
 }
 
-func (c *Context) GetOp(n uint64) OpCode {
+func (c *Context) GetOp(n *big.Int) OpCode {
 	return OpCode(c.GetByte(n))
 }
 
-func (c *Context) GetByte(n uint64) byte {
-	if n < uint64(len(c.Code)) {
-		return c.Code[n]
+func (c *Context) GetByte(n *big.Int) byte {
+	if n.Cmp(big.NewInt(int64(len(c.Code)))) < 0 {
+		return c.Code[n.Int64()]
 	}
 
 	return 0
-}
-
-func (c *Context) GetBytes(x, y int) []byte {
-	return c.GetRangeValue(uint64(x), uint64(y))
-}
-
-func (c *Context) GetRangeValue(x, size uint64) []byte {
-	x = uint64(math.Min(float64(x), float64(len(c.Code))))
-	y := uint64(math.Min(float64(x+size), float64(len(c.Code))))
-
-	return common.RightPadBytes(c.Code[x:y], int(size))
 }
 
 func (c *Context) Return(ret []byte) []byte {

@@ -72,23 +72,20 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 	var (
 		op OpCode
 
-		destinations        = analyseJumpDests(context.Code)
-		mem                 = NewMemory()
-		stack               = newStack()
-		pc           uint64 = 0
-		step                = 0
-		statedb             = self.env.State()
+		destinations = analyseJumpDests(context.Code)
+		mem          = NewMemory()
+		stack        = newStack()
+		pc           = new(big.Int)
+		statedb      = self.env.State()
 
-		jump = func(from uint64, to *big.Int) error {
-			p := to.Uint64()
-
-			nop := context.GetOp(p)
-			if !destinations.Has(p) {
-				return fmt.Errorf("invalid jump destination (%v) %v", nop, p)
+		jump = func(from *big.Int, to *big.Int) error {
+			nop := context.GetOp(to)
+			if !destinations.Has(to) {
+				return fmt.Errorf("invalid jump destination (%v) %v", nop, to)
 			}
 
 			self.Printf(" ~> %v", to)
-			pc = to.Uint64()
+			pc = to
 
 			self.Endl()
 
@@ -105,7 +102,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		// The base for all big integer arithmetic
 		base := new(big.Int)
 
-		step++
 		// Get the memory location of pc
 		op = context.GetOp(pc)
 
@@ -428,22 +424,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			self.Printf(" => %v", value)
 		case CALLDATALOAD:
-			var (
-				offset  = stack.pop()
-				data    = make([]byte, 32)
-				lenData = big.NewInt(int64(len(callData)))
-			)
-
-			if lenData.Cmp(offset) >= 0 {
-				length := new(big.Int).Add(offset, common.Big32)
-				length = common.BigMin(length, lenData)
-
-				copy(data, callData[offset.Int64():length.Int64()])
-			}
+			data := getData(callData, stack.pop(), common.Big32)
 
 			self.Printf(" => 0x%x", data)
 
-			stack.push(common.BigD(data))
+			stack.push(common.Bytes2Big(data))
 		case CALLDATASIZE:
 			l := int64(len(callData))
 			stack.push(big.NewInt(l))
@@ -542,13 +527,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			// 0x50 range
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
-			a := uint64(op - PUSH1 + 1)
-			byts := context.GetRangeValue(pc+1, a)
+			a := big.NewInt(int64(op - PUSH1 + 1))
+			byts := getData(code, new(big.Int).Add(pc, big.NewInt(1)), a)
 			// push value to stack
-			stack.push(common.BigD(byts))
-			pc += a
-
-			step += int(op) - int(PUSH1) + 1
+			stack.push(common.Bytes2Big(byts))
+			pc.Add(pc, a)
 
 			self.Printf(" => 0x%x", byts)
 		case POP:
@@ -628,7 +611,8 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 		case JUMPDEST:
 		case PC:
-			stack.push(big.NewInt(int64(pc)))
+			//stack.push(big.NewInt(int64(pc)))
+			stack.push(pc)
 		case MSIZE:
 			stack.push(big.NewInt(int64(mem.Len())))
 		case GAS:
@@ -734,7 +718,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			return nil, fmt.Errorf("Invalid opcode %x", op)
 		}
 
-		pc++
+		pc.Add(pc, One)
 
 		self.Endl()
 	}
