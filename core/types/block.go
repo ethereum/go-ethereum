@@ -148,6 +148,26 @@ func NewBlockWithHeader(header *Header) *Block {
 	return &Block{header: header}
 }
 
+func (self *Block) Validate() error {
+	if self.header == nil {
+		return fmt.Errorf("header is nil")
+	}
+	// check *big.Int fields
+	if self.header.Difficulty == nil {
+		return fmt.Errorf("Difficulty undefined")
+	}
+	if self.header.GasLimit == nil {
+		return fmt.Errorf("GasLimit undefined")
+	}
+	if self.header.GasUsed == nil {
+		return fmt.Errorf("GasUsed undefined")
+	}
+	if self.header.Number == nil {
+		return fmt.Errorf("Number undefined")
+	}
+	return nil
+}
+
 func (self *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock
 	if err := s.Decode(&eb); err != nil {
