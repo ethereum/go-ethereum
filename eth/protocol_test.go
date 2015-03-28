@@ -229,10 +229,6 @@ func TestStatusMsgErrors(t *testing.T) {
 func TestNewBlockMsg(t *testing.T) {
 	logInit()
 	eth := newEth(t)
-	eth.blockPool.addBlock = func(block *types.Block, peerId string) (err error) {
-		fmt.Printf("Add Block: %v\n", block)
-		return
-	}
 
 	var disconnected bool
 	eth.blockPool.removePeer = func(peerId string) {
@@ -294,4 +290,50 @@ func TestNewBlockMsg(t *testing.T) {
 	// Block.DecodeRLP: validation failed: header is nil
 	eth.checkError(ErrDecode, delay)
 
+}
+
+func TestBlockMsg(t *testing.T) {
+	logInit()
+	eth := newEth(t)
+	blocks := make(chan *types.Block)
+	eth.blockPool.addBlock = func(block *types.Block, peerId string) (err error) {
+		blocks <- block
+		return
+	}
+
+	var disconnected bool
+	eth.blockPool.removePeer = func(peerId string) {
+		fmt.Printf("peer <%s> is disconnected\n", peerId)
+		disconnected = true
+	}
+
+	go eth.run()
+
+	eth.handshake(t, true)
+	err := p2p.ExpectMsg(eth, TxMsg, []interface{}{})
+	if err != nil {
+		t.Errorf("transactions expected, got %v", err)
+	}
+
+	var delay = 3 * time.Second
+	// eth.reset()
+	newblock := func(i int64) *types.Block {
+		return types.NewBlock(common.Hash{byte(i)}, common.Address{byte(i)}, common.Hash{byte(i)}, big.NewInt(i), uint64(i), string(i))
+	}
+	go p2p.Send(eth, BlocksMsg, types.Blocks{newblock(0), newblock(1), newblock(2)})
+	timer := time.After(delay)
+	for i := int64(0); i < 3; i++ {
+		select {
+		case block := <-blocks:
+			if (block.ParentHash() != common.Hash{byte(i)}) {
+				t.Errorf("incorrect block %v, expected %v", block.ParentHash(), common.Hash{byte(i)})
+			}
+		case <-timer:
+			t.Errorf("no td recorded after %v", delay)
+			return
+		case err := <-eth.quit:
+			t.Errorf("no error expected, got %v", err)
+			return
+		}
+	}
 }
