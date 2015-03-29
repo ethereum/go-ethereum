@@ -148,7 +148,11 @@ var (
 		Usage: "Port on which the JSON-RPC server should listen",
 		Value: 8545,
 	}
-
+	RPCCORSDomainFlag = cli.StringFlag{
+		Name:  "rpccorsdomain",
+		Usage: "Domain on which to send Access-Control-Allow-Origin header",
+		Value: "",
+	}
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
