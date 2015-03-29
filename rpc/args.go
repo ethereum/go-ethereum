@@ -1,9 +1,7 @@
 package rpc
 
 import (
-	"bytes"
 	"encoding/json"
-	// "errors"
 	"fmt"
 	"math/big"
 
@@ -105,8 +103,8 @@ type GetBlockByHashArgs struct {
 
 func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
 
@@ -134,8 +132,7 @@ type GetBlockByNumberArgs struct {
 
 func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
 
@@ -405,8 +402,7 @@ type BlockNumIndexArgs struct {
 
 func (args *BlockNumIndexArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
 
@@ -436,8 +432,7 @@ type HashIndexArgs struct {
 
 func (args *HashIndexArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
 
@@ -468,8 +463,7 @@ type Sha3Args struct {
 
 func (args *Sha3Args) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
 
@@ -798,8 +792,7 @@ type FilterStringArgs struct {
 
 func (args *FilterStringArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
 
