@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"net"
-	"net/http"
 	"os"
 	"time"
 
@@ -70,12 +68,20 @@ func (js *jsre) startRPC(call otto.FunctionCall) otto.Value {
 		return otto.FalseValue()
 	}
 
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
+	config := rpc.RpcConfig{
+		ListenAddress: addr,
+		ListenPort:    uint(port),
+		// CorsDomain:    ctx.GlobalString(RPCCORSDomainFlag.Name),
+	}
+
+	xeth := xeth.New(js.ethereum, nil)
+	err = rpc.Start(xeth, config)
+
 	if err != nil {
-		fmt.Printf("Can't listen on %s:%d: %v", addr, port, err)
+		fmt.Printf(err.Error())
 		return otto.FalseValue()
 	}
-	go http.Serve(l, rpc.JSONRPC(xeth.New(js.ethereum, nil)))
+
 	return otto.TrueValue()
 }
 

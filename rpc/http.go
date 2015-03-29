@@ -2,8 +2,10 @@ package rpc
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/logger"
@@ -16,6 +18,16 @@ const (
 	jsonrpcver       = "2.0"
 	maxSizeReqLength = 1024 * 1024 // 1MB
 )
+
+func Start(pipe *xeth.XEth, config RpcConfig) error {
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort))
+	if err != nil {
+		rpclogger.Errorf("Can't listen on %s:%d: %v", config.ListenAddress, config.ListenPort, err)
+		return err
+	}
+	go http.Serve(l, JSONRPC(pipe))
+	return nil
+}
 
 // JSONRPC returns a handler that implements the Ethereum JSON-RPC API.
 func JSONRPC(pipe *xeth.XEth) http.Handler {

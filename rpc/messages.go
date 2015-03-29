@@ -21,6 +21,12 @@ import (
 	"fmt"
 )
 
+type RpcConfig struct {
+	ListenAddress string
+	ListenPort    uint
+	CorsDomain    string
+}
+
 type InvalidTypeError struct {
 	method string
 	msg    string
