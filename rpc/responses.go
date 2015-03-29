@@ -70,7 +70,7 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 	ext.Difficulty = common.ToHex(b.Difficulty.Bytes())
 	ext.TotalDifficulty = common.ToHex(b.TotalDifficulty.Bytes())
 	ext.Size = common.ToHex(b.Size.Bytes())
-	// ext.ExtraData = common.ToHex(b.ExtraData)
+	ext.ExtraData = common.ToHex(b.ExtraData)
 	ext.GasLimit = common.ToHex(b.GasLimit.Bytes())
 	// ext.MinGasPrice = common.ToHex(big.NewInt(b.MinGasPrice).Bytes())
 	ext.GasUsed = common.ToHex(b.GasUsed.Bytes())
@@ -111,7 +111,7 @@ func NewBlockRes(block *types.Block) *BlockRes {
 	res.Difficulty = block.Difficulty()
 	res.TotalDifficulty = block.Td
 	res.Size = big.NewInt(int64(block.Size()))
-	// res.ExtraData =
+	res.ExtraData = []byte(block.Header().Extra)
 	res.GasLimit = block.GasLimit()
 	// res.MinGasPrice =
 	res.GasUsed = block.GasUsed()
