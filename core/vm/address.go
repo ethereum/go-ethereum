@@ -3,8 +3,8 @@ package vm
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type Address interface {
@@ -61,15 +61,32 @@ func ripemd160Func(in []byte) []byte {
 	return common.LeftPadBytes(crypto.Ripemd160(in), 32)
 }
 
+const ecRecoverInputLength = 128
+
 func ecrecoverFunc(in []byte) []byte {
-	// In case of an invalid sig. Defaults to return nil
-	defer func() { recover() }()
+	// "in" is (hash, v, r, s), each 32 bytes
+	// but for ecrecover we want (r, s, v)
+	if len(in) < ecRecoverInputLength {
+		return nil
+	}
 
-	hash := in[:32]
-	v := common.BigD(in[32:64]).Bytes()[0] - 27
-	sig := append(in[64:], v)
+	// Treat V as a 256bit integer
+	v := new(big.Int).Sub(common.Bytes2Big(in[32:64]), big.NewInt(27))
+	// Ethereum requires V to be either 0 or 1 => (27 || 28)
+	if !(v.Cmp(Zero) == 0 || v.Cmp(One) == 0) {
+		return nil
+	}
 
-	return common.LeftPadBytes(crypto.Sha3(crypto.Ecrecover(append(hash, sig...))[1:])[12:], 32)
+	// v needs to be moved to the end
+	rsv := append(in[64:128], byte(v.Uint64()))
+	pubKey := crypto.Ecrecover(in[:32], rsv)
+	// make sure the public key is a valid one
+	if pubKey == nil || len(pubKey) != 65 {
+		return nil
+	}
+
+	// the first byte of pubkey is bitcoin heritage
+	return common.LeftPadBytes(crypto.Sha3(pubKey[1:])[12:], 32)
 }
 
 func memCpy(in []byte) []byte {
