@@ -61,27 +61,30 @@ func ripemd160Func(in []byte) []byte {
 	return common.LeftPadBytes(crypto.Ripemd160(in), 32)
 }
 
-const EcRecoverInputLength = 128
+const ecRecoverInputLength = 128
 
 func ecrecoverFunc(in []byte) []byte {
 	// "in" is (hash, v, r, s), each 32 bytes
 	// but for ecrecover we want (r, s, v)
-	if len(in) < EcRecoverInputLength {
+	if len(in) < ecRecoverInputLength {
 		return nil
 	}
-	hash := in[:32]
-	// v is only a bit, but comes as 32 bytes from vm. We only need least significant byte
-	encodedV := in[32:64]
-	v := encodedV[31] - 27
-	if !(v == 0 || v == 1) {
+
+	// Treat V as a 256bit integer
+	v := new(big.Int).Sub(common.Bytes2Big(in[32:64]), big.NewInt(27))
+	// Ethereum requires V to be either 0 or 1 => (27 || 28)
+	if !(v.Cmp(Zero) == 0 || v.Cmp(One) == 0) {
 		return nil
 	}
-	sig := append(in[64:], v)
-	pubKey := crypto.Ecrecover(append(hash, sig...))
-	// secp256.go returns either nil or 65 bytes
+
+	// v needs to be moved to the end
+	rsv := append(in[64:128], byte(v.Uint64()))
+	pubKey := crypto.Ecrecover(in[:32], rsv)
+	// make sure the public key is a valid one
 	if pubKey == nil || len(pubKey) != 65 {
 		return nil
 	}
+
 	// the first byte of pubkey is bitcoin heritage
 	return common.LeftPadBytes(crypto.Sha3(pubKey[1:])[12:], 32)
 }
