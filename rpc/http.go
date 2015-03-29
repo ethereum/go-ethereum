@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/rs/cors"
 )
 
 var rpclogger = logger.NewLogger("RPC")
@@ -25,7 +26,21 @@ func Start(pipe *xeth.XEth, config RpcConfig) error {
 		rpclogger.Errorf("Can't listen on %s:%d: %v", config.ListenAddress, config.ListenPort, err)
 		return err
 	}
-	go http.Serve(l, JSONRPC(pipe))
+
+	var handler http.Handler
+	if len(config.CorsDomain) > 0 {
+		var opts cors.Options
+		opts.AllowedMethods = []string{"POST"}
+		opts.AllowedOrigins = []string{config.CorsDomain}
+
+		c := cors.New(opts)
+		handler = c.Handler(JSONRPC(pipe))
+	} else {
+		handler = JSONRPC(pipe)
+	}
+
+	go http.Serve(l, handler)
+
 	return nil
 }
 
@@ -34,8 +49,7 @@ func JSONRPC(pipe *xeth.XEth) http.Handler {
 	api := NewEthereumApi(pipe)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// TODO this needs to be configurable
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
 
 		// Limit request size to resist DoS
 		if req.ContentLength > maxSizeReqLength {
