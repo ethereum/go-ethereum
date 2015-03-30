@@ -359,3 +359,42 @@ func TestBlockMsg(t *testing.T) {
 	eth.checkError(ErrDecode, delay)
 
 }
+
+func TestTransactionsMsg(t *testing.T) {
+	logInit()
+	eth := newEth(t)
+	txs := make(chan *types.Transaction)
+
+	eth.txPool.addTransactions = func(t []*types.Transaction) {
+		for _, tx := range t {
+			txs <- tx
+		}
+	}
+	go eth.run()
+
+	eth.handshake(t, true)
+	err := p2p.ExpectMsg(eth, TxMsg, []interface{}{})
+	if err != nil {
+		t.Errorf("transactions expected, got %v", err)
+	}
+
+	var delay = 3 * time.Second
+	tx := &types.Transaction{}
+
+	go p2p.Send(eth, TxMsg, []interface{}{tx, tx})
+	timer := time.After(delay)
+	for i := int64(0); i < 2; i++ {
+		select {
+		case <-txs:
+		case <-timer:
+			return
+		case err := <-eth.quit:
+			t.Errorf("no error expected, got %v", err)
+			return
+		}
+	}
+
+	go p2p.Send(eth, TxMsg, []interface{}{[]interface{}{}})
+	eth.checkError(ErrDecode, delay)
+
+}

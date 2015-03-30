@@ -250,10 +250,10 @@ func (self *Block) AddReceipt(receipt *Receipt) {
 }
 
 func (self *Block) RlpData() interface{} {
-	// 	return []interface{}{self.header, self.transactions, self.uncles}
-	// }
+	return []interface{}{self.header, self.transactions, self.uncles}
+}
 
-	// func (self *Block) RlpDataForStorage() interface{} {
+func (self *Block) RlpDataForStorage() interface{} {
 	return []interface{}{self.header, self.transactions, self.uncles, self.Td /* TODO receipts */}
 }
 

@@ -185,7 +185,10 @@ func (self *ethProtocol) handle() error {
 		if err := msg.Decode(&txs); err != nil {
 			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
-		for _, tx := range txs {
+		for i, tx := range txs {
+			if tx == nil {
+				return self.protoError(ErrDecode, "transaction %d is nil", i)
+			}
 			jsonlogger.LogJson(&logger.EthTxReceived{
 				TxHash:   tx.Hash().Hex(),
 				RemoteId: self.peer.ID().String(),
