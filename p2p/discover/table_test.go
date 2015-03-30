@@ -66,6 +66,48 @@ func TestTable_pingReplace(t *testing.T) {
 	doit(false, false)
 }
 
+func TestBucket_bumpNoDuplicates(t *testing.T) {
+	t.Parallel()
+	cfg := &quick.Config{
+		MaxCount: 1000,
+		Rand:     quickrand,
+		Values: func(args []reflect.Value, rand *rand.Rand) {
+			// generate a random list of nodes. this will be the content of the bucket.
+			n := rand.Intn(bucketSize-1) + 1
+			nodes := make([]*Node, n)
+			for i := range nodes {
+				nodes[i] = &Node{ID: randomID(NodeID{}, 200)}
+			}
+			args[0] = reflect.ValueOf(nodes)
+			// generate random bump positions.
+			bumps := make([]int, rand.Intn(100))
+			for i := range bumps {
+				bumps[i] = rand.Intn(len(nodes))
+			}
+			args[1] = reflect.ValueOf(bumps)
+		},
+	}
+
+	prop := func(nodes []*Node, bumps []int) (ok bool) {
+		b := &bucket{entries: make([]*Node, len(nodes))}
+		copy(b.entries, nodes)
+		for i, pos := range bumps {
+			b.bump(b.entries[pos])
+			if hasDuplicates(b.entries) {
+				t.Logf("bucket has duplicates after %d/%d bumps:", i+1, len(bumps))
+				for _, n := range b.entries {
+					t.Logf("  %p", n)
+				}
+				return false
+			}
+		}
+		return true
+	}
+	if err := quick.Check(prop, cfg); err != nil {
+		t.Error(err)
+	}
+}
+
 func fillBucket(tab *Table, ld int) (last *Node) {
 	b := tab.buckets[ld]
 	for len(b.entries) < bucketSize {
