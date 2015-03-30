@@ -260,10 +260,13 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
 	}
 
+	// TODO: use use minGasLimit and gasLimitBoundDivisor from
+	// https://github.com/ethereum/common/blob/master/params.json
 	// block.gasLimit - parent.gasLimit <= parent.gasLimit / 1024
 	a := new(big.Int).Sub(block.GasLimit, parent.GasLimit)
+	a.Abs(a)
 	b := new(big.Int).Div(parent.GasLimit, big.NewInt(1024))
-	if a.Cmp(b) > 0 {
+	if !(a.Cmp(b) < 0) {
 		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
 	}
 
