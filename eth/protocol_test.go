@@ -1,7 +1,6 @@
 package eth
 
 import (
-	"fmt"
 	"log"
 	"math/big"
 	"os"
@@ -227,12 +226,11 @@ func TestStatusMsgErrors(t *testing.T) {
 }
 
 func TestNewBlockMsg(t *testing.T) {
-	logInit()
+	// logInit()
 	eth := newEth(t)
 
 	var disconnected bool
 	eth.blockPool.removePeer = func(peerId string) {
-		fmt.Printf("peer <%s> is disconnected\n", peerId)
 		disconnected = true
 	}
 
@@ -293,7 +291,7 @@ func TestNewBlockMsg(t *testing.T) {
 }
 
 func TestBlockMsg(t *testing.T) {
-	logInit()
+	// logInit()
 	eth := newEth(t)
 	blocks := make(chan *types.Block)
 	eth.blockPool.addBlock = func(block *types.Block, peerId string) (err error) {
@@ -303,7 +301,6 @@ func TestBlockMsg(t *testing.T) {
 
 	var disconnected bool
 	eth.blockPool.removePeer = func(peerId string) {
-		fmt.Printf("peer <%s> is disconnected\n", peerId)
 		disconnected = true
 	}
 
@@ -320,13 +317,18 @@ func TestBlockMsg(t *testing.T) {
 	newblock := func(i int64) *types.Block {
 		return types.NewBlock(common.Hash{byte(i)}, common.Address{byte(i)}, common.Hash{byte(i)}, big.NewInt(i), uint64(i), string(i))
 	}
-	go p2p.Send(eth, BlocksMsg, types.Blocks{newblock(0), newblock(1), newblock(2)})
+	b := newblock(0)
+	b.Header().Difficulty = nil // check if nil as *big.Int decodes as 0
+	go p2p.Send(eth, BlocksMsg, types.Blocks{b, newblock(1), newblock(2)})
 	timer := time.After(delay)
 	for i := int64(0); i < 3; i++ {
 		select {
 		case block := <-blocks:
 			if (block.ParentHash() != common.Hash{byte(i)}) {
 				t.Errorf("incorrect block %v, expected %v", block.ParentHash(), common.Hash{byte(i)})
+			}
+			if block.Difficulty().Cmp(big.NewInt(i)) != 0 {
+				t.Errorf("incorrect block %v, expected %v", block.Difficulty(), big.NewInt(i))
 			}
 		case <-timer:
 			t.Errorf("no td recorded after %v", delay)
@@ -336,4 +338,24 @@ func TestBlockMsg(t *testing.T) {
 			return
 		}
 	}
+
+	go p2p.Send(eth, BlocksMsg, []interface{}{[]interface{}{}})
+	eth.checkError(ErrDecode, delay)
+	if !disconnected {
+		t.Errorf("peer not disconnected after error")
+	}
+
+	// test empty transaction
+	eth.reset()
+	go eth.run()
+	eth.handshake(t, true)
+	err = p2p.ExpectMsg(eth, TxMsg, []interface{}{})
+	if err != nil {
+		t.Errorf("transactions expected, got %v", err)
+	}
+	b = newblock(0)
+	b.AddTransaction(nil)
+	go p2p.Send(eth, BlocksMsg, types.Blocks{b})
+	eth.checkError(ErrDecode, delay)
+
 }

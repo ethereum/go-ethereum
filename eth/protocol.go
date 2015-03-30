@@ -268,6 +268,9 @@ func (self *ethProtocol) handle() error {
 					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 				}
 			}
+			if err := block.ValidateFields(); err != nil {
+				return self.protoError(ErrDecode, "block validation %v: %v", msg, err)
+			}
 			self.blockPool.AddBlock(&block, self.id)
 		}
 
@@ -276,7 +279,7 @@ func (self *ethProtocol) handle() error {
 		if err := msg.Decode(&request); err != nil {
 			return self.protoError(ErrDecode, "%v: %v", msg, err)
 		}
-		if err := request.Block.Validate(); err != nil {
+		if err := request.Block.ValidateFields(); err != nil {
 			return self.protoError(ErrDecode, "block validation %v: %v", msg, err)
 		}
 		hash := request.Block.Hash()

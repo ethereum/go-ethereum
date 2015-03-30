@@ -148,22 +148,19 @@ func NewBlockWithHeader(header *Header) *Block {
 	return &Block{header: header}
 }
 
-func (self *Block) Validate() error {
+func (self *Block) ValidateFields() error {
 	if self.header == nil {
 		return fmt.Errorf("header is nil")
 	}
-	// check *big.Int fields
-	if self.header.Difficulty == nil {
-		return fmt.Errorf("Difficulty undefined")
+	for i, transaction := range self.transactions {
+		if transaction == nil {
+			return fmt.Errorf("transaction %d is nil", i)
+		}
 	}
-	if self.header.GasLimit == nil {
-		return fmt.Errorf("GasLimit undefined")
-	}
-	if self.header.GasUsed == nil {
-		return fmt.Errorf("GasUsed undefined")
-	}
-	if self.header.Number == nil {
-		return fmt.Errorf("Number undefined")
+	for i, uncle := range self.uncles {
+		if uncle == nil {
+			return fmt.Errorf("uncle %d is nil", i)
+		}
 	}
 	return nil
 }
@@ -253,10 +250,10 @@ func (self *Block) AddReceipt(receipt *Receipt) {
 }
 
 func (self *Block) RlpData() interface{} {
-	return []interface{}{self.header, self.transactions, self.uncles}
-}
+	// 	return []interface{}{self.header, self.transactions, self.uncles}
+	// }
 
-func (self *Block) RlpDataForStorage() interface{} {
+	// func (self *Block) RlpDataForStorage() interface{} {
 	return []interface{}{self.header, self.transactions, self.uncles, self.Td /* TODO receipts */}
 }
 
