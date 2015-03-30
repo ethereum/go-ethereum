@@ -68,13 +68,8 @@ func Ripemd160(data []byte) []byte {
 	return ripemd.Sum(nil)
 }
 
-func Ecrecover(data []byte) []byte {
-	var in = struct {
-		hash []byte
-		sig  []byte
-	}{data[:32], data[32:]}
-
-	r, _ := secp256k1.RecoverPubkey(in.hash, in.sig)
+func Ecrecover(hash, sig []byte) []byte {
+	r, _ := secp256k1.RecoverPubkey(hash, sig)
 
 	return r
 }
@@ -151,9 +146,12 @@ func GenerateKey() (*ecdsa.PrivateKey, error) {
 }
 
 func SigToPub(hash, sig []byte) *ecdsa.PublicKey {
-	s := Ecrecover(append(hash, sig...))
-	x, y := elliptic.Unmarshal(S256(), s)
+	s := Ecrecover(hash, sig)
+	if s == nil || len(s) != 65 {
+		return nil
+	}
 
+	x, y := elliptic.Unmarshal(S256(), s)
 	return &ecdsa.PublicKey{S256(), x, y}
 }
 

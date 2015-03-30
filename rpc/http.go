@@ -76,7 +76,7 @@ func RpcResponse(api *EthereumApi, request *RpcRequest) *interface{} {
 	case *NotImplementedError:
 		jsonerr := &RpcErrorObject{-32601, reserr.Error()}
 		response = &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: request.Id, Error: jsonerr}
-	case *DecodeParamError, *InsufficientParamsError, *ValidationError:
+	case *DecodeParamError, *InsufficientParamsError, *ValidationError, *InvalidTypeError:
 		jsonerr := &RpcErrorObject{-32602, reserr.Error()}
 		response = &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: request.Id, Error: jsonerr}
 	default:
