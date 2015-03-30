@@ -40,7 +40,7 @@ var (
 	extensions = []string{".go", ".js", ".qml"}
 
 	// paths with any of these prefixes will be skipped
-	skipPrefixes = []string{"tests/files/", "cmd/mist/assets/ext/", "cmd/mist/assets/muted/"}
+	skipPrefixes = []string{"Godeps/", "tests/files/", "cmd/mist/assets/ext/", "cmd/mist/assets/muted/"}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.
 	gplPrefixes = []string{"cmd/"}
@@ -190,7 +190,7 @@ func fileInfo(file string) (*info, error) {
 			break
 		}
 	}
-	cmd := exec.Command("git", "log", "--follow", "--find-copies", "--pretty=format:%aI | %aN <%aE>", "--", file)
+	cmd := exec.Command("git", "log", "--follow", "--find-copies", "--pretty=format:%ai | %aN <%aE>", "--", file)
 	err := doLines(cmd, func(line string) {
 		sep := strings.IndexByte(line, '|')
 		year, name := line[:4], line[sep+2:]
