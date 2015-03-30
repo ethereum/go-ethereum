@@ -1,19 +1,40 @@
 package natspec
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/robertkrimen/otto"
+	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
+type abi2method map[[8]byte]*method
+
 type NatSpec struct {
-	jsvm *otto.Otto
+	jsvm                    *otto.Otto
+	methods                 abi2method
+	userDocJson, abiDocJson []byte
+	userDoc                 userDoc
+	// abiDoc abiDoc
 }
 
 // TODO: should initialise with abi and userdoc jsons
 func New() (self *NatSpec, err error) {
+	// fetch abi, userdoc
+	abi := []byte("")
+	userdoc := []byte("")
+	return NewWithDocs(abi, userdoc)
+}
 
-	self = new(NatSpec)
-	self.jsvm = otto.New()
+func NewWithDocs(abiDocJson, userDocJson []byte) (self *NatSpec, err error) {
+
+	self = &NatSpec{
+		jsvm:        otto.New(),
+		abiDocJson:  abiDocJson,
+		userDocJson: userDocJson,
+	}
 
 	_, err = self.jsvm.Run(natspecJS)
 	if err != nil {
@@ -24,20 +45,76 @@ func New() (self *NatSpec, err error) {
 		return
 	}
 
+	err = json.Unmarshal(userDocJson, &self.userDoc)
+	// err = parseAbiJson(abiDocJson, &self.abiDoc)
+
 	return
 }
 
-func (self *NatSpec) Notice(transaction, abi, method, expression string) (string, error) {
-	var err error
-	if _, err = self.jsvm.Run("var transaction = " + transaction + ";"); err != nil {
+// type abiDoc []method
+
+// type method struct {
+// 	Name   string  `json:name`
+// 	Inputs []input `json:inputs`
+// 	abiKey [8]byte
+// }
+
+// type input struct {
+// 	Name string `json:name`
+// 	Type string `json:type`
+// }
+
+type method struct {
+	Notice string `json:notice`
+	name   string
+}
+
+type userDoc struct {
+	Methods map[string]*method `json:methods`
+}
+
+func (self *NatSpec) makeAbi2method(abiKey [8]byte) (meth *method) {
+	if self.methods != nil {
+		meth = self.methods[abiKey]
+		return
+	}
+	self.methods = make(abi2method)
+	for signature, m := range self.userDoc.Methods {
+		name := strings.Split(signature, "(")[0]
+		hash := []byte(common.Bytes2Hex(crypto.Sha3([]byte(signature))))
+		var key [8]byte
+		copy(key[:], hash[:8])
+		self.methods[key] = meth
+		meth.name = name
+		if key == abiKey {
+			meth = m
+		}
+	}
+	return
+}
+
+func (self *NatSpec) Notice(tx string, abi string) (notice string, err error) {
+	var abiKey [8]byte
+	copy(abiKey[:], []byte(abi)[:8])
+	meth := self.makeAbi2method(abiKey)
+	if meth == nil {
+		err = fmt.Errorf("abi key %x does not match any method %v")
+		return
+	}
+	notice, err = self.noticeForMethod(tx, meth.name, meth.Notice)
+	return
+}
+
+func (self *NatSpec) noticeForMethod(tx string, name, expression string) (notice string, err error) {
+	if _, err = self.jsvm.Run("var transaction = " + tx + ";"); err != nil {
 		return "", fmt.Errorf("natspec.js error setting transaction: %v", err)
 	}
 
-	if _, err = self.jsvm.Run("var abi = " + abi + ";"); err != nil {
+	if _, err = self.jsvm.Run("var abi = " + string(self.abiDocJson) + ";"); err != nil {
 		return "", fmt.Errorf("natspec.js error setting abi: %v", err)
 	}
 
-	if _, err = self.jsvm.Run("var method = '" + method + "';"); err != nil {
+	if _, err = self.jsvm.Run("var method = '" + name + "';"); err != nil {
 		return "", fmt.Errorf("natspec.js error setting method: %v", err)
 	}
 
