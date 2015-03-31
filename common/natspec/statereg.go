@@ -1,13 +1,7 @@
 package natspec
 
 import (
-	"encoding/binary"
-	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/xeth"
-	"io/ioutil"
-	"net/http"
 )
 
 type StateReg struct {
@@ -46,65 +40,5 @@ func (self *StateReg) testCreateContracts() {
 	if err != nil {
 		panic(err)
 	}
-
-}
-
-func (self *StateReg) GetURLhint(hash string) (url string, err error) {
-
-	url_hex := self.xeth.StorageAt(self.caURL, storageAddress(0, common.Hex2Bytes(hash)))
-	url = string(common.Hex2Bytes(url_hex))
-	l := len(url)
-	for (l > 0) && (url[l-1] == 0) {
-		l--
-	}
-	url = url[:l]
-	if l == 0 {
-		err = fmt.Errorf("GetURLhint: URL hint not found")
-	}
-	return
-
-}
-
-func storageAddress(varidx uint32, key []byte) string {
-	data := make([]byte, 64)
-	binary.BigEndian.PutUint32(data[28:32], varidx)
-	copy(data[32:64], key[0:32])
-	return common.Bytes2Hex(crypto.Sha3(data))
-}
-
-func (self *StateReg) GetNatSpec(codehash string) (hash string, err error) {
-
-	hash = self.xeth.StorageAt(self.caNatSpec, storageAddress(0, common.Hex2Bytes(codehash)))
-	return
-
-}
-
-func (self *StateReg) GetContent(hash string) (content []byte, err error) {
-
-	// get URL
-	url, err := self.GetURLhint(hash)
-	if err != nil {
-		return
-	}
-
-	// retrieve content
-	resp, err := http.Get(url)
-	defer resp.Body.Close()
-	if err != nil {
-		return
-	}
-	content, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	}
-
-	// check hash
-
-	if common.Bytes2Hex(crypto.Sha3(content)) != hash {
-		content = nil
-		err = fmt.Errorf("GetContent error: content hash mismatch")
-	}
-
-	return
 
 }

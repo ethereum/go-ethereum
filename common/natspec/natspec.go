@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/docserver"
+	"github.com/ethereum/go-ethereum/common/resolver"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -22,8 +24,7 @@ type NatSpec struct {
 	// abiDoc abiDoc
 }
 
-// TODO: should initialise with abi and userdoc jsons
-func New(xeth *xeth.XEth, tx string) (self *NatSpec, err error) {
+func New(xeth *xeth.XEth, tx string, http *docserver.DocServer) (self *NatSpec, err error) {
 
 	// extract contract address from tx
 
@@ -45,21 +46,26 @@ func New(xeth *xeth.XEth, tx string) (self *NatSpec, err error) {
 		return
 	}
 	codeHash := xeth.CodeAt(contractAddress)
+	// parse out host/domain
 
-	// retrieve natspec info content hash
+	// set up nameresolver with natspecreg + urlhint contract addresses
+	stateReg := NewStateReg(xeth)
+	res := resolver.New(
+		xeth,
+		stateReg.caNatSpec,
+		stateReg.caURL,
+	)
 
-	statereg := NewStateReg(xeth)
-
-	natspecHash, err1 := statereg.GetNatSpec(codeHash)
-	if err1 != nil {
-		return nil, err1
+	// resolve host via nameReg/UrlHint Resolver
+	uri, hash, err := res.NameToUrl(codeHash)
+	if err != nil {
+		return
 	}
 
-	// retrieve content
-
-	content, err2 := statereg.GetContent(natspecHash)
-	if err2 != nil {
-		return nil, err2
+	// get content via http client and authenticate content using hash
+	content, err := http.GetAuthContent(uri, hash)
+	if err != nil {
+		return
 	}
 
 	// get abi, userdoc

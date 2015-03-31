@@ -107,29 +107,23 @@ func TestMissingMethod(t *testing.T) {
 }
 
 // test invalid desc
-/*
+
 func TestInvalidDesc(t *testing.T) {
 
 	desc := "Will multiply 122 by \"7\" and return 854."
-	expected := "natspec.js error setting expression: (anonymous): Line 1:41 Unexpected number"
+	expected := "invalid character '7' after object key:value pair"
 
 	userdoc := makeUserdoc(desc)
 
-	ns, err := NewWithDocs(abi, userdoc, tx)
-	if err != nil {
-		t.Errorf("New: error: %v", err)
-	}
-	notice, err := ns.Notice()
-
+	_, err := NewWithDocs(abi, userdoc, tx)
 	if err == nil {
-		t.Errorf("expected error, got nothing (notice: '%v')", err, notice)
+		t.Errorf("expected error, got nothing", err)
 	} else {
 		if err.Error() != expected {
-			t.Errorf("expected error '%s' got '%v' (notice: '%v')", expected, err, notice)
+			t.Errorf("expected error '%s' got '%v'", expected, err)
 		}
 	}
 }
-*/
 
 // test wrong input params
 func TestWrongInputParams(t *testing.T) {

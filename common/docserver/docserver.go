@@ -14,21 +14,6 @@ var (
 	schemes = map[string]func(*DocServer) http.RoundTripper{
 		// Simple File server from local disk file:///etc/passwd :)
 		"file": fileServerOnDocRoot,
-
-		// Swarm RoundTripper for bzz scheme bzz://mydomain/contact/twitter.json
-		// "bzz": &bzz.FileServer{},
-
-		// swarm remote file system call bzzfs:///etc/passwd
-		// "bzzfs": &bzzfs.FileServer{},
-
-		// restful peer protocol RoundTripper for enode scheme:
-		// POST suggestPeer DELETE removePeer PUT switch protocols
-		// RPC - standard protocol provides arc API for self enode (very safe remote server only connects to registered enode)
-		// POST enode://ae234dfgc56b..@128.56.68.5:3456/eth/getBlock/356eac67890fe
-		// and remote peer protocol
-		// POST enode://ae234dfgc56b..@128.56.68.5:3456/eth/getBlock/356eac67890fe
-		// proxy protoocol
-
 	}
 )
 
