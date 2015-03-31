@@ -199,9 +199,13 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		args := new(HashIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 		}
-		tx := api.xeth().EthTransactionByHash(args.Hash)
+		tx, bhash, bnum, txi := api.xeth().EthTransactionByHash(args.Hash)
 		if tx != nil {
-			*reply = NewTransactionRes(tx)
+			v := NewTransactionRes(tx)
+			v.BlockHash = newHexData(bhash)
+			v.BlockNumber = newHexNum(bnum)
+			v.TxIndex = newHexNum(txi)
+			*reply = v
 		}
 	case "eth_getTransactionByBlockHashAndIndex":
 		args := new(HashIndexArgs)

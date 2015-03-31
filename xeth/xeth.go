@@ -185,12 +185,29 @@ func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 	return block
 }
 
-func (self *XEth) EthTransactionByHash(hash string) *types.Transaction {
+func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blhash common.Hash, blnum *big.Int, txi uint64) {
 	data, _ := self.backend.ExtraDb().Get(common.FromHex(hash))
 	if len(data) != 0 {
-		return types.NewTransactionFromBytes(data)
+		tx = types.NewTransactionFromBytes(data)
 	}
-	return nil
+
+	// blockhash
+	data, _ = self.backend.ExtraDb().Get(append(common.FromHex(hash), 0x0001))
+	if len(data) != 0 {
+		blhash = common.BytesToHash(data)
+	}
+	// blocknum
+	data, _ = self.backend.ExtraDb().Get(append(common.FromHex(hash), 0x0002))
+	if len(data) != 0 {
+		blnum = common.Bytes2Big(data)
+	}
+	// txindex
+	data, _ = self.backend.ExtraDb().Get(append(common.FromHex(hash), 0x0003))
+	if len(data) != 0 {
+		txi = common.BytesToNumber(data)
+	}
+
+	return
 }
 
 func (self *XEth) BlockByNumber(num int64) *Block {
