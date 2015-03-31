@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 /*
@@ -34,7 +34,10 @@ func GenesisBlock(db common.Database) *types.Block {
 	genesis.SetTransactions(types.Transactions{})
 	genesis.SetReceipts(types.Receipts{})
 
-	var accounts map[string]struct{ Balance string }
+	var accounts map[string]struct {
+		Balance string
+		Code    string
+	}
 	err := json.Unmarshal(genesisData, &accounts)
 	if err != nil {
 		fmt.Println("enable to decode genesis json data:", err)
@@ -46,6 +49,7 @@ func GenesisBlock(db common.Database) *types.Block {
 		codedAddr := common.Hex2Bytes(addr)
 		accountState := statedb.GetAccount(common.BytesToAddress(codedAddr))
 		accountState.SetBalance(common.Big(account.Balance))
+		accountState.SetCode(common.FromHex(account.Code))
 		statedb.UpdateStateObject(accountState)
 	}
 	statedb.Sync()
