@@ -159,7 +159,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 		*reply = v
 	case "eth_call":
-		args := new(NewTxArgs)
+		args := new(CallArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}

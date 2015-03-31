@@ -238,6 +238,93 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
+type CallArgs struct {
+	From     string
+	To       string
+	Value    *big.Int
+	Gas      *big.Int
+	GasPrice *big.Int
+	Data     string
+
+	BlockNumber int64
+}
+
+func (args *CallArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []json.RawMessage
+	var ext struct {
+		From     string
+		To       string
+		Value    interface{}
+		Gas      interface{}
+		GasPrice interface{}
+		Data     string
+	}
+
+	// Decode byte slice to array of RawMessages
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return NewDecodeParamError(err.Error())
+	}
+
+	// Check for sufficient params
+	if len(obj) < 1 {
+		return NewInsufficientParamsError(len(obj), 1)
+	}
+
+	// Decode 0th RawMessage to temporary struct
+	if err := json.Unmarshal(obj[0], &ext); err != nil {
+		return NewDecodeParamError(err.Error())
+	}
+
+	if len(ext.From) == 0 {
+		return NewValidationError("from", "is required")
+	}
+	args.From = ext.From
+
+	if len(ext.To) == 0 {
+		return NewValidationError("to", "is required")
+	}
+	args.To = ext.To
+
+	var num int64
+	if ext.Value == nil {
+		num = int64(0)
+	} else {
+		if err := numString(ext.Value, &num); err != nil {
+			return err
+		}
+	}
+	args.Value = big.NewInt(num)
+
+	if ext.Gas == nil {
+		num = int64(0)
+	} else {
+		if err := numString(ext.Gas, &num); err != nil {
+			return err
+		}
+	}
+	args.Gas = big.NewInt(num)
+
+	if ext.GasPrice == nil {
+		num = int64(0)
+	} else {
+		if err := numString(ext.GasPrice, &num); err != nil {
+			return err
+		}
+	}
+	args.GasPrice = big.NewInt(num)
+
+	args.Data = ext.Data
+
+	// Check for optional BlockNumber param
+	if len(obj) > 1 {
+		if err := blockHeightFromJson(obj[1], &args.BlockNumber); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 type GetStorageArgs struct {
 	Address     string
 	BlockNumber int64
