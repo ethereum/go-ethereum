@@ -1,6 +1,7 @@
 package natspec
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/robertkrimen/otto"
@@ -8,32 +9,93 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
 type abi2method map[[8]byte]*method
 
 type NatSpec struct {
 	jsvm                    *otto.Otto
-	methods                 abi2method
 	userDocJson, abiDocJson []byte
 	userDoc                 userDoc
+	tx, data                string
 	// abiDoc abiDoc
 }
 
 // TODO: should initialise with abi and userdoc jsons
-func New() (self *NatSpec, err error) {
-	// fetch abi, userdoc
-	abi := []byte("")
-	userdoc := []byte("")
-	return NewWithDocs(abi, userdoc)
+func New(xeth *xeth.XEth, tx string) (self *NatSpec, err error) {
+
+	// extract contract address from tx
+
+	var obj map[string]json.RawMessage
+	err = json.Unmarshal([]byte(tx), &obj)
+	if err != nil {
+		return
+	}
+	var tmp []map[string]string
+	err = json.Unmarshal(obj["params"], &tmp)
+	if err != nil {
+		return
+	}
+	contractAddress := tmp[0]["to"]
+
+	// retrieve contract hash from state
+	if !xeth.IsContract(contractAddress) {
+		err = fmt.Errorf("NatSpec error: contract not found")
+		return
+	}
+	codeHash := xeth.CodeAt(contractAddress)
+
+	// retrieve natspec info content hash
+
+	statereg := NewStateReg(xeth)
+
+	natspecHash, err1 := statereg.GetNatSpec(codeHash)
+	if err1 != nil {
+		return nil, err1
+	}
+
+	// retrieve content
+
+	content, err2 := statereg.GetContent(natspecHash)
+	if err2 != nil {
+		return nil, err2
+	}
+
+	// get abi, userdoc
+	var obj2 map[string]json.RawMessage
+	err = json.Unmarshal(content, &obj2)
+	if err != nil {
+		return
+	}
+
+	abi := []byte(obj2["abi"])
+	userdoc := []byte(obj2["userdoc"])
+
+	self, err = NewWithDocs(abi, userdoc, tx)
+	return
 }
 
-func NewWithDocs(abiDocJson, userDocJson []byte) (self *NatSpec, err error) {
+func NewWithDocs(abiDocJson, userDocJson []byte, tx string) (self *NatSpec, err error) {
+
+	var obj map[string]json.RawMessage
+	err = json.Unmarshal([]byte(tx), &obj)
+	if err != nil {
+		return
+	}
+	var tmp []map[string]string
+	err = json.Unmarshal(obj["params"], &tmp)
+	if err != nil {
+		return
+	}
+	data := tmp[0]["data"]
 
 	self = &NatSpec{
 		jsvm:        otto.New(),
 		abiDocJson:  abiDocJson,
 		userDocJson: userDocJson,
+		tx:          tx,
+		data:        data,
 	}
 
 	_, err = self.jsvm.Run(natspecJS)
@@ -74,34 +136,33 @@ type userDoc struct {
 }
 
 func (self *NatSpec) makeAbi2method(abiKey [8]byte) (meth *method) {
-	if self.methods != nil {
-		meth = self.methods[abiKey]
-		return
-	}
-	self.methods = make(abi2method)
 	for signature, m := range self.userDoc.Methods {
 		name := strings.Split(signature, "(")[0]
 		hash := []byte(common.Bytes2Hex(crypto.Sha3([]byte(signature))))
 		var key [8]byte
 		copy(key[:], hash[:8])
-		self.methods[key] = meth
-		meth.name = name
-		if key == abiKey {
+		if bytes.Equal(key[:], abiKey[:]) {
 			meth = m
+			meth.name = name
+			return
 		}
 	}
 	return
 }
 
-func (self *NatSpec) Notice(tx string, abi string) (notice string, err error) {
+func (self *NatSpec) Notice() (notice string, err error) {
 	var abiKey [8]byte
-	copy(abiKey[:], []byte(abi)[:8])
+	if len(self.data) < 10 {
+		err = fmt.Errorf("Invalid transaction data")
+		return
+	}
+	copy(abiKey[:], self.data[2:10])
 	meth := self.makeAbi2method(abiKey)
 	if meth == nil {
 		err = fmt.Errorf("abi key %x does not match any method %v")
 		return
 	}
-	notice, err = self.noticeForMethod(tx, meth.name, meth.Notice)
+	notice, err = self.noticeForMethod(self.tx, meth.name, meth.Notice)
 	return
 }
 

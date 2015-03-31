@@ -608,6 +608,12 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	return common.ToHex(res), err
 }
 
+func (self *XEth) ConfirmTransaction(tx string) bool {
+
+	return self.frontend.ConfirmTransaction(tx)
+
+}
+
 func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 	var (
 		from             = common.HexToAddress(fromStr)

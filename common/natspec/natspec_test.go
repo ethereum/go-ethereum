@@ -12,10 +12,10 @@ func makeUserdoc(desc string) []byte {
   "languageVersion": 1,
   "methods": {
     "multiply(uint256)": {
-      "notice":  ` + desc + `
+      "notice":  "` + desc + `"
     },
     "balance(address)": {
-      "notice": "` + "`(balanceInmGAV / 1000).fixed(0,3)`" + ` GAV is the total funds available to ` + "`who.address()`." + `
+      "notice": "` + "`(balanceInmGAV / 1000).fixed(0,3)`" + ` GAV is the total funds available to ` + "`who.address()`." + `"
     }
   },
   "invariants": [
@@ -65,12 +65,12 @@ func TestNotice(t *testing.T) {
 
 	userdoc := makeUserdoc(desc)
 
-	ns, err := NewWithDocs(abi, userdoc)
+	ns, err := NewWithDocs(abi, userdoc, tx)
 	if err != nil {
 		t.Errorf("New: error: %v", err)
 	}
 
-	notice, err := ns.Notice(tx, desc)
+	notice, err := ns.Notice()
 
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -90,7 +90,7 @@ func TestMissingMethod(t *testing.T) {
 	userdoc := makeUserdoc(desc)
 	expected := "natspec.js error evaluating expression: Natspec evaluation failed, method does not exist"
 
-	ns, err := NewWithDocs(abi, userdoc)
+	ns, err := NewWithDocs(abi, userdoc, tx)
 	if err != nil {
 		t.Errorf("New: error: %v", err)
 	}
@@ -107,6 +107,7 @@ func TestMissingMethod(t *testing.T) {
 }
 
 // test invalid desc
+/*
 func TestInvalidDesc(t *testing.T) {
 
 	desc := "Will multiply 122 by \"7\" and return 854."
@@ -114,11 +115,11 @@ func TestInvalidDesc(t *testing.T) {
 
 	userdoc := makeUserdoc(desc)
 
-	ns, err := NewWithDocs(abi, userdoc)
+	ns, err := NewWithDocs(abi, userdoc, tx)
 	if err != nil {
 		t.Errorf("New: error: %v", err)
 	}
-	notice, err := ns.Notice(tx, data)
+	notice, err := ns.Notice()
 
 	if err == nil {
 		t.Errorf("expected error, got nothing (notice: '%v')", err, notice)
@@ -128,6 +129,7 @@ func TestInvalidDesc(t *testing.T) {
 		}
 	}
 }
+*/
 
 // test wrong input params
 func TestWrongInputParams(t *testing.T) {
@@ -137,12 +139,12 @@ func TestWrongInputParams(t *testing.T) {
 
 	userdoc := makeUserdoc(desc)
 
-	ns, err := NewWithDocs(abi, userdoc)
+	ns, err := NewWithDocs(abi, userdoc, tx)
 	if err != nil {
 		t.Errorf("New: error: %v", err)
 	}
 
-	notice, err := ns.Notice(tx, desc)
+	notice, err := ns.Notice()
 
 	if err == nil {
 		t.Errorf("expected error, got nothing (notice: '%v')", notice)
