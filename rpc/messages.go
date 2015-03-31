@@ -29,9 +29,12 @@ type hexdata struct {
 	data []byte
 }
 
+func (d *hexdata) String() string {
+	return "0x" + common.Bytes2Hex(d.data)
+}
+
 func (d *hexdata) MarshalJSON() ([]byte, error) {
-	v := common.Bytes2Hex(d.data)
-	return json.Marshal("0x" + v)
+	return json.Marshal(d.String())
 }
 
 func (d *hexdata) UnmarshalJSON(b []byte) (err error) {
@@ -72,7 +75,7 @@ type hexnum struct {
 	data []byte
 }
 
-func (d *hexnum) MarshalJSON() ([]byte, error) {
+func (d *hexnum) String() string {
 	// Get hex string from bytes
 	out := common.Bytes2Hex(d.data)
 	// Trim leading 0s
@@ -81,7 +84,11 @@ func (d *hexnum) MarshalJSON() ([]byte, error) {
 	if len(out) == 0 {
 		out = "0"
 	}
-	return json.Marshal("0x" + out)
+	return "0x" + out
+}
+
+func (d *hexnum) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.String())
 }
 
 func (d *hexnum) UnmarshalJSON(b []byte) (err error) {
