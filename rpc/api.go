@@ -213,7 +213,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		br := NewBlockRes(block)
 		br.fullTx = true
 
-		if args.Index > int64(len(br.Transactions)) || args.Index < 0 {
+		if args.Index >= int64(len(br.Transactions)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
 		}
 		*reply = br.Transactions[args.Index]
@@ -227,7 +227,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		v := NewBlockRes(block)
 		v.fullTx = true
 
-		if args.Index > int64(len(v.Transactions)) || args.Index < 0 {
+		if args.Index >= int64(len(v.Transactions)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
 		}
 		*reply = v.Transactions[args.Index]
@@ -239,7 +239,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		br := NewBlockRes(api.xeth().EthBlockByHash(args.Hash))
 
-		if args.Index > int64(len(br.Uncles)) || args.Index < 0 {
+		if args.Index >= int64(len(br.Uncles)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
 		}
 
@@ -257,7 +257,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		v := NewBlockRes(block)
 		v.fullTx = true
 
-		if args.Index > int64(len(v.Uncles)) || args.Index < 0 {
+		if args.Index >= int64(len(v.Uncles)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
 		}
 
