@@ -36,45 +36,45 @@ type BlockRes struct {
 
 func (b *BlockRes) MarshalJSON() ([]byte, error) {
 	var ext struct {
-		BlockNumber     string        `json:"number"`
-		BlockHash       string        `json:"hash"`
-		ParentHash      string        `json:"parentHash"`
-		Nonce           string        `json:"nonce"`
-		Sha3Uncles      string        `json:"sha3Uncles"`
-		LogsBloom       string        `json:"logsBloom"`
-		TransactionRoot string        `json:"transactionRoot"`
-		StateRoot       string        `json:"stateRoot"`
-		Miner           string        `json:"miner"`
-		Difficulty      string        `json:"difficulty"`
-		TotalDifficulty string        `json:"totalDifficulty"`
-		Size            string        `json:"size"`
-		ExtraData       string        `json:"extraData"`
-		GasLimit        string        `json:"gasLimit"`
-		MinGasPrice     string        `json:"minGasPrice"`
-		GasUsed         string        `json:"gasUsed"`
-		UnixTimestamp   string        `json:"timestamp"`
+		BlockNumber     *hexnum       `json:"number"`
+		BlockHash       *hexdata      `json:"hash"`
+		ParentHash      *hexdata      `json:"parentHash"`
+		Nonce           *hexnum       `json:"nonce"`
+		Sha3Uncles      *hexdata      `json:"sha3Uncles"`
+		LogsBloom       *hexdata      `json:"logsBloom"`
+		TransactionRoot *hexdata      `json:"transactionRoot"`
+		StateRoot       *hexdata      `json:"stateRoot"`
+		Miner           *hexdata      `json:"miner"`
+		Difficulty      *hexnum       `json:"difficulty"`
+		TotalDifficulty *hexnum       `json:"totalDifficulty"`
+		Size            *hexnum       `json:"size"`
+		ExtraData       *hexdata      `json:"extraData"`
+		GasLimit        *hexnum       `json:"gasLimit"`
+		MinGasPrice     *hexnum       `json:"minGasPrice"`
+		GasUsed         *hexnum       `json:"gasUsed"`
+		UnixTimestamp   *hexnum       `json:"timestamp"`
 		Transactions    []interface{} `json:"transactions"`
-		Uncles          []string      `json:"uncles"`
+		Uncles          []*hexdata    `json:"uncles"`
 	}
 
 	// convert strict types to hexified strings
-	ext.BlockNumber = common.ToHex(b.BlockNumber.Bytes())
-	ext.BlockHash = b.BlockHash.Hex()
-	ext.ParentHash = b.ParentHash.Hex()
-	ext.Nonce = common.ToHex(b.Nonce[:])
-	ext.Sha3Uncles = b.Sha3Uncles.Hex()
-	ext.LogsBloom = common.ToHex(b.LogsBloom[:])
-	ext.TransactionRoot = b.TransactionRoot.Hex()
-	ext.StateRoot = b.StateRoot.Hex()
-	ext.Miner = b.Miner.Hex()
-	ext.Difficulty = common.ToHex(b.Difficulty.Bytes())
-	ext.TotalDifficulty = common.ToHex(b.TotalDifficulty.Bytes())
-	ext.Size = common.ToHex(b.Size.Bytes())
-	ext.ExtraData = common.ToHex(b.ExtraData)
-	ext.GasLimit = common.ToHex(b.GasLimit.Bytes())
-	// ext.MinGasPrice = common.ToHex(big.NewInt(b.MinGasPrice).Bytes())
-	ext.GasUsed = common.ToHex(b.GasUsed.Bytes())
-	ext.UnixTimestamp = common.ToHex(big.NewInt(b.UnixTimestamp).Bytes())
+	ext.BlockNumber = newHexNum(b.BlockNumber.Bytes())
+	ext.BlockHash = newHexData(b.BlockHash.Bytes())
+	ext.ParentHash = newHexData(b.ParentHash.Bytes())
+	ext.Nonce = newHexNum(b.Nonce[:])
+	ext.Sha3Uncles = newHexData(b.Sha3Uncles.Bytes())
+	ext.LogsBloom = newHexData(b.LogsBloom.Bytes())
+	ext.TransactionRoot = newHexData(b.TransactionRoot.Bytes())
+	ext.StateRoot = newHexData(b.StateRoot.Bytes())
+	ext.Miner = newHexData(b.Miner.Bytes())
+	ext.Difficulty = newHexNum(b.Difficulty.Bytes())
+	ext.TotalDifficulty = newHexNum(b.TotalDifficulty.Bytes())
+	ext.Size = newHexNum(b.Size.Bytes())
+	ext.ExtraData = newHexData(b.ExtraData)
+	ext.GasLimit = newHexNum(b.GasLimit.Bytes())
+	// ext.MinGasPrice = newHexNum(big.NewInt(b.MinGasPrice).Bytes())
+	ext.GasUsed = newHexNum(b.GasUsed.Bytes())
+	ext.UnixTimestamp = newHexNum(big.NewInt(b.UnixTimestamp).Bytes())
 	ext.Transactions = make([]interface{}, len(b.Transactions))
 	if b.fullTx {
 		for i, tx := range b.Transactions {
@@ -82,12 +82,12 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 		}
 	} else {
 		for i, tx := range b.Transactions {
-			ext.Transactions[i] = tx.Hash.Hex()
+			ext.Transactions[i] = newHexData(tx.Hash.Bytes())
 		}
 	}
-	ext.Uncles = make([]string, len(b.Uncles))
+	ext.Uncles = make([]*hexdata, len(b.Uncles))
 	for i, v := range b.Uncles {
-		ext.Uncles[i] = v.Hex()
+		ext.Uncles[i] = newHexData(v.Bytes())
 	}
 
 	return json.Marshal(ext)
@@ -134,9 +134,9 @@ func NewBlockRes(block *types.Block) *BlockRes {
 type TransactionRes struct {
 	Hash        common.Hash     `json:"hash"`
 	Nonce       uint64          `json:"nonce"`
-	BlockHash   common.Hash     `json:"blockHash,omitempty"`
-	BlockNumber int64           `json:"blockNumber,omitempty"`
-	TxIndex     int64           `json:"transactionIndex,omitempty"`
+	BlockHash   common.Hash     `json:"blockHash"`
+	BlockNumber int64           `json:"blockNumber"`
+	TxIndex     int64           `json:"transactionIndex"`
 	From        common.Address  `json:"from"`
 	To          *common.Address `json:"to"`
 	Value       *big.Int        `json:"value"`
@@ -147,34 +147,30 @@ type TransactionRes struct {
 
 func (t *TransactionRes) MarshalJSON() ([]byte, error) {
 	var ext struct {
-		Hash        string      `json:"hash"`
-		Nonce       string      `json:"nonce"`
-		BlockHash   string      `json:"blockHash,omitempty"`
-		BlockNumber string      `json:"blockNumber,omitempty"`
-		TxIndex     string      `json:"transactionIndex,omitempty"`
-		From        string      `json:"from"`
-		To          interface{} `json:"to"`
-		Value       string      `json:"value"`
-		Gas         string      `json:"gas"`
-		GasPrice    string      `json:"gasPrice"`
-		Input       string      `json:"input"`
+		Hash        *hexdata `json:"hash"`
+		Nonce       *hexnum  `json:"nonce"`
+		BlockHash   *hexdata `json:"blockHash"`
+		BlockNumber *hexnum  `json:"blockNumber"`
+		TxIndex     *hexnum  `json:"transactionIndex"`
+		From        *hexdata `json:"from"`
+		To          *hexdata `json:"to"`
+		Value       *hexnum  `json:"value"`
+		Gas         *hexnum  `json:"gas"`
+		GasPrice    *hexnum  `json:"gasPrice"`
+		Input       *hexdata `json:"input"`
 	}
 
-	ext.Hash = t.Hash.Hex()
-	ext.Nonce = common.ToHex(big.NewInt(int64(t.Nonce)).Bytes())
-	ext.BlockHash = t.BlockHash.Hex()
-	ext.BlockNumber = common.ToHex(big.NewInt(t.BlockNumber).Bytes())
-	ext.TxIndex = common.ToHex(big.NewInt(t.TxIndex).Bytes())
-	ext.From = t.From.Hex()
-	if t.To == nil {
-		ext.To = nil
-	} else {
-		ext.To = t.To.Hex()
-	}
-	ext.Value = common.ToHex(t.Value.Bytes())
-	ext.Gas = common.ToHex(t.Gas.Bytes())
-	ext.GasPrice = common.ToHex(t.GasPrice.Bytes())
-	ext.Input = common.ToHex(t.Input)
+	ext.Hash = newHexData(t.Hash.Bytes())
+	ext.Nonce = newHexNum(big.NewInt(int64(t.Nonce)).Bytes())
+	ext.BlockHash = newHexData(t.BlockHash.Bytes())
+	ext.BlockNumber = newHexNum(big.NewInt(t.BlockNumber).Bytes())
+	ext.TxIndex = newHexNum(big.NewInt(t.TxIndex).Bytes())
+	ext.From = newHexData(t.From.Bytes())
+	ext.To = newHexData(t.To.Bytes())
+	ext.Value = newHexNum(t.Value.Bytes())
+	ext.Gas = newHexNum(t.Gas.Bytes())
+	ext.GasPrice = newHexNum(t.GasPrice.Bytes())
+	ext.Input = newHexData(t.Input)
 
 	return json.Marshal(ext)
 }
@@ -192,34 +188,39 @@ func NewTransactionRes(tx *types.Transaction) *TransactionRes {
 	return v
 }
 
-type FilterLogRes struct {
-	Hash             string `json:"hash"`
-	Address          string `json:"address"`
-	Data             string `json:"data"`
-	BlockNumber      string `json:"blockNumber"`
-	TransactionHash  string `json:"transactionHash"`
-	BlockHash        string `json:"blockHash"`
-	TransactionIndex string `json:"transactionIndex"`
-	LogIndex         string `json:"logIndex"`
-}
+// type FilterLogRes struct {
+// 	Hash             string `json:"hash"`
+// 	Address          string `json:"address"`
+// 	Data             string `json:"data"`
+// 	BlockNumber      string `json:"blockNumber"`
+// 	TransactionHash  string `json:"transactionHash"`
+// 	BlockHash        string `json:"blockHash"`
+// 	TransactionIndex string `json:"transactionIndex"`
+// 	LogIndex         string `json:"logIndex"`
+// }
 
-type FilterWhisperRes struct {
-	Hash       string `json:"hash"`
-	From       string `json:"from"`
-	To         string `json:"to"`
-	Expiry     string `json:"expiry"`
-	Sent       string `json:"sent"`
-	Ttl        string `json:"ttl"`
-	Topics     string `json:"topics"`
-	Payload    string `json:"payload"`
-	WorkProved string `json:"workProved"`
-}
+// type FilterWhisperRes struct {
+// 	Hash       string `json:"hash"`
+// 	From       string `json:"from"`
+// 	To         string `json:"to"`
+// 	Expiry     string `json:"expiry"`
+// 	Sent       string `json:"sent"`
+// 	Ttl        string `json:"ttl"`
+// 	Topics     string `json:"topics"`
+// 	Payload    string `json:"payload"`
+// 	WorkProved string `json:"workProved"`
+// }
 
 type LogRes struct {
-	Address common.Address `json:"address"`
-	Topics  []common.Hash  `json:"topics"`
-	Data    []byte         `json:"data"`
-	Number  uint64         `json:"number"`
+	Address          common.Address `json:"address"`
+	Topics           []common.Hash  `json:"topics"`
+	Data             []byte         `json:"data"`
+	BlockNumber      uint64         `json:"blockNumber"`
+	Hash             common.Hash    `json:"hash"`
+	LogIndex         uint64         `json:"logIndex"`
+	BlockHash        common.Hash    `json:"blockHash"`
+	TransactionHash  common.Hash    `json:"transactionHash"`
+	TransactionIndex uint64         `json:"transactionIndex"`
 }
 
 func NewLogRes(log state.Log) LogRes {
@@ -227,7 +228,7 @@ func NewLogRes(log state.Log) LogRes {
 	l.Topics = make([]common.Hash, len(log.Topics()))
 	l.Address = log.Address()
 	l.Data = log.Data()
-	l.Number = log.Number()
+	l.BlockNumber = log.Number()
 	for j, topic := range log.Topics() {
 		l.Topics[j] = topic
 	}
@@ -236,18 +237,23 @@ func NewLogRes(log state.Log) LogRes {
 
 func (l *LogRes) MarshalJSON() ([]byte, error) {
 	var ext struct {
-		Address string   `json:"address"`
-		Topics  []string `json:"topics"`
-		Data    string   `json:"data"`
-		Number  string   `json:"number"`
+		Address          *hexdata   `json:"address"`
+		Topics           []*hexdata `json:"topics"`
+		Data             *hexdata   `json:"data"`
+		BlockNumber      *hexnum    `json:"blockNumber"`
+		Hash             *hexdata   `json:"hash"`
+		LogIndex         *hexnum    `json:"logIndex"`
+		BlockHash        *hexdata   `json:"blockHash"`
+		TransactionHash  *hexdata   `json:"transactionHash"`
+		TransactionIndex *hexnum    `json:"transactionIndex"`
 	}
 
-	ext.Address = l.Address.Hex()
-	ext.Data = common.ToHex(l.Data)
-	ext.Number = common.ToHex(big.NewInt(int64(l.Number)).Bytes())
-	ext.Topics = make([]string, len(l.Topics))
+	ext.Address = newHexData(l.Address.Bytes())
+	ext.Data = newHexData(l.Data)
+	ext.BlockNumber = newHexNum(l.BlockNumber)
+	ext.Topics = make([]*hexdata, len(l.Topics))
 	for i, v := range l.Topics {
-		ext.Topics[i] = v.Hex()
+		ext.Topics[i] = newHexData(v)
 	}
 
 	return json.Marshal(ext)

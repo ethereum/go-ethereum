@@ -88,10 +88,10 @@ func TestLogRes(t *testing.T) {
 	topics = append(topics, common.HexToHash("0x20"))
 
 	v := &LogRes{
-		Topics:  topics,
-		Address: common.HexToAddress("0x0"),
-		Data:    []byte{1, 2, 3},
-		Number:  uint64(5),
+		Topics:      topics,
+		Address:     common.HexToAddress("0x0"),
+		Data:        []byte{1, 2, 3},
+		BlockNumber: uint64(5),
 	}
 
 	_, _ = json.Marshal(v)
