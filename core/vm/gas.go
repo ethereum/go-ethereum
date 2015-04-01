@@ -142,7 +142,7 @@ var _baseCheck = map[OpCode]req{
 	MSIZE:        {0, GasQuickStep, true},
 	GAS:          {0, GasQuickStep, true},
 	BLOCKHASH:    {1, GasExtStep, true},
-	BALANCE:      {0, GasExtStep, true},
+	BALANCE:      {1, GasExtStep, true},
 	EXTCODESIZE:  {1, GasExtStep, true},
 	EXTCODECOPY:  {4, GasExtStep, false},
 	SLOAD:        {1, GasStorageGet, true},
