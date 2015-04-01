@@ -49,7 +49,7 @@ func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
 	res.Miner = newHexData(block.Header().Coinbase)
 	res.Difficulty = newHexNum(block.Difficulty())
 	res.TotalDifficulty = newHexNum(block.Td)
-	res.Size = newHexNum(block.Size())
+	res.Size = newHexNum(block.Size().Int64())
 	res.ExtraData = newHexData(block.Header().Extra)
 	res.GasLimit = newHexNum(block.GasLimit())
 	// res.MinGasPrice =

@@ -18,6 +18,7 @@ const (
 	reAddress    = `"0x[0-9a-f]{40}"`                    // 20 bytes
 	reAddressOpt = `"0x[0-9a-f]{40}"|null`               // 20 bytes or null
 	reNum        = `"0x([1-9a-f][0-9a-f]{0,15})|0"`      // must not have left-padded zeros
+	reNumNonZero = `"0x([1-9a-f][0-9a-f]{0,15})"`        // non-zero required must not have left-padded zeros
 	reNumOpt     = `"0x([1-9a-f][0-9a-f]{0,15})|0"|null` // must not have left-padded zeros or null
 	reData       = `"0x[0-9a-f]*"`                       // can be "empty"
 )
@@ -42,7 +43,7 @@ func TestNewBlockRes(t *testing.T) {
 		"miner":           reAddress,
 		"difficulty":      `"0x1"`,
 		"totalDifficulty": reNum,
-		"size":            reNum,
+		"size":            reNumNonZero,
 		"extraData":       reData,
 		"gasLimit":        reNum,
 		// "minGasPrice":  "0x",
