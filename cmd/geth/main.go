@@ -233,6 +233,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.VMDebugFlag,
 		utils.ProtocolVersionFlag,
 		utils.NetworkIdFlag,
+		utils.RPCCORSDomainFlag,
 	}
 
 	// missing:
