@@ -54,7 +54,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 	case "net_peerCount":
 		v := api.xeth().PeerCount()
 		*reply = common.ToHex(big.NewInt(int64(v)).Bytes())
-	case "eth_version":
+	case "eth_protocolVersion":
 		*reply = api.xeth().EthVersion()
 	case "eth_coinbase":
 		// TODO handling of empty coinbase due to lack of accounts
