@@ -210,10 +210,12 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 		return
 	}
 
-	// Accumulate static rewards; block reward, uncle's and uncle inclusion.
-	if err = sm.AccumulateRewards(state, block, parent); err != nil {
+	// Verify uncles
+	if err = sm.VerifyUncles(state, block, parent); err != nil {
 		return
 	}
+	// Accumulate static rewards; block reward, uncle's and uncle inclusion.
+	AccumulateRewards(state, block)
 
 	// Commit state objects/accounts to a temporary trie (does not save)
 	// used to calculate the state root.
@@ -291,9 +293,27 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 	return nil
 }
 
-func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, parent *types.Block) error {
+func AccumulateRewards(statedb *state.StateDB, block *types.Block) {
 	reward := new(big.Int).Set(BlockReward)
 
+	for _, uncle := range block.Uncles() {
+		num := new(big.Int).Add(big.NewInt(8), uncle.Number)
+		num.Sub(num, block.Number())
+
+		r := new(big.Int)
+		r.Mul(BlockReward, num)
+		r.Div(r, big.NewInt(8))
+
+		statedb.AddBalance(uncle.Coinbase, r)
+
+		reward.Add(reward, new(big.Int).Div(BlockReward, big.NewInt(32)))
+	}
+
+	// Get the account associated with the coinbase
+	statedb.AddBalance(block.Header().Coinbase, reward)
+}
+
+func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *types.Block) error {
 	ancestors := set.New()
 	uncles := set.New()
 	ancestorHeaders := make(map[common.Hash]*types.Header)
@@ -327,20 +347,7 @@ func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, paren
 			return ValidationError(fmt.Sprintf("%v", err))
 		}
 
-		num := new(big.Int).Add(big.NewInt(8), uncle.Number)
-		num.Sub(num, block.Number())
-
-		r := new(big.Int)
-		r.Mul(BlockReward, num)
-		r.Div(r, big.NewInt(8))
-
-		statedb.AddBalance(uncle.Coinbase, r)
-
-		reward.Add(reward, new(big.Int).Div(BlockReward, big.NewInt(32)))
 	}
-
-	// Get the account associated with the coinbase
-	statedb.AddBalance(block.Header().Coinbase, reward)
 
 	return nil
 }
@@ -358,7 +365,6 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 	)
 
 	sm.TransitionState(state, parent, block, true)
-	sm.AccumulateRewards(state, block, parent)
 
 	return state.Logs(), nil
 }

@@ -270,7 +270,7 @@ gasLimit:
 
 	self.current.block.SetUncles(uncles)
 
-	self.current.state.AddBalance(self.coinbase, core.BlockReward)
+	core.AccumulateRewards(self.current.state, self.current.block)
 
 	self.current.state.Update(common.Big0)
 	self.push()
@@ -296,9 +296,6 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 	if self.current.family.Has(uncle.Hash()) {
 		return core.UncleError(fmt.Sprintf("Uncle already in family (%x)", uncle.Hash()))
 	}
-
-	self.current.state.AddBalance(uncle.Coinbase, uncleReward)
-	self.current.state.AddBalance(self.coinbase, inclusionReward)
 
 	return nil
 }

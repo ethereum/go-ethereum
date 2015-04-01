@@ -60,7 +60,7 @@ out:
 		}
 	}
 
-	close(self.quitCurrentOp)
+	//close(self.quitCurrentOp)
 done:
 	// Empty channel
 	for {
