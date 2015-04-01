@@ -50,8 +50,12 @@ func newHexData(input interface{}) *hexdata {
 		d.data = input.([]byte)
 	case common.Hash:
 		d.data = input.(common.Hash).Bytes()
+	case *common.Hash:
+		d.data = input.(*common.Hash).Bytes()
 	case common.Address:
 		d.data = input.(common.Address).Bytes()
+	case *common.Address:
+		d.data = input.(*common.Address).Bytes()
 	case *big.Int:
 		d.data = input.(*big.Int).Bytes()
 	case int64:
@@ -62,7 +66,7 @@ func newHexData(input interface{}) *hexdata {
 		d.data = big.NewInt(int64(input.(int))).Bytes()
 	case uint:
 		d.data = big.NewInt(int64(input.(uint))).Bytes()
-	case string:
+	case string: // hexstring
 		d.data = common.Big(input.(string)).Bytes()
 	default:
 		d.data = nil

@@ -1,12 +1,24 @@
 package rpc
 
 import (
+	"encoding/json"
+	"fmt"
 	"math/big"
+	"regexp"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+)
+
+const (
+	reHash       = `"0x[0-9a-f]{64}"`               // 32 bytes
+	reHashOpt    = `"(0x[0-9a-f]{64})"|null`        // 32 bytes or null
+	reAddress    = `"0x[0-9a-f]{40}"`               // 20 bytes
+	reAddressOpt = `"0x[0-9a-f]{40}"|null`          // 20 bytes or null
+	reNum        = `"0x([1-9a-f][0-9a-f]{1,15})|0"` // must not have left-padded zeros
+	reData       = `"0x[0-9a-f]*"`                  // can be "empty"
 )
 
 func TestNewBlockRes(t *testing.T) {
@@ -17,8 +29,35 @@ func TestNewBlockRes(t *testing.T) {
 	nonce := uint64(1)
 	extra := ""
 	block := types.NewBlock(parentHash, coinbase, root, difficulty, nonce, extra)
+	tests := map[string]string{
+		"number":          reNum,
+		"hash":            reHash,
+		"parentHash":      reHash,
+		"nonce":           reNum,
+		"sha3Uncles":      reHash,
+		"logsBloom":       reData,
+		"transactionRoot": reHash,
+		"stateRoot":       reHash,
+		"miner":           reAddress,
+		"difficulty":      `"0x1"`,
+		"totalDifficulty": reNum,
+		"size":            reNum,
+		"extraData":       reData,
+		"gasLimit":        reNum,
+		// "minGasPrice":  "0x",
+		"gasUsed":   reNum,
+		"timestamp": reNum,
+	}
 
-	_ = NewBlockRes(block)
+	v := NewBlockRes(block)
+	j, _ := json.Marshal(v)
+
+	for k, re := range tests {
+		match, _ := regexp.MatchString(fmt.Sprintf(`{.*"%s":%s.*}`, k, re), string(j))
+		if !match {
+			t.Error(fmt.Sprintf("%s output json does not match format %s. Got %s", k, re, j))
+		}
+	}
 }
 
 func TestNewTransactionRes(t *testing.T) {
@@ -29,10 +68,80 @@ func TestNewTransactionRes(t *testing.T) {
 	data := []byte{1, 2, 3}
 	tx := types.NewTransactionMessage(to, amount, gasAmount, gasPrice, data)
 
-	_ = NewTransactionRes(tx)
+	tests := map[string]string{
+		"hash":             reHash,
+		"nonce":            reNum,
+		"blockHash":        reHash,
+		"blockNum":         reNum,
+		"transactionIndex": reNum,
+		"from":             reAddress,
+		"to":               reAddressOpt,
+		"value":            reNum,
+		"gas":              reNum,
+		"gasPrice":         reNum,
+		"input":            reData,
+	}
+
+	v := NewTransactionRes(tx)
+	v.BlockHash = newHexData(common.HexToHash("0x030201"))
+	v.BlockNumber = newHexNum(5)
+	v.TxIndex = newHexNum(0)
+	j, _ := json.Marshal(v)
+	for k, re := range tests {
+		match, _ := regexp.MatchString(fmt.Sprintf(`{.*"%s":%s.*}`, k, re), string(j))
+		if !match {
+			t.Error(fmt.Sprintf("`%s` output json does not match format %s. Source %s", k, re, j))
+		}
+	}
+
 }
 
-func MakeStateLog(num int) state.Log {
+func TestNewLogRes(t *testing.T) {
+	log := makeStateLog(0)
+	tests := map[string]string{
+		"address": reAddress,
+		// "topics": "[.*]"
+		"data":        reData,
+		"blockNumber": reNum,
+		// "hash":             reHash,
+		// "logIndex":         reNum,
+		// "blockHash":        reHash,
+		// "transactionHash":  reHash,
+		"transactionIndex": reNum,
+	}
+
+	v := NewLogRes(log)
+	j, _ := json.Marshal(v)
+
+	for k, re := range tests {
+		match, _ := regexp.MatchString(fmt.Sprintf(`{.*"%s":%s.*}`, k, re), string(j))
+		if !match {
+			t.Error(fmt.Sprintf("`%s` output json does not match format %s. Got %s", k, re, j))
+		}
+	}
+
+}
+
+func TestNewLogsRes(t *testing.T) {
+	logs := make([]state.Log, 3)
+	logs[0] = makeStateLog(1)
+	logs[1] = makeStateLog(2)
+	logs[2] = makeStateLog(3)
+	tests := map[string]string{}
+
+	v := NewLogsRes(logs)
+	j, _ := json.Marshal(v)
+
+	for k, re := range tests {
+		match, _ := regexp.MatchString(fmt.Sprintf(`[{.*"%s":%s.*}]`, k, re), string(j))
+		if !match {
+			t.Error(fmt.Sprintf("%s output json does not match format %s. Got %s", k, re, j))
+		}
+	}
+
+}
+
+func makeStateLog(num int) state.Log {
 	address := common.HexToAddress("0x0")
 	data := []byte{1, 2, 3}
 	number := uint64(num)
@@ -42,17 +151,4 @@ func MakeStateLog(num int) state.Log {
 	topics = append(topics, common.HexToHash("0x20"))
 	log := state.NewLog(address, topics, data, number)
 	return log
-}
-
-func TestNewLogRes(t *testing.T) {
-	log := MakeStateLog(0)
-	_ = NewLogRes(log)
-}
-
-func TestNewLogsRes(t *testing.T) {
-	logs := make([]state.Log, 3)
-	logs[0] = MakeStateLog(1)
-	logs[1] = MakeStateLog(2)
-	logs[2] = MakeStateLog(3)
-	_ = NewLogsRes(logs)
 }
