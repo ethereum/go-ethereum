@@ -147,7 +147,7 @@ var _baseCheck = map[OpCode]req{
 	EXTCODECOPY:  {4, GasExtStep, false},
 	SLOAD:        {1, GasStorageGet, true},
 	SSTORE:       {2, Zero, false},
-	SHA3:         {1, GasSha3Base, true},
+	SHA3:         {2, GasSha3Base, true},
 	CREATE:       {3, GasCreate, true},
 	CALL:         {7, GasCall, true},
 	CALLCODE:     {7, GasCall, true},
