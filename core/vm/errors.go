@@ -2,6 +2,7 @@ package vm
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 )
 
@@ -42,7 +43,7 @@ func IsStack(err error) bool {
 type DepthError struct{}
 
 func (self DepthError) Error() string {
-	return fmt.Sprintf("Max call depth exceeded (%d)", MaxCallDepth)
+	return fmt.Sprintf("Max call depth exceeded (%d)", params.CallCreateDepth)
 }
 
 func IsDepthErr(err error) bool {

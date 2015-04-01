@@ -3,12 +3,12 @@ package core
 import (
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 /*
@@ -18,13 +18,11 @@ import (
 var ZeroHash256 = make([]byte, 32)
 var ZeroHash160 = make([]byte, 20)
 var ZeroHash512 = make([]byte, 64)
-var GenesisDiff = big.NewInt(131072)
-var GenesisGasLimit = big.NewInt(3141592)
 
 func GenesisBlock(db common.Database) *types.Block {
-	genesis := types.NewBlock(common.Hash{}, common.Address{}, common.Hash{}, GenesisDiff, 42, "")
+	genesis := types.NewBlock(common.Hash{}, common.Address{}, common.Hash{}, params.GenesisDifficulty, 42, "")
 	genesis.Header().Number = common.Big0
-	genesis.Header().GasLimit = GenesisGasLimit
+	genesis.Header().GasLimit = params.GenesisGasLimit
 	genesis.Header().GasUsed = common.Big0
 	genesis.Header().Time = 0
 
