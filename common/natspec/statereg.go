@@ -9,9 +9,9 @@ type StateReg struct {
 	caURL, caNatSpec string //contract addresses
 }
 
-func NewStateReg(_xeth *xeth.XEth) (self *StateReg) {
-
-	self.xeth = _xeth
+func NewStateReg(xeth *xeth.XEth) (self *StateReg) {
+	self = &StateReg{}
+	self.xeth = xeth
 	self.testCreateContracts()
 	return
 

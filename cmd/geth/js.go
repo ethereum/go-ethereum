@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
@@ -139,9 +140,11 @@ var net = web3.net;
 	js.re.Eval(globalRegistrar + "registrar = new GlobalRegistrar(\"" + globalRegistrarAddr + "\");")
 }
 
+var ds, _ = docserver.New(utils.JSpathFlag.String())
+
 func (self *jsre) ConfirmTransaction(tx string) bool {
 	var notice string
-	nat, err := natspec.New(self.xeth, tx)
+	nat, err := natspec.New(self.xeth, tx, ds)
 	if err == nil {
 		notice, err = nat.Notice()
 	}

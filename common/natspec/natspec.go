@@ -104,6 +104,7 @@ func NewWithDocs(abiDocJson, userDocJson []byte, tx string) (self *NatSpec, err 
 		data:        data,
 	}
 
+	// load and require natspec js (but it is meant to be protected environment)
 	_, err = self.jsvm.Run(natspecJS)
 	if err != nil {
 		return
@@ -132,6 +133,7 @@ func NewWithDocs(abiDocJson, userDocJson []byte, tx string) (self *NatSpec, err 
 // 	Type string `json:type`
 // }
 
+// json skeleton for abi doc (contract method definitions)
 type method struct {
 	Notice string `json:notice`
 	name   string

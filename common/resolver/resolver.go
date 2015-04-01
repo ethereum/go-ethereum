@@ -3,11 +3,9 @@ package resolver
 import (
 	"encoding/binary"
 	"fmt"
-	// "net/url"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/xeth"
 )
 
 /*
@@ -24,37 +22,40 @@ const (
 )
 
 type Resolver struct {
-	xeth                   *xeth.XEth
+	backend                Backend
 	urlHintContractAddress string
 	nameRegContractAddress string
 }
 
-func New(_xeth *xeth.XEth, uhca, nrca string) *Resolver {
-	return &Resolver{_xeth, uhca, nrca}
+type Backend interface {
+	StorageAt(string, string) string
 }
 
-func (self *Resolver) NameToContentHash(name string) (hash common.Hash, err error) {
+func New(eth Backend, uhca, nrca string) *Resolver {
+	return &Resolver{eth, uhca, nrca}
+}
+
+func (self *Resolver) NameToContentHash(name string) (chash common.Hash, err error) {
 	// look up in nameReg
-	hashbytes := self.xeth.StorageAt(self.nameRegContractAddress, storageAddress(0, common.Hex2Bytes(name)))
-	copy(hash[:], hashbytes[:32])
+	key := storageAddress(0, common.Hex2Bytes(name))
+	hash := self.backend.StorageAt(self.nameRegContractAddress, key)
+	copy(chash[:], common.Hex2Bytes(hash))
 	return
 }
 
-func (self *Resolver) ContentHashToUrl(hash common.Hash) (uri string, err error) {
+func (self *Resolver) ContentHashToUrl(chash common.Hash) (uri string, err error) {
 	// look up in nameReg
-
-	urlHex := self.xeth.StorageAt(self.urlHintContractAddress, storageAddress(0, hash.Bytes()))
-	uri = string(common.Hex2Bytes(urlHex))
+	key := storageAddress(0, chash[:])
+	uri = self.backend.StorageAt(self.urlHintContractAddress, key)
 	l := len(uri)
 	for (l > 0) && (uri[l-1] == 0) {
 		l--
 	}
 	uri = uri[:l]
+
 	if l == 0 {
 		err = fmt.Errorf("GetURLhint: URL hint not found")
 	}
-	// rawurl := fmt.Sprintf("bzz://%x/my/path/mycontract.s	ud", hash[:])
-	// mime type?
 	return
 }
 
