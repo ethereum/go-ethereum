@@ -11,7 +11,7 @@ type BlockRes struct {
 	BlockNumber     *hexnum           `json:"number"`
 	BlockHash       *hexdata          `json:"hash"`
 	ParentHash      *hexdata          `json:"parentHash"`
-	Nonce           *hexnum           `json:"nonce"`
+	Nonce           *hexdata          `json:"nonce"`
 	Sha3Uncles      *hexdata          `json:"sha3Uncles"`
 	LogsBloom       *hexdata          `json:"logsBloom"`
 	TransactionRoot *hexdata          `json:"transactionRoot"`
@@ -41,7 +41,7 @@ func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
 	res.BlockNumber = newHexNum(block.Number())
 	res.BlockHash = newHexData(block.Hash())
 	res.ParentHash = newHexData(block.ParentHash())
-	res.Nonce = newHexNum(block.Header().Nonce)
+	res.Nonce = newHexData(block.Header().Nonce)
 	res.Sha3Uncles = newHexData(block.Header().UncleHash)
 	res.LogsBloom = newHexData(block.Bloom())
 	res.TransactionRoot = newHexData(block.Header().TxHash)

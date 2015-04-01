@@ -34,7 +34,7 @@ func TestNewBlockRes(t *testing.T) {
 		"number":          reNum,
 		"hash":            reHash,
 		"parentHash":      reHash,
-		"nonce":           reNum,
+		"nonce":           reData,
 		"sha3Uncles":      reHash,
 		"logsBloom":       reData,
 		"transactionRoot": reHash,
