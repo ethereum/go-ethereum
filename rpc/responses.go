@@ -29,12 +29,15 @@ type BlockRes struct {
 	Uncles          []*hexdata        `json:"uncles"`
 }
 
-func NewBlockRes(block *types.Block) *BlockRes {
+func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
+	// TODO respect fullTx flag
+
 	if block == nil {
 		return &BlockRes{}
 	}
 
 	res := new(BlockRes)
+	res.fullTx = fullTx
 	res.BlockNumber = newHexNum(block.Number())
 	res.BlockHash = newHexData(block.Hash())
 	res.ParentHash = newHexData(block.ParentHash())
