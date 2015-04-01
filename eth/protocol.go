@@ -185,7 +185,10 @@ func (self *ethProtocol) handle() error {
 		if err := msg.Decode(&txs); err != nil {
 			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
-		for _, tx := range txs {
+		for i, tx := range txs {
+			if tx == nil {
+				return self.protoError(ErrDecode, "transaction %d is nil", i)
+			}
 			jsonlogger.LogJson(&logger.EthTxReceived{
 				TxHash:   tx.Hash().Hex(),
 				RemoteId: self.peer.ID().String(),
@@ -268,6 +271,9 @@ func (self *ethProtocol) handle() error {
 					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 				}
 			}
+			if err := block.ValidateFields(); err != nil {
+				return self.protoError(ErrDecode, "block validation %v: %v", msg, err)
+			}
 			self.blockPool.AddBlock(&block, self.id)
 		}
 
@@ -275,6 +281,9 @@ func (self *ethProtocol) handle() error {
 		var request newBlockMsgData
 		if err := msg.Decode(&request); err != nil {
 			return self.protoError(ErrDecode, "%v: %v", msg, err)
+		}
+		if err := request.Block.ValidateFields(); err != nil {
+			return self.protoError(ErrDecode, "block validation %v: %v", msg, err)
 		}
 		hash := request.Block.Hash()
 		_, chainHead, _ := self.chainManager.Status()

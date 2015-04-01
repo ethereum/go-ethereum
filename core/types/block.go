@@ -148,6 +148,23 @@ func NewBlockWithHeader(header *Header) *Block {
 	return &Block{header: header}
 }
 
+func (self *Block) ValidateFields() error {
+	if self.header == nil {
+		return fmt.Errorf("header is nil")
+	}
+	for i, transaction := range self.transactions {
+		if transaction == nil {
+			return fmt.Errorf("transaction %d is nil", i)
+		}
+	}
+	for i, uncle := range self.uncles {
+		if uncle == nil {
+			return fmt.Errorf("uncle %d is nil", i)
+		}
+	}
+	return nil
+}
+
 func (self *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock
 	if err := s.Decode(&eb); err != nil {
