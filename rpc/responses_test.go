@@ -49,7 +49,7 @@ func TestNewBlockRes(t *testing.T) {
 		"timestamp": reNum,
 	}
 
-	v := NewBlockRes(block)
+	v := NewBlockRes(block, false)
 	j, _ := json.Marshal(v)
 
 	for k, re := range tests {

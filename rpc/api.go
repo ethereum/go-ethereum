@@ -113,7 +113,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		block := NewBlockRes(api.xeth().EthBlockByHash(args.BlockHash))
+		block := NewBlockRes(api.xeth().EthBlockByHash(args.BlockHash), false)
 		*reply = common.ToHex(big.NewInt(int64(len(block.Transactions))).Bytes())
 	case "eth_getBlockTransactionCountByNumber":
 		args := new(GetBlockByNumberArgs)
@@ -121,7 +121,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		block := NewBlockRes(api.xeth().EthBlockByNumber(args.BlockNumber))
+		block := NewBlockRes(api.xeth().EthBlockByNumber(args.BlockNumber), false)
 		*reply = common.ToHex(big.NewInt(int64(len(block.Transactions))).Bytes())
 	case "eth_getUncleCountByBlockHash":
 		args := new(GetBlockByHashArgs)
@@ -130,7 +130,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByHash(args.BlockHash)
-		br := NewBlockRes(block)
+		br := NewBlockRes(block, false)
 		*reply = common.ToHex(big.NewInt(int64(len(br.Uncles))).Bytes())
 	case "eth_getUncleCountByBlockNumber":
 		args := new(GetBlockByNumberArgs)
@@ -139,7 +139,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
-		br := NewBlockRes(block)
+		br := NewBlockRes(block, false)
 		*reply = common.ToHex(big.NewInt(int64(len(br.Uncles))).Bytes())
 	case "eth_getData", "eth_getCode":
 		args := new(GetDataArgs)
@@ -179,8 +179,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByHash(args.BlockHash)
-		br := NewBlockRes(block)
-		br.fullTx = args.IncludeTxs
+		br := NewBlockRes(block, true)
 
 		*reply = br
 	case "eth_getBlockByNumber":
@@ -190,8 +189,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
-		br := NewBlockRes(block)
-		br.fullTx = args.IncludeTxs
+		br := NewBlockRes(block, true)
 
 		*reply = br
 	case "eth_getTransactionByHash":
@@ -214,8 +212,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByHash(args.Hash)
-		br := NewBlockRes(block)
-		br.fullTx = true
+		br := NewBlockRes(block, true)
 
 		if args.Index >= int64(len(br.Transactions)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
@@ -228,8 +225,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
-		v := NewBlockRes(block)
-		v.fullTx = true
+		v := NewBlockRes(block, true)
 
 		if args.Index >= int64(len(v.Transactions)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
@@ -241,14 +237,14 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		br := NewBlockRes(api.xeth().EthBlockByHash(args.Hash))
+		br := NewBlockRes(api.xeth().EthBlockByHash(args.Hash), false)
 
 		if args.Index >= int64(len(br.Uncles)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
 		}
 
 		uhash := br.Uncles[args.Index]
-		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash.String()))
+		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash.String()), false)
 
 		*reply = uncle
 	case "eth_getUncleByBlockNumberAndIndex":
@@ -258,15 +254,14 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
-		v := NewBlockRes(block)
-		v.fullTx = true
+		v := NewBlockRes(block, true)
 
 		if args.Index >= int64(len(v.Uncles)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
 		}
 
 		uhash := v.Uncles[args.Index]
-		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash.String()))
+		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash.String()), false)
 
 		*reply = uncle
 	case "eth_getCompilers":
