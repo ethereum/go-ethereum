@@ -233,8 +233,9 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 		sm.txpool.RemoveSet(block.Transactions())
 	}
 
-	for _, tx := range block.Transactions() {
-		putTx(sm.extraDb, tx)
+	// This puts transactions in a extra db for rpc
+	for i, tx := range block.Transactions() {
+		putTx(sm.extraDb, tx, block, uint64(i))
 	}
 
 	if uncle {
@@ -362,11 +363,26 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 	return state.Logs(), nil
 }
 
-func putTx(db common.Database, tx *types.Transaction) {
+func putTx(db common.Database, tx *types.Transaction, block *types.Block, i uint64) {
 	rlpEnc, err := rlp.EncodeToBytes(tx)
 	if err != nil {
 		statelogger.Infoln("Failed encoding tx", err)
 		return
 	}
 	db.Put(tx.Hash().Bytes(), rlpEnc)
+
+	var txExtra struct {
+		BlockHash  common.Hash
+		BlockIndex uint64
+		Index      uint64
+	}
+	txExtra.BlockHash = block.Hash()
+	txExtra.BlockIndex = block.NumberU64()
+	txExtra.Index = i
+	rlpMeta, err := rlp.EncodeToBytes(txExtra)
+	if err != nil {
+		statelogger.Infoln("Failed encoding meta", err)
+		return
+	}
+	db.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)
 }
