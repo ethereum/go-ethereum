@@ -95,10 +95,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		state := api.xethAtStateNum(args.BlockNumber).State().SafeGet(args.Address)
-		value := state.StorageString(args.Key)
-
-		*reply = common.ToHex(value.Bytes())
+		*reply = api.xethAtStateNum(args.BlockNumber).StorageAt(args.Address, args.Key)
 	case "eth_getTransactionCount":
 		args := new(GetTxCountArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
