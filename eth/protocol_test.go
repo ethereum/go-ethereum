@@ -173,7 +173,7 @@ func (self *ethProtocolTester) handshake(t *testing.T, mock bool) {
 	err := p2p.ExpectMsg(self, StatusMsg, &statusMsgData{
 		ProtocolVersion: ProtocolVersion,
 		NetworkId:       NetworkId,
-		TD:              *td,
+		TD:              td,
 		CurrentBlock:    currentBlock,
 		GenesisBlock:    genesis,
 	})
@@ -181,7 +181,7 @@ func (self *ethProtocolTester) handshake(t *testing.T, mock bool) {
 		t.Fatalf("incorrect outgoing status: %v", err)
 	}
 	if mock {
-		go p2p.Send(self, StatusMsg, &statusMsgData{ProtocolVersion, NetworkId, *td, currentBlock, genesis})
+		go p2p.Send(self, StatusMsg, &statusMsgData{ProtocolVersion, NetworkId, td, currentBlock, genesis})
 	}
 }
 
@@ -201,15 +201,15 @@ func TestStatusMsgErrors(t *testing.T) {
 			wantErrorCode: ErrNoStatusMsg,
 		},
 		{
-			code: StatusMsg, data: statusMsgData{10, NetworkId, *td, currentBlock, genesis},
+			code: StatusMsg, data: statusMsgData{10, NetworkId, td, currentBlock, genesis},
 			wantErrorCode: ErrProtocolVersionMismatch,
 		},
 		{
-			code: StatusMsg, data: statusMsgData{ProtocolVersion, 999, *td, currentBlock, genesis},
+			code: StatusMsg, data: statusMsgData{ProtocolVersion, 999, td, currentBlock, genesis},
 			wantErrorCode: ErrNetworkIdMismatch,
 		},
 		{
-			code: StatusMsg, data: statusMsgData{ProtocolVersion, NetworkId, *td, currentBlock, common.Hash{3}},
+			code: StatusMsg, data: statusMsgData{ProtocolVersion, NetworkId, td, currentBlock, common.Hash{3}},
 			wantErrorCode: ErrGenesisBlockMismatch,
 		},
 	}

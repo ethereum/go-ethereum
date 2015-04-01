@@ -105,7 +105,7 @@ type getBlockHashesMsgData struct {
 type statusMsgData struct {
 	ProtocolVersion uint32
 	NetworkId       uint32
-	TD              big.Int
+	TD              *big.Int
 	CurrentBlock    common.Hash
 	GenesisBlock    common.Hash
 }
@@ -344,7 +344,7 @@ func (self *ethProtocol) handleStatus() error {
 		return self.protoError(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, self.protocolVersion)
 	}
 
-	_, suspended := self.blockPool.AddPeer(&status.TD, status.CurrentBlock, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect)
+	_, suspended := self.blockPool.AddPeer(status.TD, status.CurrentBlock, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect)
 	if suspended {
 		return self.protoError(ErrSuspendedPeer, "")
 	}
@@ -375,7 +375,7 @@ func (self *ethProtocol) sendStatus() error {
 	return p2p.Send(self.rw, StatusMsg, &statusMsgData{
 		ProtocolVersion: uint32(self.protocolVersion),
 		NetworkId:       uint32(self.networkId),
-		TD:              *td,
+		TD:              td,
 		CurrentBlock:    currentBlock,
 		GenesisBlock:    genesisBlock,
 	})
