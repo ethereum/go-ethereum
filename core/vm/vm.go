@@ -857,7 +857,8 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 			quadCoef = new(big.Int).Div(pow, GasQuadCoeffDenom)
 			newTotalFee := new(big.Int).Add(linCoef, quadCoef)
 
-			gas.Add(gas, new(big.Int).Sub(newTotalFee, oldTotalFee))
+			fee := new(big.Int).Sub(newTotalFee, oldTotalFee)
+			gas.Add(gas, fee)
 		}
 	}
 

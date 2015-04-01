@@ -326,8 +326,12 @@ func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, paren
 			return ValidationError(fmt.Sprintf("%v", err))
 		}
 
+		num := new(big.Int).Add(big.NewInt(8), uncle.Number)
+		num.Sub(num, block.Number())
+
 		r := new(big.Int)
-		r.Mul(BlockReward, big.NewInt(15)).Div(r, big.NewInt(16))
+		r.Mul(BlockReward, num)
+		r.Div(r, big.NewInt(8))
 
 		statedb.AddBalance(uncle.Coinbase, r)
 

@@ -57,6 +57,10 @@ func (self *StateDB) Refund(address common.Address, gas *big.Int) {
 	self.refund[addr].Add(self.refund[addr], gas)
 }
 
+/*
+ * GETTERS
+ */
+
 // Retrieve the balance from the given address or 0 if object not found
 func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 	stateObject := self.GetStateObject(addr)
@@ -65,13 +69,6 @@ func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 	}
 
 	return common.Big0
-}
-
-func (self *StateDB) AddBalance(addr common.Address, amount *big.Int) {
-	stateObject := self.GetStateObject(addr)
-	if stateObject != nil {
-		stateObject.AddBalance(amount)
-	}
 }
 
 func (self *StateDB) GetNonce(addr common.Address) uint64 {
@@ -101,22 +98,41 @@ func (self *StateDB) GetState(a common.Address, b common.Hash) []byte {
 	return nil
 }
 
-func (self *StateDB) SetNonce(addr common.Address, nonce uint64) {
+func (self *StateDB) IsDeleted(addr common.Address) bool {
 	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		return stateObject.remove
+	}
+	return false
+}
+
+/*
+ * SETTERS
+ */
+
+func (self *StateDB) AddBalance(addr common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.AddBalance(amount)
+	}
+}
+
+func (self *StateDB) SetNonce(addr common.Address, nonce uint64) {
+	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
 	}
 }
 
 func (self *StateDB) SetCode(addr common.Address, code []byte) {
-	stateObject := self.GetStateObject(addr)
+	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCode(code)
 	}
 }
 
 func (self *StateDB) SetState(addr common.Address, key common.Hash, value interface{}) {
-	stateObject := self.GetStateObject(addr)
+	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetState(key, common.NewValue(value))
 	}
@@ -131,14 +147,6 @@ func (self *StateDB) Delete(addr common.Address) bool {
 		return true
 	}
 
-	return false
-}
-
-func (self *StateDB) IsDeleted(addr common.Address) bool {
-	stateObject := self.GetStateObject(addr)
-	if stateObject != nil {
-		return stateObject.remove
-	}
 	return false
 }
 
@@ -194,16 +202,14 @@ func (self *StateDB) SetStateObject(object *StateObject) {
 func (self *StateDB) GetOrNewStateObject(addr common.Address) *StateObject {
 	stateObject := self.GetStateObject(addr)
 	if stateObject == nil {
-		stateObject = self.NewStateObject(addr)
+		stateObject = self.CreateAccount(addr)
 	}
 
 	return stateObject
 }
 
-// Create a state object whether it exist in the trie or not
-func (self *StateDB) NewStateObject(addr common.Address) *StateObject {
-	//addr = common.Address(addr)
-
+// NewStateObject create a state object whether it exist in the trie or not
+func (self *StateDB) newStateObject(addr common.Address) *StateObject {
 	statelogger.Debugf("(+) %x\n", addr)
 
 	stateObject := NewStateObject(addr, self.db)
@@ -212,9 +218,19 @@ func (self *StateDB) NewStateObject(addr common.Address) *StateObject {
 	return stateObject
 }
 
-// Deprecated
-func (self *StateDB) GetAccount(addr common.Address) *StateObject {
-	return self.GetOrNewStateObject(addr)
+// Creates creates a new state object and takes ownership. This is different from "NewStateObject"
+func (self *StateDB) CreateAccount(addr common.Address) *StateObject {
+	// Get previous (if any)
+	so := self.GetStateObject(addr)
+	// Create a new one
+	newSo := self.newStateObject(addr)
+
+	// If it existed set the balance to the new account
+	if so != nil {
+		newSo.balance = so.balance
+	}
+
+	return newSo
 }
 
 //

@@ -50,16 +50,29 @@ func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.
 	}
 
 	vsnapshot := env.State().Copy()
+	var createAccount bool
 	if self.address == nil {
 		// Generate a new address
 		nonce := env.State().GetNonce(caller.Address())
-		addr := crypto.CreateAddress(caller.Address(), nonce)
 		env.State().SetNonce(caller.Address(), nonce+1)
+
+		addr := crypto.CreateAddress(caller.Address(), nonce)
+
 		self.address = &addr
+		createAccount = true
 	}
 	snapshot := env.State().Copy()
 
-	from, to := env.State().GetStateObject(caller.Address()), env.State().GetOrNewStateObject(*self.address)
+	var (
+		from = env.State().GetStateObject(caller.Address())
+		to   *state.StateObject
+	)
+	if createAccount {
+		to = env.State().CreateAccount(*self.address)
+	} else {
+		to = env.State().GetOrNewStateObject(*self.address)
+	}
+
 	err = env.Transfer(from, to, self.value)
 	if err != nil {
 		env.State().Set(vsnapshot)

@@ -47,7 +47,7 @@ func GenesisBlock(db common.Database) *types.Block {
 	statedb := state.New(genesis.Root(), db)
 	for addr, account := range accounts {
 		codedAddr := common.Hex2Bytes(addr)
-		accountState := statedb.GetAccount(common.BytesToAddress(codedAddr))
+		accountState := statedb.CreateAccount(common.BytesToAddress(codedAddr))
 		accountState.SetBalance(common.Big(account.Balance))
 		accountState.SetCode(common.FromHex(account.Code))
 		statedb.UpdateStateObject(accountState)

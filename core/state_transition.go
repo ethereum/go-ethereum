@@ -183,15 +183,16 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 	}
 
 	// Pay data gas
-	var dgas int64
+	dgas := new(big.Int)
 	for _, byt := range self.data {
 		if byt != 0 {
-			dgas += vm.GasTxDataNonzeroByte.Int64()
+			dgas.Add(dgas, vm.GasTxDataNonzeroByte)
 		} else {
-			dgas += vm.GasTxDataZeroByte.Int64()
+			dgas.Add(dgas, vm.GasTxDataZeroByte)
 		}
 	}
-	if err = self.UseGas(big.NewInt(dgas)); err != nil {
+
+	if err = self.UseGas(dgas); err != nil {
 		return nil, nil, InvalidTxError(err)
 	}
 

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -69,7 +68,7 @@ type btBlock struct {
 	BlockHeader  *btHeader
 	Rlp          string
 	Transactions []btTransaction
-	UncleHeaders []string
+	UncleHeaders []*btHeader
 }
 
 type BlockTest struct {
@@ -106,13 +105,13 @@ func (t *BlockTest) InsertPreState(db common.Database) (*state.StateDB, error) {
 		balance, _ := new(big.Int).SetString(acct.Balance, 0)
 		nonce, _ := strconv.ParseUint(acct.Nonce, 16, 64)
 
-		obj := statedb.NewStateObject(common.HexToAddress(addrString))
+		obj := statedb.CreateAccount(common.HexToAddress(addrString))
 		obj.SetCode(code)
 		obj.SetBalance(balance)
 		obj.SetNonce(nonce)
-		// for k, v := range acct.Storage {
-		// 	obj.SetState(k, v)
-		// }
+		for k, v := range acct.Storage {
+			statedb.SetState(common.HexToAddress(addrString), common.HexToHash(k), common.FromHex(v))
+		}
 	}
 	// sync objects to trie
 	statedb.Update(nil)
@@ -120,7 +119,7 @@ func (t *BlockTest) InsertPreState(db common.Database) (*state.StateDB, error) {
 	statedb.Sync()
 
 	if !bytes.Equal(t.Genesis.Root().Bytes(), statedb.Root().Bytes()) {
-		return nil, errors.New("computed state root does not match genesis block")
+		return nil, fmt.Errorf("computed state root does not match genesis block %x %x", t.Genesis.Root().Bytes()[:4], statedb.Root().Bytes()[:4])
 	}
 	return statedb, nil
 }
