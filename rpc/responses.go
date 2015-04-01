@@ -55,11 +55,20 @@ func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
 	// res.MinGasPrice =
 	res.GasUsed = newHexNum(block.GasUsed())
 	res.UnixTimestamp = newHexNum(block.Time())
-	res.Transactions = NewTransactionsRes(block.Transactions())
+
+	res.Transactions = make([]*TransactionRes, len(block.Transactions()))
+	for i, tx := range block.Transactions() {
+		res.Transactions[i] = NewTransactionRes(tx)
+		res.Transactions[i].BlockHash = res.BlockHash
+		res.Transactions[i].BlockNumber = res.BlockNumber
+		res.Transactions[i].TxIndex = newHexNum(i)
+	}
+
 	res.Uncles = make([]*hexdata, len(block.Uncles()))
 	for i, uncle := range block.Uncles() {
 		res.Uncles[i] = newHexData(uncle.Hash())
 	}
+
 	return res
 }
 
@@ -91,14 +100,6 @@ func NewTransactionRes(tx *types.Transaction) *TransactionRes {
 	v.Gas = newHexNum(tx.Gas())
 	v.GasPrice = newHexNum(tx.GasPrice())
 	v.Input = newHexData(tx.Data())
-	return v
-}
-
-func NewTransactionsRes(txs []*types.Transaction) []*TransactionRes {
-	v := make([]*TransactionRes, len(txs))
-	for i, tx := range txs {
-		v[i] = NewTransactionRes(tx)
-	}
 	return v
 }
 
