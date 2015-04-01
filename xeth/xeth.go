@@ -128,8 +128,8 @@ func cTopics(t [][]string) [][]common.Hash {
 	return topics
 }
 
-func (self *XEth) DefaultGas() *big.Int      { return big.NewInt(defaultGas.Int64()) }
-func (self *XEth) DefaultGasPrice() *big.Int { return big.NewInt(defaultGasPrice.Int64()) }
+func (self *XEth) DefaultGas() *big.Int      { return new(big.Int).Set(defaultGas) }
+func (self *XEth) DefaultGasPrice() *big.Int { return new(big.Int).Set(defaultGasPrice) }
 
 func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }
 
