@@ -13,6 +13,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -30,7 +32,8 @@ type Node struct {
 	DiscPort int // UDP listening port for discovery protocol
 	TCPPort  int // TCP listening port for RLPx
 
-	active time.Time
+	// this must be set/read using atomic load and store.
+	activeStamp int64
 }
 
 func newNode(id NodeID, addr *net.UDPAddr) *Node {
@@ -39,13 +42,26 @@ func newNode(id NodeID, addr *net.UDPAddr) *Node {
 		IP:       addr.IP,
 		DiscPort: addr.Port,
 		TCPPort:  addr.Port,
-		active:   time.Now(),
 	}
 }
 
 func (n *Node) isValid() bool {
 	// TODO: don't accept localhost, LAN addresses from internet hosts
 	return !n.IP.IsMulticast() && !n.IP.IsUnspecified() && n.TCPPort != 0 && n.DiscPort != 0
+}
+
+func (n *Node) bumpActive() {
+	stamp := time.Now().Unix()
+	atomic.StoreInt64(&n.activeStamp, stamp)
+}
+
+func (n *Node) active() time.Time {
+	stamp := atomic.LoadInt64(&n.activeStamp)
+	return time.Unix(stamp, 0)
+}
+
+func (n *Node) addr() *net.UDPAddr {
+	return &net.UDPAddr{IP: n.IP, Port: n.DiscPort}
 }
 
 // The string representation of a Node is a URL.
@@ -303,4 +319,27 @@ func randomID(a NodeID, n int) (b NodeID) {
 		b[i] = byte(rand.Intn(255))
 	}
 	return b
+}
+
+// nodeDB stores all nodes we know about.
+type nodeDB struct {
+	mu   sync.RWMutex
+	byID map[NodeID]*Node
+}
+
+func (db *nodeDB) get(id NodeID) *Node {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return db.byID[id]
+}
+
+func (db *nodeDB) add(id NodeID, addr *net.UDPAddr, tcpPort uint16) *Node {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if db.byID == nil {
+		db.byID = make(map[NodeID]*Node)
+	}
+	n := &Node{ID: id, IP: addr.IP, DiscPort: addr.Port, TCPPort: int(tcpPort)}
+	db.byID[n.ID] = n
+	return n
 }
