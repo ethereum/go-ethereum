@@ -122,6 +122,7 @@ func cAddress(a []string) []common.Address {
 func cTopics(t [][]string) [][]common.Hash {
 	topics := make([][]common.Hash, len(t))
 	for i, iv := range t {
+		topics[i] = make([]common.Hash, len(iv))
 		for j, jv := range iv {
 			topics[i][j] = common.HexToHash(jv)
 		}
