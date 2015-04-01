@@ -235,7 +235,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 
 	// This puts transactions in a extra db for rpc
 	for i, tx := range block.Transactions() {
-		putTx(sm.extraDb, tx, block, i)
+		putTx(sm.extraDb, tx, block, uint64(i))
 	}
 
 	if uncle {
@@ -359,7 +359,7 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 	return state.Logs(), nil
 }
 
-func putTx(db common.Database, tx *types.Transaction, block *types.Block, i int) {
+func putTx(db common.Database, tx *types.Transaction, block *types.Block, i uint64) {
 	rlpEnc, err := rlp.EncodeToBytes(tx)
 	if err != nil {
 		statelogger.Infoln("Failed encoding tx", err)
@@ -367,24 +367,18 @@ func putTx(db common.Database, tx *types.Transaction, block *types.Block, i int)
 	}
 	db.Put(tx.Hash().Bytes(), rlpEnc)
 
-	rlpEnc, err = rlp.EncodeToBytes(block.Hash().Bytes())
+	var txExtra struct {
+		BlockHash  common.Hash
+		BlockIndex uint64
+		Index      uint64
+	}
+	txExtra.BlockHash = block.Hash()
+	txExtra.BlockIndex = block.NumberU64()
+	txExtra.Index = i
+	rlpMeta, err := rlp.EncodeToBytes(txExtra)
 	if err != nil {
 		statelogger.Infoln("Failed encoding meta", err)
 		return
 	}
-	db.Put(append(tx.Hash().Bytes(), 0x0001), rlpEnc)
-
-	rlpEnc, err = rlp.EncodeToBytes(block.Number().Bytes())
-	if err != nil {
-		statelogger.Infoln("Failed encoding meta", err)
-		return
-	}
-	db.Put(append(tx.Hash().Bytes(), 0x0002), rlpEnc)
-
-	rlpEnc, err = rlp.EncodeToBytes(i)
-	if err != nil {
-		statelogger.Infoln("Failed encoding meta", err)
-		return
-	}
-	db.Put(append(tx.Hash().Bytes(), 0x0003), rlpEnc)
+	db.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)
 }

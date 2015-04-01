@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -191,20 +192,20 @@ func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blha
 		tx = types.NewTransactionFromBytes(data)
 	}
 
-	// blockhash
-	data, _ = self.backend.ExtraDb().Get(append(common.FromHex(hash), 0x0001))
-	if len(data) != 0 {
-		blhash = common.BytesToHash(data)
+	// meta
+	var txExtra struct {
+		BlockHash  common.Hash
+		BlockIndex int64
+		Index      uint64
 	}
-	// blocknum
-	data, _ = self.backend.ExtraDb().Get(append(common.FromHex(hash), 0x0002))
-	if len(data) != 0 {
-		blnum = common.Bytes2Big(data)
-	}
-	// txindex
-	data, _ = self.backend.ExtraDb().Get(append(common.FromHex(hash), 0x0003))
-	if len(data) != 0 {
-		txi = common.BytesToNumber(data)
+
+	v, _ := self.backend.ExtraDb().Get(append(common.FromHex(hash), 0x0001))
+	r := bytes.NewReader(v)
+	err := rlp.Decode(r, &txExtra)
+	if err == nil {
+		blhash = txExtra.BlockHash
+		blnum = big.NewInt(txExtra.BlockIndex)
+		txi = txExtra.Index
 	}
 
 	return
