@@ -2,9 +2,6 @@ package utils
 
 import (
 	"crypto/ecdsa"
-	"fmt"
-	"net"
-	"net/http"
 	"os"
 	"path"
 	"runtime"
@@ -148,7 +145,11 @@ var (
 		Usage: "Port on which the JSON-RPC server should listen",
 		Value: 8545,
 	}
-
+	RPCCORSDomainFlag = cli.StringFlag{
+		Name:  "rpccorsdomain",
+		Usage: "Domain on which to send Access-Control-Allow-Origin header",
+		Value: "",
+	}
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
@@ -255,12 +256,12 @@ func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 }
 
 func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
-	addr := ctx.GlobalString(RPCListenAddrFlag.Name)
-	port := ctx.GlobalInt(RPCPortFlag.Name)
-	fmt.Println("Starting RPC on port: ", port)
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
-	if err != nil {
-		Fatalf("Can't listen on %s:%d: %v", addr, port, err)
+	config := rpc.RpcConfig{
+		ListenAddress: ctx.GlobalString(RPCListenAddrFlag.Name),
+		ListenPort:    uint(ctx.GlobalInt(RPCPortFlag.Name)),
+		CorsDomain:    ctx.GlobalString(RPCCORSDomainFlag.Name),
 	}
-	go http.Serve(l, rpc.JSONRPC(xeth.New(eth, nil)))
+
+	xeth := xeth.New(eth, nil)
+	_ = rpc.Start(xeth, config)
 }
