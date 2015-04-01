@@ -84,7 +84,7 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	}
 
 	// Update the state with pending changes
-	statedb.Update(nil)
+	statedb.Update()
 
 	cumulative := new(big.Int).Set(usedGas.Add(usedGas, gas))
 	receipt := types.NewReceipt(statedb.Root().Bytes(), cumulative)
@@ -220,7 +220,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 
 	// Commit state objects/accounts to a temporary trie (does not save)
 	// used to calculate the state root.
-	state.Update(common.Big0)
+	state.Update()
 	if header.Root != state.Root() {
 		err = fmt.Errorf("invalid merkle root. received=%x got=%x", header.Root, state.Root())
 		return

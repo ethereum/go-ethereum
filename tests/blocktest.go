@@ -114,7 +114,7 @@ func (t *BlockTest) InsertPreState(db common.Database) (*state.StateDB, error) {
 		}
 	}
 	// sync objects to trie
-	statedb.Update(nil)
+	statedb.Update()
 	// sync trie to disk
 	statedb.Sync()
 

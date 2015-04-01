@@ -316,7 +316,7 @@ func (self *StateDB) Refunds() map[string]*big.Int {
 	return self.refund
 }
 
-func (self *StateDB) Update(gasUsed *big.Int) {
+func (self *StateDB) Update() {
 	self.refund = make(map[string]*big.Int)
 
 	for _, stateObject := range self.stateObjects {

@@ -272,7 +272,7 @@ gasLimit:
 
 	core.AccumulateRewards(self.current.state, self.current.block)
 
-	self.current.state.Update(common.Big0)
+	self.current.state.Update()
 	self.push()
 }
 

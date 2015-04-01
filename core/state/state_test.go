@@ -72,7 +72,7 @@ func TestNull(t *testing.T) {
 	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
 	value := make([]byte, 16)
 	state.SetState(address, common.Hash{}, value)
-	state.Update(nil)
+	state.Update()
 	state.Sync()
 	value = state.GetState(address, common.Hash{})
 }
