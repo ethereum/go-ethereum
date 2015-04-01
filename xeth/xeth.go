@@ -128,8 +128,8 @@ func cTopics(t [][]string) [][]common.Hash {
 	return topics
 }
 
-func (self *XEth) DefaultGas() *big.Int      { return defaultGas }
-func (self *XEth) DefaultGasPrice() *big.Int { return defaultGasPrice }
+func (self *XEth) DefaultGas() *big.Int      { return big.NewInt(defaultGas.Int64()) }
+func (self *XEth) DefaultGasPrice() *big.Int { return big.NewInt(defaultGasPrice.Int64()) }
 
 func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }
 
@@ -547,12 +547,13 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		value:    common.Big(valueStr),
 		data:     common.FromHex(dataStr),
 	}
+
 	if msg.gas.Cmp(big.NewInt(0)) == 0 {
-		msg.gas = defaultGas
+		msg.gas = self.DefaultGas()
 	}
 
 	if msg.gasPrice.Cmp(big.NewInt(0)) == 0 {
-		msg.gasPrice = defaultGasPrice
+		msg.gasPrice = self.DefaultGasPrice()
 	}
 
 	block := self.CurrentBlock()
@@ -598,11 +599,11 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	// TODO: align default values to have the same type, e.g. not depend on
 	// common.Value conversions later on
 	if gas.Cmp(big.NewInt(0)) == 0 {
-		gas = defaultGas
+		gas = self.DefaultGas()
 	}
 
 	if price.Cmp(big.NewInt(0)) == 0 {
-		price = defaultGasPrice
+		price = self.DefaultGasPrice()
 	}
 
 	data = common.FromHex(codeStr)
