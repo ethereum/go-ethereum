@@ -108,6 +108,12 @@ func newHexNum(input interface{}) *hexnum {
 	return d
 }
 
+type RpcConfig struct {
+	ListenAddress string
+	ListenPort    uint
+	CorsDomain    string
+}
+
 type InvalidTypeError struct {
 	method string
 	msg    string

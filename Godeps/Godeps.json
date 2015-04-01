@@ -91,6 +91,10 @@
 			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
 		},
 		{
+			"ImportPath": "github.com/rs/cors",
+			"Rev": "6e0c3cb65fc0fdb064c743d176a620e3ca446dfb"
+		},
+		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",
 			"Rev": "832fa7ed4d28545eab80f19e1831fc004305cade"
 		},
