@@ -21,6 +21,8 @@ const (
 	reNumNonZero = `"0x([1-9a-f][0-9a-f]{0,15})"`        // non-zero required must not have left-padded zeros
 	reNumOpt     = `"0x([1-9a-f][0-9a-f]{0,15})|0"|null` // must not have left-padded zeros or null
 	reData       = `"0x[0-9a-f]*"`                       // can be "empty"
+	// reListHash   = `[("\w":"0x[0-9a-f]{64}",?)*]`
+	// reListObj    = `[("\w":(".+"|null),?)*]`
 )
 
 func TestNewBlockRes(t *testing.T) {
@@ -49,9 +51,70 @@ func TestNewBlockRes(t *testing.T) {
 		// "minGasPrice":  "0x",
 		"gasUsed":   reNum,
 		"timestamp": reNum,
+		// "transactions": reListHash,
+		// "uncles":       reListHash,
 	}
 
+	to := common.HexToAddress("0x02")
+	amount := big.NewInt(1)
+	gasAmount := big.NewInt(1)
+	gasPrice := big.NewInt(1)
+	data := []byte{1, 2, 3}
+	tx := types.NewTransactionMessage(to, amount, gasAmount, gasPrice, data)
+
 	v := NewBlockRes(block, false)
+	v.Transactions = make([]*TransactionRes, 1)
+	v.Transactions[0] = NewTransactionRes(tx)
+	j, _ := json.Marshal(v)
+
+	for k, re := range tests {
+		match, _ := regexp.MatchString(fmt.Sprintf(`{.*"%s":%s.*}`, k, re), string(j))
+		if !match {
+			t.Error(fmt.Sprintf("%s output json does not match format %s. Got %s", k, re, j))
+		}
+	}
+}
+
+func TestNewBlockResWithTrans(t *testing.T) {
+	parentHash := common.HexToHash("0x01")
+	coinbase := common.HexToAddress("0x01")
+	root := common.HexToHash("0x01")
+	difficulty := common.Big1
+	nonce := uint64(1)
+	extra := ""
+	block := types.NewBlock(parentHash, coinbase, root, difficulty, nonce, extra)
+	tests := map[string]string{
+		"number":          reNum,
+		"hash":            reHash,
+		"parentHash":      reHash,
+		"nonce":           reData,
+		"sha3Uncles":      reHash,
+		"logsBloom":       reData,
+		"transactionRoot": reHash,
+		"stateRoot":       reHash,
+		"miner":           reAddress,
+		"difficulty":      `"0x1"`,
+		"totalDifficulty": reNum,
+		"size":            reNumNonZero,
+		"extraData":       reData,
+		"gasLimit":        reNum,
+		// "minGasPrice":  "0x",
+		"gasUsed":   reNum,
+		"timestamp": reNum,
+		// "transactions": `[{.*}]`,
+		// "uncles":       reListHash,
+	}
+
+	to := common.HexToAddress("0x02")
+	amount := big.NewInt(1)
+	gasAmount := big.NewInt(1)
+	gasPrice := big.NewInt(1)
+	data := []byte{1, 2, 3}
+	tx := types.NewTransactionMessage(to, amount, gasAmount, gasPrice, data)
+
+	v := NewBlockRes(block, true)
+	v.Transactions = make([]*TransactionRes, 1)
+	v.Transactions[0] = NewTransactionRes(tx)
 	j, _ := json.Marshal(v)
 
 	for k, re := range tests {

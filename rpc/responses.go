@@ -1,6 +1,8 @@
 package rpc
 
 import (
+	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -27,6 +29,99 @@ type BlockRes struct {
 	UnixTimestamp   *hexnum           `json:"timestamp"`
 	Transactions    []*TransactionRes `json:"transactions"`
 	Uncles          []*hexdata        `json:"uncles"`
+}
+
+func (b *BlockRes) MarshalJSON() ([]byte, error) {
+	if b.fullTx {
+		var ext struct {
+			BlockNumber     *hexnum           `json:"number"`
+			BlockHash       *hexdata          `json:"hash"`
+			ParentHash      *hexdata          `json:"parentHash"`
+			Nonce           *hexdata          `json:"nonce"`
+			Sha3Uncles      *hexdata          `json:"sha3Uncles"`
+			LogsBloom       *hexdata          `json:"logsBloom"`
+			TransactionRoot *hexdata          `json:"transactionRoot"`
+			StateRoot       *hexdata          `json:"stateRoot"`
+			Miner           *hexdata          `json:"miner"`
+			Difficulty      *hexnum           `json:"difficulty"`
+			TotalDifficulty *hexnum           `json:"totalDifficulty"`
+			Size            *hexnum           `json:"size"`
+			ExtraData       *hexdata          `json:"extraData"`
+			GasLimit        *hexnum           `json:"gasLimit"`
+			MinGasPrice     *hexnum           `json:"minGasPrice"`
+			GasUsed         *hexnum           `json:"gasUsed"`
+			UnixTimestamp   *hexnum           `json:"timestamp"`
+			Transactions    []*TransactionRes `json:"transactions"`
+			Uncles          []*hexdata        `json:"uncles"`
+		}
+
+		ext.BlockNumber = b.BlockNumber
+		ext.BlockHash = b.BlockHash
+		ext.ParentHash = b.ParentHash
+		ext.Nonce = b.Nonce
+		ext.Sha3Uncles = b.Sha3Uncles
+		ext.LogsBloom = b.LogsBloom
+		ext.TransactionRoot = b.TransactionRoot
+		ext.StateRoot = b.StateRoot
+		ext.Miner = b.Miner
+		ext.Difficulty = b.Difficulty
+		ext.TotalDifficulty = b.TotalDifficulty
+		ext.Size = b.Size
+		ext.ExtraData = b.ExtraData
+		ext.GasLimit = b.GasLimit
+		ext.MinGasPrice = b.MinGasPrice
+		ext.GasUsed = b.GasUsed
+		ext.UnixTimestamp = b.UnixTimestamp
+		ext.Transactions = b.Transactions
+		ext.Uncles = b.Uncles
+		return json.Marshal(ext)
+	} else {
+		var ext struct {
+			BlockNumber     *hexnum    `json:"number"`
+			BlockHash       *hexdata   `json:"hash"`
+			ParentHash      *hexdata   `json:"parentHash"`
+			Nonce           *hexdata   `json:"nonce"`
+			Sha3Uncles      *hexdata   `json:"sha3Uncles"`
+			LogsBloom       *hexdata   `json:"logsBloom"`
+			TransactionRoot *hexdata   `json:"transactionRoot"`
+			StateRoot       *hexdata   `json:"stateRoot"`
+			Miner           *hexdata   `json:"miner"`
+			Difficulty      *hexnum    `json:"difficulty"`
+			TotalDifficulty *hexnum    `json:"totalDifficulty"`
+			Size            *hexnum    `json:"size"`
+			ExtraData       *hexdata   `json:"extraData"`
+			GasLimit        *hexnum    `json:"gasLimit"`
+			MinGasPrice     *hexnum    `json:"minGasPrice"`
+			GasUsed         *hexnum    `json:"gasUsed"`
+			UnixTimestamp   *hexnum    `json:"timestamp"`
+			Transactions    []*hexdata `json:"transactions"`
+			Uncles          []*hexdata `json:"uncles"`
+		}
+
+		ext.BlockNumber = b.BlockNumber
+		ext.BlockHash = b.BlockHash
+		ext.ParentHash = b.ParentHash
+		ext.Nonce = b.Nonce
+		ext.Sha3Uncles = b.Sha3Uncles
+		ext.LogsBloom = b.LogsBloom
+		ext.TransactionRoot = b.TransactionRoot
+		ext.StateRoot = b.StateRoot
+		ext.Miner = b.Miner
+		ext.Difficulty = b.Difficulty
+		ext.TotalDifficulty = b.TotalDifficulty
+		ext.Size = b.Size
+		ext.ExtraData = b.ExtraData
+		ext.GasLimit = b.GasLimit
+		ext.MinGasPrice = b.MinGasPrice
+		ext.GasUsed = b.GasUsed
+		ext.UnixTimestamp = b.UnixTimestamp
+		ext.Transactions = make([]*hexdata, len(b.Transactions))
+		for i, tx := range b.Transactions {
+			ext.Transactions[i] = tx.Hash
+		}
+		ext.Uncles = b.Uncles
+		return json.Marshal(ext)
+	}
 }
 
 func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
