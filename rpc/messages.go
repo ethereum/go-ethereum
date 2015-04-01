@@ -45,29 +45,29 @@ func (d *hexdata) UnmarshalJSON(b []byte) (err error) {
 func newHexData(input interface{}) *hexdata {
 	d := new(hexdata)
 
-	switch input.(type) {
+	switch input := input.(type) {
 	case []byte:
-		d.data = input.([]byte)
+		d.data = input
 	case common.Hash:
-		d.data = input.(common.Hash).Bytes()
+		d.data = input.Bytes()
 	case *common.Hash:
-		d.data = input.(*common.Hash).Bytes()
+		d.data = input.Bytes()
 	case common.Address:
-		d.data = input.(common.Address).Bytes()
+		d.data = input.Bytes()
 	case *common.Address:
-		d.data = input.(*common.Address).Bytes()
+		d.data = input.Bytes()
 	case *big.Int:
-		d.data = input.(*big.Int).Bytes()
+		d.data = input.Bytes()
 	case int64:
-		d.data = big.NewInt(input.(int64)).Bytes()
+		d.data = big.NewInt(input).Bytes()
 	case uint64:
-		d.data = big.NewInt(int64(input.(uint64))).Bytes()
+		d.data = big.NewInt(int64(input)).Bytes()
 	case int:
-		d.data = big.NewInt(int64(input.(int))).Bytes()
+		d.data = big.NewInt(int64(input)).Bytes()
 	case uint:
-		d.data = big.NewInt(int64(input.(uint))).Bytes()
+		d.data = big.NewInt(int64(input)).Bytes()
 	case string: // hexstring
-		d.data = common.Big(input.(string)).Bytes()
+		d.data = common.Big(input).Bytes()
 	default:
 		d.data = nil
 	}
