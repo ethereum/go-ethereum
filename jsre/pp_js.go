@@ -23,18 +23,26 @@ function pp(object, indent) {
             }
         }
         str += " ]";
+    } else if (object instanceof Error) {
+        str += "\033[31m" + "Error";
     } else if(typeof(object) === "object") {
         str += "{\n";
-	indent += "  ";
-        var last = Object.keys(object).pop()
-        for(var k in object) {
-            str += indent + k + ": " + pp(object[k], indent);
+        indent += "  ";
+        var last = Object.getOwnPropertyNames(object).pop()
+        Object.getOwnPropertyNames(object).forEach(function (k) {
+            str += indent + k + ": ";
+            try {
+                str += pp(object[k], indent);
+            } catch (e) {
+                str += pp(e, indent);
+            }
 
             if(k !== last) {
                 str += ",";
             }
-	    str += "\n";
-        }
+
+            str += "\n";
+        });
         str += indent.substr(2, indent.length) + "}";
     } else if(typeof(object) === "string") {
         str += "\033[32m'" + object + "'";
@@ -43,7 +51,7 @@ function pp(object, indent) {
     } else if(typeof(object) === "number") {
         str += "\033[31m" + object;
     } else if(typeof(object) === "function") {
-	str += "\033[35m[Function]";
+        str += "\033[35m[Function]";
     } else {
         str += object;
     }
