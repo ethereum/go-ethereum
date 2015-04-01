@@ -45,6 +45,9 @@ func (d *hexdata) UnmarshalJSON(b []byte) (err error) {
 func newHexData(input interface{}) *hexdata {
 	d := new(hexdata)
 
+	if input == nil {
+		d.data = nil
+	}
 	switch input := input.(type) {
 	case []byte:
 		d.data = input
