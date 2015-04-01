@@ -47,6 +47,7 @@ func newHexData(input interface{}) *hexdata {
 
 	if input == nil {
 		d.data = nil
+		return d
 	}
 	switch input := input.(type) {
 	case []byte:
@@ -57,8 +58,8 @@ func newHexData(input interface{}) *hexdata {
 		d.data = input.Bytes()
 	case common.Address:
 		d.data = input.Bytes()
-	case *common.Address:
-		d.data = input.Bytes()
+	// case *common.Address:
+	// 	d.data = input.Bytes()
 	case *big.Int:
 		d.data = input.Bytes()
 	case int64:
