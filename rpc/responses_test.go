@@ -72,9 +72,9 @@ func TestNewTransactionRes(t *testing.T) {
 	tests := map[string]string{
 		"hash":             reHash,
 		"nonce":            reNum,
-		"blockHash":        reHash,
-		"blockNum":         reNum,
-		"transactionIndex": reNum,
+		"blockHash":        reHashOpt,
+		"blockNum":         reNumOpt,
+		"transactionIndex": reNumOpt,
 		"from":             reAddress,
 		"to":               reAddressOpt,
 		"value":            reNum,
