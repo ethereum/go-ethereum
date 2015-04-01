@@ -136,7 +136,7 @@ func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
 	res.BlockNumber = newHexNum(block.Number())
 	res.BlockHash = newHexData(block.Hash())
 	res.ParentHash = newHexData(block.ParentHash())
-	res.Nonce = newHexData(block.Header().Nonce)
+	res.Nonce = newHexData(block.Nonce())
 	res.Sha3Uncles = newHexData(block.Header().UncleHash)
 	res.LogsBloom = newHexData(block.Bloom())
 	res.TransactionRoot = newHexData(block.Header().TxHash)
