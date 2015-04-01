@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -65,7 +66,9 @@ func newHexData(input interface{}) *hexdata {
 	case int64:
 		d.data = big.NewInt(input).Bytes()
 	case uint64:
-		d.data = big.NewInt(int64(input)).Bytes()
+		buff := make([]byte, 8)
+		binary.BigEndian.PutUint64(buff, input)
+		d.data = buff
 	case int:
 		d.data = big.NewInt(int64(input)).Bytes()
 	case uint:
