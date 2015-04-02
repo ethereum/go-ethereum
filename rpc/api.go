@@ -108,15 +108,15 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		count := api.xethAtStateNum(args.BlockNumber).TxCountAt(args.Address)
 		*reply = common.ToHex(big.NewInt(int64(count)).Bytes())
 	case "eth_getBlockTransactionCountByHash":
-		args := new(GetBlockByHashArgs)
+		args := new(HashArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 
-		block := NewBlockRes(api.xeth().EthBlockByHash(args.BlockHash), false)
+		block := NewBlockRes(api.xeth().EthBlockByHash(args.Hash), false)
 		*reply = common.ToHex(big.NewInt(int64(len(block.Transactions))).Bytes())
 	case "eth_getBlockTransactionCountByNumber":
-		args := new(GetBlockByNumberArgs)
+		args := new(BlockNumArg)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
@@ -124,16 +124,16 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		block := NewBlockRes(api.xeth().EthBlockByNumber(args.BlockNumber), false)
 		*reply = common.ToHex(big.NewInt(int64(len(block.Transactions))).Bytes())
 	case "eth_getUncleCountByBlockHash":
-		args := new(GetBlockByHashArgs)
+		args := new(HashArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 
-		block := api.xeth().EthBlockByHash(args.BlockHash)
+		block := api.xeth().EthBlockByHash(args.Hash)
 		br := NewBlockRes(block, false)
 		*reply = common.ToHex(big.NewInt(int64(len(br.Uncles))).Bytes())
 	case "eth_getUncleCountByBlockNumber":
-		args := new(GetBlockByNumberArgs)
+		args := new(BlockNumArg)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}

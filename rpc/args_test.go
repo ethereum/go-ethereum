@@ -225,7 +225,7 @@ func TestGetBlockByHashArgsHashInt(t *testing.T) {
 	input := `[8]`
 
 	args := new(GetBlockByHashArgs)
-	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
 	if len(str) > 0 {
 		t.Error(str)
 	}
@@ -273,6 +273,16 @@ func TestGetBlockByNumberArgsBlockHex(t *testing.T) {
 
 func TestGetBlockByNumberEmpty(t *testing.T) {
 	input := `[]`
+
+	args := new(GetBlockByNumberArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestGetBlockByNumberShort(t *testing.T) {
+	input := `["0xbbb"]`
 
 	args := new(GetBlockByNumberArgs)
 	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
