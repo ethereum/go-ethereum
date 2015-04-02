@@ -36,7 +36,7 @@ func (api *EthereumApi) xethAtStateNum(num int64) *xeth.XEth {
 
 func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/JSON-RPC
-	rpclogger.Debugf("%s %s", req.Method, req.Params)
+	rpclogger.Infof("%s %s", req.Method, req.Params)
 
 	switch req.Method {
 	case "web3_sha3":
@@ -80,8 +80,9 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		v := api.xethAtStateNum(args.BlockNumber).State().SafeGet(args.Address).Balance()
-		*reply = common.ToHex(v.Bytes())
+		*reply = api.xethAtStateNum(args.BlockNumber).BalanceAt(args.Address)
+		//v := api.xethAtStateNum(args.BlockNumber).State().SafeGet(args.Address).Balance()
+		//*reply = common.ToHex(v.Bytes())
 	case "eth_getStorage", "eth_storageAt":
 		args := new(GetStorageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
