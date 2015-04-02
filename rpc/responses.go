@@ -28,7 +28,7 @@ type BlockRes struct {
 	GasUsed         *hexnum           `json:"gasUsed"`
 	UnixTimestamp   *hexnum           `json:"timestamp"`
 	Transactions    []*TransactionRes `json:"transactions"`
-	Uncles          []*hexdata        `json:"uncles"`
+	Uncles          []*UncleRes       `json:"uncles"`
 }
 
 func (b *BlockRes) MarshalJSON() ([]byte, error) {
@@ -73,7 +73,10 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 		ext.GasUsed = b.GasUsed
 		ext.UnixTimestamp = b.UnixTimestamp
 		ext.Transactions = b.Transactions
-		ext.Uncles = b.Uncles
+		ext.Uncles = make([]*hexdata, len(b.Uncles))
+		for i, u := range b.Uncles {
+			ext.Uncles[i] = u.BlockHash
+		}
 		return json.Marshal(ext)
 	} else {
 		var ext struct {
@@ -119,7 +122,10 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 		for i, tx := range b.Transactions {
 			ext.Transactions[i] = tx.Hash
 		}
-		ext.Uncles = b.Uncles
+		ext.Uncles = make([]*hexdata, len(b.Uncles))
+		for i, u := range b.Uncles {
+			ext.Uncles[i] = u.BlockHash
+		}
 		return json.Marshal(ext)
 	}
 }
@@ -157,9 +163,9 @@ func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
 		res.Transactions[i].TxIndex = newHexNum(i)
 	}
 
-	res.Uncles = make([]*hexdata, len(block.Uncles()))
+	res.Uncles = make([]*UncleRes, len(block.Uncles()))
 	for i, uncle := range block.Uncles() {
-		res.Uncles[i] = newHexData(uncle.Hash())
+		res.Uncles[i] = NewUncleRes(uncle)
 	}
 
 	return res
@@ -197,6 +203,49 @@ func NewTransactionRes(tx *types.Transaction) *TransactionRes {
 	v.Gas = newHexNum(tx.Gas())
 	v.GasPrice = newHexNum(tx.GasPrice())
 	v.Input = newHexData(tx.Data())
+	return v
+}
+
+type UncleRes struct {
+	BlockNumber     *hexnum  `json:"number"`
+	BlockHash       *hexdata `json:"hash"`
+	ParentHash      *hexdata `json:"parentHash"`
+	Nonce           *hexdata `json:"nonce"`
+	Sha3Uncles      *hexdata `json:"sha3Uncles"`
+	ReceiptHash     *hexdata `json:"receiptHash"`
+	LogsBloom       *hexdata `json:"logsBloom"`
+	TransactionRoot *hexdata `json:"transactionsRoot"`
+	StateRoot       *hexdata `json:"stateRoot"`
+	Miner           *hexdata `json:"miner"`
+	Difficulty      *hexnum  `json:"difficulty"`
+	ExtraData       *hexdata `json:"extraData"`
+	GasLimit        *hexnum  `json:"gasLimit"`
+	GasUsed         *hexnum  `json:"gasUsed"`
+	UnixTimestamp   *hexnum  `json:"timestamp"`
+}
+
+func NewUncleRes(h *types.Header) *UncleRes {
+	if h == nil {
+		return nil
+	}
+
+	var v = new(UncleRes)
+	v.BlockNumber = newHexNum(h.Number)
+	v.BlockHash = newHexData(h.Hash())
+	v.ParentHash = newHexData(h.ParentHash)
+	v.Sha3Uncles = newHexData(h.UncleHash)
+	v.Nonce = newHexData(h.Nonce[:])
+	v.LogsBloom = newHexData(h.Bloom)
+	v.TransactionRoot = newHexData(h.TxHash)
+	v.StateRoot = newHexData(h.Root)
+	v.Miner = newHexData(h.Coinbase)
+	v.Difficulty = newHexNum(h.Difficulty)
+	v.ExtraData = newHexData(h.Extra)
+	v.GasLimit = newHexNum(h.GasLimit)
+	v.GasUsed = newHexNum(h.GasUsed)
+	v.UnixTimestamp = newHexNum(h.Time)
+	v.ReceiptHash = newHexData(h.ReceiptHash)
+
 	return v
 }
 

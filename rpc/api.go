@@ -256,9 +256,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			// return NewValidationError("Index", "does not exist")
 			*reply = nil
 		} else {
-			uhash := br.Uncles[args.Index]
-			uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash.String()), true)
-			*reply = uncle
+			*reply = br.Uncles[args.Index]
 		}
 	case "eth_getUncleByBlockNumberAndIndex":
 		args := new(BlockNumIndexArgs)
@@ -278,9 +276,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			// return NewValidationError("Index", "does not exist")
 			*reply = nil
 		} else {
-			uhash := v.Uncles[args.Index]
-			uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash.String()), false)
-			*reply = uncle
+			*reply = v.Uncles[args.Index]
 		}
 	case "eth_getCompilers":
 		c := []string{""}
