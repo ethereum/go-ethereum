@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"encoding/json"
+	// "fmt"
 	"math/big"
 	"sync"
 
@@ -112,7 +113,11 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := NewBlockRes(api.xeth().EthBlockByHash(args.Hash), false)
-		*reply = common.ToHex(big.NewInt(int64(len(block.Transactions))).Bytes())
+		if block == nil {
+			*reply = nil
+		} else {
+			*reply = common.ToHex(big.NewInt(int64(len(block.Transactions))).Bytes())
+		}
 	case "eth_getBlockTransactionCountByNumber":
 		args := new(BlockNumArg)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
