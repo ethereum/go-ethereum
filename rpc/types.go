@@ -101,11 +101,15 @@ func newHexData(input interface{}) *hexdata {
 	case int16:
 		d.data = big.NewInt(int64(input)).Bytes()
 	case uint16:
-		d.data = big.NewInt(int64(input)).Bytes()
+		buff := make([]byte, 8)
+		binary.BigEndian.PutUint16(buff, input)
+		d.data = buff
 	case int32:
 		d.data = big.NewInt(int64(input)).Bytes()
 	case uint32:
-		d.data = big.NewInt(int64(input)).Bytes()
+		buff := make([]byte, 8)
+		binary.BigEndian.PutUint32(buff, input)
+		d.data = buff
 	case string: // hexstring
 		d.data = common.Big(input).Bytes()
 	default:
