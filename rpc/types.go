@@ -83,7 +83,11 @@ func newHexData(input interface{}) *hexdata {
 			d.data = input.Bytes()
 		}
 	case *big.Int:
-		d.data = input.Bytes()
+		if input == nil {
+			d.isNil = true
+		} else {
+			d.data = input.Bytes()
+		}
 	case int64:
 		d.data = big.NewInt(input).Bytes()
 	case uint64:
