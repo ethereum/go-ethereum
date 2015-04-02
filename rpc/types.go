@@ -17,16 +17,19 @@
 package rpc
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type hexdata struct {
-	data []byte
+	data  []byte
+	isNil bool
 }
 
 func (d *hexdata) String() string {
@@ -34,6 +37,9 @@ func (d *hexdata) String() string {
 }
 
 func (d *hexdata) MarshalJSON() ([]byte, error) {
+	if d.isNil {
+		return json.Marshal(nil)
+	}
 	return json.Marshal(d.String())
 }
 
@@ -45,27 +51,69 @@ func (d *hexdata) UnmarshalJSON(b []byte) (err error) {
 func newHexData(input interface{}) *hexdata {
 	d := new(hexdata)
 
+	if input == nil {
+		d.data = nil
+		return d
+	}
 	switch input := input.(type) {
 	case []byte:
 		d.data = input
 	case common.Hash:
 		d.data = input.Bytes()
 	case *common.Hash:
-		d.data = input.Bytes()
+		if input == nil {
+			d.isNil = true
+		} else {
+			d.data = input.Bytes()
+		}
 	case common.Address:
 		d.data = input.Bytes()
 	case *common.Address:
+		if input == nil {
+			d.isNil = true
+		} else {
+			d.data = input.Bytes()
+		}
+	case types.Bloom:
 		d.data = input.Bytes()
+	case *types.Bloom:
+		if input == nil {
+			d.isNil = true
+		} else {
+			d.data = input.Bytes()
+		}
 	case *big.Int:
-		d.data = input.Bytes()
+		if input == nil {
+			d.isNil = true
+		} else {
+			d.data = input.Bytes()
+		}
 	case int64:
 		d.data = big.NewInt(input).Bytes()
 	case uint64:
-		d.data = big.NewInt(int64(input)).Bytes()
+		buff := make([]byte, 8)
+		binary.BigEndian.PutUint64(buff, input)
+		d.data = buff
 	case int:
 		d.data = big.NewInt(int64(input)).Bytes()
 	case uint:
 		d.data = big.NewInt(int64(input)).Bytes()
+	case int8:
+		d.data = big.NewInt(int64(input)).Bytes()
+	case uint8:
+		d.data = big.NewInt(int64(input)).Bytes()
+	case int16:
+		d.data = big.NewInt(int64(input)).Bytes()
+	case uint16:
+		buff := make([]byte, 8)
+		binary.BigEndian.PutUint16(buff, input)
+		d.data = buff
+	case int32:
+		d.data = big.NewInt(int64(input)).Bytes()
+	case uint32:
+		buff := make([]byte, 8)
+		binary.BigEndian.PutUint32(buff, input)
+		d.data = buff
 	case string: // hexstring
 		d.data = common.Big(input).Bytes()
 	default:
@@ -76,14 +124,15 @@ func newHexData(input interface{}) *hexdata {
 }
 
 type hexnum struct {
-	data []byte
+	data  []byte
+	isNil bool
 }
 
 func (d *hexnum) String() string {
 	// Get hex string from bytes
 	out := common.Bytes2Hex(d.data)
 	// Trim leading 0s
-	out = strings.Trim(out, "0")
+	out = strings.TrimLeft(out, "0")
 	// Output "0x0" when value is 0
 	if len(out) == 0 {
 		out = "0"
@@ -92,6 +141,9 @@ func (d *hexnum) String() string {
 }
 
 func (d *hexnum) MarshalJSON() ([]byte, error) {
+	if d.isNil {
+		return json.Marshal(nil)
+	}
 	return json.Marshal(d.String())
 }
 
