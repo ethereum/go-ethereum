@@ -17,6 +17,10 @@ func (self StorageSize) String() string {
 	}
 }
 
+func (self StorageSize) Int64() int64 {
+	return int64(self)
+}
+
 // The different number of units
 var (
 	Douglas  = BigPow(10, 42)

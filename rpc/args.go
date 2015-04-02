@@ -108,8 +108,8 @@ func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewDecodeParamError(err.Error())
 	}
 
-	if len(obj) < 1 {
-		return NewInsufficientParamsError(len(obj), 1)
+	if len(obj) < 2 {
+		return NewInsufficientParamsError(len(obj), 2)
 	}
 
 	argstr, ok := obj[0].(string)
@@ -118,9 +118,7 @@ func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 	args.BlockHash = argstr
 
-	if len(obj) > 1 {
-		args.IncludeTxs = obj[1].(bool)
-	}
+	args.IncludeTxs = obj[1].(bool)
 
 	return nil
 }
@@ -136,8 +134,8 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewDecodeParamError(err.Error())
 	}
 
-	if len(obj) < 1 {
-		return NewInsufficientParamsError(len(obj), 1)
+	if len(obj) < 2 {
+		return NewInsufficientParamsError(len(obj), 2)
 	}
 
 	if v, ok := obj[0].(float64); ok {
@@ -148,9 +146,7 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInvalidTypeError("blockNumber", "not a number or string")
 	}
 
-	if len(obj) > 1 {
-		args.IncludeTxs = obj[1].(bool)
-	}
+	args.IncludeTxs = obj[1].(bool)
 
 	return nil
 }
@@ -202,7 +198,7 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 
 	var num int64
 	if ext.Value == nil {
-		return NewValidationError("value", "is required")
+		num = 0
 	} else {
 		if err := numString(ext.Value, &num); err != nil {
 			return err
@@ -211,7 +207,7 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Value = big.NewInt(num)
 
 	if ext.Gas == nil {
-		return NewValidationError("gas", "is required")
+		num = 0
 	} else {
 		if err := numString(ext.Gas, &num); err != nil {
 			return err
@@ -220,7 +216,7 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Gas = big.NewInt(num)
 
 	if ext.GasPrice == nil {
-		return NewValidationError("gasprice", "is required")
+		num = 0
 	} else {
 		if err := numString(ext.GasPrice, &num); err != nil {
 			return err
@@ -233,6 +229,8 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeightFromJson(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
 	}
 
 	return nil
@@ -320,6 +318,8 @@ func (args *CallArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeightFromJson(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
 	}
 
 	return nil
@@ -350,6 +350,8 @@ func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
 	}
 
 	return nil
@@ -387,6 +389,8 @@ func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeight(obj[2], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
 	}
 
 	return nil
@@ -417,6 +421,8 @@ func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
 	}
 
 	return nil
@@ -447,6 +453,8 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
 	}
 
 	return nil
@@ -477,6 +485,29 @@ func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
+	}
+
+	return nil
+}
+
+type BlockNumArg struct {
+	BlockNumber int64
+}
+
+func (args *BlockNumArg) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return NewInsufficientParamsError(len(obj), 1)
+	}
+
+	if err := blockHeight(obj[0], &args.BlockNumber); err != nil {
+		return err
 	}
 
 	return nil
@@ -493,31 +524,28 @@ func (args *BlockNumIndexArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewDecodeParamError(err.Error())
 	}
 
-	if len(obj) < 1 {
-		return NewInsufficientParamsError(len(obj), 1)
+	if len(obj) < 2 {
+		return NewInsufficientParamsError(len(obj), 2)
 	}
 
 	if err := blockHeight(obj[0], &args.BlockNumber); err != nil {
 		return err
 	}
 
-	if len(obj) > 1 {
-		arg1, ok := obj[1].(string)
-		if !ok {
-			return NewInvalidTypeError("index", "not a string")
-		}
-		args.Index = common.Big(arg1).Int64()
+	arg1, ok := obj[1].(string)
+	if !ok {
+		return NewInvalidTypeError("index", "not a string")
 	}
+	args.Index = common.Big(arg1).Int64()
 
 	return nil
 }
 
-type HashIndexArgs struct {
-	Hash  string
-	Index int64
+type HashArgs struct {
+	Hash string
 }
 
-func (args *HashIndexArgs) UnmarshalJSON(b []byte) (err error) {
+func (args *HashArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
 	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
@@ -533,13 +561,35 @@ func (args *HashIndexArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 	args.Hash = arg0
 
-	if len(obj) > 1 {
-		arg1, ok := obj[1].(string)
-		if !ok {
-			return NewInvalidTypeError("index", "not a string")
-		}
-		args.Index = common.Big(arg1).Int64()
+	return nil
+}
+
+type HashIndexArgs struct {
+	Hash  string
+	Index int64
+}
+
+func (args *HashIndexArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return NewDecodeParamError(err.Error())
 	}
+
+	if len(obj) < 2 {
+		return NewInsufficientParamsError(len(obj), 2)
+	}
+
+	arg0, ok := obj[0].(string)
+	if !ok {
+		return NewInvalidTypeError("hash", "not a string")
+	}
+	args.Hash = arg0
+
+	arg1, ok := obj[1].(string)
+	if !ok {
+		return NewInvalidTypeError("index", "not a string")
+	}
+	args.Index = common.Big(arg1).Int64()
 
 	return nil
 }

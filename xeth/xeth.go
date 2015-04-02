@@ -323,6 +323,10 @@ func (self *XEth) CodeAt(address string) string {
 	return common.ToHex(self.State().state.GetCode(common.HexToAddress(address)))
 }
 
+func (self *XEth) CodeAtBytes(address string) []byte {
+	return self.State().SafeGet(address).Code()
+}
+
 func (self *XEth) IsContract(address string) bool {
 	return len(self.State().SafeGet(address).Code()) > 0
 }
