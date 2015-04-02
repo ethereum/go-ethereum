@@ -128,7 +128,7 @@ func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
 	// TODO respect fullTx flag
 
 	if block == nil {
-		return &BlockRes{}
+		return nil
 	}
 
 	res := new(BlockRes)
