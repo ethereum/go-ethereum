@@ -207,7 +207,7 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Value = big.NewInt(num)
 
 	if ext.Gas == nil {
-		return NewValidationError("gas", "is required")
+		num = 0
 	} else {
 		if err := numString(ext.Gas, &num); err != nil {
 			return err
@@ -216,7 +216,7 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Gas = big.NewInt(num)
 
 	if ext.GasPrice == nil {
-		return NewValidationError("gasprice", "is required")
+		num = 0
 	} else {
 		if err := numString(ext.GasPrice, &num); err != nil {
 			return err
