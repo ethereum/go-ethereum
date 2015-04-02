@@ -233,6 +233,8 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeightFromJson(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
 	}
 
 	return nil
@@ -320,6 +322,8 @@ func (args *CallArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeightFromJson(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
 	}
 
 	return nil
@@ -350,6 +354,8 @@ func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
 	}
 
 	return nil
@@ -387,6 +393,8 @@ func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeight(obj[2], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
 	}
 
 	return nil
@@ -417,6 +425,8 @@ func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
 	}
 
 	return nil
@@ -447,6 +457,8 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
 	}
 
 	return nil
@@ -477,6 +489,8 @@ func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
 			return err
 		}
+	} else {
+		args.BlockNumber = -1
 	}
 
 	return nil
