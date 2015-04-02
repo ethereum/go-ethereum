@@ -217,9 +217,11 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		if args.Index >= int64(len(br.Transactions)) || args.Index < 0 {
-			return NewValidationError("Index", "does not exist")
+			// return NewValidationError("Index", "does not exist")
+			*reply = nil
+		} else {
+			*reply = br.Transactions[args.Index]
 		}
-		*reply = br.Transactions[args.Index]
 	case "eth_getTransactionByBlockNumberAndIndex":
 		args := new(BlockNumIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -233,9 +235,11 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		if args.Index >= int64(len(v.Transactions)) || args.Index < 0 {
-			return NewValidationError("Index", "does not exist")
+			// return NewValidationError("Index", "does not exist")
+			*reply = nil
+		} else {
+			*reply = v.Transactions[args.Index]
 		}
-		*reply = v.Transactions[args.Index]
 	case "eth_getUncleByBlockHashAndIndex":
 		args := new(HashIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
