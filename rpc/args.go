@@ -198,7 +198,7 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 
 	var num int64
 	if ext.Value == nil {
-		return NewValidationError("value", "is required")
+		num = 0
 	} else {
 		if err := numString(ext.Value, &num); err != nil {
 			return err
