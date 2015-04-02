@@ -1021,12 +1021,15 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	var argstr string
-	argstr, ok := obj[0].To.(string)
-	if !ok {
-		return NewInvalidTypeError("to", "is not a string")
+	if obj[0].To == nil {
+		args.To = ""
+	} else {
+		argstr, ok := obj[0].To.(string)
+		if !ok {
+			return NewInvalidTypeError("to", "is not a string")
+		}
+		args.To = argstr
 	}
-	args.To = argstr
 
 	t := make([]string, len(obj[0].Topics))
 	for i, j := range obj[0].Topics {

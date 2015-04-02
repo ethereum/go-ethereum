@@ -1805,6 +1805,16 @@ func TestWhisperFilterArgsEmpty(t *testing.T) {
 	}
 }
 
+func TestWhisperFilterArgsToInt(t *testing.T) {
+	input := `[{"to": 2}]`
+
+	args := new(WhisperFilterArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
 func TestWhisperFilterArgsToBool(t *testing.T) {
 	input := `[{"topics": ["0x68656c6c6f20776f726c64"], "to": false}]`
 
@@ -1812,6 +1822,21 @@ func TestWhisperFilterArgsToBool(t *testing.T) {
 	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
 	if len(str) > 0 {
 		t.Error(str)
+	}
+}
+
+func TestWhisperFilterArgsToMissing(t *testing.T) {
+	input := `[{"topics": ["0x68656c6c6f20776f726c64"]}]`
+	expected := new(WhisperFilterArgs)
+	expected.To = ""
+
+	args := new(WhisperFilterArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if args.To != expected.To {
+		t.Errorf("To shoud be %v but is %v", expected.To, args.To)
 	}
 }
 
