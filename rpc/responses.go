@@ -16,7 +16,7 @@ type BlockRes struct {
 	Nonce           *hexdata          `json:"nonce"`
 	Sha3Uncles      *hexdata          `json:"sha3Uncles"`
 	LogsBloom       *hexdata          `json:"logsBloom"`
-	TransactionRoot *hexdata          `json:"transactionRoot"`
+	TransactionRoot *hexdata          `json:"transactionsRoot"`
 	StateRoot       *hexdata          `json:"stateRoot"`
 	Miner           *hexdata          `json:"miner"`
 	Difficulty      *hexnum           `json:"difficulty"`
@@ -40,7 +40,7 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 			Nonce           *hexdata          `json:"nonce"`
 			Sha3Uncles      *hexdata          `json:"sha3Uncles"`
 			LogsBloom       *hexdata          `json:"logsBloom"`
-			TransactionRoot *hexdata          `json:"transactionRoot"`
+			TransactionRoot *hexdata          `json:"transactionsRoot"`
 			StateRoot       *hexdata          `json:"stateRoot"`
 			Miner           *hexdata          `json:"miner"`
 			Difficulty      *hexnum           `json:"difficulty"`
@@ -83,7 +83,7 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 			Nonce           *hexdata   `json:"nonce"`
 			Sha3Uncles      *hexdata   `json:"sha3Uncles"`
 			LogsBloom       *hexdata   `json:"logsBloom"`
-			TransactionRoot *hexdata   `json:"transactionRoot"`
+			TransactionRoot *hexdata   `json:"transactionsRoot"`
 			StateRoot       *hexdata   `json:"stateRoot"`
 			Miner           *hexdata   `json:"miner"`
 			Difficulty      *hexnum    `json:"difficulty"`
