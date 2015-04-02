@@ -171,6 +171,8 @@ func (self *worker) wait() {
 				}
 				self.mux.Post(core.NewMinedBlockEvent{block})
 
+				minerlogger.Infof("ð¨#%v", block.Number())
+
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     block.Hash().Hex(),
 					BlockNumber:   block.Number(),
