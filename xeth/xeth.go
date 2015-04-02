@@ -196,7 +196,7 @@ func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blha
 	// meta
 	var txExtra struct {
 		BlockHash  common.Hash
-		BlockIndex int64
+		BlockIndex uint64
 		Index      uint64
 	}
 
@@ -205,8 +205,10 @@ func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blha
 	err := rlp.Decode(r, &txExtra)
 	if err == nil {
 		blhash = txExtra.BlockHash
-		blnum = big.NewInt(txExtra.BlockIndex)
+		blnum = big.NewInt(int64(txExtra.BlockIndex))
 		txi = txExtra.Index
+	} else {
+		pipelogger.Errorln(err)
 	}
 
 	return
