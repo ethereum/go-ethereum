@@ -33,7 +33,6 @@ and accounts persistence is derived from stored keys' addresses
 package accounts
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"errors"
@@ -41,6 +40,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -50,12 +50,12 @@ var (
 )
 
 type Account struct {
-	Address []byte
+	Address common.Address
 }
 
 type Manager struct {
 	keyStore crypto.KeyStore2
-	unlocked map[string]*unlocked
+	unlocked map[common.Address]*unlocked
 	mutex    sync.RWMutex
 }
 
@@ -67,40 +67,40 @@ type unlocked struct {
 func NewManager(keyStore crypto.KeyStore2) *Manager {
 	return &Manager{
 		keyStore: keyStore,
-		unlocked: make(map[string]*unlocked),
+		unlocked: make(map[common.Address]*unlocked),
 	}
 }
 
-func (am *Manager) HasAccount(addr []byte) bool {
+func (am *Manager) HasAccount(addr common.Address) bool {
 	accounts, _ := am.Accounts()
 	for _, acct := range accounts {
-		if bytes.Compare(acct.Address, addr) == 0 {
+		if acct.Address == addr {
 			return true
 		}
 	}
 	return false
 }
 
-func (am *Manager) Primary() (addr []byte, err error) {
+func (am *Manager) Primary() (addr common.Address, err error) {
 	addrs, err := am.keyStore.GetKeyAddresses()
 	if os.IsNotExist(err) {
-		return nil, ErrNoKeys
+		return common.Address{}, ErrNoKeys
 	} else if err != nil {
-		return nil, err
+		return common.Address{}, err
 	}
 	if len(addrs) == 0 {
-		return nil, ErrNoKeys
+		return common.Address{}, ErrNoKeys
 	}
 	return addrs[0], nil
 }
 
-func (am *Manager) DeleteAccount(address []byte, auth string) error {
+func (am *Manager) DeleteAccount(address common.Address, auth string) error {
 	return am.keyStore.DeleteKey(address, auth)
 }
 
 func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) {
 	am.mutex.RLock()
-	unlockedKey, found := am.unlocked[string(a.Address)]
+	unlockedKey, found := am.unlocked[a.Address]
 	am.mutex.RUnlock()
 	if !found {
 		return nil, ErrLocked
@@ -111,7 +111,7 @@ func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) 
 
 // TimedUnlock unlocks the account with the given address.
 // When timeout has passed, the account will be locked again.
-func (am *Manager) TimedUnlock(addr []byte, keyAuth string, timeout time.Duration) error {
+func (am *Manager) TimedUnlock(addr common.Address, keyAuth string, timeout time.Duration) error {
 	key, err := am.keyStore.GetKey(addr, keyAuth)
 	if err != nil {
 		return err
@@ -124,7 +124,7 @@ func (am *Manager) TimedUnlock(addr []byte, keyAuth string, timeout time.Duratio
 // Unlock unlocks the account with the given address. The account
 // stays unlocked until the program exits or until a TimedUnlock
 // timeout (started after the call to Unlock) expires.
-func (am *Manager) Unlock(addr []byte, keyAuth string) error {
+func (am *Manager) Unlock(addr common.Address, keyAuth string) error {
 	key, err := am.keyStore.GetKey(addr, keyAuth)
 	if err != nil {
 		return err
@@ -157,10 +157,10 @@ func (am *Manager) Accounts() ([]Account, error) {
 	return accounts, err
 }
 
-func (am *Manager) addUnlocked(addr []byte, key *crypto.Key) *unlocked {
+func (am *Manager) addUnlocked(addr common.Address, key *crypto.Key) *unlocked {
 	u := &unlocked{Key: key, abort: make(chan struct{})}
 	am.mutex.Lock()
-	prev, found := am.unlocked[string(addr)]
+	prev, found := am.unlocked[addr]
 	if found {
 		// terminate dropLater for this key to avoid unexpected drops.
 		close(prev.abort)
@@ -169,12 +169,12 @@ func (am *Manager) addUnlocked(addr []byte, key *crypto.Key) *unlocked {
 		// key, i.e. when Unlock was used.
 		zeroKey(prev.PrivateKey)
 	}
-	am.unlocked[string(addr)] = u
+	am.unlocked[addr] = u
 	am.mutex.Unlock()
 	return u
 }
 
-func (am *Manager) dropLater(addr []byte, u *unlocked, timeout time.Duration) {
+func (am *Manager) dropLater(addr common.Address, u *unlocked, timeout time.Duration) {
 	t := time.NewTimer(timeout)
 	defer t.Stop()
 	select {
@@ -186,9 +186,9 @@ func (am *Manager) dropLater(addr []byte, u *unlocked, timeout time.Duration) {
 		// was launched with. we can check that using pointer equality
 		// because the map stores a new pointer every time the key is
 		// unlocked.
-		if am.unlocked[string(addr)] == u {
+		if am.unlocked[addr] == u {
 			zeroKey(u.PrivateKey)
-			delete(am.unlocked, string(addr))
+			delete(am.unlocked, addr)
 		}
 		am.mutex.Unlock()
 	}
@@ -204,7 +204,7 @@ func zeroKey(k *ecdsa.PrivateKey) {
 
 // USE WITH CAUTION = this will save an unencrypted private key on disk
 // no cli or js interface
-func (am *Manager) Export(path string, addr []byte, keyAuth string) error {
+func (am *Manager) Export(path string, addr common.Address, keyAuth string) error {
 	key, err := am.keyStore.GetKey(addr, keyAuth)
 	if err != nil {
 		return err

@@ -68,7 +68,6 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -76,6 +75,7 @@ import (
 	"path/filepath"
 
 	"code.google.com/p/go-uuid/uuid"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"golang.org/x/crypto/scrypt"
 )
@@ -100,7 +100,7 @@ func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *K
 	return GenerateNewKeyDefault(ks, rand, auth)
 }
 
-func (ks keyStorePassphrase) GetKey(keyAddr []byte, auth string) (key *Key, err error) {
+func (ks keyStorePassphrase) GetKey(keyAddr common.Address, auth string) (key *Key, err error) {
 	keyBytes, keyId, err := DecryptKey(ks, keyAddr, auth)
 	if err != nil {
 		return nil, err
@@ -113,7 +113,7 @@ func (ks keyStorePassphrase) GetKey(keyAddr []byte, auth string) (key *Key, err 
 	return key, err
 }
 
-func (ks keyStorePassphrase) GetKeyAddresses() (addresses [][]byte, err error) {
+func (ks keyStorePassphrase) GetKeyAddresses() (addresses []common.Address, err error) {
 	return GetKeyAddresses(ks.keysDirPath)
 }
 
@@ -150,7 +150,7 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	}
 	keyStruct := encryptedKeyJSON{
 		key.Id,
-		key.Address,
+		key.Address.Bytes(),
 		cipherStruct,
 	}
 	keyJSON, err := json.Marshal(keyStruct)
@@ -161,18 +161,18 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	return WriteKeyFile(key.Address, ks.keysDirPath, keyJSON)
 }
 
-func (ks keyStorePassphrase) DeleteKey(keyAddr []byte, auth string) (err error) {
+func (ks keyStorePassphrase) DeleteKey(keyAddr common.Address, auth string) (err error) {
 	// only delete if correct passphrase is given
 	_, _, err = DecryptKey(ks, keyAddr, auth)
 	if err != nil {
 		return err
 	}
 
-	keyDirPath := filepath.Join(ks.keysDirPath, hex.EncodeToString(keyAddr))
+	keyDirPath := filepath.Join(ks.keysDirPath, keyAddr.Hex())
 	return os.RemoveAll(keyDirPath)
 }
 
-func DecryptKey(ks keyStorePassphrase, keyAddr []byte, auth string) (keyBytes []byte, keyId []byte, err error) {
+func DecryptKey(ks keyStorePassphrase, keyAddr common.Address, auth string) (keyBytes []byte, keyId []byte, err error) {
 	fileContent, err := GetKeyFile(ks.keysDirPath, keyAddr)
 	if err != nil {
 		return nil, nil, err

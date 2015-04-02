@@ -365,7 +365,7 @@ func (self *XEth) Accounts() []string {
 	accounts, _ := self.backend.AccountManager().Accounts()
 	accountAddresses := make([]string, len(accounts))
 	for i, ac := range accounts {
-		accountAddresses[i] = common.ToHex(ac.Address)
+		accountAddresses[i] = ac.Address.Str()
 	}
 	return accountAddresses
 }

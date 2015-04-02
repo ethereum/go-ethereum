@@ -30,12 +30,13 @@ import (
 	"io"
 
 	"code.google.com/p/go-uuid/uuid"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type Key struct {
 	Id uuid.UUID // Version 4 "random" for unique id not derived from key data
 	// to simplify lookups we also store the address
-	Address []byte
+	Address common.Address
 	// we only store privkey as pubkey/address can be derived from it
 	// privkey in this struct is always in plaintext
 	PrivateKey *ecdsa.PrivateKey
@@ -63,7 +64,7 @@ type encryptedKeyJSON struct {
 func (k *Key) MarshalJSON() (j []byte, err error) {
 	jStruct := plainKeyJSON{
 		k.Id,
-		k.Address,
+		k.Address.Bytes(),
 		FromECDSA(k.PrivateKey),
 	}
 	j, err = json.Marshal(jStruct)
@@ -80,7 +81,7 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 	u := new(uuid.UUID)
 	*u = keyJSON.Id
 	k.Id = *u
-	k.Address = keyJSON.Address
+	k.Address = common.BytesToAddress(keyJSON.Address)
 	k.PrivateKey = ToECDSA(keyJSON.PrivateKey)
 
 	return err
@@ -90,7 +91,7 @@ func NewKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
 	id := uuid.NewRandom()
 	key := &Key{
 		Id:         id,
-		Address:    PubkeyToAddress(privateKeyECDSA.PublicKey),
+		Address:    common.BytesToAddress(PubkeyToAddress(privateKeyECDSA.PublicKey)),
 		PrivateKey: privateKeyECDSA,
 	}
 	return key
