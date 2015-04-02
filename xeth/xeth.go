@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -121,6 +122,7 @@ func cAddress(a []string) []common.Address {
 func cTopics(t [][]string) [][]common.Hash {
 	topics := make([][]common.Hash, len(t))
 	for i, iv := range t {
+		topics[i] = make([]common.Hash, len(iv))
 		for j, jv := range iv {
 			topics[i][j] = common.HexToHash(jv)
 		}
@@ -128,8 +130,8 @@ func cTopics(t [][]string) [][]common.Hash {
 	return topics
 }
 
-func (self *XEth) DefaultGas() *big.Int      { return defaultGas }
-func (self *XEth) DefaultGasPrice() *big.Int { return defaultGasPrice }
+func (self *XEth) DefaultGas() *big.Int      { return new(big.Int).Set(defaultGas) }
+func (self *XEth) DefaultGasPrice() *big.Int { return new(big.Int).Set(defaultGasPrice) }
 
 func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }
 
@@ -185,12 +187,29 @@ func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 	return block
 }
 
-func (self *XEth) EthTransactionByHash(hash string) *types.Transaction {
+func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blhash common.Hash, blnum *big.Int, txi uint64) {
 	data, _ := self.backend.ExtraDb().Get(common.FromHex(hash))
 	if len(data) != 0 {
-		return types.NewTransactionFromBytes(data)
+		tx = types.NewTransactionFromBytes(data)
 	}
-	return nil
+
+	// meta
+	var txExtra struct {
+		BlockHash  common.Hash
+		BlockIndex int64
+		Index      uint64
+	}
+
+	v, _ := self.backend.ExtraDb().Get(append(common.FromHex(hash), 0x0001))
+	r := bytes.NewReader(v)
+	err := rlp.Decode(r, &txExtra)
+	if err == nil {
+		blhash = txExtra.BlockHash
+		blnum = big.NewInt(txExtra.BlockIndex)
+		txi = txExtra.Index
+	}
+
+	return
 }
 
 func (self *XEth) BlockByNumber(num int64) *Block {
@@ -289,21 +308,19 @@ func (self *XEth) NumberToHuman(balance string) string {
 }
 
 func (self *XEth) StorageAt(addr, storageAddr string) string {
-	storage := self.State().SafeGet(addr).StorageString(storageAddr)
-
-	return common.ToHex(storage.Bytes())
+	return common.ToHex(self.State().state.GetState(common.HexToAddress(addr), common.HexToHash(storageAddr)))
 }
 
 func (self *XEth) BalanceAt(addr string) string {
-	return self.State().SafeGet(addr).Balance().String()
+	return self.State().state.GetBalance(common.HexToAddress(addr)).String()
 }
 
 func (self *XEth) TxCountAt(address string) int {
-	return int(self.State().SafeGet(address).Nonce())
+	return int(self.State().state.GetNonce(common.HexToAddress(address)))
 }
 
 func (self *XEth) CodeAt(address string) string {
-	return common.ToHex(self.State().SafeGet(address).Code())
+	return common.ToHex(self.State().state.GetCode(common.HexToAddress(address)))
 }
 
 func (self *XEth) IsContract(address string) bool {
@@ -547,12 +564,13 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		value:    common.Big(valueStr),
 		data:     common.FromHex(dataStr),
 	}
+
 	if msg.gas.Cmp(big.NewInt(0)) == 0 {
-		msg.gas = defaultGas
+		msg.gas = self.DefaultGas()
 	}
 
 	if msg.gasPrice.Cmp(big.NewInt(0)) == 0 {
-		msg.gasPrice = defaultGasPrice
+		msg.gasPrice = self.DefaultGasPrice()
 	}
 
 	block := self.CurrentBlock()
@@ -598,11 +616,11 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	// TODO: align default values to have the same type, e.g. not depend on
 	// common.Value conversions later on
 	if gas.Cmp(big.NewInt(0)) == 0 {
-		gas = defaultGas
+		gas = self.DefaultGas()
 	}
 
 	if price.Cmp(big.NewInt(0)) == 0 {
-		price = defaultGasPrice
+		price = self.DefaultGasPrice()
 	}
 
 	data = common.FromHex(codeStr)

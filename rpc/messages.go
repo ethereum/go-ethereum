@@ -19,7 +19,100 @@ package rpc
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
+	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
 )
+
+type hexdata struct {
+	data []byte
+}
+
+func (d *hexdata) String() string {
+	return "0x" + common.Bytes2Hex(d.data)
+}
+
+func (d *hexdata) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.String())
+}
+
+func (d *hexdata) UnmarshalJSON(b []byte) (err error) {
+	d.data = common.FromHex(string(b))
+	return nil
+}
+
+func newHexData(input interface{}) *hexdata {
+	d := new(hexdata)
+
+	switch input := input.(type) {
+	case []byte:
+		d.data = input
+	case common.Hash:
+		d.data = input.Bytes()
+	case *common.Hash:
+		d.data = input.Bytes()
+	case common.Address:
+		d.data = input.Bytes()
+	case *common.Address:
+		d.data = input.Bytes()
+	case *big.Int:
+		d.data = input.Bytes()
+	case int64:
+		d.data = big.NewInt(input).Bytes()
+	case uint64:
+		d.data = big.NewInt(int64(input)).Bytes()
+	case int:
+		d.data = big.NewInt(int64(input)).Bytes()
+	case uint:
+		d.data = big.NewInt(int64(input)).Bytes()
+	case string: // hexstring
+		d.data = common.Big(input).Bytes()
+	default:
+		d.data = nil
+	}
+
+	return d
+}
+
+type hexnum struct {
+	data []byte
+}
+
+func (d *hexnum) String() string {
+	// Get hex string from bytes
+	out := common.Bytes2Hex(d.data)
+	// Trim leading 0s
+	out = strings.Trim(out, "0")
+	// Output "0x0" when value is 0
+	if len(out) == 0 {
+		out = "0"
+	}
+	return "0x" + out
+}
+
+func (d *hexnum) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.String())
+}
+
+func (d *hexnum) UnmarshalJSON(b []byte) (err error) {
+	d.data = common.FromHex(string(b))
+	return nil
+}
+
+func newHexNum(input interface{}) *hexnum {
+	d := new(hexnum)
+
+	d.data = newHexData(input).data
+
+	return d
+}
+
+type RpcConfig struct {
+	ListenAddress string
+	ListenPort    uint
+	CorsDomain    string
+}
 
 type InvalidTypeError struct {
 	method string

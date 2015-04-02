@@ -20,8 +20,6 @@ const (
 	JitVmTy
 	MaxVmTy
 
-	MaxCallDepth = 1025
-
 	LogTyPretty byte = 0x1
 	LogTyDiff   byte = 0x2
 )

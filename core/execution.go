@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type Execution struct {
@@ -43,23 +44,36 @@ func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.
 
 	env := self.env
 	evm := self.evm
-	if env.Depth() == vm.MaxCallDepth {
+	if env.Depth() > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(self.Gas, self.price)
 
 		return nil, vm.DepthError{}
 	}
 
 	vsnapshot := env.State().Copy()
+	var createAccount bool
 	if self.address == nil {
 		// Generate a new address
 		nonce := env.State().GetNonce(caller.Address())
-		addr := crypto.CreateAddress(caller.Address(), nonce)
 		env.State().SetNonce(caller.Address(), nonce+1)
+
+		addr := crypto.CreateAddress(caller.Address(), nonce)
+
 		self.address = &addr
+		createAccount = true
 	}
 	snapshot := env.State().Copy()
 
-	from, to := env.State().GetStateObject(caller.Address()), env.State().GetOrNewStateObject(*self.address)
+	var (
+		from = env.State().GetStateObject(caller.Address())
+		to   *state.StateObject
+	)
+	if createAccount {
+		to = env.State().CreateAccount(*self.address)
+	} else {
+		to = env.State().GetOrNewStateObject(*self.address)
+	}
+
 	err = env.Transfer(from, to, self.value)
 	if err != nil {
 		env.State().Set(vsnapshot)

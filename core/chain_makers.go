@@ -5,10 +5,10 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow"
-	"github.com/ethereum/go-ethereum/core/state"
 )
 
 // So we can generate blocks easily
@@ -81,7 +81,7 @@ func makeBlock(bman *BlockProcessor, parent *types.Block, i int, db common.Datab
 	cbase := state.GetOrNewStateObject(addr)
 	cbase.SetGasPool(CalcGasLimit(parent, block))
 	cbase.AddBalance(BlockReward)
-	state.Update(common.Big0)
+	state.Update()
 	block.SetRoot(state.Root())
 	return block
 }

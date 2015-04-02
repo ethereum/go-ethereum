@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/fatih/set.v0"
@@ -83,7 +84,7 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	}
 
 	// Update the state with pending changes
-	statedb.Update(nil)
+	statedb.Update()
 
 	cumulative := new(big.Int).Set(usedGas.Add(usedGas, gas))
 	receipt := types.NewReceipt(statedb.Root().Bytes(), cumulative)
@@ -210,14 +211,16 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 		return
 	}
 
-	// Accumulate static rewards; block reward, uncle's and uncle inclusion.
-	if err = sm.AccumulateRewards(state, block, parent); err != nil {
+	// Verify uncles
+	if err = sm.VerifyUncles(state, block, parent); err != nil {
 		return
 	}
+	// Accumulate static rewards; block reward, uncle's and uncle inclusion.
+	AccumulateRewards(state, block)
 
 	// Commit state objects/accounts to a temporary trie (does not save)
 	// used to calculate the state root.
-	state.Update(common.Big0)
+	state.Update()
 	if header.Root != state.Root() {
 		err = fmt.Errorf("invalid merkle root. received=%x got=%x", header.Root, state.Root())
 		return
@@ -233,8 +236,9 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 		sm.txpool.RemoveSet(block.Transactions())
 	}
 
-	for _, tx := range block.Transactions() {
-		putTx(sm.extraDb, tx)
+	// This puts transactions in a extra db for rpc
+	for i, tx := range block.Transactions() {
+		putTx(sm.extraDb, tx, block, uint64(i))
 	}
 
 	if uncle {
@@ -251,7 +255,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
 func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
-	if len(block.Extra) > 1024 {
+	if big.NewInt(int64(len(block.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
 		return fmt.Errorf("Block extra data too long (%d)", len(block.Extra))
 	}
 
@@ -260,10 +264,11 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
 	}
 
-	// block.gasLimit - parent.gasLimit <= parent.gasLimit / 1024
+	// block.gasLimit - parent.gasLimit <= parent.gasLimit / GasLimitBoundDivisor
 	a := new(big.Int).Sub(block.GasLimit, parent.GasLimit)
-	b := new(big.Int).Div(parent.GasLimit, big.NewInt(1024))
-	if a.Cmp(b) > 0 {
+	a.Abs(a)
+	b := new(big.Int).Div(parent.GasLimit, params.GasLimitBoundDivisor)
+	if !(a.Cmp(b) < 0) || (block.GasLimit.Cmp(params.MinGasLimit) == -1) {
 		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
 	}
 
@@ -287,9 +292,27 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 	return nil
 }
 
-func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, parent *types.Block) error {
+func AccumulateRewards(statedb *state.StateDB, block *types.Block) {
 	reward := new(big.Int).Set(BlockReward)
 
+	for _, uncle := range block.Uncles() {
+		num := new(big.Int).Add(big.NewInt(8), uncle.Number)
+		num.Sub(num, block.Number())
+
+		r := new(big.Int)
+		r.Mul(BlockReward, num)
+		r.Div(r, big.NewInt(8))
+
+		statedb.AddBalance(uncle.Coinbase, r)
+
+		reward.Add(reward, new(big.Int).Div(BlockReward, big.NewInt(32)))
+	}
+
+	// Get the account associated with the coinbase
+	statedb.AddBalance(block.Header().Coinbase, reward)
+}
+
+func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *types.Block) error {
 	ancestors := set.New()
 	uncles := set.New()
 	ancestorHeaders := make(map[common.Hash]*types.Header)
@@ -323,16 +346,7 @@ func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, paren
 			return ValidationError(fmt.Sprintf("%v", err))
 		}
 
-		r := new(big.Int)
-		r.Mul(BlockReward, big.NewInt(15)).Div(r, big.NewInt(16))
-
-		statedb.AddBalance(uncle.Coinbase, r)
-
-		reward.Add(reward, new(big.Int).Div(BlockReward, big.NewInt(32)))
 	}
-
-	// Get the account associated with the coinbase
-	statedb.AddBalance(block.Header().Coinbase, reward)
 
 	return nil
 }
@@ -350,16 +364,30 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 	)
 
 	sm.TransitionState(state, parent, block, true)
-	sm.AccumulateRewards(state, block, parent)
 
 	return state.Logs(), nil
 }
 
-func putTx(db common.Database, tx *types.Transaction) {
+func putTx(db common.Database, tx *types.Transaction, block *types.Block, i uint64) {
 	rlpEnc, err := rlp.EncodeToBytes(tx)
 	if err != nil {
 		statelogger.Infoln("Failed encoding tx", err)
 		return
 	}
 	db.Put(tx.Hash().Bytes(), rlpEnc)
+
+	var txExtra struct {
+		BlockHash  common.Hash
+		BlockIndex uint64
+		Index      uint64
+	}
+	txExtra.BlockHash = block.Hash()
+	txExtra.BlockIndex = block.NumberU64()
+	txExtra.Index = i
+	rlpMeta, err := rlp.EncodeToBytes(txExtra)
+	if err != nil {
+		statelogger.Infoln("Failed encoding meta", err)
+		return
+	}
+	db.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)
 }
