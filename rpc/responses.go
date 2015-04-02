@@ -125,8 +125,6 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 }
 
 func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
-	// TODO respect fullTx flag
-
 	if block == nil {
 		return nil
 	}
@@ -182,6 +180,10 @@ type TransactionRes struct {
 }
 
 func NewTransactionRes(tx *types.Transaction) *TransactionRes {
+	if tx == nil {
+		return nil
+	}
+
 	var v = new(TransactionRes)
 	v.Hash = newHexData(tx.Hash())
 	v.Nonce = newHexNum(tx.Nonce())

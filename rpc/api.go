@@ -212,6 +212,9 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		block := api.xeth().EthBlockByHash(args.Hash)
 		br := NewBlockRes(block, true)
+		if br == nil {
+			*reply = nil
+		}
 
 		if args.Index >= int64(len(br.Transactions)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
@@ -225,6 +228,9 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
 		v := NewBlockRes(block, true)
+		if v == nil {
+			*reply = nil
+		}
 
 		if args.Index >= int64(len(v.Transactions)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
