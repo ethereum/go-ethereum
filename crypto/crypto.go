@@ -21,9 +21,14 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/ripemd160"
+)
+
+var (
+	cryptologger = logger.NewLogger("CRYPTO")
 )
 
 func init() {
@@ -69,8 +74,10 @@ func Ripemd160(data []byte) []byte {
 }
 
 func Ecrecover(hash, sig []byte) []byte {
-	r, _ := secp256k1.RecoverPubkey(hash, sig)
-
+	r, err := secp256k1.RecoverPubkey(hash, sig)
+	if err != nil {
+		cryptologger.Errorf("EC RECOVER FAIL: ", err)
+	}
 	return r
 }
 

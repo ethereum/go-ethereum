@@ -82,7 +82,7 @@ func ecrecoverFunc(in []byte) []byte {
 	rsv := append(in[64:128], byte(v.Uint64()))
 	pubKey := crypto.Ecrecover(in[:32], rsv)
 	// make sure the public key is a valid one
-	if pubKey == nil || len(pubKey) != 65 {
+	if pubKey == nil {
 		return nil
 	}
 
