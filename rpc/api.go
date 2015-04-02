@@ -194,6 +194,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 	case "eth_getTransactionByHash":
 		args := new(HashArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
 		}
 		tx, bhash, bnum, txi := api.xeth().EthTransactionByHash(args.Hash)
 		if tx != nil {

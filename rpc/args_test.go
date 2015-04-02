@@ -2090,6 +2090,51 @@ func TestHashIndexArgsInvalidIndex(t *testing.T) {
 	}
 }
 
+func TestHashArgs(t *testing.T) {
+	input := `["0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b"]`
+	expected := new(HashIndexArgs)
+	expected.Hash = "0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b"
+
+	args := new(HashArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Hash != args.Hash {
+		t.Errorf("Hash shoud be %#v but is %#v", expected.Hash, args.Hash)
+	}
+}
+
+func TestHashArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(HashArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestHashArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(HashArgs)
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestHashArgsInvalidHash(t *testing.T) {
+	input := `[7]`
+
+	args := new(HashArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
 func TestSubmitWorkArgs(t *testing.T) {
 	input := `["0x0000000000000001", "0x1234567890abcdef1234567890abcdef", "0xD1GE5700000000000000000000000000"]`
 	expected := new(SubmitWorkArgs)
