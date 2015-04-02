@@ -18,8 +18,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"unsafe"
 )
@@ -330,7 +330,7 @@ func env_create(_vm unsafe.Pointer, _gas *int64, _value unsafe.Pointer, initData
 	ret, suberr, ref := vm.env.Create(vm.me, nil, initData, gas, vm.price, value)
 	if suberr == nil {
 		dataGas := big.NewInt(int64(len(ret))) // TODO: Nto the best design. env.Create can do it, it has the reference to gas counter
-		dataGas.Mul(dataGas, GasCreateByte)
+		dataGas.Mul(dataGas, params.CreateDataGas)
 		gas.Sub(gas, dataGas)
 		*result = hash2llvm(ref.Address())
 	}

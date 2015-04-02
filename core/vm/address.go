@@ -5,6 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type Address interface {
@@ -27,28 +28,28 @@ func PrecompiledContracts() map[string]*PrecompiledAccount {
 	return map[string]*PrecompiledAccount{
 		// ECRECOVER
 		string(common.LeftPadBytes([]byte{1}, 20)): &PrecompiledAccount{func(l int) *big.Int {
-			return GasEcrecover
+			return params.EcrecoverGas
 		}, ecrecoverFunc},
 
 		// SHA256
 		string(common.LeftPadBytes([]byte{2}, 20)): &PrecompiledAccount{func(l int) *big.Int {
 			n := big.NewInt(int64(l+31) / 32)
-			n.Mul(n, GasSha256Word)
-			return n.Add(n, GasSha256Base)
+			n.Mul(n, params.Sha256WordGas)
+			return n.Add(n, params.Sha256Gas)
 		}, sha256Func},
 
 		// RIPEMD160
 		string(common.LeftPadBytes([]byte{3}, 20)): &PrecompiledAccount{func(l int) *big.Int {
 			n := big.NewInt(int64(l+31) / 32)
-			n.Mul(n, GasRipemdWord)
-			return n.Add(n, GasRipemdBase)
+			n.Mul(n, params.Ripemd160WordGas)
+			return n.Add(n, params.Ripemd160Gas)
 		}, ripemd160Func},
 
 		string(common.LeftPadBytes([]byte{4}, 20)): &PrecompiledAccount{func(l int) *big.Int {
 			n := big.NewInt(int64(l+31) / 32)
-			n.Mul(n, GasIdentityWord)
+			n.Mul(n, params.IdentityWordGas)
 
-			return n.Add(n, GasIdentityBase)
+			return n.Add(n, params.IdentityGas)
 		}, memCpy},
 	}
 }

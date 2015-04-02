@@ -171,6 +171,8 @@ func (self *worker) wait() {
 				}
 				self.mux.Post(core.NewMinedBlockEvent{block})
 
+				minerlogger.Infof("🔨 Mined block #%v", block.Number())
+
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     block.Hash().Hex(),
 					BlockNumber:   block.Number(),
@@ -270,9 +272,9 @@ gasLimit:
 
 	self.current.block.SetUncles(uncles)
 
-	self.current.state.AddBalance(self.coinbase, core.BlockReward)
+	core.AccumulateRewards(self.current.state, self.current.block)
 
-	self.current.state.Update(common.Big0)
+	self.current.state.Update()
 	self.push()
 }
 
@@ -296,9 +298,6 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 	if self.current.family.Has(uncle.Hash()) {
 		return core.UncleError(fmt.Sprintf("Uncle already in family (%x)", uncle.Hash()))
 	}
-
-	self.current.state.AddBalance(uncle.Coinbase, uncleReward)
-	self.current.state.AddBalance(self.coinbase, inclusionReward)
 
 	return nil
 }

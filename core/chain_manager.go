@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -32,18 +33,15 @@ type StateQuery interface {
 func CalcDifficulty(block, parent *types.Header) *big.Int {
 	diff := new(big.Int)
 
-	diffBoundDiv := big.NewInt(2048)
-	min := big.NewInt(131072)
-
-	adjust := new(big.Int).Div(parent.Difficulty, diffBoundDiv)
-	if (block.Time - parent.Time) < 8 {
+	adjust := new(big.Int).Div(parent.Difficulty, params.DifficultyBoundDivisor)
+	if big.NewInt(int64(block.Time)-int64(parent.Time)).Cmp(params.DurationLimit) < 0 {
 		diff.Add(parent.Difficulty, adjust)
 	} else {
 		diff.Sub(parent.Difficulty, adjust)
 	}
 
-	if diff.Cmp(min) < 0 {
-		return min
+	if diff.Cmp(params.MinimumDifficulty) < 0 {
+		return params.MinimumDifficulty
 	}
 
 	return diff
@@ -76,7 +74,7 @@ func CalcGasLimit(parent, block *types.Block) *big.Int {
 	result := new(big.Int).Add(previous, curInt)
 	result.Div(result, big.NewInt(1024))
 
-	return common.BigMax(GenesisGasLimit, result)
+	return common.BigMax(params.GenesisGasLimit, result)
 }
 
 type ChainManager struct {

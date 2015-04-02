@@ -80,8 +80,9 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		v := api.xethAtStateNum(args.BlockNumber).State().SafeGet(args.Address).Balance()
-		*reply = common.ToHex(v.Bytes())
+		*reply = api.xethAtStateNum(args.BlockNumber).BalanceAt(args.Address)
+		//v := api.xethAtStateNum(args.BlockNumber).State().SafeGet(args.Address).Balance()
+		//*reply = common.ToHex(v.Bytes())
 	case "eth_getStorage", "eth_storageAt":
 		args := new(GetStorageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -95,10 +96,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		state := api.xethAtStateNum(args.BlockNumber).State().SafeGet(args.Address)
-		value := state.StorageString(args.Key)
-
-		*reply = common.ToHex(value.Bytes())
+		*reply = api.xethAtStateNum(args.BlockNumber).StorageAt(args.Address, args.Key)
 	case "eth_getTransactionCount":
 		args := new(GetTxCountArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {

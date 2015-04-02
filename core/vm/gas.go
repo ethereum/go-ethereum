@@ -2,6 +2,7 @@ package vm
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 )
 
@@ -13,45 +14,10 @@ var (
 	GasSlowStep    = big.NewInt(10)
 	GasExtStep     = big.NewInt(20)
 
-	GasStorageGet        = big.NewInt(50)
-	GasStorageAdd        = big.NewInt(20000)
-	GasStorageMod        = big.NewInt(5000)
-	GasLogBase           = big.NewInt(375)
-	GasLogTopic          = big.NewInt(375)
-	GasLogByte           = big.NewInt(8)
-	GasCreate            = big.NewInt(32000)
-	GasCreateByte        = big.NewInt(200)
-	GasCall              = big.NewInt(40)
-	GasCallValueTransfer = big.NewInt(9000)
-	GasStipend           = big.NewInt(2300)
-	GasCallNewAccount    = big.NewInt(25000)
-	GasReturn            = big.NewInt(0)
-	GasStop              = big.NewInt(0)
-	GasJumpDest          = big.NewInt(1)
+	GasReturn = big.NewInt(0)
+	GasStop   = big.NewInt(0)
 
-	RefundStorage = big.NewInt(15000)
-	RefundSuicide = big.NewInt(24000)
-
-	GasMemWord           = big.NewInt(3)
-	GasQuadCoeffDenom    = big.NewInt(512)
-	GasContractByte      = big.NewInt(200)
-	GasTransaction       = big.NewInt(21000)
-	GasTxDataNonzeroByte = big.NewInt(68)
-	GasTxDataZeroByte    = big.NewInt(4)
-	GasTx                = big.NewInt(21000)
-	GasExp               = big.NewInt(10)
-	GasExpByte           = big.NewInt(10)
-
-	GasSha3Base     = big.NewInt(30)
-	GasSha3Word     = big.NewInt(6)
-	GasSha256Base   = big.NewInt(60)
-	GasSha256Word   = big.NewInt(12)
-	GasRipemdBase   = big.NewInt(600)
-	GasRipemdWord   = big.NewInt(12)
-	GasEcrecover    = big.NewInt(3000)
-	GasIdentityBase = big.NewInt(15)
-	GasIdentityWord = big.NewInt(3)
-	GasCopyWord     = big.NewInt(3)
+	GasContractByte = big.NewInt(200)
 )
 
 func baseCheck(op OpCode, stack *stack, gas *big.Int) error {
@@ -71,8 +37,8 @@ func baseCheck(op OpCode, stack *stack, gas *big.Int) error {
 			return err
 		}
 
-		if r.stackPush && len(stack.data)-r.stackPop+1 > 1024 {
-			return fmt.Errorf("stack limit reached (%d)", maxStack)
+		if r.stackPush && len(stack.data)-r.stackPop+1 > int(params.StackLimit.Int64()) {
+			return fmt.Errorf("stack limit reached (%d)", params.StackLimit.Int64())
 		}
 
 		gas.Add(gas, r.gas)
@@ -142,16 +108,16 @@ var _baseCheck = map[OpCode]req{
 	MSIZE:        {0, GasQuickStep, true},
 	GAS:          {0, GasQuickStep, true},
 	BLOCKHASH:    {1, GasExtStep, true},
-	BALANCE:      {0, GasExtStep, true},
+	BALANCE:      {1, GasExtStep, true},
 	EXTCODESIZE:  {1, GasExtStep, true},
 	EXTCODECOPY:  {4, GasExtStep, false},
-	SLOAD:        {1, GasStorageGet, true},
+	SLOAD:        {1, params.SloadGas, true},
 	SSTORE:       {2, Zero, false},
-	SHA3:         {1, GasSha3Base, true},
-	CREATE:       {3, GasCreate, true},
-	CALL:         {7, GasCall, true},
-	CALLCODE:     {7, GasCall, true},
-	JUMPDEST:     {0, GasJumpDest, false},
+	SHA3:         {2, params.Sha3Gas, true},
+	CREATE:       {3, params.CreateGas, true},
+	CALL:         {7, params.CallGas, true},
+	CALLCODE:     {7, params.CallGas, true},
+	JUMPDEST:     {0, params.JumpdestGas, false},
 	SUICIDE:      {1, Zero, false},
 	RETURN:       {2, Zero, false},
 	PUSH1:        {0, GasFastestStep, true},

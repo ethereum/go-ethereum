@@ -5,8 +5,6 @@ import (
 	"math/big"
 )
 
-const maxStack = 1024
-
 func newStack() *stack {
 	return &stack{}
 }
