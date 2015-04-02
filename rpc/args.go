@@ -41,7 +41,11 @@ func blockHeight(raw interface{}, number *int64) error {
 	case "pending":
 		*number = -2
 	default:
-		*number = common.String2Big(str).Int64()
+		if common.HasHexPrefix(str) {
+			*number = common.String2Big(str).Int64()
+		} else {
+			return NewInvalidTypeError("blockNumber", "is not a valid string")
+		}
 	}
 
 	return nil
