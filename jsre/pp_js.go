@@ -63,12 +63,24 @@ function pp(object, indent) {
     return str;
 }
 
+var redundantFields = [
+    'valueOf',
+    'toString',
+    'toLocaleString',
+    'hasOwnProperty',
+    'isPrototypeOf',
+    'propertyIsEnumerable',
+    'constructor'
+];
+
 var getFields = function (object) {
     var result = Object.getOwnPropertyNames(object);
     if (object.constructor && object.constructor.prototype) {
         result = result.concat(Object.getOwnPropertyNames(object.constructor.prototype));
     }
-    return result;
+    return result.filter(function (field) {
+        return redundantFields.indexOf(field) === -1;
+    });
 };
 
 var isBigNumber = function (object) {
