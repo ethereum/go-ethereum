@@ -74,6 +74,14 @@ func newHexData(input interface{}) *hexdata {
 		} else {
 			d.data = input.Bytes()
 		}
+	case types.Bloom:
+		d.data = input.Bytes()
+	case *types.Bloom:
+		if input == nil {
+			d.isNil = true
+		} else {
+			d.data = input.Bytes()
+		}
 	case *big.Int:
 		d.data = input.Bytes()
 	case int64:
@@ -85,6 +93,18 @@ func newHexData(input interface{}) *hexdata {
 	case int:
 		d.data = big.NewInt(int64(input)).Bytes()
 	case uint:
+		d.data = big.NewInt(int64(input)).Bytes()
+	case int8:
+		d.data = big.NewInt(int64(input)).Bytes()
+	case uint8:
+		d.data = big.NewInt(int64(input)).Bytes()
+	case int16:
+		d.data = big.NewInt(int64(input)).Bytes()
+	case uint16:
+		d.data = big.NewInt(int64(input)).Bytes()
+	case int32:
+		d.data = big.NewInt(int64(input)).Bytes()
+	case uint32:
 		d.data = big.NewInt(int64(input)).Bytes()
 	case string: // hexstring
 		d.data = common.Big(input).Bytes()
