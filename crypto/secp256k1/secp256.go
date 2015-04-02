@@ -59,7 +59,7 @@ func GenerateKeyPair() ([]byte, []byte) {
 	const seckey_len = 32
 
 	var pubkey []byte = make([]byte, pubkey_len)
-	var seckey []byte = randentropy.GetEntropyMixed(seckey_len)
+	var seckey []byte = randentropy.GetEntropyCSPRNG(seckey_len)
 
 	var pubkey_ptr *C.uchar = (*C.uchar)(unsafe.Pointer(&pubkey[0]))
 	var seckey_ptr *C.uchar = (*C.uchar)(unsafe.Pointer(&seckey[0]))
@@ -99,7 +99,7 @@ func GeneratePubKey(seckey []byte) ([]byte, error) {
 }
 
 func Sign(msg []byte, seckey []byte) ([]byte, error) {
-	nonce := randentropy.GetEntropyMixed(32)
+	nonce := randentropy.GetEntropyCSPRNG(32)
 
 	var sig []byte = make([]byte, 65)
 	var recid C.int

@@ -118,7 +118,7 @@ func (ks keyStorePassphrase) GetKeyAddresses() (addresses [][]byte, err error) {
 
 func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	authArray := []byte(auth)
-	salt := randentropy.GetEntropyMixed(32)
+	salt := randentropy.GetEntropyCSPRNG(32)
 	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptr, scryptp, scryptdkLen)
 	if err != nil {
 		return err
@@ -133,7 +133,7 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		return err
 	}
 
-	iv := randentropy.GetEntropyMixed(aes.BlockSize) // 16
+	iv := randentropy.GetEntropyCSPRNG(aes.BlockSize) // 16
 	AES256CBCEncrypter := cipher.NewCBCEncrypter(AES256Block, iv)
 	cipherText := make([]byte, len(toEncrypt))
 	AES256CBCEncrypter.CryptBlocks(cipherText, toEncrypt)
