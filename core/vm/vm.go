@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type Vm struct {
@@ -24,6 +25,9 @@ type Vm struct {
 	Fn          string
 
 	Recoverable bool
+
+	// Will be called before the vm returns
+	After func(*Context, error)
 }
 
 func New(env Environment) *Vm {
@@ -45,20 +49,20 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 	self.Printf("(%d) (%x) %x (code=%d) gas: %v (d) %x", self.env.Depth(), caller.Address().Bytes()[:4], context.Address(), len(code), context.Gas, callData).Endl()
 
-	if self.Recoverable {
-		// Recover from any require exception
-		defer func() {
-			if r := recover(); r != nil {
-				self.Printf(" %v", r).Endl()
+	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
+	defer func() {
+		if self.After != nil {
+			self.After(context, err)
+		}
 
-				context.UseGas(context.Gas)
+		if err != nil {
+			self.Printf(" %v", err).Endl()
+			// In case of a VM exception (known exceptions) all gas consumed (panics NOT included).
+			context.UseGas(context.Gas)
 
-				ret = context.Return(nil)
-
-				err = fmt.Errorf("%v", r)
-			}
-		}()
-	}
+			ret = context.Return(nil)
+		}
+	}()
 
 	if context.CodeAddr != nil {
 		if p := Precompiled[context.CodeAddr.Str()]; p != nil {
@@ -69,25 +73,24 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 	var (
 		op OpCode
 
-		destinations        = analyseJumpDests(context.Code)
-		mem                 = NewMemory()
-		stack               = newStack()
-		pc           uint64 = 0
-		step                = 0
-		statedb             = self.env.State()
+		destinations = analyseJumpDests(context.Code)
+		mem          = NewMemory()
+		stack        = newStack()
+		pc           = new(big.Int)
+		statedb      = self.env.State()
 
-		jump = func(from uint64, to *big.Int) {
-			p := to.Uint64()
-
-			nop := context.GetOp(p)
-			if !destinations.Has(p) {
-				panic(fmt.Sprintf("invalid jump destination (%v) %v", nop, p))
+		jump = func(from *big.Int, to *big.Int) error {
+			nop := context.GetOp(to)
+			if !destinations.Has(to) {
+				return fmt.Errorf("invalid jump destination (%v) %v", nop, to)
 			}
 
 			self.Printf(" ~> %v", to)
-			pc = to.Uint64()
+			pc = to
 
 			self.Endl()
+
+			return nil
 		}
 	)
 
@@ -100,12 +103,14 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		// The base for all big integer arithmetic
 		base := new(big.Int)
 
-		step++
 		// Get the memory location of pc
 		op = context.GetOp(pc)
 
 		self.Printf("(pc) %-3d -o- %-14s (m) %-4d (s) %-4d ", pc, op.String(), mem.Len(), stack.len())
-		newMemSize, gas := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
+		newMemSize, gas, err := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
+		if err != nil {
+			return nil, err
+		}
 
 		self.Printf("(g) %-3v (%v)", gas, context.Gas)
 
@@ -420,22 +425,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			self.Printf(" => %v", value)
 		case CALLDATALOAD:
-			var (
-				offset  = stack.pop()
-				data    = make([]byte, 32)
-				lenData = big.NewInt(int64(len(callData)))
-			)
-
-			if lenData.Cmp(offset) >= 0 {
-				length := new(big.Int).Add(offset, common.Big32)
-				length = common.BigMin(length, lenData)
-
-				copy(data, callData[offset.Int64():length.Int64()])
-			}
+			data := getData(callData, stack.pop(), common.Big32)
 
 			self.Printf(" => 0x%x", data)
 
-			stack.push(common.BigD(data))
+			stack.push(common.Bytes2Big(data))
 		case CALLDATASIZE:
 			l := int64(len(callData))
 			stack.push(big.NewInt(l))
@@ -534,13 +528,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			// 0x50 range
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
-			a := uint64(op - PUSH1 + 1)
-			byts := context.GetRangeValue(pc+1, a)
+			a := big.NewInt(int64(op - PUSH1 + 1))
+			byts := getData(code, new(big.Int).Add(pc, big.NewInt(1)), a)
 			// push value to stack
-			stack.push(common.BigD(byts))
-			pc += a
-
-			step += int(op) - int(PUSH1) + 1
+			stack.push(common.Bytes2Big(byts))
+			pc.Add(pc, a)
 
 			self.Printf(" => 0x%x", byts)
 		case POP:
@@ -600,14 +592,18 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			self.Printf(" {0x%x : 0x%x}", loc, val.Bytes())
 		case JUMP:
-			jump(pc, stack.pop())
+			if err := jump(pc, stack.pop()); err != nil {
+				return nil, err
+			}
 
 			continue
 		case JUMPI:
 			pos, cond := stack.pop(), stack.pop()
 
 			if cond.Cmp(common.BigTrue) >= 0 {
-				jump(pc, pos)
+				if err := jump(pc, pos); err != nil {
+					return nil, err
+				}
 
 				continue
 			}
@@ -616,7 +612,8 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 		case JUMPDEST:
 		case PC:
-			stack.push(big.NewInt(int64(pc)))
+			//stack.push(big.NewInt(int64(pc)))
+			stack.push(pc)
 		case MSIZE:
 			stack.push(big.NewInt(int64(mem.Len())))
 		case GAS:
@@ -642,10 +639,9 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 				self.Printf(" (*) 0x0 %v", suberr)
 			} else {
-
 				// gas < len(ret) * CreateDataGas == NO_CODE
 				dataGas := big.NewInt(int64(len(ret)))
-				dataGas.Mul(dataGas, GasCreateByte)
+				dataGas.Mul(dataGas, params.CreateDataGas)
 				if context.UseGas(dataGas) {
 					ref.SetCode(ret)
 				}
@@ -672,7 +668,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
 			if len(value.Bytes()) > 0 {
-				gas.Add(gas, GasStipend)
+				gas.Add(gas, params.CallStipend)
 			}
 
 			var (
@@ -720,68 +716,81 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		default:
 			self.Printf("(pc) %-3v Invalid opcode %x\n", pc, op).Endl()
 
-			panic(fmt.Errorf("Invalid opcode %x", op))
+			return nil, fmt.Errorf("Invalid opcode %x", op)
 		}
 
-		pc++
+		pc.Add(pc, One)
 
 		self.Endl()
 	}
 }
 
-func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *stack) (*big.Int, *big.Int) {
+func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *stack) (*big.Int, *big.Int, error) {
 	var (
 		gas                 = new(big.Int)
 		newMemSize *big.Int = new(big.Int)
 	)
-	baseCheck(op, stack, gas)
+	err := baseCheck(op, stack, gas)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	// stack Check, memory resize & gas phase
 	switch op {
-	case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
-		gas.Set(GasFastestStep)
 	case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
 		n := int(op - SWAP1 + 2)
-		stack.require(n)
+		err := stack.require(n)
+		if err != nil {
+			return nil, nil, err
+		}
 		gas.Set(GasFastestStep)
 	case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
 		n := int(op - DUP1 + 1)
-		stack.require(n)
+		err := stack.require(n)
+		if err != nil {
+			return nil, nil, err
+		}
 		gas.Set(GasFastestStep)
 	case LOG0, LOG1, LOG2, LOG3, LOG4:
 		n := int(op - LOG0)
-		stack.require(n + 2)
+		err := stack.require(n + 2)
+		if err != nil {
+			return nil, nil, err
+		}
 
 		mSize, mStart := stack.data[stack.len()-2], stack.data[stack.len()-1]
 
-		gas.Add(gas, GasLogBase)
-		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(n)), GasLogTopic))
-		gas.Add(gas, new(big.Int).Mul(mSize, GasLogByte))
+		gas.Add(gas, params.LogGas)
+		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(n)), params.LogTopicGas))
+		gas.Add(gas, new(big.Int).Mul(mSize, params.LogDataGas))
 
 		newMemSize = calcMemSize(mStart, mSize)
 	case EXP:
-		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(len(stack.data[stack.len()-2].Bytes()))), GasExpByte))
+		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(len(stack.data[stack.len()-2].Bytes()))), params.ExpByteGas))
 	case SSTORE:
-		stack.require(2)
+		err := stack.require(2)
+		if err != nil {
+			return nil, nil, err
+		}
 
 		var g *big.Int
 		y, x := stack.data[stack.len()-2], stack.data[stack.len()-1]
 		val := statedb.GetState(context.Address(), common.BigToHash(x))
 		if len(val) == 0 && len(y.Bytes()) > 0 {
 			// 0 => non 0
-			g = GasStorageAdd
+			g = params.SstoreSetGas
 		} else if len(val) > 0 && len(y.Bytes()) == 0 {
-			statedb.Refund(self.env.Origin(), RefundStorage)
+			statedb.Refund(self.env.Origin(), params.SstoreRefundGas)
 
-			g = GasStorageMod
+			g = params.SstoreClearGas
 		} else {
 			// non 0 => non 0 (or 0 => 0)
-			g = GasStorageMod
+			g = params.SstoreClearGas
 		}
 		gas.Set(g)
 	case SUICIDE:
 		if !statedb.IsDeleted(context.Address()) {
-			statedb.Refund(self.env.Origin(), RefundSuicide)
+			statedb.Refund(self.env.Origin(), params.SuicideRefundGas)
 		}
 	case MLOAD:
 		newMemSize = calcMemSize(stack.peek(), u256(32))
@@ -795,22 +804,22 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-2])
 
 		words := toWordSize(stack.data[stack.len()-2])
-		gas.Add(gas, words.Mul(words, GasSha3Word))
+		gas.Add(gas, words.Mul(words, params.Sha3WordGas))
 	case CALLDATACOPY:
 		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-3])
 
 		words := toWordSize(stack.data[stack.len()-3])
-		gas.Add(gas, words.Mul(words, GasCopyWord))
+		gas.Add(gas, words.Mul(words, params.CopyGas))
 	case CODECOPY:
 		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-3])
 
 		words := toWordSize(stack.data[stack.len()-3])
-		gas.Add(gas, words.Mul(words, GasCopyWord))
+		gas.Add(gas, words.Mul(words, params.CopyGas))
 	case EXTCODECOPY:
 		newMemSize = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-4])
 
 		words := toWordSize(stack.data[stack.len()-4])
-		gas.Add(gas, words.Mul(words, GasCopyWord))
+		gas.Add(gas, words.Mul(words, params.CopyGas))
 
 	case CREATE:
 		newMemSize = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-3])
@@ -819,12 +828,12 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 
 		if op == CALL {
 			if self.env.State().GetStateObject(common.BigToAddress(stack.data[stack.len()-2])) == nil {
-				gas.Add(gas, GasCallNewAccount)
+				gas.Add(gas, params.CallNewAccountGas)
 			}
 		}
 
 		if len(stack.data[stack.len()-3].Bytes()) > 0 {
-			gas.Add(gas, GasCallValueTransfer)
+			gas.Add(gas, params.CallValueTransferGas)
 		}
 
 		x := calcMemSize(stack.data[stack.len()-6], stack.data[stack.len()-7])
@@ -840,20 +849,21 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
 			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
 			pow := new(big.Int).Exp(oldSize, common.Big2, Zero)
-			linCoef := new(big.Int).Mul(oldSize, GasMemWord)
-			quadCoef := new(big.Int).Div(pow, GasQuadCoeffDenom)
+			linCoef := new(big.Int).Mul(oldSize, params.MemoryGas)
+			quadCoef := new(big.Int).Div(pow, params.QuadCoeffDiv)
 			oldTotalFee := new(big.Int).Add(linCoef, quadCoef)
 
 			pow.Exp(newMemSizeWords, common.Big2, Zero)
-			linCoef = new(big.Int).Mul(newMemSizeWords, GasMemWord)
-			quadCoef = new(big.Int).Div(pow, GasQuadCoeffDenom)
+			linCoef = new(big.Int).Mul(newMemSizeWords, params.MemoryGas)
+			quadCoef = new(big.Int).Div(pow, params.QuadCoeffDiv)
 			newTotalFee := new(big.Int).Add(linCoef, quadCoef)
 
-			gas.Add(gas, new(big.Int).Sub(newTotalFee, oldTotalFee))
+			fee := new(big.Int).Sub(newTotalFee, oldTotalFee)
+			gas.Add(gas, fee)
 		}
 	}
 
-	return newMemSize, gas
+	return newMemSize, gas, nil
 }
 
 func (self *Vm) RunPrecompiled(p *PrecompiledAccount, callData []byte, context *Context) (ret []byte, err error) {
@@ -869,7 +879,7 @@ func (self *Vm) RunPrecompiled(p *PrecompiledAccount, callData []byte, context *
 
 		tmp := new(big.Int).Set(context.Gas)
 
-		panic(OOG(gas, tmp).Error())
+		return nil, OOG(gas, tmp)
 	}
 }
 

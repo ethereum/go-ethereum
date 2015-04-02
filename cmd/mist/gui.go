@@ -25,6 +25,7 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"path"
 	"runtime"
@@ -91,8 +92,8 @@ func NewWindow(ethereum *eth.Ethereum) *Gui {
 		plugins:       make(map[string]plugin),
 		serviceEvents: make(chan ServEv, 1),
 	}
-	data, _ := common.ReadAllFile(path.Join(ethereum.DataDir, "plugins.json"))
-	json.Unmarshal([]byte(data), &gui.plugins)
+	data, _ := ioutil.ReadFile(path.Join(ethereum.DataDir, "plugins.json"))
+	json.Unmarshal(data, &gui.plugins)
 
 	return gui
 }

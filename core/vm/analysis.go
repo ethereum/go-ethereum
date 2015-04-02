@@ -1,9 +1,25 @@
 package vm
 
-import "gopkg.in/fatih/set.v0"
+import (
+	"math/big"
 
-func analyseJumpDests(code []byte) (dests *set.Set) {
-	dests = set.New()
+	"gopkg.in/fatih/set.v0"
+)
+
+type destinations struct {
+	set *set.Set
+}
+
+func (d *destinations) Has(dest *big.Int) bool {
+	return d.set.Has(string(dest.Bytes()))
+}
+
+func (d *destinations) Add(dest *big.Int) {
+	d.set.Add(string(dest.Bytes()))
+}
+
+func analyseJumpDests(code []byte) (dests *destinations) {
+	dests = &destinations{set.New()}
 
 	for pc := uint64(0); pc < uint64(len(code)); pc++ {
 		var op OpCode = OpCode(code[pc])
@@ -13,7 +29,7 @@ func analyseJumpDests(code []byte) (dests *set.Set) {
 
 			pc += a
 		case JUMPDEST:
-			dests.Add(pc)
+			dests.Add(big.NewInt(int64(pc)))
 		}
 	}
 	return

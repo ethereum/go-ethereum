@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 
 	"encoding/hex"
@@ -67,13 +68,8 @@ func Ripemd160(data []byte) []byte {
 	return ripemd.Sum(nil)
 }
 
-func Ecrecover(data []byte) []byte {
-	var in = struct {
-		hash []byte
-		sig  []byte
-	}{data[:32], data[32:]}
-
-	r, _ := secp256k1.RecoverPubkey(in.hash, in.sig)
+func Ecrecover(hash, sig []byte) []byte {
+	r, _ := secp256k1.RecoverPubkey(hash, sig)
 
 	return r
 }
@@ -139,14 +135,23 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 	return ToECDSA(buf), nil
 }
 
+// SaveECDSA saves a secp256k1 private key to the given file with restrictive
+// permissions
+func SaveECDSA(file string, key *ecdsa.PrivateKey) error {
+	return ioutil.WriteFile(file, FromECDSA(key), 0600)
+}
+
 func GenerateKey() (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(S256(), rand.Reader)
 }
 
 func SigToPub(hash, sig []byte) *ecdsa.PublicKey {
-	s := Ecrecover(append(hash, sig...))
-	x, y := elliptic.Unmarshal(S256(), s)
+	s := Ecrecover(hash, sig)
+	if s == nil || len(s) != 65 {
+		return nil
+	}
 
+	x, y := elliptic.Unmarshal(S256(), s)
 	return &ecdsa.PublicKey{S256(), x, y}
 }
 

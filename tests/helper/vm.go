@@ -185,7 +185,7 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) {
 		statedb.Set(snapshot)
 	}
-	statedb.Update(vmenv.Gas)
+	statedb.Update()
 
 	return ret, vmenv.logs, vmenv.Gas, err
 }

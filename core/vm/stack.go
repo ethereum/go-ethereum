@@ -15,6 +15,7 @@ type stack struct {
 }
 
 func (st *stack) push(d *big.Int) {
+	// NOTE push limit (1024) is checked in baseCheck
 	stackItem := new(big.Int).Set(d)
 	if len(st.data) > st.ptr {
 		st.data[st.ptr] = stackItem
@@ -46,10 +47,11 @@ func (st *stack) peek() *big.Int {
 	return st.data[st.len()-1]
 }
 
-func (st *stack) require(n int) {
+func (st *stack) require(n int) error {
 	if st.len() < n {
-		panic(fmt.Sprintf("stack underflow (%d <=> %d)", len(st.data), n))
+		return fmt.Errorf("stack underflow (%d <=> %d)", len(st.data), n)
 	}
+	return nil
 }
 
 func (st *stack) Print() {

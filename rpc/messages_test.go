@@ -4,6 +4,15 @@ import (
 	"testing"
 )
 
+func TestInvalidTypeError(t *testing.T) {
+	err := NewInvalidTypeError("testField", "not string")
+	expected := "invalid type on field testField: not string"
+
+	if err.Error() != expected {
+		t.Error(err.Error())
+	}
+}
+
 func TestInsufficientParamsError(t *testing.T) {
 	err := NewInsufficientParamsError(0, 1)
 	expected := "insufficient params, want 1 have 0"

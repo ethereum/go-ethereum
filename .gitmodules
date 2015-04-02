@@ -1,6 +1,3 @@
-[submodule "ethereal/assets/samplecoin"]
-	path = ethereal/assets/samplecoin
-	url = git@github.com:obscuren/SampleCoin.git
 [submodule "cmd/mist/assets/ext/ethereum.js"]
 	path = cmd/mist/assets/ext/ethereum.js
 	url = https://github.com/ethereum/ethereum.js

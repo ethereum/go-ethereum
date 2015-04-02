@@ -15,21 +15,17 @@ func NewMemory() *Memory {
 }
 
 func (m *Memory) Set(offset, size uint64, value []byte) {
-	value = common.RightPadBytes(value, int(size))
-
-	totSize := offset + size
-	lenSize := uint64(len(m.store) - 1)
-	if totSize > lenSize {
-		// Calculate the diff between the sizes
-		diff := totSize - lenSize
-		if diff > 0 {
-			// Create a new empty slice and append it
-			newSlice := make([]byte, diff-1)
-			// Resize slice
-			m.store = append(m.store, newSlice...)
-		}
+	// length of store may never be less than offset + size.
+	// The store should be resized PRIOR to setting the memory
+	if size > uint64(len(m.store)) {
+		panic("INVALID memory: store empty")
 	}
-	copy(m.store[offset:offset+size], value)
+
+	// It's possible the offset is greater than 0 and size equals 0. This is because
+	// the calcMemSize (common.go) could potentially return 0 when size is zero (NO-OP)
+	if size > 0 {
+		copy(m.store[offset:offset+size], common.RightPadBytes(value, int(size)))
+	}
 }
 
 func (m *Memory) Resize(size uint64) {

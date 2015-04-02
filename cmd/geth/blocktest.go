@@ -60,7 +60,7 @@ func runblocktest(ctx *cli.Context) {
 	// insert the test blocks, which will execute all transactions
 	chain := ethereum.ChainManager()
 	if err := chain.InsertChain(test.Blocks); err != nil {
-		utils.Fatalf("Block Test load error: %v", err)
+		utils.Fatalf("Block Test load error: %v %T", err, err)
 	} else {
 		fmt.Println("Block Test chain loaded")
 	}

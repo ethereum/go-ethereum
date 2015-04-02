@@ -30,10 +30,10 @@ RUN mkdir -p $GOPATH/src/github.com/ethereum/
 RUN git clone https://github.com/ethereum/go-ethereum $GOPATH/src/github.com/ethereum/go-ethereum
 WORKDIR $GOPATH/src/github.com/ethereum/go-ethereum
 RUN git checkout develop
-RUN GOPATH=$GOPATH:$GOPATH/src/github.com/ethereum/go-ethereum/Godeps/_workspace go install -v ./cmd/ethereum
+RUN GOPATH=$GOPATH:$GOPATH/src/github.com/ethereum/go-ethereum/Godeps/_workspace go install -v ./cmd/geth
 
 ## Run & expose JSON RPC
-ENTRYPOINT ["ethereum", "-rpc=true", "-rpcport=8545"]
+ENTRYPOINT ["geth", "-rpc=true", "-rpcport=8545"]
 EXPOSE 8545
 
 

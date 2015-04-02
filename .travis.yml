@@ -9,7 +9,7 @@ install:
   # - go get code.google.com/p/go.tools/cmd/goimports
   # - go get github.com/golang/lint/golint
   # - go get golang.org/x/tools/cmd/vet 
-  - if ! go get code.google.com/p/go.tools/cmd/cover; then go get golang.org/x/tools/cmd/cover; fi
+  - go get golang.org/x/tools/cmd/cover
   - go get github.com/mattn/goveralls
 before_script:
   # - gofmt -l -w .

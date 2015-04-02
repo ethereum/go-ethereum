@@ -2,9 +2,6 @@ package utils
 
 import (
 	"crypto/ecdsa"
-	"fmt"
-	"net"
-	"net/http"
 	"os"
 	"path"
 	"runtime"
@@ -54,7 +51,7 @@ func NewApp(version, usage string) *cli.App {
 	app := cli.NewApp()
 	app.Name = path.Base(os.Args[0])
 	app.Author = ""
-	app.Authors = nil
+	//app.Authors = nil
 	app.Email = ""
 	app.Version = version
 	app.Usage = usage
@@ -96,15 +93,21 @@ var (
 		Name:  "mine",
 		Usage: "Enable mining",
 	}
-
-	// key settings
-	UnencryptedKeysFlag = cli.BoolFlag{
-		Name:  "unencrypted-keys",
-		Usage: "disable private key disk encryption (for testing)",
+	EtherbaseFlag = cli.StringFlag{
+		Name:  "etherbase",
+		Usage: "public address for block mining rewards. By default the address of your primary account is used",
+		Value: "primary",
 	}
+
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
-		Usage: "Unlock a given account untill this programs exits (address:password)",
+		Usage: "unlock the account given until this program exits (prompts for password). '--unlock primary' unlocks the primary account",
+		Value: "",
+	}
+	PasswordFileFlag = cli.StringFlag{
+		Name:  "password",
+		Usage: "Path to password file for (un)locking an existing account.",
+		Value: "",
 	}
 
 	// logging and debug settings
@@ -142,7 +145,11 @@ var (
 		Usage: "Port on which the JSON-RPC server should listen",
 		Value: 8545,
 	}
-
+	RPCCORSDomainFlag = cli.StringFlag{
+		Name:  "rpccorsdomain",
+		Usage: "Domain on which to send Access-Control-Allow-Origin header",
+		Value: "",
+	}
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
@@ -214,6 +221,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		LogFile:         ctx.GlobalString(LogFileFlag.Name),
 		LogLevel:        ctx.GlobalInt(LogLevelFlag.Name),
 		LogJSON:         ctx.GlobalString(LogJSONFlag.Name),
+		Etherbase:       ctx.GlobalString(EtherbaseFlag.Name),
 		MinerThreads:    ctx.GlobalInt(MinerThreadsFlag.Name),
 		AccountManager:  GetAccountManager(ctx),
 		VmDebug:         ctx.GlobalBool(VMDebugFlag.Name),
@@ -243,23 +251,17 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Dat
 
 func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
-	var ks crypto.KeyStore2
-	if ctx.GlobalBool(UnencryptedKeysFlag.Name) {
-		ks = crypto.NewKeyStorePlain(path.Join(dataDir, "plainkeys"))
-	} else {
-		ks = crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
-	}
+	ks := crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
 	return accounts.NewManager(ks)
 }
 
 func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
-	addr := ctx.GlobalString(RPCListenAddrFlag.Name)
-	port := ctx.GlobalInt(RPCPortFlag.Name)
-	dataDir := ctx.GlobalString(DataDirFlag.Name)
-	fmt.Println("Starting RPC on port: ", port)
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
-	if err != nil {
-		Fatalf("Can't listen on %s:%d: %v", addr, port, err)
+	config := rpc.RpcConfig{
+		ListenAddress: ctx.GlobalString(RPCListenAddrFlag.Name),
+		ListenPort:    uint(ctx.GlobalInt(RPCPortFlag.Name)),
+		CorsDomain:    ctx.GlobalString(RPCCORSDomainFlag.Name),
 	}
-	go http.Serve(l, rpc.JSONRPC(xeth.New(eth, nil), dataDir))
+
+	xeth := xeth.New(eth, nil)
+	_ = rpc.Start(xeth, config)
 }

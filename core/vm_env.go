@@ -54,21 +54,17 @@ func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
 	return vm.Transfer(from, to, amount)
 }
 
-func (self *VMEnv) vm(addr *common.Address, data []byte, gas, price, value *big.Int) *Execution {
-	return NewExecution(self, addr, data, gas, price, value)
-}
-
 func (self *VMEnv) Call(me vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	exe := self.vm(&addr, data, gas, price, value)
+	exe := NewExecution(self, &addr, data, gas, price, value)
 	return exe.Call(addr, me)
 }
 func (self *VMEnv) CallCode(me vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
 	maddr := me.Address()
-	exe := self.vm(&maddr, data, gas, price, value)
+	exe := NewExecution(self, &maddr, data, gas, price, value)
 	return exe.Call(addr, me)
 }
 
 func (self *VMEnv) Create(me vm.ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
-	exe := self.vm(nil, data, gas, price, value)
+	exe := NewExecution(self, nil, data, gas, price, value)
 	return exe.Create(me)
 }

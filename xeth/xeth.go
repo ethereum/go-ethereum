@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -110,8 +111,27 @@ func (self *XEth) stop() {
 	close(self.quit)
 }
 
-func (self *XEth) DefaultGas() *big.Int      { return defaultGas }
-func (self *XEth) DefaultGasPrice() *big.Int { return defaultGasPrice }
+func cAddress(a []string) []common.Address {
+	bslice := make([]common.Address, len(a))
+	for i, addr := range a {
+		bslice[i] = common.HexToAddress(addr)
+	}
+	return bslice
+}
+
+func cTopics(t [][]string) [][]common.Hash {
+	topics := make([][]common.Hash, len(t))
+	for i, iv := range t {
+		topics[i] = make([]common.Hash, len(iv))
+		for j, jv := range iv {
+			topics[i][j] = common.HexToHash(jv)
+		}
+	}
+	return topics
+}
+
+func (self *XEth) DefaultGas() *big.Int      { return new(big.Int).Set(defaultGas) }
+func (self *XEth) DefaultGasPrice() *big.Int { return new(big.Int).Set(defaultGasPrice) }
 
 func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }
 
@@ -144,12 +164,8 @@ func (self *XEth) Whisper() *Whisper { return self.whisper }
 func (self *XEth) getBlockByHeight(height int64) *types.Block {
 	var num uint64
 
-	// -1 means "latest"
-	// -2 means "pending", which has no blocknum
-	if height <= -2 {
-		return &types.Block{}
-	} else if height == -1 {
-		num = self.CurrentBlock().NumberU64()
+	if height < 0 {
+		num = self.CurrentBlock().NumberU64() + uint64(-1*height)
 	} else {
 		num = uint64(height)
 	}
@@ -171,12 +187,29 @@ func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 	return block
 }
 
-func (self *XEth) EthTransactionByHash(hash string) *types.Transaction {
+func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blhash common.Hash, blnum *big.Int, txi uint64) {
 	data, _ := self.backend.ExtraDb().Get(common.FromHex(hash))
 	if len(data) != 0 {
-		return types.NewTransactionFromBytes(data)
+		tx = types.NewTransactionFromBytes(data)
 	}
-	return nil
+
+	// meta
+	var txExtra struct {
+		BlockHash  common.Hash
+		BlockIndex int64
+		Index      uint64
+	}
+
+	v, _ := self.backend.ExtraDb().Get(append(common.FromHex(hash), 0x0001))
+	r := bytes.NewReader(v)
+	err := rlp.Decode(r, &txExtra)
+	if err == nil {
+		blhash = txExtra.BlockHash
+		blnum = big.NewInt(txExtra.BlockIndex)
+		txi = txExtra.Index
+	}
+
+	return
 }
 
 func (self *XEth) BlockByNumber(num int64) *Block {
@@ -213,6 +246,16 @@ func (self *XEth) Accounts() []string {
 	return accountAddresses
 }
 
+func (self *XEth) DbPut(key, val []byte) bool {
+	self.backend.ExtraDb().Put(key, val)
+	return true
+}
+
+func (self *XEth) DbGet(key []byte) ([]byte, error) {
+	val, err := self.backend.ExtraDb().Get(key)
+	return val, err
+}
+
 func (self *XEth) PeerCount() int {
 	return self.backend.PeerCount()
 }
@@ -222,15 +265,15 @@ func (self *XEth) IsMining() bool {
 }
 
 func (self *XEth) EthVersion() string {
-	return string(self.backend.EthVersion())
+	return fmt.Sprintf("%d", self.backend.EthVersion())
 }
 
 func (self *XEth) NetworkVersion() string {
-	return string(self.backend.NetVersion())
+	return fmt.Sprintf("%d", self.backend.NetVersion())
 }
 
 func (self *XEth) WhisperVersion() string {
-	return string(self.backend.ShhVersion())
+	return fmt.Sprintf("%d", self.backend.ShhVersion())
 }
 
 func (self *XEth) ClientVersion() string {
@@ -254,8 +297,8 @@ func (self *XEth) IsListening() bool {
 }
 
 func (self *XEth) Coinbase() string {
-	cb, _ := self.backend.AccountManager().Coinbase()
-	return common.ToHex(cb)
+	eb, _ := self.backend.Etherbase()
+	return eb.Hex()
 }
 
 func (self *XEth) NumberToHuman(balance string) string {
@@ -265,21 +308,19 @@ func (self *XEth) NumberToHuman(balance string) string {
 }
 
 func (self *XEth) StorageAt(addr, storageAddr string) string {
-	storage := self.State().SafeGet(addr).StorageString(storageAddr)
-
-	return common.ToHex(storage.Bytes())
+	return common.ToHex(self.State().state.GetState(common.HexToAddress(addr), common.HexToHash(storageAddr)))
 }
 
 func (self *XEth) BalanceAt(addr string) string {
-	return self.State().SafeGet(addr).Balance().String()
+	return self.State().state.GetBalance(common.HexToAddress(addr)).String()
 }
 
 func (self *XEth) TxCountAt(address string) int {
-	return int(self.State().SafeGet(address).Nonce())
+	return int(self.State().state.GetNonce(common.HexToAddress(address)))
 }
 
 func (self *XEth) CodeAt(address string) string {
-	return common.ToHex(self.State().SafeGet(address).Code())
+	return common.ToHex(self.State().state.GetCode(common.HexToAddress(address)))
 }
 
 func (self *XEth) IsContract(address string) bool {
@@ -295,10 +336,15 @@ func (self *XEth) SecretToAddress(key string) string {
 	return common.ToHex(pair.Address())
 }
 
-func (self *XEth) RegisterFilter(args *core.FilterOptions) int {
+func (self *XEth) RegisterFilter(earliest, latest int64, skip, max int, address []string, topics [][]string) int {
 	var id int
 	filter := core.NewFilter(self.backend)
-	filter.SetOptions(args)
+	filter.SetEarliestBlock(earliest)
+	filter.SetLatestBlock(latest)
+	filter.SetSkip(skip)
+	filter.SetMax(max)
+	filter.SetAddress(cAddress(address))
+	filter.SetTopics(cTopics(topics))
 	filter.LogsCallback = func(logs state.Logs) {
 		self.logMut.Lock()
 		defer self.logMut.Unlock()
@@ -374,9 +420,14 @@ func (self *XEth) Logs(id int) state.Logs {
 	return nil
 }
 
-func (self *XEth) AllLogs(args *core.FilterOptions) state.Logs {
+func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []string, topics [][]string) state.Logs {
 	filter := core.NewFilter(self.backend)
-	filter.SetOptions(args)
+	filter.SetEarliestBlock(earliest)
+	filter.SetLatestBlock(latest)
+	filter.SetSkip(skip)
+	filter.SetMax(max)
+	filter.SetAddress(cAddress(address))
+	filter.SetTopics(cTopics(topics))
 
 	return filter.Find()
 }
@@ -456,7 +507,7 @@ func (self *XEth) EachStorage(addr string) string {
 	object := self.State().SafeGet(addr)
 	it := object.Trie().Iterator()
 	for it.Next() {
-		values = append(values, KeyVal{common.ToHex(it.Key), common.ToHex(it.Value)})
+		values = append(values, KeyVal{common.ToHex(object.Trie().GetKey(it.Key)), common.ToHex(it.Value)})
 	}
 
 	valuesJson, err := json.Marshal(values)
@@ -513,12 +564,13 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		value:    common.Big(valueStr),
 		data:     common.FromHex(dataStr),
 	}
+
 	if msg.gas.Cmp(big.NewInt(0)) == 0 {
-		msg.gas = defaultGas
+		msg.gas = self.DefaultGas()
 	}
 
 	if msg.gasPrice.Cmp(big.NewInt(0)) == 0 {
-		msg.gasPrice = defaultGasPrice
+		msg.gasPrice = self.DefaultGasPrice()
 	}
 
 	block := self.CurrentBlock()
@@ -564,11 +616,11 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	// TODO: align default values to have the same type, e.g. not depend on
 	// common.Value conversions later on
 	if gas.Cmp(big.NewInt(0)) == 0 {
-		gas = defaultGas
+		gas = self.DefaultGas()
 	}
 
 	if price.Cmp(big.NewInt(0)) == 0 {
-		price = defaultGasPrice
+		price = self.DefaultGasPrice()
 	}
 
 	data = common.FromHex(codeStr)

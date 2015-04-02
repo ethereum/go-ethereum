@@ -61,8 +61,8 @@ func main() {
 
 	db, _ := ethdb.NewMemDatabase()
 	statedb := state.New(common.Hash{}, db)
-	sender := statedb.NewStateObject(common.StringToAddress("sender"))
-	receiver := statedb.NewStateObject(common.StringToAddress("receiver"))
+	sender := statedb.CreateAccount(common.StringToAddress("sender"))
+	receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
 	receiver.SetCode(common.Hex2Bytes(*code))
 
 	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(*value))

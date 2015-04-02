@@ -3,31 +3,21 @@ package rpc
 import (
 	"encoding/json"
 	"math/big"
-	"path"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
 type EthereumApi struct {
 	eth    *xeth.XEth
 	xethMu sync.RWMutex
-	db     common.Database
 }
 
-func NewEthereumApi(xeth *xeth.XEth, dataDir string) *EthereumApi {
-	// What about when dataDir is empty?
-	db, err := ethdb.NewLDBDatabase(path.Join(dataDir, "dapps"))
-	if err != nil {
-		panic(err)
-	}
+func NewEthereumApi(xeth *xeth.XEth) *EthereumApi {
 	api := &EthereumApi{
 		eth: xeth,
-		db:  db,
 	}
 
 	return api
@@ -42,10 +32,6 @@ func (api *EthereumApi) xeth() *xeth.XEth {
 
 func (api *EthereumApi) xethAtStateNum(num int64) *xeth.XEth {
 	return api.xeth().AtStateNum(num)
-}
-
-func (api *EthereumApi) Close() {
-	api.db.Close()
 }
 
 func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
@@ -68,7 +54,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 	case "net_peerCount":
 		v := api.xeth().PeerCount()
 		*reply = common.ToHex(big.NewInt(int64(v)).Bytes())
-	case "eth_version":
+	case "eth_protocolVersion":
 		*reply = api.xeth().EthVersion()
 	case "eth_coinbase":
 		// TODO handling of empty coinbase due to lack of accounts
@@ -94,19 +80,11 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		if err := args.requirements(); err != nil {
-			return err
-		}
-
 		v := api.xethAtStateNum(args.BlockNumber).State().SafeGet(args.Address).Balance()
 		*reply = common.ToHex(v.Bytes())
 	case "eth_getStorage", "eth_storageAt":
 		args := new(GetStorageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
-			return err
-		}
-
-		if err := args.requirements(); err != nil {
 			return err
 		}
 
@@ -116,33 +94,23 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		if err := args.requirements(); err != nil {
-			return err
-		}
 
-		state := api.xethAtStateNum(args.BlockNumber).State().SafeGet(args.Address)
-		value := state.StorageString(args.Key)
-
-		*reply = common.Bytes2Hex(value.Bytes())
+		*reply = api.xethAtStateNum(args.BlockNumber).StorageAt(args.Address, args.Key)
 	case "eth_getTransactionCount":
 		args := new(GetTxCountArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 
-		err := args.requirements()
-		if err != nil {
-			return err
-		}
-
-		*reply = api.xethAtStateNum(args.BlockNumber).TxCountAt(args.Address)
+		count := api.xethAtStateNum(args.BlockNumber).TxCountAt(args.Address)
+		*reply = common.ToHex(big.NewInt(int64(count)).Bytes())
 	case "eth_getBlockTransactionCountByHash":
 		args := new(GetBlockByHashArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 
-		block := NewBlockRes(api.xeth().EthBlockByHash(args.BlockHash))
+		block := NewBlockRes(api.xeth().EthBlockByHash(args.BlockHash), false)
 		*reply = common.ToHex(big.NewInt(int64(len(block.Transactions))).Bytes())
 	case "eth_getBlockTransactionCountByNumber":
 		args := new(GetBlockByNumberArgs)
@@ -150,7 +118,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		block := NewBlockRes(api.xeth().EthBlockByNumber(args.BlockNumber))
+		block := NewBlockRes(api.xeth().EthBlockByNumber(args.BlockNumber), false)
 		*reply = common.ToHex(big.NewInt(int64(len(block.Transactions))).Bytes())
 	case "eth_getUncleCountByBlockHash":
 		args := new(GetBlockByHashArgs)
@@ -159,7 +127,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByHash(args.BlockHash)
-		br := NewBlockRes(block)
+		br := NewBlockRes(block, false)
 		*reply = common.ToHex(big.NewInt(int64(len(br.Uncles))).Bytes())
 	case "eth_getUncleCountByBlockNumber":
 		args := new(GetBlockByNumberArgs)
@@ -168,14 +136,11 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
-		br := NewBlockRes(block)
+		br := NewBlockRes(block, false)
 		*reply = common.ToHex(big.NewInt(int64(len(br.Uncles))).Bytes())
 	case "eth_getData", "eth_getCode":
 		args := new(GetDataArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
-			return err
-		}
-		if err := args.requirements(); err != nil {
 			return err
 		}
 		*reply = api.xethAtStateNum(args.BlockNumber).CodeAt(args.Address)
@@ -185,17 +150,13 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		if err := args.requirements(); err != nil {
-			return err
-		}
-
 		v, err := api.xeth().Transact(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 		if err != nil {
 			return err
 		}
 		*reply = v
 	case "eth_call":
-		args := new(NewTxArgs)
+		args := new(CallArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
@@ -215,8 +176,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByHash(args.BlockHash)
-		br := NewBlockRes(block)
-		br.fullTx = args.IncludeTxs
+		br := NewBlockRes(block, true)
 
 		*reply = br
 	case "eth_getBlockByNumber":
@@ -226,8 +186,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
-		br := NewBlockRes(block)
-		br.fullTx = args.IncludeTxs
+		br := NewBlockRes(block, true)
 
 		*reply = br
 	case "eth_getTransactionByHash":
@@ -235,9 +194,13 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		args := new(HashIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 		}
-		tx := api.xeth().EthTransactionByHash(args.Hash)
+		tx, bhash, bnum, txi := api.xeth().EthTransactionByHash(args.Hash)
 		if tx != nil {
-			*reply = NewTransactionRes(tx)
+			v := NewTransactionRes(tx)
+			v.BlockHash = newHexData(bhash)
+			v.BlockNumber = newHexNum(bnum)
+			v.TxIndex = newHexNum(txi)
+			*reply = v
 		}
 	case "eth_getTransactionByBlockHashAndIndex":
 		args := new(HashIndexArgs)
@@ -246,10 +209,9 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByHash(args.Hash)
-		br := NewBlockRes(block)
-		br.fullTx = true
+		br := NewBlockRes(block, true)
 
-		if args.Index > int64(len(br.Transactions)) || args.Index < 0 {
+		if args.Index >= int64(len(br.Transactions)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
 		}
 		*reply = br.Transactions[args.Index]
@@ -260,10 +222,9 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
-		v := NewBlockRes(block)
-		v.fullTx = true
+		v := NewBlockRes(block, true)
 
-		if args.Index > int64(len(v.Transactions)) || args.Index < 0 {
+		if args.Index >= int64(len(v.Transactions)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
 		}
 		*reply = v.Transactions[args.Index]
@@ -273,14 +234,14 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		br := NewBlockRes(api.xeth().EthBlockByHash(args.Hash))
+		br := NewBlockRes(api.xeth().EthBlockByHash(args.Hash), false)
 
-		if args.Index > int64(len(br.Uncles)) || args.Index < 0 {
+		if args.Index >= int64(len(br.Uncles)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
 		}
 
-		uhash := br.Uncles[args.Index].Hex()
-		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash))
+		uhash := br.Uncles[args.Index]
+		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash.String()), false)
 
 		*reply = uncle
 	case "eth_getUncleByBlockNumberAndIndex":
@@ -290,15 +251,14 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
-		v := NewBlockRes(block)
-		v.fullTx = true
+		v := NewBlockRes(block, true)
 
-		if args.Index > int64(len(v.Uncles)) || args.Index < 0 {
+		if args.Index >= int64(len(v.Uncles)) || args.Index < 0 {
 			return NewValidationError("Index", "does not exist")
 		}
 
-		uhash := v.Uncles[args.Index].Hex()
-		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash))
+		uhash := v.Uncles[args.Index]
+		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash.String()), false)
 
 		*reply = uncle
 	case "eth_getCompilers":
@@ -312,18 +272,13 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		opts := toFilterOptions(args)
-		id := api.xeth().RegisterFilter(opts)
+		id := api.xeth().RegisterFilter(args.Earliest, args.Latest, args.Skip, args.Max, args.Address, args.Topics)
 		*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
 	case "eth_newBlockFilter":
 		args := new(FilterStringArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		if err := args.requirements(); err != nil {
-			return err
-		}
-
 		id := api.xeth().NewFilterString(args.Word)
 		*reply = common.ToHex(big.NewInt(int64(id)).Bytes())
 	case "eth_uninstallFilter":
@@ -349,8 +304,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		opts := toFilterOptions(args)
-		*reply = NewLogsRes(api.xeth().AllLogs(opts))
+		*reply = NewLogsRes(api.xeth().AllLogs(args.Earliest, args.Latest, args.Skip, args.Max, args.Address, args.Topics))
 	case "eth_getWork":
 		api.xeth().SetMining(true)
 		*reply = api.xeth().RemoteMining().GetWork()
@@ -359,7 +313,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = api.xeth().RemoteMining().SubmitWork(args.Nonce, args.Digest, args.Header)
+		*reply = api.xeth().RemoteMining().SubmitWork(args.Nonce, common.HexToHash(args.Digest), common.HexToHash(args.Header))
 	case "db_putString":
 		args := new(DbArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -370,7 +324,8 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		api.db.Put([]byte(args.Database+args.Key), args.Value)
+		api.xeth().DbPut([]byte(args.Database+args.Key), args.Value)
+
 		*reply = true
 	case "db_getString":
 		args := new(DbArgs)
@@ -382,7 +337,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		res, _ := api.db.Get([]byte(args.Database + args.Key))
+		res, _ := api.xeth().DbGet([]byte(args.Database + args.Key))
 		*reply = string(res)
 	case "db_putHex":
 		args := new(DbHexArgs)
@@ -394,7 +349,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		api.db.Put([]byte(args.Database+args.Key), args.Value)
+		api.xeth().DbPut([]byte(args.Database+args.Key), args.Value)
 		*reply = true
 	case "db_getHex":
 		args := new(DbHexArgs)
@@ -406,7 +361,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		res, _ := api.db.Get([]byte(args.Database + args.Key))
+		res, _ := api.xeth().DbGet([]byte(args.Database + args.Key))
 		*reply = common.ToHex(res)
 	case "shh_version":
 		*reply = api.xeth().WhisperVersion()
@@ -444,7 +399,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 		opts := new(xeth.Options)
-		opts.From = args.From
+		// opts.From = args.From
 		opts.To = args.To
 		opts.Topics = args.Topics
 		id := api.xeth().NewWhisperFilter(opts)
@@ -494,46 +449,3 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)
 	return nil
 }
-
-func toFilterOptions(options *BlockFilterArgs) *core.FilterOptions {
-	var opts core.FilterOptions
-
-	// Convert optional address slice/string to byte slice
-	if str, ok := options.Address.(string); ok {
-		opts.Address = []common.Address{common.HexToAddress(str)}
-	} else if slice, ok := options.Address.([]interface{}); ok {
-		bslice := make([]common.Address, len(slice))
-		for i, addr := range slice {
-			if saddr, ok := addr.(string); ok {
-				bslice[i] = common.HexToAddress(saddr)
-			}
-		}
-		opts.Address = bslice
-	}
-
-	opts.Earliest = options.Earliest
-	opts.Latest = options.Latest
-
-	topics := make([][]common.Hash, len(options.Topics))
-	for i, topicDat := range options.Topics {
-		if slice, ok := topicDat.([]interface{}); ok {
-			topics[i] = make([]common.Hash, len(slice))
-			for j, topic := range slice {
-				topics[i][j] = common.HexToHash(topic.(string))
-			}
-		} else if str, ok := topicDat.(string); ok {
-			topics[i] = []common.Hash{common.HexToHash(str)}
-		}
-	}
-	opts.Topics = topics
-
-	return &opts
-}
-
-/*
-	Work() chan<- *types.Block
-	SetWorkCh(chan<- Work)
-	Stop()
-	Start()
-	Rate() uint64
-*/

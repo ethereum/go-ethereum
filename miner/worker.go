@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -58,13 +59,14 @@ type Agent interface {
 }
 
 type worker struct {
-	mu     sync.Mutex
+	mu sync.Mutex
+
 	agents []Agent
 	recv   chan *types.Block
 	mux    *event.TypeMux
 	quit   chan struct{}
 	pow    pow.PoW
-	atWork int
+	atWork int64
 
 	eth      core.Backend
 	chain    *core.ChainManager
@@ -107,7 +109,7 @@ func (self *worker) start() {
 
 func (self *worker) stop() {
 	self.mining = false
-	self.atWork = 0
+	atomic.StoreInt64(&self.atWork, 0)
 
 	close(self.quit)
 }
@@ -135,9 +137,6 @@ out:
 				self.uncleMu.Unlock()
 			}
 
-			if self.atWork == 0 {
-				self.commitNewWork()
-			}
 		case <-self.quit:
 			// stop all agents
 			for _, agent := range self.agents {
@@ -146,6 +145,11 @@ out:
 			break out
 		case <-timer.C:
 			minerlogger.Infoln("Hash rate:", self.HashRate(), "Khash")
+
+			// XXX In case all mined a possible uncle
+			if atomic.LoadInt64(&self.atWork) == 0 {
+				self.commitNewWork()
+			}
 		}
 	}
 
@@ -155,6 +159,12 @@ out:
 func (self *worker) wait() {
 	for {
 		for block := range self.recv {
+			atomic.AddInt64(&self.atWork, -1)
+
+			if block == nil {
+				continue
+			}
+
 			if err := self.chain.InsertChain(types.Blocks{block}); err == nil {
 				for _, uncle := range block.Uncles() {
 					delete(self.possibleUncles, uncle.Hash())
@@ -170,7 +180,6 @@ func (self *worker) wait() {
 			} else {
 				self.commitNewWork()
 			}
-			self.atWork--
 		}
 	}
 }
@@ -182,8 +191,9 @@ func (self *worker) push() {
 
 		// push new work to agents
 		for _, agent := range self.agents {
+			atomic.AddInt64(&self.atWork, 1)
+
 			agent.Work() <- self.current.block.Copy()
-			self.atWork++
 		}
 	}
 }
@@ -260,9 +270,9 @@ gasLimit:
 
 	self.current.block.SetUncles(uncles)
 
-	self.current.state.AddBalance(self.coinbase, core.BlockReward)
+	core.AccumulateRewards(self.current.state, self.current.block)
 
-	self.current.state.Update(common.Big0)
+	self.current.state.Update()
 	self.push()
 }
 
@@ -286,9 +296,6 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 	if self.current.family.Has(uncle.Hash()) {
 		return core.UncleError(fmt.Sprintf("Uncle already in family (%x)", uncle.Hash()))
 	}
-
-	self.current.state.AddBalance(uncle.Coinbase, uncleReward)
-	self.current.state.AddBalance(self.coinbase, inclusionReward)
 
 	return nil
 }

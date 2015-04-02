@@ -4,8 +4,8 @@ Ethereum Go Client © 2014 Jeffrey Wilcke.
 
           | Linux   | OSX | Windows | Tests
 ----------|---------|-----|---------|------
-develop   | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](https://build.ethdev.com/builders/Linux%20Go%20develop%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](https://build.ethdev.com/builders/OSX%20Go%20develop%20branch/builds/-1) | N/A | [![Buildr+Status](https://travis-ci.org/ethereum/go-ethereum.svg?branch=develop)](https://travis-ci.org/ethereum/go-ethereum)
-master    | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20master%20branch)](https://build.ethdev.com/builders/Linux%20Go%20master%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=OSX%20Go%20master%20branch)](https://build.ethdev.com/builders/OSX%20Go%20master%20branch/builds/-1) | N/A | [![Buildr+Status](https://travis-ci.org/ethereum/go-ethereum.svg?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
+develop   | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](https://build.ethdev.com/builders/Linux%20Go%20develop%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](https://build.ethdev.com/builders/OSX%20Go%20develop%20branch/builds/-1) | N/A | [![Buildr+Status](https://travis-ci.org/ethereum/go-ethereum.svg?branch=develop)](https://travis-ci.org/ethereum/go-ethereum) [![Coverage Status](https://coveralls.io/repos/ethereum/go-ethereum/badge.svg?branch=develop)](https://coveralls.io/r/ethereum/go-ethereum?branch=develop)
+master    | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20master%20branch)](https://build.ethdev.com/builders/Linux%20Go%20master%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=OSX%20Go%20master%20branch)](https://build.ethdev.com/builders/OSX%20Go%20master%20branch/builds/-1) | N/A | [![Buildr+Status](https://travis-ci.org/ethereum/go-ethereum.svg?branch=master)](https://travis-ci.org/ethereum/go-ethereum) [![Coverage Status](https://coveralls.io/repos/ethereum/go-ethereum/badge.svg?branch=master)](https://coveralls.io/r/ethereum/go-ethereum?branch=master)
 
 [![Bugs](https://badge.waffle.io/ethereum/go-ethereum.png?label=bug&title=Bugs)](https://waffle.io/ethereum/go-ethereum)
 [![Stories in Ready](https://badge.waffle.io/ethereum/go-ethereum.png?label=ready&title=Ready)](https://waffle.io/ethereum/go-ethereum)
@@ -20,9 +20,9 @@ Mist (GUI):
 
 `go get github.com/ethereum/go-ethereum/cmd/mist`
 
-Ethereum (CLI):
+Geth (CLI):
 
-`go get github.com/ethereum/go-ethereum/cmd/ethereum`
+`go get github.com/ethereum/go-ethereum/cmd/geth`
 
 As of POC-8, go-ethereum uses [Godep](https://github.com/tools/godep) to manage dependencies. Assuming you have [your environment all set up](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum), switch to the go-ethereum repository root folder, and build/install the executable you need:
 
@@ -32,10 +32,10 @@ Mist (GUI):
 godep go build -v ./cmd/mist
 ```
 
-Ethereum (CLI):
+Geth (CLI):
 
 ```
-godep go build -v ./cmd/ethereum
+godep go build -v ./cmd/geth
 ```
 
 Instead of `build`, you can use `install` which will also install the resulting binary.
@@ -61,7 +61,7 @@ Go Ethereum comes with several wrappers/executables found in
 [the `cmd` directory](https://github.com/ethereum/go-ethereum/tree/develop/cmd):
 
 * `mist` Official Ethereum Browser (ethereum GUI client)
-* `ethereum` Ethereum CLI (ethereum command line interface client)
+* `geth` Ethereum CLI (ethereum command line interface client)
 * `bootnode` runs a bootstrap node for the Discovery Protocol
 * `ethtest` test tool which runs with the [tests](https://github.com/ethereum/testes) suite: 
   `cat file | ethtest`.
@@ -73,12 +73,12 @@ Go Ethereum comes with several wrappers/executables found in
 Command line options
 ============================
 
-Both `mist` and `ethereum` can be configured via command line options, environment variables and config files.
+Both `mist` and `geth` can be configured via command line options, environment variables and config files.
 
 To get the options available:
 
 ```
-ethereum -help
+geth -help
 ```
 
 For further details on options, see the [wiki](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options)

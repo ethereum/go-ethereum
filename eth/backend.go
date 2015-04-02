@@ -31,9 +31,9 @@ var (
 
 	defaultBootNodes = []*discover.Node{
 		// ETH/DEV cmd/bootnode
-		discover.MustParseNode("enode://6cdd090303f394a1cac34ecc9f7cda18127eafa2a3a06de39f6d920b0e583e062a7362097c7c65ee490a758b442acd5c80c6fce4b148c6a391e946b45131365b@54.169.166.226:30303"),
-		// ETH/DEV cpp-ethereum (poc-8.ethdev.com)
-		discover.MustParseNode("enode://4a44599974518ea5b0f14c31c4463692ac0329cb84851f3435e6d1b18ee4eae4aa495f846a0fa1219bd58035671881d44423876e57db2abd57254d0197da0ebe@5.1.83.226:30303"),
+		discover.MustParseNode("enode://09fbeec0d047e9a37e63f60f8618aa9df0e49271f3fadb2c070dc09e2099b95827b63a8b837c6fd01d0802d457dd83e3bd48bd3e6509f8209ed90dabbc30e3d3@52.16.188.185:30303"),
+		// ETH/DEV cpp-ethereum (poc-9.ethdev.com)
+		discover.MustParseNode("enode://487611428e6c99a11a9795a6abe7b529e81315ca6aad66e2a2fc76e3adf263faba0d35466c2f8f68d561dbefa8878d4df5f1f2ddb1fbeab7f42ffb8cd328bd4a@5.1.83.226:30303"),
 	}
 )
 
@@ -63,6 +63,7 @@ type Config struct {
 	Shh  bool
 	Dial bool
 
+	Etherbase      string
 	MinerThreads   int
 	AccountManager *accounts.Manager
 
@@ -140,6 +141,7 @@ type Ethereum struct {
 
 	Mining        bool
 	DataDir       string
+	etherbase     common.Address
 	clientVersion string
 	ethVersionId  int
 	netVersionId  int
@@ -185,6 +187,7 @@ func New(config *Config) (*Ethereum, error) {
 		eventMux:       &event.TypeMux{},
 		accountManager: config.AccountManager,
 		DataDir:        config.DataDir,
+		etherbase:      common.HexToAddress(config.Etherbase),
 		clientVersion:  config.Name, // TODO should separate from Name
 		ethVersionId:   config.ProtocolVersion,
 		netVersionId:   config.NetworkId,
@@ -297,13 +300,29 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 }
 
 func (s *Ethereum) StartMining() error {
-	cb, err := s.accountManager.Coinbase()
+	eb, err := s.Etherbase()
 	if err != nil {
-		servlogger.Errorf("Cannot start mining without coinbase: %v\n", err)
-		return fmt.Errorf("no coinbase: %v", err)
+		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
+		servlogger.Errorln(err)
+		return err
+
 	}
-	s.miner.Start(common.BytesToAddress(cb))
+
+	s.miner.Start(eb)
 	return nil
+}
+
+func (s *Ethereum) Etherbase() (eb common.Address, err error) {
+	eb = s.etherbase
+	if (eb == common.Address{}) {
+		var ebbytes []byte
+		ebbytes, err = s.accountManager.Primary()
+		eb = common.BytesToAddress(ebbytes)
+		if (eb == common.Address{}) {
+			err = fmt.Errorf("no accounts found")
+		}
+	}
+	return
 }
 
 func (s *Ethereum) StopMining()         { s.miner.Stop() }

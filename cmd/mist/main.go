@@ -47,12 +47,19 @@ var (
 		Usage: "absolute path to GUI assets directory",
 		Value: common.DefaultAssetPath(),
 	}
+	rpcCorsFlag = utils.RPCCORSDomainFlag
 )
 
 func init() {
+	// Mist-specific default
+	if len(rpcCorsFlag.Value) == 0 {
+		rpcCorsFlag.Value = "http://localhost"
+	}
+
 	app.Action = run
 	app.Flags = []cli.Flag{
 		assetPathFlag,
+		rpcCorsFlag,
 
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
