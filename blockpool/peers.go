@@ -219,6 +219,7 @@ func (self *peers) addPeer(
 		return
 	}
 	self.lock.Lock()
+	defer self.lock.Unlock()
 	p, found := self.peers[id]
 	if found {
 		// when called on an already connected peer, it means a newBlockMsg is received
@@ -243,7 +244,6 @@ func (self *peers) addPeer(
 
 		plog.Debugf("addPeer: add new peer <%v> with td %v and current block %s", id, td, hex(currentBlockHash))
 	}
-	self.lock.Unlock()
 
 	// check if peer's current head block is known
 	if self.bp.hasBlock(currentBlockHash) {
@@ -269,7 +269,10 @@ func (self *peers) addPeer(
 	} else {
 		// baseline is our own TD
 		currentTD := self.bp.getTD()
-		if self.best != nil {
+		bestpeer := self.best
+		if bestpeer != nil {
+			bestpeer.lock.Lock()
+			defer bestpeer.lock.Unlock()
 			currentTD = self.best.td
 		}
 		if td.Cmp(currentTD) > 0 {
@@ -277,11 +280,12 @@ func (self *peers) addPeer(
 			self.status.bestPeers[p.id]++
 			self.status.lock.Unlock()
 			plog.Debugf("addPeer: peer <%v> (td: %v > current td %v) promoted best peer", id, td, currentTD)
-			self.bp.switchPeer(self.best, p)
+			self.bp.switchPeer(bestpeer, p)
 			self.best = p
 			best = true
 		}
 	}
+
 	return
 }
 
