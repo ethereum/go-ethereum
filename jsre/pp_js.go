@@ -25,6 +25,8 @@ function pp(object, indent) {
         str += " ]";
     } else if (object instanceof Error) {
         str += "\033[31m" + "Error";
+    } else if (isBigNumber(object)) {
+        str += "\033[32m'" + object.toString(10) + "'";
     } else if(typeof(object) === "object") {
         str += "{\n";
         indent += "  ";
@@ -60,6 +62,11 @@ function pp(object, indent) {
 
     return str;
 }
+
+var isBigNumber = function (object) {
+    return typeof BigNumber !== 'undefined' && object instanceof BigNumber;
+};
+
 
 function prettyPrint(/* */) {
     var args = arguments;
