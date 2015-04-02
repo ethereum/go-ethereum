@@ -179,7 +179,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByHash(args.BlockHash)
-		br := NewBlockRes(block, true)
+		br := NewBlockRes(block, args.IncludeTxs)
 
 		*reply = br
 	case "eth_getBlockByNumber":
@@ -189,7 +189,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
-		br := NewBlockRes(block, true)
+		br := NewBlockRes(block, args.IncludeTxs)
 
 		*reply = br
 	case "eth_getTransactionByHash":
