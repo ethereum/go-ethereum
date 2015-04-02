@@ -252,7 +252,7 @@ func aesCBCDecrypt(key []byte, cipherText []byte, iv []byte) (plainText []byte, 
 	decrypter.CryptBlocks(paddedPlainText, cipherText)
 	plainText = PKCS7Unpad(paddedPlainText)
 	if plainText == nil {
-		err = errors.New("Decryption failed: PKCS7Unpad failed after decryption")
+		err = errors.New("Decryption failed: PKCS7Unpad failed after AES decryption")
 	}
 	return plainText, err
 }

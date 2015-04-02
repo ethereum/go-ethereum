@@ -28,24 +28,25 @@ the private key is encrypted and on disk uses another JSON encoding.
 
 Cryptography:
 
-1. Encryption key is scrypt derived key from user passphrase. Scrypt parameters
+1. Encryption key is first 16 bytes of SHA3-256 of first 16 bytes of
+   scrypt derived key from user passphrase. Scrypt parameters
    (work factors) [1][2] are defined as constants below.
-2. Scrypt salt is 32 random bytes from CSPRNG. It is appended to ciphertext.
-3. Checksum is SHA3 of the private key bytes.
-4. Plaintext is concatenation of private key bytes and checksum.
-5. Encryption algo is AES 256 CBC [3][4]
-6. CBC IV is 16 random bytes from CSPRNG. It is appended to ciphertext.
+2. Scrypt salt is 32 random bytes from CSPRNG.
+   It's stored in plain next to ciphertext in key file.
+3. MAC is SHA3-256 of concatenation of ciphertext and last 16 bytes of scrypt derived key.
+4. Plaintext is the EC private key bytes.
+5. Encryption algo is AES 128 CBC [3][4]
+6. CBC IV is 16 random bytes from CSPRNG.
+   It's stored in plain next to ciphertext in key file.
 7. Plaintext padding is PKCS #7 [5][6]
 
 Encoding:
 
-1. On disk, ciphertext, salt and IV are encoded in a nested JSON object.
+1. On disk, the ciphertext, MAC, salt and IV are encoded in a nested JSON object.
    cat a key file to see the structure.
 2. byte arrays are base64 JSON strings.
 3. The EC private key bytes are in uncompressed form [7].
    They are a big-endian byte slice of the absolute value of D [8][9].
-4. The checksum is the last 32 bytes of the plaintext byte array and the
-   private key is the preceeding bytes.
 
 References:
 
@@ -124,21 +125,25 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		return err
 	}
 
-	keyBytes := FromECDSA(key.PrivateKey)
-	keyBytesHash := Sha3(keyBytes)
-	toEncrypt := PKCS7Pad(append(keyBytes, keyBytesHash...))
+	encryptKey := Sha3(derivedKey[:16])[:16]
 
-	AES256Block, err := aes.NewCipher(derivedKey)
+	keyBytes := FromECDSA(key.PrivateKey)
+	toEncrypt := PKCS7Pad(keyBytes)
+
+	AES128Block, err := aes.NewCipher(encryptKey)
 	if err != nil {
 		return err
 	}
 
 	iv := randentropy.GetEntropyCSPRNG(aes.BlockSize) // 16
-	AES256CBCEncrypter := cipher.NewCBCEncrypter(AES256Block, iv)
+	AES128CBCEncrypter := cipher.NewCBCEncrypter(AES128Block, iv)
 	cipherText := make([]byte, len(toEncrypt))
-	AES256CBCEncrypter.CryptBlocks(cipherText, toEncrypt)
+	AES128CBCEncrypter.CryptBlocks(cipherText, toEncrypt)
+
+	mac := Sha3(derivedKey[16:32], cipherText)
 
 	cipherStruct := cipherJSON{
+		mac,
 		salt,
 		iv,
 		cipherText,
@@ -177,6 +182,7 @@ func DecryptKey(ks keyStorePassphrase, keyAddr []byte, auth string) (keyBytes []
 	err = json.Unmarshal(fileContent, keyProtected)
 
 	keyId = keyProtected.Id
+	mac := keyProtected.Crypto.MAC
 	salt := keyProtected.Crypto.Salt
 	iv := keyProtected.Crypto.IV
 	cipherText := keyProtected.Crypto.CipherText
@@ -186,15 +192,16 @@ func DecryptKey(ks keyStorePassphrase, keyAddr []byte, auth string) (keyBytes []
 	if err != nil {
 		return nil, nil, err
 	}
-	plainText, err := aesCBCDecrypt(derivedKey, cipherText, iv)
+
+	calculatedMAC := Sha3(derivedKey[16:32], cipherText)
+	if !bytes.Equal(calculatedMAC, mac) {
+		err = errors.New("Decryption failed: MAC mismatch")
+		return nil, nil, err
+	}
+
+	plainText, err := aesCBCDecrypt(Sha3(derivedKey[:16])[:16], cipherText, iv)
 	if err != nil {
 		return nil, nil, err
 	}
-	keyBytes = plainText[:len(plainText)-32]
-	keyBytesHash := plainText[len(plainText)-32:]
-	if !bytes.Equal(Sha3(keyBytes), keyBytesHash) {
-		err = errors.New("Decryption failed: checksum mismatch")
-		return nil, nil, err
-	}
-	return keyBytes, keyId, err
+	return plainText, keyId, err
 }

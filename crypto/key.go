@@ -48,6 +48,7 @@ type plainKeyJSON struct {
 }
 
 type cipherJSON struct {
+	MAC        []byte
 	Salt       []byte
 	IV         []byte
 	CipherText []byte
