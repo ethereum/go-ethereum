@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/fatih/set.v0"
@@ -252,7 +253,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
 func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
-	if len(block.Extra) > 1024 {
+	if big.NewInt(int64(len(block.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
 		return fmt.Errorf("Block extra data too long (%d)", len(block.Extra))
 	}
 
@@ -261,13 +262,11 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
 	}
 
-	// TODO: use use minGasLimit and gasLimitBoundDivisor from
-	// https://github.com/ethereum/common/blob/master/params.json
-	// block.gasLimit - parent.gasLimit <= parent.gasLimit / 1024
+	// block.gasLimit - parent.gasLimit <= parent.gasLimit / GasLimitBoundDivisor
 	a := new(big.Int).Sub(block.GasLimit, parent.GasLimit)
 	a.Abs(a)
-	b := new(big.Int).Div(parent.GasLimit, big.NewInt(1024))
-	if !(a.Cmp(b) < 0) {
+	b := new(big.Int).Div(parent.GasLimit, params.GasLimitBoundDivisor)
+	if !(a.Cmp(b) < 0) || (block.GasLimit.Cmp(params.MinGasLimit) == -1) {
 		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
 	}
 

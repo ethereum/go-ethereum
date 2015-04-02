@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type Vm struct {
@@ -640,7 +641,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			} else {
 				// gas < len(ret) * CreateDataGas == NO_CODE
 				dataGas := big.NewInt(int64(len(ret)))
-				dataGas.Mul(dataGas, GasCreateByte)
+				dataGas.Mul(dataGas, params.CreateDataGas)
 				if context.UseGas(dataGas) {
 					ref.SetCode(ret)
 				}
@@ -667,7 +668,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
 			if len(value.Bytes()) > 0 {
-				gas.Add(gas, GasStipend)
+				gas.Add(gas, params.CallStipend)
 			}
 
 			var (
@@ -759,13 +760,13 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 
 		mSize, mStart := stack.data[stack.len()-2], stack.data[stack.len()-1]
 
-		gas.Add(gas, GasLogBase)
-		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(n)), GasLogTopic))
-		gas.Add(gas, new(big.Int).Mul(mSize, GasLogByte))
+		gas.Add(gas, params.LogGas)
+		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(n)), params.LogTopicGas))
+		gas.Add(gas, new(big.Int).Mul(mSize, params.LogDataGas))
 
 		newMemSize = calcMemSize(mStart, mSize)
 	case EXP:
-		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(len(stack.data[stack.len()-2].Bytes()))), GasExpByte))
+		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(len(stack.data[stack.len()-2].Bytes()))), params.ExpByteGas))
 	case SSTORE:
 		err := stack.require(2)
 		if err != nil {
@@ -777,19 +778,19 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		val := statedb.GetState(context.Address(), common.BigToHash(x))
 		if len(val) == 0 && len(y.Bytes()) > 0 {
 			// 0 => non 0
-			g = GasStorageAdd
+			g = params.SstoreSetGas
 		} else if len(val) > 0 && len(y.Bytes()) == 0 {
-			statedb.Refund(self.env.Origin(), RefundStorage)
+			statedb.Refund(self.env.Origin(), params.SstoreRefundGas)
 
-			g = GasStorageMod
+			g = params.SstoreClearGas
 		} else {
 			// non 0 => non 0 (or 0 => 0)
-			g = GasStorageMod
+			g = params.SstoreClearGas
 		}
 		gas.Set(g)
 	case SUICIDE:
 		if !statedb.IsDeleted(context.Address()) {
-			statedb.Refund(self.env.Origin(), RefundSuicide)
+			statedb.Refund(self.env.Origin(), params.SuicideRefundGas)
 		}
 	case MLOAD:
 		newMemSize = calcMemSize(stack.peek(), u256(32))
@@ -803,22 +804,22 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-2])
 
 		words := toWordSize(stack.data[stack.len()-2])
-		gas.Add(gas, words.Mul(words, GasSha3Word))
+		gas.Add(gas, words.Mul(words, params.Sha3WordGas))
 	case CALLDATACOPY:
 		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-3])
 
 		words := toWordSize(stack.data[stack.len()-3])
-		gas.Add(gas, words.Mul(words, GasCopyWord))
+		gas.Add(gas, words.Mul(words, params.CopyGas))
 	case CODECOPY:
 		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-3])
 
 		words := toWordSize(stack.data[stack.len()-3])
-		gas.Add(gas, words.Mul(words, GasCopyWord))
+		gas.Add(gas, words.Mul(words, params.CopyGas))
 	case EXTCODECOPY:
 		newMemSize = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-4])
 
 		words := toWordSize(stack.data[stack.len()-4])
-		gas.Add(gas, words.Mul(words, GasCopyWord))
+		gas.Add(gas, words.Mul(words, params.CopyGas))
 
 	case CREATE:
 		newMemSize = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-3])
@@ -827,12 +828,12 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 
 		if op == CALL {
 			if self.env.State().GetStateObject(common.BigToAddress(stack.data[stack.len()-2])) == nil {
-				gas.Add(gas, GasCallNewAccount)
+				gas.Add(gas, params.CallNewAccountGas)
 			}
 		}
 
 		if len(stack.data[stack.len()-3].Bytes()) > 0 {
-			gas.Add(gas, GasCallValueTransfer)
+			gas.Add(gas, params.CallValueTransferGas)
 		}
 
 		x := calcMemSize(stack.data[stack.len()-6], stack.data[stack.len()-7])
@@ -848,13 +849,13 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
 			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
 			pow := new(big.Int).Exp(oldSize, common.Big2, Zero)
-			linCoef := new(big.Int).Mul(oldSize, GasMemWord)
-			quadCoef := new(big.Int).Div(pow, GasQuadCoeffDenom)
+			linCoef := new(big.Int).Mul(oldSize, params.MemoryGas)
+			quadCoef := new(big.Int).Div(pow, params.QuadCoeffDiv)
 			oldTotalFee := new(big.Int).Add(linCoef, quadCoef)
 
 			pow.Exp(newMemSizeWords, common.Big2, Zero)
-			linCoef = new(big.Int).Mul(newMemSizeWords, GasMemWord)
-			quadCoef = new(big.Int).Div(pow, GasQuadCoeffDenom)
+			linCoef = new(big.Int).Mul(newMemSizeWords, params.MemoryGas)
+			quadCoef = new(big.Int).Div(pow, params.QuadCoeffDiv)
 			newTotalFee := new(big.Int).Add(linCoef, quadCoef)
 
 			fee := new(big.Int).Sub(newTotalFee, oldTotalFee)
