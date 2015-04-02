@@ -24,10 +24,12 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type hexdata struct {
-	data []byte
+	data  []byte
+	isNil bool
 }
 
 func (d *hexdata) String() string {
@@ -35,6 +37,9 @@ func (d *hexdata) String() string {
 }
 
 func (d *hexdata) MarshalJSON() ([]byte, error) {
+	if d.isNil {
+		return json.Marshal(nil)
+	}
 	return json.Marshal(d.String())
 }
 
@@ -56,11 +61,19 @@ func newHexData(input interface{}) *hexdata {
 	case common.Hash:
 		d.data = input.Bytes()
 	case *common.Hash:
-		d.data = input.Bytes()
+		if input == nil {
+			d.isNil = true
+		} else {
+			d.data = input.Bytes()
+		}
 	case common.Address:
 		d.data = input.Bytes()
-	// case *common.Address:
-	// 	d.data = input.Bytes()
+	case *common.Address:
+		if input == nil {
+			d.isNil = true
+		} else {
+			d.data = input.Bytes()
+		}
 	case *big.Int:
 		d.data = input.Bytes()
 	case int64:
@@ -83,7 +96,8 @@ func newHexData(input interface{}) *hexdata {
 }
 
 type hexnum struct {
-	data []byte
+	data  []byte
+	isNil bool
 }
 
 func (d *hexnum) String() string {
@@ -99,6 +113,9 @@ func (d *hexnum) String() string {
 }
 
 func (d *hexnum) MarshalJSON() ([]byte, error) {
+	if d.isNil {
+		return json.Marshal(nil)
+	}
 	return json.Marshal(d.String())
 }
 
