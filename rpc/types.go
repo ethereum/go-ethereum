@@ -104,7 +104,7 @@ func (d *hexnum) String() string {
 	// Get hex string from bytes
 	out := common.Bytes2Hex(d.data)
 	// Trim leading 0s
-	out = strings.Trim(out, "0")
+	out = strings.TrimLeft(out, "0")
 	// Output "0x0" when value is 0
 	if len(out) == 0 {
 		out = "0"
