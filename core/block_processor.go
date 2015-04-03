@@ -342,7 +342,7 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 			return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
 		}
 
-		if err := sm.ValidateHeader(uncle, ancestorHeaders[uncle.ParentHash]); err != nil && err != BlockEqualTSErr {
+		if err := sm.ValidateHeader(uncle, ancestorHeaders[uncle.ParentHash]); err != nil {
 			return ValidationError(fmt.Sprintf("%v", err))
 		}
 
