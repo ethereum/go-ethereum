@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -184,6 +185,15 @@ var (
 		Usage: "JS library path to be used with console and js subcommands",
 		Value: ".",
 	}
+	BacktraceAtFlag = cli.GenericFlag{
+		Name:  "backtrace_at",
+		Usage: "When set to a file and line number holding a logging statement a stack trace will be written to the Info log",
+		Value: glog.GetTraceLocation(),
+	}
+	LogToStdErrFlag = cli.BoolFlag{
+		Name:  "logtostderr",
+		Usage: "Logs are written to standard error instead of to files.",
+	}
 )
 
 func GetNAT(ctx *cli.Context) nat.Interface {
@@ -213,6 +223,15 @@ func GetNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 }
 
 func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
+	// Set verbosity on glog
+	glog.SetV(ctx.GlobalInt(LogLevelFlag.Name))
+	// Set the log type
+	glog.SetToStderr(ctx.GlobalBool(LogToStdErrFlag.Name))
+
+	glog.V(2).Infoln("test it")
+
+	glog.V(3).Infoln("other stuff")
+
 	return &eth.Config{
 		Name:            common.MakeName(clientID, version),
 		DataDir:         ctx.GlobalString(DataDirFlag.Name),

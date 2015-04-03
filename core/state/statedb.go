@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/golang/glog"
 )
 
 var statelogger = logger.NewLogger("STATE")
@@ -210,7 +211,9 @@ func (self *StateDB) GetOrNewStateObject(addr common.Address) *StateObject {
 
 // NewStateObject create a state object whether it exist in the trie or not
 func (self *StateDB) newStateObject(addr common.Address) *StateObject {
-	statelogger.Debugf("(+) %x\n", addr)
+	if glog.V(logger.Debug) {
+		glog.Infof("(+) %x\n", addr)
+	}
 
 	stateObject := NewStateObject(addr, self.db)
 	self.stateObjects[addr.Str()] = stateObject
