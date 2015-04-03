@@ -85,9 +85,6 @@
 
 	function refresh() {
         document.querySelector("#balance").innerHTML = contract.call({from:eth.coinbase}).balance(eth.coinbase);
-
-		var table = document.querySelector("#table_body");
-		table.innerHTML = ""; // clear
 	}
 
 	function transact() {

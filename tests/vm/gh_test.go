@@ -81,6 +81,13 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
+		/*
+			vm.Debug = true
+			helper.Logger.SetLogLevel(5)
+			if name != "Call1MB1024Calldepth" {
+				continue
+			}
+		*/
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(common.Hash{}, db)
 		for addr, account := range test.Pre {
@@ -309,5 +316,26 @@ func TestStateLog(t *testing.T) {
 func TestStateTransaction(t *testing.T) {
 	t.Skip()
 	const fn = "../files/StateTests/stTransactionTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestCallCreateCallCode(t *testing.T) {
+	const fn = "../files/StateTests/stCallCreateCallCodeTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestMemory(t *testing.T) {
+	const fn = "../files/StateTests/stMemoryTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestQuadraticComplexity(t *testing.T) {
+	t.Skip() // takes too long
+	const fn = "../files/StateTests/stQuadraticComplexityTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestSolidity(t *testing.T) {
+	const fn = "../files/StateTests/stSolidityTest.json"
 	RunVmTest(fn, t)
 }
