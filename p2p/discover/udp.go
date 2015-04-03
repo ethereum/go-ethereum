@@ -379,11 +379,9 @@ func (t *udp) readLoop() {
 			continue
 		}
 		glog.V(logger.Detail).Infof("<<< %v %T %v\n", from, packet, packet)
-		go func() {
-			if err := packet.handle(t, from, fromID, hash); err != nil {
-				glog.V(logger.Debug).Infof("error handling %T from %v: %v", packet, from, err)
-			}
-		}()
+		if err := packet.handle(t, from, fromID, hash); err != nil {
+			glog.V(logger.Debug).Infof("error handling %T from %v: %v", packet, from, err)
+		}
 	}
 }
 
@@ -430,7 +428,7 @@ func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 	})
 	if !t.handleReply(fromID, pingPacket, req) {
 		// Note: we're ignoring the provided IP address right now
-		t.bond(true, fromID, from, req.Port)
+		go t.bond(true, fromID, from, req.Port)
 	}
 	return nil
 }
