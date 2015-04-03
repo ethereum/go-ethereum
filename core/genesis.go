@@ -56,7 +56,15 @@ func GenesisBlock(db common.Database) *types.Block {
 	return genesis
 }
 
+const (
+	TestAccount = "e273f01c99144c438695e10f24926dc1f9fbf62d"
+	TestBalance = "1000000000000000000"
+)
+
 var genesisData = []byte(`{
+	"` + TestAccount + `": {"balance": "` + TestBalance + `"},
+	"` + ContractAddrURLhint + `": {"balance": "` + TestBalance + `", "code": "` + ContractCodeURLhint + `"	},
+	"` + ContractAddrHashReg + `": {"balance": "` + TestBalance + `", "code": "` + ContractCodeHashReg + `"	},
 	"0000000000000000000000000000000000000001": {"balance": "1"},
 	"0000000000000000000000000000000000000002": {"balance": "1"},
 	"0000000000000000000000000000000000000003": {"balance": "1"},

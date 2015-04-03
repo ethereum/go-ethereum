@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -17,8 +18,8 @@ The resolver is meant to be called by the roundtripper transport implementation
 of a url scheme
 */
 const (
-	urlHintContractAddress = "urlhint"
-	nameRegContractAddress = "nameReg"
+	URLHintContractAddress = core.ContractAddrURLhint
+	NameRegContractAddress = core.ContractAddrHashReg
 )
 
 type Resolver struct {
@@ -37,7 +38,7 @@ func New(eth Backend, uhca, nrca string) *Resolver {
 
 func (self *Resolver) NameToContentHash(name string) (chash common.Hash, err error) {
 	// look up in nameReg
-	key := storageAddress(0, common.Hex2Bytes(name))
+	key := storageAddress(1, common.Hex2BytesFixed(name, 32))
 	hash := self.backend.StorageAt(self.nameRegContractAddress, key)
 	copy(chash[:], common.Hex2Bytes(hash))
 	return
@@ -45,8 +46,8 @@ func (self *Resolver) NameToContentHash(name string) (chash common.Hash, err err
 
 func (self *Resolver) ContentHashToUrl(chash common.Hash) (uri string, err error) {
 	// look up in nameReg
-	key := storageAddress(0, chash[:])
-	uri = self.backend.StorageAt(self.urlHintContractAddress, key)
+	key := storageAddress(2, chash[:])
+	uri = string(common.Hex2Bytes(self.backend.StorageAt(self.urlHintContractAddress, key)))
 	l := len(uri)
 	for (l > 0) && (uri[l-1] == 0) {
 		l--

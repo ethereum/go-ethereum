@@ -49,11 +49,10 @@ func New(xeth *xeth.XEth, tx string, http *docserver.DocServer) (self *NatSpec, 
 	// parse out host/domain
 
 	// set up nameresolver with natspecreg + urlhint contract addresses
-	stateReg := NewStateReg(xeth)
 	res := resolver.New(
 		xeth,
-		stateReg.caNatSpec,
-		stateReg.caURL,
+		resolver.NameRegContractAddress,
+		resolver.URLHintContractAddress,
 	)
 
 	// resolve host via nameReg/UrlHint Resolver
