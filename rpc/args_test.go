@@ -1805,6 +1805,16 @@ func TestWhisperFilterArgsEmpty(t *testing.T) {
 	}
 }
 
+func TestWhisperFilterArgsToInt(t *testing.T) {
+	input := `[{"to": 2}]`
+
+	args := new(WhisperFilterArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
 func TestWhisperFilterArgsToBool(t *testing.T) {
 	input := `[{"topics": ["0x68656c6c6f20776f726c64"], "to": false}]`
 
@@ -1812,6 +1822,21 @@ func TestWhisperFilterArgsToBool(t *testing.T) {
 	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
 	if len(str) > 0 {
 		t.Error(str)
+	}
+}
+
+func TestWhisperFilterArgsToMissing(t *testing.T) {
+	input := `[{"topics": ["0x68656c6c6f20776f726c64"]}]`
+	expected := new(WhisperFilterArgs)
+	expected.To = ""
+
+	args := new(WhisperFilterArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if args.To != expected.To {
+		t.Errorf("To shoud be %v but is %v", expected.To, args.To)
 	}
 }
 
@@ -2084,6 +2109,51 @@ func TestHashIndexArgsInvalidIndex(t *testing.T) {
 	input := `["0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b", false]`
 
 	args := new(HashIndexArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestHashArgs(t *testing.T) {
+	input := `["0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b"]`
+	expected := new(HashIndexArgs)
+	expected.Hash = "0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b"
+
+	args := new(HashArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Hash != args.Hash {
+		t.Errorf("Hash shoud be %#v but is %#v", expected.Hash, args.Hash)
+	}
+}
+
+func TestHashArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(HashArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestHashArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(HashArgs)
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestHashArgsInvalidHash(t *testing.T) {
+	input := `[7]`
+
+	args := new(HashArgs)
 	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
 	if len(str) > 0 {
 		t.Error(str)

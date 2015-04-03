@@ -127,6 +127,11 @@ func CopyBytes(b []byte) (copiedBytes []byte) {
 	return
 }
 
+func HasHexPrefix(str string) bool {
+	l := len(str)
+	return l >= 2 && str[0:2] == "0x"
+}
+
 func IsHex(str string) bool {
 	l := len(str)
 	return l >= 4 && l%2 == 0 && str[0:2] == "0x"

@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"encoding/json"
+	// "fmt"
 	"math/big"
 	"sync"
 
@@ -112,7 +113,11 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		block := NewBlockRes(api.xeth().EthBlockByHash(args.Hash), false)
-		*reply = common.ToHex(big.NewInt(int64(len(block.Transactions))).Bytes())
+		if block == nil {
+			*reply = nil
+		} else {
+			*reply = common.ToHex(big.NewInt(int64(len(block.Transactions))).Bytes())
+		}
 	case "eth_getBlockTransactionCountByNumber":
 		args := new(BlockNumArg)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -192,9 +197,9 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		*reply = br
 	case "eth_getTransactionByHash":
-		// HashIndexArgs used, but only the "Hash" part we need.
-		args := new(HashIndexArgs)
+		args := new(HashArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
 		}
 		tx, bhash, bnum, txi := api.xeth().EthTransactionByHash(args.Hash)
 		if tx != nil {
@@ -212,11 +217,16 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		block := api.xeth().EthBlockByHash(args.Hash)
 		br := NewBlockRes(block, true)
+		if br == nil {
+			*reply = nil
+		}
 
 		if args.Index >= int64(len(br.Transactions)) || args.Index < 0 {
-			return NewValidationError("Index", "does not exist")
+			// return NewValidationError("Index", "does not exist")
+			*reply = nil
+		} else {
+			*reply = br.Transactions[args.Index]
 		}
-		*reply = br.Transactions[args.Index]
 	case "eth_getTransactionByBlockNumberAndIndex":
 		args := new(BlockNumIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -225,11 +235,16 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
 		v := NewBlockRes(block, true)
+		if v == nil {
+			*reply = nil
+		}
 
 		if args.Index >= int64(len(v.Transactions)) || args.Index < 0 {
-			return NewValidationError("Index", "does not exist")
+			// return NewValidationError("Index", "does not exist")
+			*reply = nil
+		} else {
+			*reply = v.Transactions[args.Index]
 		}
-		*reply = v.Transactions[args.Index]
 	case "eth_getUncleByBlockHashAndIndex":
 		args := new(HashIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -243,13 +258,11 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		if args.Index >= int64(len(br.Uncles)) || args.Index < 0 {
-			return NewValidationError("Index", "does not exist")
+			// return NewValidationError("Index", "does not exist")
+			*reply = nil
+		} else {
+			*reply = br.Uncles[args.Index]
 		}
-
-		uhash := br.Uncles[args.Index]
-		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash.String()), false)
-
-		*reply = uncle
 	case "eth_getUncleByBlockNumberAndIndex":
 		args := new(BlockNumIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -265,13 +278,11 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		if args.Index >= int64(len(v.Uncles)) || args.Index < 0 {
-			return NewValidationError("Index", "does not exist")
+			// return NewValidationError("Index", "does not exist")
+			*reply = nil
+		} else {
+			*reply = v.Uncles[args.Index]
 		}
-
-		uhash := v.Uncles[args.Index]
-		uncle := NewBlockRes(api.xeth().EthBlockByHash(uhash.String()), false)
-
-		*reply = uncle
 	case "eth_getCompilers":
 		c := []string{""}
 		*reply = c
