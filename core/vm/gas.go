@@ -2,8 +2,9 @@ package vm
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/params"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -37,8 +38,8 @@ func baseCheck(op OpCode, stack *stack, gas *big.Int) error {
 			return err
 		}
 
-		if r.stackPush && len(stack.data)-r.stackPop+1 > int(params.StackLimit.Int64()) {
-			return fmt.Errorf("stack limit reached (%d)", params.StackLimit.Int64())
+		if r.stackPush && len(stack.data)-r.stackPop > int(params.StackLimit.Int64()) {
+			return fmt.Errorf("stack limit reached %d (%d)", len(stack.data), params.StackLimit.Int64())
 		}
 
 		gas.Add(gas, r.gas)

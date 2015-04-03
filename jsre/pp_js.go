@@ -30,8 +30,8 @@ function pp(object, indent) {
     } else if(typeof(object) === "object") {
         str += "{\n";
         indent += "  ";
-        var last = Object.getOwnPropertyNames(object).pop()
-        Object.getOwnPropertyNames(object).forEach(function (k) {
+        var last = getFields(object).pop()
+        getFields(object).forEach(function (k) {
             str += indent + k + ": ";
             try {
                 str += pp(object[k], indent);
@@ -63,10 +63,29 @@ function pp(object, indent) {
     return str;
 }
 
+var redundantFields = [
+    'valueOf',
+    'toString',
+    'toLocaleString',
+    'hasOwnProperty',
+    'isPrototypeOf',
+    'propertyIsEnumerable',
+    'constructor'
+];
+
+var getFields = function (object) {
+    var result = Object.getOwnPropertyNames(object);
+    if (object.constructor && object.constructor.prototype) {
+        result = result.concat(Object.getOwnPropertyNames(object.constructor.prototype));
+    }
+    return result.filter(function (field) {
+        return redundantFields.indexOf(field) === -1;
+    });
+};
+
 var isBigNumber = function (object) {
     return typeof BigNumber !== 'undefined' && object instanceof BigNumber;
 };
-
 
 function prettyPrint(/* */) {
     var args = arguments;
