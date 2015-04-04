@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -34,6 +35,18 @@ func (js *jsre) adminBindings() {
 	admin.Set("import", js.importChain)
 	admin.Set("export", js.exportChain)
 	admin.Set("dumpBlock", js.dumpBlock)
+	admin.Set("verbosity", js.verbosity)
+}
+
+func (js *jsre) verbosity(call otto.FunctionCall) otto.Value {
+	v, err := call.Argument(0).ToInteger()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	glog.SetV(int(v))
+	return otto.UndefinedValue()
 }
 
 func (js *jsre) startMining(call otto.FunctionCall) otto.Value {
