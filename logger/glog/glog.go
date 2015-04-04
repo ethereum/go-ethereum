@@ -1055,7 +1055,6 @@ func (v Verbose) Infoln(args ...interface{}) {
 // Infof is equivalent to the global Infof function, guarded by the value of v.
 // See the documentation of V for usage.
 func (v Verbose) Infof(format string, args ...interface{}) {
-	fmt.Println(v)
 	if v {
 		logging.printf(infoLog, format, args...)
 	}
