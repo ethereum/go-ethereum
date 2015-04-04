@@ -761,10 +761,10 @@ func (self *BlockPool) checkTD(nodes ...*node) {
 		if n.td != nil {
 			plog.DebugDetailf("peer td %v =?= block td %v", n.td, n.block.Td)
 			if n.td.Cmp(n.block.Td) != 0 {
-				self.peers.peerError(n.blockBy, ErrIncorrectTD, "on block %x", n.hash)
-				self.status.lock.Lock()
-				self.status.badPeers[n.blockBy]++
-				self.status.lock.Unlock()
+				//self.peers.peerError(n.blockBy, ErrIncorrectTD, "on block %x", n.hash)
+				//self.status.lock.Lock()
+				//self.status.badPeers[n.blockBy]++
+				//self.status.lock.Unlock()
 			}
 		}
 	}
