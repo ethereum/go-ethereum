@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -90,7 +91,8 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	receipt := types.NewReceipt(statedb.Root().Bytes(), cumulative)
 	receipt.SetLogs(statedb.Logs())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-	chainlogger.Debugln(receipt)
+
+	glog.V(logger.Debug).Infoln(receipt)
 
 	// Notify all subscribers
 	if !transientProcess {
@@ -120,7 +122,7 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 		}
 
 		if err != nil {
-			statelogger.Infoln("TX err:", err)
+			glog.V(logger.Core).Infoln("TX err:", err)
 		}
 		receipts = append(receipts, receipt)
 
@@ -357,7 +359,7 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 func putTx(db common.Database, tx *types.Transaction, block *types.Block, i uint64) {
 	rlpEnc, err := rlp.EncodeToBytes(tx)
 	if err != nil {
-		statelogger.Infoln("Failed encoding tx", err)
+		glog.V(logger.Debug).Infoln("Failed encoding tx", err)
 		return
 	}
 	db.Put(tx.Hash().Bytes(), rlpEnc)
@@ -372,7 +374,7 @@ func putTx(db common.Database, tx *types.Transaction, block *types.Block, i uint
 	txExtra.Index = i
 	rlpMeta, err := rlp.EncodeToBytes(txExtra)
 	if err != nil {
-		statelogger.Infoln("Failed encoding meta", err)
+		glog.V(logger.Debug).Infoln("Failed encoding tx meta data", err)
 		return
 	}
 	db.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)

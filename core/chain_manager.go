@@ -187,7 +187,9 @@ func (bc *ChainManager) setLastBlock() {
 		bc.Reset()
 	}
 
-	chainlogger.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
+	if glog.V(logger.Info) {
+		glog.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
+	}
 }
 
 func (bc *ChainManager) makeCache() {
@@ -285,7 +287,7 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 func (self *ChainManager) Export(w io.Writer) error {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
-	chainlogger.Infof("exporting %v blocks...\n", self.currentBlock.Header().Number)
+	glog.V(logger.Info).Infof("exporting %v blocks...\n", self.currentBlock.Header().Number)
 	for block := self.currentBlock; block != nil; block = self.GetBlock(block.Header().ParentHash) {
 		if err := block.EncodeRLP(w); err != nil {
 			return err
@@ -332,7 +334,6 @@ func (self *ChainManager) GetBlockHashesFromHash(hash common.Hash, max uint64) (
 		parentHash := block.Header().ParentHash
 		block = self.GetBlock(parentHash)
 		if block == nil {
-			chainlogger.Infof("GetBlockHashesFromHash Parent UNKNOWN %x\n", parentHash)
 			break
 		}
 
@@ -477,7 +478,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, common.Big1)) < 0 {
 					chash := cblock.Hash()
 					hash := block.Hash()
-					chainlogger.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, hash[:4], td, cblock.Header().Number, chash[:4], self.td)
+
+					if glog.V(logger.Info) {
+						glog.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, hash[:4], td, cblock.Header().Number, chash[:4], self.td)
+					}
 
 					queue[i] = ChainSplitEvent{block, logs}
 					queueEvent.splitCount++
@@ -513,7 +517,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 	if len(chain) > 0 && glog.V(logger.Info) {
 		start, end := chain[0], chain[len(chain)-1]
-		glog.Infof("imported %d blocks [%x / %x] #%v\n", len(chain), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4], end.Number())
+		glog.Infof("imported %d blocks #%v [%x / %x]\n", len(chain), end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
 	}
 
 	go self.eventMux.Post(queueEvent)
