@@ -28,11 +28,27 @@ type Transaction struct {
 }
 
 func NewContractCreationTx(amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
-	return &Transaction{Recipient: nil, Amount: amount, GasLimit: gasLimit, Price: gasPrice, Payload: data}
+	return &Transaction{
+		Recipient: nil,
+		Amount:    amount,
+		GasLimit:  gasLimit,
+		Price:     gasPrice,
+		Payload:   data,
+		R:         new(big.Int),
+		S:         new(big.Int),
+	}
 }
 
 func NewTransactionMessage(to common.Address, amount, gasAmount, gasPrice *big.Int, data []byte) *Transaction {
-	return &Transaction{Recipient: &to, Amount: amount, GasLimit: gasAmount, Price: gasPrice, Payload: data}
+	return &Transaction{
+		Recipient: &to,
+		Amount:    amount,
+		GasLimit:  gasAmount,
+		Price:     gasPrice,
+		Payload:   data,
+		R:         new(big.Int),
+		S:         new(big.Int),
+	}
 }
 
 func NewTransactionFromBytes(data []byte) *Transaction {
