@@ -653,15 +653,19 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 		}
 		sender.lock.Unlock()
 
-		if entry == nil {
-			plog.DebugDetailf("AddBlock: unrequested block %s received from peer <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
-			sender.addError(ErrUnrequestedBlock, "%x", hash)
+		/* @zelig !!!
+		requested 5 hashes from both A & B. A responds sooner then B, process blocks. Close section.
+		delayed B sends you block ... UNREQUESTED. Blocked
+			if entry == nil {
+				plog.DebugDetailf("AddBlock: unrequested block %s received from peer <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
+				sender.addError(ErrUnrequestedBlock, "%x", hash)
 
-			self.status.lock.Lock()
-			self.status.badPeers[peerId]++
-			self.status.lock.Unlock()
-			return
-		}
+				self.status.lock.Lock()
+				self.status.badPeers[peerId]++
+				self.status.lock.Unlock()
+				return
+			}
+		*/
 	}
 	if entry == nil {
 		return
