@@ -36,6 +36,8 @@ func blockHeight(raw interface{}, number *int64) error {
 	}
 
 	switch str {
+	case "earliest":
+		*number = 0
 	case "latest":
 		*number = -1
 	case "pending":
