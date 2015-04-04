@@ -36,6 +36,18 @@ func (js *jsre) adminBindings() {
 	admin.Set("export", js.exportChain)
 	admin.Set("dumpBlock", js.dumpBlock)
 	admin.Set("verbosity", js.verbosity)
+	admin.Set("backtrace", js.backtrace)
+}
+
+func (js *jsre) backtrace(call otto.FunctionCall) otto.Value {
+	tracestr, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+	glog.GetTraceLocation().Set(tracestr)
+
+	return otto.UndefinedValue()
 }
 
 func (js *jsre) verbosity(call otto.FunctionCall) otto.Value {
