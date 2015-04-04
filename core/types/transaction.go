@@ -24,7 +24,7 @@ type Transaction struct {
 	Amount       *big.Int
 	Payload      []byte
 	V            byte
-	R, S         []byte
+	R, S         *big.Int
 }
 
 func NewContractCreationTx(amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
@@ -94,8 +94,8 @@ func (tx *Transaction) To() *common.Address {
 
 func (tx *Transaction) Curve() (v byte, r []byte, s []byte) {
 	v = byte(tx.V)
-	r = common.LeftPadBytes(tx.R, 32)
-	s = common.LeftPadBytes(tx.S, 32)
+	r = common.LeftPadBytes(tx.R.Bytes(), 32)
+	s = common.LeftPadBytes(tx.S.Bytes(), 32)
 	return
 }
 
@@ -118,8 +118,8 @@ func (tx *Transaction) PublicKey() []byte {
 }
 
 func (tx *Transaction) SetSignatureValues(sig []byte) error {
-	tx.R = sig[:32]
-	tx.S = sig[32:64]
+	tx.R = common.Bytes2Big(sig[:32])
+	tx.S = common.Bytes2Big(sig[32:64])
 	tx.V = sig[64] + 27
 	return nil
 }
@@ -137,7 +137,7 @@ func (tx *Transaction) SignECDSA(prv *ecdsa.PrivateKey) error {
 // TODO: remove
 func (tx *Transaction) RlpData() interface{} {
 	data := []interface{}{tx.AccountNonce, tx.Price, tx.GasLimit, tx.Recipient, tx.Amount, tx.Payload}
-	return append(data, tx.V, new(big.Int).SetBytes(tx.R).Bytes(), new(big.Int).SetBytes(tx.S).Bytes())
+	return append(data, tx.V, tx.R.Bytes(), tx.S.Bytes())
 }
 
 func (tx *Transaction) String() string {
