@@ -447,11 +447,6 @@ func (self *ChainManager) procFutureBlocks() {
 }
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
-	if len(chain) > 0 {
-		fmt.Println("insert chain", len(chain))
-		defer fmt.Println("insert chain done")
-	}
-
 	// A queued approach to delivering events. This is generally faster than direct delivery and requires much less mutex acquiring.
 	var queue = make([]interface{}, len(chain))
 	var queueEvent = queueEvent{queue: queue}
@@ -471,13 +466,11 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			// Do not penelise on future block. We'll need a block queue eventually that will queue
 			// future block for future use
 			if err == BlockFutureErr {
-				fmt.Println("added future block", block.Number())
 				self.futureBlocks.Push(block)
 				continue
 			}
 
 			if IsParentErr(err) && self.futureBlocks.Has(block.ParentHash()) {
-				fmt.Println("added future block 2", block.Number())
 				self.futureBlocks.Push(block)
 				continue
 			}
