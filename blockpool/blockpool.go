@@ -622,6 +622,8 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 
 	entry := self.get(hash)
 
+	fmt.Println("block number", block.Number())
+	defer fmt.Println("AddBlock done")
 	// a peer's current head block is appearing the first time
 	if hash == sender.currentBlockHash {
 		if sender.currentBlock == nil {

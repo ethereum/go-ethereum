@@ -268,13 +268,13 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 		return BlockNumberErr
 	}
 
+	if block.Time <= parent.Time {
+		return BlockEqualTSErr //ValidationError("Block timestamp equal or less than previous block (%v - %v)", block.Time, parent.Time)
+	}
+
 	// Verify the nonce of the block. Return an error if it's not valid
 	if !sm.Pow.Verify(types.NewBlockWithHeader(block)) {
 		return ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
-	}
-
-	if block.Time <= parent.Time {
-		return BlockEqualTSErr //ValidationError("Block timestamp equal or less than previous block (%v - %v)", block.Time, parent.Time)
 	}
 
 	return nil

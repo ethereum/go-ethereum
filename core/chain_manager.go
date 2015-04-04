@@ -437,21 +437,20 @@ type queueEvent struct {
 }
 
 func (self *ChainManager) procFutureBlocks() {
-	self.futureBlocks.mu.Lock()
-
 	blocks := make([]*types.Block, len(self.futureBlocks.blocks))
 	for i, hash := range self.futureBlocks.hashes {
 		blocks[i] = self.futureBlocks.Get(hash)
 	}
-	self.futureBlocks.mu.Unlock()
 
 	types.BlockBy(types.Number).Sort(blocks)
 	self.InsertChain(blocks)
 }
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
-	//self.tsmu.Lock()
-	//defer self.tsmu.Unlock()
+	if len(chain) > 0 {
+		fmt.Println("insert chain", len(chain))
+		defer fmt.Println("insert chain done")
+	}
 
 	// A queued approach to delivering events. This is generally faster than direct delivery and requires much less mutex acquiring.
 	var queue = make([]interface{}, len(chain))
@@ -472,22 +471,16 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			// Do not penelise on future block. We'll need a block queue eventually that will queue
 			// future block for future use
 			if err == BlockFutureErr {
+				fmt.Println("added future block", block.Number())
 				self.futureBlocks.Push(block)
 				continue
 			}
 
 			if IsParentErr(err) && self.futureBlocks.Has(block.ParentHash()) {
+				fmt.Println("added future block 2", block.Number())
 				self.futureBlocks.Push(block)
 				continue
 			}
-
-			/*
-				if err == BlockEqualTSErr {
-					//queue[i] = ChainSideEvent{block, logs}
-					// XXX silently discard it?
-					continue
-				}
-			*/
 
 			h := block.Header()
 			chainlogger.Errorf("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes()[:4])
