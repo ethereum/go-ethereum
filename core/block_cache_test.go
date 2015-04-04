@@ -46,3 +46,15 @@ func TestInclusion(t *testing.T) {
 		}
 	}
 }
+
+func TestDeletion(t *testing.T) {
+	chain := newChain(3)
+	cache := NewBlockCache(3)
+	insertChainCache(cache, chain)
+
+	cache.Delete(chain[1].Hash())
+
+	if cache.Has(chain[1].Hash()) {
+		t.Errorf("expected %x not to be included")
+	}
+}
