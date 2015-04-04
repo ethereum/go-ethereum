@@ -8,6 +8,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -166,9 +168,6 @@ func (self *StateTransition) preCheck() (err error) {
 }
 
 func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, err error) {
-	// statelogger.Debugf("(~) %x\n", self.msg.Hash())
-
-	// XXX Transactions after this point are considered valid.
 	if err = self.preCheck(); err != nil {
 		return
 	}
@@ -207,7 +206,7 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 			if err := self.UseGas(dataGas); err == nil {
 				ref.SetCode(ret)
 			} else {
-				statelogger.Infoln("Insufficient gas for creating code. Require", dataGas, "and have", self.gas)
+				glog.V(logger.Core).Infoln("Insufficient gas for creating code. Require", dataGas, "and have", self.gas)
 			}
 		}
 	} else {

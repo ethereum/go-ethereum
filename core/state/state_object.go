@@ -124,7 +124,7 @@ func (self *StateObject) MarkForDeletion() {
 	self.remove = true
 	self.dirty = true
 
-	if glog.V(logger.Debug) {
+	if glog.V(logger.Core) {
 		glog.Infof("%x: #%d %v X\n", self.Address(), self.nonce, self.balance)
 	}
 }
@@ -190,7 +190,7 @@ func (c *StateObject) GetInstr(pc *big.Int) *common.Value {
 func (c *StateObject) AddBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Add(c.balance, amount))
 
-	if glog.V(logger.Debug) {
+	if glog.V(logger.Core) {
 		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.balance, amount)
 	}
 }
@@ -198,7 +198,7 @@ func (c *StateObject) AddBalance(amount *big.Int) {
 func (c *StateObject) SubBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Sub(c.balance, amount))
 
-	if glog.V(logger.Debug) {
+	if glog.V(logger.Core) {
 		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.balance, amount)
 	}
 }
@@ -234,7 +234,7 @@ func (c *StateObject) ConvertGas(gas, price *big.Int) error {
 func (self *StateObject) SetGasPool(gasLimit *big.Int) {
 	self.gasPool = new(big.Int).Set(gasLimit)
 
-	if glog.V(logger.Debug) {
+	if glog.V(logger.Core) {
 		glog.Infof("%x: gas (+ %v)", self.Address(), self.gasPool)
 	}
 }

@@ -209,7 +209,7 @@ func (self *StateDB) GetOrNewStateObject(addr common.Address) *StateObject {
 
 // NewStateObject create a state object whether it exist in the trie or not
 func (self *StateDB) newStateObject(addr common.Address) *StateObject {
-	if glog.V(logger.Debug) {
+	if glog.V(logger.Core) {
 		glog.Infof("(+) %x\n", addr)
 	}
 
