@@ -26,13 +26,6 @@ const (
 )
 
 func TestNewBlockRes(t *testing.T) {
-	parentHash := common.HexToHash("0x01")
-	coinbase := common.HexToAddress("0x01")
-	root := common.HexToHash("0x01")
-	difficulty := common.Big1
-	nonce := uint64(1)
-	extra := ""
-	block := types.NewBlock(parentHash, coinbase, root, difficulty, nonce, extra)
 	tests := map[string]string{
 		"number":           reNum,
 		"hash":             reHash,
@@ -55,16 +48,8 @@ func TestNewBlockRes(t *testing.T) {
 		// "uncles":       reListHash,
 	}
 
-	to := common.HexToAddress("0x02")
-	amount := big.NewInt(1)
-	gasAmount := big.NewInt(1)
-	gasPrice := big.NewInt(1)
-	data := []byte{1, 2, 3}
-	tx := types.NewTransactionMessage(to, amount, gasAmount, gasPrice, data)
-
+	block := makeBlock()
 	v := NewBlockRes(block, false)
-	v.Transactions = make([]*TransactionRes, 1)
-	v.Transactions[0] = NewTransactionRes(tx)
 	j, _ := json.Marshal(v)
 
 	for k, re := range tests {
@@ -75,14 +60,7 @@ func TestNewBlockRes(t *testing.T) {
 	}
 }
 
-func TestNewBlockResWithTrans(t *testing.T) {
-	parentHash := common.HexToHash("0x01")
-	coinbase := common.HexToAddress("0x01")
-	root := common.HexToHash("0x01")
-	difficulty := common.Big1
-	nonce := uint64(1)
-	extra := ""
-	block := types.NewBlock(parentHash, coinbase, root, difficulty, nonce, extra)
+func TestNewBlockResTxFull(t *testing.T) {
 	tests := map[string]string{
 		"number":           reNum,
 		"hash":             reHash,
@@ -101,20 +79,12 @@ func TestNewBlockResWithTrans(t *testing.T) {
 		// "minGasPrice":  "0x",
 		"gasUsed":   reNum,
 		"timestamp": reNum,
-		// "transactions": `[{.*}]`,
+		// "transactions": reListHash,
 		// "uncles":       reListHash,
 	}
 
-	to := common.HexToAddress("0x02")
-	amount := big.NewInt(1)
-	gasAmount := big.NewInt(1)
-	gasPrice := big.NewInt(1)
-	data := []byte{1, 2, 3}
-	tx := types.NewTransactionMessage(to, amount, gasAmount, gasPrice, data)
-
+	block := makeBlock()
 	v := NewBlockRes(block, true)
-	v.Transactions = make([]*TransactionRes, 1)
-	v.Transactions[0] = NewTransactionRes(tx)
 	j, _ := json.Marshal(v)
 
 	for k, re := range tests {
@@ -122,6 +92,16 @@ func TestNewBlockResWithTrans(t *testing.T) {
 		if !match {
 			t.Error(fmt.Sprintf("%s output json does not match format %s. Got %s", k, re, j))
 		}
+	}
+}
+
+func TestBlockNil(t *testing.T) {
+	var block *types.Block
+	block = nil
+	u := NewBlockRes(block, false)
+	j, _ := json.Marshal(u)
+	if string(j) != "null" {
+		t.Errorf("Expected null but got %v", string(j))
 	}
 }
 
@@ -159,6 +139,55 @@ func TestNewTransactionRes(t *testing.T) {
 		}
 	}
 
+}
+
+func TestTransactionNil(t *testing.T) {
+	var tx *types.Transaction
+	tx = nil
+	u := NewTransactionRes(tx)
+	j, _ := json.Marshal(u)
+	if string(j) != "null" {
+		t.Errorf("Expected null but got %v", string(j))
+	}
+}
+
+func TestNewUncleRes(t *testing.T) {
+	header := makeHeader()
+	u := NewUncleRes(header)
+	tests := map[string]string{
+		"number":           reNum,
+		"hash":             reHash,
+		"parentHash":       reHash,
+		"nonce":            reData,
+		"sha3Uncles":       reHash,
+		"receiptHash":      reHash,
+		"transactionsRoot": reHash,
+		"stateRoot":        reHash,
+		"miner":            reAddress,
+		"difficulty":       reNum,
+		"extraData":        reData,
+		"gasLimit":         reNum,
+		"gasUsed":          reNum,
+		"timestamp":        reNum,
+	}
+
+	j, _ := json.Marshal(u)
+	for k, re := range tests {
+		match, _ := regexp.MatchString(fmt.Sprintf(`{.*"%s":%s.*}`, k, re), string(j))
+		if !match {
+			t.Error(fmt.Sprintf("`%s` output json does not match format %s. Source %s", k, re, j))
+		}
+	}
+}
+
+func TestUncleNil(t *testing.T) {
+	var header *types.Header
+	header = nil
+	u := NewUncleRes(header)
+	j, _ := json.Marshal(u)
+	if string(j) != "null" {
+		t.Errorf("Expected null but got %v", string(j))
+	}
 }
 
 func TestNewLogRes(t *testing.T) {
@@ -216,4 +245,52 @@ func makeStateLog(num int) state.Log {
 	topics = append(topics, common.HexToHash("0x20"))
 	log := state.NewLog(address, topics, data, number)
 	return log
+}
+
+func makeHeader() *types.Header {
+	header := &types.Header{
+		ParentHash:  common.StringToHash("0x00"),
+		UncleHash:   common.StringToHash("0x00"),
+		Coinbase:    common.StringToAddress("0x00"),
+		Root:        common.StringToHash("0x00"),
+		TxHash:      common.StringToHash("0x00"),
+		ReceiptHash: common.StringToHash("0x00"),
+		// Bloom:
+		Difficulty: big.NewInt(88888888),
+		Number:     big.NewInt(16),
+		GasLimit:   big.NewInt(70000),
+		GasUsed:    big.NewInt(25000),
+		Time:       124356789,
+		Extra:      "",
+		MixDigest:  common.StringToHash("0x00"),
+		Nonce:      [8]byte{0, 1, 2, 3, 4, 5, 6, 7},
+	}
+	return header
+}
+
+func makeBlock() *types.Block {
+	parentHash := common.HexToHash("0x01")
+	coinbase := common.HexToAddress("0x01")
+	root := common.HexToHash("0x01")
+	difficulty := common.Big1
+	nonce := uint64(1)
+	extra := ""
+	block := types.NewBlock(parentHash, coinbase, root, difficulty, nonce, extra)
+
+	txto := common.HexToAddress("0x02")
+	txamount := big.NewInt(1)
+	txgasAmount := big.NewInt(1)
+	txgasPrice := big.NewInt(1)
+	txdata := []byte{1, 2, 3}
+
+	tx := types.NewTransactionMessage(txto, txamount, txgasAmount, txgasPrice, txdata)
+	txs := make([]*types.Transaction, 1)
+	txs[0] = tx
+	block.SetTransactions(txs)
+
+	uncles := make([]*types.Header, 1)
+	uncles[0] = makeHeader()
+	block.SetUncles(uncles)
+
+	return block
 }
