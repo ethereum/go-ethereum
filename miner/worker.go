@@ -207,6 +207,9 @@ func (self *worker) commitNewWork() {
 	defer self.uncleMu.Unlock()
 
 	block := self.chain.NewBlock(self.coinbase)
+	if block.Time() == self.chain.CurrentBlock().Time() {
+		block.Header().Time++
+	}
 
 	self.current = env(block, self.eth)
 	for _, ancestor := range self.chain.GetAncestors(block, 7) {
