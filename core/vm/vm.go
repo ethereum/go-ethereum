@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -885,9 +886,7 @@ func (self *Vm) RunPrecompiled(p *PrecompiledAccount, callData []byte, context *
 
 func (self *Vm) Printf(format string, v ...interface{}) VirtualMachine {
 	if self.debug {
-		if self.logTy == LogTyPretty {
-			self.logStr += fmt.Sprintf(format, v...)
-		}
+		self.logStr += fmt.Sprintf(format, v...)
 	}
 
 	return self
@@ -895,10 +894,8 @@ func (self *Vm) Printf(format string, v ...interface{}) VirtualMachine {
 
 func (self *Vm) Endl() VirtualMachine {
 	if self.debug {
-		if self.logTy == LogTyPretty {
-			vmlogger.Infoln(self.logStr)
-			self.logStr = ""
-		}
+		glog.V(0).Infoln(self.logStr)
+		self.logStr = ""
 	}
 
 	return self

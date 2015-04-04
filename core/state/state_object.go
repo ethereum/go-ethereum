@@ -7,6 +7,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -121,7 +123,10 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db common.Data
 func (self *StateObject) MarkForDeletion() {
 	self.remove = true
 	self.dirty = true
-	statelogger.Debugf("%x: #%d %v X\n", self.Address(), self.nonce, self.balance)
+
+	if glog.V(logger.Debug) {
+		glog.Infof("%x: #%d %v X\n", self.Address(), self.nonce, self.balance)
+	}
 }
 
 func (c *StateObject) getAddr(addr common.Hash) *common.Value {
@@ -185,13 +190,17 @@ func (c *StateObject) GetInstr(pc *big.Int) *common.Value {
 func (c *StateObject) AddBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Add(c.balance, amount))
 
-	statelogger.Debugf("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.balance, amount)
+	if glog.V(logger.Debug) {
+		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.balance, amount)
+	}
 }
 
 func (c *StateObject) SubBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Sub(c.balance, amount))
 
-	statelogger.Debugf("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.balance, amount)
+	if glog.V(logger.Debug) {
+		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.balance, amount)
+	}
 }
 
 func (c *StateObject) SetBalance(amount *big.Int) {
@@ -225,7 +234,9 @@ func (c *StateObject) ConvertGas(gas, price *big.Int) error {
 func (self *StateObject) SetGasPool(gasLimit *big.Int) {
 	self.gasPool = new(big.Int).Set(gasLimit)
 
-	statelogger.Debugf("%x: gas (+ %v)", self.Address(), self.gasPool)
+	if glog.V(logger.Debug) {
+		glog.Infof("%x: gas (+ %v)", self.Address(), self.gasPool)
+	}
 }
 
 func (self *StateObject) BuyGas(gas, price *big.Int) error {

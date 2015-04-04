@@ -228,10 +228,6 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	// Set the log type
 	glog.SetToStderr(ctx.GlobalBool(LogToStdErrFlag.Name))
 
-	glog.V(2).Infoln("test it")
-
-	glog.V(3).Infoln("other stuff")
-
 	return &eth.Config{
 		Name:            common.MakeName(clientID, version),
 		DataDir:         ctx.GlobalString(DataDirFlag.Name),

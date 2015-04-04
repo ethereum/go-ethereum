@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -494,6 +495,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 				queue[i] = ChainEvent{block, logs}
 				queueEvent.canonicalCount++
+
+				if glog.V(logger.Debug) {
+					glog.Infof("inserted block #%d (%d TXs %d UNCs) (%x...)\n", block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
+				}
 			} else {
 				queue[i] = ChainSideEvent{block, logs}
 				queueEvent.sideCount++
@@ -501,6 +506,11 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		}
 		self.mu.Unlock()
 
+	}
+
+	if len(chain) > 0 && glog.V(logger.Info) {
+		start, end := chain[0], chain[len(chain)-1]
+		glog.Infof("imported %d blocks [%x / %x] #%v\n", len(chain), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4], end.Number())
 	}
 
 	go self.eventMux.Post(queueEvent)

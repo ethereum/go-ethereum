@@ -165,15 +165,9 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	// Create a new state based on the parent's root (e.g., create copy)
 	state := state.New(parent.Root(), sm.db)
 
-	// track (possible) uncle block
-	var uncle bool
 	// Block validation
 	if err = sm.ValidateHeader(block.Header(), parent.Header()); err != nil {
-		if err != BlockEqualTSErr {
-			return
-		}
-		err = nil
-		uncle = true
+		return
 	}
 
 	// There can be at most two uncles
@@ -231,21 +225,12 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	// Sync the current block's state to the database
 	state.Sync()
 
-	if !uncle {
-		// Remove transactions from the pool
-		sm.txpool.RemoveSet(block.Transactions())
-	}
+	// Remove transactions from the pool
+	sm.txpool.RemoveSet(block.Transactions())
 
 	// This puts transactions in a extra db for rpc
 	for i, tx := range block.Transactions() {
 		putTx(sm.extraDb, tx, block, uint64(i))
-	}
-
-	if uncle {
-		chainlogger.Infof("found possible uncle block #%d (%x...)\n", header.Number, block.Hash().Bytes()[0:4])
-		return td, nil, BlockEqualTSErr
-	} else {
-		chainlogger.Infof("processed block #%d (%d TXs %d UNCs) (%x...)\n", header.Number, len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
 	}
 
 	return td, state.Logs(), nil
@@ -272,7 +257,8 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
 	}
 
-	if int64(block.Time) > time.Now().Unix() {
+	// Allow future blocks up to 4 seconds
+	if int64(block.Time)+4 > time.Now().Unix() {
 		return BlockFutureErr
 	}
 
