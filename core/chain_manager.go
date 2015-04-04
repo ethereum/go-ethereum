@@ -440,6 +440,9 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	var queue = make([]interface{}, len(chain))
 	var queueEvent = queueEvent{queue: queue}
 	for i, block := range chain {
+		if block == nil {
+			continue
+		}
 		// Call in to the block processor and check for errors. It's likely that if one block fails
 		// all others will fail too (unless a known block is returned).
 		td, logs, err := self.processor.Process(block)
