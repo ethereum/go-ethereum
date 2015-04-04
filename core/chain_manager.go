@@ -291,6 +291,7 @@ func (self *ChainManager) Export(w io.Writer) error {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 	glog.V(logger.Info).Infof("exporting %v blocks...\n", self.currentBlock.Header().Number)
+
 	for block := self.currentBlock; block != nil; block = self.GetBlock(block.Header().ParentHash) {
 		if err := block.EncodeRLP(w); err != nil {
 			return err
@@ -360,7 +361,7 @@ func (self *ChainManager) GetBlock(hash common.Hash) *types.Block {
 	}
 	var block types.StorageBlock
 	if err := rlp.Decode(bytes.NewReader(data), &block); err != nil {
-		chainlogger.Errorf("invalid block RLP for hash %x: %v", hash, err)
+		glog.V(logger.Error).Infof("invalid block RLP for hash %x: %v", hash, err)
 		return nil
 	}
 	return (*types.Block)(&block)
@@ -448,8 +449,11 @@ func (self *ChainManager) procFutureBlocks() {
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	// A queued approach to delivering events. This is generally faster than direct delivery and requires much less mutex acquiring.
-	var queue = make([]interface{}, len(chain))
-	var queueEvent = queueEvent{queue: queue}
+	var (
+		queue      = make([]interface{}, len(chain))
+		queueEvent = queueEvent{queue: queue}
+		stats      struct{ delayed, processed int }
+	)
 	for i, block := range chain {
 		if block == nil {
 			continue
@@ -467,18 +471,22 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			// future block for future use
 			if err == BlockFutureErr {
 				self.futureBlocks.Push(block)
+				stats.delayed++
 				continue
 			}
 
 			if IsParentErr(err) && self.futureBlocks.Has(block.ParentHash()) {
 				self.futureBlocks.Push(block)
+				stats.delayed++
 				continue
 			}
 
 			h := block.Header()
-			chainlogger.Errorf("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes()[:4])
-			chainlogger.Errorln(err)
-			chainlogger.Debugln(block)
+
+			glog.V(logger.Error).Infof("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes()[:4])
+			glog.V(logger.Error).Infoln(err)
+			glog.V(logger.Debug).Infoln(block)
+
 			return err
 		}
 		block.Td = td
@@ -530,13 +538,15 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		}
 		self.mu.Unlock()
 
+		stats.processed++
+
 		self.futureBlocks.Delete(block.Hash())
 
 	}
 
-	if len(chain) > 0 && glog.V(logger.Info) {
+	if (stats.delayed > 0 || stats.processed > 0) && bool(glog.V(logger.Info)) {
 		start, end := chain[0], chain[len(chain)-1]
-		glog.Infof("imported %d block(s) #%v [%x / %x]\n", len(chain), end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
+		glog.Infof("imported %d block(s) %d delayed. #%v [%x / %x]\n", stats.processed, stats.delayed, end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
 	}
 
 	go self.eventMux.Post(queueEvent)

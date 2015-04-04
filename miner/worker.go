@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/pow"
 	"gopkg.in/fatih/set.v0"
 )
@@ -144,7 +145,9 @@ out:
 			}
 			break out
 		case <-timer.C:
-			minerlogger.Infoln("Hash rate:", self.HashRate(), "Khash")
+			if glog.V(logger.Info) {
+				glog.Infoln("Hash rate:", self.HashRate(), "Khash")
+			}
 
 			// XXX In case all mined a possible uncle
 			if atomic.LoadInt64(&self.atWork) == 0 {
@@ -171,7 +174,7 @@ func (self *worker) wait() {
 				}
 				self.mux.Post(core.NewMinedBlockEvent{block})
 
-				minerlogger.Infof("🔨 Mined block #%v", block.Number())
+				glog.V(logger.Info).Infof("🔨 Mined block #%v", block.Number())
 
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     block.Hash().Hex(),
@@ -238,10 +241,13 @@ gasLimit:
 			from, _ := tx.From()
 			self.chain.TxState().RemoveNonce(from, tx.Nonce())
 			remove = append(remove, tx)
-			minerlogger.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
-			minerlogger.Infoln(tx)
+
+			if glog.V(logger.Info) {
+				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
+			}
+			glog.V(logger.Debug).Infoln(tx)
 		case state.IsGasLimitErr(err):
-			minerlogger.Infof("Gas limit reached for block. %d TXs included in this block\n", i)
+			glog.V(logger.Info).Infof("Gas limit reached for block. %d TXs included in this block\n", i)
 			// Break on gas limit
 			break gasLimit
 		default:
@@ -260,15 +266,15 @@ gasLimit:
 		}
 
 		if err := self.commitUncle(uncle.Header()); err != nil {
-			minerlogger.Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
-			minerlogger.Debugln(uncle)
+			glog.V(logger.Info).Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
+			glog.V(logger.Debug).Infoln(uncle)
 			badUncles = append(badUncles, hash)
 		} else {
-			minerlogger.Infof("commiting %x as uncle\n", hash[:4])
+			glog.V(logger.Info).Infof("commiting %x as uncle\n", hash[:4])
 			uncles = append(uncles, uncle.Header())
 		}
 	}
-	minerlogger.Infof("commit new work on block %v with %d txs & %d uncles\n", self.current.block.Number(), tcount, len(uncles))
+	glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles\n", self.current.block.Number(), tcount, len(uncles))
 	for _, hash := range badUncles {
 		delete(self.possibleUncles, hash)
 	}
