@@ -438,9 +438,9 @@ type queueEvent struct {
 
 func (self *ChainManager) procFutureBlocks() {
 	blocks := make([]*types.Block, len(self.futureBlocks.blocks))
-	for i, hash := range self.futureBlocks.hashes {
-		blocks[i] = self.futureBlocks.Get(hash)
-	}
+	self.futureBlocks.Each(func(i int, block *types.Block) {
+		blocks[i] = block
+	})
 
 	types.BlockBy(types.Number).Sort(blocks)
 	self.InsertChain(blocks)
@@ -536,7 +536,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 	if len(chain) > 0 && glog.V(logger.Info) {
 		start, end := chain[0], chain[len(chain)-1]
-		glog.Infof("imported %d blocks #%v [%x / %x]\n", len(chain), end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
+		glog.Infof("imported %d block(s) #%v [%x / %x]\n", len(chain), end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
 	}
 
 	go self.eventMux.Post(queueEvent)

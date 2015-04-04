@@ -88,3 +88,14 @@ func (bc *BlockCache) Has(hash common.Hash) bool {
 	_, ok := bc.blocks[hash]
 	return ok
 }
+
+func (bc *BlockCache) Each(cb func(int, *types.Block)) {
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
+	i := 0
+	for _, block := range bc.blocks {
+		cb(i, block)
+		i++
+	}
+}
