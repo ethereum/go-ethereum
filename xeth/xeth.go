@@ -29,6 +29,9 @@ var (
 	defaultGas       = big.NewInt(90000)          //500000
 )
 
+func DefaultGas() *big.Int      { return new(big.Int).Set(defaultGas) }
+func DefaultGasPrice() *big.Int { return new(big.Int).Set(defaultGasPrice) }
+
 type XEth struct {
 	backend  *eth.Ethereum
 	frontend Frontend
@@ -129,9 +132,6 @@ func cTopics(t [][]string) [][]common.Hash {
 	}
 	return topics
 }
-
-func (self *XEth) DefaultGas() *big.Int      { return new(big.Int).Set(defaultGas) }
-func (self *XEth) DefaultGasPrice() *big.Int { return new(big.Int).Set(defaultGasPrice) }
 
 func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }
 
@@ -572,11 +572,11 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	}
 
 	if msg.gas.Cmp(big.NewInt(0)) == 0 {
-		msg.gas = self.DefaultGas()
+		msg.gas = DefaultGas()
 	}
 
 	if msg.gasPrice.Cmp(big.NewInt(0)) == 0 {
-		msg.gasPrice = self.DefaultGasPrice()
+		msg.gasPrice = DefaultGasPrice()
 	}
 
 	block := self.CurrentBlock()
@@ -622,11 +622,11 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	// TODO: align default values to have the same type, e.g. not depend on
 	// common.Value conversions later on
 	if gas.Cmp(big.NewInt(0)) == 0 {
-		gas = self.DefaultGas()
+		gas = DefaultGas()
 	}
 
 	if price.Cmp(big.NewInt(0)) == 0 {
-		price = self.DefaultGasPrice()
+		price = DefaultGasPrice()
 	}
 
 	data = common.FromHex(codeStr)

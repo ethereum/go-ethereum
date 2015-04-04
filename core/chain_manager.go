@@ -448,7 +448,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			}
 
 			if err == BlockEqualTSErr {
-				queue[i] = ChainSideEvent{block, logs}
+				//queue[i] = ChainSideEvent{block, logs}
+				// XXX silently discard it?
 				continue
 			}
 

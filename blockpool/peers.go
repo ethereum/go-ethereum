@@ -133,13 +133,10 @@ func (self *peer) addError(code int, format string, params ...interface{}) {
 	self.addToBlacklist(self.id)
 }
 
+// caller must hold peer lock
 func (self *peer) setChainInfo(td *big.Int, c common.Hash) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-
 	self.td = td
 	self.currentBlockHash = c
-
 	self.currentBlock = nil
 	self.parentHash = common.Hash{}
 	self.headSection = nil
@@ -171,7 +168,7 @@ func (self *peers) requestBlocks(attempts int, hashes []common.Hash) {
 	defer self.lock.RUnlock()
 	peerCount := len(self.peers)
 	// on first attempt use the best peer
-	if attempts == 0 {
+	if attempts == 0 && self.best != nil {
 		plog.DebugDetailf("request %v missing blocks from best peer <%s>", len(hashes), self.best.id)
 		self.best.requestBlocks(hashes)
 		return
@@ -219,10 +216,12 @@ func (self *peers) addPeer(
 		return
 	}
 	self.lock.Lock()
+	defer self.lock.Unlock()
 	p, found := self.peers[id]
 	if found {
 		// when called on an already connected peer, it means a newBlockMsg is received
 		// peer head info is updated
+		p.lock.Lock()
 		if p.currentBlockHash != currentBlockHash {
 			previousBlockHash = p.currentBlockHash
 			plog.Debugf("addPeer: Update peer <%s> with td %v and current block %s (was %v)", id, td, hex(currentBlockHash), hex(previousBlockHash))
@@ -232,6 +231,7 @@ func (self *peers) addPeer(
 			self.status.values.NewBlocks++
 			self.status.lock.Unlock()
 		}
+		p.lock.Unlock()
 	} else {
 		p = self.newPeer(td, currentBlockHash, id, requestBlockHashes, requestBlocks, peerError)
 
@@ -243,7 +243,6 @@ func (self *peers) addPeer(
 
 		plog.Debugf("addPeer: add new peer <%v> with td %v and current block %s", id, td, hex(currentBlockHash))
 	}
-	self.lock.Unlock()
 
 	// check if peer's current head block is known
 	if self.bp.hasBlock(currentBlockHash) {
@@ -269,7 +268,10 @@ func (self *peers) addPeer(
 	} else {
 		// baseline is our own TD
 		currentTD := self.bp.getTD()
-		if self.best != nil {
+		bestpeer := self.best
+		if bestpeer != nil {
+			bestpeer.lock.Lock()
+			defer bestpeer.lock.Unlock()
 			currentTD = self.best.td
 		}
 		if td.Cmp(currentTD) > 0 {
@@ -277,11 +279,12 @@ func (self *peers) addPeer(
 			self.status.bestPeers[p.id]++
 			self.status.lock.Unlock()
 			plog.Debugf("addPeer: peer <%v> (td: %v > current td %v) promoted best peer", id, td, currentTD)
-			self.bp.switchPeer(self.best, p)
+			self.bp.switchPeer(bestpeer, p)
 			self.best = p
 			best = true
 		}
 	}
+
 	return
 }
 
