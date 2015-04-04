@@ -43,16 +43,11 @@ func (d *hexdata) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.String())
 }
 
-func (d *hexdata) UnmarshalJSON(b []byte) (err error) {
-	d.data = common.FromHex(string(b))
-	return nil
-}
-
 func newHexData(input interface{}) *hexdata {
 	d := new(hexdata)
 
 	if input == nil {
-		d.data = nil
+		d.isNil = true
 		return d
 	}
 	switch input := input.(type) {
@@ -105,19 +100,19 @@ func newHexData(input interface{}) *hexdata {
 	case int16:
 		d.data = big.NewInt(int64(input)).Bytes()
 	case uint16:
-		buff := make([]byte, 8)
+		buff := make([]byte, 2)
 		binary.BigEndian.PutUint16(buff, input)
 		d.data = buff
 	case int32:
 		d.data = big.NewInt(int64(input)).Bytes()
 	case uint32:
-		buff := make([]byte, 8)
+		buff := make([]byte, 4)
 		binary.BigEndian.PutUint32(buff, input)
 		d.data = buff
 	case string: // hexstring
 		d.data = common.Big(input).Bytes()
 	default:
-		d.data = nil
+		d.isNil = true
 	}
 
 	return d
@@ -145,11 +140,6 @@ func (d *hexnum) MarshalJSON() ([]byte, error) {
 		return json.Marshal(nil)
 	}
 	return json.Marshal(d.String())
-}
-
-func (d *hexnum) UnmarshalJSON(b []byte) (err error) {
-	d.data = common.FromHex(string(b))
-	return nil
 }
 
 func newHexNum(input interface{}) *hexnum {
