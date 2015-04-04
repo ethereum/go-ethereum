@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -95,7 +96,8 @@ type ChainManager struct {
 	transState *state.StateDB
 	txState    *state.ManagedState
 
-	cache *BlockCache
+	cache        *BlockCache
+	futureBlocks *BlockCache
 
 	quit chan struct{}
 }
@@ -107,6 +109,7 @@ func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *Chai
 	// Take ownership of this particular state
 	bc.txState = state.ManageState(bc.State().Copy())
 
+	bc.futureBlocks = NewBlockCache(254)
 	bc.makeCache()
 
 	go bc.update()
@@ -433,6 +436,19 @@ type queueEvent struct {
 	splitCount     int
 }
 
+func (self *ChainManager) procFutureBlocks() {
+	self.futureBlocks.mu.Lock()
+
+	blocks := make([]*types.Block, len(self.futureBlocks.blocks))
+	for i, hash := range self.futureBlocks.hashes {
+		blocks[i] = self.futureBlocks.Get(hash)
+	}
+	self.futureBlocks.mu.Unlock()
+
+	types.BlockBy(types.Number).Sort(blocks)
+	self.InsertChain(blocks)
+}
+
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	//self.tsmu.Lock()
 	//defer self.tsmu.Unlock()
@@ -452,11 +468,26 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				continue
 			}
 
-			if err == BlockEqualTSErr {
-				//queue[i] = ChainSideEvent{block, logs}
-				// XXX silently discard it?
+			block.Td = new(big.Int)
+			// Do not penelise on future block. We'll need a block queue eventually that will queue
+			// future block for future use
+			if err == BlockFutureErr {
+				self.futureBlocks.Push(block)
 				continue
 			}
+
+			if IsParentErr(err) && self.futureBlocks.Has(block.ParentHash()) {
+				self.futureBlocks.Push(block)
+				continue
+			}
+
+			/*
+				if err == BlockEqualTSErr {
+					//queue[i] = ChainSideEvent{block, logs}
+					// XXX silently discard it?
+					continue
+				}
+			*/
 
 			h := block.Header()
 			chainlogger.Errorf("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes()[:4])
@@ -513,6 +544,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		}
 		self.mu.Unlock()
 
+		self.futureBlocks.Delete(block.Hash())
+
 	}
 
 	if len(chain) > 0 && glog.V(logger.Info) {
@@ -527,7 +560,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 func (self *ChainManager) update() {
 	events := self.eventMux.Subscribe(queueEvent{})
-
+	futureTimer := time.NewTicker(5 * time.Second)
 out:
 	for {
 		select {
@@ -553,6 +586,8 @@ out:
 					self.eventMux.Post(event)
 				}
 			}
+		case <-futureTimer.C:
+			self.procFutureBlocks()
 		case <-self.quit:
 			break out
 		}

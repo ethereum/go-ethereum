@@ -260,7 +260,7 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 	}
 
 	// Allow future blocks up to 10 seconds
-	if int64(block.Time)+10 > time.Now().Unix() {
+	if int64(block.Time) > time.Now().Unix()+4 {
 		return BlockFutureErr
 	}
 
