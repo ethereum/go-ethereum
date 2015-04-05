@@ -80,9 +80,9 @@ func ecrecoverFunc(in []byte) []byte {
 
 	// v needs to be moved to the end
 	rsv := append(in[64:128], byte(v.Uint64()))
-	pubKey := crypto.Ecrecover(in[:32], rsv)
-	// make sure the public key is a valid one
-	if pubKey == nil {
+	pubKey, err := crypto.Ecrecover(in[:32], rsv)
+	if err != nil {
+		vmlogger.Errorf("EC RECOVER FAIL: ", err)
 		return nil
 	}
 

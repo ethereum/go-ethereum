@@ -21,14 +21,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/ripemd160"
-)
-
-var (
-	cryptologger = logger.NewLogger("CRYPTO")
 )
 
 func init() {
@@ -73,12 +68,8 @@ func Ripemd160(data []byte) []byte {
 	return ripemd.Sum(nil)
 }
 
-func Ecrecover(hash, sig []byte) []byte {
-	r, err := secp256k1.RecoverPubkey(hash, sig)
-	if err != nil {
-		cryptologger.Errorf("EC RECOVER FAIL: ", err)
-	}
-	return r
+func Ecrecover(hash, sig []byte) ([]byte, error) {
+	return secp256k1.RecoverPubkey(hash, sig)
 }
 
 // New methods using proper ecdsa keys from the stdlib
@@ -153,8 +144,9 @@ func GenerateKey() (*ecdsa.PrivateKey, error) {
 }
 
 func SigToPub(hash, sig []byte) *ecdsa.PublicKey {
-	s := Ecrecover(hash, sig)
-	if s == nil || len(s) != 65 {
+	s, err := Ecrecover(hash, sig)
+	// TODO: add logging of error
+	if err != nil {
 		return nil
 	}
 
