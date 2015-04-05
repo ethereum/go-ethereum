@@ -37,12 +37,12 @@
 #include "sha3.h"
 #endif // WITH_CRYPTOPP
 
-size_t ethash_get_datasize(const uint32_t block_number) {
+uint64_t ethash_get_datasize(const uint32_t block_number) {
     assert(block_number / EPOCH_LENGTH < 2048);
     return dag_sizes[block_number / EPOCH_LENGTH];
 }
 
-size_t ethash_get_cachesize(const uint32_t block_number) {
+uint64_t ethash_get_cachesize(const uint32_t block_number) {
     assert(block_number / EPOCH_LENGTH < 2048);
     return cache_sizes[block_number / EPOCH_LENGTH];
 }
@@ -280,15 +280,15 @@ void ethash_get_seedhash(uint8_t seedhash[32], const uint32_t block_number) {
         SHA3_256(seedhash, seedhash, 32);
 }
 
-int ethash_quick_check_difficulty(
+int ethash_preliminary_check_boundary(
         const uint8_t header_hash[32],
         const uint64_t nonce,
         const uint8_t mix_hash[32],
-        const uint8_t difficulty[32]) {
+		const uint8_t difficulty[32]) {
 
-    uint8_t return_hash[32];
+	uint8_t return_hash[32];
     ethash_quick_hash(return_hash, header_hash, nonce, mix_hash);
-    return ethash_check_difficulty(return_hash, difficulty);
+	return ethash_leq_be256(return_hash, difficulty);
 }
 
 void ethash_full(ethash_return_value *ret, void const *full_mem, ethash_params const *params, const uint8_t previous_hash[32], const uint64_t nonce) {

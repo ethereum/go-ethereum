@@ -85,7 +85,7 @@ func makeParamsAndCache(chainManager pow.ChainManager, blockNum uint64) (*Params
 		Epoch:  blockNum / epochLength,
 	}
 	C.ethash_params_init(paramsAndCache.params, C.uint32_t(uint32(blockNum)))
-	paramsAndCache.cache.mem = C.malloc(paramsAndCache.params.cache_size)
+	paramsAndCache.cache.mem = C.malloc(C.size_t(paramsAndCache.params.cache_size))
 
 	seedHash, err := GetSeedHash(blockNum)
 	if err != nil {
@@ -100,14 +100,14 @@ func makeParamsAndCache(chainManager pow.ChainManager, blockNum uint64) (*Params
 	return paramsAndCache, nil
 }
 
-func (pow *Ethash) UpdateCache(force bool) error {
+func (pow *Ethash) UpdateCache(blockNum uint64, force bool) error {
 	pow.cacheMutex.Lock()
 	defer pow.cacheMutex.Unlock()
 
-	thisEpoch := pow.chainManager.CurrentBlock().NumberU64() / epochLength
+	thisEpoch := blockNum / epochLength
 	if force || pow.paramsAndCache.Epoch != thisEpoch {
 		var err error
-		pow.paramsAndCache, err = makeParamsAndCache(pow.chainManager, pow.chainManager.CurrentBlock().NumberU64())
+		pow.paramsAndCache, err = makeParamsAndCache(pow.chainManager, blockNum)
 		if err != nil {
 			panic(err)
 		}
@@ -118,7 +118,7 @@ func (pow *Ethash) UpdateCache(force bool) error {
 
 func makeDAG(p *ParamsAndCache) *DAG {
 	d := &DAG{
-		dag:            C.malloc(p.params.full_size),
+		dag:            C.malloc(C.size_t(p.params.full_size)),
 		file:           false,
 		paramsAndCache: p,
 	}
@@ -386,13 +386,13 @@ func (pow *Ethash) verify(hash common.Hash, mixDigest common.Hash, difficulty *b
 	if blockNum/epochLength < pow.paramsAndCache.Epoch {
 		var err error
 		// If we can't make the params for some reason, this block is invalid
-		pAc, err = makeParamsAndCache(pow.chainManager, blockNum)
+		pAc, err = makeParamsAndCache(pow.chainManager, blockNum+1)
 		if err != nil {
-			powlogger.Infoln(err)
+			powlogger.Infoln("big fucking eror", err)
 			return false
 		}
 	} else {
-		pow.UpdateCache(false)
+		pow.UpdateCache(blockNum, false)
 		pow.cacheMutex.RLock()
 		defer pow.cacheMutex.RUnlock()
 		pAc = pow.paramsAndCache

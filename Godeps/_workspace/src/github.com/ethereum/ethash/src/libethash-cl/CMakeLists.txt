@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+
 set(LIBRARY ethash-cl)
 set(CMAKE_BUILD_TYPE Release)
 
@@ -28,11 +30,16 @@ if (NOT MSVC)
     endif ()
 endif()
 
+set(OpenCL_FOUND TRUE)
+set(OpenCL_INCLUDE_DIRS /usr/include/CL)
+set(OpenCL_LIBRARIES -lOpenCL)
+
 if (NOT OpenCL_FOUND)
 	find_package(OpenCL)
 endif()
 
 if (OpenCL_FOUND)
+	set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wno-unknown-pragmas -Wextra -Werror -pedantic -fPIC ${CMAKE_CXX_FLAGS}")
 	include_directories(${OpenCL_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 	include_directories(..)
 	add_library(${LIBRARY} ethash_cl_miner.cpp ethash_cl_miner.h cl.hpp)
