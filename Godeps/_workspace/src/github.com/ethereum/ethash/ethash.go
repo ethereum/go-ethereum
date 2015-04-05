@@ -326,7 +326,6 @@ func (pow *Ethash) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte
 	for {
 		select {
 		case <-stop:
-			powlogger.Infoln("Breaking from mining")
 			pow.HashRate = 0
 			return 0, nil, nil
 		default:
