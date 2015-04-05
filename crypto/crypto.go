@@ -68,10 +68,8 @@ func Ripemd160(data []byte) []byte {
 	return ripemd.Sum(nil)
 }
 
-func Ecrecover(hash, sig []byte) []byte {
-	r, _ := secp256k1.RecoverPubkey(hash, sig)
-
-	return r
+func Ecrecover(hash, sig []byte) ([]byte, error) {
+	return secp256k1.RecoverPubkey(hash, sig)
 }
 
 // New methods using proper ecdsa keys from the stdlib
@@ -146,8 +144,9 @@ func GenerateKey() (*ecdsa.PrivateKey, error) {
 }
 
 func SigToPub(hash, sig []byte) *ecdsa.PublicKey {
-	s := Ecrecover(hash, sig)
-	if s == nil || len(s) != 65 {
+	s, err := Ecrecover(hash, sig)
+	// TODO: add logging of error
+	if err != nil {
 		return nil
 	}
 
