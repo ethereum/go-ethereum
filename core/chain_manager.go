@@ -228,7 +228,7 @@ func (bc *ChainManager) NewBlock(coinbase common.Address) *types.Block {
 		root,
 		common.BigPow(2, 32),
 		0,
-		"")
+		nil)
 	block.SetUncles(nil)
 	block.SetTransactions(nil)
 	block.SetReceipts(nil)

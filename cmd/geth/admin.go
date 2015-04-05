@@ -26,8 +26,6 @@ func (js *jsre) adminBindings() {
 	admin := t.Object()
 	admin.Set("suggestPeer", js.suggestPeer)
 	admin.Set("startRPC", js.startRPC)
-	admin.Set("startMining", js.startMining)
-	admin.Set("stopMining", js.stopMining)
 	admin.Set("nodeInfo", js.nodeInfo)
 	admin.Set("peers", js.peers)
 	admin.Set("newAccount", js.newAccount)
@@ -37,7 +35,30 @@ func (js *jsre) adminBindings() {
 	admin.Set("dumpBlock", js.dumpBlock)
 	admin.Set("verbosity", js.verbosity)
 	admin.Set("backtrace", js.backtrace)
-	admin.Set("hashrate", js.hashrate)
+
+	admin.Set("miner", struct{}{})
+	t, _ = admin.Get("miner")
+	miner := t.Object()
+	miner.Set("start", js.startMining)
+	miner.Set("stop", js.stopMining)
+	miner.Set("hashrate", js.hashrate)
+	miner.Set("setExtra", js.setExtra)
+}
+
+func (js *jsre) setExtra(call otto.FunctionCall) otto.Value {
+	extra, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	if len(extra) > 1024 {
+		fmt.Println("error: cannot exceed 1024 bytes")
+		return otto.UndefinedValue()
+	}
+
+	js.ethereum.Miner().SetExtra([]byte(extra))
+	return otto.UndefinedValue()
 }
 
 func (js *jsre) hashrate(otto.FunctionCall) otto.Value {

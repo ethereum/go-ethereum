@@ -55,7 +55,7 @@ func NewCanonical(n int, db common.Database) (*BlockProcessor, error) {
 
 // block time is fixed at 10 seconds
 func newBlockFromParent(addr common.Address, parent *types.Block) *types.Block {
-	block := types.NewBlock(parent.Hash(), addr, parent.Root(), common.BigPow(2, 32), 0, "")
+	block := types.NewBlock(parent.Hash(), addr, parent.Root(), common.BigPow(2, 32), 0, nil)
 	block.SetUncles(nil)
 	block.SetTransactions(nil)
 	block.SetReceipts(nil)

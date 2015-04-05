@@ -69,10 +69,12 @@ type worker struct {
 	pow    pow.PoW
 	atWork int64
 
-	eth      core.Backend
-	chain    *core.ChainManager
-	proc     *core.BlockProcessor
+	eth   core.Backend
+	chain *core.ChainManager
+	proc  *core.BlockProcessor
+
 	coinbase common.Address
+	extra    []byte
 
 	current *environment
 
@@ -213,6 +215,7 @@ func (self *worker) commitNewWork() {
 	if block.Time() == self.chain.CurrentBlock().Time() {
 		block.Header().Time++
 	}
+	block.Header().Extra = self.extra
 
 	self.current = env(block, self.eth)
 	for _, ancestor := range self.chain.GetAncestors(block, 7) {
