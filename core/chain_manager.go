@@ -453,6 +453,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		queue      = make([]interface{}, len(chain))
 		queueEvent = queueEvent{queue: queue}
 		stats      struct{ delayed, processed int }
+		tstart     = time.Now()
 	)
 	for i, block := range chain {
 		if block == nil {
@@ -545,8 +546,9 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	}
 
 	if (stats.delayed > 0 || stats.processed > 0) && bool(glog.V(logger.Info)) {
+		tend := time.Since(tstart)
 		start, end := chain[0], chain[len(chain)-1]
-		glog.Infof("imported %d block(s) %d delayed. #%v [%x / %x]\n", stats.processed, stats.delayed, end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
+		glog.Infof("imported %d block(s) %d delayed in %v. #%v [%x / %x]\n", stats.processed, stats.delayed, tend, end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
 	}
 
 	go self.eventMux.Post(queueEvent)
