@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 type Message struct {
@@ -32,7 +33,12 @@ func (self *Message) sign(key *ecdsa.PrivateKey) (err error) {
 
 func (self *Message) Recover() *ecdsa.PublicKey {
 	defer func() { recover() }() // in case of invalid sig
-	return crypto.SigToPub(self.hash(), self.Signature)
+	pub, err := crypto.SigToPub(self.hash(), self.Signature)
+	if err != nil {
+		glog.V(0).Infof("Could not get pubkey from signature: ", err)
+		return nil
+	}
+	return pub
 }
 
 func (self *Message) Encrypt(to *ecdsa.PublicKey) (err error) {
