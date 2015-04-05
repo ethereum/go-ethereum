@@ -145,7 +145,7 @@ out:
 			}
 			break out
 		case <-timer.C:
-			if glog.V(logger.Info) {
+			if glog.V(logger.Debug) {
 				glog.Infoln("Hash rate:", self.HashRate(), "Khash")
 			}
 

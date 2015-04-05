@@ -37,6 +37,11 @@ func (js *jsre) adminBindings() {
 	admin.Set("dumpBlock", js.dumpBlock)
 	admin.Set("verbosity", js.verbosity)
 	admin.Set("backtrace", js.backtrace)
+	admin.Set("hashrate", js.hashrate)
+}
+
+func (js *jsre) hashrate(otto.FunctionCall) otto.Value {
+	return js.re.ToVal(js.ethereum.Miner().HashRate())
 }
 
 func (js *jsre) backtrace(call otto.FunctionCall) otto.Value {
