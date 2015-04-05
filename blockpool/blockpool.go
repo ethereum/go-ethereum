@@ -687,17 +687,20 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 		return
 	}
 
-	// validate block for PoW
-	if !self.verifyPoW(block) {
-		plog.Warnf("AddBlock: invalid PoW on block %s from peer  <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
-		sender.addError(ErrInvalidPoW, "%x", hash)
+	/*
+		@zelig needs discussing
+			// validate block for PoW
+			if !self.verifyPoW(block) {
+				plog.Warnf("AddBlock: invalid PoW on block %s from peer  <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
+				sender.addError(ErrInvalidPoW, "%x", hash)
 
-		self.status.lock.Lock()
-		self.status.badPeers[peerId]++
-		self.status.lock.Unlock()
+				self.status.lock.Lock()
+				self.status.badPeers[peerId]++
+				self.status.lock.Unlock()
 
-		return
-	}
+				return
+			}
+	*/
 
 	node.block = block
 	node.blockBy = peerId
