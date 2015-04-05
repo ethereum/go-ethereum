@@ -480,7 +480,7 @@ func makedag(ctx *cli.Context) {
 	chain, _, _ := utils.GetChain(ctx)
 	pow := ethash.New(chain)
 	fmt.Println("making cache")
-	pow.UpdateCache(true)
+	pow.UpdateCache(0, true)
 	fmt.Println("making DAG")
 	pow.UpdateDAG()
 }
