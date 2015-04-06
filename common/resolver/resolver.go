@@ -39,7 +39,7 @@ func New(eth Backend, uhca, nrca string) *Resolver {
 func (self *Resolver) NameToContentHash(name string) (chash common.Hash, err error) {
 	// look up in nameReg
 	key := storageAddress(1, common.Hex2BytesFixed(name, 32))
-	hash := self.backend.StorageAt(self.nameRegContractAddress, key)
+	hash := self.backend.StorageAt("0x"+self.nameRegContractAddress, key)
 	copy(chash[:], common.Hex2Bytes(hash))
 	return
 }
@@ -47,7 +47,8 @@ func (self *Resolver) NameToContentHash(name string) (chash common.Hash, err err
 func (self *Resolver) ContentHashToUrl(chash common.Hash) (uri string, err error) {
 	// look up in nameReg
 	key := storageAddress(2, chash[:])
-	uri = string(common.Hex2Bytes(self.backend.StorageAt(self.urlHintContractAddress, key)))
+	hex := self.backend.StorageAt("0x"+self.urlHintContractAddress, key)
+	uri = string(common.Hex2Bytes(hex[2:]))
 	l := len(uri)
 	for (l > 0) && (uri[l-1] == 0) {
 		l--
@@ -72,7 +73,7 @@ func (self *Resolver) NameToUrl(name string) (uri string, hash common.Hash, err 
 
 func storageAddress(varidx uint32, key []byte) string {
 	data := make([]byte, 64)
-	binary.BigEndian.PutUint32(data[28:32], varidx)
-	copy(data[32:64], key[0:32])
-	return common.Bytes2Hex(crypto.Sha3(data))
+	binary.BigEndian.PutUint32(data[60:64], varidx)
+	copy(data[0:32], key[0:32])
+	return "0x" + common.Bytes2Hex(crypto.Sha3(data))
 }

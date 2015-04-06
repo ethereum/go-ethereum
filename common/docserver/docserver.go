@@ -55,7 +55,11 @@ func (self *DocServer) RegisterProtocols(schemes map[string]func(*DocServer) htt
 func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []byte, err error) {
 	// retrieve content
 	resp, err := self.Client().Get(uri)
-	defer resp.Body.Close()
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}()
 	if err != nil {
 		return
 	}

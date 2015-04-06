@@ -9,8 +9,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/resolver"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	//"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -18,9 +20,12 @@ import (
 )
 
 type testFrontend struct {
-	t        *testing.T
-	ethereum *eth.Ethereum
-	xeth     *xe.XEth
+	t           *testing.T
+	ethereum    *eth.Ethereum
+	xeth        *xe.XEth
+	stateDb     *state.StateDB
+	coinbase    string
+	lastConfirm string
 }
 
 func (f *testFrontend) UnlockAccount(acc []byte) bool {
@@ -29,11 +34,14 @@ func (f *testFrontend) UnlockAccount(acc []byte) bool {
 	return true
 }
 
-func (testFrontend) ConfirmTransaction(message string) bool { return true }
+func (f *testFrontend) ConfirmTransaction(message string) bool {
+	f.lastConfirm = message
+	return true
+}
 
 var port = 30300
 
-func testJEthRE(t *testing.T) (ethereum *eth.Ethereum, err error) {
+func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 	os.RemoveAll("/tmp/eth/")
 	err = os.MkdirAll("/tmp/eth/keys/e273f01c99144c438695e10f24926dc1f9fbf62d/", os.ModePerm)
 	if err != nil {
@@ -66,6 +74,41 @@ func testJEthRE(t *testing.T) (ethereum *eth.Ethereum, err error) {
 	return
 }
 
+func testInit(t *testing.T) (self *testFrontend) {
+
+	ethereum, err := testEth(t)
+	if err != nil {
+		t.Errorf("error creating jsre, got %v", err)
+		return
+	}
+	err = ethereum.Start()
+	if err != nil {
+		t.Errorf("error starting ethereum: %v", err)
+		return
+	}
+
+	self = &testFrontend{t: t, ethereum: ethereum}
+	self.xeth = xe.New(ethereum, self)
+
+	addr := self.xeth.Coinbase()
+	self.coinbase = addr
+	if addr != "0x"+core.TestAccount {
+		t.Errorf("CoinBase %v does not match TestAccount 0x%v", addr, core.TestAccount)
+	}
+	t.Logf("CoinBase is %v", addr)
+
+	balance := self.xeth.BalanceAt(core.TestAccount)
+	if balance != core.TestBalance {
+		t.Errorf("Balance %v does not match TestBalance %v", balance, core.TestBalance)
+	}
+	t.Logf("Balance is %v", balance)
+
+	self.stateDb = self.ethereum.ChainManager().State().Copy()
+
+	return
+
+}
+
 func (self *testFrontend) insertTx(addr, contract, fnsig string, args []string) {
 
 	hash := common.Bytes2Hex(crypto.Sha3([]byte(fnsig)))
@@ -77,67 +120,47 @@ func (self *testFrontend) insertTx(addr, contract, fnsig string, args []string) 
 	self.xeth.Transact(addr, contract, "100000000000", "100000", "100000", data)
 
 	cb := common.HexToAddress(addr)
-	stateDb := self.ethereum.ChainManager().State().Copy()
 
-	coinbase := stateDb.GetStateObject(cb)
+	coinbase := self.stateDb.GetStateObject(cb)
 	coinbase.SetGasPool(big.NewInt(100000))
 	block := self.ethereum.ChainManager().NewBlock(cb)
 	txs := self.ethereum.TxPool().GetTransactions()
 	tx := txs[0]
 
-	_, gas, err := core.ApplyMessage(core.NewEnv(stateDb, self.ethereum.ChainManager(), tx, block), tx, coinbase)
+	_, gas, err := core.ApplyMessage(core.NewEnv(self.stateDb, self.ethereum.ChainManager(), tx, block), tx, coinbase)
 
 	self.t.Logf("ApplyMessage: gas %v  err %v", gas, err)
 
 	self.ethereum.TxPool().RemoveSet(txs)
-	self.xeth = self.xeth.WithState(stateDb)
+	self.xeth = self.xeth.WithState(self.stateDb)
 
 }
 
+func (self *testFrontend) registerURL(hash common.Hash, url string) {
+	hashHex := common.Bytes2Hex(hash[:])
+	urlHex := common.Bytes2Hex([]byte(url))
+	self.insertTx(self.coinbase, core.ContractAddrURLhint, "register(bytes32,bytes32)", []string{hashHex, urlHex})
+}
+
+func (self *testFrontend) testResolver() *resolver.Resolver {
+	return resolver.New(self.xeth, resolver.URLHintContractAddress, resolver.NameRegContractAddress)
+}
+
 func TestNatspecE2E(t *testing.T) {
-	ethereum, err := testJEthRE(t)
-	if err != nil {
-		t.Errorf("error creating jsre, got %v", err)
-		return
-	}
-	err = ethereum.Start()
-	if err != nil {
-		t.Errorf("error starting ethereum: %v", err)
-		return
-	}
-	defer ethereum.Stop()
 
-	frontend := &testFrontend{t: t, ethereum: ethereum}
-	frontend.xeth = xe.New(ethereum, frontend)
+	tf := testInit(t)
+	defer tf.ethereum.Stop()
 
-	addr := frontend.xeth.Coinbase()
-	if addr != "0x"+core.TestAccount {
-		t.Errorf("CoinBase %v does not match TestAccount 0x%v", addr, core.TestAccount)
-	}
-	t.Logf("CoinBase is %v", addr)
+	ds, _ := docserver.New("/tmp/")
 
-	balance := frontend.xeth.BalanceAt(core.TestAccount)
-	if balance != core.TestBalance {
-		t.Errorf("Balance %v does not match TestBalance %v", balance, core.TestBalance)
-	}
-	t.Logf("Balance is %v", balance)
+	chash := common.BytesToHash(crypto.Sha3([]byte("kutyafasza")))
+	tf.registerURL(chash, "file:///test.content")
+	tf.registerURL(chash, "kf")
 
-	frontend.insertTx(addr, core.ContractAddrURLhint, "register(bytes32,bytes32)", []string{"1234", "5678"})
-
-	t.Logf("testcnt: %v", frontend.xeth.StorageAt(core.ContractAddrURLhint, "00"))
-
-	for i := 0; i < 10; i++ {
-		t.Logf("storage[%v] = %v", i, frontend.xeth.StorageAt("0x"+core.ContractAddrURLhint, fmt.Sprintf("%v", i)))
-	}
-
-	rsv := resolver.New(frontend.xeth, resolver.URLHintContractAddress, resolver.NameRegContractAddress)
-	url, err2 := rsv.ContentHashToUrl(common.BytesToHash(common.Hex2BytesFixed("1234", 32)))
+	url, err2 := tf.testResolver().ContentHashToUrl(chash)
 
 	t.Logf("URL: %v  err: %v", url, err2)
 
-	/*
-	   This test is unfinished; first we need to see the result of a
-	   transaction in the contract storage (testcnt should be 1).
-	*/
+	ds.GetAuthContent(url, chash)
 
 }
