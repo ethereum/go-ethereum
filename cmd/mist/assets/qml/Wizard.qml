@@ -12,6 +12,7 @@ Rectangle {
      anchors.fill: parent
      color: "blue"
      state: "State-Initial"
+     property string currentStateProcess: "State-Presale-01"
     
     Timer {
         id: startTimerAnimation
@@ -253,6 +254,58 @@ Rectangle {
                 visible: true
                 opacity: 1
             }
+        },
+        State {
+            name: "State-Restore-01"
+            PropertyChanges {
+                target: iceberg
+                x: 19
+            }
+            PropertyChanges {
+                target: icebergFrontBlur
+                x: 17
+            }
+            PropertyChanges {
+                target: mistTitle
+                y: 610
+                opacity: 0.2
+            }
+            PropertyChanges {
+                target: step0
+                opacity: 0.0
+                x: 1000
+            } 
+            PropertyChanges { 
+                target: stepRestore1
+                visible: true
+                opacity: 1
+            }
+        },
+        State {
+            name: "State-Bitcoin"
+            PropertyChanges {
+                target: iceberg
+                x: 19
+            }
+            PropertyChanges {
+                target: icebergFrontBlur
+                x: 17
+            }
+            PropertyChanges {
+                target: mistTitle
+                y: 610
+                opacity: 0.2
+            }
+            PropertyChanges {
+                target: step0
+                opacity: 0.0
+                x: 1000
+            } 
+            PropertyChanges { 
+                target: stepBitcoin
+                visible: true
+                opacity: 1
+            }
         },        
         State {
             name: "State-Presale-02"
@@ -359,6 +412,27 @@ Rectangle {
                 visible: true
                 opacity: 1
             }
+        },
+        State {
+            name: "State-Presale-07"
+            PropertyChanges {
+                target: iceberg
+                x: -11
+            }
+            PropertyChanges {
+                target: icebergFrontBlur
+                x: -23
+            }
+            PropertyChanges { 
+                target: stepPresale6
+                visible: true
+                opacity: 0
+            }
+            PropertyChanges { 
+                target: stepPresale7
+                visible: true
+                opacity: 1
+            }
         }
      ]
 
@@ -406,7 +480,7 @@ Rectangle {
            }
        }, 
        Transition {
-          from: "State-0"; to: "State-Presale-01"
+          from: "State-0"
 
            PropertyAnimation { 
                 target: skyGradient 
@@ -441,77 +515,7 @@ Rectangle {
            
        },
        Transition {
-          from: "State-0"; to: "State-Invitation-01"
-
-           PropertyAnimation { 
-                target: skyGradient 
-                properties: "height"
-                duration: 1000 
-                easing.type: Easing.InOutQuart
-           }
-           PropertyAnimation { 
-                target: step0 
-                properties: "opacity, x"
-                duration: 1000 
-                easing.type: Easing.InOutQuart
-           }
-           PropertyAnimation { 
-                target: iceberg 
-                properties: "x, y"
-                duration: 1000 
-                easing.type: Easing.InOutQuart
-           } 
-           PropertyAnimation { 
-                target: icebergFrontBlur 
-                properties: "x, y"
-                duration: 1000 
-                easing.type: Easing.InOutQuart
-           }
-           PropertyAnimation {
-                target: mistTitle
-                properties: "opacity, y"
-                duration: 1500 
-                easing.type: Easing.InOutQuart                
-           }
-           
-       },
-       Transition {
-          from: "State-Presale-01"; to: "State-0"
-
-           PropertyAnimation { 
-                target: skyGradient 
-                properties: "height"
-                duration: 500 
-                easing.type: Easing.InOutQuart
-           }
-           PropertyAnimation { 
-                target: step0 
-                properties: "opacity, x"
-                duration: 500 
-                easing.type: Easing.InOutQuart
-           }
-           PropertyAnimation {
-                target: iceberg 
-                properties: "x, y"
-                duration: 500 
-                easing.type: Easing.InOutQuart
-           } 
-           PropertyAnimation { 
-                target: icebergFrontBlur 
-                properties: "x, y"
-                duration: 500 
-                easing.type: Easing.InOutQuart
-           }
-           PropertyAnimation {
-                target: mistTitle
-                properties: "opacity, y"
-                duration: 750 
-                easing.type: Easing.InOutQuart                
-           }
-           
-       },
-       Transition {
-          from: "State-Invitation-01"; to: "State-0"
+          to: "State-0"
 
            PropertyAnimation { 
                 target: skyGradient 
@@ -565,9 +569,14 @@ Rectangle {
        }
     ]
 
-    //
-    //   STEPS
-    //
+
+
+
+     /*********************/
+     /*      MENU 00      */
+     /*********************/
+
+
 
      Rectangle {
          id: step0
@@ -578,188 +587,209 @@ Rectangle {
          color: "transparent"
          opacity: 0
 
-         Text {
-            text: "Mist is a Navigator for Ethereum, a decentralized"
-            font.family: sourceSansPro.name 
-            font.weight: Font.Light
-            font.pixelSize: 22
-            color: "#2B519E"
-            x: 20
-            y: 70
-         }  
-         
-         Text {
-            text: "app platform. It enables anyone to run programs that can transfer assets or information safely and privately between consenting parties to the contracts."
-            font.family: sourceSansPro.name 
-            font.weight: Font.Light
-            font.pixelSize: 18
-            wrapMode: Text.WordWrap
-            width: 420
-            color: "#2B519E"
-            x: 20
-            y: 100
-         } 
+         Column {
 
-         Text {
-            text: "In order to use mist, you need to have an invitation or have previously acquired Ethers or Bitcoins."
-            font.family: sourceSansPro.name 
-            font.weight: Font.Bold
-            font.pixelSize: 18
-            wrapMode: Text.WordWrap
-            width: 420
-            color: "#2B519E"
-            x: 20
-            y: 190
-         } 
+             Rectangle {
+                color: "transparent"
+                width: 100
+                height: 90
+             }
 
-         Rectangle {
-            x: 10
-            y: 320
-            color: "transparent"
-            width: 430
-            height: 70
-
-            Image {
-                source: "../wizard/start-invitation.png"
-                width: 65
-                height: 65
-                anchors.verticalCenter: parent.verticalCenter
-            }
-
-            Text {
-                text: "I have an invitation"
+             Text {
+                text: "Mist is a Navigator for Ethereum, a decentralized"
                 font.family: sourceSansPro.name 
-                font.weight: Font.SemiBold
-                font.pixelSize: 24
-                color: "#FFFFFF"
-                anchors.verticalCenter: parent.verticalCenter
-                x: 80
+                font.weight: Font.Light
+                font.pixelSize: 22
+                color: "#2B519E"
+                x: 20
+                height: 30
+                anchors.topMargin: 30
+             }  
+             
+             Text {
+                text: "app platform. It enables anyone to run programs that can transfer assets or information safely and privately between consenting parties to the contracts."
+                font.family: sourceSansPro.name 
+                font.weight: Font.Light
+                font.pixelSize: 18
+                wrapMode: Text.WordWrap
+                width: 420
+                color: "#2B519E"
+                x: 20
+                height: 100
              } 
 
-             MouseArea {
-                anchors.fill: parent
-                onClicked: {
-                    wizardWindow.state = "State-Invitation-01"
+             Text {
+                text: "In order to use mist, you need to have an invitation or have previously acquired Ethers or Bitcoins."
+                font.family: sourceSansPro.name 
+                font.weight: Font.Bold
+                font.pixelSize: 18
+                wrapMode: Text.WordWrap
+                width: 420
+                color: "#2B519E"
+                x: 20
+                height: 90
+             } 
+
+             Rectangle {
+                x: 10
+                y: 320
+                color: "transparent"
+                width: 430
+                height: 80
+
+                Image {
+                    source: "../wizard/start-invitation.png"
+                    width: 65
+                    height: 65
+                    anchors.verticalCenter: parent.verticalCenter
                 }
-             }
-         }
-         
-         Rectangle {
-            x: 10
-            y: 420
-            width: 430
-            height: 50
-            color: "transparent"            
 
-            Image {
-                source: "../wizard/start-presale.png"
-                width: 44
-                height: 44
+                Text {
+                    text: "I have an invitation"
+                    font.family: sourceSansPro.name 
+                    font.weight: Font.SemiBold
+                    font.pixelSize: 24
+                    color: "#FFFFFF"
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: 80
+                 } 
+
+                 MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        wizardWindow.state = "State-Invitation-01"
+                        currentStateProcess = "State-Invitation-01"
+                    }
+                 }
+             }
+             
+             Rectangle {
                 x: 10
-                anchors.verticalCenter: parent.verticalCenter
-            }
+                y: 420
+                width: 430
+                height: 60
+                color: "transparent"            
 
-            Text {
-                text: "Redeem presale ether"
-                font.family: sourceSansPro.name 
-                font.weight: Font.SemiBold
-                font.pixelSize: 18
-                color: "#FFFFFF"
-                anchors.verticalCenter: parent.verticalCenter
-                x: 80
-             }
-
-             MouseArea {
-                anchors.fill: parent
-                onClicked: {
-                    wizardWindow.state = "State-Presale-01"
+                Image {
+                    source: "../wizard/start-presale.png"
+                    width: 44
+                    height: 44
+                    x: 10
+                    anchors.verticalCenter: parent.verticalCenter
                 }
+
+                Text {
+                    text: "Redeem presale ether"
+                    font.family: sourceSansPro.name 
+                    font.weight: Font.SemiBold
+                    font.pixelSize: 18
+                    color: "#FFFFFF"
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: 80
+                 }
+
+                 MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        wizardWindow.state = "State-Presale-01"
+                        currentStateProcess = "State-Presale-01"                       
+                    }
+                 }
              }
-         }
 
-         Rectangle {
-            x: 10
-            y: 480
-            width: 430
-            height: 50
-            color: "transparent"
-
-            Image {
-                source: "../wizard/start-recover.png"
-                width: 44
-                height: 44
+             Rectangle {
                 x: 10
-                anchors.verticalCenter: parent.verticalCenter
-            }
+                y: 480
+                width: 430
+                height: 60
+                color: "transparent"
 
-            Text {
-                text: "Restore old wallet"
-                font.family: sourceSansPro.name 
-                font.weight: Font.SemiBold
-                font.pixelSize: 18
-                color: "#FFFFFF"
-                anchors.verticalCenter: parent.verticalCenter
-                x: 80
+                Image {
+                    source: "../wizard/start-recover.png"
+                    width: 44
+                    height: 44
+                    x: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                    text: "Restore old wallet"
+                    font.family: sourceSansPro.name 
+                    font.weight: Font.SemiBold
+                    font.pixelSize: 18
+                    color: "#FFFFFF"
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: 80
+                 }
+
+                 MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        wizardWindow.state = "State-Restore-01"
+                        currentStateProcess = "State-Restore-01"
+
+                    }
+                 }
              }
 
-             MouseArea {
-                anchors.fill: parent
-             }
-         }
-
-         Rectangle {
-            x: 10
-            y: 540
-            width: 430
-            height: 50
-            color: "transparent"
-
-            Image {
-                source: "../wizard/start-bitcoin.png"
-                width: 44
-                height: 44
+             Rectangle {
                 x: 10
-                anchors.verticalCenter: parent.verticalCenter
-            }
+                y: 540
+                width: 430
+                height: 60
+                color: "transparent"
 
-            Text {
-                text: "Use Bitcoins instead"
-                font.family: sourceSansPro.name 
-                font.weight: Font.SemiBold
-                font.pixelSize: 18
-                color: "#FFFFFF"
-                anchors.verticalCenter: parent.verticalCenter
-                x: 80
-             }
+                Image {
+                    source: "../wizard/start-bitcoin.png"
+                    width: 44
+                    height: 44
+                    x: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                }
 
-             MouseArea {
-                anchors.fill: parent
-             }
-         }         
+                Text {
+                    text: "Use Bitcoins instead"
+                    font.family: sourceSansPro.name 
+                    font.weight: Font.SemiBold
+                    font.pixelSize: 18
+                    color: "#FFFFFF"
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: 80
+                 }
 
-         Rectangle {
-            x: 10
-            y: 600
-            width: 430
-            height: 50
-            color: "transparent"
+                 MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        wizardWindow.state = "State-Bitcoin"
+                        currentStateProcess = "State-Bitcoin"
+                    }
+                 }
+             }         
 
-            Text {
-                text: "I don't have any of those, just let me in anyway.."
-                font.family: sourceSansPro.name 
-                font.weight: Font.SemiBold
-                font.italic: true
-                font.pixelSize: 18
-                color: "#FFFFFF"
-                anchors.verticalCenter: parent.verticalCenter
+             Rectangle {
                 x: 10
-             }
+                y: 600
+                width: 430
+                height: 60
+                color: "transparent"
 
-             MouseArea {
-                anchors.fill: parent
-             }
-         }         
+                Text {
+                    text: "I don't have any of those, just let me in anyway.."
+                    font.family: sourceSansPro.name 
+                    font.weight: Font.SemiBold
+                    font.italic: true
+                    font.pixelSize: 18
+                    color: "#FFFFFF"
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: 10
+                 }
 
+                 MouseArea {
+                    anchors.fill: parent
+                 }
+             }         
+
+        }
          
     }
 
@@ -1034,8 +1064,7 @@ Rectangle {
                  }
 
                  onClicked: {
-                    wizardWindow.state = "State-Presale-01";
-                    console.log( "state-0 bak")
+                    wizardWindow.state = currentStateProcess;
                  }
 
             }
@@ -2342,7 +2371,7 @@ Rectangle {
 
                  onClicked: {
                     //onboardingWizard.visible = false;
-                    wizardWindow.state = "State-Initial";
+                    wizardWindow.state = "State-0";
                     //startTimerAnimation.running = true;
                     //startTimerAnimation.start();
                  }
@@ -2417,18 +2446,16 @@ Rectangle {
                     
                     Image {
                         anchors.centerIn: parent
-                        source: "../wizard/drop-icon.png"
+                        source: "../wizard/invitation-Icon.png"
                     }
 
                 }
 
                 Text {
-                   anchors {
-                        top: invitationIcon.bottom
-                        left: parent.left
-                        right: parent.right
-                        bottom: parent.bottom
-                    }
+                    width: 160
+                    height: 130
+                    y: 90
+                    anchors.horizontalCenter: parent.horizontalCenter
                     text: "<html>DROP OR OPEN YOUR <strong>INVITE</strong> HERE</html>"
                     font.family: sourceSansPro.name 
                     font.weight: Font.Bold
@@ -2500,6 +2527,395 @@ Rectangle {
             }
          }
      }
+
+
+
+
+
+     /*********************/
+     /*      RESTORE      */
+     /*********************/
+
+
+
+    Rectangle {
+         id: stepRestore1
+         anchors.fill: parent
+         color: "transparent"
+         opacity: 0
+         visible: false
+
+
+         Behavior on opacity { PropertyAnimation { duration: 500 } }
+     
+
+
+         Rectangle {
+            // Content
+             x: 350
+             y: 0
+             color: "transparent"
+            
+            ColumnLayout {
+
+                spacing: 20 
+
+                Text {
+                    text: "Type the words you have written down"
+                    font.family: sourceSansPro.name 
+                    font.weight: Font.Light
+                    verticalAlignment: Text.AlignBottom
+                    font.pixelSize: 30
+                    color: "#57637B"
+                    Layout.minimumHeight: 120
+                 } 
+
+                 Rectangle {
+                    color: "transparent"
+                    width: 450
+                    height: 80
+
+                    Text {
+                        anchors.fill: parent
+                        text: "During the creation of the wallet, you were told to write these words down. Now it is the time to write them here again."
+                        font.family: sourceSansPro.name 
+                        font.weight: Font.Light
+                        font.pixelSize: 18
+                        wrapMode: Text.WordWrap
+                        verticalAlignment: Text.AlignVCenter
+                        color: "#57637B"
+                     }
+
+                 } 
+
+                 
+                Rectangle {
+                    radius: 4
+                    border.color: "#E1D9D9"
+                    border.width: 4
+                    color: "#FFFFFF"
+                    y: 220
+                    height: 220
+                    width: 540
+                
+                    TextEdit {
+                        id: typeMagicWordsRestore
+                        x: 20
+                        y: 20
+                        width: 400
+                        height: 180
+                        text: ""
+                        font.family: sourceSansPro.name 
+                        font.weight: Font.SemiBold
+                        font.pixelSize: 22
+                        wrapMode: Text.WordWrap
+                        horizontalAlignment: Text.AlignLeft
+                        verticalAlignment: Text.AlignTop
+                        focus: false
+                        color: "#AAA0A0"
+
+                        onTextChanged: {
+                            if (typeMagicWordsRestore.text == "correct") {
+                                iconPositiveFeedbackRestore.visible = true;
+                                iconNegativeFeedbackRestore.visible = false;
+                                nextButtonRestore.visible = true;
+                            } else if (typeMagicWordsRestore.text.length > 24) {
+                                iconPositiveFeedbackRestore.visible = false;
+                                iconNegativeFeedbackRestore.visible = true;                                
+                                nextButtonRestore.visible = false;                                
+                            } else {
+                                iconPositiveFeedbackRestore.visible = false;
+                                iconNegativeFeedbackRestore.visible = false;                                
+                                nextButtonRestore.visible = false;                            
+                            }
+
+                        }
+                    }
+                }
+
+                RowLayout {
+                    id: iconPositiveFeedbackRestore
+                    spacing: 20
+                    visible: false
+
+                    Image {
+                        source: "../wizard/icon-correct.png"
+                        width: 34
+                        height: 34
+                    }
+                
+                    Text {
+                        text: "Those words correspond to a wallet"
+                        font.family: sourceSansPro.name 
+                        font.weight: Font.SemiBold
+                        verticalAlignment: Text.AlignBottom
+                        font.pixelSize: 16
+                        color: "#679137"
+                     } 
+                }
+
+                RowLayout {
+                    id: iconNegativeFeedbackRestore
+                    spacing: 20
+                    visible: false
+
+                    Image {
+                        source: "../wizard/icon-wrong.png"
+                        width: 34
+                        height: 34
+                    }
+                
+                    Text {
+                        text: "Wrong words. Keep trying."
+                        font.family: sourceSansPro.name 
+                        font.weight: Font.SemiBold
+                        verticalAlignment: Text.AlignBottom
+                        font.pixelSize: 16
+                        color: "#D0021B"
+                     } 
+                }
+            }   
+         }
+
+         Rectangle {
+            //bottom buttons
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            height: 80
+            color: "transparent"
+
+            MouseArea {
+                anchors.verticalCenter: parent.verticalCenter
+                x: 60 
+                height: 60
+                width: 120
+
+                Text {
+                    text: "BACK"
+                    font.family: sourceSansPro.name 
+                    font.weight: Font.Light
+                    font.pixelSize: 24
+                    color: "#FFFFFF"
+                    anchors.fill: parent
+                    horizontalAlignment: Text.AlignLeft
+                    verticalAlignment: Text.AlignVCenter
+                 }
+
+                 onClicked: {
+                    wizardWindow.state = "State-0";
+                 }
+
+            }
+
+            MouseArea {
+                id: nextButtonRestore
+               // visible: false
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: 60
+                height: 60
+                width: 120
+
+                Text {
+                    text: "NEXT"
+                    font.family: sourceSansPro.name 
+                    font.weight: Font.Light
+                    font.pixelSize: 24
+                    color: "#FFFFFF"
+                    anchors.fill: parent
+                    horizontalAlignment: Text.AlignRight
+                    verticalAlignment: Text.AlignVCenter
+                 }
+
+                 onClicked: {
+                    wizardWindow.state = "State-Presale-02";
+                 }
+
+            } // MouseArea
+         } // Bottom Buttons
+     }// End State
+
+
+
+
+     /*********************/
+     /*      BITCOIN      */
+     /*********************/
+
+
+
+    Rectangle {
+         id: stepBitcoin
+         anchors.fill: parent
+         color: "transparent"
+         opacity: 0
+         visible: false
+
+
+         Behavior on opacity { PropertyAnimation { duration: 500 } }
+     
+
+
+         Rectangle {
+            // Content
+             x: 350
+             y: 0
+             color: "transparent"
+            
+            ColumnLayout {
+
+                spacing: 20 
+
+                Text {
+                    text: "Use Bitcoins"
+                    font.family: sourceSansPro.name 
+                    font.weight: Font.Light
+                    verticalAlignment: Text.AlignBottom
+                    font.pixelSize: 30
+                    color: "#57637B"
+                    Layout.minimumHeight: 120
+                 } 
+
+                 Rectangle {
+                    color: "transparent"
+                    width: 550
+                    height: 200
+
+                    Text {
+                        anchors.fill: parent
+                        text: "If you have bitcoins, you can use them in ethereum. By depositing money on the address below, you’ll be given a contract controlled solely by you that will keep it’s bitcoin value. A small amount of the bitcoins will be converted on the fly whenever you need to pay for gas for future contracts. You can restore your unspent bitcoins at any point. \n\n Creating this contract will cost in average 0.01 bits."
+                        font.family: sourceSansPro.name 
+                        font.weight: Font.Light
+                        font.pixelSize: 16
+                        wrapMode: Text.WordWrap
+                        verticalAlignment: Text.AlignVCenter
+                        color: "#57637B"
+                     }
+
+                 } 
+
+                 
+                Rectangle {
+                    radius: 4
+                    border.color: "#E1D9D9"
+                    border.width: 4
+                    color: "#FFFFFF"
+                    y: 220
+                    height: 140
+                    width: 540  
+
+                    RowLayout {
+                        //anchors.centerIn: parent
+                        // height: 120
+                        // width: 520
+                        anchors.fill: parent
+
+                        Rectangle {
+                            color: "transparent"
+                            height: 50
+                            width: 20
+                        }
+
+                        Image {
+                            source: "../wizard/bitcoin-icon.png"
+                            height: 32
+                            width: 32
+                        }
+                        
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            //width: 390
+                            //height: 100
+
+                            Text {
+                                text: "0.0 Bits"
+                                font.family: sourceSansPro.name 
+                                font.weight: Font.Light
+                                font.pixelSize: 30
+                                color: "#57637B"
+                             }
+                             Text {
+                                text: "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+                                font.family: sourceSansPro.name 
+                                font.weight: Font.SemiBold
+                                font.pixelSize: 15
+                                color: "#F7931A"
+                             }
+                        }
+
+
+                        Image {
+                            source: "../wizard/bitcoin-qrcode.png"
+                            height: 119
+                            width: 119
+                        }
+                    }              
+                }
+            }   
+         }
+
+         Rectangle {
+            //bottom buttons
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            height: 80
+            color: "transparent"
+
+            MouseArea {
+                anchors.verticalCenter: parent.verticalCenter
+                x: 60 
+                height: 60
+                width: 120
+
+                Text {
+                    text: "BACK"
+                    font.family: sourceSansPro.name 
+                    font.weight: Font.Light
+                    font.pixelSize: 24
+                    color: "#FFFFFF"
+                    anchors.fill: parent
+                    horizontalAlignment: Text.AlignLeft
+                    verticalAlignment: Text.AlignVCenter
+                 }
+
+                 onClicked: {
+                    wizardWindow.state = "State-0";
+                 }
+
+            }
+
+            MouseArea {
+                id: nextButtonBitcoins
+               // visible: false
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: 60
+                height: 60
+                width: 120
+
+                Text {
+                    text: "NEXT"
+                    font.family: sourceSansPro.name 
+                    font.weight: Font.Light
+                    font.pixelSize: 24
+                    color: "#FFFFFF"
+                    anchors.fill: parent
+                    horizontalAlignment: Text.AlignRight
+                    verticalAlignment: Text.AlignVCenter
+                 }
+
+                 onClicked: {
+                    wizardWindow.state = "State-Presale-02";
+                 }
+
+            } // MouseArea
+         } // Bottom Buttons
+     }// End State
+
+
+
 
 
 
