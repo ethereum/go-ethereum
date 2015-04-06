@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -12,18 +11,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/state"
 )
 
 // Block Test JSON Format
-
 type btJSON struct {
 	Blocks             []btBlock
 	GenesisBlockHeader btHeader
 	Pre                map[string]btAccount
+	PostState          map[string]btAccount
 }
 
 type btAccount struct {
@@ -69,7 +68,7 @@ type btBlock struct {
 	BlockHeader  *btHeader
 	Rlp          string
 	Transactions []btTransaction
-	UncleHeaders []string
+	UncleHeaders []*btHeader
 }
 
 type BlockTest struct {
@@ -97,8 +96,35 @@ func LoadBlockTests(file string) (map[string]*BlockTest, error) {
 
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
-func (t *BlockTest) InsertPreState(db common.Database) error {
-	statedb := state.New(nil, db)
+func (t *BlockTest) InsertPreState(db common.Database) (*state.StateDB, error) {
+	statedb := state.New(common.Hash{}, db)
+	for addrString, acct := range t.preAccounts {
+		// XXX: is is worth it checking for errors here?
+		//addr, _ := hex.DecodeString(addrString)
+		code, _ := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
+		balance, _ := new(big.Int).SetString(acct.Balance, 0)
+		nonce, _ := strconv.ParseUint(acct.Nonce, 16, 64)
+
+		obj := statedb.CreateAccount(common.HexToAddress(addrString))
+		obj.SetCode(code)
+		obj.SetBalance(balance)
+		obj.SetNonce(nonce)
+		for k, v := range acct.Storage {
+			statedb.SetState(common.HexToAddress(addrString), common.HexToHash(k), common.FromHex(v))
+		}
+	}
+	// sync objects to trie
+	statedb.Update()
+	// sync trie to disk
+	statedb.Sync()
+
+	if !bytes.Equal(t.Genesis.Root().Bytes(), statedb.Root().Bytes()) {
+		return nil, fmt.Errorf("computed state root does not match genesis block %x %x", t.Genesis.Root().Bytes()[:4], statedb.Root().Bytes()[:4])
+	}
+	return statedb, nil
+}
+
+func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 	for addrString, acct := range t.preAccounts {
 		// XXX: is is worth it checking for errors here?
 		addr, _ := hex.DecodeString(addrString)
@@ -106,21 +132,19 @@ func (t *BlockTest) InsertPreState(db common.Database) error {
 		balance, _ := new(big.Int).SetString(acct.Balance, 0)
 		nonce, _ := strconv.ParseUint(acct.Nonce, 16, 64)
 
-		obj := statedb.NewStateObject(addr)
-		obj.SetCode(code)
-		obj.SetBalance(balance)
-		obj.SetNonce(nonce)
-		// for k, v := range acct.Storage {
-		// 	obj.SetState(k, v)
-		// }
-	}
-	// sync objects to trie
-	statedb.Update(nil)
-	// sync trie to disk
-	statedb.Sync()
-
-	if !bytes.Equal(t.Genesis.Root(), statedb.Root()) {
-		return errors.New("computed state root does not match genesis block")
+		// address is indirectly verified by the other fields, as it's the db key
+		code2 := statedb.GetCode(common.BytesToAddress(addr))
+		balance2 := statedb.GetBalance(common.BytesToAddress(addr))
+		nonce2 := statedb.GetNonce(common.BytesToAddress(addr))
+		if !bytes.Equal(code2, code) {
+			return fmt.Errorf("account code mismatch, addr, found, expected: ", addrString, hex.EncodeToString(code2), hex.EncodeToString(code))
+		}
+		if balance2.Cmp(balance) != 0 {
+			return fmt.Errorf("account balance mismatch, addr, found, expected: ", addrString, balance2, balance)
+		}
+		if nonce2 != nonce {
+			return fmt.Errorf("account nonce mismatch, addr, found, expected: ", addrString, nonce2, nonce)
+		}
 	}
 	return nil
 }
@@ -147,29 +171,30 @@ func mustConvertGenesis(testGenesis btHeader) *types.Block {
 	hdr.Number = big.NewInt(0)
 	b := types.NewBlockWithHeader(hdr)
 	b.Td = new(big.Int)
-	b.Reward = new(big.Int)
 	return b
 }
 
 func mustConvertHeader(in btHeader) *types.Header {
 	// hex decode these fields
-	return &types.Header{
+	header := &types.Header{
 		//SeedHash:    mustConvertBytes(in.SeedHash),
-		MixDigest:   mustConvertBytes(in.MixHash),
-		Bloom:       mustConvertBytes(in.Bloom),
-		ReceiptHash: mustConvertBytes(in.ReceiptTrie),
-		TxHash:      mustConvertBytes(in.TransactionsTrie),
-		Root:        mustConvertBytes(in.StateRoot),
-		Coinbase:    mustConvertBytes(in.Coinbase),
-		UncleHash:   mustConvertBytes(in.UncleHash),
-		ParentHash:  mustConvertBytes(in.ParentHash),
-		Nonce:       mustConvertBytes(in.Nonce),
-		Extra:       string(mustConvertBytes(in.ExtraData)),
+		MixDigest:   mustConvertHash(in.MixHash),
+		Bloom:       mustConvertBloom(in.Bloom),
+		ReceiptHash: mustConvertHash(in.ReceiptTrie),
+		TxHash:      mustConvertHash(in.TransactionsTrie),
+		Root:        mustConvertHash(in.StateRoot),
+		Coinbase:    mustConvertAddress(in.Coinbase),
+		UncleHash:   mustConvertHash(in.UncleHash),
+		ParentHash:  mustConvertHash(in.ParentHash),
+		Extra:       mustConvertBytes(in.ExtraData),
 		GasUsed:     mustConvertBigInt10(in.GasUsed),
 		GasLimit:    mustConvertBigInt10(in.GasLimit),
 		Difficulty:  mustConvertBigInt10(in.Difficulty),
 		Time:        mustConvertUint(in.Timestamp),
 	}
+	// XXX cheats? :-)
+	header.SetNonce(common.BytesToHash(mustConvertBytes(in.Nonce)).Big().Uint64())
+	return header
 }
 
 func mustConvertBlocks(testBlocks []btBlock) []*types.Block {
@@ -191,6 +216,30 @@ func mustConvertBytes(in string) []byte {
 		panic(fmt.Errorf("invalid hex: %q", in))
 	}
 	return out
+}
+
+func mustConvertHash(in string) common.Hash {
+	out, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
+	if err != nil {
+		panic(fmt.Errorf("invalid hex: %q", in))
+	}
+	return common.BytesToHash(out)
+}
+
+func mustConvertAddress(in string) common.Address {
+	out, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
+	if err != nil {
+		panic(fmt.Errorf("invalid hex: %q", in))
+	}
+	return common.BytesToAddress(out)
+}
+
+func mustConvertBloom(in string) types.Bloom {
+	out, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
+	if err != nil {
+		panic(fmt.Errorf("invalid hex: %q", in))
+	}
+	return types.BytesToBloom(out)
 }
 
 func mustConvertBigInt10(in string) *big.Int {

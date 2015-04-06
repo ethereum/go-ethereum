@@ -1,13 +1,17 @@
 package whisper
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 func TestSorting(t *testing.T) {
-	m := map[int32]Hash{
-		1: HS("1"),
-		3: HS("3"),
-		2: HS("2"),
-		5: HS("5"),
+	m := map[int32]common.Hash{
+		1: {1},
+		3: {3},
+		2: {2},
+		5: {5},
 	}
 	exp := []int32{1, 2, 3, 5}
 	res := sortKeys(m)

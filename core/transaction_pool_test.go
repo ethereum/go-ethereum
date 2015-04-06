@@ -2,14 +2,15 @@ package core
 
 import (
 	"crypto/ecdsa"
+	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/state"
 )
 
 // State query interface
@@ -21,11 +22,11 @@ func SQ() stateQuery {
 }
 
 func (self stateQuery) GetAccount(addr []byte) *state.StateObject {
-	return state.NewStateObject(addr, self.db)
+	return state.NewStateObject(common.BytesToAddress(addr), self.db)
 }
 
 func transaction() *types.Transaction {
-	return types.NewTransactionMessage(make([]byte, 20), common.Big0, common.Big0, common.Big0, nil)
+	return types.NewTransactionMessage(common.Address{}, common.Big0, common.Big0, common.Big0, nil)
 }
 
 func setup() (*TxPool, *ecdsa.PrivateKey) {
@@ -89,9 +90,10 @@ func TestRemoveInvalid(t *testing.T) {
 func TestInvalidSender(t *testing.T) {
 	pool, _ := setup()
 	tx := new(types.Transaction)
-	tx.V = 28
+	tx.R = new(big.Int)
+	tx.S = new(big.Int)
 	err := pool.ValidateTransaction(tx)
 	if err != ErrInvalidSender {
-		t.Error("expected %v, got %v", ErrInvalidSender, err)
+		t.Errorf("expected %v, got %v", ErrInvalidSender, err)
 	}
 }

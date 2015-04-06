@@ -1,15 +1,21 @@
 package miner
 
 import (
+	"sync"
+
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
 type CpuMiner struct {
+	chMu          sync.Mutex
 	c             chan *types.Block
 	quit          chan struct{}
 	quitCurrentOp chan struct{}
-	returnCh      chan<- Work
+	returnCh      chan<- *types.Block
 
 	index int
 	pow   pow.PoW
@@ -24,9 +30,9 @@ func NewCpuMiner(index int, pow pow.PoW) *CpuMiner {
 	return miner
 }
 
-func (self *CpuMiner) Work() chan<- *types.Block { return self.c }
-func (self *CpuMiner) Pow() pow.PoW              { return self.pow }
-func (self *CpuMiner) SetWorkCh(ch chan<- Work)  { self.returnCh = ch }
+func (self *CpuMiner) Work() chan<- *types.Block          { return self.c }
+func (self *CpuMiner) Pow() pow.PoW                       { return self.pow }
+func (self *CpuMiner) SetReturnCh(ch chan<- *types.Block) { self.returnCh = ch }
 
 func (self *CpuMiner) Stop() {
 	close(self.quit)
@@ -42,16 +48,13 @@ func (self *CpuMiner) Start() {
 }
 
 func (self *CpuMiner) update() {
-	justStarted := true
 out:
 	for {
 		select {
 		case block := <-self.c:
-			if justStarted {
-				justStarted = true
-			} else {
-				self.quitCurrentOp <- struct{}{}
-			}
+			self.chMu.Lock()
+			self.quitCurrentOp <- struct{}{}
+			self.chMu.Unlock()
 
 			go self.mine(block)
 		case <-self.quit:
@@ -59,6 +62,7 @@ out:
 		}
 	}
 
+	//close(self.quitCurrentOp)
 done:
 	// Empty channel
 	for {
@@ -73,9 +77,24 @@ done:
 }
 
 func (self *CpuMiner) mine(block *types.Block) {
-	minerlogger.Infof("(re)started agent[%d]. mining...\n", self.index)
-	nonce, mixDigest, seedHash := self.pow.Search(block, self.quitCurrentOp)
+	glog.V(logger.Debug).Infof("(re)started agent[%d]. mining...\n", self.index)
+
+	// Reset the channel
+	self.chMu.Lock()
+	self.quitCurrentOp = make(chan struct{}, 1)
+	self.chMu.Unlock()
+
+	// Mine
+	nonce, mixDigest, _ := self.pow.Search(block, self.quitCurrentOp)
 	if nonce != 0 {
-		self.returnCh <- Work{block.Number().Uint64(), nonce, mixDigest, seedHash}
+		block.SetNonce(nonce)
+		block.Header().MixDigest = common.BytesToHash(mixDigest)
+		self.returnCh <- block
+	} else {
+		self.returnCh <- nil
 	}
+}
+
+func (self *CpuMiner) GetHashRate() int64 {
+	return self.pow.GetHashrate()
 }

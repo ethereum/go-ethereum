@@ -21,6 +21,7 @@ public:
 
 	bool init(ethash_params const& params, const uint8_t seed[32], unsigned workgroup_size = 64);
 
+	void finish();
 	void hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, unsigned count);
 	void search(uint8_t const* header, uint64_t target, search_hook& hook);
 

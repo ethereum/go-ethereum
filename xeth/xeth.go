@@ -6,151 +6,224 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/whisper"
+	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var pipelogger = logger.NewLogger("XETH")
+var (
+	pipelogger       = logger.NewLogger("XETH")
+	filterTickerTime = 5 * time.Minute
+	defaultGasPrice  = big.NewInt(10000000000000) //150000000000
+	defaultGas       = big.NewInt(90000)          //500000
+)
 
-// to resolve the import cycle
-type Backend interface {
-	BlockProcessor() *core.BlockProcessor
-	ChainManager() *core.ChainManager
-	AccountManager() *accounts.Manager
-	TxPool() *core.TxPool
-	PeerCount() int
-	IsListening() bool
-	Peers() []*p2p.Peer
-	BlockDb() common.Database
-	StateDb() common.Database
-	ExtraDb() common.Database
-	EventMux() *event.TypeMux
-	Whisper() *whisper.Whisper
-
-	IsMining() bool
-	StartMining() error
-	StopMining()
-	Version() string
-}
-
-// Frontend should be implemented by users of XEth. Its methods are
-// called whenever XEth makes a decision that requires user input.
-type Frontend interface {
-	// UnlockAccount is called when a transaction needs to be signed
-	// but the key corresponding to the transaction's sender is
-	// locked.
-	//
-	// It should unlock the account with the given address and return
-	// true if unlocking succeeded.
-	UnlockAccount(address []byte) bool
-
-	// This is called for all transactions inititated through
-	// Transact. It should prompt the user to confirm the transaction
-	// and return true if the transaction was acknowledged.
-	//
-	// ConfirmTransaction is not used for Call transactions
-	// because they cannot change any state.
-	ConfirmTransaction(tx *types.Transaction) bool
-}
+func DefaultGas() *big.Int      { return new(big.Int).Set(defaultGas) }
+func DefaultGasPrice() *big.Int { return new(big.Int).Set(defaultGasPrice) }
 
 type XEth struct {
-	eth            Backend
-	blockProcessor *core.BlockProcessor
-	chainManager   *core.ChainManager
-	accountManager *accounts.Manager
-	state          *State
-	whisper        *Whisper
-
+	backend  *eth.Ethereum
 	frontend Frontend
+
+	state   *State
+	whisper *Whisper
+
+	quit          chan struct{}
+	filterManager *filter.FilterManager
+
+	logMut sync.RWMutex
+	logs   map[int]*logFilter
+
+	messagesMut sync.RWMutex
+	messages    map[int]*whisperFilter
+
+	// regmut   sync.Mutex
+	// register map[string][]*interface{} // TODO improve return type
+
+	agent *miner.RemoteAgent
 }
-
-// dummyFrontend is a non-interactive frontend that allows all
-// transactions but cannot not unlock any keys.
-type dummyFrontend struct{}
-
-func (dummyFrontend) UnlockAccount([]byte) bool                  { return false }
-func (dummyFrontend) ConfirmTransaction(*types.Transaction) bool { return true }
 
 // New creates an XEth that uses the given frontend.
 // If a nil Frontend is provided, a default frontend which
 // confirms all transactions will be used.
-func New(eth Backend, frontend Frontend) *XEth {
+func New(eth *eth.Ethereum, frontend Frontend) *XEth {
 	xeth := &XEth{
-		eth:            eth,
-		blockProcessor: eth.BlockProcessor(),
-		chainManager:   eth.ChainManager(),
-		accountManager: eth.AccountManager(),
-		whisper:        NewWhisper(eth.Whisper()),
-		frontend:       frontend,
+		backend:       eth,
+		frontend:      frontend,
+		whisper:       NewWhisper(eth.Whisper()),
+		quit:          make(chan struct{}),
+		filterManager: filter.NewFilterManager(eth.EventMux()),
+		logs:          make(map[int]*logFilter),
+		messages:      make(map[int]*whisperFilter),
+		agent:         miner.NewRemoteAgent(),
 	}
+	eth.Miner().Register(xeth.agent)
+
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}
-	xeth.state = NewState(xeth, xeth.chainManager.TransState())
+	xeth.state = NewState(xeth, xeth.backend.ChainManager().TransState())
+
+	go xeth.start()
+	go xeth.filterManager.Start()
+
 	return xeth
 }
 
-func (self *XEth) Backend() Backend { return self.eth }
-func (self *XEth) WithState(statedb *state.StateDB) *XEth {
+func (self *XEth) start() {
+	timer := time.NewTicker(2 * time.Second)
+done:
+	for {
+		select {
+		case <-timer.C:
+			self.logMut.Lock()
+			self.messagesMut.Lock()
+			for id, filter := range self.logs {
+				if time.Since(filter.timeout) > filterTickerTime {
+					self.filterManager.UninstallFilter(id)
+					delete(self.logs, id)
+				}
+			}
+
+			for id, filter := range self.messages {
+				if time.Since(filter.timeout) > filterTickerTime {
+					self.Whisper().Unwatch(id)
+					delete(self.messages, id)
+				}
+			}
+			self.messagesMut.Unlock()
+			self.logMut.Unlock()
+		case <-self.quit:
+			break done
+		}
+	}
+}
+
+func (self *XEth) stop() {
+	close(self.quit)
+}
+
+func cAddress(a []string) []common.Address {
+	bslice := make([]common.Address, len(a))
+	for i, addr := range a {
+		bslice[i] = common.HexToAddress(addr)
+	}
+	return bslice
+}
+
+func cTopics(t [][]string) [][]common.Hash {
+	topics := make([][]common.Hash, len(t))
+	for i, iv := range t {
+		topics[i] = make([]common.Hash, len(iv))
+		for j, jv := range iv {
+			topics[i][j] = common.HexToHash(jv)
+		}
+	}
+	return topics
+}
+
+func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }
+
+func (self *XEth) AtStateNum(num int64) *XEth {
+	block := self.getBlockByHeight(num)
+
+	var st *state.StateDB
+	if block != nil {
+		st = state.New(block.Root(), self.backend.StateDb())
+	} else {
+		st = self.backend.ChainManager().State()
+	}
+
+	return self.withState(st)
+}
+
+func (self *XEth) withState(statedb *state.StateDB) *XEth {
 	xeth := &XEth{
-		eth:            self.eth,
-		blockProcessor: self.blockProcessor,
-		chainManager:   self.chainManager,
-		whisper:        self.whisper,
+		backend: self.backend,
 	}
 
 	xeth.state = NewState(xeth, statedb)
 	return xeth
 }
+
 func (self *XEth) State() *State { return self.state }
 
 func (self *XEth) Whisper() *Whisper { return self.whisper }
 
+func (self *XEth) getBlockByHeight(height int64) *types.Block {
+	var num uint64
+
+	if height < 0 {
+		num = self.CurrentBlock().NumberU64() + uint64(-1*height)
+	} else {
+		num = uint64(height)
+	}
+
+	return self.backend.ChainManager().GetBlockByNumber(num)
+}
+
 func (self *XEth) BlockByHash(strHash string) *Block {
-	hash := common.FromHex(strHash)
-	block := self.chainManager.GetBlock(hash)
+	hash := common.HexToHash(strHash)
+	block := self.backend.ChainManager().GetBlock(hash)
 
 	return NewBlock(block)
 }
 
 func (self *XEth) EthBlockByHash(strHash string) *types.Block {
-	hash := common.FromHex(strHash)
-	block := self.chainManager.GetBlock(hash)
+	hash := common.HexToHash(strHash)
+	block := self.backend.ChainManager().GetBlock(hash)
 
 	return block
 }
 
-func (self *XEth) EthTransactionByHash(hash string) *types.Transaction {
-	data, _ := self.eth.ExtraDb().Get(common.FromHex(hash))
+func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blhash common.Hash, blnum *big.Int, txi uint64) {
+	data, _ := self.backend.ExtraDb().Get(common.FromHex(hash))
 	if len(data) != 0 {
-		return types.NewTransactionFromBytes(data)
+		tx = types.NewTransactionFromBytes(data)
 	}
-	return nil
+
+	// meta
+	var txExtra struct {
+		BlockHash  common.Hash
+		BlockIndex uint64
+		Index      uint64
+	}
+
+	v, _ := self.backend.ExtraDb().Get(append(common.FromHex(hash), 0x0001))
+	r := bytes.NewReader(v)
+	err := rlp.Decode(r, &txExtra)
+	if err == nil {
+		blhash = txExtra.BlockHash
+		blnum = big.NewInt(int64(txExtra.BlockIndex))
+		txi = txExtra.Index
+	} else {
+		pipelogger.Errorln(err)
+	}
+
+	return
 }
 
 func (self *XEth) BlockByNumber(num int64) *Block {
-	if num == -1 {
-		return NewBlock(self.chainManager.CurrentBlock())
-	}
-
-	return NewBlock(self.chainManager.GetBlockByNumber(uint64(num)))
+	return NewBlock(self.getBlockByHeight(num))
 }
 
 func (self *XEth) EthBlockByNumber(num int64) *types.Block {
-	if num == -1 {
-		return self.chainManager.CurrentBlock()
-	}
+	return self.getBlockByHeight(num)
+}
 
-	return self.chainManager.GetBlockByNumber(uint64(num))
+func (self *XEth) CurrentBlock() *types.Block {
+	return self.backend.ChainManager().CurrentBlock()
 }
 
 func (self *XEth) Block(v interface{}) *Block {
@@ -167,41 +240,67 @@ func (self *XEth) Block(v interface{}) *Block {
 
 func (self *XEth) Accounts() []string {
 	// TODO: check err?
-	accounts, _ := self.eth.AccountManager().Accounts()
+	accounts, _ := self.backend.AccountManager().Accounts()
 	accountAddresses := make([]string, len(accounts))
 	for i, ac := range accounts {
-		accountAddresses[i] = toHex(ac.Address)
+		accountAddresses[i] = common.ToHex(ac.Address)
 	}
 	return accountAddresses
 }
 
+func (self *XEth) DbPut(key, val []byte) bool {
+	self.backend.ExtraDb().Put(key, val)
+	return true
+}
+
+func (self *XEth) DbGet(key []byte) ([]byte, error) {
+	val, err := self.backend.ExtraDb().Get(key)
+	return val, err
+}
+
 func (self *XEth) PeerCount() int {
-	return self.eth.PeerCount()
+	return self.backend.PeerCount()
 }
 
 func (self *XEth) IsMining() bool {
-	return self.eth.IsMining()
+	return self.backend.IsMining()
+}
+
+func (self *XEth) EthVersion() string {
+	return fmt.Sprintf("%d", self.backend.EthVersion())
+}
+
+func (self *XEth) NetworkVersion() string {
+	return fmt.Sprintf("%d", self.backend.NetVersion())
+}
+
+func (self *XEth) WhisperVersion() string {
+	return fmt.Sprintf("%d", self.backend.ShhVersion())
+}
+
+func (self *XEth) ClientVersion() string {
+	return self.backend.ClientVersion()
 }
 
 func (self *XEth) SetMining(shouldmine bool) bool {
-	ismining := self.eth.IsMining()
+	ismining := self.backend.IsMining()
 	if shouldmine && !ismining {
-		err := self.eth.StartMining()
+		err := self.backend.StartMining()
 		return err == nil
 	}
 	if ismining && !shouldmine {
-		self.eth.StopMining()
+		self.backend.StopMining()
 	}
-	return self.eth.IsMining()
+	return self.backend.IsMining()
 }
 
 func (self *XEth) IsListening() bool {
-	return self.eth.IsListening()
+	return self.backend.IsListening()
 }
 
 func (self *XEth) Coinbase() string {
-	cb, _ := self.eth.AccountManager().Coinbase()
-	return toHex(cb)
+	eb, _ := self.backend.Etherbase()
+	return eb.Hex()
 }
 
 func (self *XEth) NumberToHuman(balance string) string {
@@ -211,21 +310,23 @@ func (self *XEth) NumberToHuman(balance string) string {
 }
 
 func (self *XEth) StorageAt(addr, storageAddr string) string {
-	storage := self.State().SafeGet(addr).StorageString(storageAddr)
-
-	return toHex(storage.Bytes())
+	return common.ToHex(self.State().state.GetState(common.HexToAddress(addr), common.HexToHash(storageAddr)))
 }
 
 func (self *XEth) BalanceAt(addr string) string {
-	return self.State().SafeGet(addr).Balance().String()
+	return common.ToHex(self.State().state.GetBalance(common.HexToAddress(addr)).Bytes())
 }
 
 func (self *XEth) TxCountAt(address string) int {
-	return int(self.State().SafeGet(address).Nonce())
+	return int(self.State().state.GetNonce(common.HexToAddress(address)))
 }
 
 func (self *XEth) CodeAt(address string) string {
-	return toHex(self.State().SafeGet(address).Code())
+	return common.ToHex(self.State().state.GetCode(common.HexToAddress(address)))
+}
+
+func (self *XEth) CodeAtBytes(address string) []byte {
+	return self.State().SafeGet(address).Code()
 }
 
 func (self *XEth) IsContract(address string) bool {
@@ -238,8 +339,169 @@ func (self *XEth) SecretToAddress(key string) string {
 		return ""
 	}
 
-	return toHex(pair.Address())
+	return common.ToHex(pair.Address())
 }
+
+func (self *XEth) RegisterFilter(earliest, latest int64, skip, max int, address []string, topics [][]string) int {
+	var id int
+	filter := core.NewFilter(self.backend)
+	filter.SetEarliestBlock(earliest)
+	filter.SetLatestBlock(latest)
+	filter.SetSkip(skip)
+	filter.SetMax(max)
+	filter.SetAddress(cAddress(address))
+	filter.SetTopics(cTopics(topics))
+	filter.LogsCallback = func(logs state.Logs) {
+		self.logMut.Lock()
+		defer self.logMut.Unlock()
+
+		self.logs[id].add(logs...)
+	}
+	id = self.filterManager.InstallFilter(filter)
+	self.logs[id] = &logFilter{timeout: time.Now()}
+
+	return id
+}
+
+func (self *XEth) UninstallFilter(id int) bool {
+	if _, ok := self.logs[id]; ok {
+		delete(self.logs, id)
+		self.filterManager.UninstallFilter(id)
+		return true
+	}
+
+	return false
+}
+
+func (self *XEth) NewFilterString(word string) int {
+	var id int
+	filter := core.NewFilter(self.backend)
+
+	switch word {
+	case "pending":
+		filter.PendingCallback = func(tx *types.Transaction) {
+			self.logMut.Lock()
+			defer self.logMut.Unlock()
+
+			self.logs[id].add(&state.StateLog{})
+		}
+	case "latest":
+		filter.BlockCallback = func(block *types.Block, logs state.Logs) {
+			self.logMut.Lock()
+			defer self.logMut.Unlock()
+
+			for _, log := range logs {
+				self.logs[id].add(log)
+			}
+			self.logs[id].add(&state.StateLog{})
+		}
+	}
+
+	id = self.filterManager.InstallFilter(filter)
+	self.logs[id] = &logFilter{timeout: time.Now()}
+
+	return id
+}
+
+func (self *XEth) FilterChanged(id int) state.Logs {
+	self.logMut.Lock()
+	defer self.logMut.Unlock()
+
+	if self.logs[id] != nil {
+		return self.logs[id].get()
+	}
+
+	return nil
+}
+
+func (self *XEth) Logs(id int) state.Logs {
+	self.logMut.Lock()
+	defer self.logMut.Unlock()
+
+	filter := self.filterManager.GetFilter(id)
+	if filter != nil {
+		return filter.Find()
+	}
+
+	return nil
+}
+
+func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []string, topics [][]string) state.Logs {
+	filter := core.NewFilter(self.backend)
+	filter.SetEarliestBlock(earliest)
+	filter.SetLatestBlock(latest)
+	filter.SetSkip(skip)
+	filter.SetMax(max)
+	filter.SetAddress(cAddress(address))
+	filter.SetTopics(cTopics(topics))
+
+	return filter.Find()
+}
+
+func (p *XEth) NewWhisperFilter(opts *Options) int {
+	var id int
+	opts.Fn = func(msg WhisperMessage) {
+		p.messagesMut.Lock()
+		defer p.messagesMut.Unlock()
+		p.messages[id].add(msg) // = append(p.messages[id], msg)
+	}
+	id = p.Whisper().Watch(opts)
+	p.messages[id] = &whisperFilter{timeout: time.Now()}
+	return id
+}
+
+func (p *XEth) UninstallWhisperFilter(id int) bool {
+	if _, ok := p.messages[id]; ok {
+		delete(p.messages, id)
+		return true
+	}
+
+	return false
+}
+
+func (self *XEth) MessagesChanged(id int) []WhisperMessage {
+	self.messagesMut.Lock()
+	defer self.messagesMut.Unlock()
+
+	if self.messages[id] != nil {
+		return self.messages[id].get()
+	}
+
+	return nil
+}
+
+// func (self *XEth) Register(args string) bool {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
+
+// 	if _, ok := self.register[args]; ok {
+// 		self.register[args] = nil // register with empty
+// 	}
+// 	return true
+// }
+
+// func (self *XEth) Unregister(args string) bool {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
+
+// 	if _, ok := self.register[args]; ok {
+// 		delete(self.register, args)
+// 		return true
+// 	}
+
+// 	return false
+// }
+
+// // TODO improve return type
+// func (self *XEth) PullWatchTx(args string) []*interface{} {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
+
+// 	txs := self.register[args]
+// 	self.register[args] = nil
+
+// 	return txs
+// }
 
 type KeyVal struct {
 	Key   string `json:"key"`
@@ -251,7 +513,7 @@ func (self *XEth) EachStorage(addr string) string {
 	object := self.State().SafeGet(addr)
 	it := object.Trie().Iterator()
 	for it.Next() {
-		values = append(values, KeyVal{toHex(it.Key), toHex(it.Value)})
+		values = append(values, KeyVal{common.ToHex(object.Trie().GetKey(it.Key)), common.ToHex(it.Value)})
 	}
 
 	valuesJson, err := json.Marshal(values)
@@ -265,7 +527,7 @@ func (self *XEth) EachStorage(addr string) string {
 func (self *XEth) ToAscii(str string) string {
 	padded := common.RightPadBytes([]byte(str), 32)
 
-	return "0x" + toHex(padded)
+	return "0x" + common.ToHex(padded)
 }
 
 func (self *XEth) FromAscii(str string) string {
@@ -286,103 +548,126 @@ func (self *XEth) FromNumber(str string) string {
 
 func (self *XEth) PushTx(encodedTx string) (string, error) {
 	tx := types.NewTransactionFromBytes(common.FromHex(encodedTx))
-	err := self.eth.TxPool().Add(tx)
+	err := self.backend.TxPool().Add(tx)
 	if err != nil {
 		return "", err
 	}
 
 	if tx.To() == nil {
 		addr := core.AddressFromMessage(tx)
-		return toHex(addr), nil
+		return addr.Hex(), nil
 	}
-	return toHex(tx.Hash()), nil
+	return tx.Hash().Hex(), nil
 }
 
-var (
-	defaultGasPrice = big.NewInt(10000000000000)
-	defaultGas      = big.NewInt(90000)
-)
-
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
-	statedb := self.State().State() //self.chainManager.TransState()
+	statedb := self.State().State() //self.eth.ChainManager().TransState()
 	msg := callmsg{
-		from:     statedb.GetOrNewStateObject(common.FromHex(fromStr)),
-		to:       common.FromHex(toStr),
+		from:     statedb.GetOrNewStateObject(common.HexToAddress(fromStr)),
+		to:       common.HexToAddress(toStr),
 		gas:      common.Big(gasStr),
 		gasPrice: common.Big(gasPriceStr),
 		value:    common.Big(valueStr),
 		data:     common.FromHex(dataStr),
 	}
+
 	if msg.gas.Cmp(big.NewInt(0)) == 0 {
-		msg.gas = defaultGas
+		msg.gas = DefaultGas()
 	}
 
 	if msg.gasPrice.Cmp(big.NewInt(0)) == 0 {
-		msg.gasPrice = defaultGasPrice
+		msg.gasPrice = DefaultGasPrice()
 	}
 
-	block := self.chainManager.CurrentBlock()
-	vmenv := core.NewEnv(statedb, self.chainManager, msg, block)
+	block := self.CurrentBlock()
+	vmenv := core.NewEnv(statedb, self.backend.ChainManager(), msg, block)
 
 	res, err := vmenv.Call(msg.from, msg.to, msg.data, msg.gas, msg.gasPrice, msg.value)
-	return toHex(res), err
+	return common.ToHex(res), err
 }
 
 func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 	var (
-		from             []byte
-		to               []byte
+		from             = common.HexToAddress(fromStr)
+		to               = common.HexToAddress(toStr)
 		value            = common.NewValue(valueStr)
-		gas              = common.NewValue(gasStr)
-		price            = common.NewValue(gasPriceStr)
+		gas              = common.Big(gasStr)
+		price            = common.Big(gasPriceStr)
 		data             []byte
 		contractCreation bool
 	)
 
-	from = common.FromHex(fromStr)
+	// TODO if no_private_key then
+	//if _, exists := p.register[args.From]; exists {
+	//	p.register[args.From] = append(p.register[args.From], args)
+	//} else {
+	/*
+		account := accounts.Get(common.FromHex(args.From))
+		if account != nil {
+			if account.Unlocked() {
+				if !unlockAccount(account) {
+					return
+				}
+			}
+
+			result, _ := account.Transact(common.FromHex(args.To), common.FromHex(args.Value), common.FromHex(args.Gas), common.FromHex(args.GasPrice), common.FromHex(args.Data))
+			if len(result) > 0 {
+				*reply = common.ToHex(result)
+			}
+		} else if _, exists := p.register[args.From]; exists {
+			p.register[ags.From] = append(p.register[args.From], args)
+		}
+	*/
+
+	// TODO: align default values to have the same type, e.g. not depend on
+	// common.Value conversions later on
+	if gas.Cmp(big.NewInt(0)) == 0 {
+		gas = DefaultGas()
+	}
+
+	if price.Cmp(big.NewInt(0)) == 0 {
+		price = DefaultGasPrice()
+	}
+
 	data = common.FromHex(codeStr)
-	to = common.FromHex(toStr)
-	if len(to) == 0 {
+	if len(toStr) == 0 {
 		contractCreation = true
 	}
 
 	var tx *types.Transaction
 	if contractCreation {
-		tx = types.NewContractCreationTx(value.BigInt(), gas.BigInt(), price.BigInt(), data)
+		tx = types.NewContractCreationTx(value.BigInt(), gas, price, data)
 	} else {
-		tx = types.NewTransactionMessage(to, value.BigInt(), gas.BigInt(), price.BigInt(), data)
+		tx = types.NewTransactionMessage(to, value.BigInt(), gas, price, data)
 	}
 
-	state := self.chainManager.TxState()
-	nonce := state.NewNonce(from) //state.GetNonce(from)
+	state := self.backend.ChainManager().TxState()
+	nonce := state.NewNonce(from)
 	tx.SetNonce(nonce)
 
 	if err := self.sign(tx, from, false); err != nil {
 		return "", err
 	}
-	if err := self.eth.TxPool().Add(tx); err != nil {
+	if err := self.backend.TxPool().Add(tx); err != nil {
 		return "", err
 	}
-	//state.IncrementNonce(from)
 
 	if contractCreation {
 		addr := core.AddressFromMessage(tx)
 		pipelogger.Infof("Contract addr %x\n", addr)
-	}
 
-	if types.IsContractAddr(to) {
-		return toHex(core.AddressFromMessage(tx)), nil
+		return core.AddressFromMessage(tx).Hex(), nil
 	}
-	return toHex(tx.Hash()), nil
+	return tx.Hash().Hex(), nil
 }
 
-func (self *XEth) sign(tx *types.Transaction, from []byte, didUnlock bool) error {
-	sig, err := self.accountManager.Sign(accounts.Account{Address: from}, tx.Hash())
+func (self *XEth) sign(tx *types.Transaction, from common.Address, didUnlock bool) error {
+	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from.Bytes()}, tx.Hash().Bytes())
 	if err == accounts.ErrLocked {
 		if didUnlock {
 			return fmt.Errorf("sender account still locked after successful unlock")
 		}
-		if !self.frontend.UnlockAccount(from) {
+		if !self.frontend.UnlockAccount(from.Bytes()) {
 			return fmt.Errorf("could not unlock sender account")
 		}
 		// retry signing, the account should now be unlocked.
@@ -397,17 +682,50 @@ func (self *XEth) sign(tx *types.Transaction, from []byte, didUnlock bool) error
 // callmsg is the message type used for call transations.
 type callmsg struct {
 	from          *state.StateObject
-	to            []byte
+	to            common.Address
 	gas, gasPrice *big.Int
 	value         *big.Int
 	data          []byte
 }
 
 // accessor boilerplate to implement core.Message
-func (m callmsg) From() []byte       { return m.from.Address() }
-func (m callmsg) Nonce() uint64      { return m.from.Nonce() }
-func (m callmsg) To() []byte         { return m.to }
-func (m callmsg) GasPrice() *big.Int { return m.gasPrice }
-func (m callmsg) Gas() *big.Int      { return m.gas }
-func (m callmsg) Value() *big.Int    { return m.value }
-func (m callmsg) Data() []byte       { return m.data }
+func (m callmsg) From() (common.Address, error) { return m.from.Address(), nil }
+func (m callmsg) Nonce() uint64                 { return m.from.Nonce() }
+func (m callmsg) To() *common.Address           { return &m.to }
+func (m callmsg) GasPrice() *big.Int            { return m.gasPrice }
+func (m callmsg) Gas() *big.Int                 { return m.gas }
+func (m callmsg) Value() *big.Int               { return m.value }
+func (m callmsg) Data() []byte                  { return m.data }
+
+type whisperFilter struct {
+	messages []WhisperMessage
+	timeout  time.Time
+	id       int
+}
+
+func (w *whisperFilter) add(msgs ...WhisperMessage) {
+	w.messages = append(w.messages, msgs...)
+}
+func (w *whisperFilter) get() []WhisperMessage {
+	w.timeout = time.Now()
+	tmp := w.messages
+	w.messages = nil
+	return tmp
+}
+
+type logFilter struct {
+	logs    state.Logs
+	timeout time.Time
+	id      int
+}
+
+func (l *logFilter) add(logs ...state.Log) {
+	l.logs = append(l.logs, logs...)
+}
+
+func (l *logFilter) get() state.Logs {
+	l.timeout = time.Now()
+	tmp := l.logs
+	l.logs = nil
+	return tmp
+}

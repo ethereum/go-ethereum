@@ -9,6 +9,28 @@ import (
 	"strings"
 )
 
+func ToHex(b []byte) string {
+	hex := Bytes2Hex(b)
+	// Prefer output of "0x0" instead of "0x"
+	if len(hex) == 0 {
+		hex = "0"
+	}
+	return "0x" + hex
+}
+
+func FromHex(s string) []byte {
+	if len(s) > 1 {
+		if s[0:2] == "0x" {
+			s = s[2:]
+		}
+		if len(s)%2 == 1 {
+			s = "0" + s
+		}
+		return Hex2Bytes(s)
+	}
+	return nil
+}
+
 type Bytes []byte
 
 func (self Bytes) String() string {
@@ -103,6 +125,11 @@ func CopyBytes(b []byte) (copiedBytes []byte) {
 	copy(copiedBytes, b)
 
 	return
+}
+
+func HasHexPrefix(str string) bool {
+	l := len(str)
+	return l >= 2 && str[0:2] == "0x"
 }
 
 func IsHex(str string) bool {
@@ -211,7 +238,7 @@ func RightPadString(str string, l int) string {
 
 }
 
-func Address(slice []byte) (addr []byte) {
+func ToAddress(slice []byte) (addr []byte) {
 	if len(slice) < 20 {
 		addr = LeftPadBytes(slice, 20)
 	} else if len(slice) > 20 {

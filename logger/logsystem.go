@@ -9,55 +9,52 @@ import (
 // LogSystem is implemented by log output devices.
 // All methods can be called concurrently from multiple goroutines.
 type LogSystem interface {
-	GetLogLevel() LogLevel
-	SetLogLevel(i LogLevel)
-	LogPrint(LogLevel, string)
+	LogPrint(LogMsg)
 }
 
 // NewStdLogSystem creates a LogSystem that prints to the given writer.
 // The flag values are defined package log.
-func NewStdLogSystem(writer io.Writer, flags int, level LogLevel) LogSystem {
+func NewStdLogSystem(writer io.Writer, flags int, level LogLevel) *StdLogSystem {
 	logger := log.New(writer, "", flags)
-	return &stdLogSystem{logger, uint32(level)}
+	return &StdLogSystem{logger, uint32(level)}
 }
 
-type stdLogSystem struct {
+type StdLogSystem struct {
 	logger *log.Logger
 	level  uint32
 }
 
-func (t *stdLogSystem) LogPrint(level LogLevel, msg string) {
-	t.logger.Print(msg)
+func (t *StdLogSystem) LogPrint(msg LogMsg) {
+	stdmsg, ok := msg.(stdMsg)
+	if ok {
+		if t.GetLogLevel() >= stdmsg.Level() {
+			t.logger.Print(stdmsg.String())
+		}
+	}
 }
 
-func (t *stdLogSystem) SetLogLevel(i LogLevel) {
+func (t *StdLogSystem) SetLogLevel(i LogLevel) {
 	atomic.StoreUint32(&t.level, uint32(i))
 }
 
-func (t *stdLogSystem) GetLogLevel() LogLevel {
+func (t *StdLogSystem) GetLogLevel() LogLevel {
 	return LogLevel(atomic.LoadUint32(&t.level))
 }
 
-// NewRawLogSystem creates a LogSystem that prints to the given writer without
-// adding extra information. Suitable for preformatted output
-func NewRawLogSystem(writer io.Writer, flags int, level LogLevel) LogSystem {
+// NewJSONLogSystem creates a LogSystem that prints to the given writer without
+// adding extra information irrespective of loglevel only if message is JSON type
+func NewJsonLogSystem(writer io.Writer) LogSystem {
 	logger := log.New(writer, "", 0)
-	return &rawLogSystem{logger, uint32(level)}
+	return &jsonLogSystem{logger}
 }
 
-type rawLogSystem struct {
+type jsonLogSystem struct {
 	logger *log.Logger
-	level  uint32
 }
 
-func (t *rawLogSystem) LogPrint(level LogLevel, msg string) {
-	t.logger.Print(msg)
-}
-
-func (t *rawLogSystem) SetLogLevel(i LogLevel) {
-	atomic.StoreUint32(&t.level, uint32(i))
-}
-
-func (t *rawLogSystem) GetLogLevel() LogLevel {
-	return LogLevel(atomic.LoadUint32(&t.level))
+func (t *jsonLogSystem) LogPrint(msg LogMsg) {
+	jsonmsg, ok := msg.(jsonMsg)
+	if ok {
+		t.logger.Print(jsonmsg.String())
+	}
 }

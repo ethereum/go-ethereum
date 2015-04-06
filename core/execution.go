@@ -4,50 +4,76 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type Execution struct {
-	env               vm.Environment
-	address, input    []byte
+	env     vm.Environment
+	address *common.Address
+	input   []byte
+	evm     vm.VirtualMachine
+
 	Gas, price, value *big.Int
 }
 
-func NewExecution(env vm.Environment, address, input []byte, gas, gasPrice, value *big.Int) *Execution {
-	return &Execution{env: env, address: address, input: input, Gas: gas, price: gasPrice, value: value}
+func NewExecution(env vm.Environment, address *common.Address, input []byte, gas, gasPrice, value *big.Int) *Execution {
+	exe := &Execution{env: env, address: address, input: input, Gas: gas, price: gasPrice, value: value}
+	exe.evm = vm.NewVm(env)
+	return exe
 }
 
-func (self *Execution) Addr() []byte {
-	return self.address
-}
-
-func (self *Execution) Call(codeAddr []byte, caller vm.ContextRef) ([]byte, error) {
+func (self *Execution) Call(codeAddr common.Address, caller vm.ContextRef) ([]byte, error) {
 	// Retrieve the executing code
 	code := self.env.State().GetCode(codeAddr)
 
-	return self.exec(code, codeAddr, caller)
+	return self.exec(&codeAddr, code, caller)
 }
 
-func (self *Execution) exec(code, contextAddr []byte, caller vm.ContextRef) (ret []byte, err error) {
+func (self *Execution) Create(caller vm.ContextRef) (ret []byte, err error, account *state.StateObject) {
+	ret, err = self.exec(nil, self.input, caller)
+	account = self.env.State().GetStateObject(*self.address)
+	return
+}
+
+func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.ContextRef) (ret []byte, err error) {
+	start := time.Now()
+
 	env := self.env
-	evm := vm.NewVm(env)
-	if env.Depth() == vm.MaxCallDepth {
+	evm := self.evm
+	if env.Depth() > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(self.Gas, self.price)
 
 		return nil, vm.DepthError{}
 	}
 
 	vsnapshot := env.State().Copy()
-	if len(self.address) == 0 {
+	var createAccount bool
+	if self.address == nil {
 		// Generate a new address
 		nonce := env.State().GetNonce(caller.Address())
-		self.address = crypto.CreateAddress(caller.Address(), nonce)
 		env.State().SetNonce(caller.Address(), nonce+1)
+
+		addr := crypto.CreateAddress(caller.Address(), nonce)
+
+		self.address = &addr
+		createAccount = true
+	}
+	snapshot := env.State().Copy()
+
+	var (
+		from = env.State().GetStateObject(caller.Address())
+		to   *state.StateObject
+	)
+	if createAccount {
+		to = env.State().CreateAccount(*self.address)
+	} else {
+		to = env.State().GetOrNewStateObject(*self.address)
 	}
 
-	from, to := env.State().GetStateObject(caller.Address()), env.State().GetOrNewStateObject(self.address)
 	err = env.Transfer(from, to, self.value)
 	if err != nil {
 		env.State().Set(vsnapshot)
@@ -57,24 +83,14 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ContextRef) (ret
 		return nil, ValueTransferErr("insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance())
 	}
 
-	snapshot := env.State().Copy()
-	start := time.Now()
-
 	context := vm.NewContext(caller, to, self.value, self.Gas, self.price)
 	context.SetCallCode(contextAddr, code)
 
-	ret, err = evm.Run(context, self.input) //self.value, self.Gas, self.price, self.input)
-	chainlogger.Debugf("vm took %v\n", time.Since(start))
+	ret, err = evm.Run(context, self.input)
+	evm.Printf("message call took %v", time.Since(start)).Endl()
 	if err != nil {
 		env.State().Set(snapshot)
 	}
-
-	return
-}
-
-func (self *Execution) Create(caller vm.ContextRef) (ret []byte, err error, account *state.StateObject) {
-	ret, err = self.exec(self.input, nil, caller)
-	account = self.env.State().GetStateObject(self.address)
 
 	return
 }

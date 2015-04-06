@@ -28,7 +28,6 @@ const (
 	InfoLevel
 	DebugLevel
 	DebugDetailLevel
-	JsonLevel = 1000
 )
 
 // A Logger prints messages prefixed by a given tag. It provides named
@@ -43,11 +42,11 @@ func NewLogger(tag string) *Logger {
 }
 
 func (logger *Logger) Sendln(level LogLevel, v ...interface{}) {
-	logMessageC <- message{level, logger.tag + fmt.Sprintln(v...)}
+	logMessageC <- stdMsg{level, logger.tag + fmt.Sprintln(v...)}
 }
 
 func (logger *Logger) Sendf(level LogLevel, format string, v ...interface{}) {
-	logMessageC <- message{level, logger.tag + fmt.Sprintf(format, v...)}
+	logMessageC <- stdMsg{level, logger.tag + fmt.Sprintf(format, v...)}
 }
 
 // Errorln writes a message with ErrorLevel.
@@ -129,6 +128,6 @@ func (logger *JsonLogger) LogJson(v JsonLog) {
 	}
 
 	jsontxt, _ := json.Marshal(obj)
-	logMessageC <- message{JsonLevel, string(jsontxt)}
+	logMessageC <- (jsonMsg(jsontxt))
 
 }

@@ -2,6 +2,8 @@ package trie
 
 import "github.com/ethereum/go-ethereum/crypto"
 
+var keyPrefix = []byte("secure-key-")
+
 type SecureTrie struct {
 	*Trie
 }
@@ -11,7 +13,10 @@ func NewSecure(root []byte, backend Backend) *SecureTrie {
 }
 
 func (self *SecureTrie) Update(key, value []byte) Node {
-	return self.Trie.Update(crypto.Sha3(key), value)
+	shaKey := crypto.Sha3(key)
+	self.Trie.cache.Put(append(keyPrefix, shaKey...), key)
+
+	return self.Trie.Update(shaKey, value)
 }
 func (self *SecureTrie) UpdateString(key, value string) Node {
 	return self.Update([]byte(key), []byte(value))
@@ -33,4 +38,8 @@ func (self *SecureTrie) DeleteString(key string) Node {
 
 func (self *SecureTrie) Copy() *SecureTrie {
 	return &SecureTrie{self.Trie.Copy()}
+}
+
+func (self *SecureTrie) GetKey(shaKey []byte) []byte {
+	return self.Trie.cache.Get(append(keyPrefix, shaKey...))
 }

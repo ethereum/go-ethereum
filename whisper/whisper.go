@@ -1,12 +1,12 @@
 package whisper
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"errors"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/event/filter"
@@ -15,29 +15,10 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-// MOVE ME
-type Hash struct {
-	hash string
-}
-
-var EmptyHash Hash
-
-func H(hash []byte) Hash {
-	return Hash{string(hash)}
-}
-func HS(hash string) Hash {
-	return Hash{hash}
-}
-
-func (self Hash) Compare(other Hash) int {
-	return bytes.Compare([]byte(self.hash), []byte(other.hash))
-}
-
-// MOVE ME END
-
 const (
-	statusMsg    = 0x0
-	envelopesMsg = 0x01
+	statusMsg      = 0x0
+	envelopesMsg   = 0x01
+	whisperVersion = 0x02
 )
 
 type MessageEvent struct {
@@ -55,7 +36,7 @@ type Whisper struct {
 	filters  *filter.Filters
 
 	mmu      sync.RWMutex
-	messages map[Hash]*Envelope
+	messages map[common.Hash]*Envelope
 	expiry   map[uint32]*set.SetNonTS
 
 	quit chan struct{}
@@ -65,7 +46,7 @@ type Whisper struct {
 
 func New() *Whisper {
 	whisper := &Whisper{
-		messages: make(map[Hash]*Envelope),
+		messages: make(map[common.Hash]*Envelope),
 		filters:  filter.New(),
 		expiry:   make(map[uint32]*set.SetNonTS),
 		quit:     make(chan struct{}),
@@ -76,12 +57,16 @@ func New() *Whisper {
 	// p2p whisper sub protocol handler
 	whisper.protocol = p2p.Protocol{
 		Name:    "shh",
-		Version: 2,
+		Version: uint(whisperVersion),
 		Length:  2,
 		Run:     whisper.msgHandler,
 	}
 
 	return whisper
+}
+
+func (self *Whisper) Version() uint {
+	return self.protocol.Version
 }
 
 func (self *Whisper) Start() {
@@ -115,6 +100,15 @@ func (self *Whisper) HasIdentity(key *ecdsa.PublicKey) bool {
 func (self *Whisper) GetIdentity(key *ecdsa.PublicKey) *ecdsa.PrivateKey {
 	return self.keys[string(crypto.FromECDSAPub(key))]
 }
+
+// func (self *Whisper) RemoveIdentity(key *ecdsa.PublicKey) bool {
+// 	k := string(crypto.FromECDSAPub(key))
+// 	if _, ok := self.keys[k]; ok {
+// 		delete(self.keys, k)
+// 		return true
+// 	}
+// 	return false
+// }
 
 func (self *Whisper) Watch(opts Filter) int {
 	return self.filters.Install(filter.Generic{
@@ -174,7 +168,7 @@ func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 		for _, envelope := range envelopes {
 			if err := self.add(envelope); err != nil {
 				// TODO Punish peer here. Invalid envelope.
-				peer.Infoln(err)
+				peer.Debugln(err)
 			}
 			wpeer.addKnown(envelope)
 		}
@@ -230,7 +224,7 @@ func (self *Whisper) expire() {
 		}
 
 		hashSet.Each(func(v interface{}) bool {
-			delete(self.messages, v.(Hash))
+			delete(self.messages, v.(common.Hash))
 			return true
 		})
 		self.expiry[then].Clear()

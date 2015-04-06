@@ -17,13 +17,13 @@
 		},
 		{
 			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-81-g3e09053",
-			"Rev": "3e0905345cd2c5366530dbcdce62457f2ce16e7c"
+			"Comment": "1.2.0-95-g9b2bd2b",
+			"Rev": "9b2bd2b3489748d4d0a204fa4eb2ee9e89e0ebc6"
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",
-			"Comment": "v23-12-g149261a",
-			"Rev": "149261a5d7cafc3943cbcf1d370082ec70d81e8b"
+			"Comment": "v23.1-73-g67a0e12",
+			"Rev": "67a0e12a091de035ef083186247e84be2d863c62"
 		},
 		{
 			"ImportPath": "github.com/ethereum/serpent-go",
@@ -47,8 +47,8 @@
 			"Rev": "ccfcd0245381f0c94c68f50626665eed3c6b726a"
 		},
 		{
-			"ImportPath": "github.com/obscuren/otto",
-			"Rev": "cf13cc4228c5e5ce0fe27a7aea90bc10091c4f19"
+			"ImportPath": "github.com/robertkrimen/otto",
+			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
 		},
 		{
 			"ImportPath": "github.com/obscuren/qml",
@@ -89,6 +89,10 @@
 		{
 			"ImportPath": "github.com/robertkrimen/otto/token",
 			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
+		},
+		{
+			"ImportPath": "github.com/rs/cors",
+			"Rev": "6e0c3cb65fc0fdb064c743d176a620e3ca446dfb"
 		},
 		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",

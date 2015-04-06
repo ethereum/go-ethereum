@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -129,10 +129,14 @@ func (srv *Server) SuggestPeer(n *discover.Node) {
 
 // Broadcast sends an RLP-encoded message to all connected peers.
 // This method is deprecated and will be removed later.
-func (srv *Server) Broadcast(protocol string, code uint64, data ...interface{}) {
+func (srv *Server) Broadcast(protocol string, code uint64, data interface{}) error {
 	var payload []byte
 	if data != nil {
-		payload = common.Encode(data)
+		var err error
+		payload, err = rlp.EncodeToBytes(data)
+		if err != nil {
+			return err
+		}
 	}
 	srv.lock.RLock()
 	defer srv.lock.RUnlock()
@@ -146,6 +150,7 @@ func (srv *Server) Broadcast(protocol string, code uint64, data ...interface{}) 
 			peer.writeProtoMsg(protocol, msg)
 		}
 	}
+	return nil
 }
 
 // Start starts running the server.
@@ -180,7 +185,7 @@ func (srv *Server) Start() (err error) {
 	srv.ntab = ntab
 
 	// handshake
-	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: ntab.Self()}
+	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: ntab.Self().ID}
 	for _, p := range srv.Protocols {
 		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
 	}
@@ -298,7 +303,7 @@ func (srv *Server) dialLoop() {
 			srv.lock.Lock()
 			_, isconnected := srv.peers[dest.ID]
 			srv.lock.Unlock()
-			if isconnected || dialing[dest.ID] || dest.ID == srv.ntab.Self() {
+			if isconnected || dialing[dest.ID] || dest.ID == srv.Self().ID {
 				continue
 			}
 
@@ -332,12 +337,16 @@ func (srv *Server) dialNode(dest *discover.Node) {
 	srv.startPeer(conn, dest)
 }
 
+func (srv *Server) Self() *discover.Node {
+	return srv.ntab.Self()
+}
+
 func (srv *Server) findPeers() {
-	far := srv.ntab.Self()
+	far := srv.Self().ID
 	for i := range far {
 		far[i] = ^far[i]
 	}
-	closeToSelf := srv.ntab.Lookup(srv.ntab.Self())
+	closeToSelf := srv.ntab.Lookup(srv.Self().ID)
 	farFromSelf := srv.ntab.Lookup(far)
 
 	for i := 0; i < len(closeToSelf) || i < len(farFromSelf); i++ {
@@ -402,7 +411,7 @@ func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
 		return false, DiscTooManyPeers
 	case srv.peers[id] != nil:
 		return false, DiscAlreadyConnected
-	case id == srv.ntab.Self():
+	case id == srv.Self().ID:
 		return false, DiscSelf
 	}
 	srv.peers[id] = p

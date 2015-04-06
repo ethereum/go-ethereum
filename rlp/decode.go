@@ -2,6 +2,7 @@ package rlp
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -73,6 +74,12 @@ func Decode(r io.Reader, val interface{}) error {
 	return NewStream(r).Decode(val)
 }
 
+// DecodeBytes parses RLP data from b into val.
+// Please see the documentation of Decode for the decoding rules.
+func DecodeBytes(b []byte, val interface{}) error {
+	return NewStream(bytes.NewReader(b)).Decode(val)
+}
+
 type decodeError struct {
 	msg string
 	typ reflect.Type
@@ -92,6 +99,8 @@ func (err *decodeError) Error() string {
 
 func wrapStreamError(err error, typ reflect.Type) error {
 	switch err {
+	case ErrCanonInt:
+		return &decodeError{msg: "canon int error appends zero's", typ: typ}
 	case ErrExpectedList:
 		return &decodeError{msg: "expected input list", typ: typ}
 	case ErrExpectedString:
@@ -177,6 +186,12 @@ func decodeBigInt(s *Stream, val reflect.Value) error {
 		i = new(big.Int)
 		val.Set(reflect.ValueOf(i))
 	}
+
+	// Reject big integers which are zero appended
+	if len(b) > 0 && b[0] == 0 {
+		return wrapStreamError(ErrCanonInt, val.Type())
+	}
+
 	i.SetBytes(b)
 	return nil
 }
@@ -360,7 +375,12 @@ func makePtrDecoder(typ reflect.Type) (decoder, error) {
 	dec := func(s *Stream, val reflect.Value) (err error) {
 		_, size, err := s.Kind()
 		if err != nil || size == 0 && s.byteval == 0 {
-			val.Set(reflect.Zero(typ)) // set to nil
+			// rearm s.Kind. This is important because the input
+			// position must advance to the next value even though
+			// we don't read anything.
+			s.kind = -1
+			// set the pointer to nil.
+			val.Set(reflect.Zero(typ))
 			return err
 		}
 		newval := val
@@ -448,6 +468,7 @@ var (
 	// Other errors
 	ErrExpectedString = errors.New("rlp: expected String or Byte")
 	ErrExpectedList   = errors.New("rlp: expected List")
+	ErrCanonInt       = errors.New("rlp: expected Int")
 	ErrElemTooLarge   = errors.New("rlp: element is larger than containing list")
 
 	// internal errors
@@ -526,6 +547,31 @@ func (s *Stream) Bytes() ([]byte, error) {
 	default:
 		return nil, ErrExpectedString
 	}
+}
+
+// Raw reads a raw encoded value including RLP type information.
+func (s *Stream) Raw() ([]byte, error) {
+	kind, size, err := s.Kind()
+	if err != nil {
+		return nil, err
+	}
+	if kind == Byte {
+		s.kind = -1 // rearm Kind
+		return []byte{s.byteval}, nil
+	}
+	// the original header has already been read and is no longer
+	// available. read content and put a new header in front of it.
+	start := headsize(size)
+	buf := make([]byte, uint64(start)+size)
+	if err := s.readFull(buf[start:]); err != nil {
+		return nil, err
+	}
+	if kind == String {
+		puthead(buf, 0x80, 0xB8, size)
+	} else {
+		puthead(buf, 0xC0, 0xF7, size)
+	}
+	return buf, nil
 }
 
 var errUintOverflow = errors.New("rlp: uint overflow")

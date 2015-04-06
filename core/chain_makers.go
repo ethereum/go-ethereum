@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow"
-	"github.com/ethereum/go-ethereum/state"
 )
 
 // So we can generate blocks easily
@@ -29,7 +29,7 @@ var (
 
 // Utility functions for making chains on the fly
 // Exposed for sake of testing from other packages (eg. go-ethash)
-func NewBlockFromParent(addr []byte, parent *types.Block) *types.Block {
+func NewBlockFromParent(addr common.Address, parent *types.Block) *types.Block {
 	return newBlockFromParent(addr, parent)
 }
 
@@ -54,8 +54,8 @@ func NewCanonical(n int, db common.Database) (*BlockProcessor, error) {
 }
 
 // block time is fixed at 10 seconds
-func newBlockFromParent(addr []byte, parent *types.Block) *types.Block {
-	block := types.NewBlock(parent.Hash(), addr, parent.Root(), common.BigPow(2, 32), 0, "")
+func newBlockFromParent(addr common.Address, parent *types.Block) *types.Block {
+	block := types.NewBlock(parent.Hash(), addr, parent.Root(), common.BigPow(2, 32), 0, nil)
 	block.SetUncles(nil)
 	block.SetTransactions(nil)
 	block.SetReceipts(nil)
@@ -74,14 +74,14 @@ func newBlockFromParent(addr []byte, parent *types.Block) *types.Block {
 // Actually make a block by simulating what miner would do
 // we seed chains by the first byte of the coinbase
 func makeBlock(bman *BlockProcessor, parent *types.Block, i int, db common.Database, seed int) *types.Block {
-	addr := common.LeftPadBytes([]byte{byte(i)}, 20)
-	addr[0] = byte(seed)
+	var addr common.Address
+	addr[0], addr[19] = byte(seed), byte(i)
 	block := newBlockFromParent(addr, parent)
 	state := state.New(block.Root(), db)
 	cbase := state.GetOrNewStateObject(addr)
 	cbase.SetGasPool(CalcGasLimit(parent, block))
 	cbase.AddBalance(BlockReward)
-	state.Update(common.Big0)
+	state.Update()
 	block.SetRoot(state.Root())
 	return block
 }
@@ -93,7 +93,7 @@ func makeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Dat
 	blocks := make(types.Blocks, max)
 	for i := 0; i < max; i++ {
 		block := makeBlock(bman, parent, i, db, seed)
-		td, err := bman.processWithParent(block, parent)
+		td, _, err := bman.processWithParent(block, parent)
 		if err != nil {
 			fmt.Println("process with parent failed", err)
 			panic(err)
@@ -109,6 +109,7 @@ func makeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Dat
 // Effectively a fork factory
 func newChainManager(block *types.Block, eventMux *event.TypeMux, db common.Database) *ChainManager {
 	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: GenesisBlock(db), eventMux: eventMux}
+	bc.futureBlocks = NewBlockCache(1000)
 	if block == nil {
 		bc.Reset()
 	} else {

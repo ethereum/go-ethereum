@@ -28,8 +28,8 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/ui/qt/webengine"
 	"github.com/obscuren/qml"
@@ -47,12 +47,19 @@ var (
 		Usage: "absolute path to GUI assets directory",
 		Value: common.DefaultAssetPath(),
 	}
+	rpcCorsFlag = utils.RPCCORSDomainFlag
 )
 
 func init() {
+	// Mist-specific default
+	if len(rpcCorsFlag.Value) == 0 {
+		rpcCorsFlag.Value = "http://localhost"
+	}
+
 	app.Action = run
 	app.Flags = []cli.Flag{
 		assetPathFlag,
+		rpcCorsFlag,
 
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
@@ -65,6 +72,9 @@ func init() {
 		utils.NodeKeyFileFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
+		utils.JSpathFlag,
+		utils.ProtocolVersionFlag,
+		utils.NetworkIdFlag,
 	}
 }
 
@@ -111,7 +121,7 @@ func run(ctx *cli.Context) {
 		gui := NewWindow(ethereum)
 		utils.RegisterInterrupt(func(os.Signal) { gui.Stop() })
 		// gui blocks the main thread
-		gui.Start(ctx.GlobalString(assetPathFlag.Name))
+		gui.Start(ctx.GlobalString(assetPathFlag.Name), ctx.GlobalString(utils.JSpathFlag.Name))
 		return nil
 	})
 }

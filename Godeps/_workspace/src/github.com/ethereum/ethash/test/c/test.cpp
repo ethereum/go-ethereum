@@ -2,6 +2,7 @@
 #include <libethash/fnv.h>
 #include <libethash/ethash.h>
 #include <libethash/internal.h>
+#include <libethash/io.h>
 
 #ifdef WITH_CRYPTOPP
 
@@ -14,13 +15,23 @@
 #define BOOST_TEST_MODULE Daggerhashimoto
 #define BOOST_TEST_MAIN
 
-#include <boost/test/unit_test.hpp>
 #include <iostream>
+#include <fstream>
+#include <vector>
+#include <boost/filesystem.hpp>
+#include <boost/test/unit_test.hpp>
 
-std::string bytesToHexString(const uint8_t *str, const size_t s) {
+using namespace std;
+namespace fs = boost::filesystem;
+
+// Just an alloca "wrapper" to silence uint64_t to size_t conversion warnings in windows
+// consider replacing alloca calls with something better though!
+#define our_alloca(param__) alloca((size_t)(param__))
+
+std::string bytesToHexString(const uint8_t *str, const uint64_t s) {
     std::ostringstream ret;
 
-    for (int i = 0; i < s; ++i)
+    for (size_t i = 0; i < s; ++i)
         ret << std::hex << std::setfill('0') << std::setw(2) << std::nouppercase << (int) str[i];
 
     return ret.str();
@@ -108,9 +119,9 @@ BOOST_AUTO_TEST_CASE(light_and_full_client_checks) {
     params.cache_size = 1024;
     params.full_size = 1024 * 32;
     ethash_cache cache;
-    cache.mem = alloca(params.cache_size);
+    cache.mem = our_alloca(params.cache_size);
     ethash_mkcache(&cache, &params, seed);
-    node *full_mem = (node *) alloca(params.full_size);
+    node *full_mem = (node *) our_alloca(params.full_size);
     ethash_compute_full_data(full_mem, &params, &cache);
 
     {
@@ -225,4 +236,147 @@ BOOST_AUTO_TEST_CASE(ethash_check_difficulty_check) {
     BOOST_REQUIRE_MESSAGE(
             !ethash_check_difficulty(hash, target),
             "\nexpected \"" << hash << "\" to have more difficulty than \"" << target << "\"\n");
+}
+
+BOOST_AUTO_TEST_CASE(test_ethash_dir_creation) {
+    ethash_blockhash_t seedhash;
+    memset(&seedhash, 0, 32);
+    BOOST_REQUIRE_EQUAL(
+        ETHASH_IO_MEMO_MISMATCH,
+        ethash_io_prepare("./test_ethash_directory/", seedhash)
+    );
+
+    // let's make sure that the directory was created
+    BOOST_REQUIRE(fs::is_directory(fs::path("./test_ethash_directory/")));
+
+    // cleanup
+    fs::remove_all("./test_ethash_directory/");
+}
+
+BOOST_AUTO_TEST_CASE(test_ethash_io_write_files_are_created) {
+    ethash_blockhash_t seedhash;
+    static const int blockn = 0;
+    ethash_get_seedhash((uint8_t*)&seedhash, blockn);
+    BOOST_REQUIRE_EQUAL(
+        ETHASH_IO_MEMO_MISMATCH,
+        ethash_io_prepare("./test_ethash_directory/", seedhash)
+    );
+
+ // let's make sure that the directory was created
+    BOOST_REQUIRE(fs::is_directory(fs::path("./test_ethash_directory/")));
+
+    ethash_cache cache;
+    ethash_params params;
+    uint8_t *data;
+    uint64_t size;
+    ethash_params_init(&params, blockn);
+    params.cache_size = 1024;
+    params.full_size = 1024 * 32;
+    cache.mem = our_alloca(params.cache_size);
+    ethash_mkcache(&cache, &params, (uint8_t*)&seedhash);
+
+    BOOST_REQUIRE(
+        ethash_io_write("./test_ethash_directory/", &params, seedhash, &cache, &data, &size)
+    );
+
+    BOOST_REQUIRE(fs::exists(fs::path("./test_ethash_directory/full")));
+    BOOST_REQUIRE(fs::exists(fs::path("./test_ethash_directory/full.info")));
+
+    // cleanup
+    fs::remove_all("./test_ethash_directory/");
+    free(data);
+}
+
+BOOST_AUTO_TEST_CASE(test_ethash_io_memo_file_match) {
+    ethash_blockhash_t seedhash;
+    static const int blockn = 0;
+    ethash_get_seedhash((uint8_t*)&seedhash, blockn);
+    BOOST_REQUIRE_EQUAL(
+        ETHASH_IO_MEMO_MISMATCH,
+        ethash_io_prepare("./test_ethash_directory/", seedhash)
+    );
+
+    // let's make sure that the directory was created
+    BOOST_REQUIRE(fs::is_directory(fs::path("./test_ethash_directory/")));
+
+    ethash_cache cache;
+    ethash_params params;
+    uint8_t *data;
+    uint64_t size;
+    ethash_params_init(&params, blockn);
+    params.cache_size = 1024;
+    params.full_size = 1024 * 32;
+    cache.mem = our_alloca(params.cache_size);
+    ethash_mkcache(&cache, &params, (uint8_t*)&seedhash);
+
+    BOOST_REQUIRE(
+        ethash_io_write("./test_ethash_directory/", &params, seedhash, &cache, &data, &size)
+    );
+
+    BOOST_REQUIRE(fs::exists(fs::path("./test_ethash_directory/full")));
+    BOOST_REQUIRE(fs::exists(fs::path("./test_ethash_directory/full.info")));
+
+    BOOST_REQUIRE_EQUAL(
+        ETHASH_IO_MEMO_MATCH,
+        ethash_io_prepare("./test_ethash_directory/", seedhash)
+    );
+
+    // cleanup
+    fs::remove_all("./test_ethash_directory/");
+    free(data);
+}
+
+// could have used dev::contentsNew but don't wanna try to import
+// libdevcore just for one function
+static std::vector<char> readFileIntoVector(char const* filename)
+{
+    ifstream ifs(filename, ios::binary|ios::ate);
+    ifstream::pos_type pos = ifs.tellg();
+
+    std::vector<char> result((unsigned int)pos);
+
+    ifs.seekg(0, ios::beg);
+    ifs.read(&result[0], pos);
+
+    return result;
+}
+
+BOOST_AUTO_TEST_CASE(test_ethash_io_memo_file_contents) {
+    ethash_blockhash_t seedhash;
+    static const int blockn = 0;
+    ethash_get_seedhash((uint8_t*)&seedhash, blockn);
+    BOOST_REQUIRE_EQUAL(
+        ETHASH_IO_MEMO_MISMATCH,
+        ethash_io_prepare("./test_ethash_directory/", seedhash)
+    );
+
+    // let's make sure that the directory was created
+    BOOST_REQUIRE(fs::is_directory(fs::path("./test_ethash_directory/")));
+
+    ethash_cache cache;
+    ethash_params params;
+    uint8_t *data;
+    uint64_t size;
+    ethash_params_init(&params, blockn);
+    params.cache_size = 1024;
+    params.full_size = 1024 * 32;
+    cache.mem = our_alloca(params.cache_size);
+    ethash_mkcache(&cache, &params, (uint8_t*)&seedhash);
+
+    BOOST_REQUIRE(
+        ethash_io_write("./test_ethash_directory/", &params, seedhash, &cache, &data, &size)
+    );
+
+    BOOST_REQUIRE(fs::exists(fs::path("./test_ethash_directory/full")));
+    BOOST_REQUIRE(fs::exists(fs::path("./test_ethash_directory/full.info")));
+
+    char expect_buffer[DAG_MEMO_BYTESIZE];
+    ethash_io_serialize_info(REVISION, seedhash, expect_buffer);
+    auto vec = readFileIntoVector("./test_ethash_directory/full.info");
+    BOOST_REQUIRE_EQUAL(vec.size(), DAG_MEMO_BYTESIZE);
+    BOOST_REQUIRE(memcmp(expect_buffer, &vec[0], DAG_MEMO_BYTESIZE) == 0);
+
+    // cleanup
+    fs::remove_all("./test_ethash_directory/");
+    free(data);
 }

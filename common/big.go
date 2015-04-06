@@ -2,6 +2,19 @@ package common
 
 import "math/big"
 
+// Common big integers often used
+var (
+	Big1     = big.NewInt(1)
+	Big2     = big.NewInt(2)
+	Big3     = big.NewInt(3)
+	Big0     = big.NewInt(0)
+	BigTrue  = Big1
+	BigFalse = Big0
+	Big32    = big.NewInt(32)
+	Big256   = big.NewInt(0xff)
+	Big257   = big.NewInt(257)
+)
+
 // Big pow
 //
 // Returns the power of two big integers
@@ -104,7 +117,7 @@ func BigCopy(src *big.Int) *big.Int {
 //
 // Returns the maximum size big integer
 func BigMax(x, y *big.Int) *big.Int {
-	if x.Cmp(y) <= 0 {
+	if x.Cmp(y) < 0 {
 		return y
 	}
 
@@ -115,7 +128,7 @@ func BigMax(x, y *big.Int) *big.Int {
 //
 // Returns the minimum size big integer
 func BigMin(x, y *big.Int) *big.Int {
-	if x.Cmp(y) >= 0 {
+	if x.Cmp(y) > 0 {
 		return y
 	}
 

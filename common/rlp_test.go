@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func TestNonInterfaceSlice(t *testing.T) {
@@ -19,13 +21,16 @@ func TestNonInterfaceSlice(t *testing.T) {
 
 func TestRlpValueEncoding(t *testing.T) {
 	val := EmptyValue()
-	val.AppendList().Append(1).Append(2).Append(3)
-	val.Append("4").AppendList().Append(5)
+	val.AppendList().Append(byte(1)).Append(byte(2)).Append(byte(3))
+	val.Append("4").AppendList().Append(byte(5))
 
-	res := val.Encode()
+	res, err := rlp.EncodeToBytes(val)
+	if err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
 	exp := Encode([]interface{}{[]interface{}{1, 2, 3}, "4", []interface{}{5}})
 	if bytes.Compare(res, exp) != 0 {
-		t.Errorf("expected %q, got %q", res, exp)
+		t.Errorf("expected %x, got %x", exp, res)
 	}
 }
 
@@ -57,9 +62,7 @@ func TestValueSlice(t *testing.T) {
 func TestLargeData(t *testing.T) {
 	data := make([]byte, 100000)
 	enc := Encode(data)
-	value := NewValue(enc)
-	value.Decode()
-
+	value := NewValueFromBytes(enc)
 	if value.Len() != len(data) {
 		t.Error("Expected data to be", len(data), "got", value.Len())
 	}
@@ -133,15 +136,16 @@ func TestEncodeDecodeBigInt(t *testing.T) {
 }
 
 func TestEncodeDecodeBytes(t *testing.T) {
-	b := NewValue([]interface{}{[]byte{1, 2, 3, 4, 5}, byte(6)})
-	val := NewValueFromBytes(b.Encode())
-	if !b.Cmp(val) {
-		t.Errorf("Expected %v, got %v", val, b)
+	bv := NewValue([]interface{}{[]byte{1, 2, 3, 4, 5}, []byte{6}})
+	b, _ := rlp.EncodeToBytes(bv)
+	val := NewValueFromBytes(b)
+	if !bv.Cmp(val) {
+		t.Errorf("Expected %#v, got %#v", bv, val)
 	}
 }
 
 func TestEncodeZero(t *testing.T) {
-	b := NewValue(0).Encode()
+	b, _ := rlp.EncodeToBytes(NewValue(0))
 	exp := []byte{0xc0}
 	if bytes.Compare(b, exp) == 0 {
 		t.Error("Expected", exp, "got", b)

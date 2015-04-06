@@ -6,6 +6,11 @@ if (MSVC)
 	add_definitions("/openmp")
 endif()
 
+# enable C++11, should probably be a bit more specific about compiler
+if (NOT MSVC)
+    SET(CMAKE_CXX_FLAGS "-std=c++11")
+endif()
+
 if (NOT MPI_FOUND)
     find_package(MPI)
 endif()

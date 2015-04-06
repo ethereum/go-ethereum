@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
 // These tests are sanity checks.
@@ -19,6 +19,12 @@ func TestSha3(t *testing.T) {
 	msg := []byte("abc")
 	exp, _ := hex.DecodeString("4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45")
 	checkhash(t, "Sha3-256", func(in []byte) []byte { return Sha3(in) }, msg, exp)
+}
+
+func TestSha3Hash(t *testing.T) {
+	msg := []byte("abc")
+	exp, _ := hex.DecodeString("4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45")
+	checkhash(t, "Sha3-256-array", func(in []byte) []byte { h := Sha3Hash(in); return h[:] }, msg, exp)
 }
 
 func TestSha256(t *testing.T) {

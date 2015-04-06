@@ -39,7 +39,7 @@ func TestStreamKind(t *testing.T) {
 		s := NewStream(bytes.NewReader(unhex(test.input)))
 		kind, len, err := s.Kind()
 		if err != nil {
-			t.Errorf("test %d: Type returned error: %v", i, err)
+			t.Errorf("test %d: Kind returned error: %v", i, err)
 			continue
 		}
 		if kind != test.wantKind {
@@ -93,6 +93,23 @@ func TestStreamErrors(t *testing.T) {
 		{"C3C2010201", calls{"List", "List", "Uint", "Uint", "ListEnd", "Uint"}, EOL},
 		{"00", calls{"ListEnd"}, errNotInList},
 		{"C40102", calls{"List", "Uint", "ListEnd"}, errNotAtEOL},
+
+		// This test verifies that the input position is advanced
+		// correctly when calling Bytes for empty strings. Kind can be called
+		// any number of times in between and doesn't advance.
+		{"C3808080", calls{
+			"List",  // enter the list
+			"Bytes", // past first element
+
+			"Kind", "Kind", "Kind", // this shouldn't advance
+
+			"Bytes", // past second element
+
+			"Kind", "Kind", // can't hurt to try
+
+			"Bytes", // past final element
+			"Bytes", // this one should fail
+		}, EOL},
 	}
 
 testfor:
@@ -145,6 +162,20 @@ func TestStreamList(t *testing.T) {
 	}
 	if err = s.ListEnd(); err != nil {
 		t.Fatalf("ListEnd error: %v", err)
+	}
+}
+
+func TestStreamRaw(t *testing.T) {
+	s := NewStream(bytes.NewReader(unhex("C58401010101")))
+	s.List()
+
+	want := unhex("8401010101")
+	raw, err := s.Raw()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(want, raw) {
+		t.Errorf("raw mismatch: got %x, want %x", raw, want)
 	}
 }
 
@@ -281,6 +312,7 @@ var decodeTests = []decodeTest{
 	// big ints
 	{input: "01", ptr: new(*big.Int), value: big.NewInt(1)},
 	{input: "89FFFFFFFFFFFFFFFFFF", ptr: new(*big.Int), value: veryBigInt},
+	{input: "820001", ptr: new(big.Int), error: "rlp: canon int error appends zero's for *big.Int"},
 	{input: "10", ptr: new(big.Int), value: *big.NewInt(16)}, // non-pointer also works
 	{input: "C0", ptr: new(*big.Int), error: "rlp: expected input string or byte for *big.Int"},
 
@@ -313,6 +345,9 @@ var decodeTests = []decodeTest{
 	{input: "8108", ptr: new(*uint), value: uintp(8)},
 	{input: "C109", ptr: new(*[]uint), value: &[]uint{9}},
 	{input: "C58403030303", ptr: new(*[][]byte), value: &[][]byte{{3, 3, 3, 3}}},
+
+	// check that input position is advanced also for empty values.
+	{input: "C3808005", ptr: new([]*uint), value: []*uint{nil, nil, uintp(5)}},
 
 	// pointer should be reset to nil
 	{input: "05", ptr: sharedPtr, value: uintp(5)},
