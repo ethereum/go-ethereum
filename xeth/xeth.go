@@ -165,7 +165,7 @@ func (self *XEth) getBlockByHeight(height int64) *types.Block {
 	var num uint64
 
 	if height < 0 {
-		num = self.CurrentBlock().NumberU64() + uint64(-1*height)
+		num = self.CurrentBlock().NumberU64() + uint64(-1*(height+1))
 	} else {
 		num = uint64(height)
 	}
