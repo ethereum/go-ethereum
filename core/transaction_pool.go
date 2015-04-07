@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"gopkg.in/fatih/set.v0"
 )
 
 var (
@@ -42,7 +43,8 @@ type TxPool struct {
 	quit chan bool
 	// The actual pool
 	//pool *list.List
-	txs map[common.Hash]*types.Transaction
+	txs           map[common.Hash]*types.Transaction
+	invalidHashes *set.Set
 
 	SecondaryProcessor TxProcessor
 
@@ -53,10 +55,11 @@ type TxPool struct {
 
 func NewTxPool(eventMux *event.TypeMux) *TxPool {
 	return &TxPool{
-		txs:       make(map[common.Hash]*types.Transaction),
-		queueChan: make(chan *types.Transaction, txPoolQueueSize),
-		quit:      make(chan bool),
-		eventMux:  eventMux,
+		txs:           make(map[common.Hash]*types.Transaction),
+		queueChan:     make(chan *types.Transaction, txPoolQueueSize),
+		quit:          make(chan bool),
+		eventMux:      eventMux,
+		invalidHashes: set.New(),
 	}
 }
 
@@ -87,20 +90,24 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 }
 
 func (self *TxPool) addTx(tx *types.Transaction) {
-	self.txs[tx.Hash()] = tx
 }
 
 func (self *TxPool) add(tx *types.Transaction) error {
 	hash := tx.Hash()
+
+	if self.invalidHashes.Has(hash) {
+		return fmt.Errorf("Invalid transaction (%x)", hash[:4])
+	}
+
 	if self.txs[hash] != nil {
-		return fmt.Errorf("Known transaction (%x)", hash[0:4])
+		return fmt.Errorf("Known transaction (%x)", hash[:4])
 	}
 	err := self.ValidateTransaction(tx)
 	if err != nil {
 		return err
 	}
 
-	self.addTx(tx)
+	self.txs[hash] = tx
 
 	var toname string
 	if to := tx.To(); to != nil {
@@ -115,7 +122,9 @@ func (self *TxPool) add(tx *types.Transaction) error {
 	txplogger.Debugf("(t) %x => %s (%v) %x\n", from, toname, tx.Value, tx.Hash())
 
 	// Notify the subscribers
+	//println("post")
 	go self.eventMux.Post(TxPreEvent{tx})
+	//println("done post")
 
 	return nil
 }
@@ -127,6 +136,7 @@ func (self *TxPool) Size() int {
 func (self *TxPool) Add(tx *types.Transaction) error {
 	self.mu.Lock()
 	defer self.mu.Unlock()
+
 	return self.add(tx)
 }
 
@@ -181,6 +191,17 @@ func (self *TxPool) RemoveSet(txs types.Transactions) {
 	for _, tx := range txs {
 		delete(self.txs, tx.Hash())
 	}
+}
+
+func (self *TxPool) InvalidateSet(hashes *set.Set) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
+	hashes.Each(func(v interface{}) bool {
+		delete(self.txs, v.(common.Hash))
+		return true
+	})
+	self.invalidHashes.Merge(hashes)
 }
 
 func (pool *TxPool) Flush() {

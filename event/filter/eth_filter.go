@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 type FilterManager struct {
