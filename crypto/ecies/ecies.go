@@ -303,6 +303,10 @@ func (prv *PrivateKey) Decrypt(rand io.Reader, c, s1, s2 []byte) (m []byte, err 
 		err = ErrInvalidPublicKey
 		return
 	}
+	if !R.Curve.IsOnCurve(R.X, R.Y) {
+		err = ErrInvalidCurve
+		return
+	}
 
 	z, err := prv.GenerateShared(R, params.KeyLen, params.KeyLen)
 	if err != nil {
