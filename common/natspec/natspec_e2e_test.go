@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -28,7 +27,6 @@ type testFrontend struct {
 	xeth        *xe.XEth
 	api         *rpc.EthereumApi
 	coinbase    string
-	txc         int
 	lastConfirm string
 	makeNatSpec bool
 }
@@ -175,6 +173,9 @@ func testInit(t *testing.T) (self *testFrontend) {
 
 func (self *testFrontend) insertTx(addr, contract, fnsig string, args []string) {
 
+	//cb := common.HexToAddress(self.coinbase)
+	//coinbase := self.ethereum.ChainManager().State().GetStateObject(cb)
+
 	hash := common.Bytes2Hex(crypto.Sha3([]byte(fnsig)))
 	data := "0x" + hash[0:8]
 	for _, arg := range args {
@@ -192,24 +193,17 @@ func (self *testFrontend) insertTx(addr, contract, fnsig string, args []string) 
       "data": "` + data + `"
 }]
 `
-	self.txc++
 	req := &rpc.RpcRequest{
 		Jsonrpc: "2.0",
 		Method:  "eth_transact",
 		Params:  []byte(jsontx),
-		Id:      self.txc,
+		Id:      6,
 	}
-
-	txcount := self.ethereum.TxPool().Size()
 
 	var reply interface{}
 	err0 := self.api.GetRequestReply(req, &reply)
 	if err0 != nil {
 		self.t.Errorf("GetRequestReply error: %v", err0)
-	}
-
-	for txcount == self.ethereum.TxPool().Size() {
-		time.Sleep(time.Millisecond)
 	}
 
 	//self.xeth.Transact(addr, contract, "100000000000", "100000", "100000", data)
@@ -224,11 +218,14 @@ func (self *testFrontend) applyTxs() {
 	coinbase.SetGasPool(big.NewInt(1000000))
 	txs := self.ethereum.TxPool().GetTransactions()
 
-	for _, tx := range txs {
-		_, gas, err := core.ApplyMessage(core.NewEnv(stateDb, self.ethereum.ChainManager(), tx, block), tx, coinbase)
-		//self.ethereum.TxPool().RemoveSet([]*types.Transaction{tx})
-		time.Sleep(time.Millisecond * 100)
-		self.t.Logf("ApplyMessage: gas %v  err %v", gas, err)
+	for i := 0; i < len(txs); i++ {
+		for _, tx := range txs {
+			if tx.Nonce() == uint64(i) {
+				_, gas, err := core.ApplyMessage(core.NewEnv(stateDb, self.ethereum.ChainManager(), tx, block), tx, coinbase)
+				//self.ethereum.TxPool().RemoveSet([]*types.Transaction{tx})
+				self.t.Logf("ApplyMessage: gas %v  err %v", gas, err)
+			}
+		}
 	}
 
 	self.ethereum.TxPool().RemoveSet(txs)
