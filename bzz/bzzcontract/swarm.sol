@@ -15,7 +15,7 @@ contract Swarm
 
   function signup(uint time) {
     Bee b = swarm[msg.sender];
-    b.expiry = max(b.expiry, now) + time;
+    if(now + time > now) b.expiry = max(b.expiry, now + time);
     b.deposit += msg.value;
   }
 
@@ -23,6 +23,7 @@ contract Swarm
     Bee b = swarm[msg.sender];
     if(now > b.expiry) {
 	msg.sender.send(b.deposit);
+	b.deposit = 0;
     }
   }
 
