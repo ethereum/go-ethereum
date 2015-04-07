@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -25,8 +26,6 @@ func (js *jsre) adminBindings() {
 	admin := t.Object()
 	admin.Set("suggestPeer", js.suggestPeer)
 	admin.Set("startRPC", js.startRPC)
-	admin.Set("startMining", js.startMining)
-	admin.Set("stopMining", js.stopMining)
 	admin.Set("nodeInfo", js.nodeInfo)
 	admin.Set("peers", js.peers)
 	admin.Set("newAccount", js.newAccount)
@@ -34,6 +33,58 @@ func (js *jsre) adminBindings() {
 	admin.Set("import", js.importChain)
 	admin.Set("export", js.exportChain)
 	admin.Set("dumpBlock", js.dumpBlock)
+	admin.Set("verbosity", js.verbosity)
+	admin.Set("backtrace", js.backtrace)
+
+	admin.Set("miner", struct{}{})
+	t, _ = admin.Get("miner")
+	miner := t.Object()
+	miner.Set("start", js.startMining)
+	miner.Set("stop", js.stopMining)
+	miner.Set("hashrate", js.hashrate)
+	miner.Set("setExtra", js.setExtra)
+}
+
+func (js *jsre) setExtra(call otto.FunctionCall) otto.Value {
+	extra, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	if len(extra) > 1024 {
+		fmt.Println("error: cannot exceed 1024 bytes")
+		return otto.UndefinedValue()
+	}
+
+	js.ethereum.Miner().SetExtra([]byte(extra))
+	return otto.UndefinedValue()
+}
+
+func (js *jsre) hashrate(otto.FunctionCall) otto.Value {
+	return js.re.ToVal(js.ethereum.Miner().HashRate())
+}
+
+func (js *jsre) backtrace(call otto.FunctionCall) otto.Value {
+	tracestr, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+	glog.GetTraceLocation().Set(tracestr)
+
+	return otto.UndefinedValue()
+}
+
+func (js *jsre) verbosity(call otto.FunctionCall) otto.Value {
+	v, err := call.Argument(0).ToInteger()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	glog.SetV(int(v))
+	return otto.UndefinedValue()
 }
 
 func (js *jsre) startMining(call otto.FunctionCall) otto.Value {

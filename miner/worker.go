@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/pow"
 	"gopkg.in/fatih/set.v0"
 )
@@ -68,21 +69,27 @@ type worker struct {
 	pow    pow.PoW
 	atWork int64
 
-	eth      core.Backend
-	chain    *core.ChainManager
-	proc     *core.BlockProcessor
-	coinbase common.Address
+	eth   core.Backend
+	chain *core.ChainManager
+	proc  *core.BlockProcessor
 
-	current *environment
+	coinbase common.Address
+	extra    []byte
+
+	currentMu sync.Mutex
+	current   *environment
 
 	uncleMu        sync.Mutex
 	possibleUncles map[common.Hash]*types.Block
 
-	mining bool
+	txQueueMu sync.Mutex
+	txQueue   map[common.Hash]*types.Transaction
+
+	mining int64
 }
 
 func newWorker(coinbase common.Address, eth core.Backend) *worker {
-	return &worker{
+	worker := &worker{
 		eth:            eth,
 		mux:            eth.EventMux(),
 		recv:           make(chan *types.Block),
@@ -90,28 +97,45 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 		proc:           eth.BlockProcessor(),
 		possibleUncles: make(map[common.Hash]*types.Block),
 		coinbase:       coinbase,
+		txQueue:        make(map[common.Hash]*types.Transaction),
 	}
+	go worker.update()
+	go worker.wait()
+
+	worker.quit = make(chan struct{})
+
+	worker.commitNewWork()
+
+	return worker
+}
+
+func (self *worker) pendingState() *state.StateDB {
+	self.currentMu.Lock()
+	defer self.currentMu.Unlock()
+
+	return self.current.state
+}
+
+func (self *worker) pendingBlock() *types.Block {
+	self.currentMu.Lock()
+	defer self.currentMu.Unlock()
+
+	return self.current.block
 }
 
 func (self *worker) start() {
-	self.mining = true
-
-	self.quit = make(chan struct{})
-
 	// spin up agents
 	for _, agent := range self.agents {
 		agent.Start()
 	}
 
-	go self.update()
-	go self.wait()
+	atomic.StoreInt64(&self.mining, 1)
 }
 
 func (self *worker) stop() {
-	self.mining = false
-	atomic.StoreInt64(&self.atWork, 0)
+	atomic.StoreInt64(&self.mining, 0)
 
-	close(self.quit)
+	atomic.StoreInt64(&self.atWork, 0)
 }
 
 func (self *worker) register(agent Agent) {
@@ -120,7 +144,7 @@ func (self *worker) register(agent Agent) {
 }
 
 func (self *worker) update() {
-	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{})
+	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
 
 	timer := time.NewTicker(2 * time.Second)
 
@@ -135,6 +159,10 @@ out:
 				self.uncleMu.Lock()
 				self.possibleUncles[ev.Block.Hash()] = ev.Block
 				self.uncleMu.Unlock()
+			case core.TxPreEvent:
+				if atomic.LoadInt64(&self.mining) == 0 {
+					self.commitNewWork()
+				}
 			}
 
 		case <-self.quit:
@@ -144,10 +172,12 @@ out:
 			}
 			break out
 		case <-timer.C:
-			minerlogger.Infoln("Hash rate:", self.HashRate(), "Khash")
+			if glog.V(logger.Debug) {
+				glog.Infoln("Hash rate:", self.HashRate(), "Khash")
+			}
 
 			// XXX In case all mined a possible uncle
-			if atomic.LoadInt64(&self.atWork) == 0 {
+			if atomic.LoadInt64(&self.atWork) == 0 && atomic.LoadInt64(&self.mining) == 1 {
 				self.commitNewWork()
 			}
 		}
@@ -171,7 +201,7 @@ func (self *worker) wait() {
 				}
 				self.mux.Post(core.NewMinedBlockEvent{block})
 
-				minerlogger.Infof("🔨 Mined block #%v", block.Number())
+				glog.V(logger.Info).Infof("🔨 Mined block #%v", block.Number())
 
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     block.Hash().Hex(),
@@ -187,7 +217,7 @@ func (self *worker) wait() {
 }
 
 func (self *worker) push() {
-	if self.mining {
+	if atomic.LoadInt64(&self.mining) == 1 {
 		self.current.block.Header().GasUsed = self.current.totalUsedGas
 		self.current.block.SetRoot(self.current.state.Root())
 
@@ -200,13 +230,12 @@ func (self *worker) push() {
 	}
 }
 
-func (self *worker) commitNewWork() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.uncleMu.Lock()
-	defer self.uncleMu.Unlock()
-
+func (self *worker) makeCurrent() {
 	block := self.chain.NewBlock(self.coinbase)
+	if block.Time() == self.chain.CurrentBlock().Time() {
+		block.Header().Time++
+	}
+	block.Header().Extra = self.extra
 
 	self.current = env(block, self.eth)
 	for _, ancestor := range self.chain.GetAncestors(block, 7) {
@@ -215,6 +244,17 @@ func (self *worker) commitNewWork() {
 
 	parent := self.chain.GetBlock(self.current.block.ParentHash())
 	self.current.coinbase.SetGasPool(core.CalcGasLimit(parent, self.current.block))
+}
+
+func (self *worker) commitNewWork() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.uncleMu.Lock()
+	defer self.uncleMu.Unlock()
+	self.currentMu.Lock()
+	defer self.currentMu.Unlock()
+
+	self.makeCurrent()
 
 	transactions := self.eth.TxPool().GetTransactions()
 	sort.Sort(types.TxByNonce{transactions})
@@ -235,10 +275,13 @@ gasLimit:
 			from, _ := tx.From()
 			self.chain.TxState().RemoveNonce(from, tx.Nonce())
 			remove = append(remove, tx)
-			minerlogger.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
-			minerlogger.Infoln(tx)
+
+			if glog.V(logger.Debug) {
+				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
+				glog.Infoln(tx)
+			}
 		case state.IsGasLimitErr(err):
-			minerlogger.Infof("Gas limit reached for block. %d TXs included in this block\n", i)
+			glog.V(logger.Debug).Infof("Gas limit reached for block. %d TXs included in this block\n", i)
 			// Break on gas limit
 			break gasLimit
 		default:
@@ -257,15 +300,20 @@ gasLimit:
 		}
 
 		if err := self.commitUncle(uncle.Header()); err != nil {
-			minerlogger.Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
-			minerlogger.Debugln(uncle)
+			glog.V(logger.Debug).Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
+			glog.V(logger.Debug).Infoln(uncle)
 			badUncles = append(badUncles, hash)
 		} else {
-			minerlogger.Infof("commiting %x as uncle\n", hash[:4])
+			glog.V(logger.Debug).Infof("commiting %x as uncle\n", hash[:4])
 			uncles = append(uncles, uncle.Header())
 		}
 	}
-	minerlogger.Infof("commit new work on block %v with %d txs & %d uncles\n", self.current.block.Number(), tcount, len(uncles))
+
+	// We only care about logging if we're actually mining
+	if atomic.LoadInt64(&self.mining) == 1 {
+		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles\n", self.current.block.Number(), tcount, len(uncles))
+	}
+
 	for _, hash := range badUncles {
 		delete(self.possibleUncles, hash)
 	}
@@ -275,6 +323,7 @@ gasLimit:
 	core.AccumulateRewards(self.current.state, self.current.block)
 
 	self.current.state.Update()
+
 	self.push()
 }
 

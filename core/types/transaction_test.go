@@ -30,8 +30,8 @@ var (
 		Amount:       big.NewInt(10),
 		Payload:      common.FromHex("5544"),
 		V:            28,
-		R:            common.FromHex("98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a"),
-		S:            common.FromHex("8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"),
+		R:            common.String2Big("0x98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a"),
+		S:            common.String2Big("0x8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"),
 	}
 )
 

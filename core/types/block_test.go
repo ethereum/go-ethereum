@@ -44,8 +44,8 @@ func TestBlockEncoding(t *testing.T) {
 			GasLimit:     big.NewInt(50000),
 			AccountNonce: 0,
 			V:            27,
-			R:            common.FromHex("9bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094f"),
-			S:            common.FromHex("8a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b1"),
+			R:            common.String2Big("0x9bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094f"),
+			S:            common.String2Big("0x8a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b1"),
 			Recipient:    &to,
 		},
 	})

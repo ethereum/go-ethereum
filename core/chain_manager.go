@@ -6,12 +6,14 @@ import (
 	"io"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -94,7 +96,8 @@ type ChainManager struct {
 	transState *state.StateDB
 	txState    *state.ManagedState
 
-	cache *BlockCache
+	cache        *BlockCache
+	futureBlocks *BlockCache
 
 	quit chan struct{}
 }
@@ -106,6 +109,7 @@ func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *Chai
 	// Take ownership of this particular state
 	bc.txState = state.ManageState(bc.State().Copy())
 
+	bc.futureBlocks = NewBlockCache(254)
 	bc.makeCache()
 
 	go bc.update()
@@ -186,7 +190,9 @@ func (bc *ChainManager) setLastBlock() {
 		bc.Reset()
 	}
 
-	chainlogger.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
+	if glog.V(logger.Info) {
+		glog.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
+	}
 }
 
 func (bc *ChainManager) makeCache() {
@@ -222,7 +228,7 @@ func (bc *ChainManager) NewBlock(coinbase common.Address) *types.Block {
 		root,
 		common.BigPow(2, 32),
 		0,
-		"")
+		nil)
 	block.SetUncles(nil)
 	block.SetTransactions(nil)
 	block.SetReceipts(nil)
@@ -284,7 +290,8 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 func (self *ChainManager) Export(w io.Writer) error {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
-	chainlogger.Infof("exporting %v blocks...\n", self.currentBlock.Header().Number)
+	glog.V(logger.Info).Infof("exporting %v blocks...\n", self.currentBlock.Header().Number)
+
 	for block := self.currentBlock; block != nil; block = self.GetBlock(block.Header().ParentHash) {
 		if err := block.EncodeRLP(w); err != nil {
 			return err
@@ -331,7 +338,6 @@ func (self *ChainManager) GetBlockHashesFromHash(hash common.Hash, max uint64) (
 		parentHash := block.Header().ParentHash
 		block = self.GetBlock(parentHash)
 		if block == nil {
-			chainlogger.Infof("GetBlockHashesFromHash Parent UNKNOWN %x\n", parentHash)
 			break
 		}
 
@@ -355,7 +361,7 @@ func (self *ChainManager) GetBlock(hash common.Hash) *types.Block {
 	}
 	var block types.StorageBlock
 	if err := rlp.Decode(bytes.NewReader(data), &block); err != nil {
-		chainlogger.Errorf("invalid block RLP for hash %x: %v", hash, err)
+		glog.V(logger.Error).Infof("invalid block RLP for hash %x: %v", hash, err)
 		return nil
 	}
 	return (*types.Block)(&block)
@@ -431,14 +437,28 @@ type queueEvent struct {
 	splitCount     int
 }
 
-func (self *ChainManager) InsertChain(chain types.Blocks) error {
-	//self.tsmu.Lock()
-	//defer self.tsmu.Unlock()
+func (self *ChainManager) procFutureBlocks() {
+	blocks := make([]*types.Block, len(self.futureBlocks.blocks))
+	self.futureBlocks.Each(func(i int, block *types.Block) {
+		blocks[i] = block
+	})
 
+	types.BlockBy(types.Number).Sort(blocks)
+	self.InsertChain(blocks)
+}
+
+func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	// A queued approach to delivering events. This is generally faster than direct delivery and requires much less mutex acquiring.
-	var queue = make([]interface{}, len(chain))
-	var queueEvent = queueEvent{queue: queue}
+	var (
+		queue      = make([]interface{}, len(chain))
+		queueEvent = queueEvent{queue: queue}
+		stats      struct{ queued, processed int }
+		tstart     = time.Now()
+	)
 	for i, block := range chain {
+		if block == nil {
+			continue
+		}
 		// Call in to the block processor and check for errors. It's likely that if one block fails
 		// all others will fail too (unless a known block is returned).
 		td, logs, err := self.processor.Process(block)
@@ -447,16 +467,27 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				continue
 			}
 
-			if err == BlockEqualTSErr {
-				//queue[i] = ChainSideEvent{block, logs}
-				// XXX silently discard it?
+			block.Td = new(big.Int)
+			// Do not penelise on future block. We'll need a block queue eventually that will queue
+			// future block for future use
+			if err == BlockFutureErr {
+				self.futureBlocks.Push(block)
+				stats.queued++
+				continue
+			}
+
+			if IsParentErr(err) && self.futureBlocks.Has(block.ParentHash()) {
+				self.futureBlocks.Push(block)
+				stats.queued++
 				continue
 			}
 
 			h := block.Header()
-			chainlogger.Errorf("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes()[:4])
-			chainlogger.Errorln(err)
-			chainlogger.Debugln(block)
+
+			glog.V(logger.Error).Infof("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes()[:4])
+			glog.V(logger.Error).Infoln(err)
+			glog.V(logger.Debug).Infoln(block)
+
 			return err
 		}
 		block.Td = td
@@ -473,7 +504,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, common.Big1)) < 0 {
 					chash := cblock.Hash()
 					hash := block.Hash()
-					chainlogger.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, hash[:4], td, cblock.Header().Number, chash[:4], self.td)
+
+					if glog.V(logger.Info) {
+						glog.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, hash[:4], td, cblock.Header().Number, chash[:4], self.td)
+					}
 
 					queue[i] = ChainSplitEvent{block, logs}
 					queueEvent.splitCount++
@@ -494,6 +528,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 				queue[i] = ChainEvent{block, logs}
 				queueEvent.canonicalCount++
+
+				if glog.V(logger.Debug) {
+					glog.Infof("inserted block #%d (%d TXs %d UNCs) (%x...)\n", block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
+				}
 			} else {
 				queue[i] = ChainSideEvent{block, logs}
 				queueEvent.sideCount++
@@ -501,6 +539,16 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		}
 		self.mu.Unlock()
 
+		stats.processed++
+
+		self.futureBlocks.Delete(block.Hash())
+
+	}
+
+	if (stats.queued > 0 || stats.processed > 0) && bool(glog.V(logger.Info)) {
+		tend := time.Since(tstart)
+		start, end := chain[0], chain[len(chain)-1]
+		glog.Infof("imported %d block(s) %d queued in %v. #%v [%x / %x]\n", stats.processed, stats.queued, tend, end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
 	}
 
 	go self.eventMux.Post(queueEvent)
@@ -510,7 +558,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 func (self *ChainManager) update() {
 	events := self.eventMux.Subscribe(queueEvent{})
-
+	futureTimer := time.NewTicker(5 * time.Second)
 out:
 	for {
 		select {
@@ -536,6 +584,8 @@ out:
 					self.eventMux.Post(event)
 				}
 			}
+		case <-futureTimer.C:
+			self.procFutureBlocks()
 		case <-self.quit:
 			break out
 		}

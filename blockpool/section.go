@@ -132,7 +132,7 @@ func (self *section) addSectionToBlockChain(p *peer) {
 		}
 		self.bp.lock.Unlock()
 
-		plog.Infof("[%s] insert %v blocks [%v/%v] into blockchain", sectionhex(self), len(blocks), hex(blocks[0].Hash()), hex(blocks[len(blocks)-1].Hash()))
+		plog.Debugf("[%s] insert %v blocks [%v/%v] into blockchain", sectionhex(self), len(blocks), hex(blocks[0].Hash()), hex(blocks[len(blocks)-1].Hash()))
 		err := self.bp.insertChain(blocks)
 		if err != nil {
 			self.invalid = true

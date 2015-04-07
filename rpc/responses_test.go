@@ -261,7 +261,7 @@ func makeHeader() *types.Header {
 		GasLimit:   big.NewInt(70000),
 		GasUsed:    big.NewInt(25000),
 		Time:       124356789,
-		Extra:      "",
+		Extra:      nil,
 		MixDigest:  common.StringToHash("0x00"),
 		Nonce:      [8]byte{0, 1, 2, 3, 4, 5, 6, 7},
 	}
@@ -274,8 +274,7 @@ func makeBlock() *types.Block {
 	root := common.HexToHash("0x01")
 	difficulty := common.Big1
 	nonce := uint64(1)
-	extra := ""
-	block := types.NewBlock(parentHash, coinbase, root, difficulty, nonce, extra)
+	block := types.NewBlock(parentHash, coinbase, root, difficulty, nonce, nil)
 
 	txto := common.HexToAddress("0x02")
 	txamount := big.NewInt(1)

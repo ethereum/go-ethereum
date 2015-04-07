@@ -11,7 +11,7 @@ import (
 func newChain(size int) (chain []*types.Block) {
 	var parentHash common.Hash
 	for i := 0; i < size; i++ {
-		block := types.NewBlock(parentHash, common.Address{}, common.Hash{}, new(big.Int), 0, "")
+		block := types.NewBlock(parentHash, common.Address{}, common.Hash{}, new(big.Int), 0, nil)
 		block.Header().Number = big.NewInt(int64(i))
 		chain = append(chain, block)
 		parentHash = block.Hash()
@@ -44,5 +44,17 @@ func TestInclusion(t *testing.T) {
 		if b := cache.Get(block.Hash()); b == nil {
 			t.Errorf("getting %x failed", block.Hash())
 		}
+	}
+}
+
+func TestDeletion(t *testing.T) {
+	chain := newChain(3)
+	cache := NewBlockCache(3)
+	insertChainCache(cache, chain)
+
+	cache.Delete(chain[1].Hash())
+
+	if cache.Has(chain[1].Hash()) {
+		t.Errorf("expected %x not to be included")
 	}
 }

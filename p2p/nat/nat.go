@@ -10,10 +10,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/jackpal/go-nat-pmp"
 )
-
-var log = logger.NewLogger("P2P NAT")
 
 // An implementation of nat.Interface can map local ports to ports
 // accessible from the Internet.
@@ -87,12 +86,12 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 	refresh := time.NewTimer(mapUpdateInterval)
 	defer func() {
 		refresh.Stop()
-		log.Debugf("Deleting port mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
+		glog.V(logger.Debug).Infof("Deleting port mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 		m.DeleteMapping(protocol, extport, intport)
 	}()
-	log.Debugf("add mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
+	glog.V(logger.Debug).Infof("add mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 	if err := m.AddMapping(protocol, intport, extport, name, mapTimeout); err != nil {
-		log.Errorf("mapping error: %v\n", err)
+		glog.V(logger.Error).Infof("mapping error: %v\n", err)
 	}
 	for {
 		select {
@@ -101,9 +100,9 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 				return
 			}
 		case <-refresh.C:
-			log.DebugDetailf("refresh mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
+			glog.V(logger.Detail).Infof("refresh mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 			if err := m.AddMapping(protocol, intport, extport, name, mapTimeout); err != nil {
-				log.Errorf("mapping error: %v\n", err)
+				glog.V(logger.Error).Infof("mapping error: %v\n", err)
 			}
 			refresh.Reset(mapUpdateInterval)
 		}

@@ -43,13 +43,10 @@ import (
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.5"
+	Version          = "0.9.7"
 )
 
-var (
-	clilogger = logger.NewLogger("CLI")
-	app       = utils.NewApp(Version, "the go-ethereum command line interface")
-)
+var app = utils.NewApp(Version, "the go-ethereum command line interface")
 
 func init() {
 	app.Action = run
@@ -217,9 +214,6 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.DataDirFlag,
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
-		utils.LogFileFlag,
-		utils.LogJSONFlag,
-		utils.LogLevelFlag,
 		utils.MaxPeersFlag,
 		utils.EtherbaseFlag,
 		utils.MinerThreadsFlag,
@@ -234,6 +228,12 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.ProtocolVersionFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
+		utils.LogLevelFlag,
+		utils.BacktraceAtFlag,
+		utils.LogToStdErrFlag,
+		utils.LogVModuleFlag,
+		utils.LogFileFlag,
+		utils.LogJSONFlag,
 	}
 
 	// missing:
@@ -248,6 +248,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 }
 
 func main() {
+	fmt.Printf("Welcome to the FRONTIER\n")
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	defer logger.Flush()
 	if err := app.Run(os.Args); err != nil {
@@ -257,7 +258,6 @@ func main() {
 }
 
 func run(ctx *cli.Context) {
-	fmt.Printf("Welcome to the FRONTIER\n")
 	utils.HandleInterrupt()
 	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
 	ethereum, err := eth.New(cfg)
@@ -478,7 +478,7 @@ func makedag(ctx *cli.Context) {
 	chain, _, _ := utils.GetChain(ctx)
 	pow := ethash.New(chain)
 	fmt.Println("making cache")
-	pow.UpdateCache(true)
+	pow.UpdateCache(0, true)
 	fmt.Println("making DAG")
 	pow.UpdateDAG()
 }

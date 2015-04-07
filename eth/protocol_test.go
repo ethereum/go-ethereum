@@ -250,7 +250,7 @@ func TestNewBlockMsg(t *testing.T) {
 
 	var delay = 1 * time.Second
 	// eth.reset()
-	block := types.NewBlock(common.Hash{1}, common.Address{1}, common.Hash{1}, common.Big1, 1, "extra")
+	block := types.NewBlock(common.Hash{1}, common.Address{1}, common.Hash{1}, common.Big1, 1, []byte("extra"))
 
 	go p2p.Send(eth, NewBlockMsg, &newBlockMsgData{Block: block})
 	timer := time.After(delay)
@@ -315,7 +315,7 @@ func TestBlockMsg(t *testing.T) {
 	var delay = 3 * time.Second
 	// eth.reset()
 	newblock := func(i int64) *types.Block {
-		return types.NewBlock(common.Hash{byte(i)}, common.Address{byte(i)}, common.Hash{byte(i)}, big.NewInt(i), uint64(i), string(i))
+		return types.NewBlock(common.Hash{byte(i)}, common.Address{byte(i)}, common.Hash{byte(i)}, big.NewInt(i), uint64(i), []byte{byte(i)})
 	}
 	b := newblock(0)
 	b.Header().Difficulty = nil // check if nil as *big.Int decodes as 0

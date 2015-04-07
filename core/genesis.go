@@ -20,7 +20,7 @@ var ZeroHash160 = make([]byte, 20)
 var ZeroHash512 = make([]byte, 64)
 
 func GenesisBlock(db common.Database) *types.Block {
-	genesis := types.NewBlock(common.Hash{}, common.Address{}, common.Hash{}, params.GenesisDifficulty, 42, "")
+	genesis := types.NewBlock(common.Hash{}, common.Address{}, common.Hash{}, params.GenesisDifficulty, 42, nil)
 	genesis.Header().Number = common.Big0
 	genesis.Header().GasLimit = params.GenesisGasLimit
 	genesis.Header().GasUsed = common.Big0
