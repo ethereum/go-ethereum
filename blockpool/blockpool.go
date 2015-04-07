@@ -624,6 +624,7 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 	entry := self.get(hash)
 
 	// a peer's current head block is appearing the first time
+	sender.lock.Lock()
 	if hash == sender.currentBlockHash {
 		if sender.currentBlock == nil {
 			plog.Debugf("AddBlock: add head block %s for peer <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
@@ -634,16 +635,28 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 			self.status.values.Blocks++
 			self.status.values.BlocksInPool++
 			self.status.lock.Unlock()
+			select {
+			case sender.currentBlockC <- block:
+			case <-sender.switchC:
+			}
 		} else {
 			plog.DebugDetailf("AddBlock: head block %s for peer <%s> (head: %s) already known", hex(hash), peerId, hex(sender.currentBlockHash))
 			// signal to head section process
-			sender.currentBlockC <- block
 		}
+		// self.wg.Add(1)
+		// go func() {
+		// 	timeout := time.After(1 * time.Second)
+		// select {
+		// 	case sender.currentBlockC <- block:
+		// 	case <-timeout:
+		// 	}
+		// 	self.wg.Done()
+		// }()
+
 	} else {
 
 		plog.DebugDetailf("AddBlock: block %s received from peer <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
 
-		sender.lock.Lock()
 		// update peer chain info if more recent than what we registered
 		if block.Td != nil && block.Td.Cmp(sender.td) > 0 {
 			sender.td = block.Td
@@ -652,7 +665,6 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 			sender.currentBlock = block
 			sender.headSection = nil
 		}
-		sender.lock.Unlock()
 
 		/* @zelig !!!
 		requested 5 hashes from both A & B. A responds sooner then B, process blocks. Close section.
@@ -668,6 +680,8 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 			}
 		*/
 	}
+	sender.lock.Unlock()
+
 	if entry == nil {
 		return
 	}

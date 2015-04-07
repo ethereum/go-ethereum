@@ -142,9 +142,8 @@ func (self *peer) setChainInfo(td *big.Int, c common.Hash) {
 	self.headSection = nil
 }
 
+// caller must hold peer lock
 func (self *peer) setChainInfoFromBlock(block *types.Block) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
 	// use the optional TD to update peer td, this helps second best peer selection
 	// in case best peer is lost
 	if block.Td != nil && block.Td.Cmp(self.td) > 0 {
@@ -155,11 +154,6 @@ func (self *peer) setChainInfoFromBlock(block *types.Block) {
 		self.currentBlock = block
 		self.headSection = nil
 	}
-	self.bp.wg.Add(1)
-	go func() {
-		self.currentBlockC <- block
-		self.bp.wg.Done()
-	}()
 }
 
 // distribute block request among known peers
@@ -571,7 +565,6 @@ LOOP:
 			self.bp.status.badPeers[self.id]++
 			self.bp.status.lock.Unlock()
 			// there is no persistence here, so GC will just take care of cleaning up
-			break LOOP
 
 		// signal for peer switch, quit
 		case <-switchC:
@@ -594,7 +587,6 @@ LOOP:
 			self.bp.status.badPeers[self.id]++
 			self.bp.status.lock.Unlock()
 			plog.Debugf("HeadSection: <%s> (headsection [%s]) quit channel closed : timed out without providing new blocks...quitting", self.id, sectionhex(self.headSection))
-			break LOOP
 		}
 	}
 	if !self.idle {
