@@ -98,11 +98,10 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 		possibleUncles: make(map[common.Hash]*types.Block),
 		coinbase:       coinbase,
 		txQueue:        make(map[common.Hash]*types.Transaction),
+		quit:           make(chan struct{}),
 	}
 	go worker.update()
 	go worker.wait()
-
-	worker.quit = make(chan struct{})
 
 	worker.commitNewWork()
 
@@ -133,8 +132,14 @@ func (self *worker) start() {
 }
 
 func (self *worker) stop() {
-	atomic.StoreInt64(&self.mining, 0)
+	if atomic.LoadInt64(&self.mining) == 1 {
+		// stop all agents
+		for _, agent := range self.agents {
+			agent.Stop()
+		}
+	}
 
+	atomic.StoreInt64(&self.mining, 0)
 	atomic.StoreInt64(&self.atWork, 0)
 }
 
@@ -164,12 +169,7 @@ out:
 					self.commitNewWork()
 				}
 			}
-
 		case <-self.quit:
-			// stop all agents
-			for _, agent := range self.agents {
-				agent.Stop()
-			}
 			break out
 		case <-timer.C:
 			if glog.V(logger.Debug) {
@@ -261,20 +261,18 @@ func (self *worker) commitNewWork() {
 
 	// Keep track of transactions which return errors so they can be removed
 	var (
-		remove types.Transactions
+		remove = set.New()
 		tcount = 0
 	)
 gasLimit:
 	for i, tx := range transactions {
 		err := self.commitTransaction(tx)
 		switch {
-		case core.IsNonceErr(err):
-			fallthrough
-		case core.IsInvalidTxErr(err):
+		case core.IsNonceErr(err) || core.IsInvalidTxErr(err):
 			// Remove invalid transactions
 			from, _ := tx.From()
 			self.chain.TxState().RemoveNonce(from, tx.Nonce())
-			remove = append(remove, tx)
+			remove.Add(tx.Hash())
 
 			if glog.V(logger.Debug) {
 				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
@@ -288,7 +286,7 @@ gasLimit:
 			tcount++
 		}
 	}
-	self.eth.TxPool().RemoveSet(remove)
+	self.eth.TxPool().InvalidateSet(remove)
 
 	var (
 		uncles    []*types.Header
