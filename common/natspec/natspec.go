@@ -45,18 +45,19 @@ func New(xeth *xeth.XEth, tx string, http *docserver.DocServer) (self *NatSpec, 
 		err = fmt.Errorf("NatSpec error: contract not found")
 		return
 	}
-	codeHash := xeth.CodeAt(contractAddress)
+	codehex := xeth.CodeAt(contractAddress)
+	codeHash := common.BytesToHash(crypto.Sha3(common.Hex2Bytes(codehex)))
 	// parse out host/domain
 
 	// set up nameresolver with natspecreg + urlhint contract addresses
 	res := resolver.New(
 		xeth,
-		resolver.NameRegContractAddress,
 		resolver.URLHintContractAddress,
+		resolver.HashRegContractAddress,
 	)
 
-	// resolve host via nameReg/UrlHint Resolver
-	uri, hash, err := res.NameToUrl(codeHash)
+	// resolve host via HashReg/UrlHint Resolver
+	uri, hash, err := res.KeyToUrl(codeHash)
 	if err != nil {
 		return
 	}
@@ -165,6 +166,7 @@ func (self *NatSpec) Notice() (notice string, err error) {
 	}
 	copy(abiKey[:], self.data[2:10])
 	meth := self.makeAbi2method(abiKey)
+
 	if meth == nil {
 		err = fmt.Errorf("abi key %x does not match any method %v")
 		return
@@ -174,6 +176,7 @@ func (self *NatSpec) Notice() (notice string, err error) {
 }
 
 func (self *NatSpec) noticeForMethod(tx string, name, expression string) (notice string, err error) {
+
 	if _, err = self.jsvm.Run("var transaction = " + tx + ";"); err != nil {
 		return "", fmt.Errorf("natspec.js error setting transaction: %v", err)
 	}

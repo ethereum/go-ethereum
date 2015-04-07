@@ -168,11 +168,8 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		// call ConfirmTransaction first
-		var obj []json.RawMessage
-		if err := json.Unmarshal(req.Params, &obj); err != nil {
-			return NewDecodeParamError(err.Error())
-		}
-		if !api.xeth().ConfirmTransaction(string(obj[0])) {
+		tx, _ := json.Marshal(req)
+		if !api.xeth().ConfirmTransaction(string(tx)) {
 			return fmt.Errorf("Transaction not confirmed")
 		}
 

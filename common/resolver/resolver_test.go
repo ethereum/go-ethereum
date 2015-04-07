@@ -23,12 +23,12 @@ func NewTestBackend() *testBackend {
 	self := &testBackend{}
 	self.contracts = make(map[string](map[string]string))
 
-	self.contracts[NameRegContractAddress] = make(map[string]string)
-	key := storageAddress(0, common.Hex2Bytes(codehash))
-	self.contracts[NameRegContractAddress][key] = hash
+	self.contracts[HashRegContractAddress] = make(map[string]string)
+	key := storageAddress(1, common.Hex2Bytes(codehash))
+	self.contracts[HashRegContractAddress][key] = hash
 
 	self.contracts[URLHintContractAddress] = make(map[string]string)
-	key = storageAddress(0, common.Hex2Bytes(hash))
+	key = storageAddress(1, common.Hex2Bytes(hash))
 	self.contracts[URLHintContractAddress][key] = url
 
 	return self
@@ -43,10 +43,12 @@ func (self *testBackend) StorageAt(ca, sa string) (res string) {
 	return
 }
 
-func TestNameToContentHash(t *testing.T) {
+func TestKeyToContentHash(t *testing.T) {
 	b := NewTestBackend()
-	res := New(b, URLHintContractAddress, NameRegContractAddress)
-	got, err := res.NameToContentHash(codehash)
+	res := New(b, URLHintContractAddress, HashRegContractAddress)
+	chash := common.Hash{}
+	copy(chash[:], common.Hex2BytesFixed(codehash, 32))
+	got, err := res.KeyToContentHash(chash)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	} else {
@@ -58,7 +60,7 @@ func TestNameToContentHash(t *testing.T) {
 
 func TestContentHashToUrl(t *testing.T) {
 	b := NewTestBackend()
-	res := New(b, URLHintContractAddress, NameRegContractAddress)
+	res := New(b, URLHintContractAddress, HashRegContractAddress)
 	chash := common.Hash{}
 	copy(chash[:], common.Hex2Bytes(hash))
 	got, err := res.ContentHashToUrl(chash)
@@ -71,5 +73,5 @@ func TestContentHashToUrl(t *testing.T) {
 	}
 }
 
-func TestNameToUrl(t *testing.T) {
+func TestKeyToUrl(t *testing.T) {
 }
