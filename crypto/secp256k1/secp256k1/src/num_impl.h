@@ -4,16 +4,21 @@
  * file COPYING or http://www.opensource.org/licenses/mit-license.php.*
  **********************************************************************/
 
-#ifndef _SECP256K1_ECMULT_
-#define _SECP256K1_ECMULT_
+#ifndef _SECP256K1_NUM_IMPL_H_
+#define _SECP256K1_NUM_IMPL_H_
+
+#if defined HAVE_CONFIG_H
+#include "libsecp256k1-config.h"
+#endif
 
 #include "num.h"
-#include "group.h"
 
-static void secp256k1_ecmult_start(void);
-static void secp256k1_ecmult_stop(void);
-
-/** Double multiply: R = na*A + ng*G */
-static void secp256k1_ecmult(secp256k1_gej_t *r, const secp256k1_gej_t *a, const secp256k1_scalar_t *na, const secp256k1_scalar_t *ng);
+#if defined(USE_NUM_GMP)
+#include "num_gmp_impl.h"
+#elif defined(USE_NUM_NONE)
+/* Nothing. */
+#else
+#error "Please select num implementation"
+#endif
 
 #endif
