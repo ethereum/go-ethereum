@@ -37,6 +37,10 @@ std::string bytesToHexString(const uint8_t *str, const uint64_t s) {
     return ret.str();
 }
 
+std::string blockhashToHexString(ethash_blockhash_t *hash) {
+    return bytesToHexString((uint8_t*)hash, 32);
+}
+
 BOOST_AUTO_TEST_CASE(fnv_hash_check) {
     uint32_t x = 1235U;
     const uint32_t
@@ -52,12 +56,13 @@ BOOST_AUTO_TEST_CASE(fnv_hash_check) {
 }
 
 BOOST_AUTO_TEST_CASE(SHA256_check) {
-    uint8_t input[32], out[32];
-    memcpy(input, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~", 32);
-    SHA3_256(out, input, 32);
+    ethash_blockhash_t input;
+    ethash_blockhash_t out;
+    memcpy(&input, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~", 32);
+    SHA3_256(&out, (uint8_t*)&input, 32);
     const std::string
             expected = "2b5ddf6f4d21c23de216f44d5e4bdc68e044b71897837ea74c83908be7037cd7",
-            actual = bytesToHexString(out, 32);
+        actual = bytesToHexString((uint8_t*)&out, 32);
     BOOST_REQUIRE_MESSAGE(expected == actual,
             "\nexpected: " << expected.c_str() << "\n"
                     << "actual: " << actual.c_str() << "\n");
@@ -104,23 +109,26 @@ BOOST_AUTO_TEST_CASE(ethash_params_init_genesis_calcifide_check) {
 
 BOOST_AUTO_TEST_CASE(light_and_full_client_checks) {
     ethash_params params;
-    uint8_t seed[32], hash[32], difficulty[32];
-    ethash_return_value light_out, full_out;
-    memcpy(seed, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~", 32);
-    memcpy(hash, "~~~X~~~~~~~~~~~~~~~~~~~~~~~~~~~~", 32);
+    ethash_blockhash_t seed;
+    ethash_blockhash_t hash;
+    ethash_blockhash_t difficulty;
+    ethash_return_value light_out;
+    ethash_return_value full_out;
+    memcpy(&seed, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~", 32);
+    memcpy(&hash, "~~~X~~~~~~~~~~~~~~~~~~~~~~~~~~~~", 32);
 
     // Set the difficulty
-    difficulty[0] = 197;
-    difficulty[1] = 90;
+    ethash_blockhash_set(&difficulty, 0, 197);
+    ethash_blockhash_set(&difficulty, 1, 90);
     for (int i = 2; i < 32; i++)
-        difficulty[i] = (uint8_t) 255;
+        ethash_blockhash_set(&difficulty, i, 255);
 
     ethash_params_init(&params, 0);
     params.cache_size = 1024;
     params.full_size = 1024 * 32;
     ethash_cache cache;
     cache.mem = our_alloca(params.cache_size);
-    ethash_mkcache(&cache, &params, seed);
+    ethash_mkcache(&cache, &params, &seed);
     node *full_mem = (node *) our_alloca(params.full_size);
     ethash_compute_full_data(full_mem, &params, &cache);
 
@@ -164,78 +172,76 @@ BOOST_AUTO_TEST_CASE(light_and_full_client_checks) {
 
     {
         uint64_t nonce = 0x7c7c597c;
-        ethash_full(&full_out, full_mem, &params, hash, nonce);
-        ethash_light(&light_out, &cache, &params, hash, nonce);
+        ethash_full(&full_out, full_mem, &params, &hash, nonce);
+        ethash_light(&light_out, &cache, &params, &hash, nonce);
         const std::string
-                light_result_string = bytesToHexString(light_out.result, 32),
-                full_result_string = bytesToHexString(full_out.result, 32);
+                light_result_string = blockhashToHexString(&light_out.result),
+                full_result_string = blockhashToHexString(&full_out.result);
         BOOST_REQUIRE_MESSAGE(light_result_string == full_result_string,
                 "\nlight result: " << light_result_string.c_str() << "\n"
                         << "full result: " << full_result_string.c_str() << "\n");
         const std::string
-                light_mix_hash_string = bytesToHexString(light_out.mix_hash, 32),
-                full_mix_hash_string = bytesToHexString(full_out.mix_hash, 32);
+                light_mix_hash_string = blockhashToHexString(&light_out.mix_hash),
+                full_mix_hash_string = blockhashToHexString(&full_out.mix_hash);
         BOOST_REQUIRE_MESSAGE(full_mix_hash_string == light_mix_hash_string,
                 "\nlight mix hash: " << light_mix_hash_string.c_str() << "\n"
                         << "full mix hash: " << full_mix_hash_string.c_str() << "\n");
-        uint8_t check_hash[32];
-        ethash_quick_hash(check_hash, hash, nonce, full_out.mix_hash);
-        const std::string check_hash_string = bytesToHexString(check_hash, 32);
+        ethash_blockhash_t check_hash;
+        ethash_quick_hash(&check_hash, &hash, nonce, &full_out.mix_hash);
+        const std::string check_hash_string = blockhashToHexString(&check_hash);
         BOOST_REQUIRE_MESSAGE(check_hash_string == full_result_string,
                 "\ncheck hash string: " << check_hash_string.c_str() << "\n"
                         << "full result: " << full_result_string.c_str() << "\n");
     }
     {
-        ethash_full(&full_out, full_mem, &params, hash, 5);
+        ethash_full(&full_out, full_mem, &params, &hash, 5);
         std::string
-                light_result_string = bytesToHexString(light_out.result, 32),
-                full_result_string = bytesToHexString(full_out.result, 32);
+                light_result_string = blockhashToHexString(&light_out.result),
+                full_result_string = blockhashToHexString(&full_out.result);
 
         BOOST_REQUIRE_MESSAGE(light_result_string != full_result_string,
                 "\nlight result and full result should differ: " << light_result_string.c_str() << "\n");
 
-        ethash_light(&light_out, &cache, &params, hash, 5);
-        light_result_string = bytesToHexString(light_out.result, 32);
+        ethash_light(&light_out, &cache, &params, &hash, 5);
+        light_result_string = blockhashToHexString(&light_out.result);
         BOOST_REQUIRE_MESSAGE(light_result_string == full_result_string,
                 "\nlight result and full result should be the same\n"
                         << "light result: " << light_result_string.c_str() << "\n"
                         << "full result: " << full_result_string.c_str() << "\n");
         std::string
-                light_mix_hash_string = bytesToHexString(light_out.mix_hash, 32),
-                full_mix_hash_string = bytesToHexString(full_out.mix_hash, 32);
+                light_mix_hash_string = blockhashToHexString(&light_out.mix_hash),
+                full_mix_hash_string = blockhashToHexString(&full_out.mix_hash);
         BOOST_REQUIRE_MESSAGE(full_mix_hash_string == light_mix_hash_string,
                 "\nlight mix hash: " << light_mix_hash_string.c_str() << "\n"
                         << "full mix hash: " << full_mix_hash_string.c_str() << "\n");
-        BOOST_REQUIRE_MESSAGE(ethash_check_difficulty(full_out.result, difficulty),
+        BOOST_REQUIRE_MESSAGE(ethash_check_difficulty(&full_out.result, &difficulty),
                 "ethash_check_difficulty failed"
         );
-        BOOST_REQUIRE_MESSAGE(ethash_quick_check_difficulty(hash, 5U, full_out.mix_hash, difficulty),
+        BOOST_REQUIRE_MESSAGE(ethash_quick_check_difficulty(&hash, 5U, &full_out.mix_hash, &difficulty),
                 "ethash_quick_check_difficulty failed"
         );
     }
 }
 
 BOOST_AUTO_TEST_CASE(ethash_check_difficulty_check) {
-    uint8_t hash[32], target[32];
-    memset(hash, 0, 32);
-    memset(target, 0, 32);
-
-    memcpy(hash, "11111111111111111111111111111111", 32);
-    memcpy(target, "22222222222222222222222222222222", 32);
+    ethash_blockhash_t hash;
+    ethash_blockhash_t target;
+    memcpy(&hash, "11111111111111111111111111111111", 32);
+    memcpy(&target, "22222222222222222222222222222222", 32);
     BOOST_REQUIRE_MESSAGE(
-            ethash_check_difficulty(hash, target),
-            "\nexpected \"" << std::string((char *) hash, 32).c_str() << "\" to have the same or less difficulty than \"" << std::string((char *) target, 32).c_str() << "\"\n");
+            ethash_check_difficulty(&hash, &target),
+            "\nexpected \"" << std::string((char *) &hash, 32).c_str() << "\" to have the same or less difficulty than \"" << std::string((char *) &target, 32).c_str() << "\"\n");
     BOOST_REQUIRE_MESSAGE(
-            ethash_check_difficulty(hash, hash),
-            "\nexpected \"" << hash << "\" to have the same or less difficulty than \"" << hash << "\"\n");
-    memcpy(target, "11111111111111111111111111111112", 32);
+        ethash_check_difficulty(&hash, &hash), "");
+            // "\nexpected \"" << hash << "\" to have the same or less difficulty than \"" << hash << "\"\n");
+    memcpy(&target, "11111111111111111111111111111112", 32);
     BOOST_REQUIRE_MESSAGE(
-            ethash_check_difficulty(hash, target),
-            "\nexpected \"" << hash << "\" to have the same or less difficulty than \"" << target << "\"\n");
-    memcpy(target, "11111111111111111111111111111110", 32);
+        ethash_check_difficulty(&hash, &target), "");
+            // "\nexpected \"" << hash << "\" to have the same or less difficulty than \"" << target << "\"\n");
+    memcpy(&target, "11111111111111111111111111111110", 32);
     BOOST_REQUIRE_MESSAGE(
-            !ethash_check_difficulty(hash, target),
-            "\nexpected \"" << hash << "\" to have more difficulty than \"" << target << "\"\n");
+            !ethash_check_difficulty(&hash, &target), "");
+            // "\nexpected \"" << hash << "\" to have more difficulty than \"" << target << "\"\n");
 }
 
 BOOST_AUTO_TEST_CASE(test_ethash_dir_creation) {
@@ -256,7 +262,7 @@ BOOST_AUTO_TEST_CASE(test_ethash_dir_creation) {
 BOOST_AUTO_TEST_CASE(test_ethash_io_write_files_are_created) {
     ethash_blockhash_t seedhash;
     static const int blockn = 0;
-    ethash_get_seedhash((uint8_t*)&seedhash, blockn);
+    ethash_get_seedhash(&seedhash, blockn);
     BOOST_REQUIRE_EQUAL(
         ETHASH_IO_MEMO_MISMATCH,
         ethash_io_prepare("./test_ethash_directory/", seedhash)
@@ -273,7 +279,7 @@ BOOST_AUTO_TEST_CASE(test_ethash_io_write_files_are_created) {
     params.cache_size = 1024;
     params.full_size = 1024 * 32;
     cache.mem = our_alloca(params.cache_size);
-    ethash_mkcache(&cache, &params, (uint8_t*)&seedhash);
+    ethash_mkcache(&cache, &params, &seedhash);
 
     BOOST_REQUIRE(
         ethash_io_write("./test_ethash_directory/", &params, seedhash, &cache, &data, &size)
@@ -290,7 +296,7 @@ BOOST_AUTO_TEST_CASE(test_ethash_io_write_files_are_created) {
 BOOST_AUTO_TEST_CASE(test_ethash_io_memo_file_match) {
     ethash_blockhash_t seedhash;
     static const int blockn = 0;
-    ethash_get_seedhash((uint8_t*)&seedhash, blockn);
+    ethash_get_seedhash(&seedhash, blockn);
     BOOST_REQUIRE_EQUAL(
         ETHASH_IO_MEMO_MISMATCH,
         ethash_io_prepare("./test_ethash_directory/", seedhash)
@@ -307,7 +313,7 @@ BOOST_AUTO_TEST_CASE(test_ethash_io_memo_file_match) {
     params.cache_size = 1024;
     params.full_size = 1024 * 32;
     cache.mem = our_alloca(params.cache_size);
-    ethash_mkcache(&cache, &params, (uint8_t*)&seedhash);
+    ethash_mkcache(&cache, &params, &seedhash);
 
     BOOST_REQUIRE(
         ethash_io_write("./test_ethash_directory/", &params, seedhash, &cache, &data, &size)
@@ -344,7 +350,7 @@ static std::vector<char> readFileIntoVector(char const* filename)
 BOOST_AUTO_TEST_CASE(test_ethash_io_memo_file_contents) {
     ethash_blockhash_t seedhash;
     static const int blockn = 0;
-    ethash_get_seedhash((uint8_t*)&seedhash, blockn);
+    ethash_get_seedhash(&seedhash, blockn);
     BOOST_REQUIRE_EQUAL(
         ETHASH_IO_MEMO_MISMATCH,
         ethash_io_prepare("./test_ethash_directory/", seedhash)
@@ -361,8 +367,8 @@ BOOST_AUTO_TEST_CASE(test_ethash_io_memo_file_contents) {
     params.cache_size = 1024;
     params.full_size = 1024 * 32;
     cache.mem = our_alloca(params.cache_size);
-    ethash_mkcache(&cache, &params, (uint8_t*)&seedhash);
-
+    ethash_mkcache(&cache, &params, &seedhash);
+    
     BOOST_REQUIRE(
         ethash_io_write("./test_ethash_directory/", &params, seedhash, &cache, &data, &size)
     );

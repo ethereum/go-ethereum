@@ -28,8 +28,6 @@
 extern "C" {
 #endif
 
-typedef struct ethash_blockhash { uint8_t b[32]; } ethash_blockhash_t;
-
 static const char DAG_FILE_NAME[] = "full";
 static const char DAG_MEMO_NAME[] = "full.info";
 // MSVC thinks that "static const unsigned int" is not a compile time variable. Sorry for the #define :(
@@ -54,6 +52,7 @@ enum ethash_io_rc {
  * @return               For possible return values @see enum ethash_io_rc
  */
 enum ethash_io_rc ethash_io_prepare(char const *dirname, ethash_blockhash_t seedhash);
+
 /**
  * Fully computes data and writes it to the file on disk.
  *

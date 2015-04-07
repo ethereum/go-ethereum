@@ -30,18 +30,15 @@ typedef union node {
 
 } node;
 
-void ethash_calculate_dag_item(
-        node *const ret,
-        const unsigned node_index,
-        ethash_params const *params,
-        ethash_cache const *cache
-);
+void ethash_calculate_dag_item(node *const ret,
+                               const unsigned node_index,
+                               ethash_params const *params,
+                               ethash_cache const *cache);
 
-void ethash_quick_hash(
-        uint8_t return_hash[32],
-        const uint8_t header_hash[32],
-        const uint64_t nonce,
-        const uint8_t mix_hash[32]);
+void ethash_quick_hash(ethash_blockhash_t *return_hash,
+                       ethash_blockhash_t const *header_hash,
+                       const uint64_t nonce,
+                       ethash_blockhash_t const *mix_hash);
 
 #ifdef __cplusplus
 }

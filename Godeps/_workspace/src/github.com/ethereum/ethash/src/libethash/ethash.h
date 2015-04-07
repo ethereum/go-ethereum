@@ -47,9 +47,26 @@ typedef struct ethash_params {
 	uint64_t cache_size;              // Size of compute cache (in bytes, multiple of node size (64)).
 } ethash_params;
 
+/// Type of a blockhash
+typedef struct ethash_blockhash { uint8_t b[32]; } ethash_blockhash_t;
+static inline uint8_t ethash_blockhash_get(ethash_blockhash_t const* hash, unsigned int i)
+{
+    return hash->b[i];
+}
+
+static inline void ethash_blockhash_set(ethash_blockhash_t *hash, unsigned int i, uint8_t v)
+{
+    hash->b[i] = v;
+}
+
+static inline void ethash_blockhash_reset(ethash_blockhash_t *hash)
+{
+    memset(hash, 0, 32);
+}
+
 typedef struct ethash_return_value {
-	uint8_t result[32];
-	uint8_t mix_hash[32];
+    ethash_blockhash_t result;
+    ethash_blockhash_t mix_hash;
 } ethash_return_value;
 
 uint64_t ethash_get_datasize(const uint32_t block_number);
@@ -65,58 +82,68 @@ typedef struct ethash_cache {
 	void *mem;
 } ethash_cache;
 
-void ethash_mkcache(ethash_cache *cache, ethash_params const *params, const uint8_t seed[32]);
+void ethash_mkcache(ethash_cache *cache, ethash_params const *params, ethash_blockhash_t const *seed);
 void ethash_compute_full_data(void *mem, ethash_params const *params, ethash_cache const *cache);
-void ethash_full(ethash_return_value *ret, void const *full_mem, ethash_params const *params, const uint8_t header_hash[32], const uint64_t nonce);
-void ethash_light(ethash_return_value *ret, ethash_cache const *cache, ethash_params const *params, const uint8_t header_hash[32], const uint64_t nonce);
-void ethash_get_seedhash(uint8_t seedhash[32], const uint32_t block_number);
+void ethash_full(ethash_return_value *ret,
+                 void const *full_mem,
+                 ethash_params const *params,
+                 ethash_blockhash_t const *header_hash,
+                 const uint64_t nonce);
+void ethash_light(ethash_return_value *ret,
+                  ethash_cache const *cache,
+                  ethash_params const *params,
+                  ethash_blockhash_t const *header_hash,
+                  const uint64_t nonce);
+void ethash_get_seedhash(ethash_blockhash_t *seedhash, const uint32_t block_number);
 
-static inline void ethash_prep_light(void *cache, ethash_params const *params, const uint8_t seed[32]) {
-	ethash_cache c;
-	c.mem = cache;
-	ethash_mkcache(&c, params, seed);
+static inline void ethash_prep_light(void *cache, ethash_params const *params, ethash_blockhash_t const* seed)
+{
+    ethash_cache c;
+    c.mem = cache;
+    ethash_mkcache(&c, params, seed);
 }
 
-static inline void ethash_compute_light(ethash_return_value *ret, void const *cache, ethash_params const *params, const uint8_t header_hash[32], const uint64_t nonce) {
-	ethash_cache c;
-	c.mem = (void *) cache;
-	ethash_light(ret, &c, params, header_hash, nonce);
+static inline void ethash_compute_light(ethash_return_value *ret, void const *cache, ethash_params const *params, ethash_blockhash_t const *header_hash, const uint64_t nonce)
+{
+    ethash_cache c;
+    c.mem = (void *) cache;
+    ethash_light(ret, &c, params, header_hash, nonce);
 }
 
-static inline void ethash_prep_full(void *full, ethash_params const *params, void const *cache) {
-	ethash_cache c;
-	c.mem = (void *) cache;
-	ethash_compute_full_data(full, params, &c);
+static inline void ethash_prep_full(void *full, ethash_params const *params, void const *cache)
+{
+    ethash_cache c;
+    c.mem = (void *) cache;
+    ethash_compute_full_data(full, params, &c);
 }
 
-static inline void ethash_compute_full(ethash_return_value *ret, void const *full, ethash_params const *params, const uint8_t header_hash[32], const uint64_t nonce) {
-	ethash_full(ret, full, params, header_hash, nonce);
+static inline void ethash_compute_full(ethash_return_value *ret,
+                                       void const *full,
+                                       ethash_params const *params,
+                                       ethash_blockhash_t const *header_hash,
+                                       const uint64_t nonce)
+{
+    ethash_full(ret, full, params, header_hash, nonce);
 }
 
-/// @brief Compare two s256-bit big-endian values.
-/// @returns 1 if @a a is less than or equal to @a b, 0 otherwise.
-/// Both parameters are 256-bit big-endian values.
-static inline int ethash_leq_be256(const uint8_t a[32], const uint8_t b[32]) {
-	// Boundary is big endian
-	for (int i = 0; i < 32; i++) {
-		if (a[i] == b[i])
-			continue;
-		return a[i] < b[i];
-	}
-	return 1;
+// Returns if hash is less than or equal to difficulty
+static inline int ethash_check_difficulty(ethash_blockhash_t const *hash,
+                                          ethash_blockhash_t const *difficulty)
+{
+    // Difficulty is big endian
+    for (int i = 0; i < 32; i++) {
+        if (ethash_blockhash_get(hash, i) == ethash_blockhash_get(difficulty, i)) {
+            continue;
+        }
+        return ethash_blockhash_get(hash, i) < ethash_blockhash_get(difficulty, i);
+    }
+    return 1;
 }
 
-/// Perofrms a cursory check on the validity of the nonce.
-/// @returns 1 if the nonce may possibly be valid for the given header_hash & boundary.
-/// @p boundary equivalent to 2 ^ 256 / block_difficulty, represented as a 256-bit big-endian.
-int ethash_preliminary_check_boundary(
-	const uint8_t header_hash[32],
-	const uint64_t nonce,
-	const uint8_t mix_hash[32],
-	const uint8_t boundary[32]);
-
-#define ethash_quick_check_difficulty ethash_preliminary_check_boundary
-#define ethash_check_difficulty ethash_leq_be256
+int ethash_quick_check_difficulty(ethash_blockhash_t const *header_hash,
+                                  const uint64_t nonce,
+                                  ethash_blockhash_t const *mix_hash,
+                                  ethash_blockhash_t const *difficulty);
 
 #ifdef __cplusplus
 }

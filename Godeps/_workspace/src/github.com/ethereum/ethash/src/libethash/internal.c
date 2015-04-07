@@ -50,14 +50,14 @@ uint64_t ethash_get_cachesize(const uint32_t block_number) {
 // Follows Sergio's "STRICT MEMORY HARD HASHING FUNCTIONS" (2014)
 // https://bitslog.files.wordpress.com/2013/12/memohash-v0-3.pdf
 // SeqMemoHash(s, R, N)
-void static ethash_compute_cache_nodes(
-        node *const nodes,
-        ethash_params const *params,
-        const uint8_t seed[32]) {
+void static ethash_compute_cache_nodes(node *const nodes,
+                                       ethash_params const *params,
+                                       ethash_blockhash_t const* seed)
+{
     assert((params->cache_size % sizeof(node)) == 0);
     uint32_t const num_nodes = (uint32_t) (params->cache_size / sizeof(node));
 
-    SHA3_512(nodes[0].bytes, seed, 32);
+    SHA3_512(nodes[0].bytes, (uint8_t*)seed, 32);
 
     for (unsigned i = 1; i != num_nodes; ++i) {
         SHA3_512(nodes[i].bytes, nodes[i - 1].bytes, 64);
@@ -84,20 +84,19 @@ void static ethash_compute_cache_nodes(
 #endif
 }
 
-void ethash_mkcache(
-        ethash_cache *cache,
-        ethash_params const *params,
-        const uint8_t seed[32]) {
+void ethash_mkcache(ethash_cache *cache,
+                    ethash_params const *params,
+                    ethash_blockhash_t const* seed)
+{
     node *nodes = (node *) cache->mem;
     ethash_compute_cache_nodes(nodes, params, seed);
 }
 
-void ethash_calculate_dag_item(
-        node *const ret,
-        const unsigned node_index,
-        const struct ethash_params *params,
-        const struct ethash_cache *cache) {
-
+void ethash_calculate_dag_item(node *const ret,
+                               const unsigned node_index,
+                               const struct ethash_params *params,
+                               const struct ethash_cache *cache)
+{
     uint32_t num_parent_nodes = (uint32_t) (params->cache_size / sizeof(node));
     node const *cache_nodes = (node const *) cache->mem;
     node const *init = &cache_nodes[node_index % num_parent_nodes];
@@ -161,13 +160,13 @@ void ethash_compute_full_data(
     }
 }
 
-static void ethash_hash(
-        ethash_return_value *ret,
-        node const *full_nodes,
-        ethash_cache const *cache,
-        ethash_params const *params,
-        const uint8_t header_hash[32],
-        const uint64_t nonce) {
+static void ethash_hash(ethash_return_value *ret,
+                        node const *full_nodes,
+                        ethash_cache const *cache,
+                        ethash_params const *params,
+                        ethash_blockhash_t const *header_hash,
+                        const uint64_t nonce)
+{
 
     assert((params->full_size % MIX_WORDS) == 0);
 
@@ -251,16 +250,16 @@ static void ethash_hash(
     }
 #endif
 
-    memcpy(ret->mix_hash, mix->bytes, 32);
+    memcpy(&ret->mix_hash, mix->bytes, 32);
     // final Keccak hash
-    SHA3_256(ret->result, s_mix->bytes, 64 + 32); // Keccak-256(s + compressed_mix)
+    SHA3_256(&ret->result, s_mix->bytes, 64 + 32); // Keccak-256(s + compressed_mix)
 }
 
-void ethash_quick_hash(
-        uint8_t return_hash[32],
-        const uint8_t header_hash[32],
-        const uint64_t nonce,
-        const uint8_t mix_hash[32]) {
+void ethash_quick_hash(ethash_blockhash_t *return_hash,
+                       ethash_blockhash_t const *header_hash,
+                       const uint64_t nonce,
+                       ethash_blockhash_t const *mix_hash)
+{
 
     uint8_t buf[64 + 32];
     memcpy(buf, header_hash, 32);
@@ -273,28 +272,39 @@ void ethash_quick_hash(
     SHA3_256(return_hash, buf, 64 + 32);
 }
 
-void ethash_get_seedhash(uint8_t seedhash[32], const uint32_t block_number) {
-    memset(seedhash, 0, 32);
+void ethash_get_seedhash(ethash_blockhash_t *seedhash, const uint32_t block_number)
+{
+    ethash_blockhash_reset(seedhash);
     const uint32_t epochs = block_number / EPOCH_LENGTH;
     for (uint32_t i = 0; i < epochs; ++i)
-        SHA3_256(seedhash, seedhash, 32);
+        SHA3_256(seedhash, (uint8_t*)seedhash, 32);
 }
 
-int ethash_preliminary_check_boundary(
-        const uint8_t header_hash[32],
-        const uint64_t nonce,
-        const uint8_t mix_hash[32],
-		const uint8_t difficulty[32]) {
+int ethash_quick_check_difficulty(ethash_blockhash_t const *header_hash,
+                                  const uint64_t nonce,
+                                  ethash_blockhash_t const *mix_hash,
+                                  ethash_blockhash_t const *difficulty)
+{
 
-	uint8_t return_hash[32];
-    ethash_quick_hash(return_hash, header_hash, nonce, mix_hash);
-	return ethash_leq_be256(return_hash, difficulty);
+    ethash_blockhash_t return_hash;
+    ethash_quick_hash(&return_hash, header_hash, nonce, mix_hash);
+    return ethash_check_difficulty(&return_hash, difficulty);
 }
 
-void ethash_full(ethash_return_value *ret, void const *full_mem, ethash_params const *params, const uint8_t previous_hash[32], const uint64_t nonce) {
-    ethash_hash(ret, (node const *) full_mem, NULL, params, previous_hash, nonce);
+void ethash_full(ethash_return_value *ret,
+                 void const *full_mem,
+                 ethash_params const *params,
+                 ethash_blockhash_t const *header_hash,
+                 const uint64_t nonce)
+{
+    ethash_hash(ret, (node const *) full_mem, NULL, params, header_hash, nonce);
 }
 
-void ethash_light(ethash_return_value *ret, ethash_cache const *cache, ethash_params const *params, const uint8_t previous_hash[32], const uint64_t nonce) {
-    ethash_hash(ret, NULL, cache, params, previous_hash, nonce);
+void ethash_light(ethash_return_value *ret,
+                  ethash_cache const *cache,
+                  ethash_params const *params,
+                  ethash_blockhash_t const *header_hash,
+                  const uint64_t nonce)
+{
+    ethash_hash(ret, NULL, cache, params, header_hash, nonce);
 }

@@ -54,15 +54,7 @@ ethash_cl_miner::ethash_cl_miner()
 {
 }
 
-void ethash_cl_miner::finish()
-{
-	if (m_queue())
-	{
-		m_queue.finish();
-	}
-}
-
-bool ethash_cl_miner::init(ethash_params const& params, const uint8_t seed[32], unsigned workgroup_size)
+bool ethash_cl_miner::init(ethash_params const& params, ethash_blockhash_t const *seed, unsigned workgroup_size)
 {
 	// store params
 	m_params = params;
