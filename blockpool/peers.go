@@ -165,6 +165,7 @@ func (self *peer) setChainInfoFromBlock(block *types.Block) {
 // distribute block request among known peers
 func (self *peers) requestBlocks(attempts int, hashes []common.Hash) {
 	self.lock.RLock()
+
 	defer self.lock.RUnlock()
 	peerCount := len(self.peers)
 	// on first attempt use the best peer
