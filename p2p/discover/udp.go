@@ -10,11 +10,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
 )
-
-var log = logger.NewLogger("P2P Discovery")
 
 const Version = 3
 
@@ -155,7 +154,7 @@ func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface) (*Table
 		return nil, err
 	}
 	tab, _ := newUDP(priv, conn, natm)
-	log.Infoln("Listening,", tab.self)
+	glog.V(logger.Info).Infoln("Listening,", tab.self)
 	return tab, nil
 }
 
@@ -336,9 +335,9 @@ func (t *udp) send(toaddr *net.UDPAddr, ptype byte, req interface{}) error {
 	if err != nil {
 		return err
 	}
-	log.DebugDetailf(">>> %v %T %v\n", toaddr, req, req)
+	glog.V(logger.Detail).Infof(">>> %v %T %v\n", toaddr, req, req)
 	if _, err = t.conn.WriteToUDP(packet, toaddr); err != nil {
-		log.DebugDetailln("UDP send failed:", err)
+		glog.V(logger.Detail).Infoln("UDP send failed:", err)
 	}
 	return err
 }
@@ -348,13 +347,13 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, 
 	b.Write(headSpace)
 	b.WriteByte(ptype)
 	if err := rlp.Encode(b, req); err != nil {
-		log.Errorln("error encoding packet:", err)
+		glog.V(logger.Error).Infoln("error encoding packet:", err)
 		return nil, err
 	}
 	packet := b.Bytes()
 	sig, err := crypto.Sign(crypto.Sha3(packet[headSize:]), priv)
 	if err != nil {
-		log.Errorln("could not sign packet:", err)
+		glog.V(logger.Error).Infoln("could not sign packet:", err)
 		return nil, err
 	}
 	copy(packet[macSize:], sig)
@@ -376,13 +375,13 @@ func (t *udp) readLoop() {
 		}
 		packet, fromID, hash, err := decodePacket(buf[:nbytes])
 		if err != nil {
-			log.Debugf("Bad packet from %v: %v\n", from, err)
+			glog.V(logger.Debug).Infof("Bad packet from %v: %v\n", from, err)
 			continue
 		}
-		log.DebugDetailf("<<< %v %T %v\n", from, packet, packet)
+		glog.V(logger.Detail).Infof("<<< %v %T %v\n", from, packet, packet)
 		go func() {
 			if err := packet.handle(t, from, fromID, hash); err != nil {
-				log.Debugf("error handling %T from %v: %v", packet, from, err)
+				glog.V(logger.Debug).Infof("error handling %T from %v: %v", packet, from, err)
 			}
 		}()
 	}

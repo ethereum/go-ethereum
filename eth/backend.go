@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -26,7 +27,6 @@ import (
 )
 
 var (
-	servlogger = logger.NewLogger("SERV")
 	jsonlogger = logger.NewJsonLogger()
 
 	defaultBootNodes = []*discover.Node{
@@ -83,7 +83,7 @@ func (cfg *Config) parseBootNodes() []*discover.Node {
 		}
 		n, err := discover.ParseNode(url)
 		if err != nil {
-			servlogger.Errorf("Bootstrap URL %s: %v\n", url, err)
+			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
 			continue
 		}
 		ns = append(ns, n)
@@ -107,7 +107,7 @@ func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
 		return nil, fmt.Errorf("could not generate server key: %v", err)
 	}
 	if err := ioutil.WriteFile(keyfile, crypto.FromECDSA(key), 0600); err != nil {
-		servlogger.Errorln("could not persist nodekey: ", err)
+		glog.V(logger.Error).Infoln("could not persist nodekey: ", err)
 	}
 	return key, nil
 }
@@ -177,7 +177,7 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
 	}
 	saveProtocolVersion(blockDb, config.ProtocolVersion)
-	servlogger.Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
+	glog.V(logger.Info).Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
 
 	eth := &Ethereum{
 		shutdownChan:   make(chan bool),
@@ -303,7 +303,7 @@ func (s *Ethereum) StartMining() error {
 	eb, err := s.Etherbase()
 	if err != nil {
 		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
-		servlogger.Errorln(err)
+		glog.V(logger.Error).Infoln(err)
 		return err
 
 	}
@@ -380,7 +380,7 @@ func (s *Ethereum) Start() error {
 	s.blockSub = s.eventMux.Subscribe(core.ChainHeadEvent{})
 	go s.blockBroadcastLoop()
 
-	servlogger.Infoln("Server started")
+	glog.V(logger.Info).Infoln("Server started")
 	return nil
 }
 
@@ -420,7 +420,7 @@ func (s *Ethereum) Stop() {
 		s.whisper.Stop()
 	}
 
-	servlogger.Infoln("Server stopped")
+	glog.V(logger.Info).Infoln("Server stopped")
 	close(s.shutdownChan)
 }
 

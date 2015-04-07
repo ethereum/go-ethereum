@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/errs"
 	"github.com/ethereum/go-ethereum/event"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
@@ -260,7 +261,7 @@ func (self *BlockPool) Start() {
 			}
 		}
 	}()
-	plog.Infoln("Started")
+	glog.V(ethlogger.Info).Infoln("Blockpool started")
 }
 
 func (self *BlockPool) Stop() {

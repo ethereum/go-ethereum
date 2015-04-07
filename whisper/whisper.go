@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"gopkg.in/fatih/set.v0"
 )
@@ -28,8 +29,6 @@ type MessageEvent struct {
 }
 
 const DefaultTtl = 50 * time.Second
-
-var wlogger = logger.NewLogger("SHH")
 
 type Whisper struct {
 	protocol p2p.Protocol
@@ -70,7 +69,7 @@ func (self *Whisper) Version() uint {
 }
 
 func (self *Whisper) Start() {
-	wlogger.Infoln("Whisper started")
+	glog.V(logger.Info).Infoln("Whisper started")
 	go self.update()
 }
 
@@ -195,7 +194,7 @@ func (self *Whisper) add(envelope *Envelope) error {
 		go self.postEvent(envelope)
 	}
 
-	wlogger.DebugDetailf("added whisper envelope %x\n", envelope)
+	glog.V(logger.Detail).Infof("added whisper envelope %x\n", envelope)
 
 	return nil
 }

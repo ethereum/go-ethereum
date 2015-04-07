@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -29,7 +30,6 @@ const (
 	frameWriteTimeout = 5 * time.Second
 )
 
-var srvlog = logger.NewLogger("P2P Server")
 var srvjslog = logger.NewJsonLogger()
 
 // Server manages all peer connections.
@@ -161,7 +161,7 @@ func (srv *Server) Start() (err error) {
 	if srv.running {
 		return errors.New("server already running")
 	}
-	srvlog.Infoln("Starting Server")
+	glog.V(logger.Info).Infoln("Starting Server")
 
 	// static fields
 	if srv.PrivateKey == nil {
@@ -204,7 +204,7 @@ func (srv *Server) Start() (err error) {
 		go srv.dialLoop()
 	}
 	if srv.NoDial && srv.ListenAddr == "" {
-		srvlog.Warnln("I will be kind-of useless, neither dialing nor listening.")
+		glog.V(logger.Warn).Infoln("I will be kind-of useless, neither dialing nor listening.")
 	}
 
 	srv.running = true
@@ -242,7 +242,7 @@ func (srv *Server) Stop() {
 	srv.running = false
 	srv.lock.Unlock()
 
-	srvlog.Infoln("Stopping Server")
+	glog.V(logger.Info).Infoln("Stopping Server")
 	srv.ntab.Close()
 	if srv.listener != nil {
 		// this unblocks listener Accept
@@ -263,13 +263,13 @@ func (srv *Server) Stop() {
 // main loop for adding connections via listening
 func (srv *Server) listenLoop() {
 	defer srv.loopWG.Done()
-	srvlog.Infoln("Listening on", srv.listener.Addr())
+	glog.V(logger.Info).Infoln("Listening on", srv.listener.Addr())
 	for {
 		conn, err := srv.listener.Accept()
 		if err != nil {
 			return
 		}
-		srvlog.Debugf("Accepted conn %v\n", conn.RemoteAddr())
+		glog.V(logger.Debug).Infof("Accepted conn %v\n", conn.RemoteAddr())
 		srv.peerWG.Add(1)
 		go srv.startPeer(conn, nil)
 	}
@@ -328,10 +328,10 @@ func (srv *Server) dialLoop() {
 
 func (srv *Server) dialNode(dest *discover.Node) {
 	addr := &net.TCPAddr{IP: dest.IP, Port: dest.TCPPort}
-	srvlog.Debugf("Dialing %v\n", dest)
+	glog.V(logger.Debug).Infof("Dialing %v\n", dest)
 	conn, err := srv.Dialer.Dial("tcp", addr.String())
 	if err != nil {
-		srvlog.DebugDetailf("dial error: %v", err)
+		glog.V(logger.Detail).Infof("dial error: %v", err)
 		return
 	}
 	srv.startPeer(conn, dest)
@@ -365,7 +365,7 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest)
 	if err != nil {
 		fd.Close()
-		srvlog.Debugf("Handshake with %v failed: %v", fd.RemoteAddr(), err)
+		glog.V(logger.Debug).Infof("Handshake with %v failed: %v", fd.RemoteAddr(), err)
 		return
 	}
 
@@ -375,12 +375,12 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	}
 	p := newPeer(fd, conn, srv.Protocols)
 	if ok, reason := srv.addPeer(conn.ID, p); !ok {
-		srvlog.DebugDetailf("Not adding %v (%v)\n", p, reason)
+		glog.V(logger.Detail).Infof("Not adding %v (%v)\n", p, reason)
 		p.politeDisconnect(reason)
 		return
 	}
 
-	srvlog.Debugf("Added %v\n", p)
+	glog.V(logger.Debug).Infof("Added %v\n", p)
 	srvjslog.LogJson(&logger.P2PConnected{
 		RemoteId:            fmt.Sprintf("%x", conn.ID[:]),
 		RemoteAddress:       fd.RemoteAddr().String(),
@@ -394,7 +394,7 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	discreason := p.run()
 	srv.removePeer(p)
 
-	srvlog.Debugf("Removed %v (%v)\n", p, discreason)
+	glog.V(logger.Debug).Infof("Removed %v (%v)\n", p, discreason)
 	srvjslog.LogJson(&logger.P2PDisconnected{
 		RemoteId:       fmt.Sprintf("%x", conn.ID[:]),
 		NumConnections: srv.PeerCount(),

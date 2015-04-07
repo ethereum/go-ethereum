@@ -276,12 +276,12 @@ gasLimit:
 			self.chain.TxState().RemoveNonce(from, tx.Nonce())
 			remove = append(remove, tx)
 
-			if glog.V(logger.Info) {
+			if glog.V(logger.Debug) {
 				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
+				glog.Infoln(tx)
 			}
-			glog.V(logger.Debug).Infoln(tx)
 		case state.IsGasLimitErr(err):
-			glog.V(logger.Info).Infof("Gas limit reached for block. %d TXs included in this block\n", i)
+			glog.V(logger.Debug).Infof("Gas limit reached for block. %d TXs included in this block\n", i)
 			// Break on gas limit
 			break gasLimit
 		default:
@@ -300,15 +300,20 @@ gasLimit:
 		}
 
 		if err := self.commitUncle(uncle.Header()); err != nil {
-			glog.V(logger.Info).Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
+			glog.V(logger.Debug).Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
 			glog.V(logger.Debug).Infoln(uncle)
 			badUncles = append(badUncles, hash)
 		} else {
-			glog.V(logger.Info).Infof("commiting %x as uncle\n", hash[:4])
+			glog.V(logger.Debug).Infof("commiting %x as uncle\n", hash[:4])
 			uncles = append(uncles, uncle.Header())
 		}
 	}
-	glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles\n", self.current.block.Number(), tcount, len(uncles))
+
+	// We only care about logging if we're actually mining
+	if atomic.LoadInt64(&self.mining) == 1 {
+		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles\n", self.current.block.Number(), tcount, len(uncles))
+	}
+
 	for _, hash := range badUncles {
 		delete(self.possibleUncles, hash)
 	}

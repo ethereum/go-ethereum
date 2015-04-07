@@ -194,6 +194,11 @@ var (
 		Name:  "logtostderr",
 		Usage: "Logs are written to standard error instead of to files.",
 	}
+	LogVModuleFlag = cli.GenericFlag{
+		Name:  "vmodule",
+		Usage: "The syntax of the argument is a comma-separated list of pattern=N, where pattern is a literal file name (minus the \".go\" suffix) or \"glob\" pattern and N is a V level.",
+		Value: glog.GetVModule(),
+	}
 )
 
 func GetNAT(ctx *cli.Context) nat.Interface {
@@ -227,6 +232,8 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	glog.SetV(ctx.GlobalInt(LogLevelFlag.Name))
 	// Set the log type
 	glog.SetToStderr(ctx.GlobalBool(LogToStdErrFlag.Name))
+	// Set the log dir
+	glog.SetLogDir(ctx.GlobalString(LogFileFlag.Name))
 
 	return &eth.Config{
 		Name:            common.MakeName(clientID, version),
