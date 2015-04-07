@@ -76,16 +76,20 @@ type worker struct {
 	coinbase common.Address
 	extra    []byte
 
-	current *environment
+	currentMu sync.Mutex
+	current   *environment
 
 	uncleMu        sync.Mutex
 	possibleUncles map[common.Hash]*types.Block
 
-	mining bool
+	txQueueMu sync.Mutex
+	txQueue   map[common.Hash]*types.Transaction
+
+	mining int64
 }
 
 func newWorker(coinbase common.Address, eth core.Backend) *worker {
-	return &worker{
+	worker := &worker{
 		eth:            eth,
 		mux:            eth.EventMux(),
 		recv:           make(chan *types.Block),
@@ -93,28 +97,45 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 		proc:           eth.BlockProcessor(),
 		possibleUncles: make(map[common.Hash]*types.Block),
 		coinbase:       coinbase,
+		txQueue:        make(map[common.Hash]*types.Transaction),
 	}
+	go worker.update()
+	go worker.wait()
+
+	worker.quit = make(chan struct{})
+
+	worker.commitNewWork()
+
+	return worker
+}
+
+func (self *worker) pendingState() *state.StateDB {
+	self.currentMu.Lock()
+	defer self.currentMu.Unlock()
+
+	return self.current.state
+}
+
+func (self *worker) pendingBlock() *types.Block {
+	self.currentMu.Lock()
+	defer self.currentMu.Unlock()
+
+	return self.current.block
 }
 
 func (self *worker) start() {
-	self.mining = true
-
-	self.quit = make(chan struct{})
-
 	// spin up agents
 	for _, agent := range self.agents {
 		agent.Start()
 	}
 
-	go self.update()
-	go self.wait()
+	atomic.StoreInt64(&self.mining, 1)
 }
 
 func (self *worker) stop() {
-	self.mining = false
-	atomic.StoreInt64(&self.atWork, 0)
+	atomic.StoreInt64(&self.mining, 0)
 
-	close(self.quit)
+	atomic.StoreInt64(&self.atWork, 0)
 }
 
 func (self *worker) register(agent Agent) {
@@ -123,7 +144,7 @@ func (self *worker) register(agent Agent) {
 }
 
 func (self *worker) update() {
-	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{})
+	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
 
 	timer := time.NewTicker(2 * time.Second)
 
@@ -138,6 +159,10 @@ out:
 				self.uncleMu.Lock()
 				self.possibleUncles[ev.Block.Hash()] = ev.Block
 				self.uncleMu.Unlock()
+			case core.TxPreEvent:
+				if atomic.LoadInt64(&self.mining) == 0 {
+					self.commitNewWork()
+				}
 			}
 
 		case <-self.quit:
@@ -152,7 +177,7 @@ out:
 			}
 
 			// XXX In case all mined a possible uncle
-			if atomic.LoadInt64(&self.atWork) == 0 {
+			if atomic.LoadInt64(&self.atWork) == 0 && atomic.LoadInt64(&self.mining) == 1 {
 				self.commitNewWork()
 			}
 		}
@@ -192,7 +217,7 @@ func (self *worker) wait() {
 }
 
 func (self *worker) push() {
-	if self.mining {
+	if atomic.LoadInt64(&self.mining) == 1 {
 		self.current.block.Header().GasUsed = self.current.totalUsedGas
 		self.current.block.SetRoot(self.current.state.Root())
 
@@ -205,12 +230,7 @@ func (self *worker) push() {
 	}
 }
 
-func (self *worker) commitNewWork() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.uncleMu.Lock()
-	defer self.uncleMu.Unlock()
-
+func (self *worker) makeCurrent() {
 	block := self.chain.NewBlock(self.coinbase)
 	if block.Time() == self.chain.CurrentBlock().Time() {
 		block.Header().Time++
@@ -224,6 +244,17 @@ func (self *worker) commitNewWork() {
 
 	parent := self.chain.GetBlock(self.current.block.ParentHash())
 	self.current.coinbase.SetGasPool(core.CalcGasLimit(parent, self.current.block))
+}
+
+func (self *worker) commitNewWork() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.uncleMu.Lock()
+	defer self.uncleMu.Unlock()
+	self.currentMu.Lock()
+	defer self.currentMu.Unlock()
+
+	self.makeCurrent()
 
 	transactions := self.eth.TxPool().GetTransactions()
 	sort.Sort(types.TxByNonce{transactions})
@@ -287,6 +318,7 @@ gasLimit:
 	core.AccumulateRewards(self.current.state, self.current.block)
 
 	self.current.state.Update()
+
 	self.push()
 }
 

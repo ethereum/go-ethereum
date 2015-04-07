@@ -136,13 +136,16 @@ func cTopics(t [][]string) [][]common.Hash {
 func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }
 
 func (self *XEth) AtStateNum(num int64) *XEth {
-	block := self.getBlockByHeight(num)
-
 	var st *state.StateDB
-	if block != nil {
-		st = state.New(block.Root(), self.backend.StateDb())
-	} else {
-		st = self.backend.ChainManager().State()
+	switch num {
+	case -2:
+		st = self.backend.Miner().PendingState().Copy()
+	default:
+		if block := self.getBlockByHeight(num); block != nil {
+			st = state.New(block.Root(), self.backend.StateDb())
+		} else {
+			st = state.New(self.backend.ChainManager().GetBlockByNumber(0).Root(), self.backend.StateDb())
+		}
 	}
 
 	return self.withState(st)
@@ -164,9 +167,16 @@ func (self *XEth) Whisper() *Whisper { return self.whisper }
 func (self *XEth) getBlockByHeight(height int64) *types.Block {
 	var num uint64
 
-	if height < 0 {
-		num = self.CurrentBlock().NumberU64() + uint64(-1*height)
-	} else {
+	switch height {
+	case -2:
+		return self.backend.Miner().PendingBlock()
+	case -1:
+		return self.CurrentBlock()
+	default:
+		if height < 0 {
+			return nil
+		}
+
 		num = uint64(height)
 	}
 

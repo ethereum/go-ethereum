@@ -6,6 +6,8 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
@@ -26,6 +28,7 @@ func New(eth core.Backend, pow pow.PoW, minerThreads int) *Miner {
 	for i := 0; i < minerThreads; i++ {
 		miner.worker.register(NewCpuMiner(i, pow))
 	}
+
 	return miner
 }
 
@@ -40,6 +43,7 @@ func (self *Miner) Start(coinbase common.Address) {
 	self.pow.(*ethash.Ethash).UpdateDAG()
 
 	self.worker.start()
+
 	self.worker.commitNewWork()
 }
 
@@ -60,4 +64,12 @@ func (self *Miner) HashRate() int64 {
 
 func (self *Miner) SetExtra(extra []byte) {
 	self.worker.extra = extra
+}
+
+func (self *Miner) PendingState() *state.StateDB {
+	return self.worker.pendingState()
+}
+
+func (self *Miner) PendingBlock() *types.Block {
+	return self.worker.pendingBlock()
 }
