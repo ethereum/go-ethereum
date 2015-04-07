@@ -1,26 +1,19 @@
 package ethdb
 
-/*
 import (
-	"bytes"
-	"testing"
+	"os"
+	"path"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
-func TestCompression(t *testing.T) {
-	db, err := NewLDBDatabase("testdb")
-	if err != nil {
-		t.Fatal(err)
+func newDb() *LDBDatabase {
+	file := path.Join("/", "tmp", "ldbtesttmpfile")
+	if common.FileExist(file) {
+		os.RemoveAll(file)
 	}
 
-	in := make([]byte, 10)
-	db.Put([]byte("test1"), in)
-	out, err := db.Get([]byte("test1"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	db, _ := NewLDBDatabase(file)
 
-	if bytes.Compare(out, in) != 0 {
-		t.Error("put get", in, out)
-	}
+	return db
 }
-*/
