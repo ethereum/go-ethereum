@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
@@ -35,7 +36,7 @@ func (self *Message) Recover() *ecdsa.PublicKey {
 	defer func() { recover() }() // in case of invalid sig
 	pub, err := crypto.SigToPub(self.hash(), self.Signature)
 	if err != nil {
-		glog.V(0).Infof("Could not get pubkey from signature: ", err)
+		glog.V(logger.Error).Infof("Could not get pubkey from signature: ", err)
 		return nil
 	}
 	return pub

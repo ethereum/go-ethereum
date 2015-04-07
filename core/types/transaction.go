@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -132,7 +133,7 @@ func (tx *Transaction) PublicKey() []byte {
 	//pubkey, _ := secp256k1.RecoverPubkey(hash[:], sig)
 	p, err := crypto.SigToPub(hash[:], sig)
 	if err != nil {
-		glog.V(0).Infof("Could not get pubkey from signature: ", err)
+		glog.V(logger.Error).Infof("Could not get pubkey from signature: ", err)
 		return nil
 	}
 	pubkey := crypto.FromECDSAPub(p)
