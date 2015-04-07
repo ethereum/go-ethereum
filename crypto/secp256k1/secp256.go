@@ -12,6 +12,7 @@ package secp256k1
 #define USE_FIELD_INV_BUILTIN
 #define USE_SCALAR_8X32
 #define USE_SCALAR_INV_BUILTIN
+#define NDEBUG
 #include "./secp256k1/src/secp256k1.c"
 */
 import "C"
