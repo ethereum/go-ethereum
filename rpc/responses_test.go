@@ -31,8 +31,7 @@ func TestNewBlockRes(t *testing.T) {
 	root := common.HexToHash("0x01")
 	difficulty := common.Big1
 	nonce := uint64(1)
-	extra := ""
-	block := types.NewBlock(parentHash, coinbase, root, difficulty, nonce, extra)
+	block := types.NewBlock(parentHash, coinbase, root, difficulty, nonce, nil)
 	tests := map[string]string{
 		"number":           reNum,
 		"hash":             reHash,
@@ -81,8 +80,7 @@ func TestNewBlockResWithTrans(t *testing.T) {
 	root := common.HexToHash("0x01")
 	difficulty := common.Big1
 	nonce := uint64(1)
-	extra := ""
-	block := types.NewBlock(parentHash, coinbase, root, difficulty, nonce, extra)
+	block := types.NewBlock(parentHash, coinbase, root, difficulty, nonce, nil)
 	tests := map[string]string{
 		"number":           reNum,
 		"hash":             reHash,
