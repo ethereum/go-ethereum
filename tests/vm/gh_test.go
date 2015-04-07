@@ -9,8 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/tests/helper"
 )
 
@@ -80,14 +82,13 @@ func RunVmTest(p string, t *testing.T) {
 	tests := make(map[string]VmTest)
 	helper.CreateFileTests(t, p, &tests)
 
+	vm.Debug = true
+	glog.SetV(4)
+	glog.SetToStderr(true)
 	for name, test := range tests {
-		/*
-			vm.Debug = true
-			helper.Logger.SetLogLevel(5)
-			if name != "Call1MB1024Calldepth" {
-				continue
-			}
-		*/
+		if name != "stackLimitPush32_1024" {
+			continue
+		}
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(common.Hash{}, db)
 		for addr, account := range test.Pre {

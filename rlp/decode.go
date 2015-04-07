@@ -99,6 +99,8 @@ func (err *decodeError) Error() string {
 
 func wrapStreamError(err error, typ reflect.Type) error {
 	switch err {
+	case ErrCanonInt:
+		return &decodeError{msg: "canon int error appends zero's", typ: typ}
 	case ErrExpectedList:
 		return &decodeError{msg: "expected input list", typ: typ}
 	case ErrExpectedString:
@@ -184,6 +186,12 @@ func decodeBigInt(s *Stream, val reflect.Value) error {
 		i = new(big.Int)
 		val.Set(reflect.ValueOf(i))
 	}
+
+	// Reject big integers which are zero appended
+	if len(b) > 0 && b[0] == 0 {
+		return wrapStreamError(ErrCanonInt, val.Type())
+	}
+
 	i.SetBytes(b)
 	return nil
 }
@@ -460,6 +468,7 @@ var (
 	// Other errors
 	ErrExpectedString = errors.New("rlp: expected String or Byte")
 	ErrExpectedList   = errors.New("rlp: expected List")
+	ErrCanonInt       = errors.New("rlp: expected Int")
 	ErrElemTooLarge   = errors.New("rlp: element is larger than containing list")
 
 	// internal errors

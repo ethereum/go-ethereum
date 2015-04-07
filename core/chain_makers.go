@@ -55,7 +55,7 @@ func NewCanonical(n int, db common.Database) (*BlockProcessor, error) {
 
 // block time is fixed at 10 seconds
 func newBlockFromParent(addr common.Address, parent *types.Block) *types.Block {
-	block := types.NewBlock(parent.Hash(), addr, parent.Root(), common.BigPow(2, 32), 0, "")
+	block := types.NewBlock(parent.Hash(), addr, parent.Root(), common.BigPow(2, 32), 0, nil)
 	block.SetUncles(nil)
 	block.SetTransactions(nil)
 	block.SetReceipts(nil)
@@ -109,6 +109,7 @@ func makeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Dat
 // Effectively a fork factory
 func newChainManager(block *types.Block, eventMux *event.TypeMux, db common.Database) *ChainManager {
 	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: GenesisBlock(db), eventMux: eventMux}
+	bc.futureBlocks = NewBlockCache(1000)
 	if block == nil {
 		bc.Reset()
 	} else {

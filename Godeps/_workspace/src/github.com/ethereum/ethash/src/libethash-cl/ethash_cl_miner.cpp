@@ -22,6 +22,8 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 
+#include <cstdio>
+#include <cstdlib>
 #include <assert.h>
 #include <queue>
 #include <vector>
@@ -50,6 +52,14 @@ static void add_definition(std::string& source, char const* id, unsigned value)
 ethash_cl_miner::ethash_cl_miner()
 :	m_opencl_1_1()
 {
+}
+
+void ethash_cl_miner::finish()
+{
+	if (m_queue())
+	{
+		m_queue.finish();
+	}
 }
 
 bool ethash_cl_miner::init(ethash_params const& params, const uint8_t seed[32], unsigned workgroup_size)
@@ -95,7 +105,7 @@ bool ethash_cl_miner::init(ethash_params const& params, const uint8_t seed[32], 
 	}
 
 	// create context
-	m_context = cl::Context(std::vector<cl::Device>(&device, &device+1));
+	m_context = cl::Context(std::vector<cl::Device>(&device, &device + 1));
 	m_queue = cl::CommandQueue(m_context, device);
 
 	// use requested workgroup size, but we require multiple of 8
@@ -307,6 +317,10 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 			exit |= hook.searched(batch.start_nonce, c_search_batch_size); // always report searched before exit
 			if (exit)
 				break;
+
+			// reset search buffer if we're still going
+			if (num_found)
+				m_queue.enqueueWriteBuffer(m_search_buf[batch.buf], true, 0, 4, &c_zero);
 
 			pending.pop();
 		}

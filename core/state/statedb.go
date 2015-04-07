@@ -6,10 +6,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/trie"
 )
-
-var statelogger = logger.NewLogger("STATE")
 
 // StateDBs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
@@ -210,7 +209,9 @@ func (self *StateDB) GetOrNewStateObject(addr common.Address) *StateObject {
 
 // NewStateObject create a state object whether it exist in the trie or not
 func (self *StateDB) newStateObject(addr common.Address) *StateObject {
-	statelogger.Debugf("(+) %x\n", addr)
+	if glog.V(logger.Core) {
+		glog.Infof("(+) %x\n", addr)
+	}
 
 	stateObject := NewStateObject(addr, self.db)
 	self.stateObjects[addr.Str()] = stateObject

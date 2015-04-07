@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -90,7 +91,8 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	receipt := types.NewReceipt(statedb.Root().Bytes(), cumulative)
 	receipt.SetLogs(statedb.Logs())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-	chainlogger.Debugln(receipt)
+
+	glog.V(logger.Debug).Infoln(receipt)
 
 	// Notify all subscribers
 	if !transientProcess {
@@ -120,7 +122,7 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 		}
 
 		if err != nil {
-			statelogger.Infoln("TX err:", err)
+			glog.V(logger.Core).Infoln("TX err:", err)
 		}
 		receipts = append(receipts, receipt)
 
@@ -165,15 +167,9 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	// Create a new state based on the parent's root (e.g., create copy)
 	state := state.New(parent.Root(), sm.db)
 
-	// track (possible) uncle block
-	var uncle bool
 	// Block validation
 	if err = sm.ValidateHeader(block.Header(), parent.Header()); err != nil {
-		if err != BlockEqualTSErr {
-			return
-		}
-		err = nil
-		uncle = true
+		return
 	}
 
 	// There can be at most two uncles
@@ -231,21 +227,12 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	// Sync the current block's state to the database
 	state.Sync()
 
-	if !uncle {
-		// Remove transactions from the pool
-		sm.txpool.RemoveSet(block.Transactions())
-	}
+	// Remove transactions from the pool
+	sm.txpool.RemoveSet(block.Transactions())
 
 	// This puts transactions in a extra db for rpc
 	for i, tx := range block.Transactions() {
 		putTx(sm.extraDb, tx, block, uint64(i))
-	}
-
-	if uncle {
-		chainlogger.Infof("found possible uncle block #%d (%x...)\n", header.Number, block.Hash().Bytes()[0:4])
-		return td, nil, BlockEqualTSErr
-	} else {
-		chainlogger.Infof("processed block #%d (%d TXs %d UNCs) (%x...)\n", header.Number, len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
 	}
 
 	return td, state.Logs(), nil
@@ -272,7 +259,8 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
 	}
 
-	if int64(block.Time) > time.Now().Unix() {
+	// Allow future blocks up to 10 seconds
+	if int64(block.Time) > time.Now().Unix()+4 {
 		return BlockFutureErr
 	}
 
@@ -280,13 +268,13 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 		return BlockNumberErr
 	}
 
+	if block.Time <= parent.Time {
+		return BlockEqualTSErr //ValidationError("Block timestamp equal or less than previous block (%v - %v)", block.Time, parent.Time)
+	}
+
 	// Verify the nonce of the block. Return an error if it's not valid
 	if !sm.Pow.Verify(types.NewBlockWithHeader(block)) {
 		return ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
-	}
-
-	if block.Time <= parent.Time {
-		return BlockEqualTSErr //ValidationError("Block timestamp equal or less than previous block (%v - %v)", block.Time, parent.Time)
 	}
 
 	return nil
@@ -342,7 +330,7 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 			return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
 		}
 
-		if err := sm.ValidateHeader(uncle, ancestorHeaders[uncle.ParentHash]); err != nil && err != BlockEqualTSErr {
+		if err := sm.ValidateHeader(uncle, ancestorHeaders[uncle.ParentHash]); err != nil {
 			return ValidationError(fmt.Sprintf("%v", err))
 		}
 
@@ -371,7 +359,7 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 func putTx(db common.Database, tx *types.Transaction, block *types.Block, i uint64) {
 	rlpEnc, err := rlp.EncodeToBytes(tx)
 	if err != nil {
-		statelogger.Infoln("Failed encoding tx", err)
+		glog.V(logger.Debug).Infoln("Failed encoding tx", err)
 		return
 	}
 	db.Put(tx.Hash().Bytes(), rlpEnc)
@@ -386,7 +374,7 @@ func putTx(db common.Database, tx *types.Transaction, block *types.Block, i uint
 	txExtra.Index = i
 	rlpMeta, err := rlp.EncodeToBytes(txExtra)
 	if err != nil {
-		statelogger.Infoln("Failed encoding meta", err)
+		glog.V(logger.Debug).Infoln("Failed encoding tx meta data", err)
 		return
 	}
 	db.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)

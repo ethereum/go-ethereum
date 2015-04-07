@@ -43,7 +43,7 @@ import (
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.4"
+	Version          = "0.9.7"
 )
 
 var (
@@ -234,6 +234,8 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.ProtocolVersionFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
+		utils.BacktraceAtFlag,
+		utils.LogToStdErrFlag,
 	}
 
 	// missing:
@@ -478,7 +480,7 @@ func makedag(ctx *cli.Context) {
 	chain, _, _ := utils.GetChain(ctx)
 	pow := ethash.New(chain)
 	fmt.Println("making cache")
-	pow.UpdateCache(true)
+	pow.UpdateCache(0, true)
 	fmt.Println("making DAG")
 	pow.UpdateDAG()
 }

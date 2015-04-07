@@ -39,7 +39,7 @@ type Header struct {
 	// Creation time
 	Time uint64
 	// Extra data
-	Extra string
+	Extra []byte
 	// Mix digest for quick checking to prevent DOS
 	MixDigest common.Hash
 	// Nonce
@@ -121,7 +121,7 @@ type storageblock struct {
 	TD     *big.Int
 }
 
-func NewBlock(parentHash common.Hash, coinbase common.Address, root common.Hash, difficulty *big.Int, nonce uint64, extra string) *Block {
+func NewBlock(parentHash common.Hash, coinbase common.Address, root common.Hash, difficulty *big.Int, nonce uint64, extra []byte) *Block {
 	header := &Header{
 		Root:       root,
 		ParentHash: parentHash,
@@ -371,7 +371,7 @@ func (self *Header) String() string {
 	GasLimit:	    %v
 	GasUsed:	    %v
 	Time:		    %v
-	Extra:		    %v
+	Extra:		    %s
 	MixDigest:          %x
 	Nonce:		    %x`,
 		self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.MixDigest, self.Nonce)
