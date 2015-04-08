@@ -62,7 +62,7 @@ func (ms *ManagedState) NewNonce(addr common.Address) uint64 {
 		}
 	}
 	account.nonces = append(account.nonces, true)
-	return uint64(len(account.nonces)) + account.nstart
+	return uint64(len(account.nonces)-1) + account.nstart
 }
 
 // GetNonce returns the canonical nonce for the managed or unmanged account
@@ -109,5 +109,5 @@ func (ms *ManagedState) getAccount(addr common.Address) *account {
 }
 
 func newAccount(so *StateObject) *account {
-	return &account{so, so.nonce - 1, nil}
+	return &account{so, so.nonce, nil}
 }

@@ -449,7 +449,7 @@ func (self *Ethereum) syncAccounts(tx *types.Transaction) {
 
 	if self.accountManager.HasAccount(from.Bytes()) {
 		if self.chainManager.TxState().GetNonce(from) < tx.Nonce() {
-			self.chainManager.TxState().SetNonce(from, tx.Nonce()+1)
+			self.chainManager.TxState().SetNonce(from, tx.Nonce())
 		}
 	}
 }
