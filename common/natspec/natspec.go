@@ -24,6 +24,33 @@ type NatSpec struct {
 	// abiDoc abiDoc
 }
 
+func getFallbackNotice(comment, tx string) string {
+
+	return "About to submit transaction (" + comment + "): " + tx
+
+}
+
+func GetNotice(xeth *xeth.XEth, tx string, http *docserver.DocServer) (notice string) {
+
+	ns, err := New(xeth, tx, http)
+	if err != nil {
+		if ns == nil {
+			return getFallbackNotice("no NatSpec info found for contract", tx)
+		} else {
+			return getFallbackNotice("invalid NatSpec info", tx)
+		}
+	}
+
+	notice, err2 := ns.Notice()
+
+	if err2 != nil {
+		return getFallbackNotice("couldn't create NatSpec notice", tx)
+	}
+
+	return
+
+}
+
 func New(xeth *xeth.XEth, tx string, http *docserver.DocServer) (self *NatSpec, err error) {
 
 	// extract contract address from tx
@@ -46,7 +73,7 @@ func New(xeth *xeth.XEth, tx string, http *docserver.DocServer) (self *NatSpec, 
 		return
 	}
 	codehex := xeth.CodeAt(contractAddress)
-	codeHash := common.BytesToHash(crypto.Sha3(common.Hex2Bytes(codehex)))
+	codeHash := common.BytesToHash(crypto.Sha3(common.Hex2Bytes(codehex[2:])))
 	// parse out host/domain
 
 	// set up nameresolver with natspecreg + urlhint contract addresses

@@ -143,14 +143,7 @@ var net = web3.net;
 var ds, _ = docserver.New(utils.JSpathFlag.String())
 
 func (self *jsre) ConfirmTransaction(tx string) bool {
-	var notice string
-	nat, err := natspec.New(self.xeth, tx, ds)
-	if err == nil {
-		notice, err = nat.Notice()
-	}
-	if err != nil {
-		notice = fmt.Sprintf("About to submit transaction: %v")
-	}
+	notice := natspec.GetNotice(self.xeth, tx, ds)
 	fmt.Println(notice)
 	answer, _ := self.Prompt("Confirm Transaction\n[y/n] ")
 	return strings.HasPrefix(strings.Trim(answer, " "), "y")
