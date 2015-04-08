@@ -105,6 +105,7 @@ func (self *TxPool) add(tx *types.Transaction) error {
 	}
 	err := self.ValidateTransaction(tx)
 	if err != nil {
+		self.invalidHashes.Add(tx.Hash())
 		return err
 	}
 

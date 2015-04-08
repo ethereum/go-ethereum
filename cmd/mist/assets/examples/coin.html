@@ -72,16 +72,19 @@
 	// deploy if not exist
 	if(address === null) {
 		var code = "0x60056013565b61014f8061003a6000396000f35b620f42406000600033600160a060020a0316815260200190815260200160002081905550560060e060020a600035048063d0679d3414610020578063e3d670d71461003457005b61002e600435602435610049565b60006000f35b61003f600435610129565b8060005260206000f35b806000600033600160a060020a03168152602001908152602001600020541061007157610076565b610125565b806000600033600160a060020a03168152602001908152602001600020908154039081905550806000600084600160a060020a031681526020019081526020016000209081540190819055508033600160a060020a03167fb52dda022b6c1a1f40905a85f257f689aa5d69d850e49cf939d688fbe5af594660006000a38082600160a060020a03167fb52dda022b6c1a1f40905a85f257f689aa5d69d850e49cf939d688fbe5af594660006000a35b5050565b60006000600083600160a060020a0316815260200190815260200160002054905091905056";
-		address = web3.eth.sendTransaction({from: eth.coinbase, data: code, gas: "1000000"});
+		address = web3.eth.sendTransaction({from: eth.accounts[0], data: code, gas: "1000000"});
         localStorage.setItem("address", address);
 	}
 	document.querySelector("#contract_addr").innerHTML = address;
 
 	var Contract = web3.eth.contract(desc);
 	contract = new Contract(address);
-	contract.Changed({from: eth.accounts[0]}).watch(function() {
+	var filter = contract.Changed({from: eth.accounts[0]})
+	filter.watch(function(logs) {
+		console.log(logs);
 		refresh();
 	});
+window.filter = filter;
 
 	function refresh() {
         document.querySelector("#balance").innerHTML = contract.call({from:eth.coinbase}).balance(eth.coinbase);
