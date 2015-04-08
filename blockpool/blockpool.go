@@ -377,7 +377,7 @@ func (self *BlockPool) AddBlockHashes(next func() (common.Hash, bool), peerId st
 	var nodes []*node
 
 	hash, ok = next()
-	bestpeer.lock.Lock()
+	bestpeer.lock.RLock()
 
 	plog.Debugf("AddBlockHashes: peer <%s> starting from [%s] (peer head: %s)", peerId, hex(bestpeer.parentHash), hex(bestpeer.currentBlockHash))
 
@@ -423,7 +423,7 @@ func (self *BlockPool) AddBlockHashes(next func() (common.Hash, bool), peerId st
 	}
 	// the switch channel signals peerswitch event
 	switchC := bestpeer.switchC
-	bestpeer.lock.Unlock()
+	bestpeer.lock.RUnlock()
 
 	// iterate over hashes coming from peer (first round we have hash set above)
 LOOP:
@@ -549,8 +549,10 @@ LOOP:
 		In this case no activation should happen
 	*/
 	if parent != nil && !peerswitch {
-		self.activateChain(parent, bestpeer, nil)
+		bestpeer.lock.RLock()
+		self.activateChain(parent, bestpeer, bestpeer.switchC, nil)
 		plog.DebugDetailf("AddBlockHashes: peer <%s> (head: %s): parent section [%s]", peerId, hex(bestpeer.currentBlockHash), sectionhex(parent))
+		bestpeer.lock.RUnlock()
 	}
 
 	/*
@@ -625,33 +627,40 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 
 	entry := self.get(hash)
 	blockIsCurrentHead := false
-	sender.lock.Lock()
+	sender.lock.RLock()
+	currentBlockHash := sender.currentBlockHash
+	currentBlock := sender.currentBlock
+	currentBlockC := sender.currentBlockC
+	switchC := sender.switchC
+	sender.lock.RUnlock()
+
 	// a peer's current head block is appearing the first time
-	if hash == sender.currentBlockHash {
+	if hash == currentBlockHash {
 		// this happens when block came in a newblock message but
 		// also if sent in a blockmsg (for instance, if we requested, only if we
 		// dont apply on blockrequests the restriction of flood control)
 		blockIsCurrentHead = true
-		if sender.currentBlock == nil {
-			plog.Debugf("AddBlock: add head block %s for peer <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
+		if currentBlock == nil {
+			sender.lock.Lock()
 			sender.setChainInfoFromBlock(block)
+			sender.lock.Unlock()
 
 			self.status.lock.Lock()
 			self.status.values.BlockHashes++
 			self.status.values.Blocks++
 			self.status.values.BlocksInPool++
 			self.status.lock.Unlock()
+			// signal to head section process
 			select {
-			case sender.currentBlockC <- block:
-			case <-sender.switchC:
+			case currentBlockC <- block:
+			case <-switchC:
 			}
 		} else {
-			plog.DebugDetailf("AddBlock: head block %s for peer <%s> (head: %s) already known", hex(hash), peerId, hex(sender.currentBlockHash))
-			// signal to head section process
+			plog.DebugDetailf("AddBlock: head block %s for peer <%s> (head: %s) already known", hex(hash), peerId, hex(currentBlockHash))
 		}
 	} else {
 
-		plog.DebugDetailf("AddBlock: block %s received from peer <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
+		plog.DebugDetailf("AddBlock: block %s received from peer <%s> (head: %s)", hex(hash), peerId, hex(currentBlockHash))
 
 		/* @zelig !!!
 		   requested 5 hashes from both A & B. A responds sooner then B, process blocks. Close section.
@@ -667,7 +676,6 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 		     }
 		*/
 	}
-	sender.lock.Unlock()
 
 	if entry == nil {
 		// FIXME: here check the cache find or create node -
@@ -721,7 +729,7 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 	*/
 
 	node.block = block
-	// node.blockBy = peerId
+	node.blockBy = peerId
 
 	self.status.lock.Lock()
 	self.status.values.Blocks++
@@ -735,11 +743,7 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
   It activates the section process on incomplete sections with peer.
   It relinks orphaned sections with their parent if root block (and its parent hash) is known.
 */
-func (self *BlockPool) activateChain(sec *section, p *peer, connected map[common.Hash]*section) {
-
-	p.lock.RLock()
-	switchC := p.switchC
-	p.lock.RUnlock()
+func (self *BlockPool) activateChain(sec *section, p *peer, switchC chan bool, connected map[common.Hash]*section) {
 
 	var i int
 
@@ -786,10 +790,10 @@ func (self *BlockPool) checkTD(nodes ...*node) {
 		if n.td != nil && !n.block.Queued() {
 			plog.DebugDetailf("peer td %v =?= block td %v", n.td, n.block.Td)
 			if n.td.Cmp(n.block.Td) != 0 {
-				self.peers.peerError(n.blockBy, ErrIncorrectTD, "on block %x", n.hash)
-				self.status.lock.Lock()
-				self.status.badPeers[n.blockBy]++
-				self.status.lock.Unlock()
+				// self.peers.peerError(n.blockBy, ErrIncorrectTD, "on block %x", n.hash)
+				// self.status.lock.Lock()
+				// self.status.badPeers[n.blockBy]++
+				// self.status.lock.Unlock()
 			}
 		}
 	}
