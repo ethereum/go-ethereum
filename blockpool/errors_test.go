@@ -128,8 +128,6 @@ func TestErrInsufficientChainInfo(t *testing.T) {
 }
 
 func TestIncorrectTD(t *testing.T) {
-	t.Skip() // @zelig this one requires fixing for the TD
-
 	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
@@ -153,6 +151,45 @@ func TestIncorrectTD(t *testing.T) {
 		}
 	} else {
 		t.Errorf("expected %v error, got %v", ErrIncorrectTD, peer1.peerErrors)
+	}
+}
+
+func TestSkipIncorrectTDonFutureBlocks(t *testing.T) {
+	// t.Skip() // @zelig this one requires fixing for the TD
+
+	test.LogInit()
+	_, blockPool, blockPoolTester := newTestBlockPool(t)
+	blockPoolTester.blockChain[0] = nil
+	blockPoolTester.initRefBlockChain(3)
+
+	blockPool.insertChain = func(blocks types.Blocks) error {
+		err := blockPoolTester.insertChain(blocks)
+		if err == nil {
+			for _, block := range blocks {
+				if block.Td.Cmp(common.Big3) == 0 {
+					block.Td = common.Big3
+					block.SetQueued(true)
+					break
+				}
+			}
+		}
+		return err
+	}
+
+	blockPool.Start()
+
+	peer1 := blockPoolTester.newPeer("peer1", 3, 3)
+	peer1.AddPeer()
+	go peer1.serveBlocks(2, 3)
+	go peer1.serveBlockHashes(3, 2, 1, 0)
+	peer1.serveBlocks(0, 1, 2)
+
+	blockPool.Wait(waitTimeout)
+	blockPool.Stop()
+	blockPoolTester.refBlockChain[3] = []int{}
+	blockPoolTester.checkBlockChain(blockPoolTester.refBlockChain)
+	if len(peer1.peerErrors) > 0 {
+		t.Errorf("expected no error, got %v (1 of %v)", peer1.peerErrors[0], len(peer1.peerErrors))
 	}
 }
 

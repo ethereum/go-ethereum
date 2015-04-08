@@ -87,7 +87,7 @@ func (self *blockPoolTester) insertChain(blocks types.Blocks) error {
 	var ok bool
 	for _, block := range blocks {
 		child = self.hashPool.HashesToIndexes([]common.Hash{block.Hash()})[0]
-		var td int
+		td := child
 		if self.tds != nil {
 			td, ok = self.tds[child]
 		}
