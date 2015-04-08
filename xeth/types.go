@@ -77,15 +77,19 @@ func NewBlock(block *types.Block) *Block {
 	}
 
 	ptxs := make([]*Transaction, len(block.Transactions()))
-	for i, tx := range block.Transactions() {
-		ptxs[i] = NewTx(tx)
-	}
+	/*
+		for i, tx := range block.Transactions() {
+			ptxs[i] = NewTx(tx)
+		}
+	*/
 	txlist := common.NewList(ptxs)
 
 	puncles := make([]*Block, len(block.Uncles()))
-	for i, uncle := range block.Uncles() {
-		puncles[i] = NewBlock(types.NewBlockWithHeader(uncle))
-	}
+	/*
+		for i, uncle := range block.Uncles() {
+			puncles[i] = NewBlock(types.NewBlockWithHeader(uncle))
+		}
+	*/
 	ulist := common.NewList(puncles)
 
 	return &Block{
