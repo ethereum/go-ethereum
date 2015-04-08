@@ -81,5 +81,6 @@ func storageAddress(varidx uint32, key []byte) string {
 	data := make([]byte, 64)
 	binary.BigEndian.PutUint32(data[60:64], varidx)
 	copy(data[0:32], key[0:32])
+	//fmt.Printf("%x %v\n", key, common.Bytes2Hex(crypto.Sha3(data)))
 	return "0x" + common.Bytes2Hex(crypto.Sha3(data))
 }

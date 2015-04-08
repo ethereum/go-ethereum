@@ -14,7 +14,7 @@ type testBackend struct {
 
 var (
 	text     = "test"
-	codehash = common.RightPadString("1234", 64)
+	codehash = "1234" //common.RightPadString("1234", 64)
 	hash     = common.Bytes2Hex(crypto.Sha3([]byte(text)))
 	url      = "bzz://bzzhash/my/path/contr.act"
 )
@@ -23,13 +23,13 @@ func NewTestBackend() *testBackend {
 	self := &testBackend{}
 	self.contracts = make(map[string](map[string]string))
 
-	self.contracts[HashRegContractAddress] = make(map[string]string)
-	key := storageAddress(1, common.Hex2Bytes(codehash))
-	self.contracts[HashRegContractAddress][key] = hash
+	self.contracts["0x"+HashRegContractAddress] = make(map[string]string)
+	key := storageAddress(1, common.Hex2BytesFixed(codehash, 32))
+	self.contracts["0x"+HashRegContractAddress][key] = "0x" + hash
 
-	self.contracts[URLHintContractAddress] = make(map[string]string)
-	key = storageAddress(1, common.Hex2Bytes(hash))
-	self.contracts[URLHintContractAddress][key] = url
+	self.contracts["0x"+URLHintContractAddress] = make(map[string]string)
+	key = storageAddress(1, common.Hex2BytesFixed(hash, 32))
+	self.contracts["0x"+URLHintContractAddress][key] = "0x" + common.Bytes2Hex([]byte(url))
 
 	return self
 }
@@ -48,6 +48,7 @@ func TestKeyToContentHash(t *testing.T) {
 	res := New(b, URLHintContractAddress, HashRegContractAddress)
 	chash := common.Hash{}
 	copy(chash[:], common.Hex2BytesFixed(codehash, 32))
+
 	got, err := res.KeyToContentHash(chash)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -62,7 +63,7 @@ func TestContentHashToUrl(t *testing.T) {
 	b := NewTestBackend()
 	res := New(b, URLHintContractAddress, HashRegContractAddress)
 	chash := common.Hash{}
-	copy(chash[:], common.Hex2Bytes(hash))
+	copy(chash[:], common.Hex2BytesFixed(hash, 32))
 	got, err := res.ContentHashToUrl(chash)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)

@@ -143,10 +143,14 @@ var net = web3.net;
 var ds, _ = docserver.New(utils.JSpathFlag.String())
 
 func (self *jsre) ConfirmTransaction(tx string) bool {
-	notice := natspec.GetNotice(self.xeth, tx, ds)
-	fmt.Println(notice)
-	answer, _ := self.Prompt("Confirm Transaction\n[y/n] ")
-	return strings.HasPrefix(strings.Trim(answer, " "), "y")
+	if self.ethereum.NatSpec {
+		notice := natspec.GetNotice(self.xeth, tx, ds)
+		fmt.Println(notice)
+		answer, _ := self.Prompt("Confirm Transaction\n[y/n] ")
+		return strings.HasPrefix(strings.Trim(answer, " "), "y")
+	} else {
+		return true
+	}
 }
 
 func (self *jsre) UnlockAccount(addr []byte) bool {

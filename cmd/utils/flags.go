@@ -93,6 +93,10 @@ var (
 		Name:  "identity",
 		Usage: "node name",
 	}
+	NatspecEnabledFlag = cli.BoolFlag{
+		Name:  "natspec",
+		Usage: "Enable NatSpec confirmation notice",
+	}
 
 	// miner settings
 	MinerThreadsFlag = cli.IntFlag{
@@ -252,26 +256,25 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	}
 
 	return &eth.Config{
-		Name:               common.MakeName(clientID, version),
-		DataDir:            ctx.GlobalString(DataDirFlag.Name),
-		ProtocolVersion:    ctx.GlobalInt(ProtocolVersionFlag.Name),
-		BlockChainVersion:  ctx.GlobalInt(BlockchainVersionFlag.Name),
-		SkipBcVersionCheck: false,
-		NetworkId:          ctx.GlobalInt(NetworkIdFlag.Name),
-		LogFile:            ctx.GlobalString(LogFileFlag.Name),
-		LogLevel:           ctx.GlobalInt(LogLevelFlag.Name),
-		LogJSON:            ctx.GlobalString(LogJSONFlag.Name),
-		Etherbase:          ctx.GlobalString(EtherbaseFlag.Name),
-		MinerThreads:       ctx.GlobalInt(MinerThreadsFlag.Name),
-		AccountManager:     GetAccountManager(ctx),
-		VmDebug:            ctx.GlobalBool(VMDebugFlag.Name),
-		MaxPeers:           ctx.GlobalInt(MaxPeersFlag.Name),
-		Port:               ctx.GlobalString(ListenPortFlag.Name),
-		NAT:                GetNAT(ctx),
-		NodeKey:            GetNodeKey(ctx),
-		Shh:                true,
-		Dial:               true,
-		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
+		Name:            common.MakeName(clientID, version),
+		DataDir:         ctx.GlobalString(DataDirFlag.Name),
+		ProtocolVersion: ctx.GlobalInt(ProtocolVersionFlag.Name),
+		NetworkId:       ctx.GlobalInt(NetworkIdFlag.Name),
+		LogFile:         ctx.GlobalString(LogFileFlag.Name),
+		LogLevel:        ctx.GlobalInt(LogLevelFlag.Name),
+		LogJSON:         ctx.GlobalString(LogJSONFlag.Name),
+		Etherbase:       ctx.GlobalString(EtherbaseFlag.Name),
+		MinerThreads:    ctx.GlobalInt(MinerThreadsFlag.Name),
+		AccountManager:  GetAccountManager(ctx),
+		VmDebug:         ctx.GlobalBool(VMDebugFlag.Name),
+		MaxPeers:        ctx.GlobalInt(MaxPeersFlag.Name),
+		Port:            ctx.GlobalString(ListenPortFlag.Name),
+		NAT:             GetNAT(ctx),
+		NatSpec:         ctx.GlobalBool(NatspecEnabledFlag.Name),
+		NodeKey:         GetNodeKey(ctx),
+		Shh:             true,
+		Dial:            true,
+		BootNodes:       ctx.GlobalString(BootnodesFlag.Name),
 	}
 }
 
