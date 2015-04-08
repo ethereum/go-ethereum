@@ -217,7 +217,7 @@ func TestNewLogRes(t *testing.T) {
 }
 
 func TestNewLogsRes(t *testing.T) {
-	logs := make([]state.Log, 3)
+	logs := make([]*state.Log, 3)
 	logs[0] = makeStateLog(1)
 	logs[1] = makeStateLog(2)
 	logs[2] = makeStateLog(3)
@@ -235,7 +235,7 @@ func TestNewLogsRes(t *testing.T) {
 
 }
 
-func makeStateLog(num int) state.Log {
+func makeStateLog(num int) *state.Log {
 	address := common.HexToAddress("0x0")
 	data := []byte{1, 2, 3}
 	number := uint64(num)

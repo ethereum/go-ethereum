@@ -9,10 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/tests/helper"
 )
 
@@ -82,13 +80,15 @@ func RunVmTest(p string, t *testing.T) {
 	tests := make(map[string]VmTest)
 	helper.CreateFileTests(t, p, &tests)
 
-	vm.Debug = true
-	glog.SetV(4)
-	glog.SetToStderr(true)
 	for name, test := range tests {
-		if name != "stackLimitPush32_1024" {
-			continue
-		}
+		/*
+			vm.Debug = true
+			glog.SetV(4)
+			glog.SetToStderr(true)
+			if name != "stackLimitPush32_1024" {
+				continue
+			}
+		*/
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(common.Hash{}, db)
 		for addr, account := range test.Pre {
@@ -182,20 +182,20 @@ func RunVmTest(p string, t *testing.T) {
 				t.Errorf("log length mismatch. Expected %d, got %d", len(test.Logs), len(logs))
 			} else {
 				for i, log := range test.Logs {
-					if common.HexToAddress(log.AddressF) != logs[i].Address() {
-						t.Errorf("'%s' log address expected %v got %x", name, log.AddressF, logs[i].Address())
+					if common.HexToAddress(log.AddressF) != logs[i].Address {
+						t.Errorf("'%s' log address expected %v got %x", name, log.AddressF, logs[i].Address)
 					}
 
-					if !bytes.Equal(logs[i].Data(), helper.FromHex(log.DataF)) {
-						t.Errorf("'%s' log data expected %v got %x", name, log.DataF, logs[i].Data())
+					if !bytes.Equal(logs[i].Data, helper.FromHex(log.DataF)) {
+						t.Errorf("'%s' log data expected %v got %x", name, log.DataF, logs[i].Data)
 					}
 
-					if len(log.TopicsF) != len(logs[i].Topics()) {
-						t.Errorf("'%s' log topics length expected %d got %d", name, len(log.TopicsF), logs[i].Topics())
+					if len(log.TopicsF) != len(logs[i].Topics) {
+						t.Errorf("'%s' log topics length expected %d got %d", name, len(log.TopicsF), logs[i].Topics)
 					} else {
 						for j, topic := range log.TopicsF {
-							if common.HexToHash(topic) != logs[i].Topics()[j] {
-								t.Errorf("'%s' log topic[%d] expected %v got %x", name, j, topic, logs[i].Topics()[j])
+							if common.HexToHash(topic) != logs[i].Topics[j] {
+								t.Errorf("'%s' log topic[%d] expected %v got %x", name, j, topic, logs[i].Topics[j])
 							}
 						}
 					}

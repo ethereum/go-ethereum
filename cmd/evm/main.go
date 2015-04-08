@@ -133,7 +133,7 @@ func (self *VMEnv) GetHash(n uint64) common.Hash {
 	}
 	return common.Hash{}
 }
-func (self *VMEnv) AddLog(log state.Log) {
+func (self *VMEnv) AddLog(log *state.Log) {
 	self.state.AddLog(log)
 }
 func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {

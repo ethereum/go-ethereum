@@ -176,23 +176,23 @@ func RunVmTest(r io.Reader) (failed int) {
 				failed = 1
 			} else {
 				for i, log := range test.Logs {
-					if common.HexToAddress(log.AddressF) != logs[i].Address() {
-						helper.Log.Infof("'%s' log address failed. Expected %v got %x", name, log.AddressF, logs[i].Address())
+					if common.HexToAddress(log.AddressF) != logs[i].Address {
+						helper.Log.Infof("'%s' log address failed. Expected %v got %x", name, log.AddressF, logs[i].Address)
 						failed = 1
 					}
 
-					if !bytes.Equal(logs[i].Data(), helper.FromHex(log.DataF)) {
-						helper.Log.Infof("'%s' log data failed. Expected %v got %x", name, log.DataF, logs[i].Data())
+					if !bytes.Equal(logs[i].Data, helper.FromHex(log.DataF)) {
+						helper.Log.Infof("'%s' log data failed. Expected %v got %x", name, log.DataF, logs[i].Data)
 						failed = 1
 					}
 
-					if len(log.TopicsF) != len(logs[i].Topics()) {
-						helper.Log.Infof("'%s' log topics length failed. Expected %d got %d", name, len(log.TopicsF), logs[i].Topics())
+					if len(log.TopicsF) != len(logs[i].Topics) {
+						helper.Log.Infof("'%s' log topics length failed. Expected %d got %d", name, len(log.TopicsF), logs[i].Topics)
 						failed = 1
 					} else {
 						for j, topic := range log.TopicsF {
-							if common.HexToHash(topic) != logs[i].Topics()[j] {
-								helper.Log.Infof("'%s' log topic[%d] failed. Expected %v got %x", name, j, topic, logs[i].Topics()[j])
+							if common.HexToHash(topic) != logs[i].Topics[j] {
+								helper.Log.Infof("'%s' log topic[%d] failed. Expected %v got %x", name, j, topic, logs[i].Topics[j])
 								failed = 1
 							}
 						}
