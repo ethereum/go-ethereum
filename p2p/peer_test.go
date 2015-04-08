@@ -2,8 +2,9 @@ package p2p
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
-	"io"
+	"math/rand"
 	"net"
 	"reflect"
 	"testing"
@@ -27,7 +28,7 @@ var discard = Protocol{
 	},
 }
 
-func testPeer(protos []Protocol) (io.Closer, *conn, *Peer, <-chan DiscReason) {
+func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan DiscReason) {
 	fd1, _ := net.Pipe()
 	hs1 := &protoHandshake{ID: randomID(), Version: baseProtocolVersion}
 	hs2 := &protoHandshake{ID: randomID(), Version: baseProtocolVersion}
@@ -41,7 +42,11 @@ func testPeer(protos []Protocol) (io.Closer, *conn, *Peer, <-chan DiscReason) {
 	errc := make(chan DiscReason, 1)
 	go func() { errc <- peer.run() }()
 
-	return p1, &conn{p2, hs2}, peer, errc
+	closer := func() {
+		p1.Close()
+		fd1.Close()
+	}
+	return closer, &conn{p2, hs2}, peer, errc
 }
 
 func TestPeerProtoReadMsg(t *testing.T) {
@@ -67,7 +72,7 @@ func TestPeerProtoReadMsg(t *testing.T) {
 	}
 
 	closer, rw, _, errc := testPeer([]Protocol{proto})
-	defer closer.Close()
+	defer closer()
 
 	Send(rw, baseProtocolLength+2, []uint{1})
 	Send(rw, baseProtocolLength+3, []uint{2})
@@ -99,7 +104,7 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 		},
 	}
 	closer, rw, _, _ := testPeer([]Protocol{proto})
-	defer closer.Close()
+	defer closer()
 
 	if err := ExpectMsg(rw, 17, []string{"foo", "bar"}); err != nil {
 		t.Error(err)
@@ -110,7 +115,7 @@ func TestPeerWriteForBroadcast(t *testing.T) {
 	defer testlog(t).detach()
 
 	closer, rw, peer, peerErr := testPeer([]Protocol{discard})
-	defer closer.Close()
+	defer closer()
 
 	emptymsg := func(code uint64) Msg {
 		return Msg{Code: code, Size: 0, Payload: bytes.NewReader(nil)}
@@ -150,7 +155,7 @@ func TestPeerPing(t *testing.T) {
 	defer testlog(t).detach()
 
 	closer, rw, _, _ := testPeer(nil)
-	defer closer.Close()
+	defer closer()
 	if err := SendItems(rw, pingMsg); err != nil {
 		t.Fatal(err)
 	}
@@ -163,16 +168,67 @@ func TestPeerDisconnect(t *testing.T) {
 	defer testlog(t).detach()
 
 	closer, rw, _, disc := testPeer(nil)
-	defer closer.Close()
+	defer closer()
 	if err := SendItems(rw, discMsg, DiscQuitting); err != nil {
 		t.Fatal(err)
 	}
 	if err := ExpectMsg(rw, discMsg, []interface{}{DiscRequested}); err != nil {
 		t.Error(err)
 	}
-	closer.Close() // make test end faster
+	closer()
 	if reason := <-disc; reason != DiscRequested {
 		t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscRequested)
+	}
+}
+
+// This test is supposed to verify that Peer can reliably handle
+// multiple causes of disconnection occurring at the same time.
+func TestPeerDisconnectRace(t *testing.T) {
+	defer testlog(t).detach()
+	maybe := func() bool { return rand.Intn(1) == 1 }
+
+	for i := 0; i < 1000; i++ {
+		protoclose := make(chan error)
+		protodisc := make(chan DiscReason)
+		closer, rw, p, disc := testPeer([]Protocol{
+			{
+				Name:   "closereq",
+				Run:    func(p *Peer, rw MsgReadWriter) error { return <-protoclose },
+				Length: 1,
+			},
+			{
+				Name:   "disconnect",
+				Run:    func(p *Peer, rw MsgReadWriter) error { p.Disconnect(<-protodisc); return nil },
+				Length: 1,
+			},
+		})
+
+		// Simulate incoming messages.
+		go SendItems(rw, baseProtocolLength+1)
+		go SendItems(rw, baseProtocolLength+2)
+		// Close the network connection.
+		go closer()
+		// Make protocol "closereq" return.
+		protoclose <- errors.New("protocol closed")
+		// Make protocol "disconnect" call peer.Disconnect
+		protodisc <- DiscAlreadyConnected
+		// In some cases, simulate something else calling peer.Disconnect.
+		if maybe() {
+			go p.Disconnect(DiscInvalidIdentity)
+		}
+		// In some cases, simulate remote requesting a disconnect.
+		if maybe() {
+			go SendItems(rw, discMsg, DiscQuitting)
+		}
+
+		select {
+		case <-disc:
+		case <-time.After(2 * time.Second):
+			// Peer.run should return quickly. If it doesn't the Peer
+			// goroutines are probably deadlocked. Call panic in order to
+			// show the stacks.
+			panic("Peer.run took to long to return.")
+		}
 	}
 }
 

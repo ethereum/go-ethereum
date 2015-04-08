@@ -409,7 +409,7 @@ func readProtocolHandshake(r MsgReader, our *protoHandshake) (*protoHandshake, e
 		// spec and we send it ourself if Server.addPeer fails.
 		var reason DiscReason
 		rlp.Decode(msg.Payload, &reason)
-		return nil, discRequestedError(reason)
+		return nil, reason
 	}
 	if msg.Code != handshakeMsg {
 		return nil, fmt.Errorf("expected handshake, got %x", msg.Code)
