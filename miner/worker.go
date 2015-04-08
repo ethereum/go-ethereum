@@ -266,6 +266,8 @@ func (self *worker) commitNewWork() {
 	)
 gasLimit:
 	for i, tx := range transactions {
+		self.current.state.StartRecord(tx.Hash(), common.Hash{}, 0)
+
 		err := self.commitTransaction(tx)
 		switch {
 		case core.IsNonceErr(err) || core.IsInvalidTxErr(err):

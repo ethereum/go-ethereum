@@ -7,8 +7,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type Receipt struct {
@@ -29,12 +29,6 @@ func (self *Receipt) SetLogs(logs state.Logs) {
 func (self *Receipt) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, self.logs})
 }
-
-/*
-func (self *Receipt) RlpData() interface{} {
-	return []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, self.logs.RlpData()}
-}
-*/
 
 func (self *Receipt) RlpEncode() []byte {
 	bytes, err := rlp.EncodeToBytes(self)
@@ -57,17 +51,6 @@ func (self *Receipt) String() string {
 }
 
 type Receipts []*Receipt
-
-/*
-func (self Receipts) RlpData() interface{} {
-	data := make([]interface{}, len(self))
-	for i, receipt := range self {
-		data[i] = receipt.RlpData()
-	}
-
-	return data
-}
-*/
 
 func (self Receipts) RlpEncode() []byte {
 	bytes, err := rlp.EncodeToBytes(self)

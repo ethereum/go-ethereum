@@ -23,30 +23,53 @@ type StateDB struct {
 
 	refund map[string]*big.Int
 
-	logs Logs
+	thash, bhash common.Hash
+	txIndex      int
+	logs         map[common.Hash]Logs
 }
 
 // Create a new state from a given trie
 func New(root common.Hash, db common.Database) *StateDB {
 	trie := trie.NewSecure(root[:], db)
-	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: make(map[string]*big.Int)}
+	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: make(map[string]*big.Int), logs: make(map[common.Hash]Logs)}
 }
 
 func (self *StateDB) PrintRoot() {
 	self.trie.Trie.PrintRoot()
 }
 
-func (self *StateDB) EmptyLogs() {
-	self.logs = nil
+func (self *StateDB) StartRecord(thash, bhash common.Hash, ti int) {
+	self.thash = thash
+	self.bhash = bhash
+	self.txIndex = ti
 }
 
-func (self *StateDB) AddLog(log Log) {
-	self.logs = append(self.logs, log)
+func (self *StateDB) AddLog(log *Log) {
+	log.TxHash = self.thash
+	log.BlockHash = self.bhash
+	log.TxIndex = uint(self.txIndex)
+	self.logs[self.thash] = append(self.logs[self.thash], log)
+}
+
+func (self *StateDB) GetLogs(hash common.Hash) Logs {
+	return self.logs[hash]
 }
 
 func (self *StateDB) Logs() Logs {
+	var logs Logs
+	for _, lgs := range self.logs {
+		logs = append(logs, lgs...)
+	}
+	return logs
+}
+
+/*
+func (self *StateDB) Logs(txHash, blockHash common.Hash, txIndex uint) Logs {
+	self.logs.SetInfo(txHash, blockHash, txIndex)
+
 	return self.logs
 }
+*/
 
 func (self *StateDB) Refund(address common.Address, gas *big.Int) {
 	addr := address.Str()
@@ -253,9 +276,10 @@ func (self *StateDB) Copy() *StateDB {
 		state.refund[addr] = new(big.Int).Set(refund)
 	}
 
-	logs := make(Logs, len(self.logs))
-	copy(logs, self.logs)
-	state.logs = logs
+	for hash, logs := range self.logs {
+		state.logs[hash] = make(Logs, len(logs))
+		copy(state.logs[hash], logs)
+	}
 
 	return state
 }

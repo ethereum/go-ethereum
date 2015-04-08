@@ -4,8 +4,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func CreateBloom(receipts Receipts) Bloom {
@@ -20,10 +20,10 @@ func CreateBloom(receipts Receipts) Bloom {
 func LogsBloom(logs state.Logs) *big.Int {
 	bin := new(big.Int)
 	for _, log := range logs {
-		data := make([]common.Hash, len(log.Topics()))
-		bin.Or(bin, bloom9(log.Address().Bytes()))
+		data := make([]common.Hash, len(log.Topics))
+		bin.Or(bin, bloom9(log.Address.Bytes()))
 
-		for i, topic := range log.Topics() {
+		for i, topic := range log.Topics {
 			data[i] = topic
 		}
 

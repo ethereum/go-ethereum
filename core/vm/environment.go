@@ -22,7 +22,7 @@ type Environment interface {
 	Difficulty() *big.Int
 	GasLimit() *big.Int
 	Transfer(from, to Account, amount *big.Int) error
-	AddLog(state.Log)
+	AddLog(*state.Log)
 
 	VmType() Type
 

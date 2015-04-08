@@ -124,17 +124,17 @@ func (self *Filter) FilterLogs(logs state.Logs) state.Logs {
 	// Filter the logs for interesting stuff
 Logs:
 	for _, log := range logs {
-		if len(self.address) > 0 && !includes(self.address, log.Address()) {
+		if len(self.address) > 0 && !includes(self.address, log.Address) {
 			continue
 		}
 
 		logTopics := make([]common.Hash, len(self.topics))
-		copy(logTopics, log.Topics())
+		copy(logTopics, log.Topics)
 
 		for i, topics := range self.topics {
 			for _, topic := range topics {
 				var match bool
-				if log.Topics()[i] == topic {
+				if log.Topics[i] == topic {
 					match = true
 				}
 				if !match {

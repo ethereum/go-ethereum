@@ -284,15 +284,19 @@ type LogRes struct {
 	TransactionIndex *hexnum    `json:"transactionIndex"`
 }
 
-func NewLogRes(log state.Log) LogRes {
+func NewLogRes(log *state.Log) LogRes {
 	var l LogRes
-	l.Topics = make([]*hexdata, len(log.Topics()))
-	for j, topic := range log.Topics() {
+	l.Topics = make([]*hexdata, len(log.Topics))
+	for j, topic := range log.Topics {
 		l.Topics[j] = newHexData(topic)
 	}
-	l.Address = newHexData(log.Address())
-	l.Data = newHexData(log.Data())
-	l.BlockNumber = newHexNum(log.Number())
+	l.Address = newHexData(log.Address)
+	l.Data = newHexData(log.Data)
+	l.BlockNumber = newHexNum(log.Number)
+	l.LogIndex = newHexNum(log.Index)
+	l.TransactionHash = newHexData(log.TxHash)
+	l.TransactionIndex = newHexNum(log.TxIndex)
+	l.BlockHash = newHexData(log.BlockHash)
 
 	return l
 }

@@ -393,7 +393,7 @@ func (self *XEth) NewFilterString(word string) int {
 			self.logMut.Lock()
 			defer self.logMut.Unlock()
 
-			self.logs[id].add(&state.StateLog{})
+			self.logs[id].add(&state.Log{})
 		}
 	case "latest":
 		filter.BlockCallback = func(block *types.Block, logs state.Logs) {
@@ -403,7 +403,7 @@ func (self *XEth) NewFilterString(word string) int {
 			for _, log := range logs {
 				self.logs[id].add(log)
 			}
-			self.logs[id].add(&state.StateLog{})
+			self.logs[id].add(&state.Log{})
 		}
 	}
 
@@ -729,7 +729,7 @@ type logFilter struct {
 	id      int
 }
 
-func (l *logFilter) add(logs ...state.Log) {
+func (l *logFilter) add(logs ...*state.Log) {
 	l.logs = append(l.logs, logs...)
 }
 

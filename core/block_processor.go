@@ -73,7 +73,7 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 
 func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
 	// If we are mining this block and validating we want to set the logs back to 0
-	statedb.EmptyLogs()
+	//statedb.EmptyLogs()
 
 	cb := statedb.GetStateObject(coinbase.Address())
 	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, block), tx, cb)
@@ -89,7 +89,9 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 
 	cumulative := new(big.Int).Set(usedGas.Add(usedGas, gas))
 	receipt := types.NewReceipt(statedb.Root().Bytes(), cumulative)
-	receipt.SetLogs(statedb.Logs())
+
+	logs := statedb.GetLogs(tx.Hash())
+	receipt.SetLogs(logs)
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	glog.V(logger.Debug).Infoln(receipt)
@@ -97,7 +99,6 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	// Notify all subscribers
 	if !transientProcess {
 		go self.eventMux.Post(TxPostEvent{tx})
-		logs := statedb.Logs()
 		go self.eventMux.Post(logs)
 	}
 
@@ -115,7 +116,9 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 		cumulativeSum = new(big.Int)
 	)
 
-	for _, tx := range txs {
+	for i, tx := range txs {
+		statedb.StartRecord(tx.Hash(), block.Hash(), i)
+
 		receipt, txGas, err := self.ApplyTransaction(coinbase, statedb, block, tx, totalUsedGas, transientProcess)
 		if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
 			return nil, err
