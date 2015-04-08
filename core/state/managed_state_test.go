@@ -87,3 +87,21 @@ func TestRemoteNonceChange(t *testing.T) {
 		t.Error("expected nonce after remote update to be", 201, "got", nonce)
 	}
 }
+
+func TestSetNonce(t *testing.T) {
+	ms, _ := create()
+
+	var addr common.Address
+	ms.SetNonce(addr, 10)
+
+	if ms.GetNonce(addr) != 10 {
+		t.Errorf("Expected nonce of 10, got", ms.GetNonce(addr))
+	}
+
+	addr[0] = 1
+	ms.StateDB.SetNonce(addr, 1)
+
+	if ms.GetNonce(addr) != 1 {
+		t.Errorf("Expected nonce of 1, got", ms.GetNonce(addr))
+	}
+}

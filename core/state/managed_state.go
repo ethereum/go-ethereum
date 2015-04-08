@@ -20,6 +20,7 @@ type ManagedState struct {
 	accounts map[string]*account
 }
 
+// ManagedState returns a new managed state with the statedb as it's backing layer
 func ManageState(statedb *StateDB) *ManagedState {
 	return &ManagedState{
 		StateDB:  statedb,
@@ -27,14 +28,16 @@ func ManageState(statedb *StateDB) *ManagedState {
 	}
 }
 
+// SetState sets the backing layer of the managed state
 func (ms *ManagedState) SetState(statedb *StateDB) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	ms.StateDB = statedb
 }
 
+// RemoveNonce removed the nonce from the managed state and all future pending nonces
 func (ms *ManagedState) RemoveNonce(addr common.Address, n uint64) {
-	if ms.hasAccount(addr) {
+	if ms.HasAccount(addr) {
 		ms.mu.Lock()
 		defer ms.mu.Unlock()
 
@@ -47,6 +50,7 @@ func (ms *ManagedState) RemoveNonce(addr common.Address, n uint64) {
 	}
 }
 
+// NewNonce returns the new canonical nonce for the managed account
 func (ms *ManagedState) NewNonce(addr common.Address) uint64 {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
@@ -61,11 +65,31 @@ func (ms *ManagedState) NewNonce(addr common.Address) uint64 {
 	return uint64(len(account.nonces)) + account.nstart
 }
 
-func (ms *ManagedState) hasAccount(addr common.Address) bool {
+// GetNonce returns the canonical nonce for the managed or unmanged account
+func (ms *ManagedState) GetNonce(addr common.Address) uint64 {
+	if ms.HasAccount(addr) {
+		account := ms.getAccount(addr)
+		return uint64(len(account.nonces)) + account.nstart
+	} else {
+		return ms.StateDB.GetNonce(addr)
+	}
+}
+
+// SetNonce sets the new canonical nonce for the managed state
+func (ms *ManagedState) SetNonce(addr common.Address, nonce uint64) {
+	so := ms.GetOrNewStateObject(addr)
+	so.SetNonce(nonce)
+
+	ms.accounts[addr.Str()] = newAccount(so)
+}
+
+// HasAccount returns whether the given address is managed or not
+func (ms *ManagedState) HasAccount(addr common.Address) bool {
 	_, ok := ms.accounts[addr.Str()]
 	return ok
 }
 
+// populate the managed state
 func (ms *ManagedState) getAccount(addr common.Address) *account {
 	straddr := addr.Str()
 	if account, ok := ms.accounts[straddr]; !ok {
