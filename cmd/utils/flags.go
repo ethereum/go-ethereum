@@ -231,7 +231,8 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	// Set verbosity on glog
 	glog.SetV(ctx.GlobalInt(LogLevelFlag.Name))
 	// Set the log type
-	glog.SetToStderr(ctx.GlobalBool(LogToStdErrFlag.Name))
+	//glog.SetToStderr(ctx.GlobalBool(LogToStdErrFlag.Name))
+	glog.SetToStderr(true)
 	// Set the log dir
 	glog.SetLogDir(ctx.GlobalString(LogFileFlag.Name))
 
