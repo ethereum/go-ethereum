@@ -97,6 +97,7 @@ type Block struct {
 	uncles       []*Header
 	transactions Transactions
 	Td           *big.Int
+	queued       bool // flag for blockpool to skip TD check
 
 	receipts Receipts
 }
@@ -267,6 +268,9 @@ func (self *Block) Nonce() uint64 {
 func (self *Block) SetNonce(nonce uint64) {
 	self.header.SetNonce(nonce)
 }
+
+func (self *Block) Queued() bool     { return self.queued }
+func (self *Block) SetQueued(q bool) { self.queued = q }
 
 func (self *Block) Bloom() Bloom             { return self.header.Bloom }
 func (self *Block) Coinbase() common.Address { return self.header.Coinbase }

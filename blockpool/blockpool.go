@@ -782,7 +782,8 @@ LOOP:
 // check if block's actual TD (calculated after successful insertChain) is identical to TD advertised for peer's head block.
 func (self *BlockPool) checkTD(nodes ...*node) {
 	for _, n := range nodes {
-		if n.td != nil {
+		// skip check if queued future block
+		if n.td != nil && !n.block.Queued() {
 			plog.DebugDetailf("peer td %v =?= block td %v", n.td, n.block.Td)
 			if n.td.Cmp(n.block.Td) != 0 {
 				self.peers.peerError(n.blockBy, ErrIncorrectTD, "on block %x", n.hash)

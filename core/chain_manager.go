@@ -471,6 +471,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			// Do not penelise on future block. We'll need a block queue eventually that will queue
 			// future block for future use
 			if err == BlockFutureErr {
+				block.SetQueued(true)
 				self.futureBlocks.Push(block)
 				stats.queued++
 				continue
