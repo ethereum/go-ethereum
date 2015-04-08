@@ -90,6 +90,7 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 }
 
 func (self *TxPool) addTx(tx *types.Transaction) {
+	self.txs[tx.Hash()] = tx
 }
 
 func (self *TxPool) add(tx *types.Transaction) error {
@@ -107,7 +108,7 @@ func (self *TxPool) add(tx *types.Transaction) error {
 		return err
 	}
 
-	self.txs[hash] = tx
+	self.addTx(tx)
 
 	var toname string
 	if to := tx.To(); to != nil {
@@ -122,9 +123,7 @@ func (self *TxPool) add(tx *types.Transaction) error {
 	txplogger.Debugf("(t) %x => %s (%v) %x\n", from, toname, tx.Value, tx.Hash())
 
 	// Notify the subscribers
-	//println("post")
 	go self.eventMux.Post(TxPreEvent{tx})
-	//println("done post")
 
 	return nil
 }

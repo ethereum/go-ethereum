@@ -436,6 +436,21 @@ func (self *Ethereum) txBroadcastLoop() {
 	for obj := range self.txSub.Chan() {
 		event := obj.(core.TxPreEvent)
 		self.net.Broadcast("eth", TxMsg, []*types.Transaction{event.Tx})
+		self.syncAccounts(event.Tx)
+	}
+}
+
+// keep accounts synced up
+func (self *Ethereum) syncAccounts(tx *types.Transaction) {
+	from, err := tx.From()
+	if err != nil {
+		return
+	}
+
+	if self.accountManager.HasAccount(from.Bytes()) {
+		if self.chainManager.TxState().GetNonce(from) < tx.Nonce() {
+			self.chainManager.TxState().SetNonce(from, tx.Nonce()+1)
+		}
 	}
 }
 
