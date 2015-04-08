@@ -572,8 +572,20 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	statedb := self.State().State() //self.eth.ChainManager().TransState()
+	var from *state.StateObject
+	if len(fromStr) == 0 {
+		accounts, err := self.backend.AccountManager().Accounts()
+		if err != nil || len(accounts) == 0 {
+			from = statedb.GetOrNewStateObject(common.Address{})
+		} else {
+			from = statedb.GetOrNewStateObject(common.BytesToAddress(accounts[0].Address))
+		}
+	} else {
+		from = statedb.GetOrNewStateObject(common.HexToAddress(fromStr))
+	}
+
 	msg := callmsg{
-		from:     statedb.GetOrNewStateObject(common.HexToAddress(fromStr)),
+		from:     from,
 		to:       common.HexToAddress(toStr),
 		gas:      common.Big(gasStr),
 		gasPrice: common.Big(gasPriceStr),

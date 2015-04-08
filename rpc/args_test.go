@@ -671,10 +671,6 @@ func TestCallArgs(t *testing.T) {
 		t.Error(err)
 	}
 
-	if expected.From != args.From {
-		t.Errorf("From shoud be %#v but is %#v", expected.From, args.From)
-	}
-
 	if expected.To != args.To {
 		t.Errorf("To shoud be %#v but is %#v", expected.To, args.To)
 	}
@@ -895,19 +891,8 @@ func TestCallArgsNotStrings(t *testing.T) {
 	}
 }
 
-func TestCallArgsFromEmpty(t *testing.T) {
-	input := `[{"to": "0xb60e8dd61c5d32be8058bb8eb970870f07233155"}]`
-
-	args := new(CallArgs)
-	str := ExpectValidationError(json.Unmarshal([]byte(input), &args))
-	if len(str) > 0 {
-		t.Error(str)
-	}
-}
-
 func TestCallArgsToEmpty(t *testing.T) {
 	input := `[{"from": "0xb60e8dd61c5d32be8058bb8eb970870f07233155"}]`
-
 	args := new(CallArgs)
 	str := ExpectValidationError(json.Unmarshal([]byte(input), &args))
 	if len(str) > 0 {
