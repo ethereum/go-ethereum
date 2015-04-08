@@ -195,7 +195,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
 	eth.pow = ethash.New(eth.chainManager)
-	eth.txPool = core.NewTxPool(eth.EventMux())
+	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State)
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()

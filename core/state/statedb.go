@@ -63,14 +63,6 @@ func (self *StateDB) Logs() Logs {
 	return logs
 }
 
-/*
-func (self *StateDB) Logs(txHash, blockHash common.Hash, txIndex uint) Logs {
-	self.logs.SetInfo(txHash, blockHash, txIndex)
-
-	return self.logs
-}
-*/
-
 func (self *StateDB) Refund(address common.Address, gas *big.Int) {
 	addr := address.Str()
 	if self.refund[addr] == nil {
@@ -82,6 +74,10 @@ func (self *StateDB) Refund(address common.Address, gas *big.Int) {
 /*
  * GETTERS
  */
+
+func (self *StateDB) HasAccount(addr common.Address) bool {
+	return self.GetStateObject(addr) != nil
+}
 
 // Retrieve the balance from the given address or 0 if object not found
 func (self *StateDB) GetBalance(addr common.Address) *big.Int {

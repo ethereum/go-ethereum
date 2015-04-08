@@ -255,7 +255,7 @@ func TestChainInsertions(t *testing.T) {
 
 	var eventMux event.TypeMux
 	chainMan := NewChainManager(db, db, &eventMux)
-	txPool := NewTxPool(&eventMux)
+	txPool := NewTxPool(&eventMux, chainMan.State)
 	blockMan := NewBlockProcessor(db, db, nil, txPool, chainMan, &eventMux)
 	chainMan.SetProcessor(blockMan)
 
@@ -301,7 +301,7 @@ func TestChainMultipleInsertions(t *testing.T) {
 	}
 	var eventMux event.TypeMux
 	chainMan := NewChainManager(db, db, &eventMux)
-	txPool := NewTxPool(&eventMux)
+	txPool := NewTxPool(&eventMux, chainMan.State)
 	blockMan := NewBlockProcessor(db, db, nil, txPool, chainMan, &eventMux)
 	chainMan.SetProcessor(blockMan)
 	done := make(chan bool, max)

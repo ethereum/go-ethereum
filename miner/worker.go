@@ -288,7 +288,7 @@ gasLimit:
 			tcount++
 		}
 	}
-	self.eth.TxPool().InvalidateSet(remove)
+	//self.eth.TxPool().InvalidateSet(remove)
 
 	var (
 		uncles    []*types.Header

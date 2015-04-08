@@ -45,8 +45,8 @@ func NewChainMan(block *types.Block, eventMux *event.TypeMux, db common.Database
 	return newChainManager(block, eventMux, db)
 }
 
-func NewBlockProc(db common.Database, txpool *TxPool, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
-	return newBlockProcessor(db, txpool, cman, eventMux)
+func NewBlockProc(db common.Database, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+	return newBlockProcessor(db, cman, eventMux)
 }
 
 func NewCanonical(n int, db common.Database) (*BlockProcessor, error) {
@@ -120,8 +120,10 @@ func newChainManager(block *types.Block, eventMux *event.TypeMux, db common.Data
 }
 
 // block processor with fake pow
-func newBlockProcessor(db common.Database, txpool *TxPool, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
-	bman := NewBlockProcessor(db, db, FakePow{}, txpool, newChainManager(nil, eventMux, db), eventMux)
+func newBlockProcessor(db common.Database, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+	chainMan := newChainManager(nil, eventMux, db)
+	txpool := NewTxPool(eventMux, chainMan.State)
+	bman := NewBlockProcessor(db, db, FakePow{}, txpool, chainMan, eventMux)
 	return bman
 }
 
@@ -129,9 +131,8 @@ func newBlockProcessor(db common.Database, txpool *TxPool, cman *ChainManager, e
 // on result of makeChain
 func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
 	eventMux := &event.TypeMux{}
-	txpool := NewTxPool(eventMux)
 
-	bman := newBlockProcessor(db, txpool, newChainManager(nil, eventMux, db), eventMux)
+	bman := newBlockProcessor(db, newChainManager(nil, eventMux, db), eventMux)
 	bman.bc.SetProcessor(bman)
 	parent := bman.bc.CurrentBlock()
 	if n == 0 {
