@@ -136,6 +136,7 @@ var net = web3.net;
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
 
+	js.re.Eval(registrar + "registrar = new Registrar(" + registrarAddr + ");")
 }
 
 func (self *jsre) ConfirmTransaction(tx *types.Transaction) bool {

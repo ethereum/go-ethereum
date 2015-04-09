@@ -50,15 +50,7 @@ func CalcDifficulty(block, parent *types.Header) *big.Int {
 }
 
 func CalculateTD(block, parent *types.Block) *big.Int {
-	uncleDiff := new(big.Int)
-	for _, uncle := range block.Uncles() {
-		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
-	}
-
-	// TD(genesis_block) = 0 and TD(B) = TD(B.parent) + sum(u.difficulty for u in B.uncles) + B.difficulty
-	td := new(big.Int)
-	td = td.Add(parent.Td, uncleDiff)
-	td = td.Add(td, block.Header().Difficulty)
+	td := new(big.Int).Add(parent.Td, block.Header().Difficulty)
 
 	return td
 }
