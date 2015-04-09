@@ -68,10 +68,10 @@ func NewApp(version, usage string) *cli.App {
 
 var (
 	// General settings
-	DataDirFlag = cli.StringFlag{
+	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
 		Usage: "Data directory to be used",
-		Value: common.DefaultDataDir(),
+		Value: DirectoryString{common.DefaultDataDir()},
 	}
 	ProtocolVersionFlag = cli.IntFlag{
 		Name:  "protocolversion",
