@@ -57,7 +57,8 @@ type peer struct {
 // peers is the component keeping a record of peers in a hashmap
 //
 type peers struct {
-	lock sync.RWMutex
+	lock   sync.RWMutex
+	bllock sync.Mutex
 
 	bp        *BlockPool
 	errors    *errs.Errors
@@ -109,13 +110,15 @@ func (self *peers) peerError(id string, code int, format string, params ...inter
 
 // record time of offence in blacklist to implement suspension for PeerSuspensionInterval
 func (self *peers) addToBlacklist(id string) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+	self.bllock.Lock()
+	defer self.bllock.Unlock()
 	self.blacklist[id] = time.Now()
 }
 
 // suspended checks if peer is still suspended, caller should hold peers.lock
 func (self *peers) suspended(id string) (s bool) {
+	self.bllock.Lock()
+	defer self.bllock.Unlock()
 	if suspendedAt, ok := self.blacklist[id]; ok {
 		if s = suspendedAt.Add(self.bp.Config.PeerSuspensionInterval).After(time.Now()); !s {
 			// no longer suspended, delete entry
