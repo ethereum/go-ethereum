@@ -87,7 +87,7 @@
 window.filter = filter;
 
 	function refresh() {
-        document.querySelector("#balance").innerHTML = contract.call({from:eth.coinbase}).balance(eth.coinbase);
+        document.querySelector("#balance").innerHTML = contract.balance(eth.coinbase);
 	}
 
 	function transact() {

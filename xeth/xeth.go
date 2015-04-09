@@ -18,12 +18,12 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
-	pipelogger       = logger.NewLogger("XETH")
 	filterTickerTime = 5 * time.Minute
 	defaultGasPrice  = big.NewInt(10000000000000) //150000000000
 	defaultGas       = big.NewInt(90000)          //500000
@@ -218,7 +218,7 @@ func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blha
 		blnum = big.NewInt(int64(txExtra.BlockIndex))
 		txi = txExtra.Index
 	} else {
-		pipelogger.Errorln(err)
+		glog.V(logger.Error).Infoln(err)
 	}
 
 	return
@@ -676,7 +676,7 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 
 	if contractCreation {
 		addr := core.AddressFromMessage(tx)
-		pipelogger.Infof("Contract addr %x\n", addr)
+		glog.V(logger.Info).Infof("Contract addr %x\n", addr)
 
 		return core.AddressFromMessage(tx).Hex(), nil
 	}
