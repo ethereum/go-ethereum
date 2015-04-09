@@ -121,7 +121,7 @@ func HexToECDSA(hexkey string) (*ecdsa.PrivateKey, error) {
 
 // LoadECDSA loads a secp256k1 private key from the given file.
 func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
-	buf := make([]byte, 32)
+	buf := make([]byte, 64)
 	fd, err := os.Open(file)
 	if err != nil {
 		return nil, err
@@ -130,13 +130,20 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 	if _, err := io.ReadFull(fd, buf); err != nil {
 		return nil, err
 	}
-	return ToECDSA(buf), nil
+
+	key, err := hex.DecodeString(string(buf))
+	if err != nil {
+		return nil, err
+	}
+
+	return ToECDSA(key), nil
 }
 
 // SaveECDSA saves a secp256k1 private key to the given file with restrictive
 // permissions
 func SaveECDSA(file string, key *ecdsa.PrivateKey) error {
-	return ioutil.WriteFile(file, FromECDSA(key), 0600)
+	k := hex.EncodeToString(FromECDSA(key))
+	return ioutil.WriteFile(file, []byte(k), 0600)
 }
 
 func GenerateKey() (*ecdsa.PrivateKey, error) {
