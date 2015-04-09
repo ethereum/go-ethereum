@@ -8,6 +8,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -37,7 +39,7 @@ func (api *EthereumApi) xethAtStateNum(num int64) *xeth.XEth {
 
 func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/JSON-RPC
-	rpclogger.Debugf("%s %s", req.Method, req.Params)
+	glog.V(logger.Debug).Infof("%s %s", req.Method, req.Params)
 
 	switch req.Method {
 	case "web3_sha3":
