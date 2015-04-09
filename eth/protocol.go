@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/errs"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -366,7 +367,8 @@ func (self *ethProtocol) requestBlocks(hashes []common.Hash) error {
 
 func (self *ethProtocol) protoError(code int, format string, params ...interface{}) (err *errs.Error) {
 	err = self.errors.New(code, format, params...)
-	err.Log(self.peer.Logger)
+	//err.Log(self.peer.Logger)
+	err.Log(glog.V(logger.Info))
 	return
 }
 
@@ -382,8 +384,11 @@ func (self *ethProtocol) sendStatus() error {
 }
 
 func (self *ethProtocol) protoErrorDisconnect(err *errs.Error) {
-	err.Log(self.peer.Logger)
-	if err.Fatal() {
-		self.peer.Disconnect(p2p.DiscSubprotocolError)
-	}
+	//err.Log(self.peer.Logger)
+	err.Log(glog.V(logger.Info))
+	/*
+		if err.Fatal() {
+			self.peer.Disconnect(p2p.DiscSubprotocolError)
+		}
+	*/
 }

@@ -489,7 +489,7 @@ func (self *section) blockHashesRequest() {
 				//  activate parent section with this peer
 				// but only if not during switch mode
 				plog.DebugDetailf("[%s] parent section [%s] activated\n", sectionhex(self), sectionhex(parentSection))
-				self.bp.activateChain(parentSection, self.peer, nil)
+				self.bp.activateChain(parentSection, self.peer, self.peer.switchC, nil)
 				// if not root of chain, switch off
 				plog.DebugDetailf("[%s] parent found, hash requests deactivated (after %v total attempts)\n", sectionhex(self), self.blockHashesRequests)
 				self.blockHashesRequestTimer = nil
