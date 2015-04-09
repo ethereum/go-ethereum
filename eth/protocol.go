@@ -385,7 +385,7 @@ func (self *ethProtocol) sendStatus() error {
 
 func (self *ethProtocol) protoErrorDisconnect(err *errs.Error) {
 	//err.Log(self.peer.Logger)
-	err.Log(glog.V(logger.Debug))
+	err.Log(glog.V(logger.Info))
 	/*
 		if err.Fatal() {
 			self.peer.Disconnect(p2p.DiscSubprotocolError)

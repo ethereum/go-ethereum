@@ -790,12 +790,14 @@ func (self *BlockPool) checkTD(nodes ...*node) {
 		// skip check if queued future block
 		if n.td != nil && !n.block.Queued() {
 			plog.DebugDetailf("peer td %v =?= block td %v", n.td, n.block.Td)
+			/* @zelig: Commented out temp untill the rest of the network has been fixed.
 			if n.td.Cmp(n.block.Td) != 0 {
 				self.peers.peerError(n.blockBy, ErrIncorrectTD, "on block %x", n.hash)
 				self.status.lock.Lock()
 				self.status.badPeers[n.blockBy]++
 				self.status.lock.Unlock()
 			}
+			*/
 		}
 	}
 }

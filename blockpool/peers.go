@@ -473,6 +473,7 @@ func (self *peer) getBlockHashes() bool {
 			self.addError(ErrInvalidBlock, "%v", err)
 			self.bp.status.badPeers[self.id]++
 		} else {
+			/* @zelig: Commented out temp untill the rest of the network has been fixed.
 			// XXX added currentBlock check (?)
 			if self.currentBlock != nil && self.currentBlock.Td != nil && !self.currentBlock.Queued() {
 				plog.DebugDetailf("HeadSection: <%s> inserted %s to blockchain... check TD %v =?= %v", self.id, hex(self.parentHash), self.td, self.currentBlock.Td)
@@ -481,6 +482,7 @@ func (self *peer) getBlockHashes() bool {
 					self.bp.status.badPeers[self.id]++
 				}
 			}
+			*/
 			headKey := self.parentHash
 			height := self.bp.status.chain[headKey] + 1
 			self.bp.status.chain[self.currentBlockHash] = height
