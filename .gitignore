@@ -23,9 +23,7 @@ Godeps/_workspace/bin
 .project
 .settings
 
-geth
 mist
-cmd/geth/geth
 cmd/mist/mist
 deploy/osx/Mist.app
 deploy/osx/Mist\ Installer.dmg
