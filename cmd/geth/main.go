@@ -43,7 +43,7 @@ import (
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.7"
+	Version          = "0.9.8"
 )
 
 var app = utils.NewApp(Version, "the go-ethereum command line interface")
