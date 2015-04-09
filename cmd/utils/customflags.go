@@ -18,11 +18,11 @@ type DirectoryString struct {
 	Value string
 }
 
-func (self DirectoryString) String() string {
+func (self *DirectoryString) String() string {
 	return self.Value
 }
 
-func (self DirectoryString) Set(value string) error {
+func (self *DirectoryString) Set(value string) error {
 	self.Value = expandPath(value)
 	return nil
 }
@@ -72,9 +72,8 @@ func (self DirectoryFlag) Apply(set *flag.FlagSet) {
 	}
 
 	eachName(self.Name, func(name string) {
-		set.Var(self.Value, self.Name, "a: "+self.Usage)
+		set.Var(&self.Value, self.Name, self.Usage)
 	})
-
 }
 
 func prefixFor(name string) (prefix string) {
