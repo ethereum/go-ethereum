@@ -147,18 +147,6 @@ func Hex2Bytes(str string) []byte {
 	return h
 }
 
-func HexBytes2Bytes(d []byte) []byte {
-	r := make([]byte, hex.DecodedLen(len(d)))
-	hex.Decode(r, d)
-	return r
-}
-
-func Bytes2HexBytes(d []byte) []byte {
-	r := make([]byte, hex.EncodedLen(len(d)))
-	hex.Encode(r, d)
-	return r
-}
-
 func StringToByteFunc(str string, cb func(str string) []byte) (ret []byte) {
 	if len(str) > 1 && str[0:2] == "0x" && !strings.Contains(str, "\n") {
 		ret = Hex2Bytes(str[2:])
