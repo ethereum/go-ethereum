@@ -149,8 +149,7 @@ password to file or expose in any other way.
 Imports an unencrypted private key from <keyfile> and creates a new account.
 Prints the address.
 
-The keyfile is assumed to contain an unencrypted private key in canonical EC
-raw bytes format.
+The keyfile is assumed to contain an unencrypted private key in hexadecimal format.
 
 The account is saved in encrypted format, you are prompted for a passphrase.
 
