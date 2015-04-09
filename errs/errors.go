@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 /*
@@ -76,9 +77,18 @@ func (self Error) Error() (message string) {
 	return self.message
 }
 
+func (self Error) Log(v glog.Verbose) {
+	if v {
+		v.Infoln(self)
+	}
+	//log.Sendln(self.level, self)
+}
+
+/*
 func (self Error) Log(log *logger.Logger) {
 	log.Sendln(self.level, self)
 }
+*/
 
 /*
 err.Fatal() is true if err's severity level is 0 or 1 (logger.ErrorLevel or logger.Silence)
