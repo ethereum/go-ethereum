@@ -472,6 +472,7 @@ func (self *peer) getBlockHashes() bool {
 		} else {
 			// XXX added currentBlock check (?)
 			if self.currentBlock != nil && self.currentBlock.Td != nil && !self.currentBlock.Queued() {
+				plog.DebugDetailf("HeadSection: <%s> inserted %s to blockchain... check TD %v =?= %v", self.id, hex(self.parentHash), self.td, self.currentBlock.Td)
 				if self.td.Cmp(self.currentBlock.Td) != 0 {
 					self.addError(ErrIncorrectTD, "on block %x", self.currentBlockHash)
 					self.bp.status.badPeers[self.id]++

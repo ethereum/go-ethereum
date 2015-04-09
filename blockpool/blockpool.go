@@ -384,6 +384,7 @@ func (self *BlockPool) AddBlockHashes(next func() (common.Hash, bool), peerId st
 	// first check if we are building the head section of a peer's chain
 	if bestpeer.parentHash == hash {
 		if self.hasBlock(bestpeer.currentBlockHash) {
+			bestpeer.lock.RUnlock()
 			return
 		}
 		/*
