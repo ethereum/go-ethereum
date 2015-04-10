@@ -24,6 +24,8 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"net/http"
 	"os"
 	"runtime"
 	"strconv"
@@ -40,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/peterh/liner"
 )
+import _ "net/http/pprof"
 
 const (
 	ClientIdentifier = "Geth"
@@ -247,6 +250,11 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 }
 
 func main() {
+	// Start up the default http server for pprof
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	fmt.Printf("Welcome to the FRONTIER\n")
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	defer logger.Flush()
