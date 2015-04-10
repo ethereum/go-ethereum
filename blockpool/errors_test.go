@@ -128,6 +128,7 @@ func TestErrInsufficientChainInfo(t *testing.T) {
 }
 
 func TestIncorrectTD(t *testing.T) {
+	t.Skip() // td not tested atm
 	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
