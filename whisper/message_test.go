@@ -13,7 +13,7 @@ func TestMessageSimpleWrap(t *testing.T) {
 	payload := []byte("hello world")
 
 	msg := NewMessage(payload)
-	if _, err := msg.Wrap(DefaultPow, Options{}); err != nil {
+	if _, err := msg.Wrap(DefaultProofOfWork, Options{}); err != nil {
 		t.Fatalf("failed to wrap message: %v", err)
 	}
 	if msg.Flags&128 != 0 {
@@ -36,7 +36,7 @@ func TestMessageCleartextSignRecover(t *testing.T) {
 	payload := []byte("hello world")
 
 	msg := NewMessage(payload)
-	if _, err := msg.Wrap(DefaultPow, Options{
+	if _, err := msg.Wrap(DefaultProofOfWork, Options{
 		From: key,
 	}); err != nil {
 		t.Fatalf("failed to sign message: %v", err)
@@ -69,7 +69,7 @@ func TestMessageAnonymousEncryptDecrypt(t *testing.T) {
 	payload := []byte("hello world")
 
 	msg := NewMessage(payload)
-	envelope, err := msg.Wrap(DefaultPow, Options{
+	envelope, err := msg.Wrap(DefaultProofOfWork, Options{
 		To: &key.PublicKey,
 	})
 	if err != nil {
@@ -104,7 +104,7 @@ func TestMessageFullCrypto(t *testing.T) {
 
 	payload := []byte("hello world")
 	msg := NewMessage(payload)
-	envelope, err := msg.Wrap(DefaultPow, Options{
+	envelope, err := msg.Wrap(DefaultProofOfWork, Options{
 		From: fromKey,
 		To:   &toKey.PublicKey,
 	})

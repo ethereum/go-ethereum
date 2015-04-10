@@ -69,7 +69,7 @@ func selfSend(shh *whisper.Whisper, payload []byte) error {
 	})
 	// Wrap the payload and encrypt it
 	msg := whisper.NewMessage(payload)
-	envelope, err := msg.Wrap(whisper.DefaultPow, whisper.Options{
+	envelope, err := msg.Wrap(whisper.DefaultProofOfWork, whisper.Options{
 		From: id,
 		To:   &id.PublicKey,
 		TTL:  whisper.DefaultTimeToLive,

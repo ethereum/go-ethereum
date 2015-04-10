@@ -17,7 +17,7 @@ import (
 // protocol. These are wrapped into Envelopes that need not be understood by
 // intermediate nodes, just forwarded.
 type Message struct {
-	Flags     byte // First bit it signature presence, rest reserved and should be random
+	Flags     byte // First bit is signature presence, rest reserved and should be random
 	Signature []byte
 	Payload   []byte
 	Sent      int64

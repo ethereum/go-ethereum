@@ -29,7 +29,8 @@ type MessageEvent struct {
 }
 
 const (
-	DefaultTimeToLive = 50 * time.Second
+	DefaultTimeToLive  = 50 * time.Second
+	DefaultProofOfWork = 50 * time.Millisecond
 )
 
 type Whisper struct {
