@@ -9,16 +9,8 @@ func TestTransactions(t *testing.T) {
 	// TODO: all commented out tests should work!
 
 	snafus := []string{
-		"AddressLessThan20Prefixed0",
-		"DataTest",
 		"EmptyTransaction",
-		"RightVRSTest",
-		"SenderTest",
-		"TransactionWithGasLimitxPriceOverflow",
-		"TransactionWithHihghGas",
-		"TransactionWithHihghGasPrice",
 		"TransactionWithHihghNonce",
-		"TransactionWithHihghValue",
 		"TransactionWithRvalueWrongSize",
 		"TransactionWithSvalueHigh",
 		"TransactionWithSvalueTooHigh",
@@ -26,7 +18,8 @@ func TestTransactions(t *testing.T) {
 		"ValuesAsDec",
 		"ValuesAsHex",
 		"libsecp256k1test",
-		"unpadedRValue"}
+		"unpadedRValue",
+	}
 
 	for _, name := range snafus {
 		notWorking[name] = true

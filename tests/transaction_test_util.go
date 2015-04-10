@@ -30,7 +30,7 @@ type TransactionTest struct {
 	Transaction TtTransaction
 }
 
-func RunTransactionTests(file string, notWorking  map[string]bool) error {
+func RunTransactionTests(file string, notWorking map[string]bool) error {
 	bt := make(map[string]TransactionTest)
 	if err := LoadJSON(file, &bt); err != nil {
 		return err
@@ -60,7 +60,7 @@ func runTest(txTest TransactionTest) (err error) {
 	}
 	tx := new(types.Transaction)
 	rlp.DecodeBytes(rlpBytes, tx)
-
+	//fmt.Println("HURR tx: %v", tx)
 	sender, err := tx.From()
 	if err != nil {
 		return err
@@ -120,15 +120,15 @@ func convertTestTypes(txTest TransactionTest) (sender, to common.Address,
 	txInputData = mustConvertBytes(txTest.Transaction.Data)
 	rlpBytes = mustConvertBytes(txTest.Rlp)
 
-	gasLimit = mustConvertBigIntHex(txTest.Transaction.GasLimit)
-	gasPrice = mustConvertBigIntHex(txTest.Transaction.GasPrice)
-	value = mustConvertBigIntHex(txTest.Transaction.Value)
+	gasLimit = mustConvertBigInt10(txTest.Transaction.GasLimit)
+	gasPrice = mustConvertBigInt10(txTest.Transaction.GasPrice)
+	value = mustConvertBigInt10(txTest.Transaction.Value)
 
 	r = common.Bytes2Big(mustConvertBytes(txTest.Transaction.R))
 	s = common.Bytes2Big(mustConvertBytes(txTest.Transaction.S))
 
 	nonce = mustConvertUintHex(txTest.Transaction.Nonce)
-	v = mustConvertUintHex(txTest.Transaction.V)
+	v = mustConvertUint(txTest.Transaction.V)
 
 	return sender, to, txInputData, rlpBytes, gasLimit, gasPrice, value, r, s, nonce, v, nil
 }
