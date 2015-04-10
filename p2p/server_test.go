@@ -22,7 +22,7 @@ func startTestServer(t *testing.T, pf newPeerHook) *Server {
 		ListenAddr:  "127.0.0.1:0",
 		PrivateKey:  newkey(),
 		newPeerHook: pf,
-		setupFunc: func(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node) (*conn, error) {
+		setupFunc: func(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node, atcap bool) (*conn, error) {
 			id := randomID()
 			rw := newRlpxFrameRW(fd, secrets{
 				MAC:        zero16,
@@ -159,6 +159,62 @@ func TestServerBroadcast(t *testing.T) {
 			t.Errorf("conn %d: read error: %v", i, err)
 		} else if !bytes.Equal(buf, golden) {
 			t.Errorf("conn %d: msg mismatch\ngot:  %x\nwant: %x", i, buf, golden)
+		}
+	}
+}
+
+// This test checks that connections are disconnected
+// just after the encryption handshake when the server is
+// at capacity.
+//
+// It also serves as a light-weight integration test.
+func TestServerDisconnectAtCap(t *testing.T) {
+	defer testlog(t).detach()
+
+	started := make(chan *Peer)
+	srv := &Server{
+		ListenAddr: "127.0.0.1:0",
+		PrivateKey: newkey(),
+		MaxPeers:   10,
+		NoDial:     true,
+		// This hook signals that the peer was actually started. We
+		// need to wait for the peer to be started before dialing the
+		// next connection to get a deterministic peer count.
+		newPeerHook: func(p *Peer) { started <- p },
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Stop()
+
+	nconns := srv.MaxPeers + 1
+	dialer := &net.Dialer{Deadline: time.Now().Add(3 * time.Second)}
+	for i := 0; i < nconns; i++ {
+		conn, err := dialer.Dial("tcp", srv.ListenAddr)
+		if err != nil {
+			t.Fatalf("conn %d: dial error: %v", i, err)
+		}
+		// Close the connection when the test ends, before
+		// shutting down the server.
+		defer conn.Close()
+		// Run the handshakes just like a real peer would.
+		key := newkey()
+		hs := &protoHandshake{Version: baseProtocolVersion, ID: discover.PubkeyID(&key.PublicKey)}
+		_, err = setupConn(conn, key, hs, srv.Self(), false)
+		if i == nconns-1 {
+			// When handling the last connection, the server should
+			// disconnect immediately instead of running the protocol
+			// handshake.
+			if err != DiscTooManyPeers {
+				t.Errorf("conn %d: got error %q, expected %q", i, err, DiscTooManyPeers)
+			}
+		} else {
+			// For all earlier connections, the handshake should go through.
+			if err != nil {
+				t.Fatalf("conn %d: unexpected error: %v", i, err)
+			}
+			// Wait for runPeer to be started.
+			<-started
 		}
 	}
 }

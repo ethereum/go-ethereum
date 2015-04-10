@@ -98,15 +98,13 @@ func (d DiscReason) String() string {
 	return discReasonToString[d]
 }
 
-type discRequestedError DiscReason
-
-func (err discRequestedError) Error() string {
-	return fmt.Sprintf("disconnect requested: %v", DiscReason(err))
+func (d DiscReason) Error() string {
+	return d.String()
 }
 
 func discReasonForError(err error) DiscReason {
-	if reason, ok := err.(discRequestedError); ok {
-		return DiscReason(reason)
+	if reason, ok := err.(DiscReason); ok {
+		return reason
 	}
 	peerError, ok := err.(*peerError)
 	if !ok {

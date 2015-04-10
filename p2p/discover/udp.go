@@ -335,7 +335,7 @@ func (t *udp) send(toaddr *net.UDPAddr, ptype byte, req interface{}) error {
 	if err != nil {
 		return err
 	}
-	glog.V(logger.Detail).Infof(">>> %v %T %v\n", toaddr, req, req)
+	glog.V(logger.Detail).Infof(">>> %v %T\n", toaddr, req)
 	if _, err = t.conn.WriteToUDP(packet, toaddr); err != nil {
 		glog.V(logger.Detail).Infoln("UDP send failed:", err)
 	}
@@ -378,12 +378,11 @@ func (t *udp) readLoop() {
 			glog.V(logger.Debug).Infof("Bad packet from %v: %v\n", from, err)
 			continue
 		}
-		glog.V(logger.Detail).Infof("<<< %v %T %v\n", from, packet, packet)
-		go func() {
-			if err := packet.handle(t, from, fromID, hash); err != nil {
-				glog.V(logger.Debug).Infof("error handling %T from %v: %v", packet, from, err)
-			}
-		}()
+		status := "ok"
+		if err := packet.handle(t, from, fromID, hash); err != nil {
+			status = err.Error()
+		}
+		glog.V(logger.Detail).Infof("<<< %v %T: %s\n", from, packet, status)
 	}
 }
 
@@ -430,7 +429,7 @@ func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 	})
 	if !t.handleReply(fromID, pingPacket, req) {
 		// Note: we're ignoring the provided IP address right now
-		t.bond(true, fromID, from, req.Port)
+		go t.bond(true, fromID, from, req.Port)
 	}
 	return nil
 }
