@@ -186,7 +186,6 @@ func (p *Peer) pingLoop() {
 func (p *Peer) readLoop(errc chan<- error) {
 	defer p.wg.Done()
 	for {
-		p.conn.SetDeadline(time.Now().Add(frameReadTimeout))
 		msg, err := p.rw.ReadMsg()
 		if err != nil {
 			errc <- err
