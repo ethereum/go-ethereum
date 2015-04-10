@@ -99,7 +99,7 @@ type Server struct {
 	peerConnect chan *discover.Node
 }
 
-type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node) (*conn, error)
+type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, bool) (*conn, error)
 type newPeerHook func(*Peer)
 
 // Peers returns all connected peers.
@@ -261,6 +261,11 @@ func (srv *Server) Stop() {
 	srv.peerWG.Wait()
 }
 
+// Self returns the local node's endpoint information.
+func (srv *Server) Self() *discover.Node {
+	return srv.ntab.Self()
+}
+
 // main loop for adding connections via listening
 func (srv *Server) listenLoop() {
 	defer srv.loopWG.Done()
@@ -354,10 +359,6 @@ func (srv *Server) dialNode(dest *discover.Node) {
 	srv.startPeer(conn, dest)
 }
 
-func (srv *Server) Self() *discover.Node {
-	return srv.ntab.Self()
-}
-
 func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// TODO: handle/store session token
 
@@ -366,7 +367,10 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// returns during that exchange need to call peerWG.Done because
 	// the callers of startPeer added the peer to the wait group already.
 	fd.SetDeadline(time.Now().Add(handshakeTimeout))
-	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest)
+	srv.lock.RLock()
+	atcap := len(srv.peers) == srv.MaxPeers
+	srv.lock.RUnlock()
+	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, atcap)
 	if err != nil {
 		fd.Close()
 		glog.V(logger.Debug).Infof("Handshake with %v failed: %v", fd.RemoteAddr(), err)
