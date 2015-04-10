@@ -169,6 +169,9 @@ type BlockPool struct {
 	// alloc-easy pool of hash slices
 	hashSlicePool chan []common.Hash
 
+	nodeCache     map[common.Hash]*node
+	nodeCacheLock sync.RWMutex
+
 	// waitgroup is used in tests to wait for result-critical routines
 	// as well as in determining idle / syncing status
 	wg      sync.WaitGroup //
@@ -210,6 +213,7 @@ func (self *BlockPool) Start() {
 	self.Config.init()
 
 	self.hashSlicePool = make(chan []common.Hash, 150)
+	self.nodeCache = make(map[common.Hash]*node)
 	self.status = newStatus()
 	self.quit = make(chan bool)
 	self.pool = make(map[common.Hash]*entry)
@@ -615,127 +619,104 @@ LOOP:
 	If the block received is the head block of the current best peer, signal it to the head section process
 */
 func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
-	hash := block.Hash()
-
-	sender, _ := self.peers.getPeer(peerId)
-	if sender == nil {
-		return
-	}
 
 	self.status.lock.Lock()
 	self.status.activePeers[peerId]++
 	self.status.lock.Unlock()
 
-	entry := self.get(hash)
-	blockIsCurrentHead := false
-	sender.lock.RLock()
-	currentBlockHash := sender.currentBlockHash
-	currentBlock := sender.currentBlock
-	currentBlockC := sender.currentBlockC
-	switchC := sender.switchC
-	sender.lock.RUnlock()
-
-	// a peer's current head block is appearing the first time
-	if hash == currentBlockHash {
-		// this happens when block came in a newblock message but
-		// also if sent in a blockmsg (for instance, if we requested, only if we
-		// dont apply on blockrequests the restriction of flood control)
-		blockIsCurrentHead = true
-		if currentBlock == nil {
-			sender.lock.Lock()
-			sender.setChainInfoFromBlock(block)
-			sender.lock.Unlock()
-
-			self.status.lock.Lock()
-			self.status.values.BlockHashes++
-			self.status.values.Blocks++
-			self.status.values.BlocksInPool++
-			self.status.lock.Unlock()
-			// signal to head section process
-			select {
-			case currentBlockC <- block:
-			case <-switchC:
-			}
-		} else {
-			plog.DebugDetailf("AddBlock: head block %s for peer <%s> (head: %s) already known", hex(hash), peerId, hex(currentBlockHash))
-		}
-	} else {
-
-		plog.DebugDetailf("AddBlock: block %s received from peer <%s> (head: %s)", hex(hash), peerId, hex(currentBlockHash))
-
-		/* @zelig !!!
-		   requested 5 hashes from both A & B. A responds sooner then B, process blocks. Close section.
-		   delayed B sends you block ... UNREQUESTED. Blocked
-		     if entry == nil {
-		       plog.DebugDetailf("AddBlock: unrequested block %s received from peer <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
-		       sender.addError(ErrUnrequestedBlock, "%x", hash)
-
-		       self.status.lock.Lock()
-		       self.status.badPeers[peerId]++
-		       self.status.lock.Unlock()
-		       return
-		     }
-		*/
-	}
-
-	if entry == nil {
-		// FIXME: here check the cache find or create node -
-		// put peer as blockBy!
-		return
-	}
-
-	node := entry.node
-	node.lock.Lock()
-	defer node.lock.Unlock()
-
-	// register peer on node as source
-	if node.peers == nil {
-		node.peers = make(map[string]bool)
-	}
-	FoundBlockCurrentHead, found := node.peers[sender.id]
-	if !found || FoundBlockCurrentHead {
-		// if found but not FoundBlockCurrentHead, then no update
-		// necessary (||)
-		node.peers[sender.id] = blockIsCurrentHead
-		// for those that are false, TD will update their head
-		// for those that are true, TD is checked !
-		// this is checked at the time of TD calculation in checkTD
-	}
-	// check if block already received
-	if node.block != nil {
-		plog.DebugDetailf("AddBlock: block %s from peer <%s> (head: %s) already sent by <%s> ", hex(hash), peerId, hex(sender.currentBlockHash), node.blockBy)
-	}
+	hash := block.Hash()
 
 	// check if block is already inserted in the blockchain
 	if self.hasBlock(hash) {
-		plog.DebugDetailf("AddBlock: block %s from peer <%s> (head: %s) already in the blockchain", hex(hash), peerId, hex(sender.currentBlockHash))
 		return
 	}
 
-	/*
-		@zelig needs discussing
-		Viktor: pow check can be delayed in a go routine and therefore cache
-		creation is not blocking
-			// validate block for PoW
-			if !self.verifyPoW(block) {
-				plog.Warnf("AddBlock: invalid PoW on block %s from peer  <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
-				sender.addError(ErrInvalidPoW, "%x", hash)
+	sender, _ := self.peers.getPeer(peerId)
+	if sender == nil {
+		return
+	}
+	tdFromCurrentHead, currentBlockHash := sender.setChainInfoFromBlock(block)
 
-				self.status.lock.Lock()
-				self.status.badPeers[peerId]++
-				self.status.lock.Unlock()
+	entry := self.get(hash)
 
-				return
-			}
+	/* @zelig !!!
+	   requested 5 hashes from both A & B. A responds sooner then B, process blocks. Close section.
+	   delayed B sends you block ... UNREQUESTED. Blocked
+	     if entry == nil {
+	       plog.DebugDetailf("AddBlock: unrequested block %s received from peer <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
+	       sender.addError(ErrUnrequestedBlock, "%x", hash)
+
+	       self.status.lock.Lock()
+	       self.status.badPeers[peerId]++
+	       self.status.lock.Unlock()
+	       return
+	     }
 	*/
 
-	node.block = block
-	node.blockBy = peerId
+	var bnode *node
+	if entry == nil {
+		self.nodeCacheLock.Lock()
+		bnode, _ = self.nodeCache[hash]
+		if bnode == nil {
+			bnode = &node{
+				hash:    currentBlockHash,
+				block:   block,
+				hashBy:  peerId,
+				blockBy: peerId,
+				td:      tdFromCurrentHead,
+			}
+			self.nodeCache[hash] = bnode
+		}
+		self.nodeCacheLock.Unlock()
+	} else {
+		bnode = entry.node
+	}
 
-	self.status.lock.Lock()
-	self.status.values.Blocks++
-	self.status.values.BlocksInPool++
-	self.status.lock.Unlock()
+	bnode.lock.Lock()
+	defer bnode.lock.Unlock()
+
+	// check if block already received
+	if bnode.block != nil {
+		plog.DebugDetailf("AddBlock: block %s from peer <%s> (head: %s) already sent by <%s> ", hex(hash), peerId, hex(sender.currentBlockHash), bnode.blockBy)
+		// register peer on node as source
+		if bnode.peers == nil {
+			bnode.peers = make(map[string]bool)
+		}
+		foundBlockCurrentHead, found := bnode.peers[sender.id]
+		if !found || foundBlockCurrentHead {
+			// if found but not FoundBlockCurrentHead, then no update
+			// necessary (||)
+			bnode.peers[sender.id] = (currentBlockHash == hash)
+			// for those that are false, TD will update their head
+			// for those that are true, TD is checked !
+			// this is checked at the time of TD calculation in checkTD
+		}
+		sender.setChainInfoFromNode(bnode)
+	} else {
+		/*
+			@zelig needs discussing
+			Viktor: pow check can be delayed in a go routine and therefore cache
+			creation is not blocking
+				// validate block for PoW
+				if !self.verifyPoW(block) {
+					plog.Warnf("AddBlock: invalid PoW on block %s from peer  <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
+					sender.addError(ErrInvalidPoW, "%x", hash)
+
+					self.status.lock.Lock()
+					self.status.badPeers[peerId]++
+					self.status.lock.Unlock()
+
+					return
+				}
+		*/
+		bnode.block = block
+		bnode.blockBy = peerId
+		bnode.td = tdFromCurrentHead
+		self.status.lock.Lock()
+		self.status.values.Blocks++
+		self.status.values.BlocksInPool++
+		self.status.lock.Unlock()
+	}
 
 }
 

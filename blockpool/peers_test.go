@@ -145,7 +145,6 @@ func TestAddPeer(t *testing.T) {
 }
 
 func TestPeerPromotionByTdOnBlock(t *testing.T) {
-	t.Skip()
 	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
@@ -155,28 +154,26 @@ func TestPeerPromotionByTdOnBlock(t *testing.T) {
 	peer2 := blockPoolTester.newPeer("peer2", 4, 4)
 
 	blockPool.Start()
-	blockPoolTester.tds = make(map[int]int)
-	blockPoolTester.tds[3] = 3
 
-	// pool
 	peer0.AddPeer()
 	peer0.serveBlocks(1, 2)
 	best := peer1.AddPeer()
 	// this tests that peer1 is not promoted over peer0 yet
 	if best {
 		t.Errorf("peer1 (TD=1) should not be set as best")
+		return
 	}
 	best = peer2.AddPeer()
 	peer2.serveBlocks(3, 4)
 	peer2.serveBlockHashes(4, 3, 2, 1)
-	// hashes := blockPoolTester.hashPool.IndexesToHashes([]int{2, 3})
-	peer1.serveBlocks(2, 3)
+	peer1.sendBlocks(3, 4)
 
 	blockPool.RemovePeer("peer2")
 	if blockPool.peers.best.id != "peer1" {
 		t.Errorf("peer1 (TD=3) should be set as best")
+		return
 	}
-	peer1.serveBlocks(0, 1, 2)
+	peer1.serveBlocks(0, 1, 2, 3)
 
 	blockPool.Wait(waitTimeout)
 	blockPool.Stop()
