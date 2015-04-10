@@ -42,13 +42,6 @@ func TestTransactions(t *testing.T) {
 
 func TestWrongRLPTransactions(t *testing.T) {
 	notWorking := make(map[string]bool, 100)
-	// TODO: all commented out tests should work!
-	notWorking[""] = true
-	notWorking[""] = true
-	notWorking[""] = true
-	notWorking[""] = true
-	notWorking[""] = true
-
 	var err error
 	err = RunTransactionTests("./files/TransactionTests/ttWrongRLPTransaction.json",
 		notWorking)
