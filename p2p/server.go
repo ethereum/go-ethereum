@@ -21,6 +21,11 @@ const (
 	defaultDialTimeout   = 10 * time.Second
 	refreshPeersInterval = 30 * time.Second
 
+	// This is the maximum number of inbound connection
+	// that are allowed to linger between 'accepted' and
+	// 'added as peer'.
+	maxAcceptConns = 50
+
 	// total timeout for encryption handshake and protocol
 	// handshake in both directions.
 	handshakeTimeout = 5 * time.Second
@@ -269,15 +274,28 @@ func (srv *Server) Self() *discover.Node {
 // main loop for adding connections via listening
 func (srv *Server) listenLoop() {
 	defer srv.loopWG.Done()
+
+	// This channel acts as a semaphore limiting
+	// active inbound connections that are lingering pre-handshake.
+	// If all slots are taken, no further connections are accepted.
+	slots := make(chan struct{}, maxAcceptConns)
+	for i := 0; i < maxAcceptConns; i++ {
+		slots <- struct{}{}
+	}
+
 	glog.V(logger.Info).Infoln("Listening on", srv.listener.Addr())
 	for {
+		<-slots
 		conn, err := srv.listener.Accept()
 		if err != nil {
 			return
 		}
 		glog.V(logger.Debug).Infof("Accepted conn %v\n", conn.RemoteAddr())
 		srv.peerWG.Add(1)
-		go srv.startPeer(conn, nil)
+		go func() {
+			srv.startPeer(conn, nil)
+			slots <- struct{}{}
+		}()
 	}
 }
 
