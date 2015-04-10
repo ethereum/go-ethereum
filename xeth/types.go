@@ -140,8 +140,11 @@ type Transaction struct {
 
 func NewTx(tx *types.Transaction) *Transaction {
 	hash := tx.Hash().Hex()
-	receiver := tx.To().Hex()
-	if len(receiver) == 0 {
+
+	var receiver string
+	if to := tx.To(); to != nil {
+		receiver = to.Hex()
+	} else {
 		receiver = core.AddressFromMessage(tx).Hex()
 	}
 	sender, _ := tx.From()
