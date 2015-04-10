@@ -344,6 +344,10 @@ func (srv *Server) dialNode(dest *discover.Node) {
 	glog.V(logger.Debug).Infof("Dialing %v\n", dest)
 	conn, err := srv.Dialer.Dial("tcp", addr.String())
 	if err != nil {
+		// dialLoop adds to the wait group counter when launching
+		// dialNode, so we need to count it down again. startPeer also
+		// does that when an error occurs.
+		srv.peerWG.Done()
 		glog.V(logger.Detail).Infof("dial error: %v", err)
 		return
 	}
@@ -356,11 +360,17 @@ func (srv *Server) Self() *discover.Node {
 
 func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// TODO: handle/store session token
+
+	// Run setupFunc, which should create an authenticated connection
+	// and run the capability exchange. Note that any early error
+	// returns during that exchange need to call peerWG.Done because
+	// the callers of startPeer added the peer to the wait group already.
 	fd.SetDeadline(time.Now().Add(handshakeTimeout))
 	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest)
 	if err != nil {
 		fd.Close()
 		glog.V(logger.Debug).Infof("Handshake with %v failed: %v", fd.RemoteAddr(), err)
+		srv.peerWG.Done()
 		return
 	}
 	conn.MsgReadWriter = &netWrapper{
@@ -371,6 +381,7 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	if ok, reason := srv.addPeer(conn.ID, p); !ok {
 		glog.V(logger.Detail).Infof("Not adding %v (%v)\n", p, reason)
 		p.politeDisconnect(reason)
+		srv.peerWG.Done()
 		return
 	}
 	// The handshakes are done and it passed all checks.
