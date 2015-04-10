@@ -18,6 +18,7 @@ type peer struct {
 
 	// last known blockchain status
 	td               *big.Int
+	tdAdvertised     bool
 	currentBlockHash common.Hash
 	currentBlock     *types.Block
 	parentHash       common.Hash
@@ -135,21 +136,52 @@ func (self *peer) addError(code int, format string, params ...interface{}) {
 }
 
 // caller must hold peer lock
-func (self *peer) setChainInfo(td *big.Int, c common.Hash) {
-	self.td = td
-	self.currentBlockHash = c
-	self.currentBlock = nil
-	self.parentHash = common.Hash{}
-	self.headSection = nil
+func (self *peer) setChainInfo(td *big.Int, currentBlockHash common.Hash) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	if self.currentBlockHash != currentBlockHash {
+		previousBlockHash := self.currentBlockHash
+		plog.Debugf("addPeer: Update peer <%s> with td %v and current block %s (was %v)", self.id, td, hex(currentBlockHash), hex(previousBlockHash))
+		self.td = td
+		self.currentBlockHash = currentBlockHash
+		self.currentBlock = nil
+		self.parentHash = common.Hash{}
+		self.headSection = nil
+	}
+	self.tdAdvertised = true
 }
 
-// caller must hold peer lock
-func (self *peer) setChainInfoFromBlock(block *types.Block) {
-	// use the optional TD to update peer td, this helps second best peer selection
+func (self *peer) setChainInfoFromBlock(block *types.Block) (td *big.Int, currentBlockHash common.Hash) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	hash := block.Hash()
+	// this happens when block came in a newblock message but
+	// also if sent in a blockmsg (for instance, if we requested, only if we
+	// dont apply on blockrequests the restriction of flood control)
+	currentBlockHash = self.currentBlockHash
+	if currentBlockHash == hash && self.currentBlock == nil {
+		// signal to head section process
+		plog.DebugDetailf("AddBlock: head block %s for peer <%s> (head: %s) received\n", hex(hash), self.id, hex(currentBlockHash))
+		select {
+		case self.currentBlockC <- block:
+		case <-self.switchC:
+		}
+		return self.td, currentBlockHash
+	} else {
+		plog.DebugDetailf("AddBlock: head block %s for peer <%s> (head: %s) already known", hex(hash), self.id, hex(currentBlockHash))
+		return nil, currentBlockHash
+	}
+}
+
+// this will use the TD given by the first peer to update peer td, this helps second best peer selection
+// :FIXME: node
+func (self *peer) setChainInfoFromNode(n *node) {
 	// in case best peer is lost
-	if block.Td != nil && block.Td.Cmp(self.td) > 0 {
-		plog.DebugDetailf("setChainInfoFromBlock: update <%s> - head: %v->%v - TD: %v->%v", self.id, hex(self.currentBlockHash), hex(block.Hash()), self.td, block.Td)
-		self.td = block.Td
+	block := n.block
+	hash := block.Hash()
+	if n.td != nil && n.td.Cmp(self.td) > 0 {
+		plog.DebugDetailf("AddBlock: update peer <%s> - head: %v->%v - TD: %v->%v", self.id, hex(self.currentBlockHash), hex(hash), self.td, n.td)
+		self.td = n.td
 		self.currentBlockHash = block.Hash()
 		self.parentHash = block.ParentHash()
 		self.currentBlock = block
@@ -218,17 +250,11 @@ func (self *peers) addPeer(
 	if found {
 		// when called on an already connected peer, it means a newBlockMsg is received
 		// peer head info is updated
-		p.lock.Lock()
-		if p.currentBlockHash != currentBlockHash {
-			previousBlockHash = p.currentBlockHash
-			plog.Debugf("addPeer: Update peer <%s> with td %v and current block %s (was %v)", id, td, hex(currentBlockHash), hex(previousBlockHash))
-			p.setChainInfo(td, currentBlockHash)
-
-			self.status.lock.Lock()
-			self.status.values.NewBlocks++
-			self.status.lock.Unlock()
-		}
-		p.lock.Unlock()
+		p.setChainInfo(td, currentBlockHash)
+		// FIXME: only count the same block once
+		self.status.lock.Lock()
+		self.status.values.NewBlocks++
+		self.status.lock.Unlock()
 	} else {
 		p = self.newPeer(td, currentBlockHash, id, requestBlockHashes, requestBlocks, peerError)
 
@@ -333,8 +359,8 @@ func (self *BlockPool) switchPeer(oldp, newp *peer) {
 		close(oldp.switchC)
 	}
 	if newp != nil {
-		newp.idleC = make(chan bool)
-		newp.switchC = make(chan bool)
+		// newp.idleC = make(chan bool)
+		// newp.switchC = make(chan bool)
 		// if new best peer has no head section yet, create it and run it
 		// otherwise head section is an element of peer.sections
 		if newp.headSection == nil {
@@ -354,6 +380,9 @@ func (self *BlockPool) switchPeer(oldp, newp *peer) {
 				}
 			}()
 
+		} else {
+			newp.idleC = make(chan bool)
+			newp.switchC = make(chan bool)
 		}
 
 		var connected = make(map[common.Hash]*section)
@@ -528,10 +557,12 @@ func (self *peer) getBlockHashes() bool {
 // main loop for head section process
 func (self *peer) run() {
 
-	self.lock.RLock()
+	self.lock.Lock()
+	self.switchC = make(chan bool)
+	self.idleC = make(chan bool)
 	switchC := self.switchC
 	plog.Debugf("HeadSection: <%s> section process for head %s started", self.id, hex(self.currentBlockHash))
-	self.lock.RUnlock()
+	self.lock.Unlock()
 
 	self.blockHashesRequestTimer = nil
 
