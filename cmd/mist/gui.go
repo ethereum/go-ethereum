@@ -238,13 +238,11 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 		inout = "recv"
 	}
 
-	var (
-		ptx  = xeth.NewTx(tx)
-		send = from.Hex()
-		rec  = tx.To().Hex()
-	)
-	ptx.Sender = send
-	ptx.Address = rec
+	ptx := xeth.NewTx(tx)
+	ptx.Sender = from.Hex()
+	if to := tx.To(); to != nil {
+		ptx.Address = to.Hex()
+	}
 
 	if window == "post" {
 		//gui.getObjectByName("transactionView").Call("addTx", ptx, inout)
