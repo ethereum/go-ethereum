@@ -86,12 +86,12 @@ type Server struct {
 
 	ourHandshake *protoHandshake
 
-	lock     sync.RWMutex
-	running  bool
-	listener net.Listener
-	peers    map[discover.NodeID]*Peer
+	lock    sync.RWMutex // protects running and peers
+	running bool
+	peers   map[discover.NodeID]*Peer
 
-	ntab *discover.Table
+	ntab     *discover.Table
+	listener net.Listener
 
 	quit        chan struct{}
 	loopWG      sync.WaitGroup // {dial,listen,nat}Loop
@@ -293,16 +293,17 @@ func (srv *Server) dialLoop() {
 
 	// TODO: maybe limit number of active dials
 	dial := func(dest *discover.Node) {
-		srv.lock.Lock()
-		ok, _ := srv.checkPeer(dest.ID)
-		srv.lock.Unlock()
 		// Don't dial nodes that would fail the checks in addPeer.
 		// This is important because the connection handshake is a lot
 		// of work and we'd rather avoid doing that work for peers
 		// that can't be added.
+		srv.lock.RLock()
+		ok, _ := srv.checkPeer(dest.ID)
+		srv.lock.RUnlock()
 		if !ok || dialing[dest.ID] {
 			return
 		}
+
 		dialing[dest.ID] = true
 		srv.peerWG.Add(1)
 		go func() {
@@ -315,9 +316,10 @@ func (srv *Server) dialLoop() {
 	for {
 		select {
 		case <-refresh.C:
-			srv.lock.Lock()
+			// Grab some nodes to connect to if we're not at capacity.
+			srv.lock.RLock()
 			needpeers := len(srv.peers) < srv.MaxPeers
-			srv.lock.Unlock()
+			srv.lock.RUnlock()
 			if needpeers {
 				go func() {
 					var target discover.NodeID
