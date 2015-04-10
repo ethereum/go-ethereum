@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/tests/helper"
 )
 
@@ -110,6 +111,9 @@ func RunVmTest(r io.Reader) (failed int) {
 		log.Fatalln(err)
 	}
 
+	vm.Debug = true
+	glog.SetV(4)
+	glog.SetToStderr(true)
 	for name, test := range tests {
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(common.Hash{}, db)
@@ -135,7 +139,7 @@ func RunVmTest(r io.Reader) (failed int) {
 
 		rexp := helper.FromHex(test.Out)
 		if bytes.Compare(rexp, ret) != 0 {
-			helper.Log.Infof("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
+			glog.V(logger.Info).Infof("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
 			failed = 1
 		}
 
@@ -147,7 +151,7 @@ func RunVmTest(r io.Reader) (failed int) {
 
 			if len(test.Exec) == 0 {
 				if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
-					helper.Log.Infof("%s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
+					glog.V(logger.Info).Infof("%s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
 					failed = 1
 				}
 			}
@@ -157,7 +161,7 @@ func RunVmTest(r io.Reader) (failed int) {
 				vexp := helper.FromHex(value)
 
 				if bytes.Compare(v, vexp) != 0 {
-					helper.Log.Infof("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address().Bytes()[0:4], addr, vexp, v, common.BigD(vexp), common.BigD(v))
+					glog.V(logger.Info).Infof("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address().Bytes()[0:4], addr, vexp, v, common.BigD(vexp), common.BigD(v))
 					failed = 1
 				}
 			}
@@ -166,33 +170,33 @@ func RunVmTest(r io.Reader) (failed int) {
 		statedb.Sync()
 		//if !bytes.Equal(common.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
 		if common.HexToHash(test.PostStateRoot) != statedb.Root() {
-			helper.Log.Infof("%s's : Post state root failed. Expected %s, got %x", name, test.PostStateRoot, statedb.Root())
+			glog.V(logger.Info).Infof("%s's : Post state root failed. Expected %s, got %x", name, test.PostStateRoot, statedb.Root())
 			failed = 1
 		}
 
 		if len(test.Logs) > 0 {
 			if len(test.Logs) != len(logs) {
-				helper.Log.Infof("log length failed. Expected %d, got %d", len(test.Logs), len(logs))
+				glog.V(logger.Info).Infof("log length failed. Expected %d, got %d", len(test.Logs), len(logs))
 				failed = 1
 			} else {
 				for i, log := range test.Logs {
 					if common.HexToAddress(log.AddressF) != logs[i].Address {
-						helper.Log.Infof("'%s' log address failed. Expected %v got %x", name, log.AddressF, logs[i].Address)
+						glog.V(logger.Info).Infof("'%s' log address failed. Expected %v got %x", name, log.AddressF, logs[i].Address)
 						failed = 1
 					}
 
 					if !bytes.Equal(logs[i].Data, helper.FromHex(log.DataF)) {
-						helper.Log.Infof("'%s' log data failed. Expected %v got %x", name, log.DataF, logs[i].Data)
+						glog.V(logger.Info).Infof("'%s' log data failed. Expected %v got %x", name, log.DataF, logs[i].Data)
 						failed = 1
 					}
 
 					if len(log.TopicsF) != len(logs[i].Topics) {
-						helper.Log.Infof("'%s' log topics length failed. Expected %d got %d", name, len(log.TopicsF), logs[i].Topics)
+						glog.V(logger.Info).Infof("'%s' log topics length failed. Expected %d got %d", name, len(log.TopicsF), logs[i].Topics)
 						failed = 1
 					} else {
 						for j, topic := range log.TopicsF {
 							if common.HexToHash(topic) != logs[i].Topics[j] {
-								helper.Log.Infof("'%s' log topic[%d] failed. Expected %v got %x", name, j, topic, logs[i].Topics[j])
+								glog.V(logger.Info).Infof("'%s' log topic[%d] failed. Expected %v got %x", name, j, topic, logs[i].Topics[j])
 								failed = 1
 							}
 						}
@@ -200,7 +204,7 @@ func RunVmTest(r io.Reader) (failed int) {
 					genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
 
 					if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
-						helper.Log.Infof("'%s' bloom failed.", name)
+						glog.V(logger.Info).Infof("'%s' bloom failed.", name)
 						failed = 1
 					}
 				}
@@ -208,7 +212,7 @@ func RunVmTest(r io.Reader) (failed int) {
 		}
 
 		if failed == 1 {
-			helper.Log.Infoln(string(statedb.Dump()))
+			glog.V(logger.Info).Infoln(string(statedb.Dump()))
 		}
 
 		logger.Flush()
