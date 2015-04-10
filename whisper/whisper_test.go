@@ -18,8 +18,8 @@ func TestEvent(t *testing.T) {
 	})
 
 	msg := NewMessage([]byte(fmt.Sprintf("Hello world. This is whisper-go. Incase you're wondering; the time is %v", time.Now())))
-	envelope, err := msg.Seal(DefaultPow, Opts{
-		Ttl:  DefaultTtl,
+	envelope, err := msg.Wrap(DefaultPow, Options{
+		TTL:  DefaultTimeToLive,
 		From: id,
 		To:   &id.PublicKey,
 	})

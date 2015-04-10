@@ -28,7 +28,9 @@ type MessageEvent struct {
 	Message *Message
 }
 
-const DefaultTtl = 50 * time.Second
+const (
+	DefaultTimeToLive = 50 * time.Second
+)
 
 type Whisper struct {
 	protocol p2p.Protocol

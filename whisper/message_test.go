@@ -3,48 +3,136 @@ package whisper
 import (
 	"bytes"
 	"crypto/elliptic"
-	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-func TestSign(t *testing.T) {
-	prv, _ := crypto.GenerateKey()
-	msg := NewMessage([]byte("hello world"))
-	msg.sign(prv)
+// Tests whether a message can be wrapped without any identity or encryption.
+func TestMessageSimpleWrap(t *testing.T) {
+	payload := []byte("hello world")
 
-	pubKey := msg.Recover()
-	p1 := elliptic.Marshal(crypto.S256(), prv.PublicKey.X, prv.PublicKey.Y)
-	p2 := elliptic.Marshal(crypto.S256(), pubKey.X, pubKey.Y)
-
-	if !bytes.Equal(p1, p2) {
-		t.Error("recovered pub key did not match")
+	msg := NewMessage(payload)
+	if _, err := msg.Wrap(DefaultPow, Options{}); err != nil {
+		t.Fatalf("failed to wrap message: %v", err)
+	}
+	if msg.Flags&128 != 0 {
+		t.Fatalf("signature flag mismatch: have %d, want %d", (msg.Flags&128)>>7, 0)
+	}
+	if len(msg.Signature) != 0 {
+		t.Fatalf("signature found for simple wrapping: 0x%x", msg.Signature)
+	}
+	if bytes.Compare(msg.Payload, payload) != 0 {
+		t.Fatalf("payload mismatch after wrapping: have 0x%x, want 0x%x", msg.Payload, payload)
 	}
 }
 
-func TestMessageEncryptDecrypt(t *testing.T) {
-	prv1, _ := crypto.GenerateKey()
-	prv2, _ := crypto.GenerateKey()
+// Tests whether a message can be signed, and wrapped in plain-text.
+func TestMessageCleartextSignRecover(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("failed to create crypto key: %v", err)
+	}
+	payload := []byte("hello world")
 
-	data := []byte("hello world")
-	msg := NewMessage(data)
-	envelope, err := msg.Seal(DefaultPow, Opts{
-		From: prv1,
-		To:   &prv2.PublicKey,
+	msg := NewMessage(payload)
+	if _, err := msg.Wrap(DefaultPow, Options{
+		From: key,
+	}); err != nil {
+		t.Fatalf("failed to sign message: %v", err)
+	}
+	if msg.Flags&128 != 128 {
+		t.Fatalf("signature flag mismatch: have %d, want %d", (msg.Flags&128)>>7, 1)
+	}
+	if bytes.Compare(msg.Payload, payload) != 0 {
+		t.Fatalf("payload mismatch after signing: have 0x%x, want 0x%x", msg.Payload, payload)
+	}
+
+	pubKey := msg.Recover()
+	if pubKey == nil {
+		t.Fatalf("failed to recover public key")
+	}
+	p1 := elliptic.Marshal(crypto.S256(), key.PublicKey.X, key.PublicKey.Y)
+	p2 := elliptic.Marshal(crypto.S256(), pubKey.X, pubKey.Y)
+	if !bytes.Equal(p1, p2) {
+		t.Fatalf("public key mismatch: have 0x%x, want 0x%x", p2, p1)
+	}
+}
+
+// Tests whether a message can be encrypted and decrypted using an anonymous
+// sender (i.e. no signature).
+func TestMessageAnonymousEncryptDecrypt(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("failed to create recipient crypto key: %v", err)
+	}
+	payload := []byte("hello world")
+
+	msg := NewMessage(payload)
+	envelope, err := msg.Wrap(DefaultPow, Options{
+		To: &key.PublicKey,
 	})
 	if err != nil {
-		fmt.Println(err)
-		t.FailNow()
+		t.Fatalf("failed to encrypt message: %v", err)
+	}
+	if msg.Flags&128 != 0 {
+		t.Fatalf("signature flag mismatch: have %d, want %d", (msg.Flags&128)>>7, 0)
+	}
+	if len(msg.Signature) != 0 {
+		t.Fatalf("signature found for anonymous message: 0x%x", msg.Signature)
 	}
 
-	msg1, err := envelope.Open(prv2)
+	out, err := envelope.Open(key)
 	if err != nil {
-		t.Error(err)
-		t.FailNow()
+		t.Fatalf("failed to open encrypted message: %v", err)
+	}
+	if !bytes.Equal(out.Payload, payload) {
+		t.Error("payload mismatch: have 0x%x, want 0x%x", out.Payload, payload)
+	}
+}
+
+// Tests whether a message can be properly signed and encrypted.
+func TestMessageFullCrypto(t *testing.T) {
+	fromKey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("failed to create sender crypto key: %v", err)
+	}
+	toKey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("failed to create recipient crypto key: %v", err)
 	}
 
-	if !bytes.Equal(msg1.Payload, data) {
-		t.Error("encryption error. data did not match")
+	payload := []byte("hello world")
+	msg := NewMessage(payload)
+	envelope, err := msg.Wrap(DefaultPow, Options{
+		From: fromKey,
+		To:   &toKey.PublicKey,
+	})
+	if err != nil {
+		t.Fatalf("failed to encrypt message: %v", err)
+	}
+	if msg.Flags&128 != 128 {
+		t.Fatalf("signature flag mismatch: have %d, want %d", (msg.Flags&128)>>7, 1)
+	}
+	if len(msg.Signature) == 0 {
+		t.Fatalf("no signature found for signed message")
+	}
+
+	out, err := envelope.Open(toKey)
+	if err != nil {
+		t.Fatalf("failed to open encrypted message: %v", err)
+	}
+	if !bytes.Equal(out.Payload, payload) {
+		t.Error("payload mismatch: have 0x%x, want 0x%x", out.Payload, payload)
+	}
+
+	pubKey := out.Recover()
+	if pubKey == nil {
+		t.Fatalf("failed to recover public key")
+	}
+	p1 := elliptic.Marshal(crypto.S256(), fromKey.PublicKey.X, fromKey.PublicKey.Y)
+	p2 := elliptic.Marshal(crypto.S256(), pubKey.X, pubKey.Y)
+	if !bytes.Equal(p1, p2) {
+		t.Fatalf("public key mismatch: have 0x%x, want 0x%x", p2, p1)
 	}
 }

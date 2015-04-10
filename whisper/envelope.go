@@ -40,7 +40,7 @@ func NewEnvelope(ttl time.Duration, topics [][]byte, data *Message) *Envelope {
 		Expiry: uint32(exp.Unix()),
 		TTL:    uint32(ttl.Seconds()),
 		Topics: topics,
-		Data:   data.Bytes(),
+		Data:   data.bytes(),
 		Nonce:  0,
 	}
 }
@@ -49,32 +49,32 @@ func (self *Envelope) Seal(pow time.Duration) {
 	self.proveWork(pow)
 }
 
-func (self *Envelope) Open(prv *ecdsa.PrivateKey) (msg *Message, err error) {
+func (self *Envelope) Open(key *ecdsa.PrivateKey) (msg *Message, err error) {
 	data := self.Data
-	var message Message
-	dataStart := 1
-	if data[0] > 0 {
-		if len(data) < 66 {
-			return nil, fmt.Errorf("unable to open envelope. First bit set but len(data) < 66")
-		}
-		dataStart = 66
-		message.Flags = data[0]
-		message.Signature = data[1:66]
-	}
 
-	payload := data[dataStart:]
-	if prv != nil {
-		message.Payload, err = crypto.Decrypt(prv, payload)
+	message := Message{
+		Flags: data[0],
+	}
+	data = data[1:]
+
+	if message.Flags&128 == 128 {
+		if len(data) < 65 {
+			return nil, fmt.Errorf("unable to open envelope. First bit set but len(data) < 65")
+		}
+		message.Signature, data = data[:65], data[65:]
+	}
+	message.Payload = data
+
+	if key != nil {
+		message.Payload, err = crypto.Decrypt(key, message.Payload)
 		switch err {
 		case nil: // OK
 		case ecies.ErrInvalidPublicKey: // Payload isn't encrypted
-			message.Payload = payload
 			return &message, err
 		default:
 			return nil, fmt.Errorf("unable to open envelope. Decrypt failed: %v", err)
 		}
 	}
-
 	return &message, nil
 }
 

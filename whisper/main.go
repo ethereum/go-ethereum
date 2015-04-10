@@ -69,10 +69,10 @@ func selfSend(shh *whisper.Whisper, payload []byte) error {
 	})
 	// Wrap the payload and encrypt it
 	msg := whisper.NewMessage(payload)
-	envelope, err := msg.Seal(whisper.DefaultPow, whisper.Opts{
-		Ttl:  whisper.DefaultTtl,
+	envelope, err := msg.Wrap(whisper.DefaultPow, whisper.Options{
 		From: id,
 		To:   &id.PublicKey,
+		TTL:  whisper.DefaultTimeToLive,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to seal message: %v", err)
