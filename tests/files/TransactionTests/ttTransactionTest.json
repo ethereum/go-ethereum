@@ -53,6 +53,9 @@
             "value" : ""
         }
     },
+    "RSsecp256k1" : {
+        "rlp" : "0xf86103018207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a8255441ca0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141a0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"
+    },
     "RightVRSTest" : {
         "rlp" : "0xf86103018207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a8255441ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3",
         "sender" : "5ba306ae3650c72c3586da6f1dbac3c9fa7e529e",
