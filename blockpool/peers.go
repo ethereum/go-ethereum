@@ -89,10 +89,12 @@ func (self *peers) newPeer(
 		peerError:          peerError,
 		currentBlockC:      make(chan *types.Block),
 		headSectionC:       make(chan *section),
+		switchC:            make(chan bool),
 		bp:                 self.bp,
 		idle:               true,
 		addToBlacklist:     self.addToBlacklist,
 	}
+	close(p.switchC) //! hack :((((
 	// at creation the peer is recorded in the peer pool
 	self.peers[id] = p
 	return
@@ -153,7 +155,8 @@ func (self *peer) setChainInfo(td *big.Int, currentBlockHash common.Hash) {
 
 func (self *peer) setChainInfoFromBlock(block *types.Block) (td *big.Int, currentBlockHash common.Hash) {
 	self.lock.Lock()
-	defer self.lock.Unlock()
+	currentBlockC := self.currentBlockC
+	switchC := self.switchC
 	hash := block.Hash()
 	// this happens when block came in a newblock message but
 	// also if sent in a blockmsg (for instance, if we requested, only if we
@@ -162,15 +165,20 @@ func (self *peer) setChainInfoFromBlock(block *types.Block) (td *big.Int, curren
 	if currentBlockHash == hash && self.currentBlock == nil {
 		// signal to head section process
 		plog.DebugDetailf("AddBlock: head block %s for peer <%s> (head: %s) received\n", hex(hash), self.id, hex(currentBlockHash))
-		select {
-		case self.currentBlockC <- block:
-		case <-self.switchC:
-		}
-		return self.td, currentBlockHash
+		td = self.td
 	} else {
 		plog.DebugDetailf("AddBlock: head block %s for peer <%s> (head: %s) already known", hex(hash), self.id, hex(currentBlockHash))
-		return nil, currentBlockHash
 	}
+	self.lock.Unlock()
+	// this must be called without peerlock.
+	// peerlock held can halt the loop and block on select forever
+	if td != nil {
+		select {
+		case currentBlockC <- block:
+		case <-switchC: // peer is not best peer
+		}
+	}
+	return
 }
 
 // this will use the TD given by the first peer to update peer td, this helps second best peer selection
