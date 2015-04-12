@@ -268,8 +268,14 @@ out:
 					chunk := d.queue.get(peer, maxBlockFetch)
 					if chunk != nil {
 						//fmt.Println("fetching for", peer.id)
-						// Fetch the chunk.
-						peer.fetch(chunk)
+						// Fetch the chunk and check for error. If the peer was somehow
+						// already fetching a chunk due to a bug, it will be returned to
+						// the queue
+						if err := peer.fetch(chunk); err != nil {
+							// log for tracing
+							glog.V(logger.Debug).Infof("peer %s received double work (state = %v)\n", peer.id, peer.state)
+							d.queue.put(chunk.hashes)
+						}
 					}
 				}
 				atomic.StoreInt32(&d.downloadingBlocks, 1)

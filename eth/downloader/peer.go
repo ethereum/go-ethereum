@@ -1,6 +1,7 @@
 package downloader
 
 import (
+	"errors"
 	"math/big"
 	"sync"
 
@@ -31,9 +32,13 @@ func newPeer(id string, td *big.Int, hash common.Hash, getHashes hashFetcherFn, 
 }
 
 // fetch a chunk using the peer
-func (p *peer) fetch(chunk *chunk) {
+func (p *peer) fetch(chunk *chunk) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if p.state == workingState {
+		return errors.New("peer already fetching chunk")
+	}
 
 	// set working state
 	p.state = workingState
@@ -45,4 +50,6 @@ func (p *peer) fetch(chunk *chunk) {
 		return true
 	})
 	p.getBlocks(hashes)
+
+	return nil
 }
