@@ -62,6 +62,8 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		*reply = newHexData(api.xeth().Coinbase())
 	case "eth_mining":
 		*reply = api.xeth().IsMining()
+	case "eth_hashrate":
+		*reply = api.xeth().HashRate()
 	case "eth_gasPrice":
 		v := xeth.DefaultGas()
 		*reply = newHexData(v.Bytes())
