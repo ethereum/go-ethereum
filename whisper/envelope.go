@@ -59,7 +59,7 @@ func (self *Envelope) Seal(pow time.Duration) {
 	}
 }
 
-// Valid checks whether the claimed proof of work was indeed executed.
+// valid checks whether the claimed proof of work was indeed executed.
 // TODO: Is this really useful? Isn't this always true?
 func (self *Envelope) valid() bool {
 	d := make([]byte, 64)
@@ -69,7 +69,7 @@ func (self *Envelope) valid() bool {
 	return common.FirstBitSet(common.BigD(crypto.Sha3(d))) > 0
 }
 
-// RlpWithoutNonce returns the RLP encoded envelope contents, except the nonce.
+// rlpWithoutNonce returns the RLP encoded envelope contents, except the nonce.
 func (self *Envelope) rlpWithoutNonce() []byte {
 	enc, _ := rlp.EncodeToBytes([]interface{}{self.Expiry, self.TTL, self.Topics, self.Data})
 	return enc

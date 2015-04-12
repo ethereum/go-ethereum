@@ -48,7 +48,7 @@ func NewMessage(payload []byte) *Message {
 
 // Wrap bundles the message into an Envelope to transmit over the network.
 //
-// Pov (Proof Of Work) controls how much time to spend on hashing the message,
+// pow (Proof Of Work) controls how much time to spend on hashing the message,
 // inherently controlling its priority through the network (smaller hash, bigger
 // priority).
 //
@@ -81,7 +81,7 @@ func (self *Message) Wrap(pow time.Duration, options Options) (*Envelope, error)
 	return envelope, nil
 }
 
-// Sign calculates and sets the cryptographic signature for the message , also
+// sign calculates and sets the cryptographic signature for the message , also
 // setting the sign flag.
 func (self *Message) sign(key *ecdsa.PrivateKey) (err error) {
 	self.Flags |= 1 << 7
@@ -101,18 +101,18 @@ func (self *Message) Recover() *ecdsa.PublicKey {
 	return pub
 }
 
-// Encrypt encrypts a message payload with a public key.
+// encrypt encrypts a message payload with a public key.
 func (self *Message) encrypt(to *ecdsa.PublicKey) (err error) {
 	self.Payload, err = crypto.Encrypt(to, self.Payload)
 	return
 }
 
-// Hash calculates the SHA3 checksum of the message flags and payload.
+// hash calculates the SHA3 checksum of the message flags and payload.
 func (self *Message) hash() []byte {
 	return crypto.Sha3(append([]byte{self.Flags}, self.Payload...))
 }
 
-// Bytes flattens the message contents (flags, signature and payload) into a
+// bytes flattens the message contents (flags, signature and payload) into a
 // single binary blob.
 func (self *Message) bytes() []byte {
 	return append([]byte{self.Flags}, append(self.Signature, self.Payload...)...)
