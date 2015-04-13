@@ -14,7 +14,7 @@ import (
 
 var knownHash = common.Hash{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
-func createHashes(amount int) (hashes []common.Hash) {
+func createHashes(start, amount int) (hashes []common.Hash) {
 	hashes = make([]common.Hash, amount+1)
 	hashes[len(hashes)-1] = knownHash
 
@@ -49,7 +49,7 @@ type downloadTester struct {
 
 func newTester(t *testing.T, hashes []common.Hash, blocks map[common.Hash]*types.Block) *downloadTester {
 	tester := &downloadTester{t: t, hashes: hashes, blocks: blocks, done: make(chan bool)}
-	downloader := New(tester.hasBlock, tester.insertChain)
+	downloader := New(tester.hasBlock, tester.insertChain, func() *big.Int { return new(big.Int) })
 	tester.downloader = downloader
 
 	return tester
@@ -84,7 +84,7 @@ func (dl *downloadTester) getBlocks(id string) func([]common.Hash) error {
 			blocks[i] = dl.blocks[hash]
 		}
 
-		go dl.downloader.DeliverBlocks(id, blocks)
+		go dl.downloader.DeliverChunk(id, blocks)
 
 		return nil
 	}
@@ -109,11 +109,11 @@ func TestDownload(t *testing.T) {
 	glog.SetV(logger.Detail)
 	glog.SetToStderr(true)
 
-	hashes := createHashes(1000)
+	hashes := createHashes(0, 1000)
 	blocks := createBlocksFromHashes(hashes)
 	tester := newTester(t, hashes, blocks)
 
-	tester.newPeer("peer1", big.NewInt(10000), hashes[len(hashes)-1])
+	tester.newPeer("peer1", big.NewInt(10000), hashes[0])
 	tester.newPeer("peer2", big.NewInt(0), common.Hash{})
 	tester.badBlocksPeer("peer3", big.NewInt(0), common.Hash{})
 	tester.badBlocksPeer("peer4", big.NewInt(0), common.Hash{})
@@ -125,4 +125,31 @@ success:
 	case <-time.After(10 * time.Second): // XXX this could actually fail on a slow computer
 		t.Error("timout")
 	}
+}
+
+func TestMissing(t *testing.T) {
+	t.Skip()
+
+	glog.SetV(logger.Detail)
+	glog.SetToStderr(true)
+
+	hashes := createHashes(0, 1000)
+	extraHashes := createHashes(1001, 1003)
+	blocks := createBlocksFromHashes(append(extraHashes, hashes...))
+	tester := newTester(t, hashes, blocks)
+
+	tester.newPeer("peer1", big.NewInt(10000), hashes[len(hashes)-1])
+
+	hashes = append(extraHashes, hashes[:len(hashes)-1]...)
+	tester.newPeer("peer2", big.NewInt(0), common.Hash{})
+
+success1:
+	select {
+	case <-tester.done:
+		break success1
+	case <-time.After(10 * time.Second): // XXX this could actually fail on a slow computer
+		t.Error("timout")
+	}
+
+	tester.downloader.AddBlock("peer2", blocks[hashes[len(hashes)-1]], big.NewInt(10001))
 }
