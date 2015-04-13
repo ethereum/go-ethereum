@@ -25,17 +25,19 @@ const (
 	signatureLength = 65
 )
 
+const (
+	DefaultTimeToLive  = 50 * time.Second
+	DefaultProofOfWork = 50 * time.Millisecond
+)
+
 type MessageEvent struct {
 	To      *ecdsa.PrivateKey
 	From    *ecdsa.PublicKey
 	Message *Message
 }
 
-const (
-	DefaultTimeToLive  = 50 * time.Second
-	DefaultProofOfWork = 50 * time.Millisecond
-)
-
+// Whisper represents a dark communication interface through the Ethereum
+// network, using its very own P2P communication layer.
 type Whisper struct {
 	protocol p2p.Protocol
 	filters  *filter.Filters
@@ -199,7 +201,6 @@ func (self *Whisper) add(envelope *Envelope) error {
 		self.expiry[envelope.Expiry].Add(hash)
 		go self.postEvent(envelope)
 	}
-
 	glog.V(logger.Detail).Infof("added whisper envelope %x\n", envelope)
 
 	return nil

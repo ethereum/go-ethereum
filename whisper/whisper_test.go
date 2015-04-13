@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 )
@@ -17,6 +18,7 @@ type testNode struct {
 }
 
 func startNodes(n int) ([]*testNode, error) {
+	// Start up the cluster of nodes
 	cluster := make([]*testNode, 0, n)
 	for i := 0; i < n; i++ {
 		shh := New()
@@ -46,6 +48,11 @@ func startNodes(n int) ([]*testNode, error) {
 			client: shh,
 		})
 	}
+	// Manually wire together the cluster nodes
+	root := cluster[0].server.Self()
+	for _, node := range cluster[1:] {
+		node.server.SuggestPeer(root)
+	}
 	return cluster, nil
 }
 
@@ -56,6 +63,7 @@ func stopNodes(cluster []*testNode) {
 }
 
 func TestSelfMessage(t *testing.T) {
+	// Start the single node cluster
 	cluster, err := startNodes(1)
 	if err != nil {
 		t.Fatalf("failed to boot test cluster: %v", err)
@@ -96,6 +104,10 @@ func TestSelfMessage(t *testing.T) {
 }
 
 func TestDirectMessage(t *testing.T) {
+	glog.SetV(6)
+	glog.SetToStderr(true)
+
+	// Start the sender-recipient cluster
 	cluster, err := startNodes(2)
 	if err != nil {
 		t.Fatalf("failed to boot test cluster: %v", err)
