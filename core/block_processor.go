@@ -18,6 +18,12 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
+const (
+	// must be bumped when consensus algorithm is changed, this forces the upgradedb
+	// command to be run (forces the blocks to be imported again using the new algorithm)
+	BlockChainVersion = 1
+)
+
 var statelogger = logger.NewLogger("BLOCK")
 
 type BlockProcessor struct {
