@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -130,6 +131,7 @@ type Ethereum struct {
 	accountManager *accounts.Manager
 	whisper        *whisper.Whisper
 	pow            *ethash.Ethash
+	downloader     *downloader.Downloader
 
 	net      *p2p.Server
 	eventMux *event.TypeMux
@@ -194,6 +196,7 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
+	eth.downloader = downloader.New(eth.chainManager.HasBlock, eth.chainManager.InsertChain, eth.chainManager.Td)
 	eth.pow = ethash.New(eth.chainManager)
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State)
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
@@ -212,7 +215,7 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	ethProto := EthProtocol(config.ProtocolVersion, config.NetworkId, eth.txPool, eth.chainManager, eth.blockPool)
+	ethProto := EthProtocol(config.ProtocolVersion, config.NetworkId, eth.txPool, eth.chainManager, eth.blockPool, eth.downloader)
 	protocols := []p2p.Protocol{ethProto}
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
@@ -349,6 +352,7 @@ func (s *Ethereum) ClientVersion() string                { return s.clientVersio
 func (s *Ethereum) EthVersion() int                      { return s.ethVersionId }
 func (s *Ethereum) NetVersion() int                      { return s.netVersionId }
 func (s *Ethereum) ShhVersion() int                      { return s.shhVersionId }
+func (s *Ethereum) Downloader() *downloader.Downloader   { return s.downloader }
 
 // Start the ethereum
 func (s *Ethereum) Start() error {
