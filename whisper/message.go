@@ -35,8 +35,9 @@ type Options struct {
 
 // NewMessage creates and initializes a non-signed, non-encrypted Whisper message.
 func NewMessage(payload []byte) *Message {
-	// Construct an initial flag set: bit #1 = 0 (no signature), rest random
-	flags := byte(rand.Intn(128))
+	// Construct an initial flag set: no signature, rest random
+	flags := byte(rand.Intn(256))
+	flags &= ^signatureFlag
 
 	// Assemble and return the message
 	return &Message{
@@ -84,7 +85,7 @@ func (self *Message) Wrap(pow time.Duration, options Options) (*Envelope, error)
 // sign calculates and sets the cryptographic signature for the message , also
 // setting the sign flag.
 func (self *Message) sign(key *ecdsa.PrivateKey) (err error) {
-	self.Flags |= 1 << 7
+	self.Flags |= signatureFlag
 	self.Signature, err = crypto.Sign(self.hash(), key)
 	return
 }
@@ -102,8 +103,14 @@ func (self *Message) Recover() *ecdsa.PublicKey {
 }
 
 // encrypt encrypts a message payload with a public key.
-func (self *Message) encrypt(to *ecdsa.PublicKey) (err error) {
-	self.Payload, err = crypto.Encrypt(to, self.Payload)
+func (self *Message) encrypt(key *ecdsa.PublicKey) (err error) {
+	self.Payload, err = crypto.Encrypt(key, self.Payload)
+	return
+}
+
+// decrypt decrypts an encrypted payload with a private key.
+func (self *Message) decrypt(key *ecdsa.PrivateKey) (err error) {
+	self.Payload, err = crypto.Decrypt(key, self.Payload)
 	return
 }
 

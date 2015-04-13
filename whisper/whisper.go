@@ -20,6 +20,9 @@ const (
 	statusMsg      = 0x0
 	envelopesMsg   = 0x01
 	whisperVersion = 0x02
+
+	signatureFlag   = byte(1 << 7)
+	signatureLength = 65
 )
 
 type MessageEvent struct {
