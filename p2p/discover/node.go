@@ -14,8 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -31,9 +29,6 @@ type Node struct {
 
 	DiscPort int // UDP listening port for discovery protocol
 	TCPPort  int // TCP listening port for RLPx
-
-	// this must be set/read using atomic load and store.
-	activeStamp int64
 }
 
 func newNode(id NodeID, addr *net.UDPAddr) *Node {
@@ -48,16 +43,6 @@ func newNode(id NodeID, addr *net.UDPAddr) *Node {
 func (n *Node) isValid() bool {
 	// TODO: don't accept localhost, LAN addresses from internet hosts
 	return !n.IP.IsMulticast() && !n.IP.IsUnspecified() && n.TCPPort != 0 && n.DiscPort != 0
-}
-
-func (n *Node) bumpActive() {
-	stamp := time.Now().Unix()
-	atomic.StoreInt64(&n.activeStamp, stamp)
-}
-
-func (n *Node) active() time.Time {
-	stamp := atomic.LoadInt64(&n.activeStamp)
-	return time.Unix(stamp, 0)
 }
 
 func (n *Node) addr() *net.UDPAddr {
