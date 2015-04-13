@@ -44,7 +44,7 @@ func GetNotice(xeth *xeth.XEth, tx string, http *docserver.DocServer) (notice st
 	notice, err2 := ns.Notice()
 
 	if err2 != nil {
-		return getFallbackNotice("couldn't create NatSpec notice", tx)
+		return getFallbackNotice("NatSpec notice error \""+err2.Error()+"\"", tx)
 	}
 
 	return
