@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"sort"
 	"sync"
@@ -20,8 +19,7 @@ const (
 	baseProtocolLength     = uint64(16)
 	baseProtocolMaxMsgSize = 10 * 1024 * 1024
 
-	pingInterval          = 15 * time.Second
-	disconnectGracePeriod = 2 * time.Second
+	pingInterval = 15 * time.Second
 )
 
 const (
@@ -129,39 +127,27 @@ func (p *Peer) run() DiscReason {
 	case err := <-readErr:
 		if r, ok := err.(DiscReason); ok {
 			reason = r
-			break
+		} else {
+			// Note: We rely on protocols to abort if there is a write
+			// error. It might be more robust to handle them here as well.
+			p.DebugDetailf("Read error: %v\n", err)
+			reason = DiscNetworkError
 		}
-		// Note: We rely on protocols to abort if there is a write
-		// error. It might be more robust to handle them here as well.
-		p.DebugDetailf("Read error: %v\n", err)
-		p.conn.Close()
-		reason = DiscNetworkError
 	case err := <-p.protoErr:
 		reason = discReasonForError(err)
 	case reason = <-p.disc:
 	}
 
 	close(p.closed)
+	p.politeDisconnect(reason)
 	p.wg.Wait()
-	if reason != DiscNetworkError {
-		p.politeDisconnect(reason)
-	}
 	p.Debugf("Disconnected: %v\n", reason)
 	return reason
 }
 
 func (p *Peer) politeDisconnect(reason DiscReason) {
-	done := make(chan struct{})
-	go func() {
+	if reason != DiscNetworkError {
 		SendItems(p.rw, discMsg, uint(reason))
-		// Wait for the other side to close the connection.
-		// Discard any data that they send until then.
-		io.Copy(ioutil.Discard, p.conn)
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(disconnectGracePeriod):
 	}
 	p.conn.Close()
 }

@@ -115,7 +115,7 @@ func setupOutboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, 
 	// returning the handshake read error. If the remote side
 	// disconnects us early with a valid reason, we should return it
 	// as the error so it can be tracked elsewhere.
-	werr := make(chan error)
+	werr := make(chan error, 1)
 	go func() { werr <- Send(rw, handshakeMsg, our) }()
 	rhs, err := readProtocolHandshake(rw, secrets.RemoteID, our)
 	if err != nil {

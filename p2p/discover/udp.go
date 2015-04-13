@@ -267,11 +267,12 @@ func (t *udp) loop() {
 	defer timeout.Stop()
 
 	rearmTimeout := func() {
-		if len(pending) == 0 || nextDeadline == pending[0].deadline {
+		now := time.Now()
+		if len(pending) == 0 || now.Before(nextDeadline) {
 			return
 		}
 		nextDeadline = pending[0].deadline
-		timeout.Reset(nextDeadline.Sub(time.Now()))
+		timeout.Reset(nextDeadline.Sub(now))
 	}
 
 	for {
