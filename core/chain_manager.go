@@ -284,11 +284,14 @@ func (self *ChainManager) Export(w io.Writer) error {
 	defer self.mu.RUnlock()
 	glog.V(logger.Info).Infof("exporting %v blocks...\n", self.currentBlock.Header().Number)
 
-	for block := self.currentBlock; block != nil; block = self.GetBlock(block.Header().ParentHash) {
-		if err := block.EncodeRLP(w); err != nil {
+	last := self.currentBlock.NumberU64()
+
+	for nr := uint64(0); nr <= last; nr++ {
+		if err := self.GetBlockByNumber(nr).EncodeRLP(w); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -470,6 +473,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			}
 
 			if IsParentErr(err) && self.futureBlocks.Has(block.ParentHash()) {
+				block.SetQueued(true)
 				self.futureBlocks.Push(block)
 				stats.queued++
 				continue

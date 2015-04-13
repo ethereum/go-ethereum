@@ -4,14 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/blockpool/test"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
 func TestInvalidBlock(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(2)
@@ -41,7 +39,6 @@ func TestInvalidBlock(t *testing.T) {
 func TestVerifyPoW(t *testing.T) {
 	t.Skip() // :FIXME:
 
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(3)
@@ -88,7 +85,6 @@ func TestVerifyPoW(t *testing.T) {
 func TestUnrequestedBlock(t *testing.T) {
 	t.Skip() // :FIXME:
 
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPool.Start()
@@ -108,7 +104,6 @@ func TestUnrequestedBlock(t *testing.T) {
 }
 
 func TestErrInsufficientChainInfo(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPool.Config.BlockHashesTimeout = 100 * time.Millisecond
 	blockPool.Start()
@@ -128,8 +123,6 @@ func TestErrInsufficientChainInfo(t *testing.T) {
 }
 
 func TestIncorrectTD(t *testing.T) {
-	t.Skip("skipping TD check until network is healthy")
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(3)
@@ -156,9 +149,6 @@ func TestIncorrectTD(t *testing.T) {
 }
 
 func TestSkipIncorrectTDonFutureBlocks(t *testing.T) {
-	// t.Skip() // @zelig this one requires fixing for the TD
-
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(3)
@@ -195,31 +185,40 @@ func TestSkipIncorrectTDonFutureBlocks(t *testing.T) {
 }
 
 func TestPeerSuspension(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPool.Config.PeerSuspensionInterval = 100 * time.Millisecond
 
 	blockPool.Start()
 
-	peer1 := blockPoolTester.newPeer("peer1", 1, 3)
+	peer1 := blockPoolTester.newPeer("peer1", 3, 3)
 	peer1.AddPeer()
-	blockPool.peers.peerError("peer1", 0, "")
 	bestpeer, _ := blockPool.peers.getPeer("peer1")
+	if bestpeer == nil {
+		t.Errorf("peer1 not best peer")
+		return
+	}
+	peer1.serveBlocks(2, 3)
+
+	blockPool.peers.peerError("peer1", 0, "")
+	bestpeer, _ = blockPool.peers.getPeer("peer1")
 	if bestpeer != nil {
 		t.Errorf("peer1 not removed on error")
+		return
 	}
 	peer1.AddPeer()
 	bestpeer, _ = blockPool.peers.getPeer("peer1")
 	if bestpeer != nil {
 		t.Errorf("peer1 not removed on reconnect")
+		return
 	}
 	time.Sleep(100 * time.Millisecond)
 	peer1.AddPeer()
+
 	bestpeer, _ = blockPool.peers.getPeer("peer1")
 	if bestpeer == nil {
 		t.Errorf("peer1 not connected after PeerSuspensionInterval")
+		return
 	}
-	// blockPool.Wait(waitTimeout)
 	blockPool.Stop()
 
 }

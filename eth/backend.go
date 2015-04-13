@@ -42,6 +42,9 @@ type Config struct {
 	ProtocolVersion int
 	NetworkId       int
 
+	BlockChainVersion  int
+	SkipBcVersionCheck bool // e.g. blockchain export
+
 	DataDir  string
 	LogFile  string
 	LogLevel int
@@ -149,7 +152,7 @@ type Ethereum struct {
 }
 
 func New(config *Config) (*Ethereum, error) {
-	// Boostrap database
+	// Bootstrap database
 	logger.New(config.DataDir, config.LogFile, config.LogLevel)
 	if len(config.LogJSON) > 0 {
 		logger.NewJSONsystem(config.DataDir, config.LogJSON)
@@ -178,6 +181,16 @@ func New(config *Config) (*Ethereum, error) {
 	}
 	saveProtocolVersion(blockDb, config.ProtocolVersion)
 	glog.V(logger.Info).Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
+
+	if !config.SkipBcVersionCheck {
+		b, _ := blockDb.Get([]byte("BlockchainVersion"))
+		bcVersion := int(common.NewValue(b).Uint())
+		if bcVersion != config.BlockChainVersion && bcVersion != 0 {
+			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run geth upgradedb.\n", bcVersion, config.BlockChainVersion)
+		}
+		saveBlockchainVersion(blockDb, config.BlockChainVersion)
+	}
+	glog.V(logger.Info).Infof("Blockchain DB Version: %d", config.BlockChainVersion)
 
 	eth := &Ethereum{
 		shutdownChan:   make(chan bool),
@@ -470,5 +483,14 @@ func saveProtocolVersion(db common.Database, protov int) {
 
 	if protocolVersion == 0 {
 		db.Put([]byte("ProtocolVersion"), common.NewValue(protov).Bytes())
+	}
+}
+
+func saveBlockchainVersion(db common.Database, bcVersion int) {
+	d, _ := db.Get([]byte("BlockchainVersion"))
+	blockchainVersion := common.NewValue(d).Uint()
+
+	if blockchainVersion == 0 {
+		db.Put([]byte("BlockchainVersion"), common.NewValue(bcVersion).Bytes())
 	}
 }

@@ -155,7 +155,11 @@ func ImportChain(chainmgr *core.ChainManager, fn string) error {
 
 	chainmgr.Reset()
 	stream := rlp.NewStream(fh)
-	var i int
+	var i, n int
+
+	batchSize := 2500
+	blocks := make(types.Blocks, batchSize)
+
 	for ; ; i++ {
 		var b types.Block
 		if err := stream.Decode(&b); err == io.EOF {
@@ -163,10 +167,25 @@ func ImportChain(chainmgr *core.ChainManager, fn string) error {
 		} else if err != nil {
 			return fmt.Errorf("at block %d: %v", i, err)
 		}
-		if err := chainmgr.InsertChain(types.Blocks{&b}); err != nil {
-			return fmt.Errorf("invalid block %d: %v", i, err)
+
+		blocks[n] = &b
+		n++
+
+		if n == batchSize {
+			if err := chainmgr.InsertChain(blocks); err != nil {
+				return fmt.Errorf("invalid block %v", err)
+			}
+			n = 0
+			blocks = make(types.Blocks, batchSize)
 		}
 	}
+
+	if n > 0 {
+		if err := chainmgr.InsertChain(blocks[:n]); err != nil {
+			return fmt.Errorf("invalid block %v", err)
+		}
+	}
+
 	fmt.Printf("imported %d blocks\n", i)
 	return nil
 }

@@ -6,6 +6,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 /*
@@ -88,7 +90,7 @@ func (self *BlockPool) newSection(nodes []*node) *section {
 		self.set(n.hash, entry)
 	}
 
-	plog.DebugDetailf("[%s] setup section process", sectionhex(sec))
+	glog.V(logger.Detail).Infof("[%s] setup section process", sectionhex(sec))
 
 	go sec.run()
 	return sec
@@ -132,13 +134,13 @@ func (self *section) addSectionToBlockChain(p *peer) {
 		}
 		self.bp.lock.Unlock()
 
-		plog.Debugf("[%s] insert %v blocks [%v/%v] into blockchain", sectionhex(self), len(blocks), hex(blocks[0].Hash()), hex(blocks[len(blocks)-1].Hash()))
+		glog.V(logger.Debug).Infof("[%s] insert %v blocks [%v/%v] into blockchain", sectionhex(self), len(blocks), hex(blocks[0].Hash()), hex(blocks[len(blocks)-1].Hash()))
 		err := self.bp.insertChain(blocks)
 		if err != nil {
 			self.invalid = true
 			self.bp.peers.peerError(n.blockBy, ErrInvalidBlock, "%v", err)
-			plog.Warnf("invalid block %x", n.hash)
-			plog.Warnf("penalise peers %v (hash), %v (block)", n.hashBy, n.blockBy)
+			glog.V(logger.Error).Infof("invalid block %x", n.hash)
+			glog.V(logger.Error).Infof("penalise peers %v (hash), %v (block)", n.hashBy, n.blockBy)
 
 			// or invalid block and the entire chain needs to be removed
 			self.removeChain()
@@ -146,7 +148,6 @@ func (self *section) addSectionToBlockChain(p *peer) {
 			// check tds
 			self.bp.wg.Add(1)
 			go func() {
-				plog.DebugDetailf("checking td")
 				self.bp.checkTD(nodes...)
 				self.bp.wg.Done()
 			}()
@@ -159,15 +160,15 @@ func (self *section) addSectionToBlockChain(p *peer) {
 				if child := self.bp.getChild(self); child != nil {
 					select {
 					case <-child.offC:
-						plog.DebugDetailf("[%s] add complete child section [%s] to the blockchain", sectionhex(self), sectionhex(child))
+						glog.V(logger.Detail).Infof("[%s] add complete child section [%s] to the blockchain", sectionhex(self), sectionhex(child))
 					case child.poolRootC <- p:
-						plog.DebugDetailf("[%s] add incomplete child section [%s] to the blockchain", sectionhex(self), sectionhex(child))
+						glog.V(logger.Detail).Infof("[%s] add incomplete child section [%s] to the blockchain", sectionhex(self), sectionhex(child))
 					}
 					child.addSectionToBlockChain(p)
 				} else {
-					plog.DebugDetailf("[%s] no child section in pool", sectionhex(self))
+					glog.V(logger.Detail).Infof("[%s] no child section in pool", sectionhex(self))
 				}
-				plog.DebugDetailf("[%s] section completely inserted to blockchain - remove", sectionhex(self))
+				glog.V(logger.Detail).Infof("[%s] section completely inserted to blockchain - remove", sectionhex(self))
 				// complete sections are removed. if called from within section process,
 				// this must run in its own go routine to avoid deadlock
 				self.remove()
@@ -216,7 +217,7 @@ LOOP:
 			if self.peer != nil {
 				name = self.peer.id
 			}
-			plog.DebugDetailf("[%s] peer <%s> active: %v", sectionhex(self), name, self.active)
+			glog.V(logger.Detail).Infof("[%s] peer <%s> active: %v", sectionhex(self), name, self.active)
 
 		// global quit from blockpool
 		case <-self.bp.quit:
@@ -239,30 +240,30 @@ LOOP:
 		// peer quit or demoted, put section in idle mode
 		case <-self.idleC:
 			// peer quit or demoted, put section in idle mode
-			plog.Debugf("[%s] peer <%s> quit or demoted", sectionhex(self), self.peer.id)
+			glog.V(logger.Debug).Infof("[%s] peer <%s> quit or demoted", sectionhex(self), self.peer.id)
 			self.switchOff()
 			self.idleC = nil
 
 		// timebomb - if section is not complete in time, nuke the entire chain
 		case <-self.suicideTimer:
 			self.removeChain()
-			plog.Debugf("[%s] timeout. (%v total attempts): missing %v/%v/%v...suicide", sectionhex(self), self.blocksRequests, self.missing, self.lastMissing, self.depth)
+			glog.V(logger.Debug).Infof("[%s] timeout. (%v total attempts): missing %v/%v/%v...suicide", sectionhex(self), self.blocksRequests, self.missing, self.lastMissing, self.depth)
 			self.suicideTimer = nil
 			break LOOP
 
 		// closing suicideC triggers section suicide: removes section nodes from pool and terminates section process
 		case <-self.suicideC:
-			plog.DebugDetailf("[%s] quit", sectionhex(self))
+			glog.V(logger.Detail).Infof("[%s] quit", sectionhex(self))
 			break LOOP
 
 		// alarm for checking blocks in the section
 		case <-self.blocksRequestTimer:
-			plog.DebugDetailf("[%s] alarm: block request time", sectionhex(self))
+			glog.V(logger.Detail).Infof("[%s] alarm: block request time", sectionhex(self))
 			self.processC = self.missingC
 
 		// alarm for checking parent of the section or sending out hash requests
 		case <-self.blockHashesRequestTimer:
-			plog.DebugDetailf("[%s] alarm: hash request time", sectionhex(self))
+			glog.V(logger.Detail).Infof("[%s] alarm: hash request time", sectionhex(self))
 			self.blockHashesRequest()
 
 		// activate this section process with a peer
@@ -283,15 +284,13 @@ LOOP:
 		case n, ok := <-self.processC:
 			// channel closed, first iteration finished
 			if !ok && !self.initialised {
-				plog.DebugDetailf("[%s] section initalised: missing %v/%v/%v", sectionhex(self), self.missing, self.lastMissing, self.depth)
+				glog.V(logger.Detail).Infof("[%s] section initalised: missing %v/%v/%v", sectionhex(self), self.missing, self.lastMissing, self.depth)
 				self.initialised = true
 				self.processC = nil
-				// self.processC = make(chan *node, self.missing)
 				self.checkRound()
 				checking = false
 				break
 			}
-			// plog.DebugDetailf("[%s] section proc step %v: missing %v/%v/%v", sectionhex(self), self.step, self.missing, self.lastMissing, self.depth)
 			if !checking {
 				self.step = 0
 				self.missing = 0
@@ -322,19 +321,19 @@ LOOP:
 					// if node has got block (received via async AddBlock call from protocol)
 					if self.step == self.lastMissing {
 						// current root of the pool
-						plog.DebugDetailf("[%s] received block for current pool root %s", sectionhex(self), hex(n.hash))
+						glog.V(logger.Detail).Infof("[%s] received block for current pool root %s", sectionhex(self), hex(n.hash))
 						self.addSectionToBlockChain(self.peer)
 					}
 				} else {
 					if (self.parentHash == common.Hash{}) && n == self.bottom {
 						self.parentHash = block.ParentHash()
-						plog.DebugDetailf("[%s] got parent head block hash %s...checking", sectionhex(self), hex(self.parentHash))
+						glog.V(logger.Detail).Infof("[%s] got parent head block hash %s...checking", sectionhex(self), hex(self.parentHash))
 						self.blockHashesRequest()
 					}
 				}
 			}
 			if self.initialised && self.step == self.lastMissing {
-				plog.DebugDetailf("[%s] check if new blocks arrived (attempt %v): missing %v/%v/%v", sectionhex(self), self.blocksRequests, self.missing, self.lastMissing, self.depth)
+				glog.V(logger.Detail).Infof("[%s] check if new blocks arrived (attempt %v): missing %v/%v/%v", sectionhex(self), self.blocksRequests, self.missing, self.lastMissing, self.depth)
 				self.checkRound()
 				checking = false
 			}
@@ -347,7 +346,7 @@ LOOP:
 		self.bp.wg.Done()
 	}
 
-	plog.DebugDetailf("[%s] section process terminated: %v blocks retrieved (%v attempts), hash requests complete on root (%v attempts).", sectionhex(self), self.depth, self.blocksRequests, self.blockHashesRequests)
+	glog.V(logger.Detail).Infof("[%s] section process terminated: %v blocks retrieved (%v attempts), hash requests complete on root (%v attempts).", sectionhex(self), self.depth, self.blocksRequests, self.blockHashesRequests)
 
 }
 
@@ -369,7 +368,7 @@ func (self *section) switchOn(newpeer *peer) {
 			newp = newpeer.id
 		}
 
-		plog.DebugDetailf("[%s] active mode <%s> -> <%s>", sectionhex(self), oldp, newp)
+		glog.V(logger.Detail).Infof("[%s] active mode <%s> -> <%s>", sectionhex(self), oldp, newp)
 	}
 
 	// activate section with current peer
@@ -411,7 +410,7 @@ func (self *section) switchOff() {
 		if oldpeer != nil {
 			oldp = oldpeer.id
 		}
-		plog.DebugDetailf("[%s] idle mode peer <%s> -> <> (%v total attempts): missing %v/%v/%v", sectionhex(self), oldp, self.blocksRequests, self.missing, self.lastMissing, self.depth)
+		glog.V(logger.Detail).Infof("[%s] idle mode peer <%s> -> <> (%v total attempts): missing %v/%v/%v", sectionhex(self), oldp, self.blocksRequests, self.missing, self.lastMissing, self.depth)
 
 		self.active = false
 		self.peer = nil
@@ -462,19 +461,15 @@ func (self *section) blockHashesRequest() {
 		if parentSection == nil {
 
 			// only link to new parent if not switching peers
-			// this protects against synchronisation issue where during switching
-			// a demoted peer's fork will be chosen over the best peer's chain
-			// because relinking the correct chain (activateChain) is overwritten here in
-			// demoted peer's section process just before the section is put to idle mode
 			if (self.parentHash != common.Hash{}) {
 				if parent := self.bp.get(self.parentHash); parent != nil {
 					parentSection = parent.section
-					plog.DebugDetailf("[%s] blockHashesRequest: parent section [%s] linked\n", sectionhex(self), sectionhex(parentSection))
+					glog.V(logger.Detail).Infof("[%s] blockHashesRequest: parent section [%s] linked\n", sectionhex(self), sectionhex(parentSection))
 					link(parentSection, self)
 				} else {
 					if self.bp.hasBlock(self.parentHash) {
 						self.poolRoot = true
-						plog.DebugDetailf("[%s] blockHashesRequest: parentHash known ... inserting section in blockchain", sectionhex(self))
+						glog.V(logger.Detail).Infof("[%s] blockHashesRequest: parentHash known ... inserting section in blockchain", sectionhex(self))
 						self.addSectionToBlockChain(self.peer)
 						self.blockHashesRequestTimer = nil
 						self.blockHashesRequestsComplete = true
@@ -488,15 +483,15 @@ func (self *section) blockHashesRequest() {
 			if parentSection != nil {
 				//  activate parent section with this peer
 				// but only if not during switch mode
-				plog.DebugDetailf("[%s] parent section [%s] activated\n", sectionhex(self), sectionhex(parentSection))
+				glog.V(logger.Detail).Infof("[%s] parent section [%s] activated\n", sectionhex(self), sectionhex(parentSection))
 				self.bp.activateChain(parentSection, self.peer, self.peer.switchC, nil)
 				// if not root of chain, switch off
-				plog.DebugDetailf("[%s] parent found, hash requests deactivated (after %v total attempts)\n", sectionhex(self), self.blockHashesRequests)
+				glog.V(logger.Detail).Infof("[%s] parent found, hash requests deactivated (after %v total attempts)\n", sectionhex(self), self.blockHashesRequests)
 				self.blockHashesRequestTimer = nil
 				self.blockHashesRequestsComplete = true
 			} else {
 				self.blockHashesRequests++
-				plog.DebugDetailf("[%s] hash request on root (%v total attempts)\n", sectionhex(self), self.blockHashesRequests)
+				glog.V(logger.Detail).Infof("[%s] hash request on root (%v total attempts)\n", sectionhex(self), self.blockHashesRequests)
 				self.peer.requestBlockHashes(self.bottom.hash)
 				self.blockHashesRequestTimer = time.After(self.bp.Config.BlockHashesRequestInterval)
 			}
@@ -508,12 +503,12 @@ func (self *section) blockHashesRequest() {
 func (self *section) checkRound() {
 	if self.missing == 0 {
 		// no missing blocks
-		plog.DebugDetailf("[%s] section checked: got all blocks. process complete (%v total blocksRequests): missing %v/%v/%v", sectionhex(self), self.blocksRequests, self.missing, self.lastMissing, self.depth)
+		glog.V(logger.Detail).Infof("[%s] section checked: got all blocks. process complete (%v total blocksRequests): missing %v/%v/%v", sectionhex(self), self.blocksRequests, self.missing, self.lastMissing, self.depth)
 		self.blocksRequestsComplete = true
 		self.blocksRequestTimer = nil
 	} else {
 		// some missing blocks
-		plog.DebugDetailf("[%s] section checked: missing %v/%v/%v", sectionhex(self), self.missing, self.lastMissing, self.depth)
+		glog.V(logger.Detail).Infof("[%s] section checked: missing %v/%v/%v", sectionhex(self), self.missing, self.lastMissing, self.depth)
 		self.blocksRequests++
 		pos := self.missing % self.bp.Config.BlockBatchSize
 		if pos == 0 {
@@ -529,7 +524,7 @@ func (self *section) checkRound() {
 				self.idle++
 				// too many idle rounds
 				if self.idle >= self.bp.Config.BlocksRequestMaxIdleRounds {
-					plog.DebugDetailf("[%s] block requests had %v idle rounds (%v total attempts): missing %v/%v/%v\ngiving up...", sectionhex(self), self.idle, self.blocksRequests, self.missing, self.lastMissing, self.depth)
+					glog.V(logger.Detail).Infof("[%s] block requests had %v idle rounds (%v total attempts): missing %v/%v/%v\ngiving up...", sectionhex(self), self.idle, self.blocksRequests, self.missing, self.lastMissing, self.depth)
 					self.removeChain()
 				}
 			} else {
@@ -558,7 +553,7 @@ func link(parent *section, child *section) {
 		if exChild != nil && exChild != child {
 			if child != nil {
 				// if child is nil it is not a real fork
-				plog.DebugDetailf("[%s] chain fork [%s] -> [%s]", sectionhex(parent), sectionhex(exChild), sectionhex(child))
+				glog.V(logger.Detail).Infof("[%s] chain fork [%s] -> [%s]", sectionhex(parent), sectionhex(exChild), sectionhex(child))
 			}
 			exChild.parent = nil
 		}
@@ -568,7 +563,7 @@ func link(parent *section, child *section) {
 		if exParent != nil && exParent != parent {
 			if parent != nil {
 				// if parent is nil it is not a real fork, but suicide delinking section
-				plog.DebugDetailf("[%s] chain reverse fork [%s] -> [%s]", sectionhex(child), sectionhex(exParent), sectionhex(parent))
+				glog.V(logger.Detail).Infof("[%s] chain reverse fork [%s] -> [%s]", sectionhex(child), sectionhex(exParent), sectionhex(parent))
 			}
 			exParent.child = nil
 		}
@@ -583,7 +578,7 @@ func link(parent *section, child *section) {
   caller must hold chain lock
 */
 func (self *BlockPool) splitSection(parent *section, entry *entry) {
-	plog.DebugDetailf("[%s] split section at fork", sectionhex(parent))
+	glog.V(logger.Detail).Infof("[%s] split section at fork", sectionhex(parent))
 	parent.deactivate()
 	waiter := make(chan bool)
 	parent.wait(waiter)
@@ -606,14 +601,14 @@ func (self *BlockPool) linkSections(nodes []*node, parent, child *section) (sec 
 	// and launch section process fetching block and further hashes
 	if len(nodes) > 0 {
 		sec = self.newSection(nodes)
-		plog.Debugf("[%s]->[%s](%v)->[%s] new chain section", sectionhex(parent), sectionhex(sec), len(nodes), sectionhex(child))
+		glog.V(logger.Debug).Infof("[%s]->[%s](%v)->[%s] new chain section", sectionhex(parent), sectionhex(sec), len(nodes), sectionhex(child))
 		link(parent, sec)
 		link(sec, child)
 	} else {
 		if parent != nil && child != nil {
 			// now this can only happen if we allow response to hash request to include <from> hash
 			// in this case we just link parent and child (without needing root block of child section)
-			plog.Debugf("[%s]->[%s] connecting known sections", sectionhex(parent), sectionhex(child))
+			glog.V(logger.Debug).Infof("[%s]->[%s] connecting known sections", sectionhex(parent), sectionhex(child))
 			link(parent, child)
 		}
 	}
@@ -624,10 +619,10 @@ func (self *section) activate(p *peer) {
 	self.bp.wg.Add(1)
 	select {
 	case <-self.offC:
-		plog.DebugDetailf("[%s] completed section process. cannot activate for peer <%s>", sectionhex(self), p.id)
+		glog.V(logger.Detail).Infof("[%s] completed section process. cannot activate for peer <%s>", sectionhex(self), p.id)
 		self.bp.wg.Done()
 	case self.controlC <- p:
-		plog.DebugDetailf("[%s] activate section process for peer <%s>", sectionhex(self), p.id)
+		glog.V(logger.Detail).Infof("[%s] activate section process for peer <%s>", sectionhex(self), p.id)
 	}
 }
 
@@ -641,16 +636,16 @@ func (self *section) remove() {
 	select {
 	case <-self.offC:
 		close(self.suicideC)
-		plog.DebugDetailf("[%s] remove: suicide", sectionhex(self))
+		glog.V(logger.Detail).Infof("[%s] remove: suicide", sectionhex(self))
 	case <-self.suicideC:
-		plog.DebugDetailf("[%s] remove: suicided already", sectionhex(self))
+		glog.V(logger.Detail).Infof("[%s] remove: suicided already", sectionhex(self))
 	default:
-		plog.DebugDetailf("[%s] remove: suicide", sectionhex(self))
+		glog.V(logger.Detail).Infof("[%s] remove: suicide", sectionhex(self))
 		close(self.suicideC)
 	}
 	self.unlink()
 	self.bp.remove(self)
-	plog.DebugDetailf("[%s] removed section.", sectionhex(self))
+	glog.V(logger.Detail).Infof("[%s] removed section.", sectionhex(self))
 
 }
 
@@ -661,7 +656,7 @@ func (self *section) removeChain() {
 	child := self.child
 	self.bp.chainLock.RUnlock()
 
-	plog.DebugDetailf("[%s] remove chain", sectionhex(self))
+	glog.V(logger.Detail).Infof("[%s] remove chain", sectionhex(self))
 	self.remove()
 	if child != nil {
 		child.removeChain()

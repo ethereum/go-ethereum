@@ -3,19 +3,12 @@ package blockpool
 import (
 	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/blockpool/test"
 )
-
-func init() {
-	test.LogInit()
-}
 
 // using the mock framework in blockpool_util_test
 // we test various scenarios here
 
 func TestPeerWithKnownBlock(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.refBlockChain[0] = nil
 	blockPoolTester.blockChain[0] = nil
@@ -31,7 +24,6 @@ func TestPeerWithKnownBlock(t *testing.T) {
 }
 
 func TestPeerWithKnownParentBlock(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.initRefBlockChain(1)
 	blockPoolTester.blockChain[0] = nil
@@ -50,7 +42,6 @@ func TestPeerWithKnownParentBlock(t *testing.T) {
 }
 
 func TestSimpleChain(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(2)
@@ -70,7 +61,6 @@ func TestSimpleChain(t *testing.T) {
 }
 
 func TestChainConnectingWithParentHash(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(3)
@@ -90,7 +80,6 @@ func TestChainConnectingWithParentHash(t *testing.T) {
 }
 
 func TestMultiSectionChain(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(5)
@@ -113,7 +102,6 @@ func TestMultiSectionChain(t *testing.T) {
 }
 
 func TestNewBlocksOnPartialChain(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(7)
@@ -146,7 +134,6 @@ func TestNewBlocksOnPartialChain(t *testing.T) {
 }
 
 func TestPeerSwitchUp(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(7)
@@ -174,7 +161,6 @@ func TestPeerSwitchUp(t *testing.T) {
 }
 
 func TestPeerSwitchDownOverlapSectionWithoutRootBlock(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(6)
@@ -200,7 +186,6 @@ func TestPeerSwitchDownOverlapSectionWithoutRootBlock(t *testing.T) {
 }
 
 func TestPeerSwitchDownOverlapSectionWithRootBlock(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(6)
@@ -227,7 +212,6 @@ func TestPeerSwitchDownOverlapSectionWithRootBlock(t *testing.T) {
 }
 
 func TestPeerSwitchDownDisjointSection(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(3)
@@ -254,7 +238,6 @@ func TestPeerSwitchDownDisjointSection(t *testing.T) {
 }
 
 func TestPeerSwitchBack(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(8)
@@ -270,7 +253,7 @@ func TestPeerSwitchBack(t *testing.T) {
 	go peer2.serveBlockHashes(6, 5, 4)
 	peer2.serveBlocks(4, 5)                  // section partially complete
 	peer1.AddPeer()                          // peer1 is promoted as best peer
-	go peer1.serveBlocks(10, 11)             //
+	peer1.serveBlocks(10, 11)                //
 	peer1.serveBlockHashes(11, 10)           // only gives useless results
 	blockPool.RemovePeer("peer1")            // peer1 disconnects
 	go peer2.serveBlockHashes(4, 3, 2, 1, 0) // tests that asking for hashes from 4 is remembered
@@ -284,7 +267,6 @@ func TestPeerSwitchBack(t *testing.T) {
 }
 
 func TestForkSimple(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(9)
@@ -320,7 +302,6 @@ func TestForkSimple(t *testing.T) {
 }
 
 func TestForkSwitchBackByNewBlocks(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(11)
@@ -351,8 +332,8 @@ func TestForkSwitchBackByNewBlocks(t *testing.T) {
 	go peer1.serveBlockHashes(11, 10, 9)
 	go peer1.serveBlocks(9, 10)
 	// time.Sleep(1 * time.Second)
-	go peer1.serveBlocks(3, 7)      // tests that block requests on earlier fork are remembered
-	go peer1.serveBlockHashes(2, 1) // tests that hash request from root of connecting chain section (added by demoted peer) is remembered
+	go peer1.serveBlocks(3, 7)         // tests that block requests on earlier fork are remembered
+	go peer1.serveBlockHashes(2, 1, 0) // tests that hash request from root of connecting chain section (added by demoted peer) is remembered
 	peer1.serveBlocks(0, 1)
 
 	blockPool.Wait(waitTimeout)
@@ -367,7 +348,6 @@ func TestForkSwitchBackByNewBlocks(t *testing.T) {
 }
 
 func TestForkSwitchBackByPeerSwitchBack(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(9)
@@ -411,7 +391,6 @@ func TestForkSwitchBackByPeerSwitchBack(t *testing.T) {
 }
 
 func TestForkCompleteSectionSwitchBackByPeerSwitchBack(t *testing.T) {
-	test.LogInit()
 	_, blockPool, blockPoolTester := newTestBlockPool(t)
 	blockPoolTester.blockChain[0] = nil
 	blockPoolTester.initRefBlockChain(9)
@@ -429,16 +408,17 @@ func TestForkCompleteSectionSwitchBackByPeerSwitchBack(t *testing.T) {
 	peer1.AddPeer()
 	go peer1.serveBlocks(8, 9)
 	go peer1.serveBlockHashes(9, 8, 7)
-	peer1.serveBlocks(3, 7, 8)               // make sure this section is complete
-	time.Sleep(1 * time.Second)              //
-	go peer1.serveBlockHashes(7, 3, 2)       // block 3/7 is section boundary
+	peer1.serveBlocks(3, 7, 8) // make sure this section is complete
+	// time.Sleep(2 * time.Second)              //
+	peer1.serveBlockHashes(7, 3, 2)          // block 3/7 is section boundary
 	peer1.serveBlocks(2, 3)                  // partially complete sections block 2 missing
 	peer2.AddPeer()                          //
 	go peer2.serveBlocks(5, 6)               //
 	go peer2.serveBlockHashes(6, 5, 4, 3, 2) // peer2 forks on block 3
+	time.Sleep(100 * time.Millisecond)       //
 	peer2.serveBlocks(2, 3, 4, 5)            // block 2 still missing.
 	blockPool.RemovePeer("peer2")            // peer2 disconnects, peer1 is promoted again as best peer
-	go peer1.serveBlockHashes(2, 1, 0)       //
+	go peer1.serveBlockHashes(2, 1)          //
 	peer1.serveBlocks(0, 1, 2)
 
 	blockPool.Wait(waitTimeout)
