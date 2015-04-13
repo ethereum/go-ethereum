@@ -112,6 +112,9 @@ func TestStreamErrors(t *testing.T) {
 		{"BFFFFFFFFFFFFFFFFFFF", calls{"Bytes"}, nil, ErrValueTooLarge},
 		{"C801", calls{"List"}, nil, ErrValueTooLarge},
 
+		// Test for list element size check overflow.
+		{"CD04040404FFFFFFFFFFFFFFFFFF0303", calls{"List", "Uint", "Uint", "Uint", "Uint", "List"}, nil, ErrElemTooLarge},
+
 		// Test for input limit overflow. Since we are counting the limit
 		// down toward zero in Stream.remaining, reading too far can overflow
 		// remaining to a large value, effectively disabling the limit.

@@ -751,7 +751,7 @@ func (s *Stream) Kind() (kind Kind, size uint64, err error) {
 		tos = &s.stack[len(s.stack)-1]
 	}
 	if s.kind < 0 {
-		// don't read further if we're at the end of the
+		// Don't read further if we're at the end of the
 		// innermost list.
 		if tos != nil && tos.pos == tos.size {
 			return 0, 0, EOL
@@ -772,7 +772,7 @@ func (s *Stream) Kind() (kind Kind, size uint64, err error) {
 		}
 	} else {
 		// Inside a list, check that the value doesn't overflow the list.
-		if tos.pos+s.size > tos.size {
+		if s.size > tos.size-tos.pos {
 			return 0, 0, ErrElemTooLarge
 		}
 	}
