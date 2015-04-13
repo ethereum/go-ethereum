@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -82,6 +83,11 @@ var (
 		Name:  "networkid",
 		Usage: "Network Id",
 		Value: eth.NetworkId,
+	}
+	BlockchainVersionFlag = cli.IntFlag{
+		Name:  "blockchainversion",
+		Usage: "Blockchain version",
+		Value: core.BlockChainVersion,
 	}
 
 	// miner settings
@@ -237,29 +243,32 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	glog.SetLogDir(ctx.GlobalString(LogFileFlag.Name))
 
 	return &eth.Config{
-		Name:            common.MakeName(clientID, version),
-		DataDir:         ctx.GlobalString(DataDirFlag.Name),
-		ProtocolVersion: ctx.GlobalInt(ProtocolVersionFlag.Name),
-		NetworkId:       ctx.GlobalInt(NetworkIdFlag.Name),
-		LogFile:         ctx.GlobalString(LogFileFlag.Name),
-		LogLevel:        ctx.GlobalInt(LogLevelFlag.Name),
-		LogJSON:         ctx.GlobalString(LogJSONFlag.Name),
-		Etherbase:       ctx.GlobalString(EtherbaseFlag.Name),
-		MinerThreads:    ctx.GlobalInt(MinerThreadsFlag.Name),
-		AccountManager:  GetAccountManager(ctx),
-		VmDebug:         ctx.GlobalBool(VMDebugFlag.Name),
-		MaxPeers:        ctx.GlobalInt(MaxPeersFlag.Name),
-		Port:            ctx.GlobalString(ListenPortFlag.Name),
-		NAT:             GetNAT(ctx),
-		NodeKey:         GetNodeKey(ctx),
-		Shh:             true,
-		Dial:            true,
-		BootNodes:       ctx.GlobalString(BootnodesFlag.Name),
+		Name:               common.MakeName(clientID, version),
+		DataDir:            ctx.GlobalString(DataDirFlag.Name),
+		ProtocolVersion:    ctx.GlobalInt(ProtocolVersionFlag.Name),
+		BlockChainVersion:  ctx.GlobalInt(BlockchainVersionFlag.Name),
+		SkipBcVersionCheck: false,
+		NetworkId:          ctx.GlobalInt(NetworkIdFlag.Name),
+		LogFile:            ctx.GlobalString(LogFileFlag.Name),
+		LogLevel:           ctx.GlobalInt(LogLevelFlag.Name),
+		LogJSON:            ctx.GlobalString(LogJSONFlag.Name),
+		Etherbase:          ctx.GlobalString(EtherbaseFlag.Name),
+		MinerThreads:       ctx.GlobalInt(MinerThreadsFlag.Name),
+		AccountManager:     GetAccountManager(ctx),
+		VmDebug:            ctx.GlobalBool(VMDebugFlag.Name),
+		MaxPeers:           ctx.GlobalInt(MaxPeersFlag.Name),
+		Port:               ctx.GlobalString(ListenPortFlag.Name),
+		NAT:                GetNAT(ctx),
+		NodeKey:            GetNodeKey(ctx),
+		Shh:                true,
+		Dial:               true,
+		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
 	}
 }
 
 func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Database) {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
+
 	blockDb, err := ethdb.NewLDBDatabase(path.Join(dataDir, "blockchain"))
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
@@ -269,7 +278,20 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Dat
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
-	return core.NewChainManager(blockDb, stateDb, new(event.TypeMux)), blockDb, stateDb
+
+	extraDb, err := ethdb.NewLDBDatabase(path.Join(dataDir, "extra"))
+	if err != nil {
+		Fatalf("Could not open database: %v", err)
+	}
+
+	eventMux := new(event.TypeMux)
+	chainManager := core.NewChainManager(blockDb, stateDb, eventMux)
+	pow := ethash.New(chainManager)
+	txPool := core.NewTxPool(eventMux, chainManager.State)
+	blockProcessor := core.NewBlockProcessor(stateDb, extraDb, pow, txPool, chainManager, eventMux)
+	chainManager.SetProcessor(blockProcessor)
+
+	return chainManager, blockDb, stateDb
 }
 
 func GetAccountManager(ctx *cli.Context) *accounts.Manager {
