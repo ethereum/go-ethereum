@@ -473,6 +473,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			}
 
 			if IsParentErr(err) && self.futureBlocks.Has(block.ParentHash()) {
+				block.SetQueued(true)
 				self.futureBlocks.Push(block)
 				stats.queued++
 				continue
