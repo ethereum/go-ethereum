@@ -19,7 +19,7 @@ import (
 type Envelope struct {
 	Expiry uint32 // Whisper protocol specifies int32, really should be int64
 	TTL    uint32 // ^^^^^^
-	Topics [][]byte
+	Topics []Topic
 	Data   []byte
 	Nonce  uint32
 
@@ -28,7 +28,7 @@ type Envelope struct {
 
 // NewEnvelope wraps a Whisper message with expiration and destination data
 // included into an envelope for network forwarding.
-func NewEnvelope(ttl time.Duration, topics [][]byte, msg *Message) *Envelope {
+func NewEnvelope(ttl time.Duration, topics []Topic, msg *Message) *Envelope {
 	return &Envelope{
 		Expiry: uint32(time.Now().Add(ttl).Unix()),
 		TTL:    uint32(ttl.Seconds()),

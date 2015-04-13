@@ -119,7 +119,7 @@ func (self *Whisper) Watch(opts Filter) int {
 	return self.filters.Install(filter.Generic{
 		Str1: string(crypto.FromECDSAPub(opts.To)),
 		Str2: string(crypto.FromECDSAPub(opts.From)),
-		Data: bytesToMap(opts.Topics),
+		Data: NewTopicSet(opts.Topics),
 		Fn: func(data interface{}) {
 			opts.Fn(data.(*Message))
 		},
@@ -272,9 +272,9 @@ func (self *Whisper) Protocol() p2p.Protocol {
 	return self.protocol
 }
 
-func createFilter(message *Message, topics [][]byte, key *ecdsa.PrivateKey) filter.Filter {
+func createFilter(message *Message, topics []Topic, key *ecdsa.PrivateKey) filter.Filter {
 	return filter.Generic{
 		Str1: string(crypto.FromECDSAPub(&key.PublicKey)), Str2: string(crypto.FromECDSAPub(message.Recover())),
-		Data: bytesToMap(topics),
+		Data: NewTopicSet(topics),
 	}
 }

@@ -5,6 +5,6 @@ import "crypto/ecdsa"
 type Filter struct {
 	To     *ecdsa.PublicKey
 	From   *ecdsa.PublicKey
-	Topics [][]byte
+	Topics []Topic
 	Fn     func(*Message)
 }
