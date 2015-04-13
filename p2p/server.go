@@ -260,9 +260,11 @@ func (srv *Server) Stop() {
 	// No new peers can be added at this point because dialLoop and
 	// listenLoop are down. It is safe to call peerWG.Wait because
 	// peerWG.Add is not called outside of those loops.
+	srv.lock.Lock()
 	for _, peer := range srv.peers {
 		peer.Disconnect(DiscQuitting)
 	}
+	srv.lock.Unlock()
 	srv.peerWG.Wait()
 }
 
