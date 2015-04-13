@@ -172,7 +172,7 @@ out:
 		case <-self.quit:
 			break out
 		case <-timer.C:
-			if glog.V(logger.Debug) {
+			if glog.V(logger.Detail) && atomic.LoadInt64(&self.mining) == 1 {
 				glog.Infoln("Hash rate:", self.HashRate(), "Khash")
 			}
 
@@ -264,8 +264,8 @@ func (self *worker) commitNewWork() {
 		remove = set.New()
 		tcount = 0
 	)
-gasLimit:
-	for i, tx := range transactions {
+	//gasLimit:
+	for _, tx := range transactions {
 		self.current.state.StartRecord(tx.Hash(), common.Hash{}, 0)
 
 		err := self.commitTransaction(tx)
@@ -276,14 +276,13 @@ gasLimit:
 			self.chain.TxState().RemoveNonce(from, tx.Nonce())
 			remove.Add(tx.Hash())
 
-			if glog.V(logger.Debug) {
+			if glog.V(logger.Detail) {
 				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
-				glog.Infoln(tx)
+				//glog.Infoln(tx)
 			}
 		case state.IsGasLimitErr(err):
-			glog.V(logger.Debug).Infof("Gas limit reached for block. %d TXs included in this block\n", i)
-			// Break on gas limit
-			break gasLimit
+			//glog.V(logger.Debug).Infof("Gas limit reached for block. %d TXs included in this block\n", i)
+			//break gasLimit
 		default:
 			tcount++
 		}
