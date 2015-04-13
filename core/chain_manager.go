@@ -490,8 +490,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		block.Td = td
 
 		self.mu.Lock()
-		cblock := self.currentBlock
 		{
+			cblock := self.currentBlock
 			// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
 			// not in the canonical chain.
 			self.write(block)
@@ -505,6 +505,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 					if glog.V(logger.Info) {
 						glog.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, hash[:4], td, cblock.Header().Number, chash[:4], self.td)
 					}
+					// during split we merge two different chains and create the new canonical chain
+					self.merge(cblock, block)
 
 					queue[i] = ChainSplitEvent{block, logs}
 					queueEvent.splitCount++
@@ -551,6 +553,35 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	go self.eventMux.Post(queueEvent)
 
 	return nil
+}
+
+// merge takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them
+// to be part of the new canonical chain.
+func (self *ChainManager) merge(oldBlock, newBlock *types.Block) {
+	glog.V(logger.Debug).Infof("Applying diff to %x & %x\n", oldBlock.Hash().Bytes()[:4], newBlock.Hash().Bytes()[:4])
+
+	var oldChain, newChain types.Blocks
+	// First find the split (common ancestor) so we can perform an adequate merge
+	for {
+		oldBlock, newBlock = self.GetBlock(oldBlock.ParentHash()), self.GetBlock(newBlock.ParentHash())
+		if oldBlock.Hash() == newBlock.Hash() {
+			break
+		}
+		oldChain = append(oldChain, oldBlock)
+		newChain = append(newChain, newBlock)
+	}
+
+	// insert blocks
+	for _, block := range newChain {
+		self.insert(block)
+	}
+
+	if glog.V(logger.Detail) {
+		for i, oldBlock := range oldChain {
+			glog.Infof("- %.10v   = %x\n", oldBlock.Number(), oldBlock.Hash())
+			glog.Infof("+ %.10v   = %x\n", newChain[i].Number(), newChain[i].Hash())
+		}
+	}
 }
 
 func (self *ChainManager) update() {
