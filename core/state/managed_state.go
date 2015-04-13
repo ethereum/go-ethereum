@@ -52,8 +52,8 @@ func (ms *ManagedState) RemoveNonce(addr common.Address, n uint64) {
 
 // NewNonce returns the new canonical nonce for the managed account
 func (ms *ManagedState) NewNonce(addr common.Address) uint64 {
-	ms.mu.RLock()
-	defer ms.mu.RUnlock()
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
 
 	account := ms.getAccount(addr)
 	for i, nonce := range account.nonces {
