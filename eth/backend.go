@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"path"
 	"strings"
 
@@ -448,7 +449,7 @@ func (self *Ethereum) txBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.txSub.Chan() {
 		event := obj.(core.TxPreEvent)
-		self.net.Broadcast("eth", TxMsg, []*types.Transaction{event.Tx})
+		self.net.BroadcastLimited("eth", TxMsg, math.Sqrt, []*types.Transaction{event.Tx})
 		self.syncAccounts(event.Tx)
 	}
 }
@@ -472,7 +473,7 @@ func (self *Ethereum) blockBroadcastLoop() {
 	for obj := range self.blockSub.Chan() {
 		switch ev := obj.(type) {
 		case core.ChainHeadEvent:
-			self.net.Broadcast("eth", NewBlockMsg, []interface{}{ev.Block, ev.Block.Td})
+			self.net.BroadcastLimited("eth", NewBlockMsg, math.Sqrt, []interface{}{ev.Block, ev.Block.Td})
 		}
 	}
 }
