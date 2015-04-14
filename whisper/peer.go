@@ -9,10 +9,6 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-const (
-	protocolVersion uint64 = 0x02
-)
-
 type peer struct {
 	host *Whisper
 	peer *p2p.Peer

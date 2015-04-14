@@ -24,7 +24,7 @@ type Envelope struct {
 	Data   []byte
 	Nonce  uint32
 
-	hash common.Hash
+	hash common.Hash // Cached hash of the envelope to avoid rehashing every time
 }
 
 // NewEnvelope wraps a Whisper message with expiration and destination data
@@ -57,16 +57,6 @@ func (self *Envelope) Seal(pow time.Duration) {
 			nonce++
 		}
 	}
-}
-
-// valid checks whether the claimed proof of work was indeed executed.
-// TODO: Is this really useful? Isn't this always true?
-func (self *Envelope) valid() bool {
-	d := make([]byte, 64)
-	copy(d[:32], self.rlpWithoutNonce())
-	binary.BigEndian.PutUint32(d[60:], self.Nonce)
-
-	return common.FirstBitSet(common.BigD(crypto.Sha3(d))) > 0
 }
 
 // rlpWithoutNonce returns the RLP encoded envelope contents, except the nonce.
