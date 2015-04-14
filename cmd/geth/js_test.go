@@ -175,7 +175,7 @@ func TestBlockChain(t *testing.T) {
 	defer ethereum.Stop()
 
 	// should get current block
-	val0, err := repl.re.Run("admin.dumpBlock()")
+	val0, err := repl.re.Run("admin.debug.dumpBlock()")
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -197,7 +197,7 @@ func TestBlockChain(t *testing.T) {
 	var val1 otto.Value
 
 	// should get current block
-	val1, err = repl.re.Run("admin.dumpBlock()")
+	val1, err = repl.re.Run("admin.debug.dumpBlock()")
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
