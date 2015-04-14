@@ -63,7 +63,6 @@ const (
 
 var genesisData = []byte(`{
 	"` + TestAccount + `": {"balance": "` + TestBalance + `"},
-	` + BuiltInContracts + `
 	"0000000000000000000000000000000000000001": {"balance": "1"},
 	"0000000000000000000000000000000000000002": {"balance": "1"},
 	"0000000000000000000000000000000000000003": {"balance": "1"},

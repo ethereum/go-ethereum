@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	xe "github.com/ethereum/go-ethereum/xeth"
 )
 
 /*
@@ -17,10 +17,24 @@ UrlHint : Content Hash -> Url Hint
 The resolver is meant to be called by the roundtripper transport implementation
 of a url scheme
 */
-const (
-	URLHintContractAddress = core.ContractAddrURLhint
-	HashRegContractAddress = core.ContractAddrHashReg
-)
+
+// contract addresses will be hardcoded after they're created
+var URLHintContractAddress string = "0000000000000000000000000000000000000000000000000000000000001234"
+var HashRegContractAddress string = "0000000000000000000000000000000000000000000000000000000000005678"
+
+func CreateContracts(xeth *xe.XEth, addr string) {
+	var err error
+	URLHintContractAddress, err = xeth.Transact(addr, "", "100000000000", "1000000", "100000", ContractCodeURLhint)
+	if err != nil {
+		panic(err)
+	}
+	HashRegContractAddress, err = xeth.Transact(addr, "", "100000000000", "1000000", "100000", ContractCodeHashReg)
+	if err != nil {
+		panic(err)
+	}
+	URLHintContractAddress = URLHintContractAddress[2:]
+	HashRegContractAddress = HashRegContractAddress[2:]
+}
 
 type Resolver struct {
 	backend                Backend

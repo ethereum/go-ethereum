@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/common/resolver"
 	"github.com/ethereum/go-ethereum/core"
-	//"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state"
 	//"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -27,14 +27,16 @@ type testFrontend struct {
 	xeth        *xe.XEth
 	api         *rpc.EthereumApi
 	coinbase    string
+	stateDb     *state.StateDB
+	txc         uint64
 	lastConfirm string
 	makeNatSpec bool
 }
 
 const testNotice = "Register key `utils.toHex(_key)` <- content `utils.toHex(_content)`"
 const testExpNotice = "Register key 0xadd1a7d961cff0242089674ec2ef6fca671ab15e1fe80e38859fc815b98d88ab <- content 0xc00d5bcc872e17813df6ec5c646bb281a6e2d3b454c2c400c78192adf3344af9"
-const testExpNotice2 = `About to submit transaction (NatSpec notice error "abi key %!x(MISSING) does not match any method %!v(MISSING)"): {"id":6,"jsonrpc":"2.0","method":"eth_transact","params":[{"from":"0xe273f01c99144c438695e10f24926dc1f9fbf62d","to":"0x0000000000000000000000000000000000000009","value":"100000000000","gas":"100000","gasPrice":"100000","data":"0x31e12c20"}]}`
-const testExpNotice3 = `About to submit transaction (no NatSpec info found for contract): {"id":6,"jsonrpc":"2.0","method":"eth_transact","params":[{"from":"0xe273f01c99144c438695e10f24926dc1f9fbf62d","to":"0x0000000000000000000000000000000000000008","value":"100000000000","gas":"100000","gasPrice":"100000","data":"0xd66d6c10c00d5bcc872e17813df6ec5c646bb281a6e2d3b454c2c400c78192adf3344af900000000000000000000000066696c653a2f2f2f746573742e636f6e74656e74"}]}`
+const testExpNotice2 = `About to submit transaction (NatSpec notice error "abi key %!x(MISSING) does not match any method %!v(MISSING)"): {"id":6,"jsonrpc":"2.0","method":"eth_transact","params":[{"from":"0xe273f01c99144c438695e10f24926dc1f9fbf62d","to":"0xb737b91f8e95cf756766fc7c62c9a8ff58470381","value":"100000000000","gas":"100000","gasPrice":"100000","data":"0x31e12c20"}]}`
+const testExpNotice3 = `About to submit transaction (no NatSpec info found for contract): {"id":6,"jsonrpc":"2.0","method":"eth_transact","params":[{"from":"0xe273f01c99144c438695e10f24926dc1f9fbf62d","to":"0x8b839ad85686967a4f418eccc81962eaee314ac3","value":"100000000000","gas":"100000","gasPrice":"100000","data":"0xd66d6c10c00d5bcc872e17813df6ec5c646bb281a6e2d3b454c2c400c78192adf3344af900000000000000000000000066696c653a2f2f2f746573742e636f6e74656e74"}]}`
 
 const testUserDoc = `
 {
@@ -161,6 +163,8 @@ func testInit(t *testing.T) (self *testFrontend) {
 	}*/
 	t.Logf("Balance is %v", balance)
 
+	self.stateDb = self.ethereum.ChainManager().State().Copy()
+
 	return
 
 }
@@ -201,43 +205,45 @@ func (self *testFrontend) insertTx(addr, contract, fnsig string, args []string) 
 	}
 
 	//self.xeth.Transact(addr, contract, "100000000000", "100000", "100000", data)
+
 }
 
 func (self *testFrontend) applyTxs() {
 
 	cb := common.HexToAddress(self.coinbase)
-	stateDb := self.ethereum.ChainManager().State().Copy()
 	block := self.ethereum.ChainManager().NewBlock(cb)
-	coinbase := stateDb.GetStateObject(cb)
-	coinbase.SetGasPool(big.NewInt(1000000))
+	coinbase := self.stateDb.GetStateObject(cb)
+	coinbase.SetGasPool(big.NewInt(10000000))
 	txs := self.ethereum.TxPool().GetTransactions()
 
 	for i := 0; i < len(txs); i++ {
 		for _, tx := range txs {
-			if tx.Nonce() == uint64(i) {
-				_, gas, err := core.ApplyMessage(core.NewEnv(stateDb, self.ethereum.ChainManager(), tx, block), tx, coinbase)
+			//self.t.Logf("%v %v %v", i, tx.Nonce(), self.txc)
+			if tx.Nonce() == self.txc {
+				_, gas, err := core.ApplyMessage(core.NewEnv(self.stateDb, self.ethereum.ChainManager(), tx, block), tx, coinbase)
 				//self.ethereum.TxPool().RemoveSet([]*types.Transaction{tx})
 				self.t.Logf("ApplyMessage: gas %v  err %v", gas, err)
+				self.txc++
 			}
 		}
 	}
 
-	self.ethereum.TxPool().RemoveSet(txs)
-	self.xeth = self.xeth.WithState(stateDb)
+	//self.ethereum.TxPool().RemoveSet(txs)
+	self.xeth = self.xeth.WithState(self.stateDb)
 
 }
 
 func (self *testFrontend) registerURL(hash common.Hash, url string) {
 	hashHex := common.Bytes2Hex(hash[:])
 	urlHex := common.Bytes2Hex([]byte(url))
-	self.insertTx(self.coinbase, core.ContractAddrURLhint, "register(uint256,uint256)", []string{hashHex, urlHex})
+	self.insertTx(self.coinbase, resolver.URLHintContractAddress, "register(uint256,uint256)", []string{hashHex, urlHex})
 }
 
 func (self *testFrontend) setOwner() {
 
-	self.insertTx(self.coinbase, core.ContractAddrHashReg, "setowner()", []string{})
+	self.insertTx(self.coinbase, resolver.HashRegContractAddress, "setowner()", []string{})
 
-	/*owner := self.xeth.StorageAt("0x"+core.ContractAddrHashReg, "0x0000000000000000000000000000000000000000000000000000000000000000")
+	/*owner := self.xeth.StorageAt("0x"+resolver.HashRegContractAddress, "0x0000000000000000000000000000000000000000000000000000000000000000")
 	self.t.Logf("owner = %v", owner)
 	if owner != self.coinbase {
 		self.t.Errorf("setowner() unsuccessful, owner != coinbase")
@@ -248,7 +254,7 @@ func (self *testFrontend) registerNatSpec(codehash, dochash common.Hash) {
 
 	codeHex := common.Bytes2Hex(codehash[:])
 	docHex := common.Bytes2Hex(dochash[:])
-	self.insertTx(self.coinbase, core.ContractAddrHashReg, "register(uint256,uint256)", []string{codeHex, docHex})
+	self.insertTx(self.coinbase, resolver.HashRegContractAddress, "register(uint256,uint256)", []string{codeHex, docHex})
 }
 
 func (self *testFrontend) testResolver() *resolver.Resolver {
@@ -260,10 +266,15 @@ func TestNatspecE2E(t *testing.T) {
 	tf := testInit(t)
 	defer tf.ethereum.Stop()
 
+	resolver.CreateContracts(tf.xeth, core.TestAccount)
+	t.Logf("URLHint contract registered at %v", resolver.URLHintContractAddress)
+	t.Logf("HashReg contract registered at %v", resolver.HashRegContractAddress)
+	tf.applyTxs()
+
 	ioutil.WriteFile("/tmp/test.content", []byte(testDocs), os.ModePerm)
 	dochash := common.BytesToHash(crypto.Sha3([]byte(testDocs)))
 
-	codehex := tf.xeth.CodeAt(core.ContractAddrHashReg)
+	codehex := tf.xeth.CodeAt(resolver.HashRegContractAddress)
 	codehash := common.BytesToHash(crypto.Sha3(common.Hex2Bytes(codehex[2:])))
 
 	tf.setOwner()
