@@ -1,75 +1,36 @@
 package whisper
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/nat"
 )
 
-type testNode struct {
-	server *p2p.Server
-	client *Whisper
-}
-
-func startNodes(n int) ([]*testNode, error) {
-	// Start up the cluster of nodes
-	cluster := make([]*testNode, 0, n)
+func startTestCluster(n int) []*Whisper {
+	// Create the batch of simulated peers
+	nodes := make([]*p2p.Peer, n)
 	for i := 0; i < n; i++ {
-		shh := New()
-
-		// Generate the node identity
-		key, err := crypto.GenerateKey()
-		if err != nil {
-			return nil, err
-		}
-		name := common.MakeName(fmt.Sprintf("whisper-go-test-%d", i), "1.0")
-
-		// Create an Ethereum server to communicate through
-		server := &p2p.Server{
-			PrivateKey: key,
-			MaxPeers:   10,
-			Name:       name,
-			Protocols:  []p2p.Protocol{shh.Protocol()},
-			ListenAddr: fmt.Sprintf(":%d", 30300+i),
-			NAT:        nat.Any(),
-		}
-		if err := server.Start(); err != nil {
-			return nil, err
-		}
-		// Peer online, store and iterate
-		cluster = append(cluster, &testNode{
-			server: server,
-			client: shh,
-		})
+		nodes[i] = p2p.NewPeer(randomNodeID(), randomNodeName(), whisperCaps())
 	}
-	// Manually wire together the cluster nodes
-	root := cluster[0].server.Self()
-	for _, node := range cluster[1:] {
-		node.server.SuggestPeer(root)
+	whispers := make([]*Whisper, n)
+	for i := 0; i < n; i++ {
+		whispers[i] = New()
+		whispers[i].Start()
 	}
-	return cluster, nil
-}
+	// Wire all the peers to the root one
+	for i := 1; i < n; i++ {
+		src, dst := bufMsgPipe()
 
-func stopNodes(cluster []*testNode) {
-	for _, node := range cluster {
-		node.server.Stop()
+		go whispers[0].handlePeer(nodes[i], src)
+		go whispers[i].handlePeer(nodes[0], dst)
 	}
+	return whispers
 }
 
 func TestSelfMessage(t *testing.T) {
 	// Start the single node cluster
-	cluster, err := startNodes(1)
-	if err != nil {
-		t.Fatalf("failed to boot test cluster: %v", err)
-	}
-	defer stopNodes(cluster)
-
-	client := cluster[0].client
+	client := startTestCluster(1)[0]
 
 	// Start watching for self messages, signal any arrivals
 	self := client.NewIdentity()
@@ -104,16 +65,12 @@ func TestSelfMessage(t *testing.T) {
 
 func TestDirectMessage(t *testing.T) {
 	// Start the sender-recipient cluster
-	cluster, err := startNodes(2)
-	if err != nil {
-		t.Fatalf("failed to boot test cluster: %v", err)
-	}
-	defer stopNodes(cluster)
+	cluster := startTestCluster(2)
 
-	sender := cluster[0].client
+	sender := cluster[0]
 	senderId := sender.NewIdentity()
 
-	recipient := cluster[1].client
+	recipient := cluster[1]
 	recipientId := recipient.NewIdentity()
 
 	// Watch for arriving messages on the recipient
@@ -155,18 +112,13 @@ func TestIdentifiedBroadcast(t *testing.T) {
 
 func testBroadcast(anonymous bool, t *testing.T) {
 	// Start the single sender multi recipient cluster
-	cluster, err := startNodes(3)
-	if err != nil {
-		t.Fatalf("failed to boot test cluster: %v", err)
-	}
-	defer stopNodes(cluster)
+	cluster := startTestCluster(3)
 
-	sender := cluster[0].client
-	targets := make([]*Whisper, len(cluster)-1)
-	for i, node := range cluster[1:] {
-		targets[i] = node.client
+	sender := cluster[1]
+	targets := cluster[1:]
+	for _, target := range targets {
 		if !anonymous {
-			targets[i].NewIdentity()
+			target.NewIdentity()
 		}
 	}
 	// Watch for arriving messages on the recipients
