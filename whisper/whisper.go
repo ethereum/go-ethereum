@@ -136,8 +136,8 @@ func (self *Whisper) Messages(id int) (messages []*Message) {
 	filter := self.filters.Get(id)
 	if filter != nil {
 		for _, e := range self.messages {
-			if msg, key := self.open(e); msg != nil {
-				f := createFilter(msg, e.Topics, key)
+			if msg := self.open(e); msg != nil {
+				f := createFilter(msg, e.Topics)
 				if self.filters.Match(filter, f) {
 					messages = append(messages, msg)
 				}
@@ -251,31 +251,45 @@ func (self *Whisper) envelopes() (envelopes []*Envelope) {
 	return
 }
 
-func (self *Whisper) postEvent(envelope *Envelope) {
-	if message, key := self.open(envelope); message != nil {
-		self.filters.Notify(createFilter(message, envelope.Topics, key), message)
-	}
-}
-
-func (self *Whisper) open(envelope *Envelope) (*Message, *ecdsa.PrivateKey) {
-	for _, key := range self.keys {
-		if message, err := envelope.Open(key); err == nil || (err != nil && err == ecies.ErrInvalidPublicKey) {
-			message.To = &key.PublicKey
-
-			return message, key
-		}
-	}
-
-	return nil, nil
-}
-
 func (self *Whisper) Protocol() p2p.Protocol {
 	return self.protocol
 }
 
-func createFilter(message *Message, topics []Topic, key *ecdsa.PrivateKey) filter.Filter {
+// postEvent opens an envelope with the configured identities and delivers the
+// message upstream from application processing.
+func (self *Whisper) postEvent(envelope *Envelope) {
+	if message := self.open(envelope); message != nil {
+		self.filters.Notify(createFilter(message, envelope.Topics), message)
+	}
+}
+
+// open tries to decrypt a whisper envelope with all the configured identities,
+// returning the decrypted message and the key used to achieve it. If not keys
+// are configured, open will return the payload as if non encrypted.
+func (self *Whisper) open(envelope *Envelope) *Message {
+	// Short circuit if no identity is set, and assume clear-text
+	if len(self.keys) == 0 {
+		if message, err := envelope.Open(nil); err == nil {
+			return message
+		}
+	}
+	// Iterate over the keys and try to decrypt the message
+	for _, key := range self.keys {
+		message, err := envelope.Open(key)
+		if err == nil || err == ecies.ErrInvalidPublicKey {
+			message.To = &key.PublicKey
+			return message
+		}
+	}
+	// Failed to decrypt, don't return anything
+	return nil
+}
+
+// createFilter creates a message filter to check against installed handlers.
+func createFilter(message *Message, topics []Topic) filter.Filter {
 	return filter.Generic{
-		Str1: string(crypto.FromECDSAPub(&key.PublicKey)), Str2: string(crypto.FromECDSAPub(message.Recover())),
+		Str1: string(crypto.FromECDSAPub(message.To)),
+		Str2: string(crypto.FromECDSAPub(message.Recover())),
 		Data: NewTopicSet(topics),
 	}
 }

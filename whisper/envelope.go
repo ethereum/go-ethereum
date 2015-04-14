@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -96,9 +97,13 @@ func (self *Envelope) Open(key *ecdsa.PrivateKey) (msg *Message, err error) {
 	if key == nil {
 		return message, nil
 	}
-	switch message.decrypt(key) {
+	err = message.decrypt(key)
+	switch err {
 	case nil:
 		return message, nil
+
+	case ecies.ErrInvalidPublicKey: // Payload isn't encrypted
+		return message, err
 
 	default:
 		return nil, fmt.Errorf("unable to open envelope, decrypt failed: %v", err)
