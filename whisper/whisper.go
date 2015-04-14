@@ -144,6 +144,21 @@ func (self *Whisper) Stop() {
 	glog.V(logger.Info).Infoln("Whisper stopped")
 }
 
+// Messages retrieves the currently pooled messages matching a filter id.
+func (self *Whisper) Messages(id int) []*Message {
+	messages := make([]*Message, 0)
+	if filter := self.filters.Get(id); filter != nil {
+		for _, envelope := range self.messages {
+			if message := self.open(envelope); message != nil {
+				if self.filters.Match(filter, createFilter(message, envelope.Topics)) {
+					messages = append(messages, message)
+				}
+			}
+		}
+	}
+	return messages
+}
+
 // func (self *Whisper) RemoveIdentity(key *ecdsa.PublicKey) bool {
 // 	k := string(crypto.FromECDSAPub(key))
 // 	if _, ok := self.keys[k]; ok {
@@ -152,22 +167,6 @@ func (self *Whisper) Stop() {
 // 	}
 // 	return false
 // }
-
-/*func (self *Whisper) Messages(id int) (messages []*Message) {
-	filter := self.filters.Get(id)
-	if filter != nil {
-		for _, e := range self.messages {
-			if msg := self.open(e); msg != nil {
-				f := createFilter(msg, e.Topics)
-				if self.filters.Match(filter, f) {
-					messages = append(messages, msg)
-				}
-			}
-		}
-	}
-
-	return
-}*/
 
 // handlePeer is called by the underlying P2P layer when the whisper sub-protocol
 // connection is negotiated.

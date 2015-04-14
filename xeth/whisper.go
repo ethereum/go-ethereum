@@ -36,7 +36,7 @@ func (self *Whisper) Post(payload string, to, from string, topics []string, prio
 			TTL:    time.Duration(ttl) * time.Second,
 			To:     crypto.ToECDSAPub(common.FromHex(to)),
 			From:   key,
-			Topics: whisper.TopicsFromString(topics...),
+			Topics: whisper.NewTopicsFromStrings(topics...),
 		})
 
 		if err != nil {
@@ -71,7 +71,7 @@ func (self *Whisper) Watch(opts *Options) int {
 	filter := whisper.Filter{
 		To:     crypto.ToECDSAPub(common.FromHex(opts.To)),
 		From:   crypto.ToECDSAPub(common.FromHex(opts.From)),
-		Topics: whisper.TopicsFromString(opts.Topics...),
+		Topics: whisper.NewTopicsFromStrings(opts.Topics...),
 	}
 
 	var i int
