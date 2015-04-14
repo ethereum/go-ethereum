@@ -33,6 +33,11 @@ type testFrontend struct {
 	makeNatSpec bool
 }
 
+const (
+	testAccount = "e273f01c99144c438695e10f24926dc1f9fbf62d"
+	testBalance = "1000000000000"
+)
+
 const testNotice = "Register key `utils.toHex(_key)` <- content `utils.toHex(_content)`"
 const testExpNotice = "Register key 0xadd1a7d961cff0242089674ec2ef6fca671ab15e1fe80e38859fc815b98d88ab <- content 0xc00d5bcc872e17813df6ec5c646bb281a6e2d3b454c2c400c78192adf3344af9"
 const testExpNotice2 = `About to submit transaction (NatSpec notice error "abi key %!x(MISSING) does not match any method %!v(MISSING)"): {"id":6,"jsonrpc":"2.0","method":"eth_transact","params":[{"from":"0xe273f01c99144c438695e10f24926dc1f9fbf62d","to":"0xb737b91f8e95cf756766fc7c62c9a8ff58470381","value":"100000000000","gas":"100000","gasPrice":"100000","data":"0x31e12c20"}]}`
@@ -135,6 +140,10 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 
 func testInit(t *testing.T) (self *testFrontend) {
 
+	core.GenesisData = []byte(`{
+	"` + testAccount + `": {"balance": "` + testBalance + `"}
+	}`)
+
 	ethereum, err := testEth(t)
 	if err != nil {
 		t.Errorf("error creating jsre, got %v", err)
@@ -152,12 +161,12 @@ func testInit(t *testing.T) (self *testFrontend) {
 
 	addr := self.xeth.Coinbase()
 	self.coinbase = addr
-	if addr != "0x"+core.TestAccount {
-		t.Errorf("CoinBase %v does not match TestAccount 0x%v", addr, core.TestAccount)
+	if addr != "0x"+testAccount {
+		t.Errorf("CoinBase %v does not match TestAccount 0x%v", addr, testAccount)
 	}
 	t.Logf("CoinBase is %v", addr)
 
-	balance := self.xeth.BalanceAt(core.TestAccount)
+	balance := self.xeth.BalanceAt(testAccount)
 	/*if balance != core.TestBalance {
 		t.Errorf("Balance %v does not match TestBalance %v", balance, core.TestBalance)
 	}*/
@@ -266,7 +275,7 @@ func TestNatspecE2E(t *testing.T) {
 	tf := testInit(t)
 	defer tf.ethereum.Stop()
 
-	resolver.CreateContracts(tf.xeth, core.TestAccount)
+	resolver.CreateContracts(tf.xeth, testAccount)
 	t.Logf("URLHint contract registered at %v", resolver.URLHintContractAddress)
 	t.Logf("HashReg contract registered at %v", resolver.HashRegContractAddress)
 	tf.applyTxs()
