@@ -30,8 +30,8 @@ const (
 )
 
 const (
-	DefaultTimeToLive  = 50 * time.Second
-	DefaultProofOfWork = 50 * time.Millisecond
+	DefaultTTL = 50 * time.Second
+	DefaultPoW = 50 * time.Millisecond
 )
 
 type MessageEvent struct {

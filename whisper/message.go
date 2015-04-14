@@ -62,7 +62,7 @@ func NewMessage(payload []byte) *Message {
 func (self *Message) Wrap(pow time.Duration, options Options) (*Envelope, error) {
 	// Use the default TTL if non was specified
 	if options.TTL == 0 {
-		options.TTL = DefaultTimeToLive
+		options.TTL = DefaultTTL
 	}
 	// Sign and encrypt the message if requested
 	if options.From != nil {

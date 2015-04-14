@@ -83,10 +83,10 @@ func TestSelfMessage(t *testing.T) {
 	})
 	// Send a dummy message to oneself
 	msg := NewMessage([]byte("self whisper"))
-	envelope, err := msg.Wrap(DefaultProofOfWork, Options{
+	envelope, err := msg.Wrap(DefaultPoW, Options{
 		From: self,
 		To:   &self.PublicKey,
-		TTL:  DefaultTimeToLive,
+		TTL:  DefaultTTL,
 	})
 	if err != nil {
 		t.Fatalf("failed to wrap message: %v", err)
@@ -126,10 +126,10 @@ func TestDirectMessage(t *testing.T) {
 	})
 	// Send a dummy message from the sender
 	msg := NewMessage([]byte("direct whisper"))
-	envelope, err := msg.Wrap(DefaultProofOfWork, Options{
+	envelope, err := msg.Wrap(DefaultPoW, Options{
 		From: senderId,
 		To:   &recipientId.PublicKey,
-		TTL:  DefaultTimeToLive,
+		TTL:  DefaultTTL,
 	})
 	if err != nil {
 		t.Fatalf("failed to wrap message: %v", err)
@@ -184,9 +184,9 @@ func testBroadcast(anonymous bool, t *testing.T) {
 	}
 	// Send a dummy message from the sender
 	msg := NewMessage([]byte("broadcast whisper"))
-	envelope, err := msg.Wrap(DefaultProofOfWork, Options{
+	envelope, err := msg.Wrap(DefaultPoW, Options{
 		Topics: NewTopicsFromStrings("broadcast topic"),
-		TTL:    DefaultTimeToLive,
+		TTL:    DefaultTTL,
 	})
 	if err != nil {
 		t.Fatalf("failed to wrap message: %v", err)
