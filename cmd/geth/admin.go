@@ -32,7 +32,6 @@ func (js *jsre) adminBindings() {
 	admin.Set("unlock", js.unlock)
 	admin.Set("import", js.importChain)
 	admin.Set("export", js.exportChain)
-	admin.Set("dumpBlock", js.dumpBlock)
 	admin.Set("verbosity", js.verbosity)
 	admin.Set("backtrace", js.backtrace)
 
@@ -43,6 +42,12 @@ func (js *jsre) adminBindings() {
 	miner.Set("stop", js.stopMining)
 	miner.Set("hashrate", js.hashrate)
 	miner.Set("setExtra", js.setExtra)
+
+	admin.Set("debug", struct{}{})
+	t, _ = admin.Get("debug")
+	debug := t.Object()
+	debug.Set("printBlock", js.printBlock)
+	debug.Set("dumpBlock", js.dumpBlock)
 }
 
 func (js *jsre) setExtra(call otto.FunctionCall) otto.Value {
@@ -282,6 +287,32 @@ func (js *jsre) exportChain(call otto.FunctionCall) otto.Value {
 		return otto.FalseValue()
 	}
 	return otto.TrueValue()
+}
+
+func (js *jsre) printBlock(call otto.FunctionCall) otto.Value {
+	var block *types.Block
+	if len(call.ArgumentList) > 0 {
+		if call.Argument(0).IsNumber() {
+			num, _ := call.Argument(0).ToInteger()
+			block = js.ethereum.ChainManager().GetBlockByNumber(uint64(num))
+		} else if call.Argument(0).IsString() {
+			hash, _ := call.Argument(0).ToString()
+			block = js.ethereum.ChainManager().GetBlock(common.HexToHash(hash))
+		} else {
+			fmt.Println("invalid argument for dump. Either hex string or number")
+		}
+
+	} else {
+		block = js.ethereum.ChainManager().CurrentBlock()
+	}
+	if block == nil {
+		fmt.Println("block not found")
+		return otto.UndefinedValue()
+	}
+
+	fmt.Println(block)
+
+	return otto.UndefinedValue()
 }
 
 func (js *jsre) dumpBlock(call otto.FunctionCall) otto.Value {
