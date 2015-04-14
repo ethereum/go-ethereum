@@ -15,10 +15,39 @@ var topicCreationTests = []struct {
 }
 
 func TestTopicCreation(t *testing.T) {
+	// Create the topics individually
 	for i, tt := range topicCreationTests {
 		topic := NewTopic(tt.data)
 		if bytes.Compare(topic[:], tt.hash[:]) != 0 {
-			t.Errorf("test %d: hash mismatch: have %v, want %v.", i, topic, tt.hash)
+			t.Errorf("binary test %d: hash mismatch: have %v, want %v.", i, topic, tt.hash)
+		}
+	}
+	for i, tt := range topicCreationTests {
+		topic := NewTopicFromString(string(tt.data))
+		if bytes.Compare(topic[:], tt.hash[:]) != 0 {
+			t.Errorf("textual test %d: hash mismatch: have %v, want %v.", i, topic, tt.hash)
+		}
+	}
+	// Create the topics in batches
+	binaryData := make([][]byte, len(topicCreationTests))
+	for i, tt := range topicCreationTests {
+		binaryData[i] = tt.data
+	}
+	textualData := make([]string, len(topicCreationTests))
+	for i, tt := range topicCreationTests {
+		textualData[i] = string(tt.data)
+	}
+
+	topics := NewTopics(binaryData...)
+	for i, tt := range topicCreationTests {
+		if bytes.Compare(topics[i][:], tt.hash[:]) != 0 {
+			t.Errorf("binary batch test %d: hash mismatch: have %v, want %v.", i, topics[i], tt.hash)
+		}
+	}
+	topics = NewTopicsFromStrings(textualData...)
+	for i, tt := range topicCreationTests {
+		if bytes.Compare(topics[i][:], tt.hash[:]) != 0 {
+			t.Errorf("textual batch test %d: hash mismatch: have %v, want %v.", i, topics[i], tt.hash)
 		}
 	}
 }

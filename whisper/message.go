@@ -30,7 +30,7 @@ type Options struct {
 	From   *ecdsa.PrivateKey
 	To     *ecdsa.PublicKey
 	TTL    time.Duration
-	Topics [][]byte
+	Topics []Topic
 }
 
 // NewMessage creates and initializes a non-signed, non-encrypted Whisper message.
@@ -75,13 +75,8 @@ func (self *Message) Wrap(pow time.Duration, options Options) (*Envelope, error)
 			return nil, err
 		}
 	}
-	// Convert the user topic into whisper ones
-	topics := make([]Topic, len(options.Topics))
-	for i, topic := range options.Topics {
-		topics[i] = NewTopic(topic)
-	}
 	// Wrap the processed message, seal it and return
-	envelope := NewEnvelope(options.TTL, topics, self)
+	envelope := NewEnvelope(options.TTL, options.Topics, self)
 	envelope.Seal(pow)
 
 	return envelope, nil

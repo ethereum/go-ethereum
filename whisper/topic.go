@@ -17,6 +17,32 @@ func NewTopic(data []byte) Topic {
 	return Topic(prefix)
 }
 
+// NewTopics creates a list of topics from a list of binary data elements, by
+// iteratively calling NewTopic on each of them.
+func NewTopics(data ...[]byte) []Topic {
+	topics := make([]Topic, len(data))
+	for i, element := range data {
+		topics[i] = NewTopic(element)
+	}
+	return topics
+}
+
+// NewTopicFromString creates a topic using the binary data contents of the
+// specified string.
+func NewTopicFromString(data string) Topic {
+	return NewTopic([]byte(data))
+}
+
+// NewTopicsFromStrings creates a list of topics from a list of textual data
+// elements, by iteratively calling NewTopicFromString on each of them.
+func NewTopicsFromStrings(data ...string) []Topic {
+	topics := make([]Topic, len(data))
+	for i, element := range data {
+		topics[i] = NewTopicFromString(element)
+	}
+	return topics
+}
+
 // String converts a topic byte array to a string representation.
 func (self *Topic) String() string {
 	return string(self[:])
