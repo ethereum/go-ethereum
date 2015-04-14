@@ -109,7 +109,9 @@ func (err *decodeError) Error() string {
 func wrapStreamError(err error, typ reflect.Type) error {
 	switch err {
 	case ErrCanonInt:
-		return &decodeError{msg: "canon int error appends zero's", typ: typ}
+		return &decodeError{msg: "non-canonical integer (leading zero bytes)", typ: typ}
+	case ErrCanonSize:
+		return &decodeError{msg: "non-canonical size information", typ: typ}
 	case ErrExpectedList:
 		return &decodeError{msg: "expected input list", typ: typ}
 	case ErrExpectedString:
@@ -195,12 +197,10 @@ func decodeBigInt(s *Stream, val reflect.Value) error {
 		i = new(big.Int)
 		val.Set(reflect.ValueOf(i))
 	}
-
-	// Reject big integers which are zero appended
+	// Reject leading zero bytes
 	if len(b) > 0 && b[0] == 0 {
 		return wrapStreamError(ErrCanonInt, val.Type())
 	}
-
 	i.SetBytes(b)
 	return nil
 }
@@ -270,7 +270,7 @@ func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
 func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
 	size, err := s.List()
 	if err != nil {
-		return err
+		return wrapStreamError(err, val.Type())
 	}
 	if size == 0 {
 		zero(val, 0)
@@ -474,10 +474,11 @@ var (
 	// has been reached during streaming.
 	EOL = errors.New("rlp: end of list")
 
-	// Other errors
+	// Actual Errors
 	ErrExpectedString = errors.New("rlp: expected String or Byte")
 	ErrExpectedList   = errors.New("rlp: expected List")
-	ErrCanonInt       = errors.New("rlp: expected Int")
+	ErrCanonInt       = errors.New("rlp: non-canonical (leading zero bytes) integer")
+	ErrCanonSize      = errors.New("rlp: non-canonical size information")
 	ErrElemTooLarge   = errors.New("rlp: element is larger than containing list")
 	ErrValueTooLarge  = errors.New("rlp: value size exceeds available input length")
 
@@ -519,6 +520,7 @@ type Stream struct {
 	kind    Kind   // kind of value ahead
 	size    uint64 // size of value ahead
 	byteval byte   // value of single byte in type tag
+	kinderr error  // error from last readKind
 	stack   []listpos
 }
 
@@ -619,13 +621,21 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 	}
 	switch kind {
 	case Byte:
+		if s.byteval == 0 {
+			return 0, ErrCanonInt
+		}
 		s.kind = -1 // rearm Kind
 		return uint64(s.byteval), nil
 	case String:
 		if size > uint64(maxbits/8) {
 			return 0, errUintOverflow
 		}
-		return s.readUint(byte(size))
+		v, err := s.readUint(byte(size))
+		if err == ErrCanonSize {
+			// Adjust error because we're not reading a size right now.
+			err = ErrCanonInt
+		}
+		return v, err
 	default:
 		return 0, ErrExpectedString
 	}
@@ -729,6 +739,7 @@ func (s *Stream) Reset(r io.Reader, inputLimit uint64) {
 	s.stack = s.stack[:0]
 	s.size = 0
 	s.kind = -1
+	s.kinderr = nil
 	if s.uintbuf == nil {
 		s.uintbuf = make([]byte, 8)
 	}
@@ -751,32 +762,31 @@ func (s *Stream) Kind() (kind Kind, size uint64, err error) {
 		tos = &s.stack[len(s.stack)-1]
 	}
 	if s.kind < 0 {
+		s.kinderr = nil
 		// Don't read further if we're at the end of the
 		// innermost list.
 		if tos != nil && tos.pos == tos.size {
 			return 0, 0, EOL
 		}
-		kind, size, err = s.readKind()
-		if err != nil {
-			return 0, 0, err
-		}
-		s.kind, s.size = kind, size
-	}
-	// Make sure size is reasonable. This is done always
-	// so Kind returns the same error when called multiple times.
-	if tos == nil {
-		// At toplevel, check that the value is smaller
-		// than the remaining input length.
-		if s.limited && s.size > s.remaining {
-			return 0, 0, ErrValueTooLarge
-		}
-	} else {
-		// Inside a list, check that the value doesn't overflow the list.
-		if s.size > tos.size-tos.pos {
-			return 0, 0, ErrElemTooLarge
+		s.kind, s.size, s.kinderr = s.readKind()
+		if s.kinderr == nil {
+			if tos == nil {
+				// At toplevel, check that the value is smaller
+				// than the remaining input length.
+				if s.limited && s.size > s.remaining {
+					s.kinderr = ErrValueTooLarge
+				}
+			} else {
+				// Inside a list, check that the value doesn't overflow the list.
+				if s.size > tos.size-tos.pos {
+					s.kinderr = ErrElemTooLarge
+				}
+			}
 		}
 	}
-	return s.kind, s.size, nil
+	// Note: this might return a sticky error generated
+	// by an earlier call to readKind.
+	return s.kind, s.size, s.kinderr
 }
 
 func (s *Stream) readKind() (kind Kind, size uint64, err error) {
@@ -805,6 +815,9 @@ func (s *Stream) readKind() (kind Kind, size uint64, err error) {
 		// would be encoded as 0xB90400 followed by the string. The range of
 		// the first byte is thus [0xB8, 0xBF].
 		size, err = s.readUint(b - 0xB7)
+		if err == nil && size < 56 {
+			err = ErrCanonSize
+		}
 		return String, size, err
 	case b < 0xF8:
 		// If the total payload of a list
@@ -821,24 +834,40 @@ func (s *Stream) readKind() (kind Kind, size uint64, err error) {
 		// the concatenation of the RLP encodings of the items. The
 		// range of the first byte is thus [0xF8, 0xFF].
 		size, err = s.readUint(b - 0xF7)
+		if err == nil && size < 56 {
+			err = ErrCanonSize
+		}
 		return List, size, err
 	}
 }
 
 func (s *Stream) readUint(size byte) (uint64, error) {
-	if size == 1 {
+	switch size {
+	case 0:
+		s.kind = -1 // rearm Kind
+		return 0, nil
+	case 1:
 		b, err := s.readByte()
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
 		return uint64(b), err
+	default:
+		start := int(8 - size)
+		for i := 0; i < start; i++ {
+			s.uintbuf[i] = 0
+		}
+		if err := s.readFull(s.uintbuf[start:]); err != nil {
+			return 0, err
+		}
+		if s.uintbuf[start] == 0 {
+			// Note: readUint is also used to decode integer
+			// values. The error needs to be adjusted to become
+			// ErrCanonInt in this case.
+			return 0, ErrCanonSize
+		}
+		return binary.BigEndian.Uint64(s.uintbuf), nil
 	}
-	start := int(8 - size)
-	for i := 0; i < start; i++ {
-		s.uintbuf[i] = 0
-	}
-	err := s.readFull(s.uintbuf[start:])
-	return binary.BigEndian.Uint64(s.uintbuf), err
 }
 
 func (s *Stream) readFull(buf []byte) (err error) {

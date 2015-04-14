@@ -21,16 +21,11 @@ func TestStreamKind(t *testing.T) {
 		{"7F", Byte, 0},
 		{"80", String, 0},
 		{"B7", String, 55},
-		{"B800", String, 0},
 		{"B90400", String, 1024},
-		{"BA000400", String, 1024},
-		{"BB00000400", String, 1024},
 		{"BFFFFFFFFFFFFFFFFF", String, ^uint64(0)},
 		{"C0", List, 0},
 		{"C8", List, 8},
 		{"F7", List, 55},
-		{"F800", List, 0},
-		{"F804", List, 4},
 		{"F90400", List, 1024},
 		{"FFFFFFFFFFFFFFFFFF", List, ^uint64(0)},
 	}
@@ -85,7 +80,7 @@ func TestStreamErrors(t *testing.T) {
 		string
 		calls
 		newStream func([]byte) *Stream // uses bytes.Reader if nil
-		error
+		error     error
 	}{
 		{"C0", calls{"Bytes"}, nil, ErrExpectedString},
 		{"C0", calls{"Uint"}, nil, ErrExpectedString},
@@ -97,6 +92,21 @@ func TestStreamErrors(t *testing.T) {
 		{"C3C2010201", calls{"List", "List", "Uint", "Uint", "ListEnd", "Uint"}, nil, EOL},
 		{"00", calls{"ListEnd"}, nil, errNotInList},
 		{"C401020304", calls{"List", "Uint", "ListEnd"}, nil, errNotAtEOL},
+
+		// Leading zero bytes are rejected when reading integers.
+		{"00", calls{"Uint"}, nil, ErrCanonInt},
+		{"820002", calls{"Uint"}, nil, ErrCanonInt},
+
+		// Size tags must use the smallest possible encoding.
+		// Leading zero bytes in the size tag are also rejected.
+		{"B800", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
+		{"B90000", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
+		{"B90055", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
+		{"BA0002FFFF", calls{"Bytes"}, withoutInputLimit, ErrCanonSize},
+		{"F800", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
+		{"F90000", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
+		{"F90055", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
+		{"FA0002FFFF", calls{"List"}, withoutInputLimit, ErrCanonSize},
 
 		// Expected EOF
 		{"", calls{"Kind"}, nil, io.EOF},
@@ -170,10 +180,12 @@ testfor:
 					want = test.error.Error()
 				}
 				if err != want {
+					t.Log(test)
 					t.Errorf("test %d: last call (%s) error mismatch\ngot:  %s\nwant: %s",
 						i, call, err, test.error)
 				}
 			} else if err != "<nil>" {
+				t.Log(test)
 				t.Errorf("test %d: call %d (%s) unexpected error: %q", i, j, call, err)
 				continue testfor
 			}
@@ -289,15 +301,20 @@ var decodeTests = []decodeTest{
 	{input: "8405050505", ptr: new(uint32), value: uint32(0x05050505)},
 	{input: "850505050505", ptr: new(uint32), error: "rlp: input string too long for uint32"},
 	{input: "C0", ptr: new(uint32), error: "rlp: expected input string or byte for uint32"},
+	{input: "00", ptr: new(uint32), error: "rlp: non-canonical integer (leading zero bytes) for uint32"},
+	{input: "820004", ptr: new(uint32), error: "rlp: non-canonical integer (leading zero bytes) for uint32"},
+	{input: "B8020004", ptr: new(uint32), error: "rlp: non-canonical size information for uint32"},
 
 	// slices
 	{input: "C0", ptr: new([]uint), value: []uint{}},
 	{input: "C80102030405060708", ptr: new([]uint), value: []uint{1, 2, 3, 4, 5, 6, 7, 8}},
+	{input: "F8020004", ptr: new([]uint), error: "rlp: non-canonical size information for []uint"},
 
 	// arrays
 	{input: "C0", ptr: new([5]uint), value: [5]uint{}},
 	{input: "C50102030405", ptr: new([5]uint), value: [5]uint{1, 2, 3, 4, 5}},
 	{input: "C6010203040506", ptr: new([5]uint), error: "rlp: input list has too many elements for [5]uint"},
+	{input: "F8020004", ptr: new([5]uint), error: "rlp: non-canonical size information for [5]uint"},
 
 	// byte slices
 	{input: "01", ptr: new([]byte), value: []byte{1}},
@@ -352,7 +369,7 @@ var decodeTests = []decodeTest{
 	// big ints
 	{input: "01", ptr: new(*big.Int), value: big.NewInt(1)},
 	{input: "89FFFFFFFFFFFFFFFFFF", ptr: new(*big.Int), value: veryBigInt},
-	{input: "820001", ptr: new(big.Int), error: "rlp: canon int error appends zero's for *big.Int"},
+	{input: "820001", ptr: new(big.Int), error: "rlp: non-canonical integer (leading zero bytes) for *big.Int"},
 	{input: "10", ptr: new(big.Int), value: *big.NewInt(16)}, // non-pointer also works
 	{input: "C0", ptr: new(*big.Int), error: "rlp: expected input string or byte for *big.Int"},
 
@@ -367,6 +384,11 @@ var decodeTests = []decodeTest{
 	},
 
 	{
+		input: "83222222",
+		ptr:   new(simplestruct),
+		error: "rlp: expected input list for rlp.simplestruct",
+	},
+	{
 		input: "C3010101",
 		ptr:   new(simplestruct),
 		error: "rlp: input list has too many elements for rlp.simplestruct",
@@ -378,7 +400,7 @@ var decodeTests = []decodeTest{
 	},
 
 	// pointers
-	{input: "00", ptr: new(*uint), value: uintp(0)},
+	{input: "00", ptr: new(*[]byte), value: &[]byte{0}},
 	{input: "80", ptr: new(*uint), value: (*uint)(nil)},
 	{input: "C0", ptr: new(*uint), value: (*uint)(nil)},
 	{input: "07", ptr: new(*uint), value: uintp(7)},
