@@ -413,7 +413,7 @@ func decodePacket(buf []byte) (packet, NodeID, []byte, error) {
 	default:
 		return nil, fromID, hash, fmt.Errorf("unknown type: %d", ptype)
 	}
-	err = rlp.Decode(bytes.NewReader(sigdata[1:]), req)
+	err = rlp.DecodeBytes(sigdata[1:], req)
 	return req, fromID, hash, err
 }
 
