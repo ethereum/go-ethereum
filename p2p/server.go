@@ -136,6 +136,12 @@ func (srv *Server) SuggestPeer(n *discover.Node) {
 // Broadcast sends an RLP-encoded message to all connected peers.
 // This method is deprecated and will be removed later.
 func (srv *Server) Broadcast(protocol string, code uint64, data interface{}) error {
+	return srv.BroadcastLimited(protocol, code, func(i float64) float64 { return i }, data)
+}
+
+// BroadcastsRange an RLP-encoded message to a random set of peers using the limit function to limit the amount
+// of peers.
+func (srv *Server) BroadcastLimited(protocol string, code uint64, limit func(float64) float64, data interface{}) error {
 	var payload []byte
 	if data != nil {
 		var err error
@@ -146,7 +152,13 @@ func (srv *Server) Broadcast(protocol string, code uint64, data interface{}) err
 	}
 	srv.lock.RLock()
 	defer srv.lock.RUnlock()
+
+	i, max := 0, int(limit(float64(len(srv.peers))))
 	for _, peer := range srv.peers {
+		if i >= max {
+			break
+		}
+
 		if peer != nil {
 			var msg = Msg{Code: code}
 			if data != nil {
@@ -154,6 +166,7 @@ func (srv *Server) Broadcast(protocol string, code uint64, data interface{}) err
 				msg.Size = uint32(len(payload))
 			}
 			peer.writeProtoMsg(protocol, msg)
+			i++
 		}
 	}
 	return nil
