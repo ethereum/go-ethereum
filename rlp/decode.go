@@ -37,9 +37,9 @@ type Decoder interface {
 // DecodeRLP.
 //
 // To decode into a pointer, Decode will set the pointer to nil if the
-// input has size zero or the input is a single byte with value zero.
-// If the input has nonzero size, Decode will allocate a new value of
-// the type being pointed to.
+// input has size zero. If the input has nonzero size, Decode will
+// parse the input data into a value of the type being pointed to.
+// If the pointer is non-nil, the existing value will reused.
 //
 // To decode into a struct, Decode expects the input to be an RLP
 // list. The decoded elements of the list are assigned to each public
@@ -382,8 +382,8 @@ func makePtrDecoder(typ reflect.Type) (decoder, error) {
 		return nil, err
 	}
 	dec := func(s *Stream, val reflect.Value) (err error) {
-		_, size, err := s.Kind()
-		if err != nil || size == 0 && s.byteval == 0 {
+		kind, size, err := s.Kind()
+		if err != nil || size == 0 && kind != Byte {
 			// rearm s.Kind. This is important because the input
 			// position must advance to the next value even though
 			// we don't read anything.

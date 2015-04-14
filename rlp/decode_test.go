@@ -378,7 +378,7 @@ var decodeTests = []decodeTest{
 	},
 
 	// pointers
-	{input: "00", ptr: new(*uint), value: (*uint)(nil)},
+	{input: "00", ptr: new(*uint), value: uintp(0)},
 	{input: "80", ptr: new(*uint), value: (*uint)(nil)},
 	{input: "C0", ptr: new(*uint), value: (*uint)(nil)},
 	{input: "07", ptr: new(*uint), value: uintp(7)},
