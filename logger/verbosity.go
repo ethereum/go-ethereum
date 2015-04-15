@@ -7,4 +7,6 @@ const (
 	Core
 	Debug
 	Detail
+
+	Ridiculousness = 100
 )

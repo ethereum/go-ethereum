@@ -299,8 +299,11 @@ func (self *worker) commitNewWork() {
 		}
 
 		if err := self.commitUncle(uncle.Header()); err != nil {
-			glog.V(logger.Debug).Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
-			glog.V(logger.Debug).Infoln(uncle)
+			if glog.V(logger.Ridiculousness) {
+				glog.V(logger.Detail).Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
+				glog.V(logger.Detail).Infoln(uncle)
+			}
+
 			badUncles = append(badUncles, hash)
 		} else {
 			glog.V(logger.Debug).Infof("commiting %x as uncle\n", hash[:4])
