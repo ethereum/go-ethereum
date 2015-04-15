@@ -6,19 +6,11 @@ import (
 
 func TestTransactions(t *testing.T) {
 	notWorking := make(map[string]bool, 100)
-	// TODO: all commented out tests should work!
 
+	// TODO: all these tests should work! remove them from the array when they work
 	snafus := []string{
-		"EmptyTransaction",
-		"TransactionWithHihghNonce",
-		"TransactionWithRvalueWrongSize",
-		"TransactionWithSvalueHigh",
-		"TransactionWithSvalueTooHigh",
-		"TransactionWithSvalueWrongSize",
-		"ValuesAsDec",
-		"ValuesAsHex",
-		"libsecp256k1test",
-		"unpadedRValue",
+		"TransactionWithHihghNonce", // fails due to testing upper bound of 256 bit nonce
+		"TransactionWithSvalueHigh", // fails due to C++ wrong ECDSA r,s ranges. see https://github.com/ethereum/yellowpaper/pull/112
 	}
 
 	for _, name := range snafus {
@@ -42,3 +34,18 @@ func TestWrongRLPTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+/*
+
+Not working until it's fields are in HEX
+
+func Test10MBtx(t *testing.T) {
+	notWorking := make(map[string]bool, 100)
+	var err error
+	err = RunTransactionTests("./files/TransactionTests/tt10mbDataField.json",
+		notWorking)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+*/
