@@ -498,7 +498,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
 			if td.Cmp(self.td) > 0 {
-				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, common.Big1)) < 0 {
+				//if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, common.Big1)) < 0 {
+				if block.Number().Cmp(cblock.Number()) <= 0 {
 					chash := cblock.Hash()
 					hash := block.Hash()
 
