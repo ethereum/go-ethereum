@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 type testPeer struct {
@@ -15,7 +16,7 @@ type testPeer struct {
 
 func startTestPeer() *testPeer {
 	// Create a simulated P2P remote peer and data streams to it
-	remote := p2p.NewPeer(randomNodeID(), randomNodeName(), whisperCaps())
+	remote := p2p.NewPeer(discover.NodeID{}, "", nil)
 	tester, tested := p2p.MsgPipe()
 
 	// Create a whisper client and connect with it to the tester peer
@@ -30,7 +31,7 @@ func startTestPeer() *testPeer {
 
 		client.handlePeer(remote, tested)
 	}()
-	// Assemble and return the test peer
+
 	return &testPeer{
 		client: client,
 		stream: tester,

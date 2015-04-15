@@ -5,13 +5,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 func startTestCluster(n int) []*Whisper {
 	// Create the batch of simulated peers
 	nodes := make([]*p2p.Peer, n)
 	for i := 0; i < n; i++ {
-		nodes[i] = p2p.NewPeer(randomNodeID(), randomNodeName(), whisperCaps())
+		nodes[i] = p2p.NewPeer(discover.NodeID{}, "", nil)
 	}
 	whispers := make([]*Whisper, n)
 	for i := 0; i < n; i++ {
