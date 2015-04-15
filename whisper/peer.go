@@ -53,10 +53,12 @@ func (self *peer) stop() {
 // handshake sends the protocol initiation status message to the remote peer and
 // verifies the remote status too.
 func (self *peer) handshake() error {
-	// Send own status message, fetch remote one
-	if err := p2p.SendItems(self.ws, statusCode, protocolVersion); err != nil {
-		return err
-	}
+	// Send the handshake status message asynchronously
+	errc := make(chan error, 1)
+	go func() {
+		errc <- p2p.SendItems(self.ws, statusCode, protocolVersion)
+	}()
+	// Fetch the remote status packet and verify protocol match
 	packet, err := self.ws.ReadMsg()
 	if err != nil {
 		return err
@@ -64,7 +66,6 @@ func (self *peer) handshake() error {
 	if packet.Code != statusCode {
 		return fmt.Errorf("peer sent %x before status packet", packet.Code)
 	}
-	// Decode the rest of the status packet and verify protocol match
 	s := rlp.NewStream(packet.Payload)
 	if _, err := s.List(); err != nil {
 		return fmt.Errorf("bad status message: %v", err)
@@ -76,7 +77,11 @@ func (self *peer) handshake() error {
 	if peerVersion != protocolVersion {
 		return fmt.Errorf("protocol version mismatch %d != %d", peerVersion, protocolVersion)
 	}
-	return packet.Discard() // ignore anything after protocol version
+	// Wait until out own status is consumed too
+	if err := <-errc; err != nil {
+		return fmt.Errorf("failed to send status packet: %v", err)
+	}
+	return nil
 }
 
 // update executes periodic operations on the peer, including message transmission

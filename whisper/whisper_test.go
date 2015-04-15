@@ -21,7 +21,7 @@ func startTestCluster(n int) []*Whisper {
 	}
 	// Wire all the peers to the root one
 	for i := 1; i < n; i++ {
-		src, dst := bufMsgPipe()
+		src, dst := p2p.MsgPipe()
 
 		go whispers[0].handlePeer(nodes[i], src)
 		go whispers[i].handlePeer(nodes[0], dst)
