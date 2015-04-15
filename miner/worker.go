@@ -172,7 +172,7 @@ out:
 		case <-self.quit:
 			break out
 		case <-timer.C:
-			if glog.V(logger.Debug) {
+			if glog.V(logger.Detail) && atomic.LoadInt64(&self.mining) == 1 {
 				glog.Infoln("Hash rate:", self.HashRate(), "Khash")
 			}
 
@@ -225,7 +225,11 @@ func (self *worker) push() {
 		for _, agent := range self.agents {
 			atomic.AddInt64(&self.atWork, 1)
 
-			agent.Work() <- self.current.block.Copy()
+			if agent.Work() != nil {
+				agent.Work() <- self.current.block.Copy()
+			} else {
+				common.Report(fmt.Sprintf("%v %T\n", agent, agent))
+			}
 		}
 	}
 }
@@ -264,8 +268,8 @@ func (self *worker) commitNewWork() {
 		remove = set.New()
 		tcount = 0
 	)
-gasLimit:
-	for i, tx := range transactions {
+	//gasLimit:
+	for _, tx := range transactions {
 		self.current.state.StartRecord(tx.Hash(), common.Hash{}, 0)
 
 		err := self.commitTransaction(tx)
@@ -276,14 +280,13 @@ gasLimit:
 			self.chain.TxState().RemoveNonce(from, tx.Nonce())
 			remove.Add(tx.Hash())
 
-			if glog.V(logger.Debug) {
+			if glog.V(logger.Detail) {
 				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
-				glog.Infoln(tx)
+				//glog.Infoln(tx)
 			}
 		case state.IsGasLimitErr(err):
-			glog.V(logger.Debug).Infof("Gas limit reached for block. %d TXs included in this block\n", i)
-			// Break on gas limit
-			break gasLimit
+			//glog.V(logger.Debug).Infof("Gas limit reached for block. %d TXs included in this block\n", i)
+			//break gasLimit
 		default:
 			tcount++
 		}
@@ -300,8 +303,11 @@ gasLimit:
 		}
 
 		if err := self.commitUncle(uncle.Header()); err != nil {
-			glog.V(logger.Debug).Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
-			glog.V(logger.Debug).Infoln(uncle)
+			if glog.V(logger.Ridiculousness) {
+				glog.V(logger.Detail).Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
+				glog.V(logger.Detail).Infoln(uncle)
+			}
+
 			badUncles = append(badUncles, hash)
 		} else {
 			glog.V(logger.Debug).Infof("commiting %x as uncle\n", hash[:4])

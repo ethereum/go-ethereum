@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/rs/cors"
 )
@@ -110,7 +111,7 @@ func RpcResponse(api *EthereumApi, request *RpcRequest) *interface{} {
 		response = &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: request.Id, Error: jsonerr}
 	}
 
-	rpclogger.DebugDetailf("Generated response: %T %s", response, response)
+	glog.V(logger.Detail).Infof("Generated response: %T %s", response, response)
 	return &response
 }
 
@@ -121,7 +122,7 @@ func send(writer io.Writer, v interface{}) (n int, err error) {
 		rpclogger.Fatalln("Error marshalling JSON", err)
 		return 0, err
 	}
-	rpclogger.DebugDetailf("Sending payload: %s", payload)
+	glog.V(logger.Detail).Infof("Sending payload: %s", payload)
 
 	return writer.Write(payload)
 }

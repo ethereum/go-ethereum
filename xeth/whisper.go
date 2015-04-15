@@ -32,8 +32,8 @@ func (self *Whisper) Post(payload string, to, from string, topics []string, prio
 	pk := crypto.ToECDSAPub(common.FromHex(from))
 	if key := self.Whisper.GetIdentity(pk); key != nil || len(from) == 0 {
 		msg := whisper.NewMessage(common.FromHex(payload))
-		envelope, err := msg.Seal(time.Duration(priority*100000), whisper.Opts{
-			Ttl:    time.Duration(ttl) * time.Second,
+		envelope, err := msg.Wrap(time.Duration(priority*100000), whisper.Options{
+			TTL:    time.Duration(ttl) * time.Second,
 			To:     crypto.ToECDSAPub(common.FromHex(to)),
 			From:   key,
 			Topics: whisper.TopicsFromString(topics...),

@@ -153,7 +153,7 @@ func (self *Filter) bloomFilter(block *types.Block) bool {
 	if len(self.address) > 0 {
 		var included bool
 		for _, addr := range self.address {
-			if types.BloomLookup(block.Bloom(), addr.Hash()) {
+			if types.BloomLookup(block.Bloom(), addr) {
 				included = true
 				break
 			}

@@ -81,7 +81,7 @@ type BlockTest struct {
 // LoadBlockTests loads a block test JSON file.
 func LoadBlockTests(file string) (map[string]*BlockTest, error) {
 	bt := make(map[string]*btJSON)
-	if err := loadJSON(file, &bt); err != nil {
+	if err := LoadJSON(file, &bt); err != nil {
 		return nil, err
 	}
 	out := make(map[string]*BlockTest)
@@ -250,6 +250,14 @@ func mustConvertBigInt10(in string) *big.Int {
 	return out
 }
 
+func mustConvertBigIntHex(in string) *big.Int {
+	out, ok := new(big.Int).SetString(in, 16)
+	if !ok {
+		panic(fmt.Errorf("invalid integer: %q", in))
+	}
+	return out
+}
+
 func mustConvertUint(in string) uint64 {
 	out, err := strconv.ParseUint(in, 0, 64)
 	if err != nil {
@@ -258,8 +266,16 @@ func mustConvertUint(in string) uint64 {
 	return out
 }
 
-// loadJSON reads the given file and unmarshals its content.
-func loadJSON(file string, val interface{}) error {
+func mustConvertUintHex(in string) uint64 {
+	out, err := strconv.ParseUint(in, 16, 64)
+	if err != nil {
+		panic(fmt.Errorf("invalid integer: %q", in))
+	}
+	return out
+}
+
+// LoadJSON reads the given file and unmarshals its content.
+func LoadJSON(file string, val interface{}) error {
 	content, err := ioutil.ReadFile(file)
 	if err != nil {
 		return err

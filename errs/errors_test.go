@@ -28,7 +28,7 @@ func testErrors() *Errors {
 func TestErrorMessage(t *testing.T) {
 	err := testErrors().New(0, "zero detail %v", "available")
 	message := fmt.Sprintf("%v", err)
-	exp := "[TEST] zero: zero detail available"
+	exp := "[TEST] ERROR: zero: zero detail available"
 	if message != exp {
 		t.Errorf("error message incorrect. expected %v, got %v", exp, message)
 	}

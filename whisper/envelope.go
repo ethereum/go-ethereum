@@ -1,3 +1,6 @@
+// Contains the Whisper protocol Envelope element. For formal details please see
+// the specs at https://github.com/ethereum/wiki/wiki/Whisper-PoC-1-Protocol-Spec#envelopes.
+
 package whisper
 
 import (
@@ -12,10 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const (
-	DefaultPow = 50 * time.Millisecond
-)
-
+// Envelope represents a clear-text data packet to transmit through the Whisper
+// network. Its contents may or may not be encrypted and signed.
 type Envelope struct {
 	Expiry uint32 // Whisper protocol specifies int32, really should be int64
 	TTL    uint32 // ^^^^^^
@@ -26,6 +27,91 @@ type Envelope struct {
 	hash common.Hash
 }
 
+// NewEnvelope wraps a Whisper message with expiration and destination data
+// included into an envelope for network forwarding.
+func NewEnvelope(ttl time.Duration, topics [][]byte, msg *Message) *Envelope {
+	return &Envelope{
+		Expiry: uint32(time.Now().Add(ttl).Unix()),
+		TTL:    uint32(ttl.Seconds()),
+		Topics: topics,
+		Data:   msg.bytes(),
+		Nonce:  0,
+	}
+}
+
+// Seal closes the envelope by spending the requested amount of time as a proof
+// of work on hashing the data.
+func (self *Envelope) Seal(pow time.Duration) {
+	d := make([]byte, 64)
+	copy(d[:32], self.rlpWithoutNonce())
+
+	finish, bestBit := time.Now().Add(pow).UnixNano(), 0
+	for nonce := uint32(0); time.Now().UnixNano() < finish; {
+		for i := 0; i < 1024; i++ {
+			binary.BigEndian.PutUint32(d[60:], nonce)
+
+			firstBit := common.FirstBitSet(common.BigD(crypto.Sha3(d)))
+			if firstBit > bestBit {
+				self.Nonce, bestBit = nonce, firstBit
+			}
+			nonce++
+		}
+	}
+}
+
+// valid checks whether the claimed proof of work was indeed executed.
+// TODO: Is this really useful? Isn't this always true?
+func (self *Envelope) valid() bool {
+	d := make([]byte, 64)
+	copy(d[:32], self.rlpWithoutNonce())
+	binary.BigEndian.PutUint32(d[60:], self.Nonce)
+
+	return common.FirstBitSet(common.BigD(crypto.Sha3(d))) > 0
+}
+
+// rlpWithoutNonce returns the RLP encoded envelope contents, except the nonce.
+func (self *Envelope) rlpWithoutNonce() []byte {
+	enc, _ := rlp.EncodeToBytes([]interface{}{self.Expiry, self.TTL, self.Topics, self.Data})
+	return enc
+}
+
+// Open extracts the message contained within a potentially encrypted envelope.
+func (self *Envelope) Open(key *ecdsa.PrivateKey) (msg *Message, err error) {
+	// Split open the payload into a message construct
+	data := self.Data
+
+	message := &Message{
+		Flags: data[0],
+	}
+	data = data[1:]
+
+	if message.Flags&128 == 128 {
+		if len(data) < 65 {
+			return nil, fmt.Errorf("unable to open envelope. First bit set but len(data) < 65")
+		}
+		message.Signature, data = data[:65], data[65:]
+	}
+	message.Payload = data
+
+	// Short circuit if the encryption was requested
+	if key == nil {
+		return message, nil
+	}
+	// Otherwise try to decrypt the message
+	message.Payload, err = crypto.Decrypt(key, message.Payload)
+	switch err {
+	case nil:
+		return message, nil
+
+	case ecies.ErrInvalidPublicKey: // Payload isn't encrypted
+		return message, err
+
+	default:
+		return nil, fmt.Errorf("unable to open envelope, decrypt failed: %v", err)
+	}
+}
+
+// Hash returns the SHA3 hash of the envelope, calculating it if not yet done.
 func (self *Envelope) Hash() common.Hash {
 	if (self.hash == common.Hash{}) {
 		enc, _ := rlp.EncodeToBytes(self)
@@ -34,88 +120,11 @@ func (self *Envelope) Hash() common.Hash {
 	return self.hash
 }
 
-func NewEnvelope(ttl time.Duration, topics [][]byte, data *Message) *Envelope {
-	exp := time.Now().Add(ttl)
-	return &Envelope{
-		Expiry: uint32(exp.Unix()),
-		TTL:    uint32(ttl.Seconds()),
-		Topics: topics,
-		Data:   data.Bytes(),
-		Nonce:  0,
-	}
-}
-
-func (self *Envelope) Seal(pow time.Duration) {
-	self.proveWork(pow)
-}
-
-func (self *Envelope) Open(prv *ecdsa.PrivateKey) (msg *Message, err error) {
-	data := self.Data
-	var message Message
-	dataStart := 1
-	if data[0] > 0 {
-		if len(data) < 66 {
-			return nil, fmt.Errorf("unable to open envelope. First bit set but len(data) < 66")
-		}
-		dataStart = 66
-		message.Flags = data[0]
-		message.Signature = data[1:66]
-	}
-
-	payload := data[dataStart:]
-	if prv != nil {
-		message.Payload, err = crypto.Decrypt(prv, payload)
-		switch err {
-		case nil: // OK
-		case ecies.ErrInvalidPublicKey: // Payload isn't encrypted
-			message.Payload = payload
-			return &message, err
-		default:
-			return nil, fmt.Errorf("unable to open envelope. Decrypt failed: %v", err)
-		}
-	}
-
-	return &message, nil
-}
-
-func (self *Envelope) proveWork(dura time.Duration) {
-	var bestBit int
-	d := make([]byte, 64)
-	enc, _ := rlp.EncodeToBytes(self.withoutNonce())
-	copy(d[:32], enc)
-
-	then := time.Now().Add(dura).UnixNano()
-	for n := uint32(0); time.Now().UnixNano() < then; {
-		for i := 0; i < 1024; i++ {
-			binary.BigEndian.PutUint32(d[60:], n)
-
-			fbs := common.FirstBitSet(common.BigD(crypto.Sha3(d)))
-			if fbs > bestBit {
-				bestBit = fbs
-				self.Nonce = n
-			}
-
-			n++
-		}
-	}
-}
-
-func (self *Envelope) valid() bool {
-	d := make([]byte, 64)
-	enc, _ := rlp.EncodeToBytes(self.withoutNonce())
-	copy(d[:32], enc)
-	binary.BigEndian.PutUint32(d[60:], self.Nonce)
-	return common.FirstBitSet(common.BigD(crypto.Sha3(d))) > 0
-}
-
-func (self *Envelope) withoutNonce() interface{} {
-	return []interface{}{self.Expiry, self.TTL, self.Topics, self.Data}
-}
-
 // rlpenv is an Envelope but is not an rlp.Decoder.
 // It is used for decoding because we need to
 type rlpenv Envelope
 
+// DecodeRLP decodes an Envelope from an RLP data stream.
 func (self *Envelope) DecodeRLP(s *rlp.Stream) error {
 	raw, err := s.Raw()
 	if err != nil {

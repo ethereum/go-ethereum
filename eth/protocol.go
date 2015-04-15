@@ -324,7 +324,7 @@ func (self *ethProtocol) handle() error {
 		// to simplify backend interface adding a new block
 		// uses AddPeer followed by AddBlock only if peer is the best peer
 		// (or selected as new best peer)
-		if best, _ := self.blockPool.AddPeer(request.TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect); best {
+		if _, suspended := self.blockPool.AddPeer(request.TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect); !suspended {
 			self.blockPool.AddBlock(request.Block, self.id)
 		}
 
@@ -415,11 +415,9 @@ func (self *ethProtocol) sendStatus() error {
 }
 
 func (self *ethProtocol) protoErrorDisconnect(err *errs.Error) {
-	//err.Log(self.peer.Logger)
 	err.Log(glog.V(logger.Info))
-	/*
-		if err.Fatal() {
-			self.peer.Disconnect(p2p.DiscSubprotocolError)
-		}
-	*/
+	if err.Fatal() {
+		self.peer.Disconnect(p2p.DiscSubprotocolError)
+	}
+
 }

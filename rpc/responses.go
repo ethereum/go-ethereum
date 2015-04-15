@@ -277,7 +277,6 @@ type LogRes struct {
 	Topics           []*hexdata `json:"topics"`
 	Data             *hexdata   `json:"data"`
 	BlockNumber      *hexnum    `json:"blockNumber"`
-	Hash             *hexdata   `json:"hash"`
 	LogIndex         *hexnum    `json:"logIndex"`
 	BlockHash        *hexdata   `json:"blockHash"`
 	TransactionHash  *hexdata   `json:"transactionHash"`

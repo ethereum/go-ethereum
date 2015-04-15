@@ -326,7 +326,6 @@ outer:
 func (b *bucket) bump(n *Node) bool {
 	for i := range b.entries {
 		if b.entries[i].ID == n.ID {
-			n.bumpActive()
 			// move it to the front
 			copy(b.entries[1:], b.entries[:i])
 			b.entries[0] = n

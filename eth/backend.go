@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"path"
 	"strings"
 
@@ -42,6 +43,9 @@ type Config struct {
 	Name            string
 	ProtocolVersion int
 	NetworkId       int
+
+	BlockChainVersion  int
+	SkipBcVersionCheck bool // e.g. blockchain export
 
 	DataDir  string
 	LogFile  string
@@ -151,7 +155,7 @@ type Ethereum struct {
 }
 
 func New(config *Config) (*Ethereum, error) {
-	// Boostrap database
+	// Bootstrap database
 	logger.New(config.DataDir, config.LogFile, config.LogLevel)
 	if len(config.LogJSON) > 0 {
 		logger.NewJSONsystem(config.DataDir, config.LogJSON)
@@ -180,6 +184,16 @@ func New(config *Config) (*Ethereum, error) {
 	}
 	saveProtocolVersion(blockDb, config.ProtocolVersion)
 	glog.V(logger.Info).Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
+
+	if !config.SkipBcVersionCheck {
+		b, _ := blockDb.Get([]byte("BlockchainVersion"))
+		bcVersion := int(common.NewValue(b).Uint())
+		if bcVersion != config.BlockChainVersion && bcVersion != 0 {
+			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run geth upgradedb.\n", bcVersion, config.BlockChainVersion)
+		}
+		saveBlockchainVersion(blockDb, config.BlockChainVersion)
+	}
+	glog.V(logger.Info).Infof("Blockchain DB Version: %d", config.BlockChainVersion)
 
 	eth := &Ethereum{
 		shutdownChan:   make(chan bool),
@@ -439,7 +453,7 @@ func (self *Ethereum) txBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.txSub.Chan() {
 		event := obj.(core.TxPreEvent)
-		self.net.Broadcast("eth", TxMsg, []*types.Transaction{event.Tx})
+		self.net.BroadcastLimited("eth", TxMsg, math.Sqrt, []*types.Transaction{event.Tx})
 		self.syncAccounts(event.Tx)
 	}
 }
@@ -463,7 +477,7 @@ func (self *Ethereum) blockBroadcastLoop() {
 	for obj := range self.blockSub.Chan() {
 		switch ev := obj.(type) {
 		case core.ChainHeadEvent:
-			self.net.Broadcast("eth", NewBlockMsg, []interface{}{ev.Block, ev.Block.Td})
+			self.net.BroadcastLimited("eth", NewBlockMsg, math.Sqrt, []interface{}{ev.Block, ev.Block.Td})
 		}
 	}
 }
@@ -474,5 +488,14 @@ func saveProtocolVersion(db common.Database, protov int) {
 
 	if protocolVersion == 0 {
 		db.Put([]byte("ProtocolVersion"), common.NewValue(protov).Bytes())
+	}
+}
+
+func saveBlockchainVersion(db common.Database, bcVersion int) {
+	d, _ := db.Get([]byte("BlockchainVersion"))
+	blockchainVersion := common.NewValue(d).Uint()
+
+	if blockchainVersion == 0 {
+		db.Put([]byte("BlockchainVersion"), common.NewValue(bcVersion).Bytes())
 	}
 }
