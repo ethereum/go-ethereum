@@ -225,7 +225,11 @@ func (self *worker) push() {
 		for _, agent := range self.agents {
 			atomic.AddInt64(&self.atWork, 1)
 
-			agent.Work() <- self.current.block.Copy()
+			if agent.Work() != nil {
+				agent.Work() <- self.current.block.Copy()
+			} else {
+				common.Report(fmt.Sprintf("%v %T\n", agent, agent))
+			}
 		}
 	}
 }

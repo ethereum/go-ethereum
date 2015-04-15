@@ -48,14 +48,16 @@ func (self *Miner) Start(coinbase common.Address) {
 }
 
 func (self *Miner) Register(agent Agent) {
+	if self.mining {
+		agent.Start()
+	}
+
 	self.worker.register(agent)
 }
 
 func (self *Miner) Stop() {
 	self.mining = false
 	self.worker.stop()
-
-	//self.pow.(*ethash.Ethash).Stop()
 }
 
 func (self *Miner) HashRate() int64 {
