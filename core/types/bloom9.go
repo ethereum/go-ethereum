@@ -8,6 +8,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+type bytesBacked interface {
+	Bytes() []byte
+}
+
 func CreateBloom(receipts Receipts) Bloom {
 	bin := new(big.Int)
 	for _, receipt := range receipts {
@@ -51,9 +55,9 @@ func bloom9(b []byte) *big.Int {
 
 var Bloom9 = bloom9
 
-func BloomLookup(bin Bloom, topic common.Hash) bool {
+func BloomLookup(bin Bloom, topic bytesBacked) bool {
 	bloom := bin.Big()
-	cmp := bloom9(topic[:])
+	cmp := bloom9(topic.Bytes()[:])
 
 	return bloom.And(bloom, cmp).Cmp(cmp) == 0
 }
