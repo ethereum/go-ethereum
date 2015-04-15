@@ -8,9 +8,8 @@ import (
 	"io/ioutil"
 	"math/rand"
 
-	"github.com/ethereum/go-ethereum/p2p"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 

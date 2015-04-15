@@ -156,3 +156,29 @@ func testBroadcast(anonymous bool, t *testing.T) {
 		}
 	}
 }
+
+func TestMessageExpiration(t *testing.T) {
+	// Start the single node cluster and inject a dummy message
+	node := startTestCluster(1)[0]
+
+	message := NewMessage([]byte("expiring message"))
+	envelope, err := message.Wrap(DefaultPoW, Options{
+		TTL: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("failed to wrap message: %v", err)
+	}
+	if err := node.Send(envelope); err != nil {
+		t.Fatalf("failed to inject message: %v", err)
+	}
+	// Check that the message is inside the cache
+	if _, ok := node.messages[envelope.Hash()]; !ok {
+		t.Fatalf("message not found in cache")
+	}
+	// Wait for expiration and check cache again
+	time.Sleep(time.Second)     // wait for expiration
+	time.Sleep(expirationTicks) // wait for cleanup cycle
+	if _, ok := node.messages[envelope.Hash()]; ok {
+		t.Fatalf("message not expired from cache")
+	}
+}

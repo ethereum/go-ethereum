@@ -38,6 +38,20 @@ func startTestPeer() *testPeer {
 	}
 }
 
+func startTestPeerInited() (*testPeer, error) {
+	peer := startTestPeer()
+
+	if err := p2p.ExpectMsg(peer.stream, statusCode, []uint64{protocolVersion}); err != nil {
+		peer.stream.Close()
+		return nil, err
+	}
+	if err := p2p.SendItems(peer.stream, statusCode, protocolVersion); err != nil {
+		peer.stream.Close()
+		return nil, err
+	}
+	return peer, nil
+}
+
 func TestPeerStatusMessage(t *testing.T) {
 	tester := startTestPeer()
 
@@ -102,15 +116,12 @@ func TestPeerHandshakeSuccess(t *testing.T) {
 
 func TestPeerSend(t *testing.T) {
 	// Start a tester and execute the handshake
-	tester := startTestPeer()
+	tester, err := startTestPeerInited()
+	if err != nil {
+		t.Fatalf("failed to start initialized peer: %v", err)
+	}
 	defer tester.stream.Close()
 
-	if err := p2p.ExpectMsg(tester.stream, statusCode, []uint64{protocolVersion}); err != nil {
-		t.Fatalf("status message mismatch: %v", err)
-	}
-	if err := p2p.SendItems(tester.stream, statusCode, protocolVersion); err != nil {
-		t.Fatalf("failed to send status: %v", err)
-	}
 	// Construct a message and inject into the tester
 	message := NewMessage([]byte("peer broadcast test message"))
 	envelope, err := message.Wrap(DefaultPoW, Options{
@@ -138,15 +149,12 @@ func TestPeerSend(t *testing.T) {
 
 func TestPeerDeliver(t *testing.T) {
 	// Start a tester and execute the handshake
-	tester := startTestPeer()
+	tester, err := startTestPeerInited()
+	if err != nil {
+		t.Fatalf("failed to start initialized peer: %v", err)
+	}
 	defer tester.stream.Close()
 
-	if err := p2p.ExpectMsg(tester.stream, statusCode, []uint64{protocolVersion}); err != nil {
-		t.Fatalf("status message mismatch: %v", err)
-	}
-	if err := p2p.SendItems(tester.stream, statusCode, protocolVersion); err != nil {
-		t.Fatalf("failed to send status: %v", err)
-	}
 	// Watch for all inbound messages
 	arrived := make(chan struct{}, 1)
 	tester.client.Watch(Filter{
