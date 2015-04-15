@@ -396,6 +396,31 @@ func (self *ethProtocol) requestBlocks(hashes []common.Hash) error {
 	return p2p.Send(self.rw, GetBlocksMsg, hashes)
 }
 
+/*
+func (self *ethProtocol) newRespBlockCh() BlockPack {
+	self.blockRespCh = make(chan blockResp)
+	return self.blockRespCh
+}
+
+func (self *ethProtocol) RequestBlocks(hashes *set.Set) <-chan []*types.Block {
+	out := make(chan []*types.Block)
+	go func() {
+	done:
+		for {
+			select {
+			case blockResp := <-self.newRespBlockCh():
+				if len(blockResp.blocks) {
+				}
+			case <-time.After(5 * time.Second):
+			}
+		}
+
+		close(out)
+	}()
+	return out
+}
+*/
+
 func (self *ethProtocol) protoError(code int, format string, params ...interface{}) (err *errs.Error) {
 	err = self.errors.New(code, format, params...)
 	//err.Log(self.peer.Logger)
