@@ -81,6 +81,8 @@ import (
 )
 
 const (
+	keyHeaderVersion = "1"
+	keyHeaderKDF     = "scrypt"
 	// 2^18 / 8 / 1 uses 256MB memory and approx 1s CPU time on a modern CPU.
 	scryptN     = 1 << 18
 	scryptr     = 8
@@ -140,12 +142,32 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	cipherText := make([]byte, len(toEncrypt))
 	AES128CBCEncrypter.CryptBlocks(cipherText, toEncrypt)
 
-	mac := Sha3(derivedKey[16:32], cipherText)
+	paramsJSON := scryptParamsJSON{
+		N:       scryptN,
+		R:       scryptr,
+		P:       scryptp,
+		DkLen:   scryptdkLen,
+		SaltLen: 32,
+	}
+
+	keyHeaderJSON := keyHeaderJSON{
+		Version:   keyHeaderVersion,
+		Kdf:       keyHeaderKDF,
+		KdfParams: paramsJSON,
+	}
+
+	keyHeaderJSONStr, err := json.Marshal(keyHeaderJSON)
+	if err != nil {
+		return err
+	}
+
+	mac := Sha3(keyHeaderJSONStr, derivedKey[16:32], cipherText)
 
 	cipherStruct := cipherJSON{
 		mac,
 		salt,
 		iv,
+		keyHeaderJSON,
 		cipherText,
 	}
 	keyStruct := encryptedKeyJSON{
@@ -185,15 +207,28 @@ func DecryptKey(ks keyStorePassphrase, keyAddr common.Address, auth string) (key
 	mac := keyProtected.Crypto.MAC
 	salt := keyProtected.Crypto.Salt
 	iv := keyProtected.Crypto.IV
+	keyHeader := keyProtected.Crypto.KeyHeader
 	cipherText := keyProtected.Crypto.CipherText
 
-	authArray := []byte(auth)
-	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptr, scryptp, scryptdkLen)
+	// used in MAC
+	keyHeaderJSONStr, err := json.Marshal(keyHeader)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	calculatedMAC := Sha3(derivedKey[16:32], cipherText)
+	// TODO: make this more generic when we support different KDF params / key versions
+	n := keyHeader.KdfParams.N
+	r := keyHeader.KdfParams.R
+	p := keyHeader.KdfParams.P
+	dkLen := keyHeader.KdfParams.DkLen
+
+	authArray := []byte(auth)
+	derivedKey, err := scrypt.Key(authArray, salt, n, r, p, dkLen)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	calculatedMAC := Sha3(keyHeaderJSONStr, derivedKey[16:32], cipherText)
 	if !bytes.Equal(calculatedMAC, mac) {
 		err = errors.New("Decryption failed: MAC mismatch")
 		return nil, nil, err

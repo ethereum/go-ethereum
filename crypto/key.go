@@ -48,17 +48,32 @@ type plainKeyJSON struct {
 	PrivateKey []byte
 }
 
-type cipherJSON struct {
-	MAC        []byte
-	Salt       []byte
-	IV         []byte
-	CipherText []byte
-}
-
 type encryptedKeyJSON struct {
 	Id      []byte
 	Address []byte
 	Crypto  cipherJSON
+}
+
+type cipherJSON struct {
+	MAC        []byte
+	Salt       []byte
+	IV         []byte
+	KeyHeader  keyHeaderJSON
+	CipherText []byte
+}
+
+type keyHeaderJSON struct {
+	Version   string
+	Kdf       string
+	KdfParams scryptParamsJSON // TODO: make more generic?
+}
+
+type scryptParamsJSON struct {
+	N       int
+	R       int
+	P       int
+	DkLen   int
+	SaltLen int
 }
 
 func (k *Key) MarshalJSON() (j []byte, err error) {
