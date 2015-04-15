@@ -153,7 +153,7 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	keyHeaderJSON := keyHeaderJSON{
 		Version:   keyHeaderVersion,
 		Kdf:       keyHeaderKDF,
-		KdfParams: paramsJSON,
+		KdfParams: &paramsJSON,
 	}
 
 	keyHeaderJSONStr, err := json.Marshal(keyHeaderJSON)
@@ -167,12 +167,12 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		mac,
 		salt,
 		iv,
-		keyHeaderJSON,
 		cipherText,
 	}
 	keyStruct := encryptedKeyJSON{
 		key.Id,
 		key.Address.Bytes(),
+		keyHeaderJSON,
 		cipherStruct,
 	}
 	keyJSON, err := json.Marshal(keyStruct)
@@ -204,10 +204,11 @@ func DecryptKey(ks keyStorePassphrase, keyAddr common.Address, auth string) (key
 	err = json.Unmarshal(fileContent, keyProtected)
 
 	keyId = keyProtected.Id
+	keyHeader := keyProtected.KeyHeader
+
 	mac := keyProtected.Crypto.MAC
 	salt := keyProtected.Crypto.Salt
 	iv := keyProtected.Crypto.IV
-	keyHeader := keyProtected.Crypto.KeyHeader
 	cipherText := keyProtected.Crypto.CipherText
 
 	// used in MAC
