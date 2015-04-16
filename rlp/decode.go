@@ -305,10 +305,11 @@ func decodeByteSlice(s *Stream, val reflect.Value) error {
 		return decodeListSlice(s, val, decodeUint)
 	}
 	b, err := s.Bytes()
-	if err == nil {
-		val.SetBytes(b)
+	if err != nil {
+		return wrapStreamError(err, val.Type())
 	}
-	return err
+	val.SetBytes(b)
+	return nil
 }
 
 func decodeByteArray(s *Stream, val reflect.Value) error {
@@ -333,6 +334,10 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 			return err
 		}
 		zero(val, int(size))
+		// Reject cases where single byte encoding should have been used.
+		if size == 1 && slice[0] < 56 {
+			return wrapStreamError(ErrCanonSize, val.Type())
+		}
 	case List:
 		return decodeListArray(s, val, decodeUint)
 	}
@@ -477,7 +482,7 @@ var (
 	// Actual Errors
 	ErrExpectedString = errors.New("rlp: expected String or Byte")
 	ErrExpectedList   = errors.New("rlp: expected List")
-	ErrCanonInt       = errors.New("rlp: non-canonical (leading zero bytes) integer")
+	ErrCanonInt       = errors.New("rlp: non-canonical integer format")
 	ErrCanonSize      = errors.New("rlp: non-canonical size information")
 	ErrElemTooLarge   = errors.New("rlp: element is larger than containing list")
 	ErrValueTooLarge  = errors.New("rlp: value size exceeds available input length")
@@ -576,6 +581,9 @@ func (s *Stream) Bytes() ([]byte, error) {
 		if err = s.readFull(b); err != nil {
 			return nil, err
 		}
+		if size == 1 && b[0] < 56 {
+			return nil, ErrCanonSize
+		}
 		return b, nil
 	default:
 		return nil, ErrExpectedString
@@ -631,11 +639,17 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 			return 0, errUintOverflow
 		}
 		v, err := s.readUint(byte(size))
-		if err == ErrCanonSize {
+		switch {
+		case err == ErrCanonSize:
 			// Adjust error because we're not reading a size right now.
-			err = ErrCanonInt
+			return 0, ErrCanonInt
+		case err != nil:
+			return 0, err
+		case size > 0 && v < 56:
+			return 0, ErrCanonSize
+		default:
+			return v, nil
 		}
-		return v, err
 	default:
 		return 0, ErrExpectedString
 	}

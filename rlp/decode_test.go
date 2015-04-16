@@ -93,12 +93,16 @@ func TestStreamErrors(t *testing.T) {
 		{"00", calls{"ListEnd"}, nil, errNotInList},
 		{"C401020304", calls{"List", "Uint", "ListEnd"}, nil, errNotAtEOL},
 
-		// Leading zero bytes are rejected when reading integers.
+		// Non-canonical integers (e.g. leading zero bytes).
 		{"00", calls{"Uint"}, nil, ErrCanonInt},
 		{"820002", calls{"Uint"}, nil, ErrCanonInt},
+		{"8133", calls{"Uint"}, nil, ErrCanonSize},
+		{"8156", calls{"Uint"}, nil, nil},
 
 		// Size tags must use the smallest possible encoding.
 		// Leading zero bytes in the size tag are also rejected.
+		{"8100", calls{"Uint"}, nil, ErrCanonSize},
+		{"8100", calls{"Bytes"}, nil, ErrCanonSize},
 		{"B800", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
 		{"B90000", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
 		{"B90055", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
@@ -112,7 +116,7 @@ func TestStreamErrors(t *testing.T) {
 		{"", calls{"Kind"}, nil, io.EOF},
 		{"", calls{"Uint"}, nil, io.EOF},
 		{"", calls{"List"}, nil, io.EOF},
-		{"8105", calls{"Uint", "Uint"}, nil, io.EOF},
+		{"8158", calls{"Uint", "Uint"}, nil, io.EOF},
 		{"C0", calls{"List", "ListEnd", "List"}, nil, io.EOF},
 
 		// Input limit errors.
@@ -129,11 +133,11 @@ func TestStreamErrors(t *testing.T) {
 		// down toward zero in Stream.remaining, reading too far can overflow
 		// remaining to a large value, effectively disabling the limit.
 		{"C40102030401", calls{"Raw", "Uint"}, withCustomInputLimit(5), io.EOF},
-		{"C4010203048102", calls{"Raw", "Uint"}, withCustomInputLimit(6), ErrValueTooLarge},
+		{"C4010203048158", calls{"Raw", "Uint"}, withCustomInputLimit(6), ErrValueTooLarge},
 
 		// Check that the same calls are fine without a limit.
 		{"C40102030401", calls{"Raw", "Uint"}, withoutInputLimit, nil},
-		{"C4010203048102", calls{"Raw", "Uint"}, withoutInputLimit, nil},
+		{"C4010203048158", calls{"Raw", "Uint"}, withoutInputLimit, nil},
 
 		// Unexpected EOF. This only happens when there is
 		// no input limit, so the reader needs to be 'dumbed down'.
@@ -295,13 +299,13 @@ var decodeTests = []decodeTest{
 	// integers
 	{input: "05", ptr: new(uint32), value: uint32(5)},
 	{input: "80", ptr: new(uint32), value: uint32(0)},
-	{input: "8105", ptr: new(uint32), value: uint32(5)},
 	{input: "820505", ptr: new(uint32), value: uint32(0x0505)},
 	{input: "83050505", ptr: new(uint32), value: uint32(0x050505)},
 	{input: "8405050505", ptr: new(uint32), value: uint32(0x05050505)},
 	{input: "850505050505", ptr: new(uint32), error: "rlp: input string too long for uint32"},
 	{input: "C0", ptr: new(uint32), error: "rlp: expected input string or byte for uint32"},
 	{input: "00", ptr: new(uint32), error: "rlp: non-canonical integer (leading zero bytes) for uint32"},
+	{input: "8105", ptr: new(uint32), error: "rlp: non-canonical size information for uint32"},
 	{input: "820004", ptr: new(uint32), error: "rlp: non-canonical integer (leading zero bytes) for uint32"},
 	{input: "B8020004", ptr: new(uint32), error: "rlp: non-canonical size information for uint32"},
 
@@ -319,10 +323,16 @@ var decodeTests = []decodeTest{
 	// byte slices
 	{input: "01", ptr: new([]byte), value: []byte{1}},
 	{input: "80", ptr: new([]byte), value: []byte{}},
+
 	{input: "8D6162636465666768696A6B6C6D", ptr: new([]byte), value: []byte("abcdefghijklm")},
 	{input: "C0", ptr: new([]byte), value: []byte{}},
 	{input: "C3010203", ptr: new([]byte), value: []byte{1, 2, 3}},
 
+	{
+		input: "8105",
+		ptr:   new([]byte),
+		error: "rlp: non-canonical size information for []uint8",
+	},
 	{
 		input: "C3820102",
 		ptr:   new([]byte),
@@ -346,10 +356,15 @@ var decodeTests = []decodeTest{
 		ptr:   new([5]byte),
 		error: "rlp: input string too long for [5]uint8",
 	},
+	{
+		input: "8105",
+		ptr:   new([5]byte),
+		error: "rlp: non-canonical size information for [5]uint8",
+	},
 
 	// byte array reuse (should be zeroed)
 	{input: "850102030405", ptr: &sharedByteArray, value: [5]byte{1, 2, 3, 4, 5}},
-	{input: "8101", ptr: &sharedByteArray, value: [5]byte{1}}, // kind: String
+	{input: "01", ptr: &sharedByteArray, value: [5]byte{1}}, // kind: String
 	{input: "850102030405", ptr: &sharedByteArray, value: [5]byte{1, 2, 3, 4, 5}},
 	{input: "01", ptr: &sharedByteArray, value: [5]byte{1}}, // kind: Byte
 	{input: "C3010203", ptr: &sharedByteArray, value: [5]byte{1, 2, 3, 0, 0}},
@@ -369,9 +384,10 @@ var decodeTests = []decodeTest{
 	// big ints
 	{input: "01", ptr: new(*big.Int), value: big.NewInt(1)},
 	{input: "89FFFFFFFFFFFFFFFFFF", ptr: new(*big.Int), value: veryBigInt},
-	{input: "820001", ptr: new(big.Int), error: "rlp: non-canonical integer (leading zero bytes) for *big.Int"},
 	{input: "10", ptr: new(big.Int), value: *big.NewInt(16)}, // non-pointer also works
 	{input: "C0", ptr: new(*big.Int), error: "rlp: expected input string or byte for *big.Int"},
+	{input: "820001", ptr: new(big.Int), error: "rlp: non-canonical integer (leading zero bytes) for *big.Int"},
+	{input: "8105", ptr: new(big.Int), error: "rlp: non-canonical size information for *big.Int"},
 
 	// structs
 	{input: "C0", ptr: new(simplestruct), value: simplestruct{0, ""}},
@@ -404,7 +420,7 @@ var decodeTests = []decodeTest{
 	{input: "80", ptr: new(*uint), value: (*uint)(nil)},
 	{input: "C0", ptr: new(*uint), value: (*uint)(nil)},
 	{input: "07", ptr: new(*uint), value: uintp(7)},
-	{input: "8108", ptr: new(*uint), value: uintp(8)},
+	{input: "8158", ptr: new(*uint), value: uintp(0x58)},
 	{input: "C109", ptr: new(*[]uint), value: &[]uint{9}},
 	{input: "C58403030303", ptr: new(*[][]byte), value: &[][]byte{{3, 3, 3, 3}}},
 
