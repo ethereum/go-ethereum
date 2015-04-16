@@ -178,7 +178,7 @@ func TestMessageExpiration(t *testing.T) {
 	}
 	// Wait for expiration and check cache again
 	time.Sleep(time.Second)     // wait for expiration
-	time.Sleep(expirationTicks) // wait for cleanup cycle
+	time.Sleep(expirationCycle) // wait for cleanup cycle
 	if _, ok := node.messages[envelope.Hash()]; ok {
 		t.Fatalf("message not expired from cache")
 	}

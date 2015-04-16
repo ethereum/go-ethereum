@@ -88,8 +88,8 @@ func (self *peer) handshake() error {
 // and expiration.
 func (self *peer) update() {
 	// Start the tickers for the updates
-	expire := time.NewTicker(expirationTicks)
-	transmit := time.NewTicker(transmissionTicks)
+	expire := time.NewTicker(expirationCycle)
+	transmit := time.NewTicker(transmissionCycle)
 
 	// Loop and transmit until termination is requested
 	for {

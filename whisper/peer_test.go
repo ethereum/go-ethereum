@@ -185,7 +185,7 @@ func TestPeerDeliver(t *testing.T) {
 		t.Fatalf("failed to transfer message: %v", err)
 	}
 	select {
-	case <-time.After(2 * transmissionTicks):
+	case <-time.After(2 * transmissionCycle):
 	case <-arrived:
 		t.Fatalf("repeating message arrived")
 	}

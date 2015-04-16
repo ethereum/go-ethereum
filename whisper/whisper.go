@@ -25,8 +25,8 @@ const (
 	signatureFlag   = byte(1 << 7)
 	signatureLength = 65
 
-	expirationTicks   = 800 * time.Millisecond
-	transmissionTicks = 300 * time.Millisecond
+	expirationCycle   = 800 * time.Millisecond
+	transmissionCycle = 300 * time.Millisecond
 )
 
 const (
@@ -275,7 +275,7 @@ func createFilter(message *Message, topics []Topic) filter.Filter {
 // state by expiring stale messages from the pool.
 func (self *Whisper) update() {
 	// Start a ticker to check for expirations
-	expire := time.NewTicker(expirationTicks)
+	expire := time.NewTicker(expirationCycle)
 
 	// Repeat updates until termination is requested
 	for {
