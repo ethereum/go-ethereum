@@ -245,6 +245,7 @@ out:
 	for {
 		select {
 		case blockPack := <-d.blockCh:
+			d.peers[blockPack.peerId].promote()
 			d.queue.deliver(blockPack.peerId, blockPack.blocks)
 			d.peers.setState(blockPack.peerId, idleState)
 		case <-ticker.C:
@@ -310,6 +311,9 @@ out:
 					// 2) Measure their speed;
 					// 3) Amount and availability.
 					d.queue.deliver(pid, nil)
+					if peer := p.peers[pid]; peer != nil {
+						peer.demote()
+					}
 				}
 
 			}
@@ -343,6 +347,7 @@ func (d *Downloader) AddBlock(id string, block *types.Block, td *big.Int) {
 	peer.td = td
 	peer.recentHash = block.Hash()
 	peer.mu.Unlock()
+	peer.promote()
 
 	glog.V(logger.Detail).Infoln("Inserting new block from:", id)
 	d.queue.addBlock(id, block, td)

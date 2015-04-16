@@ -95,3 +95,23 @@ func (p *peer) fetch(chunk *chunk) error {
 
 	return nil
 }
+
+// promote increases the peer's reputation
+func (p *peer) promote() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.rep++
+}
+
+// demote decreases the peer's reputation or leaves it at 0
+func (p *peer) demote() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.rep > 1 {
+		p.rep -= 2
+	} else {
+		p.rep = 0
+	}
+}
