@@ -25,7 +25,10 @@ import (
 
 	"errors"
 	"net"
+	"net/http"
 	"time"
+
+	"io"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -266,39 +269,64 @@ type ListenerStoppedError struct {
 	msg string
 }
 
-func (self ListenerStoppedError) Timout() bool {
-	return false
-}
-
-func (self ListenerStoppedError) Temporary() bool {
-	return false
-}
-
 func (self ListenerStoppedError) Error() string {
 	return self.msg
 }
 
-type ControllableTCPListener struct {
+var listenerStoppedError = ListenerStoppedError{"Listener stopped"}
+
+type StoppableTCPListener struct {
 	*net.TCPListener
-	stop chan struct{}
+	stop *chan struct{} // closed when the listener must stop
 }
 
-var listenerStoppedError ListenerStoppedError
-
-func (self *ControllableTCPListener) Stop() {
-	close(self.stop)
+// Wraps the default handler and checks if the RPC service was stopped. In that case it returns an
+// error indicating that the service was stopped. This will only happen for connections which are
+// kept open (HTTP keep-alive) when the RPC service was shutdown.
+func NewStoppableHandler(h http.Handler, stop *chan struct{}) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-*stop:
+			w.Header().Set("Content-Type", "application/json")
+			jsonerr := &RpcErrorObject{-32603, "RPC service stopt"}
+			send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
+		default:
+			h.ServeHTTP(w, r)
+		}
+	})
 }
 
-func (self *ControllableTCPListener) Accept() (net.Conn, error) {
+// Stop the listener and all accepted and still active connections.
+func (self *StoppableTCPListener) Stop() {
+	close(*self.stop)
+}
+
+func NewStoppableTCPListener(addr string) (*StoppableTCPListener, error) {
+	wl, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	if tcpl, ok := wl.(*net.TCPListener); ok {
+		stop := make(chan struct{})
+		l := &StoppableTCPListener{tcpl, &stop}
+		return l, nil
+	}
+
+	return nil, errors.New("Unable to create TCP listener for RPC service")
+}
+
+func (self *StoppableTCPListener) Accept() (net.Conn, error) {
 	for {
-		self.SetDeadline(time.Now().Add(time.Duration(500 * time.Millisecond)))
+		self.SetDeadline(time.Now().Add(time.Duration(1 * time.Second)))
 		c, err := self.TCPListener.AcceptTCP()
 
 		select {
-		case <-self.stop:
+		case <-*self.stop:
+			c.Close()
 			self.TCPListener.Close()
 			return nil, listenerStoppedError
-		default: // keep on going
+		default:
 		}
 
 		if err != nil {
@@ -307,20 +335,21 @@ func (self *ControllableTCPListener) Accept() (net.Conn, error) {
 			}
 		}
 
-		return c, err
+		return &ClosableConnection{c, self.stop}, err
 	}
 }
 
-func NewControllableTCPListener(addr string) (*ControllableTCPListener, error) {
-	wl, err := net.Listen("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
+type ClosableConnection struct {
+	*net.TCPConn
+	closed *chan struct{}
+}
 
-	if tcpl, ok := wl.(*net.TCPListener); ok {
-		l := &ControllableTCPListener{tcpl, make(chan struct{})}
-		return l, nil
+func (self *ClosableConnection) Read(b []byte) (n int, err error) {
+	select {
+	case <-*self.closed:
+		self.TCPConn.Close()
+		return 0, io.EOF
+	default:
+		return self.TCPConn.Read(b)
 	}
-
-	return nil, errors.New("Unable to create TCP listener for RPC")
 }

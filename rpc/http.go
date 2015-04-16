@@ -14,7 +14,7 @@ import (
 )
 
 var rpclogger = logger.NewLogger("RPC")
-var rpclistener *ControllableTCPListener
+var rpclistener *StoppableTCPListener
 
 const (
 	jsonrpcver       = "2.0"
@@ -22,12 +22,14 @@ const (
 )
 
 func Start(pipe *xeth.XEth, config RpcConfig) error {
-	if rpclistener != nil { // listener already running
-		glog.Infoln("RPC listener already running")
-		return fmt.Errorf("RPC already running on %s", rpclistener.Addr().String())
+	if rpclistener != nil {
+		if fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort) != rpclistener.Addr().String() {
+			return fmt.Errorf("RPC service already running on %s ", rpclistener.Addr().String())
+		}
+		return nil // RPC service already running on given host/port
 	}
 
-	l, err := NewControllableTCPListener(fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort))
+	l, err := NewStoppableTCPListener(fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort))
 	if err != nil {
 		rpclogger.Errorf("Can't listen on %s:%d: %v", config.ListenAddress, config.ListenPort, err)
 		return err
@@ -41,7 +43,7 @@ func Start(pipe *xeth.XEth, config RpcConfig) error {
 		opts.AllowedOrigins = []string{config.CorsDomain}
 
 		c := cors.New(opts)
-		handler = c.Handler(JSONRPC(pipe))
+		handler = NewStoppableHandler(c.Handler(JSONRPC(pipe)), l.stop)
 	} else {
 		handler = JSONRPC(pipe)
 	}
@@ -52,13 +54,11 @@ func Start(pipe *xeth.XEth, config RpcConfig) error {
 }
 
 func Stop() error {
-	if rpclistener == nil { // listener not running
-		glog.Infoln("RPC listener not running")
-		return nil
+	if rpclistener != nil {
+		rpclistener.Stop()
+		rpclistener = nil
 	}
 
-	rpclistener.Stop()
-	rpclistener = nil
 	return nil
 }
 
