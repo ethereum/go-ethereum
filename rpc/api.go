@@ -182,8 +182,8 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		if err != nil {
 			return err
 		}
-
-		*reply = v
+		// TODO unwrap the parent method's ToHex call
+		*reply = newHexData(common.FromHex(v))
 	case "eth_flush":
 		return NewNotImplementedError(req.Method)
 	case "eth_getBlockByHash":
