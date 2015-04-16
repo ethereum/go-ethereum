@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/logger"
@@ -15,6 +14,7 @@ import (
 )
 
 var rpclogger = logger.NewLogger("RPC")
+var rpclistener *ControllableTCPListener
 
 const (
 	jsonrpcver       = "2.0"
@@ -22,11 +22,17 @@ const (
 )
 
 func Start(pipe *xeth.XEth, config RpcConfig) error {
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort))
+	if rpclistener != nil { // listener already running
+		glog.Infoln("RPC listener already running")
+		return fmt.Errorf("RPC already running on %s", rpclistener.Addr().String())
+	}
+
+	l, err := NewControllableTCPListener(fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort))
 	if err != nil {
 		rpclogger.Errorf("Can't listen on %s:%d: %v", config.ListenAddress, config.ListenPort, err)
 		return err
 	}
+	rpclistener = l
 
 	var handler http.Handler
 	if len(config.CorsDomain) > 0 {
@@ -42,6 +48,17 @@ func Start(pipe *xeth.XEth, config RpcConfig) error {
 
 	go http.Serve(l, handler)
 
+	return nil
+}
+
+func Stop() error {
+	if rpclistener == nil { // listener not running
+		glog.Infoln("RPC listener not running")
+		return nil
+	}
+
+	rpclistener.Stop()
+	rpclistener = nil
 	return nil
 }
 

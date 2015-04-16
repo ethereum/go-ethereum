@@ -23,6 +23,10 @@ import (
 	"math/big"
 	"strings"
 
+	"errors"
+	"net"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -256,4 +260,67 @@ type RpcErrorObject struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	// Data    interface{} `json:"data"`
+}
+
+type ListenerStoppedError struct {
+	msg string
+}
+
+func (self ListenerStoppedError) Timout() bool {
+	return false
+}
+
+func (self ListenerStoppedError) Temporary() bool {
+	return false
+}
+
+func (self ListenerStoppedError) Error() string {
+	return self.msg
+}
+
+type ControllableTCPListener struct {
+	*net.TCPListener
+	stop chan struct{}
+}
+
+var listenerStoppedError ListenerStoppedError
+
+func (self *ControllableTCPListener) Stop() {
+	close(self.stop)
+}
+
+func (self *ControllableTCPListener) Accept() (net.Conn, error) {
+	for {
+		self.SetDeadline(time.Now().Add(time.Duration(500 * time.Millisecond)))
+		c, err := self.TCPListener.AcceptTCP()
+
+		select {
+		case <-self.stop:
+			self.TCPListener.Close()
+			return nil, listenerStoppedError
+		default: // keep on going
+		}
+
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() && netErr.Temporary() {
+				continue // regular timeout
+			}
+		}
+
+		return c, err
+	}
+}
+
+func NewControllableTCPListener(addr string) (*ControllableTCPListener, error) {
+	wl, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	if tcpl, ok := wl.(*net.TCPListener); ok {
+		l := &ControllableTCPListener{tcpl, make(chan struct{})}
+		return l, nil
+	}
+
+	return nil, errors.New("Unable to create TCP listener for RPC")
 }

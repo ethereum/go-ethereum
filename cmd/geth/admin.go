@@ -26,6 +26,7 @@ func (js *jsre) adminBindings() {
 	admin := t.Object()
 	admin.Set("suggestPeer", js.suggestPeer)
 	admin.Set("startRPC", js.startRPC)
+	admin.Set("stopRPC", js.stopRPC)
 	admin.Set("nodeInfo", js.nodeInfo)
 	admin.Set("peers", js.peers)
 	admin.Set("newAccount", js.newAccount)
@@ -139,6 +140,13 @@ func (js *jsre) startRPC(call otto.FunctionCall) otto.Value {
 	}
 
 	return otto.TrueValue()
+}
+
+func (js *jsre) stopRPC(call otto.FunctionCall) otto.Value {
+	if rpc.Stop() == nil {
+		return otto.TrueValue()
+	}
+	return otto.FalseValue()
 }
 
 func (js *jsre) suggestPeer(call otto.FunctionCall) otto.Value {
