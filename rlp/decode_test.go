@@ -280,7 +280,7 @@ type simplestruct struct {
 
 type recstruct struct {
 	I     uint
-	Child *recstruct
+	Child *recstruct `rlp:"nil"`
 }
 
 var (
@@ -390,15 +390,33 @@ var decodeTests = []decodeTest{
 	{input: "8105", ptr: new(big.Int), error: "rlp: non-canonical size information for *big.Int"},
 
 	// structs
-	{input: "C0", ptr: new(simplestruct), value: simplestruct{0, ""}},
-	{input: "C105", ptr: new(simplestruct), value: simplestruct{5, ""}},
-	{input: "C50583343434", ptr: new(simplestruct), value: simplestruct{5, "444"}},
 	{
-		input: "C501C302C103",
+		input: "C50583343434",
+		ptr:   new(simplestruct),
+		value: simplestruct{5, "444"},
+	},
+	{
+		input: "C601C402C203C0",
 		ptr:   new(recstruct),
 		value: recstruct{1, &recstruct{2, &recstruct{3, nil}}},
 	},
 
+	// struct errors
+	{
+		input: "C0",
+		ptr:   new(simplestruct),
+		error: "rlp: too few elements for rlp.simplestruct",
+	},
+	{
+		input: "C105",
+		ptr:   new(simplestruct),
+		error: "rlp: too few elements for rlp.simplestruct",
+	},
+	{
+		input: "C7C50583343434C0",
+		ptr:   new([]*simplestruct),
+		error: "rlp: too few elements for rlp.simplestruct, decoding into ([]*rlp.simplestruct)[1]",
+	},
 	{
 		input: "83222222",
 		ptr:   new(simplestruct),
@@ -417,19 +435,15 @@ var decodeTests = []decodeTest{
 
 	// pointers
 	{input: "00", ptr: new(*[]byte), value: &[]byte{0}},
-	{input: "80", ptr: new(*uint), value: (*uint)(nil)},
-	{input: "C0", ptr: new(*uint), value: (*uint)(nil)},
+	{input: "80", ptr: new(*uint), value: uintp(0)},
+	{input: "C0", ptr: new(*uint), error: "rlp: expected input string or byte for uint"},
 	{input: "07", ptr: new(*uint), value: uintp(7)},
 	{input: "8158", ptr: new(*uint), value: uintp(0x58)},
 	{input: "C109", ptr: new(*[]uint), value: &[]uint{9}},
 	{input: "C58403030303", ptr: new(*[][]byte), value: &[][]byte{{3, 3, 3, 3}}},
 
 	// check that input position is advanced also for empty values.
-	{input: "C3808005", ptr: new([]*uint), value: []*uint{nil, nil, uintp(5)}},
-
-	// pointer should be reset to nil
-	{input: "05", ptr: sharedPtr, value: uintp(5)},
-	{input: "80", ptr: sharedPtr, value: (*uint)(nil)},
+	{input: "C3808005", ptr: new([]*uint), value: []*uint{uintp(0), uintp(0), uintp(5)}},
 
 	// interface{}
 	{input: "00", ptr: new(interface{}), value: []byte{0}},
@@ -597,6 +611,33 @@ func ExampleDecode() {
 	}
 	// Output:
 	// Decoded value: rlp.example{A:0xa, B:0x14, private:0x0, String:"foobar"}
+}
+
+func ExampleDecode_structTagNil() {
+	// In this example, we'll use the "nil" struct tag to change
+	// how a pointer-typed field is decoded. The input contains an RLP
+	// list of one element, an empty string.
+	input := []byte{0xC1, 0x80}
+
+	// This type uses the normal rules.
+	// The empty input string is decoded as a pointer to an empty Go string.
+	var normalRules struct {
+		String *string
+	}
+	Decode(bytes.NewReader(input), &normalRules)
+	fmt.Printf("normal: String = %q\n", *normalRules.String)
+
+	// This type uses the struct tag.
+	// The empty input string is decoded as a nil pointer.
+	var withEmptyOK struct {
+		String *string `rlp:"nil"`
+	}
+	Decode(bytes.NewReader(input), &withEmptyOK)
+	fmt.Printf("with nil tag: String = %v\n", withEmptyOK.String)
+
+	// Output:
+	// normal: String = ""
+	// with nil tag: String = <nil>
 }
 
 func ExampleStream() {

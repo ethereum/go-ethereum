@@ -194,7 +194,7 @@ func (w *encbuf) Write(b []byte) (int, error) {
 
 func (w *encbuf) encode(val interface{}) error {
 	rval := reflect.ValueOf(val)
-	ti, err := cachedTypeInfo(rval.Type())
+	ti, err := cachedTypeInfo(rval.Type(), tags{})
 	if err != nil {
 		return err
 	}
@@ -485,7 +485,7 @@ func writeInterface(val reflect.Value, w *encbuf) error {
 		return nil
 	}
 	eval := val.Elem()
-	ti, err := cachedTypeInfo(eval.Type())
+	ti, err := cachedTypeInfo(eval.Type(), tags{})
 	if err != nil {
 		return err
 	}
@@ -493,7 +493,7 @@ func writeInterface(val reflect.Value, w *encbuf) error {
 }
 
 func makeSliceWriter(typ reflect.Type) (writer, error) {
-	etypeinfo, err := cachedTypeInfo1(typ.Elem())
+	etypeinfo, err := cachedTypeInfo1(typ.Elem(), tags{})
 	if err != nil {
 		return nil, err
 	}
@@ -530,7 +530,7 @@ func makeStructWriter(typ reflect.Type) (writer, error) {
 }
 
 func makePtrWriter(typ reflect.Type) (writer, error) {
-	etypeinfo, err := cachedTypeInfo1(typ.Elem())
+	etypeinfo, err := cachedTypeInfo1(typ.Elem(), tags{})
 	if err != nil {
 		return nil, err
 	}
