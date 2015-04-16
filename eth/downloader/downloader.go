@@ -311,7 +311,7 @@ out:
 					// 2) Measure their speed;
 					// 3) Amount and availability.
 					d.queue.deliver(pid, nil)
-					if peer := p.peers[pid]; peer != nil {
+					if peer := d.peers[pid]; peer != nil {
 						peer.demote()
 					}
 				}
