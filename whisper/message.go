@@ -94,6 +94,11 @@ func (self *Message) sign(key *ecdsa.PrivateKey) (err error) {
 func (self *Message) Recover() *ecdsa.PublicKey {
 	defer func() { recover() }() // in case of invalid signature
 
+	// Short circuit if no signature is present
+	if self.Signature == nil {
+		return nil
+	}
+	// Otherwise try and recover the signature
 	pub, err := crypto.SigToPub(self.hash(), self.Signature)
 	if err != nil {
 		glog.V(logger.Error).Infof("Could not get public key from signature: %v", err)
