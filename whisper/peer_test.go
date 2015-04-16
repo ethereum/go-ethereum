@@ -190,3 +190,53 @@ func TestPeerDeliver(t *testing.T) {
 		t.Fatalf("repeating message arrived")
 	}
 }
+
+func TestPeerMessageExpiration(t *testing.T) {
+	// Start a tester and execute the handshake
+	tester, err := startTestPeerInited()
+	if err != nil {
+		t.Fatalf("failed to start initialized peer: %v", err)
+	}
+	defer tester.stream.Close()
+
+	// Fetch the peer instance for later inspection
+	tester.client.peerMu.RLock()
+	if peers := len(tester.client.peers); peers != 1 {
+		t.Fatalf("peer pool size mismatch: have %v, want %v", peers, 1)
+	}
+	var peer *peer
+	for peer, _ = range tester.client.peers {
+		break
+	}
+	tester.client.peerMu.RUnlock()
+
+	// Construct a message and pass it through the tester
+	message := NewMessage([]byte("peer test message"))
+	envelope, err := message.Wrap(DefaultPoW, Options{
+		TTL: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("failed to wrap message: %v", err)
+	}
+	if err := tester.client.Send(envelope); err != nil {
+		t.Fatalf("failed to send message: %v", err)
+	}
+	payload := []interface{}{envelope}
+	if err := p2p.ExpectMsg(tester.stream, messagesCode, payload); err != nil {
+		t.Fatalf("message mismatch: %v", err)
+	}
+	// Check that the message is inside the cache
+	if !peer.known.Has(envelope.Hash()) {
+		t.Fatalf("message not found in cache")
+	}
+	// Discard messages until expiration and check cache again
+	exp := time.Now().Add(time.Second + expirationCycle)
+	for time.Now().Before(exp) {
+		if err := p2p.ExpectMsg(tester.stream, messagesCode, []interface{}{}); err != nil {
+			t.Fatalf("message mismatch: %v", err)
+		}
+	}
+	if peer.known.Has(envelope.Hash()) {
+		t.Fatalf("message not expired from cache")
+	}
+}
