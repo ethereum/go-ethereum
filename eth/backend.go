@@ -433,6 +433,7 @@ func (s *Ethereum) Stop() {
 	s.txSub.Unsubscribe()    // quits txBroadcastLoop
 	s.blockSub.Unsubscribe() // quits blockBroadcastLoop
 
+	s.chainManager.Stop()
 	s.txPool.Stop()
 	s.eventMux.Stop()
 	s.blockPool.Stop()
