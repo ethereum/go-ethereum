@@ -408,18 +408,18 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		*reply = newHexData(res)
 	case "shh_version":
 		*reply = api.xeth().WhisperVersion()
+
 	case "shh_post":
 		args := new(WhisperMessageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-
 		err := api.xeth().Whisper().Post(args.Payload, args.To, args.From, args.Topics, args.Priority, args.Ttl)
 		if err != nil {
 			return err
 		}
-
 		*reply = true
+
 	case "shh_newIdentity":
 		*reply = api.xeth().Whisper().NewIdentity()
 	// case "shh_removeIdentity":
@@ -434,32 +434,35 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 		*reply = api.xeth().Whisper().HasIdentity(args.Identity)
+
 	case "shh_newGroup", "shh_addToGroup":
 		return NewNotImplementedError(req.Method)
+
 	case "shh_newFilter":
 		args := new(WhisperFilterArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		opts := new(xeth.Options)
-		// opts.From = args.From
-		opts.To = args.To
-		opts.Topics = args.Topics
-		id := api.xeth().NewWhisperFilter(opts)
+		id := api.xeth().NewWhisperFilter(args.To, args.From, args.Topics)
 		*reply = newHexNum(big.NewInt(int64(id)).Bytes())
+
 	case "shh_uninstallFilter":
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		*reply = api.xeth().UninstallWhisperFilter(args.Id)
+
 	case "shh_getFilterChanges":
+		// Retrieve all the new messages arrived since the last request
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		*reply = api.xeth().MessagesChanged(args.Id)
+
 	case "shh_getMessages":
+		// Retrieve all the cached messages matching a specific, existing filter
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err

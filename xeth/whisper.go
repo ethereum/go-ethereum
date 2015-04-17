@@ -1,7 +1,9 @@
+// Contains the external API to the whisper sub-protocol.
+
 package xeth
 
 import (
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -12,109 +14,78 @@ import (
 
 var qlogger = logger.NewLogger("XSHH")
 
+// Whisper represents the API wrapper around the internal whisper implementation.
 type Whisper struct {
 	*whisper.Whisper
 }
 
+// NewWhisper wraps an internal whisper client into an external API version.
 func NewWhisper(w *whisper.Whisper) *Whisper {
 	return &Whisper{w}
 }
 
-func (self *Whisper) Post(payload string, to, from string, topics []string, priority, ttl uint32) error {
-	if priority == 0 {
-		priority = 1000
-	}
-
-	if ttl == 0 {
-		ttl = 100
-	}
-
-	pk := crypto.ToECDSAPub(common.FromHex(from))
-	if key := self.Whisper.GetIdentity(pk); key != nil || len(from) == 0 {
-		msg := whisper.NewMessage(common.FromHex(payload))
-		envelope, err := msg.Wrap(time.Duration(priority*100000), whisper.Options{
-			TTL:    time.Duration(ttl) * time.Second,
-			To:     crypto.ToECDSAPub(common.FromHex(to)),
-			From:   key,
-			Topics: whisper.NewTopicsFromStrings(topics...),
-		})
-
-		if err != nil {
-			return err
-		}
-
-		if err := self.Whisper.Send(envelope); err != nil {
-			return err
-		}
-	} else {
-		return errors.New("unmatched pub / priv for seal")
-	}
-
-	return nil
-}
-
+// NewIdentity generates a new cryptographic identity for the client, and injects
+// it into the known identities for message decryption.
 func (self *Whisper) NewIdentity() string {
-	key := self.Whisper.NewIdentity()
-
-	return common.ToHex(crypto.FromECDSAPub(&key.PublicKey))
+	identity := self.Whisper.NewIdentity()
+	return common.ToHex(crypto.FromECDSAPub(&identity.PublicKey))
 }
 
+// HasIdentity checks if the the whisper node is configured with the private key
+// of the specified public pair.
 func (self *Whisper) HasIdentity(key string) bool {
 	return self.Whisper.HasIdentity(crypto.ToECDSAPub(common.FromHex(key)))
 }
 
-// func (self *Whisper) RemoveIdentity(key string) bool {
-// 	return self.Whisper.RemoveIdentity(crypto.ToECDSAPub(common.FromHex(key)))
-// }
-
-func (self *Whisper) Watch(opts *Options) int {
-	filter := whisper.Filter{
-		To:     crypto.ToECDSAPub(common.FromHex(opts.To)),
-		From:   crypto.ToECDSAPub(common.FromHex(opts.From)),
-		Topics: whisper.NewTopicsFromStrings(opts.Topics...),
+// Post injects a message into the whisper network for distribution.
+func (self *Whisper) Post(payload string, to, from string, topics []string, priority, ttl uint32) error {
+	// Construct the whisper message and transmission options
+	message := whisper.NewMessage(common.FromHex(payload))
+	options := whisper.Options{
+		To:     crypto.ToECDSAPub(common.FromHex(to)),
+		TTL:    time.Duration(ttl) * time.Second,
+		Topics: whisper.NewTopicsFromStrings(topics...),
 	}
-
-	var i int
-	filter.Fn = func(msg *whisper.Message) {
-		opts.Fn(NewWhisperMessage(msg))
+	if len(from) != 0 {
+		if key := self.Whisper.GetIdentity(crypto.ToECDSAPub(common.FromHex(from))); key != nil {
+			options.From = key
+		} else {
+			return fmt.Errorf("unknown identity to send from: %s", from)
+		}
 	}
-
-	i = self.Whisper.Watch(filter)
-
-	return i
+	// Wrap and send the message
+	pow := time.Duration(priority) * time.Millisecond
+	envelope, err := message.Wrap(pow, options)
+	if err != nil {
+		return err
+	}
+	if err := self.Whisper.Send(envelope); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (self *Whisper) Messages(id int) (messages []WhisperMessage) {
-	msgs := self.Whisper.Messages(id)
-	messages = make([]WhisperMessage, len(msgs))
-	for i, message := range msgs {
+// Watch installs a new message handler to run in case a matching packet arrives
+// from the whisper network.
+func (self *Whisper) Watch(to, from string, topics []string, fn func(WhisperMessage)) int {
+	filter := whisper.Filter{
+		To:     crypto.ToECDSAPub(common.FromHex(to)),
+		From:   crypto.ToECDSAPub(common.FromHex(from)),
+		Topics: whisper.NewTopicsFromStrings(topics...),
+	}
+	filter.Fn = func(message *whisper.Message) {
+		fn(NewWhisperMessage(message))
+	}
+	return self.Whisper.Watch(filter)
+}
+
+// Messages retrieves all the currently pooled messages matching a filter id.
+func (self *Whisper) Messages(id int) []WhisperMessage {
+	pool := self.Whisper.Messages(id)
+
+	messages := make([]WhisperMessage, len(pool))
+	for i, message := range pool {
 		messages[i] = NewWhisperMessage(message)
 	}
-
-	return
-}
-
-type Options struct {
-	To     string
-	From   string
-	Topics []string
-	Fn     func(msg WhisperMessage)
-}
-
-type WhisperMessage struct {
-	ref     *whisper.Message
-	Payload string `json:"payload"`
-	To      string `json:"to"`
-	From    string `json:"from"`
-	Sent    int64  `json:"sent"`
-}
-
-func NewWhisperMessage(msg *whisper.Message) WhisperMessage {
-	return WhisperMessage{
-		ref:     msg,
-		Payload: common.ToHex(msg.Payload),
-		From:    common.ToHex(crypto.FromECDSAPub(msg.Recover())),
-		To:      common.ToHex(crypto.FromECDSAPub(msg.To)),
-		Sent:    msg.Sent,
-	}
+	return messages
 }

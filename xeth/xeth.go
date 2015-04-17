@@ -452,14 +452,15 @@ func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []strin
 	return filter.Find()
 }
 
-func (p *XEth) NewWhisperFilter(opts *Options) int {
+func (p *XEth) NewWhisperFilter(to, from string, topics []string) int {
 	var id int
-	opts.Fn = func(msg WhisperMessage) {
+	callback := func(msg WhisperMessage) {
 		p.messagesMut.Lock()
 		defer p.messagesMut.Unlock()
-		p.messages[id].add(msg) // = append(p.messages[id], msg)
+
+		p.messages[id].insert(msg)
 	}
-	id = p.Whisper().Watch(opts)
+	id = p.Whisper().Watch(to, from, topics, callback)
 	p.messages[id] = &whisperFilter{timeout: time.Now()}
 	return id
 }
@@ -478,7 +479,7 @@ func (self *XEth) MessagesChanged(id int) []WhisperMessage {
 	defer self.messagesMut.Unlock()
 
 	if self.messages[id] != nil {
-		return self.messages[id].get()
+		return self.messages[id].retrieve()
 	}
 
 	return nil
@@ -730,22 +731,6 @@ func (m callmsg) GasPrice() *big.Int            { return m.gasPrice }
 func (m callmsg) Gas() *big.Int                 { return m.gas }
 func (m callmsg) Value() *big.Int               { return m.value }
 func (m callmsg) Data() []byte                  { return m.data }
-
-type whisperFilter struct {
-	messages []WhisperMessage
-	timeout  time.Time
-	id       int
-}
-
-func (w *whisperFilter) add(msgs ...WhisperMessage) {
-	w.messages = append(w.messages, msgs...)
-}
-func (w *whisperFilter) get() []WhisperMessage {
-	w.timeout = time.Now()
-	tmp := w.messages
-	w.messages = nil
-	return tmp
-}
 
 type logFilter struct {
 	logs    state.Logs

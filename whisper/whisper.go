@@ -58,6 +58,8 @@ type Whisper struct {
 	quit chan struct{}
 }
 
+// New creates a Whisper client ready to communicate through the Ethereum P2P
+// network.
 func New() *Whisper {
 	whisper := &Whisper{
 		filters:     filter.New(),
@@ -148,7 +150,7 @@ func (self *Whisper) Stop() {
 	glog.V(logger.Info).Infoln("Whisper stopped")
 }
 
-// Messages retrieves the currently pooled messages matching a filter id.
+// Messages retrieves all the currently pooled messages matching a filter id.
 func (self *Whisper) Messages(id int) []*Message {
 	messages := make([]*Message, 0)
 	if filter := self.filters.Get(id); filter != nil {
@@ -162,15 +164,6 @@ func (self *Whisper) Messages(id int) []*Message {
 	}
 	return messages
 }
-
-// func (self *Whisper) RemoveIdentity(key *ecdsa.PublicKey) bool {
-// 	k := string(crypto.FromECDSAPub(key))
-// 	if _, ok := self.keys[k]; ok {
-// 		delete(self.keys, k)
-// 		return true
-// 	}
-// 	return false
-// }
 
 // handlePeer is called by the underlying P2P layer when the whisper sub-protocol
 // connection is negotiated.
