@@ -10,7 +10,6 @@ import (
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/blockpool"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -131,7 +130,6 @@ type Ethereum struct {
 	blockProcessor *core.BlockProcessor
 	txPool         *core.TxPool
 	chainManager   *core.ChainManager
-	blockPool      *blockpool.BlockPool
 	accountManager *accounts.Manager
 	whisper        *whisper.Whisper
 	pow            *ethash.Ethash
@@ -219,17 +217,12 @@ func New(config *Config) (*Ethereum, error) {
 	eth.shhVersionId = int(eth.whisper.Version())
 	eth.miner = miner.New(eth, eth.pow, config.MinerThreads)
 
-	hasBlock := eth.chainManager.HasBlock
-	insertChain := eth.chainManager.InsertChain
-	td := eth.chainManager.Td()
-	eth.blockPool = blockpool.New(hasBlock, insertChain, eth.pow.Verify, eth.EventMux(), td)
-
 	netprv, err := config.nodeKey()
 	if err != nil {
 		return nil, err
 	}
 
-	ethProto := EthProtocol(config.ProtocolVersion, config.NetworkId, eth.txPool, eth.chainManager, eth.blockPool, eth.downloader)
+	ethProto := EthProtocol(config.ProtocolVersion, config.NetworkId, eth.txPool, eth.chainManager, eth.downloader)
 	protocols := []p2p.Protocol{ethProto}
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
@@ -352,7 +345,6 @@ func (s *Ethereum) AccountManager() *accounts.Manager    { return s.accountManag
 func (s *Ethereum) ChainManager() *core.ChainManager     { return s.chainManager }
 func (s *Ethereum) BlockProcessor() *core.BlockProcessor { return s.blockProcessor }
 func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
-func (s *Ethereum) BlockPool() *blockpool.BlockPool      { return s.blockPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
 func (s *Ethereum) BlockDb() common.Database             { return s.blockDb }
@@ -384,7 +376,6 @@ func (s *Ethereum) Start() error {
 
 	// Start services
 	s.txPool.Start()
-	s.blockPool.Start()
 
 	if s.whisper != nil {
 		s.whisper.Start()
@@ -410,7 +401,6 @@ func (s *Ethereum) StartForTest() {
 
 	// Start services
 	s.txPool.Start()
-	s.blockPool.Start()
 }
 
 func (self *Ethereum) SuggestPeer(nodeURL string) error {
@@ -433,7 +423,6 @@ func (s *Ethereum) Stop() {
 
 	s.txPool.Stop()
 	s.eventMux.Stop()
-	s.blockPool.Stop()
 	if s.whisper != nil {
 		s.whisper.Stop()
 	}
