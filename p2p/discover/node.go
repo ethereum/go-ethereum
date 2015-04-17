@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"math/rand"
 	"net"
@@ -16,49 +15,45 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const nodeIDBits = 512
 
 // Node represents a host on the network.
 type Node struct {
-	ID NodeID
-	IP net.IP
-
-	DiscPort int // UDP listening port for discovery protocol
-	TCPPort  int // TCP listening port for RLPx
+	IP       net.IP // len 4 for IPv4 or 16 for IPv6
+	UDP, TCP uint16 // port numbers
+	ID       NodeID
 }
 
 func newNode(id NodeID, addr *net.UDPAddr) *Node {
+	ip := addr.IP.To4()
+	if ip == nil {
+		ip = addr.IP.To16()
+	}
 	return &Node{
-		ID:       id,
-		IP:       addr.IP,
-		DiscPort: addr.Port,
-		TCPPort:  addr.Port,
+		IP:  ip,
+		UDP: uint16(addr.Port),
+		TCP: uint16(addr.Port),
+		ID:  id,
 	}
 }
 
-func (n *Node) isValid() bool {
-	// TODO: don't accept localhost, LAN addresses from internet hosts
-	return !n.IP.IsMulticast() && !n.IP.IsUnspecified() && n.TCPPort != 0 && n.DiscPort != 0
-}
-
 func (n *Node) addr() *net.UDPAddr {
-	return &net.UDPAddr{IP: n.IP, Port: n.DiscPort}
+	return &net.UDPAddr{IP: n.IP, Port: int(n.UDP)}
 }
 
 // The string representation of a Node is a URL.
 // Please see ParseNode for a description of the format.
 func (n *Node) String() string {
-	addr := net.TCPAddr{IP: n.IP, Port: n.TCPPort}
+	addr := net.TCPAddr{IP: n.IP, Port: int(n.TCP)}
 	u := url.URL{
 		Scheme: "enode",
 		User:   url.User(fmt.Sprintf("%x", n.ID[:])),
 		Host:   addr.String(),
 	}
-	if n.DiscPort != n.TCPPort {
-		u.RawQuery = "discport=" + strconv.Itoa(n.DiscPort)
+	if n.UDP != n.TCP {
+		u.RawQuery = "discport=" + strconv.Itoa(int(n.UDP))
 	}
 	return u.String()
 }
@@ -98,16 +93,20 @@ func ParseNode(rawurl string) (*Node, error) {
 	if n.IP = net.ParseIP(ip); n.IP == nil {
 		return nil, errors.New("invalid IP address")
 	}
-	if n.TCPPort, err = strconv.Atoi(port); err != nil {
+	tcp, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
 		return nil, errors.New("invalid port")
 	}
+	n.TCP = uint16(tcp)
 	qv := u.Query()
 	if qv.Get("discport") == "" {
-		n.DiscPort = n.TCPPort
+		n.UDP = n.TCP
 	} else {
-		if n.DiscPort, err = strconv.Atoi(qv.Get("discport")); err != nil {
+		udp, err := strconv.ParseUint(qv.Get("discport"), 10, 16)
+		if err != nil {
 			return nil, errors.New("invalid discport in query")
 		}
+		n.UDP = uint16(udp)
 	}
 	return &n, nil
 }
@@ -119,22 +118,6 @@ func MustParseNode(rawurl string) *Node {
 		panic("invalid node URL: " + err.Error())
 	}
 	return n
-}
-
-func (n Node) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, rpcNode{IP: n.IP.String(), Port: uint16(n.TCPPort), ID: n.ID})
-}
-func (n *Node) DecodeRLP(s *rlp.Stream) (err error) {
-	var ext rpcNode
-	if err = s.Decode(&ext); err == nil {
-		n.TCPPort = int(ext.Port)
-		n.DiscPort = int(ext.Port)
-		n.ID = ext.ID
-		if n.IP = net.ParseIP(ext.IP); n.IP == nil {
-			return errors.New("invalid IP string")
-		}
-	}
-	return err
 }
 
 // NodeID is a unique identifier for each node.

@@ -23,6 +23,15 @@ func init() {
 	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, logpkg.LstdFlags, logger.ErrorLevel))
 }
 
+// shared test variables
+var (
+	futureExp          = uint64(time.Now().Add(10 * time.Hour).Unix())
+	testTarget         = MustHexID("01010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101")
+	testRemote         = rpcEndpoint{IP: net.ParseIP("1.1.1.1").To4(), UDP: 1, TCP: 2}
+	testLocalAnnounced = rpcEndpoint{IP: net.ParseIP("2.2.2.2").To4(), UDP: 3, TCP: 4}
+	testLocal          = rpcEndpoint{IP: net.ParseIP("3.3.3.3").To4(), UDP: 5, TCP: 6}
+)
+
 type udpTest struct {
 	t                   *testing.T
 	pipe                *dgramPipe
@@ -52,8 +61,7 @@ func (test *udpTest) packetIn(wantError error, ptype byte, data packet) error {
 		return test.errorf("packet (%d) encode error: %v", err)
 	}
 	test.sent = append(test.sent, enc)
-	err = data.handle(test.udp, test.remoteaddr, PubkeyID(&test.remotekey.PublicKey), enc[:macSize])
-	if err != wantError {
+	if err = test.udp.handlePacket(test.remoteaddr, enc); err != wantError {
 		return test.errorf("error mismatch: got %q, want %q", err, wantError)
 	}
 	return nil
@@ -90,18 +98,12 @@ func (test *udpTest) errorf(format string, args ...interface{}) error {
 	return err
 }
 
-// shared test variables
-var (
-	futureExp  = uint64(time.Now().Add(10 * time.Hour).Unix())
-	testTarget = MustHexID("01010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101")
-)
-
 func TestUDP_packetErrors(t *testing.T) {
 	test := newUDPTest(t)
 	defer test.table.Close()
 
-	test.packetIn(errExpired, pingPacket, &ping{IP: "foo", Port: 99, Version: Version})
-	test.packetIn(errBadVersion, pingPacket, &ping{IP: "foo", Port: 99, Version: 99, Expiration: futureExp})
+	test.packetIn(errExpired, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: Version})
+	test.packetIn(errBadVersion, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: 99, Expiration: futureExp})
 	test.packetIn(errUnsolicitedReply, pongPacket, &pong{ReplyTok: []byte{}, Expiration: futureExp})
 	test.packetIn(errUnknownNode, findnodePacket, &findnode{Expiration: futureExp})
 	test.packetIn(errUnsolicitedReply, neighborsPacket, &neighbors{Expiration: futureExp})
@@ -147,10 +149,10 @@ func TestUDP_findnode(t *testing.T) {
 	nodes := &nodesByDistance{target: target}
 	for i := 0; i < bucketSize; i++ {
 		nodes.push(&Node{
-			IP:       net.IP{1, 2, 3, byte(i)},
-			DiscPort: i + 2,
-			TCPPort:  i + 2,
-			ID:       randomID(test.table.self.ID, i+2),
+			IP:  net.IP{1, 2, 3, byte(i)},
+			UDP: uint16(i + 2),
+			TCP: uint16(i + 3),
+			ID:  randomID(test.table.self.ID, i+2),
 		}, bucketSize)
 	}
 	test.table.add(nodes.entries)
@@ -158,10 +160,10 @@ func TestUDP_findnode(t *testing.T) {
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
 	test.table.db.updateNode(&Node{
-		ID:       PubkeyID(&test.remotekey.PublicKey),
-		IP:       test.remoteaddr.IP,
-		DiscPort: test.remoteaddr.Port,
-		TCPPort:  99,
+		ID:  PubkeyID(&test.remotekey.PublicKey),
+		IP:  test.remoteaddr.IP,
+		UDP: uint16(test.remoteaddr.Port),
+		TCP: 99,
 	})
 	// check that closest neighbors are returned.
 	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
@@ -204,9 +206,9 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 
 	// send the reply as two packets.
 	list := []*Node{
-		MustParseNode("enode://ba85011c70bcc5c04d8607d3a0ed29aa6179c092cbdda10d5d32684fb33ed01bd94f588ca8f91ac48318087dcb02eaf36773a7a453f0eedd6742af668097b29c@10.0.1.16:30303"),
+		MustParseNode("enode://ba85011c70bcc5c04d8607d3a0ed29aa6179c092cbdda10d5d32684fb33ed01bd94f588ca8f91ac48318087dcb02eaf36773a7a453f0eedd6742af668097b29c@10.0.1.16:30303?discport=30304"),
 		MustParseNode("enode://81fa361d25f157cd421c60dcc28d8dac5ef6a89476633339c5df30287474520caca09627da18543d9079b5b288698b542d56167aa5c09111e55acdbbdf2ef799@10.0.1.16:30303"),
-		MustParseNode("enode://9bffefd833d53fac8e652415f4973bee289e8b1a5c6c4cbe70abf817ce8a64cee11b823b66a987f51aaa9fba0d6a91b3e6bf0d5a5d1042de8e9eeea057b217f8@10.0.1.36:30301"),
+		MustParseNode("enode://9bffefd833d53fac8e652415f4973bee289e8b1a5c6c4cbe70abf817ce8a64cee11b823b66a987f51aaa9fba0d6a91b3e6bf0d5a5d1042de8e9eeea057b217f8@10.0.1.36:30301?discport=17"),
 		MustParseNode("enode://1b5b4aa662d7cb44a7221bfba67302590b643028197a7d5214790f3bac7aaa4a3241be9e83c09cf1f6c69d007c634faae3dc1b1221793e8446c0b3a09de65960@10.0.1.16:30303"),
 	}
 	test.packetIn(nil, neighborsPacket, &neighbors{Expiration: futureExp, Nodes: list[:2]})
@@ -231,7 +233,8 @@ func TestUDP_successfulPing(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		test.packetIn(nil, pingPacket, &ping{IP: "foo", Port: 99, Version: Version, Expiration: futureExp})
+		// The remote side sends a ping packet to initiate the exchange.
+		test.packetIn(nil, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: Version, Expiration: futureExp})
 		close(done)
 	}()
 
@@ -239,12 +242,34 @@ func TestUDP_successfulPing(t *testing.T) {
 	test.waitPacketOut(func(p *pong) {
 		pinghash := test.sent[0][:macSize]
 		if !bytes.Equal(p.ReplyTok, pinghash) {
-			t.Errorf("got ReplyTok %x, want %x", p.ReplyTok, pinghash)
+			t.Errorf("got pong.ReplyTok %x, want %x", p.ReplyTok, pinghash)
+		}
+		wantTo := rpcEndpoint{
+			// The mirrored UDP address is the UDP packet sender
+			IP: test.remoteaddr.IP, UDP: uint16(test.remoteaddr.Port),
+			// The mirrored TCP port is the one from the ping packet
+			TCP: testRemote.TCP,
+		}
+		if !reflect.DeepEqual(p.To, wantTo) {
+			t.Errorf("got pong.To %v, want %v", p.To, wantTo)
 		}
 	})
 
 	// remote is unknown, the table pings back.
-	test.waitPacketOut(func(p *ping) error { return nil })
+	test.waitPacketOut(func(p *ping) error {
+		if !reflect.DeepEqual(p.From, test.udp.ourEndpoint) {
+			t.Errorf("got ping.From %v, want %v", p.From, test.udp.ourEndpoint)
+		}
+		wantTo := rpcEndpoint{
+			// The mirrored UDP address is the UDP packet sender.
+			IP: test.remoteaddr.IP, UDP: uint16(test.remoteaddr.Port),
+			TCP: 0,
+		}
+		if !reflect.DeepEqual(p.To, wantTo) {
+			t.Errorf("got ping.To %v, want %v", p.To, wantTo)
+		}
+		return nil
+	})
 	test.packetIn(nil, pongPacket, &pong{Expiration: futureExp})
 
 	// ping should return shortly after getting the pong packet.
@@ -259,11 +284,11 @@ func TestUDP_successfulPing(t *testing.T) {
 	if !bytes.Equal(rnode.IP, test.remoteaddr.IP) {
 		t.Errorf("node has wrong IP: got %v, want: %v", rnode.IP, test.remoteaddr.IP)
 	}
-	if rnode.DiscPort != test.remoteaddr.Port {
-		t.Errorf("node has wrong Port: got %v, want: %v", rnode.DiscPort, test.remoteaddr.Port)
+	if int(rnode.UDP) != test.remoteaddr.Port {
+		t.Errorf("node has wrong UDP port: got %v, want: %v", rnode.UDP, test.remoteaddr.Port)
 	}
-	if rnode.TCPPort != 99 {
-		t.Errorf("node has wrong Port: got %v, want: %v", rnode.TCPPort, 99)
+	if rnode.TCP != testRemote.TCP {
+		t.Errorf("node has wrong TCP port: got %v, want: %v", rnode.TCP, testRemote.TCP)
 	}
 }
 
@@ -327,7 +352,7 @@ func (c *dgramPipe) Close() error {
 }
 
 func (c *dgramPipe) LocalAddr() net.Addr {
-	return &net.UDPAddr{}
+	return &net.UDPAddr{IP: testLocal.IP, Port: int(testLocal.UDP)}
 }
 
 func (c *dgramPipe) waitPacketOut() []byte {

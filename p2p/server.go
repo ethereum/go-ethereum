@@ -394,7 +394,7 @@ func (srv *Server) dialLoop() {
 }
 
 func (srv *Server) dialNode(dest *discover.Node) {
-	addr := &net.TCPAddr{IP: dest.IP, Port: dest.TCPPort}
+	addr := &net.TCPAddr{IP: dest.IP, Port: int(dest.TCP)}
 	glog.V(logger.Debug).Infof("Dialing %v\n", dest)
 	conn, err := srv.Dialer.Dial("tcp", addr.String())
 	if err != nil {

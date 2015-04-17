@@ -277,8 +277,8 @@ func (s *Ethereum) NodeInfo() *NodeInfo {
 		NodeUrl:    node.String(),
 		NodeID:     node.ID.String(),
 		IP:         node.IP.String(),
-		DiscPort:   node.DiscPort,
-		TCPPort:    node.TCPPort,
+		DiscPort:   int(node.UDP),
+		TCPPort:    int(node.TCP),
 		ListenAddr: s.net.ListenAddr,
 		Td:         s.ChainManager().Td().String(),
 	}

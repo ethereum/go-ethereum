@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -86,9 +87,10 @@ func TestNodeDBInt64(t *testing.T) {
 
 func TestNodeDBFetchStore(t *testing.T) {
 	node := &Node{
-		ID:      MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-		IP:      net.IP([]byte{192, 168, 0, 1}),
-		TCPPort: 30303,
+		ID:  MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+		IP:  net.IP([]byte{192, 168, 0, 1}),
+		UDP: 30303,
+		TCP: 30303,
 	}
 	inst := time.Now()
 
@@ -124,7 +126,7 @@ func TestNodeDBFetchStore(t *testing.T) {
 	}
 	if stored := db.node(node.ID); stored == nil {
 		t.Errorf("node: not found")
-	} else if !bytes.Equal(stored.ID[:], node.ID[:]) || !stored.IP.Equal(node.IP) || stored.TCPPort != node.TCPPort {
+	} else if !reflect.DeepEqual(stored, node) {
 		t.Errorf("node: data mismatch: have %v, want %v", stored, node)
 	}
 }
