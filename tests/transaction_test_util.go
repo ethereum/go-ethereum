@@ -127,15 +127,15 @@ func convertTestTypes(txTest TransactionTest) (sender, to common.Address,
 	txInputData = mustConvertBytes(txTest.Transaction.Data)
 	rlpBytes = mustConvertBytes(txTest.Rlp)
 
-	gasLimit = mustConvertBigInt(txTest.Transaction.GasLimit)
-	gasPrice = mustConvertBigInt(txTest.Transaction.GasPrice)
-	value = mustConvertBigInt(txTest.Transaction.Value)
+	gasLimit = mustConvertBigInt(txTest.Transaction.GasLimit, 16)
+	gasPrice = mustConvertBigInt(txTest.Transaction.GasPrice, 16)
+	value = mustConvertBigInt(txTest.Transaction.Value, 16)
 
 	r = common.Bytes2Big(mustConvertBytes(txTest.Transaction.R))
 	s = common.Bytes2Big(mustConvertBytes(txTest.Transaction.S))
 
-	nonce = mustConvertUint(txTest.Transaction.Nonce)
-	v = mustConvertUint(txTest.Transaction.V)
+	nonce = mustConvertUint(txTest.Transaction.Nonce, 16)
+	v = mustConvertUint(txTest.Transaction.V, 16)
 
 	return sender, to, txInputData, rlpBytes, gasLimit, gasPrice, value, r, s, nonce, v, nil
 }

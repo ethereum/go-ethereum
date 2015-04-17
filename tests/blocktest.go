@@ -211,13 +211,13 @@ func mustConvertHeader(in btHeader) *types.Header {
 		UncleHash:   mustConvertHash(in.UncleHash),
 		ParentHash:  mustConvertHash(in.ParentHash),
 		Extra:       mustConvertBytes(in.ExtraData),
-		GasUsed:     mustConvertBigInt(in.GasUsed),
-		GasLimit:    mustConvertBigInt(in.GasLimit),
-		Difficulty:  mustConvertBigInt(in.Difficulty),
-		Time:        mustConvertUint(in.Timestamp),
+		GasUsed:     mustConvertBigInt(in.GasUsed, 10),
+		GasLimit:    mustConvertBigInt(in.GasLimit, 10),
+		Difficulty:  mustConvertBigInt(in.Difficulty, 10),
+		Time:        mustConvertUint(in.Timestamp, 10),
 	}
 	// XXX cheats? :-)
-	header.SetNonce(common.BytesToHash(mustConvertBytes(in.Nonce)).Big().Uint64())
+	header.SetNonce(mustConvertUint(in.Nonce, 16))
 	return header
 }
 
@@ -238,7 +238,7 @@ func mustConvertBytes(in string) []byte {
 	if in == "0x" {
 		return []byte{}
 	}
-	h := strings.TrimPrefix(unfuckCPPHexInts(in), "0x")
+	h := nibbleFix(strings.TrimPrefix(in, "0x"))
 	out, err := hex.DecodeString(h)
 	if err != nil {
 		panic(fmt.Errorf("invalid hex: %q", h))
@@ -255,7 +255,7 @@ func mustConvertHash(in string) common.Hash {
 }
 
 func mustConvertAddress(in string) common.Address {
-	out, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
+	out, err := hex.DecodeString(nibbleFix(strings.TrimPrefix(in, "0x")))
 	if err != nil {
 		panic(fmt.Errorf("invalid hex: %q", in))
 	}
@@ -270,16 +270,18 @@ func mustConvertBloom(in string) types.Bloom {
 	return types.BytesToBloom(out)
 }
 
-func mustConvertBigInt(in string) *big.Int {
-	out, ok := new(big.Int).SetString(unfuckCPPHexInts(in), 0)
+func mustConvertBigInt(in string, base int) *big.Int {
+	in = prepInt(base, in)
+	out, ok := new(big.Int).SetString(in, base)
 	if !ok {
 		panic(fmt.Errorf("invalid integer: %q", in))
 	}
 	return out
 }
 
-func mustConvertUint(in string) uint64 {
-	out, err := strconv.ParseUint(unfuckCPPHexInts(in), 0, 64)
+func mustConvertUint(in string, base int) uint64 {
+	in = prepInt(base, in)
+	out, err := strconv.ParseUint(in, base, 64)
 	if err != nil {
 		panic(fmt.Errorf("invalid integer: %q", in))
 	}
@@ -316,19 +318,22 @@ func findLine(data []byte, offset int64) (line int) {
 	return
 }
 
-func unfuckCPPHexInts(s string) string {
-	switch {
-	case s == "0x":
-		// no respect for the empty value :(
-		return "0x00"
-	case len(s) == 0:
-		return "0x00"
-	case len(s) == 1:
-		return "0x0" + s[:1]
-	case len(s)%2 != 0:
-		// motherfucking nibbles
-		return "0x0" + s[2:]
-	default:
-		return s
+func prepInt(base int, s string) string {
+	if base == 16 {
+		if strings.HasPrefix(s, "0x") {
+			s = s[2:]
+		}
+		if len(s) == 0 {
+			s = "00"
+		}
+		s = nibbleFix(s)
 	}
+	return s
+}
+
+func nibbleFix(s string) string {
+	if len(s)%2 != 0 {
+		s = "0" + s
+	}
+	return s
 }
