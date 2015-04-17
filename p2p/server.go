@@ -359,9 +359,11 @@ func (srv *Server) dialLoop() {
 					rand.Read(target[:])
 					findresults <- srv.ntab.Lookup(target)
 				}()
-				refresh.Stop()
+			} else {
+				// Make sure we check again if the peer count falls
+				// below MaxPeers.
+				refresh.Reset(refreshPeersInterval)
 			}
-
 		case dest := <-srv.peerConnect:
 			dial(dest)
 		case dests := <-findresults:
@@ -371,7 +373,10 @@ func (srv *Server) dialLoop() {
 			refresh.Reset(refreshPeersInterval)
 		case dest := <-dialed:
 			delete(dialing, dest.ID)
-
+			if len(dialing) == 0 {
+				// Check again immediately after dialing all current candidates.
+				refresh.Reset(0)
+			}
 		case <-srv.quit:
 			// TODO: maybe wait for active dials
 			return
