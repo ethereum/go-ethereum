@@ -24,12 +24,16 @@ func NewTestBackend() *testBackend {
 	self.contracts = make(map[string](map[string]string))
 
 	self.contracts["0x"+HashRegContractAddress] = make(map[string]string)
-	key := storageAddress(1, common.Hex2BytesFixed(codehash, 32))
+	key := storageAddress(storageMapping(storageIdx2Addr(1), common.Hex2BytesFixed(codehash, 32)))
 	self.contracts["0x"+HashRegContractAddress][key] = "0x" + hash
 
 	self.contracts["0x"+URLHintContractAddress] = make(map[string]string)
-	key = storageAddress(1, common.Hex2BytesFixed(hash, 32))
+	mapaddr := storageMapping(storageIdx2Addr(1), common.Hex2BytesFixed(hash, 32))
+
+	key = storageAddress(storageFixedArray(mapaddr, storageIdx2Addr(0)))
 	self.contracts["0x"+URLHintContractAddress][key] = "0x" + common.Bytes2Hex([]byte(url))
+	key = storageAddress(storageFixedArray(mapaddr, storageIdx2Addr(1)))
+	self.contracts["0x"+URLHintContractAddress][key] = "0x00"
 
 	return self
 }
