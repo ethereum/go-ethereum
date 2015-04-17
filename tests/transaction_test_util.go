@@ -90,9 +90,16 @@ func runTest(txTest TransactionTest) (err error) {
 	if expectedV != uint64(tx.V) {
 		return fmt.Errorf("V mismatch: %v %v", expectedV, uint64(tx.V))
 	}
-	if expectedTo != *tx.Recipient {
-		return fmt.Errorf("To mismatch: %v %v", expectedTo, *tx.Recipient)
+	if tx.Recipient == nil {
+		if expectedTo != common.BytesToAddress([]byte{}) { // "empty" or "zero" address
+			return fmt.Errorf("To mismatch when recipient is nil (contract creation): %v", expectedTo)
+		}
+	} else {
+		if expectedTo != *tx.Recipient {
+			return fmt.Errorf("To mismatch: %v %v", expectedTo, *tx.Recipient)
+		}
 	}
+
 	if expectedValue.Cmp(tx.Amount) != 0 {
 		return fmt.Errorf("Value mismatch: %v %v", expectedValue, tx.Amount)
 	}
@@ -120,14 +127,14 @@ func convertTestTypes(txTest TransactionTest) (sender, to common.Address,
 	txInputData = mustConvertBytes(txTest.Transaction.Data)
 	rlpBytes = mustConvertBytes(txTest.Rlp)
 
-	gasLimit = mustConvertBigInt10(txTest.Transaction.GasLimit)
-	gasPrice = mustConvertBigInt10(txTest.Transaction.GasPrice)
-	value = mustConvertBigInt10(txTest.Transaction.Value)
+	gasLimit = mustConvertBigInt(txTest.Transaction.GasLimit)
+	gasPrice = mustConvertBigInt(txTest.Transaction.GasPrice)
+	value = mustConvertBigInt(txTest.Transaction.Value)
 
 	r = common.Bytes2Big(mustConvertBytes(txTest.Transaction.R))
 	s = common.Bytes2Big(mustConvertBytes(txTest.Transaction.S))
 
-	nonce = mustConvertUintHex(txTest.Transaction.Nonce)
+	nonce = mustConvertUint(txTest.Transaction.Nonce)
 	v = mustConvertUint(txTest.Transaction.V)
 
 	return sender, to, txInputData, rlpBytes, gasLimit, gasPrice, value, r, s, nonce, v, nil

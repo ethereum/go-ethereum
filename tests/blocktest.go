@@ -187,9 +187,9 @@ func mustConvertHeader(in btHeader) *types.Header {
 		UncleHash:   mustConvertHash(in.UncleHash),
 		ParentHash:  mustConvertHash(in.ParentHash),
 		Extra:       mustConvertBytes(in.ExtraData),
-		GasUsed:     mustConvertBigInt10(in.GasUsed),
-		GasLimit:    mustConvertBigInt10(in.GasLimit),
-		Difficulty:  mustConvertBigInt10(in.Difficulty),
+		GasUsed:     mustConvertBigInt(in.GasUsed),
+		GasLimit:    mustConvertBigInt(in.GasLimit),
+		Difficulty:  mustConvertBigInt(in.Difficulty),
 		Time:        mustConvertUint(in.Timestamp),
 	}
 	// XXX cheats? :-)
@@ -211,9 +211,13 @@ func mustConvertBlocks(testBlocks []btBlock) []*types.Block {
 }
 
 func mustConvertBytes(in string) []byte {
-	out, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
+	if in == "0x" {
+		return []byte{}
+	}
+	h := strings.TrimPrefix(unfuckCPPHexInts(in), "0x")
+	out, err := hex.DecodeString(h)
 	if err != nil {
-		panic(fmt.Errorf("invalid hex: %q", in))
+		panic(fmt.Errorf("invalid hex: %q", h))
 	}
 	return out
 }
@@ -242,16 +246,8 @@ func mustConvertBloom(in string) types.Bloom {
 	return types.BytesToBloom(out)
 }
 
-func mustConvertBigInt10(in string) *big.Int {
-	out, ok := new(big.Int).SetString(in, 10)
-	if !ok {
-		panic(fmt.Errorf("invalid integer: %q", in))
-	}
-	return out
-}
-
-func mustConvertBigIntHex(in string) *big.Int {
-	out, ok := new(big.Int).SetString(in, 16)
+func mustConvertBigInt(in string) *big.Int {
+	out, ok := new(big.Int).SetString(unfuckCPPHexInts(in), 0)
 	if !ok {
 		panic(fmt.Errorf("invalid integer: %q", in))
 	}
@@ -259,15 +255,7 @@ func mustConvertBigIntHex(in string) *big.Int {
 }
 
 func mustConvertUint(in string) uint64 {
-	out, err := strconv.ParseUint(in, 0, 64)
-	if err != nil {
-		panic(fmt.Errorf("invalid integer: %q", in))
-	}
-	return out
-}
-
-func mustConvertUintHex(in string) uint64 {
-	out, err := strconv.ParseUint(in, 16, 64)
+	out, err := strconv.ParseUint(unfuckCPPHexInts(in), 0, 64)
 	if err != nil {
 		panic(fmt.Errorf("invalid integer: %q", in))
 	}
@@ -302,4 +290,14 @@ func findLine(data []byte, offset int64) (line int) {
 		}
 	}
 	return
+}
+
+func unfuckCPPHexInts(s string) string {
+	if s == "0x" { // no respect for the empty value :(
+		return "0x00"
+	}
+	if (len(s) % 2) != 0 { // motherfucking nibbles
+		return "0x0" + s[2:]
+	}
+	return s
 }
