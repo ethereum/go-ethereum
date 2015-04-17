@@ -215,9 +215,12 @@ func New(config *Config) (*Ethereum, error) {
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State)
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
-	eth.whisper = whisper.New()
-	eth.shhVersionId = int(eth.whisper.Version())
 	eth.miner = miner.New(eth, eth.pow, config.MinerThreads)
+
+	if config.Shh {
+		eth.whisper = whisper.New()
+		eth.shhVersionId = int(eth.whisper.Version())
+	}
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
