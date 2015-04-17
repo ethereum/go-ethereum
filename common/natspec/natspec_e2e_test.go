@@ -38,10 +38,12 @@ const (
 	testBalance = "1000000000000"
 )
 
+const testFileName = "long_file_name_for_testing_registration_of_URLs_longer_than_32_bytes.content"
+
 const testNotice = "Register key `utils.toHex(_key)` <- content `utils.toHex(_content)`"
 const testExpNotice = "Register key 0xadd1a7d961cff0242089674ec2ef6fca671ab15e1fe80e38859fc815b98d88ab <- content 0xc00d5bcc872e17813df6ec5c646bb281a6e2d3b454c2c400c78192adf3344af9"
 const testExpNotice2 = `About to submit transaction (NatSpec notice error "abi key %!x(MISSING) does not match any method %!v(MISSING)"): {"id":6,"jsonrpc":"2.0","method":"eth_transact","params":[{"from":"0xe273f01c99144c438695e10f24926dc1f9fbf62d","to":"0xb737b91f8e95cf756766fc7c62c9a8ff58470381","value":"100000000000","gas":"100000","gasPrice":"100000","data":"0x31e12c20"}]}`
-const testExpNotice3 = `About to submit transaction (no NatSpec info found for contract): {"id":6,"jsonrpc":"2.0","method":"eth_transact","params":[{"from":"0xe273f01c99144c438695e10f24926dc1f9fbf62d","to":"0x8b839ad85686967a4f418eccc81962eaee314ac3","value":"100000000000","gas":"100000","gasPrice":"100000","data":"0xd66d6c10c00d5bcc872e17813df6ec5c646bb281a6e2d3b454c2c400c78192adf3344af900000000000000000000000066696c653a2f2f2f746573742e636f6e74656e74"}]}`
+const testExpNotice3 = `About to submit transaction (no NatSpec info found for contract): {"id":6,"jsonrpc":"2.0","method":"eth_transact","params":[{"from":"0xe273f01c99144c438695e10f24926dc1f9fbf62d","to":"0x8b839ad85686967a4f418eccc81962eaee314ac3","value":"100000000000","gas":"100000","gasPrice":"100000","data":"0x300a3bbfc00d5bcc872e17813df6ec5c646bb281a6e2d3b454c2c400c78192adf3344af900000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"}]}`
 
 const testUserDoc = `
 {
@@ -244,8 +246,24 @@ func (self *testFrontend) applyTxs() {
 
 func (self *testFrontend) registerURL(hash common.Hash, url string) {
 	hashHex := common.Bytes2Hex(hash[:])
-	urlHex := common.Bytes2Hex([]byte(url))
-	self.insertTx(self.coinbase, resolver.URLHintContractAddress, "register(uint256,uint256)", []string{hashHex, urlHex})
+	urlBytes := []byte(url)
+	var bb bool = true
+	var cnt byte
+	for bb {
+		bb = len(urlBytes) > 0
+		urlb := urlBytes
+		if len(urlb) > 32 {
+			urlb = urlb[:32]
+		}
+		urlHex := common.Bytes2Hex(urlb)
+		self.insertTx(self.coinbase, resolver.URLHintContractAddress, "register(uint256,uint8,uint256)", []string{hashHex, common.Bytes2Hex([]byte{cnt}), urlHex})
+		if len(urlBytes) > 32 {
+			urlBytes = urlBytes[32:]
+		} else {
+			urlBytes = nil
+		}
+		cnt++
+	}
 }
 
 func (self *testFrontend) setOwner() {
@@ -280,7 +298,7 @@ func TestNatspecE2E(t *testing.T) {
 	t.Logf("HashReg contract registered at %v", resolver.HashRegContractAddress)
 	tf.applyTxs()
 
-	ioutil.WriteFile("/tmp/test.content", []byte(testDocs), os.ModePerm)
+	ioutil.WriteFile("/tmp/"+testFileName, []byte(testDocs), os.ModePerm)
 	dochash := common.BytesToHash(crypto.Sha3([]byte(testDocs)))
 
 	codehex := tf.xeth.CodeAt(resolver.HashRegContractAddress)
@@ -288,7 +306,7 @@ func TestNatspecE2E(t *testing.T) {
 
 	tf.setOwner()
 	tf.registerNatSpec(codehash, dochash)
-	tf.registerURL(dochash, "file:///test.content")
+	tf.registerURL(dochash, "file:///"+testFileName)
 	tf.applyTxs()
 
 	chash, err := tf.testResolver().KeyToContentHash(codehash)

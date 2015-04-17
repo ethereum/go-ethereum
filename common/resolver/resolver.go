@@ -52,7 +52,7 @@ func New(eth Backend, uhca, nrca string) *Resolver {
 
 func (self *Resolver) KeyToContentHash(khash common.Hash) (chash common.Hash, err error) {
 	// look up in hashReg
-	key := storageAddress(1, khash[:])
+	key := storageAddress(storageMapping(storageIdx2Addr(1), khash[:]))
 	hash := self.backend.StorageAt("0x"+self.hashRegContractAddress, key)
 
 	if hash == "0x0" || len(hash) < 3 {
@@ -66,16 +66,23 @@ func (self *Resolver) KeyToContentHash(khash common.Hash) (chash common.Hash, er
 
 func (self *Resolver) ContentHashToUrl(chash common.Hash) (uri string, err error) {
 	// look up in URL reg
-	key := storageAddress(1, chash[:])
-	hex := self.backend.StorageAt("0x"+self.urlHintContractAddress, key)
-	uri = string(common.Hex2Bytes(hex[2:]))
-	l := len(uri)
-	for (l > 0) && (uri[l-1] == 0) {
-		l--
+	var str string = " "
+	var idx uint32
+	for len(str) > 0 {
+		mapaddr := storageMapping(storageIdx2Addr(1), chash[:])
+		key := storageAddress(storageFixedArray(mapaddr, storageIdx2Addr(idx)))
+		hex := self.backend.StorageAt("0x"+self.urlHintContractAddress, key)
+		str = string(common.Hex2Bytes(hex[2:]))
+		l := len(str)
+		for (l > 0) && (str[l-1] == 0) {
+			l--
+		}
+		str = str[:l]
+		uri = uri + str
+		idx++
 	}
-	uri = uri[:l]
 
-	if l == 0 {
+	if len(uri) == 0 {
 		err = fmt.Errorf("GetURLhint: URL hint not found")
 	}
 	return
@@ -91,10 +98,33 @@ func (self *Resolver) KeyToUrl(key common.Hash) (uri string, hash common.Hash, e
 	return
 }
 
-func storageAddress(varidx uint32, key []byte) string {
+func storageIdx2Addr(varidx uint32) []byte {
+	data := make([]byte, 32)
+	binary.BigEndian.PutUint32(data[28:32], varidx)
+	return data
+}
+
+func storageMapping(addr, key []byte) []byte {
 	data := make([]byte, 64)
-	binary.BigEndian.PutUint32(data[60:64], varidx)
 	copy(data[0:32], key[0:32])
-	//fmt.Printf("%x %v\n", key, common.Bytes2Hex(crypto.Sha3(data)))
-	return "0x" + common.Bytes2Hex(crypto.Sha3(data))
+	copy(data[32:64], addr[0:32])
+	return crypto.Sha3(data)
+}
+
+func storageFixedArray(addr, idx []byte) []byte {
+	var carry byte
+	for i := 31; i >= 0; i-- {
+		var b byte = addr[i] + idx[i] + carry
+		if b < addr[i] {
+			carry = 1
+		} else {
+			carry = 0
+		}
+		addr[i] = b
+	}
+	return addr
+}
+
+func storageAddress(addr []byte) string {
+	return "0x" + common.Bytes2Hex(addr)
 }
