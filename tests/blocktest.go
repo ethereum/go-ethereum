@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -73,8 +74,8 @@ type btBlock struct {
 
 type BlockTest struct {
 	Genesis *types.Block
-	Blocks  []*types.Block
 
+	json        *btJSON
 	preAccounts map[string]btAccount
 }
 
@@ -88,7 +89,7 @@ func LoadBlockTests(file string) (map[string]*BlockTest, error) {
 	for name, in := range bt {
 		var err error
 		if out[name], err = convertTest(in); err != nil {
-			return nil, fmt.Errorf("bad test %q: %v", err)
+			return out, fmt.Errorf("bad test %q: %v", name, err)
 		}
 	}
 	return out, nil
@@ -124,6 +125,15 @@ func (t *BlockTest) InsertPreState(db common.Database) (*state.StateDB, error) {
 	return statedb, nil
 }
 
+// InsertBlocks loads the test's blocks into the given chain.
+func (t *BlockTest) InsertBlocks(chain *core.ChainManager) error {
+	blocks, err := t.convertBlocks()
+	if err != nil {
+		return err
+	}
+	return chain.InsertChain(blocks)
+}
+
 func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 	for addrString, acct := range t.preAccounts {
 		// XXX: is is worth it checking for errors here?
@@ -149,6 +159,21 @@ func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 	return nil
 }
 
+func (t *BlockTest) convertBlocks() (blocks []*types.Block, err error) {
+	// the conversion handles errors by catching panics.
+	// you might consider this ugly, but the alternative (passing errors)
+	// would be much harder to read.
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			buf := make([]byte, 64<<10)
+			buf = buf[:runtime.Stack(buf, false)]
+			err = fmt.Errorf("%v\n%s", recovered, buf)
+		}
+	}()
+	blocks = mustConvertBlocks(t.json.Blocks)
+	return blocks, nil
+}
+
 func convertTest(in *btJSON) (out *BlockTest, err error) {
 	// the conversion handles errors by catching panics.
 	// you might consider this ugly, but the alternative (passing errors)
@@ -160,9 +185,8 @@ func convertTest(in *btJSON) (out *BlockTest, err error) {
 			err = fmt.Errorf("%v\n%s", recovered, buf)
 		}
 	}()
-	out = &BlockTest{preAccounts: in.Pre}
+	out = &BlockTest{preAccounts: in.Pre, json: in}
 	out.Genesis = mustConvertGenesis(in.GenesisBlockHeader)
-	out.Blocks = mustConvertBlocks(in.Blocks)
 	return out, err
 }
 
@@ -203,7 +227,7 @@ func mustConvertBlocks(testBlocks []btBlock) []*types.Block {
 		var b types.Block
 		r := bytes.NewReader(mustConvertBytes(inb.Rlp))
 		if err := rlp.Decode(r, &b); err != nil {
-			panic(fmt.Errorf("invalid block %d: %q", i, inb.Rlp))
+			panic(fmt.Errorf("invalid block %d: %q\nerror: %v", i, inb.Rlp, err))
 		}
 		out = append(out, &b)
 	}
@@ -293,11 +317,18 @@ func findLine(data []byte, offset int64) (line int) {
 }
 
 func unfuckCPPHexInts(s string) string {
-	if s == "0x" { // no respect for the empty value :(
+	switch {
+	case s == "0x":
+		// no respect for the empty value :(
 		return "0x00"
-	}
-	if (len(s) % 2) != 0 { // motherfucking nibbles
+	case len(s) == 0:
+		return "0x00"
+	case len(s) == 1:
+		return "0x0" + s[:1]
+	case len(s)%2 != 0:
+		// motherfucking nibbles
 		return "0x0" + s[2:]
+	default:
+		return s
 	}
-	return s
 }
