@@ -58,9 +58,8 @@ type Decoder interface {
 //     }
 //
 // To decode into a slice, the input must be a list and the resulting
-// slice will contain the input elements in order.
-// As a special case, if the slice has a byte-size element type, the input
-// can also be an RLP string.
+// slice will contain the input elements in order. For byte slices,
+// the input must be an RLP string.
 //
 // To decode into a Go string, the input must be an RLP string. The
 // input bytes are taken as-is and will not necessarily be valid UTF-8.
@@ -309,13 +308,6 @@ func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
 }
 
 func decodeByteSlice(s *Stream, val reflect.Value) error {
-	kind, _, err := s.Kind()
-	if err != nil {
-		return err
-	}
-	if kind == List {
-		return decodeListSlice(s, val, decodeUint)
-	}
 	b, err := s.Bytes()
 	if err != nil {
 		return wrapStreamError(err, val.Type())
@@ -351,7 +343,7 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 			return wrapStreamError(ErrCanonSize, val.Type())
 		}
 	case List:
-		return decodeListArray(s, val, decodeUint)
+		return wrapStreamError(ErrExpectedString, val.Type())
 	}
 	return nil
 }

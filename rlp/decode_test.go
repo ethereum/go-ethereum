@@ -323,56 +323,29 @@ var decodeTests = []decodeTest{
 	// byte slices
 	{input: "01", ptr: new([]byte), value: []byte{1}},
 	{input: "80", ptr: new([]byte), value: []byte{}},
-
 	{input: "8D6162636465666768696A6B6C6D", ptr: new([]byte), value: []byte("abcdefghijklm")},
-	{input: "C0", ptr: new([]byte), value: []byte{}},
-	{input: "C3010203", ptr: new([]byte), value: []byte{1, 2, 3}},
-
-	{
-		input: "8105",
-		ptr:   new([]byte),
-		error: "rlp: non-canonical size information for []uint8",
-	},
-	{
-		input: "C3820102",
-		ptr:   new([]byte),
-		error: "rlp: input string too long for uint8, decoding into ([]uint8)[0]",
-	},
+	{input: "C0", ptr: new([]byte), error: "rlp: expected input string or byte for []uint8"},
+	{input: "8105", ptr: new([]byte), error: "rlp: non-canonical size information for []uint8"},
 
 	// byte arrays
 	{input: "01", ptr: new([5]byte), value: [5]byte{1}},
 	{input: "80", ptr: new([5]byte), value: [5]byte{}},
 	{input: "850102030405", ptr: new([5]byte), value: [5]byte{1, 2, 3, 4, 5}},
-	{input: "C0", ptr: new([5]byte), value: [5]byte{}},
-	{input: "C3010203", ptr: new([5]byte), value: [5]byte{1, 2, 3, 0, 0}},
 
-	{
-		input: "C3820102",
-		ptr:   new([5]byte),
-		error: "rlp: input string too long for uint8, decoding into ([5]uint8)[0]",
-	},
-	{
-		input: "86010203040506",
-		ptr:   new([5]byte),
-		error: "rlp: input string too long for [5]uint8",
-	},
-	{
-		input: "8105",
-		ptr:   new([5]byte),
-		error: "rlp: non-canonical size information for [5]uint8",
-	},
+	// byte array errors
+	{input: "C0", ptr: new([5]byte), error: "rlp: expected input string or byte for [5]uint8"},
+	{input: "C3010203", ptr: new([5]byte), error: "rlp: expected input string or byte for [5]uint8"},
+	{input: "86010203040506", ptr: new([5]byte), error: "rlp: input string too long for [5]uint8"},
+	{input: "8105", ptr: new([5]byte), error: "rlp: non-canonical size information for [5]uint8"},
 
 	// byte array reuse (should be zeroed)
 	{input: "850102030405", ptr: &sharedByteArray, value: [5]byte{1, 2, 3, 4, 5}},
 	{input: "01", ptr: &sharedByteArray, value: [5]byte{1}}, // kind: String
 	{input: "850102030405", ptr: &sharedByteArray, value: [5]byte{1, 2, 3, 4, 5}},
 	{input: "01", ptr: &sharedByteArray, value: [5]byte{1}}, // kind: Byte
-	{input: "C3010203", ptr: &sharedByteArray, value: [5]byte{1, 2, 3, 0, 0}},
-	{input: "C101", ptr: &sharedByteArray, value: [5]byte{1}}, // kind: List
 
 	// zero sized byte arrays
 	{input: "80", ptr: new([0]byte), value: [0]byte{}},
-	{input: "C0", ptr: new([0]byte), value: [0]byte{}},
 	{input: "01", ptr: new([0]byte), error: "rlp: input string too long for [0]uint8"},
 	{input: "8101", ptr: new([0]byte), error: "rlp: input string too long for [0]uint8"},
 
