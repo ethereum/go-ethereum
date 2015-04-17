@@ -52,7 +52,7 @@ func (self *Topic) String() string {
 type topicSet map[string]struct{}
 
 // NewTopicSet creates a topic hash set from a slice of topics.
-func NewTopicSet(topics []Topic) topicSet {
+func newTopicSet(topics []Topic) topicSet {
 	set := make(map[string]struct{})
 	for _, topic := range topics {
 		set[topic.String()] = struct{}{}

@@ -57,7 +57,7 @@ func TestTopicSetCreation(t *testing.T) {
 	for i, tt := range topicCreationTests {
 		topics[i] = NewTopic(tt.data)
 	}
-	set := NewTopicSet(topics)
+	set := newTopicSet(topics)
 	for i, tt := range topicCreationTests {
 		topic := NewTopic(tt.data)
 		if _, ok := set[topic.String()]; !ok {

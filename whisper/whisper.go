@@ -119,7 +119,7 @@ func (self *Whisper) Watch(options Filter) int {
 	filter := filter.Generic{
 		Str1: string(crypto.FromECDSAPub(options.To)),
 		Str2: string(crypto.FromECDSAPub(options.From)),
-		Data: NewTopicSet(options.Topics),
+		Data: newTopicSet(options.Topics),
 		Fn: func(data interface{}) {
 			options.Fn(data.(*Message))
 		},
@@ -281,7 +281,7 @@ func createFilter(message *Message, topics []Topic) filter.Filter {
 	return filter.Generic{
 		Str1: string(crypto.FromECDSAPub(message.To)),
 		Str2: string(crypto.FromECDSAPub(message.Recover())),
-		Data: NewTopicSet(topics),
+		Data: newTopicSet(topics),
 	}
 }
 
