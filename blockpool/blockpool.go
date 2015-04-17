@@ -181,9 +181,10 @@ type BlockPool struct {
 
 	// waitgroup is used in tests to wait for result-critical routines
 	// as well as in determining idle / syncing status
-	wg      sync.WaitGroup //
-	quit    chan bool      // chan used for quitting parallel routines
-	running bool           //
+	wg         sync.WaitGroup //
+	quit       chan bool      // chan used for quitting parallel routines
+	running    bool           //
+	evloopdone chan struct{}
 }
 
 // public constructor
@@ -204,6 +205,7 @@ func New(
 		verifyPoW:   verifyPoW,
 		chainEvents: chainEvents,
 		td:          td,
+		evloopdone:  make(chan struct{}),
 	}
 }
 
@@ -244,6 +246,7 @@ func (self *BlockPool) Start() {
 	// status update interval
 	timer := time.NewTicker(self.Config.StatusUpdateInterval)
 	go func() {
+		defer close(self.evloopdone)
 		for {
 			select {
 			case <-self.quit:
@@ -290,6 +293,7 @@ func (self *BlockPool) Stop() {
 
 	self.tdSub.Unsubscribe()
 	close(self.quit)
+	<-self.evloopdone
 
 	self.lock.Lock()
 	self.peers = nil
