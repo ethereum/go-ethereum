@@ -59,7 +59,9 @@ type Decoder interface {
 //
 // To decode into a slice, the input must be a list and the resulting
 // slice will contain the input elements in order. For byte slices,
-// the input must be an RLP string.
+// the input must be an RLP string. Array types decode similarly, with
+// the additional restriction that the number of input elements (or
+// bytes) must match the array's length.
 //
 // To decode into a Go string, the input must be an RLP string. The
 // input bytes are taken as-is and will not necessarily be valid UTF-8.
@@ -279,19 +281,10 @@ func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
 }
 
 func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
-	size, err := s.List()
+	_, err := s.List()
 	if err != nil {
 		return wrapStreamError(err, val.Type())
 	}
-	if size == 0 {
-		zero(val, 0)
-		return s.ListEnd()
-	}
-
-	// The approach here is stolen from package json, although we differ
-	// in the semantics for arrays. package json discards remaining
-	// elements that would not fit into the array. We generate an error in
-	// this case because we'd be losing information.
 	vlen := val.Len()
 	i := 0
 	for ; i < vlen; i++ {
@@ -302,7 +295,7 @@ func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
 		}
 	}
 	if i < vlen {
-		zero(val, i)
+		return &decodeError{msg: "input list has too few elements", typ: val.Type()}
 	}
 	return wrapStreamError(s.ListEnd(), val.Type())
 }
@@ -321,23 +314,28 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 	if err != nil {
 		return err
 	}
+	vlen := val.Len()
 	switch kind {
 	case Byte:
-		if val.Len() == 0 {
+		if vlen == 0 {
 			return &decodeError{msg: "input string too long", typ: val.Type()}
+		}
+		if vlen > 1 {
+			return &decodeError{msg: "input string too short", typ: val.Type()}
 		}
 		bv, _ := s.Uint()
 		val.Index(0).SetUint(bv)
-		zero(val, 1)
 	case String:
-		if uint64(val.Len()) < size {
+		if uint64(vlen) < size {
 			return &decodeError{msg: "input string too long", typ: val.Type()}
 		}
-		slice := val.Slice(0, int(size)).Interface().([]byte)
+		if uint64(vlen) > size {
+			return &decodeError{msg: "input string too short", typ: val.Type()}
+		}
+		slice := val.Slice(0, vlen).Interface().([]byte)
 		if err := s.readFull(slice); err != nil {
 			return err
 		}
-		zero(val, int(size))
 		// Reject cases where single byte encoding should have been used.
 		if size == 1 && slice[0] < 56 {
 			return wrapStreamError(ErrCanonSize, val.Type())
@@ -346,14 +344,6 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 		return wrapStreamError(ErrExpectedString, val.Type())
 	}
 	return nil
-}
-
-func zero(val reflect.Value, start int) {
-	z := reflect.Zero(val.Type().Elem())
-	end := val.Len()
-	for i := start; i < end; i++ {
-		val.Index(i).Set(z)
-	}
 }
 
 func makeStructDecoder(typ reflect.Type) (decoder, error) {
