@@ -49,13 +49,13 @@ func (self *Topic) String() string {
 }
 
 // TopicSet represents a hash set to check if a topic exists or not.
-type TopicSet map[string]struct{}
+type topicSet map[string]struct{}
 
 // NewTopicSet creates a topic hash set from a slice of topics.
-func NewTopicSet(topics []Topic) TopicSet {
+func NewTopicSet(topics []Topic) topicSet {
 	set := make(map[string]struct{})
 	for _, topic := range topics {
 		set[topic.String()] = struct{}{}
 	}
-	return TopicSet(set)
+	return topicSet(set)
 }
