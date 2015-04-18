@@ -22,7 +22,7 @@ type peers map[string]*peer
 
 func (p peers) reset() {
 	for _, peer := range p {
-		p.reset()
+		peer.reset()
 	}
 }
 
