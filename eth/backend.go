@@ -171,7 +171,10 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	extraDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "extra"))
+	extraDb, err := newdb(path.Join(config.DataDir, "extra"))
+	if err != nil {
+		return nil, err
+	}
 
 	// Perform database sanity checks
 	d, _ := blockDb.Get([]byte("ProtocolVersion"))
@@ -213,8 +216,6 @@ func New(config *Config) (*Ethereum, error) {
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State)
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
-	eth.whisper = whisper.New()
-	eth.shhVersionId = int(eth.whisper.Version())
 	eth.miner = miner.New(eth, eth.pow, config.MinerThreads)
 	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.txPool, eth.chainManager, eth.downloader)
 
@@ -419,6 +420,7 @@ func (s *Ethereum) Stop() {
 	s.txSub.Unsubscribe()         // quits txBroadcastLoop
 	s.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
 
+	s.chainManager.Stop()
 	s.txPool.Stop()
 	s.eventMux.Stop()
 	if s.whisper != nil {

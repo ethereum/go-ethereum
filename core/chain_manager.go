@@ -92,6 +92,7 @@ type ChainManager struct {
 	futureBlocks *BlockCache
 
 	quit chan struct{}
+	wg   sync.WaitGroup
 }
 
 func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *ChainManager {
@@ -104,6 +105,7 @@ func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *Chai
 	bc.futureBlocks = NewBlockCache(254)
 	bc.makeCache()
 
+	bc.wg.Add(1)
 	go bc.update()
 
 	return bc
@@ -428,6 +430,7 @@ func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
 
 func (bc *ChainManager) Stop() {
 	close(bc.quit)
+	bc.wg.Wait()
 }
 
 type queueEvent struct {
@@ -593,6 +596,9 @@ func (self *ChainManager) merge(oldBlock, newBlock *types.Block) {
 func (self *ChainManager) update() {
 	events := self.eventMux.Subscribe(queueEvent{})
 	futureTimer := time.NewTicker(5 * time.Second)
+	defer self.wg.Done()
+	defer futureTimer.Stop()
+
 out:
 	for {
 		select {
