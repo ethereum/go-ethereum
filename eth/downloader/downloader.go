@@ -173,8 +173,6 @@ out:
 		select {
 		case sync := <-d.syncCh:
 			var peer *peer = sync.peer
-			d.activePeer = peer.id
-
 			err := d.getFromPeer(peer, sync.hash, sync.ignoreInitial)
 			if err != nil {
 				break

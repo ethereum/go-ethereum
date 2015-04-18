@@ -50,6 +50,8 @@ func (d *Downloader) Synchronise() (types.Blocks, error) {
 }
 
 func (d *Downloader) getFromPeer(p *peer, hash common.Hash, ignoreInitial bool) error {
+	d.activePeer = p.id
+
 	glog.V(logger.Detail).Infoln("Synchronising with the network using:", p.id)
 	// Start the fetcher. This will block the update entirely
 	// interupts need to be send to the appropriate channels

@@ -265,10 +265,12 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		if self.chainman.HasBlock(hash) {
 			break
 		}
-		if self.chainman.Td().Cmp(request.TD) > 0 {
+		/* XXX unsure about this
+		if self.chainman.Td().Cmp(request.TD) > 0 && new(big.Int).Add(request.Block.Number(), big.NewInt(7)).Cmp(self.chainman.CurrentBlock().Number()) < 0 {
 			glog.V(logger.Debug).Infoln("dropped block", request.Block.Number(), "due to low TD", request.TD)
 			break
 		}
+		*/
 
 		// Attempt to insert the newly received by checking if the parent exists.
 		// if the parent exists we process the block and propagate to our peers
@@ -281,7 +283,15 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 			}
 			self.BroadcastBlock(hash, request.Block)
 		} else {
-			self.downloader.AddBlock(p.id, request.Block, request.TD)
+			// adding blocks is synchronous
+			go func() {
+				err := self.downloader.AddBlock(p.id, request.Block, request.TD)
+				if err != nil {
+					glog.V(logger.Detail).Infoln("downloader err:", err)
+					return
+				}
+				self.BroadcastBlock(hash, request.Block)
+			}()
 		}
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
