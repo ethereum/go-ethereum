@@ -26,12 +26,13 @@ const (
 )
 
 var (
-	errLowTd        = errors.New("peer's TD is too low")
-	errBusy         = errors.New("busy")
-	errUnknownPeer  = errors.New("peer's unknown or unhealthy")
-	errBadPeer      = errors.New("action from bad peer ignored")
-	errTimeout      = errors.New("timeout")
-	errEmptyHashSet = errors.New("empty hash set by peer")
+	errLowTd            = errors.New("peer's TD is too low")
+	errBusy             = errors.New("busy")
+	errUnknownPeer      = errors.New("peer's unknown or unhealthy")
+	errBadPeer          = errors.New("action from bad peer ignored")
+	errTimeout          = errors.New("timeout")
+	errEmptyHashSet     = errors.New("empty hash set by peer")
+	errPeersUnavailable = errors.New("no peers available or all peers tried for block download process")
 )
 
 type hashCheckFn func(common.Hash) bool
@@ -293,6 +294,15 @@ out:
 						d.queue.put(chunk.hashes)
 					}
 				}
+
+				// make sure that we have peers available for fetching. If all peers have been tried
+				// and all failed throw an error
+				if len(availablePeers) > 0 && d.queue.fetchPool.Size() == 0 {
+					d.queue.reset()
+
+					return errPeersUnavailable
+				}
+
 			} else if len(d.queue.fetching) == 0 {
 				// When there are no more queue and no more `fetching`. We can
 				// safely assume we're done. Another part of the process will  check
