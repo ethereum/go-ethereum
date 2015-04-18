@@ -89,6 +89,10 @@ var (
 		Usage: "Blockchain version",
 		Value: core.BlockChainVersion,
 	}
+	IdentityFlag = cli.StringFlag{
+		Name:  "identity",
+		Usage: "node name",
+	}
 
 	// miner settings
 	MinerThreadsFlag = cli.IntFlag{
@@ -241,6 +245,11 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	glog.SetToStderr(true)
 	// Set the log dir
 	glog.SetLogDir(ctx.GlobalString(LogFileFlag.Name))
+
+	customName := ctx.GlobalString(IdentityFlag.Name)
+	if len(customName) > 0 {
+		clientID += "/" + customName
+	}
 
 	return &eth.Config{
 		Name:               common.MakeName(clientID, version),
