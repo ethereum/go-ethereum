@@ -238,10 +238,10 @@ func mustConvertBytes(in string) []byte {
 	if in == "0x" {
 		return []byte{}
 	}
-	h := nibbleFix(strings.TrimPrefix(in, "0x"))
+	h := unfuckFuckedHex(strings.TrimPrefix(in, "0x"))
 	out, err := hex.DecodeString(h)
 	if err != nil {
-		panic(fmt.Errorf("invalid hex: %q", h))
+		panic(fmt.Errorf("invalid hex: %q: ", h, err))
 	}
 	return out
 }
@@ -255,7 +255,7 @@ func mustConvertHash(in string) common.Hash {
 }
 
 func mustConvertAddress(in string) common.Address {
-	out, err := hex.DecodeString(nibbleFix(strings.TrimPrefix(in, "0x")))
+	out, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
 	if err != nil {
 		panic(fmt.Errorf("invalid hex: %q", in))
 	}
@@ -318,6 +318,7 @@ func findLine(data []byte, offset int64) (line int) {
 	return
 }
 
+// Nothing to see here, please move along...
 func prepInt(base int, s string) string {
 	if base == 16 {
 		if strings.HasPrefix(s, "0x") {
@@ -329,6 +330,11 @@ func prepInt(base int, s string) string {
 		s = nibbleFix(s)
 	}
 	return s
+}
+
+// don't ask
+func unfuckFuckedHex(almostHex string) string {
+	return nibbleFix(strings.Replace(almostHex, "v", "", -1))
 }
 
 func nibbleFix(s string) string {
