@@ -257,8 +257,9 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		})
 
 		// Make sure the block isn't already known. If this is the case simply drop
-		// the message and move on.
-		if self.chainman.HasBlock(hash) {
+		// the message and move on. If the TD is < currentTd; drop it as well. If this
+		// chain at some point becomes canonical, the downloader will fetch it.
+		if self.chainman.HasBlock(hash) && self.chainman.Td().Cmp(request.TD) > 0 {
 			break
 		}
 
