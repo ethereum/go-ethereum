@@ -330,14 +330,13 @@ func (self *ChainManager) GetBlockHashesFromHash(hash common.Hash, max uint64) (
 	}
 	// XXX Could be optimised by using a different database which only holds hashes (i.e., linked list)
 	for i := uint64(0); i < max; i++ {
-		parentHash := block.Header().ParentHash
-		block = self.GetBlock(parentHash)
+		block = self.GetBlock(block.ParentHash())
 		if block == nil {
 			break
 		}
 
 		chain = append(chain, block.Hash())
-		if block.Header().Number.Cmp(common.Big0) <= 0 {
+		if block.Number().Cmp(common.Big0) <= 0 {
 			break
 		}
 	}
