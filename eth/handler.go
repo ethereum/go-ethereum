@@ -194,7 +194,10 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		if err := msgStream.Decode(&hashes); err != nil {
 			break
 		}
-		self.downloader.HashCh <- hashes
+		err := self.downloader.AddHashes(p.id, hashes)
+		if err != nil {
+			glog.V(logger.Debug).Infoln(err)
+		}
 
 	case GetBlocksMsg:
 		msgStream := rlp.NewStream(msg.Payload)
@@ -259,7 +262,11 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		// Make sure the block isn't already known. If this is the case simply drop
 		// the message and move on. If the TD is < currentTd; drop it as well. If this
 		// chain at some point becomes canonical, the downloader will fetch it.
-		if self.chainman.HasBlock(hash) && self.chainman.Td().Cmp(request.TD) > 0 {
+		if self.chainman.HasBlock(hash) {
+			break
+		}
+		if self.chainman.Td().Cmp(request.TD) > 0 {
+			glog.V(logger.Debug).Infoln("dropped block", request.Block.Number(), "due to low TD", request.TD)
 			break
 		}
 
