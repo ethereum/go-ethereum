@@ -137,4 +137,5 @@ func (p *peer) demote() {
 
 func (p *peer) reset() {
 	p.state = idleState
+	p.requested.Clear()
 }

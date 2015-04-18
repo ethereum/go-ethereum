@@ -205,13 +205,13 @@ func (d *Downloader) startFetchingHashes(p *peer, hash common.Hash, ignoreInitia
 	// Get the first batch of hashes
 	p.getHashes(hash)
 
-	failureResponse := time.NewTimer(hashTtl)
+	failureResponseTimer := time.NewTimer(hashTtl)
 
 out:
 	for {
 		select {
 		case hashes := <-d.hashCh:
-			failureResponse.Reset(hashTtl)
+			failureResponseTimer.Reset(hashTtl)
 
 			var done bool // determines whether we're done fetching hashes (i.e. common hash found)
 			hashSet := set.New()
@@ -239,7 +239,7 @@ out:
 			} else { // we're done
 				break out
 			}
-		case <-failureResponse.C:
+		case <-failureResponseTimer.C:
 			glog.V(logger.Debug).Infof("Peer (%s) didn't respond in time for hash request\n", p.id)
 			// TODO instead of reseting the queue select a new peer from which we can start downloading hashes.
 			// 1. check for peer's best hash to be included in the current hash set;
@@ -258,6 +258,10 @@ func (d *Downloader) startFetchingBlocks(p *peer) error {
 	glog.V(logger.Detail).Infoln("Downloading", d.queue.hashPool.Size(), "block(s)")
 	atomic.StoreInt32(&d.downloadingBlocks, 1)
 	defer atomic.StoreInt32(&d.downloadingBlocks, 0)
+	// Defer the peer reset. This will empty the peer requested set
+	// and makes sure there are no lingering peers with an incorrect
+	// state
+	defer d.peers.reset()
 
 	start := time.Now()
 
@@ -302,7 +306,6 @@ out:
 				// and all failed throw an error
 				if len(d.queue.fetching) == 0 {
 					d.queue.reset()
-					d.peers.reset()
 
 					return fmt.Errorf("%v avaialable = %d. total = %d", errPeersUnavailable, len(availablePeers), len(d.peers))
 				}
