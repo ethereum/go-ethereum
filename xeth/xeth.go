@@ -781,7 +781,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		if err != nil || len(accounts) == 0 {
 			from = statedb.GetOrNewStateObject(common.Address{})
 		} else {
-			from = statedb.GetOrNewStateObject(common.BytesToAddress(accounts[0].Address))
+			from = statedb.GetOrNewStateObject(accounts[0].Address)
 		}
 	} else {
 		from = statedb.GetOrNewStateObject(common.HexToAddress(fromStr))
