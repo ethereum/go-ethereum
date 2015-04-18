@@ -60,13 +60,18 @@ func (c *queue) get(p *peer, max int) *chunk {
 			return false
 		}
 
-		hashes.Add(v)
-		i++
+		// Skip any hashes that have previously been requested from the peer
+		if !p.requested.Has(v) {
+			hashes.Add(v)
+			i++
+		}
 
 		return true
 	})
-	// remove hashes that have previously been fetched
-	hashes.Separate(p.requested)
+	// if no hashes can be requested return a nil chunk
+	if hashes.Size() == 0 {
+		return nil
+	}
 
 	// remove the fetchable hashes from hash pool
 	c.hashPool.Separate(hashes)

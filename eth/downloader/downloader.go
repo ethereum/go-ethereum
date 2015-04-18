@@ -297,8 +297,9 @@ out:
 
 				// make sure that we have peers available for fetching. If all peers have been tried
 				// and all failed throw an error
-				if len(availablePeers) > 0 && d.queue.fetchPool.Size() == 0 {
+				if len(d.queue.fetching) == 0 {
 					d.queue.reset()
+					d.peers.reset()
 
 					return errPeersUnavailable
 				}
@@ -337,6 +338,7 @@ out:
 					d.queue.deliver(pid, nil)
 					if peer := d.peers[pid]; peer != nil {
 						peer.demote()
+						peer.reset()
 					}
 				}
 

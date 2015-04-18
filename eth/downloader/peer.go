@@ -20,6 +20,12 @@ type blockFetcherFn func([]common.Hash) error
 // XXX make threadsafe!!!!
 type peers map[string]*peer
 
+func (p peers) reset() {
+	for _, peer := range p {
+		p.reset()
+	}
+}
+
 func (p peers) get(state int) []*peer {
 	var peers []*peer
 	for _, peer := range p {
@@ -127,4 +133,8 @@ func (p *peer) demote() {
 	} else {
 		p.rep = 0
 	}
+}
+
+func (p *peer) reset() {
+	p.state = idleState
 }
