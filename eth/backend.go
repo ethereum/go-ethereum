@@ -136,11 +136,11 @@ type Ethereum struct {
 	protocolManager *ProtocolManager
 	downloader      *downloader.Downloader
 
-	net      *p2p.Server
-	eventMux *event.TypeMux
-	txSub    event.Subscription
-	//blockSub event.Subscription
-	miner *miner.Miner
+	net           *p2p.Server
+	eventMux      *event.TypeMux
+	txSub         event.Subscription
+	minedBlockSub event.Subscription
+	miner         *miner.Miner
 
 	// logger logger.LogSystem
 
@@ -387,8 +387,8 @@ func (s *Ethereum) Start() error {
 	go s.txBroadcastLoop()
 
 	// broadcast mined blocks
-	//s.blockSub = s.eventMux.Subscribe(core.ChainHeadEvent{})
-	go s.blockBroadcastLoop()
+	s.minedBlockSub = s.eventMux.Subscribe(core.NewMinedBlockEvent{})
+	go s.minedBroadcastLoop()
 
 	glog.V(logger.Info).Infoln("Server started")
 	return nil
@@ -419,8 +419,8 @@ func (s *Ethereum) Stop() {
 	defer s.stateDb.Close()
 	defer s.extraDb.Close()
 
-	s.txSub.Unsubscribe() // quits txBroadcastLoop
-	//s.blockSub.Unsubscribe() // quits blockBroadcastLoop
+	s.txSub.Unsubscribe()         // quits txBroadcastLoop
+	s.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
 
 	s.txPool.Stop()
 	s.eventMux.Stop()
@@ -462,16 +462,14 @@ func (self *Ethereum) syncAccounts(tx *types.Transaction) {
 	}
 }
 
-func (self *Ethereum) blockBroadcastLoop() {
+func (self *Ethereum) minedBroadcastLoop() {
 	// automatically stops if unsubscribe
-	/*
-		for obj := range self.blockSub.Chan() {
-			switch ev := obj.(type) {
-			case core.ChainHeadEvent:
-				self.net.BroadcastLimited("eth", NewBlockMsg, math.Sqrt, []interface{}{ev.Block, ev.Block.Td})
-			}
+	for obj := range self.minedBlockSub.Chan() {
+		switch ev := obj.(type) {
+		case core.NewMinedBlockEvent:
+			self.protocolManager.BroadcastBlock(ev.Block)
 		}
-	*/
+	}
 }
 
 func saveProtocolVersion(db common.Database, protov int) {
