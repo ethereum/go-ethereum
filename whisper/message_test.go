@@ -13,11 +13,11 @@ func TestMessageSimpleWrap(t *testing.T) {
 	payload := []byte("hello world")
 
 	msg := NewMessage(payload)
-	if _, err := msg.Wrap(DefaultProofOfWork, Options{}); err != nil {
+	if _, err := msg.Wrap(DefaultPoW, Options{}); err != nil {
 		t.Fatalf("failed to wrap message: %v", err)
 	}
-	if msg.Flags&128 != 0 {
-		t.Fatalf("signature flag mismatch: have %d, want %d", (msg.Flags&128)>>7, 0)
+	if msg.Flags&signatureFlag != 0 {
+		t.Fatalf("signature flag mismatch: have %d, want %d", msg.Flags&signatureFlag, 0)
 	}
 	if len(msg.Signature) != 0 {
 		t.Fatalf("signature found for simple wrapping: 0x%x", msg.Signature)
@@ -36,13 +36,13 @@ func TestMessageCleartextSignRecover(t *testing.T) {
 	payload := []byte("hello world")
 
 	msg := NewMessage(payload)
-	if _, err := msg.Wrap(DefaultProofOfWork, Options{
+	if _, err := msg.Wrap(DefaultPoW, Options{
 		From: key,
 	}); err != nil {
 		t.Fatalf("failed to sign message: %v", err)
 	}
-	if msg.Flags&128 != 128 {
-		t.Fatalf("signature flag mismatch: have %d, want %d", (msg.Flags&128)>>7, 1)
+	if msg.Flags&signatureFlag != signatureFlag {
+		t.Fatalf("signature flag mismatch: have %d, want %d", msg.Flags&signatureFlag, signatureFlag)
 	}
 	if bytes.Compare(msg.Payload, payload) != 0 {
 		t.Fatalf("payload mismatch after signing: have 0x%x, want 0x%x", msg.Payload, payload)
@@ -69,14 +69,14 @@ func TestMessageAnonymousEncryptDecrypt(t *testing.T) {
 	payload := []byte("hello world")
 
 	msg := NewMessage(payload)
-	envelope, err := msg.Wrap(DefaultProofOfWork, Options{
+	envelope, err := msg.Wrap(DefaultPoW, Options{
 		To: &key.PublicKey,
 	})
 	if err != nil {
 		t.Fatalf("failed to encrypt message: %v", err)
 	}
-	if msg.Flags&128 != 0 {
-		t.Fatalf("signature flag mismatch: have %d, want %d", (msg.Flags&128)>>7, 0)
+	if msg.Flags&signatureFlag != 0 {
+		t.Fatalf("signature flag mismatch: have %d, want %d", msg.Flags&signatureFlag, 0)
 	}
 	if len(msg.Signature) != 0 {
 		t.Fatalf("signature found for anonymous message: 0x%x", msg.Signature)
@@ -104,15 +104,15 @@ func TestMessageFullCrypto(t *testing.T) {
 
 	payload := []byte("hello world")
 	msg := NewMessage(payload)
-	envelope, err := msg.Wrap(DefaultProofOfWork, Options{
+	envelope, err := msg.Wrap(DefaultPoW, Options{
 		From: fromKey,
 		To:   &toKey.PublicKey,
 	})
 	if err != nil {
 		t.Fatalf("failed to encrypt message: %v", err)
 	}
-	if msg.Flags&128 != 128 {
-		t.Fatalf("signature flag mismatch: have %d, want %d", (msg.Flags&128)>>7, 1)
+	if msg.Flags&signatureFlag != signatureFlag {
+		t.Fatalf("signature flag mismatch: have %d, want %d", msg.Flags&signatureFlag, signatureFlag)
 	}
 	if len(msg.Signature) == 0 {
 		t.Fatalf("no signature found for signed message")

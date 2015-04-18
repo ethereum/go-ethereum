@@ -41,7 +41,7 @@ func (self *Whisper) Post(payload []string, to, from string, topics []string, pr
 			TTL:    time.Duration(ttl) * time.Second,
 			To:     crypto.ToECDSAPub(common.FromHex(to)),
 			From:   key,
-			Topics: whisper.TopicsFromString(topics...),
+			Topics: whisper.NewTopicsFromStrings(topics...),
 		})
 
 		if err != nil {
@@ -106,7 +106,7 @@ func filterFromMap(opts map[string]interface{}) (f whisper.Filter) {
 	if topicList, ok := opts["topics"].(*qml.List); ok {
 		var topics []string
 		topicList.Convert(&topics)
-		f.Topics = whisper.TopicsFromString(topics...)
+		f.Topics = whisper.NewTopicsFromStrings(topics...)
 	}
 
 	return

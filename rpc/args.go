@@ -279,6 +279,8 @@ func (args *CallArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewDecodeParamError(err.Error())
 	}
 
+	args.From = ext.From
+
 	if len(ext.To) == 0 {
 		return NewValidationError("to", "is required")
 	}

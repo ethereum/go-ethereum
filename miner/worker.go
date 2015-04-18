@@ -201,7 +201,7 @@ func (self *worker) wait() {
 				}
 				self.mux.Post(core.NewMinedBlockEvent{block})
 
-				glog.V(logger.Info).Infof("🔨 Mined block #%v", block.Number())
+				glog.V(logger.Info).Infof("🔨  Mined block #%v", block.Number())
 
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     block.Hash().Hex(),

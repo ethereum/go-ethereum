@@ -91,7 +91,7 @@ func makeParamsAndCache(chainManager pow.ChainManager, blockNum uint64) (*Params
 		return nil, err
 	}
 
-	glog.V(logger.Info).Infoln("Making cache")
+	glog.V(logger.Info).Infof("Making cache for epoch: %d (%v) (%x)\n", paramsAndCache.Epoch, blockNum, seedHash)
 	start := time.Now()
 	C.ethash_mkcache(paramsAndCache.cache, paramsAndCache.params, (*C.ethash_blockhash_t)(unsafe.Pointer(&seedHash[0])))
 
@@ -387,7 +387,7 @@ func (pow *Ethash) verify(hash common.Hash, mixDigest common.Hash, difficulty *b
 	if blockNum/epochLength < pow.paramsAndCache.Epoch {
 		var err error
 		// If we can't make the params for some reason, this block is invalid
-		pAc, err = makeParamsAndCache(pow.chainManager, blockNum+1)
+		pAc, err = makeParamsAndCache(pow.chainManager, blockNum)
 		if err != nil {
 			glog.V(logger.Info).Infoln("big fucking eror", err)
 			return false
