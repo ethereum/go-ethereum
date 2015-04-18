@@ -158,7 +158,7 @@ out:
 		select {
 		case event := <-events.Chan():
 			switch ev := event.(type) {
-			case core.ChainHeadEvent:
+			case core.NewMinedBlockEvent:
 				self.commitNewWork()
 			case core.ChainSideEvent:
 				self.uncleMu.Lock()
