@@ -176,6 +176,7 @@ out:
 			var peer *peer = sync.peer
 			err := d.getFromPeer(peer, sync.hash, sync.ignoreInitial)
 			if err != nil {
+				glog.V(logger.Detail).Infoln(err)
 				break
 			}
 
@@ -301,7 +302,7 @@ out:
 					d.queue.reset()
 					d.peers.reset()
 
-					return errPeersUnavailable
+					return fmt.Errorf("%v avaialable = %d. total = %d", errPeersUnavailable, len(availablePeers), len(d.peers))
 				}
 
 			} else if len(d.queue.fetching) == 0 {
@@ -321,7 +322,7 @@ out:
 					if time.Since(chunk.itime) > blockTtl {
 						badPeers = append(badPeers, pid)
 						// remove peer as good peer from peer list
-						d.UnregisterPeer(pid)
+						//d.UnregisterPeer(pid)
 					}
 				}
 				d.queue.mu.Unlock()

@@ -185,7 +185,16 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		if request.Amount > maxHashes {
 			request.Amount = maxHashes
 		}
+
 		hashes := self.chainman.GetBlockHashesFromHash(request.Hash, request.Amount)
+
+		if glog.V(logger.Debug) {
+			if len(hashes) == 0 {
+				glog.Infof("invalid block hash %x", request.Hash.Bytes()[:4])
+			}
+		}
+
+		// returns either requested hashes or nothing (i.e. not found)
 		return p.sendBlockHashes(hashes)
 	case BlockHashesMsg:
 		msgStream := rlp.NewStream(msg.Payload)
@@ -282,6 +291,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 				return nil
 			}
 			self.BroadcastBlock(hash, request.Block)
+			fmt.Println(request.Block.Hash().Hex(), "our calculated TD =", request.Block.Td, "their TD =", request.TD)
 		} else {
 			// adding blocks is synchronous
 			go func() {
@@ -291,6 +301,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 					return
 				}
 				self.BroadcastBlock(hash, request.Block)
+				fmt.Println(request.Block.Hash().Hex(), "our calculated TD =", request.Block.Td, "their TD =", request.TD)
 			}()
 		}
 	default:
