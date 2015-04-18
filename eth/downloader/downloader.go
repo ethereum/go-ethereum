@@ -116,7 +116,7 @@ func (d *Downloader) UnregisterPeer(id string) {
 // checks fail an error will be returned. This method is synchronous
 func (d *Downloader) SynchroniseWithPeer(id string) (types.Blocks, error) {
 	// Check if we're busy
-	if d.isFetchingHashes() || d.isDownloadingBlocks() || d.isProcessing() {
+	if d.isBusy() {
 		return nil, errBusy
 	}
 
@@ -213,7 +213,7 @@ func (d *Downloader) selectPeer(p *peer) {
 	// Make sure it's doing neither. Once done we can restart the
 	// downloading process if the TD is higher. For now just get on
 	// with whatever is going on. This prevents unecessary switching.
-	if !(d.isFetchingHashes() || d.isDownloadingBlocks() || d.isProcessing()) {
+	if !d.isBusy() {
 		// selected peer must be better than our own
 		// XXX we also check the peer's recent hash to make sure we
 		// don't have it. Some peers report (i think) incorrect TD.
@@ -340,10 +340,6 @@ out:
 			// from the available peers.
 			if d.queue.hashPool.Size() > 0 {
 				availablePeers := d.peers.get(idleState)
-				if len(availablePeers) == 0 {
-					glog.V(logger.Detail).Infoln("No peers available out of", len(d.peers))
-				}
-
 				for _, peer := range availablePeers {
 					// Get a possible chunk. If nil is returned no chunk
 					// could be returned due to no hashes available.
@@ -440,7 +436,7 @@ func (d *Downloader) AddBlock(id string, block *types.Block, td *big.Int) {
 	d.queue.addBlock(id, block, td)
 
 	// if neither go ahead to process
-	if !(d.isFetchingHashes() || d.isDownloadingBlocks()) {
+	if !d.isBusy() {
 		// Check if the parent of the received block is known.
 		// If the block is not know, request it otherwise, request.
 		phash := block.ParentHash()
@@ -518,4 +514,8 @@ func (d *Downloader) isDownloadingBlocks() bool {
 
 func (d *Downloader) isProcessing() bool {
 	return atomic.LoadInt32(&d.processingBlocks) == 1
+}
+
+func (d *Downloader) isBusy() bool {
+	return d.isFetchingHashes() || d.isDownloadingBlocks() || d.isProcessing()
 }
