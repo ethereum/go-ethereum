@@ -36,7 +36,6 @@ pm.chainman.InsertChain(blocks)
 
 import (
 	"fmt"
-	"math"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -326,7 +325,8 @@ func (pm *ProtocolManager) BroadcastBlock(hash common.Hash, block *types.Block) 
 		}
 	}
 	// Broadcast block to peer set
-	peers = peers[:int(math.Sqrt(float64(len(peers))))]
+	// XXX due to the current shit state of the network disable the limit
+	//peers = peers[:int(math.Sqrt(float64(len(peers))))]
 	for _, peer := range peers {
 		peer.sendNewBlock(block)
 	}
