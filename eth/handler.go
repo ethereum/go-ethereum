@@ -291,7 +291,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 				return nil
 			}
 			self.BroadcastBlock(hash, request.Block)
-			fmt.Println(request.Block.Hash().Hex(), "our calculated TD =", request.Block.Td, "their TD =", request.TD)
+			//fmt.Println(request.Block.Hash().Hex(), "our calculated TD =", request.Block.Td, "their TD =", request.TD)
 		} else {
 			// adding blocks is synchronous
 			go func() {
@@ -301,7 +301,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 					return
 				}
 				self.BroadcastBlock(hash, request.Block)
-				fmt.Println(request.Block.Hash().Hex(), "our calculated TD =", request.Block.Td, "their TD =", request.TD)
+				//fmt.Println(request.Block.Hash().Hex(), "our calculated TD =", request.Block.Td, "their TD =", request.TD)
 			}()
 		}
 	default:
