@@ -31,6 +31,17 @@ func newqueue() *queue {
 	}
 }
 
+func (c *queue) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.hashPool.Clear()
+	c.fetchPool.Clear()
+	c.blockHashes.Clear()
+	c.blocks = nil
+	c.fetching = make(map[string]*chunk)
+}
+
 // reserve a `max` set of hashes for `p` peer.
 func (c *queue) get(p *peer, max int) *chunk {
 	c.mu.Lock()
@@ -49,11 +60,19 @@ func (c *queue) get(p *peer, max int) *chunk {
 			return false
 		}
 
-		hashes.Add(v)
-		i++
+		// Skip any hashes that have previously been requested from the peer
+		if !p.requested.Has(v) {
+			hashes.Add(v)
+			i++
+		}
 
 		return true
 	})
+	// if no hashes can be requested return a nil chunk
+	if hashes.Size() == 0 {
+		return nil
+	}
+
 	// remove the fetchable hashes from hash pool
 	c.hashPool.Separate(hashes)
 	c.fetchPool.Merge(hashes)

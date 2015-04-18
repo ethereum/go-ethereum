@@ -10,12 +10,12 @@ import (
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/blockpool"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -127,19 +127,20 @@ type Ethereum struct {
 
 	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
-	blockProcessor *core.BlockProcessor
-	txPool         *core.TxPool
-	chainManager   *core.ChainManager
-	blockPool      *blockpool.BlockPool
-	accountManager *accounts.Manager
-	whisper        *whisper.Whisper
-	pow            *ethash.Ethash
+	blockProcessor  *core.BlockProcessor
+	txPool          *core.TxPool
+	chainManager    *core.ChainManager
+	accountManager  *accounts.Manager
+	whisper         *whisper.Whisper
+	pow             *ethash.Ethash
+	protocolManager *ProtocolManager
+	downloader      *downloader.Downloader
 
-	net      *p2p.Server
-	eventMux *event.TypeMux
-	txSub    event.Subscription
-	blockSub event.Subscription
-	miner    *miner.Miner
+	net           *p2p.Server
+	eventMux      *event.TypeMux
+	txSub         event.Subscription
+	minedBlockSub event.Subscription
+	miner         *miner.Miner
 
 	// logger logger.LogSystem
 
@@ -208,6 +209,7 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
+	eth.downloader = downloader.New(eth.chainManager.HasBlock, eth.chainManager.InsertChain, eth.chainManager.Td)
 	eth.pow = ethash.New(eth.chainManager)
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State)
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
@@ -215,19 +217,14 @@ func New(config *Config) (*Ethereum, error) {
 	eth.whisper = whisper.New()
 	eth.shhVersionId = int(eth.whisper.Version())
 	eth.miner = miner.New(eth, eth.pow, config.MinerThreads)
-
-	hasBlock := eth.chainManager.HasBlock
-	insertChain := eth.chainManager.InsertChain
-	td := eth.chainManager.Td()
-	eth.blockPool = blockpool.New(hasBlock, insertChain, eth.pow.Verify, eth.EventMux(), td)
+	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.txPool, eth.chainManager, eth.downloader)
 
 	netprv, err := config.nodeKey()
 	if err != nil {
 		return nil, err
 	}
 
-	ethProto := EthProtocol(config.ProtocolVersion, config.NetworkId, eth.txPool, eth.chainManager, eth.blockPool)
-	protocols := []p2p.Protocol{ethProto}
+	protocols := []p2p.Protocol{eth.protocolManager.SubProtocol}
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
 	}
@@ -349,7 +346,6 @@ func (s *Ethereum) AccountManager() *accounts.Manager    { return s.accountManag
 func (s *Ethereum) ChainManager() *core.ChainManager     { return s.chainManager }
 func (s *Ethereum) BlockProcessor() *core.BlockProcessor { return s.blockProcessor }
 func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
-func (s *Ethereum) BlockPool() *blockpool.BlockPool      { return s.blockPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
 func (s *Ethereum) BlockDb() common.Database             { return s.blockDb }
@@ -363,6 +359,7 @@ func (s *Ethereum) ClientVersion() string                { return s.clientVersio
 func (s *Ethereum) EthVersion() int                      { return s.ethVersionId }
 func (s *Ethereum) NetVersion() int                      { return s.netVersionId }
 func (s *Ethereum) ShhVersion() int                      { return s.shhVersionId }
+func (s *Ethereum) Downloader() *downloader.Downloader   { return s.downloader }
 
 // Start the ethereum
 func (s *Ethereum) Start() error {
@@ -380,7 +377,6 @@ func (s *Ethereum) Start() error {
 
 	// Start services
 	s.txPool.Start()
-	s.blockPool.Start()
 
 	if s.whisper != nil {
 		s.whisper.Start()
@@ -391,8 +387,8 @@ func (s *Ethereum) Start() error {
 	go s.txBroadcastLoop()
 
 	// broadcast mined blocks
-	s.blockSub = s.eventMux.Subscribe(core.ChainHeadEvent{})
-	go s.blockBroadcastLoop()
+	s.minedBlockSub = s.eventMux.Subscribe(core.NewMinedBlockEvent{})
+	go s.minedBroadcastLoop()
 
 	glog.V(logger.Info).Infoln("Server started")
 	return nil
@@ -406,7 +402,6 @@ func (s *Ethereum) StartForTest() {
 
 	// Start services
 	s.txPool.Start()
-	s.blockPool.Start()
 }
 
 func (self *Ethereum) SuggestPeer(nodeURL string) error {
@@ -424,12 +419,11 @@ func (s *Ethereum) Stop() {
 	defer s.stateDb.Close()
 	defer s.extraDb.Close()
 
-	s.txSub.Unsubscribe()    // quits txBroadcastLoop
-	s.blockSub.Unsubscribe() // quits blockBroadcastLoop
+	s.txSub.Unsubscribe()         // quits txBroadcastLoop
+	s.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
 
 	s.txPool.Stop()
 	s.eventMux.Stop()
-	s.blockPool.Stop()
 	if s.whisper != nil {
 		s.whisper.Stop()
 	}
@@ -468,12 +462,12 @@ func (self *Ethereum) syncAccounts(tx *types.Transaction) {
 	}
 }
 
-func (self *Ethereum) blockBroadcastLoop() {
+func (self *Ethereum) minedBroadcastLoop() {
 	// automatically stops if unsubscribe
-	for obj := range self.blockSub.Chan() {
+	for obj := range self.minedBlockSub.Chan() {
 		switch ev := obj.(type) {
-		case core.ChainHeadEvent:
-			self.net.BroadcastLimited("eth", NewBlockMsg, math.Sqrt, []interface{}{ev.Block, ev.Block.Td})
+		case core.NewMinedBlockEvent:
+			self.protocolManager.BroadcastBlock(ev.Block.Hash(), ev.Block)
 		}
 	}
 }

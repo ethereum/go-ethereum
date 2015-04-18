@@ -323,7 +323,7 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 	}
 
 	uncles.Add(block.Hash())
-	for _, uncle := range block.Uncles() {
+	for i, uncle := range block.Uncles() {
 		if uncles.Has(uncle.Hash()) {
 			// Error not unique
 			return UncleError("Uncle not unique")
@@ -340,9 +340,8 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 		}
 
 		if err := sm.ValidateHeader(uncle, ancestorHeaders[uncle.ParentHash]); err != nil {
-			return ValidationError(fmt.Sprintf("%v", err))
+			return ValidationError(fmt.Sprintf("uncle[%d](%x) header invalid: %v", i, uncle.Hash().Bytes()[:4], err))
 		}
-
 	}
 
 	return nil
