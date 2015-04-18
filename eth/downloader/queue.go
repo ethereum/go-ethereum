@@ -31,6 +31,17 @@ func newqueue() *queue {
 	}
 }
 
+func (c *queue) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.hashPool.Clear()
+	c.fetchPool.Clear()
+	c.blockHashes.Clear()
+	c.blocks = nil
+	c.fetching = make(map[string]*chunk)
+}
+
 // reserve a `max` set of hashes for `p` peer.
 func (c *queue) get(p *peer, max int) *chunk {
 	c.mu.Lock()

@@ -95,7 +95,7 @@ func NewProtocolManager(protocolVersion, networkId int, txpool txPool, chainman 
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 			peer := manager.newPeer(protocolVersion, networkId, p, rw)
 			err := manager.handle(peer)
-			glog.V(logger.Detail).Infof("[%s]: %v\n", peer.id, err)
+			//glog.V(logger.Detail).Infof("[%s]: %v\n", peer.id, err)
 
 			return err
 		},
