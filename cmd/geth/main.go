@@ -31,6 +31,8 @@ import (
 	"strconv"
 	"time"
 
+	"path"
+
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -42,13 +44,12 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/peterh/liner"
-	"path"
 )
 import _ "net/http/pprof"
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.9"
+	Version          = "0.9.10"
 )
 
 var app = utils.NewApp(Version, "the go-ethereum command line interface")
