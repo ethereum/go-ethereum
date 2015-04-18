@@ -366,6 +366,12 @@ func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
+	return self.getBlockByNumber(num)
+
+}
+
+// non blocking version
+func (self *ChainManager) getBlockByNumber(num uint64) *types.Block {
 	key, _ := self.blockDb.Get(append(blockNumPre, big.NewInt(int64(num)).Bytes()...))
 	if len(key) == 0 {
 		return nil
@@ -507,7 +513,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 						glog.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, hash[:4], td, cblock.Header().Number, chash[:4], self.td)
 					}
 					// during split we merge two different chains and create the new canonical chain
-					self.merge(cblock, block)
+					self.merge(self.getBlockByNumber(block.NumberU64()), block)
 
 					queue[i] = ChainSplitEvent{block, logs}
 					queueEvent.splitCount++
