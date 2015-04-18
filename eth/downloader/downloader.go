@@ -293,7 +293,6 @@ out:
 						d.queue.put(chunk.hashes)
 					}
 				}
-				atomic.StoreInt32(&d.downloadingBlocks, 1)
 			} else if len(d.queue.fetching) == 0 {
 				// When there are no more queue and no more `fetching`. We can
 				// safely assume we're done. Another part of the process will  check
