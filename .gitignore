@@ -27,3 +27,8 @@ mist
 cmd/mist/mist
 deploy/osx/Mist.app
 deploy/osx/Mist\ Installer.dmg
+
+# used by the Makefile
+/build/_workspace/
+/build/bin/
+
