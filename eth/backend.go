@@ -3,7 +3,6 @@ package eth
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"path"
 	"strings"
@@ -110,7 +109,7 @@ func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
 	if key, err = crypto.GenerateKey(); err != nil {
 		return nil, fmt.Errorf("could not generate server key: %v", err)
 	}
-	if err := ioutil.WriteFile(keyfile, crypto.FromECDSA(key), 0600); err != nil {
+	if err := crypto.SaveECDSA(keyfile, key); err != nil {
 		glog.V(logger.Error).Infoln("could not persist nodekey: ", err)
 	}
 	return key, nil
@@ -223,12 +222,10 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	protocols := []p2p.Protocol{eth.protocolManager.SubProtocol}
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
 	}
-
 	eth.net = &p2p.Server{
 		PrivateKey:     netprv,
 		Name:           config.Name,
