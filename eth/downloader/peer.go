@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"gopkg.in/fatih/set.v0"
 )
 
 const (
@@ -64,13 +65,23 @@ type peer struct {
 	td         *big.Int
 	recentHash common.Hash
 
+	requested *set.Set
+
 	getHashes hashFetcherFn
 	getBlocks blockFetcherFn
 }
 
 // create a new peer
 func newPeer(id string, td *big.Int, hash common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) *peer {
-	return &peer{id: id, td: td, recentHash: hash, getHashes: getHashes, getBlocks: getBlocks, state: idleState}
+	return &peer{
+		id:         id,
+		td:         td,
+		recentHash: hash,
+		getHashes:  getHashes,
+		getBlocks:  getBlocks,
+		state:      idleState,
+		requested:  set.New(),
+	}
 }
 
 // fetch a chunk using the peer
@@ -81,6 +92,8 @@ func (p *peer) fetch(chunk *chunk) error {
 	if p.state == workingState {
 		return errors.New("peer already fetching chunk")
 	}
+
+	p.requested.Merge(chunk.hashes)
 
 	// set working state
 	p.state = workingState

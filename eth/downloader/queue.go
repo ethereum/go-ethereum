@@ -65,6 +65,9 @@ func (c *queue) get(p *peer, max int) *chunk {
 
 		return true
 	})
+	// remove hashes that have previously been fetched
+	hashes.Separate(p.requested)
+
 	// remove the fetchable hashes from hash pool
 	c.hashPool.Separate(hashes)
 	c.fetchPool.Merge(hashes)
