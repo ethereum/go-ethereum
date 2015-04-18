@@ -20,16 +20,16 @@ import (
 type Envelope struct {
 	Expiry uint32 // Whisper protocol specifies int32, really should be int64
 	TTL    uint32 // ^^^^^^
-	Topics [][]byte
+	Topics []Topic
 	Data   []byte
 	Nonce  uint32
 
-	hash common.Hash
+	hash common.Hash // Cached hash of the envelope to avoid rehashing every time
 }
 
 // NewEnvelope wraps a Whisper message with expiration and destination data
 // included into an envelope for network forwarding.
-func NewEnvelope(ttl time.Duration, topics [][]byte, msg *Message) *Envelope {
+func NewEnvelope(ttl time.Duration, topics []Topic, msg *Message) *Envelope {
 	return &Envelope{
 		Expiry: uint32(time.Now().Add(ttl).Unix()),
 		TTL:    uint32(ttl.Seconds()),
@@ -59,16 +59,6 @@ func (self *Envelope) Seal(pow time.Duration) {
 	}
 }
 
-// valid checks whether the claimed proof of work was indeed executed.
-// TODO: Is this really useful? Isn't this always true?
-func (self *Envelope) valid() bool {
-	d := make([]byte, 64)
-	copy(d[:32], self.rlpWithoutNonce())
-	binary.BigEndian.PutUint32(d[60:], self.Nonce)
-
-	return common.FirstBitSet(common.BigD(crypto.Sha3(d))) > 0
-}
-
 // rlpWithoutNonce returns the RLP encoded envelope contents, except the nonce.
 func (self *Envelope) rlpWithoutNonce() []byte {
 	enc, _ := rlp.EncodeToBytes([]interface{}{self.Expiry, self.TTL, self.Topics, self.Data})
@@ -85,20 +75,19 @@ func (self *Envelope) Open(key *ecdsa.PrivateKey) (msg *Message, err error) {
 	}
 	data = data[1:]
 
-	if message.Flags&128 == 128 {
-		if len(data) < 65 {
-			return nil, fmt.Errorf("unable to open envelope. First bit set but len(data) < 65")
+	if message.Flags&signatureFlag == signatureFlag {
+		if len(data) < signatureLength {
+			return nil, fmt.Errorf("unable to open envelope. First bit set but len(data) < len(signature)")
 		}
-		message.Signature, data = data[:65], data[65:]
+		message.Signature, data = data[:signatureLength], data[signatureLength:]
 	}
 	message.Payload = data
 
-	// Short circuit if the encryption was requested
+	// Decrypt the message, if requested
 	if key == nil {
 		return message, nil
 	}
-	// Otherwise try to decrypt the message
-	message.Payload, err = crypto.Decrypt(key, message.Payload)
+	err = message.decrypt(key)
 	switch err {
 	case nil:
 		return message, nil

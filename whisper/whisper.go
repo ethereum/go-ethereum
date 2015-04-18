@@ -2,7 +2,6 @@ package whisper
 
 import (
 	"crypto/ecdsa"
-	"errors"
 	"sync"
 	"time"
 
@@ -17,9 +16,22 @@ import (
 )
 
 const (
-	statusMsg      = 0x0
-	envelopesMsg   = 0x01
-	whisperVersion = 0x02
+	statusCode   = 0x00
+	messagesCode = 0x01
+
+	protocolVersion uint64 = 0x02
+	protocolName           = "shh"
+
+	signatureFlag   = byte(1 << 7)
+	signatureLength = 65
+
+	expirationCycle   = 800 * time.Millisecond
+	transmissionCycle = 300 * time.Millisecond
+)
+
+const (
+	DefaultTTL = 50 * time.Second
+	DefaultPoW = 50 * time.Millisecond
 )
 
 type MessageEvent struct {
@@ -28,47 +40,102 @@ type MessageEvent struct {
 	Message *Message
 }
 
-const (
-	DefaultTimeToLive  = 50 * time.Second
-	DefaultProofOfWork = 50 * time.Millisecond
-)
-
+// Whisper represents a dark communication interface through the Ethereum
+// network, using its very own P2P communication layer.
 type Whisper struct {
 	protocol p2p.Protocol
 	filters  *filter.Filters
 
-	mmu      sync.RWMutex
-	messages map[common.Hash]*Envelope
-	expiry   map[uint32]*set.SetNonTS
+	keys map[string]*ecdsa.PrivateKey
+
+	messages    map[common.Hash]*Envelope // Pool of messages currently tracked by this node
+	expirations map[uint32]*set.SetNonTS  // Message expiration pool (TODO: something lighter)
+	poolMu      sync.RWMutex              // Mutex to sync the message and expiration pools
+
+	peers  map[*peer]struct{} // Set of currently active peers
+	peerMu sync.RWMutex       // Mutex to sync the active peer set
 
 	quit chan struct{}
-
-	keys map[string]*ecdsa.PrivateKey
 }
 
 func New() *Whisper {
 	whisper := &Whisper{
-		messages: make(map[common.Hash]*Envelope),
-		filters:  filter.New(),
-		expiry:   make(map[uint32]*set.SetNonTS),
-		quit:     make(chan struct{}),
-		keys:     make(map[string]*ecdsa.PrivateKey),
+		filters:     filter.New(),
+		keys:        make(map[string]*ecdsa.PrivateKey),
+		messages:    make(map[common.Hash]*Envelope),
+		expirations: make(map[uint32]*set.SetNonTS),
+		peers:       make(map[*peer]struct{}),
+		quit:        make(chan struct{}),
 	}
 	whisper.filters.Start()
 
 	// p2p whisper sub protocol handler
 	whisper.protocol = p2p.Protocol{
-		Name:    "shh",
-		Version: uint(whisperVersion),
+		Name:    protocolName,
+		Version: uint(protocolVersion),
 		Length:  2,
-		Run:     whisper.msgHandler,
+		Run:     whisper.handlePeer,
 	}
 
 	return whisper
 }
 
+// Protocol returns the whisper sub-protocol handler for this particular client.
+func (self *Whisper) Protocol() p2p.Protocol {
+	return self.protocol
+}
+
+// Version returns the whisper sub-protocols version number.
 func (self *Whisper) Version() uint {
 	return self.protocol.Version
+}
+
+// NewIdentity generates a new cryptographic identity for the client, and injects
+// it into the known identities for message decryption.
+func (self *Whisper) NewIdentity() *ecdsa.PrivateKey {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		panic(err)
+	}
+	self.keys[string(crypto.FromECDSAPub(&key.PublicKey))] = key
+
+	return key
+}
+
+// HasIdentity checks if the the whisper node is configured with the private key
+// of the specified public pair.
+func (self *Whisper) HasIdentity(key *ecdsa.PublicKey) bool {
+	return self.keys[string(crypto.FromECDSAPub(key))] != nil
+}
+
+// GetIdentity retrieves the private key of the specified public identity.
+func (self *Whisper) GetIdentity(key *ecdsa.PublicKey) *ecdsa.PrivateKey {
+	return self.keys[string(crypto.FromECDSAPub(key))]
+}
+
+// Watch installs a new message handler to run in case a matching packet arrives
+// from the whisper network.
+func (self *Whisper) Watch(options Filter) int {
+	filter := filter.Generic{
+		Str1: string(crypto.FromECDSAPub(options.To)),
+		Str2: string(crypto.FromECDSAPub(options.From)),
+		Data: newTopicSet(options.Topics),
+		Fn: func(data interface{}) {
+			options.Fn(data.(*Message))
+		},
+	}
+	return self.filters.Install(filter)
+}
+
+// Unwatch removes an installed message handler.
+func (self *Whisper) Unwatch(id int) {
+	self.filters.Uninstall(id)
+}
+
+// Send injects a message into the whisper send queue, to be distributed in the
+// network in the coming cycles.
+func (self *Whisper) Send(envelope *Envelope) error {
+	return self.add(envelope)
 }
 
 func (self *Whisper) Start() {
@@ -78,29 +145,22 @@ func (self *Whisper) Start() {
 
 func (self *Whisper) Stop() {
 	close(self.quit)
+	glog.V(logger.Info).Infoln("Whisper stopped")
 }
 
-func (self *Whisper) Send(envelope *Envelope) error {
-	return self.add(envelope)
-}
-
-func (self *Whisper) NewIdentity() *ecdsa.PrivateKey {
-	key, err := crypto.GenerateKey()
-	if err != nil {
-		panic(err)
+// Messages retrieves the currently pooled messages matching a filter id.
+func (self *Whisper) Messages(id int) []*Message {
+	messages := make([]*Message, 0)
+	if filter := self.filters.Get(id); filter != nil {
+		for _, envelope := range self.messages {
+			if message := self.open(envelope); message != nil {
+				if self.filters.Match(filter, createFilter(message, envelope.Topics)) {
+					messages = append(messages, message)
+				}
+			}
+		}
 	}
-
-	self.keys[string(crypto.FromECDSAPub(&key.PublicKey))] = key
-
-	return key
-}
-
-func (self *Whisper) HasIdentity(key *ecdsa.PublicKey) bool {
-	return self.keys[string(crypto.FromECDSAPub(key))] != nil
-}
-
-func (self *Whisper) GetIdentity(key *ecdsa.PublicKey) *ecdsa.PrivateKey {
-	return self.keys[string(crypto.FromECDSAPub(key))]
+	return messages
 }
 
 // func (self *Whisper) RemoveIdentity(key *ecdsa.PublicKey) bool {
@@ -112,166 +172,166 @@ func (self *Whisper) GetIdentity(key *ecdsa.PublicKey) *ecdsa.PrivateKey {
 // 	return false
 // }
 
-func (self *Whisper) Watch(opts Filter) int {
-	return self.filters.Install(filter.Generic{
-		Str1: string(crypto.FromECDSAPub(opts.To)),
-		Str2: string(crypto.FromECDSAPub(opts.From)),
-		Data: bytesToMap(opts.Topics),
-		Fn: func(data interface{}) {
-			opts.Fn(data.(*Message))
-		},
-	})
-}
-
-func (self *Whisper) Unwatch(id int) {
-	self.filters.Uninstall(id)
-}
-
-func (self *Whisper) Messages(id int) (messages []*Message) {
-	filter := self.filters.Get(id)
-	if filter != nil {
-		for _, e := range self.messages {
-			if msg, key := self.open(e); msg != nil {
-				f := createFilter(msg, e.Topics, key)
-				if self.filters.Match(filter, f) {
-					messages = append(messages, msg)
-				}
-			}
-		}
-	}
-
-	return
-}
-
-// Main handler for passing whisper messages to whisper peer objects
-func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
-	wpeer := NewPeer(self, peer, ws)
-	// initialise whisper peer (handshake/status)
-	if err := wpeer.init(); err != nil {
+// handlePeer is called by the underlying P2P layer when the whisper sub-protocol
+// connection is negotiated.
+func (self *Whisper) handlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+	// Create, initialize and start the whisper peer
+	whisperPeer, err := newPeer(self, peer, rw)
+	if err != nil {
 		return err
 	}
-	// kick of the main handler for broadcasting/managing envelopes
-	go wpeer.start()
-	defer wpeer.stop()
+	whisperPeer.start()
+	defer whisperPeer.stop()
 
-	// Main *read* loop. Writing is done by the peer it self.
+	// Start tracking the active peer
+	self.peerMu.Lock()
+	self.peers[whisperPeer] = struct{}{}
+	self.peerMu.Unlock()
+
+	defer func() {
+		self.peerMu.Lock()
+		delete(self.peers, whisperPeer)
+		self.peerMu.Unlock()
+	}()
+	// Read and process inbound messages directly to merge into client-global state
 	for {
-		msg, err := ws.ReadMsg()
+		// Fetch the next packet and decode the contained envelopes
+		packet, err := rw.ReadMsg()
 		if err != nil {
 			return err
 		}
-
 		var envelopes []*Envelope
-		if err := msg.Decode(&envelopes); err != nil {
-			peer.Infoln(err)
+		if err := packet.Decode(&envelopes); err != nil {
+			peer.Infof("failed to decode enveloped: %v", err)
 			continue
 		}
-
+		// Inject all envelopes into the internal pool
 		for _, envelope := range envelopes {
 			if err := self.add(envelope); err != nil {
 				// TODO Punish peer here. Invalid envelope.
-				peer.Debugln(err)
+				peer.Debugf("failed to pool envelope: %f", err)
 			}
-			wpeer.addKnown(envelope)
+			whisperPeer.mark(envelope)
 		}
 	}
 }
 
-// takes care of adding envelopes to the messages pool. At this moment no sanity checks are being performed.
+// add inserts a new envelope into the message pool to be distributed within the
+// whisper network. It also inserts the envelope into the expiration pool at the
+// appropriate time-stamp.
 func (self *Whisper) add(envelope *Envelope) error {
-	if !envelope.valid() {
-		return errors.New("invalid pow provided for envelope")
-	}
+	self.poolMu.Lock()
+	defer self.poolMu.Unlock()
 
-	self.mmu.Lock()
-	defer self.mmu.Unlock()
-
+	// Insert the message into the tracked pool
 	hash := envelope.Hash()
-	self.messages[hash] = envelope
-	if self.expiry[envelope.Expiry] == nil {
-		self.expiry[envelope.Expiry] = set.NewNonTS()
+	if _, ok := self.messages[hash]; ok {
+		glog.V(logger.Detail).Infof("whisper envelope already cached: %x\n", envelope)
+		return nil
 	}
+	self.messages[hash] = envelope
 
-	if !self.expiry[envelope.Expiry].Has(hash) {
-		self.expiry[envelope.Expiry].Add(hash)
+	// Insert the message into the expiration pool for later removal
+	if self.expirations[envelope.Expiry] == nil {
+		self.expirations[envelope.Expiry] = set.NewNonTS()
+	}
+	if !self.expirations[envelope.Expiry].Has(hash) {
+		self.expirations[envelope.Expiry].Add(hash)
+
+		// Notify the local node of a message arrival
 		go self.postEvent(envelope)
 	}
-
-	glog.V(logger.Detail).Infof("added whisper envelope %x\n", envelope)
+	glog.V(logger.Detail).Infof("cached whisper envelope %x\n", envelope)
 
 	return nil
 }
 
+// postEvent opens an envelope with the configured identities and delivers the
+// message upstream from application processing.
+func (self *Whisper) postEvent(envelope *Envelope) {
+	if message := self.open(envelope); message != nil {
+		self.filters.Notify(createFilter(message, envelope.Topics), message)
+	}
+}
+
+// open tries to decrypt a whisper envelope with all the configured identities,
+// returning the decrypted message and the key used to achieve it. If not keys
+// are configured, open will return the payload as if non encrypted.
+func (self *Whisper) open(envelope *Envelope) *Message {
+	// Short circuit if no identity is set, and assume clear-text
+	if len(self.keys) == 0 {
+		if message, err := envelope.Open(nil); err == nil {
+			return message
+		}
+	}
+	// Iterate over the keys and try to decrypt the message
+	for _, key := range self.keys {
+		message, err := envelope.Open(key)
+		if err == nil || err == ecies.ErrInvalidPublicKey {
+			message.To = &key.PublicKey
+			return message
+		}
+	}
+	// Failed to decrypt, don't return anything
+	return nil
+}
+
+// createFilter creates a message filter to check against installed handlers.
+func createFilter(message *Message, topics []Topic) filter.Filter {
+	return filter.Generic{
+		Str1: string(crypto.FromECDSAPub(message.To)),
+		Str2: string(crypto.FromECDSAPub(message.Recover())),
+		Data: newTopicSet(topics),
+	}
+}
+
+// update loops until the lifetime of the whisper node, updating its internal
+// state by expiring stale messages from the pool.
 func (self *Whisper) update() {
-	expire := time.NewTicker(800 * time.Millisecond)
-out:
+	// Start a ticker to check for expirations
+	expire := time.NewTicker(expirationCycle)
+
+	// Repeat updates until termination is requested
 	for {
 		select {
 		case <-expire.C:
 			self.expire()
+
 		case <-self.quit:
-			break out
+			return
 		}
 	}
 }
 
+// expire iterates over all the expiration timestamps, removing all stale
+// messages from the pools.
 func (self *Whisper) expire() {
-	self.mmu.Lock()
-	defer self.mmu.Unlock()
+	self.poolMu.Lock()
+	defer self.poolMu.Unlock()
 
 	now := uint32(time.Now().Unix())
-	for then, hashSet := range self.expiry {
+	for then, hashSet := range self.expirations {
+		// Short circuit if a future time
 		if then > now {
 			continue
 		}
-
+		// Dump all expired messages and remove timestamp
 		hashSet.Each(func(v interface{}) bool {
 			delete(self.messages, v.(common.Hash))
 			return true
 		})
-		self.expiry[then].Clear()
+		self.expirations[then].Clear()
 	}
 }
 
-func (self *Whisper) envelopes() (envelopes []*Envelope) {
-	self.mmu.RLock()
-	defer self.mmu.RUnlock()
+// envelopes retrieves all the messages currently pooled by the node.
+func (self *Whisper) envelopes() []*Envelope {
+	self.poolMu.RLock()
+	defer self.poolMu.RUnlock()
 
-	envelopes = make([]*Envelope, len(self.messages))
-	i := 0
+	envelopes := make([]*Envelope, 0, len(self.messages))
 	for _, envelope := range self.messages {
-		envelopes[i] = envelope
-		i++
+		envelopes = append(envelopes, envelope)
 	}
-
-	return
-}
-
-func (self *Whisper) postEvent(envelope *Envelope) {
-	if message, key := self.open(envelope); message != nil {
-		self.filters.Notify(createFilter(message, envelope.Topics, key), message)
-	}
-}
-
-func (self *Whisper) open(envelope *Envelope) (*Message, *ecdsa.PrivateKey) {
-	for _, key := range self.keys {
-		if message, err := envelope.Open(key); err == nil || (err != nil && err == ecies.ErrInvalidPublicKey) {
-			message.To = &key.PublicKey
-
-			return message, key
-		}
-	}
-
-	return nil, nil
-}
-
-func (self *Whisper) Protocol() p2p.Protocol {
-	return self.protocol
-}
-
-func createFilter(message *Message, topics [][]byte, key *ecdsa.PrivateKey) filter.Filter {
-	return filter.Generic{
-		Str1: string(crypto.FromECDSAPub(&key.PublicKey)), Str2: string(crypto.FromECDSAPub(message.Recover())),
-		Data: bytesToMap(topics),
-	}
+	return envelopes
 }
