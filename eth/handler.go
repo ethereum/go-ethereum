@@ -256,6 +256,12 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 			RemoteId:      p.ID().String(),
 		})
 
+		// Make sure the block isn't already known. If this is the case simply drop
+		// the message and move on.
+		if self.chainman.HasBlock(hash) {
+			break
+		}
+
 		// Attempt to insert the newly received by checking if the parent exists.
 		// if the parent exists we process the block and propagate to our peers
 		// if the parent does not exists we delegate to the downloader.
