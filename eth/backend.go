@@ -467,7 +467,7 @@ func (self *Ethereum) minedBroadcastLoop() {
 	for obj := range self.minedBlockSub.Chan() {
 		switch ev := obj.(type) {
 		case core.NewMinedBlockEvent:
-			self.protocolManager.BroadcastBlock(ev.Block)
+			self.protocolManager.BroadcastBlock(ev.Block.Hash(), ev.Block)
 		}
 	}
 }
