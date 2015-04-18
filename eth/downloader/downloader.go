@@ -211,6 +211,8 @@ out:
 	for {
 		select {
 		case hashes := <-d.hashCh:
+			failureResponse.Reset(hashTtl)
+
 			var done bool // determines whether we're done fetching hashes (i.e. common hash found)
 			hashSet := set.New()
 			for _, hash := range hashes {
