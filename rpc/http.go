@@ -45,7 +45,7 @@ func Start(pipe *xeth.XEth, config RpcConfig) error {
 		c := cors.New(opts)
 		handler = NewStoppableHandler(c.Handler(JSONRPC(pipe)), l.stop)
 	} else {
-		handler = JSONRPC(pipe)
+		handler = NewStoppableHandler(JSONRPC(pipe), l.stop)
 	}
 
 	go http.Serve(l, handler)

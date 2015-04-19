@@ -275,20 +275,21 @@ func (self ListenerStoppedError) Error() string {
 
 var listenerStoppedError = ListenerStoppedError{"Listener stopped"}
 
+// When https://github.com/golang/go/issues/4674 is fixed this could be replaced
 type StoppableTCPListener struct {
 	*net.TCPListener
-	stop *chan struct{} // closed when the listener must stop
+	stop chan struct{} // closed when the listener must stop
 }
 
 // Wraps the default handler and checks if the RPC service was stopped. In that case it returns an
 // error indicating that the service was stopped. This will only happen for connections which are
 // kept open (HTTP keep-alive) when the RPC service was shutdown.
-func NewStoppableHandler(h http.Handler, stop *chan struct{}) http.Handler {
+func NewStoppableHandler(h http.Handler, stop chan struct{}) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
-		case <-*stop:
+		case <-stop:
 			w.Header().Set("Content-Type", "application/json")
-			jsonerr := &RpcErrorObject{-32603, "RPC service stopt"}
+			jsonerr := &RpcErrorObject{-32603, "RPC service stopped"}
 			send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
 		default:
 			h.ServeHTTP(w, r)
@@ -298,7 +299,7 @@ func NewStoppableHandler(h http.Handler, stop *chan struct{}) http.Handler {
 
 // Stop the listener and all accepted and still active connections.
 func (self *StoppableTCPListener) Stop() {
-	close(*self.stop)
+	close(self.stop)
 }
 
 func NewStoppableTCPListener(addr string) (*StoppableTCPListener, error) {
@@ -309,7 +310,7 @@ func NewStoppableTCPListener(addr string) (*StoppableTCPListener, error) {
 
 	if tcpl, ok := wl.(*net.TCPListener); ok {
 		stop := make(chan struct{})
-		l := &StoppableTCPListener{tcpl, &stop}
+		l := &StoppableTCPListener{tcpl, stop}
 		return l, nil
 	}
 
@@ -322,8 +323,10 @@ func (self *StoppableTCPListener) Accept() (net.Conn, error) {
 		c, err := self.TCPListener.AcceptTCP()
 
 		select {
-		case <-*self.stop:
-			c.Close()
+		case <-self.stop:
+			if c != nil { // accept timeout
+				c.Close()
+			}
 			self.TCPListener.Close()
 			return nil, listenerStoppedError
 		default:
@@ -341,12 +344,12 @@ func (self *StoppableTCPListener) Accept() (net.Conn, error) {
 
 type ClosableConnection struct {
 	*net.TCPConn
-	closed *chan struct{}
+	closed chan struct{}
 }
 
 func (self *ClosableConnection) Read(b []byte) (n int, err error) {
 	select {
-	case <-*self.closed:
+	case <-self.closed:
 		self.TCPConn.Close()
 		return 0, io.EOF
 	default:
