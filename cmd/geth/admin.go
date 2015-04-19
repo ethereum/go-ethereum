@@ -34,6 +34,7 @@ func (js *jsre) adminBindings() {
 	admin.Set("export", js.exportChain)
 	admin.Set("verbosity", js.verbosity)
 	admin.Set("backtrace", js.backtrace)
+	admin.Set("progress", js.downloadProgress)
 
 	admin.Set("miner", struct{}{})
 	t, _ = admin.Get("miner")
@@ -49,6 +50,12 @@ func (js *jsre) adminBindings() {
 	debug.Set("printBlock", js.printBlock)
 	debug.Set("dumpBlock", js.dumpBlock)
 	debug.Set("getBlockRlp", js.getBlockRlp)
+}
+
+func (js *jsre) downloadProgress(call otto.FunctionCall) otto.Value {
+	current, max := js.ethereum.Downloader().Stats()
+
+	return js.re.ToVal(fmt.Sprintf("%d/%d", current, max))
 }
 
 func (js *jsre) getBlockRlp(call otto.FunctionCall) otto.Value {

@@ -41,6 +41,17 @@ type chainInsertFn func(types.Blocks) error
 type hashIterFn func() (common.Hash, error)
 type currentTdFn func() *big.Int
 
+type blockPack struct {
+	peerId string
+	blocks []*types.Block
+}
+
+type syncPack struct {
+	peer          *peer
+	hash          common.Hash
+	ignoreInitial bool
+}
+
 type Downloader struct {
 	mu         sync.RWMutex
 	queue      *queue
@@ -65,17 +76,6 @@ type Downloader struct {
 	quit      chan struct{}
 }
 
-type blockPack struct {
-	peerId string
-	blocks []*types.Block
-}
-
-type syncPack struct {
-	peer          *peer
-	hash          common.Hash
-	ignoreInitial bool
-}
-
 func New(hasBlock hashCheckFn, insertChain chainInsertFn, currentTd currentTdFn) *Downloader {
 	downloader := &Downloader{
 		queue:       newqueue(),
@@ -93,6 +93,10 @@ func New(hasBlock hashCheckFn, insertChain chainInsertFn, currentTd currentTdFn)
 	go downloader.update()
 
 	return downloader
+}
+
+func (d *Downloader) Stats() (current int, max int) {
+	return d.queue.blockHashes.Size(), d.queue.fetchPool.Size() + d.queue.hashPool.Size()
 }
 
 func (d *Downloader) RegisterPeer(id string, td *big.Int, hash common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) error {
