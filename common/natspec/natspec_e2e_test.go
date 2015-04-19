@@ -10,11 +10,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/docserver"
-	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/common/resolver"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
-	//"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -100,7 +98,7 @@ func (f *testFrontend) ConfirmTransaction(tx string) bool {
 		if err != nil {
 			f.t.Errorf("Error creating DocServer: %v", err)
 		}
-		f.lastConfirm = natspec.GetNotice(f.xeth, tx, ds)
+		f.lastConfirm = GetNotice(f.xeth, tx, ds)
 	}
 	return true
 }
