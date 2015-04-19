@@ -57,7 +57,7 @@ func (self *peerError) Error() string {
 	return self.message
 }
 
-type DiscReason byte
+type DiscReason uint
 
 const (
 	DiscRequested DiscReason = iota

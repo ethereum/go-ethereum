@@ -154,7 +154,7 @@ func ImportChain(chainmgr *core.ChainManager, fn string) error {
 	defer fh.Close()
 
 	chainmgr.Reset()
-	stream := rlp.NewStream(fh)
+	stream := rlp.NewStream(fh, 0)
 	var i, n int
 
 	batchSize := 2500

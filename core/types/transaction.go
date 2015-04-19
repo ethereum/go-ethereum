@@ -22,7 +22,7 @@ type Transaction struct {
 	AccountNonce uint64
 	Price        *big.Int
 	GasLimit     *big.Int
-	Recipient    *common.Address // nil means contract creation
+	Recipient    *common.Address `rlp:"nil"` // nil means contract creation
 	Amount       *big.Int
 	Payload      []byte
 	V            byte

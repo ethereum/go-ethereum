@@ -78,7 +78,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	s := rlp.NewStream(r)
+	s := rlp.NewStream(r, 0)
 	for {
 		if err := dump(s, 0); err != nil {
 			if err != io.EOF {

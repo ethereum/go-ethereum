@@ -109,16 +109,17 @@ func (self *Envelope) Hash() common.Hash {
 	return self.hash
 }
 
-// rlpenv is an Envelope but is not an rlp.Decoder.
-// It is used for decoding because we need to
-type rlpenv Envelope
-
 // DecodeRLP decodes an Envelope from an RLP data stream.
 func (self *Envelope) DecodeRLP(s *rlp.Stream) error {
 	raw, err := s.Raw()
 	if err != nil {
 		return err
 	}
+	// The decoding of Envelope uses the struct fields but also needs
+	// to compute the hash of the whole RLP-encoded envelope. This
+	// type has the same structure as Envelope but is not an
+	// rlp.Decoder so we can reuse the Envelope struct definition.
+	type rlpenv Envelope
 	if err := rlp.DecodeBytes(raw, (*rlpenv)(self)); err != nil {
 		return err
 	}
