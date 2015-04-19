@@ -1,7 +1,6 @@
 package natspec
 
 import (
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -40,7 +39,7 @@ const testFileName = "long_file_name_for_testing_registration_of_URLs_longer_tha
 
 const testNotice = "Register key `utils.toHex(_key)` <- content `utils.toHex(_content)`"
 const testExpNotice = "Register key 0xadd1a7d961cff0242089674ec2ef6fca671ab15e1fe80e38859fc815b98d88ab <- content 0xc00d5bcc872e17813df6ec5c646bb281a6e2d3b454c2c400c78192adf3344af9"
-const testExpNotice2 = `About to submit transaction (NatSpec notice error "abi key %!x(MISSING) does not match any method %!v(MISSING)"): {"id":6,"jsonrpc":"2.0","method":"eth_transact","params":[{"from":"0xe273f01c99144c438695e10f24926dc1f9fbf62d","to":"0xb737b91f8e95cf756766fc7c62c9a8ff58470381","value":"100000000000","gas":"100000","gasPrice":"100000","data":"0x31e12c20"}]}`
+const testExpNotice2 = `About to submit transaction (NatSpec notice error "abi key does not match any method"): {"id":6,"jsonrpc":"2.0","method":"eth_transact","params":[{"from":"0xe273f01c99144c438695e10f24926dc1f9fbf62d","to":"0xb737b91f8e95cf756766fc7c62c9a8ff58470381","value":"100000000000","gas":"100000","gasPrice":"100000","data":"0x31e12c20"}]}`
 const testExpNotice3 = `About to submit transaction (no NatSpec info found for contract): {"id":6,"jsonrpc":"2.0","method":"eth_transact","params":[{"from":"0xe273f01c99144c438695e10f24926dc1f9fbf62d","to":"0x8b839ad85686967a4f418eccc81962eaee314ac3","value":"100000000000","gas":"100000","gasPrice":"100000","data":"0x300a3bbfc00d5bcc872e17813df6ec5c646bb281a6e2d3b454c2c400c78192adf3344af900000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"}]}`
 
 const testUserDoc = `
@@ -106,27 +105,25 @@ func (f *testFrontend) ConfirmTransaction(tx string) bool {
 var port = 30300
 
 func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
-	os.RemoveAll("/tmp/eth/")
-	err = os.MkdirAll("/tmp/eth/keys/e273f01c99144c438695e10f24926dc1f9fbf62d/", os.ModePerm)
+	os.RemoveAll("/tmp/eth-natspec/")
+	err = os.MkdirAll("/tmp/eth-natspec/keys/e273f01c99144c438695e10f24926dc1f9fbf62d/", os.ModePerm)
 	if err != nil {
 		t.Errorf("%v", err)
 		return
 	}
-	err = os.MkdirAll("/tmp/eth/data", os.ModePerm)
+	err = os.MkdirAll("/tmp/eth-natspec/data", os.ModePerm)
 	if err != nil {
 		t.Errorf("%v", err)
 		return
 	}
-	ks := crypto.NewKeyStorePlain("/tmp/eth/keys")
-	ioutil.WriteFile("/tmp/eth/keys/e273f01c99144c438695e10f24926dc1f9fbf62d/e273f01c99144c438695e10f24926dc1f9fbf62d",
+	ks := crypto.NewKeyStorePlain("/tmp/eth-natspec/keys")
+	ioutil.WriteFile("/tmp/eth-natspec/keys/e273f01c99144c438695e10f24926dc1f9fbf62d/e273f01c99144c438695e10f24926dc1f9fbf62d",
 		[]byte(`{"Id":"RhRXD+fNRKS4jx+7ZfEsNA==","Address":"4nPwHJkUTEOGleEPJJJtwfn79i0=","PrivateKey":"h4ACVpe74uIvi5Cg/2tX/Yrm2xdr3J7QoMbMtNX2CNc="}`), os.ModePerm)
 
 	port++
 	ethereum, err = eth.New(&eth.Config{
-		DataDir:        "/tmp/eth",
+		DataDir:        "/tmp/eth-natspec",
 		AccountManager: accounts.NewManager(ks),
-		Port:           fmt.Sprintf("%d", port),
-		MaxPeers:       10,
 		Name:           "test",
 	})
 
@@ -146,7 +143,7 @@ func testInit(t *testing.T) (self *testFrontend) {
 
 	ethereum, err := testEth(t)
 	if err != nil {
-		t.Errorf("error creating jsre, got %v", err)
+		t.Errorf("error creating ethereum: %v", err)
 		return
 	}
 	err = ethereum.Start()
@@ -193,7 +190,7 @@ func (self *testFrontend) insertTx(addr, contract, fnsig string, args []string) 
 	jsontx := `
 [{
 	  "from": "` + addr + `",
-      "to": "0x` + contract + `",
+      "to": "` + contract + `",
 	  "value": "100000000000",
 	  "gas": "100000",
 	  "gasPrice": "100000",

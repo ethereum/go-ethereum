@@ -32,8 +32,6 @@ func CreateContracts(xeth *xe.XEth, addr string) {
 	if err != nil {
 		panic(err)
 	}
-	URLHintContractAddress = URLHintContractAddress[2:]
-	HashRegContractAddress = HashRegContractAddress[2:]
 }
 
 type Resolver struct {
@@ -53,7 +51,7 @@ func New(eth Backend, uhca, nrca string) *Resolver {
 func (self *Resolver) KeyToContentHash(khash common.Hash) (chash common.Hash, err error) {
 	// look up in hashReg
 	key := storageAddress(storageMapping(storageIdx2Addr(1), khash[:]))
-	hash := self.backend.StorageAt("0x"+self.hashRegContractAddress, key)
+	hash := self.backend.StorageAt(self.hashRegContractAddress, key)
 
 	if hash == "0x0" || len(hash) < 3 {
 		err = fmt.Errorf("GetHashReg: content hash not found")
@@ -71,7 +69,7 @@ func (self *Resolver) ContentHashToUrl(chash common.Hash) (uri string, err error
 	for len(str) > 0 {
 		mapaddr := storageMapping(storageIdx2Addr(1), chash[:])
 		key := storageAddress(storageFixedArray(mapaddr, storageIdx2Addr(idx)))
-		hex := self.backend.StorageAt("0x"+self.urlHintContractAddress, key)
+		hex := self.backend.StorageAt(self.urlHintContractAddress, key)
 		str = string(common.Hex2Bytes(hex[2:]))
 		l := len(str)
 		for (l > 0) && (str[l-1] == 0) {
@@ -126,5 +124,5 @@ func storageFixedArray(addr, idx []byte) []byte {
 }
 
 func storageAddress(addr []byte) string {
-	return "0x" + common.Bytes2Hex(addr)
+	return common.ToHex(addr)
 }

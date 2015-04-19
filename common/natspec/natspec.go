@@ -195,7 +195,7 @@ func (self *NatSpec) Notice() (notice string, err error) {
 	meth := self.makeAbi2method(abiKey)
 
 	if meth == nil {
-		err = fmt.Errorf("abi key %x does not match any method %v")
+		err = fmt.Errorf("abi key does not match any method")
 		return
 	}
 	notice, err = self.noticeForMethod(self.tx, meth.name, meth.Notice)
