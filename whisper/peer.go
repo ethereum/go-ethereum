@@ -66,7 +66,7 @@ func (self *peer) handshake() error {
 	if packet.Code != statusCode {
 		return fmt.Errorf("peer sent %x before status packet", packet.Code)
 	}
-	s := rlp.NewStream(packet.Payload)
+	s := rlp.NewStream(packet.Payload, uint64(packet.Size))
 	if _, err := s.List(); err != nil {
 		return fmt.Errorf("bad status message: %v", err)
 	}

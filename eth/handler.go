@@ -197,7 +197,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		// returns either requested hashes or nothing (i.e. not found)
 		return p.sendBlockHashes(hashes)
 	case BlockHashesMsg:
-		msgStream := rlp.NewStream(msg.Payload)
+		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 
 		var hashes []common.Hash
 		if err := msgStream.Decode(&hashes); err != nil {
@@ -209,12 +209,12 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case GetBlocksMsg:
-		msgStream := rlp.NewStream(msg.Payload)
+		var blocks []*types.Block
+
+		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
 			return err
 		}
-
-		var blocks []*types.Block
 		var i int
 		for {
 			i++
@@ -236,9 +236,9 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.sendBlocks(blocks)
 	case BlocksMsg:
-		msgStream := rlp.NewStream(msg.Payload)
-
 		var blocks []*types.Block
+
+		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if err := msgStream.Decode(&blocks); err != nil {
 			glog.V(logger.Detail).Infoln("Decode error", err)
 			blocks = nil
