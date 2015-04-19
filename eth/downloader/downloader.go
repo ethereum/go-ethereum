@@ -359,6 +359,12 @@ out:
 	return nil
 }
 
+// Deliver a chunk to the downloader. This is usually done through the BlocksMsg by
+// the protocol handler.
+func (d *Downloader) DeliverChunk(id string, blocks []*types.Block) {
+	d.blockCh <- blockPack{id, blocks}
+}
+
 func (d *Downloader) AddHashes(id string, hashes []common.Hash) error {
 	// make sure that the hashes that are being added are actually from the peer
 	// that's the current active peer. hashes that have been received from other
@@ -420,12 +426,6 @@ func (d *Downloader) AddBlock(id string, block *types.Block, td *big.Int) error 
 	}
 
 	return d.process()
-}
-
-// Deliver a chunk to the downloader. This is usually done through the BlocksMsg by
-// the protocol handler.
-func (d *Downloader) DeliverChunk(id string, blocks []*types.Block) {
-	d.blockCh <- blockPack{id, blocks}
 }
 
 func (d *Downloader) process() error {
