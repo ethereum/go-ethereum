@@ -36,6 +36,7 @@ pm.chainman.InsertChain(blocks)
 
 import (
 	"fmt"
+	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -273,12 +274,11 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		if self.chainman.HasBlock(hash) {
 			break
 		}
-		/* XXX unsure about this
+		/* XXX unsure about this */
 		if self.chainman.Td().Cmp(request.TD) > 0 && new(big.Int).Add(request.Block.Number(), big.NewInt(7)).Cmp(self.chainman.CurrentBlock().Number()) < 0 {
-			glog.V(logger.Debug).Infoln("dropped block", request.Block.Number(), "due to low TD", request.TD)
+			glog.V(logger.Debug).Infof("[%s] dropped block %v due to low TD %v\n", p.id, request.Block.Number(), request.TD)
 			break
 		}
-		*/
 
 		// Attempt to insert the newly received by checking if the parent exists.
 		// if the parent exists we process the block and propagate to our peers
