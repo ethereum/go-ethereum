@@ -50,7 +50,6 @@ out:
 			break out
 		case work := <-a.workCh:
 			a.work = work
-			a.returnCh <- nil
 		}
 	}
 }
@@ -60,6 +59,8 @@ func (a *RemoteAgent) GetWork() [3]string {
 
 	// XXX Wait here until work != nil ?
 	if a.work != nil {
+		a.currentWork = a.work
+
 		res[0] = a.work.HashNoNonce().Hex()
 		seedHash, _ := ethash.GetSeedHash(a.currentWork.NumberU64())
 		res[1] = common.Bytes2Hex(seedHash)
