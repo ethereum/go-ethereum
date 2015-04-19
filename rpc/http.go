@@ -14,7 +14,7 @@ import (
 )
 
 var rpclogger = logger.NewLogger("RPC")
-var rpclistener *StoppableTCPListener
+var rpclistener *stoppableTCPListener
 
 const (
 	jsonrpcver       = "2.0"
@@ -29,7 +29,7 @@ func Start(pipe *xeth.XEth, config RpcConfig) error {
 		return nil // RPC service already running on given host/port
 	}
 
-	l, err := NewStoppableTCPListener(fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort))
+	l, err := newStoppableTCPListener(fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort))
 	if err != nil {
 		rpclogger.Errorf("Can't listen on %s:%d: %v", config.ListenAddress, config.ListenPort, err)
 		return err
@@ -43,9 +43,9 @@ func Start(pipe *xeth.XEth, config RpcConfig) error {
 		opts.AllowedOrigins = []string{config.CorsDomain}
 
 		c := cors.New(opts)
-		handler = NewStoppableHandler(c.Handler(JSONRPC(pipe)), l.stop)
+		handler = newStoppableHandler(c.Handler(JSONRPC(pipe)), l.stop)
 	} else {
-		handler = NewStoppableHandler(JSONRPC(pipe), l.stop)
+		handler = newStoppableHandler(JSONRPC(pipe), l.stop)
 	}
 
 	go http.Serve(l, handler)
