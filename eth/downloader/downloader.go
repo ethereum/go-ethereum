@@ -20,12 +20,12 @@ import (
 const (
 	maxBlockFetch    = 256              // Amount of max blocks to be fetched per chunk
 	peerCountTimeout = 12 * time.Second // Amount of time it takes for the peer handler to ignore minDesiredPeerCount
-	blockTtl         = 20 * time.Second // The amount of time it takes for a block request to time out
 	hashTtl          = 20 * time.Second // The amount of time it takes for a hash request to time out
 )
 
 var (
-	minDesiredPeerCount = 5 // Amount of peers desired to start syncing
+	minDesiredPeerCount = 5                // Amount of peers desired to start syncing
+	blockTtl            = 20 * time.Second // The amount of time it takes for a block request to time out
 
 	errLowTd            = errors.New("peer's TD is too low")
 	errBusy             = errors.New("busy")

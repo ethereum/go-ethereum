@@ -110,6 +110,7 @@ func TestDownload(t *testing.T) {
 	glog.SetToStderr(true)
 
 	minDesiredPeerCount = 4
+	blockTtl = 1 * time.Second
 
 	hashes := createHashes(0, 1000)
 	blocks := createBlocksFromHashes(hashes)
