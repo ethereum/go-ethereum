@@ -6,7 +6,6 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -151,8 +150,6 @@ func (self *worker) register(agent Agent) {
 func (self *worker) update() {
 	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
 
-	timer := time.NewTicker(2 * time.Second)
-
 out:
 	for {
 		select {
@@ -171,15 +168,6 @@ out:
 			}
 		case <-self.quit:
 			break out
-		case <-timer.C:
-			if glog.V(logger.Detail) && atomic.LoadInt64(&self.mining) == 1 {
-				glog.Infoln("Hash rate:", self.HashRate(), "Khash")
-			}
-
-			// XXX In case all mined a possible uncle
-			if atomic.LoadInt64(&self.atWork) == 0 && atomic.LoadInt64(&self.mining) == 1 {
-				self.commitNewWork()
-			}
 		}
 	}
 

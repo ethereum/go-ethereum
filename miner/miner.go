@@ -16,9 +16,10 @@ type Miner struct {
 
 	MinAcceptedGasPrice *big.Int
 
-	mining bool
-	eth    core.Backend
-	pow    pow.PoW
+	threads int
+	mining  bool
+	eth     core.Backend
+	pow     pow.PoW
 }
 
 func New(eth core.Backend, pow pow.PoW, minerThreads int) *Miner {
@@ -28,6 +29,7 @@ func New(eth core.Backend, pow pow.PoW, minerThreads int) *Miner {
 	for i := 0; i < minerThreads; i++ {
 		miner.worker.register(NewCpuMiner(i, pow))
 	}
+	miner.threads = minerThreads
 
 	return miner
 }
@@ -40,7 +42,9 @@ func (self *Miner) Start(coinbase common.Address) {
 	self.mining = true
 	self.worker.coinbase = coinbase
 
-	self.pow.(*ethash.Ethash).UpdateDAG()
+	if self.threads > 0 {
+		self.pow.(*ethash.Ethash).UpdateDAG()
+	}
 
 	self.worker.start()
 
