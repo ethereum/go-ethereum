@@ -284,8 +284,6 @@ out:
 			// If there are unrequested hashes left start fetching
 			// from the available peers.
 			if d.queue.hashPool.Size() > 0 {
-				was := d.queue.hashPool.Size()
-				fmt.Println("it was =", was)
 				availablePeers := d.peers.get(idleState)
 				for _, peer := range availablePeers {
 					// Get a possible chunk. If nil is returned no chunk
@@ -305,7 +303,6 @@ out:
 						d.queue.put(chunk.hashes)
 					}
 				}
-				fmt.Println("it is =", d.queue.hashPool.Size())
 
 				// make sure that we have peers available for fetching. If all peers have been tried
 				// and all failed throw an error
