@@ -18,14 +18,15 @@ import (
 )
 
 const (
-	maxBlockFetch       = 256              // Amount of max blocks to be fetched per chunk
-	minDesiredPeerCount = 5                // Amount of peers desired to start syncing
-	peerCountTimeout    = 12 * time.Second // Amount of time it takes for the peer handler to ignore minDesiredPeerCount
-	blockTtl            = 15 * time.Second // The amount of time it takes for a block request to time out
-	hashTtl             = 20 * time.Second // The amount of time it takes for a hash request to time out
+	maxBlockFetch    = 256              // Amount of max blocks to be fetched per chunk
+	peerCountTimeout = 12 * time.Second // Amount of time it takes for the peer handler to ignore minDesiredPeerCount
+	blockTtl         = 20 * time.Second // The amount of time it takes for a block request to time out
+	hashTtl          = 20 * time.Second // The amount of time it takes for a hash request to time out
 )
 
 var (
+	minDesiredPeerCount = 5 // Amount of peers desired to start syncing
+
 	errLowTd            = errors.New("peer's TD is too low")
 	errBusy             = errors.New("busy")
 	errUnknownPeer      = errors.New("peer's unknown or unhealthy")
@@ -127,11 +128,11 @@ out:
 	for {
 		select {
 		case <-d.newPeerCh:
-			itimer.Stop()
 			// Meet the `minDesiredPeerCount` before we select our best peer
 			if len(d.peers) < minDesiredPeerCount {
 				break
 			}
+			itimer.Stop()
 
 			d.selectPeer(d.peers.bestPeer())
 		case <-itimer.C:
@@ -154,17 +155,18 @@ func (d *Downloader) selectPeer(p *peer) {
 	// Make sure it's doing neither. Once done we can restart the
 	// downloading process if the TD is higher. For now just get on
 	// with whatever is going on. This prevents unecessary switching.
-	if !d.isBusy() {
-		// selected peer must be better than our own
-		// XXX we also check the peer's recent hash to make sure we
-		// don't have it. Some peers report (i think) incorrect TD.
-		if p.td.Cmp(d.currentTd()) <= 0 || d.hasBlock(p.recentHash) {
-			return
-		}
-
-		glog.V(logger.Detail).Infoln("New peer with highest TD =", p.td)
-		d.syncCh <- syncPack{p, p.recentHash, false}
+	if d.isBusy() {
+		return
 	}
+	// selected peer must be better than our own
+	// XXX we also check the peer's recent hash to make sure we
+	// don't have it. Some peers report (i think) incorrect TD.
+	if p.td.Cmp(d.currentTd()) <= 0 || d.hasBlock(p.recentHash) {
+		return
+	}
+
+	glog.V(logger.Detail).Infoln("New peer with highest TD =", p.td)
+	d.syncCh <- syncPack{p, p.recentHash, false}
 
 }
 
@@ -282,6 +284,8 @@ out:
 			// If there are unrequested hashes left start fetching
 			// from the available peers.
 			if d.queue.hashPool.Size() > 0 {
+				was := d.queue.hashPool.Size()
+				fmt.Println("it was =", was)
 				availablePeers := d.peers.get(idleState)
 				for _, peer := range availablePeers {
 					// Get a possible chunk. If nil is returned no chunk
@@ -301,13 +305,14 @@ out:
 						d.queue.put(chunk.hashes)
 					}
 				}
+				fmt.Println("it is =", d.queue.hashPool.Size())
 
 				// make sure that we have peers available for fetching. If all peers have been tried
 				// and all failed throw an error
 				if len(d.queue.fetching) == 0 {
 					d.queue.reset()
 
-					return fmt.Errorf("%v avaialable = %d. total = %d", errPeersUnavailable, len(availablePeers), len(d.peers))
+					return fmt.Errorf("%v peers avaialable = %d. total peers = %d. hashes needed = %d", errPeersUnavailable, len(availablePeers), len(d.peers), d.queue.hashPool.Size())
 				}
 
 			} else if len(d.queue.fetching) == 0 {

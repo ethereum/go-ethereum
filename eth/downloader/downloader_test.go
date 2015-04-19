@@ -73,7 +73,7 @@ func (dl *downloadTester) insertChain(blocks types.Blocks) error {
 }
 
 func (dl *downloadTester) getHashes(hash common.Hash) error {
-	dl.downloader.HashCh <- dl.hashes
+	dl.downloader.hashCh <- dl.hashes
 	return nil
 }
 
@@ -109,6 +109,8 @@ func TestDownload(t *testing.T) {
 	glog.SetV(logger.Detail)
 	glog.SetToStderr(true)
 
+	minDesiredPeerCount = 4
+
 	hashes := createHashes(0, 1000)
 	blocks := createBlocksFromHashes(hashes)
 	tester := newTester(t, hashes, blocks)
@@ -123,7 +125,7 @@ success:
 	case <-tester.done:
 		break success
 	case <-time.After(10 * time.Second): // XXX this could actually fail on a slow computer
-		t.Error("timout")
+		t.Error("timeout")
 	}
 }
 

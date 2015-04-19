@@ -71,7 +71,7 @@ type peer struct {
 	td         *big.Int
 	recentHash common.Hash
 
-	requested *set.Set
+	ignored *set.Set
 
 	getHashes hashFetcherFn
 	getBlocks blockFetcherFn
@@ -86,7 +86,7 @@ func newPeer(id string, td *big.Int, hash common.Hash, getHashes hashFetcherFn, 
 		getHashes:  getHashes,
 		getBlocks:  getBlocks,
 		state:      idleState,
-		requested:  set.New(),
+		ignored:    set.New(),
 	}
 }
 
@@ -98,8 +98,6 @@ func (p *peer) fetch(chunk *chunk) error {
 	if p.state == workingState {
 		return errors.New("peer already fetching chunk")
 	}
-
-	p.requested.Merge(chunk.hashes)
 
 	// set working state
 	p.state = workingState
@@ -137,5 +135,5 @@ func (p *peer) demote() {
 
 func (p *peer) reset() {
 	p.state = idleState
-	p.requested.Clear()
+	p.ignored.Clear()
 }

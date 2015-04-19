@@ -56,15 +56,17 @@ func (c *queue) get(p *peer, max int) *chunk {
 	// Create a new set of hashes
 	hashes, i := set.New(), 0
 	c.hashPool.Each(func(v interface{}) bool {
+		// break on limit
 		if i == limit {
 			return false
 		}
-
-		// Skip any hashes that have previously been requested from the peer
-		if !p.requested.Has(v) {
-			hashes.Add(v)
-			i++
+		// skip any hashes that have previously been requested from the peer
+		if p.ignored.Has(v) {
+			return true
 		}
+
+		hashes.Add(v)
+		i++
 
 		return true
 	})
@@ -79,7 +81,7 @@ func (c *queue) get(p *peer, max int) *chunk {
 
 	// Create a new chunk for the seperated hashes. The time is being used
 	// to reset the chunk (timeout)
-	chunk := &chunk{hashes, time.Now()}
+	chunk := &chunk{p, hashes, time.Now()}
 	// register as 'fetching' state
 	c.fetching[p.id] = chunk
 
@@ -111,6 +113,12 @@ func (c *queue) deliver(id string, blocks []*types.Block) {
 	// If the chunk was never requested simply ignore it
 	if chunk != nil {
 		delete(c.fetching, id)
+		// check the length of the returned blocks. If the length of blocks is 0
+		// we'll assume the peer doesn't know about the chain.
+		if len(blocks) == 0 {
+			// So we can ignore the blocks we didn't know about
+			chunk.peer.ignored.Merge(chunk.hashes)
+		}
 
 		// seperate the blocks and the hashes
 		blockHashes := chunk.fetchedHashes(blocks)
@@ -118,7 +126,6 @@ func (c *queue) deliver(id string, blocks []*types.Block) {
 		c.blockHashes.Merge(blockHashes)
 		// Add the blocks
 		c.blocks = append(c.blocks, blocks...)
-
 		// Add back whatever couldn't be delivered
 		c.hashPool.Merge(chunk.hashes)
 		c.fetchPool.Separate(chunk.hashes)
@@ -134,6 +141,7 @@ func (c *queue) put(hashes *set.Set) {
 }
 
 type chunk struct {
+	peer   *peer
 	hashes *set.Set
 	itime  time.Time
 }
