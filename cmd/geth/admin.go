@@ -48,6 +48,32 @@ func (js *jsre) adminBindings() {
 	debug := t.Object()
 	debug.Set("printBlock", js.printBlock)
 	debug.Set("dumpBlock", js.dumpBlock)
+	debug.Set("getBlockRlp", js.getBlockRlp)
+}
+
+func (js *jsre) getBlockRlp(call otto.FunctionCall) otto.Value {
+	var block *types.Block
+	if len(call.ArgumentList) > 0 {
+		if call.Argument(0).IsNumber() {
+			num, _ := call.Argument(0).ToInteger()
+			block = js.ethereum.ChainManager().GetBlockByNumber(uint64(num))
+		} else if call.Argument(0).IsString() {
+			hash, _ := call.Argument(0).ToString()
+			block = js.ethereum.ChainManager().GetBlock(common.HexToHash(hash))
+		} else {
+			fmt.Println("invalid argument for dump. Either hex string or number")
+		}
+
+	} else {
+		block = js.ethereum.ChainManager().CurrentBlock()
+	}
+	if block == nil {
+		fmt.Println("block not found")
+		return otto.UndefinedValue()
+	}
+
+	encoded, _ := rlp.EncodeToBytes(block)
+	return js.re.ToVal(fmt.Sprintf("%x", encoded))
 }
 
 func (js *jsre) setExtra(call otto.FunctionCall) otto.Value {
