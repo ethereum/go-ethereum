@@ -49,7 +49,7 @@ import _ "net/http/pprof"
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.10"
+	Version          = "0.9.11"
 )
 
 var app = utils.NewApp(Version, "the go-ethereum command line interface")
