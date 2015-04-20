@@ -245,8 +245,14 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.LogVModuleFlag,
 		utils.LogFileFlag,
 		utils.LogJSONFlag,
-		utils.PProfEnabledFlag,
+		utils.PProfDisabledFlag,
 		utils.PProfPortFlag,
+	}
+	app.Before = func(ctx *cli.Context) error {
+		if !ctx.GlobalBool(utils.PProfDisabledFlag.Name) {
+			utils.StartPProf(ctx)
+		}
+		return nil
 	}
 
 	// missing:
@@ -332,10 +338,6 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 }
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
-	// Start profiling, if requested
-	if ctx.GlobalBool(utils.PProfEnabledFlag.Name) {
-		utils.StartPProf(ctx)
-	}
 	// Start Ethereum itself
 	utils.StartEthereum(eth)
 	am := eth.AccountManager()
