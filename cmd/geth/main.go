@@ -245,11 +245,11 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.LogVModuleFlag,
 		utils.LogFileFlag,
 		utils.LogJSONFlag,
-		utils.PProfDisabledFlag,
+		utils.PProfEanbledFlag,
 		utils.PProfPortFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
-		if !ctx.GlobalBool(utils.PProfDisabledFlag.Name) {
+		if ctx.GlobalBool(utils.PProfEanbledFlag.Name) {
 			utils.StartPProf(ctx)
 		}
 		return nil

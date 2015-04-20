@@ -157,9 +157,9 @@ var (
 		Usage: "When set to a file and line number holding a logging statement a stack trace will be written to the Info log",
 		Value: glog.GetTraceLocation(),
 	}
-	PProfDisabledFlag = cli.BoolFlag{
-		Name:  "nopprof",
-		Usage: "Whether the profiling server should be disabled",
+	PProfEanbledFlag = cli.BoolFlag{
+		Name:  "pprof",
+		Usage: "Whether the profiling server should be enabled",
 	}
 	PProfPortFlag = cli.IntFlag{
 		Name:  "pprofport",
