@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -52,6 +53,7 @@ func (js *jsre) adminBindings() {
 	debug.Set("dumpBlock", js.dumpBlock)
 	debug.Set("getBlockRlp", js.getBlockRlp)
 	debug.Set("setHead", js.setHead)
+	debug.Set("block", js.debugBlock)
 }
 
 func (js *jsre) getBlock(call otto.FunctionCall) (*types.Block, error) {
@@ -70,6 +72,29 @@ func (js *jsre) getBlock(call otto.FunctionCall) (*types.Block, error) {
 	}
 
 	return nil, errors.New("requires block number or block hash as argument")
+}
+
+func (js *jsre) debugBlock(call otto.FunctionCall) otto.Value {
+	block, err := js.getBlock(call)
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	if block == nil {
+		fmt.Println("block not found")
+		return otto.UndefinedValue()
+	}
+
+	old := vm.Debug
+	vm.Debug = true
+	_, err = js.ethereum.BlockProcessor().RetryProcess(block)
+	if err != nil {
+		glog.Infoln(err)
+	}
+	vm.Debug = old
+
+	return otto.UndefinedValue()
 }
 
 func (js *jsre) setHead(call otto.FunctionCall) otto.Value {
