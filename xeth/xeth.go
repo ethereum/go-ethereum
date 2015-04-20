@@ -148,10 +148,10 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 		}
 	}
 
-	return self.withState(st)
+	return self.WithState(st)
 }
 
-func (self *XEth) withState(statedb *state.StateDB) *XEth {
+func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 	xeth := &XEth{
 		backend: self.backend,
 	}
@@ -606,6 +606,12 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 
 	res, err := vmenv.Call(msg.from, msg.to, msg.data, msg.gas, msg.gasPrice, msg.value)
 	return common.ToHex(res), err
+}
+
+func (self *XEth) ConfirmTransaction(tx string) bool {
+
+	return self.frontend.ConfirmTransaction(tx)
+
 }
 
 func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {

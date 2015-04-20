@@ -50,6 +50,7 @@ type Config struct {
 	LogLevel int
 	LogJSON  string
 	VmDebug  bool
+	NatSpec  bool
 
 	MaxPeers int
 	Port     string
@@ -144,6 +145,7 @@ type Ethereum struct {
 	// logger logger.LogSystem
 
 	Mining        bool
+	NatSpec       bool
 	DataDir       string
 	etherbase     common.Address
 	clientVersion string
@@ -205,6 +207,7 @@ func New(config *Config) (*Ethereum, error) {
 		clientVersion:  config.Name, // TODO should separate from Name
 		ethVersionId:   config.ProtocolVersion,
 		netVersionId:   config.NetworkId,
+		NatSpec:        config.NatSpec,
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
