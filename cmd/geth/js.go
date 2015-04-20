@@ -25,7 +25,8 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/common/docserver"
+	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -139,10 +140,17 @@ var net = web3.net;
 	js.re.Eval(globalRegistrar + "registrar = new GlobalRegistrar(\"" + globalRegistrarAddr + "\");")
 }
 
-func (self *jsre) ConfirmTransaction(tx *types.Transaction) bool {
-	p := fmt.Sprintf("Confirm Transaction %v\n[y/n] ", tx)
-	answer, _ := self.Prompt(p)
-	return strings.HasPrefix(strings.Trim(answer, " "), "y")
+var ds, _ = docserver.New(utils.JSpathFlag.String())
+
+func (self *jsre) ConfirmTransaction(tx string) bool {
+	if self.ethereum.NatSpec {
+		notice := natspec.GetNotice(self.xeth, tx, ds)
+		fmt.Println(notice)
+		answer, _ := self.Prompt("Confirm Transaction\n[y/n] ")
+		return strings.HasPrefix(strings.Trim(answer, " "), "y")
+	} else {
+		return true
+	}
 }
 
 func (self *jsre) UnlockAccount(addr []byte) bool {
