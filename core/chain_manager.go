@@ -97,6 +97,21 @@ type ChainManager struct {
 func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *ChainManager {
 	bc := &ChainManager{blockDb: blockDb, stateDb: stateDb, genesisBlock: GenesisBlock(stateDb), eventMux: mux, quit: make(chan struct{}), cache: NewBlockCache(blockCacheLimit)}
 	bc.setLastBlock()
+
+	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
+	for _, hash := range badHashes {
+		if block := bc.GetBlock(hash); block != nil {
+			glog.V(logger.Error).Infof("Found bad hash. Reorganising chain to state %x\n", block.ParentHash().Bytes()[:4])
+			block = bc.GetBlock(block.ParentHash())
+			if block == nil {
+				glog.Fatal("Unable to complete. Parent block not found. Corrupted DB?")
+			}
+			bc.SetHead(block)
+
+			glog.V(logger.Error).Infoln("Chain reorg was successfull. Resuming normal operation")
+		}
+	}
+
 	bc.transState = bc.State().Copy()
 	// Take ownership of this particular state
 	bc.txState = state.ManageState(bc.State().Copy())
@@ -109,27 +124,23 @@ func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *Chai
 	return bc
 }
 
-func (bc *ChainManager) SetHead(block *types.Block) {
+func (bc *ChainManager) SetHead(head *types.Block) {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	for block := bc.currentBlock; block != nil && block.Hash() != block.Hash(); block = bc.GetBlock(block.Header().ParentHash) {
+	for block := bc.currentBlock; block != nil && block.Hash() != head.Hash(); block = bc.GetBlock(block.Header().ParentHash) {
 		bc.removeBlock(block)
 	}
 
-	if bc.cache == nil {
-		bc.cache = NewBlockCache(blockCacheLimit)
-	}
-
-	bc.currentBlock = block
+	bc.cache = NewBlockCache(blockCacheLimit)
+	bc.currentBlock = head
 	bc.makeCache()
 
-	statedb := state.New(block.Root(), bc.stateDb)
+	statedb := state.New(head.Root(), bc.stateDb)
 	bc.txState = state.ManageState(statedb)
 	bc.transState = statedb.Copy()
-	bc.setTotalDifficulty(block.Td)
-	bc.setLastBlock()
-	bc.insert(block)
+	bc.setTotalDifficulty(head.Td)
+	bc.insert(head)
 	bc.setLastBlock()
 }
 
@@ -510,7 +521,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 			h := block.Header()
 
-			glog.V(logger.Error).Infof("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes()[:4])
+			glog.V(logger.Error).Infof("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes())
 			glog.V(logger.Error).Infoln(err)
 			glog.V(logger.Debug).Infoln(block)
 
