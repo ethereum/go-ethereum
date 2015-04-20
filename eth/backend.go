@@ -222,10 +222,12 @@ func New(config *Config) (*Ethereum, error) {
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
-	eth.whisper = whisper.New()
-	eth.shhVersionId = int(eth.whisper.Version())
 	eth.miner = miner.New(eth, eth.pow, config.MinerThreads)
 	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.eventMux, eth.txPool, eth.chainManager, eth.downloader)
+	if config.Shh {
+		eth.whisper = whisper.New()
+		eth.shhVersionId = int(eth.whisper.Version())
+	}
 
 	netprv, err := config.nodeKey()
 	if err != nil {
