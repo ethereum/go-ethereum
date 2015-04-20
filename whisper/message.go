@@ -8,12 +8,13 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-// Message represents an end-user data packet to trasmit through the Whisper
+// Message represents an end-user data packet to transmit through the Whisper
 // protocol. These are wrapped into Envelopes that need not be understood by
 // intermediate nodes, just forwarded.
 type Message struct {
@@ -22,7 +23,8 @@ type Message struct {
 	Payload   []byte
 	Sent      int64
 
-	To *ecdsa.PublicKey
+	To   *ecdsa.PublicKey // Message recipient (identity used to decode the message)
+	Hash common.Hash      // Message envelope hash to act as a unique id in de-duplication
 }
 
 // Options specifies the exact way a message should be wrapped into an Envelope.

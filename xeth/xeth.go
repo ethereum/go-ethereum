@@ -97,7 +97,7 @@ done:
 			}
 
 			for id, filter := range self.messages {
-				if time.Since(filter.timeout) > filterTickerTime {
+				if time.Since(filter.activity()) > filterTickerTime {
 					self.Whisper().Unwatch(id)
 					delete(self.messages, id)
 				}
@@ -461,7 +461,7 @@ func (p *XEth) NewWhisperFilter(to, from string, topics []string) int {
 		p.messages[id].insert(msg)
 	}
 	id = p.Whisper().Watch(to, from, topics, callback)
-	p.messages[id] = &whisperFilter{timeout: time.Now()}
+	p.messages[id] = newWhisperFilter(id, p.Whisper())
 	return id
 }
 
@@ -481,7 +481,16 @@ func (self *XEth) MessagesChanged(id int) []WhisperMessage {
 	if self.messages[id] != nil {
 		return self.messages[id].retrieve()
 	}
+	return nil
+}
 
+func (self *XEth) Messages(id int) []WhisperMessage {
+	self.messagesMut.Lock()
+	defer self.messagesMut.Unlock()
+
+	if self.messages[id] != nil {
+		return self.messages[id].messages()
+	}
 	return nil
 }
 

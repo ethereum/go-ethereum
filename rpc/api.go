@@ -467,7 +467,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = api.xeth().Whisper().Messages(args.Id)
+		*reply = api.xeth().Messages(args.Id)
 
 	// case "eth_register":
 	// 	// Placeholder for actual type
