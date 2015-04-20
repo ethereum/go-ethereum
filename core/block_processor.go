@@ -152,25 +152,25 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 // Process block will attempt to process the given block's transactions and applies them
 // on top of the block's parent state (given it exists) and will return wether it was
 // successful or not.
-func (sm *BlockProcessor) Process(block *types.Block) (td *big.Int, logs state.Logs, err error) {
+func (sm *BlockProcessor) Process(block *types.Block) (logs state.Logs, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
 	header := block.Header()
 	if sm.bc.HasBlock(header.Hash()) {
-		return nil, nil, &KnownBlockError{header.Number, header.Hash()}
+		return nil, &KnownBlockError{header.Number, header.Hash()}
 	}
 
 	if !sm.bc.HasBlock(header.ParentHash) {
-		return nil, nil, ParentError(header.ParentHash)
+		return nil, ParentError(header.ParentHash)
 	}
 	parent := sm.bc.GetBlock(header.ParentHash)
 
 	return sm.processWithParent(block, parent)
 }
 
-func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big.Int, logs state.Logs, err error) {
+func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs state.Logs, err error) {
 	sm.lastAttemptedBlock = block
 
 	// Create a new state based on the parent's root (e.g., create copy)
@@ -183,7 +183,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 
 	// There can be at most two uncles
 	if len(block.Uncles()) > 2 {
-		return nil, nil, ValidationError("Block can only contain one uncle (contained %v)", len(block.Uncles()))
+		return nil, ValidationError("Block can only contain one uncle (contained %v)", len(block.Uncles()))
 	}
 
 	receipts, err := sm.TransitionState(state, parent, block, false)
@@ -232,7 +232,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	}
 
 	// Calculate the td for this block
-	td = CalculateTD(block, parent)
+	//td = CalculateTD(block, parent)
 	// Sync the current block's state to the database
 	state.Sync()
 
@@ -244,7 +244,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 		putTx(sm.extraDb, tx, block, uint64(i))
 	}
 
-	return td, state.Logs(), nil
+	return state.Logs(), nil
 }
 
 // Validates the current block. Returns an error if the block was invalid,

@@ -52,6 +52,7 @@ func GenesisBlock(db common.Database) *types.Block {
 	}
 	statedb.Sync()
 	genesis.Header().Root = statedb.Root()
+	genesis.Td = params.GenesisDifficulty
 
 	return genesis
 }

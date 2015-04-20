@@ -347,22 +347,20 @@ func (self *Block) Copy() *Block {
 }
 
 func (self *Block) String() string {
-	return fmt.Sprintf(`BLOCK(%x): Size: %v TD: %v {
-NoNonce: %x
-Header:
-[
+	return fmt.Sprintf(`Block(#%v): Size: %v TD: %v {
+MinerHash: %x
 %v
-]
 Transactions:
 %v
 Uncles:
 %v
 }
-`, self.header.Hash(), self.Size(), self.Td, self.header.HashNoNonce(), self.header, self.transactions, self.uncles)
+`, self.Number(), self.Size(), self.Td, self.header.HashNoNonce(), self.header, self.transactions, self.uncles)
 }
 
 func (self *Header) String() string {
-	return fmt.Sprintf(`
+	return fmt.Sprintf(`Header(%x):
+[
 	ParentHash:	    %x
 	UncleHash:	    %x
 	Coinbase:	    %x
@@ -377,8 +375,8 @@ func (self *Header) String() string {
 	Time:		    %v
 	Extra:		    %s
 	MixDigest:          %x
-	Nonce:		    %x`,
-		self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.MixDigest, self.Nonce)
+	Nonce:		    %x
+]`, self.Hash(), self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.MixDigest, self.Nonce)
 }
 
 type Blocks []*Block

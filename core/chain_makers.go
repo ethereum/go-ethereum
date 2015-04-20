@@ -93,12 +93,12 @@ func makeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Dat
 	blocks := make(types.Blocks, max)
 	for i := 0; i < max; i++ {
 		block := makeBlock(bman, parent, i, db, seed)
-		td, _, err := bman.processWithParent(block, parent)
+		_, err := bman.processWithParent(block, parent)
 		if err != nil {
 			fmt.Println("process with parent failed", err)
 			panic(err)
 		}
-		block.Td = td
+		block.Td = CalculateTD(block, parent)
 		blocks[i] = block
 		parent = block
 	}

@@ -461,7 +461,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		}
 		// Call in to the block processor and check for errors. It's likely that if one block fails
 		// all others will fail too (unless a known block is returned).
-		td, logs, err := self.processor.Process(block)
+		logs, err := self.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
@@ -492,7 +492,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 			return err
 		}
-		block.Td = td
+
+		block.Td = new(big.Int).Set(CalculateTD(block, self.GetBlock(block.ParentHash())))
 
 		self.mu.Lock()
 		{
@@ -502,14 +503,14 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			self.write(block)
 			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
-			if td.Cmp(self.td) > 0 {
+			if block.Td.Cmp(self.td) > 0 {
 				//if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, common.Big1)) < 0 {
 				if block.Number().Cmp(cblock.Number()) <= 0 {
 					chash := cblock.Hash()
 					hash := block.Hash()
 
 					if glog.V(logger.Info) {
-						glog.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, hash[:4], td, cblock.Header().Number, chash[:4], self.td)
+						glog.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, hash[:4], block.Td, cblock.Header().Number, chash[:4], self.td)
 					}
 					// during split we merge two different chains and create the new canonical chain
 					self.merge(self.getBlockByNumber(block.NumberU64()), block)
@@ -518,7 +519,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 					queueEvent.splitCount++
 				}
 
-				self.setTotalDifficulty(td)
+				self.setTotalDifficulty(block.Td)
 				self.insert(block)
 
 				jsonlogger.LogJson(&logger.EthChainNewHead{
