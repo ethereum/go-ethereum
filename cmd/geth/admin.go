@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -50,15 +51,10 @@ func (js *jsre) adminBindings() {
 	debug.Set("printBlock", js.printBlock)
 	debug.Set("dumpBlock", js.dumpBlock)
 	debug.Set("getBlockRlp", js.getBlockRlp)
+	debug.Set("setHead", js.setHead)
 }
 
-func (js *jsre) downloadProgress(call otto.FunctionCall) otto.Value {
-	current, max := js.ethereum.Downloader().Stats()
-
-	return js.re.ToVal(fmt.Sprintf("%d/%d", current, max))
-}
-
-func (js *jsre) getBlockRlp(call otto.FunctionCall) otto.Value {
+func (js *jsre) getBlock(call otto.FunctionCall) (*types.Block, error) {
 	var block *types.Block
 	if len(call.ArgumentList) > 0 {
 		if call.Argument(0).IsNumber() {
@@ -68,12 +64,43 @@ func (js *jsre) getBlockRlp(call otto.FunctionCall) otto.Value {
 			hash, _ := call.Argument(0).ToString()
 			block = js.ethereum.ChainManager().GetBlock(common.HexToHash(hash))
 		} else {
-			fmt.Println("invalid argument for dump. Either hex string or number")
+			return nil, errors.New("invalid argument for dump. Either hex string or number")
 		}
-
-	} else {
-		block = js.ethereum.ChainManager().CurrentBlock()
+		return block, nil
 	}
+
+	return nil, errors.New("requires block number or block hash as argument")
+}
+
+func (js *jsre) setHead(call otto.FunctionCall) otto.Value {
+	block, err := js.getBlock(call)
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	if block == nil {
+		fmt.Println("block not found")
+		return otto.UndefinedValue()
+	}
+
+	js.ethereum.ChainManager().SetHead(block)
+	return otto.UndefinedValue()
+}
+
+func (js *jsre) downloadProgress(call otto.FunctionCall) otto.Value {
+	current, max := js.ethereum.Downloader().Stats()
+
+	return js.re.ToVal(fmt.Sprintf("%d/%d", current, max))
+}
+
+func (js *jsre) getBlockRlp(call otto.FunctionCall) otto.Value {
+	block, err := js.getBlock(call)
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
 	if block == nil {
 		fmt.Println("block not found")
 		return otto.UndefinedValue()

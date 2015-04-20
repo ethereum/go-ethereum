@@ -472,6 +472,8 @@ func (d *Downloader) process() error {
 			}
 			break
 		} else if err != nil {
+			// immediatly unregister the false peer but do not disconnect
+			d.UnregisterPeer(d.activePeer)
 			// Reset chain completely. This needs much, much improvement.
 			// instead: check all blocks leading down to this block false block and remove it
 			blocks = nil

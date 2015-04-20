@@ -109,6 +109,30 @@ func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *Chai
 	return bc
 }
 
+func (bc *ChainManager) SetHead(block *types.Block) {
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
+	for block := bc.currentBlock; block != nil && block.Hash() != block.Hash(); block = bc.GetBlock(block.Header().ParentHash) {
+		bc.removeBlock(block)
+	}
+
+	if bc.cache == nil {
+		bc.cache = NewBlockCache(blockCacheLimit)
+	}
+
+	bc.currentBlock = block
+	bc.makeCache()
+
+	statedb := state.New(block.Root(), bc.stateDb)
+	bc.txState = state.ManageState(statedb)
+	bc.transState = statedb.Copy()
+	bc.setTotalDifficulty(block.Td)
+	bc.setLastBlock()
+	bc.insert(block)
+	bc.setLastBlock()
+}
+
 func (self *ChainManager) Td() *big.Int {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
