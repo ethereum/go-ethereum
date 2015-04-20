@@ -21,7 +21,7 @@ import (
 const (
 	// must be bumped when consensus algorithm is changed, this forces the upgradedb
 	// command to be run (forces the blocks to be imported again using the new algorithm)
-	BlockChainVersion = 1
+	BlockChainVersion = 2
 )
 
 var statelogger = logger.NewLogger("BLOCK")
