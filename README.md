@@ -40,7 +40,7 @@ godep go build -v ./cmd/geth
 
 Instead of `build`, you can use `install` which will also install the resulting binary.
 
-For prerequisites and detailed build instructions please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go))
+For prerequisites and detailed build instructions please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum)
 
 If you intend to develop on go-ethereum, check the [Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide)
 
