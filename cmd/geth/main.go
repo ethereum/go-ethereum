@@ -24,8 +24,6 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
-	"log"
-	"net/http"
 	"os"
 	"runtime"
 	"strconv"
@@ -237,6 +235,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
+		utils.WhisperEnabledFlag,
 		utils.VMDebugFlag,
 		utils.ProtocolVersionFlag,
 		utils.NetworkIdFlag,
@@ -247,6 +246,14 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.LogVModuleFlag,
 		utils.LogFileFlag,
 		utils.LogJSONFlag,
+		utils.PProfEanbledFlag,
+		utils.PProfPortFlag,
+	}
+	app.Before = func(ctx *cli.Context) error {
+		if ctx.GlobalBool(utils.PProfEanbledFlag.Name) {
+			utils.StartPProf(ctx)
+		}
+		return nil
 	}
 
 	// missing:
@@ -261,11 +268,6 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 }
 
 func main() {
-	// Start up the default http server for pprof
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
-
 	fmt.Printf("Welcome to the FRONTIER\n")
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	defer logger.Flush()
@@ -337,6 +339,7 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 }
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
+	// Start Ethereum itself
 	utils.StartEthereum(eth)
 	am := eth.AccountManager()
 
