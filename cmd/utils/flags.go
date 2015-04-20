@@ -2,6 +2,9 @@ package utils
 
 import (
 	"crypto/ecdsa"
+	"fmt"
+	"log"
+	"net/http"
 	"os"
 	"path"
 	"runtime"
@@ -140,9 +143,32 @@ var (
 		Usage: "Send json structured log output to a file or '-' for standard output (default: no json output)",
 		Value: "",
 	}
+	LogToStdErrFlag = cli.BoolFlag{
+		Name:  "logtostderr",
+		Usage: "Logs are written to standard error instead of to files.",
+	}
+	LogVModuleFlag = cli.GenericFlag{
+		Name:  "vmodule",
+		Usage: "The syntax of the argument is a comma-separated list of pattern=N, where pattern is a literal file name (minus the \".go\" suffix) or \"glob\" pattern and N is a V level.",
+		Value: glog.GetVModule(),
+	}
 	VMDebugFlag = cli.BoolFlag{
 		Name:  "vmdebug",
 		Usage: "Virtual Machine debug output",
+	}
+	BacktraceAtFlag = cli.GenericFlag{
+		Name:  "backtrace_at",
+		Usage: "When set to a file and line number holding a logging statement a stack trace will be written to the Info log",
+		Value: glog.GetTraceLocation(),
+	}
+	PProfEanbledFlag = cli.BoolFlag{
+		Name:  "pprof",
+		Usage: "Whether the profiling server should be enabled",
+	}
+	PProfPortFlag = cli.IntFlag{
+		Name:  "pprofport",
+		Usage: "Port on which the profiler should listen",
+		Value: 6060,
 	}
 
 	// RPC settings
@@ -194,24 +220,14 @@ var (
 		Usage: "Port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
 		Value: "any",
 	}
+	WhisperEnabledFlag = cli.BoolFlag{
+		Name:  "shh",
+		Usage: "Whether the whisper sub-protocol is enabled",
+	}
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
 		Usage: "JS library path to be used with console and js subcommands",
 		Value: ".",
-	}
-	BacktraceAtFlag = cli.GenericFlag{
-		Name:  "backtrace_at",
-		Usage: "When set to a file and line number holding a logging statement a stack trace will be written to the Info log",
-		Value: glog.GetTraceLocation(),
-	}
-	LogToStdErrFlag = cli.BoolFlag{
-		Name:  "logtostderr",
-		Usage: "Logs are written to standard error instead of to files.",
-	}
-	LogVModuleFlag = cli.GenericFlag{
-		Name:  "vmodule",
-		Usage: "The syntax of the argument is a comma-separated list of pattern=N, where pattern is a literal file name (minus the \".go\" suffix) or \"glob\" pattern and N is a V level.",
-		Value: glog.GetVModule(),
 	}
 )
 
@@ -274,7 +290,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		NAT:                GetNAT(ctx),
 		NatSpec:            ctx.GlobalBool(NatspecEnabledFlag.Name),
 		NodeKey:            GetNodeKey(ctx),
-		Shh:                true,
+		Shh:                ctx.GlobalBool(WhisperEnabledFlag.Name),
 		Dial:               true,
 		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
 	}
@@ -323,4 +339,11 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
 
 	xeth := xeth.New(eth, nil)
 	_ = rpc.Start(xeth, config)
+}
+
+func StartPProf(ctx *cli.Context) {
+	address := fmt.Sprintf("localhost:%d", ctx.GlobalInt(PProfPortFlag.Name))
+	go func() {
+		log.Println(http.ListenAndServe(address, nil))
+	}()
 }

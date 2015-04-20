@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/logger"
@@ -15,6 +14,7 @@ import (
 )
 
 var rpclogger = logger.NewLogger("RPC")
+var rpclistener *stoppableTCPListener
 
 const (
 	jsonrpcver       = "2.0"
@@ -22,11 +22,19 @@ const (
 )
 
 func Start(pipe *xeth.XEth, config RpcConfig) error {
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort))
+	if rpclistener != nil {
+		if fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort) != rpclistener.Addr().String() {
+			return fmt.Errorf("RPC service already running on %s ", rpclistener.Addr().String())
+		}
+		return nil // RPC service already running on given host/port
+	}
+
+	l, err := newStoppableTCPListener(fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort))
 	if err != nil {
 		rpclogger.Errorf("Can't listen on %s:%d: %v", config.ListenAddress, config.ListenPort, err)
 		return err
 	}
+	rpclistener = l
 
 	var handler http.Handler
 	if len(config.CorsDomain) > 0 {
@@ -35,12 +43,21 @@ func Start(pipe *xeth.XEth, config RpcConfig) error {
 		opts.AllowedOrigins = []string{config.CorsDomain}
 
 		c := cors.New(opts)
-		handler = c.Handler(JSONRPC(pipe))
+		handler = newStoppableHandler(c.Handler(JSONRPC(pipe)), l.stop)
 	} else {
-		handler = JSONRPC(pipe)
+		handler = newStoppableHandler(JSONRPC(pipe), l.stop)
 	}
 
 	go http.Serve(l, handler)
+
+	return nil
+}
+
+func Stop() error {
+	if rpclistener != nil {
+		rpclistener.Stop()
+		rpclistener = nil
+	}
 
 	return nil
 }
