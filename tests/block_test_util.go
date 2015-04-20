@@ -19,11 +19,25 @@ import (
 )
 
 // Block Test JSON Format
+type BlockTest struct {
+	Genesis *types.Block
+
+	Json        *btJSON
+	preAccounts map[string]btAccount
+}
+
 type btJSON struct {
 	Blocks             []btBlock
 	GenesisBlockHeader btHeader
 	Pre                map[string]btAccount
 	PostState          map[string]btAccount
+}
+
+type btBlock struct {
+	BlockHeader  *btHeader
+	Rlp          string
+	Transactions []btTransaction
+	UncleHeaders []*btHeader
 }
 
 type btAccount struct {
@@ -63,20 +77,6 @@ type btTransaction struct {
 	To       string
 	V        string
 	Value    string
-}
-
-type btBlock struct {
-	BlockHeader  *btHeader
-	Rlp          string
-	Transactions []btTransaction
-	UncleHeaders []*btHeader
-}
-
-type BlockTest struct {
-	Genesis *types.Block
-
-	json        *btJSON
-	preAccounts map[string]btAccount
 }
 
 // LoadBlockTests loads a block test JSON file.
@@ -125,13 +125,43 @@ func (t *BlockTest) InsertPreState(db common.Database) (*state.StateDB, error) {
 	return statedb, nil
 }
 
-// InsertBlocks loads the test's blocks into the given chain.
-func (t *BlockTest) InsertBlocks(chain *core.ChainManager) error {
-	blocks, err := t.convertBlocks()
-	if err != nil {
-		return err
+/* See https://github.com/ethereum/tests/wiki/Blockchain-Tests-II
+
+   Whether a block is valid or not is a bit subtle, it's defined by presence of
+   blockHeader, transactions and uncleHeaders fields. If they are missing, the block is
+   invalid and we must verify that we do not accept it.
+
+   Since some tests mix valid and invalid blocks we need to check this for every block.
+
+   If a block is invalid it does not necessarily fail the test, if it's invalidness is
+   expected we are expected to ignore it and continue processing and then validate the
+   post state.
+*/
+func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
+	// insert the test blocks, which will execute all transactions
+	for _, b := range t.Json.Blocks {
+		cb, err := mustConvertBlock(b)
+		if err != nil {
+			if b.BlockHeader == nil {
+				continue // OK - block is supposed to be invalid, continue with next block
+			} else {
+				return fmt.Errorf("Block RLP decoding failed when expected to succeed: ", err)
+			}
+		}
+		// RLP decoding worked, try to insert into chain:
+		err = chainManager.InsertChain(types.Blocks{cb})
+		if err != nil {
+			if b.BlockHeader == nil {
+				continue // OK - block is supposed to be invalid, continue with next block
+			} else {
+				return fmt.Errorf("Block insertion into chain failed: ", err)
+			}
+		}
+		if b.BlockHeader == nil {
+			return fmt.Errorf("Block insertion should have failed")
+		}
 	}
-	return chain.InsertChain(blocks)
+	return nil
 }
 
 func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
@@ -159,21 +189,6 @@ func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 	return nil
 }
 
-func (t *BlockTest) convertBlocks() (blocks []*types.Block, err error) {
-	// the conversion handles errors by catching panics.
-	// you might consider this ugly, but the alternative (passing errors)
-	// would be much harder to read.
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			buf := make([]byte, 64<<10)
-			buf = buf[:runtime.Stack(buf, false)]
-			err = fmt.Errorf("%v\n%s", recovered, buf)
-		}
-	}()
-	blocks = mustConvertBlocks(t.json.Blocks)
-	return blocks, nil
-}
-
 func convertTest(in *btJSON) (out *BlockTest, err error) {
 	// the conversion handles errors by catching panics.
 	// you might consider this ugly, but the alternative (passing errors)
@@ -185,7 +200,7 @@ func convertTest(in *btJSON) (out *BlockTest, err error) {
 			err = fmt.Errorf("%v\n%s", recovered, buf)
 		}
 	}()
-	out = &BlockTest{preAccounts: in.Pre, json: in}
+	out = &BlockTest{preAccounts: in.Pre, Json: in}
 	out.Genesis = mustConvertGenesis(in.GenesisBlockHeader)
 	return out, err
 }
@@ -221,17 +236,11 @@ func mustConvertHeader(in btHeader) *types.Header {
 	return header
 }
 
-func mustConvertBlocks(testBlocks []btBlock) []*types.Block {
-	var out []*types.Block
-	for i, inb := range testBlocks {
-		var b types.Block
-		r := bytes.NewReader(mustConvertBytes(inb.Rlp))
-		if err := rlp.Decode(r, &b); err != nil {
-			panic(fmt.Errorf("invalid block %d: %q\nerror: %v", i, inb.Rlp, err))
-		}
-		out = append(out, &b)
-	}
-	return out
+func mustConvertBlock(testBlock btBlock) (*types.Block, error) {
+	var b types.Block
+	r := bytes.NewReader(mustConvertBytes(testBlock.Rlp))
+	err := rlp.Decode(r, &b)
+	return &b, err
 }
 
 func mustConvertBytes(in string) []byte {
