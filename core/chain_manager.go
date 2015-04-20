@@ -26,11 +26,10 @@ var (
 	blockNumPre  = []byte("block-num-")
 )
 
-const blockCacheLimit = 10000
-
-type StateQuery interface {
-	GetAccount(addr []byte) *state.StateObject
-}
+const (
+	blockCacheLimit = 10000
+	maxFutureBlocks = 256
+)
 
 func CalcDifficulty(block, parent *types.Header) *big.Int {
 	diff := new(big.Int)
@@ -95,7 +94,14 @@ type ChainManager struct {
 }
 
 func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *ChainManager {
-	bc := &ChainManager{blockDb: blockDb, stateDb: stateDb, genesisBlock: GenesisBlock(stateDb), eventMux: mux, quit: make(chan struct{}), cache: NewBlockCache(blockCacheLimit)}
+	bc := &ChainManager{
+		blockDb:      blockDb,
+		stateDb:      stateDb,
+		genesisBlock: GenesisBlock(stateDb),
+		eventMux:     mux,
+		quit:         make(chan struct{}),
+		cache:        NewBlockCache(blockCacheLimit),
+	}
 	bc.setLastBlock()
 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
@@ -116,7 +122,7 @@ func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *Chai
 	// Take ownership of this particular state
 	bc.txState = state.ManageState(bc.State().Copy())
 
-	bc.futureBlocks = NewBlockCache(254)
+	bc.futureBlocks = NewBlockCache(maxFutureBlocks)
 	bc.makeCache()
 
 	go bc.update()
