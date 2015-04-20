@@ -8,8 +8,7 @@ ENV DEBIAN_FRONTEND noninteractive
 
 ## Install base dependencies
 RUN apt-get update && apt-get upgrade -y && \
-    apt-get install -y build-essential software-properties-common wget pkg-config \
-    	libgmp3-dev unzip --no-install-recommends
+    apt-get install -y build-essential ca-certificates pkg-config libgmp3-dev wget unzip --no-install-recommends
 
 ## Install Qt5.4.1 (not required for CLI)
 # RUN add-apt-repository ppa:beineri/opt-qt541-trusty -y && \
@@ -34,7 +33,8 @@ RUN mkdir -p $GOPATH/src/github.com/ethereum                                    
     rm -f *.zip                                                                                           && \
     \
     cd go-ethereum                                                                                        && \
-    GOPATH=$GOPATH:$GOPATH/src/github.com/ethereum/go-ethereum/Godeps/_workspace go install -v ./cmd/geth
+    GOPATH=$GOPATH:$GOPATH/src/github.com/ethereum/go-ethereum/Godeps/_workspace go install -v ./cmd/geth && \
+    rm -rf $GOPATH/pkg $GOPATH/src/github.com/ethereum/go-ethereum/Godeps/_workspace/pkg
 
 ## Run & expose JSON RPC
 ENTRYPOINT ["geth", "-rpc=true", "-rpcport=8545"]
