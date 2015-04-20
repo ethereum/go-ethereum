@@ -69,15 +69,16 @@ func printChain(bc *ChainManager) {
 func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 	td := new(big.Int)
 	for _, block := range chainB {
-		td2, _, err := bman.bc.processor.Process(block)
+		_, err := bman.bc.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
 			}
 			return nil, err
 		}
-		block.Td = td2
-		td = td2
+		parent := bman.bc.GetBlock(block.ParentHash())
+		block.Td = CalculateTD(block, parent)
+		td = block.Td
 
 		bman.bc.mu.Lock()
 		{

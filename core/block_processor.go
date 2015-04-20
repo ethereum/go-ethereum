@@ -149,6 +149,20 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 	return receipts, err
 }
 
+func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs state.Logs, err error) {
+	// Processing a blocks may never happen simultaneously
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	header := block.Header()
+	if !sm.bc.HasBlock(header.ParentHash) {
+		return nil, ParentError(header.ParentHash)
+	}
+	parent := sm.bc.GetBlock(header.ParentHash)
+
+	return sm.processWithParent(block, parent)
+}
+
 // Process block will attempt to process the given block's transactions and applies them
 // on top of the block's parent state (given it exists) and will return wether it was
 // successful or not.
