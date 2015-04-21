@@ -422,12 +422,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 	case "shh_newIdentity":
 		*reply = api.xeth().Whisper().NewIdentity()
-	// case "shh_removeIdentity":
-	// 	args := new(WhisperIdentityArgs)
-	// 	if err := json.Unmarshal(req.Params, &args); err != nil {
-	// 		return err
-	// 	}
-	// 	*reply = api.xeth().Whisper().RemoveIdentity(args.Identity)
+
 	case "shh_hasIdentity":
 		args := new(WhisperIdentityArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -439,6 +434,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		return NewNotImplementedError(req.Method)
 
 	case "shh_newFilter":
+		// Create a new filter to watch and match messages with
 		args := new(WhisperFilterArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err

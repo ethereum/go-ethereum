@@ -52,16 +52,149 @@ func TestTopicCreation(t *testing.T) {
 	}
 }
 
-func TestTopicSetCreation(t *testing.T) {
-	topics := make([]Topic, len(topicCreationTests))
-	for i, tt := range topicCreationTests {
-		topics[i] = NewTopic(tt.data)
+var topicMatcherCreationTest = struct {
+	binary  [][][]byte
+	textual [][]string
+	matcher []map[[4]byte]struct{}
+}{
+	binary: [][][]byte{
+		[][]byte{},
+		[][]byte{
+			[]byte("Topic A"),
+		},
+		[][]byte{
+			[]byte("Topic B1"),
+			[]byte("Topic B2"),
+			[]byte("Topic B3"),
+		},
+	},
+	textual: [][]string{
+		[]string{},
+		[]string{"Topic A"},
+		[]string{"Topic B1", "Topic B2", "Topic B3"},
+	},
+	matcher: []map[[4]byte]struct{}{
+		map[[4]byte]struct{}{},
+		map[[4]byte]struct{}{
+			[4]byte{0x25, 0xfc, 0x95, 0x66}: struct{}{},
+		},
+		map[[4]byte]struct{}{
+			[4]byte{0x93, 0x6d, 0xec, 0x09}: struct{}{},
+			[4]byte{0x25, 0x23, 0x34, 0xd3}: struct{}{},
+			[4]byte{0x6b, 0xc2, 0x73, 0xd1}: struct{}{},
+		},
+	},
+}
+
+func TestTopicMatcherCreation(t *testing.T) {
+	test := topicMatcherCreationTest
+
+	matcher := newTopicMatcherFromBinary(test.binary...)
+	for i, cond := range matcher.conditions {
+		for topic, _ := range cond {
+			if _, ok := test.matcher[i][topic]; !ok {
+				t.Errorf("condition %d; extra topic found: 0x%x", i, topic[:])
+			}
+		}
 	}
-	set := newTopicSet(topics)
-	for i, tt := range topicCreationTests {
-		topic := NewTopic(tt.data)
-		if _, ok := set[topic.String()]; !ok {
-			t.Errorf("topic %d: not found in set", i)
+	for i, cond := range test.matcher {
+		for topic, _ := range cond {
+			if _, ok := matcher.conditions[i][topic]; !ok {
+				t.Errorf("condition %d; topic not found: 0x%x", i, topic[:])
+			}
+		}
+	}
+
+	matcher = newTopicMatcherFromStrings(test.textual...)
+	for i, cond := range matcher.conditions {
+		for topic, _ := range cond {
+			if _, ok := test.matcher[i][topic]; !ok {
+				t.Errorf("condition %d; extra topic found: 0x%x", i, topic[:])
+			}
+		}
+	}
+	for i, cond := range test.matcher {
+		for topic, _ := range cond {
+			if _, ok := matcher.conditions[i][topic]; !ok {
+				t.Errorf("condition %d; topic not found: 0x%x", i, topic[:])
+			}
+		}
+	}
+}
+
+var topicMatcherTests = []struct {
+	filter [][]string
+	topics []string
+	match  bool
+}{
+	// Empty topic matcher should match everything
+	{
+		filter: [][]string{},
+		topics: []string{},
+		match:  true,
+	},
+	{
+		filter: [][]string{},
+		topics: []string{"a", "b", "c"},
+		match:  true,
+	},
+	// Fixed topic matcher should match strictly, but only prefix
+	{
+		filter: [][]string{[]string{"a"}, []string{"b"}},
+		topics: []string{"a"},
+		match:  false,
+	},
+	{
+		filter: [][]string{[]string{"a"}, []string{"b"}},
+		topics: []string{"a", "b"},
+		match:  true,
+	},
+	{
+		filter: [][]string{[]string{"a"}, []string{"b"}},
+		topics: []string{"a", "b", "c"},
+		match:  true,
+	},
+	// Multi-matcher should match any from a sub-group
+	{
+		filter: [][]string{[]string{"a1", "a2"}},
+		topics: []string{"a"},
+		match:  false,
+	},
+	{
+		filter: [][]string{[]string{"a1", "a2"}},
+		topics: []string{"a1"},
+		match:  true,
+	},
+	{
+		filter: [][]string{[]string{"a1", "a2"}},
+		topics: []string{"a2"},
+		match:  true,
+	},
+	// Wild-card condition should match anything
+	{
+		filter: [][]string{[]string{}, []string{"b"}},
+		topics: []string{"a"},
+		match:  false,
+	},
+	{
+		filter: [][]string{[]string{}, []string{"b"}},
+		topics: []string{"a", "b"},
+		match:  true,
+	},
+	{
+		filter: [][]string{[]string{}, []string{"b"}},
+		topics: []string{"b", "b"},
+		match:  true,
+	},
+}
+
+func TestTopicMatcher(t *testing.T) {
+	for i, tt := range topicMatcherTests {
+		topics := NewTopicsFromStrings(tt.topics...)
+
+		matcher := newTopicMatcherFromStrings(tt.filter...)
+		if match := matcher.Matches(topics); match != tt.match {
+			t.Errorf("test %d: match mismatch: have %v, want %v", i, match, tt.match)
 		}
 	}
 }

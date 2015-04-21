@@ -452,7 +452,7 @@ func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []strin
 	return filter.Find()
 }
 
-func (p *XEth) NewWhisperFilter(to, from string, topics []string) int {
+func (p *XEth) NewWhisperFilter(to, from string, topics [][]string) int {
 	var id int
 	callback := func(msg WhisperMessage) {
 		p.messagesMut.Lock()

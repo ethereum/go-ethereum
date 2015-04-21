@@ -118,11 +118,11 @@ func (self *Whisper) GetIdentity(key *ecdsa.PublicKey) *ecdsa.PrivateKey {
 // Watch installs a new message handler to run in case a matching packet arrives
 // from the whisper network.
 func (self *Whisper) Watch(options Filter) int {
-	filter := filter.Generic{
-		Str1: string(crypto.FromECDSAPub(options.To)),
-		Str2: string(crypto.FromECDSAPub(options.From)),
-		Data: newTopicSet(options.Topics),
-		Fn: func(data interface{}) {
+	filter := filterer{
+		to:      string(crypto.FromECDSAPub(options.To)),
+		from:    string(crypto.FromECDSAPub(options.From)),
+		matcher: newTopicMatcher(options.Topics...),
+		fn: func(data interface{}) {
 			options.Fn(data.(*Message))
 		},
 	}
@@ -273,10 +273,14 @@ func (self *Whisper) open(envelope *Envelope) *Message {
 
 // createFilter creates a message filter to check against installed handlers.
 func createFilter(message *Message, topics []Topic) filter.Filter {
-	return filter.Generic{
-		Str1: string(crypto.FromECDSAPub(message.To)),
-		Str2: string(crypto.FromECDSAPub(message.Recover())),
-		Data: newTopicSet(topics),
+	matcher := make([][]Topic, len(topics))
+	for i, topic := range topics {
+		matcher[i] = []Topic{topic}
+	}
+	return filterer{
+		to:      string(crypto.FromECDSAPub(message.To)),
+		from:    string(crypto.FromECDSAPub(message.Recover())),
+		matcher: newTopicMatcher(matcher...),
 	}
 }
 

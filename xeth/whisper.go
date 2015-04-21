@@ -67,11 +67,11 @@ func (self *Whisper) Post(payload string, to, from string, topics []string, prio
 
 // Watch installs a new message handler to run in case a matching packet arrives
 // from the whisper network.
-func (self *Whisper) Watch(to, from string, topics []string, fn func(WhisperMessage)) int {
+func (self *Whisper) Watch(to, from string, topics [][]string, fn func(WhisperMessage)) int {
 	filter := whisper.Filter{
 		To:     crypto.ToECDSAPub(common.FromHex(to)),
 		From:   crypto.ToECDSAPub(common.FromHex(from)),
-		Topics: whisper.NewTopicsFromStrings(topics...),
+		Topics: whisper.NewTopicFilterFromStrings(topics...),
 	}
 	filter.Fn = func(message *whisper.Message) {
 		fn(NewWhisperMessage(message))

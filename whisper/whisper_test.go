@@ -129,7 +129,7 @@ func testBroadcast(anonymous bool, t *testing.T) {
 		dones[i] = done
 
 		targets[i].Watch(Filter{
-			Topics: NewTopicsFromStrings("broadcast topic"),
+			Topics: NewTopicFilterFromStrings([]string{"broadcast topic"}),
 			Fn: func(msg *Message) {
 				close(done)
 			},
