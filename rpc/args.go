@@ -739,10 +739,14 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 					for j, jv := range argarray {
 						if v, ok := jv.(string); ok {
 							topicdbl[i][j] = v
+						} else if jv == nil {
+							topicdbl[i][j] = ""
 						} else {
 							return NewInvalidTypeError(fmt.Sprintf("topic[%d][%d]", i, j), "is not a string")
 						}
 					}
+				} else if iv == nil {
+					topicdbl[i] = []string{""}
 				} else {
 					return NewInvalidTypeError(fmt.Sprintf("topic[%d]", i), "not a string or array")
 				}

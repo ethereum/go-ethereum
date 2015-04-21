@@ -62,6 +62,7 @@ func (ms *ManagedState) NewNonce(addr common.Address) uint64 {
 		}
 	}
 	account.nonces = append(account.nonces, true)
+
 	return uint64(len(account.nonces)-1) + account.nstart
 }
 
