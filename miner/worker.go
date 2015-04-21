@@ -253,11 +253,23 @@ func (self *worker) commitNewWork() {
 
 	// Keep track of transactions which return errors so they can be removed
 	var (
-		remove = set.New()
-		tcount = 0
+		remove             = set.New()
+		tcount             = 0
+		ignoredTransactors = set.New()
 	)
 	//gasLimit:
 	for _, tx := range transactions {
+		// We can skip err. It has already been validated in the tx pool
+		from, _ := tx.From()
+		// Move on to the next transaction when the transactor is in ignored transactions set
+		// This may occur when a transaction hits the gas limit. When a gas limit is hit and
+		// the transaction is processed (that could potentially be included in the block) it
+		// will throw a nonce error because the previous transaction hasn't been processed.
+		// Therefor we need to ignore any transaction after the ignored one.
+		if ignoredTransactors.Has(from) {
+			continue
+		}
+
 		self.current.state.StartRecord(tx.Hash(), common.Hash{}, 0)
 
 		err := self.commitTransaction(tx)
@@ -265,14 +277,18 @@ func (self *worker) commitNewWork() {
 		case core.IsNonceErr(err) || core.IsInvalidTxErr(err):
 			// Remove invalid transactions
 			from, _ := tx.From()
+
 			self.chain.TxState().RemoveNonce(from, tx.Nonce())
 			remove.Add(tx.Hash())
 
 			if glog.V(logger.Detail) {
 				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
-				//glog.Infoln(tx)
 			}
 		case state.IsGasLimitErr(err):
+			from, _ := tx.From()
+			// ignore the transactor so no nonce errors will be thrown for this account
+			// next time the worker is run, they'll be picked up again.
+			ignoredTransactors.Add(from)
 			//glog.V(logger.Debug).Infof("Gas limit reached for block. %d TXs included in this block\n", i)
 			//break gasLimit
 		default:
