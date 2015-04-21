@@ -283,10 +283,6 @@ func (js *jsre) unlock(call otto.FunctionCall) otto.Value {
 		}
 	}
 	am := js.ethereum.AccountManager()
-	// err := am.Unlock(common.FromHex(split[0]), split[1])
-	// if err != nil {
-	// 	utils.Fatalf("Unlock account failed '%v'", err)
-	// }
 	err = am.TimedUnlock(common.FromHex(addr), passphrase, time.Duration(seconds)*time.Second)
 	if err != nil {
 		fmt.Printf("Unlock account failed '%v'\n", err)

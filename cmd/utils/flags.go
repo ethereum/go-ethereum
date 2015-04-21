@@ -79,22 +79,22 @@ var (
 	}
 	ProtocolVersionFlag = cli.IntFlag{
 		Name:  "protocolversion",
-		Usage: "ETH protocol version",
+		Usage: "ETH protocol version (integer)",
 		Value: eth.ProtocolVersion,
 	}
 	NetworkIdFlag = cli.IntFlag{
 		Name:  "networkid",
-		Usage: "Network Id",
+		Usage: "Network Id (integer)",
 		Value: eth.NetworkId,
 	}
 	BlockchainVersionFlag = cli.IntFlag{
 		Name:  "blockchainversion",
-		Usage: "Blockchain version",
+		Usage: "Blockchain version (integer)",
 		Value: core.BlockChainVersion,
 	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
-		Usage: "node name",
+		Usage: "Custom node name",
 	}
 	NatspecEnabledFlag = cli.BoolFlag{
 		Name:  "natspec",
@@ -113,18 +113,18 @@ var (
 	}
 	EtherbaseFlag = cli.StringFlag{
 		Name:  "etherbase",
-		Usage: "public address for block mining rewards. By default the address of your primary account is used",
+		Usage: "Public address for block mining rewards. By default the address of your primary account is used",
 		Value: "primary",
 	}
 
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
-		Usage: "unlock the account given until this program exits (prompts for password). '--unlock primary' unlocks the primary account",
+		Usage: "Unlock the account given until this program exits (prompts for password). '--unlock primary' unlocks the primary account",
 		Value: "",
 	}
 	PasswordFileFlag = cli.StringFlag{
 		Name:  "password",
-		Usage: "Path to password file for (un)locking an existing account.",
+		Usage: "Path to password file to use with options and subcommands needing a password",
 		Value: "",
 	}
 
@@ -135,7 +135,7 @@ var (
 	}
 	LogLevelFlag = cli.IntFlag{
 		Name:  "loglevel",
-		Usage: "0-5 (silent, error, warn, info, debug, debug detail)",
+		Usage: "Logging verbosity: 0-6 (0=silent, 1=error, 2=warn, 3=info, 4=core, 5=debug, 6=debug detail)",
 		Value: int(logger.InfoLevel),
 	}
 	LogJSONFlag = cli.StringFlag{
@@ -149,7 +149,7 @@ var (
 	}
 	LogVModuleFlag = cli.GenericFlag{
 		Name:  "vmodule",
-		Usage: "The syntax of the argument is a comma-separated list of pattern=N, where pattern is a literal file name (minus the \".go\" suffix) or \"glob\" pattern and N is a V level.",
+		Usage: "The syntax of the argument is a comma-separated list of pattern=N, where pattern is a literal file name (minus the \".go\" suffix) or \"glob\" pattern and N is a log verbosity level.",
 		Value: glog.GetVModule(),
 	}
 	VMDebugFlag = cli.BoolFlag{
@@ -158,12 +158,12 @@ var (
 	}
 	BacktraceAtFlag = cli.GenericFlag{
 		Name:  "backtrace_at",
-		Usage: "When set to a file and line number holding a logging statement a stack trace will be written to the Info log",
+		Usage: "If set to a file and line number (e.g., \"block.go:271\") holding a logging statement, a stack trace will be logged",
 		Value: glog.GetTraceLocation(),
 	}
 	PProfEanbledFlag = cli.BoolFlag{
 		Name:  "pprof",
-		Usage: "Whether the profiling server should be enabled",
+		Usage: "Enable the profiling server on localhost",
 	}
 	PProfPortFlag = cli.IntFlag{
 		Name:  "pprofport",
@@ -174,7 +174,7 @@ var (
 	// RPC settings
 	RPCEnabledFlag = cli.BoolFlag{
 		Name:  "rpc",
-		Usage: "Whether RPC server is enabled",
+		Usage: "Enable the JSON-RPC server",
 	}
 	RPCListenAddrFlag = cli.StringFlag{
 		Name:  "rpcaddr",
@@ -194,7 +194,7 @@ var (
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
-		Usage: "Maximum number of network peers",
+		Usage: "Maximum number of network peers (network disabled if set to 0)",
 		Value: 16,
 	}
 	ListenPortFlag = cli.IntFlag{
@@ -204,7 +204,7 @@ var (
 	}
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
-		Usage: "Space-separated enode URLs for discovery bootstrap",
+		Usage: "Space-separated enode URLs of initial peers to connect to",
 		Value: "",
 	}
 	NodeKeyFileFlag = cli.StringFlag{
@@ -217,12 +217,12 @@ var (
 	}
 	NATFlag = cli.StringFlag{
 		Name:  "nat",
-		Usage: "Port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
+		Usage: "NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
 		Value: "any",
 	}
 	WhisperEnabledFlag = cli.BoolFlag{
 		Name:  "shh",
-		Usage: "Whether the whisper sub-protocol is enabled",
+		Usage: "Enable whisper",
 	}
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
