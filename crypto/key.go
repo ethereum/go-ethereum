@@ -45,28 +45,27 @@ type Key struct {
 type plainKeyJSON struct {
 	Id         []byte
 	Address    []byte
-	KeyHeader  keyHeaderJSON
 	PrivateKey []byte
 }
 
 type encryptedKeyJSON struct {
-	Id        []byte
-	Address   []byte
-	KeyHeader keyHeaderJSON
-	Crypto    cipherJSON
+	Id      []byte
+	Address []byte
+	Crypto  cipherJSON
 }
 
 type cipherJSON struct {
 	MAC        []byte
 	Salt       []byte
 	IV         []byte
+	KeyHeader  keyHeaderJSON
 	CipherText []byte
 }
 
 type keyHeaderJSON struct {
 	Version   string
 	Kdf       string
-	KdfParams *scryptParamsJSON // TODO: make more generic?
+	KdfParams scryptParamsJSON // TODO: make more generic?
 }
 
 type scryptParamsJSON struct {
@@ -78,15 +77,9 @@ type scryptParamsJSON struct {
 }
 
 func (k *Key) MarshalJSON() (j []byte, err error) {
-	keyHeader := keyHeaderJSON{
-		Version:   "1",
-		Kdf:       "",
-		KdfParams: nil,
-	}
 	jStruct := plainKeyJSON{
 		k.Id,
 		k.Address.Bytes(),
-		keyHeader,
 		FromECDSA(k.PrivateKey),
 	}
 	j, err = json.Marshal(jStruct)
