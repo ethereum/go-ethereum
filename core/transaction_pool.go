@@ -125,11 +125,6 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	return nil
 }
 
-func (self *TxPool) addTx(tx *types.Transaction) {
-	from, _ := tx.From()
-	self.queue[from] = append(self.queue[from], tx)
-}
-
 func (self *TxPool) add(tx *types.Transaction) error {
 	hash := tx.Hash()
 
@@ -147,7 +142,7 @@ func (self *TxPool) add(tx *types.Transaction) error {
 		return err
 	}
 
-	self.addTx(tx)
+	self.queueTx(tx)
 
 	var toname string
 	if to := tx.To(); to != nil {
@@ -226,6 +221,19 @@ func (pool *TxPool) Stop() {
 	glog.V(logger.Info).Infoln("TX Pool stopped")
 }
 
+func (self *TxPool) queueTx(tx *types.Transaction) {
+	from, _ := tx.From()
+	self.queue[from] = append(self.queue[from], tx)
+}
+
+func (pool *TxPool) addTx(tx *types.Transaction) {
+	if _, ok := pool.txs[tx.Hash()]; !ok {
+		pool.txs[tx.Hash()] = tx
+		// Notify the subscribers
+		pool.eventMux.Post(TxPreEvent{tx})
+	}
+}
+
 // check queue will attempt to insert
 func (pool *TxPool) checkQueue() {
 	pool.mu.Lock()
@@ -257,9 +265,7 @@ func (pool *TxPool) checkQueue() {
 			}
 			enonce++
 
-			pool.txs[tx.Hash()] = tx
-			// Notify the subscribers
-			go pool.eventMux.Post(TxPreEvent{tx})
+			pool.addTx(tx)
 		}
 		//pool.queue[address] = txs[i:]
 		// delete the entire queue entry if it's empty. There's no need to keep it

@@ -67,7 +67,7 @@ func TestTransactionQueue(t *testing.T) {
 	tx.SignECDSA(key)
 	from, _ := tx.From()
 	pool.currentState().AddBalance(from, big.NewInt(1))
-	pool.addTx(tx)
+	pool.queueTx(tx)
 
 	pool.checkQueue()
 	if len(pool.txs) != 1 {
@@ -79,7 +79,7 @@ func TestTransactionQueue(t *testing.T) {
 	from, _ = tx.From()
 	pool.currentState().SetNonce(from, 10)
 	tx.SetNonce(1)
-	pool.addTx(tx)
+	pool.queueTx(tx)
 	pool.checkQueue()
 	if _, ok := pool.txs[tx.Hash()]; ok {
 		t.Error("expected transaction to be in tx pool")
@@ -96,9 +96,9 @@ func TestTransactionQueue(t *testing.T) {
 	tx1.SignECDSA(key)
 	tx2.SignECDSA(key)
 	tx3.SignECDSA(key)
-	pool.addTx(tx1)
-	pool.addTx(tx2)
-	pool.addTx(tx3)
+	pool.queueTx(tx1)
+	pool.queueTx(tx2)
+	pool.queueTx(tx3)
 	from, _ = tx1.From()
 	pool.checkQueue()
 
@@ -106,7 +106,7 @@ func TestTransactionQueue(t *testing.T) {
 		t.Error("expected tx pool to be 1 =")
 	}
 
-	if len(pool.queue[from]) != 2 {
+	if len(pool.queue[from]) != 3 {
 		t.Error("expected transaction queue to be empty. is", len(pool.queue[from]))
 	}
 }
