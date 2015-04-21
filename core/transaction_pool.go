@@ -28,6 +28,8 @@ const txPoolQueueSize = 50
 type TxPoolHook chan *types.Transaction
 type TxMsg struct{ Tx *types.Transaction }
 
+type stateFn func() *state.StateDB
+
 const (
 	minGasPrice = 1000000
 )
@@ -47,7 +49,7 @@ type TxPool struct {
 	// Quiting channel
 	quit chan bool
 	// The state function which will allow us to do some pre checkes
-	currentState func() *state.StateDB
+	currentState stateFn
 	// The actual pool
 	txs           map[common.Hash]*types.Transaction
 	invalidHashes *set.Set
@@ -57,7 +59,7 @@ type TxPool struct {
 	eventMux *event.TypeMux
 }
 
-func NewTxPool(eventMux *event.TypeMux, currentStateFn func() *state.StateDB) *TxPool {
+func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn) *TxPool {
 	return &TxPool{
 		txs:           make(map[common.Hash]*types.Transaction),
 		queueChan:     make(chan *types.Transaction, txPoolQueueSize),
