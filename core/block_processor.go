@@ -258,7 +258,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	state.Sync()
 
 	// Remove transactions from the pool
-	sm.txpool.RemoveSet(block.Transactions())
+	sm.txpool.RemoveTransactions(block.Transactions())
 
 	// This puts transactions in a extra db for rpc
 	for i, tx := range block.Transactions() {
