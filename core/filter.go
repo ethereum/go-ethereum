@@ -134,7 +134,8 @@ Logs:
 		for i, topics := range self.topics {
 			for _, topic := range topics {
 				var match bool
-				if log.Topics[i] == topic {
+				// common.Hash{} is a match all (wildcard)
+				if (topic == common.Hash{}) || log.Topics[i] == topic {
 					match = true
 				}
 				if !match {
