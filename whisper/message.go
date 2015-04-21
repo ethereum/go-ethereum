@@ -21,10 +21,12 @@ type Message struct {
 	Flags     byte // First bit is signature presence, rest reserved and should be random
 	Signature []byte
 	Payload   []byte
-	Sent      int64
+
+	Sent time.Time     // Time when the message was posted into the network
+	TTL  time.Duration // Maximum time to live allowed for the message
 
 	To   *ecdsa.PublicKey // Message recipient (identity used to decode the message)
-	Hash common.Hash      // Message envelope hash to act as a unique id in de-duplication
+	Hash common.Hash      // Message envelope hash to act as a unique id
 }
 
 // Options specifies the exact way a message should be wrapped into an Envelope.
@@ -45,7 +47,7 @@ func NewMessage(payload []byte) *Message {
 	return &Message{
 		Flags:   flags,
 		Payload: payload,
-		Sent:    time.Now().Unix(),
+		Sent:    time.Now(),
 	}
 }
 
@@ -66,6 +68,8 @@ func (self *Message) Wrap(pow time.Duration, options Options) (*Envelope, error)
 	if options.TTL == 0 {
 		options.TTL = DefaultTTL
 	}
+	self.TTL = options.TTL
+
 	// Sign and encrypt the message if requested
 	if options.From != nil {
 		if err := self.sign(options.From); err != nil {
