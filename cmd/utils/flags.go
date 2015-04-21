@@ -330,7 +330,7 @@ func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 	return accounts.NewManager(ks)
 }
 
-func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
+func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
 	config := rpc.RpcConfig{
 		ListenAddress: ctx.GlobalString(RPCListenAddrFlag.Name),
 		ListenPort:    uint(ctx.GlobalInt(RPCPortFlag.Name)),
@@ -338,7 +338,7 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
 	}
 
 	xeth := xeth.New(eth, nil)
-	_ = rpc.Start(xeth, config)
+	return rpc.Start(xeth, config)
 }
 
 func StartPProf(ctx *cli.Context) {

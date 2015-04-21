@@ -354,7 +354,9 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	}
 	// Start auxiliary services if enabled.
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
-		utils.StartRPC(eth, ctx)
+		if err := utils.StartRPC(eth, ctx); err != nil {
+			utils.Fatalf("Error starting RPC: %v", err)
+		}
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
 		eth.StartMining()
