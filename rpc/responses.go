@@ -24,7 +24,6 @@ type BlockRes struct {
 	Size            *hexnum           `json:"size"`
 	ExtraData       *hexdata          `json:"extraData"`
 	GasLimit        *hexnum           `json:"gasLimit"`
-	MinGasPrice     *hexnum           `json:"minGasPrice"`
 	GasUsed         *hexnum           `json:"gasUsed"`
 	UnixTimestamp   *hexnum           `json:"timestamp"`
 	Transactions    []*TransactionRes `json:"transactions"`
@@ -48,7 +47,6 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 			Size            *hexnum           `json:"size"`
 			ExtraData       *hexdata          `json:"extraData"`
 			GasLimit        *hexnum           `json:"gasLimit"`
-			MinGasPrice     *hexnum           `json:"minGasPrice"`
 			GasUsed         *hexnum           `json:"gasUsed"`
 			UnixTimestamp   *hexnum           `json:"timestamp"`
 			Transactions    []*TransactionRes `json:"transactions"`
@@ -69,7 +67,6 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 		ext.Size = b.Size
 		ext.ExtraData = b.ExtraData
 		ext.GasLimit = b.GasLimit
-		ext.MinGasPrice = b.MinGasPrice
 		ext.GasUsed = b.GasUsed
 		ext.UnixTimestamp = b.UnixTimestamp
 		ext.Transactions = b.Transactions
@@ -94,7 +91,6 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 			Size            *hexnum    `json:"size"`
 			ExtraData       *hexdata   `json:"extraData"`
 			GasLimit        *hexnum    `json:"gasLimit"`
-			MinGasPrice     *hexnum    `json:"minGasPrice"`
 			GasUsed         *hexnum    `json:"gasUsed"`
 			UnixTimestamp   *hexnum    `json:"timestamp"`
 			Transactions    []*hexdata `json:"transactions"`
@@ -115,7 +111,6 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 		ext.Size = b.Size
 		ext.ExtraData = b.ExtraData
 		ext.GasLimit = b.GasLimit
-		ext.MinGasPrice = b.MinGasPrice
 		ext.GasUsed = b.GasUsed
 		ext.UnixTimestamp = b.UnixTimestamp
 		ext.Transactions = make([]*hexdata, len(b.Transactions))
@@ -151,7 +146,6 @@ func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
 	res.Size = newHexNum(block.Size().Int64())
 	res.ExtraData = newHexData(block.Header().Extra)
 	res.GasLimit = newHexNum(block.GasLimit())
-	// res.MinGasPrice =
 	res.GasUsed = newHexNum(block.GasUsed())
 	res.UnixTimestamp = newHexNum(block.Time())
 
