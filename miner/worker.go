@@ -258,7 +258,7 @@ func (self *worker) commitNewWork() {
 		tcount             = 0
 		ignoredTransactors = set.New()
 	)
-	//gasLimit:
+
 	for _, tx := range transactions {
 		// We can skip err. It has already been validated in the tx pool
 		from, _ := tx.From()
@@ -296,7 +296,6 @@ func (self *worker) commitNewWork() {
 			tcount++
 		}
 	}
-	//self.eth.TxPool().InvalidateSet(remove)
 
 	var (
 		uncles    []*types.Header
