@@ -379,7 +379,7 @@ func (s *Ethereum) Start() error {
 	}
 
 	// Start services
-	s.txPool.Start()
+	go s.txPool.Start()
 
 	if s.whisper != nil {
 		s.whisper.Start()
