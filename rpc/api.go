@@ -62,8 +62,6 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		*reply = newHexData(api.xeth().Coinbase())
 	case "eth_mining":
 		*reply = api.xeth().IsMining()
-	case "eth_hashrate":
-		*reply = newHexNum(api.xeth().HashRate())
 	case "eth_gasPrice":
 		v := xeth.DefaultGas()
 		*reply = newHexData(v.Bytes())
@@ -463,6 +461,8 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 		*reply = api.xeth().Whisper().Messages(args.Id)
+	case "ext_hashrate":
+		*reply = newHexNum(api.xeth().HashRate())
 
 	// case "eth_register":
 	// 	// Placeholder for actual type
