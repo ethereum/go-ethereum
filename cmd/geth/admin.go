@@ -35,7 +35,6 @@ func (js *jsre) adminBindings() {
 	admin.Set("import", js.importChain)
 	admin.Set("export", js.exportChain)
 	admin.Set("verbosity", js.verbosity)
-	admin.Set("backtrace", js.backtrace)
 	admin.Set("progress", js.downloadProgress)
 
 	admin.Set("miner", struct{}{})
@@ -49,11 +48,12 @@ func (js *jsre) adminBindings() {
 	admin.Set("debug", struct{}{})
 	t, _ = admin.Get("debug")
 	debug := t.Object()
+	debug.Set("backtrace", js.backtrace)
 	debug.Set("printBlock", js.printBlock)
 	debug.Set("dumpBlock", js.dumpBlock)
 	debug.Set("getBlockRlp", js.getBlockRlp)
 	debug.Set("setHead", js.setHead)
-	debug.Set("block", js.debugBlock)
+	debug.Set("processBlock", js.debugBlock)
 }
 
 func (js *jsre) getBlock(call otto.FunctionCall) (*types.Block, error) {
