@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -73,8 +74,8 @@ type btBlock struct {
 
 type BlockTest struct {
 	Genesis *types.Block
-	Blocks  []*types.Block
 
+	json        *btJSON
 	preAccounts map[string]btAccount
 }
 
@@ -88,7 +89,7 @@ func LoadBlockTests(file string) (map[string]*BlockTest, error) {
 	for name, in := range bt {
 		var err error
 		if out[name], err = convertTest(in); err != nil {
-			return nil, fmt.Errorf("bad test %q: %v", err)
+			return out, fmt.Errorf("bad test %q: %v", name, err)
 		}
 	}
 	return out, nil
@@ -124,6 +125,15 @@ func (t *BlockTest) InsertPreState(db common.Database) (*state.StateDB, error) {
 	return statedb, nil
 }
 
+// InsertBlocks loads the test's blocks into the given chain.
+func (t *BlockTest) InsertBlocks(chain *core.ChainManager) error {
+	blocks, err := t.convertBlocks()
+	if err != nil {
+		return err
+	}
+	return chain.InsertChain(blocks)
+}
+
 func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 	for addrString, acct := range t.preAccounts {
 		// XXX: is is worth it checking for errors here?
@@ -149,6 +159,21 @@ func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 	return nil
 }
 
+func (t *BlockTest) convertBlocks() (blocks []*types.Block, err error) {
+	// the conversion handles errors by catching panics.
+	// you might consider this ugly, but the alternative (passing errors)
+	// would be much harder to read.
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			buf := make([]byte, 64<<10)
+			buf = buf[:runtime.Stack(buf, false)]
+			err = fmt.Errorf("%v\n%s", recovered, buf)
+		}
+	}()
+	blocks = mustConvertBlocks(t.json.Blocks)
+	return blocks, nil
+}
+
 func convertTest(in *btJSON) (out *BlockTest, err error) {
 	// the conversion handles errors by catching panics.
 	// you might consider this ugly, but the alternative (passing errors)
@@ -160,9 +185,8 @@ func convertTest(in *btJSON) (out *BlockTest, err error) {
 			err = fmt.Errorf("%v\n%s", recovered, buf)
 		}
 	}()
-	out = &BlockTest{preAccounts: in.Pre}
+	out = &BlockTest{preAccounts: in.Pre, json: in}
 	out.Genesis = mustConvertGenesis(in.GenesisBlockHeader)
-	out.Blocks = mustConvertBlocks(in.Blocks)
 	return out, err
 }
 
@@ -187,13 +211,13 @@ func mustConvertHeader(in btHeader) *types.Header {
 		UncleHash:   mustConvertHash(in.UncleHash),
 		ParentHash:  mustConvertHash(in.ParentHash),
 		Extra:       mustConvertBytes(in.ExtraData),
-		GasUsed:     mustConvertBigInt(in.GasUsed),
-		GasLimit:    mustConvertBigInt(in.GasLimit),
-		Difficulty:  mustConvertBigInt(in.Difficulty),
-		Time:        mustConvertUint(in.Timestamp),
+		GasUsed:     mustConvertBigInt(in.GasUsed, 10),
+		GasLimit:    mustConvertBigInt(in.GasLimit, 10),
+		Difficulty:  mustConvertBigInt(in.Difficulty, 10),
+		Time:        mustConvertUint(in.Timestamp, 10),
 	}
 	// XXX cheats? :-)
-	header.SetNonce(common.BytesToHash(mustConvertBytes(in.Nonce)).Big().Uint64())
+	header.SetNonce(mustConvertUint(in.Nonce, 16))
 	return header
 }
 
@@ -203,7 +227,7 @@ func mustConvertBlocks(testBlocks []btBlock) []*types.Block {
 		var b types.Block
 		r := bytes.NewReader(mustConvertBytes(inb.Rlp))
 		if err := rlp.Decode(r, &b); err != nil {
-			panic(fmt.Errorf("invalid block %d: %q", i, inb.Rlp))
+			panic(fmt.Errorf("invalid block %d: %q\nerror: %v", i, inb.Rlp, err))
 		}
 		out = append(out, &b)
 	}
@@ -214,10 +238,10 @@ func mustConvertBytes(in string) []byte {
 	if in == "0x" {
 		return []byte{}
 	}
-	h := strings.TrimPrefix(unfuckCPPHexInts(in), "0x")
+	h := unfuckFuckedHex(strings.TrimPrefix(in, "0x"))
 	out, err := hex.DecodeString(h)
 	if err != nil {
-		panic(fmt.Errorf("invalid hex: %q", h))
+		panic(fmt.Errorf("invalid hex: %q: ", h, err))
 	}
 	return out
 }
@@ -246,16 +270,18 @@ func mustConvertBloom(in string) types.Bloom {
 	return types.BytesToBloom(out)
 }
 
-func mustConvertBigInt(in string) *big.Int {
-	out, ok := new(big.Int).SetString(unfuckCPPHexInts(in), 0)
+func mustConvertBigInt(in string, base int) *big.Int {
+	in = prepInt(base, in)
+	out, ok := new(big.Int).SetString(in, base)
 	if !ok {
 		panic(fmt.Errorf("invalid integer: %q", in))
 	}
 	return out
 }
 
-func mustConvertUint(in string) uint64 {
-	out, err := strconv.ParseUint(unfuckCPPHexInts(in), 0, 64)
+func mustConvertUint(in string, base int) uint64 {
+	in = prepInt(base, in)
+	out, err := strconv.ParseUint(in, base, 64)
 	if err != nil {
 		panic(fmt.Errorf("invalid integer: %q", in))
 	}
@@ -292,12 +318,28 @@ func findLine(data []byte, offset int64) (line int) {
 	return
 }
 
-func unfuckCPPHexInts(s string) string {
-	if s == "0x" { // no respect for the empty value :(
-		return "0x00"
+// Nothing to see here, please move along...
+func prepInt(base int, s string) string {
+	if base == 16 {
+		if strings.HasPrefix(s, "0x") {
+			s = s[2:]
+		}
+		if len(s) == 0 {
+			s = "00"
+		}
+		s = nibbleFix(s)
 	}
-	if (len(s) % 2) != 0 { // motherfucking nibbles
-		return "0x0" + s[2:]
+	return s
+}
+
+// don't ask
+func unfuckFuckedHex(almostHex string) string {
+	return nibbleFix(strings.Replace(almostHex, "v", "", -1))
+}
+
+func nibbleFix(s string) string {
+	if len(s)%2 != 0 {
+		s = "0" + s
 	}
 	return s
 }

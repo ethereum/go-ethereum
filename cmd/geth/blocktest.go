@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -12,7 +13,7 @@ import (
 )
 
 var blocktestCmd = cli.Command{
-	Action: runblocktest,
+	Action: runBlockTest,
 	Name:   "blocktest",
 	Usage:  `loads a block test file`,
 	Description: `
@@ -25,27 +26,78 @@ be able to interact with the chain defined by the test.
 `,
 }
 
-func runblocktest(ctx *cli.Context) {
-	if len(ctx.Args()) != 3 {
-		utils.Fatalf("Usage: ethereum blocktest <path-to-test-file> <test-name> {rpc, norpc}")
+func runBlockTest(ctx *cli.Context) {
+	var (
+		file, testname string
+		rpc            bool
+	)
+	args := ctx.Args()
+	switch {
+	case len(args) == 1:
+		file = args[0]
+	case len(args) == 2:
+		file, testname = args[0], args[1]
+	case len(args) == 3:
+		file, testname = args[0], args[1]
+		rpc = true
+	default:
+		utils.Fatalf(`Usage: ethereum blocktest <path-to-test-file> [ <test-name> [ "rpc" ] ]`)
 	}
-	file, testname, startrpc := ctx.Args()[0], ctx.Args()[1], ctx.Args()[2]
-
 	bt, err := tests.LoadBlockTests(file)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
+
+	// run all tests if no test name is specified
+	if testname == "" {
+		ecode := 0
+		for name, test := range bt {
+			fmt.Printf("----------------- Running Block Test %q\n", name)
+			ethereum, err := runOneBlockTest(ctx, test)
+			if err != nil {
+				fmt.Println(err)
+				fmt.Println("FAIL")
+				ecode = 1
+			}
+			if ethereum != nil {
+				ethereum.Stop()
+				ethereum.WaitForShutdown()
+			}
+		}
+		os.Exit(ecode)
+		return
+	}
+	// otherwise, run the given test
 	test, ok := bt[testname]
 	if !ok {
 		utils.Fatalf("Test file does not contain test named %q", testname)
 	}
+	ethereum, err := runOneBlockTest(ctx, test)
+	if err != nil {
+		utils.Fatalf("%v", err)
+	}
+	defer ethereum.Stop()
+	if rpc {
+		fmt.Println("Block Test post state validated, starting RPC interface.")
+		startEth(ctx, ethereum)
+		utils.StartRPC(ethereum, ctx)
+		ethereum.WaitForShutdown()
+	}
+}
 
+func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, error) {
 	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
 	cfg.NewDB = func(path string) (common.Database, error) { return ethdb.NewMemDatabase() }
 	cfg.MaxPeers = 0 // disable network
+	cfg.Shh = false  // disable whisper
+	cfg.NAT = nil    // disable port mapping
+
 	ethereum, err := eth.New(cfg)
 	if err != nil {
-		utils.Fatalf("%v", err)
+		return nil, err
+	}
+	if err := ethereum.Start(); err != nil {
+		return nil, err
 	}
 
 	// import the genesis block
@@ -54,27 +106,16 @@ func runblocktest(ctx *cli.Context) {
 	// import pre accounts
 	statedb, err := test.InsertPreState(ethereum.StateDb())
 	if err != nil {
-		utils.Fatalf("could not insert genesis accounts: %v", err)
+		return ethereum, fmt.Errorf("InsertPreState: %v", err)
 	}
 
 	// insert the test blocks, which will execute all transactions
-	chain := ethereum.ChainManager()
-	if err := chain.InsertChain(test.Blocks); err != nil {
-		utils.Fatalf("Block Test load error: %v %T", err, err)
-	} else {
-		fmt.Println("Block Test chain loaded")
+	if err := test.InsertBlocks(ethereum.ChainManager()); err != nil {
+		return ethereum, fmt.Errorf("Block Test load error: %v %T", err, err)
 	}
-
+	fmt.Println("chain loaded")
 	if err := test.ValidatePostState(statedb); err != nil {
-		utils.Fatalf("post state validation failed: %v", err)
+		return ethereum, fmt.Errorf("post state validation failed: %v", err)
 	}
-	fmt.Println("Block Test post state validated, starting ethereum.")
-
-	if startrpc == "rpc" {
-		startEth(ctx, ethereum)
-		utils.StartRPC(ethereum, ctx)
-		ethereum.WaitForShutdown()
-	} else {
-		startEth(ctx, ethereum)
-	}
+	return ethereum, nil
 }

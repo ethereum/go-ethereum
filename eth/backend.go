@@ -173,7 +173,10 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	extraDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "extra"))
+	extraDb, err := newdb(path.Join(config.DataDir, "extra"))
+	if err != nil {
+		return nil, err
+	}
 
 	// Perform database sanity checks
 	d, _ := blockDb.Get([]byte("ProtocolVersion"))

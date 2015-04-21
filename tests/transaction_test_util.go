@@ -2,8 +2,8 @@ package tests
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
-	"math/big"
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -49,70 +49,44 @@ func RunTransactionTests(file string, notWorking map[string]bool) error {
 }
 
 func runTest(txTest TransactionTest) (err error) {
-	expectedSender, expectedTo, expectedData, rlpBytes, expectedGasLimit, expectedGasPrice, expectedValue, expectedR, expectedS, expectedNonce, expectedV, err := convertTestTypes(txTest)
+	tx := new(types.Transaction)
+	err = rlp.DecodeBytes(mustConvertBytes(txTest.Rlp), tx)
 
 	if err != nil {
-		if txTest.Sender == "" { // tx is invalid and this is expected (test OK)
+		if txTest.Sender == "" {
+			// RLP decoding failed and this is expected (test OK)
 			return nil
 		} else {
-			return err // tx is invalid and this is NOT expected (test FAIL)
-		}
-	}
-	tx := new(types.Transaction)
-	rlp.DecodeBytes(rlpBytes, tx)
-	//fmt.Println("HURR tx: %v", tx)
-	sender, err := tx.From()
-	if err != nil {
-		return err
-	}
-
-	if expectedSender != sender {
-		return fmt.Errorf("Sender mismatch: %v %v", expectedSender, sender)
-	}
-	if !bytes.Equal(expectedData, tx.Payload) {
-		return fmt.Errorf("Tx input data mismatch: %#v %#v", expectedData, tx.Payload)
-	}
-	if expectedGasLimit.Cmp(tx.GasLimit) != 0 {
-		return fmt.Errorf("GasLimit mismatch: %v %v", expectedGasLimit, tx.GasLimit)
-	}
-	if expectedGasPrice.Cmp(tx.Price) != 0 {
-		return fmt.Errorf("GasPrice mismatch: %v %v", expectedGasPrice, tx.Price)
-	}
-	if expectedNonce != tx.AccountNonce {
-		return fmt.Errorf("Nonce mismatch: %v %v", expectedNonce, tx.AccountNonce)
-	}
-	if expectedR.Cmp(tx.R) != 0 {
-		return fmt.Errorf("R mismatch: %v %v", expectedR, tx.R)
-	}
-	if expectedS.Cmp(tx.S) != 0 {
-		return fmt.Errorf("S mismatch: %v %v", expectedS, tx.S)
-	}
-	if expectedV != uint64(tx.V) {
-		return fmt.Errorf("V mismatch: %v %v", expectedV, uint64(tx.V))
-	}
-	if tx.Recipient == nil {
-		if expectedTo != common.BytesToAddress([]byte{}) { // "empty" or "zero" address
-			return fmt.Errorf("To mismatch when recipient is nil (contract creation): %v", expectedTo)
-		}
-	} else {
-		if expectedTo != *tx.Recipient {
-			return fmt.Errorf("To mismatch: %v %v", expectedTo, *tx.Recipient)
+			// RLP decoding failed but is expected to succeed (test FAIL)
+			return errors.New("RLP decoding failed when expected to succeed")
 		}
 	}
 
-	if expectedValue.Cmp(tx.Amount) != 0 {
-		return fmt.Errorf("Value mismatch: %v %v", expectedValue, tx.Amount)
+	validationError := verifyTxFields(txTest, tx)
+	if txTest.Sender == "" {
+		if validationError != nil {
+			// RLP decoding works but validation should fail (test OK)
+			return nil
+		} else {
+			// RLP decoding works but validation should fail (test FAIL)
+			// (this should not be possible but added here for completeness)
+			return errors.New("Field validations succeeded but should fail")
+		}
 	}
 
-	return nil
+	if txTest.Sender != "" {
+		if validationError == nil {
+			// RLP decoding works and validations pass (test OK)
+			return nil
+		} else {
+			// RLP decoding works and validations pass (test FAIL)
+			return errors.New("Field validations failed after RLP decoding")
+		}
+	}
+	return errors.New("Should not happen: verify RLP decoding and field validation")
 }
 
-func convertTestTypes(txTest TransactionTest) (sender, to common.Address,
-	txInputData, rlpBytes []byte,
-	gasLimit, gasPrice, value, r, s *big.Int,
-	nonce, v uint64,
-	err error) {
-
+func verifyTxFields(txTest TransactionTest, decodedTx *types.Transaction) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			buf := make([]byte, 64<<10)
@@ -121,21 +95,66 @@ func convertTestTypes(txTest TransactionTest) (sender, to common.Address,
 		}
 	}()
 
-	sender = mustConvertAddress(txTest.Sender)
-	to = mustConvertAddress(txTest.Transaction.To)
+	decodedSender, err := decodedTx.From()
+	if err != nil {
+		return err
+	}
 
-	txInputData = mustConvertBytes(txTest.Transaction.Data)
-	rlpBytes = mustConvertBytes(txTest.Rlp)
+	expectedSender := mustConvertAddress(txTest.Sender)
+	if expectedSender != decodedSender {
+		return fmt.Errorf("Sender mismatch: %v %v", expectedSender, decodedSender)
+	}
 
-	gasLimit = mustConvertBigInt(txTest.Transaction.GasLimit)
-	gasPrice = mustConvertBigInt(txTest.Transaction.GasPrice)
-	value = mustConvertBigInt(txTest.Transaction.Value)
+	expectedData := mustConvertBytes(txTest.Transaction.Data)
+	if !bytes.Equal(expectedData, decodedTx.Payload) {
+		return fmt.Errorf("Tx input data mismatch: %#v %#v", expectedData, decodedTx.Payload)
+	}
 
-	r = common.Bytes2Big(mustConvertBytes(txTest.Transaction.R))
-	s = common.Bytes2Big(mustConvertBytes(txTest.Transaction.S))
+	expectedGasLimit := mustConvertBigInt(txTest.Transaction.GasLimit, 16)
+	if expectedGasLimit.Cmp(decodedTx.GasLimit) != 0 {
+		return fmt.Errorf("GasLimit mismatch: %v %v", expectedGasLimit, decodedTx.GasLimit)
+	}
 
-	nonce = mustConvertUint(txTest.Transaction.Nonce)
-	v = mustConvertUint(txTest.Transaction.V)
+	expectedGasPrice := mustConvertBigInt(txTest.Transaction.GasPrice, 16)
+	if expectedGasPrice.Cmp(decodedTx.Price) != 0 {
+		return fmt.Errorf("GasPrice mismatch: %v %v", expectedGasPrice, decodedTx.Price)
+	}
 
-	return sender, to, txInputData, rlpBytes, gasLimit, gasPrice, value, r, s, nonce, v, nil
+	expectedNonce := mustConvertUint(txTest.Transaction.Nonce, 16)
+	if expectedNonce != decodedTx.AccountNonce {
+		return fmt.Errorf("Nonce mismatch: %v %v", expectedNonce, decodedTx.AccountNonce)
+	}
+
+	expectedR := common.Bytes2Big(mustConvertBytes(txTest.Transaction.R))
+	if expectedR.Cmp(decodedTx.R) != 0 {
+		return fmt.Errorf("R mismatch: %v %v", expectedR, decodedTx.R)
+	}
+
+	expectedS := common.Bytes2Big(mustConvertBytes(txTest.Transaction.S))
+	if expectedS.Cmp(decodedTx.S) != 0 {
+		return fmt.Errorf("S mismatch: %v %v", expectedS, decodedTx.S)
+	}
+
+	expectedV := mustConvertUint(txTest.Transaction.V, 16)
+	if expectedV != uint64(decodedTx.V) {
+		return fmt.Errorf("V mismatch: %v %v", expectedV, uint64(decodedTx.V))
+	}
+
+	expectedTo := mustConvertAddress(txTest.Transaction.To)
+	if decodedTx.Recipient == nil {
+		if expectedTo != common.BytesToAddress([]byte{}) { // "empty" or "zero" address
+			return fmt.Errorf("To mismatch when recipient is nil (contract creation): %v", expectedTo)
+		}
+	} else {
+		if expectedTo != *decodedTx.Recipient {
+			return fmt.Errorf("To mismatch: %v %v", expectedTo, *decodedTx.Recipient)
+		}
+	}
+
+	expectedValue := mustConvertBigInt(txTest.Transaction.Value, 16)
+	if expectedValue.Cmp(decodedTx.Amount) != 0 {
+		return fmt.Errorf("Value mismatch: %v %v", expectedValue, decodedTx.Amount)
+	}
+
+	return nil
 }
