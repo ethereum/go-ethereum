@@ -209,10 +209,19 @@ func (js *jsre) startRPC(call otto.FunctionCall) otto.Value {
 		return otto.FalseValue()
 	}
 
+	var corsDomain string
+	if len(call.ArgumentList) > 2 {
+		corsDomain, err = call.Argument(2).ToString()
+		if err != nil {
+			fmt.Println(err)
+			return otto.FalseValue()
+		}
+	}
+
 	config := rpc.RpcConfig{
 		ListenAddress: addr,
 		ListenPort:    uint(port),
-		// CorsDomain:    ctx.GlobalString(RPCCORSDomainFlag.Name),
+		CorsDomain:    corsDomain,
 	}
 
 	xeth := xeth.New(js.ethereum, nil)

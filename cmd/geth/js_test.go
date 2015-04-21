@@ -3,16 +3,16 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"path/filepath"
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"runtime"
 	"regexp"
+	"runtime"
 	"strconv"
 )
 
@@ -70,8 +70,8 @@ func TestAccounts(t *testing.T) {
 		t.Errorf("address not hex: %q", addr)
 	}
 
-	checkEvalJSON(t, repl, `eth.accounts`, `["` + addr + `"]`)
-	checkEvalJSON(t, repl, `eth.coinbase`, `"` + addr + `"`)
+	checkEvalJSON(t, repl, `eth.accounts`, `["`+addr+`"]`)
+	checkEvalJSON(t, repl, `eth.coinbase`, `"`+addr+`"`)
 }
 
 func TestBlockChain(t *testing.T) {
@@ -97,13 +97,13 @@ func TestBlockChain(t *testing.T) {
 	tmpfile := filepath.Join(tmp, "export.chain")
 	tmpfileq := strconv.Quote(tmpfile)
 
-	checkEvalJSON(t, repl, `admin.export(` + tmpfileq + `)`, `true`)
+	checkEvalJSON(t, repl, `admin.export(`+tmpfileq+`)`, `true`)
 	if _, err := os.Stat(tmpfile); err != nil {
 		t.Fatal(err)
 	}
 
 	// check import, verify that dumpBlock gives the same result.
-	checkEvalJSON(t, repl, `admin.import(` + tmpfileq + `)`, `true`)
+	checkEvalJSON(t, repl, `admin.import(`+tmpfileq+`)`, `true`)
 	checkEvalJSON(t, repl, `admin.debug.dumpBlock()`, beforeExport)
 }
 
@@ -129,7 +129,7 @@ func TestRPC(t *testing.T) {
 }
 
 func checkEvalJSON(t *testing.T, re *jsre, expr, want string) error {
-	val, err := re.re.Run("JSON.stringify("+ expr + ")")
+	val, err := re.re.Run("JSON.stringify(" + expr + ")")
 	if err == nil && val.String() != want {
 		err = fmt.Errorf("Output mismatch for `%s`:\ngot:  %s\nwant: %s", expr, val.String(), want)
 	}
