@@ -120,9 +120,12 @@ func (self *Message) encrypt(key *ecdsa.PublicKey) (err error) {
 }
 
 // decrypt decrypts an encrypted payload with a private key.
-func (self *Message) decrypt(key *ecdsa.PrivateKey) (err error) {
-	self.Payload, err = crypto.Decrypt(key, self.Payload)
-	return
+func (self *Message) decrypt(key *ecdsa.PrivateKey) error {
+	cleartext, err := crypto.Decrypt(key, self.Payload)
+	if err == nil {
+		self.Payload = cleartext
+	}
+	return err
 }
 
 // hash calculates the SHA3 checksum of the message flags and payload.
