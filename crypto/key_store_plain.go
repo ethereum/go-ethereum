@@ -98,12 +98,12 @@ func (ks keyStorePlain) DeleteKey(keyAddr common.Address, auth string) (err erro
 }
 
 func GetKeyFile(keysDirPath string, keyAddr common.Address) (fileContent []byte, err error) {
-	fileName := keyAddr.Hex()
+	fileName := hex.EncodeToString(keyAddr[:])
 	return ioutil.ReadFile(filepath.Join(keysDirPath, fileName, fileName))
 }
 
 func WriteKeyFile(addr common.Address, keysDirPath string, content []byte) (err error) {
-	addrHex := addr.Hex()
+	addrHex := hex.EncodeToString(addr[:])
 	keyDirPath := filepath.Join(keysDirPath, addrHex)
 	keyFilePath := filepath.Join(keyDirPath, addrHex)
 	err = os.MkdirAll(keyDirPath, 0700) // read, write and dir search for user

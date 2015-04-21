@@ -26,11 +26,16 @@ package crypto
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 
 	"code.google.com/p/go-uuid/uuid"
 	"github.com/ethereum/go-ethereum/common"
+)
+
+const (
+	version = "1"
 )
 
 type Key struct {
@@ -43,29 +48,31 @@ type Key struct {
 }
 
 type plainKeyJSON struct {
-	Id         []byte
-	Address    []byte
-	PrivateKey []byte
+	Version    string
+	Id         string
+	Address    string
+	PrivateKey string
 }
 
 type encryptedKeyJSON struct {
-	Id      []byte
-	Address []byte
+	Version string
+	Id      string
+	Address string
 	Crypto  cipherJSON
 }
 
 type cipherJSON struct {
-	MAC        []byte
-	Salt       []byte
-	IV         []byte
+	MAC        string
+	Salt       string
+	IV         string
 	KeyHeader  keyHeaderJSON
-	CipherText []byte
+	CipherText string
 }
 
 type keyHeaderJSON struct {
 	Version   string
 	Kdf       string
-	KdfParams scryptParamsJSON // TODO: make more generic?
+	KdfParams scryptParamsJSON
 }
 
 type scryptParamsJSON struct {
@@ -78,9 +85,10 @@ type scryptParamsJSON struct {
 
 func (k *Key) MarshalJSON() (j []byte, err error) {
 	jStruct := plainKeyJSON{
-		k.Id,
-		k.Address.Bytes(),
-		FromECDSA(k.PrivateKey),
+		version,
+		k.Id.String(),
+		hex.EncodeToString(k.Address[:]),
+		hex.EncodeToString(FromECDSA(k.PrivateKey)),
 	}
 	j, err = json.Marshal(jStruct)
 	return j, err
@@ -94,12 +102,22 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 	}
 
 	u := new(uuid.UUID)
-	*u = keyJSON.Id
+	*u = uuid.Parse(keyJSON.Id)
 	k.Id = *u
-	k.Address = common.BytesToAddress(keyJSON.Address)
-	k.PrivateKey = ToECDSA(keyJSON.PrivateKey)
+	addr, err := hex.DecodeString(keyJSON.Address)
+	if err != nil {
+		return err
+	}
 
-	return err
+	privkey, err := hex.DecodeString(keyJSON.PrivateKey)
+	if err != nil {
+		return err
+	}
+
+	k.Address = common.BytesToAddress(addr)
+	k.PrivateKey = ToECDSA(privkey)
+
+	return nil
 }
 
 func NewKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {

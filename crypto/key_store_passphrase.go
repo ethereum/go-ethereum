@@ -68,6 +68,7 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -164,15 +165,16 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	mac := Sha3(keyHeaderJSONStr, derivedKey[16:32], cipherText)
 
 	cipherStruct := cipherJSON{
-		mac,
-		salt,
-		iv,
+		hex.EncodeToString(mac),
+		hex.EncodeToString(salt),
+		hex.EncodeToString(iv),
 		keyHeaderJSON,
-		cipherText,
+		hex.EncodeToString(cipherText),
 	}
 	keyStruct := encryptedKeyJSON{
-		key.Id,
-		key.Address.Bytes(),
+		version,
+		key.Id.String(),
+		hex.EncodeToString(key.Address[:]),
 		cipherStruct,
 	}
 	keyJSON, err := json.Marshal(keyStruct)
@@ -190,7 +192,7 @@ func (ks keyStorePassphrase) DeleteKey(keyAddr common.Address, auth string) (err
 		return err
 	}
 
-	keyDirPath := filepath.Join(ks.keysDirPath, keyAddr.Hex())
+	keyDirPath := filepath.Join(ks.keysDirPath, hex.EncodeToString(keyAddr[:]))
 	return os.RemoveAll(keyDirPath)
 }
 
@@ -203,12 +205,28 @@ func DecryptKey(ks keyStorePassphrase, keyAddr common.Address, auth string) (key
 	keyProtected := new(encryptedKeyJSON)
 	err = json.Unmarshal(fileContent, keyProtected)
 
-	keyId = keyProtected.Id
-	mac := keyProtected.Crypto.MAC
-	salt := keyProtected.Crypto.Salt
-	iv := keyProtected.Crypto.IV
+	keyId = uuid.Parse(keyProtected.Id)
+
+	mac, err := hex.DecodeString(keyProtected.Crypto.MAC)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	salt, err := hex.DecodeString(keyProtected.Crypto.Salt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	iv, err := hex.DecodeString(keyProtected.Crypto.IV)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	keyHeader := keyProtected.Crypto.KeyHeader
-	cipherText := keyProtected.Crypto.CipherText
+	cipherText, err := hex.DecodeString(keyProtected.Crypto.CipherText)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	// used in MAC
 	keyHeaderJSONStr, err := json.Marshal(keyHeader)
