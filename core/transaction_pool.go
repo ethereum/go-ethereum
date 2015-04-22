@@ -229,8 +229,10 @@ func (self *TxPool) queueTx(tx *types.Transaction) {
 func (pool *TxPool) addTx(tx *types.Transaction) {
 	if _, ok := pool.txs[tx.Hash()]; !ok {
 		pool.txs[tx.Hash()] = tx
-		// Notify the subscribers
-		pool.eventMux.Post(TxPreEvent{tx})
+		// Notify the subscribers. This event is posted in a goroutine
+		// because it's possible that somewhere during the post "Remove transaction"
+		// gets called which will then wait for the global tx pool lock and deadlock.
+		go pool.eventMux.Post(TxPreEvent{tx})
 	}
 }
 
