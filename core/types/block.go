@@ -209,6 +209,10 @@ func (self *Block) Uncles() []*Header {
 	return self.uncles
 }
 
+func (self *Block) CalculateUnclesHash() common.Hash {
+	return rlpHash(self.uncles)
+}
+
 func (self *Block) SetUncles(uncleHeaders []*Header) {
 	self.uncles = uncleHeaders
 	self.header.UncleHash = rlpHash(uncleHeaders)
