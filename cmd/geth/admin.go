@@ -203,13 +203,14 @@ func (js *jsre) startRPC(call otto.FunctionCall) otto.Value {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}
+
 	port, err := call.Argument(1).ToInteger()
 	if err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}
 
-	var corsDomain string
+	corsDomain := js.corsDomain
 	if len(call.ArgumentList) > 2 {
 		corsDomain, err = call.Argument(2).ToString()
 		if err != nil {

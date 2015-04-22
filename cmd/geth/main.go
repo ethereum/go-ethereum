@@ -296,7 +296,7 @@ func console(ctx *cli.Context) {
 	}
 
 	startEth(ctx, ethereum)
-	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), true)
+	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), true, ctx.GlobalString(utils.RPCCORSDomainFlag.Name))
 	repl.interactive()
 
 	ethereum.Stop()
@@ -311,7 +311,7 @@ func execJSFiles(ctx *cli.Context) {
 	}
 
 	startEth(ctx, ethereum)
-	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), false)
+	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), false, ctx.GlobalString(utils.RPCCORSDomainFlag.Name))
 	for _, file := range ctx.Args() {
 		repl.exec(file)
 	}
