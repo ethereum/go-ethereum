@@ -53,22 +53,23 @@ func blockHeight(raw interface{}, number *int64) error {
 	return nil
 }
 
-func numString(raw interface{}, number *int64) error {
+func numString(raw interface{}) (*big.Int, error) {
+	var number *big.Int
 	// Parse as integer
 	num, ok := raw.(float64)
 	if ok {
-		*number = int64(num)
-		return nil
+		number = big.NewInt(int64(num))
+		return number, nil
 	}
 
 	// Parse as string/hexstring
 	str, ok := raw.(string)
-	if !ok {
-		return NewInvalidTypeError("", "not a number or string")
+	if ok {
+		number = common.String2Big(str)
+		return number, nil
 	}
-	*number = common.String2Big(str).Int64()
 
-	return nil
+	return nil, NewInvalidTypeError("", "not a number or string")
 }
 
 // func toNumber(v interface{}) (int64, error) {
@@ -202,33 +203,36 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	args.To = ext.To
 	args.Data = ext.Data
 
-	var num int64
+	var num *big.Int
 	if ext.Value == nil {
-		num = 0
+		num = big.NewInt(0)
 	} else {
-		if err := numString(ext.Value, &num); err != nil {
+		num, err = numString(ext.Value)
+		if err != nil {
 			return err
 		}
 	}
-	args.Value = big.NewInt(num)
+	args.Value = num
 
+	num = nil
 	if ext.Gas == nil {
-		num = 0
+		num = big.NewInt(0)
 	} else {
-		if err := numString(ext.Gas, &num); err != nil {
+		if num, err = numString(ext.Gas); err != nil {
 			return err
 		}
 	}
-	args.Gas = big.NewInt(num)
+	args.Gas = num
 
+	num = nil
 	if ext.GasPrice == nil {
-		num = 0
+		num = big.NewInt(0)
 	} else {
-		if err := numString(ext.GasPrice, &num); err != nil {
+		if num, err = numString(ext.GasPrice); err != nil {
 			return err
 		}
 	}
-	args.GasPrice = big.NewInt(num)
+	args.GasPrice = num
 
 	// Check for optional BlockNumber param
 	if len(obj) > 1 {
@@ -286,33 +290,33 @@ func (args *CallArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 	args.To = ext.To
 
-	var num int64
+	var num *big.Int
 	if ext.Value == nil {
-		num = int64(0)
+		num = big.NewInt(0)
 	} else {
-		if err := numString(ext.Value, &num); err != nil {
+		if num, err = numString(ext.Value); err != nil {
 			return err
 		}
 	}
-	args.Value = big.NewInt(num)
+	args.Value = num
 
 	if ext.Gas == nil {
-		num = int64(0)
+		num = big.NewInt(0)
 	} else {
-		if err := numString(ext.Gas, &num); err != nil {
+		if num, err = numString(ext.Gas); err != nil {
 			return err
 		}
 	}
-	args.Gas = big.NewInt(num)
+	args.Gas = num
 
 	if ext.GasPrice == nil {
-		num = int64(0)
+		num = big.NewInt(0)
 	} else {
-		if err := numString(ext.GasPrice, &num); err != nil {
+		if num, err = numString(ext.GasPrice); err != nil {
 			return err
 		}
 	}
-	args.GasPrice = big.NewInt(num)
+	args.GasPrice = num
 
 	args.Data = ext.Data
 
@@ -655,6 +659,7 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	// 	return NewDecodeParamError(fmt.Sprintf("ToBlock %v", err))
 
 	var num int64
+	var numBig *big.Int
 
 	// if blank then latest
 	if obj[0].FromBlock == nil {
@@ -682,22 +687,22 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Latest = num
 
 	if obj[0].Limit == nil {
-		num = defaultLogLimit
+		numBig = big.NewInt(defaultLogLimit)
 	} else {
-		if err := numString(obj[0].Limit, &num); err != nil {
+		if numBig, err = numString(obj[0].Limit); err != nil {
 			return err
 		}
 	}
-	args.Max = int(num)
+	args.Max = int(numBig.Int64())
 
 	if obj[0].Offset == nil {
-		num = defaultLogOffset
+		numBig = big.NewInt(defaultLogOffset)
 	} else {
-		if err := numString(obj[0].Offset, &num); err != nil {
+		if numBig, err = numString(obj[0].Offset); err != nil {
 			return err
 		}
 	}
-	args.Skip = int(num)
+	args.Skip = int(numBig.Int64())
 
 	if obj[0].Address != nil {
 		marg, ok := obj[0].Address.([]interface{})
@@ -894,16 +899,16 @@ func (args *WhisperMessageArgs) UnmarshalJSON(b []byte) (err error) {
 	args.From = obj[0].From
 	args.Topics = obj[0].Topics
 
-	var num int64
-	if err := numString(obj[0].Priority, &num); err != nil {
+	var num *big.Int
+	if num, err = numString(obj[0].Priority); err != nil {
 		return err
 	}
-	args.Priority = uint32(num)
+	args.Priority = uint32(num.Int64())
 
-	if err := numString(obj[0].Ttl, &num); err != nil {
+	if num, err = numString(obj[0].Ttl); err != nil {
 		return err
 	}
-	args.Ttl = uint32(num)
+	args.Ttl = uint32(num.Int64())
 
 	return nil
 }
@@ -973,11 +978,11 @@ func (args *FilterIdArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	var num int64
-	if err := numString(obj[0], &num); err != nil {
+	var num *big.Int
+	if num, err = numString(obj[0]); err != nil {
 		return err
 	}
-	args.Id = int(num)
+	args.Id = int(num.Int64())
 
 	return nil
 }
