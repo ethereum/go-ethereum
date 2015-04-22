@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -318,7 +317,7 @@ func (js *jsre) newAccount(call otto.FunctionCall) otto.Value {
 		fmt.Printf("Could not create the account: %v", err)
 		return otto.UndefinedValue()
 	}
-	return js.re.ToVal(common.Bytes2Hex(acct.Address))
+	return js.re.ToVal("0x" + common.Bytes2Hex(acct.Address))
 }
 
 func (js *jsre) nodeInfo(call otto.FunctionCall) otto.Value {
@@ -334,33 +333,15 @@ func (js *jsre) importChain(call otto.FunctionCall) otto.Value {
 		fmt.Println("err: require file name")
 		return otto.FalseValue()
 	}
-
 	fn, err := call.Argument(0).ToString()
 	if err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}
-
-	var fh *os.File
-	fh, err = os.OpenFile(fn, os.O_RDONLY, os.ModePerm)
-	if err != nil {
-		fmt.Println(err)
+	if err := utils.ImportChain(js.ethereum.ChainManager(), fn); err != nil {
+		fmt.Println("Import error: ", err)
 		return otto.FalseValue()
 	}
-	defer fh.Close()
-
-	var blocks types.Blocks
-	if err = rlp.Decode(fh, &blocks); err != nil {
-		fmt.Println(err)
-		return otto.FalseValue()
-	}
-
-	js.ethereum.ChainManager().Reset()
-	if err = js.ethereum.ChainManager().InsertChain(blocks); err != nil {
-		fmt.Println(err)
-		return otto.FalseValue()
-	}
-
 	return otto.TrueValue()
 }
 
