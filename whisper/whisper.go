@@ -168,15 +168,9 @@ func (self *Whisper) Messages(id int) []*Message {
 // handlePeer is called by the underlying P2P layer when the whisper sub-protocol
 // connection is negotiated.
 func (self *Whisper) handlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
-	// Create, initialize and start the whisper peer
-	whisperPeer, err := newPeer(self, peer, rw)
-	if err != nil {
-		return err
-	}
-	whisperPeer.start()
-	defer whisperPeer.stop()
+	// Create the new peer and start tracking it
+	whisperPeer := newPeer(self, peer, rw)
 
-	// Start tracking the active peer
 	self.peerMu.Lock()
 	self.peers[whisperPeer] = struct{}{}
 	self.peerMu.Unlock()
@@ -186,6 +180,14 @@ func (self *Whisper) handlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 		delete(self.peers, whisperPeer)
 		self.peerMu.Unlock()
 	}()
+
+	// Run the peer handshake and state updates
+	if err := whisperPeer.handshake(); err != nil {
+		return err
+	}
+	whisperPeer.start()
+	defer whisperPeer.stop()
+
 	// Read and process inbound messages directly to merge into client-global state
 	for {
 		// Fetch the next packet and decode the contained envelopes
