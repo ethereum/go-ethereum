@@ -6,10 +6,10 @@
         "rlp" : "0xf85f800182520894000000000000000000000000000b9331677e6ebf0a801ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3",
         "sender" : "31bb58672e8bf7684108feeacf424ab62b873824",
         "transaction" : {
-            "data" : "0x",
+            "data" : "",
             "gasLimit" : "0x5208",
             "gasPrice" : "0x01",
-            "nonce" : "0x",
+            "nonce" : "0x00",
             "r" : "0x98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a",
             "s" : "0x8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3",
             "to" : "0x000000000000000000000000000b9331677e6ebf",
@@ -30,7 +30,7 @@
             "data" : "0x0358ac39584bc98a7c979f984b03",
             "gasLimit" : "0x59d8",
             "gasPrice" : "0x01",
-            "nonce" : "0x",
+            "nonce" : "0x00",
             "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
             "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
@@ -66,14 +66,14 @@
         }
     },
     "SenderTest" : {
-        "//" : "sender 0f65fe9276bc9a24ae7083ae28e2660ef72df99e",
         "rlp" : "0xf85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870a801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
         "sender" : "0f65fe9276bc9a24ae7083ae28e2660ef72df99e",
+        "senderExpect" : "sender 0f65fe9276bc9a24ae7083ae28e2660ef72df99e",
         "transaction" : {
-            "data" : "0x",
+            "data" : "",
             "gasLimit" : "0x5208",
             "gasPrice" : "0x01",
-            "nonce" : "0x",
+            "nonce" : "0x00",
             "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
             "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
@@ -88,15 +88,15 @@
         "rlp" : "0xf8858088016345785d8a0000a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff94095e7baea6a6c7c4c2dfeb977efac326af552d8780801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
         "sender" : "700764607c82cf3e9cf4ecbd49185f8914f1a361",
         "transaction" : {
-            "data" : "0x",
+            "data" : "",
             "gasLimit" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
             "gasPrice" : "0x016345785d8a0000",
-            "nonce" : "0x",
+            "nonce" : "0x00",
             "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
             "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
             "v" : "0x1b",
-            "value" : "0x"
+            "value" : "0x00"
         }
     },
     "TransactionWithGasPriceOverflow" : {
@@ -109,37 +109,37 @@
         "rlp" : "0xf87d8001a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff94095e7baea6a6c7c4c2dfeb977efac326af552d8780801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
         "sender" : "9e92c26895f279d68ad7b57b803dc522717d5572",
         "transaction" : {
-            "data" : "0x",
+            "data" : "",
             "gasLimit" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
             "gasPrice" : "0x01",
-            "nonce" : "0x",
+            "nonce" : "0x00",
             "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
             "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
             "v" : "0x1b",
-            "value" : "0x"
+            "value" : "0x00"
         }
     },
     "TransactionWithHihghGasPrice" : {
         "rlp" : "0xf87f80a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff82520894095e7baea6a6c7c4c2dfeb977efac326af552d8780801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
         "sender" : "b10eac078276dc8dbf1753715396d480156236f8",
         "transaction" : {
-            "data" : "0x",
+            "data" : "",
             "gasLimit" : "0x5208",
             "gasPrice" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-            "nonce" : "0x",
+            "nonce" : "0x00",
             "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
             "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
             "v" : "0x1b",
-            "value" : "0x"
+            "value" : "0x00"
         }
     },
     "TransactionWithHihghNonce" : {
         "rlp" : "0xf87fa0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0182520894095e7baea6a6c7c4c2dfeb977efac326af552d8780801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
         "sender" : "9b96002788562fefd5ac08d5af877fa738272dc7",
         "transaction" : {
-            "data" : "0x",
+            "data" : "",
             "gasLimit" : "0x5208",
             "gasPrice" : "0x01",
             "nonce" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
@@ -147,17 +147,17 @@
             "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
             "v" : "0x1b",
-            "value" : "0x"
+            "value" : "0x00"
         }
     },
     "TransactionWithHihghValue" : {
         "rlp" : "0xf87f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d87a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
         "sender" : "396bd0363e26195eeacfedbe54c44f16fbe470b6",
         "transaction" : {
-            "data" : "0x",
+            "data" : "",
             "gasLimit" : "0x5208",
             "gasPrice" : "0x01",
-            "nonce" : "0x",
+            "nonce" : "0x00",
             "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
             "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
@@ -167,6 +167,12 @@
     },
     "TransactionWithNonceOverflow" : {
         "rlp" : "0xf880a10100000000000000000000000000000000000000000000000000000000000000000182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"
+    },
+    "TransactionWithRSvalue0" : {
+        "rlp" : "0xdf800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801b8080"
+    },
+    "TransactionWithRvalue0" : {
+        "rlp" : "0xf83f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801b80a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"
     },
     "TransactionWithRvalueHigh" : {
         "rlp" : "0xf85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140a08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
@@ -178,10 +184,10 @@
         "rlp" : "0xf850800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801b910ebaaedce6af48a03bbfd25e8cd0364141a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
         "sender" : "0dd0dcb6502a463fa90ecaa59ca29a5e6571deef",
         "transaction" : {
-            "data" : "0x",
+            "data" : "",
             "gasLimit" : "0x5208",
             "gasPrice" : "0x01",
-            "nonce" : "0x",
+            "nonce" : "0x00",
             "r" : "0xebaaedce6af48a03bbfd25e8cd0364141",
             "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
@@ -192,14 +198,29 @@
     "TransactionWithRvalueTooHigh" : {
         "rlp" : "0xf85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"
     },
-    "TransactionWithSvalueHigh" : {
-        "rlp" : "0xf85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e",
-        "sender" : "cae01e4c9e1eb0fc7676055de1fa1f1e8cfd36ee",
+    "TransactionWithSvalue0" : {
+        "rlp" : "0xf83f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a3664935380",
+        "sender" : "f9c8b2d1e51d4cd5e749fd80393caf36879bca08",
         "transaction" : {
             "data" : "0x",
             "gasLimit" : "0x5208",
             "gasPrice" : "0x01",
             "nonce" : "0x",
+            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
+            "s" : "0x",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "v" : "0x1b",
+            "value" : "0x0b"
+        }
+    },
+    "TransactionWithSvalueHigh" : {
+        "rlp" : "0xf85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e",
+        "sender" : "cae01e4c9e1eb0fc7676055de1fa1f1e8cfd36ee",
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "0x5208",
+            "gasPrice" : "0x01",
+            "nonce" : "0x00",
             "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
             "s" : "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
@@ -214,10 +235,10 @@
         "rlp" : "0xf851800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a920ef0b28ad43601b4ab949f53faa07bd2c804",
         "sender" : "a825d77f343f31619c991cd7db5aaa6adbe9452e",
         "transaction" : {
-            "data" : "0x",
+            "data" : "",
             "gasLimit" : "0x5208",
             "gasPrice" : "0x01",
-            "nonce" : "0x",
+            "nonce" : "0x00",
             "r" : "0x98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a",
             "s" : "0xef0b28ad43601b4ab949f53faa07bd2c804",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
@@ -268,12 +289,12 @@
             "data" : "0x60056013565b6101918061001d6000396000f35b3360008190555056006001600060e060020a6000350480630a874df61461003a57806341c0e1b514610058578063a02b161e14610066578063dbbdf0831461007757005b610045600435610149565b80600160a060020a031660005260206000f35b610060610161565b60006000f35b6100716004356100d4565b60006000f35b61008560043560243561008b565b60006000f35b600054600160a060020a031632600160a060020a031614156100ac576100b1565b6100d0565b8060018360005260205260406000208190555081600060005260206000a15b5050565b600054600160a060020a031633600160a060020a031614158015610118575033600160a060020a0316600182600052602052604060002054600160a060020a031614155b61012157610126565b610146565b600060018260005260205260406000208190555080600060005260206000a15b50565b60006001826000526020526040600020549050919050565b600054600160a060020a031633600160a060020a0316146101815761018f565b600054600160a060020a0316ff5b56",
             "gasLimit" : "0xc350",
             "gasPrice" : "0x32",
-            "nonce" : "0x",
+            "nonce" : "0x00",
             "r" : "0xc5689ed1ad124753d54576dfb4b571465a41900a1dff4058d8adf16f752013d0",
             "s" : "0xe221cbd70ec28c94a3b55ec771bcbc70778d6ee0b51ca7ea9514594c861b1884",
             "to" : "",
             "v" : "0x1c",
-            "value" : "0x"
+            "value" : "0x00"
         }
     },
     "libsecp256k1test" : {
@@ -283,12 +304,12 @@
             "data" : "0x",
             "gasLimit" : "0xf388",
             "gasPrice" : "0x09184e72a000",
-            "nonce" : "0x",
+            "nonce" : "0x00",
             "r" : "0x2c",
             "s" : "0x04",
             "to" : "",
             "v" : "0x1b",
-            "value" : "0x"
+            "value" : "0x00"
         }
     },
     "unpadedRValue" : {
@@ -303,7 +324,7 @@
             "s" : "0x495701e230667832c8999e884e366a61028633ecf951e8cd66d119f381ae5718",
             "to" : "7c47ef93268a311f4cad0c750724299e9b72c268",
             "v" : "0x1c",
-            "value" : "0x"
+            "value" : "0x00"
         }
     }
 }
