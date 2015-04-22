@@ -1061,7 +1061,7 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 		for idx, field := range list {
 			switch value := field.(type) {
 			case nil:
-				topics[idx] = []string{""}
+				topics[idx] = []string{}
 
 			case string:
 				topics[idx] = []string{value}
