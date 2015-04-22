@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 )
 
 type testNativeObjectBinding struct {
@@ -43,6 +44,31 @@ func TestExec(t *testing.T) {
 	if exp != got {
 		t.Errorf("expected '%v', got '%v'", exp, got)
 	}
+	jsre.Stop(false)
+}
+
+func TestNatto(t *testing.T) {
+	jsre := New("/tmp")
+
+	ioutil.WriteFile("/tmp/test.js", []byte(`setTimeout(function(){msg = "testMsg"}, 1);`), os.ModePerm)
+	err := jsre.Exec("test.js")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	time.Sleep(time.Millisecond * 10)
+	val, err := jsre.Run("msg")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if !val.IsString() {
+		t.Errorf("expected string value, got %v", val)
+	}
+	exp := "testMsg"
+	got, _ := val.ToString()
+	if exp != got {
+		t.Errorf("expected '%v', got '%v'", exp, got)
+	}
+	jsre.Stop(false)
 }
 
 func TestBind(t *testing.T) {
@@ -59,6 +85,7 @@ func TestBind(t *testing.T) {
 		t.Errorf("expected no error, got %v", err)
 	}
 	t.Logf("no: %v", pp)
+	jsre.Stop(false)
 }
 
 func TestLoadScript(t *testing.T) {
@@ -81,4 +108,5 @@ func TestLoadScript(t *testing.T) {
 	if exp != got {
 		t.Errorf("expected '%v', got '%v'", exp, got)
 	}
+	jsre.Stop(false)
 }
