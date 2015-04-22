@@ -283,6 +283,11 @@ func (srv *Server) Stop() {
 
 // Self returns the local node's endpoint information.
 func (srv *Server) Self() *discover.Node {
+	srv.lock.RLock()
+	defer srv.lock.RUnlock()
+	if !srv.running {
+		return &discover.Node{IP: net.ParseIP("0.0.0.0")}
+	}
 	return srv.ntab.Self()
 }
 
@@ -471,7 +476,7 @@ func (srv *Server) checkPeer(id discover.NodeID) (bool, DiscReason) {
 		return false, DiscTooManyPeers
 	case srv.peers[id] != nil:
 		return false, DiscAlreadyConnected
-	case id == srv.Self().ID:
+	case id == srv.ntab.Self().ID:
 		return false, DiscSelf
 	default:
 		return true, 0
