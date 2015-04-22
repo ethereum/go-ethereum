@@ -109,10 +109,10 @@ func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, er
 		return ethereum, fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	// insert the test blocks, which will execute all transactions
-	if err := test.InsertBlocks(ethereum.ChainManager()); err != nil {
-		return ethereum, fmt.Errorf("Block Test load error: %v %T", err, err)
+	if err := test.TryBlocksInsert(ethereum.ChainManager()); err != nil {
+		return ethereum, fmt.Errorf("Block Test load error: %v", err)
 	}
+
 	fmt.Println("chain loaded")
 	if err := test.ValidatePostState(statedb); err != nil {
 		return ethereum, fmt.Errorf("post state validation failed: %v", err)
