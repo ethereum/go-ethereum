@@ -145,12 +145,8 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 2)
 	}
 
-	if v, ok := obj[0].(float64); ok {
-		args.BlockNumber = int64(v)
-	} else if v, ok := obj[0].(string); ok {
-		args.BlockNumber = common.Big(v).Int64()
-	} else {
-		return NewInvalidTypeError("blockNumber", "not a number or string")
+	if err := blockHeight(obj[0], &args.BlockNumber); err != nil {
+		return err
 	}
 
 	args.IncludeTxs = obj[1].(bool)

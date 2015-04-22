@@ -355,6 +355,25 @@ func TestGetBlockByNumberArgsBlockHex(t *testing.T) {
 		t.Errorf("IncludeTxs should be %v but is %v", expected.IncludeTxs, args.IncludeTxs)
 	}
 }
+func TestGetBlockByNumberArgsWords(t *testing.T) {
+	input := `["earliest", true]`
+	expected := new(GetBlockByNumberArgs)
+	expected.BlockNumber = 0
+	expected.IncludeTxs = true
+
+	args := new(GetBlockByNumberArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if args.BlockNumber != expected.BlockNumber {
+		t.Errorf("BlockNumber should be %v but is %v", expected.BlockNumber, args.BlockNumber)
+	}
+
+	if args.IncludeTxs != expected.IncludeTxs {
+		t.Errorf("IncludeTxs should be %v but is %v", expected.IncludeTxs, args.IncludeTxs)
+	}
+}
 
 func TestGetBlockByNumberEmpty(t *testing.T) {
 	input := `[]`
