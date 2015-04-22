@@ -39,12 +39,17 @@ func (self *Whisper) HasIdentity(key string) bool {
 
 // Post injects a message into the whisper network for distribution.
 func (self *Whisper) Post(payload string, to, from string, topics []string, priority, ttl uint32) error {
+	// Decode the topic strings
+	topicsDecoded := make([][]byte, len(topics))
+	for i, topic := range topics {
+		topicsDecoded[i] = common.FromHex(topic)
+	}
 	// Construct the whisper message and transmission options
 	message := whisper.NewMessage(common.FromHex(payload))
 	options := whisper.Options{
 		To:     crypto.ToECDSAPub(common.FromHex(to)),
 		TTL:    time.Duration(ttl) * time.Second,
-		Topics: whisper.NewTopicsFromStrings(topics...),
+		Topics: whisper.NewTopics(topicsDecoded...),
 	}
 	if len(from) != 0 {
 		if key := self.Whisper.GetIdentity(crypto.ToECDSAPub(common.FromHex(from))); key != nil {
@@ -68,10 +73,19 @@ func (self *Whisper) Post(payload string, to, from string, topics []string, prio
 // Watch installs a new message handler to run in case a matching packet arrives
 // from the whisper network.
 func (self *Whisper) Watch(to, from string, topics [][]string, fn func(WhisperMessage)) int {
+	// Decode the topic strings
+	topicsDecoded := make([][][]byte, len(topics))
+	for i, condition := range topics {
+		topicsDecoded[i] = make([][]byte, len(condition))
+		for j, topic := range condition {
+			topicsDecoded[i][j] = common.FromHex(topic)
+		}
+	}
+	// Assemble and inject the filter into the whisper client
 	filter := whisper.Filter{
 		To:     crypto.ToECDSAPub(common.FromHex(to)),
 		From:   crypto.ToECDSAPub(common.FromHex(from)),
-		Topics: whisper.NewFilterTopicsFromStrings(topics...),
+		Topics: whisper.NewFilterTopics(topicsDecoded...),
 	}
 	filter.Fn = func(message *whisper.Message) {
 		fn(NewWhisperMessage(message))
