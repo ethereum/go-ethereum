@@ -11,6 +11,8 @@ import "github.com/ethereum/go-ethereum/crypto"
 type Topic [4]byte
 
 // NewTopic creates a topic from the 4 byte prefix of the SHA3 hash of the data.
+//
+// Note, empty topics are considered the wildcard, and cannot be used in messages.
 func NewTopic(data []byte) Topic {
 	prefix := [4]byte{}
 	copy(prefix[:], crypto.Sha3(data)[:4])
@@ -27,26 +29,6 @@ func NewTopics(data ...[]byte) []Topic {
 	return topics
 }
 
-// NewTopicFilter creates a 2D topic array used by whisper.Filter from binary
-// data elements.
-func NewTopicFilter(data ...[][]byte) [][]Topic {
-	filter := make([][]Topic, len(data))
-	for i, condition := range data {
-		filter[i] = NewTopics(condition...)
-	}
-	return filter
-}
-
-// NewTopicFilterFlat creates a 2D topic array used by whisper.Filter from flat
-// binary data elements.
-func NewTopicFilterFlat(data ...[]byte) [][]Topic {
-	filter := make([][]Topic, len(data))
-	for i, element := range data {
-		filter[i] = []Topic{NewTopic(element)}
-	}
-	return filter
-}
-
 // NewTopicFromString creates a topic using the binary data contents of the
 // specified string.
 func NewTopicFromString(data string) Topic {
@@ -61,26 +43,6 @@ func NewTopicsFromStrings(data ...string) []Topic {
 		topics[i] = NewTopicFromString(element)
 	}
 	return topics
-}
-
-// NewTopicFilterFromStrings creates a 2D topic array used by whisper.Filter
-// from textual data elements.
-func NewTopicFilterFromStrings(data ...[]string) [][]Topic {
-	filter := make([][]Topic, len(data))
-	for i, condition := range data {
-		filter[i] = NewTopicsFromStrings(condition...)
-	}
-	return filter
-}
-
-// NewTopicFilterFromStringsFlat creates a 2D topic array used by whisper.Filter from flat
-// binary data elements.
-func NewTopicFilterFromStringsFlat(data ...string) [][]Topic {
-	filter := make([][]Topic, len(data))
-	for i, element := range data {
-		filter[i] = []Topic{NewTopicFromString(element)}
-	}
-	return filter
 }
 
 // String converts a topic byte array to a string representation.

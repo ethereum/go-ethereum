@@ -9,9 +9,8 @@ var topicCreationTests = []struct {
 	data []byte
 	hash [4]byte
 }{
-	{hash: [4]byte{0xc5, 0xd2, 0x46, 0x01}, data: nil},
-	{hash: [4]byte{0xc5, 0xd2, 0x46, 0x01}, data: []byte{}},
 	{hash: [4]byte{0x8f, 0x9a, 0x2b, 0x7d}, data: []byte("test name")},
+	{hash: [4]byte{0xf2, 0x6e, 0x77, 0x79}, data: []byte("some other test")},
 }
 
 func TestTopicCreation(t *testing.T) {

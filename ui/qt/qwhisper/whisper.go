@@ -106,7 +106,7 @@ func filterFromMap(opts map[string]interface{}) (f whisper.Filter) {
 	if topicList, ok := opts["topics"].(*qml.List); ok {
 		var topics []string
 		topicList.Convert(&topics)
-		f.Topics = whisper.NewTopicFilterFromStringsFlat(topics...)
+		f.Topics = whisper.NewFilterTopicsFromStringsFlat(topics...)
 	}
 
 	return

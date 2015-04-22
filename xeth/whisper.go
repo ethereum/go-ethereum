@@ -71,7 +71,7 @@ func (self *Whisper) Watch(to, from string, topics [][]string, fn func(WhisperMe
 	filter := whisper.Filter{
 		To:     crypto.ToECDSAPub(common.FromHex(to)),
 		From:   crypto.ToECDSAPub(common.FromHex(from)),
-		Topics: whisper.NewTopicFilterFromStrings(topics...),
+		Topics: whisper.NewFilterTopicsFromStrings(topics...),
 	}
 	filter.Fn = func(message *whisper.Message) {
 		fn(NewWhisperMessage(message))
