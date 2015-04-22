@@ -2264,7 +2264,7 @@ func TestBlockNumIndexArgsBlocknumInvalid(t *testing.T) {
 }
 
 func TestBlockNumIndexArgsIndexInvalid(t *testing.T) {
-	input := `["0x29a", 1]`
+	input := `["0x29a", true]`
 
 	args := new(BlockNumIndexArgs)
 	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))

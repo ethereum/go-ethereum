@@ -535,11 +535,11 @@ func (args *BlockNumIndexArgs) UnmarshalJSON(b []byte) (err error) {
 		return err
 	}
 
-	arg1, ok := obj[1].(string)
-	if !ok {
-		return NewInvalidTypeError("index", "not a string")
+	var arg1 *big.Int
+	if arg1, err = numString(obj[1]); err != nil {
+		return err
 	}
-	args.Index = common.Big(arg1).Int64()
+	args.Index = arg1.Int64()
 
 	return nil
 }
