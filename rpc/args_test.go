@@ -2184,6 +2184,21 @@ func TestBlockNumArgs(t *testing.T) {
 	}
 }
 
+func TestBlockNumArgsWord(t *testing.T) {
+	input := `["pending"]`
+	expected := new(BlockNumIndexArgs)
+	expected.BlockNumber = -2
+
+	args := new(BlockNumArg)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
 func TestBlockNumArgsInvalid(t *testing.T) {
 	input := `{}`
 
@@ -2218,6 +2233,26 @@ func TestBlockNumIndexArgs(t *testing.T) {
 	expected := new(BlockNumIndexArgs)
 	expected.BlockNumber = 666
 	expected.Index = 0
+
+	args := new(BlockNumIndexArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+
+	if expected.Index != args.Index {
+		t.Errorf("Index shoud be %#v but is %#v", expected.Index, args.Index)
+	}
+}
+
+func TestBlockNumIndexArgsWord(t *testing.T) {
+	input := `["latest", 67]`
+	expected := new(BlockNumIndexArgs)
+	expected.BlockNumber = -1
+	expected.Index = 67
 
 	args := new(BlockNumIndexArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
