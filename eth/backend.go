@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -123,6 +124,8 @@ type Ethereum struct {
 	blockDb common.Database // Block chain database
 	stateDb common.Database // State changes database
 	extraDb common.Database // Extra database (txs, etc)
+	// Closed when databases are flushed and closed
+	databasesClosed chan bool
 
 	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
@@ -197,18 +200,19 @@ func New(config *Config) (*Ethereum, error) {
 	glog.V(logger.Info).Infof("Blockchain DB Version: %d", config.BlockChainVersion)
 
 	eth := &Ethereum{
-		shutdownChan:   make(chan bool),
-		blockDb:        blockDb,
-		stateDb:        stateDb,
-		extraDb:        extraDb,
-		eventMux:       &event.TypeMux{},
-		accountManager: config.AccountManager,
-		DataDir:        config.DataDir,
-		etherbase:      common.HexToAddress(config.Etherbase),
-		clientVersion:  config.Name, // TODO should separate from Name
-		ethVersionId:   config.ProtocolVersion,
-		netVersionId:   config.NetworkId,
-		NatSpec:        config.NatSpec,
+		shutdownChan:    make(chan bool),
+		databasesClosed: make(chan bool),
+		blockDb:         blockDb,
+		stateDb:         stateDb,
+		extraDb:         extraDb,
+		eventMux:        &event.TypeMux{},
+		accountManager:  config.AccountManager,
+		DataDir:         config.DataDir,
+		etherbase:       common.HexToAddress(config.Etherbase),
+		clientVersion:   config.Name, // TODO should separate from Name
+		ethVersionId:    config.ProtocolVersion,
+		netVersionId:    config.NetworkId,
+		NatSpec:         config.NatSpec,
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
@@ -376,6 +380,9 @@ func (s *Ethereum) Start() error {
 		}
 	}
 
+	// periodically flush databases
+	go s.syncDatabases()
+
 	// Start services
 	go s.txPool.Start()
 	s.protocolManager.Start()
@@ -390,6 +397,34 @@ func (s *Ethereum) Start() error {
 
 	glog.V(logger.Info).Infoln("Server started")
 	return nil
+}
+
+func (s *Ethereum) syncDatabases() {
+	ticker := time.NewTicker(1 * time.Minute)
+done:
+	for {
+		select {
+		case <-ticker.C:
+			// don't change the order of database flushes
+			if err := s.extraDb.Flush(); err != nil {
+				glog.V(logger.Error).Infof("error: flush extraDb: %v\n", err)
+			}
+			if err := s.stateDb.Flush(); err != nil {
+				glog.V(logger.Error).Infof("error: flush stateDb: %v\n", err)
+			}
+			if err := s.blockDb.Flush(); err != nil {
+				glog.V(logger.Error).Infof("error: flush blockDb: %v\n", err)
+			}
+		case <-s.shutdownChan:
+			break done
+		}
+	}
+
+	s.blockDb.Close()
+	s.stateDb.Close()
+	s.extraDb.Close()
+
+	close(s.databasesClosed)
 }
 
 func (s *Ethereum) StartForTest() {
@@ -412,12 +447,7 @@ func (self *Ethereum) SuggestPeer(nodeURL string) error {
 }
 
 func (s *Ethereum) Stop() {
-	// Close the database
-	defer s.blockDb.Close()
-	defer s.stateDb.Close()
-	defer s.extraDb.Close()
-
-	s.txSub.Unsubscribe() // quits txBroadcastLoop
+	s.txSub.Unsubscribe()         // quits txBroadcastLoop
 
 	s.protocolManager.Stop()
 	s.txPool.Stop()
@@ -432,6 +462,7 @@ func (s *Ethereum) Stop() {
 
 // This function will wait for a shutdown and resumes main thread execution
 func (s *Ethereum) WaitForShutdown() {
+	<-s.databasesClosed
 	<-s.shutdownChan
 }
 

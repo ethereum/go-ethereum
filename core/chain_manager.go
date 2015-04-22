@@ -342,14 +342,14 @@ func (self *ChainManager) Export(w io.Writer) error {
 }
 
 func (bc *ChainManager) insert(block *types.Block) {
+	key := append(blockNumPre, block.Number().Bytes()...)
+	bc.blockDb.Put(key, block.Hash().Bytes())
+	// Push block to cache
+	bc.cache.Push(block)
+
 	bc.blockDb.Put([]byte("LastBlock"), block.Hash().Bytes())
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
-
-	key := append(blockNumPre, block.Number().Bytes()...)
-	bc.blockDb.Put(key, bc.lastBlockHash.Bytes())
-	// Push block to cache
-	bc.cache.Push(block)
 }
 
 func (bc *ChainManager) write(block *types.Block) {

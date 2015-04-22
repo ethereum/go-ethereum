@@ -2,7 +2,6 @@ package ethdb
 
 import (
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/ethereum/go-ethereum/logger"
@@ -34,8 +33,6 @@ func NewLDBDatabase(file string) (*LDBDatabase, error) {
 		quit: make(chan struct{}),
 	}
 	database.makeQueue()
-
-	go database.update()
 
 	return database, nil
 }
@@ -111,35 +108,16 @@ func (self *LDBDatabase) Flush() error {
 	}
 	self.makeQueue() // reset the queue
 
+	glog.V(logger.Detail).Infoln("Flush database: ", self.fn)
+
 	return self.db.Write(batch, nil)
 }
 
 func (self *LDBDatabase) Close() {
-	self.quit <- struct{}{}
-	<-self.quit
-	glog.V(logger.Info).Infoln("flushed and closed db:", self.fn)
-}
-
-func (self *LDBDatabase) update() {
-	ticker := time.NewTicker(1 * time.Minute)
-done:
-	for {
-		select {
-		case <-ticker.C:
-			if err := self.Flush(); err != nil {
-				glog.V(logger.Error).Infof("error: flush '%s': %v\n", self.fn, err)
-			}
-		case <-self.quit:
-			break done
-		}
-	}
-
 	if err := self.Flush(); err != nil {
 		glog.V(logger.Error).Infof("error: flush '%s': %v\n", self.fn, err)
 	}
 
-	// Close the leveldb database
 	self.db.Close()
-
-	self.quit <- struct{}{}
+	glog.V(logger.Error).Infoln("flushed and closed db:", self.fn)
 }

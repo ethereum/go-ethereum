@@ -7,4 +7,5 @@ type Database interface {
 	Delete(key []byte) error
 	LastKnownTD() []byte
 	Close()
+	Flush() error
 }
