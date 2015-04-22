@@ -20,6 +20,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"math/big"
 	"os"
 	"path"
 	"strings"
@@ -62,19 +63,26 @@ type jsre struct {
 	re         *re.JSRE
 	ethereum   *eth.Ethereum
 	xeth       *xeth.XEth
+	wait       chan *big.Int
 	ps1        string
 	atexit     func()
 	corsDomain string
 	prompter
 }
 
-func newJSRE(ethereum *eth.Ethereum, libPath string, interactive bool, corsDomain string) *jsre {
+func newJSRE(ethereum *eth.Ethereum, libPath, solcPath, corsDomain string, interactive bool, f xeth.Frontend) *jsre {
 	js := &jsre{ethereum: ethereum, ps1: "> "}
 	// set default cors domain used by startRpc from CLI flag
 	js.corsDomain = corsDomain
-	js.xeth = xeth.New(ethereum, js)
+	if f == nil {
+		f = js
+	}
+	js.xeth = xeth.New(ethereum, f)
+	js.wait = js.xeth.UpdateState()
+	// update state in separare forever blocks
+	js.xeth.SetSolc(solcPath)
 	js.re = re.New(libPath)
-	js.apiBindings()
+	js.apiBindings(f)
 	js.adminBindings()
 
 	if !liner.TerminalSupported() || !interactive {
@@ -87,18 +95,17 @@ func newJSRE(ethereum *eth.Ethereum, libPath string, interactive bool, corsDomai
 		js.atexit = func() {
 			js.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
 			lr.Close()
+			close(js.wait)
 		}
 	}
 	return js
 }
 
-func (js *jsre) apiBindings() {
-
-	ethApi := rpc.NewEthereumApi(js.xeth)
-	//js.re.Bind("jeth", rpc.NewJeth(ethApi, js.re.ToVal))
-
+func (js *jsre) apiBindings(f xeth.Frontend) {
+	xe := xeth.New(js.ethereum, f)
+	ethApi := rpc.NewEthereumApi(xe)
 	jeth := rpc.NewJeth(ethApi, js.re.ToVal, js.re)
-	//js.re.Bind("jeth", jeth)
+
 	js.re.Set("jeth", struct{}{})
 	t, _ := js.re.Get("jeth")
 	jethObj := t.Object()
@@ -143,13 +150,13 @@ var net = web3.net;
 	js.re.Eval(globalRegistrar + "registrar = new GlobalRegistrar(\"" + globalRegistrarAddr + "\");")
 }
 
-var ds, _ = docserver.New(utils.JSpathFlag.String())
+var ds, _ = docserver.New("/")
 
 func (self *jsre) ConfirmTransaction(tx string) bool {
 	if self.ethereum.NatSpec {
 		notice := natspec.GetNotice(self.xeth, tx, ds)
 		fmt.Println(notice)
-		answer, _ := self.Prompt("Confirm Transaction\n[y/n] ")
+		answer, _ := self.Prompt("Confirm Transaction [y/n]")
 		return strings.HasPrefix(strings.Trim(answer, " "), "y")
 	} else {
 		return true

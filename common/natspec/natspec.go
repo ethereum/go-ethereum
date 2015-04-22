@@ -17,118 +17,119 @@ import (
 type abi2method map[[8]byte]*method
 
 type NatSpec struct {
-	jsvm                    *otto.Otto
-	userDocJson, abiDocJson []byte
-	userDoc                 userDoc
-	tx, data                string
-	// abiDoc abiDoc
+	jsvm       *otto.Otto
+	abiDocJson []byte
+	userDoc    userDoc
+	tx, data   string
 }
 
-func getFallbackNotice(comment, tx string) string {
-
-	return "About to submit transaction (" + comment + "): " + tx
-
-}
-
+// main entry point for to get natspec notice for a transaction
+// the implementation is frontend friendly in that it always gives back
+// a notice that is safe to display
+// :FIXME: the second return value is an error, which can be used to fine-tune bahaviour
 func GetNotice(xeth *xeth.XEth, tx string, http *docserver.DocServer) (notice string) {
-
 	ns, err := New(xeth, tx, http)
 	if err != nil {
 		if ns == nil {
-			return getFallbackNotice("no NatSpec info found for contract", tx)
+			return getFallbackNotice(fmt.Sprintf("no NatSpec info found for contract: %v", err), tx)
 		} else {
-			return getFallbackNotice("invalid NatSpec info", tx)
+			return getFallbackNotice(fmt.Sprintf("invalid NatSpec info: %v", err), tx)
 		}
 	}
 
-	notice, err2 := ns.Notice()
-
-	if err2 != nil {
-		return getFallbackNotice("NatSpec notice error \""+err2.Error()+"\"", tx)
+	notice, err = ns.Notice()
+	if err != nil {
+		return getFallbackNotice(fmt.Sprintf("NatSpec notice error: %v", err), tx)
 	}
 
 	return
-
 }
 
-func New(xeth *xeth.XEth, tx string, http *docserver.DocServer) (self *NatSpec, err error) {
+func getFallbackNotice(comment, tx string) string {
+	return fmt.Sprintf("About to submit transaction (%s): %s", comment, tx)
+}
+
+type transaction struct {
+	To   string `json:"to"`
+	Data string `json:"data"`
+}
+
+type jsonTx struct {
+	Params []transaction `json:"params"`
+}
+
+type contractInfo struct {
+	Source        string          `json:"source"`
+	Language      string          `json:"language"`
+	Version       string          `json:"compilerVersion"`
+	AbiDefinition json.RawMessage `json:"abiDefinition"`
+	UserDoc       userDoc         `json:"userDoc"`
+	DeveloperDoc  json.RawMessage `json:"developerDoc"`
+}
+
+func New(xeth *xeth.XEth, jsontx string, http *docserver.DocServer) (self *NatSpec, err error) {
 
 	// extract contract address from tx
-
-	var obj map[string]json.RawMessage
-	err = json.Unmarshal([]byte(tx), &obj)
+	var tx jsonTx
+	err = json.Unmarshal([]byte(jsontx), &tx)
 	if err != nil {
 		return
 	}
-	var tmp []map[string]string
-	err = json.Unmarshal(obj["params"], &tmp)
+	t := tx.Params[0]
+	contractAddress := t.To
+
+	content, err := FetchDocsForContract(contractAddress, xeth, http)
 	if err != nil {
 		return
 	}
-	contractAddress := tmp[0]["to"]
 
+	self, err = NewWithDocs(content, jsontx, t.Data)
+	return
+}
+
+// also called by admin.contractInfo.get
+func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, http *docserver.DocServer) (content []byte, err error) {
 	// retrieve contract hash from state
-	if !xeth.IsContract(contractAddress) {
-		err = fmt.Errorf("NatSpec error: contract not found")
+	codehex := xeth.CodeAt(contractAddress)
+	codeb := xeth.CodeAtBytes(contractAddress)
+
+	if codehex == "0x" {
+		err = fmt.Errorf("contract (%v) not found", contractAddress)
 		return
 	}
-	codehex := xeth.CodeAt(contractAddress)
-	codeHash := common.BytesToHash(crypto.Sha3(common.Hex2Bytes(codehex[2:])))
-	// parse out host/domain
-
+	codehash := common.BytesToHash(crypto.Sha3(codeb))
 	// set up nameresolver with natspecreg + urlhint contract addresses
-	res := resolver.New(
-		xeth,
-		resolver.URLHintContractAddress,
-		resolver.HashRegContractAddress,
-	)
+	res := resolver.New(xeth)
 
 	// resolve host via HashReg/UrlHint Resolver
-	uri, hash, err := res.KeyToUrl(codeHash)
+	uri, hash, err := res.KeyToUrl(codehash)
 	if err != nil {
 		return
 	}
 
 	// get content via http client and authenticate content using hash
-	content, err := http.GetAuthContent(uri, hash)
+	content, err = http.GetAuthContent(uri, hash)
 	if err != nil {
 		return
 	}
 
-	// get abi, userdoc
-	var obj2 map[string]json.RawMessage
-	err = json.Unmarshal(content, &obj2)
-	if err != nil {
-		return
-	}
-
-	abi := []byte(obj2["abi"])
-	userdoc := []byte(obj2["userdoc"])
-
-	self, err = NewWithDocs(abi, userdoc, tx)
 	return
 }
 
-func NewWithDocs(abiDocJson, userDocJson []byte, tx string) (self *NatSpec, err error) {
+func NewWithDocs(infoDoc []byte, tx string, data string) (self *NatSpec, err error) {
 
-	var obj map[string]json.RawMessage
-	err = json.Unmarshal([]byte(tx), &obj)
+	var contract contractInfo
+	err = json.Unmarshal(infoDoc, &contract)
 	if err != nil {
 		return
 	}
-	var tmp []map[string]string
-	err = json.Unmarshal(obj["params"], &tmp)
-	if err != nil {
-		return
-	}
-	data := tmp[0]["data"]
 
 	self = &NatSpec{
-		jsvm:        otto.New(),
-		abiDocJson:  abiDocJson,
-		userDocJson: userDocJson,
-		tx:          tx,
-		data:        data,
+		jsvm:       otto.New(),
+		abiDocJson: []byte(contract.AbiDefinition),
+		userDoc:    contract.UserDoc,
+		tx:         tx,
+		data:       data,
 	}
 
 	// load and require natspec js (but it is meant to be protected environment)
@@ -137,13 +138,6 @@ func NewWithDocs(abiDocJson, userDocJson []byte, tx string) (self *NatSpec, err 
 		return
 	}
 	_, err = self.jsvm.Run("var natspec = require('natspec');")
-	if err != nil {
-		return
-	}
-
-	err = json.Unmarshal(userDocJson, &self.userDoc)
-	// err = parseAbiJson(abiDocJson, &self.abiDoc)
-
 	return
 }
 

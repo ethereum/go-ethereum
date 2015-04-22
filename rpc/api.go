@@ -2,9 +2,8 @@ package rpc
 
 import (
 	"encoding/json"
-	"fmt"
 	"math/big"
-	"sync"
+	// "sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -14,8 +13,7 @@ import (
 )
 
 type EthereumApi struct {
-	eth    *xeth.XEth
-	xethMu sync.RWMutex
+	eth *xeth.XEth
 }
 
 func NewEthereumApi(xeth *xeth.XEth) *EthereumApi {
@@ -27,9 +25,6 @@ func NewEthereumApi(xeth *xeth.XEth) *EthereumApi {
 }
 
 func (api *EthereumApi) xeth() *xeth.XEth {
-	api.xethMu.RLock()
-	defer api.xethMu.RUnlock()
-
 	return api.eth
 }
 
@@ -154,6 +149,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 
 		*reply = newHexNum(big.NewInt(int64(len(br.Uncles))).Bytes())
+
 	case "eth_getData", "eth_getCode":
 		args := new(GetDataArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -161,16 +157,11 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 		v := api.xethAtStateNum(args.BlockNumber).CodeAtBytes(args.Address)
 		*reply = newHexData(v)
+
 	case "eth_sendTransaction", "eth_transact":
 		args := new(NewTxArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
-		}
-
-		// call ConfirmTransaction first
-		tx, _ := json.Marshal(req)
-		if !api.xeth().ConfirmTransaction(string(tx)) {
-			return fmt.Errorf("Transaction not confirmed")
 		}
 
 		// nonce may be nil ("guess" mode)
@@ -311,11 +302,36 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		} else {
 			*reply = v.Uncles[args.Index]
 		}
+
 	case "eth_getCompilers":
-		c := []string{""}
+		var lang string
+		if solc, _ := api.xeth().Solc(); solc != nil {
+			lang = "Solidity"
+		}
+		c := []string{lang}
 		*reply = c
-	case "eth_compileSolidity", "eth_compileLLL", "eth_compileSerpent":
+
+	case "eth_compileLLL", "eth_compileSerpent":
 		return NewNotImplementedError(req.Method)
+
+	case "eth_compileSolidity":
+
+		solc, _ := api.xeth().Solc()
+		if solc == nil {
+			return NewNotImplementedError(req.Method)
+		}
+
+		args := new(SourceArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		contract, err := solc.Compile(args.Source)
+		if err != nil {
+			return err
+		}
+		*reply = contract
+
 	case "eth_newFilter":
 		args := new(BlockFilterArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {

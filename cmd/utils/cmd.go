@@ -95,19 +95,10 @@ func initDataDir(Datadir string) {
 	}
 }
 
-func exit(err error) {
-	status := 0
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Fatal:", err)
-		status = 1
-	}
-	logger.Flush()
-	os.Exit(status)
-}
-
 // Fatalf formats a message to standard output and exits the program.
 func Fatalf(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "Fatal: "+format+"\n", args...)
+	fmt.Fprintf(os.Stdout, "Fatal: "+format+"\n", args...)
 	logger.Flush()
 	os.Exit(1)
 }
@@ -115,7 +106,7 @@ func Fatalf(format string, args ...interface{}) {
 func StartEthereum(ethereum *eth.Ethereum) {
 	glog.V(logger.Info).Infoln("Starting ", ethereum.Name())
 	if err := ethereum.Start(); err != nil {
-		exit(err)
+		Fatalf("Error starting Ethereum: %v", err)
 	}
 	RegisterInterrupt(func(sig os.Signal) {
 		ethereum.Stop()

@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -51,6 +52,9 @@ type XEth struct {
 	// regmut   sync.Mutex
 	// register map[string][]*interface{} // TODO improve return type
 
+	solcPath string
+	solc     *compiler.Solidity
+
 	agent *miner.RemoteAgent
 }
 
@@ -69,7 +73,6 @@ func New(eth *eth.Ethereum, frontend Frontend) *XEth {
 		agent:         miner.NewRemoteAgent(),
 	}
 	eth.Miner().Register(xeth.agent)
-
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}
@@ -151,9 +154,38 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 	return self.WithState(st)
 }
 
+// applies queued transactions originating from address onto the latest state
+// and creates a block
+// only used in tests
+// - could be removed in favour of mining on testdag (natspec e2e + networking)
+// + filters
+func (self *XEth) ApplyTestTxs(statedb *state.StateDB, address common.Address, txc uint64) (uint64, *XEth) {
+
+	block := self.backend.ChainManager().NewBlock(address)
+	coinbase := statedb.GetStateObject(address)
+	coinbase.SetGasPool(big.NewInt(10000000))
+	txs := self.backend.TxPool().GetQueuedTransactions()
+
+	for i := 0; i < len(txs); i++ {
+		for _, tx := range txs {
+			if tx.Nonce() == txc {
+				_, _, err := core.ApplyMessage(core.NewEnv(statedb, self.backend.ChainManager(), tx, block), tx, coinbase)
+				if err != nil {
+					panic(err)
+				}
+				txc++
+			}
+		}
+	}
+
+	xeth := self.WithState(statedb)
+	return txc, xeth
+}
+
 func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 	xeth := &XEth{
-		backend: self.backend,
+		backend:  self.backend,
+		frontend: self.frontend,
 	}
 
 	xeth.state = NewState(xeth, statedb)
@@ -161,6 +193,44 @@ func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 }
 
 func (self *XEth) State() *State { return self.state }
+
+// subscribes to new head block events and
+// waits until blockchain height is greater n at any time
+// given the current head, waits for the next chain event
+// sets the state to the current head
+// loop is async and quit by closing the channel
+// used in tests and JS console debug module to control advancing private chain manually
+// Note: this is not threadsafe, only called in JS single process and tests
+func (self *XEth) UpdateState() (wait chan *big.Int) {
+	wait = make(chan *big.Int)
+	go func() {
+		sub := self.backend.EventMux().Subscribe(core.ChainHeadEvent{})
+		var m, n *big.Int
+		var ok bool
+	out:
+		for {
+			select {
+			case event := <-sub.Chan():
+				ev, ok := event.(core.ChainHeadEvent)
+				if ok {
+					m = ev.Block.Number()
+					if n != nil && n.Cmp(m) < 0 {
+						wait <- n
+						n = nil
+					}
+					statedb := state.New(ev.Block.Root(), self.backend.StateDb())
+					self.state = NewState(self, statedb)
+				}
+			case n, ok = <-wait:
+				if !ok {
+					break out
+				}
+			}
+		}
+		sub.Unsubscribe()
+	}()
+	return
+}
 
 func (self *XEth) Whisper() *Whisper { return self.whisper }
 
@@ -260,6 +330,23 @@ func (self *XEth) Accounts() []string {
 		accountAddresses[i] = common.ToHex(ac.Address)
 	}
 	return accountAddresses
+}
+
+// accessor for solidity compiler.
+// memoized if available, retried on-demand if not
+func (self *XEth) Solc() (*compiler.Solidity, error) {
+	var err error
+	if self.solc == nil {
+		self.solc, err = compiler.New(self.solcPath)
+	}
+	return self.solc, err
+}
+
+// set in js console via admin interface or wrapper from cli flags
+func (self *XEth) SetSolc(solcPath string) (*compiler.Solidity, error) {
+	self.solcPath = solcPath
+	self.solc = nil
+	return self.Solc()
 }
 
 func (self *XEth) DbPut(key, val []byte) bool {
@@ -643,12 +730,18 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 }
 
 func (self *XEth) ConfirmTransaction(tx string) bool {
-
 	return self.frontend.ConfirmTransaction(tx)
-
 }
 
 func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
+
+	// this minimalistic recoding is enough (works for natspec.js)
+	var jsontx = fmt.Sprintf(`{"params":[{"to":"%s","data": "%s"}]}`, toStr, codeStr)
+	if !self.ConfirmTransaction(jsontx) {
+		err := fmt.Errorf("Transaction not confirmed")
+		return "", err
+	}
+
 	var (
 		from             = common.HexToAddress(fromStr)
 		to               = common.HexToAddress(toStr)

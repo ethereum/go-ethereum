@@ -265,6 +265,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.LogJSONFlag,
 		utils.PProfEanbledFlag,
 		utils.PProfPortFlag,
+		utils.SolcPathFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		if ctx.GlobalBool(utils.PProfEanbledFlag.Name) {
@@ -320,7 +321,14 @@ func console(ctx *cli.Context) {
 	}
 
 	startEth(ctx, ethereum)
-	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), true, ctx.GlobalString(utils.RPCCORSDomainFlag.Name))
+	repl := newJSRE(
+		ethereum,
+		ctx.String(utils.JSpathFlag.Name),
+		ctx.String(utils.SolcPathFlag.Name),
+		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
+		true,
+		nil,
+	)
 	repl.interactive()
 
 	ethereum.Stop()
@@ -335,7 +343,14 @@ func execJSFiles(ctx *cli.Context) {
 	}
 
 	startEth(ctx, ethereum)
-	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), false, ctx.GlobalString(utils.RPCCORSDomainFlag.Name))
+	repl := newJSRE(
+		ethereum,
+		ctx.String(utils.JSpathFlag.Name),
+		ctx.String(utils.SolcPathFlag.Name),
+		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
+		false,
+		nil,
+	)
 	for _, file := range ctx.Args() {
 		repl.exec(file)
 	}
@@ -362,6 +377,7 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	// Start Ethereum itself
+
 	utils.StartEthereum(eth)
 	am := eth.AccountManager()
 

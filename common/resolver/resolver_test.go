@@ -20,6 +20,8 @@ var (
 )
 
 func NewTestBackend() *testBackend {
+	HashRegContractAddress = common.BigToAddress(common.Big0).Hex()[2:]
+	UrlHintContractAddress = common.BigToAddress(common.Big1).Hex()[2:]
 	self := &testBackend{}
 	self.contracts = make(map[string](map[string]string))
 
@@ -27,14 +29,13 @@ func NewTestBackend() *testBackend {
 	key := storageAddress(storageMapping(storageIdx2Addr(1), codehash[:]))
 	self.contracts[HashRegContractAddress][key] = hash.Hex()
 
-	self.contracts[URLHintContractAddress] = make(map[string]string)
+	self.contracts[UrlHintContractAddress] = make(map[string]string)
 	mapaddr := storageMapping(storageIdx2Addr(1), hash[:])
 
 	key = storageAddress(storageFixedArray(mapaddr, storageIdx2Addr(0)))
-	self.contracts[URLHintContractAddress][key] = common.ToHex([]byte(url))
+	self.contracts[UrlHintContractAddress][key] = common.ToHex([]byte(url))
 	key = storageAddress(storageFixedArray(mapaddr, storageIdx2Addr(1)))
-	self.contracts[URLHintContractAddress][key] = "0x00"
-
+	self.contracts[UrlHintContractAddress][key] = "0x00"
 	return self
 }
 
@@ -47,42 +48,46 @@ func (self *testBackend) StorageAt(ca, sa string) (res string) {
 	return
 }
 
+func (self *testBackend) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
+	return "", nil
+}
+
 func TestKeyToContentHash(t *testing.T) {
 	b := NewTestBackend()
-	res := New(b, URLHintContractAddress, HashRegContractAddress)
+	res := New(b)
 
 	got, err := res.KeyToContentHash(codehash)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	} else {
 		if got != hash {
-			t.Errorf("incorrect result, expected %x, got %x: ", hash.Hex(), got.Hex())
+			t.Errorf("incorrect result, expected '%v', got '%v'", hash.Hex(), got.Hex())
 		}
 	}
 }
 
 func TestContentHashToUrl(t *testing.T) {
 	b := NewTestBackend()
-	res := New(b, URLHintContractAddress, HashRegContractAddress)
+	res := New(b)
 	got, err := res.ContentHashToUrl(hash)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	} else {
-		if string(got) != url {
-			t.Errorf("incorrect result, expected %v, got %s: ", url, string(got))
+		if got != url {
+			t.Errorf("incorrect result, expected '%v', got '%s'", url, got)
 		}
 	}
 }
 
 func TestKeyToUrl(t *testing.T) {
 	b := NewTestBackend()
-	res := New(b, URLHintContractAddress, HashRegContractAddress)
+	res := New(b)
 	got, _, err := res.KeyToUrl(codehash)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	} else {
-		if string(got) != url {
-			t.Errorf("incorrect result, expected %v, got %s: ", url, string(got))
+		if got != url {
+			t.Errorf("incorrect result, expected \n'%s', got \n'%s'", url, got)
 		}
 	}
 }

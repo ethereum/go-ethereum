@@ -138,9 +138,12 @@ func (c *StateObject) setAddr(addr []byte, value interface{}) {
 }
 
 func (self *StateObject) GetStorage(key *big.Int) *common.Value {
+	fmt.Printf("%v: get %v %v", self.address.Hex(), key)
 	return self.GetState(common.BytesToHash(key.Bytes()))
 }
+
 func (self *StateObject) SetStorage(key *big.Int, value *common.Value) {
+	fmt.Printf("%v: set %v -> %v", self.address.Hex(), key, value)
 	self.SetState(common.BytesToHash(key.Bytes()), value)
 }
 

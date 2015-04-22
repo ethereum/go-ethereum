@@ -1136,3 +1136,26 @@ func (args *SubmitWorkArgs) UnmarshalJSON(b []byte) (err error) {
 
 	return nil
 }
+
+type SourceArgs struct {
+	Source string
+}
+
+func (args *SourceArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return NewInsufficientParamsError(len(obj), 1)
+	}
+
+	arg0, ok := obj[0].(string)
+	if !ok {
+		return NewInvalidTypeError("source code", "not a string")
+	}
+	args.Source = arg0
+
+	return nil
+}
