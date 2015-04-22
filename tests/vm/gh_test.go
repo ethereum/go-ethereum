@@ -269,6 +269,11 @@ func TestVmLog(t *testing.T) {
 	RunVmTest(fn, t)
 }
 
+func TestInputLimits1(t *testing.T) {
+	const fn = "../files/VMTests/vmInputLimits1.json"
+	RunVmTest(fn, t)
+}
+
 func TestStateExample(t *testing.T) {
 	const fn = "../files/StateTests/stExample.json"
 	RunVmTest(fn, t)
