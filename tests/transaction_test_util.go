@@ -80,7 +80,7 @@ func runTest(txTest TransactionTest) (err error) {
 			return nil
 		} else {
 			// RLP decoding works and validations pass (test FAIL)
-			return errors.New("Field validations failed after RLP decoding")
+			return fmt.Errorf("Field validations failed after RLP decoding: ", validationError)
 		}
 	}
 	return errors.New("Should not happen: verify RLP decoding and field validation")
