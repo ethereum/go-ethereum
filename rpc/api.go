@@ -406,10 +406,13 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		res, _ := api.xeth().DbGet([]byte(args.Database + args.Key))
 		*reply = newHexData(res)
+
 	case "shh_version":
+		// Retrieves the currently running whisper protocol version
 		*reply = api.xeth().WhisperVersion()
 
 	case "shh_post":
+		// Injects a new message into the whisper network
 		args := new(WhisperMessageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
@@ -421,17 +424,16 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		*reply = true
 
 	case "shh_newIdentity":
+		// Creates a new whisper identity to use for sending/receiving messages
 		*reply = api.xeth().Whisper().NewIdentity()
 
 	case "shh_hasIdentity":
+		// Checks if an identity if owned or not
 		args := new(WhisperIdentityArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		*reply = api.xeth().Whisper().HasIdentity(args.Identity)
-
-	case "shh_newGroup", "shh_addToGroup":
-		return NewNotImplementedError(req.Method)
 
 	case "shh_newFilter":
 		// Create a new filter to watch and match messages with
@@ -443,6 +445,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		*reply = newHexNum(big.NewInt(int64(id)).Bytes())
 
 	case "shh_uninstallFilter":
+		// Remove an existing filter watching messages
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
@@ -455,7 +458,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = api.xeth().MessagesChanged(args.Id)
+		*reply = api.xeth().WhisperMessagesChanged(args.Id)
 
 	case "shh_getMessages":
 		// Retrieve all the cached messages matching a specific, existing filter
@@ -463,7 +466,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = api.xeth().Messages(args.Id)
+		*reply = api.xeth().WhisperMessages(args.Id)
 
 	// case "eth_register":
 	// 	// Placeholder for actual type

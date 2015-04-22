@@ -452,44 +452,60 @@ func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []strin
 	return filter.Find()
 }
 
+// NewWhisperFilter creates and registers a new message filter to watch for
+// inbound whisper messages. All parameters at this point are assumed to be
+// HEX encoded.
 func (p *XEth) NewWhisperFilter(to, from string, topics [][]string) int {
+	// Pre-define the id to be filled later
 	var id int
-	callback := func(msg WhisperMessage) {
-		p.messagesMut.Lock()
-		defer p.messagesMut.Unlock()
 
+	// Callback to delegate core whisper messages to this xeth filter
+	callback := func(msg WhisperMessage) {
+		p.messagesMut.RLock() // Only read lock to the filter pool
+		defer p.messagesMut.RUnlock()
 		p.messages[id].insert(msg)
 	}
+	// Initialize the core whisper filter and wrap into xeth
 	id = p.Whisper().Watch(to, from, topics, callback)
+
+	p.messagesMut.Lock()
 	p.messages[id] = newWhisperFilter(id, p.Whisper())
+	p.messagesMut.Unlock()
+
 	return id
 }
 
+// UninstallWhisperFilter disables and removes an existing filter.
 func (p *XEth) UninstallWhisperFilter(id int) bool {
+	p.messagesMut.Lock()
+	defer p.messagesMut.Unlock()
+
 	if _, ok := p.messages[id]; ok {
 		delete(p.messages, id)
 		return true
 	}
-
 	return false
 }
 
-func (self *XEth) MessagesChanged(id int) []WhisperMessage {
-	self.messagesMut.Lock()
-	defer self.messagesMut.Unlock()
+// WhisperMessages retrieves all the known messages that match a specific filter.
+func (self *XEth) WhisperMessages(id int) []WhisperMessage {
+	self.messagesMut.RLock()
+	defer self.messagesMut.RUnlock()
 
 	if self.messages[id] != nil {
-		return self.messages[id].retrieve()
+		return self.messages[id].messages()
 	}
 	return nil
 }
 
-func (self *XEth) Messages(id int) []WhisperMessage {
-	self.messagesMut.Lock()
-	defer self.messagesMut.Unlock()
+// WhisperMessagesChanged retrieves all the new messages matched by a filter
+// since the last retrieval
+func (self *XEth) WhisperMessagesChanged(id int) []WhisperMessage {
+	self.messagesMut.RLock()
+	defer self.messagesMut.RUnlock()
 
 	if self.messages[id] != nil {
-		return self.messages[id].messages()
+		return self.messages[id].retrieve()
 	}
 	return nil
 }
