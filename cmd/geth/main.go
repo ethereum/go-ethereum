@@ -268,7 +268,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 }
 
 func main() {
-	fmt.Printf("Welcome to the FRONTIER\n")
+	fmt.Printf("\n\n█   █      █                       █           █  █           ███              █   █\n█ █ █ ███  █  ███ ███ ███ ███     ███ ███     ███ ███ ███     █   ███ ███ ██  ███     ███ ███ \n█ █ █ ██   █  █   █ █ ███ ██       █  █ █      █  █ █ ██      ██  █   █ █ █ █  █   █  ██  █   \n█████ ███  ██ ███ ███ █ █ ███      ██ ███      ██ █ █ ███     █   █   ███ █ █  ██  ██ ███ █   \n\n")
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	defer logger.Flush()
 	if err := app.Run(os.Args); err != nil {
