@@ -226,10 +226,10 @@ func mustConvertHeader(in btHeader) *types.Header {
 		UncleHash:   mustConvertHash(in.UncleHash),
 		ParentHash:  mustConvertHash(in.ParentHash),
 		Extra:       mustConvertBytes(in.ExtraData),
-		GasUsed:     mustConvertBigInt(in.GasUsed, 10),
-		GasLimit:    mustConvertBigInt(in.GasLimit, 10),
-		Difficulty:  mustConvertBigInt(in.Difficulty, 10),
-		Time:        mustConvertUint(in.Timestamp, 10),
+		GasUsed:     mustConvertBigInt(in.GasUsed, 16),
+		GasLimit:    mustConvertBigInt(in.GasLimit, 16),
+		Difficulty:  mustConvertBigInt(in.Difficulty, 16),
+		Time:        mustConvertUint(in.Timestamp, 16),
 	}
 	// XXX cheats? :-)
 	header.SetNonce(mustConvertUint(in.Nonce, 16))
