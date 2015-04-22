@@ -147,3 +147,53 @@ func TestFilterTopicsCreation(t *testing.T) {
 		}
 	}
 }
+
+var filterCompareTests = []struct {
+	matcher filterer
+	message filterer
+	match   bool
+}{
+	{ // Wild-card filter matching anything
+		matcher: filterer{to: "", from: "", matcher: newTopicMatcher()},
+		message: filterer{to: "to", from: "from", matcher: newTopicMatcher(NewFilterTopicsFromStringsFlat("topic")...)},
+		match:   true,
+	},
+	{ // Filter matching the to field
+		matcher: filterer{to: "to", from: "", matcher: newTopicMatcher()},
+		message: filterer{to: "to", from: "from", matcher: newTopicMatcher(NewFilterTopicsFromStringsFlat("topic")...)},
+		match:   true,
+	},
+	{ // Filter rejecting the to field
+		matcher: filterer{to: "to", from: "", matcher: newTopicMatcher()},
+		message: filterer{to: "", from: "from", matcher: newTopicMatcher(NewFilterTopicsFromStringsFlat("topic")...)},
+		match:   false,
+	},
+	{ // Filter matching the from field
+		matcher: filterer{to: "", from: "from", matcher: newTopicMatcher()},
+		message: filterer{to: "to", from: "from", matcher: newTopicMatcher(NewFilterTopicsFromStringsFlat("topic")...)},
+		match:   true,
+	},
+	{ // Filter rejecting the from field
+		matcher: filterer{to: "", from: "from", matcher: newTopicMatcher()},
+		message: filterer{to: "to", from: "", matcher: newTopicMatcher(NewFilterTopicsFromStringsFlat("topic")...)},
+		match:   false,
+	},
+	{ // Filter matching the topic field
+		matcher: filterer{to: "", from: "from", matcher: newTopicMatcher(NewFilterTopicsFromStringsFlat("topic")...)},
+		message: filterer{to: "to", from: "from", matcher: newTopicMatcher(NewFilterTopicsFromStringsFlat("topic")...)},
+		match:   true,
+	},
+	{ // Filter rejecting the topic field
+		matcher: filterer{to: "", from: "", matcher: newTopicMatcher(NewFilterTopicsFromStringsFlat("topic")...)},
+		message: filterer{to: "to", from: "from", matcher: newTopicMatcher()},
+		match:   false,
+	},
+}
+
+func TestFilterCompare(t *testing.T) {
+	for i, tt := range filterCompareTests {
+		if match := tt.matcher.Compare(tt.message); match != tt.match {
+			t.Errorf("test %d: match mismatch: have %v, want %v", i, match, tt.match)
+		}
+	}
+}
