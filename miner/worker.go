@@ -66,7 +66,6 @@ type worker struct {
 	mux    *event.TypeMux
 	quit   chan struct{}
 	pow    pow.PoW
-	atWork int64
 
 	eth   core.Backend
 	chain *core.ChainManager
@@ -84,7 +83,9 @@ type worker struct {
 	txQueueMu sync.Mutex
 	txQueue   map[common.Hash]*types.Transaction
 
-	mining int64
+	// atomic status counters
+	mining int32
+	atWork int32
 }
 
 func newWorker(coinbase common.Address, eth core.Backend) *worker {
@@ -127,19 +128,19 @@ func (self *worker) start() {
 		agent.Start()
 	}
 
-	atomic.StoreInt64(&self.mining, 1)
+	atomic.StoreInt32(&self.mining, 1)
 }
 
 func (self *worker) stop() {
-	if atomic.LoadInt64(&self.mining) == 1 {
+	if atomic.LoadInt32(&self.mining) == 1 {
 		// stop all agents
 		for _, agent := range self.agents {
 			agent.Stop()
 		}
 	}
 
-	atomic.StoreInt64(&self.mining, 0)
-	atomic.StoreInt64(&self.atWork, 0)
+	atomic.StoreInt32(&self.mining, 0)
+	atomic.StoreInt32(&self.atWork, 0)
 }
 
 func (self *worker) register(agent Agent) {
@@ -162,7 +163,7 @@ out:
 				self.possibleUncles[ev.Block.Hash()] = ev.Block
 				self.uncleMu.Unlock()
 			case core.TxPreEvent:
-				if atomic.LoadInt64(&self.mining) == 0 {
+				if atomic.LoadInt32(&self.mining) == 0 {
 					self.commitNewWork()
 				}
 			}
@@ -177,7 +178,7 @@ out:
 func (self *worker) wait() {
 	for {
 		for block := range self.recv {
-			atomic.AddInt64(&self.atWork, -1)
+			atomic.AddInt32(&self.atWork, -1)
 
 			if block == nil {
 				continue
@@ -205,13 +206,13 @@ func (self *worker) wait() {
 }
 
 func (self *worker) push() {
-	if atomic.LoadInt64(&self.mining) == 1 {
+	if atomic.LoadInt32(&self.mining) == 1 {
 		self.current.block.Header().GasUsed = self.current.totalUsedGas
 		self.current.block.SetRoot(self.current.state.Root())
 
 		// push new work to agents
 		for _, agent := range self.agents {
-			atomic.AddInt64(&self.atWork, 1)
+			atomic.AddInt32(&self.atWork, 1)
 
 			if agent.Work() != nil {
 				agent.Work() <- self.current.block.Copy()
@@ -320,7 +321,7 @@ func (self *worker) commitNewWork() {
 	}
 
 	// We only care about logging if we're actually mining
-	if atomic.LoadInt64(&self.mining) == 1 {
+	if atomic.LoadInt32(&self.mining) == 1 {
 		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles\n", self.current.block.Number(), tcount, len(uncles))
 	}
 
