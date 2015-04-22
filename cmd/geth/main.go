@@ -359,7 +359,9 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 		}
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		eth.StartMining()
+		if err := eth.StartMining(); err != nil {
+			utils.Fatalf("%v", err)
+		}
 	}
 }
 
