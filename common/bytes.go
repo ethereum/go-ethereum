@@ -106,17 +106,6 @@ func ReadVarInt(buff []byte) (ret uint64) {
 	return
 }
 
-// Binary length
-//
-// Returns the true binary length of the given number
-func BinaryLength(num int) int {
-	if num == 0 {
-		return 0
-	}
-
-	return 1 + BinaryLength(num>>8)
-}
-
 // Copy bytes
 //
 // Returns an exact copy of the provided bytes
