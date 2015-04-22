@@ -11,6 +11,7 @@ func TestTransactions(t *testing.T) {
 	snafus := []string{
 		"TransactionWithHihghNonce", // fails due to testing upper bound of 256 bit nonce
 		"TransactionWithSvalueHigh", // fails due to C++ wrong ECDSA r,s ranges. see https://github.com/ethereum/yellowpaper/pull/112
+		"TransactionWithSvalue0",    // Invalid, 0 < s according to YP eq 205. probably typo/copy-paste error
 	}
 
 	for _, name := range snafus {
