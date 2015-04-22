@@ -335,6 +335,12 @@ func TestMemory(t *testing.T) {
 	RunVmTest(fn, t)
 }
 
+func TestMemoryStress(t *testing.T) {
+	t.Skip("Skipped due to...consuming too much memory :D")
+	const fn = "../files/StateTests/stMemoryStressTest.json"
+	RunVmTest(fn, t)
+}
+
 func TestQuadraticComplexity(t *testing.T) {
 	t.Skip() // takes too long
 	const fn = "../files/StateTests/stQuadraticComplexityTest.json"
