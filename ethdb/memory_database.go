@@ -65,3 +65,7 @@ func (db *MemDatabase) LastKnownTD() []byte {
 
 	return data
 }
+
+func (db *MemDatabase) Flush() error {
+	return nil
+}
