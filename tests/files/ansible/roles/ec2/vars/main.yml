@@ -1,7 +1,7 @@
 ---
 # default config for ec2 instances
 
-instance_type:      c4.xlarge  
+instance_type:      c4.8xlarge  
 security_group:     client-tests
 
 image:              ami-9eaa1cf6

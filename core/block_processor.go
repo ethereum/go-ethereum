@@ -219,14 +219,21 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	// can be used by light clients to make sure they've received the correct Txs
 	txSha := types.DeriveSha(block.Transactions())
 	if txSha != header.TxHash {
-		err = fmt.Errorf("validating transaction root. received=%x got=%x", header.TxHash, txSha)
+		err = fmt.Errorf("invalid transaction root hash. received=%x calculated=%x", header.TxHash, txSha)
 		return
 	}
 
 	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, R1]]))
 	receiptSha := types.DeriveSha(receipts)
 	if receiptSha != header.ReceiptHash {
-		err = fmt.Errorf("validating receipt root. received=%x got=%x", header.ReceiptHash, receiptSha)
+		err = fmt.Errorf("invalid receipt root hash. received=%x calculated=%x", header.ReceiptHash, receiptSha)
+		return
+	}
+
+	// Verify UncleHash before running other uncle validations
+	unclesSha := block.CalculateUnclesHash()
+	if unclesSha != header.UncleHash {
+		err = fmt.Errorf("invalid uncles root hash. received=%x calculated=%x", header.UncleHash, unclesSha)
 		return
 	}
 

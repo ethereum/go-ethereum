@@ -1,6 +1,6 @@
 {
   "name": "ethereum-tests",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "tests for ethereum",
   "main": "index.js",
   "scripts": {

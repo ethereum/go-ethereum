@@ -29,22 +29,12 @@ func TestBcUncleHeaderValidityTests(t *testing.T) {
 
 func TestBcInvalidHeaderTests(t *testing.T) {
 	t.Skip("Skipped in lieu of performance fixes.")
-	snafus := []string{
-		"wrongUncleHash", // TODO: why does this fail?
-	}
-	runBlockTestsInFile("files/BlockTests/bcInvalidHeaderTest.json", snafus, t)
+	runBlockTestsInFile("files/BlockTests/bcInvalidHeaderTest.json", []string{}, t)
 }
 
 func TestBcInvalidRLPTests(t *testing.T) {
 	t.Skip("Skipped in lieu of performance fixes.")
-	snafus := []string{
-		// TODO: why does these fail?
-		"TRANSCT__ZeroByteAtTheEnd",
-		"TRANSCT__RandomByteAtTheEnd",
-		"BLOCK__ZeroByteAtTheEnd",
-		"BLOCK__RandomByteAtTheEnd",
-	}
-	runBlockTestsInFile("files/BlockTests/bcInvalidRLPTest.json", snafus, t)
+	runBlockTestsInFile("files/BlockTests/bcInvalidRLPTest.json", []string{}, t)
 }
 
 func TestBcJSAPITests(t *testing.T) {
