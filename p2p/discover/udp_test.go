@@ -41,7 +41,7 @@ func newUDPTest(t *testing.T) *udpTest {
 		remotekey:  newkey(),
 		remoteaddr: &net.UDPAddr{IP: net.IP{1, 2, 3, 4}, Port: 30303},
 	}
-	test.table, test.udp = newUDP(test.localkey, test.pipe, nil)
+	test.table, test.udp = newUDP(test.localkey, test.pipe, nil, "")
 	return test
 }
 
