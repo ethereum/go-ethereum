@@ -11,6 +11,9 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 const (
@@ -58,8 +61,14 @@ type bucket struct {
 	entries    []*Node
 }
 
-func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr) *Table {
-	db, _ := newNodeDB("", Version)
+func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, seedCache string) *Table {
+	// Load the bootstrap seed cache (use in memory db upon failure)
+	db, err := newNodeDB(seedCache, Version)
+	if err != nil {
+		glog.V(logger.Warn).Infoln("Failed to open bootstrap seed cache:", err)
+		db, _ = newNodeDB("", Version)
+	}
+	// Create the bootstrap table
 	tab := &Table{
 		net:       t,
 		db:        db,
@@ -81,9 +90,10 @@ func (tab *Table) Self() *Node {
 	return tab.self
 }
 
-// Close terminates the network listener.
+// Close terminates the network listener and flushes the seed cache.
 func (tab *Table) Close() {
 	tab.net.close()
+	tab.db.close()
 }
 
 // Bootstrap sets the bootstrap nodes. These nodes are used to connect

@@ -59,6 +59,10 @@ type Server struct {
 	// with the rest of the network.
 	BootstrapNodes []*discover.Node
 
+	// SeedCache is the path to the database containing the previously seen live
+	// nodes in the network to use as potential bootstrap seeds.
+	SeedCache string
+
 	// Protocols should contain the protocols supported
 	// by the server. Matching protocols are launched for
 	// each peer.
@@ -197,7 +201,7 @@ func (srv *Server) Start() (err error) {
 	}
 
 	// node table
-	ntab, err := discover.ListenUDP(srv.PrivateKey, srv.ListenAddr, srv.NAT)
+	ntab, err := discover.ListenUDP(srv.PrivateKey, srv.ListenAddr, srv.NAT, srv.SeedCache)
 	if err != nil {
 		return err
 	}

@@ -387,3 +387,7 @@ func (db *nodeDB) add(id NodeID, addr *net.UDPAddr, tcpPort uint16) *Node {
 	db.update(n)
 	return n
 }
+
+func (db *nodeDB) close() {
+	db.ldb.Close()
+}

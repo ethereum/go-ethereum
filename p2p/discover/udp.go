@@ -144,7 +144,7 @@ type reply struct {
 }
 
 // ListenUDP returns a new table that listens for UDP packets on laddr.
-func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface) (*Table, error) {
+func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, seedCache string) (*Table, error) {
 	addr, err := net.ResolveUDPAddr("udp", laddr)
 	if err != nil {
 		return nil, err
@@ -153,12 +153,12 @@ func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface) (*Table
 	if err != nil {
 		return nil, err
 	}
-	tab, _ := newUDP(priv, conn, natm)
+	tab, _ := newUDP(priv, conn, natm, seedCache)
 	glog.V(logger.Info).Infoln("Listening,", tab.self)
 	return tab, nil
 }
 
-func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface) (*Table, *udp) {
+func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, seedCache string) (*Table, *udp) {
 	udp := &udp{
 		conn:       c,
 		priv:       priv,
@@ -176,7 +176,7 @@ func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface) (*Table, *udp) {
 			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
 		}
 	}
-	udp.Table = newTable(udp, PubkeyID(&priv.PublicKey), realaddr)
+	udp.Table = newTable(udp, PubkeyID(&priv.PublicKey), realaddr, seedCache)
 	go udp.loop()
 	go udp.readLoop()
 	return udp.Table, udp

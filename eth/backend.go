@@ -179,6 +179,7 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+	seedDbPath := path.Join(config.DataDir, "seeds")
 
 	// Perform database sanity checks
 	d, _ := blockDb.Get([]byte("ProtocolVersion"))
@@ -243,6 +244,7 @@ func New(config *Config) (*Ethereum, error) {
 		NAT:            config.NAT,
 		NoDial:         !config.Dial,
 		BootstrapNodes: config.parseBootNodes(),
+		SeedCache:      seedDbPath,
 	}
 	if len(config.Port) > 0 {
 		eth.net.ListenAddr = ":" + config.Port
