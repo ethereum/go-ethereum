@@ -81,7 +81,7 @@ func (err *NonceErr) Error() string {
 }
 
 func NonceError(is, exp uint64) *NonceErr {
-	return &NonceErr{Message: fmt.Sprintf("Transaction w/ invalid nonce (%d / %d)", is, exp), Is: is, Exp: exp}
+	return &NonceErr{Message: fmt.Sprintf("Transaction w/ invalid nonce. tx=%d  state=%d)", is, exp), Is: is, Exp: exp}
 }
 
 func IsNonceErr(err error) bool {

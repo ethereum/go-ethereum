@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -17,7 +19,7 @@ import (
 
 var (
 	ErrInvalidSender      = errors.New("Invalid sender")
-	ErrImpossibleNonce    = errors.New("Impossible nonce")
+	ErrNonce              = errors.New("Nonce too low")
 	ErrNonExistentAccount = errors.New("Account does not exist")
 	ErrInsufficientFunds  = errors.New("Insufficient funds")
 	ErrIntrinsicGas       = errors.New("Intrinsic gas too low")
@@ -54,19 +56,42 @@ type TxPool struct {
 	txs           map[common.Hash]*types.Transaction
 	invalidHashes *set.Set
 
+	queue map[common.Address]types.Transactions
+
 	subscribers []chan TxMsg
 
 	eventMux *event.TypeMux
 }
 
 func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn) *TxPool {
-	return &TxPool{
+	txPool := &TxPool{
 		txs:           make(map[common.Hash]*types.Transaction),
+		queue:         make(map[common.Address]types.Transactions),
 		queueChan:     make(chan *types.Transaction, txPoolQueueSize),
 		quit:          make(chan bool),
 		eventMux:      eventMux,
 		invalidHashes: set.New(),
 		currentState:  currentStateFn,
+	}
+	return txPool
+}
+
+func (pool *TxPool) Start() {
+	// Queue timer will tick so we can attempt to move items from the queue to the
+	// main transaction pool.
+	queueTimer := time.NewTicker(300 * time.Millisecond)
+	// Removal timer will tick and attempt to remove bad transactions (account.nonce>tx.nonce)
+	removalTimer := time.NewTicker(1 * time.Second)
+done:
+	for {
+		select {
+		case <-queueTimer.C:
+			pool.checkQueue()
+		case <-removalTimer.C:
+			pool.validatePool()
+		case <-pool.quit:
+			break done
+		}
 	}
 }
 
@@ -100,14 +125,10 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	}
 
 	if pool.currentState().GetNonce(from) > tx.Nonce() {
-		return ErrImpossibleNonce
+		return ErrNonce
 	}
 
 	return nil
-}
-
-func (self *TxPool) addTx(tx *types.Transaction) {
-	self.txs[tx.Hash()] = tx
 }
 
 func (self *TxPool) add(tx *types.Transaction) error {
@@ -127,7 +148,7 @@ func (self *TxPool) add(tx *types.Transaction) error {
 		return err
 	}
 
-	self.addTx(tx)
+	self.queueTx(tx)
 
 	var toname string
 	if to := tx.To(); to != nil {
@@ -143,9 +164,6 @@ func (self *TxPool) add(tx *types.Transaction) error {
 	if glog.V(logger.Debug) {
 		glog.Infof("(t) %x => %s (%v) %x\n", from, toname, tx.Value, tx.Hash())
 	}
-
-	// Notify the subscribers
-	go self.eventMux.Post(TxPreEvent{tx})
 
 	return nil
 }
@@ -189,34 +207,108 @@ func (self *TxPool) GetTransactions() (txs types.Transactions) {
 	return
 }
 
-func (self *TxPool) RemoveSet(txs types.Transactions) {
+func (self *TxPool) GetQueuedTransactions() types.Transactions {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	var txs types.Transactions
+	for _, ts := range self.queue {
+		txs = append(txs, ts...)
+	}
+
+	return txs
+}
+
+func (self *TxPool) RemoveTransactions(txs types.Transactions) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
+
 	for _, tx := range txs {
 		delete(self.txs, tx.Hash())
 	}
-}
-
-func (self *TxPool) InvalidateSet(hashes *set.Set) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
-	hashes.Each(func(v interface{}) bool {
-		delete(self.txs, v.(common.Hash))
-		return true
-	})
-	self.invalidHashes.Merge(hashes)
 }
 
 func (pool *TxPool) Flush() {
 	pool.txs = make(map[common.Hash]*types.Transaction)
 }
 
-func (pool *TxPool) Start() {
-}
-
 func (pool *TxPool) Stop() {
 	pool.Flush()
+	close(pool.quit)
 
 	glog.V(logger.Info).Infoln("TX Pool stopped")
+}
+
+func (self *TxPool) queueTx(tx *types.Transaction) {
+	from, _ := tx.From()
+	self.queue[from] = append(self.queue[from], tx)
+}
+
+func (pool *TxPool) addTx(tx *types.Transaction) {
+	if _, ok := pool.txs[tx.Hash()]; !ok {
+		pool.txs[tx.Hash()] = tx
+		// Notify the subscribers. This event is posted in a goroutine
+		// because it's possible that somewhere during the post "Remove transaction"
+		// gets called which will then wait for the global tx pool lock and deadlock.
+		go pool.eventMux.Post(TxPreEvent{tx})
+	}
+}
+
+// check queue will attempt to insert
+func (pool *TxPool) checkQueue() {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	statedb := pool.currentState()
+	for address, txs := range pool.queue {
+		sort.Sort(types.TxByNonce{txs})
+
+		var (
+			nonce = statedb.GetNonce(address)
+			start int
+		)
+		// Clean up the transactions first and determine the start of the nonces
+		for _, tx := range txs {
+			if tx.Nonce() >= nonce {
+				break
+			}
+			start++
+		}
+		pool.queue[address] = txs[start:]
+
+		// expected nonce
+		enonce := nonce
+		for _, tx := range pool.queue[address] {
+			// If the expected nonce does not match up with the next one
+			// (i.e. a nonce gap), we stop the loop
+			if enonce != tx.Nonce() {
+				break
+			}
+			enonce++
+
+			pool.addTx(tx)
+		}
+		//pool.queue[address] = txs[i:]
+		// delete the entire queue entry if it's empty. There's no need to keep it
+		if len(pool.queue[address]) == 0 {
+			delete(pool.queue, address)
+		}
+	}
+}
+
+func (pool *TxPool) validatePool() {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	statedb := pool.currentState()
+	for hash, tx := range pool.txs {
+		from, _ := tx.From()
+		if nonce := statedb.GetNonce(from); nonce > tx.Nonce() {
+			if glog.V(logger.Debug) {
+				glog.Infof("removed tx (%x) from pool due to nonce error. state=%d tx=%d\n", hash[:4], nonce, tx.Nonce())
+			}
+
+			delete(pool.txs, hash)
+		}
+	}
 }

@@ -220,7 +220,7 @@ func (self *testFrontend) applyTxs() {
 	block := self.ethereum.ChainManager().NewBlock(cb)
 	coinbase := self.stateDb.GetStateObject(cb)
 	coinbase.SetGasPool(big.NewInt(10000000))
-	txs := self.ethereum.TxPool().GetTransactions()
+	txs := self.ethereum.TxPool().GetQueuedTransactions()
 
 	for i := 0; i < len(txs); i++ {
 		for _, tx := range txs {

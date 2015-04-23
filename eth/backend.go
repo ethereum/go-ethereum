@@ -3,7 +3,6 @@ package eth
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"math"
 	"path"
 	"strings"
 
@@ -136,11 +135,10 @@ type Ethereum struct {
 	protocolManager *ProtocolManager
 	downloader      *downloader.Downloader
 
-	net           *p2p.Server
-	eventMux      *event.TypeMux
-	txSub         event.Subscription
-	minedBlockSub event.Subscription
-	miner         *miner.Miner
+	net      *p2p.Server
+	eventMux *event.TypeMux
+	txSub    event.Subscription
+	miner    *miner.Miner
 
 	// logger logger.LogSystem
 
@@ -222,7 +220,7 @@ func New(config *Config) (*Ethereum, error) {
 	eth.whisper = whisper.New()
 	eth.shhVersionId = int(eth.whisper.Version())
 	eth.miner = miner.New(eth, eth.pow, config.MinerThreads)
-	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.txPool, eth.chainManager, eth.downloader)
+	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.eventMux, eth.txPool, eth.chainManager, eth.downloader)
 
 	netprv, err := config.nodeKey()
 	if err != nil {
@@ -379,7 +377,8 @@ func (s *Ethereum) Start() error {
 	}
 
 	// Start services
-	s.txPool.Start()
+	go s.txPool.Start()
+	s.protocolManager.Start()
 
 	if s.whisper != nil {
 		s.whisper.Start()
@@ -388,10 +387,6 @@ func (s *Ethereum) Start() error {
 	// broadcast transactions
 	s.txSub = s.eventMux.Subscribe(core.TxPreEvent{})
 	go s.txBroadcastLoop()
-
-	// broadcast mined blocks
-	s.minedBlockSub = s.eventMux.Subscribe(core.NewMinedBlockEvent{})
-	go s.minedBroadcastLoop()
 
 	glog.V(logger.Info).Infoln("Server started")
 	return nil
@@ -422,9 +417,9 @@ func (s *Ethereum) Stop() {
 	defer s.stateDb.Close()
 	defer s.extraDb.Close()
 
-	s.txSub.Unsubscribe()         // quits txBroadcastLoop
-	s.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
+	s.txSub.Unsubscribe() // quits txBroadcastLoop
 
+	s.protocolManager.Stop()
 	s.txPool.Stop()
 	s.eventMux.Stop()
 	if s.whisper != nil {
@@ -440,13 +435,10 @@ func (s *Ethereum) WaitForShutdown() {
 	<-s.shutdownChan
 }
 
-// now tx broadcasting is taken out of txPool
-// handled here via subscription, efficiency?
 func (self *Ethereum) txBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.txSub.Chan() {
 		event := obj.(core.TxPreEvent)
-		self.net.BroadcastLimited("eth", TxMsg, math.Sqrt, []*types.Transaction{event.Tx})
 		self.syncAccounts(event.Tx)
 	}
 }
@@ -461,16 +453,6 @@ func (self *Ethereum) syncAccounts(tx *types.Transaction) {
 	if self.accountManager.HasAccount(from.Bytes()) {
 		if self.chainManager.TxState().GetNonce(from) < tx.Nonce() {
 			self.chainManager.TxState().SetNonce(from, tx.Nonce())
-		}
-	}
-}
-
-func (self *Ethereum) minedBroadcastLoop() {
-	// automatically stops if unsubscribe
-	for obj := range self.minedBlockSub.Chan() {
-		switch ev := obj.(type) {
-		case core.NewMinedBlockEvent:
-			self.protocolManager.BroadcastBlock(ev.Block.Hash(), ev.Block)
 		}
 	}
 }
