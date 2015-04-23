@@ -5,8 +5,10 @@ package secp256k1
 /*
 #cgo CFLAGS: -I./secp256k1
 #cgo darwin CFLAGS: -I/usr/local/include
+#cgo linux,arm CFLAGS: -I/usr/local/arm/include
 #cgo LDFLAGS: -lgmp
 #cgo darwin LDFLAGS: -L/usr/local/lib
+#cgo linux,arm LDFLAGS: -L/usr/local/arm/lib
 #define USE_NUM_GMP
 #define USE_FIELD_10X26
 #define USE_FIELD_INV_BUILTIN
