@@ -77,12 +77,18 @@ func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn) *TxPool {
 }
 
 func (pool *TxPool) Start() {
-	ticker := time.NewTicker(300 * time.Millisecond)
+	// Queue timer will tick so we can attempt to move items from the queue to the
+	// main transaction pool.
+	queueTimer := time.NewTicker(300 * time.Millisecond)
+	// Removal timer will tick and attempt to remove bad transactions (account.nonce>tx.nonce)
+	removalTimer := time.NewTicker(1 * time.Second)
 done:
 	for {
 		select {
-		case <-ticker.C:
+		case <-queueTimer.C:
 			pool.checkQueue()
+		case <-removalTimer.C:
+			pool.validatePool()
 		case <-pool.quit:
 			break done
 		}
@@ -253,11 +259,12 @@ func (pool *TxPool) checkQueue() {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
+	statedb := pool.currentState()
 	for address, txs := range pool.queue {
 		sort.Sort(types.TxByNonce{txs})
 
 		var (
-			nonce = pool.currentState().GetNonce(address)
+			nonce = statedb.GetNonce(address)
 			start int
 		)
 		// Clean up the transactions first and determine the start of the nonces
@@ -285,6 +292,23 @@ func (pool *TxPool) checkQueue() {
 		// delete the entire queue entry if it's empty. There's no need to keep it
 		if len(pool.queue[address]) == 0 {
 			delete(pool.queue, address)
+		}
+	}
+}
+
+func (pool *TxPool) validatePool() {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	statedb := pool.currentState()
+	for hash, tx := range pool.txs {
+		from, _ := tx.From()
+		if nonce := statedb.GetNonce(from); nonce > tx.Nonce() {
+			if glog.V(logger.Debug) {
+				glog.Infof("removed tx (%x) from pool due to nonce error. state=%d tx=%d\n", hash[:4], nonce, tx.Nonce())
+			}
+
+			delete(pool.txs, hash)
 		}
 	}
 }
