@@ -201,6 +201,18 @@ func (self *TxPool) GetTransactions() (txs types.Transactions) {
 	return
 }
 
+func (self *TxPool) GetQueuedTransactions() types.Transactions {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	var txs types.Transactions
+	for _, ts := range self.queue {
+		txs = append(txs, ts...)
+	}
+
+	return txs
+}
+
 func (self *TxPool) RemoveTransactions(txs types.Transactions) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
