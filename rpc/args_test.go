@@ -355,6 +355,25 @@ func TestGetBlockByNumberArgsBlockHex(t *testing.T) {
 		t.Errorf("IncludeTxs should be %v but is %v", expected.IncludeTxs, args.IncludeTxs)
 	}
 }
+func TestGetBlockByNumberArgsWords(t *testing.T) {
+	input := `["earliest", true]`
+	expected := new(GetBlockByNumberArgs)
+	expected.BlockNumber = 0
+	expected.IncludeTxs = true
+
+	args := new(GetBlockByNumberArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if args.BlockNumber != expected.BlockNumber {
+		t.Errorf("BlockNumber should be %v but is %v", expected.BlockNumber, args.BlockNumber)
+	}
+
+	if args.IncludeTxs != expected.IncludeTxs {
+		t.Errorf("IncludeTxs should be %v but is %v", expected.IncludeTxs, args.IncludeTxs)
+	}
+}
 
 func TestGetBlockByNumberEmpty(t *testing.T) {
 	input := `[]`
@@ -2165,6 +2184,21 @@ func TestBlockNumArgs(t *testing.T) {
 	}
 }
 
+func TestBlockNumArgsWord(t *testing.T) {
+	input := `["pending"]`
+	expected := new(BlockNumIndexArgs)
+	expected.BlockNumber = -2
+
+	args := new(BlockNumArg)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
 func TestBlockNumArgsInvalid(t *testing.T) {
 	input := `{}`
 
@@ -2214,6 +2248,26 @@ func TestBlockNumIndexArgs(t *testing.T) {
 	}
 }
 
+func TestBlockNumIndexArgsWord(t *testing.T) {
+	input := `["latest", 67]`
+	expected := new(BlockNumIndexArgs)
+	expected.BlockNumber = -1
+	expected.Index = 67
+
+	args := new(BlockNumIndexArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+
+	if expected.Index != args.Index {
+		t.Errorf("Index shoud be %#v but is %#v", expected.Index, args.Index)
+	}
+}
+
 func TestBlockNumIndexArgsEmpty(t *testing.T) {
 	input := `[]`
 
@@ -2245,7 +2299,7 @@ func TestBlockNumIndexArgsBlocknumInvalid(t *testing.T) {
 }
 
 func TestBlockNumIndexArgsIndexInvalid(t *testing.T) {
-	input := `["0x29a", 1]`
+	input := `["0x29a", true]`
 
 	args := new(BlockNumIndexArgs)
 	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
