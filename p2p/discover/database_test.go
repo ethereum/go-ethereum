@@ -86,12 +86,12 @@ func TestNodeDBInt64(t *testing.T) {
 }
 
 func TestNodeDBFetchStore(t *testing.T) {
-	node := &Node{
-		ID:  MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-		IP:  net.IP([]byte{192, 168, 0, 1}),
-		UDP: 30303,
-		TCP: 30303,
-	}
+	node := newNode(
+		MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+		net.IP{192, 168, 0, 1},
+		30303,
+		30303,
+	)
 	inst := time.Now()
 
 	db, _ := newNodeDB("", Version)
@@ -132,28 +132,34 @@ func TestNodeDBFetchStore(t *testing.T) {
 }
 
 var nodeDBSeedQueryNodes = []struct {
-	node Node
+	node *Node
 	pong time.Time
 }{
 	{
-		node: Node{
-			ID: MustHexID("0x01d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-			IP: []byte{127, 0, 0, 1},
-		},
+		node: newNode(
+			MustHexID("0x01d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			net.IP{127, 0, 0, 1},
+			30303,
+			30303,
+		),
 		pong: time.Now().Add(-2 * time.Second),
 	},
 	{
-		node: Node{
-			ID: MustHexID("0x02d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-			IP: []byte{127, 0, 0, 2},
-		},
+		node: newNode(
+			MustHexID("0x02d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			net.IP{127, 0, 0, 2},
+			30303,
+			30303,
+		),
 		pong: time.Now().Add(-3 * time.Second),
 	},
 	{
-		node: Node{
-			ID: MustHexID("0x03d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-			IP: []byte{127, 0, 0, 3},
-		},
+		node: newNode(
+			MustHexID("0x03d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			net.IP{127, 0, 0, 3},
+			30303,
+			30303,
+		),
 		pong: time.Now().Add(-1 * time.Second),
 	},
 }
@@ -164,7 +170,7 @@ func TestNodeDBSeedQuery(t *testing.T) {
 
 	// Insert a batch of nodes for querying
 	for i, seed := range nodeDBSeedQueryNodes {
-		if err := db.updateNode(&seed.node); err != nil {
+		if err := db.updateNode(seed.node); err != nil {
 			t.Fatalf("node %d: failed to insert: %v", i, err)
 		}
 	}
@@ -204,7 +210,7 @@ func TestNodeDBSeedQueryContinuation(t *testing.T) {
 
 	// Insert a batch of nodes for querying
 	for i, seed := range nodeDBSeedQueryNodes {
-		if err := db.updateNode(&seed.node); err != nil {
+		if err := db.updateNode(seed.node); err != nil {
 			t.Fatalf("node %d: failed to insert: %v", i, err)
 		}
 	}
@@ -268,22 +274,26 @@ func TestNodeDBPersistency(t *testing.T) {
 }
 
 var nodeDBExpirationNodes = []struct {
-	node Node
+	node *Node
 	pong time.Time
 	exp  bool
 }{
 	{
-		node: Node{
-			ID: MustHexID("0x01d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-			IP: []byte{127, 0, 0, 1},
-		},
+		node: newNode(
+			MustHexID("0x01d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			net.IP{127, 0, 0, 1},
+			30303,
+			30303,
+		),
 		pong: time.Now().Add(-nodeDBNodeExpiration + time.Minute),
 		exp:  false,
 	}, {
-		node: Node{
-			ID: MustHexID("0x02d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-			IP: []byte{127, 0, 0, 2},
-		},
+		node: newNode(
+			MustHexID("0x02d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			net.IP{127, 0, 0, 2},
+			30303,
+			30303,
+		),
 		pong: time.Now().Add(-nodeDBNodeExpiration - time.Minute),
 		exp:  true,
 	},
@@ -295,7 +305,7 @@ func TestNodeDBExpiration(t *testing.T) {
 
 	// Add all the test nodes and set their last pong time
 	for i, seed := range nodeDBExpirationNodes {
-		if err := db.updateNode(&seed.node); err != nil {
+		if err := db.updateNode(seed.node); err != nil {
 			t.Fatalf("node %d: failed to insert: %v", i, err)
 		}
 		if err := db.updateLastPong(seed.node.ID, seed.pong); err != nil {

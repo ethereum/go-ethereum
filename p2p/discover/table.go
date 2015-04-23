@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
@@ -71,7 +72,7 @@ func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, nodeDBPath string
 	tab := &Table{
 		net:       t,
 		db:        db,
-		self:      newNode(ourID, ourAddr),
+		self:      newNode(ourID, ourAddr.IP, uint16(ourAddr.Port), uint16(ourAddr.Port)),
 		bonding:   make(map[NodeID]*bondproc),
 		bondslots: make(chan struct{}, maxBondingPingPongs),
 	}
@@ -105,6 +106,7 @@ func (tab *Table) Bootstrap(nodes []*Node) {
 	tab.nursery = make([]*Node, 0, len(nodes))
 	for _, n := range nodes {
 		cpy := *n
+		cpy.sha = crypto.Sha3Hash(n.ID[:])
 		tab.nursery = append(tab.nursery, &cpy)
 	}
 	tab.mutex.Unlock()
@@ -299,7 +301,7 @@ func (tab *Table) pingpong(w *bondproc, pinged bool, id NodeID, addr *net.UDPAdd
 		tab.net.waitping(id)
 	}
 	// Bonding succeeded, update the node database
-	w.n = &Node{ID: id, IP: addr.IP, UDP: uint16(addr.Port), TCP: tcpPort}
+	w.n = newNode(id, addr.IP, uint16(addr.Port), tcpPort)
 	tab.db.updateNode(w.n)
 	close(w.done)
 }
@@ -340,9 +342,8 @@ func (tab *Table) ping(id NodeID, addr *net.UDPAddr) error {
 func (tab *Table) add(entries []*Node) {
 outer:
 	for _, n := range entries {
-		if n == nil || n.ID == tab.self.ID {
-			// skip bad entries. The RLP decoder returns nil for empty
-			// input lists.
+		if n.ID == tab.self.ID {
+			// don't add self.
 			continue
 		}
 		bucket := tab.buckets[logdist(tab.self.ID, n.ID)]

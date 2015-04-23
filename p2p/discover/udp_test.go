@@ -159,12 +159,12 @@ func TestUDP_findnode(t *testing.T) {
 
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
-	test.table.db.updateNode(&Node{
-		ID:  PubkeyID(&test.remotekey.PublicKey),
-		IP:  test.remoteaddr.IP,
-		UDP: uint16(test.remoteaddr.Port),
-		TCP: 99,
-	})
+	test.table.db.updateNode(newNode(
+		PubkeyID(&test.remotekey.PublicKey),
+		test.remoteaddr.IP,
+		uint16(test.remoteaddr.Port),
+		99,
+	))
 	// check that closest neighbors are returned.
 	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
 	test.waitPacketOut(func(p *neighbors) {
@@ -211,8 +211,12 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 		MustParseNode("enode://9bffefd833d53fac8e652415f4973bee289e8b1a5c6c4cbe70abf817ce8a64cee11b823b66a987f51aaa9fba0d6a91b3e6bf0d5a5d1042de8e9eeea057b217f8@10.0.1.36:30301?discport=17"),
 		MustParseNode("enode://1b5b4aa662d7cb44a7221bfba67302590b643028197a7d5214790f3bac7aaa4a3241be9e83c09cf1f6c69d007c634faae3dc1b1221793e8446c0b3a09de65960@10.0.1.16:30303"),
 	}
-	test.packetIn(nil, neighborsPacket, &neighbors{Expiration: futureExp, Nodes: list[:2]})
-	test.packetIn(nil, neighborsPacket, &neighbors{Expiration: futureExp, Nodes: list[2:]})
+	rpclist := make([]rpcNode, len(list))
+	for i := range list {
+		rpclist[i] = nodeToRPC(list[i])
+	}
+	test.packetIn(nil, neighborsPacket, &neighbors{Expiration: futureExp, Nodes: rpclist[:2]})
+	test.packetIn(nil, neighborsPacket, &neighbors{Expiration: futureExp, Nodes: rpclist[2:]})
 
 	// check that the sent neighbors are all returned by findnode
 	select {

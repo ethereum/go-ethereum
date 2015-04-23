@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
@@ -23,19 +24,26 @@ const nodeIDBits = 512
 type Node struct {
 	IP       net.IP // len 4 for IPv4 or 16 for IPv6
 	UDP, TCP uint16 // port numbers
-	ID       NodeID
+	ID       NodeID // the node's public key
+
+	// This is a cached copy of sha3(ID) which is used for node
+	// distance calculations. This is part of Node in order to make it
+	// possible to write tests that need a node at a certain distance.
+	// In those tests, the content of sha will not actually correspond
+	// with ID.
+	sha common.Hash
 }
 
-func newNode(id NodeID, addr *net.UDPAddr) *Node {
-	ip := addr.IP.To4()
-	if ip == nil {
-		ip = addr.IP.To16()
+func newNode(id NodeID, ip net.IP, udpPort, tcpPort uint16) *Node {
+	if ipv4 := ip.To4(); ipv4 != nil {
+		ip = ipv4
 	}
 	return &Node{
 		IP:  ip,
-		UDP: uint16(addr.Port),
-		TCP: uint16(addr.Port),
+		UDP: udpPort,
+		TCP: tcpPort,
 		ID:  id,
+		sha: crypto.Sha3Hash(id[:]),
 	}
 }
 
@@ -75,40 +83,47 @@ func (n *Node) String() string {
 //
 //    enode://<hex node id>@10.3.58.6:30303?discport=30301
 func ParseNode(rawurl string) (*Node, error) {
-	var n Node
+	var (
+		id               NodeID
+		ip               net.IP
+		tcpPort, udpPort uint64
+	)
 	u, err := url.Parse(rawurl)
 	if u.Scheme != "enode" {
 		return nil, errors.New("invalid URL scheme, want \"enode\"")
 	}
+	// Parse the Node ID from the user portion.
 	if u.User == nil {
 		return nil, errors.New("does not contain node ID")
 	}
-	if n.ID, err = HexID(u.User.String()); err != nil {
+	if id, err = HexID(u.User.String()); err != nil {
 		return nil, fmt.Errorf("invalid node ID (%v)", err)
 	}
-	ip, port, err := net.SplitHostPort(u.Host)
+	// Parse the IP address.
+	host, port, err := net.SplitHostPort(u.Host)
 	if err != nil {
 		return nil, fmt.Errorf("invalid host: %v", err)
 	}
-	if n.IP = net.ParseIP(ip); n.IP == nil {
+	if ip = net.ParseIP(host); ip == nil {
 		return nil, errors.New("invalid IP address")
 	}
-	tcp, err := strconv.ParseUint(port, 10, 16)
-	if err != nil {
+	// Ensure the IP is 4 bytes long for IPv4 addresses.
+	if ipv4 := ip.To4(); ipv4 != nil {
+		ip = ipv4
+	}
+	// Parse the port numbers.
+	if tcpPort, err = strconv.ParseUint(port, 10, 16); err != nil {
 		return nil, errors.New("invalid port")
 	}
-	n.TCP = uint16(tcp)
+	udpPort = tcpPort
 	qv := u.Query()
-	if qv.Get("discport") == "" {
-		n.UDP = n.TCP
-	} else {
-		udp, err := strconv.ParseUint(qv.Get("discport"), 10, 16)
+	if qv.Get("discport") != "" {
+		udpPort, err = strconv.ParseUint(qv.Get("discport"), 10, 16)
 		if err != nil {
 			return nil, errors.New("invalid discport in query")
 		}
-		n.UDP = uint16(udp)
 	}
-	return &n, nil
+	return newNode(id, ip, uint16(udpPort), uint16(tcpPort)), nil
 }
 
 // MustParseNode parses a node URL. It panics if the URL is not valid.

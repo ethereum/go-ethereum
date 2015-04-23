@@ -224,7 +224,7 @@ func TestTable_Lookup(t *testing.T) {
 		t.Fatalf("lookup on empty table returned %d results: %#v", len(results), results)
 	}
 	// seed table with initial node (otherwise lookup will terminate immediately)
-	tab.add([]*Node{newNode(randomID(target, 200), &net.UDPAddr{Port: 200})})
+	tab.add([]*Node{newNode(randomID(target, 200), net.ParseIP("127.0.0.1"), 200, 200)})
 
 	results := tab.Lookup(target)
 	t.Logf("results:")

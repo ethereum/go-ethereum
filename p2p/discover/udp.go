@@ -74,8 +74,15 @@ type (
 
 	// reply to findnode
 	neighbors struct {
-		Nodes      []*Node
+		Nodes      []rpcNode
 		Expiration uint64
+	}
+
+	rpcNode struct {
+		IP  net.IP // len 4 for IPv4 or 16 for IPv6
+		UDP uint16 // for discovery protocol
+		TCP uint16 // for RLPx protocol
+		ID  NodeID
 	}
 
 	rpcEndpoint struct {
@@ -93,9 +100,17 @@ func makeEndpoint(addr *net.UDPAddr, tcpPort uint16) rpcEndpoint {
 	return rpcEndpoint{IP: ip, UDP: uint16(addr.Port), TCP: tcpPort}
 }
 
-func validNode(n *Node) bool {
+func nodeFromRPC(rn rpcNode) (n *Node, valid bool) {
 	// TODO: don't accept localhost, LAN addresses from internet hosts
-	return !n.IP.IsMulticast() && !n.IP.IsUnspecified() && n.UDP != 0
+	// TODO: check public key is on secp256k1 curve
+	if rn.IP.IsMulticast() || rn.IP.IsUnspecified() || rn.UDP == 0 {
+		return nil, false
+	}
+	return newNode(rn.ID, rn.IP, rn.UDP, rn.TCP), true
+}
+
+func nodeToRPC(n *Node) rpcNode {
+	return rpcNode{ID: n.ID, IP: n.IP, UDP: n.UDP, TCP: n.TCP}
 }
 
 type packet interface {
@@ -232,9 +247,9 @@ func (t *udp) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node
 	nreceived := 0
 	errc := t.pending(toid, neighborsPacket, func(r interface{}) bool {
 		reply := r.(*neighbors)
-		for _, n := range reply.Nodes {
+		for _, rn := range reply.Nodes {
 			nreceived++
-			if validNode(n) {
+			if n, valid := nodeFromRPC(rn); valid {
 				nodes = append(nodes, n)
 			}
 		}
@@ -489,8 +504,13 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte
 	closest := t.closest(req.Target, bucketSize).entries
 	t.mutex.Unlock()
 
+	// TODO: this conversion could use a cached version of the slice
+	closestrpc := make([]rpcNode, len(closest))
+	for i, n := range closest {
+		closestrpc[i] = nodeToRPC(n)
+	}
 	t.send(from, neighborsPacket, neighbors{
-		Nodes:      closest,
+		Nodes:      closestrpc,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
 	return nil
