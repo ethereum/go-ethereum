@@ -290,8 +290,8 @@ func (self *worker) commitNewWork() {
 			// ignore the transactor so no nonce errors will be thrown for this account
 			// next time the worker is run, they'll be picked up again.
 			ignoredTransactors.Add(from)
-			//glog.V(logger.Debug).Infof("Gas limit reached for block. %d TXs included in this block\n", i)
-			//break gasLimit
+
+			glog.V(logger.Detail).Infof("Gas limit reached for (%x) in this block. Continue to try smaller txs\n", from[:4])
 		default:
 			tcount++
 		}
