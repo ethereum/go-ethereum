@@ -343,7 +343,7 @@ func (self *ChainManager) Export(w io.Writer) error {
 
 func (bc *ChainManager) insert(block *types.Block) {
 	key := append(blockNumPre, block.Number().Bytes()...)
-	bc.blockDb.Put(key, bc.lastBlockHash.Bytes())
+	bc.blockDb.Put(key, block.Hash().Bytes())
 	// Push block to cache
 	bc.cache.Push(block)
 
