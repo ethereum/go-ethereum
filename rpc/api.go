@@ -56,7 +56,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		*reply = api.xeth().IsListening()
 	case "net_peerCount":
 		*reply = newHexNum(api.xeth().PeerCount())
-	case "eth_version":
+	case "eth_protocolVersion":
 		*reply = api.xeth().EthVersion()
 	case "eth_coinbase":
 		*reply = newHexData(api.xeth().Coinbase())
