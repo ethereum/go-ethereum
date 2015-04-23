@@ -59,9 +59,10 @@ type bucket struct {
 }
 
 func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr) *Table {
+	db, _ := newNodeDB("", Version)
 	tab := &Table{
 		net:       t,
-		db:        new(nodeDB),
+		db:        db,
 		self:      newNode(ourID, ourAddr),
 		bonding:   make(map[NodeID]*bondproc),
 		bondslots: make(chan struct{}, maxBondingPingPongs),
