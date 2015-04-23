@@ -177,8 +177,14 @@ func (tab *Table) refresh() {
 
 	result := tab.Lookup(randomID(tab.self.ID, ld))
 	if len(result) == 0 {
-		// bootstrap the table with a self lookup
-		all := tab.bondall(tab.nursery)
+		// Pick a batch of previously know seeds to lookup with and discard them (will come back if they are still live)
+		seeds := tab.db.list(10)
+		for _, seed := range seeds {
+			glog.V(logger.Debug).Infoln("Seeding network with:", seed)
+			tab.db.delete(seed.ID)
+		}
+		// Bootstrap the table with a self lookup
+		all := tab.bondall(append(tab.nursery, seeds...))
 		tab.mutex.Lock()
 		tab.add(all)
 		tab.mutex.Unlock()

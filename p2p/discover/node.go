@@ -325,12 +325,13 @@ func newNodeDB(path string, version int64) (db *nodeDB, err error) {
 	if path == "" {
 		db.ldb, err = leveldb.Open(storage.NewMemStorage(), opts)
 	} else {
-		db.ldb, err = openLDB(path, opts, version)
+		db.ldb, err = openNodeDB(path, opts, version)
 	}
 	return db, err
 }
 
-func openLDB(path string, opts *opt.Options, version int64) (*leveldb.DB, error) {
+// openNodeDB opens a persistent seed cache, flushing old versions.
+func openNodeDB(path string, opts *opt.Options, version int64) (*leveldb.DB, error) {
 	ldb, err := leveldb.OpenFile(path, opts)
 	if _, iscorrupted := err.(leveldb.ErrCorrupted); iscorrupted {
 		ldb, err = leveldb.RecoverFile(path, opts)
@@ -353,7 +354,7 @@ func openLDB(path string, opts *opt.Options, version int64) (*leveldb.DB, error)
 		if err = os.RemoveAll(path); err != nil {
 			return nil, err
 		}
-		return openLDB(path, opts, version)
+		return openNodeDB(path, opts, version)
 	}
 	if err != nil {
 		ldb.Close()
@@ -362,6 +363,7 @@ func openLDB(path string, opts *opt.Options, version int64) (*leveldb.DB, error)
 	return ldb, err
 }
 
+// get retrieves a node with a given id from the seed da
 func (db *nodeDB) get(id NodeID) *Node {
 	v, err := db.ldb.Get(id[:], nil)
 	if err != nil {
@@ -374,6 +376,24 @@ func (db *nodeDB) get(id NodeID) *Node {
 	return n
 }
 
+// list retrieves a batch of nodes from the database.
+func (db *nodeDB) list(n int) []*Node {
+	it := db.ldb.NewIterator(nil, nil)
+	defer it.Release()
+
+	nodes := make([]*Node, 0, n)
+	for i := 0; i < n && it.Next(); i++ {
+		var id NodeID
+		copy(id[:], it.Key())
+
+		if node := db.get(id); node != nil {
+			nodes = append(nodes, node)
+		}
+	}
+	return nodes
+}
+
+// update inserts - potentially overwriting - a node in the seed database.
 func (db *nodeDB) update(n *Node) error {
 	v, err := rlp.EncodeToBytes(n)
 	if err != nil {
@@ -382,12 +402,19 @@ func (db *nodeDB) update(n *Node) error {
 	return db.ldb.Put(n.ID[:], v, nil)
 }
 
+// add inserts a new node into the seed database.
 func (db *nodeDB) add(id NodeID, addr *net.UDPAddr, tcpPort uint16) *Node {
 	n := &Node{ID: id, IP: addr.IP, DiscPort: addr.Port, TCPPort: int(tcpPort)}
 	db.update(n)
 	return n
 }
 
+// delete removes a node from the database.
+func (db *nodeDB) delete(id NodeID) error {
+	return db.ldb.Delete(id[:], nil)
+}
+
+// close flushes and closes the database files.
 func (db *nodeDB) close() {
 	db.ldb.Close()
 }
