@@ -90,7 +90,7 @@ type ProtocolManager struct {
 	minedBlockSub event.Subscription
 
 	newPeerCh chan *peer
-	quit      chan struct{}
+	quitSync  chan struct{}
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
@@ -103,9 +103,8 @@ func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpo
 		downloader: downloader,
 		peers:      make(map[string]*peer),
 		newPeerCh:  make(chan *peer, 1),
-		quit:       make(chan struct{}),
+		quitSync:   make(chan struct{}),
 	}
-	go manager.peerHandler()
 
 	manager.SubProtocol = p2p.Protocol{
 		Name:    "eth",
@@ -123,7 +122,7 @@ func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpo
 	return manager
 }
 
-func (pm *ProtocolManager) peerHandler() {
+func (pm *ProtocolManager) syncHandler() {
 	// itimer is used to determine when to start ignoring `minDesiredPeerCount`
 	itimer := time.NewTimer(peerCountTimeout)
 out:
@@ -153,7 +152,7 @@ out:
 			} else {
 				itimer.Reset(5 * time.Second)
 			}
-		case <-pm.quit:
+		case <-pm.quitSync:
 			break out
 		}
 	}
@@ -161,7 +160,7 @@ out:
 
 func (pm *ProtocolManager) synchronise(peer *peer) {
 	// Get the hashes from the peer (synchronously)
-	_, err := pm.downloader.Synchronise(peer.id, peer.recentHash)
+	err := pm.downloader.Synchronise(peer.id, peer.recentHash)
 	if err != nil {
 		// handle error
 		glog.V(logger.Debug).Infoln("error downloading:", err)
@@ -176,11 +175,15 @@ func (pm *ProtocolManager) Start() {
 	// broadcast mined blocks
 	pm.minedBlockSub = pm.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go pm.minedBroadcastLoop()
+
+	// sync handler
+	go pm.syncHandler()
 }
 
 func (pm *ProtocolManager) Stop() {
 	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
+	close(pm.quitSync)             // quits the sync handler
 }
 
 func (pm *ProtocolManager) newPeer(pv, nv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -198,7 +201,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	pm.peers[p.id] = p
 	pm.pmu.Unlock()
 
-	pm.downloader.RegisterPeer(p.id, p.td, p.recentHash, p.requestHashes, p.requestBlocks)
+	pm.downloader.RegisterPeer(p.id, p.recentHash, p.requestHashes, p.requestBlocks)
 	defer func() {
 		pm.pmu.Lock()
 		defer pm.pmu.Unlock()
@@ -370,6 +373,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		} else {
 			// adding blocks is synchronous
 			go func() {
+				// TODO check parent error
 				err := self.downloader.AddBlock(p.id, request.Block, request.TD)
 				if err != nil {
 					glog.V(logger.Detail).Infoln("downloader err:", err)

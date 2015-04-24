@@ -96,14 +96,14 @@ func (d *Downloader) Stats() (current int, max int) {
 	return d.queue.blockHashes.Size(), d.queue.fetchPool.Size() + d.queue.hashPool.Size()
 }
 
-func (d *Downloader) RegisterPeer(id string, td *big.Int, hash common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) error {
+func (d *Downloader) RegisterPeer(id string, hash common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	glog.V(logger.Detail).Infoln("Register peer", id, "TD =", td)
+	glog.V(logger.Detail).Infoln("Register peer", id)
 
 	// Create a new peer and add it to the list of known peers
-	peer := newPeer(id, td, hash, getHashes, getBlocks)
+	peer := newPeer(id, hash, getHashes, getBlocks)
 	// add peer to our peer set
 	d.peers[id] = peer
 	// broadcast new peer
@@ -133,7 +133,7 @@ out:
 				break
 			}
 
-			d.process()
+			d.process(peer)
 		case <-d.quit:
 			break out
 		}
@@ -143,27 +143,27 @@ out:
 // SynchroniseWithPeer will select the peer and use it for synchronising. If an empty string is given
 // it will use the best peer possible and synchronise if it's TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
-func (d *Downloader) Synchronise(id string, hash common.Hash) (types.Blocks, error) {
+func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 	// Make sure it's doing neither. Once done we can restart the
 	// downloading process if the TD is higher. For now just get on
 	// with whatever is going on. This prevents unecessary switching.
 	if d.isBusy() {
-		return nil, errBusy
+		return errBusy
 	}
 
 	// Fetch the peer using the id or throw an error if the peer couldn't be found
 	p := d.peers[id]
 	if p == nil {
-		return nil, errUnknownPeer
+		return errUnknownPeer
 	}
 
 	// Get the hash from the peer and initiate the downloading progress.
 	err := d.getFromPeer(p, hash, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return d.queue.blocks, nil
+	return d.process(p)
 }
 
 func (d *Downloader) getFromPeer(p *peer, hash common.Hash, ignoreInitial bool) error {
@@ -405,13 +405,12 @@ func (d *Downloader) AddBlock(id string, block *types.Block, td *big.Int) error 
 	}
 
 	peer.mu.Lock()
-	peer.td = td
 	peer.recentHash = block.Hash()
 	peer.mu.Unlock()
 	peer.promote()
 
 	glog.V(logger.Detail).Infoln("Inserting new block from:", id)
-	d.queue.addBlock(id, block, td)
+	d.queue.addBlock(id, block)
 
 	// if neither go ahead to process
 	if d.isBusy() {
@@ -431,10 +430,10 @@ func (d *Downloader) AddBlock(id string, block *types.Block, td *big.Int) error 
 		}
 	}
 
-	return d.process()
+	return d.process(peer)
 }
 
-func (d *Downloader) process() error {
+func (d *Downloader) process(peer *peer) error {
 	atomic.StoreInt32(&d.processingBlocks, 1)
 	defer atomic.StoreInt32(&d.processingBlocks, 0)
 
@@ -460,18 +459,8 @@ func (d *Downloader) process() error {
 		// grandparents can be requested and queued.
 		err = d.insertChain(blocks[:max])
 		if err != nil && core.IsParentErr(err) {
-			glog.V(logger.Debug).Infoln("Aborting process due to missing parent. Fetching hashes")
+			glog.V(logger.Debug).Infoln("Aborting process due to missing parent.")
 
-			// TODO change this. This shite
-			for i, block := range blocks[:max] {
-				if !d.hasBlock(block.ParentHash()) {
-					d.syncCh <- syncPack{d.peers.bestPeer(), block.Hash(), true}
-					// remove processed blocks
-					blocks = blocks[i:]
-
-					break
-				}
-			}
 			break
 		} else if err != nil {
 			// immediatly unregister the false peer but do not disconnect
