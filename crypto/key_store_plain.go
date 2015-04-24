@@ -117,7 +117,7 @@ func GetKeyAddresses(keysDirPath string) (addresses [][]byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	addresses = *new([][]byte)
+	addresses = make([][]byte, 0)
 	for _, fileInfo := range fileInfos {
 		address, err := hex.DecodeString(fileInfo.Name())
 		if err != nil {
