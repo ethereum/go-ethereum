@@ -134,14 +134,14 @@ out:
 			if len(pm.peers) < minDesiredPeerCount {
 				break
 			}
-			itimer.Stop()
 
 			// Find the best peer
 			peer := getBestPeer(pm.peers)
 			if peer == nil {
 				glog.V(logger.Debug).Infoln("Sync attempt cancelled. No peers available")
-				return
 			}
+
+			itimer.Stop()
 			go pm.synchronise(peer)
 		case <-itimer.C:
 			// The timer will make sure that the downloader keeps an active state

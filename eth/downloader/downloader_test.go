@@ -49,7 +49,7 @@ type downloadTester struct {
 
 func newTester(t *testing.T, hashes []common.Hash, blocks map[common.Hash]*types.Block) *downloadTester {
 	tester := &downloadTester{t: t, hashes: hashes, blocks: blocks, done: make(chan bool)}
-	downloader := New(tester.hasBlock, tester.insertChain, func() *big.Int { return new(big.Int) })
+	downloader := New(tester.hasBlock, tester.insertChain)
 	tester.downloader = downloader
 
 	return tester
@@ -112,7 +112,8 @@ func TestDownload(t *testing.T) {
 	minDesiredPeerCount = 4
 	blockTtl = 1 * time.Second
 
-	hashes := createHashes(0, 1000)
+	targetBlocks := 1000
+	hashes := createHashes(0, targetBlocks)
 	blocks := createBlocksFromHashes(hashes)
 	tester := newTester(t, hashes, blocks)
 
@@ -121,21 +122,21 @@ func TestDownload(t *testing.T) {
 	tester.badBlocksPeer("peer3", big.NewInt(0), common.Hash{})
 	tester.badBlocksPeer("peer4", big.NewInt(0), common.Hash{})
 
-success:
-	select {
-	case <-tester.done:
-		break success
-	case <-time.After(10 * time.Second): // XXX this could actually fail on a slow computer
-		t.Error("timeout")
+	blox, err := tester.downloader.Synchronise("peer1", hashes[0])
+	if err != nil {
+		t.Error("download error", err)
+	}
+
+	if len(blox) != targetBlocks {
+		t.Error("expected", targetBlocks, "have", len(blox))
 	}
 }
 
 func TestMissing(t *testing.T) {
-	t.Skip()
-
 	glog.SetV(logger.Detail)
 	glog.SetToStderr(true)
 
+	targetBlocks := 1000
 	hashes := createHashes(0, 1000)
 	extraHashes := createHashes(1001, 1003)
 	blocks := createBlocksFromHashes(append(extraHashes, hashes...))
@@ -146,13 +147,12 @@ func TestMissing(t *testing.T) {
 	hashes = append(extraHashes, hashes[:len(hashes)-1]...)
 	tester.newPeer("peer2", big.NewInt(0), common.Hash{})
 
-success1:
-	select {
-	case <-tester.done:
-		break success1
-	case <-time.After(10 * time.Second): // XXX this could actually fail on a slow computer
-		t.Error("timout")
+	blox, err := tester.downloader.Synchronise("peer1", hashes[0])
+	if err != nil {
+		t.Error("download error", err)
 	}
 
-	tester.downloader.AddBlock("peer2", blocks[hashes[len(hashes)-1]], big.NewInt(10001))
+	if len(blox) != targetBlocks {
+		t.Error("expected", targetBlocks, "have", len(blox))
+	}
 }

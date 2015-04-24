@@ -39,7 +39,6 @@ var (
 type hashCheckFn func(common.Hash) bool
 type chainInsertFn func(types.Blocks) error
 type hashIterFn func() (common.Hash, error)
-type currentTdFn func() *big.Int
 
 type blockPack struct {
 	peerId string
@@ -61,7 +60,6 @@ type Downloader struct {
 	// Callbacks
 	hasBlock    hashCheckFn
 	insertChain chainInsertFn
-	currentTd   currentTdFn
 
 	// Status
 	fetchingHashes    int32
@@ -76,13 +74,12 @@ type Downloader struct {
 	quit      chan struct{}
 }
 
-func New(hasBlock hashCheckFn, insertChain chainInsertFn, currentTd currentTdFn) *Downloader {
+func New(hasBlock hashCheckFn, insertChain chainInsertFn) *Downloader {
 	downloader := &Downloader{
 		queue:       newqueue(),
 		peers:       make(peers),
 		hasBlock:    hasBlock,
 		insertChain: insertChain,
-		currentTd:   currentTd,
 		newPeerCh:   make(chan *peer, 1),
 		syncCh:      make(chan syncPack, 1),
 		hashCh:      make(chan []common.Hash, 1),
