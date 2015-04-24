@@ -65,10 +65,6 @@ func (dl *downloadTester) hasBlock(hash common.Hash) bool {
 func (dl *downloadTester) insertChain(blocks types.Blocks) error {
 	dl.insertedBlocks += len(blocks)
 
-	if len(dl.blocks)-1 <= dl.insertedBlocks {
-		dl.done <- true
-	}
-
 	return nil
 }
 
@@ -93,14 +89,14 @@ func (dl *downloadTester) getBlocks(id string) func([]common.Hash) error {
 func (dl *downloadTester) newPeer(id string, td *big.Int, hash common.Hash) {
 	dl.pcount++
 
-	dl.downloader.RegisterPeer(id, td, hash, dl.getHashes, dl.getBlocks(id))
+	dl.downloader.RegisterPeer(id, hash, dl.getHashes, dl.getBlocks(id))
 }
 
 func (dl *downloadTester) badBlocksPeer(id string, td *big.Int, hash common.Hash) {
 	dl.pcount++
 
 	// This bad peer never returns any blocks
-	dl.downloader.RegisterPeer(id, td, hash, dl.getHashes, func([]common.Hash) error {
+	dl.downloader.RegisterPeer(id, hash, dl.getHashes, func([]common.Hash) error {
 		return nil
 	})
 }
@@ -122,13 +118,13 @@ func TestDownload(t *testing.T) {
 	tester.badBlocksPeer("peer3", big.NewInt(0), common.Hash{})
 	tester.badBlocksPeer("peer4", big.NewInt(0), common.Hash{})
 
-	blox, err := tester.downloader.Synchronise("peer1", hashes[0])
+	err := tester.downloader.Synchronise("peer1", hashes[0])
 	if err != nil {
 		t.Error("download error", err)
 	}
 
-	if len(blox) != targetBlocks {
-		t.Error("expected", targetBlocks, "have", len(blox))
+	if tester.insertedBlocks != targetBlocks {
+		t.Error("expected", targetBlocks, "have", tester.insertedBlocks)
 	}
 }
 
@@ -147,12 +143,12 @@ func TestMissing(t *testing.T) {
 	hashes = append(extraHashes, hashes[:len(hashes)-1]...)
 	tester.newPeer("peer2", big.NewInt(0), common.Hash{})
 
-	blox, err := tester.downloader.Synchronise("peer1", hashes[0])
+	err := tester.downloader.Synchronise("peer1", hashes[0])
 	if err != nil {
 		t.Error("download error", err)
 	}
 
-	if len(blox) != targetBlocks {
-		t.Error("expected", targetBlocks, "have", len(blox))
+	if tester.insertedBlocks != targetBlocks {
+		t.Error("expected", targetBlocks, "have", tester.insertedBlocks)
 	}
 }
