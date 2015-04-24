@@ -97,6 +97,8 @@ The output of this command is supposed to be machine-readable.
 Manage accounts lets you create new accounts, list all existing accounts,
 import a private key into a new account.
 
+'account help' shows a list of subcommands or help for one subcommand.
+
 It supports interactive mode, when you are prompted for password as well as
 non-interactive mode where passwords are supplied via a given password file.
 Non-interactive mode is only meant for scripted use on test networks or known
@@ -186,8 +188,8 @@ Use "ethereum dump 0" to dump the genesis block.
 			Usage:  `Geth Console: interactive JavaScript environment`,
 			Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
-which exposes a node admin interface as well as the DAPP JavaScript API.
-See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
+which exposes a node admin interface as well as the Ðapp JavaScript API.
+See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
 `,
 		},
 		{
@@ -195,7 +197,7 @@ See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
 			Name:   "js",
 			Usage:  `executes the given JavaScript files in the Geth JavaScript VM`,
 			Description: `
-The JavaScript VM exposes a node admin interface as well as the DAPP
+The JavaScript VM exposes a node admin interface as well as the Ðapp
 JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
 `,
 		},
@@ -261,10 +263,6 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 	// flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
 	// flag.StringVar(&DiffType, "diff", "all", "sets the level of diff output [vm, all]. Has no effect if difftool=false")
 
-	// potential subcommands:
-	// flag.StringVar(&SecretFile, "import", "", "imports the file given (hex or mnemonic formats)")
-	// flag.StringVar(&ExportDir, "export", "", "exports the session keyring to files in the directory given")
-	// flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
 }
 
 func main() {
@@ -298,7 +296,7 @@ func console(ctx *cli.Context) {
 	}
 
 	startEth(ctx, ethereum)
-	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), true)
+	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), true, ctx.GlobalString(utils.RPCCORSDomainFlag.Name))
 	repl.interactive()
 
 	ethereum.Stop()
@@ -313,7 +311,7 @@ func execJSFiles(ctx *cli.Context) {
 	}
 
 	startEth(ctx, ethereum)
-	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), false)
+	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), false, ctx.GlobalString(utils.RPCCORSDomainFlag.Name))
 	for _, file := range ctx.Args() {
 		repl.exec(file)
 	}
@@ -356,10 +354,14 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	}
 	// Start auxiliary services if enabled.
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
-		utils.StartRPC(eth, ctx)
+		if err := utils.StartRPC(eth, ctx); err != nil {
+			utils.Fatalf("Error starting RPC: %v", err)
+		}
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		eth.StartMining()
+		if err := eth.StartMining(); err != nil {
+			utils.Fatalf("%v", err)
+		}
 	}
 }
 
@@ -369,8 +371,10 @@ func accountList(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
 	}
-	for _, acct := range accts {
-		fmt.Printf("Address: %x\n", acct)
+	name := "Primary"
+	for i, acct := range accts {
+		fmt.Printf("%s #%d: %x\n", name, i, acct)
+		name = "Account"
 	}
 }
 

@@ -59,17 +59,19 @@ func (r dumbterm) PasswordPrompt(p string) (string, error) {
 func (r dumbterm) AppendHistory(string) {}
 
 type jsre struct {
-	re       *re.JSRE
-	ethereum *eth.Ethereum
-	xeth     *xeth.XEth
-	ps1      string
-	atexit   func()
-
+	re         *re.JSRE
+	ethereum   *eth.Ethereum
+	xeth       *xeth.XEth
+	ps1        string
+	atexit     func()
+	corsDomain string
 	prompter
 }
 
-func newJSRE(ethereum *eth.Ethereum, libPath string, interactive bool) *jsre {
+func newJSRE(ethereum *eth.Ethereum, libPath string, interactive bool, corsDomain string) *jsre {
 	js := &jsre{ethereum: ethereum, ps1: "> "}
+	// set default cors domain used by startRpc from CLI flag
+	js.corsDomain = corsDomain
 	js.xeth = xeth.New(ethereum, js)
 	js.re = re.New(libPath)
 	js.apiBindings()

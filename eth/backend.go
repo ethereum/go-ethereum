@@ -322,10 +322,9 @@ func (s *Ethereum) StartMining() error {
 		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
 		glog.V(logger.Error).Infoln(err)
 		return err
-
 	}
 
-	s.miner.Start(eb)
+	go s.miner.Start(eb)
 	return nil
 }
 

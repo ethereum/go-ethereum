@@ -35,7 +35,6 @@ func (js *jsre) adminBindings() {
 	admin.Set("import", js.importChain)
 	admin.Set("export", js.exportChain)
 	admin.Set("verbosity", js.verbosity)
-	admin.Set("backtrace", js.backtrace)
 	admin.Set("progress", js.downloadProgress)
 
 	admin.Set("miner", struct{}{})
@@ -49,11 +48,12 @@ func (js *jsre) adminBindings() {
 	admin.Set("debug", struct{}{})
 	t, _ = admin.Get("debug")
 	debug := t.Object()
+	debug.Set("backtrace", js.backtrace)
 	debug.Set("printBlock", js.printBlock)
 	debug.Set("dumpBlock", js.dumpBlock)
 	debug.Set("getBlockRlp", js.getBlockRlp)
 	debug.Set("setHead", js.setHead)
-	debug.Set("block", js.debugBlock)
+	debug.Set("processBlock", js.debugBlock)
 }
 
 func (js *jsre) getBlock(call otto.FunctionCall) (*types.Block, error) {
@@ -203,16 +203,26 @@ func (js *jsre) startRPC(call otto.FunctionCall) otto.Value {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}
+
 	port, err := call.Argument(1).ToInteger()
 	if err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}
 
+	corsDomain := js.corsDomain
+	if len(call.ArgumentList) > 2 {
+		corsDomain, err = call.Argument(2).ToString()
+		if err != nil {
+			fmt.Println(err)
+			return otto.FalseValue()
+		}
+	}
+
 	config := rpc.RpcConfig{
 		ListenAddress: addr,
 		ListenPort:    uint(port),
-		// CorsDomain:    ctx.GlobalString(RPCCORSDomainFlag.Name),
+		CorsDomain:    corsDomain,
 	}
 
 	xeth := xeth.New(js.ethereum, nil)
@@ -274,10 +284,6 @@ func (js *jsre) unlock(call otto.FunctionCall) otto.Value {
 		}
 	}
 	am := js.ethereum.AccountManager()
-	// err := am.Unlock(common.FromHex(split[0]), split[1])
-	// if err != nil {
-	// 	utils.Fatalf("Unlock account failed '%v'", err)
-	// }
 	err = am.TimedUnlock(common.FromHex(addr), passphrase, time.Duration(seconds)*time.Second)
 	if err != nil {
 		fmt.Printf("Unlock account failed '%v'\n", err)
