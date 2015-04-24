@@ -144,7 +144,7 @@ type reply struct {
 }
 
 // ListenUDP returns a new table that listens for UDP packets on laddr.
-func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, seedCache string) (*Table, error) {
+func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, seeder *Cache) (*Table, error) {
 	addr, err := net.ResolveUDPAddr("udp", laddr)
 	if err != nil {
 		return nil, err
@@ -153,12 +153,12 @@ func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, seedCac
 	if err != nil {
 		return nil, err
 	}
-	tab, _ := newUDP(priv, conn, natm, seedCache)
+	tab, _ := newUDP(priv, conn, natm, seeder)
 	glog.V(logger.Info).Infoln("Listening,", tab.self)
 	return tab, nil
 }
 
-func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, seedCache string) (*Table, *udp) {
+func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, seeder *Cache) (*Table, *udp) {
 	udp := &udp{
 		conn:       c,
 		priv:       priv,
@@ -176,7 +176,7 @@ func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, seedCache string
 			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
 		}
 	}
-	udp.Table = newTable(udp, PubkeyID(&priv.PublicKey), realaddr, seedCache)
+	udp.Table = newTable(udp, PubkeyID(&priv.PublicKey), realaddr, seeder)
 	go udp.loop()
 	go udp.readLoop()
 	return udp.Table, udp
@@ -449,7 +449,7 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte
 	if expired(req.Expiration) {
 		return errExpired
 	}
-	if t.db.get(fromID) == nil {
+	if t.cache.get(fromID) == nil {
 		// No bond exists, we don't process the packet. This prevents
 		// an attack vector where the discovery protocol could be used
 		// to amplify traffic in a DDOS attack. A malicious actor

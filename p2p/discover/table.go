@@ -27,6 +27,7 @@ type Table struct {
 	mutex   sync.Mutex        // protects buckets, their content, and nursery
 	buckets [nBuckets]*bucket // index of known nodes by distance
 	nursery []*Node           // bootstrap nodes
+	cache   *Cache            // cache of known nodes
 
 	bondmu    sync.Mutex
 	bonding   map[NodeID]*bondproc
@@ -34,7 +35,6 @@ type Table struct {
 
 	net  transport
 	self *Node // metadata of the local node
-	db   *nodeDB
 }
 
 type bondproc struct {
@@ -61,17 +61,15 @@ type bucket struct {
 	entries    []*Node
 }
 
-func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, seedCache string) *Table {
-	// Load the bootstrap seed cache (use in memory db upon failure)
-	db, err := newNodeDB(seedCache, Version)
-	if err != nil {
-		glog.V(logger.Warn).Infoln("Failed to open bootstrap seed cache:", err)
-		db, _ = newNodeDB("", Version)
+func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, seeder *Cache) *Table {
+	// If no seed cache was given, use an in-memory one
+	if seeder == nil {
+		seeder, _ = NewMemoryCache()
 	}
 	// Create the bootstrap table
 	tab := &Table{
 		net:       t,
-		db:        db,
+		cache:     seeder,
 		self:      newNode(ourID, ourAddr),
 		bonding:   make(map[NodeID]*bondproc),
 		bondslots: make(chan struct{}, maxBondingPingPongs),
@@ -93,7 +91,6 @@ func (tab *Table) Self() *Node {
 // Close terminates the network listener and flushes the seed cache.
 func (tab *Table) Close() {
 	tab.net.close()
-	tab.db.close()
 }
 
 // Bootstrap sets the bootstrap nodes. These nodes are used to connect
@@ -178,10 +175,10 @@ func (tab *Table) refresh() {
 	result := tab.Lookup(randomID(tab.self.ID, ld))
 	if len(result) == 0 {
 		// Pick a batch of previously know seeds to lookup with and discard them (will come back if they are still live)
-		seeds := tab.db.list(10)
+		seeds := tab.cache.list(10)
 		for _, seed := range seeds {
 			glog.V(logger.Debug).Infoln("Seeding network with:", seed)
-			tab.db.delete(seed.ID)
+			tab.cache.delete(seed.ID)
 		}
 		// Bootstrap the table with a self lookup
 		all := tab.bondall(append(tab.nursery, seeds...))
@@ -252,7 +249,7 @@ func (tab *Table) bondall(nodes []*Node) (result []*Node) {
 // of the process can be skipped.
 func (tab *Table) bond(pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16) (*Node, error) {
 	var n *Node
-	if n = tab.db.get(id); n == nil {
+	if n = tab.cache.get(id); n == nil {
 		tab.bondmu.Lock()
 		w := tab.bonding[id]
 		if w != nil {
@@ -297,7 +294,7 @@ func (tab *Table) pingpong(w *bondproc, pinged bool, id NodeID, addr *net.UDPAdd
 		// waitping will simply time out.
 		tab.net.waitping(id)
 	}
-	w.n = tab.db.add(id, addr, tcpPort)
+	w.n = tab.cache.add(id, addr, tcpPort)
 	close(w.done)
 }
 
