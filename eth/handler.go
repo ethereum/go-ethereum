@@ -159,6 +159,12 @@ out:
 }
 
 func (pm *ProtocolManager) synchronise(peer *peer) {
+	// Make sure the peer's TD is higher than our own. If not drop.
+	if peer.td.Cmp(pm.chainman.Td()) <= 0 {
+		return
+	}
+
+	glog.V(logger.Info).Infof("Synchronisation attempt using %s TD=%v\n", peer.id, peer.td)
 	// Get the hashes from the peer (synchronously)
 	err := pm.downloader.Synchronise(peer.id, peer.recentHash)
 	if err != nil {
