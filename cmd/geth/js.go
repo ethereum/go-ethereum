@@ -118,7 +118,7 @@ func (js *jsre) apiBindings() {
 		utils.Fatalf("Error loading ethereum.js: %v", err)
 	}
 
-	_, err = js.re.Eval("var web3 = require('ethereum.js');")
+	_, err = js.re.Eval("var web3 = require('web3');")
 	if err != nil {
 		utils.Fatalf("Error requiring web3: %v", err)
 	}
