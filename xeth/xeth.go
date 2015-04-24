@@ -236,6 +236,10 @@ func (self *XEth) CurrentBlock() *types.Block {
 	return self.backend.ChainManager().CurrentBlock()
 }
 
+func (self *XEth) GasLimit() *big.Int {
+	return self.backend.ChainManager().GasLimit()
+}
+
 func (self *XEth) Block(v interface{}) *Block {
 	if n, ok := v.(int32); ok {
 		return self.BlockByNumber(int64(n))

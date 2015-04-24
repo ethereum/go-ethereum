@@ -317,7 +317,7 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Dat
 	eventMux := new(event.TypeMux)
 	chainManager := core.NewChainManager(blockDb, stateDb, eventMux)
 	pow := ethash.New(chainManager)
-	txPool := core.NewTxPool(eventMux, chainManager.State)
+	txPool := core.NewTxPool(eventMux, chainManager.State, chainManager.GasLimit)
 	blockProcessor := core.NewBlockProcessor(stateDb, extraDb, pow, txPool, chainManager, eventMux)
 	chainManager.SetProcessor(blockProcessor)
 

@@ -78,11 +78,12 @@ type ChainManager struct {
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
 	// Last known total difficulty
-	mu            sync.RWMutex
-	tsmu          sync.RWMutex
-	td            *big.Int
-	currentBlock  *types.Block
-	lastBlockHash common.Hash
+	mu              sync.RWMutex
+	tsmu            sync.RWMutex
+	td              *big.Int
+	currentBlock    *types.Block
+	lastBlockHash   common.Hash
+	currentGasLimit *big.Int
 
 	transState *state.StateDB
 	txState    *state.ManagedState
@@ -95,12 +96,13 @@ type ChainManager struct {
 
 func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *ChainManager {
 	bc := &ChainManager{
-		blockDb:      blockDb,
-		stateDb:      stateDb,
-		genesisBlock: GenesisBlock(stateDb),
-		eventMux:     mux,
-		quit:         make(chan struct{}),
-		cache:        NewBlockCache(blockCacheLimit),
+		blockDb:         blockDb,
+		stateDb:         stateDb,
+		genesisBlock:    GenesisBlock(stateDb),
+		eventMux:        mux,
+		quit:            make(chan struct{}),
+		cache:           NewBlockCache(blockCacheLimit),
+		currentGasLimit: new(big.Int),
 	}
 	bc.setLastBlock()
 
@@ -155,6 +157,10 @@ func (self *ChainManager) Td() *big.Int {
 	defer self.mu.RUnlock()
 
 	return self.td
+}
+
+func (self *ChainManager) GasLimit() *big.Int {
+	return self.currentGasLimit
 }
 
 func (self *ChainManager) LastBlockHash() common.Hash {
@@ -652,6 +658,7 @@ out:
 						// We need some control over the mining operation. Acquiring locks and waiting for the miner to create new block takes too long
 						// and in most cases isn't even necessary.
 						if i+1 == ev.canonicalCount {
+							self.currentGasLimit = CalcGasLimit(self.GetBlock(event.Block.ParentHash()), event.Block)
 							self.eventMux.Post(ChainHeadEvent{event.Block})
 						}
 					case ChainSplitEvent:

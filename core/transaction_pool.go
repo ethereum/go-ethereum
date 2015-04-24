@@ -23,6 +23,7 @@ var (
 	ErrNonExistentAccount = errors.New("Account does not exist")
 	ErrInsufficientFunds  = errors.New("Insufficient funds")
 	ErrIntrinsicGas       = errors.New("Intrinsic gas too low")
+	ErrGasLimit           = errors.New("Exceeds block gas limit")
 )
 
 const txPoolQueueSize = 50
@@ -52,6 +53,8 @@ type TxPool struct {
 	quit chan bool
 	// The state function which will allow us to do some pre checkes
 	currentState stateFn
+	// The current gas limit function callback
+	gasLimit func() *big.Int
 	// The actual pool
 	txs           map[common.Hash]*types.Transaction
 	invalidHashes *set.Set
@@ -63,7 +66,7 @@ type TxPool struct {
 	eventMux *event.TypeMux
 }
 
-func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn) *TxPool {
+func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
 	txPool := &TxPool{
 		txs:           make(map[common.Hash]*types.Transaction),
 		queue:         make(map[common.Address]types.Transactions),
@@ -72,6 +75,7 @@ func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn) *TxPool {
 		eventMux:      eventMux,
 		invalidHashes: set.New(),
 		currentState:  currentStateFn,
+		gasLimit:      gasLimitFn,
 	}
 	return txPool
 }
@@ -114,6 +118,10 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 
 	if !pool.currentState().HasAccount(from) {
 		return ErrNonExistentAccount
+	}
+
+	if pool.gasLimit().Cmp(tx.GasLimit) < 0 {
+		return ErrGasLimit
 	}
 
 	if pool.currentState().GetBalance(from).Cmp(new(big.Int).Mul(tx.Price, tx.GasLimit)) < 0 {
