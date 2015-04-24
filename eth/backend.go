@@ -217,9 +217,9 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
-	eth.downloader = downloader.New(eth.chainManager.HasBlock, eth.chainManager.InsertChain, eth.chainManager.Td)
+	eth.downloader = downloader.New(eth.chainManager.HasBlock, eth.chainManager.InsertChain)
 	eth.pow = ethash.New(eth.chainManager)
-	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State)
+	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
@@ -447,7 +447,7 @@ func (self *Ethereum) SuggestPeer(nodeURL string) error {
 }
 
 func (s *Ethereum) Stop() {
-	s.txSub.Unsubscribe()         // quits txBroadcastLoop
+	s.txSub.Unsubscribe() // quits txBroadcastLoop
 
 	s.protocolManager.Stop()
 	s.txPool.Stop()

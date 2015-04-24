@@ -49,7 +49,7 @@ type downloadTester struct {
 
 func newTester(t *testing.T, hashes []common.Hash, blocks map[common.Hash]*types.Block) *downloadTester {
 	tester := &downloadTester{t: t, hashes: hashes, blocks: blocks, done: make(chan bool)}
-	downloader := New(tester.hasBlock, tester.insertChain, func() *big.Int { return new(big.Int) })
+	downloader := New(tester.hasBlock, tester.insertChain)
 	tester.downloader = downloader
 
 	return tester
@@ -64,10 +64,6 @@ func (dl *downloadTester) hasBlock(hash common.Hash) bool {
 
 func (dl *downloadTester) insertChain(blocks types.Blocks) error {
 	dl.insertedBlocks += len(blocks)
-
-	if len(dl.blocks)-1 <= dl.insertedBlocks {
-		dl.done <- true
-	}
 
 	return nil
 }
@@ -93,14 +89,14 @@ func (dl *downloadTester) getBlocks(id string) func([]common.Hash) error {
 func (dl *downloadTester) newPeer(id string, td *big.Int, hash common.Hash) {
 	dl.pcount++
 
-	dl.downloader.RegisterPeer(id, td, hash, dl.getHashes, dl.getBlocks(id))
+	dl.downloader.RegisterPeer(id, hash, dl.getHashes, dl.getBlocks(id))
 }
 
 func (dl *downloadTester) badBlocksPeer(id string, td *big.Int, hash common.Hash) {
 	dl.pcount++
 
 	// This bad peer never returns any blocks
-	dl.downloader.RegisterPeer(id, td, hash, dl.getHashes, func([]common.Hash) error {
+	dl.downloader.RegisterPeer(id, hash, dl.getHashes, func([]common.Hash) error {
 		return nil
 	})
 }
@@ -112,7 +108,8 @@ func TestDownload(t *testing.T) {
 	minDesiredPeerCount = 4
 	blockTtl = 1 * time.Second
 
-	hashes := createHashes(0, 1000)
+	targetBlocks := 1000
+	hashes := createHashes(0, targetBlocks)
 	blocks := createBlocksFromHashes(hashes)
 	tester := newTester(t, hashes, blocks)
 
@@ -121,21 +118,21 @@ func TestDownload(t *testing.T) {
 	tester.badBlocksPeer("peer3", big.NewInt(0), common.Hash{})
 	tester.badBlocksPeer("peer4", big.NewInt(0), common.Hash{})
 
-success:
-	select {
-	case <-tester.done:
-		break success
-	case <-time.After(10 * time.Second): // XXX this could actually fail on a slow computer
-		t.Error("timeout")
+	err := tester.downloader.Synchronise("peer1", hashes[0])
+	if err != nil {
+		t.Error("download error", err)
+	}
+
+	if tester.insertedBlocks != targetBlocks {
+		t.Error("expected", targetBlocks, "have", tester.insertedBlocks)
 	}
 }
 
 func TestMissing(t *testing.T) {
-	t.Skip()
-
 	glog.SetV(logger.Detail)
 	glog.SetToStderr(true)
 
+	targetBlocks := 1000
 	hashes := createHashes(0, 1000)
 	extraHashes := createHashes(1001, 1003)
 	blocks := createBlocksFromHashes(append(extraHashes, hashes...))
@@ -146,13 +143,12 @@ func TestMissing(t *testing.T) {
 	hashes = append(extraHashes, hashes[:len(hashes)-1]...)
 	tester.newPeer("peer2", big.NewInt(0), common.Hash{})
 
-success1:
-	select {
-	case <-tester.done:
-		break success1
-	case <-time.After(10 * time.Second): // XXX this could actually fail on a slow computer
-		t.Error("timout")
+	err := tester.downloader.Synchronise("peer1", hashes[0])
+	if err != nil {
+		t.Error("download error", err)
 	}
 
-	tester.downloader.AddBlock("peer2", blocks[hashes[len(hashes)-1]], big.NewInt(10001))
+	if tester.insertedBlocks != targetBlocks {
+		t.Error("expected", targetBlocks, "have", tester.insertedBlocks)
+	}
 }

@@ -2,7 +2,6 @@ package downloader
 
 import (
 	"math"
-	"math/big"
 	"sync"
 	"time"
 
@@ -93,7 +92,7 @@ func (c *queue) has(hash common.Hash) bool {
 	return c.hashPool.Has(hash) || c.fetchPool.Has(hash)
 }
 
-func (c *queue) addBlock(id string, block *types.Block, td *big.Int) {
+func (c *queue) addBlock(id string, block *types.Block) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

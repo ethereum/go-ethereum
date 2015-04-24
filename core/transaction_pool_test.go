@@ -23,7 +23,7 @@ func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
 
 	var m event.TypeMux
 	key, _ := crypto.GenerateKey()
-	return NewTxPool(&m, func() *state.StateDB { return statedb }), key
+	return NewTxPool(&m, func() *state.StateDB { return statedb }, func() *big.Int { return big.NewInt(1000000) }), key
 }
 
 func TestInvalidTransactions(t *testing.T) {
