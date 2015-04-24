@@ -23,51 +23,38 @@
 #include <direct.h>
 #include <errno.h>
 #include <stdio.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
-enum ethash_io_rc ethash_io_prepare(char const *dirname, ethash_blockhash_t seedhash)
+FILE* ethash_fopen(char const* file_name, char const* mode)
 {
-    char read_buffer[DAG_MEMO_BYTESIZE];
-    char expect_buffer[DAG_MEMO_BYTESIZE];
-    enum ethash_io_rc ret = ETHASH_IO_FAIL;
+	FILE* f;
+	return fopen_s(&f, file_name, mode) == 0 ? f : NULL;
+}
 
-    // assert directory exists
-    int rc = _mkdir(dirname);
-    if (rc == -1 && errno != EEXIST) {
-        goto end;
-    }
+char* ethash_strncat(char* dest, size_t dest_size, char const* src, size_t count)
+{
+	return strncat_s(dest, dest_size, src, count) == 0 ? dest : NULL;
+}
 
-    char *memofile = ethash_io_create_filename(dirname, DAG_MEMO_NAME, sizeof(DAG_MEMO_NAME));
-    if (!memofile) {
-        goto end;
-    }
+bool ethash_mkdir(char const* dirname)
+{
+	int rc = _mkdir(dirname);
+	return rc != -1 || errno == EEXIST;
+}
 
-    // try to open memo file
-    FILE *f = fopen(memofile, "rb");
-    if (!f) {
-        // file does not exist, so no checking happens. All is fine.
-        ret = ETHASH_IO_MEMO_MISMATCH;
-        goto free_memo;
-    }
+int ethash_fileno(FILE* f)
+{
+	return _fileno(f);
+}
 
-    if (fread(read_buffer, 1, DAG_MEMO_BYTESIZE, f) != DAG_MEMO_BYTESIZE) {
-        goto close;
-    }
-
-    ethash_io_serialize_info(REVISION, seedhash, expect_buffer);
-    if (memcmp(read_buffer, expect_buffer, DAG_MEMO_BYTESIZE) != 0) {
-        // we have different memo contents so delete the memo file
-        if (_unlink(memofile) != 0) {
-            goto close;
-        }
-        ret = ETHASH_IO_MEMO_MISMATCH;
-    }
-
-    ret = ETHASH_IO_MEMO_MATCH;
-
-close:
-    fclose(f);
-free_memo:
-    free(memofile);
-end:
-    return ret;
+bool ethash_file_size(FILE* f, size_t* ret_size)
+{
+	struct _stat st;
+	int fd;
+	if ((fd = _fileno(f)) == -1 || _fstat(fd, &st) != 0) {
+		return false;
+	}
+	*ret_size = st.st_size;
+	return true;
 }

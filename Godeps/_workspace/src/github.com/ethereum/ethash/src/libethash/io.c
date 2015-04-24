@@ -22,68 +22,62 @@
 #include <string.h>
 #include <stdio.h>
 
-// silly macro to save some typing
-#define PASS_ARR(c_) (c_), sizeof(c_)
-
-static bool ethash_io_write_file(char const *dirname,
-                                 char const* filename,
-                                 size_t filename_length,
-                                 void const* data,
-                                 size_t data_size)
+enum ethash_io_rc ethash_io_prepare(
+	char const* dirname,
+	ethash_h256_t const seedhash,
+	FILE** output_file,
+	size_t file_size
+)
 {
-    bool ret = false;
-    char *fullname = ethash_io_create_filename(dirname, filename, filename_length);
-    if (!fullname) {
-        return false;
-    }
-    FILE *f = fopen(fullname, "wb");
-    if (!f) {
-        goto free_name;
-    }
-    if (data_size != fwrite(data, 1, data_size, f)) {
-        goto close;
-    }
+	char mutable_name[DAG_MUTABLE_NAME_MAX_SIZE];
+	enum ethash_io_rc ret = ETHASH_IO_FAIL;
 
-    ret = true;
-close:
-    fclose(f);
-free_name:
-    free(fullname);
-    return ret;
-}
+	// assert directory exists
+	if (!ethash_mkdir(dirname)) {
+		goto end;
+	}
 
-bool ethash_io_write(char const *dirname,
-                     ethash_params const* params,
-                     ethash_blockhash_t seedhash,
-                     void const* cache,
-                     uint8_t **data,
-                     uint64_t *data_size)
-{
-    char info_buffer[DAG_MEMO_BYTESIZE];
-    // allocate the bytes
-    uint8_t *temp_data_ptr = malloc((size_t)params->full_size);
-    if (!temp_data_ptr) {
-        goto end;
-    }
-    ethash_compute_full_data(temp_data_ptr, params, cache);
+	ethash_io_mutable_name(REVISION, &seedhash, mutable_name);
+	char* tmpfile = ethash_io_create_filename(dirname, mutable_name, strlen(mutable_name));
+	if (!tmpfile) {
+		goto end;
+	}
 
-    if (!ethash_io_write_file(dirname, PASS_ARR(DAG_FILE_NAME), temp_data_ptr, (size_t)params->full_size)) {
-        goto fail_free;
-    }
+	// try to open the file
+	FILE* f = ethash_fopen(tmpfile, "rb+");
+	if (f) {
+		size_t found_size;
+		if (!ethash_file_size(f, &found_size)) {
+			fclose(f);
+			goto free_memo;
+		}
+		if (file_size != found_size) {
+			fclose(f);
+			ret = ETHASH_IO_MEMO_SIZE_MISMATCH;
+			goto free_memo;
+		}
+	} else {
+		// file does not exist, will need to be created
+		f = ethash_fopen(tmpfile, "wb+");
+		if (!f) {
+			goto free_memo;
+		}
+		// make sure it's of the proper size
+		if (fseek(f, file_size - 1, SEEK_SET) != 0) {
+			fclose(f);
+			goto free_memo;
+		}
+		fputc('\n', f);
+		fflush(f);
+		ret = ETHASH_IO_MEMO_MISMATCH;
+		goto set_file;
+	}
 
-    ethash_io_serialize_info(REVISION, seedhash, info_buffer);
-    if (!ethash_io_write_file(dirname, PASS_ARR(DAG_MEMO_NAME), info_buffer, DAG_MEMO_BYTESIZE)) {
-        goto fail_free;
-    }
-
-    *data = temp_data_ptr;
-    *data_size = params->full_size;
-    return true;
-
-fail_free:
-    free(temp_data_ptr);
+	ret = ETHASH_IO_MEMO_MATCH;
+set_file:
+	*output_file = f;
+free_memo:
+	free(tmpfile);
 end:
-    return false;
+	return ret;
 }
-
-#undef PASS_ARR

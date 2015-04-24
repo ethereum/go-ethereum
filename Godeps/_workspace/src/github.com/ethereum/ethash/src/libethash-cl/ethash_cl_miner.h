@@ -19,7 +19,7 @@ public:
 public:
 	ethash_cl_miner();
 
-	bool init(ethash_params const& params, ethash_blockhash_t const *seed, unsigned workgroup_size = 64);
+	bool init(ethash_params const& params, ethash_h256_t const *seed, unsigned workgroup_size = 64);
 
 	void finish();
 	void hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, unsigned count);

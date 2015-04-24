@@ -14,34 +14,34 @@
   You should have received a copy of the GNU General Public License
   along with ethash.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file util.h
- * @author Tim Hughes <tim@twistedfury.com>
+/** @file mmap.h
+ * @author Lefteris Karapetsas <lefteris@ethdev.com>
  * @date 2015
  */
 #pragma once
-#include <stdint.h>
-#include "compiler.h"
+#if defined(__MINGW32__) || defined(_WIN32)
+#include <sys/types.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#ifdef _MSC_VER
-void debugf(char const* str, ...);
+#define PROT_READ     0x1
+#define PROT_WRITE    0x2
+/* This flag is only available in WinXP+ */
+#ifdef FILE_MAP_EXECUTE
+#define PROT_EXEC     0x4
 #else
-#define debugf printf
+#define PROT_EXEC        0x0
+#define FILE_MAP_EXECUTE 0
 #endif
 
-static inline uint32_t min_u32(uint32_t a, uint32_t b)
-{
-	return a < b ? a : b;
-}
+#define MAP_SHARED    0x01
+#define MAP_PRIVATE   0x02
+#define MAP_ANONYMOUS 0x20
+#define MAP_ANON      MAP_ANONYMOUS
+#define MAP_FAILED    ((void *) -1)
 
-static inline uint32_t clamp_u32(uint32_t x, uint32_t min_, uint32_t max_)
-{
-	return x < min_ ? min_ : (x > max_ ? max_ : x);
-}
-
-#ifdef __cplusplus
-}
+void* mmap(void* start, size_t length, int prot, int flags, int fd, off_t offset);
+void munmap(void* addr, size_t length);
+#else // posix, yay! ^_^
+#include <sys/mman.h>
 #endif
+
+

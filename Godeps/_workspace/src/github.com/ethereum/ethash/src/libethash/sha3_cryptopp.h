@@ -8,11 +8,11 @@
 extern "C" {
 #endif
 
-struct ethash_blockhash;
-typedef struct ethash_blockhash ethash_blockhash_t;
+struct ethash_h256;
+typedef struct ethash_h256 ethash_h256_t;
 
-void SHA3_256(ethash_blockhash_t *const ret, const uint8_t *data, size_t size);
-void SHA3_512(uint8_t *const ret, const uint8_t *data, size_t size);
+void SHA3_256(ethash_h256_t const* ret, uint8_t const* data, size_t size);
+void SHA3_512(uint8_t* const ret, uint8_t const* data, size_t size);
 
 #ifdef __cplusplus
 }

@@ -54,14 +54,20 @@ ethash_cl_miner::ethash_cl_miner()
 {
 }
 
-bool ethash_cl_miner::init(ethash_params const& params, ethash_blockhash_t const *seed, unsigned workgroup_size)
+void ethash_cl_miner::finish()
+{
+	if (m_queue())
+		m_queue.finish();
+}
+
+bool ethash_cl_miner::init(ethash_params const& params, ethash_h256_t const *seed, unsigned workgroup_size)
 {
 	// store params
 	m_params = params;
 
 	// get all platforms
-    std::vector<cl::Platform> platforms;
-    cl::Platform::get(&platforms);
+	std::vector<cl::Platform> platforms;
+	cl::Platform::get(&platforms);
 	if (platforms.empty())
 	{
 		debugf("No OpenCL platforms found.\n");
@@ -71,10 +77,10 @@ bool ethash_cl_miner::init(ethash_params const& params, ethash_blockhash_t const
 	// use default platform
 	debugf("Using platform: %s\n", platforms[0].getInfo<CL_PLATFORM_NAME>().c_str());
 
-    // get GPU device of the default platform
-    std::vector<cl::Device> devices;
-    platforms[0].getDevices(CL_DEVICE_TYPE_ALL, &devices);
-    if (devices.empty())
+	// get GPU device of the default platform
+	std::vector<cl::Device> devices;
+	platforms[0].getDevices(CL_DEVICE_TYPE_ALL, &devices);
+	if (devices.empty())
 	{
 		debugf("No OpenCL devices found.\n");
 		return false;
@@ -130,7 +136,7 @@ bool ethash_cl_miner::init(ethash_params const& params, ethash_blockhash_t const
 
 	// create buffer for dag
 	m_dag = cl::Buffer(m_context, CL_MEM_READ_ONLY, params.full_size);
-	
+
 	// create buffer for header
 	m_header = cl::Buffer(m_context, CL_MEM_READ_ONLY, 32);
 
@@ -143,7 +149,7 @@ bool ethash_cl_miner::init(ethash_params const& params, ethash_blockhash_t const
 
 		// if this throws then it's because we probably need to subdivide the dag uploads for compatibility
 		void* dag_ptr = m_queue.enqueueMapBuffer(m_dag, true, m_opencl_1_1 ? CL_MAP_WRITE : CL_MAP_WRITE_INVALIDATE_REGION, 0, params.full_size);
-		ethash_compute_full_data(dag_ptr, &params, &cache);
+		ethash_compute_full_data(dag_ptr, params.full_size, &cache);
 		m_queue.enqueueUnmapMemObject(m_dag, dag_ptr);
 
 		free(cache_mem);
@@ -167,7 +173,7 @@ void ethash_cl_miner::hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, 
 		unsigned buf;
 	};
 	std::queue<pending_batch> pending;
-	
+
 	// update header constant buffer
 	m_queue.enqueueWriteBuffer(m_header, true, 0, 32, header);
 
@@ -205,7 +211,7 @@ void ethash_cl_miner::hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, 
 				cl::NDRange(m_workgroup_size)
 				);
 			m_queue.flush();
-		
+
 			pending.push({i, this_count, buf});
 			i += this_count;
 			buf = (buf + 1) % c_num_buffers;
@@ -284,7 +290,7 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 
 		// execute it!
 		m_queue.enqueueNDRangeKernel(m_search_kernel, cl::NullRange, c_search_batch_size, m_workgroup_size);
-		
+
 		pending.push({start_nonce, buf});
 		buf = (buf + 1) % c_num_buffers;
 
@@ -302,9 +308,9 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 			{
 				nonces[i] = batch.start_nonce + results[i+1];
 			}
-			
+
 			m_queue.enqueueUnmapMemObject(m_search_buf[batch.buf], results);
-			
+
 			bool exit = num_found && hook.found(nonces, num_found);
 			exit |= hook.searched(batch.start_nonce, c_search_batch_size); // always report searched before exit
 			if (exit)

@@ -69,7 +69,7 @@ mkcache_bytes(PyObject *self, PyObject *args) {
     params.cache_size = (size_t) cache_size;
     ethash_cache cache;
     cache.mem = malloc(cache_size);
-    ethash_mkcache(&cache, &params, (ethash_blockhash_t *) seed);
+    ethash_mkcache(&cache, &params, (ethash_h256_t *) seed);
     PyObject * val = Py_BuildValue(PY_STRING_FORMAT, cache.mem, cache_size);
     free(cache.mem);
     return val;
@@ -146,7 +146,7 @@ hashimoto_light(PyObject *self, PyObject *args) {
     params.full_size = (size_t) full_size;
     ethash_cache cache;
     cache.mem = (void *) cache_bytes;
-    ethash_light(&out, &cache, &params, (ethash_blockhash_t *) header, nonce);
+    ethash_light(&out, &cache, &params, (ethash_h256_t *) header, nonce);
     return Py_BuildValue("{" PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT "," PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT "}",
                          "mix digest", &out.mix_hash, 32,
                          "result", &out.result, 32);
@@ -181,7 +181,7 @@ hashimoto_full(PyObject *self, PyObject *args) {
     ethash_return_value out;
     ethash_params params;
     params.full_size = (size_t) full_size;
-    ethash_full(&out, (void *) full_bytes, &params, (ethash_blockhash_t *) header, nonce);
+    ethash_full(&out, (void *) full_bytes, &params, (ethash_h256_t *) header, nonce);
     return Py_BuildValue("{" PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT ", " PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT "}",
                          "mix digest", &out.mix_hash, 32,
                          "result", &out.result, 32);
@@ -227,9 +227,9 @@ mine(PyObject *self, PyObject *args) {
 
     // TODO: Multi threading?
     do {
-        ethash_full(&out, (void *) full_bytes, &params, (const ethash_blockhash_t *) header, nonce++);
+        ethash_full(&out, (void *) full_bytes, &params, (const ethash_h256_t *) header, nonce++);
         // TODO: disagrees with the spec https://github.com/ethereum/wiki/wiki/Ethash#mining
-    } while (!ethash_check_difficulty(&out.result, (const ethash_blockhash_t *) difficulty));
+    } while (!ethash_check_difficulty(&out.result, (const ethash_h256_t *) difficulty));
 
     return Py_BuildValue("{" PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT ", " PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT ", " PY_CONST_STRING_FORMAT ":K}",
             "mix digest", &out.mix_hash, 32,
@@ -250,7 +250,7 @@ get_seedhash(PyObject *self, PyObject *args) {
         PyErr_SetString(PyExc_ValueError, error_message);
         return 0;
     }
-    ethash_blockhash_t seedhash;
+    ethash_h256_t seedhash;
     ethash_get_seedhash(&seedhash, block_number);
     return Py_BuildValue(PY_STRING_FORMAT, (char *) &seedhash, 32);
 }
