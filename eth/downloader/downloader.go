@@ -89,7 +89,7 @@ func New(hasBlock hashCheckFn, insertChain chainInsertFn, currentTd currentTdFn)
 		blockCh:     make(chan blockPack, 1),
 		quit:        make(chan struct{}),
 	}
-	go downloader.peerHandler()
+	//go downloader.peerHandler()
 	go downloader.update()
 
 	return downloader
@@ -110,7 +110,6 @@ func (d *Downloader) RegisterPeer(id string, td *big.Int, hash common.Hash, getH
 	// add peer to our peer set
 	d.peers[id] = peer
 	// broadcast new peer
-	d.newPeerCh <- peer
 
 	return nil
 }
@@ -123,55 +122,6 @@ func (d *Downloader) UnregisterPeer(id string) {
 	glog.V(logger.Detail).Infoln("Unregister peer", id)
 
 	delete(d.peers, id)
-}
-
-func (d *Downloader) peerHandler() {
-	// itimer is used to determine when to start ignoring `minDesiredPeerCount`
-	itimer := time.NewTimer(peerCountTimeout)
-out:
-	for {
-		select {
-		case <-d.newPeerCh:
-			// Meet the `minDesiredPeerCount` before we select our best peer
-			if len(d.peers) < minDesiredPeerCount {
-				break
-			}
-			itimer.Stop()
-
-			d.selectPeer(d.peers.bestPeer())
-		case <-itimer.C:
-			// The timer will make sure that the downloader keeps an active state
-			// in which it attempts to always check the network for highest td peers
-			// Either select the peer or restart the timer if no peers could
-			// be selected.
-			if peer := d.peers.bestPeer(); peer != nil {
-				d.selectPeer(d.peers.bestPeer())
-			} else {
-				itimer.Reset(5 * time.Second)
-			}
-		case <-d.quit:
-			break out
-		}
-	}
-}
-
-func (d *Downloader) selectPeer(p *peer) {
-	// Make sure it's doing neither. Once done we can restart the
-	// downloading process if the TD is higher. For now just get on
-	// with whatever is going on. This prevents unecessary switching.
-	if d.isBusy() {
-		return
-	}
-	// selected peer must be better than our own
-	// XXX we also check the peer's recent hash to make sure we
-	// don't have it. Some peers report (i think) incorrect TD.
-	if p.td.Cmp(d.currentTd()) <= 0 || d.hasBlock(p.recentHash) {
-		return
-	}
-
-	glog.V(logger.Detail).Infoln("New peer with highest TD =", p.td)
-	d.syncCh <- syncPack{p, p.recentHash, false}
-
 }
 
 func (d *Downloader) update() {
@@ -191,6 +141,61 @@ out:
 			break out
 		}
 	}
+}
+
+// SynchroniseWithPeer will select the peer and use it for synchronising. If an empty string is given
+// it will use the best peer possible and synchronise if it's TD is higher than our own. If any of the
+// checks fail an error will be returned. This method is synchronous
+func (d *Downloader) Synchronise(id string, hash common.Hash) (types.Blocks, error) {
+	// Make sure it's doing neither. Once done we can restart the
+	// downloading process if the TD is higher. For now just get on
+	// with whatever is going on. This prevents unecessary switching.
+	if d.isBusy() {
+		return nil, errBusy
+	}
+
+	// Fetch the peer using the id or throw an error if the peer couldn't be found
+	p := d.peers[id]
+	if p == nil {
+		return nil, errUnknownPeer
+	}
+
+	// Get the hash from the peer and initiate the downloading progress.
+	err := d.getFromPeer(p, hash, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return d.queue.blocks, nil
+}
+
+func (d *Downloader) getFromPeer(p *peer, hash common.Hash, ignoreInitial bool) error {
+	d.activePeer = p.id
+
+	glog.V(logger.Detail).Infoln("Synchronising with the network using:", p.id)
+	// Start the fetcher. This will block the update entirely
+	// interupts need to be send to the appropriate channels
+	// respectively.
+	if err := d.startFetchingHashes(p, hash, ignoreInitial); err != nil {
+		// handle error
+		glog.V(logger.Debug).Infoln("Error fetching hashes:", err)
+		// XXX Reset
+		return err
+	}
+
+	// Start fetching blocks in paralel. The strategy is simple
+	// take any available peers, seserve a chunk for each peer available,
+	// let the peer deliver the chunkn and periodically check if a peer
+	// has timedout. When done downloading, process blocks.
+	if err := d.startFetchingBlocks(p); err != nil {
+		glog.V(logger.Debug).Infoln("Error downloading blocks:", err)
+		// XXX reset
+		return err
+	}
+
+	glog.V(logger.Detail).Infoln("Sync completed")
+
+	return nil
 }
 
 // XXX Make synchronous

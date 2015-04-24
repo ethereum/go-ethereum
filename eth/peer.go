@@ -25,6 +25,16 @@ type getBlockHashesMsgData struct {
 	Amount uint64
 }
 
+func getBestPeer(peers map[string]*peer) *peer {
+	var peer *peer
+	for _, cp := range peers {
+		if peer == nil || cp.td.Cmp(peer.td) > 0 {
+			peer = cp
+		}
+	}
+	return peer
+}
+
 type peer struct {
 	*p2p.Peer
 
@@ -32,9 +42,9 @@ type peer struct {
 
 	protv, netid int
 
-	currentHash common.Hash
-	id          string
-	td          *big.Int
+	recentHash common.Hash
+	id         string
+	td         *big.Int
 
 	genesis, ourHash common.Hash
 	ourTd            *big.Int
@@ -43,14 +53,14 @@ type peer struct {
 	blockHashes *set.Set
 }
 
-func newPeer(protv, netid int, genesis, currentHash common.Hash, td *big.Int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
+func newPeer(protv, netid int, genesis, recentHash common.Hash, td *big.Int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	id := p.ID()
 
 	return &peer{
 		Peer:        p,
 		rw:          rw,
 		genesis:     genesis,
-		ourHash:     currentHash,
+		ourHash:     recentHash,
 		ourTd:       td,
 		protv:       protv,
 		netid:       netid,
@@ -145,7 +155,7 @@ func (p *peer) handleStatus() error {
 	// Set the total difficulty of the peer
 	p.td = status.TD
 	// set the best hash of the peer
-	p.currentHash = status.CurrentBlock
+	p.recentHash = status.CurrentBlock
 
 	return <-errc
 }
