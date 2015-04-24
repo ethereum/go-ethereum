@@ -68,10 +68,8 @@ type Downloader struct {
 
 	// Channels
 	newPeerCh chan *peer
-	syncCh    chan syncPack
 	hashCh    chan []common.Hash
 	blockCh   chan blockPack
-	quit      chan struct{}
 }
 
 func New(hasBlock hashCheckFn, insertChain chainInsertFn) *Downloader {
@@ -81,13 +79,9 @@ func New(hasBlock hashCheckFn, insertChain chainInsertFn) *Downloader {
 		hasBlock:    hasBlock,
 		insertChain: insertChain,
 		newPeerCh:   make(chan *peer, 1),
-		syncCh:      make(chan syncPack, 1),
 		hashCh:      make(chan []common.Hash, 1),
 		blockCh:     make(chan blockPack, 1),
-		quit:        make(chan struct{}),
 	}
-	//go downloader.peerHandler()
-	go downloader.update()
 
 	return downloader
 }
@@ -119,25 +113,6 @@ func (d *Downloader) UnregisterPeer(id string) {
 	glog.V(logger.Detail).Infoln("Unregister peer", id)
 
 	delete(d.peers, id)
-}
-
-func (d *Downloader) update() {
-out:
-	for {
-		select {
-		case sync := <-d.syncCh:
-			var peer *peer = sync.peer
-			err := d.getFromPeer(peer, sync.hash, sync.ignoreInitial)
-			if err != nil {
-				glog.V(logger.Detail).Infoln(err)
-				break
-			}
-
-			d.process(peer)
-		case <-d.quit:
-			break out
-		}
-	}
 }
 
 // SynchroniseWithPeer will select the peer and use it for synchronising. If an empty string is given
