@@ -204,7 +204,7 @@ var (
 	}
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
-		Usage: "Space-separated enode URLs of initial peers to connect to",
+		Usage: "Space-separated enode URLs for p2p discovery bootstrap",
 		Value: "",
 	}
 	NodeKeyFileFlag = cli.StringFlag{
