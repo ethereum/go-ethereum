@@ -682,11 +682,9 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 
 	if contractCreation {
 		addr := core.AddressFromMessage(tx)
-		glog.V(logger.Info).Infof("Tx(%x) created: %x\n", tx.Hash(), addr)
+		glog.V(logger.Info).Infof("Contract addr %x\n", addr)
 
 		return core.AddressFromMessage(tx).Hex(), nil
-	} else {
-		glog.V(logger.Info).Infof("Tx(%x) to: %x\n", tx.Hash(), tx.To())
 	}
 	return tx.Hash().Hex(), nil
 }

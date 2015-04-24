@@ -7,11 +7,8 @@ Implements cryptographic operations for the secp256k1 ECDSA curve used by Bitcoi
 
 Installing
 ===
-
-GMP library headers are required to build. On Debian-based systems, the package is called `libgmp-dev`.
-
 ```
-sudo apt-get install libgmp-dev
+sudo apt-get install gmp-dev
 ```
 
 Now compiles with cgo!
