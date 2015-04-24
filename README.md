@@ -92,9 +92,5 @@ are ignored (use gofmt!). If you send pull requests make absolute sure that you
 commit on the `develop` branch and that you do not merge to master.
 Commits that are directly based on master are simply ignored.
 
-For dependency management, we use [godep](https://github.com/tools/godep). After installing with `go get github.com/tools/godep`, run `godep restore` to ensure that changes to other repositories do not break the build. To update a dependency version (for example, to include a new upstream fix), run `go get -u <foo/bar>` then `godep update <foo/...>`. To track a new dependency, add it to the project as normal than run `godep save ./...`. Changes to the [Godeps folder](https://github.com/ethereum/go-ethereum/tree/develop/Godeps): should be manually verified then commited.
-
-To make life easier try [git flow](http://nvie.com/posts/a-successful-git-branching-model/) it sets this all up and streamlines your work flow.
-
-See [Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide)
+See [Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide) for more details on configuring your environment, testing, and dependency management.
 

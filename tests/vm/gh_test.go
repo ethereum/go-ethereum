@@ -269,6 +269,11 @@ func TestVmLog(t *testing.T) {
 	RunVmTest(fn, t)
 }
 
+func TestInputLimits1(t *testing.T) {
+	const fn = "../files/VMTests/vmInputLimits1.json"
+	RunVmTest(fn, t)
+}
+
 func TestStateExample(t *testing.T) {
 	const fn = "../files/StateTests/stExample.json"
 	RunVmTest(fn, t)
@@ -327,6 +332,12 @@ func TestCallCreateCallCode(t *testing.T) {
 
 func TestMemory(t *testing.T) {
 	const fn = "../files/StateTests/stMemoryTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestMemoryStress(t *testing.T) {
+	t.Skip("Skipped due to...consuming too much memory :D")
+	const fn = "../files/StateTests/stMemoryStressTest.json"
 	RunVmTest(fn, t)
 }
 

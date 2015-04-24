@@ -108,7 +108,9 @@ func makeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Dat
 // Create a new chain manager starting from given block
 // Effectively a fork factory
 func newChainManager(block *types.Block, eventMux *event.TypeMux, db common.Database) *ChainManager {
-	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: GenesisBlock(db), eventMux: eventMux}
+	genesis := GenesisBlock(db)
+	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: eventMux}
+	bc.txState = state.ManageState(state.New(genesis.Root(), db))
 	bc.futureBlocks = NewBlockCache(1000)
 	if block == nil {
 		bc.Reset()

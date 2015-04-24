@@ -86,6 +86,12 @@ func (p *peer) sendNewBlock(block *types.Block) error {
 	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, block.Td})
 }
 
+func (p *peer) sendTransaction(tx *types.Transaction) error {
+	p.txHashes.Add(tx.Hash())
+
+	return p2p.Send(p.rw, TxMsg, []*types.Transaction{tx})
+}
+
 func (p *peer) requestHashes(from common.Hash) error {
 	glog.V(logger.Debug).Infof("[%s] fetching hashes (%d) %x...\n", p.id, maxHashes, from[:4])
 	return p2p.Send(p.rw, GetBlockHashesMsg, getBlockHashesMsgData{from, maxHashes})
