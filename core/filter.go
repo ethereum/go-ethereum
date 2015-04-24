@@ -131,17 +131,26 @@ Logs:
 		logTopics := make([]common.Hash, len(self.topics))
 		copy(logTopics, log.Topics)
 
+		// If the to filtered topics is greater than the amount of topics in
+		//  logs, skip.
+		if len(self.topics) > len(log.Topics) {
+			continue Logs
+		}
+
 		for i, topics := range self.topics {
+			var match bool
 			for _, topic := range topics {
-				var match bool
 				// common.Hash{} is a match all (wildcard)
 				if (topic == common.Hash{}) || log.Topics[i] == topic {
 					match = true
-				}
-				if !match {
-					continue Logs
+					break
 				}
 			}
+
+			if !match {
+				continue Logs
+			}
+
 		}
 
 		ret = append(ret, log)
@@ -168,7 +177,7 @@ func (self *Filter) bloomFilter(block *types.Block) bool {
 	for _, sub := range self.topics {
 		var included bool
 		for _, topic := range sub {
-			if types.BloomLookup(block.Bloom(), topic) {
+			if (topic == common.Hash{}) || types.BloomLookup(block.Bloom(), topic) {
 				included = true
 				break
 			}
