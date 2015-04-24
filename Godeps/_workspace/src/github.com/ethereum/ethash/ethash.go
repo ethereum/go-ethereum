@@ -165,7 +165,7 @@ func freeDAG(h *dag) {
 	}
 }
 
-func makeDAG(blockNum uint64, test bool, dir string) *dag {
+func MakeDAG(blockNum uint64, test bool, dir string) *dag {
 	if dir == "" {
 		dir = DefaultDir
 	}
@@ -210,7 +210,7 @@ func (pow *Full) getDAG(blockNum uint64) *dag {
 	// This computation is very very expensive.
 	// The lock should prevent more than one of them
 	// to run at the same time.
-	pow.dag = makeDAG(blockNum, pow.test, pow.Dir)
+	pow.dag = MakeDAG(blockNum, pow.test, pow.Dir)
 	return pow.dag
 }
 
