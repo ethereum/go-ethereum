@@ -125,7 +125,6 @@ type Ethereum struct {
 	blockDb common.Database // Block chain database
 	stateDb common.Database // State changes database
 	extraDb common.Database // Extra database (txs, etc)
-	seedDb  *discover.Cache // Peer database seeding the bootstrap
 
 	// Closed when databases are flushed and closed
 	databasesClosed chan bool
@@ -181,10 +180,7 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	seedDb, err := discover.NewPersistentCache(path.Join(config.DataDir, "seeds"))
-	if err != nil {
-		return nil, err
-	}
+	nodeDb := path.Join(config.DataDir, "nodes")
 
 	// Perform database sanity checks
 	d, _ := blockDb.Get([]byte("ProtocolVersion"))
@@ -212,7 +208,6 @@ func New(config *Config) (*Ethereum, error) {
 		blockDb:         blockDb,
 		stateDb:         stateDb,
 		extraDb:         extraDb,
-		seedDb:          seedDb,
 		eventMux:        &event.TypeMux{},
 		accountManager:  config.AccountManager,
 		DataDir:         config.DataDir,
@@ -250,7 +245,7 @@ func New(config *Config) (*Ethereum, error) {
 		NAT:            config.NAT,
 		NoDial:         !config.Dial,
 		BootstrapNodes: config.parseBootNodes(),
-		SeedCache:      seedDb,
+		NodeDatabase:   nodeDb,
 	}
 	if len(config.Port) > 0 {
 		eth.net.ListenAddr = ":" + config.Port
@@ -429,7 +424,6 @@ done:
 		}
 	}
 
-	s.seedDb.Close()
 	s.blockDb.Close()
 	s.stateDb.Close()
 	s.extraDb.Close()

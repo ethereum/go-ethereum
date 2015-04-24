@@ -71,7 +71,7 @@ func main() {
 		}
 	}
 
-	if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm, nil); err != nil {
+	if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm, ""); err != nil {
 		log.Fatal(err)
 	}
 	select {}
