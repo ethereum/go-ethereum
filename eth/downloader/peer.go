@@ -2,7 +2,6 @@ package downloader
 
 import (
 	"errors"
-	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -51,16 +50,6 @@ func (p peers) getPeer(id string) *peer {
 	return p[id]
 }
 
-func (p peers) bestPeer() *peer {
-	var peer *peer
-	for _, cp := range p {
-		if peer == nil || cp.td.Cmp(peer.td) > 0 {
-			peer = cp
-		}
-	}
-	return peer
-}
-
 // peer represents an active peer
 type peer struct {
 	state int // Peer state (working, idle)
@@ -68,7 +57,6 @@ type peer struct {
 
 	mu         sync.RWMutex
 	id         string
-	td         *big.Int
 	recentHash common.Hash
 
 	ignored *set.Set
@@ -78,10 +66,9 @@ type peer struct {
 }
 
 // create a new peer
-func newPeer(id string, td *big.Int, hash common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) *peer {
+func newPeer(id string, hash common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) *peer {
 	return &peer{
 		id:         id,
-		td:         td,
 		recentHash: hash,
 		getHashes:  getHashes,
 		getBlocks:  getBlocks,
