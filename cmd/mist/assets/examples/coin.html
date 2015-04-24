@@ -3,7 +3,7 @@
 <title>JevCoin</title>
 <head>
 <script type="text/javascript" src="../ext/bignumber.min.js"></script>
-<script type="text/javascript" src="../ext/ethereum.js/dist/ethereum-light.min.js"></script>
+<script type="text/javascript" src="../ext/ethereum.js/dist/web3-light.min.js"></script>
 </head>
 <body>
 
@@ -32,7 +32,6 @@
 </body>
 
 <script type="text/javascript">
-	var web3 = require('ethereum.js');
 	var eth = web3.eth;
 
 	web3.setProvider(new web3.providers.HttpProvider('http://localhost:8545'));

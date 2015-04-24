@@ -276,7 +276,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "block validation %v: %v", msg, err)
 		}
 		hash := request.Block.Hash()
-		// Add the block hash as a known hash to the peer. This will later be used to detirmine
+		// Add the block hash as a known hash to the peer. This will later be used to determine
 		// who should receive this.
 		p.blockHashes.Add(hash)
 
@@ -296,7 +296,6 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		if self.chainman.HasBlock(hash) {
 			break
 		}
-		/* XXX unsure about this */
 		if self.chainman.Td().Cmp(request.TD) > 0 && new(big.Int).Add(request.Block.Number(), big.NewInt(7)).Cmp(self.chainman.CurrentBlock().Number()) < 0 {
 			glog.V(logger.Debug).Infof("[%s] dropped block %v due to low TD %v\n", p.id, request.Block.Number(), request.TD)
 			break
@@ -305,14 +304,12 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		// Attempt to insert the newly received by checking if the parent exists.
 		// if the parent exists we process the block and propagate to our peers
 		// if the parent does not exists we delegate to the downloader.
-		// NOTE we can reduce chatter by dropping blocks with Td < currentTd
 		if self.chainman.HasBlock(request.Block.ParentHash()) {
 			if err := self.chainman.InsertChain(types.Blocks{request.Block}); err != nil {
 				// handle error
 				return nil
 			}
 			self.BroadcastBlock(hash, request.Block)
-			//fmt.Println(request.Block.Hash().Hex(), "our calculated TD =", request.Block.Td, "their TD =", request.TD)
 		} else {
 			// adding blocks is synchronous
 			go func() {
@@ -322,7 +319,6 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 					return
 				}
 				self.BroadcastBlock(hash, request.Block)
-				//fmt.Println(request.Block.Hash().Hex(), "our calculated TD =", request.Block.Td, "their TD =", request.TD)
 			}()
 		}
 	default:
