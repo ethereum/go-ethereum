@@ -84,7 +84,7 @@ type testFrontend struct {
 }
 
 func (self *testFrontend) UnlockAccount(acc []byte) bool {
-	self.ethereum.AccountManager().Unlock(acc, "password")
+	self.ethereum.AccountManager().Unlock(common.BytesToAddress(acc), "password")
 	return true
 }
 
