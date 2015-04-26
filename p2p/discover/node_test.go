@@ -9,6 +9,7 @@ import (
 	"testing/quick"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -169,7 +170,7 @@ func TestNodeID_pubkeyBad(t *testing.T) {
 }
 
 func TestNodeID_distcmp(t *testing.T) {
-	distcmpBig := func(target, a, b NodeID) int {
+	distcmpBig := func(target, a, b common.Hash) int {
 		tbig := new(big.Int).SetBytes(target[:])
 		abig := new(big.Int).SetBytes(a[:])
 		bbig := new(big.Int).SetBytes(b[:])
@@ -182,15 +183,15 @@ func TestNodeID_distcmp(t *testing.T) {
 
 // the random tests is likely to miss the case where they're equal.
 func TestNodeID_distcmpEqual(t *testing.T) {
-	base := NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	x := NodeID{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
+	base := common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	x := common.Hash{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
 	if distcmp(base, x, x) != 0 {
 		t.Errorf("distcmp(base, x, x) != 0")
 	}
 }
 
 func TestNodeID_logdist(t *testing.T) {
-	logdistBig := func(a, b NodeID) int {
+	logdistBig := func(a, b common.Hash) int {
 		abig, bbig := new(big.Int).SetBytes(a[:]), new(big.Int).SetBytes(b[:])
 		return new(big.Int).Xor(abig, bbig).BitLen()
 	}
@@ -201,19 +202,19 @@ func TestNodeID_logdist(t *testing.T) {
 
 // the random tests is likely to miss the case where they're equal.
 func TestNodeID_logdistEqual(t *testing.T) {
-	x := NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	x := common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	if logdist(x, x) != 0 {
 		t.Errorf("logdist(x, x) != 0")
 	}
 }
 
-func TestNodeID_randomID(t *testing.T) {
+func TestNodeID_hashAtDistance(t *testing.T) {
 	// we don't use quick.Check here because its output isn't
 	// very helpful when the test fails.
 	for i := 0; i < quickcfg.MaxCount; i++ {
-		a := gen(NodeID{}, quickrand).(NodeID)
-		dist := quickrand.Intn(len(NodeID{}) * 8)
-		result := randomID(a, dist)
+		a := gen(common.Hash{}, quickrand).(common.Hash)
+		dist := quickrand.Intn(len(common.Hash{}) * 8)
+		result := hashAtDistance(a, dist)
 		actualdist := logdist(result, a)
 
 		if dist != actualdist {
@@ -223,6 +224,9 @@ func TestNodeID_randomID(t *testing.T) {
 		}
 	}
 }
+
+// TODO: this can be dropped when we require Go >= 1.5
+// because testing/quick learned to generate arrays in 1.5.
 
 func (NodeID) Generate(rand *rand.Rand, size int) reflect.Value {
 	var id NodeID

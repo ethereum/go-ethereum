@@ -65,10 +65,9 @@ type (
 		Expiration uint64 // Absolute timestamp at which the packet becomes invalid.
 	}
 
+	// findnode is a query for nodes close to the given target.
 	findnode struct {
-		// Id to look up. The responding node will send back nodes
-		// closest to the target.
-		Target     NodeID
+		Target     NodeID // doesn't need to be an actual public key
 		Expiration uint64
 	}
 
@@ -500,8 +499,9 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte
 		// (which is a much bigger packet than findnode) to the victim.
 		return errUnknownNode
 	}
+	target := crypto.Sha3Hash(req.Target[:])
 	t.mutex.Lock()
-	closest := t.closest(req.Target, bucketSize).entries
+	closest := t.closest(target, bucketSize).entries
 	t.mutex.Unlock()
 
 	// TODO: this conversion could use a cached version of the slice

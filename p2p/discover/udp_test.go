@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 )
 
@@ -26,7 +27,7 @@ func init() {
 // shared test variables
 var (
 	futureExp          = uint64(time.Now().Add(10 * time.Hour).Unix())
-	testTarget         = MustHexID("01010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101")
+	testTarget         = NodeID{0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1}
 	testRemote         = rpcEndpoint{IP: net.ParseIP("1.1.1.1").To4(), UDP: 1, TCP: 2}
 	testLocalAnnounced = rpcEndpoint{IP: net.ParseIP("2.2.2.2").To4(), UDP: 3, TCP: 4}
 	testLocal          = rpcEndpoint{IP: net.ParseIP("3.3.3.3").To4(), UDP: 5, TCP: 6}
@@ -145,15 +146,10 @@ func TestUDP_findnode(t *testing.T) {
 	// put a few nodes into the table. their exact
 	// distribution shouldn't matter much, altough we need to
 	// take care not to overflow any bucket.
-	target := testTarget
-	nodes := &nodesByDistance{target: target}
+	targetHash := crypto.Sha3Hash(testTarget[:])
+	nodes := &nodesByDistance{target: targetHash}
 	for i := 0; i < bucketSize; i++ {
-		nodes.push(&Node{
-			IP:  net.IP{1, 2, 3, byte(i)},
-			UDP: uint16(i + 2),
-			TCP: uint16(i + 3),
-			ID:  randomID(test.table.self.ID, i+2),
-		}, bucketSize)
+		nodes.push(nodeAtDistance(test.table.self.sha, i+2), bucketSize)
 	}
 	test.table.add(nodes.entries)
 
@@ -168,7 +164,7 @@ func TestUDP_findnode(t *testing.T) {
 	// check that closest neighbors are returned.
 	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
 	test.waitPacketOut(func(p *neighbors) {
-		expected := test.table.closest(testTarget, bucketSize)
+		expected := test.table.closest(targetHash, bucketSize)
 		if len(p.Nodes) != bucketSize {
 			t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSize)
 		}

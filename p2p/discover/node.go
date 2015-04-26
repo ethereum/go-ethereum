@@ -219,7 +219,7 @@ func recoverNodeID(hash, sig []byte) (id NodeID, err error) {
 // distcmp compares the distances a->target and b->target.
 // Returns -1 if a is closer to target, 1 if b is closer to target
 // and 0 if they are equal.
-func distcmp(target, a, b NodeID) int {
+func distcmp(target, a, b common.Hash) int {
 	for i := range target {
 		da := a[i] ^ target[i]
 		db := b[i] ^ target[i]
@@ -269,7 +269,7 @@ var lzcount = [256]int{
 }
 
 // logdist returns the logarithmic distance between a and b, log2(a ^ b).
-func logdist(a, b NodeID) int {
+func logdist(a, b common.Hash) int {
 	lz := 0
 	for i := range a {
 		x := a[i] ^ b[i]
@@ -283,8 +283,8 @@ func logdist(a, b NodeID) int {
 	return len(a)*8 - lz
 }
 
-// randomID returns a random NodeID such that logdist(a, b) == n
-func randomID(a NodeID, n int) (b NodeID) {
+// hashAtDistance returns a random hash such that logdist(a, b) == n
+func hashAtDistance(a common.Hash, n int) (b common.Hash) {
 	if n == 0 {
 		return a
 	}
