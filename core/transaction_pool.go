@@ -20,8 +20,9 @@ import (
 var (
 	ErrInvalidSender      = errors.New("Invalid sender")
 	ErrNonce              = errors.New("Nonce too low")
+	ErrBalance            = errors.New("Insufficient balance")
 	ErrNonExistentAccount = errors.New("Account does not exist")
-	ErrInsufficientFunds  = errors.New("Insufficient funds")
+	ErrInsufficientFunds  = errors.New("Insufficient funds for gas * price + value")
 	ErrIntrinsicGas       = errors.New("Intrinsic gas too low")
 	ErrGasLimit           = errors.New("Exceeds block gas limit")
 )
@@ -124,7 +125,9 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 		return ErrGasLimit
 	}
 
-	if pool.currentState().GetBalance(from).Cmp(new(big.Int).Mul(tx.Price, tx.GasLimit)) < 0 {
+	total := new(big.Int).Mul(tx.Price, tx.GasLimit)
+	total.Add(total, tx.Value())
+	if pool.currentState().GetBalance(from).Cmp(total) < 0 {
 		return ErrInsufficientFunds
 	}
 
@@ -193,7 +196,7 @@ func (self *TxPool) AddTransactions(txs []*types.Transaction) {
 
 	for _, tx := range txs {
 		if err := self.add(tx); err != nil {
-			glog.V(logger.Debug).Infoln(err)
+			glog.V(logger.Debug).Infoln("tx error:", err)
 		} else {
 			h := tx.Hash()
 			glog.V(logger.Debug).Infof("tx %x\n", h[:4])
@@ -296,7 +299,6 @@ func (pool *TxPool) checkQueue() {
 
 			pool.addTx(tx)
 		}
-		//pool.queue[address] = txs[i:]
 		// delete the entire queue entry if it's empty. There's no need to keep it
 		if len(pool.queue[address]) == 0 {
 			delete(pool.queue, address)
@@ -308,12 +310,10 @@ func (pool *TxPool) validatePool() {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	statedb := pool.currentState()
 	for hash, tx := range pool.txs {
-		from, _ := tx.From()
-		if nonce := statedb.GetNonce(from); nonce > tx.Nonce() {
-			if glog.V(logger.Debug) {
-				glog.Infof("removed tx (%x) from pool due to nonce error. state=%d tx=%d\n", hash[:4], nonce, tx.Nonce())
+		if err := pool.ValidateTransaction(tx); err != nil {
+			if glog.V(logger.Info) {
+				glog.Infof("removed tx (%x) from pool: %v\n", hash[:4], err)
 			}
 
 			delete(pool.txs, hash)

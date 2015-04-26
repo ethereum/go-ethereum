@@ -54,11 +54,7 @@ func CalculateTD(block, parent *types.Block) *big.Int {
 	return td
 }
 
-func CalcGasLimit(parent, block *types.Block) *big.Int {
-	if block.Number().Cmp(big.NewInt(0)) == 0 {
-		return common.BigPow(10, 6)
-	}
-
+func CalcGasLimit(parent *types.Block) *big.Int {
 	// ((1024-1) * parent.gasLimit + (gasUsed * 6 / 5)) / 1024
 	previous := new(big.Int).Mul(big.NewInt(1024-1), parent.GasLimit())
 	current := new(big.Rat).Mul(new(big.Rat).SetInt(parent.GasUsed()), big.NewRat(6, 5))
@@ -277,7 +273,7 @@ func (bc *ChainManager) NewBlock(coinbase common.Address) *types.Block {
 		header := block.Header()
 		header.Difficulty = CalcDifficulty(block.Header(), parent.Header())
 		header.Number = new(big.Int).Add(parent.Header().Number, common.Big1)
-		header.GasLimit = CalcGasLimit(parent, block)
+		header.GasLimit = CalcGasLimit(parent)
 
 	}
 
@@ -658,7 +654,7 @@ out:
 						// We need some control over the mining operation. Acquiring locks and waiting for the miner to create new block takes too long
 						// and in most cases isn't even necessary.
 						if i+1 == ev.canonicalCount {
-							self.currentGasLimit = CalcGasLimit(self.GetBlock(event.Block.ParentHash()), event.Block)
+							self.currentGasLimit = CalcGasLimit(event.Block)
 							self.eventMux.Post(ChainHeadEvent{event.Block})
 						}
 					case ChainSplitEvent:

@@ -236,7 +236,7 @@ func (self *worker) makeCurrent() {
 	}
 
 	parent := self.chain.GetBlock(self.current.block.ParentHash())
-	self.current.coinbase.SetGasPool(core.CalcGasLimit(parent, self.current.block))
+	self.current.coinbase.SetGasPool(core.CalcGasLimit(parent))
 }
 
 func (self *worker) commitNewWork() {

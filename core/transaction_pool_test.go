@@ -43,10 +43,11 @@ func TestInvalidTransactions(t *testing.T) {
 		t.Error("expected", ErrInsufficientFunds)
 	}
 
-	pool.currentState().AddBalance(from, big.NewInt(100*100))
+	balance := new(big.Int).Add(tx.Value(), new(big.Int).Mul(tx.Gas(), tx.GasPrice()))
+	pool.currentState().AddBalance(from, balance)
 	err = pool.Add(tx)
 	if err != ErrIntrinsicGas {
-		t.Error("expected", ErrIntrinsicGas)
+		t.Error("expected", ErrIntrinsicGas, "got", err)
 	}
 
 	pool.currentState().SetNonce(from, 1)
