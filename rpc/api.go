@@ -489,6 +489,6 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		return NewNotImplementedError(req.Method)
 	}
 
-	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)
+	glog.V(logger.Detail).Infof("Reply: %T %s\n", reply, reply)
 	return nil
 }

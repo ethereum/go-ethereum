@@ -13,7 +13,6 @@ import (
 	"github.com/rs/cors"
 )
 
-var rpclogger = logger.NewLogger("RPC")
 var rpclistener *stoppableTCPListener
 
 const (
@@ -31,7 +30,7 @@ func Start(pipe *xeth.XEth, config RpcConfig) error {
 
 	l, err := newStoppableTCPListener(fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort))
 	if err != nil {
-		rpclogger.Errorf("Can't listen on %s:%d: %v", config.ListenAddress, config.ListenPort, err)
+		glog.V(logger.Error).Infof("Can't listen on %s:%d: %v", config.ListenAddress, config.ListenPort, err)
 		return err
 	}
 	rpclistener = l
@@ -136,7 +135,7 @@ func send(writer io.Writer, v interface{}) (n int, err error) {
 	var payload []byte
 	payload, err = json.MarshalIndent(v, "", "\t")
 	if err != nil {
-		rpclogger.Fatalln("Error marshalling JSON", err)
+		glog.V(logger.Error).Infoln("Error marshalling JSON", err)
 		return 0, err
 	}
 	glog.V(logger.Detail).Infof("Sending payload: %s", payload)
