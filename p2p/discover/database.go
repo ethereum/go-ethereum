@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
@@ -17,13 +18,19 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
-// Special node ID to use as a nil element.
-var nodeDBNilNodeID = NodeID{}
+var (
+	nodeDBNilNodeID      = NodeID{}       // Special node ID to use as a nil element.
+	nodeDBNodeExpiration = 24 * time.Hour // Time after which an unseen node should be dropped.
+	nodeDBCleanupCycle   = time.Hour      // Time period for running the expiration task.
+)
 
 // nodeDB stores all nodes we know about.
 type nodeDB struct {
 	lvl    *leveldb.DB       // Interface to the database itself
 	seeder iterator.Iterator // Iterator for fetching possible seed nodes
+
+	runner sync.Once     // Ensures we can start at most one expirer
+	quit   chan struct{} // Channel to signal the expiring thread to stop
 }
 
 // Schema layout for the node database
@@ -53,7 +60,10 @@ func newMemoryNodeDB() (*nodeDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &nodeDB{lvl: db}, nil
+	return &nodeDB{
+		lvl:  db,
+		quit: make(chan struct{}),
+	}, nil
 }
 
 // newPersistentNodeDB creates/opens a leveldb backed persistent node database,
@@ -91,7 +101,10 @@ func newPersistentNodeDB(path string, version int) (*nodeDB, error) {
 			return newPersistentNodeDB(path, version)
 		}
 	}
-	return &nodeDB{lvl: db}, nil
+	return &nodeDB{
+		lvl:  db,
+		quit: make(chan struct{}),
+	}, nil
 }
 
 // makeKey generates the leveldb key-blob from a node id and its particular
@@ -164,6 +177,55 @@ func (db *nodeDB) updateNode(node *Node) error {
 	return db.lvl.Put(makeKey(node.ID, nodeDBDiscoverRoot), blob, nil)
 }
 
+// expirer should be started in a go routine, and is responsible for looping ad
+// infinitum and dropping stale data from the database.
+func (db *nodeDB) expirer() {
+	db.runner.Do(func() {
+		tick := time.Tick(nodeDBCleanupCycle)
+		for {
+			select {
+			case <-tick:
+				if err := db.expireNodes(); err != nil {
+					glog.V(logger.Error).Infof("Failed to expire nodedb items: %v", err)
+				}
+
+			case <-db.quit:
+				return
+			}
+		}
+	})
+}
+
+// expireNodes iterates over the database and deletes all nodes that have not
+// been seen (i.e. received a pong from) for some alloted time.
+func (db *nodeDB) expireNodes() error {
+	threshold := time.Now().Add(-nodeDBNodeExpiration)
+
+	// Find discovered nodes that are older than the allowance
+	it := db.lvl.NewIterator(nil, nil)
+	defer it.Release()
+
+	for it.Next() {
+		// Skip the item if not a discovery node
+		id, field := splitKey(it.Key())
+		if field != nodeDBDiscoverRoot {
+			continue
+		}
+		// Skip the node if not expired yet
+		if seen := db.lastPong(id); seen.After(threshold) {
+			continue
+		}
+		// Otherwise delete all associated information
+		prefix := makeKey(id, "")
+		for ok := it.Seek(prefix); ok && bytes.HasPrefix(it.Key(), prefix); ok = it.Next() {
+			if err := db.lvl.Delete(it.Key(), nil); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // lastPing retrieves the time of the last ping packet send to a remote node,
 // requesting binding.
 func (db *nodeDB) lastPing(id NodeID) time.Time {
@@ -226,5 +288,6 @@ func (db *nodeDB) close() {
 	if db.seeder != nil {
 		db.seeder.Release()
 	}
+	close(db.quit)
 	db.lvl.Close()
 }

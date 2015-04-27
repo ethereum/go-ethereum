@@ -335,6 +335,8 @@ func (tab *Table) ping(id NodeID, addr *net.UDPAddr) error {
 	}
 	// Pong received, update the database and return
 	tab.db.updateLastPong(id, time.Now())
+	go tab.db.expirer()
+
 	return nil
 }
 

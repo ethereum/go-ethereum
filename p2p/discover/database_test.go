@@ -264,3 +264,50 @@ func TestNodeDBPersistency(t *testing.T) {
 	}
 	db.close()
 }
+
+var nodeDBExpirationNodes = []struct {
+	node Node
+	pong time.Time
+	exp  bool
+}{
+	{
+		node: Node{
+			ID: MustHexID("0x01d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			IP: []byte{127, 0, 0, 1},
+		},
+		pong: time.Now().Add(-nodeDBNodeExpiration + time.Minute),
+		exp:  false,
+	}, {
+		node: Node{
+			ID: MustHexID("0x02d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			IP: []byte{127, 0, 0, 2},
+		},
+		pong: time.Now().Add(-nodeDBNodeExpiration - time.Minute),
+		exp:  true,
+	},
+}
+
+func TestNodeDBExpiration(t *testing.T) {
+	db, _ := newNodeDB("", Version)
+	defer db.close()
+
+	// Add all the test nodes and set their last pong time
+	for i, seed := range nodeDBExpirationNodes {
+		if err := db.updateNode(&seed.node); err != nil {
+			t.Fatalf("node %d: failed to insert: %v", i, err)
+		}
+		if err := db.updateLastPong(seed.node.ID, seed.pong); err != nil {
+			t.Fatalf("node %d: failed to update pong: %v", i, err)
+		}
+	}
+	// Expire some of them, and check the rest
+	if err := db.expireNodes(); err != nil {
+		t.Fatalf("failed to expire nodes: %v", err)
+	}
+	for i, seed := range nodeDBExpirationNodes {
+		node := db.node(seed.node.ID)
+		if (node == nil && !seed.exp) || (node != nil && seed.exp) {
+			t.Errorf("node %d: expiration mismatch: have %v, want %v", i, node, seed.exp)
+		}
+	}
+}
