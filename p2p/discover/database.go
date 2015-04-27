@@ -14,6 +14,9 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
+// Special node ID to use as a nil element.
+var nodeDBNilNodeID = NodeID{}
+
 // nodeDB stores all nodes we know about.
 type nodeDB struct {
 	lvl *leveldb.DB
@@ -27,7 +30,7 @@ var (
 
 	nodeDBDiscoverRoot = ":discover"
 	nodeDBDiscoverPing = nodeDBDiscoverRoot + ":lastping"
-	nodeDBDiscoverBond = nodeDBDiscoverRoot + ":lastbond"
+	nodeDBDiscoverPong = nodeDBDiscoverRoot + ":lastpong"
 )
 
 // newNodeDB creates a new node database for storing and retrieving infos about
@@ -91,6 +94,9 @@ func newPersistentNodeDB(path string) (*nodeDB, error) {
 // makeKey generates the leveldb key-blob from a node id and its particular
 // field of interest.
 func makeKey(id NodeID, field string) []byte {
+	if bytes.Equal(id[:], nodeDBNilNodeID[:]) {
+		return []byte(field)
+	}
 	return append(nodeDBItemPrefix, append(id[:], field...)...)
 }
 
@@ -176,14 +182,14 @@ func (db *nodeDB) updateLastPing(id NodeID, instance time.Time) error {
 	return db.storeInt64(makeKey(id, nodeDBDiscoverPing), instance.Unix())
 }
 
-// lastBond retrieves the time of the last successful bonding with a remote node.
-func (db *nodeDB) lastBond(id NodeID) time.Time {
-	return time.Unix(db.fetchInt64(makeKey(id, nodeDBDiscoverBond)), 0)
+// lastPong retrieves the time of the last successful contact from remote node.
+func (db *nodeDB) lastPong(id NodeID) time.Time {
+	return time.Unix(db.fetchInt64(makeKey(id, nodeDBDiscoverPong)), 0)
 }
 
-// updateLastBond updates the last time we successfully bound to a remote node.
-func (db *nodeDB) updateLastBond(id NodeID, instance time.Time) error {
-	return db.storeInt64(makeKey(id, nodeDBDiscoverBond), instance.Unix())
+// updateLastPong updates the last time a remote node successfully contacted.
+func (db *nodeDB) updateLastPong(id NodeID, instance time.Time) error {
+	return db.storeInt64(makeKey(id, nodeDBDiscoverPong), instance.Unix())
 }
 
 // querySeeds retrieves a batch of nodes to be used as potential seed servers

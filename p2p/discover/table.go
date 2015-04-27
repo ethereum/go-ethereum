@@ -307,7 +307,7 @@ func (tab *Table) pingpong(w *bondproc, pinged bool, id NodeID, addr *net.UDPAdd
 		TCPPort:  int(tcpPort),
 	}
 	tab.db.updateNode(w.n)
-	tab.db.updateLastBond(id, time.Now())
+	tab.db.updateLastPong(id, time.Now())
 	close(w.done)
 }
 
