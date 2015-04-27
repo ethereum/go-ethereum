@@ -87,7 +87,7 @@ func runBlockTest(name string, test *BlockTest, t *testing.T) {
 	ethereum.ResetWithGenesisBlock(test.Genesis)
 
 	// import pre accounts
-	statedb, err := test.InsertPreState(ethereum.StateDb())
+	statedb, err := test.InsertPreState(ethereum)
 	if err != nil {
 		t.Fatalf("InsertPreState: %v", err)
 	}

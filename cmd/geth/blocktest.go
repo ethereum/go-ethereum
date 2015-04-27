@@ -104,7 +104,7 @@ func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, er
 	ethereum.ResetWithGenesisBlock(test.Genesis)
 
 	// import pre accounts
-	statedb, err := test.InsertPreState(ethereum.StateDb())
+	statedb, err := test.InsertPreState(ethereum)
 	if err != nil {
 		return ethereum, fmt.Errorf("InsertPreState: %v", err)
 	}

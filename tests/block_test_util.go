@@ -10,11 +10,14 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -41,10 +44,11 @@ type btBlock struct {
 }
 
 type btAccount struct {
-	Balance string
-	Code    string
-	Nonce   string
-	Storage map[string]string
+	Balance    string
+	Code       string
+	Nonce      string
+	Storage    map[string]string
+	PrivateKey string
 }
 
 type btHeader struct {
@@ -97,14 +101,23 @@ func LoadBlockTests(file string) (map[string]*BlockTest, error) {
 
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
-func (t *BlockTest) InsertPreState(db common.Database) (*state.StateDB, error) {
+func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, error) {
+	db := ethereum.StateDb()
 	statedb := state.New(common.Hash{}, db)
 	for addrString, acct := range t.preAccounts {
-		// XXX: is is worth it checking for errors here?
-		//addr, _ := hex.DecodeString(addrString)
+		addr, _ := hex.DecodeString(addrString)
 		code, _ := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
 		balance, _ := new(big.Int).SetString(acct.Balance, 0)
 		nonce, _ := strconv.ParseUint(acct.Nonce, 16, 64)
+
+		if acct.PrivateKey != "" {
+			privkey, err := hex.DecodeString(strings.TrimPrefix(acct.PrivateKey, "0x"))
+			err = crypto.ImportBlockTestKey(privkey)
+			err = ethereum.AccountManager().TimedUnlock(addr, "", 999999*time.Second)
+			if err != nil {
+				return nil, err
+			}
+		}
 
 		obj := statedb.CreateAccount(common.HexToAddress(addrString))
 		obj.SetCode(code)
