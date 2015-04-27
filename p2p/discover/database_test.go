@@ -82,24 +82,13 @@ func TestNodeDBInt64(t *testing.T) {
 
 func TestNodeDBFetchStore(t *testing.T) {
 	node := &Node{
-		ID:       MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-		IP:       net.IP([]byte{192, 168, 0, 1}),
-		DiscPort: 31313,
-		TCPPort:  30303,
+		ID:      MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+		IP:      net.IP([]byte{192, 168, 0, 1}),
+		TCPPort: 30303,
 	}
 	inst := time.Now()
 	db, _ := newNodeDB("")
 
-	// Check fetch/store operations on the startup object
-	if stored := db.startup(); stored.Unix() != 0 {
-		t.Errorf("startup: non-existing object: %v", stored)
-	}
-	if err := db.updateStartup(inst); err != nil {
-		t.Errorf("startup: failed to update: %v", err)
-	}
-	if stored := db.startup(); stored.Unix() != inst.Unix() {
-		t.Errorf("startup: value mismatch: have %v, want %v", stored, inst)
-	}
 	// Check fetch/store operations on a node ping object
 	if stored := db.lastPing(node.ID); stored.Unix() != 0 {
 		t.Errorf("ping: non-existing object: %v", stored)
@@ -129,8 +118,98 @@ func TestNodeDBFetchStore(t *testing.T) {
 	}
 	if stored := db.node(node.ID); stored == nil {
 		t.Errorf("node: not found")
-	} else if !bytes.Equal(stored.ID[:], node.ID[:]) || !bytes.Equal(stored.IP, node.IP) ||
-		stored.DiscPort != node.DiscPort || stored.TCPPort != node.TCPPort {
+	} else if !bytes.Equal(stored.ID[:], node.ID[:]) || !stored.IP.Equal(node.IP) || stored.TCPPort != node.TCPPort {
 		t.Errorf("node: data mismatch: have %v, want %v", stored, node)
+	}
+}
+
+var nodeDBSeedQueryNodes = []struct {
+	node Node
+	pong time.Time
+}{
+	{
+		node: Node{
+			ID: MustHexID("0x01d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			IP: []byte{127, 0, 0, 1},
+		},
+		pong: time.Now().Add(-2 * time.Second),
+	},
+	{
+		node: Node{
+			ID: MustHexID("0x02d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			IP: []byte{127, 0, 0, 2},
+		},
+		pong: time.Now().Add(-3 * time.Second),
+	},
+	{
+		node: Node{
+			ID: MustHexID("0x03d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			IP: []byte{127, 0, 0, 3},
+		},
+		pong: time.Now().Add(-1 * time.Second),
+	},
+}
+
+func TestNodeDBSeedQuery(t *testing.T) {
+	db, _ := newNodeDB("")
+
+	// Insert a batch of nodes for querying
+	for i, seed := range nodeDBSeedQueryNodes {
+		if err := db.updateNode(&seed.node); err != nil {
+			t.Fatalf("node %d: failed to insert: %v", i, err)
+		}
+	}
+	// Retrieve the entire batch and check for duplicates
+	seeds := db.querySeeds(2 * len(nodeDBSeedQueryNodes))
+	if len(seeds) != len(nodeDBSeedQueryNodes) {
+		t.Errorf("seed count mismatch: have %v, want %v", len(seeds), len(nodeDBSeedQueryNodes))
+	}
+	have := make(map[NodeID]struct{})
+	for _, seed := range seeds {
+		have[seed.ID] = struct{}{}
+	}
+	want := make(map[NodeID]struct{})
+	for _, seed := range nodeDBSeedQueryNodes {
+		want[seed.node.ID] = struct{}{}
+	}
+	for id, _ := range have {
+		if _, ok := want[id]; !ok {
+			t.Errorf("extra seed: %v", id)
+		}
+	}
+	for id, _ := range want {
+		if _, ok := have[id]; !ok {
+			t.Errorf("missing seed: %v", id)
+		}
+	}
+	// Make sure the next batch is empty (seed EOF)
+	seeds = db.querySeeds(2 * len(nodeDBSeedQueryNodes))
+	if len(seeds) != 0 {
+		t.Errorf("seed count mismatch: have %v, want %v", len(seeds), 0)
+	}
+}
+
+func TestNodeDBSeedQueryContinuation(t *testing.T) {
+	db, _ := newNodeDB("")
+
+	// Insert a batch of nodes for querying
+	for i, seed := range nodeDBSeedQueryNodes {
+		if err := db.updateNode(&seed.node); err != nil {
+			t.Fatalf("node %d: failed to insert: %v", i, err)
+		}
+	}
+	// Iteratively retrieve the batch, checking for an empty batch on reset
+	for i := 0; i < len(nodeDBSeedQueryNodes); i++ {
+		if seeds := db.querySeeds(1); len(seeds) != 1 {
+			t.Errorf("1st iteration %d: seed count mismatch: have %v, want %v", i, len(seeds), 1)
+		}
+	}
+	if seeds := db.querySeeds(1); len(seeds) != 0 {
+		t.Errorf("reset: seed count mismatch: have %v, want %v", len(seeds), 0)
+	}
+	for i := 0; i < len(nodeDBSeedQueryNodes); i++ {
+		if seeds := db.querySeeds(1); len(seeds) != 1 {
+			t.Errorf("2nd iteration %d: seed count mismatch: have %v, want %v", i, len(seeds), 1)
+		}
 	}
 }

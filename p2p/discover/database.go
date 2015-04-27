@@ -9,8 +9,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
@@ -19,13 +22,13 @@ var nodeDBNilNodeID = NodeID{}
 
 // nodeDB stores all nodes we know about.
 type nodeDB struct {
-	lvl *leveldb.DB
+	lvl    *leveldb.DB       // Interface to the database itself
+	seeder iterator.Iterator // Iterator for fetching possible seed nodes
 }
 
 // Schema layout for the node database
 var (
 	nodeDBVersionKey = []byte("version") // Version of the database to flush if changes
-	nodeDBStartupKey = []byte("startup") // Time when the node discovery started (seed selection)
 	nodeDBItemPrefix = []byte("n:")      // Identifier to prefix node entries with
 
 	nodeDBDiscoverRoot = ":discover"
@@ -137,26 +140,16 @@ func (db *nodeDB) storeInt64(key []byte, n int64) error {
 	return db.lvl.Put(key, blob, nil)
 }
 
-// startup retrieves the time instance when the bootstrapping last begun. Its
-// purpose is to prevent contacting potential seed nodes multiple times in the
-// same boot cycle.
-func (db *nodeDB) startup() time.Time {
-	return time.Unix(db.fetchInt64(nodeDBStartupKey), 0)
-}
-
-// updateStartup updates the bootstrap initiation time to the one specified.
-func (db *nodeDB) updateStartup(instance time.Time) error {
-	return db.storeInt64(nodeDBStartupKey, instance.Unix())
-}
-
 // node retrieves a node with a given id from the database.
 func (db *nodeDB) node(id NodeID) *Node {
 	blob, err := db.lvl.Get(makeKey(id, nodeDBDiscoverRoot), nil)
 	if err != nil {
+		glog.V(logger.Warn).Infof("failed to retrieve node: %v", err)
 		return nil
 	}
 	node := new(Node)
 	if err := rlp.DecodeBytes(blob, node); err != nil {
+		glog.V(logger.Warn).Infof("failed to decode node RLP: %v", err)
 		return nil
 	}
 	return node
@@ -203,34 +196,35 @@ func (db *nodeDB) updateLastPong(id NodeID, instance time.Time) error {
 // If the database runs out of potential seeds, we restart the startup counter
 // and start iterating over the peers again.
 func (db *nodeDB) querySeeds(n int) []*Node {
-	startup := db.startup()
-
-	it := db.lvl.NewIterator(nil, nil)
-	defer it.Release()
-
+	// Create a new seed iterator if none exists
+	if db.seeder == nil {
+		db.seeder = db.lvl.NewIterator(nil, nil)
+	}
+	// Iterate over the nodes and find suitable seeds
 	nodes := make([]*Node, 0, n)
-	for len(nodes) < n && it.Next() {
+	for len(nodes) < n && db.seeder.Next() {
 		// Iterate until a discovery node is found
-		id, field := splitKey(it.Key())
+		id, field := splitKey(db.seeder.Key())
 		if field != nodeDBDiscoverRoot {
 			continue
 		}
-		// Retrieve the last ping time, and if older than startup, query
-		lastPing := db.lastPing(id)
-		if lastPing.Before(startup) {
-			if node := db.node(id); node != nil {
-				nodes = append(nodes, node)
-			}
+		// Load it as a potential seed
+		if node := db.node(id); node != nil {
+			nodes = append(nodes, node)
 		}
 	}
-	// Reset the startup time if no seeds were found
+	// Release the iterator if we reached the end
 	if len(nodes) == 0 {
-		db.updateStartup(time.Now())
+		db.seeder.Release()
+		db.seeder = nil
 	}
 	return nodes
 }
 
 // close flushes and closes the database files.
 func (db *nodeDB) close() {
+	if db.seeder != nil {
+		db.seeder.Release()
+	}
 	db.lvl.Close()
 }
