@@ -2,7 +2,10 @@ package discover
 
 import (
 	"bytes"
+	"io/ioutil"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -59,7 +62,8 @@ var nodeDBInt64Tests = []struct {
 }
 
 func TestNodeDBInt64(t *testing.T) {
-	db, _ := newNodeDB("")
+	db, _ := newNodeDB("", Version)
+	defer db.close()
 
 	tests := nodeDBInt64Tests
 	for i := 0; i < len(tests); i++ {
@@ -87,7 +91,9 @@ func TestNodeDBFetchStore(t *testing.T) {
 		TCPPort: 30303,
 	}
 	inst := time.Now()
-	db, _ := newNodeDB("")
+
+	db, _ := newNodeDB("", Version)
+	defer db.close()
 
 	// Check fetch/store operations on a node ping object
 	if stored := db.lastPing(node.ID); stored.Unix() != 0 {
@@ -151,7 +157,8 @@ var nodeDBSeedQueryNodes = []struct {
 }
 
 func TestNodeDBSeedQuery(t *testing.T) {
-	db, _ := newNodeDB("")
+	db, _ := newNodeDB("", Version)
+	defer db.close()
 
 	// Insert a batch of nodes for querying
 	for i, seed := range nodeDBSeedQueryNodes {
@@ -190,7 +197,8 @@ func TestNodeDBSeedQuery(t *testing.T) {
 }
 
 func TestNodeDBSeedQueryContinuation(t *testing.T) {
-	db, _ := newNodeDB("")
+	db, _ := newNodeDB("", Version)
+	defer db.close()
 
 	// Insert a batch of nodes for querying
 	for i, seed := range nodeDBSeedQueryNodes {
@@ -212,4 +220,47 @@ func TestNodeDBSeedQueryContinuation(t *testing.T) {
 			t.Errorf("2nd iteration %d: seed count mismatch: have %v, want %v", i, len(seeds), 1)
 		}
 	}
+}
+
+func TestNodeDBPersistency(t *testing.T) {
+	root, err := ioutil.TempDir("", "nodedb-")
+	if err != nil {
+		t.Fatalf("failed to create temporary data folder: %v", err)
+	}
+	defer os.RemoveAll(root)
+
+	var (
+		testKey = []byte("somekey")
+		testInt = int64(314)
+	)
+
+	// Create a persistent database and store some values
+	db, err := newNodeDB(filepath.Join("root", "database"), Version)
+	if err != nil {
+		t.Fatalf("failed to create persistent database: %v", err)
+	}
+	if err := db.storeInt64(testKey, testInt); err != nil {
+		t.Fatalf("failed to store value: %v.", err)
+	}
+	db.close()
+
+	// Reopen the database and check the value
+	db, err = newNodeDB(filepath.Join("root", "database"), Version)
+	if err != nil {
+		t.Fatalf("failed to open persistent database: %v", err)
+	}
+	if val := db.fetchInt64(testKey); val != testInt {
+		t.Fatalf("value mismatch: have %v, want %v", val, testInt)
+	}
+	db.close()
+
+	// Change the database version and check flush
+	db, err = newNodeDB(filepath.Join("root", "database"), Version+1)
+	if err != nil {
+		t.Fatalf("failed to open persistent database: %v", err)
+	}
+	if val := db.fetchInt64(testKey); val != 0 {
+		t.Fatalf("value mismatch: have %v, want %v", val, 0)
+	}
+	db.close()
 }

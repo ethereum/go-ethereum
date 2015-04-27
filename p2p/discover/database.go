@@ -39,11 +39,11 @@ var (
 // newNodeDB creates a new node database for storing and retrieving infos about
 // known peers in the network. If no path is given, an in-memory, temporary
 // database is constructed.
-func newNodeDB(path string) (*nodeDB, error) {
+func newNodeDB(path string, version int) (*nodeDB, error) {
 	if path == "" {
 		return newMemoryNodeDB()
 	}
-	return newPersistentNodeDB(path)
+	return newPersistentNodeDB(path, version)
 }
 
 // newMemoryNodeDB creates a new in-memory node database without a persistent
@@ -58,7 +58,7 @@ func newMemoryNodeDB() (*nodeDB, error) {
 
 // newPersistentNodeDB creates/opens a leveldb backed persistent node database,
 // also flushing its contents in case of a version mismatch.
-func newPersistentNodeDB(path string) (*nodeDB, error) {
+func newPersistentNodeDB(path string, version int) (*nodeDB, error) {
 	// Try to open the cache, recovering any corruption
 	db, err := leveldb.OpenFile(path, nil)
 	if _, iscorrupted := err.(leveldb.ErrCorrupted); iscorrupted {
@@ -70,7 +70,7 @@ func newPersistentNodeDB(path string) (*nodeDB, error) {
 	// The nodes contained in the cache correspond to a certain protocol version.
 	// Flush all nodes if the version doesn't match.
 	currentVer := make([]byte, binary.MaxVarintLen64)
-	currentVer = currentVer[:binary.PutVarint(currentVer, Version)]
+	currentVer = currentVer[:binary.PutVarint(currentVer, int64(version))]
 
 	blob, err := db.Get(nodeDBVersionKey, nil)
 	switch err {
@@ -88,7 +88,7 @@ func newPersistentNodeDB(path string) (*nodeDB, error) {
 			if err = os.RemoveAll(path); err != nil {
 				return nil, err
 			}
-			return newPersistentNodeDB(path)
+			return newPersistentNodeDB(path, version)
 		}
 	}
 	return &nodeDB{lvl: db}, nil
