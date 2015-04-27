@@ -63,8 +63,8 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 	case "eth_mining":
 		*reply = api.xeth().IsMining()
 	case "eth_gasPrice":
-		v := xeth.DefaultGas()
-		*reply = newHexData(v.Bytes())
+		v := xeth.DefaultGasPrice()
+		*reply = newHexNum(v.Bytes())
 	case "eth_accounts":
 		*reply = api.xeth().Accounts()
 	case "eth_blockNumber":
@@ -489,6 +489,6 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		return NewNotImplementedError(req.Method)
 	}
 
-	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)
+	glog.V(logger.Detail).Infof("Reply: %T %s\n", reply, reply)
 	return nil
 }
