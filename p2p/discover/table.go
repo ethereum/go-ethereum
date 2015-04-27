@@ -288,8 +288,7 @@ func (tab *Table) pingpong(w *bondproc, pinged bool, id NodeID, addr *net.UDPAdd
 	defer func() { tab.bondslots <- struct{}{} }()
 
 	// Ping the remote side and wait for a pong
-	tab.db.updateLastPing(id, time.Now())
-	if w.err = tab.net.ping(id, addr); w.err != nil {
+	if w.err = tab.ping(id, addr); w.err != nil {
 		close(w.done)
 		return
 	}
@@ -307,14 +306,13 @@ func (tab *Table) pingpong(w *bondproc, pinged bool, id NodeID, addr *net.UDPAdd
 		TCPPort:  int(tcpPort),
 	}
 	tab.db.updateNode(w.n)
-	tab.db.updateLastPong(id, time.Now())
 	close(w.done)
 }
 
 func (tab *Table) pingreplace(new *Node, b *bucket) {
 	if len(b.entries) == bucketSize {
 		oldest := b.entries[bucketSize-1]
-		if err := tab.net.ping(oldest.ID, oldest.addr()); err == nil {
+		if err := tab.ping(oldest.ID, oldest.addr()); err == nil {
 			// The node responded, we don't need to replace it.
 			return
 		}
@@ -325,6 +323,19 @@ func (tab *Table) pingreplace(new *Node, b *bucket) {
 	}
 	copy(b.entries[1:], b.entries)
 	b.entries[0] = new
+}
+
+// ping a remote endpoint and wait for a reply, also updating the node database
+// accordingly.
+func (tab *Table) ping(id NodeID, addr *net.UDPAddr) error {
+	// Update the last ping and send the message
+	tab.db.updateLastPing(id, time.Now())
+	if err := tab.net.ping(id, addr); err != nil {
+		return err
+	}
+	// Pong received, update the database and return
+	tab.db.updateLastPong(id, time.Now())
+	return nil
 }
 
 // add puts the entries into the table if their corresponding
