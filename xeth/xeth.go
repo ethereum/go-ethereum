@@ -280,6 +280,10 @@ func (self *XEth) IsMining() bool {
 	return self.backend.IsMining()
 }
 
+func (self *XEth) HashRate() int64 {
+	return self.backend.Miner().HashRate()
+}
+
 func (self *XEth) EthVersion() string {
 	return fmt.Sprintf("%d", self.backend.EthVersion())
 }
