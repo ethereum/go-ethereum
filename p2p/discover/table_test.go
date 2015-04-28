@@ -15,7 +15,7 @@ import (
 func TestTable_pingReplace(t *testing.T) {
 	doit := func(newNodeIsResponding, lastInBucketIsResponding bool) {
 		transport := newPingRecorder()
-		tab := newTable(transport, NodeID{}, &net.UDPAddr{})
+		tab := newTable(transport, NodeID{}, &net.UDPAddr{}, "")
 		last := fillBucket(tab, 200)
 		pingSender := randomID(tab.self.ID, 200)
 
@@ -145,7 +145,7 @@ func TestTable_closest(t *testing.T) {
 
 	test := func(test *closeTest) bool {
 		// for any node table, Target and N
-		tab := newTable(nil, test.Self, &net.UDPAddr{})
+		tab := newTable(nil, test.Self, &net.UDPAddr{}, "")
 		tab.add(test.All)
 
 		// check that doClosest(Target, N) returns nodes
@@ -217,7 +217,7 @@ func TestTable_Lookup(t *testing.T) {
 	self := gen(NodeID{}, quickrand).(NodeID)
 	target := randomID(self, 200)
 	transport := findnodeOracle{t, target}
-	tab := newTable(transport, self, &net.UDPAddr{})
+	tab := newTable(transport, self, &net.UDPAddr{}, "")
 
 	// lookup on empty table returns no nodes
 	if results := tab.Lookup(target); len(results) > 0 {

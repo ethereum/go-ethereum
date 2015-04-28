@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -304,27 +303,4 @@ func randomID(a NodeID, n int) (b NodeID) {
 		b[i] = byte(rand.Intn(255))
 	}
 	return b
-}
-
-// nodeDB stores all nodes we know about.
-type nodeDB struct {
-	mu   sync.RWMutex
-	byID map[NodeID]*Node
-}
-
-func (db *nodeDB) get(id NodeID) *Node {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	return db.byID[id]
-}
-
-func (db *nodeDB) add(id NodeID, addr *net.UDPAddr, tcpPort uint16) *Node {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	if db.byID == nil {
-		db.byID = make(map[NodeID]*Node)
-	}
-	n := &Node{ID: id, IP: addr.IP, DiscPort: addr.Port, TCPPort: int(tcpPort)}
-	db.byID[n.ID] = n
-	return n
 }

@@ -41,7 +41,7 @@ func newUDPTest(t *testing.T) *udpTest {
 		remotekey:  newkey(),
 		remoteaddr: &net.UDPAddr{IP: net.IP{1, 2, 3, 4}, Port: 30303},
 	}
-	test.table, test.udp = newUDP(test.localkey, test.pipe, nil)
+	test.table, test.udp = newUDP(test.localkey, test.pipe, nil, "")
 	return test
 }
 
@@ -157,8 +157,12 @@ func TestUDP_findnode(t *testing.T) {
 
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
-	test.table.db.add(PubkeyID(&test.remotekey.PublicKey), test.remoteaddr, 99)
-
+	test.table.db.updateNode(&Node{
+		ID:       PubkeyID(&test.remotekey.PublicKey),
+		IP:       test.remoteaddr.IP,
+		DiscPort: test.remoteaddr.Port,
+		TCPPort:  99,
+	})
 	// check that closest neighbors are returned.
 	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
 	test.waitPacketOut(func(p *neighbors) {
