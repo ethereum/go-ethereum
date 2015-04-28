@@ -92,15 +92,14 @@ type ChainManager struct {
 
 func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *ChainManager {
 	bc := &ChainManager{
-		blockDb:         blockDb,
-		stateDb:         stateDb,
-		genesisBlock:    GenesisBlock(stateDb),
-		eventMux:        mux,
-		quit:            make(chan struct{}),
-		cache:           NewBlockCache(blockCacheLimit),
-		currentGasLimit: new(big.Int),
+		blockDb:      blockDb,
+		stateDb:      stateDb,
+		genesisBlock: GenesisBlock(stateDb),
+		eventMux:     mux,
+		quit:         make(chan struct{}),
+		cache:        NewBlockCache(blockCacheLimit),
 	}
-	bc.setLastBlock()
+	bc.setLastState()
 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for _, hash := range badHashes {
@@ -145,7 +144,7 @@ func (bc *ChainManager) SetHead(head *types.Block) {
 	bc.transState = statedb.Copy()
 	bc.setTotalDifficulty(head.Td)
 	bc.insert(head)
-	bc.setLastBlock()
+	bc.setLastState()
 }
 
 func (self *ChainManager) Td() *big.Int {
@@ -212,7 +211,7 @@ func (self *ChainManager) setTransState(statedb *state.StateDB) {
 	self.transState = statedb
 }
 
-func (bc *ChainManager) setLastBlock() {
+func (bc *ChainManager) setLastState() {
 	data, _ := bc.blockDb.Get([]byte("LastBlock"))
 	if len(data) != 0 {
 		block := bc.GetBlock(common.BytesToHash(data))
@@ -224,6 +223,7 @@ func (bc *ChainManager) setLastBlock() {
 	} else {
 		bc.Reset()
 	}
+	bc.currentGasLimit = CalcGasLimit(bc.currentBlock)
 
 	if glog.V(logger.Info) {
 		glog.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
