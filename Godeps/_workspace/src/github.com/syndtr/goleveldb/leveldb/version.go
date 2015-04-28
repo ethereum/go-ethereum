@@ -7,7 +7,6 @@
 package leveldb
 
 import (
-	"errors"
 	"sync/atomic"
 	"unsafe"
 
@@ -15,19 +14,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
-
-var levelMaxSize [kNumLevels]float64
-
-func init() {
-	// Precompute max size of each level
-	for level := range levelMaxSize {
-		res := float64(10 * 1048576)
-		for n := level; n > 1; n-- {
-			res *= 10
-		}
-		levelMaxSize[level] = res
-	}
-}
 
 type tSet struct {
 	level int
@@ -37,21 +23,26 @@ type tSet struct {
 type version struct {
 	s *session
 
-	tables [kNumLevels]tFiles
+	tables []tFiles
 
 	// Level that should be compacted next and its compaction score.
-	// Score < 1 means compaction is not strictly needed.  These fields
-	// are initialized by ComputeCompaction()
+	// Score < 1 means compaction is not strictly needed. These fields
+	// are initialized by computeCompaction()
 	cLevel int
 	cScore float64
 
 	cSeek unsafe.Pointer
 
-	ref  int
+	ref int
+	// Succeeding version.
 	next *version
 }
 
-func (v *version) release_NB() {
+func newVersion(s *session) *version {
+	return &version{s: s, tables: make([]tFiles, s.o.GetNumLevel())}
+}
+
+func (v *version) releaseNB() {
 	v.ref--
 	if v.ref > 0 {
 		return
@@ -59,8 +50,6 @@ func (v *version) release_NB() {
 	if v.ref < 0 {
 		panic("negative version ref")
 	}
-
-	s := v.s
 
 	tables := make(map[uint64]bool)
 	for _, tt := range v.next.tables {
@@ -74,145 +63,184 @@ func (v *version) release_NB() {
 		for _, t := range tt {
 			num := t.file.Num()
 			if _, ok := tables[num]; !ok {
-				s.tops.remove(t)
+				v.s.tops.remove(t)
 			}
 		}
 	}
 
-	v.next.release_NB()
+	v.next.releaseNB()
 	v.next = nil
 }
 
 func (v *version) release() {
 	v.s.vmu.Lock()
-	v.release_NB()
+	v.releaseNB()
 	v.s.vmu.Unlock()
 }
 
-func (v *version) get(key iKey, ro *opt.ReadOptions) (value []byte, cstate bool, err error) {
-	s := v.s
+func (v *version) walkOverlapping(ikey iKey, f func(level int, t *tFile) bool, lf func(level int) bool) {
+	ukey := ikey.ukey()
 
-	ukey := key.ukey()
-
-	var tset *tSet
-	tseek := true
-
-	// We can search level-by-level since entries never hop across
-	// levels. Therefore we are guaranteed that if we find data
-	// in an smaller level, later levels are irrelevant.
-	for level, ts := range v.tables {
-		if len(ts) == 0 {
+	// Walk tables level-by-level.
+	for level, tables := range v.tables {
+		if len(tables) == 0 {
 			continue
 		}
 
 		if level == 0 {
 			// Level-0 files may overlap each other. Find all files that
-			// overlap user_key and process them in order from newest to
-			var tmp tFiles
-			for _, t := range ts {
-				if s.icmp.uCompare(ukey, t.min.ukey()) >= 0 &&
-					s.icmp.uCompare(ukey, t.max.ukey()) <= 0 {
-					tmp = append(tmp, t)
-				}
-			}
-
-			if len(tmp) == 0 {
-				continue
-			}
-
-			tmp.sortByNum()
-			ts = tmp
-		} else {
-			i := ts.searchMax(key, s.icmp)
-			if i >= len(ts) || s.icmp.uCompare(ukey, ts[i].min.ukey()) < 0 {
-				continue
-			}
-
-			ts = ts[i : i+1]
-		}
-
-		var l0found bool
-		var l0seq uint64
-		var l0type vType
-		var l0value []byte
-		for _, t := range ts {
-			if tseek {
-				if tset == nil {
-					tset = &tSet{level, t}
-				} else if tset.table.incrSeek() <= 0 {
-					cstate = atomic.CompareAndSwapPointer(&v.cSeek, nil, unsafe.Pointer(tset))
-					tseek = false
-				}
-			}
-
-			var _rkey, rval []byte
-			_rkey, rval, err = s.tops.get(t, key, ro)
-			if err == ErrNotFound {
-				continue
-			} else if err != nil {
-				return
-			}
-
-			rkey := iKey(_rkey)
-			if seq, t, ok := rkey.parseNum(); ok {
-				if s.icmp.uCompare(ukey, rkey.ukey()) == 0 {
-					if level == 0 {
-						if seq >= l0seq {
-							l0found = true
-							l0seq = seq
-							l0type = t
-							l0value = rval
-						}
-					} else {
-						switch t {
-						case tVal:
-							value = rval
-						case tDel:
-							err = ErrNotFound
-						default:
-							panic("invalid type")
-						}
+			// overlap ukey.
+			for _, t := range tables {
+				if t.overlaps(v.s.icmp, ukey, ukey) {
+					if !f(level, t) {
 						return
 					}
 				}
-			} else {
-				err = errors.New("leveldb: internal key corrupted")
-				return
+			}
+		} else {
+			if i := tables.searchMax(v.s.icmp, ikey); i < len(tables) {
+				t := tables[i]
+				if v.s.icmp.uCompare(ukey, t.imin.ukey()) >= 0 {
+					if !f(level, t) {
+						return
+					}
+				}
 			}
 		}
-		if level == 0 && l0found {
-			switch l0type {
-			case tVal:
-				value = l0value
-			case tDel:
-				err = ErrNotFound
-			default:
-				panic("invalid type")
-			}
+
+		if lf != nil && !lf(level) {
 			return
 		}
 	}
+}
+
+func (v *version) get(ikey iKey, ro *opt.ReadOptions, noValue bool) (value []byte, tcomp bool, err error) {
+	ukey := ikey.ukey()
+
+	var (
+		tset  *tSet
+		tseek bool
+
+		// Level-0.
+		zfound bool
+		zseq   uint64
+		zkt    kType
+		zval   []byte
+	)
 
 	err = ErrNotFound
+
+	// Since entries never hope across level, finding key/value
+	// in smaller level make later levels irrelevant.
+	v.walkOverlapping(ikey, func(level int, t *tFile) bool {
+		if !tseek {
+			if tset == nil {
+				tset = &tSet{level, t}
+			} else {
+				tseek = true
+			}
+		}
+
+		var (
+			fikey, fval []byte
+			ferr        error
+		)
+		if noValue {
+			fikey, ferr = v.s.tops.findKey(t, ikey, ro)
+		} else {
+			fikey, fval, ferr = v.s.tops.find(t, ikey, ro)
+		}
+		switch ferr {
+		case nil:
+		case ErrNotFound:
+			return true
+		default:
+			err = ferr
+			return false
+		}
+
+		if fukey, fseq, fkt, fkerr := parseIkey(fikey); fkerr == nil {
+			if v.s.icmp.uCompare(ukey, fukey) == 0 {
+				if level == 0 {
+					if fseq >= zseq {
+						zfound = true
+						zseq = fseq
+						zkt = fkt
+						zval = fval
+					}
+				} else {
+					switch fkt {
+					case ktVal:
+						value = fval
+						err = nil
+					case ktDel:
+					default:
+						panic("leveldb: invalid iKey type")
+					}
+					return false
+				}
+			}
+		} else {
+			err = fkerr
+			return false
+		}
+
+		return true
+	}, func(level int) bool {
+		if zfound {
+			switch zkt {
+			case ktVal:
+				value = zval
+				err = nil
+			case ktDel:
+			default:
+				panic("leveldb: invalid iKey type")
+			}
+			return false
+		}
+
+		return true
+	})
+
+	if tseek && tset.table.consumeSeek() <= 0 {
+		tcomp = atomic.CompareAndSwapPointer(&v.cSeek, nil, unsafe.Pointer(tset))
+	}
+
+	return
+}
+
+func (v *version) sampleSeek(ikey iKey) (tcomp bool) {
+	var tset *tSet
+
+	v.walkOverlapping(ikey, func(level int, t *tFile) bool {
+		if tset == nil {
+			tset = &tSet{level, t}
+			return true
+		} else {
+			if tset.table.consumeSeek() <= 0 {
+				tcomp = atomic.CompareAndSwapPointer(&v.cSeek, nil, unsafe.Pointer(tset))
+			}
+			return false
+		}
+	}, nil)
+
 	return
 }
 
 func (v *version) getIterators(slice *util.Range, ro *opt.ReadOptions) (its []iterator.Iterator) {
-	s := v.s
-
 	// Merge all level zero files together since they may overlap
 	for _, t := range v.tables[0] {
-		it := s.tops.newIterator(t, slice, ro)
+		it := v.s.tops.newIterator(t, slice, ro)
 		its = append(its, it)
 	}
 
-	strict := s.o.GetStrict(opt.StrictIterator) || ro.GetStrict(opt.StrictIterator)
-	for _, tt := range v.tables[1:] {
-		if len(tt) == 0 {
+	strict := opt.GetStrict(v.s.o.Options, ro, opt.StrictReader)
+	for _, tables := range v.tables[1:] {
+		if len(tables) == 0 {
 			continue
 		}
 
-		it := iterator.NewIndexedIterator(tt.newIndexIterator(s.tops, s.icmp, slice, ro), strict, true)
+		it := iterator.NewIndexedIterator(tables.newIndexIterator(v.s.tops, v.s.icmp, slice, ro), strict)
 		its = append(its, it)
 	}
 
@@ -220,7 +248,7 @@ func (v *version) getIterators(slice *util.Range, ro *opt.ReadOptions) (its []it
 }
 
 func (v *version) newStaging() *versionStaging {
-	return &versionStaging{base: v}
+	return &versionStaging{base: v, tables: make([]tablesScratch, v.s.o.GetNumLevel())}
 }
 
 // Spawn a new version based on this version.
@@ -242,25 +270,25 @@ func (v *version) tLen(level int) int {
 	return len(v.tables[level])
 }
 
-func (v *version) offsetOf(key iKey) (n uint64, err error) {
-	for level, tt := range v.tables {
-		for _, t := range tt {
-			if v.s.icmp.Compare(t.max, key) <= 0 {
-				// Entire file is before "key", so just add the file size
+func (v *version) offsetOf(ikey iKey) (n uint64, err error) {
+	for level, tables := range v.tables {
+		for _, t := range tables {
+			if v.s.icmp.Compare(t.imax, ikey) <= 0 {
+				// Entire file is before "ikey", so just add the file size
 				n += t.size
-			} else if v.s.icmp.Compare(t.min, key) > 0 {
-				// Entire file is after "key", so ignore
+			} else if v.s.icmp.Compare(t.imin, ikey) > 0 {
+				// Entire file is after "ikey", so ignore
 				if level > 0 {
 					// Files other than level 0 are sorted by meta->min, so
 					// no further files in this level will contain data for
-					// "key".
+					// "ikey".
 					break
 				}
 			} else {
-				// "key" falls in the range for this table.  Add the
-				// approximate offset of "key" within the table.
+				// "ikey" falls in the range for this table. Add the
+				// approximate offset of "ikey" within the table.
 				var nn uint64
-				nn, err = v.s.tops.offsetOf(t, key)
+				nn, err = v.s.tops.offsetOf(t, ikey)
 				if err != nil {
 					return 0, err
 				}
@@ -272,15 +300,16 @@ func (v *version) offsetOf(key iKey) (n uint64, err error) {
 	return
 }
 
-func (v *version) pickLevel(min, max []byte) (level int) {
-	if !v.tables[0].isOverlaps(min, max, false, v.s.icmp) {
-		var r tFiles
-		for ; level < kMaxMemCompactLevel; level++ {
-			if v.tables[level+1].isOverlaps(min, max, true, v.s.icmp) {
+func (v *version) pickLevel(umin, umax []byte) (level int) {
+	if !v.tables[0].overlaps(v.s.icmp, umin, umax, true) {
+		var overlaps tFiles
+		maxLevel := v.s.o.GetMaxMemCompationLevel()
+		for ; level < maxLevel; level++ {
+			if v.tables[level+1].overlaps(v.s.icmp, umin, umax, false) {
 				break
 			}
-			v.tables[level+2].getOverlaps(min, max, &r, true, v.s.icmp.ucmp)
-			if r.size() > kMaxGrandParentOverlapBytes {
+			overlaps = v.tables[level+2].getOverlaps(overlaps, v.s.icmp, umin, umax, false)
+			if overlaps.size() > uint64(v.s.o.GetCompactionGPOverlaps(level)) {
 				break
 			}
 		}
@@ -294,7 +323,7 @@ func (v *version) computeCompaction() {
 	var bestLevel int = -1
 	var bestScore float64 = -1
 
-	for level, ff := range v.tables {
+	for level, tables := range v.tables {
 		var score float64
 		if level == 0 {
 			// We treat level-0 specially by bounding the number of files
@@ -308,9 +337,9 @@ func (v *version) computeCompaction() {
 			// file size is small (perhaps because of a small write-buffer
 			// setting, or very high compression ratios, or lots of
 			// overwrites/deletions).
-			score = float64(len(ff)) / kL0_CompactionTrigger
+			score = float64(len(tables)) / float64(v.s.o.GetCompactionL0Trigger())
 		} else {
-			score = float64(ff.size()) / levelMaxSize[level]
+			score = float64(tables.size()) / float64(v.s.o.GetCompactionTotalSize(level))
 		}
 
 		if score > bestScore {
@@ -327,66 +356,62 @@ func (v *version) needCompaction() bool {
 	return v.cScore >= 1 || atomic.LoadPointer(&v.cSeek) != nil
 }
 
+type tablesScratch struct {
+	added   map[uint64]atRecord
+	deleted map[uint64]struct{}
+}
+
 type versionStaging struct {
 	base   *version
-	tables [kNumLevels]struct {
-		added   map[uint64]ntRecord
-		deleted map[uint64]struct{}
-	}
+	tables []tablesScratch
 }
 
 func (p *versionStaging) commit(r *sessionRecord) {
-	btt := p.base.tables
+	// Deleted tables.
+	for _, r := range r.deletedTables {
+		tm := &(p.tables[r.level])
 
-	// deleted tables
-	for _, tr := range r.deletedTables {
-		tm := &(p.tables[tr.level])
-
-		bt := btt[tr.level]
-		if len(bt) > 0 {
+		if len(p.base.tables[r.level]) > 0 {
 			if tm.deleted == nil {
 				tm.deleted = make(map[uint64]struct{})
 			}
-			tm.deleted[tr.num] = struct{}{}
+			tm.deleted[r.num] = struct{}{}
 		}
 
 		if tm.added != nil {
-			delete(tm.added, tr.num)
+			delete(tm.added, r.num)
 		}
 	}
 
-	// new tables
-	for _, tr := range r.addedTables {
-		tm := &(p.tables[tr.level])
+	// New tables.
+	for _, r := range r.addedTables {
+		tm := &(p.tables[r.level])
 
 		if tm.added == nil {
-			tm.added = make(map[uint64]ntRecord)
+			tm.added = make(map[uint64]atRecord)
 		}
-		tm.added[tr.num] = tr
+		tm.added[r.num] = r
 
 		if tm.deleted != nil {
-			delete(tm.deleted, tr.num)
+			delete(tm.deleted, r.num)
 		}
 	}
 }
 
 func (p *versionStaging) finish() *version {
-	s := p.base.s
-	btt := p.base.tables
-
-	// build new version
-	nv := &version{s: s}
+	// Build new version.
+	nv := newVersion(p.base.s)
 	for level, tm := range p.tables {
-		bt := btt[level]
+		btables := p.base.tables[level]
 
-		n := len(bt) + len(tm.added) - len(tm.deleted)
+		n := len(btables) + len(tm.added) - len(tm.deleted)
 		if n < 0 {
 			n = 0
 		}
 		nt := make(tFiles, 0, n)
 
-		// base tables
-		for _, t := range bt {
+		// Base tables.
+		for _, t := range btables {
 			if _, ok := tm.deleted[t.file.Num()]; ok {
 				continue
 			}
@@ -396,17 +421,21 @@ func (p *versionStaging) finish() *version {
 			nt = append(nt, t)
 		}
 
-		// new tables
-		for _, tr := range tm.added {
-			nt = append(nt, tr.makeFile(s))
+		// New tables.
+		for _, r := range tm.added {
+			nt = append(nt, p.base.s.tableFileFromRecord(r))
 		}
 
-		// sort tables
-		nt.sortByKey(s.icmp)
+		// Sort tables.
+		if level == 0 {
+			nt.sortByNum()
+		} else {
+			nt.sortByKey(p.base.s.icmp)
+		}
 		nv.tables[level] = nt
 	}
 
-	// compute compaction score for new version
+	// Compute compaction score for new version.
 	nv.computeCompaction()
 
 	return nv
@@ -421,7 +450,7 @@ func (vr *versionReleaser) Release() {
 	v := vr.v
 	v.s.vmu.Lock()
 	if !vr.once {
-		v.release_NB()
+		v.releaseNB()
 		vr.once = true
 	}
 	v.s.vmu.Unlock()

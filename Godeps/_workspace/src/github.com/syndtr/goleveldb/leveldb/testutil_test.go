@@ -34,6 +34,10 @@ func (t *testingDB) TestGet(key []byte) (value []byte, err error) {
 	return t.Get(key, t.ro)
 }
 
+func (t *testingDB) TestHas(key []byte) (ret bool, err error) {
+	return t.Has(key, t.ro)
+}
+
 func (t *testingDB) TestNewIterator(slice *util.Range) iterator.Iterator {
 	return t.NewIterator(slice, t.ro)
 }
@@ -48,6 +52,7 @@ func (t *testingDB) TestClose() {
 func newTestingDB(o *opt.Options, ro *opt.ReadOptions, wo *opt.WriteOptions) *testingDB {
 	stor := testutil.NewStorage()
 	db, err := Open(stor, o)
+	// FIXME: This may be called from outside It, which may cause panic.
 	Expect(err).NotTo(HaveOccurred())
 	return &testingDB{
 		DB:   db,

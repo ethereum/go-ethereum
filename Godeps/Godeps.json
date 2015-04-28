@@ -11,11 +11,6 @@
 			"Rev": "7dda39b2e7d5e265014674c5af696ba4186679e9"
 		},
 		{
-			"ImportPath": "code.google.com/p/snappy-go/snappy",
-			"Comment": "null-15",
-			"Rev": "12e4b4183793ac4b061921e7980845e750679fd0"
-		},
-		{
 			"ImportPath": "github.com/codegangsta/cli",
 			"Comment": "1.2.0-95-g9b2bd2b",
 			"Rev": "9b2bd2b3489748d4d0a204fa4eb2ee9e89e0ebc6"
@@ -24,10 +19,6 @@
 			"ImportPath": "github.com/ethereum/ethash",
 			"Comment": "v23.1-82-g908aad3",
 			"Rev": "908aad345c9fbf3ab9bbb94031dc02d0d90df1b8"
-		},
-		{
-			"ImportPath": "github.com/ethereum/serpent-go",
-			"Rev": "5767a0dbd759d313df3f404dadb7f98d7ab51443"
 		},
 		{
 			"ImportPath": "github.com/howeyc/fsnotify",
@@ -47,10 +38,6 @@
 			"Rev": "ccfcd0245381f0c94c68f50626665eed3c6b726a"
 		},
 		{
-			"ImportPath": "github.com/robertkrimen/otto",
-			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
-		},
-		{
 			"ImportPath": "github.com/obscuren/qml",
 			"Rev": "c288002b52e905973b131089a8a7c761d4a2c36a"
 		},
@@ -67,27 +54,7 @@
 			"Rev": "907cca0f578a5316fb864ec6992dc3d9730ec58c"
 		},
 		{
-			"ImportPath": "github.com/robertkrimen/otto/ast",
-			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
-		},
-		{
-			"ImportPath": "github.com/robertkrimen/otto/dbg",
-			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
-		},
-		{
-			"ImportPath": "github.com/robertkrimen/otto/file",
-			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
-		},
-		{
-			"ImportPath": "github.com/robertkrimen/otto/parser",
-			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
-		},
-		{
-			"ImportPath": "github.com/robertkrimen/otto/registry",
-			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
-		},
-		{
-			"ImportPath": "github.com/robertkrimen/otto/token",
+			"ImportPath": "github.com/robertkrimen/otto",
 			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
 		},
 		{
@@ -96,7 +63,11 @@
 		},
 		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",
-			"Rev": "832fa7ed4d28545eab80f19e1831fc004305cade"
+			"Rev": "4875955338b0a434238a31165cb87255ab6e9e4a"
+		},
+		{
+			"ImportPath": "github.com/syndtr/gosnappy/snappy",
+			"Rev": "156a073208e131d7d2e212cb749feae7c339e846"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/pbkdf2",
