@@ -21,20 +21,15 @@ type peer struct {
 	quit chan struct{}
 }
 
-// newPeer creates and initializes a new whisper peer connection, returning either
-// the newly constructed link or a failure reason.
-func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) (*peer, error) {
-	p := &peer{
+// newPeer creates a new whisper peer object, but does not run the handshake itself.
+func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *peer {
+	return &peer{
 		host:  host,
 		peer:  remote,
 		ws:    rw,
 		known: set.New(),
 		quit:  make(chan struct{}),
 	}
-	if err := p.handshake(); err != nil {
-		return nil, err
-	}
-	return p, nil
 }
 
 // start initiates the peer updater, periodically broadcasting the whisper packets

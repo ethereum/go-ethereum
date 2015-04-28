@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/elliptic"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -24,6 +25,9 @@ func TestMessageSimpleWrap(t *testing.T) {
 	}
 	if bytes.Compare(msg.Payload, payload) != 0 {
 		t.Fatalf("payload mismatch after wrapping: have 0x%x, want 0x%x", msg.Payload, payload)
+	}
+	if msg.TTL/time.Second != DefaultTTL/time.Second {
+		t.Fatalf("message TTL mismatch: have %v, want %v", msg.TTL, DefaultTTL)
 	}
 }
 

@@ -406,65 +406,67 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		res, _ := api.xeth().DbGet([]byte(args.Database + args.Key))
 		*reply = newHexData(res)
+
 	case "shh_version":
+		// Retrieves the currently running whisper protocol version
 		*reply = api.xeth().WhisperVersion()
+
 	case "shh_post":
+		// Injects a new message into the whisper network
 		args := new(WhisperMessageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-
 		err := api.xeth().Whisper().Post(args.Payload, args.To, args.From, args.Topics, args.Priority, args.Ttl)
 		if err != nil {
 			return err
 		}
-
 		*reply = true
+
 	case "shh_newIdentity":
+		// Creates a new whisper identity to use for sending/receiving messages
 		*reply = api.xeth().Whisper().NewIdentity()
-	// case "shh_removeIdentity":
-	// 	args := new(WhisperIdentityArgs)
-	// 	if err := json.Unmarshal(req.Params, &args); err != nil {
-	// 		return err
-	// 	}
-	// 	*reply = api.xeth().Whisper().RemoveIdentity(args.Identity)
+
 	case "shh_hasIdentity":
+		// Checks if an identity if owned or not
 		args := new(WhisperIdentityArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		*reply = api.xeth().Whisper().HasIdentity(args.Identity)
-	case "shh_newGroup", "shh_addToGroup":
-		return NewNotImplementedError(req.Method)
+
 	case "shh_newFilter":
+		// Create a new filter to watch and match messages with
 		args := new(WhisperFilterArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		opts := new(xeth.Options)
-		// opts.From = args.From
-		opts.To = args.To
-		opts.Topics = args.Topics
-		id := api.xeth().NewWhisperFilter(opts)
+		id := api.xeth().NewWhisperFilter(args.To, args.From, args.Topics)
 		*reply = newHexNum(big.NewInt(int64(id)).Bytes())
+
 	case "shh_uninstallFilter":
+		// Remove an existing filter watching messages
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		*reply = api.xeth().UninstallWhisperFilter(args.Id)
+
 	case "shh_getFilterChanges":
+		// Retrieve all the new messages arrived since the last request
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = api.xeth().MessagesChanged(args.Id)
+		*reply = api.xeth().WhisperMessagesChanged(args.Id)
+
 	case "shh_getMessages":
+		// Retrieve all the cached messages matching a specific, existing filter
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = api.xeth().Whisper().Messages(args.Id)
+		*reply = api.xeth().WhisperMessages(args.Id)
 
 	// case "eth_register":
 	// 	// Placeholder for actual type
