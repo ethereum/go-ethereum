@@ -19,4 +19,4 @@ mist:
 	@echo "Run \"$(GOBIN)/mist --asset_path=cmd/mist/assets\" to launch mist."
 
 clean:
-	rm -fr build/_workspace/pkg/ $(GOBIN)/*
+	rm -fr build/_workspace/pkg/ Godeps/_workspace/pkg $(GOBIN)/*
