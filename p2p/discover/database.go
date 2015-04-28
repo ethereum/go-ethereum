@@ -177,23 +177,34 @@ func (db *nodeDB) updateNode(node *Node) error {
 	return db.lvl.Put(makeKey(node.ID, nodeDBDiscoverRoot), blob, nil)
 }
 
+// ensureExpirer is a small helper method ensuring that the data expiration
+// mechanism is running. If the expiration goroutine is already running, this
+// method simply returns.
+//
+// The goal is to start the data evacuation only after the network successfully
+// bootstrapped itself (to prevent dumping potentially useful seed nodes). Since
+// it would require significant overhead to exactly trace the first successful
+// convergence, it's simpler to "ensure" the correct state when an appropriate
+// condition occurs (i.e. a successful bonding), and discard further events.
+func (db *nodeDB) ensureExpirer() {
+	db.runner.Do(func() { go db.expirer() })
+}
+
 // expirer should be started in a go routine, and is responsible for looping ad
 // infinitum and dropping stale data from the database.
 func (db *nodeDB) expirer() {
-	db.runner.Do(func() {
-		tick := time.Tick(nodeDBCleanupCycle)
-		for {
-			select {
-			case <-tick:
-				if err := db.expireNodes(); err != nil {
-					glog.V(logger.Error).Infof("Failed to expire nodedb items: %v", err)
-				}
-
-			case <-db.quit:
-				return
+	tick := time.Tick(nodeDBCleanupCycle)
+	for {
+		select {
+		case <-tick:
+			if err := db.expireNodes(); err != nil {
+				glog.V(logger.Error).Infof("Failed to expire nodedb items: %v", err)
 			}
+
+		case <-db.quit:
+			return
 		}
-	})
+	}
 }
 
 // expireNodes iterates over the database and deletes all nodes that have not
