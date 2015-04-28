@@ -343,6 +343,7 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 
 func (s *Ethereum) StopMining()         { s.miner.Stop() }
 func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
+func (s *Ethereum) HashRate() int64     { return s.miner.HashRate() }
 func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 
 // func (s *Ethereum) Logger() logger.LogSystem             { return s.logger }
