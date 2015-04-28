@@ -465,7 +465,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 		*reply = api.xeth().Whisper().Messages(args.Id)
-	case "ext_hashrate":
+	case "eth_hashrate":
 		*reply = newHexNum(api.xeth().HashRate())
 
 	// case "eth_register":

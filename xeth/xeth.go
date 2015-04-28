@@ -281,7 +281,7 @@ func (self *XEth) IsMining() bool {
 }
 
 func (self *XEth) HashRate() int64 {
-	return self.backend.HashRate()
+	return self.backend.Miner().HashRate()
 }
 
 func (self *XEth) EthVersion() string {
