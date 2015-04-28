@@ -30,3 +30,7 @@ deploy/osx/Mist\ Installer.dmg
 /build/_workspace/
 /build/bin/
 
+# travis
+profile.tmp
+profile.cov
+

@@ -2,7 +2,7 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth mist test clean
+.PHONY: geth mist all test travis-test-with-coverage clean
 GOBIN = build/bin
 
 geth:
@@ -20,6 +20,9 @@ all:
 
 test: all
 	build/env.sh go test ./...
+
+travis-test-with-coverage: all
+	build/env.sh build/test-global-coverage.sh
 
 clean:
 	rm -fr build/_workspace/pkg/ Godeps/_workspace/pkg $(GOBIN)/*
