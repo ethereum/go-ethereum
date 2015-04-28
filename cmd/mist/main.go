@@ -74,6 +74,7 @@ func init() {
 		utils.RPCPortFlag,
 		utils.JSpathFlag,
 		utils.ProtocolVersionFlag,
+		utils.BlockchainVersionFlag,
 		utils.NetworkIdFlag,
 	}
 }
