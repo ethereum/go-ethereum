@@ -41,6 +41,9 @@ const (
 )
 
 var (
+	gitCommit       string // set via linker flag
+	nodeNameVersion string
+
 	app           = utils.NewApp(Version, "the ether browser")
 	assetPathFlag = cli.StringFlag{
 		Name:  "asset_path",
@@ -54,6 +57,11 @@ func init() {
 	// Mist-specific default
 	if len(rpcCorsFlag.Value) == 0 {
 		rpcCorsFlag.Value = "http://localhost"
+	}
+	if gitCommit == "" {
+		nodeNameVersion = Version
+	} else {
+		nodeNameVersion = Version + "-" + gitCommit[:8]
 	}
 
 	app.Action = run
@@ -107,7 +115,7 @@ func run(ctx *cli.Context) {
 	tstart := time.Now()
 
 	// TODO: show qml popup instead of exiting if initialization fails.
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
