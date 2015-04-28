@@ -1,3 +1,0 @@
-def register(k, v):
-    if !self.storage[k]:
-        self.storage[k] = v

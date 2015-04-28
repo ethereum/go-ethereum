@@ -1,3 +1,0 @@
-[submodule "serp"]
-	path = serpent
-	url = https://github.com/ethereum/serpent.git
