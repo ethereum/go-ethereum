@@ -116,6 +116,7 @@ func run(ctx *cli.Context) {
 
 	// TODO: show qml popup instead of exiting if initialization fails.
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	cfg.Shh = true
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
