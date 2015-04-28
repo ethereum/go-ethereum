@@ -12,38 +12,6 @@ master    | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=L
 [![Stories in Progress](https://badge.waffle.io/ethereum/go-ethereum.svg?label=in%20progress&title=In Progress)](http://waffle.io/ethereum/go-ethereum)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethereum/go-ethereum?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-
-Build
-=====
-
-Mist (GUI):
-
-`go get github.com/ethereum/go-ethereum/cmd/mist`
-
-Geth (CLI):
-
-`go get github.com/ethereum/go-ethereum/cmd/geth`
-
-As of POC-8, go-ethereum uses [Godep](https://github.com/tools/godep) to manage dependencies. Assuming you have [your environment all set up](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum), switch to the go-ethereum repository root folder, and build/install the executable you need:
-
-Mist (GUI):
-
-```
-godep go build -v ./cmd/mist
-```
-
-Geth (CLI):
-
-```
-godep go build -v ./cmd/geth
-```
-
-Instead of `build`, you can use `install` which will also install the resulting binary.
-
-For prerequisites and detailed build instructions please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum)
-
-If you intend to develop on go-ethereum, check the [Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide)
-
 Automated (dev) builds
 ======================
 
@@ -53,6 +21,19 @@ Automated (dev) builds
   [trusty](https://build.ethdev.com/builds/Linux%20Go%20develop%20deb%20i386-trusty/latest/) |
   [utopic](https://build.ethdev.com/builds/Linux%20Go%20develop%20deb%20i386-utopic/latest/)
 * [Windows 64-bit](https://build.ethdev.com/builds/Windows%20Go%20develop%20branch/Geth-Win64-latest.7z)
+
+Building the source
+===================
+
+For prerequisites and detailed build instructions please read the
+[Installation Instructions](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum)
+on the wiki.
+
+Building geth requires two external dependencies, Go and GMP.
+You can install them using your favourite package manager.
+Once the dependencies are installed, run
+
+    make geth
 
 Executables
 ===========
@@ -68,18 +49,16 @@ Go Ethereum comes with several wrappers/executables found in
 * `evm` is a generic Ethereum Virtual Machine: `evm -code 60ff60ff -gas
   10000 -price 0 -dump`. See `-h` for a detailed description.
 * `disasm` disassembles EVM code: `echo "6001" | disasm`
-* `rlpdump` converts a rlp stream to `interface{}`.
+* `rlpdump` prints RLP structures
 
 Command line options
-============================
+====================
 
 Both `mist` and `geth` can be configured via command line options, environment variables and config files.
 
 To get the options available:
 
-```
-geth -help
-```
+    geth --help
 
 For further details on options, see the [wiki](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options)
 
@@ -92,6 +71,6 @@ are ignored (use gofmt!). If you send pull requests make absolute sure that you
 commit on the `develop` branch and that you do not merge to master.
 Commits that are directly based on master are simply ignored.
 
-See [Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide) for more details on configuring your environment, testing, and dependency management.
-
-TEST
+See [Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide)
+for more details on configuring your environment, testing, and
+dependency management.
