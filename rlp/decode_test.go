@@ -119,6 +119,10 @@ func TestStreamErrors(t *testing.T) {
 		{"8158", calls{"Uint", "Uint"}, nil, io.EOF},
 		{"C0", calls{"List", "ListEnd", "List"}, nil, io.EOF},
 
+		{"", calls{"List"}, withoutInputLimit, io.EOF},
+		{"8158", calls{"Uint", "Uint"}, withoutInputLimit, io.EOF},
+		{"C0", calls{"List", "ListEnd", "List"}, withoutInputLimit, io.EOF},
+
 		// Input limit errors.
 		{"81", calls{"Bytes"}, nil, ErrValueTooLarge},
 		{"81", calls{"Uint"}, nil, ErrValueTooLarge},
@@ -425,6 +429,13 @@ var decodeTests = []decodeTest{
 		input: "C3010203",
 		ptr:   new([]io.Reader),
 		error: "rlp: type io.Reader is not RLP-serializable",
+	},
+
+	// fuzzer crashes
+	{
+		input: "c330f9c030f93030ce3030303030303030bd303030303030",
+		ptr:   new(interface{}),
+		error: "rlp: element is larger than containing list",
 	},
 }
 
