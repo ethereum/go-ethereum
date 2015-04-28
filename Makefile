@@ -9,12 +9,12 @@
 GOBIN = build/bin
 
 geth:
-	build/env.sh go install -v github.com/ethereum/go-ethereum/cmd/geth
+	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
 mist:
-	build/env.sh go install -v github.com/ethereum/go-ethereum/cmd/mist
+	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/mist
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/mist --asset_path=cmd/mist/assets\" to launch mist."
 
