@@ -472,3 +472,7 @@ func (d *Downloader) isProcessing() bool {
 func (d *Downloader) isBusy() bool {
 	return d.isFetchingHashes() || d.isDownloadingBlocks() || d.isProcessing()
 }
+
+func (d *Downloader) IsBusy() bool {
+	return d.isBusy()
+}

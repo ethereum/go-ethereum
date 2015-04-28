@@ -163,6 +163,11 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	if peer.td.Cmp(pm.chainman.Td()) <= 0 {
 		return
 	}
+	// Check downloader if it's busy so it doesn't show the sync message
+	// for every attempty
+	if pm.downloader.IsBusy() {
+		return
+	}
 
 	glog.V(logger.Info).Infof("Synchronisation attempt using %s TD=%v\n", peer.id, peer.td)
 	// Get the hashes from the peer (synchronously)
