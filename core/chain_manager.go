@@ -74,8 +74,10 @@ type ChainManager struct {
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
 	// Last known total difficulty
-	mu              sync.RWMutex
-	tsmu            sync.RWMutex
+	mu       sync.RWMutex
+	tsmu     sync.RWMutex
+	insertMu sync.Mutex
+
 	td              *big.Int
 	currentBlock    *types.Block
 	lastBlockHash   common.Hash
@@ -496,8 +498,8 @@ func (self *ChainManager) procFutureBlocks() {
 }
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
-	self.mu.Lock()
-	defer self.mu.Unlock()
+	self.insertMu.Lock()
+	defer self.insertMu.Unlock()
 
 	// A queued approach to delivering events. This is generally faster than direct delivery and requires much less mutex acquiring.
 	var (
@@ -546,51 +548,55 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 		block.Td = new(big.Int).Set(CalculateTD(block, self.GetBlock(block.ParentHash())))
 
-		cblock := self.currentBlock
-		// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
-		// not in the canonical chain.
-		self.write(block)
-		// Compare the TD of the last known block in the canonical chain to make sure it's greater.
-		// At this point it's possible that a different chain (fork) becomes the new canonical chain.
-		if block.Td.Cmp(self.td) > 0 {
-			//if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, common.Big1)) < 0 {
-			if block.Number().Cmp(cblock.Number()) <= 0 {
-				chash := cblock.Hash()
-				hash := block.Hash()
+		self.mu.Lock()
+		{
+			cblock := self.currentBlock
+			// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
+			// not in the canonical chain.
+			self.write(block)
+			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
+			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
+			if block.Td.Cmp(self.td) > 0 {
+				//if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, common.Big1)) < 0 {
+				if block.Number().Cmp(cblock.Number()) <= 0 {
+					chash := cblock.Hash()
+					hash := block.Hash()
 
-				if glog.V(logger.Info) {
-					glog.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, hash[:4], block.Td, cblock.Header().Number, chash[:4], self.td)
+					if glog.V(logger.Info) {
+						glog.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, hash[:4], block.Td, cblock.Header().Number, chash[:4], self.td)
+					}
+					// during split we merge two different chains and create the new canonical chain
+					self.merge(self.getBlockByNumber(block.NumberU64()), block)
+
+					queue[i] = ChainSplitEvent{block, logs}
+					queueEvent.splitCount++
 				}
-				// during split we merge two different chains and create the new canonical chain
-				self.merge(self.getBlockByNumber(block.NumberU64()), block)
 
-				queue[i] = ChainSplitEvent{block, logs}
-				queueEvent.splitCount++
+				self.setTotalDifficulty(block.Td)
+				self.insert(block)
+
+				jsonlogger.LogJson(&logger.EthChainNewHead{
+					BlockHash:     block.Hash().Hex(),
+					BlockNumber:   block.Number(),
+					ChainHeadHash: cblock.Hash().Hex(),
+					BlockPrevHash: block.ParentHash().Hex(),
+				})
+
+				self.setTransState(state.New(block.Root(), self.stateDb))
+				self.txState.SetState(state.New(block.Root(), self.stateDb))
+
+				queue[i] = ChainEvent{block, logs}
+				queueEvent.canonicalCount++
+
+				if glog.V(logger.Debug) {
+					glog.Infof("inserted block #%d (%d TXs %d UNCs) (%x...)\n", block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
+				}
+			} else {
+				queue[i] = ChainSideEvent{block, logs}
+				queueEvent.sideCount++
 			}
-
-			self.setTotalDifficulty(block.Td)
-			self.insert(block)
-
-			jsonlogger.LogJson(&logger.EthChainNewHead{
-				BlockHash:     block.Hash().Hex(),
-				BlockNumber:   block.Number(),
-				ChainHeadHash: cblock.Hash().Hex(),
-				BlockPrevHash: block.ParentHash().Hex(),
-			})
-
-			self.setTransState(state.New(block.Root(), self.stateDb))
-			self.txState.SetState(state.New(block.Root(), self.stateDb))
-
-			queue[i] = ChainEvent{block, logs}
-			queueEvent.canonicalCount++
-
-			if glog.V(logger.Debug) {
-				glog.Infof("inserted block #%d (%d TXs %d UNCs) (%x...)\n", block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
-			}
-		} else {
-			queue[i] = ChainSideEvent{block, logs}
-			queueEvent.sideCount++
 		}
+		self.mu.Unlock()
 
 		stats.processed++
 
