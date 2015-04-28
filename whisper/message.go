@@ -8,21 +8,25 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-// Message represents an end-user data packet to trasmit through the Whisper
+// Message represents an end-user data packet to transmit through the Whisper
 // protocol. These are wrapped into Envelopes that need not be understood by
 // intermediate nodes, just forwarded.
 type Message struct {
 	Flags     byte // First bit is signature presence, rest reserved and should be random
 	Signature []byte
 	Payload   []byte
-	Sent      int64
 
-	To *ecdsa.PublicKey
+	Sent time.Time     // Time when the message was posted into the network
+	TTL  time.Duration // Maximum time to live allowed for the message
+
+	To   *ecdsa.PublicKey // Message recipient (identity used to decode the message)
+	Hash common.Hash      // Message envelope hash to act as a unique id
 }
 
 // Options specifies the exact way a message should be wrapped into an Envelope.
@@ -43,7 +47,7 @@ func NewMessage(payload []byte) *Message {
 	return &Message{
 		Flags:   flags,
 		Payload: payload,
-		Sent:    time.Now().Unix(),
+		Sent:    time.Now(),
 	}
 }
 
@@ -64,6 +68,8 @@ func (self *Message) Wrap(pow time.Duration, options Options) (*Envelope, error)
 	if options.TTL == 0 {
 		options.TTL = DefaultTTL
 	}
+	self.TTL = options.TTL
+
 	// Sign and encrypt the message if requested
 	if options.From != nil {
 		if err := self.sign(options.From); err != nil {
@@ -114,9 +120,12 @@ func (self *Message) encrypt(key *ecdsa.PublicKey) (err error) {
 }
 
 // decrypt decrypts an encrypted payload with a private key.
-func (self *Message) decrypt(key *ecdsa.PrivateKey) (err error) {
-	self.Payload, err = crypto.Decrypt(key, self.Payload)
-	return
+func (self *Message) decrypt(key *ecdsa.PrivateKey) error {
+	cleartext, err := crypto.Decrypt(key, self.Payload)
+	if err == nil {
+		self.Payload = cleartext
+	}
+	return err
 }
 
 // hash calculates the SHA3 checksum of the message flags and payload.

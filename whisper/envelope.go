@@ -72,6 +72,9 @@ func (self *Envelope) Open(key *ecdsa.PrivateKey) (msg *Message, err error) {
 
 	message := &Message{
 		Flags: data[0],
+		Sent:  time.Unix(int64(self.Expiry-self.TTL), 0),
+		TTL:   time.Duration(self.TTL) * time.Second,
+		Hash:  self.Hash(),
 	}
 	data = data[1:]
 

@@ -1010,25 +1010,27 @@ func (args *WhisperIdentityArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type WhisperFilterArgs struct {
-	To     string `json:"to"`
+	To     string
 	From   string
-	Topics []string
+	Topics [][]string
 }
 
+// UnmarshalJSON implements the json.Unmarshaler interface, invoked to convert a
+// JSON message blob into a WhisperFilterArgs structure.
 func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
+	// Unmarshal the JSON message and sanity check
 	var obj []struct {
-		To     interface{}
-		Topics []interface{}
+		To     interface{} `json:"to"`
+		From   interface{} `json:"from"`
+		Topics interface{} `json:"topics"`
 	}
-
-	if err = json.Unmarshal(b, &obj); err != nil {
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
-
 	if len(obj) < 1 {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
-
+	// Retrieve the simple data contents of the filter arguments
 	if obj[0].To == nil {
 		args.To = ""
 	} else {
@@ -1038,17 +1040,52 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 		}
 		args.To = argstr
 	}
-
-	t := make([]string, len(obj[0].Topics))
-	for i, j := range obj[0].Topics {
-		argstr, ok := j.(string)
+	if obj[0].From == nil {
+		args.From = ""
+	} else {
+		argstr, ok := obj[0].From.(string)
 		if !ok {
-			return NewInvalidTypeError("topics["+string(i)+"]", "is not a string")
+			return NewInvalidTypeError("from", "is not a string")
 		}
-		t[i] = argstr
+		args.From = argstr
 	}
-	args.Topics = t
+	// Construct the nested topic array
+	if obj[0].Topics != nil {
+		// Make sure we have an actual topic array
+		list, ok := obj[0].Topics.([]interface{})
+		if !ok {
+			return NewInvalidTypeError("topics", "is not an array")
+		}
+		// Iterate over each topic and handle nil, string or array
+		topics := make([][]string, len(list))
+		for idx, field := range list {
+			switch value := field.(type) {
+			case nil:
+				topics[idx] = []string{}
 
+			case string:
+				topics[idx] = []string{value}
+
+			case []interface{}:
+				topics[idx] = make([]string, len(value))
+				for i, nested := range value {
+					switch value := nested.(type) {
+					case nil:
+						topics[idx][i] = ""
+
+					case string:
+						topics[idx][i] = value
+
+					default:
+						return NewInvalidTypeError(fmt.Sprintf("topic[%d][%d]", idx, i), "is not a string")
+					}
+				}
+			default:
+				return NewInvalidTypeError(fmt.Sprintf("topic[%d]", idx), "not a string or array")
+			}
+		}
+		args.Topics = topics
+	}
 	return nil
 }
 

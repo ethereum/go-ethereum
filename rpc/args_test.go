@@ -1943,7 +1943,7 @@ func TestWhisperFilterArgs(t *testing.T) {
 	input := `[{"topics": ["0x68656c6c6f20776f726c64"], "to": "0x34ag445g3455b34"}]`
 	expected := new(WhisperFilterArgs)
 	expected.To = "0x34ag445g3455b34"
-	expected.Topics = []string{"0x68656c6c6f20776f726c64"}
+	expected.Topics = [][]string{[]string{"0x68656c6c6f20776f726c64"}}
 
 	args := new(WhisperFilterArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
