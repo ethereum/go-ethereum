@@ -14,8 +14,10 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/storage"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 var (
@@ -71,7 +73,7 @@ func newMemoryNodeDB() (*nodeDB, error) {
 func newPersistentNodeDB(path string, version int) (*nodeDB, error) {
 	// Try to open the cache, recovering any corruption
 	db, err := leveldb.OpenFile(path, nil)
-	if _, iscorrupted := err.(leveldb.ErrCorrupted); iscorrupted {
+	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
 		db, err = leveldb.RecoverFile(path, nil)
 	}
 	if err != nil {
@@ -227,9 +229,9 @@ func (db *nodeDB) expireNodes() error {
 			continue
 		}
 		// Otherwise delete all associated information
-		prefix := makeKey(id, "")
-		for ok := it.Seek(prefix); ok && bytes.HasPrefix(it.Key(), prefix); ok = it.Next() {
-			if err := db.lvl.Delete(it.Key(), nil); err != nil {
+		deleter := db.lvl.NewIterator(util.BytesPrefix(makeKey(id, "")), nil)
+		for deleter.Next() {
+			if err := db.lvl.Delete(deleter.Key(), nil); err != nil {
 				return err
 			}
 		}
