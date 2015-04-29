@@ -73,6 +73,7 @@ const (
 	DiscSelf
 	DiscReadTimeout
 	DiscSubprotocolError
+	DiscFailureCooldown
 )
 
 var discReasonToString = [...]string{
@@ -89,6 +90,7 @@ var discReasonToString = [...]string{
 	DiscSelf:                "Connected to self",
 	DiscReadTimeout:         "Read timeout",
 	DiscSubprotocolError:    "Subprotocol error",
+	DiscFailureCooldown:     "Failure cooldown",
 }
 
 func (d DiscReason) String() string {

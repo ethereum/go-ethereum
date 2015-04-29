@@ -21,6 +21,7 @@ const (
 	defaultDialTimeout      = 10 * time.Second
 	refreshPeersInterval    = 30 * time.Second
 	staticPeerCheckInterval = 15 * time.Second
+	dialFailureCooldown     = 30 * time.Second
 
 	// Maximum number of concurrently handshaking inbound connections.
 	maxAcceptConns = 10
@@ -113,6 +114,7 @@ type Server struct {
 	lock         sync.RWMutex // protects running, peers and the trust fields
 	running      bool
 	peers        map[discover.NodeID]*Peer
+	fails        map[discover.NodeID]bool           // List of recently failed connections
 	staticNodes  map[discover.NodeID]*discover.Node // Map of currently maintained static remote nodes
 	staticDial   chan *discover.Node                // Dial request channel reserved for the static nodes
 	staticCycle  time.Duration                      // Overrides staticPeerCheckInterval, used for testing
@@ -217,6 +219,7 @@ func (srv *Server) Start() (err error) {
 	}
 	srv.quit = make(chan struct{})
 	srv.peers = make(map[discover.NodeID]*Peer)
+	srv.fails = make(map[discover.NodeID]bool)
 
 	// Create the current trust maps, and the associated dialing channel
 	srv.trustedNodes = make(map[discover.NodeID]bool)
@@ -491,7 +494,20 @@ func (srv *Server) dialNode(dest *discover.Node) {
 		// dialNode, so we need to count it down again. startPeer also
 		// does that when an error occurs.
 		srv.peerWG.Done()
-		glog.V(logger.Detail).Infof("dial error: %v", err)
+
+		// Mark the dialing as failed so prevent too fast redials, and set a
+		// timer for re-allowing dialing
+		srv.lock.Lock()
+		srv.fails[dest.ID] = true
+		srv.lock.Unlock()
+		go func() {
+			glog.V(logger.Detail).Infof("Dialing %v failed: %v. Locked until %v\n", dest, err, time.Now().Add(dialFailureCooldown))
+			<-time.After(dialFailureCooldown)
+
+			srv.lock.Lock()
+			delete(srv.fails, dest.ID)
+			srv.lock.Unlock()
+		}()
 		return
 	}
 	srv.startPeer(conn, dest)
@@ -586,6 +602,8 @@ func (srv *Server) checkPeer(id discover.NodeID) (bool, DiscReason) {
 		return false, DiscAlreadyConnected
 	case id == srv.ntab.Self().ID:
 		return false, DiscSelf
+	case srv.fails[id]:
+		return false, DiscFailureCooldown
 	default:
 		return true, 0
 	}
