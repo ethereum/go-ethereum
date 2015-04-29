@@ -346,6 +346,8 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		if err := request.Block.ValidateFields(); err != nil {
 			return errResp(ErrDecode, "block validation %v: %v", msg, err)
 		}
+		request.Block.ReceivedAt = time.Now()
+
 		hash := request.Block.Hash()
 		// Add the block hash as a known hash to the peer. This will later be used to determine
 		// who should receive this.
@@ -419,7 +421,7 @@ func (pm *ProtocolManager) BroadcastBlock(hash common.Hash, block *types.Block) 
 	for _, peer := range peers {
 		peer.sendNewBlock(block)
 	}
-	glog.V(logger.Detail).Infoln("broadcast block to", len(peers), "peers")
+	glog.V(logger.Detail).Infoln("broadcast block to", len(peers), "peers. Total propagation time:", time.Since(block.ReceivedAt))
 }
 
 // BroadcastTx will propagate the block to its connected peers. It will sort
