@@ -22,9 +22,10 @@ import (
 // structure, encode the payload into a byte array and create a
 // separate Msg with a bytes.Reader as Payload for each send.
 type Msg struct {
-	Code    uint64
-	Size    uint32 // size of the paylod
-	Payload io.Reader
+	Code       uint64
+	Size       uint32 // size of the paylod
+	Payload    io.Reader
+	ReceivedAt time.Time
 }
 
 // Decode parses the RLP content of a message into
