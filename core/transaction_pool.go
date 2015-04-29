@@ -306,6 +306,27 @@ func (pool *TxPool) checkQueue() {
 	}
 }
 
+func (pool *TxPool) removeTx(hash common.Hash) {
+	// delete from pending pool
+	delete(pool.txs, hash)
+
+	// delete from queue
+out:
+	for address, txs := range pool.queue {
+		for i, tx := range txs {
+			if tx.Hash() == hash {
+				if len(txs) == 1 {
+					// if only one tx, remove entire address entry
+					delete(pool.queue, address)
+				} else {
+					pool.queue[address][len(txs)-1], pool.queue[address] = nil, append(txs[:i], txs[i+1:]...)
+				}
+				break out
+			}
+		}
+	}
+}
+
 func (pool *TxPool) validatePool() {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
@@ -316,7 +337,7 @@ func (pool *TxPool) validatePool() {
 				glog.Infof("removed tx (%x) from pool: %v\n", hash[:4], err)
 			}
 
-			delete(pool.txs, hash)
+			pool.removeTx(hash)
 		}
 	}
 }

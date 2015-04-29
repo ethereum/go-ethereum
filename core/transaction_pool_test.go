@@ -111,3 +111,30 @@ func TestTransactionQueue(t *testing.T) {
 		t.Error("expected transaction queue to be empty. is", len(pool.queue[from]))
 	}
 }
+
+func TestRemoveTx(t *testing.T) {
+	pool, key := setupTxPool()
+	tx := transaction()
+	tx.SignECDSA(key)
+	from, _ := tx.From()
+	pool.currentState().AddBalance(from, big.NewInt(1))
+	pool.queueTx(tx)
+	pool.addTx(tx)
+	if len(pool.queue) != 1 {
+		t.Error("expected queue to be 1, got", len(pool.queue))
+	}
+
+	if len(pool.txs) != 1 {
+		t.Error("expected txs to be 1, got", len(pool.txs))
+	}
+
+	pool.removeTx(tx.Hash())
+
+	if len(pool.queue) > 0 {
+		t.Error("expected queue to be 0, got", len(pool.queue))
+	}
+
+	if len(pool.txs) > 0 {
+		t.Error("expected txs to be 0, got", len(pool.txs))
+	}
+}

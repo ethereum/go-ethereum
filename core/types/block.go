@@ -99,6 +99,8 @@ type Block struct {
 	Td           *big.Int
 	queued       bool // flag for blockpool to skip TD check
 
+	ReceivedAt time.Time
+
 	receipts Receipts
 }
 

@@ -37,7 +37,7 @@ var (
 )
 
 type hashCheckFn func(common.Hash) bool
-type chainInsertFn func(types.Blocks) error
+type chainInsertFn func(types.Blocks) (int, error)
 type hashIterFn func() (common.Hash, error)
 
 type blockPack struct {
@@ -418,27 +418,30 @@ func (d *Downloader) process(peer *peer) error {
 	// link). We should at least check whihc queue match. This code could move
 	// to a seperate goroutine where it periodically checks for linked pieces.
 	types.BlockBy(types.Number).Sort(d.queue.blocks)
-	blocks := d.queue.blocks
-	if len(blocks) == 0 {
+	if len(d.queue.blocks) == 0 {
 		return nil
 	}
 
+	var (
+		blocks = d.queue.blocks
+		err    error
+	)
 	glog.V(logger.Debug).Infof("Inserting chain with %d blocks (#%v - #%v)\n", len(blocks), blocks[0].Number(), blocks[len(blocks)-1].Number())
 
-	var err error
 	// Loop untill we're out of blocks
 	for len(blocks) != 0 {
 		max := int(math.Min(float64(len(blocks)), 256))
 		// TODO check for parent error. When there's a parent error we should stop
 		// processing and start requesting the `block.hash` so that it's parent and
 		// grandparents can be requested and queued.
-		err = d.insertChain(blocks[:max])
+		var i int
+		i, err = d.insertChain(blocks[:max])
 		if err != nil && core.IsParentErr(err) {
-			glog.V(logger.Debug).Infoln("Aborting process due to missing parent.")
+			// Ignore the missing blocks. Handler should take care of anything that's missing.
+			glog.V(logger.Debug).Infof("Ignored block with missing parent (%d)\n", i)
+			blocks = blocks[i+1:]
 
-			// XXX this needs a lot of attention
-			blocks = nil
-			break
+			continue
 		} else if err != nil {
 			// immediatly unregister the false peer but do not disconnect
 			d.UnregisterPeer(d.activePeer)

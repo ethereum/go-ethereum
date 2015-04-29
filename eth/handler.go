@@ -346,6 +346,8 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		if err := request.Block.ValidateFields(); err != nil {
 			return errResp(ErrDecode, "block validation %v: %v", msg, err)
 		}
+		request.Block.ReceivedAt = msg.ReceivedAt
+
 		hash := request.Block.Hash()
 		// Add the block hash as a known hash to the peer. This will later be used to determine
 		// who should receive this.
@@ -376,7 +378,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		// if the parent exists we process the block and propagate to our peers
 		// if the parent does not exists we delegate to the downloader.
 		if self.chainman.HasBlock(request.Block.ParentHash()) {
-			if err := self.chainman.InsertChain(types.Blocks{request.Block}); err != nil {
+			if _, err := self.chainman.InsertChain(types.Blocks{request.Block}); err != nil {
 				// handle error
 				return nil
 			}
@@ -419,7 +421,7 @@ func (pm *ProtocolManager) BroadcastBlock(hash common.Hash, block *types.Block) 
 	for _, peer := range peers {
 		peer.sendNewBlock(block)
 	}
-	glog.V(logger.Detail).Infoln("broadcast block to", len(peers), "peers")
+	glog.V(logger.Detail).Infoln("broadcast block to", len(peers), "peers. Total propagation time:", time.Since(block.ReceivedAt))
 }
 
 // BroadcastTx will propagate the block to its connected peers. It will sort

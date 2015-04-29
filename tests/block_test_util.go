@@ -162,7 +162,7 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
 			}
 		}
 		// RLP decoding worked, try to insert into chain:
-		err = chainManager.InsertChain(types.Blocks{cb})
+		_, err = chainManager.InsertChain(types.Blocks{cb})
 		if err != nil {
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block

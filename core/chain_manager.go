@@ -497,7 +497,9 @@ func (self *ChainManager) procFutureBlocks() {
 	self.InsertChain(blocks)
 }
 
-func (self *ChainManager) InsertChain(chain types.Blocks) error {
+// InsertChain will attempt to insert the given chain in to the canonical chain or, otherwise, create a fork. It an error is returned
+// it will return the index number of the failing block as well an error describing what went wrong (for possible errors see core/errors.go).
+func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	// A queued approach to delivering events. This is generally faster than direct delivery and requires much less mutex acquiring.
 	var (
 		queue      = make([]interface{}, len(chain))
@@ -540,7 +542,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			glog.V(logger.Error).Infoln(err)
 			glog.V(logger.Debug).Infoln(block)
 
-			return err
+			return i, err
 		}
 
 		block.Td = new(big.Int).Set(CalculateTD(block, self.GetBlock(block.ParentHash())))
@@ -591,7 +593,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				}
 			} else {
 				if glog.V(logger.Detail) {
-					glog.Infof("inserted forked block #%d (%d TXs %d UNCs) (%x...)\n", block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
+					glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...)\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
 				}
 
 				queue[i] = ChainSideEvent{block, logs}
@@ -613,7 +615,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 	go self.eventMux.Post(queueEvent)
 
-	return nil
+	return 0, nil
 }
 
 // diff takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them

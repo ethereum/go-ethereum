@@ -141,6 +141,6 @@ func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
 		return bman, nil
 	}
 	lchain := makeChain(bman, parent, n, db, CanonicalSeed)
-	err := bman.bc.InsertChain(lchain)
+	_, err := bman.bc.InsertChain(lchain)
 	return bman, err
 }

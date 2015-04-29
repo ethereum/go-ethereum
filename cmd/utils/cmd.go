@@ -172,7 +172,7 @@ func ImportChain(chainmgr *core.ChainManager, fn string) error {
 		n++
 
 		if n == batchSize {
-			if err := chainmgr.InsertChain(blocks); err != nil {
+			if _, err := chainmgr.InsertChain(blocks); err != nil {
 				return fmt.Errorf("invalid block %v", err)
 			}
 			n = 0
@@ -181,7 +181,7 @@ func ImportChain(chainmgr *core.ChainManager, fn string) error {
 	}
 
 	if n > 0 {
-		if err := chainmgr.InsertChain(blocks[:n]); err != nil {
+		if _, err := chainmgr.InsertChain(blocks[:n]); err != nil {
 			return fmt.Errorf("invalid block %v", err)
 		}
 	}
