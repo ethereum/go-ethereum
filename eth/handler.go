@@ -346,7 +346,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		if err := request.Block.ValidateFields(); err != nil {
 			return errResp(ErrDecode, "block validation %v: %v", msg, err)
 		}
-		request.Block.ReceivedAt = time.Now()
+		request.Block.ReceivedAt = msg.ReceivedAt
 
 		hash := request.Block.Hash()
 		// Add the block hash as a known hash to the peer. This will later be used to determine
