@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -369,11 +370,8 @@ func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block 
 	return chain
 }
 
-func TestReorg(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+func chm(genesis *types.Block, db common.Database) *ChainManager {
 	var eventMux event.TypeMux
-
-	genesis := GenesisBlock(db)
 	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: &eventMux}
 	bc.cache = NewBlockCache(100)
 	bc.futureBlocks = NewBlockCache(100)
@@ -381,8 +379,35 @@ func TestReorg(t *testing.T) {
 	bc.ResetWithGenesisBlock(genesis)
 	bc.txState = state.ManageState(bc.State())
 
+	return bc
+}
+
+func TestReorgLongest(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	genesis := GenesisBlock(db)
+	bc := chm(genesis, db)
+
 	chain1 := makeChainWithDiff(genesis, []int{1, 2, 4}, 10)
 	chain2 := makeChainWithDiff(genesis, []int{1, 2, 3, 4}, 11)
+
+	bc.InsertChain(chain1)
+	bc.InsertChain(chain2)
+
+	prev := bc.CurrentBlock()
+	for block := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 1); block.NumberU64() != 0; prev, block = block, bc.GetBlockByNumber(block.NumberU64()-1) {
+		if prev.ParentHash() != block.Hash() {
+			t.Errorf("parent hash mismatch %x - %x", prev.ParentHash(), block.Hash())
+		}
+	}
+}
+
+func TestReorgShortest(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	genesis := GenesisBlock(db)
+	bc := chm(genesis, db)
+
+	chain1 := makeChainWithDiff(genesis, []int{1, 2, 3, 4}, 10)
+	chain2 := makeChainWithDiff(genesis, []int{1, 10}, 11)
 
 	bc.InsertChain(chain1)
 	bc.InsertChain(chain2)

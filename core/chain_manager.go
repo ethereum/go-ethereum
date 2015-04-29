@@ -593,7 +593,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 				}
 			} else {
 				if glog.V(logger.Detail) {
-					glog.Infof("inserted forked block #%d (%d TXs %d UNCs) (%x...)\n", block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
+					glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...)\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
 				}
 
 				queue[i] = ChainSideEvent{block, logs}
