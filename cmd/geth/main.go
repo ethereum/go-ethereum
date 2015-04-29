@@ -50,9 +50,20 @@ const (
 	Version          = "0.9.12"
 )
 
-var app = utils.NewApp(Version, "the go-ethereum command line interface")
+var (
+	gitCommit       string // set via linker flag
+	nodeNameVersion string
+	app             *cli.App
+)
 
 func init() {
+	if gitCommit == "" {
+		nodeNameVersion = Version
+	} else {
+		nodeNameVersion = Version + "-" + gitCommit[:8]
+	}
+
+	app = utils.NewApp(Version, "the go-ethereum command line interface")
 	app.Action = run
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
@@ -278,7 +289,7 @@ func main() {
 
 func run(ctx *cli.Context) {
 	utils.HandleInterrupt()
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -290,7 +301,7 @@ func run(ctx *cli.Context) {
 }
 
 func console(ctx *cli.Context) {
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -305,7 +316,7 @@ func console(ctx *cli.Context) {
 }
 
 func execJSFiles(ctx *cli.Context) {
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -487,7 +498,7 @@ func exportchain(ctx *cli.Context) {
 		utils.Fatalf("This command requires an argument.")
 	}
 
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	cfg.SkipBcVersionCheck = true
 
 	ethereum, err := eth.New(cfg)
@@ -589,15 +600,17 @@ func makedag(ctx *cli.Context) {
 }
 
 func version(c *cli.Context) {
-	fmt.Printf(`%v
-Version: %v
-Protocol Version: %d
-Network Id: %d
-GO: %s
-OS: %s
-GOPATH=%s
-GOROOT=%s
-`, ClientIdentifier, Version, c.GlobalInt(utils.ProtocolVersionFlag.Name), c.GlobalInt(utils.NetworkIdFlag.Name), runtime.Version(), runtime.GOOS, os.Getenv("GOPATH"), runtime.GOROOT())
+	fmt.Println(ClientIdentifier)
+	fmt.Println("Version:", Version)
+	if gitCommit != "" {
+		fmt.Println("Git Commit:", gitCommit)
+	}
+	fmt.Println("Protocol Version:", c.GlobalInt(utils.ProtocolVersionFlag.Name))
+	fmt.Println("Network Id:", c.GlobalInt(utils.NetworkIdFlag.Name))
+	fmt.Println("Go Version:", runtime.Version())
+	fmt.Println("OS:", runtime.GOOS)
+	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
+	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
 }
 
 // hashish returns true for strings that look like hashes.

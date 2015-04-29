@@ -24,5 +24,9 @@ GOPATH="$ethdir/go-ethereum/Godeps/_workspace:$workspace"
 GOBIN="$PWD/build/bin"
 export GOPATH GOBIN
 
+# Run the command inside the workspace.
+cd "$ethdir/go-ethereum"
+PWD="$ethdir/go-ethereum"
+
 # Launch the arguments with the configured environment.
-exec $@
+exec "$@"

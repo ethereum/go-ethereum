@@ -4,13 +4,12 @@ go:
 before_install:
   - sudo add-apt-repository ppa:beineri/opt-qt541 -y
   - sudo apt-get update -qq
-  - sudo apt-get install -yqq libgmp3-dev libreadline6-dev qt54quickcontrols qt54webengine
+  - sudo apt-get install -yqq libgmp3-dev qt54quickcontrols qt54webengine
 install:
   # - go get code.google.com/p/go.tools/cmd/goimports
   # - go get github.com/golang/lint/golint
   # - go get golang.org/x/tools/cmd/vet 
-  - go get golang.org/x/tools/cmd/cover
-  - go get github.com/mattn/goveralls
+  - go get golang.org/x/tools/cmd/cover github.com/mattn/goveralls
 before_script:
   # - gofmt -l -w .
   # - goimports -l -w .
@@ -18,7 +17,7 @@ before_script:
   # - go vet ./...
   # - go test -race ./...
 script:
-  - ./gocoverage.sh
+  - make travis-test-with-coverage
 after_success:
   - if [ "$COVERALLS_TOKEN" ]; then goveralls -coverprofile=profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN; fi
 env:
