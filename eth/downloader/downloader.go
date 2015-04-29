@@ -439,7 +439,7 @@ func (d *Downloader) process(peer *peer) error {
 		if err != nil && core.IsParentErr(err) {
 			// Ignore the missing blocks. Handler should take care of anything that's missing.
 			glog.V(logger.Debug).Infof("Ignored block with missing parent (%d)\n", i)
-			blocks = blocks[i:]
+			blocks = blocks[i+1:]
 
 			continue
 		} else if err != nil {
