@@ -21,9 +21,10 @@ func MakeName(name, version string) string {
 
 func ExpandHomePath(p string) (path string) {
 	path = p
+	sep := fmt.Sprintf("%s", os.PathSeparator)
 
 	// Check in case of paths like "/something/~/something/"
-	if len(path) > 1 && path[:2] == "~/" {
+	if len(p) > 1 && p[:1+len(sep)] == "~"+sep {
 		usr, _ := user.Current()
 		dir := usr.HomeDir
 
@@ -64,11 +65,11 @@ func DefaultAssetPath() string {
 		case "darwin":
 			// Get Binary Directory
 			exedir, _ := osext.ExecutableFolder()
-			assetPath = filepath.Join(exedir, "../Resources")
+			assetPath = filepath.Join(exedir, "..", "Resources")
 		case "linux":
-			assetPath = "/usr/share/mist"
+			assetPath = path.Join("usr", "share", "mist")
 		case "windows":
-			assetPath = "./assets"
+			assetPath = path.Join(".", "assets")
 		default:
 			assetPath = "."
 		}
@@ -86,9 +87,9 @@ func DefaultAssetPath() string {
 func DefaultDataDir() string {
 	usr, _ := user.Current()
 	if runtime.GOOS == "darwin" {
-		return path.Join(usr.HomeDir, "Library/Ethereum")
+		return path.Join(usr.HomeDir, "Library", "Ethereum")
 	} else if runtime.GOOS == "windows" {
-		return path.Join(usr.HomeDir, "AppData/Roaming/Ethereum")
+		return path.Join(usr.HomeDir, "AppData", "Roaming", "Ethereum")
 	} else {
 		return path.Join(usr.HomeDir, ".ethereum")
 	}
