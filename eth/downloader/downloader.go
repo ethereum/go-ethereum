@@ -418,14 +418,16 @@ func (d *Downloader) process(peer *peer) error {
 	// link). We should at least check whihc queue match. This code could move
 	// to a seperate goroutine where it periodically checks for linked pieces.
 	types.BlockBy(types.Number).Sort(d.queue.blocks)
-	blocks := d.queue.blocks
-	if len(blocks) == 0 {
+	if len(d.queue.blocks) == 0 {
 		return nil
 	}
 
+	var (
+		blocks = d.queue.blocks
+		err    error
+	)
 	glog.V(logger.Debug).Infof("Inserting chain with %d blocks (#%v - #%v)\n", len(blocks), blocks[0].Number(), blocks[len(blocks)-1].Number())
 
-	var err error
 	// Loop untill we're out of blocks
 	for len(blocks) != 0 {
 		max := int(math.Min(float64(len(blocks)), 256))
@@ -435,9 +437,11 @@ func (d *Downloader) process(peer *peer) error {
 		var i int
 		i, err = d.insertChain(blocks[:max])
 		if err != nil && core.IsParentErr(err) {
-			glog.V(logger.Debug).Infof("Aborting process due to missing parent (%d)\n", i)
+			// Ignore the missing blocks. Handler should take care of anything that's missing.
+			glog.V(logger.Debug).Infof("Ignored block with missing parent (%d)\n", i)
+			blocks = blocks[i:]
 
-			break
+			continue
 		} else if err != nil {
 			// immediatly unregister the false peer but do not disconnect
 			d.UnregisterPeer(d.activePeer)
