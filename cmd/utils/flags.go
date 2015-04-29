@@ -202,9 +202,14 @@ var (
 		Usage: "Network listening port",
 		Value: 30303,
 	}
-	BootnodesFlag = cli.StringFlag{
+	BootNodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
 		Usage: "Space-separated enode URLs for p2p discovery bootstrap",
+		Value: "",
+	}
+	TrustedNodesFlag = cli.StringFlag{
+		Name:  "trustednodes",
+		Usage: "List of trusted nodes (either an enode list or path to a json file of enodes)",
 		Value: "",
 	}
 	NodeKeyFileFlag = cli.StringFlag{
@@ -292,7 +297,8 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		NodeKey:            GetNodeKey(ctx),
 		Shh:                ctx.GlobalBool(WhisperEnabledFlag.Name),
 		Dial:               true,
-		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
+		BootNodes:          ctx.GlobalString(BootNodesFlag.Name),
+		TrustedNodes:       ctx.GlobalString(TrustedNodesFlag.Name),
 	}
 }
 

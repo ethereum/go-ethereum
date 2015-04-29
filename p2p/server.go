@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	defaultDialTimeout   = 10 * time.Second
-	refreshPeersInterval = 30 * time.Second
+	defaultDialTimeout       = 10 * time.Second
+	refreshPeersInterval     = 30 * time.Second
+	trustedPeerCheckInterval = 15 * time.Second
 
 	// This is the maximum number of inbound connection
 	// that are allowed to linger between 'accepted' and
@@ -58,6 +59,10 @@ type Server struct {
 	// Bootstrap nodes are used to establish connectivity
 	// with the rest of the network.
 	BootstrapNodes []*discover.Node
+
+	// Trusted nodes are used as privileged connections which are always accepted
+	// and also always maintained.
+	TrustedNodes []*discover.Node
 
 	// NodeDatabase is the path to the database containing the previously seen
 	// live nodes in the network.
@@ -99,13 +104,15 @@ type Server struct {
 	running bool
 	peers   map[discover.NodeID]*Peer
 
+	trusts    map[discover.NodeID]*discover.Node // Map of currently trusted remote nodes
+	trustDial chan *discover.Node                // Dial request channel reserved for the trusted nodes
+
 	ntab     *discover.Table
 	listener net.Listener
 
-	quit        chan struct{}
-	loopWG      sync.WaitGroup // {dial,listen,nat}Loop
-	peerWG      sync.WaitGroup // active peer goroutines
-	peerConnect chan *discover.Node
+	quit   chan struct{}
+	loopWG sync.WaitGroup // {dial,listen,nat}Loop
+	peerWG sync.WaitGroup // active peer goroutines
 }
 
 type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, bool) (*conn, error)
@@ -131,10 +138,9 @@ func (srv *Server) PeerCount() int {
 	return n
 }
 
-// SuggestPeer creates a connection to the given Node if it
-// is not already connected.
-func (srv *Server) SuggestPeer(n *discover.Node) {
-	srv.peerConnect <- n
+// TrustPeer inserts a node into the list of privileged nodes.
+func (srv *Server) TrustPeer(node *discover.Node) {
+	srv.trustDial <- node
 }
 
 // Broadcast sends an RLP-encoded message to all connected peers.
@@ -195,7 +201,14 @@ func (srv *Server) Start() (err error) {
 	}
 	srv.quit = make(chan struct{})
 	srv.peers = make(map[discover.NodeID]*Peer)
-	srv.peerConnect = make(chan *discover.Node)
+
+	// Create the current trust map, and the associated dialing channel
+	srv.trusts = make(map[discover.NodeID]*discover.Node)
+	for _, node := range srv.TrustedNodes {
+		srv.trusts[node.ID] = node
+	}
+	srv.trustDial = make(chan *discover.Node)
+
 	if srv.setupFunc == nil {
 		srv.setupFunc = setupConn
 	}
@@ -229,6 +242,8 @@ func (srv *Server) Start() (err error) {
 	if srv.NoDial && srv.ListenAddr == "" {
 		glog.V(logger.Warn).Infoln("I will be kind-of useless, neither dialing nor listening.")
 	}
+	// maintain the trusted peers
+	go srv.trustLoop()
 
 	srv.running = true
 	return nil
@@ -323,6 +338,45 @@ func (srv *Server) listenLoop() {
 	}
 }
 
+// trustLoop is responsible for periodically checking that trusted connections
+// are actually live, and requests dialing if not.
+func (srv *Server) trustLoop() {
+	// Create a ticker for verifying trusted connections
+	tick := time.Tick(trustedPeerCheckInterval)
+
+	for {
+		select {
+		case <-srv.quit:
+			// Termination requested, simple return
+			return
+
+		case <-tick:
+			// Collect all the non-connected trusted nodes
+			needed := []*discover.Node{}
+			srv.lock.RLock()
+			for id, node := range srv.trusts {
+				if _, ok := srv.peers[id]; !ok {
+					needed = append(needed, node)
+				}
+			}
+			srv.lock.RUnlock()
+
+			// Try to dial each of them (don't hang if server terminates)
+			for _, node := range needed {
+				glog.V(logger.Error).Infof("Dialing trusted peer %v", node)
+				select {
+				case srv.trustDial <- node:
+					// Ok, dialing
+
+				case <-srv.quit:
+					// Terminating, return
+					return
+				}
+			}
+		}
+	}
+}
+
 func (srv *Server) dialLoop() {
 	var (
 		dialed      = make(chan *discover.Node)
@@ -373,7 +427,7 @@ func (srv *Server) dialLoop() {
 				// below MaxPeers.
 				refresh.Reset(refreshPeersInterval)
 			}
-		case dest := <-srv.peerConnect:
+		case dest := <-srv.trustDial:
 			dial(dest)
 		case dests := <-findresults:
 			for _, dest := range dests {
@@ -472,16 +526,26 @@ func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
 	return true, 0
 }
 
+// checkPeer verifies whether a peer looks promising and should be allowed/kept
+// in the pool, or if it's of no use.
 func (srv *Server) checkPeer(id discover.NodeID) (bool, DiscReason) {
+	// First up, figure out if the peer is trusted
+	_, trusted := srv.trusts[id]
+
+	// Make sure the peer passes all required checks
 	switch {
 	case !srv.running:
 		return false, DiscQuitting
-	case len(srv.peers) >= srv.MaxPeers:
+
+	case !trusted && len(srv.peers) >= srv.MaxPeers:
 		return false, DiscTooManyPeers
+
 	case srv.peers[id] != nil:
 		return false, DiscAlreadyConnected
+
 	case id == srv.ntab.Self().ID:
 		return false, DiscSelf
+
 	default:
 		return true, 0
 	}
