@@ -436,6 +436,8 @@ func (d *Downloader) process(peer *peer) error {
 		if err != nil && core.IsParentErr(err) {
 			glog.V(logger.Debug).Infoln("Aborting process due to missing parent.")
 
+			// XXX this needs a lot of attention
+			blocks = nil
 			break
 		} else if err != nil {
 			// immediatly unregister the false peer but do not disconnect
@@ -471,4 +473,8 @@ func (d *Downloader) isProcessing() bool {
 
 func (d *Downloader) isBusy() bool {
 	return d.isFetchingHashes() || d.isDownloadingBlocks() || d.isProcessing()
+}
+
+func (d *Downloader) IsBusy() bool {
+	return d.isBusy()
 }

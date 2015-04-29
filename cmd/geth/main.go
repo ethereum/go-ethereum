@@ -47,7 +47,7 @@ import _ "net/http/pprof"
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.12"
+	Version          = "0.9.13"
 )
 
 var (

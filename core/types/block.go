@@ -351,7 +351,7 @@ func (self *Block) Copy() *Block {
 }
 
 func (self *Block) String() string {
-	return fmt.Sprintf(`Block(#%v): Size: %v TD: %v {
+	str := fmt.Sprintf(`Block(#%v): Size: %v TD: %v {
 MinerHash: %x
 %v
 Transactions:
@@ -360,6 +360,16 @@ Uncles:
 %v
 }
 `, self.Number(), self.Size(), self.Td, self.header.HashNoNonce(), self.header, self.transactions, self.uncles)
+
+	if (self.HeaderHash != common.Hash{}) {
+		str += fmt.Sprintf("\nFake hash = %x", self.HeaderHash)
+	}
+
+	if (self.ParentHeaderHash != common.Hash{}) {
+		str += fmt.Sprintf("\nFake parent hash = %x", self.ParentHeaderHash)
+	}
+
+	return str
 }
 
 func (self *Header) String() string {
