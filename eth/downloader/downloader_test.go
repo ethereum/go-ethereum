@@ -62,10 +62,10 @@ func (dl *downloadTester) hasBlock(hash common.Hash) bool {
 	return false
 }
 
-func (dl *downloadTester) insertChain(blocks types.Blocks) error {
+func (dl *downloadTester) insertChain(blocks types.Blocks) (int, error) {
 	dl.insertedBlocks += len(blocks)
 
-	return nil
+	return 0, nil
 }
 
 func (dl *downloadTester) getHashes(hash common.Hash) error {

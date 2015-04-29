@@ -44,7 +44,7 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 	// extend the fork
 	parent := bman2.bc.CurrentBlock()
 	chainB := makeChain(bman2, parent, N, db, ForkSeed)
-	err = bman2.bc.InsertChain(chainB)
+	_, err = bman2.bc.InsertChain(chainB)
 	if err != nil {
 		t.Fatal("Insert chain error for fork:", err)
 	}
@@ -108,7 +108,7 @@ func loadChain(fn string, t *testing.T) (types.Blocks, error) {
 }
 
 func insertChain(done chan bool, chainMan *ChainManager, chain types.Blocks, t *testing.T) {
-	err := chainMan.InsertChain(chain)
+	_, err := chainMan.InsertChain(chain)
 	if err != nil {
 		fmt.Println(err)
 		t.FailNow()
