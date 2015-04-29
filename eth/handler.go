@@ -376,7 +376,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		// if the parent exists we process the block and propagate to our peers
 		// if the parent does not exists we delegate to the downloader.
 		if self.chainman.HasBlock(request.Block.ParentHash()) {
-			if err := self.chainman.InsertChain(types.Blocks{request.Block}); err != nil {
+			if _, err := self.chainman.InsertChain(types.Blocks{request.Block}); err != nil {
 				// handle error
 				return nil
 			}

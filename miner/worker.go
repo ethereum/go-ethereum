@@ -184,7 +184,7 @@ func (self *worker) wait() {
 				continue
 			}
 
-			if err := self.chain.InsertChain(types.Blocks{block}); err == nil {
+			if _, err := self.chain.InsertChain(types.Blocks{block}); err == nil {
 				for _, uncle := range block.Uncles() {
 					delete(self.possibleUncles, uncle.Hash())
 				}

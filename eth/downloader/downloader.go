@@ -37,7 +37,7 @@ var (
 )
 
 type hashCheckFn func(common.Hash) bool
-type chainInsertFn func(types.Blocks) error
+type chainInsertFn func(types.Blocks) (int, error)
 type hashIterFn func() (common.Hash, error)
 
 type blockPack struct {
@@ -432,12 +432,11 @@ func (d *Downloader) process(peer *peer) error {
 		// TODO check for parent error. When there's a parent error we should stop
 		// processing and start requesting the `block.hash` so that it's parent and
 		// grandparents can be requested and queued.
-		err = d.insertChain(blocks[:max])
+		var i int
+		i, err = d.insertChain(blocks[:max])
 		if err != nil && core.IsParentErr(err) {
-			glog.V(logger.Debug).Infoln("Aborting process due to missing parent.")
+			glog.V(logger.Debug).Infof("Aborting process due to missing parent (%d)\n", i)
 
-			// XXX this needs a lot of attention
-			blocks = nil
 			break
 		} else if err != nil {
 			// immediatly unregister the false peer but do not disconnect
