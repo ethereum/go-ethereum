@@ -363,7 +363,7 @@ func (srv *Server) trustLoop() {
 
 			// Try to dial each of them (don't hang if server terminates)
 			for _, node := range needed {
-				glog.V(logger.Error).Infof("Dialing trusted peer %v", node)
+				glog.V(logger.Debug).Infof("Dialing trusted peer %v", node)
 				select {
 				case srv.trustDial <- node:
 					// Ok, dialing
