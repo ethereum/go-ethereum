@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -56,12 +57,14 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 	}
 	// Compare difficulties
 	f(tdpre, td)
+
+	// Loop over parents making sure reconstruction is done properly
 }
 
 func printChain(bc *ChainManager) {
 	for i := bc.CurrentBlock().Number().Uint64(); i > 0; i-- {
 		b := bc.GetBlockByNumber(uint64(i))
-		fmt.Printf("\t%x\n", b.Hash())
+		fmt.Printf("\t%x %v\n", b.Hash(), b.Difficulty())
 	}
 }
 
@@ -343,4 +346,51 @@ func TestGetAncestors(t *testing.T) {
 
 	ancestors := chainMan.GetAncestors(chain[len(chain)-1], 4)
 	fmt.Println(ancestors)
+}
+
+type bproc struct{}
+
+func (bproc) Process(*types.Block) (state.Logs, error) { return nil, nil }
+
+func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block {
+	var chain []*types.Block
+	for i, difficulty := range d {
+		header := &types.Header{Number: big.NewInt(int64(i + 1)), Difficulty: big.NewInt(int64(difficulty))}
+		block := types.NewBlockWithHeader(header)
+		copy(block.HeaderHash[:2], []byte{byte(i + 1), seed})
+		if i == 0 {
+			block.ParentHeaderHash = genesis.Hash()
+		} else {
+			copy(block.ParentHeaderHash[:2], []byte{byte(i), seed})
+		}
+
+		chain = append(chain, block)
+	}
+	return chain
+}
+
+func TestReorg(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	var eventMux event.TypeMux
+
+	genesis := GenesisBlock(db)
+	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: &eventMux}
+	bc.cache = NewBlockCache(100)
+	bc.futureBlocks = NewBlockCache(100)
+	bc.processor = bproc{}
+	bc.ResetWithGenesisBlock(genesis)
+	bc.txState = state.ManageState(bc.State())
+
+	chain1 := makeChainWithDiff(genesis, []int{1, 2, 4}, 10)
+	chain2 := makeChainWithDiff(genesis, []int{1, 2, 3, 4}, 11)
+
+	bc.InsertChain(chain1)
+	bc.InsertChain(chain2)
+
+	prev := bc.CurrentBlock()
+	for block := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 1); block.NumberU64() != 0; prev, block = block, bc.GetBlockByNumber(block.NumberU64()-1) {
+		if prev.ParentHash() != block.Hash() {
+			t.Errorf("parent hash mismatch %x - %x", prev.ParentHash(), block.Hash())
+		}
+	}
 }

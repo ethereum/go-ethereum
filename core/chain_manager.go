@@ -74,9 +74,8 @@ type ChainManager struct {
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
 	// Last known total difficulty
-	mu       sync.RWMutex
-	tsmu     sync.RWMutex
-	insertMu sync.Mutex
+	mu   sync.RWMutex
+	tsmu sync.RWMutex
 
 	td              *big.Int
 	currentBlock    *types.Block
@@ -321,6 +320,7 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 	bc.insert(bc.genesisBlock)
 	bc.currentBlock = bc.genesisBlock
 	bc.makeCache()
+	bc.td = gb.Difficulty()
 }
 
 // Export writes the active chain to the given writer.
@@ -348,8 +348,6 @@ func (self *ChainManager) Export(w io.Writer) error {
 func (bc *ChainManager) insert(block *types.Block) {
 	key := append(blockNumPre, block.Number().Bytes()...)
 	bc.blockDb.Put(key, block.Hash().Bytes())
-	// Push block to cache
-	bc.cache.Push(block)
 
 	bc.blockDb.Put([]byte("LastBlock"), block.Hash().Bytes())
 	bc.currentBlock = block
@@ -360,6 +358,8 @@ func (bc *ChainManager) write(block *types.Block) {
 	enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
 	key := append(blockHashPre, block.Hash().Bytes()...)
 	bc.blockDb.Put(key, enc)
+	// Push block to cache
+	bc.cache.Push(block)
 }
 
 // Accessors
@@ -498,9 +498,6 @@ func (self *ChainManager) procFutureBlocks() {
 }
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
-	self.insertMu.Lock()
-	defer self.insertMu.Unlock()
-
 	// A queued approach to delivering events. This is generally faster than direct delivery and requires much less mutex acquiring.
 	var (
 		queue      = make([]interface{}, len(chain))
@@ -557,16 +554,17 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
 			if block.Td.Cmp(self.td) > 0 {
-				//if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, common.Big1)) < 0 {
-				if block.Number().Cmp(cblock.Number()) <= 0 {
+				// Check for chain forks. If H(block.num - 1) != block.parent, we're on a fork and need to do some merging
+				if previous := self.getBlockByNumber(block.NumberU64() - 1); previous.Hash() != block.ParentHash() {
 					chash := cblock.Hash()
 					hash := block.Hash()
 
 					if glog.V(logger.Info) {
 						glog.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, hash[:4], block.Td, cblock.Header().Number, chash[:4], self.td)
 					}
+
 					// during split we merge two different chains and create the new canonical chain
-					self.merge(self.getBlockByNumber(block.NumberU64()), block)
+					self.merge(previous, block)
 
 					queue[i] = ChainSplitEvent{block, logs}
 					queueEvent.splitCount++
@@ -592,15 +590,18 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 					glog.Infof("inserted block #%d (%d TXs %d UNCs) (%x...)\n", block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
 				}
 			} else {
+				if glog.V(logger.Detail) {
+					glog.Infof("inserted forked block #%d (%d TXs %d UNCs) (%x...)\n", block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
+				}
+
 				queue[i] = ChainSideEvent{block, logs}
 				queueEvent.sideCount++
 			}
+			self.futureBlocks.Delete(block.Hash())
 		}
 		self.mu.Unlock()
 
 		stats.processed++
-
-		self.futureBlocks.Delete(block.Hash())
 
 	}
 
@@ -615,32 +616,37 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	return nil
 }
 
-// merge takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them
+// diff takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them
 // to be part of the new canonical chain.
-func (self *ChainManager) merge(oldBlock, newBlock *types.Block) {
+func (self *ChainManager) diff(oldBlock, newBlock *types.Block) types.Blocks {
 	glog.V(logger.Debug).Infof("Applying diff to %x & %x\n", oldBlock.Hash().Bytes()[:4], newBlock.Hash().Bytes()[:4])
 
-	var oldChain, newChain types.Blocks
-	// First find the split (common ancestor) so we can perform an adequate merge
+	var newChain types.Blocks
+	// first find common number
+	for newBlock = newBlock; newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = self.GetBlock(newBlock.ParentHash()) {
+		newChain = append(newChain, newBlock)
+	}
+
+	glog.V(logger.Debug).Infoln("Found common number", newBlock.Number())
 	for {
-		oldBlock, newBlock = self.GetBlock(oldBlock.ParentHash()), self.GetBlock(newBlock.ParentHash())
 		if oldBlock.Hash() == newBlock.Hash() {
 			break
 		}
-		oldChain = append(oldChain, oldBlock)
 		newChain = append(newChain, newBlock)
+
+		oldBlock, newBlock = self.GetBlock(oldBlock.ParentHash()), self.GetBlock(newBlock.ParentHash())
 	}
+
+	return newChain
+}
+
+// merge merges two different chain to the new canonical chain
+func (self *ChainManager) merge(oldBlock, newBlock *types.Block) {
+	newChain := self.diff(oldBlock, newBlock)
 
 	// insert blocks
 	for _, block := range newChain {
 		self.insert(block)
-	}
-
-	if glog.V(logger.Detail) {
-		for i, oldBlock := range oldChain {
-			glog.Infof("- %.10v   = %x\n", oldBlock.Number(), oldBlock.Hash())
-			glog.Infof("+ %.10v   = %x\n", newChain[i].Number(), newChain[i].Hash())
-		}
 	}
 }
 
