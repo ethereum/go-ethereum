@@ -233,7 +233,6 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
 		utils.BootNodesFlag,
-		utils.TrustedNodesFlag,
 		utils.DataDirFlag,
 		utils.BlockchainVersionFlag,
 		utils.JSpathFlag,

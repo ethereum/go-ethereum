@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -39,6 +40,9 @@ var (
 		// ETH/DEV cpp-ethereum (poc-9.ethdev.com)
 		discover.MustParseNode("enode://487611428e6c99a11a9795a6abe7b529e81315ca6aad66e2a2fc76e3adf263faba0d35466c2f8f68d561dbefa8878d4df5f1f2ddb1fbeab7f42ffb8cd328bd4a@5.1.83.226:30303"),
 	}
+
+	// Path within <datadir> to search for the trusted node list
+	trustedNodes = "trusted-nodes.json"
 )
 
 type Config struct {
@@ -61,10 +65,6 @@ type Config struct {
 
 	// Space-separated list of discovery node URLs
 	BootNodes string
-
-	// Either a space-separated list of discovery node URLs, or a path to a json
-	// file containing such a list.
-	TrustedNodes string
 
 	// This key is used to identify the node on the network.
 	// If nil, an ephemeral key is used.
@@ -105,30 +105,27 @@ func (cfg *Config) parseBootNodes() []*discover.Node {
 // parseTrustedNodes parses a list of discovery node URLs either given literally,
 // or loaded from a .json file.
 func (cfg *Config) parseTrustedNodes() []*discover.Node {
-	// Short circuit if no trusted nodes were given
-	if cfg.TrustedNodes == "" {
+	// Short circuit if no trusted node config is present
+	path := filepath.Join(cfg.DataDir, trustedNodes)
+	if _, err := os.Stat(path); err != nil {
+		fmt.Println("nodes", nil)
 		return nil
 	}
-	// Try to interpret the trusted node config as a .json file
-	if _, err := os.Stat(cfg.TrustedNodes); err == nil {
-		// Load the file from disk
-		blob, err := ioutil.ReadFile(cfg.TrustedNodes)
-		if err != nil {
-			glog.V(logger.Error).Infof("Failed to access trusted nodes: %v", err)
-			return nil
-		}
-		// Interpret the json contents
-		list := []string{}
-		if err := json.Unmarshal(blob, &list); err != nil {
-			glog.V(logger.Error).Infof("Failed to load trusted nodes: %v", err)
-			return nil
-		}
-		// Swap out the configuration for the actual nodes
-		cfg.TrustedNodes = strings.Join(list, " ")
+	// Load the trusted nodes from the config file
+	blob, err := ioutil.ReadFile(path)
+	if err != nil {
+		glog.V(logger.Error).Infof("Failed to access trusted nodes: %v", err)
+		return nil
 	}
+	nodelist := []string{}
+	if err := json.Unmarshal(blob, &nodelist); err != nil {
+		glog.V(logger.Error).Infof("Failed to load trusted nodes: %v", err)
+		return nil
+	}
+	fmt.Println("nodes", nodelist)
 	// Interpret the list as a discovery node array
 	var nodes []*discover.Node
-	for _, url := range strings.Split(cfg.TrustedNodes, " ") {
+	for _, url := range nodelist {
 		if url == "" {
 			continue
 		}
