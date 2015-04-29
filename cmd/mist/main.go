@@ -69,7 +69,7 @@ func init() {
 		assetPathFlag,
 		rpcCorsFlag,
 
-		utils.BootnodesFlag,
+		utils.BootNodesFlag,
 		utils.DataDirFlag,
 		utils.ListenPortFlag,
 		utils.LogFileFlag,
