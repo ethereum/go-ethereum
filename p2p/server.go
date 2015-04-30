@@ -25,10 +25,10 @@ const (
 	// This is the maximum number of inbound connection
 	// that are allowed to linger between 'accepted' and
 	// 'added as peer'.
-	maxAcceptConns = 50
+	maxAcceptConns = 10
 
 	// Maximum number of concurrently dialing outbound connections.
-	maxDialingConns = 50
+	maxDialingConns = 10
 
 	// total timeout for encryption handshake and protocol
 	// handshake in both directions.
