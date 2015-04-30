@@ -27,6 +27,9 @@ const (
 	// 'added as peer'.
 	maxAcceptConns = 50
 
+	// Maximum number of concurrently dialing outbound connections.
+	maxDialingConns = 50
+
 	// total timeout for encryption handshake and protocol
 	// handshake in both directions.
 	handshakeTimeout = 5 * time.Second
@@ -401,7 +404,11 @@ func (srv *Server) dialLoop() {
 	defer srv.loopWG.Done()
 	defer refresh.Stop()
 
-	// TODO: maybe limit number of active dials
+	// Limit the number of concurrent dials
+	slots := make(chan struct{}, maxDialingConns)
+	for i := 0; i < maxDialingConns; i++ {
+		slots <- struct{}{}
+	}
 	dial := func(dest *discover.Node) {
 		// Don't dial nodes that would fail the checks in addPeer.
 		// This is important because the connection handshake is a lot
@@ -413,6 +420,9 @@ func (srv *Server) dialLoop() {
 		if !ok || dialing[dest.ID] {
 			return
 		}
+		// Request a dial slot to prevent CPU exhaustion
+		<-slots
+		defer func() { slots <- struct{}{} }()
 
 		dialing[dest.ID] = true
 		srv.peerWG.Add(1)
