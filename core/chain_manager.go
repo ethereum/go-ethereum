@@ -511,6 +511,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		if block == nil {
 			continue
 		}
+		// Setting block.Td regardless of error (known for example) prevents errors down the line
+		// in the protocol handler
+		block.Td = new(big.Int).Set(CalculateTD(block, self.GetBlock(block.ParentHash())))
+
 		// Call in to the block processor and check for errors. It's likely that if one block fails
 		// all others will fail too (unless a known block is returned).
 		logs, err := self.processor.Process(block)
@@ -544,8 +548,6 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 
 			return i, err
 		}
-
-		block.Td = new(big.Int).Set(CalculateTD(block, self.GetBlock(block.ParentHash())))
 
 		self.mu.Lock()
 		{

@@ -125,6 +125,7 @@ func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpo
 func (pm *ProtocolManager) removePeer(peer *peer) {
 	pm.pmu.Lock()
 	defer pm.pmu.Unlock()
+	pm.downloader.UnregisterPeer(peer.id)
 	delete(pm.peers, peer.id)
 }
 
@@ -223,7 +224,6 @@ func (pm *ProtocolManager) handle(p *peer) error {
 
 	pm.downloader.RegisterPeer(p.id, p.recentHash, p.requestHashes, p.requestBlocks)
 	defer func() {
-		pm.downloader.UnregisterPeer(p.id)
 		pm.removePeer(p)
 	}()
 
@@ -392,6 +392,12 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 
 				return nil
 			}
+
+			if err := self.verifyTd(p, request); err != nil {
+				glog.V(logger.Error).Infoln(err)
+				// XXX for now return nil so it won't disconnect (we should in the future)
+				return nil
+			}
 			self.BroadcastBlock(hash, request.Block)
 		} else {
 			// adding blocks is synchronous
@@ -406,12 +412,26 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 					glog.V(logger.Detail).Infoln("downloader err:", err)
 					return
 				}
+				if err := self.verifyTd(p, request); err != nil {
+					glog.V(logger.Error).Infoln(err)
+					return
+				}
 				self.BroadcastBlock(hash, request.Block)
 			}()
 		}
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
+	return nil
+}
+
+func (pm *ProtocolManager) verifyTd(peer *peer, request newBlockMsgData) error {
+	if request.Block.Td.Cmp(request.TD) != 0 {
+		glog.V(logger.Detail).Infoln(peer)
+
+		return fmt.Errorf("invalid TD on block(%v) from peer(%s): block.td=%v, request.td=%v", request.Block.Number(), peer.id, request.Block.Td, request.TD)
+	}
+
 	return nil
 }
 
