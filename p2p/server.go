@@ -422,13 +422,13 @@ func (srv *Server) dialLoop() {
 		}
 		// Request a dial slot to prevent CPU exhaustion
 		<-slots
-		defer func() { slots <- struct{}{} }()
 
 		dialing[dest.ID] = true
 		srv.peerWG.Add(1)
 		go func() {
 			srv.dialNode(dest)
 			dialed <- dest
+			slots <- struct{}{}
 		}()
 	}
 
