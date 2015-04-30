@@ -114,7 +114,7 @@ type Server struct {
 	lock         sync.RWMutex // protects running, peers and the trust fields
 	running      bool
 	peers        map[discover.NodeID]*Peer
-	fails        map[discover.NodeID]bool           // List of recently failed connections
+	throttle     map[discover.NodeID]bool           // List of recently failed connections
 	staticNodes  map[discover.NodeID]*discover.Node // Map of currently maintained static remote nodes
 	staticDial   chan *discover.Node                // Dial request channel reserved for the static nodes
 	staticCycle  time.Duration                      // Overrides staticPeerCheckInterval, used for testing
@@ -219,7 +219,7 @@ func (srv *Server) Start() (err error) {
 	}
 	srv.quit = make(chan struct{})
 	srv.peers = make(map[discover.NodeID]*Peer)
-	srv.fails = make(map[discover.NodeID]bool)
+	srv.throttle = make(map[discover.NodeID]bool)
 
 	// Create the current trust maps, and the associated dialing channel
 	srv.trustedNodes = make(map[discover.NodeID]bool)
@@ -495,22 +495,31 @@ func (srv *Server) dialNode(dest *discover.Node) {
 		// does that when an error occurs.
 		srv.peerWG.Done()
 
-		// Mark the dialing as failed so prevent too fast redials, and set a
-		// timer for re-allowing dialing
-		srv.lock.Lock()
-		srv.fails[dest.ID] = true
-		srv.lock.Unlock()
-		go func() {
-			glog.V(logger.Detail).Infof("Dialing %v failed: %v. Locked until %v\n", dest, err, time.Now().Add(dialFailureCooldown))
-			<-time.After(dialFailureCooldown)
+		// Throttle the node to prevent hammering it with connections
+		glog.V(logger.Detail).Infof("Dialing %v failed: %v, throttling", dest, err)
+		srv.throttleNode(dest.ID)
 
-			srv.lock.Lock()
-			delete(srv.fails, dest.ID)
-			srv.lock.Unlock()
-		}()
 		return
 	}
 	srv.startPeer(conn, dest)
+}
+
+// throttleNode temporarily throttles a node, disabling both egress as well as
+// ingress connections to/from that particular node.
+func (srv *Server) throttleNode(id discover.NodeID) {
+	// Mark the node as throttled
+	srv.lock.Lock()
+	srv.throttle[id] = true
+	srv.lock.Unlock()
+
+	// Wait a while, after which discard the throttling
+	go func() {
+		<-time.After(dialFailureCooldown)
+
+		srv.lock.Lock()
+		delete(srv.throttle, id)
+		srv.lock.Unlock()
+	}()
 }
 
 func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
@@ -567,7 +576,11 @@ func (srv *Server) runPeer(p *Peer) {
 		srv.newPeerHook(p)
 	}
 	discreason := p.run()
+
+	// Drop the node, and throttle it to prevent hammering
 	srv.removePeer(p)
+	srv.throttleNode(p.ID())
+
 	glog.V(logger.Debug).Infof("Removed %v (%v)\n", p, discreason)
 	srvjslog.LogJson(&logger.P2PDisconnected{
 		RemoteId:       p.ID().String(),
@@ -602,8 +615,8 @@ func (srv *Server) checkPeer(id discover.NodeID) (bool, DiscReason) {
 		return false, DiscAlreadyConnected
 	case id == srv.ntab.Self().ID:
 		return false, DiscSelf
-	case srv.fails[id]:
-		return false, DiscFailureCooldown
+	case srv.throttle[id]:
+		return false, DiscThrottled
 	default:
 		return true, 0
 	}
