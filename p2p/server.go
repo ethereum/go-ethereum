@@ -100,10 +100,9 @@ type Server struct {
 
 	ourHandshake *protoHandshake
 
-	lock    sync.RWMutex // protects running and peers
-	running bool
-	peers   map[discover.NodeID]*Peer
-
+	lock      sync.RWMutex // protects running, peers and the trust fields
+	running   bool
+	peers     map[discover.NodeID]*Peer
 	trusts    map[discover.NodeID]*discover.Node // Map of currently trusted remote nodes
 	trustDial chan *discover.Node                // Dial request channel reserved for the trusted nodes
 
@@ -138,8 +137,10 @@ func (srv *Server) PeerCount() int {
 	return n
 }
 
-// TrustPeer inserts a node into the list of privileged nodes.
-func (srv *Server) TrustPeer(node *discover.Node) {
+// AddPeer connects to the given node and maintains the connection until the
+// server is shut down. If the connection fails for any reason, the server will
+// attempt to reconnect the peer.
+func (srv *Server) AddPeer(node *discover.Node) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
 
@@ -246,7 +247,7 @@ func (srv *Server) Start() (err error) {
 		glog.V(logger.Warn).Infoln("I will be kind-of useless, neither dialing nor listening.")
 	}
 	// maintain the trusted peers
-	go srv.trustLoop()
+	go srv.trustedNodesLoop()
 
 	srv.running = true
 	return nil
@@ -341,16 +342,13 @@ func (srv *Server) listenLoop() {
 	}
 }
 
-// trustLoop is responsible for periodically checking that trusted connections
-// are actually live, and requests dialing if not.
-func (srv *Server) trustLoop() {
-	// Create a ticker for verifying trusted connections
+// trustedNodesLoop is responsible for periodically checking that trusted
+// connections are actually live, and requests dialing if not.
+func (srv *Server) trustedNodesLoop() {
 	tick := time.Tick(trustedPeerCheckInterval)
-
 	for {
 		select {
 		case <-srv.quit:
-			// Termination requested, simple return
 			return
 
 		case <-tick:
@@ -369,10 +367,7 @@ func (srv *Server) trustLoop() {
 				glog.V(logger.Debug).Infof("Dialing trusted peer %v", node)
 				select {
 				case srv.trustDial <- node:
-					// Ok, dialing
-
 				case <-srv.quit:
-					// Terminating, return
 					return
 				}
 			}
@@ -547,16 +542,12 @@ func (srv *Server) checkPeer(id discover.NodeID) (bool, DiscReason) {
 	switch {
 	case !srv.running:
 		return false, DiscQuitting
-
 	case !trusted && len(srv.peers) >= srv.MaxPeers:
 		return false, DiscTooManyPeers
-
 	case srv.peers[id] != nil:
 		return false, DiscAlreadyConnected
-
 	case id == srv.ntab.Self().ID:
 		return false, DiscSelf
-
 	default:
 		return true, 0
 	}

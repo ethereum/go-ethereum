@@ -260,7 +260,7 @@ func TestServerTrustedPeers(t *testing.T) {
 	trusted := &discover.Node{
 		ID: discover.PubkeyID(&key.PublicKey),
 	}
-	server.TrustPeer(trusted)
+	server.AddPeer(trusted)
 
 	conn, err := dialer.Dial("tcp", server.ListenAddr)
 	if err != nil {

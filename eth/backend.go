@@ -108,7 +108,6 @@ func (cfg *Config) parseTrustedNodes() []*discover.Node {
 	// Short circuit if no trusted node config is present
 	path := filepath.Join(cfg.DataDir, trustedNodes)
 	if _, err := os.Stat(path); err != nil {
-		fmt.Println("nodes", nil)
 		return nil
 	}
 	// Load the trusted nodes from the config file
@@ -122,7 +121,6 @@ func (cfg *Config) parseTrustedNodes() []*discover.Node {
 		glog.V(logger.Error).Infof("Failed to load trusted nodes: %v", err)
 		return nil
 	}
-	fmt.Println("nodes", nodelist)
 	// Interpret the list as a discovery node array
 	var nodes []*discover.Node
 	for _, url := range nodelist {
@@ -486,13 +484,15 @@ func (s *Ethereum) StartForTest() {
 	s.txPool.Start()
 }
 
-// TrustPeer injects a new node into the list of privileged nodes.
-func (self *Ethereum) TrustPeer(nodeURL string) error {
+// AddPeer connects to the given node and maintains the connection until the
+// server is shut down. If the connection fails for any reason, the server will
+// attempt to reconnect the peer.
+func (self *Ethereum) AddPeer(nodeURL string) error {
 	n, err := discover.ParseNode(nodeURL)
 	if err != nil {
 		return fmt.Errorf("invalid node URL: %v", err)
 	}
-	self.net.TrustPeer(n)
+	self.net.AddPeer(n)
 	return nil
 }
 
