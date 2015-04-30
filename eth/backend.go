@@ -41,8 +41,8 @@ var (
 		discover.MustParseNode("enode://487611428e6c99a11a9795a6abe7b529e81315ca6aad66e2a2fc76e3adf263faba0d35466c2f8f68d561dbefa8878d4df5f1f2ddb1fbeab7f42ffb8cd328bd4a@5.1.83.226:30303"),
 	}
 
-	// Path within <datadir> to search for the trusted node list
-	trustedNodes = "trusted-nodes.json"
+	// Path within <datadir> to search for the static node list
+	staticNodes = "static-nodes.json"
 )
 
 type Config struct {
@@ -102,23 +102,23 @@ func (cfg *Config) parseBootNodes() []*discover.Node {
 	return ns
 }
 
-// parseTrustedNodes parses a list of discovery node URLs either given literally,
+// parseStaticNodes parses a list of discovery node URLs either given literally,
 // or loaded from a .json file.
-func (cfg *Config) parseTrustedNodes() []*discover.Node {
-	// Short circuit if no trusted node config is present
-	path := filepath.Join(cfg.DataDir, trustedNodes)
+func (cfg *Config) parseStaticNodes() []*discover.Node {
+	// Short circuit if no static node config is present
+	path := filepath.Join(cfg.DataDir, staticNodes)
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
-	// Load the trusted nodes from the config file
+	// Load the static nodes from the config file
 	blob, err := ioutil.ReadFile(path)
 	if err != nil {
-		glog.V(logger.Error).Infof("Failed to access trusted nodes: %v", err)
+		glog.V(logger.Error).Infof("Failed to access static nodes: %v", err)
 		return nil
 	}
 	nodelist := []string{}
 	if err := json.Unmarshal(blob, &nodelist); err != nil {
-		glog.V(logger.Error).Infof("Failed to load trusted nodes: %v", err)
+		glog.V(logger.Error).Infof("Failed to load static nodes: %v", err)
 		return nil
 	}
 	// Interpret the list as a discovery node array
@@ -129,7 +129,7 @@ func (cfg *Config) parseTrustedNodes() []*discover.Node {
 		}
 		node, err := discover.ParseNode(url)
 		if err != nil {
-			glog.V(logger.Error).Infof("Trusted node URL %s: %v\n", url, err)
+			glog.V(logger.Error).Infof("Static node URL %s: %v\n", url, err)
 			continue
 		}
 		nodes = append(nodes, node)
@@ -288,7 +288,7 @@ func New(config *Config) (*Ethereum, error) {
 		NAT:            config.NAT,
 		NoDial:         !config.Dial,
 		BootstrapNodes: config.parseBootNodes(),
-		TrustedNodes:   config.parseTrustedNodes(),
+		StaticNodes:    config.parseStaticNodes(),
 		NodeDatabase:   nodeDb,
 	}
 	if len(config.Port) > 0 {

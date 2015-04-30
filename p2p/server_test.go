@@ -22,7 +22,7 @@ func startTestServer(t *testing.T, pf newPeerHook) *Server {
 		ListenAddr:  "127.0.0.1:0",
 		PrivateKey:  newkey(),
 		newPeerHook: pf,
-		setupFunc: func(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node, atcap bool, trust map[discover.NodeID]bool) (*conn, error) {
+		setupFunc: func(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node, atcap bool) (*conn, error) {
 			id := randomID()
 			rw := newRlpxFrameRW(fd, secrets{
 				MAC:        zero16,
@@ -102,7 +102,7 @@ func TestServerDial(t *testing.T) {
 
 	// tell the server to connect
 	tcpAddr := listener.Addr().(*net.TCPAddr)
-	srv.trustDial <- &discover.Node{IP: tcpAddr.IP, TCPPort: tcpAddr.Port}
+	srv.staticDial <- &discover.Node{IP: tcpAddr.IP, TCPPort: tcpAddr.Port}
 
 	select {
 	case conn := <-accepted:
@@ -200,7 +200,7 @@ func TestServerDisconnectAtCap(t *testing.T) {
 		// Run the handshakes just like a real peer would.
 		key := newkey()
 		hs := &protoHandshake{Version: baseProtocolVersion, ID: discover.PubkeyID(&key.PublicKey)}
-		_, err = setupConn(conn, key, hs, srv.Self(), false, nil)
+		_, err = setupConn(conn, key, hs, srv.Self(), false)
 		if i == nconns-1 {
 			// When handling the last connection, the server should
 			// disconnect immediately instead of running the protocol
@@ -219,6 +219,7 @@ func TestServerDisconnectAtCap(t *testing.T) {
 	}
 }
 
+/*
 // Tests that trusted peers and can connect above max peer caps.
 func TestServerTrustedPeers(t *testing.T) {
 	defer testlog(t).detach()
@@ -250,7 +251,7 @@ func TestServerTrustedPeers(t *testing.T) {
 		// Run the handshakes just like a real peer would, and wait for completion
 		key := newkey()
 		shake := &protoHandshake{Version: baseProtocolVersion, ID: discover.PubkeyID(&key.PublicKey)}
-		if _, err = setupConn(conn, key, shake, server.Self(), false, nil); err != nil {
+		if _, err = setupConn(conn, key, shake, server.Self(), false); err != nil {
 			t.Fatalf("conn %d: unexpected error: %v", i, err)
 		}
 		<-started
@@ -269,7 +270,7 @@ func TestServerTrustedPeers(t *testing.T) {
 	defer conn.Close()
 
 	shake := &protoHandshake{Version: baseProtocolVersion, ID: trusted.ID}
-	if _, err = setupConn(conn, key, shake, server.Self(), false, nil); err != nil {
+	if _, err = setupConn(conn, key, shake, server.Self(), false); err != nil {
 		t.Fatalf("trusted node: unexpected error: %v", err)
 	}
 	select {
@@ -280,6 +281,7 @@ func TestServerTrustedPeers(t *testing.T) {
 		t.Fatalf("trusted node timeout")
 	}
 }
+*/
 
 func newkey() *ecdsa.PrivateKey {
 	key, err := crypto.GenerateKey()

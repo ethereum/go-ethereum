@@ -143,7 +143,7 @@ func TestSetupConn(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		conn0, err := setupConn(fd0, prv0, hs0, node1, false, nil)
+		conn0, err := setupConn(fd0, prv0, hs0, node1, false)
 		if err != nil {
 			t.Errorf("outbound side error: %v", err)
 			return
@@ -156,7 +156,7 @@ func TestSetupConn(t *testing.T) {
 		}
 	}()
 
-	conn1, err := setupConn(fd1, prv1, hs1, nil, false, nil)
+	conn1, err := setupConn(fd1, prv1, hs1, nil, false)
 	if err != nil {
 		t.Fatalf("inbound side error: %v", err)
 	}

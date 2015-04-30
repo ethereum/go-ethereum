@@ -60,9 +60,9 @@ type Server struct {
 	// with the rest of the network.
 	BootstrapNodes []*discover.Node
 
-	// Trusted nodes are used as privileged connections which are always accepted
-	// and also always maintained.
-	TrustedNodes []*discover.Node
+	// Static nodes are used as pre-configured connections which are always
+	// maintained and re-connected on disconnects.
+	StaticNodes []*discover.Node
 
 	// NodeDatabase is the path to the database containing the previously seen
 	// live nodes in the network.
@@ -100,11 +100,11 @@ type Server struct {
 
 	ourHandshake *protoHandshake
 
-	lock      sync.RWMutex // protects running, peers and the trust fields
-	running   bool
-	peers     map[discover.NodeID]*Peer
-	trusts    map[discover.NodeID]*discover.Node // Map of currently trusted remote nodes
-	trustDial chan *discover.Node                // Dial request channel reserved for the trusted nodes
+	lock       sync.RWMutex // protects running, peers and the trust fields
+	running    bool
+	peers      map[discover.NodeID]*Peer
+	statics    map[discover.NodeID]*discover.Node // Map of currently static remote nodes
+	staticDial chan *discover.Node                // Dial request channel reserved for the static nodes
 
 	ntab     *discover.Table
 	listener net.Listener
@@ -114,7 +114,7 @@ type Server struct {
 	peerWG sync.WaitGroup // active peer goroutines
 }
 
-type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, bool, map[discover.NodeID]bool) (*conn, error)
+type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, bool) (*conn, error)
 type newPeerHook func(*Peer)
 
 // Peers returns all connected peers.
@@ -144,7 +144,7 @@ func (srv *Server) AddPeer(node *discover.Node) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
 
-	srv.trusts[node.ID] = node
+	srv.statics[node.ID] = node
 }
 
 // Broadcast sends an RLP-encoded message to all connected peers.
@@ -207,11 +207,11 @@ func (srv *Server) Start() (err error) {
 	srv.peers = make(map[discover.NodeID]*Peer)
 
 	// Create the current trust map, and the associated dialing channel
-	srv.trusts = make(map[discover.NodeID]*discover.Node)
-	for _, node := range srv.TrustedNodes {
-		srv.trusts[node.ID] = node
+	srv.statics = make(map[discover.NodeID]*discover.Node)
+	for _, node := range srv.StaticNodes {
+		srv.statics[node.ID] = node
 	}
-	srv.trustDial = make(chan *discover.Node)
+	srv.staticDial = make(chan *discover.Node)
 
 	if srv.setupFunc == nil {
 		srv.setupFunc = setupConn
@@ -246,8 +246,8 @@ func (srv *Server) Start() (err error) {
 	if srv.NoDial && srv.ListenAddr == "" {
 		glog.V(logger.Warn).Infoln("I will be kind-of useless, neither dialing nor listening.")
 	}
-	// maintain the trusted peers
-	go srv.trustedNodesLoop()
+	// maintain the static peers
+	go srv.staticNodesLoop()
 
 	srv.running = true
 	return nil
@@ -342,9 +342,9 @@ func (srv *Server) listenLoop() {
 	}
 }
 
-// trustedNodesLoop is responsible for periodically checking that trusted
+// staticNodesLoop is responsible for periodically checking that static
 // connections are actually live, and requests dialing if not.
-func (srv *Server) trustedNodesLoop() {
+func (srv *Server) staticNodesLoop() {
 	tick := time.Tick(trustedPeerCheckInterval)
 	for {
 		select {
@@ -352,10 +352,10 @@ func (srv *Server) trustedNodesLoop() {
 			return
 
 		case <-tick:
-			// Collect all the non-connected trusted nodes
+			// Collect all the non-connected static nodes
 			needed := []*discover.Node{}
 			srv.lock.RLock()
-			for id, node := range srv.trusts {
+			for id, node := range srv.statics {
 				if _, ok := srv.peers[id]; !ok {
 					needed = append(needed, node)
 				}
@@ -364,9 +364,9 @@ func (srv *Server) trustedNodesLoop() {
 
 			// Try to dial each of them (don't hang if server terminates)
 			for _, node := range needed {
-				glog.V(logger.Debug).Infof("Dialing trusted peer %v", node)
+				glog.V(logger.Debug).Infof("Dialing static peer %v", node)
 				select {
-				case srv.trustDial <- node:
+				case srv.staticDial <- node:
 				case <-srv.quit:
 					return
 				}
@@ -425,7 +425,7 @@ func (srv *Server) dialLoop() {
 				// below MaxPeers.
 				refresh.Reset(refreshPeersInterval)
 			}
-		case dest := <-srv.trustDial:
+		case dest := <-srv.staticDial:
 			dial(dest)
 		case dests := <-findresults:
 			for _, dest := range dests {
@@ -469,17 +469,17 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// the callers of startPeer added the peer to the wait group already.
 	fd.SetDeadline(time.Now().Add(handshakeTimeout))
 
-	// Check capacity and trust list
+	// Check capacity, but override for static nodes
 	srv.lock.RLock()
 	atcap := len(srv.peers) == srv.MaxPeers
-
-	trust := make(map[discover.NodeID]bool)
-	for id, _ := range srv.trusts {
-		trust[id] = true
+	if dest != nil {
+		if _, ok := srv.statics[dest.ID]; ok {
+			atcap = false
+		}
 	}
 	srv.lock.RUnlock()
 
-	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, atcap, trust)
+	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, atcap)
 	if err != nil {
 		fd.Close()
 		glog.V(logger.Debug).Infof("Handshake with %v failed: %v", fd.RemoteAddr(), err)
@@ -535,14 +535,14 @@ func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
 // checkPeer verifies whether a peer looks promising and should be allowed/kept
 // in the pool, or if it's of no use.
 func (srv *Server) checkPeer(id discover.NodeID) (bool, DiscReason) {
-	// First up, figure out if the peer is trusted
-	_, trusted := srv.trusts[id]
+	// First up, figure out if the peer is static
+	_, static := srv.statics[id]
 
 	// Make sure the peer passes all required checks
 	switch {
 	case !srv.running:
 		return false, DiscQuitting
-	case !trusted && len(srv.peers) >= srv.MaxPeers:
+	case !static && len(srv.peers) >= srv.MaxPeers:
 		return false, DiscTooManyPeers
 	case srv.peers[id] != nil:
 		return false, DiscAlreadyConnected
