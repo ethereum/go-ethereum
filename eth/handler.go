@@ -455,7 +455,7 @@ func (pm *ProtocolManager) BroadcastBlock(hash common.Hash, block *types.Block) 
 	for _, peer := range peers {
 		peer.sendNewBlock(block)
 	}
-	glog.V(logger.Detail).Infoln("broadcast block to", len(peers), "peers. Total propagation time:", time.Since(block.ReceivedAt))
+	glog.V(logger.Detail).Infoln("broadcast block to", len(peers), "peers. Total processing time:", time.Since(block.ReceivedAt))
 }
 
 // BroadcastTx will propagate the block to its connected peers. It will sort

@@ -354,6 +354,11 @@ func (d *Downloader) AddHashes(id string, hashes []common.Hash) error {
 		return fmt.Errorf("received hashes from %s while active peer is %s", id, d.activePeer)
 	}
 
+	if glog.V(logger.Detail) && len(hashes) != 0 {
+		from, to := hashes[0], hashes[len(hashes)-1]
+		glog.Infof("adding %d (T=%d) hashes [ %x / %x ] from: %s\n", len(hashes), d.queue.hashPool.Size(), from[:4], to[:4], id)
+	}
+
 	d.hashCh <- hashes
 
 	return nil
@@ -448,10 +453,17 @@ func (d *Downloader) process(peer *peer) error {
 
 			return ErrBadPeer
 		}
-		blocks = blocks[max:]
+
+		// delete the blocks from the slice and let them be garbage collected
+		// without this slice trick the blocks would stay in memory until nil
+		// would be assigned to d.queue.blocks
+		copy(blocks, blocks[max:])
+		for k, n := len(blocks)-max, len(blocks); k < n; k++ {
+			blocks[k] = nil
+		}
+		blocks = blocks[:len(blocks)-max]
 	}
 
-	// This will allow the GC to remove the in memory blocks
 	if len(blocks) == 0 {
 		d.queue.blocks = nil
 	} else {
