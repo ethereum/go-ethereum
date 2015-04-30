@@ -427,8 +427,8 @@ func (srv *Server) dialLoop() {
 		srv.peerWG.Add(1)
 		go func() {
 			srv.dialNode(dest)
-			dialed <- dest
 			slots <- struct{}{}
+			dialed <- dest
 		}()
 	}
 
