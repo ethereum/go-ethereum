@@ -115,7 +115,7 @@ type Server struct {
 	peerWG sync.WaitGroup // active peer goroutines
 }
 
-type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, bool) (*conn, error)
+type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, bool, map[discover.NodeID]bool) (*conn, error)
 type newPeerHook func(*Peer)
 
 // Peers returns all connected peers.
@@ -140,7 +140,10 @@ func (srv *Server) PeerCount() int {
 
 // TrustPeer inserts a node into the list of privileged nodes.
 func (srv *Server) TrustPeer(node *discover.Node) {
-	srv.trustDial <- node
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+
+	srv.trusts[node.ID] = node
 }
 
 // Broadcast sends an RLP-encoded message to all connected peers.
@@ -470,10 +473,18 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// returns during that exchange need to call peerWG.Done because
 	// the callers of startPeer added the peer to the wait group already.
 	fd.SetDeadline(time.Now().Add(handshakeTimeout))
+
+	// Check capacity and trust list
 	srv.lock.RLock()
 	atcap := len(srv.peers) == srv.MaxPeers
+
+	trust := make(map[discover.NodeID]bool)
+	for id, _ := range srv.trusts {
+		trust[id] = true
+	}
 	srv.lock.RUnlock()
-	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, atcap)
+
+	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, atcap, trust)
 	if err != nil {
 		fd.Close()
 		glog.V(logger.Debug).Infof("Handshake with %v failed: %v", fd.RemoteAddr(), err)
