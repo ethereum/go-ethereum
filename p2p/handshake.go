@@ -70,21 +70,21 @@ type protoHandshake struct {
 // If dial is non-nil, the connection the local node is the initiator.
 // If atcap is true, the connection will be disconnected with DiscTooManyPeers
 // after the key exchange.
-func setupConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node, atcap bool) (*conn, error) {
+func setupConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node, atcap bool, trust map[discover.NodeID]bool) (*conn, error) {
 	if dial == nil {
-		return setupInboundConn(fd, prv, our, atcap)
+		return setupInboundConn(fd, prv, our, atcap, trust)
 	} else {
-		return setupOutboundConn(fd, prv, our, dial, atcap)
+		return setupOutboundConn(fd, prv, our, dial, atcap, trust)
 	}
 }
 
-func setupInboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, atcap bool) (*conn, error) {
+func setupInboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, atcap bool, trust map[discover.NodeID]bool) (*conn, error) {
 	secrets, err := receiverEncHandshake(fd, prv, nil)
 	if err != nil {
 		return nil, fmt.Errorf("encryption handshake failed: %v", err)
 	}
 	rw := newRlpxFrameRW(fd, secrets)
-	if atcap {
+	if atcap && !trust[secrets.RemoteID] {
 		SendItems(rw, discMsg, DiscTooManyPeers)
 		return nil, errors.New("we have too many peers")
 	}
@@ -99,13 +99,13 @@ func setupInboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, a
 	return &conn{rw, rhs}, nil
 }
 
-func setupOutboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node, atcap bool) (*conn, error) {
+func setupOutboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node, atcap bool, trust map[discover.NodeID]bool) (*conn, error) {
 	secrets, err := initiatorEncHandshake(fd, prv, dial.ID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("encryption handshake failed: %v", err)
 	}
 	rw := newRlpxFrameRW(fd, secrets)
-	if atcap {
+	if atcap && !trust[secrets.RemoteID] {
 		SendItems(rw, discMsg, DiscTooManyPeers)
 		return nil, errors.New("we have too many peers")
 	}
