@@ -49,6 +49,10 @@ func CalcDifficulty(block, parent *types.Header) *big.Int {
 }
 
 func CalculateTD(block, parent *types.Block) *big.Int {
+	if parent == nil {
+		return block.Difficulty()
+	}
+
 	td := new(big.Int).Add(parent.Td, block.Header().Difficulty)
 
 	return td
