@@ -18,8 +18,10 @@ import (
 )
 
 const (
-	defaultDialTimeout   = 10 * time.Second
-	refreshPeersInterval = 30 * time.Second
+	defaultDialTimeout       = 10 * time.Second
+	refreshPeersInterval     = 30 * time.Second
+	trustedPeerCheckInterval = 15 * time.Second
+	dialFailureCooldown      = 30 * time.Second
 
 	// This is the maximum number of inbound connection
 	// that are allowed to linger between 'accepted' and
@@ -59,6 +61,10 @@ type Server struct {
 	// with the rest of the network.
 	BootstrapNodes []*discover.Node
 
+	// Trusted nodes are used as privileged connections which are always accepted
+	// and also always maintained.
+	TrustedNodes []*discover.Node
+
 	// NodeDatabase is the path to the database containing the previously seen
 	// live nodes in the network.
 	NodeDatabase string
@@ -95,20 +101,24 @@ type Server struct {
 
 	ourHandshake *protoHandshake
 
-	lock    sync.RWMutex // protects running and peers
-	running bool
-	peers   map[discover.NodeID]*Peer
+	lock sync.RWMutex // protects running and peers
+
+	running  bool
+	peers    map[discover.NodeID]*Peer // Currently active peer pool
+	throttle map[discover.NodeID]bool  // List of recently failed connections
+
+	trusts    map[discover.NodeID]*discover.Node // Map of currently trusted remote nodes
+	trustDial chan *discover.Node                // Dial request channel reserved for the trusted nodes
 
 	ntab     *discover.Table
 	listener net.Listener
 
-	quit        chan struct{}
-	loopWG      sync.WaitGroup // {dial,listen,nat}Loop
-	peerWG      sync.WaitGroup // active peer goroutines
-	peerConnect chan *discover.Node
+	quit   chan struct{}
+	loopWG sync.WaitGroup // {dial,listen,nat}Loop
+	peerWG sync.WaitGroup // active peer goroutines
 }
 
-type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, bool) (*conn, error)
+type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, bool, map[discover.NodeID]bool) (*conn, error)
 type newPeerHook func(*Peer)
 
 // Peers returns all connected peers.
@@ -131,10 +141,12 @@ func (srv *Server) PeerCount() int {
 	return n
 }
 
-// SuggestPeer creates a connection to the given Node if it
-// is not already connected.
-func (srv *Server) SuggestPeer(n *discover.Node) {
-	srv.peerConnect <- n
+// TrustPeer inserts a node into the list of privileged nodes.
+func (srv *Server) TrustPeer(node *discover.Node) {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+
+	srv.trusts[node.ID] = node
 }
 
 // Broadcast sends an RLP-encoded message to all connected peers.
@@ -195,7 +207,15 @@ func (srv *Server) Start() (err error) {
 	}
 	srv.quit = make(chan struct{})
 	srv.peers = make(map[discover.NodeID]*Peer)
-	srv.peerConnect = make(chan *discover.Node)
+	srv.throttle = make(map[discover.NodeID]bool)
+
+	// Create the current trust map, and the associated dialing channel
+	srv.trusts = make(map[discover.NodeID]*discover.Node)
+	for _, node := range srv.TrustedNodes {
+		srv.trusts[node.ID] = node
+	}
+	srv.trustDial = make(chan *discover.Node)
+
 	if srv.setupFunc == nil {
 		srv.setupFunc = setupConn
 	}
@@ -229,6 +249,8 @@ func (srv *Server) Start() (err error) {
 	if srv.NoDial && srv.ListenAddr == "" {
 		glog.V(logger.Warn).Infoln("I will be kind-of useless, neither dialing nor listening.")
 	}
+	// maintain the trusted peers
+	go srv.trustLoop()
 
 	srv.running = true
 	return nil
@@ -323,6 +345,45 @@ func (srv *Server) listenLoop() {
 	}
 }
 
+// trustLoop is responsible for periodically checking that trusted connections
+// are actually live, and requests dialing if not.
+func (srv *Server) trustLoop() {
+	// Create a ticker for verifying trusted connections
+	tick := time.Tick(trustedPeerCheckInterval)
+
+	for {
+		select {
+		case <-srv.quit:
+			// Termination requested, simple return
+			return
+
+		case <-tick:
+			// Collect all the non-connected trusted nodes
+			needed := []*discover.Node{}
+			srv.lock.RLock()
+			for id, node := range srv.trusts {
+				if _, ok := srv.peers[id]; !ok {
+					needed = append(needed, node)
+				}
+			}
+			srv.lock.RUnlock()
+
+			// Try to dial each of them (don't hang if server terminates)
+			for _, node := range needed {
+				glog.V(logger.Debug).Infof("Dialing trusted peer %v", node)
+				select {
+				case srv.trustDial <- node:
+					// Ok, dialing
+
+				case <-srv.quit:
+					// Terminating, return
+					return
+				}
+			}
+		}
+	}
+}
+
 func (srv *Server) dialLoop() {
 	var (
 		dialed      = make(chan *discover.Node)
@@ -373,7 +434,7 @@ func (srv *Server) dialLoop() {
 				// below MaxPeers.
 				refresh.Reset(refreshPeersInterval)
 			}
-		case dest := <-srv.peerConnect:
+		case dest := <-srv.trustDial:
 			dial(dest)
 		case dests := <-findresults:
 			for _, dest := range dests {
@@ -402,10 +463,32 @@ func (srv *Server) dialNode(dest *discover.Node) {
 		// dialNode, so we need to count it down again. startPeer also
 		// does that when an error occurs.
 		srv.peerWG.Done()
-		glog.V(logger.Detail).Infof("dial error: %v", err)
+
+		// Throttle the node to prevent hammering it with connections
+		glog.V(logger.Detail).Infof("Dialing %v failed: %v, throttling", dest, err)
+		srv.throttleNode(dest.ID)
+
 		return
 	}
 	srv.startPeer(conn, dest)
+}
+
+// throttleNode temporarily throttles a node, disabling both egress as well as
+// ingress connections to/from that particular node.
+func (srv *Server) throttleNode(id discover.NodeID) {
+	// Mark the node as throttled
+	srv.lock.Lock()
+	srv.throttle[id] = true
+	srv.lock.Unlock()
+
+	// Wait a while, after which discard the throttling
+	go func() {
+		<-time.After(dialFailureCooldown)
+
+		srv.lock.Lock()
+		delete(srv.throttle, id)
+		srv.lock.Unlock()
+	}()
 }
 
 func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
@@ -416,10 +499,18 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// returns during that exchange need to call peerWG.Done because
 	// the callers of startPeer added the peer to the wait group already.
 	fd.SetDeadline(time.Now().Add(handshakeTimeout))
+
+	// Check capacity and trust list
 	srv.lock.RLock()
 	atcap := len(srv.peers) == srv.MaxPeers
+
+	trust := make(map[discover.NodeID]bool)
+	for id, _ := range srv.trusts {
+		trust[id] = true
+	}
 	srv.lock.RUnlock()
-	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, atcap)
+
+	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, atcap, trust)
 	if err != nil {
 		fd.Close()
 		glog.V(logger.Debug).Infof("Handshake with %v failed: %v", fd.RemoteAddr(), err)
@@ -454,7 +545,11 @@ func (srv *Server) runPeer(p *Peer) {
 		srv.newPeerHook(p)
 	}
 	discreason := p.run()
+
+	// Drop the node, and throttle it to prevent hammering
 	srv.removePeer(p)
+	srv.throttleNode(p.ID())
+
 	glog.V(logger.Debug).Infof("Removed %v (%v)\n", p, discreason)
 	srvjslog.LogJson(&logger.P2PDisconnected{
 		RemoteId:       p.ID().String(),
@@ -472,16 +567,29 @@ func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
 	return true, 0
 }
 
+// checkPeer verifies whether a peer looks promising and should be allowed/kept
+// in the pool, or if it's of no use.
 func (srv *Server) checkPeer(id discover.NodeID) (bool, DiscReason) {
+	// First up, figure out if the peer is trusted
+	_, trusted := srv.trusts[id]
+
+	// Make sure the peer passes all required checks
 	switch {
 	case !srv.running:
 		return false, DiscQuitting
-	case len(srv.peers) >= srv.MaxPeers:
+
+	case !trusted && len(srv.peers) >= srv.MaxPeers:
 		return false, DiscTooManyPeers
+
 	case srv.peers[id] != nil:
 		return false, DiscAlreadyConnected
+
 	case id == srv.ntab.Self().ID:
 		return false, DiscSelf
+
+	case srv.throttle[id]:
+		return false, DiscThrottled
+
 	default:
 		return true, 0
 	}

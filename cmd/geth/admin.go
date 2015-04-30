@@ -25,7 +25,7 @@ func (js *jsre) adminBindings() {
 	js.re.Set("admin", struct{}{})
 	t, _ := js.re.Get("admin")
 	admin := t.Object()
-	admin.Set("suggestPeer", js.suggestPeer)
+	admin.Set("trustPeer", js.trustPeer)
 	admin.Set("startRPC", js.startRPC)
 	admin.Set("stopRPC", js.stopRPC)
 	admin.Set("nodeInfo", js.nodeInfo)
@@ -243,13 +243,13 @@ func (js *jsre) stopRPC(call otto.FunctionCall) otto.Value {
 	return otto.FalseValue()
 }
 
-func (js *jsre) suggestPeer(call otto.FunctionCall) otto.Value {
+func (js *jsre) trustPeer(call otto.FunctionCall) otto.Value {
 	nodeURL, err := call.Argument(0).ToString()
 	if err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}
-	err = js.ethereum.SuggestPeer(nodeURL)
+	err = js.ethereum.TrustPeer(nodeURL)
 	if err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()

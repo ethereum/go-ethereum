@@ -2,8 +2,12 @@ package eth
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -36,6 +40,9 @@ var (
 		// ETH/DEV cpp-ethereum (poc-9.ethdev.com)
 		discover.MustParseNode("enode://487611428e6c99a11a9795a6abe7b529e81315ca6aad66e2a2fc76e3adf263faba0d35466c2f8f68d561dbefa8878d4df5f1f2ddb1fbeab7f42ffb8cd328bd4a@5.1.83.226:30303"),
 	}
+
+	// Path within <datadir> to search for the trusted node list
+	trustedNodes = "trusted-nodes.json"
 )
 
 type Config struct {
@@ -56,8 +63,7 @@ type Config struct {
 	MaxPeers int
 	Port     string
 
-	// This should be a space-separated list of
-	// discovery node URLs.
+	// Space-separated list of discovery node URLs
 	BootNodes string
 
 	// This key is used to identify the node on the network.
@@ -94,6 +100,43 @@ func (cfg *Config) parseBootNodes() []*discover.Node {
 		ns = append(ns, n)
 	}
 	return ns
+}
+
+// parseTrustedNodes parses a list of discovery node URLs either given literally,
+// or loaded from a .json file.
+func (cfg *Config) parseTrustedNodes() []*discover.Node {
+	// Short circuit if no trusted node config is present
+	path := filepath.Join(cfg.DataDir, trustedNodes)
+	if _, err := os.Stat(path); err != nil {
+		fmt.Println("nodes", nil)
+		return nil
+	}
+	// Load the trusted nodes from the config file
+	blob, err := ioutil.ReadFile(path)
+	if err != nil {
+		glog.V(logger.Error).Infof("Failed to access trusted nodes: %v", err)
+		return nil
+	}
+	nodelist := []string{}
+	if err := json.Unmarshal(blob, &nodelist); err != nil {
+		glog.V(logger.Error).Infof("Failed to load trusted nodes: %v", err)
+		return nil
+	}
+	fmt.Println("nodes", nodelist)
+	// Interpret the list as a discovery node array
+	var nodes []*discover.Node
+	for _, url := range nodelist {
+		if url == "" {
+			continue
+		}
+		node, err := discover.ParseNode(url)
+		if err != nil {
+			glog.V(logger.Error).Infof("Trusted node URL %s: %v\n", url, err)
+			continue
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes
 }
 
 func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
@@ -247,6 +290,7 @@ func New(config *Config) (*Ethereum, error) {
 		NAT:            config.NAT,
 		NoDial:         !config.Dial,
 		BootstrapNodes: config.parseBootNodes(),
+		TrustedNodes:   config.parseTrustedNodes(),
 		NodeDatabase:   nodeDb,
 	}
 	if len(config.Port) > 0 {
@@ -442,12 +486,13 @@ func (s *Ethereum) StartForTest() {
 	s.txPool.Start()
 }
 
-func (self *Ethereum) SuggestPeer(nodeURL string) error {
+// TrustPeer injects a new node into the list of privileged nodes.
+func (self *Ethereum) TrustPeer(nodeURL string) error {
 	n, err := discover.ParseNode(nodeURL)
 	if err != nil {
 		return fmt.Errorf("invalid node URL: %v", err)
 	}
-	self.net.SuggestPeer(n)
+	self.net.TrustPeer(n)
 	return nil
 }
 

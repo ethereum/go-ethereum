@@ -232,7 +232,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
-		utils.BootnodesFlag,
+		utils.BootNodesFlag,
 		utils.DataDirFlag,
 		utils.BlockchainVersionFlag,
 		utils.JSpathFlag,
