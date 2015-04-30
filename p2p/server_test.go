@@ -80,7 +80,7 @@ func TestServerDial(t *testing.T) {
 	// run a one-shot TCP server to handle the connection.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("could not setup listener: %v")
+		t.Fatalf("could not setup listener: %v", err)
 	}
 	defer listener.Close()
 	accepted := make(chan net.Conn)
@@ -102,7 +102,7 @@ func TestServerDial(t *testing.T) {
 
 	// tell the server to connect
 	tcpAddr := listener.Addr().(*net.TCPAddr)
-	srv.trustDial <-&discover.Node{IP: tcpAddr.IP, TCPPort: tcpAddr.Port}
+	srv.trustDial <- &discover.Node{IP: tcpAddr.IP, TCPPort: tcpAddr.Port}
 
 	select {
 	case conn := <-accepted:
@@ -216,6 +216,116 @@ func TestServerDisconnectAtCap(t *testing.T) {
 			// Wait for runPeer to be started.
 			<-started
 		}
+	}
+}
+
+// Tests that a failed dial will temporarily throttle a peer.
+func TestServerOutboundThrottling(t *testing.T) {
+	defer testlog(t).detach()
+
+	// Start a simple test server
+	server := startTestServer(t, nil)
+	defer server.Stop()
+
+	// Request a failing dial from the server and check throttling
+	node := &discover.Node{
+		ID:      discover.PubkeyID(&newkey().PublicKey),
+		IP:      []byte{127, 0, 0, 1},
+		TCPPort: 65535,
+	}
+	server.trustDial <- node
+
+	time.Sleep(100 * time.Millisecond)
+	if throttle := server.throttle[node.ID]; !throttle {
+		t.Fatalf("throttling mismatch: have %v, want %v", throttle, true)
+	}
+	// Open a one shot TCP server to listen for valid dialing
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to setup listener: %v", err)
+	}
+	defer listener.Close()
+
+	connected := make(chan net.Conn)
+	go func() {
+		conn, err := listener.Accept()
+		if err == nil {
+			conn.Close()
+			connected <- conn
+		}
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	// Request a re-dial from the server, make sure this also fails
+	addr := listener.Addr().(*net.TCPAddr)
+	node.IP, node.TCPPort = addr.IP, addr.Port
+	server.trustDial <- node
+
+	select {
+	case peer := <-connected:
+		t.Fatalf("throttled peer connected: %v", peer)
+
+	case <-time.After(100 * time.Millisecond):
+		// Ok, peer not accepted
+	}
+}
+
+// Tests that a failed peer will get temporarily throttled.
+func TestServerInboundThrottling(t *testing.T) {
+	defer testlog(t).detach()
+
+	// Start a test server and a peer sink for synchronization
+	started := make(chan *Peer)
+	server := &Server{
+		ListenAddr:  "127.0.0.1:0",
+		PrivateKey:  newkey(),
+		MaxPeers:    10,
+		NoDial:      true,
+		newPeerHook: func(p *Peer) { started <- p },
+	}
+	if err := server.Start(); err != nil {
+		t.Fatal("failed to start test server: %v", err)
+	}
+	defer server.Stop()
+
+	// Create a new peer identity to check throttling with
+	dialer := &net.Dialer{Deadline: time.Now().Add(3 * time.Second)}
+	key := newkey()
+
+	// Connect with a new peer, run the handshake and disconnect
+	connection, err := dialer.Dial("tcp", server.ListenAddr)
+	if err != nil {
+		t.Fatalf("failed to dial server: %v", err)
+	}
+	shake := &protoHandshake{Version: baseProtocolVersion, ID: discover.PubkeyID(&key.PublicKey)}
+	if _, err = setupConn(connection, key, shake, server.Self(), false); err != nil {
+		t.Fatalf("failed to run handshake: %v", err)
+	}
+	<-started
+	connection.Close()
+	server.peerWG.Wait()
+
+	// Check that throttling has been enabled
+	if throttle := server.throttle[shake.ID]; !throttle {
+		t.Fatalf("throttling mismatch: have %v, want %v", throttle, true)
+	}
+	// Try to reconnect with the same peer, run the handshake and verify throttling
+	connection, err = dialer.Dial("tcp", server.ListenAddr)
+	if err != nil {
+		t.Fatalf("failed to re-dial server: %v", err)
+	}
+	defer connection.Close()
+
+	shake = &protoHandshake{Version: baseProtocolVersion, ID: discover.PubkeyID(&key.PublicKey)}
+	if _, err = setupConn(connection, key, shake, server.Self(), false); err != nil {
+		t.Fatalf("failed to re-run handshake: %v", err)
+	}
+	select {
+	case peer := <-started:
+		t.Fatalf("throttled peer accepted: %v", peer)
+
+	case <-time.After(100 * time.Millisecond):
+		// Ok, peer not accepted
 	}
 }
 
