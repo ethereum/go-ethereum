@@ -454,6 +454,7 @@ func (self *Ethereum) SuggestPeer(nodeURL string) error {
 func (s *Ethereum) Stop() {
 	s.txSub.Unsubscribe() // quits txBroadcastLoop
 
+	s.chainManager.Stop()
 	s.protocolManager.Stop()
 	s.txPool.Stop()
 	s.eventMux.Stop()

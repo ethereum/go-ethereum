@@ -93,6 +93,7 @@ type ChainManager struct {
 	futureBlocks *BlockCache
 
 	quit chan struct{}
+	wg   sync.WaitGroup
 }
 
 func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *ChainManager {
@@ -482,6 +483,10 @@ func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
 
 func (bc *ChainManager) Stop() {
 	close(bc.quit)
+
+	bc.wg.Wait()
+
+	glog.V(logger.Info).Infoln("Chain manager stopped")
 }
 
 type queueEvent struct {
@@ -504,6 +509,9 @@ func (self *ChainManager) procFutureBlocks() {
 // InsertChain will attempt to insert the given chain in to the canonical chain or, otherwise, create a fork. It an error is returned
 // it will return the index number of the failing block as well an error describing what went wrong (for possible errors see core/errors.go).
 func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
+	self.wg.Add(1)
+	defer self.wg.Done()
+
 	// A queued approach to delivering events. This is generally faster than direct delivery and requires much less mutex acquiring.
 	var (
 		queue      = make([]interface{}, len(chain))
