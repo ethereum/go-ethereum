@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	defaultDialTimeout       = 10 * time.Second
-	refreshPeersInterval     = 30 * time.Second
-	trustedPeerCheckInterval = 15 * time.Second
+	defaultDialTimeout      = 10 * time.Second
+	refreshPeersInterval    = 30 * time.Second
+	staticPeerCheckInterval = 15 * time.Second
 
 	// This is the maximum number of inbound connection
 	// that are allowed to linger between 'accepted' and
@@ -345,7 +345,7 @@ func (srv *Server) listenLoop() {
 // staticNodesLoop is responsible for periodically checking that static
 // connections are actually live, and requests dialing if not.
 func (srv *Server) staticNodesLoop() {
-	tick := time.Tick(trustedPeerCheckInterval)
+	tick := time.Tick(staticPeerCheckInterval)
 	for {
 		select {
 		case <-srv.quit:
