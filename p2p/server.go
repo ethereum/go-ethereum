@@ -616,7 +616,7 @@ func (srv *Server) checkPeer(id discover.NodeID) (bool, DiscReason) {
 	case id == srv.ntab.Self().ID:
 		return false, DiscSelf
 	case srv.throttle[id]:
-		return false, DiscThrottled
+		return false, DiscUselessPeer
 	default:
 		return true, 0
 	}
