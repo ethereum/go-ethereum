@@ -122,6 +122,12 @@ func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpo
 	return manager
 }
 
+func (pm *ProtocolManager) removePeer(peer *peer) {
+	pm.pmu.Lock()
+	defer pm.pmu.Unlock()
+	delete(pm.peers, peer.id)
+}
+
 func (pm *ProtocolManager) syncHandler() {
 	// itimer is used to determine when to start ignoring `minDesiredPeerCount`
 	itimer := time.NewTimer(peerCountTimeout)
@@ -172,7 +178,10 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	glog.V(logger.Info).Infof("Synchronisation attempt using %s TD=%v\n", peer.id, peer.td)
 	// Get the hashes from the peer (synchronously)
 	err := pm.downloader.Synchronise(peer.id, peer.recentHash)
-	if err != nil {
+	if err != nil && err == downloader.ErrBadPeer {
+		glog.V(logger.Debug).Infoln("removed peer from peer set due to bad action")
+		pm.removePeer(peer)
+	} else if err != nil {
 		// handle error
 		glog.V(logger.Debug).Infoln("error downloading:", err)
 	}
@@ -214,10 +223,8 @@ func (pm *ProtocolManager) handle(p *peer) error {
 
 	pm.downloader.RegisterPeer(p.id, p.recentHash, p.requestHashes, p.requestBlocks)
 	defer func() {
-		pm.pmu.Lock()
-		defer pm.pmu.Unlock()
-		delete(pm.peers, p.id)
 		pm.downloader.UnregisterPeer(p.id)
+		pm.removePeer(p)
 	}()
 
 	// propagate existing transactions. new transactions appearing
@@ -379,16 +386,23 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		// if the parent does not exists we delegate to the downloader.
 		if self.chainman.HasBlock(request.Block.ParentHash()) {
 			if _, err := self.chainman.InsertChain(types.Blocks{request.Block}); err != nil {
-				// handle error
+				glog.V(logger.Error).Infoln("removed peer (", p.id, ") due to block error")
+
+				self.removePeer(p)
+
 				return nil
 			}
 			self.BroadcastBlock(hash, request.Block)
 		} else {
 			// adding blocks is synchronous
 			go func() {
-				// TODO check parent error
 				err := self.downloader.AddBlock(p.id, request.Block, request.TD)
-				if err != nil {
+				if err != nil && err == downloader.ErrBadPeer {
+					glog.V(logger.Error).Infoln("removed peer (", p.id, ") with err:", err)
+
+					self.removePeer(p)
+					return
+				} else if err != nil {
 					glog.V(logger.Detail).Infoln("downloader err:", err)
 					return
 				}

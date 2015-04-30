@@ -30,7 +30,7 @@ var (
 	errLowTd            = errors.New("peer's TD is too low")
 	errBusy             = errors.New("busy")
 	errUnknownPeer      = errors.New("peer's unknown or unhealthy")
-	errBadPeer          = errors.New("action from bad peer ignored")
+	ErrBadPeer          = errors.New("action from bad peer ignored")
 	errTimeout          = errors.New("timeout")
 	errEmptyHashSet     = errors.New("empty hash set by peer")
 	errPeersUnavailable = errors.New("no peers available or all peers tried for block download process")
@@ -376,7 +376,7 @@ func (d *Downloader) AddBlock(id string, block *types.Block, td *big.Int) error 
 	// and add the block. Otherwise just ignore it
 	if peer == nil {
 		glog.V(logger.Detail).Infof("Ignored block from bad peer %s\n", id)
-		return errBadPeer
+		return ErrBadPeer
 	}
 
 	peer.mu.Lock()
@@ -422,10 +422,7 @@ func (d *Downloader) process(peer *peer) error {
 		return nil
 	}
 
-	var (
-		blocks = d.queue.blocks
-		err    error
-	)
+	var blocks = d.queue.blocks
 	glog.V(logger.Debug).Infof("Inserting chain with %d blocks (#%v - #%v)\n", len(blocks), blocks[0].Number(), blocks[len(blocks)-1].Number())
 
 	// Loop untill we're out of blocks
@@ -435,7 +432,7 @@ func (d *Downloader) process(peer *peer) error {
 		// processing and start requesting the `block.hash` so that it's parent and
 		// grandparents can be requested and queued.
 		var i int
-		i, err = d.insertChain(blocks[:max])
+		i, err := d.insertChain(blocks[:max])
 		if err != nil && core.IsParentErr(err) {
 			// Ignore the missing blocks. Handler should take care of anything that's missing.
 			glog.V(logger.Debug).Infof("Ignored block with missing parent (%d)\n", i)
@@ -447,8 +444,9 @@ func (d *Downloader) process(peer *peer) error {
 			d.UnregisterPeer(d.activePeer)
 			// Reset chain completely. This needs much, much improvement.
 			// instead: check all blocks leading down to this block false block and remove it
-			blocks = nil
-			break
+			d.queue.blocks = nil
+
+			return ErrBadPeer
 		}
 		blocks = blocks[max:]
 	}
@@ -459,7 +457,7 @@ func (d *Downloader) process(peer *peer) error {
 	} else {
 		d.queue.blocks = blocks
 	}
-	return err
+	return nil
 }
 
 func (d *Downloader) isFetchingHashes() bool {
