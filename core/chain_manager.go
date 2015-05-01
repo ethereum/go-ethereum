@@ -669,7 +669,7 @@ func (self *ChainManager) merge(oldBlock, newBlock *types.Block) {
 
 func (self *ChainManager) update() {
 	events := self.eventMux.Subscribe(queueEvent{})
-	futureTimer := time.NewTicker(5 * time.Second)
+	futureTimer := time.Tick(5 * time.Second)
 out:
 	for {
 		select {
@@ -696,7 +696,7 @@ out:
 					self.eventMux.Post(event)
 				}
 			}
-		case <-futureTimer.C:
+		case <-futureTimer:
 			self.procFutureBlocks()
 		case <-self.quit:
 			break out

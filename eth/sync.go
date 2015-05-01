@@ -15,8 +15,8 @@ func (pm *ProtocolManager) update() {
 	// itimer is used to determine when to start ignoring `minDesiredPeerCount`
 	itimer := time.NewTimer(peerCountTimeout)
 	// btimer is used for picking of blocks from the downloader
-	btimer := time.NewTicker(blockProcTimer)
-out:
+	btimer := time.Tick(blockProcTimer)
+
 	for {
 		select {
 		case <-pm.newPeerCh:
@@ -43,10 +43,10 @@ out:
 			} else {
 				itimer.Reset(5 * time.Second)
 			}
-		case <-btimer.C:
+		case <-btimer:
 			go pm.processBlocks()
 		case <-pm.quitSync:
-			break out
+			return
 		}
 	}
 }
