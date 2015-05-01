@@ -187,7 +187,7 @@ func symEncrypt(rand io.Reader, params *ECIESParams, key, m []byte) (ct []byte, 
 		return
 	}
 	/*
-		In SEC 1 Version 2.0 the IV value is not specified in for XOR CTR.
+		In SEC 1 Version 2.0 section 3.8 the IV value is not specified in for XOR CTR.
 		It is specified, however, that it should not be transmitted as part of the ciphertext.
 		This means it cannot be random, as the other party would not know the value.
 		Therefore we set it to the zeroed value defined for AES in CTR mode.
