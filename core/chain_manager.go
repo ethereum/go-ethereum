@@ -604,7 +604,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 				queueEvent.canonicalCount++
 
 				if glog.V(logger.Debug) {
-					glog.Infof("inserted block #%d (%d TXs %d UNCs) (%x...)\n", block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
+					glog.Infof("[%v] inserted block #%d (%d TXs %d UNCs) (%x...)\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
 				}
 			} else {
 				if glog.V(logger.Detail) {
