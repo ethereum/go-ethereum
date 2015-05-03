@@ -23,12 +23,19 @@ func createHashes(start, amount int) (hashes []common.Hash) {
 	return
 }
 
+func createBlock(i int, prevHash, hash common.Hash) *types.Block {
+	header := &types.Header{Number: big.NewInt(int64(i))}
+	block := types.NewBlockWithHeader(header)
+	block.HeaderHash = hash
+	block.ParentHeaderHash = knownHash
+	return block
+}
+
 func createBlocksFromHashes(hashes []common.Hash) map[common.Hash]*types.Block {
 	blocks := make(map[common.Hash]*types.Block)
+
 	for i, hash := range hashes {
-		header := &types.Header{Number: big.NewInt(int64(len(hashes) - i))}
-		blocks[hash] = types.NewBlockWithHeader(header)
-		blocks[hash].HeaderHash = hash
+		blocks[hash] = createBlock(len(hashes)-i, knownHash, hash)
 	}
 
 	return blocks
@@ -162,7 +169,7 @@ func TestTaking(t *testing.T) {
 		t.Error("download error", err)
 	}
 
-	bs1 := tester.downloader.TakeBlocks(1000)
+	bs1 := tester.downloader.TakeBlocks()
 	if len(bs1) != 1000 {
 		t.Error("expected to take 1000, got", len(bs1))
 	}
