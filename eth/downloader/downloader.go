@@ -270,7 +270,7 @@ out:
 			)
 			hashSet := set.New()
 			for _, hash = range hashes {
-				if d.hasBlock(hash) || d.queue.has(hash) {
+				if d.hasBlock(hash) || d.queue.blockHashes.Has(hash) {
 					glog.V(logger.Debug).Infof("Found common hash %x\n", hash[:4])
 
 					done = true
