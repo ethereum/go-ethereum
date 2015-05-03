@@ -89,6 +89,13 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		return
 	}
 
+	// FIXME if we have the hash in our chain and the TD of the peer is
+	// much higher than ours, something is wrong with us or the peer.
+	// Check if the hash is on our own chain
+	if pm.chainman.HasBlock(peer.recentHash) {
+		return
+	}
+
 	// Get the hashes from the peer (synchronously)
 	err := pm.downloader.Synchronise(peer.id, peer.recentHash)
 	if err != nil && err == downloader.ErrBadPeer {
