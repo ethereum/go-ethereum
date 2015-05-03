@@ -1,6 +1,7 @@
 package downloader
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -102,17 +103,6 @@ func (c *queue) has(hash common.Hash) bool {
 	return c.hashPool.Has(hash) || c.fetchPool.Has(hash) || c.blockHashes.Has(hash)
 }
 
-func (c *queue) addBlock(id string, block *types.Block) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// when adding a block make sure it doesn't already exist
-	if !c.blockHashes.Has(block.Hash()) {
-		c.hashPool.Remove(block.Hash())
-		c.blocks = append(c.blocks, block)
-	}
-}
-
 func (c *queue) getBlock(hash common.Hash) *types.Block {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -130,7 +120,7 @@ func (c *queue) getBlock(hash common.Hash) *types.Block {
 }
 
 // deliver delivers a chunk to the queue that was requested of the peer
-func (c *queue) deliver(id string, blocks []*types.Block) error {
+func (c *queue) deliver(id string, blocks []*types.Block) (err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -145,25 +135,30 @@ func (c *queue) deliver(id string, blocks []*types.Block) error {
 			chunk.peer.ignored.Merge(chunk.hashes)
 		}
 
+		// Add the blocks
+		for i, block := range blocks {
+			// See (1) for future limitation
+			n := int(block.NumberU64()) - c.blockOffset
+			if n > len(c.blocks) || n < 0 {
+				// set the error and set the blocks which could be processed
+				// abort the rest of the blocks (FIXME this could be improved)
+				err = fmt.Errorf("received block which overflow (N=%v O=%v)", block.Number(), c.blockOffset)
+				blocks = blocks[:i]
+				break
+			}
+			c.blocks[n] = block
+		}
 		// seperate the blocks and the hashes
 		blockHashes := chunk.fetchedHashes(blocks)
 		// merge block hashes
 		c.blockHashes.Merge(blockHashes)
-		// Add the blocks
-		for _, block := range blocks {
-			// See (1) for future limitation
-			n := int(block.NumberU64()) - c.blockOffset
-			if n > len(c.blocks) || n < 0 {
-				return errBlockNumberOverflow
-			}
-			c.blocks[n] = block
-		}
 		// Add back whatever couldn't be delivered
 		c.hashPool.Merge(chunk.hashes)
+		// Remove the hashes from the fetch pool
 		c.fetchPool.Separate(chunk.hashes)
 	}
 
-	return nil
+	return
 }
 
 func (c *queue) alloc(offset, size int) {
