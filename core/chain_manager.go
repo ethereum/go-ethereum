@@ -622,7 +622,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 
 	}
 
-	if (stats.queued > 0 || stats.processed > 0) && bool(glog.V(logger.Info)) {
+	if (stats.queued > 0 || stats.processed > 0 || stats.ignored > 0) && bool(glog.V(logger.Info)) {
 		tend := time.Since(tstart)
 		start, end := chain[0], chain[len(chain)-1]
 		glog.Infof("imported %d block(s) (%d queued %d ignored) in %v. #%v [%x / %x]\n", stats.processed, stats.queued, stats.ignored, tend, end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
