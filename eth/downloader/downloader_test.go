@@ -42,12 +42,13 @@ func createBlocksFromHashes(hashes []common.Hash) map[common.Hash]*types.Block {
 }
 
 type downloadTester struct {
-	downloader *Downloader
-	hashes     []common.Hash
-	blocks     map[common.Hash]*types.Block
-	t          *testing.T
-	pcount     int
-	done       chan bool
+	downloader   *Downloader
+	hashes       []common.Hash
+	blocks       map[common.Hash]*types.Block
+	t            *testing.T
+	pcount       int
+	done         chan bool
+	activePeerId string
 }
 
 func newTester(t *testing.T, hashes []common.Hash, blocks map[common.Hash]*types.Block) *downloadTester {
@@ -56,6 +57,11 @@ func newTester(t *testing.T, hashes []common.Hash, blocks map[common.Hash]*types
 	tester.downloader = downloader
 
 	return tester
+}
+
+func (dl *downloadTester) sync(peerId string, hash common.Hash) error {
+	dl.activePeerId = peerId
+	return dl.downloader.Synchronise(peerId, hash)
 }
 
 func (dl *downloadTester) hasBlock(hash common.Hash) bool {
@@ -70,7 +76,7 @@ func (dl *downloadTester) getBlock(hash common.Hash) *types.Block {
 }
 
 func (dl *downloadTester) getHashes(hash common.Hash) error {
-	dl.downloader.hashCh <- dl.hashes
+	dl.downloader.AddHashes(dl.activePeerId, dl.hashes)
 	return nil
 }
 
@@ -115,8 +121,9 @@ func TestDownload(t *testing.T) {
 	tester.newPeer("peer2", big.NewInt(0), common.Hash{})
 	tester.badBlocksPeer("peer3", big.NewInt(0), common.Hash{})
 	tester.badBlocksPeer("peer4", big.NewInt(0), common.Hash{})
+	tester.activePeerId = "peer1"
 
-	err := tester.downloader.Synchronise("peer1", hashes[0])
+	err := tester.sync("peer1", hashes[0])
 	if err != nil {
 		t.Error("download error", err)
 	}
@@ -139,7 +146,7 @@ func TestMissing(t *testing.T) {
 	hashes = append(extraHashes, hashes[:len(hashes)-1]...)
 	tester.newPeer("peer2", big.NewInt(0), common.Hash{})
 
-	err := tester.downloader.Synchronise("peer1", hashes[0])
+	err := tester.sync("peer1", hashes[0])
 	if err != nil {
 		t.Error("download error", err)
 	}
@@ -164,7 +171,7 @@ func TestTaking(t *testing.T) {
 	tester.badBlocksPeer("peer3", big.NewInt(0), common.Hash{})
 	tester.badBlocksPeer("peer4", big.NewInt(0), common.Hash{})
 
-	err := tester.downloader.Synchronise("peer1", hashes[0])
+	err := tester.sync("peer1", hashes[0])
 	if err != nil {
 		t.Error("download error", err)
 	}
