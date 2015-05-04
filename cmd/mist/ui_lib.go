@@ -105,7 +105,7 @@ func (ui *UiLib) Connect(button qml.Object) {
 
 func (ui *UiLib) ConnectToPeer(nodeURL string) {
 	if err := ui.eth.AddPeer(nodeURL); err != nil {
-		guilogger.Infoln("TrustPeer error: " + err.Error())
+		guilogger.Infoln("AddPeer error: " + err.Error())
 	}
 }
 
