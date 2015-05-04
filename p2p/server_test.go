@@ -480,7 +480,7 @@ func TestServerMaxPendingAccepts(t *testing.T) {
 	case <-started:
 		t.Fatalf("handshake on second connection accepted")
 
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(time.Second):
 	}
 	// Shake on first, check that both go through
 	go func() {
@@ -493,7 +493,7 @@ func TestServerMaxPendingAccepts(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		select {
 		case <-started:
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(time.Second):
 			t.Fatalf("peer %d: handshake timeout", i)
 		}
 	}
