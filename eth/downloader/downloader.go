@@ -3,14 +3,11 @@ package downloader
 import (
 	"errors"
 	"fmt"
-	"math"
-	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -27,16 +24,21 @@ var (
 	minDesiredPeerCount = 5                // Amount of peers desired to start syncing
 	blockTtl            = 20 * time.Second // The amount of time it takes for a block request to time out
 
-	errLowTd            = errors.New("peer's TD is too low")
-	errBusy             = errors.New("busy")
-	errUnknownPeer      = errors.New("peer's unknown or unhealthy")
-	errBadPeer          = errors.New("action from bad peer ignored")
-	errTimeout          = errors.New("timeout")
-	errEmptyHashSet     = errors.New("empty hash set by peer")
-	errPeersUnavailable = errors.New("no peers available or all peers tried for block download process")
+	errLowTd               = errors.New("peer's TD is too low")
+	errBusy                = errors.New("busy")
+	errUnknownPeer         = errors.New("peer's unknown or unhealthy")
+	ErrBadPeer             = errors.New("action from bad peer ignored")
+	errNoPeers             = errors.New("no peers to keep download active")
+	errPendingQueue        = errors.New("pending items in queue")
+	errTimeout             = errors.New("timeout")
+	errEmptyHashSet        = errors.New("empty hash set by peer")
+	errPeersUnavailable    = errors.New("no peers available or all peers tried for block download process")
+	errAlreadyInPool       = errors.New("hash already in pool")
+	errBlockNumberOverflow = errors.New("received block which overflows")
 )
 
 type hashCheckFn func(common.Hash) bool
+type getBlockFn func(common.Hash) *types.Block
 type chainInsertFn func(types.Blocks) (int, error)
 type hashIterFn func() (common.Hash, error)
 
@@ -51,6 +53,11 @@ type syncPack struct {
 	ignoreInitial bool
 }
 
+type hashPack struct {
+	peerId string
+	hashes []common.Hash
+}
+
 type Downloader struct {
 	mu         sync.RWMutex
 	queue      *queue
@@ -58,29 +65,28 @@ type Downloader struct {
 	activePeer string
 
 	// Callbacks
-	hasBlock    hashCheckFn
-	insertChain chainInsertFn
+	hasBlock hashCheckFn
+	getBlock getBlockFn
 
 	// Status
 	fetchingHashes    int32
 	downloadingBlocks int32
-	processingBlocks  int32
 
 	// Channels
 	newPeerCh chan *peer
-	hashCh    chan []common.Hash
+	hashCh    chan hashPack
 	blockCh   chan blockPack
 }
 
-func New(hasBlock hashCheckFn, insertChain chainInsertFn) *Downloader {
+func New(hasBlock hashCheckFn, getBlock getBlockFn) *Downloader {
 	downloader := &Downloader{
-		queue:       newqueue(),
-		peers:       make(peers),
-		hasBlock:    hasBlock,
-		insertChain: insertChain,
-		newPeerCh:   make(chan *peer, 1),
-		hashCh:      make(chan []common.Hash, 1),
-		blockCh:     make(chan blockPack, 1),
+		queue:     newqueue(),
+		peers:     make(peers),
+		hasBlock:  hasBlock,
+		getBlock:  getBlock,
+		newPeerCh: make(chan *peer, 1),
+		hashCh:    make(chan hashPack, 1),
+		blockCh:   make(chan blockPack, 1),
 	}
 
 	return downloader
@@ -126,6 +132,12 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 		return errBusy
 	}
 
+	// When a synchronisation attempt is made while the queue stil
+	// contains items we abort the sync attempt
+	if d.queue.size() > 0 {
+		return errPendingQueue
+	}
+
 	// Fetch the peer using the id or throw an error if the peer couldn't be found
 	p := d.peers[id]
 	if p == nil {
@@ -138,30 +150,87 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 		return err
 	}
 
-	return d.process(p)
+	return nil
 }
 
-func (d *Downloader) getFromPeer(p *peer, hash common.Hash, ignoreInitial bool) error {
+// Done lets the downloader know that whatever previous hashes were taken
+// are processed. If the block count reaches zero and done is called
+// we reset the queue for the next batch of incoming hashes and blocks.
+func (d *Downloader) Done() {
+	d.queue.mu.Lock()
+	defer d.queue.mu.Unlock()
+
+	if len(d.queue.blocks) == 0 {
+		d.queue.resetNoTS()
+	}
+}
+
+// TakeBlocks takes blocks from the queue and yields them to the blockTaker handler
+// it's possible it yields no blocks
+func (d *Downloader) TakeBlocks() types.Blocks {
+	d.queue.mu.Lock()
+	defer d.queue.mu.Unlock()
+
+	var blocks types.Blocks
+	if len(d.queue.blocks) > 0 {
+		// Make sure the parent hash is known
+		if d.queue.blocks[0] != nil && !d.hasBlock(d.queue.blocks[0].ParentHash()) {
+			return nil
+		}
+
+		for _, block := range d.queue.blocks {
+			if block == nil {
+				break
+			}
+
+			blocks = append(blocks, block)
+		}
+		d.queue.blockOffset += len(blocks)
+		// delete the blocks from the slice and let them be garbage collected
+		// without this slice trick the blocks would stay in memory until nil
+		// would be assigned to d.queue.blocks
+		copy(d.queue.blocks, d.queue.blocks[len(blocks):])
+		for k, n := len(d.queue.blocks)-len(blocks), len(d.queue.blocks); k < n; k++ {
+			d.queue.blocks[k] = nil
+		}
+		d.queue.blocks = d.queue.blocks[:len(d.queue.blocks)-len(blocks)]
+
+		//d.queue.blocks = d.queue.blocks[len(blocks):]
+		if len(d.queue.blocks) == 0 {
+			d.queue.blocks = nil
+		}
+
+	}
+
+	return blocks
+}
+
+func (d *Downloader) Has(hash common.Hash) bool {
+	return d.queue.has(hash)
+}
+
+func (d *Downloader) getFromPeer(p *peer, hash common.Hash, ignoreInitial bool) (err error) {
 	d.activePeer = p.id
+	defer func() {
+		// reset on error
+		if err != nil {
+			d.queue.reset()
+		}
+	}()
 
 	glog.V(logger.Detail).Infoln("Synchronising with the network using:", p.id)
 	// Start the fetcher. This will block the update entirely
 	// interupts need to be send to the appropriate channels
 	// respectively.
-	if err := d.startFetchingHashes(p, hash, ignoreInitial); err != nil {
-		// handle error
-		glog.V(logger.Debug).Infoln("Error fetching hashes:", err)
-		// XXX Reset
+	if err = d.startFetchingHashes(p, hash, ignoreInitial); err != nil {
 		return err
 	}
 
 	// Start fetching blocks in paralel. The strategy is simple
 	// take any available peers, seserve a chunk for each peer available,
 	// let the peer deliver the chunkn and periodically check if a peer
-	// has timedout. When done downloading, process blocks.
-	if err := d.startFetchingBlocks(p); err != nil {
-		glog.V(logger.Debug).Infoln("Error downloading blocks:", err)
-		// XXX reset
+	// has timedout.
+	if err = d.startFetchingBlocks(p); err != nil {
 		return err
 	}
 
@@ -171,11 +240,15 @@ func (d *Downloader) getFromPeer(p *peer, hash common.Hash, ignoreInitial bool) 
 }
 
 // XXX Make synchronous
-func (d *Downloader) startFetchingHashes(p *peer, hash common.Hash, ignoreInitial bool) error {
+func (d *Downloader) startFetchingHashes(p *peer, h common.Hash, ignoreInitial bool) error {
 	atomic.StoreInt32(&d.fetchingHashes, 1)
 	defer atomic.StoreInt32(&d.fetchingHashes, 0)
 
-	glog.V(logger.Debug).Infof("Downloading hashes (%x) from %s", hash.Bytes()[:4], p.id)
+	if d.queue.has(h) {
+		return errAlreadyInPool
+	}
+
+	glog.V(logger.Debug).Infof("Downloading hashes (%x) from %s", h[:4], p.id)
 
 	start := time.Now()
 
@@ -183,23 +256,38 @@ func (d *Downloader) startFetchingHashes(p *peer, hash common.Hash, ignoreInitia
 	// In such circumstances we don't need to download the block so don't add it to the queue.
 	if !ignoreInitial {
 		// Add the hash to the queue first
-		d.queue.hashPool.Add(hash)
+		d.queue.hashPool.Add(h)
 	}
 	// Get the first batch of hashes
-	p.getHashes(hash)
+	p.getHashes(h)
 
-	failureResponseTimer := time.NewTimer(hashTtl)
+	var (
+		failureResponseTimer = time.NewTimer(hashTtl)
+		attemptedPeers       = make(map[string]bool) // attempted peers will help with retries
+		activePeer           = p                     // active peer will help determine the current active peer
+		hash                 common.Hash             // common and last hash
+	)
+	attemptedPeers[p.id] = true
 
 out:
 	for {
 		select {
-		case hashes := <-d.hashCh:
+		case hashPack := <-d.hashCh:
+			// make sure the active peer is giving us the hashes
+			if hashPack.peerId != activePeer.id {
+				glog.V(logger.Debug).Infof("Received hashes from incorrect peer(%s)\n", hashPack.peerId)
+				break
+			}
+
 			failureResponseTimer.Reset(hashTtl)
 
-			var done bool // determines whether we're done fetching hashes (i.e. common hash found)
+			var (
+				hashes = hashPack.hashes
+				done   bool // determines whether we're done fetching hashes (i.e. common hash found)
+			)
 			hashSet := set.New()
-			for _, hash := range hashes {
-				if d.hasBlock(hash) {
+			for _, hash = range hashes {
+				if d.hasBlock(hash) || d.queue.blockHashes.Has(hash) {
 					glog.V(logger.Debug).Infof("Found common hash %x\n", hash[:4])
 
 					done = true
@@ -212,24 +300,50 @@ out:
 
 			// Add hashes to the chunk set
 			if len(hashes) == 0 { // Make sure the peer actually gave you something valid
-				glog.V(logger.Debug).Infof("Peer (%s) responded with empty hash set\n", p.id)
+				glog.V(logger.Debug).Infof("Peer (%s) responded with empty hash set\n", activePeer.id)
 				d.queue.reset()
 
 				return errEmptyHashSet
 			} else if !done { // Check if we're done fetching
 				// Get the next set of hashes
-				p.getHashes(hashes[len(hashes)-1])
+				activePeer.getHashes(hash)
 			} else { // we're done
+				// The offset of the queue is determined by the highest known block
+				var offset int
+				if block := d.getBlock(hash); block != nil {
+					offset = int(block.NumberU64() + 1)
+				}
+				// allocate proper size for the queueue
+				d.queue.alloc(offset, d.queue.hashPool.Size())
+
 				break out
 			}
 		case <-failureResponseTimer.C:
 			glog.V(logger.Debug).Infof("Peer (%s) didn't respond in time for hash request\n", p.id)
-			// TODO instead of reseting the queue select a new peer from which we can start downloading hashes.
-			// 1. check for peer's best hash to be included in the current hash set;
-			// 2. resume from last point (hashes[len(hashes)-1]) using the newly selected peer.
-			d.queue.reset()
 
-			return errTimeout
+			var p *peer // p will be set if a peer can be found
+			// Attempt to find a new peer by checking inclusion of peers best hash in our
+			// already fetched hash list. This can't guarantee 100% correctness but does
+			// a fair job. This is always either correct or false incorrect.
+			for id, peer := range d.peers {
+				if d.queue.hashPool.Has(peer.recentHash) && !attemptedPeers[id] {
+					p = peer
+					break
+				}
+			}
+
+			// if all peers have been tried, abort the process entirely or if the hash is
+			// the zero hash.
+			if p == nil || (hash == common.Hash{}) {
+				d.queue.reset()
+				return errTimeout
+			}
+
+			// set p to the active peer. this will invalidate any hashes that may be returned
+			// by our previous (delayed) peer.
+			activePeer = p
+			p.getHashes(hash)
+			glog.V(logger.Debug).Infof("Hash fetching switched to new peer(%s)\n", p.id)
 		}
 	}
 	glog.V(logger.Detail).Infof("Downloaded hashes (%d) in %v\n", d.queue.hashPool.Size(), time.Since(start))
@@ -257,11 +371,27 @@ out:
 			// If the peer was previously banned and failed to deliver it's pack
 			// in a reasonable time frame, ignore it's message.
 			if d.peers[blockPack.peerId] != nil {
+				err := d.queue.deliver(blockPack.peerId, blockPack.blocks)
+				if err != nil {
+					glog.V(logger.Debug).Infof("deliver failed for peer %s: %v\n", blockPack.peerId, err)
+					// FIXME d.UnregisterPeer(blockPack.peerId)
+					break
+				}
+
+				if glog.V(logger.Debug) {
+					glog.Infof("adding %d blocks from: %s\n", len(blockPack.blocks), blockPack.peerId)
+				}
 				d.peers[blockPack.peerId].promote()
-				d.queue.deliver(blockPack.peerId, blockPack.blocks)
 				d.peers.setState(blockPack.peerId, idleState)
 			}
 		case <-ticker.C:
+			// after removing bad peers make sure we actually have suffucient peer left to keep downlading
+			if len(d.peers) == 0 {
+				d.queue.reset()
+
+				return errNoPeers
+			}
+
 			// If there are unrequested hashes left start fetching
 			// from the available peers.
 			if d.queue.hashPool.Size() > 0 {
@@ -310,7 +440,7 @@ out:
 					if time.Since(chunk.itime) > blockTtl {
 						badPeers = append(badPeers, pid)
 						// remove peer as good peer from peer list
-						//d.UnregisterPeer(pid)
+						// FIXME d.UnregisterPeer(pid)
 					}
 				}
 				d.queue.mu.Unlock()
@@ -354,112 +484,14 @@ func (d *Downloader) AddHashes(id string, hashes []common.Hash) error {
 		return fmt.Errorf("received hashes from %s while active peer is %s", id, d.activePeer)
 	}
 
-	d.hashCh <- hashes
+	if glog.V(logger.Detail) && len(hashes) != 0 {
+		from, to := hashes[0], hashes[len(hashes)-1]
+		glog.Infof("adding %d (T=%d) hashes [ %x / %x ] from: %s\n", len(hashes), d.queue.hashPool.Size(), from[:4], to[:4], id)
+	}
+
+	d.hashCh <- hashPack{id, hashes}
 
 	return nil
-}
-
-// Add an (unrequested) block to the downloader. This is usually done through the
-// NewBlockMsg by the protocol handler.
-// Adding blocks is done synchronously. if there are missing blocks, blocks will be
-// fetched first. If the downloader is busy or if some other processed failed an error
-// will be returned.
-func (d *Downloader) AddBlock(id string, block *types.Block, td *big.Int) error {
-	hash := block.Hash()
-
-	if d.hasBlock(hash) {
-		return fmt.Errorf("known block %x", hash.Bytes()[:4])
-	}
-
-	peer := d.peers.getPeer(id)
-	// if the peer is in our healthy list of peers; update the td
-	// and add the block. Otherwise just ignore it
-	if peer == nil {
-		glog.V(logger.Detail).Infof("Ignored block from bad peer %s\n", id)
-		return errBadPeer
-	}
-
-	peer.mu.Lock()
-	peer.recentHash = block.Hash()
-	peer.mu.Unlock()
-	peer.promote()
-
-	glog.V(logger.Detail).Infoln("Inserting new block from:", id)
-	d.queue.addBlock(id, block)
-
-	// if neither go ahead to process
-	if d.isBusy() {
-		return errBusy
-	}
-
-	// Check if the parent of the received block is known.
-	// If the block is not know, request it otherwise, request.
-	phash := block.ParentHash()
-	if !d.hasBlock(phash) {
-		glog.V(logger.Detail).Infof("Missing parent %x, requires fetching\n", phash.Bytes()[:4])
-
-		// Get the missing hashes from the peer (synchronously)
-		err := d.getFromPeer(peer, peer.recentHash, true)
-		if err != nil {
-			return err
-		}
-	}
-
-	return d.process(peer)
-}
-
-func (d *Downloader) process(peer *peer) error {
-	atomic.StoreInt32(&d.processingBlocks, 1)
-	defer atomic.StoreInt32(&d.processingBlocks, 0)
-
-	// XXX this will move when optimised
-	// Sort the blocks by number. This bit needs much improvement. Right now
-	// it assumes full honesty form peers (i.e. it's not checked when the blocks
-	// link). We should at least check whihc queue match. This code could move
-	// to a seperate goroutine where it periodically checks for linked pieces.
-	types.BlockBy(types.Number).Sort(d.queue.blocks)
-	if len(d.queue.blocks) == 0 {
-		return nil
-	}
-
-	var (
-		blocks = d.queue.blocks
-		err    error
-	)
-	glog.V(logger.Debug).Infof("Inserting chain with %d blocks (#%v - #%v)\n", len(blocks), blocks[0].Number(), blocks[len(blocks)-1].Number())
-
-	// Loop untill we're out of blocks
-	for len(blocks) != 0 {
-		max := int(math.Min(float64(len(blocks)), 256))
-		// TODO check for parent error. When there's a parent error we should stop
-		// processing and start requesting the `block.hash` so that it's parent and
-		// grandparents can be requested and queued.
-		var i int
-		i, err = d.insertChain(blocks[:max])
-		if err != nil && core.IsParentErr(err) {
-			// Ignore the missing blocks. Handler should take care of anything that's missing.
-			glog.V(logger.Debug).Infof("Ignored block with missing parent (%d)\n", i)
-			blocks = blocks[i+1:]
-
-			continue
-		} else if err != nil {
-			// immediatly unregister the false peer but do not disconnect
-			d.UnregisterPeer(d.activePeer)
-			// Reset chain completely. This needs much, much improvement.
-			// instead: check all blocks leading down to this block false block and remove it
-			blocks = nil
-			break
-		}
-		blocks = blocks[max:]
-	}
-
-	// This will allow the GC to remove the in memory blocks
-	if len(blocks) == 0 {
-		d.queue.blocks = nil
-	} else {
-		d.queue.blocks = blocks
-	}
-	return err
 }
 
 func (d *Downloader) isFetchingHashes() bool {
@@ -470,12 +502,8 @@ func (d *Downloader) isDownloadingBlocks() bool {
 	return atomic.LoadInt32(&d.downloadingBlocks) == 1
 }
 
-func (d *Downloader) isProcessing() bool {
-	return atomic.LoadInt32(&d.processingBlocks) == 1
-}
-
 func (d *Downloader) isBusy() bool {
-	return d.isFetchingHashes() || d.isDownloadingBlocks() || d.isProcessing()
+	return d.isFetchingHashes() || d.isDownloadingBlocks()
 }
 
 func (d *Downloader) IsBusy() bool {

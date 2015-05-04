@@ -219,7 +219,7 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
-	eth.downloader = downloader.New(eth.chainManager.HasBlock, eth.chainManager.InsertChain)
+	eth.downloader = downloader.New(eth.chainManager.HasBlock, eth.chainManager.GetBlock)
 	eth.pow = ethash.New(eth.chainManager)
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
@@ -455,6 +455,7 @@ func (s *Ethereum) Stop() {
 	s.txSub.Unsubscribe() // quits txBroadcastLoop
 
 	s.protocolManager.Stop()
+	s.chainManager.Stop()
 	s.txPool.Stop()
 	s.eventMux.Stop()
 	if s.whisper != nil {
