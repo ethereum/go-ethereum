@@ -60,8 +60,9 @@ type Config struct {
 	VmDebug  bool
 	NatSpec  bool
 
-	MaxPeers int
-	Port     string
+	MaxPeers        int
+	MaxPendingPeers int
+	Port            string
 
 	// Space-separated list of discovery node URLs
 	BootNodes string
@@ -280,16 +281,17 @@ func New(config *Config) (*Ethereum, error) {
 		protocols = append(protocols, eth.whisper.Protocol())
 	}
 	eth.net = &p2p.Server{
-		PrivateKey:     netprv,
-		Name:           config.Name,
-		MaxPeers:       config.MaxPeers,
-		Protocols:      protocols,
-		NAT:            config.NAT,
-		NoDial:         !config.Dial,
-		BootstrapNodes: config.parseBootNodes(),
-		StaticNodes:    config.parseNodes(staticNodes),
-		TrustedNodes:   config.parseNodes(trustedNodes),
-		NodeDatabase:   nodeDb,
+		PrivateKey:      netprv,
+		Name:            config.Name,
+		MaxPeers:        config.MaxPeers,
+		MaxPendingPeers: config.MaxPendingPeers,
+		Protocols:       protocols,
+		NAT:             config.NAT,
+		NoDial:          !config.Dial,
+		BootstrapNodes:  config.parseBootNodes(),
+		StaticNodes:     config.parseNodes(staticNodes),
+		TrustedNodes:    config.parseNodes(trustedNodes),
+		NodeDatabase:    nodeDb,
 	}
 	if len(config.Port) > 0 {
 		eth.net.ListenAddr = ":" + config.Port
