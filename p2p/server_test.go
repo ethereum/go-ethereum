@@ -219,6 +219,94 @@ func TestServerDisconnectAtCap(t *testing.T) {
 	}
 }
 
+// Tests that static peers are (re)connected, and done so even above max peers.
+func TestServerStaticPeers(t *testing.T) {
+	defer testlog(t).detach()
+
+	// Create a test server with limited connection slots
+	started := make(chan *Peer)
+	server := &Server{
+		ListenAddr:  "127.0.0.1:0",
+		PrivateKey:  newkey(),
+		MaxPeers:    3,
+		newPeerHook: func(p *Peer) { started <- p },
+		staticCycle: time.Second,
+	}
+	if err := server.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer server.Stop()
+
+	// Fill up all the slots on the server
+	dialer := &net.Dialer{Deadline: time.Now().Add(3 * time.Second)}
+	for i := 0; i < server.MaxPeers; i++ {
+		// Establish a new connection
+		conn, err := dialer.Dial("tcp", server.ListenAddr)
+		if err != nil {
+			t.Fatalf("conn %d: dial error: %v", i, err)
+		}
+		defer conn.Close()
+
+		// Run the handshakes just like a real peer would, and wait for completion
+		key := newkey()
+		shake := &protoHandshake{Version: baseProtocolVersion, ID: discover.PubkeyID(&key.PublicKey)}
+		if _, err = setupConn(conn, key, shake, server.Self(), false); err != nil {
+			t.Fatalf("conn %d: unexpected error: %v", i, err)
+		}
+		<-started
+	}
+	// Open a TCP listener to accept static connections
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to setup listener: %v", err)
+	}
+	defer listener.Close()
+
+	connected := make(chan net.Conn)
+	go func() {
+		for i := 0; i < 3; i++ {
+			conn, err := listener.Accept()
+			if err == nil {
+				connected <- conn
+			}
+		}
+	}()
+	// Inject a static node and wait for a remote dial, then redial, then nothing
+	addr := listener.Addr().(*net.TCPAddr)
+	static := &discover.Node{
+		ID:      discover.PubkeyID(&newkey().PublicKey),
+		IP:      addr.IP,
+		TCPPort: addr.Port,
+	}
+	server.AddPeer(static)
+
+	select {
+	case conn := <-connected:
+		// Close the first connection, expect redial
+		conn.Close()
+
+	case <-time.After(2 * server.staticCycle):
+		t.Fatalf("remote dial timeout")
+	}
+
+	select {
+	case conn := <-connected:
+		// Keep the second connection, don't expect redial
+		defer conn.Close()
+
+	case <-time.After(2 * server.staticCycle):
+		t.Fatalf("remote re-dial timeout")
+	}
+
+	select {
+	case <-time.After(2 * server.staticCycle):
+		// Timeout as no dial occurred
+
+	case <-connected:
+		t.Fatalf("connected node dialed")
+	}
+}
+
 /*
 // Tests that trusted peers and can connect above max peer caps.
 func TestServerTrustedPeers(t *testing.T) {

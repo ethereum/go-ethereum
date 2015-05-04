@@ -100,11 +100,12 @@ type Server struct {
 
 	ourHandshake *protoHandshake
 
-	lock       sync.RWMutex // protects running, peers and the trust fields
-	running    bool
-	peers      map[discover.NodeID]*Peer
-	statics    map[discover.NodeID]*discover.Node // Map of currently static remote nodes
-	staticDial chan *discover.Node                // Dial request channel reserved for the static nodes
+	lock        sync.RWMutex // protects running, peers and the trust fields
+	running     bool
+	peers       map[discover.NodeID]*Peer
+	staticNodes map[discover.NodeID]*discover.Node // Map of currently maintained static remote nodes
+	staticDial  chan *discover.Node                // Dial request channel reserved for the static nodes
+	staticCycle time.Duration                      // Overrides staticPeerCheckInterval, used for testing
 
 	ntab     *discover.Table
 	listener net.Listener
@@ -144,7 +145,7 @@ func (srv *Server) AddPeer(node *discover.Node) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
 
-	srv.statics[node.ID] = node
+	srv.staticNodes[node.ID] = node
 }
 
 // Broadcast sends an RLP-encoded message to all connected peers.
@@ -207,9 +208,9 @@ func (srv *Server) Start() (err error) {
 	srv.peers = make(map[discover.NodeID]*Peer)
 
 	// Create the current trust map, and the associated dialing channel
-	srv.statics = make(map[discover.NodeID]*discover.Node)
+	srv.staticNodes = make(map[discover.NodeID]*discover.Node)
 	for _, node := range srv.StaticNodes {
-		srv.statics[node.ID] = node
+		srv.staticNodes[node.ID] = node
 	}
 	srv.staticDial = make(chan *discover.Node)
 
@@ -345,17 +346,23 @@ func (srv *Server) listenLoop() {
 // staticNodesLoop is responsible for periodically checking that static
 // connections are actually live, and requests dialing if not.
 func (srv *Server) staticNodesLoop() {
-	tick := time.Tick(staticPeerCheckInterval)
+	// Create a default maintenance ticker, but override it requested
+	cycle := staticPeerCheckInterval
+	if srv.staticCycle != 0 {
+		cycle = srv.staticCycle
+	}
+	tick := time.NewTicker(cycle)
+
 	for {
 		select {
 		case <-srv.quit:
 			return
 
-		case <-tick:
+		case <-tick.C:
 			// Collect all the non-connected static nodes
 			needed := []*discover.Node{}
 			srv.lock.RLock()
-			for id, node := range srv.statics {
+			for id, node := range srv.staticNodes {
 				if _, ok := srv.peers[id]; !ok {
 					needed = append(needed, node)
 				}
@@ -473,7 +480,7 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	srv.lock.RLock()
 	atcap := len(srv.peers) == srv.MaxPeers
 	if dest != nil {
-		if _, ok := srv.statics[dest.ID]; ok {
+		if _, ok := srv.staticNodes[dest.ID]; ok {
 			atcap = false
 		}
 	}
@@ -536,7 +543,7 @@ func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
 // in the pool, or if it's of no use.
 func (srv *Server) checkPeer(id discover.NodeID) (bool, DiscReason) {
 	// First up, figure out if the peer is static
-	_, static := srv.statics[id]
+	_, static := srv.staticNodes[id]
 
 	// Make sure the peer passes all required checks
 	switch {
