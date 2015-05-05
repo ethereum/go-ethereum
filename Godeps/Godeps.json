@@ -38,6 +38,14 @@
 			"Rev": "ccfcd0245381f0c94c68f50626665eed3c6b726a"
 		},
 		{
+			"ImportPath": "github.com/mattn/go-colorable",
+			"Rev": "043ae16291351db8465272edf465c9f388161627"
+		},
+		{
+			"ImportPath": "github.com/mattn/go-isatty",
+			"Rev": "fdbe02a1b44e75977b2690062b83cf507d70c013"
+		},
+		{
 			"ImportPath": "github.com/obscuren/qml",
 			"Rev": "c288002b52e905973b131089a8a7c761d4a2c36a"
 		},

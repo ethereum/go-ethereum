@@ -23,13 +23,13 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"runtime"
 	"strconv"
 	"time"
-
-	"path"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
@@ -41,6 +41,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"github.com/peterh/liner"
 )
 import _ "net/http/pprof"
@@ -301,6 +303,14 @@ func run(ctx *cli.Context) {
 }
 
 func console(ctx *cli.Context) {
+	// Wrap the standard output with a colorified stream (windows)
+	if isatty.IsTerminal(os.Stdout.Fd()) {
+		if pr, pw, err := os.Pipe(); err == nil {
+			go io.Copy(colorable.NewColorableStdout(), pr)
+			os.Stdout = pw
+		}
+	}
+
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
