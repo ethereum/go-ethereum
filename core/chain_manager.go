@@ -296,7 +296,7 @@ func (bc *ChainManager) Reset() {
 	}
 
 	// Prepare the genesis block
-	bc.write(bc.genesisBlock)
+	bc.writeBlock(bc.genesisBlock)
 	bc.insert(bc.genesisBlock)
 	bc.currentBlock = bc.genesisBlock
 	bc.makeCache()
@@ -318,7 +318,7 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 
 	// Prepare the genesis block
 	bc.genesisBlock = gb
-	bc.write(bc.genesisBlock)
+	bc.writeBlock(bc.genesisBlock)
 	bc.insert(bc.genesisBlock)
 	bc.currentBlock = bc.genesisBlock
 	bc.makeCache()
@@ -347,16 +347,19 @@ func (self *ChainManager) Export(w io.Writer) error {
 	return nil
 }
 
-func (bc *ChainManager) insert(block *types.Block) {
+func (bc *ChainManager) writeBlockHash(block *types.Block) {
 	key := append(blockNumPre, block.Number().Bytes()...)
 	bc.blockDb.Put(key, block.Hash().Bytes())
+}
 
+func (bc *ChainManager) insert(block *types.Block) {
+	bc.writeBlockHash(block)
 	bc.blockDb.Put([]byte("LastBlock"), block.Hash().Bytes())
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
 }
 
-func (bc *ChainManager) write(block *types.Block) {
+func (bc *ChainManager) writeBlock(block *types.Block) {
 	enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
 	key := append(blockHashPre, block.Hash().Bytes()...)
 	bc.blockDb.Put(key, enc)
@@ -544,12 +547,14 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			cblock := self.currentBlock
 			// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
 			// not in the canonical chain.
-			self.write(block)
+			self.writeBlockHash(block)
+			self.writeBlock(block)
 			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
 			if block.Td.Cmp(self.td) > 0 {
 				// Check for chain forks. If H(block.num - 1) != block.parent, we're on a fork and need to do some merging
-				if previous := self.getBlockByNumber(block.NumberU64() - 1); previous.Hash() != block.ParentHash() {
+				previous := self.getBlockByNumber(block.NumberU64() - 1)
+				if previous.Hash() != block.ParentHash() {
 					chash := cblock.Hash()
 					hash := block.Hash()
 

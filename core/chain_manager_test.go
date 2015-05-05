@@ -86,7 +86,7 @@ func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 
 		bman.bc.mu.Lock()
 		{
-			bman.bc.write(block)
+			bman.bc.writeBlock(block)
 		}
 		bman.bc.mu.Unlock()
 	}
@@ -342,7 +342,7 @@ func TestGetAncestors(t *testing.T) {
 	}
 
 	for _, block := range chain {
-		chainMan.write(block)
+		chainMan.writeBlock(block)
 	}
 
 	ancestors := chainMan.GetAncestors(chain[len(chain)-1], 4)
