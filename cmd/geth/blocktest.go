@@ -113,7 +113,6 @@ func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, er
 		return ethereum, fmt.Errorf("Block Test load error: %v", err)
 	}
 
-	fmt.Println("chain loaded")
 	if err := test.ValidatePostState(statedb); err != nil {
 		return ethereum, fmt.Errorf("post state validation failed: %v", err)
 	}
