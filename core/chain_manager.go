@@ -52,10 +52,7 @@ func CalculateTD(block, parent *types.Block) *big.Int {
 	if parent == nil {
 		return block.Difficulty()
 	}
-
-	td := new(big.Int).Add(parent.Td, block.Header().Difficulty)
-
-	return td
+	return new(big.Int).Add(parent.Td, block.Difficulty())
 }
 
 func CalcGasLimit(parent *types.Block) *big.Int {
