@@ -137,10 +137,10 @@ func (js *jsre) resend(call otto.FunctionCall) otto.Value {
 	if tx, ok := v.(*tx); ok {
 		gl, gp := tx.GasLimit, tx.GasPrice
 		if len(call.ArgumentList) > 1 {
-			gl = call.Argument(1).String()
+			gp = call.Argument(1).String()
 		}
 		if len(call.ArgumentList) > 2 {
-			gp = call.Argument(2).String()
+			gl = call.Argument(2).String()
 		}
 
 		ret, err := js.xeth.Transact(tx.From, tx.To, tx.Nonce, tx.Value, gl, gp, tx.Data)
