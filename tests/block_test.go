@@ -13,42 +13,37 @@ import (
 
 // TODO: refactor test setup & execution to better align with vm and tx tests
 func TestBcValidBlockTests(t *testing.T) {
-	t.Skip("Skipped in lieu of performance fixes.")
 	runBlockTestsInFile("files/BlockTests/bcValidBlockTest.json", []string{}, t)
 }
 
 func TestBcUncleTests(t *testing.T) {
-	t.Skip("Skipped in lieu of performance fixes.")
+	t.Skip("Skipped until https://github.com/ethereum/go-ethereum/pull/857 is merged.")
 	runBlockTestsInFile("files/BlockTests/bcUncleTest.json", []string{}, t)
 }
 
 func TestBcUncleHeaderValidityTests(t *testing.T) {
-	t.Skip("Skipped in lieu of performance fixes.")
+	t.Skip("Skipped until https://github.com/ethereum/go-ethereum/pull/857 is merged.")
 	runBlockTestsInFile("files/BlockTests/bcUncleHeaderValiditiy.json", []string{}, t)
 }
 
 func TestBcInvalidHeaderTests(t *testing.T) {
-	t.Skip("Skipped in lieu of performance fixes.")
 	runBlockTestsInFile("files/BlockTests/bcInvalidHeaderTest.json", []string{}, t)
 }
 
 func TestBcInvalidRLPTests(t *testing.T) {
-	t.Skip("Skipped in lieu of performance fixes.")
 	runBlockTestsInFile("files/BlockTests/bcInvalidRLPTest.json", []string{}, t)
 }
 
 func TestBcJSAPITests(t *testing.T) {
-	t.Skip("Skipped in lieu of performance fixes.")
 	runBlockTestsInFile("files/BlockTests/bcJS_API_Test.json", []string{}, t)
 }
 
 func TestBcRPCAPITests(t *testing.T) {
-	t.Skip("Skipped in lieu of performance fixes.")
+	t.Skip("Skipped until https://github.com/ethereum/go-ethereum/pull/857 is merged.")
 	runBlockTestsInFile("files/BlockTests/bcRPC_API_Test.json", []string{}, t)
 }
 
 func TestBcForkBlockTests(t *testing.T) {
-	t.Skip("Skipped in lieu of performance fixes.")
 	runBlockTestsInFile("files/BlockTests/bcForkBlockTest.json", []string{}, t)
 }
 
@@ -71,7 +66,6 @@ func runBlockTestsInFile(filepath string, snafus []string, t *testing.T) {
 }
 
 func runBlockTest(name string, test *BlockTest, t *testing.T) {
-	t.Log("Running test: ", name)
 	cfg := testEthConfig()
 	ethereum, err := eth.New(cfg)
 	if err != nil {
@@ -100,7 +94,7 @@ func runBlockTest(name string, test *BlockTest, t *testing.T) {
 	if err = test.ValidatePostState(statedb); err != nil {
 		t.Fatal("post state validation failed: %v", err)
 	}
-	t.Log("Test passed:  ", name)
+	t.Log("Test passed: ", name)
 }
 
 func testEthConfig() *eth.Config {
