@@ -74,10 +74,10 @@ type ChainManager struct {
 	processor    types.BlockProcessor
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
-	// Last known total difficulty
-	mu   sync.RWMutex
-	tsmu sync.RWMutex
+	mu           sync.RWMutex
+	tsmu         sync.RWMutex
 
+	// Last known total difficulty
 	td              *big.Int
 	currentBlock    *types.Block
 	lastBlockHash   common.Hash
@@ -458,26 +458,6 @@ func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
 	bc.td = td
 }
 
-func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
-	parent := self.GetBlock(block.Header().ParentHash)
-	if parent == nil {
-		return nil, fmt.Errorf("Unable to calculate total diff without known parent %x", block.Header().ParentHash)
-	}
-
-	parentTd := parent.Td
-
-	uncleDiff := new(big.Int)
-	for _, uncle := range block.Uncles() {
-		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
-	}
-
-	td := new(big.Int)
-	td = td.Add(parentTd, uncleDiff)
-	td = td.Add(td, block.Header().Difficulty)
-
-	return td, nil
-}
-
 func (bc *ChainManager) Stop() {
 	close(bc.quit)
 
@@ -534,7 +514,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			}
 
 			block.Td = new(big.Int)
-			// Do not penelise on future block. We'll need a block queue eventually that will queue
+			// Do not penalize on future block. We'll need a block queue eventually that will queue
 			// future block for future use
 			if err == BlockFutureErr {
 				block.SetQueued(true)
