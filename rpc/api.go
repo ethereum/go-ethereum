@@ -173,7 +173,13 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return fmt.Errorf("Transaction not confirmed")
 		}
 
-		v, err := api.xeth().Transact(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+		// nonce may be nil ("guess" mode)
+		var nonce string
+		if args.Nonce != nil {
+			nonce = args.Nonce.String()
+		}
+
+		v, err := api.xeth().Transact(args.From, args.To, nonce, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 		if err != nil {
 			return err
 		}

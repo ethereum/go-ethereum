@@ -648,7 +648,7 @@ func (self *XEth) ConfirmTransaction(tx string) bool {
 
 }
 
-func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
+func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 	var (
 		from             = common.HexToAddress(fromStr)
 		to               = common.HexToAddress(toStr)
@@ -704,7 +704,13 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	}
 
 	state := self.backend.ChainManager().TxState()
-	nonce := state.NewNonce(from)
+
+	var nonce uint64
+	if len(nonceStr) != 0 {
+		nonce = common.Big(nonceStr).Uint64()
+	} else {
+		nonce = state.NewNonce(from)
+	}
 	tx.SetNonce(nonce)
 
 	if err := self.sign(tx, from, false); err != nil {
