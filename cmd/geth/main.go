@@ -27,8 +27,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/codegangsta/cli"
@@ -601,12 +603,32 @@ func dump(ctx *cli.Context) {
 }
 
 func makedag(ctx *cli.Context) {
-	chain, _, _ := utils.GetChain(ctx)
-	pow := ethash.New(chain)
-	fmt.Println("making cache")
-	pow.UpdateCache(0, true)
-	fmt.Println("making DAG")
-	pow.UpdateDAG()
+	args := ctx.Args()
+	wrongArgs := func() {
+		utils.Fatalf(`Usage: geth makedag <block number> <outputdir>`)
+	}
+	switch {
+	case len(args) == 2:
+		blockNum, err := strconv.ParseUint(args[0], 0, 64)
+		dir := args[1]
+		if err != nil {
+			wrongArgs()
+		} else {
+			dir = filepath.Clean(dir)
+			// seems to require a trailing slash
+			if !strings.HasSuffix(dir, "/") {
+				dir = dir + "/"
+			}
+			_, err = ioutil.ReadDir(dir)
+			if err != nil {
+				utils.Fatalf("Can't find dir")
+			}
+			fmt.Println("making DAG, this could take awhile...")
+			ethash.MakeDAG(blockNum, dir)
+		}
+	default:
+		wrongArgs()
+	}
 }
 
 func version(c *cli.Context) {
