@@ -235,7 +235,7 @@ func (self *TxPool) RemoveTransactions(txs types.Transactions) {
 	defer self.mu.Unlock()
 
 	for _, tx := range txs {
-		delete(self.txs, tx.Hash())
+		self.removeTx(tx.Hash())
 	}
 }
 
