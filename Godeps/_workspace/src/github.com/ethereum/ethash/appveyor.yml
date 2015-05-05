@@ -1,0 +1,43 @@
+version: 1.0.0.{build}
+
+environment:
+    BOOST_ROOT: "c:/projects/ethash/deps/boost"
+
+branches:
+    only:
+        - master
+        - develop
+
+os: Windows Server 2012 R2
+
+clone_folder: c:\projects\ethash
+
+#platform: Any CPU
+#configuration: Debug
+
+install:
+    # by default, all script lines are interpreted as batch
+
+# scripts to run before build
+before_build:
+    - echo "Downloading boost..."
+    - mkdir c:\projects\ethash\deps
+    - cd c:\projects\ethash\deps
+    - curl -O https://build.ethdev.com/builds/windows-precompiled/boost.tar.gz
+    - echo "Unzipping boost..."
+    - 7z x boost.tar.gz > nul
+    - 7z x boost.tar > nul
+    - ls
+    - echo "Running cmake..."
+    - cd c:\projects\ethash
+    - cmake .
+
+build:
+    project: ALL_BUILD.vcxproj      # path to Visual Studio solution or project
+
+after_build:
+    - echo "Running tests..."
+    - cd c:\projects\ethash\test\c\Debug
+    - Test.exe
+    - echo "Finished!"
+

@@ -1,14 +1,23 @@
-# making our travis.yml play well with C++11 by obtaining g++4.8
-# Taken from this file:
-# https://github.com/beark/ftl/blob/master/.travis.yml
+language: go
+go:
+  - 1.4.2
+
 before_install:
+  # for g++4.8 and C++11
   - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+
+  # Set up go-ethereum
   - sudo apt-get update -y -qq
+  - sudo apt-get install -yqq libgmp3-dev 
+  - git clone --depth=10 https://github.com/ethereum/go-ethereum ${GOPATH}/src/github.com/ethereum/go-ethereum
+  # use canned dependencies from the go-ethereum repository
+  - export GOPATH=$GOPATH:$GOPATH/src/github.com/ethereum/go-ethereum/Godeps/_workspace/
+  - echo $GOPATH
 
 install:
+  # need to explicitly request version 1.48 since by default we get 1.46 which does not work with C++11
   - sudo apt-get install -qq --yes --force-yes g++-4.8
   - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 50
-  # need to explicitly request version 1.48 since by default we get 1.46 which does not work with C++11
-  - sudo apt-get install -qq wget cmake bash libboost-test1.48-dev libboost-system1.48-dev libboost-filesystem1.48-dev nodejs python-pip python-dev
+  - sudo apt-get install -qq wget cmake bash libboost-test1.48-dev libboost-system1.48-dev libboost-filesystem1.48-dev nodejs python-pip python-dev valgrind
   - sudo pip install virtualenv -q
 script: "./test/test.sh"
