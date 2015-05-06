@@ -103,6 +103,7 @@ func (js *jsre) apiBindings() {
 	t, _ := js.re.Get("jeth")
 	jethObj := t.Object()
 	jethObj.Set("send", jeth.Send)
+	jethObj.Set("sendAsync", jeth.Send)
 
 	err := js.re.Compile("bignumber.js", re.BigNumber_JS)
 	if err != nil {
@@ -172,8 +173,10 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 
 func (self *jsre) exec(filename string) error {
 	if err := self.re.Exec(filename); err != nil {
+		self.re.Stop(false)
 		return fmt.Errorf("Javascript Error: %v", err)
 	}
+	self.re.Stop(true)
 	return nil
 }
 
@@ -201,6 +204,7 @@ func (self *jsre) interactive() {
 	if self.atexit != nil {
 		self.atexit()
 	}
+	self.re.Stop(false)
 }
 
 func (self *jsre) withHistory(op func(*os.File)) {
