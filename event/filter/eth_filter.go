@@ -88,8 +88,8 @@ out:
 			case core.TxPreEvent:
 				self.filterMu.RLock()
 				for _, filter := range self.filters {
-					if filter.PendingCallback != nil {
-						filter.PendingCallback(event.Tx)
+					if filter.TransactionCallback != nil {
+						filter.TransactionCallback(event.Tx)
 					}
 				}
 				self.filterMu.RUnlock()

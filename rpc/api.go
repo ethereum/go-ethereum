@@ -322,14 +322,13 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		id := api.xeth().RegisterFilter(args.Earliest, args.Latest, args.Skip, args.Max, args.Address, args.Topics)
+		id := api.xeth().NewLogFilter(args.Earliest, args.Latest, args.Skip, args.Max, args.Address, args.Topics)
 		*reply = newHexNum(big.NewInt(int64(id)).Bytes())
+
 	case "eth_newBlockFilter":
-		args := new(FilterStringArgs)
-		if err := json.Unmarshal(req.Params, &args); err != nil {
-			return err
-		}
-		*reply = newHexNum(api.xeth().NewFilterString(args.Word))
+		*reply = newHexNum(api.xeth().NewBlockFilter())
+	case "eth_transactionFilter":
+		*reply = newHexNum(api.xeth().NewTransactionFilter())
 	case "eth_uninstallFilter":
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -341,7 +340,17 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = NewLogsRes(api.xeth().FilterChanged(args.Id))
+
+		switch api.xeth().GetFilterType(args.Id) {
+		case xeth.BlockFilterTy:
+			*reply = NewHashesRes(api.xeth().BlockFilterChanged(args.Id))
+		case xeth.TransactionFilterTy:
+			*reply = NewHashesRes(api.xeth().TransactionFilterChanged(args.Id))
+		case xeth.LogFilterTy:
+			*reply = NewLogsRes(api.xeth().LogFilterChanged(args.Id))
+		default:
+			*reply = []string{} // reply empty string slice
+		}
 	case "eth_getFilterLogs":
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
