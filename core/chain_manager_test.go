@@ -248,8 +248,8 @@ func TestChainForkWithWrongBlockNum(t *testing.T) {
 
 	chain1 := makeChainWithDiff(genesis, []int{1, 2, 3}, 10)
 	chain2 := makeChainWithDiff(genesis, []int{4, 5}, 11)
-	chain2[0].Header().Number = big.NewInt(int64(4))
-	chain2[1].Header().Number = big.NewInt(int64(5))
+	chain2[0].Header().Number = big.NewInt(int64(6))
+	chain2[1].Header().Number = big.NewInt(int64(7))
 
 	_, _ = bc.InsertChain(chain1)
 	_, err := bc.InsertChain(chain2)
