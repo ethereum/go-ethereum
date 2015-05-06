@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/robertkrimen/otto"
+	"gopkg.in/fatih/set.v0"
 )
 
 /*
@@ -25,7 +26,7 @@ node admin bindings
 func (js *jsre) adminBindings() {
 	ethO, _ := js.re.Get("eth")
 	eth := ethO.Object()
-	eth.Set("transactions", js.transactions)
+	eth.Set("pendingTransactions", js.pendingTransactions)
 	eth.Set("resend", js.resend)
 
 	js.re.Set("admin", struct{}{})
@@ -80,43 +81,30 @@ func (js *jsre) getBlock(call otto.FunctionCall) (*types.Block, error) {
 	return nil, errors.New("requires block number or block hash as argument")
 }
 
-type tx struct {
-	tx *types.Transaction
-
-	To       string
-	From     string
-	Nonce    string
-	Value    string
-	Data     string
-	GasLimit string
-	GasPrice string
-}
-
-func newTx(t *types.Transaction) *tx {
-	from, _ := t.From()
-	var to string
-	if t := t.To(); t != nil {
-		to = t.Hex()
-	}
-
-	return &tx{
-		tx:       t,
-		To:       to,
-		From:     from.Hex(),
-		Value:    t.Amount.String(),
-		Nonce:    strconv.Itoa(int(t.Nonce())),
-		Data:     "0x" + common.Bytes2Hex(t.Data()),
-		GasLimit: t.GasLimit.String(),
-		GasPrice: t.GasPrice().String(),
-	}
-}
-
-func (js *jsre) transactions(call otto.FunctionCall) otto.Value {
+func (js *jsre) pendingTransactions(call otto.FunctionCall) otto.Value {
 	txs := js.ethereum.TxPool().GetTransactions()
 
-	ltxs := make([]*tx, len(txs))
-	for i, tx := range txs {
-		ltxs[i] = newTx(tx)
+	// grab the accounts from the account manager. This will help with determening which
+	// transactions should be returned.
+	accounts, err := js.ethereum.AccountManager().Accounts()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	// Add the accouns to a new set
+	accountSet := set.New()
+	for _, account := range accounts {
+		accountSet.Add(common.BytesToAddress(account.Address))
+	}
+
+	//ltxs := make([]*tx, len(txs))
+	var ltxs []*tx
+	for _, tx := range txs {
+		// no need to check err
+		if from, _ := tx.From(); accountSet.Has(from) {
+			ltxs = append(ltxs, newTx(tx))
+		}
 	}
 
 	return js.re.ToVal(ltxs)
@@ -503,4 +491,36 @@ func (js *jsre) dumpBlock(call otto.FunctionCall) otto.Value {
 	dump := statedb.RawDump()
 	return js.re.ToVal(dump)
 
+}
+
+// internal transaction type which will allow us to resend transactions  using `eth.resend`
+type tx struct {
+	tx *types.Transaction
+
+	To       string
+	From     string
+	Nonce    string
+	Value    string
+	Data     string
+	GasLimit string
+	GasPrice string
+}
+
+func newTx(t *types.Transaction) *tx {
+	from, _ := t.From()
+	var to string
+	if t := t.To(); t != nil {
+		to = t.Hex()
+	}
+
+	return &tx{
+		tx:       t,
+		To:       to,
+		From:     from.Hex(),
+		Value:    t.Amount.String(),
+		Nonce:    strconv.Itoa(int(t.Nonce())),
+		Data:     "0x" + common.Bytes2Hex(t.Data()),
+		GasLimit: t.GasLimit.String(),
+		GasPrice: t.GasPrice().String(),
+	}
 }
