@@ -128,7 +128,7 @@ func TestDownload(t *testing.T) {
 		t.Error("download error", err)
 	}
 
-	inqueue := len(tester.downloader.queue.blocks)
+	inqueue := len(tester.downloader.queue.blockCache)
 	if inqueue != targetBlocks {
 		t.Error("expected", targetBlocks, "have", inqueue)
 	}
@@ -151,7 +151,7 @@ func TestMissing(t *testing.T) {
 		t.Error("download error", err)
 	}
 
-	inqueue := len(tester.downloader.queue.blocks)
+	inqueue := len(tester.downloader.queue.blockCache)
 	if inqueue != targetBlocks {
 		t.Error("expected", targetBlocks, "have", inqueue)
 	}

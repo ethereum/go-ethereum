@@ -78,7 +78,7 @@ func newPeer(id string, hash common.Hash, getHashes hashFetcherFn, getBlocks blo
 }
 
 // fetch a chunk using the peer
-func (p *peer) fetch(chunk *chunk) error {
+func (p *peer) fetch(request *fetchRequest) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -88,13 +88,12 @@ func (p *peer) fetch(chunk *chunk) error {
 
 	// set working state
 	p.state = workingState
-	// convert the set to a fetchable slice
-	hashes, i := make([]common.Hash, chunk.hashes.Size()), 0
-	chunk.hashes.Each(func(v interface{}) bool {
-		hashes[i] = v.(common.Hash)
-		i++
-		return true
-	})
+
+	// Convert the hash set to a fetchable slice
+	hashes := make([]common.Hash, 0, len(request.Hashes))
+	for hash, _ := range request.Hashes {
+		hashes = append(hashes, hash)
+	}
 	p.getBlocks(hashes)
 
 	return nil

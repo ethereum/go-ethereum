@@ -99,6 +99,10 @@
 			"Rev": "27c40922c40b43fe04554d8223a402af3ea333f3"
 		},
 		{
+			"ImportPath": "gopkg.in/karalabe/cookiejar.v2/collections/prque",
+			"Rev": "cf5d8079df7c4501217638e1e3a6e43f94822548"
+		},
+		{
 			"ImportPath": "gopkg.in/qml.v1/cdata",
 			"Rev": "1116cb9cd8dee23f8d444ded354eb53122739f99"
 		},
