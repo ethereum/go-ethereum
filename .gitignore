@@ -25,6 +25,7 @@ Godeps/_workspace/bin
 
 deploy/osx/Mist.app
 deploy/osx/Mist\ Installer.dmg
+cmd/mist/assets/ext/ethereum.js/
 
 # used by the Makefile
 /build/_workspace/
