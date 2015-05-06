@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -167,6 +168,7 @@ func (db *nodeDB) node(id NodeID) *Node {
 		glog.V(logger.Warn).Infof("failed to decode node RLP: %v", err)
 		return nil
 	}
+	node.sha = crypto.Sha3Hash(node.ID[:])
 	return node
 }
 

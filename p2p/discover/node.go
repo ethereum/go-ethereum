@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"math/rand"
 	"net"
@@ -14,51 +13,55 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const nodeIDBits = 512
 
 // Node represents a host on the network.
 type Node struct {
-	ID NodeID
-	IP net.IP
+	IP       net.IP // len 4 for IPv4 or 16 for IPv6
+	UDP, TCP uint16 // port numbers
+	ID       NodeID // the node's public key
 
-	DiscPort int // UDP listening port for discovery protocol
-	TCPPort  int // TCP listening port for RLPx
+	// This is a cached copy of sha3(ID) which is used for node
+	// distance calculations. This is part of Node in order to make it
+	// possible to write tests that need a node at a certain distance.
+	// In those tests, the content of sha will not actually correspond
+	// with ID.
+	sha common.Hash
 }
 
-func newNode(id NodeID, addr *net.UDPAddr) *Node {
+func newNode(id NodeID, ip net.IP, udpPort, tcpPort uint16) *Node {
+	if ipv4 := ip.To4(); ipv4 != nil {
+		ip = ipv4
+	}
 	return &Node{
-		ID:       id,
-		IP:       addr.IP,
-		DiscPort: addr.Port,
-		TCPPort:  addr.Port,
+		IP:  ip,
+		UDP: udpPort,
+		TCP: tcpPort,
+		ID:  id,
+		sha: crypto.Sha3Hash(id[:]),
 	}
 }
 
-func (n *Node) isValid() bool {
-	// TODO: don't accept localhost, LAN addresses from internet hosts
-	return !n.IP.IsMulticast() && !n.IP.IsUnspecified() && n.TCPPort != 0 && n.DiscPort != 0
-}
-
 func (n *Node) addr() *net.UDPAddr {
-	return &net.UDPAddr{IP: n.IP, Port: n.DiscPort}
+	return &net.UDPAddr{IP: n.IP, Port: int(n.UDP)}
 }
 
 // The string representation of a Node is a URL.
 // Please see ParseNode for a description of the format.
 func (n *Node) String() string {
-	addr := net.TCPAddr{IP: n.IP, Port: n.TCPPort}
+	addr := net.TCPAddr{IP: n.IP, Port: int(n.TCP)}
 	u := url.URL{
 		Scheme: "enode",
 		User:   url.User(fmt.Sprintf("%x", n.ID[:])),
 		Host:   addr.String(),
 	}
-	if n.DiscPort != n.TCPPort {
-		u.RawQuery = "discport=" + strconv.Itoa(n.DiscPort)
+	if n.UDP != n.TCP {
+		u.RawQuery = "discport=" + strconv.Itoa(int(n.UDP))
 	}
 	return u.String()
 }
@@ -80,36 +83,47 @@ func (n *Node) String() string {
 //
 //    enode://<hex node id>@10.3.58.6:30303?discport=30301
 func ParseNode(rawurl string) (*Node, error) {
-	var n Node
+	var (
+		id               NodeID
+		ip               net.IP
+		tcpPort, udpPort uint64
+	)
 	u, err := url.Parse(rawurl)
 	if u.Scheme != "enode" {
 		return nil, errors.New("invalid URL scheme, want \"enode\"")
 	}
+	// Parse the Node ID from the user portion.
 	if u.User == nil {
 		return nil, errors.New("does not contain node ID")
 	}
-	if n.ID, err = HexID(u.User.String()); err != nil {
+	if id, err = HexID(u.User.String()); err != nil {
 		return nil, fmt.Errorf("invalid node ID (%v)", err)
 	}
-	ip, port, err := net.SplitHostPort(u.Host)
+	// Parse the IP address.
+	host, port, err := net.SplitHostPort(u.Host)
 	if err != nil {
 		return nil, fmt.Errorf("invalid host: %v", err)
 	}
-	if n.IP = net.ParseIP(ip); n.IP == nil {
+	if ip = net.ParseIP(host); ip == nil {
 		return nil, errors.New("invalid IP address")
 	}
-	if n.TCPPort, err = strconv.Atoi(port); err != nil {
+	// Ensure the IP is 4 bytes long for IPv4 addresses.
+	if ipv4 := ip.To4(); ipv4 != nil {
+		ip = ipv4
+	}
+	// Parse the port numbers.
+	if tcpPort, err = strconv.ParseUint(port, 10, 16); err != nil {
 		return nil, errors.New("invalid port")
 	}
+	udpPort = tcpPort
 	qv := u.Query()
-	if qv.Get("discport") == "" {
-		n.DiscPort = n.TCPPort
-	} else {
-		if n.DiscPort, err = strconv.Atoi(qv.Get("discport")); err != nil {
+	if qv.Get("discport") != "" {
+		udpPort, err = strconv.ParseUint(qv.Get("discport"), 10, 16)
+		if err != nil {
 			return nil, errors.New("invalid discport in query")
 		}
 	}
-	return &n, nil
+	return newNode(id, ip, uint16(udpPort), uint16(tcpPort)), nil
 }
 
 // MustParseNode parses a node URL. It panics if the URL is not valid.
@@ -119,22 +133,6 @@ func MustParseNode(rawurl string) *Node {
 		panic("invalid node URL: " + err.Error())
 	}
 	return n
-}
-
-func (n Node) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, rpcNode{IP: n.IP.String(), Port: uint16(n.TCPPort), ID: n.ID})
-}
-func (n *Node) DecodeRLP(s *rlp.Stream) (err error) {
-	var ext rpcNode
-	if err = s.Decode(&ext); err == nil {
-		n.TCPPort = int(ext.Port)
-		n.DiscPort = int(ext.Port)
-		n.ID = ext.ID
-		if n.IP = net.ParseIP(ext.IP); n.IP == nil {
-			return errors.New("invalid IP string")
-		}
-	}
-	return err
 }
 
 // NodeID is a unique identifier for each node.
@@ -221,7 +219,7 @@ func recoverNodeID(hash, sig []byte) (id NodeID, err error) {
 // distcmp compares the distances a->target and b->target.
 // Returns -1 if a is closer to target, 1 if b is closer to target
 // and 0 if they are equal.
-func distcmp(target, a, b NodeID) int {
+func distcmp(target, a, b common.Hash) int {
 	for i := range target {
 		da := a[i] ^ target[i]
 		db := b[i] ^ target[i]
@@ -271,7 +269,7 @@ var lzcount = [256]int{
 }
 
 // logdist returns the logarithmic distance between a and b, log2(a ^ b).
-func logdist(a, b NodeID) int {
+func logdist(a, b common.Hash) int {
 	lz := 0
 	for i := range a {
 		x := a[i] ^ b[i]
@@ -285,8 +283,8 @@ func logdist(a, b NodeID) int {
 	return len(a)*8 - lz
 }
 
-// randomID returns a random NodeID such that logdist(a, b) == n
-func randomID(a NodeID, n int) (b NodeID) {
+// hashAtDistance returns a random hash such that logdist(a, b) == n
+func hashAtDistance(a common.Hash, n int) (b common.Hash) {
 	if n == 0 {
 		return a
 	}

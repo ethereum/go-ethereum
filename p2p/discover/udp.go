@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const Version = 3
+const Version = 4
 
 // Errors
 var (
@@ -49,36 +49,67 @@ const (
 // RPC request structures
 type (
 	ping struct {
-		Version    uint   // must match Version
-		IP         string // our IP
-		Port       uint16 // our port
+		Version    uint
+		From, To   rpcEndpoint
 		Expiration uint64
 	}
 
-	// reply to Ping
+	// pong is the reply to ping.
 	pong struct {
-		ReplyTok   []byte
-		Expiration uint64
+		// This field should mirror the UDP envelope address
+		// of the ping packet, which provides a way to discover the
+		// the external address (after NAT).
+		To rpcEndpoint
+
+		ReplyTok   []byte // This contains the hash of the ping packet.
+		Expiration uint64 // Absolute timestamp at which the packet becomes invalid.
 	}
 
+	// findnode is a query for nodes close to the given target.
 	findnode struct {
-		// Id to look up. The responding node will send back nodes
-		// closest to the target.
-		Target     NodeID
+		Target     NodeID // doesn't need to be an actual public key
 		Expiration uint64
 	}
 
 	// reply to findnode
 	neighbors struct {
-		Nodes      []*Node
+		Nodes      []rpcNode
 		Expiration uint64
+	}
+
+	rpcNode struct {
+		IP  net.IP // len 4 for IPv4 or 16 for IPv6
+		UDP uint16 // for discovery protocol
+		TCP uint16 // for RLPx protocol
+		ID  NodeID
+	}
+
+	rpcEndpoint struct {
+		IP  net.IP // len 4 for IPv4 or 16 for IPv6
+		UDP uint16 // for discovery protocol
+		TCP uint16 // for RLPx protocol
 	}
 )
 
-type rpcNode struct {
-	IP   string
-	Port uint16
-	ID   NodeID
+func makeEndpoint(addr *net.UDPAddr, tcpPort uint16) rpcEndpoint {
+	ip := addr.IP.To4()
+	if ip == nil {
+		ip = addr.IP.To16()
+	}
+	return rpcEndpoint{IP: ip, UDP: uint16(addr.Port), TCP: tcpPort}
+}
+
+func nodeFromRPC(rn rpcNode) (n *Node, valid bool) {
+	// TODO: don't accept localhost, LAN addresses from internet hosts
+	// TODO: check public key is on secp256k1 curve
+	if rn.IP.IsMulticast() || rn.IP.IsUnspecified() || rn.UDP == 0 {
+		return nil, false
+	}
+	return newNode(rn.ID, rn.IP, rn.UDP, rn.TCP), true
+}
+
+func nodeToRPC(n *Node) rpcNode {
+	return rpcNode{ID: n.ID, IP: n.IP, UDP: n.UDP, TCP: n.TCP}
 }
 
 type packet interface {
@@ -94,8 +125,9 @@ type conn interface {
 
 // udp implements the RPC protocol.
 type udp struct {
-	conn conn
-	priv *ecdsa.PrivateKey
+	conn        conn
+	priv        *ecdsa.PrivateKey
+	ourEndpoint rpcEndpoint
 
 	addpending chan *pending
 	gotreply   chan reply
@@ -176,6 +208,8 @@ func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, nodeDBPath strin
 			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
 		}
 	}
+	// TODO: separate TCP port
+	udp.ourEndpoint = makeEndpoint(realaddr, uint16(realaddr.Port))
 	udp.Table = newTable(udp, PubkeyID(&priv.PublicKey), realaddr, nodeDBPath)
 	go udp.loop()
 	go udp.readLoop()
@@ -194,8 +228,8 @@ func (t *udp) ping(toid NodeID, toaddr *net.UDPAddr) error {
 	errc := t.pending(toid, pongPacket, func(interface{}) bool { return true })
 	t.send(toaddr, pingPacket, ping{
 		Version:    Version,
-		IP:         t.self.IP.String(),
-		Port:       uint16(t.self.TCPPort),
+		From:       t.ourEndpoint,
+		To:         makeEndpoint(toaddr, 0), // TODO: maybe use known TCP port from DB
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
 	return <-errc
@@ -212,9 +246,9 @@ func (t *udp) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node
 	nreceived := 0
 	errc := t.pending(toid, neighborsPacket, func(r interface{}) bool {
 		reply := r.(*neighbors)
-		for _, n := range reply.Nodes {
+		for _, rn := range reply.Nodes {
 			nreceived++
-			if n.isValid() {
+			if n, valid := nodeFromRPC(rn); valid {
 				nodes = append(nodes, n)
 			}
 		}
@@ -374,17 +408,22 @@ func (t *udp) readLoop() {
 		if err != nil {
 			return
 		}
-		packet, fromID, hash, err := decodePacket(buf[:nbytes])
-		if err != nil {
-			glog.V(logger.Debug).Infof("Bad packet from %v: %v\n", from, err)
-			continue
-		}
-		status := "ok"
-		if err := packet.handle(t, from, fromID, hash); err != nil {
-			status = err.Error()
-		}
-		glog.V(logger.Detail).Infof("<<< %v %T: %s\n", from, packet, status)
+		t.handlePacket(from, buf[:nbytes])
 	}
+}
+
+func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
+	packet, fromID, hash, err := decodePacket(buf)
+	if err != nil {
+		glog.V(logger.Debug).Infof("Bad packet from %v: %v\n", from, err)
+		return err
+	}
+	status := "ok"
+	if err = packet.handle(t, from, fromID, hash); err != nil {
+		status = err.Error()
+	}
+	glog.V(logger.Detail).Infof("<<< %v %T: %s\n", from, packet, status)
+	return err
 }
 
 func decodePacket(buf []byte) (packet, NodeID, []byte, error) {
@@ -425,12 +464,13 @@ func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 		return errBadVersion
 	}
 	t.send(from, pongPacket, pong{
+		To:         makeEndpoint(from, req.From.TCP),
 		ReplyTok:   mac,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
 	if !t.handleReply(fromID, pingPacket, req) {
 		// Note: we're ignoring the provided IP address right now
-		go t.bond(true, fromID, from, req.Port)
+		go t.bond(true, fromID, from, req.From.TCP)
 	}
 	return nil
 }
@@ -459,12 +499,18 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte
 		// (which is a much bigger packet than findnode) to the victim.
 		return errUnknownNode
 	}
+	target := crypto.Sha3Hash(req.Target[:])
 	t.mutex.Lock()
-	closest := t.closest(req.Target, bucketSize).entries
+	closest := t.closest(target, bucketSize).entries
 	t.mutex.Unlock()
 
+	// TODO: this conversion could use a cached version of the slice
+	closestrpc := make([]rpcNode, len(closest))
+	for i, n := range closest {
+		closestrpc[i] = nodeToRPC(n)
+	}
 	t.send(from, neighborsPacket, neighbors{
-		Nodes:      closest,
+		Nodes:      closestrpc,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
 	return nil
