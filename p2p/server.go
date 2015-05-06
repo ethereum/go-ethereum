@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	defaultDialTimeout   = 10 * time.Second
-	refreshPeersInterval = 30 * time.Second
+	defaultDialTimeout      = 10 * time.Second
+	refreshPeersInterval    = 30 * time.Second
+	staticPeerCheckInterval = 15 * time.Second
 
 	// This is the maximum number of inbound connection
 	// that are allowed to linger between 'accepted' and
@@ -59,6 +60,14 @@ type Server struct {
 	// with the rest of the network.
 	BootstrapNodes []*discover.Node
 
+	// Static nodes are used as pre-configured connections which are always
+	// maintained and re-connected on disconnects.
+	StaticNodes []*discover.Node
+
+	// Trusted nodes are used as pre-configured connections which are always
+	// allowed to connect, even above the peer limit.
+	TrustedNodes []*discover.Node
+
 	// NodeDatabase is the path to the database containing the previously seen
 	// live nodes in the network.
 	NodeDatabase string
@@ -95,20 +104,23 @@ type Server struct {
 
 	ourHandshake *protoHandshake
 
-	lock    sync.RWMutex // protects running and peers
-	running bool
-	peers   map[discover.NodeID]*Peer
+	lock         sync.RWMutex // protects running, peers and the trust fields
+	running      bool
+	peers        map[discover.NodeID]*Peer
+	staticNodes  map[discover.NodeID]*discover.Node // Map of currently maintained static remote nodes
+	staticDial   chan *discover.Node                // Dial request channel reserved for the static nodes
+	staticCycle  time.Duration                      // Overrides staticPeerCheckInterval, used for testing
+	trustedNodes map[discover.NodeID]bool           // Set of currently trusted remote nodes
 
 	ntab     *discover.Table
 	listener net.Listener
 
-	quit        chan struct{}
-	loopWG      sync.WaitGroup // {dial,listen,nat}Loop
-	peerWG      sync.WaitGroup // active peer goroutines
-	peerConnect chan *discover.Node
+	quit   chan struct{}
+	loopWG sync.WaitGroup // {dial,listen,nat}Loop
+	peerWG sync.WaitGroup // active peer goroutines
 }
 
-type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, bool) (*conn, error)
+type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, bool, map[discover.NodeID]bool) (*conn, error)
 type newPeerHook func(*Peer)
 
 // Peers returns all connected peers.
@@ -131,10 +143,14 @@ func (srv *Server) PeerCount() int {
 	return n
 }
 
-// SuggestPeer creates a connection to the given Node if it
-// is not already connected.
-func (srv *Server) SuggestPeer(n *discover.Node) {
-	srv.peerConnect <- n
+// AddPeer connects to the given node and maintains the connection until the
+// server is shut down. If the connection fails for any reason, the server will
+// attempt to reconnect the peer.
+func (srv *Server) AddPeer(node *discover.Node) {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+
+	srv.staticNodes[node.ID] = node
 }
 
 // Broadcast sends an RLP-encoded message to all connected peers.
@@ -195,7 +211,18 @@ func (srv *Server) Start() (err error) {
 	}
 	srv.quit = make(chan struct{})
 	srv.peers = make(map[discover.NodeID]*Peer)
-	srv.peerConnect = make(chan *discover.Node)
+
+	// Create the current trust maps, and the associated dialing channel
+	srv.trustedNodes = make(map[discover.NodeID]bool)
+	for _, node := range srv.TrustedNodes {
+		srv.trustedNodes[node.ID] = true
+	}
+	srv.staticNodes = make(map[discover.NodeID]*discover.Node)
+	for _, node := range srv.StaticNodes {
+		srv.staticNodes[node.ID] = node
+	}
+	srv.staticDial = make(chan *discover.Node)
+
 	if srv.setupFunc == nil {
 		srv.setupFunc = setupConn
 	}
@@ -229,6 +256,8 @@ func (srv *Server) Start() (err error) {
 	if srv.NoDial && srv.ListenAddr == "" {
 		glog.V(logger.Warn).Infoln("I will be kind-of useless, neither dialing nor listening.")
 	}
+	// maintain the static peers
+	go srv.staticNodesLoop()
 
 	srv.running = true
 	return nil
@@ -323,6 +352,45 @@ func (srv *Server) listenLoop() {
 	}
 }
 
+// staticNodesLoop is responsible for periodically checking that static
+// connections are actually live, and requests dialing if not.
+func (srv *Server) staticNodesLoop() {
+	// Create a default maintenance ticker, but override it requested
+	cycle := staticPeerCheckInterval
+	if srv.staticCycle != 0 {
+		cycle = srv.staticCycle
+	}
+	tick := time.NewTicker(cycle)
+
+	for {
+		select {
+		case <-srv.quit:
+			return
+
+		case <-tick.C:
+			// Collect all the non-connected static nodes
+			needed := []*discover.Node{}
+			srv.lock.RLock()
+			for id, node := range srv.staticNodes {
+				if _, ok := srv.peers[id]; !ok {
+					needed = append(needed, node)
+				}
+			}
+			srv.lock.RUnlock()
+
+			// Try to dial each of them (don't hang if server terminates)
+			for _, node := range needed {
+				glog.V(logger.Debug).Infof("Dialing static peer %v", node)
+				select {
+				case srv.staticDial <- node:
+				case <-srv.quit:
+					return
+				}
+			}
+		}
+	}
+}
+
 func (srv *Server) dialLoop() {
 	var (
 		dialed      = make(chan *discover.Node)
@@ -373,7 +441,7 @@ func (srv *Server) dialLoop() {
 				// below MaxPeers.
 				refresh.Reset(refreshPeersInterval)
 			}
-		case dest := <-srv.peerConnect:
+		case dest := <-srv.staticDial:
 			dial(dest)
 		case dests := <-findresults:
 			for _, dest := range dests {
@@ -416,10 +484,18 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// returns during that exchange need to call peerWG.Done because
 	// the callers of startPeer added the peer to the wait group already.
 	fd.SetDeadline(time.Now().Add(handshakeTimeout))
+
+	// Check capacity, but override for static nodes
 	srv.lock.RLock()
 	atcap := len(srv.peers) == srv.MaxPeers
+	if dest != nil {
+		if _, ok := srv.staticNodes[dest.ID]; ok {
+			atcap = false
+		}
+	}
 	srv.lock.RUnlock()
-	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, atcap)
+
+	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, atcap, srv.trustedNodes)
 	if err != nil {
 		fd.Close()
 		glog.V(logger.Debug).Infof("Handshake with %v failed: %v", fd.RemoteAddr(), err)
@@ -472,11 +548,18 @@ func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
 	return true, 0
 }
 
+// checkPeer verifies whether a peer looks promising and should be allowed/kept
+// in the pool, or if it's of no use.
 func (srv *Server) checkPeer(id discover.NodeID) (bool, DiscReason) {
+	// First up, figure out if the peer is static or trusted
+	_, static := srv.staticNodes[id]
+	trusted := srv.trustedNodes[id]
+
+	// Make sure the peer passes all required checks
 	switch {
 	case !srv.running:
 		return false, DiscQuitting
-	case len(srv.peers) >= srv.MaxPeers:
+	case !static && !trusted && len(srv.peers) >= srv.MaxPeers:
 		return false, DiscTooManyPeers
 	case srv.peers[id] != nil:
 		return false, DiscAlreadyConnected

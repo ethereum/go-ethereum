@@ -104,8 +104,8 @@ func (ui *UiLib) Connect(button qml.Object) {
 }
 
 func (ui *UiLib) ConnectToPeer(nodeURL string) {
-	if err := ui.eth.SuggestPeer(nodeURL); err != nil {
-		guilogger.Infoln("SuggestPeer error: " + err.Error())
+	if err := ui.eth.AddPeer(nodeURL); err != nil {
+		guilogger.Infoln("AddPeer error: " + err.Error())
 	}
 }
 
