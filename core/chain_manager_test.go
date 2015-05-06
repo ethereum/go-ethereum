@@ -241,6 +241,24 @@ func TestBrokenChain(t *testing.T) {
 	}
 }
 
+func TestChainForkWithWrongBlockNum(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	genesis := GenesisBlock(db)
+	bc := chm(genesis, db)
+
+	chain1 := makeChainWithDiff(genesis, []int{1, 2, 3}, 10)
+	chain2 := makeChainWithDiff(genesis, []int{4, 5}, 11)
+	chain2[0].Header().Number = big.NewInt(int64(4))
+	chain2[1].Header().Number = big.NewInt(int64(5))
+
+	_, _ = bc.InsertChain(chain1)
+	_, err := bc.InsertChain(chain2)
+
+	if err != BlockNumberErr {
+		t.Errorf("should have failed with BlockNumberErr")
+	}
+}
+
 func TestChainInsertions(t *testing.T) {
 	t.Skip() // travil fails.
 
