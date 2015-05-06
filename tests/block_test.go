@@ -17,12 +17,10 @@ func TestBcValidBlockTests(t *testing.T) {
 }
 
 func TestBcUncleTests(t *testing.T) {
-	t.Skip("Skipped until https://github.com/ethereum/go-ethereum/pull/857 is merged.")
 	runBlockTestsInFile("files/BlockTests/bcUncleTest.json", []string{}, t)
 }
 
 func TestBcUncleHeaderValidityTests(t *testing.T) {
-	t.Skip("Skipped until https://github.com/ethereum/go-ethereum/pull/857 is merged.")
 	runBlockTestsInFile("files/BlockTests/bcUncleHeaderValiditiy.json", []string{}, t)
 }
 
@@ -39,7 +37,6 @@ func TestBcJSAPITests(t *testing.T) {
 }
 
 func TestBcRPCAPITests(t *testing.T) {
-	t.Skip("Skipped until https://github.com/ethereum/go-ethereum/pull/857 is merged.")
 	runBlockTestsInFile("files/BlockTests/bcRPC_API_Test.json", []string{}, t)
 }
 
