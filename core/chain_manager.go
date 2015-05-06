@@ -571,8 +571,15 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
 			if block.Td.Cmp(self.td) > 0 {
+				//key := append(blockNumPre, block.Number().Bytes()...)
+				//self.blockDb.Put(key, block.Hash().Bytes())
 				// Check for chain forks. If H(block.num - 1) != block.parent, we're on a fork and need to do some merging
-				if previous := self.getBlockByNumber(block.NumberU64() - 1); previous.Hash() != block.ParentHash() {
+				previous := self.getBlockByNumber(block.NumberU64() - 1)
+				if previous == nil {
+					glog.V(logger.Error).Infof("INVALID block #%v (%x)\n", block.Header().Number, block.Header().Hash().Bytes())
+					return i, BlockNumberErr
+				}
+				if previous.Hash() != block.ParentHash() {
 					chash := cblock.Hash()
 					hash := block.Hash()
 
