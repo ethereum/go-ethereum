@@ -320,6 +320,7 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 	}
 
 	// Prepare the genesis block
+	gb.Td = gb.Difficulty()
 	bc.genesisBlock = gb
 	bc.write(bc.genesisBlock)
 	bc.insert(bc.genesisBlock)
