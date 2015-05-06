@@ -127,12 +127,12 @@ func (l *Light) Verify(block pow.Block) bool {
 	return h256ToHash(ret.result).Big().Cmp(target) <= 0
 }
 
-func h256ToHash(in C.struct_ethash_h256) common.Hash {
+func h256ToHash(in C.ethash_h256_t) common.Hash {
 	return *(*common.Hash)(unsafe.Pointer(&in.b))
 }
 
-func hashToH256(in common.Hash) C.struct_ethash_h256 {
-	return C.struct_ethash_h256{b: *(*[32]C.uint8_t)(unsafe.Pointer(&in[0]))}
+func hashToH256(in common.Hash) C.ethash_h256_t {
+	return C.ethash_h256_t{b: *(*[32]C.uint8_t)(unsafe.Pointer(&in[0]))}
 }
 
 func (l *Light) getCache(blockNum uint64) *cache {

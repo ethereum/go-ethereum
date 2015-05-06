@@ -49,7 +49,7 @@ enum ethash_io_rc {
 
 // small hack for windows. I don't feel I should use va_args and forward just
 // to have this one function properly cross-platform abstracted
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(__GNUC__)
 #define snprintf(...) sprintf_s(__VA_ARGS__)
 #endif
 
