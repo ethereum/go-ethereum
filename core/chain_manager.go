@@ -52,10 +52,7 @@ func CalculateTD(block, parent *types.Block) *big.Int {
 	if parent == nil {
 		return block.Difficulty()
 	}
-
-	td := new(big.Int).Add(parent.Td, block.Header().Difficulty)
-
-	return td
+	return new(big.Int).Add(parent.Td, block.Difficulty())
 }
 
 func CalcGasLimit(parent *types.Block) *big.Int {
@@ -77,10 +74,10 @@ type ChainManager struct {
 	processor    types.BlockProcessor
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
-	// Last known total difficulty
-	mu   sync.RWMutex
-	tsmu sync.RWMutex
+	mu           sync.RWMutex
+	tsmu         sync.RWMutex
 
+	// Last known total difficulty
 	td              *big.Int
 	currentBlock    *types.Block
 	lastBlockHash   common.Hash
@@ -299,7 +296,7 @@ func (bc *ChainManager) Reset() {
 	}
 
 	// Prepare the genesis block
-	bc.write(bc.genesisBlock)
+	bc.writeBlock(bc.genesisBlock)
 	bc.insert(bc.genesisBlock)
 	bc.currentBlock = bc.genesisBlock
 	bc.makeCache()
@@ -321,7 +318,7 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 
 	// Prepare the genesis block
 	bc.genesisBlock = gb
-	bc.write(bc.genesisBlock)
+	bc.writeBlock(bc.genesisBlock)
 	bc.insert(bc.genesisBlock)
 	bc.currentBlock = bc.genesisBlock
 	bc.makeCache()
@@ -350,16 +347,19 @@ func (self *ChainManager) Export(w io.Writer) error {
 	return nil
 }
 
-func (bc *ChainManager) insert(block *types.Block) {
+func (bc *ChainManager) writeBlockHash(block *types.Block) {
 	key := append(blockNumPre, block.Number().Bytes()...)
 	bc.blockDb.Put(key, block.Hash().Bytes())
+}
 
+func (bc *ChainManager) insert(block *types.Block) {
+	bc.writeBlockHash(block)
 	bc.blockDb.Put([]byte("LastBlock"), block.Hash().Bytes())
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
 }
 
-func (bc *ChainManager) write(block *types.Block) {
+func (bc *ChainManager) writeBlock(block *types.Block) {
 	enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
 	key := append(blockHashPre, block.Hash().Bytes()...)
 	bc.blockDb.Put(key, enc)
@@ -461,26 +461,6 @@ func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
 	bc.td = td
 }
 
-func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
-	parent := self.GetBlock(block.Header().ParentHash)
-	if parent == nil {
-		return nil, fmt.Errorf("Unable to calculate total diff without known parent %x", block.Header().ParentHash)
-	}
-
-	parentTd := parent.Td
-
-	uncleDiff := new(big.Int)
-	for _, uncle := range block.Uncles() {
-		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
-	}
-
-	td := new(big.Int)
-	td = td.Add(parentTd, uncleDiff)
-	td = td.Add(td, block.Header().Difficulty)
-
-	return td, nil
-}
-
 func (bc *ChainManager) Stop() {
 	close(bc.quit)
 
@@ -537,7 +517,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			}
 
 			block.Td = new(big.Int)
-			// Do not penelise on future block. We'll need a block queue eventually that will queue
+			// Do not penalize on future block. We'll need a block queue eventually that will queue
 			// future block for future use
 			if err == BlockFutureErr {
 				block.SetQueued(true)
@@ -567,12 +547,14 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			cblock := self.currentBlock
 			// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
 			// not in the canonical chain.
-			self.write(block)
+			self.writeBlockHash(block)
+			self.writeBlock(block)
 			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
 			if block.Td.Cmp(self.td) > 0 {
 				// Check for chain forks. If H(block.num - 1) != block.parent, we're on a fork and need to do some merging
-				if previous := self.getBlockByNumber(block.NumberU64() - 1); previous.Hash() != block.ParentHash() {
+				previous := self.getBlockByNumber(block.NumberU64() - 1)
+				if previous.Hash() != block.ParentHash() {
 					chash := cblock.Hash()
 					hash := block.Hash()
 
