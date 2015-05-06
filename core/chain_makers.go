@@ -14,8 +14,8 @@ import (
 // So we can generate blocks easily
 type FakePow struct{}
 
-func (f FakePow) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte, []byte) {
-	return 0, nil, nil
+func (f FakePow) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte) {
+	return 0, nil
 }
 func (f FakePow) Verify(block pow.Block) bool { return true }
 func (f FakePow) GetHashrate() int64          { return 0 }

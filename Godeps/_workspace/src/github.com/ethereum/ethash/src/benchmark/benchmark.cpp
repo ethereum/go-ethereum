@@ -96,6 +96,11 @@ static std::string bytesToHexString(uint8_t const* bytes, unsigned size)
 	return str;
 }
 
+static std::string bytesToHexString(ethash_h256_t const *hash, unsigned size)
+{
+	return bytesToHexString((uint8_t*)hash, size);
+}
+
 extern "C" int main(void)
 {
 	// params for ethash
@@ -106,12 +111,12 @@ extern "C" int main(void)
 	//params.full_size = 8209 * 4096;	// 8MBish;
 	//params.cache_size = 8209*4096;
 	//params.cache_size = 2053*4096;
-	ethash_blockhash_t seed;
-	ethash_blockhash_t previous_hash;
+	ethash_h256_t seed;
+	ethash_h256_t previous_hash;
 
 	memcpy(&seed, hexStringToBytes("9410b944535a83d9adf6bbdcc80e051f30676173c16ca0d32d6f1263fc246466").data(), 32);
 	memcpy(&previous_hash, hexStringToBytes("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").data(), 32);
-	
+
 	// allocate page aligned buffer for dataset
 #ifdef FULL
 	void* full_mem_buf = malloc(params.full_size + 4095);
@@ -122,24 +127,24 @@ extern "C" int main(void)
 
 	ethash_cache cache;
 	cache.mem = cache_mem;
-	
+
 	// compute cache or full data
 	{
 		auto startTime = high_resolution_clock::now();
-		ethash_mkcache(&cache, &params, seed);
+		ethash_mkcache(&cache, &params, &seed);
 		auto time = std::chrono::duration_cast<std::chrono::milliseconds>(high_resolution_clock::now() - startTime).count();
 
-		ethash_blockhash_t cache_hash;
+		ethash_h256_t cache_hash;
 		SHA3_256(&cache_hash, (uint8_t const*)cache_mem, params.cache_size);
-		debugf("ethash_mkcache: %ums, sha3: %s\n", (unsigned)((time*1000)/CLOCKS_PER_SEC), bytesToHexString(cache_hash,sizeof(cache_hash)).data());
+		debugf("ethash_mkcache: %ums, sha3: %s\n", (unsigned)((time*1000)/CLOCKS_PER_SEC), bytesToHexString(&cache_hash, sizeof(cache_hash)).data());
 
 		// print a couple of test hashes
 		{
 			auto startTime = high_resolution_clock::now();
 			ethash_return_value hash;
-			ethash_light(&hash, &cache, &params, previous_hash, 0);
+			ethash_light(&hash, &cache, &params, &previous_hash, 0);
 			auto time = std::chrono::duration_cast<std::chrono::milliseconds>(high_resolution_clock::now() - startTime).count();
-			debugf("ethash_light test: %ums, %s\n", (unsigned)time, bytesToHexString(hash.result, 32).data());
+			debugf("ethash_light test: %ums, %s\n", (unsigned)time, bytesToHexString(&hash.result, 32).data());
 		}
 
 		#ifdef FULL
@@ -154,34 +159,34 @@ extern "C" int main(void)
 	ethash_cl_miner miner;
 	{
 		auto startTime = high_resolution_clock::now();
-		if (!miner.init(params, seed))
+		if (!miner.init(params, &seed))
 			exit(-1);
 		auto time = std::chrono::duration_cast<std::chrono::milliseconds>(high_resolution_clock::now() - startTime).count();
-        debugf("ethash_cl_miner init: %ums\n", (unsigned)time);
+		debugf("ethash_cl_miner init: %ums\n", (unsigned)time);
 	}
 #endif
 
 
 #ifdef FULL
-    {
-        auto startTime = high_resolution_clock::now();
+	{
+		auto startTime = high_resolution_clock::now();
 		ethash_return_value hash;
-        ethash_full(&hash, full_mem, &params, previous_hash, 0);
-        auto time = std::chrono::duration_cast<std::chrono::milliseconds>(high_resolution_clock::now() - startTime).count();
-        debugf("ethash_full test: %uns, %s\n", (unsigned)time);
-    }
+		ethash_full(&hash, full_mem, &params, &previous_hash, 0);
+		auto time = std::chrono::duration_cast<std::chrono::milliseconds>(high_resolution_clock::now() - startTime).count();
+		debugf("ethash_full test: %uns\n", (unsigned)time);
+	}
 #endif
 
 #ifdef OPENCL
 	// validate 1024 hashes against CPU
-	miner.hash(g_hashes, previous_hash, 0, 1024);
+	miner.hash(g_hashes, (uint8_t*)&previous_hash, 0, 1024);
 	for (unsigned i = 0; i != 1024; ++i)
 	{
 		ethash_return_value hash;
-		ethash_light(&hash, &cache, &params, previous_hash, i);
-		if (memcmp(hash.result, g_hashes + 32*i, 32) != 0)
+		ethash_light(&hash, &cache, &params, &previous_hash, i);
+		if (memcmp(&hash.result, g_hashes + 32*i, 32) != 0)
 		{
-			debugf("nonce %u failed: %s %s\n", i, bytesToHexString(g_hashes + 32*i, 32).c_str(), bytesToHexString(hash.result, 32).c_str());
+			debugf("nonce %u failed: %s %s\n", i, bytesToHexString(g_hashes + 32*i, 32).c_str(), bytesToHexString(&hash.result, 32).c_str());
 			static unsigned c = 0;
 			if (++c == 16)
 			{
@@ -189,14 +194,14 @@ extern "C" int main(void)
 			}
 		}
 	}
-	
+
 	// ensure nothing else is going on
 	miner.finish();
 #endif
 
 	auto startTime = high_resolution_clock::now();
 	unsigned hash_count = trials;
-	
+
 	#ifdef OPENCL
 	{
 		struct search_hook : ethash_cl_miner::search_hook
@@ -220,14 +225,14 @@ extern "C" int main(void)
 		search_hook hook;
 		hook.hash_count = 0;
 
-		miner.search(previous_hash, 0x000000ffffffffff, hook);
+		miner.search((uint8_t*)&previous_hash, 0x000000ffffffffff, hook);
 
 		for (unsigned i = 0; i != hook.nonce_vec.size(); ++i)
 		{
 			uint64_t nonce = hook.nonce_vec[i];
 			ethash_return_value hash;
-			ethash_light(&hash, &cache, &params, previous_hash, nonce);
-			debugf("found: %.8x%.8x -> %s\n", unsigned(nonce>>32), unsigned(nonce), bytesToHexString(hash.result, 32).c_str());
+			ethash_light(&hash, &cache, &params, &previous_hash, nonce);
+			debugf("found: %.8x%.8x -> %s\n", unsigned(nonce>>32), unsigned(nonce), bytesToHexString(&hash.result, 32).c_str());
 		}
 
 		hash_count = hook.hash_count;
@@ -239,9 +244,9 @@ extern "C" int main(void)
 		{
 			ethash_return_value hash;
 			#ifdef FULL
-				ethash_full(&hash, full_mem, &params, previous_hash, nonce);
+				ethash_full(&hash, full_mem, &params, &previous_hash, nonce);
 			#else
-				ethash_light(&hash, &cache, &params, previous_hash, nonce);
+				ethash_light(&hash, &cache, &params, &previous_hash, nonce);
 			#endif // FULL
 		}
 	}
@@ -249,7 +254,7 @@ extern "C" int main(void)
 	auto time = std::chrono::duration_cast<std::chrono::microseconds>(high_resolution_clock::now() - startTime).count();
 	debugf("Search took: %ums\n", (unsigned)time/1000);
 
-	unsigned read_size = ACCESSES * MIX_BYTES;
+	unsigned read_size = ETHASH_ACCESSES * ETHASH_MIX_BYTES;
 #if defined(OPENCL) || defined(FULL)
 	debugf(
 		"hashrate: %8.2f Mh/s, bw: %8.2f GB/s\n",
