@@ -44,4 +44,63 @@ contract Swarm
     }
   }
 
+  /// @notice Total deposit for address `addr`.
+  /// No change in state.
+  ///
+  /// @dev Not meaningful for "Guilty" status.
+  ///
+  /// @param addr queried address.
+  ///
+  /// @return balance of queried address.
+  function balance(address addr) returns (uint d) {
+    Bee b = swarm[addr];
+    return b.deposit;
+  }
+
+  /// @notice Determine clean status of address `addr`.
+  /// No change in state.
+  ///
+  /// @param addr queried address.
+  ///
+  /// @return true if status is "Clean".
+  function isClean(address addr) returns (bool s) {
+    Bee b = swarm[addr];
+    return b.status == Status.Clean;
+  }
+
+  /// @notice Determine suspect status of address `addr`.
+  /// No change in state.
+  ///
+  /// @param addr queried address.
+  ///
+  /// @return true if status is "Suspect".
+  function isSuspect(address addr) returns (bool s) {
+    Bee b = swarm[addr];
+    return b.status == Status.Suspect;
+  }
+
+  /// @notice Determine guilty status of address `addr`.
+  /// No change in state.
+  ///
+  /// @param addr queried address.
+  ///
+  /// @return true if status is "Guilty".
+  function isGuilty(address addr) returns (bool s) {
+    Bee b = swarm[addr];
+    return b.status == Status.Guilty;
+  }
+
+  /// @notice Determine if the deposit for `addr` is unaccessible until `time`.
+  /// No change in state.
+  ///
+  /// @param addr queried address.
+  ///
+  /// @param time queried time.
+  ///
+  /// @return true if deposit expires after queried time.
+  function expiresAfter(address addr, uint time) returns (bool s) {
+    Bee b = swarm[addr];
+    return b.expiry > time;
+  }
 }
+v
