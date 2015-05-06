@@ -220,7 +220,7 @@ func (tab *Table) bondall(nodes []*Node) (result []*Node) {
 	rc := make(chan *Node, len(nodes))
 	for i := range nodes {
 		go func(n *Node) {
-			nn, _ := tab.bond(false, n.ID, n.addr(), uint16(n.TCPPort))
+			nn, _ := tab.bond(false, n.ID, n.addr(), uint16(n.TCP))
 			rc <- nn
 		}(nodes[i])
 	}
@@ -299,12 +299,7 @@ func (tab *Table) pingpong(w *bondproc, pinged bool, id NodeID, addr *net.UDPAdd
 		tab.net.waitping(id)
 	}
 	// Bonding succeeded, update the node database
-	w.n = &Node{
-		ID:       id,
-		IP:       addr.IP,
-		DiscPort: addr.Port,
-		TCPPort:  int(tcpPort),
-	}
+	w.n = &Node{ID: id, IP: addr.IP, UDP: uint16(addr.Port), TCP: tcpPort}
 	tab.db.updateNode(w.n)
 	close(w.done)
 }

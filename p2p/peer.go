@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	baseProtocolVersion    = 3
+	baseProtocolVersion    = 4
 	baseProtocolLength     = uint64(16)
 	baseProtocolMaxMsgSize = 10 * 1024 * 1024
 

@@ -261,9 +261,9 @@ func (t findnodeOracle) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID
 		panic("query to node at distance 0")
 	default:
 		// TODO: add more randomness to distances
-		next := toaddr.Port - 1
+		next := uint16(toaddr.Port) - 1
 		for i := 0; i < bucketSize; i++ {
-			result = append(result, &Node{ID: randomID(t.target, next), DiscPort: next})
+			result = append(result, &Node{ID: randomID(t.target, int(next)), UDP: next})
 		}
 	}
 	return result, nil

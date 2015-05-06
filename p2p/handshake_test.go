@@ -119,14 +119,14 @@ func TestSetupConn(t *testing.T) {
 	prv0, _ := crypto.GenerateKey()
 	prv1, _ := crypto.GenerateKey()
 	node0 := &discover.Node{
-		ID:      discover.PubkeyID(&prv0.PublicKey),
-		IP:      net.IP{1, 2, 3, 4},
-		TCPPort: 33,
+		ID:  discover.PubkeyID(&prv0.PublicKey),
+		IP:  net.IP{1, 2, 3, 4},
+		TCP: 33,
 	}
 	node1 := &discover.Node{
-		ID:      discover.PubkeyID(&prv1.PublicKey),
-		IP:      net.IP{5, 6, 7, 8},
-		TCPPort: 44,
+		ID:  discover.PubkeyID(&prv1.PublicKey),
+		IP:  net.IP{5, 6, 7, 8},
+		TCP: 44,
 	}
 	hs0 := &protoHandshake{
 		Version: baseProtocolVersion,
