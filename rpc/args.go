@@ -157,6 +157,7 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 type NewTxArgs struct {
 	From     string
 	To       string
+	Nonce    *big.Int
 	Value    *big.Int
 	Gas      *big.Int
 	GasPrice *big.Int
@@ -170,6 +171,7 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	var ext struct {
 		From     string
 		To       string
+		Nonce    interface{}
 		Value    interface{}
 		Gas      interface{}
 		GasPrice interface{}
@@ -200,6 +202,14 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Data = ext.Data
 
 	var num *big.Int
+	if ext.Nonce != nil {
+		num, err = numString(ext.Nonce)
+		if err != nil {
+			return err
+		}
+	}
+	args.Nonce = num
+
 	if ext.Value == nil {
 		num = big.NewInt(0)
 	} else {

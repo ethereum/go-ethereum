@@ -119,6 +119,7 @@ func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
 	return self.XEth.Transact(
 		object["from"],
 		object["to"],
+		"",
 		object["value"],
 		object["gas"],
 		object["gasPrice"],

@@ -24,11 +24,11 @@ var HashRegContractAddress string = "0000000000000000000000000000000000000000000
 
 func CreateContracts(xeth *xe.XEth, addr string) {
 	var err error
-	URLHintContractAddress, err = xeth.Transact(addr, "", "100000000000", "1000000", "100000", ContractCodeURLhint)
+	URLHintContractAddress, err = xeth.Transact(addr, "", "", "100000000000", "1000000", "100000", ContractCodeURLhint)
 	if err != nil {
 		panic(err)
 	}
-	HashRegContractAddress, err = xeth.Transact(addr, "", "100000000000", "1000000", "100000", ContractCodeHashReg)
+	HashRegContractAddress, err = xeth.Transact(addr, "", "", "100000000000", "1000000", "100000", ContractCodeHashReg)
 	if err != nil {
 		panic(err)
 	}
