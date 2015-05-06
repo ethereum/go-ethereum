@@ -428,7 +428,7 @@ func (srv *Server) dialLoop() {
 		case <-refresh.C:
 			// Grab some nodes to connect to if we're not at capacity.
 			srv.lock.RLock()
-			needpeers := len(srv.peers) < srv.MaxPeers
+			needpeers := len(srv.peers) < srv.MaxPeers/2
 			srv.lock.RUnlock()
 			if needpeers {
 				go func() {

@@ -91,7 +91,8 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 	}()
 	glog.V(logger.Debug).Infof("add mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 	if err := m.AddMapping(protocol, intport, extport, name, mapTimeout); err != nil {
-		glog.V(logger.Error).Infof("mapping error: %v\n", err)
+		glog.V(logger.Warn).Infof("network port %d could not be mapped: %v\n", intport, err)
+		glog.V(logger.Debug).Infof("mapping with %v returned %v\n", m, err)
 	}
 	for {
 		select {
@@ -102,7 +103,8 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 		case <-refresh.C:
 			glog.V(logger.Detail).Infof("refresh mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 			if err := m.AddMapping(protocol, intport, extport, name, mapTimeout); err != nil {
-				glog.V(logger.Error).Infof("mapping error: %v\n", err)
+				glog.V(logger.Warn).Infof("network port %d could not be mapped: %v\n", intport, err)
+				glog.V(logger.Debug).Infof("mapping with %v returned %v\n", m, err)
 			}
 			refresh.Reset(mapUpdateInterval)
 		}
@@ -225,7 +227,7 @@ func (n *autodisc) wait() error {
 		return nil
 	}
 	if found = <-n.done; found == nil {
-		return errors.New("no devices discovered")
+		return errors.New("no UPnP or NAT-PMP router discovered")
 	}
 	n.mu.Lock()
 	n.found = found

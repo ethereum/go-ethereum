@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -34,10 +35,6 @@ const (
 
 // Peer represents a connected remote node.
 type Peer struct {
-	// Peers have all the log methods.
-	// Use them to display messages related to the peer.
-	*logger.Logger
-
 	conn    net.Conn
 	rw      *conn
 	running map[string]*protoRW
@@ -99,10 +96,8 @@ func (p *Peer) String() string {
 }
 
 func newPeer(fd net.Conn, conn *conn, protocols []Protocol) *Peer {
-	logtag := fmt.Sprintf("Peer %.8x %v", conn.ID[:], fd.RemoteAddr())
 	protomap := matchProtocols(protocols, conn.Caps, conn)
 	p := &Peer{
-		Logger:   logger.NewLogger(logtag),
 		conn:     fd,
 		rw:       conn,
 		running:  protomap,
@@ -130,7 +125,7 @@ func (p *Peer) run() DiscReason {
 		} else {
 			// Note: We rely on protocols to abort if there is a write
 			// error. It might be more robust to handle them here as well.
-			p.DebugDetailf("Read error: %v\n", err)
+			glog.V(logger.Detail).Infof("%v: Read error: %v\n", p, err)
 			reason = DiscNetworkError
 		}
 	case err := <-p.protoErr:
@@ -141,7 +136,7 @@ func (p *Peer) run() DiscReason {
 	close(p.closed)
 	p.politeDisconnect(reason)
 	p.wg.Wait()
-	p.Debugf("Disconnected: %v\n", reason)
+	glog.V(logger.Debug).Infof("%v: Disconnected: %v\n", p, reason)
 	return reason
 }
 
@@ -195,7 +190,7 @@ func (p *Peer) handle(msg Msg) error {
 		// This is the last message. We don't need to discard or
 		// check errors because, the connection will be closed after it.
 		rlp.Decode(msg.Payload, &reason)
-		p.Debugf("Disconnect requested: %v\n", reason[0])
+		glog.V(logger.Debug).Infof("%v: Disconnect Requested: %v\n", p, reason[0])
 		return DiscRequested
 	case msg.Code < baseProtocolLength:
 		// ignore other base protocol messages
@@ -239,14 +234,14 @@ func (p *Peer) startProtocols() {
 	for _, proto := range p.running {
 		proto := proto
 		proto.closed = p.closed
-		p.DebugDetailf("Starting protocol %s/%d\n", proto.Name, proto.Version)
+		glog.V(logger.Detail).Infof("%v: Starting protocol %s/%d\n", p, proto.Name, proto.Version)
 		go func() {
 			err := proto.Run(p, proto)
 			if err == nil {
-				p.DebugDetailf("Protocol %s/%d returned\n", proto.Name, proto.Version)
+				glog.V(logger.Detail).Infof("%v: Protocol %s/%d returned\n", p, proto.Name, proto.Version)
 				err = errors.New("protocol returned")
-			} else {
-				p.DebugDetailf("Protocol %s/%d error: %v\n", proto.Name, proto.Version, err)
+			} else if err != io.EOF {
+				glog.V(logger.Detail).Infof("%v: Protocol %s/%d error: \n", p, proto.Name, proto.Version, err)
 			}
 			p.protoErr <- err
 			p.wg.Done()
