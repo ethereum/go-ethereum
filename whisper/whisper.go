@@ -197,14 +197,14 @@ func (self *Whisper) handlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 		}
 		var envelopes []*Envelope
 		if err := packet.Decode(&envelopes); err != nil {
-			peer.Infof("failed to decode enveloped: %v", err)
+			glog.V(logger.Info).Infof("%v: failed to decode envelope: %v", peer, err)
 			continue
 		}
 		// Inject all envelopes into the internal pool
 		for _, envelope := range envelopes {
 			if err := self.add(envelope); err != nil {
 				// TODO Punish peer here. Invalid envelope.
-				peer.Debugf("failed to pool envelope: %f", err)
+				glog.V(logger.Debug).Infof("%v: failed to pool envelope: %v", peer, err)
 			}
 			whisperPeer.mark(envelope)
 		}
