@@ -63,16 +63,6 @@ func (q *queue) Reset() {
 	q.blockCache = nil
 }
 
-// Done checks if all the downloads have been retrieved, wiping the queue.
-func (q *queue) Done() {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
-	if len(q.blockCache) == 0 {
-		q.Reset()
-	}
-}
-
 // Size retrieves the number of hashes in the queue, returning separately for
 // pending and already downloaded.
 func (q *queue) Size() (int, int) {

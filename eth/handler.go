@@ -307,7 +307,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 
 		// Attempt to insert the newly received by checking if the parent exists.
 		// if the parent exists we process the block and propagate to our peers
-		// otherwise synchronise with the peer
+		// otherwise synchronize with the peer
 		if self.chainman.HasBlock(request.Block.ParentHash()) {
 			if _, err := self.chainman.InsertChain(types.Blocks{request.Block}); err != nil {
 				glog.V(logger.Error).Infoln("removed peer (", p.id, ") due to block error")
@@ -324,7 +324,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 			}
 			self.BroadcastBlock(hash, request.Block)
 		} else {
-			go self.synchronise(p)
+			go self.synchronize(p)
 		}
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)

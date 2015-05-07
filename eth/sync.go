@@ -32,14 +32,14 @@ func (pm *ProtocolManager) update() {
 			}
 
 			itimer.Stop()
-			go pm.synchronise(peer)
+			go pm.synchronize(peer)
 		case <-itimer.C:
 			// The timer will make sure that the downloader keeps an active state
 			// in which it attempts to always check the network for highest td peers
 			// Either select the peer or restart the timer if no peers could
 			// be selected.
 			if peer := getBestPeer(pm.peers); peer != nil {
-				go pm.synchronise(peer)
+				go pm.synchronize(peer)
 			} else {
 				itimer.Reset(5 * time.Second)
 			}
@@ -63,7 +63,6 @@ func (pm *ProtocolManager) processBlocks() error {
 	if len(blocks) == 0 {
 		return nil
 	}
-	defer pm.downloader.Done()
 
 	glog.V(logger.Debug).Infof("Inserting chain with %d blocks (#%v - #%v)\n", len(blocks), blocks[0].Number(), blocks[len(blocks)-1].Number())
 
@@ -78,26 +77,19 @@ func (pm *ProtocolManager) processBlocks() error {
 	return nil
 }
 
-func (pm *ProtocolManager) synchronise(peer *peer) {
+func (pm *ProtocolManager) synchronize(peer *peer) {
 	// Make sure the peer's TD is higher than our own. If not drop.
 	if peer.td.Cmp(pm.chainman.Td()) <= 0 {
 		return
 	}
-	// Check downloader if it's busy so it doesn't show the sync message
-	// for every attempty
-	if pm.downloader.IsBusy() {
-		return
-	}
-
 	// FIXME if we have the hash in our chain and the TD of the peer is
 	// much higher than ours, something is wrong with us or the peer.
 	// Check if the hash is on our own chain
 	if pm.chainman.HasBlock(peer.recentHash) {
 		return
 	}
-
 	// Get the hashes from the peer (synchronously)
-	err := pm.downloader.Synchronise(peer.id, peer.recentHash)
+	err := pm.downloader.Synchronize(peer.id, peer.recentHash)
 	if err != nil && err == downloader.ErrBadPeer {
 		glog.V(logger.Debug).Infoln("removed peer from peer set due to bad action")
 		pm.removePeer(peer)

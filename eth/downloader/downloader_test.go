@@ -61,7 +61,7 @@ func newTester(t *testing.T, hashes []common.Hash, blocks map[common.Hash]*types
 
 func (dl *downloadTester) sync(peerId string, hash common.Hash) error {
 	dl.activePeerId = peerId
-	return dl.downloader.Synchronise(peerId, hash)
+	return dl.downloader.Synchronize(peerId, hash)
 }
 
 func (dl *downloadTester) hasBlock(hash common.Hash) bool {
