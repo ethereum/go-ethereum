@@ -327,7 +327,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 	case "eth_newBlockFilter":
 		*reply = newHexNum(api.xeth().NewBlockFilter())
-	case "eth_transactionFilter":
+	case "eth_newPendingTransactionFilter":
 		*reply = newHexNum(api.xeth().NewTransactionFilter())
 	case "eth_uninstallFilter":
 		args := new(FilterIdArgs)
