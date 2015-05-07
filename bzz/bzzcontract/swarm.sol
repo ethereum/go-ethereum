@@ -10,11 +10,14 @@ contract Swarm
   struct Bee {
     uint deposit;    // amount deposited by this member
     uint expiry;     // expiration time of the deposit
-    uint256 missing; // member accused of losing this swarm chunk
+    bytes32 missing; // member accused of losing this swarm chunk
     uint deadline;   // block number before which chunk must be presented
   }
 
   mapping (address => Bee) swarm;
+  
+  // block number of transactions presenting chunks
+  mapping (bytes32 => uint) presentedChunks;
 
   function max(uint a, uint b) private returns (uint c) {
     if(a >= b) return a;
@@ -29,7 +32,7 @@ contract Swarm
   ///
   /// @param time term of Swarm membership in seconds from now.
   function signup(uint time) {
-    Bee b = swarm[msg.sender];
+    Bee b = swarm[tx.origin];
     if(isClean(msg.sender) && now + time > now) {
       b.expiry = max(b.expiry, now + time);
     }
@@ -40,7 +43,7 @@ contract Swarm
   ///
   /// @dev Only allowed with clean status and expired term.
   function withdraw() {
-    Bee b = swarm[msg.sender];
+    Bee b = swarm[tx.origin];
     if(now > b.expiry && isClean(msg.sender)) {
 	msg.sender.send(b.deposit);
 	b.deposit = 0;
@@ -61,7 +64,8 @@ contract Swarm
   }
 
   /// @notice Determine clean status of address `addr`.
-  /// No change in state.
+  /// Changes the state, but only as a matter of optimization.
+  /// Works as accessor.
   ///
   /// @dev Defined as no signed receipt has been presented for missing chunk.
   ///
@@ -70,7 +74,39 @@ contract Swarm
   /// @return true if status is "Clean".
   function isClean(address addr) returns (bool s) {
     Bee b = swarm[addr];
+    if(b.missing != 0 && presentedChunks[b.missing] != 0) b.missing = 0;
     return b.missing == 0; // nothing they signed is missing
+  }
+
+  /// @param suspect address of reported Swarm node
+  event Report(address suspect);
+
+  /// @notice Find out what is missing in case of a Report event.
+  ///
+  /// @return 0 if nothing is missing, swarm hash otherwise
+  function whatIsMissing() returns (bytes32 h) {
+      bytes32 missing = swarm[tx.origin].missing;
+      if(presentedChunks[missing] != 0) missing = 0;
+      return missing;
+  }
+
+  /// @notice Report chunk `swarmHash` as missing.
+  ///
+  /// @param swarmHash sha3 hash of the missing chunk
+  /// @param expiry expiration time of receipt
+  /// @param sig_v signature parameter v
+  /// @param sig_r signature parameter r
+  /// @param sig_s signature parameter s
+  function reportMissingChunk(bytes32 swarmHash, uint expiry,
+        uint8 sig_v, bytes32 sig_r, bytes32 sig_s) {
+      if(expiry < now) return;
+      bytes32 recptHash = sha3(MAGIC_NUMBER, swarmHash, expiry);
+      address signer = ecrecover(recptHash, sig_v, sig_r, sig_s);
+      if(!isClean(signer) || !expiresAfter(signer, now)) return;
+      Bee b = swarm[signer];
+      b.missing = swarmHash;
+      b.deadline = block.number + GRACE;
+      Report(signer);
   }
 
   /// @notice Determine if the deposit for `addr` is unaccessible until `time`.
