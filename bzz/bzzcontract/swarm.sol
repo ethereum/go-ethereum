@@ -4,6 +4,7 @@ contract Swarm
 {
 
   uint constant GRACE = 50; // grace period for lost information in blocks
+  uint constant REWARD_FRACTION = 10; // this fraction of a deposit is paid as reward
 
   bytes32 constant MAGIC_NUMBER = "Swarm receipt";
 
@@ -131,6 +132,18 @@ contract Swarm
       if(isClean(addr)) return false;
       Bee b = swarm[addr];
       return b.deadline < block.number;
+  }
+
+  /// @notice Collect rewards for successfully prosecuting `addr`.
+  ///
+  /// @dev This implies burning 9/10 of the security deposit.
+  ///
+  /// @param addr guilty defendant address
+  function claimReporterReward(address addr) {
+      if(!isGuilty(addr)) return;
+      Bee b = swarm[addr];
+      msg.sender.send(b.deposit / REWARD_FRACTION); // reporter rewarded
+      delete swarm[addr]; // rest of deposit burnt
   }
 
   /// @notice Determine if the deposit for `addr` is unaccessible until `time`.
