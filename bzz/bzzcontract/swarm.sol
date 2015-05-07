@@ -3,12 +3,15 @@
 contract Swarm
 {
 
-  enum Status {Clean, Suspect, Guilty}
+  uint constant GRACE = 50; // grace period for lost information in blocks
+
+  bytes32 constant MAGIC_NUMBER = "Swarm receipt";
 
   struct Bee {
-    uint deposit;
-    uint expiry;
-    Status status;
+    uint deposit;    // amount deposited by this member
+    uint expiry;     // expiration time of the deposit
+    uint256 missing; // member accused of losing this swarm chunk
+    uint deadline;   // block number before which chunk must be presented
   }
 
   mapping (address => Bee) swarm;
@@ -27,7 +30,7 @@ contract Swarm
   /// @param time term of Swarm membership in seconds from now.
   function signup(uint time) {
     Bee b = swarm[msg.sender];
-    if(b.status == Status.Clean && now + time > now) {
+    if(isClean(msg.sender) && now + time > now) {
       b.expiry = max(b.expiry, now + time);
     }
     b.deposit += msg.value;
@@ -38,7 +41,7 @@ contract Swarm
   /// @dev Only allowed with clean status and expired term.
   function withdraw() {
     Bee b = swarm[msg.sender];
-    if(now > b.expiry && b.status == Status.Clean) {
+    if(now > b.expiry && isClean(msg.sender)) {
 	msg.sender.send(b.deposit);
 	b.deposit = 0;
     }
@@ -60,34 +63,14 @@ contract Swarm
   /// @notice Determine clean status of address `addr`.
   /// No change in state.
   ///
+  /// @dev Defined as no signed receipt has been presented for missing chunk.
+  ///
   /// @param addr queried address.
   ///
   /// @return true if status is "Clean".
   function isClean(address addr) returns (bool s) {
     Bee b = swarm[addr];
-    return b.status == Status.Clean;
-  }
-
-  /// @notice Determine suspect status of address `addr`.
-  /// No change in state.
-  ///
-  /// @param addr queried address.
-  ///
-  /// @return true if status is "Suspect".
-  function isSuspect(address addr) returns (bool s) {
-    Bee b = swarm[addr];
-    return b.status == Status.Suspect;
-  }
-
-  /// @notice Determine guilty status of address `addr`.
-  /// No change in state.
-  ///
-  /// @param addr queried address.
-  ///
-  /// @return true if status is "Guilty".
-  function isGuilty(address addr) returns (bool s) {
-    Bee b = swarm[addr];
-    return b.status == Status.Guilty;
+    return b.missing == 0; // nothing they signed is missing
   }
 
   /// @notice Determine if the deposit for `addr` is unaccessible until `time`.
