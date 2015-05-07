@@ -11,7 +11,7 @@ contract Swarm
     Status status;
   }
 
-  mapping (address => Bee) swarm;
+  mapping (address => mapping (address => Bee)) swarm;
 
   function max(uint a, uint b) private returns (uint c) {
     if(a >= b) return a;
@@ -25,8 +25,10 @@ contract Swarm
   /// but all funds are added to deposite irrespective of status.
   ///
   /// @param time term of Swarm membership in seconds from now.
-  function signup(uint time) {
-    Bee b = swarm[msg.sender];
+  ///
+  /// @param arbiter address of arbiter contract (or external arbiter entity)
+  function signup(uint time, address arbiter) {
+    Bee b = swarm[arbiter][msg.sender];
     if(b.status == Status.Clean && now + time > now) {
       b.expiry = max(b.expiry, now + time);
     }
@@ -36,8 +38,10 @@ contract Swarm
   /// @notice Withdraw from Swarm, refund deposit.
   ///
   /// @dev Only allowed with clean status and expired term.
-  function withdraw() {
-    Bee b = swarm[msg.sender];
+  ///
+  /// @param arbiter address of arbiter contract (or external arbiter entity)
+  function withdraw(address arbiter) {
+    Bee b = swarm[arbiter][msg.sender];
     if(now > b.expiry && b.status == Status.Clean) {
 	msg.sender.send(b.deposit);
 	b.deposit = 0;
@@ -51,9 +55,11 @@ contract Swarm
   ///
   /// @param addr queried address.
   ///
+  /// @param arbiter address of arbiter contract (or external arbiter entity)
+  ///
   /// @return balance of queried address.
-  function balance(address addr) returns (uint d) {
-    Bee b = swarm[addr];
+  function balance(address addr, address arbiter) returns (uint d) {
+    Bee b = swarm[arbiter][addr];
     return b.deposit;
   }
 
@@ -62,9 +68,11 @@ contract Swarm
   ///
   /// @param addr queried address.
   ///
+  /// @param arbiter address of arbiter contract (or external arbiter entity)
+  ///
   /// @return true if status is "Clean".
-  function isClean(address addr) returns (bool s) {
-    Bee b = swarm[addr];
+  function isClean(address addr, address arbiter) returns (bool s) {
+    Bee b = swarm[arbiter][addr];
     return b.status == Status.Clean;
   }
 
@@ -73,9 +81,11 @@ contract Swarm
   ///
   /// @param addr queried address.
   ///
+  /// @param arbiter address of arbiter contract (or external arbiter entity)
+  ///
   /// @return true if status is "Suspect".
-  function isSuspect(address addr) returns (bool s) {
-    Bee b = swarm[addr];
+  function isSuspect(address addr, address arbiter) returns (bool s) {
+    Bee b = swarm[arbiter][addr];
     return b.status == Status.Suspect;
   }
 
@@ -84,9 +94,11 @@ contract Swarm
   ///
   /// @param addr queried address.
   ///
+  /// @param arbiter address of arbiter contract (or external arbiter entity)
+  ///
   /// @return true if status is "Guilty".
-  function isGuilty(address addr) returns (bool s) {
-    Bee b = swarm[addr];
+  function isGuilty(address addr, address arbiter) returns (bool s) {
+    Bee b = swarm[arbiter][addr];
     return b.status == Status.Guilty;
   }
 
@@ -97,10 +109,11 @@ contract Swarm
   ///
   /// @param time queried time.
   ///
+  /// @param arbiter address of arbiter contract (or external arbiter entity)
+  ///
   /// @return true if deposit expires after queried time.
-  function expiresAfter(address addr, uint time) returns (bool s) {
-    Bee b = swarm[addr];
+  function expiresAfter(address addr, uint time, address arbiter) returns (bool s) {
+    Bee b = swarm[arbiter][addr];
     return b.expiry > time;
   }
 }
-v
