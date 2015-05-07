@@ -88,7 +88,7 @@ func (s *sstack) Less(i, j int) bool {
 	return s.blocks[i/blockSize][i%blockSize].priority > s.blocks[j/blockSize][j%blockSize].priority
 }
 
-// Swapts two elements in the stack. Required by sort.Interface.
+// Swaps two elements in the stack. Required by sort.Interface.
 func (s *sstack) Swap(i, j int) {
 	ib, io, jb, jo := i/blockSize, i%blockSize, j/blockSize, j%blockSize
 	s.blocks[ib][io], s.blocks[jb][jo] = s.blocks[jb][jo], s.blocks[ib][io]
@@ -96,8 +96,5 @@ func (s *sstack) Swap(i, j int) {
 
 // Resets the stack, effectively clearing its contents.
 func (s *sstack) Reset() {
-	s.size = 0
-	s.offset = 0
-	s.active = s.blocks[0]
-	s.capacity = blockSize
+	*s = *newSstack()
 }

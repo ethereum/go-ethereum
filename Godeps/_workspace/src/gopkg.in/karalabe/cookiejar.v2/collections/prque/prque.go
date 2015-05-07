@@ -71,5 +71,5 @@ func (p *Prque) Size() int {
 
 // Clears the contents of the priority queue.
 func (p *Prque) Reset() {
-	p.cont.Reset()
+	*p = *New()
 }

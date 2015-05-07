@@ -79,15 +79,31 @@ func TestSstackSort(t *testing.T) {
 }
 
 func TestSstackReset(t *testing.T) {
-	// Push some stuff onto the stack
+	// Create some initial data
 	size := 16 * blockSize
-	stack := newSstack()
+	data := make([]*item, size)
 	for i := 0; i < size; i++ {
-		stack.Push(&item{i, float32(i)})
+		data[i] = &item{rand.Int(), rand.Float32()}
 	}
-	// Clear and verify
-	stack.Reset()
-	if stack.Len() != 0 {
-		t.Errorf("stack not empty after reset: %v", stack)
+	stack := newSstack()
+	for rep := 0; rep < 2; rep++ {
+		// Push all the data into the stack, pop out every second
+		secs := []*item{}
+		for i := 0; i < size; i++ {
+			stack.Push(data[i])
+			if i%2 == 0 {
+				secs = append(secs, stack.Pop().(*item))
+			}
+		}
+		// Reset and verify both pulled and stack contents
+		stack.Reset()
+		if stack.Len() != 0 {
+			t.Errorf("stack not empty after reset: %v", stack)
+		}
+		for i := 0; i < size; i++ {
+			if i%2 == 0 && data[i] != secs[i/2] {
+				t.Errorf("push/pop mismatch: have %v, want %v.", secs[i/2], data[i])
+			}
+		}
 	}
 }
