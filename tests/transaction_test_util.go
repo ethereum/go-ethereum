@@ -58,7 +58,7 @@ func runTest(txTest TransactionTest) (err error) {
 			return nil
 		} else {
 			// RLP decoding failed but is expected to succeed (test FAIL)
-			return errors.New("RLP decoding failed when expected to succeed")
+			return fmt.Errorf("RLP decoding failed when expected to succeed: ", err)
 		}
 	}
 
