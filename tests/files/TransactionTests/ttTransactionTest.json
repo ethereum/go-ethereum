@@ -38,8 +38,53 @@
             "value" : "0x0a"
         }
     },
+    "DataTestFirstZeroBytes" : {
+        "rlp" : "0xf87c80018261a894095e7baea6a6c7c4c2dfeb977efac326af552d870a9d00000000000000000000000000010000000000000000000000000000001ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+        "sender" : "8131688854fe0dca411aa19572a01fe3e3e4fa74",
+        "transaction" : {
+            "data" : "0x000000000000000000000000001000000000000000000000000000000",
+            "gasLimit" : "0x61a8",
+            "gasPrice" : "0x01",
+            "nonce" : "0x00",
+            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
+            "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "v" : "0x1b",
+            "value" : "0x0a"
+        }
+    },
+    "DataTestLastZeroBytes" : {
+        "rlp" : "0xf87c80018261a894095e7baea6a6c7c4c2dfeb977efac326af552d870a9d00100000000000000000000000000000000000000000000000000000001ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+        "sender" : "ead53a9560ea38feb0bc2cad8ef65e5d8f990fc1",
+        "transaction" : {
+            "data" : "0x010000000000000000000000000000000000000000000000000000000",
+            "gasLimit" : "0x61a8",
+            "gasPrice" : "0x01",
+            "nonce" : "0x00",
+            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
+            "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "v" : "0x1b",
+            "value" : "0x0a"
+        }
+    },
     "DataTestNotEnoughGAS" : {
         "rlp" : "0xf86d800182521c94095e7baea6a6c7c4c2dfeb977efac326af552d870a8e0358ac39584bc98a7c979f984b031ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"
+    },
+    "DataTestZeroBytes" : {
+        "rlp" : "0xf87c80018261a894095e7baea6a6c7c4c2dfeb977efac326af552d870a9d00000000000000000000000000000000000000000000000000000000001ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+        "sender" : "b7ab01c0f092d30aeed17e23adb7aa5a9b2ee077",
+        "transaction" : {
+            "data" : "0x000000000000000000000000000000000000000000000000000000000",
+            "gasLimit" : "0x61a8",
+            "gasPrice" : "0x01",
+            "nonce" : "0x00",
+            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
+            "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "v" : "0x1b",
+            "value" : "0x0a"
+        }
     },
     "EmptyTransaction" : {
         "rlp" : "0xf85d80808094095e7baea6a6c7c4c2dfeb977efac326af552d8780801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"
@@ -135,7 +180,7 @@
             "value" : "0x00"
         }
     },
-    "TransactionWithHihghNonce" : {
+    "TransactionWithHihghNonce256" : {
         "rlp" : "0xf87fa0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0182520894095e7baea6a6c7c4c2dfeb977efac326af552d8780801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
         "sender" : "9b96002788562fefd5ac08d5af877fa738272dc7",
         "transaction" : {
@@ -143,6 +188,21 @@
             "gasLimit" : "0x5208",
             "gasPrice" : "0x01",
             "nonce" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
+            "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "v" : "0x1b",
+            "value" : "0x00"
+        }
+    },
+    "TransactionWithHihghNonce32" : {
+        "rlp" : "0xf8648501000000000182520894095e7baea6a6c7c4c2dfeb977efac326af552d8780801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+        "sender" : "e86dc346fd8debf719486ff2f9c4c629fe58fc46",
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "0x5208",
+            "gasPrice" : "0x01",
+            "nonce" : "0x0100000000",
             "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
             "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
@@ -171,8 +231,38 @@
     "TransactionWithRSvalue0" : {
         "rlp" : "0xdf800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801b8080"
     },
+    "TransactionWithRSvalue1" : {
+        "rlp" : "0xdf800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801b0101",
+        "sender" : "98c188f183d4e93ff2bffadd145f39b4a792ed85",
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "0x5208",
+            "gasPrice" : "0x01",
+            "nonce" : "0x00",
+            "r" : "0x01",
+            "s" : "0x01",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "v" : "0x1b",
+            "value" : "0x0b"
+        }
+    },
     "TransactionWithRvalue0" : {
         "rlp" : "0xf83f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801b80a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"
+    },
+    "TransactionWithRvalue1" : {
+        "rlp" : "0xf83f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801b01a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+        "sender" : "421ba7ba39c1c2ddb98308deca3af1dd9e461740",
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "0x5208",
+            "gasPrice" : "0x01",
+            "nonce" : "0x00",
+            "r" : "0x01",
+            "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "v" : "0x1b",
+            "value" : "0x0b"
+        }
     },
     "TransactionWithRvalueHigh" : {
         "rlp" : "0xf85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140a08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
@@ -199,30 +289,33 @@
         "rlp" : "0xf85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"
     },
     "TransactionWithSvalue0" : {
-        "rlp" : "0xf83f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a3664935380",
-        "sender" : "f9c8b2d1e51d4cd5e749fd80393caf36879bca08",
-        "transaction" : {
-            "data" : "0x",
-            "gasLimit" : "0x5208",
-            "gasPrice" : "0x01",
-            "nonce" : "0x",
-            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
-            "s" : "0x",
-            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
-            "v" : "0x1b",
-            "value" : "0x0b"
-        }
+        "rlp" : "0xf83f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a3664935380"
     },
-    "TransactionWithSvalueHigh" : {
-        "rlp" : "0xf85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e",
-        "sender" : "cae01e4c9e1eb0fc7676055de1fa1f1e8cfd36ee",
+    "TransactionWithSvalue1" : {
+        "rlp" : "0xf83f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a3664935301",
+        "sender" : "e115cf6bb5656786569dd273705242ca72d84bc0",
         "transaction" : {
             "data" : "",
             "gasLimit" : "0x5208",
             "gasPrice" : "0x01",
             "nonce" : "0x00",
             "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
-            "s" : "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e",
+            "s" : "0x01",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "v" : "0x1b",
+            "value" : "0x0b"
+        }
+    },
+    "TransactionWithSvalueHigh" : {
+        "rlp" : "0xf85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140",
+        "sender" : "474869ba435affa1f45aaada48520880921c0887",
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "0x5208",
+            "gasPrice" : "0x01",
+            "nonce" : "0x00",
+            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
+            "s" : "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
             "v" : "0x1b",
             "value" : "0x0b"
@@ -247,7 +340,7 @@
         }
     },
     "TransactionWithSvalueTooHigh" : {
-        "rlp" : "0xf85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"
+        "rlp" : "0xf85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"
     },
     "TransactionWithTooFewRLPElements" : {
         "rlp" : "0xf85b800194095e7baea6a6c7c4c2dfeb977efac326af552d87801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"

@@ -373,7 +373,7 @@
                 "code" : "0x6000600060006000600073aaae7baea6a6c7c4c2dfeb977efac326af552aaa61157cf1600055",
                 "nonce" : "0x00",
                 "storage" : {
-                    "0x" : "0x01",
+                    "0x00" : "0x01",
                     "0x01" : "0x01"
                 }
             },
@@ -613,7 +613,7 @@
                 "code" : "0x6000600060006000600073aaae7baea6a6c7c4c2dfeb977efac326af552aaa6101f4f1600055",
                 "nonce" : "0x00",
                 "storage" : {
-                    "0x" : "0x01",
+                    "0x00" : "0x01",
                     "0x01" : "0x01"
                 }
             },
@@ -685,7 +685,7 @@
                 "code" : "0x6000600060006000600073aaae7baea6a6c7c4c2dfeb977efac326af552aaa6101f4f1600055",
                 "nonce" : "0x00",
                 "storage" : {
-                    "0x" : "0x01",
+                    "0x00" : "0x01",
                     "0x01" : "0x01"
                 }
             },
@@ -758,7 +758,7 @@
                 "code" : "0x6000600060006000600073aaae7baea6a6c7c4c2dfeb977efac326af552aaa6101f4f16000556000600060006000600073aaae7baea6a6c7c4c2dfeb977efac326af552aaa6101f4f1",
                 "nonce" : "0x00",
                 "storage" : {
-                    "0x" : "0x01",
+                    "0x00" : "0x01",
                     "0x01" : "0x01"
                 }
             },
