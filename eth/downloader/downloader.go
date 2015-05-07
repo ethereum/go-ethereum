@@ -346,13 +346,28 @@ out:
 				d.peers.setState(blockPack.peerId, idleState)
 			}
 		case <-ticker.C:
-			// after removing bad peers make sure we actually have sufficient peer left to keep downloading
+			// Check for bad peers. Bad peers may indicate a peer not responding
+			// to a `getBlocks` message. A timeout of 5 seconds is set. Peers
+			// that badly or poorly behave are removed from the peer set (not banned).
+			// Bad peers are excluded from the available peer set and therefor won't be
+			// reused. XXX We could re-introduce peers after X time.
+			badPeers := d.queue.Expire(blockTtl)
+			for _, pid := range badPeers {
+				// XXX We could make use of a reputation system here ranking peers
+				// in their performance
+				// 1) Time for them to respond;
+				// 2) Measure their speed;
+				// 3) Amount and availability.
+				if peer := d.peers[pid]; peer != nil {
+					peer.demote()
+					peer.reset()
+				}
+			}
+			// After removing bad peers make sure we actually have sufficient peer left to keep downloading
 			if len(d.peers) == 0 {
 				d.queue.Reset()
-
 				return errNoPeers
 			}
-
 			// If there are unrequested hashes left start fetching
 			// from the available peers.
 			if d.queue.Pending() > 0 {
@@ -392,25 +407,6 @@ out:
 				// safely assume we're done. Another part of the process will  check
 				// for parent errors and will re-request anything that's missing
 				break out
-			} else {
-				// Check for bad peers. Bad peers may indicate a peer not responding
-				// to a `getBlocks` message. A timeout of 5 seconds is set. Peers
-				// that badly or poorly behave are removed from the peer set (not banned).
-				// Bad peers are excluded from the available peer set and therefor won't be
-				// reused. XXX We could re-introduce peers after X time.
-				badPeers := d.queue.Expire(blockTtl)
-				for _, pid := range badPeers {
-					// XXX We could make use of a reputation system here ranking peers
-					// in their performance
-					// 1) Time for them to respond;
-					// 2) Measure their speed;
-					// 3) Amount and availability.
-					if peer := d.peers[pid]; peer != nil {
-						peer.demote()
-						peer.reset()
-					}
-				}
-
 			}
 		}
 	}
