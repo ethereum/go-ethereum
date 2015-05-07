@@ -204,6 +204,27 @@ func (self *TxPool) AddTransactions(txs []*types.Transaction) {
 	}
 }
 
+// GetTransaction allows you to check the pending and queued transaction in the
+// transaction pool.
+// It has two stategies, first check the pool (map) then check the queue
+func (tp *TxPool) GetTransaction(hash common.Hash) *types.Transaction {
+	// check the txs first
+	if tx, ok := tp.txs[hash]; ok {
+		return tx
+	}
+
+	// check queue
+	for _, txs := range tp.queue {
+		for _, tx := range txs {
+			if tx.Hash() == hash {
+				return tx
+			}
+		}
+	}
+
+	return nil
+}
+
 func (self *TxPool) GetTransactions() (txs types.Transactions) {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
