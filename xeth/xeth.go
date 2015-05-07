@@ -235,6 +235,8 @@ func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blha
 	data, _ := self.backend.ExtraDb().Get(common.FromHex(hash))
 	if len(data) != 0 {
 		tx = types.NewTransactionFromBytes(data)
+	} else { // check pending transactions
+		tx = self.backend.TxPool().GetTransaction(common.HexToHash(hash))
 	}
 
 	// meta
