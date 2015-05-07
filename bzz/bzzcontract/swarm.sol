@@ -12,6 +12,7 @@ contract Swarm
     uint expiry;     // expiration time of the deposit
     bytes32 missing; // member accused of losing this swarm chunk
     uint deadline;   // block number before which chunk must be presented
+    address reporter; // receipt reported by this address
   }
 
   mapping (address => Bee) swarm;
@@ -106,7 +107,30 @@ contract Swarm
       Bee b = swarm[signer];
       b.missing = swarmHash;
       b.deadline = block.number + GRACE;
+      b.reporter = msg.sender;
       Report(signer);
+  }
+  
+  /// @notice Present a chunk in order to avoid losing deposit.
+  ///
+  /// @param chunk chunk data
+  function presentMissingChunk(bytes chunk) external {
+      bytes32 swarmHash = sha3(chunk);
+      presentedChunks[swarmHash] = block.number;
+  }
+
+  /// @notice Determine guilty status of address `addr`.
+  /// No change in state.
+  ///
+  /// @dev Definition of guilty is failing to present missing chunk within grace period.
+  ///
+  /// @param addr queried address.
+  ///
+  /// @return true, if status is "Guilty".
+  function isGuilty(address addr) returns (bool g){
+      if(isClean(addr)) return false;
+      Bee b = swarm[addr];
+      return b.deadline < block.number;
   }
 
   /// @notice Determine if the deposit for `addr` is unaccessible until `time`.
