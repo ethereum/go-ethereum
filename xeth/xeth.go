@@ -504,7 +504,7 @@ func (self *XEth) TransactionFilterChanged(id int) []common.Hash {
 	self.blockMu.Lock()
 	defer self.blockMu.Unlock()
 
-	if self.blockQueue[id] != nil {
+	if self.transactionQueue[id] != nil {
 		return self.transactionQueue[id].get()
 	}
 	return nil
