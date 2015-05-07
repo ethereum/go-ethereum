@@ -25,7 +25,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <Shlobj.h>
+#include <shlobj.h>
 
 FILE* ethash_fopen(char const* file_name, char const* mode)
 {

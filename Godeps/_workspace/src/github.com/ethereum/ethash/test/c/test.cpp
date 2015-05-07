@@ -205,10 +205,10 @@ BOOST_AUTO_TEST_CASE(test_ethash_io_mutable_name) {
 	// should have at least 8 bytes provided since this is what we test :)
 	ethash_h256_t seed1 = ethash_h256_static_init(0, 10, 65, 255, 34, 55, 22, 8);
 	ethash_io_mutable_name(1, &seed1, mutable_name);
-	BOOST_REQUIRE_EQUAL(0, strcmp(mutable_name, "1_000a41ff22371608"));
+	BOOST_REQUIRE_EQUAL(0, strcmp(mutable_name, "full-R1-000a41ff22371608"));
 	ethash_h256_t seed2 = ethash_h256_static_init(0, 0, 0, 0, 0, 0, 0, 0);
 	ethash_io_mutable_name(44, &seed2, mutable_name);
-	BOOST_REQUIRE_EQUAL(0, strcmp(mutable_name, "44_0000000000000000"));
+	BOOST_REQUIRE_EQUAL(0, strcmp(mutable_name, "full-R44-0000000000000000"));
 }
 
 BOOST_AUTO_TEST_CASE(test_ethash_dir_creation) {
@@ -599,16 +599,49 @@ BOOST_AUTO_TEST_CASE(test_incomplete_dag_file) {
 	fs::remove_all("./test_ethash_directory/");
 }
 
-BOOST_AUTO_TEST_CASE(test_block_verification) {
+BOOST_AUTO_TEST_CASE(test_block22_verification) {
+	// from POC-9 testnet, epoch 0
 	ethash_light_t light = ethash_light_new(22);
 	ethash_h256_t seedhash = stringToBlockhash("372eca2454ead349c3df0ab5d00b0b706b23e49d469387db91811cee0358fc6d");
 	BOOST_ASSERT(light);
 	ethash_return_value_t ret = ethash_light_compute(
 		light,
 		seedhash,
-		0x495732e0ed7a801c
+		0x495732e0ed7a801cU
 	);
 	BOOST_REQUIRE_EQUAL(blockhashToHexString(&ret.result), "00000b184f1fdd88bfd94c86c39e65db0c36144d5e43f745f722196e730cb614");
+	ethash_h256_t difficulty = ethash_h256_static_init(0x2, 0x5, 0x40);
+	BOOST_REQUIRE(ethash_check_difficulty(&ret.result, &difficulty));
+	ethash_light_delete(light);
+}
+
+BOOST_AUTO_TEST_CASE(test_block30001_verification) {
+	// from POC-9 testnet, epoch 1
+	ethash_light_t light = ethash_light_new(30001);
+	ethash_h256_t seedhash = stringToBlockhash("7e44356ee3441623bc72a683fd3708fdf75e971bbe294f33e539eedad4b92b34");
+	BOOST_ASSERT(light);
+	ethash_return_value_t ret = ethash_light_compute(
+		light,
+		seedhash,
+		0x318df1c8adef7e5eU
+	);
+	ethash_h256_t difficulty = ethash_h256_static_init(0x17, 0x62, 0xff);
+	BOOST_REQUIRE(ethash_check_difficulty(&ret.result, &difficulty));
+	ethash_light_delete(light);
+}
+
+BOOST_AUTO_TEST_CASE(test_block60000_verification) {
+	// from POC-9 testnet, epoch 2
+	ethash_light_t light = ethash_light_new(60000);
+	ethash_h256_t seedhash = stringToBlockhash("5fc898f16035bf5ac9c6d9077ae1e3d5fc1ecc3c9fd5bee8bb00e810fdacbaa0");
+	BOOST_ASSERT(light);
+	ethash_return_value_t ret = ethash_light_compute(
+		light,
+		seedhash,
+		0x50377003e5d830caU
+	);
+	ethash_h256_t difficulty = ethash_h256_static_init(0x25, 0xa6, 0x1e);
+	BOOST_REQUIRE(ethash_check_difficulty(&ret.result, &difficulty));
 	ethash_light_delete(light);
 }
 
@@ -617,7 +650,7 @@ BOOST_AUTO_TEST_CASE(test_block_verification) {
 // Uncomment and run on your own machine if you want to confirm
 // it works fine.
 #if 0
-static int lef_cb(unsigned _progress)
+static int progress_cb(unsigned _progress)
 {
 	printf("CREATING DAG. PROGRESS: %u\n", _progress);
 	fflush(stdout);
@@ -627,7 +660,7 @@ static int lef_cb(unsigned _progress)
 BOOST_AUTO_TEST_CASE(full_dag_test) {
 	ethash_light_t light = ethash_light_new(55);
 	BOOST_ASSERT(light);
-	ethash_full_t full = ethash_full_new(light, lef_cb);
+	ethash_full_t full = ethash_full_new(light, progress_cb);
 	BOOST_ASSERT(full);
 	ethash_light_delete(light);
 	ethash_full_delete(full);

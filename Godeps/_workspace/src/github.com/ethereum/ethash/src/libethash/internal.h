@@ -47,7 +47,7 @@ static inline void ethash_h256_reset(ethash_h256_t* hash)
 }
 
 // Returns if hash is less than or equal to difficulty
-static inline int ethash_check_difficulty(
+static inline bool ethash_check_difficulty(
 	ethash_h256_t const* hash,
 	ethash_h256_t const* difficulty
 )
@@ -59,10 +59,10 @@ static inline int ethash_check_difficulty(
 		}
 		return ethash_h256_get(hash, i) < ethash_h256_get(difficulty, i);
 	}
-	return 1;
+	return true;
 }
 
-int ethash_quick_check_difficulty(
+bool ethash_quick_check_difficulty(
 	ethash_h256_t const* header_hash,
 	uint64_t const nonce,
 	ethash_h256_t const* mix_hash,
