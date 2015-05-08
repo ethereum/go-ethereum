@@ -518,7 +518,7 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 		conn:    fd, rtimeout: frameReadTimeout, wtimeout: frameWriteTimeout,
 	}
 	p := newPeer(fd, conn, srv.Protocols)
-	if ok, reason := srv.addPeer(conn.ID, p); !ok {
+	if ok, reason := srv.addPeer(conn, p); !ok {
 		glog.V(logger.Detail).Infof("Not adding %v (%v)\n", p, reason)
 		p.politeDisconnect(reason)
 		srv.peerWG.Done()
@@ -564,13 +564,18 @@ func (srv *Server) runPeer(p *Peer) {
 	})
 }
 
-func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
+func (srv *Server) addPeer(conn *conn, p *Peer) (bool, DiscReason) {
+	// drop connections with no matching protocols.
+	if len(srv.Protocols) > 0 && countMatchingProtocols(srv.Protocols, conn.protoHandshake.Caps) == 0 {
+		return false, DiscUselessPeer
+	}
+	// add the peer if it passes the other checks.
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
-	if ok, reason := srv.checkPeer(id); !ok {
+	if ok, reason := srv.checkPeer(conn.ID); !ok {
 		return false, reason
 	}
-	srv.peers[id] = p
+	srv.peers[conn.ID] = p
 	return true, 0
 }
 
