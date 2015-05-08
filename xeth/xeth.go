@@ -813,25 +813,25 @@ func (self *XEth) ConfirmTransaction(tx string) bool {
 	return self.frontend.ConfirmTransaction(tx)
 }
 
-func (self *XEth) Sign(fromStr, hashStr string) (string, error) {
+func (self *XEth) Sign(fromStr, hashStr string, didUnlock bool) (string, error) {
 	var (
 		from = common.HexToAddress(fromStr)
 		hash = common.HexToHash(hashStr)
 	)
-	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from.Bytes()}, hash)
+	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from.Bytes()}, hash.Bytes())
 	if err == accounts.ErrLocked {
 		if didUnlock {
-			return fmt.Errorf("signer account still locked after successful unlock")
+			return "", fmt.Errorf("signer account still locked after successful unlock")
 		}
 		if !self.frontend.UnlockAccount(from.Bytes()) {
-			return fmt.Errorf("could not unlock signer account")
+			return "", fmt.Errorf("could not unlock signer account")
 		}
 		// retry signing, the account should now be unlocked.
-		return self.Sign(fromStr, hashStr)
+		return self.Sign(fromStr, hashStr, true)
 	} else if err != nil {
-		return err
+		return "", err
 	}
-	return common.toHex(sig)
+	return common.ToHex(sig), nil
 }
 
 func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
