@@ -412,7 +412,7 @@ func (srv *Server) dialLoop() {
 	defer refresh.Stop()
 
 	// Limit the number of concurrent dials
-	tokens := maxAcceptConns
+	tokens := maxDialingConns
 	if srv.MaxPendingPeers > 0 {
 		tokens = srv.MaxPendingPeers
 	}
