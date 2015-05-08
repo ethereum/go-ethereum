@@ -22,10 +22,11 @@ const (
 	refreshPeersInterval    = 30 * time.Second
 	staticPeerCheckInterval = 15 * time.Second
 
-	// This is the maximum number of inbound connection
-	// that are allowed to linger between 'accepted' and
-	// 'added as peer'.
-	maxAcceptConns = 50
+	// Maximum number of concurrently handshaking inbound connections.
+	maxAcceptConns = 10
+
+	// Maximum number of concurrently dialing outbound connections.
+	maxDialingConns = 10
 
 	// total timeout for encryption handshake and protocol
 	// handshake in both directions.
@@ -51,6 +52,11 @@ type Server struct {
 	// MaxPeers is the maximum number of peers that can be
 	// connected. It must be greater than zero.
 	MaxPeers int
+
+	// MaxPendingPeers is the maximum number of peers that can be pending in the
+	// handshake phase, counted separately for inbound and outbound connections.
+	// Zero defaults to preset values.
+	MaxPendingPeers int
 
 	// Name sets the node name of this server.
 	// Use common.MakeName to create a name that follows existing conventions.
@@ -120,7 +126,7 @@ type Server struct {
 	peerWG sync.WaitGroup // active peer goroutines
 }
 
-type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, bool, map[discover.NodeID]bool) (*conn, error)
+type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, func(discover.NodeID) bool) (*conn, error)
 type newPeerHook func(*Peer)
 
 // Peers returns all connected peers.
@@ -331,8 +337,12 @@ func (srv *Server) listenLoop() {
 	// This channel acts as a semaphore limiting
 	// active inbound connections that are lingering pre-handshake.
 	// If all slots are taken, no further connections are accepted.
-	slots := make(chan struct{}, maxAcceptConns)
-	for i := 0; i < maxAcceptConns; i++ {
+	tokens := maxAcceptConns
+	if srv.MaxPendingPeers > 0 {
+		tokens = srv.MaxPendingPeers
+	}
+	slots := make(chan struct{}, tokens)
+	for i := 0; i < tokens; i++ {
 		slots <- struct{}{}
 	}
 
@@ -401,7 +411,15 @@ func (srv *Server) dialLoop() {
 	defer srv.loopWG.Done()
 	defer refresh.Stop()
 
-	// TODO: maybe limit number of active dials
+	// Limit the number of concurrent dials
+	tokens := maxDialingConns
+	if srv.MaxPendingPeers > 0 {
+		tokens = srv.MaxPendingPeers
+	}
+	slots := make(chan struct{}, tokens)
+	for i := 0; i < tokens; i++ {
+		slots <- struct{}{}
+	}
 	dial := func(dest *discover.Node) {
 		// Don't dial nodes that would fail the checks in addPeer.
 		// This is important because the connection handshake is a lot
@@ -413,11 +431,14 @@ func (srv *Server) dialLoop() {
 		if !ok || dialing[dest.ID] {
 			return
 		}
+		// Request a dial slot to prevent CPU exhaustion
+		<-slots
 
 		dialing[dest.ID] = true
 		srv.peerWG.Add(1)
 		go func() {
 			srv.dialNode(dest)
+			slots <- struct{}{}
 			dialed <- dest
 		}()
 	}
@@ -485,17 +506,7 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// the callers of startPeer added the peer to the wait group already.
 	fd.SetDeadline(time.Now().Add(handshakeTimeout))
 
-	// Check capacity, but override for static nodes
-	srv.lock.RLock()
-	atcap := len(srv.peers) == srv.MaxPeers
-	if dest != nil {
-		if _, ok := srv.staticNodes[dest.ID]; ok {
-			atcap = false
-		}
-	}
-	srv.lock.RUnlock()
-
-	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, atcap, srv.trustedNodes)
+	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, srv.keepconn)
 	if err != nil {
 		fd.Close()
 		glog.V(logger.Debug).Infof("Handshake with %v failed: %v", fd.RemoteAddr(), err)
@@ -507,7 +518,7 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 		conn:    fd, rtimeout: frameReadTimeout, wtimeout: frameWriteTimeout,
 	}
 	p := newPeer(fd, conn, srv.Protocols)
-	if ok, reason := srv.addPeer(conn.ID, p); !ok {
+	if ok, reason := srv.addPeer(conn, p); !ok {
 		glog.V(logger.Detail).Infof("Not adding %v (%v)\n", p, reason)
 		p.politeDisconnect(reason)
 		srv.peerWG.Done()
@@ -516,6 +527,21 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// The handshakes are done and it passed all checks.
 	// Spawn the Peer loops.
 	go srv.runPeer(p)
+}
+
+// preflight checks whether a connection should be kept. it runs
+// after the encryption handshake, as soon as the remote identity is
+// known.
+func (srv *Server) keepconn(id discover.NodeID) bool {
+	srv.lock.RLock()
+	defer srv.lock.RUnlock()
+	if _, ok := srv.staticNodes[id]; ok {
+		return true // static nodes are always allowed
+	}
+	if _, ok := srv.trustedNodes[id]; ok {
+		return true // trusted nodes are always allowed
+	}
+	return len(srv.peers) < srv.MaxPeers
 }
 
 func (srv *Server) runPeer(p *Peer) {
@@ -538,13 +564,18 @@ func (srv *Server) runPeer(p *Peer) {
 	})
 }
 
-func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
+func (srv *Server) addPeer(conn *conn, p *Peer) (bool, DiscReason) {
+	// drop connections with no matching protocols.
+	if len(srv.Protocols) > 0 && countMatchingProtocols(srv.Protocols, conn.protoHandshake.Caps) == 0 {
+		return false, DiscUselessPeer
+	}
+	// add the peer if it passes the other checks.
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
-	if ok, reason := srv.checkPeer(id); !ok {
+	if ok, reason := srv.checkPeer(conn.ID); !ok {
 		return false, reason
 	}
-	srv.peers[id] = p
+	srv.peers[conn.ID] = p
 	return true, 0
 }
 

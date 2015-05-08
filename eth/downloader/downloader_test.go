@@ -128,7 +128,7 @@ func TestDownload(t *testing.T) {
 		t.Error("download error", err)
 	}
 
-	inqueue := len(tester.downloader.queue.blocks)
+	inqueue := len(tester.downloader.queue.blockCache)
 	if inqueue != targetBlocks {
 		t.Error("expected", targetBlocks, "have", inqueue)
 	}
@@ -151,7 +151,7 @@ func TestMissing(t *testing.T) {
 		t.Error("download error", err)
 	}
 
-	inqueue := len(tester.downloader.queue.blocks)
+	inqueue := len(tester.downloader.queue.blockCache)
 	if inqueue != targetBlocks {
 		t.Error("expected", targetBlocks, "have", inqueue)
 	}
@@ -179,5 +179,53 @@ func TestTaking(t *testing.T) {
 	bs1 := tester.downloader.TakeBlocks()
 	if len(bs1) != 1000 {
 		t.Error("expected to take 1000, got", len(bs1))
+	}
+}
+
+func TestThrottling(t *testing.T) {
+	minDesiredPeerCount = 4
+	blockTtl = 1 * time.Second
+
+	targetBlocks := 4 * blockCacheLimit
+	hashes := createHashes(0, targetBlocks)
+	blocks := createBlocksFromHashes(hashes)
+	tester := newTester(t, hashes, blocks)
+
+	tester.newPeer("peer1", big.NewInt(10000), hashes[0])
+	tester.newPeer("peer2", big.NewInt(0), common.Hash{})
+	tester.badBlocksPeer("peer3", big.NewInt(0), common.Hash{})
+	tester.badBlocksPeer("peer4", big.NewInt(0), common.Hash{})
+
+	// Concurrently download and take the blocks
+	errc := make(chan error, 1)
+	go func() {
+		errc <- tester.sync("peer1", hashes[0])
+	}()
+
+	done := make(chan struct{})
+	took := []*types.Block{}
+	go func() {
+		for {
+			select {
+			case <-done:
+				took = append(took, tester.downloader.TakeBlocks()...)
+				done <- struct{}{}
+				return
+			default:
+				took = append(took, tester.downloader.TakeBlocks()...)
+			}
+		}
+	}()
+
+	// Synchronise the two threads and verify
+	err := <-errc
+	done <- struct{}{}
+	<-done
+
+	if err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	if len(took) != targetBlocks {
+		t.Fatalf("downloaded block mismatch: have %v, want %v", len(took), targetBlocks)
 	}
 }

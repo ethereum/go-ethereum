@@ -195,7 +195,12 @@ var (
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
 		Usage: "Maximum number of network peers (network disabled if set to 0)",
-		Value: 16,
+		Value: 25,
+	}
+	MaxPendingPeersFlag = cli.IntFlag{
+		Name:  "maxpendpeers",
+		Usage: "Maximum number of pending connection attempts (defaults used if set to 0)",
+		Value: 0,
 	}
 	ListenPortFlag = cli.IntFlag{
 		Name:  "port",
@@ -292,6 +297,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		AccountManager:     GetAccountManager(ctx),
 		VmDebug:            ctx.GlobalBool(VMDebugFlag.Name),
 		MaxPeers:           ctx.GlobalInt(MaxPeersFlag.Name),
+		MaxPendingPeers:    ctx.GlobalInt(MaxPendingPeersFlag.Name),
 		Port:               ctx.GlobalString(ListenPortFlag.Name),
 		NAT:                GetNAT(ctx),
 		NatSpec:            ctx.GlobalBool(NatspecEnabledFlag.Name),

@@ -51,7 +51,7 @@ import _ "net/http/pprof"
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.16"
+	Version          = "0.9.17"
 )
 
 var (
@@ -242,6 +242,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
+		utils.MaxPendingPeersFlag,
 		utils.EtherbaseFlag,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
