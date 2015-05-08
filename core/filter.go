@@ -22,9 +22,9 @@ type Filter struct {
 	max      int
 	topics   [][]common.Hash
 
-	BlockCallback   func(*types.Block, state.Logs)
-	PendingCallback func(*types.Transaction)
-	LogsCallback    func(state.Logs)
+	BlockCallback       func(*types.Block, state.Logs)
+	TransactionCallback func(*types.Transaction)
+	LogsCallback        func(state.Logs)
 }
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
