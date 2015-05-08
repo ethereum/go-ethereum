@@ -130,9 +130,12 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 	defer atomic.StoreInt32(&d.synchronising, 0)
 
 	// Abort if the queue still contains some leftover data
-	if _, cached := d.queue.Size(); cached > 0 {
+	if _, cached := d.queue.Size(); cached > 0 && d.queue.GetHeadBlock() != nil {
 		return errPendingQueue
 	}
+	// Reset the queue to clean any internal leftover state
+	d.queue.Reset()
+
 	// Retrieve the origin peer and initiate the downloading process
 	p := d.peers[id]
 	if p == nil {
