@@ -117,12 +117,6 @@ func (js *jsre) apiBindings(f xeth.Frontend) {
 		utils.Fatalf("Error loading bignumber.js: %v", err)
 	}
 
-	// we need to declare a dummy setTimeout. Otto does not support it
-	_, err = js.re.Eval("setTimeout = function(cb, delay) {};")
-	if err != nil {
-		utils.Fatalf("Error defining setTimeout: %v", err)
-	}
-
 	err = js.re.Compile("ethereum.js", re.Ethereum_JS)
 	if err != nil {
 		utils.Fatalf("Error loading ethereum.js: %v", err)

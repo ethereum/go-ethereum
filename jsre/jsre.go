@@ -143,6 +143,10 @@ func (self *JSRE) runEventLoop() {
 		}
 		return otto.UndefinedValue()
 	}
+	self.vm.Set("setTimeout", setTimeout)
+	self.vm.Set("setInterval", setInterval)
+	self.vm.Set("clearTimeout", clearTimeout)
+	self.vm.Set("clearInterval", clearTimeout)
 
 	var waitForCallbacks bool
 
@@ -165,7 +169,7 @@ loop:
 			_, err := self.vm.Call(`Function.call.call`, nil, arguments...)
 
 			if err != nil {
-				break loop
+				fmt.Println("js error:", err, arguments)
 			}
 			if timer.interval {
 				timer.timer.Reset(timer.duration)
@@ -177,10 +181,6 @@ loop:
 			}
 		case evalReq := <-self.evalQueue:
 			// run the code, send the result back
-			self.vm.Set("setTimeout", setTimeout)
-			self.vm.Set("setInterval", setInterval)
-			self.vm.Set("clearTimeout", clearTimeout)
-			self.vm.Set("clearInterval", clearTimeout)
 			evalReq.fn(&evalReq.res)
 			close(evalReq.done)
 			if waitForCallbacks && (len(registry) == 0) {
