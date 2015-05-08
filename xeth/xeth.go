@@ -813,6 +813,27 @@ func (self *XEth) ConfirmTransaction(tx string) bool {
 	return self.frontend.ConfirmTransaction(tx)
 }
 
+func (self *XEth) Sign(fromStr, hashStr string) (string, error) {
+	var (
+		from = common.HexToAddress(fromStr)
+		hash = common.HexToHash(hashStr)
+	)
+	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from.Bytes()}, hash)
+	if err == accounts.ErrLocked {
+		if didUnlock {
+			return fmt.Errorf("signer account still locked after successful unlock")
+		}
+		if !self.frontend.UnlockAccount(from.Bytes()) {
+			return fmt.Errorf("could not unlock signer account")
+		}
+		// retry signing, the account should now be unlocked.
+		return self.Sign(fromStr, hashStr)
+	} else if err != nil {
+		return err
+	}
+	return common.toHex(sig)
+}
+
 func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 
 	// this minimalistic recoding is enough (works for natspec.js)

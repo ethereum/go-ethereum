@@ -166,6 +166,11 @@ type NewTxArgs struct {
 	BlockNumber int64
 }
 
+type NewSigArgs struct {
+	From string
+	Data string
+}
+
 func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []json.RawMessage
 	var ext struct {
