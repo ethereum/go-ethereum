@@ -65,26 +65,26 @@ type protoHandshake struct {
 	ID         discover.NodeID
 }
 
-// setupConn starts a protocol session on the given connection.
-// It runs the encryption handshake and the protocol handshake.
-// If dial is non-nil, the connection the local node is the initiator.
-// If atcap is true, the connection will be disconnected with DiscTooManyPeers
-// after the key exchange.
-func setupConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node, atcap bool, trusted map[discover.NodeID]bool) (*conn, error) {
+// setupConn starts a protocol session on the given connection. It
+// runs the encryption handshake and the protocol handshake. If dial
+// is non-nil, the connection the local node is the initiator. If
+// keepconn returns false, the connection will be disconnected with
+// DiscTooManyPeers after the key exchange.
+func setupConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node, keepconn func(discover.NodeID) bool) (*conn, error) {
 	if dial == nil {
-		return setupInboundConn(fd, prv, our, atcap, trusted)
+		return setupInboundConn(fd, prv, our, keepconn)
 	} else {
-		return setupOutboundConn(fd, prv, our, dial, atcap, trusted)
+		return setupOutboundConn(fd, prv, our, dial, keepconn)
 	}
 }
 
-func setupInboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, atcap bool, trusted map[discover.NodeID]bool) (*conn, error) {
+func setupInboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, keepconn func(discover.NodeID) bool) (*conn, error) {
 	secrets, err := receiverEncHandshake(fd, prv, nil)
 	if err != nil {
 		return nil, fmt.Errorf("encryption handshake failed: %v", err)
 	}
 	rw := newRlpxFrameRW(fd, secrets)
-	if atcap && !trusted[secrets.RemoteID] {
+	if !keepconn(secrets.RemoteID) {
 		SendItems(rw, discMsg, DiscTooManyPeers)
 		return nil, errors.New("we have too many peers")
 	}
@@ -99,13 +99,13 @@ func setupInboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, a
 	return &conn{rw, rhs}, nil
 }
 
-func setupOutboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node, atcap bool, trusted map[discover.NodeID]bool) (*conn, error) {
+func setupOutboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node, keepconn func(discover.NodeID) bool) (*conn, error) {
 	secrets, err := initiatorEncHandshake(fd, prv, dial.ID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("encryption handshake failed: %v", err)
 	}
 	rw := newRlpxFrameRW(fd, secrets)
-	if atcap && !trusted[secrets.RemoteID] {
+	if !keepconn(secrets.RemoteID) {
 		SendItems(rw, discMsg, DiscTooManyPeers)
 		return nil, errors.New("we have too many peers")
 	}

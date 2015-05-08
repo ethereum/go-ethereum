@@ -126,7 +126,7 @@ type Server struct {
 	peerWG sync.WaitGroup // active peer goroutines
 }
 
-type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, bool, map[discover.NodeID]bool) (*conn, error)
+type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node, func(discover.NodeID) bool) (*conn, error)
 type newPeerHook func(*Peer)
 
 // Peers returns all connected peers.
@@ -506,17 +506,7 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// the callers of startPeer added the peer to the wait group already.
 	fd.SetDeadline(time.Now().Add(handshakeTimeout))
 
-	// Check capacity, but override for static nodes
-	srv.lock.RLock()
-	atcap := len(srv.peers) == srv.MaxPeers
-	if dest != nil {
-		if _, ok := srv.staticNodes[dest.ID]; ok {
-			atcap = false
-		}
-	}
-	srv.lock.RUnlock()
-
-	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, atcap, srv.trustedNodes)
+	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest, srv.keepconn)
 	if err != nil {
 		fd.Close()
 		glog.V(logger.Debug).Infof("Handshake with %v failed: %v", fd.RemoteAddr(), err)
@@ -537,6 +527,21 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// The handshakes are done and it passed all checks.
 	// Spawn the Peer loops.
 	go srv.runPeer(p)
+}
+
+// preflight checks whether a connection should be kept. it runs
+// after the encryption handshake, as soon as the remote identity is
+// known.
+func (srv *Server) keepconn(id discover.NodeID) bool {
+	srv.lock.RLock()
+	defer srv.lock.RUnlock()
+	if _, ok := srv.staticNodes[id]; ok {
+		return true // static nodes are always allowed
+	}
+	if _, ok := srv.trustedNodes[id]; ok {
+		return true // trusted nodes are always allowed
+	}
+	return len(srv.peers) < srv.MaxPeers
 }
 
 func (srv *Server) runPeer(p *Peer) {
