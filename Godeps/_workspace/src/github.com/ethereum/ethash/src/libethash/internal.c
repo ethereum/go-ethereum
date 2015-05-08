@@ -280,7 +280,7 @@ ethash_h256_t ethash_get_seedhash(uint64_t block_number)
 	return ret;
 }
 
-int ethash_quick_check_difficulty(
+bool ethash_quick_check_difficulty(
 	ethash_h256_t const* header_hash,
 	uint64_t const nonce,
 	ethash_h256_t const* mix_hash,

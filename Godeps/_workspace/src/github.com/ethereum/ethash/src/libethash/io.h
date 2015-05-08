@@ -34,11 +34,12 @@
 extern "C" {
 #endif
 // Maximum size for mutable part of DAG file name
+// 6 is for "full-R", the suffix of the filename
 // 10 is for maximum number of digits of a uint32_t (for REVISION)
-// 1 is for _ and 16 is for the first 16 hex digits for first 8 bytes of
+// 1 is for - and 16 is for the first 16 hex digits for first 8 bytes of
 // the seedhash and last 1 is for the null terminating character
 // Reference: https://github.com/ethereum/wiki/wiki/Ethash-DAG
-#define DAG_MUTABLE_NAME_MAX_SIZE (10 + 1 + 16 + 1)
+#define DAG_MUTABLE_NAME_MAX_SIZE (6 + 10 + 1 + 16 + 1)
 /// Possible return values of @see ethash_io_prepare
 enum ethash_io_rc {
 	ETHASH_IO_FAIL = 0,           ///< There has been an IO failure
@@ -176,7 +177,7 @@ static inline bool ethash_io_mutable_name(
 #if LITTLE_ENDIAN == BYTE_ORDER
     hash = ethash_swap_u64(hash);
 #endif
-    return snprintf(output, DAG_MUTABLE_NAME_MAX_SIZE, "%u_%016" PRIx64, revision, hash) >= 0;
+    return snprintf(output, DAG_MUTABLE_NAME_MAX_SIZE, "full-R%u-%016" PRIx64, revision, hash) >= 0;
 }
 
 #ifdef __cplusplus
