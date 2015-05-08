@@ -171,6 +171,41 @@ type NewSigArgs struct {
 	Data string
 }
 
+func (args *NewSigArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []json.RawMessage
+	var ext struct {
+		From string
+		Data string
+	}
+
+	// Decode byte slice to array of RawMessages
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return NewDecodeParamError(err.Error())
+	}
+
+	// Check for sufficient params
+	if len(obj) < 1 {
+		return NewInsufficientParamsError(len(obj), 1)
+	}
+
+	// Decode 0th RawMessage to temporary struct
+	if err := json.Unmarshal(obj[0], &ext); err != nil {
+		return NewDecodeParamError(err.Error())
+	}
+
+	if len(ext.From) == 0 {
+		return NewValidationError("from", "is required")
+	}
+
+	if len(ext.Data) == 0 {
+		return NewValidationError("data", "is required")
+	}
+
+	args.From = ext.From
+	args.Data = ext.Data
+	return nil
+}
+
 func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []json.RawMessage
 	var ext struct {

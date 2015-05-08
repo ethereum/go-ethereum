@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"encoding/json"
-
 	"github.com/ethereum/go-ethereum/jsre"
 	"github.com/robertkrimen/otto"
 )
@@ -35,7 +34,6 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 	}
 
 	jsonreq, err := json.Marshal(reqif)
-
 	var reqs []RpcRequest
 	batch := true
 	err = json.Unmarshal(jsonreq, &reqs)
