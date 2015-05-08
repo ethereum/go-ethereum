@@ -22,8 +22,11 @@ func startTestServer(t *testing.T, pf newPeerHook) *Server {
 		ListenAddr:  "127.0.0.1:0",
 		PrivateKey:  newkey(),
 		newPeerHook: pf,
-		setupFunc: func(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node, atcap bool, trusted map[discover.NodeID]bool) (*conn, error) {
+		setupFunc: func(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node, keepconn func(discover.NodeID) bool) (*conn, error) {
 			id := randomID()
+			if !keepconn(id) {
+				return nil, DiscAlreadyConnected
+			}
 			rw := newRlpxFrameRW(fd, secrets{
 				MAC:        zero16,
 				AES:        zero16,
@@ -200,7 +203,7 @@ func TestServerDisconnectAtCap(t *testing.T) {
 		// Run the handshakes just like a real peer would.
 		key := newkey()
 		hs := &protoHandshake{Version: baseProtocolVersion, ID: discover.PubkeyID(&key.PublicKey)}
-		_, err = setupConn(conn, key, hs, srv.Self(), false, srv.trustedNodes)
+		_, err = setupConn(conn, key, hs, srv.Self(), keepalways)
 		if i == nconns-1 {
 			// When handling the last connection, the server should
 			// disconnect immediately instead of running the protocol
@@ -250,7 +253,7 @@ func TestServerStaticPeers(t *testing.T) {
 		// Run the handshakes just like a real peer would, and wait for completion
 		key := newkey()
 		shake := &protoHandshake{Version: baseProtocolVersion, ID: discover.PubkeyID(&key.PublicKey)}
-		if _, err = setupConn(conn, key, shake, server.Self(), false, server.trustedNodes); err != nil {
+		if _, err = setupConn(conn, key, shake, server.Self(), keepalways); err != nil {
 			t.Fatalf("conn %d: unexpected error: %v", i, err)
 		}
 		<-started
@@ -344,7 +347,7 @@ func TestServerTrustedPeers(t *testing.T) {
 		// Run the handshakes just like a real peer would, and wait for completion
 		key := newkey()
 		shake := &protoHandshake{Version: baseProtocolVersion, ID: discover.PubkeyID(&key.PublicKey)}
-		if _, err = setupConn(conn, key, shake, server.Self(), false, server.trustedNodes); err != nil {
+		if _, err = setupConn(conn, key, shake, server.Self(), keepalways); err != nil {
 			t.Fatalf("conn %d: unexpected error: %v", i, err)
 		}
 		<-started
@@ -357,7 +360,7 @@ func TestServerTrustedPeers(t *testing.T) {
 	defer conn.Close()
 
 	shake := &protoHandshake{Version: baseProtocolVersion, ID: trusted.ID}
-	if _, err = setupConn(conn, key, shake, server.Self(), false, server.trustedNodes); err != nil {
+	if _, err = setupConn(conn, key, shake, server.Self(), keepalways); err != nil {
 		t.Fatalf("trusted node: unexpected error: %v", err)
 	}
 	select {
@@ -472,7 +475,7 @@ func TestServerMaxPendingAccepts(t *testing.T) {
 	go func() {
 		key := newkey()
 		shake := &protoHandshake{Version: baseProtocolVersion, ID: discover.PubkeyID(&key.PublicKey)}
-		if _, err := setupConn(conns[1], key, shake, server.Self(), false, server.trustedNodes); err != nil {
+		if _, err := setupConn(conns[1], key, shake, server.Self(), keepalways); err != nil {
 			t.Fatalf("failed to run handshake: %v", err)
 		}
 	}()
@@ -486,7 +489,7 @@ func TestServerMaxPendingAccepts(t *testing.T) {
 	go func() {
 		key := newkey()
 		shake := &protoHandshake{Version: baseProtocolVersion, ID: discover.PubkeyID(&key.PublicKey)}
-		if _, err := setupConn(conns[0], key, shake, server.Self(), false, server.trustedNodes); err != nil {
+		if _, err := setupConn(conns[0], key, shake, server.Self(), keepalways); err != nil {
 			t.Fatalf("failed to run handshake: %v", err)
 		}
 	}()
@@ -512,4 +515,8 @@ func randomID() (id discover.NodeID) {
 		id[i] = byte(rand.Intn(255))
 	}
 	return id
+}
+
+func keepalways(id discover.NodeID) bool {
+	return true
 }

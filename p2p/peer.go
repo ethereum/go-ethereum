@@ -211,6 +211,18 @@ func (p *Peer) handle(msg Msg) error {
 	return nil
 }
 
+func countMatchingProtocols(protocols []Protocol, caps []Cap) int {
+	n := 0
+	for _, cap := range caps {
+		for _, proto := range protocols {
+			if proto.Name == cap.Name && proto.Version == cap.Version {
+				n++
+			}
+		}
+	}
+	return n
+}
+
 // matchProtocols creates structures for matching named subprotocols.
 func matchProtocols(protocols []Protocol, caps []Cap, rw MsgReadWriter) map[string]*protoRW {
 	sort.Sort(capsByName(caps))

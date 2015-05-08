@@ -141,9 +141,10 @@ func TestSetupConn(t *testing.T) {
 	fd0, fd1 := net.Pipe()
 
 	done := make(chan struct{})
+	keepalways := func(discover.NodeID) bool { return true }
 	go func() {
 		defer close(done)
-		conn0, err := setupConn(fd0, prv0, hs0, node1, false, nil)
+		conn0, err := setupConn(fd0, prv0, hs0, node1, keepalways)
 		if err != nil {
 			t.Errorf("outbound side error: %v", err)
 			return
@@ -156,7 +157,7 @@ func TestSetupConn(t *testing.T) {
 		}
 	}()
 
-	conn1, err := setupConn(fd1, prv1, hs1, nil, false, nil)
+	conn1, err := setupConn(fd1, prv1, hs1, nil, keepalways)
 	if err != nil {
 		t.Fatalf("inbound side error: %v", err)
 	}
