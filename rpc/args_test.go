@@ -2494,3 +2494,13 @@ func TestBlockHeightFromJsonInvalid(t *testing.T) {
 		t.Error(str)
 	}
 }
+
+func TestSourceArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(SourceArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}

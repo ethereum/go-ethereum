@@ -224,10 +224,16 @@ var (
 		Name:  "shh",
 		Usage: "Enable whisper",
 	}
+	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
 		Usage: "JS library path to be used with console and js subcommands",
 		Value: ".",
+	}
+	SolcPathFlag = cli.StringFlag{
+		Name:  "solc",
+		Usage: "solidity compiler to be used",
+		Value: "solc",
 	}
 )
 
@@ -294,6 +300,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		Dial:               true,
 		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
 	}
+
 }
 
 func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Database) {
