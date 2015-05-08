@@ -297,7 +297,7 @@ func (self *JSRE) PrettyPrint(v interface{}) (val otto.Value, err error) {
 	return method.Call(method, v)
 }
 
-// creates an otto value from a go type
+// creates an otto value from a go type (serialized version)
 func (self *JSRE) ToValue(v interface{}) (otto.Value, error) {
 	done := make(chan bool)
 	req := &evalReq{
@@ -311,9 +311,10 @@ func (self *JSRE) ToValue(v interface{}) (otto.Value, error) {
 	return req.res.result, req.res.err
 }
 
+// creates an otto value from a go type (non-serialized version)
 func (self *JSRE) ToVal(v interface{}) otto.Value {
 
-	result, err := self.ToValue(v)
+	result, err := self.vm.ToValue(v)
 	if err != nil {
 		fmt.Println("Value unknown:", err)
 		return otto.UndefinedValue()
