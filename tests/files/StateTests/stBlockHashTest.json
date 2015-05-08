@@ -17,7 +17,7 @@
                 "code" : "0x600040600055600540600155600440600255",
                 "nonce" : "0x00",
                 "storage" : {
-                    "0x" : "0x044852b2a670ade5407e78fb2863c51de9fcb96542a07186fe3aeda6bb8a116d",
+                    "0x00" : "0x044852b2a670ade5407e78fb2863c51de9fcb96542a07186fe3aeda6bb8a116d",
                     "0x02" : "0x13600b294191fc92924bb3ce4b969c1e7e2bab8f4c93c3fc6d0a51733df3c060"
                 }
             },
@@ -81,7 +81,7 @@
                 "code" : "0x60014060005560024060015561010040600255",
                 "nonce" : "0x00",
                 "storage" : {
-                    "0x" : "0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6",
+                    "0x00" : "0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6",
                     "0x01" : "0xad7c5bef027816a800da1736444fb58a807ef4c9603b7848673f7e3a68eb14a5",
                     "0x02" : "0x6ca54da2c4784ea43fd88b3402de07ae4bced597cbb19f323b7595857a6720ae"
                 }
