@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	peerCountTimeout    = 12 * time.Second // Amount of time it takes for the peer handler to ignore minDesiredPeerCount
-	blockProcTimer      = 500 * time.Millisecond
-	minDesiredPeerCount = 5 // Amount of peers desired to start syncing
+	forceSyncCycle      = 10 * time.Second       // Time interval to force syncs, even if few peers are available
+	blockProcCycle      = 500 * time.Millisecond // Time interval to check for new blocks to process
+	minDesiredPeerCount = 5                      // Amount of peers desired to start syncing
 	blockProcAmount     = 256
 )
 
@@ -307,7 +307,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 
 		// Attempt to insert the newly received by checking if the parent exists.
 		// if the parent exists we process the block and propagate to our peers
-		// otherwise synchronise with the peer
+		// otherwise synchronize with the peer
 		if self.chainman.HasBlock(request.Block.ParentHash()) {
 			if _, err := self.chainman.InsertChain(types.Blocks{request.Block}); err != nil {
 				glog.V(logger.Error).Infoln("removed peer (", p.id, ") due to block error")
