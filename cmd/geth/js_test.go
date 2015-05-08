@@ -29,6 +29,8 @@ const (
 	testKey     = "e6fab74a43941f82d89cb7faa408e227cdad3153c4720e540e855c19b15e6674"
 	testAddress = "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	testBalance = "10000000000000000000"
+	// of empty string
+	testHash = "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
 )
 
 var (
@@ -213,6 +215,32 @@ func TestCheckTestAccountBalance(t *testing.T) {
 
 	repl.re.Run(`primary = "` + testAddress + `"`)
 	checkEvalJSON(t, repl, `eth.getBalance(primary)`, `"`+testBalance+`"`)
+}
+
+func TestSignature(t *testing.T) {
+	tmp, repl, ethereum := testJEthRE(t)
+	if err := ethereum.Start(); err != nil {
+		t.Errorf("error starting ethereum: %v", err)
+		return
+	}
+	defer ethereum.Stop()
+	defer os.RemoveAll(tmp)
+
+	val, err := repl.re.Run(`eth.sign({from: "` + testAddress + `", data: "` + testHash + `"})`)
+
+	// This is a very preliminary test, lacking actual signature verification
+	if err != nil {
+		t.Errorf("Error runnig js: %v", err)
+		return
+	}
+	output := val.String()
+	t.Logf("Output: %v", output)
+
+	regex := regexp.MustCompile(`^0x[0-9a-f]{130}$`)
+	if !regex.MatchString(output) {
+		t.Errorf("Signature is not 65 bytes represented in hexadecimal.")
+		return
+	}
 }
 
 func TestContract(t *testing.T) {
