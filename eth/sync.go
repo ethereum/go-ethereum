@@ -12,10 +12,8 @@ import (
 // Sync contains all synchronisation code for the eth protocol
 
 func (pm *ProtocolManager) update() {
-	// itimer is used to determine when to start ignoring `minDesiredPeerCount`
-	itimer := time.NewTimer(peerCountTimeout)
-	// btimer is used for picking of blocks from the downloader
-	btimer := time.Tick(blockProcTimer)
+	forceSync := time.Tick(forceSyncCycle)
+	blockProc := time.Tick(blockProcCycle)
 
 	for {
 		select {
@@ -24,27 +22,22 @@ func (pm *ProtocolManager) update() {
 			if len(pm.peers) < minDesiredPeerCount {
 				break
 			}
-
-			// Find the best peer
+			// Find the best peer and synchronise with it
 			peer := getBestPeer(pm.peers)
 			if peer == nil {
-				glog.V(logger.Debug).Infoln("Sync attempt cancelled. No peers available")
+				glog.V(logger.Debug).Infoln("Sync attempt canceled. No peers available")
 			}
+			go pm.synchronise(peer)
 
-			itimer.Stop()
-			go pm.synchronize(peer)
-		case <-itimer.C:
-			// The timer will make sure that the downloader keeps an active state
-			// in which it attempts to always check the network for highest td peers
-			// Either select the peer or restart the timer if no peers could
-			// be selected.
+		case <-forceSync:
+			// Force a sync even if not enough peers are present
 			if peer := getBestPeer(pm.peers); peer != nil {
-				go pm.synchronize(peer)
-			} else {
-				itimer.Reset(5 * time.Second)
+				go pm.synchronise(peer)
 			}
-		case <-btimer:
+		case <-blockProc:
+			// Try to pull some blocks from the downloaded
 			go pm.processBlocks()
+
 		case <-pm.quitSync:
 			return
 		}
@@ -59,11 +52,11 @@ func (pm *ProtocolManager) processBlocks() error {
 	pm.wg.Add(1)
 	defer pm.wg.Done()
 
+	// Take a batch of blocks (will return nil if a previous batch has not reached the chain yet)
 	blocks := pm.downloader.TakeBlocks()
 	if len(blocks) == 0 {
 		return nil
 	}
-
 	glog.V(logger.Debug).Infof("Inserting chain with %d blocks (#%v - #%v)\n", len(blocks), blocks[0].Number(), blocks[len(blocks)-1].Number())
 
 	for len(blocks) != 0 && !pm.quit {
@@ -77,7 +70,7 @@ func (pm *ProtocolManager) processBlocks() error {
 	return nil
 }
 
-func (pm *ProtocolManager) synchronize(peer *peer) {
+func (pm *ProtocolManager) synchronise(peer *peer) {
 	// Make sure the peer's TD is higher than our own. If not drop.
 	if peer.td.Cmp(pm.chainman.Td()) <= 0 {
 		return
@@ -89,12 +82,21 @@ func (pm *ProtocolManager) synchronize(peer *peer) {
 		return
 	}
 	// Get the hashes from the peer (synchronously)
-	err := pm.downloader.Synchronize(peer.id, peer.recentHash)
-	if err != nil && err == downloader.ErrBadPeer {
-		glog.V(logger.Debug).Infoln("removed peer from peer set due to bad action")
+	glog.V(logger.Debug).Infof("Attempting synchronisation: %v, 0x%x", peer.id, peer.recentHash)
+
+	err := pm.downloader.Synchronise(peer.id, peer.recentHash)
+	switch err {
+	case nil:
+		glog.V(logger.Debug).Infof("Synchronisation completed")
+
+	case downloader.ErrBusy:
+		glog.V(logger.Debug).Infof("Synchronisation already in progress")
+
+	case downloader.ErrTimeout:
+		glog.V(logger.Debug).Infof("Removing peer %v due to sync timeout", peer.id)
 		pm.removePeer(peer)
-	} else if err != nil {
-		// handle error
-		glog.V(logger.Detail).Infoln("error downloading:", err)
+
+	default:
+		glog.V(logger.Warn).Infof("Synchronisation failed: %v", err)
 	}
 }

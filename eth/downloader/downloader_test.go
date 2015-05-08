@@ -61,7 +61,7 @@ func newTester(t *testing.T, hashes []common.Hash, blocks map[common.Hash]*types
 
 func (dl *downloadTester) sync(peerId string, hash common.Hash) error {
 	dl.activePeerId = peerId
-	return dl.downloader.Synchronize(peerId, hash)
+	return dl.downloader.Synchronise(peerId, hash)
 }
 
 func (dl *downloadTester) hasBlock(hash common.Hash) bool {
@@ -217,13 +217,13 @@ func TestThrottling(t *testing.T) {
 		}
 	}()
 
-	// Synchronize the two threads and verify
+	// Synchronise the two threads and verify
 	err := <-errc
 	done <- struct{}{}
 	<-done
 
 	if err != nil {
-		t.Fatalf("failed to synchronize blocks: %v", err)
+		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	if len(took) != targetBlocks {
 		t.Fatalf("downloaded block mismatch: have %v, want %v", len(took), targetBlocks)

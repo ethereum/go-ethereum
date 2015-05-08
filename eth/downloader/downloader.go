@@ -24,12 +24,12 @@ var (
 	blockTtl            = 20 * time.Second // The amount of time it takes for a block request to time out
 
 	errLowTd               = errors.New("peer's TD is too low")
-	errBusy                = errors.New("busy")
+	ErrBusy                = errors.New("busy")
 	errUnknownPeer         = errors.New("peer's unknown or unhealthy")
-	ErrBadPeer             = errors.New("action from bad peer ignored")
+	errBadPeer             = errors.New("action from bad peer ignored")
 	errNoPeers             = errors.New("no peers to keep download active")
 	errPendingQueue        = errors.New("pending items in queue")
-	errTimeout             = errors.New("timeout")
+	ErrTimeout             = errors.New("timeout")
 	errEmptyHashSet        = errors.New("empty hash set by peer")
 	errPeersUnavailable    = errors.New("no peers available or all peers tried for block download process")
 	errAlreadyInPool       = errors.New("hash already in pool")
@@ -68,7 +68,7 @@ type Downloader struct {
 	getBlock getBlockFn
 
 	// Status
-	synchronizing int32
+	synchronising int32
 
 	// Channels
 	newPeerCh chan *peer
@@ -119,15 +119,15 @@ func (d *Downloader) UnregisterPeer(id string) {
 	delete(d.peers, id)
 }
 
-// Synchronize will select the peer and use it for synchronizing. If an empty string is given
+// Synchronise will select the peer and use it for synchronising. If an empty string is given
 // it will use the best peer possible and synchronize if it's TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
-func (d *Downloader) Synchronize(id string, hash common.Hash) error {
+func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 	// Make sure only one goroutine is ever allowed past this point at once
-	if !atomic.CompareAndSwapInt32(&d.synchronizing, 0, 1) {
-		return nil
+	if !atomic.CompareAndSwapInt32(&d.synchronising, 0, 1) {
+		return ErrBusy
 	}
-	defer atomic.StoreInt32(&d.synchronizing, 0)
+	defer atomic.StoreInt32(&d.synchronising, 0)
 
 	// Abort if the queue still contains some leftover data
 	if _, cached := d.queue.Size(); cached > 0 {
@@ -272,7 +272,7 @@ out:
 			// the zero hash.
 			if p == nil || (hash == common.Hash{}) {
 				d.queue.Reset()
-				return errTimeout
+				return ErrTimeout
 			}
 
 			// set p to the active peer. this will invalidate any hashes that may be returned
@@ -282,7 +282,7 @@ out:
 			glog.V(logger.Debug).Infof("Hash fetching switched to new peer(%s)\n", p.id)
 		}
 	}
-	glog.V(logger.Detail).Infof("Downloaded hashes (%d) in %v\n", d.queue.Pending(), time.Since(start))
+	glog.V(logger.Debug).Infof("Downloaded hashes (%d) in %v\n", d.queue.Pending(), time.Since(start))
 
 	return nil
 }
@@ -384,7 +384,6 @@ out:
 			}
 		}
 	}
-
 	glog.V(logger.Detail).Infoln("Downloaded block(s) in", time.Since(start))
 
 	return nil
@@ -404,11 +403,10 @@ func (d *Downloader) AddHashes(id string, hashes []common.Hash) error {
 		return fmt.Errorf("received hashes from %s while active peer is %s", id, d.activePeer)
 	}
 
-	if glog.V(logger.Detail) && len(hashes) != 0 {
+	if glog.V(logger.Debug) && len(hashes) != 0 {
 		from, to := hashes[0], hashes[len(hashes)-1]
-		glog.Infof("adding %d (T=%d) hashes [ %x / %x ] from: %s\n", len(hashes), d.queue.Pending(), from[:4], to[:4], id)
+		glog.V(logger.Debug).Infof("adding %d (T=%d) hashes [ %x / %x ] from: %s\n", len(hashes), d.queue.Pending(), from[:4], to[:4], id)
 	}
-
 	d.hashCh <- hashPack{id, hashes}
 
 	return nil

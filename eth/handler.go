@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	peerCountTimeout    = 12 * time.Second // Amount of time it takes for the peer handler to ignore minDesiredPeerCount
-	blockProcTimer      = 500 * time.Millisecond
-	minDesiredPeerCount = 5 // Amount of peers desired to start syncing
+	forceSyncCycle      = 10 * time.Second       // Time interval to force syncs, even if few peers are available
+	blockProcCycle      = 500 * time.Millisecond // Time interval to check for new blocks to process
+	minDesiredPeerCount = 5                      // Amount of peers desired to start syncing
 	blockProcAmount     = 256
 )
 
@@ -324,7 +324,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 			}
 			self.BroadcastBlock(hash, request.Block)
 		} else {
-			go self.synchronize(p)
+			go self.synchronise(p)
 		}
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
