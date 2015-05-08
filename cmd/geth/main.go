@@ -242,6 +242,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
+		utils.MaxPendingPeersFlag,
 		utils.EtherbaseFlag,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,

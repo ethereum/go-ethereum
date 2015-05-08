@@ -22,10 +22,11 @@ const (
 	refreshPeersInterval    = 30 * time.Second
 	staticPeerCheckInterval = 15 * time.Second
 
-	// This is the maximum number of inbound connection
-	// that are allowed to linger between 'accepted' and
-	// 'added as peer'.
-	maxAcceptConns = 50
+	// Maximum number of concurrently handshaking inbound connections.
+	maxAcceptConns = 10
+
+	// Maximum number of concurrently dialing outbound connections.
+	maxDialingConns = 10
 
 	// total timeout for encryption handshake and protocol
 	// handshake in both directions.
@@ -51,6 +52,11 @@ type Server struct {
 	// MaxPeers is the maximum number of peers that can be
 	// connected. It must be greater than zero.
 	MaxPeers int
+
+	// MaxPendingPeers is the maximum number of peers that can be pending in the
+	// handshake phase, counted separately for inbound and outbound connections.
+	// Zero defaults to preset values.
+	MaxPendingPeers int
 
 	// Name sets the node name of this server.
 	// Use common.MakeName to create a name that follows existing conventions.
@@ -331,8 +337,12 @@ func (srv *Server) listenLoop() {
 	// This channel acts as a semaphore limiting
 	// active inbound connections that are lingering pre-handshake.
 	// If all slots are taken, no further connections are accepted.
-	slots := make(chan struct{}, maxAcceptConns)
-	for i := 0; i < maxAcceptConns; i++ {
+	tokens := maxAcceptConns
+	if srv.MaxPendingPeers > 0 {
+		tokens = srv.MaxPendingPeers
+	}
+	slots := make(chan struct{}, tokens)
+	for i := 0; i < tokens; i++ {
 		slots <- struct{}{}
 	}
 
@@ -401,7 +411,15 @@ func (srv *Server) dialLoop() {
 	defer srv.loopWG.Done()
 	defer refresh.Stop()
 
-	// TODO: maybe limit number of active dials
+	// Limit the number of concurrent dials
+	tokens := maxAcceptConns
+	if srv.MaxPendingPeers > 0 {
+		tokens = srv.MaxPendingPeers
+	}
+	slots := make(chan struct{}, tokens)
+	for i := 0; i < tokens; i++ {
+		slots <- struct{}{}
+	}
 	dial := func(dest *discover.Node) {
 		// Don't dial nodes that would fail the checks in addPeer.
 		// This is important because the connection handshake is a lot
@@ -413,11 +431,14 @@ func (srv *Server) dialLoop() {
 		if !ok || dialing[dest.ID] {
 			return
 		}
+		// Request a dial slot to prevent CPU exhaustion
+		<-slots
 
 		dialing[dest.ID] = true
 		srv.peerWG.Add(1)
 		go func() {
 			srv.dialNode(dest)
+			slots <- struct{}{}
 			dialed <- dest
 		}()
 	}
