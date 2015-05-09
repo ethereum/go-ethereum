@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path"
 	"path/filepath"
@@ -53,12 +54,12 @@ type Config struct {
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
 
-	DataDir  string
-	LogFile  string
-	LogLevel int
-	LogJSON  string
-	VmDebug  bool
-	NatSpec  bool
+	DataDir   string
+	LogFile   string
+	Verbosity int
+	LogJSON   string
+	VmDebug   bool
+	NatSpec   bool
 
 	MaxPeers        int
 	MaxPendingPeers int
@@ -76,6 +77,7 @@ type Config struct {
 	Dial bool
 
 	Etherbase      string
+	GasPrice       *big.Int
 	MinerThreads   int
 	AccountManager *accounts.Manager
 
@@ -200,7 +202,7 @@ type Ethereum struct {
 
 func New(config *Config) (*Ethereum, error) {
 	// Bootstrap database
-	logger.New(config.DataDir, config.LogFile, config.LogLevel)
+	logger.New(config.DataDir, config.LogFile, config.Verbosity)
 	if len(config.LogJSON) > 0 {
 		logger.NewJSONsystem(config.DataDir, config.LogJSON)
 	}
@@ -266,6 +268,8 @@ func New(config *Config) (*Ethereum, error) {
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.miner = miner.New(eth, eth.pow, config.MinerThreads)
+	eth.miner.SetGasPrice(config.GasPrice)
+
 	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.eventMux, eth.txPool, eth.chainManager, eth.downloader)
 	if config.Shh {
 		eth.whisper = whisper.New()
