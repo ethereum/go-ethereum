@@ -125,6 +125,9 @@ func (self *worker) pendingBlock() *types.Block {
 }
 
 func (self *worker) start() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	// spin up agents
 	for _, agent := range self.agents {
 		agent.Start()
@@ -134,6 +137,9 @@ func (self *worker) start() {
 }
 
 func (self *worker) stop() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// stop all agents
 		for _, agent := range self.agents {
@@ -146,6 +152,9 @@ func (self *worker) stop() {
 }
 
 func (self *worker) register(agent Agent) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	self.agents = append(self.agents, agent)
 	agent.SetReturnCh(self.recv)
 }
