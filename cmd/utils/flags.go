@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
 	"path"
@@ -116,6 +117,11 @@ var (
 		Usage: "Public address for block mining rewards. By default the address of your primary account is used",
 		Value: "primary",
 	}
+	GasPriceFlag = cli.StringFlag{
+		Name:  "gasprice",
+		Usage: "Sets the minimal gasprice when mining transactions",
+		Value: new(big.Int).Mul(big.NewInt(10), common.Szabo).String(),
+	}
 
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
@@ -133,8 +139,8 @@ var (
 		Name:  "logfile",
 		Usage: "Send log output to a file",
 	}
-	LogLevelFlag = cli.IntFlag{
-		Name:  "loglevel",
+	VerbosityFlag = cli.IntFlag{
+		Name:  "verbosity",
 		Usage: "Logging verbosity: 0-6 (0=silent, 1=error, 2=warn, 3=info, 4=core, 5=debug, 6=debug detail)",
 		Value: int(logger.InfoLevel),
 	}
@@ -270,7 +276,7 @@ func GetNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 
 func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	// Set verbosity on glog
-	glog.SetV(ctx.GlobalInt(LogLevelFlag.Name))
+	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 	// Set the log type
 	//glog.SetToStderr(ctx.GlobalBool(LogToStdErrFlag.Name))
 	glog.SetToStderr(true)
@@ -290,7 +296,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		SkipBcVersionCheck: false,
 		NetworkId:          ctx.GlobalInt(NetworkIdFlag.Name),
 		LogFile:            ctx.GlobalString(LogFileFlag.Name),
-		LogLevel:           ctx.GlobalInt(LogLevelFlag.Name),
+		Verbosity:          ctx.GlobalInt(VerbosityFlag.Name),
 		LogJSON:            ctx.GlobalString(LogJSONFlag.Name),
 		Etherbase:          ctx.GlobalString(EtherbaseFlag.Name),
 		MinerThreads:       ctx.GlobalInt(MinerThreadsFlag.Name),
@@ -305,6 +311,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		Shh:                ctx.GlobalBool(WhisperEnabledFlag.Name),
 		Dial:               true,
 		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
+		GasPrice:           common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
 	}
 
 }

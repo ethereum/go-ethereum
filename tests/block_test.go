@@ -103,7 +103,7 @@ func testEthConfig() *eth.Config {
 
 	return &eth.Config{
 		DataDir:        common.DefaultDataDir(),
-		LogLevel:       5,
+		Verbosity:      5,
 		Etherbase:      "primary",
 		AccountManager: accounts.NewManager(ks),
 		NewDB:          func(path string) (common.Database, error) { return ethdb.NewMemDatabase() },

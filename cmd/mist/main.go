@@ -73,7 +73,7 @@ func init() {
 		utils.DataDirFlag,
 		utils.ListenPortFlag,
 		utils.LogFileFlag,
-		utils.LogLevelFlag,
+		utils.VerbosityFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
 		utils.MinerThreadsFlag,

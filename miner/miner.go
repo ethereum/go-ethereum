@@ -37,6 +37,15 @@ func (self *Miner) Mining() bool {
 	return self.mining
 }
 
+func (m *Miner) SetGasPrice(price *big.Int) {
+	// FIXME block tests set a nil gas price. Quick dirty fix
+	if price == nil {
+		return
+	}
+
+	m.worker.gasPrice = price
+}
+
 func (self *Miner) Start(coinbase common.Address) {
 	self.mining = true
 	self.worker.coinbase = coinbase
