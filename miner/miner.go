@@ -38,6 +38,11 @@ func (self *Miner) Mining() bool {
 }
 
 func (m *Miner) SetGasPrice(price *big.Int) {
+	// FIXME block tests set a nil gas price. Quick dirty fix
+	if price == nil {
+		return
+	}
+
 	m.worker.gasPrice = price
 }
 
