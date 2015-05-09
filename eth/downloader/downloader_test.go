@@ -182,6 +182,49 @@ func TestTaking(t *testing.T) {
 	}
 }
 
+func TestInactiveDownloader(t *testing.T) {
+	targetBlocks := 1000
+	hashes := createHashes(0, targetBlocks)
+	blocks := createBlocksFromHashSet(createHashSet(hashes))
+	tester := newTester(t, hashes, nil)
+
+	err := tester.downloader.AddHashes("bad peer 001", hashes)
+	if err != errNoSyncActive {
+		t.Error("expected no sync error, got", err)
+	}
+
+	err = tester.downloader.DeliverChunk("bad peer 001", blocks)
+	if err != errNoSyncActive {
+		t.Error("expected no sync error, got", err)
+	}
+}
+
+func TestCancel(t *testing.T) {
+	minDesiredPeerCount = 4
+	blockTtl = 1 * time.Second
+
+	targetBlocks := 1000
+	hashes := createHashes(0, targetBlocks)
+	blocks := createBlocksFromHashes(hashes)
+	tester := newTester(t, hashes, blocks)
+
+	tester.newPeer("peer1", big.NewInt(10000), hashes[0])
+
+	err := tester.sync("peer1", hashes[0])
+	if err != nil {
+		t.Error("download error", err)
+	}
+
+	if !tester.downloader.Cancel() {
+		t.Error("cancel operation unsuccessfull")
+	}
+
+	hashSize, blockSize := tester.downloader.queue.Size()
+	if hashSize > 0 || blockSize > 0 {
+		t.Error("block (", blockSize, ") or hash (", hashSize, ") not 0")
+	}
+}
+
 func TestThrottling(t *testing.T) {
 	minDesiredPeerCount = 4
 	blockTtl = 1 * time.Second
