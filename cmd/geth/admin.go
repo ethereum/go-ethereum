@@ -70,6 +70,7 @@ func (js *jsre) adminBindings() {
 	miner.Set("stop", js.stopMining)
 	miner.Set("hashrate", js.hashrate)
 	miner.Set("setExtra", js.setExtra)
+	miner.Set("setGasPrice", js.setGasPrice)
 
 	admin.Set("debug", struct{}{})
 	t, _ = admin.Get("debug")
@@ -233,6 +234,17 @@ func (js *jsre) setExtra(call otto.FunctionCall) otto.Value {
 	}
 
 	js.ethereum.Miner().SetExtra([]byte(extra))
+	return otto.UndefinedValue()
+}
+
+func (js *jsre) setGasPrice(call otto.FunctionCall) otto.Value {
+	gasPrice, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	js.ethereum.Miner().SetGasPrice(common.String2Big(gasPrice))
 	return otto.UndefinedValue()
 }
 

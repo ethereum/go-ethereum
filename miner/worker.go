@@ -72,6 +72,7 @@ type worker struct {
 	proc  *core.BlockProcessor
 
 	coinbase common.Address
+	gasPrice *big.Int
 	extra    []byte
 
 	currentMu sync.Mutex
@@ -93,6 +94,7 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 		eth:            eth,
 		mux:            eth.EventMux(),
 		recv:           make(chan *types.Block),
+		gasPrice:       new(big.Int),
 		chain:          eth.ChainManager(),
 		proc:           eth.BlockProcessor(),
 		possibleUncles: make(map[common.Hash]*types.Block),
@@ -239,6 +241,19 @@ func (self *worker) makeCurrent() {
 	self.current.coinbase.SetGasPool(core.CalcGasLimit(parent))
 }
 
+func (w *worker) setGasPrice(p *big.Int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.gasPrice = p
+}
+
+func (w *worker) gasprice(pct int64) *big.Int {
+	p := new(big.Int).Set(w.gasPrice)
+	p.Div(p, big.NewInt(100))
+	p.Mul(p, big.NewInt(pct))
+	return p
+}
+
 func (self *worker) commitNewWork() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -259,9 +274,22 @@ func (self *worker) commitNewWork() {
 		ignoredTransactors = set.New()
 	)
 
+	var pct int64 = 90
+	minprice := self.gasprice(pct)
 	for _, tx := range transactions {
 		// We can skip err. It has already been validated in the tx pool
 		from, _ := tx.From()
+
+		// check if it falls within margin
+		if tx.GasPrice().Cmp(minprice) < 0 {
+			// ignore the transaction and transactor. We ignore the transactor
+			// because nonce will fail after ignoring this transaction so there's
+			// no point
+			ignoredTransactors.Add(from)
+			glog.V(logger.Info).Infof("transaction(%x) below gas price (<%d%% ask price). All sequential txs from this address(%x) will fail\n", tx.Hash().Bytes()[:4], pct, from[:4])
+			continue
+		}
+
 		// Move on to the next transaction when the transactor is in ignored transactions set
 		// This may occur when a transaction hits the gas limit. When a gas limit is hit and
 		// the transaction is processed (that could potentially be included in the block) it

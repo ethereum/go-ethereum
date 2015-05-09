@@ -37,6 +37,10 @@ func (self *Miner) Mining() bool {
 	return self.mining
 }
 
+func (m *Miner) SetGasPrice(price *big.Int) {
+	m.worker.gasPrice = price
+}
+
 func (self *Miner) Start(coinbase common.Address) {
 	self.mining = true
 	self.worker.coinbase = coinbase
