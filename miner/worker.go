@@ -247,13 +247,6 @@ func (w *worker) setGasPrice(p *big.Int) {
 	w.gasPrice = p
 }
 
-func (w *worker) gasprice(pct int64) *big.Int {
-	p := new(big.Int).Set(w.gasPrice)
-	p.Div(p, big.NewInt(100))
-	p.Mul(p, big.NewInt(pct))
-	return p
-}
-
 func (self *worker) commitNewWork() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -274,8 +267,9 @@ func (self *worker) commitNewWork() {
 		ignoredTransactors = set.New()
 	)
 
-	var pct int64 = 90
-	minprice := self.gasprice(pct)
+	const pct = int64(90)
+	// calculate the minimal gas price the miner accepts when sorting out transactions.
+	minprice := gasprice(self.gasPrice, pct)
 	for _, tx := range transactions {
 		// We can skip err. It has already been validated in the tx pool
 		from, _ := tx.From()
@@ -410,4 +404,13 @@ func (self *worker) HashRate() int64 {
 	}
 
 	return tot
+}
+
+// gasprice calculates a reduced gas price based on the pct
+// XXX Use big.Rat?
+func gasprice(price *big.Int, pct int64) *big.Int {
+	p := new(big.Int).Set(price)
+	p.Div(p, big.NewInt(100))
+	p.Mul(p, big.NewInt(pct))
+	return p
 }
