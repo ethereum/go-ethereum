@@ -474,7 +474,7 @@ func gasprice(price *big.Int, pct int64) *big.Int {
 func accountAddressesSet(accounts []accounts.Account) *set.Set {
 	accountSet := set.New()
 	for _, account := range accounts {
-		accountSet.Add(common.BytesToAddress(account.Address))
+		accountSet.Add(account.Address)
 	}
 	return accountSet
 }

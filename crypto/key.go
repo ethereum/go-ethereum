@@ -48,47 +48,47 @@ type Key struct {
 }
 
 type plainKeyJSON struct {
-	Version    string
-	Id         string
-	Address    string
-	PrivateKey string
+	Address    string `json:"address"`
+	PrivateKey string `json:"privatekey"`
+	Id         string `json:"id"`
+	Version    string `json:"version"`
 }
 
 type encryptedKeyJSON struct {
-	Version string
-	Id      string
-	Address string
-	Crypto  cipherJSON
+	Address string `json:"address"`
+	Crypto  cryptoJSON
+	Id      string `json:"id"`
+	Version string `json:"version"`
 }
 
-type cipherJSON struct {
-	MAC        string
-	Salt       string
-	IV         string
-	KeyHeader  keyHeaderJSON
-	CipherText string
+type cryptoJSON struct {
+	Cipher       string           `json:"cipher"`
+	CipherText   string           `json:"ciphertext"`
+	CipherParams cipherparamsJSON `json:"cipherparams"`
+	KDF          string           `json:"kdf"`
+	KDFParams    scryptParamsJSON `json:"kdfparams"`
+	MAC          string           `json:"mac"`
+	Version      string           `json:"version"`
 }
 
-type keyHeaderJSON struct {
-	Version   string
-	Kdf       string
-	KdfParams scryptParamsJSON
+type cipherparamsJSON struct {
+	IV string `json:"iv"`
 }
 
 type scryptParamsJSON struct {
-	N       int
-	R       int
-	P       int
-	DkLen   int
-	SaltLen int
+	N     int    `json:"n"`
+	R     int    `json:"r"`
+	P     int    `json:"p"`
+	DkLen int    `json:"dklen"`
+	Salt  string `json:"salt"`
 }
 
 func (k *Key) MarshalJSON() (j []byte, err error) {
 	jStruct := plainKeyJSON{
-		version,
-		k.Id.String(),
 		hex.EncodeToString(k.Address[:]),
 		hex.EncodeToString(FromECDSA(k.PrivateKey)),
+		k.Id.String(),
+		version,
 	}
 	j, err = json.Marshal(jStruct)
 	return j, err

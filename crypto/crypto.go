@@ -185,7 +185,7 @@ func ImportBlockTestKey(privKeyBytes []byte) error {
 	ecKey := ToECDSA(privKeyBytes)
 	key := &Key{
 		Id:         uuid.NewRandom(),
-		Address:    PubkeyToAddress(ecKey.PublicKey),
+		Address:    common.BytesToAddress(PubkeyToAddress(ecKey.PublicKey)),
 		PrivateKey: ecKey,
 	}
 	err := ks.StoreKey(key, "")

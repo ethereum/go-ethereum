@@ -817,7 +817,7 @@ func (self *XEth) ConfirmTransaction(tx string) bool {
 }
 
 func (self *XEth) doSign(from common.Address, hash common.Hash, didUnlock bool) ([]byte, error) {
-	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from.Bytes()}, hash.Bytes())
+	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from}, hash.Bytes())
 	if err == accounts.ErrLocked {
 		if didUnlock {
 			return nil, fmt.Errorf("signer account still locked after successful unlock")

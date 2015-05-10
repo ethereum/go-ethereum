@@ -143,41 +143,36 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	cipherText := make([]byte, len(toEncrypt))
 	AES128CBCEncrypter.CryptBlocks(cipherText, toEncrypt)
 
-	paramsJSON := scryptParamsJSON{
-		N:       scryptN,
-		R:       scryptr,
-		P:       scryptp,
-		DkLen:   scryptdkLen,
-		SaltLen: 32,
+	mac := Sha3(derivedKey[16:32], cipherText)
+
+	scryptParamsJSON := scryptParamsJSON{
+		N:     scryptN,
+		R:     scryptr,
+		P:     scryptp,
+		DkLen: scryptdkLen,
+		Salt:  hex.EncodeToString(salt),
 	}
 
-	keyHeaderJSON := keyHeaderJSON{
-		Version:   keyHeaderVersion,
-		Kdf:       keyHeaderKDF,
-		KdfParams: paramsJSON,
+	cipherParamsJSON := cipherparamsJSON{
+		IV: hex.EncodeToString(iv),
 	}
 
-	keyHeaderJSONStr, err := json.Marshal(keyHeaderJSON)
-	if err != nil {
-		return err
+	cryptoStruct := cryptoJSON{
+		Cipher:       "aes-128-cbc",
+		CipherText:   hex.EncodeToString(cipherText),
+		CipherParams: cipherParamsJSON,
+		KDF:          "scrypt",
+		KDFParams:    scryptParamsJSON,
+		MAC:          hex.EncodeToString(mac),
+		Version:      "1",
 	}
-
-	mac := Sha3(keyHeaderJSONStr, derivedKey[16:32], cipherText)
-
-	cipherStruct := cipherJSON{
-		hex.EncodeToString(mac),
-		hex.EncodeToString(salt),
-		hex.EncodeToString(iv),
-		keyHeaderJSON,
-		hex.EncodeToString(cipherText),
-	}
-	keyStruct := encryptedKeyJSON{
-		version,
-		key.Id.String(),
+	encryptedKeyJSON := encryptedKeyJSON{
 		hex.EncodeToString(key.Address[:]),
-		cipherStruct,
+		cryptoStruct,
+		key.Id.String(),
+		version,
 	}
-	keyJSON, err := json.Marshal(keyStruct)
+	keyJSON, err := json.Marshal(encryptedKeyJSON)
 	if err != nil {
 		return err
 	}
@@ -212,33 +207,25 @@ func DecryptKey(ks keyStorePassphrase, keyAddr common.Address, auth string) (key
 		return nil, nil, err
 	}
 
-	salt, err := hex.DecodeString(keyProtected.Crypto.Salt)
+	iv, err := hex.DecodeString(keyProtected.Crypto.CipherParams.IV)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	iv, err := hex.DecodeString(keyProtected.Crypto.IV)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	keyHeader := keyProtected.Crypto.KeyHeader
 	cipherText, err := hex.DecodeString(keyProtected.Crypto.CipherText)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// used in MAC
-	keyHeaderJSONStr, err := json.Marshal(keyHeader)
+	salt, err := hex.DecodeString(keyProtected.Crypto.KDFParams.Salt)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// TODO: make this more generic when we support different KDF params / key versions
-	n := keyHeader.KdfParams.N
-	r := keyHeader.KdfParams.R
-	p := keyHeader.KdfParams.P
-	dkLen := keyHeader.KdfParams.DkLen
+	n := keyProtected.Crypto.KDFParams.N
+	r := keyProtected.Crypto.KDFParams.R
+	p := keyProtected.Crypto.KDFParams.P
+	dkLen := keyProtected.Crypto.KDFParams.DkLen
 
 	authArray := []byte(auth)
 	derivedKey, err := scrypt.Key(authArray, salt, n, r, p, dkLen)
@@ -246,7 +233,7 @@ func DecryptKey(ks keyStorePassphrase, keyAddr common.Address, auth string) (key
 		return nil, nil, err
 	}
 
-	calculatedMAC := Sha3(keyHeaderJSONStr, derivedKey[16:32], cipherText)
+	calculatedMAC := Sha3(derivedKey[16:32], cipherText)
 	if !bytes.Equal(calculatedMAC, mac) {
 		err = errors.New("Decryption failed: MAC mismatch")
 		return nil, nil, err

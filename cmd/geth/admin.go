@@ -126,7 +126,7 @@ func (js *jsre) pendingTransactions(call otto.FunctionCall) otto.Value {
 	// Add the accouns to a new set
 	accountSet := set.New()
 	for _, account := range accounts {
-		accountSet.Add(common.BytesToAddress(account.Address))
+		accountSet.Add(account.Address)
 	}
 
 	//ltxs := make([]*tx, len(txs))
