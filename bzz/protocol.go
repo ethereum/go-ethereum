@@ -10,6 +10,9 @@ import (
 	"net"
 	"time"
 
+	"github.com/ethereum/go-ethereum/errs"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
@@ -29,12 +32,33 @@ const (
 	peersMsg                  // 0x04
 )
 
+const (
+	ErrMsgTooLarge = iota
+	ErrDecode
+	ErrInvalidMsgCode
+	ErrVersionMismatch
+	ErrNetworkIdMismatch
+	ErrNoStatusMsg
+	ErrExtraStatusMsg
+)
+
+var errorToString = map[int]string{
+	ErrMsgTooLarge:       "Message too long",
+	ErrDecode:            "Invalid message",
+	ErrInvalidMsgCode:    "Invalid message code",
+	ErrVersionMismatch:   "Protocol version mismatch",
+	ErrNetworkIdMismatch: "NetworkId mismatch",
+	ErrNoStatusMsg:       "No status message",
+	ErrExtraStatusMsg:    "Extra status message",
+}
+
 // bzzProtocol represents the swarm wire protocol
 // instance is running on each peer
 type bzzProtocol struct {
 	netStore *NetStore
 	peer     *p2p.Peer
 	rw       p2p.MsgReadWriter
+	errors   *errs.Errors
 }
 
 /*
@@ -157,6 +181,10 @@ func runBzzProtocol(netStore *NetStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err 
 		netStore: netStore,
 		rw:       rw,
 		peer:     p,
+		errors: &errs.Errors{
+			Package: "BZZ",
+			Errors:  errorToString,
+		},
 	}
 	err = self.handleStatus()
 	if err == nil {
@@ -271,7 +299,7 @@ func (self *bzzProtocol) handleStatus() (err error) {
 		return self.protoError(ErrVersionMismatch, "%d (!= %d)", status.Version, Version)
 	}
 
-	self.peer.Infof("Peer is [bzz] capable (%d/%d)\n", status.Version, status.NetworkId)
+	glog.V(logger.Info).Infof("Peer is [bzz] capable (%d/%d)\n", status.Version, status.NetworkId)
 
 	self.netStore.hive.addPeer(peer{bzzProtocol: self, pubkey: status.NodeID})
 
@@ -295,39 +323,15 @@ func (self *bzzProtocol) peers(req *peersMsgData) {
 	p2p.Send(self.rw, peersMsg, req)
 }
 
-// func (self *ethProtocol) protoError(code int, format string, params ...interface{}) (err *errs.Error) {
-// 	err = self.errors.New(code, format, params...)
-// 	err.Log(self.peer.Logger)
-// 	return
-// }
-
-// func (self *ethProtocol) protoErrorDisconnect(err *errs.Error) {
-// 	err.Log(self.peer.Logger)
-// 	if err.Fatal() {
-// 		self.peer.Disconnect(p2p.DiscSubprotocolError)
-// 	}
-// }
-
-// errors
-// TODO: should be reworked using errs pkg
-func (self *bzzProtocol) protoError(code int, format string, params ...interface{}) (err *protocolError) {
-	err = ProtocolError(code, format, params...)
-	if err.Fatal() {
-		self.peer.Errorln("err %v", err)
-		// disconnect
-	} else {
-		self.peer.Debugf("fyi %v", err)
-	}
+func (self *bzzProtocol) protoError(code int, format string, params ...interface{}) (err *errs.Error) {
+	err = self.errors.New(code, format, params...)
+	err.Log(glog.V(logger.Info))
 	return
 }
 
-func (self *bzzProtocol) protoErrorDisconnect(code int, format string, params ...interface{}) {
-	err := ProtocolError(code, format, params...)
+func (self *bzzProtocol) protoErrorDisconnect(err *errs.Error) {
+	err.Log(glog.V(logger.Info))
 	if err.Fatal() {
-		self.peer.Errorln("err %v", err)
-		// disconnect
-	} else {
-		self.peer.Debugf("fyi %v", err)
+		self.peer.Disconnect(p2p.DiscSubprotocolError)
 	}
-
 }

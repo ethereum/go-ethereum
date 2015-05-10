@@ -6,8 +6,6 @@ import (
 	"io"
 	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/blockpool/test"
 )
 
 /*
@@ -139,7 +137,6 @@ func testRandomData(chunker *TreeChunker, tester *chunkerTester, n int, chunks i
 }
 
 func TestRandomData(t *testing.T) {
-	test.LogInit()
 	chunker := &TreeChunker{
 		Branches:     2,
 		SplitTimeout: 10 * time.Second,
@@ -201,7 +198,6 @@ func benchmarkJoinRandomData(n int, chunks int, t *testing.B) {
 }
 
 func benchmarkSplitRandomData(n int, chunks int, t *testing.B) {
-	defer test.Benchlog(t).Detach()
 	for i := 0; i < t.N; i++ {
 		chunker, tester := chunkerAndTester()
 		tester.Split(chunker, n)

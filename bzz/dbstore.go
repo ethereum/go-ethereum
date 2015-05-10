@@ -125,7 +125,7 @@ func encodeData(chunk *Chunk) []byte {
 
 func decodeIndex(data []byte, index *dpaDBIndex) {
 
-	dec := rlp.NewStream(bytes.NewReader(data))
+	dec := rlp.NewStream(bytes.NewReader(data), 0)
 	dec.Decode(index)
 
 }
