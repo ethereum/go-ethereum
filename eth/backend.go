@@ -451,6 +451,8 @@ func (s *Ethereum) Start() error {
 	return nil
 }
 
+// sync databases every minute. If flushing fails we exit immediatly. The system
+// may not continue under any circumstances.
 func (s *Ethereum) syncDatabases() {
 	ticker := time.NewTicker(1 * time.Minute)
 done:
@@ -459,13 +461,13 @@ done:
 		case <-ticker.C:
 			// don't change the order of database flushes
 			if err := s.extraDb.Flush(); err != nil {
-				glog.V(logger.Error).Infof("error: flush extraDb: %v\n", err)
+				glog.Fatalf("fatal error: flush extraDb: %v\n", err)
 			}
 			if err := s.stateDb.Flush(); err != nil {
-				glog.V(logger.Error).Infof("error: flush stateDb: %v\n", err)
+				glog.Fatalf("fatal error: flush stateDb: %v\n", err)
 			}
 			if err := s.blockDb.Flush(); err != nil {
-				glog.V(logger.Error).Infof("error: flush blockDb: %v\n", err)
+				glog.Fatalf("fatal error: flush blockDb: %v\n", err)
 			}
 		case <-s.shutdownChan:
 			break done

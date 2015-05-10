@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -253,7 +254,12 @@ func (self *worker) makeCurrent() {
 func (w *worker) setGasPrice(p *big.Int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.gasPrice = p
+
+	// calculate the minimal gas price the miner accepts when sorting out transactions.
+	const pct = int64(90)
+	w.gasPrice = gasprice(p, pct)
+
+	w.mux.Post(core.GasPriceChanged{w.gasPrice})
 }
 
 func (self *worker) commitNewWork() {
@@ -269,27 +275,40 @@ func (self *worker) commitNewWork() {
 	transactions := self.eth.TxPool().GetTransactions()
 	sort.Sort(types.TxByNonce{transactions})
 
+	accounts, _ := self.eth.AccountManager().Accounts()
 	// Keep track of transactions which return errors so they can be removed
 	var (
 		remove             = set.New()
 		tcount             = 0
 		ignoredTransactors = set.New()
+		lowGasTransactors  = set.New()
+		ownedAccounts      = accountAddressesSet(accounts)
+		lowGasTxs          types.Transactions
 	)
 
-	const pct = int64(90)
-	// calculate the minimal gas price the miner accepts when sorting out transactions.
-	minprice := gasprice(self.gasPrice, pct)
 	for _, tx := range transactions {
 		// We can skip err. It has already been validated in the tx pool
 		from, _ := tx.From()
 
 		// check if it falls within margin
-		if tx.GasPrice().Cmp(minprice) < 0 {
+		if tx.GasPrice().Cmp(self.gasPrice) < 0 {
 			// ignore the transaction and transactor. We ignore the transactor
 			// because nonce will fail after ignoring this transaction so there's
 			// no point
-			ignoredTransactors.Add(from)
-			glog.V(logger.Info).Infof("transaction(%x) below gas price (<%d%% ask price). All sequential txs from this address(%x) will fail\n", tx.Hash().Bytes()[:4], pct, from[:4])
+			lowGasTransactors.Add(from)
+
+			glog.V(logger.Info).Infof("transaction(%x) below gas price (tx=%v ask=%v). All sequential txs from this address(%x) will be ignored\n", tx.Hash().Bytes()[:4], common.CurrencyToString(tx.GasPrice()), common.CurrencyToString(self.gasPrice), from[:4])
+		}
+
+		// Continue with the next transaction if the transaction sender is included in
+		// the low gas tx set. This will also remove the tx and all sequential transaction
+		// from this transactor
+		if lowGasTransactors.Has(from) {
+			// add tx to the low gas set. This will be removed at the end of the run
+			// owned accounts are ignored
+			if !ownedAccounts.Has(from) {
+				lowGasTxs = append(lowGasTxs, tx)
+			}
 			continue
 		}
 
@@ -327,6 +346,7 @@ func (self *worker) commitNewWork() {
 			tcount++
 		}
 	}
+	self.eth.TxPool().RemoveTransactions(lowGasTxs)
 
 	var (
 		uncles    []*types.Header
@@ -422,4 +442,12 @@ func gasprice(price *big.Int, pct int64) *big.Int {
 	p.Div(p, big.NewInt(100))
 	p.Mul(p, big.NewInt(pct))
 	return p
+}
+
+func accountAddressesSet(accounts []accounts.Account) *set.Set {
+	accountSet := set.New()
+	for _, account := range accounts {
+		accountSet.Add(common.BytesToAddress(account.Address))
+	}
+	return accountSet
 }
