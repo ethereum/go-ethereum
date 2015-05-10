@@ -3,6 +3,7 @@ package rpc
 import (
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -24,7 +25,6 @@ type BlockRes struct {
 	Size            *hexnum           `json:"size"`
 	ExtraData       *hexdata          `json:"extraData"`
 	GasLimit        *hexnum           `json:"gasLimit"`
-	MinGasPrice     *hexnum           `json:"minGasPrice"`
 	GasUsed         *hexnum           `json:"gasUsed"`
 	UnixTimestamp   *hexnum           `json:"timestamp"`
 	Transactions    []*TransactionRes `json:"transactions"`
@@ -48,7 +48,6 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 			Size            *hexnum           `json:"size"`
 			ExtraData       *hexdata          `json:"extraData"`
 			GasLimit        *hexnum           `json:"gasLimit"`
-			MinGasPrice     *hexnum           `json:"minGasPrice"`
 			GasUsed         *hexnum           `json:"gasUsed"`
 			UnixTimestamp   *hexnum           `json:"timestamp"`
 			Transactions    []*TransactionRes `json:"transactions"`
@@ -69,7 +68,6 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 		ext.Size = b.Size
 		ext.ExtraData = b.ExtraData
 		ext.GasLimit = b.GasLimit
-		ext.MinGasPrice = b.MinGasPrice
 		ext.GasUsed = b.GasUsed
 		ext.UnixTimestamp = b.UnixTimestamp
 		ext.Transactions = b.Transactions
@@ -94,7 +92,6 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 			Size            *hexnum    `json:"size"`
 			ExtraData       *hexdata   `json:"extraData"`
 			GasLimit        *hexnum    `json:"gasLimit"`
-			MinGasPrice     *hexnum    `json:"minGasPrice"`
 			GasUsed         *hexnum    `json:"gasUsed"`
 			UnixTimestamp   *hexnum    `json:"timestamp"`
 			Transactions    []*hexdata `json:"transactions"`
@@ -115,7 +112,6 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 		ext.Size = b.Size
 		ext.ExtraData = b.ExtraData
 		ext.GasLimit = b.GasLimit
-		ext.MinGasPrice = b.MinGasPrice
 		ext.GasUsed = b.GasUsed
 		ext.UnixTimestamp = b.UnixTimestamp
 		ext.Transactions = make([]*hexdata, len(b.Transactions))
@@ -151,7 +147,6 @@ func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
 	res.Size = newHexNum(block.Size().Int64())
 	res.ExtraData = newHexData(block.Header().Extra)
 	res.GasLimit = newHexNum(block.GasLimit())
-	// res.MinGasPrice =
 	res.GasUsed = newHexNum(block.GasUsed())
 	res.UnixTimestamp = newHexNum(block.Time())
 
@@ -277,22 +272,25 @@ type LogRes struct {
 	Topics           []*hexdata `json:"topics"`
 	Data             *hexdata   `json:"data"`
 	BlockNumber      *hexnum    `json:"blockNumber"`
-	Hash             *hexdata   `json:"hash"`
 	LogIndex         *hexnum    `json:"logIndex"`
 	BlockHash        *hexdata   `json:"blockHash"`
 	TransactionHash  *hexdata   `json:"transactionHash"`
 	TransactionIndex *hexnum    `json:"transactionIndex"`
 }
 
-func NewLogRes(log state.Log) LogRes {
+func NewLogRes(log *state.Log) LogRes {
 	var l LogRes
-	l.Topics = make([]*hexdata, len(log.Topics()))
-	for j, topic := range log.Topics() {
+	l.Topics = make([]*hexdata, len(log.Topics))
+	for j, topic := range log.Topics {
 		l.Topics[j] = newHexData(topic)
 	}
-	l.Address = newHexData(log.Address())
-	l.Data = newHexData(log.Data())
-	l.BlockNumber = newHexNum(log.Number())
+	l.Address = newHexData(log.Address)
+	l.Data = newHexData(log.Data)
+	l.BlockNumber = newHexNum(log.Number)
+	l.LogIndex = newHexNum(log.Index)
+	l.TransactionHash = newHexData(log.TxHash)
+	l.TransactionIndex = newHexNum(log.TxIndex)
+	l.BlockHash = newHexData(log.BlockHash)
 
 	return l
 }
@@ -305,4 +303,14 @@ func NewLogsRes(logs state.Logs) (ls []LogRes) {
 	}
 
 	return
+}
+
+func NewHashesRes(hs []common.Hash) []string {
+	hashes := make([]string, len(hs))
+
+	for i, hash := range hs {
+		hashes[i] = hash.Hex()
+	}
+
+	return hashes
 }

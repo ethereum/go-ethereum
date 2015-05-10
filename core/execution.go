@@ -34,7 +34,10 @@ func (self *Execution) Call(codeAddr common.Address, caller vm.ContextRef) ([]by
 }
 
 func (self *Execution) Create(caller vm.ContextRef) (ret []byte, err error, account *state.StateObject) {
-	ret, err = self.exec(nil, self.input, caller)
+	// Input must be nil for create
+	code := self.input
+	self.input = nil
+	ret, err = self.exec(nil, code, caller)
 	account = self.env.State().GetStateObject(*self.address)
 	return
 }

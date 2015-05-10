@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -43,7 +45,7 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 	// extend the fork
 	parent := bman2.bc.CurrentBlock()
 	chainB := makeChain(bman2, parent, N, db, ForkSeed)
-	err = bman2.bc.InsertChain(chainB)
+	_, err = bman2.bc.InsertChain(chainB)
 	if err != nil {
 		t.Fatal("Insert chain error for fork:", err)
 	}
@@ -56,12 +58,14 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 	}
 	// Compare difficulties
 	f(tdpre, td)
+
+	// Loop over parents making sure reconstruction is done properly
 }
 
 func printChain(bc *ChainManager) {
 	for i := bc.CurrentBlock().Number().Uint64(); i > 0; i-- {
 		b := bc.GetBlockByNumber(uint64(i))
-		fmt.Printf("\t%x\n", b.Hash())
+		fmt.Printf("\t%x %v\n", b.Hash(), b.Difficulty())
 	}
 }
 
@@ -69,15 +73,16 @@ func printChain(bc *ChainManager) {
 func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 	td := new(big.Int)
 	for _, block := range chainB {
-		td2, _, err := bman.bc.processor.Process(block)
+		_, err := bman.bc.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
 			}
 			return nil, err
 		}
-		block.Td = td2
-		td = td2
+		parent := bman.bc.GetBlock(block.ParentHash())
+		block.Td = CalculateTD(block, parent)
+		td = block.Td
 
 		bman.bc.mu.Lock()
 		{
@@ -104,7 +109,7 @@ func loadChain(fn string, t *testing.T) (types.Blocks, error) {
 }
 
 func insertChain(done chan bool, chainMan *ChainManager, chain types.Blocks, t *testing.T) {
-	err := chainMan.InsertChain(chain)
+	_, err := chainMan.InsertChain(chain)
 	if err != nil {
 		fmt.Println(err)
 		t.FailNow()
@@ -255,7 +260,7 @@ func TestChainInsertions(t *testing.T) {
 
 	var eventMux event.TypeMux
 	chainMan := NewChainManager(db, db, &eventMux)
-	txPool := NewTxPool(&eventMux)
+	txPool := NewTxPool(&eventMux, chainMan.State, func() *big.Int { return big.NewInt(100000000) })
 	blockMan := NewBlockProcessor(db, db, nil, txPool, chainMan, &eventMux)
 	chainMan.SetProcessor(blockMan)
 
@@ -301,7 +306,7 @@ func TestChainMultipleInsertions(t *testing.T) {
 	}
 	var eventMux event.TypeMux
 	chainMan := NewChainManager(db, db, &eventMux)
-	txPool := NewTxPool(&eventMux)
+	txPool := NewTxPool(&eventMux, chainMan.State, func() *big.Int { return big.NewInt(100000000) })
 	blockMan := NewBlockProcessor(db, db, nil, txPool, chainMan, &eventMux)
 	chainMan.SetProcessor(blockMan)
 	done := make(chan bool, max)
@@ -342,4 +347,75 @@ func TestGetAncestors(t *testing.T) {
 
 	ancestors := chainMan.GetAncestors(chain[len(chain)-1], 4)
 	fmt.Println(ancestors)
+}
+
+type bproc struct{}
+
+func (bproc) Process(*types.Block) (state.Logs, error) { return nil, nil }
+
+func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block {
+	var chain []*types.Block
+	for i, difficulty := range d {
+		header := &types.Header{Number: big.NewInt(int64(i + 1)), Difficulty: big.NewInt(int64(difficulty))}
+		block := types.NewBlockWithHeader(header)
+		copy(block.HeaderHash[:2], []byte{byte(i + 1), seed})
+		if i == 0 {
+			block.ParentHeaderHash = genesis.Hash()
+		} else {
+			copy(block.ParentHeaderHash[:2], []byte{byte(i), seed})
+		}
+
+		chain = append(chain, block)
+	}
+	return chain
+}
+
+func chm(genesis *types.Block, db common.Database) *ChainManager {
+	var eventMux event.TypeMux
+	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: &eventMux}
+	bc.cache = NewBlockCache(100)
+	bc.futureBlocks = NewBlockCache(100)
+	bc.processor = bproc{}
+	bc.ResetWithGenesisBlock(genesis)
+	bc.txState = state.ManageState(bc.State())
+
+	return bc
+}
+
+func TestReorgLongest(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	genesis := GenesisBlock(db)
+	bc := chm(genesis, db)
+
+	chain1 := makeChainWithDiff(genesis, []int{1, 2, 4}, 10)
+	chain2 := makeChainWithDiff(genesis, []int{1, 2, 3, 4}, 11)
+
+	bc.InsertChain(chain1)
+	bc.InsertChain(chain2)
+
+	prev := bc.CurrentBlock()
+	for block := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 1); block.NumberU64() != 0; prev, block = block, bc.GetBlockByNumber(block.NumberU64()-1) {
+		if prev.ParentHash() != block.Hash() {
+			t.Errorf("parent hash mismatch %x - %x", prev.ParentHash(), block.Hash())
+		}
+	}
+}
+
+func TestReorgShortest(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	genesis := GenesisBlock(db)
+	bc := chm(genesis, db)
+
+	chain1 := makeChainWithDiff(genesis, []int{1, 2, 3, 4}, 10)
+	chain2 := makeChainWithDiff(genesis, []int{1, 10}, 11)
+
+	bc.InsertChain(chain1)
+	bc.InsertChain(chain2)
+
+	prev := bc.CurrentBlock()
+	for block := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 1); block.NumberU64() != 0; prev, block = block, bc.GetBlockByNumber(block.NumberU64()-1) {
+		if prev.ParentHash() != block.Hash() {
+			t.Errorf("parent hash mismatch %x - %x", prev.ParentHash(), block.Hash())
+		}
+	}
 }

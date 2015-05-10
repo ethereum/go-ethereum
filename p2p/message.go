@@ -22,9 +22,10 @@ import (
 // structure, encode the payload into a byte array and create a
 // separate Msg with a bytes.Reader as Payload for each send.
 type Msg struct {
-	Code    uint64
-	Size    uint32 // size of the paylod
-	Payload io.Reader
+	Code       uint64
+	Size       uint32 // size of the paylod
+	Payload    io.Reader
+	ReceivedAt time.Time
 }
 
 // Decode parses the RLP content of a message into
@@ -32,7 +33,8 @@ type Msg struct {
 //
 // For the decoding rules, please see package rlp.
 func (msg Msg) Decode(val interface{}) error {
-	if err := rlp.Decode(msg.Payload, val); err != nil {
+	s := rlp.NewStream(msg.Payload, uint64(msg.Size))
+	if err := s.Decode(val); err != nil {
 		return newPeerError(errInvalidMsg, "(code %x) (size %d) %v", msg.Code, msg.Size, err)
 	}
 	return nil

@@ -40,7 +40,7 @@ type plugin struct {
 func (gui *Gui) Transact(from, recipient, value, gas, gasPrice, d string) (string, error) {
 	d = common.Bytes2Hex(utils.FormatTransactionData(d))
 
-	return gui.xeth.Transact(from, recipient, value, gas, gasPrice, d)
+	return gui.xeth.Transact(from, recipient, "", value, gas, gasPrice, d)
 }
 
 func (self *Gui) AddPlugin(pluginPath string) {

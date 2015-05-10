@@ -1,9 +1,5 @@
 package xeth
 
-import (
-	"github.com/ethereum/go-ethereum/core/types"
-)
-
 // Frontend should be implemented by users of XEth. Its methods are
 // called whenever XEth makes a decision that requires user input.
 type Frontend interface {
@@ -21,12 +17,12 @@ type Frontend interface {
 	//
 	// ConfirmTransaction is not used for Call transactions
 	// because they cannot change any state.
-	ConfirmTransaction(tx *types.Transaction) bool
+	ConfirmTransaction(tx string) bool
 }
 
 // dummyFrontend is a non-interactive frontend that allows all
 // transactions but cannot not unlock any keys.
 type dummyFrontend struct{}
 
-func (dummyFrontend) UnlockAccount([]byte) bool                  { return false }
-func (dummyFrontend) ConfirmTransaction(*types.Transaction) bool { return true }
+func (dummyFrontend) UnlockAccount([]byte) bool      { return false }
+func (dummyFrontend) ConfirmTransaction(string) bool { return true }

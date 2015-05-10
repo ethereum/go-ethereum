@@ -33,10 +33,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var clilogger = logger.NewLogger("CLI")
 var interruptCallbacks = []func(os.Signal){}
 
 // Register interrupt handlers callbacks
@@ -50,7 +50,7 @@ func HandleInterrupt() {
 	go func() {
 		signal.Notify(c, os.Interrupt)
 		for sig := range c {
-			clilogger.Errorf("Shutting down (%v) ... \n", sig)
+			glog.V(logger.Error).Infof("Shutting down (%v) ... \n", sig)
 			RunInterruptCallbacks(sig)
 		}
 	}()
@@ -95,27 +95,18 @@ func initDataDir(Datadir string) {
 	}
 }
 
-func exit(err error) {
-	status := 0
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Fatal:", err)
-		status = 1
-	}
-	logger.Flush()
-	os.Exit(status)
-}
-
 // Fatalf formats a message to standard output and exits the program.
 func Fatalf(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "Fatal: "+format+"\n", args...)
+	fmt.Fprintf(os.Stdout, "Fatal: "+format+"\n", args...)
 	logger.Flush()
 	os.Exit(1)
 }
 
 func StartEthereum(ethereum *eth.Ethereum) {
-	clilogger.Infoln("Starting ", ethereum.Name())
+	glog.V(logger.Info).Infoln("Starting ", ethereum.Name())
 	if err := ethereum.Start(); err != nil {
-		exit(err)
+		Fatalf("Error starting Ethereum: %v", err)
 	}
 	RegisterInterrupt(func(sig os.Signal) {
 		ethereum.Stop()
@@ -124,7 +115,7 @@ func StartEthereum(ethereum *eth.Ethereum) {
 }
 
 func StartEthereumForTest(ethereum *eth.Ethereum) {
-	clilogger.Infoln("Starting ", ethereum.Name())
+	glog.V(logger.Info).Infoln("Starting ", ethereum.Name())
 	ethereum.StartForTest()
 	RegisterInterrupt(func(sig os.Signal) {
 		ethereum.Stop()
@@ -154,8 +145,12 @@ func ImportChain(chainmgr *core.ChainManager, fn string) error {
 	defer fh.Close()
 
 	chainmgr.Reset()
-	stream := rlp.NewStream(fh)
-	var i int
+	stream := rlp.NewStream(fh, 0)
+	var i, n int
+
+	batchSize := 2500
+	blocks := make(types.Blocks, batchSize)
+
 	for ; ; i++ {
 		var b types.Block
 		if err := stream.Decode(&b); err == io.EOF {
@@ -163,10 +158,25 @@ func ImportChain(chainmgr *core.ChainManager, fn string) error {
 		} else if err != nil {
 			return fmt.Errorf("at block %d: %v", i, err)
 		}
-		if err := chainmgr.InsertChain(types.Blocks{&b}); err != nil {
-			return fmt.Errorf("invalid block %d: %v", i, err)
+
+		blocks[n] = &b
+		n++
+
+		if n == batchSize {
+			if _, err := chainmgr.InsertChain(blocks); err != nil {
+				return fmt.Errorf("invalid block %v", err)
+			}
+			n = 0
+			blocks = make(types.Blocks, batchSize)
 		}
 	}
+
+	if n > 0 {
+		if _, err := chainmgr.InsertChain(blocks[:n]); err != nil {
+			return fmt.Errorf("invalid block %v", err)
+		}
+	}
+
 	fmt.Printf("imported %d blocks\n", i)
 	return nil
 }

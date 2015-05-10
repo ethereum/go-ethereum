@@ -6,7 +6,6 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -67,65 +66,101 @@ type worker struct {
 	mux    *event.TypeMux
 	quit   chan struct{}
 	pow    pow.PoW
-	atWork int64
 
 	eth   core.Backend
 	chain *core.ChainManager
 	proc  *core.BlockProcessor
 
 	coinbase common.Address
+	gasPrice *big.Int
 	extra    []byte
 
-	current *environment
+	currentMu sync.Mutex
+	current   *environment
 
 	uncleMu        sync.Mutex
 	possibleUncles map[common.Hash]*types.Block
 
-	mining bool
+	txQueueMu sync.Mutex
+	txQueue   map[common.Hash]*types.Transaction
+
+	// atomic status counters
+	mining int32
+	atWork int32
 }
 
 func newWorker(coinbase common.Address, eth core.Backend) *worker {
-	return &worker{
+	worker := &worker{
 		eth:            eth,
 		mux:            eth.EventMux(),
 		recv:           make(chan *types.Block),
+		gasPrice:       new(big.Int),
 		chain:          eth.ChainManager(),
 		proc:           eth.BlockProcessor(),
 		possibleUncles: make(map[common.Hash]*types.Block),
 		coinbase:       coinbase,
+		txQueue:        make(map[common.Hash]*types.Transaction),
+		quit:           make(chan struct{}),
 	}
+	go worker.update()
+	go worker.wait()
+
+	worker.commitNewWork()
+
+	return worker
+}
+
+func (self *worker) pendingState() *state.StateDB {
+	self.currentMu.Lock()
+	defer self.currentMu.Unlock()
+
+	return self.current.state
+}
+
+func (self *worker) pendingBlock() *types.Block {
+	self.currentMu.Lock()
+	defer self.currentMu.Unlock()
+
+	return self.current.block
 }
 
 func (self *worker) start() {
-	self.mining = true
-
-	self.quit = make(chan struct{})
+	self.mu.Lock()
+	defer self.mu.Unlock()
 
 	// spin up agents
 	for _, agent := range self.agents {
 		agent.Start()
 	}
 
-	go self.update()
-	go self.wait()
+	atomic.StoreInt32(&self.mining, 1)
 }
 
 func (self *worker) stop() {
-	self.mining = false
-	atomic.StoreInt64(&self.atWork, 0)
+	self.mu.Lock()
+	defer self.mu.Unlock()
 
-	close(self.quit)
+	if atomic.LoadInt32(&self.mining) == 1 {
+		// stop all agents
+		for _, agent := range self.agents {
+			agent.Stop()
+		}
+	}
+
+	atomic.StoreInt32(&self.mining, 0)
+	atomic.StoreInt32(&self.atWork, 0)
 }
 
 func (self *worker) register(agent Agent) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	self.agents = append(self.agents, agent)
 	agent.SetReturnCh(self.recv)
 }
 
 func (self *worker) update() {
-	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{})
-
-	timer := time.NewTicker(2 * time.Second)
+	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
 
 out:
 	for {
@@ -138,23 +173,13 @@ out:
 				self.uncleMu.Lock()
 				self.possibleUncles[ev.Block.Hash()] = ev.Block
 				self.uncleMu.Unlock()
+			case core.TxPreEvent:
+				if atomic.LoadInt32(&self.mining) == 0 {
+					self.commitNewWork()
+				}
 			}
-
 		case <-self.quit:
-			// stop all agents
-			for _, agent := range self.agents {
-				agent.Stop()
-			}
 			break out
-		case <-timer.C:
-			if glog.V(logger.Debug) {
-				glog.Infoln("Hash rate:", self.HashRate(), "Khash")
-			}
-
-			// XXX In case all mined a possible uncle
-			if atomic.LoadInt64(&self.atWork) == 0 {
-				self.commitNewWork()
-			}
 		}
 	}
 
@@ -164,19 +189,19 @@ out:
 func (self *worker) wait() {
 	for {
 		for block := range self.recv {
-			atomic.AddInt64(&self.atWork, -1)
+			atomic.AddInt32(&self.atWork, -1)
 
 			if block == nil {
 				continue
 			}
 
-			if err := self.chain.InsertChain(types.Blocks{block}); err == nil {
+			if _, err := self.chain.InsertChain(types.Blocks{block}); err == nil {
 				for _, uncle := range block.Uncles() {
 					delete(self.possibleUncles, uncle.Hash())
 				}
 				self.mux.Post(core.NewMinedBlockEvent{block})
 
-				glog.V(logger.Info).Infof("🔨 Mined block #%v", block.Number())
+				glog.V(logger.Info).Infof("🔨  Mined block #%v", block.Number())
 
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     block.Hash().Hex(),
@@ -192,25 +217,24 @@ func (self *worker) wait() {
 }
 
 func (self *worker) push() {
-	if self.mining {
+	if atomic.LoadInt32(&self.mining) == 1 {
 		self.current.block.Header().GasUsed = self.current.totalUsedGas
 		self.current.block.SetRoot(self.current.state.Root())
 
 		// push new work to agents
 		for _, agent := range self.agents {
-			atomic.AddInt64(&self.atWork, 1)
+			atomic.AddInt32(&self.atWork, 1)
 
-			agent.Work() <- self.current.block.Copy()
+			if agent.Work() != nil {
+				agent.Work() <- self.current.block.Copy()
+			} else {
+				common.Report(fmt.Sprintf("%v %T\n", agent, agent))
+			}
 		}
 	}
 }
 
-func (self *worker) commitNewWork() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.uncleMu.Lock()
-	defer self.uncleMu.Unlock()
-
+func (self *worker) makeCurrent() {
 	block := self.chain.NewBlock(self.coinbase)
 	if block.Time() == self.chain.CurrentBlock().Time() {
 		block.Header().Time++
@@ -223,41 +247,86 @@ func (self *worker) commitNewWork() {
 	}
 
 	parent := self.chain.GetBlock(self.current.block.ParentHash())
-	self.current.coinbase.SetGasPool(core.CalcGasLimit(parent, self.current.block))
+	self.current.coinbase.SetGasPool(core.CalcGasLimit(parent))
+}
+
+func (w *worker) setGasPrice(p *big.Int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.gasPrice = p
+}
+
+func (self *worker) commitNewWork() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.uncleMu.Lock()
+	defer self.uncleMu.Unlock()
+	self.currentMu.Lock()
+	defer self.currentMu.Unlock()
+
+	self.makeCurrent()
 
 	transactions := self.eth.TxPool().GetTransactions()
 	sort.Sort(types.TxByNonce{transactions})
 
 	// Keep track of transactions which return errors so they can be removed
 	var (
-		remove types.Transactions
-		tcount = 0
+		remove             = set.New()
+		tcount             = 0
+		ignoredTransactors = set.New()
 	)
-gasLimit:
-	for i, tx := range transactions {
+
+	const pct = int64(90)
+	// calculate the minimal gas price the miner accepts when sorting out transactions.
+	minprice := gasprice(self.gasPrice, pct)
+	for _, tx := range transactions {
+		// We can skip err. It has already been validated in the tx pool
+		from, _ := tx.From()
+
+		// check if it falls within margin
+		if tx.GasPrice().Cmp(minprice) < 0 {
+			// ignore the transaction and transactor. We ignore the transactor
+			// because nonce will fail after ignoring this transaction so there's
+			// no point
+			ignoredTransactors.Add(from)
+			glog.V(logger.Info).Infof("transaction(%x) below gas price (<%d%% ask price). All sequential txs from this address(%x) will fail\n", tx.Hash().Bytes()[:4], pct, from[:4])
+			continue
+		}
+
+		// Move on to the next transaction when the transactor is in ignored transactions set
+		// This may occur when a transaction hits the gas limit. When a gas limit is hit and
+		// the transaction is processed (that could potentially be included in the block) it
+		// will throw a nonce error because the previous transaction hasn't been processed.
+		// Therefor we need to ignore any transaction after the ignored one.
+		if ignoredTransactors.Has(from) {
+			continue
+		}
+
+		self.current.state.StartRecord(tx.Hash(), common.Hash{}, 0)
+
 		err := self.commitTransaction(tx)
 		switch {
-		case core.IsNonceErr(err):
-			fallthrough
-		case core.IsInvalidTxErr(err):
+		case core.IsNonceErr(err) || core.IsInvalidTxErr(err):
 			// Remove invalid transactions
 			from, _ := tx.From()
-			self.chain.TxState().RemoveNonce(from, tx.Nonce())
-			remove = append(remove, tx)
 
-			if glog.V(logger.Info) {
+			self.chain.TxState().RemoveNonce(from, tx.Nonce())
+			remove.Add(tx.Hash())
+
+			if glog.V(logger.Detail) {
 				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
 			}
-			glog.V(logger.Debug).Infoln(tx)
 		case state.IsGasLimitErr(err):
-			glog.V(logger.Info).Infof("Gas limit reached for block. %d TXs included in this block\n", i)
-			// Break on gas limit
-			break gasLimit
+			from, _ := tx.From()
+			// ignore the transactor so no nonce errors will be thrown for this account
+			// next time the worker is run, they'll be picked up again.
+			ignoredTransactors.Add(from)
+
+			glog.V(logger.Detail).Infof("Gas limit reached for (%x) in this block. Continue to try smaller txs\n", from[:4])
 		default:
 			tcount++
 		}
 	}
-	self.eth.TxPool().RemoveSet(remove)
 
 	var (
 		uncles    []*types.Header
@@ -269,15 +338,23 @@ gasLimit:
 		}
 
 		if err := self.commitUncle(uncle.Header()); err != nil {
-			glog.V(logger.Info).Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
-			glog.V(logger.Debug).Infoln(uncle)
+			if glog.V(logger.Ridiculousness) {
+				glog.V(logger.Detail).Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
+				glog.V(logger.Detail).Infoln(uncle)
+			}
+
 			badUncles = append(badUncles, hash)
 		} else {
-			glog.V(logger.Info).Infof("commiting %x as uncle\n", hash[:4])
+			glog.V(logger.Debug).Infof("commiting %x as uncle\n", hash[:4])
 			uncles = append(uncles, uncle.Header())
 		}
 	}
-	glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles\n", self.current.block.Number(), tcount, len(uncles))
+
+	// We only care about logging if we're actually mining
+	if atomic.LoadInt32(&self.mining) == 1 {
+		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles\n", self.current.block.Number(), tcount, len(uncles))
+	}
+
 	for _, hash := range badUncles {
 		delete(self.possibleUncles, hash)
 	}
@@ -287,6 +364,7 @@ gasLimit:
 	core.AccumulateRewards(self.current.state, self.current.block)
 
 	self.current.state.Update()
+
 	self.push()
 }
 
@@ -335,4 +413,13 @@ func (self *worker) HashRate() int64 {
 	}
 
 	return tot
+}
+
+// gasprice calculates a reduced gas price based on the pct
+// XXX Use big.Rat?
+func gasprice(price *big.Int, pct int64) *big.Int {
+	p := new(big.Int).Set(price)
+	p.Div(p, big.NewInt(100))
+	p.Mul(p, big.NewInt(pct))
+	return p
 }

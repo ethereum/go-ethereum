@@ -4,9 +4,13 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/crypto"
 )
+
+type bytesBacked interface {
+	Bytes() []byte
+}
 
 func CreateBloom(receipts Receipts) Bloom {
 	bin := new(big.Int)
@@ -20,10 +24,10 @@ func CreateBloom(receipts Receipts) Bloom {
 func LogsBloom(logs state.Logs) *big.Int {
 	bin := new(big.Int)
 	for _, log := range logs {
-		data := make([]common.Hash, len(log.Topics()))
-		bin.Or(bin, bloom9(log.Address().Bytes()))
+		data := make([]common.Hash, len(log.Topics))
+		bin.Or(bin, bloom9(log.Address.Bytes()))
 
-		for i, topic := range log.Topics() {
+		for i, topic := range log.Topics {
 			data[i] = topic
 		}
 
@@ -51,9 +55,9 @@ func bloom9(b []byte) *big.Int {
 
 var Bloom9 = bloom9
 
-func BloomLookup(bin Bloom, topic common.Hash) bool {
+func BloomLookup(bin Bloom, topic bytesBacked) bool {
 	bloom := bin.Big()
-	cmp := bloom9(topic[:])
+	cmp := bloom9(topic.Bytes()[:])
 
 	return bloom.And(bloom, cmp).Cmp(cmp) == 0
 }

@@ -23,6 +23,13 @@ import (
 	"math/big"
 	"strings"
 
+	"errors"
+	"net"
+	"net/http"
+	"time"
+
+	"io"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -43,16 +50,11 @@ func (d *hexdata) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.String())
 }
 
-func (d *hexdata) UnmarshalJSON(b []byte) (err error) {
-	d.data = common.FromHex(string(b))
-	return nil
-}
-
 func newHexData(input interface{}) *hexdata {
 	d := new(hexdata)
 
 	if input == nil {
-		d.data = nil
+		d.isNil = true
 		return d
 	}
 	switch input := input.(type) {
@@ -105,19 +107,19 @@ func newHexData(input interface{}) *hexdata {
 	case int16:
 		d.data = big.NewInt(int64(input)).Bytes()
 	case uint16:
-		buff := make([]byte, 8)
+		buff := make([]byte, 2)
 		binary.BigEndian.PutUint16(buff, input)
 		d.data = buff
 	case int32:
 		d.data = big.NewInt(int64(input)).Bytes()
 	case uint32:
-		buff := make([]byte, 8)
+		buff := make([]byte, 4)
 		binary.BigEndian.PutUint32(buff, input)
 		d.data = buff
 	case string: // hexstring
 		d.data = common.Big(input).Bytes()
 	default:
-		d.data = nil
+		d.isNil = true
 	}
 
 	return d
@@ -145,11 +147,6 @@ func (d *hexnum) MarshalJSON() ([]byte, error) {
 		return json.Marshal(nil)
 	}
 	return json.Marshal(d.String())
-}
-
-func (d *hexnum) UnmarshalJSON(b []byte) (err error) {
-	d.data = common.FromHex(string(b))
-	return nil
 }
 
 func newHexNum(input interface{}) *hexnum {
@@ -266,4 +263,96 @@ type RpcErrorObject struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	// Data    interface{} `json:"data"`
+}
+
+type listenerHasStoppedError struct {
+	msg string
+}
+
+func (self listenerHasStoppedError) Error() string {
+	return self.msg
+}
+
+var listenerStoppedError = listenerHasStoppedError{"Listener stopped"}
+
+// When https://github.com/golang/go/issues/4674 is fixed this could be replaced
+type stoppableTCPListener struct {
+	*net.TCPListener
+	stop chan struct{} // closed when the listener must stop
+}
+
+// Wraps the default handler and checks if the RPC service was stopped. In that case it returns an
+// error indicating that the service was stopped. This will only happen for connections which are
+// kept open (HTTP keep-alive) when the RPC service was shutdown.
+func newStoppableHandler(h http.Handler, stop chan struct{}) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-stop:
+			w.Header().Set("Content-Type", "application/json")
+			jsonerr := &RpcErrorObject{-32603, "RPC service stopped"}
+			send(w, &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: nil, Error: jsonerr})
+		default:
+			h.ServeHTTP(w, r)
+		}
+	})
+}
+
+// Stop the listener and all accepted and still active connections.
+func (self *stoppableTCPListener) Stop() {
+	close(self.stop)
+}
+
+func newStoppableTCPListener(addr string) (*stoppableTCPListener, error) {
+	wl, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	if tcpl, ok := wl.(*net.TCPListener); ok {
+		stop := make(chan struct{})
+		l := &stoppableTCPListener{tcpl, stop}
+		return l, nil
+	}
+
+	return nil, errors.New("Unable to create TCP listener for RPC service")
+}
+
+func (self *stoppableTCPListener) Accept() (net.Conn, error) {
+	for {
+		self.SetDeadline(time.Now().Add(time.Duration(1 * time.Second)))
+		c, err := self.TCPListener.AcceptTCP()
+
+		select {
+		case <-self.stop:
+			if c != nil { // accept timeout
+				c.Close()
+			}
+			self.TCPListener.Close()
+			return nil, listenerStoppedError
+		default:
+		}
+
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() && netErr.Temporary() {
+				continue // regular timeout
+			}
+		}
+
+		return &closableConnection{c, self.stop}, err
+	}
+}
+
+type closableConnection struct {
+	*net.TCPConn
+	closed chan struct{}
+}
+
+func (self *closableConnection) Read(b []byte) (n int, err error) {
+	select {
+	case <-self.closed:
+		self.TCPConn.Close()
+		return 0, io.EOF
+	default:
+		return self.TCPConn.Read(b)
+	}
 }

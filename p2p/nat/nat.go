@@ -10,10 +10,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/jackpal/go-nat-pmp"
 )
-
-var log = logger.NewLogger("P2P NAT")
 
 // An implementation of nat.Interface can map local ports to ports
 // accessible from the Internet.
@@ -87,12 +86,13 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 	refresh := time.NewTimer(mapUpdateInterval)
 	defer func() {
 		refresh.Stop()
-		log.Debugf("Deleting port mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
+		glog.V(logger.Debug).Infof("Deleting port mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 		m.DeleteMapping(protocol, extport, intport)
 	}()
-	log.Debugf("add mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
+	glog.V(logger.Debug).Infof("add mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 	if err := m.AddMapping(protocol, intport, extport, name, mapTimeout); err != nil {
-		log.Errorf("mapping error: %v\n", err)
+		glog.V(logger.Warn).Infof("network port %d could not be mapped: %v\n", intport, err)
+		glog.V(logger.Debug).Infof("mapping with %v returned %v\n", m, err)
 	}
 	for {
 		select {
@@ -101,9 +101,10 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 				return
 			}
 		case <-refresh.C:
-			log.DebugDetailf("refresh mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
+			glog.V(logger.Detail).Infof("refresh mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 			if err := m.AddMapping(protocol, intport, extport, name, mapTimeout); err != nil {
-				log.Errorf("mapping error: %v\n", err)
+				glog.V(logger.Warn).Infof("network port %d could not be mapped: %v\n", intport, err)
+				glog.V(logger.Debug).Infof("mapping with %v returned %v\n", m, err)
 			}
 			refresh.Reset(mapUpdateInterval)
 		}
@@ -226,7 +227,7 @@ func (n *autodisc) wait() error {
 		return nil
 	}
 	if found = <-n.done; found == nil {
-		return errors.New("no devices discovered")
+		return errors.New("no UPnP or NAT-PMP router discovered")
 	}
 	n.mu.Lock()
 	n.found = found

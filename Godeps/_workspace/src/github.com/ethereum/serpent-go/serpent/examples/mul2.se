@@ -1,2 +1,0 @@
-def double(v):
-    return(v*2)

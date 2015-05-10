@@ -20,6 +20,7 @@ type ManagedState struct {
 	accounts map[string]*account
 }
 
+// ManagedState returns a new managed state with the statedb as it's backing layer
 func ManageState(statedb *StateDB) *ManagedState {
 	return &ManagedState{
 		StateDB:  statedb,
@@ -27,12 +28,14 @@ func ManageState(statedb *StateDB) *ManagedState {
 	}
 }
 
+// SetState sets the backing layer of the managed state
 func (ms *ManagedState) SetState(statedb *StateDB) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	ms.StateDB = statedb
 }
 
+// RemoveNonce removed the nonce from the managed state and all future pending nonces
 func (ms *ManagedState) RemoveNonce(addr common.Address, n uint64) {
 	if ms.hasAccount(addr) {
 		ms.mu.Lock()
@@ -47,9 +50,10 @@ func (ms *ManagedState) RemoveNonce(addr common.Address, n uint64) {
 	}
 }
 
+// NewNonce returns the new canonical nonce for the managed account
 func (ms *ManagedState) NewNonce(addr common.Address) uint64 {
-	ms.mu.RLock()
-	defer ms.mu.RUnlock()
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
 
 	account := ms.getAccount(addr)
 	for i, nonce := range account.nonces {
@@ -58,7 +62,39 @@ func (ms *ManagedState) NewNonce(addr common.Address) uint64 {
 		}
 	}
 	account.nonces = append(account.nonces, true)
-	return uint64(len(account.nonces)) + account.nstart
+
+	return uint64(len(account.nonces)-1) + account.nstart
+}
+
+// GetNonce returns the canonical nonce for the managed or unmanged account
+func (ms *ManagedState) GetNonce(addr common.Address) uint64 {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+
+	if ms.hasAccount(addr) {
+		account := ms.getAccount(addr)
+		return uint64(len(account.nonces)) + account.nstart
+	} else {
+		return ms.StateDB.GetNonce(addr)
+	}
+}
+
+// SetNonce sets the new canonical nonce for the managed state
+func (ms *ManagedState) SetNonce(addr common.Address, nonce uint64) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	so := ms.GetOrNewStateObject(addr)
+	so.SetNonce(nonce)
+
+	ms.accounts[addr.Str()] = newAccount(so)
+}
+
+// HasAccount returns whether the given address is managed or not
+func (ms *ManagedState) HasAccount(addr common.Address) bool {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	return ms.hasAccount(addr)
 }
 
 func (ms *ManagedState) hasAccount(addr common.Address) bool {
@@ -66,6 +102,7 @@ func (ms *ManagedState) hasAccount(addr common.Address) bool {
 	return ok
 }
 
+// populate the managed state
 func (ms *ManagedState) getAccount(addr common.Address) *account {
 	straddr := addr.Str()
 	if account, ok := ms.accounts[straddr]; !ok {
@@ -85,5 +122,5 @@ func (ms *ManagedState) getAccount(addr common.Address) *account {
 }
 
 func newAccount(so *StateObject) *account {
-	return &account{so, so.nonce - 1, nil}
+	return &account{so, so.nonce, nil}
 }

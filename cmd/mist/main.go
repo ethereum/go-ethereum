@@ -37,10 +37,13 @@ import (
 
 const (
 	ClientIdentifier = "Mist"
-	Version          = "0.9.0"
+	Version          = "0.9.19"
 )
 
 var (
+	gitCommit       string // set via linker flag
+	nodeNameVersion string
+
 	app           = utils.NewApp(Version, "the ether browser")
 	assetPathFlag = cli.StringFlag{
 		Name:  "asset_path",
@@ -55,6 +58,11 @@ func init() {
 	if len(rpcCorsFlag.Value) == 0 {
 		rpcCorsFlag.Value = "http://localhost"
 	}
+	if gitCommit == "" {
+		nodeNameVersion = Version
+	} else {
+		nodeNameVersion = Version + "-" + gitCommit[:8]
+	}
 
 	app.Action = run
 	app.Flags = []cli.Flag{
@@ -65,8 +73,9 @@ func init() {
 		utils.DataDirFlag,
 		utils.ListenPortFlag,
 		utils.LogFileFlag,
-		utils.LogLevelFlag,
+		utils.VerbosityFlag,
 		utils.MaxPeersFlag,
+		utils.MaxPendingPeersFlag,
 		utils.MinerThreadsFlag,
 		utils.NATFlag,
 		utils.NodeKeyFileFlag,
@@ -74,6 +83,7 @@ func init() {
 		utils.RPCPortFlag,
 		utils.JSpathFlag,
 		utils.ProtocolVersionFlag,
+		utils.BlockchainVersionFlag,
 		utils.NetworkIdFlag,
 	}
 }
@@ -106,7 +116,8 @@ func run(ctx *cli.Context) {
 	tstart := time.Now()
 
 	// TODO: show qml popup instead of exiting if initialization fails.
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	cfg.Shh = true
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)

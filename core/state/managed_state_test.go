@@ -4,12 +4,15 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 var addr = common.BytesToAddress([]byte("test"))
 
 func create() (*ManagedState, *account) {
-	ms := ManageState(&StateDB{stateObjects: make(map[string]*StateObject)})
+	db, _ := ethdb.NewMemDatabase()
+	statedb := New(common.Hash{}, db)
+	ms := ManageState(statedb)
 	so := &StateObject{address: addr, nonce: 100}
 	ms.StateDB.stateObjects[addr.Str()] = so
 	ms.accounts[addr.Str()] = newAccount(so)
@@ -85,5 +88,23 @@ func TestRemoteNonceChange(t *testing.T) {
 	nonce = ms.NewNonce(addr)
 	if nonce != 204 {
 		t.Error("expected nonce after remote update to be", 201, "got", nonce)
+	}
+}
+
+func TestSetNonce(t *testing.T) {
+	ms, _ := create()
+
+	var addr common.Address
+	ms.SetNonce(addr, 10)
+
+	if ms.GetNonce(addr) != 10 {
+		t.Error("Expected nonce of 10, got", ms.GetNonce(addr))
+	}
+
+	addr[0] = 1
+	ms.StateDB.SetNonce(addr, 1)
+
+	if ms.GetNonce(addr) != 1 {
+		t.Error("Expected nonce of 1, got", ms.GetNonce(addr))
 	}
 }

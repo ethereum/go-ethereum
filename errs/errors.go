@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 /*
@@ -68,7 +69,7 @@ func (self *Errors) New(code int, format string, params ...interface{}) *Error {
 
 func (self Error) Error() (message string) {
 	if len(message) == 0 {
-		self.message = fmt.Sprintf("[%s] %s", self.Package, self.Name)
+		self.message = fmt.Sprintf("[%s] ERROR: %s", self.Package, self.Name)
 		if self.format != "" {
 			self.message += ": " + fmt.Sprintf(self.format, self.params...)
 		}
@@ -76,8 +77,10 @@ func (self Error) Error() (message string) {
 	return self.message
 }
 
-func (self Error) Log(log *logger.Logger) {
-	log.Sendln(self.level, self)
+func (self Error) Log(v glog.Verbose) {
+	if v {
+		v.Infoln(self)
+	}
 }
 
 /*

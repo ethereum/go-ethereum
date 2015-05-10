@@ -66,7 +66,7 @@ func (self *Env) VmType() vm.Type          { return vm.StdVmTy }
 func (self *Env) GetHash(n uint64) common.Hash {
 	return common.BytesToHash(crypto.Sha3([]byte(big.NewInt(int64(n)).String())))
 }
-func (self *Env) AddLog(log state.Log) {
+func (self *Env) AddLog(log *state.Log) {
 	self.logs = append(self.logs, log)
 }
 func (self *Env) Depth() int     { return self.depth }

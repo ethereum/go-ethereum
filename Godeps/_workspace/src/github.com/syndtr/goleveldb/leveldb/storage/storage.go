@@ -67,7 +67,7 @@ type Writer interface {
 	Syncer
 }
 
-// File is the file.
+// File is the file. A file instance must be goroutine-safe.
 type File interface {
 	// Open opens the file for read. Returns os.ErrNotExist error
 	// if the file does not exist.
@@ -94,7 +94,7 @@ type File interface {
 	Remove() error
 }
 
-// Storage is the storage.
+// Storage is the storage. A storage instance must be goroutine-safe.
 type Storage interface {
 	// Lock locks the storage. Any subsequent attempt to call Lock will fail
 	// until the last lock released.
@@ -124,4 +124,34 @@ type Storage interface {
 	// Close closes the storage. It is valid to call Close multiple times.
 	// Other methods should not be called after the storage has been closed.
 	Close() error
+}
+
+// FileInfo wraps basic file info.
+type FileInfo struct {
+	Type FileType
+	Num  uint64
+}
+
+func (fi FileInfo) String() string {
+	switch fi.Type {
+	case TypeManifest:
+		return fmt.Sprintf("MANIFEST-%06d", fi.Num)
+	case TypeJournal:
+		return fmt.Sprintf("%06d.log", fi.Num)
+	case TypeTable:
+		return fmt.Sprintf("%06d.ldb", fi.Num)
+	case TypeTemp:
+		return fmt.Sprintf("%06d.tmp", fi.Num)
+	default:
+		return fmt.Sprintf("%#x-%d", fi.Type, fi.Num)
+	}
+}
+
+// NewFileInfo creates new FileInfo from the given File. It will returns nil
+// if File is nil.
+func NewFileInfo(f File) *FileInfo {
+	if f == nil {
+		return nil
+	}
+	return &FileInfo{f.Type(), f.Num()}
 }

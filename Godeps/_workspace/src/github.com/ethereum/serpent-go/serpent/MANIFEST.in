@@ -1,5 +1,0 @@
-include *.cpp
-include *.h
-include *py
-include README.md
-include Makefile

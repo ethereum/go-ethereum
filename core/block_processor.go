@@ -18,6 +18,12 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
+const (
+	// must be bumped when consensus algorithm is changed, this forces the upgradedb
+	// command to be run (forces the blocks to be imported again using the new algorithm)
+	BlockChainVersion = 2
+)
+
 var statelogger = logger.NewLogger("BLOCK")
 
 type BlockProcessor struct {
@@ -73,14 +79,14 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 
 func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
 	// If we are mining this block and validating we want to set the logs back to 0
-	statedb.EmptyLogs()
+	//statedb.EmptyLogs()
 
 	cb := statedb.GetStateObject(coinbase.Address())
 	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, block), tx, cb)
 	if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
 		// If the account is managed, remove the invalid nonce.
-		from, _ := tx.From()
-		self.bc.TxState().RemoveNonce(from, tx.Nonce())
+		//from, _ := tx.From()
+		//self.bc.TxState().RemoveNonce(from, tx.Nonce())
 		return nil, nil, err
 	}
 
@@ -89,7 +95,9 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 
 	cumulative := new(big.Int).Set(usedGas.Add(usedGas, gas))
 	receipt := types.NewReceipt(statedb.Root().Bytes(), cumulative)
-	receipt.SetLogs(statedb.Logs())
+
+	logs := statedb.GetLogs(tx.Hash())
+	receipt.SetLogs(logs)
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	glog.V(logger.Debug).Infoln(receipt)
@@ -97,7 +105,6 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	// Notify all subscribers
 	if !transientProcess {
 		go self.eventMux.Post(TxPostEvent{tx})
-		logs := statedb.Logs()
 		go self.eventMux.Post(logs)
 	}
 
@@ -115,7 +122,9 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 		cumulativeSum = new(big.Int)
 	)
 
-	for _, tx := range txs {
+	for i, tx := range txs {
+		statedb.StartRecord(tx.Hash(), block.Hash(), i)
+
 		receipt, txGas, err := self.ApplyTransaction(coinbase, statedb, block, tx, totalUsedGas, transientProcess)
 		if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
 			return nil, err
@@ -140,28 +149,42 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 	return receipts, err
 }
 
-// Process block will attempt to process the given block's transactions and applies them
-// on top of the block's parent state (given it exists) and will return wether it was
-// successful or not.
-func (sm *BlockProcessor) Process(block *types.Block) (td *big.Int, logs state.Logs, err error) {
+func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs state.Logs, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
 	header := block.Header()
-	if sm.bc.HasBlock(header.Hash()) {
-		return nil, nil, &KnownBlockError{header.Number, header.Hash()}
-	}
-
 	if !sm.bc.HasBlock(header.ParentHash) {
-		return nil, nil, ParentError(header.ParentHash)
+		return nil, ParentError(header.ParentHash)
 	}
 	parent := sm.bc.GetBlock(header.ParentHash)
 
 	return sm.processWithParent(block, parent)
 }
 
-func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big.Int, logs state.Logs, err error) {
+// Process block will attempt to process the given block's transactions and applies them
+// on top of the block's parent state (given it exists) and will return wether it was
+// successful or not.
+func (sm *BlockProcessor) Process(block *types.Block) (logs state.Logs, err error) {
+	// Processing a blocks may never happen simultaneously
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	header := block.Header()
+	if sm.bc.HasBlock(header.Hash()) {
+		return nil, &KnownBlockError{header.Number, header.Hash()}
+	}
+
+	if !sm.bc.HasBlock(header.ParentHash) {
+		return nil, ParentError(header.ParentHash)
+	}
+	parent := sm.bc.GetBlock(header.ParentHash)
+
+	return sm.processWithParent(block, parent)
+}
+
+func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs state.Logs, err error) {
 	sm.lastAttemptedBlock = block
 
 	// Create a new state based on the parent's root (e.g., create copy)
@@ -174,7 +197,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 
 	// There can be at most two uncles
 	if len(block.Uncles()) > 2 {
-		return nil, nil, ValidationError("Block can only contain one uncle (contained %v)", len(block.Uncles()))
+		return nil, ValidationError("Block can only contain one uncle (contained %v)", len(block.Uncles()))
 	}
 
 	receipts, err := sm.TransitionState(state, parent, block, false)
@@ -196,14 +219,21 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	// can be used by light clients to make sure they've received the correct Txs
 	txSha := types.DeriveSha(block.Transactions())
 	if txSha != header.TxHash {
-		err = fmt.Errorf("validating transaction root. received=%x got=%x", header.TxHash, txSha)
+		err = fmt.Errorf("invalid transaction root hash. received=%x calculated=%x", header.TxHash, txSha)
 		return
 	}
 
 	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, R1]]))
 	receiptSha := types.DeriveSha(receipts)
 	if receiptSha != header.ReceiptHash {
-		err = fmt.Errorf("validating receipt root. received=%x got=%x", header.ReceiptHash, receiptSha)
+		err = fmt.Errorf("invalid receipt root hash. received=%x calculated=%x", header.ReceiptHash, receiptSha)
+		return
+	}
+
+	// Verify UncleHash before running other uncle validations
+	unclesSha := block.CalculateUnclesHash()
+	if unclesSha != header.UncleHash {
+		err = fmt.Errorf("invalid uncles root hash. received=%x calculated=%x", header.UncleHash, unclesSha)
 		return
 	}
 
@@ -223,19 +253,19 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	}
 
 	// Calculate the td for this block
-	td = CalculateTD(block, parent)
+	//td = CalculateTD(block, parent)
 	// Sync the current block's state to the database
 	state.Sync()
 
 	// Remove transactions from the pool
-	sm.txpool.RemoveSet(block.Transactions())
+	sm.txpool.RemoveTransactions(block.Transactions())
 
 	// This puts transactions in a extra db for rpc
 	for i, tx := range block.Transactions() {
 		putTx(sm.extraDb, tx, block, uint64(i))
 	}
 
-	return td, state.Logs(), nil
+	return state.Logs(), nil
 }
 
 // Validates the current block. Returns an error if the block was invalid,
@@ -314,7 +344,7 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 	}
 
 	uncles.Add(block.Hash())
-	for _, uncle := range block.Uncles() {
+	for i, uncle := range block.Uncles() {
 		if uncles.Has(uncle.Hash()) {
 			// Error not unique
 			return UncleError("Uncle not unique")
@@ -331,9 +361,8 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 		}
 
 		if err := sm.ValidateHeader(uncle, ancestorHeaders[uncle.ParentHash]); err != nil {
-			return ValidationError(fmt.Sprintf("%v", err))
+			return ValidationError(fmt.Sprintf("uncle[%d](%x) header invalid: %v", i, uncle.Hash().Bytes()[:4], err))
 		}
-
 	}
 
 	return nil

@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 #ifdef _MSC_VER
-void debugf(const char *str, ...);
+void debugf(char const* str, ...);
 #else
 #define debugf printf
 #endif

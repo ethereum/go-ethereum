@@ -85,7 +85,7 @@ func (self *CpuMiner) mine(block *types.Block) {
 	self.chMu.Unlock()
 
 	// Mine
-	nonce, mixDigest, _ := self.pow.Search(block, self.quitCurrentOp)
+	nonce, mixDigest := self.pow.Search(block, self.quitCurrentOp)
 	if nonce != 0 {
 		block.SetNonce(nonce)
 		block.Header().MixDigest = common.BytesToHash(mixDigest)

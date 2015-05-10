@@ -8,6 +8,61 @@ import (
 	"testing"
 )
 
+func TestBlockheightInvalidString(t *testing.T) {
+	v := "foo"
+	var num int64
+
+	str := ExpectInvalidTypeError(blockHeight(v, &num))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestBlockheightEarliest(t *testing.T) {
+	v := "earliest"
+	e := int64(0)
+	var num int64
+
+	err := blockHeight(v, &num)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if num != e {
+		t.Errorf("Expected %s but got %s", e, num)
+	}
+}
+
+func TestBlockheightLatest(t *testing.T) {
+	v := "latest"
+	e := int64(-1)
+	var num int64
+
+	err := blockHeight(v, &num)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if num != e {
+		t.Errorf("Expected %s but got %s", e, num)
+	}
+}
+
+func TestBlockheightPending(t *testing.T) {
+	v := "pending"
+	e := int64(-2)
+	var num int64
+
+	err := blockHeight(v, &num)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if num != e {
+		t.Errorf("Expected %s but got %s", e, num)
+	}
+}
+
 func ExpectValidationError(err error) string {
 	var str string
 	switch err.(type) {
@@ -106,6 +161,26 @@ func TestGetBalanceArgs(t *testing.T) {
 	expected := new(GetBalanceArgs)
 	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
 	expected.BlockNumber = 31
+
+	args := new(GetBalanceArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if args.Address != expected.Address {
+		t.Errorf("Address should be %v but is %v", expected.Address, args.Address)
+	}
+
+	if args.BlockNumber != expected.BlockNumber {
+		t.Errorf("BlockNumber should be %v but is %v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestGetBalanceArgsBlocknumMissing(t *testing.T) {
+	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1"]`
+	expected := new(GetBalanceArgs)
+	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
+	expected.BlockNumber = -1
 
 	args := new(GetBalanceArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -231,6 +306,16 @@ func TestGetBlockByHashArgsHashInt(t *testing.T) {
 	}
 }
 
+func TestGetBlockByHashArgsHashBool(t *testing.T) {
+	input := `[false, true]`
+
+	args := new(GetBlockByHashArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
 func TestGetBlockByNumberArgsBlockNum(t *testing.T) {
 	input := `[436, false]`
 	expected := new(GetBlockByNumberArgs)
@@ -256,6 +341,25 @@ func TestGetBlockByNumberArgsBlockHex(t *testing.T) {
 	expected := new(GetBlockByNumberArgs)
 	expected.BlockNumber = 436
 	expected.IncludeTxs = false
+
+	args := new(GetBlockByNumberArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if args.BlockNumber != expected.BlockNumber {
+		t.Errorf("BlockNumber should be %v but is %v", expected.BlockNumber, args.BlockNumber)
+	}
+
+	if args.IncludeTxs != expected.IncludeTxs {
+		t.Errorf("IncludeTxs should be %v but is %v", expected.IncludeTxs, args.IncludeTxs)
+	}
+}
+func TestGetBlockByNumberArgsWords(t *testing.T) {
+	input := `["earliest", true]`
+	expected := new(GetBlockByNumberArgs)
+	expected.BlockNumber = 0
+	expected.IncludeTxs = true
 
 	args := new(GetBlockByNumberArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -586,10 +690,6 @@ func TestCallArgs(t *testing.T) {
 		t.Error(err)
 	}
 
-	if expected.From != args.From {
-		t.Errorf("From shoud be %#v but is %#v", expected.From, args.From)
-	}
-
 	if expected.To != args.To {
 		t.Errorf("To shoud be %#v but is %#v", expected.To, args.To)
 	}
@@ -810,19 +910,8 @@ func TestCallArgsNotStrings(t *testing.T) {
 	}
 }
 
-func TestCallArgsFromEmpty(t *testing.T) {
-	input := `[{"to": "0xb60e8dd61c5d32be8058bb8eb970870f07233155"}]`
-
-	args := new(CallArgs)
-	str := ExpectValidationError(json.Unmarshal([]byte(input), &args))
-	if len(str) > 0 {
-		t.Error(str)
-	}
-}
-
 func TestCallArgsToEmpty(t *testing.T) {
 	input := `[{"from": "0xb60e8dd61c5d32be8058bb8eb970870f07233155"}]`
-
 	args := new(CallArgs)
 	str := ExpectValidationError(json.Unmarshal([]byte(input), &args))
 	if len(str) > 0 {
@@ -832,6 +921,26 @@ func TestCallArgsToEmpty(t *testing.T) {
 
 func TestGetStorageArgs(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "latest"]`
+	expected := new(GetStorageArgs)
+	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
+	expected.BlockNumber = -1
+
+	args := new(GetStorageArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Address != args.Address {
+		t.Errorf("Address shoud be %#v but is %#v", expected.Address, args.Address)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestGetStorageArgsMissingBlocknum(t *testing.T) {
+	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1"]`
 	expected := new(GetStorageArgs)
 	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
 	expected.BlockNumber = -1
@@ -896,6 +1005,31 @@ func TestGetStorageAtArgs(t *testing.T) {
 	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
 	expected.Key = "0x0"
 	expected.BlockNumber = 2
+
+	args := new(GetStorageAtArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Address != args.Address {
+		t.Errorf("Address shoud be %#v but is %#v", expected.Address, args.Address)
+	}
+
+	if expected.Key != args.Key {
+		t.Errorf("Address shoud be %#v but is %#v", expected.Address, args.Address)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestGetStorageAtArgsMissingBlocknum(t *testing.T) {
+	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", "0x0"]`
+	expected := new(GetStorageAtArgs)
+	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
+	expected.Key = "0x0"
+	expected.BlockNumber = -1
 
 	args := new(GetStorageAtArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -1015,6 +1149,26 @@ func TestGetTxCountAddressNotString(t *testing.T) {
 	}
 }
 
+func TestGetTxCountBlockheightMissing(t *testing.T) {
+	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1"]`
+	expected := new(GetTxCountArgs)
+	expected.Address = "0x407d73d8a49eeb85d32cf465507dd71d507100c1"
+	expected.BlockNumber = -1
+
+	args := new(GetTxCountArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Address != args.Address {
+		t.Errorf("Address shoud be %#v but is %#v", expected.Address, args.Address)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
 func TestGetTxCountBlockheightInvalid(t *testing.T) {
 	input := `["0x407d73d8a49eeb85d32cf465507dd71d507100c1", {}]`
 
@@ -1027,6 +1181,26 @@ func TestGetTxCountBlockheightInvalid(t *testing.T) {
 
 func TestGetDataArgs(t *testing.T) {
 	input := `["0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8", "latest"]`
+	expected := new(GetDataArgs)
+	expected.Address = "0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8"
+	expected.BlockNumber = -1
+
+	args := new(GetDataArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Address != args.Address {
+		t.Errorf("Address shoud be %#v but is %#v", expected.Address, args.Address)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestGetDataArgsBlocknumMissing(t *testing.T) {
+	input := `["0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8"]`
 	expected := new(GetDataArgs)
 	expected.Address = "0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8"
 	expected.BlockNumber = -1
@@ -1769,7 +1943,7 @@ func TestWhisperFilterArgs(t *testing.T) {
 	input := `[{"topics": ["0x68656c6c6f20776f726c64"], "to": "0x34ag445g3455b34"}]`
 	expected := new(WhisperFilterArgs)
 	expected.To = "0x34ag445g3455b34"
-	expected.Topics = []string{"0x68656c6c6f20776f726c64"}
+	expected.Topics = [][]string{[]string{"0x68656c6c6f20776f726c64"}}
 
 	args := new(WhisperFilterArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -1995,11 +2169,90 @@ func TestWhisperIdentityArgsInt(t *testing.T) {
 	}
 }
 
+func TestBlockNumArgs(t *testing.T) {
+	input := `["0x29a"]`
+	expected := new(BlockNumIndexArgs)
+	expected.BlockNumber = 666
+
+	args := new(BlockNumArg)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestBlockNumArgsWord(t *testing.T) {
+	input := `["pending"]`
+	expected := new(BlockNumIndexArgs)
+	expected.BlockNumber = -2
+
+	args := new(BlockNumArg)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+}
+
+func TestBlockNumArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(BlockNumArg)
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestBlockNumArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(BlockNumArg)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+func TestBlockNumArgsBool(t *testing.T) {
+	input := `[true]`
+
+	args := new(BlockNumArg)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
 func TestBlockNumIndexArgs(t *testing.T) {
 	input := `["0x29a", "0x0"]`
 	expected := new(BlockNumIndexArgs)
 	expected.BlockNumber = 666
 	expected.Index = 0
+
+	args := new(BlockNumIndexArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.BlockNumber != args.BlockNumber {
+		t.Errorf("BlockNumber shoud be %#v but is %#v", expected.BlockNumber, args.BlockNumber)
+	}
+
+	if expected.Index != args.Index {
+		t.Errorf("Index shoud be %#v but is %#v", expected.Index, args.Index)
+	}
+}
+
+func TestBlockNumIndexArgsWord(t *testing.T) {
+	input := `["latest", 67]`
+	expected := new(BlockNumIndexArgs)
+	expected.BlockNumber = -1
+	expected.Index = 67
 
 	args := new(BlockNumIndexArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -2046,7 +2299,7 @@ func TestBlockNumIndexArgsBlocknumInvalid(t *testing.T) {
 }
 
 func TestBlockNumIndexArgsIndexInvalid(t *testing.T) {
-	input := `["0x29a", 1]`
+	input := `["0x29a", true]`
 
 	args := new(BlockNumIndexArgs)
 	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), &args))
@@ -2237,6 +2490,16 @@ func TestBlockHeightFromJsonInvalid(t *testing.T) {
 	var num int64
 	var msg json.RawMessage = []byte(`}{`)
 	str := ExpectDecodeParamError(blockHeightFromJson(msg, &num))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestSourceArgsEmpty(t *testing.T) {
+	input := `[]`
+
+	args := new(SourceArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
 	if len(str) > 0 {
 		t.Error(str)
 	}

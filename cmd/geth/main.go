@@ -23,10 +23,14 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
+	"path"
+	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/codegangsta/cli"
@@ -34,24 +38,36 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"github.com/peterh/liner"
 )
+import _ "net/http/pprof"
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.7"
+	Version          = "0.9.19"
 )
 
 var (
-	clilogger = logger.NewLogger("CLI")
-	app       = utils.NewApp(Version, "the go-ethereum command line interface")
+	gitCommit       string // set via linker flag
+	nodeNameVersion string
+	app             *cli.App
 )
 
 func init() {
+	if gitCommit == "" {
+		nodeNameVersion = Version
+	} else {
+		nodeNameVersion = Version + "-" + gitCommit[:8]
+	}
+
+	app = utils.NewApp(Version, "the go-ethereum command line interface")
 	app.Action = run
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
@@ -95,6 +111,8 @@ The output of this command is supposed to be machine-readable.
 
 Manage accounts lets you create new accounts, list all existing accounts,
 import a private key into a new account.
+
+'account help' shows a list of subcommands or help for one subcommand.
 
 It supports interactive mode, when you are prompted for password as well as
 non-interactive mode where passwords are supplied via a given password file.
@@ -152,8 +170,7 @@ password to file or expose in any other way.
 Imports an unencrypted private key from <keyfile> and creates a new account.
 Prints the address.
 
-The keyfile is assumed to contain an unencrypted private key in canonical EC
-raw bytes format.
+The keyfile is assumed to contain an unencrypted private key in hexadecimal format.
 
 The account is saved in encrypted format, you are prompted for a passphrase.
 
@@ -186,8 +203,8 @@ Use "ethereum dump 0" to dump the genesis block.
 			Usage:  `Geth Console: interactive JavaScript environment`,
 			Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
-which exposes a node admin interface as well as the DAPP JavaScript API.
-See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
+which exposes a node admin interface as well as the Ðapp JavaScript API.
+See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
 `,
 		},
 		{
@@ -195,7 +212,7 @@ See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
 			Name:   "js",
 			Usage:  `executes the given JavaScript files in the Geth JavaScript VM`,
 			Description: `
-The JavaScript VM exposes a node admin interface as well as the DAPP
+The JavaScript VM exposes a node admin interface as well as the Ðapp
 JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
 `,
 		},
@@ -209,33 +226,54 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 			Name:   "export",
 			Usage:  `export blockchain into file`,
 		},
+		{
+			Action: upgradeDb,
+			Name:   "upgradedb",
+			Usage:  "upgrade chainblock database",
+		},
 	}
 	app.Flags = []cli.Flag{
+		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
+		utils.BlockchainVersionFlag,
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
-		utils.LogFileFlag,
-		utils.LogJSONFlag,
-		utils.LogLevelFlag,
 		utils.MaxPeersFlag,
+		utils.MaxPendingPeersFlag,
 		utils.EtherbaseFlag,
+		utils.GasPriceFlag,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
 		utils.NATFlag,
+		utils.NatspecEnabledFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
+		utils.WhisperEnabledFlag,
 		utils.VMDebugFlag,
 		utils.ProtocolVersionFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
+		utils.VerbosityFlag,
 		utils.BacktraceAtFlag,
 		utils.LogToStdErrFlag,
+		utils.LogVModuleFlag,
+		utils.LogFileFlag,
+		utils.LogJSONFlag,
+		utils.PProfEanbledFlag,
+		utils.PProfPortFlag,
+		utils.SolcPathFlag,
+	}
+	app.Before = func(ctx *cli.Context) error {
+		if ctx.GlobalBool(utils.PProfEanbledFlag.Name) {
+			utils.StartPProf(ctx)
+		}
+		return nil
 	}
 
 	// missing:
@@ -243,13 +281,11 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 	// flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
 	// flag.StringVar(&DiffType, "diff", "all", "sets the level of diff output [vm, all]. Has no effect if difftool=false")
 
-	// potential subcommands:
-	// flag.StringVar(&SecretFile, "import", "", "imports the file given (hex or mnemonic formats)")
-	// flag.StringVar(&ExportDir, "export", "", "exports the session keyring to files in the directory given")
-	// flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
 }
 
 func main() {
+	//fmt.Printf("\n              🌞\n\n        ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴛʜᴇ\n       𝐅 𝐑 𝐎 𝐍 𝐓 𝐈 𝐄 𝐑\n\n🌾      🌵🌾🌾  🐎    🌾      🌵   🌾\n\n")
+	fmt.Println("\n   Welcome to the\n      FRONTIER\n")
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	defer logger.Flush()
 	if err := app.Run(os.Args); err != nil {
@@ -259,9 +295,8 @@ func main() {
 }
 
 func run(ctx *cli.Context) {
-	fmt.Printf("Welcome to the FRONTIER\n")
 	utils.HandleInterrupt()
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -273,14 +308,29 @@ func run(ctx *cli.Context) {
 }
 
 func console(ctx *cli.Context) {
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	// Wrap the standard output with a colorified stream (windows)
+	if isatty.IsTerminal(os.Stdout.Fd()) {
+		if pr, pw, err := os.Pipe(); err == nil {
+			go io.Copy(colorable.NewColorableStdout(), pr)
+			os.Stdout = pw
+		}
+	}
+
+	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
 
 	startEth(ctx, ethereum)
-	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), true)
+	repl := newJSRE(
+		ethereum,
+		ctx.String(utils.JSpathFlag.Name),
+		ctx.String(utils.SolcPathFlag.Name),
+		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
+		true,
+		nil,
+	)
 	repl.interactive()
 
 	ethereum.Stop()
@@ -288,14 +338,21 @@ func console(ctx *cli.Context) {
 }
 
 func execJSFiles(ctx *cli.Context) {
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
 
 	startEth(ctx, ethereum)
-	repl := newJSRE(ethereum, ctx.String(utils.JSpathFlag.Name), false)
+	repl := newJSRE(
+		ethereum,
+		ctx.String(utils.JSpathFlag.Name),
+		ctx.String(utils.SolcPathFlag.Name),
+		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
+		false,
+		nil,
+	)
 	for _, file := range ctx.Args() {
 		repl.exec(file)
 	}
@@ -321,6 +378,8 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 }
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
+	// Start Ethereum itself
+
 	utils.StartEthereum(eth)
 	am := eth.AccountManager()
 
@@ -337,10 +396,14 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	}
 	// Start auxiliary services if enabled.
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
-		utils.StartRPC(eth, ctx)
+		if err := utils.StartRPC(eth, ctx); err != nil {
+			utils.Fatalf("Error starting RPC: %v", err)
+		}
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		eth.StartMining()
+		if err := eth.StartMining(); err != nil {
+			utils.Fatalf("%v", err)
+		}
 	}
 }
 
@@ -350,8 +413,10 @@ func accountList(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
 	}
-	for _, acct := range accts {
-		fmt.Printf("Address: %x\n", acct)
+	name := "Primary"
+	for i, acct := range accts {
+		fmt.Printf("%s #%d: %x\n", name, i, acct)
+		name = "Account"
 	}
 }
 
@@ -432,13 +497,29 @@ func importchain(ctx *cli.Context) {
 	if len(ctx.Args()) != 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	chainmgr, _, _ := utils.GetChain(ctx)
+
+	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	cfg.SkipBcVersionCheck = true
+
+	ethereum, err := eth.New(cfg)
+	if err != nil {
+		utils.Fatalf("%v\n", err)
+	}
+
+	chainmgr := ethereum.ChainManager()
 	start := time.Now()
-	err := utils.ImportChain(chainmgr, ctx.Args().First())
+	err = utils.ImportChain(chainmgr, ctx.Args().First())
 	if err != nil {
 		utils.Fatalf("Import error: %v\n", err)
 	}
+
+	// force database flush
+	ethereum.BlockDb().Close()
+	ethereum.StateDb().Close()
+	ethereum.ExtraDb().Close()
+
 	fmt.Printf("Import done in %v", time.Since(start))
+
 	return
 }
 
@@ -446,14 +527,77 @@ func exportchain(ctx *cli.Context) {
 	if len(ctx.Args()) != 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	chainmgr, _, _ := utils.GetChain(ctx)
+
+	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	cfg.SkipBcVersionCheck = true
+
+	ethereum, err := eth.New(cfg)
+	if err != nil {
+		utils.Fatalf("%v\n", err)
+	}
+
+	chainmgr := ethereum.ChainManager()
 	start := time.Now()
-	err := utils.ExportChain(chainmgr, ctx.Args().First())
+	err = utils.ExportChain(chainmgr, ctx.Args().First())
 	if err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 	fmt.Printf("Export done in %v", time.Since(start))
 	return
+}
+
+func upgradeDb(ctx *cli.Context) {
+	fmt.Println("Upgrade blockchain DB")
+
+	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	cfg.SkipBcVersionCheck = true
+
+	ethereum, err := eth.New(cfg)
+	if err != nil {
+		utils.Fatalf("%v\n", err)
+	}
+
+	v, _ := ethereum.BlockDb().Get([]byte("BlockchainVersion"))
+	bcVersion := int(common.NewValue(v).Uint())
+
+	if bcVersion == 0 {
+		bcVersion = core.BlockChainVersion
+	}
+
+	filename := fmt.Sprintf("blockchain_%d_%s.chain", bcVersion, time.Now().Format("2006-01-02_15:04:05"))
+	exportFile := path.Join(ctx.GlobalString(utils.DataDirFlag.Name), filename)
+
+	err = utils.ExportChain(ethereum.ChainManager(), exportFile)
+	if err != nil {
+		utils.Fatalf("Unable to export chain for reimport %s\n", err)
+	}
+
+	ethereum.BlockDb().Close()
+	ethereum.StateDb().Close()
+	ethereum.ExtraDb().Close()
+
+	os.RemoveAll(path.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
+
+	ethereum, err = eth.New(cfg)
+	if err != nil {
+		utils.Fatalf("%v\n", err)
+	}
+
+	ethereum.BlockDb().Put([]byte("BlockchainVersion"), common.NewValue(core.BlockChainVersion).Bytes())
+
+	err = utils.ImportChain(ethereum.ChainManager(), exportFile)
+	if err != nil {
+		utils.Fatalf("Import error %v (a backup is made in %s, use the import command to import it)\n", err, exportFile)
+	}
+
+	// force database flush
+	ethereum.BlockDb().Close()
+	ethereum.StateDb().Close()
+	ethereum.ExtraDb().Close()
+
+	os.Remove(exportFile)
+
+	fmt.Println("Import finished")
 }
 
 func dump(ctx *cli.Context) {
@@ -477,24 +621,46 @@ func dump(ctx *cli.Context) {
 }
 
 func makedag(ctx *cli.Context) {
-	chain, _, _ := utils.GetChain(ctx)
-	pow := ethash.New(chain)
-	fmt.Println("making cache")
-	pow.UpdateCache(0, true)
-	fmt.Println("making DAG")
-	pow.UpdateDAG()
+	args := ctx.Args()
+	wrongArgs := func() {
+		utils.Fatalf(`Usage: geth makedag <block number> <outputdir>`)
+	}
+	switch {
+	case len(args) == 2:
+		blockNum, err := strconv.ParseUint(args[0], 0, 64)
+		dir := args[1]
+		if err != nil {
+			wrongArgs()
+		} else {
+			dir = filepath.Clean(dir)
+			// seems to require a trailing slash
+			if !strings.HasSuffix(dir, "/") {
+				dir = dir + "/"
+			}
+			_, err = ioutil.ReadDir(dir)
+			if err != nil {
+				utils.Fatalf("Can't find dir")
+			}
+			fmt.Println("making DAG, this could take awhile...")
+			ethash.MakeDAG(blockNum, dir)
+		}
+	default:
+		wrongArgs()
+	}
 }
 
 func version(c *cli.Context) {
-	fmt.Printf(`%v
-Version: %v
-Protocol Version: %d
-Network Id: %d
-GO: %s
-OS: %s
-GOPATH=%s
-GOROOT=%s
-`, ClientIdentifier, Version, c.GlobalInt(utils.ProtocolVersionFlag.Name), c.GlobalInt(utils.NetworkIdFlag.Name), runtime.Version(), runtime.GOOS, os.Getenv("GOPATH"), runtime.GOROOT())
+	fmt.Println(ClientIdentifier)
+	fmt.Println("Version:", Version)
+	if gitCommit != "" {
+		fmt.Println("Git Commit:", gitCommit)
+	}
+	fmt.Println("Protocol Version:", c.GlobalInt(utils.ProtocolVersionFlag.Name))
+	fmt.Println("Network Id:", c.GlobalInt(utils.NetworkIdFlag.Name))
+	fmt.Println("Go Version:", runtime.Version())
+	fmt.Println("OS:", runtime.GOOS)
+	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
+	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
 }
 
 // hashish returns true for strings that look like hashes.

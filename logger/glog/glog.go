@@ -128,6 +128,10 @@ func GetTraceLocation() *TraceLocation {
 	return &logging.traceLocation
 }
 
+func GetVModule() *moduleSpec {
+	return &logging.vmodule
+}
+
 // get returns the value of the severity.
 func (s *severity) get() severity {
 	return severity(atomic.LoadInt32((*int32)(s)))

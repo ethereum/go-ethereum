@@ -77,15 +77,19 @@ func NewBlock(block *types.Block) *Block {
 	}
 
 	ptxs := make([]*Transaction, len(block.Transactions()))
-	for i, tx := range block.Transactions() {
-		ptxs[i] = NewTx(tx)
-	}
+	/*
+		for i, tx := range block.Transactions() {
+			ptxs[i] = NewTx(tx)
+		}
+	*/
 	txlist := common.NewList(ptxs)
 
 	puncles := make([]*Block, len(block.Uncles()))
-	for i, uncle := range block.Uncles() {
-		puncles[i] = NewBlock(types.NewBlockWithHeader(uncle))
-	}
+	/*
+		for i, uncle := range block.Uncles() {
+			puncles[i] = NewBlock(types.NewBlockWithHeader(uncle))
+		}
+	*/
 	ulist := common.NewList(puncles)
 
 	return &Block{
@@ -136,8 +140,11 @@ type Transaction struct {
 
 func NewTx(tx *types.Transaction) *Transaction {
 	hash := tx.Hash().Hex()
-	receiver := tx.To().Hex()
-	if len(receiver) == 0 {
+
+	var receiver string
+	if to := tx.To(); to != nil {
+		receiver = to.Hex()
+	} else {
 		receiver = core.AddressFromMessage(tx).Hex()
 	}
 	sender, _ := tx.From()

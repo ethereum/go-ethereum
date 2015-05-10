@@ -14,8 +14,8 @@ import (
 // So we can generate blocks easily
 type FakePow struct{}
 
-func (f FakePow) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte, []byte) {
-	return 0, nil, nil
+func (f FakePow) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte) {
+	return 0, nil
 }
 func (f FakePow) Verify(block pow.Block) bool { return true }
 func (f FakePow) GetHashrate() int64          { return 0 }
@@ -45,8 +45,8 @@ func NewChainMan(block *types.Block, eventMux *event.TypeMux, db common.Database
 	return newChainManager(block, eventMux, db)
 }
 
-func NewBlockProc(db common.Database, txpool *TxPool, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
-	return newBlockProcessor(db, txpool, cman, eventMux)
+func NewBlockProc(db common.Database, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+	return newBlockProcessor(db, cman, eventMux)
 }
 
 func NewCanonical(n int, db common.Database) (*BlockProcessor, error) {
@@ -64,7 +64,7 @@ func newBlockFromParent(addr common.Address, parent *types.Block) *types.Block {
 	header.Difficulty = CalcDifficulty(block.Header(), parent.Header())
 	header.Number = new(big.Int).Add(parent.Header().Number, common.Big1)
 	header.Time = parent.Header().Time + 10
-	header.GasLimit = CalcGasLimit(parent, block)
+	header.GasLimit = CalcGasLimit(parent)
 
 	block.Td = parent.Td
 
@@ -79,7 +79,7 @@ func makeBlock(bman *BlockProcessor, parent *types.Block, i int, db common.Datab
 	block := newBlockFromParent(addr, parent)
 	state := state.New(block.Root(), db)
 	cbase := state.GetOrNewStateObject(addr)
-	cbase.SetGasPool(CalcGasLimit(parent, block))
+	cbase.SetGasPool(CalcGasLimit(parent))
 	cbase.AddBalance(BlockReward)
 	state.Update()
 	block.SetRoot(state.Root())
@@ -93,12 +93,12 @@ func makeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Dat
 	blocks := make(types.Blocks, max)
 	for i := 0; i < max; i++ {
 		block := makeBlock(bman, parent, i, db, seed)
-		td, _, err := bman.processWithParent(block, parent)
+		_, err := bman.processWithParent(block, parent)
 		if err != nil {
 			fmt.Println("process with parent failed", err)
 			panic(err)
 		}
-		block.Td = td
+		block.Td = CalculateTD(block, parent)
 		blocks[i] = block
 		parent = block
 	}
@@ -108,7 +108,9 @@ func makeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Dat
 // Create a new chain manager starting from given block
 // Effectively a fork factory
 func newChainManager(block *types.Block, eventMux *event.TypeMux, db common.Database) *ChainManager {
-	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: GenesisBlock(db), eventMux: eventMux}
+	genesis := GenesisBlock(db)
+	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: eventMux}
+	bc.txState = state.ManageState(state.New(genesis.Root(), db))
 	bc.futureBlocks = NewBlockCache(1000)
 	if block == nil {
 		bc.Reset()
@@ -120,8 +122,10 @@ func newChainManager(block *types.Block, eventMux *event.TypeMux, db common.Data
 }
 
 // block processor with fake pow
-func newBlockProcessor(db common.Database, txpool *TxPool, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
-	bman := NewBlockProcessor(db, db, FakePow{}, txpool, newChainManager(nil, eventMux, db), eventMux)
+func newBlockProcessor(db common.Database, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+	chainMan := newChainManager(nil, eventMux, db)
+	txpool := NewTxPool(eventMux, chainMan.State, chainMan.GasLimit)
+	bman := NewBlockProcessor(db, db, FakePow{}, txpool, chainMan, eventMux)
 	return bman
 }
 
@@ -129,15 +133,14 @@ func newBlockProcessor(db common.Database, txpool *TxPool, cman *ChainManager, e
 // on result of makeChain
 func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
 	eventMux := &event.TypeMux{}
-	txpool := NewTxPool(eventMux)
 
-	bman := newBlockProcessor(db, txpool, newChainManager(nil, eventMux, db), eventMux)
+	bman := newBlockProcessor(db, newChainManager(nil, eventMux, db), eventMux)
 	bman.bc.SetProcessor(bman)
 	parent := bman.bc.CurrentBlock()
 	if n == 0 {
 		return bman, nil
 	}
 	lchain := makeChain(bman, parent, n, db, CanonicalSeed)
-	err := bman.bc.InsertChain(lchain)
+	_, err := bman.bc.InsertChain(lchain)
 	return bman, err
 }

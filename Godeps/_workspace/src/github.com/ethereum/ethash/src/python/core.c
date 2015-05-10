@@ -13,16 +13,16 @@
 #define PY_CONST_STRING_FORMAT "s"
 #endif
 
-#define MIX_WORDS (MIX_BYTES/4)
+#define MIX_WORDS (ETHASH_MIX_BYTES/4)
 
 static PyObject *
 get_cache_size(PyObject *self, PyObject *args) {
     unsigned long block_number;
     if (!PyArg_ParseTuple(args, "k", &block_number))
         return 0;
-    if (block_number >= EPOCH_LENGTH * 2048) {
+    if (block_number >= ETHASH_EPOCH_LENGTH * 2048) {
         char error_message[1024];
-        sprintf(error_message, "Block number must be less than %i (was %lu)", EPOCH_LENGTH * 2048, block_number);
+        sprintf(error_message, "Block number must be less than %i (was %lu)", ETHASH_EPOCH_LENGTH * 2048, block_number);
 
         PyErr_SetString(PyExc_ValueError, error_message);
         return 0;
@@ -36,9 +36,9 @@ get_full_size(PyObject *self, PyObject *args) {
     unsigned long block_number;
     if (!PyArg_ParseTuple(args, "k", &block_number))
         return 0;
-    if (block_number >= EPOCH_LENGTH * 2048) {
+    if (block_number >= ETHASH_EPOCH_LENGTH * 2048) {
         char error_message[1024];
-        sprintf(error_message, "Block number must be less than %i (was %lu)", EPOCH_LENGTH * 2048, block_number);
+        sprintf(error_message, "Block number must be less than %i (was %lu)", ETHASH_EPOCH_LENGTH * 2048, block_number);
 
         PyErr_SetString(PyExc_ValueError, error_message);
         return 0;
@@ -69,7 +69,7 @@ mkcache_bytes(PyObject *self, PyObject *args) {
     params.cache_size = (size_t) cache_size;
     ethash_cache cache;
     cache.mem = malloc(cache_size);
-    ethash_mkcache(&cache, &params, (uint8_t *) seed);
+    ethash_mkcache(&cache, &params, (ethash_h256_t *) seed);
     PyObject * val = Py_BuildValue(PY_STRING_FORMAT, cache.mem, cache_size);
     free(cache.mem);
     return val;
@@ -92,9 +92,9 @@ calc_dataset_bytes(PyObject *self, PyObject *args) {
         return 0;
     }
 
-    if (cache_size % HASH_BYTES != 0) {
+    if (cache_size % ETHASH_HASH_BYTES != 0) {
         char error_message[1024];
-        sprintf(error_message, "The size of the cache must be a multiple of %i bytes (was %i)", HASH_BYTES, cache_size);
+        sprintf(error_message, "The size of the cache must be a multiple of %i bytes (was %i)", ETHASH_HASH_BYTES, cache_size);
         PyErr_SetString(PyExc_ValueError, error_message);
         return 0;
     }
@@ -114,28 +114,25 @@ calc_dataset_bytes(PyObject *self, PyObject *args) {
 // hashimoto_light(full_size, cache, header, nonce)
 static PyObject *
 hashimoto_light(PyObject *self, PyObject *args) {
-    char *cache_bytes, *header;
+    char *cache_bytes;
+    char *header;
     unsigned long full_size;
     unsigned long long nonce;
     int cache_size, header_size;
-
     if (!PyArg_ParseTuple(args, "k" PY_STRING_FORMAT PY_STRING_FORMAT "K", &full_size, &cache_bytes, &cache_size, &header, &header_size, &nonce))
         return 0;
-
     if (full_size % MIX_WORDS != 0) {
         char error_message[1024];
         sprintf(error_message, "The size of data set must be a multiple of %i bytes (was %lu)", MIX_WORDS, full_size);
         PyErr_SetString(PyExc_ValueError, error_message);
         return 0;
     }
-
-    if (cache_size % HASH_BYTES != 0) {
+    if (cache_size % ETHASH_HASH_BYTES != 0) {
         char error_message[1024];
-        sprintf(error_message, "The size of the cache must be a multiple of %i bytes (was %i)", HASH_BYTES, cache_size);
+        sprintf(error_message, "The size of the cache must be a multiple of %i bytes (was %i)", ETHASH_HASH_BYTES, cache_size);
         PyErr_SetString(PyExc_ValueError, error_message);
         return 0;
     }
-
     if (header_size != 32) {
         char error_message[1024];
         sprintf(error_message, "Seed must be 32 bytes long (was %i)", header_size);
@@ -143,23 +140,23 @@ hashimoto_light(PyObject *self, PyObject *args) {
         return 0;
     }
 
-
     ethash_return_value out;
     ethash_params params;
     params.cache_size = (size_t) cache_size;
     params.full_size = (size_t) full_size;
     ethash_cache cache;
     cache.mem = (void *) cache_bytes;
-    ethash_light(&out, &cache, &params, (uint8_t *) header, nonce);
+    ethash_light(&out, &cache, &params, (ethash_h256_t *) header, nonce);
     return Py_BuildValue("{" PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT "," PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT "}",
-            "mix digest", out.mix_hash, 32,
-            "result", out.result, 32);
+                         "mix digest", &out.mix_hash, 32,
+                         "result", &out.result, 32);
 }
 
 // hashimoto_full(dataset, header, nonce)
 static PyObject *
 hashimoto_full(PyObject *self, PyObject *args) {
-    char *full_bytes, *header;
+    char *full_bytes;
+    char *header;
     unsigned long long nonce;
     int full_size, header_size;
 
@@ -184,16 +181,18 @@ hashimoto_full(PyObject *self, PyObject *args) {
     ethash_return_value out;
     ethash_params params;
     params.full_size = (size_t) full_size;
-    ethash_full(&out, (void *) full_bytes, &params, (uint8_t *) header, nonce);
+    ethash_full(&out, (void *) full_bytes, &params, (ethash_h256_t *) header, nonce);
     return Py_BuildValue("{" PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT ", " PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT "}",
-            "mix digest", out.mix_hash, 32,
-            "result", out.result, 32);
+                         "mix digest", &out.mix_hash, 32,
+                         "result", &out.result, 32);
 }
 
 // mine(dataset_bytes, header, difficulty_bytes)
 static PyObject *
 mine(PyObject *self, PyObject *args) {
-    char *full_bytes, *header, *difficulty;
+    char *full_bytes;
+    char *header;
+    char *difficulty;
     srand(time(0));
     uint64_t nonce = ((uint64_t) rand()) << 32 | rand();
     int full_size, header_size, difficulty_size;
@@ -228,13 +227,13 @@ mine(PyObject *self, PyObject *args) {
 
     // TODO: Multi threading?
     do {
-        ethash_full(&out, (void *) full_bytes, &params, (const uint8_t *) header, nonce++);
+        ethash_full(&out, (void *) full_bytes, &params, (const ethash_h256_t *) header, nonce++);
         // TODO: disagrees with the spec https://github.com/ethereum/wiki/wiki/Ethash#mining
-    } while (!ethash_check_difficulty(out.result, (const uint8_t *) difficulty));
+    } while (!ethash_check_difficulty(&out.result, (const ethash_h256_t *) difficulty));
 
     return Py_BuildValue("{" PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT ", " PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT ", " PY_CONST_STRING_FORMAT ":K}",
-            "mix digest", out.mix_hash, 32,
-            "result", out.result, 32,
+            "mix digest", &out.mix_hash, 32,
+            "result", &out.result, 32,
             "nonce", nonce);
 }
 
@@ -244,16 +243,15 @@ get_seedhash(PyObject *self, PyObject *args) {
     unsigned long block_number;
     if (!PyArg_ParseTuple(args, "k", &block_number))
         return 0;
-    if (block_number >= EPOCH_LENGTH * 2048) {
+    if (block_number >= ETHASH_EPOCH_LENGTH * 2048) {
         char error_message[1024];
-        sprintf(error_message, "Block number must be less than %i (was %lu)", EPOCH_LENGTH * 2048, block_number);
+        sprintf(error_message, "Block number must be less than %i (was %lu)", ETHASH_EPOCH_LENGTH * 2048, block_number);
 
         PyErr_SetString(PyExc_ValueError, error_message);
         return 0;
     }
-    uint8_t seedhash[32];
-    ethash_get_seedhash(seedhash, block_number);
-    return Py_BuildValue(PY_STRING_FORMAT, (char *) seedhash, 32);
+    ethash_h256_t seedhash = ethash_get_seedhash(block_number);
+    return Py_BuildValue(PY_STRING_FORMAT, (char *) &seedhash, 32);
 }
 
 static PyMethodDef PyethashMethods[] =
@@ -307,17 +305,17 @@ static struct PyModuleDef PyethashModule = {
 PyMODINIT_FUNC PyInit_pyethash(void) {
     PyObject *module =  PyModule_Create(&PyethashModule);
     // Following Spec: https://github.com/ethereum/wiki/wiki/Ethash#definitions
-    PyModule_AddIntConstant(module, "REVISION", (long) REVISION);
-    PyModule_AddIntConstant(module, "DATASET_BYTES_INIT", (long) DATASET_BYTES_INIT);
-    PyModule_AddIntConstant(module, "DATASET_BYTES_GROWTH", (long) DATASET_BYTES_GROWTH);
-    PyModule_AddIntConstant(module, "CACHE_BYTES_INIT", (long) CACHE_BYTES_INIT);
-    PyModule_AddIntConstant(module, "CACHE_BYTES_GROWTH", (long) CACHE_BYTES_GROWTH);
-    PyModule_AddIntConstant(module, "EPOCH_LENGTH", (long) EPOCH_LENGTH);
-    PyModule_AddIntConstant(module, "MIX_BYTES", (long) MIX_BYTES);
-    PyModule_AddIntConstant(module, "HASH_BYTES", (long) HASH_BYTES);
-    PyModule_AddIntConstant(module, "DATASET_PARENTS", (long) DATASET_PARENTS);
-    PyModule_AddIntConstant(module, "CACHE_ROUNDS", (long) CACHE_ROUNDS);
-    PyModule_AddIntConstant(module, "ACCESSES", (long) ACCESSES);
+    PyModule_AddIntConstant(module, "REVISION", (long) ETHASH_REVISION);
+    PyModule_AddIntConstant(module, "DATASET_BYTES_INIT", (long) ETHASH_DATASET_BYTES_INIT);
+    PyModule_AddIntConstant(module, "DATASET_BYTES_GROWTH", (long) ETHASH_DATASET_BYTES_GROWTH);
+    PyModule_AddIntConstant(module, "CACHE_BYTES_INIT", (long) ETHASH_CACHE_BYTES_INIT);
+    PyModule_AddIntConstant(module, "CACHE_BYTES_GROWTH", (long) ETHASH_CACHE_BYTES_GROWTH);
+    PyModule_AddIntConstant(module, "EPOCH_LENGTH", (long) ETHASH_EPOCH_LENGTH);
+    PyModule_AddIntConstant(module, "MIX_BYTES", (long) ETHASH_MIX_BYTES);
+    PyModule_AddIntConstant(module, "HASH_BYTES", (long) ETHASH_HASH_BYTES);
+    PyModule_AddIntConstant(module, "DATASET_PARENTS", (long) ETHASH_DATASET_PARENTS);
+    PyModule_AddIntConstant(module, "CACHE_ROUNDS", (long) ETHASH_CACHE_ROUNDS);
+    PyModule_AddIntConstant(module, "ACCESSES", (long) ETHASH_ACCESSES);
     return module;
 }
 #else
@@ -325,16 +323,16 @@ PyMODINIT_FUNC
 initpyethash(void) {
     PyObject *module = Py_InitModule("pyethash", PyethashMethods);
     // Following Spec: https://github.com/ethereum/wiki/wiki/Ethash#definitions
-    PyModule_AddIntConstant(module, "REVISION", (long) REVISION);
-    PyModule_AddIntConstant(module, "DATASET_BYTES_INIT", (long) DATASET_BYTES_INIT);
-    PyModule_AddIntConstant(module, "DATASET_BYTES_GROWTH", (long) DATASET_BYTES_GROWTH);
-    PyModule_AddIntConstant(module, "CACHE_BYTES_INIT", (long) CACHE_BYTES_INIT);
-    PyModule_AddIntConstant(module, "CACHE_BYTES_GROWTH", (long) CACHE_BYTES_GROWTH);
-    PyModule_AddIntConstant(module, "EPOCH_LENGTH", (long) EPOCH_LENGTH);
-    PyModule_AddIntConstant(module, "MIX_BYTES", (long) MIX_BYTES);
-    PyModule_AddIntConstant(module, "HASH_BYTES", (long) HASH_BYTES);
-    PyModule_AddIntConstant(module, "DATASET_PARENTS", (long) DATASET_PARENTS);
-    PyModule_AddIntConstant(module, "CACHE_ROUNDS", (long) CACHE_ROUNDS);
-    PyModule_AddIntConstant(module, "ACCESSES", (long) ACCESSES);
+    PyModule_AddIntConstant(module, "REVISION", (long) ETHASH_REVISION);
+    PyModule_AddIntConstant(module, "DATASET_BYTES_INIT", (long) ETHASH_DATASET_BYTES_INIT);
+    PyModule_AddIntConstant(module, "DATASET_BYTES_GROWTH", (long) ETHASH_DATASET_BYTES_GROWTH);
+    PyModule_AddIntConstant(module, "CACHE_BYTES_INIT", (long) ETHASH_CACHE_BYTES_INIT);
+    PyModule_AddIntConstant(module, "CACHE_BYTES_GROWTH", (long) ETHASH_CACHE_BYTES_GROWTH);
+    PyModule_AddIntConstant(module, "EPOCH_LENGTH", (long) ETHASH_EPOCH_LENGTH);
+    PyModule_AddIntConstant(module, "MIX_BYTES", (long) ETHASH_MIX_BYTES);
+    PyModule_AddIntConstant(module, "HASH_BYTES", (long) ETHASH_HASH_BYTES);
+    PyModule_AddIntConstant(module, "DATASET_PARENTS", (long) ETHASH_DATASET_PARENTS);
+    PyModule_AddIntConstant(module, "CACHE_ROUNDS", (long) ETHASH_CACHE_ROUNDS);
+    PyModule_AddIntConstant(module, "ACCESSES", (long) ETHASH_ACCESSES);
 }
 #endif

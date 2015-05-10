@@ -1,1 +1,0 @@
-return(sha3([msg.sender, msg.data[0]], 2))

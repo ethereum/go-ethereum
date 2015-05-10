@@ -27,50 +27,76 @@
 #include <stdio.h>
 #include <unistd.h>
 
-enum ethash_io_rc ethash_io_prepare(char const *dirname, ethash_blockhash_t seedhash)
+FILE* ethash_fopen(char const* file_name, char const* mode)
 {
-    char read_buffer[DAG_MEMO_BYTESIZE];
-    char expect_buffer[DAG_MEMO_BYTESIZE];
-    enum ethash_io_rc ret = ETHASH_IO_FAIL;
+	return fopen(file_name, mode);
+}
 
-    // assert directory exists, full owner permissions and read/search for others
-    int rc = mkdir(dirname, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-    if (rc == -1 && errno != EEXIST) {
-        goto end;
-    }
+char* ethash_strncat(char* dest, size_t dest_size, char const* src, size_t count)
+{
+	return strlen(dest) + count + 1 <= dest_size ? strncat(dest, src, count) : NULL;
+}
 
-    char *memofile = ethash_io_create_filename(dirname, DAG_MEMO_NAME, sizeof(DAG_MEMO_NAME));
-    if (!memofile) {
-        goto end;
-    }
+bool ethash_mkdir(char const* dirname)
+{
+	int rc = mkdir(dirname, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	return rc != -1 || errno == EEXIST;
+}
 
-    // try to open memo file
-    FILE *f = fopen(memofile, "rb");
-    if (!f) {
-        // file does not exist, so no checking happens. All is fine.
-        ret = ETHASH_IO_MEMO_MISMATCH;
-        goto free_memo;
-    }
+int ethash_fileno(FILE *f)
+{
+	return fileno(f);
+}
 
-    if (fread(read_buffer, 1, DAG_MEMO_BYTESIZE, f) != DAG_MEMO_BYTESIZE) {
-        goto close;
-    }
+char* ethash_io_create_filename(
+	char const* dirname,
+	char const* filename,
+	size_t filename_length
+)
+{
+	size_t dirlen = strlen(dirname);
+	size_t dest_size = dirlen + filename_length + 1;
+	if (dirname[dirlen] != '/') {
+		dest_size += 1;
+	}
+	char* name = malloc(dest_size);
+	if (!name) {
+		return NULL;
+	}
 
-    ethash_io_serialize_info(REVISION, seedhash, expect_buffer);
-    if (memcmp(read_buffer, expect_buffer, DAG_MEMO_BYTESIZE) != 0) {
-        // we have different memo contents so delete the memo file
-        if (unlink(memofile) != 0) {
-            goto close;
-        }
-        ret = ETHASH_IO_MEMO_MISMATCH;
-    }
+	name[0] = '\0';
+	ethash_strncat(name, dest_size, dirname, dirlen);
+	if (dirname[dirlen] != '/') {
+		ethash_strncat(name, dest_size, "/", 1);
+	}
+	ethash_strncat(name, dest_size, filename, filename_length);
+	return name;
+}
 
-    ret = ETHASH_IO_MEMO_MATCH;
+bool ethash_file_size(FILE* f, size_t* ret_size)
+{
+	struct stat st;
+	int fd;
+	if ((fd = fileno(f)) == -1 || fstat(fd, &st) != 0) {
+		return false;
+	}
+	*ret_size = st.st_size;
+	return true;
+}
 
-close:
-    fclose(f);
-free_memo:
-    free(memofile);
-end:
-    return ret;
+bool ethash_get_default_dirname(char* strbuf, size_t buffsize)
+{
+	static const char dir_suffix[] = ".ethash/";
+	strbuf[0] = '\0';
+	char* home_dir = getenv("HOME");
+	size_t len = strlen(home_dir);
+	if (!ethash_strncat(strbuf, buffsize, home_dir, len)) {
+		return false;
+	}
+	if (home_dir[len] != '/') {
+		if (!ethash_strncat(strbuf, buffsize, "/", 1)) {
+			return false;
+		}
+	}
+	return ethash_strncat(strbuf, buffsize, dir_suffix, sizeof(dir_suffix));
 }

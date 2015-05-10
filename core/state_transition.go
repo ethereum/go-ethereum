@@ -74,6 +74,19 @@ func MessageGasValue(msg Message) *big.Int {
 	return new(big.Int).Mul(msg.Gas(), msg.GasPrice())
 }
 
+func IntrinsicGas(msg Message) *big.Int {
+	igas := new(big.Int).Set(params.TxGas)
+	for _, byt := range msg.Data() {
+		if byt != 0 {
+			igas.Add(igas, params.TxDataNonZeroGas)
+		} else {
+			igas.Add(igas, params.TxDataZeroGas)
+		}
+	}
+
+	return igas
+}
+
 func ApplyMessage(env vm.Environment, msg Message, coinbase *state.StateObject) ([]byte, *big.Int, error) {
 	return NewStateTransition(env, msg, coinbase).transitionState()
 }
@@ -177,22 +190,8 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 		sender = self.From()
 	)
 
-	// Transaction gas
-	if err = self.UseGas(params.TxGas); err != nil {
-		return nil, nil, InvalidTxError(err)
-	}
-
-	// Pay data gas
-	dgas := new(big.Int)
-	for _, byt := range self.data {
-		if byt != 0 {
-			dgas.Add(dgas, params.TxDataNonZeroGas)
-		} else {
-			dgas.Add(dgas, params.TxDataZeroGas)
-		}
-	}
-
-	if err = self.UseGas(dgas); err != nil {
+	// Pay intrinsic gas
+	if err = self.UseGas(IntrinsicGas(self.msg)); err != nil {
 		return nil, nil, InvalidTxError(err)
 	}
 

@@ -2,22 +2,28 @@ package eth
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/big"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/blockpool"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -26,15 +32,18 @@ import (
 )
 
 var (
-	servlogger = logger.NewLogger("SERV")
 	jsonlogger = logger.NewJsonLogger()
 
 	defaultBootNodes = []*discover.Node{
-		// ETH/DEV cmd/bootnode
-		discover.MustParseNode("enode://09fbeec0d047e9a37e63f60f8618aa9df0e49271f3fadb2c070dc09e2099b95827b63a8b837c6fd01d0802d457dd83e3bd48bd3e6509f8209ed90dabbc30e3d3@52.16.188.185:30303"),
+		// ETH/DEV Go Bootnodes
+		discover.MustParseNode("enode://a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c@52.16.188.185:30303"),
+		discover.MustParseNode("enode://7f25d3eab333a6b98a8b5ed68d962bb22c876ffcd5561fca54e3c2ef27f754df6f7fd7c9b74cc919067abac154fb8e1f8385505954f161ae440abc355855e034@54.207.93.166:30303"),
 		// ETH/DEV cpp-ethereum (poc-9.ethdev.com)
 		discover.MustParseNode("enode://487611428e6c99a11a9795a6abe7b529e81315ca6aad66e2a2fc76e3adf263faba0d35466c2f8f68d561dbefa8878d4df5f1f2ddb1fbeab7f42ffb8cd328bd4a@5.1.83.226:30303"),
 	}
+
+	staticNodes  = "static-nodes.json"  // Path within <datadir> to search for the static node list
+	trustedNodes = "trusted-nodes.json" // Path within <datadir> to search for the trusted node list
 )
 
 type Config struct {
@@ -42,17 +51,21 @@ type Config struct {
 	ProtocolVersion int
 	NetworkId       int
 
-	DataDir  string
-	LogFile  string
-	LogLevel int
-	LogJSON  string
-	VmDebug  bool
+	BlockChainVersion  int
+	SkipBcVersionCheck bool // e.g. blockchain export
 
-	MaxPeers int
-	Port     string
+	DataDir   string
+	LogFile   string
+	Verbosity int
+	LogJSON   string
+	VmDebug   bool
+	NatSpec   bool
 
-	// This should be a space-separated list of
-	// discovery node URLs.
+	MaxPeers        int
+	MaxPendingPeers int
+	Port            string
+
+	// Space-separated list of discovery node URLs
 	BootNodes string
 
 	// This key is used to identify the node on the network.
@@ -64,6 +77,7 @@ type Config struct {
 	Dial bool
 
 	Etherbase      string
+	GasPrice       *big.Int
 	MinerThreads   int
 	AccountManager *accounts.Manager
 
@@ -83,12 +97,46 @@ func (cfg *Config) parseBootNodes() []*discover.Node {
 		}
 		n, err := discover.ParseNode(url)
 		if err != nil {
-			servlogger.Errorf("Bootstrap URL %s: %v\n", url, err)
+			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
 			continue
 		}
 		ns = append(ns, n)
 	}
 	return ns
+}
+
+// parseNodes parses a list of discovery node URLs loaded from a .json file.
+func (cfg *Config) parseNodes(file string) []*discover.Node {
+	// Short circuit if no node config is present
+	path := filepath.Join(cfg.DataDir, file)
+	if _, err := os.Stat(path); err != nil {
+		return nil
+	}
+	// Load the nodes from the config file
+	blob, err := ioutil.ReadFile(path)
+	if err != nil {
+		glog.V(logger.Error).Infof("Failed to access nodes: %v", err)
+		return nil
+	}
+	nodelist := []string{}
+	if err := json.Unmarshal(blob, &nodelist); err != nil {
+		glog.V(logger.Error).Infof("Failed to load nodes: %v", err)
+		return nil
+	}
+	// Interpret the list as a discovery node array
+	var nodes []*discover.Node
+	for _, url := range nodelist {
+		if url == "" {
+			continue
+		}
+		node, err := discover.ParseNode(url)
+		if err != nil {
+			glog.V(logger.Error).Infof("Node URL %s: %v\n", url, err)
+			continue
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes
 }
 
 func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
@@ -106,8 +154,8 @@ func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
 	if key, err = crypto.GenerateKey(); err != nil {
 		return nil, fmt.Errorf("could not generate server key: %v", err)
 	}
-	if err := ioutil.WriteFile(keyfile, crypto.FromECDSA(key), 0600); err != nil {
-		servlogger.Errorln("could not persist nodekey: ", err)
+	if err := crypto.SaveECDSA(keyfile, key); err != nil {
+		glog.V(logger.Error).Infoln("could not persist nodekey: ", err)
 	}
 	return key, nil
 }
@@ -121,25 +169,29 @@ type Ethereum struct {
 	stateDb common.Database // State changes database
 	extraDb common.Database // Extra database (txs, etc)
 
+	// Closed when databases are flushed and closed
+	databasesClosed chan bool
+
 	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
-	blockProcessor *core.BlockProcessor
-	txPool         *core.TxPool
-	chainManager   *core.ChainManager
-	blockPool      *blockpool.BlockPool
-	accountManager *accounts.Manager
-	whisper        *whisper.Whisper
-	pow            *ethash.Ethash
+	blockProcessor  *core.BlockProcessor
+	txPool          *core.TxPool
+	chainManager    *core.ChainManager
+	accountManager  *accounts.Manager
+	whisper         *whisper.Whisper
+	pow             *ethash.Ethash
+	protocolManager *ProtocolManager
+	downloader      *downloader.Downloader
 
 	net      *p2p.Server
 	eventMux *event.TypeMux
 	txSub    event.Subscription
-	blockSub event.Subscription
 	miner    *miner.Miner
 
 	// logger logger.LogSystem
 
 	Mining        bool
+	NatSpec       bool
 	DataDir       string
 	etherbase     common.Address
 	clientVersion string
@@ -149,8 +201,8 @@ type Ethereum struct {
 }
 
 func New(config *Config) (*Ethereum, error) {
-	// Boostrap database
-	logger.New(config.DataDir, config.LogFile, config.LogLevel)
+	// Bootstrap database
+	logger.New(config.DataDir, config.LogFile, config.Verbosity)
 	if len(config.LogJSON) > 0 {
 		logger.NewJSONsystem(config.DataDir, config.LogJSON)
 	}
@@ -167,7 +219,11 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	extraDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "extra"))
+	extraDb, err := newdb(path.Join(config.DataDir, "extra"))
+	if err != nil {
+		return nil, err
+	}
+	nodeDb := path.Join(config.DataDir, "nodes")
 
 	// Perform database sanity checks
 	d, _ := blockDb.Get([]byte("ProtocolVersion"))
@@ -177,55 +233,69 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
 	}
 	saveProtocolVersion(blockDb, config.ProtocolVersion)
-	servlogger.Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
+	glog.V(logger.Info).Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
+
+	if !config.SkipBcVersionCheck {
+		b, _ := blockDb.Get([]byte("BlockchainVersion"))
+		bcVersion := int(common.NewValue(b).Uint())
+		if bcVersion != config.BlockChainVersion && bcVersion != 0 {
+			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run geth upgradedb.\n", bcVersion, config.BlockChainVersion)
+		}
+		saveBlockchainVersion(blockDb, config.BlockChainVersion)
+	}
+	glog.V(logger.Info).Infof("Blockchain DB Version: %d", config.BlockChainVersion)
 
 	eth := &Ethereum{
-		shutdownChan:   make(chan bool),
-		blockDb:        blockDb,
-		stateDb:        stateDb,
-		extraDb:        extraDb,
-		eventMux:       &event.TypeMux{},
-		accountManager: config.AccountManager,
-		DataDir:        config.DataDir,
-		etherbase:      common.HexToAddress(config.Etherbase),
-		clientVersion:  config.Name, // TODO should separate from Name
-		ethVersionId:   config.ProtocolVersion,
-		netVersionId:   config.NetworkId,
+		shutdownChan:    make(chan bool),
+		databasesClosed: make(chan bool),
+		blockDb:         blockDb,
+		stateDb:         stateDb,
+		extraDb:         extraDb,
+		eventMux:        &event.TypeMux{},
+		accountManager:  config.AccountManager,
+		DataDir:         config.DataDir,
+		etherbase:       common.HexToAddress(config.Etherbase),
+		clientVersion:   config.Name, // TODO should separate from Name
+		ethVersionId:    config.ProtocolVersion,
+		netVersionId:    config.NetworkId,
+		NatSpec:         config.NatSpec,
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
-	eth.pow = ethash.New(eth.chainManager)
-	eth.txPool = core.NewTxPool(eth.EventMux())
+	eth.downloader = downloader.New(eth.chainManager.HasBlock, eth.chainManager.GetBlock)
+	eth.pow = ethash.New()
+	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
-	eth.whisper = whisper.New()
-	eth.shhVersionId = int(eth.whisper.Version())
 	eth.miner = miner.New(eth, eth.pow, config.MinerThreads)
+	eth.miner.SetGasPrice(config.GasPrice)
 
-	hasBlock := eth.chainManager.HasBlock
-	insertChain := eth.chainManager.InsertChain
-	td := eth.chainManager.Td()
-	eth.blockPool = blockpool.New(hasBlock, insertChain, eth.pow.Verify, eth.EventMux(), td)
+	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.eventMux, eth.txPool, eth.chainManager, eth.downloader)
+	if config.Shh {
+		eth.whisper = whisper.New()
+		eth.shhVersionId = int(eth.whisper.Version())
+	}
 
 	netprv, err := config.nodeKey()
 	if err != nil {
 		return nil, err
 	}
-
-	ethProto := EthProtocol(config.ProtocolVersion, config.NetworkId, eth.txPool, eth.chainManager, eth.blockPool)
-	protocols := []p2p.Protocol{ethProto}
+	protocols := []p2p.Protocol{eth.protocolManager.SubProtocol}
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
 	}
-
 	eth.net = &p2p.Server{
-		PrivateKey:     netprv,
-		Name:           config.Name,
-		MaxPeers:       config.MaxPeers,
-		Protocols:      protocols,
-		NAT:            config.NAT,
-		NoDial:         !config.Dial,
-		BootstrapNodes: config.parseBootNodes(),
+		PrivateKey:      netprv,
+		Name:            config.Name,
+		MaxPeers:        config.MaxPeers,
+		MaxPendingPeers: config.MaxPendingPeers,
+		Protocols:       protocols,
+		NAT:             config.NAT,
+		NoDial:          !config.Dial,
+		BootstrapNodes:  config.parseBootNodes(),
+		StaticNodes:     config.parseNodes(staticNodes),
+		TrustedNodes:    config.parseNodes(trustedNodes),
+		NodeDatabase:    nodeDb,
 	}
 	if len(config.Port) > 0 {
 		eth.net.ListenAddr = ":" + config.Port
@@ -255,8 +325,8 @@ func (s *Ethereum) NodeInfo() *NodeInfo {
 		NodeUrl:    node.String(),
 		NodeID:     node.ID.String(),
 		IP:         node.IP.String(),
-		DiscPort:   node.DiscPort,
-		TCPPort:    node.TCPPort,
+		DiscPort:   int(node.UDP),
+		TCPPort:    int(node.TCP),
 		ListenAddr: s.net.ListenAddr,
 		Td:         s.ChainManager().Td().String(),
 	}
@@ -296,19 +366,17 @@ func (s *Ethereum) PeersInfo() (peersinfo []*PeerInfo) {
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.chainManager.ResetWithGenesisBlock(gb)
-	s.pow.UpdateCache(0, true)
 }
 
 func (s *Ethereum) StartMining() error {
 	eb, err := s.Etherbase()
 	if err != nil {
 		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
-		servlogger.Errorln(err)
+		glog.V(logger.Error).Infoln(err)
 		return err
-
 	}
 
-	s.miner.Start(eb)
+	go s.miner.Start(eb)
 	return nil
 }
 
@@ -335,7 +403,6 @@ func (s *Ethereum) AccountManager() *accounts.Manager    { return s.accountManag
 func (s *Ethereum) ChainManager() *core.ChainManager     { return s.chainManager }
 func (s *Ethereum) BlockProcessor() *core.BlockProcessor { return s.blockProcessor }
 func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
-func (s *Ethereum) BlockPool() *blockpool.BlockPool      { return s.blockPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
 func (s *Ethereum) BlockDb() common.Database             { return s.blockDb }
@@ -349,6 +416,7 @@ func (s *Ethereum) ClientVersion() string                { return s.clientVersio
 func (s *Ethereum) EthVersion() int                      { return s.ethVersionId }
 func (s *Ethereum) NetVersion() int                      { return s.netVersionId }
 func (s *Ethereum) ShhVersion() int                      { return s.shhVersionId }
+func (s *Ethereum) Downloader() *downloader.Downloader   { return s.downloader }
 
 // Start the ethereum
 func (s *Ethereum) Start() error {
@@ -364,9 +432,12 @@ func (s *Ethereum) Start() error {
 		}
 	}
 
+	// periodically flush databases
+	go s.syncDatabases()
+
 	// Start services
-	s.txPool.Start()
-	s.blockPool.Start()
+	go s.txPool.Start()
+	s.protocolManager.Start()
 
 	if s.whisper != nil {
 		s.whisper.Start()
@@ -376,12 +447,36 @@ func (s *Ethereum) Start() error {
 	s.txSub = s.eventMux.Subscribe(core.TxPreEvent{})
 	go s.txBroadcastLoop()
 
-	// broadcast mined blocks
-	s.blockSub = s.eventMux.Subscribe(core.ChainHeadEvent{})
-	go s.blockBroadcastLoop()
-
-	servlogger.Infoln("Server started")
+	glog.V(logger.Info).Infoln("Server started")
 	return nil
+}
+
+func (s *Ethereum) syncDatabases() {
+	ticker := time.NewTicker(1 * time.Minute)
+done:
+	for {
+		select {
+		case <-ticker.C:
+			// don't change the order of database flushes
+			if err := s.extraDb.Flush(); err != nil {
+				glog.V(logger.Error).Infof("error: flush extraDb: %v\n", err)
+			}
+			if err := s.stateDb.Flush(); err != nil {
+				glog.V(logger.Error).Infof("error: flush stateDb: %v\n", err)
+			}
+			if err := s.blockDb.Flush(); err != nil {
+				glog.V(logger.Error).Infof("error: flush blockDb: %v\n", err)
+			}
+		case <-s.shutdownChan:
+			break done
+		}
+	}
+
+	s.blockDb.Close()
+	s.stateDb.Close()
+	s.extraDb.Close()
+
+	close(s.databasesClosed)
 }
 
 func (s *Ethereum) StartForTest() {
@@ -392,59 +487,59 @@ func (s *Ethereum) StartForTest() {
 
 	// Start services
 	s.txPool.Start()
-	s.blockPool.Start()
 }
 
-func (self *Ethereum) SuggestPeer(nodeURL string) error {
+// AddPeer connects to the given node and maintains the connection until the
+// server is shut down. If the connection fails for any reason, the server will
+// attempt to reconnect the peer.
+func (self *Ethereum) AddPeer(nodeURL string) error {
 	n, err := discover.ParseNode(nodeURL)
 	if err != nil {
 		return fmt.Errorf("invalid node URL: %v", err)
 	}
-	self.net.SuggestPeer(n)
+	self.net.AddPeer(n)
 	return nil
 }
 
 func (s *Ethereum) Stop() {
-	// Close the database
-	defer s.blockDb.Close()
-	defer s.stateDb.Close()
-	defer s.extraDb.Close()
+	s.txSub.Unsubscribe() // quits txBroadcastLoop
 
-	s.txSub.Unsubscribe()    // quits txBroadcastLoop
-	s.blockSub.Unsubscribe() // quits blockBroadcastLoop
-
+	s.protocolManager.Stop()
+	s.chainManager.Stop()
 	s.txPool.Stop()
 	s.eventMux.Stop()
-	s.blockPool.Stop()
 	if s.whisper != nil {
 		s.whisper.Stop()
 	}
 
-	servlogger.Infoln("Server stopped")
+	glog.V(logger.Info).Infoln("Server stopped")
 	close(s.shutdownChan)
 }
 
 // This function will wait for a shutdown and resumes main thread execution
 func (s *Ethereum) WaitForShutdown() {
+	<-s.databasesClosed
 	<-s.shutdownChan
 }
 
-// now tx broadcasting is taken out of txPool
-// handled here via subscription, efficiency?
 func (self *Ethereum) txBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.txSub.Chan() {
 		event := obj.(core.TxPreEvent)
-		self.net.Broadcast("eth", TxMsg, []*types.Transaction{event.Tx})
+		self.syncAccounts(event.Tx)
 	}
 }
 
-func (self *Ethereum) blockBroadcastLoop() {
-	// automatically stops if unsubscribe
-	for obj := range self.blockSub.Chan() {
-		switch ev := obj.(type) {
-		case core.ChainHeadEvent:
-			self.net.Broadcast("eth", NewBlockMsg, []interface{}{ev.Block, ev.Block.Td})
+// keep accounts synced up
+func (self *Ethereum) syncAccounts(tx *types.Transaction) {
+	from, err := tx.From()
+	if err != nil {
+		return
+	}
+
+	if self.accountManager.HasAccount(from.Bytes()) {
+		if self.chainManager.TxState().GetNonce(from) < tx.Nonce() {
+			self.chainManager.TxState().SetNonce(from, tx.Nonce())
 		}
 	}
 }
@@ -455,5 +550,14 @@ func saveProtocolVersion(db common.Database, protov int) {
 
 	if protocolVersion == 0 {
 		db.Put([]byte("ProtocolVersion"), common.NewValue(protov).Bytes())
+	}
+}
+
+func saveBlockchainVersion(db common.Database, bcVersion int) {
+	d, _ := db.Get([]byte("BlockchainVersion"))
+	blockchainVersion := common.NewValue(d).Uint()
+
+	if blockchainVersion == 0 {
+		db.Put([]byte("BlockchainVersion"), common.NewValue(bcVersion).Bytes())
 	}
 }

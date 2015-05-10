@@ -40,6 +40,10 @@ var logDirs []string
 //var logDir = flag.String("log_dir", "", "If non-empty, write log files in this directory")
 var logDir *string = new(string)
 
+func SetLogDir(str string) {
+	*logDir = str
+}
+
 func createLogDirs() {
 	if *logDir != "" {
 		logDirs = append(logDirs, *logDir)

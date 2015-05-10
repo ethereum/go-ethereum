@@ -36,6 +36,8 @@ func blockHeight(raw interface{}, number *int64) error {
 	}
 
 	switch str {
+	case "earliest":
+		*number = 0
 	case "latest":
 		*number = -1
 	case "pending":
@@ -51,22 +53,23 @@ func blockHeight(raw interface{}, number *int64) error {
 	return nil
 }
 
-func numString(raw interface{}, number *int64) error {
+func numString(raw interface{}) (*big.Int, error) {
+	var number *big.Int
 	// Parse as integer
 	num, ok := raw.(float64)
 	if ok {
-		*number = int64(num)
-		return nil
+		number = big.NewInt(int64(num))
+		return number, nil
 	}
 
 	// Parse as string/hexstring
 	str, ok := raw.(string)
-	if !ok {
-		return NewInvalidTypeError("", "not a number or string")
+	if ok {
+		number = common.String2Big(str)
+		return number, nil
 	}
-	*number = common.String2Big(str).Int64()
 
-	return nil
+	return nil, NewInvalidTypeError("", "not a number or string")
 }
 
 // func toNumber(v interface{}) (int64, error) {
@@ -142,12 +145,8 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 2)
 	}
 
-	if v, ok := obj[0].(float64); ok {
-		args.BlockNumber = int64(v)
-	} else if v, ok := obj[0].(string); ok {
-		args.BlockNumber = common.Big(v).Int64()
-	} else {
-		return NewInvalidTypeError("blockNumber", "not a number or string")
+	if err := blockHeight(obj[0], &args.BlockNumber); err != nil {
+		return err
 	}
 
 	args.IncludeTxs = obj[1].(bool)
@@ -158,6 +157,7 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 type NewTxArgs struct {
 	From     string
 	To       string
+	Nonce    *big.Int
 	Value    *big.Int
 	Gas      *big.Int
 	GasPrice *big.Int
@@ -171,6 +171,7 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	var ext struct {
 		From     string
 		To       string
+		Nonce    interface{}
 		Value    interface{}
 		Gas      interface{}
 		GasPrice interface{}
@@ -200,33 +201,44 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	args.To = ext.To
 	args.Data = ext.Data
 
-	var num int64
+	var num *big.Int
+	if ext.Nonce != nil {
+		num, err = numString(ext.Nonce)
+		if err != nil {
+			return err
+		}
+	}
+	args.Nonce = num
+
 	if ext.Value == nil {
-		num = 0
+		num = big.NewInt(0)
 	} else {
-		if err := numString(ext.Value, &num); err != nil {
+		num, err = numString(ext.Value)
+		if err != nil {
 			return err
 		}
 	}
-	args.Value = big.NewInt(num)
+	args.Value = num
 
+	num = nil
 	if ext.Gas == nil {
-		num = 0
+		num = big.NewInt(0)
 	} else {
-		if err := numString(ext.Gas, &num); err != nil {
+		if num, err = numString(ext.Gas); err != nil {
 			return err
 		}
 	}
-	args.Gas = big.NewInt(num)
+	args.Gas = num
 
+	num = nil
 	if ext.GasPrice == nil {
-		num = 0
+		num = big.NewInt(0)
 	} else {
-		if err := numString(ext.GasPrice, &num); err != nil {
+		if num, err = numString(ext.GasPrice); err != nil {
 			return err
 		}
 	}
-	args.GasPrice = big.NewInt(num)
+	args.GasPrice = num
 
 	// Check for optional BlockNumber param
 	if len(obj) > 1 {
@@ -277,9 +289,6 @@ func (args *CallArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewDecodeParamError(err.Error())
 	}
 
-	if len(ext.From) == 0 {
-		return NewValidationError("from", "is required")
-	}
 	args.From = ext.From
 
 	if len(ext.To) == 0 {
@@ -287,33 +296,33 @@ func (args *CallArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 	args.To = ext.To
 
-	var num int64
+	var num *big.Int
 	if ext.Value == nil {
-		num = int64(0)
+		num = big.NewInt(0)
 	} else {
-		if err := numString(ext.Value, &num); err != nil {
+		if num, err = numString(ext.Value); err != nil {
 			return err
 		}
 	}
-	args.Value = big.NewInt(num)
+	args.Value = num
 
 	if ext.Gas == nil {
-		num = int64(0)
+		num = big.NewInt(0)
 	} else {
-		if err := numString(ext.Gas, &num); err != nil {
+		if num, err = numString(ext.Gas); err != nil {
 			return err
 		}
 	}
-	args.Gas = big.NewInt(num)
+	args.Gas = num
 
 	if ext.GasPrice == nil {
-		num = int64(0)
+		num = big.NewInt(0)
 	} else {
-		if err := numString(ext.GasPrice, &num); err != nil {
+		if num, err = numString(ext.GasPrice); err != nil {
 			return err
 		}
 	}
-	args.GasPrice = big.NewInt(num)
+	args.GasPrice = num
 
 	args.Data = ext.Data
 
@@ -536,11 +545,11 @@ func (args *BlockNumIndexArgs) UnmarshalJSON(b []byte) (err error) {
 		return err
 	}
 
-	arg1, ok := obj[1].(string)
-	if !ok {
-		return NewInvalidTypeError("index", "not a string")
+	var arg1 *big.Int
+	if arg1, err = numString(obj[1]); err != nil {
+		return err
 	}
-	args.Index = common.Big(arg1).Int64()
+	args.Index = arg1.Int64()
 
 	return nil
 }
@@ -656,6 +665,7 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	// 	return NewDecodeParamError(fmt.Sprintf("ToBlock %v", err))
 
 	var num int64
+	var numBig *big.Int
 
 	// if blank then latest
 	if obj[0].FromBlock == nil {
@@ -683,22 +693,22 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Latest = num
 
 	if obj[0].Limit == nil {
-		num = defaultLogLimit
+		numBig = big.NewInt(defaultLogLimit)
 	} else {
-		if err := numString(obj[0].Limit, &num); err != nil {
+		if numBig, err = numString(obj[0].Limit); err != nil {
 			return err
 		}
 	}
-	args.Max = int(num)
+	args.Max = int(numBig.Int64())
 
 	if obj[0].Offset == nil {
-		num = defaultLogOffset
+		numBig = big.NewInt(defaultLogOffset)
 	} else {
-		if err := numString(obj[0].Offset, &num); err != nil {
+		if numBig, err = numString(obj[0].Offset); err != nil {
 			return err
 		}
 	}
-	args.Skip = int(num)
+	args.Skip = int(numBig.Int64())
 
 	if obj[0].Address != nil {
 		marg, ok := obj[0].Address.([]interface{})
@@ -740,10 +750,14 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 					for j, jv := range argarray {
 						if v, ok := jv.(string); ok {
 							topicdbl[i][j] = v
+						} else if jv == nil {
+							topicdbl[i][j] = ""
 						} else {
 							return NewInvalidTypeError(fmt.Sprintf("topic[%d][%d]", i, j), "is not a string")
 						}
 					}
+				} else if iv == nil {
+					topicdbl[i] = []string{""}
 				} else {
 					return NewInvalidTypeError(fmt.Sprintf("topic[%d]", i), "not a string or array")
 				}
@@ -891,16 +905,16 @@ func (args *WhisperMessageArgs) UnmarshalJSON(b []byte) (err error) {
 	args.From = obj[0].From
 	args.Topics = obj[0].Topics
 
-	var num int64
-	if err := numString(obj[0].Priority, &num); err != nil {
+	var num *big.Int
+	if num, err = numString(obj[0].Priority); err != nil {
 		return err
 	}
-	args.Priority = uint32(num)
+	args.Priority = uint32(num.Int64())
 
-	if err := numString(obj[0].Ttl, &num); err != nil {
+	if num, err = numString(obj[0].Ttl); err != nil {
 		return err
 	}
-	args.Ttl = uint32(num)
+	args.Ttl = uint32(num.Int64())
 
 	return nil
 }
@@ -970,11 +984,11 @@ func (args *FilterIdArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	var num int64
-	if err := numString(obj[0], &num); err != nil {
+	var num *big.Int
+	if num, err = numString(obj[0]); err != nil {
 		return err
 	}
-	args.Id = int(num)
+	args.Id = int(num.Int64())
 
 	return nil
 }
@@ -1006,25 +1020,27 @@ func (args *WhisperIdentityArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type WhisperFilterArgs struct {
-	To     string `json:"to"`
+	To     string
 	From   string
-	Topics []string
+	Topics [][]string
 }
 
+// UnmarshalJSON implements the json.Unmarshaler interface, invoked to convert a
+// JSON message blob into a WhisperFilterArgs structure.
 func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
+	// Unmarshal the JSON message and sanity check
 	var obj []struct {
-		To     interface{}
-		Topics []interface{}
+		To     interface{} `json:"to"`
+		From   interface{} `json:"from"`
+		Topics interface{} `json:"topics"`
 	}
-
-	if err = json.Unmarshal(b, &obj); err != nil {
+	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
-
 	if len(obj) < 1 {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
-
+	// Retrieve the simple data contents of the filter arguments
 	if obj[0].To == nil {
 		args.To = ""
 	} else {
@@ -1034,17 +1050,52 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 		}
 		args.To = argstr
 	}
-
-	t := make([]string, len(obj[0].Topics))
-	for i, j := range obj[0].Topics {
-		argstr, ok := j.(string)
+	if obj[0].From == nil {
+		args.From = ""
+	} else {
+		argstr, ok := obj[0].From.(string)
 		if !ok {
-			return NewInvalidTypeError("topics["+string(i)+"]", "is not a string")
+			return NewInvalidTypeError("from", "is not a string")
 		}
-		t[i] = argstr
+		args.From = argstr
 	}
-	args.Topics = t
+	// Construct the nested topic array
+	if obj[0].Topics != nil {
+		// Make sure we have an actual topic array
+		list, ok := obj[0].Topics.([]interface{})
+		if !ok {
+			return NewInvalidTypeError("topics", "is not an array")
+		}
+		// Iterate over each topic and handle nil, string or array
+		topics := make([][]string, len(list))
+		for idx, field := range list {
+			switch value := field.(type) {
+			case nil:
+				topics[idx] = []string{}
 
+			case string:
+				topics[idx] = []string{value}
+
+			case []interface{}:
+				topics[idx] = make([]string, len(value))
+				for i, nested := range value {
+					switch value := nested.(type) {
+					case nil:
+						topics[idx][i] = ""
+
+					case string:
+						topics[idx][i] = value
+
+					default:
+						return NewInvalidTypeError(fmt.Sprintf("topic[%d][%d]", idx, i), "is not a string")
+					}
+				}
+			default:
+				return NewInvalidTypeError(fmt.Sprintf("topic[%d]", idx), "not a string or array")
+			}
+		}
+		args.Topics = topics
+	}
 	return nil
 }
 
@@ -1082,6 +1133,29 @@ func (args *SubmitWorkArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	args.Digest = objstr
+
+	return nil
+}
+
+type SourceArgs struct {
+	Source string
+}
+
+func (args *SourceArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return NewInsufficientParamsError(len(obj), 1)
+	}
+
+	arg0, ok := obj[0].(string)
+	if !ok {
+		return NewInvalidTypeError("source code", "not a string")
+	}
+	args.Source = arg0
 
 	return nil
 }

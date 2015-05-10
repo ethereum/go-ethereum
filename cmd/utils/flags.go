@@ -2,11 +2,16 @@ package utils
 
 import (
 	"crypto/ecdsa"
+	"fmt"
+	"log"
+	"math/big"
+	"net/http"
 	"os"
 	"path"
 	"runtime"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -68,20 +73,33 @@ func NewApp(version, usage string) *cli.App {
 
 var (
 	// General settings
-	DataDirFlag = cli.StringFlag{
+	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
 		Usage: "Data directory to be used",
-		Value: common.DefaultDataDir(),
+		Value: DirectoryString{common.DefaultDataDir()},
 	}
 	ProtocolVersionFlag = cli.IntFlag{
 		Name:  "protocolversion",
-		Usage: "ETH protocol version",
+		Usage: "ETH protocol version (integer)",
 		Value: eth.ProtocolVersion,
 	}
 	NetworkIdFlag = cli.IntFlag{
 		Name:  "networkid",
-		Usage: "Network Id",
+		Usage: "Network Id (integer)",
 		Value: eth.NetworkId,
+	}
+	BlockchainVersionFlag = cli.IntFlag{
+		Name:  "blockchainversion",
+		Usage: "Blockchain version (integer)",
+		Value: core.BlockChainVersion,
+	}
+	IdentityFlag = cli.StringFlag{
+		Name:  "identity",
+		Usage: "Custom node name",
+	}
+	NatspecEnabledFlag = cli.BoolFlag{
+		Name:  "natspec",
+		Usage: "Enable NatSpec confirmation notice",
 	}
 
 	// miner settings
@@ -96,18 +114,23 @@ var (
 	}
 	EtherbaseFlag = cli.StringFlag{
 		Name:  "etherbase",
-		Usage: "public address for block mining rewards. By default the address of your primary account is used",
+		Usage: "Public address for block mining rewards. By default the address of your primary account is used",
 		Value: "primary",
+	}
+	GasPriceFlag = cli.StringFlag{
+		Name:  "gasprice",
+		Usage: "Sets the minimal gasprice when mining transactions",
+		Value: new(big.Int).Mul(big.NewInt(10), common.Szabo).String(),
 	}
 
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
-		Usage: "unlock the account given until this program exits (prompts for password). '--unlock primary' unlocks the primary account",
+		Usage: "Unlock the account given until this program exits (prompts for password). '--unlock primary' unlocks the primary account",
 		Value: "",
 	}
 	PasswordFileFlag = cli.StringFlag{
 		Name:  "password",
-		Usage: "Path to password file for (un)locking an existing account.",
+		Usage: "Path to password file to use with options and subcommands needing a password",
 		Value: "",
 	}
 
@@ -116,9 +139,9 @@ var (
 		Name:  "logfile",
 		Usage: "Send log output to a file",
 	}
-	LogLevelFlag = cli.IntFlag{
-		Name:  "loglevel",
-		Usage: "0-5 (silent, error, warn, info, debug, debug detail)",
+	VerbosityFlag = cli.IntFlag{
+		Name:  "verbosity",
+		Usage: "Logging verbosity: 0-6 (0=silent, 1=error, 2=warn, 3=info, 4=core, 5=debug, 6=debug detail)",
 		Value: int(logger.InfoLevel),
 	}
 	LogJSONFlag = cli.StringFlag{
@@ -126,15 +149,38 @@ var (
 		Usage: "Send json structured log output to a file or '-' for standard output (default: no json output)",
 		Value: "",
 	}
+	LogToStdErrFlag = cli.BoolFlag{
+		Name:  "logtostderr",
+		Usage: "Logs are written to standard error instead of to files.",
+	}
+	LogVModuleFlag = cli.GenericFlag{
+		Name:  "vmodule",
+		Usage: "The syntax of the argument is a comma-separated list of pattern=N, where pattern is a literal file name (minus the \".go\" suffix) or \"glob\" pattern and N is a log verbosity level.",
+		Value: glog.GetVModule(),
+	}
 	VMDebugFlag = cli.BoolFlag{
 		Name:  "vmdebug",
 		Usage: "Virtual Machine debug output",
+	}
+	BacktraceAtFlag = cli.GenericFlag{
+		Name:  "backtrace_at",
+		Usage: "If set to a file and line number (e.g., \"block.go:271\") holding a logging statement, a stack trace will be logged",
+		Value: glog.GetTraceLocation(),
+	}
+	PProfEanbledFlag = cli.BoolFlag{
+		Name:  "pprof",
+		Usage: "Enable the profiling server on localhost",
+	}
+	PProfPortFlag = cli.IntFlag{
+		Name:  "pprofport",
+		Usage: "Port on which the profiler should listen",
+		Value: 6060,
 	}
 
 	// RPC settings
 	RPCEnabledFlag = cli.BoolFlag{
 		Name:  "rpc",
-		Usage: "Whether RPC server is enabled",
+		Usage: "Enable the JSON-RPC server",
 	}
 	RPCListenAddrFlag = cli.StringFlag{
 		Name:  "rpcaddr",
@@ -154,8 +200,13 @@ var (
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
-		Usage: "Maximum number of network peers",
-		Value: 16,
+		Usage: "Maximum number of network peers (network disabled if set to 0)",
+		Value: 25,
+	}
+	MaxPendingPeersFlag = cli.IntFlag{
+		Name:  "maxpendpeers",
+		Usage: "Maximum number of pending connection attempts (defaults used if set to 0)",
+		Value: 0,
 	}
 	ListenPortFlag = cli.IntFlag{
 		Name:  "port",
@@ -164,7 +215,7 @@ var (
 	}
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
-		Usage: "Space-separated enode URLs for discovery bootstrap",
+		Usage: "Space-separated enode URLs for p2p discovery bootstrap",
 		Value: "",
 	}
 	NodeKeyFileFlag = cli.StringFlag{
@@ -177,22 +228,23 @@ var (
 	}
 	NATFlag = cli.StringFlag{
 		Name:  "nat",
-		Usage: "Port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
+		Usage: "NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
 		Value: "any",
 	}
+	WhisperEnabledFlag = cli.BoolFlag{
+		Name:  "shh",
+		Usage: "Enable whisper",
+	}
+	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
 		Usage: "JS library path to be used with console and js subcommands",
 		Value: ".",
 	}
-	BacktraceAtFlag = cli.GenericFlag{
-		Name:  "backtrace_at",
-		Usage: "When set to a file and line number holding a logging statement a stack trace will be written to the Info log",
-		Value: glog.GetTraceLocation(),
-	}
-	LogToStdErrFlag = cli.BoolFlag{
-		Name:  "logtostderr",
-		Usage: "Logs are written to standard error instead of to files.",
+	SolcPathFlag = cli.StringFlag{
+		Name:  "solc",
+		Usage: "solidity compiler to be used",
+		Value: "solc",
 	}
 )
 
@@ -224,34 +276,49 @@ func GetNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 
 func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	// Set verbosity on glog
-	glog.SetV(ctx.GlobalInt(LogLevelFlag.Name))
+	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 	// Set the log type
-	glog.SetToStderr(ctx.GlobalBool(LogToStdErrFlag.Name))
+	//glog.SetToStderr(ctx.GlobalBool(LogToStdErrFlag.Name))
+	glog.SetToStderr(true)
+	// Set the log dir
+	glog.SetLogDir(ctx.GlobalString(LogFileFlag.Name))
+
+	customName := ctx.GlobalString(IdentityFlag.Name)
+	if len(customName) > 0 {
+		clientID += "/" + customName
+	}
 
 	return &eth.Config{
-		Name:            common.MakeName(clientID, version),
-		DataDir:         ctx.GlobalString(DataDirFlag.Name),
-		ProtocolVersion: ctx.GlobalInt(ProtocolVersionFlag.Name),
-		NetworkId:       ctx.GlobalInt(NetworkIdFlag.Name),
-		LogFile:         ctx.GlobalString(LogFileFlag.Name),
-		LogLevel:        ctx.GlobalInt(LogLevelFlag.Name),
-		LogJSON:         ctx.GlobalString(LogJSONFlag.Name),
-		Etherbase:       ctx.GlobalString(EtherbaseFlag.Name),
-		MinerThreads:    ctx.GlobalInt(MinerThreadsFlag.Name),
-		AccountManager:  GetAccountManager(ctx),
-		VmDebug:         ctx.GlobalBool(VMDebugFlag.Name),
-		MaxPeers:        ctx.GlobalInt(MaxPeersFlag.Name),
-		Port:            ctx.GlobalString(ListenPortFlag.Name),
-		NAT:             GetNAT(ctx),
-		NodeKey:         GetNodeKey(ctx),
-		Shh:             true,
-		Dial:            true,
-		BootNodes:       ctx.GlobalString(BootnodesFlag.Name),
+		Name:               common.MakeName(clientID, version),
+		DataDir:            ctx.GlobalString(DataDirFlag.Name),
+		ProtocolVersion:    ctx.GlobalInt(ProtocolVersionFlag.Name),
+		BlockChainVersion:  ctx.GlobalInt(BlockchainVersionFlag.Name),
+		SkipBcVersionCheck: false,
+		NetworkId:          ctx.GlobalInt(NetworkIdFlag.Name),
+		LogFile:            ctx.GlobalString(LogFileFlag.Name),
+		Verbosity:          ctx.GlobalInt(VerbosityFlag.Name),
+		LogJSON:            ctx.GlobalString(LogJSONFlag.Name),
+		Etherbase:          ctx.GlobalString(EtherbaseFlag.Name),
+		MinerThreads:       ctx.GlobalInt(MinerThreadsFlag.Name),
+		AccountManager:     GetAccountManager(ctx),
+		VmDebug:            ctx.GlobalBool(VMDebugFlag.Name),
+		MaxPeers:           ctx.GlobalInt(MaxPeersFlag.Name),
+		MaxPendingPeers:    ctx.GlobalInt(MaxPendingPeersFlag.Name),
+		Port:               ctx.GlobalString(ListenPortFlag.Name),
+		NAT:                GetNAT(ctx),
+		NatSpec:            ctx.GlobalBool(NatspecEnabledFlag.Name),
+		NodeKey:            GetNodeKey(ctx),
+		Shh:                ctx.GlobalBool(WhisperEnabledFlag.Name),
+		Dial:               true,
+		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
+		GasPrice:           common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
 	}
+
 }
 
 func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Database) {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
+
 	blockDb, err := ethdb.NewLDBDatabase(path.Join(dataDir, "blockchain"))
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
@@ -261,7 +328,20 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Dat
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
-	return core.NewChainManager(blockDb, stateDb, new(event.TypeMux)), blockDb, stateDb
+
+	extraDb, err := ethdb.NewLDBDatabase(path.Join(dataDir, "extra"))
+	if err != nil {
+		Fatalf("Could not open database: %v", err)
+	}
+
+	eventMux := new(event.TypeMux)
+	chainManager := core.NewChainManager(blockDb, stateDb, eventMux)
+	pow := ethash.New()
+	txPool := core.NewTxPool(eventMux, chainManager.State, chainManager.GasLimit)
+	blockProcessor := core.NewBlockProcessor(stateDb, extraDb, pow, txPool, chainManager, eventMux)
+	chainManager.SetProcessor(blockProcessor)
+
+	return chainManager, blockDb, stateDb
 }
 
 func GetAccountManager(ctx *cli.Context) *accounts.Manager {
@@ -270,7 +350,7 @@ func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 	return accounts.NewManager(ks)
 }
 
-func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
+func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
 	config := rpc.RpcConfig{
 		ListenAddress: ctx.GlobalString(RPCListenAddrFlag.Name),
 		ListenPort:    uint(ctx.GlobalInt(RPCPortFlag.Name)),
@@ -278,5 +358,12 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
 	}
 
 	xeth := xeth.New(eth, nil)
-	_ = rpc.Start(xeth, config)
+	return rpc.Start(xeth, config)
+}
+
+func StartPProf(ctx *cli.Context) {
+	address := fmt.Sprintf("localhost:%d", ctx.GlobalInt(PProfPortFlag.Name))
+	go func() {
+		log.Println(http.ListenAndServe(address, nil))
+	}()
 }

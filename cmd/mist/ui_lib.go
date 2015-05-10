@@ -104,8 +104,8 @@ func (ui *UiLib) Connect(button qml.Object) {
 }
 
 func (ui *UiLib) ConnectToPeer(nodeURL string) {
-	if err := ui.eth.SuggestPeer(nodeURL); err != nil {
-		guilogger.Infoln("SuggestPeer error: " + err.Error())
+	if err := ui.eth.AddPeer(nodeURL); err != nil {
+		guilogger.Infoln("AddPeer error: " + err.Error())
 	}
 }
 
@@ -119,6 +119,7 @@ func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
 	return self.XEth.Transact(
 		object["from"],
 		object["to"],
+		"",
 		object["value"],
 		object["gas"],
 		object["gasPrice"],

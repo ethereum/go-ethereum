@@ -22,9 +22,9 @@ type Filter struct {
 	max      int
 	topics   [][]common.Hash
 
-	BlockCallback   func(*types.Block, state.Logs)
-	PendingCallback func(*types.Transaction)
-	LogsCallback    func(state.Logs)
+	BlockCallback       func(*types.Block, state.Logs)
+	TransactionCallback func(*types.Transaction)
+	LogsCallback        func(state.Logs)
 }
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
@@ -124,23 +124,33 @@ func (self *Filter) FilterLogs(logs state.Logs) state.Logs {
 	// Filter the logs for interesting stuff
 Logs:
 	for _, log := range logs {
-		if len(self.address) > 0 && !includes(self.address, log.Address()) {
+		if len(self.address) > 0 && !includes(self.address, log.Address) {
 			continue
 		}
 
 		logTopics := make([]common.Hash, len(self.topics))
-		copy(logTopics, log.Topics())
+		copy(logTopics, log.Topics)
+
+		// If the to filtered topics is greater than the amount of topics in
+		//  logs, skip.
+		if len(self.topics) > len(log.Topics) {
+			continue Logs
+		}
 
 		for i, topics := range self.topics {
+			var match bool
 			for _, topic := range topics {
-				var match bool
-				if log.Topics()[i] == topic {
+				// common.Hash{} is a match all (wildcard)
+				if (topic == common.Hash{}) || log.Topics[i] == topic {
 					match = true
-				}
-				if !match {
-					continue Logs
+					break
 				}
 			}
+
+			if !match {
+				continue Logs
+			}
+
 		}
 
 		ret = append(ret, log)
@@ -153,7 +163,7 @@ func (self *Filter) bloomFilter(block *types.Block) bool {
 	if len(self.address) > 0 {
 		var included bool
 		for _, addr := range self.address {
-			if types.BloomLookup(block.Bloom(), addr.Hash()) {
+			if types.BloomLookup(block.Bloom(), addr) {
 				included = true
 				break
 			}
@@ -167,7 +177,7 @@ func (self *Filter) bloomFilter(block *types.Block) bool {
 	for _, sub := range self.topics {
 		var included bool
 		for _, topic := range sub {
-			if types.BloomLookup(block.Bloom(), topic) {
+			if (topic == common.Hash{}) || types.BloomLookup(block.Bloom(), topic) {
 				included = true
 				break
 			}

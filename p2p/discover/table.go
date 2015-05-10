@@ -7,16 +7,24 @@
 package discover
 
 import (
+	"crypto/rand"
 	"net"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 const (
-	alpha               = 3              // Kademlia concurrency factor
-	bucketSize          = 16             // Kademlia bucket size
-	nBuckets            = nodeIDBits + 1 // Number of buckets
+	alpha      = 3  // Kademlia concurrency factor
+	bucketSize = 16 // Kademlia bucket size
+	hashBits   = len(common.Hash{}) * 8
+	nBuckets   = hashBits + 1 // Number of buckets
+
 	maxBondingPingPongs = 10
 )
 
@@ -24,6 +32,7 @@ type Table struct {
 	mutex   sync.Mutex        // protects buckets, their content, and nursery
 	buckets [nBuckets]*bucket // index of known nodes by distance
 	nursery []*Node           // bootstrap nodes
+	db      *nodeDB           // database of known nodes
 
 	bondmu    sync.Mutex
 	bonding   map[NodeID]*bondproc
@@ -31,7 +40,6 @@ type Table struct {
 
 	net  transport
 	self *Node // metadata of the local node
-	db   *nodeDB
 }
 
 type bondproc struct {
@@ -58,11 +66,17 @@ type bucket struct {
 	entries    []*Node
 }
 
-func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr) *Table {
+func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, nodeDBPath string) *Table {
+	// If no node database was given, use an in-memory one
+	db, err := newNodeDB(nodeDBPath, Version)
+	if err != nil {
+		glog.V(logger.Warn).Infoln("Failed to open node database:", err)
+		db, _ = newNodeDB("", Version)
+	}
 	tab := &Table{
 		net:       t,
-		db:        new(nodeDB),
-		self:      newNode(ourID, ourAddr),
+		db:        db,
+		self:      newNode(ourID, ourAddr.IP, uint16(ourAddr.Port), uint16(ourAddr.Port)),
 		bonding:   make(map[NodeID]*bondproc),
 		bondslots: make(chan struct{}, maxBondingPingPongs),
 	}
@@ -80,9 +94,10 @@ func (tab *Table) Self() *Node {
 	return tab.self
 }
 
-// Close terminates the network listener.
+// Close terminates the network listener and flushes the node database.
 func (tab *Table) Close() {
 	tab.net.close()
+	tab.db.close()
 }
 
 // Bootstrap sets the bootstrap nodes. These nodes are used to connect
@@ -95,6 +110,7 @@ func (tab *Table) Bootstrap(nodes []*Node) {
 	tab.nursery = make([]*Node, 0, len(nodes))
 	for _, n := range nodes {
 		cpy := *n
+		cpy.sha = crypto.Sha3Hash(n.ID[:])
 		tab.nursery = append(tab.nursery, &cpy)
 	}
 	tab.mutex.Unlock()
@@ -104,21 +120,23 @@ func (tab *Table) Bootstrap(nodes []*Node) {
 // Lookup performs a network search for nodes close
 // to the given target. It approaches the target by querying
 // nodes that are closer to it on each iteration.
-func (tab *Table) Lookup(target NodeID) []*Node {
+// The given target does not need to be an actual node
+// identifier.
+func (tab *Table) Lookup(targetID NodeID) []*Node {
 	var (
+		target         = crypto.Sha3Hash(targetID[:])
 		asked          = make(map[NodeID]bool)
 		seen           = make(map[NodeID]bool)
 		reply          = make(chan []*Node, alpha)
 		pendingQueries = 0
 	)
-	// don't query further if we hit the target or ourself.
+	// don't query further if we hit ourself.
 	// unlikely to happen often in practice.
-	asked[target] = true
 	asked[tab.self.ID] = true
 
 	tab.mutex.Lock()
 	// update last lookup stamp (for refresh logic)
-	tab.buckets[logdist(tab.self.ID, target)].lastLookup = time.Now()
+	tab.buckets[logdist(tab.self.sha, target)].lastLookup = time.Now()
 	// generate initial result set
 	result := tab.closest(target, bucketSize)
 	tab.mutex.Unlock()
@@ -131,7 +149,7 @@ func (tab *Table) Lookup(target NodeID) []*Node {
 				asked[n.ID] = true
 				pendingQueries++
 				go func() {
-					r, _ := tab.net.findnode(n.ID, n.addr(), target)
+					r, _ := tab.net.findnode(n.ID, n.addr(), targetID)
 					reply <- tab.bondall(r)
 				}()
 			}
@@ -154,20 +172,24 @@ func (tab *Table) Lookup(target NodeID) []*Node {
 
 // refresh performs a lookup for a random target to keep buckets full.
 func (tab *Table) refresh() {
-	ld := -1 // logdist of chosen bucket
-	tab.mutex.Lock()
-	for i, b := range tab.buckets {
-		if i > 0 && b.lastLookup.Before(time.Now().Add(-1*time.Hour)) {
-			ld = i
-			break
-		}
-	}
-	tab.mutex.Unlock()
-
-	result := tab.Lookup(randomID(tab.self.ID, ld))
+	// The Kademlia paper specifies that the bucket refresh should
+	// perform a refresh in the least recently used bucket. We cannot
+	// adhere to this because the findnode target is a 512bit value
+	// (not hash-sized) and it is not easily possible to generate a
+	// sha3 preimage that falls into a chosen bucket.
+	//
+	// We perform a lookup with a random target instead.
+	var target NodeID
+	rand.Read(target[:])
+	result := tab.Lookup(target)
 	if len(result) == 0 {
-		// bootstrap the table with a self lookup
-		all := tab.bondall(tab.nursery)
+		// Pick a batch of previously know seeds to lookup with
+		seeds := tab.db.querySeeds(10)
+		for _, seed := range seeds {
+			glog.V(logger.Debug).Infoln("Seeding network with", seed)
+		}
+		// Bootstrap the table with a self lookup
+		all := tab.bondall(append(tab.nursery, seeds...))
 		tab.mutex.Lock()
 		tab.add(all)
 		tab.mutex.Unlock()
@@ -179,7 +201,7 @@ func (tab *Table) refresh() {
 
 // closest returns the n nodes in the table that are closest to the
 // given id. The caller must hold tab.mutex.
-func (tab *Table) closest(target NodeID, nresults int) *nodesByDistance {
+func (tab *Table) closest(target common.Hash, nresults int) *nodesByDistance {
 	// This is a very wasteful way to find the closest nodes but
 	// obviously correct. I believe that tree-based buckets would make
 	// this easier to implement efficiently.
@@ -205,7 +227,7 @@ func (tab *Table) bondall(nodes []*Node) (result []*Node) {
 	rc := make(chan *Node, len(nodes))
 	for i := range nodes {
 		go func(n *Node) {
-			nn, _ := tab.bond(false, n.ID, n.addr(), uint16(n.TCPPort))
+			nn, _ := tab.bond(false, n.ID, n.addr(), uint16(n.TCP))
 			rc <- nn
 		}(nodes[i])
 	}
@@ -235,7 +257,7 @@ func (tab *Table) bondall(nodes []*Node) (result []*Node) {
 // of the process can be skipped.
 func (tab *Table) bond(pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16) (*Node, error) {
 	var n *Node
-	if n = tab.db.get(id); n == nil {
+	if n = tab.db.node(id); n == nil {
 		tab.bondmu.Lock()
 		w := tab.bonding[id]
 		if w != nil {
@@ -261,16 +283,20 @@ func (tab *Table) bond(pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16
 	}
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
-	if b := tab.buckets[logdist(tab.self.ID, n.ID)]; !b.bump(n) {
+	b := tab.buckets[logdist(tab.self.sha, n.sha)]
+	if !b.bump(n) {
 		tab.pingreplace(n, b)
 	}
 	return n, nil
 }
 
 func (tab *Table) pingpong(w *bondproc, pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16) {
+	// Request a bonding slot to limit network usage
 	<-tab.bondslots
 	defer func() { tab.bondslots <- struct{}{} }()
-	if w.err = tab.net.ping(id, addr); w.err != nil {
+
+	// Ping the remote side and wait for a pong
+	if w.err = tab.ping(id, addr); w.err != nil {
 		close(w.done)
 		return
 	}
@@ -280,14 +306,16 @@ func (tab *Table) pingpong(w *bondproc, pinged bool, id NodeID, addr *net.UDPAdd
 		// waitping will simply time out.
 		tab.net.waitping(id)
 	}
-	w.n = tab.db.add(id, addr, tcpPort)
+	// Bonding succeeded, update the node database
+	w.n = newNode(id, addr.IP, uint16(addr.Port), tcpPort)
+	tab.db.updateNode(w.n)
 	close(w.done)
 }
 
 func (tab *Table) pingreplace(new *Node, b *bucket) {
 	if len(b.entries) == bucketSize {
 		oldest := b.entries[bucketSize-1]
-		if err := tab.net.ping(oldest.ID, oldest.addr()); err == nil {
+		if err := tab.ping(oldest.ID, oldest.addr()); err == nil {
 			// The node responded, we don't need to replace it.
 			return
 		}
@@ -300,17 +328,31 @@ func (tab *Table) pingreplace(new *Node, b *bucket) {
 	b.entries[0] = new
 }
 
+// ping a remote endpoint and wait for a reply, also updating the node database
+// accordingly.
+func (tab *Table) ping(id NodeID, addr *net.UDPAddr) error {
+	// Update the last ping and send the message
+	tab.db.updateLastPing(id, time.Now())
+	if err := tab.net.ping(id, addr); err != nil {
+		return err
+	}
+	// Pong received, update the database and return
+	tab.db.updateLastPong(id, time.Now())
+	tab.db.ensureExpirer()
+
+	return nil
+}
+
 // add puts the entries into the table if their corresponding
 // bucket is not full. The caller must hold tab.mutex.
 func (tab *Table) add(entries []*Node) {
 outer:
 	for _, n := range entries {
-		if n == nil || n.ID == tab.self.ID {
-			// skip bad entries. The RLP decoder returns nil for empty
-			// input lists.
+		if n.ID == tab.self.ID {
+			// don't add self.
 			continue
 		}
-		bucket := tab.buckets[logdist(tab.self.ID, n.ID)]
+		bucket := tab.buckets[logdist(tab.self.sha, n.sha)]
 		for i := range bucket.entries {
 			if bucket.entries[i].ID == n.ID {
 				// already in bucket
@@ -326,7 +368,6 @@ outer:
 func (b *bucket) bump(n *Node) bool {
 	for i := range b.entries {
 		if b.entries[i].ID == n.ID {
-			n.bumpActive()
 			// move it to the front
 			copy(b.entries[1:], b.entries[:i])
 			b.entries[0] = n
@@ -340,13 +381,13 @@ func (b *bucket) bump(n *Node) bool {
 // distance to target.
 type nodesByDistance struct {
 	entries []*Node
-	target  NodeID
+	target  common.Hash
 }
 
 // push adds the given node to the list, keeping the total size below maxElems.
 func (h *nodesByDistance) push(n *Node, maxElems int) {
 	ix := sort.Search(len(h.entries), func(i int) bool {
-		return distcmp(h.target, h.entries[i].ID, n.ID) > 0
+		return distcmp(h.target, h.entries[i].sha, n.sha) > 0
 	})
 	if len(h.entries) < maxElems {
 		h.entries = append(h.entries, n)

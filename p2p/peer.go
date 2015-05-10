@@ -4,24 +4,23 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
-	baseProtocolVersion    = 3
+	baseProtocolVersion    = 4
 	baseProtocolLength     = uint64(16)
 	baseProtocolMaxMsgSize = 10 * 1024 * 1024
 
-	pingInterval          = 15 * time.Second
-	disconnectGracePeriod = 2 * time.Second
+	pingInterval = 15 * time.Second
 )
 
 const (
@@ -36,15 +35,11 @@ const (
 
 // Peer represents a connected remote node.
 type Peer struct {
-	// Peers have all the log methods.
-	// Use them to display messages related to the peer.
-	*logger.Logger
-
 	conn    net.Conn
 	rw      *conn
 	running map[string]*protoRW
 
-	protoWG  sync.WaitGroup
+	wg       sync.WaitGroup
 	protoErr chan error
 	closed   chan struct{}
 	disc     chan DiscReason
@@ -101,91 +96,88 @@ func (p *Peer) String() string {
 }
 
 func newPeer(fd net.Conn, conn *conn, protocols []Protocol) *Peer {
-	logtag := fmt.Sprintf("Peer %.8x %v", conn.ID[:], fd.RemoteAddr())
+	protomap := matchProtocols(protocols, conn.Caps, conn)
 	p := &Peer{
-		Logger:   logger.NewLogger(logtag),
 		conn:     fd,
 		rw:       conn,
-		running:  matchProtocols(protocols, conn.Caps, conn),
+		running:  protomap,
 		disc:     make(chan DiscReason),
-		protoErr: make(chan error),
+		protoErr: make(chan error, len(protomap)+1), // protocols + pingLoop
 		closed:   make(chan struct{}),
 	}
 	return p
 }
 
 func (p *Peer) run() DiscReason {
-	var readErr = make(chan error, 1)
-	defer p.closeProtocols()
-	defer close(p.closed)
+	readErr := make(chan error, 1)
+	p.wg.Add(2)
+	go p.readLoop(readErr)
+	go p.pingLoop()
 
 	p.startProtocols()
-	go func() { readErr <- p.readLoop() }()
-
-	ping := time.NewTicker(pingInterval)
-	defer ping.Stop()
 
 	// Wait for an error or disconnect.
 	var reason DiscReason
-loop:
-	for {
-		select {
-		case <-ping.C:
-			go func() {
-				if err := SendItems(p.rw, pingMsg); err != nil {
-					p.protoErr <- err
-					return
-				}
-			}()
-		case err := <-readErr:
-			// We rely on protocols to abort if there is a write error. It
-			// might be more robust to handle them here as well.
-			p.DebugDetailf("Read error: %v\n", err)
-			p.conn.Close()
-			return DiscNetworkError
-		case err := <-p.protoErr:
-			reason = discReasonForError(err)
-			break loop
-		case reason = <-p.disc:
-			break loop
+	select {
+	case err := <-readErr:
+		if r, ok := err.(DiscReason); ok {
+			reason = r
+		} else {
+			// Note: We rely on protocols to abort if there is a write
+			// error. It might be more robust to handle them here as well.
+			glog.V(logger.Detail).Infof("%v: Read error: %v\n", p, err)
+			reason = DiscNetworkError
 		}
+	case err := <-p.protoErr:
+		reason = discReasonForError(err)
+	case reason = <-p.disc:
 	}
-	p.politeDisconnect(reason)
 
-	// Wait for readLoop. It will end because conn is now closed.
-	<-readErr
-	p.Debugf("Disconnected: %v\n", reason)
+	close(p.closed)
+	p.politeDisconnect(reason)
+	p.wg.Wait()
+	glog.V(logger.Debug).Infof("%v: Disconnected: %v\n", p, reason)
 	return reason
 }
 
 func (p *Peer) politeDisconnect(reason DiscReason) {
-	done := make(chan struct{})
-	go func() {
+	if reason != DiscNetworkError {
 		SendItems(p.rw, discMsg, uint(reason))
-		// Wait for the other side to close the connection.
-		// Discard any data that they send until then.
-		io.Copy(ioutil.Discard, p.conn)
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(disconnectGracePeriod):
 	}
 	p.conn.Close()
 }
 
-func (p *Peer) readLoop() error {
+func (p *Peer) pingLoop() {
+	ping := time.NewTicker(pingInterval)
+	defer p.wg.Done()
+	defer ping.Stop()
 	for {
-		p.conn.SetDeadline(time.Now().Add(frameReadTimeout))
-		msg, err := p.rw.ReadMsg()
-		if err != nil {
-			return err
-		}
-		if err = p.handle(msg); err != nil {
-			return err
+		select {
+		case <-ping.C:
+			if err := SendItems(p.rw, pingMsg); err != nil {
+				p.protoErr <- err
+				return
+			}
+		case <-p.closed:
+			return
 		}
 	}
-	return nil
+}
+
+func (p *Peer) readLoop(errc chan<- error) {
+	defer p.wg.Done()
+	for {
+		msg, err := p.rw.ReadMsg()
+		if err != nil {
+			errc <- err
+			return
+		}
+		msg.ReceivedAt = time.Now()
+		if err = p.handle(msg); err != nil {
+			errc <- err
+			return
+		}
+	}
 }
 
 func (p *Peer) handle(msg Msg) error {
@@ -195,12 +187,11 @@ func (p *Peer) handle(msg Msg) error {
 		go SendItems(p.rw, pongMsg)
 	case msg.Code == discMsg:
 		var reason [1]DiscReason
-		// no need to discard or for error checking, we'll close the
-		// connection after this.
+		// This is the last message. We don't need to discard or
+		// check errors because, the connection will be closed after it.
 		rlp.Decode(msg.Payload, &reason)
-		p.Debugf("Disconnect requested: %v\n", reason[0])
-		p.Disconnect(DiscRequested)
-		return discRequestedError(reason[0])
+		glog.V(logger.Debug).Infof("%v: Disconnect Requested: %v\n", p, reason[0])
+		return DiscRequested
 	case msg.Code < baseProtocolLength:
 		// ignore other base protocol messages
 		return msg.Discard()
@@ -210,9 +201,26 @@ func (p *Peer) handle(msg Msg) error {
 		if err != nil {
 			return fmt.Errorf("msg code out of range: %v", msg.Code)
 		}
-		proto.in <- msg
+		select {
+		case proto.in <- msg:
+			return nil
+		case <-p.closed:
+			return io.EOF
+		}
 	}
 	return nil
+}
+
+func countMatchingProtocols(protocols []Protocol, caps []Cap) int {
+	n := 0
+	for _, cap := range caps {
+		for _, proto := range protocols {
+			if proto.Name == cap.Name && proto.Version == cap.Version {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 // matchProtocols creates structures for matching named subprotocols.
@@ -234,23 +242,21 @@ outer:
 }
 
 func (p *Peer) startProtocols() {
+	p.wg.Add(len(p.running))
 	for _, proto := range p.running {
 		proto := proto
-		p.DebugDetailf("Starting protocol %s/%d\n", proto.Name, proto.Version)
-		p.protoWG.Add(1)
+		proto.closed = p.closed
+		glog.V(logger.Detail).Infof("%v: Starting protocol %s/%d\n", p, proto.Name, proto.Version)
 		go func() {
 			err := proto.Run(p, proto)
 			if err == nil {
-				p.DebugDetailf("Protocol %s/%d returned\n", proto.Name, proto.Version)
+				glog.V(logger.Detail).Infof("%v: Protocol %s/%d returned\n", p, proto.Name, proto.Version)
 				err = errors.New("protocol returned")
-			} else {
-				p.DebugDetailf("Protocol %s/%d error: %v\n", proto.Name, proto.Version, err)
+			} else if err != io.EOF {
+				glog.V(logger.Detail).Infof("%v: Protocol %s/%d error: \n", p, proto.Name, proto.Version, err)
 			}
-			select {
-			case p.protoErr <- err:
-			case <-p.closed:
-			}
-			p.protoWG.Done()
+			p.protoErr <- err
+			p.wg.Done()
 		}()
 	}
 }
@@ -264,13 +270,6 @@ func (p *Peer) getProto(code uint64) (*protoRW, error) {
 		}
 	}
 	return nil, newPeerError(errInvalidMsgCode, "%d", code)
-}
-
-func (p *Peer) closeProtocols() {
-	for _, p := range p.running {
-		close(p.in)
-	}
-	p.protoWG.Wait()
 }
 
 // writeProtoMsg sends the given message on behalf of the given named protocol.
@@ -289,8 +288,8 @@ func (p *Peer) writeProtoMsg(protoName string, msg Msg) error {
 
 type protoRW struct {
 	Protocol
-
 	in     chan Msg
+	closed <-chan struct{}
 	offset uint64
 	w      MsgWriter
 }
@@ -304,10 +303,11 @@ func (rw *protoRW) WriteMsg(msg Msg) error {
 }
 
 func (rw *protoRW) ReadMsg() (Msg, error) {
-	msg, ok := <-rw.in
-	if !ok {
-		return msg, io.EOF
+	select {
+	case msg := <-rw.in:
+		msg.Code -= rw.offset
+		return msg, nil
+	case <-rw.closed:
+		return Msg{}, io.EOF
 	}
-	msg.Code -= rw.offset
-	return msg, nil
 }

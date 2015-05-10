@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/rs/cors"
 )
 
-var rpclogger = logger.NewLogger("RPC")
+var rpclistener *stoppableTCPListener
 
 const (
 	jsonrpcver       = "2.0"
@@ -21,11 +21,19 @@ const (
 )
 
 func Start(pipe *xeth.XEth, config RpcConfig) error {
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort))
+	if rpclistener != nil {
+		if fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort) != rpclistener.Addr().String() {
+			return fmt.Errorf("RPC service already running on %s ", rpclistener.Addr().String())
+		}
+		return nil // RPC service already running on given host/port
+	}
+
+	l, err := newStoppableTCPListener(fmt.Sprintf("%s:%d", config.ListenAddress, config.ListenPort))
 	if err != nil {
-		rpclogger.Errorf("Can't listen on %s:%d: %v", config.ListenAddress, config.ListenPort, err)
+		glog.V(logger.Error).Infof("Can't listen on %s:%d: %v", config.ListenAddress, config.ListenPort, err)
 		return err
 	}
+	rpclistener = l
 
 	var handler http.Handler
 	if len(config.CorsDomain) > 0 {
@@ -34,12 +42,21 @@ func Start(pipe *xeth.XEth, config RpcConfig) error {
 		opts.AllowedOrigins = []string{config.CorsDomain}
 
 		c := cors.New(opts)
-		handler = c.Handler(JSONRPC(pipe))
+		handler = newStoppableHandler(c.Handler(JSONRPC(pipe)), l.stop)
 	} else {
-		handler = JSONRPC(pipe)
+		handler = newStoppableHandler(JSONRPC(pipe), l.stop)
 	}
 
 	go http.Serve(l, handler)
+
+	return nil
+}
+
+func Stop() error {
+	if rpclistener != nil {
+		rpclistener.Stop()
+		rpclistener = nil
+	}
 
 	return nil
 }
@@ -110,7 +127,7 @@ func RpcResponse(api *EthereumApi, request *RpcRequest) *interface{} {
 		response = &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: request.Id, Error: jsonerr}
 	}
 
-	rpclogger.DebugDetailf("Generated response: %T %s", response, response)
+	glog.V(logger.Detail).Infof("Generated response: %T %s", response, response)
 	return &response
 }
 
@@ -118,10 +135,10 @@ func send(writer io.Writer, v interface{}) (n int, err error) {
 	var payload []byte
 	payload, err = json.MarshalIndent(v, "", "\t")
 	if err != nil {
-		rpclogger.Fatalln("Error marshalling JSON", err)
+		glog.V(logger.Error).Infoln("Error marshalling JSON", err)
 		return 0, err
 	}
-	rpclogger.DebugDetailf("Sending payload: %s", payload)
+	glog.V(logger.Detail).Infof("Sending payload: %s", payload)
 
 	return writer.Write(payload)
 }

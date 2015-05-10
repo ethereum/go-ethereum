@@ -1,6 +1,8 @@
 package miner
 
 import (
+	"math/big"
+
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -50,7 +52,6 @@ out:
 			break out
 		case work := <-a.workCh:
 			a.work = work
-			a.returnCh <- nil
 		}
 	}
 }
@@ -58,12 +59,18 @@ out:
 func (a *RemoteAgent) GetWork() [3]string {
 	var res [3]string
 
-	// XXX Wait here until work != nil ?
 	if a.work != nil {
+		a.currentWork = a.work
+
 		res[0] = a.work.HashNoNonce().Hex()
 		seedHash, _ := ethash.GetSeedHash(a.currentWork.NumberU64())
 		res[1] = common.Bytes2Hex(seedHash)
-		res[2] = common.Bytes2Hex(a.work.Difficulty().Bytes())
+		// Calculate the "target" to be returned to the external miner
+		n := big.NewInt(1)
+		n.Lsh(n, 255)
+		n.Div(n, a.work.Difficulty())
+		n.Lsh(n, 1)
+		res[2] = common.Bytes2Hex(n.Bytes())
 	}
 
 	return res

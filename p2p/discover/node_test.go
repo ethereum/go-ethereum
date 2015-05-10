@@ -9,6 +9,7 @@ import (
 	"testing/quick"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -48,46 +49,61 @@ var parseNodeTests = []struct {
 	},
 	{
 		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:52150",
-		wantResult: &Node{
-			ID:       MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-			IP:       net.ParseIP("127.0.0.1"),
-			DiscPort: 52150,
-			TCPPort:  52150,
-		},
+		wantResult: newNode(
+			MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			net.IP{0x7f, 0x0, 0x0, 0x1},
+			52150,
+			52150,
+		),
 	},
 	{
 		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@[::]:52150",
-		wantResult: &Node{
-			ID:       MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-			IP:       net.ParseIP("::"),
-			DiscPort: 52150,
-			TCPPort:  52150,
-		},
+		wantResult: newNode(
+			MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			net.ParseIP("::"),
+			52150,
+			52150,
+		),
 	},
 	{
-		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:52150?discport=223344",
-		wantResult: &Node{
-			ID:       MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-			IP:       net.ParseIP("127.0.0.1"),
-			DiscPort: 223344,
-			TCPPort:  52150,
-		},
+		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@[2001:db8:3c4d:15::abcd:ef12]:52150",
+		wantResult: newNode(
+			MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			net.ParseIP("2001:db8:3c4d:15::abcd:ef12"),
+			52150,
+			52150,
+		),
+	},
+	{
+		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:52150?discport=22334",
+		wantResult: newNode(
+			MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			net.IP{0x7f, 0x0, 0x0, 0x1},
+			22334,
+			52150,
+		),
 	},
 }
 
 func TestParseNode(t *testing.T) {
 	for i, test := range parseNodeTests {
 		n, err := ParseNode(test.rawurl)
-		if err == nil && test.wantError != "" {
-			t.Errorf("test %d: got nil error, expected %#q", i, test.wantError)
-			continue
-		}
-		if err != nil && err.Error() != test.wantError {
-			t.Errorf("test %d: got error %#q, expected %#q", i, err.Error(), test.wantError)
-			continue
-		}
-		if !reflect.DeepEqual(n, test.wantResult) {
-			t.Errorf("test %d: result mismatch:\ngot:  %#v, want: %#v", i, n, test.wantResult)
+		if test.wantError != "" {
+			if err == nil {
+				t.Errorf("test %d: got nil error, expected %#q", i, test.wantError)
+				continue
+			} else if err.Error() != test.wantError {
+				t.Errorf("test %d: got error %#q, expected %#q", i, err.Error(), test.wantError)
+				continue
+			}
+		} else {
+			if err != nil {
+				t.Errorf("test %d: unexpected error: %v", i, err)
+				continue
+			}
+			if !reflect.DeepEqual(n, test.wantResult) {
+				t.Errorf("test %d: result mismatch:\ngot:  %#v, want: %#v", i, n, test.wantResult)
+			}
 		}
 	}
 }
@@ -154,7 +170,7 @@ func TestNodeID_pubkeyBad(t *testing.T) {
 }
 
 func TestNodeID_distcmp(t *testing.T) {
-	distcmpBig := func(target, a, b NodeID) int {
+	distcmpBig := func(target, a, b common.Hash) int {
 		tbig := new(big.Int).SetBytes(target[:])
 		abig := new(big.Int).SetBytes(a[:])
 		bbig := new(big.Int).SetBytes(b[:])
@@ -167,15 +183,15 @@ func TestNodeID_distcmp(t *testing.T) {
 
 // the random tests is likely to miss the case where they're equal.
 func TestNodeID_distcmpEqual(t *testing.T) {
-	base := NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	x := NodeID{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
+	base := common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	x := common.Hash{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
 	if distcmp(base, x, x) != 0 {
 		t.Errorf("distcmp(base, x, x) != 0")
 	}
 }
 
 func TestNodeID_logdist(t *testing.T) {
-	logdistBig := func(a, b NodeID) int {
+	logdistBig := func(a, b common.Hash) int {
 		abig, bbig := new(big.Int).SetBytes(a[:]), new(big.Int).SetBytes(b[:])
 		return new(big.Int).Xor(abig, bbig).BitLen()
 	}
@@ -186,19 +202,19 @@ func TestNodeID_logdist(t *testing.T) {
 
 // the random tests is likely to miss the case where they're equal.
 func TestNodeID_logdistEqual(t *testing.T) {
-	x := NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	x := common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	if logdist(x, x) != 0 {
 		t.Errorf("logdist(x, x) != 0")
 	}
 }
 
-func TestNodeID_randomID(t *testing.T) {
+func TestNodeID_hashAtDistance(t *testing.T) {
 	// we don't use quick.Check here because its output isn't
 	// very helpful when the test fails.
 	for i := 0; i < quickcfg.MaxCount; i++ {
-		a := gen(NodeID{}, quickrand).(NodeID)
-		dist := quickrand.Intn(len(NodeID{}) * 8)
-		result := randomID(a, dist)
+		a := gen(common.Hash{}, quickrand).(common.Hash)
+		dist := quickrand.Intn(len(common.Hash{}) * 8)
+		result := hashAtDistance(a, dist)
 		actualdist := logdist(result, a)
 
 		if dist != actualdist {
@@ -208,6 +224,9 @@ func TestNodeID_randomID(t *testing.T) {
 		}
 	}
 }
+
+// TODO: this can be dropped when we require Go >= 1.5
+// because testing/quick learned to generate arrays in 1.5.
 
 func (NodeID) Generate(rand *rand.Rand, size int) reflect.Value {
 	var id NodeID

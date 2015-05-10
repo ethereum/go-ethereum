@@ -415,8 +415,7 @@ __kernel void ethash_search_simple(
 {
 	uint const gid = get_global_id(0);
 	hash32_t hash = compute_hash_simple(g_header, g_dag, start_nonce + gid, isolate);
-
-	if (hash.ulongs[countof(hash.ulongs)-1] < target)
+	if (as_ulong(as_uchar8(hash.ulongs[0]).s76543210) < target)
 	{
 		uint slot = min(MAX_OUTPUTS, atomic_inc(&g_output[0]) + 1);
 		g_output[slot] = gid;
@@ -453,7 +452,7 @@ __kernel void ethash_search(
 	uint const gid = get_global_id(0);
 	hash32_t hash = compute_hash(share, g_header, g_dag, start_nonce + gid, isolate);
 
-	if (hash.ulongs[countof(hash.ulongs)-1] < target)
+	if (as_ulong(as_uchar8(hash.ulongs[0]).s76543210) < target)
 	{
 		uint slot = min(MAX_OUTPUTS, atomic_inc(&g_output[0]) + 1);
 		g_output[slot] = gid;

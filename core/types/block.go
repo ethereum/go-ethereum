@@ -97,6 +97,9 @@ type Block struct {
 	uncles       []*Header
 	transactions Transactions
 	Td           *big.Int
+	queued       bool // flag for blockpool to skip TD check
+
+	ReceivedAt time.Time
 
 	receipts Receipts
 }
@@ -208,6 +211,10 @@ func (self *Block) Uncles() []*Header {
 	return self.uncles
 }
 
+func (self *Block) CalculateUnclesHash() common.Hash {
+	return rlpHash(self.uncles)
+}
+
 func (self *Block) SetUncles(uncleHeaders []*Header) {
 	self.uncles = uncleHeaders
 	self.header.UncleHash = rlpHash(uncleHeaders)
@@ -267,6 +274,9 @@ func (self *Block) Nonce() uint64 {
 func (self *Block) SetNonce(nonce uint64) {
 	self.header.SetNonce(nonce)
 }
+
+func (self *Block) Queued() bool     { return self.queued }
+func (self *Block) SetQueued(q bool) { self.queued = q }
 
 func (self *Block) Bloom() Bloom             { return self.header.Bloom }
 func (self *Block) Coinbase() common.Address { return self.header.Coinbase }
@@ -343,22 +353,30 @@ func (self *Block) Copy() *Block {
 }
 
 func (self *Block) String() string {
-	return fmt.Sprintf(`BLOCK(%x): Size: %v TD: %v {
-NoNonce: %x
-Header:
-[
+	str := fmt.Sprintf(`Block(#%v): Size: %v TD: %v {
+MinerHash: %x
 %v
-]
 Transactions:
 %v
 Uncles:
 %v
 }
-`, self.header.Hash(), self.Size(), self.Td, self.header.HashNoNonce(), self.header, self.transactions, self.uncles)
+`, self.Number(), self.Size(), self.Td, self.header.HashNoNonce(), self.header, self.transactions, self.uncles)
+
+	if (self.HeaderHash != common.Hash{}) {
+		str += fmt.Sprintf("\nFake hash = %x", self.HeaderHash)
+	}
+
+	if (self.ParentHeaderHash != common.Hash{}) {
+		str += fmt.Sprintf("\nFake parent hash = %x", self.ParentHeaderHash)
+	}
+
+	return str
 }
 
 func (self *Header) String() string {
-	return fmt.Sprintf(`
+	return fmt.Sprintf(`Header(%x):
+[
 	ParentHash:	    %x
 	UncleHash:	    %x
 	Coinbase:	    %x
@@ -373,8 +391,8 @@ func (self *Header) String() string {
 	Time:		    %v
 	Extra:		    %s
 	MixDigest:          %x
-	Nonce:		    %x`,
-		self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.MixDigest, self.Nonce)
+	Nonce:		    %x
+]`, self.Hash(), self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.MixDigest, self.Nonce)
 }
 
 type Blocks []*Block

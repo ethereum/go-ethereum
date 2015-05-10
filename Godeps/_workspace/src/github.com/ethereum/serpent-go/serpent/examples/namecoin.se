@@ -1,7 +1,0 @@
-def register(k, v):
-    if !self.storage[k]: # Is the key not yet taken?
-        # Then take it!
-        self.storage[k] = v
-        return(1)
-    else:
-        return(0) // Otherwise do nothing

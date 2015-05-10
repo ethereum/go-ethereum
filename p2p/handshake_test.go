@@ -119,14 +119,14 @@ func TestSetupConn(t *testing.T) {
 	prv0, _ := crypto.GenerateKey()
 	prv1, _ := crypto.GenerateKey()
 	node0 := &discover.Node{
-		ID:      discover.PubkeyID(&prv0.PublicKey),
-		IP:      net.IP{1, 2, 3, 4},
-		TCPPort: 33,
+		ID:  discover.PubkeyID(&prv0.PublicKey),
+		IP:  net.IP{1, 2, 3, 4},
+		TCP: 33,
 	}
 	node1 := &discover.Node{
-		ID:      discover.PubkeyID(&prv1.PublicKey),
-		IP:      net.IP{5, 6, 7, 8},
-		TCPPort: 44,
+		ID:  discover.PubkeyID(&prv1.PublicKey),
+		IP:  net.IP{5, 6, 7, 8},
+		TCP: 44,
 	}
 	hs0 := &protoHandshake{
 		Version: baseProtocolVersion,
@@ -141,9 +141,10 @@ func TestSetupConn(t *testing.T) {
 	fd0, fd1 := net.Pipe()
 
 	done := make(chan struct{})
+	keepalways := func(discover.NodeID) bool { return true }
 	go func() {
 		defer close(done)
-		conn0, err := setupConn(fd0, prv0, hs0, node1)
+		conn0, err := setupConn(fd0, prv0, hs0, node1, keepalways)
 		if err != nil {
 			t.Errorf("outbound side error: %v", err)
 			return
@@ -156,7 +157,7 @@ func TestSetupConn(t *testing.T) {
 		}
 	}()
 
-	conn1, err := setupConn(fd1, prv1, hs1, nil)
+	conn1, err := setupConn(fd1, prv1, hs1, nil, keepalways)
 	if err != nil {
 		t.Fatalf("inbound side error: %v", err)
 	}

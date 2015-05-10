@@ -9,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -20,7 +22,7 @@ type Transaction struct {
 	AccountNonce uint64
 	Price        *big.Int
 	GasLimit     *big.Int
-	Recipient    *common.Address // nil means contract creation
+	Recipient    *common.Address `rlp:"nil"` // nil means contract creation
 	Amount       *big.Int
 	Payload      []byte
 	V            byte
@@ -129,7 +131,12 @@ func (tx *Transaction) PublicKey() []byte {
 
 	//pubkey := crypto.Ecrecover(append(hash[:], sig...))
 	//pubkey, _ := secp256k1.RecoverPubkey(hash[:], sig)
-	pubkey := crypto.FromECDSAPub(crypto.SigToPub(hash[:], sig))
+	p, err := crypto.SigToPub(hash[:], sig)
+	if err != nil {
+		glog.V(logger.Error).Infof("Could not get pubkey from signature: ", err)
+		return nil
+	}
+	pubkey := crypto.FromECDSAPub(p)
 	return pubkey
 }
 

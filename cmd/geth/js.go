@@ -20,12 +20,14 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"math/big"
 	"os"
 	"path"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/common/docserver"
+	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -58,20 +60,29 @@ func (r dumbterm) PasswordPrompt(p string) (string, error) {
 func (r dumbterm) AppendHistory(string) {}
 
 type jsre struct {
-	re       *re.JSRE
-	ethereum *eth.Ethereum
-	xeth     *xeth.XEth
-	ps1      string
-	atexit   func()
-
+	re         *re.JSRE
+	ethereum   *eth.Ethereum
+	xeth       *xeth.XEth
+	wait       chan *big.Int
+	ps1        string
+	atexit     func()
+	corsDomain string
 	prompter
 }
 
-func newJSRE(ethereum *eth.Ethereum, libPath string, interactive bool) *jsre {
+func newJSRE(ethereum *eth.Ethereum, libPath, solcPath, corsDomain string, interactive bool, f xeth.Frontend) *jsre {
 	js := &jsre{ethereum: ethereum, ps1: "> "}
-	js.xeth = xeth.New(ethereum, js)
+	// set default cors domain used by startRpc from CLI flag
+	js.corsDomain = corsDomain
+	if f == nil {
+		f = js
+	}
+	js.xeth = xeth.New(ethereum, f)
+	js.wait = js.xeth.UpdateState()
+	// update state in separare forever blocks
+	js.xeth.SetSolc(solcPath)
 	js.re = re.New(libPath)
-	js.apiBindings()
+	js.apiBindings(f)
 	js.adminBindings()
 
 	if !liner.TerminalSupported() || !interactive {
@@ -84,32 +95,26 @@ func newJSRE(ethereum *eth.Ethereum, libPath string, interactive bool) *jsre {
 		js.atexit = func() {
 			js.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
 			lr.Close()
+			close(js.wait)
 		}
 	}
 	return js
 }
 
-func (js *jsre) apiBindings() {
-
-	ethApi := rpc.NewEthereumApi(js.xeth)
-	//js.re.Bind("jeth", rpc.NewJeth(ethApi, js.re.ToVal))
-
+func (js *jsre) apiBindings(f xeth.Frontend) {
+	xe := xeth.New(js.ethereum, f)
+	ethApi := rpc.NewEthereumApi(xe)
 	jeth := rpc.NewJeth(ethApi, js.re.ToVal, js.re)
-	//js.re.Bind("jeth", jeth)
+
 	js.re.Set("jeth", struct{}{})
 	t, _ := js.re.Get("jeth")
 	jethObj := t.Object()
 	jethObj.Set("send", jeth.Send)
+	jethObj.Set("sendAsync", jeth.Send)
 
 	err := js.re.Compile("bignumber.js", re.BigNumber_JS)
 	if err != nil {
 		utils.Fatalf("Error loading bignumber.js: %v", err)
-	}
-
-	// we need to declare a dummy setTimeout. Otto does not support it
-	_, err = js.re.Eval("setTimeout = function(cb, delay) {};")
-	if err != nil {
-		utils.Fatalf("Error defining setTimeout: %v", err)
 	}
 
 	err = js.re.Compile("ethereum.js", re.Ethereum_JS)
@@ -117,7 +122,7 @@ func (js *jsre) apiBindings() {
 		utils.Fatalf("Error loading ethereum.js: %v", err)
 	}
 
-	_, err = js.re.Eval("var web3 = require('ethereum.js');")
+	_, err = js.re.Eval("var web3 = require('web3');")
 	if err != nil {
 		utils.Fatalf("Error requiring web3: %v", err)
 	}
@@ -136,12 +141,20 @@ var net = web3.net;
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
 
+	js.re.Eval(globalRegistrar + "registrar = new GlobalRegistrar(\"" + globalRegistrarAddr + "\");")
 }
 
-func (self *jsre) ConfirmTransaction(tx *types.Transaction) bool {
-	p := fmt.Sprintf("Confirm Transaction %v\n[y/n] ", tx)
-	answer, _ := self.Prompt(p)
-	return strings.HasPrefix(strings.Trim(answer, " "), "y")
+var ds, _ = docserver.New("/")
+
+func (self *jsre) ConfirmTransaction(tx string) bool {
+	if self.ethereum.NatSpec {
+		notice := natspec.GetNotice(self.xeth, tx, ds)
+		fmt.Println(notice)
+		answer, _ := self.Prompt("Confirm Transaction [y/n]")
+		return strings.HasPrefix(strings.Trim(answer, " "), "y")
+	} else {
+		return true
+	}
 }
 
 func (self *jsre) UnlockAccount(addr []byte) bool {
@@ -161,8 +174,10 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 
 func (self *jsre) exec(filename string) error {
 	if err := self.re.Exec(filename); err != nil {
+		self.re.Stop(false)
 		return fmt.Errorf("Javascript Error: %v", err)
 	}
+	self.re.Stop(true)
 	return nil
 }
 
@@ -190,6 +205,7 @@ func (self *jsre) interactive() {
 	if self.atexit != nil {
 		self.atexit()
 	}
+	self.re.Stop(false)
 }
 
 func (self *jsre) withHistory(op func(*os.File)) {

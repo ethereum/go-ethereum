@@ -68,10 +68,8 @@ func Ripemd160(data []byte) []byte {
 	return ripemd.Sum(nil)
 }
 
-func Ecrecover(hash, sig []byte) []byte {
-	r, _ := secp256k1.RecoverPubkey(hash, sig)
-
-	return r
+func Ecrecover(hash, sig []byte) ([]byte, error) {
+	return secp256k1.RecoverPubkey(hash, sig)
 }
 
 // New methods using proper ecdsa keys from the stdlib
@@ -122,8 +120,9 @@ func HexToECDSA(hexkey string) (*ecdsa.PrivateKey, error) {
 }
 
 // LoadECDSA loads a secp256k1 private key from the given file.
+// The key data is expected to be hex-encoded.
 func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
-	buf := make([]byte, 32)
+	buf := make([]byte, 64)
 	fd, err := os.Open(file)
 	if err != nil {
 		return nil, err
@@ -132,27 +131,34 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 	if _, err := io.ReadFull(fd, buf); err != nil {
 		return nil, err
 	}
-	return ToECDSA(buf), nil
+
+	key, err := hex.DecodeString(string(buf))
+	if err != nil {
+		return nil, err
+	}
+
+	return ToECDSA(key), nil
 }
 
-// SaveECDSA saves a secp256k1 private key to the given file with restrictive
-// permissions
+// SaveECDSA saves a secp256k1 private key to the given file with
+// restrictive permissions. The key data is saved hex-encoded.
 func SaveECDSA(file string, key *ecdsa.PrivateKey) error {
-	return ioutil.WriteFile(file, FromECDSA(key), 0600)
+	k := hex.EncodeToString(FromECDSA(key))
+	return ioutil.WriteFile(file, []byte(k), 0600)
 }
 
 func GenerateKey() (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(S256(), rand.Reader)
 }
 
-func SigToPub(hash, sig []byte) *ecdsa.PublicKey {
-	s := Ecrecover(hash, sig)
-	if s == nil || len(s) != 65 {
-		return nil
+func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
+	s, err := Ecrecover(hash, sig)
+	if err != nil {
+		return nil, err
 	}
 
 	x, y := elliptic.Unmarshal(S256(), s)
-	return &ecdsa.PublicKey{S256(), x, y}
+	return &ecdsa.PublicKey{S256(), x, y}, nil
 }
 
 func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
@@ -171,6 +177,19 @@ func Encrypt(pub *ecdsa.PublicKey, message []byte) ([]byte, error) {
 func Decrypt(prv *ecdsa.PrivateKey, ct []byte) ([]byte, error) {
 	key := ecies.ImportECDSA(prv)
 	return key.Decrypt(rand.Reader, ct, nil, nil)
+}
+
+// Used only by block tests.
+func ImportBlockTestKey(privKeyBytes []byte) error {
+	ks := NewKeyStorePassphrase(common.DefaultDataDir() + "/keys")
+	ecKey := ToECDSA(privKeyBytes)
+	key := &Key{
+		Id:         uuid.NewRandom(),
+		Address:    PubkeyToAddress(ecKey.PublicKey),
+		PrivateKey: ecKey,
+	}
+	err := ks.StoreKey(key, "")
+	return err
 }
 
 // creates a Key and stores that in the given KeyStore by decrypting a presale key JSON

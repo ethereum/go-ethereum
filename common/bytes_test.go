@@ -79,20 +79,6 @@ func (s *BytesSuite) TestReadVarInt(c *checker.C) {
 	c.Assert(res1, checker.Equals, exp1)
 }
 
-func (s *BytesSuite) TestBinaryLength(c *checker.C) {
-	data1 := 0
-	data2 := 920987656789
-
-	exp1 := 0
-	exp2 := 5
-
-	res1 := BinaryLength(data1)
-	res2 := BinaryLength(data2)
-
-	c.Assert(res1, checker.Equals, exp1)
-	c.Assert(res2, checker.Equals, exp2)
-}
-
 func (s *BytesSuite) TestCopyBytes(c *checker.C) {
 	data1 := []byte{1, 2, 3, 4}
 	exp1 := []byte{1, 2, 3, 4}

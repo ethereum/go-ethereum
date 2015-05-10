@@ -1,3 +1,3 @@
 [submodule "cmd/mist/assets/ext/ethereum.js"]
 	path = cmd/mist/assets/ext/ethereum.js
-	url = https://github.com/ethereum/ethereum.js
+	url = https://github.com/ethereum/web3.js
