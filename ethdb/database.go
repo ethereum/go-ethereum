@@ -8,7 +8,10 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
+
+const openFileLimit = 128
 
 type LDBDatabase struct {
 	fn string
@@ -23,7 +26,7 @@ type LDBDatabase struct {
 
 func NewLDBDatabase(file string) (*LDBDatabase, error) {
 	// Open the db
-	db, err := leveldb.OpenFile(file, nil)
+	db, err := leveldb.OpenFile(file, &opt.Options{OpenFilesCacheCapacity: openFileLimit})
 	if err != nil {
 		return nil, err
 	}
