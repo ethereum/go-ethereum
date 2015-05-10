@@ -25,6 +25,7 @@ import (
 
 const (
 	testSolcPath = ""
+	solcVersion  = "0.9.17"
 
 	testKey     = "e6fab74a43941f82d89cb7faa408e227cdad3153c4720e540e855c19b15e6674"
 	testAddress = "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
@@ -273,9 +274,16 @@ func TestContract(t *testing.T) {
 	checkEvalJSON(t, repl, `primary = eth.accounts[0]`, `"`+testAddress+`"`)
 	checkEvalJSON(t, repl, `source = "`+source+`"`, `"`+source+`"`)
 
-	_, err = compiler.New("")
+	// if solc is found with right version, test it, otherwise read from file
+	sol, err := compiler.New("")
 	if err != nil {
 		t.Logf("solc not found: skipping compiler test")
+	} else if sol.Version() != solcVersion {
+		err = fmt.Errorf("solc wrong version found (%v, expect %v): skipping compiler test", sol.Version(), solcVersion)
+		t.Log(err)
+	}
+
+	if err != nil {
 		info, err := ioutil.ReadFile("info_test.json")
 		if err != nil {
 			t.Fatalf("%v", err)
@@ -287,6 +295,7 @@ func TestContract(t *testing.T) {
 	} else {
 		checkEvalJSON(t, repl, `contract = eth.compile.solidity(source)`, string(contractInfo))
 	}
+
 	checkEvalJSON(t, repl, `contract.code`, `"605280600c6000396000f3006000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa114602e57005b60376004356041565b8060005260206000f35b6000600782029050604d565b91905056"`)
 
 	checkEvalJSON(
@@ -326,7 +335,7 @@ multiply7 = new Multiply7(contractaddress);
 	}
 
 	checkEvalJSON(t, repl, `filename = "/tmp/info.json"`, `"/tmp/info.json"`)
-	checkEvalJSON(t, repl, `contenthash = admin.contractInfo.register(primary, contractaddress, contract, filename)`, `"0x57e577316ccee6514797d9de9823af2004fdfe22bcfb6e39bbb8f92f57dcc421"`)
+	checkEvalJSON(t, repl, `contenthash = admin.contractInfo.register(primary, contractaddress, contract, filename)`, `"0x0d067e2dd99a4d8f0c0279738b17130dd415a89f24a23f0e7cf68c546ae3089d"`)
 	checkEvalJSON(t, repl, `admin.contractInfo.registerUrl(primary, contenthash, "file://"+filename)`, `true`)
 	if err != nil {
 		t.Errorf("unexpected error registering, got %v", err)
