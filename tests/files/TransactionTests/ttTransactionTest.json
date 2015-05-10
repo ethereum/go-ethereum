@@ -294,6 +294,21 @@
     "WrongVRSTestVOverflow" : {
         "rlp" : "0xf86180018207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a80820136a098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
     },
+    "libsecp256k1test" : {
+        "rlp" : "0xd1808609184e72a0008213888080801b2c04",
+        "sender" : "847c8602054c653f489398f0fc2de507083d6f1c",
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "0x1388",
+            "gasPrice" : "0x09184e72a000",
+            "nonce" : "",
+            "r" : "44",
+            "s" : "4",
+            "to" : "",
+            "v" : "27",
+            "value" : ""
+        }
+    },
     "unpadedRValue" : {
         "rlp" : "0xf8880d8609184e72a000822710947c47ef93268a311f4cad0c750724299e9b72c26880a4379607f500000000000000000000000000000000000000000000000000000000000000051c9f6ab6dda9f4df56ea45583af36660329147f1753f3724ea5eb9ed83e812ca77a0495701e230667832c8999e884e366a61028633ecf951e8cd66d119f381ae5718",
         "sender" : "7adf3b3bce3a5c8c17e8b243f4c331dd97c60579",

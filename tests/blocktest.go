@@ -186,7 +186,7 @@ func mustConvertHeader(in btHeader) *types.Header {
 		Coinbase:    mustConvertAddress(in.Coinbase),
 		UncleHash:   mustConvertHash(in.UncleHash),
 		ParentHash:  mustConvertHash(in.ParentHash),
-		Extra:       string(mustConvertBytes(in.ExtraData)),
+		Extra:       mustConvertBytes(in.ExtraData),
 		GasUsed:     mustConvertBigInt10(in.GasUsed),
 		GasLimit:    mustConvertBigInt10(in.GasLimit),
 		Difficulty:  mustConvertBigInt10(in.Difficulty),

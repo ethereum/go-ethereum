@@ -653,15 +653,19 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 		}
 		sender.lock.Unlock()
 
-		if entry == nil {
-			plog.DebugDetailf("AddBlock: unrequested block %s received from peer <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
-			sender.addError(ErrUnrequestedBlock, "%x", hash)
+		/* @zelig !!!
+		requested 5 hashes from both A & B. A responds sooner then B, process blocks. Close section.
+		delayed B sends you block ... UNREQUESTED. Blocked
+			if entry == nil {
+				plog.DebugDetailf("AddBlock: unrequested block %s received from peer <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
+				sender.addError(ErrUnrequestedBlock, "%x", hash)
 
-			self.status.lock.Lock()
-			self.status.badPeers[peerId]++
-			self.status.lock.Unlock()
-			return
-		}
+				self.status.lock.Lock()
+				self.status.badPeers[peerId]++
+				self.status.lock.Unlock()
+				return
+			}
+		*/
 	}
 	if entry == nil {
 		return
@@ -683,17 +687,20 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 		return
 	}
 
-	// validate block for PoW
-	if !self.verifyPoW(block) {
-		plog.Warnf("AddBlock: invalid PoW on block %s from peer  <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
-		sender.addError(ErrInvalidPoW, "%x", hash)
+	/*
+		@zelig needs discussing
+			// validate block for PoW
+			if !self.verifyPoW(block) {
+				plog.Warnf("AddBlock: invalid PoW on block %s from peer  <%s> (head: %s)", hex(hash), peerId, hex(sender.currentBlockHash))
+				sender.addError(ErrInvalidPoW, "%x", hash)
 
-		self.status.lock.Lock()
-		self.status.badPeers[peerId]++
-		self.status.lock.Unlock()
+				self.status.lock.Lock()
+				self.status.badPeers[peerId]++
+				self.status.lock.Unlock()
 
-		return
-	}
+				return
+			}
+	*/
 
 	node.block = block
 	node.blockBy = peerId
@@ -761,10 +768,10 @@ func (self *BlockPool) checkTD(nodes ...*node) {
 		if n.td != nil {
 			plog.DebugDetailf("peer td %v =?= block td %v", n.td, n.block.Td)
 			if n.td.Cmp(n.block.Td) != 0 {
-				self.peers.peerError(n.blockBy, ErrIncorrectTD, "on block %x", n.hash)
-				self.status.lock.Lock()
-				self.status.badPeers[n.blockBy]++
-				self.status.lock.Unlock()
+				//self.peers.peerError(n.blockBy, ErrIncorrectTD, "on block %x", n.hash)
+				//self.status.lock.Lock()
+				//self.status.badPeers[n.blockBy]++
+				//self.status.lock.Unlock()
 			}
 		}
 	}

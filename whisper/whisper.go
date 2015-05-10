@@ -168,7 +168,7 @@ func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 		for _, envelope := range envelopes {
 			if err := self.add(envelope); err != nil {
 				// TODO Punish peer here. Invalid envelope.
-				peer.Infoln(err)
+				peer.Debugln(err)
 			}
 			wpeer.addKnown(envelope)
 		}

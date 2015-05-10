@@ -349,7 +349,7 @@ func (self *ethProtocol) handleStatus() error {
 		return self.protoError(ErrSuspendedPeer, "")
 	}
 
-	self.peer.Infof("Peer is [eth] capable (%d/%d). TD=%v H=%x\n", status.ProtocolVersion, status.NetworkId, status.TD, status.CurrentBlock[:4])
+	self.peer.Debugf("Peer is [eth] capable (%d/%d). TD=%v H=%x\n", status.ProtocolVersion, status.NetworkId, status.TD, status.CurrentBlock[:4])
 
 	return nil
 }

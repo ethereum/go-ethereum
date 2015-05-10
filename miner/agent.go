@@ -5,6 +5,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
@@ -75,7 +77,7 @@ done:
 }
 
 func (self *CpuMiner) mine(block *types.Block) {
-	minerlogger.Debugf("(re)started agent[%d]. mining...\n", self.index)
+	glog.V(logger.Debug).Infof("(re)started agent[%d]. mining...\n", self.index)
 
 	// Reset the channel
 	self.chMu.Lock()

@@ -210,7 +210,7 @@
                 "code" : "0x600163ffffffff5259600055",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : "0x20"
+                    "0x" : "0x0100000020"
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
@@ -228,7 +228,7 @@
                 }
             }
         },
-        "postStateRoot" : "2959cb7d4801e19f2f83560db82253c45d0f3ebe6fd24b683e3fb61cbf36d8c3",
+        "postStateRoot" : "f5cba7b1b92529ff627b7c99277dce9461d3b4cf23b030d82a3c67411d22315d",
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "1000000000000000000",

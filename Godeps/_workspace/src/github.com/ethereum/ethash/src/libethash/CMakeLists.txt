@@ -12,12 +12,19 @@ endif()
 
 set(FILES 	util.c
           	util.h
+          	io.c
           	internal.c
           	ethash.h
           	endian.h
           	compiler.h
           	fnv.h
           	data_sizes.h)
+
+if (MSVC)
+	list(APPEND FILES io_win32.c)
+else()
+	list(APPEND FILES io_posix.c)
+endif()
 
 if (NOT CRYPTOPP_FOUND)
 	find_package(CryptoPP 5.6.2)

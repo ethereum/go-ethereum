@@ -6,17 +6,13 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
 )
-
-var minerlogger = logger.NewLogger("MINER")
 
 type Miner struct {
 	worker *worker
 
 	MinAcceptedGasPrice *big.Int
-	Extra               string
 
 	mining bool
 	eth    core.Backend
@@ -60,4 +56,8 @@ func (self *Miner) Stop() {
 
 func (self *Miner) HashRate() int64 {
 	return self.worker.HashRate()
+}
+
+func (self *Miner) SetExtra(extra []byte) {
+	self.worker.extra = extra
 }

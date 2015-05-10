@@ -20,7 +20,7 @@ var ZeroHash160 = make([]byte, 20)
 var ZeroHash512 = make([]byte, 64)
 
 func GenesisBlock(db common.Database) *types.Block {
-	genesis := types.NewBlock(common.Hash{}, common.Address{}, common.Hash{}, params.GenesisDifficulty, 42, "")
+	genesis := types.NewBlock(common.Hash{}, common.Address{}, common.Hash{}, params.GenesisDifficulty, 42, nil)
 	genesis.Header().Number = common.Big0
 	genesis.Header().GasLimit = params.GenesisGasLimit
 	genesis.Header().GasUsed = common.Big0
@@ -56,7 +56,14 @@ func GenesisBlock(db common.Database) *types.Block {
 	return genesis
 }
 
+const (
+	TestAccount = "e273f01c99144c438695e10f24926dc1f9fbf62d"
+	TestBalance = "1000000000000"
+)
+
 var genesisData = []byte(`{
+	"` + TestAccount + `": {"balance": "` + TestBalance + `"},
+	` + BuiltInContracts + `
 	"0000000000000000000000000000000000000001": {"balance": "1"},
 	"0000000000000000000000000000000000000002": {"balance": "1"},
 	"0000000000000000000000000000000000000003": {"balance": "1"},

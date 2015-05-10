@@ -9,8 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/tests/helper"
 )
 
@@ -80,7 +82,13 @@ func RunVmTest(p string, t *testing.T) {
 	tests := make(map[string]VmTest)
 	helper.CreateFileTests(t, p, &tests)
 
+	vm.Debug = true
+	glog.SetV(4)
+	glog.SetToStderr(true)
 	for name, test := range tests {
+		if name != "stackLimitPush32_1024" {
+			continue
+		}
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(common.Hash{}, db)
 		for addr, account := range test.Pre {
@@ -309,5 +317,26 @@ func TestStateLog(t *testing.T) {
 func TestStateTransaction(t *testing.T) {
 	t.Skip()
 	const fn = "../files/StateTests/stTransactionTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestCallCreateCallCode(t *testing.T) {
+	const fn = "../files/StateTests/stCallCreateCallCodeTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestMemory(t *testing.T) {
+	const fn = "../files/StateTests/stMemoryTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestQuadraticComplexity(t *testing.T) {
+	t.Skip() // takes too long
+	const fn = "../files/StateTests/stQuadraticComplexityTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestSolidity(t *testing.T) {
+	const fn = "../files/StateTests/stSolidityTest.json"
 	RunVmTest(fn, t)
 }

@@ -56,6 +56,23 @@ func (bc *BlockCache) Push(block *types.Block) {
 	bc.hashes[len(bc.hashes)-1] = hash
 }
 
+func (bc *BlockCache) Delete(hash common.Hash) {
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
+	if _, ok := bc.blocks[hash]; ok {
+		delete(bc.blocks, hash)
+		for i, h := range bc.hashes {
+			if hash == h {
+				bc.hashes = bc.hashes[:i+copy(bc.hashes[i:], bc.hashes[i+1:])]
+				// or ? => bc.hashes = append(bc.hashes[:i], bc.hashes[i+1]...)
+
+				break
+			}
+		}
+	}
+}
+
 func (bc *BlockCache) Get(hash common.Hash) *types.Block {
 	bc.mu.RLock()
 	defer bc.mu.RUnlock()
@@ -70,4 +87,15 @@ func (bc *BlockCache) Get(hash common.Hash) *types.Block {
 func (bc *BlockCache) Has(hash common.Hash) bool {
 	_, ok := bc.blocks[hash]
 	return ok
+}
+
+func (bc *BlockCache) Each(cb func(int, *types.Block)) {
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
+	i := 0
+	for _, block := range bc.blocks {
+		cb(i, block)
+		i++
+	}
 }

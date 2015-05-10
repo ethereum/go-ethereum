@@ -2,14 +2,15 @@ package core
 
 import (
 	"crypto/ecdsa"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/core/state"
 )
 
 // State query interface
@@ -88,7 +89,10 @@ func TestRemoveInvalid(t *testing.T) {
 
 func TestInvalidSender(t *testing.T) {
 	pool, _ := setup()
-	err := pool.ValidateTransaction(new(types.Transaction))
+	tx := new(types.Transaction)
+	tx.R = new(big.Int)
+	tx.S = new(big.Int)
+	err := pool.ValidateTransaction(tx)
 	if err != ErrInvalidSender {
 		t.Errorf("expected %v, got %v", ErrInvalidSender, err)
 	}

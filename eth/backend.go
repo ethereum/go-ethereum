@@ -296,7 +296,7 @@ func (s *Ethereum) PeersInfo() (peersinfo []*PeerInfo) {
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.chainManager.ResetWithGenesisBlock(gb)
-	s.pow.UpdateCache(true)
+	s.pow.UpdateCache(0, true)
 }
 
 func (s *Ethereum) StartMining() error {

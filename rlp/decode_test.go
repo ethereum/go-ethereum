@@ -312,6 +312,7 @@ var decodeTests = []decodeTest{
 	// big ints
 	{input: "01", ptr: new(*big.Int), value: big.NewInt(1)},
 	{input: "89FFFFFFFFFFFFFFFFFF", ptr: new(*big.Int), value: veryBigInt},
+	{input: "820001", ptr: new(big.Int), error: "rlp: canon int error appends zero's for *big.Int"},
 	{input: "10", ptr: new(big.Int), value: *big.NewInt(16)}, // non-pointer also works
 	{input: "C0", ptr: new(*big.Int), error: "rlp: expected input string or byte for *big.Int"},
 

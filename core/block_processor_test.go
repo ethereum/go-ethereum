@@ -22,10 +22,11 @@ func TestNumber(t *testing.T) {
 	bp, chain := proc()
 	block1 := chain.NewBlock(common.Address{})
 	block1.Header().Number = big.NewInt(3)
+	block1.Header().Time--
 
 	err := bp.ValidateHeader(block1.Header(), chain.Genesis().Header())
 	if err != BlockNumberErr {
-		t.Errorf("expected block number error")
+		t.Errorf("expected block number error %v", err)
 	}
 
 	block1 = chain.NewBlock(common.Address{})

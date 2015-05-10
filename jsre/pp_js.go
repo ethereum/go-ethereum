@@ -2,17 +2,13 @@ package jsre
 
 const pp_js = `
 function pp(object, indent) {
-    var str = "";
-    /*
-    var o = object;
     try {
-	object = JSON.stringify(object)
-	object = JSON.parse(object);
-   } catch(e) {
-	object = o;
-   }
-   */
+        JSON.stringify(object)
+    } catch(e) {
+        return pp(e, indent);
+    }
 
+    var str = "";
     if(object instanceof Array) {
         str += "[";
         for(var i = 0, l = object.length; i < l; i++) {
@@ -24,14 +20,14 @@ function pp(object, indent) {
         }
         str += " ]";
     } else if (object instanceof Error) {
-        str += "\033[31m" + "Error";
+        str += "\033[31m" + "Error:\033[0m " + object.message;
     } else if (isBigNumber(object)) {
         str += "\033[32m'" + object.toString(10) + "'";
     } else if(typeof(object) === "object") {
         str += "{\n";
         indent += "  ";
-        var last = Object.getOwnPropertyNames(object).pop()
-        Object.getOwnPropertyNames(object).forEach(function (k) {
+        var last = getFields(object).pop()
+        getFields(object).forEach(function (k) {
             str += indent + k + ": ";
             try {
                 str += pp(object[k], indent);
@@ -63,10 +59,29 @@ function pp(object, indent) {
     return str;
 }
 
+var redundantFields = [
+    'valueOf',
+    'toString',
+    'toLocaleString',
+    'hasOwnProperty',
+    'isPrototypeOf',
+    'propertyIsEnumerable',
+    'constructor'
+];
+
+var getFields = function (object) {
+    var result = Object.getOwnPropertyNames(object);
+    if (object.constructor && object.constructor.prototype) {
+        result = result.concat(Object.getOwnPropertyNames(object.constructor.prototype));
+    }
+    return result.filter(function (field) {
+        return redundantFields.indexOf(field) === -1;
+    });
+};
+
 var isBigNumber = function (object) {
     return typeof BigNumber !== 'undefined' && object instanceof BigNumber;
 };
-
 
 function prettyPrint(/* */) {
     var args = arguments;

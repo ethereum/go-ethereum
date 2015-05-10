@@ -127,6 +127,11 @@ func CopyBytes(b []byte) (copiedBytes []byte) {
 	return
 }
 
+func HasHexPrefix(str string) bool {
+	l := len(str)
+	return l >= 2 && str[0:2] == "0x"
+}
+
 func IsHex(str string) bool {
 	l := len(str)
 	return l >= 4 && l%2 == 0 && str[0:2] == "0x"
@@ -140,6 +145,23 @@ func Hex2Bytes(str string) []byte {
 	h, _ := hex.DecodeString(str)
 
 	return h
+}
+
+func Hex2BytesFixed(str string, flen int) []byte {
+
+	h, _ := hex.DecodeString(str)
+	if len(h) == flen {
+		return h
+	} else {
+		if len(h) > flen {
+			return h[len(h)-flen : len(h)]
+		} else {
+			hh := make([]byte, flen)
+			copy(hh[flen-len(h):flen], h[:])
+			return hh
+		}
+	}
+
 }
 
 func StringToByteFunc(str string, cb func(str string) []byte) (ret []byte) {
