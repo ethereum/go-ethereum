@@ -5,7 +5,6 @@ package bzz
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/ethdb"
