@@ -11,7 +11,6 @@ import (
 	"testing/quick"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 )
 
@@ -38,6 +37,9 @@ func (n *testNode) String() string {
 
 func (n *testNode) Addr() Address {
 	return n.addr
+}
+
+func (n *testNode) Drop() {
 }
 
 func (n *testNode) LastActive() time.Time {
@@ -154,12 +156,10 @@ func TestProxAdjust(t *testing.T) {
 		a := gen(Address{}, r).(Address)
 		addresses = append(addresses, a)
 		err = kad.AddNode(&testNode{addr: a})
-		fmt.Printf("add node: %x (%v)\n", a, kad.proximityBin(a))
 		if err != nil {
 			t.Errorf("backend not accepting node")
 			return
 		}
-		fmt.Printf("MaxProxBinSize: %d, proxSize: %d, proxLimit: %d, count: %d\n", kad.MaxProxBinSize, kad.proxSize, kad.proxLimit, kad.count)
 		if !kad.proxCheck(t) {
 			return
 		}
@@ -167,20 +167,61 @@ func TestProxAdjust(t *testing.T) {
 
 	test := func(test *proxTest) bool {
 		node := &testNode{test.address}
-		a := test.address
 		if test.add {
 			kad.AddNode(node)
-			fmt.Printf("add node: %x (%v)\n", a, kad.proximityBin(a))
 		} else {
 			kad.RemoveNode(node)
-			fmt.Printf("remove node: %x (%v)\n", common.ToHex(a[:]), kad.proximityBin(a))
 		}
-		fmt.Printf("MaxProxBinSize: %d, proxSize: %d, proxLimit: %d, count: %d\n", kad.MaxProxBinSize, kad.proxSize, kad.proxLimit, kad.count)
 		return kad.proxCheck(t)
 	}
 	if err := quick.Check(test, quickcfg); err != nil {
 		t.Error(err)
 	}
+}
+
+func TestCallback(t *testing.T) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	self := gen(Address{}, r).(Address)
+	kad := New(self)
+	var bucket int
+	var called chan bool
+	kad.MaxProx = 5
+	kad.BucketSize = 2
+	kad.GetNode = func(b int) {
+		bucket = b
+		close(called)
+	}
+	kad.Start()
+	var err error
+
+	for i := 0; i < 100; i++ {
+		a := gen(Address{}, r).(Address)
+		addresses = append(addresses, a)
+		err = kad.AddNode(&testNode{addr: a})
+		if err != nil {
+			t.Errorf("backend not accepting node")
+			return
+		}
+	}
+	for _, a := range addresses {
+		called = make(chan bool)
+		kad.RemoveNode(&testNode{a})
+		b := kad.proximityBin(a)
+		select {
+		case <-called:
+			if bucket != b {
+				t.Errorf("GetNode callback called with incorrect bucket, expected %v, got %v", b, bucket)
+			}
+		case <-time.After(100 * time.Millisecond):
+			l := len(kad.buckets[b].nodes)
+			if l < kad.BucketSize {
+				t.Errorf("GetNode not called on bucket %v although size is %v < %v", b, l, kad.BucketSize)
+			} else {
+				t.Logf("bucket callback ok")
+			}
+		}
+	}
+
 }
 
 func TestSaveLoad(t *testing.T) {

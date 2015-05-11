@@ -34,6 +34,8 @@ type Kademlia struct {
 	nodeDB         [][]*nodeRecord
 	nodeIndex      map[Address]*nodeRecord
 
+	GetNode func(int)
+
 	// state
 	proxLimit int
 	proxSize  int
@@ -52,6 +54,7 @@ type Node interface {
 	Addr() Address
 	// Url()
 	LastActive() time.Time
+	Drop()
 }
 
 type nodeRecord struct {
@@ -159,7 +162,9 @@ func (self *Kademlia) RemoveNode(node Node) (err error) {
 	}
 	// async callback to notify user that bucket needs filling
 	// action is left to the user
-	// go self.getNode(index)
+	if self.GetNode != nil {
+		go self.GetNode(index)
+	}
 	return
 }
 
