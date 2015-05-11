@@ -335,7 +335,7 @@ out:
 				// Deliver the received chunk of blocks, but drop the peer if invalid
 				if err := d.queue.Deliver(blockPack.peerId, blockPack.blocks); err != nil {
 					glog.V(logger.Debug).Infof("Failed delivery for peer %s: %v\n", blockPack.peerId, err)
-					d.peers.Unregister(blockPack.peerId)
+					peer.Demote()
 					break
 				}
 				if glog.V(logger.Debug) {
@@ -358,7 +358,9 @@ out:
 				// 1) Time for them to respond;
 				// 2) Measure their speed;
 				// 3) Amount and availability.
-				d.peers.Unregister(pid)
+				if peer := d.peers.Peer(pid); peer != nil {
+					peer.Demote()
+				}
 			}
 			// After removing bad peers make sure we actually have sufficient peer left to keep downloading
 			if d.peers.Peers() == 0 {
@@ -372,9 +374,13 @@ out:
 				if d.queue.Throttle() {
 					continue
 				}
-				// Send a download request to all idle peers
+				// Send a download request to all idle peers, until throttled
 				idlePeers := d.peers.IdlePeers()
 				for _, peer := range idlePeers {
+					// Short circuit if throttling activated since above
+					if d.queue.Throttle() {
+						break
+					}
 					// Get a possible chunk. If nil is returned no chunk
 					// could be returned due to no hashes available.
 					request := d.queue.Reserve(peer, maxBlockFetch)

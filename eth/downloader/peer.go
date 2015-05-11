@@ -86,10 +86,8 @@ func (p *peer) Demote() {
 	for {
 		// Calculate the new reputation value
 		prev := atomic.LoadInt32(&p.rep)
-		next := prev - 2
-		if next < 0 {
-			next = 0
-		}
+		next := prev / 2
+
 		// Try to update the old value
 		if atomic.CompareAndSwapInt32(&p.rep, prev, next) {
 			return
@@ -177,7 +175,7 @@ func (ps *peerSet) AllPeers() []*peer {
 }
 
 // IdlePeers retrieves a flat list of all the currently idle peers within the
-// active peer set.
+// active peer set, ordered by their reputation.
 func (ps *peerSet) IdlePeers() []*peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
@@ -186,6 +184,13 @@ func (ps *peerSet) IdlePeers() []*peer {
 	for _, p := range ps.peers {
 		if atomic.LoadInt32(&p.idle) == 0 {
 			list = append(list, p)
+		}
+	}
+	for i := 0; i < len(list); i++ {
+		for j := i + 1; j < len(list); j++ {
+			if atomic.LoadInt32(&list[i].rep) < atomic.LoadInt32(&list[j].rep) {
+				list[i], list[j] = list[j], list[i]
+			}
 		}
 	}
 	return list
