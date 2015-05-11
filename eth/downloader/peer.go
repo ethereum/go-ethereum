@@ -154,8 +154,8 @@ func (ps *peerSet) Peer(id string) *peer {
 	return ps.peers[id]
 }
 
-// Peers returns if the current number of peers in the set.
-func (ps *peerSet) Peers() int {
+// Len returns if the current number of peers in the set.
+func (ps *peerSet) Len() int {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
