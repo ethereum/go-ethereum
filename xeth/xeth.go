@@ -815,6 +815,35 @@ func (self *XEth) ConfirmTransaction(tx string) bool {
 	return self.frontend.ConfirmTransaction(tx)
 }
 
+func (self *XEth) doSign(from common.Address, hash common.Hash, didUnlock bool) ([]byte, error) {
+	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from.Bytes()}, hash.Bytes())
+	if err == accounts.ErrLocked {
+		if didUnlock {
+			return nil, fmt.Errorf("signer account still locked after successful unlock")
+		}
+		if !self.frontend.UnlockAccount(from.Bytes()) {
+			return nil, fmt.Errorf("could not unlock signer account")
+		}
+		// retry signing, the account should now be unlocked.
+		return self.doSign(from, hash, true)
+	} else if err != nil {
+		return nil, err
+	}
+	return sig, nil
+}
+
+func (self *XEth) Sign(fromStr, hashStr string, didUnlock bool) (string, error) {
+	var (
+		from = common.HexToAddress(fromStr)
+		hash = common.HexToHash(hashStr)
+	)
+	sig, err := self.doSign(from, hash, didUnlock)
+	if err != nil {
+		return "", err
+	}
+	return common.ToHex(sig), nil
+}
+
 func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 
 	// this minimalistic recoding is enough (works for natspec.js)
@@ -907,17 +936,9 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 }
 
 func (self *XEth) sign(tx *types.Transaction, from common.Address, didUnlock bool) error {
-	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from.Bytes()}, tx.Hash().Bytes())
-	if err == accounts.ErrLocked {
-		if didUnlock {
-			return fmt.Errorf("sender account still locked after successful unlock")
-		}
-		if !self.frontend.UnlockAccount(from.Bytes()) {
-			return fmt.Errorf("could not unlock sender account")
-		}
-		// retry signing, the account should now be unlocked.
-		return self.sign(tx, from, true)
-	} else if err != nil {
+	hash := tx.Hash()
+	sig, err := self.doSign(from, hash, didUnlock)
+	if err != nil {
 		return err
 	}
 	tx.SetSignatureValues(sig)
