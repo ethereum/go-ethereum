@@ -363,7 +363,7 @@ out:
 				}
 			}
 			// After removing bad peers make sure we actually have sufficient peer left to keep downloading
-			if d.peers.Peers() == 0 {
+			if d.peers.Len() == 0 {
 				d.queue.Reset()
 				return errNoPeers
 			}
@@ -400,7 +400,7 @@ out:
 				if d.queue.InFlight() == 0 {
 					d.queue.Reset()
 
-					return fmt.Errorf("%v peers available = %d. total peers = %d. hashes needed = %d", errPeersUnavailable, len(idlePeers), d.peers.Peers(), d.queue.Pending())
+					return fmt.Errorf("%v peers available = %d. total peers = %d. hashes needed = %d", errPeersUnavailable, len(idlePeers), d.peers.Len(), d.queue.Pending())
 				}
 
 			} else if d.queue.InFlight() == 0 {
