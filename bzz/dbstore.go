@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -32,7 +31,7 @@ type gcItem struct {
 }
 
 type dbStore struct {
-	db *ethdb.LDBDatabase
+	db *LDBDatabase
 
 	// this should be stored in db, accessed transactionally
 	entryCnt, accessCnt, dataIdx, capacity uint64
@@ -381,7 +380,7 @@ func newDbStore(path string) (s *dbStore, err error) {
 
 	s = new(dbStore)
 
-	s.db, err = ethdb.NewLDBDatabase(path)
+	s.db, err = NewLDBDatabase(path)
 	if err != nil {
 		return
 	}
