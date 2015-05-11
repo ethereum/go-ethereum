@@ -209,6 +209,22 @@ func NewNotImplementedError(method string) *NotImplementedError {
 	}
 }
 
+type NotAvailableError struct {
+	Method string
+	Reason string
+}
+
+func (e *NotAvailableError) Error() string {
+	return fmt.Sprintf("%s method not available: %s", e.Method, e.Reason)
+}
+
+func NewNotAvailableError(method string, reason string) *NotAvailableError {
+	return &NotAvailableError{
+		Method: method,
+		Reason: reason,
+	}
+}
+
 type DecodeParamError struct {
 	err string
 }
