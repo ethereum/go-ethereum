@@ -275,10 +275,19 @@ func (js *jsre) verbosity(call otto.FunctionCall) otto.Value {
 }
 
 func (js *jsre) startMining(call otto.FunctionCall) otto.Value {
-	threads, err := call.Argument(0).ToInteger()
-	if err != nil {
-		fmt.Println(err)
-		return otto.FalseValue()
+	var (
+		threads int64
+		err     error
+	)
+
+	if len(call.ArgumentList) > 0 {
+		threads, err = call.Argument(0).ToInteger()
+		if err != nil {
+			fmt.Println(err)
+			return otto.FalseValue()
+		}
+	} else {
+		threads = 4
 	}
 
 	err = js.ethereum.StartMining(int(threads))
