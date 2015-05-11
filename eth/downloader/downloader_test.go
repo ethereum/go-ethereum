@@ -229,7 +229,7 @@ func TestThrottling(t *testing.T) {
 	minDesiredPeerCount = 4
 	blockTtl = 1 * time.Second
 
-	targetBlocks := 4 * blockCacheLimit
+	targetBlocks := 16 * blockCacheLimit
 	hashes := createHashes(0, targetBlocks)
 	blocks := createBlocksFromHashes(hashes)
 	tester := newTester(t, hashes, blocks)
@@ -256,6 +256,7 @@ func TestThrottling(t *testing.T) {
 				return
 			default:
 				took = append(took, tester.downloader.TakeBlocks()...)
+				time.Sleep(time.Millisecond)
 			}
 		}
 	}()
