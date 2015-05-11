@@ -79,7 +79,6 @@ func New(eth *eth.Ethereum, frontend Frontend) *XEth {
 	xeth := &XEth{
 		backend:          eth,
 		frontend:         frontend,
-		whisper:          NewWhisper(eth.Whisper()),
 		quit:             make(chan struct{}),
 		filterManager:    filter.NewFilterManager(eth.EventMux()),
 		logQueue:         make(map[int]*logQueue),
@@ -87,6 +86,9 @@ func New(eth *eth.Ethereum, frontend Frontend) *XEth {
 		transactionQueue: make(map[int]*hashQueue),
 		messages:         make(map[int]*whisperFilter),
 		agent:            miner.NewRemoteAgent(),
+	}
+	if eth.Whisper() != nil {
+		xeth.whisper = NewWhisper(eth.Whisper())
 	}
 	eth.Miner().Register(xeth.agent)
 	if frontend == nil {
@@ -811,6 +813,27 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 
 func (self *XEth) ConfirmTransaction(tx string) bool {
 	return self.frontend.ConfirmTransaction(tx)
+}
+
+func (self *XEth) Sign(fromStr, hashStr string, didUnlock bool) (string, error) {
+	var (
+		from = common.HexToAddress(fromStr)
+		hash = common.HexToHash(hashStr)
+	)
+	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from.Bytes()}, hash.Bytes())
+	if err == accounts.ErrLocked {
+		if didUnlock {
+			return "", fmt.Errorf("signer account still locked after successful unlock")
+		}
+		if !self.frontend.UnlockAccount(from.Bytes()) {
+			return "", fmt.Errorf("could not unlock signer account")
+		}
+		// retry signing, the account should now be unlocked.
+		return self.Sign(fromStr, hashStr, true)
+	} else if err != nil {
+		return "", err
+	}
+	return common.ToHex(sig), nil
 }
 
 func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {

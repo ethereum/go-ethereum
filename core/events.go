@@ -1,8 +1,10 @@
 package core
 
 import (
-	"github.com/ethereum/go-ethereum/core/types"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // TxPreEvent is posted when a transaction enters the transaction pool.
@@ -43,6 +45,8 @@ type ChainUncleEvent struct {
 }
 
 type ChainHeadEvent struct{ Block *types.Block }
+
+type GasPriceChanged struct{ Price *big.Int }
 
 // Mining operation events
 type StartMining struct{}
