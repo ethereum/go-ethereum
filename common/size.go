@@ -44,12 +44,6 @@ func CurrencyToString(num *big.Int) string {
 	)
 
 	switch {
-	case num.Cmp(Douglas) >= 0:
-		fin = new(big.Int).Div(num, Douglas)
-		denom = "Douglas"
-	case num.Cmp(Einstein) >= 0:
-		fin = new(big.Int).Div(num, Einstein)
-		denom = "Einstein"
 	case num.Cmp(Ether) >= 0:
 		fin = new(big.Int).Div(num, Ether)
 		denom = "Ether"

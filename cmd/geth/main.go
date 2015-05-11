@@ -51,7 +51,7 @@ import _ "net/http/pprof"
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.17"
+	Version          = "0.9.19"
 )
 
 var (
@@ -244,6 +244,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
 		utils.EtherbaseFlag,
+		utils.GasPriceFlag,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
 		utils.NATFlag,
@@ -258,7 +259,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.ProtocolVersionFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
-		utils.LogLevelFlag,
+		utils.VerbosityFlag,
 		utils.BacktraceAtFlag,
 		utils.LogToStdErrFlag,
 		utils.LogVModuleFlag,

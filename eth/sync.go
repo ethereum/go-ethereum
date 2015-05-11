@@ -63,6 +63,9 @@ func (pm *ProtocolManager) processBlocks() error {
 		max := int(math.Min(float64(len(blocks)), float64(blockProcAmount)))
 		_, err := pm.chainman.InsertChain(blocks[:max])
 		if err != nil {
+			// cancel download process
+			pm.downloader.Cancel()
+
 			return err
 		}
 		blocks = blocks[max:]

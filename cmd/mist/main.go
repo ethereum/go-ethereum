@@ -37,7 +37,7 @@ import (
 
 const (
 	ClientIdentifier = "Mist"
-	Version          = "0.9.0"
+	Version          = "0.9.19"
 )
 
 var (
@@ -73,7 +73,7 @@ func init() {
 		utils.DataDirFlag,
 		utils.ListenPortFlag,
 		utils.LogFileFlag,
-		utils.LogLevelFlag,
+		utils.VerbosityFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
 		utils.MinerThreadsFlag,

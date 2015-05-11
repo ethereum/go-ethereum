@@ -116,7 +116,7 @@ func RpcResponse(api *EthereumApi, request *RpcRequest) *interface{} {
 	switch reserr.(type) {
 	case nil:
 		response = &RpcSuccessResponse{Jsonrpc: jsonrpcver, Id: request.Id, Result: reply}
-	case *NotImplementedError:
+	case *NotImplementedError, *NotAvailableError:
 		jsonerr := &RpcErrorObject{-32601, reserr.Error()}
 		response = &RpcErrorResponse{Jsonrpc: jsonrpcver, Id: request.Id, Error: jsonerr}
 	case *DecodeParamError, *InsufficientParamsError, *ValidationError, *InvalidTypeError:

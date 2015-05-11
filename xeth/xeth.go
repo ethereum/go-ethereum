@@ -79,7 +79,6 @@ func New(eth *eth.Ethereum, frontend Frontend) *XEth {
 	xeth := &XEth{
 		backend:          eth,
 		frontend:         frontend,
-		whisper:          NewWhisper(eth.Whisper()),
 		quit:             make(chan struct{}),
 		filterManager:    filter.NewFilterManager(eth.EventMux()),
 		logQueue:         make(map[int]*logQueue),
@@ -87,6 +86,9 @@ func New(eth *eth.Ethereum, frontend Frontend) *XEth {
 		transactionQueue: make(map[int]*hashQueue),
 		messages:         make(map[int]*whisperFilter),
 		agent:            miner.NewRemoteAgent(),
+	}
+	if eth.Whisper() != nil {
+		xeth.whisper = NewWhisper(eth.Whisper())
 	}
 	eth.Miner().Register(xeth.agent)
 	if frontend == nil {

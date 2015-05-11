@@ -7,6 +7,8 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
@@ -37,7 +39,18 @@ func (self *Miner) Mining() bool {
 	return self.mining
 }
 
+func (m *Miner) SetGasPrice(price *big.Int) {
+	// FIXME block tests set a nil gas price. Quick dirty fix
+	if price == nil {
+		return
+	}
+
+	m.worker.gasPrice = price
+}
+
 func (self *Miner) Start(coinbase common.Address) {
+	glog.V(logger.Info).Infoln("Starting mining operation")
+
 	self.mining = true
 	self.worker.coinbase = coinbase
 	self.worker.start()

@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/go-ethereum/jsre"
 	"github.com/robertkrimen/otto"
 )
@@ -50,6 +51,7 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 		var respif interface{}
 		err = self.ethApi.GetRequestReply(&req, &respif)
 		if err != nil {
+			fmt.Println("Error response:", err)
 			return self.err(call, -32603, err.Error(), req.Id)
 		}
 		call.Otto.Set("ret_jsonrpc", jsonrpcver)
