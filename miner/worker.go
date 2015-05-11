@@ -141,7 +141,6 @@ func (self *worker) start() {
 	for _, agent := range self.agents {
 		agent.Start()
 	}
-
 }
 
 func (self *worker) stop() {
@@ -149,10 +148,16 @@ func (self *worker) stop() {
 	defer self.mu.Unlock()
 
 	if atomic.LoadInt32(&self.mining) == 1 {
+		var keep []Agent
 		// stop all agents
 		for _, agent := range self.agents {
 			agent.Stop()
+			// keep all that's not a cpu agent
+			if _, ok := agent.(*CpuAgent); !ok {
+				keep = append(keep, agent)
+			}
 		}
+		self.agents = keep
 	}
 
 	atomic.StoreInt32(&self.mining, 0)

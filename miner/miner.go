@@ -23,16 +23,8 @@ type Miner struct {
 	pow     pow.PoW
 }
 
-func New(eth core.Backend, pow pow.PoW, minerThreads int) *Miner {
-	// note: minerThreads is currently ignored because
-	// ethash is not thread safe.
-	miner := &Miner{eth: eth, pow: pow, worker: newWorker(common.Address{}, eth)}
-	for i := 0; i < minerThreads; i++ {
-		miner.worker.register(NewCpuMiner(i, pow))
-	}
-	miner.threads = minerThreads
-
-	return miner
+func New(eth core.Backend, pow pow.PoW) *Miner {
+	return &Miner{eth: eth, pow: pow, worker: newWorker(common.Address{}, eth)}
 }
 
 func (self *Miner) Mining() bool {
@@ -48,13 +40,25 @@ func (m *Miner) SetGasPrice(price *big.Int) {
 	m.worker.gasPrice = price
 }
 
-func (self *Miner) Start(coinbase common.Address) {
-	glog.V(logger.Info).Infoln("Starting mining operation")
+func (self *Miner) Start(coinbase common.Address, threads int) {
 
 	self.mining = true
+
+	for i := 0; i < threads; i++ {
+		self.worker.register(NewCpuAgent(i, self.pow))
+	}
+	self.threads = threads
+
+	glog.V(logger.Info).Infof("Starting mining operation (CPU=%d TOT=%d)\n", threads, len(self.worker.agents))
+
 	self.worker.coinbase = coinbase
 	self.worker.start()
 	self.worker.commitNewWork()
+}
+
+func (self *Miner) Stop() {
+	self.worker.stop()
+	self.mining = false
 }
 
 func (self *Miner) Register(agent Agent) {
@@ -63,11 +67,6 @@ func (self *Miner) Register(agent Agent) {
 	}
 
 	self.worker.register(agent)
-}
-
-func (self *Miner) Stop() {
-	self.mining = false
-	self.worker.stop()
 }
 
 func (self *Miner) HashRate() int64 {

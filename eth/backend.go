@@ -267,7 +267,7 @@ func New(config *Config) (*Ethereum, error) {
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
-	eth.miner = miner.New(eth, eth.pow, config.MinerThreads)
+	eth.miner = miner.New(eth, eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
 
 	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.eventMux, eth.txPool, eth.chainManager, eth.downloader)
@@ -368,7 +368,7 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.chainManager.ResetWithGenesisBlock(gb)
 }
 
-func (s *Ethereum) StartMining() error {
+func (s *Ethereum) StartMining(threads int) error {
 	eb, err := s.Etherbase()
 	if err != nil {
 		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
@@ -376,7 +376,7 @@ func (s *Ethereum) StartMining() error {
 		return err
 	}
 
-	go s.miner.Start(eb)
+	go s.miner.Start(eb, threads)
 	return nil
 }
 
@@ -461,13 +461,13 @@ done:
 		case <-ticker.C:
 			// don't change the order of database flushes
 			if err := s.extraDb.Flush(); err != nil {
-				glog.Fatalf("fatal error: flush extraDb: %v\n", err)
+				glog.Fatalf("fatal error: flush extraDb: %v (Restart your node. We are aware of this issue)\n", err)
 			}
 			if err := s.stateDb.Flush(); err != nil {
-				glog.Fatalf("fatal error: flush stateDb: %v\n", err)
+				glog.Fatalf("fatal error: flush stateDb: %v (Restart your node. We are aware of this issue)\n", err)
 			}
 			if err := s.blockDb.Flush(); err != nil {
-				glog.Fatalf("fatal error: flush blockDb: %v\n", err)
+				glog.Fatalf("fatal error: flush blockDb: %v (Restart your node. We are aware of this issue)\n", err)
 			}
 		case <-s.shutdownChan:
 			break done

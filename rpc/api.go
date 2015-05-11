@@ -391,7 +391,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 		*reply = NewLogsRes(api.xeth().AllLogs(args.Earliest, args.Latest, args.Skip, args.Max, args.Address, args.Topics))
 	case "eth_getWork":
-		api.xeth().SetMining(true)
+		api.xeth().SetMining(true, 0)
 		*reply = api.xeth().RemoteMining().GetWork()
 	case "eth_submitWork":
 		args := new(SubmitWorkArgs)

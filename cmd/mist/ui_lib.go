@@ -159,7 +159,7 @@ func (self *UiLib) RemoveLocalTransaction(id int) {
 
 func (self *UiLib) ToggleMining() bool {
 	if !self.eth.IsMining() {
-		err := self.eth.StartMining()
+		err := self.eth.StartMining(4)
 		return err == nil
 	} else {
 		self.eth.StopMining()

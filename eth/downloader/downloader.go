@@ -28,7 +28,7 @@ var (
 	errUnknownPeer         = errors.New("peer's unknown or unhealthy")
 	errBadPeer             = errors.New("action from bad peer ignored")
 	errNoPeers             = errors.New("no peers to keep download active")
-	errPendingQueue        = errors.New("pending items in queue")
+	ErrPendingQueue        = errors.New("pending items in queue")
 	ErrTimeout             = errors.New("timeout")
 	errEmptyHashSet        = errors.New("empty hash set by peer")
 	errPeersUnavailable    = errors.New("no peers available or all peers tried for block download process")
@@ -129,7 +129,7 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 
 	// Abort if the queue still contains some leftover data
 	if _, cached := d.queue.Size(); cached > 0 && d.queue.GetHeadBlock() != nil {
-		return errPendingQueue
+		return ErrPendingQueue
 	}
 	// Reset the queue and peer set to clean any internal leftover state
 	d.queue.Reset()
