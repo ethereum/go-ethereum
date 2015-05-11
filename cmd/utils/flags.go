@@ -235,6 +235,10 @@ var (
 		Name:  "shh",
 		Usage: "Enable whisper",
 	}
+	SwarmEnabledFlag = cli.BoolFlag{
+		Name:  "bzz",
+		Usage: "Enable swarm",
+	}
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
@@ -309,6 +313,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		NatSpec:            ctx.GlobalBool(NatspecEnabledFlag.Name),
 		NodeKey:            GetNodeKey(ctx),
 		Shh:                ctx.GlobalBool(WhisperEnabledFlag.Name),
+		Bzz:                ctx.GlobalBool(SwarmEnabledFlag.Name),
 		Dial:               true,
 		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
 		GasPrice:           common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),

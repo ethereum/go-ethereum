@@ -232,7 +232,7 @@ func (s *dbStore) collectGarbage(ratio float32) {
 	cutidx := gcListSelect(s.gcArray, 0, gcnt-1, int(float32(gcnt)*ratio))
 	cutval := s.gcArray[cutidx].value
 
-	fmt.Print(gcnt, " ", s.entryCnt, " ")
+	// fmt.Print(gcnt, " ", s.entryCnt, " ")
 
 	// actual gc
 	for i := 0; i < gcnt; i++ {
@@ -246,7 +246,7 @@ func (s *dbStore) collectGarbage(ratio float32) {
 		}
 	}
 
-	fmt.Println(s.entryCnt)
+	// fmt.Println(s.entryCnt)
 
 	s.db.Put(keyGCPos, s.gcPos)
 
