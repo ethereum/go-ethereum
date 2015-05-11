@@ -5,7 +5,6 @@ package bzz
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -232,7 +231,7 @@ func (s *dbStore) collectGarbage(ratio float32) {
 	cutidx := gcListSelect(s.gcArray, 0, gcnt-1, int(float32(gcnt)*ratio))
 	cutval := s.gcArray[cutidx].value
 
-	fmt.Print(gcnt, " ", s.entryCnt, " ")
+	// fmt.Print(gcnt, " ", s.entryCnt, " ")
 
 	// actual gc
 	for i := 0; i < gcnt; i++ {
@@ -246,7 +245,7 @@ func (s *dbStore) collectGarbage(ratio float32) {
 		}
 	}
 
-	fmt.Println(s.entryCnt)
+	// fmt.Println(s.entryCnt)
 
 	s.db.Put(keyGCPos, s.gcPos)
 
@@ -386,7 +385,7 @@ func newDbStore(path string) (s *dbStore, err error) {
 		return
 	}
 
-	s.setCapacity(50000) // TODO define default capacity as constant
+	s.setCapacity(5000000) // TODO define default capacity as constant
 
 	s.gcStartPos = make([]byte, 1)
 	s.gcStartPos[0] = kpIndex

@@ -14,6 +14,7 @@ import (
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/bzz"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -74,6 +75,7 @@ type Config struct {
 
 	NAT  nat.Interface
 	Shh  bool
+	Bzz  bool
 	Dial bool
 
 	Etherbase      string
@@ -280,7 +282,22 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	protocols := []p2p.Protocol{eth.protocolManager.SubProtocol}
+
+	if config.Bzz {
+		netStore := bzz.NewNetStore(config.DataDir + "/bzz")
+		chunker := &bzz.TreeChunker{}
+		chunker.Init()
+		dpa := &bzz.DPA{
+			Chunker:    chunker,
+			ChunkStore: netStore,
+		}
+		dpa.Start()
+		protocols = append(protocols, bzz.BzzProtocol(netStore))
+		go bzz.StartHttpServer(dpa)
+	}
+
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
 	}
