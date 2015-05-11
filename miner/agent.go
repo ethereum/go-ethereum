@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/pow"
 )
 
-type CpuMiner struct {
+type CpuAgent struct {
 	chMu          sync.Mutex
 	c             chan *types.Block
 	quit          chan struct{}
@@ -21,8 +21,8 @@ type CpuMiner struct {
 	pow   pow.PoW
 }
 
-func NewCpuMiner(index int, pow pow.PoW) *CpuMiner {
-	miner := &CpuMiner{
+func NewCpuAgent(index int, pow pow.PoW) *CpuAgent {
+	miner := &CpuAgent{
 		pow:   pow,
 		index: index,
 	}
@@ -30,16 +30,16 @@ func NewCpuMiner(index int, pow pow.PoW) *CpuMiner {
 	return miner
 }
 
-func (self *CpuMiner) Work() chan<- *types.Block          { return self.c }
-func (self *CpuMiner) Pow() pow.PoW                       { return self.pow }
-func (self *CpuMiner) SetReturnCh(ch chan<- *types.Block) { self.returnCh = ch }
+func (self *CpuAgent) Work() chan<- *types.Block          { return self.c }
+func (self *CpuAgent) Pow() pow.PoW                       { return self.pow }
+func (self *CpuAgent) SetReturnCh(ch chan<- *types.Block) { self.returnCh = ch }
 
-func (self *CpuMiner) Stop() {
+func (self *CpuAgent) Stop() {
 	close(self.quit)
 	close(self.quitCurrentOp)
 }
 
-func (self *CpuMiner) Start() {
+func (self *CpuAgent) Start() {
 	self.quit = make(chan struct{})
 	self.quitCurrentOp = make(chan struct{}, 1)
 	self.c = make(chan *types.Block, 1)
@@ -47,7 +47,7 @@ func (self *CpuMiner) Start() {
 	go self.update()
 }
 
-func (self *CpuMiner) update() {
+func (self *CpuAgent) update() {
 out:
 	for {
 		select {
@@ -76,7 +76,7 @@ done:
 	}
 }
 
-func (self *CpuMiner) mine(block *types.Block) {
+func (self *CpuAgent) mine(block *types.Block) {
 	glog.V(logger.Debug).Infof("(re)started agent[%d]. mining...\n", self.index)
 
 	// Reset the channel
@@ -95,6 +95,6 @@ func (self *CpuMiner) mine(block *types.Block) {
 	}
 }
 
-func (self *CpuMiner) GetHashRate() int64 {
+func (self *CpuAgent) GetHashRate() int64 {
 	return self.pow.GetHashrate()
 }

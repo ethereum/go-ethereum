@@ -425,10 +425,10 @@ func (self *XEth) ClientVersion() string {
 	return self.backend.ClientVersion()
 }
 
-func (self *XEth) SetMining(shouldmine bool) bool {
+func (self *XEth) SetMining(shouldmine bool, threads int) bool {
 	ismining := self.backend.IsMining()
 	if shouldmine && !ismining {
-		err := self.backend.StartMining()
+		err := self.backend.StartMining(threads)
 		return err == nil
 	}
 	if ismining && !shouldmine {
