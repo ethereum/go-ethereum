@@ -160,7 +160,6 @@ func (self *DPA) storeLoop() {
 					dpaLogger.Debugf("DPA.storeLoop %064x", chunk.Key)
 					chunk.wg.Done()
 				}
-				self.ChunkStore.Put(chunk)
 			}(ch)
 			select {
 			case <-self.quitC:
