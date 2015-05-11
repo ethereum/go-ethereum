@@ -21,7 +21,7 @@ var (
 	ErrInvalidSender      = errors.New("Invalid sender")
 	ErrNonce              = errors.New("Nonce too low")
 	ErrBalance            = errors.New("Insufficient balance")
-	ErrNonExistentAccount = errors.New("Account does not exist")
+	ErrNonExistentAccount = errors.New("Account does not exist or account balance too low")
 	ErrInsufficientFunds  = errors.New("Insufficient funds for gas * price + value")
 	ErrIntrinsicGas       = errors.New("Intrinsic gas too low")
 	ErrGasLimit           = errors.New("Exceeds block gas limit")
