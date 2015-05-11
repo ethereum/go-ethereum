@@ -255,6 +255,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
 		utils.WhisperEnabledFlag,
+		utils.SwarmEnabledFlag,
 		utils.VMDebugFlag,
 		utils.ProtocolVersionFlag,
 		utils.NetworkIdFlag,
