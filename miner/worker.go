@@ -21,21 +21,41 @@ import (
 
 var jsonlogger = logger.NewJsonLogger()
 
+// Work holds the current work
+type Work struct {
+	Number    uint64
+	Nonce     uint64
+	MixDigest []byte
+	SeedHash  []byte
+}
+
+// Agent can register themself with the worker
+type Agent interface {
+	Work() chan<- *types.Block
+	SetReturnCh(chan<- *types.Block)
+	Stop()
+	Start()
+	GetHashRate() int64
+}
+
+// environment is the workers current environment and holds
+// all of the current state information
 type environment struct {
-	totalUsedGas       *big.Int
-	state              *state.StateDB
-	coinbase           *state.StateObject
-	block              *types.Block
-	family             *set.Set
-	uncles             *set.Set
-	remove             *set.Set
-	tcount             int
+	totalUsedGas       *big.Int           // total gas usage in the cycle
+	state              *state.StateDB     // apply state changes here
+	coinbase           *state.StateObject // the miner's account
+	block              *types.Block       // the new block
+	family             *set.Set           // family set (used for checking uncles)
+	uncles             *set.Set           // uncle set
+	remove             *set.Set           // tx which will be removed
+	tcount             int                // tx count in cycle
 	ignoredTransactors *set.Set
 	lowGasTransactors  *set.Set
 	ownedAccounts      *set.Set
 	lowGasTxs          types.Transactions
 }
 
+// env returns a new environment for the current cycle
 func env(block *types.Block, eth core.Backend) *environment {
 	state := state.New(block.Root(), eth.StateDb())
 	env := &environment{
@@ -50,21 +70,7 @@ func env(block *types.Block, eth core.Backend) *environment {
 	return env
 }
 
-type Work struct {
-	Number    uint64
-	Nonce     uint64
-	MixDigest []byte
-	SeedHash  []byte
-}
-
-type Agent interface {
-	Work() chan<- *types.Block
-	SetReturnCh(chan<- *types.Block)
-	Stop()
-	Start()
-	GetHashRate() int64
-}
-
+// worker is the main object which takes care of applying messages to the new state
 type worker struct {
 	mu sync.Mutex
 
@@ -375,8 +381,8 @@ func (self *worker) commitTransactions(transactions types.Transactions) {
 		// We can skip err. It has already been validated in the tx pool
 		from, _ := tx.From()
 
-		// check if it falls within margin
-		if tx.GasPrice().Cmp(self.gasPrice) < 0 {
+		// Check if it falls within margin. Txs from owned accounts are always processed.
+		if tx.GasPrice().Cmp(self.gasPrice) < 0 && !current.ownedAccounts.Has(from) {
 			// ignore the transaction and transactor. We ignore the transactor
 			// because nonce will fail after ignoring this transaction so there's
 			// no point
