@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -113,7 +114,7 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 		} else {
 			http.Error(w, "No POST to "+uri+" allowed.", http.StatusBadRequest)
 		}
-	case r.Method == "GET":
+	case r.Method == "GET" || r.Method == "HEAD":
 		if uriMatcher.MatchString(uri) {
 			dpaLogger.Debugf("Swarm: Raw GET request %s received", uri)
 			name := uri[5:69]
@@ -191,10 +192,11 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 					http.Error(w, "Object "+uri+" not found.", http.StatusNotFound)
 					break MANIFEST_RESOLUTION
 				} else if mimeType != manifestType {
+					reader := dpa.Retrieve(key)
 					w.Header().Set("Content-Type", mimeType)
 					dpaLogger.Debugf("Swarm: HTTP Status %d", status)
+					w.Header().Set("Content-Length", strconv.FormatInt(reader.Size(), 10))
 					w.WriteHeader(int(status))
-					reader := dpa.Retrieve(key)
 					dpaLogger.Debugf("Swarm: Reading %d bytes.", reader.Size())
 					http.ServeContent(w, r, name, time.Unix(0, 0), reader)
 					dpaLogger.Debugf("Swarm: Served %s as %s.", mimeType, uri)
