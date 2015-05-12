@@ -79,7 +79,6 @@ func New(eth *eth.Ethereum, frontend Frontend) *XEth {
 	xeth := &XEth{
 		backend:          eth,
 		frontend:         frontend,
-		whisper:          NewWhisper(eth.Whisper()),
 		quit:             make(chan struct{}),
 		filterManager:    filter.NewFilterManager(eth.EventMux()),
 		logQueue:         make(map[int]*logQueue),
@@ -87,6 +86,9 @@ func New(eth *eth.Ethereum, frontend Frontend) *XEth {
 		transactionQueue: make(map[int]*hashQueue),
 		messages:         make(map[int]*whisperFilter),
 		agent:            miner.NewRemoteAgent(),
+	}
+	if eth.Whisper() != nil {
+		xeth.whisper = NewWhisper(eth.Whisper())
 	}
 	eth.Miner().Register(xeth.agent)
 	if frontend == nil {
@@ -363,7 +365,7 @@ func (self *XEth) Accounts() []string {
 	accounts, _ := self.backend.AccountManager().Accounts()
 	accountAddresses := make([]string, len(accounts))
 	for i, ac := range accounts {
-		accountAddresses[i] = common.ToHex(ac.Address)
+		accountAddresses[i] = ac.Address.Hex()
 	}
 	return accountAddresses
 }
@@ -423,10 +425,10 @@ func (self *XEth) ClientVersion() string {
 	return self.backend.ClientVersion()
 }
 
-func (self *XEth) SetMining(shouldmine bool) bool {
+func (self *XEth) SetMining(shouldmine bool, threads int) bool {
 	ismining := self.backend.IsMining()
 	if shouldmine && !ismining {
-		err := self.backend.StartMining()
+		err := self.backend.StartMining(threads)
 		return err == nil
 	}
 	if ismining && !shouldmine {
@@ -771,7 +773,7 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 	return tx.Hash().Hex(), nil
 }
 
-func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
+func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, string, error) {
 	statedb := self.State().State() //self.eth.ChainManager().TransState()
 	var from *state.StateObject
 	if len(fromStr) == 0 {
@@ -779,12 +781,13 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		if err != nil || len(accounts) == 0 {
 			from = statedb.GetOrNewStateObject(common.Address{})
 		} else {
-			from = statedb.GetOrNewStateObject(common.BytesToAddress(accounts[0].Address))
+			from = statedb.GetOrNewStateObject(accounts[0].Address)
 		}
 	} else {
 		from = statedb.GetOrNewStateObject(common.HexToAddress(fromStr))
 	}
 
+	from.SetGasPool(self.backend.ChainManager().GasLimit())
 	msg := callmsg{
 		from:     from,
 		to:       common.HexToAddress(toStr),
@@ -805,12 +808,41 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	block := self.CurrentBlock()
 	vmenv := core.NewEnv(statedb, self.backend.ChainManager(), msg, block)
 
-	res, err := vmenv.Call(msg.from, msg.to, msg.data, msg.gas, msg.gasPrice, msg.value)
-	return common.ToHex(res), err
+	res, gas, err := core.ApplyMessage(vmenv, msg, from)
+	return common.ToHex(res), gas.String(), err
 }
 
 func (self *XEth) ConfirmTransaction(tx string) bool {
 	return self.frontend.ConfirmTransaction(tx)
+}
+
+func (self *XEth) doSign(from common.Address, hash common.Hash, didUnlock bool) ([]byte, error) {
+	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from}, hash.Bytes())
+	if err == accounts.ErrLocked {
+		if didUnlock {
+			return nil, fmt.Errorf("signer account still locked after successful unlock")
+		}
+		if !self.frontend.UnlockAccount(from.Bytes()) {
+			return nil, fmt.Errorf("could not unlock signer account")
+		}
+		// retry signing, the account should now be unlocked.
+		return self.doSign(from, hash, true)
+	} else if err != nil {
+		return nil, err
+	}
+	return sig, nil
+}
+
+func (self *XEth) Sign(fromStr, hashStr string, didUnlock bool) (string, error) {
+	var (
+		from = common.HexToAddress(fromStr)
+		hash = common.HexToHash(hashStr)
+	)
+	sig, err := self.doSign(from, hash, didUnlock)
+	if err != nil {
+		return "", err
+	}
+	return common.ToHex(sig), nil
 }
 
 func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
@@ -905,17 +937,9 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 }
 
 func (self *XEth) sign(tx *types.Transaction, from common.Address, didUnlock bool) error {
-	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from.Bytes()}, tx.Hash().Bytes())
-	if err == accounts.ErrLocked {
-		if didUnlock {
-			return fmt.Errorf("sender account still locked after successful unlock")
-		}
-		if !self.frontend.UnlockAccount(from.Bytes()) {
-			return fmt.Errorf("could not unlock sender account")
-		}
-		// retry signing, the account should now be unlocked.
-		return self.sign(tx, from, true)
-	} else if err != nil {
+	hash := tx.Hash()
+	sig, err := self.doSign(from, hash, didUnlock)
+	if err != nil {
 		return err
 	}
 	tx.SetSignatureValues(sig)

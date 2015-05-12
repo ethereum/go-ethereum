@@ -64,13 +64,13 @@ func (a *RemoteAgent) GetWork() [3]string {
 
 		res[0] = a.work.HashNoNonce().Hex()
 		seedHash, _ := ethash.GetSeedHash(a.currentWork.NumberU64())
-		res[1] = common.Bytes2Hex(seedHash)
+		res[1] = common.BytesToHash(seedHash).Hex()
 		// Calculate the "target" to be returned to the external miner
 		n := big.NewInt(1)
 		n.Lsh(n, 255)
 		n.Div(n, a.work.Difficulty())
 		n.Lsh(n, 1)
-		res[2] = common.Bytes2Hex(n.Bytes())
+		res[2] = common.BytesToHash(n.Bytes()).Hex()
 	}
 
 	return res

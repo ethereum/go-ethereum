@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -84,7 +85,7 @@ type testFrontend struct {
 }
 
 func (self *testFrontend) UnlockAccount(acc []byte) bool {
-	self.ethereum.AccountManager().Unlock(acc, "password")
+	self.ethereum.AccountManager().Unlock(common.BytesToAddress(acc), "password")
 	return true
 }
 
@@ -103,19 +104,19 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 
 	os.RemoveAll("/tmp/eth-natspec/")
 
-	err = os.MkdirAll("/tmp/eth-natspec/keys", os.ModePerm)
+	err = os.MkdirAll("/tmp/eth-natspec/keystore", os.ModePerm)
 	if err != nil {
 		panic(err)
 	}
 
 	// create a testAddress
-	ks := crypto.NewKeyStorePassphrase("/tmp/eth-natspec/keys")
+	ks := crypto.NewKeyStorePassphrase("/tmp/eth-natspec/keystore")
 	am := accounts.NewManager(ks)
 	testAccount, err := am.NewAccount("password")
 	if err != nil {
 		panic(err)
 	}
-	testAddress := common.Bytes2Hex(testAccount.Address)
+	testAddress := strings.TrimPrefix(testAccount.Address.Hex(), "0x")
 
 	// set up mock genesis with balance on the testAddress
 	core.GenesisData = []byte(`{

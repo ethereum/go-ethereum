@@ -158,6 +158,17 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		v := api.xethAtStateNum(args.BlockNumber).CodeAtBytes(args.Address)
 		*reply = newHexData(v)
 
+	case "eth_sign":
+		args := new(NewSigArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+		v, err := api.xeth().Sign(args.From, args.Data, false)
+		if err != nil {
+			return err
+		}
+		*reply = v
+
 	case "eth_sendTransaction", "eth_transact":
 		args := new(NewTxArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -175,16 +186,24 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 		*reply = v
-	case "eth_call":
-		args := new(CallArgs)
-		if err := json.Unmarshal(req.Params, &args); err != nil {
-			return err
-		}
-
-		v, err := api.xethAtStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+	case "eth_estimateGas":
+		_, gas, err := api.doCall(req.Params)
 		if err != nil {
 			return err
 		}
+
+		// TODO unwrap the parent method's ToHex call
+		if len(gas) == 0 {
+			*reply = newHexNum(0)
+		} else {
+			*reply = newHexNum(gas)
+		}
+	case "eth_call":
+		v, _, err := api.doCall(req.Params)
+		if err != nil {
+			return err
+		}
+
 		// TODO unwrap the parent method's ToHex call
 		if v == "0x0" {
 			*reply = newHexData([]byte{})
@@ -380,7 +399,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 		*reply = NewLogsRes(api.xeth().AllLogs(args.Earliest, args.Latest, args.Skip, args.Max, args.Address, args.Topics))
 	case "eth_getWork":
-		api.xeth().SetMining(true)
+		api.xeth().SetMining(true, 0)
 		*reply = api.xeth().RemoteMining().GetWork()
 	case "eth_submitWork":
 		args := new(SubmitWorkArgs)
@@ -439,10 +458,18 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		*reply = newHexData(res)
 
 	case "shh_version":
+		// Short circuit if whisper is not running
+		if api.xeth().Whisper() == nil {
+			return NewNotAvailableError(req.Method, "whisper offline")
+		}
 		// Retrieves the currently running whisper protocol version
 		*reply = api.xeth().WhisperVersion()
 
 	case "shh_post":
+		// Short circuit if whisper is not running
+		if api.xeth().Whisper() == nil {
+			return NewNotAvailableError(req.Method, "whisper offline")
+		}
 		// Injects a new message into the whisper network
 		args := new(WhisperMessageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -455,10 +482,18 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		*reply = true
 
 	case "shh_newIdentity":
+		// Short circuit if whisper is not running
+		if api.xeth().Whisper() == nil {
+			return NewNotAvailableError(req.Method, "whisper offline")
+		}
 		// Creates a new whisper identity to use for sending/receiving messages
 		*reply = api.xeth().Whisper().NewIdentity()
 
 	case "shh_hasIdentity":
+		// Short circuit if whisper is not running
+		if api.xeth().Whisper() == nil {
+			return NewNotAvailableError(req.Method, "whisper offline")
+		}
 		// Checks if an identity if owned or not
 		args := new(WhisperIdentityArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -467,6 +502,10 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		*reply = api.xeth().Whisper().HasIdentity(args.Identity)
 
 	case "shh_newFilter":
+		// Short circuit if whisper is not running
+		if api.xeth().Whisper() == nil {
+			return NewNotAvailableError(req.Method, "whisper offline")
+		}
 		// Create a new filter to watch and match messages with
 		args := new(WhisperFilterArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -476,6 +515,10 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		*reply = newHexNum(big.NewInt(int64(id)).Bytes())
 
 	case "shh_uninstallFilter":
+		// Short circuit if whisper is not running
+		if api.xeth().Whisper() == nil {
+			return NewNotAvailableError(req.Method, "whisper offline")
+		}
 		// Remove an existing filter watching messages
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -484,6 +527,10 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		*reply = api.xeth().UninstallWhisperFilter(args.Id)
 
 	case "shh_getFilterChanges":
+		// Short circuit if whisper is not running
+		if api.xeth().Whisper() == nil {
+			return NewNotAvailableError(req.Method, "whisper offline")
+		}
 		// Retrieve all the new messages arrived since the last request
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -492,12 +539,17 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		*reply = api.xeth().WhisperMessagesChanged(args.Id)
 
 	case "shh_getMessages":
+		// Short circuit if whisper is not running
+		if api.xeth().Whisper() == nil {
+			return NewNotAvailableError(req.Method, "whisper offline")
+		}
 		// Retrieve all the cached messages matching a specific, existing filter
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		*reply = api.xeth().WhisperMessages(args.Id)
+
 	case "eth_hashrate":
 		*reply = newHexNum(api.xeth().HashRate())
 
@@ -526,4 +578,13 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 	glog.V(logger.Detail).Infof("Reply: %T %s\n", reply, reply)
 	return nil
+}
+
+func (api *EthereumApi) doCall(params json.RawMessage) (string, string, error) {
+	args := new(CallArgs)
+	if err := json.Unmarshal(params, &args); err != nil {
+		return "", "", err
+	}
+
+	return api.xethAtStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 }

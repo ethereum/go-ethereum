@@ -27,7 +27,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
-	"path"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"time"
@@ -79,7 +79,7 @@ type Gui struct {
 
 // Create GUI, but doesn't start it
 func NewWindow(ethereum *eth.Ethereum) *Gui {
-	db, err := ethdb.NewLDBDatabase(path.Join(ethereum.DataDir, "tx_database"))
+	db, err := ethdb.NewLDBDatabase(filepath.Join(ethereum.DataDir, "tx_database"))
 	if err != nil {
 		panic(err)
 	}
@@ -92,7 +92,7 @@ func NewWindow(ethereum *eth.Ethereum) *Gui {
 		plugins:       make(map[string]plugin),
 		serviceEvents: make(chan ServEv, 1),
 	}
-	data, _ := ioutil.ReadFile(path.Join(ethereum.DataDir, "plugins.json"))
+	data, _ := ioutil.ReadFile(filepath.Join(ethereum.DataDir, "plugins.json"))
 	json.Unmarshal(data, &gui.plugins)
 
 	return gui
@@ -232,7 +232,7 @@ func (self *Gui) loadMergedMiningOptions() {
 func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	var inout string
 	from, _ := tx.From()
-	if gui.eth.AccountManager().HasAccount(common.Hex2Bytes(from.Hex())) {
+	if gui.eth.AccountManager().HasAccount(from) {
 		inout = "send"
 	} else {
 		inout = "recv"

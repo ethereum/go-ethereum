@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -88,6 +87,10 @@ func (sol *Solidity) Info() string {
 	return fmt.Sprintf("solc v%s\nSolidity Compiler: %s\n%s", sol.version, sol.solcPath, flair)
 }
 
+func (sol *Solidity) Version() string {
+	return sol.version
+}
+
 func (sol *Solidity) Compile(source string) (contract *Contract, err error) {
 
 	if len(source) == 0 {
@@ -126,10 +129,10 @@ func (sol *Solidity) Compile(source string) (contract *Contract, err error) {
 	_, file := filepath.Split(matches[0])
 	base := strings.Split(file, ".")[0]
 
-	codeFile := path.Join(wd, base+".binary")
-	abiDefinitionFile := path.Join(wd, base+".abi")
-	userDocFile := path.Join(wd, base+".docuser")
-	developerDocFile := path.Join(wd, base+".docdev")
+	codeFile := filepath.Join(wd, base+".binary")
+	abiDefinitionFile := filepath.Join(wd, base+".abi")
+	userDocFile := filepath.Join(wd, base+".docuser")
+	developerDocFile := filepath.Join(wd, base+".docdev")
 
 	code, err := ioutil.ReadFile(codeFile)
 	if err != nil {

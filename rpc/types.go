@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -117,7 +118,13 @@ func newHexData(input interface{}) *hexdata {
 		binary.BigEndian.PutUint32(buff, input)
 		d.data = buff
 	case string: // hexstring
-		d.data = common.Big(input).Bytes()
+		// aaargh ffs TODO: avoid back-and-forth hex encodings where unneeded
+		bytes, err := hex.DecodeString(strings.TrimPrefix(input, "0x"))
+		if err != nil {
+			d.isNil = true
+		} else {
+			d.data = bytes
+		}
 	default:
 		d.isNil = true
 	}
@@ -206,6 +213,22 @@ func (e *NotImplementedError) Error() string {
 func NewNotImplementedError(method string) *NotImplementedError {
 	return &NotImplementedError{
 		Method: method,
+	}
+}
+
+type NotAvailableError struct {
+	Method string
+	Reason string
+}
+
+func (e *NotAvailableError) Error() string {
+	return fmt.Sprintf("%s method not available: %s", e.Method, e.Reason)
+}
+
+func NewNotAvailableError(method string, reason string) *NotAvailableError {
+	return &NotAvailableError{
+		Method: method,
+		Reason: reason,
 	}
 }
 

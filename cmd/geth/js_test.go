@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -25,10 +24,13 @@ import (
 
 const (
 	testSolcPath = ""
+	solcVersion  = "0.9.17"
 
 	testKey     = "e6fab74a43941f82d89cb7faa408e227cdad3153c4720e540e855c19b15e6674"
 	testAddress = "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	testBalance = "10000000000000000000"
+	// of empty string
+	testHash = "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
 )
 
 var (
@@ -43,7 +45,7 @@ type testjethre struct {
 }
 
 func (self *testjethre) UnlockAccount(acc []byte) bool {
-	err := self.ethereum.AccountManager().Unlock(acc, "")
+	err := self.ethereum.AccountManager().Unlock(common.BytesToAddress(acc), "")
 	if err != nil {
 		panic("unable to unlock")
 	}
@@ -66,7 +68,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 	// set up mock genesis with balance on the testAddress
 	core.GenesisData = []byte(testGenesis)
 
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(tmp, "keys"))
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(tmp, "keystore"))
 	am := accounts.NewManager(ks)
 	ethereum, err := eth.New(&eth.Config{
 		DataDir:        tmp,
@@ -93,7 +95,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 		t.Fatal(err)
 	}
 
-	assetPath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
+	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
 	ds, err := docserver.New("/")
 	if err != nil {
 		t.Errorf("Error creating DocServer: %v", err)
@@ -215,7 +217,34 @@ func TestCheckTestAccountBalance(t *testing.T) {
 	checkEvalJSON(t, repl, `eth.getBalance(primary)`, `"`+testBalance+`"`)
 }
 
+func TestSignature(t *testing.T) {
+	tmp, repl, ethereum := testJEthRE(t)
+	if err := ethereum.Start(); err != nil {
+		t.Errorf("error starting ethereum: %v", err)
+		return
+	}
+	defer ethereum.Stop()
+	defer os.RemoveAll(tmp)
+
+	val, err := repl.re.Run(`eth.sign({from: "` + testAddress + `", data: "` + testHash + `"})`)
+
+	// This is a very preliminary test, lacking actual signature verification
+	if err != nil {
+		t.Errorf("Error runnig js: %v", err)
+		return
+	}
+	output := val.String()
+	t.Logf("Output: %v", output)
+
+	regex := regexp.MustCompile(`^0x[0-9a-f]{130}$`)
+	if !regex.MatchString(output) {
+		t.Errorf("Signature is not 65 bytes represented in hexadecimal.")
+		return
+	}
+}
+
 func TestContract(t *testing.T) {
+	t.Skip()
 
 	tmp, repl, ethereum := testJEthRE(t)
 	if err := ethereum.Start(); err != nil {
@@ -245,9 +274,16 @@ func TestContract(t *testing.T) {
 	checkEvalJSON(t, repl, `primary = eth.accounts[0]`, `"`+testAddress+`"`)
 	checkEvalJSON(t, repl, `source = "`+source+`"`, `"`+source+`"`)
 
-	_, err = compiler.New("")
+	// if solc is found with right version, test it, otherwise read from file
+	sol, err := compiler.New("")
 	if err != nil {
 		t.Logf("solc not found: skipping compiler test")
+	} else if sol.Version() != solcVersion {
+		err = fmt.Errorf("solc wrong version found (%v, expect %v): skipping compiler test", sol.Version(), solcVersion)
+		t.Log(err)
+	}
+
+	if err != nil {
 		info, err := ioutil.ReadFile("info_test.json")
 		if err != nil {
 			t.Fatalf("%v", err)
@@ -259,6 +295,7 @@ func TestContract(t *testing.T) {
 	} else {
 		checkEvalJSON(t, repl, `contract = eth.compile.solidity(source)`, string(contractInfo))
 	}
+
 	checkEvalJSON(t, repl, `contract.code`, `"605280600c6000396000f3006000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa114602e57005b60376004356041565b8060005260206000f35b6000600782029050604d565b91905056"`)
 
 	checkEvalJSON(
@@ -298,7 +335,7 @@ multiply7 = new Multiply7(contractaddress);
 	}
 
 	checkEvalJSON(t, repl, `filename = "/tmp/info.json"`, `"/tmp/info.json"`)
-	checkEvalJSON(t, repl, `contenthash = admin.contractInfo.register(primary, contractaddress, contract, filename)`, `"0x57e577316ccee6514797d9de9823af2004fdfe22bcfb6e39bbb8f92f57dcc421"`)
+	checkEvalJSON(t, repl, `contenthash = admin.contractInfo.register(primary, contractaddress, contract, filename)`, `"0x0d067e2dd99a4d8f0c0279738b17130dd415a89f24a23f0e7cf68c546ae3089d"`)
 	checkEvalJSON(t, repl, `admin.contractInfo.registerUrl(primary, contenthash, "file://"+filename)`, `true`)
 	if err != nil {
 		t.Errorf("unexpected error registering, got %v", err)
@@ -324,7 +361,7 @@ func checkEvalJSON(t *testing.T, re *testjethre, expr, want string) error {
 	}
 	if err != nil {
 		_, file, line, _ := runtime.Caller(1)
-		file = path.Base(file)
+		file = filepath.Base(file)
 		fmt.Printf("\t%s:%d: %v\n", file, line, err)
 		t.Fail()
 	}
