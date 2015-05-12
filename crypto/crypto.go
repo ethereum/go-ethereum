@@ -181,7 +181,7 @@ func Decrypt(prv *ecdsa.PrivateKey, ct []byte) ([]byte, error) {
 
 // Used only by block tests.
 func ImportBlockTestKey(privKeyBytes []byte) error {
-	ks := NewKeyStorePassphrase(common.DefaultDataDir() + "/keys")
+	ks := NewKeyStorePassphrase(common.DefaultDataDir() + "/keystore")
 	ecKey := ToECDSA(privKeyBytes)
 	key := &Key{
 		Id:         uuid.NewRandom(),

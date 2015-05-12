@@ -104,13 +104,13 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 
 	os.RemoveAll("/tmp/eth-natspec/")
 
-	err = os.MkdirAll("/tmp/eth-natspec/keys", os.ModePerm)
+	err = os.MkdirAll("/tmp/eth-natspec/keystore", os.ModePerm)
 	if err != nil {
 		panic(err)
 	}
 
 	// create a testAddress
-	ks := crypto.NewKeyStorePassphrase("/tmp/eth-natspec/keys")
+	ks := crypto.NewKeyStorePassphrase("/tmp/eth-natspec/keystore")
 	am := accounts.NewManager(ks)
 	testAccount, err := am.NewAccount("password")
 	if err != nil {
