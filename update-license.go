@@ -26,13 +26,13 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"text/template"
-    "path/filepath"
 )
 
 var (
