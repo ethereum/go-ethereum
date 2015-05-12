@@ -57,7 +57,8 @@ var errorToString = map[int]string{
 // bzzProtocol represents the swarm wire protocol
 // instance is running on each peer
 type bzzProtocol struct {
-	self     *discover.Node
+	self     func() *discover.Node
+	node     *discover.Node
 	netStore *NetStore
 	peer     *p2p.Peer
 	rw       p2p.MsgReadWriter
@@ -186,7 +187,7 @@ main entrypoint, wrappers starting a server running the bzz protocol
 use this constructor to attach the protocol ("class") to server caps
 the Dev p2p layer then runs the protocol instance on each peer
 */
-func BzzProtocol(netStore *NetStore, self *discover.Node) p2p.Protocol {
+func BzzProtocol(netStore *NetStore, self func() *discover.Node) p2p.Protocol {
 	return p2p.Protocol{
 		Name:    "bzz",
 		Version: Version,
@@ -199,10 +200,9 @@ func BzzProtocol(netStore *NetStore, self *discover.Node) p2p.Protocol {
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runBzzProtocol(netStore *NetStore, selfNode *discover.Node, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func runBzzProtocol(netStore *NetStore, selfF func() *discover.Node, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 	self := &bzzProtocol{
-		self: selfNode,
-
+		self:     selfF,
 		netStore: netStore,
 		rw:       rw,
 		peer:     p,
@@ -283,12 +283,12 @@ func (self *bzzProtocol) handle() error {
 
 func (self *bzzProtocol) handleStatus() (err error) {
 	// send precanned status message
-	sliceNodeID := self.self.ID
+	sliceNodeID := self.self().ID
 	handshake := &statusMsgData{
 		Version:   uint64(Version),
 		ID:        "honey",
 		NodeID:    sliceNodeID[:],
-		Addr:      newPeerAddrFromNode(self.self),
+		Addr:      newPeerAddrFromNode(self.self()),
 		NetworkId: uint64(NetworkId),
 		Caps:      []p2p.Cap{},
 	}
@@ -327,6 +327,8 @@ func (self *bzzProtocol) handleStatus() (err error) {
 
 	glog.V(logger.Info).Infof("Peer is [bzz] capable (%d/%d)\n", status.Version, status.NetworkId)
 
+	self.node = status.Addr.node()
+
 	self.netStore.hive.addPeer(peer{bzzProtocol: self})
 
 	return nil
@@ -334,11 +336,11 @@ func (self *bzzProtocol) handleStatus() (err error) {
 
 // protocol instance implements kademlia.Node interface (embedded hive.peer)
 func (self *bzzProtocol) Addr() (a kademlia.Address) {
-	return kademlia.Address(self.self.Sha())
+	return kademlia.Address(self.node.Sha())
 }
 
 func (self *bzzProtocol) Url() string {
-	return self.self.String()
+	return self.node.String()
 }
 
 func (self *bzzProtocol) LastActive() time.Time {

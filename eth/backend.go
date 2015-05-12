@@ -285,8 +285,24 @@ func New(config *Config) (*Ethereum, error) {
 
 	protocols := []p2p.Protocol{eth.protocolManager.SubProtocol}
 
+	eth.net = &p2p.Server{
+		PrivateKey:      netprv,
+		Name:            config.Name,
+		MaxPeers:        config.MaxPeers,
+		MaxPendingPeers: config.MaxPendingPeers,
+		// Protocols:       protocols,
+		NAT:            config.NAT,
+		NoDial:         !config.Dial,
+		BootstrapNodes: config.parseBootNodes(),
+		StaticNodes:    config.parseNodes(staticNodes),
+		TrustedNodes:   config.parseNodes(trustedNodes),
+		NodeDatabase:   nodeDb,
+	}
+	if len(config.Port) > 0 {
+		eth.net.ListenAddr = ":" + config.Port
+	}
 	if config.Bzz {
-		netStore := bzz.NewNetStore(config.DataDir + "/bzz")
+		netStore := bzz.NewNetStore(eth.net.Self().Sha(), path.Join(config.DataDir, "bzz"), path.Join(config.DataDir, "bzzpeers.json"))
 		chunker := &bzz.TreeChunker{}
 		chunker.Init()
 		dpa := &bzz.DPA{
@@ -294,29 +310,15 @@ func New(config *Config) (*Ethereum, error) {
 			ChunkStore: netStore,
 		}
 		dpa.Start()
-		protocols = append(protocols, bzz.BzzProtocol(netStore))
+		protocols = append(protocols, bzz.BzzProtocol(netStore, eth.net.Self))
 		go bzz.StartHttpServer(dpa)
 	}
 
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
 	}
-	eth.net = &p2p.Server{
-		PrivateKey:      netprv,
-		Name:            config.Name,
-		MaxPeers:        config.MaxPeers,
-		MaxPendingPeers: config.MaxPendingPeers,
-		Protocols:       protocols,
-		NAT:             config.NAT,
-		NoDial:          !config.Dial,
-		BootstrapNodes:  config.parseBootNodes(),
-		StaticNodes:     config.parseNodes(staticNodes),
-		TrustedNodes:    config.parseNodes(trustedNodes),
-		NodeDatabase:    nodeDb,
-	}
-	if len(config.Port) > 0 {
-		eth.net.ListenAddr = ":" + config.Port
-	}
+
+	eth.net.Protocols = protocols
 
 	vm.Debug = config.VmDebug
 
