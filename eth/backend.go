@@ -207,6 +207,7 @@ func New(config *Config) (*Ethereum, error) {
 		logger.NewJSONsystem(config.DataDir, config.LogJSON)
 	}
 
+	// Let the database take 3/4 of the max open files (TODO figure out a way to get the actual limit of the open files)
 	const dbCount = 3
 	ethdb.OpenFileLimit = 256 / (dbCount + 1)
 
