@@ -42,6 +42,10 @@ func (n *testNode) Addr() Address {
 func (n *testNode) Drop() {
 }
 
+func (n *testNode) Url() string {
+	return ""
+}
+
 func (n *testNode) LastActive() time.Time {
 	return time.Now()
 }
@@ -85,7 +89,7 @@ func TestGetNodes(t *testing.T) {
 		if len(test.All) == 0 || test.N == 0 {
 			return true
 		}
-		result := kad.GetNodes(test.Target, test.N)
+		nodes := kad.GetNodes(test.Target, test.N)
 
 		// check that the number of results is min(N, kad.len)
 		wantN := test.N
@@ -93,26 +97,26 @@ func TestGetNodes(t *testing.T) {
 			wantN = tlen
 		}
 
-		if len(result.nodes) != wantN {
-			t.Errorf("wrong number of nodes: got %d, want %d", len(result.nodes), wantN)
+		if len(nodes) != wantN {
+			t.Errorf("wrong number of nodes: got %d, want %d", len(nodes), wantN)
 			return false
 		}
 
-		if hasDuplicates(result.nodes) {
+		if hasDuplicates(nodes) {
 			t.Errorf("result contains duplicates")
 			return false
 		}
 
-		if !sortedByDistanceTo(test.Target, result.nodes) {
+		if !sortedByDistanceTo(test.Target, nodes) {
 			t.Errorf("result is not sorted by distance to target")
 			return false
 		}
 
 		// check that the result nodes have minimum distance to target.
-		farthestResult := result.nodes[len(result.nodes)-1].Addr()
+		farthestResult := nodes[len(nodes)-1].Addr()
 		for i, b := range kad.buckets {
 			for j, n := range b.nodes {
-				if contains(result.nodes, n.Addr()) {
+				if contains(nodes, n.Addr()) {
 					continue // don't run the check below for nodes in result
 				}
 				if proxCmp(test.Target, n.Addr(), farthestResult) < 0 {
@@ -239,7 +243,7 @@ func TestSaveLoad(t *testing.T) {
 			return
 		}
 	}
-	nodes := kad.GetNodes(self, 100).nodes
+	nodes := kad.GetNodes(self, 100)
 	path := "/tmp/bzz.peers"
 	kad.Stop(path)
 	kad = New(self)
@@ -255,7 +259,7 @@ func TestSaveLoad(t *testing.T) {
 			}
 		}
 	}
-	loadednodes := kad.GetNodes(self, 100).nodes
+	loadednodes := kad.GetNodes(self, 100)
 	for i, node := range loadednodes {
 		if nodes[i].Addr() != node.Addr() {
 			t.Errorf("node mismatch at %d/%d", i, len(nodes))

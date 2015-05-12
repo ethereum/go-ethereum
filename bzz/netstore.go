@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type NetStore struct {
@@ -43,13 +45,13 @@ type requestStatus struct {
 	C          chan bool
 }
 
-func NewNetStore(path string) *NetStore {
+func NewNetStore(addr common.Hash, path, hivepath string) *NetStore {
 	dbStore, _ := newDbStore(path)
 	return &NetStore{
 		localStore: &localStore{
 			memStore: newMemStore(dbStore),
 			dbStore:  dbStore,
-		}, hive: newHive(),
+		}, hive: newHive(addr, hivepath),
 	}
 }
 
@@ -180,8 +182,8 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 // it's assumed that caller holds the lock
 func (self *NetStore) startSearch(chunk *Chunk, id int64, timeout *time.Time) {
 	chunk.req.status = reqSearching
-	dpaLogger.Debugf("NetStore.startSearch: %064x - getting peers from cademlia...", chunk.Key)
-	peers := self.hive.getPeers(chunk.Key)
+	dpaLogger.Debugf("NetStore.startSearch: %064x - getting peers from KΛÐΞMLIΛ...", chunk.Key)
+	peers := self.hive.getPeers(chunk.Key, 0)
 	req := &retrieveRequestMsgData{
 		Key:     chunk.Key,
 		Id:      uint64(id),
@@ -279,14 +281,18 @@ func (self *NetStore) store(chunk *Chunk) {
 		SData: chunk.SData,
 		Id:    uint64(id),
 	}
-	for _, peer := range self.hive.getPeers(chunk.Key) {
+	for _, peer := range self.hive.getPeers(chunk.Key, 0) {
 		go peer.store(req)
 	}
 }
 
 func (self *NetStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout *time.Time) {
+	var addrs []*peerAddr
+	for _, peer := range self.hive.getPeers(req.Key, int(req.MaxPeers)) {
+		addrs = append(addrs, peer.peerAddr())
+	}
 	peersData := &peersMsgData{
-		Peers:   []*peerAddr{}, // get proximity bin from cademlia routing table
+		Peers:   addrs,
 		Key:     req.Key,
 		Id:      req.Id,
 		timeout: timeout,

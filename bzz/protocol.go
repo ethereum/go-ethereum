@@ -10,10 +10,12 @@ import (
 	"net"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/kademlia"
 	"github.com/ethereum/go-ethereum/errs"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 const (
@@ -55,6 +57,7 @@ var errorToString = map[int]string{
 // bzzProtocol represents the swarm wire protocol
 // instance is running on each peer
 type bzzProtocol struct {
+	self     *discover.Node
 	netStore *NetStore
 	peer     *p2p.Peer
 	rw       p2p.MsgReadWriter
@@ -85,6 +88,7 @@ type statusMsgData struct {
 	Version   uint64
 	ID        string
 	NodeID    []byte
+	Addr      *peerAddr
 	NetworkId uint64
 	Caps      []p2p.Cap
 	// Strategy  uint64
@@ -118,18 +122,37 @@ It is unclear if a retrieval request with an empty target is the same as a self 
 type retrieveRequestMsgData struct {
 	Key Key
 	// optional
-	Id      uint64     //
-	MaxSize uint64     //  maximum size of delivery accepted
-	timeout *time.Time //
+	Id       uint64     // request id
+	MaxSize  uint64     // maximum size of delivery accepted
+	MaxPeers uint64     // maximum number of peers returned
+	timeout  *time.Time //
 	//Metadata metaData  //
 	//
-	peer peer
+	peer peer // protocol registers the requester
 }
 
 type peerAddr struct {
-	IP     net.IP
-	Port   uint64
-	Pubkey []byte
+	IP   net.IP
+	Port uint16
+	ID   []byte
+	n    *discover.Node
+}
+
+func (self *peerAddr) node() *discover.Node {
+	if self.n == nil {
+		var nodeid discover.NodeID
+		copy(nodeid[:], self.ID)
+		self.n = discover.NewNode(nodeid, self.IP, self.Port, self.Port)
+	}
+	return self.n
+}
+
+func (self *peerAddr) addr() kademlia.Address {
+	return kademlia.Address(self.node().Sha())
+}
+
+func (self *peerAddr) url() string {
+	return self.node().String()
 }
 
 /*
@@ -163,21 +186,23 @@ main entrypoint, wrappers starting a server running the bzz protocol
 use this constructor to attach the protocol ("class") to server caps
 the Dev p2p layer then runs the protocol instance on each peer
 */
-func BzzProtocol(netStore *NetStore) p2p.Protocol {
+func BzzProtocol(netStore *NetStore, self *discover.Node) p2p.Protocol {
 	return p2p.Protocol{
 		Name:    "bzz",
 		Version: Version,
 		Length:  ProtocolLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return runBzzProtocol(netStore, p, rw)
+			return runBzzProtocol(netStore, self, p, rw)
 		},
 	}
 }
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runBzzProtocol(netStore *NetStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func runBzzProtocol(netStore *NetStore, selfNode *discover.Node, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 	self := &bzzProtocol{
+		self: selfNode,
+
 		netStore: netStore,
 		rw:       rw,
 		peer:     p,
@@ -248,7 +273,7 @@ func (self *bzzProtocol) handle() error {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
 		req.peer = peer{bzzProtocol: self}
-		self.netStore.hive.addPeers(&req)
+		self.netStore.hive.addPeerEntries(&req)
 
 	default:
 		return self.protoError(ErrInvalidMsgCode, "%v", msg.Code)
@@ -258,11 +283,12 @@ func (self *bzzProtocol) handle() error {
 
 func (self *bzzProtocol) handleStatus() (err error) {
 	// send precanned status message
-	sliceNodeID := self.peer.ID()
+	sliceNodeID := self.self.ID
 	handshake := &statusMsgData{
 		Version:   uint64(Version),
 		ID:        "honey",
 		NodeID:    sliceNodeID[:],
+		Addr:      newPeerAddrFromNode(self.self),
 		NetworkId: uint64(NetworkId),
 		Caps:      []p2p.Cap{},
 	}
@@ -301,9 +327,37 @@ func (self *bzzProtocol) handleStatus() (err error) {
 
 	glog.V(logger.Info).Infof("Peer is [bzz] capable (%d/%d)\n", status.Version, status.NetworkId)
 
-	self.netStore.hive.addPeer(peer{bzzProtocol: self, pubkey: status.NodeID})
+	self.netStore.hive.addPeer(peer{bzzProtocol: self})
 
 	return nil
+}
+
+// protocol instance implements kademlia.Node interface (embedded hive.peer)
+func (self *bzzProtocol) Addr() (a kademlia.Address) {
+	return kademlia.Address(self.self.Sha())
+}
+
+func (self *bzzProtocol) Url() string {
+	return self.self.String()
+}
+
+func (self *bzzProtocol) LastActive() time.Time {
+	return time.Now()
+}
+
+func (self *bzzProtocol) Drop() {
+}
+
+func newPeerAddrFromNode(node *discover.Node) *peerAddr {
+	return &peerAddr{
+		ID:   node.ID[:],
+		IP:   node.IP,
+		Port: node.TCP,
+	}
+}
+
+func (self *bzzProtocol) peerAddr() *peerAddr {
+	return newPeerAddrFromNode(self.peer.Node())
 }
 
 // outgoing messages

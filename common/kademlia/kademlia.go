@@ -28,11 +28,12 @@ type Kademlia struct {
 	addr Address
 
 	// adjustable parameters
-	BucketSize     int
-	MaxProx        int
-	MaxProxBinSize int
-	nodeDB         [][]*nodeRecord
-	nodeIndex      map[Address]*nodeRecord
+	MaxProx              int
+	MaxProxBinSize       int
+	BucketSize           int
+	currentMaxBucketSize int
+	nodeDB               [][]*NodeRecord
+	nodeIndex            map[Address]*NodeRecord
 
 	GetNode func(int)
 
@@ -44,26 +45,28 @@ type Kademlia struct {
 	count   int
 	buckets []*bucket
 
-	lock  sync.RWMutex
-	quitC chan bool
+	dblock sync.RWMutex
+	lock   sync.RWMutex
+	quitC  chan bool
 }
 
 type Address common.Hash
 
 type Node interface {
 	Addr() Address
-	// Url()
+	Url() string
 	LastActive() time.Time
 	Drop()
 }
 
-type nodeRecord struct {
+type NodeRecord struct {
 	Address Address `json:address`
+	Url     string  `json:url`
 	Active  int64   `json:active`
 	node    Node
 }
 
-func (self *nodeRecord) setActive() {
+func (self *NodeRecord) setActive() {
 	if self.node != nil {
 		self.Active = self.node.LastActive().UnixNano()
 	}
@@ -71,7 +74,7 @@ func (self *nodeRecord) setActive() {
 
 type kadDB struct {
 	Address Address         `json:address`
-	Nodes   [][]*nodeRecord `json:nodes`
+	Nodes   [][]*NodeRecord `json:nodes`
 }
 
 // public constructor with compulsory arguments
@@ -116,8 +119,8 @@ func (self *Kademlia) Start() error {
 		self.buckets[i] = &bucket{size: self.BucketSize} // will initialise bucket{int(0),[]Node(nil),sync.Mutex}
 	}
 
-	self.nodeDB = make([][]*nodeRecord, 8*len(self.addr))
-	self.nodeIndex = make(map[Address]*nodeRecord)
+	self.nodeDB = make([][]*NodeRecord, 8*len(self.addr))
+	self.nodeIndex = make(map[Address]*NodeRecord)
 
 	self.quitC = make(chan bool)
 	return nil
@@ -188,15 +191,17 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 	}
 
 	go func() {
+		self.dblock.Lock()
+		defer self.dblock.Unlock()
 		record, found := self.nodeIndex[node.Addr()]
 		if found {
 			record.node = node
 		} else {
-			record = &nodeRecord{
+			record = &NodeRecord{
 				Address: node.Addr(),
-				// Url:     node.Url(),
-				Active: node.LastActive().UnixNano(),
-				node:   node,
+				Url:     node.Url(),
+				Active:  node.LastActive().UnixNano(),
+				node:    node,
 			}
 			self.nodeIndex[node.Addr()] = record
 			self.nodeDB[index] = append(self.nodeDB[index], record)
@@ -236,7 +241,11 @@ proxLimit and MaxProx. proxLimit is dynamically adjusted so that 1) there is no
 empty buckets in bin < proxLimit and 2) the sum of all items are the maximum
 possible but lower than MaxProxBinSize
 */
-func (self *Kademlia) GetNodes(target Address, max int) (r nodesByDistance) {
+func (self *Kademlia) GetNodes(target Address, max int) []Node {
+	return self.getNodes(target, max).nodes
+}
+
+func (self *Kademlia) getNodes(target Address, max int) (r nodesByDistance) {
 	self.lock.RLock()
 	defer self.lock.RUnlock()
 	r.target = target
@@ -275,6 +284,61 @@ func (self *Kademlia) GetNodes(target Address, max int) (r nodesByDistance) {
 				start++
 			}
 		}
+	}
+	return
+}
+
+// this is used to add node records to the persisted db
+// TODO: maybe db needs to be purged occasionally (reputation will take care of
+// that)
+func (self *Kademlia) AddNodeRecords(nrs []*NodeRecord) {
+	self.dblock.Lock()
+	defer self.dblock.Unlock()
+	for _, node := range nrs {
+		_, found := self.nodeIndex[node.Address]
+		if !found {
+			self.nodeIndex[node.Address] = node
+			index := self.proximityBin(node.Address)
+			self.nodeDB[index] = append(self.nodeDB[index], node)
+		}
+	}
+}
+
+/*
+GetNodeRecords gives back an at most max length slice of node records
+in order of decreasing priority for desired connection
+Used to pick candidates for live nodes to satisfy Kademlia network for Swarm
+
+Does a round robin on buckets starting from 0 to proxLimit then back
+on each round i we inspect if live-nodes fill the bucket
+if len(nodes) + i < currentMaxBucketSize, then take ith element in corresponding
+db row ordered by reputation (active time?)
+
+This has double role. Starting as naive node with empty db, this implements
+Kademlia bootstrapping
+As a mature node, it manages quickly fill in blanks or short lines
+All on demand
+*/
+func (self *Kademlia) GetNodeRecords(max int) (nrs []*NodeRecord, err error) {
+	var round int
+	for max > 0 {
+		for i, b := range self.buckets {
+			if len(b.nodes)+round < self.currentMaxBucketSize {
+				if nr := self.getNodeRecord(i, round); nr != nil {
+					nrs = append(nrs)
+				}
+			}
+		}
+		round++
+		max--
+	}
+	return
+}
+
+func (self *Kademlia) getNodeRecord(row, col int) (nr *NodeRecord) {
+	if row >= 0 && row < len(self.nodeDB) &&
+		col >= 0 && col < len(self.nodeDB[row]) {
+		nr = self.nodeDB[row][col]
 	}
 	return
 }
@@ -417,16 +481,16 @@ func proxCmp(target, a, b Address) int {
 	return 0
 }
 
-func (self *Kademlia) DB() [][]*nodeRecord {
+func (self *Kademlia) DB() [][]*NodeRecord {
 	return self.nodeDB
 }
 
-func (n *nodeRecord) bumpActive() {
+func (n *NodeRecord) bumpActive() {
 	stamp := time.Now().Unix()
 	atomic.StoreInt64(&n.Active, stamp)
 }
 
-func (n *nodeRecord) LastActive() time.Time {
+func (n *NodeRecord) LastActive() time.Time {
 	stamp := atomic.LoadInt64(&n.Active)
 	return time.Unix(stamp, 0)
 }
@@ -438,11 +502,13 @@ func (self *Kademlia) Save(path string) error {
 		Address: self.addr,
 		Nodes:   self.nodeDB,
 	}
+
 	for _, b := range kad.Nodes {
 		for _, node := range b {
 			node.setActive()
 		}
 	}
+
 	data, err := json.MarshalIndent(&kad, "", " ")
 	if err != nil {
 		return err

@@ -1,5 +1,8 @@
 package bzz
 
+// this is a clone of an earlier state of the ethereum ethdb/database
+// no need for queueing/caching
+
 import (
 	"fmt"
 
