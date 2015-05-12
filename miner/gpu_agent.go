@@ -10,6 +10,7 @@ import (
 	"text/template"
 	"unsafe"
 
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/samuel/go-opencl/cl"
 )
@@ -25,11 +26,11 @@ type params struct {
 }
 
 const (
-	kernelFn         = "ethash.cl"
+	kernelFn         = "ethash_kernel.cl"
 	searchBuffSize   = 4
 	maxSearchResults = 63
 	searchBatchSize  = 1024
-	dagSize          = 128
+	dagSize          = 1024
 
 	SIZEOF_UINT32    = 4
 	ETHASH_MIX_BYTES = 32
@@ -37,6 +38,7 @@ const (
 
 var (
 	workGroupSize = 256
+	pow           *ethash.Ethash
 )
 
 type EthashCL struct {
@@ -134,6 +136,14 @@ func New() (*EthashCL, error) {
 		return nil, fmt.Errorf("dag buffer err:", err)
 	}
 
+	pow, err = ethash.NewForTesting()
+	if err != nil {
+		return nil, fmt.Errorf("dag err:", err)
+	}
+	dag := pow.Full.DAG(0).Ptr()
+
+	queue.EnqueueWriteBuffer(dagBuff, true, 0, dagSize, dag, nil)
+
 	headerBuff, err := context.CreateEmptyBuffer(cl.MemReadOnly, 32)
 	if err != nil {
 		return nil, fmt.Errorf("header buffer err:", err)
@@ -147,7 +157,6 @@ func New() (*EthashCL, error) {
 		}
 		searchBuffers[i] = searchBuff
 	}
-	queue.EnqueueWriteBuffer(dagBuff, true, 0, dagSize, nil, nil)
 
 	return &EthashCL{
 		ctx:           context,
@@ -238,7 +247,7 @@ func (h *EthashCL) Search(header common.Hash, target uint64, doneFn func([]uint6
 func main() {
 	fmt.Println("initialising OpenCL miner...")
 
-	ethash, err := New()
+	gpu, err := New()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -246,7 +255,7 @@ func main() {
 	fmt.Println("OpenCL miner initialised")
 
 	fmt.Println("Searching for solution...")
-	err = ethash.Search(common.Hash{}, 1000000000000, func(res []uint64) bool {
+	err = gpu.Search(common.Hash{}, 1000000000000, func(res []uint64) bool {
 		fmt.Printf("found: %x\n", res)
 		return true
 	})
