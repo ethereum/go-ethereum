@@ -207,21 +207,24 @@ func New(config *Config) (*Ethereum, error) {
 		logger.NewJSONsystem(config.DataDir, config.LogJSON)
 	}
 
+	const dbCount = 3
+	ethdb.OpenFileLimit = 256 / (dbCount + 1)
+
 	newdb := config.NewDB
 	if newdb == nil {
 		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path) }
 	}
 	blockDb, err := newdb(path.Join(config.DataDir, "blockchain"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("blockchain db err: %v", err)
 	}
 	stateDb, err := newdb(path.Join(config.DataDir, "state"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("state db err: %v", err)
 	}
 	extraDb, err := newdb(path.Join(config.DataDir, "extra"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("extra db err: %v", err)
 	}
 	nodeDb := path.Join(config.DataDir, "nodes")
 
