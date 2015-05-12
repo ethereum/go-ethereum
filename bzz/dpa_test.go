@@ -12,7 +12,6 @@ import (
 const testDataSize = 0x1000000
 
 func TestDPArandom(t *testing.T) {
-	t.Skip("skip until fixed")
 	os.RemoveAll("/tmp/bzz")
 	dbStore, err := newDbStore("/tmp/bzz")
 	dbStore.setCapacity(50000)
@@ -70,7 +69,6 @@ func TestDPArandom(t *testing.T) {
 }
 
 func TestDPA_capacity(t *testing.T) {
-	t.Skip("skip until fixed")
 	os.RemoveAll("/tmp/bzz")
 	dbStore, err := newDbStore("/tmp/bzz")
 	if err != nil {

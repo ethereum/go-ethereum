@@ -27,7 +27,7 @@ func NewLDBDatabase(file string) (*LDBDatabase, error) {
 		return nil, err
 	}
 
-	database := &LDBDatabase{db: db, comp: true}
+	database := &LDBDatabase{db: db, comp: false}
 
 	return database, nil
 }
