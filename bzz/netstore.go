@@ -45,14 +45,23 @@ type requestStatus struct {
 	C          chan bool
 }
 
-func NewNetStore(addr common.Hash, path, hivepath string) *NetStore {
-	dbStore, _ := newDbStore(path)
-	return &NetStore{
+func NewNetStore(addr common.Hash, path, hivepath string) (netstore *NetStore, err error) {
+	dbStore, err := newDbStore(path)
+	if err != nil {
+		return
+	}
+	hive := newHive(addr, hivepath)
+	netstore = &NetStore{
 		localStore: &localStore{
 			memStore: newMemStore(dbStore),
 			dbStore:  dbStore,
-		}, hive: newHive(addr, hivepath),
+		}, hive: hive,
 	}
+	err = hive.start()
+	if err != nil {
+		return
+	}
+	return
 }
 
 func (self *NetStore) Put(entry *Chunk) {

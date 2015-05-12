@@ -302,16 +302,20 @@ func New(config *Config) (*Ethereum, error) {
 		eth.net.ListenAddr = ":" + config.Port
 	}
 	if config.Bzz {
-		netStore := bzz.NewNetStore(eth.net.Self().Sha(), path.Join(config.DataDir, "bzz"), path.Join(config.DataDir, "bzzpeers.json"))
-		chunker := &bzz.TreeChunker{}
-		chunker.Init()
-		dpa := &bzz.DPA{
-			Chunker:    chunker,
-			ChunkStore: netStore,
+		netStore, err := bzz.NewNetStore(eth.net.Self().Sha(), path.Join(config.DataDir, "bzz"), path.Join(config.DataDir, "bzzpeers.json"))
+		if err != nil {
+			glog.V(logger.Warn).Infof("BZZ: error creating net store: %v. Protocol skipped", err)
+		} else {
+			chunker := &bzz.TreeChunker{}
+			chunker.Init()
+			dpa := &bzz.DPA{
+				Chunker:    chunker,
+				ChunkStore: netStore,
+			}
+			dpa.Start()
+			protocols = append(protocols, bzz.BzzProtocol(netStore, eth.net.Self))
+			go bzz.StartHttpServer(dpa)
 		}
-		dpa.Start()
-		protocols = append(protocols, bzz.BzzProtocol(netStore, eth.net.Self))
-		go bzz.StartHttpServer(dpa)
 	}
 
 	if config.Shh {

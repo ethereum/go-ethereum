@@ -1,6 +1,8 @@
 package bzz
 
 import (
+	// "fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/kademlia"
 )
@@ -38,7 +40,8 @@ func (self *hive) start() (err error) {
 	self.kad.Start()
 	err = self.kad.Load(self.path)
 	if err != nil {
-		return
+		dpaLogger.Warnf("Warning: error reading kademlia node db (skipping): %v", err)
+		err = nil
 	}
 	// go func() {
 	// 	for {
