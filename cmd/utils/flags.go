@@ -346,7 +346,7 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Dat
 
 func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keys"))
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keystore"))
 	return accounts.NewManager(ks)
 }
 

@@ -232,7 +232,7 @@ func (self *Gui) loadMergedMiningOptions() {
 func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	var inout string
 	from, _ := tx.From()
-	if gui.eth.AccountManager().HasAccount(common.Hex2Bytes(from.Hex())) {
+	if gui.eth.AccountManager().HasAccount(from) {
 		inout = "send"
 	} else {
 		inout = "recv"

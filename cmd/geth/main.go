@@ -365,11 +365,10 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 	// Load startup keys. XXX we are going to need a different format
 	// Attempt to unlock the account
 	passphrase = getPassPhrase(ctx, "", false)
-	accbytes := common.FromHex(account)
-	if len(accbytes) == 0 {
+	if len(account) == 0 {
 		utils.Fatalf("Invalid account address '%s'", account)
 	}
-	err = am.Unlock(accbytes, passphrase)
+	err = am.Unlock(common.StringToAddress(account), passphrase)
 	if err != nil {
 		utils.Fatalf("Unlock account failed '%v'", err)
 	}
@@ -385,11 +384,11 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	if len(account) > 0 {
 		if account == "primary" {
-			accbytes, err := am.Primary()
+			primaryAcc, err := am.Primary()
 			if err != nil {
 				utils.Fatalf("no primary account: %v", err)
 			}
-			account = common.ToHex(accbytes)
+			account = primaryAcc.Hex()
 		}
 		unlockAccount(ctx, am, account)
 	}

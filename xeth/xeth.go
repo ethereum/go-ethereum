@@ -365,7 +365,7 @@ func (self *XEth) Accounts() []string {
 	accounts, _ := self.backend.AccountManager().Accounts()
 	accountAddresses := make([]string, len(accounts))
 	for i, ac := range accounts {
-		accountAddresses[i] = common.ToHex(ac.Address)
+		accountAddresses[i] = ac.Address.Hex()
 	}
 	return accountAddresses
 }
@@ -781,7 +781,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		if err != nil || len(accounts) == 0 {
 			from = statedb.GetOrNewStateObject(common.Address{})
 		} else {
-			from = statedb.GetOrNewStateObject(common.BytesToAddress(accounts[0].Address))
+			from = statedb.GetOrNewStateObject(accounts[0].Address)
 		}
 	} else {
 		from = statedb.GetOrNewStateObject(common.HexToAddress(fromStr))
@@ -817,7 +817,7 @@ func (self *XEth) ConfirmTransaction(tx string) bool {
 }
 
 func (self *XEth) doSign(from common.Address, hash common.Hash, didUnlock bool) ([]byte, error) {
-	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from.Bytes()}, hash.Bytes())
+	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from}, hash.Bytes())
 	if err == accounts.ErrLocked {
 		if didUnlock {
 			return nil, fmt.Errorf("signer account still locked after successful unlock")

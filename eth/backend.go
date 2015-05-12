@@ -386,14 +386,17 @@ func (s *Ethereum) StartMining(threads int) error {
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	eb = s.etherbase
 	if (eb == common.Address{}) {
-		var ebbytes []byte
-		ebbytes, err = s.accountManager.Primary()
-		eb = common.BytesToAddress(ebbytes)
-		if (eb == common.Address{}) {
-			err = fmt.Errorf("no accounts found")
+		primary, err := s.accountManager.Primary()
+		if err != nil {
+			return eb, err
 		}
+		if (primary == common.Address{}) {
+			err = fmt.Errorf("no accounts found")
+			return eb, err
+		}
+		eb = primary
 	}
-	return
+	return eb, nil
 }
 
 func (s *Ethereum) StopMining()         { s.miner.Stop() }
@@ -542,7 +545,7 @@ func (self *Ethereum) syncAccounts(tx *types.Transaction) {
 		return
 	}
 
-	if self.accountManager.HasAccount(from.Bytes()) {
+	if self.accountManager.HasAccount(from) {
 		if self.chainManager.TxState().GetNonce(from) < tx.Nonce() {
 			self.chainManager.TxState().SetNonce(from, tx.Nonce())
 		}

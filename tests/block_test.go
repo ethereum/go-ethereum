@@ -99,7 +99,7 @@ func runBlockTest(name string, test *BlockTest, t *testing.T) {
 }
 
 func testEthConfig() *eth.Config {
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keys"))
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"))
 
 	return &eth.Config{
 		DataDir:        common.DefaultDataDir(),

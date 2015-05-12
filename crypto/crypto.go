@@ -181,11 +181,11 @@ func Decrypt(prv *ecdsa.PrivateKey, ct []byte) ([]byte, error) {
 
 // Used only by block tests.
 func ImportBlockTestKey(privKeyBytes []byte) error {
-	ks := NewKeyStorePassphrase(common.DefaultDataDir() + "/keys")
+	ks := NewKeyStorePassphrase(common.DefaultDataDir() + "/keystore")
 	ecKey := ToECDSA(privKeyBytes)
 	key := &Key{
 		Id:         uuid.NewRandom(),
-		Address:    PubkeyToAddress(ecKey.PublicKey),
+		Address:    common.BytesToAddress(PubkeyToAddress(ecKey.PublicKey)),
 		PrivateKey: ecKey,
 	}
 	err := ks.StoreKey(key, "")
@@ -231,13 +231,13 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	ecKey := ToECDSA(ethPriv)
 	key = &Key{
 		Id:         nil,
-		Address:    PubkeyToAddress(ecKey.PublicKey),
+		Address:    common.BytesToAddress(PubkeyToAddress(ecKey.PublicKey)),
 		PrivateKey: ecKey,
 	}
-	derivedAddr := common.Bytes2Hex(key.Address)
+	derivedAddr := hex.EncodeToString(key.Address.Bytes()) // needed because .Hex() gives leading "0x"
 	expectedAddr := preSaleKeyStruct.EthAddr
 	if derivedAddr != expectedAddr {
-		err = errors.New("decrypted addr not equal to expected addr")
+		err = errors.New(fmt.Sprintf("decrypted addr not equal to expected addr ", derivedAddr, expectedAddr))
 	}
 	return key, err
 }
@@ -252,7 +252,7 @@ func aesCBCDecrypt(key []byte, cipherText []byte, iv []byte) (plainText []byte, 
 	decrypter.CryptBlocks(paddedPlainText, cipherText)
 	plainText = PKCS7Unpad(paddedPlainText)
 	if plainText == nil {
-		err = errors.New("Decryption failed: PKCS7Unpad failed after decryption")
+		err = errors.New("Decryption failed: PKCS7Unpad failed after AES decryption")
 	}
 	return plainText, err
 }

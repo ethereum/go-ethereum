@@ -113,7 +113,7 @@ func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, erro
 		if acct.PrivateKey != "" {
 			privkey, err := hex.DecodeString(strings.TrimPrefix(acct.PrivateKey, "0x"))
 			err = crypto.ImportBlockTestKey(privkey)
-			err = ethereum.AccountManager().TimedUnlock(addr, "", 999999*time.Second)
+			err = ethereum.AccountManager().TimedUnlock(common.BytesToAddress(addr), "", 999999*time.Second)
 			if err != nil {
 				return nil, err
 			}

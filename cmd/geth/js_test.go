@@ -45,7 +45,7 @@ type testjethre struct {
 }
 
 func (self *testjethre) UnlockAccount(acc []byte) bool {
-	err := self.ethereum.AccountManager().Unlock(acc, "")
+	err := self.ethereum.AccountManager().Unlock(common.BytesToAddress(acc), "")
 	if err != nil {
 		panic("unable to unlock")
 	}
@@ -68,7 +68,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 	// set up mock genesis with balance on the testAddress
 	core.GenesisData = []byte(testGenesis)
 
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(tmp, "keys"))
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(tmp, "keystore"))
 	am := accounts.NewManager(ks)
 	ethereum, err := eth.New(&eth.Config{
 		DataDir:        tmp,
