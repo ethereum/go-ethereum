@@ -22,9 +22,8 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"strings"
-
 	"path/filepath"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common/docserver"

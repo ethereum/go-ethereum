@@ -22,7 +22,6 @@ package main
 
 import (
 	"io/ioutil"
-
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"

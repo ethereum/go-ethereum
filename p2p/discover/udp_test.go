@@ -9,6 +9,7 @@ import (
 	logpkg "log"
 	"net"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"sync"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
-    "path/filepath"
 )
 
 func init() {

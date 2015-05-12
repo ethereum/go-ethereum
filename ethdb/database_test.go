@@ -2,7 +2,6 @@ package ethdb
 
 import (
 	"os"
-
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"

@@ -7,9 +7,8 @@ import (
 	"math/big"
 	"net/http"
 	"os"
-	"runtime"
-
 	"path/filepath"
+	"runtime"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
