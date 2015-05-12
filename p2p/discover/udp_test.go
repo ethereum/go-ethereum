@@ -9,7 +9,7 @@ import (
 	logpkg "log"
 	"net"
 	"os"
-	"path"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"sync"
@@ -88,7 +88,7 @@ func (test *udpTest) waitPacketOut(validate interface{}) error {
 func (test *udpTest) errorf(format string, args ...interface{}) error {
 	_, file, line, ok := runtime.Caller(2) // errorf + waitPacketOut
 	if ok {
-		file = path.Base(file)
+		file = filepath.Base(file)
 	} else {
 		file = "???"
 		line = 1

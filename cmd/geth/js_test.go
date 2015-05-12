@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -96,7 +95,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 		t.Fatal(err)
 	}
 
-	assetPath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
+	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
 	ds, err := docserver.New("/")
 	if err != nil {
 		t.Errorf("Error creating DocServer: %v", err)
@@ -362,7 +361,7 @@ func checkEvalJSON(t *testing.T, re *testjethre, expr, want string) error {
 	}
 	if err != nil {
 		_, file, line, _ := runtime.Caller(1)
-		file = path.Base(file)
+		file = filepath.Base(file)
 		fmt.Printf("\t%s:%d: %v\n", file, line, err)
 		t.Fail()
 	}

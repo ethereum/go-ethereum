@@ -26,7 +26,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
@@ -144,7 +144,7 @@ func getFiles(out chan<- string) {
 				return
 			}
 		}
-		ext := path.Ext(line)
+		ext := filepath.Ext(line)
 		for _, wantExt := range extensions {
 			if ext == wantExt {
 				goto send

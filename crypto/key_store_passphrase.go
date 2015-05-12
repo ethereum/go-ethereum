@@ -72,7 +72,7 @@ import (
 	"errors"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 
 	"code.google.com/p/go-uuid/uuid"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
@@ -163,7 +163,7 @@ func (ks keyStorePassphrase) DeleteKey(keyAddr []byte, auth string) (err error) 
 		return err
 	}
 
-	keyDirPath := path.Join(ks.keysDirPath, hex.EncodeToString(keyAddr))
+	keyDirPath := filepath.Join(ks.keysDirPath, hex.EncodeToString(keyAddr))
 	return os.RemoveAll(keyDirPath)
 }
 

@@ -30,7 +30,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 )
 
 // TODO: rename to KeyStore when replacing existing KeyStore
@@ -91,20 +91,20 @@ func (ks keyStorePlain) StoreKey(key *Key, auth string) (err error) {
 }
 
 func (ks keyStorePlain) DeleteKey(keyAddr []byte, auth string) (err error) {
-	keyDirPath := path.Join(ks.keysDirPath, hex.EncodeToString(keyAddr))
+	keyDirPath := filepath.Join(ks.keysDirPath, hex.EncodeToString(keyAddr))
 	err = os.RemoveAll(keyDirPath)
 	return err
 }
 
 func GetKeyFile(keysDirPath string, keyAddr []byte) (fileContent []byte, err error) {
 	fileName := hex.EncodeToString(keyAddr)
-	return ioutil.ReadFile(path.Join(keysDirPath, fileName, fileName))
+	return ioutil.ReadFile(filepath.Join(keysDirPath, fileName, fileName))
 }
 
 func WriteKeyFile(addr []byte, keysDirPath string, content []byte) (err error) {
 	addrHex := hex.EncodeToString(addr)
-	keyDirPath := path.Join(keysDirPath, addrHex)
-	keyFilePath := path.Join(keyDirPath, addrHex)
+	keyDirPath := filepath.Join(keysDirPath, addrHex)
+	keyFilePath := filepath.Join(keyDirPath, addrHex)
 	err = os.MkdirAll(keyDirPath, 0700) // read, write and dir search for user
 	if err != nil {
 		return err
