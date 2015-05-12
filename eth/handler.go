@@ -381,7 +381,7 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 		}
 	}
 	// Broadcast block to peer set
-	peers = peers[:int(math.Sqrt(float64(len(peers))))]
+	//FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
 	for _, peer := range peers {
 		peer.sendTransaction(tx)
 	}
