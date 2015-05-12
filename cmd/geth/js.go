@@ -22,8 +22,9 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"path"
 	"strings"
+
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common/docserver"
@@ -209,7 +210,7 @@ func (self *jsre) interactive() {
 }
 
 func (self *jsre) withHistory(op func(*os.File)) {
-	hist, err := os.OpenFile(path.Join(self.ethereum.DataDir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
+	hist, err := os.OpenFile(filepath.Join(self.ethereum.DataDir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		fmt.Printf("unable to open history file: %v\n", err)
 		return

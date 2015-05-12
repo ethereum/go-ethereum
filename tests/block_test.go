@@ -1,7 +1,7 @@
 package tests
 
 import (
-	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -99,7 +99,7 @@ func runBlockTest(name string, test *BlockTest, t *testing.T) {
 }
 
 func testEthConfig() *eth.Config {
-	ks := crypto.NewKeyStorePassphrase(path.Join(common.DefaultDataDir(), "keys"))
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keys"))
 
 	return &eth.Config{
 		DataDir:        common.DefaultDataDir(),

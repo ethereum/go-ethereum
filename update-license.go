@@ -26,13 +26,13 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
 	"regexp"
 	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"text/template"
+    "path/filepath"
 )
 
 var (
@@ -144,7 +144,7 @@ func getFiles(out chan<- string) {
 				return
 			}
 		}
-		ext := path.Ext(line)
+		ext := filepath.Ext(line)
 		for _, wantExt := range extensions {
 			if ext == wantExt {
 				goto send

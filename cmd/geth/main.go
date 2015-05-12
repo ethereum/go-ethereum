@@ -26,7 +26,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -565,7 +564,7 @@ func upgradeDb(ctx *cli.Context) {
 	}
 
 	filename := fmt.Sprintf("blockchain_%d_%s.chain", bcVersion, time.Now().Format("2006-01-02_15:04:05"))
-	exportFile := path.Join(ctx.GlobalString(utils.DataDirFlag.Name), filename)
+	exportFile := filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), filename)
 
 	err = utils.ExportChain(ethereum.ChainManager(), exportFile)
 	if err != nil {
@@ -576,7 +575,7 @@ func upgradeDb(ctx *cli.Context) {
 	ethereum.StateDb().Close()
 	ethereum.ExtraDb().Close()
 
-	os.RemoveAll(path.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
+	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
 
 	ethereum, err = eth.New(cfg)
 	if err != nil {

@@ -27,10 +27,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
-	"path"
 	"runtime"
 	"sort"
 	"time"
+
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -79,7 +80,7 @@ type Gui struct {
 
 // Create GUI, but doesn't start it
 func NewWindow(ethereum *eth.Ethereum) *Gui {
-	db, err := ethdb.NewLDBDatabase(path.Join(ethereum.DataDir, "tx_database"))
+	db, err := ethdb.NewLDBDatabase(filepath.Join(ethereum.DataDir, "tx_database"))
 	if err != nil {
 		panic(err)
 	}
@@ -92,7 +93,7 @@ func NewWindow(ethereum *eth.Ethereum) *Gui {
 		plugins:       make(map[string]plugin),
 		serviceEvents: make(chan ServEv, 1),
 	}
-	data, _ := ioutil.ReadFile(path.Join(ethereum.DataDir, "plugins.json"))
+	data, _ := ioutil.ReadFile(filepath.Join(ethereum.DataDir, "plugins.json"))
 	json.Unmarshal(data, &gui.plugins)
 
 	return gui

@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"path"
 	"runtime"
 	"strconv"
 	"testing"
+
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -94,7 +95,7 @@ func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 }
 
 func loadChain(fn string, t *testing.T) (types.Blocks, error) {
-	fh, err := os.OpenFile(path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "_data", fn), os.O_RDONLY, os.ModePerm)
+	fh, err := os.OpenFile(filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "_data", fn), os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return nil, err
 	}

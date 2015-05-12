@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -145,7 +144,7 @@ func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
 		return cfg.NodeKey, nil
 	}
 	// use persistent key if present
-	keyfile := path.Join(cfg.DataDir, "nodekey")
+	keyfile := filepath.Join(cfg.DataDir, "nodekey")
 	key, err := crypto.LoadECDSA(keyfile)
 	if err == nil {
 		return key, nil
@@ -214,25 +213,25 @@ func New(config *Config) (*Ethereum, error) {
 	if newdb == nil {
 		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path) }
 	}
-	blockDb, err := newdb(path.Join(config.DataDir, "blockchain"))
+	blockDb, err := newdb(filepath.Join(config.DataDir, "blockchain"))
 	if err != nil {
 		return nil, fmt.Errorf("blockchain db err: %v", err)
 	}
-	stateDb, err := newdb(path.Join(config.DataDir, "state"))
+	stateDb, err := newdb(filepath.Join(config.DataDir, "state"))
 	if err != nil {
 		return nil, fmt.Errorf("state db err: %v", err)
 	}
-	extraDb, err := newdb(path.Join(config.DataDir, "extra"))
+	extraDb, err := newdb(filepath.Join(config.DataDir, "extra"))
 	if err != nil {
 		return nil, fmt.Errorf("extra db err: %v", err)
 	}
-	nodeDb := path.Join(config.DataDir, "nodes")
+	nodeDb := filepath.Join(config.DataDir, "nodes")
 
 	// Perform database sanity checks
 	d, _ := blockDb.Get([]byte("ProtocolVersion"))
 	protov := int(common.NewValue(d).Uint())
 	if protov != config.ProtocolVersion && protov != 0 {
-		path := path.Join(config.DataDir, "blockchain")
+		path := filepath.Join(config.DataDir, "blockchain")
 		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
 	}
 	saveProtocolVersion(blockDb, config.ProtocolVersion)

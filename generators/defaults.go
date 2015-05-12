@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -35,7 +35,7 @@ func main() {
 	m := make(map[string]setting)
 	json.Unmarshal(content, &m)
 
-	filepath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "params", os.Args[2])
+	filepath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "params", os.Args[2])
 	output, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE, os.ModePerm /*0777*/)
 	if err != nil {
 		fatal("error opening file for writing %v\n", err)

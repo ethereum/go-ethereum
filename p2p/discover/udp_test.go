@@ -9,7 +9,6 @@ import (
 	logpkg "log"
 	"net"
 	"os"
-	"path"
 	"reflect"
 	"runtime"
 	"sync"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
+    "path/filepath"
 )
 
 func init() {
@@ -88,7 +88,7 @@ func (test *udpTest) waitPacketOut(validate interface{}) error {
 func (test *udpTest) errorf(format string, args ...interface{}) error {
 	_, file, line, ok := runtime.Caller(2) // errorf + waitPacketOut
 	if ok {
-		file = path.Base(file)
+		file = filepath.Base(file)
 	} else {
 		file = "???"
 		line = 1

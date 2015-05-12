@@ -7,8 +7,9 @@ import (
 	"math/big"
 	"net/http"
 	"os"
-	"path"
 	"runtime"
+
+	"path/filepath"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
@@ -55,7 +56,7 @@ OPTIONS:
 // NewApp creates an app with sane defaults.
 func NewApp(version, usage string) *cli.App {
 	app := cli.NewApp()
-	app.Name = path.Base(os.Args[0])
+	app.Name = filepath.Base(os.Args[0])
 	app.Author = ""
 	//app.Authors = nil
 	app.Email = ""
@@ -319,17 +320,17 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Database) {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
 
-	blockDb, err := ethdb.NewLDBDatabase(path.Join(dataDir, "blockchain"))
+	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(dataDir, "blockchain"))
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
 
-	stateDb, err := ethdb.NewLDBDatabase(path.Join(dataDir, "state"))
+	stateDb, err := ethdb.NewLDBDatabase(filepath.Join(dataDir, "state"))
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
 
-	extraDb, err := ethdb.NewLDBDatabase(path.Join(dataDir, "extra"))
+	extraDb, err := ethdb.NewLDBDatabase(filepath.Join(dataDir, "extra"))
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
@@ -346,7 +347,7 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Dat
 
 func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
-	ks := crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keys"))
 	return accounts.NewManager(ks)
 }
 
