@@ -9,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const solcVersion = "0.9.17"
+
 var (
 	source = `
 contract test {
@@ -19,9 +21,9 @@ contract test {
 }
 `
 	code = "605280600c6000396000f3006000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa114602e57005b60376004356041565b8060005260206000f35b6000600782029050604d565b91905056"
-	info = `{"source":"\ncontract test {\n   /// @notice Will multiply ` + "`a`" + ` by 7.\n   function multiply(uint a) returns(uint d) {\n       return a * 7;\n   }\n}\n","language":"Solidity","languageVersion":"0","compilerVersion":"0.9.13","abiDefinition":[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}],"userDoc":{"methods":{"multiply(uint256)":{"notice":"Will multiply ` + "`a`" + ` by 7."}}},"developerDoc":{"methods":{}}}`
+	info = `{"source":"\ncontract test {\n   /// @notice Will multiply ` + "`a`" + ` by 7.\n   function multiply(uint a) returns(uint d) {\n       return a * 7;\n   }\n}\n","language":"Solidity","languageVersion":"0","compilerVersion":"0.9.17","abiDefinition":[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}],"userDoc":{"methods":{"multiply(uint256)":{"notice":"Will multiply ` + "`a`" + ` by 7."}}},"developerDoc":{"methods":{}}}`
 
-	infohash = common.HexToHash("0xfdb031637e8a1c1891143f8d129ebc7f7c4e4b41ecad8c85abe1756190f74204")
+	infohash = common.HexToHash("0x834075768a68e500e459b9c3213750c84de3df47156500cb01bb664d3f88c60a")
 )
 
 func TestCompiler(t *testing.T) {
@@ -41,7 +43,7 @@ func TestCompiler(t *testing.T) {
 
 func TestCompileError(t *testing.T) {
 	sol, err := New("")
-	if err != nil {
+	if err != nil || sol.version != solcVersion {
 		t.Skip("no solc installed")
 	}
 	contract, err := sol.Compile(source[2:])

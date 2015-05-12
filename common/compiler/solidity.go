@@ -88,6 +88,10 @@ func (sol *Solidity) Info() string {
 	return fmt.Sprintf("solc v%s\nSolidity Compiler: %s\n%s", sol.version, sol.solcPath, flair)
 }
 
+func (sol *Solidity) Version() string {
+	return sol.version
+}
+
 func (sol *Solidity) Compile(source string) (contract *Contract, err error) {
 
 	if len(source) == 0 {
