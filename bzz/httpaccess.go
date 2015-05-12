@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -174,10 +173,6 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 						// content type defaults to manifest
 						entry.ContentType = manifestType
 					}
-					if entry.Status == 0 {
-						// status defaults to 200
-						entry.Status = 200
-					}
 					pathLen := len(entry.Path)
 					if len(path) >= pathLen && path[:pathLen] == entry.Path && prefix <= pathLen {
 						dpaLogger.Debugf("Swarm: \"%s\" matches \"%s\".", path, entry.Path)
@@ -195,8 +190,9 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 					reader := dpa.Retrieve(key)
 					w.Header().Set("Content-Type", mimeType)
 					dpaLogger.Debugf("Swarm: HTTP Status %d", status)
-					w.Header().Set("Content-Length", strconv.FormatInt(reader.Size(), 10))
-					w.WriteHeader(int(status))
+					if status > 0 {
+						w.WriteHeader(int(status))
+					}
 					dpaLogger.Debugf("Swarm: Reading %d bytes.", reader.Size())
 					http.ServeContent(w, r, name, time.Unix(0, 0), reader)
 					dpaLogger.Debugf("Swarm: Served %s as %s.", mimeType, uri)
