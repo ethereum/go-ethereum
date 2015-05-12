@@ -324,6 +324,15 @@ func (s *dbStore) Get(key Key) (chunk *Chunk, err error) {
 		if err != nil {
 			return
 		}
+
+		hasher := hasherfunc.New()
+		hasher.Write(data)
+		if bytes.Compare(hasher.Sum(nil), key) != 0 {
+			s.db.Delete(getDataKey(index.Idx))
+			err = notFound
+			return
+		}
+
 		chunk = &Chunk{
 			Key: key,
 		}
