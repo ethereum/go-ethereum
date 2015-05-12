@@ -45,7 +45,7 @@ type testjethre struct {
 }
 
 func (self *testjethre) UnlockAccount(acc []byte) bool {
-	err := self.ethereum.AccountManager().Unlock(acc, "")
+	err := self.ethereum.AccountManager().Unlock(common.BytesToAddress(acc), "")
 	if err != nil {
 		panic("unable to unlock")
 	}
