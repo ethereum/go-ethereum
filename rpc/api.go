@@ -194,9 +194,9 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		// TODO unwrap the parent method's ToHex call
 		if len(gas) == 0 {
-			*reply = newHexData([]byte{})
+			*reply = newHexNum(0)
 		} else {
-			*reply = newHexData(gas)
+			*reply = newHexNum(gas)
 		}
 	case "eth_call":
 		v, _, err := api.doCall(req.Params)
