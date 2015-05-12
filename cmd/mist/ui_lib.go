@@ -127,7 +127,7 @@ func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
 	)
 }
 
-func (self *UiLib) Call(params map[string]interface{}) (string, error) {
+func (self *UiLib) Call(params map[string]interface{}) (string, string, error) {
 	object := mapToTxParams(params)
 
 	return self.XEth.Call(

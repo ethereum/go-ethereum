@@ -186,16 +186,24 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 		*reply = v
-	case "eth_call":
-		args := new(CallArgs)
-		if err := json.Unmarshal(req.Params, &args); err != nil {
-			return err
-		}
-
-		v, err := api.xethAtStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+	case "eth_estimateGas":
+		_, gas, err := api.doCall(req.Params)
 		if err != nil {
 			return err
 		}
+
+		// TODO unwrap the parent method's ToHex call
+		if len(gas) == 0 {
+			*reply = newHexData([]byte{})
+		} else {
+			*reply = newHexData(gas)
+		}
+	case "eth_call":
+		v, _, err := api.doCall(req.Params)
+		if err != nil {
+			return err
+		}
+
 		// TODO unwrap the parent method's ToHex call
 		if v == "0x0" {
 			*reply = newHexData([]byte{})
@@ -570,4 +578,13 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 	glog.V(logger.Detail).Infof("Reply: %T %s\n", reply, reply)
 	return nil
+}
+
+func (api *EthereumApi) doCall(params json.RawMessage) (string, string, error) {
+	args := new(CallArgs)
+	if err := json.Unmarshal(params, &args); err != nil {
+		return "", "", err
+	}
+
+	return api.xethAtStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 }
