@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -117,7 +118,13 @@ func newHexData(input interface{}) *hexdata {
 		binary.BigEndian.PutUint32(buff, input)
 		d.data = buff
 	case string: // hexstring
-		d.data = common.Big(input).Bytes()
+		// aaargh ffs TODO: avoid back-and-forth hex encodings where unneeded
+		bytes, err := hex.DecodeString(strings.TrimPrefix(input, "0x"))
+		if err != nil {
+			d.isNil = true
+		} else {
+			d.data = bytes
+		}
 	default:
 		d.isNil = true
 	}
