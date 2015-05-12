@@ -20,6 +20,7 @@ const (
 )
 
 var (
+	protocolMatcher = regexp.MustCompile("^/bzz:")
 	uriMatcher      = regexp.MustCompile("^/raw/[0-9A-Fa-f]{64}(?:/[a-z]+/[-+0-9a-z]+)?$")
 	manifestMatcher = regexp.MustCompile("^/[0-9A-Fa-f]{64}")
 	hashMatcher     = regexp.MustCompile("^[0-9A-Fa-f]{64}$")
@@ -94,7 +95,7 @@ func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error
 }
 
 func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
-	uri := r.RequestURI
+	uri := protocolMatcher.ReplaceAllString(r.RequestURI, "")
 	switch {
 	case r.Method == "POST":
 		if uri == "/raw" {
