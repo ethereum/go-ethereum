@@ -773,7 +773,7 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 	return tx.Hash().Hex(), nil
 }
 
-func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
+func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, string, error) {
 	statedb := self.State().State() //self.eth.ChainManager().TransState()
 	var from *state.StateObject
 	if len(fromStr) == 0 {
@@ -787,6 +787,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		from = statedb.GetOrNewStateObject(common.HexToAddress(fromStr))
 	}
 
+	from.SetGasPool(self.backend.ChainManager().GasLimit())
 	msg := callmsg{
 		from:     from,
 		to:       common.HexToAddress(toStr),
@@ -807,8 +808,8 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	block := self.CurrentBlock()
 	vmenv := core.NewEnv(statedb, self.backend.ChainManager(), msg, block)
 
-	res, err := vmenv.Call(msg.from, msg.to, msg.data, msg.gas, msg.gasPrice, msg.value)
-	return common.ToHex(res), err
+	res, gas, err := core.ApplyMessage(vmenv, msg, from)
+	return common.ToHex(res), gas.String(), err
 }
 
 func (self *XEth) ConfirmTransaction(tx string) bool {
