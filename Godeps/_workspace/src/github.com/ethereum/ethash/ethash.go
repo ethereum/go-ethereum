@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -256,7 +257,7 @@ func (pow *Full) getDAG(blockNum uint64) (d *dag) {
 	return d
 }
 
-func (pow *Full) Search(block pow.Block, stop <-chan struct{}) (nonce uint64, mixDigest []byte) {
+func (pow *Full) Search(block pow.Block, stop <-chan struct{}, prevHashRate *uint64) (nonce uint64, mixDigest []byte) {
 	dag := pow.getDAG(block.NumberU64())
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -277,9 +278,11 @@ func (pow *Full) Search(block pow.Block, stop <-chan struct{}) (nonce uint64, mi
 		default:
 			i++
 
-			elapsed := time.Now().UnixNano() - start
-			hashes := ((float64(1e9) / float64(elapsed)) * float64(i-starti)) / 1000
-			pow.hashRate = int64(hashes)
+			if (i % (1 << 14)) == 0 { // we don't have to update hash rate on every nonce
+				elapsed := time.Now().UnixNano() - start
+				hashes := (float64(1e9) / float64(elapsed)) * float64(i-starti)
+				atomic.StoreUint64(prevHashRate, uint64(hashes))
+			}
 
 			ret := C.ethash_full_compute(dag.ptr, hash, C.uint64_t(nonce))
 			result := h256ToHash(ret.result).Big()
@@ -298,9 +301,10 @@ func (pow *Full) Search(block pow.Block, stop <-chan struct{}) (nonce uint64, mi
 	}
 }
 
+// TODO: remove? for ethash we do not call this anymore
 func (pow *Full) GetHashrate() int64 {
 	// TODO: this needs to use an atomic operation.
-	return pow.hashRate
+	return 0
 }
 
 func (pow *Full) Turbo(on bool) {

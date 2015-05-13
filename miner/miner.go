@@ -54,6 +54,7 @@ func (self *Miner) Start(coinbase common.Address, threads int) {
 	self.worker.coinbase = coinbase
 	self.worker.start()
 	self.worker.commitNewWork()
+
 }
 
 func (self *Miner) Stop() {
@@ -69,7 +70,7 @@ func (self *Miner) Register(agent Agent) {
 	self.worker.register(agent)
 }
 
-func (self *Miner) HashRate() int64 {
+func (self *Miner) HashRate() uint64 {
 	return self.worker.HashRate()
 }
 

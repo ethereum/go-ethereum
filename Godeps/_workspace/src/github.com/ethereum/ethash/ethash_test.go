@@ -73,7 +73,7 @@ func TestEthashConcurrentVerify(t *testing.T) {
 	defer os.RemoveAll(eth.Full.Dir)
 
 	block := &testBlock{difficulty: big.NewInt(10)}
-	nonce, _ := eth.Search(block, nil)
+	nonce, _ := eth.Search(block, nil, new(uint64))
 	block.nonce = nonce
 
 	// Verify the block concurrently to check for data races.
@@ -110,7 +110,7 @@ func TestEthashConcurrentSearch(t *testing.T) {
 	wg.Add(nsearch)
 	for i := 0; i < nsearch; i++ {
 		go func() {
-			nonce, _ := eth.Search(block, stop)
+			nonce, _ := eth.Search(block, stop, new(uint64))
 			select {
 			case found <- nonce:
 			case <-stop:
@@ -140,7 +140,7 @@ func TestEthashSearchAcrossEpoch(t *testing.T) {
 	for i := epochLength - 40; i < epochLength+40; i++ {
 		block := &testBlock{number: i, difficulty: big.NewInt(90)}
 		rand.Read(block.hashNoNonce[:])
-		nonce, _ := eth.Search(block, nil)
+		nonce, _ := eth.Search(block, nil, new(uint64))
 		block.nonce = nonce
 		if !eth.Verify(block) {
 			t.Fatalf("Block could not be verified")

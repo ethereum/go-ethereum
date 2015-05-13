@@ -405,7 +405,7 @@ func (self *XEth) IsMining() bool {
 	return self.backend.IsMining()
 }
 
-func (self *XEth) HashRate() int64 {
+func (self *XEth) HashRate() uint64 {
 	return self.backend.Miner().HashRate()
 }
 

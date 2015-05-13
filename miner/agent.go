@@ -2,6 +2,7 @@ package miner
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -17,14 +18,16 @@ type CpuAgent struct {
 	quitCurrentOp chan struct{}
 	returnCh      chan<- *types.Block
 
-	index int
-	pow   pow.PoW
+	index        int
+	prevHashRate *uint64
+	pow          pow.PoW
 }
 
 func NewCpuAgent(index int, pow pow.PoW) *CpuAgent {
 	miner := &CpuAgent{
-		pow:   pow,
-		index: index,
+		pow:          pow,
+		index:        index,
+		prevHashRate: new(uint64),
 	}
 
 	return miner
@@ -85,7 +88,7 @@ func (self *CpuAgent) mine(block *types.Block) {
 	self.chMu.Unlock()
 
 	// Mine
-	nonce, mixDigest := self.pow.Search(block, self.quitCurrentOp)
+	nonce, mixDigest := self.pow.Search(block, self.quitCurrentOp, self.prevHashRate)
 	if nonce != 0 {
 		block.SetNonce(nonce)
 		block.Header().MixDigest = common.BytesToHash(mixDigest)
@@ -95,6 +98,6 @@ func (self *CpuAgent) mine(block *types.Block) {
 	}
 }
 
-func (self *CpuAgent) GetHashRate() int64 {
-	return self.pow.GetHashrate()
+func (self *CpuAgent) GetHashRate() uint64 {
+	return atomic.LoadUint64(self.prevHashRate)
 }
