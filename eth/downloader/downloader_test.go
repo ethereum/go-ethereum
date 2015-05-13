@@ -76,7 +76,7 @@ func (dl *downloadTester) getBlock(hash common.Hash) *types.Block {
 }
 
 func (dl *downloadTester) getHashes(hash common.Hash) error {
-	dl.downloader.AddHashes(dl.activePeerId, dl.hashes)
+	dl.downloader.DeliverHashes(dl.activePeerId, dl.hashes)
 	return nil
 }
 
@@ -87,7 +87,7 @@ func (dl *downloadTester) getBlocks(id string) func([]common.Hash) error {
 			blocks[i] = dl.blocks[hash]
 		}
 
-		go dl.downloader.DeliverChunk(id, blocks)
+		go dl.downloader.DeliverBlocks(id, blocks)
 
 		return nil
 	}
@@ -188,12 +188,12 @@ func TestInactiveDownloader(t *testing.T) {
 	blocks := createBlocksFromHashSet(createHashSet(hashes))
 	tester := newTester(t, hashes, nil)
 
-	err := tester.downloader.AddHashes("bad peer 001", hashes)
+	err := tester.downloader.DeliverHashes("bad peer 001", hashes)
 	if err != errNoSyncActive {
 		t.Error("expected no sync error, got", err)
 	}
 
-	err = tester.downloader.DeliverChunk("bad peer 001", blocks)
+	err = tester.downloader.DeliverBlocks("bad peer 001", blocks)
 	if err != errNoSyncActive {
 		t.Error("expected no sync error, got", err)
 	}

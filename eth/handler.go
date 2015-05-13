@@ -224,7 +224,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		if err := msgStream.Decode(&hashes); err != nil {
 			break
 		}
-		err := self.downloader.AddHashes(p.id, hashes)
+		err := self.downloader.DeliverHashes(p.id, hashes)
 		if err != nil {
 			glog.V(logger.Debug).Infoln(err)
 		}
@@ -264,7 +264,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 			glog.V(logger.Detail).Infoln("Decode error", err)
 			blocks = nil
 		}
-		self.downloader.DeliverChunk(p.id, blocks)
+		self.downloader.DeliverBlocks(p.id, blocks)
 
 	case NewBlockMsg:
 		var request newBlockMsgData

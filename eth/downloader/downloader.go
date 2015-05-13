@@ -55,10 +55,9 @@ type hashPack struct {
 }
 
 type Downloader struct {
-	mu         sync.RWMutex
-	queue      *queue
-	peers      *peerSet
-	activePeer string
+	mu    sync.RWMutex
+	queue *queue
+	peers *peerSet
 
 	// Callbacks
 	hasBlock hashCheckFn
@@ -162,7 +161,6 @@ func (d *Downloader) Has(hash common.Hash) bool {
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
 func (d *Downloader) syncWithPeer(p *peer, hash common.Hash) (err error) {
-	d.activePeer = p.id
 	defer func() {
 		// reset on error
 		if err != nil {
@@ -416,32 +414,26 @@ out:
 	return nil
 }
 
-// Deliver a chunk to the downloader. This is usually done through the BlocksMsg by
-// the protocol handler.
-func (d *Downloader) DeliverChunk(id string, blocks []*types.Block) error {
+// DeliverBlocks injects a new batch of blocks received from a remote node.
+// This is usually invoked through the BlocksMsg by the protocol handler.
+func (d *Downloader) DeliverBlocks(id string, blocks []*types.Block) error {
 	// Make sure the downloader is active
 	if atomic.LoadInt32(&d.synchronising) == 0 {
 		return errNoSyncActive
 	}
-
 	d.blockCh <- blockPack{id, blocks}
 
 	return nil
 }
 
-func (d *Downloader) AddHashes(id string, hashes []common.Hash) error {
+// DeliverHashes injects a new batch of hashes received from a remote node into
+// the download schedule. This is usually invoked through the BlockHashesMsg by
+// the protocol handler.
+func (d *Downloader) DeliverHashes(id string, hashes []common.Hash) error {
 	// Make sure the downloader is active
 	if atomic.LoadInt32(&d.synchronising) == 0 {
 		return errNoSyncActive
 	}
-
-	// make sure that the hashes that are being added are actually from the peer
-	// that's the current active peer. hashes that have been received from other
-	// peers are dropped and ignored.
-	if d.activePeer != id {
-		return fmt.Errorf("received hashes from %s while active peer is %s", id, d.activePeer)
-	}
-
 	if glog.V(logger.Debug) && len(hashes) != 0 {
 		from, to := hashes[0], hashes[len(hashes)-1]
 		glog.V(logger.Debug).Infof("adding %d (T=%d) hashes [ %x / %x ] from: %s\n", len(hashes), d.queue.Pending(), from[:4], to[:4], id)
