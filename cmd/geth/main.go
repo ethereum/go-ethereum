@@ -563,7 +563,7 @@ func upgradeDb(ctx *cli.Context) {
 		bcVersion = core.BlockChainVersion
 	}
 
-	filename := fmt.Sprintf("blockchain_%d_%s.chain", bcVersion, time.Now().Format("2006-01-02_15:04:05"))
+	filename := fmt.Sprintf("blockchain_%d_%s.chain", bcVersion, time.Now().Format("20060102_150405"))
 	exportFile := filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), filename)
 
 	err = utils.ExportChain(ethereum.ChainManager(), exportFile)
