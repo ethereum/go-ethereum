@@ -114,7 +114,7 @@ func (self *NetStore) addStoreRequest(req *storeRequestMsgData) {
 	} else {
 		return
 	}
-	chunk.source = req.peer
+	chunk.source = &req.peer
 	self.put(chunk)
 }
 
@@ -295,7 +295,7 @@ func (self *NetStore) store(chunk *Chunk) {
 		Id:    uint64(id),
 	}
 	for _, peer := range self.hive.getPeers(chunk.Key, 0) {
-		if peer.Addr() != chunk.source.Addr() {
+		if chunk.source == nil || peer.Addr() != chunk.source.Addr() {
 			go peer.store(req)
 		}
 	}
