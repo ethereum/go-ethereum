@@ -289,7 +289,7 @@ out:
 			// already fetched hash list. This can't guarantee 100% correctness but does
 			// a fair job. This is always either correct or false incorrect.
 			for _, peer := range d.peers.AllPeers() {
-				if d.queue.Has(peer.head) && !attemptedPeers[p.id] {
+				if d.queue.Has(peer.head) && !attemptedPeers[peer.id] {
 					p = peer
 					break
 				}
