@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -280,7 +281,7 @@ func (pow *Full) Search(block pow.Block, stop <-chan struct{}, prevHashRate *uin
 			if (i % (1 << 14)) == 0 { // we don't have to update hash rate on every nonce
 				elapsed := time.Now().UnixNano() - start
 				hashes := (float64(1e9) / float64(elapsed)) * float64(i-starti)
-				*prevHashRate = uint64(hashes)
+				atomic.StoreUint64(prevHashRate, uint64(hashes))
 			}
 
 			ret := C.ethash_full_compute(dag.ptr, hash, C.uint64_t(nonce))
