@@ -19,17 +19,13 @@ type NetStore struct {
 
 /*
 request status values:
-- blank
 - started searching
-- timed out
 - found
 */
 
 const (
-	reqBlank = iota
-	reqSearching
-	reqTimedOut
-	reqFound
+	reqSearching = iota // after search for chunk started until found or timed out
+	reqFound            // chunk found search terminated
 )
 
 const (
@@ -88,10 +84,12 @@ func (self *NetStore) Put(entry *Chunk) {
 func (self *NetStore) put(entry *Chunk) {
 	self.localStore.Put(entry)
 	dpaLogger.Debugf("NetStore.put: localStore.Put of %064x completed, %d bytes (%p).", entry.Key, len(entry.SData), entry)
-	if entry.req != nil && entry.req.status == reqSearching {
-		entry.req.status = reqFound
-		close(entry.req.C)
-		self.propagateResponse(entry)
+	if entry.req != nil {
+		if entry.req.status == reqSearching {
+			entry.req.status = reqFound
+			close(entry.req.C)
+			self.propagateResponse(entry)
+		}
 	} else {
 		go self.store(entry)
 	}
@@ -137,7 +135,6 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 		err = notFound
 	case <-chunk.req.C:
 		dpaLogger.Debugf("NetStore.Get: %064x retrieved, %d bytes (%p)", key, len(chunk.SData), chunk)
-
 	}
 	return
 }
@@ -169,29 +166,23 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 
 	chunk := self.get(req.Key)
 	if chunk.SData == nil {
-		chunk.req.status = reqSearching
+		t := time.Now().Add(10 * time.Second)
+		req.timeout = &t
 	} else {
 		chunk.req.status = reqFound
 	}
 
-	t := time.Now().Add(10 * time.Second)
-	req.timeout = &t
+	timeout := self.strategyUpdateRequest(chunk.req, req) // may change req status
 
-	send, timeout := self.strategyUpdateRequest(chunk.req, req) // may change req status
-
-	if send == storeRequestMsg {
+	if timeout == nil {
 		dpaLogger.Debugf("NetStore.addRetrieveRequest: %064x - content found, delivering...", req.Key)
 		self.deliver(req, chunk)
 	} else {
 		// we might need chunk.req to cache relevant peers response, or would it expire?
 		self.peers(req, chunk, timeout)
 		dpaLogger.Debugf("NetStore.addRetrieveRequest: %064x - searching.... responding with peers...", req.Key)
-
-		if timeout != nil {
-			self.startSearch(chunk, int64(req.Id), timeout)
-		}
+		self.startSearch(chunk, int64(req.Id), timeout)
 	}
-
 }
 
 // it's assumed that caller holds the lock
@@ -238,17 +229,11 @@ this is the most simplistic implementation:
  - respond with peers and timeout if still searching
 ! in the last case as well, we should respond with reject if already got requesterCount peers with that exact id
 */
-func (self *NetStore) strategyUpdateRequest(rs *requestStatus, req *retrieveRequestMsgData) (msgTyp int, timeout *time.Time) {
+func (self *NetStore) strategyUpdateRequest(rs *requestStatus, req *retrieveRequestMsgData) (timeout *time.Time) {
 	dpaLogger.Debugf("NetStore.strategyUpdateRequest: key %064x", req.Key)
 
-	switch rs.status {
-	case reqSearching:
-		msgTyp = peersMsg
+	if rs.status == reqSearching {
 		timeout = self.searchTimeout(rs, req)
-	case reqTimedOut:
-		msgTyp = peersMsg
-	case reqFound:
-		msgTyp = storeRequestMsg
 	}
 	return
 
