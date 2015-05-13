@@ -184,6 +184,8 @@ type Ethereum struct {
 	pow             *ethash.Ethash
 	protocolManager *ProtocolManager
 	downloader      *downloader.Downloader
+	DPA             *bzz.DPA
+	netStore        *bzz.NetStore
 
 	net      *p2p.Server
 	eventMux *event.TypeMux
@@ -285,41 +287,39 @@ func New(config *Config) (*Ethereum, error) {
 
 	protocols := []p2p.Protocol{eth.protocolManager.SubProtocol}
 
-	eth.net = &p2p.Server{
-		PrivateKey:      netprv,
-		Name:            config.Name,
-		MaxPeers:        config.MaxPeers,
-		MaxPendingPeers: config.MaxPendingPeers,
-		// Protocols:       protocols,
-		NAT:            config.NAT,
-		NoDial:         !config.Dial,
-		BootstrapNodes: config.parseBootNodes(),
-		StaticNodes:    config.parseNodes(staticNodes),
-		TrustedNodes:   config.parseNodes(trustedNodes),
-		NodeDatabase:   nodeDb,
-	}
-	if len(config.Port) > 0 {
-		eth.net.ListenAddr = ":" + config.Port
-	}
 	if config.Bzz {
-		netStore, err := bzz.NewNetStore(eth.net.Self().Sha(), path.Join(config.DataDir, "bzz"), path.Join(config.DataDir, "bzzpeers.json"))
+		eth.netStore, err = bzz.NewNetStore(path.Join(config.DataDir, "bzz"), path.Join(config.DataDir, "bzzpeers.json"))
 		if err != nil {
 			glog.V(logger.Warn).Infof("BZZ: error creating net store: %v. Protocol skipped", err)
 		} else {
 			chunker := &bzz.TreeChunker{}
 			chunker.Init()
-			dpa := &bzz.DPA{
+			eth.DPA = &bzz.DPA{
 				Chunker:    chunker,
-				ChunkStore: netStore,
+				ChunkStore: eth.netStore,
 			}
-			dpa.Start()
-			protocols = append(protocols, bzz.BzzProtocol(netStore, eth.net.Self))
-			go bzz.StartHttpServer(dpa)
+			protocols = append(protocols, bzz.BzzProtocol(eth.netStore))
 		}
 	}
 
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
+	}
+	eth.net = &p2p.Server{
+		PrivateKey:      netprv,
+		Name:            config.Name,
+		MaxPeers:        config.MaxPeers,
+		MaxPendingPeers: config.MaxPendingPeers,
+		Protocols:       protocols,
+		NAT:             config.NAT,
+		NoDial:          !config.Dial,
+		BootstrapNodes:  config.parseBootNodes(),
+		StaticNodes:     config.parseNodes(staticNodes),
+		TrustedNodes:    config.parseNodes(trustedNodes),
+		NodeDatabase:    nodeDb,
+	}
+	if len(config.Port) > 0 {
+		eth.net.ListenAddr = ":" + config.Port
 	}
 
 	eth.net.Protocols = protocols
@@ -464,6 +464,12 @@ func (s *Ethereum) Start() error {
 
 	if s.whisper != nil {
 		s.whisper.Start()
+	}
+
+	if s.DPA != nil {
+		s.DPA.Start()
+		s.netStore.Start(s.net.Self())
+		go bzz.StartHttpServer(s.DPA)
 	}
 
 	// broadcast transactions

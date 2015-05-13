@@ -61,8 +61,8 @@ func TestAddNode(t *testing.T) {
 	if !ok {
 		t.Errorf("oops")
 	}
-	kad := New(addr)
-	kad.Start()
+	kad := New()
+	kad.Start(addr)
 	err := kad.AddNode(&testNode{addr: other})
 	_ = err
 }
@@ -73,9 +73,9 @@ func TestGetNodes(t *testing.T) {
 
 	test := func(test *getNodesTest) bool {
 		// for any node kad.le, Target and N
-		kad := New(test.Self)
+		kad := New()
 		kad.MaxProx = 10
-		kad.Start()
+		kad.Start(test.Self)
 		var err error
 		t.Logf("getNodesTest %v: %v\n", len(test.All), test)
 		for _, node := range test.All {
@@ -152,9 +152,9 @@ func TestProxAdjust(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	self := gen(Address{}, r).(Address)
 
-	kad := New(self)
+	kad := New()
 	kad.MaxProx = 10
-	kad.Start()
+	kad.Start(self)
 	var err error
 	for i := 0; i < 100; i++ {
 		a := gen(Address{}, r).(Address)
@@ -186,7 +186,7 @@ func TestProxAdjust(t *testing.T) {
 func TestCallback(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	self := gen(Address{}, r).(Address)
-	kad := New(self)
+	kad := New()
 	var bucket int
 	var called chan bool
 	kad.MaxProx = 5
@@ -195,7 +195,7 @@ func TestCallback(t *testing.T) {
 		bucket = b
 		close(called)
 	}
-	kad.Start()
+	kad.Start(self)
 	var err error
 
 	for i := 0; i < 100; i++ {
@@ -232,9 +232,9 @@ func TestSaveLoad(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	addresses := gen([]Address{}, r).([]Address)
 	self := addresses[0]
-	kad := New(self)
+	kad := New()
 	kad.MaxProx = 10
-	kad.Start()
+	kad.Start(self)
 	var err error
 	for _, a := range addresses[1:] {
 		err = kad.AddNode(&testNode{addr: a})
@@ -246,8 +246,8 @@ func TestSaveLoad(t *testing.T) {
 	nodes := kad.GetNodes(self, 100)
 	path := "/tmp/bzz.peers"
 	kad.Stop(path)
-	kad = New(self)
-	kad.Start()
+	kad = New()
+	kad.Start(self)
 	kad.Load(path)
 	for _, b := range kad.DB() {
 		for _, node := range b {

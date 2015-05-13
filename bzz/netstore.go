@@ -6,13 +6,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/kademlia"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 type NetStore struct {
 	localStore *localStore
 	lock       sync.Mutex
 	hive       *hive
+	self       *discover.Node
 }
 
 /*
@@ -45,19 +47,24 @@ type requestStatus struct {
 	C          chan bool
 }
 
-func NewNetStore(addr common.Hash, path, hivepath string) (netstore *NetStore, err error) {
+func NewNetStore(path, hivepath string) (netstore *NetStore, err error) {
 	dbStore, err := newDbStore(path)
 	if err != nil {
 		return
 	}
-	hive := newHive(addr, hivepath)
+	hive := newHive(hivepath)
 	netstore = &NetStore{
 		localStore: &localStore{
 			memStore: newMemStore(dbStore),
 			dbStore:  dbStore,
 		}, hive: hive,
 	}
-	err = hive.start()
+	return
+}
+
+func (self *NetStore) Start(node *discover.Node) (err error) {
+	self.self = node
+	err = self.hive.start(kademlia.Address(node.Sha()))
 	if err != nil {
 		return
 	}

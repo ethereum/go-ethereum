@@ -58,7 +58,6 @@ var errorToString = map[int]string{
 // bzzProtocol represents the swarm wire protocol
 // instance is running on each peer
 type bzzProtocol struct {
-	self     func() *discover.Node
 	node     *discover.Node
 	netStore *NetStore
 	peer     *p2p.Peer
@@ -188,22 +187,21 @@ main entrypoint, wrappers starting a server running the bzz protocol
 use this constructor to attach the protocol ("class") to server caps
 the Dev p2p layer then runs the protocol instance on each peer
 */
-func BzzProtocol(netStore *NetStore, self func() *discover.Node) p2p.Protocol {
+func BzzProtocol(netStore *NetStore) p2p.Protocol {
 	return p2p.Protocol{
 		Name:    "bzz",
 		Version: Version,
 		Length:  ProtocolLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return runBzzProtocol(netStore, self, p, rw)
+			return runBzzProtocol(netStore, p, rw)
 		},
 	}
 }
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runBzzProtocol(netStore *NetStore, selfF func() *discover.Node, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func runBzzProtocol(netStore *NetStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 	self := &bzzProtocol{
-		self:     selfF,
 		netStore: netStore,
 		rw:       rw,
 		peer:     p,
@@ -284,12 +282,12 @@ func (self *bzzProtocol) handle() error {
 
 func (self *bzzProtocol) handleStatus() (err error) {
 	// send precanned status message
-	sliceNodeID := self.self().ID
+	sliceNodeID := self.netStore.self.ID
 	handshake := &statusMsgData{
 		Version:   uint64(Version),
 		ID:        "honey",
 		NodeID:    sliceNodeID[:],
-		Addr:      newPeerAddrFromNode(self.self()),
+		Addr:      newPeerAddrFromNode(self.netStore.self),
 		NetworkId: uint64(NetworkId),
 		Caps:      []p2p.Cap{},
 	}

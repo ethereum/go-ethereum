@@ -3,8 +3,6 @@ package bzz
 import (
 	"errors"
 	"sync"
-	// "time"
-	// "fmt"
 
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 )

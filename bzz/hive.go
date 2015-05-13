@@ -3,7 +3,6 @@ package bzz
 import (
 	// "fmt"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/kademlia"
 )
 
@@ -29,15 +28,15 @@ type hive struct {
 	path string
 }
 
-func newHive(address common.Hash, hivepath string) *hive {
+func newHive(hivepath string) *hive {
 	return &hive{
 		path: hivepath,
-		kad:  kademlia.New(kademlia.Address(address)),
+		kad:  kademlia.New(),
 	}
 }
 
-func (self *hive) start() (err error) {
-	self.kad.Start()
+func (self *hive) start(address kademlia.Address) (err error) {
+	self.kad.Start(address)
 	err = self.kad.Load(self.path)
 	if err != nil {
 		dpaLogger.Warnf("Warning: error reading kademlia node db (skipping): %v", err)

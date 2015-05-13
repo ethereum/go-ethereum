@@ -77,12 +77,10 @@ type kadDB struct {
 	Nodes   [][]*NodeRecord `json:nodes`
 }
 
-// public constructor with compulsory arguments
+// public constructor
 // hash is a byte slice of length equal to self.HashBytes
-func New(a Address) *Kademlia {
-	return &Kademlia{
-		addr: a, // compulsory fields without default
-	}
+func New() *Kademlia {
+	return &Kademlia{}
 }
 
 // accessor for KAD self address
@@ -97,12 +95,13 @@ func (self *Kademlia) Count() int {
 
 // Start brings up a pool of entries potentially from an offline persisted source
 // and sets default values for optional parameters
-func (self *Kademlia) Start() error {
+func (self *Kademlia) Start(addr Address) error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if self.quitC != nil {
 		return nil
 	}
+	self.addr = addr
 	if self.MaxProx == 0 {
 		self.MaxProx = maxProx
 	}
@@ -454,6 +453,7 @@ bit first).
 proximity(x, y) counts the common zeros in the front of this distance measure.
 */
 func proximity(one, other Address) (ret int) {
+	fmt.Printf("%08b ^  %08b = %08b\n", one[0], other[0], one[0]^other[0])
 	for i := 0; i < len(one); i++ {
 		oxo := one[i] ^ other[i]
 		for j := 0; j < 8; j++ {
