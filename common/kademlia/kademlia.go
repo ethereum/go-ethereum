@@ -267,7 +267,7 @@ func (self *Kademlia) getNodes(target Address, max int) (r nodesByDistance) {
 			r.push(bucket[i], limit)
 			n++
 		}
-		if max == 0 && start <= index && n > 0 ||
+		if max == 0 && start <= index && (n > 0 || start == 0) ||
 			max > 0 && down && start <= index && (n >= limit || n == self.Count() || start == 0) {
 			break
 		}
