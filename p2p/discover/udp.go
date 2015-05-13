@@ -402,7 +402,7 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, 
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
 func (t *udp) readLoop() {
 	defer t.conn.Close()
-	buf := make([]byte, 4096) // TODO: good buffer size
+	buf := make([]byte, 1280)
 	for {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
 		if err != nil {
@@ -510,9 +510,15 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte
 		closestrpc[i] = nodeToRPC(n)
 	}
 	t.send(from, neighborsPacket, neighbors{
-		Nodes:      closestrpc,
+		Nodes:      closestrpc[:13],
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
+	if len(closestrpc) > 13 {
+		t.send(from, neighborsPacket, neighbors{
+			Nodes:      closestrpc[13:],
+			Expiration: uint64(time.Now().Add(expiration).Unix()),
+		})
+	}
 	return nil
 }
 
