@@ -86,10 +86,6 @@ func New(hasBlock hashCheckFn, getBlock getBlockFn) *Downloader {
 		hashCh:    make(chan hashPack, 1),
 		blockCh:   make(chan blockPack, 1),
 	}
-	// Set the initial downloader state as canceled (sanity check)
-	downloader.cancelCh = make(chan struct{})
-	close(downloader.cancelCh)
-
 	return downloader
 }
 
