@@ -42,7 +42,7 @@ func (a *RemoteAgent) Stop() {
 	close(a.workCh)
 }
 
-func (a *RemoteAgent) GetHashRate() int64 { return 0 }
+func (a *RemoteAgent) GetHashRate() uint64 { return 0 }
 
 func (a *RemoteAgent) run() {
 out:

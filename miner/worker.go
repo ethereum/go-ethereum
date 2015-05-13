@@ -35,7 +35,7 @@ type Agent interface {
 	SetReturnCh(chan<- *types.Block)
 	Stop()
 	Start()
-	GetHashRate() int64
+	GetHashRate() uint64
 }
 
 // environment is the workers current environment and holds
@@ -453,8 +453,8 @@ func (self *worker) commitTransaction(tx *types.Transaction) error {
 	return nil
 }
 
-func (self *worker) HashRate() int64 {
-	var tot int64
+func (self *worker) HashRate() uint64 {
+	var tot uint64
 	for _, agent := range self.agents {
 		tot += agent.GetHashRate()
 	}
