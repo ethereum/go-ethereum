@@ -368,7 +368,7 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 	if len(account) == 0 {
 		utils.Fatalf("Invalid account address '%s'", account)
 	}
-	err = am.Unlock(common.StringToAddress(account), passphrase)
+	err = am.Unlock(common.HexToAddress(account), passphrase)
 	if err != nil {
 		utils.Fatalf("Unlock account failed '%v'", err)
 	}
