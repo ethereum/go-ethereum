@@ -28,21 +28,22 @@ the private key is encrypted and on disk uses another JSON encoding.
 
 Cryptography:
 
-1. Encryption key is first 16 bytes of SHA3-256 of first 16 bytes of
-   scrypt derived key from user passphrase. Scrypt parameters
+1. Encryption key is first 16 bytes of scrypt derived key
+   from user passphrase. Scrypt parameters
    (work factors) [1][2] are defined as constants below.
 2. Scrypt salt is 32 random bytes from CSPRNG.
-   It's stored in plain next to ciphertext in key file.
-3. MAC is SHA3-256 of concatenation of ciphertext and last 16 bytes of scrypt derived key.
+   It's stored in plain next in the key file.
+3. MAC is SHA3-256 of concatenation of ciphertext and
+   last 16 bytes of scrypt derived key.
 4. Plaintext is the EC private key bytes.
 5. Encryption algo is AES 128 CBC [3][4]
 6. CBC IV is 16 random bytes from CSPRNG.
-   It's stored in plain next to ciphertext in key file.
+   It's stored in plain next in the key file.
 7. Plaintext padding is PKCS #7 [5][6]
 
 Encoding:
 
-1. On disk, the ciphertext, MAC, salt and IV are encoded in a nested JSON object.
+1. On disk, the ciphertext, MAC, salt and IV are encoded in a JSON object.
    cat a key file to see the structure.
 2. byte arrays are base64 JSON strings.
 3. The EC private key bytes are in uncompressed form [7].
