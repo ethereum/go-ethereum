@@ -198,8 +198,8 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 // it's assumed that caller holds the lock
 func (self *NetStore) startSearch(chunk *Chunk, id int64, timeout *time.Time) {
 	chunk.req.status = reqSearching
-	dpaLogger.Debugf("NetStore.startSearch: %064x - getting peers from KΛÐΞMLIΛ...", chunk.Key)
 	peers := self.hive.getPeers(chunk.Key, 0)
+	dpaLogger.Debugf("NetStore.startSearch: %064x - received %d peers from KΛÐΞMLIΛ...", chunk.Key, len(peers))
 	req := &retrieveRequestMsgData{
 		Key:     chunk.Key,
 		Id:      uint64(id),

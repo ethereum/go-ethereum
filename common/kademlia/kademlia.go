@@ -252,6 +252,7 @@ func (self *Kademlia) getNodes(target Address, max int) (r nodesByDistance) {
 	start := index
 	var down bool
 	if index >= self.proxLimit {
+		index = self.proxLimit
 		start = self.MaxProx
 		down = true
 	}
@@ -266,8 +267,8 @@ func (self *Kademlia) getNodes(target Address, max int) (r nodesByDistance) {
 			r.push(bucket[i], limit)
 			n++
 		}
-		if max == 0 && start == index ||
-			max > 0 && down && start <= index && (n >= max || n == self.Count() || start == 0) {
+		if max == 0 && start <= index && n > 0 ||
+			max > 0 && down && start <= index && (n >= limit || n == self.Count() || start == 0) {
 			break
 		}
 		if down {
@@ -453,7 +454,6 @@ bit first).
 proximity(x, y) counts the common zeros in the front of this distance measure.
 */
 func proximity(one, other Address) (ret int) {
-	fmt.Printf("%08b ^  %08b = %08b\n", one[0], other[0], one[0]^other[0])
 	for i := 0; i < len(one); i++ {
 		oxo := one[i] ^ other[i]
 		for j := 0; j < 8; j++ {
