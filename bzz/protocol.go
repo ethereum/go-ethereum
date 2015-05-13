@@ -7,6 +7,7 @@ registering peers with the DHT
 */
 
 import (
+	"fmt"
 	"net"
 	"time"
 
@@ -348,6 +349,10 @@ func (self *bzzProtocol) LastActive() time.Time {
 }
 
 func (self *bzzProtocol) Drop() {
+}
+
+func (self *bzzProtocol) String() string {
+	return fmt.Sprintf("%4x: %v\n", self.node.Sha().Bytes()[:4], self.Url())
 }
 
 func newPeerAddrFromNode(node *discover.Node) *peerAddr {
