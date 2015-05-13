@@ -2,6 +2,7 @@ package miner
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -98,5 +99,5 @@ func (self *CpuAgent) mine(block *types.Block) {
 }
 
 func (self *CpuAgent) GetHashRate() uint64 {
-	return *self.prevHashRate
+	return atomic.LoadUint64(self.prevHashRate)
 }
