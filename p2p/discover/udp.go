@@ -510,9 +510,15 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte
 		closestrpc[i] = nodeToRPC(n)
 	}
 	t.send(from, neighborsPacket, neighbors{
-		Nodes:      closestrpc,
+		Nodes:      closestrpc[:13],
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
+	if len(closestrpc) > 13 {
+		t.send(from, neighborsPacket, neighbors{
+			Nodes:      closestrpc[13:],
+			Expiration: uint64(time.Now().Add(expiration).Unix()),
+		})
+	}
 	return nil
 }
 

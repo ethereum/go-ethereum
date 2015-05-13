@@ -163,9 +163,19 @@ func TestUDP_findnode(t *testing.T) {
 	))
 	// check that closest neighbors are returned.
 	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
+	expected := test.table.closest(targetHash, bucketSize)
 	test.waitPacketOut(func(p *neighbors) {
-		expected := test.table.closest(targetHash, bucketSize)
-		if len(p.Nodes) != bucketSize {
+		if len(p.Nodes) != 13 {
+			t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSize)
+		}
+		for i := range p.Nodes {
+			if p.Nodes[i].ID != expected.entries[i].ID {
+				t.Errorf("result mismatch at %d:\n  got:  %v\n  want: %v", i, p.Nodes[i], expected.entries[i])
+			}
+		}
+	})
+	test.waitPacketOut(func(p *neighbors) {
+		if len(p.Nodes) != 3 {
 			t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSize)
 		}
 		for i := range p.Nodes {
