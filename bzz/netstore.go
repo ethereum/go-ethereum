@@ -88,13 +88,12 @@ func (self *NetStore) Put(entry *Chunk) {
 func (self *NetStore) put(entry *Chunk) {
 	self.localStore.Put(entry)
 	dpaLogger.Debugf("NetStore.put: localStore.Put of %064x completed, %d bytes (%p).", entry.Key, len(entry.SData), entry)
-	go self.store(entry)
-	// only send responses once
-	dpaLogger.Debugf("NetStore.put: req: %#v", entry.req)
 	if entry.req != nil && entry.req.status == reqSearching {
 		entry.req.status = reqFound
 		close(entry.req.C)
 		self.propagateResponse(entry)
+	} else {
+		go self.store(entry)
 	}
 }
 

@@ -113,6 +113,10 @@ type storeRequestMsgData struct {
 	peer peer
 }
 
+func (self *storeRequestMsgData) String() string {
+	return fmt.Sprint("From: %v, Key: %x; ID: %v, requestTimeout: %v, storageTimeout: %v, SData %x", self.peer.Addr(), self.Key[:4], self.Id, self.requestTimeout, self.storageTimeout, self.SData[:10])
+}
+
 /*
 Root key retrieve request
 Timeout in milliseconds. Note that zero timeout retrieval requests do not request forwarding, but prompt for a peers message response. therefore they also serve also as messages to retrieve peers.
