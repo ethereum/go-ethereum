@@ -9,6 +9,7 @@ type localStore struct {
 // localStore is itself a chunk store , to stores a chunk only
 // its integrity is checked ?
 func (self *localStore) Put(chunk *Chunk) {
+	chunk.dbStored = make(chan bool)
 	self.memStore.Put(chunk)
 	if chunk.wg != nil {
 		chunk.wg.Add(1)

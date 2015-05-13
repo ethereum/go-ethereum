@@ -54,12 +54,13 @@ type DPA struct {
 // but the size of the subtree encoded in the chunk
 // 0 if request, to be supplied by the dpa
 type Chunk struct {
-	SData []byte         // nil if request, to be supplied by dpa
-	Size  int64          // size of the data covered by the subtree encoded in this chunk
-	Key   Key            // always
-	C     chan bool      // to signal data delivery by the dpa
-	req   *requestStatus //
-	wg    *sync.WaitGroup
+	SData    []byte         // nil if request, to be supplied by dpa
+	Size     int64          // size of the data covered by the subtree encoded in this chunk
+	Key      Key            // always
+	C        chan bool      // to signal data delivery by the dpa
+	req      *requestStatus //
+	wg       *sync.WaitGroup
+	dbStored chan bool
 }
 
 type ChunkStore interface {

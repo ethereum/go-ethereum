@@ -314,8 +314,14 @@ func (s *memStore) removeOldest() {
 
 	}
 
-	node.entry = nil
-	s.entryCnt--
+	if node.entry.dbStored != nil {
+		<-node.entry.dbStored
+	}
+	if node.entry.SData != nil {
+		node.entry = nil
+		s.entryCnt--
+	}
+
 	node.access[0] = 0
 
 	//---

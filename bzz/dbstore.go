@@ -287,6 +287,9 @@ func (s *dbStore) Put(chunk *Chunk) {
 	batch.Put(ikey, idata)
 
 	s.db.Write(batch)
+	if chunk.dbStored != nil {
+		close(chunk.dbStored)
+	}
 }
 
 // try to find index; if found, update access cnt and return true
