@@ -114,7 +114,7 @@ type storeRequestMsgData struct {
 }
 
 func (self *storeRequestMsgData) String() string {
-	return fmt.Sprint("From: %v, Key: %x; ID: %v, requestTimeout: %v, storageTimeout: %v, SData %x", self.peer.Addr(), self.Key[:4], self.Id, self.requestTimeout, self.storageTimeout, self.SData[:10])
+	return fmt.Sprintf("From: %v, Key: %x; ID: %v, requestTimeout: %v, storageTimeout: %v, SData %x", self.peer.Addr(), self.Key[:4], self.Id, self.requestTimeout, self.storageTimeout, self.SData[:10])
 }
 
 /*
