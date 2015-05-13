@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/samuel/go-opencl/cl"
 )
 
@@ -27,13 +29,14 @@ type params struct {
 
 const (
 	kernelFn         = "ethash_kernel.cl"
-	searchBuffSize   = 4
+	searchBuffSize   = 2
 	maxSearchResults = 63
 	searchBatchSize  = 1024
-	dagSize          = 1024
+	dagSize          = 1024 * 32
 
 	SIZEOF_UINT32    = 4
-	ETHASH_MIX_BYTES = 32
+	ETHASH_MIX_BYTES = 128
+	ACCESSES         = 64
 )
 
 var (
@@ -106,7 +109,7 @@ func New() (*EthashCL, error) {
 
 	var buffer bytes.Buffer
 	err = tmpl.Execute(&buffer, params{
-		GroupSize: workGroupSize, Accesses: 1, MaxOutputs: 4, DagSize: dagSize / ETHASH_MIX_BYTES,
+		GroupSize: workGroupSize, Accesses: ACCESSES, MaxOutputs: 4, DagSize: dagSize / ETHASH_MIX_BYTES,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("template err:", err)
@@ -141,6 +144,7 @@ func New() (*EthashCL, error) {
 		return nil, fmt.Errorf("dag err:", err)
 	}
 	dag := pow.Full.DAG(0).Ptr()
+	fmt.Println("DAG ptr", dag)
 
 	queue.EnqueueWriteBuffer(dagBuff, true, 0, dagSize, dag, nil)
 
@@ -151,7 +155,7 @@ func New() (*EthashCL, error) {
 
 	searchBuffers := make([]*cl.MemObject, searchBuffSize)
 	for i := 0; i < searchBuffSize; i++ {
-		searchBuff, err := context.CreateEmptyBuffer(cl.MemReadOnly, maxSearchResults+1*SIZEOF_UINT32)
+		searchBuff, err := context.CreateEmptyBuffer(cl.MemWriteOnly, maxSearchResults+1*SIZEOF_UINT32)
 		if err != nil {
 			return nil, fmt.Errorf("search buffer err:", err)
 		}
@@ -226,25 +230,37 @@ func (h *EthashCL) Search(header common.Hash, target uint64, doneFn func([]uint6
 		if err != nil {
 			return fmt.Errorf("buffer mapping err: %v", err)
 		}
+		h.queue.Flush()
+
 		results := cres.ByteSlice()
 		nfound := binary.BigEndian.Uint32(results)
+		fmt.Println("sollutions found:", nfound)
 		nfound = uint32(math.Min(float64(nfound), float64(maxSearchResults)))
 
 		nonces := make([]uint64, maxSearchResults)
 		for i := uint32(0); i < nfound; i++ {
 			nonces[i] = nonce + uint64(binary.BigEndian.Uint32(results[1+i*SIZEOF_UINT32:]))
 		}
+		h.queue.EnqueueUnmapMemObject(h.searchBuffers[buff], cres, nil)
 		if doneFn(nonces) {
 			break
 		}
 
-		h.queue.EnqueueUnmapMemObject(h.searchBuffers[buff], cres, nil)
 	}
 
 	return nil
 }
 
+func rndHash() common.Hash {
+	var h common.Hash
+	rand.Read(h[:])
+	return h
+}
+
 func main() {
+	glog.SetV(6)
+	glog.SetToStderr(true)
+
 	fmt.Println("initialising OpenCL miner...")
 
 	gpu, err := New()
@@ -254,13 +270,22 @@ func main() {
 	}
 	fmt.Println("OpenCL miner initialised")
 
-	fmt.Println("Searching for solution...")
-	err = gpu.Search(common.Hash{}, 1000000000000, func(res []uint64) bool {
+	hash := rndHash()
+	fmt.Printf("Searching for solution for %x\n", hash)
+	err = gpu.Search(hash, 0x000000ffffffffff, func(res []uint64) bool {
 		fmt.Printf("found: %x\n", res)
 		return true
 	})
 	if err != nil {
 		fmt.Println("search err:", err)
 		os.Exit(1)
+	}
+	gpu.ctx.Release()
+	gpu.dagBuff.Release()
+	gpu.headerBuff.Release()
+	gpu.searchKernel.Release()
+	gpu.queue.Release()
+	for _, searchBuffer := range gpu.searchBuffers {
+		searchBuffer.Release()
 	}
 }
