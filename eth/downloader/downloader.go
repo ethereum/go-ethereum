@@ -65,6 +65,7 @@ type Downloader struct {
 
 	// Status
 	synchronising int32
+	notified      int32
 
 	// Channels
 	newPeerCh chan *peer
@@ -128,6 +129,10 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 	}
 	defer atomic.StoreInt32(&d.synchronising, 0)
 
+	// Post a user notification of the sync (only once per session)
+	if atomic.CompareAndSwapInt32(&d.notified, 0, 1) {
+		glog.V(logger.Info).Infoln("Block synchronisation started")
+	}
 	// Create cancel channel for aborting mid-flight
 	d.cancelLock.Lock()
 	d.cancelCh = make(chan struct{})
