@@ -61,6 +61,7 @@ type Chunk struct {
 	req      *requestStatus //
 	wg       *sync.WaitGroup
 	dbStored chan bool
+	source   peer
 }
 
 type ChunkStore interface {

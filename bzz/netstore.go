@@ -98,7 +98,7 @@ func (self *NetStore) put(entry *Chunk) {
 func (self *NetStore) addStoreRequest(req *storeRequestMsgData) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	dpaLogger.Debugf("NetStore.addStoreRequest: req = %#v", req)
+	dpaLogger.Debugf("NetStore.addStoreRequest: req = %v", req)
 	chunk, err := self.localStore.Get(req.Key)
 	dpaLogger.Debugf("NetStore.addStoreRequest: chunk reference %p", chunk)
 	// we assume that a returned chunk is the one stored in the memory cache
@@ -114,6 +114,7 @@ func (self *NetStore) addStoreRequest(req *storeRequestMsgData) {
 	} else {
 		return
 	}
+	chunk.source = req.peer
 	self.put(chunk)
 }
 
@@ -224,7 +225,7 @@ only add if less than requesterCount peers forwarded the same request id so far
 note this is done irrespective of status (searching or found/timedOut)
 */
 func (self *NetStore) addRequester(rs *requestStatus, req *retrieveRequestMsgData) {
-	dpaLogger.Debugf("NetStore.addRequester: key %064x - add peer [%#v] to req.Id %064x", req.Key, req.peer, req.Id)
+	dpaLogger.Debugf("NetStore.addRequester: key %064x - add peer [%v] to req.Id %064x", req.Key, req.peer, req.Id)
 	list := rs.requesters[int64(req.Id)]
 	rs.requesters[int64(req.Id)] = append(list, req)
 }
@@ -294,7 +295,9 @@ func (self *NetStore) store(chunk *Chunk) {
 		Id:    uint64(id),
 	}
 	for _, peer := range self.hive.getPeers(chunk.Key, 0) {
-		go peer.store(req)
+		if peer.Addr() != chunk.source.Addr() {
+			go peer.store(req)
+		}
 	}
 }
 
