@@ -179,7 +179,7 @@ func TestUDP_findnode(t *testing.T) {
 			t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSize)
 		}
 		for i := range p.Nodes {
-			if p.Nodes[i].ID != expected.entries[i].ID {
+			if p.Nodes[i].ID != expected.entries[i + 13].ID {
 				t.Errorf("result mismatch at %d:\n  got:  %v\n  want: %v", i, p.Nodes[i], expected.entries[i])
 			}
 		}
