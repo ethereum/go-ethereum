@@ -190,32 +190,15 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash) (err error) {
 // Cancel cancels all of the operations and resets the queue. It returns true
 // if the cancel operation was completed.
 func (d *Downloader) Cancel() bool {
-	hs, bs := d.queue.Size()
 	// If we're not syncing just return.
+	hs, bs := d.queue.Size()
 	if atomic.LoadInt32(&d.synchronising) == 0 && hs == 0 && bs == 0 {
 		return false
 	}
-
+	// Close the current cancel channel
+	d.cancelLock.RLock()
 	close(d.cancelCh)
-
-	// clean up
-hashDone:
-	for {
-		select {
-		case <-d.hashCh:
-		default:
-			break hashDone
-		}
-	}
-
-blockDone:
-	for {
-		select {
-		case <-d.blockCh:
-		default:
-			break blockDone
-		}
-	}
+	d.cancelLock.RUnlock()
 
 	// reset the queue
 	d.queue.Reset()
