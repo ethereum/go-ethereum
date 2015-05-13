@@ -472,7 +472,7 @@ func (s *Ethereum) Start() error {
 		if selfNode == nil {
 			panic("self is nil")
 		}
-		s.netStore.Start()
+		s.netStore.Start(selfNode)
 		go bzz.StartHttpServer(s.DPA)
 	}
 
