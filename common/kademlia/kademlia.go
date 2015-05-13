@@ -457,12 +457,12 @@ func proximity(one, other Address) (ret int) {
 	for i := 0; i < len(one); i++ {
 		oxo := one[i] ^ other[i]
 		for j := 0; j < 8; j++ {
-			if (oxo>>uint8(7-j))&0x1 != 0 {
+			if (uint8(oxo)>>uint8(7-j))&0x1 != 0 {
 				return i*8 + j
 			}
 		}
 	}
-	return len(one)*8 - 1
+	return len(one) * 8
 }
 
 // proxCmp compares the distances a->target and b->target.
