@@ -164,26 +164,21 @@ func TestUDP_findnode(t *testing.T) {
 	// check that closest neighbors are returned.
 	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
 	expected := test.table.closest(targetHash, bucketSize)
-	test.waitPacketOut(func(p *neighbors) {
-		if len(p.Nodes) != 13 {
-			t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSize)
-		}
-		for i := range p.Nodes {
-			if p.Nodes[i].ID != expected.entries[i].ID {
-				t.Errorf("result mismatch at %d:\n  got:  %v\n  want: %v", i, p.Nodes[i], expected.entries[i])
+
+	waitNeighbors := func(want []*Node) {
+		test.waitPacketOut(func(p *neighbors) {
+			if len(p.Nodes) != len(want) {
+				t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSize)
 			}
-		}
-	})
-	test.waitPacketOut(func(p *neighbors) {
-		if len(p.Nodes) != 3 {
-			t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSize)
-		}
-		for i := range p.Nodes {
-			if p.Nodes[i].ID != expected.entries[i + 13].ID {
-				t.Errorf("result mismatch at %d:\n  got:  %v\n  want: %v", i, p.Nodes[i], expected.entries[i])
+			for i := range p.Nodes {
+				if p.Nodes[i].ID != want[i].ID {
+					t.Errorf("result mismatch at %d:\n  got:  %v\n  want: %v", i, p.Nodes[i], expected.entries[i])
+				}
 			}
-		}
-	})
+		})
+	}
+	waitNeighbors(expected.entries[:maxNeighbors])
+	waitNeighbors(expected.entries[maxNeighbors:])
 }
 
 func TestUDP_findnodeMultiReply(t *testing.T) {
