@@ -172,8 +172,9 @@ func PMP(gateway net.IP) Interface {
 // This type is useful because discovery can take a while but we
 // want return an Interface value from UPnP, PMP and Auto immediately.
 type autodisc struct {
-	what string
-	done <-chan Interface
+	what string // type of interface being autodiscovered
+	once sync.Once
+	doit func() Interface
 
 	mu    sync.Mutex
 	found Interface
@@ -181,9 +182,10 @@ type autodisc struct {
 
 func startautodisc(what string, doit func() Interface) Interface {
 	// TODO: monitor network configuration and rerun doit when it changes.
-	done := make(chan Interface)
-	ad := &autodisc{what: what, done: done}
-	go func() { done <- doit(); close(done) }()
+	ad := &autodisc{what: what, doit: doit}
+	// Start the auto discovery as early as possible so it is already
+	// in progress when the rest of the stack calls the methods.
+	go ad.wait()
 	return ad
 }
 
@@ -218,19 +220,15 @@ func (n *autodisc) String() string {
 	}
 }
 
+// wait blocks until auto-discovery has been performed.
 func (n *autodisc) wait() error {
-	n.mu.Lock()
-	found := n.found
-	n.mu.Unlock()
-	if found != nil {
-		// already discovered
-		return nil
+	n.once.Do(func() {
+		n.mu.Lock()
+		n.found = n.doit()
+		n.mu.Unlock()
+	})
+	if n.found == nil {
+		return fmt.Errorf("no %s router discovered", n.what)
 	}
-	if found = <-n.done; found == nil {
-		return errors.New("no UPnP or NAT-PMP router discovered")
-	}
-	n.mu.Lock()
-	n.found = found
-	n.mu.Unlock()
 	return nil
 }
