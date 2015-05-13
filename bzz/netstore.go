@@ -197,7 +197,19 @@ func (self *NetStore) startSearch(chunk *Chunk, id int64, timeout *time.Time) {
 	}
 	for _, peer := range peers {
 		dpaLogger.Debugf("NetStore.startSearch: sending retrieveRequests to peer [%064x]", req.Key)
-		peer.retrieve(req)
+		var requester bool
+	OUT:
+		for _, recipients := range chunk.req.requesters {
+			for _, recipient := range recipients {
+				if recipient.peer.Addr() == peer.Addr() {
+					requester = true
+					break OUT
+				}
+			}
+		}
+		if !requester {
+			peer.retrieve(req)
+		}
 	}
 }
 
