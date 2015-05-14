@@ -87,7 +87,9 @@ func JSONRPC(pipe *xeth.XEth) http.Handler {
 		var reqSingle RpcRequest
 		if err := json.Unmarshal(body, &reqSingle); err == nil {
 			response := RpcResponse(api, &reqSingle)
-			send(w, &response)
+			if reqSingle.Id != nil {
+				send(w, &response)
+			}
 			return
 		}
 
@@ -96,11 +98,28 @@ func JSONRPC(pipe *xeth.XEth) http.Handler {
 		if err := json.Unmarshal(body, &reqBatch); err == nil {
 			// Build response batch
 			resBatch := make([]*interface{}, len(reqBatch))
+			resCount := 0
+
 			for i, request := range reqBatch {
 				response := RpcResponse(api, &request)
-				resBatch[i] = response
+				// this leaves nil entries in the response batch for later removal
+				if request.Id != nil {
+					resBatch[i] = response
+					resCount = resCount + 1
+				}
 			}
-			send(w, resBatch)
+
+			// make response omitting nil entries
+			respBatchComp := make([]*interface{}, resCount)
+			resCount = resCount - 1
+			for _, v := range resBatch {
+				if v != nil {
+					respBatchComp[resCount] = v
+					resCount = resCount - 1
+				}
+			}
+
+			send(w, respBatchComp)
 			return
 		}
 
