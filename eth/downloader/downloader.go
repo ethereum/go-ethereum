@@ -37,7 +37,6 @@ var (
 	errCancelHashFetch     = errors.New("hash fetching cancelled (requested)")
 	errCancelBlockFetch    = errors.New("block downloading cancelled (requested)")
 	errNoSyncActive        = errors.New("no sync active")
-	ErrUnknownParent       = errors.New("block has unknown parent")
 )
 
 type hashCheckFn func(common.Hash) bool
