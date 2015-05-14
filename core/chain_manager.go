@@ -593,7 +593,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 				self.setTransState(state.New(block.Root(), self.stateDb))
 				self.txState.SetState(state.New(block.Root(), self.stateDb))
 
-				queue[i] = ChainEvent{block, logs}
+				queue[i] = ChainEvent{block, block.Hash(), logs}
 				queueEvent.canonicalCount++
 
 				if glog.V(logger.Debug) {
@@ -683,7 +683,7 @@ out:
 					case ChainEvent:
 						// We need some control over the mining operation. Acquiring locks and waiting for the miner to create new block takes too long
 						// and in most cases isn't even necessary.
-						if i+1 == ev.canonicalCount {
+						if self.lastBlockHash == event.Hash {
 							self.currentGasLimit = CalcGasLimit(event.Block)
 							self.eventMux.Post(ChainHeadEvent{event.Block})
 						}
