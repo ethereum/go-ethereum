@@ -349,6 +349,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		if err != nil {
 			return err
 		}
+		contract.Code = newHexData(contract.Code).String()
 		*reply = contract
 
 	case "eth_newFilter":
