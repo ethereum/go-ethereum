@@ -136,6 +136,10 @@ type retrieveRequestMsgData struct {
 	peer peer // protocol registers the requester
 }
 
+func (self *retrieveRequestMsgData) String() string {
+	return fmt.Sprintf("From: %v, Key: %x; ID: %v, MaxSize: %v, MaxPeers: %v", self.peer.Addr(), self.Key[:4], self.Id, self.MaxSize, self.MaxPeers)
+}
+
 type peerAddr struct {
 	IP   net.IP
 	Port uint16

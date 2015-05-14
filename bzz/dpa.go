@@ -60,7 +60,7 @@ type Chunk struct {
 	C        chan bool      // to signal data delivery by the dpa
 	req      *requestStatus //
 	wg       *sync.WaitGroup
-	dbStored chan bool
+	dbStored sync.Mutex
 	source   *peer
 }
 

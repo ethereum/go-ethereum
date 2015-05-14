@@ -318,16 +318,16 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		dpaLogger.Debugf("quit")
 		return
 	case <-chunk.C: // bells are ringing, data have been delivered
-		dpaLogger.Debugf("chunk data received for %x", chunk.Key[:4])
+		// dpaLogger.Debugf("chunk data received for %x", chunk.Key[:4])
 	}
 	if len(chunk.SData) == 0 {
-		dpaLogger.Debugf("No payload in %x.", chunk.Key)
+		// dpaLogger.Debugf("No payload in %x", chunk.Key)
 		return 0, notFound
 	}
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	self.size = chunk.Size
 	if b == nil {
-		dpaLogger.Debugf("Size query for %x.", chunk.Key[:4])
+		// dpaLogger.Debugf("Size query for %x", chunk.Key[:4])
 		return
 	}
 	want := int64(len(b))
@@ -350,14 +350,14 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	}()
 	select {
 	case err = <-self.errC:
-		dpaLogger.Debugf("ReadAt received %v.", err)
+		dpaLogger.Debugf("ReadAt received %v", err)
 		read = len(b)
 		if off+int64(read) == self.size {
 			err = io.EOF
 		}
-		dpaLogger.Debugf("ReadAt returning with %d, %v.", read, err)
+		dpaLogger.Debugf("ReadAt returning with %d, %v", read, err)
 	case <-self.quitC:
-		dpaLogger.Debugf("ReadAt aborted with %d, %v.", read, err)
+		dpaLogger.Debugf("ReadAt aborted with %d, %v", read, err)
 	}
 	return
 }
@@ -365,7 +365,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeSize int64, chunk *Chunk, parentWg *sync.WaitGroup) {
 	defer parentWg.Done()
 
-	dpaLogger.Debugf("depth: %v, loff: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, off, eoff, chunk.Size, treeSize)
+	// dpaLogger.Debugf("depth: %v, loff: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, off, eoff, chunk.Size, treeSize)
 
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 
@@ -376,7 +376,7 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 	}
 
 	if depth == 0 {
-		dpaLogger.Debugf("len(b): %v, off: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, len(b), off, eoff, chunk.Size, treeSize)
+		// dpaLogger.Debugf("depth: %v, len(b): %v, off: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, len(b), off, eoff, chunk.Size, treeSize)
 		if int64(len(b)) != eoff-off {
 			//fmt.Printf("len(b) = %v  off = %v  eoff = %v", len(b), off, eoff)
 			panic("len(b) does not match")
