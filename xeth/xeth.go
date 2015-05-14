@@ -318,7 +318,11 @@ func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blha
 		Index      uint64
 	}
 
-	v, _ := self.backend.ExtraDb().Get(append(common.FromHex(hash), 0x0001))
+	v, dberr := self.backend.ExtraDb().Get(append(common.FromHex(hash), 0x0001))
+	// TODO check specifically for ErrNotFound
+	if dberr != nil {
+		return
+	}
 	r := bytes.NewReader(v)
 	err := rlp.Decode(r, &txExtra)
 	if err == nil {
