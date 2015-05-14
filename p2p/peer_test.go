@@ -50,8 +50,6 @@ func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan DiscReason) {
 }
 
 func TestPeerProtoReadMsg(t *testing.T) {
-	defer testlog(t).detach()
-
 	done := make(chan struct{})
 	proto := Protocol{
 		Name:   "a",
@@ -88,8 +86,6 @@ func TestPeerProtoReadMsg(t *testing.T) {
 }
 
 func TestPeerProtoEncodeMsg(t *testing.T) {
-	defer testlog(t).detach()
-
 	proto := Protocol{
 		Name:   "a",
 		Length: 2,
@@ -112,8 +108,6 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 }
 
 func TestPeerWriteForBroadcast(t *testing.T) {
-	defer testlog(t).detach()
-
 	closer, rw, peer, peerErr := testPeer([]Protocol{discard})
 	defer closer()
 
@@ -152,8 +146,6 @@ func TestPeerWriteForBroadcast(t *testing.T) {
 }
 
 func TestPeerPing(t *testing.T) {
-	defer testlog(t).detach()
-
 	closer, rw, _, _ := testPeer(nil)
 	defer closer()
 	if err := SendItems(rw, pingMsg); err != nil {
@@ -165,8 +157,6 @@ func TestPeerPing(t *testing.T) {
 }
 
 func TestPeerDisconnect(t *testing.T) {
-	defer testlog(t).detach()
-
 	closer, rw, _, disc := testPeer(nil)
 	defer closer()
 	if err := SendItems(rw, discMsg, DiscQuitting); err != nil {
@@ -185,7 +175,6 @@ func TestPeerDisconnect(t *testing.T) {
 // This test is supposed to verify that Peer can reliably handle
 // multiple causes of disconnection occurring at the same time.
 func TestPeerDisconnectRace(t *testing.T) {
-	defer testlog(t).detach()
 	maybe := func() bool { return rand.Intn(1) == 1 }
 
 	for i := 0; i < 1000; i++ {

@@ -46,8 +46,6 @@ func startTestServer(t *testing.T, pf newPeerHook) *Server {
 }
 
 func TestServerListen(t *testing.T) {
-	defer testlog(t).detach()
-
 	// start the test server
 	connected := make(chan *Peer)
 	srv := startTestServer(t, func(p *Peer) {
@@ -78,8 +76,6 @@ func TestServerListen(t *testing.T) {
 }
 
 func TestServerDial(t *testing.T) {
-	defer testlog(t).detach()
-
 	// run a one-shot TCP server to handle the connection.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -126,8 +122,6 @@ func TestServerDial(t *testing.T) {
 }
 
 func TestServerBroadcast(t *testing.T) {
-	defer testlog(t).detach()
-
 	var connected sync.WaitGroup
 	srv := startTestServer(t, func(p *Peer) {
 		p.running = matchProtocols([]Protocol{discard}, []Cap{discard.cap()}, p.rw)
@@ -172,8 +166,6 @@ func TestServerBroadcast(t *testing.T) {
 //
 // It also serves as a light-weight integration test.
 func TestServerDisconnectAtCap(t *testing.T) {
-	defer testlog(t).detach()
-
 	started := make(chan *Peer)
 	srv := &Server{
 		ListenAddr: "127.0.0.1:0",
@@ -224,8 +216,6 @@ func TestServerDisconnectAtCap(t *testing.T) {
 
 // Tests that static peers are (re)connected, and done so even above max peers.
 func TestServerStaticPeers(t *testing.T) {
-	defer testlog(t).detach()
-
 	// Create a test server with limited connection slots
 	started := make(chan *Peer)
 	server := &Server{
@@ -312,7 +302,6 @@ func TestServerStaticPeers(t *testing.T) {
 
 // Tests that trusted peers and can connect above max peer caps.
 func TestServerTrustedPeers(t *testing.T) {
-	defer testlog(t).detach()
 
 	// Create a trusted peer to accept connections from
 	key := newkey()
@@ -374,8 +363,6 @@ func TestServerTrustedPeers(t *testing.T) {
 
 // Tests that a failed dial will temporarily throttle a peer.
 func TestServerMaxPendingDials(t *testing.T) {
-	defer testlog(t).detach()
-
 	// Start a simple test server
 	server := &Server{
 		ListenAddr:      "127.0.0.1:0",
@@ -443,8 +430,6 @@ func TestServerMaxPendingDials(t *testing.T) {
 }
 
 func TestServerMaxPendingAccepts(t *testing.T) {
-	defer testlog(t).detach()
-
 	// Start a test server and a peer sink for synchronization
 	started := make(chan *Peer)
 	server := &Server{
