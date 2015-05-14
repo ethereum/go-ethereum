@@ -42,8 +42,8 @@ func (err *UncleErr) Error() string {
 	return err.Message
 }
 
-func UncleError(str string) error {
-	return &UncleErr{Message: str}
+func UncleError(format string, v ...interface{}) error {
+	return &UncleErr{Message: fmt.Sprintf(format, v...)}
 }
 
 func IsUncleErr(err error) bool {
