@@ -277,6 +277,7 @@ func GetNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	// Set verbosity on glog
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
+	glog.CopyStandardLogTo("INFO")
 	// Set the log type
 	//glog.SetToStderr(ctx.GlobalBool(LogToStdErrFlag.Name))
 	glog.SetToStderr(true)

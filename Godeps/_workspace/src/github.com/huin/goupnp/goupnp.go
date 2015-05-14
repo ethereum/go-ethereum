@@ -20,6 +20,8 @@ import (
 	"net/http"
 	"net/url"
 
+	"golang.org/x/net/html/charset"
+
 	"github.com/huin/goupnp/httpu"
 	"github.com/huin/goupnp/ssdp"
 )
@@ -104,6 +106,7 @@ func requestXml(url string, defaultSpace string, doc interface{}) error {
 
 	decoder := xml.NewDecoder(resp.Body)
 	decoder.DefaultSpace = defaultSpace
+	decoder.CharsetReader = charset.NewReaderLabel
 
 	return decoder.Decode(doc)
 }
