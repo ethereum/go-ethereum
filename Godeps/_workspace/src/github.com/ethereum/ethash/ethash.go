@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -235,7 +236,7 @@ type Full struct {
 
 	test     bool // if set use a smaller DAG size
 	turbo    bool
-	hashRate int64
+	hashRate int32
 
 	mu      sync.Mutex // protects dag
 	current *dag       // current full DAG
@@ -265,6 +266,7 @@ func (pow *Full) Search(block pow.Block, stop <-chan struct{}) (nonce uint64, mi
 	i := int64(0)
 	starti := i
 	start := time.Now().UnixNano()
+	previousHashrate := int32(0)
 
 	nonce = uint64(r.Int63())
 	hash := hashToH256(block.HashNoNonce())
@@ -272,14 +274,20 @@ func (pow *Full) Search(block pow.Block, stop <-chan struct{}) (nonce uint64, mi
 	for {
 		select {
 		case <-stop:
-			pow.hashRate = 0
+			atomic.AddInt32(&pow.hashRate, -previousHashrate)
 			return 0, nil
 		default:
 			i++
 
-			elapsed := time.Now().UnixNano() - start
-			hashes := ((float64(1e9) / float64(elapsed)) * float64(i-starti)) / 1000
-			pow.hashRate = int64(hashes)
+			// we don't have to update hash rate on every nonce, so update after
+			// first nonce check and then after 2^X nonces
+			if i == 2 || ((i % (1 << 16)) == 0) {
+				elapsed := time.Now().UnixNano() - start
+				hashes := (float64(1e9) / float64(elapsed)) * float64(i-starti)
+				hashrateDiff := int32(hashes) - previousHashrate
+				previousHashrate = int32(hashes)
+				atomic.AddInt32(&pow.hashRate, hashrateDiff)
+			}
 
 			ret := C.ethash_full_compute(dag.ptr, hash, C.uint64_t(nonce))
 			result := h256ToHash(ret.result).Big()
@@ -287,6 +295,7 @@ func (pow *Full) Search(block pow.Block, stop <-chan struct{}) (nonce uint64, mi
 			// TODO: disagrees with the spec https://github.com/ethereum/wiki/wiki/Ethash#mining
 			if ret.success && result.Cmp(target) <= 0 {
 				mixDigest = C.GoBytes(unsafe.Pointer(&ret.mix_hash), C.int(32))
+				atomic.AddInt32(&pow.hashRate, -previousHashrate)
 				return nonce, mixDigest
 			}
 			nonce += 1
@@ -299,8 +308,7 @@ func (pow *Full) Search(block pow.Block, stop <-chan struct{}) (nonce uint64, mi
 }
 
 func (pow *Full) GetHashrate() int64 {
-	// TODO: this needs to use an atomic operation.
-	return pow.hashRate
+	return int64(atomic.LoadInt32(&pow.hashRate))
 }
 
 func (pow *Full) Turbo(on bool) {

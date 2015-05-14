@@ -173,7 +173,6 @@ func (self *worker) stop() {
 func (self *worker) register(agent Agent) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-
 	self.agents = append(self.agents, agent)
 	agent.SetReturnCh(self.recv)
 }
@@ -453,13 +452,9 @@ func (self *worker) commitTransaction(tx *types.Transaction) error {
 	return nil
 }
 
+// TODO: remove or use
 func (self *worker) HashRate() int64 {
-	var tot int64
-	for _, agent := range self.agents {
-		tot += agent.GetHashRate()
-	}
-
-	return tot
+	return 0
 }
 
 // gasprice calculates a reduced gas price based on the pct
