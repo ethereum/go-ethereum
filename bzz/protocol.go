@@ -95,6 +95,10 @@ type statusMsgData struct {
 	// Strategy  uint64
 }
 
+func (self *statusMsgData) String() string {
+	return fmt.Sptintf("Status: Version: %v, ID: %v, NodeID: %v, Addr: %v, NetworkId: %v, Caps: %v", self.Version, self.ID, self.NodeID, self.Addr, self.NetworkId, self.Caps)
+}
+
 /*
  Given the chunker I see absolutely no reason why not allow storage and delivery of larger data . See my discussion on flexible chunking.
  store requests are forwarded to the peers in their cademlia proximity bin if they are distant
@@ -251,7 +255,7 @@ func (self *bzzProtocol) handle() error {
 
 	switch msg.Code {
 	case statusMsg:
-		dpaLogger.Debugf("Status message: %#v", msg)
+		dpaLogger.Debugf("Status message: %v", msg)
 		return self.protoError(ErrExtraStatusMsg, "")
 
 	case storeRequestMsg:
@@ -267,7 +271,7 @@ func (self *bzzProtocol) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		dpaLogger.Debugf("Request message: %#v", req)
+		dpaLogger.Debugf("Request message: %v", req)
 		if req.Key == nil {
 			return self.protoError(ErrDecode, "protocol handler: req.Key == nil || req.Timeout == nil")
 		}
@@ -375,7 +379,7 @@ func (self *bzzProtocol) peerAddr() *peerAddr {
 
 // outgoing messages
 func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
-	dpaLogger.Debugf("Request message: %#v", req)
+	dpaLogger.Debugf("Request message: %v", req)
 	err := p2p.Send(self.rw, retrieveRequestMsg, req)
 	if err != nil {
 		dpaLogger.Errorf("EncodeMsg error: %v", err)
