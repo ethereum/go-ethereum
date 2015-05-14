@@ -27,7 +27,7 @@ var (
 	errLowTd               = errors.New("peer's TD is too low")
 	ErrBusy                = errors.New("busy")
 	errUnknownPeer         = errors.New("peer's unknown or unhealthy")
-	errBadPeer             = errors.New("action from bad peer ignored")
+	ErrBadPeer             = errors.New("action from bad peer ignored")
 	errNoPeers             = errors.New("no peers to keep download active")
 	ErrPendingQueue        = errors.New("pending items in queue")
 	ErrTimeout             = errors.New("timeout")
@@ -266,9 +266,11 @@ out:
 					break
 				}
 			}
-			d.queue.Insert(hashPack.hashes)
-
-			if !done {
+			// Insert all the new hashes, but only continue if got something useful
+			inserts := d.queue.Insert(hashPack.hashes)
+			if inserts == 0 && !done {
+				return ErrBadPeer
+			} else if !done {
 				activePeer.getHashes(hash)
 				continue
 			}

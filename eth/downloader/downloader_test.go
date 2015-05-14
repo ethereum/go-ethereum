@@ -336,3 +336,32 @@ func TestNonExistingParentAttack(t *testing.T) {
 		t.Fatalf("tester doesn't know about the origin hash")
 	}
 }
+
+// Tests that if a malicious peers keeps sending us repeating hashes, we don't
+// loop indefinitely.
+func TestRepeatingHashAttack(t *testing.T) {
+	// Create a valid chain, but drop the last link
+	hashes := createHashes(1000, 1)
+	blocks := createBlocksFromHashes(hashes)
+
+	hashes = hashes[:len(hashes)-1]
+
+	// Try and sync with the malicious node
+	tester := newTester(t, hashes, blocks)
+	tester.newPeer("attack", big.NewInt(10000), hashes[0])
+
+	errc := make(chan error)
+	go func() {
+		errc <- tester.sync("attack", hashes[0])
+	}()
+
+	// Make sure that syncing returns and does so with a failure
+	select {
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("synchronisation blocked")
+	case err := <-errc:
+		if err == nil {
+			t.Fatalf("synchronisation succeeded")
+		}
+	}
+}

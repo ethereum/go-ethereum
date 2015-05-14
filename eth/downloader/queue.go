@@ -122,24 +122,26 @@ func (q *queue) Has(hash common.Hash) bool {
 	return false
 }
 
-// Insert adds a set of hashes for the download queue for scheduling.
-func (q *queue) Insert(hashes []common.Hash) {
+// Insert adds a set of hashes for the download queue for scheduling, returning
+// the number of new hashes encountered.
+func (q *queue) Insert(hashes []common.Hash) int {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	// Insert all the hashes prioritized in the arrival order
-	for i, hash := range hashes {
-		index := q.hashCounter + i
-
+	inserts := 0
+	for _, hash := range hashes {
+		// Skip anything we already have
 		if old, ok := q.hashPool[hash]; ok {
 			glog.V(logger.Warn).Infof("Hash %x already scheduled at index %v", hash, old)
 			continue
 		}
-		q.hashPool[hash] = index
-		q.hashQueue.Push(hash, float32(index)) // Highest gets schedules first
+		// Update the counters and insert the hash
+		q.hashCounter, inserts = q.hashCounter+1, inserts+1
+		q.hashPool[hash] = q.hashCounter
+		q.hashQueue.Push(hash, float32(q.hashCounter)) // Highest gets schedules first
 	}
-	// Update the hash counter for the next batch of inserts
-	q.hashCounter += len(hashes)
+	return inserts
 }
 
 // GetHeadBlock retrieves the first block from the cache, or nil if it hasn't
