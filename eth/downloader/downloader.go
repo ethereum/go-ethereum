@@ -268,8 +268,12 @@ out:
 			// Insert all the new hashes, but only continue if got something useful
 			inserts := d.queue.Insert(hashPack.hashes)
 			if inserts == 0 && !done {
+				glog.V(logger.Debug).Infof("Peer (%s) responded with stale hashes\n", activePeer.id)
+				d.queue.Reset()
+
 				return ErrBadPeer
-			} else if !done {
+			}
+			if !done {
 				activePeer.getHashes(hash)
 				continue
 			}

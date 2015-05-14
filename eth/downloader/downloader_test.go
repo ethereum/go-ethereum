@@ -342,14 +342,13 @@ func TestNonExistingParentAttack(t *testing.T) {
 // loop indefinitely.
 func TestRepeatingHashAttack(t *testing.T) {
 	// Create a valid chain, but drop the last link
-	hashes := createHashes(0, 1000)
+	hashes := createHashes(0, blockCacheLimit)
 	blocks := createBlocksFromHashes(hashes)
-
-	hashes = hashes[:len(hashes)-1]
+	forged := hashes[:len(hashes)-1]
 
 	// Try and sync with the malicious node
-	tester := newTester(t, hashes, blocks)
-	tester.newPeer("attack", big.NewInt(10000), hashes[0])
+	tester := newTester(t, forged, blocks)
+	tester.newPeer("attack", big.NewInt(10000), forged[0])
 
 	errc := make(chan error)
 	go func() {
@@ -365,14 +364,21 @@ func TestRepeatingHashAttack(t *testing.T) {
 			t.Fatalf("synchronisation succeeded")
 		}
 	}
+	// Ensure that a valid chain can still pass sync
+	tester.hashes = hashes
+	tester.newPeer("valid", big.NewInt(20000), hashes[0])
+	if err := tester.sync("valid", hashes[0]); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
 }
 
 // Tests that if a malicious peers returns a non-existent block hash, it should
 // eventually time out and the sync reattempted.
 func TestNonExistingBlockAttack(t *testing.T) {
 	// Create a valid chain, but forge the last link
-	hashes := createHashes(0, 10)
+	hashes := createHashes(0, blockCacheLimit)
 	blocks := createBlocksFromHashes(hashes)
+	origin := hashes[len(hashes)/2]
 
 	hashes[len(hashes)/2] = unknownHash
 
@@ -381,5 +387,11 @@ func TestNonExistingBlockAttack(t *testing.T) {
 	tester.newPeer("attack", big.NewInt(10000), hashes[0])
 	if err := tester.sync("attack", hashes[0]); err != errPeersUnavailable {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errPeersUnavailable)
+	}
+	// Ensure that a valid chain can still pass sync
+	hashes[len(hashes)/2] = origin
+	tester.newPeer("valid", big.NewInt(20000), hashes[0])
+	if err := tester.sync("valid", hashes[0]); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
