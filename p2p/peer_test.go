@@ -172,12 +172,13 @@ func TestPeerDisconnect(t *testing.T) {
 	if err := SendItems(rw, discMsg, DiscQuitting); err != nil {
 		t.Fatal(err)
 	}
-	if err := ExpectMsg(rw, discMsg, []interface{}{DiscRequested}); err != nil {
-		t.Error(err)
-	}
-	closer()
-	if reason := <-disc; reason != DiscRequested {
-		t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscRequested)
+	select {
+	case reason := <-disc:
+		if reason != DiscQuitting {
+			t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscRequested)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Error("peer did not return")
 	}
 }
 
