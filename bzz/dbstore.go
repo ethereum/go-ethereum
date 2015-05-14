@@ -259,7 +259,9 @@ func (s *dbStore) Put(chunk *Chunk) {
 	var index dpaDBIndex
 
 	if s.tryAccessIdx(ikey, &index) {
-		chunk.dbStored.Unlock()
+		if chunk.dbStored != nil {
+			close(chunk.dbStored)
+		}
 		return // already exists, only update access
 	}
 
@@ -288,7 +290,9 @@ func (s *dbStore) Put(chunk *Chunk) {
 	batch.Put(ikey, idata)
 
 	s.db.Write(batch)
-	chunk.dbStored.Unlock()
+	if chunk.dbStored != nil {
+		close(chunk.dbStored)
+	}
 }
 
 // try to find index; if found, update access cnt and return true
