@@ -37,6 +37,7 @@ var (
 	errCancelHashFetch     = errors.New("hash fetching cancelled (requested)")
 	errCancelBlockFetch    = errors.New("block downloading cancelled (requested)")
 	errNoSyncActive        = errors.New("no sync active")
+	ErrUnknownParent       = errors.New("block has unknown parent")
 )
 
 type hashCheckFn func(common.Hash) bool
@@ -142,16 +143,19 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 	return d.syncWithPeer(p, hash)
 }
 
-// TakeBlocks takes blocks from the queue and yields them to the blockTaker handler
-// it's possible it yields no blocks
-func (d *Downloader) TakeBlocks() types.Blocks {
-	// Check that there are blocks available and its parents are known
+// TakeBlocks takes blocks from the queue and yields them to the caller.
+func (d *Downloader) TakeBlocks() (types.Blocks, error) {
+	// If the head block is missing, no blocks are ready
 	head := d.queue.GetHeadBlock()
-	if head == nil || !d.hasBlock(head.ParentHash()) {
-		return nil
+	if head == nil {
+		return nil, nil
 	}
-	// Retrieve a full batch of blocks
-	return d.queue.TakeBlocks(head)
+	// If the parent hash of the head is unknown, notify the caller
+	if !d.hasBlock(head.ParentHash()) {
+		return nil, ErrUnknownParent
+	}
+	// Otherwise retrieve a full batch of blocks
+	return d.queue.TakeBlocks(head), nil
 }
 
 func (d *Downloader) Has(hash common.Hash) bool {

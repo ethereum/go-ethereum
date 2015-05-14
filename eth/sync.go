@@ -2,6 +2,7 @@ package eth
 
 import (
 	"math"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -14,6 +15,7 @@ import (
 func (pm *ProtocolManager) update() {
 	forceSync := time.Tick(forceSyncCycle)
 	blockProc := time.Tick(blockProcCycle)
+	blockProcPend := int32(0)
 
 	for {
 		select {
@@ -36,7 +38,14 @@ func (pm *ProtocolManager) update() {
 			}
 		case <-blockProc:
 			// Try to pull some blocks from the downloaded
-			go pm.processBlocks()
+			if atomic.CompareAndSwapInt32(&blockProcPend, 0, 1) {
+				go func() {
+					if err := pm.processBlocks(); err != nil {
+						pm.downloader.Cancel()
+					}
+					atomic.StoreInt32(&blockProcPend, 0)
+				}()
+			}
 
 		case <-pm.quitSync:
 			return
@@ -52,8 +61,12 @@ func (pm *ProtocolManager) processBlocks() error {
 	pm.wg.Add(1)
 	defer pm.wg.Done()
 
-	// Take a batch of blocks (will return nil if a previous batch has not reached the chain yet)
-	blocks := pm.downloader.TakeBlocks()
+	// Take a batch of blocks, but abort if there's an invalid head or if the chain's empty
+	blocks, err := pm.downloader.TakeBlocks()
+	if err != nil {
+		glog.V(logger.Warn).Infof("Block processing failed: %v", err)
+		return err
+	}
 	if len(blocks) == 0 {
 		return nil
 	}
@@ -63,9 +76,7 @@ func (pm *ProtocolManager) processBlocks() error {
 		max := int(math.Min(float64(len(blocks)), float64(blockProcAmount)))
 		_, err := pm.chainman.InsertChain(blocks[:max])
 		if err != nil {
-			// cancel download process
-			pm.downloader.Cancel()
-
+			glog.V(logger.Warn).Infof("Block insertion failed: %v", err)
 			return err
 		}
 		blocks = blocks[max:]
