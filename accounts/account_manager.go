@@ -49,6 +49,11 @@ var (
 	ErrNoKeys = errors.New("no keys in store")
 )
 
+const (
+    // Default unlock duration (in seconds) when an account is unlocked from the console
+    DefaultAccountUnlockDuration = 300
+)
+
 type Account struct {
 	Address common.Address
 }
