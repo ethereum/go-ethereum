@@ -197,7 +197,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 
 	// There can be at most two uncles
 	if len(block.Uncles()) > 2 {
-		return nil, ValidationError("Block can only contain one uncle (contained %v)", len(block.Uncles()))
+		return nil, ValidationError("Block can only contain maximum 2 uncles (contained %v)", len(block.Uncles()))
 	}
 
 	receipts, err := sm.TransitionState(state, parent, block, false)
