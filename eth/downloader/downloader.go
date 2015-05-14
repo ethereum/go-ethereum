@@ -2,7 +2,6 @@ package downloader
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -398,8 +397,7 @@ out:
 				// and all failed throw an error
 				if d.queue.InFlight() == 0 {
 					d.queue.Reset()
-
-					return fmt.Errorf("%v peers available = %d. total peers = %d. hashes needed = %d", errPeersUnavailable, len(idlePeers), d.peers.Len(), d.queue.Pending())
+					return errPeersUnavailable
 				}
 
 			} else if d.queue.InFlight() == 0 {

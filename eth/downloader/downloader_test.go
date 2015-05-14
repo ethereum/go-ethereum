@@ -106,11 +106,12 @@ func (dl *downloadTester) getHashes(hash common.Hash) error {
 
 func (dl *downloadTester) getBlocks(id string) func([]common.Hash) error {
 	return func(hashes []common.Hash) error {
-		blocks := make([]*types.Block, len(hashes))
-		for i, hash := range hashes {
-			blocks[i] = dl.blocks[hash]
+		blocks := make([]*types.Block, 0, len(hashes))
+		for _, hash := range hashes {
+			if block, ok := dl.blocks[hash]; ok {
+				blocks = append(blocks, block)
+			}
 		}
-
 		go dl.downloader.DeliverBlocks(id, blocks)
 
 		return nil
@@ -341,7 +342,7 @@ func TestNonExistingParentAttack(t *testing.T) {
 // loop indefinitely.
 func TestRepeatingHashAttack(t *testing.T) {
 	// Create a valid chain, but drop the last link
-	hashes := createHashes(1000, 1)
+	hashes := createHashes(0, 1000)
 	blocks := createBlocksFromHashes(hashes)
 
 	hashes = hashes[:len(hashes)-1]
@@ -363,5 +364,22 @@ func TestRepeatingHashAttack(t *testing.T) {
 		if err == nil {
 			t.Fatalf("synchronisation succeeded")
 		}
+	}
+}
+
+// Tests that if a malicious peers returns a non-existent block hash, it should
+// eventually time out and the sync reattempted.
+func TestNonExistingBlockAttack(t *testing.T) {
+	// Create a valid chain, but forge the last link
+	hashes := createHashes(0, 10)
+	blocks := createBlocksFromHashes(hashes)
+
+	hashes[len(hashes)/2] = unknownHash
+
+	// Try and sync with the malicious node and check that it fails
+	tester := newTester(t, hashes, blocks)
+	tester.newPeer("attack", big.NewInt(10000), hashes[0])
+	if err := tester.sync("attack", hashes[0]); err != errPeersUnavailable {
+		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errPeersUnavailable)
 	}
 }
