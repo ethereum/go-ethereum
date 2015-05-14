@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"errors"
@@ -14,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -157,45 +155,6 @@ func (srv *Server) AddPeer(node *discover.Node) {
 	defer srv.lock.Unlock()
 
 	srv.staticNodes[node.ID] = node
-}
-
-// Broadcast sends an RLP-encoded message to all connected peers.
-// This method is deprecated and will be removed later.
-func (srv *Server) Broadcast(protocol string, code uint64, data interface{}) error {
-	return srv.BroadcastLimited(protocol, code, func(i float64) float64 { return i }, data)
-}
-
-// BroadcastsRange an RLP-encoded message to a random set of peers using the limit function to limit the amount
-// of peers.
-func (srv *Server) BroadcastLimited(protocol string, code uint64, limit func(float64) float64, data interface{}) error {
-	var payload []byte
-	if data != nil {
-		var err error
-		payload, err = rlp.EncodeToBytes(data)
-		if err != nil {
-			return err
-		}
-	}
-	srv.lock.RLock()
-	defer srv.lock.RUnlock()
-
-	i, max := 0, int(limit(float64(len(srv.peers))))
-	for _, peer := range srv.peers {
-		if i >= max {
-			break
-		}
-
-		if peer != nil {
-			var msg = Msg{Code: code}
-			if data != nil {
-				msg.Payload = bytes.NewReader(payload)
-				msg.Size = uint32(len(payload))
-			}
-			peer.writeProtoMsg(protocol, msg)
-			i++
-		}
-	}
-	return nil
 }
 
 // Start starts running the server.

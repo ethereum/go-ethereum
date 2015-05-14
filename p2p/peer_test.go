@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -104,44 +103,6 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 
 	if err := ExpectMsg(rw, 17, []string{"foo", "bar"}); err != nil {
 		t.Error(err)
-	}
-}
-
-func TestPeerWriteForBroadcast(t *testing.T) {
-	closer, rw, peer, peerErr := testPeer([]Protocol{discard})
-	defer closer()
-
-	emptymsg := func(code uint64) Msg {
-		return Msg{Code: code, Size: 0, Payload: bytes.NewReader(nil)}
-	}
-
-	// test write errors
-	if err := peer.writeProtoMsg("b", emptymsg(3)); err == nil {
-		t.Errorf("expected error for unknown protocol, got nil")
-	}
-	if err := peer.writeProtoMsg("discard", emptymsg(8)); err == nil {
-		t.Errorf("expected error for out-of-range msg code, got nil")
-	} else if perr, ok := err.(*peerError); !ok || perr.Code != errInvalidMsgCode {
-		t.Errorf("wrong error for out-of-range msg code, got %#v", err)
-	}
-
-	// setup for reading the message on the other end
-	read := make(chan struct{})
-	go func() {
-		if err := ExpectMsg(rw, 16, nil); err != nil {
-			t.Error(err)
-		}
-		close(read)
-	}()
-
-	// test successful write
-	if err := peer.writeProtoMsg("discard", emptymsg(0)); err != nil {
-		t.Errorf("expect no error for known protocol: %v", err)
-	}
-	select {
-	case <-read:
-	case err := <-peerErr:
-		t.Fatalf("peer stopped: %v", err)
 	}
 }
 

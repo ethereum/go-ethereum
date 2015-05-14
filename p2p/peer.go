@@ -273,20 +273,6 @@ func (p *Peer) getProto(code uint64) (*protoRW, error) {
 	return nil, newPeerError(errInvalidMsgCode, "%d", code)
 }
 
-// writeProtoMsg sends the given message on behalf of the given named protocol.
-// this exists because of Server.Broadcast.
-func (p *Peer) writeProtoMsg(protoName string, msg Msg) error {
-	proto, ok := p.running[protoName]
-	if !ok {
-		return fmt.Errorf("protocol %s not handled by peer", protoName)
-	}
-	if msg.Code >= proto.Length {
-		return newPeerError(errInvalidMsgCode, "code %x is out of range for protocol %q", msg.Code, protoName)
-	}
-	msg.Code += proto.offset
-	return p.rw.WriteMsg(msg)
-}
-
 type protoRW struct {
 	Protocol
 	in     chan Msg

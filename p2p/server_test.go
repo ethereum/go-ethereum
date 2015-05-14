@@ -1,12 +1,9 @@
 package p2p
 
 import (
-	"bytes"
 	"crypto/ecdsa"
-	"io"
 	"math/rand"
 	"net"
-	"sync"
 	"testing"
 	"time"
 
@@ -118,45 +115,6 @@ func TestServerDial(t *testing.T) {
 
 	case <-time.After(1 * time.Second):
 		t.Error("server did not connect within one second")
-	}
-}
-
-func TestServerBroadcast(t *testing.T) {
-	var connected sync.WaitGroup
-	srv := startTestServer(t, func(p *Peer) {
-		p.running = matchProtocols([]Protocol{discard}, []Cap{discard.cap()}, p.rw)
-		connected.Done()
-	})
-	defer srv.Stop()
-
-	// create a few peers
-	var conns = make([]net.Conn, 8)
-	connected.Add(len(conns))
-	deadline := time.Now().Add(3 * time.Second)
-	dialer := &net.Dialer{Deadline: deadline}
-	for i := range conns {
-		conn, err := dialer.Dial("tcp", srv.ListenAddr)
-		if err != nil {
-			t.Fatalf("conn %d: dial error: %v", i, err)
-		}
-		defer conn.Close()
-		conn.SetDeadline(deadline)
-		conns[i] = conn
-	}
-	connected.Wait()
-
-	// broadcast one message
-	srv.Broadcast("discard", 0, []string{"foo"})
-	golden := unhex("66e94d166f0a2c3b884cfa59ca34")
-
-	// check that the message has been written everywhere
-	for i, conn := range conns {
-		buf := make([]byte, len(golden))
-		if _, err := io.ReadFull(conn, buf); err != nil {
-			t.Errorf("conn %d: read error: %v", i, err)
-		} else if !bytes.Equal(buf, golden) {
-			t.Errorf("conn %d: msg mismatch\ngot:  %x\nwant: %x", i, buf, golden)
-		}
 	}
 }
 
