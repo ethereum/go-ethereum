@@ -40,9 +40,7 @@ func (pm *ProtocolManager) update() {
 			// Try to pull some blocks from the downloaded
 			if atomic.CompareAndSwapInt32(&blockProcPend, 0, 1) {
 				go func() {
-					if err := pm.processBlocks(); err != nil {
-						pm.downloader.Cancel()
-					}
+					pm.processBlocks()
 					atomic.StoreInt32(&blockProcPend, 0)
 				}()
 			}
@@ -61,12 +59,8 @@ func (pm *ProtocolManager) processBlocks() error {
 	pm.wg.Add(1)
 	defer pm.wg.Done()
 
-	// Take a batch of blocks, but abort if there's an invalid head or if the chain's empty
-	blocks, err := pm.downloader.TakeBlocks()
-	if err != nil {
-		glog.V(logger.Warn).Infof("Block processing failed: %v", err)
-		return err
-	}
+	// Short circuit if no blocks are available for insertion
+	blocks := pm.downloader.TakeBlocks()
 	if len(blocks) == 0 {
 		return nil
 	}
@@ -77,6 +71,7 @@ func (pm *ProtocolManager) processBlocks() error {
 		_, err := pm.chainman.InsertChain(blocks[:max])
 		if err != nil {
 			glog.V(logger.Warn).Infof("Block insertion failed: %v", err)
+			pm.downloader.Cancel()
 			return err
 		}
 		blocks = blocks[max:]
