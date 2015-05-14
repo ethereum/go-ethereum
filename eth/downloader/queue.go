@@ -172,17 +172,11 @@ func (q *queue) GetBlock(hash common.Hash) *types.Block {
 }
 
 // TakeBlocks retrieves and permanently removes a batch of blocks from the cache.
-// The head parameter is required to prevent a race condition where concurrent
-// takes may fail parent verifications.
-func (q *queue) TakeBlocks(head *types.Block) types.Blocks {
+func (q *queue) TakeBlocks() types.Blocks {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	// Short circuit if the head block's different
-	if len(q.blockCache) == 0 || q.blockCache[0] != head {
-		return nil
-	}
-	// Otherwise accumulate all available blocks
+	// Accumulate all available blocks
 	var blocks types.Blocks
 	for _, block := range q.blockCache {
 		if block == nil {

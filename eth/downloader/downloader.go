@@ -150,16 +150,9 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 	return d.syncWithPeer(p, hash)
 }
 
-// TakeBlocks takes blocks from the queue and yields them to the blockTaker handler
-// it's possible it yields no blocks
+// TakeBlocks takes blocks from the queue and yields them to the caller.
 func (d *Downloader) TakeBlocks() types.Blocks {
-	// Check that there are blocks available and its parents are known
-	head := d.queue.GetHeadBlock()
-	if head == nil || !d.hasBlock(head.ParentHash()) {
-		return nil
-	}
-	// Retrieve a full batch of blocks
-	return d.queue.TakeBlocks(head)
+	return d.queue.TakeBlocks()
 }
 
 func (d *Downloader) Has(hash common.Hash) bool {
