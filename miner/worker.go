@@ -267,13 +267,11 @@ func (self *worker) makeCurrent() {
 
 	current := env(block, self.eth)
 	for _, ancestor := range self.chain.GetAncestors(block, 7) {
-		current.ancestors.Add(ancestor.Hash())
-	}
-	for _, ancestor := range self.chain.GetAncestors(block, 7) {
 		for _, uncle := range ancestor.Uncles() {
 			current.family.Add(uncle.Hash())
 		}
 		current.family.Add(ancestor.Hash())
+		current.ancestors.Add(ancestor.Hash())
 	}
 	accounts, _ := self.eth.AccountManager().Accounts()
 	// Keep track of transactions which return errors so they can be removed
