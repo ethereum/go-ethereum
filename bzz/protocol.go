@@ -7,8 +7,10 @@ registering peers with the DHT
 */
 
 import (
+	"bytes"
 	"fmt"
 	"net"
+	"path"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/kademlia"
@@ -17,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
 
 const (
@@ -58,11 +61,13 @@ var errorToString = map[int]string{
 // bzzProtocol represents the swarm wire protocol
 // instance is running on each peer
 type bzzProtocol struct {
-	node     *discover.Node
-	netStore *NetStore
-	peer     *p2p.Peer
-	rw       p2p.MsgReadWriter
-	errors   *errs.Errors
+	node      *discover.Node
+	netStore  *NetStore
+	peer      *p2p.Peer
+	rw        p2p.MsgReadWriter
+	errors    *errs.Errors
+	requestDb *LDBDatabase
+	quitC     chan bool
 }
 
 /*
@@ -96,7 +101,7 @@ type statusMsgData struct {
 }
 
 func (self *statusMsgData) String() string {
-	return fmt.Sptintf("Status: Version: %v, ID: %v, NodeID: %v, Addr: %v, NetworkId: %v, Caps: %v", self.Version, self.ID, self.NodeID, self.Addr, self.NetworkId, self.Caps)
+	return fmt.Sprintf("Status: Version: %v, ID: %v, NodeID: %v, Addr: %v, NetworkId: %v, Caps: %v", self.Version, self.ID, self.NodeID, self.Addr, self.NetworkId, self.Caps)
 }
 
 /*
@@ -213,6 +218,12 @@ func BzzProtocol(netStore *NetStore) p2p.Protocol {
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
 func runBzzProtocol(netStore *NetStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+
+	db, err := NewLDBDatabase(path.Join(netStore.path, "requests"))
+	if err != nil {
+		return
+	}
+
 	self := &bzzProtocol{
 		netStore: netStore,
 		rw:       rw,
@@ -221,7 +232,12 @@ func runBzzProtocol(netStore *NetStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err 
 			Package: "BZZ",
 			Errors:  errorToString,
 		},
+		requestDb: db,
+		quitC:     make(chan bool),
 	}
+
+	go self.storeRequestLoop()
+
 	err = self.handleStatus()
 	if err == nil {
 		for {
@@ -231,6 +247,7 @@ func runBzzProtocol(netStore *NetStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err 
 				break
 			}
 		}
+		close(self.quitC)
 	}
 	return
 }
@@ -386,8 +403,88 @@ func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
 	}
 }
 
+func (self *bzzProtocol) key() []byte {
+	return self.peer.Node().Sha().Bytes()[:]
+}
+
+func (self *bzzProtocol) storeRequestLoop() {
+
+	start := make([]byte, 64)
+	copy(start, self.key())
+
+	key := make([]byte, 64)
+	copy(key, start)
+	var n int
+	var it iterator.Iterator
+LOOP:
+	for {
+		if n == 0 {
+			it = self.requestDb.NewIterator()
+			// dpaLogger.Debugf("seek iterator: %x", key)
+			it.Seek(key)
+			if !it.Valid() {
+				// dpaLogger.Debugf("not valid, sleep, continue: %x", key)
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			key = it.Key()
+			// dpaLogger.Debugf("found db key: %x", key)
+			n = 100
+		}
+		// dpaLogger.Debugf("checking key: %x <> %x ", key, self.key())
+
+		// reached the end of this peers range
+		if !bytes.Equal(key[:32], self.key()) {
+			// dpaLogger.Debugf("reached the end of this peers range: %x", key)
+			n = 0
+			continue
+		}
+
+		chunk, err := self.netStore.localStore.dbStore.Get(key[32:])
+		if err != nil {
+			self.requestDb.Delete(key)
+			continue
+		}
+		// dpaLogger.Debugf("sending chunk: %x", chunk.Key)
+
+		id := generateId()
+		req := &storeRequestMsgData{
+			Key:   chunk.Key,
+			SData: chunk.SData,
+			Id:    uint64(id),
+		}
+		self.store(req)
+
+		n--
+		self.requestDb.Delete(key)
+		it.Next()
+		key = it.Key()
+		if len(key) == 0 {
+			key = start
+			if n == 0 {
+				time.Sleep(1 * time.Second)
+			}
+			n = 0
+		}
+
+		select {
+		case <-self.quitC:
+			break LOOP
+		default:
+		}
+	}
+}
+
 func (self *bzzProtocol) store(req *storeRequestMsgData) {
 	p2p.Send(self.rw, storeRequestMsg, req)
+}
+
+func (self *bzzProtocol) storeRequest(key Key) {
+	peerKey := make([]byte, 64)
+	copy(peerKey, self.key())
+	copy(peerKey[32:], key[:])
+	dpaLogger.Debugf("enter store request %x", peerKey)
+	self.requestDb.Put(peerKey, []byte{0})
 }
 
 func (self *bzzProtocol) peers(req *peersMsgData) {

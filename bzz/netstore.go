@@ -15,6 +15,7 @@ type NetStore struct {
 	lock       sync.Mutex
 	hive       *hive
 	self       *discover.Node
+	path       string
 }
 
 /*
@@ -53,7 +54,9 @@ func NewNetStore(path, hivepath string) (netstore *NetStore, err error) {
 		localStore: &localStore{
 			memStore: newMemStore(dbStore),
 			dbStore:  dbStore,
-		}, hive: hive,
+		},
+		path: path,
+		hive: hive,
 	}
 	return
 }
@@ -92,6 +95,15 @@ func (self *NetStore) put(entry *Chunk) {
 		}
 	} else {
 		go self.store(entry)
+	}
+}
+
+func (self *NetStore) store(chunk *Chunk) {
+
+	for _, peer := range self.hive.getPeers(chunk.Key, 0) {
+		if chunk.source == nil || peer.Addr() != chunk.source.Addr() {
+			peer.storeRequest(chunk.Key)
+		}
 	}
 }
 
@@ -285,20 +297,6 @@ func (self *NetStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 		// Metadata       metaData
 	}
 	req.peer.store(storeReq)
-}
-
-func (self *NetStore) store(chunk *Chunk) {
-	id := generateId()
-	req := &storeRequestMsgData{
-		Key:   chunk.Key,
-		SData: chunk.SData,
-		Id:    uint64(id),
-	}
-	for _, peer := range self.hive.getPeers(chunk.Key, 0) {
-		if chunk.source == nil || peer.Addr() != chunk.source.Addr() {
-			go peer.store(req)
-		}
-	}
 }
 
 func (self *NetStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout *time.Time) {
