@@ -17,6 +17,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -72,8 +73,8 @@ func newMemoryNodeDB() (*nodeDB, error) {
 // newPersistentNodeDB creates/opens a leveldb backed persistent node database,
 // also flushing its contents in case of a version mismatch.
 func newPersistentNodeDB(path string, version int) (*nodeDB, error) {
-	// Try to open the cache, recovering any corruption
-	db, err := leveldb.OpenFile(path, nil)
+	opts := &opt.Options{OpenFilesCacheCapacity: 5}
+	db, err := leveldb.OpenFile(path, opts)
 	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
 		db, err = leveldb.RecoverFile(path, nil)
 	}
