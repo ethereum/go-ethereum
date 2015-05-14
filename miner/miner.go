@@ -70,7 +70,7 @@ func (self *Miner) Register(agent Agent) {
 }
 
 func (self *Miner) HashRate() int64 {
-	return self.worker.HashRate()
+	return self.pow.GetHashrate()
 }
 
 func (self *Miner) SetExtra(extra []byte) {
