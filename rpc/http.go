@@ -111,10 +111,9 @@ func JSONRPC(pipe *xeth.XEth) http.Handler {
 
 			// make response omitting nil entries
 			respBatchComp := make([]*interface{}, resCount)
-			resCount = resCount - 1
 			for _, v := range resBatch {
 				if v != nil {
-					respBatchComp[resCount] = v
+					respBatchComp[len(respBatchComp)-resCount] = v
 					resCount = resCount - 1
 				}
 			}
