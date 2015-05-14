@@ -573,13 +573,6 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			if block.Td.Cmp(self.td) > 0 {
 				// Check for chain forks. If H(block.num - 1) != block.parent, we're on a fork and need to do some merging
 				if previous := self.getBlockByNumber(block.NumberU64() - 1); previous.Hash() != block.ParentHash() {
-					chash := cblock.Hash()
-					hash := block.Hash()
-
-					if glog.V(logger.Info) {
-						glog.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, hash[:4], block.Td, cblock.Header().Number, chash[:4], self.td)
-					}
-
 					// during split we merge two different chains and create the new canonical chain
 					self.merge(previous, block)
 
@@ -636,22 +629,31 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 // diff takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them
 // to be part of the new canonical chain.
 func (self *ChainManager) diff(oldBlock, newBlock *types.Block) types.Blocks {
-	glog.V(logger.Debug).Infof("Applying diff to %x & %x\n", oldBlock.Hash().Bytes()[:4], newBlock.Hash().Bytes()[:4])
-
-	var newChain types.Blocks
+	var (
+		newChain    types.Blocks
+		commonBlock *types.Block
+		oldStart    = oldBlock
+		newStart    = newBlock
+	)
 	// first find common number
 	for newBlock = newBlock; newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = self.GetBlock(newBlock.ParentHash()) {
 		newChain = append(newChain, newBlock)
 	}
 
-	glog.V(logger.Debug).Infoln("Found common number", newBlock.Number())
+	numSplit := newBlock.Number()
 	for {
 		if oldBlock.Hash() == newBlock.Hash() {
+			commonBlock = oldBlock
 			break
 		}
 		newChain = append(newChain, newBlock)
 
 		oldBlock, newBlock = self.GetBlock(oldBlock.ParentHash()), self.GetBlock(newBlock.ParentHash())
+	}
+
+	if glog.V(logger.Info) {
+		commonHash := commonBlock.Hash()
+		glog.Infof("Fork detected @ %x. Reorganising chain from #%v %x to %x", commonHash[:4], numSplit, oldStart.Hash().Bytes()[:4], newStart.Hash().Bytes()[:4])
 	}
 
 	return newChain
