@@ -330,4 +330,7 @@ func TestNonExistingParentAttack(t *testing.T) {
 	if len(bs) != 1 {
 		t.Fatalf("retrieved block mismatch: have %v, want %v", len(bs), 1)
 	}
+	if !tester.hasBlock(bs[0].ParentHash()) {
+		t.Fatalf("tester doesn't know about the origin hash")
+	}
 }
