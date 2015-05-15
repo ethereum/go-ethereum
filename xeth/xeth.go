@@ -778,7 +778,7 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 }
 
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, string, error) {
-	statedb := self.State().State() //self.eth.ChainManager().TransState()
+	statedb := self.State().State().Copy() //self.eth.ChainManager().TransState()
 	var from *state.StateObject
 	if len(fromStr) == 0 {
 		accounts, err := self.backend.AccountManager().Accounts()
@@ -791,6 +791,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		from = statedb.GetOrNewStateObject(common.HexToAddress(fromStr))
 	}
 
+	from.SetBalance(common.MaxBig)
 	from.SetGasPool(self.backend.ChainManager().GasLimit())
 	msg := callmsg{
 		from:     from,

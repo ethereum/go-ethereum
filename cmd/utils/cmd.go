@@ -104,7 +104,7 @@ func Fatalf(format string, args ...interface{}) {
 }
 
 func StartEthereum(ethereum *eth.Ethereum) {
-	glog.V(logger.Info).Infoln("Starting ", ethereum.Name())
+	glog.V(logger.Info).Infoln("Starting", ethereum.Name())
 	if err := ethereum.Start(); err != nil {
 		Fatalf("Error starting Ethereum: %v", err)
 	}
