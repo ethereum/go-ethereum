@@ -48,7 +48,7 @@ func CalcDifficulty(block, parent *types.Header) *big.Int {
 	return diff
 }
 
-func CalculateTD(block, parent *types.Block) *big.Int {
+func CalcTD(block, parent *types.Block) *big.Int {
 	if parent == nil {
 		return block.Difficulty()
 	}
@@ -59,14 +59,20 @@ func CalculateTD(block, parent *types.Block) *big.Int {
 }
 
 func CalcGasLimit(parent *types.Block) *big.Int {
-	// ((1024-1) * parent.gasLimit + (gasUsed * 6 / 5)) / 1024
-	previous := new(big.Int).Mul(big.NewInt(1024-1), parent.GasLimit())
-	current := new(big.Rat).Mul(new(big.Rat).SetInt(parent.GasUsed()), big.NewRat(6, 5))
-	curInt := new(big.Int).Div(current.Num(), current.Denom())
+	decay := new(big.Int).Div(parent.GasLimit(), params.GasLimitBoundDivisor)
+	contrib := new(big.Int).Mul(parent.GasUsed(), big.NewInt(3))
+	contrib = contrib.Div(contrib, big.NewInt(2))
+	contrib = contrib.Div(contrib, params.GasLimitBoundDivisor)
 
-	result := new(big.Int).Add(previous, curInt)
-	result.Div(result, big.NewInt(1024))
-	return common.BigMax(params.GenesisGasLimit, result)
+	gl := new(big.Int).Sub(parent.GasLimit(), decay)
+	gl = gl.Add(gl, contrib)
+	gl = common.BigMax(gl, params.MinGasLimit)
+
+	if gl.Cmp(params.GenesisGasLimit) < 0 {
+		gl2 := new(big.Int).Add(parent.GasLimit(), decay)
+		return common.BigMin(params.GenesisGasLimit, gl2)
+	}
+	return gl
 }
 
 type ChainManager struct {
@@ -525,7 +531,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		}
 		// Setting block.Td regardless of error (known for example) prevents errors down the line
 		// in the protocol handler
-		block.Td = new(big.Int).Set(CalculateTD(block, self.GetBlock(block.ParentHash())))
+		block.Td = new(big.Int).Set(CalcTD(block, self.GetBlock(block.ParentHash())))
 
 		// Call in to the block processor and check for errors. It's likely that if one block fails
 		// all others will fail too (unless a known block is returned).
