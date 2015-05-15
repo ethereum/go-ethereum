@@ -2,7 +2,7 @@ package downloader
 
 import (
 	"errors"
-	"fmt"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,29 +15,34 @@ import (
 )
 
 const (
-	maxBlockFetch    = 128              // Amount of max blocks to be fetched per chunk
+	maxHashFetch     = 512              // Amount of hashes to be fetched per chunk
+	maxBlockFetch    = 128              // Amount of blocks to be fetched per chunk
 	peerCountTimeout = 12 * time.Second // Amount of time it takes for the peer handler to ignore minDesiredPeerCount
-	hashTtl          = 20 * time.Second // The amount of time it takes for a hash request to time out
+	hashTTL          = 5 * time.Second  // Time it takes for a hash request to time out
 )
 
 var (
-	minDesiredPeerCount = 5                // Amount of peers desired to start syncing
-	blockTtl            = 20 * time.Second // The amount of time it takes for a block request to time out
+	blockTTL            = 5 * time.Second // Time it takes for a block request to time out
+	crossCheckCycle     = time.Second     // Period after which to check for expired cross checks
+	minDesiredPeerCount = 5               // Amount of peers desired to start syncing
+)
 
-	errLowTd               = errors.New("peer's TD is too low")
-	ErrBusy                = errors.New("busy")
-	errUnknownPeer         = errors.New("peer's unknown or unhealthy")
-	errBadPeer             = errors.New("action from bad peer ignored")
-	errNoPeers             = errors.New("no peers to keep download active")
-	ErrPendingQueue        = errors.New("pending items in queue")
-	ErrTimeout             = errors.New("timeout")
-	errEmptyHashSet        = errors.New("empty hash set by peer")
-	errPeersUnavailable    = errors.New("no peers available or all peers tried for block download process")
-	errAlreadyInPool       = errors.New("hash already in pool")
-	errBlockNumberOverflow = errors.New("received block which overflows")
-	errCancelHashFetch     = errors.New("hash fetching cancelled (requested)")
-	errCancelBlockFetch    = errors.New("block downloading cancelled (requested)")
-	errNoSyncActive        = errors.New("no sync active")
+var (
+	errLowTd            = errors.New("peer's TD is too low")
+	ErrBusy             = errors.New("busy")
+	errUnknownPeer      = errors.New("peer's unknown or unhealthy")
+	ErrBadPeer          = errors.New("action from bad peer ignored")
+	errNoPeers          = errors.New("no peers to keep download active")
+	ErrPendingQueue     = errors.New("pending items in queue")
+	ErrTimeout          = errors.New("timeout")
+	errEmptyHashSet     = errors.New("empty hash set by peer")
+	errPeersUnavailable = errors.New("no peers available or all peers tried for block download process")
+	errAlreadyInPool    = errors.New("hash already in pool")
+	ErrInvalidChain     = errors.New("retrieved hash chain is invalid")
+	ErrCrossCheckFailed = errors.New("block cross-check failed")
+	errCancelHashFetch  = errors.New("hash fetching cancelled (requested)")
+	errCancelBlockFetch = errors.New("block downloading cancelled (requested)")
+	errNoSyncActive     = errors.New("no sync active")
 )
 
 type hashCheckFn func(common.Hash) bool
@@ -58,9 +63,10 @@ type hashPack struct {
 type Downloader struct {
 	mux *event.TypeMux
 
-	mu    sync.RWMutex
-	queue *queue
-	peers *peerSet
+	mu     sync.RWMutex
+	queue  *queue                    // Scheduler for selecting the hashes to download
+	peers  *peerSet                  // Set of active peers from which download can proceed
+	checks map[common.Hash]time.Time // Pending cross checks to verify a hash chain
 
 	// Callbacks
 	hasBlock hashCheckFn
@@ -153,6 +159,7 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 	// Reset the queue and peer set to clean any internal leftover state
 	d.queue.Reset()
 	d.peers.Reset()
+	d.checks = make(map[common.Hash]time.Time)
 
 	// Retrieve the origin peer and initiate the downloading process
 	p := d.peers.Peer(id)
@@ -177,7 +184,7 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash) (err error) {
 	defer func() {
 		// reset on error
 		if err != nil {
-			d.queue.Reset()
+			d.Cancel()
 			d.mux.Post(FailedEvent{err})
 		} else {
 			d.mux.Post(DoneEvent{})
@@ -221,66 +228,98 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 
 	start := time.Now()
 
-	// Add the hash to the queue first
+	// Add the hash to the queue first, and start hash retrieval
 	d.queue.Insert([]common.Hash{h})
-
-	// Get the first batch of hashes
 	p.getHashes(h)
 
 	var (
-		failureResponseTimer = time.NewTimer(hashTtl)
-		attemptedPeers       = make(map[string]bool) // attempted peers will help with retries
-		activePeer           = p                     // active peer will help determine the current active peer
-		hash                 common.Hash             // common and last hash
-	)
-	attemptedPeers[p.id] = true
+		active = p             // active peer will help determine the current active peer
+		head   = common.Hash{} // common and last hash
 
-out:
-	for {
+		timeout     = time.NewTimer(hashTTL)          // timer to dump a non-responsive active peer
+		attempted   = make(map[string]bool)           // attempted peers will help with retries
+		crossTicker = time.NewTicker(crossCheckCycle) // ticker to periodically check expired cross checks
+	)
+	defer crossTicker.Stop()
+
+	attempted[p.id] = true
+	for finished := false; !finished; {
 		select {
 		case <-d.cancelCh:
 			return errCancelHashFetch
+
 		case hashPack := <-d.hashCh:
 			// Make sure the active peer is giving us the hashes
-			if hashPack.peerId != activePeer.id {
+			if hashPack.peerId != active.id {
 				glog.V(logger.Debug).Infof("Received hashes from incorrect peer(%s)\n", hashPack.peerId)
 				break
 			}
-
-			failureResponseTimer.Reset(hashTtl)
+			timeout.Reset(hashTTL)
 
 			// Make sure the peer actually gave something valid
 			if len(hashPack.hashes) == 0 {
-				glog.V(logger.Debug).Infof("Peer (%s) responded with empty hash set\n", activePeer.id)
-				d.queue.Reset()
-
+				glog.V(logger.Debug).Infof("Peer (%s) responded with empty hash set\n", active.id)
 				return errEmptyHashSet
 			}
 			// Determine if we're done fetching hashes (queue up all pending), and continue if not done
 			done, index := false, 0
-			for index, hash = range hashPack.hashes {
-				if d.hasBlock(hash) || d.queue.GetBlock(hash) != nil {
-					glog.V(logger.Debug).Infof("Found common hash %x\n", hash[:4])
+			for index, head = range hashPack.hashes {
+				if d.hasBlock(head) || d.queue.GetBlock(head) != nil {
+					glog.V(logger.Debug).Infof("Found common hash %x\n", head[:4])
 					hashPack.hashes = hashPack.hashes[:index]
 					done = true
 					break
 				}
 			}
-			d.queue.Insert(hashPack.hashes)
-
+			// Insert all the new hashes, but only continue if got something useful
+			inserts := d.queue.Insert(hashPack.hashes)
+			if len(inserts) == 0 && !done {
+				glog.V(logger.Debug).Infof("Peer (%s) responded with stale hashes\n", active.id)
+				return ErrBadPeer
+			}
 			if !done {
-				activePeer.getHashes(hash)
+				// Try and fetch a random block to verify the hash batch
+				cross := inserts[rand.Intn(len(inserts))]
+				glog.V(logger.Detail).Infof("Cross checking (%s) with %x", active.id, cross)
+
+				d.checks[cross] = time.Now().Add(blockTTL)
+				active.getBlocks([]common.Hash{cross})
+
+				// Also fetch a fresh
+				active.getHashes(head)
 				continue
 			}
 			// We're done, allocate the download cache and proceed pulling the blocks
 			offset := 0
-			if block := d.getBlock(hash); block != nil {
+			if block := d.getBlock(head); block != nil {
 				offset = int(block.NumberU64() + 1)
 			}
 			d.queue.Alloc(offset)
-			break out
+			finished = true
 
-		case <-failureResponseTimer.C:
+		case blockPack := <-d.blockCh:
+			// Cross check the block with the random verifications
+			if blockPack.peerId != active.id || len(blockPack.blocks) != 1 {
+				continue
+			}
+			block := blockPack.blocks[0]
+			if _, ok := d.checks[block.Hash()]; ok {
+				if !d.queue.Has(block.ParentHash()) {
+					return ErrCrossCheckFailed
+				}
+				delete(d.checks, block.Hash())
+			}
+
+		case <-crossTicker.C:
+			// Iterate over all the cross checks and fail the hash chain if they're not verified
+			for hash, deadline := range d.checks {
+				if time.Now().After(deadline) {
+					glog.V(logger.Debug).Infof("Cross check timeout for %x", hash)
+					return ErrCrossCheckFailed
+				}
+			}
+
+		case <-timeout.C:
 			glog.V(logger.Debug).Infof("Peer (%s) didn't respond in time for hash request\n", p.id)
 
 			var p *peer // p will be set if a peer can be found
@@ -288,21 +327,20 @@ out:
 			// already fetched hash list. This can't guarantee 100% correctness but does
 			// a fair job. This is always either correct or false incorrect.
 			for _, peer := range d.peers.AllPeers() {
-				if d.queue.Has(peer.head) && !attemptedPeers[peer.id] {
+				if d.queue.Has(peer.head) && !attempted[peer.id] {
 					p = peer
 					break
 				}
 			}
 			// if all peers have been tried, abort the process entirely or if the hash is
 			// the zero hash.
-			if p == nil || (hash == common.Hash{}) {
-				d.queue.Reset()
+			if p == nil || (head == common.Hash{}) {
 				return ErrTimeout
 			}
 			// set p to the active peer. this will invalidate any hashes that may be returned
 			// by our previous (delayed) peer.
-			activePeer = p
-			p.getHashes(hash)
+			active = p
+			p.getHashes(head)
 			glog.V(logger.Debug).Infof("Hash fetching switched to new peer(%s)\n", p.id)
 		}
 	}
@@ -325,12 +363,26 @@ out:
 		select {
 		case <-d.cancelCh:
 			return errCancelBlockFetch
+
 		case blockPack := <-d.blockCh:
+			// Short circuit if it's a stale cross check
+			if len(blockPack.blocks) == 1 {
+				block := blockPack.blocks[0]
+				if _, ok := d.checks[block.Hash()]; ok {
+					delete(d.checks, block.Hash())
+					continue
+				}
+			}
 			// If the peer was previously banned and failed to deliver it's pack
 			// in a reasonable time frame, ignore it's message.
 			if peer := d.peers.Peer(blockPack.peerId); peer != nil {
-				// Deliver the received chunk of blocks, but drop the peer if invalid
+				// Deliver the received chunk of blocks
 				if err := d.queue.Deliver(blockPack.peerId, blockPack.blocks); err != nil {
+					if err == ErrInvalidChain {
+						// The hash chain is invalid (blocks are not ordered properly), abort
+						return err
+					}
+					// Peer did deliver, but some blocks were off, penalize
 					glog.V(logger.Debug).Infof("Failed delivery for peer %s: %v\n", blockPack.peerId, err)
 					peer.Demote()
 					break
@@ -348,7 +400,7 @@ out:
 			// that badly or poorly behave are removed from the peer set (not banned).
 			// Bad peers are excluded from the available peer set and therefor won't be
 			// reused. XXX We could re-introduce peers after X time.
-			badPeers := d.queue.Expire(blockTtl)
+			badPeers := d.queue.Expire(blockTTL)
 			for _, pid := range badPeers {
 				// XXX We could make use of a reputation system here ranking peers
 				// in their performance
@@ -361,7 +413,6 @@ out:
 			}
 			// After removing bad peers make sure we actually have sufficient peer left to keep downloading
 			if d.peers.Len() == 0 {
-				d.queue.Reset()
 				return errNoPeers
 			}
 			// If there are unrequested hashes left start fetching
@@ -395,9 +446,7 @@ out:
 				// Make sure that we have peers available for fetching. If all peers have been tried
 				// and all failed throw an error
 				if d.queue.InFlight() == 0 {
-					d.queue.Reset()
-
-					return fmt.Errorf("%v peers available = %d. total peers = %d. hashes needed = %d", errPeersUnavailable, len(idlePeers), d.peers.Len(), d.queue.Pending())
+					return errPeersUnavailable
 				}
 
 			} else if d.queue.InFlight() == 0 {
