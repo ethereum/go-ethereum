@@ -81,7 +81,7 @@ func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 			return nil, err
 		}
 		parent := bman.bc.GetBlock(block.ParentHash())
-		block.Td = CalculateTD(block, parent)
+		block.Td = CalcTD(block, parent)
 		td = block.Td
 
 		bman.bc.mu.Lock()

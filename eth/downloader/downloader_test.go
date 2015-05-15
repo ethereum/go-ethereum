@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 var (
@@ -67,7 +68,8 @@ func newTester(t *testing.T, hashes []common.Hash, blocks map[common.Hash]*types
 
 		done: make(chan bool),
 	}
-	downloader := New(tester.hasBlock, tester.getBlock)
+	var mux event.TypeMux
+	downloader := New(&mux, tester.hasBlock, tester.getBlock)
 	tester.downloader = downloader
 
 	return tester

@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
@@ -55,6 +56,8 @@ type hashPack struct {
 }
 
 type Downloader struct {
+	mux *event.TypeMux
+
 	mu    sync.RWMutex
 	queue *queue
 	peers *peerSet
@@ -76,8 +79,9 @@ type Downloader struct {
 	cancelLock sync.RWMutex  // Lock to protect the cancel channel in delivers
 }
 
-func New(hasBlock hashCheckFn, getBlock getBlockFn) *Downloader {
+func New(mux *event.TypeMux, hasBlock hashCheckFn, getBlock getBlockFn) *Downloader {
 	downloader := &Downloader{
+		mux:       mux,
 		queue:     newQueue(),
 		peers:     newPeerSet(),
 		hasBlock:  hasBlock,
@@ -91,6 +95,11 @@ func New(hasBlock hashCheckFn, getBlock getBlockFn) *Downloader {
 
 func (d *Downloader) Stats() (current int, max int) {
 	return d.queue.Size()
+}
+
+// Synchronising returns the state of the downloader
+func (d *Downloader) Synchronising() bool {
+	return atomic.LoadInt32(&d.synchronising) > 0
 }
 
 // RegisterPeer injects a new download peer into the set of block source to be
@@ -129,6 +138,9 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 	if atomic.CompareAndSwapInt32(&d.notified, 0, 1) {
 		glog.V(logger.Info).Infoln("Block synchronisation started")
 	}
+
+	d.mux.Post(StartEvent{})
+
 	// Create cancel channel for aborting mid-flight
 	d.cancelLock.Lock()
 	d.cancelCh = make(chan struct{})
@@ -166,6 +178,9 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash) (err error) {
 		// reset on error
 		if err != nil {
 			d.queue.Reset()
+			d.mux.Post(FailedEvent{err})
+		} else {
+			d.mux.Post(DoneEvent{})
 		}
 	}()
 
