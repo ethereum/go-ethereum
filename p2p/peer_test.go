@@ -28,24 +28,20 @@ var discard = Protocol{
 }
 
 func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan DiscReason) {
-	fd1, _ := net.Pipe()
-	hs1 := &protoHandshake{ID: randomID(), Version: baseProtocolVersion}
-	hs2 := &protoHandshake{ID: randomID(), Version: baseProtocolVersion}
+	fd1, fd2 := net.Pipe()
+	c1 := &conn{fd: fd1, transport: newTestTransport(randomID(), fd1)}
+	c2 := &conn{fd: fd2, transport: newTestTransport(randomID(), fd2)}
 	for _, p := range protos {
-		hs1.Caps = append(hs1.Caps, p.cap())
-		hs2.Caps = append(hs2.Caps, p.cap())
+		c1.caps = append(c1.caps, p.cap())
+		c2.caps = append(c2.caps, p.cap())
 	}
 
-	p1, p2 := MsgPipe()
-	peer := newPeer(fd1, &conn{p1, hs1}, protos)
+	peer := newPeer(c1, protos)
 	errc := make(chan DiscReason, 1)
 	go func() { errc <- peer.run() }()
 
-	closer := func() {
-		p1.Close()
-		fd1.Close()
-	}
-	return closer, &conn{p2, hs2}, peer, errc
+	closer := func() { c2.close(errors.New("close func called")) }
+	return closer, c2, peer, errc
 }
 
 func TestPeerProtoReadMsg(t *testing.T) {
