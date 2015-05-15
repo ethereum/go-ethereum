@@ -131,10 +131,11 @@ func (p *Peer) run() DiscReason {
 	case err := <-p.protoErr:
 		reason = discReasonForError(err)
 	case reason = <-p.disc:
+		p.politeDisconnect(reason)
+		reason = DiscRequested
 	}
 
 	close(p.closed)
-	p.politeDisconnect(reason)
 	p.wg.Wait()
 	glog.V(logger.Debug).Infof("%v: Disconnected: %v\n", p, reason)
 	return reason
@@ -191,7 +192,7 @@ func (p *Peer) handle(msg Msg) error {
 		// check errors because, the connection will be closed after it.
 		rlp.Decode(msg.Payload, &reason)
 		glog.V(logger.Debug).Infof("%v: Disconnect Requested: %v\n", p, reason[0])
-		return DiscRequested
+		return reason[0]
 	case msg.Code < baseProtocolLength:
 		// ignore other base protocol messages
 		return msg.Discard()

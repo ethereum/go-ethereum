@@ -50,7 +50,7 @@ import _ "net/http/pprof"
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.20"
+	Version          = "0.9.21"
 )
 
 var (
@@ -283,8 +283,6 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 }
 
 func main() {
-	//fmt.Printf("\n              🌞\n\n        ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴛʜᴇ\n       𝐅 𝐑 𝐎 𝐍 𝐓 𝐈 𝐄 𝐑\n\n🌾      🌵🌾🌾  🐎    🌾      🌵   🌾\n\n")
-	fmt.Println("\n   Welcome to the\n      FRONTIER\n")
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	defer logger.Flush()
 	if err := app.Run(os.Args); err != nil {
@@ -368,10 +366,11 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 	if len(account) == 0 {
 		utils.Fatalf("Invalid account address '%s'", account)
 	}
-	err = am.Unlock(common.StringToAddress(account), passphrase)
+	err = am.Unlock(common.HexToAddress(account), passphrase)
 	if err != nil {
 		utils.Fatalf("Unlock account failed '%v'", err)
 	}
+	fmt.Printf("Account '%s' unlocked.\n", account)
 	return
 }
 
@@ -562,7 +561,7 @@ func upgradeDb(ctx *cli.Context) {
 		bcVersion = core.BlockChainVersion
 	}
 
-	filename := fmt.Sprintf("blockchain_%d_%s.chain", bcVersion, time.Now().Format("2006-01-02_15:04:05"))
+	filename := fmt.Sprintf("blockchain_%d_%s.chain", bcVersion, time.Now().Format("20060102_150405"))
 	exportFile := filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), filename)
 
 	err = utils.ExportChain(ethereum.ChainManager(), exportFile)

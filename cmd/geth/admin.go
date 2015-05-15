@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
@@ -287,7 +288,7 @@ func (js *jsre) startMining(call otto.FunctionCall) otto.Value {
 			return otto.FalseValue()
 		}
 	} else {
-		threads = 4
+		threads = int64(js.ethereum.MinerThreads)
 	}
 
 	err = js.ethereum.StartMining(int(threads))
@@ -374,6 +375,10 @@ func (js *jsre) unlock(call otto.FunctionCall) otto.Value {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}
+	if seconds == 0 {
+		seconds = accounts.DefaultAccountUnlockDuration
+	}
+
 	arg := call.Argument(1)
 	var passphrase string
 	if arg.IsUndefined() {

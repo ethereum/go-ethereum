@@ -363,7 +363,31 @@ const (
 	headSize = macSize + sigSize // space of packet frame data
 )
 
-var headSpace = make([]byte, headSize)
+var (
+	headSpace = make([]byte, headSize)
+
+	// Neighbors responses are sent across multiple packets to
+	// stay below the 1280 byte limit. We compute the maximum number
+	// of entries by stuffing a packet until it grows too large.
+	maxNeighbors int
+)
+
+func init() {
+	p := neighbors{Expiration: ^uint64(0)}
+	maxSizeNode := rpcNode{IP: make(net.IP, 16), UDP: ^uint16(0), TCP: ^uint16(0)}
+	for n := 0; ; n++ {
+		p.Nodes = append(p.Nodes, maxSizeNode)
+		size, _, err := rlp.EncodeToReader(p)
+		if err != nil {
+			// If this ever happens, it will be caught by the unit tests.
+			panic("cannot encode: " + err.Error())
+		}
+		if headSize+size+1 >= 1280 {
+			maxNeighbors = n
+			break
+		}
+	}
+}
 
 func (t *udp) send(toaddr *net.UDPAddr, ptype byte, req interface{}) error {
 	packet, err := encodePacket(t.priv, ptype, req)
@@ -402,7 +426,10 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, 
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
 func (t *udp) readLoop() {
 	defer t.conn.Close()
-	buf := make([]byte, 4096) // TODO: good buffer size
+	// Discovery packets are defined to be no larger than 1280 bytes.
+	// Packets larger than this size will be cut at the end and treated
+	// as invalid because their hash won't match.
+	buf := make([]byte, 1280)
 	for {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
 		if err != nil {
@@ -504,15 +531,16 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte
 	closest := t.closest(target, bucketSize).entries
 	t.mutex.Unlock()
 
-	// TODO: this conversion could use a cached version of the slice
-	closestrpc := make([]rpcNode, len(closest))
+	p := neighbors{Expiration: uint64(time.Now().Add(expiration).Unix())}
+	// Send neighbors in chunks with at most maxNeighbors per packet
+	// to stay below the 1280 byte limit.
 	for i, n := range closest {
-		closestrpc[i] = nodeToRPC(n)
+		p.Nodes = append(p.Nodes, nodeToRPC(n))
+		if len(p.Nodes) == maxNeighbors || i == len(closest)-1 {
+			t.send(from, neighborsPacket, p)
+			p.Nodes = p.Nodes[:0]
+		}
 	}
-	t.send(from, neighborsPacket, neighbors{
-		Nodes:      closestrpc,
-		Expiration: uint64(time.Now().Add(expiration).Unix()),
-	})
 	return nil
 }
 

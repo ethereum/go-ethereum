@@ -98,7 +98,7 @@ func makeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Dat
 			fmt.Println("process with parent failed", err)
 			panic(err)
 		}
-		block.Td = CalculateTD(block, parent)
+		block.Td = CalcTD(block, parent)
 		blocks[i] = block
 		parent = block
 	}

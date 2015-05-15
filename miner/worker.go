@@ -45,7 +45,8 @@ type environment struct {
 	state              *state.StateDB     // apply state changes here
 	coinbase           *state.StateObject // the miner's account
 	block              *types.Block       // the new block
-	family             *set.Set           // family set (used for checking uncles)
+	ancestors          *set.Set           // ancestor set (used for checking uncle parent validity)
+	family             *set.Set           // family set (used for checking uncle invalidity)
 	uncles             *set.Set           // uncle set
 	remove             *set.Set           // tx which will be removed
 	tcount             int                // tx count in cycle
@@ -62,6 +63,7 @@ func env(block *types.Block, eth core.Backend) *environment {
 		totalUsedGas: new(big.Int),
 		state:        state,
 		block:        block,
+		ancestors:    set.New(),
 		family:       set.New(),
 		uncles:       set.New(),
 		coinbase:     state.GetOrNewStateObject(block.Coinbase()),
@@ -173,7 +175,6 @@ func (self *worker) stop() {
 func (self *worker) register(agent Agent) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-
 	self.agents = append(self.agents, agent)
 	agent.SetReturnCh(self.recv)
 }
@@ -265,7 +266,11 @@ func (self *worker) makeCurrent() {
 
 	current := env(block, self.eth)
 	for _, ancestor := range self.chain.GetAncestors(block, 7) {
+		for _, uncle := range ancestor.Uncles() {
+			current.family.Add(uncle.Hash())
+		}
 		current.family.Add(ancestor.Hash())
+		current.ancestors.Add(ancestor.Hash())
 	}
 	accounts, _ := self.eth.AccountManager().Accounts()
 	// Keep track of transactions which return errors so they can be removed
@@ -363,7 +368,7 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 	}
 	self.current.uncles.Add(uncle.Hash())
 
-	if !self.current.family.Has(uncle.ParentHash) {
+	if !self.current.ancestors.Has(uncle.ParentHash) {
 		return core.UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
 	}
 
@@ -453,13 +458,9 @@ func (self *worker) commitTransaction(tx *types.Transaction) error {
 	return nil
 }
 
+// TODO: remove or use
 func (self *worker) HashRate() int64 {
-	var tot int64
-	for _, agent := range self.agents {
-		tot += agent.GetHashRate()
-	}
-
-	return tot
+	return 0
 }
 
 // gasprice calculates a reduced gas price based on the pct

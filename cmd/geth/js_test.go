@@ -68,7 +68,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 	// set up mock genesis with balance on the testAddress
 	core.GenesisData = []byte(testGenesis)
 
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(tmp, "keystore"))
+	ks := crypto.NewKeyStorePlain(filepath.Join(tmp, "keystore"))
 	am := accounts.NewManager(ks)
 	ethereum, err := eth.New(&eth.Config{
 		DataDir:        tmp,
