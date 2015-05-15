@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	quickrand = rand.New(rand.NewSource(time.Now().Unix()))
-	quickcfg  = &quick.Config{MaxCount: 5000, Rand: quickrand}
+	quickrand         = rand.New(rand.NewSource(time.Now().Unix()))
+	quickcfgGetNodes  = &quick.Config{MaxCount: 5000, Rand: quickrand}
+	quickcfgBootStrap = &quick.Config{MaxCount: 1000, Rand: quickrand}
 )
 
 var once sync.Once
@@ -65,6 +66,82 @@ func TestAddNode(t *testing.T) {
 	kad.Start(addr)
 	err := kad.AddNode(&testNode{addr: other})
 	_ = err
+}
+
+func TestBootstrap(t *testing.T) {
+	t.Parallel()
+	LogInit(logger.DebugLevel)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	test := func(test *bootstrapTest) bool {
+		// for any node kad.le, Target and N
+		kad := New()
+		kad.MaxProx = test.MaxProx
+		kad.MinBucketSize = test.MinBucketSize
+		kad.BucketSize = test.BucketSize
+		kad.Start(test.Self)
+		var err error
+
+		t.Logf("bootstapTest MaxProx: %v MinBucketSize: %v BucketSize: %v\n", test.MaxProx, test.MinBucketSize, test.BucketSize)
+
+		addr := gen(Address{}, r).(Address)
+		prox := proximity(addr, test.Self)
+
+		for p := 0; p <= prox; p++ {
+			var nrs []*NodeRecord
+			for i := 0; i < test.BucketSize; i++ {
+				nrs = append(nrs, &NodeRecord{
+					Address: RandomAddressAt(test.Self, p),
+				})
+			}
+			kad.AddNodeRecords(nrs)
+		}
+
+		node := &testNode{addr}
+
+		n := 0
+		for n < 100 {
+			err = kad.AddNode(node)
+			if err != nil {
+				t.Errorf("backend not accepting node")
+				return false
+			}
+			var nrs []*NodeRecord
+			prox := proximity(node.addr, test.Self)
+			for i := 0; i < test.BucketSize; i++ {
+				nrs = append(nrs, &NodeRecord{
+					Address: RandomAddressAt(test.Self, prox+1),
+				})
+			}
+			kad.AddNodeRecords(nrs)
+
+			var lens []int
+			for i := 0; i <= test.MaxProx; i++ {
+				lens = append(lens, len(kad.buckets[i].nodes))
+			}
+
+			record, _ := kad.GetNodeRecord()
+			if record == nil {
+				t.Logf("after round %d, no more node records needed", n)
+				break
+			}
+			node = &testNode{record.Address}
+			n++
+		}
+		exp := test.BucketSize * (test.MaxProx + 1)
+		if kad.Count() != exp {
+			t.Errorf("incorrect number of peers, expceted %d, got %d", exp, kad.Count())
+		}
+		return true
+		if n < 1 {
+			t.Errorf("incorrect number of rounds, expceted %d, got %d", 0, n)
+		}
+		return true
+	}
+	if err := quick.Check(test, quickcfgBootStrap); err != nil {
+		t.Error(err)
+	}
+
 }
 
 func TestGetNodes(t *testing.T) {
@@ -131,7 +208,7 @@ func TestGetNodes(t *testing.T) {
 		}
 		return true
 	}
-	if err := quick.Check(test, quickcfg); err != nil {
+	if err := quick.Check(test, quickcfgGetNodes); err != nil {
 		t.Error(err)
 	}
 }
@@ -178,7 +255,7 @@ func TestProxAdjust(t *testing.T) {
 		}
 		return kad.proxCheck(t)
 	}
-	if err := quick.Check(test, quickcfg); err != nil {
+	if err := quick.Check(test, quickcfgGetNodes); err != nil {
 		t.Error(err)
 	}
 }
@@ -285,7 +362,7 @@ func (self *Kademlia) proxCheck(t *testing.T) bool {
 	}
 	// check if merged high prox bucket does not exceed size
 	if sum > 0 {
-		if sum > self.MaxProxBinSize {
+		if sum > self.ProxBinSize {
 			t.Errorf("bucket %d is empty, yet proxSize is %d", i, self.proxSize)
 			return false
 		}
@@ -293,8 +370,30 @@ func (self *Kademlia) proxCheck(t *testing.T) bool {
 			t.Errorf("proxSize incorrect, expected %v, got %v", sum, self.proxSize)
 			return false
 		}
+		if self.proxLimit > 0 && sum+len(self.buckets[self.proxLimit-1].nodes) < self.ProxBinSize {
+			t.Errorf("proxBinSize incorrect, expected %v got %v", sum, self.proxSize)
+			return false
+		}
 	}
 	return true
+}
+
+type bootstrapTest struct {
+	MaxProx       int
+	MinBucketSize int
+	BucketSize    int
+	Self          Address
+}
+
+func (*bootstrapTest) Generate(rand *rand.Rand, size int) reflect.Value {
+	m := rand.Intn(2) + 1
+	t := &bootstrapTest{
+		Self:          gen(Address{}, rand).(Address),
+		MaxProx:       10 + rand.Intn(3),
+		MinBucketSize: m,
+		BucketSize:    rand.Intn(3) + m,
+	}
+	return reflect.ValueOf(t)
 }
 
 type getNodesTest struct {

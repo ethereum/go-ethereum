@@ -1,15 +1,14 @@
 package kademlia
 
 import (
-	"fmt"
-	"sort"
-	// "math"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
+	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -19,8 +18,9 @@ import (
 var kadlogger = logger.NewLogger("KΛÐ")
 
 const (
-	bucketSize = 20
-	maxProx    = 255
+	minBucketSize = 1
+	bucketSize    = 20
+	maxProx       = 255
 )
 
 type Kademlia struct {
@@ -28,12 +28,12 @@ type Kademlia struct {
 	addr Address
 
 	// adjustable parameters
-	MaxProx              int
-	MaxProxBinSize       int
-	BucketSize           int
-	currentMaxBucketSize int
-	nodeDB               [][]*NodeRecord
-	nodeIndex            map[Address]*NodeRecord
+	MaxProx       int
+	ProxBinSize   int
+	BucketSize    int
+	MinBucketSize int
+	nodeDB        [][]*NodeRecord
+	nodeIndex     map[Address]*NodeRecord
 
 	GetNode func(int)
 
@@ -108,9 +108,12 @@ func (self *Kademlia) Start(addr Address) error {
 	if self.BucketSize == 0 {
 		self.BucketSize = bucketSize
 	}
+	if self.MinBucketSize == 0 {
+		self.MinBucketSize = minBucketSize
+	}
 	// runtime parameters
-	if self.MaxProxBinSize == 0 {
-		self.MaxProxBinSize = self.BucketSize
+	if self.ProxBinSize == 0 {
+		self.ProxBinSize = self.BucketSize
 	}
 
 	self.buckets = make([]*bucket, self.MaxProx+1)
@@ -159,7 +162,7 @@ func (self *Kademlia) RemoveNode(node Node) (err error) {
 	if len(bucket.nodes) < bucket.size {
 		err = fmt.Errorf("insufficient nodes (%v) in bucket %v", len(bucket.nodes), index)
 	}
-	if len(bucket.nodes) == 0 {
+	if len(bucket.nodes) == 0 || index >= self.proxLimit {
 		self.adjustProx(index, -1)
 	}
 	// async callback to notify user that bucket needs filling
@@ -214,22 +217,24 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 
 // adjust Prox (proxLimit and proxSize after an insertion of add nodes into bucket r)
 func (self *Kademlia) adjustProx(r int, add int) {
+	var i int
 	switch {
-	case add > 0 && r == self.proxLimit:
-		self.proxLimit += add
-		for ; self.proxLimit < self.MaxProx && len(self.buckets[self.proxLimit].nodes) > 0; self.proxLimit++ {
-			self.proxSize -= len(self.buckets[self.proxLimit].nodes)
-		}
-	case add > 0 && r > self.proxLimit && self.proxSize+add > self.MaxProxBinSize:
-		self.proxLimit++
-		self.proxSize -= len(self.buckets[r].nodes) - add
-	case add > 0 && r > self.proxLimit:
+	case add > 0 && r >= self.proxLimit:
 		self.proxSize += add
+		for i = self.proxLimit; i < self.MaxProx && len(self.buckets[i].nodes) > 0 && self.proxSize > self.ProxBinSize; i++ {
+			self.proxSize -= len(self.buckets[i].nodes)
+		}
+		self.proxLimit = i
 	case add < 0 && r < self.proxLimit && len(self.buckets[r].nodes) == 0:
-		for i := self.proxLimit - 1; i > r; i-- {
+		for i = self.proxLimit - 1; i > r; i-- {
 			self.proxSize += len(self.buckets[i].nodes)
 		}
 		self.proxLimit = r
+	case add < 0 && self.proxLimit > 0 && r >= self.proxLimit-1:
+		for i = self.proxLimit - 1; len(self.buckets[i].nodes)+self.proxSize <= self.ProxBinSize; i-- {
+			self.proxSize += len(self.buckets[i].nodes)
+		}
+		self.proxLimit = i
 	}
 }
 
@@ -238,7 +243,7 @@ GetNodes(target) returns the list of nodes belonging to the same proximity bin
 as the target. The most proximate bin will be the union of the bins between
 proxLimit and MaxProx. proxLimit is dynamically adjusted so that 1) there is no
 empty buckets in bin < proxLimit and 2) the sum of all items are the maximum
-possible but lower than MaxProxBinSize
+possible but lower than ProxBinSize
 */
 func (self *Kademlia) GetNodes(target Address, max int) []Node {
 	return self.getNodes(target, max).nodes
@@ -298,49 +303,58 @@ func (self *Kademlia) AddNodeRecords(nrs []*NodeRecord) {
 		_, found := self.nodeIndex[node.Address]
 		if !found {
 			self.nodeIndex[node.Address] = node
-			index := self.proximityBin(node.Address)
+			index := proximity(self.addr, node.Address)
 			self.nodeDB[index] = append(self.nodeDB[index], node)
 		}
 	}
 }
 
 /*
-GetNodeRecords gives back an at most max length slice of node records
-in order of decreasing priority for desired connection
+GetNodeRecord gives back a node record with the highest priority for desired
+connection
 Used to pick candidates for live nodes to satisfy Kademlia network for Swarm
 
-Does a round robin on buckets starting from 0 to proxLimit then back
-on each round i we inspect if live-nodes fill the bucket
-if len(nodes) + i < currentMaxBucketSize, then take ith element in corresponding
+if len(nodes) < MinBucketSize, then take ith element in corresponding
 db row ordered by reputation (active time?)
+node record a is more favoured to b a > b iff
+|proxBin(a)| < |proxBin(b)|
+|| proxBin(a) < proxBin(b) && |proxBin(a)| < MinBucketSize
+|| lastActive(a) < lastActive(b)
 
 This has double role. Starting as naive node with empty db, this implements
 Kademlia bootstrapping
 As a mature node, it manages quickly fill in blanks or short lines
 All on demand
 */
-func (self *Kademlia) GetNodeRecords(max int) (nrs []*NodeRecord, err error) {
-	var round int
-	for max > 0 {
-		for i, b := range self.buckets {
-			if len(b.nodes)+round < self.currentMaxBucketSize {
-				if nr := self.getNodeRecord(i, round); nr != nil {
-					nrs = append(nrs)
+func (self *Kademlia) GetNodeRecord() (*NodeRecord, bool) {
+	full := true
+	for i, b := range self.nodeDB {
+		if i >= self.MaxProx {
+			break
+		}
+		if len(self.buckets[i].nodes) < self.MinBucketSize {
+			full = false
+			for _, node := range b {
+				if node.node == nil {
+					return node, full
 				}
 			}
 		}
-		round++
-		max--
 	}
-	return
-}
-
-func (self *Kademlia) getNodeRecord(row, col int) (nr *NodeRecord) {
-	if row >= 0 && row < len(self.nodeDB) &&
-		col >= 0 && col < len(self.nodeDB[row]) {
-		nr = self.nodeDB[row][col]
+	for i, b := range self.nodeDB {
+		if i > self.MaxProx {
+			break
+		}
+		if len(self.buckets[i].nodes) < self.BucketSize {
+			full = false
+			for _, node := range b {
+				if node.node == nil {
+					return node, full
+				}
+			}
+		}
 	}
-	return
+	return nil, full
 }
 
 // in situ mutable bucket
@@ -401,21 +415,19 @@ func (self *bucket) insert(node Node) (err error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if len(self.nodes) >= self.size { // >= allows us to add peers beyond the bucketsize limitation
-		worst := self.worstNode()
-		self.nodes[worst] = node
-	} else {
-		self.nodes = append(self.nodes, node)
+		self.worstNode().Drop() // assumes self.size > 0
 	}
+	self.nodes = append(self.nodes, node)
 	return
 }
 
 // worst expunges the single worst entry in a row, where worst entry is with a peer that has not been active the longests
-func (self *bucket) worstNode() (index int) {
+func (self *bucket) worstNode() (node Node) {
 	var oldest time.Time
-	for i, node := range self.nodes {
+	for _, n := range self.nodes {
 		if (oldest == time.Time{}) || node.LastActive().Before(oldest) {
-			oldest = node.LastActive()
-			index = i
+			oldest = n.LastActive()
+			node = n
 		}
 	}
 	return
@@ -452,6 +464,9 @@ The distance metric MSB(x, y) of two equal length byte sequences x an y is the
 value of the binary integer cast of the xor-ed byte sequence (most significant
 bit first).
 proximity(x, y) counts the common zeros in the front of this distance measure.
+which is equivalent to the reverse rank of the integer part of the base 2
+logarithm of the distance
+called proximity belt (0 farthest, 255 closest, 256 self)
 */
 func proximity(one, other Address) (ret int) {
 	for i := 0; i < len(one); i++ {
@@ -483,16 +498,6 @@ func proxCmp(target, a, b Address) int {
 
 func (self *Kademlia) DB() [][]*NodeRecord {
 	return self.nodeDB
-}
-
-func (n *NodeRecord) bumpActive() {
-	stamp := time.Now().Unix()
-	atomic.StoreInt64(&n.Active, stamp)
-}
-
-func (n *NodeRecord) LastActive() time.Time {
-	stamp := atomic.LoadInt64(&n.Active)
-	return time.Unix(stamp, 0)
 }
 
 // save persists all peers encountered
@@ -528,9 +533,38 @@ func (self *Kademlia) Load(path string) (err error) {
 	if err != nil {
 		return
 	}
-	self.nodeDB = kad.Nodes
 	if self.addr != kad.Address {
 		return fmt.Errorf("invalid kad db: address mismatch, expected %v, got %v", self.addr, kad.Address)
 	}
+	self.nodeDB = kad.Nodes
 	return
+}
+
+// randomAddressAt(address, prox) generates a random address
+// at proximity order prox relative to address
+// if prox is negative a random address is generated
+func RandomAddressAt(self Address, prox int) (addr Address) {
+	addr = self
+	var pos int
+	if prox >= 0 {
+		pos = prox / 8
+		trans := prox % 8
+		transbytea := byte(0)
+		for j := 0; j <= trans; j++ {
+			transbytea |= 1 << uint8(7-j)
+		}
+		flipbyte := byte(1 << uint8(7-trans))
+		transbyteb := transbytea ^ byte(255)
+		randbyte := byte(rand.Intn(255))
+		addr[pos] = ((addr[pos] & transbytea) ^ flipbyte) | randbyte&transbyteb
+	}
+	for i := pos + 1; i < len(addr); i++ {
+		addr[i] = byte(rand.Intn(255))
+	}
+	return
+}
+
+// randomAddressAt() generates a random address
+func RandomAddress() Address {
+	return RandomAddressAt(Address{}, -1)
 }

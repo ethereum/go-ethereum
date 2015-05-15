@@ -468,7 +468,7 @@ func (s *Ethereum) Start() error {
 
 	if s.DPA != nil {
 		s.DPA.Start()
-		s.netStore.Start(s.net.Self())
+		s.netStore.Start(s.net.Self(), s.AddPeer)
 		go bzz.StartHttpServer(s.DPA)
 	}
 
@@ -541,6 +541,13 @@ func (s *Ethereum) Stop() {
 	s.eventMux.Stop()
 	if s.whisper != nil {
 		s.whisper.Stop()
+	}
+
+	if s.DPA != nil {
+		s.DPA.Stop()
+	}
+	if s.netStore != nil {
+		s.netStore.Stop()
 	}
 
 	glog.V(logger.Info).Infoln("Server stopped")

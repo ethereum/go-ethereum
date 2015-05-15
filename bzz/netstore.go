@@ -61,13 +61,17 @@ func NewNetStore(path, hivepath string) (netstore *NetStore, err error) {
 	return
 }
 
-func (self *NetStore) Start(node *discover.Node) (err error) {
+func (self *NetStore) Start(node *discover.Node, connectPeer func(string) error) (err error) {
 	self.self = node
-	err = self.hive.start(kademlia.Address(node.Sha()))
+	err = self.hive.start(kademlia.Address(node.Sha()), connectPeer)
 	if err != nil {
 		return
 	}
 	return
+}
+
+func (self *NetStore) Stop() (err error) {
+	return self.hive.stop()
 }
 
 func (self *NetStore) Put(entry *Chunk) {
