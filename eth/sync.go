@@ -101,7 +101,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	case downloader.ErrBusy:
 		glog.V(logger.Debug).Infof("Synchronisation already in progress")
 
-	case downloader.ErrTimeout, downloader.ErrBadPeer, downloader.ErrInvalidChain:
+	case downloader.ErrTimeout, downloader.ErrBadPeer, downloader.ErrInvalidChain, downloader.ErrCrossCheckFailed:
 		glog.V(logger.Debug).Infof("Removing peer %v: %v", peer.id, err)
 		pm.removePeer(peer)
 

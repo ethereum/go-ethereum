@@ -123,13 +123,13 @@ func (q *queue) Has(hash common.Hash) bool {
 }
 
 // Insert adds a set of hashes for the download queue for scheduling, returning
-// the number of new hashes encountered.
-func (q *queue) Insert(hashes []common.Hash) int {
+// the new hashes encountered.
+func (q *queue) Insert(hashes []common.Hash) []common.Hash {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	// Insert all the hashes prioritized in the arrival order
-	inserts := 0
+	inserts := make([]common.Hash, 0, len(hashes))
 	for _, hash := range hashes {
 		// Skip anything we already have
 		if old, ok := q.hashPool[hash]; ok {
@@ -137,7 +137,9 @@ func (q *queue) Insert(hashes []common.Hash) int {
 			continue
 		}
 		// Update the counters and insert the hash
-		q.hashCounter, inserts = q.hashCounter+1, inserts+1
+		q.hashCounter = q.hashCounter + 1
+		inserts = append(inserts, hash)
+
 		q.hashPool[hash] = q.hashCounter
 		q.hashQueue.Push(hash, float32(q.hashCounter)) // Highest gets schedules first
 	}
