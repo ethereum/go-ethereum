@@ -101,7 +101,7 @@ func (self *Miner) Stop() {
 }
 
 func (self *Miner) Register(agent Agent) {
-	if atomic.LoadInt32(&self.mining) == 0 {
+	if self.Mining() {
 		agent.Start()
 	}
 
