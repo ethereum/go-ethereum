@@ -24,8 +24,6 @@ const (
 	BlockChainVersion = 2
 )
 
-var statelogger = logger.NewLogger("BLOCK")
-
 type BlockProcessor struct {
 	db      common.Database
 	extraDb common.Database
