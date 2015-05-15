@@ -205,6 +205,7 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 			if err := self.UseGas(dataGas); err == nil {
 				ref.SetCode(ret)
 			} else {
+				ret = nil // does not affect consensus but useful for StateTests validations
 				glog.V(logger.Core).Infoln("Insufficient gas for creating code. Require", dataGas, "and have", self.gas)
 			}
 		}
