@@ -472,6 +472,9 @@ func TestMadeupHashChainAttack(t *testing.T) {
 // Tests that if a malicious peer makes up a random block chain, and tried to
 // push indefinitely, it actually gets caught with it.
 func TestMadeupBlockChainAttack(t *testing.T) {
+	defaultBlockTTL := blockTTL
+	defaultCrossCheckCycle := crossCheckCycle
+
 	blockTTL = 100 * time.Millisecond
 	crossCheckCycle = 25 * time.Millisecond
 
@@ -490,6 +493,9 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrCrossCheckFailed)
 	}
 	// Ensure that a valid chain can still pass sync
+	blockTTL = defaultBlockTTL
+	crossCheckCycle = defaultCrossCheckCycle
+
 	tester.hashes = hashes
 	tester.newPeer("valid", big.NewInt(20000), hashes[0])
 	if _, err := tester.syncTake("valid", hashes[0]); err != nil {
