@@ -2,7 +2,9 @@ package vm
 
 import (
 	"bytes"
+	"io/ioutil"
 	"math/big"
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -269,8 +271,13 @@ func TestVmLog(t *testing.T) {
 	RunVmTest(fn, t)
 }
 
-func TestInputLimits1(t *testing.T) {
-	const fn = "../files/VMTests/vmInputLimits1.json"
+func TestInputLimits(t *testing.T) {
+	const fn = "../files/VMTests/vmInputLimits.json"
+	RunVmTest(fn, t)
+}
+
+func TestInputLimitsLight(t *testing.T) {
+	const fn = "../files/VMTests/vmInputLimitsLight.json"
 	RunVmTest(fn, t)
 }
 
@@ -320,7 +327,6 @@ func TestStateLog(t *testing.T) {
 }
 
 func TestStateTransaction(t *testing.T) {
-	t.Skip()
 	const fn = "../files/StateTests/stTransactionTest.json"
 	RunVmTest(fn, t)
 }
@@ -350,4 +356,28 @@ func TestQuadraticComplexity(t *testing.T) {
 func TestSolidity(t *testing.T) {
 	const fn = "../files/StateTests/stSolidityTest.json"
 	RunVmTest(fn, t)
+}
+
+func TestWallet(t *testing.T) {
+	const fn = "../files/StateTests/stWalletTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestRandom(t *testing.T) {
+	// TODO: fix JSON EOF bug and unskip
+	t.Skip()
+	fileNames := make([]string, 1024)
+	fileInfos, err := ioutil.ReadDir("../files/StateTests/RandomTests")
+	if err != nil {
+		t.Errorf("Could not read StateTests/RandomTests dir: %v", err)
+		return
+	}
+	for _, fileInfo := range fileInfos {
+		fileNames = append(fileNames, fileInfo.Name())
+	}
+
+	//for _, f := range fileNames {
+	path := filepath.Join("../files/StateTests/RandomTests/", fileNames[0])
+	RunVmTest(path, t)
+	//}
 }
