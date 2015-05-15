@@ -284,12 +284,14 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 			}
 			if !done {
 				// Try and fetch a random block to verify the hash batch
-				cross := inserts[rand.Intn(len(inserts))]
-				glog.V(logger.Detail).Infof("Cross checking (%s) with %x", active.id, cross)
+				// Skip the last hash as the cross check races with the next hash fetch
+				if len(inserts) > 1 {
+					cross := inserts[rand.Intn(len(inserts)-1)]
+					glog.V(logger.Detail).Infof("Cross checking (%s) with %x", active.id, cross)
 
-				d.checks[cross] = time.Now().Add(blockTTL)
-				active.getBlocks([]common.Hash{cross})
-
+					d.checks[cross] = time.Now().Add(blockTTL)
+					active.getBlocks([]common.Hash{cross})
+				}
 				// Also fetch a fresh
 				active.getHashes(head)
 				continue
