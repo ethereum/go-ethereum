@@ -320,7 +320,6 @@ func TestStateLog(t *testing.T) {
 }
 
 func TestStateTransaction(t *testing.T) {
-	t.Skip()
 	const fn = "../files/StateTests/stTransactionTest.json"
 	RunVmTest(fn, t)
 }
