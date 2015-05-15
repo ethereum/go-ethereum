@@ -90,7 +90,6 @@ func New(mux *event.TypeMux, hasBlock hashCheckFn, getBlock getBlockFn) *Downloa
 		mux:       mux,
 		queue:     newQueue(),
 		peers:     newPeerSet(),
-		checks:    make(map[common.Hash]time.Time),
 		hasBlock:  hasBlock,
 		getBlock:  getBlock,
 		newPeerCh: make(chan *peer, 1),
@@ -160,6 +159,7 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 	// Reset the queue and peer set to clean any internal leftover state
 	d.queue.Reset()
 	d.peers.Reset()
+	d.checks = make(map[common.Hash]time.Time)
 
 	// Retrieve the origin peer and initiate the downloading process
 	p := d.peers.Peer(id)
@@ -184,7 +184,7 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash) (err error) {
 	defer func() {
 		// reset on error
 		if err != nil {
-			d.queue.Reset()
+			d.Cancel()
 			d.mux.Post(FailedEvent{err})
 		} else {
 			d.mux.Post(DoneEvent{})
@@ -259,8 +259,6 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 			// Make sure the peer actually gave something valid
 			if len(hashPack.hashes) == 0 {
 				glog.V(logger.Debug).Infof("Peer (%s) responded with empty hash set\n", active.id)
-				d.queue.Reset()
-
 				return errEmptyHashSet
 			}
 			// Determine if we're done fetching hashes (queue up all pending), and continue if not done
@@ -277,8 +275,6 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 			inserts := d.queue.Insert(hashPack.hashes)
 			if len(inserts) == 0 && !done {
 				glog.V(logger.Debug).Infof("Peer (%s) responded with stale hashes\n", active.id)
-				d.queue.Reset()
-
 				return ErrBadPeer
 			}
 			if !done {
@@ -306,8 +302,13 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 			if blockPack.peerId != active.id || len(blockPack.blocks) != 1 {
 				continue
 			}
-			hash := blockPack.blocks[0].Hash()
-			delete(d.checks, hash)
+			block := blockPack.blocks[0]
+			if _, ok := d.checks[block.Hash()]; ok {
+				if !d.queue.Has(block.ParentHash()) {
+					return ErrCrossCheckFailed
+				}
+				delete(d.checks, block.Hash())
+			}
 
 		case <-crossTicker.C:
 			// Iterate over all the cross checks and fail the hash chain if they're not verified
@@ -334,7 +335,6 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 			// if all peers have been tried, abort the process entirely or if the hash is
 			// the zero hash.
 			if p == nil || (head == common.Hash{}) {
-				d.queue.Reset()
 				return ErrTimeout
 			}
 			// set p to the active peer. this will invalidate any hashes that may be returned
@@ -380,7 +380,6 @@ out:
 				if err := d.queue.Deliver(blockPack.peerId, blockPack.blocks); err != nil {
 					if err == ErrInvalidChain {
 						// The hash chain is invalid (blocks are not ordered properly), abort
-						d.queue.Reset()
 						return err
 					}
 					// Peer did deliver, but some blocks were off, penalize
@@ -414,7 +413,6 @@ out:
 			}
 			// After removing bad peers make sure we actually have sufficient peer left to keep downloading
 			if d.peers.Len() == 0 {
-				d.queue.Reset()
 				return errNoPeers
 			}
 			// If there are unrequested hashes left start fetching
@@ -448,7 +446,6 @@ out:
 				// Make sure that we have peers available for fetching. If all peers have been tried
 				// and all failed throw an error
 				if d.queue.InFlight() == 0 {
-					d.queue.Reset()
 					return errPeersUnavailable
 				}
 
