@@ -63,9 +63,10 @@ type hashPack struct {
 type Downloader struct {
 	mux *event.TypeMux
 
-	mu    sync.RWMutex
-	queue *queue
-	peers *peerSet
+	mu     sync.RWMutex
+	queue  *queue                    // Scheduler for selecting the hashes to download
+	peers  *peerSet                  // Set of active peers from which download can proceed
+	checks map[common.Hash]time.Time // Pending cross checks to verify a hash chain
 
 	// Callbacks
 	hasBlock hashCheckFn
@@ -89,6 +90,7 @@ func New(mux *event.TypeMux, hasBlock hashCheckFn, getBlock getBlockFn) *Downloa
 		mux:       mux,
 		queue:     newQueue(),
 		peers:     newPeerSet(),
+		checks:    make(map[common.Hash]time.Time),
 		hasBlock:  hasBlock,
 		getBlock:  getBlock,
 		newPeerCh: make(chan *peer, 1),
@@ -236,7 +238,6 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 
 		timeout     = time.NewTimer(hashTTL)          // timer to dump a non-responsive active peer
 		attempted   = make(map[string]bool)           // attempted peers will help with retries
-		crossChecks = make(map[common.Hash]time.Time) // running cross checks and their deadline
 		crossTicker = time.NewTicker(crossCheckCycle) // ticker to periodically check expired cross checks
 	)
 	defer crossTicker.Stop()
@@ -285,7 +286,7 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 				cross := inserts[rand.Intn(len(inserts))]
 				glog.V(logger.Detail).Infof("Cross checking (%s) with %x", active.id, cross)
 
-				crossChecks[cross] = time.Now().Add(blockTTL)
+				d.checks[cross] = time.Now().Add(blockTTL)
 				active.getBlocks([]common.Hash{cross})
 
 				// Also fetch a fresh
@@ -306,11 +307,11 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 				continue
 			}
 			hash := blockPack.blocks[0].Hash()
-			delete(crossChecks, hash)
+			delete(d.checks, hash)
 
 		case <-crossTicker.C:
 			// Iterate over all the cross checks and fail the hash chain if they're not verified
-			for hash, deadline := range crossChecks {
+			for hash, deadline := range d.checks {
 				if time.Now().After(deadline) {
 					glog.V(logger.Debug).Infof("Cross check timeout for %x", hash)
 					return ErrCrossCheckFailed
@@ -362,7 +363,16 @@ out:
 		select {
 		case <-d.cancelCh:
 			return errCancelBlockFetch
+
 		case blockPack := <-d.blockCh:
+			// Short circuit if it's a stale cross check
+			if len(blockPack.blocks) == 1 {
+				block := blockPack.blocks[0]
+				if _, ok := d.checks[block.Hash()]; ok {
+					delete(d.checks, block.Hash())
+					continue
+				}
+			}
 			// If the peer was previously banned and failed to deliver it's pack
 			// in a reasonable time frame, ignore it's message.
 			if peer := d.peers.Peer(blockPack.peerId); peer != nil {
