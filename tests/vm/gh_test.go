@@ -2,7 +2,9 @@ package vm
 
 import (
 	"bytes"
+	"io/ioutil"
 	"math/big"
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -359,4 +361,23 @@ func TestSolidity(t *testing.T) {
 func TestWallet(t *testing.T) {
 	const fn = "../files/StateTests/stWalletTest.json"
 	RunVmTest(fn, t)
+}
+
+func TestRandom(t *testing.T) {
+	// TODO: fix JSON EOF bug and unskip
+	t.Skip()
+	fileNames := make([]string, 1024)
+	fileInfos, err := ioutil.ReadDir("../files/StateTests/RandomTests")
+	if err != nil {
+		t.Errorf("Could not read StateTests/RandomTests dir: %v", err)
+		return
+	}
+	for _, fileInfo := range fileInfos {
+		fileNames = append(fileNames, fileInfo.Name())
+	}
+
+	//for _, f := range fileNames {
+	path := filepath.Join("../files/StateTests/RandomTests/", fileNames[0])
+	RunVmTest(path, t)
+	//}
 }
