@@ -212,9 +212,14 @@ func (d *Downloader) Cancel() bool {
 		return false
 	}
 	// Close the current cancel channel
-	d.cancelLock.RLock()
-	close(d.cancelCh)
-	d.cancelLock.RUnlock()
+	d.cancelLock.Lock()
+	select {
+	case <-d.cancelCh:
+		// Channel was already closed
+	default:
+		close(d.cancelCh)
+	}
+	d.cancelLock.Unlock()
 
 	// reset the queue
 	d.queue.Reset()
