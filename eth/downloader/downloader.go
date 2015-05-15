@@ -23,20 +23,20 @@ var (
 	minDesiredPeerCount = 5                // Amount of peers desired to start syncing
 	blockTtl            = 20 * time.Second // The amount of time it takes for a block request to time out
 
-	errLowTd               = errors.New("peer's TD is too low")
-	ErrBusy                = errors.New("busy")
-	errUnknownPeer         = errors.New("peer's unknown or unhealthy")
-	ErrBadPeer             = errors.New("action from bad peer ignored")
-	errNoPeers             = errors.New("no peers to keep download active")
-	ErrPendingQueue        = errors.New("pending items in queue")
-	ErrTimeout             = errors.New("timeout")
-	errEmptyHashSet        = errors.New("empty hash set by peer")
-	errPeersUnavailable    = errors.New("no peers available or all peers tried for block download process")
-	errAlreadyInPool       = errors.New("hash already in pool")
-	errBlockNumberOverflow = errors.New("received block which overflows")
-	errCancelHashFetch     = errors.New("hash fetching cancelled (requested)")
-	errCancelBlockFetch    = errors.New("block downloading cancelled (requested)")
-	errNoSyncActive        = errors.New("no sync active")
+	errLowTd            = errors.New("peer's TD is too low")
+	ErrBusy             = errors.New("busy")
+	errUnknownPeer      = errors.New("peer's unknown or unhealthy")
+	ErrBadPeer          = errors.New("action from bad peer ignored")
+	errNoPeers          = errors.New("no peers to keep download active")
+	ErrPendingQueue     = errors.New("pending items in queue")
+	ErrTimeout          = errors.New("timeout")
+	errEmptyHashSet     = errors.New("empty hash set by peer")
+	errPeersUnavailable = errors.New("no peers available or all peers tried for block download process")
+	errAlreadyInPool    = errors.New("hash already in pool")
+	ErrInvalidChain     = errors.New("retrieved hash chain is invalid")
+	errCancelHashFetch  = errors.New("hash fetching cancelled (requested)")
+	errCancelBlockFetch = errors.New("block downloading cancelled (requested)")
+	errNoSyncActive     = errors.New("no sync active")
 )
 
 type hashCheckFn func(common.Hash) bool
@@ -334,8 +334,14 @@ out:
 			// If the peer was previously banned and failed to deliver it's pack
 			// in a reasonable time frame, ignore it's message.
 			if peer := d.peers.Peer(blockPack.peerId); peer != nil {
-				// Deliver the received chunk of blocks, but drop the peer if invalid
+				// Deliver the received chunk of blocks
 				if err := d.queue.Deliver(blockPack.peerId, blockPack.blocks); err != nil {
+					if err == ErrInvalidChain {
+						// The hash chain is invalid (blocks are not ordered properly), abort
+						d.queue.Reset()
+						return err
+					}
+					// Peer did deliver, but some blocks were off, penalize
 					glog.V(logger.Debug).Infof("Failed delivery for peer %s: %v\n", blockPack.peerId, err)
 					peer.Demote()
 					break

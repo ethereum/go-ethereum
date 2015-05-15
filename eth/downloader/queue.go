@@ -298,17 +298,16 @@ func (q *queue) Deliver(id string, blocks []*types.Block) (err error) {
 	// Iterate over the downloaded blocks and add each of them
 	errs := make([]error, 0)
 	for _, block := range blocks {
-		// Skip any blocks that fall outside the cache range
-		index := int(block.NumberU64()) - q.blockOffset
-		if index >= len(q.blockCache) || index < 0 {
-			//fmt.Printf("block cache overflown (N=%v O=%v, C=%v)", block.Number(), q.blockOffset, len(q.blockCache))
-			continue
-		}
 		// Skip any blocks that were not requested
 		hash := block.Hash()
 		if _, ok := request.Hashes[hash]; !ok {
 			errs = append(errs, fmt.Errorf("non-requested block %v", hash))
 			continue
+		}
+		// If a requested block falls out of the range, the hash chain is invalid
+		index := int(block.NumberU64()) - q.blockOffset
+		if index >= len(q.blockCache) || index < 0 {
+			return ErrInvalidChain
 		}
 		// Otherwise merge the block and mark the hash block
 		q.blockCache[index] = block

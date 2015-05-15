@@ -75,9 +75,40 @@ func newTester(t *testing.T, hashes []common.Hash, blocks map[common.Hash]*types
 	return tester
 }
 
-func (dl *downloadTester) sync(peerId string, hash common.Hash) error {
+// sync is a simple wrapper around the downloader to start synchronisation and
+// block until it returns
+func (dl *downloadTester) sync(peerId string, head common.Hash) error {
 	dl.activePeerId = peerId
-	return dl.downloader.Synchronise(peerId, hash)
+	return dl.downloader.Synchronise(peerId, head)
+}
+
+// syncTake is starts synchronising with a remote peer, but concurrently it also
+// starts fetching blocks that the downloader retrieved. IT blocks until both go
+// routines terminate.
+func (dl *downloadTester) syncTake(peerId string, head common.Hash) (types.Blocks, error) {
+	// Start a block collector to take blocks as they become available
+	done := make(chan struct{})
+	took := []*types.Block{}
+	go func() {
+		for running := true; running; {
+			select {
+			case <-done:
+				running = false
+			default:
+				time.Sleep(time.Millisecond)
+			}
+			// Take a batch of blocks and accumulate
+			took = append(took, dl.downloader.TakeBlocks()...)
+		}
+		done <- struct{}{}
+	}()
+	// Start the downloading, sync the taker and return
+	err := dl.sync(peerId, head)
+
+	done <- struct{}{}
+	<-done
+
+	return took, err
 }
 
 func (dl *downloadTester) insertBlocks(blocks types.Blocks) {
@@ -264,32 +295,7 @@ func TestThrottling(t *testing.T) {
 	tester.badBlocksPeer("peer4", big.NewInt(0), common.Hash{})
 
 	// Concurrently download and take the blocks
-	errc := make(chan error, 1)
-	go func() {
-		errc <- tester.sync("peer1", hashes[0])
-	}()
-
-	done := make(chan struct{})
-	took := []*types.Block{}
-	go func() {
-		for running := true; running; {
-			select {
-			case <-done:
-				running = false
-			default:
-				time.Sleep(time.Millisecond)
-			}
-			// Take a batch of blocks and accumulate
-			took = append(took, tester.downloader.TakeBlocks()...)
-		}
-		done <- struct{}{}
-	}()
-
-	// Synchronise the two threads and verify
-	err := <-errc
-	done <- struct{}{}
-	<-done
-
+	took, err := tester.syncTake("peer1", hashes[0])
 	if err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
@@ -392,6 +398,34 @@ func TestNonExistingBlockAttack(t *testing.T) {
 	hashes[len(hashes)/2] = origin
 	tester.newPeer("valid", big.NewInt(20000), hashes[0])
 	if err := tester.sync("valid", hashes[0]); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+}
+
+// Tests that if a malicious peer is returning hashes in a weird order, that the
+// sync throttler doesn't choke on them waiting for the valid blocks.
+func TestInvalidHashOrderAttack(t *testing.T) {
+	// Create a valid long chain, but reverse some hashes within
+	hashes := createHashes(0, 4*blockCacheLimit)
+	blocks := createBlocksFromHashes(hashes)
+
+	reverse := make([]common.Hash, len(hashes))
+	copy(reverse, hashes)
+
+	for i := len(hashes) / 4; i < 2*len(hashes)/4; i++ {
+		reverse[i], reverse[len(hashes)-i-1] = reverse[len(hashes)-i-1], reverse[i]
+	}
+
+	// Try and sync with the malicious node and check that it fails
+	tester := newTester(t, reverse, blocks)
+	tester.newPeer("attack", big.NewInt(10000), reverse[0])
+	if _, err := tester.syncTake("attack", reverse[0]); err != ErrInvalidChain {
+		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrInvalidChain)
+	}
+	// Ensure that a valid chain can still pass sync
+	tester.hashes = hashes
+	tester.newPeer("valid", big.NewInt(20000), hashes[0])
+	if _, err := tester.syncTake("valid", hashes[0]); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
