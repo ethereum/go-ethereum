@@ -288,7 +288,7 @@ func (js *jsre) startMining(call otto.FunctionCall) otto.Value {
 			return otto.FalseValue()
 		}
 	} else {
-		threads = 4
+		threads = int64(js.ethereum.MinerThreads)
 	}
 
 	err = js.ethereum.StartMining(int(threads))
