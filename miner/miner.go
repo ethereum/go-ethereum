@@ -47,6 +47,7 @@ func (self *Miner) update() {
 			atomic.StoreInt32(&self.canStart, 0)
 			if self.Mining() {
 				self.Stop()
+				atomic.StoreInt32(&self.shouldStart, 1)
 				glog.V(logger.Info).Infoln("Mining operation aborted due to sync operation")
 			}
 		case downloader.DoneEvent, downloader.FailedEvent:
