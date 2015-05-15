@@ -190,6 +190,7 @@ type Ethereum struct {
 	// logger logger.LogSystem
 
 	Mining        bool
+	MinerThreads  int
 	NatSpec       bool
 	DataDir       string
 	etherbase     common.Address
@@ -262,6 +263,7 @@ func New(config *Config) (*Ethereum, error) {
 		ethVersionId:    config.ProtocolVersion,
 		netVersionId:    config.NetworkId,
 		NatSpec:         config.NatSpec,
+		MinerThreads:    config.MinerThreads,
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())

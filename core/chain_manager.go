@@ -577,10 +577,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
 			if block.Td.Cmp(self.td) > 0 {
-				// Check for chain forks. If H(block.num - 1) != block.parent, we're on a fork and need to do some merging
-				if previous := self.getBlockByNumber(block.NumberU64() - 1); previous.Hash() != block.ParentHash() {
+				// chain fork
+				if block.ParentHash() != cblock.Hash() {
 					// during split we merge two different chains and create the new canonical chain
-					self.merge(previous, block)
+					self.merge(cblock, block)
 
 					queue[i] = ChainSplitEvent{block, logs}
 					queueEvent.splitCount++
@@ -641,9 +641,17 @@ func (self *ChainManager) diff(oldBlock, newBlock *types.Block) types.Blocks {
 		oldStart    = oldBlock
 		newStart    = newBlock
 	)
-	// first find common number
-	for newBlock = newBlock; newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = self.GetBlock(newBlock.ParentHash()) {
-		newChain = append(newChain, newBlock)
+
+	// first reduce whoever is higher bound
+	if oldBlock.NumberU64() > newBlock.NumberU64() {
+		// reduce old chain
+		for oldBlock = oldBlock; oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = self.GetBlock(oldBlock.ParentHash()) {
+		}
+	} else {
+		// reduce new chain and append new chain blocks for inserting later on
+		for newBlock = newBlock; newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = self.GetBlock(newBlock.ParentHash()) {
+			newChain = append(newChain, newBlock)
+		}
 	}
 
 	numSplit := newBlock.Number()
@@ -669,7 +677,7 @@ func (self *ChainManager) diff(oldBlock, newBlock *types.Block) types.Blocks {
 func (self *ChainManager) merge(oldBlock, newBlock *types.Block) {
 	newChain := self.diff(oldBlock, newBlock)
 
-	// insert blocks
+	// insert blocks. Order does not matter. Last block will be written in ImportChain itself which creates the new head properly
 	for _, block := range newChain {
 		self.insert(block)
 	}
