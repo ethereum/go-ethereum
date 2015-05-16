@@ -304,7 +304,9 @@ func (self *Kademlia) AddNodeRecords(nrs []*NodeRecord) {
 		if !found {
 			self.nodeIndex[node.Address] = node
 			index := proximity(self.addr, node.Address)
-			self.nodeDB[index] = append(self.nodeDB[index], node)
+			if index < len(self.nodeDB) {
+				self.nodeDB[index] = append(self.nodeDB[index], node)
+			}
 		}
 	}
 }
