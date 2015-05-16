@@ -75,6 +75,7 @@ func (self *Miner) Start(coinbase common.Address, threads int) {
 	atomic.StoreInt32(&self.shouldStart, 1)
 	self.threads = threads
 	self.worker.coinbase = coinbase
+	self.coinbase = coinbase
 
 	if atomic.LoadInt32(&self.canStart) == 0 {
 		glog.V(logger.Info).Infoln("Can not start mining operation due to network sync (starts when finished)")
