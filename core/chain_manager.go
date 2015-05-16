@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"runtime"
 	"sync"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -100,9 +102,11 @@ type ChainManager struct {
 
 	quit chan struct{}
 	wg   sync.WaitGroup
+
+	pow pow.PoW
 }
 
-func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *ChainManager {
+func NewChainManager(blockDb, stateDb common.Database, pow pow.PoW, mux *event.TypeMux) *ChainManager {
 	bc := &ChainManager{
 		blockDb:      blockDb,
 		stateDb:      stateDb,
@@ -110,6 +114,7 @@ func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *Chai
 		eventMux:     mux,
 		quit:         make(chan struct{}),
 		cache:        NewBlockCache(blockCacheLimit),
+		pow:          pow,
 	}
 	bc.setLastState()
 
@@ -529,10 +534,19 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		stats      struct{ queued, processed, ignored int }
 		tstart     = time.Now()
 	)
+
+	// check the nonce in parallel to the block processing
+	// this speeds catching up significantly
+	nonceErrCh := make(chan error)
+	go func() {
+		nonceErrCh <- verifyNonces(self.pow, chain)
+	}()
+
 	for i, block := range chain {
 		if block == nil {
 			continue
 		}
+
 		// Setting block.Td regardless of error (known for example) prevents errors down the line
 		// in the protocol handler
 		block.Td = new(big.Int).Set(CalcTD(block, self.GetBlock(block.ParentHash())))
@@ -562,11 +576,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 				continue
 			}
 
-			h := block.Header()
-
-			glog.V(logger.Error).Infof("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes())
-			glog.V(logger.Error).Infoln(err)
-			glog.V(logger.Debug).Infoln(block)
+			blockErr(block, err)
 
 			return i, err
 		}
@@ -618,6 +628,13 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 
 		stats.processed++
 
+	}
+
+	// check and wait for the nonce error channel and
+	// make sure no nonce error was thrown in the process
+	err := <-nonceErrCh
+	if err != nil {
+		return 0, err
 	}
 
 	if (stats.queued > 0 || stats.processed > 0 || stats.ignored > 0) && bool(glog.V(logger.Info)) {
@@ -715,6 +732,66 @@ out:
 			self.procFutureBlocks()
 		case <-self.quit:
 			break out
+		}
+	}
+}
+
+func blockErr(block *types.Block, err error) {
+	h := block.Header()
+	glog.V(logger.Error).Infof("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes())
+	glog.V(logger.Error).Infoln(err)
+	glog.V(logger.Debug).Infoln(block)
+}
+
+// verifyNonces verifies nonces of the given blocks in parallel and returns
+// an error if one of the blocks nonce verifications failed.
+func verifyNonces(pow pow.PoW, blocks []*types.Block) error {
+	// Spawn a few workers. They listen for blocks on the in channel
+	// and send results on done. The workers will exit in the
+	// background when in is closed.
+	var (
+		in   = make(chan *types.Block)
+		done = make(chan error, runtime.GOMAXPROCS(0))
+	)
+	defer close(in)
+	for i := 0; i < cap(done); i++ {
+		go verifyNonce(pow, in, done)
+	}
+	// Feed blocks to the workers, aborting at the first invalid nonce.
+	var (
+		running, i int
+		block      *types.Block
+		sendin     = in
+	)
+	for i < len(blocks) || running > 0 {
+		if i == len(blocks) {
+			// Disable sending to in.
+			sendin = nil
+		} else {
+			block = blocks[i]
+			i++
+		}
+		select {
+		case sendin <- block:
+			running++
+		case err := <-done:
+			running--
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// verifyNonce is a worker for the verifyNonces method. It will run until
+// in is closed.
+func verifyNonce(pow pow.PoW, in <-chan *types.Block, done chan<- error) {
+	for block := range in {
+		if !pow.Verify(block) {
+			done <- ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
+		} else {
+			done <- nil
 		}
 	}
 }

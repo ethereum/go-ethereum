@@ -189,7 +189,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	state := state.New(parent.Root(), sm.db)
 
 	// Block validation
-	if err = sm.ValidateHeader(block.Header(), parent.Header()); err != nil {
+	if err = sm.ValidateHeader(block.Header(), parent.Header(), false); err != nil {
 		return
 	}
 
@@ -269,7 +269,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 // Validates the current block. Returns an error if the block was invalid,
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
-func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
+func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header, checkPow bool) error {
 	if big.NewInt(int64(len(block.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
 		return fmt.Errorf("Block extra data too long (%d)", len(block.Extra))
 	}
@@ -300,9 +300,11 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 		return BlockEqualTSErr //ValidationError("Block timestamp equal or less than previous block (%v - %v)", block.Time, parent.Time)
 	}
 
-	// Verify the nonce of the block. Return an error if it's not valid
-	if !sm.Pow.Verify(types.NewBlockWithHeader(block)) {
-		return ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
+	if checkPow {
+		// Verify the nonce of the block. Return an error if it's not valid
+		if !sm.Pow.Verify(types.NewBlockWithHeader(block)) {
+			return ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
+		}
 	}
 
 	return nil
@@ -358,7 +360,7 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 			return UncleError("uncle[%d](%x)'s parent unknown (%x)", i, hash[:4], uncle.ParentHash[0:4])
 		}
 
-		if err := sm.ValidateHeader(uncle, ancestorHeaders[uncle.ParentHash]); err != nil {
+		if err := sm.ValidateHeader(uncle, ancestorHeaders[uncle.ParentHash], true); err != nil {
 			return ValidationError(fmt.Sprintf("uncle[%d](%x) header invalid: %v", i, hash[:4], err))
 		}
 	}
