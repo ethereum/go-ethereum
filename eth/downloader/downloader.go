@@ -145,8 +145,6 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 		glog.V(logger.Info).Infoln("Block synchronisation started")
 	}
 
-	d.mux.Post(StartEvent{})
-
 	// Create cancel channel for aborting mid-flight
 	d.cancelLock.Lock()
 	d.cancelCh = make(chan struct{})
@@ -166,6 +164,7 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 	if p == nil {
 		return errUnknownPeer
 	}
+
 	return d.syncWithPeer(p, hash)
 }
 
@@ -181,6 +180,7 @@ func (d *Downloader) Has(hash common.Hash) bool {
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
 func (d *Downloader) syncWithPeer(p *peer, hash common.Hash) (err error) {
+	d.mux.Post(StartEvent{})
 	defer func() {
 		// reset on error
 		if err != nil {

@@ -11,8 +11,9 @@ import (
 )
 
 type CpuAgent struct {
-	chMu          sync.Mutex
-	c             chan *types.Block
+	mu sync.Mutex
+
+	workCh        chan *types.Block
 	quit          chan struct{}
 	quitCurrentOp chan struct{}
 	returnCh      chan<- *types.Block
@@ -30,19 +31,27 @@ func NewCpuAgent(index int, pow pow.PoW) *CpuAgent {
 	return miner
 }
 
-func (self *CpuAgent) Work() chan<- *types.Block          { return self.c }
+func (self *CpuAgent) Work() chan<- *types.Block          { return self.workCh }
 func (self *CpuAgent) Pow() pow.PoW                       { return self.pow }
 func (self *CpuAgent) SetReturnCh(ch chan<- *types.Block) { self.returnCh = ch }
 
 func (self *CpuAgent) Stop() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	close(self.quit)
 	close(self.quitCurrentOp)
 }
 
 func (self *CpuAgent) Start() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	self.quit = make(chan struct{})
-	self.quitCurrentOp = make(chan struct{}, 1)
-	self.c = make(chan *types.Block, 1)
+	// creating current op ch makes sure we're not closing a nil ch
+	// later on
+	self.quitCurrentOp = make(chan struct{})
+	self.workCh = make(chan *types.Block, 1)
 
 	go self.update()
 }
@@ -51,10 +60,10 @@ func (self *CpuAgent) update() {
 out:
 	for {
 		select {
-		case block := <-self.c:
-			self.chMu.Lock()
-			self.quitCurrentOp <- struct{}{}
-			self.chMu.Unlock()
+		case block := <-self.workCh:
+			self.mu.Lock()
+			close(self.quitCurrentOp)
+			self.mu.Unlock()
 
 			go self.mine(block)
 		case <-self.quit:
@@ -62,14 +71,13 @@ out:
 		}
 	}
 
-	//close(self.quitCurrentOp)
 done:
-	// Empty channel
+	// Empty work channel
 	for {
 		select {
-		case <-self.c:
+		case <-self.workCh:
 		default:
-			close(self.c)
+			close(self.workCh)
 
 			break done
 		}
@@ -80,9 +88,9 @@ func (self *CpuAgent) mine(block *types.Block) {
 	glog.V(logger.Debug).Infof("(re)started agent[%d]. mining...\n", self.index)
 
 	// Reset the channel
-	self.chMu.Lock()
-	self.quitCurrentOp = make(chan struct{}, 1)
-	self.chMu.Unlock()
+	self.mu.Lock()
+	self.quitCurrentOp = make(chan struct{})
+	self.mu.Unlock()
 
 	// Mine
 	nonce, mixDigest := self.pow.Search(block, self.quitCurrentOp)
