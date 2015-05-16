@@ -204,25 +204,25 @@ main entrypoint, wrappers starting a server running the bzz protocol
 use this constructor to attach the protocol ("class") to server caps
 the Dev p2p layer then runs the protocol instance on each peer
 */
-func BzzProtocol(netStore *NetStore) p2p.Protocol {
+func BzzProtocol(netStore *NetStore) (p2p.Protocol, error) {
+
+	db, err := NewLDBDatabase(path.Join(netStore.path, "requests"))
+	if err != nil {
+		return p2p.Protocol{}, err
+	}
 	return p2p.Protocol{
 		Name:    "bzz",
 		Version: Version,
 		Length:  ProtocolLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return runBzzProtocol(netStore, p, rw)
+			return runBzzProtocol(db, netStore, p, rw)
 		},
-	}
+	}, nil
 }
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runBzzProtocol(netStore *NetStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
-
-	db, err := NewLDBDatabase(path.Join(netStore.path, "requests"))
-	if err != nil {
-		return
-	}
+func runBzzProtocol(db *LDBDatabase, netStore *NetStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 
 	self := &bzzProtocol{
 		netStore: netStore,

@@ -293,7 +293,7 @@ func New(config *Config) (*Ethereum, error) {
 	protocols := []p2p.Protocol{eth.protocolManager.SubProtocol}
 
 	if config.Bzz {
-		eth.netStore, err = bzz.NewNetStore(path.Join(config.DataDir, "bzz"), path.Join(config.DataDir, "bzzpeers.json"))
+		eth.netStore, err = bzz.NewNetStore(filepath.Join(config.DataDir, "bzz"), filepath.Join(config.DataDir, "bzzpeers.json"))
 		if err != nil {
 			glog.V(logger.Warn).Infof("BZZ: error creating net store: %v. Protocol skipped", err)
 		} else {
@@ -303,7 +303,10 @@ func New(config *Config) (*Ethereum, error) {
 				Chunker:    chunker,
 				ChunkStore: eth.netStore,
 			}
-			protocols = append(protocols, bzz.BzzProtocol(eth.netStore))
+			bzzProto, err := bzz.BzzProtocol(eth.netStore)
+			if err != nil {
+				protocols = append(protocols, bzzProto)
+			}
 		}
 	}
 
