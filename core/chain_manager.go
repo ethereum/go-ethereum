@@ -48,7 +48,7 @@ func CalcDifficulty(block, parent *types.Header) *big.Int {
 	return diff
 }
 
-func CalculateTD(block, parent *types.Block) *big.Int {
+func CalcTD(block, parent *types.Block) *big.Int {
 	if parent == nil {
 		return block.Difficulty()
 	}
@@ -59,14 +59,20 @@ func CalculateTD(block, parent *types.Block) *big.Int {
 }
 
 func CalcGasLimit(parent *types.Block) *big.Int {
-	// ((1024-1) * parent.gasLimit + (gasUsed * 6 / 5)) / 1024
-	previous := new(big.Int).Mul(big.NewInt(1024-1), parent.GasLimit())
-	current := new(big.Rat).Mul(new(big.Rat).SetInt(parent.GasUsed()), big.NewRat(6, 5))
-	curInt := new(big.Int).Div(current.Num(), current.Denom())
+	decay := new(big.Int).Div(parent.GasLimit(), params.GasLimitBoundDivisor)
+	contrib := new(big.Int).Mul(parent.GasUsed(), big.NewInt(3))
+	contrib = contrib.Div(contrib, big.NewInt(2))
+	contrib = contrib.Div(contrib, params.GasLimitBoundDivisor)
 
-	result := new(big.Int).Add(previous, curInt)
-	result.Div(result, big.NewInt(1024))
-	return common.BigMax(params.GenesisGasLimit, result)
+	gl := new(big.Int).Sub(parent.GasLimit(), decay)
+	gl = gl.Add(gl, contrib)
+	gl = common.BigMax(gl, params.MinGasLimit)
+
+	if gl.Cmp(params.GenesisGasLimit) < 0 {
+		gl2 := new(big.Int).Add(parent.GasLimit(), decay)
+		return common.BigMin(params.GenesisGasLimit, gl2)
+	}
+	return gl
 }
 
 type ChainManager struct {
@@ -525,7 +531,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		}
 		// Setting block.Td regardless of error (known for example) prevents errors down the line
 		// in the protocol handler
-		block.Td = new(big.Int).Set(CalculateTD(block, self.GetBlock(block.ParentHash())))
+		block.Td = new(big.Int).Set(CalcTD(block, self.GetBlock(block.ParentHash())))
 
 		// Call in to the block processor and check for errors. It's likely that if one block fails
 		// all others will fail too (unless a known block is returned).
@@ -571,17 +577,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
 			if block.Td.Cmp(self.td) > 0 {
-				// Check for chain forks. If H(block.num - 1) != block.parent, we're on a fork and need to do some merging
-				if previous := self.getBlockByNumber(block.NumberU64() - 1); previous.Hash() != block.ParentHash() {
-					chash := cblock.Hash()
-					hash := block.Hash()
-
-					if glog.V(logger.Info) {
-						glog.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, hash[:4], block.Td, cblock.Header().Number, chash[:4], self.td)
-					}
-
+				// chain fork
+				if block.ParentHash() != cblock.Hash() {
 					// during split we merge two different chains and create the new canonical chain
-					self.merge(previous, block)
+					self.merge(cblock, block)
 
 					queue[i] = ChainSplitEvent{block, logs}
 					queueEvent.splitCount++
@@ -600,7 +599,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 				self.setTransState(state.New(block.Root(), self.stateDb))
 				self.txState.SetState(state.New(block.Root(), self.stateDb))
 
-				queue[i] = ChainEvent{block, logs}
+				queue[i] = ChainEvent{block, block.Hash(), logs}
 				queueEvent.canonicalCount++
 
 				if glog.V(logger.Debug) {
@@ -636,22 +635,39 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 // diff takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them
 // to be part of the new canonical chain.
 func (self *ChainManager) diff(oldBlock, newBlock *types.Block) types.Blocks {
-	glog.V(logger.Debug).Infof("Applying diff to %x & %x\n", oldBlock.Hash().Bytes()[:4], newBlock.Hash().Bytes()[:4])
+	var (
+		newChain    types.Blocks
+		commonBlock *types.Block
+		oldStart    = oldBlock
+		newStart    = newBlock
+	)
 
-	var newChain types.Blocks
-	// first find common number
-	for newBlock = newBlock; newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = self.GetBlock(newBlock.ParentHash()) {
-		newChain = append(newChain, newBlock)
+	// first reduce whoever is higher bound
+	if oldBlock.NumberU64() > newBlock.NumberU64() {
+		// reduce old chain
+		for oldBlock = oldBlock; oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = self.GetBlock(oldBlock.ParentHash()) {
+		}
+	} else {
+		// reduce new chain and append new chain blocks for inserting later on
+		for newBlock = newBlock; newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = self.GetBlock(newBlock.ParentHash()) {
+			newChain = append(newChain, newBlock)
+		}
 	}
 
-	glog.V(logger.Debug).Infoln("Found common number", newBlock.Number())
+	numSplit := newBlock.Number()
 	for {
 		if oldBlock.Hash() == newBlock.Hash() {
+			commonBlock = oldBlock
 			break
 		}
 		newChain = append(newChain, newBlock)
 
 		oldBlock, newBlock = self.GetBlock(oldBlock.ParentHash()), self.GetBlock(newBlock.ParentHash())
+	}
+
+	if glog.V(logger.Info) {
+		commonHash := commonBlock.Hash()
+		glog.Infof("Fork detected @ %x. Reorganising chain from #%v %x to %x", commonHash[:4], numSplit, oldStart.Hash().Bytes()[:4], newStart.Hash().Bytes()[:4])
 	}
 
 	return newChain
@@ -661,7 +677,7 @@ func (self *ChainManager) diff(oldBlock, newBlock *types.Block) types.Blocks {
 func (self *ChainManager) merge(oldBlock, newBlock *types.Block) {
 	newChain := self.diff(oldBlock, newBlock)
 
-	// insert blocks
+	// insert blocks. Order does not matter. Last block will be written in ImportChain itself which creates the new head properly
 	for _, block := range newChain {
 		self.insert(block)
 	}
@@ -681,7 +697,7 @@ out:
 					case ChainEvent:
 						// We need some control over the mining operation. Acquiring locks and waiting for the miner to create new block takes too long
 						// and in most cases isn't even necessary.
-						if i+1 == ev.canonicalCount {
+						if self.lastBlockHash == event.Hash {
 							self.currentGasLimit = CalcGasLimit(event.Block)
 							self.eventMux.Post(ChainHeadEvent{event.Block})
 						}

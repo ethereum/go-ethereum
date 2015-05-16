@@ -26,7 +26,6 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -80,7 +79,7 @@ func (app *HtmlApplication) RootFolder() string {
 	if err != nil {
 		return ""
 	}
-	return path.Dir(common.WindonizePath(folder.RequestURI()))
+	return filepath.Dir(common.WindonizePath(folder.RequestURI()))
 }
 func (app *HtmlApplication) RecursiveFolders() []os.FileInfo {
 	files, _ := ioutil.ReadDir(app.RootFolder())

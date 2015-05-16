@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
@@ -126,7 +127,7 @@ func (js *jsre) pendingTransactions(call otto.FunctionCall) otto.Value {
 	// Add the accouns to a new set
 	accountSet := set.New()
 	for _, account := range accounts {
-		accountSet.Add(common.BytesToAddress(account.Address))
+		accountSet.Add(account.Address)
 	}
 
 	//ltxs := make([]*tx, len(txs))
@@ -275,14 +276,22 @@ func (js *jsre) verbosity(call otto.FunctionCall) otto.Value {
 }
 
 func (js *jsre) startMining(call otto.FunctionCall) otto.Value {
-	_, err := call.Argument(0).ToInteger()
-	if err != nil {
-		fmt.Println(err)
-		return otto.FalseValue()
-	}
-	// threads now ignored
+	var (
+		threads int64
+		err     error
+	)
 
-	err = js.ethereum.StartMining()
+	if len(call.ArgumentList) > 0 {
+		threads, err = call.Argument(0).ToInteger()
+		if err != nil {
+			fmt.Println(err)
+			return otto.FalseValue()
+		}
+	} else {
+		threads = int64(js.ethereum.MinerThreads)
+	}
+
+	err = js.ethereum.StartMining(int(threads))
 	if err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
@@ -366,6 +375,10 @@ func (js *jsre) unlock(call otto.FunctionCall) otto.Value {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}
+	if seconds == 0 {
+		seconds = accounts.DefaultAccountUnlockDuration
+	}
+
 	arg := call.Argument(1)
 	var passphrase string
 	if arg.IsUndefined() {
@@ -383,7 +396,7 @@ func (js *jsre) unlock(call otto.FunctionCall) otto.Value {
 		}
 	}
 	am := js.ethereum.AccountManager()
-	err = am.TimedUnlock(common.FromHex(addr), passphrase, time.Duration(seconds)*time.Second)
+	err = am.TimedUnlock(common.HexToAddress(addr), passphrase, time.Duration(seconds)*time.Second)
 	if err != nil {
 		fmt.Printf("Unlock account failed '%v'\n", err)
 		return otto.FalseValue()
@@ -425,7 +438,7 @@ func (js *jsre) newAccount(call otto.FunctionCall) otto.Value {
 		fmt.Printf("Could not create the account: %v", err)
 		return otto.UndefinedValue()
 	}
-	return js.re.ToVal(common.ToHex(acct.Address))
+	return js.re.ToVal(acct.Address.Hex())
 }
 
 func (js *jsre) nodeInfo(call otto.FunctionCall) otto.Value {

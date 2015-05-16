@@ -26,7 +26,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -51,7 +50,7 @@ import _ "net/http/pprof"
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.19"
+	Version          = "0.9.21.1"
 )
 
 var (
@@ -285,8 +284,6 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 }
 
 func main() {
-	//fmt.Printf("\n              🌞\n\n        ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴛʜᴇ\n       𝐅 𝐑 𝐎 𝐍 𝐓 𝐈 𝐄 𝐑\n\n🌾      🌵🌾🌾  🐎    🌾      🌵   🌾\n\n")
-	fmt.Println("\n   Welcome to the\n      FRONTIER\n")
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	defer logger.Flush()
 	if err := app.Run(os.Args); err != nil {
@@ -367,14 +364,14 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 	// Load startup keys. XXX we are going to need a different format
 	// Attempt to unlock the account
 	passphrase = getPassPhrase(ctx, "", false)
-	accbytes := common.FromHex(account)
-	if len(accbytes) == 0 {
+	if len(account) == 0 {
 		utils.Fatalf("Invalid account address '%s'", account)
 	}
-	err = am.Unlock(accbytes, passphrase)
+	err = am.Unlock(common.HexToAddress(account), passphrase)
 	if err != nil {
 		utils.Fatalf("Unlock account failed '%v'", err)
 	}
+	fmt.Printf("Account '%s' unlocked.\n", account)
 	return
 }
 
@@ -387,11 +384,11 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	if len(account) > 0 {
 		if account == "primary" {
-			accbytes, err := am.Primary()
+			primaryAcc, err := am.Primary()
 			if err != nil {
 				utils.Fatalf("no primary account: %v", err)
 			}
-			account = common.ToHex(accbytes)
+			account = primaryAcc.Hex()
 		}
 		unlockAccount(ctx, am, account)
 	}
@@ -402,7 +399,7 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 		}
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		if err := eth.StartMining(); err != nil {
+		if err := eth.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}
@@ -565,8 +562,8 @@ func upgradeDb(ctx *cli.Context) {
 		bcVersion = core.BlockChainVersion
 	}
 
-	filename := fmt.Sprintf("blockchain_%d_%s.chain", bcVersion, time.Now().Format("2006-01-02_15:04:05"))
-	exportFile := path.Join(ctx.GlobalString(utils.DataDirFlag.Name), filename)
+	filename := fmt.Sprintf("blockchain_%d_%s.chain", bcVersion, time.Now().Format("20060102_150405"))
+	exportFile := filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), filename)
 
 	err = utils.ExportChain(ethereum.ChainManager(), exportFile)
 	if err != nil {
@@ -577,7 +574,7 @@ func upgradeDb(ctx *cli.Context) {
 	ethereum.StateDb().Close()
 	ethereum.ExtraDb().Close()
 
-	os.RemoveAll(path.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
+	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
 
 	ethereum, err = eth.New(cfg)
 	if err != nil {

@@ -22,10 +22,11 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/eth"
@@ -164,7 +165,7 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 		return false
 	}
 	// TODO: allow retry
-	if err := self.ethereum.AccountManager().Unlock(addr, pass); err != nil {
+	if err := self.ethereum.AccountManager().Unlock(common.BytesToAddress(addr), pass); err != nil {
 		return false
 	} else {
 		fmt.Println("Account is now unlocked for this session.")
@@ -209,7 +210,7 @@ func (self *jsre) interactive() {
 }
 
 func (self *jsre) withHistory(op func(*os.File)) {
-	hist, err := os.OpenFile(path.Join(self.ethereum.DataDir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
+	hist, err := os.OpenFile(filepath.Join(self.ethereum.DataDir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		fmt.Printf("unable to open history file: %v\n", err)
 		return

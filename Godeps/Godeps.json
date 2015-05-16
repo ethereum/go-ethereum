@@ -17,8 +17,8 @@
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",
-			"Comment": "v23.1-204-g0401fdf",
-			"Rev": "0401fdf56a3bc8679f9560e542c3d1cf83020efe"
+			"Comment": "v23.1-206-gf0e6321",
+			"Rev": "f0e63218b721dc2f696920a92d5de1f6364e9bf7"
 		},
 		{
 			"ImportPath": "github.com/howeyc/fsnotify",
@@ -27,7 +27,7 @@
 		},
 		{
 			"ImportPath": "github.com/huin/goupnp",
-			"Rev": "4191d8a85005844ea202fde52799681971b12dfe"
+			"Rev": "c57ae84388ab59076fd547f1abeab71c2edb0a21"
 		},
 		{
 			"ImportPath": "github.com/jackpal/go-nat-pmp",
@@ -88,6 +88,18 @@
 		{
 			"ImportPath": "golang.org/x/crypto/scrypt",
 			"Rev": "4ed45ec682102c643324fae5dff8dab085b6c300"
+		},
+		{
+			"ImportPath": "golang.org/x/net/html",
+			"Rev": "e0403b4e005737430c05a57aac078479844f919c"
+		},
+		{
+			"ImportPath": "golang.org/x/text/encoding",
+			"Rev": "c93e7c9fff19fb9139b5ab04ce041833add0134e"
+		},
+		{
+			"ImportPath": "golang.org/x/text/transform",
+			"Rev": "c93e7c9fff19fb9139b5ab04ce041833add0134e"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",

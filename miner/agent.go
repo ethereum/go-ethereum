@@ -10,9 +10,10 @@ import (
 	"github.com/ethereum/go-ethereum/pow"
 )
 
-type CpuMiner struct {
-	chMu          sync.Mutex
-	c             chan *types.Block
+type CpuAgent struct {
+	mu sync.Mutex
+
+	workCh        chan *types.Block
 	quit          chan struct{}
 	quitCurrentOp chan struct{}
 	returnCh      chan<- *types.Block
@@ -21,8 +22,8 @@ type CpuMiner struct {
 	pow   pow.PoW
 }
 
-func NewCpuMiner(index int, pow pow.PoW) *CpuMiner {
-	miner := &CpuMiner{
+func NewCpuAgent(index int, pow pow.PoW) *CpuAgent {
+	miner := &CpuAgent{
 		pow:   pow,
 		index: index,
 	}
@@ -30,31 +31,39 @@ func NewCpuMiner(index int, pow pow.PoW) *CpuMiner {
 	return miner
 }
 
-func (self *CpuMiner) Work() chan<- *types.Block          { return self.c }
-func (self *CpuMiner) Pow() pow.PoW                       { return self.pow }
-func (self *CpuMiner) SetReturnCh(ch chan<- *types.Block) { self.returnCh = ch }
+func (self *CpuAgent) Work() chan<- *types.Block          { return self.workCh }
+func (self *CpuAgent) Pow() pow.PoW                       { return self.pow }
+func (self *CpuAgent) SetReturnCh(ch chan<- *types.Block) { self.returnCh = ch }
 
-func (self *CpuMiner) Stop() {
+func (self *CpuAgent) Stop() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	close(self.quit)
 	close(self.quitCurrentOp)
 }
 
-func (self *CpuMiner) Start() {
+func (self *CpuAgent) Start() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	self.quit = make(chan struct{})
-	self.quitCurrentOp = make(chan struct{}, 1)
-	self.c = make(chan *types.Block, 1)
+	// creating current op ch makes sure we're not closing a nil ch
+	// later on
+	self.quitCurrentOp = make(chan struct{})
+	self.workCh = make(chan *types.Block, 1)
 
 	go self.update()
 }
 
-func (self *CpuMiner) update() {
+func (self *CpuAgent) update() {
 out:
 	for {
 		select {
-		case block := <-self.c:
-			self.chMu.Lock()
-			self.quitCurrentOp <- struct{}{}
-			self.chMu.Unlock()
+		case block := <-self.workCh:
+			self.mu.Lock()
+			close(self.quitCurrentOp)
+			self.mu.Unlock()
 
 			go self.mine(block)
 		case <-self.quit:
@@ -62,27 +71,26 @@ out:
 		}
 	}
 
-	//close(self.quitCurrentOp)
 done:
-	// Empty channel
+	// Empty work channel
 	for {
 		select {
-		case <-self.c:
+		case <-self.workCh:
 		default:
-			close(self.c)
+			close(self.workCh)
 
 			break done
 		}
 	}
 }
 
-func (self *CpuMiner) mine(block *types.Block) {
+func (self *CpuAgent) mine(block *types.Block) {
 	glog.V(logger.Debug).Infof("(re)started agent[%d]. mining...\n", self.index)
 
 	// Reset the channel
-	self.chMu.Lock()
-	self.quitCurrentOp = make(chan struct{}, 1)
-	self.chMu.Unlock()
+	self.mu.Lock()
+	self.quitCurrentOp = make(chan struct{})
+	self.mu.Unlock()
 
 	// Mine
 	nonce, mixDigest := self.pow.Search(block, self.quitCurrentOp)
@@ -95,6 +103,6 @@ func (self *CpuMiner) mine(block *types.Block) {
 	}
 }
 
-func (self *CpuMiner) GetHashRate() int64 {
+func (self *CpuAgent) GetHashRate() int64 {
 	return self.pow.GetHashrate()
 }

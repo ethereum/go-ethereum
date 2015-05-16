@@ -37,7 +37,7 @@ import (
 
 const (
 	ClientIdentifier = "Mist"
-	Version          = "0.9.19"
+	Version          = "0.9.21"
 )
 
 var (

@@ -22,7 +22,7 @@ package main
 
 import (
 	"io/ioutil"
-	"path"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -110,7 +110,7 @@ func (ui *UiLib) ConnectToPeer(nodeURL string) {
 }
 
 func (ui *UiLib) AssetPath(p string) string {
-	return path.Join(ui.assetPath, p)
+	return filepath.Join(ui.assetPath, p)
 }
 
 func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
@@ -127,7 +127,7 @@ func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
 	)
 }
 
-func (self *UiLib) Call(params map[string]interface{}) (string, error) {
+func (self *UiLib) Call(params map[string]interface{}) (string, string, error) {
 	object := mapToTxParams(params)
 
 	return self.XEth.Call(
@@ -159,7 +159,7 @@ func (self *UiLib) RemoveLocalTransaction(id int) {
 
 func (self *UiLib) ToggleMining() bool {
 	if !self.eth.IsMining() {
-		err := self.eth.StartMining()
+		err := self.eth.StartMining(4)
 		return err == nil
 	} else {
 		self.eth.StopMining()
@@ -218,7 +218,7 @@ func (self *UiLib) Messages(id int) *common.List {
 }
 
 func (self *UiLib) ReadFile(p string) string {
-	content, err := ioutil.ReadFile(self.AssetPath(path.Join("ext", p)))
+	content, err := ioutil.ReadFile(self.AssetPath(filepath.Join("ext", p)))
 	if err != nil {
 		guilogger.Infoln("error reading file", p, ":", err)
 	}

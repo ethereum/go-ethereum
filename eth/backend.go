@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -147,7 +146,7 @@ func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
 		return cfg.NodeKey, nil
 	}
 	// use persistent key if present
-	keyfile := path.Join(cfg.DataDir, "nodekey")
+	keyfile := filepath.Join(cfg.DataDir, "nodekey")
 	key, err := crypto.LoadECDSA(keyfile)
 	if err == nil {
 		return key, nil
@@ -195,6 +194,7 @@ type Ethereum struct {
 	// logger logger.LogSystem
 
 	Mining        bool
+	MinerThreads  int
 	NatSpec       bool
 	DataDir       string
 	etherbase     common.Address
@@ -211,29 +211,33 @@ func New(config *Config) (*Ethereum, error) {
 		logger.NewJSONsystem(config.DataDir, config.LogJSON)
 	}
 
+	// Let the database take 3/4 of the max open files (TODO figure out a way to get the actual limit of the open files)
+	const dbCount = 3
+	ethdb.OpenFileLimit = 256 / (dbCount + 1)
+
 	newdb := config.NewDB
 	if newdb == nil {
 		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path) }
 	}
-	blockDb, err := newdb(path.Join(config.DataDir, "blockchain"))
+	blockDb, err := newdb(filepath.Join(config.DataDir, "blockchain"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("blockchain db err: %v", err)
 	}
-	stateDb, err := newdb(path.Join(config.DataDir, "state"))
+	stateDb, err := newdb(filepath.Join(config.DataDir, "state"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("state db err: %v", err)
 	}
-	extraDb, err := newdb(path.Join(config.DataDir, "extra"))
+	extraDb, err := newdb(filepath.Join(config.DataDir, "extra"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("extra db err: %v", err)
 	}
-	nodeDb := path.Join(config.DataDir, "nodes")
+	nodeDb := filepath.Join(config.DataDir, "nodes")
 
 	// Perform database sanity checks
 	d, _ := blockDb.Get([]byte("ProtocolVersion"))
 	protov := int(common.NewValue(d).Uint())
 	if protov != config.ProtocolVersion && protov != 0 {
-		path := path.Join(config.DataDir, "blockchain")
+		path := filepath.Join(config.DataDir, "blockchain")
 		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
 	}
 	saveProtocolVersion(blockDb, config.ProtocolVersion)
@@ -263,15 +267,16 @@ func New(config *Config) (*Ethereum, error) {
 		ethVersionId:    config.ProtocolVersion,
 		netVersionId:    config.NetworkId,
 		NatSpec:         config.NatSpec,
+		MinerThreads:    config.MinerThreads,
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
-	eth.downloader = downloader.New(eth.chainManager.HasBlock, eth.chainManager.GetBlock)
+	eth.downloader = downloader.New(eth.EventMux(), eth.chainManager.HasBlock, eth.chainManager.GetBlock)
 	eth.pow = ethash.New()
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
-	eth.miner = miner.New(eth, eth.pow, config.MinerThreads)
+	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
 
 	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.eventMux, eth.txPool, eth.chainManager, eth.downloader)
@@ -391,7 +396,7 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.chainManager.ResetWithGenesisBlock(gb)
 }
 
-func (s *Ethereum) StartMining() error {
+func (s *Ethereum) StartMining(threads int) error {
 	eb, err := s.Etherbase()
 	if err != nil {
 		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
@@ -399,21 +404,24 @@ func (s *Ethereum) StartMining() error {
 		return err
 	}
 
-	go s.miner.Start(eb)
+	go s.miner.Start(eb, threads)
 	return nil
 }
 
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	eb = s.etherbase
 	if (eb == common.Address{}) {
-		var ebbytes []byte
-		ebbytes, err = s.accountManager.Primary()
-		eb = common.BytesToAddress(ebbytes)
-		if (eb == common.Address{}) {
-			err = fmt.Errorf("no accounts found")
+		primary, err := s.accountManager.Primary()
+		if err != nil {
+			return eb, err
 		}
+		if (primary == common.Address{}) {
+			err = fmt.Errorf("no accounts found")
+			return eb, err
+		}
+		eb = primary
 	}
-	return
+	return eb, nil
 }
 
 func (s *Ethereum) StopMining()         { s.miner.Stop() }
@@ -490,13 +498,13 @@ done:
 		case <-ticker.C:
 			// don't change the order of database flushes
 			if err := s.extraDb.Flush(); err != nil {
-				glog.Fatalf("fatal error: flush extraDb: %v\n", err)
+				glog.Fatalf("fatal error: flush extraDb: %v (Restart your node. We are aware of this issue)\n", err)
 			}
 			if err := s.stateDb.Flush(); err != nil {
-				glog.Fatalf("fatal error: flush stateDb: %v\n", err)
+				glog.Fatalf("fatal error: flush stateDb: %v (Restart your node. We are aware of this issue)\n", err)
 			}
 			if err := s.blockDb.Flush(); err != nil {
-				glog.Fatalf("fatal error: flush blockDb: %v\n", err)
+				glog.Fatalf("fatal error: flush blockDb: %v (Restart your node. We are aware of this issue)\n", err)
 			}
 		case <-s.shutdownChan:
 			break done
@@ -575,7 +583,7 @@ func (self *Ethereum) syncAccounts(tx *types.Transaction) {
 		return
 	}
 
-	if self.accountManager.HasAccount(from.Bytes()) {
+	if self.accountManager.HasAccount(from) {
 		if self.chainManager.TxState().GetNonce(from) < tx.Nonce() {
 			self.chainManager.TxState().SetNonce(from, tx.Nonce())
 		}

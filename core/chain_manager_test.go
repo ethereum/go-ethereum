@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"path"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"testing"
@@ -81,7 +81,7 @@ func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 			return nil, err
 		}
 		parent := bman.bc.GetBlock(block.ParentHash())
-		block.Td = CalculateTD(block, parent)
+		block.Td = CalcTD(block, parent)
 		td = block.Td
 
 		bman.bc.mu.Lock()
@@ -94,7 +94,7 @@ func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 }
 
 func loadChain(fn string, t *testing.T) (types.Blocks, error) {
-	fh, err := os.OpenFile(path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "_data", fn), os.O_RDONLY, os.ModePerm)
+	fh, err := os.OpenFile(filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "_data", fn), os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return nil, err
 	}

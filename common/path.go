@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/user"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -44,22 +43,22 @@ func FileExist(filePath string) bool {
 }
 
 func AbsolutePath(Datadir string, filename string) string {
-	if path.IsAbs(filename) {
+	if filepath.IsAbs(filename) {
 		return filename
 	}
-	return path.Join(Datadir, filename)
+	return filepath.Join(Datadir, filename)
 }
 
 func DefaultAssetPath() string {
 	var assetPath string
 	pwd, _ := os.Getwd()
-	srcdir := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist")
+	srcdir := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist")
 
 	// If the current working directory is the go-ethereum dir
 	// assume a debug build and use the source directory as
 	// asset directory.
 	if pwd == srcdir {
-		assetPath = path.Join(pwd, "assets")
+		assetPath = filepath.Join(pwd, "assets")
 	} else {
 		switch runtime.GOOS {
 		case "darwin":
@@ -67,9 +66,9 @@ func DefaultAssetPath() string {
 			exedir, _ := osext.ExecutableFolder()
 			assetPath = filepath.Join(exedir, "..", "Resources")
 		case "linux":
-			assetPath = path.Join("usr", "share", "mist")
+			assetPath = filepath.Join("usr", "share", "mist")
 		case "windows":
-			assetPath = path.Join(".", "assets")
+			assetPath = filepath.Join(".", "assets")
 		default:
 			assetPath = "."
 		}
@@ -78,7 +77,7 @@ func DefaultAssetPath() string {
 	// Check if the assetPath exists. If not, try the source directory
 	// This happens when binary is run from outside cmd/mist directory
 	if _, err := os.Stat(assetPath); os.IsNotExist(err) {
-		assetPath = path.Join(srcdir, "assets")
+		assetPath = filepath.Join(srcdir, "assets")
 	}
 
 	return assetPath
@@ -87,11 +86,11 @@ func DefaultAssetPath() string {
 func DefaultDataDir() string {
 	usr, _ := user.Current()
 	if runtime.GOOS == "darwin" {
-		return path.Join(usr.HomeDir, "Library", "Ethereum")
+		return filepath.Join(usr.HomeDir, "Library", "Ethereum")
 	} else if runtime.GOOS == "windows" {
-		return path.Join(usr.HomeDir, "AppData", "Roaming", "Ethereum")
+		return filepath.Join(usr.HomeDir, "AppData", "Roaming", "Ethereum")
 	} else {
-		return path.Join(usr.HomeDir, ".ethereum")
+		return filepath.Join(usr.HomeDir, ".ethereum")
 	}
 }
 
