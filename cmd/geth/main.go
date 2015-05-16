@@ -574,6 +574,7 @@ func upgradeDb(ctx *cli.Context) {
 	ethereum.ExtraDb().Close()
 
 	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
+	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "state"))
 
 	ethereum, err = eth.New(cfg)
 	if err != nil {
