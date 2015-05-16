@@ -304,7 +304,7 @@ func New(config *Config) (*Ethereum, error) {
 				ChunkStore: eth.netStore,
 			}
 			bzzProto, err := bzz.BzzProtocol(eth.netStore)
-			if err != nil {
+			if err == nil {
 				protocols = append(protocols, bzzProto)
 			}
 		}
