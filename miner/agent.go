@@ -49,6 +49,7 @@ func (self *CpuAgent) Start() {
 
 	self.quit = make(chan struct{})
 	// creating current op ch makes sure we're not closing a nil ch
+	// later on
 	self.quitCurrentOp = make(chan struct{})
 	self.workCh = make(chan *types.Block, 1)
 
