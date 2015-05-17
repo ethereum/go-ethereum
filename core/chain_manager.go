@@ -83,8 +83,9 @@ type ChainManager struct {
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
 	// Last known total difficulty
-	mu   sync.RWMutex
-	tsmu sync.RWMutex
+	mu      sync.RWMutex
+	chainmu sync.RWMutex
+	tsmu    sync.RWMutex
 
 	td              *big.Int
 	currentBlock    *types.Block
@@ -518,6 +519,9 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	self.wg.Add(1)
 	defer self.wg.Done()
 
+	self.chainmu.Lock()
+	defer self.chainmu.Unlock()
+
 	// A queued approach to delivering events. This is generally faster than direct delivery and requires much less mutex acquiring.
 	var (
 		queue      = make([]interface{}, len(chain))
@@ -542,7 +546,6 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 				continue
 			}
 
-			block.Td = new(big.Int)
 			// Do not penelise on future block. We'll need a block queue eventually that will queue
 			// future block for future use
 			if err == BlockFutureErr {
@@ -568,54 +571,50 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			return i, err
 		}
 
-		self.mu.Lock()
-		{
-			cblock := self.currentBlock
-			// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
-			// not in the canonical chain.
-			self.write(block)
-			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
-			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
-			if block.Td.Cmp(self.td) > 0 {
-				// chain fork
-				if block.ParentHash() != cblock.Hash() {
-					// during split we merge two different chains and create the new canonical chain
-					self.merge(cblock, block)
+		cblock := self.currentBlock
+		// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
+		// not in the canonical chain.
+		self.write(block)
+		// Compare the TD of the last known block in the canonical chain to make sure it's greater.
+		// At this point it's possible that a different chain (fork) becomes the new canonical chain.
+		if block.Td.Cmp(self.td) > 0 {
+			// chain fork
+			if block.ParentHash() != cblock.Hash() {
+				// during split we merge two different chains and create the new canonical chain
+				self.merge(cblock, block)
 
-					queue[i] = ChainSplitEvent{block, logs}
-					queueEvent.splitCount++
-				}
-
-				self.setTotalDifficulty(block.Td)
-				self.insert(block)
-
-				jsonlogger.LogJson(&logger.EthChainNewHead{
-					BlockHash:     block.Hash().Hex(),
-					BlockNumber:   block.Number(),
-					ChainHeadHash: cblock.Hash().Hex(),
-					BlockPrevHash: block.ParentHash().Hex(),
-				})
-
-				self.setTransState(state.New(block.Root(), self.stateDb))
-				self.txState.SetState(state.New(block.Root(), self.stateDb))
-
-				queue[i] = ChainEvent{block, block.Hash(), logs}
-				queueEvent.canonicalCount++
-
-				if glog.V(logger.Debug) {
-					glog.Infof("[%v] inserted block #%d (%d TXs %d UNCs) (%x...)\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
-				}
-			} else {
-				if glog.V(logger.Detail) {
-					glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...)\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
-				}
-
-				queue[i] = ChainSideEvent{block, logs}
-				queueEvent.sideCount++
+				queue[i] = ChainSplitEvent{block, logs}
+				queueEvent.splitCount++
 			}
-			self.futureBlocks.Delete(block.Hash())
+
+			self.setTotalDifficulty(block.Td)
+			self.insert(block)
+
+			jsonlogger.LogJson(&logger.EthChainNewHead{
+				BlockHash:     block.Hash().Hex(),
+				BlockNumber:   block.Number(),
+				ChainHeadHash: cblock.Hash().Hex(),
+				BlockPrevHash: block.ParentHash().Hex(),
+			})
+
+			self.setTransState(state.New(block.Root(), self.stateDb))
+			self.txState.SetState(state.New(block.Root(), self.stateDb))
+
+			queue[i] = ChainEvent{block, block.Hash(), logs}
+			queueEvent.canonicalCount++
+
+			if glog.V(logger.Debug) {
+				glog.Infof("[%v] inserted block #%d (%d TXs %d UNCs) (%x...)\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
+			}
+		} else {
+			if glog.V(logger.Detail) {
+				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...)\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
+			}
+
+			queue[i] = ChainSideEvent{block, logs}
+			queueEvent.sideCount++
 		}
-		self.mu.Unlock()
+		self.futureBlocks.Delete(block.Hash())
 
 		stats.processed++
 
