@@ -231,6 +231,13 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
 		br := NewBlockRes(block, args.IncludeTxs)
 
+		if args.BlockNumber == -2 {
+			br.BlockHash = nil
+			br.BlockNumber = nil
+			br.Miner = nil
+			br.Nonce = nil
+			br.LogsBloom = nil
+		}
 		*reply = br
 	case "eth_getTransactionByHash":
 		args := new(HashArgs)
