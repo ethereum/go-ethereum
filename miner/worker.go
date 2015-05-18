@@ -224,7 +224,13 @@ func (self *worker) wait() {
 				}
 				self.mux.Post(core.NewMinedBlockEvent{block})
 
-				glog.V(logger.Info).Infof("🔨  Mined block #%v", block.Number())
+				var stale string
+				canonBlock := self.chain.GetBlockByNumber(block.NumberU64())
+				if canonBlock != nil && canonBlock.Hash() != block.Hash() {
+					stale = "stale-"
+				}
+
+				glog.V(logger.Info).Infof("🔨  Mined %sblock #%v (%x)", stale, block.Number(), block.Hash().Bytes()[:4])
 
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     block.Hash().Hex(),
