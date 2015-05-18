@@ -348,7 +348,7 @@ func (self *ChainManager) Export(w io.Writer) error {
 
 	last := self.currentBlock.NumberU64()
 
-	for nr := uint64(0); nr <= last; nr++ {
+	for nr := uint64(1); nr <= last; nr++ {
 		block := self.GetBlockByNumber(nr)
 		if block == nil {
 			return fmt.Errorf("export failed on #%d: not found", nr)
@@ -789,7 +789,7 @@ func verifyNonces(pow pow.PoW, blocks []*types.Block) error {
 func verifyNonce(pow pow.PoW, in <-chan *types.Block, done chan<- error) {
 	for block := range in {
 		if !pow.Verify(block) {
-			done <- ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
+			done <- ValidationError("Block(#%v) nonce is invalid (= %x)", block.Number(), block.Nonce)
 		} else {
 			done <- nil
 		}

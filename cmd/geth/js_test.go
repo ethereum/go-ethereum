@@ -172,6 +172,8 @@ func TestBlockChain(t *testing.T) {
 	tmpfile := filepath.Join(extmp, "export.chain")
 	tmpfileq := strconv.Quote(tmpfile)
 
+	ethereum.ChainManager().Reset()
+
 	checkEvalJSON(t, repl, `admin.export(`+tmpfileq+`)`, `true`)
 	if _, err := os.Stat(tmpfile); err != nil {
 		t.Fatal(err)
