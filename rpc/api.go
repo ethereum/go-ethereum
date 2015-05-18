@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"math/big"
-	// "sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -231,7 +230,6 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
 		br := NewBlockRes(block, args.IncludeTxs)
-
 		if args.BlockNumber == -2 {
 			br.BlockHash = nil
 			br.BlockNumber = nil
@@ -588,7 +586,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		return NewNotImplementedError(req.Method)
 	}
 
-	glog.V(logger.Detail).Infof("Reply: %T %s\n", reply, reply)
+	// glog.V(logger.Detail).Infof("Reply: %v\n", reply)
 	return nil
 }
 
