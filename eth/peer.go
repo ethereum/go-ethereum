@@ -1,8 +1,10 @@
 package eth
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -10,6 +12,11 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"gopkg.in/fatih/set.v0"
+)
+
+var (
+	errAlreadyRegistered = errors.New("peer is already registered")
+	errNotRegistered     = errors.New("peer is not registered")
 )
 
 type statusMsgData struct {
@@ -23,16 +30,6 @@ type statusMsgData struct {
 type getBlockHashesMsgData struct {
 	Hash   common.Hash
 	Amount uint64
-}
-
-func getBestPeer(peers map[string]*peer) *peer {
-	var peer *peer
-	for _, cp := range peers {
-		if peer == nil || cp.td.Cmp(peer.td) > 0 {
-			peer = cp
-		}
-	}
-	return peer
 }
 
 type peer struct {
@@ -158,4 +155,116 @@ func (p *peer) handleStatus() error {
 	p.recentHash = status.CurrentBlock
 
 	return <-errc
+}
+
+// peerSet represents the collection of active peers currently participating in
+// the Ethereum sub-protocol.
+type peerSet struct {
+	peers map[string]*peer
+	lock  sync.RWMutex
+}
+
+// newPeerSet creates a new peer set to track the active participants.
+func newPeerSet() *peerSet {
+	return &peerSet{
+		peers: make(map[string]*peer),
+	}
+}
+
+// Register injects a new peer into the working set, or returns an error if the
+// peer is already known.
+func (ps *peerSet) Register(p *peer) error {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	if _, ok := ps.peers[p.id]; ok {
+		return errAlreadyRegistered
+	}
+	ps.peers[p.id] = p
+	return nil
+}
+
+// Unregister removes a remote peer from the active set, disabling any further
+// actions to/from that particular entity.
+func (ps *peerSet) Unregister(id string) error {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	if _, ok := ps.peers[id]; !ok {
+		return errNotRegistered
+	}
+	delete(ps.peers, id)
+	return nil
+}
+
+// Peer retrieves the registered peer with the given id.
+func (ps *peerSet) Peer(id string) *peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	return ps.peers[id]
+}
+
+// Len returns if the current number of peers in the set.
+func (ps *peerSet) Len() int {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	return len(ps.peers)
+}
+
+// BlockLackingPeers retrieves a list of peers that do not have a given block
+// in their set of known hashes.
+func (ps *peerSet) BlockLackingPeers(hash common.Hash) []*peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*peer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		if !p.blockHashes.Has(hash) {
+			list = append(list, p)
+		}
+	}
+	return list
+}
+
+// TxLackingPeers retrieves a list of peers that do not have a given transaction
+// in their set of known hashes.
+func (ps *peerSet) TxLackingPeers(hash common.Hash) []*peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*peer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		if !p.txHashes.Has(hash) {
+			list = append(list, p)
+		}
+	}
+	return list
+}
+
+// AllPeers retrieves a flat list of all the peers within the set.
+func (ps *peerSet) AllPeers() []*peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*peer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		list = append(list, p)
+	}
+	return list
+}
+
+// BestPeer retrieves the known peer with the currently highest total difficulty.
+func (ps *peerSet) BestPeer() *peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	var best *peer
+	for _, p := range ps.peers {
+		if best == nil || p.td.Cmp(best.td) > 0 {
+			best = p
+		}
+	}
+	return best
 }
