@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -39,7 +40,7 @@ func Start(pipe *xeth.XEth, config RpcConfig) error {
 	if len(config.CorsDomain) > 0 {
 		var opts cors.Options
 		opts.AllowedMethods = []string{"POST"}
-		opts.AllowedOrigins = []string{config.CorsDomain}
+		opts.AllowedOrigins = strings.Split(config.CorsDomain, " ")
 
 		c := cors.New(opts)
 		handler = newStoppableHandler(c.Handler(JSONRPC(pipe)), l.stop)
