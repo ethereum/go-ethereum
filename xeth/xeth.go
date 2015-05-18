@@ -924,9 +924,11 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	tx.SetNonce(nonce)
 
 	if err := self.sign(tx, from, false); err != nil {
+		state.RemoveNonce(from, tx.Nonce())
 		return "", err
 	}
 	if err := self.backend.TxPool().Add(tx); err != nil {
+		state.RemoveNonce(from, tx.Nonce())
 		return "", err
 	}
 
