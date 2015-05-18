@@ -230,6 +230,11 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 			Name:   "upgradedb",
 			Usage:  "upgrade chainblock database",
 		},
+		{
+			Action: removeDb,
+			Name:   "removedb",
+			Usage:  "Remove blockchain and state databases",
+		},
 	}
 	app.Flags = []cli.Flag{
 		utils.IdentityFlag,
@@ -541,6 +546,16 @@ func exportchain(ctx *cli.Context) {
 	}
 	fmt.Printf("Export done in %v", time.Since(start))
 	return
+}
+
+func removeDb(ctx *cli.Context) {
+	fmt.Println("Removing chain and state databases...")
+	start := time.Now()
+
+	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
+	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "state"))
+
+	fmt.Printf("Removed in %v\n", time.Since(start))
 }
 
 func upgradeDb(ctx *cli.Context) {
