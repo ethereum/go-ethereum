@@ -67,6 +67,12 @@ out:
 			go self.mine(block, self.quitCurrentOp)
 			self.mu.Unlock()
 		case <-self.quit:
+			self.mu.Lock()
+			if self.quitCurrentOp != nil {
+				close(self.quitCurrentOp)
+				self.quitCurrentOp = nil
+			}
+			self.mu.Unlock()
 			break out
 		}
 	}
