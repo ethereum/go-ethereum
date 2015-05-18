@@ -549,13 +549,22 @@ func exportchain(ctx *cli.Context) {
 }
 
 func removeDb(ctx *cli.Context) {
-	fmt.Println("Removing chain and state databases...")
-	start := time.Now()
+	confirm, err := readConfirm("Remove local databases?")
+	if err != nil {
+		utils.Fatalf("%v", err)
+	}
 
-	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
-	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "state"))
+	if confirm {
+		fmt.Println("Removing chain and state databases...")
+		start := time.Now()
 
-	fmt.Printf("Removed in %v\n", time.Since(start))
+		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
+		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "state"))
+
+		fmt.Printf("Removed in %v\n", time.Since(start))
+	} else {
+		fmt.Println("Operation aborted")
+	}
 }
 
 func upgradeDb(ctx *cli.Context) {
@@ -680,6 +689,32 @@ func version(c *cli.Context) {
 func hashish(x string) bool {
 	_, err := strconv.Atoi(x)
 	return err != nil
+}
+
+func readConfirm(prompt string) (bool, error) {
+	var (
+		input string
+		err   error
+	)
+	prompt = prompt + " [y/N] "
+
+	if liner.TerminalSupported() {
+		lr := liner.NewLiner()
+		defer lr.Close()
+		input, err = lr.Prompt(prompt)
+	} else {
+		fmt.Print(prompt)
+		input, err = bufio.NewReader(os.Stdin).ReadString('\n')
+		fmt.Println()
+	}
+
+	if len(input) > 0 && strings.ToUpper(input[:1]) == "Y" {
+		return true, nil
+	} else {
+		return false, nil
+	}
+
+	return false, err
 }
 
 func readPassword(prompt string, warnTerm bool) (string, error) {
