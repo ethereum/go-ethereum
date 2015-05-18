@@ -40,7 +40,6 @@ func (self *CpuAgent) Stop() {
 	defer self.mu.Unlock()
 
 	close(self.quit)
-	close(self.quitCurrentOp)
 }
 
 func (self *CpuAgent) Start() {
@@ -50,7 +49,6 @@ func (self *CpuAgent) Start() {
 	self.quit = make(chan struct{})
 	// creating current op ch makes sure we're not closing a nil ch
 	// later on
-	self.quitCurrentOp = make(chan struct{})
 	self.workCh = make(chan *types.Block, 1)
 
 	go self.update()
@@ -62,10 +60,12 @@ out:
 		select {
 		case block := <-self.workCh:
 			self.mu.Lock()
-			close(self.quitCurrentOp)
+			if self.quitCurrentOp != nil {
+				close(self.quitCurrentOp)
+			}
+			self.quitCurrentOp = make(chan struct{})
+			go self.mine(block, self.quitCurrentOp)
 			self.mu.Unlock()
-
-			go self.mine(block)
 		case <-self.quit:
 			break out
 		}
@@ -84,16 +84,11 @@ done:
 	}
 }
 
-func (self *CpuAgent) mine(block *types.Block) {
+func (self *CpuAgent) mine(block *types.Block, stop <- chan struct{}) {
 	glog.V(logger.Debug).Infof("(re)started agent[%d]. mining...\n", self.index)
 
-	// Reset the channel
-	self.mu.Lock()
-	self.quitCurrentOp = make(chan struct{})
-	self.mu.Unlock()
-
 	// Mine
-	nonce, mixDigest := self.pow.Search(block, self.quitCurrentOp)
+	nonce, mixDigest := self.pow.Search(block, stop)
 	if nonce != 0 {
 		block.SetNonce(nonce)
 		block.Header().MixDigest = common.BytesToHash(mixDigest)
