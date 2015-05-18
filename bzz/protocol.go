@@ -122,7 +122,7 @@ type storeRequestMsgData struct {
 	peer peer
 }
 
-func (self *storeRequestMsgData) String() string {
+func (self storeRequestMsgData) String() string {
 	return fmt.Sprintf("From: %v, Key: %x; ID: %v, requestTimeout: %v, storageTimeout: %v, SData %x", self.peer.Addr(), self.Key[:4], self.Id, self.requestTimeout, self.storageTimeout, self.SData[:10])
 }
 
@@ -145,7 +145,7 @@ type retrieveRequestMsgData struct {
 	peer peer // protocol registers the requester
 }
 
-func (self *retrieveRequestMsgData) String() string {
+func (self retrieveRequestMsgData) String() string {
 	return fmt.Sprintf("From: %v, Key: %x; ID: %v, MaxSize: %v, MaxPeers: %v", self.peer.Addr(), self.Key[:4], self.Id, self.MaxSize, self.MaxPeers)
 }
 
@@ -288,7 +288,7 @@ func (self *bzzProtocol) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		dpaLogger.Debugf("Request message: %v", req)
+		dpaLogger.Debugf("Receiving retrieve request: %v", req)
 		if req.Key == nil {
 			return self.protoError(ErrDecode, "protocol handler: req.Key == nil || req.Timeout == nil")
 		}
@@ -396,7 +396,7 @@ func (self *bzzProtocol) peerAddr() *peerAddr {
 
 // outgoing messages
 func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
-	dpaLogger.Debugf("Request message: %v", req)
+	dpaLogger.Debugf("Sending retrieve request: %v", req)
 	err := p2p.Send(self.rw, retrieveRequestMsg, req)
 	if err != nil {
 		dpaLogger.Errorf("EncodeMsg error: %v", err)

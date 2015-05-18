@@ -75,6 +75,7 @@ func (self *hive) stop() error {
 }
 
 func (self *hive) addPeer(p peer) {
+	dpaLogger.Debugf("hive: add peer %v", p)
 	self.kad.AddNode(p)
 	// self lookup
 	req := &retrieveRequestMsgData{
@@ -85,6 +86,7 @@ func (self *hive) addPeer(p peer) {
 }
 
 func (self *hive) removePeer(p peer) {
+	dpaLogger.Debugf("hive: remove peer %v", p)
 	self.kad.RemoveNode(p)
 	self.ping <- false
 }
