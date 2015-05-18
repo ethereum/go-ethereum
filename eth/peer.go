@@ -243,18 +243,6 @@ func (ps *peerSet) TxLackingPeers(hash common.Hash) []*peer {
 	return list
 }
 
-// AllPeers retrieves a flat list of all the peers within the set.
-func (ps *peerSet) AllPeers() []*peer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	list := make([]*peer, 0, len(ps.peers))
-	for _, p := range ps.peers {
-		list = append(list, p)
-	}
-	return list
-}
-
 // BestPeer retrieves the known peer with the currently highest total difficulty.
 func (ps *peerSet) BestPeer() *peer {
 	ps.lock.RLock()
