@@ -383,7 +383,7 @@ func (js *jsre) unlock(call otto.FunctionCall) otto.Value {
 	var passphrase string
 	if arg.IsUndefined() {
 		fmt.Println("Please enter a passphrase now.")
-		passphrase, err = readPassword("Passphrase: ", true)
+		passphrase, err = utils.PromptPassword("Passphrase: ", true)
 		if err != nil {
 			fmt.Println(err)
 			return otto.FalseValue()
@@ -410,12 +410,12 @@ func (js *jsre) newAccount(call otto.FunctionCall) otto.Value {
 	if arg.IsUndefined() {
 		fmt.Println("The new account will be encrypted with a passphrase.")
 		fmt.Println("Please enter a passphrase now.")
-		auth, err := readPassword("Passphrase: ", true)
+		auth, err := utils.PromptPassword("Passphrase: ", true)
 		if err != nil {
 			fmt.Println(err)
 			return otto.FalseValue()
 		}
-		confirm, err := readPassword("Repeat Passphrase: ", false)
+		confirm, err := utils.PromptPassword("Repeat Passphrase: ", false)
 		if err != nil {
 			fmt.Println(err)
 			return otto.FalseValue()

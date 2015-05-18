@@ -21,7 +21,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -44,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
-	"github.com/peterh/liner"
 )
 import _ "net/http/pprof"
 
@@ -229,6 +227,11 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 			Action: upgradeDb,
 			Name:   "upgradedb",
 			Usage:  "upgrade chainblock database",
+		},
+		{
+			Action: removeDb,
+			Name:   "removedb",
+			Usage:  "Remove blockchain and state databases",
 		},
 	}
 	app.Flags = []cli.Flag{
@@ -421,12 +424,12 @@ func getPassPhrase(ctx *cli.Context, desc string, confirmation bool) (passphrase
 	passfile := ctx.GlobalString(utils.PasswordFileFlag.Name)
 	if len(passfile) == 0 {
 		fmt.Println(desc)
-		auth, err := readPassword("Passphrase: ", true)
+		auth, err := utils.PromptPassword("Passphrase: ", true)
 		if err != nil {
 			utils.Fatalf("%v", err)
 		}
 		if confirmation {
-			confirm, err := readPassword("Repeat Passphrase: ", false)
+			confirm, err := utils.PromptPassword("Repeat Passphrase: ", false)
 			if err != nil {
 				utils.Fatalf("%v", err)
 			}
@@ -541,6 +544,25 @@ func exportchain(ctx *cli.Context) {
 	}
 	fmt.Printf("Export done in %v", time.Since(start))
 	return
+}
+
+func removeDb(ctx *cli.Context) {
+	confirm, err := utils.PromptConfirm("Remove local databases?")
+	if err != nil {
+		utils.Fatalf("%v", err)
+	}
+
+	if confirm {
+		fmt.Println("Removing chain and state databases...")
+		start := time.Now()
+
+		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
+		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "state"))
+
+		fmt.Printf("Removed in %v\n", time.Since(start))
+	} else {
+		fmt.Println("Operation aborted")
+	}
 }
 
 func upgradeDb(ctx *cli.Context) {
@@ -665,19 +687,4 @@ func version(c *cli.Context) {
 func hashish(x string) bool {
 	_, err := strconv.Atoi(x)
 	return err != nil
-}
-
-func readPassword(prompt string, warnTerm bool) (string, error) {
-	if liner.TerminalSupported() {
-		lr := liner.NewLiner()
-		defer lr.Close()
-		return lr.PasswordPrompt(prompt)
-	}
-	if warnTerm {
-		fmt.Println("!! Unsupported terminal, password will be echoed.")
-	}
-	fmt.Print(prompt)
-	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	fmt.Println()
-	return input, err
 }
