@@ -74,20 +74,6 @@ func openLogFile(Datadir string, filename string) *os.File {
 	return file
 }
 
-func confirm(message string) bool {
-	fmt.Println(message, "Are you sure? (y/n)")
-	var r string
-	fmt.Scanln(&r)
-	for ; ; fmt.Scanln(&r) {
-		if r == "n" || r == "y" {
-			break
-		} else {
-			fmt.Printf("Yes or no? (%s)", r)
-		}
-	}
-	return r == "y"
-}
-
 func PromptConfirm(prompt string) (bool, error) {
 	var (
 		input string
