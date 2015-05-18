@@ -351,6 +351,13 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 		uncles.Add(hash)
 
 		if ancestors.Has(hash) {
+			var branch string
+			ancestors.Each(func(item interface{}) bool {
+				branch += fmt.Sprintf("  O - %x\n  |\n", item.(common.Hash))
+			})
+			branch += fmt.Sprintf("  O - %x\n  |\n", block.Hash())
+			glog.Infoln(branch)
+
 			return UncleError("uncle[%d](%x) is ancestor", i, hash[:4])
 		}
 
