@@ -22,11 +22,13 @@
 package utils
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"regexp"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -35,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/peterh/liner"
 )
 
 var interruptCallbacks = []func(os.Signal){}
@@ -83,6 +86,47 @@ func confirm(message string) bool {
 		}
 	}
 	return r == "y"
+}
+
+func PromptConfirm(prompt string) (bool, error) {
+	var (
+		input string
+		err   error
+	)
+	prompt = prompt + " [y/N] "
+
+	if liner.TerminalSupported() {
+		lr := liner.NewLiner()
+		defer lr.Close()
+		input, err = lr.Prompt(prompt)
+	} else {
+		fmt.Print(prompt)
+		input, err = bufio.NewReader(os.Stdin).ReadString('\n')
+		fmt.Println()
+	}
+
+	if len(input) > 0 && strings.ToUpper(input[:1]) == "Y" {
+		return true, nil
+	} else {
+		return false, nil
+	}
+
+	return false, err
+}
+
+func PromptPassword(prompt string, warnTerm bool) (string, error) {
+	if liner.TerminalSupported() {
+		lr := liner.NewLiner()
+		defer lr.Close()
+		return lr.PasswordPrompt(prompt)
+	}
+	if warnTerm {
+		fmt.Println("!! Unsupported terminal, password will be echoed.")
+	}
+	fmt.Print(prompt)
+	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	fmt.Println()
+	return input, err
 }
 
 func initDataDir(Datadir string) {

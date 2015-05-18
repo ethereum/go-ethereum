@@ -21,7 +21,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -44,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
-	"github.com/peterh/liner"
 )
 import _ "net/http/pprof"
 
@@ -426,12 +424,12 @@ func getPassPhrase(ctx *cli.Context, desc string, confirmation bool) (passphrase
 	passfile := ctx.GlobalString(utils.PasswordFileFlag.Name)
 	if len(passfile) == 0 {
 		fmt.Println(desc)
-		auth, err := readPassword("Passphrase: ", true)
+		auth, err := utils.PromptPassword("Passphrase: ", true)
 		if err != nil {
 			utils.Fatalf("%v", err)
 		}
 		if confirmation {
-			confirm, err := readPassword("Repeat Passphrase: ", false)
+			confirm, err := utils.PromptPassword("Repeat Passphrase: ", false)
 			if err != nil {
 				utils.Fatalf("%v", err)
 			}
@@ -549,7 +547,7 @@ func exportchain(ctx *cli.Context) {
 }
 
 func removeDb(ctx *cli.Context) {
-	confirm, err := readConfirm("Remove local databases?")
+	confirm, err := utils.PromptConfirm("Remove local databases?")
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
@@ -689,45 +687,4 @@ func version(c *cli.Context) {
 func hashish(x string) bool {
 	_, err := strconv.Atoi(x)
 	return err != nil
-}
-
-func readConfirm(prompt string) (bool, error) {
-	var (
-		input string
-		err   error
-	)
-	prompt = prompt + " [y/N] "
-
-	if liner.TerminalSupported() {
-		lr := liner.NewLiner()
-		defer lr.Close()
-		input, err = lr.Prompt(prompt)
-	} else {
-		fmt.Print(prompt)
-		input, err = bufio.NewReader(os.Stdin).ReadString('\n')
-		fmt.Println()
-	}
-
-	if len(input) > 0 && strings.ToUpper(input[:1]) == "Y" {
-		return true, nil
-	} else {
-		return false, nil
-	}
-
-	return false, err
-}
-
-func readPassword(prompt string, warnTerm bool) (string, error) {
-	if liner.TerminalSupported() {
-		lr := liner.NewLiner()
-		defer lr.Close()
-		return lr.PasswordPrompt(prompt)
-	}
-	if warnTerm {
-		fmt.Println("!! Unsupported terminal, password will be echoed.")
-	}
-	fmt.Print(prompt)
-	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	fmt.Println()
-	return input, err
 }
