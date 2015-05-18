@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/big"
 	// "sync"
@@ -247,9 +248,12 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		tx, bhash, bnum, txi := api.xeth().EthTransactionByHash(args.Hash)
 		if tx != nil {
 			v := NewTransactionRes(tx)
-			v.BlockHash = newHexData(bhash)
-			v.BlockNumber = newHexNum(bnum)
-			v.TxIndex = newHexNum(txi)
+			// if the blockhash is 0, assume this is a pending transaction
+			if bytes.Compare(bhash.Bytes(), []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) != 0 {
+				v.BlockHash = newHexData(bhash)
+				v.BlockNumber = newHexNum(bnum)
+				v.TxIndex = newHexNum(txi)
+			}
 			*reply = v
 		}
 	case "eth_getTransactionByBlockHashAndIndex":
