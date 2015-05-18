@@ -304,6 +304,8 @@ func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 }
 
 func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blhash common.Hash, blnum *big.Int, txi uint64) {
+	// Due to increasing return params and need to determine if this is from transaction pool or
+	// some chain, this probably needs to be refactored for more expressiveness
 	data, _ := self.backend.ExtraDb().Get(common.FromHex(hash))
 	if len(data) != 0 {
 		tx = types.NewTransactionFromBytes(data)
@@ -357,7 +359,7 @@ func (self *XEth) Block(v interface{}) *Block {
 		return self.BlockByNumber(int64(n))
 	} else if str, ok := v.(string); ok {
 		return self.BlockByHash(str)
-	} else if f, ok := v.(float64); ok { // Don't ask ...
+	} else if f, ok := v.(float64); ok { // JSON numbers are represented as float64
 		return self.BlockByNumber(int64(f))
 	}
 
@@ -778,7 +780,7 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 }
 
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, string, error) {
-	statedb := self.State().State().Copy() //self.eth.ChainManager().TransState()
+	statedb := self.State().State().Copy()
 	var from *state.StateObject
 	if len(fromStr) == 0 {
 		accounts, err := self.backend.AccountManager().Accounts()
@@ -869,6 +871,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 		contractCreation bool
 	)
 
+	// 2015-05-18 Is this still needed?
 	// TODO if no_private_key then
 	//if _, exists := p.register[args.From]; exists {
 	//	p.register[args.From] = append(p.register[args.From], args)
