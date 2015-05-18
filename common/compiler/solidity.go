@@ -164,7 +164,7 @@ func (sol *Solidity) Compile(source string) (contract *Contract, err error) {
 	err = json.Unmarshal(developerDocJson, &developerDoc)
 
 	contract = &Contract{
-		Code: string(code),
+		Code: "0x" + string(code),
 		Info: ContractInfo{
 			Source:          source,
 			Language:        "Solidity",
