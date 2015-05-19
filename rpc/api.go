@@ -1,9 +1,9 @@
 package rpc
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/big"
-	// "sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -230,7 +230,14 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
 		br := NewBlockRes(block, args.IncludeTxs)
-
+		// If request was for "pending", nil nonsensical fields
+		if args.BlockNumber == -2 {
+			br.BlockHash = nil
+			br.BlockNumber = nil
+			br.Miner = nil
+			br.Nonce = nil
+			br.LogsBloom = nil
+		}
 		*reply = br
 	case "eth_getTransactionByHash":
 		args := new(HashArgs)
@@ -240,9 +247,12 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		tx, bhash, bnum, txi := api.xeth().EthTransactionByHash(args.Hash)
 		if tx != nil {
 			v := NewTransactionRes(tx)
-			v.BlockHash = newHexData(bhash)
-			v.BlockNumber = newHexNum(bnum)
-			v.TxIndex = newHexNum(txi)
+			// if the blockhash is 0, assume this is a pending transaction
+			if bytes.Compare(bhash.Bytes(), bytes.Repeat([]byte{0}, 32)) != 0 {
+				v.BlockHash = newHexData(bhash)
+				v.BlockNumber = newHexNum(bnum)
+				v.TxIndex = newHexNum(txi)
+			}
 			*reply = v
 		}
 	case "eth_getTransactionByBlockHashAndIndex":
@@ -577,7 +587,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		return NewNotImplementedError(req.Method)
 	}
 
-	glog.V(logger.Detail).Infof("Reply: %T %s\n", reply, reply)
+	// glog.V(logger.Detail).Infof("Reply: %v\n", reply)
 	return nil
 }
 
