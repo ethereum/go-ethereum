@@ -10,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-// Sync contains all synchronisation code for the eth protocol
-
+// update periodically tries to synchronise with the network, both downloading
+// hashes and blocks as well as retrieving cached ones.
 func (pm *ProtocolManager) update() {
 	forceSync := time.Tick(forceSyncCycle)
 	blockProc := time.Tick(blockProcCycle)
@@ -20,22 +20,16 @@ func (pm *ProtocolManager) update() {
 	for {
 		select {
 		case <-pm.newPeerCh:
-			// Meet the `minDesiredPeerCount` before we select our best peer
-			if len(pm.peers) < minDesiredPeerCount {
+			// Make sure we have peers to select from, then sync
+			if pm.peers.Len() < minDesiredPeerCount {
 				break
 			}
-			// Find the best peer and synchronise with it
-			peer := getBestPeer(pm.peers)
-			if peer == nil {
-				glog.V(logger.Debug).Infoln("Sync attempt canceled. No peers available")
-			}
-			go pm.synchronise(peer)
+			go pm.synchronise(pm.peers.BestPeer())
 
 		case <-forceSync:
 			// Force a sync even if not enough peers are present
-			if peer := getBestPeer(pm.peers); peer != nil {
-				go pm.synchronise(peer)
-			}
+			go pm.synchronise(pm.peers.BestPeer())
+
 		case <-blockProc:
 			// Try to pull some blocks from the downloaded
 			if atomic.CompareAndSwapInt32(&blockProcPend, 0, 1) {
@@ -51,10 +45,9 @@ func (pm *ProtocolManager) update() {
 	}
 }
 
-// processBlocks will attempt to reconstruct a chain by checking the first item and check if it's
-// a known parent. The first block in the chain may be unknown during downloading. When the
-// downloader isn't downloading blocks will be dropped with an unknown parent until either it
-// has depleted the list or found a known parent.
+// processBlocks retrieves downloaded blocks from the download cache and tries
+// to construct the local block chain with it. Note, since the block retrieval
+// order matters, access to this function *must* be synchronized/serialized.
 func (pm *ProtocolManager) processBlocks() error {
 	pm.wg.Add(1)
 	defer pm.wg.Done()
@@ -79,15 +72,24 @@ func (pm *ProtocolManager) processBlocks() error {
 	return nil
 }
 
+// synchronise tries to sync up our local block chain with a remote peer, both
+// adding various sanity checks as well as wrapping it with various log entries.
 func (pm *ProtocolManager) synchronise(peer *peer) {
+	// Short circuit if no peers are available
+	if peer == nil {
+		glog.V(logger.Debug).Infoln("Synchronisation canceled: no peers available")
+		return
+	}
 	// Make sure the peer's TD is higher than our own. If not drop.
 	if peer.td.Cmp(pm.chainman.Td()) <= 0 {
+		glog.V(logger.Debug).Infoln("Synchronisation canceled: peer TD too small")
 		return
 	}
 	// FIXME if we have the hash in our chain and the TD of the peer is
 	// much higher than ours, something is wrong with us or the peer.
 	// Check if the hash is on our own chain
 	if pm.chainman.HasBlock(peer.recentHash) {
+		glog.V(logger.Debug).Infoln("Synchronisation canceled: head already known")
 		return
 	}
 	// Get the hashes from the peer (synchronously)
