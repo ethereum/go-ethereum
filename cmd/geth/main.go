@@ -364,11 +364,12 @@ func execJSFiles(ctx *cli.Context) {
 func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (passphrase string) {
 	var err error
 	// Load startup keys. XXX we are going to need a different format
-	// Attempt to unlock the account
-	passphrase = getPassPhrase(ctx, "", false)
+
 	if len(account) == 0 {
 		utils.Fatalf("Invalid account address '%s'", account)
 	}
+	// Attempt to unlock the account
+	passphrase = getPassPhrase(ctx, "Unlocking account "+account, false)
 	err = am.Unlock(common.HexToAddress(account), passphrase)
 	if err != nil {
 		utils.Fatalf("Unlock account failed '%v'", err)
@@ -384,15 +385,18 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	am := eth.AccountManager()
 
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
-	if len(account) > 0 {
-		if account == "primary" {
-			primaryAcc, err := am.Primary()
-			if err != nil {
-				utils.Fatalf("no primary account: %v", err)
+	accounts := strings.Split(account, " ")
+	for _, account := range accounts {
+		if len(account) > 0 {
+			if account == "primary" {
+				primaryAcc, err := am.Primary()
+				if err != nil {
+					utils.Fatalf("no primary account: %v", err)
+				}
+				account = primaryAcc.Hex()
 			}
-			account = primaryAcc.Hex()
+			unlockAccount(ctx, am, account)
 		}
-		unlockAccount(ctx, am, account)
 	}
 	// Start auxiliary services if enabled.
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
