@@ -286,13 +286,13 @@ func TestInputLimitsLight(t *testing.T) {
 	RunVmTest(fn, t)
 }
 
-func TestStateExample(t *testing.T) {
-	const fn = "../files/StateTests/stExample.json"
+func TestStateSystemOperations(t *testing.T) {
+	const fn = "../files/StateTests/stSystemOperationsTest.json"
 	RunVmTest(fn, t)
 }
 
-func TestStateSystemOperations(t *testing.T) {
-	const fn = "../files/StateTests/stSystemOperationsTest.json"
+func TestStateExample(t *testing.T) {
+	const fn = "../files/StateTests/stExample.json"
 	RunVmTest(fn, t)
 }
 
