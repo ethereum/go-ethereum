@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io/ioutil"
 	"math/big"
+	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -347,11 +348,17 @@ func TestMemory(t *testing.T) {
 }
 
 func TestMemoryStress(t *testing.T) {
+	if os.Getenv("TEST_VM_COMPLEX") == "" {
+		t.Skip()
+	}
 	const fn = "../files/StateTests/stMemoryStressTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestQuadraticComplexity(t *testing.T) {
+	if os.Getenv("TEST_VM_COMPLEX") == "" {
+		t.Skip()
+	}
 	const fn = "../files/StateTests/stQuadraticComplexityTest.json"
 	RunVmTest(fn, t)
 }
