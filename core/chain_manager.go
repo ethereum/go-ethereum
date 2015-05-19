@@ -412,9 +412,11 @@ func (self *ChainManager) GetBlockHashesFromHash(hash common.Hash, max uint64) (
 }
 
 func (self *ChainManager) GetBlock(hash common.Hash) *types.Block {
-	if block := self.cache.Get(hash); block != nil {
-		return block
-	}
+	/*
+		if block := self.cache.Get(hash); block != nil {
+			return block
+		}
+	*/
 
 	data, _ := self.blockDb.Get(append(blockHashPre, hash[:]...))
 	if len(data) == 0 {
