@@ -85,6 +85,9 @@ func (bc *BlockCache) Get(hash common.Hash) *types.Block {
 }
 
 func (bc *BlockCache) Has(hash common.Hash) bool {
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
+
 	_, ok := bc.blocks[hash]
 	return ok
 }
