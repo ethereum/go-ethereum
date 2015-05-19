@@ -342,13 +342,11 @@ func TestMemory(t *testing.T) {
 }
 
 func TestMemoryStress(t *testing.T) {
-	t.Skip("Skipped due to...consuming too much memory :D")
 	const fn = "../files/StateTests/stMemoryStressTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestQuadraticComplexity(t *testing.T) {
-	t.Skip() // takes too long
 	const fn = "../files/StateTests/stQuadraticComplexityTest.json"
 	RunVmTest(fn, t)
 }
@@ -364,7 +362,7 @@ func TestWallet(t *testing.T) {
 }
 
 func TestRandom(t *testing.T) {
-	// TODO: fix JSON EOF bug and unskip
+	// TODO: fix JSON EOF bug and unskip !!!
 	t.Skip()
 	fileNames := make([]string, 1024)
 	fileInfos, err := ioutil.ReadDir("../files/StateTests/RandomTests")
