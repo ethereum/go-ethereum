@@ -368,9 +368,16 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 	if len(account) == 0 {
 		utils.Fatalf("Invalid account address '%s'", account)
 	}
-	// Attempt to unlock the account
-	passphrase = getPassPhrase(ctx, "Unlocking account "+account, false)
-	err = am.Unlock(common.HexToAddress(account), passphrase)
+	// Attempt to unlock the account 3 times
+	attempts := 3
+	for tries := 0; tries < attempts; tries++ {
+		msg := fmt.Sprintf("Unlocking account %s...%s | Attempt %d/%d", account[:8], account[len(account)-6:], tries+1, attempts)
+		passphrase = getPassPhrase(ctx, msg, false)
+		err = am.Unlock(common.HexToAddress(account), passphrase)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		utils.Fatalf("Unlock account failed '%v'", err)
 	}
