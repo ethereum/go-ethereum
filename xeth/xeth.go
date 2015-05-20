@@ -66,10 +66,14 @@ type XEth struct {
 	// regmut   sync.Mutex
 	// register map[string][]*interface{} // TODO improve return type
 
-	solcPath string
-	solc     *compiler.Solidity
-
 	agent *miner.RemoteAgent
+}
+
+func NewTest(eth *eth.Ethereum, frontend Frontend) *XEth {
+	return &XEth{
+		backend:  eth,
+		frontend: frontend,
+	}
 }
 
 // New creates an XEth that uses the given frontend.
@@ -379,17 +383,12 @@ func (self *XEth) Accounts() []string {
 // accessor for solidity compiler.
 // memoized if available, retried on-demand if not
 func (self *XEth) Solc() (*compiler.Solidity, error) {
-	var err error
-	if self.solc == nil {
-		self.solc, err = compiler.New(self.solcPath)
-	}
-	return self.solc, err
+	return self.backend.Solc()
 }
 
 // set in js console via admin interface or wrapper from cli flags
 func (self *XEth) SetSolc(solcPath string) (*compiler.Solidity, error) {
-	self.solcPath = solcPath
-	self.solc = nil
+	self.backend.SetSolc(solcPath)
 	return self.Solc()
 }
 

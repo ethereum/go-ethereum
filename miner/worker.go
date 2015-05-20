@@ -270,6 +270,7 @@ func (self *worker) makeCurrent() {
 	}
 	block.Header().Extra = self.extra
 
+	// when 08 is processed ancestors contain 07 (quick block)
 	current := env(block, self.eth)
 	for _, ancestor := range self.chain.GetAncestors(block, 7) {
 		for _, uncle := range ancestor.Uncles() {

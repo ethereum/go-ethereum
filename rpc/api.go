@@ -158,16 +158,16 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		v := api.xethAtStateNum(args.BlockNumber).CodeAtBytes(args.Address)
 		*reply = newHexData(v)
 
-	case "eth_sign":
-		args := new(NewSigArgs)
-		if err := json.Unmarshal(req.Params, &args); err != nil {
-			return err
-		}
-		v, err := api.xeth().Sign(args.From, args.Data, false)
-		if err != nil {
-			return err
-		}
-		*reply = v
+	// case "eth_sign":
+	// 	args := new(NewSigArgs)
+	// 	if err := json.Unmarshal(req.Params, &args); err != nil {
+	// 		return err
+	// 	}
+	// 	v, err := api.xeth().Sign(args.From, args.Data, false)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	*reply = v
 
 	case "eth_sendTransaction", "eth_transact":
 		args := new(NewTxArgs)
@@ -347,7 +347,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		solc, _ := api.xeth().Solc()
 		if solc == nil {
-			return NewNotImplementedError(req.Method)
+			return NewNotAvailableError(req.Method, "solc (solidity compiler) not found")
 		}
 
 		args := new(SourceArgs)
@@ -355,12 +355,11 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		contract, err := solc.Compile(args.Source)
+		contracts, err := solc.Compile(args.Source)
 		if err != nil {
 			return err
 		}
-		contract.Code = newHexData(contract.Code).String()
-		*reply = contract
+		*reply = contracts
 
 	case "eth_newFilter":
 		args := new(BlockFilterArgs)

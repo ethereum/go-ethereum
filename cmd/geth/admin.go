@@ -35,6 +35,7 @@ func (js *jsre) adminBindings() {
 	eth := ethO.Object()
 	eth.Set("pendingTransactions", js.pendingTransactions)
 	eth.Set("resend", js.resend)
+	eth.Set("sign", js.sign)
 
 	js.re.Set("admin", struct{}{})
 	t, _ := js.re.Get("admin")
@@ -175,6 +176,30 @@ func (js *jsre) resend(call otto.FunctionCall) otto.Value {
 
 	fmt.Println("first argument must be a transaction")
 	return otto.FalseValue()
+}
+
+func (js *jsre) sign(call otto.FunctionCall) otto.Value {
+	if len(call.ArgumentList) != 2 {
+		fmt.Println("requires 2 arguments: eth.sign(signer, data)")
+		return otto.UndefinedValue()
+	}
+	signer, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	data, err := call.Argument(1).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+	v, err := js.xeth.Sign(signer, data, false)
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+	return js.re.ToVal(v)
 }
 
 func (js *jsre) debugBlock(call otto.FunctionCall) otto.Value {

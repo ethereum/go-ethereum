@@ -313,6 +313,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		Dial:               true,
 		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
 		GasPrice:           common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
+		SolcPath:           ctx.GlobalString(SolcPathFlag.Name),
 	}
 
 }
