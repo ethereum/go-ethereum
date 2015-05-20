@@ -18,7 +18,8 @@ import (
 )
 
 const (
-	flair           = "Christian <c@ethdev.com> and Lefteris <lefteris@ethdev.com> (c) 2014-2015"
+	// flair           = "Christian <c@ethdev.com> and Lefteris <lefteris@ethdev.com> (c) 2014-2015"
+	flair           = ""
 	languageVersion = "0"
 )
 
