@@ -23,6 +23,8 @@ const (
 	BlockChainVersion = 2
 )
 
+var receiptsPre = []byte("receipts-")
+
 type BlockProcessor struct {
 	db      common.Database
 	extraDb common.Database
@@ -262,7 +264,21 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 		putTx(sm.extraDb, tx, block, uint64(i))
 	}
 
+	receiptsRlp := block.Receipts().RlpEncode()
+	sm.extraDb.Put(append(receiptsPre, block.Hash().Bytes()...), receiptsRlp)
+
 	return state.Logs(), nil
+}
+
+func (self *BlockProcessor) GetBlockReceipts(bhash common.Hash) (receipts types.Receipts, err error) {
+	var rdata []byte
+	rdata, err = self.extraDb.Get(append(receiptsPre, bhash[:]...))
+
+	if err == nil {
+		err = rlp.DecodeBytes(rdata, &receipts)
+	}
+	return
+
 }
 
 // Validates the current block. Returns an error if the block was invalid,
