@@ -382,7 +382,7 @@ func TestRepeatingHashAttack(t *testing.T) {
 
 	// Make sure that syncing returns and does so with a failure
 	select {
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(time.Second):
 		t.Fatalf("synchronisation blocked")
 	case err := <-errc:
 		if err == nil {
