@@ -99,7 +99,15 @@ The output of this command is supposed to be machine-readable.
 					Usage:  "import ethereum presale wallet",
 				},
 			},
-		},
+			Description: `
+
+    get wallet import /path/to/my/presale.wallet
+
+will prompt for your password and imports your ether presale account.
+It can be used non-interactively with the --password option taking a
+passwordfile as argument containing the wallet password in plaintext.
+
+`},
 		{
 			Action: accountList,
 			Name:   "account",
