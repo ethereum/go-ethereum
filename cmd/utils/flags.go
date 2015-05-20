@@ -112,6 +112,10 @@ var (
 		Name:  "mine",
 		Usage: "Enable mining",
 	}
+	AutoDAGFlag = cli.BoolFlag{
+		Name:  "autodag",
+		Usage: "Enable automatic DAG pregeneration",
+	}
 	EtherbaseFlag = cli.StringFlag{
 		Name:  "etherbase",
 		Usage: "Public address for block mining rewards. By default the address of your primary account is used",
@@ -314,6 +318,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
 		GasPrice:           common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
 		SolcPath:           ctx.GlobalString(SolcPathFlag.Name),
+		AutoDAG:            ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
 	}
 
 }

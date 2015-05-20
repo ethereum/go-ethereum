@@ -31,6 +31,14 @@ import (
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
+const (
+	epochLength    = 30000
+	ethashRevision = 23
+
+	autoDAGcheckInterval = 10 * time.Hour
+	autoDAGepochHeight   = epochLength / 2
+)
+
 var (
 	jsonlogger = logger.NewJsonLogger()
 
@@ -60,6 +68,7 @@ type Config struct {
 	LogJSON   string
 	VmDebug   bool
 	NatSpec   bool
+	AutoDAG   bool
 
 	MaxPeers        int
 	MaxPendingPeers int
@@ -197,6 +206,8 @@ type Ethereum struct {
 	MinerThreads  int
 	NatSpec       bool
 	DataDir       string
+	AutoDAG       bool
+	autodagquit   chan bool
 	etherbase     common.Address
 	clientVersion string
 	ethVersionId  int
@@ -269,6 +280,7 @@ func New(config *Config) (*Ethereum, error) {
 		NatSpec:         config.NatSpec,
 		MinerThreads:    config.MinerThreads,
 		SolcPath:        config.SolcPath,
+		AutoDAG:         config.AutoDAG,
 	}
 
 	eth.pow = ethash.New()
@@ -448,6 +460,10 @@ func (s *Ethereum) Start() error {
 	// periodically flush databases
 	go s.syncDatabases()
 
+	if s.AutoDAG {
+		s.StartAutoDAG()
+	}
+
 	// Start services
 	go s.txPool.Start()
 	s.protocolManager.Start()
@@ -526,6 +542,7 @@ func (s *Ethereum) Stop() {
 	if s.whisper != nil {
 		s.whisper.Stop()
 	}
+	s.StopAutoDAG()
 
 	glog.V(logger.Info).Infoln("Server stopped")
 	close(s.shutdownChan)
@@ -557,6 +574,77 @@ func (self *Ethereum) syncAccounts(tx *types.Transaction) {
 			self.chainManager.TxState().SetNonce(from, tx.Nonce())
 		}
 	}
+}
+
+// StartAutoDAG() spawns a go routine that checks the DAG every autoDAGcheckInterval
+// by default that is 10 times per epoch
+// in epoch n, if we past autoDAGepochHeight within-epoch blocks,
+// it calls ethash.MakeDAG  to pregenerate the DAG for the next epoch n+1
+// if it does not exist yet as well as remove the DAG for epoch n-1
+// the loop quits if autodagquit channel is closed, it can safely restart and
+// stop any number of times.
+// For any more sophisticated pattern of DAG generation, use CLI subcommand
+// makedag
+func (self *Ethereum) StartAutoDAG() {
+	if self.autodagquit != nil {
+		return // already started
+	}
+	go func() {
+		glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG ON (ethash dir: %s)", ethash.DefaultDir)
+		var nextEpoch uint64
+		timer := time.After(0)
+		self.autodagquit = make(chan bool)
+		for {
+			select {
+			case <-timer:
+				glog.V(logger.Info).Infof("checking DAG (ethash dir: %s)", ethash.DefaultDir)
+				currentBlock := self.ChainManager().CurrentBlock().NumberU64()
+				thisEpoch := currentBlock / epochLength
+				if nextEpoch <= thisEpoch {
+					if currentBlock%epochLength > autoDAGepochHeight {
+						if thisEpoch > 0 {
+							previousDag, previousDagFull := dagFiles(thisEpoch - 1)
+							os.Remove(filepath.Join(ethash.DefaultDir, previousDag))
+							os.Remove(filepath.Join(ethash.DefaultDir, previousDagFull))
+							glog.V(logger.Info).Infof("removed DAG for epoch %d (%s)", thisEpoch-1, previousDag)
+						}
+						nextEpoch = thisEpoch + 1
+						dag, _ := dagFiles(nextEpoch)
+						if _, err := os.Stat(dag); os.IsNotExist(err) {
+							glog.V(logger.Info).Infof("Pregenerating DAG for epoch %d (%s)", nextEpoch, dag)
+							err := ethash.MakeDAG(nextEpoch*epochLength, "") // "" -> ethash.DefaultDir
+							if err != nil {
+								glog.V(logger.Error).Infof("Error generating DAG for epoch %d (%s)", nextEpoch, dag)
+								return
+							}
+						} else {
+							glog.V(logger.Error).Infof("DAG for epoch %d (%s)", nextEpoch, dag)
+						}
+					}
+				}
+				timer = time.After(autoDAGcheckInterval)
+			case <-self.autodagquit:
+				return
+			}
+		}
+	}()
+}
+
+// dagFiles(epoch) returns the two alternative DAG filenames (not a path)
+// 1) <revision>-<hex(seedhash[8])> 2) full-R<revision>-<hex(seedhash[8])>
+func dagFiles(epoch uint64) (string, string) {
+	seedHash, _ := ethash.GetSeedHash(epoch * epochLength)
+	dag := fmt.Sprintf("full-R%d-%x", ethashRevision, seedHash[:8])
+	return dag, "full-R" + dag
+}
+
+// stopAutoDAG stops automatic DAG pregeneration by quitting the loop
+func (self *Ethereum) StopAutoDAG() {
+	if self.autodagquit != nil {
+		close(self.autodagquit)
+		self.autodagquit = nil
+	}
+	glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
 }
 
 func saveProtocolVersion(db common.Database, protov int) {

@@ -117,7 +117,7 @@ passwordfile as argument containing the wallet password in plaintext.
 Manage accounts lets you create new accounts, list all existing accounts,
 import a private key into a new account.
 
-'account help' shows a list of subcommands or help for one subcommand.
+'            help' shows a list of subcommands or help for one subcommand.
 
 It supports interactive mode, when you are prompted for password as well as
 non-interactive mode where passwords are supplied via a given password file.
@@ -257,6 +257,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.GasPriceFlag,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
+		utils.AutoDAGFlag,
 		utils.NATFlag,
 		utils.NatspecEnabledFlag,
 		utils.NodeKeyFileFlag,

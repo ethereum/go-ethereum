@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -73,6 +74,9 @@ func (js *jsre) adminBindings() {
 	miner.Set("hashrate", js.hashrate)
 	miner.Set("setExtra", js.setExtra)
 	miner.Set("setGasPrice", js.setGasPrice)
+	miner.Set("startAutoDAG", js.startAutoDAG)
+	miner.Set("stopAutoDAG", js.stopAutoDAG)
+	miner.Set("makeDAG", js.makeDAG)
 
 	admin.Set("debug", struct{}{})
 	t, _ = admin.Get("debug")
@@ -278,6 +282,30 @@ func (js *jsre) hashrate(otto.FunctionCall) otto.Value {
 	return js.re.ToVal(js.ethereum.Miner().HashRate())
 }
 
+func (js *jsre) makeDAG(call otto.FunctionCall) otto.Value {
+	blockNumber, err := call.Argument(1).ToInteger()
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	err = ethash.MakeDAG(uint64(blockNumber), "")
+	if err != nil {
+		return otto.FalseValue()
+	}
+	return otto.TrueValue()
+}
+
+func (js *jsre) startAutoDAG(otto.FunctionCall) otto.Value {
+	js.ethereum.StartAutoDAG()
+	return otto.TrueValue()
+}
+
+func (js *jsre) stopAutoDAG(otto.FunctionCall) otto.Value {
+	js.ethereum.StopAutoDAG()
+	return otto.TrueValue()
+}
+
 func (js *jsre) backtrace(call otto.FunctionCall) otto.Value {
 	tracestr, err := call.Argument(0).ToString()
 	if err != nil {
@@ -316,6 +344,9 @@ func (js *jsre) startMining(call otto.FunctionCall) otto.Value {
 		threads = int64(js.ethereum.MinerThreads)
 	}
 
+	// switch on DAG autogeneration when miner starts
+	js.ethereum.StartAutoDAG()
+
 	err = js.ethereum.StartMining(int(threads))
 	if err != nil {
 		fmt.Println(err)
@@ -327,6 +358,7 @@ func (js *jsre) startMining(call otto.FunctionCall) otto.Value {
 
 func (js *jsre) stopMining(call otto.FunctionCall) otto.Value {
 	js.ethereum.StopMining()
+	js.ethereum.StopAutoDAG()
 	return otto.TrueValue()
 }
 
