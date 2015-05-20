@@ -234,7 +234,7 @@ func TestSignature(t *testing.T) {
 
 	// This is a very preliminary test, lacking actual signature verification
 	if err != nil {
-		t.Errorf("Error runnig js: %v", err)
+		t.Errorf("Error running js: %v", err)
 		return
 	}
 	output := val.String()
@@ -297,7 +297,7 @@ func TestContract(t *testing.T) {
 			t.Errorf("%v", err)
 		}
 	} else {
-		checkEvalJSON(t, repl, `contract = eth.compile.solidity(source)`, string(contractInfo))
+		checkEvalJSON(t, repl, `contract = eth.compile.solidity(source).test`, string(contractInfo))
 	}
 
 	checkEvalJSON(t, repl, `contract.code`, `"0x605880600c6000396000f3006000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa114602e57005b603d6004803590602001506047565b8060005260206000f35b60006007820290506053565b91905056"`)
@@ -310,7 +310,7 @@ func TestContract(t *testing.T) {
 
 	callSetup := `abiDef = JSON.parse('[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}]');
 Multiply7 = eth.contract(abiDef);
-multiply7 = new Multiply7(contractaddress);
+multiply7 = Multiply7.at(contractaddress);
 `
 	// time.Sleep(1500 * time.Millisecond)
 	_, err = repl.re.Run(callSetup)

@@ -355,12 +355,11 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		contract, err := solc.Compile(args.Source)
+		contracts, err := solc.Compile(args.Source)
 		if err != nil {
 			return err
 		}
-		contract.Code = newHexData(contract.Code).String()
-		*reply = contract
+		*reply = contracts
 
 	case "eth_newFilter":
 		args := new(BlockFilterArgs)

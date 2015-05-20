@@ -69,6 +69,13 @@ type XEth struct {
 	agent *miner.RemoteAgent
 }
 
+func NewTest(eth *eth.Ethereum, frontend Frontend) *XEth {
+	return &XEth{
+		backend:  eth,
+		frontend: frontend,
+	}
+}
+
 // New creates an XEth that uses the given frontend.
 // If a nil Frontend is provided, a default frontend which
 // confirms all transactions will be used.

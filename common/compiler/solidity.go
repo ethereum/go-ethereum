@@ -92,7 +92,7 @@ func (sol *Solidity) Version() string {
 	return sol.version
 }
 
-func (sol *Solidity) Compile(source string) (contract *Contract, err error) {
+func (sol *Solidity) Compile(source string) (contracts map[string]*Contract, err error) {
 
 	if len(source) == 0 {
 		err = fmt.Errorf("empty source")
@@ -123,58 +123,61 @@ func (sol *Solidity) Compile(source string) (contract *Contract, err error) {
 		err = fmt.Errorf("solc error: missing code output")
 		return
 	}
-	if len(matches) > 1 {
-		err = fmt.Errorf("multi-contract sources are not supported")
-		return
-	}
-	_, file := filepath.Split(matches[0])
-	base := strings.Split(file, ".")[0]
 
-	codeFile := filepath.Join(wd, base+".binary")
-	abiDefinitionFile := filepath.Join(wd, base+".abi")
-	userDocFile := filepath.Join(wd, base+".docuser")
-	developerDocFile := filepath.Join(wd, base+".docdev")
+	contracts = make(map[string]*Contract)
+	for _, path := range matches {
+		_, file := filepath.Split(path)
+		base := strings.Split(file, ".")[0]
 
-	code, err := ioutil.ReadFile(codeFile)
-	if err != nil {
-		err = fmt.Errorf("error reading compiler output for code: %v", err)
-		return
-	}
-	abiDefinitionJson, err := ioutil.ReadFile(abiDefinitionFile)
-	if err != nil {
-		err = fmt.Errorf("error reading compiler output for abiDefinition: %v", err)
-		return
-	}
-	var abiDefinition interface{}
-	err = json.Unmarshal(abiDefinitionJson, &abiDefinition)
+		codeFile := filepath.Join(wd, base+".binary")
+		abiDefinitionFile := filepath.Join(wd, base+".abi")
+		userDocFile := filepath.Join(wd, base+".docuser")
+		developerDocFile := filepath.Join(wd, base+".docdev")
 
-	userDocJson, err := ioutil.ReadFile(userDocFile)
-	if err != nil {
-		err = fmt.Errorf("error reading compiler output for userDoc: %v", err)
-		return
-	}
-	var userDoc interface{}
-	err = json.Unmarshal(userDocJson, &userDoc)
+		var code, abiDefinitionJson, userDocJson, developerDocJson []byte
+		code, err = ioutil.ReadFile(codeFile)
+		if err != nil {
+			err = fmt.Errorf("error reading compiler output for code: %v", err)
+			return
+		}
+		abiDefinitionJson, err = ioutil.ReadFile(abiDefinitionFile)
+		if err != nil {
+			err = fmt.Errorf("error reading compiler output for abiDefinition: %v", err)
+			return
+		}
+		var abiDefinition interface{}
+		err = json.Unmarshal(abiDefinitionJson, &abiDefinition)
 
-	developerDocJson, err := ioutil.ReadFile(developerDocFile)
-	if err != nil {
-		err = fmt.Errorf("error reading compiler output for developerDoc: %v", err)
-		return
-	}
-	var developerDoc interface{}
-	err = json.Unmarshal(developerDocJson, &developerDoc)
+		userDocJson, err = ioutil.ReadFile(userDocFile)
+		if err != nil {
+			err = fmt.Errorf("error reading compiler output for userDoc: %v", err)
+			return
+		}
+		var userDoc interface{}
+		err = json.Unmarshal(userDocJson, &userDoc)
 
-	contract = &Contract{
-		Code: "0x" + string(code),
-		Info: ContractInfo{
-			Source:          source,
-			Language:        "Solidity",
-			LanguageVersion: languageVersion,
-			CompilerVersion: sol.version,
-			AbiDefinition:   abiDefinition,
-			UserDoc:         userDoc,
-			DeveloperDoc:    developerDoc,
-		},
+		developerDocJson, err = ioutil.ReadFile(developerDocFile)
+		if err != nil {
+			err = fmt.Errorf("error reading compiler output for developerDoc: %v", err)
+			return
+		}
+		var developerDoc interface{}
+		err = json.Unmarshal(developerDocJson, &developerDoc)
+
+		contract := &Contract{
+			Code: "0x" + string(code),
+			Info: ContractInfo{
+				Source:          source,
+				Language:        "Solidity",
+				LanguageVersion: languageVersion,
+				CompilerVersion: sol.version,
+				AbiDefinition:   abiDefinition,
+				UserDoc:         userDoc,
+				DeveloperDoc:    developerDoc,
+			},
+		}
+
+		contracts[base] = contract
 	}
 
 	return

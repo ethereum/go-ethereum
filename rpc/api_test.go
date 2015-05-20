@@ -2,14 +2,11 @@ package rpc
 
 import (
 	"encoding/json"
-	// "sync"
-	"testing"
-	// "time"
-	// "fmt"
-	"io/ioutil"
 	"strconv"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common/compiler"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -58,7 +55,7 @@ func TestCompileSolidity(t *testing.T) {
 	expLanguageVersion := "0"
 	expSource := source
 
-	api := NewEthereumApi(&xeth.XEth{})
+	api := NewEthereumApi(xeth.NewTest(&eth.Ethereum{}, nil))
 
 	var req RpcRequest
 	json.Unmarshal([]byte(jsonstr), &req)
@@ -73,11 +70,17 @@ func TestCompileSolidity(t *testing.T) {
 		t.Errorf("expected no error, got %v", err)
 	}
 
-	var contract = compiler.Contract{}
-	err = json.Unmarshal(respjson, &contract)
+	var contracts = make(map[string]*compiler.Contract)
+	err = json.Unmarshal(respjson, &contracts)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
+
+	if len(contracts) != 1 {
+		t.Errorf("expected one contract, got %v", len(contracts))
+	}
+
+	contract := contracts["test"]
 
 	if contract.Code != expCode {
 		t.Errorf("Expected \n%s got \n%s", expCode, contract.Code)
@@ -86,12 +89,15 @@ func TestCompileSolidity(t *testing.T) {
 	if strconv.Quote(contract.Info.Source) != `"`+expSource+`"` {
 		t.Errorf("Expected \n'%s' got \n'%s'", expSource, strconv.Quote(contract.Info.Source))
 	}
+
 	if contract.Info.Language != expLanguage {
 		t.Errorf("Expected %s got %s", expLanguage, contract.Info.Language)
 	}
+
 	if contract.Info.LanguageVersion != expLanguageVersion {
 		t.Errorf("Expected %s got %s", expLanguageVersion, contract.Info.LanguageVersion)
 	}
+
 	if contract.Info.CompilerVersion != expCompilerVersion {
 		t.Errorf("Expected %s got %s", expCompilerVersion, contract.Info.CompilerVersion)
 	}
@@ -114,8 +120,6 @@ func TestCompileSolidity(t *testing.T) {
 	if string(abidef) != expAbiDefinition {
 		t.Errorf("Expected \n'%s' got \n'%s'", expAbiDefinition, string(abidef))
 	}
-	ioutil.WriteFile("/tmp/abidef", []byte(string(abidef)), 0700)
-	ioutil.WriteFile("/tmp/expabidef", []byte(expAbiDefinition), 0700)
 
 	if string(userdoc) != expUserDoc {
 		t.Errorf("Expected \n'%s' got \n'%s'", expUserDoc, string(userdoc))

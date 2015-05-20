@@ -33,14 +33,18 @@ func TestCompiler(t *testing.T) {
 	} else if sol.Version() != solcVersion {
 		t.Logf("WARNING: a newer version of solc found (%v, expect %v)", sol.Version(), solcVersion)
 	}
-	contract, err := sol.Compile(source)
+	contracts, err := sol.Compile(source)
 	if err != nil {
-		t.Errorf("error compiling source. result %v: %v", contract, err)
+		t.Errorf("error compiling source. result %v: %v", contracts, err)
 		return
 	}
 
-	if contract.Code != code {
-		t.Errorf("wrong code, expected\n%s, got\n%s", code, contract.Code)
+	if len(contracts) != 1 {
+		t.Errorf("one contract expected, got\n%s", len(contracts))
+	}
+
+	if contracts["test"].Code != code {
+		t.Errorf("wrong code, expected\n%s, got\n%s", code, contracts["test"].Code)
 	}
 
 }
@@ -52,9 +56,9 @@ func TestCompileError(t *testing.T) {
 	} else if sol.Version() != solcVersion {
 		t.Logf("WARNING: a newer version of solc found (%v, expect %v)", sol.Version(), solcVersion)
 	}
-	contract, err := sol.Compile(source[2:])
+	contracts, err := sol.Compile(source[2:])
 	if err == nil {
-		t.Errorf("error expected compiling source. got none. result %v", contract)
+		t.Errorf("error expected compiling source. got none. result %v", contracts)
 		return
 	}
 }
