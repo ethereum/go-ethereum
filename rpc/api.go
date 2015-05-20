@@ -347,7 +347,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		solc, _ := api.xeth().Solc()
 		if solc == nil {
-			return NewNotImplementedError(req.Method)
+			return NewNotAvailableError(req.Method, "solc (solidity compiler) not found")
 		}
 
 		args := new(SourceArgs)
