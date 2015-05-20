@@ -76,6 +76,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 		AccountManager: am,
 		MaxPeers:       0,
 		Name:           "test",
+		SolcPath:       testSolcPath,
 	})
 	if err != nil {
 		t.Fatal("%v", err)
@@ -102,7 +103,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 		t.Errorf("Error creating DocServer: %v", err)
 	}
 	tf := &testjethre{ds: ds, stateDb: ethereum.ChainManager().State().Copy()}
-	repl := newJSRE(ethereum, assetPath, testSolcPath, "", false, tf)
+	repl := newJSRE(ethereum, assetPath, "", false, tf)
 	tf.jsre = repl
 	return tmp, tf, ethereum
 }

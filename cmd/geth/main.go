@@ -326,7 +326,6 @@ func console(ctx *cli.Context) {
 	repl := newJSRE(
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
-		ctx.String(utils.SolcPathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		true,
 		nil,
@@ -348,7 +347,6 @@ func execJSFiles(ctx *cli.Context) {
 	repl := newJSRE(
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
-		ctx.String(utils.SolcPathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		false,
 		nil,

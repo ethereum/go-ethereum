@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -79,6 +80,7 @@ type Config struct {
 	GasPrice       *big.Int
 	MinerThreads   int
 	AccountManager *accounts.Manager
+	SolcPath       string
 
 	// NewDB is used to create databases.
 	// If nil, the default is to create leveldb databases on disk.
@@ -181,6 +183,8 @@ type Ethereum struct {
 	pow             *ethash.Ethash
 	protocolManager *ProtocolManager
 	downloader      *downloader.Downloader
+	SolcPath        string
+	solc            *compiler.Solidity
 
 	net      *p2p.Server
 	eventMux *event.TypeMux
@@ -264,6 +268,7 @@ func New(config *Config) (*Ethereum, error) {
 		netVersionId:    config.NetworkId,
 		NatSpec:         config.NatSpec,
 		MinerThreads:    config.MinerThreads,
+		SolcPath:        config.SolcPath,
 	}
 
 	eth.pow = ethash.New()
@@ -570,4 +575,19 @@ func saveBlockchainVersion(db common.Database, bcVersion int) {
 	if blockchainVersion == 0 {
 		db.Put([]byte("BlockchainVersion"), common.NewValue(bcVersion).Bytes())
 	}
+}
+
+func (self *Ethereum) Solc() (*compiler.Solidity, error) {
+	var err error
+	if self.solc == nil {
+		self.solc, err = compiler.New(self.SolcPath)
+	}
+	return self.solc, err
+}
+
+// set in js console via admin interface or wrapper from cli flags
+func (self *Ethereum) SetSolc(solcPath string) (*compiler.Solidity, error) {
+	self.SolcPath = solcPath
+	self.solc = nil
+	return self.Solc()
 }

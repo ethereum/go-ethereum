@@ -71,7 +71,7 @@ type jsre struct {
 	prompter
 }
 
-func newJSRE(ethereum *eth.Ethereum, libPath, solcPath, corsDomain string, interactive bool, f xeth.Frontend) *jsre {
+func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, interactive bool, f xeth.Frontend) *jsre {
 	js := &jsre{ethereum: ethereum, ps1: "> "}
 	// set default cors domain used by startRpc from CLI flag
 	js.corsDomain = corsDomain
@@ -81,7 +81,6 @@ func newJSRE(ethereum *eth.Ethereum, libPath, solcPath, corsDomain string, inter
 	js.xeth = xeth.New(ethereum, f)
 	js.wait = js.xeth.UpdateState()
 	// update state in separare forever blocks
-	js.xeth.SetSolc(solcPath)
 	js.re = re.New(libPath)
 	js.apiBindings(f)
 	js.adminBindings()
