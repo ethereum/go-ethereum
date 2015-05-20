@@ -230,7 +230,7 @@ func TestSignature(t *testing.T) {
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
 
-	val, err := repl.re.Run(`eth.sign({from: "` + testAddress + `", data: "` + testHash + `"})`)
+	val, err := repl.re.Run(`eth.sign("` + testAddress + `", "` + testHash + `")`)
 
 	// This is a very preliminary test, lacking actual signature verification
 	if err != nil {
