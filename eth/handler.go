@@ -350,7 +350,7 @@ func (pm *ProtocolManager) verifyTd(peer *peer, request newBlockMsgData) error {
 // sqrt(peers) to determine the amount of peers we broadcast to.
 func (pm *ProtocolManager) BroadcastBlock(hash common.Hash, block *types.Block) {
 	// Broadcast block to a batch of peers not knowing about it
-	peers := pm.peers.BlockLackingPeers(hash)
+	peers := pm.peers.PeersWithoutBlock(hash)
 	peers = peers[:int(math.Sqrt(float64(len(peers))))]
 	for _, peer := range peers {
 		peer.sendNewBlock(block)
@@ -363,7 +363,7 @@ func (pm *ProtocolManager) BroadcastBlock(hash common.Hash, block *types.Block) 
 // sqrt(peers) to determine the amount of peers we broadcast to.
 func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) {
 	// Broadcast transaction to a batch of peers not knowing about it
-	peers := pm.peers.TxLackingPeers(hash)
+	peers := pm.peers.PeersWithoutTx(hash)
 	//FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
 	for _, peer := range peers {
 		peer.sendTransaction(tx)

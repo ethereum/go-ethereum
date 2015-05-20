@@ -213,9 +213,9 @@ func (ps *peerSet) Len() int {
 	return len(ps.peers)
 }
 
-// BlockLackingPeers retrieves a list of peers that do not have a given block
-// in their set of known hashes.
-func (ps *peerSet) BlockLackingPeers(hash common.Hash) []*peer {
+// PeersWithoutBlock retrieves a list of peers that do not have a given block in
+// their set of known hashes.
+func (ps *peerSet) PeersWithoutBlock(hash common.Hash) []*peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
@@ -228,9 +228,9 @@ func (ps *peerSet) BlockLackingPeers(hash common.Hash) []*peer {
 	return list
 }
 
-// TxLackingPeers retrieves a list of peers that do not have a given transaction
+// PeersWithoutTx retrieves a list of peers that do not have a given transaction
 // in their set of known hashes.
-func (ps *peerSet) TxLackingPeers(hash common.Hash) []*peer {
+func (ps *peerSet) PeersWithoutTx(hash common.Hash) []*peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
