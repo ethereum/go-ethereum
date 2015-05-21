@@ -28,6 +28,7 @@ var (
 	filterTickerTime = 5 * time.Minute
 	defaultGasPrice  = big.NewInt(10000000000000) //150000000000
 	defaultGas       = big.NewInt(90000)          //500000
+	dappStorePre     = []byte("dapp-")
 )
 
 // byte will be inferred
@@ -410,13 +411,15 @@ func (self *XEth) SetSolc(solcPath string) (*compiler.Solidity, error) {
 	return self.Solc()
 }
 
+// store DApp value in extra database
 func (self *XEth) DbPut(key, val []byte) bool {
-	self.backend.ExtraDb().Put(key, val)
+	self.backend.ExtraDb().Put(append(dappStorePre, key...), val)
 	return true
 }
 
+// retrieve DApp value from extra database
 func (self *XEth) DbGet(key []byte) ([]byte, error) {
-	val, err := self.backend.ExtraDb().Get(key)
+	val, err := self.backend.ExtraDb().Get(append(dappStorePre, key...))
 	return val, err
 }
 
