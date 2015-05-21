@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -24,9 +25,17 @@ type LDBDatabase struct {
 	quit chan struct{}
 }
 
+// NewLDBDatabase returns a LevelDB wrapped object. LDBDatabase does not persist data by
+// it self but requires a background poller which syncs every X. `Flush` should be called
+// when data needs to be stored and written to disk.
 func NewLDBDatabase(file string) (*LDBDatabase, error) {
 	// Open the db
 	db, err := leveldb.OpenFile(file, &opt.Options{OpenFilesCacheCapacity: OpenFileLimit})
+	// check for curruption and attempt to recover
+	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
+		db, err = leveldb.RecoverFile(file, nil)
+	}
+	// (re) check for errors and abort if opening of the db failed
 	if err != nil {
 		return nil, err
 	}
@@ -44,21 +53,15 @@ func (self *LDBDatabase) makeQueue() {
 	self.queue = make(map[string][]byte)
 }
 
+// Put puts the given key / value to the queue
 func (self *LDBDatabase) Put(key []byte, value []byte) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
 	self.queue[string(key)] = value
-	/*
-		value = rle.Compress(value)
-
-		err := self.db.Put(key, value, nil)
-		if err != nil {
-			fmt.Println("Error put", err)
-		}
-	*/
 }
 
+// Get returns the given key if it's present.
 func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -76,6 +79,7 @@ func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
 	return rle.Decompress(dat)
 }
 
+// Delete deletes the key from the queue and database
 func (self *LDBDatabase) Delete(key []byte) error {
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -100,6 +104,7 @@ func (self *LDBDatabase) NewIterator() iterator.Iterator {
 	return self.db.NewIterator(nil, nil)
 }
 
+// Flush flushes out the queue to leveldb
 func (self *LDBDatabase) Flush() error {
 	self.mu.Lock()
 	defer self.mu.Unlock()
