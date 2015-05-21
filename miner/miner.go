@@ -45,6 +45,7 @@ func New(eth core.Backend, mux *event.TypeMux, pow pow.PoW) *Miner {
 // and halt your mining operation for as long as the DOS continues.
 func (self *Miner) update() {
 	events := self.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
+out:
 	for ev := range events.Chan() {
 		switch ev.(type) {
 		case downloader.StartEvent:
@@ -62,11 +63,11 @@ func (self *Miner) update() {
 			if shouldStart {
 				self.Start(self.coinbase, self.threads)
 			}
+			// unsubscribe. we're only interested in this event once
+			events.Unsubscribe()
+			// stop immediately and ignore all further pending events
+			break out
 		}
-		// unsubscribe. we're only interested in this event once
-		events.Unsubscribe()
-		// stop immediately and ignore all further pending events
-		break
 	}
 }
 
