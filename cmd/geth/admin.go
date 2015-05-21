@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -35,6 +36,7 @@ func (js *jsre) adminBindings() {
 	eth := ethO.Object()
 	eth.Set("pendingTransactions", js.pendingTransactions)
 	eth.Set("resend", js.resend)
+	eth.Set("sign", js.sign)
 
 	js.re.Set("admin", struct{}{})
 	t, _ := js.re.Get("admin")
@@ -72,6 +74,9 @@ func (js *jsre) adminBindings() {
 	miner.Set("hashrate", js.hashrate)
 	miner.Set("setExtra", js.setExtra)
 	miner.Set("setGasPrice", js.setGasPrice)
+	miner.Set("startAutoDAG", js.startAutoDAG)
+	miner.Set("stopAutoDAG", js.stopAutoDAG)
+	miner.Set("makeDAG", js.makeDAG)
 
 	admin.Set("debug", struct{}{})
 	t, _ = admin.Get("debug")
@@ -177,6 +182,30 @@ func (js *jsre) resend(call otto.FunctionCall) otto.Value {
 	return otto.FalseValue()
 }
 
+func (js *jsre) sign(call otto.FunctionCall) otto.Value {
+	if len(call.ArgumentList) != 2 {
+		fmt.Println("requires 2 arguments: eth.sign(signer, data)")
+		return otto.UndefinedValue()
+	}
+	signer, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	data, err := call.Argument(1).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+	v, err := js.xeth.Sign(signer, data, false)
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+	return js.re.ToVal(v)
+}
+
 func (js *jsre) debugBlock(call otto.FunctionCall) otto.Value {
 	block, err := js.getBlock(call)
 	if err != nil {
@@ -253,6 +282,30 @@ func (js *jsre) hashrate(otto.FunctionCall) otto.Value {
 	return js.re.ToVal(js.ethereum.Miner().HashRate())
 }
 
+func (js *jsre) makeDAG(call otto.FunctionCall) otto.Value {
+	blockNumber, err := call.Argument(1).ToInteger()
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	err = ethash.MakeDAG(uint64(blockNumber), "")
+	if err != nil {
+		return otto.FalseValue()
+	}
+	return otto.TrueValue()
+}
+
+func (js *jsre) startAutoDAG(otto.FunctionCall) otto.Value {
+	js.ethereum.StartAutoDAG()
+	return otto.TrueValue()
+}
+
+func (js *jsre) stopAutoDAG(otto.FunctionCall) otto.Value {
+	js.ethereum.StopAutoDAG()
+	return otto.TrueValue()
+}
+
 func (js *jsre) backtrace(call otto.FunctionCall) otto.Value {
 	tracestr, err := call.Argument(0).ToString()
 	if err != nil {
@@ -291,6 +344,9 @@ func (js *jsre) startMining(call otto.FunctionCall) otto.Value {
 		threads = int64(js.ethereum.MinerThreads)
 	}
 
+	// switch on DAG autogeneration when miner starts
+	js.ethereum.StartAutoDAG()
+
 	err = js.ethereum.StartMining(int(threads))
 	if err != nil {
 		fmt.Println(err)
@@ -302,6 +358,7 @@ func (js *jsre) startMining(call otto.FunctionCall) otto.Value {
 
 func (js *jsre) stopMining(call otto.FunctionCall) otto.Value {
 	js.ethereum.StopMining()
+	js.ethereum.StopAutoDAG()
 	return otto.TrueValue()
 }
 
@@ -383,7 +440,7 @@ func (js *jsre) unlock(call otto.FunctionCall) otto.Value {
 	var passphrase string
 	if arg.IsUndefined() {
 		fmt.Println("Please enter a passphrase now.")
-		passphrase, err = readPassword("Passphrase: ", true)
+		passphrase, err = utils.PromptPassword("Passphrase: ", true)
 		if err != nil {
 			fmt.Println(err)
 			return otto.FalseValue()
@@ -410,12 +467,12 @@ func (js *jsre) newAccount(call otto.FunctionCall) otto.Value {
 	if arg.IsUndefined() {
 		fmt.Println("The new account will be encrypted with a passphrase.")
 		fmt.Println("Please enter a passphrase now.")
-		auth, err := readPassword("Passphrase: ", true)
+		auth, err := utils.PromptPassword("Passphrase: ", true)
 		if err != nil {
 			fmt.Println(err)
 			return otto.FalseValue()
 		}
-		confirm, err := readPassword("Repeat Passphrase: ", false)
+		confirm, err := utils.PromptPassword("Repeat Passphrase: ", false)
 		if err != nil {
 			fmt.Println(err)
 			return otto.FalseValue()

@@ -1,9 +1,9 @@
 package rpc
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/big"
-	// "sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -158,16 +158,16 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		v := api.xethAtStateNum(args.BlockNumber).CodeAtBytes(args.Address)
 		*reply = newHexData(v)
 
-	case "eth_sign":
-		args := new(NewSigArgs)
-		if err := json.Unmarshal(req.Params, &args); err != nil {
-			return err
-		}
-		v, err := api.xeth().Sign(args.From, args.Data, false)
-		if err != nil {
-			return err
-		}
-		*reply = v
+	// case "eth_sign":
+	// 	args := new(NewSigArgs)
+	// 	if err := json.Unmarshal(req.Params, &args); err != nil {
+	// 		return err
+	// 	}
+	// 	v, err := api.xeth().Sign(args.From, args.Data, false)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	*reply = v
 
 	case "eth_sendTransaction", "eth_transact":
 		args := new(NewTxArgs)
@@ -230,7 +230,14 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		block := api.xeth().EthBlockByNumber(args.BlockNumber)
 		br := NewBlockRes(block, args.IncludeTxs)
-
+		// If request was for "pending", nil nonsensical fields
+		if args.BlockNumber == -2 {
+			br.BlockHash = nil
+			br.BlockNumber = nil
+			br.Miner = nil
+			br.Nonce = nil
+			br.LogsBloom = nil
+		}
 		*reply = br
 	case "eth_getTransactionByHash":
 		args := new(HashArgs)
@@ -240,9 +247,12 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		tx, bhash, bnum, txi := api.xeth().EthTransactionByHash(args.Hash)
 		if tx != nil {
 			v := NewTransactionRes(tx)
-			v.BlockHash = newHexData(bhash)
-			v.BlockNumber = newHexNum(bnum)
-			v.TxIndex = newHexNum(txi)
+			// if the blockhash is 0, assume this is a pending transaction
+			if bytes.Compare(bhash.Bytes(), bytes.Repeat([]byte{0}, 32)) != 0 {
+				v.BlockHash = newHexData(bhash)
+				v.BlockNumber = newHexNum(bnum)
+				v.TxIndex = newHexNum(txi)
+			}
 			*reply = v
 		}
 	case "eth_getTransactionByBlockHashAndIndex":
@@ -337,7 +347,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		solc, _ := api.xeth().Solc()
 		if solc == nil {
-			return NewNotImplementedError(req.Method)
+			return NewNotAvailableError(req.Method, "solc (solidity compiler) not found")
 		}
 
 		args := new(SourceArgs)
@@ -345,12 +355,11 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			return err
 		}
 
-		contract, err := solc.Compile(args.Source)
+		contracts, err := solc.Compile(args.Source)
 		if err != nil {
 			return err
 		}
-		contract.Code = newHexData(contract.Code).String()
-		*reply = contract
+		*reply = contracts
 
 	case "eth_newFilter":
 		args := new(BlockFilterArgs)
@@ -577,7 +586,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		return NewNotImplementedError(req.Method)
 	}
 
-	glog.V(logger.Detail).Infof("Reply: %T %s\n", reply, reply)
+	// glog.V(logger.Detail).Infof("Reply: %v\n", reply)
 	return nil
 }
 

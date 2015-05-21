@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io/ioutil"
 	"math/big"
+	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -87,7 +88,7 @@ func RunVmTest(p string, t *testing.T) {
 			vm.Debug = true
 			glog.SetV(4)
 			glog.SetToStderr(true)
-			if name != "stackLimitPush32_1024" {
+			if name != "Call50000_sha256" {
 				continue
 			}
 		*/
@@ -128,9 +129,15 @@ func RunVmTest(p string, t *testing.T) {
 			ret, logs, gas, err = helper.RunState(statedb, env, test.Transaction)
 		}
 
-		rexp := helper.FromHex(test.Out)
-		if bytes.Compare(rexp, ret) != 0 {
-			t.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
+		switch name {
+		// the memory required for these tests (4294967297 bytes) would take too much time.
+		// on 19 May 2015 decided to skip these tests their output.
+		case "mload32bitBound_return", "mload32bitBound_return2":
+		default:
+			rexp := helper.FromHex(test.Out)
+			if bytes.Compare(rexp, ret) != 0 {
+				t.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
+			}
 		}
 
 		if isVmTest {
@@ -246,8 +253,7 @@ func TestLogTest(t *testing.T) {
 }
 
 func TestPerformance(t *testing.T) {
-	t.Skip()
-	const fn = "../files/VMTests/vmPerformance.json"
+	const fn = "../files/VMTests/vmPerformanceTest.json"
 	RunVmTest(fn, t)
 }
 
@@ -281,13 +287,13 @@ func TestInputLimitsLight(t *testing.T) {
 	RunVmTest(fn, t)
 }
 
-func TestStateExample(t *testing.T) {
-	const fn = "../files/StateTests/stExample.json"
+func TestStateSystemOperations(t *testing.T) {
+	const fn = "../files/StateTests/stSystemOperationsTest.json"
 	RunVmTest(fn, t)
 }
 
-func TestStateSystemOperations(t *testing.T) {
-	const fn = "../files/StateTests/stSystemOperationsTest.json"
+func TestStateExample(t *testing.T) {
+	const fn = "../files/StateTests/stExample.json"
 	RunVmTest(fn, t)
 }
 
@@ -342,13 +348,17 @@ func TestMemory(t *testing.T) {
 }
 
 func TestMemoryStress(t *testing.T) {
-	t.Skip("Skipped due to...consuming too much memory :D")
+	if os.Getenv("TEST_VM_COMPLEX") == "" {
+		t.Skip()
+	}
 	const fn = "../files/StateTests/stMemoryStressTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestQuadraticComplexity(t *testing.T) {
-	t.Skip() // takes too long
+	if os.Getenv("TEST_VM_COMPLEX") == "" {
+		t.Skip()
+	}
 	const fn = "../files/StateTests/stQuadraticComplexityTest.json"
 	RunVmTest(fn, t)
 }

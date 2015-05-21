@@ -21,7 +21,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -44,13 +43,12 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
-	"github.com/peterh/liner"
 )
 import _ "net/http/pprof"
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.22"
+	Version          = "0.9.23"
 )
 
 var (
@@ -101,7 +99,15 @@ The output of this command is supposed to be machine-readable.
 					Usage:  "import ethereum presale wallet",
 				},
 			},
-		},
+			Description: `
+
+    get wallet import /path/to/my/presale.wallet
+
+will prompt for your password and imports your ether presale account.
+It can be used non-interactively with the --password option taking a
+passwordfile as argument containing the wallet password in plaintext.
+
+`},
 		{
 			Action: accountList,
 			Name:   "account",
@@ -111,7 +117,7 @@ The output of this command is supposed to be machine-readable.
 Manage accounts lets you create new accounts, list all existing accounts,
 import a private key into a new account.
 
-'account help' shows a list of subcommands or help for one subcommand.
+'            help' shows a list of subcommands or help for one subcommand.
 
 It supports interactive mode, when you are prompted for password as well as
 non-interactive mode where passwords are supplied via a given password file.
@@ -230,6 +236,11 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 			Name:   "upgradedb",
 			Usage:  "upgrade chainblock database",
 		},
+		{
+			Action: removeDb,
+			Name:   "removedb",
+			Usage:  "Remove blockchain and state databases",
+		},
 	}
 	app.Flags = []cli.Flag{
 		utils.IdentityFlag,
@@ -246,6 +257,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.GasPriceFlag,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
+		utils.AutoDAGFlag,
 		utils.NATFlag,
 		utils.NatspecEnabledFlag,
 		utils.NodeKeyFileFlag,
@@ -323,7 +335,6 @@ func console(ctx *cli.Context) {
 	repl := newJSRE(
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
-		ctx.String(utils.SolcPathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		true,
 		nil,
@@ -345,7 +356,6 @@ func execJSFiles(ctx *cli.Context) {
 	repl := newJSRE(
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
-		ctx.String(utils.SolcPathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		false,
 		nil,
@@ -361,12 +371,20 @@ func execJSFiles(ctx *cli.Context) {
 func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (passphrase string) {
 	var err error
 	// Load startup keys. XXX we are going to need a different format
-	// Attempt to unlock the account
-	passphrase = getPassPhrase(ctx, "", false)
+
 	if len(account) == 0 {
 		utils.Fatalf("Invalid account address '%s'", account)
 	}
-	err = am.Unlock(common.HexToAddress(account), passphrase)
+	// Attempt to unlock the account 3 times
+	attempts := 3
+	for tries := 0; tries < attempts; tries++ {
+		msg := fmt.Sprintf("Unlocking account %s...%s | Attempt %d/%d", account[:8], account[len(account)-6:], tries+1, attempts)
+		passphrase = getPassPhrase(ctx, msg, false)
+		err = am.Unlock(common.HexToAddress(account), passphrase)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		utils.Fatalf("Unlock account failed '%v'", err)
 	}
@@ -381,15 +399,18 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	am := eth.AccountManager()
 
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
-	if len(account) > 0 {
-		if account == "primary" {
-			primaryAcc, err := am.Primary()
-			if err != nil {
-				utils.Fatalf("no primary account: %v", err)
+	accounts := strings.Split(account, " ")
+	for _, account := range accounts {
+		if len(account) > 0 {
+			if account == "primary" {
+				primaryAcc, err := am.Primary()
+				if err != nil {
+					utils.Fatalf("no primary account: %v", err)
+				}
+				account = primaryAcc.Hex()
 			}
-			account = primaryAcc.Hex()
+			unlockAccount(ctx, am, account)
 		}
-		unlockAccount(ctx, am, account)
 	}
 	// Start auxiliary services if enabled.
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
@@ -421,12 +442,12 @@ func getPassPhrase(ctx *cli.Context, desc string, confirmation bool) (passphrase
 	passfile := ctx.GlobalString(utils.PasswordFileFlag.Name)
 	if len(passfile) == 0 {
 		fmt.Println(desc)
-		auth, err := readPassword("Passphrase: ", true)
+		auth, err := utils.PromptPassword("Passphrase: ", true)
 		if err != nil {
 			utils.Fatalf("%v", err)
 		}
 		if confirmation {
-			confirm, err := readPassword("Repeat Passphrase: ", false)
+			confirm, err := utils.PromptPassword("Repeat Passphrase: ", false)
 			if err != nil {
 				utils.Fatalf("%v", err)
 			}
@@ -543,6 +564,25 @@ func exportchain(ctx *cli.Context) {
 	return
 }
 
+func removeDb(ctx *cli.Context) {
+	confirm, err := utils.PromptConfirm("Remove local databases?")
+	if err != nil {
+		utils.Fatalf("%v", err)
+	}
+
+	if confirm {
+		fmt.Println("Removing chain and state databases...")
+		start := time.Now()
+
+		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
+		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "state"))
+
+		fmt.Printf("Removed in %v\n", time.Since(start))
+	} else {
+		fmt.Println("Operation aborted")
+	}
+}
+
 func upgradeDb(ctx *cli.Context) {
 	fmt.Println("Upgrade blockchain DB")
 
@@ -574,6 +614,7 @@ func upgradeDb(ctx *cli.Context) {
 	ethereum.ExtraDb().Close()
 
 	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
+	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "state"))
 
 	ethereum, err = eth.New(cfg)
 	if err != nil {
@@ -664,19 +705,4 @@ func version(c *cli.Context) {
 func hashish(x string) bool {
 	_, err := strconv.Atoi(x)
 	return err != nil
-}
-
-func readPassword(prompt string, warnTerm bool) (string, error) {
-	if liner.TerminalSupported() {
-		lr := liner.NewLiner()
-		defer lr.Close()
-		return lr.PasswordPrompt(prompt)
-	}
-	if warnTerm {
-		fmt.Println("!! Unsupported terminal, password will be echoed.")
-	}
-	fmt.Print(prompt)
-	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	fmt.Println()
-	return input, err
 }

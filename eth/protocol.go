@@ -12,8 +12,6 @@ const (
 	NetworkId          = 0
 	ProtocolLength     = uint64(8)
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
-	maxHashes          = 512
-	maxBlocks          = 128
 )
 
 // eth protocol message codes

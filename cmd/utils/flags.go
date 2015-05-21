@@ -112,6 +112,10 @@ var (
 		Name:  "mine",
 		Usage: "Enable mining",
 	}
+	AutoDAGFlag = cli.BoolFlag{
+		Name:  "autodag",
+		Usage: "Enable automatic DAG pregeneration",
+	}
 	EtherbaseFlag = cli.StringFlag{
 		Name:  "etherbase",
 		Usage: "Public address for block mining rewards. By default the address of your primary account is used",
@@ -313,6 +317,8 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		Dial:               true,
 		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
 		GasPrice:           common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
+		SolcPath:           ctx.GlobalString(SolcPathFlag.Name),
+		AutoDAG:            ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
 	}
 
 }
@@ -336,8 +342,8 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Dat
 	}
 
 	eventMux := new(event.TypeMux)
-	chainManager := core.NewChainManager(blockDb, stateDb, eventMux)
 	pow := ethash.New()
+	chainManager := core.NewChainManager(blockDb, stateDb, pow, eventMux)
 	txPool := core.NewTxPool(eventMux, chainManager.State, chainManager.GasLimit)
 	blockProcessor := core.NewBlockProcessor(stateDb, extraDb, pow, txPool, chainManager, eventMux)
 	chainManager.SetProcessor(blockProcessor)

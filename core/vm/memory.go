@@ -49,6 +49,18 @@ func (self *Memory) Get(offset, size int64) (cpy []byte) {
 	return
 }
 
+func (self *Memory) GetPtr(offset, size int64) []byte {
+	if size == 0 {
+		return nil
+	}
+
+	if len(self.store) > int(offset) {
+		return self.store[offset : offset+size]
+	}
+
+	return nil
+}
+
 func (m *Memory) Len() int {
 	return len(m.store)
 }

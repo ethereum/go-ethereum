@@ -28,6 +28,7 @@ var (
 	filterTickerTime = 5 * time.Minute
 	defaultGasPrice  = big.NewInt(10000000000000) //150000000000
 	defaultGas       = big.NewInt(90000)          //500000
+	dappStorePre     = []byte("dapp-")
 )
 
 // byte will be inferred
@@ -66,10 +67,14 @@ type XEth struct {
 	// regmut   sync.Mutex
 	// register map[string][]*interface{} // TODO improve return type
 
-	solcPath string
-	solc     *compiler.Solidity
-
 	agent *miner.RemoteAgent
+}
+
+func NewTest(eth *eth.Ethereum, frontend Frontend) *XEth {
+	return &XEth{
+		backend:  eth,
+		frontend: frontend,
+	}
 }
 
 // New creates an XEth that uses the given frontend.
@@ -304,6 +309,8 @@ func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 }
 
 func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blhash common.Hash, blnum *big.Int, txi uint64) {
+	// Due to increasing return params and need to determine if this is from transaction pool or
+	// some chain, this probably needs to be refactored for more expressiveness
 	data, _ := self.backend.ExtraDb().Get(common.FromHex(hash))
 	if len(data) != 0 {
 		tx = types.NewTransactionFromBytes(data)
@@ -348,6 +355,24 @@ func (self *XEth) CurrentBlock() *types.Block {
 	return self.backend.ChainManager().CurrentBlock()
 }
 
+func (self *XEth) GetBlockReceipts(bhash common.Hash) (receipts types.Receipts, err error) {
+	return self.backend.BlockProcessor().GetBlockReceipts(bhash)
+}
+
+func (self *XEth) GetTxReceipt(txhash common.Hash) (receipt *types.Receipt, err error) {
+	_, bhash, _, txi := self.EthTransactionByHash(common.ToHex(txhash[:]))
+	var receipts types.Receipts
+	receipts, err = self.backend.BlockProcessor().GetBlockReceipts(bhash)
+	if err == nil {
+		if txi < uint64(len(receipts)) {
+			receipt = receipts[txi]
+		} else {
+			err = fmt.Errorf("Invalid tx index")
+		}
+	}
+	return
+}
+
 func (self *XEth) GasLimit() *big.Int {
 	return self.backend.ChainManager().GasLimit()
 }
@@ -357,7 +382,7 @@ func (self *XEth) Block(v interface{}) *Block {
 		return self.BlockByNumber(int64(n))
 	} else if str, ok := v.(string); ok {
 		return self.BlockByHash(str)
-	} else if f, ok := v.(float64); ok { // Don't ask ...
+	} else if f, ok := v.(float64); ok { // JSON numbers are represented as float64
 		return self.BlockByNumber(int64(f))
 	}
 
@@ -377,27 +402,24 @@ func (self *XEth) Accounts() []string {
 // accessor for solidity compiler.
 // memoized if available, retried on-demand if not
 func (self *XEth) Solc() (*compiler.Solidity, error) {
-	var err error
-	if self.solc == nil {
-		self.solc, err = compiler.New(self.solcPath)
-	}
-	return self.solc, err
+	return self.backend.Solc()
 }
 
 // set in js console via admin interface or wrapper from cli flags
 func (self *XEth) SetSolc(solcPath string) (*compiler.Solidity, error) {
-	self.solcPath = solcPath
-	self.solc = nil
+	self.backend.SetSolc(solcPath)
 	return self.Solc()
 }
 
+// store DApp value in extra database
 func (self *XEth) DbPut(key, val []byte) bool {
-	self.backend.ExtraDb().Put(key, val)
+	self.backend.ExtraDb().Put(append(dappStorePre, key...), val)
 	return true
 }
 
+// retrieve DApp value from extra database
 func (self *XEth) DbGet(key []byte) ([]byte, error) {
-	val, err := self.backend.ExtraDb().Get(key)
+	val, err := self.backend.ExtraDb().Get(append(dappStorePre, key...))
 	return val, err
 }
 
@@ -778,7 +800,7 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 }
 
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, string, error) {
-	statedb := self.State().State().Copy() //self.eth.ChainManager().TransState()
+	statedb := self.State().State().Copy()
 	var from *state.StateObject
 	if len(fromStr) == 0 {
 		accounts, err := self.backend.AccountManager().Accounts()
@@ -862,13 +884,14 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	var (
 		from             = common.HexToAddress(fromStr)
 		to               = common.HexToAddress(toStr)
-		value            = common.NewValue(valueStr)
+		value            = common.Big(valueStr)
 		gas              = common.Big(gasStr)
 		price            = common.Big(gasPriceStr)
 		data             []byte
 		contractCreation bool
 	)
 
+	// 2015-05-18 Is this still needed?
 	// TODO if no_private_key then
 	//if _, exists := p.register[args.From]; exists {
 	//	p.register[args.From] = append(p.register[args.From], args)
@@ -908,9 +931,9 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 
 	var tx *types.Transaction
 	if contractCreation {
-		tx = types.NewContractCreationTx(value.BigInt(), gas, price, data)
+		tx = types.NewContractCreationTx(value, gas, price, data)
 	} else {
-		tx = types.NewTransactionMessage(to, value.BigInt(), gas, price, data)
+		tx = types.NewTransactionMessage(to, value, gas, price, data)
 	}
 
 	state := self.backend.ChainManager().TxState()
@@ -924,9 +947,11 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	tx.SetNonce(nonce)
 
 	if err := self.sign(tx, from, false); err != nil {
+		state.RemoveNonce(from, tx.Nonce())
 		return "", err
 	}
 	if err := self.backend.TxPool().Add(tx); err != nil {
+		state.RemoveNonce(from, tx.Nonce())
 		return "", err
 	}
 

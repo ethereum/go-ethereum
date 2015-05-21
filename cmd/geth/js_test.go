@@ -24,7 +24,7 @@ import (
 
 const (
 	testSolcPath = ""
-	solcVersion  = "0.9.17"
+	solcVersion  = "0.9.23"
 
 	testKey     = "e6fab74a43941f82d89cb7faa408e227cdad3153c4720e540e855c19b15e6674"
 	testAddress = "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
@@ -34,6 +34,7 @@ const (
 )
 
 var (
+	versionRE   = regexp.MustCompile(strconv.Quote(`"compilerVersion":"` + solcVersion + `"`))
 	testGenesis = `{"` + testAddress[2:] + `": {"balance": "` + testBalance + `"}}`
 )
 
@@ -75,6 +76,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 		AccountManager: am,
 		MaxPeers:       0,
 		Name:           "test",
+		SolcPath:       testSolcPath,
 	})
 	if err != nil {
 		t.Fatal("%v", err)
@@ -101,7 +103,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 		t.Errorf("Error creating DocServer: %v", err)
 	}
 	tf := &testjethre{ds: ds, stateDb: ethereum.ChainManager().State().Copy()}
-	repl := newJSRE(ethereum, assetPath, testSolcPath, "", false, tf)
+	repl := newJSRE(ethereum, assetPath, "", false, tf)
 	tf.jsre = repl
 	return tmp, tf, ethereum
 }
@@ -172,6 +174,8 @@ func TestBlockChain(t *testing.T) {
 	tmpfile := filepath.Join(extmp, "export.chain")
 	tmpfileq := strconv.Quote(tmpfile)
 
+	ethereum.ChainManager().Reset()
+
 	checkEvalJSON(t, repl, `admin.export(`+tmpfileq+`)`, `true`)
 	if _, err := os.Stat(tmpfile); err != nil {
 		t.Fatal(err)
@@ -226,11 +230,11 @@ func TestSignature(t *testing.T) {
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
 
-	val, err := repl.re.Run(`eth.sign({from: "` + testAddress + `", data: "` + testHash + `"})`)
+	val, err := repl.re.Run(`eth.sign("` + testAddress + `", "` + testHash + `")`)
 
 	// This is a very preliminary test, lacking actual signature verification
 	if err != nil {
-		t.Errorf("Error runnig js: %v", err)
+		t.Errorf("Error running js: %v", err)
 		return
 	}
 	output := val.String()
@@ -244,7 +248,6 @@ func TestSignature(t *testing.T) {
 }
 
 func TestContract(t *testing.T) {
-	t.Skip()
 
 	tmp, repl, ethereum := testJEthRE(t)
 	if err := ethereum.Start(); err != nil {
@@ -257,7 +260,9 @@ func TestContract(t *testing.T) {
 	var txc uint64
 	coinbase := common.HexToAddress(testAddress)
 	resolver.New(repl.xeth).CreateContracts(coinbase)
+	// time.Sleep(1000 * time.Millisecond)
 
+	// checkEvalJSON(t, repl, `eth.getBlock("pending", true).transactions.length`, `2`)
 	source := `contract test {\n` +
 		"   /// @notice Will multiply `a` by 7." + `\n` +
 		`   function multiply(uint a) returns(uint d) {\n` +
@@ -277,10 +282,9 @@ func TestContract(t *testing.T) {
 	// if solc is found with right version, test it, otherwise read from file
 	sol, err := compiler.New("")
 	if err != nil {
-		t.Logf("solc not found: skipping compiler test")
+		t.Logf("solc not found: mocking contract compilation step")
 	} else if sol.Version() != solcVersion {
-		err = fmt.Errorf("solc wrong version found (%v, expect %v): skipping compiler test", sol.Version(), solcVersion)
-		t.Log(err)
+		t.Logf("WARNING: solc different version found (%v, test written for %v, may need to update)", sol.Version(), solcVersion)
 	}
 
 	if err != nil {
@@ -293,10 +297,10 @@ func TestContract(t *testing.T) {
 			t.Errorf("%v", err)
 		}
 	} else {
-		checkEvalJSON(t, repl, `contract = eth.compile.solidity(source)`, string(contractInfo))
+		checkEvalJSON(t, repl, `contract = eth.compile.solidity(source).test`, string(contractInfo))
 	}
 
-	checkEvalJSON(t, repl, `contract.code`, `"605280600c6000396000f3006000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa114602e57005b60376004356041565b8060005260206000f35b6000600782029050604d565b91905056"`)
+	checkEvalJSON(t, repl, `contract.code`, `"0x605880600c6000396000f3006000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa114602e57005b603d6004803590602001506047565b8060005260206000f35b60006007820290506053565b91905056"`)
 
 	checkEvalJSON(
 		t, repl,
@@ -306,15 +310,16 @@ func TestContract(t *testing.T) {
 
 	callSetup := `abiDef = JSON.parse('[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}]');
 Multiply7 = eth.contract(abiDef);
-multiply7 = new Multiply7(contractaddress);
+multiply7 = Multiply7.at(contractaddress);
 `
-
+	// time.Sleep(1500 * time.Millisecond)
 	_, err = repl.re.Run(callSetup)
 	if err != nil {
-		t.Errorf("unexpected error registering, got %v", err)
+		t.Errorf("unexpected error setting up contract, got %v", err)
 	}
 
-	// updatespec
+	// checkEvalJSON(t, repl, `eth.getBlock("pending", true).transactions.length`, `3`)
+
 	// why is this sometimes failing?
 	// checkEvalJSON(t, repl, `multiply7.multiply.call(6)`, `42`)
 	expNotice := ""
@@ -322,20 +327,23 @@ multiply7 = new Multiply7(contractaddress);
 		t.Errorf("incorrect confirmation message: expected %v, got %v", expNotice, repl.lastConfirm)
 	}
 
-	// why 0?
-	checkEvalJSON(t, repl, `eth.getBlock("pending", true).transactions.length`, `0`)
-
 	txc, repl.xeth = repl.xeth.ApplyTestTxs(repl.stateDb, coinbase, txc)
 
 	checkEvalJSON(t, repl, `admin.contractInfo.start()`, `true`)
 	checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary, gas: "1000000", gasPrice: "100000" })`, `undefined`)
-	expNotice = `About to submit transaction (no NatSpec info found for contract: content hash not found for '0x4a6c99e127191d2ee302e42182c338344b39a37a47cdbb17ab0f26b6802eb4d1'): {"params":[{"to":"0x5dcaace5982778b409c524873b319667eba5d074","data": "0xc6888fa10000000000000000000000000000000000000000000000000000000000000006"}]}`
+	expNotice = `About to submit transaction (no NatSpec info found for contract: content hash not found for '0x87e2802265838c7f14bb69eecd2112911af6767907a702eeaa445239fb20711b'): {"params":[{"to":"0x5dcaace5982778b409c524873b319667eba5d074","data": "0xc6888fa10000000000000000000000000000000000000000000000000000000000000006"}]}`
 	if repl.lastConfirm != expNotice {
 		t.Errorf("incorrect confirmation message: expected %v, got %v", expNotice, repl.lastConfirm)
 	}
 
+	var contenthash = `"0x86d2b7cf1e72e9a7a3f8d96601f0151742a2f780f1526414304fbe413dc7f9bd"`
+	if sol != nil {
+		modContractInfo := versionRE.ReplaceAll(contractInfo, []byte(`"compilerVersion":"`+sol.Version()+`"`))
+		_ = modContractInfo
+		// contenthash = crypto.Sha3(modContractInfo)
+	}
 	checkEvalJSON(t, repl, `filename = "/tmp/info.json"`, `"/tmp/info.json"`)
-	checkEvalJSON(t, repl, `contenthash = admin.contractInfo.register(primary, contractaddress, contract, filename)`, `"0x0d067e2dd99a4d8f0c0279738b17130dd415a89f24a23f0e7cf68c546ae3089d"`)
+	checkEvalJSON(t, repl, `contenthash = admin.contractInfo.register(primary, contractaddress, contract, filename)`, contenthash)
 	checkEvalJSON(t, repl, `admin.contractInfo.registerUrl(primary, contenthash, "file://"+filename)`, `true`)
 	if err != nil {
 		t.Errorf("unexpected error registering, got %v", err)

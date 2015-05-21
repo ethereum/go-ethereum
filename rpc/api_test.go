@@ -2,14 +2,11 @@ package rpc
 
 import (
 	"encoding/json"
-	// "sync"
-	"testing"
-	// "time"
-	// "fmt"
-	"io/ioutil"
 	"strconv"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common/compiler"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -30,12 +27,15 @@ func TestWeb3Sha3(t *testing.T) {
 	}
 }
 
+const solcVersion = "0.9.23"
+
 func TestCompileSolidity(t *testing.T) {
-	t.Skip()
 
 	solc, err := compiler.New("")
 	if solc == nil {
-		t.Skip("no solidity compiler")
+		t.Skip("no solc found: skip")
+	} else if solc.Version() != solcVersion {
+		t.Logf("WARNING: solc different version found (%v, test written for %v, may need to update)", solc.Version(), solcVersion)
 	}
 	source := `contract test {\n` +
 		"   /// @notice Will multiply `a` by 7." + `\n` +
@@ -46,16 +46,16 @@ func TestCompileSolidity(t *testing.T) {
 
 	jsonstr := `{"jsonrpc":"2.0","method":"eth_compileSolidity","params":["` + source + `"],"id":64}`
 
-	//expCode := "605280600c6000396000f3006000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa114602e57005b60376004356041565b8060005260206000f35b6000600782029050604d565b91905056"
+	expCode := "0x605880600c6000396000f3006000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa114602e57005b603d6004803590602001506047565b8060005260206000f35b60006007820290506053565b91905056"
 	expAbiDefinition := `[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}]`
 	expUserDoc := `{"methods":{"multiply(uint256)":{"notice":"Will multiply ` + "`a`" + ` by 7."}}}`
 	expDeveloperDoc := `{"methods":{}}`
-	expCompilerVersion := `0.9.13`
+	expCompilerVersion := solc.Version()
 	expLanguage := "Solidity"
 	expLanguageVersion := "0"
 	expSource := source
 
-	api := NewEthereumApi(&xeth.XEth{})
+	api := NewEthereumApi(xeth.NewTest(&eth.Ethereum{}, nil))
 
 	var req RpcRequest
 	json.Unmarshal([]byte(jsonstr), &req)
@@ -70,26 +70,34 @@ func TestCompileSolidity(t *testing.T) {
 		t.Errorf("expected no error, got %v", err)
 	}
 
-	var contract = compiler.Contract{}
-	err = json.Unmarshal(respjson, &contract)
+	var contracts = make(map[string]*compiler.Contract)
+	err = json.Unmarshal(respjson, &contracts)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
 
-	/*
-		if contract.Code != expCode {
-			t.Errorf("Expected %s got %s", expCode, contract.Code)
-		}
-	*/
+	if len(contracts) != 1 {
+		t.Errorf("expected one contract, got %v", len(contracts))
+	}
+
+	contract := contracts["test"]
+
+	if contract.Code != expCode {
+		t.Errorf("Expected \n%s got \n%s", expCode, contract.Code)
+	}
+
 	if strconv.Quote(contract.Info.Source) != `"`+expSource+`"` {
 		t.Errorf("Expected \n'%s' got \n'%s'", expSource, strconv.Quote(contract.Info.Source))
 	}
+
 	if contract.Info.Language != expLanguage {
 		t.Errorf("Expected %s got %s", expLanguage, contract.Info.Language)
 	}
+
 	if contract.Info.LanguageVersion != expLanguageVersion {
 		t.Errorf("Expected %s got %s", expLanguageVersion, contract.Info.LanguageVersion)
 	}
+
 	if contract.Info.CompilerVersion != expCompilerVersion {
 		t.Errorf("Expected %s got %s", expCompilerVersion, contract.Info.CompilerVersion)
 	}
@@ -112,8 +120,6 @@ func TestCompileSolidity(t *testing.T) {
 	if string(abidef) != expAbiDefinition {
 		t.Errorf("Expected \n'%s' got \n'%s'", expAbiDefinition, string(abidef))
 	}
-	ioutil.WriteFile("/tmp/abidef", []byte(string(abidef)), 0700)
-	ioutil.WriteFile("/tmp/expabidef", []byte(expAbiDefinition), 0700)
 
 	if string(userdoc) != expUserDoc {
 		t.Errorf("Expected \n'%s' got \n'%s'", expUserDoc, string(userdoc))
