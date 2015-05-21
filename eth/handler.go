@@ -206,8 +206,8 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "->msg %v: %v", msg, err)
 		}
 
-		if request.Amount > maxHashes {
-			request.Amount = maxHashes
+		if request.Amount > downloader.MaxHashFetch {
+			request.Amount = downloader.MaxHashFetch
 		}
 
 		hashes := self.chainman.GetBlockHashesFromHash(request.Hash, request.Amount)
@@ -254,7 +254,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 			if block != nil {
 				blocks = append(blocks, block)
 			}
-			if i == maxBlocks {
+			if i == downloader.MaxBlockFetch {
 				break
 			}
 		}

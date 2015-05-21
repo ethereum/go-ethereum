@@ -53,6 +53,8 @@ type downloadTester struct {
 	blocks map[common.Hash]*types.Block // Blocks associated with the hashes
 	chain  []common.Hash                // Block-chain being constructed
 
+	maxHashFetch int // Overrides the maximum number of retrieved hashes
+
 	t            *testing.T
 	pcount       int
 	done         chan bool
@@ -133,8 +135,12 @@ func (dl *downloadTester) getBlock(hash common.Hash) *types.Block {
 
 // getHashes retrieves a batch of hashes for reconstructing the chain.
 func (dl *downloadTester) getHashes(head common.Hash) error {
+	limit := MaxHashFetch
+	if dl.maxHashFetch > 0 {
+		limit = dl.maxHashFetch
+	}
 	// Gather the next batch of hashes
-	hashes := make([]common.Hash, 0, maxHashFetch)
+	hashes := make([]common.Hash, 0, limit)
 	for i, hash := range dl.hashes {
 		if hash == head {
 			i++
@@ -469,6 +475,23 @@ func TestMadeupHashChainAttack(t *testing.T) {
 	}
 }
 
+// Tests that if a malicious peer makes up a random hash chain, and tries to push
+// indefinitely, one hash at a time, it actually gets caught with it. The reason
+// this is separate from the classical made up chain attack is that sending hashes
+// one by one prevents reliable block/parent verification.
+func TestMadeupHashChainDrippingAttack(t *testing.T) {
+	// Create a random chain of hashes to drip
+	hashes := createHashes(0, 16*blockCacheLimit)
+	tester := newTester(t, hashes, nil)
+
+	// Try and sync with the attacker, one hash at a time
+	tester.maxHashFetch = 1
+	tester.newPeer("attack", big.NewInt(10000), hashes[0])
+	if _, err := tester.syncTake("attack", hashes[0]); err != ErrStallingPeer {
+		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrStallingPeer)
+	}
+}
+
 // Tests that if a malicious peer makes up a random block chain, and tried to
 // push indefinitely, it actually gets caught with it.
 func TestMadeupBlockChainAttack(t *testing.T) {
@@ -479,7 +502,7 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 	crossCheckCycle = 25 * time.Millisecond
 
 	// Create a long chain of blocks and simulate an invalid chain by dropping every second
-	hashes := createHashes(0, 32*blockCacheLimit)
+	hashes := createHashes(0, 16*blockCacheLimit)
 	blocks := createBlocksFromHashes(hashes)
 
 	gapped := make([]common.Hash, len(hashes)/2)
@@ -497,6 +520,40 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 	crossCheckCycle = defaultCrossCheckCycle
 
 	tester.hashes = hashes
+	tester.newPeer("valid", big.NewInt(20000), hashes[0])
+	if _, err := tester.syncTake("valid", hashes[0]); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+}
+
+// Advanced form of the above forged blockchain attack, where not only does the
+// attacker make up a valid hashes for random blocks, but also forges the block
+// parents to point to existing hashes.
+func TestMadeupParentBlockChainAttack(t *testing.T) {
+	defaultBlockTTL := blockTTL
+	defaultCrossCheckCycle := crossCheckCycle
+
+	blockTTL = 100 * time.Millisecond
+	crossCheckCycle = 25 * time.Millisecond
+
+	// Create a long chain of blocks and simulate an invalid chain by dropping every second
+	hashes := createHashes(0, 16*blockCacheLimit)
+	blocks := createBlocksFromHashes(hashes)
+	forges := createBlocksFromHashes(hashes)
+	for hash, block := range forges {
+		block.ParentHeaderHash = hash // Simulate pointing to already known hash
+	}
+	// Try and sync with the malicious node and check that it fails
+	tester := newTester(t, hashes, forges)
+	tester.newPeer("attack", big.NewInt(10000), hashes[0])
+	if _, err := tester.syncTake("attack", hashes[0]); err != ErrCrossCheckFailed {
+		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrCrossCheckFailed)
+	}
+	// Ensure that a valid chain can still pass sync
+	blockTTL = defaultBlockTTL
+	crossCheckCycle = defaultCrossCheckCycle
+
+	tester.blocks = blocks
 	tester.newPeer("valid", big.NewInt(20000), hashes[0])
 	if _, err := tester.syncTake("valid", hashes[0]); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)

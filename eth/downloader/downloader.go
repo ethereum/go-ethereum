@@ -15,8 +15,10 @@ import (
 )
 
 const (
-	maxHashFetch     = 512              // Amount of hashes to be fetched per chunk
-	maxBlockFetch    = 128              // Amount of blocks to be fetched per chunk
+	MinHashFetch  = 512  // Minimum amount of hashes to not consider a peer stalling
+	MaxHashFetch  = 2048 // Amount of hashes to be fetched per retrieval request
+	MaxBlockFetch = 128  // Amount of blocks to be fetched per retrieval request
+
 	peerCountTimeout = 12 * time.Second // Amount of time it takes for the peer handler to ignore minDesiredPeerCount
 	hashTTL          = 5 * time.Second  // Time it takes for a hash request to time out
 )
@@ -28,10 +30,11 @@ var (
 )
 
 var (
-	errLowTd            = errors.New("peer's TD is too low")
+	errLowTd            = errors.New("peers TD is too low")
 	ErrBusy             = errors.New("busy")
-	errUnknownPeer      = errors.New("peer's unknown or unhealthy")
+	errUnknownPeer      = errors.New("peer is unknown or unhealthy")
 	ErrBadPeer          = errors.New("action from bad peer ignored")
+	ErrStallingPeer     = errors.New("peer is stalling")
 	errNoPeers          = errors.New("no peers to keep download active")
 	ErrPendingQueue     = errors.New("pending items in queue")
 	ErrTimeout          = errors.New("timeout")
@@ -60,13 +63,18 @@ type hashPack struct {
 	hashes []common.Hash
 }
 
+type crossCheck struct {
+	expire time.Time
+	parent common.Hash
+}
+
 type Downloader struct {
 	mux *event.TypeMux
 
 	mu     sync.RWMutex
-	queue  *queue                    // Scheduler for selecting the hashes to download
-	peers  *peerSet                  // Set of active peers from which download can proceed
-	checks map[common.Hash]time.Time // Pending cross checks to verify a hash chain
+	queue  *queue                      // Scheduler for selecting the hashes to download
+	peers  *peerSet                    // Set of active peers from which download can proceed
+	checks map[common.Hash]*crossCheck // Pending cross checks to verify a hash chain
 
 	// Callbacks
 	hasBlock hashCheckFn
@@ -157,7 +165,7 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 	// Reset the queue and peer set to clean any internal leftover state
 	d.queue.Reset()
 	d.peers.Reset()
-	d.checks = make(map[common.Hash]time.Time)
+	d.checks = make(map[common.Hash]*crossCheck)
 
 	// Retrieve the origin peer and initiate the downloading process
 	p := d.peers.Peer(id)
@@ -283,15 +291,22 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 				return ErrBadPeer
 			}
 			if !done {
+				// Check that the peer is not stalling the sync
+				if len(inserts) < MinHashFetch {
+					return ErrStallingPeer
+				}
 				// Try and fetch a random block to verify the hash batch
 				// Skip the last hash as the cross check races with the next hash fetch
-				if len(inserts) > 1 {
-					cross := inserts[rand.Intn(len(inserts)-1)]
-					glog.V(logger.Detail).Infof("Cross checking (%s) with %x", active.id, cross)
+				cross := rand.Intn(len(inserts) - 1)
+				origin, parent := inserts[cross], inserts[cross+1]
+				glog.V(logger.Detail).Infof("Cross checking (%s) with %x/%x", active.id, origin, parent)
 
-					d.checks[cross] = time.Now().Add(blockTTL)
-					active.getBlocks([]common.Hash{cross})
+				d.checks[origin] = &crossCheck{
+					expire: time.Now().Add(blockTTL),
+					parent: parent,
 				}
+				active.getBlocks([]common.Hash{origin})
+
 				// Also fetch a fresh
 				active.getHashes(head)
 				continue
@@ -310,8 +325,8 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 				continue
 			}
 			block := blockPack.blocks[0]
-			if _, ok := d.checks[block.Hash()]; ok {
-				if !d.queue.Has(block.ParentHash()) {
+			if check, ok := d.checks[block.Hash()]; ok {
+				if block.ParentHash() != check.parent {
 					return ErrCrossCheckFailed
 				}
 				delete(d.checks, block.Hash())
@@ -319,8 +334,8 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 
 		case <-crossTicker.C:
 			// Iterate over all the cross checks and fail the hash chain if they're not verified
-			for hash, deadline := range d.checks {
-				if time.Now().After(deadline) {
+			for hash, check := range d.checks {
+				if time.Now().After(check.expire) {
 					glog.V(logger.Debug).Infof("Cross check timeout for %x", hash)
 					return ErrCrossCheckFailed
 				}
@@ -438,7 +453,7 @@ out:
 					}
 					// Get a possible chunk. If nil is returned no chunk
 					// could be returned due to no hashes available.
-					request := d.queue.Reserve(peer, maxBlockFetch)
+					request := d.queue.Reserve(peer, MaxBlockFetch)
 					if request == nil {
 						continue
 					}
