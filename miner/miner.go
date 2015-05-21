@@ -63,10 +63,10 @@ func (self *Miner) update() {
 				self.Start(self.coinbase, self.threads)
 			}
 
-            // unsubscribe. we're only interested in this event once
-            events.Unsubscribe()
-            // stop immediately and ignore all further pending events
-            break
+			// unsubscribe. we're only interested in this event once
+			events.Unsubscribe()
+			// stop immediately and ignore all further pending events
+			break
 		}
 	}
 }
