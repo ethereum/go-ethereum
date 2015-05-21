@@ -243,7 +243,7 @@ func TestNodeDBPersistency(t *testing.T) {
 	)
 
 	// Create a persistent database and store some values
-	db, err := newNodeDB(filepath.Join("root", "database"), Version)
+	db, err := newNodeDB(filepath.Join(root, "database"), Version)
 	if err != nil {
 		t.Fatalf("failed to create persistent database: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestNodeDBPersistency(t *testing.T) {
 	db.close()
 
 	// Reopen the database and check the value
-	db, err = newNodeDB(filepath.Join("root", "database"), Version)
+	db, err = newNodeDB(filepath.Join(root, "database"), Version)
 	if err != nil {
 		t.Fatalf("failed to open persistent database: %v", err)
 	}
@@ -263,7 +263,7 @@ func TestNodeDBPersistency(t *testing.T) {
 	db.close()
 
 	// Change the database version and check flush
-	db, err = newNodeDB(filepath.Join("root", "database"), Version+1)
+	db, err = newNodeDB(filepath.Join(root, "database"), Version+1)
 	if err != nil {
 		t.Fatalf("failed to open persistent database: %v", err)
 	}
