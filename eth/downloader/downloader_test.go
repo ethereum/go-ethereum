@@ -502,7 +502,7 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 	crossCheckCycle = 25 * time.Millisecond
 
 	// Create a long chain of blocks and simulate an invalid chain by dropping every second
-	hashes := createHashes(0, 32*blockCacheLimit)
+	hashes := createHashes(0, 16*blockCacheLimit)
 	blocks := createBlocksFromHashes(hashes)
 
 	gapped := make([]common.Hash, len(hashes)/2)
@@ -520,6 +520,40 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 	crossCheckCycle = defaultCrossCheckCycle
 
 	tester.hashes = hashes
+	tester.newPeer("valid", big.NewInt(20000), hashes[0])
+	if _, err := tester.syncTake("valid", hashes[0]); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+}
+
+// Advanced form of the above forged blockchain attack, where not only does the
+// attacker make up a valid hashes for random blocks, but also forges the block
+// parents to point to existing hashes.
+func TestMadeupParentBlockChainAttack(t *testing.T) {
+	defaultBlockTTL := blockTTL
+	defaultCrossCheckCycle := crossCheckCycle
+
+	blockTTL = 100 * time.Millisecond
+	crossCheckCycle = 25 * time.Millisecond
+
+	// Create a long chain of blocks and simulate an invalid chain by dropping every second
+	hashes := createHashes(0, 16*blockCacheLimit)
+	blocks := createBlocksFromHashes(hashes)
+	forges := createBlocksFromHashes(hashes)
+	for hash, block := range forges {
+		block.ParentHeaderHash = hash // Simulate pointing to already known hash
+	}
+	// Try and sync with the malicious node and check that it fails
+	tester := newTester(t, hashes, forges)
+	tester.newPeer("attack", big.NewInt(10000), hashes[0])
+	if _, err := tester.syncTake("attack", hashes[0]); err != ErrCrossCheckFailed {
+		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrCrossCheckFailed)
+	}
+	// Ensure that a valid chain can still pass sync
+	blockTTL = defaultBlockTTL
+	crossCheckCycle = defaultCrossCheckCycle
+
+	tester.blocks = blocks
 	tester.newPeer("valid", big.NewInt(20000), hashes[0])
 	if _, err := tester.syncTake("valid", hashes[0]); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
