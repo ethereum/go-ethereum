@@ -210,6 +210,36 @@ func TestTable_closest(t *testing.T) {
 	}
 }
 
+func TestTable_ReadRandomNodesGetAll(t *testing.T) {
+	cfg := &quick.Config{
+		MaxCount: 200,
+		Rand:     quickrand,
+		Values: func(args []reflect.Value, rand *rand.Rand) {
+			args[0] = reflect.ValueOf(make([]*Node, rand.Intn(1000)))
+		},
+	}
+	test := func(buf []*Node) bool {
+		tab := newTable(nil, NodeID{}, &net.UDPAddr{}, "")
+		for i := 0; i < len(buf); i++ {
+			ld := quickrand.Intn(len(tab.buckets))
+			tab.add([]*Node{nodeAtDistance(tab.self.sha, ld)})
+		}
+		gotN := tab.ReadRandomNodes(buf)
+		if gotN != tab.len() {
+			t.Errorf("wrong number of nodes, got %d, want %d", gotN, tab.len())
+			return false
+		}
+		if hasDuplicates(buf[:gotN]) {
+			t.Errorf("result contains duplicates")
+			return false
+		}
+		return true
+	}
+	if err := quick.Check(test, cfg); err != nil {
+		t.Error(err)
+	}
+}
+
 type closeTest struct {
 	Self   NodeID
 	Target common.Hash
@@ -517,7 +547,10 @@ func (n *preminedTestnet) mine(target NodeID) {
 
 func hasDuplicates(slice []*Node) bool {
 	seen := make(map[NodeID]bool)
-	for _, e := range slice {
+	for i, e := range slice {
+		if e == nil {
+			panic(fmt.Sprintf("nil *Node at %d", i))
+		}
 		if seen[e.ID] {
 			return true
 		}
