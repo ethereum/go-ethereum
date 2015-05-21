@@ -33,6 +33,8 @@ type nodeDB struct {
 	lvl    *leveldb.DB       // Interface to the database itself
 	seeder iterator.Iterator // Iterator for fetching possible seed nodes
 
+	self NodeID // Own node id to prevent adding it into the database
+
 	runner sync.Once     // Ensures we can start at most one expirer
 	quit   chan struct{} // Channel to signal the expiring thread to stop
 }
@@ -50,29 +52,30 @@ var (
 // newNodeDB creates a new node database for storing and retrieving infos about
 // known peers in the network. If no path is given, an in-memory, temporary
 // database is constructed.
-func newNodeDB(path string, version int) (*nodeDB, error) {
+func newNodeDB(path string, version int, self NodeID) (*nodeDB, error) {
 	if path == "" {
-		return newMemoryNodeDB()
+		return newMemoryNodeDB(self)
 	}
-	return newPersistentNodeDB(path, version)
+	return newPersistentNodeDB(path, version, self)
 }
 
 // newMemoryNodeDB creates a new in-memory node database without a persistent
 // backend.
-func newMemoryNodeDB() (*nodeDB, error) {
+func newMemoryNodeDB(self NodeID) (*nodeDB, error) {
 	db, err := leveldb.Open(storage.NewMemStorage(), nil)
 	if err != nil {
 		return nil, err
 	}
 	return &nodeDB{
 		lvl:  db,
+		self: self,
 		quit: make(chan struct{}),
 	}, nil
 }
 
 // newPersistentNodeDB creates/opens a leveldb backed persistent node database,
 // also flushing its contents in case of a version mismatch.
-func newPersistentNodeDB(path string, version int) (*nodeDB, error) {
+func newPersistentNodeDB(path string, version int, self NodeID) (*nodeDB, error) {
 	opts := &opt.Options{OpenFilesCacheCapacity: 5}
 	db, err := leveldb.OpenFile(path, opts)
 	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
@@ -102,11 +105,12 @@ func newPersistentNodeDB(path string, version int) (*nodeDB, error) {
 			if err = os.RemoveAll(path); err != nil {
 				return nil, err
 			}
-			return newPersistentNodeDB(path, version)
+			return newPersistentNodeDB(path, version, self)
 		}
 	}
 	return &nodeDB{
 		lvl:  db,
+		self: self,
 		quit: make(chan struct{}),
 	}, nil
 }
@@ -182,6 +186,17 @@ func (db *nodeDB) updateNode(node *Node) error {
 	return db.lvl.Put(makeKey(node.ID, nodeDBDiscoverRoot), blob, nil)
 }
 
+// deleteNode deletes all information/keys associated with a node.
+func (db *nodeDB) deleteNode(id NodeID) error {
+	deleter := db.lvl.NewIterator(util.BytesPrefix(makeKey(id, "")), nil)
+	for deleter.Next() {
+		if err := db.lvl.Delete(deleter.Key(), nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ensureExpirer is a small helper method ensuring that the data expiration
 // mechanism is running. If the expiration goroutine is already running, this
 // method simply returns.
@@ -227,17 +242,14 @@ func (db *nodeDB) expireNodes() error {
 		if field != nodeDBDiscoverRoot {
 			continue
 		}
-		// Skip the node if not expired yet
-		if seen := db.lastPong(id); seen.After(threshold) {
-			continue
-		}
-		// Otherwise delete all associated information
-		deleter := db.lvl.NewIterator(util.BytesPrefix(makeKey(id, "")), nil)
-		for deleter.Next() {
-			if err := db.lvl.Delete(deleter.Key(), nil); err != nil {
-				return err
+		// Skip the node if not expired yet (and not self)
+		if bytes.Compare(id[:], db.self[:]) != 0 {
+			if seen := db.lastPong(id); seen.After(threshold) {
+				continue
 			}
 		}
+		// Otherwise delete all associated information
+		db.deleteNode(id)
 	}
 	return nil
 }
@@ -284,6 +296,11 @@ func (db *nodeDB) querySeeds(n int) []*Node {
 		// Iterate until a discovery node is found
 		id, field := splitKey(db.seeder.Key())
 		if field != nodeDBDiscoverRoot {
+			continue
+		}
+		// Dump it if its a self reference
+		if bytes.Compare(id[:], db.self[:]) == 0 {
+			db.deleteNode(id)
 			continue
 		}
 		// Load it as a potential seed
