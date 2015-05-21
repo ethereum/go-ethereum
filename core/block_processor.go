@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
+	"gopkg.in/fatih/set.v0"
 )
 
 const (
@@ -346,50 +347,39 @@ func AccumulateRewards(statedb *state.StateDB, block *types.Block) {
 }
 
 func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *types.Block) error {
-	//ancestors := set.New()
-	//uncles := set.New()
-	ancestors := make(map[common.Hash]struct{})
-	uncles := make(map[common.Hash]struct{})
+	ancestors := set.New()
+	uncles := set.New()
 	ancestorHeaders := make(map[common.Hash]*types.Header)
 	for _, ancestor := range sm.bc.GetAncestors(block, 7) {
 		ancestorHeaders[ancestor.Hash()] = ancestor.Header()
-		//ancestors.Add(ancestor.Hash())
-		ancestors[ancestor.Hash()] = struct{}{}
+		ancestors.Add(ancestor.Hash())
 		// Include ancestors uncles in the uncle set. Uncles must be unique.
 		for _, uncle := range ancestor.Uncles() {
-			//uncles.Add(uncle.Hash())
-			uncles[uncle.Hash()] = struct{}{}
+			uncles.Add(uncle.Hash())
 		}
 	}
 
-	//uncles.Add(block.Hash())
-	uncles[block.Hash()] = struct{}{}
+	uncles.Add(block.Hash())
 	for i, uncle := range block.Uncles() {
 		hash := uncle.Hash()
-		//if uncles.Has(hash) {
-		if _, has := uncles[hash]; has {
+		if uncles.Has(hash) {
 			// Error not unique
 			return UncleError("uncle[%d](%x) not unique", i, hash[:4])
 		}
-		uncles[hash] = struct{}{}
+		uncles.Add(hash)
 
-		//if ancestors.Has(hash) {
-		if _, has := ancestors[hash]; has {
-			var branch string
-			//ancestors.Each(func(item interface{}) bool {
-			for hash := range ancestors {
+		if ancestors.Has(hash) {
+			branch := fmt.Sprintf("  O - %x\n  |\n", block.Hash())
+			ancestors.Each(func(item interface{}) bool {
 				branch += fmt.Sprintf("  O - %x\n  |\n", hash)
-				//return true
-			}
-			//})
-			branch += fmt.Sprintf("  O - %x\n  |\n", block.Hash())
+				return true
+			})
 			glog.Infoln(branch)
 
 			return UncleError("uncle[%d](%x) is ancestor", i, hash[:4])
 		}
 
-		//if !ancestors.Has(uncle.ParentHash) {
-		if _, has := ancestors[uncle.ParentHash]; !has {
+		if !ancestors.Has(uncle.ParentHash) {
 			return UncleError("uncle[%d](%x)'s parent unknown (%x)", i, hash[:4], uncle.ParentHash[0:4])
 		}
 
