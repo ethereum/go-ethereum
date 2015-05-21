@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	blockCacheLimit = 1024 // Maximum number of blocks to cache before throttling the download
+	blockCacheLimit = 8 * MaxBlockFetch // Maximum number of blocks to cache before throttling the download
 )
 
 // fetchRequest is a currently running block retrieval operation.

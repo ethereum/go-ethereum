@@ -15,8 +15,10 @@ import (
 )
 
 const (
-	maxHashFetch     = 512              // Amount of hashes to be fetched per chunk
-	maxBlockFetch    = 128              // Amount of blocks to be fetched per chunk
+	MinHashFetch  = 512  // Minimum amount of hashes to not consider a peer stalling
+	MaxHashFetch  = 2048 // Amount of hashes to be fetched per retrieval request
+	MaxBlockFetch = 128  // Amount of blocks to be fetched per retrieval request
+
 	peerCountTimeout = 12 * time.Second // Amount of time it takes for the peer handler to ignore minDesiredPeerCount
 	hashTTL          = 5 * time.Second  // Time it takes for a hash request to time out
 )
@@ -290,7 +292,7 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 			}
 			if !done {
 				// Check that the peer is not stalling the sync
-				if len(inserts) < maxHashFetch {
+				if len(inserts) < MinHashFetch {
 					return ErrStallingPeer
 				}
 				// Try and fetch a random block to verify the hash batch
@@ -451,7 +453,7 @@ out:
 					}
 					// Get a possible chunk. If nil is returned no chunk
 					// could be returned due to no hashes available.
-					request := d.queue.Reserve(peer, maxBlockFetch)
+					request := d.queue.Reserve(peer, MaxBlockFetch)
 					if request == nil {
 						continue
 					}

@@ -135,7 +135,7 @@ func (dl *downloadTester) getBlock(hash common.Hash) *types.Block {
 
 // getHashes retrieves a batch of hashes for reconstructing the chain.
 func (dl *downloadTester) getHashes(head common.Hash) error {
-	limit := maxHashFetch
+	limit := MaxHashFetch
 	if dl.maxHashFetch > 0 {
 		limit = dl.maxHashFetch
 	}
