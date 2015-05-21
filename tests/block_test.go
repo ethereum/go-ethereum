@@ -48,6 +48,10 @@ func TestBcTotalDifficulty(t *testing.T) {
 	runBlockTestsInFile("files/BlockTests/bcTotalDifficultyTest.json", []string{}, t)
 }
 
+func TestBcWallet(t *testing.T) {
+	runBlockTestsInFile("files/BlockTests/bcWalletTest.json", []string{}, t)
+}
+
 func runBlockTestsInFile(filepath string, snafus []string, t *testing.T) {
 	bt, err := LoadBlockTests(filepath)
 	if err != nil {

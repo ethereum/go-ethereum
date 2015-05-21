@@ -38,6 +38,12 @@ func (self *Execution) Create(caller vm.ContextRef) (ret []byte, err error, acco
 	code := self.input
 	self.input = nil
 	ret, err = self.exec(nil, code, caller)
+	// Here we get an error if we run into maximum stack depth,
+	// See: https://github.com/ethereum/yellowpaper/pull/131
+	// and YP definitions for CREATE instruction
+	if err != nil {
+		return nil, err, nil
+	}
 	account = self.env.State().GetStateObject(*self.address)
 	return
 }
