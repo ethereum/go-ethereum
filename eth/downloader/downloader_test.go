@@ -53,6 +53,8 @@ type downloadTester struct {
 	blocks map[common.Hash]*types.Block // Blocks associated with the hashes
 	chain  []common.Hash                // Block-chain being constructed
 
+	maxHashFetch int // Overrides the maximum number of retrieved hashes
+
 	t            *testing.T
 	pcount       int
 	done         chan bool
@@ -133,8 +135,12 @@ func (dl *downloadTester) getBlock(hash common.Hash) *types.Block {
 
 // getHashes retrieves a batch of hashes for reconstructing the chain.
 func (dl *downloadTester) getHashes(head common.Hash) error {
+	limit := maxHashFetch
+	if dl.maxHashFetch > 0 {
+		limit = dl.maxHashFetch
+	}
 	// Gather the next batch of hashes
-	hashes := make([]common.Hash, 0, maxHashFetch)
+	hashes := make([]common.Hash, 0, limit)
 	for i, hash := range dl.hashes {
 		if hash == head {
 			i++
@@ -466,6 +472,23 @@ func TestMadeupHashChainAttack(t *testing.T) {
 	tester.newPeer("attack", big.NewInt(10000), hashes[0])
 	if _, err := tester.syncTake("attack", hashes[0]); err != ErrCrossCheckFailed {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrCrossCheckFailed)
+	}
+}
+
+// Tests that if a malicious peer makes up a random hash chain, and tries to push
+// indefinitely, one hash at a time, it actually gets caught with it. The reason
+// this is separate from the classical made up chain attack is that sending hashes
+// one by one prevents reliable block/parent verification.
+func TestMadeupHashChainDrippingAttack(t *testing.T) {
+	// Create a random chain of hashes to drip
+	hashes := createHashes(0, 16*blockCacheLimit)
+	tester := newTester(t, hashes, nil)
+
+	// Try and sync with the attacker, one hash at a time
+	tester.maxHashFetch = 1
+	tester.newPeer("attack", big.NewInt(10000), hashes[0])
+	if _, err := tester.syncTake("attack", hashes[0]); err != ErrStallingPeer {
+		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrStallingPeer)
 	}
 }
 
