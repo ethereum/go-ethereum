@@ -65,6 +65,8 @@ func (self *Miner) update() {
 		}
 		// unsubscribe. we're only interested in this event once
 		events.Unsubscribe()
+		// stop immediately and ignore all further pending events
+		break
 	}
 }
 
