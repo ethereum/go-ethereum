@@ -881,7 +881,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	var (
 		from             = common.HexToAddress(fromStr)
 		to               = common.HexToAddress(toStr)
-		value            = common.NewValue(valueStr)
+		value            = common.Big(valueStr)
 		gas              = common.Big(gasStr)
 		price            = common.Big(gasPriceStr)
 		data             []byte
@@ -928,9 +928,9 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 
 	var tx *types.Transaction
 	if contractCreation {
-		tx = types.NewContractCreationTx(value.BigInt(), gas, price, data)
+		tx = types.NewContractCreationTx(value, gas, price, data)
 	} else {
-		tx = types.NewTransactionMessage(to, value.BigInt(), gas, price, data)
+		tx = types.NewTransactionMessage(to, value, gas, price, data)
 	}
 
 	state := self.backend.ChainManager().TxState()
