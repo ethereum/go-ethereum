@@ -815,22 +815,23 @@ func (js *jsre) newRegistry(call otto.FunctionCall) otto.Value {
 
 	if len(call.ArgumentList) != 1 {
 		fmt.Println("requires 1 argument: admin.contractInfo.newRegistry(adminaddress)")
-		return otto.FalseValue()
+		return otto.UndefinedValue()
 	}
 	addr, err := call.Argument(0).ToString()
 	if err != nil {
 		fmt.Println(err)
-		return otto.FalseValue()
+		return otto.UndefinedValue()
 	}
-
+	var hashReg, urlHint string
 	registry := resolver.New(js.xeth)
-	err = registry.CreateContracts(common.HexToAddress(addr))
+	hashReg, urlHint, err = registry.CreateContracts(common.HexToAddress(addr))
 	if err != nil {
 		fmt.Println(err)
-		return otto.FalseValue()
+		return otto.UndefinedValue()
 	}
 
-	return otto.TrueValue()
+	v, _ := call.Otto.ToValue([]string{hashReg, urlHint})
+	return v
 }
 
 // internal transaction type which will allow us to resend transactions  using `eth.resend`
