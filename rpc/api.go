@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -344,7 +345,6 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		return NewNotImplementedError(req.Method)
 
 	case "eth_compileSolidity":
-
 		solc, _ := api.xeth().Solc()
 		if solc == nil {
 			return NewNotAvailableError(req.Method, "solc (solidity compiler) not found")
@@ -562,6 +562,13 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 	case "eth_hashrate":
 		*reply = newHexNum(api.xeth().HashRate())
+	case "ext_disasm":
+		args := new(SourceArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		*reply = vm.Disasm(common.FromHex(args.Source))
 
 	// case "eth_register":
 	// 	// Placeholder for actual type
