@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
+	"github.com/ethereum/go-ethereum/common/resolver"
 	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -141,7 +142,7 @@ var net = web3.net;
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
 
-	js.re.Eval(globalRegistrar + "registrar = GlobalRegistrar.at(\"" + globalRegistrarAddr + "\");")
+	js.re.Eval(resolver.GlobalRegistrar + "registrar = GlobalRegistrar.at(\"" + resolver.GlobalRegistrarAddr + "\");")
 }
 
 var ds, _ = docserver.New("/")
