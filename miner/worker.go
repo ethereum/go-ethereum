@@ -38,7 +38,7 @@ type Agent interface {
 	GetHashRate() int64
 }
 
-const MINING_LOG_AT_DEPTH = 5
+const miningLogAtDepth = 5
 
 type UInt64RingBuffer struct {
 	ints []uint64 //array of all integers in buffer
@@ -219,7 +219,7 @@ out:
 
 func newLocalMinedBlock(blockNumber uint64, prevMinedBlocks *UInt64RingBuffer) (minedBlocks *UInt64RingBuffer) {
 	if prevMinedBlocks == nil {
-		minedBlocks = &UInt64RingBuffer{next: 0, ints: make([]uint64, MINING_LOG_AT_DEPTH)}
+		minedBlocks = &UInt64RingBuffer{next: 0, ints: make([]uint64, miningLogAtDepth)}
 	} else {
 		minedBlocks = prevMinedBlocks
 	}
@@ -353,9 +353,9 @@ func (self *worker) logLocalMinedBlocks(previous *environment) {
 	if previous != nil && self.current.localMinedBlocks != nil {
 		nextBlockNum := self.current.block.Number().Uint64()
 		for checkBlockNum := previous.block.Number().Uint64(); checkBlockNum < nextBlockNum; checkBlockNum++ {
-			inspectBlockNum := checkBlockNum - MINING_LOG_AT_DEPTH
+			inspectBlockNum := checkBlockNum - miningLogAtDepth
 			if self.isBlockLocallyMined(inspectBlockNum) {
-				glog.V(logger.Info).Infof("🔨 🔗  Mined %d blocks back: block #%v", MINING_LOG_AT_DEPTH, inspectBlockNum)
+				glog.V(logger.Info).Infof("🔨 🔗  Mined %d blocks back: block #%v", miningLogAtDepth, inspectBlockNum)
 			}
 		}
 	}
