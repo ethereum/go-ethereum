@@ -40,7 +40,7 @@ type Agent interface {
 
 const miningLogAtDepth = 5
 
-type UInt64RingBuffer struct {
+type uint64RingBuffer struct {
 	ints []uint64 //array of all integers in buffer
 	next int      //where is the next insertion? assert 0 <= next < len(ints)
 }
@@ -61,7 +61,7 @@ type environment struct {
 	lowGasTransactors  *set.Set
 	ownedAccounts      *set.Set
 	lowGasTxs          types.Transactions
-	localMinedBlocks   *UInt64RingBuffer // the most recent block numbers that were mined locally (used to check block inclusion)
+	localMinedBlocks   *uint64RingBuffer // the most recent block numbers that were mined locally (used to check block inclusion)
 }
 
 // env returns a new environment for the current cycle
@@ -217,9 +217,9 @@ out:
 	events.Unsubscribe()
 }
 
-func newLocalMinedBlock(blockNumber uint64, prevMinedBlocks *UInt64RingBuffer) (minedBlocks *UInt64RingBuffer) {
+func newLocalMinedBlock(blockNumber uint64, prevMinedBlocks *uint64RingBuffer) (minedBlocks *uint64RingBuffer) {
 	if prevMinedBlocks == nil {
-		minedBlocks = &UInt64RingBuffer{next: 0, ints: make([]uint64, miningLogAtDepth)}
+		minedBlocks = &uint64RingBuffer{next: 0, ints: make([]uint64, miningLogAtDepth)}
 	} else {
 		minedBlocks = prevMinedBlocks
 	}
