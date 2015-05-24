@@ -52,6 +52,10 @@ type Kademlia struct {
 
 type Address common.Hash
 
+func (a Address) String() string {
+	return fmt.Sprintf("%x", a[:])
+}
+
 type Node interface {
 	Addr() Address
 	Url() string

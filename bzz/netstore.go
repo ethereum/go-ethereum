@@ -130,7 +130,7 @@ func (self *NetStore) addStoreRequest(req *storeRequestMsgData) {
 	} else {
 		return
 	}
-	chunk.source = &req.peer
+	chunk.source = req.peer
 	self.put(chunk)
 }
 
@@ -170,10 +170,16 @@ func (self *NetStore) get(key Key) (chunk *Chunk) {
 	}
 
 	if chunk.req == nil {
-		chunk.req = new(requestStatus)
-		chunk.req.C = make(chan bool)
+		chunk.req = newRequestStatus()
 	}
 	return
+}
+
+func newRequestStatus() *requestStatus {
+	return &requestStatus{
+		requesters: make(map[int64][]*retrieveRequestMsgData),
+		C:          make(chan bool),
+	}
 }
 
 func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
@@ -214,6 +220,7 @@ func (self *NetStore) startSearch(chunk *Chunk, id int64, timeout *time.Time) {
 	}
 	for _, peer := range peers {
 		dpaLogger.Debugf("NetStore.startSearch: sending retrieveRequests to peer [%064x]", req.Key)
+		dpaLogger.Debugf("req.requesters: %v", chunk.req.requesters)
 		var requester bool
 	OUT:
 		for _, recipients := range chunk.req.requesters {
@@ -238,7 +245,7 @@ func generateId() int64 {
 /*
 adds a new peer to an existing open request
 only add if less than requesterCount peers forwarded the same request id so far
-note this is done irrespective of status (searching or found/timedOut)
+note this is done irrespective of status (searching or found)
 */
 func (self *NetStore) addRequester(rs *requestStatus, req *retrieveRequestMsgData) {
 	dpaLogger.Debugf("NetStore.addRequester: key %064x - add peer [%v] to req.Id %064x", req.Key, req.peer, req.Id)
@@ -260,7 +267,7 @@ this is the most simplistic implementation:
 */
 func (self *NetStore) strategyUpdateRequest(rs *requestStatus, req *retrieveRequestMsgData) (timeout *time.Time) {
 	dpaLogger.Debugf("NetStore.strategyUpdateRequest: key %064x", req.Key)
-
+	self.addRequester(rs, req)
 	if rs.status == reqSearching {
 		timeout = self.searchTimeout(rs, req)
 	}

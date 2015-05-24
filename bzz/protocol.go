@@ -119,11 +119,17 @@ type storeRequestMsgData struct {
 	storageTimeout *time.Time // expiry of content
 	Metadata       metaData   //
 	//
-	peer peer
+	peer *peer
 }
 
 func (self storeRequestMsgData) String() string {
-	return fmt.Sprintf("From: %v, Key: %x; ID: %v, requestTimeout: %v, storageTimeout: %v, SData %x", self.peer.Addr(), self.Key[:4], self.Id, self.requestTimeout, self.storageTimeout, self.SData[:10])
+	var from string
+	if self.peer == nil {
+		from = "self"
+	} else {
+		from = self.peer.Addr().String()
+	}
+	return fmt.Sprintf("From: %v, Key: %x; ID: %v, requestTimeout: %v, storageTimeout: %v, SData %x", from, self.Key[:4], self.Id, self.requestTimeout, self.storageTimeout, self.SData[:10])
 }
 
 /*
@@ -142,11 +148,17 @@ type retrieveRequestMsgData struct {
 	timeout  *time.Time //
 	//Metadata metaData  //
 	//
-	peer peer // protocol registers the requester
+	peer *peer // protocol registers the requester
 }
 
 func (self retrieveRequestMsgData) String() string {
-	return fmt.Sprintf("From: %v, Key: %x; ID: %v, MaxSize: %v, MaxPeers: %v", self.peer.Addr(), self.Key[:4], self.Id, self.MaxSize, self.MaxPeers)
+	var from string
+	if self.peer == nil {
+		from = "self"
+	} else {
+		from = self.peer.Addr().String()
+	}
+	return fmt.Sprintf("From: %v, Key: %x; ID: %v, MaxSize: %v, MaxPeers: %v", from, self.Key[:4], self.Id, self.MaxSize, self.MaxPeers)
 }
 
 type peerAddr struct {
@@ -187,7 +199,7 @@ type peersMsgData struct {
 	Key     Key         // if a response to a retrieval request
 	Id      uint64      // if a response to a retrieval request
 	//
-	peer peer
+	peer *peer
 }
 
 /*
@@ -280,7 +292,7 @@ func (self *bzzProtocol) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
-		req.peer = peer{bzzProtocol: self}
+		req.peer = &peer{bzzProtocol: self}
 		self.netStore.addStoreRequest(&req)
 
 	case retrieveRequestMsg:
@@ -292,7 +304,7 @@ func (self *bzzProtocol) handle() error {
 		if req.Key == nil {
 			return self.protoError(ErrDecode, "protocol handler: req.Key == nil || req.Timeout == nil")
 		}
-		req.peer = peer{bzzProtocol: self}
+		req.peer = &peer{bzzProtocol: self}
 		self.netStore.addRetrieveRequest(&req)
 
 	case peersMsg:
@@ -300,7 +312,7 @@ func (self *bzzProtocol) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		req.peer = peer{bzzProtocol: self}
+		req.peer = &peer{bzzProtocol: self}
 		self.netStore.hive.addPeerEntries(&req)
 
 	default:
