@@ -695,7 +695,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			self.Printf("resume %x (%v)", context.Address(), context.Gas)
 		case RETURN:
 			offset, size := stack.pop(), stack.pop()
-			ret := mem.Get(offset.Int64(), size.Int64())
+			ret := mem.GetPtr(offset.Int64(), size.Int64())
 
 			self.Printf(" => [%v, %v] (%d) 0x%x", offset, size, len(ret), ret).Endl()
 

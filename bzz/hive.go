@@ -48,18 +48,23 @@ func (self *hive) start(address kademlia.Address, connectPeer func(string) error
 		err = nil
 	}
 	go func() {
+		// whenever pinged ask kademlia about most preferred peer
 		for _ = range self.ping {
 			node, full := self.kad.GetNodeRecord()
 			if node != nil {
+				// if Url known, connect to peer
 				if len(node.Url) > 0 {
+					dpaLogger.Debugf("hive: attempt to connect kaddb node %v", node)
 					connectPeer(node.Url)
 				} else if !full {
-					// a random peer is taken
+					// a random peer is taken from the table
 					peers := self.kad.GetNodes(kademlia.RandomAddress(), 1)
 					if len(peers) > 0 {
+						// a random address at prox bin 0 is sent for lookup
 						req := &retrieveRequestMsgData{
 							Key: Key(common.Hash(kademlia.RandomAddressAt(self.addr, 0)).Bytes()),
 						}
+						dpaLogger.Debugf("hive: look up random address with prox order 0 from peer %v", peers[0])
 						peers[0].(peer).retrieve(req)
 					}
 				}
@@ -70,6 +75,7 @@ func (self *hive) start(address kademlia.Address, connectPeer func(string) error
 }
 
 func (self *hive) stop() error {
+	// closing ping channel quits the updateloop
 	close(self.ping)
 	return self.kad.Stop(self.path)
 }

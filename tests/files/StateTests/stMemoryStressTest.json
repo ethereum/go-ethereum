@@ -266,35 +266,35 @@
         },
         "logs" : [
         ],
-        "out" : "0x00",
+        "out" : "#4294967295",
         "post" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "0x0de0b6b3a7640000",
-                "code" : "0x6401000000016000f3",
+                "code" : "0x63ffffffff6000f3",
                 "nonce" : "0x00",
                 "storage" : {
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "0x200018085211",
+                "balance" : "0x20001800520e",
                 "code" : "0x",
                 "nonce" : "0x00",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "0x1869ec3b06114f6f",
+                "balance" : "0x1869ec3b06194f72",
                 "code" : "0x",
                 "nonce" : "0x01",
                 "storage" : {
                 }
             }
         },
-        "postStateRoot" : "8745f6bdec4290420747b8c024382c6ed14e09f4a11718bdc1f0f99e4d04607b",
+        "postStateRoot" : "1716bcf6c106040a46ab1d37c569b7e0841f921b4d252dc5202fb05388308a39",
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "0x0de0b6b3a7640000",
-                "code" : "0x6401000000016000f3",
+                "code" : "0x63ffffffff6000f3",
                 "nonce" : "0x00",
                 "storage" : {
                 }
@@ -328,11 +328,11 @@
         },
         "logs" : [
         ],
-        "out" : "0x",
+        "out" : "#4294967295",
         "post" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "0x0de0b6b3a7640000",
-                "code" : "0x60016000526401000000006000f3",
+                "code" : "0x600160005263ffffffff6000f3",
                 "nonce" : "0x00",
                 "storage" : {
                 }
@@ -352,11 +352,11 @@
                 }
             }
         },
-        "postStateRoot" : "e6c6c5b997cf7ecbc653c920a5b42d1ddd9f9ca2df2c68fd47059df2a3309b14",
+        "postStateRoot" : "b95676d3103fc4a6bdcfb1c201a6ed49e0fa7a239520a4b8ac034ce3b6c697eb",
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "0x0de0b6b3a7640000",
-                "code" : "0x60016000526401000000006000f3",
+                "code" : "0x600160005263ffffffff6000f3",
                 "nonce" : "0x00",
                 "storage" : {
                 }
