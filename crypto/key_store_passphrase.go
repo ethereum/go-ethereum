@@ -26,40 +26,7 @@
 This key store behaves as KeyStorePlain with the difference that
 the private key is encrypted and on disk uses another JSON encoding.
 
-Cryptography:
-
-1. Encryption key is first 16 bytes of scrypt derived key
-   from user passphrase. Scrypt parameters
-   (work factors) [1][2] are defined as constants below.
-2. Scrypt salt is 32 random bytes from CSPRNG.
-   It's stored in plain next in the key file.
-3. MAC is SHA3-256 of concatenation of ciphertext and
-   last 16 bytes of scrypt derived key.
-4. Plaintext is the EC private key bytes.
-5. Encryption algo is AES 128 CBC [3][4]
-6. CBC IV is 16 random bytes from CSPRNG.
-   It's stored in plain next in the key file.
-7. Plaintext padding is PKCS #7 [5][6]
-
-Encoding:
-
-1. On disk, the ciphertext, MAC, salt and IV are encoded in a JSON object.
-   cat a key file to see the structure.
-2. byte arrays are base64 JSON strings.
-3. The EC private key bytes are in uncompressed form [7].
-   They are a big-endian byte slice of the absolute value of D [8][9].
-
-References:
-
-1. http://www.tarsnap.com/scrypt/scrypt-slides.pdf
-2. http://stackoverflow.com/questions/11126315/what-are-optimal-scrypt-work-factors
-3. http://en.wikipedia.org/wiki/Advanced_Encryption_Standard
-4. http://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Cipher-block_chaining_.28CBC.29
-5. https://leanpub.com/gocrypto/read#leanpub-auto-block-cipher-modes
-6. http://tools.ietf.org/html/rfc2315
-7. http://bitcoin.stackexchange.com/questions/3059/what-is-a-compressed-bitcoin-key
-8. http://golang.org/pkg/crypto/ecdsa/#PrivateKey
-9. https://golang.org/pkg/math/big/#Int.Bytes
+The crypto is documented at https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition
 
 */
 
@@ -68,23 +35,25 @@ package crypto
 import (
 	"bytes"
 	"crypto/aes"
-	"crypto/cipher"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	"code.google.com/p/go-uuid/uuid"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
+	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"
 )
 
 const (
-	keyHeaderVersion = "1"
-	keyHeaderKDF     = "scrypt"
+	keyHeaderKDF = "scrypt"
 	// 2^18 / 8 / 1 uses 256MB memory and approx 1s CPU time on a modern CPU.
 	scryptN     = 1 << 18
 	scryptr     = 8
@@ -105,7 +74,7 @@ func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *K
 }
 
 func (ks keyStorePassphrase) GetKey(keyAddr common.Address, auth string) (key *Key, err error) {
-	keyBytes, keyId, err := DecryptKey(ks, keyAddr, auth)
+	keyBytes, keyId, err := DecryptKeyFromFile(ks, keyAddr, auth)
 	if err != nil {
 		return nil, err
 	}
@@ -129,51 +98,43 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		return err
 	}
 
-	encryptKey := Sha3(derivedKey[:16])[:16]
-
+	encryptKey := derivedKey[:16]
 	keyBytes := FromECDSA(key.PrivateKey)
-	toEncrypt := PKCS7Pad(keyBytes)
 
-	AES128Block, err := aes.NewCipher(encryptKey)
+	iv := randentropy.GetEntropyCSPRNG(aes.BlockSize) // 16
+	cipherText, err := aesCTRXOR(encryptKey, keyBytes, iv)
 	if err != nil {
 		return err
 	}
 
-	iv := randentropy.GetEntropyCSPRNG(aes.BlockSize) // 16
-	AES128CBCEncrypter := cipher.NewCBCEncrypter(AES128Block, iv)
-	cipherText := make([]byte, len(toEncrypt))
-	AES128CBCEncrypter.CryptBlocks(cipherText, toEncrypt)
-
 	mac := Sha3(derivedKey[16:32], cipherText)
 
-	scryptParamsJSON := scryptParamsJSON{
-		N:     scryptN,
-		R:     scryptr,
-		P:     scryptp,
-		DkLen: scryptdkLen,
-		Salt:  hex.EncodeToString(salt),
-	}
+	scryptParamsJSON := make(map[string]interface{}, 5)
+	scryptParamsJSON["n"] = scryptN
+	scryptParamsJSON["r"] = scryptr
+	scryptParamsJSON["p"] = scryptp
+	scryptParamsJSON["dklen"] = scryptdkLen
+	scryptParamsJSON["salt"] = hex.EncodeToString(salt)
 
 	cipherParamsJSON := cipherparamsJSON{
 		IV: hex.EncodeToString(iv),
 	}
 
 	cryptoStruct := cryptoJSON{
-		Cipher:       "aes-128-cbc",
+		Cipher:       "aes-128-ctr",
 		CipherText:   hex.EncodeToString(cipherText),
 		CipherParams: cipherParamsJSON,
 		KDF:          "scrypt",
 		KDFParams:    scryptParamsJSON,
 		MAC:          hex.EncodeToString(mac),
-		Version:      "1",
 	}
-	encryptedKeyJSON := encryptedKeyJSON{
+	encryptedKeyJSONV3 := encryptedKeyJSONV3{
 		hex.EncodeToString(key.Address[:]),
 		cryptoStruct,
 		key.Id.String(),
 		version,
 	}
-	keyJSON, err := json.Marshal(encryptedKeyJSON)
+	keyJSON, err := json.Marshal(encryptedKeyJSONV3)
 	if err != nil {
 		return err
 	}
@@ -183,7 +144,7 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 
 func (ks keyStorePassphrase) DeleteKey(keyAddr common.Address, auth string) (err error) {
 	// only delete if correct passphrase is given
-	_, _, err = DecryptKey(ks, keyAddr, auth)
+	_, _, err = DecryptKeyFromFile(ks, keyAddr, auth)
 	if err != nil {
 		return err
 	}
@@ -192,17 +153,43 @@ func (ks keyStorePassphrase) DeleteKey(keyAddr common.Address, auth string) (err
 	return os.RemoveAll(keyDirPath)
 }
 
-func DecryptKey(ks keyStorePassphrase, keyAddr common.Address, auth string) (keyBytes []byte, keyId []byte, err error) {
+func DecryptKeyFromFile(ks keyStorePassphrase, keyAddr common.Address, auth string) (keyBytes []byte, keyId []byte, err error) {
 	fileContent, err := GetKeyFile(ks.keysDirPath, keyAddr)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	keyProtected := new(encryptedKeyJSON)
-	err = json.Unmarshal(fileContent, keyProtected)
+	m := make(map[string]interface{})
+	err = json.Unmarshal(fileContent, &m)
+
+	v := reflect.ValueOf(m["version"])
+	if v.Kind() == reflect.String && v.String() == "1" {
+		k := new(encryptedKeyJSONV1)
+		err := json.Unmarshal(fileContent, k)
+		if err != nil {
+			return nil, nil, err
+		}
+		return decryptKeyV1(k, auth)
+	} else {
+		k := new(encryptedKeyJSONV3)
+		err := json.Unmarshal(fileContent, k)
+		if err != nil {
+			return nil, nil, err
+		}
+		return decryptKeyV3(k, auth)
+	}
+}
+
+func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byte, keyId []byte, err error) {
+	if keyProtected.Version != version {
+		return nil, nil, fmt.Errorf("Version not supported: %v", keyProtected.Version)
+	}
+
+	if keyProtected.Crypto.Cipher != "aes-128-ctr" {
+		return nil, nil, fmt.Errorf("Cipher not supported: %v", keyProtected.Crypto.Cipher)
+	}
 
 	keyId = uuid.Parse(keyProtected.Id)
-
 	mac, err := hex.DecodeString(keyProtected.Crypto.MAC)
 	if err != nil {
 		return nil, nil, err
@@ -218,26 +205,48 @@ func DecryptKey(ks keyStorePassphrase, keyAddr common.Address, auth string) (key
 		return nil, nil, err
 	}
 
-	salt, err := hex.DecodeString(keyProtected.Crypto.KDFParams.Salt)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	n := keyProtected.Crypto.KDFParams.N
-	r := keyProtected.Crypto.KDFParams.R
-	p := keyProtected.Crypto.KDFParams.P
-	dkLen := keyProtected.Crypto.KDFParams.DkLen
-
-	authArray := []byte(auth)
-	derivedKey, err := scrypt.Key(authArray, salt, n, r, p, dkLen)
+	derivedKey, err := getKDFKey(keyProtected.Crypto, auth)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	calculatedMAC := Sha3(derivedKey[16:32], cipherText)
 	if !bytes.Equal(calculatedMAC, mac) {
-		err = errors.New("Decryption failed: MAC mismatch")
+		return nil, nil, errors.New("Decryption failed: MAC mismatch")
+	}
+
+	plainText, err := aesCTRXOR(derivedKey[:16], cipherText, iv)
+	if err != nil {
 		return nil, nil, err
+	}
+	return plainText, keyId, err
+}
+
+func decryptKeyV1(keyProtected *encryptedKeyJSONV1, auth string) (keyBytes []byte, keyId []byte, err error) {
+	keyId = uuid.Parse(keyProtected.Id)
+	mac, err := hex.DecodeString(keyProtected.Crypto.MAC)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	iv, err := hex.DecodeString(keyProtected.Crypto.CipherParams.IV)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cipherText, err := hex.DecodeString(keyProtected.Crypto.CipherText)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	derivedKey, err := getKDFKey(keyProtected.Crypto, auth)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	calculatedMAC := Sha3(derivedKey[16:32], cipherText)
+	if !bytes.Equal(calculatedMAC, mac) {
+		return nil, nil, errors.New("Decryption failed: MAC mismatch")
 	}
 
 	plainText, err := aesCBCDecrypt(Sha3(derivedKey[:16])[:16], cipherText, iv)
@@ -245,4 +254,42 @@ func DecryptKey(ks keyStorePassphrase, keyAddr common.Address, auth string) (key
 		return nil, nil, err
 	}
 	return plainText, keyId, err
+}
+
+func getKDFKey(cryptoJSON cryptoJSON, auth string) ([]byte, error) {
+	authArray := []byte(auth)
+	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string))
+	if err != nil {
+		return nil, err
+	}
+	dkLen := ensureInt(cryptoJSON.KDFParams["dklen"])
+
+	if cryptoJSON.KDF == "scrypt" {
+		n := ensureInt(cryptoJSON.KDFParams["n"])
+		r := ensureInt(cryptoJSON.KDFParams["r"])
+		p := ensureInt(cryptoJSON.KDFParams["p"])
+		return scrypt.Key(authArray, salt, n, r, p, dkLen)
+
+	} else if cryptoJSON.KDF == "pbkdf2" {
+		c := ensureInt(cryptoJSON.KDFParams["c"])
+		prf := cryptoJSON.KDFParams["prf"].(string)
+		if prf != "hmac-sha256" {
+			return nil, fmt.Errorf("Unsupported PBKDF2 PRF: ", prf)
+		}
+		key := pbkdf2.Key(authArray, salt, c, dkLen, sha256.New)
+		return key, nil
+	}
+
+	return nil, fmt.Errorf("Unsupported KDF: ", cryptoJSON.KDF)
+}
+
+// TODO: can we do without this when unmarshalling dynamic JSON?
+// why do integers in KDF params end up as float64 and not int after
+// unmarshal?
+func ensureInt(x interface{}) int {
+	res, ok := x.(int)
+	if !ok {
+		res = int(x.(float64))
+	}
+	return res
 }

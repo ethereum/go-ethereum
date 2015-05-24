@@ -1,10 +1,13 @@
 package crypto
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/randentropy"
+	"encoding/hex"
+	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto/randentropy"
 )
 
 func TestKeyStorePlain(t *testing.T) {
@@ -96,4 +99,111 @@ func TestImportPreSaleKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// Test and utils for the key store tests in the Ethereum JSON tests;
+// tests/KeyStoreTests/basic_tests.json
+type KeyStoreTestV3 struct {
+	Json     encryptedKeyJSONV3
+	Password string
+	Priv     string
+}
+
+type KeyStoreTestV1 struct {
+	Json     encryptedKeyJSONV1
+	Password string
+	Priv     string
+}
+
+func TestV3_PBKDF2_1(t *testing.T) {
+	tests := loadKeyStoreTestV3("tests/v3_test_vector.json", t)
+	testDecryptV3(tests["wikipage_test_vector_pbkdf2"], t)
+}
+
+func TestV3_PBKDF2_2(t *testing.T) {
+	tests := loadKeyStoreTestV3("../tests/files/KeyStoreTests/basic_tests.json", t)
+	testDecryptV3(tests["test1"], t)
+}
+
+func TestV3_PBKDF2_3(t *testing.T) {
+	tests := loadKeyStoreTestV3("../tests/files/KeyStoreTests/basic_tests.json", t)
+	testDecryptV3(tests["python_generated_test_with_odd_iv"], t)
+}
+
+func TestV3_PBKDF2_4(t *testing.T) {
+	tests := loadKeyStoreTestV3("../tests/files/KeyStoreTests/basic_tests.json", t)
+	testDecryptV3(tests["evilnonce"], t)
+}
+
+func TestV3_Scrypt_1(t *testing.T) {
+	tests := loadKeyStoreTestV3("tests/v3_test_vector.json", t)
+	testDecryptV3(tests["wikipage_test_vector_scrypt"], t)
+}
+
+func TestV3_Scrypt_2(t *testing.T) {
+	tests := loadKeyStoreTestV3("../tests/files/KeyStoreTests/basic_tests.json", t)
+	testDecryptV3(tests["test2"], t)
+}
+
+func TestV1_1(t *testing.T) {
+	tests := loadKeyStoreTestV1("tests/v1_test_vector.json", t)
+	testDecryptV1(tests["test1"], t)
+}
+
+func TestV1_2(t *testing.T) {
+	ks := NewKeyStorePassphrase("tests/v1")
+	addr := common.HexToAddress("cb61d5a9c4896fb9658090b597ef0e7be6f7b67e")
+	k, err := ks.GetKey(addr, "g")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.Address != addr {
+		t.Fatal(fmt.Errorf("Unexpected address: %v, expected %v", k.Address, addr))
+	}
+
+	privHex := hex.EncodeToString(FromECDSA(k.PrivateKey))
+	expectedHex := "d1b1178d3529626a1a93e073f65028370d14c7eb0936eb42abef05db6f37ad7d"
+	if privHex != expectedHex {
+		t.Fatal(fmt.Errorf("Unexpected privkey: %v, expected %v", privHex, expectedHex))
+	}
+}
+
+func testDecryptV3(test KeyStoreTestV3, t *testing.T) {
+	privBytes, _, err := decryptKeyV3(&test.Json, test.Password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	privHex := hex.EncodeToString(privBytes)
+	if test.Priv != privHex {
+		t.Fatal(fmt.Errorf("Decrypted bytes not equal to test, expected %v have %v", test.Priv, privHex))
+	}
+}
+
+func testDecryptV1(test KeyStoreTestV1, t *testing.T) {
+	privBytes, _, err := decryptKeyV1(&test.Json, test.Password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	privHex := hex.EncodeToString(privBytes)
+	if test.Priv != privHex {
+		t.Fatal(fmt.Errorf("Decrypted bytes not equal to test, expected %v have %v", test.Priv, privHex))
+	}
+}
+
+func loadKeyStoreTestV3(file string, t *testing.T) map[string]KeyStoreTestV3 {
+	tests := make(map[string]KeyStoreTestV3)
+	err := common.LoadJSON(file, &tests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tests
+}
+
+func loadKeyStoreTestV1(file string, t *testing.T) map[string]KeyStoreTestV1 {
+	tests := make(map[string]KeyStoreTestV1)
+	err := common.LoadJSON(file, &tests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tests
 }
