@@ -191,6 +191,12 @@ func (tab *Table) Lookup(targetID NodeID) []*Node {
 	result := tab.closest(target, bucketSize)
 	tab.mutex.Unlock()
 
+	// If the result set is empty, all nodes were dropped, refresh
+	if len(result.entries) == 0 {
+		tab.refresh()
+		return nil
+	}
+
 	for {
 		// ask the alpha closest nodes that we haven't asked yet
 		for i := 0; i < len(result.entries) && pendingQueries < alpha; i++ {
@@ -207,7 +213,7 @@ func (tab *Table) Lookup(targetID NodeID) []*Node {
 						tab.db.updateFindFails(n.ID, fails)
 						glog.V(logger.Detail).Infof("Bumping failures for %x: %d", n.ID[:8], fails)
 
-						if fails > maxFindnodeFailures {
+						if fails >= maxFindnodeFailures {
 							glog.V(logger.Detail).Infof("Evacuating node %x: %d findnode failures", n.ID[:8], fails)
 							tab.del(n)
 						}
@@ -232,19 +238,41 @@ func (tab *Table) Lookup(targetID NodeID) []*Node {
 	return result.entries
 }
 
-// refresh performs a lookup for a random target to keep buckets full.
+// refresh performs a lookup for a random target to keep buckets full, or seeds
+// the table if it is empty (initial bootstrap or discarded faulty peers).
 func (tab *Table) refresh() {
-	// The Kademlia paper specifies that the bucket refresh should
-	// perform a refresh in the least recently used bucket. We cannot
-	// adhere to this because the findnode target is a 512bit value
-	// (not hash-sized) and it is not easily possible to generate a
-	// sha3 preimage that falls into a chosen bucket.
-	//
-	// We perform a lookup with a random target instead.
-	var target NodeID
-	rand.Read(target[:])
-	result := tab.Lookup(target)
-	if len(result) == 0 {
+	seed := true
+
+	// If the discovery table is empty, seed with previously known nodes
+	tab.mutex.Lock()
+	for _, bucket := range tab.buckets {
+		if len(bucket.entries) > 0 {
+			seed = false
+			break
+		}
+	}
+	tab.mutex.Unlock()
+
+	// If the table is not empty, try to refresh using the live entries
+	if !seed {
+		// The Kademlia paper specifies that the bucket refresh should
+		// perform a refresh in the least recently used bucket. We cannot
+		// adhere to this because the findnode target is a 512bit value
+		// (not hash-sized) and it is not easily possible to generate a
+		// sha3 preimage that falls into a chosen bucket.
+		//
+		// We perform a lookup with a random target instead.
+		var target NodeID
+		rand.Read(target[:])
+
+		result := tab.Lookup(target)
+		if len(result) == 0 {
+			// Lookup failed, seed after all
+			seed = true
+		}
+	}
+
+	if seed {
 		// Pick a batch of previously know seeds to lookup with
 		seeds := tab.db.querySeeds(10)
 		for _, seed := range seeds {
