@@ -44,9 +44,10 @@ var (
 	nodeDBVersionKey = []byte("version") // Version of the database to flush if changes
 	nodeDBItemPrefix = []byte("n:")      // Identifier to prefix node entries with
 
-	nodeDBDiscoverRoot = ":discover"
-	nodeDBDiscoverPing = nodeDBDiscoverRoot + ":lastping"
-	nodeDBDiscoverPong = nodeDBDiscoverRoot + ":lastpong"
+	nodeDBDiscoverRoot      = ":discover"
+	nodeDBDiscoverPing      = nodeDBDiscoverRoot + ":lastping"
+	nodeDBDiscoverPong      = nodeDBDiscoverRoot + ":lastpong"
+	nodeDBDiscoverFindFails = nodeDBDiscoverRoot + ":findfail"
 )
 
 // newNodeDB creates a new node database for storing and retrieving infos about
@@ -273,6 +274,16 @@ func (db *nodeDB) lastPong(id NodeID) time.Time {
 // updateLastPong updates the last time a remote node successfully contacted.
 func (db *nodeDB) updateLastPong(id NodeID, instance time.Time) error {
 	return db.storeInt64(makeKey(id, nodeDBDiscoverPong), instance.Unix())
+}
+
+// findFails retrieves the number of findnode failures since bonding.
+func (db *nodeDB) findFails(id NodeID) int {
+	return int(db.fetchInt64(makeKey(id, nodeDBDiscoverFindFails)))
+}
+
+// updateFindFails updates the number of findnode failures since bonding.
+func (db *nodeDB) updateFindFails(id NodeID, fails int) error {
+	return db.storeInt64(makeKey(id, nodeDBDiscoverFindFails), int64(fails))
 }
 
 // querySeeds retrieves a batch of nodes to be used as potential seed servers
