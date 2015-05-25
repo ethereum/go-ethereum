@@ -27,10 +27,7 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-/*
-node admin bindings
-*/
-
+// node admin bindings
 func (js *jsre) adminBindings() {
 	ethO, _ := js.re.Get("eth")
 	eth := ethO.Object()

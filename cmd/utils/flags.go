@@ -243,6 +243,11 @@ var (
 		Name:  "bzz",
 		Usage: "Enable swarm",
 	}
+	SwarmProxyPortFlag = cli.StringFlag{
+		Name:  "bzzport",
+		Usage: "Swarm HTTP Proxy Port on localhost",
+		Value: "8500",
+	}
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",

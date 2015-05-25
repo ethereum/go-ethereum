@@ -62,7 +62,7 @@ var errorToString = map[int]string{
 // instance is running on each peer
 type bzzProtocol struct {
 	node      *discover.Node
-	netStore  *NetStore
+	netStore  *netStore
 	peer      *p2p.Peer
 	rw        p2p.MsgReadWriter
 	errors    *errs.Errors
@@ -216,9 +216,9 @@ main entrypoint, wrappers starting a server running the bzz protocol
 use this constructor to attach the protocol ("class") to server caps
 the Dev p2p layer then runs the protocol instance on each peer
 */
-func BzzProtocol(netStore *NetStore) (p2p.Protocol, error) {
+func BzzProtocol(netstore *netStore) (p2p.Protocol, error) {
 
-	db, err := NewLDBDatabase(path.Join(netStore.path, "requests"))
+	db, err := NewLDBDatabase(path.Join(netstore.path, "requests"))
 	if err != nil {
 		return p2p.Protocol{}, err
 	}
@@ -227,17 +227,17 @@ func BzzProtocol(netStore *NetStore) (p2p.Protocol, error) {
 		Version: Version,
 		Length:  ProtocolLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return runBzzProtocol(db, netStore, p, rw)
+			return runBzzProtocol(db, netstore, p, rw)
 		},
 	}, nil
 }
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runBzzProtocol(db *LDBDatabase, netStore *NetStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func runBzzProtocol(db *LDBDatabase, netstore *netStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 
 	self := &bzzProtocol{
-		netStore: netStore,
+		netStore: netstore,
 		rw:       rw,
 		peer:     p,
 		errors: &errs.Errors{

@@ -267,6 +267,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.RPCPortFlag,
 		utils.WhisperEnabledFlag,
 		utils.SwarmEnabledFlag,
+		utils.SwarmProxyPortFlag,
 		utils.VMDebugFlag,
 		utils.ProtocolVersionFlag,
 		utils.NetworkIdFlag,
@@ -337,6 +338,8 @@ func console(ctx *cli.Context) {
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
+		ctx.GlobalBool(utils.SwarmEnabledFlag.Name),
+		ctx.GlobalString(utils.SwarmProxyPortFlag.Name),
 		true,
 		nil,
 	)
@@ -358,6 +361,8 @@ func execJSFiles(ctx *cli.Context) {
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
+		ctx.GlobalBool(utils.SwarmEnabledFlag.Name),
+		ctx.GlobalString(utils.SwarmProxyPortFlag.Name),
 		false,
 		nil,
 	)

@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/bzz"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/docserver"
@@ -72,7 +73,7 @@ type jsre struct {
 	prompter
 }
 
-func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, interactive bool, f xeth.Frontend) *jsre {
+func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, bzzEnabled bool, bzzPort string, interactive bool, f xeth.Frontend) *jsre {
 	js := &jsre{ethereum: ethereum, ps1: "> "}
 	// set default cors domain used by startRpc from CLI flag
 	js.corsDomain = corsDomain
@@ -85,6 +86,12 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, interactive boo
 	js.re = re.New(libPath)
 	js.apiBindings(f)
 	js.adminBindings()
+	if bzzEnabled {
+		ds.RegisterProtocol("bzz", &bzz.RoundTripper{Port: bzzPort})
+		bzz.NewJSApi(js.re, js.ethereum.Swarm)
+		// nil for no natsped, memoryrrbmm d
+		js.ethereum.Swarm.Resolver = resolver.New(xeth.New(ethereum, nil))
+	}
 
 	if !liner.TerminalSupported() || !interactive {
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
@@ -145,7 +152,7 @@ var net = web3.net;
 	js.re.Eval(resolver.GlobalRegistrar + "registrar = GlobalRegistrar.at(\"" + resolver.GlobalRegistrarAddr + "\");")
 }
 
-var ds, _ = docserver.New("/")
+var ds = docserver.New("/")
 
 func (self *jsre) ConfirmTransaction(tx string) bool {
 	if self.ethereum.NatSpec {

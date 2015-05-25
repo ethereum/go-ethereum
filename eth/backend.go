@@ -82,10 +82,11 @@ type Config struct {
 	// If nil, an ephemeral key is used.
 	NodeKey *ecdsa.PrivateKey
 
-	NAT  nat.Interface
-	Shh  bool
-	Bzz  bool
-	Dial bool
+	NAT     nat.Interface
+	Shh     bool
+	Dial    bool
+	Bzz     bool
+	BzzPort string
 
 	Etherbase      string
 	GasPrice       *big.Int
@@ -194,8 +195,7 @@ type Ethereum struct {
 	pow             *ethash.Ethash
 	protocolManager *ProtocolManager
 	downloader      *downloader.Downloader
-	DPA             *bzz.DPA
-	netStore        *bzz.NetStore
+	Swarm           *bzz.Api
 	SolcPath        string
 	solc            *compiler.Solidity
 
@@ -310,20 +310,12 @@ func New(config *Config) (*Ethereum, error) {
 	protocols := []p2p.Protocol{eth.protocolManager.SubProtocol}
 
 	if config.Bzz {
-		eth.netStore, err = bzz.NewNetStore(filepath.Join(config.DataDir, "bzz"), filepath.Join(config.DataDir, "bzzpeers.json"))
-		if err != nil {
-			glog.V(logger.Warn).Infof("BZZ: error creating net store: %v. Protocol skipped", err)
-		} else {
-			chunker := &bzz.TreeChunker{}
-			chunker.Init()
-			eth.DPA = &bzz.DPA{
-				Chunker:    chunker,
-				ChunkStore: eth.netStore,
-			}
-			bzzProto, err := bzz.BzzProtocol(eth.netStore)
-			if err == nil {
-				protocols = append(protocols, bzzProto)
-			}
+		eth.Swarm, err = bzz.NewApi(config.DataDir, config.BzzPort)
+		var proto p2p.Protocol
+		proto, err = eth.Swarm.Bzz()
+		if err == nil {
+			glog.V(logger.Warn).Infof("BZZ: error creating swarm: %v. Protocol skipped", err)
+			protocols = append(protocols, proto)
 		}
 	}
 
@@ -498,10 +490,8 @@ func (s *Ethereum) Start() error {
 		s.whisper.Start()
 	}
 
-	if s.DPA != nil {
-		s.DPA.Start()
-		s.netStore.Start(s.net.Self(), s.AddPeer)
-		go bzz.StartHttpServer(s.DPA)
+	if s.Swarm != nil {
+		s.Swarm.Start(s.net.Self(), s.AddPeer)
 	}
 
 	// broadcast transactions
@@ -576,11 +566,8 @@ func (s *Ethereum) Stop() {
 	}
 	s.StopAutoDAG()
 
-	if s.DPA != nil {
-		s.DPA.Stop()
-	}
-	if s.netStore != nil {
-		s.netStore.Stop()
+	if s.Swarm != nil {
+		s.Swarm.Stop()
 	}
 
 	glog.V(logger.Info).Infoln("Server stopped")

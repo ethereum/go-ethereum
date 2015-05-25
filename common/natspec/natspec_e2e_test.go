@@ -91,10 +91,7 @@ func (self *testFrontend) UnlockAccount(acc []byte) bool {
 
 func (self *testFrontend) ConfirmTransaction(tx string) bool {
 	if self.wantNatSpec {
-		ds, err := docserver.New("/tmp/")
-		if err != nil {
-			self.t.Errorf("Error creating DocServer: %v", err)
-		}
+		ds := docserver.New("/tmp/")
 		self.lastConfirm = GetNotice(self.xeth, tx, ds)
 	}
 	return true
