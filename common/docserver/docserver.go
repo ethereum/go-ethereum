@@ -9,29 +9,17 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// http://golang.org/pkg/net/http/#RoundTripper
-var (
-	schemes = map[string]func(*DocServer) http.RoundTripper{
-		// Simple File server from local disk file:///etc/passwd :)
-		"file": fileServerOnDocRoot,
-	}
-)
-
-func fileServerOnDocRoot(ds *DocServer) http.RoundTripper {
-	return http.NewFileTransport(http.Dir(ds.DocRoot))
-}
-
 type DocServer struct {
 	*http.Transport
 	DocRoot string
 }
 
-func New(docRoot string) (self *DocServer, err error) {
+func New(docRoot string) (self *DocServer) {
 	self = &DocServer{
 		Transport: &http.Transport{},
 		DocRoot:   docRoot,
 	}
-	err = self.RegisterProtocols(schemes)
+	self.RegisterProtocol("file", http.NewFileTransport(http.Dir(self.DocRoot)))
 	return
 }
 
@@ -43,13 +31,6 @@ func (self *DocServer) Client() *http.Client {
 	return &http.Client{
 		Transport: self,
 	}
-}
-
-func (self *DocServer) RegisterProtocols(schemes map[string]func(*DocServer) http.RoundTripper) (err error) {
-	for scheme, rtf := range schemes {
-		self.RegisterProtocol(scheme, rtf(self))
-	}
-	return
 }
 
 func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []byte, err error) {

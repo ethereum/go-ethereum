@@ -495,7 +495,7 @@ func (self *bzzProtocol) storeRequest(key Key) {
 	peerKey := make([]byte, 64)
 	copy(peerKey, self.key())
 	copy(peerKey[32:], key[:])
-	dpaLogger.Debugf("enter store request %x", peerKey)
+	dpaLogger.Debugf("enter store request %x into db", peerKey)
 	self.requestDb.Put(peerKey, []byte{0})
 }
 
