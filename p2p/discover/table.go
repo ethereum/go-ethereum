@@ -278,12 +278,16 @@ func (tab *Table) refresh() {
 		for _, seed := range seeds {
 			glog.V(logger.Debug).Infoln("Seeding network with", seed)
 		}
+		peers := append(tab.nursery, seeds...)
+
 		// Bootstrap the table with a self lookup
-		all := tab.bondall(append(tab.nursery, seeds...))
-		tab.mutex.Lock()
-		tab.add(all)
-		tab.mutex.Unlock()
-		tab.Lookup(tab.self.ID)
+		if len(peers) > 0 {
+			tab.mutex.Lock()
+			tab.add(peers)
+			tab.mutex.Unlock()
+
+			tab.Lookup(tab.self.ID)
+		}
 		// TODO: the Kademlia paper says that we're supposed to perform
 		// random lookups in all buckets further away than our closest neighbor.
 	}
