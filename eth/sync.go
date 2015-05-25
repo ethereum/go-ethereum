@@ -82,7 +82,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	}
 	// Make sure the peer's TD is higher than our own. If not drop.
 	if peer.td.Cmp(pm.chainman.Td()) <= 0 {
-		glog.V(logger.Debug).Infoln("Synchronisation canceled: peer TD too small")
+		glog.V(logger.Debug).Infoln("Synchronisation canceled: peer's total difficulty is too small")
 		return
 	}
 	// FIXME if we have the hash in our chain and the TD of the peer is
