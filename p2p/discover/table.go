@@ -278,14 +278,11 @@ func (tab *Table) refresh() {
 		for _, seed := range seeds {
 			glog.V(logger.Debug).Infoln("Seeding network with", seed)
 		}
-		peers := append(tab.nursery, seeds...)
+		nodes := append(tab.nursery, seeds...)
 
-		// Bootstrap the table with a self lookup
-		if len(peers) > 0 {
-			tab.mutex.Lock()
-			tab.add(peers)
-			tab.mutex.Unlock()
-
+		// Bond with all the seed nodes (will pingpong only if failed recently)
+		bonded := tab.bondall(nodes)
+		if len(bonded) > 0 {
 			tab.Lookup(tab.self.ID)
 		}
 		// TODO: the Kademlia paper says that we're supposed to perform
