@@ -3,18 +3,18 @@ package rpc
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/jsre"
 	"github.com/robertkrimen/otto"
 )
 
 type Jeth struct {
 	ethApi *EthereumApi
-	toVal  func(interface{}) otto.Value
 	re     *jsre.JSRE
 }
 
-func NewJeth(ethApi *EthereumApi, toVal func(interface{}) otto.Value, re *jsre.JSRE) *Jeth {
-	return &Jeth{ethApi, toVal, re}
+func NewJeth(ethApi *EthereumApi, re *jsre.JSRE) *Jeth {
+	return &Jeth{ethApi, re}
 }
 
 func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id interface{}) (response otto.Value) {

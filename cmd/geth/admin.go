@@ -144,7 +144,8 @@ func (js *jsre) pendingTransactions(call otto.FunctionCall) otto.Value {
 		}
 	}
 
-	return js.re.ToVal(ltxs)
+	v, _ := call.Otto.ToValue(ltxs)
+	return v
 }
 
 func (js *jsre) resend(call otto.FunctionCall) otto.Value {
@@ -175,7 +176,8 @@ func (js *jsre) resend(call otto.FunctionCall) otto.Value {
 		}
 		js.ethereum.TxPool().RemoveTransactions(types.Transactions{tx.tx})
 
-		return js.re.ToVal(ret)
+		v, _ := call.Otto.ToValue(ret)
+		return v
 	}
 
 	fmt.Println("first argument must be a transaction")
@@ -198,12 +200,13 @@ func (js *jsre) sign(call otto.FunctionCall) otto.Value {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
-	v, err := js.xeth.Sign(signer, data, false)
+	signed, err := js.xeth.Sign(signer, data, false)
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
-	return js.re.ToVal(v)
+	v, _ := call.Otto.ToValue(signed)
+	return v
 }
 
 func (js *jsre) debugBlock(call otto.FunctionCall) otto.Value {
@@ -237,8 +240,8 @@ func (js *jsre) setHead(call otto.FunctionCall) otto.Value {
 
 func (js *jsre) downloadProgress(call otto.FunctionCall) otto.Value {
 	current, max := js.ethereum.Downloader().Stats()
-
-	return js.re.ToVal(fmt.Sprintf("%d/%d", current, max))
+	v, _ := call.Otto.ToValue(fmt.Sprintf("%d/%d", current, max))
+	return v
 }
 
 func (js *jsre) getBlockRlp(call otto.FunctionCall) otto.Value {
@@ -248,7 +251,8 @@ func (js *jsre) getBlockRlp(call otto.FunctionCall) otto.Value {
 		return otto.UndefinedValue()
 	}
 	encoded, _ := rlp.EncodeToBytes(block)
-	return js.re.ToVal(fmt.Sprintf("%x", encoded))
+	v, _ := call.Otto.ToValue(fmt.Sprintf("%x", encoded))
+	return v
 }
 
 func (js *jsre) setExtra(call otto.FunctionCall) otto.Value {
@@ -278,8 +282,9 @@ func (js *jsre) setGasPrice(call otto.FunctionCall) otto.Value {
 	return otto.UndefinedValue()
 }
 
-func (js *jsre) hashrate(otto.FunctionCall) otto.Value {
-	return js.re.ToVal(js.ethereum.Miner().HashRate())
+func (js *jsre) hashrate(call otto.FunctionCall) otto.Value {
+	v, _ := call.Otto.ToValue(js.ethereum.Miner().HashRate())
+	return v
 }
 
 func (js *jsre) makeDAG(call otto.FunctionCall) otto.Value {
@@ -495,15 +500,18 @@ func (js *jsre) newAccount(call otto.FunctionCall) otto.Value {
 		fmt.Printf("Could not create the account: %v", err)
 		return otto.UndefinedValue()
 	}
-	return js.re.ToVal(acct.Address.Hex())
+	v, _ := call.Otto.ToValue(acct.Address.Hex())
+	return v
 }
 
 func (js *jsre) nodeInfo(call otto.FunctionCall) otto.Value {
-	return js.re.ToVal(js.ethereum.NodeInfo())
+	v, _ := call.Otto.ToValue(js.ethereum.NodeInfo())
+	return v
 }
 
 func (js *jsre) peers(call otto.FunctionCall) otto.Value {
-	return js.re.ToVal(js.ethereum.PeersInfo())
+	v, _ := call.Otto.ToValue(js.ethereum.PeersInfo())
+	return v
 }
 
 func (js *jsre) importChain(call otto.FunctionCall) otto.Value {
@@ -562,7 +570,8 @@ func (js *jsre) dumpBlock(call otto.FunctionCall) otto.Value {
 
 	statedb := state.New(block.Root(), js.ethereum.StateDb())
 	dump := statedb.RawDump()
-	return js.re.ToVal(dump)
+	v, _ := call.Otto.ToValue(dump)
+	return v
 }
 
 func (js *jsre) waitForBlocks(call otto.FunctionCall) otto.Value {
@@ -611,7 +620,8 @@ func (js *jsre) waitForBlocks(call otto.FunctionCall) otto.Value {
 		return otto.UndefinedValue()
 	case height = <-wait:
 	}
-	return js.re.ToVal(height.Uint64())
+	v, _ := call.Otto.ToValue(height.Uint64())
+	return v
 }
 
 func (js *jsre) sleep(call otto.FunctionCall) otto.Value {
@@ -704,8 +714,8 @@ func (js *jsre) register(call otto.FunctionCall) otto.Value {
 		return otto.UndefinedValue()
 	}
 
-	return js.re.ToVal(contenthash.Hex())
-
+	v, _ := call.Otto.ToValue(contenthash.Hex())
+	return v
 }
 
 func (js *jsre) registerUrl(call otto.FunctionCall) otto.Value {
@@ -764,7 +774,8 @@ func (js *jsre) getContractInfo(call otto.FunctionCall) otto.Value {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
-	return js.re.ToVal(info)
+	v, _ := call.Otto.ToValue(info)
+	return v
 }
 
 func (js *jsre) startNatSpec(call otto.FunctionCall) otto.Value {
