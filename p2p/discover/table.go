@@ -324,6 +324,7 @@ func (tab *Table) bond(pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16
 		fails = tab.db.findFails(id)
 	}
 	// If the node is unknown (non-bonded) or failed (remotely unknown), bond from scratch
+	var result error
 	if node == nil || fails > 0 {
 		glog.V(logger.Detail).Infof("Bonding %x: known=%v, fails=%v", id[:8], node != nil, fails)
 
@@ -345,22 +346,24 @@ func (tab *Table) bond(pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16
 			delete(tab.bonding, id)
 			tab.bondmu.Unlock()
 		}
-		node = w.n
-		if w.err != nil {
-			return nil, w.err
+		// Retrieve the bonding results
+		result = w.err
+		if result == nil {
+			node = w.n
 		}
 	}
-	// Bonding succeeded, add to the table and reset previous findnode failures
-	tab.mutex.Lock()
-	defer tab.mutex.Unlock()
+	// Even if bonding temporarily failed, give the node a chance
+	if node != nil {
+		tab.mutex.Lock()
+		defer tab.mutex.Unlock()
 
-	b := tab.buckets[logdist(tab.self.sha, node.sha)]
-	if !b.bump(node) {
-		tab.pingreplace(node, b)
+		b := tab.buckets[logdist(tab.self.sha, node.sha)]
+		if !b.bump(node) {
+			tab.pingreplace(node, b)
+		}
+		tab.db.updateFindFails(id, 0)
 	}
-	tab.db.updateFindFails(id, 0)
-
-	return node, nil
+	return node, result
 }
 
 func (tab *Table) pingpong(w *bondproc, pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16) {
