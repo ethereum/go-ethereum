@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -233,14 +234,23 @@ func (bc *ChainManager) setLastState() {
 	data, _ := bc.blockDb.Get([]byte("LastBlock"))
 	if len(data) != 0 {
 		block := bc.GetBlock(common.BytesToHash(data))
-		bc.currentBlock = block
-		bc.lastBlockHash = block.Hash()
-
-		// Set the last know difficulty (might be 0x0 as initial value, Genesis)
-		bc.td = common.BigD(bc.blockDb.LastKnownTD())
+		if block != nil {
+			bc.currentBlock = block
+			bc.lastBlockHash = block.Hash()
+		} else { // TODO CLEAN THIS UP TMP CODE
+			block = bc.GetBlockByNumber(400000)
+			if block == nil {
+				fmt.Println("Fatal. LastBlock not found. Report this issue")
+				os.Exit(1)
+			}
+			bc.currentBlock = block
+			bc.lastBlockHash = block.Hash()
+			bc.insert(block)
+		}
 	} else {
 		bc.Reset()
 	}
+	bc.td = bc.currentBlock.Td
 	bc.currentGasLimit = CalcGasLimit(bc.currentBlock)
 
 	if glog.V(logger.Info) {
@@ -471,7 +481,7 @@ func (self *ChainManager) GetAncestors(block *types.Block, length int) (blocks [
 }
 
 func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
-	bc.blockDb.Put([]byte("LTD"), td.Bytes())
+	//bc.blockDb.Put([]byte("LTD"), td.Bytes())
 	bc.td = td
 }
 
