@@ -68,10 +68,10 @@ type bucket struct {
 
 func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, nodeDBPath string) *Table {
 	// If no node database was given, use an in-memory one
-	db, err := newNodeDB(nodeDBPath, Version)
+	db, err := newNodeDB(nodeDBPath, Version, ourID)
 	if err != nil {
 		glog.V(logger.Warn).Infoln("Failed to open node database:", err)
-		db, _ = newNodeDB("", Version)
+		db, _ = newNodeDB("", Version, ourID)
 	}
 	tab := &Table{
 		net:       t,

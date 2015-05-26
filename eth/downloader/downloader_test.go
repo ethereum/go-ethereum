@@ -88,10 +88,10 @@ func (dl *downloadTester) sync(peerId string, head common.Hash) error {
 // syncTake is starts synchronising with a remote peer, but concurrently it also
 // starts fetching blocks that the downloader retrieved. IT blocks until both go
 // routines terminate.
-func (dl *downloadTester) syncTake(peerId string, head common.Hash) (types.Blocks, error) {
+func (dl *downloadTester) syncTake(peerId string, head common.Hash) ([]*Block, error) {
 	// Start a block collector to take blocks as they become available
 	done := make(chan struct{})
-	took := []*types.Block{}
+	took := []*Block{}
 	go func() {
 		for running := true; running; {
 			select {
@@ -349,7 +349,7 @@ func TestNonExistingParentAttack(t *testing.T) {
 	if len(bs) != 1 {
 		t.Fatalf("retrieved block mismatch: have %v, want %v", len(bs), 1)
 	}
-	if tester.hasBlock(bs[0].ParentHash()) {
+	if tester.hasBlock(bs[0].RawBlock.ParentHash()) {
 		t.Fatalf("tester knows about the unknown hash")
 	}
 	tester.downloader.Cancel()
@@ -364,7 +364,7 @@ func TestNonExistingParentAttack(t *testing.T) {
 	if len(bs) != 1 {
 		t.Fatalf("retrieved block mismatch: have %v, want %v", len(bs), 1)
 	}
-	if !tester.hasBlock(bs[0].ParentHash()) {
+	if !tester.hasBlock(bs[0].RawBlock.ParentHash()) {
 		t.Fatalf("tester doesn't know about the origin hash")
 	}
 }

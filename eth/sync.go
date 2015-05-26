@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -57,13 +58,20 @@ func (pm *ProtocolManager) processBlocks() error {
 	if len(blocks) == 0 {
 		return nil
 	}
-	glog.V(logger.Debug).Infof("Inserting chain with %d blocks (#%v - #%v)\n", len(blocks), blocks[0].Number(), blocks[len(blocks)-1].Number())
+	glog.V(logger.Debug).Infof("Inserting chain with %d blocks (#%v - #%v)\n", len(blocks), blocks[0].RawBlock.Number(), blocks[len(blocks)-1].RawBlock.Number())
 
 	for len(blocks) != 0 && !pm.quit {
+		// Retrieve the first batch of blocks to insert
 		max := int(math.Min(float64(len(blocks)), float64(blockProcAmount)))
-		_, err := pm.chainman.InsertChain(blocks[:max])
+		raw := make(types.Blocks, 0, max)
+		for _, block := range blocks[:max] {
+			raw = append(raw, block.RawBlock)
+		}
+		// Try to inset the blocks, drop the originating peer if there's an error
+		index, err := pm.chainman.InsertChain(raw)
 		if err != nil {
 			glog.V(logger.Warn).Infof("Block insertion failed: %v", err)
+			pm.removePeer(blocks[index].OriginPeer)
 			pm.downloader.Cancel()
 			return err
 		}
@@ -82,7 +90,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	}
 	// Make sure the peer's TD is higher than our own. If not drop.
 	if peer.td.Cmp(pm.chainman.Td()) <= 0 {
-		glog.V(logger.Debug).Infoln("Synchronisation canceled: peer TD too small")
+		glog.V(logger.Debug).Infoln("Synchronisation canceled: peer's total difficulty is too small")
 		return
 	}
 	// FIXME if we have the hash in our chain and the TD of the peer is
@@ -105,7 +113,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 
 	case downloader.ErrTimeout, downloader.ErrBadPeer, downloader.ErrInvalidChain, downloader.ErrCrossCheckFailed:
 		glog.V(logger.Debug).Infof("Removing peer %v: %v", peer.id, err)
-		pm.removePeer(peer)
+		pm.removePeer(peer.id)
 
 	case downloader.ErrPendingQueue:
 		glog.V(logger.Debug).Infoln("Synchronisation aborted:", err)

@@ -141,7 +141,7 @@ var net = web3.net;
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
 
-	js.re.Eval(globalRegistrar + "registrar = new GlobalRegistrar(\"" + globalRegistrarAddr + "\");")
+	js.re.Eval(globalRegistrar + "registrar = GlobalRegistrar.at(\"" + globalRegistrarAddr + "\");")
 }
 
 var ds, _ = docserver.New("/")

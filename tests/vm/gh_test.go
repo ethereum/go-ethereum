@@ -2,7 +2,6 @@ package vm
 
 import (
 	"bytes"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -373,21 +372,16 @@ func TestWallet(t *testing.T) {
 	RunVmTest(fn, t)
 }
 
-func TestRandom(t *testing.T) {
-	// TODO: fix JSON EOF bug and unskip
-	t.Skip()
-	fileNames := make([]string, 1024)
-	fileInfos, err := ioutil.ReadDir("../files/StateTests/RandomTests")
-	if err != nil {
-		t.Errorf("Could not read StateTests/RandomTests dir: %v", err)
-		return
+func TestStateTestsRandom(t *testing.T) {
+	fns, _ := filepath.Glob("../files/StateTests/RandomTests/*")
+	for _, fn := range fns {
+		RunVmTest(fn, t)
 	}
-	for _, fileInfo := range fileInfos {
-		fileNames = append(fileNames, fileInfo.Name())
-	}
+}
 
-	//for _, f := range fileNames {
-	path := filepath.Join("../files/StateTests/RandomTests/", fileNames[0])
-	RunVmTest(path, t)
-	//}
+func TestVMRandom(t *testing.T) {
+	fns, _ := filepath.Glob("../files/VMTests/RandomTests/*")
+	for _, fn := range fns {
+		RunVmTest(fn, t)
+	}
 }

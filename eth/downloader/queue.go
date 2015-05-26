@@ -36,7 +36,7 @@ type queue struct {
 	pendPool map[string]*fetchRequest // Currently pending block retrieval operations
 
 	blockPool   map[common.Hash]int // Hash-set of the downloaded data blocks, mapping to cache indexes
-	blockCache  []*types.Block      // Downloaded but not yet delivered blocks
+	blockCache  []*Block            // Downloaded but not yet delivered blocks
 	blockOffset int                 // Offset of the first cached block in the block-chain
 
 	lock sync.RWMutex
@@ -148,7 +148,7 @@ func (q *queue) Insert(hashes []common.Hash) []common.Hash {
 
 // GetHeadBlock retrieves the first block from the cache, or nil if it hasn't
 // been downloaded yet (or simply non existent).
-func (q *queue) GetHeadBlock() *types.Block {
+func (q *queue) GetHeadBlock() *Block {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
@@ -159,7 +159,7 @@ func (q *queue) GetHeadBlock() *types.Block {
 }
 
 // GetBlock retrieves a downloaded block, or nil if non-existent.
-func (q *queue) GetBlock(hash common.Hash) *types.Block {
+func (q *queue) GetBlock(hash common.Hash) *Block {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
@@ -176,18 +176,18 @@ func (q *queue) GetBlock(hash common.Hash) *types.Block {
 }
 
 // TakeBlocks retrieves and permanently removes a batch of blocks from the cache.
-func (q *queue) TakeBlocks() types.Blocks {
+func (q *queue) TakeBlocks() []*Block {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	// Accumulate all available blocks
-	var blocks types.Blocks
+	blocks := []*Block{}
 	for _, block := range q.blockCache {
 		if block == nil {
 			break
 		}
 		blocks = append(blocks, block)
-		delete(q.blockPool, block.Hash())
+		delete(q.blockPool, block.RawBlock.Hash())
 	}
 	// Delete the blocks from the slice and let them be garbage collected
 	// without this slice trick the blocks would stay in memory until nil
@@ -312,8 +312,10 @@ func (q *queue) Deliver(id string, blocks []*types.Block) (err error) {
 			return ErrInvalidChain
 		}
 		// Otherwise merge the block and mark the hash block
-		q.blockCache[index] = block
-
+		q.blockCache[index] = &Block{
+			RawBlock:   block,
+			OriginPeer: id,
+		}
 		delete(request.Hashes, hash)
 		delete(q.hashPool, hash)
 		q.blockPool[hash] = int(block.NumberU64())
@@ -342,6 +344,6 @@ func (q *queue) Alloc(offset int) {
 		size = blockCacheLimit
 	}
 	if len(q.blockCache) < size {
-		q.blockCache = append(q.blockCache, make([]*types.Block, size-len(q.blockCache))...)
+		q.blockCache = append(q.blockCache, make([]*Block, size-len(q.blockCache))...)
 	}
 }
