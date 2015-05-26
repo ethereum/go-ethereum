@@ -16,6 +16,10 @@
 			"Rev": "9b2bd2b3489748d4d0a204fa4eb2ee9e89e0ebc6"
 		},
 		{
+			"ImportPath": "github.com/davecgh/go-spew/spew",
+			"Rev": "3e6e67c4dcea3ac2f25fd4731abc0e1deaf36216"
+		},
+		{
 			"ImportPath": "github.com/ethereum/ethash",
 			"Comment": "v23.1-206-gf0e6321",
 			"Rev": "f0e63218b721dc2f696920a92d5de1f6364e9bf7"
