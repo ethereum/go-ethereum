@@ -32,10 +32,6 @@ func TestBcInvalidRLPTests(t *testing.T) {
 	runBlockTestsInFile("files/BlockTests/bcInvalidRLPTest.json", []string{}, t)
 }
 
-func TestBcJSAPITests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcJS_API_Test.json", []string{}, t)
-}
-
 func TestBcRPCAPITests(t *testing.T) {
 	runBlockTestsInFile("files/BlockTests/bcRPC_API_Test.json", []string{}, t)
 }
