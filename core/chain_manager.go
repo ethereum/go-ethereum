@@ -750,7 +750,7 @@ out:
 
 func blockErr(block *types.Block, err error) {
 	h := block.Header()
-	glog.V(logger.Error).Infof("INVALID block #%v (%x)\n", h.Number, h.Hash().Bytes())
+	glog.V(logger.Error).Infof("Bad block #%v (%x)\n", h.Number, h.Hash().Bytes())
 	glog.V(logger.Error).Infoln(err)
 	glog.V(logger.Debug).Infoln(block)
 }
