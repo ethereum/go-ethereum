@@ -162,6 +162,9 @@ func (self *GasPriceOracle) SuggestPrice() *big.Int {
 	if base == nil {
 		base = self.eth.GpoMinGasPrice
 	}
+	if base == nil {
+		return big.NewInt(10000000000000) // apparently MinGasPrice is not initialized during some tests
+	}
 
 	baseCorr := new(big.Int).Mul(base, big.NewInt(int64(100+self.eth.GpobaseCorrectionFactor)))
 	baseCorr.Div(baseCorr, big.NewInt(100))
