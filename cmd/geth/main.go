@@ -533,9 +533,9 @@ func importchain(ctx *cli.Context) {
 	}
 
 	// force database flush
-	ethereum.BlockDb().Close()
-	ethereum.StateDb().Close()
-	ethereum.ExtraDb().Close()
+	ethereum.BlockDb().Flush()
+	ethereum.StateDb().Flush()
+	ethereum.ExtraDb().Flush()
 
 	fmt.Printf("Import done in %v", time.Since(start))
 
@@ -630,9 +630,9 @@ func upgradeDb(ctx *cli.Context) {
 	}
 
 	// force database flush
-	ethereum.BlockDb().Close()
-	ethereum.StateDb().Close()
-	ethereum.ExtraDb().Close()
+	ethereum.BlockDb().Flush()
+	ethereum.StateDb().Flush()
+	ethereum.ExtraDb().Flush()
 
 	os.Remove(exportFile)
 
