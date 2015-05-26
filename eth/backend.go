@@ -535,6 +535,7 @@ func (self *Ethereum) AddPeer(nodeURL string) error {
 func (s *Ethereum) Stop() {
 	s.txSub.Unsubscribe() // quits txBroadcastLoop
 
+	s.net.Stop()
 	s.protocolManager.Stop()
 	s.chainManager.Stop()
 	s.txPool.Stop()
@@ -544,7 +545,6 @@ func (s *Ethereum) Stop() {
 	}
 	s.StopAutoDAG()
 
-	glog.V(logger.Info).Infoln("Server stopped")
 	close(s.shutdownChan)
 }
 

@@ -8,6 +8,7 @@ package discover
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"net"
 	"sort"
 	"sync"
@@ -90,8 +91,56 @@ func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, nodeDBPath string
 }
 
 // Self returns the local node.
+// The returned node should not be modified by the caller.
 func (tab *Table) Self() *Node {
 	return tab.self
+}
+
+// ReadRandomNodes fills the given slice with random nodes from the
+// table. It will not write the same node more than once. The nodes in
+// the slice are copies and can be modified by the caller.
+func (tab *Table) ReadRandomNodes(buf []*Node) (n int) {
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+	// TODO: tree-based buckets would help here
+	// Find all non-empty buckets and get a fresh slice of their entries.
+	var buckets [][]*Node
+	for _, b := range tab.buckets {
+		if len(b.entries) > 0 {
+			buckets = append(buckets, b.entries[:])
+		}
+	}
+	if len(buckets) == 0 {
+		return 0
+	}
+	// Shuffle the buckets.
+	for i := uint32(len(buckets)) - 1; i > 0; i-- {
+		j := randUint(i)
+		buckets[i], buckets[j] = buckets[j], buckets[i]
+	}
+	// Move head of each bucket into buf, removing buckets that become empty.
+	var i, j int
+	for ; i < len(buf); i, j = i+1, (j+1)%len(buckets) {
+		b := buckets[j]
+		buf[i] = &(*b[0])
+		buckets[j] = b[1:]
+		if len(b) == 1 {
+			buckets = append(buckets[:j], buckets[j+1:]...)
+		}
+		if len(buckets) == 0 {
+			break
+		}
+	}
+	return i + 1
+}
+
+func randUint(max uint32) uint32 {
+	if max == 0 {
+		return 0
+	}
+	var b [4]byte
+	rand.Read(b[:])
+	return binary.BigEndian.Uint32(b[:]) % max
 }
 
 // Close terminates the network listener and flushes the node database.
