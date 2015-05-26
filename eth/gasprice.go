@@ -159,6 +159,10 @@ func (self *GasPriceOracle) SuggestPrice() *big.Int {
 	base := self.lastBase
 	self.lastBaseMutex.Unlock()
 
+	if base == nil {
+		base = self.eth.GpoMinGasPrice
+	}
+
 	baseCorr := new(big.Int).Mul(base, big.NewInt(int64(100+self.eth.GpobaseCorrectionFactor)))
 	baseCorr.Div(baseCorr, big.NewInt(100))
 
