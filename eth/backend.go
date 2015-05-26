@@ -72,6 +72,7 @@ type Config struct {
 
 	MaxPeers        int
 	MaxPendingPeers int
+	Discovery       bool
 	Port            string
 
 	// Space-separated list of discovery node URLs
@@ -311,6 +312,7 @@ func New(config *Config) (*Ethereum, error) {
 		Name:            config.Name,
 		MaxPeers:        config.MaxPeers,
 		MaxPendingPeers: config.MaxPendingPeers,
+		Discovery:       config.Discovery,
 		Protocols:       protocols,
 		NAT:             config.NAT,
 		NoDial:          !config.Dial,
