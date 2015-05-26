@@ -92,13 +92,13 @@ func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpo
 	return manager
 }
 
-func (pm *ProtocolManager) removePeer(peer *peer) {
+func (pm *ProtocolManager) removePeer(id string) {
 	// Unregister the peer from the downloader
-	pm.downloader.UnregisterPeer(peer.id)
+	pm.downloader.UnregisterPeer(id)
 
 	// Remove the peer from the Ethereum peer set too
-	glog.V(logger.Detail).Infoln("Removing peer", peer.id)
-	if err := pm.peers.Unregister(peer.id); err != nil {
+	glog.V(logger.Detail).Infoln("Removing peer", id)
+	if err := pm.peers.Unregister(id); err != nil {
 		glog.V(logger.Error).Infoln("Removal failed:", err)
 	}
 }
@@ -148,7 +148,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		glog.V(logger.Error).Infoln("Addition failed:", err)
 		return err
 	}
-	defer pm.removePeer(p)
+	defer pm.removePeer(p.id)
 
 	if err := pm.downloader.RegisterPeer(p.id, p.recentHash, p.requestHashes, p.requestBlocks); err != nil {
 		return err
@@ -315,7 +315,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 			if _, err := self.chainman.InsertChain(types.Blocks{request.Block}); err != nil {
 				glog.V(logger.Error).Infoln("removed peer (", p.id, ") due to block error")
 
-				self.removePeer(p)
+				self.removePeer(p.id)
 
 				return nil
 			}
