@@ -241,10 +241,18 @@ func (srv *Server) AddPeer(node *discover.Node) {
 func (srv *Server) Self() *discover.Node {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
+
+	// If the server's not running, return an empty node
 	if !srv.running {
 		return &discover.Node{IP: net.ParseIP("0.0.0.0")}
 	}
+	// If the node is running but discovery is off, manually assemble the node infos
 	if srv.ntab == nil {
+		// Inbound connections disabled, use zero address
+		if srv.listener == nil {
+			return &discover.Node{IP: net.ParseIP("0.0.0.0"), ID: discover.PubkeyID(&srv.PrivateKey.PublicKey)}
+		}
+		// Otherwise inject the listener address too
 		addr := srv.listener.Addr().(*net.TCPAddr)
 		return &discover.Node{
 			ID:  discover.PubkeyID(&srv.PrivateKey.PublicKey),
@@ -252,6 +260,7 @@ func (srv *Server) Self() *discover.Node {
 			TCP: uint16(addr.Port),
 		}
 	}
+	// Otherwise return the live node infos
 	return srv.ntab.Self()
 }
 
