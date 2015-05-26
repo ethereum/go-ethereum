@@ -1,16 +1,15 @@
 package jsre
 
 import (
-	"github.com/robertkrimen/otto"
 	"io/ioutil"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/robertkrimen/otto"
 )
 
-type testNativeObjectBinding struct {
-	toVal func(interface{}) otto.Value
-}
+type testNativeObjectBinding struct{}
 
 type msg struct {
 	Msg string
@@ -21,7 +20,8 @@ func (no *testNativeObjectBinding) TestMethod(call otto.FunctionCall) otto.Value
 	if err != nil {
 		return otto.UndefinedValue()
 	}
-	return no.toVal(&msg{m})
+	v, _ := call.Otto.ToValue(&msg{m})
+	return v
 }
 
 func TestExec(t *testing.T) {
@@ -74,7 +74,7 @@ func TestNatto(t *testing.T) {
 func TestBind(t *testing.T) {
 	jsre := New("/tmp")
 
-	jsre.Bind("no", &testNativeObjectBinding{jsre.ToVal})
+	jsre.Bind("no", &testNativeObjectBinding{})
 
 	val, err := jsre.Run(`no.TestMethod("testMsg")`)
 	if err != nil {
