@@ -275,9 +275,6 @@ func (srv *Server) Start() (err error) {
 	if srv.PrivateKey == nil {
 		return fmt.Errorf("Server.PrivateKey must be set to a non-nil key")
 	}
-	if srv.MaxPeers <= 0 {
-		return fmt.Errorf("Server.MaxPeers must be > 0")
-	}
 	if srv.newTransport == nil {
 		srv.newTransport = newRLPX
 	}
