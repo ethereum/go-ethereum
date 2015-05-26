@@ -138,3 +138,17 @@ func TestRemoveTx(t *testing.T) {
 		t.Error("expected txs to be 0, got", len(pool.txs))
 	}
 }
+
+func TestNegativeValue(t *testing.T) {
+	pool, key := setupTxPool()
+
+	tx := transaction()
+	tx.Value().Set(big.NewInt(-1))
+	tx.SignECDSA(key)
+	from, _ := tx.From()
+	pool.currentState().AddBalance(from, big.NewInt(1))
+	err := pool.Add(tx)
+	if err != ErrNegativeValue {
+		t.Error("expected", ErrNegativeValue, "got", err)
+	}
+}
