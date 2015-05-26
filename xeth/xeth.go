@@ -39,8 +39,11 @@ const (
 	LogFilterTy
 )
 
-func DefaultGas() *big.Int      { return new(big.Int).Set(defaultGas) }
-func DefaultGasPrice() *big.Int { return new(big.Int).Set(defaultGasPrice) }
+func DefaultGas() *big.Int { return new(big.Int).Set(defaultGas) }
+
+func (self *XEth) DefaultGasPrice() *big.Int {
+	return self.gpo.SuggestPrice()
+}
 
 type XEth struct {
 	backend  *eth.Ethereum
@@ -68,6 +71,8 @@ type XEth struct {
 	// register map[string][]*interface{} // TODO improve return type
 
 	agent *miner.RemoteAgent
+
+	gpo *eth.GasPriceOracle
 }
 
 func NewTest(eth *eth.Ethereum, frontend Frontend) *XEth {
@@ -80,22 +85,23 @@ func NewTest(eth *eth.Ethereum, frontend Frontend) *XEth {
 // New creates an XEth that uses the given frontend.
 // If a nil Frontend is provided, a default frontend which
 // confirms all transactions will be used.
-func New(eth *eth.Ethereum, frontend Frontend) *XEth {
+func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 	xeth := &XEth{
-		backend:          eth,
+		backend:          ethereum,
 		frontend:         frontend,
 		quit:             make(chan struct{}),
-		filterManager:    filter.NewFilterManager(eth.EventMux()),
+		filterManager:    filter.NewFilterManager(ethereum.EventMux()),
 		logQueue:         make(map[int]*logQueue),
 		blockQueue:       make(map[int]*hashQueue),
 		transactionQueue: make(map[int]*hashQueue),
 		messages:         make(map[int]*whisperFilter),
 		agent:            miner.NewRemoteAgent(),
+		gpo:              eth.NewGasPriceOracle(ethereum),
 	}
-	if eth.Whisper() != nil {
-		xeth.whisper = NewWhisper(eth.Whisper())
+	if ethereum.Whisper() != nil {
+		xeth.whisper = NewWhisper(ethereum.Whisper())
 	}
-	eth.Miner().Register(xeth.agent)
+	ethereum.Miner().Register(xeth.agent)
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}
@@ -829,7 +835,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	}
 
 	if msg.gasPrice.Cmp(big.NewInt(0)) == 0 {
-		msg.gasPrice = DefaultGasPrice()
+		msg.gasPrice = self.DefaultGasPrice()
 	}
 
 	block := self.CurrentBlock()
@@ -898,7 +904,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	}
 
 	if len(gasPriceStr) == 0 {
-		price = DefaultGasPrice()
+		price = self.DefaultGasPrice()
 	} else {
 		price = common.Big(gasPriceStr)
 	}

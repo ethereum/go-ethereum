@@ -93,6 +93,13 @@ type Config struct {
 	AccountManager *accounts.Manager
 	SolcPath       string
 
+	GpoMinGasPrice          *big.Int
+	GpoMaxGasPrice          *big.Int
+	GpoFullBlockRatio       int
+	GpobaseStepDown         int
+	GpobaseStepUp           int
+	GpobaseCorrectionFactor int
+
 	// NewDB is used to create databases.
 	// If nil, the default is to create leveldb databases on disk.
 	NewDB func(path string) (common.Database, error)
@@ -197,6 +204,13 @@ type Ethereum struct {
 	SolcPath        string
 	solc            *compiler.Solidity
 
+	GpoMinGasPrice          *big.Int
+	GpoMaxGasPrice          *big.Int
+	GpoFullBlockRatio       int
+	GpobaseStepDown         int
+	GpobaseStepUp           int
+	GpobaseCorrectionFactor int
+
 	net      *p2p.Server
 	eventMux *event.TypeMux
 	miner    *miner.Miner
@@ -266,22 +280,28 @@ func New(config *Config) (*Ethereum, error) {
 	glog.V(logger.Info).Infof("Blockchain DB Version: %d", config.BlockChainVersion)
 
 	eth := &Ethereum{
-		shutdownChan:    make(chan bool),
-		databasesClosed: make(chan bool),
-		blockDb:         blockDb,
-		stateDb:         stateDb,
-		extraDb:         extraDb,
-		eventMux:        &event.TypeMux{},
-		accountManager:  config.AccountManager,
-		DataDir:         config.DataDir,
-		etherbase:       common.HexToAddress(config.Etherbase),
-		clientVersion:   config.Name, // TODO should separate from Name
-		ethVersionId:    config.ProtocolVersion,
-		netVersionId:    config.NetworkId,
-		NatSpec:         config.NatSpec,
-		MinerThreads:    config.MinerThreads,
-		SolcPath:        config.SolcPath,
-		AutoDAG:         config.AutoDAG,
+		shutdownChan:            make(chan bool),
+		databasesClosed:         make(chan bool),
+		blockDb:                 blockDb,
+		stateDb:                 stateDb,
+		extraDb:                 extraDb,
+		eventMux:                &event.TypeMux{},
+		accountManager:          config.AccountManager,
+		DataDir:                 config.DataDir,
+		etherbase:               common.HexToAddress(config.Etherbase),
+		clientVersion:           config.Name, // TODO should separate from Name
+		ethVersionId:            config.ProtocolVersion,
+		netVersionId:            config.NetworkId,
+		NatSpec:                 config.NatSpec,
+		MinerThreads:            config.MinerThreads,
+		SolcPath:                config.SolcPath,
+		AutoDAG:                 config.AutoDAG,
+		GpoMinGasPrice:          config.GpoMinGasPrice,
+		GpoMaxGasPrice:          config.GpoMaxGasPrice,
+		GpoFullBlockRatio:       config.GpoFullBlockRatio,
+		GpobaseStepDown:         config.GpobaseStepDown,
+		GpobaseStepUp:           config.GpobaseStepUp,
+		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
 	}
 
 	eth.pow = ethash.New()

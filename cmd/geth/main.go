@@ -256,6 +256,12 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.PProfEanbledFlag,
 		utils.PProfPortFlag,
 		utils.SolcPathFlag,
+		utils.GpoMinGasPriceFlag,
+		utils.GpoMaxGasPriceFlag,
+		utils.GpoFullBlockRatioFlag,
+		utils.GpobaseStepDownFlag,
+		utils.GpobaseStepUpFlag,
+		utils.GpobaseCorrectionFactorFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		utils.SetupLogger(ctx)
