@@ -21,7 +21,7 @@ import (
 const (
 	// must be bumped when consensus algorithm is changed, this forces the upgradedb
 	// command to be run (forces the blocks to be imported again using the new algorithm)
-	BlockChainVersion = 2
+	BlockChainVersion = 3
 )
 
 var receiptsPre = []byte("receipts-")
@@ -159,6 +159,9 @@ func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs state.Logs, err
 		return nil, ParentError(header.ParentHash)
 	}
 	parent := sm.bc.GetBlock(header.ParentHash)
+	if !sm.Pow.Verify(block) {
+		return nil, ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
+	}
 
 	return sm.processWithParent(block, parent)
 }

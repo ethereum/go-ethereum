@@ -88,6 +88,7 @@ func (js *jsre) adminBindings() {
 	debug.Set("getBlockRlp", js.getBlockRlp)
 	debug.Set("setHead", js.setHead)
 	debug.Set("processBlock", js.debugBlock)
+	debug.Set("seedhash", js.seedHash)
 	// undocumented temporary
 	debug.Set("waitForBlocks", js.waitForBlocks)
 }
@@ -116,6 +117,27 @@ func (js *jsre) getBlock(call otto.FunctionCall) (*types.Block, error) {
 		return nil, errors.New("block not found")
 	}
 	return block, nil
+}
+
+func (js *jsre) seedHash(call otto.FunctionCall) otto.Value {
+	if len(call.ArgumentList) > 0 {
+		if call.Argument(0).IsNumber() {
+			num, _ := call.Argument(0).ToInteger()
+			hash, err := ethash.GetSeedHash(uint64(num))
+			if err != nil {
+				fmt.Println(err)
+				return otto.UndefinedValue()
+			}
+			v, _ := call.Otto.ToValue(fmt.Sprintf("0x%x", hash))
+			return v
+		} else {
+			fmt.Println("arg not a number")
+		}
+	} else {
+		fmt.Println("requires number argument")
+	}
+
+	return otto.UndefinedValue()
 }
 
 func (js *jsre) pendingTransactions(call otto.FunctionCall) otto.Value {
@@ -220,10 +242,11 @@ func (js *jsre) debugBlock(call otto.FunctionCall) otto.Value {
 	vm.Debug = true
 	_, err = js.ethereum.BlockProcessor().RetryProcess(block)
 	if err != nil {
-		glog.Infoln(err)
+		fmt.Println(err)
 	}
 	vm.Debug = old
 
+	fmt.Println("ok")
 	return otto.UndefinedValue()
 }
 
