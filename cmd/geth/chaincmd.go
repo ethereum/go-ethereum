@@ -52,7 +52,7 @@ func importChain(ctx *cli.Context) {
 	if len(ctx.Args()) != 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	chain, blockDB, stateDB, extraDB := utils.GetChain(ctx)
+	chain, blockDB, stateDB, extraDB := utils.MakeChain(ctx)
 	start := time.Now()
 	if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
 		utils.Fatalf("Import error: %v\n", err)
@@ -65,7 +65,7 @@ func exportChain(ctx *cli.Context) {
 	if len(ctx.Args()) != 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	chain, _, _, _ := utils.GetChain(ctx)
+	chain, _, _, _ := utils.MakeChain(ctx)
 	start := time.Now()
 	if err := utils.ExportChain(chain, ctx.Args().First()); err != nil {
 		utils.Fatalf("Export error: %v\n", err)
@@ -95,7 +95,7 @@ func removeDB(ctx *cli.Context) {
 func upgradeDB(ctx *cli.Context) {
 	glog.Infoln("Upgrading blockchain database")
 
-	chain, blockDB, stateDB, extraDB := utils.GetChain(ctx)
+	chain, blockDB, stateDB, extraDB := utils.MakeChain(ctx)
 	v, _ := blockDB.Get([]byte("BlockchainVersion"))
 	bcVersion := int(common.NewValue(v).Uint())
 	if bcVersion == 0 {
@@ -113,7 +113,7 @@ func upgradeDB(ctx *cli.Context) {
 	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "state"))
 
 	// Import the chain file.
-	chain, blockDB, stateDB, extraDB = utils.GetChain(ctx)
+	chain, blockDB, stateDB, extraDB = utils.MakeChain(ctx)
 	blockDB.Put([]byte("BlockchainVersion"), common.NewValue(core.BlockChainVersion).Bytes())
 	err := utils.ImportChain(chain, exportFile)
 	flushAll(blockDB, stateDB, extraDB)
@@ -126,7 +126,7 @@ func upgradeDB(ctx *cli.Context) {
 }
 
 func dump(ctx *cli.Context) {
-	chain, _, stateDB, _ := utils.GetChain(ctx)
+	chain, _, stateDB, _ := utils.MakeChain(ctx)
 	for _, arg := range ctx.Args() {
 		var block *types.Block
 		if hashish(arg) {

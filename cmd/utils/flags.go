@@ -256,7 +256,8 @@ var (
 	}
 )
 
-func GetNAT(ctx *cli.Context) nat.Interface {
+// MakeNAT creates a port mapper from set command line flags.
+func MakeNAT(ctx *cli.Context) nat.Interface {
 	natif, err := nat.Parse(ctx.GlobalString(NATFlag.Name))
 	if err != nil {
 		Fatalf("Option %s: %v", NATFlag.Name, err)
@@ -264,7 +265,8 @@ func GetNAT(ctx *cli.Context) nat.Interface {
 	return natif
 }
 
-func GetNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
+// MakeNodeKey creates a node key from set command line flags.
+func MakeNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 	hex, file := ctx.GlobalString(NodeKeyHexFlag.Name), ctx.GlobalString(NodeKeyFileFlag.Name)
 	var err error
 	switch {
@@ -282,6 +284,7 @@ func GetNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 	return key
 }
 
+// MakeEthConfig creates ethereum options from set command line flags.
 func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	customName := ctx.GlobalString(IdentityFlag.Name)
 	if len(customName) > 0 {
@@ -299,15 +302,15 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		LogJSON:            ctx.GlobalString(LogJSONFlag.Name),
 		Etherbase:          ctx.GlobalString(EtherbaseFlag.Name),
 		MinerThreads:       ctx.GlobalInt(MinerThreadsFlag.Name),
-		AccountManager:     GetAccountManager(ctx),
+		AccountManager:     MakeAccountManager(ctx),
 		VmDebug:            ctx.GlobalBool(VMDebugFlag.Name),
 		MaxPeers:           ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers:    ctx.GlobalInt(MaxPendingPeersFlag.Name),
 		Port:               ctx.GlobalString(ListenPortFlag.Name),
-		NAT:                GetNAT(ctx),
+		NAT:                MakeNAT(ctx),
 		NatSpec:            ctx.GlobalBool(NatspecEnabledFlag.Name),
 		Discovery:          !ctx.GlobalBool(NoDiscoverFlag.Name),
-		NodeKey:            GetNodeKey(ctx),
+		NodeKey:            MakeNodeKey(ctx),
 		Shh:                ctx.GlobalBool(WhisperEnabledFlag.Name),
 		Dial:               true,
 		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
@@ -325,7 +328,8 @@ func SetupLogger(ctx *cli.Context) {
 	glog.SetLogDir(ctx.GlobalString(LogFileFlag.Name))
 }
 
-func GetChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, extraDB common.Database) {
+// MakeChain creates a chain manager from set command line flags.
+func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, extraDB common.Database) {
 	dd := ctx.GlobalString(DataDirFlag.Name)
 	var err error
 	if blockDB, err = ethdb.NewLDBDatabase(filepath.Join(dd, "blockchain")); err != nil {
@@ -347,7 +351,8 @@ func GetChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, ext
 	return chain, blockDB, stateDB, extraDB
 }
 
-func GetAccountManager(ctx *cli.Context) *accounts.Manager {
+// MakeChain creates an account manager from set command line flags.
+func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
 	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keystore"))
 	return accounts.NewManager(ks)

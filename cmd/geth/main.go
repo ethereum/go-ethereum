@@ -394,7 +394,7 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 }
 
 func accountList(ctx *cli.Context) {
-	am := utils.GetAccountManager(ctx)
+	am := utils.MakeAccountManager(ctx)
 	accts, err := am.Accounts()
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
@@ -436,7 +436,7 @@ func getPassPhrase(ctx *cli.Context, desc string, confirmation bool) (passphrase
 }
 
 func accountCreate(ctx *cli.Context) {
-	am := utils.GetAccountManager(ctx)
+	am := utils.MakeAccountManager(ctx)
 	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true)
 	acct, err := am.NewAccount(passphrase)
 	if err != nil {
@@ -455,7 +455,7 @@ func importWallet(ctx *cli.Context) {
 		utils.Fatalf("Could not read wallet file: %v", err)
 	}
 
-	am := utils.GetAccountManager(ctx)
+	am := utils.MakeAccountManager(ctx)
 	passphrase := getPassPhrase(ctx, "", false)
 
 	acct, err := am.ImportPreSaleKey(keyJson, passphrase)
@@ -470,7 +470,7 @@ func accountImport(ctx *cli.Context) {
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
 	}
-	am := utils.GetAccountManager(ctx)
+	am := utils.MakeAccountManager(ctx)
 	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true)
 	acct, err := am.Import(keyfile, passphrase)
 	if err != nil {
