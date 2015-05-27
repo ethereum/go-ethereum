@@ -219,7 +219,7 @@ out:
 
 func newLocalMinedBlock(blockNumber uint64, prevMinedBlocks *uint64RingBuffer) (minedBlocks *uint64RingBuffer) {
 	if prevMinedBlocks == nil {
-		minedBlocks = &uint64RingBuffer{next: 0, ints: make([]uint64, miningLogAtDepth)}
+		minedBlocks = &uint64RingBuffer{next: 0, ints: make([]uint64, miningLogAtDepth + 1)}
 	} else {
 		minedBlocks = prevMinedBlocks
 	}
