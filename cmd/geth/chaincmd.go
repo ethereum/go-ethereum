@@ -55,7 +55,7 @@ func importChain(ctx *cli.Context) {
 	chain, blockDB, stateDB, extraDB := utils.MakeChain(ctx)
 	start := time.Now()
 	err := utils.ImportChain(chain, ctx.Args().First())
-	flushAll(blockDB, stateDB, extraDB)
+	closeAll(blockDB, stateDB, extraDB)
 	if err != nil {
 		utils.Fatalf("Import error: %v", err)
 	}
@@ -109,7 +109,7 @@ func upgradeDB(ctx *cli.Context) {
 	if err := utils.ExportChain(chain, exportFile); err != nil {
 		utils.Fatalf("Unable to export chain for reimport %s", err)
 	}
-	flushAll(blockDB, stateDB, extraDB)
+	closeAll(blockDB, stateDB, extraDB)
 	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
 	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "state"))
 
@@ -117,7 +117,7 @@ func upgradeDB(ctx *cli.Context) {
 	chain, blockDB, stateDB, extraDB = utils.MakeChain(ctx)
 	blockDB.Put([]byte("BlockchainVersion"), common.NewValue(core.BlockChainVersion).Bytes())
 	err := utils.ImportChain(chain, exportFile)
-	flushAll(blockDB, stateDB, extraDB)
+	closeAll(blockDB, stateDB, extraDB)
 	if err != nil {
 		utils.Fatalf("Import error %v (a backup is made in %s, use the import command to import it)", err, exportFile)
 	} else {
@@ -152,9 +152,8 @@ func hashish(x string) bool {
 	return err != nil
 }
 
-func flushAll(dbs ...common.Database) {
+func closeAll(dbs ...common.Database) {
 	for _, db := range dbs {
-		db.Flush()
 		db.Close()
 	}
 }
