@@ -173,22 +173,47 @@ func FormatTransactionData(data string) []byte {
 	return d
 }
 
-func ImportChain(chainmgr *core.ChainManager, fn string) error {
+func ImportChain(chain *core.ChainManager, fn string) error {
+	// Watch for Ctrl-C while the import is running.
+	// If a signal is received, the import will stop at the next batch.
+	interrupt := make(chan os.Signal, 1)
+	stop := make(chan struct{})
+	signal.Notify(interrupt, os.Interrupt)
+	defer signal.Stop(interrupt)
+	defer close(interrupt)
+	go func() {
+		if _, ok := <-interrupt; ok {
+			glog.Info("caught interrupt during import, will stop at next batch")
+		}
+		close(stop)
+	}()
+	checkInterrupt := func() bool {
+		select {
+		case <-stop:
+			return true
+		default:
+			return false
+		}
+	}
+
 	glog.Infoln("Importing blockchain", fn)
-	fh, err := os.OpenFile(fn, os.O_RDONLY, os.ModePerm)
+	fh, err := os.Open(fn)
 	if err != nil {
 		return err
 	}
 	defer fh.Close()
-
-	chainmgr.Reset()
 	stream := rlp.NewStream(fh, 0)
 
+	// Remove all existing blocks and start the import.
+	chain.Reset()
 	batchSize := 2500
 	blocks := make(types.Blocks, batchSize)
 	n := 0
 	for {
 		// Load a batch of RLP blocks.
+		if checkInterrupt() {
+			return fmt.Errorf("interrupted")
+		}
 		i := 0
 		for ; i < batchSize; i++ {
 			var b types.Block
@@ -204,7 +229,10 @@ func ImportChain(chainmgr *core.ChainManager, fn string) error {
 			break
 		}
 		// Import the batch.
-		if _, err := chainmgr.InsertChain(blocks[:i]); err != nil {
+		if checkInterrupt() {
+			return fmt.Errorf("interrupted")
+		}
+		if _, err := chain.InsertChain(blocks[:i]); err != nil {
 			return fmt.Errorf("invalid block %d: %v", n, err)
 		}
 	}
