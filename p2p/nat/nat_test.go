@@ -30,7 +30,7 @@ func TestAutoDiscRace(t *testing.T) {
 	}
 
 	// Check that they all return the correct result within the deadline.
-	deadline := time.After(550 * time.Millisecond)
+	deadline := time.After(2 * time.Second)
 	for i := 0; i < cap(results); i++ {
 		select {
 		case <-deadline:
