@@ -70,7 +70,6 @@ func (pm *ProtocolManager) processBlocks() error {
 		// Try to inset the blocks, drop the originating peer if there's an error
 		index, err := pm.chainman.InsertChain(raw)
 		if err != nil {
-			glog.V(logger.Warn).Infof("Block insertion failed: %v", err)
 			pm.removePeer(blocks[index].OriginPeer)
 			pm.downloader.Cancel()
 			return err

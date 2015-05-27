@@ -35,6 +35,7 @@ const (
 
 var (
 	versionRE   = regexp.MustCompile(strconv.Quote(`"compilerVersion":"` + solcVersion + `"`))
+	testNodeKey = crypto.ToECDSA(common.Hex2Bytes("4b50fa71f5c3eeb8fdc452224b2395af2fcc3d125e06c32c82e048c0559db03f"))
 	testGenesis = `{"` + testAddress[2:] + `": {"balance": "` + testBalance + `"}}`
 )
 
@@ -72,6 +73,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 	ks := crypto.NewKeyStorePlain(filepath.Join(tmp, "keystore"))
 	am := accounts.NewManager(ks)
 	ethereum, err := eth.New(&eth.Config{
+		NodeKey:        testNodeKey,
 		DataDir:        tmp,
 		AccountManager: am,
 		MaxPeers:       0,
@@ -122,7 +124,7 @@ func TestNodeInfo(t *testing.T) {
 	}
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
-	want := `{"DiscPort":0,"IP":"0.0.0.0","ListenAddr":"","Name":"test","NodeID":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","NodeUrl":"enode://00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000@0.0.0.0:0","TCPPort":0,"Td":"0"}`
+	want := `{"DiscPort":0,"IP":"0.0.0.0","ListenAddr":"","Name":"test","NodeID":"4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5","NodeUrl":"enode://4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5@0.0.0.0:0","TCPPort":0,"Td":"131072"}`
 	checkEvalJSON(t, repl, `admin.nodeInfo()`, want)
 }
 

@@ -235,6 +235,10 @@ var (
 		Usage: "NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
 		Value: "any",
 	}
+	NoDiscoverFlag = cli.BoolFlag{
+		Name:  "nodiscover",
+		Usage: "Disables the peer discovery mechanism (manual peer addition)",
+	}
 	WhisperEnabledFlag = cli.BoolFlag{
 		Name:  "shh",
 		Usage: "Enable whisper",
@@ -312,6 +316,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		Port:               ctx.GlobalString(ListenPortFlag.Name),
 		NAT:                GetNAT(ctx),
 		NatSpec:            ctx.GlobalBool(NatspecEnabledFlag.Name),
+		Discovery:          !ctx.GlobalBool(NoDiscoverFlag.Name),
 		NodeKey:            GetNodeKey(ctx),
 		Shh:                ctx.GlobalBool(WhisperEnabledFlag.Name),
 		Dial:               true,
@@ -320,7 +325,6 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		SolcPath:           ctx.GlobalString(SolcPathFlag.Name),
 		AutoDAG:            ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
 	}
-
 }
 
 func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Database) {

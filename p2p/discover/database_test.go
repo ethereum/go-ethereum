@@ -93,6 +93,7 @@ func TestNodeDBFetchStore(t *testing.T) {
 		30303,
 	)
 	inst := time.Now()
+	num := 314
 
 	db, _ := newNodeDB("", Version, NodeID{})
 	defer db.close()
@@ -116,6 +117,16 @@ func TestNodeDBFetchStore(t *testing.T) {
 	}
 	if stored := db.lastPong(node.ID); stored.Unix() != inst.Unix() {
 		t.Errorf("pong: value mismatch: have %v, want %v", stored, inst)
+	}
+	// Check fetch/store operations on a node findnode-failure object
+	if stored := db.findFails(node.ID); stored != 0 {
+		t.Errorf("find-node fails: non-existing object: %v", stored)
+	}
+	if err := db.updateFindFails(node.ID, num); err != nil {
+		t.Errorf("find-node fails: failed to update: %v", err)
+	}
+	if stored := db.findFails(node.ID); stored != num {
+		t.Errorf("find-node fails: value mismatch: have %v, want %v", stored, num)
 	}
 	// Check fetch/store operations on an actual node object
 	if stored := db.node(node.ID); stored != nil {

@@ -34,6 +34,8 @@ var (
 		"file",           //
 		"--natspec-dev",  // Request to output the contract's Natspec developer documentation.
 		"file",
+		"--add-std",
+		"1",
 	}
 )
 

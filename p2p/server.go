@@ -55,6 +55,10 @@ type Server struct {
 	// Zero defaults to preset values.
 	MaxPendingPeers int
 
+	// Discovery specifies whether the peer discovery mechanism should be started
+	// or not. Disabling is usually useful for protocol debugging (manual topology).
+	Discovery bool
+
 	// Name sets the node name of this server.
 	// Use common.MakeName to create a name that follows existing conventions.
 	Name string
@@ -237,9 +241,26 @@ func (srv *Server) AddPeer(node *discover.Node) {
 func (srv *Server) Self() *discover.Node {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
+
+	// If the server's not running, return an empty node
 	if !srv.running {
 		return &discover.Node{IP: net.ParseIP("0.0.0.0")}
 	}
+	// If the node is running but discovery is off, manually assemble the node infos
+	if srv.ntab == nil {
+		// Inbound connections disabled, use zero address
+		if srv.listener == nil {
+			return &discover.Node{IP: net.ParseIP("0.0.0.0"), ID: discover.PubkeyID(&srv.PrivateKey.PublicKey)}
+		}
+		// Otherwise inject the listener address too
+		addr := srv.listener.Addr().(*net.TCPAddr)
+		return &discover.Node{
+			ID:  discover.PubkeyID(&srv.PrivateKey.PublicKey),
+			IP:  addr.IP,
+			TCP: uint16(addr.Port),
+		}
+	}
+	// Otherwise return the live node infos
 	return srv.ntab.Self()
 }
 
@@ -275,9 +296,6 @@ func (srv *Server) Start() (err error) {
 	if srv.PrivateKey == nil {
 		return fmt.Errorf("Server.PrivateKey must be set to a non-nil key")
 	}
-	if srv.MaxPeers <= 0 {
-		return fmt.Errorf("Server.MaxPeers must be > 0")
-	}
 	if srv.newTransport == nil {
 		srv.newTransport = newRLPX
 	}
@@ -293,15 +311,22 @@ func (srv *Server) Start() (err error) {
 	srv.peerOpDone = make(chan struct{})
 
 	// node table
-	ntab, err := discover.ListenUDP(srv.PrivateKey, srv.ListenAddr, srv.NAT, srv.NodeDatabase)
-	if err != nil {
-		return err
+	if srv.Discovery {
+		ntab, err := discover.ListenUDP(srv.PrivateKey, srv.ListenAddr, srv.NAT, srv.NodeDatabase)
+		if err != nil {
+			return err
+		}
+		srv.ntab = ntab
 	}
-	srv.ntab = ntab
-	dialer := newDialState(srv.StaticNodes, srv.ntab, srv.MaxPeers/2)
+
+	dynPeers := srv.MaxPeers / 2
+	if !srv.Discovery {
+		dynPeers = 0
+	}
+	dialer := newDialState(srv.StaticNodes, srv.ntab, dynPeers)
 
 	// handshake
-	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: ntab.Self().ID}
+	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: discover.PubkeyID(&srv.PrivateKey.PublicKey)}
 	for _, p := range srv.Protocols {
 		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
 	}
@@ -457,7 +482,9 @@ running:
 	}
 
 	// Terminate discovery. If there is a running lookup it will terminate soon.
-	srv.ntab.Close()
+	if srv.ntab != nil {
+		srv.ntab.Close()
+	}
 	// Disconnect all peers.
 	for _, p := range peers {
 		p.Disconnect(DiscQuitting)
@@ -489,7 +516,7 @@ func (srv *Server) encHandshakeChecks(peers map[discover.NodeID]*Peer, c *conn) 
 		return DiscTooManyPeers
 	case peers[c.id] != nil:
 		return DiscAlreadyConnected
-	case c.id == srv.ntab.Self().ID:
+	case c.id == srv.Self().ID:
 		return DiscSelf
 	default:
 		return nil

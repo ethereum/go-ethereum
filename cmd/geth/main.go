@@ -48,7 +48,7 @@ import _ "net/http/pprof"
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.24"
+	Version          = "0.9.25"
 )
 
 var (
@@ -260,6 +260,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.AutoDAGFlag,
 		utils.NATFlag,
 		utils.NatspecEnabledFlag,
+		utils.NoDiscoverFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
 		utils.RPCEnabledFlag,
@@ -532,9 +533,9 @@ func importchain(ctx *cli.Context) {
 	}
 
 	// force database flush
-	ethereum.BlockDb().Close()
-	ethereum.StateDb().Close()
-	ethereum.ExtraDb().Close()
+	ethereum.BlockDb().Flush()
+	ethereum.StateDb().Flush()
+	ethereum.ExtraDb().Flush()
 
 	fmt.Printf("Import done in %v", time.Since(start))
 
@@ -629,9 +630,9 @@ func upgradeDb(ctx *cli.Context) {
 	}
 
 	// force database flush
-	ethereum.BlockDb().Close()
-	ethereum.StateDb().Close()
-	ethereum.ExtraDb().Close()
+	ethereum.BlockDb().Flush()
+	ethereum.StateDb().Flush()
+	ethereum.ExtraDb().Flush()
 
 	os.Remove(exportFile)
 

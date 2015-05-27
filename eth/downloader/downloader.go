@@ -415,7 +415,7 @@ out:
 					peer.Demote()
 					break
 				}
-				if glog.V(logger.Debug) {
+				if glog.V(logger.Debug) && len(blockPack.blocks) > 0 {
 					glog.Infof("Added %d blocks from: %s\n", len(blockPack.blocks), blockPack.peerId)
 				}
 				// Promote the peer and update it's idle state
