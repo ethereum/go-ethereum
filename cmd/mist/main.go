@@ -86,6 +86,10 @@ func init() {
 		utils.BlockchainVersionFlag,
 		utils.NetworkIdFlag,
 	}
+	app.Before = func(ctx *cli.Context) error {
+		utils.SetupLogger(ctx)
+		return nil
+	}
 }
 
 func main() {
