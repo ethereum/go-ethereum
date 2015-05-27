@@ -219,7 +219,7 @@ out:
 
 func newLocalMinedBlock(blockNumber uint64, prevMinedBlocks *uint64RingBuffer) (minedBlocks *uint64RingBuffer) {
 	if prevMinedBlocks == nil {
-		minedBlocks = &uint64RingBuffer{next: 0, ints: make([]uint64, miningLogAtDepth + 1)}
+		minedBlocks = &uint64RingBuffer{next: 0, ints: make([]uint64, miningLogAtDepth+1)}
 	} else {
 		minedBlocks = prevMinedBlocks
 	}
@@ -244,15 +244,16 @@ func (self *worker) wait() {
 				}
 				self.mux.Post(core.NewMinedBlockEvent{block})
 
-				var stale string
+				var stale, confirm string
 				canonBlock := self.chain.GetBlockByNumber(block.NumberU64())
 				if canonBlock != nil && canonBlock.Hash() != block.Hash() {
-					stale = "stale-"
+					stale = "stale "
 				} else {
+					confirm = "Wait 5 blocks for confirmation"
 					self.current.localMinedBlocks = newLocalMinedBlock(block.Number().Uint64(), self.current.localMinedBlocks)
 				}
 
-				glog.V(logger.Info).Infof("🔨  Mined %sblock #%v (%x)", stale, block.Number(), block.Hash().Bytes()[:4])
+				glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
 
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     block.Hash().Hex(),
