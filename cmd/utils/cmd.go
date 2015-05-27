@@ -40,6 +40,10 @@ import (
 	"github.com/peterh/liner"
 )
 
+const (
+	importBatchSize = 2500
+)
+
 var interruptCallbacks = []func(os.Signal){}
 
 // Register interrupt handlers callbacks
@@ -205,8 +209,7 @@ func ImportChain(chain *core.ChainManager, fn string) error {
 	stream := rlp.NewStream(fh, 0)
 
 	// Run actual the import.
-	batchSize := 2500
-	blocks := make(types.Blocks, batchSize)
+	blocks := make(types.Blocks, importBatchSize)
 	n := 0
 	for batch := 0; ; batch++ {
 		// Load a batch of RLP blocks.
@@ -214,7 +217,7 @@ func ImportChain(chain *core.ChainManager, fn string) error {
 			return fmt.Errorf("interrupted")
 		}
 		i := 0
-		for ; i < batchSize; i++ {
+		for ; i < importBatchSize; i++ {
 			var b types.Block
 			if err := stream.Decode(&b); err == io.EOF {
 				break
