@@ -262,8 +262,8 @@ func (js *jsre) setHead(call otto.FunctionCall) otto.Value {
 }
 
 func (js *jsre) downloadProgress(call otto.FunctionCall) otto.Value {
-	current, max := js.ethereum.Downloader().Stats()
-	v, _ := call.Otto.ToValue(fmt.Sprintf("%d/%d", current, max))
+	pending, cached := js.ethereum.Downloader().Stats()
+	v, _ := call.Otto.ToValue(map[string]interface{}{"pending": pending, "cached": cached})
 	return v
 }
 
