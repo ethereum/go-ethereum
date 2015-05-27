@@ -89,7 +89,7 @@ func (self *Api) resolveHost(hostport string) (contentHash Key, errR errResolve)
 	var host, port string
 	var err error
 	host, port, err = net.SplitHostPort(hostport)
-	if err != nil {
+	if err != nil && err.Error() != "missing port in address "+hostport {
 		errR = errResolve(fmt.Errorf("invalid host '%s': %v", hostport, err))
 		return
 	}

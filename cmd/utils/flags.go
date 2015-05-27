@@ -329,6 +329,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		NodeKey:            GetNodeKey(ctx),
 		Shh:                ctx.GlobalBool(WhisperEnabledFlag.Name),
 		Bzz:                ctx.GlobalBool(SwarmEnabledFlag.Name),
+		BzzPort:            ctx.GlobalString(SwarmProxyPortFlag.Name),
 		Dial:               true,
 		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
 		GasPrice:           common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),

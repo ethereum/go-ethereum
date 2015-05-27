@@ -37,14 +37,16 @@ func startHttpServer(api *Api, port string) {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		handler(w, r, api)
 	})
-	go http.ListenAndServe(port, nil)
-	dpaLogger.Infof("Swarm HTTP proxy started.")
+	go http.ListenAndServe(":"+port, nil)
+	dpaLogger.Infof("Swarm HTTP proxy started on localhost:%s", port)
 }
 
 func handler(w http.ResponseWriter, r *http.Request, api *Api) {
+	dpaLogger.Debugf("request URL: '%s' Host: '%s', Path: '%s'", r.RequestURI, r.URL.Host, r.URL.Path)
 
 	switch {
 	case r.Method == "POST":
+		dpaLogger.Debugf("request URL Host: '%s', Path: '%s'", r.URL.Host, r.URL.Path)
 		if r.URL.Path == "/raw" {
 			dpaLogger.Debugf("Swarm: POST request received.")
 			key, err := api.dpa.Store(io.NewSectionReader(&sequentialReader{
@@ -53,7 +55,7 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			}, 0, r.ContentLength), nil)
 			if err == nil {
 				fmt.Fprintf(w, "%064x", key)
-				dpaLogger.Debugf("Swarm: Object %064x stored", key)
+				dpaLogger.Debugf("Swarm: Content for '%064x' stored", key)
 			} else {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
@@ -72,7 +74,7 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 
 			// resolving host
 			name := uri[5:]
-			key, err := api.resolveHost(uri)
+			key, err := api.resolveHost(name)
 			if err != nil {
 				dpaLogger.Debugf("Swarm: %v", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -100,7 +102,7 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			dpaLogger.Debugf("Swarm: Structured GET request '%s' received.", uri)
 
 			// call to api.getPath on uri
-			reader, mimeType, status, err := api.getPath(uri)
+			reader, mimeType, status, err := api.getPath(uri[1:])
 			if err != nil {
 				var status int
 				if _, ok := err.(errResolve); ok {
