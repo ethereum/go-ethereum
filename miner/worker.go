@@ -313,6 +313,10 @@ func (self *worker) makeCurrent() {
 	}
 
 	parent := self.chain.GetBlock(current.block.ParentHash())
+	if parent == nil {
+		// in case geth quits the blockchain db can be closed and this returns nil
+		return
+	}
 	current.coinbase.SetGasPool(core.CalcGasLimit(parent))
 
 	self.current = current
