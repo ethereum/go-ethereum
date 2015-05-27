@@ -302,7 +302,7 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header, checkPow b
 	a := new(big.Int).Sub(block.GasLimit, parent.GasLimit)
 	a.Abs(a)
 	b := new(big.Int).Div(parent.GasLimit, params.GasLimitBoundDivisor)
-	if !(a.Cmp(b) <= 0) || (block.GasLimit.Cmp(params.MinGasLimit) == -1) {
+	if !(a.Cmp(b) < 0) || (block.GasLimit.Cmp(params.MinGasLimit) == -1) {
 		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
 	}
 
