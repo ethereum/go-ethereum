@@ -18,10 +18,8 @@ const (
 )
 
 var (
-	// protocolMatcher    = regexp.MustCompile("^/bzz:")
-	rawManifestMatcher = regexp.MustCompile("^/raw/")
-	// rawManifestMatcher = regexp.MustCompile("^/raw/[0-9A-Fa-f]{64}(?:/[a-z]+/[-+0-9a-z]+)?$")
-	manifestMatcher = regexp.MustCompile("^/[0-9A-Fa-f]{64}")
+	rawUrl          = regexp.MustCompile("^/+raw/*")
+	trailingSlashes = regexp.MustCompile("/+$")
 )
 
 type sequentialReader struct {
@@ -43,11 +41,17 @@ func startHttpServer(api *Api, port string) {
 
 func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 	dpaLogger.Debugf("request URL: '%s' Host: '%s', Path: '%s'", r.RequestURI, r.URL.Host, r.URL.Path)
+	uri := r.URL.Path
+	var raw bool
+	path := rawUrl.ReplaceAllStringFunc(uri, func(string) string {
+		raw = true
+		return ""
+	})
 
 	switch {
 	case r.Method == "POST":
 		dpaLogger.Debugf("request URL Host: '%s', Path: '%s'", r.URL.Host, r.URL.Path)
-		if r.URL.Path == "/raw" {
+		if raw {
 			dpaLogger.Debugf("Swarm: POST request received.")
 			key, err := api.dpa.Store(io.NewSectionReader(&sequentialReader{
 				reader: r.Body,
@@ -61,20 +65,18 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 				return
 			}
 		} else {
-			http.Error(w, "No POST to "+r.URL.Path+" allowed.", http.StatusBadRequest)
+			http.Error(w, "No POST to "+uri+" allowed.", http.StatusBadRequest)
 			return
 		}
 
 	case r.Method == "GET" || r.Method == "HEAD":
-		uri := r.URL.Path
-		dpaLogger.Debugf("request URL Host: '%s', Path: '%s'", r.URL.Host, r.URL.Path)
-		// raw ,
-		if rawManifestMatcher.MatchString(uri) {
+		dpaLogger.Debugf("request URL Host: '%s', Path: '%s'", r.URL.Host, uri)
+		path = trailingSlashes.ReplaceAllString(path, "")
+		if raw {
 			dpaLogger.Debugf("Swarm: Raw GET request '%s' received", uri)
 
 			// resolving host
-			name := uri[5:]
-			key, err := api.resolveHost(name)
+			key, err := api.resolveHost(path)
 			if err != nil {
 				dpaLogger.Debugf("Swarm: %v", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -93,7 +95,7 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			}
 
 			w.Header().Set("Content-Type", mimeType)
-			http.ServeContent(w, r, name, time.Unix(0, 0), reader)
+			http.ServeContent(w, r, uri, time.Unix(0, 0), reader)
 			dpaLogger.Debugf("Swarm: Serve raw content '%s' (%d bytes) as '%s'", uri, reader.Size(), mimeType)
 
 			// retrieve path via manifest
@@ -102,9 +104,8 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			dpaLogger.Debugf("Swarm: Structured GET request '%s' received.", uri)
 
 			// call to api.getPath on uri
-			reader, mimeType, status, err := api.getPath(uri[1:])
+			reader, mimeType, status, err := api.getPath(path)
 			if err != nil {
-				var status int
 				if _, ok := err.(errResolve); ok {
 					dpaLogger.Debugf("Swarm: %v", err)
 					status = http.StatusBadRequest
@@ -121,8 +122,8 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			if status > 0 {
 				w.WriteHeader(status)
 			}
+			dpaLogger.Debugf("Swarm: Served '%s' (%d bytes) as '%s' (status code: %v)", uri, reader.Size(), mimeType, w.Header())
 			http.ServeContent(w, r, uri, time.Unix(0, 0), reader)
-			dpaLogger.Debugf("Swarm: Served '%s' (%d bytes) as '%s' (status code: %d)", uri, reader.Size(), mimeType, status)
 
 		}
 	default:

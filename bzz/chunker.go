@@ -309,13 +309,13 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		C:   make(chan bool), // close channel to signal data delivery
 	}
 	self.chunkC <- chunk // submit retrieval request, someone should be listening on the other side (or we will time out globally)
-	dpaLogger.Debugf("readAt %x into %d bytes at %d.", chunk.Key[:4], len(b), off)
+	dpaLogger.Debugf("readAt: reading %x into %d bytes at offset %d.", chunk.Key[:4], len(b), off)
 
 	// waiting for the chunk retrieval
 	select {
 	case <-self.quitC:
 		// this is how we control process leakage (quitC is closed once join is finished (after timeout))
-		dpaLogger.Debugf("quit")
+		// dpaLogger.Debugf("quit")
 		return
 	case <-chunk.C: // bells are ringing, data have been delivered
 		// dpaLogger.Debugf("chunk data received for %x", chunk.Key[:4])
@@ -355,9 +355,9 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		if off+int64(read) == self.size {
 			err = io.EOF
 		}
-		dpaLogger.Debugf("ReadAt returning with %d, %v", read, err)
+		dpaLogger.Debugf("ReadAt returning at %d: %v", read, err)
 	case <-self.quitC:
-		dpaLogger.Debugf("ReadAt aborted with %d, %v", read, err)
+		dpaLogger.Debugf("ReadAt aborted at %d: %v", read, err)
 	}
 	return
 }
@@ -422,7 +422,7 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 				// this is how we control process leakage (quitC is closed once join is finished (after timeout))
 				return
 			case <-ch.C: // bells are ringing, data have been delivered
-				dpaLogger.Debugf("chunk data received")
+				// dpaLogger.Debugf("chunk data received")
 			}
 			if soff < off {
 				soff = off

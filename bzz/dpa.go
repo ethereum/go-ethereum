@@ -84,7 +84,7 @@ SPLIT:
 		select {
 		case err, ok := <-errC:
 			if err != nil {
-				dpaLogger.Warnf("chunkner split error: %v", err)
+				dpaLogger.Warnf("chunker split error: %v", err)
 			}
 			if !ok {
 				break SPLIT
@@ -108,7 +108,7 @@ func (self *DPA) Start() {
 	self.quitC = make(chan bool)
 	self.storeLoop()
 	self.retrieveLoop()
-	dpaLogger.Infof("Swarm started.")
+	dpaLogger.Debugf("Swarm DPA started.")
 }
 
 func (self *DPA) Stop() {
@@ -129,6 +129,7 @@ func (self *DPA) retrieveLoop() {
 		for ch := range self.retrieveC {
 
 			go func(chunk *Chunk) {
+				dpaLogger.DebugDetailf("dpa: retrieve loop : chunk '%x'", chunk.Key)
 				storedChunk, err := self.ChunkStore.Get(chunk.Key)
 				if err == notFound {
 					dpaLogger.DebugDetailf("chunk '%x' not found", chunk.Key)

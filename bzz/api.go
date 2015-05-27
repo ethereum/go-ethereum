@@ -5,13 +5,18 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
-	"strings"
+	"regexp"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/resolver"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+)
+
+var (
+	hashMatcher = regexp.MustCompile("^[0-9A-Fa-f]{64}")
+	slashes     = regexp.MustCompile("/+")
 )
 
 /*
@@ -50,6 +55,7 @@ func (self *Api) Bzz() (p2p.Protocol, error) {
 func (self *Api) Start(node *discover.Node, connectPeer func(string) error) {
 	self.dpa.Start()
 	self.netStore.Start(node, connectPeer)
+	dpaLogger.Infof("Swarm started.")
 	go startHttpServer(self, self.port)
 }
 
@@ -89,15 +95,20 @@ func (self *Api) resolveHost(hostport string) (contentHash Key, errR errResolve)
 	var host, port string
 	var err error
 	host, port, err = net.SplitHostPort(hostport)
-	if err != nil && err.Error() != "missing port in address "+hostport {
-		errR = errResolve(fmt.Errorf("invalid host '%s': %v", hostport, err))
-		return
+	if err != nil {
+		if err.Error() == "missing port in address "+hostport {
+			host = hostport
+		} else {
+			errR = errResolve(fmt.Errorf("invalid host '%s': %v", hostport, err))
+			return
+		}
 	}
 	if hashMatcher.MatchString(host) {
-		contentHash = Key(host)
+		contentHash = Key(common.Hex2Bytes(host))
+		dpaLogger.Debugf("Swarm host is a contentHash: '%064x'", contentHash)
 	} else {
 		if self.Resolver != nil {
-			hostHash := common.BytesToHash(crypto.Sha3([]byte(host)))
+			hostHash := common.BytesToHash(crypto.Sha3(common.Hex2Bytes(host)))
 			// TODO: should take port as block number versioning
 			_ = port
 			var hash common.Hash
@@ -106,6 +117,7 @@ func (self *Api) resolveHost(hostport string) (contentHash Key, errR errResolve)
 				err = errResolve(fmt.Errorf("unable to resolve '%s': %v", hostport, err))
 			}
 			contentHash = Key(hash.Bytes())
+			dpaLogger.Debugf("Swarm resolve host to contentHash: '%064x'", contentHash)
 		} else {
 			err = errResolve(fmt.Errorf("no resolver '%s': %v", hostport, err))
 		}
@@ -114,9 +126,12 @@ func (self *Api) resolveHost(hostport string) (contentHash Key, errR errResolve)
 }
 
 func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, status int, err error) {
-	parts := strings.SplitAfterN(uri[1:], "/", 2)
-	hostPort := parts[0]
-	path := parts[1]
+	parts := slashes.Split(uri, 3)
+	hostPort := parts[1]
+	var path string
+	if len(parts) > 2 {
+		path = parts[2]
+	}
 	dpaLogger.Debugf("Swarm: host: '%s', path '%s' requested.", hostPort, path)
 
 	//resolving host and port
@@ -129,6 +144,7 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 	// retrieve content following path along manifests
 	var pos int
 	for {
+		dpaLogger.Debugf("Swarm: manifest lookup key: '%064x'.", key)
 		// retrieve manifest via DPA
 		manifestReader := self.dpa.Retrieve(key)
 		// TODO check size for oversized manifests
@@ -143,7 +159,7 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 			return
 		}
 
-		dpaLogger.Debugf("Swarm: Manifest for '%s' retrieved.", uri)
+		dpaLogger.Debugf("Swarm: Manifest for '%s' retrieved", uri)
 		man := manifest{}
 		err = json.Unmarshal(manifestData, &man)
 		if err != nil {
@@ -152,7 +168,7 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 			return
 		}
 
-		dpaLogger.Debugf("Swarm: Manifest for '%s' has %d entries.", uri, len(man.Entries))
+		dpaLogger.Debugf("Swarm: Manifest for '%s' has %d entries. Retrieving entry for '%s'", uri, len(man.Entries), path)
 
 		// retrieve entry that matches path from manifest entries
 		var entry *manifestEntry
@@ -172,13 +188,14 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 
 		// get mime type of entry
 		mimeType = entry.ContentType
-		if mimeType != "" {
+		if mimeType == "" {
 			mimeType = manifestType
 		}
 
 		// if path matched on non-manifest content type, then retrieve reader
 		// and return
 		if mimeType != manifestType {
+			dpaLogger.Debugf("Swarm: content lookup key: '%064x' (%v)", key, mimeType)
 			reader = self.dpa.Retrieve(key)
 			return
 		}
