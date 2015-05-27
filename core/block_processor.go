@@ -306,8 +306,7 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header, checkPow b
 		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
 	}
 
-	// Allow future blocks up to 10 seconds
-	if int64(block.Time) > time.Now().Unix()+4 {
+	if int64(block.Time) > time.Now().Unix() {
 		return BlockFutureErr
 	}
 

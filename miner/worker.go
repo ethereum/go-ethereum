@@ -287,8 +287,10 @@ func (self *worker) push() {
 
 func (self *worker) makeCurrent() {
 	block := self.chain.NewBlock(self.coinbase)
-	if block.Time() == self.chain.CurrentBlock().Time() {
-		block.Header().Time++
+	parent := self.chain.GetBlock(block.ParentHash())
+
+	if block.Time() <= parent.Time() {
+		block.Header().Time = parent.Header().Time + 1
 	}
 	block.Header().Extra = self.extra
 
@@ -312,7 +314,6 @@ func (self *worker) makeCurrent() {
 		current.localMinedBlocks = self.current.localMinedBlocks
 	}
 
-	parent := self.chain.GetBlock(current.block.ParentHash())
 	current.coinbase.SetGasPool(core.CalcGasLimit(parent))
 
 	self.current = current
