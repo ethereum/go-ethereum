@@ -125,10 +125,17 @@ func initDataDir(Datadir string) {
 	}
 }
 
-// Fatalf formats a message to standard output and exits the program.
+// Fatalf formats a message to standard error and exits the program.
+// The message is also printed to standard output if standard error
+// is redirected to a different file.
 func Fatalf(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "Fatal: "+format+"\n", args...)
-	fmt.Fprintf(os.Stdout, "Fatal: "+format+"\n", args...)
+	w := io.MultiWriter(os.Stdout, os.Stderr)
+	outf, _ := os.Stdout.Stat()
+	errf, _ := os.Stderr.Stat()
+	if outf != nil && errf != nil && os.SameFile(outf, errf) {
+		w = os.Stderr
+	}
+	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
 	logger.Flush()
 	os.Exit(1)
 }
