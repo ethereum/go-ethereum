@@ -5,39 +5,17 @@ import (
 )
 
 const (
-	errMagicTokenMismatch = iota
-	errRead
-	errWrite
-	errMisc
-	errInvalidMsgCode
+	errInvalidMsgCode = iota
 	errInvalidMsg
-	errP2PVersionMismatch
-	errPubkeyInvalid
-	errPubkeyForbidden
-	errProtocolBreach
-	errPingTimeout
-	errInvalidNetworkId
-	errInvalidProtocolVersion
 )
 
 var errorToString = map[int]string{
-	errMagicTokenMismatch:     "magic token mismatch",
-	errRead:                   "read error",
-	errWrite:                  "write error",
-	errMisc:                   "misc error",
-	errInvalidMsgCode:         "invalid message code",
-	errInvalidMsg:             "invalid message",
-	errP2PVersionMismatch:     "P2P Version Mismatch",
-	errPubkeyInvalid:          "public key invalid",
-	errPubkeyForbidden:        "public key forbidden",
-	errProtocolBreach:         "protocol Breach",
-	errPingTimeout:            "ping timeout",
-	errInvalidNetworkId:       "invalid network id",
-	errInvalidProtocolVersion: "invalid protocol version",
+	errInvalidMsgCode: "invalid message code",
+	errInvalidMsg:     "invalid message",
 }
 
 type peerError struct {
-	Code    int
+	code    int
 	message string
 }
 
@@ -107,23 +85,13 @@ func discReasonForError(err error) DiscReason {
 		return reason
 	}
 	peerError, ok := err.(*peerError)
-	if !ok {
-		return DiscSubprotocolError
+	if ok {
+		switch peerError.code {
+		case errInvalidMsgCode, errInvalidMsg:
+			return DiscProtocolError
+		default:
+			return DiscSubprotocolError
+		}
 	}
-	switch peerError.Code {
-	case errP2PVersionMismatch:
-		return DiscIncompatibleVersion
-	case errPubkeyInvalid:
-		return DiscInvalidIdentity
-	case errPubkeyForbidden:
-		return DiscUselessPeer
-	case errInvalidMsgCode, errMagicTokenMismatch, errProtocolBreach:
-		return DiscProtocolError
-	case errPingTimeout:
-		return DiscReadTimeout
-	case errRead, errWrite:
-		return DiscNetworkError
-	default:
-		return DiscSubprotocolError
-	}
+	return DiscSubprotocolError
 }

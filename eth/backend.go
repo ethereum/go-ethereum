@@ -73,6 +73,7 @@ type Config struct {
 
 	MaxPeers        int
 	MaxPendingPeers int
+	Discovery       bool
 	Port            string
 
 	// Space-separated list of discovery node URLs
@@ -327,6 +328,7 @@ func New(config *Config) (*Ethereum, error) {
 		Name:            config.Name,
 		MaxPeers:        config.MaxPeers,
 		MaxPendingPeers: config.MaxPendingPeers,
+		Discovery:       config.Discovery,
 		Protocols:       protocols,
 		NAT:             config.NAT,
 		NoDial:          !config.Dial,
@@ -468,13 +470,10 @@ func (s *Ethereum) Start() error {
 		ProtocolVersion: ProtocolVersion,
 	})
 
-	if s.net.MaxPeers >= 0 {
-		err := s.net.Start()
-		if err != nil {
-			return err
-		}
+	err := s.net.Start()
+	if err != nil {
+		return err
 	}
-
 	// periodically flush databases
 	go s.syncDatabases()
 
@@ -557,6 +556,7 @@ func (self *Ethereum) AddPeer(nodeURL string) error {
 func (s *Ethereum) Stop() {
 	s.txSub.Unsubscribe() // quits txBroadcastLoop
 
+	s.net.Stop()
 	s.protocolManager.Stop()
 	s.chainManager.Stop()
 	s.txPool.Stop()

@@ -128,7 +128,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		mem.Resize(newMemSize.Uint64())
 
 		switch op {
-		// 0x20 range
 		case ADD:
 			x, y := stack.pop(), stack.pop()
 			self.Printf(" %v + %v", y, x)
@@ -142,7 +141,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			stack.push(base)
 		case SUB:
 			x, y := stack.pop(), stack.pop()
-			self.Printf(" %v - %v", y, x)
+			self.Printf(" %v - %v", x, y)
 
 			base.Sub(x, y)
 
@@ -268,9 +267,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			}
 		case NOT:
 			stack.push(U256(new(big.Int).Not(stack.pop())))
-			//base.Sub(Pow256, stack.pop()).Sub(base, common.Big1)
-			//base = U256(base)
-			//stack.push(base)
 		case LT:
 			x, y := stack.pop(), stack.pop()
 			self.Printf(" %v < %v", x, y)
@@ -329,7 +325,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				stack.push(common.BigTrue)
 			}
 
-			// 0x10 range
 		case AND:
 			x, y := stack.pop(), stack.pop()
 			self.Printf(" %v & %v", y, x)
@@ -390,7 +385,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			stack.push(base)
 
-			// 0x20 range
 		case SHA3:
 			offset, size := stack.pop(), stack.pop()
 			data := crypto.Sha3(mem.Get(offset.Int64(), size.Int64()))
@@ -398,7 +392,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			stack.push(common.BigD(data))
 
 			self.Printf(" => (%v) %x", size, data)
-			// 0x30 range
 		case ADDRESS:
 			stack.push(common.Bytes2Big(context.Address().Bytes()))
 
@@ -486,7 +479,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			self.Printf(" => %x", context.Price)
 
-			// 0x40 range
 		case BLOCKHASH:
 			num := stack.pop()
 
@@ -527,7 +519,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			stack.push(self.env.GasLimit())
 
-			// 0x50 range
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
 			a := big.NewInt(int64(op - PUSH1 + 1))
 			byts := getData(code, new(big.Int).Add(pc, big.NewInt(1)), a)
@@ -553,12 +544,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			topics := make([]common.Hash, n)
 			mStart, mSize := stack.pop(), stack.pop()
 			for i := 0; i < n; i++ {
-				topics[i] = common.BigToHash(stack.pop()) //common.LeftPadBytes(stack.pop().Bytes(), 32)
+				topics[i] = common.BigToHash(stack.pop())
 			}
 
 			data := mem.Get(mStart.Int64(), mSize.Int64())
 			log := state.NewLog(context.Address(), topics, data, self.env.BlockNumber().Uint64())
-			//log := &Log{context.Address(), topics, data, self.env.BlockNumber().Uint64()}
 			self.env.AddLog(log)
 
 			self.Printf(" => %v", log)
@@ -568,7 +558,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			stack.push(val)
 
 			self.Printf(" => 0x%x", val.Bytes())
-		case MSTORE: // Store the value at stack top-1 in to memory at location stack top
+		case MSTORE:
 			// pop value of the stack
 			mStart, val := stack.pop(), stack.pop()
 			mem.Set(mStart.Uint64(), 32, common.BigToBytes(val, 256))
@@ -614,7 +604,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 		case JUMPDEST:
 		case PC:
-			//stack.push(big.NewInt(int64(pc)))
 			stack.push(pc)
 		case MSIZE:
 			stack.push(big.NewInt(int64(mem.Len())))
@@ -622,7 +611,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			stack.push(context.Gas)
 
 			self.Printf(" => %x", context.Gas)
-			// 0x60 range
 		case CREATE:
 
 			var (

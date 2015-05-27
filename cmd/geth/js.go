@@ -112,7 +112,7 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, bzzEnabled bool
 func (js *jsre) apiBindings(f xeth.Frontend) {
 	xe := xeth.New(js.ethereum, f)
 	ethApi := rpc.NewEthereumApi(xe)
-	jeth := rpc.NewJeth(ethApi, js.re.ToVal, js.re)
+	jeth := rpc.NewJeth(ethApi, js.re)
 
 	js.re.Set("jeth", struct{}{})
 	t, _ := js.re.Get("jeth")

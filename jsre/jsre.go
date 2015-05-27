@@ -19,9 +19,7 @@ It provides some helper functions to
 - bind native go objects
 */
 type JSRE struct {
-	assetPath string
-	vm        *otto.Otto
-
+	assetPath     string
 	evalQueue     chan *evalReq
 	stopEventLoop chan bool
 	loopWg        sync.WaitGroup
@@ -35,68 +33,37 @@ type jsTimer struct {
 	call     otto.FunctionCall
 }
 
-// evalResult is a structure to store the result of any serialized vm execution
-type evalResult struct {
-	result otto.Value
-	err    error
-}
-
-// evalReq is a serialized vm execution request put in evalQueue and processed by runEventLoop
+// evalReq is a serialized vm execution request processed by runEventLoop.
 type evalReq struct {
-	fn   func(res *evalResult)
+	fn   func(vm *otto.Otto)
 	done chan bool
-	res  evalResult
 }
 
 // runtime must be stopped with Stop() after use and cannot be used after stopping
 func New(assetPath string) *JSRE {
 	re := &JSRE{
-		assetPath: assetPath,
-		vm:        otto.New(),
+		assetPath:     assetPath,
+		evalQueue:     make(chan *evalReq),
+		stopEventLoop: make(chan bool),
 	}
-
-	// load prettyprint func definition
-	re.vm.Run(pp_js)
-	re.vm.Set("loadScript", re.loadScript)
-
-	re.evalQueue = make(chan *evalReq)
-	re.stopEventLoop = make(chan bool)
 	re.loopWg.Add(1)
 	go re.runEventLoop()
-
+	re.Compile("pp.js", pp_js) // load prettyprint func definition
+	re.Set("loadScript", re.loadScript)
 	return re
 }
 
-// this function runs a piece of JS code either in a serialized way (when useEQ is true) or instantly, circumventing the evalQueue
-func (self *JSRE) run(src interface{}, useEQ bool) (value otto.Value, err error) {
-	if useEQ {
-		done := make(chan bool)
-		req := &evalReq{
-			fn: func(res *evalResult) {
-				res.result, res.err = self.vm.Run(src)
-			},
-			done: done,
-		}
-		self.evalQueue <- req
-		<-done
-		return req.res.result, req.res.err
-	} else {
-		return self.vm.Run(src)
-	}
-}
+// This function runs the main event loop from a goroutine that is started
+// when JSRE is created. Use Stop() before exiting to properly stop it.
+// The event loop processes vm access requests from the evalQueue in a
+// serialized way and calls timer callback functions at the appropriate time.
 
-/*
-This function runs the main event loop from a goroutine that is started
- when JSRE is created. Use Stop() before exiting to properly stop it.
-The event loop processes vm access requests from the evalQueue in a
- serialized way and calls timer callback functions at the appropriate time.
-
-Exported functions always access the vm through the event queue. You can
- call the functions of the otto vm directly to circumvent the queue. These
- functions should be used if and only if running a routine that was already
- called from JS through an RPC call.
-*/
+// Exported functions always access the vm through the event queue. You can
+// call the functions of the otto vm directly to circumvent the queue. These
+// functions should be used if and only if running a routine that was already
+// called from JS through an RPC call.
 func (self *JSRE) runEventLoop() {
+	vm := otto.New()
 	registry := map[*jsTimer]*jsTimer{}
 	ready := make(chan *jsTimer)
 
@@ -143,10 +110,10 @@ func (self *JSRE) runEventLoop() {
 		}
 		return otto.UndefinedValue()
 	}
-	self.vm.Set("setTimeout", setTimeout)
-	self.vm.Set("setInterval", setInterval)
-	self.vm.Set("clearTimeout", clearTimeout)
-	self.vm.Set("clearInterval", clearTimeout)
+	vm.Set("setTimeout", setTimeout)
+	vm.Set("setInterval", setInterval)
+	vm.Set("clearTimeout", clearTimeout)
+	vm.Set("clearInterval", clearTimeout)
 
 	var waitForCallbacks bool
 
@@ -166,8 +133,7 @@ loop:
 				arguments = make([]interface{}, 1)
 			}
 			arguments[0] = timer.call.ArgumentList[0]
-			_, err := self.vm.Call(`Function.call.call`, nil, arguments...)
-
+			_, err := vm.Call(`Function.call.call`, nil, arguments...)
 			if err != nil {
 				fmt.Println("js error:", err, arguments)
 			}
@@ -179,10 +145,10 @@ loop:
 					break loop
 				}
 			}
-		case evalReq := <-self.evalQueue:
+		case req := <-self.evalQueue:
 			// run the code, send the result back
-			evalReq.fn(&evalReq.res)
-			close(evalReq.done)
+			req.fn(vm)
+			close(req.done)
 			if waitForCallbacks && (len(registry) == 0) {
 				break loop
 			}
@@ -201,6 +167,14 @@ loop:
 	self.loopWg.Done()
 }
 
+// do schedules the given function on the event loop.
+func (self *JSRE) do(fn func(*otto.Otto)) {
+	done := make(chan bool)
+	req := &evalReq{fn, done}
+	self.evalQueue <- req
+	<-done
+}
+
 // stops the event loop before exit, optionally waits for all timers to expire
 func (self *JSRE) Stop(waitForCallbacks bool) {
 	self.stopEventLoop <- waitForCallbacks
@@ -210,119 +184,78 @@ func (self *JSRE) Stop(waitForCallbacks bool) {
 // Exec(file) loads and runs the contents of a file
 // if a relative path is given, the jsre's assetPath is used
 func (self *JSRE) Exec(file string) error {
-	return self.exec(common.AbsolutePath(self.assetPath, file), true)
-}
-
-// circumvents the eval queue, see runEventLoop
-func (self *JSRE) execWithoutEQ(file string) error {
-	return self.exec(common.AbsolutePath(self.assetPath, file), false)
-}
-
-func (self *JSRE) exec(path string, useEQ bool) error {
-	code, err := ioutil.ReadFile(path)
+	code, err := ioutil.ReadFile(common.AbsolutePath(self.assetPath, file))
 	if err != nil {
 		return err
 	}
-	_, err = self.run(code, useEQ)
+	self.do(func(vm *otto.Otto) { _, err = vm.Run(code) })
 	return err
 }
 
-// assigns value v to a variable in the JS environment
-func (self *JSRE) Bind(name string, v interface{}) (err error) {
-	self.Set(name, v)
-	return
+// Bind assigns value v to a variable in the JS environment
+// This method is deprecated, use Set.
+func (self *JSRE) Bind(name string, v interface{}) error {
+	return self.Set(name, v)
 }
 
-// runs a piece of JS code
-func (self *JSRE) Run(code string) (otto.Value, error) {
-	return self.run(code, true)
+// Run runs a piece of JS code.
+func (self *JSRE) Run(code string) (v otto.Value, err error) {
+	self.do(func(vm *otto.Otto) { v, err = vm.Run(code) })
+	return v, err
 }
 
-// returns the value of a variable in the JS environment
-func (self *JSRE) Get(ns string) (otto.Value, error) {
-	done := make(chan bool)
-	req := &evalReq{
-		fn: func(res *evalResult) {
-			res.result, res.err = self.vm.Get(ns)
-		},
-		done: done,
-	}
-	self.evalQueue <- req
-	<-done
-	return req.res.result, req.res.err
+// Get returns the value of a variable in the JS environment.
+func (self *JSRE) Get(ns string) (v otto.Value, err error) {
+	self.do(func(vm *otto.Otto) { v, err = vm.Get(ns) })
+	return v, err
 }
 
-// assigns value v to a variable in the JS environment
-func (self *JSRE) Set(ns string, v interface{}) error {
-	done := make(chan bool)
-	req := &evalReq{
-		fn: func(res *evalResult) {
-			res.err = self.vm.Set(ns, v)
-		},
-		done: done,
-	}
-	self.evalQueue <- req
-	<-done
-	return req.res.err
+// Set assigns value v to a variable in the JS environment.
+func (self *JSRE) Set(ns string, v interface{}) (err error) {
+	self.do(func(vm *otto.Otto) { err = vm.Set(ns, v) })
+	return err
 }
 
-/*
-Executes a JS script from inside the currently executing JS code.
-Should only be called from inside an RPC routine.
-*/
+// loadScript executes a JS script from inside the currently executing JS code.
 func (self *JSRE) loadScript(call otto.FunctionCall) otto.Value {
 	file, err := call.Argument(0).ToString()
 	if err != nil {
+		// TODO: throw exception
 		return otto.FalseValue()
 	}
-	if err := self.execWithoutEQ(file); err != nil { // loadScript is only called from inside js
+	file = common.AbsolutePath(self.assetPath, file)
+	source, err := ioutil.ReadFile(file)
+	if err != nil {
+		// TODO: throw exception
+		return otto.FalseValue()
+	}
+	if _, err := compileAndRun(call.Otto, file, source); err != nil {
+		// TODO: throw exception
 		fmt.Println("err:", err)
 		return otto.FalseValue()
 	}
-
+	// TODO: return evaluation result
 	return otto.TrueValue()
 }
 
-// uses the "prettyPrint" JS function to format a value
+// PrettyPrint writes v to standard output.
 func (self *JSRE) PrettyPrint(v interface{}) (val otto.Value, err error) {
 	var method otto.Value
-	v, err = self.ToValue(v)
-	if err != nil {
-		return
-	}
-	method, err = self.vm.Get("prettyPrint")
-	if err != nil {
-		return
-	}
-	return method.Call(method, v)
+	self.do(func(vm *otto.Otto) {
+		val, err = vm.ToValue(v)
+		if err != nil {
+			return
+		}
+		method, err = vm.Get("prettyPrint")
+		if err != nil {
+			return
+		}
+		val, err = method.Call(method, val)
+	})
+	return val, err
 }
 
-// creates an otto value from a go type (serialized version)
-func (self *JSRE) ToValue(v interface{}) (otto.Value, error) {
-	done := make(chan bool)
-	req := &evalReq{
-		fn: func(res *evalResult) {
-			res.result, res.err = self.vm.ToValue(v)
-		},
-		done: done,
-	}
-	self.evalQueue <- req
-	<-done
-	return req.res.result, req.res.err
-}
-
-// creates an otto value from a go type (non-serialized version)
-func (self *JSRE) ToVal(v interface{}) otto.Value {
-
-	result, err := self.vm.ToValue(v)
-	if err != nil {
-		fmt.Println("Value unknown:", err)
-		return otto.UndefinedValue()
-	}
-	return result
-}
-
-// evaluates JS function and returns result in a pretty printed string format
+// Eval evaluates JS function and returns result in a pretty printed string format.
 func (self *JSRE) Eval(code string) (s string, err error) {
 	var val otto.Value
 	val, err = self.Run(code)
@@ -336,12 +269,16 @@ func (self *JSRE) Eval(code string) (s string, err error) {
 	return fmt.Sprintf("%v", val), nil
 }
 
-// compiles and then runs a piece of JS code
-func (self *JSRE) Compile(fn string, src interface{}) error {
-	script, err := self.vm.Compile(fn, src)
+// Compile compiles and then runs a piece of JS code.
+func (self *JSRE) Compile(filename string, src interface{}) (err error) {
+	self.do(func(vm *otto.Otto) { _, err = compileAndRun(vm, filename, src) })
+	return err
+}
+
+func compileAndRun(vm *otto.Otto, filename string, src interface{}) (otto.Value, error) {
+	script, err := vm.Compile(filename, src)
 	if err != nil {
-		return err
+		return otto.Value{}, err
 	}
-	self.run(script, true)
-	return nil
+	return vm.Run(script)
 }

@@ -93,6 +93,12 @@ type Downloader struct {
 	cancelLock sync.RWMutex  // Lock to protect the cancel channel in delivers
 }
 
+// Block is an origin-tagged blockchain block.
+type Block struct {
+	RawBlock   *types.Block
+	OriginPeer string
+}
+
 func New(mux *event.TypeMux, hasBlock hashCheckFn, getBlock getBlockFn) *Downloader {
 	downloader := &Downloader{
 		mux:       mux,
@@ -177,7 +183,7 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 }
 
 // TakeBlocks takes blocks from the queue and yields them to the caller.
-func (d *Downloader) TakeBlocks() types.Blocks {
+func (d *Downloader) TakeBlocks() []*Block {
 	return d.queue.TakeBlocks()
 }
 
@@ -409,7 +415,7 @@ out:
 					peer.Demote()
 					break
 				}
-				if glog.V(logger.Debug) {
+				if glog.V(logger.Debug) && len(blockPack.blocks) > 0 {
 					glog.Infof("Added %d blocks from: %s\n", len(blockPack.blocks), blockPack.peerId)
 				}
 				// Promote the peer and update it's idle state

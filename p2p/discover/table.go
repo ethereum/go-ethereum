@@ -8,6 +8,7 @@ package discover
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"net"
 	"sort"
 	"sync"
@@ -26,6 +27,7 @@ const (
 	nBuckets   = hashBits + 1 // Number of buckets
 
 	maxBondingPingPongs = 16
+	maxFindnodeFailures = 5
 )
 
 type Table struct {
@@ -68,10 +70,10 @@ type bucket struct {
 
 func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, nodeDBPath string) *Table {
 	// If no node database was given, use an in-memory one
-	db, err := newNodeDB(nodeDBPath, Version)
+	db, err := newNodeDB(nodeDBPath, Version, ourID)
 	if err != nil {
 		glog.V(logger.Warn).Infoln("Failed to open node database:", err)
-		db, _ = newNodeDB("", Version)
+		db, _ = newNodeDB("", Version, ourID)
 	}
 	tab := &Table{
 		net:       t,
@@ -90,8 +92,56 @@ func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, nodeDBPath string
 }
 
 // Self returns the local node.
+// The returned node should not be modified by the caller.
 func (tab *Table) Self() *Node {
 	return tab.self
+}
+
+// ReadRandomNodes fills the given slice with random nodes from the
+// table. It will not write the same node more than once. The nodes in
+// the slice are copies and can be modified by the caller.
+func (tab *Table) ReadRandomNodes(buf []*Node) (n int) {
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+	// TODO: tree-based buckets would help here
+	// Find all non-empty buckets and get a fresh slice of their entries.
+	var buckets [][]*Node
+	for _, b := range tab.buckets {
+		if len(b.entries) > 0 {
+			buckets = append(buckets, b.entries[:])
+		}
+	}
+	if len(buckets) == 0 {
+		return 0
+	}
+	// Shuffle the buckets.
+	for i := uint32(len(buckets)) - 1; i > 0; i-- {
+		j := randUint(i)
+		buckets[i], buckets[j] = buckets[j], buckets[i]
+	}
+	// Move head of each bucket into buf, removing buckets that become empty.
+	var i, j int
+	for ; i < len(buf); i, j = i+1, (j+1)%len(buckets) {
+		b := buckets[j]
+		buf[i] = &(*b[0])
+		buckets[j] = b[1:]
+		if len(b) == 1 {
+			buckets = append(buckets[:j], buckets[j+1:]...)
+		}
+		if len(buckets) == 0 {
+			break
+		}
+	}
+	return i + 1
+}
+
+func randUint(max uint32) uint32 {
+	if max == 0 {
+		return 0
+	}
+	var b [4]byte
+	rand.Read(b[:])
+	return binary.BigEndian.Uint32(b[:]) % max
 }
 
 // Close terminates the network listener and flushes the node database.
@@ -141,6 +191,12 @@ func (tab *Table) Lookup(targetID NodeID) []*Node {
 	result := tab.closest(target, bucketSize)
 	tab.mutex.Unlock()
 
+	// If the result set is empty, all nodes were dropped, refresh
+	if len(result.entries) == 0 {
+		tab.refresh()
+		return nil
+	}
+
 	for {
 		// ask the alpha closest nodes that we haven't asked yet
 		for i := 0; i < len(result.entries) && pendingQueries < alpha; i++ {
@@ -149,7 +205,19 @@ func (tab *Table) Lookup(targetID NodeID) []*Node {
 				asked[n.ID] = true
 				pendingQueries++
 				go func() {
-					r, _ := tab.net.findnode(n.ID, n.addr(), targetID)
+					// Find potential neighbors to bond with
+					r, err := tab.net.findnode(n.ID, n.addr(), targetID)
+					if err != nil {
+						// Bump the failure counter to detect and evacuate non-bonded entries
+						fails := tab.db.findFails(n.ID) + 1
+						tab.db.updateFindFails(n.ID, fails)
+						glog.V(logger.Detail).Infof("Bumping failures for %x: %d", n.ID[:8], fails)
+
+						if fails >= maxFindnodeFailures {
+							glog.V(logger.Detail).Infof("Evacuating node %x: %d findnode failures", n.ID[:8], fails)
+							tab.del(n)
+						}
+					}
 					reply <- tab.bondall(r)
 				}()
 			}
@@ -170,30 +238,53 @@ func (tab *Table) Lookup(targetID NodeID) []*Node {
 	return result.entries
 }
 
-// refresh performs a lookup for a random target to keep buckets full.
+// refresh performs a lookup for a random target to keep buckets full, or seeds
+// the table if it is empty (initial bootstrap or discarded faulty peers).
 func (tab *Table) refresh() {
-	// The Kademlia paper specifies that the bucket refresh should
-	// perform a refresh in the least recently used bucket. We cannot
-	// adhere to this because the findnode target is a 512bit value
-	// (not hash-sized) and it is not easily possible to generate a
-	// sha3 preimage that falls into a chosen bucket.
-	//
-	// We perform a lookup with a random target instead.
-	var target NodeID
-	rand.Read(target[:])
-	result := tab.Lookup(target)
-	if len(result) == 0 {
+	seed := true
+
+	// If the discovery table is empty, seed with previously known nodes
+	tab.mutex.Lock()
+	for _, bucket := range tab.buckets {
+		if len(bucket.entries) > 0 {
+			seed = false
+			break
+		}
+	}
+	tab.mutex.Unlock()
+
+	// If the table is not empty, try to refresh using the live entries
+	if !seed {
+		// The Kademlia paper specifies that the bucket refresh should
+		// perform a refresh in the least recently used bucket. We cannot
+		// adhere to this because the findnode target is a 512bit value
+		// (not hash-sized) and it is not easily possible to generate a
+		// sha3 preimage that falls into a chosen bucket.
+		//
+		// We perform a lookup with a random target instead.
+		var target NodeID
+		rand.Read(target[:])
+
+		result := tab.Lookup(target)
+		if len(result) == 0 {
+			// Lookup failed, seed after all
+			seed = true
+		}
+	}
+
+	if seed {
 		// Pick a batch of previously know seeds to lookup with
 		seeds := tab.db.querySeeds(10)
 		for _, seed := range seeds {
 			glog.V(logger.Debug).Infoln("Seeding network with", seed)
 		}
-		// Bootstrap the table with a self lookup
-		all := tab.bondall(append(tab.nursery, seeds...))
-		tab.mutex.Lock()
-		tab.add(all)
-		tab.mutex.Unlock()
-		tab.Lookup(tab.self.ID)
+		nodes := append(tab.nursery, seeds...)
+
+		// Bond with all the seed nodes (will pingpong only if failed recently)
+		bonded := tab.bondall(nodes)
+		if len(bonded) > 0 {
+			tab.Lookup(tab.self.ID)
+		}
 		// TODO: the Kademlia paper says that we're supposed to perform
 		// random lookups in all buckets further away than our closest neighbor.
 	}
@@ -256,8 +347,16 @@ func (tab *Table) bondall(nodes []*Node) (result []*Node) {
 // If pinged is true, the remote node has just pinged us and one half
 // of the process can be skipped.
 func (tab *Table) bond(pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16) (*Node, error) {
-	var n *Node
-	if n = tab.db.node(id); n == nil {
+	// Retrieve a previously known node and any recent findnode failures
+	node, fails := tab.db.node(id), 0
+	if node != nil {
+		fails = tab.db.findFails(id)
+	}
+	// If the node is unknown (non-bonded) or failed (remotely unknown), bond from scratch
+	var result error
+	if node == nil || fails > 0 {
+		glog.V(logger.Detail).Infof("Bonding %x: known=%v, fails=%v", id[:8], node != nil, fails)
+
 		tab.bondmu.Lock()
 		w := tab.bonding[id]
 		if w != nil {
@@ -276,18 +375,24 @@ func (tab *Table) bond(pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16
 			delete(tab.bonding, id)
 			tab.bondmu.Unlock()
 		}
-		n = w.n
-		if w.err != nil {
-			return nil, w.err
+		// Retrieve the bonding results
+		result = w.err
+		if result == nil {
+			node = w.n
 		}
 	}
-	tab.mutex.Lock()
-	defer tab.mutex.Unlock()
-	b := tab.buckets[logdist(tab.self.sha, n.sha)]
-	if !b.bump(n) {
-		tab.pingreplace(n, b)
+	// Even if bonding temporarily failed, give the node a chance
+	if node != nil {
+		tab.mutex.Lock()
+		defer tab.mutex.Unlock()
+
+		b := tab.buckets[logdist(tab.self.sha, node.sha)]
+		if !b.bump(node) {
+			tab.pingreplace(node, b)
+		}
+		tab.db.updateFindFails(id, 0)
 	}
-	return n, nil
+	return node, result
 }
 
 func (tab *Table) pingpong(w *bondproc, pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16) {
@@ -361,6 +466,21 @@ outer:
 		}
 		if len(bucket.entries) < bucketSize {
 			bucket.entries = append(bucket.entries, n)
+		}
+	}
+}
+
+// del removes an entry from the node table (used to evacuate failed/non-bonded
+// discovery peers).
+func (tab *Table) del(node *Node) {
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+
+	bucket := tab.buckets[logdist(tab.self.sha, node.sha)]
+	for i := range bucket.entries {
+		if bucket.entries[i].ID == node.ID {
+			bucket.entries = append(bucket.entries[:i], bucket.entries[i+1:]...)
+			return
 		}
 	}
 }

@@ -25,6 +25,7 @@ var (
 	ErrInsufficientFunds  = errors.New("Insufficient funds for gas * price + value")
 	ErrIntrinsicGas       = errors.New("Intrinsic gas too low")
 	ErrGasLimit           = errors.New("Exceeds block gas limit")
+	ErrNegativeValue      = errors.New("Negative value")
 )
 
 const txPoolQueueSize = 50
@@ -123,6 +124,10 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 
 	if pool.gasLimit().Cmp(tx.GasLimit) < 0 {
 		return ErrGasLimit
+	}
+
+	if tx.Amount.Cmp(common.Big0) < 0 {
+		return ErrNegativeValue
 	}
 
 	total := new(big.Int).Mul(tx.Price, tx.GasLimit)
