@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 
@@ -47,7 +48,8 @@ type dumbterm struct{ r *bufio.Reader }
 
 func (r dumbterm) Prompt(p string) (string, error) {
 	fmt.Print(p)
-	return r.r.ReadString('\n')
+	line, err := r.r.ReadString('\n')
+	return strings.TrimSuffix(line, "\n"), err
 }
 
 func (r dumbterm) PasswordPrompt(p string) (string, error) {
@@ -182,30 +184,52 @@ func (self *jsre) exec(filename string) error {
 }
 
 func (self *jsre) interactive() {
-	for {
-		input, err := self.Prompt(self.ps1)
-		if err != nil {
-			break
-		}
-		if input == "" {
-			continue
-		}
-		str += input + "\n"
-		self.setIndent()
-		if indentCount <= 0 {
-			if input == "exit" {
-				break
+	// Read input lines.
+	prompt := make(chan string)
+	inputln := make(chan string)
+	go func() {
+		defer close(inputln)
+		for {
+			line, err := self.Prompt(<-prompt)
+			if err != nil {
+				return
 			}
-			hist := str[:len(str)-1]
-			self.AppendHistory(hist)
-			self.parseInput(str)
-			str = ""
+			inputln <- line
+		}
+	}()
+	// Wait for Ctrl-C, too.
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+
+	defer func() {
+		if self.atexit != nil {
+			self.atexit()
+		}
+		self.re.Stop(false)
+	}()
+	for {
+		prompt <- self.ps1
+		select {
+		case <-sig:
+			fmt.Println("caught interrupt, exiting")
+			return
+		case input, ok := <-inputln:
+			if !ok || indentCount <= 0 && input == "exit" {
+				return
+			}
+			if input == "" {
+				continue
+			}
+			str += input + "\n"
+			self.setIndent()
+			if indentCount <= 0 {
+				hist := str[:len(str)-1]
+				self.AppendHistory(hist)
+				self.parseInput(str)
+				str = ""
+			}
 		}
 	}
-	if self.atexit != nil {
-		self.atexit()
-	}
-	self.re.Stop(false)
 }
 
 func (self *jsre) withHistory(op func(*os.File)) {
