@@ -93,13 +93,21 @@ func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpo
 }
 
 func (pm *ProtocolManager) removePeer(id string) {
-	// Unregister the peer from the downloader
-	pm.downloader.UnregisterPeer(id)
+	// Short circuit if the peer was already removed
+	peer := pm.peers.Peer(id)
+	if peer == nil {
+		return
+	}
+	glog.V(logger.Debug).Infoln("Removing peer", id)
 
-	// Remove the peer from the Ethereum peer set too
-	glog.V(logger.Detail).Infoln("Removing peer", id)
+	// Unregister the peer from the downloader and Ethereum peer set
+	pm.downloader.UnregisterPeer(id)
 	if err := pm.peers.Unregister(id); err != nil {
 		glog.V(logger.Error).Infoln("Removal failed:", err)
+	}
+	// Hard disconnect at the networking layer
+	if peer != nil {
+		peer.Peer.Disconnect(p2p.DiscUselessPeer)
 	}
 }
 
