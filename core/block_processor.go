@@ -285,9 +285,8 @@ func (self *BlockProcessor) GetBlockReceipts(bhash common.Hash) (receipts types.
 
 }
 
-// Validates the current block. Returns an error if the block was invalid,
-// an uncle or anything that isn't on the current block chain.
-// Validation validates easy over difficult (dagger takes longer time = difficult)
+// See YP section 4.3.4. "Block Header Validity"
+// Validates a block. Returns an error if the block is invalid.
 func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header, checkPow bool) error {
 	if big.NewInt(int64(len(block.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
 		return fmt.Errorf("Block extra data too long (%d)", len(block.Extra))
@@ -298,7 +297,6 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header, checkPow b
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
 	}
 
-	// block.gasLimit - parent.gasLimit <= parent.gasLimit / GasLimitBoundDivisor
 	a := new(big.Int).Sub(block.GasLimit, parent.GasLimit)
 	a.Abs(a)
 	b := new(big.Int).Div(parent.GasLimit, params.GasLimitBoundDivisor)
