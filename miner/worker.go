@@ -248,11 +248,11 @@ func (self *worker) wait() {
 				canonBlock := self.chain.GetBlockByNumber(block.NumberU64())
 				if canonBlock != nil && canonBlock.Hash() != block.Hash() {
 					stale = "stale-"
+				} else {
+					self.current.localMinedBlocks = newLocalMinedBlock(block.Number().Uint64(), self.current.localMinedBlocks)
 				}
 
 				glog.V(logger.Info).Infof("🔨  Mined %sblock #%v (%x)", stale, block.Number(), block.Hash().Bytes()[:4])
-
-				self.current.localMinedBlocks = newLocalMinedBlock(block.Number().Uint64(), self.current.localMinedBlocks)
 
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     block.Hash().Hex(),
