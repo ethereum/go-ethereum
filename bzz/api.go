@@ -21,12 +21,13 @@ on top of the dpa
 type Api struct {
 	dpa      *DPA
 	netStore *netStore
+	port     string
 	Resolver *resolver.Resolver
 }
 
 func NewApi(datadir, port string) (api *Api, err error) {
 
-	api = &Api{}
+	api = &Api{port: port}
 
 	api.netStore, err = newNetStore(filepath.Join(datadir, "bzz"), filepath.Join(datadir, "bzzpeers.json"))
 	if err != nil {
@@ -49,6 +50,7 @@ func (self *Api) Bzz() (p2p.Protocol, error) {
 func (self *Api) Start(node *discover.Node, connectPeer func(string) error) {
 	self.dpa.Start()
 	self.netStore.Start(node, connectPeer)
+	go startHttpServer(self, self.port)
 }
 
 func (self *Api) Stop() {
