@@ -827,7 +827,8 @@ func (js *jsre) newRegistry(call otto.FunctionCall) otto.Value {
 		return otto.UndefinedValue()
 	}
 
-	return js.re.ToVal([]string{hashReg, urlHint})
+	v, _ := call.Otto.ToValue([]string{hashReg, urlHint})
+	return v
 }
 
 // internal transaction type which will allow us to resend transactions  using `eth.resend`

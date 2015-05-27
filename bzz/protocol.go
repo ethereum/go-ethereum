@@ -3,7 +3,7 @@ package bzz
 /*
 BZZ implements the bzz wire protocol of swarm
 routing decoded storage and retrieval requests
-registering peers with the DHT
+registering peers with the KAD DHT via hive
 */
 
 import (
@@ -11,9 +11,11 @@ import (
 	"fmt"
 	"net"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/kademlia"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/errs"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -64,6 +66,7 @@ type bzzProtocol struct {
 	node      *discover.Node
 	netStore  *netStore
 	peer      *p2p.Peer
+	key       Key
 	rw        p2p.MsgReadWriter
 	errors    *errs.Errors
 	requestDb *LDBDatabase
@@ -325,10 +328,14 @@ func (self *bzzProtocol) handleStatus() (err error) {
 	// send precanned status message
 	sliceNodeID := self.netStore.self.ID
 	handshake := &statusMsgData{
-		Version:   uint64(Version),
-		ID:        "honey",
-		NodeID:    sliceNodeID[:],
-		Addr:      newPeerAddrFromNode(self.netStore.self),
+		Version: uint64(Version),
+		ID:      "honey",
+		NodeID:  sliceNodeID[:],
+		Addr: &peerAddr{
+			ID:   sliceNodeID[:],
+			IP:   self.netStore.self.IP,
+			Port: self.netStore.self.TCP,
+		},
 		NetworkId: uint64(NetworkId),
 		Caps:      []p2p.Cap{},
 	}
@@ -394,16 +401,16 @@ func (self *bzzProtocol) String() string {
 	return fmt.Sprintf("%4x: %v\n", self.node.Sha().Bytes()[:4], self.Url())
 }
 
-func newPeerAddrFromNode(node *discover.Node) *peerAddr {
-	return &peerAddr{
-		ID:   node.ID[:],
-		IP:   node.IP,
-		Port: node.TCP,
-	}
-}
-
 func (self *bzzProtocol) peerAddr() *peerAddr {
-	return newPeerAddrFromNode(self.peer.Node())
+	p := self.peer
+	id := p.ID()
+	host, port, _ := net.SplitHostPort(p.RemoteAddr().String())
+	intport, _ := strconv.Atoi(port)
+	return &peerAddr{
+		ID:   id[:],
+		IP:   net.ParseIP(host),
+		Port: uint16(intport),
+	}
 }
 
 // outgoing messages
@@ -415,14 +422,18 @@ func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
 	}
 }
 
-func (self *bzzProtocol) key() []byte {
-	return self.peer.Node().Sha().Bytes()[:]
+func (self *bzzProtocol) addrKey() []byte {
+	id := self.peer.ID()
+	if self.key == nil {
+		self.key = Key(crypto.Sha3(id[:]))
+	}
+	return self.key
 }
 
 func (self *bzzProtocol) storeRequestLoop() {
 
 	start := make([]byte, 64)
-	copy(start, self.key())
+	copy(start, self.addrKey())
 
 	key := make([]byte, 64)
 	copy(key, start)
@@ -446,7 +457,7 @@ LOOP:
 		// dpaLogger.Debugf("checking key: %x <> %x ", key, self.key())
 
 		// reached the end of this peers range
-		if !bytes.Equal(key[:32], self.key()) {
+		if !bytes.Equal(key[:32], self.addrKey()) {
 			// dpaLogger.Debugf("reached the end of this peers range: %x", key)
 			n = 0
 			continue
@@ -493,7 +504,7 @@ func (self *bzzProtocol) store(req *storeRequestMsgData) {
 
 func (self *bzzProtocol) storeRequest(key Key) {
 	peerKey := make([]byte, 64)
-	copy(peerKey, self.key())
+	copy(peerKey, self.addrKey())
 	copy(peerKey[32:], key[:])
 	dpaLogger.Debugf("enter store request %x into db", peerKey)
 	self.requestDb.Put(peerKey, []byte{0})

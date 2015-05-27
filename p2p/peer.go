@@ -88,16 +88,6 @@ func (p *Peer) LocalAddr() net.Addr {
 	return p.rw.fd.LocalAddr()
 }
 
-// LocalAddr returns the local address of the network connection.
-func (p *Peer) Node() *discover.Node {
-	return discover.NewNode(
-		p.rw.ID,
-		net.ParseIP(p.conn.RemoteAddr().String()),
-		uint16(p.rw.ListenPort), //
-		uint16(p.rw.ListenPort), //
-	)
-}
-
 // Disconnect terminates the peer connection with the given reason.
 // It returns immediately and does not wait until the connection is closed.
 func (p *Peer) Disconnect(reason DiscReason) {
