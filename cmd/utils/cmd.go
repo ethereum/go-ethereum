@@ -204,12 +204,11 @@ func ImportChain(chain *core.ChainManager, fn string) error {
 	defer fh.Close()
 	stream := rlp.NewStream(fh, 0)
 
-	// Remove all existing blocks and start the import.
-	chain.Reset()
+	// Run actual the import.
 	batchSize := 2500
 	blocks := make(types.Blocks, batchSize)
 	n := 0
-	for {
+	for batch := 0; ; batch++ {
 		// Load a batch of RLP blocks.
 		if checkInterrupt() {
 			return fmt.Errorf("interrupted")
@@ -232,11 +231,25 @@ func ImportChain(chain *core.ChainManager, fn string) error {
 		if checkInterrupt() {
 			return fmt.Errorf("interrupted")
 		}
+		if hasAllBlocks(chain, blocks[:i]) {
+			glog.Infof("skipping batch %d, all blocks present [%x / %x]",
+				batch, blocks[0].Hash().Bytes()[:4], blocks[i-1].Hash().Bytes()[:4])
+			continue
+		}
 		if _, err := chain.InsertChain(blocks[:i]); err != nil {
 			return fmt.Errorf("invalid block %d: %v", n, err)
 		}
 	}
 	return nil
+}
+
+func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
+	for _, b := range bs {
+		if !chain.HasBlock(b.Hash()) {
+			return false
+		}
+	}
+	return true
 }
 
 func ExportChain(chainmgr *core.ChainManager, fn string) error {
