@@ -283,20 +283,10 @@ func GetNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 }
 
 func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
-	// Set verbosity on glog
-	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
-	glog.CopyStandardLogTo("INFO")
-	// Set the log type
-	//glog.SetToStderr(ctx.GlobalBool(LogToStdErrFlag.Name))
-	glog.SetToStderr(true)
-	// Set the log dir
-	glog.SetLogDir(ctx.GlobalString(LogFileFlag.Name))
-
 	customName := ctx.GlobalString(IdentityFlag.Name)
 	if len(customName) > 0 {
 		clientID += "/" + customName
 	}
-
 	return &eth.Config{
 		Name:               common.MakeName(clientID, version),
 		DataDir:            ctx.GlobalString(DataDirFlag.Name),
@@ -327,32 +317,34 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	}
 }
 
-func GetChain(ctx *cli.Context) (*core.ChainManager, common.Database, common.Database) {
-	dataDir := ctx.GlobalString(DataDirFlag.Name)
+// SetupLogger configures glog from the logging-related command line flags.
+func SetupLogger(ctx *cli.Context) {
+	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
+	glog.CopyStandardLogTo("INFO")
+	glog.SetToStderr(true)
+	glog.SetLogDir(ctx.GlobalString(LogFileFlag.Name))
+}
 
-	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(dataDir, "blockchain"))
-	if err != nil {
+func GetChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, extraDB common.Database) {
+	dd := ctx.GlobalString(DataDirFlag.Name)
+	var err error
+	if blockDB, err = ethdb.NewLDBDatabase(filepath.Join(dd, "blockchain")); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
-
-	stateDb, err := ethdb.NewLDBDatabase(filepath.Join(dataDir, "state"))
-	if err != nil {
+	if stateDB, err = ethdb.NewLDBDatabase(filepath.Join(dd, "state")); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
-
-	extraDb, err := ethdb.NewLDBDatabase(filepath.Join(dataDir, "extra"))
-	if err != nil {
+	if extraDB, err = ethdb.NewLDBDatabase(filepath.Join(dd, "extra")); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
 
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
-	chainManager := core.NewChainManager(blockDb, stateDb, pow, eventMux)
-	txPool := core.NewTxPool(eventMux, chainManager.State, chainManager.GasLimit)
-	blockProcessor := core.NewBlockProcessor(stateDb, extraDb, pow, txPool, chainManager, eventMux)
-	chainManager.SetProcessor(blockProcessor)
-
-	return chainManager, blockDb, stateDb
+	chain = core.NewChainManager(blockDB, stateDB, pow, eventMux)
+	txpool := core.NewTxPool(eventMux, chain.State, chain.GasLimit)
+	proc := core.NewBlockProcessor(stateDB, extraDB, pow, txpool, chain, eventMux)
+	chain.SetProcessor(proc)
+	return chain, blockDB, stateDB, extraDB
 }
 
 func GetAccountManager(ctx *cli.Context) *accounts.Manager {

@@ -167,7 +167,7 @@ func FormatTransactionData(data string) []byte {
 }
 
 func ImportChain(chainmgr *core.ChainManager, fn string) error {
-	fmt.Printf("importing blockchain '%s'\n", fn)
+	glog.Infoln("Importing blockchain", fn)
 	fh, err := os.OpenFile(fn, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return err
@@ -176,43 +176,36 @@ func ImportChain(chainmgr *core.ChainManager, fn string) error {
 
 	chainmgr.Reset()
 	stream := rlp.NewStream(fh, 0)
-	var i, n int
 
 	batchSize := 2500
 	blocks := make(types.Blocks, batchSize)
-
-	for ; ; i++ {
-		var b types.Block
-		if err := stream.Decode(&b); err == io.EOF {
-			break
-		} else if err != nil {
-			return fmt.Errorf("at block %d: %v", i, err)
-		}
-
-		blocks[n] = &b
-		n++
-
-		if n == batchSize {
-			if _, err := chainmgr.InsertChain(blocks); err != nil {
-				return fmt.Errorf("invalid block %v", err)
+	n := 0
+	for {
+		// Load a batch of RLP blocks.
+		i := 0
+		for ; i < batchSize; i++ {
+			var b types.Block
+			if err := stream.Decode(&b); err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("at block %d: %v", n, err)
 			}
-			n = 0
-			blocks = make(types.Blocks, batchSize)
+			blocks[i] = &b
+			n++
+		}
+		if i == 0 {
+			break
+		}
+		// Import the batch.
+		if _, err := chainmgr.InsertChain(blocks[:i]); err != nil {
+			return fmt.Errorf("invalid block %d: %v", n, err)
 		}
 	}
-
-	if n > 0 {
-		if _, err := chainmgr.InsertChain(blocks[:n]); err != nil {
-			return fmt.Errorf("invalid block %v", err)
-		}
-	}
-
-	fmt.Printf("imported %d blocks\n", i)
 	return nil
 }
 
 func ExportChain(chainmgr *core.ChainManager, fn string) error {
-	fmt.Printf("exporting blockchain '%s'\n", fn)
+	glog.Infoln("Exporting blockchain to", fn)
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return err
@@ -221,6 +214,6 @@ func ExportChain(chainmgr *core.ChainManager, fn string) error {
 	if err := chainmgr.Export(fh); err != nil {
 		return err
 	}
-	fmt.Printf("exported blockchain\n")
+	glog.Infoln("Exported blockchain to", fn)
 	return nil
 }

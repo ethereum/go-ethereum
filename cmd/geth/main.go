@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 )
@@ -282,17 +283,12 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.SolcPathFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
+		utils.SetupLogger(ctx)
 		if ctx.GlobalBool(utils.PProfEanbledFlag.Name) {
 			utils.StartPProf(ctx)
 		}
 		return nil
 	}
-
-	// missing:
-	// flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
-	// flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
-	// flag.StringVar(&DiffType, "diff", "all", "sets the level of diff output [vm, all]. Has no effect if difftool=false")
-
 }
 
 func main() {
@@ -516,53 +512,25 @@ func importchain(ctx *cli.Context) {
 	if len(ctx.Args()) != 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
-	cfg.SkipBcVersionCheck = true
-
-	ethereum, err := eth.New(cfg)
-	if err != nil {
-		utils.Fatalf("%v\n", err)
-	}
-
-	chainmgr := ethereum.ChainManager()
+	chain, blockDB, stateDB, extraDB := utils.GetChain(ctx)
 	start := time.Now()
-	err = utils.ImportChain(chainmgr, ctx.Args().First())
-	if err != nil {
+	if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
 		utils.Fatalf("Import error: %v\n", err)
 	}
-
-	// force database flush
-	ethereum.BlockDb().Flush()
-	ethereum.StateDb().Flush()
-	ethereum.ExtraDb().Flush()
-
+	flushAll(blockDB, stateDB, extraDB)
 	fmt.Printf("Import done in %v", time.Since(start))
-
-	return
 }
 
 func exportchain(ctx *cli.Context) {
 	if len(ctx.Args()) != 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	cfg.SkipBcVersionCheck = true
-
-	ethereum, err := eth.New(cfg)
-	if err != nil {
-		utils.Fatalf("%v\n", err)
-	}
-
-	chainmgr := ethereum.ChainManager()
+	chain, _, _, _ := utils.GetChain(ctx)
 	start := time.Now()
-	err = utils.ExportChain(chainmgr, ctx.Args().First())
-	if err != nil {
+	if err := utils.ExportChain(chain, ctx.Args().First()); err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 	fmt.Printf("Export done in %v", time.Since(start))
-	return
 }
 
 func removeDb(ctx *cli.Context) {
@@ -585,76 +553,54 @@ func removeDb(ctx *cli.Context) {
 }
 
 func upgradeDb(ctx *cli.Context) {
-	fmt.Println("Upgrade blockchain DB")
+	glog.Infoln("Upgrading blockchain database")
 
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
-	cfg.SkipBcVersionCheck = true
-
-	ethereum, err := eth.New(cfg)
-	if err != nil {
-		utils.Fatalf("%v\n", err)
-	}
-
-	v, _ := ethereum.BlockDb().Get([]byte("BlockchainVersion"))
+	chain, blockDB, stateDB, extraDB := utils.GetChain(ctx)
+	v, _ := blockDB.Get([]byte("BlockchainVersion"))
 	bcVersion := int(common.NewValue(v).Uint())
-
 	if bcVersion == 0 {
 		bcVersion = core.BlockChainVersion
 	}
 
+	// Export the current chain.
 	filename := fmt.Sprintf("blockchain_%d_%s.chain", bcVersion, time.Now().Format("20060102_150405"))
 	exportFile := filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), filename)
-
-	err = utils.ExportChain(ethereum.ChainManager(), exportFile)
-	if err != nil {
+	if err := utils.ExportChain(chain, exportFile); err != nil {
 		utils.Fatalf("Unable to export chain for reimport %s\n", err)
 	}
-
-	ethereum.BlockDb().Close()
-	ethereum.StateDb().Close()
-	ethereum.ExtraDb().Close()
-
+	flushAll(blockDB, stateDB, extraDB)
 	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
 	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "state"))
 
-	ethereum, err = eth.New(cfg)
-	if err != nil {
-		utils.Fatalf("%v\n", err)
-	}
-
-	ethereum.BlockDb().Put([]byte("BlockchainVersion"), common.NewValue(core.BlockChainVersion).Bytes())
-
-	err = utils.ImportChain(ethereum.ChainManager(), exportFile)
+	// Import the chain file.
+	chain, blockDB, stateDB, extraDB = utils.GetChain(ctx)
+	blockDB.Put([]byte("BlockchainVersion"), common.NewValue(core.BlockChainVersion).Bytes())
+	err := utils.ImportChain(chain, exportFile)
+	flushAll(blockDB, stateDB, extraDB)
 	if err != nil {
 		utils.Fatalf("Import error %v (a backup is made in %s, use the import command to import it)\n", err, exportFile)
+	} else {
+		os.Remove(exportFile)
+		glog.Infoln("Import finished")
 	}
-
-	// force database flush
-	ethereum.BlockDb().Flush()
-	ethereum.StateDb().Flush()
-	ethereum.ExtraDb().Flush()
-
-	os.Remove(exportFile)
-
-	fmt.Println("Import finished")
 }
 
 func dump(ctx *cli.Context) {
-	chainmgr, _, stateDb := utils.GetChain(ctx)
+	chain, _, stateDB, _ := utils.GetChain(ctx)
 	for _, arg := range ctx.Args() {
 		var block *types.Block
 		if hashish(arg) {
-			block = chainmgr.GetBlock(common.HexToHash(arg))
+			block = chain.GetBlock(common.HexToHash(arg))
 		} else {
 			num, _ := strconv.Atoi(arg)
-			block = chainmgr.GetBlockByNumber(uint64(num))
+			block = chain.GetBlockByNumber(uint64(num))
 		}
 		if block == nil {
 			fmt.Println("{}")
 			utils.Fatalf("block not found")
 		} else {
-			statedb := state.New(block.Root(), stateDb)
-			fmt.Printf("%s\n", statedb.Dump())
+			state := state.New(block.Root(), stateDB)
+			fmt.Printf("%s\n", state.Dump())
 		}
 	}
 }
@@ -706,4 +652,11 @@ func version(c *cli.Context) {
 func hashish(x string) bool {
 	_, err := strconv.Atoi(x)
 	return err != nil
+}
+
+func flushAll(dbs ...common.Database) {
+	for _, db := range dbs {
+		db.Flush()
+		db.Close()
+	}
 }
