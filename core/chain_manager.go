@@ -69,6 +69,7 @@ func CalcGasLimit(parent *types.Block) *big.Int {
 
 	gl := new(big.Int).Sub(parent.GasLimit(), decay)
 	gl = gl.Add(gl, contrib)
+	gl = gl.Add(gl, big.NewInt(1))
 	gl = common.BigMax(gl, params.MinGasLimit)
 
 	if gl.Cmp(params.GenesisGasLimit) < 0 {
