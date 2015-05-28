@@ -19,6 +19,11 @@ const (
 	refreshPeersInterval    = 30 * time.Second
 	staticPeerCheckInterval = 15 * time.Second
 
+	banStartingTimeout       = 30 * time.Second // Amount of time a first offender is banned
+	banMaximumTimeout        = 30 * time.Minute // Maximum time for banning somebody
+	banAggrevationMultiplier = 2                // Multiplier for repeat offenders
+	banAbsolutionMultiplier  = 10               // Multiplier for absolving a node
+
 	// Maximum number of concurrently handshaking inbound connections.
 	maxAcceptConns = 50
 
@@ -122,6 +127,7 @@ type Server struct {
 
 	quit          chan struct{}
 	addstatic     chan *discover.Node
+	addbanned     chan *Peer
 	posthandshake chan *conn
 	addpeer       chan *conn
 	delpeer       chan *Peer
@@ -307,6 +313,7 @@ func (srv *Server) Start() (err error) {
 	srv.delpeer = make(chan *Peer)
 	srv.posthandshake = make(chan *conn)
 	srv.addstatic = make(chan *discover.Node)
+	srv.addbanned = make(chan *Peer)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
 
@@ -380,6 +387,9 @@ func (srv *Server) run(dialstate dialer) {
 		peers   = make(map[discover.NodeID]*Peer)
 		trusted = make(map[discover.NodeID]bool, len(srv.TrustedNodes))
 
+		banned    = make(map[discover.NodeID]time.Time)
+		penalties = make(map[discover.NodeID]time.Duration)
+
 		tasks        []task
 		pendingTasks []task
 		taskdone     = make(chan task, maxActiveDialTasks)
@@ -436,6 +446,18 @@ running:
 			// it will keep the node connected.
 			glog.V(logger.Detail).Infoln("<-addstatic:", n)
 			dialstate.addStatic(n)
+		case p := <-srv.addbanned:
+			// Add a node to the banned list, doubling any previous bans
+			glog.V(logger.Detail).Infoln("<-addbanned:", p)
+			penalty := banStartingTimeout
+			if prev, ok := penalties[p.ID()]; ok {
+				penalty = prev * banAggrevationMultiplier
+				if penalty > banMaximumTimeout {
+					penalty = banMaximumTimeout
+				}
+			}
+			banned[p.ID()] = time.Now().Add(penalty)
+			glog.V(logger.Debug).Infoln("Banned", p.ID(), "until", banned[p.ID()])
 		case op := <-srv.peerOp:
 			// This channel is used by Peers and PeerCount.
 			op(peers)
@@ -450,6 +472,11 @@ running:
 		case c := <-srv.posthandshake:
 			// A connection has passed the encryption handshake so
 			// the remote identity is known (but hasn't been verified yet).
+			if exp, ok := banned[c.id]; ok && time.Now().Before(exp) {
+				glog.V(logger.Detail).Infoln("<-banned:", c)
+				c.cont <- errors.New("temporarily banned")
+				continue
+			}
 			if trusted[c.id] {
 				// Ensure that the trusted flag is set before checking against MaxPeers.
 				c.flags |= trustedConn
@@ -478,6 +505,15 @@ running:
 			// A peer disconnected.
 			glog.V(logger.Detail).Infoln("<-delpeer:", p)
 			delete(peers, p.ID())
+
+			// Lift any previous bans for good behavior
+			if exp, ok := banned[p.ID()]; ok {
+				lift := exp.Add(penalties[p.ID()] * banAbsolutionMultiplier)
+				if time.Now().After(lift) {
+					delete(banned, p.ID())
+					delete(penalties, p.ID())
+				}
+			}
 		}
 	}
 
@@ -494,6 +530,13 @@ running:
 	// is closed.
 	glog.V(logger.Detail).Infof("ignoring %d pending tasks at spindown", len(tasks))
 	for len(peers) > 0 {
+		// Drop any in flight ban requests
+		select {
+		case p := <-srv.addbanned:
+			glog.V(logger.Detail).Infoln("<-addbanned (spindown):", p)
+		default:
+		}
+		// Drop the peer itself
 		p := <-srv.delpeer
 		glog.V(logger.Detail).Infoln("<-delpeer (spindown):", p)
 		delete(peers, p.ID())
@@ -640,6 +683,10 @@ func (srv *Server) runPeer(p *Peer) {
 		srv.newPeerHook(p)
 	}
 	discreason := p.run()
+	if discreason == DiscUselessPeer {
+		// Temporarily disallow the peer to reconnect
+		srv.addbanned <- p
+	}
 	// Note: run waits for existing peers to be sent on srv.delpeer
 	// before returning, so this send should not select on srv.quit.
 	srv.delpeer <- p
