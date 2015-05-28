@@ -289,6 +289,10 @@ func (self *worker) push() {
 func (self *worker) makeCurrent() {
 	block := self.chain.NewBlock(self.coinbase)
 	parent := self.chain.GetBlock(block.ParentHash())
+	// TMP fix for build server ...
+	if parent == nil {
+		return
+	}
 
 	if block.Time() <= parent.Time() {
 		block.Header().Time = parent.Header().Time + 1
