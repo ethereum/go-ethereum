@@ -456,6 +456,7 @@ running:
 					penalty = banMaximumTimeout
 				}
 			}
+			penalties[p.ID()] = penalty
 			banned[p.ID()] = time.Now().Add(penalty)
 			glog.V(logger.Debug).Infof("Banned %s until %v", p.ID().String()[:16], banned[p.ID()])
 		case op := <-srv.peerOp:
