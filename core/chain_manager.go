@@ -680,20 +680,19 @@ func (self *ChainManager) diff(oldBlock, newBlock *types.Block) (types.Blocks, e
 	// first reduce whoever is higher bound
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
 		// reduce old chain
-		for oldBlock = oldBlock; oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = self.GetBlock(oldBlock.ParentHash()) {
-			if oldBlock == nil {
-				return nil, fmt.Errorf("Invalid old chain")
-			}
+		for oldBlock = oldBlock; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = self.GetBlock(oldBlock.ParentHash()) {
 		}
 	} else {
 		// reduce new chain and append new chain blocks for inserting later on
-		for newBlock = newBlock; newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = self.GetBlock(newBlock.ParentHash()) {
-			if newBlock == nil {
-				return nil, fmt.Errorf("Invalid new chain")
-			}
-
+		for newBlock = newBlock; newBlock != nil && newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = self.GetBlock(newBlock.ParentHash()) {
 			newChain = append(newChain, newBlock)
 		}
+	}
+	if oldBlock == nil {
+		return nil, fmt.Errorf("Invalid old chain")
+	}
+	if newBlock == nil {
+		return nil, fmt.Errorf("Invalid new chain")
 	}
 
 	numSplit := newBlock.Number()
