@@ -24,27 +24,23 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 )
-import _ "net/http/pprof"
 
 const (
 	ClientIdentifier = "Geth"
@@ -68,7 +64,12 @@ func init() {
 	app.Action = run
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
-		blocktestCmd,
+		blocktestCommand,
+		importCommand,
+		exportCommand,
+		upgradedbCommand,
+		removedbCommand,
+		dumpCommand,
 		{
 			Action: makedag,
 			Name:   "makedag",
@@ -194,15 +195,6 @@ nodes.
 			},
 		},
 		{
-			Action: dump,
-			Name:   "dump",
-			Usage:  `dump a specific block from storage`,
-			Description: `
-The arguments are interpreted as block numbers or hashes.
-Use "ethereum dump 0" to dump the genesis block.
-`,
-		},
-		{
 			Action: console,
 			Name:   "console",
 			Usage:  `Geth Console: interactive JavaScript environment`,
@@ -220,26 +212,6 @@ See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
 The JavaScript VM exposes a node admin interface as well as the Ðapp
 JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
 `,
-		},
-		{
-			Action: importchain,
-			Name:   "import",
-			Usage:  `import a blockchain file`,
-		},
-		{
-			Action: exportchain,
-			Name:   "export",
-			Usage:  `export blockchain into file`,
-		},
-		{
-			Action: upgradeDb,
-			Name:   "upgradedb",
-			Usage:  "upgrade chainblock database",
-		},
-		{
-			Action: removeDb,
-			Name:   "removedb",
-			Usage:  "Remove blockchain and state databases",
 		},
 	}
 	app.Flags = []cli.Flag{
@@ -282,17 +254,12 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.SolcPathFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
+		utils.SetupLogger(ctx)
 		if ctx.GlobalBool(utils.PProfEanbledFlag.Name) {
 			utils.StartPProf(ctx)
 		}
 		return nil
 	}
-
-	// missing:
-	// flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
-	// flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
-	// flag.StringVar(&DiffType, "diff", "all", "sets the level of diff output [vm, all]. Has no effect if difftool=false")
-
 }
 
 func main() {
@@ -427,7 +394,7 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 }
 
 func accountList(ctx *cli.Context) {
-	am := utils.GetAccountManager(ctx)
+	am := utils.MakeAccountManager(ctx)
 	accts, err := am.Accounts()
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
@@ -469,7 +436,7 @@ func getPassPhrase(ctx *cli.Context, desc string, confirmation bool) (passphrase
 }
 
 func accountCreate(ctx *cli.Context) {
-	am := utils.GetAccountManager(ctx)
+	am := utils.MakeAccountManager(ctx)
 	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true)
 	acct, err := am.NewAccount(passphrase)
 	if err != nil {
@@ -488,7 +455,7 @@ func importWallet(ctx *cli.Context) {
 		utils.Fatalf("Could not read wallet file: %v", err)
 	}
 
-	am := utils.GetAccountManager(ctx)
+	am := utils.MakeAccountManager(ctx)
 	passphrase := getPassPhrase(ctx, "", false)
 
 	acct, err := am.ImportPreSaleKey(keyJson, passphrase)
@@ -503,160 +470,13 @@ func accountImport(ctx *cli.Context) {
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
 	}
-	am := utils.GetAccountManager(ctx)
+	am := utils.MakeAccountManager(ctx)
 	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true)
 	acct, err := am.Import(keyfile, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
 	fmt.Printf("Address: %x\n", acct)
-}
-
-func importchain(ctx *cli.Context) {
-	if len(ctx.Args()) != 1 {
-		utils.Fatalf("This command requires an argument.")
-	}
-
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
-	cfg.SkipBcVersionCheck = true
-
-	ethereum, err := eth.New(cfg)
-	if err != nil {
-		utils.Fatalf("%v\n", err)
-	}
-
-	chainmgr := ethereum.ChainManager()
-	start := time.Now()
-	err = utils.ImportChain(chainmgr, ctx.Args().First())
-	if err != nil {
-		utils.Fatalf("Import error: %v\n", err)
-	}
-
-	// force database flush
-	ethereum.BlockDb().Flush()
-	ethereum.StateDb().Flush()
-	ethereum.ExtraDb().Flush()
-
-	fmt.Printf("Import done in %v", time.Since(start))
-
-	return
-}
-
-func exportchain(ctx *cli.Context) {
-	if len(ctx.Args()) != 1 {
-		utils.Fatalf("This command requires an argument.")
-	}
-
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	cfg.SkipBcVersionCheck = true
-
-	ethereum, err := eth.New(cfg)
-	if err != nil {
-		utils.Fatalf("%v\n", err)
-	}
-
-	chainmgr := ethereum.ChainManager()
-	start := time.Now()
-	err = utils.ExportChain(chainmgr, ctx.Args().First())
-	if err != nil {
-		utils.Fatalf("Export error: %v\n", err)
-	}
-	fmt.Printf("Export done in %v", time.Since(start))
-	return
-}
-
-func removeDb(ctx *cli.Context) {
-	confirm, err := utils.PromptConfirm("Remove local databases?")
-	if err != nil {
-		utils.Fatalf("%v", err)
-	}
-
-	if confirm {
-		fmt.Println("Removing chain and state databases...")
-		start := time.Now()
-
-		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
-		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "state"))
-
-		fmt.Printf("Removed in %v\n", time.Since(start))
-	} else {
-		fmt.Println("Operation aborted")
-	}
-}
-
-func upgradeDb(ctx *cli.Context) {
-	fmt.Println("Upgrade blockchain DB")
-
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
-	cfg.SkipBcVersionCheck = true
-
-	ethereum, err := eth.New(cfg)
-	if err != nil {
-		utils.Fatalf("%v\n", err)
-	}
-
-	v, _ := ethereum.BlockDb().Get([]byte("BlockchainVersion"))
-	bcVersion := int(common.NewValue(v).Uint())
-
-	if bcVersion == 0 {
-		bcVersion = core.BlockChainVersion
-	}
-
-	filename := fmt.Sprintf("blockchain_%d_%s.chain", bcVersion, time.Now().Format("20060102_150405"))
-	exportFile := filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), filename)
-
-	err = utils.ExportChain(ethereum.ChainManager(), exportFile)
-	if err != nil {
-		utils.Fatalf("Unable to export chain for reimport %s\n", err)
-	}
-
-	ethereum.BlockDb().Close()
-	ethereum.StateDb().Close()
-	ethereum.ExtraDb().Close()
-
-	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
-	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "state"))
-
-	ethereum, err = eth.New(cfg)
-	if err != nil {
-		utils.Fatalf("%v\n", err)
-	}
-
-	ethereum.BlockDb().Put([]byte("BlockchainVersion"), common.NewValue(core.BlockChainVersion).Bytes())
-
-	err = utils.ImportChain(ethereum.ChainManager(), exportFile)
-	if err != nil {
-		utils.Fatalf("Import error %v (a backup is made in %s, use the import command to import it)\n", err, exportFile)
-	}
-
-	// force database flush
-	ethereum.BlockDb().Flush()
-	ethereum.StateDb().Flush()
-	ethereum.ExtraDb().Flush()
-
-	os.Remove(exportFile)
-
-	fmt.Println("Import finished")
-}
-
-func dump(ctx *cli.Context) {
-	chainmgr, _, stateDb := utils.GetChain(ctx)
-	for _, arg := range ctx.Args() {
-		var block *types.Block
-		if hashish(arg) {
-			block = chainmgr.GetBlock(common.HexToHash(arg))
-		} else {
-			num, _ := strconv.Atoi(arg)
-			block = chainmgr.GetBlockByNumber(uint64(num))
-		}
-		if block == nil {
-			fmt.Println("{}")
-			utils.Fatalf("block not found")
-		} else {
-			statedb := state.New(block.Root(), stateDb)
-			fmt.Printf("%s\n", statedb.Dump())
-		}
-	}
 }
 
 func makedag(ctx *cli.Context) {
@@ -700,10 +520,4 @@ func version(c *cli.Context) {
 	fmt.Println("OS:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
 	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
-}
-
-// hashish returns true for strings that look like hashes.
-func hashish(x string) bool {
-	_, err := strconv.Atoi(x)
-	return err != nil
 }
