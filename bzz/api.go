@@ -71,13 +71,20 @@ func (self *Api) Stop() {
 
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve path to content using dpa retrieve
-func (self *Api) Get(bzzpath string) (string, error) {
-	return "", nil
+func (self *Api) Get(bzzpath string) (content []byte, mimeType string, status int, size int, err error) {
+	var reader SectionReader
+	reader, mimeType, status, err = self.getPath("/" + bzzpath)
+	content = make([]byte, reader.Size())
+	size, err = reader.Read(content)
+	if err == io.EOF {
+		err = nil
+	}
+	return
 }
 
 // Put provides singleton manifest creation and optional name registration
 // on top of dpa store
-func (self *Api) Put(content, contentType, address, domain string) (string, error) {
+func (self *Api) Put(content, contentType string) (string, error) {
 	sr := io.NewSectionReader(strings.NewReader(content), 0, int64(len(content)))
 	wg := &sync.WaitGroup{}
 	key, err := self.dpa.Store(sr, wg)
@@ -103,7 +110,7 @@ func (self *Api) Download(bzzpath, localpath string) (string, error) {
 // Upload replicates a local directory as a manifest file and uploads it
 // using dpa store
 // TODO: localpath should point to a manifest
-func (self *Api) Upload(localpath, address, domain string) (string, error) {
+func (self *Api) Upload(localpath string) (string, error) {
 	var files []string
 	localpath = common.ExpandHomePath(localpath)
 	dpaLogger.Debugf("uploading '%s'", localpath)
@@ -165,9 +172,13 @@ func (self *Api) Upload(localpath, address, domain string) (string, error) {
 	return fmt.Sprintf("%064x", key), err2
 }
 
+func (self *Api) Register(sender, address, domain string) (err error) {
+	return
+}
+
 type errResolve error
 
-func (self *Api) resolveHost(hostport string) (contentHash Key, errR errResolve) {
+func (self *Api) resolve(hostport string) (contentHash Key, errR errResolve) {
 	var host, port string
 	var err error
 	host, port, err = net.SplitHostPort(hostport)
@@ -212,7 +223,7 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 
 	//resolving host and port
 	var key Key
-	key, err = self.resolveHost(hostPort)
+	key, err = self.resolve(hostPort)
 	if err != nil {
 		return
 	}

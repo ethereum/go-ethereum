@@ -16,6 +16,7 @@ func NewJSApi(vm *jsre.JSRE, api *Api) (jsapi *JSApi) {
 	vm.Set("bzz", struct{}{})
 	t, _ := vm.Get("bzz")
 	o := t.Object()
+	o.Set("register", jsapi.register)
 	o.Set("download", jsapi.download)
 	o.Set("upload", jsapi.upload)
 	o.Set("get", jsapi.get)
@@ -29,6 +30,38 @@ type JSApi struct {
 	api *Api
 }
 
+func (self *JSApi) register(call otto.FunctionCall) otto.Value {
+	if len(call.ArgumentList) != 2 {
+		fmt.Println("requires 3 arguments: bzz.register(address, contenthash, domain)")
+		return otto.UndefinedValue()
+	}
+
+	var err error
+	var sender, contenthash, domain string
+	sender, err = call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+	contenthash, err = call.Argument(1).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+	domain, err = call.Argument(2).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	err = self.api.Register(sender, contenthash, domain)
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+	return otto.TrueValue()
+}
+
 func (self *JSApi) get(call otto.FunctionCall) otto.Value {
 	if len(call.ArgumentList) != 1 {
 		fmt.Println("requires 1 argument: bzz.get(path)")
@@ -36,31 +69,41 @@ func (self *JSApi) get(call otto.FunctionCall) otto.Value {
 	}
 
 	var err error
-	var bzzpath, res string
+	var bzzpath string
 	bzzpath, err = call.Argument(0).ToString()
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
 
-	res, err = self.api.Get(bzzpath)
+	var content []byte
+	var mimeType string
+	var status, size int
+	content, mimeType, status, size, err = self.api.Get(bzzpath)
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
 
-	v, _ := call.Otto.ToValue(res)
+	obj := map[string]string{
+		"content":     string(content),
+		"contentType": mimeType,
+		"status":      fmt.Sprintf("%v", status),
+		"size":        fmt.Sprintf("%v", size),
+	}
+
+	v, _ := call.Otto.ToValue(obj)
 	return v
 }
 
 func (self *JSApi) put(call otto.FunctionCall) otto.Value {
-	if len(call.ArgumentList) != 2 && len(call.ArgumentList) != 4 {
-		fmt.Println("requires 2 or 4 arguments: bzz.put(content, content-type[, address, domain])")
+	if len(call.ArgumentList) != 2 {
+		fmt.Println("requires 2 arguments: bzz.put(content, content-type)")
 		return otto.UndefinedValue()
 	}
 
 	var err error
-	var res, content, contentType, address, domain string
+	var res, content, contentType string
 	content, err = call.Argument(0).ToString()
 	if err != nil {
 		fmt.Println(err)
@@ -71,20 +114,8 @@ func (self *JSApi) put(call otto.FunctionCall) otto.Value {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
-	if len(call.ArgumentList) > 2 {
-		address, err = call.Argument(2).ToString()
-		if err != nil {
-			fmt.Println(err)
-			return otto.UndefinedValue()
-		}
-		domain, err = call.Argument(3).ToString()
-		if err != nil {
-			fmt.Println(err)
-			return otto.UndefinedValue()
-		}
-	}
 
-	res, err = self.api.Put(content, contentType, address, domain)
+	res, err = self.api.Put(content, contentType)
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
@@ -124,32 +155,20 @@ func (self *JSApi) download(call otto.FunctionCall) otto.Value {
 }
 
 func (self *JSApi) upload(call otto.FunctionCall) otto.Value {
-	if len(call.ArgumentList) != 1 && len(call.ArgumentList) != 3 {
-		fmt.Println("requires 1 or 3 arguments: bzz.put(localpath[, address, domain])")
+	if len(call.ArgumentList) != 1 {
+		fmt.Println("requires 1 arguments: bzz.put(localpath)")
 		return otto.UndefinedValue()
 	}
 
 	var err error
-	var localpath, address, domain, res string
+	var localpath, res string
 	localpath, err = call.Argument(0).ToString()
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
-	if len(call.ArgumentList) > 1 {
-		address, err = call.Argument(1).ToString()
-		if err != nil {
-			fmt.Println(err)
-			return otto.UndefinedValue()
-		}
-		domain, err = call.Argument(2).ToString()
-		if err != nil {
-			fmt.Println(err)
-			return otto.UndefinedValue()
-		}
-	}
 
-	res, err = self.api.Upload(localpath, address, domain)
+	res, err = self.api.Upload(localpath)
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
