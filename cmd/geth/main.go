@@ -340,13 +340,13 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 	var err error
 	// Load startup keys. XXX we are going to need a different format
 
-	if len(account) == 0 {
+	if !((len(account) == 40) || (len(account) == 42)) { // with or without 0x
 		utils.Fatalf("Invalid account address '%s'", account)
 	}
 	// Attempt to unlock the account 3 times
 	attempts := 3
 	for tries := 0; tries < attempts; tries++ {
-		msg := fmt.Sprintf("Unlocking account %s...%s | Attempt %d/%d", account[:8], account[len(account)-6:], tries+1, attempts)
+		msg := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", account, tries+1, attempts)
 		passphrase = getPassPhrase(ctx, msg, false)
 		err = am.Unlock(common.HexToAddress(account), passphrase)
 		if err == nil {
