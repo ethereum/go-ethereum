@@ -4,6 +4,7 @@ import (
 	"fmt"
 	// "net/http"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/jsre"
 	"github.com/robertkrimen/otto"
 )
@@ -17,6 +18,7 @@ func NewJSApi(vm *jsre.JSRE, api *Api) (jsapi *JSApi) {
 	t, _ := vm.Get("bzz")
 	o := t.Object()
 	o.Set("register", jsapi.register)
+	o.Set("resolve", jsapi.resolve)
 	o.Set("download", jsapi.download)
 	o.Set("upload", jsapi.upload)
 	o.Set("get", jsapi.get)
@@ -31,7 +33,7 @@ type JSApi struct {
 }
 
 func (self *JSApi) register(call otto.FunctionCall) otto.Value {
-	if len(call.ArgumentList) != 2 {
+	if len(call.ArgumentList) != 3 {
 		fmt.Println("requires 3 arguments: bzz.register(address, contenthash, domain)")
 		return otto.UndefinedValue()
 	}
@@ -54,12 +56,37 @@ func (self *JSApi) register(call otto.FunctionCall) otto.Value {
 		return otto.UndefinedValue()
 	}
 
-	err = self.api.Register(sender, contenthash, domain)
+	hash := common.HexToHash(contenthash)
+
+	err = self.api.Register(common.HexToAddress(sender), hash, domain)
 	if err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}
 	return otto.TrueValue()
+}
+
+func (self *JSApi) resolve(call otto.FunctionCall) otto.Value {
+	if len(call.ArgumentList) != 1 {
+		fmt.Println("requires 1 argument: bzz.resolve(domain)")
+		return otto.UndefinedValue()
+	}
+	var err error
+	var domain string
+	domain, err = call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+	var contentHash Key
+	contentHash, err = self.api.Resolve(domain)
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	v, _ := call.Otto.ToValue(common.ToHex(contentHash[:]))
+	return v
 }
 
 func (self *JSApi) get(call otto.FunctionCall) otto.Value {

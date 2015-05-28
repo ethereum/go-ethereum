@@ -76,7 +76,7 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			dpaLogger.Debugf("Swarm: Raw GET request '%s' received", uri)
 
 			// resolving host
-			key, err := api.resolve(path)
+			key, err := api.Resolve(path)
 			if err != nil {
 				dpaLogger.Debugf("Swarm: %v", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)

@@ -172,13 +172,20 @@ func (self *Api) Upload(localpath string) (string, error) {
 	return fmt.Sprintf("%064x", key), err2
 }
 
-func (self *Api) Register(sender, address, domain string) (err error) {
+func (self *Api) Register(sender common.Address, hash common.Hash, domain string) (err error) {
+	domainhash := common.BytesToHash(crypto.Sha3([]byte(domain)))
+
+	if self.Resolver != nil {
+		_, err = self.Resolver.RegisterContentHash(sender, domainhash, hash)
+	} else {
+		err = fmt.Errorf("no registry: %v", err)
+	}
 	return
 }
 
 type errResolve error
 
-func (self *Api) resolve(hostport string) (contentHash Key, errR errResolve) {
+func (self *Api) Resolve(hostport string) (contentHash Key, errR errResolve) {
 	var host, port string
 	var err error
 	host, port, err = net.SplitHostPort(hostport)
@@ -223,7 +230,7 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 
 	//resolving host and port
 	var key Key
-	key, err = self.resolve(hostPort)
+	key, err = self.Resolve(hostPort)
 	if err != nil {
 		return
 	}
