@@ -91,6 +91,8 @@ func (self *Api) Download(bzzpath, localpath string) (string, error) {
 // TODO: localpath should point to a manifest
 func (self *Api) Upload(localpath, address, domain string) (string, error) {
 	var files []string
+	localpath = common.ExpandHomePath(localpath)
+	dpaLogger.Debugf("uploading '%s'", localpath)
 	err := filepath.Walk(localpath, func(path string, info os.FileInfo, err error) error {
 		if err == nil {
 			files = append(files, path)
@@ -124,6 +126,13 @@ func (self *Api) Upload(localpath, address, domain string) (string, error) {
 	var buffer bytes.Buffer
 	buffer.WriteString(`{"entries":[`)
 	sc := ","
+	var pathPrefix *regexp.Regexp
+	var relativePath string
+	pathPrefix, err = regexp.Compile("^" + localpath + fmt.Sprintf("%s", os.PathSeparator))
+	if err != nil {
+		return "", err
+	}
+
 	for i, path := range files {
 		if errors[i] != nil {
 			return "", errors[i]
@@ -131,7 +140,8 @@ func (self *Api) Upload(localpath, address, domain string) (string, error) {
 		if i == cnt-1 {
 			sc = "]}"
 		}
-		buffer.WriteString(fmt.Sprintf(`{"hash":"%064x","path":"%s","contentType":"text/plain"}%s`, hashes[i], path, sc))
+		relativePath = pathPrefix.ReplaceAllString(path, "")
+		buffer.WriteString(fmt.Sprintf(`{"hash":"%064x","path":"%s","contentType":"text/plain"}%s`, hashes[i], relativePath, sc))
 	}
 
 	manifest := buffer.Bytes()

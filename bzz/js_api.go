@@ -54,7 +54,7 @@ func (self *JSApi) get(call otto.FunctionCall) otto.Value {
 }
 
 func (self *JSApi) put(call otto.FunctionCall) otto.Value {
-	if len(call.ArgumentList) != 2 || len(call.ArgumentList) != 4 {
+	if len(call.ArgumentList) != 2 && len(call.ArgumentList) != 4 {
 		fmt.Println("requires 2 or 4 arguments: bzz.put(content, content-type[, address, domain])")
 		return otto.UndefinedValue()
 	}
@@ -124,8 +124,8 @@ func (self *JSApi) download(call otto.FunctionCall) otto.Value {
 }
 
 func (self *JSApi) upload(call otto.FunctionCall) otto.Value {
-	if len(call.ArgumentList) != 1 || len(call.ArgumentList) != 3 {
-		fmt.Println("requires 1 or 1 arguments: bzz.put(localpath[, address, domain])")
+	if len(call.ArgumentList) != 1 && len(call.ArgumentList) != 3 {
+		fmt.Println("requires 1 or 3 arguments: bzz.put(localpath[, address, domain])")
 		return otto.UndefinedValue()
 	}
 
