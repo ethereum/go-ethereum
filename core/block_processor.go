@@ -40,11 +40,6 @@ type BlockProcessor struct {
 
 	txpool *TxPool
 
-	// The last attempted block is mainly used for debugging purposes
-	// This does not have to be a valid block and will be set during
-	// 'Process' & canonical validation.
-	lastAttemptedBlock *types.Block
-
 	events event.Subscription
 
 	eventMux *event.TypeMux
@@ -188,8 +183,6 @@ func (sm *BlockProcessor) Process(block *types.Block) (logs state.Logs, err erro
 }
 
 func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs state.Logs, err error) {
-	sm.lastAttemptedBlock = block
-
 	// Create a new state based on the parent's root (e.g., create copy)
 	state := state.New(parent.Root(), sm.db)
 
@@ -255,6 +248,12 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 		return
 	}
 
+	// store the receipts
+	err = putReceipts(sm.extraDb, block.Hash(), receipts)
+	if err != nil {
+		return nil, err
+	}
+
 	// Calculate the td for this block
 	//td = CalculateTD(block, parent)
 	// Sync the current block's state to the database
@@ -268,21 +267,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 		putTx(sm.extraDb, tx, block, uint64(i))
 	}
 
-	receiptsRlp := block.Receipts().RlpEncode()
-	sm.extraDb.Put(append(receiptsPre, block.Hash().Bytes()...), receiptsRlp)
-
 	return state.Logs(), nil
-}
-
-func (self *BlockProcessor) GetBlockReceipts(bhash common.Hash) (receipts types.Receipts, err error) {
-	var rdata []byte
-	rdata, err = self.extraDb.Get(append(receiptsPre, bhash[:]...))
-
-	if err == nil {
-		err = rlp.DecodeBytes(rdata, &receipts)
-	}
-	return
-
 }
 
 // See YP section 4.3.4. "Block Header Validity"
@@ -391,13 +376,25 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 	return nil
 }
 
+// GetBlockReceipts returns the receipts beloniging to the block hash
+func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) (receipts types.Receipts, err error) {
+	return getBlockReceipts(sm.extraDb, bhash)
+}
+
+// GetLogs returns the logs of the given block. This method is using a two step approach
+// where it tries to get it from the (updated) method which gets them from the receipts or
+// the depricated way by re-processing the block.
 func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err error) {
-	if !sm.bc.HasBlock(block.Header().ParentHash) {
-		return nil, ParentError(block.Header().ParentHash)
+	receipts, err := sm.GetBlockReceipts(block.Hash())
+	if err == nil && len(receipts) > 0 {
+		// coalesce logs
+		for _, receipt := range receipts {
+			logs = append(logs, receipt.Logs()...)
+		}
+		return
 	}
 
-	sm.lastAttemptedBlock = block
-
+	// TODO: remove backward compatibility
 	var (
 		parent = sm.bc.GetBlock(block.Header().ParentHash)
 		state  = state.New(parent.Root(), sm.db)
@@ -406,6 +403,16 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 	sm.TransitionState(state, parent, block, true)
 
 	return state.Logs(), nil
+}
+
+func getBlockReceipts(db common.Database, bhash common.Hash) (receipts types.Receipts, err error) {
+	var rdata []byte
+	rdata, err = db.Get(append(receiptsPre, bhash[:]...))
+
+	if err == nil {
+		err = rlp.DecodeBytes(rdata, &receipts)
+	}
+	return
 }
 
 func putTx(db common.Database, tx *types.Transaction, block *types.Block, i uint64) {
@@ -430,4 +437,20 @@ func putTx(db common.Database, tx *types.Transaction, block *types.Block, i uint
 		return
 	}
 	db.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)
+}
+
+func putReceipts(db common.Database, hash common.Hash, receipts types.Receipts) error {
+	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
+	for i, receipt := range receipts {
+		storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
+	}
+
+	bytes, err := rlp.EncodeToBytes(storageReceipts)
+	if err != nil {
+		return err
+	}
+
+	db.Put(append(receiptsPre, hash[:]...), bytes)
+
+	return nil
 }
