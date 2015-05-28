@@ -113,9 +113,20 @@ func (self *Api) Download(bzzpath, localpath string) (string, error) {
 func (self *Api) Upload(localpath string) (string, error) {
 	var files []string
 	localpath = common.ExpandHomePath(localpath)
+	start := len(localpath)
+	if (start > 0) && (localpath[start-1] != os.PathSeparator) {
+		start++
+	}
 	dpaLogger.Debugf("uploading '%s'", localpath)
 	err := filepath.Walk(localpath, func(path string, info os.FileInfo, err error) error {
-		if err == nil {
+		if (err == nil) && !info.IsDir() {
+			//fmt.Printf("lp %s  path %s\n", localpath, path)
+			if len(path) <= start {
+				return fmt.Errorf("Path is too short")
+			}
+			if path[:len(localpath)] != localpath {
+				return fmt.Errorf("Path prefix does not match localpath")
+			}
 			files = append(files, path)
 		}
 		return err
@@ -147,9 +158,6 @@ func (self *Api) Upload(localpath string) (string, error) {
 	var buffer bytes.Buffer
 	buffer.WriteString(`{"entries":[`)
 	sc := ","
-	var pathPrefix *regexp.Regexp
-	var relativePath string
-	pathPrefix, err = regexp.Compile("^" + localpath + fmt.Sprintf("%s", os.PathSeparator))
 	if err != nil {
 		return "", err
 	}
@@ -161,8 +169,7 @@ func (self *Api) Upload(localpath string) (string, error) {
 		if i == cnt-1 {
 			sc = "]}"
 		}
-		relativePath = pathPrefix.ReplaceAllString(path, "")
-		buffer.WriteString(fmt.Sprintf(`{"hash":"%064x","path":"%s","contentType":"text/plain"}%s`, hashes[i], relativePath, sc))
+		buffer.WriteString(fmt.Sprintf(`{"hash":"%064x","path":"%s","contentType":"text/plain"}%s`, hashes[i], path[start:], sc))
 	}
 
 	manifest := buffer.Bytes()
