@@ -121,7 +121,7 @@ func NewChainManager(blockDb, stateDb common.Database, pow pow.PoW, mux *event.T
 	bc.setLastState()
 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
-	for _, hash := range badHashes {
+	for hash, _ := range BadHashes {
 		if block := bc.GetBlock(hash); block != nil {
 			glog.V(logger.Error).Infof("Found bad hash. Reorganising chain to state %x\n", block.ParentHash().Bytes()[:4])
 			block = bc.GetBlock(block.ParentHash())
