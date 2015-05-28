@@ -2,7 +2,6 @@ package eth
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 	"sync"
 	"time"
@@ -359,7 +358,7 @@ func (pm *ProtocolManager) verifyTd(peer *peer, request newBlockMsgData) error {
 func (pm *ProtocolManager) BroadcastBlock(hash common.Hash, block *types.Block) {
 	// Broadcast block to a batch of peers not knowing about it
 	peers := pm.peers.PeersWithoutBlock(hash)
-	peers = peers[:int(math.Sqrt(float64(len(peers))))]
+	//peers = peers[:int(math.Sqrt(float64(len(peers))))]
 	for _, peer := range peers {
 		peer.sendNewBlock(block)
 	}
