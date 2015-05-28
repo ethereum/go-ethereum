@@ -123,10 +123,8 @@ func (p *Peer) run() DiscReason {
 	p.startProtocols()
 
 	// Wait for an error or disconnect.
-	var (
-		reason    DiscReason
-		requested bool
-	)
+	var reason DiscReason
+
 	select {
 	case err := <-readErr:
 		if r, ok := err.(DiscReason); ok {
@@ -140,15 +138,11 @@ func (p *Peer) run() DiscReason {
 	case err := <-p.protoErr:
 		reason = discReasonForError(err)
 	case reason = <-p.disc:
-		requested = true
 	}
 	close(p.closed)
 	p.rw.close(reason)
 	p.wg.Wait()
 
-	if requested {
-		reason = DiscRequested
-	}
 	glog.V(logger.Debug).Infof("%v: Disconnected: %v\n", p, reason)
 	return reason
 }
