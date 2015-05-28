@@ -1,11 +1,15 @@
 package bzz
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
+	"os"
 	"path/filepath"
 	"regexp"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/resolver"
@@ -65,7 +69,7 @@ func (self *Api) Stop() {
 }
 
 // Get uses iterative manifest retrieval and prefix matching
-// to resolve path to contenwt using dpa retrieve
+// to resolve path to content using dpa retrieve
 func (self *Api) Get(bzzpath string) (string, error) {
 	return "", nil
 }
@@ -86,7 +90,55 @@ func (self *Api) Download(bzzpath, localpath string) (string, error) {
 // using dpa store
 // TODO: localpath should point to a manifest
 func (self *Api) Upload(localpath, address, domain string) (string, error) {
-	return "", nil
+	var files []string
+	err := filepath.Walk(localpath, func(path string, info os.FileInfo, err error) error {
+		if err == nil {
+			files = append(files, path)
+		}
+		return err
+	})
+	if err != nil {
+		return "", err
+	}
+
+	cnt := len(files)
+	hashes := make([]Key, cnt)
+	errors := make([]error, cnt)
+	wg := &sync.WaitGroup{}
+
+	for i, path := range files {
+		wg.Add(1)
+		go func(i int, path string) {
+			f, err := os.Open(path)
+			if err == nil {
+				stat, _ := f.Stat()
+				sr := io.NewSectionReader(f, 0, stat.Size())
+				hashes[i], err = self.dpa.Store(sr, wg)
+			}
+			errors[i] = err
+			wg.Done()
+		}(i, path)
+	}
+	wg.Wait()
+
+	var buffer bytes.Buffer
+	buffer.WriteString(`{"entries":[`)
+	sc := ","
+	for i, path := range files {
+		if errors[i] != nil {
+			return "", errors[i]
+		}
+		if i == cnt-1 {
+			sc = "]}"
+		}
+		buffer.WriteString(fmt.Sprintf(`{"hash":"%064x","path":"%s","contentType":"text/plain"}%s`, hashes[i], path, sc))
+	}
+
+	manifest := buffer.Bytes()
+	sr := io.NewSectionReader(bytes.NewReader(manifest), 0, int64(len(manifest)))
+	key, err2 := self.dpa.Store(sr, wg)
+	wg.Wait()
+	return fmt.Sprintf("%064x", key), err2
 }
 
 type errResolve error
