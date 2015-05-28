@@ -826,7 +826,7 @@ func verifyNonces(pow pow.PoW, blocks []*types.Block) error {
 func verifyNonce(pow pow.PoW, in <-chan *types.Block, done chan<- error) {
 	for block := range in {
 		if !pow.Verify(block) {
-			done <- ValidationError("Block(#%v) nonce is invalid (= %x)", block.Number(), block.Nonce)
+			done <- ValidationError("Block (#%v / %x) nonce is invalid (= %x)", block.Number(), block.Hash(), block.Nonce)
 		} else {
 			done <- nil
 		}
@@ -835,7 +835,7 @@ func verifyNonce(pow pow.PoW, in <-chan *types.Block, done chan<- error) {
 
 func verifyBlockNonce(pow pow.PoW, block *types.Block, done chan<- error) {
 	if !pow.Verify(block) {
-		done <- ValidationError("Block(#%v) nonce is invalid (= %x)", block.Number(), block.Nonce)
+		done <- ValidationError("Block (#%v / %x) nonce is invalid (= %x)", block.Number(), block.Hash(), block.Nonce)
 	} else {
 		done <- nil
 	}
