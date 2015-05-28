@@ -548,17 +548,20 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		tstart     = time.Now()
 	)
 
-	// check the nonce in parallel to the block processing
-	// this speeds catching up significantly
-	nonceErrCh := make(chan error)
-	go func() {
-		nonceErrCh <- verifyNonces(self.pow, chain)
-	}()
-
 	for i, block := range chain {
 		if block == nil {
 			continue
 		}
+
+		if BadHashes[block.Hash()] {
+			err := fmt.Errorf("Found known bad hash in chain %x", block.Hash())
+			blockErr(block, err)
+			return i, err
+		}
+
+		// create a nonce channel for parallisation of the nonce check
+		nonceErrCh := make(chan error)
+		go verifyBlockNonce(self.pow, block, nonceErrCh)
 
 		// Setting block.Td regardless of error (known for example) prevents errors down the line
 		// in the protocol handler
@@ -568,13 +571,14 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		// all others will fail too (unless a known block is returned).
 		logs, err := self.processor.Process(block)
 		if err != nil {
+			// empty the nonce channel
+			<-nonceErrCh
+
 			if IsKnownBlockErr(err) {
 				stats.ignored++
 				continue
 			}
 
-			// Do not penelise on future block. We'll need a block queue eventually that will queue
-			// future block for future use
 			if err == BlockFutureErr {
 				block.SetQueued(true)
 				self.futureBlocks.Push(block)
@@ -593,18 +597,23 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 
 			return i, err
 		}
+		// Wait and check nonce channel and make sure it checks out fine
+		// otherwise return the error
+		if err := <-nonceErrCh; err != nil {
+			return i, err
+		}
 
 		cblock := self.currentBlock
-		// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
-		// not in the canonical chain.
-		self.write(block)
 		// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 		// At this point it's possible that a different chain (fork) becomes the new canonical chain.
 		if block.Td.Cmp(self.td) > 0 {
 			// chain fork
 			if block.ParentHash() != cblock.Hash() {
 				// during split we merge two different chains and create the new canonical chain
-				self.merge(cblock, block)
+				err := self.merge(cblock, block)
+				if err != nil {
+					return i, err
+				}
 
 				queue[i] = ChainSplitEvent{block, logs}
 				queueEvent.splitCount++
@@ -637,17 +646,14 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			queue[i] = ChainSideEvent{block, logs}
 			queueEvent.sideCount++
 		}
+		// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
+		// not in the canonical chain.
+		self.write(block)
+		// Delete from future blocks
 		self.futureBlocks.Delete(block.Hash())
 
 		stats.processed++
 
-	}
-
-	// check and wait for the nonce error channel and
-	// make sure no nonce error was thrown in the process
-	err := <-nonceErrCh
-	if err != nil {
-		return 0, err
 	}
 
 	if (stats.queued > 0 || stats.processed > 0 || stats.ignored > 0) && bool(glog.V(logger.Info)) {
@@ -663,7 +669,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 
 // diff takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them
 // to be part of the new canonical chain.
-func (self *ChainManager) diff(oldBlock, newBlock *types.Block) types.Blocks {
+func (self *ChainManager) diff(oldBlock, newBlock *types.Block) (types.Blocks, error) {
 	var (
 		newChain    types.Blocks
 		commonBlock *types.Block
@@ -675,10 +681,17 @@ func (self *ChainManager) diff(oldBlock, newBlock *types.Block) types.Blocks {
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
 		// reduce old chain
 		for oldBlock = oldBlock; oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = self.GetBlock(oldBlock.ParentHash()) {
+			if oldBlock == nil {
+				return nil, fmt.Errorf("Invalid old chain")
+			}
 		}
 	} else {
 		// reduce new chain and append new chain blocks for inserting later on
 		for newBlock = newBlock; newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = self.GetBlock(newBlock.ParentHash()) {
+			if newBlock == nil {
+				return nil, fmt.Errorf("Invalid new chain")
+			}
+
 			newChain = append(newChain, newBlock)
 		}
 	}
@@ -692,6 +705,12 @@ func (self *ChainManager) diff(oldBlock, newBlock *types.Block) types.Blocks {
 		newChain = append(newChain, newBlock)
 
 		oldBlock, newBlock = self.GetBlock(oldBlock.ParentHash()), self.GetBlock(newBlock.ParentHash())
+		if oldBlock == nil {
+			return nil, fmt.Errorf("Invalid old chain")
+		}
+		if newBlock == nil {
+			return nil, fmt.Errorf("Invalid new chain")
+		}
 	}
 
 	if glog.V(logger.Info) {
@@ -699,17 +718,22 @@ func (self *ChainManager) diff(oldBlock, newBlock *types.Block) types.Blocks {
 		glog.Infof("Fork detected @ %x. Reorganising chain from #%v %x to %x", commonHash[:4], numSplit, oldStart.Hash().Bytes()[:4], newStart.Hash().Bytes()[:4])
 	}
 
-	return newChain
+	return newChain, nil
 }
 
 // merge merges two different chain to the new canonical chain
-func (self *ChainManager) merge(oldBlock, newBlock *types.Block) {
-	newChain := self.diff(oldBlock, newBlock)
+func (self *ChainManager) merge(oldBlock, newBlock *types.Block) error {
+	newChain, err := self.diff(oldBlock, newBlock)
+	if err != nil {
+		return fmt.Errorf("chain reorg failed: %v", err)
+	}
 
 	// insert blocks. Order does not matter. Last block will be written in ImportChain itself which creates the new head properly
 	for _, block := range newChain {
 		self.insert(block)
 	}
+
+	return nil
 }
 
 func (self *ChainManager) update() {
@@ -806,5 +830,13 @@ func verifyNonce(pow pow.PoW, in <-chan *types.Block, done chan<- error) {
 		} else {
 			done <- nil
 		}
+	}
+}
+
+func verifyBlockNonce(pow pow.PoW, block *types.Block, done chan<- error) {
+	if !pow.Verify(block) {
+		done <- ValidationError("Block(#%v) nonce is invalid (= %x)", block.Number(), block.Nonce)
+	} else {
+		done <- nil
 	}
 }
