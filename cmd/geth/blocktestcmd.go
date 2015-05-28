@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/tests"
 )
 
-var blocktestCmd = cli.Command{
+var blocktestCommand = cli.Command{
 	Action: runBlockTest,
 	Name:   "blocktest",
 	Usage:  `loads a block test file`,

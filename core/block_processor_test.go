@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow/ezp"
@@ -33,5 +35,35 @@ func TestNumber(t *testing.T) {
 	err = bp.ValidateHeader(block1.Header(), chain.Genesis().Header(), false)
 	if err == BlockNumberErr {
 		t.Errorf("didn't expect block number error")
+	}
+}
+
+func TestPutReceipt(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+
+	var addr common.Address
+	addr[0] = 1
+	var hash common.Hash
+	hash[0] = 2
+
+	receipt := new(types.Receipt)
+	receipt.SetLogs(state.Logs{&state.Log{
+		Address:   addr,
+		Topics:    []common.Hash{hash},
+		Data:      []byte("hi"),
+		Number:    42,
+		TxHash:    hash,
+		TxIndex:   0,
+		BlockHash: hash,
+		Index:     0,
+	}})
+
+	putReceipts(db, hash, types.Receipts{receipt})
+	receipts, err := getBlockReceipts(db, hash)
+	if err != nil {
+		t.Error("got err:", err)
+	}
+	if len(receipts) != 1 {
+		t.Error("expected to get 1 receipt, got", len(receipts))
 	}
 }

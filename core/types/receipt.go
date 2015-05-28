@@ -26,8 +26,37 @@ func (self *Receipt) SetLogs(logs state.Logs) {
 	self.logs = logs
 }
 
+func (self *Receipt) Logs() state.Logs {
+	return self.logs
+}
+
 func (self *Receipt) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, self.logs})
+}
+
+func (self *Receipt) DecodeRLP(s *rlp.Stream) error {
+	var r struct {
+		PostState         []byte
+		CumulativeGasUsed *big.Int
+		Bloom             Bloom
+		Logs              state.Logs
+	}
+	if err := s.Decode(&r); err != nil {
+		return err
+	}
+	self.PostState, self.CumulativeGasUsed, self.Bloom, self.logs = r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs
+
+	return nil
+}
+
+type ReceiptForStorage Receipt
+
+func (self *ReceiptForStorage) EncodeRLP(w io.Writer) error {
+	storageLogs := make([]*state.LogForStorage, len(self.logs))
+	for i, log := range self.logs {
+		storageLogs[i] = (*state.LogForStorage)(log)
+	}
+	return rlp.Encode(w, []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, storageLogs})
 }
 
 func (self *Receipt) RlpEncode() []byte {

@@ -38,6 +38,13 @@ type Agent interface {
 	GetHashRate() int64
 }
 
+const miningLogAtDepth = 5
+
+type uint64RingBuffer struct {
+	ints []uint64 //array of all integers in buffer
+	next int      //where is the next insertion? assert 0 <= next < len(ints)
+}
+
 // environment is the workers current environment and holds
 // all of the current state information
 type environment struct {
@@ -54,6 +61,7 @@ type environment struct {
 	lowGasTransactors  *set.Set
 	ownedAccounts      *set.Set
 	lowGasTxs          types.Transactions
+	localMinedBlocks   *uint64RingBuffer // the most recent block numbers that were mined locally (used to check block inclusion)
 }
 
 // env returns a new environment for the current cycle
@@ -209,6 +217,18 @@ out:
 	events.Unsubscribe()
 }
 
+func newLocalMinedBlock(blockNumber uint64, prevMinedBlocks *uint64RingBuffer) (minedBlocks *uint64RingBuffer) {
+	if prevMinedBlocks == nil {
+		minedBlocks = &uint64RingBuffer{next: 0, ints: make([]uint64, miningLogAtDepth+1)}
+	} else {
+		minedBlocks = prevMinedBlocks
+	}
+
+	minedBlocks.ints[minedBlocks.next] = blockNumber
+	minedBlocks.next = (minedBlocks.next + 1) % len(minedBlocks.ints)
+	return minedBlocks
+}
+
 func (self *worker) wait() {
 	for {
 		for block := range self.recv {
@@ -224,13 +244,16 @@ func (self *worker) wait() {
 				}
 				self.mux.Post(core.NewMinedBlockEvent{block})
 
-				var stale string
+				var stale, confirm string
 				canonBlock := self.chain.GetBlockByNumber(block.NumberU64())
 				if canonBlock != nil && canonBlock.Hash() != block.Hash() {
-					stale = "stale-"
+					stale = "stale "
+				} else {
+					confirm = "Wait 5 blocks for confirmation"
+					self.current.localMinedBlocks = newLocalMinedBlock(block.Number().Uint64(), self.current.localMinedBlocks)
 				}
 
-				glog.V(logger.Info).Infof("🔨  Mined %sblock #%v (%x)", stale, block.Number(), block.Hash().Bytes()[:4])
+				glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
 
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     block.Hash().Hex(),
@@ -265,8 +288,14 @@ func (self *worker) push() {
 
 func (self *worker) makeCurrent() {
 	block := self.chain.NewBlock(self.coinbase)
-	if block.Time() == self.chain.CurrentBlock().Time() {
-		block.Header().Time++
+	parent := self.chain.GetBlock(block.ParentHash())
+	// TMP fix for build server ...
+	if parent == nil {
+		return
+	}
+
+	if block.Time() <= parent.Time() {
+		block.Header().Time = parent.Header().Time + 1
 	}
 	block.Header().Extra = self.extra
 
@@ -286,8 +315,10 @@ func (self *worker) makeCurrent() {
 	current.ignoredTransactors = set.New()
 	current.lowGasTransactors = set.New()
 	current.ownedAccounts = accountAddressesSet(accounts)
+	if self.current != nil {
+		current.localMinedBlocks = self.current.localMinedBlocks
+	}
 
-	parent := self.chain.GetBlock(current.block.ParentHash())
 	current.coinbase.SetGasPool(core.CalcGasLimit(parent))
 
 	self.current = current
@@ -304,6 +335,38 @@ func (w *worker) setGasPrice(p *big.Int) {
 	w.mux.Post(core.GasPriceChanged{w.gasPrice})
 }
 
+func (self *worker) isBlockLocallyMined(deepBlockNum uint64) bool {
+	//Did this instance mine a block at {deepBlockNum} ?
+	var isLocal = false
+	for idx, blockNum := range self.current.localMinedBlocks.ints {
+		if deepBlockNum == blockNum {
+			isLocal = true
+			self.current.localMinedBlocks.ints[idx] = 0 //prevent showing duplicate logs
+			break
+		}
+	}
+	//Short-circuit on false, because the previous and following tests must both be true
+	if !isLocal {
+		return false
+	}
+
+	//Does the block at {deepBlockNum} send earnings to my coinbase?
+	var block = self.chain.GetBlockByNumber(deepBlockNum)
+	return block.Header().Coinbase == self.coinbase
+}
+
+func (self *worker) logLocalMinedBlocks(previous *environment) {
+	if previous != nil && self.current.localMinedBlocks != nil {
+		nextBlockNum := self.current.block.Number().Uint64()
+		for checkBlockNum := previous.block.Number().Uint64(); checkBlockNum < nextBlockNum; checkBlockNum++ {
+			inspectBlockNum := checkBlockNum - miningLogAtDepth
+			if self.isBlockLocallyMined(inspectBlockNum) {
+				glog.V(logger.Info).Infof("🔨 🔗  Mined %d blocks back: block #%v", miningLogAtDepth, inspectBlockNum)
+			}
+		}
+	}
+}
+
 func (self *worker) commitNewWork() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -312,6 +375,7 @@ func (self *worker) commitNewWork() {
 	self.currentMu.Lock()
 	defer self.currentMu.Unlock()
 
+	previous := self.current
 	self.makeCurrent()
 	current := self.current
 
@@ -347,6 +411,7 @@ func (self *worker) commitNewWork() {
 	// We only care about logging if we're actually mining
 	if atomic.LoadInt32(&self.mining) == 1 {
 		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles\n", current.block.Number(), current.tcount, len(uncles))
+		self.logLocalMinedBlocks(previous)
 	}
 
 	for _, hash := range badUncles {

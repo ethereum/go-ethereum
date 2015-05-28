@@ -7,7 +7,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gopkg.in/fatih/set.v0"
+
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -75,6 +78,7 @@ type Downloader struct {
 	queue  *queue                      // Scheduler for selecting the hashes to download
 	peers  *peerSet                    // Set of active peers from which download can proceed
 	checks map[common.Hash]*crossCheck // Pending cross checks to verify a hash chain
+	banned *set.SetNonTS               // Set of hashes we've received and banned
 
 	// Callbacks
 	hasBlock hashCheckFn
@@ -100,6 +104,7 @@ type Block struct {
 }
 
 func New(mux *event.TypeMux, hasBlock hashCheckFn, getBlock getBlockFn) *Downloader {
+	// Create the base downloader
 	downloader := &Downloader{
 		mux:       mux,
 		queue:     newQueue(),
@@ -109,6 +114,11 @@ func New(mux *event.TypeMux, hasBlock hashCheckFn, getBlock getBlockFn) *Downloa
 		newPeerCh: make(chan *peer, 1),
 		hashCh:    make(chan hashPack, 1),
 		blockCh:   make(chan blockPack, 1),
+	}
+	// Inject all the known bad hashes
+	downloader.banned = set.NewNonTS()
+	for hash, _ := range core.BadHashes {
+		downloader.banned.Add(hash)
 	}
 	return downloader
 }
@@ -279,6 +289,12 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 			if len(hashPack.hashes) == 0 {
 				glog.V(logger.Debug).Infof("Peer (%s) responded with empty hash set\n", active.id)
 				return errEmptyHashSet
+			}
+			for _, hash := range hashPack.hashes {
+				if d.banned.Has(hash) {
+					glog.V(logger.Debug).Infof("Peer (%s) sent a known invalid chain\n", active.id)
+					return ErrInvalidChain
+				}
 			}
 			// Determine if we're done fetching hashes (queue up all pending), and continue if not done
 			done, index := false, 0

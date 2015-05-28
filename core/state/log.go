@@ -29,15 +29,22 @@ func (self *Log) EncodeRLP(w io.Writer) error {
 }
 
 func (self *Log) String() string {
-	return fmt.Sprintf(`log: %x %x %x`, self.Address, self.Topics, self.Data)
+	return fmt.Sprintf(`log: %x %x %x %x %d %x %d`, self.Address, self.Topics, self.Data, self.TxHash, self.TxIndex, self.BlockHash, self.Index)
 }
 
 type Logs []*Log
 
-func (self Logs) String() (ret string) {
-	for _, log := range self {
-		ret += fmt.Sprintf("%v", log)
-	}
+type LogForStorage Log
 
-	return "[" + ret + "]"
+func (self *LogForStorage) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, []interface{}{
+		self.Address,
+		self.Topics,
+		self.Data,
+		self.Number,
+		self.TxHash,
+		self.TxIndex,
+		self.BlockHash,
+		self.Index,
+	})
 }
