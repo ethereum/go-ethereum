@@ -19,10 +19,10 @@ const (
 	refreshPeersInterval    = 30 * time.Second
 	staticPeerCheckInterval = 15 * time.Second
 
-	banStartingTimeout       = 30 * time.Second // Amount of time a first offender is banned
-	banMaximumTimeout        = 30 * time.Minute // Maximum time for banning somebody
-	banAggrevationMultiplier = 2                // Multiplier for repeat offenders
-	banAbsolutionMultiplier  = 10               // Multiplier for absolving a node
+	banStartingTimeout       = time.Minute // Amount of time a first offender is banned
+	banMaximumTimeout        = time.Hour   // Maximum time for banning somebody
+	banAggrevationMultiplier = 4           // Multiplier for repeat offenders
+	banAbsolutionMultiplier  = 24          // Multiplier for absolving a node
 
 	// Maximum number of concurrently handshaking inbound connections.
 	maxAcceptConns = 50
