@@ -457,7 +457,7 @@ running:
 				}
 			}
 			banned[p.ID()] = time.Now().Add(penalty)
-			glog.V(logger.Debug).Infoln("Banned", p.ID(), "until", banned[p.ID()])
+			glog.V(logger.Debug).Infof("Banned %s until %v", p.ID().String()[:16], banned[p.ID()])
 		case op := <-srv.peerOp:
 			// This channel is used by Peers and PeerCount.
 			op(peers)
@@ -474,7 +474,7 @@ running:
 			// the remote identity is known (but hasn't been verified yet).
 			if exp, ok := banned[c.id]; ok && time.Now().Before(exp) {
 				glog.V(logger.Detail).Infoln("<-banned:", c)
-				c.cont <- errors.New("temporarily banned")
+				c.cont <- fmt.Errorf("banned until %v", exp)
 				continue
 			}
 			if trusted[c.id] {
