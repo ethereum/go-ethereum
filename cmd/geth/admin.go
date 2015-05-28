@@ -88,6 +88,12 @@ func (js *jsre) adminBindings() {
 	debug.Set("seedhash", js.seedHash)
 	// undocumented temporary
 	debug.Set("waitForBlocks", js.waitForBlocks)
+
+	js.re.Set("http", struct{}{})
+	t, _ = js.re.Get("http")
+	http := t.Object()
+	http.Set("get", js.httpGet)
+	http.Set("loadScript", js.httpLoadScript)
 }
 
 // generic helper to getBlock by Number/Height or Hex depending on autodetected input
@@ -201,6 +207,56 @@ func (js *jsre) resend(call otto.FunctionCall) otto.Value {
 
 	fmt.Println("first argument must be a transaction")
 	return otto.FalseValue()
+}
+
+func (js *jsre) httpLoadScript(call otto.FunctionCall) otto.Value {
+	if len(call.ArgumentList) != 1 {
+		fmt.Println("requires 1 argument: http.httpLoadScript(url)")
+		return otto.FalseValue()
+	}
+	uri, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+	script, err := ds.Get(uri, "")
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+	_, err = call.Otto.Run(script)
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+	return otto.TrueValue()
+}
+
+func (js *jsre) httpGet(call otto.FunctionCall) otto.Value {
+	if len(call.ArgumentList) > 2 {
+		fmt.Println("requires 1 or 2 arguments: http.get(url[, filepath])")
+		return otto.UndefinedValue()
+	}
+	uri, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+	var path string
+	if len(call.ArgumentList) > 1 {
+		path, err = call.Argument(1).ToString()
+		if err != nil {
+			fmt.Println(err)
+			return otto.UndefinedValue()
+		}
+	}
+	resp, err := ds.Get(uri, path)
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+	v, _ := call.Otto.ToValue(string(resp))
+	return v
 }
 
 func (js *jsre) sign(call otto.FunctionCall) otto.Value {

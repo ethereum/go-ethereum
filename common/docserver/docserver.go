@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -35,6 +36,27 @@ func (self *DocServer) Client() *http.Client {
 
 func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []byte, err error) {
 	// retrieve content
+
+	content, err = self.Get(uri, "")
+	if err != nil {
+		return
+	}
+
+	// check hash to authenticate content
+	hashbytes := crypto.Sha3(content)
+	var chash common.Hash
+	copy(chash[:], hashbytes)
+	if chash != hash {
+		content = nil
+		err = fmt.Errorf("content hash mismatch")
+	}
+
+	return
+
+}
+
+func (self *DocServer) Get(uri, path string) (content []byte, err error) {
+	// retrieve content
 	resp, err := self.Client().Get(uri)
 	defer func() {
 		if resp != nil {
@@ -49,13 +71,8 @@ func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []b
 		return
 	}
 
-	// check hash to authenticate content
-	hashbytes := crypto.Sha3(content)
-	var chash common.Hash
-	copy(chash[:], hashbytes)
-	if chash != hash {
-		content = nil
-		err = fmt.Errorf("content hash mismatch")
+	if path != "" {
+		ioutil.WriteFile(utils.ExpandPath(path), content, 0700)
 	}
 
 	return

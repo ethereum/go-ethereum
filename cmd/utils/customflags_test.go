@@ -20,7 +20,7 @@ func TestPathExpansion(t *testing.T) {
 	os.Setenv("DDDXXX", "/tmp")
 
 	for test, expected := range tests {
-		got := expandPath(test)
+		got := ExpandPath(test)
 		if got != expected {
 			t.Errorf("test %s, got %s, expected %s\n", test, got, expected)
 		}
