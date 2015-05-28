@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -77,7 +78,20 @@ func (self *Api) Get(bzzpath string) (string, error) {
 // Put provides singleton manifest creation and optional name registration
 // on top of dpa store
 func (self *Api) Put(content, contentType, address, domain string) (string, error) {
-	return "", nil
+	sr := io.NewSectionReader(strings.NewReader(content), 0, int64(len(content)))
+	wg := &sync.WaitGroup{}
+	key, err := self.dpa.Store(sr, wg)
+	if err != nil {
+		return "", err
+	}
+	manifest := fmt.Sprintf(`{"entries":[{"hash":"%064x","contentType":"%s"}]}`, key, contentType)
+	sr = io.NewSectionReader(strings.NewReader(manifest), 0, int64(len(manifest)))
+	key, err = self.dpa.Store(sr, wg)
+	if err != nil {
+		return "", err
+	}
+	wg.Wait()
+	return fmt.Sprintf("%064x", key), nil
 }
 
 // Download replicates the manifest path structure on the local filesystem
