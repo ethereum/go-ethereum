@@ -102,7 +102,7 @@ window.filter = filter;
 		var amount = parseInt( value.value );
 		console.log("transact: ", to.value, " => ", amount)
 
-		contract.sendTransaction({from: eth.accounts[0]}).send( to.value, amount );
+		contract.send.sendTransaction(to.value, amount ,{from: eth.accounts[0]});
 
 		to.value = "";
 		value.value = "";

@@ -40,6 +40,10 @@ import (
 	"github.com/peterh/liner"
 )
 
+const (
+	importBatchSize = 2500
+)
+
 var interruptCallbacks = []func(os.Signal){}
 
 // Register interrupt handlers callbacks
@@ -125,10 +129,17 @@ func initDataDir(Datadir string) {
 	}
 }
 
-// Fatalf formats a message to standard output and exits the program.
+// Fatalf formats a message to standard error and exits the program.
+// The message is also printed to standard output if standard error
+// is redirected to a different file.
 func Fatalf(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "Fatal: "+format+"\n", args...)
-	fmt.Fprintf(os.Stdout, "Fatal: "+format+"\n", args...)
+	w := io.MultiWriter(os.Stdout, os.Stderr)
+	outf, _ := os.Stdout.Stat()
+	errf, _ := os.Stderr.Stat()
+	if outf != nil && errf != nil && os.SameFile(outf, errf) {
+		w = os.Stderr
+	}
+	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
 	logger.Flush()
 	os.Exit(1)
 }
@@ -166,53 +177,86 @@ func FormatTransactionData(data string) []byte {
 	return d
 }
 
-func ImportChain(chainmgr *core.ChainManager, fn string) error {
-	fmt.Printf("importing blockchain '%s'\n", fn)
-	fh, err := os.OpenFile(fn, os.O_RDONLY, os.ModePerm)
+func ImportChain(chain *core.ChainManager, fn string) error {
+	// Watch for Ctrl-C while the import is running.
+	// If a signal is received, the import will stop at the next batch.
+	interrupt := make(chan os.Signal, 1)
+	stop := make(chan struct{})
+	signal.Notify(interrupt, os.Interrupt)
+	defer signal.Stop(interrupt)
+	defer close(interrupt)
+	go func() {
+		if _, ok := <-interrupt; ok {
+			glog.Info("caught interrupt during import, will stop at next batch")
+		}
+		close(stop)
+	}()
+	checkInterrupt := func() bool {
+		select {
+		case <-stop:
+			return true
+		default:
+			return false
+		}
+	}
+
+	glog.Infoln("Importing blockchain", fn)
+	fh, err := os.Open(fn)
 	if err != nil {
 		return err
 	}
 	defer fh.Close()
-
-	chainmgr.Reset()
 	stream := rlp.NewStream(fh, 0)
-	var i, n int
 
-	batchSize := 2500
-	blocks := make(types.Blocks, batchSize)
-
-	for ; ; i++ {
-		var b types.Block
-		if err := stream.Decode(&b); err == io.EOF {
-			break
-		} else if err != nil {
-			return fmt.Errorf("at block %d: %v", i, err)
+	// Run actual the import.
+	blocks := make(types.Blocks, importBatchSize)
+	n := 0
+	for batch := 0; ; batch++ {
+		// Load a batch of RLP blocks.
+		if checkInterrupt() {
+			return fmt.Errorf("interrupted")
 		}
-
-		blocks[n] = &b
-		n++
-
-		if n == batchSize {
-			if _, err := chainmgr.InsertChain(blocks); err != nil {
-				return fmt.Errorf("invalid block %v", err)
+		i := 0
+		for ; i < importBatchSize; i++ {
+			var b types.Block
+			if err := stream.Decode(&b); err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("at block %d: %v", n, err)
 			}
-			n = 0
-			blocks = make(types.Blocks, batchSize)
+			blocks[i] = &b
+			n++
+		}
+		if i == 0 {
+			break
+		}
+		// Import the batch.
+		if checkInterrupt() {
+			return fmt.Errorf("interrupted")
+		}
+		if hasAllBlocks(chain, blocks[:i]) {
+			glog.Infof("skipping batch %d, all blocks present [%x / %x]",
+				batch, blocks[0].Hash().Bytes()[:4], blocks[i-1].Hash().Bytes()[:4])
+			continue
+		}
+		if _, err := chain.InsertChain(blocks[:i]); err != nil {
+			return fmt.Errorf("invalid block %d: %v", n, err)
 		}
 	}
-
-	if n > 0 {
-		if _, err := chainmgr.InsertChain(blocks[:n]); err != nil {
-			return fmt.Errorf("invalid block %v", err)
-		}
-	}
-
-	fmt.Printf("imported %d blocks\n", i)
 	return nil
 }
 
+func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
+	for _, b := range bs {
+		if !chain.HasBlock(b.Hash()) {
+			return false
+		}
+	}
+	return true
+}
+
 func ExportChain(chainmgr *core.ChainManager, fn string) error {
-	fmt.Printf("exporting blockchain '%s'\n", fn)
+	glog.Infoln("Exporting blockchain to", fn)
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return err
@@ -221,6 +265,6 @@ func ExportChain(chainmgr *core.ChainManager, fn string) error {
 	if err := chainmgr.Export(fh); err != nil {
 		return err
 	}
-	fmt.Printf("exported blockchain\n")
+	glog.Infoln("Exported blockchain to", fn)
 	return nil
 }

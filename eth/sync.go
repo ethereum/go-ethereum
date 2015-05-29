@@ -70,6 +70,7 @@ func (pm *ProtocolManager) processBlocks() error {
 		// Try to inset the blocks, drop the originating peer if there's an error
 		index, err := pm.chainman.InsertChain(raw)
 		if err != nil {
+			glog.V(logger.Debug).Infoln("Downloaded block import failed:", err)
 			pm.removePeer(blocks[index].OriginPeer)
 			pm.downloader.Cancel()
 			return err
@@ -84,12 +85,10 @@ func (pm *ProtocolManager) processBlocks() error {
 func (pm *ProtocolManager) synchronise(peer *peer) {
 	// Short circuit if no peers are available
 	if peer == nil {
-		glog.V(logger.Debug).Infoln("Synchronisation canceled: no peers available")
 		return
 	}
 	// Make sure the peer's TD is higher than our own. If not drop.
 	if peer.td.Cmp(pm.chainman.Td()) <= 0 {
-		glog.V(logger.Debug).Infoln("Synchronisation canceled: peer's total difficulty is too small")
 		return
 	}
 	// FIXME if we have the hash in our chain and the TD of the peer is
