@@ -91,8 +91,7 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, bzzEnabled bool
 	if bzzEnabled {
 		ds.RegisterProtocol("bzz", &bzz.RoundTripper{Port: bzzPort})
 		bzz.NewJSApi(js.re, js.ethereum.Swarm)
-		// nil for no natsped, memoryrrbmm d
-		js.ethereum.Swarm.Resolver = resolver.New(xeth.New(ethereum, nil))
+		js.ethereum.Swarm.Resolver = resolver.New(xeth.New(ethereum, f))
 	}
 
 	if !liner.TerminalSupported() || !interactive {
