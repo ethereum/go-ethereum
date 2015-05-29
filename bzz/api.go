@@ -108,12 +108,14 @@ func (self *Api) Download(bzzpath, localpath string) (string, error) {
 	return "", nil
 }
 
+const maxParallelFiles = 5
+
 // Upload replicates a local directory as a manifest file and uploads it
 // using dpa store
 // TODO: localpath should point to a manifest
 func (self *Api) Upload(lpath string) (string, error) {
 	var files []string
-	localpath, err1 := filepath.Abs(lpath)
+	localpath, err1 := filepath.Abs(filepath.Clean(lpath))
 	if err1 != nil {
 		return "", err1
 	}
@@ -143,16 +145,22 @@ func (self *Api) Upload(lpath string) (string, error) {
 	hashes := make([]Key, cnt)
 	errors := make([]error, cnt)
 	ctypes := make([]string, cnt)
-	wg := &sync.WaitGroup{}
+	done := make(chan bool, maxParallelFiles)
+	dcnt := 0
 
 	for i, path := range files {
-		wg.Add(1)
-		go func(i int, path string) {
+		if i >= dcnt+maxParallelFiles {
+			<-done
+			dcnt++
+		}
+		go func(i int, path string, done chan bool) {
 			f, err := os.Open(path)
 			if err == nil {
 				stat, _ := f.Stat()
 				sr := io.NewSectionReader(f, 0, stat.Size())
+				wg := &sync.WaitGroup{}
 				hashes[i], err = self.dpa.Store(sr, wg)
+				wg.Wait()
 			}
 			if err == nil {
 				cmd := exec.Command("file", "--mime-type", "-b", path)
@@ -164,10 +172,13 @@ func (self *Api) Upload(lpath string) (string, error) {
 				}
 			}
 			errors[i] = err
-			wg.Done()
-		}(i, path)
+			done <- true
+		}(i, path, done)
 	}
-	wg.Wait()
+	for dcnt < cnt {
+		<-done
+		dcnt++
+	}
 
 	var buffer bytes.Buffer
 	buffer.WriteString(`{"entries":[`)
@@ -188,6 +199,7 @@ func (self *Api) Upload(lpath string) (string, error) {
 
 	manifest := buffer.Bytes()
 	sr := io.NewSectionReader(bytes.NewReader(manifest), 0, int64(len(manifest)))
+	wg := &sync.WaitGroup{}
 	key, err2 := self.dpa.Store(sr, wg)
 	wg.Wait()
 	return fmt.Sprintf("%064x", key), err2
