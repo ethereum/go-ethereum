@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -125,12 +126,17 @@ func (self *Api) Download(bzzpath, localpath string) (string, error) {
 	return "", nil
 }
 
+const maxParallelFiles = 5
+
 // Upload replicates a local directory as a manifest file and uploads it
 // using dpa store
 // TODO: localpath should point to a manifest
-func (self *Api) Upload(localpath string) (string, error) {
+func (self *Api) Upload(lpath string) (string, error) {
 	var files []string
-	localpath = common.ExpandHomePath(localpath)
+	localpath, err1 := filepath.Abs(filepath.Clean(lpath))
+	if err1 != nil {
+		return "", err1
+	}
 	start := len(localpath)
 	if (start > 0) && (localpath[start-1] != os.PathSeparator) {
 		start++
@@ -143,7 +149,7 @@ func (self *Api) Upload(localpath string) (string, error) {
 				return fmt.Errorf("Path is too short")
 			}
 			if path[:len(localpath)] != localpath {
-				return fmt.Errorf("Path prefix does not match localpath")
+				return fmt.Errorf("Path prefix of '%s' does not match localpath '%s'", path, localpath)
 			}
 			files = append(files, path)
 		}
@@ -156,22 +162,41 @@ func (self *Api) Upload(localpath string) (string, error) {
 	cnt := len(files)
 	hashes := make([]Key, cnt)
 	errors := make([]error, cnt)
-	wg := &sync.WaitGroup{}
+	ctypes := make([]string, cnt)
+	done := make(chan bool, maxParallelFiles)
+	dcnt := 0
 
 	for i, path := range files {
-		wg.Add(1)
-		go func(i int, path string) {
+		if i >= dcnt+maxParallelFiles {
+			<-done
+			dcnt++
+		}
+		go func(i int, path string, done chan bool) {
 			f, err := os.Open(path)
 			if err == nil {
 				stat, _ := f.Stat()
 				sr := io.NewSectionReader(f, 0, stat.Size())
+				wg := &sync.WaitGroup{}
 				hashes[i], err = self.dpa.Store(sr, wg)
+				wg.Wait()
+			}
+			if err == nil {
+				cmd := exec.Command("file", "--mime-type", "-b", path)
+				var out bytes.Buffer
+				cmd.Stdout = &out
+				err = cmd.Run()
+				if err == nil {
+					ctypes[i] = strings.TrimSuffix(out.String(), "\n")
+				}
 			}
 			errors[i] = err
-			wg.Done()
-		}(i, path)
+			done <- true
+		}(i, path, done)
 	}
-	wg.Wait()
+	for dcnt < cnt {
+		<-done
+		dcnt++
+	}
 
 	var buffer bytes.Buffer
 	buffer.WriteString(`{"entries":[`)
@@ -187,11 +212,12 @@ func (self *Api) Upload(localpath string) (string, error) {
 		if i == cnt-1 {
 			sc = "]}"
 		}
-		buffer.WriteString(fmt.Sprintf(`{"hash":"%064x","path":"%s","contentType":"text/plain"}%s`, hashes[i], path[start:], sc))
+		buffer.WriteString(fmt.Sprintf(`{"hash":"%064x","path":"%s","contentType":"%s"}%s`, hashes[i], path[start:], ctypes[i], sc))
 	}
 
 	manifest := buffer.Bytes()
 	sr := io.NewSectionReader(bytes.NewReader(manifest), 0, int64(len(manifest)))
+	wg := &sync.WaitGroup{}
 	key, err2 := self.dpa.Store(sr, wg)
 	wg.Wait()
 	return fmt.Sprintf("%064x", key), err2
