@@ -71,6 +71,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		}
 	}
 
+	// Don't bother with the execution if there's no code.
+	if len(code) == 0 {
+		return context.Return(nil), nil
+	}
+
 	var (
 		op       OpCode
 		codehash = crypto.Sha3Hash(code)
@@ -93,11 +98,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			return nil
 		}
 	)
-
-	// Don't bother with the execution if there's no code.
-	if len(code) == 0 {
-		return context.Return(nil), nil
-	}
 
 	for {
 		// The base for all big integer arithmetic
