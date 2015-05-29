@@ -3,13 +3,10 @@ package downloader
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"gopkg.in/fatih/set.v0"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -17,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"gopkg.in/fatih/set.v0"
 )
 
 const (
@@ -301,7 +299,6 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 
 					d.queue.Insert(hashPack.hashes[:index+1])
 					if err := d.banBlocks(active.id, hash); err != nil {
-						fmt.Println("ban err", err)
 						glog.V(logger.Debug).Infof("Failed to ban batch of blocks: %v", err)
 					}
 					return ErrInvalidChain
@@ -596,15 +593,8 @@ func (d *Downloader) banBlocks(peerId string, head common.Hash) error {
 			if len(blocks) == 0 {
 				return errors.New("no blocks returned to ban")
 			}
-			// Got the batch of invalid blocks, reconstruct their chain order
-			for i := 0; i < len(blocks); i++ {
-				for j := i + 1; j < len(blocks); j++ {
-					if blocks[i].NumberU64() > blocks[j].NumberU64() {
-						blocks[i], blocks[j] = blocks[j], blocks[i]
-					}
-				}
-			}
-			// Ensure we're really banning the correct blocks
+			// Reconstruct the original chain order and ensure we're banning the correct blocks
+			types.BlockBy(types.Number).Sort(blocks)
 			if bytes.Compare(blocks[0].Hash().Bytes(), head.Bytes()) != 0 {
 				return errors.New("head block not the banned one")
 			}
