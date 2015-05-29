@@ -93,6 +93,9 @@ func (self *Api) Stop() {
 func (self *Api) Get(bzzpath string) (content []byte, mimeType string, status int, size int, err error) {
 	var reader SectionReader
 	reader, mimeType, status, err = self.getPath("/" + bzzpath)
+	if err != nil {
+		return
+	}
 	content = make([]byte, reader.Size())
 	size, err = reader.Read(content)
 	if err == io.EOF {

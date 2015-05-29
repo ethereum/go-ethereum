@@ -1,11 +1,16 @@
 package bzz
 
 import (
-// "fmt"
+	// "fmt"
+	"regexp"
 )
 
 const (
 	manifestType = "application/bzz-manifest+json"
+)
+
+var (
+	leadingSlashes = regexp.MustCompile("^/+")
 )
 
 type manifest struct {
@@ -21,10 +26,19 @@ type manifestEntry struct {
 
 func (self *manifest) getEntry(path string) (entry *manifestEntry, pos int) {
 	for _, entry = range self.Entries {
-		pos = len(entry.Path)
-		if len(path) >= pos && path[:pos] == entry.Path {
-			dpaLogger.Debugf("Swarm: '%s' matches '%s'.", path, entry.Path)
-			return
+		entryPath := leadingSlashes.ReplaceAllString(entry.Path, "")
+		pos = len(entryPath)
+		if len(path) >= pos && path[:pos] == entryPath {
+			var n int
+			if len(path) > pos {
+				chopped := leadingSlashes.ReplaceAllString(path[pos:], "")
+				n = len(path) - pos - len(chopped)
+			}
+			if n > 0 || pos == 0 || path[pos-1] == '/' {
+				pos += n
+				dpaLogger.Debugf("Swarm: '%s' matches '%s'.", path, entry.Path)
+				return
+			}
 		}
 	}
 	entry = nil
