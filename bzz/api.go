@@ -27,6 +27,7 @@ var (
 /*
 Api implements webserver/file system related content storage and retrieval
 on top of the dpa
+it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
 	dpa      *DPA
@@ -35,6 +36,12 @@ type Api struct {
 	Resolver *resolver.Resolver
 }
 
+/*
+the api constructor initialises
+- the netstore endpoint for chunk store logic
+- the chunker (bzz hash)
+- the dpa - single document retrieval api
+*/
 func NewApi(datadir, port string) (api *Api, err error) {
 
 	api = &Api{port: port}
@@ -44,29 +51,35 @@ func NewApi(datadir, port string) (api *Api, err error) {
 		return
 	}
 
-	chunker := &TreeChunker{}
-	chunker.Init()
 	api.dpa = &DPA{
-		Chunker:    chunker,
+		Chunker:    &TreeChunker{},
 		ChunkStore: api.netStore,
 	}
 	return
 }
 
+// Bzz returns the bzz protocol class instances of which run on every peer
 func (self *Api) Bzz() (p2p.Protocol, error) {
 	return BzzProtocol(self.netStore)
 }
 
+/*
+Start is called when the ethereum stack is started
+- launches the dpa (listening for chunk store/retrieve requests)
+- launches the netStore (starts kademlia hive peer management)
+- starts an http server
+*/
 func (self *Api) Start(node *discover.Node, connectPeer func(string) error) {
-	self.dpa.Start()
-	self.netStore.Start(node, connectPeer)
+
+	self.dpa.start()
+	self.netStore.start(node, connectPeer)
 	dpaLogger.Infof("Swarm started.")
 	go startHttpServer(self, self.port)
 }
 
 func (self *Api) Stop() {
-	self.dpa.Stop()
-	self.netStore.Stop()
+	self.dpa.stop()
+	self.netStore.stop()
 }
 
 // Get uses iterative manifest retrieval and prefix matching
@@ -206,7 +219,7 @@ func (self *Api) Resolve(hostport string) (contentHash Key, errR errResolve) {
 	}
 	if hashMatcher.MatchString(host) {
 		contentHash = Key(common.Hex2Bytes(host))
-		dpaLogger.Debugf("Swarm host is a contentHash: '%064x'", contentHash)
+		dpaLogger.Debugf("Swarm: host is a contentHash: '%064x'", contentHash)
 	} else {
 		if self.Resolver != nil {
 			hostHash := common.BytesToHash(crypto.Sha3(common.Hex2Bytes(host)))
@@ -218,7 +231,7 @@ func (self *Api) Resolve(hostport string) (contentHash Key, errR errResolve) {
 				err = errResolve(fmt.Errorf("unable to resolve '%s': %v", hostport, err))
 			}
 			contentHash = Key(hash.Bytes())
-			dpaLogger.Debugf("Swarm resolve host to contentHash: '%064x'", contentHash)
+			dpaLogger.Debugf("Swarm: resolve host to contentHash: '%064x'", contentHash)
 		} else {
 			err = errResolve(fmt.Errorf("no resolver '%s': %v", hostport, err))
 		}

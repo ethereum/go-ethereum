@@ -84,12 +84,13 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, bzzEnabled bool
 	}
 	js.xeth = xeth.New(ethereum, f)
 	js.wait = js.xeth.UpdateState()
-	// update state in separare forever blocks
 	js.re = re.New(libPath)
 	js.apiBindings(f)
 	js.adminBindings()
 	if bzzEnabled {
+		// register the swarm rountripper with the bzz scheme on the docserver
 		ds.RegisterProtocol("bzz", &bzz.RoundTripper{Port: bzzPort})
+		// swarm js bindings
 		bzz.NewJSApi(js.re, js.ethereum.Swarm)
 		js.ethereum.Swarm.Resolver = resolver.New(xeth.New(ethereum, f))
 	}

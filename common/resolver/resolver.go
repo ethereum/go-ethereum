@@ -12,14 +12,23 @@ import (
 
 /*
 Resolver implements the Ethereum DNS mapping
-HashReg : Key Hash (hash of domain name or contract code) -> Content Hash
-UrlHint : Content Hash -> Url Hint
 
-The resolver is meant to be called by the roundtripper transport implementation
-of a url scheme
+The resolver is used by
+* the roundtripper transport implementation of
+url schemes to register and resolve domain names
+* contract info retrieval (NatSpec)
+
+The resolver uses 2 contracts on the blockchain:
+* HashReg : Key Hash (hash of domain name or contract code) -> Content Hash
+* UrlHint : Content Hash -> Url Hint
+
+These contracts are (currently) not included in the genesis block.
+CreateContracts needs to be called once on each blockchain/network once.
+
+Afterwards contract addresses are retrieved from the global registrar
+the first time the Resolver constructor is called in a client session
+(see setContracts)
 */
-
-// // contract addresses will be hardcoded after they're created
 var (
 	UrlHintContractAddress = "0x0"
 	HashRegContractAddress = "0x0"
@@ -48,6 +57,7 @@ var (
 	addressAbiPrefix       = string(make([]byte, 24))
 )
 
+// resolver's backend is defined as an interface (implemented by xeth, but could be remote)
 type Backend interface {
 	StorageAt(string, string) string
 	Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error)
@@ -64,6 +74,10 @@ func New(eth Backend) (res *Resolver) {
 	return
 }
 
+// setContracts retrieves contract addresses from the global registrar
+// if they are unset
+// the addresses are package level variables so this is done only once every
+// client session
 func (self *Resolver) setContracts() {
 	var err error
 	if HashRegContractAddress != "0x0" {
@@ -102,9 +116,11 @@ func (self *Resolver) setContracts() {
 	glog.V(logger.Detail).Infof("HashReg @ %v\nUrlHint @ %v\n", HashRegContractAddress, UrlHintContractAddress)
 }
 
-// This can be safely called from tests to or private chains to create
-// new HashReg and UrlHint contracts (requires transaction)
+// CreateContracts creates new HashReg and UrlHint contracts
+// and registers their address on the global registrar.
+// creates 6 transactions which need to be mined too take effect
 // It does nothing if addresses are set
+// needs to be called only once ever for a blockchain
 func (self *Resolver) CreateContracts(addr common.Address) (hashReg, urlHint string, err error) {
 	if HashRegContractAddress != "0x0" {
 		err = fmt.Errorf("HashReg already exists at %v", HashRegContractAddress)
@@ -178,7 +194,7 @@ func (self *Resolver) RegisterAddress(from common.Address, name string, address 
 	)
 }
 
-// NameToAddr(from, name) queries the registrar for the address on
+// NameToAddr(from, name) queries the registrar for the address on name
 func (self *Resolver) NameToAddr(from common.Address, name string) (address common.Address, err error) {
 	nameHex, extra := encodeName(name, 2)
 	abi := resolveAbi + nameHex + extra
@@ -208,7 +224,6 @@ func (self *Resolver) SetOwner(address common.Address) (txh string, err error) {
 // registers some content hash to a key/code hash
 // e.g., the contract Info combined Json Doc's ContentHash
 // to CodeHash of a contract or hash of a domain
-// kept
 func (self *Resolver) RegisterContentHash(address common.Address, codehash, dochash common.Hash) (txh string, err error) {
 	_, err = self.SetOwner(address)
 	if err != nil {
@@ -231,7 +246,6 @@ func (self *Resolver) RegisterContentHash(address common.Address, codehash, doch
 // registry entry on first time use
 // FIXME: silently doing nothing if sender is not the owner
 // note that with content addressed storage, this step is no longer necessary
-// it could be purely
 func (self *Resolver) RegisterUrl(address common.Address, hash common.Hash, url string) (txh string, err error) {
 	hashHex := common.Bytes2Hex(hash[:])
 	var urlHex string
@@ -266,6 +280,11 @@ func (self *Resolver) RegisterUrl(address common.Address, hash common.Hash, url 
 	return
 }
 
+// RegisterAddrWithUrl(address, key, contenthash, url) is a convenience method
+// registers key -> conenthash in HashReg and
+// registers  contenthash -> url in UrlHint
+// creates 3 transaction using address as  sender
+// transactions need to obe mined to take effect
 func (self *Resolver) RegisterAddrWithUrl(address common.Address, codehash, dochash common.Hash, url string) (txh string, err error) {
 
 	_, err = self.RegisterContentHash(address, codehash, dochash)
@@ -275,6 +294,7 @@ func (self *Resolver) RegisterAddrWithUrl(address common.Address, codehash, doch
 	return self.RegisterUrl(address, dochash, url)
 }
 
+// KeyToContentHash(key) resolves contenthash for key (a hash) using HashReg
 // resolution is costless non-transactional
 // implemented as direct retrieval from  db
 func (self *Resolver) KeyToContentHash(khash common.Hash) (chash common.Hash, err error) {
@@ -291,7 +311,9 @@ func (self *Resolver) KeyToContentHash(khash common.Hash) (chash common.Hash, er
 	return
 }
 
-// retrieves the url-hint for the content hash -
+// ContentHashToUrl(contenthash) resolves the url for contenthash using UrlHint
+// resolution is costless non-transactional
+// implemented as direct retrieval from  db
 // if we use content addressed storage, this step is no longer necessary
 func (self *Resolver) ContentHashToUrl(chash common.Hash) (uri string, err error) {
 	// look up in URL reg
@@ -317,6 +339,11 @@ func (self *Resolver) ContentHashToUrl(chash common.Hash) (uri string, err error
 	return
 }
 
+// KeyToUrl(key) is a convenience method
+// resolves contenthash for key (a hash) using HashReg, then
+// resolves the url for contenthash using UrlHint
+// resolution is costless non-transactional
+// implemented as direct retrieval from  db
 func (self *Resolver) KeyToUrl(key common.Hash) (uri string, hash common.Hash, err error) {
 	// look up in urlHint
 	hash, err = self.KeyToContentHash(key)

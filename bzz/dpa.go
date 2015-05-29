@@ -21,7 +21,7 @@ The ChunkStore interface is implemented by :
 
 - memStore: a memory cache
 - dbStore: local disk/db store
-- localStore: a combination (sequence of) memStoe and dbStoe
+- localStore: a combination (sequence of) memStore and dbStore
 - netStore: dht storage
 */
 
@@ -104,6 +104,7 @@ func (self *DPA) Start() {
 	if self.running {
 		return
 	}
+	self.Chunker.Init()
 	self.running = true
 	self.quitC = make(chan bool)
 	self.storeLoop()

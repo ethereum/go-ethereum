@@ -10,6 +10,12 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
+/*
+netStore is a network storage for chunks (a dht = distributed hash table of sorts)
+it is the entrypoint for chunk store/retrieval requests
+both local (coming from DPA api) and network (coming from peers via bzz protocol)
+it implements the ChunkStore interface and embeds local storage
+*/
 type netStore struct {
 	localStore *localStore
 	lock       sync.Mutex
@@ -61,7 +67,7 @@ func newNetStore(path, hivepath string) (netstore *netStore, err error) {
 	return
 }
 
-func (self *netStore) Start(node *discover.Node, connectPeer func(string) error) (err error) {
+func (self *netStore) start(node *discover.Node, connectPeer func(string) error) (err error) {
 	self.self = node
 	err = self.hive.start(kademlia.Address(node.Sha()), connectPeer)
 	if err != nil {
@@ -70,13 +76,14 @@ func (self *netStore) Start(node *discover.Node, connectPeer func(string) error)
 	return
 }
 
-func (self *netStore) Stop() (err error) {
+func (self *netStore) stop() (err error) {
 	return self.hive.stop()
 }
 
+// called from dpa, entrypoint for *local* chunk store requests
 func (self *netStore) Put(entry *Chunk) {
 	chunk, err := self.localStore.Get(entry.Key)
-	dpaLogger.Debugf("netStore.Put: localStore.Get returned with %v.", err)
+	dpaLogger.Debugf("netStore.Pszut: localStore.Get returned with %v.", err)
 	if err != nil {
 		chunk = entry
 	} else if chunk.SData == nil {
@@ -88,6 +95,7 @@ func (self *netStore) Put(entry *Chunk) {
 	self.put(chunk)
 }
 
+// store logic common to local and network chunk store requests
 func (self *netStore) put(entry *Chunk) {
 	self.localStore.Put(entry)
 	dpaLogger.Debugf("netStore.put: localStore.Put of %064x completed, %d bytes (%p).", entry.Key, len(entry.SData), entry)
@@ -102,8 +110,9 @@ func (self *netStore) put(entry *Chunk) {
 	}
 }
 
+// store propagates store requests to specific peers given by the kademlia hive
+// except for peers that the store request came from (if any)
 func (self *netStore) store(chunk *Chunk) {
-
 	for _, peer := range self.hive.getPeers(chunk.Key, 0) {
 		if chunk.source == nil || peer.Addr() != chunk.source.Addr() {
 			peer.storeRequest(chunk.Key)
@@ -111,6 +120,7 @@ func (self *netStore) store(chunk *Chunk) {
 	}
 }
 
+// the entrypoint for network store requests
 func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -134,7 +144,8 @@ func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 	self.put(chunk)
 }
 
-// waits for response or times  out
+// Get is the entrypoint for local retrieve requests
+// waits for response or times out
 func (self *netStore) Get(key Key) (chunk *Chunk, err error) {
 	chunk = self.get(key)
 	id := generateId()
@@ -156,6 +167,7 @@ func (self *netStore) Get(key Key) (chunk *Chunk, err error) {
 	return
 }
 
+// retrieve logic common for local and network chunk retrieval
 func (self *netStore) get(key Key) (chunk *Chunk) {
 	var err error
 	chunk, err = self.localStore.Get(key)
@@ -182,6 +194,7 @@ func newRequestStatus() *requestStatus {
 	}
 }
 
+// entrypoint for network retrieve requests
 func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 
 	self.lock.Lock()
@@ -208,6 +221,7 @@ func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 	}
 }
 
+// logic propagating retrieve requests to peers given by the kademlia hive
 // it's assumed that caller holds the lock
 func (self *netStore) startSearch(chunk *Chunk, id int64, timeout *time.Time) {
 	chunk.req.status = reqSearching
@@ -253,18 +267,7 @@ func (self *netStore) addRequester(rs *requestStatus, req *retrieveRequestMsgDat
 	rs.requesters[int64(req.Id)] = append(list, req)
 }
 
-/*
-decides how to respond to a retrieval request
-updates the request status if needed
-returns
-send bool: true if chunk is to be delivered, false if respond with peers (as for now)
-timeout: if respond with peers, timeout indicates our bet
-this is the most simplistic implementation:
- - respond with delivery iff less than requesterCount peers forwarded the same request id so far and chunk is found
- - respond with reject (peers and zero timeout) if given up
- - respond with peers and timeout if still searching
-! in the last case as well, we should respond with reject if already got requesterCount peers with that exact id
-*/
+// add peer request the chunk and decides the timeout for the response if still searching
 func (self *netStore) strategyUpdateRequest(rs *requestStatus, req *retrieveRequestMsgData) (timeout *time.Time) {
 	dpaLogger.Debugf("netStore.strategyUpdateRequest: key %064x", req.Key)
 	self.addRequester(rs, req)
@@ -275,6 +278,7 @@ func (self *netStore) strategyUpdateRequest(rs *requestStatus, req *retrieveRequ
 
 }
 
+// once a chunk is found propagate it its requesters unless timed out
 func (self *netStore) propagateResponse(chunk *Chunk) {
 	dpaLogger.Debugf("netStore.propagateResponse: key %064x", chunk.Key)
 	for id, requesters := range chunk.req.requesters {
@@ -298,6 +302,8 @@ func (self *netStore) propagateResponse(chunk *Chunk) {
 	}
 }
 
+// called on each request when a chunk is found,
+// delivery is done by sending a request to the requesting peer
 func (self *netStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 	storeReq := &storeRequestMsgData{
 		Key:            req.Key,
@@ -310,6 +316,8 @@ func (self *netStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 	req.peer.store(storeReq)
 }
 
+// the immediate response to a retrieve request,
+// sends relevant peer data given by the kademlia hive to the requester
 func (self *netStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout *time.Time) {
 	var addrs []*peerAddr
 	for _, peer := range self.hive.getPeers(req.Key, int(req.MaxPeers)) {
@@ -324,6 +332,7 @@ func (self *netStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout *
 	req.peer.peers(peersData)
 }
 
+// decides the timeout promise sent with the immediate peers response to a retrieve request
 func (self *netStore) searchTimeout(rs *requestStatus, req *retrieveRequestMsgData) (timeout *time.Time) {
 	t := time.Now().Add(searchTimeout)
 	if req.timeout != nil && req.timeout.Before(t) {
