@@ -885,11 +885,28 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 		from             = common.HexToAddress(fromStr)
 		to               = common.HexToAddress(toStr)
 		value            = common.Big(valueStr)
-		gas              = common.Big(gasStr)
-		price            = common.Big(gasPriceStr)
+		gas              *big.Int
+		price            *big.Int
 		data             []byte
 		contractCreation bool
 	)
+
+	if len(gasStr) == 0 {
+		gas = DefaultGas()
+	} else {
+		gas = common.Big(gasStr)
+	}
+
+	if len(gasPriceStr) == 0 {
+		price = DefaultGasPrice()
+	} else {
+		price = common.Big(gasPriceStr)
+	}
+
+	data = common.FromHex(codeStr)
+	if len(toStr) == 0 {
+		contractCreation = true
+	}
 
 	// 2015-05-18 Is this still needed?
 	// TODO if no_private_key then
@@ -916,18 +933,6 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 
 	// TODO: align default values to have the same type, e.g. not depend on
 	// common.Value conversions later on
-	if gas.Cmp(big.NewInt(0)) == 0 {
-		gas = DefaultGas()
-	}
-
-	if price.Cmp(big.NewInt(0)) == 0 {
-		price = DefaultGasPrice()
-	}
-
-	data = common.FromHex(codeStr)
-	if len(toStr) == 0 {
-		contractCreation = true
-	}
 
 	var tx *types.Transaction
 	if contractCreation {
