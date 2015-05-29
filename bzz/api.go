@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -110,9 +111,12 @@ func (self *Api) Download(bzzpath, localpath string) (string, error) {
 // Upload replicates a local directory as a manifest file and uploads it
 // using dpa store
 // TODO: localpath should point to a manifest
-func (self *Api) Upload(localpath string) (string, error) {
+func (self *Api) Upload(lpath string) (string, error) {
 	var files []string
-	localpath = common.ExpandHomePath(localpath)
+	localpath, err1 := filepath.Abs(lpath)
+	if err1 != nil {
+		return "", err1
+	}
 	start := len(localpath)
 	if (start > 0) && (localpath[start-1] != os.PathSeparator) {
 		start++
@@ -125,7 +129,7 @@ func (self *Api) Upload(localpath string) (string, error) {
 				return fmt.Errorf("Path is too short")
 			}
 			if path[:len(localpath)] != localpath {
-				return fmt.Errorf("Path prefix does not match localpath")
+				return fmt.Errorf("Path prefix of '%s' does not match localpath '%s'", path, localpath)
 			}
 			files = append(files, path)
 		}
@@ -138,6 +142,7 @@ func (self *Api) Upload(localpath string) (string, error) {
 	cnt := len(files)
 	hashes := make([]Key, cnt)
 	errors := make([]error, cnt)
+	ctypes := make([]string, cnt)
 	wg := &sync.WaitGroup{}
 
 	for i, path := range files {
@@ -148,6 +153,15 @@ func (self *Api) Upload(localpath string) (string, error) {
 				stat, _ := f.Stat()
 				sr := io.NewSectionReader(f, 0, stat.Size())
 				hashes[i], err = self.dpa.Store(sr, wg)
+			}
+			if err == nil {
+				cmd := exec.Command("file", "--mime-type", "-b", path)
+				var out bytes.Buffer
+				cmd.Stdout = &out
+				err = cmd.Run()
+				if err == nil {
+					ctypes[i] = strings.TrimSuffix(out.String(), "\n")
+				}
 			}
 			errors[i] = err
 			wg.Done()
@@ -169,7 +183,7 @@ func (self *Api) Upload(localpath string) (string, error) {
 		if i == cnt-1 {
 			sc = "]}"
 		}
-		buffer.WriteString(fmt.Sprintf(`{"hash":"%064x","path":"%s","contentType":"text/plain"}%s`, hashes[i], path[start:], sc))
+		buffer.WriteString(fmt.Sprintf(`{"hash":"%064x","path":"%s","contentType":"%s"}%s`, hashes[i], path[start:], ctypes[i], sc))
 	}
 
 	manifest := buffer.Bytes()
