@@ -522,9 +522,9 @@ type queueEvent struct {
 }
 
 func (self *ChainManager) procFutureBlocks() {
-	blocks := make([]*types.Block, len(self.futureBlocks.blocks))
+	blocks := []*types.Block{}
 	self.futureBlocks.Each(func(i int, block *types.Block) {
-		blocks[i] = block
+		blocks = append(blocks, block)
 	})
 
 	types.BlockBy(types.Number).Sort(blocks)
