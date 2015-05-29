@@ -72,17 +72,16 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 	}
 
 	var (
-		op OpCode
-
-		destinations = analyseJumpDests(context.Code)
-		mem          = NewMemory()
-		stack        = newStack()
-		pc           = new(big.Int)
-		statedb      = self.env.State()
+		op       OpCode
+		codehash = crypto.Sha3Hash(code)
+		mem      = NewMemory()
+		stack    = newStack()
+		pc       = new(big.Int)
+		statedb  = self.env.State()
 
 		jump = func(from *big.Int, to *big.Int) error {
-			nop := context.GetOp(to)
-			if !destinations.Has(to) {
+			if !context.jumpdests.has(codehash, code, to) {
+				nop := context.GetOp(to)
 				return fmt.Errorf("invalid jump destination (%v) %v", nop, to)
 			}
 
