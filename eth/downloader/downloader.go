@@ -165,6 +165,10 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 	}
 	defer atomic.StoreInt32(&d.synchronising, 0)
 
+	// If the head hash is banned, terminate immediately
+	if d.banned.Has(hash) {
+		return ErrInvalidChain
+	}
 	// Post a user notification of the sync (only once per session)
 	if atomic.CompareAndSwapInt32(&d.notified, 0, 1) {
 		glog.V(logger.Info).Infoln("Block synchronisation started")
