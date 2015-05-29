@@ -14,6 +14,7 @@ import (
 var (
 	knownHash   = common.Hash{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	unknownHash = common.Hash{9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9}
+	bannedHash  = common.Hash{5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5}
 )
 
 func createHashes(start, amount int) (hashes []common.Hash) {
@@ -518,5 +519,39 @@ func TestMadeupParentBlockChainAttack(t *testing.T) {
 	tester.newPeer("valid", big.NewInt(20000), hashes[0])
 	if _, err := tester.syncTake("valid", hashes[0]); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+}
+
+// Tests that if one/multiple malicious peers try to feed a banned blockchain to
+// the downloader, it will not keep refetching the same chain indefinitely, but
+// gradually block pieces of it, until it's head is also blocked.
+func TestBannedChainStarvationAttack(t *testing.T) {
+	// Construct a valid chain, but ban one of the hashes in it
+	hashes := createHashes(0, 8*blockCacheLimit)
+	hashes[len(hashes)/2+23] = bannedHash // weird index to have non multiple of ban chunk size
+
+	blocks := createBlocksFromHashes(hashes)
+
+	// Create the tester and ban the selected hash
+	tester := newTester(t, hashes, blocks)
+	tester.downloader.banned.Add(bannedHash)
+
+	// Iteratively try to sync, and verify that the banned hash list grows until
+	// the head of the invalid chain is blocked too.
+	tester.newPeer("attack", big.NewInt(10000), hashes[0])
+	for banned := tester.downloader.banned.Size(); ; {
+		// Try to sync with the attacker, check hash chain failure
+		if _, err := tester.syncTake("attack", hashes[0]); err != ErrInvalidChain {
+			t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrInvalidChain)
+		}
+		// Check that the ban list grew with at least 1 new item, or all banned
+		bans := tester.downloader.banned.Size()
+		if bans < banned+1 {
+			if tester.downloader.banned.Has(hashes[0]) {
+				break
+			}
+			t.Fatalf("ban count mismatch: have %v, want %v+", bans, banned+1)
+		}
+		banned = bans
 	}
 }

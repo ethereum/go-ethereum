@@ -1,7 +1,9 @@
 package downloader
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -289,9 +291,15 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 				glog.V(logger.Debug).Infof("Peer (%s) responded with empty hash set", active.id)
 				return ErrEmptyHashSet
 			}
-			for _, hash := range hashPack.hashes {
+			for index, hash := range hashPack.hashes {
 				if d.banned.Has(hash) {
 					glog.V(logger.Debug).Infof("Peer (%s) sent a known invalid chain", active.id)
+
+					d.queue.Insert(hashPack.hashes[:index+1])
+					if err := d.banBlocks(active.id, hash); err != nil {
+						fmt.Println("ban err", err)
+						glog.V(logger.Debug).Infof("Failed to ban batch of blocks: %v", err)
+					}
 					return ErrInvalidChain
 				}
 			}
@@ -399,8 +407,10 @@ func (d *Downloader) fetchBlocks() error {
 	glog.V(logger.Debug).Infoln("Downloading", d.queue.Pending(), "block(s)")
 	start := time.Now()
 
-	// default ticker for re-fetching blocks every now and then
+	// Start a ticker to continue throttled downloads and check for bad peers
 	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+
 out:
 	for {
 		select {
@@ -413,7 +423,7 @@ out:
 				block := blockPack.blocks[0]
 				if _, ok := d.checks[block.Hash()]; ok {
 					delete(d.checks, block.Hash())
-					continue
+					break
 				}
 			}
 			// If the peer was previously banned and failed to deliver it's pack
@@ -488,7 +498,7 @@ out:
 			if d.queue.Pending() > 0 {
 				// Throttle the download if block cache is full and waiting processing
 				if d.queue.Throttle() {
-					continue
+					break
 				}
 				// Send a download request to all idle peers, until throttled
 				idlePeers := d.peers.IdlePeers()
@@ -529,8 +539,84 @@ out:
 		}
 	}
 	glog.V(logger.Detail).Infoln("Downloaded block(s) in", time.Since(start))
-
 	return nil
+}
+
+// banBlocks retrieves a batch of blocks from a peer feeding us invalid hashes,
+// and bans the head of the retrieved batch.
+//
+// This method only fetches one single batch as the goal is not ban an entire
+// (potentially long) invalid chain - wasting a lot of time in the meanwhile -,
+// but rather to gradually build up a blacklist if the peer keeps reconnecting.
+func (d *Downloader) banBlocks(peerId string, head common.Hash) error {
+	glog.V(logger.Debug).Infof("Banning a batch out of %d blocks from %s", d.queue.Pending(), peerId)
+
+	// Ask the peer being banned for a batch of blocks from the banning point
+	peer := d.peers.Peer(peerId)
+	if peer == nil {
+		return nil
+	}
+	request := d.queue.Reserve(peer, MaxBlockFetch)
+	if request == nil {
+		return nil
+	}
+	if err := peer.Fetch(request); err != nil {
+		return err
+	}
+	// Wait a bit for the reply to arrive, and ban if done so
+	timeout := time.After(blockTTL)
+	for {
+		select {
+		case <-d.cancelCh:
+			return errCancelBlockFetch
+
+		case <-timeout:
+			return ErrTimeout
+
+		case blockPack := <-d.blockCh:
+			blocks := blockPack.blocks
+
+			// Short circuit if it's a stale cross check
+			if len(blocks) == 1 {
+				block := blocks[0]
+				if _, ok := d.checks[block.Hash()]; ok {
+					delete(d.checks, block.Hash())
+					break
+				}
+			}
+			// Short circuit if it's not from the peer being banned
+			if blockPack.peerId != peerId {
+				break
+			}
+			// Short circuit if no blocks were returned
+			if len(blocks) == 0 {
+				return errors.New("no blocks returned to ban")
+			}
+			// Got the batch of invalid blocks, reconstruct their chain order
+			for i := 0; i < len(blocks); i++ {
+				for j := i + 1; j < len(blocks); j++ {
+					if blocks[i].NumberU64() > blocks[j].NumberU64() {
+						blocks[i], blocks[j] = blocks[j], blocks[i]
+					}
+				}
+			}
+			// Ensure we're really banning the correct blocks
+			if bytes.Compare(blocks[0].Hash().Bytes(), head.Bytes()) != 0 {
+				return errors.New("head block not the banned one")
+			}
+			index := 0
+			for _, block := range blocks[1:] {
+				if bytes.Compare(block.ParentHash().Bytes(), blocks[index].Hash().Bytes()) != 0 {
+					break
+				}
+				index++
+			}
+			d.banned.Add(blocks[index].Hash())
+
+			glog.V(logger.Debug).Infof("Banned %d blocks from: %s\n", index+1, peerId)
+			return nil
+		}
+	}
 }
 
 // DeliverBlocks injects a new batch of blocks received from a remote node.
