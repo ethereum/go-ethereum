@@ -522,13 +522,14 @@ type queueEvent struct {
 }
 
 func (self *ChainManager) procFutureBlocks() {
-	blocks := []*types.Block{}
+	var blocks []*types.Block
 	self.futureBlocks.Each(func(i int, block *types.Block) {
 		blocks = append(blocks, block)
 	})
-
-	types.BlockBy(types.Number).Sort(blocks)
-	self.InsertChain(blocks)
+	if len(blocks) > 0 {
+		types.BlockBy(types.Number).Sort(blocks)
+		self.InsertChain(blocks)
+	}
 }
 
 // InsertChain will attempt to insert the given chain in to the canonical chain or, otherwise, create a fork. It an error is returned
