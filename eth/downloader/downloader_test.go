@@ -274,7 +274,7 @@ func TestThrottling(t *testing.T) {
 	// Iteratively take some blocks, always checking the retrieval count
 	for total := 0; total < targetBlocks; {
 		// Sleep a bit for sync to complete
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 
 		// Fetch the next batch of blocks
 		took := tester.downloader.TakeBlocks()
