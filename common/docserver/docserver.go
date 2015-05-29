@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -72,7 +72,9 @@ func (self *DocServer) Get(uri, path string) (content []byte, err error) {
 	}
 
 	if path != "" {
-		ioutil.WriteFile(utils.ExpandPath(path), content, 0700)
+		var abspath string
+		abspath, err = filepath.Abs(path)
+		ioutil.WriteFile(abspath, content, 0700)
 	}
 
 	return
