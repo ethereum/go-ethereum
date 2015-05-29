@@ -30,10 +30,11 @@ on top of the dpa
 it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
+	Chunker  *TreeChunker
+	Port     string
+	Resolver *resolver.Resolver
 	dpa      *DPA
 	netStore *netStore
-	port     string
-	Resolver *resolver.Resolver
 }
 
 /*
@@ -42,18 +43,21 @@ the api constructor initialises
 - the chunker (bzz hash)
 - the dpa - single document retrieval api
 */
-func NewApi(datadir, port string) (api *Api, err error) {
+func NewApi(datadir, port string) (self *Api, err error) {
 
-	api = &Api{port: port}
+	self = &Api{
+		Chunker: &TreeChunker{},
+		Port:    port,
+	}
 
-	api.netStore, err = newNetStore(filepath.Join(datadir, "bzz"), filepath.Join(datadir, "bzzpeers.json"))
+	self.netStore, err = newNetStore(filepath.Join(datadir, "bzz"), filepath.Join(datadir, "bzzpeers.json"))
 	if err != nil {
 		return
 	}
 
-	api.dpa = &DPA{
-		Chunker:    &TreeChunker{},
-		ChunkStore: api.netStore,
+	self.dpa = &DPA{
+		Chunker:    self.Chunker,
+		ChunkStore: self.netStore,
 	}
 	return
 }
@@ -65,20 +69,21 @@ func (self *Api) Bzz() (p2p.Protocol, error) {
 
 /*
 Start is called when the ethereum stack is started
+- calls Init() on treechunker
 - launches the dpa (listening for chunk store/retrieve requests)
 - launches the netStore (starts kademlia hive peer management)
 - starts an http server
 */
 func (self *Api) Start(node *discover.Node, connectPeer func(string) error) {
-
-	self.dpa.start()
+	self.Chunker.Init()
+	self.dpa.Start()
 	self.netStore.start(node, connectPeer)
 	dpaLogger.Infof("Swarm started.")
-	go startHttpServer(self, self.port)
+	go startHttpServer(self, self.Port)
 }
 
 func (self *Api) Stop() {
-	self.dpa.stop()
+	self.dpa.Stop()
 	self.netStore.stop()
 }
 

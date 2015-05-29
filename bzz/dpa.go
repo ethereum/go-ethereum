@@ -104,7 +104,6 @@ func (self *DPA) Start() {
 	if self.running {
 		return
 	}
-	self.Chunker.Init()
 	self.running = true
 	self.quitC = make(chan bool)
 	self.storeLoop()
