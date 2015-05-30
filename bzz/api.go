@@ -2,7 +2,6 @@ package bzz
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -123,6 +122,31 @@ func (self *Api) Put(content, contentType string) (string, error) {
 	return fmt.Sprintf("%064x", key), nil
 }
 
+func (self *Api) Modify(rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
+	root := common.Hex2Bytes(rootHash)
+	trie, err := loadManifestTrie(self.dpa, root)
+	if err != nil {
+		return
+	}
+
+	if contentHash != "" {
+		entry := &manifestTrieEntry{
+			Path:        path,
+			Hash:        contentHash,
+			ContentType: contentType,
+		}
+		trie.addEntry(entry)
+	} else {
+		trie.deleteEntry(path)
+	}
+
+	err = trie.recalcAndStore()
+	if err != nil {
+		return
+	}
+	return fmt.Sprintf("%064x", trie.hash), nil
+}
+
 // Download replicates the manifest path structure on the local filesystem
 // under localpath
 func (self *Api) Download(bzzpath, localpath string) (string, error) {
@@ -135,7 +159,7 @@ const maxParallelFiles = 5
 // using dpa store
 // TODO: localpath should point to a manifest
 func (self *Api) Upload(lpath string) (string, error) {
-	var files []string
+	var list []*manifestTrieEntry
 	localpath, err1 := filepath.Abs(filepath.Clean(lpath))
 	if err1 != nil {
 		return "", err1
@@ -154,7 +178,10 @@ func (self *Api) Upload(lpath string) (string, error) {
 			if path[:len(localpath)] != localpath {
 				return fmt.Errorf("Path prefix of '%s' does not match localpath '%s'", path, localpath)
 			}
-			files = append(files, path)
+			entry := &manifestTrieEntry{
+				Path: path,
+			}
+			list = append(list, entry)
 		}
 		return err
 	})
@@ -162,68 +189,64 @@ func (self *Api) Upload(lpath string) (string, error) {
 		return "", err
 	}
 
-	cnt := len(files)
-	hashes := make([]Key, cnt)
+	cnt := len(list)
 	errors := make([]error, cnt)
-	ctypes := make([]string, cnt)
 	done := make(chan bool, maxParallelFiles)
 	dcnt := 0
 
-	for i, path := range files {
+	for i, entry := range list {
 		if i >= dcnt+maxParallelFiles {
 			<-done
 			dcnt++
 		}
-		go func(i int, path string, done chan bool) {
-			f, err := os.Open(path)
+		go func(i int, entry *manifestTrieEntry, done chan bool) {
+			f, err := os.Open(entry.Path)
 			if err == nil {
 				stat, _ := f.Stat()
 				sr := io.NewSectionReader(f, 0, stat.Size())
 				wg := &sync.WaitGroup{}
-				hashes[i], err = self.dpa.Store(sr, wg)
+				var hash Key
+				hash, err = self.dpa.Store(sr, wg)
+				if hash != nil {
+					list[i].Hash = fmt.Sprintf("%064x", hash)
+				}
 				wg.Wait()
 			}
 			if err == nil {
-				cmd := exec.Command("file", "--mime-type", "-b", path)
+				cmd := exec.Command("file", "--mime-type", "-b", entry.Path)
 				var out bytes.Buffer
 				cmd.Stdout = &out
 				err = cmd.Run()
 				if err == nil {
-					ctypes[i] = strings.TrimSuffix(out.String(), "\n")
+					list[i].ContentType = strings.TrimSuffix(out.String(), "\n")
 				}
 			}
 			errors[i] = err
 			done <- true
-		}(i, path, done)
+		}(i, entry, done)
 	}
 	for dcnt < cnt {
 		<-done
 		dcnt++
 	}
 
-	var buffer bytes.Buffer
-	buffer.WriteString(`{"entries":[`)
-	sc := ","
-	if err != nil {
-		return "", err
+	trie := &manifestTrie{
+		dpa: self.dpa,
 	}
-
-	for i, path := range files {
+	for i, entry := range list {
 		if errors[i] != nil {
 			return "", errors[i]
 		}
-		if i == cnt-1 {
-			sc = "]}"
-		}
-		buffer.WriteString(fmt.Sprintf(`{"hash":"%064x","path":"%s","contentType":"%s"}%s`, hashes[i], path[start:], ctypes[i], sc))
+		entry.Path = entry.Path[start:]
+		trie.addEntry(entry)
 	}
 
-	manifest := buffer.Bytes()
-	sr := io.NewSectionReader(bytes.NewReader(manifest), 0, int64(len(manifest)))
-	wg := &sync.WaitGroup{}
-	key, err2 := self.dpa.Store(sr, wg)
-	wg.Wait()
-	return fmt.Sprintf("%064x", key), err2
+	err2 := trie.recalcAndStore()
+	var hs string
+	if err2 == nil {
+		hs = fmt.Sprintf("%064x", trie.hash)
+	}
+	return hs, err2
 }
 
 func (self *Api) Register(sender common.Address, hash common.Hash, domain string) (err error) {
@@ -289,67 +312,18 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 		return
 	}
 
-	// retrieve content following path along manifests
-	var pos int
-	for {
-		dpaLogger.Debugf("Swarm: manifest lookup key: '%064x'.", key)
-		// retrieve manifest via DPA
-		manifestReader := self.dpa.Retrieve(key)
-		// TODO check size for oversized manifests
-		manifestData := make([]byte, manifestReader.Size())
-		var size int
-		size, err = manifestReader.Read(manifestData)
-		if int64(size) < manifestReader.Size() {
-			dpaLogger.Debugf("Swarm: Manifest for '%s' not found (uri: '%s')", path[:pos], uri)
-			if err == nil {
-				err = fmt.Errorf("Manifest retrieval cut short: %v &lt; %v", size, manifestReader.Size())
-			}
-			return
-		}
+	trie, err := loadManifestTrie(self.dpa, key)
+	if err != nil {
+		return
+	}
 
-		dpaLogger.Debugf("Swarm: Manifest for '%s' retrieved", path[:pos])
-		man := manifest{}
-		err = json.Unmarshal(manifestData, &man)
-		if err != nil {
-			err = fmt.Errorf("Manifest for '%s' is malformed: %v", path[:pos], err)
-			dpaLogger.Debugf("Swarm: %v", err)
-			return
-		}
-
-		dpaLogger.Debugf("Swarm: Manifest for '%s' has %d entries. Match path '%s'", path[:pos], len(man.Entries), path[pos:])
-
-		// retrieve entry that matches path from manifest entries
-		entry, hop := man.getEntry(path[pos:])
-
-		if entry == nil {
-			err = fmt.Errorf("Path '%s' not found on manifest '%s'", path[:pos], path[pos:])
-			return
-		}
-
-		// check hash of entry
-		if !hashMatcher.MatchString(entry.Hash) {
-			err = fmt.Errorf("Incorrect hash '%064x' for path '%s' on manifest for '%s')", entry.Hash, path[pos:], path[:pos])
-			return
-		}
+	entry, _ := trie.getEntry(path)
+	if entry != nil {
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
-
-		// get mime type of entry
 		mimeType = entry.ContentType
-		if mimeType == "" {
-			mimeType = manifestType
-		}
-
-		// if path matched on non-manifest content type, then retrieve reader
-		// and return
-		if mimeType != manifestType {
-			dpaLogger.Debugf("Swarm: content lookup key: '%064x' (%v)", key, mimeType)
-			reader = self.dpa.Retrieve(key)
-			return
-		}
-
-		// otherwise continue along the path with manifest resolution
-		pos += hop
+		dpaLogger.Debugf("Swarm: content lookup key: '%064x' (%v)", key, mimeType)
+		reader = self.dpa.Retrieve(key)
 	}
 	return
 }
