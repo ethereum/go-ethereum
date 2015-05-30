@@ -122,6 +122,31 @@ func (self *Api) Put(content, contentType string) (string, error) {
 	return fmt.Sprintf("%064x", key), nil
 }
 
+func (self *Api) Modify(rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
+	root := common.Hex2Bytes(rootHash)
+	trie, err := loadManifestTrie(self.dpa, root)
+	if err != nil {
+		return
+	}
+
+	if contentHash != "" {
+		entry := &manifestTrieEntry{
+			Path:        path,
+			Hash:        contentHash,
+			ContentType: contentType,
+		}
+		trie.addEntry(entry)
+	} else {
+		trie.deleteEntry(path)
+	}
+
+	err = trie.recalcAndStore()
+	if err != nil {
+		return
+	}
+	return fmt.Sprintf("%064x", trie.hash), nil
+}
+
 // Download replicates the manifest path structure on the local filesystem
 // under localpath
 func (self *Api) Download(bzzpath, localpath string) (string, error) {
@@ -205,7 +230,9 @@ func (self *Api) Upload(lpath string) (string, error) {
 		dcnt++
 	}
 
-	trie := &manifestTrie{}
+	trie := &manifestTrie{
+		dpa: self.dpa,
+	}
 	for i, entry := range list {
 		if errors[i] != nil {
 			return "", errors[i]
@@ -214,7 +241,7 @@ func (self *Api) Upload(lpath string) (string, error) {
 		trie.addEntry(entry)
 	}
 
-	err2 := trie.recalcAndStore(self.dpa)
+	err2 := trie.recalcAndStore()
 	var hs string
 	if err2 == nil {
 		hs = fmt.Sprintf("%064x", trie.hash)
@@ -290,7 +317,7 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 		return
 	}
 
-	entry, _ := trie.getEntry(self.dpa, path)
+	entry, _ := trie.getEntry(path)
 	if entry != nil {
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
