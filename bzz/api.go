@@ -135,7 +135,7 @@ const maxParallelFiles = 5
 // using dpa store
 // TODO: localpath should point to a manifest
 func (self *Api) Upload(lpath string) (string, error) {
-	var files []string
+	var list []*manifestTrieEntry
 	localpath, err1 := filepath.Abs(filepath.Clean(lpath))
 	if err1 != nil {
 		return "", err1
@@ -154,7 +154,10 @@ func (self *Api) Upload(lpath string) (string, error) {
 			if path[:len(localpath)] != localpath {
 				return fmt.Errorf("Path prefix of '%s' does not match localpath '%s'", path, localpath)
 			}
-			files = append(files, path)
+			entry := &manifestTrieEntry{
+				Path: path,
+			}
+			list = append(list, entry)
 		}
 		return err
 	})
@@ -162,68 +165,62 @@ func (self *Api) Upload(lpath string) (string, error) {
 		return "", err
 	}
 
-	cnt := len(files)
-	hashes := make([]Key, cnt)
+	cnt := len(list)
 	errors := make([]error, cnt)
-	ctypes := make([]string, cnt)
 	done := make(chan bool, maxParallelFiles)
 	dcnt := 0
 
-	for i, path := range files {
+	for i, entry := range list {
 		if i >= dcnt+maxParallelFiles {
 			<-done
 			dcnt++
 		}
-		go func(i int, path string, done chan bool) {
-			f, err := os.Open(path)
+		go func(i int, entry *manifestTrieEntry, done chan bool) {
+			f, err := os.Open(entry.Path)
 			if err == nil {
 				stat, _ := f.Stat()
 				sr := io.NewSectionReader(f, 0, stat.Size())
 				wg := &sync.WaitGroup{}
-				hashes[i], err = self.dpa.Store(sr, wg)
+				var hash Key
+				hash, err = self.dpa.Store(sr, wg)
+				if hash != nil {
+					list[i].Hash = fmt.Sprintf("%064x", hash)
+				}
 				wg.Wait()
 			}
 			if err == nil {
-				cmd := exec.Command("file", "--mime-type", "-b", path)
+				cmd := exec.Command("file", "--mime-type", "-b", entry.Path)
 				var out bytes.Buffer
 				cmd.Stdout = &out
 				err = cmd.Run()
 				if err == nil {
-					ctypes[i] = strings.TrimSuffix(out.String(), "\n")
+					list[i].ContentType = strings.TrimSuffix(out.String(), "\n")
 				}
 			}
 			errors[i] = err
 			done <- true
-		}(i, path, done)
+		}(i, entry, done)
 	}
 	for dcnt < cnt {
 		<-done
 		dcnt++
 	}
 
-	var buffer bytes.Buffer
-	buffer.WriteString(`{"entries":[`)
-	sc := ","
-	if err != nil {
-		return "", err
-	}
-
-	for i, path := range files {
+	trie := &manifestTrie{}
+	for i, entry := range list {
 		if errors[i] != nil {
 			return "", errors[i]
 		}
-		if i == cnt-1 {
-			sc = "]}"
-		}
-		buffer.WriteString(fmt.Sprintf(`{"hash":"%064x","path":"%s","contentType":"%s"}%s`, hashes[i], path[start:], ctypes[i], sc))
+		entry.Path = entry.Path[start:]
+		trie.addEntry(entry)
 	}
 
-	manifest := buffer.Bytes()
-	sr := io.NewSectionReader(bytes.NewReader(manifest), 0, int64(len(manifest)))
-	wg := &sync.WaitGroup{}
-	key, err2 := self.dpa.Store(sr, wg)
-	wg.Wait()
-	return fmt.Sprintf("%064x", key), err2
+	err2 := trie.recalcAndStore(self.dpa)
+	var hs string
+	if err2 == nil {
+		hs = fmt.Sprintf("%064x", trie.hash)
+	}
+	return hs, err2
 }
 
 func (self *Api) Register(sender common.Address, hash common.Hash, domain string) (err error) {
