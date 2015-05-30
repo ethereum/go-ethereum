@@ -2,7 +2,6 @@ package bzz
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -286,67 +285,18 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 		return
 	}
 
-	// retrieve content following path along manifests
-	var pos int
-	for {
-		dpaLogger.Debugf("Swarm: manifest lookup key: '%064x'.", key)
-		// retrieve manifest via DPA
-		manifestReader := self.dpa.Retrieve(key)
-		// TODO check size for oversized manifests
-		manifestData := make([]byte, manifestReader.Size())
-		var size int
-		size, err = manifestReader.Read(manifestData)
-		if int64(size) < manifestReader.Size() {
-			dpaLogger.Debugf("Swarm: Manifest for '%s' not found.", uri)
-			if err == nil {
-				err = fmt.Errorf("Manifest retrieval cut short: %v &lt; %v", size, manifestReader.Size())
-			}
-			return
-		}
+	trie, err := loadManifestTrie(self.dpa, key)
+	if err != nil {
+		return
+	}
 
-		dpaLogger.Debugf("Swarm: Manifest for '%s' retrieved", uri)
-		man := manifest{}
-		err = json.Unmarshal(manifestData, &man)
-		if err != nil {
-			err = fmt.Errorf("Manifest for '%s' is malformed: %v", uri, err)
-			dpaLogger.Debugf("Swarm: %v", err)
-			return
-		}
-
-		dpaLogger.Debugf("Swarm: Manifest for '%s' has %d entries. Retrieving entry for '%s'", uri, len(man.Entries), path)
-
-		// retrieve entry that matches path from manifest entries
-		var entry *manifestEntry
-		entry, pos = man.getEntry(path)
-		if entry == nil {
-			err = fmt.Errorf("Content for '%s' not found.", uri)
-			return
-		}
-
-		// check hash of entry
-		if !hashMatcher.MatchString(entry.Hash) {
-			err = fmt.Errorf("Incorrect hash '%064x' for '%s'", entry.Hash, uri)
-			return
-		}
+	entry, _ := trie.getEntry(self.dpa, path)
+	if entry != nil {
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
-
-		// get mime type of entry
 		mimeType = entry.ContentType
-		if mimeType == "" {
-			mimeType = manifestType
-		}
-
-		// if path matched on non-manifest content type, then retrieve reader
-		// and return
-		if mimeType != manifestType {
-			dpaLogger.Debugf("Swarm: content lookup key: '%064x' (%v)", key, mimeType)
-			reader = self.dpa.Retrieve(key)
-			return
-		}
-
-		// otherwise continue along the path with manifest resolution
-		path = path[pos:]
+		dpaLogger.Debugf("Swarm: content lookup key: '%064x' (%v)", key, mimeType)
+		reader = self.dpa.Retrieve(key)
 	}
 	return
 }

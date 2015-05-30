@@ -6,6 +6,12 @@ import (
 	"fmt"
 	"io"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/common"
+)
+
+const (
+	manifestType = "application/bzz-manifest+json"
 )
 
 type manifestTrie struct {
@@ -21,6 +27,7 @@ type manifestTrieEntry struct {
 	Path        string `json:"path"`
 	Hash        string `json:"hash"` // for manifest content type, empty until subtrie is evaluated
 	ContentType string `json:"contentType"`
+	Status      int    `json:"status"`
 	subtrie     *manifestTrie
 }
 
@@ -121,12 +128,12 @@ func (self *manifestTrie) deleteEntry(path string) {
 	}
 
 	b := byte(path[0])
-	if (self.entries[b] != nil) && (self.entries[b].Path == path) {
+	entry := self.entries[b]
+	if (entry != nil) && (entry.Path == path) {
 		self.entries[b] = nil
 		return
 	}
 
-	entry := self.entries[b]
 	epl := len(entry.Path)
 	if (entry.ContentType == manifestType) && (len(path) >= epl) && (path[:epl] == entry.Path) {
 		entry.subtrie.deleteEntry(path[epl:])
@@ -175,4 +182,66 @@ func (self *manifestTrie) recalcAndStore(dpa *DPA) error {
 	wg.Wait()
 	self.hash = key
 	return err2
+}
+
+func (self *manifestTrie) findPrefixOf(dpa *DPA, path string) (entry *manifestTrieEntry, pos int) {
+	if len(path) == 0 {
+		return self.entries[256], 0
+	}
+
+	b := byte(path[0])
+	entry = self.entries[b]
+	epl := len(entry.Path)
+	if (len(path) >= epl) && (path[:epl] == entry.Path) {
+		if entry.ContentType == manifestType {
+			if entry.subtrie == nil {
+				hash := common.Hex2Bytes(entry.Hash)
+				var err error
+				entry.subtrie, err = loadManifestTrie(dpa, hash)
+				if err != nil {
+					return nil, 0
+				}
+				entry.Hash = "" // might not match, should be recalculated
+			}
+			entry, pos = entry.subtrie.findPrefixOf(dpa, path[epl:])
+			if entry != nil {
+				pos += epl
+			}
+		} else {
+			pos = epl
+		}
+	} else {
+		entry = nil
+	}
+	return
+}
+
+func (self *manifestTrie) getEntryNLS(dpa *DPA, path string) (entry *manifestTrieEntry, pos int) {
+	entry, pos = self.findPrefixOf(dpa, path)
+	if entry != nil {
+		for (pos < len(path)) && (path[pos] == '/') {
+			pos++
+		}
+		if (pos > 0) && (path[pos-1] != '/') {
+			return nil, 0
+		}
+	}
+	return
+}
+
+func (self *manifestTrie) getEntry(dpa *DPA, path string) (entry *manifestTrieEntry, pos int) {
+	var slash string
+	for {
+		entry, pos = self.getEntryNLS(dpa, slash+path)
+		if pos < len(slash) {
+			dpaLogger.Debugf("Path '%s' on manifest not found.", path)
+			return nil, 0
+		}
+		if entry != nil {
+			pos -= len(slash)
+			dpaLogger.Debugf("Swarm: '%s' matches '%s'.", path, entry.Path)
+			return
+		}
+		slash = slash + "/"
+	}
 }
