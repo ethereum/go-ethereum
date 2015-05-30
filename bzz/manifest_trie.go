@@ -205,14 +205,22 @@ func (self *manifestTrie) loadSubTrie(entry *manifestTrieEntry) (err error) {
 }
 
 func (self *manifestTrie) findPrefixOf(path string) (entry *manifestTrieEntry, pos int) {
+
+	dpaLogger.Debugf("findPrefixOf(%s)", path)
+
 	if len(path) == 0 {
 		return self.entries[256], 0
 	}
 
 	b := byte(path[0])
 	entry = self.entries[b]
+	if entry == nil {
+		return nil, 0
+	}
 	epl := len(entry.Path)
+	dpaLogger.Debugf("path = %v  entry.Path = %v  epl = %v", path, entry.Path, epl)
 	if (len(path) >= epl) && (path[:epl] == entry.Path) {
+		dpaLogger.Debugf("entry.ContentType = %v", entry.ContentType)
 		if entry.ContentType == manifestType {
 			if self.loadSubTrie(entry) != nil {
 				return nil, 0
@@ -236,7 +244,7 @@ func (self *manifestTrie) getEntryNLS(path string) (entry *manifestTrieEntry, po
 		for (pos < len(path)) && (path[pos] == '/') {
 			pos++
 		}
-		if (pos > 0) && (path[pos-1] != '/') {
+		if (pos < len(path)) && (pos > 0) && (path[pos-1] != '/') {
 			return nil, 0
 		}
 	}
@@ -247,6 +255,7 @@ func (self *manifestTrie) getEntry(path string) (entry *manifestTrieEntry, pos i
 	var slash string
 	for {
 		entry, pos = self.getEntryNLS(slash + path)
+		dpaLogger.Debugf("getEntryNLS(%s) pos=%v", slash+path, pos)
 		if pos < len(slash) {
 			dpaLogger.Debugf("Path '%s' on manifest not found.", path)
 			return nil, 0

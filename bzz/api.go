@@ -309,14 +309,17 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 	var key Key
 	key, err = self.Resolve(hostPort)
 	if err != nil {
+		dpaLogger.Debugf("Swarm: rResolve error: %v", err)
 		return
 	}
 
 	trie, err := loadManifestTrie(self.dpa, key)
 	if err != nil {
+		dpaLogger.Debugf("Swarm: loadManifestTrie error: %v", err)
 		return
 	}
 
+	dpaLogger.Debugf("Swarm: getEntry(%s)", path)
 	entry, _ := trie.getEntry(path)
 	if entry != nil {
 		key = common.Hex2Bytes(entry.Hash)
@@ -324,6 +327,8 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 		mimeType = entry.ContentType
 		dpaLogger.Debugf("Swarm: content lookup key: '%064x' (%v)", key, mimeType)
 		reader = self.dpa.Retrieve(key)
+	} else {
+		dpaLogger.Debugf("Swarm: getEntry(%s): not found", path)
 	}
 	return
 }
