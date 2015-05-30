@@ -300,35 +300,35 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 		var size int
 		size, err = manifestReader.Read(manifestData)
 		if int64(size) < manifestReader.Size() {
-			dpaLogger.Debugf("Swarm: Manifest for '%s' not found.", uri)
+			dpaLogger.Debugf("Swarm: Manifest for '%s' not found (uri: '%s')", path[:pos], uri)
 			if err == nil {
 				err = fmt.Errorf("Manifest retrieval cut short: %v &lt; %v", size, manifestReader.Size())
 			}
 			return
 		}
 
-		dpaLogger.Debugf("Swarm: Manifest for '%s' retrieved", uri)
+		dpaLogger.Debugf("Swarm: Manifest for '%s' retrieved", path[:pos])
 		man := manifest{}
 		err = json.Unmarshal(manifestData, &man)
 		if err != nil {
-			err = fmt.Errorf("Manifest for '%s' is malformed: %v", uri, err)
+			err = fmt.Errorf("Manifest for '%s' is malformed: %v", path[:pos], err)
 			dpaLogger.Debugf("Swarm: %v", err)
 			return
 		}
 
-		dpaLogger.Debugf("Swarm: Manifest for '%s' has %d entries. Retrieving entry for '%s'", uri, len(man.Entries), path)
+		dpaLogger.Debugf("Swarm: Manifest for '%s' has %d entries. Match path '%s'", path[:pos], len(man.Entries), path[pos:])
 
 		// retrieve entry that matches path from manifest entries
-		var entry *manifestEntry
-		entry, pos = man.getEntry(path)
+		entry, hop := man.getEntry(path[pos:])
+
 		if entry == nil {
-			err = fmt.Errorf("Content for '%s' not found.", uri)
+			err = fmt.Errorf("Path '%s' not found on manifest '%s'", path[:pos], path[pos:])
 			return
 		}
 
 		// check hash of entry
 		if !hashMatcher.MatchString(entry.Hash) {
-			err = fmt.Errorf("Incorrect hash '%064x' for '%s'", entry.Hash, uri)
+			err = fmt.Errorf("Incorrect hash '%064x' for path '%s' on manifest for '%s')", entry.Hash, path[pos:], path[:pos])
 			return
 		}
 		key = common.Hex2Bytes(entry.Hash)
@@ -349,7 +349,7 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 		}
 
 		// otherwise continue along the path with manifest resolution
-		path = path[pos:]
+		pos += hop
 	}
 	return
 }

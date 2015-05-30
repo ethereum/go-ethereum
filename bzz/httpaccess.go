@@ -4,22 +4,24 @@ A simple http server interface to Swarm
 package bzz
 
 import (
-	"fmt"
+	"bytes"
 	"io"
 	"net/http"
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
-	notFoundStatus = 404
-	rawType        = "application/octet-stream"
+	rawType = "application/octet-stream"
 )
 
 var (
 	rawUrl          = regexp.MustCompile("^/+raw/*")
 	trailingSlashes = regexp.MustCompile("/+$")
+	forever         = time.Unix(0, 0)
 )
 
 type sequentialReader struct {
@@ -40,8 +42,9 @@ func startHttpServer(api *Api, port string) {
 }
 
 func handler(w http.ResponseWriter, r *http.Request, api *Api) {
-	dpaLogger.Debugf("request URL: '%s' Host: '%s', Path: '%s'", r.RequestURI, r.URL.Host, r.URL.Path)
-	uri := r.URL.Path
+	requestURL := r.URL
+	dpaLogger.Debugf("Swarm: HTTP request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
+	uri := requestURL.Path
 	var raw bool
 	path := rawUrl.ReplaceAllStringFunc(uri, func(string) string {
 		raw = true
@@ -50,7 +53,6 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 
 	switch {
 	case r.Method == "POST":
-		dpaLogger.Debugf("request URL Host: '%s', Path: '%s'", r.URL.Host, r.URL.Path)
 		if raw {
 			dpaLogger.Debugf("Swarm: POST request received.")
 			key, err := api.dpa.Store(io.NewSectionReader(&sequentialReader{
@@ -58,7 +60,8 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 				ahead:  make(map[int64]chan bool),
 			}, 0, r.ContentLength), nil)
 			if err == nil {
-				fmt.Fprintf(w, "%064x", key)
+				w.Header().Set("Content-Type", "text/plain")
+				http.ServeContent(w, r, "", time.Now(), bytes.NewReader([]byte(common.Bytes2Hex(key))))
 				dpaLogger.Debugf("Swarm: Content for '%064x' stored", key)
 			} else {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -70,7 +73,6 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 		}
 
 	case r.Method == "GET" || r.Method == "HEAD":
-		dpaLogger.Debugf("request URL Host: '%s', Path: '%s'", r.URL.Host, uri)
 		path = trailingSlashes.ReplaceAllString(path, "")
 		if raw {
 			dpaLogger.Debugf("Swarm: Raw GET request '%s' received", uri)
@@ -88,14 +90,14 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			dpaLogger.Debugf("Swarm: Reading %d bytes.", reader.Size())
 
 			// setting mime type
-			qv := r.URL.Query()
+			qv := requestURL.Query()
 			mimeType := qv.Get("content_type")
 			if mimeType == "" {
 				mimeType = rawType
 			}
 
 			w.Header().Set("Content-Type", mimeType)
-			http.ServeContent(w, r, uri, time.Unix(0, 0), reader)
+			http.ServeContent(w, r, uri, forever, reader)
 			dpaLogger.Debugf("Swarm: Serve raw content '%s' (%d bytes) as '%s'", uri, reader.Size(), mimeType)
 
 			// retrieve path via manifest
@@ -121,9 +123,12 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			w.Header().Set("Content-Type", mimeType)
 			if status > 0 {
 				w.WriteHeader(status)
+			} else {
+				status = 200
 			}
-			dpaLogger.Debugf("Swarm: Served '%s' (%d bytes) as '%s' (status code: %v)", uri, reader.Size(), mimeType, w.Header())
-			http.ServeContent(w, r, uri, time.Unix(0, 0), reader)
+			dpaLogger.Debugf("Swarm: Served '%s' (%d bytes) as '%s' (status code: %v)", uri, reader.Size(), mimeType, status)
+
+			http.ServeContent(w, r, path, forever, reader)
 
 		}
 	default:
