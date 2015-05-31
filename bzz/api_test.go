@@ -1,15 +1,12 @@
 package bzz
 
 import (
-	// "net/http"
-	// "strings"
-	"testing"
-	// "time"
+	"bytes"
+	"io/ioutil"
 	"os"
 	"path"
 	"runtime"
-
-	// "github.com/ethereum/go-ethereum/common/docserver"
+	"testing"
 )
 
 var (
@@ -36,6 +33,7 @@ func TestApiPut(t *testing.T) {
 	api, err := testApi()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+		return
 	}
 	expContent := "hello"
 	expMimeType := "text/plain"
@@ -44,30 +42,71 @@ func TestApiPut(t *testing.T) {
 	bzzhash, err := api.Put(expContent, expMimeType)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+		return
 	}
-	bytecontent, mimeType, status, size, err := api.Get(bzzhash)
+	testGet(t, api, bzzhash, []byte(expContent), expMimeType, expStatus, expSize)
+}
+
+func testGet(t *testing.T, api *Api, bzzhash string, expContent []byte, expMimeType string, expStatus int, expSize int) {
+	content, mimeType, status, size, err := api.Get(bzzhash)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+		return
 	}
-	content := string(bytecontent)
-	if content != expContent {
-		t.Errorf("incorrect content. expected '%s', got '%s'", expContent, content)
+	if !bytes.Equal(content, expContent) {
+		t.Errorf("incorrect content. expected '%s...', got '%s...'", string(expContent), string(content))
 	}
 	if mimeType != expMimeType {
 		t.Errorf("incorrect mimeType. expected '%s', got '%s'", expMimeType, mimeType)
 	}
 	if status != expStatus {
-		t.Errorf("incorrect status. expected '%s', got '%s'", expStatus, status)
+		t.Errorf("incorrect status. expected '%d', got '%d'", expStatus, status)
 	}
 	if size != expSize {
 		t.Errorf("incorrect size. expected '%d', got '%d'", expSize, size)
 	}
 }
 
-func TestApiUpload(t *testing.T) {
+func TestApiDirUpload(t *testing.T) {
 	api, err := testApi()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+		return
 	}
-	_ = api
+	bzzhash, err := api.Upload(path.Join(testDir, "test0"))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	content, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
+	testGet(t, api, path.Join(bzzhash, "index.html"), content, "text/html", 0, 202)
+	testGet(t, api, bzzhash, content, "text/html", 0, 202)
+
+	content, err = ioutil.ReadFile(path.Join(testDir, "test0", "index.css"))
+	testGet(t, api, path.Join(bzzhash, "index.css"), content, "text/plain", 0, 132)
+
+	content, err = ioutil.ReadFile(path.Join(testDir, "test0", "img", "logo.png"))
+	testGet(t, api, path.Join(bzzhash, "img", "logo.png"), content, "image/png", 0, 18136)
+
+	_, _, _, _, err = api.Get(bzzhash)
+	if err == nil {
+		t.Errorf("expected error: %v", err)
+	}
+}
+
+func TestApiFileUpload(t *testing.T) {
+	api, err := testApi()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	bzzhash, err := api.Upload(path.Join(testDir, "test0", "index.html"))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	content, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
+	testGet(t, api, path.Join(bzzhash), content, "text/html", 0, 202)
 }

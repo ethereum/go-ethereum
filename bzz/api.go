@@ -359,7 +359,8 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 		dpaLogger.Debugf("Swarm: content lookup key: '%064x' (%v)", key, mimeType)
 		reader = self.dpa.Retrieve(key)
 	} else {
-		dpaLogger.Debugf("Swarm: getEntry(%s): not found", path)
+		err = fmt.Errorf("manifest entry for '%s' not found", path)
+		dpaLogger.Debugf("Swarm: %v", err)
 	}
 	return
 }
