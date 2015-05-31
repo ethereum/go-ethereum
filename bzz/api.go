@@ -124,7 +124,7 @@ func (self *Api) Put(content, contentType string) (string, error) {
 
 func (self *Api) Modify(rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
 	root := common.Hex2Bytes(rootHash)
-	trie, err := loadManifestTrie(self.dpa, root)
+	trie, err := loadManifest(self.dpa, root)
 	if err != nil {
 		return
 	}
@@ -313,9 +313,9 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 		return
 	}
 
-	trie, err := loadManifestTrie(self.dpa, key)
+	trie, err := loadManifest(self.dpa, key)
 	if err != nil {
-		dpaLogger.Debugf("Swarm: loadManifestTrie error: %v", err)
+		dpaLogger.Debugf("Swarm: loadManifest error: %v", err)
 		return
 	}
 

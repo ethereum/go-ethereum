@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sync"
 	"time"
@@ -21,7 +22,8 @@ const (
 var (
 	rawUrl          = regexp.MustCompile("^/+raw/*")
 	trailingSlashes = regexp.MustCompile("/+$")
-	forever         = time.Unix(0, 0)
+	// forever         = time.Unix(0, 0)
+	forever = time.Now()
 )
 
 type sequentialReader struct {
@@ -43,6 +45,14 @@ func startHttpServer(api *Api, port string) {
 
 func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 	requestURL := r.URL
+	if requestURL.Host == "" {
+		var err error
+		requestURL, err = url.Parse(r.Referer() + requestURL.String())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 	dpaLogger.Debugf("Swarm: HTTP request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
 	uri := requestURL.Path
 	var raw bool

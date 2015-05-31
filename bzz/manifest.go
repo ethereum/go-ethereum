@@ -32,11 +32,16 @@ type manifestTrieEntry struct {
 	subtrie     *manifestTrie
 }
 
-func loadManifestTrie(dpa *DPA, hash Key) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func loadManifest(dpa *DPA, hash Key) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
 	dpaLogger.Debugf("Swarm: manifest lookup key: '%064x'.", hash)
 	// retrieve manifest via DPA
 	manifestReader := dpa.Retrieve(hash)
+	return readManifest(manifestReader, hash, dpa)
+}
+
+func readManifest(manifestReader SectionReader, hash Key, dpa *DPA) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+
 	// TODO check size for oversized manifests
 	manifestData := make([]byte, manifestReader.Size())
 	var size int
@@ -198,7 +203,7 @@ func (self *manifestTrie) recalcAndStore() error {
 func (self *manifestTrie) loadSubTrie(entry *manifestTrieEntry) (err error) {
 	if entry.subtrie == nil {
 		hash := common.Hex2Bytes(entry.Hash)
-		entry.subtrie, err = loadManifestTrie(self.dpa, hash)
+		entry.subtrie, err = loadManifest(self.dpa, hash)
 		entry.Hash = "" // might not match, should be recalculated
 	}
 	return
