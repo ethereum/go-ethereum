@@ -220,7 +220,7 @@ func (self *manifestTrie) findPrefixOf(path string) (entry *manifestTrieEntry, p
 	b := byte(path[0])
 	entry = self.entries[b]
 	if entry == nil {
-		return nil, 0
+		return self.entries[256], 0
 	}
 	epl := len(entry.Path)
 	dpaLogger.Debugf("path = %v  entry.Path = %v  epl = %v", path, entry.Path, epl)
@@ -243,33 +243,27 @@ func (self *manifestTrie) findPrefixOf(path string) (entry *manifestTrieEntry, p
 	return
 }
 
-func (self *manifestTrie) getEntryNLS(path string) (entry *manifestTrieEntry, pos int) {
-	entry, pos = self.findPrefixOf(path)
-	if entry != nil {
-		for (pos < len(path)) && (path[pos] == '/') {
-			pos++
-		}
-		if (pos < len(path)) && (pos > 0) && (path[pos-1] != '/') {
-			return nil, 0
+// file system manifest always contains regularized paths
+// no leading or trailing slashes, only single slashes inside
+func regularSlashes(path string) (res string) {
+	for i := 0; i < len(path); i++ {
+		if (path[i] != '/') || ((i > 0) && (path[i-1] != '/')) {
+			res = res + path[i:i+1]
 		}
 	}
+	if (len(res) > 0) && (res[len(res)-1] == '/') {
+		res = res[:len(res)-1]
+	}
+	//fmt.Printf("%v -> %v\n", path, res)
 	return
 }
 
-func (self *manifestTrie) getEntry(path string) (entry *manifestTrieEntry, pos int) {
-	var slash string
-	for {
-		entry, pos = self.getEntryNLS(slash + path)
-		dpaLogger.Debugf("getEntryNLS(%s) pos=%v", slash+path, pos)
-		if pos < len(slash) {
-			dpaLogger.Debugf("Path '%s' on manifest not found.", path)
-			return nil, 0
-		}
-		if entry != nil {
-			pos -= len(slash)
-			dpaLogger.Debugf("Swarm: '%s' matches '%s'.", path, entry.Path)
-			return
-		}
-		slash = slash + "/"
+func (self *manifestTrie) getEntry(spath string) (entry *manifestTrieEntry, fullpath string) {
+	path := regularSlashes(spath)
+	var pos int
+	entry, pos = self.findPrefixOf(path)
+	if (pos > 0) && (pos < len(path)) && (path[pos] != '/') {
+		return nil, ""
 	}
+	return entry, path[:pos]
 }
