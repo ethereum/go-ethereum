@@ -260,9 +260,7 @@ func (self *Api) Register(sender common.Address, hash common.Hash, domain string
 	return
 }
 
-type errResolve error
-
-func (self *Api) Resolve(hostport string) (contentHash Key, errR errResolve) {
+func (self *Api) Resolve(hostport string) (contentHash Key, err error) {
 	var host, port string
 	var err error
 	host, port, err = net.SplitHostPort(hostport)
@@ -270,7 +268,7 @@ func (self *Api) Resolve(hostport string) (contentHash Key, errR errResolve) {
 		if err.Error() == "missing port in address "+hostport {
 			host = hostport
 		} else {
-			errR = errResolve(fmt.Errorf("invalid host '%s': %v", hostport, err))
+			err = fmt.Errorf("invalid host '%s': %v", hostport, err)
 			return
 		}
 	}
@@ -285,12 +283,12 @@ func (self *Api) Resolve(hostport string) (contentHash Key, errR errResolve) {
 			var hash common.Hash
 			hash, err = self.Resolver.KeyToContentHash(hostHash)
 			if err != nil {
-				err = errResolve(fmt.Errorf("unable to resolve '%s': %v", hostport, err))
+				err = fmt.Errorf("unable to resolve '%s': %v", hostport, err)
 			}
 			contentHash = Key(hash.Bytes())
 			dpaLogger.Debugf("Swarm: resolve host to contentHash: '%064x'", contentHash)
 		} else {
-			err = errResolve(fmt.Errorf("no resolver '%s': %v", hostport, err))
+			err = fmt.Errorf("no resolver '%s': %v", hostport, err)
 		}
 	}
 	return
