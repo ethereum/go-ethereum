@@ -62,6 +62,30 @@ func NewApi(datadir, port string) (self *Api, err error) {
 	return
 }
 
+// Local swarm without netStore
+func NewLocalApi(datadir string) (self *Api, err error) {
+
+	self = &Api{
+		Chunker: &TreeChunker{},
+	}
+	dbStore, err := newDbStore(datadir)
+	dbStore.setCapacity(50000)
+	if err != nil {
+		return
+	}
+	memStore := newMemStore(dbStore)
+	localStore := &localStore{
+		memStore,
+		dbStore,
+	}
+
+	self.dpa = &DPA{
+		Chunker:    self.Chunker,
+		ChunkStore: localStore,
+	}
+	return
+}
+
 // Bzz returns the bzz protocol class instances of which run on every peer
 func (self *Api) Bzz() (p2p.Protocol, error) {
 	return BzzProtocol(self.netStore)
@@ -77,9 +101,15 @@ Start is called when the ethereum stack is started
 func (self *Api) Start(node *discover.Node, connectPeer func(string) error) {
 	self.Chunker.Init()
 	self.dpa.Start()
-	self.netStore.start(node, connectPeer)
-	dpaLogger.Infof("Swarm started.")
-	go startHttpServer(self, self.Port)
+	if node != nil && self.netStore != nil && connectPeer != nil {
+		self.netStore.start(node, connectPeer)
+		dpaLogger.Infof("Swarm network started.")
+	} else {
+		dpaLogger.Infof("Local Swarm started without network")
+	}
+	if self.Port != "" {
+		go startHttpServer(self, self.Port)
+	}
 }
 
 func (self *Api) Stop() {
@@ -171,7 +201,7 @@ func (self *Api) Upload(lpath string) (string, error) {
 	dpaLogger.Debugf("uploading '%s'", localpath)
 	err := filepath.Walk(localpath, func(path string, info os.FileInfo, err error) error {
 		if (err == nil) && !info.IsDir() {
-			//fmt.Printf("lp %s  path %s\n", localpath, path)
+			dpaLogger.Debugf("localpath: '%s'; path: '%s'\n", localpath, path)
 			if len(path) <= start {
 				return fmt.Errorf("Path is too short")
 			}
@@ -253,6 +283,7 @@ func (self *Api) Register(sender common.Address, hash common.Hash, domain string
 	domainhash := common.BytesToHash(crypto.Sha3([]byte(domain)))
 
 	if self.Resolver != nil {
+		dpaLogger.Debugf("Swarm: host '%s' (hash: '%v') to be registered as '%v'", domain, domainhash.Hex(), hash.Hex())
 		_, err = self.Resolver.RegisterContentHash(sender, domainhash, hash)
 	} else {
 		err = fmt.Errorf("no registry: %v", err)
@@ -266,10 +297,12 @@ func (self *Api) Resolve(hostPort string) (contentHash Key, err error) {
 	var host string
 	host, _, err = net.SplitHostPort(hostPort)
 	if err != nil {
-		if err.Error() == "missing port in address "+hostPort {
+		porterr := "missing port in address " + hostPort
+		if err.Error() == porterr {
 			host = hostPort
+			err = nil
 		} else {
-			err = fmt.Errorf("invalid host '%s': %v", hostPort, err)
+			err = fmt.Errorf("invalid host '%s': %v (<>'%s')", hostPort, err, porterr)
 			return
 		}
 	}
