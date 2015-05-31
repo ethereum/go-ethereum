@@ -237,7 +237,7 @@ func (self *Api) Upload(lpath string) (string, error) {
 		if errors[i] != nil {
 			return "", errors[i]
 		}
-		entry.Path = entry.Path[start:]
+		entry.Path = regularSlashes(entry.Path[start:])
 		trie.addEntry(entry)
 	}
 
@@ -313,7 +313,7 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 
 	trie, err := loadManifest(self.dpa, key)
 	if err != nil {
-		dpaLogger.Debugf("Swarm: loadManifest error: %v", err)
+		dpaLogger.Debugf("Swarm: loadManifestTrie error: %v", err)
 		return
 	}
 

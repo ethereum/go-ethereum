@@ -28,38 +28,29 @@ func testGetEntry(t *testing.T, path, match string, paths ...string) *manifestTr
 }
 
 func checkEntry(t *testing.T, path, match string, trie *manifestTrie) {
-	entry, _ := trie.getEntry(path)
+	entry, fullpath := trie.getEntry(path)
 	if match == "-" && entry != nil {
-		t.Errorf("expected no match for '%s', got '%s'", path, entry.Path)
+		t.Errorf("expected no match for '%s', got '%s'", path, fullpath)
 	} else if entry == nil {
-		t.Errorf("expected entry '%s' to match '%s', got no match", match, path)
-	} else if entry.Path != match {
-		t.Errorf("incorrect entry retrieved for '%s'. expected path '%v', got '%s'", path, match, entry.Path)
+		if match != "-" {
+			t.Errorf("expected entry '%s' to match '%s', got no match", match, path)
+		}
+	} else if fullpath != match {
+		t.Errorf("incorrect entry retrieved for '%s'. expected path '%v', got '%s'", path, match, fullpath)
 	}
 }
 
 func TestGetEntry(t *testing.T) {
+	// file system manifest always contains regularized paths
 	testGetEntry(t, "a", "a", "a")
 	testGetEntry(t, "b", "-", "a")
-	testGetEntry(t, "/a", "/a", "/a")
-	testGetEntry(t, "/a", "///a", "///a")
-	testGetEntry(t, "/a", "a", "a")
+	testGetEntry(t, "/a//", "a", "a")
 	// fallback
-	testGetEntry(t, "/a", "/", "/")
-	testGetEntry(t, "a", "/", "/")
 	testGetEntry(t, "/a", "", "")
+	testGetEntry(t, "/a/b", "a/b", "a/b")
 	// longest/deepest math
-	testGetEntry(t, "a/b", "a/b", "a///", "a/b")
-	// trailing slash
-	testGetEntry(t, "", "", "/", "")
-	testGetEntry(t, "/", "/", "/", "")
-	testGetEntry(t, "a", "a", "a", "a/")
-	testGetEntry(t, "a/", "a/", "a/", "a")
-	// prefix match
-	testGetEntry(t, "a", "a", "a", "ab")
-	testGetEntry(t, "ab", "", "a", "")
-	testGetEntry(t, "a", "a", "a", "ab")
-	testGetEntry(t, "a/b", "a", "a", "ab")
+	testGetEntry(t, "a/b", "a/b", "a", "a/b", "a/bb", "a/b/c")
+	testGetEntry(t, "//a//b//", "a/b", "a", "a/b", "a/bb", "a/b/c")
 }
 
 func TestDeleteEntry(t *testing.T) {
