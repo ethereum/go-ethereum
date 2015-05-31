@@ -260,15 +260,16 @@ func (self *Api) Register(sender common.Address, hash common.Hash, domain string
 	return
 }
 
-func (self *Api) Resolve(hostport string) (contentHash Key, err error) {
-	var host, port string
-	var err error
-	host, port, err = net.SplitHostPort(hostport)
+type errResolve error
+
+func (self *Api) Resolve(hostPort string) (contentHash Key, err error) {
+	var host string
+	host, _, err = net.SplitHostPort(hostPort)
 	if err != nil {
-		if err.Error() == "missing port in address "+hostport {
-			host = hostport
+		if err.Error() == "missing port in address "+hostPort {
+			host = hostPort
 		} else {
-			err = fmt.Errorf("invalid host '%s': %v", hostport, err)
+			err = fmt.Errorf("invalid host '%s': %v", hostPort, err)
 			return
 		}
 	}
@@ -277,18 +278,16 @@ func (self *Api) Resolve(hostport string) (contentHash Key, err error) {
 		dpaLogger.Debugf("Swarm: host is a contentHash: '%064x'", contentHash)
 	} else {
 		if self.Resolver != nil {
-			hostHash := common.BytesToHash(crypto.Sha3(common.Hex2Bytes(host)))
-			// TODO: should take port as block number versioning
-			_ = port
+			hostHash := common.BytesToHash(crypto.Sha3([]byte(host)))
 			var hash common.Hash
 			hash, err = self.Resolver.KeyToContentHash(hostHash)
 			if err != nil {
-				err = fmt.Errorf("unable to resolve '%s': %v", hostport, err)
+				err = fmt.Errorf("unable to resolve '%s': %v", hostPort, err)
 			}
 			contentHash = Key(hash.Bytes())
-			dpaLogger.Debugf("Swarm: resolve host to contentHash: '%064x'", contentHash)
+			dpaLogger.Debugf("Swarm: resolve host '%s' to contentHash: '%064x'", hostPort, contentHash)
 		} else {
-			err = fmt.Errorf("no resolver '%s': %v", hostport, err)
+			err = fmt.Errorf("no resolver '%s': %v", hostPort, err)
 		}
 	}
 	return
@@ -307,7 +306,8 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 	var key Key
 	key, err = self.Resolve(hostPort)
 	if err != nil {
-		dpaLogger.Debugf("Swarm: rResolve error: %v", err)
+		err = errResolve(err)
+		dpaLogger.Debugf("Swarm: error : %v", err)
 		return
 	}
 
