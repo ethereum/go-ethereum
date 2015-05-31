@@ -2,13 +2,10 @@ package vm
 
 import (
 	"errors"
-	"fmt"
-	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type Environment interface {
@@ -51,41 +48,4 @@ func Transfer(from, to Account, amount *big.Int) error {
 	to.AddBalance(amount)
 
 	return nil
-}
-
-type Log struct {
-	address common.Address
-	topics  []common.Hash
-	data    []byte
-	log     uint64
-}
-
-func (self *Log) Address() common.Address {
-	return self.address
-}
-
-func (self *Log) Topics() []common.Hash {
-	return self.topics
-}
-
-func (self *Log) Data() []byte {
-	return self.data
-}
-
-func (self *Log) Number() uint64 {
-	return self.log
-}
-
-func (self *Log) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{self.address, self.topics, self.data})
-}
-
-/*
-func (self *Log) RlpData() interface{} {
-	return []interface{}{self.address, common.ByteSliceToInterface(self.topics), self.data}
-}
-*/
-
-func (self *Log) String() string {
-	return fmt.Sprintf("{%x %x %x}", self.address, self.data, self.topics)
 }
