@@ -364,8 +364,8 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 			return UncleError("uncle[%d](%x) is ancestor", i, hash[:4])
 		}
 
-		if !ancestors.Has(uncle.ParentHash) {
-			return UncleError("uncle[%d](%x)'s parent unknown (%x)", i, hash[:4], uncle.ParentHash[0:4])
+		if !ancestors.Has(uncle.ParentHash) || uncle.ParentHash == parent.Hash() {
+			return UncleError("uncle[%d](%x)'s parent is not ancestor (%x)", i, hash[:4], uncle.ParentHash[0:4])
 		}
 
 		if err := sm.ValidateHeader(uncle, ancestorHeaders[uncle.ParentHash], true); err != nil {
