@@ -160,7 +160,6 @@ func (js *jsre) pendingTransactions(call otto.FunctionCall) otto.Value {
 	//ltxs := make([]*tx, len(txs))
 	var ltxs []*tx
 	for _, tx := range txs {
-		// no need to check err
 		if from, _ := tx.From(); accountSet.Has(from) {
 			ltxs = append(ltxs, newTx(tx))
 		}
