@@ -112,12 +112,6 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 		return ErrInvalidSender
 	}
 
-	// Validate curve param
-	v, _, _ := tx.Curve()
-	if v > 28 || v < 27 {
-		return fmt.Errorf("tx.v != (28 || 27) => %v", v)
-	}
-
 	if !pool.currentState().HasAccount(from) {
 		return ErrNonExistentAccount
 	}
