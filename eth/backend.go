@@ -88,6 +88,7 @@ type Config struct {
 	Dial    bool
 	Bzz     bool
 	BzzPort string
+	PowTest bool
 
 	Etherbase      string
 	GasPrice       *big.Int
@@ -288,7 +289,14 @@ func New(config *Config) (*Ethereum, error) {
 		AutoDAG:         config.AutoDAG,
 	}
 
-	eth.pow = ethash.New()
+	if config.PowTest {
+		eth.pow, err = ethash.NewForTesting()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		eth.pow = ethash.New()
+	}
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.pow, eth.EventMux())
 	eth.downloader = downloader.New(eth.EventMux(), eth.chainManager.HasBlock, eth.chainManager.GetBlock)
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
@@ -312,11 +320,17 @@ func New(config *Config) (*Ethereum, error) {
 
 	if config.Bzz {
 		eth.Swarm, err = bzz.NewApi(config.DataDir, config.BzzPort)
-		var proto p2p.Protocol
-		proto, err = eth.Swarm.Bzz()
-		if err == nil {
+		if err != nil {
 			glog.V(logger.Warn).Infof("BZZ: error creating swarm: %v. Protocol skipped", err)
-			protocols = append(protocols, proto)
+		} else {
+			var proto p2p.Protocol
+			proto, err = eth.Swarm.Bzz()
+			if err != nil {
+				glog.V(logger.Warn).Infof("BZZ: error creating swarm: %v. Protocol skipped", err)
+				eth.Swarm = nil
+			} else {
+				protocols = append(protocols, proto)
+			}
 		}
 	}
 
