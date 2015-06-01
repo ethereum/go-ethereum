@@ -231,6 +231,9 @@ func (tp *TxPool) GetTransaction(hash common.Hash) *types.Transaction {
 }
 
 func (self *TxPool) GetTransactions() (txs types.Transactions) {
+	self.checkQueue()
+	self.validatePool()
+
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 

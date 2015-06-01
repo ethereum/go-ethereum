@@ -290,6 +290,7 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	if config.PowTest {
+		glog.V(logger.Info).Infof("ethash used in test mode")
 		eth.pow, err = ethash.NewForTesting()
 		if err != nil {
 			return nil, err

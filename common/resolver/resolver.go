@@ -36,8 +36,8 @@ var (
 
 const (
 	txValue    = "0"
-	txGas      = "100000"
-	txGasPrice = "1000000000000"
+	txGas      = ""
+	txGasPrice = ""
 )
 
 func abiSignature(s string) string {
@@ -284,7 +284,7 @@ func (self *Resolver) RegisterUrl(address common.Address, hash common.Hash, url 
 // registers key -> conenthash in HashReg and
 // registers  contenthash -> url in UrlHint
 // creates 3 transaction using address as  sender
-// transactions need to obe mined to take effect
+// transactions need to be mined to take effect
 func (self *Resolver) RegisterAddrWithUrl(address common.Address, codehash, dochash common.Hash, url string) (txh string, err error) {
 
 	_, err = self.RegisterContentHash(address, codehash, dochash)

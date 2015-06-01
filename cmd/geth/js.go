@@ -85,6 +85,7 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, bzzEnabled bool
 	js.xeth = xeth.New(ethereum, f)
 	js.wait = js.xeth.UpdateState()
 	js.re = re.New(libPath)
+	// js.apiBindings(js.xeth)
 	js.apiBindings(f)
 	js.adminBindings()
 	if bzzEnabled {
@@ -113,6 +114,7 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, bzzEnabled bool
 
 func (js *jsre) apiBindings(f xeth.Frontend) {
 	xe := xeth.New(js.ethereum, f)
+	// func (js *jsre) apiBindings(xe *xeth.XEth) {
 	ethApi := rpc.NewEthereumApi(xe)
 	jeth := rpc.NewJeth(ethApi, js.re)
 
