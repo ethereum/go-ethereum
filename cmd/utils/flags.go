@@ -24,6 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/rpc/api"
+	"github.com/ethereum/go-ethereum/rpc/codec"
 )
 
 func init() {
@@ -201,6 +204,10 @@ var (
 		Usage: "Domain on which to send Access-Control-Allow-Origin header",
 		Value: "",
 	}
+	IPCEnabledFlag = cli.BoolFlag{
+		Name:  "ipc",
+		Usage: "Enable the IPC-RPC server",
+	}
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
@@ -367,6 +374,21 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
 
 	xeth := xeth.New(eth, nil)
 	return rpc.Start(xeth, config)
+}
+
+func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
+	config := comms.IpcConfig{
+		Endpoint: ctx.GlobalString(DataDirFlag.Name) + "/geth.sock",
+	}
+
+	xeth := xeth.New(eth, nil)
+	// offered API over IPC
+	codec := codec.JSON
+	web3Api := api.NewWeb3(xeth, codec)
+	ethApi := api.NewEth(xeth, codec)
+	netApi := api.NewNet(xeth, codec)
+
+	return comms.StartIpc(config, codec, web3Api, ethApi, netApi)
 }
 
 func StartPProf(ctx *cli.Context) {
