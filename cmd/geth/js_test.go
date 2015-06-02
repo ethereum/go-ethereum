@@ -3,12 +3,14 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -17,7 +19,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/common/resolver"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 )
@@ -41,7 +42,6 @@ var (
 
 type testjethre struct {
 	*jsre
-	stateDb     *state.StateDB
 	lastConfirm string
 	ds          *docserver.DocServer
 }
@@ -79,6 +79,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 		MaxPeers:       0,
 		Name:           "test",
 		SolcPath:       testSolcPath,
+		PowTest:        true,
 	})
 	if err != nil {
 		t.Fatal("%v", err)
@@ -101,18 +102,11 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 
 	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
 	ds := docserver.New("/")
-	tf := &testjethre{ds: ds, stateDb: ethereum.ChainManager().State().Copy()}
+	tf := &testjethre{ds: ds}
 	repl := newJSRE(ethereum, assetPath, "", false, "", false, tf)
 	tf.jsre = repl
 	return tmp, tf, ethereum
 }
-
-// this line below is needed for transaction to be applied to the state in testing
-// the heavy lifing is done in XEth.ApplyTestTxs
-// this is fragile, overwriting xeth will result in
-// process leaking since xeth loops cannot quit safely
-// should be replaced by proper mining with testDAG for easy full integration tests
-// txc, self.xeth = self.xeth.ApplyTestTxs(self.xeth.repl.stateDb, coinbase, txc)
 
 func TestNodeInfo(t *testing.T) {
 	t.Skip("broken after p2p update")
@@ -257,12 +251,9 @@ func TestContract(t *testing.T) {
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
 
-	var txc uint64
 	coinbase := common.HexToAddress(testAddress)
 	resolver.New(repl.xeth).CreateContracts(coinbase)
-	// time.Sleep(1000 * time.Millisecond)
 
-	// checkEvalJSON(t, repl, `eth.getBlock("pending", true).transactions.length`, `2`)
 	source := `contract test {\n` +
 		"   /// @notice Will multiply `a` by 7." + `\n` +
 		`   function multiply(uint a) returns(uint d) {\n` +
@@ -270,14 +261,20 @@ func TestContract(t *testing.T) {
 		`   }\n` +
 		`}\n`
 
-	checkEvalJSON(t, repl, `admin.contractInfo.stop()`, `true`)
+	if checkEvalJSON(t, repl, `admin.contractInfo.stop()`, `true`) != nil {
+		return
+	}
 
 	contractInfo, err := ioutil.ReadFile("info_test.json")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	checkEvalJSON(t, repl, `primary = eth.accounts[0]`, `"`+testAddress+`"`)
-	checkEvalJSON(t, repl, `source = "`+source+`"`, `"`+source+`"`)
+	if checkEvalJSON(t, repl, `primary = eth.accounts[0]`, `"`+testAddress+`"`) != nil {
+		return
+	}
+	if checkEvalJSON(t, repl, `source = "`+source+`"`, `"`+source+`"`) != nil {
+		return
+	}
 
 	// if solc is found with right version, test it, otherwise read from file
 	sol, err := compiler.New("")
@@ -297,69 +294,154 @@ func TestContract(t *testing.T) {
 			t.Errorf("%v", err)
 		}
 	} else {
-		checkEvalJSON(t, repl, `contract = eth.compile.solidity(source).test`, string(contractInfo))
+		if checkEvalJSON(t, repl, `contract = eth.compile.solidity(source).test`, string(contractInfo)) != nil {
+			return
+		}
 	}
 
-	checkEvalJSON(t, repl, `contract.code`, `"0x605880600c6000396000f3006000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa114602e57005b603d6004803590602001506047565b8060005260206000f35b60006007820290506053565b91905056"`)
+	if checkEvalJSON(t, repl, `contract.code`, `"0x605880600c6000396000f3006000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa114602e57005b603d6004803590602001506047565b8060005260206000f35b60006007820290506053565b91905056"`) != nil {
+		return
+	}
 
-	checkEvalJSON(
+	if checkEvalJSON(
 		t, repl,
-		`contractaddress = eth.sendTransaction({from: primary, data: contract.code })`,
+		`contractaddress = eth.sendTransaction({from: primary, data: contract.code, gasPrice:"1000", gas:"100000", amount:100 })`,
 		`"0x291293d57e0a0ab47effe97c02577f90d9211567"`,
-	)
+	) != nil {
+		return
+	}
+
+	if !processTxs(repl, t, 7) {
+		return
+	}
 
 	callSetup := `abiDef = JSON.parse('[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}]');
 Multiply7 = eth.contract(abiDef);
 multiply7 = Multiply7.at(contractaddress);
 `
-	// time.Sleep(1500 * time.Millisecond)
 	_, err = repl.re.Run(callSetup)
 	if err != nil {
 		t.Errorf("unexpected error setting up contract, got %v", err)
+		return
 	}
 
-	// checkEvalJSON(t, repl, `eth.getBlock("pending", true).transactions.length`, `3`)
-
-	// why is this sometimes failing?
-	// checkEvalJSON(t, repl, `multiply7.multiply.call(6)`, `42`)
 	expNotice := ""
 	if repl.lastConfirm != expNotice {
 		t.Errorf("incorrect confirmation message: expected %v, got %v", expNotice, repl.lastConfirm)
+		return
 	}
 
-	txc, repl.xeth = repl.xeth.ApplyTestTxs(repl.stateDb, coinbase, txc)
+	if checkEvalJSON(t, repl, `admin.contractInfo.start()`, `true`) != nil {
+		return
+	}
+	if checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary })`, `undefined`) != nil {
+		return
+	}
 
-	checkEvalJSON(t, repl, `admin.contractInfo.start()`, `true`)
-	checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary, gas: "1000000", gasPrice: "100000" })`, `undefined`)
+	if !processTxs(repl, t, 1) {
+		return
+	}
+
 	expNotice = `About to submit transaction (no NatSpec info found for contract: content hash not found for '0x87e2802265838c7f14bb69eecd2112911af6767907a702eeaa445239fb20711b'): {"params":[{"to":"0x291293d57e0a0ab47effe97c02577f90d9211567","data": "0xc6888fa10000000000000000000000000000000000000000000000000000000000000006"}]}`
 	if repl.lastConfirm != expNotice {
-		t.Errorf("incorrect confirmation message: expected %v, got %v", expNotice, repl.lastConfirm)
+		t.Errorf("incorrect confirmation message: expected\n%v, got\n%v", expNotice, repl.lastConfirm)
+		return
 	}
 
-	var contenthash = `"0x86d2b7cf1e72e9a7a3f8d96601f0151742a2f780f1526414304fbe413dc7f9bd"`
-	if sol != nil {
+	var contentHash = `"0x86d2b7cf1e72e9a7a3f8d96601f0151742a2f780f1526414304fbe413dc7f9bd"`
+	if sol != nil && solcVersion != sol.Version() {
 		modContractInfo := versionRE.ReplaceAll(contractInfo, []byte(`"compilerVersion":"`+sol.Version()+`"`))
-		_ = modContractInfo
-		// contenthash = crypto.Sha3(modContractInfo)
+		fmt.Printf("modified contractinfo:\n%s\n", modContractInfo)
+		contentHash = `"` + common.ToHex(crypto.Sha3([]byte(modContractInfo))) + `"`
 	}
-	checkEvalJSON(t, repl, `filename = "/tmp/info.json"`, `"/tmp/info.json"`)
-	checkEvalJSON(t, repl, `contenthash = admin.contractInfo.register(primary, contractaddress, contract, filename)`, contenthash)
-	checkEvalJSON(t, repl, `admin.contractInfo.registerUrl(primary, contenthash, "file://"+filename)`, `true`)
-	if err != nil {
-		t.Errorf("unexpected error registering, got %v", err)
+	if checkEvalJSON(t, repl, `filename = "/tmp/info.json"`, `"/tmp/info.json"`) != nil {
+		return
+	}
+	if checkEvalJSON(t, repl, `contentHash = admin.contractInfo.saveInfo(contract.info, filename)`, contentHash) != nil {
+		return
+	}
+	if checkEvalJSON(t, repl, `admin.contractInfo.register(primary, contractaddress, contentHash)`, `true`) != nil {
+		return
+	}
+	if checkEvalJSON(t, repl, `admin.contractInfo.registerUrl(primary, contentHash, "file://"+filename)`, `true`) != nil {
+		return
 	}
 
-	checkEvalJSON(t, repl, `admin.contractInfo.start()`, `true`)
+	if checkEvalJSON(t, repl, `admin.contractInfo.start()`, `true`) != nil {
+		return
+	}
 
-	// update state
-	txc, repl.xeth = repl.xeth.ApplyTestTxs(repl.stateDb, coinbase, txc)
+	if !processTxs(repl, t, 3) {
+		return
+	}
 
-	checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary, gas: "1000000", gasPrice: "100000" })`, `undefined`)
+	if checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary })`, `undefined`) != nil {
+		return
+	}
+
+	if !processTxs(repl, t, 1) {
+		return
+	}
+
 	expNotice = "Will multiply 6 by 7."
 	if repl.lastConfirm != expNotice {
-		t.Errorf("incorrect confirmation message: expected %v, got %v", expNotice, repl.lastConfirm)
+		t.Errorf("incorrect confirmation message: expected\n%v, got\n%v", expNotice, repl.lastConfirm)
+		return
 	}
 
+}
+
+func pendingTransactions(repl *testjethre, t *testing.T) (txc int64, err error) {
+	txs := repl.ethereum.TxPool().GetTransactions()
+	return int64(len(txs)), nil
+}
+
+func processTxs(repl *testjethre, t *testing.T, expTxc int) bool {
+	var txc int64
+	var err error
+	for i := 0; i < 50; i++ {
+		txc, err = pendingTransactions(repl, t)
+		if err != nil {
+			t.Errorf("unexpected error checking pending transactions: %v", err)
+			return false
+		}
+		if expTxc < int(txc) {
+			t.Errorf("too many pending transactions: expected %v, got %v", expTxc, txc)
+			return false
+		} else if expTxc == int(txc) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if int(txc) != expTxc {
+		t.Errorf("incorrect number of pending transactions, expected %v, got %v", expTxc, txc)
+		return false
+	}
+
+	err = repl.ethereum.StartMining(runtime.NumCPU())
+	if err != nil {
+		t.Errorf("unexpected error mining: %v", err)
+		return false
+	}
+	defer repl.ethereum.StopMining()
+
+	timer := time.NewTimer(100 * time.Second)
+	height := new(big.Int).Add(repl.xeth.CurrentBlock().Number(), big.NewInt(1))
+	_, err = waitForBlocks(repl.wait, height, timer.C)
+	if err != nil {
+		t.Errorf("error mining transactions: %v", err)
+		return false
+	}
+	txc, err = pendingTransactions(repl, t)
+	if err != nil {
+		t.Errorf("unexpected error checking pending transactions: %v", err)
+		return false
+	}
+	if txc != 0 {
+		t.Errorf("%d trasactions were not mined", txc)
+		return false
+	}
+	return true
 }
 
 func checkEvalJSON(t *testing.T, re *testjethre, expr, want string) error {

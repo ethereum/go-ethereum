@@ -59,6 +59,7 @@ func (js *jsre) adminBindings() {
 	cinfo.Set("stop", js.stopNatSpec)
 	cinfo.Set("newRegistry", js.newRegistry)
 	cinfo.Set("get", js.getContractInfo)
+	cinfo.Set("saveInfo", js.saveInfo)
 	cinfo.Set("register", js.register)
 	cinfo.Set("registerUrl", js.registerUrl)
 	// cinfo.Set("verify", js.verify)
@@ -678,12 +679,18 @@ func (js *jsre) waitForBlocks(call otto.FunctionCall) otto.Value {
 	}
 
 	if args == 0 {
-		height = js.xeth.CurrentBlock().Number()
-		height.Add(height, common.Big1)
+		height = new(big.Int).Add(js.xeth.CurrentBlock().Number(), common.Big1)
 	}
+	height, err = waitForBlocks(js.wait, height, timer)
+	if err != nil {
+		return otto.UndefinedValue()
+	}
+	v, _ := call.Otto.ToValue(height.Uint64())
+	return v
+}
 
-	wait := js.wait
-	js.wait <- height
+func waitForBlocks(wait chan *big.Int, height *big.Int, timer <-chan time.Time) (newHeight *big.Int, err error) {
+	wait <- height
 	select {
 	case <-timer:
 		// if times out make sure the xeth loop does not block
@@ -693,11 +700,10 @@ func (js *jsre) waitForBlocks(call otto.FunctionCall) otto.Value {
 			case <-wait:
 			}
 		}()
-		return otto.UndefinedValue()
-	case height = <-wait:
+		return nil, fmt.Errorf("timeout")
+	case newHeight = <-wait:
 	}
-	v, _ := call.Otto.ToValue(height.Uint64())
-	return v
+	return
 }
 
 func (js *jsre) sleep(call otto.FunctionCall) otto.Value {
@@ -729,23 +735,49 @@ func (js *jsre) setSolc(call otto.FunctionCall) otto.Value {
 }
 
 func (js *jsre) register(call otto.FunctionCall) otto.Value {
-	if len(call.ArgumentList) != 4 {
-		fmt.Println("requires 4 arguments: admin.contractInfo.register(fromaddress, contractaddress, contract, filename)")
-		return otto.UndefinedValue()
+	if len(call.ArgumentList) != 3 {
+		fmt.Println("requires 3 arguments: admin.contractInfo.register(fromaddress, contractaddress, contenthash)")
+		return otto.FalseValue()
 	}
 	sender, err := call.Argument(0).ToString()
 	if err != nil {
 		fmt.Println(err)
-		return otto.UndefinedValue()
+		return otto.FalseValue()
 	}
 
 	address, err := call.Argument(1).ToString()
 	if err != nil {
 		fmt.Println(err)
-		return otto.UndefinedValue()
+		return otto.FalseValue()
 	}
 
-	raw, err := call.Argument(2).Export()
+	contentHashHex, err := call.Argument(2).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	// sender and contract address are passed as hex strings
+	codeb := js.xeth.CodeAtBytes(address)
+	codeHash := common.BytesToHash(crypto.Sha3(codeb))
+	contentHash := common.HexToHash(contentHashHex)
+	registry := resolver.New(js.xeth)
+
+	_, err = registry.RegisterContentHash(common.HexToAddress(sender), codeHash, contentHash)
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	return otto.TrueValue()
+}
+
+func (js *jsre) saveInfo(call otto.FunctionCall) otto.Value {
+	if len(call.ArgumentList) != 2 {
+		fmt.Println("requires 2 arguments: admin.contractInfo.saveInfo(contract.info, filename)")
+		return otto.UndefinedValue()
+	}
+	raw, err := call.Argument(0).Export()
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
@@ -755,36 +787,20 @@ func (js *jsre) register(call otto.FunctionCall) otto.Value {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
-	var contract compiler.Contract
-	err = json.Unmarshal(jsonraw, &contract)
+	var contractInfo compiler.ContractInfo
+	err = json.Unmarshal(jsonraw, &contractInfo)
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
 
-	filename, err := call.Argument(3).ToString()
+	filename, err := call.Argument(1).ToString()
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
 
-	contenthash, err := compiler.ExtractInfo(&contract, filename)
-	if err != nil {
-		fmt.Println(err)
-		return otto.UndefinedValue()
-	}
-	// sender and contract address are passed as hex strings
-	codeb := js.xeth.CodeAtBytes(address)
-	codehash := common.BytesToHash(crypto.Sha3(codeb))
-
-	if err != nil {
-		fmt.Println(err)
-		return otto.UndefinedValue()
-	}
-
-	registry := resolver.New(js.xeth)
-
-	_, err = registry.RegisterContentHash(common.HexToAddress(sender), codehash, contenthash)
+	contenthash, err := compiler.SaveInfo(&contractInfo, filename)
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
@@ -796,7 +812,7 @@ func (js *jsre) register(call otto.FunctionCall) otto.Value {
 
 func (js *jsre) registerUrl(call otto.FunctionCall) otto.Value {
 	if len(call.ArgumentList) != 3 {
-		fmt.Println("requires 3 arguments: admin.contractInfo.register(fromaddress, contenthash, filename)")
+		fmt.Println("requires 3 arguments: admin.contractInfo.registerUrl(fromaddress, contenthash, url)")
 		return otto.FalseValue()
 	}
 	sender, err := call.Argument(0).ToString()
@@ -818,7 +834,6 @@ func (js *jsre) registerUrl(call otto.FunctionCall) otto.Value {
 	}
 
 	registry := resolver.New(js.xeth)
-
 	_, err = registry.RegisterUrl(common.HexToAddress(sender), common.HexToHash(contenthash), url)
 	if err != nil {
 		fmt.Println(err)
@@ -830,7 +845,7 @@ func (js *jsre) registerUrl(call otto.FunctionCall) otto.Value {
 
 func (js *jsre) getContractInfo(call otto.FunctionCall) otto.Value {
 	if len(call.ArgumentList) != 1 {
-		fmt.Println("requires 1 argument: admin.contractInfo.register(contractaddress)")
+		fmt.Println("requires 1 argument: admin.contractInfo.get(contractaddress)")
 		return otto.FalseValue()
 	}
 	addr, err := call.Argument(0).ToString()

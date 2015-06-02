@@ -62,6 +62,30 @@ func NewApi(datadir, port string) (self *Api, err error) {
 	return
 }
 
+// Local swarm without netStore
+func NewLocalApi(datadir string) (self *Api, err error) {
+
+	self = &Api{
+		Chunker: &TreeChunker{},
+	}
+	dbStore, err := newDbStore(datadir)
+	dbStore.setCapacity(50000)
+	if err != nil {
+		return
+	}
+	memStore := newMemStore(dbStore)
+	localStore := &localStore{
+		memStore,
+		dbStore,
+	}
+
+	self.dpa = &DPA{
+		Chunker:    self.Chunker,
+		ChunkStore: localStore,
+	}
+	return
+}
+
 // Bzz returns the bzz protocol class instances of which run on every peer
 func (self *Api) Bzz() (p2p.Protocol, error) {
 	return BzzProtocol(self.netStore)
@@ -77,9 +101,15 @@ Start is called when the ethereum stack is started
 func (self *Api) Start(node *discover.Node, connectPeer func(string) error) {
 	self.Chunker.Init()
 	self.dpa.Start()
-	self.netStore.start(node, connectPeer)
-	dpaLogger.Infof("Swarm started.")
-	go startHttpServer(self, self.Port)
+	if node != nil && self.netStore != nil && connectPeer != nil {
+		self.netStore.start(node, connectPeer)
+		dpaLogger.Infof("Swarm network started.")
+	} else {
+		dpaLogger.Infof("Local Swarm started without network")
+	}
+	if self.Port != "" {
+		go startHttpServer(self, self.Port)
+	}
 }
 
 func (self *Api) Stop() {
@@ -158,7 +188,7 @@ const maxParallelFiles = 5
 // Upload replicates a local directory as a manifest file and uploads it
 // using dpa store
 // TODO: localpath should point to a manifest
-func (self *Api) Upload(lpath string) (string, error) {
+func (self *Api) Upload(lpath, index string) (string, error) {
 	var list []*manifestTrieEntry
 	localpath, err := filepath.Abs(filepath.Clean(lpath))
 	if err != nil {
@@ -263,6 +293,15 @@ func (self *Api) Upload(lpath string) (string, error) {
 		}
 		entry.Path = regularSlashes(entry.Path[start:])
 		trie.addEntry(entry)
+
+		if entry.Path == index {
+			ientry := &manifestTrieEntry{
+				Path:        "",
+				Hash:        entry.Hash,
+				ContentType: entry.ContentType,
+			}
+			trie.addEntry(ientry)
+		}
 	}
 
 	err2 := trie.recalcAndStore()
@@ -277,6 +316,7 @@ func (self *Api) Register(sender common.Address, hash common.Hash, domain string
 	domainhash := common.BytesToHash(crypto.Sha3([]byte(domain)))
 
 	if self.Resolver != nil {
+		dpaLogger.Debugf("Swarm: host '%s' (hash: '%v') to be registered as '%v'", domain, domainhash.Hex(), hash.Hex())
 		_, err = self.Resolver.RegisterContentHash(sender, domainhash, hash)
 	} else {
 		err = fmt.Errorf("no registry: %v", err)
@@ -286,15 +326,16 @@ func (self *Api) Register(sender common.Address, hash common.Hash, domain string
 
 type errResolve error
 
-func (self *Api) Resolve(hostport string) (contentHash Key, errR errResolve) {
-	var host, port string
-	var err error
-	host, port, err = net.SplitHostPort(hostport)
+func (self *Api) Resolve(hostPort string) (contentHash Key, err error) {
+	var host string
+	host, _, err = net.SplitHostPort(hostPort)
 	if err != nil {
-		if err.Error() == "missing port in address "+hostport {
-			host = hostport
+		porterr := "missing port in address " + hostPort
+		if err.Error() == porterr {
+			host = hostPort
+			err = nil
 		} else {
-			errR = errResolve(fmt.Errorf("invalid host '%s': %v", hostport, err))
+			err = fmt.Errorf("invalid host '%s': %v (<>'%s')", hostPort, err, porterr)
 			return
 		}
 	}
@@ -303,18 +344,16 @@ func (self *Api) Resolve(hostport string) (contentHash Key, errR errResolve) {
 		dpaLogger.Debugf("Swarm: host is a contentHash: '%064x'", contentHash)
 	} else {
 		if self.Resolver != nil {
-			hostHash := common.BytesToHash(crypto.Sha3(common.Hex2Bytes(host)))
-			// TODO: should take port as block number versioning
-			_ = port
+			hostHash := common.BytesToHash(crypto.Sha3([]byte(host)))
 			var hash common.Hash
 			hash, err = self.Resolver.KeyToContentHash(hostHash)
 			if err != nil {
-				err = errResolve(fmt.Errorf("unable to resolve '%s': %v", hostport, err))
+				err = fmt.Errorf("unable to resolve '%s': %v", hostPort, err)
 			}
 			contentHash = Key(hash.Bytes())
-			dpaLogger.Debugf("Swarm: resolve host to contentHash: '%064x'", contentHash)
+			dpaLogger.Debugf("Swarm: resolve host '%s' to contentHash: '%064x'", hostPort, contentHash)
 		} else {
-			err = errResolve(fmt.Errorf("no resolver '%s': %v", hostport, err))
+			err = fmt.Errorf("no resolver '%s': %v", hostPort, err)
 		}
 	}
 	return
@@ -333,7 +372,8 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 	var key Key
 	key, err = self.Resolve(hostPort)
 	if err != nil {
-		dpaLogger.Debugf("Swarm: rResolve error: %v", err)
+		err = errResolve(err)
+		dpaLogger.Debugf("Swarm: error : %v", err)
 		return
 	}
 
@@ -352,7 +392,8 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 		dpaLogger.Debugf("Swarm: content lookup key: '%064x' (%v)", key, mimeType)
 		reader = self.dpa.Retrieve(key)
 	} else {
-		dpaLogger.Debugf("Swarm: getEntry(%s): not found", path)
+		err = fmt.Errorf("manifest entry for '%s' not found", path)
+		dpaLogger.Debugf("Swarm: %v", err)
 	}
 	return
 }
