@@ -18,6 +18,7 @@ func TestBcValidBlockTests(t *testing.T) {
 
 func TestBcUncleTests(t *testing.T) {
 	runBlockTestsInFile("files/BlockTests/bcUncleTest.json", []string{}, t)
+	runBlockTestsInFile("files/BlockTests/bcBruncleTest.json", []string{}, t)
 }
 
 func TestBcUncleHeaderValidityTests(t *testing.T) {
