@@ -220,7 +220,7 @@ func (js *jsre) httpLoadScript(call otto.FunctionCall) otto.Value {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}
-	script, err := ds.Get(uri, "")
+	script, err := js.ds.Get(uri, "")
 	if err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
@@ -251,7 +251,7 @@ func (js *jsre) httpGet(call otto.FunctionCall) otto.Value {
 			return otto.UndefinedValue()
 		}
 	}
-	resp, err := ds.Get(uri, path)
+	resp, err := js.ds.Get(uri, path)
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
@@ -854,7 +854,7 @@ func (js *jsre) getContractInfo(call otto.FunctionCall) otto.Value {
 		return otto.FalseValue()
 	}
 
-	infoDoc, err := natspec.FetchDocsForContract(addr, js.xeth, ds)
+	infoDoc, err := natspec.FetchDocsForContract(addr, js.xeth, js.ds)
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
