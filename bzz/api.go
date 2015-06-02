@@ -292,8 +292,6 @@ func (self *Api) Upload(lpath, index string) (string, error) {
 			return "", errors[i]
 		}
 		entry.Path = regularSlashes(entry.Path[start:])
-		trie.addEntry(entry)
-
 		if entry.Path == index {
 			ientry := &manifestTrieEntry{
 				Path:        "",
@@ -302,6 +300,7 @@ func (self *Api) Upload(lpath, index string) (string, error) {
 			}
 			trie.addEntry(ientry)
 		}
+		trie.addEntry(entry)
 	}
 
 	err2 := trie.recalcAndStore()
