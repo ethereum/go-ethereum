@@ -266,8 +266,8 @@ func (self *Api) Upload(lpath, index string) (string, error) {
 				wg.Wait()
 			}
 			if err == nil {
-				//cmd := exec.Command("file", "--mime-type", "-b", entry.Path)
-				cmd := exec.Command("mimetype", "-b", entry.Path)
+				cmd := exec.Command("file", "--mime-type", "-b", entry.Path)
+				// cmd := exec.Command("mimetype", "-b", entry.Path)
 				var out bytes.Buffer
 				cmd.Stdout = &out
 				err = cmd.Run()
