@@ -62,6 +62,10 @@ func (self *testjethre) ConfirmTransaction(tx string) bool {
 }
 
 func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
+	return testREPL(t, nil)
+}
+
+func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth.Ethereum) {
 	tmp, err := ioutil.TempDir("", "geth-test")
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +76,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 
 	ks := crypto.NewKeyStorePlain(filepath.Join(tmp, "keystore"))
 	am := accounts.NewManager(ks)
-	ethereum, err := eth.New(&eth.Config{
+	conf := &eth.Config{
 		NodeKey:        testNodeKey,
 		DataDir:        tmp,
 		AccountManager: am,
@@ -80,7 +84,11 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 		Name:           "test",
 		SolcPath:       testSolcPath,
 		PowTest:        true,
-	})
+	}
+	if config != nil {
+		config(conf)
+	}
+	ethereum, err := eth.New(conf)
 	if err != nil {
 		t.Fatal("%v", err)
 	}
@@ -103,7 +111,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
 	ds := docserver.New("/")
 	tf := &testjethre{ds: ds}
-	repl := newJSRE(ethereum, assetPath, "", false, "", false, tf)
+	repl := newJSRE(ethereum, assetPath, "", conf.Bzz, conf.BzzPort, false, tf)
 	tf.jsre = repl
 	return tmp, tf, ethereum
 }

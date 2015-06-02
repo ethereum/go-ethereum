@@ -65,6 +65,7 @@ func (r dumbterm) PasswordPrompt(p string) (string, error) {
 func (r dumbterm) AppendHistory(string) {}
 
 type jsre struct {
+	ds         *docserver.DocServer
 	re         *re.JSRE
 	ethereum   *eth.Ethereum
 	xeth       *xeth.XEth
@@ -82,6 +83,7 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, bzzEnabled bool
 	if f == nil {
 		f = js
 	}
+	js.ds = docserver.New("/")
 	js.xeth = xeth.New(ethereum, f)
 	js.wait = js.xeth.UpdateState()
 	js.re = re.New(libPath)
@@ -90,7 +92,7 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, bzzEnabled bool
 	js.adminBindings()
 	if bzzEnabled {
 		// register the swarm rountripper with the bzz scheme on the docserver
-		ds.RegisterProtocol("bzz", &bzz.RoundTripper{Port: bzzPort})
+		js.ds.RegisterProtocol("bzz", &bzz.RoundTripper{Port: bzzPort})
 		// swarm js bindings
 		bzz.NewJSApi(js.re, js.ethereum.Swarm)
 		js.ethereum.Swarm.Resolver = resolver.New(xeth.New(ethereum, f))
@@ -156,11 +158,9 @@ var net = web3.net;
 	js.re.Eval(resolver.GlobalRegistrar + "registrar = GlobalRegistrar.at(\"" + resolver.GlobalRegistrarAddr + "\");")
 }
 
-var ds = docserver.New("/")
-
 func (self *jsre) ConfirmTransaction(tx string) bool {
 	if self.ethereum.NatSpec {
-		notice := natspec.GetNotice(self.xeth, tx, ds)
+		notice := natspec.GetNotice(self.xeth, tx, self.ds)
 		fmt.Println(notice)
 		answer, _ := self.Prompt("Confirm Transaction [y/n]")
 		return strings.HasPrefix(strings.Trim(answer, " "), "y")
