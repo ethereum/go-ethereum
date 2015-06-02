@@ -88,7 +88,7 @@ func New(xeth *xeth.XEth, jsontx string, http *docserver.DocServer) (self *NatSp
 }
 
 // also called by admin.contractInfo.get
-func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, http *docserver.DocServer) (content []byte, err error) {
+func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, ds *docserver.DocServer) (content []byte, err error) {
 	// retrieve contract hash from state
 	codehex := xeth.CodeAt(contractAddress)
 	codeb := xeth.CodeAtBytes(contractAddress)
@@ -102,17 +102,29 @@ func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, http *docserv
 	res := resolver.New(xeth)
 
 	// resolve host via HashReg/UrlHint Resolver
-	uri, hash, err := res.KeyToUrl(codehash)
+	hash, err := res.KeyToContentHash(codehash)
+	if err != nil {
+		return
+	}
+	if ds.HasScheme("bzz") {
+		content, err = ds.Get("bzz://"+hash.Hex(), "")
+		if err == nil { // non-fatal
+			return
+		}
+		err = nil
+		//falling back to urlhint
+	}
+
+	uri, err := res.ContentHashToUrl(hash)
 	if err != nil {
 		return
 	}
 
 	// get content via http client and authenticate content using hash
-	content, err = http.GetAuthContent(uri, hash)
+	content, err = ds.GetAuthContent(uri, hash)
 	if err != nil {
 		return
 	}
-
 	return
 }
 

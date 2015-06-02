@@ -2,6 +2,7 @@ package docserver
 
 import (
 	"io/ioutil"
+	"net/http"
 	"os"
 	"testing"
 
@@ -35,4 +36,19 @@ func TestGetAuthContent(t *testing.T) {
 		}
 	}
 
+}
+
+type rt struct{}
+
+func (rt) RoundTrip(req *http.Request) (resp *http.Response, err error) { return }
+
+func TestRegisterScheme(t *testing.T) {
+	ds := New("/tmp/")
+	if ds.HasScheme("scheme") {
+		t.Errorf("expected scheme not to be registered")
+	}
+	ds.RegisterScheme("scheme", rt{})
+	if !ds.HasScheme("scheme") {
+		t.Errorf("expected scheme to be registered")
+	}
 }
