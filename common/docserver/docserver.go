@@ -71,6 +71,8 @@ func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []b
 
 }
 
+// Get(uri, path) downloads the document at uri, if path is non-empty it
+// is interpreted as a filepath to which the contents are saved
 func (self *DocServer) Get(uri, path string) (content []byte, err error) {
 	// retrieve content
 	resp, err := self.Client().Get(uri)
