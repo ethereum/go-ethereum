@@ -13,12 +13,14 @@ import (
 type DocServer struct {
 	*http.Transport
 	DocRoot string
+	schemes []string
 }
 
 func New(docRoot string) (self *DocServer) {
 	self = &DocServer{
 		Transport: &http.Transport{},
 		DocRoot:   docRoot,
+		schemes:   []string{"file"},
 	}
 	self.RegisterProtocol("file", http.NewFileTransport(http.Dir(self.DocRoot)))
 	return
@@ -32,6 +34,20 @@ func (self *DocServer) Client() *http.Client {
 	return &http.Client{
 		Transport: self,
 	}
+}
+
+func (self *DocServer) RegisterScheme(scheme string, rt http.RoundTripper) {
+	self.schemes = append(self.schemes, scheme)
+	self.RegisterProtocol(scheme, rt)
+}
+
+func (self *DocServer) HasScheme(scheme string) bool {
+	for _, s := range self.schemes {
+		if s == scheme {
+			return true
+		}
+	}
+	return false
 }
 
 func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []byte, err error) {
