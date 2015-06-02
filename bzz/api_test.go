@@ -73,7 +73,7 @@ func TestApiDirUpload(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
-	bzzhash, err := api.Upload(path.Join(testDir, "test0"))
+	bzzhash, err := api.Upload(path.Join(testDir, "test0"), "")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return
@@ -101,7 +101,7 @@ func TestApiFileUpload(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
-	bzzhash, err := api.Upload(path.Join(testDir, "test0", "index.html"))
+	bzzhash, err := api.Upload(path.Join(testDir, "test0", "index.html"), "")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return

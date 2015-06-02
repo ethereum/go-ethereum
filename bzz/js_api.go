@@ -182,12 +182,19 @@ func (self *JSApi) download(call otto.FunctionCall) otto.Value {
 }
 
 func (self *JSApi) upload(call otto.FunctionCall) otto.Value {
-	if len(call.ArgumentList) != 1 {
-		fmt.Println("requires 1 arguments: bzz.put(localpath)")
+	var err error
+	var index string
+	if len(call.ArgumentList) == 2 {
+		index, err = call.Argument(1).ToString()
+		if err != nil {
+			fmt.Println(err)
+			return otto.UndefinedValue()
+		}
+	} else if len(call.ArgumentList) != 1 {
+		fmt.Println("requires 1 or 2 arguments: bzz.put(localpath[, index])")
 		return otto.UndefinedValue()
 	}
 
-	var err error
 	var localpath, res string
 	localpath, err = call.Argument(0).ToString()
 	if err != nil {
@@ -195,7 +202,7 @@ func (self *JSApi) upload(call otto.FunctionCall) otto.Value {
 		return otto.UndefinedValue()
 	}
 
-	res, err = self.api.Upload(localpath)
+	res, err = self.api.Upload(localpath, index)
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
