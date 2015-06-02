@@ -67,14 +67,14 @@ type jsre struct {
 	prompter
 }
 
-func newJSRE(datadir, libPath string) *jsre {
+func newJSRE(datadir, libPath, ipcpath string) *jsre {
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
 
 	// update state in separare forever blocks
 	js.re = re.New(libPath)
-	js.apiBindings()
-	//	js.adminBindings()
+	js.apiBindings(ipcpath)
+	//	TODO js.adminBindings()
 
 	if !liner.TerminalSupported() {
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
@@ -92,9 +92,9 @@ func newJSRE(datadir, libPath string) *jsre {
 	return js
 }
 
-func (js *jsre) apiBindings() {
+func (js *jsre) apiBindings(ipcpath string) {
 	ethApi := rpc.NewEthereumApi(nil)
-	jeth := rpc.NewJeth(ethApi, js.re)
+	jeth := rpc.NewJeth(ethApi, js.re, ipcpath)
 
 	js.re.Set("jeth", struct{}{})
 	t, _ := js.re.Get("jeth")

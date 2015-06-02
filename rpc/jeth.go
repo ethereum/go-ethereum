@@ -13,12 +13,13 @@ import (
 )
 
 type Jeth struct {
-	ethApi *EthereumApi
-	re     *jsre.JSRE
+	ethApi  *EthereumApi
+	re      *jsre.JSRE
+	ipcpath string
 }
 
-func NewJeth(ethApi *EthereumApi, re *jsre.JSRE) *Jeth {
-	return &Jeth{ethApi, re}
+func NewJeth(ethApi *EthereumApi, re *jsre.JSRE, ipcpath string) *Jeth {
+	return &Jeth{ethApi, re, ipcpath}
 }
 
 func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id interface{}) (response otto.Value) {
@@ -39,9 +40,8 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 	if err != nil {
 		return self.err(call, -32700, err.Error(), nil)
 	}
-
-	// TODO
-	client, err := comms.NewIpcClient(comms.IpcConfig{"/home/bas/.ethereum/geth.sock"}, codec.JSON)
+	
+	client, err := comms.NewIpcClient(comms.IpcConfig{self.ipcpath}, codec.JSON)
 	if err != nil {
 		fmt.Println("Error response:", err)
 		return self.err(call, -32603, err.Error(), -1)

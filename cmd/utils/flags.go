@@ -204,9 +204,14 @@ var (
 		Usage: "Domain on which to send Access-Control-Allow-Origin header",
 		Value: "",
 	}
-	IPCEnabledFlag = cli.BoolFlag{
-		Name:  "ipc",
-		Usage: "Enable the IPC-RPC server",
+	IPCDisabledFlag = cli.BoolFlag{
+		Name:  "ipcdisable",
+		Usage: "Disable the IPC-RPC server",
+	}
+	IPCPathFlag = cli.StringFlag{
+		Name:  "ipcpath",
+		Usage: "Filename for IPC socket/pipe",
+		Value: common.DefaultIpcPath(),
 	}
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
@@ -378,7 +383,7 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
 
 func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
 	config := comms.IpcConfig{
-		Endpoint: ctx.GlobalString(DataDirFlag.Name) + "/geth.sock",
+		Endpoint: ctx.GlobalString(IPCPathFlag.Name),
 	}
 
 	xeth := xeth.New(eth, nil)

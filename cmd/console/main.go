@@ -21,17 +21,49 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
 
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
+	"github.com/codegangsta/cli"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/logger"
 )
 
 const (
 	ClientIdentifier = "Geth console"
 	Version          = "0.9.26"
 )
+
+var (
+	gitCommit       string // set via linker flag
+	nodeNameVersion string
+	app           = utils.NewApp(Version, "the ether console")
+)
+
+func init() {
+	if gitCommit == "" {
+		nodeNameVersion = Version
+	} else {
+		nodeNameVersion = Version + "-" + gitCommit[:8]
+	}
+
+	app.Action = run
+	app.Flags = []cli.Flag{
+		utils.DataDirFlag,
+		utils.IPCDisabledFlag,
+		utils.IPCPathFlag,
+		utils.VerbosityFlag,
+		utils.JSpathFlag,
+	}
+
+	app.Before = func(ctx *cli.Context) error {
+		utils.SetupLogger(ctx)
+		return nil
+	}
+}
 
 func main() {
 	// Wrap the standard output with a colorified stream (windows)
@@ -42,7 +74,32 @@ func main() {
 		}
 	}
 
-	// TODO, datadir + jspath
-	repl := newJSRE("/home/bas/.ethereum", ".")
+	var interrupted = false
+	utils.RegisterInterrupt(func(os.Signal) {
+		interrupted = true
+	})
+	utils.HandleInterrupt()
+
+	if err := app.Run(os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, "Error: ", err)
+	}
+
+	// we need to run the interrupt callbacks in case gui is closed
+	// this skips if we got here by actual interrupt stopping the GUI
+	if !interrupted {
+		utils.RunInterruptCallbacks(os.Interrupt)
+	}
+	logger.Flush()
+}
+
+func run(ctx *cli.Context) {
+	//start := time.Now()
+
+	datadir := ctx.GlobalString(utils.DataDirFlag.Name)
+	jspath := ctx.GlobalString(utils.JSpathFlag.Name)
+	ipcpath := ctx.GlobalString(utils.IPCPathFlag.Name)
+
+	repl := newJSRE(datadir, jspath, ipcpath)
+
 	repl.interactive()
 }
