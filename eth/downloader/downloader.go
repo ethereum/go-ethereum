@@ -418,6 +418,9 @@ out:
 		case <-d.cancelCh:
 			return errCancelBlockFetch
 
+		case <-d.hashCh:
+			// Out of bounds hashes received, ignore them
+
 		case blockPack := <-d.blockCh:
 			// Short circuit if it's a stale cross check
 			if len(blockPack.blocks) == 1 {
@@ -472,30 +475,21 @@ out:
 					glog.V(logger.Detail).Infof("%s: delivery partially failed: %v", peer, err)
 				}
 			}
+
 		case <-ticker.C:
-			// Check for bad peers. Bad peers may indicate a peer not responding
-			// to a `getBlocks` message. A timeout of 5 seconds is set. Peers
-			// that badly or poorly behave are removed from the peer set (not banned).
-			// Bad peers are excluded from the available peer set and therefor won't be
-			// reused. XXX We could re-introduce peers after X time.
+			// Short circuit if we lost all our peers
+			if d.peers.Len() == 0 {
+				return errNoPeers
+			}
+			// Check for block request timeouts and demote the responsible peers
 			badPeers := d.queue.Expire(blockHardTTL)
 			for _, pid := range badPeers {
-				// XXX We could make use of a reputation system here ranking peers
-				// in their performance
-				// 1) Time for them to respond;
-				// 2) Measure their speed;
-				// 3) Amount and availability.
 				if peer := d.peers.Peer(pid); peer != nil {
 					peer.Demote()
 					glog.V(logger.Detail).Infof("%s: block delivery timeout", peer)
 				}
 			}
-			// After removing bad peers make sure we actually have sufficient peer left to keep downloading
-			if d.peers.Len() == 0 {
-				return errNoPeers
-			}
-			// If there are unrequested hashes left start fetching
-			// from the available peers.
+			// If there are unrequested hashes left start fetching from the available peers
 			if d.queue.Pending() > 0 {
 				// Throttle the download if block cache is full and waiting processing
 				if d.queue.Throttle() {
@@ -565,7 +559,7 @@ func (d *Downloader) banBlocks(peerId string, head common.Hash) error {
 		return err
 	}
 	// Wait a bit for the reply to arrive, and ban if done so
-	timeout := time.After(blockTTL)
+	timeout := time.After(blockHardTTL)
 	for {
 		select {
 		case <-d.cancelCh:
@@ -573,6 +567,9 @@ func (d *Downloader) banBlocks(peerId string, head common.Hash) error {
 
 		case <-timeout:
 			return ErrTimeout
+
+		case <-d.hashCh:
+			// Out of bounds hashes received, ignore them
 
 		case blockPack := <-d.blockCh:
 			blocks := blockPack.blocks
