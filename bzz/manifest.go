@@ -209,6 +209,42 @@ func (self *manifestTrie) loadSubTrie(entry *manifestTrieEntry) (err error) {
 	return
 }
 
+func (self *manifestTrie) listWithPrefixInt(prefix, rp string, cb func(entry *manifestTrieEntry, suffix string)) {
+	plen := len(prefix)
+	var start, stop int
+	if plen == 0 {
+		start = 0
+		stop = 256
+	} else {
+		start = int(prefix[0])
+		stop = start
+	}
+
+	for i := start; i <= stop; i++ {
+		entry := self.entries[i]
+		if entry != nil {
+			epl := len(entry.Path)
+			if entry.ContentType == manifestType {
+				l := plen
+				if epl < l {
+					l = epl
+				}
+				if (prefix[:l] == entry.Path[:l]) && (self.loadSubTrie(entry) == nil) { // TODO: handle errors
+					entry.subtrie.listWithPrefixInt(prefix[l:], rp+entry.Path[l:], cb)
+				}
+			} else {
+				if (epl >= plen) && (prefix == entry.Path[:plen]) {
+					cb(entry, rp+entry.Path[plen:])
+				}
+			}
+		}
+	}
+}
+
+func (self *manifestTrie) listWithPrefix(prefix string, cb func(entry *manifestTrieEntry, suffix string)) {
+	self.listWithPrefixInt(prefix, "", cb)
+}
+
 func (self *manifestTrie) findPrefixOf(path string) (entry *manifestTrieEntry, pos int) {
 
 	dpaLogger.Debugf("findPrefixOf(%s)", path)

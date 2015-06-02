@@ -159,7 +159,7 @@ func (self *JSApi) download(call otto.FunctionCall) otto.Value {
 	}
 
 	var err error
-	var bzzpath, localpath, res string
+	var bzzpath, localpath string
 	bzzpath, err = call.Argument(0).ToString()
 	if err != nil {
 		fmt.Println(err)
@@ -171,14 +171,13 @@ func (self *JSApi) download(call otto.FunctionCall) otto.Value {
 		return otto.UndefinedValue()
 	}
 
-	res, err = self.api.Download(bzzpath, localpath)
+	err = self.api.Download(bzzpath, localpath)
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
 
-	v, _ := call.Otto.ToValue(res)
-	return v
+	return otto.UndefinedValue()
 }
 
 func (self *JSApi) upload(call otto.FunctionCall) otto.Value {

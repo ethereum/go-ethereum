@@ -1,6 +1,7 @@
 package bzz
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -179,8 +180,62 @@ func (self *Api) Modify(rootHash, path, contentHash, contentType string) (newRoo
 
 // Download replicates the manifest path structure on the local filesystem
 // under localpath
-func (self *Api) Download(bzzpath, localpath string) (string, error) {
-	return "", nil
+func (self *Api) Download(bzzpath, localpath string) (err error) {
+	lpath, err := filepath.Abs(filepath.Clean(localpath))
+	if err != nil {
+		return
+	}
+	err = os.MkdirAll(lpath, os.ModePerm)
+	if err != nil {
+		return
+	}
+
+	parts := slashes.Split(bzzpath, 3)
+	if len(parts) < 2 {
+		return fmt.Errorf("Invalid bzz path")
+	}
+	hostPort := parts[1]
+	var path string
+	if len(parts) > 2 {
+		path = regularSlashes(parts[2]) + "/"
+	}
+	dpaLogger.Debugf("Swarm: host: '%s', path '%s' requested.", hostPort, path)
+
+	//resolving host and port
+	var key Key
+	key, err = self.Resolve(hostPort)
+	if err != nil {
+		err = errResolve(err)
+		dpaLogger.Debugf("Swarm: error : %v", err)
+		return
+	}
+
+	trie, err := loadManifest(self.dpa, key)
+	if err != nil {
+		dpaLogger.Debugf("Swarm: loadManifestTrie error: %v", err)
+		return
+	}
+
+	prevPath := lpath
+	trie.listWithPrefix(path, func(entry *manifestTrieEntry, suffix string) { // TODO: paralellize
+		key := common.Hex2Bytes(entry.Hash)
+		reader := self.dpa.Retrieve(key)
+		path := lpath + "/" + suffix
+		dir := filepath.Dir(path)
+		if dir != prevPath {
+			os.MkdirAll(dir, os.ModePerm) // TODO: handle errors
+			prevPath = dir
+		}
+		f, _ := os.Create(path) // TODO: handle errors, ??path separators
+		writer := bufio.NewWriter(f)
+		//io.Copy(writer, reader) // TODO: handle errors
+		io.CopyN(writer, reader, reader.Size()) // TODO: handle errors
+
+		writer.Flush()
+		f.Close()
+	})
+
+	return
 }
 
 const maxParallelFiles = 5
