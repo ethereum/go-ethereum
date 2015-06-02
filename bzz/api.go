@@ -188,35 +188,58 @@ const maxParallelFiles = 5
 // Upload replicates a local directory as a manifest file and uploads it
 // using dpa store
 // TODO: localpath should point to a manifest
-func (self *Api) Upload(lpath string) (string, error) {
+func (self *Api) Upload(lpath, index string) (string, error) {
 	var list []*manifestTrieEntry
-	localpath, err1 := filepath.Abs(filepath.Clean(lpath))
-	if err1 != nil {
-		return "", err1
-	}
-	start := len(localpath)
-	if (start > 0) && (localpath[start-1] != os.PathSeparator) {
-		start++
-	}
-	dpaLogger.Debugf("uploading '%s'", localpath)
-	err := filepath.Walk(localpath, func(path string, info os.FileInfo, err error) error {
-		if (err == nil) && !info.IsDir() {
-			dpaLogger.Debugf("localpath: '%s'; path: '%s'\n", localpath, path)
-			if len(path) <= start {
-				return fmt.Errorf("Path is too short")
-			}
-			if path[:len(localpath)] != localpath {
-				return fmt.Errorf("Path prefix of '%s' does not match localpath '%s'", path, localpath)
-			}
-			entry := &manifestTrieEntry{
-				Path: path,
-			}
-			list = append(list, entry)
-		}
-		return err
-	})
+	localpath, err := filepath.Abs(filepath.Clean(lpath))
 	if err != nil {
 		return "", err
+	}
+
+	f, err := os.Open(localpath)
+	if err != nil {
+		return "", err
+	}
+	stat, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+
+	var start int
+	if stat.IsDir() {
+		start = len(localpath)
+		dpaLogger.Debugf("uploading '%s'", localpath)
+		err = filepath.Walk(localpath, func(path string, info os.FileInfo, err error) error {
+			if (err == nil) && !info.IsDir() {
+				//fmt.Printf("lp %s  path %s\n", localpath, path)
+				if len(path) <= start {
+					return fmt.Errorf("Path is too short")
+				}
+				if path[:start] != localpath {
+					return fmt.Errorf("Path prefix of '%s' does not match localpath '%s'", path, localpath)
+				}
+				entry := &manifestTrieEntry{
+					Path: path,
+				}
+				list = append(list, entry)
+			}
+			return err
+		})
+		if err != nil {
+			return "", err
+		}
+	} else {
+		dir := filepath.Dir(localpath)
+		start = len(dir)
+		if len(localpath) <= start {
+			return "", fmt.Errorf("Path is too short")
+		}
+		if localpath[:start] != dir {
+			return "", fmt.Errorf("Path prefix of '%s' does not match dir '%s'", localpath, dir)
+		}
+		entry := &manifestTrieEntry{
+			Path: localpath,
+		}
+		list = append(list, entry)
 	}
 
 	cnt := len(list)
@@ -243,7 +266,8 @@ func (self *Api) Upload(lpath string) (string, error) {
 				wg.Wait()
 			}
 			if err == nil {
-				cmd := exec.Command("file", "--mime-type", "-b", entry.Path)
+				//cmd := exec.Command("file", "--mime-type", "-b", entry.Path)
+				cmd := exec.Command("mimetype", "-b", entry.Path)
 				var out bytes.Buffer
 				cmd.Stdout = &out
 				err = cmd.Run()
@@ -269,6 +293,15 @@ func (self *Api) Upload(lpath string) (string, error) {
 		}
 		entry.Path = regularSlashes(entry.Path[start:])
 		trie.addEntry(entry)
+
+		if entry.Path == index {
+			ientry := &manifestTrieEntry{
+				Path:        "",
+				Hash:        entry.Hash,
+				ContentType: entry.ContentType,
+			}
+			trie.addEntry(ientry)
+		}
 	}
 
 	err2 := trie.recalcAndStore()
