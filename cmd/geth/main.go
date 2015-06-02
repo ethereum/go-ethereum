@@ -305,7 +305,7 @@ func console(ctx *cli.Context) {
 	repl := newJSRE(
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
-		ctx.String(utils.IPCPathFlag.Name),
+		ctx.GlobalString(utils.IPCPathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		true,
 		nil,

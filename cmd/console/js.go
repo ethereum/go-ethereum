@@ -74,7 +74,7 @@ func newJSRE(datadir, libPath, ipcpath string) *jsre {
 	// update state in separare forever blocks
 	js.re = re.New(libPath)
 	js.apiBindings(ipcpath)
-	//	TODO js.adminBindings()
+	js.adminBindings()
 
 	if !liner.TerminalSupported() {
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
@@ -171,6 +171,13 @@ func (self *jsre) exec(filename string) error {
 	}
 	self.re.Stop(true)
 	return nil
+}
+
+// show summary of current geth instance
+func (self *jsre) welcome() {
+	self.re.Eval(`
+		console.log('Connected to ' + web3.version.client);
+	`)
 }
 
 func (self *jsre) interactive() {

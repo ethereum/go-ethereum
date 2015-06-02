@@ -546,9 +546,63 @@ type GetBalanceArgs struct {
 	BlockNumber int64
 }
 
+func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	addstr, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("address", "not a string")
+	}
+	args.Address = addstr
+
+	if len(obj) > 1 {
+		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
+			return err
+		}
+	} else {
+		args.BlockNumber = -1
+	}
+
+	return nil
+}
+
 type GetStorageArgs struct {
 	Address     string
 	BlockNumber int64
+}
+
+func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	addstr, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("address", "not a string")
+	}
+	args.Address = addstr
+
+	if len(obj) > 1 {
+		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
+			return err
+		}
+	} else {
+		args.BlockNumber = -1
+	}
+
+	return nil
 }
 
 type GetStorageAtArgs struct {
@@ -557,17 +611,113 @@ type GetStorageAtArgs struct {
 	Key         string
 }
 
+func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 2 {
+		return shared.NewInsufficientParamsError(len(obj), 2)
+	}
+
+	addstr, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("address", "not a string")
+	}
+	args.Address = addstr
+
+	keystr, ok := obj[1].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("key", "not a string")
+	}
+	args.Key = keystr
+
+	if len(obj) > 2 {
+		if err := blockHeight(obj[2], &args.BlockNumber); err != nil {
+			return err
+		}
+	} else {
+		args.BlockNumber = -1
+	}
+
+	return nil
+}
+
 type GetTxCountArgs struct {
 	Address     string
 	BlockNumber int64
+}
+
+func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	addstr, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("address", "not a string")
+	}
+	args.Address = addstr
+
+	if len(obj) > 1 {
+		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
+			return err
+		}
+	} else {
+		args.BlockNumber = -1
+	}
+
+	return nil
 }
 
 type HashArgs struct {
 	Hash string
 }
 
+func (args *HashArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	arg0, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("hash", "not a string")
+	}
+	args.Hash = arg0
+
+	return nil
+}
+
 type BlockNumArg struct {
 	BlockNumber int64
+}
+
+func (args *BlockNumArg) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	if err := blockHeight(obj[0], &args.BlockNumber); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type GetDataArgs struct {
@@ -575,9 +725,71 @@ type GetDataArgs struct {
 	BlockNumber int64
 }
 
+func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	addstr, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("address", "not a string")
+	}
+	args.Address = addstr
+
+	if len(obj) > 1 {
+		if err := blockHeight(obj[1], &args.BlockNumber); err != nil {
+			return err
+		}
+	} else {
+		args.BlockNumber = -1
+	}
+
+	return nil
+}
+
 type NewSignArgs struct {
 	From string
 	Data string
+}
+
+func (args *NewSignArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []json.RawMessage
+	var ext struct {
+		From string
+		Data string
+	}
+
+	// Decode byte slice to array of RawMessages
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	// Check for sufficient params
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	// Decode 0th RawMessage to temporary struct
+	if err := json.Unmarshal(obj[0], &ext); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(ext.From) == 0 {
+		return shared.NewValidationError("from", "is required")
+	}
+
+	if len(ext.Data) == 0 {
+		return shared.NewValidationError("data", "is required")
+	}
+
+	args.From = ext.From
+	args.Data = ext.Data
+	return nil
 }
 
 type NewTxArgs struct {
@@ -592,36 +804,12 @@ type NewTxArgs struct {
 	BlockNumber int64
 }
 
-type SourceArgs struct {
-	Source string
-}
-
-type CallArgs struct {
-	From     string
-	To       string
-	Value    *big.Int
-	Gas      *big.Int
-	GasPrice *big.Int
-	Data     string
-
-	BlockNumber int64
-}
-
-type HashIndexArgs struct {
-	Hash  string
-	Index int64
-}
-
-type BlockNumIndexArgs struct {
-	BlockNumber int64
-	Index       int64
-}
-
 func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []json.RawMessage
 	var ext struct {
 		From     string
 		To       string
+		Nonce    interface{}
 		Value    interface{}
 		Gas      interface{}
 		GasPrice interface{}
@@ -652,6 +840,14 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Data = ext.Data
 
 	var num *big.Int
+	if ext.Nonce != nil {
+		num, err = numString(ext.Nonce)
+		if err != nil {
+			return err
+		}
+	}
+	args.Nonce = num
+
 	if ext.Value == nil {
 		num = big.NewInt(0)
 	} else {
@@ -690,6 +886,173 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	} else {
 		args.BlockNumber = -1
 	}
+
+	return nil
+}
+
+type SourceArgs struct {
+	Source string
+}
+
+func (args *SourceArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	arg0, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("source code", "not a string")
+	}
+	args.Source = arg0
+
+	return nil
+}
+
+type CallArgs struct {
+	From     string
+	To       string
+	Value    *big.Int
+	Gas      *big.Int
+	GasPrice *big.Int
+	Data     string
+
+	BlockNumber int64
+}
+
+func (args *CallArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []json.RawMessage
+	var ext struct {
+		From     string
+		To       string
+		Value    interface{}
+		Gas      interface{}
+		GasPrice interface{}
+		Data     string
+	}
+
+	// Decode byte slice to array of RawMessages
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	// Check for sufficient params
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	// Decode 0th RawMessage to temporary struct
+	if err := json.Unmarshal(obj[0], &ext); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	args.From = ext.From
+
+	if len(ext.To) == 0 {
+		return shared.NewValidationError("to", "is required")
+	}
+	args.To = ext.To
+
+	var num *big.Int
+	if ext.Value == nil {
+		num = big.NewInt(0)
+	} else {
+		if num, err = numString(ext.Value); err != nil {
+			return err
+		}
+	}
+	args.Value = num
+
+	if ext.Gas == nil {
+		num = big.NewInt(0)
+	} else {
+		if num, err = numString(ext.Gas); err != nil {
+			return err
+		}
+	}
+	args.Gas = num
+
+	if ext.GasPrice == nil {
+		num = big.NewInt(0)
+	} else {
+		if num, err = numString(ext.GasPrice); err != nil {
+			return err
+		}
+	}
+	args.GasPrice = num
+
+	args.Data = ext.Data
+
+	// Check for optional BlockNumber param
+	if len(obj) > 1 {
+		if err := blockHeightFromJson(obj[1], &args.BlockNumber); err != nil {
+			return err
+		}
+	} else {
+		args.BlockNumber = -1
+	}
+
+	return nil
+}
+
+type HashIndexArgs struct {
+	Hash  string
+	Index int64
+}
+
+func (args *HashIndexArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 2 {
+		return shared.NewInsufficientParamsError(len(obj), 2)
+	}
+
+	arg0, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("hash", "not a string")
+	}
+	args.Hash = arg0
+
+	arg1, ok := obj[1].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("index", "not a string")
+	}
+	args.Index = common.Big(arg1).Int64()
+
+	return nil
+}
+
+type BlockNumIndexArgs struct {
+	BlockNumber int64
+	Index       int64
+}
+
+func (args *BlockNumIndexArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 2 {
+		return shared.NewInsufficientParamsError(len(obj), 2)
+	}
+
+	if err := blockHeight(obj[0], &args.BlockNumber); err != nil {
+		return err
+	}
+
+	var arg1 *big.Int
+	if arg1, err = numString(obj[1]); err != nil {
+		return err
+	}
+	args.Index = arg1.Int64()
 
 	return nil
 }

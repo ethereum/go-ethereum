@@ -7,6 +7,10 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
+const (
+	MAX_RESPONSE_SIZE = 64 * 1024
+)
+
 // Json serialization support
 type JsonCodec struct {
 	c net.Conn
@@ -35,14 +39,17 @@ func (self *JsonCodec) ReadRequest() (*shared.Request, error) {
 
 func (self *JsonCodec) ReadResponse() (interface{}, error) {
 	var err error
-	var success shared.SuccessResponse
-	if err = self.d.Decode(&success); err == nil {
-		return success, nil
-	}
+	buf := make([]byte, MAX_RESPONSE_SIZE)
+	n, _ := self.c.Read(buf)
 
 	var failure shared.ErrorResponse
-	if err = self.d.Decode(&failure); err == nil {
+	if err = json.Unmarshal(buf[:n], &failure); err == nil && failure.Error != nil {
 		return failure, nil
+	}
+
+	var success shared.SuccessResponse
+	if err = json.Unmarshal(buf[:n], &success); err == nil {
+		return success, nil
 	}
 
 	return nil, err

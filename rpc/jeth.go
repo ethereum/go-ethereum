@@ -40,10 +40,10 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 	if err != nil {
 		return self.err(call, -32700, err.Error(), nil)
 	}
-	
+
 	client, err := comms.NewIpcClient(comms.IpcConfig{self.ipcpath}, codec.JSON)
 	if err != nil {
-		fmt.Println("Error response:", err)
+		fmt.Println("Unable to connect to geth.")
 		return self.err(call, -32603, err.Error(), -1)
 	}
 	defer client.Close()
@@ -80,19 +80,23 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 			resObj, _ := json.Marshal(res.Result)
 			call.Otto.Set("ret_result", string(resObj))
 			call.Otto.Set("response_idx", i)
+
+			response, err = call.Otto.Run(`
+				ret_response[response_idx] = { jsonrpc: ret_jsonrpc, id: ret_id, result: JSON.parse(ret_result) };
+			`)
 		} else if res, ok := respif.(shared.ErrorResponse); ok {
 			call.Otto.Set("ret_id", res.Id)
 			call.Otto.Set("ret_jsonrpc", res.Jsonrpc)
-			errorObj, _ := json.Marshal(res.Error)
-			call.Otto.Set("ret_result", string(errorObj))
+			call.Otto.Set("ret_error", res.Error)
 			call.Otto.Set("response_idx", i)
-		} else {
-			fmt.Printf("different type\n", reflect.TypeOf(respif))
-		}
 
-		response, err = call.Otto.Run(`
-		ret_response[response_idx] = { jsonrpc: ret_jsonrpc, id: ret_id, result: JSON.parse(ret_result) };
-		`)
+			response, _ = call.Otto.Run(`
+				ret_response = { jsonrpc: ret_jsonrpc, id: ret_id, error: ret_error };
+			`)
+			return
+		} else {
+			fmt.Printf("unexpected response\n", reflect.TypeOf(respif))
+		}
 	}
 
 	if !batch {

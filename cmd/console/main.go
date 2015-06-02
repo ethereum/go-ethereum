@@ -100,6 +100,6 @@ func run(ctx *cli.Context) {
 	ipcpath := ctx.GlobalString(utils.IPCPathFlag.Name)
 
 	repl := newJSRE(datadir, jspath, ipcpath)
-
+	repl.welcome()
 	repl.interactive()
 }
