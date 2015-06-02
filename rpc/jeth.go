@@ -34,9 +34,7 @@ func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id interface
 }
 
 func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
-
 	reqif, err := call.Argument(0).Export()
-
 	if err != nil {
 		return self.err(call, -32700, err.Error(), nil)
 	}
@@ -85,6 +83,8 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 				ret_response[response_idx] = { jsonrpc: ret_jsonrpc, id: ret_id, result: JSON.parse(ret_result) };
 			`)
 		} else if res, ok := respif.(shared.ErrorResponse); ok {
+			fmt.Printf("Error: %s (%d)\n", res.Error.Message, res.Error.Code)
+
 			call.Otto.Set("ret_id", res.Id)
 			call.Otto.Set("ret_jsonrpc", res.Jsonrpc)
 			call.Otto.Set("ret_error", res.Error)
