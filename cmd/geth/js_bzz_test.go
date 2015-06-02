@@ -55,14 +55,18 @@ func TestHTTP(t *testing.T) {
 	}
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
-	if checkEvalJSON(t, repl, `hash = bzz.put("6*7", "application/javascript")`, `"97f1b7c7ea12468fd37c262383b9aa862d0cfbc4fc7218652374679fc5cf40cd"`) != nil {
+	if checkEvalJSON(t, repl, `hash = bzz.put("f42 = function() { return 42 }", "application/javascript")`, `"e6847876f00102441f850b2d438a06d10e3bf24e6a0a76d47b073a86c3c2f9ac"`) != nil {
 		return
 	}
-	if checkEvalJSON(t, repl, `http.get("bzz://"+hash)`, `"6*7"`) != nil {
+	if checkEvalJSON(t, repl, `http.get("bzz://"+hash)`, `"f42 = function() { return 42 }"`) != nil {
 		return
 	}
 
-	if checkEvalJSON(t, repl, `http.loadScript("bzz://"+hash)`, `42`) != nil {
+	if checkEvalJSON(t, repl, `http.loadScript("bzz://"+hash)`, `true`) != nil {
+		return
+	}
+
+	if checkEvalJSON(t, repl, `f42()`, `42`) != nil {
 		return
 	}
 }
