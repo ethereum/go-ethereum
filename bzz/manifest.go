@@ -262,8 +262,8 @@ func (self *manifestTrie) getEntry(spath string) (entry *manifestTrieEntry, full
 	path := regularSlashes(spath)
 	var pos int
 	entry, pos = self.findPrefixOf(path)
-	if (pos > 0) && (pos < len(path)) && (path[pos] != '/') {
+	/*if (pos > 0) && (pos < len(path)) && (path[pos] != '/') {
 		return nil, ""
-	}
+	}*/
 	return entry, path[:pos]
 }
