@@ -27,9 +27,10 @@ const (
 )
 
 var (
-	blockTTL            = 5 * time.Second // Time it takes for a block request to time out
-	crossCheckCycle     = time.Second     // Period after which to check for expired cross checks
-	minDesiredPeerCount = 5               // Amount of peers desired to start syncing
+	blockSoftTTL        = 3 * time.Second  // Request completion threshold for increasing or decreasing a peer's bandwidth
+	blockHardTTL        = 3 * blockSoftTTL // Maximum time allowance before a block request is considered expired
+	crossCheckCycle     = time.Second      // Period after which to check for expired cross checks
+	minDesiredPeerCount = 5                // Amount of peers desired to start syncing
 )
 
 var (
@@ -324,7 +325,7 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 				glog.V(logger.Detail).Infof("Cross checking (%s) with %x/%x", active.id, origin, parent)
 
 				d.checks[origin] = &crossCheck{
-					expire: time.Now().Add(blockTTL),
+					expire: time.Now().Add(blockSoftTTL),
 					parent: parent,
 				}
 				active.getBlocks([]common.Hash{origin})
@@ -429,6 +430,7 @@ out:
 					// Peer did deliver, but some blocks were off, penalize
 					glog.V(logger.Debug).Infof("Failed delivery for peer %s: %v\n", blockPack.peerId, err)
 					peer.Demote()
+					peer.SetIdle()
 					break
 				}
 				if glog.V(logger.Debug) && len(blockPack.blocks) > 0 {
@@ -444,7 +446,7 @@ out:
 			// that badly or poorly behave are removed from the peer set (not banned).
 			// Bad peers are excluded from the available peer set and therefor won't be
 			// reused. XXX We could re-introduce peers after X time.
-			badPeers := d.queue.Expire(blockTTL)
+			badPeers := d.queue.Expire(blockHardTTL)
 			for _, pid := range badPeers {
 				// XXX We could make use of a reputation system here ranking peers
 				// in their performance
@@ -475,7 +477,7 @@ out:
 					}
 					// Get a possible chunk. If nil is returned no chunk
 					// could be returned due to no hashes available.
-					request := d.queue.Reserve(peer, MaxBlockFetch)
+					request := d.queue.Reserve(peer)
 					if request == nil {
 						continue
 					}

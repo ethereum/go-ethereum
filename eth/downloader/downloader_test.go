@@ -191,7 +191,7 @@ func (dl *downloadTester) badBlocksPeer(id string, td *big.Int, hash common.Hash
 
 func TestDownload(t *testing.T) {
 	minDesiredPeerCount = 4
-	blockTTL = 1 * time.Second
+	blockHardTTL = 1 * time.Second
 
 	targetBlocks := 1000
 	hashes := createHashes(0, targetBlocks)
@@ -240,7 +240,7 @@ func TestMissing(t *testing.T) {
 
 func TestTaking(t *testing.T) {
 	minDesiredPeerCount = 4
-	blockTTL = 1 * time.Second
+	blockHardTTL = 1 * time.Second
 
 	targetBlocks := 1000
 	hashes := createHashes(0, targetBlocks)
@@ -281,7 +281,7 @@ func TestInactiveDownloader(t *testing.T) {
 
 func TestCancel(t *testing.T) {
 	minDesiredPeerCount = 4
-	blockTTL = 1 * time.Second
+	blockHardTTL = 1 * time.Second
 
 	targetBlocks := 1000
 	hashes := createHashes(0, targetBlocks)
@@ -307,7 +307,7 @@ func TestCancel(t *testing.T) {
 
 func TestThrottling(t *testing.T) {
 	minDesiredPeerCount = 4
-	blockTTL = 1 * time.Second
+	blockHardTTL = 1 * time.Second
 
 	targetBlocks := 16 * blockCacheLimit
 	hashes := createHashes(0, targetBlocks)
@@ -461,7 +461,7 @@ func TestInvalidHashOrderAttack(t *testing.T) {
 // Tests that if a malicious peer makes up a random hash chain and tries to push
 // indefinitely, it actually gets caught with it.
 func TestMadeupHashChainAttack(t *testing.T) {
-	blockTTL = 100 * time.Millisecond
+	blockSoftTTL = 100 * time.Millisecond
 	crossCheckCycle = 25 * time.Millisecond
 
 	// Create a long chain of hashes without backing blocks
@@ -495,10 +495,10 @@ func TestMadeupHashChainDrippingAttack(t *testing.T) {
 // Tests that if a malicious peer makes up a random block chain, and tried to
 // push indefinitely, it actually gets caught with it.
 func TestMadeupBlockChainAttack(t *testing.T) {
-	defaultBlockTTL := blockTTL
+	defaultBlockTTL := blockSoftTTL
 	defaultCrossCheckCycle := crossCheckCycle
 
-	blockTTL = 100 * time.Millisecond
+	blockSoftTTL = 100 * time.Millisecond
 	crossCheckCycle = 25 * time.Millisecond
 
 	// Create a long chain of blocks and simulate an invalid chain by dropping every second
@@ -516,7 +516,7 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrCrossCheckFailed)
 	}
 	// Ensure that a valid chain can still pass sync
-	blockTTL = defaultBlockTTL
+	blockSoftTTL = defaultBlockTTL
 	crossCheckCycle = defaultCrossCheckCycle
 
 	tester.hashes = hashes
@@ -530,10 +530,10 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 // attacker make up a valid hashes for random blocks, but also forges the block
 // parents to point to existing hashes.
 func TestMadeupParentBlockChainAttack(t *testing.T) {
-	defaultBlockTTL := blockTTL
+	defaultBlockTTL := blockSoftTTL
 	defaultCrossCheckCycle := crossCheckCycle
 
-	blockTTL = 100 * time.Millisecond
+	blockSoftTTL = 100 * time.Millisecond
 	crossCheckCycle = 25 * time.Millisecond
 
 	// Create a long chain of blocks and simulate an invalid chain by dropping every second
@@ -550,7 +550,7 @@ func TestMadeupParentBlockChainAttack(t *testing.T) {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrCrossCheckFailed)
 	}
 	// Ensure that a valid chain can still pass sync
-	blockTTL = defaultBlockTTL
+	blockSoftTTL = defaultBlockTTL
 	crossCheckCycle = defaultCrossCheckCycle
 
 	tester.blocks = blocks
