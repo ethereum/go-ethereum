@@ -139,6 +139,10 @@ type Transaction struct {
 }
 
 func NewTx(tx *types.Transaction) *Transaction {
+	sender, err := tx.From()
+	if err != nil {
+		return nil
+	}
 	hash := tx.Hash().Hex()
 
 	var receiver string
@@ -147,7 +151,6 @@ func NewTx(tx *types.Transaction) *Transaction {
 	} else {
 		receiver = core.AddressFromMessage(tx).Hex()
 	}
-	sender, _ := tx.From()
 	createsContract := core.MessageCreatesContract(tx)
 
 	var data string

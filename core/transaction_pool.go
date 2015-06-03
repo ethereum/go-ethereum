@@ -271,7 +271,7 @@ func (pool *TxPool) Stop() {
 }
 
 func (self *TxPool) queueTx(tx *types.Transaction) {
-	from, _ := tx.From()
+	from, _ := tx.From() // already validated
 	self.queue[from] = append(self.queue[from], tx)
 }
 
