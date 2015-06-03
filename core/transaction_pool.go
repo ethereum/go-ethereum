@@ -284,7 +284,6 @@ func (pool *TxPool) checkQueue() {
 		addq := addq[:0]
 		for hash, tx := range txs {
 			if tx.AccountNonce < curnonce {
-				fmt.Println("delete the tx", tx.AccountNonce, curnonce)
 				// Drop queued transactions whose nonce is lower than
 				// the account nonce because they have been processed.
 				delete(txs, hash)

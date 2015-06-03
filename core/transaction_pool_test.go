@@ -119,7 +119,7 @@ func TestRemoveTx(t *testing.T) {
 	from, _ := tx.From()
 	pool.state.AddBalance(from, big.NewInt(1))
 	pool.queueTx(tx.Hash(), tx)
-	pool.addTx(tx.Hash(), tx)
+	pool.addTx(tx.Hash(), from, tx)
 	if len(pool.queue) != 1 {
 		t.Error("expected queue to be 1, got", len(pool.queue))
 	}
