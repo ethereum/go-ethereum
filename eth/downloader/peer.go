@@ -93,11 +93,16 @@ func (p *peer) SetIdle() {
 		// Calculate the new download bandwidth allowance
 		prev := atomic.LoadInt32(&p.capacity)
 		next := int32(math.Max(1, math.Min(MaxBlockFetch, float64(prev)*scale)))
-		if scale < 1 {
-			glog.V(logger.Detail).Infof("%s: reducing block allowance from %d to %d", p.id, prev, next)
-		}
+
 		// Try to update the old value
 		if atomic.CompareAndSwapInt32(&p.capacity, prev, next) {
+			// If we're having problems at 1 capacity, try to find better peers
+			if next == 1 {
+				p.Demote()
+			}
+			if prev != next {
+				glog.V(logger.Detail).Infof("%s: changing block download capacity from %d to %d", p.id, prev, next)
+			}
 			break
 		}
 	}
