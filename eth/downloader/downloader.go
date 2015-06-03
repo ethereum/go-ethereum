@@ -551,7 +551,7 @@ func (d *Downloader) banBlocks(peerId string, head common.Hash) error {
 	if peer == nil {
 		return nil
 	}
-	request := d.queue.Reserve(peer, MaxBlockFetch)
+	request := d.queue.Reserve(peer)
 	if request == nil {
 		return nil
 	}
