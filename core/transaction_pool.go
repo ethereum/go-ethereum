@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"gopkg.in/fatih/set.v0"
 )
 
 var (
@@ -28,58 +27,31 @@ var (
 	ErrNegativeValue      = errors.New("Negative value")
 )
 
-const txPoolQueueSize = 50
-
-type TxPoolHook chan *types.Transaction
-type TxMsg struct{ Tx *types.Transaction }
-
 type stateFn func() *state.StateDB
-
-const (
-	minGasPrice = 1000000
-)
-
-type TxProcessor interface {
-	ProcessTransaction(tx *types.Transaction)
-}
 
 // The tx pool a thread safe transaction pool handler. In order to
 // guarantee a non blocking pool we use a queue channel which can be
 // independently read without needing access to the actual pool.
 type TxPool struct {
-	mu sync.RWMutex
-	// Queueing channel for reading and writing incoming
-	// transactions to
-	queueChan chan *types.Transaction
-	// Quiting channel
-	quit chan bool
-	// The state function which will allow us to do some pre checkes
-	currentState stateFn
-	// The current gas limit function callback
-	gasLimit func() *big.Int
-	// The actual pool
-	txs           map[common.Hash]*types.Transaction
-	invalidHashes *set.Set
+	quit         chan bool       // Quiting channel
+	currentState stateFn         // The state function which will allow us to do some pre checkes
+	gasLimit     func() *big.Int // The current gas limit function callback
+	eventMux     *event.TypeMux
 
+	mu    sync.RWMutex
+	txs   map[common.Hash]*types.Transaction // The actual pool
 	queue map[common.Address]map[common.Hash]*types.Transaction
-
-	subscribers []chan TxMsg
-
-	eventMux *event.TypeMux
 }
 
 func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
-	txPool := &TxPool{
-		txs:           make(map[common.Hash]*types.Transaction),
-		queue:         make(map[common.Address]map[common.Hash]*types.Transaction),
-		queueChan:     make(chan *types.Transaction, txPoolQueueSize),
-		quit:          make(chan bool),
-		eventMux:      eventMux,
-		invalidHashes: set.New(),
-		currentState:  currentStateFn,
-		gasLimit:      gasLimitFn,
+	return &TxPool{
+		txs:          make(map[common.Hash]*types.Transaction),
+		queue:        make(map[common.Address]map[common.Hash]*types.Transaction),
+		quit:         make(chan bool),
+		eventMux:     eventMux,
+		currentState: currentStateFn,
+		gasLimit:     gasLimitFn,
 	}
-	return txPool
 }
 
 func (pool *TxPool) Start() {
