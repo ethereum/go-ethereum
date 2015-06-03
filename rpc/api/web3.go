@@ -66,7 +66,7 @@ func (self *web3) Version() string {
 
 // Calculates the sha3 over req.Params.Data
 func (self *web3) Sha3(req *shared.Request) (interface{}, error) {
-	args := new(shared.Sha3Args)
+	args := new(Sha3Args)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, err
 	}
