@@ -345,8 +345,7 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, ex
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
 	chain = core.NewChainManager(blockDB, stateDB, pow, eventMux)
-	txpool := core.NewTxPool(eventMux, chain.State, chain.GasLimit)
-	proc := core.NewBlockProcessor(stateDB, extraDB, pow, txpool, chain, eventMux)
+	proc := core.NewBlockProcessor(stateDB, extraDB, pow, chain, eventMux)
 	chain.SetProcessor(proc)
 	return chain, blockDB, stateDB, extraDB
 }
