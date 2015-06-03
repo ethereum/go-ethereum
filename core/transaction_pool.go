@@ -17,6 +17,7 @@ import (
 )
 
 var (
+	// Transaction Pool Errors
 	ErrInvalidSender      = errors.New("Invalid sender")
 	ErrNonce              = errors.New("Nonce too low")
 	ErrBalance            = errors.New("Insufficient balance")
@@ -29,9 +30,13 @@ var (
 
 type stateFn func() *state.StateDB
 
-// The tx pool a thread safe transaction pool handler. In order to
-// guarantee a non blocking pool we use a queue channel which can be
-// independently read without needing access to the actual pool.
+// TxPool contains all currently known transactions. Transactions
+// enter the pool when they are received from the network or submitted
+// locally. They exit the pool when they are included in the blockchain.
+//
+// The pool separates processable transactions (which can be applied to the
+// current state) and future transactions. Transactions move between those
+// two states over time as they are received and processed.
 type TxPool struct {
 	quit         chan bool       // Quiting channel
 	currentState stateFn         // The state function which will allow us to do some pre checkes
@@ -39,7 +44,7 @@ type TxPool struct {
 	eventMux     *event.TypeMux
 
 	mu    sync.RWMutex
-	txs   map[common.Hash]*types.Transaction // The actual pool
+	txs   map[common.Hash]*types.Transaction // processable transactions
 	queue map[common.Address]map[common.Hash]*types.Transaction
 }
 
@@ -73,7 +78,9 @@ done:
 	}
 }
 
-func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
+// validateTx checks whether a transaction is valid according
+// to the consensus rules.
+func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	// Validate sender
 	var (
 		from common.Address
@@ -125,7 +132,7 @@ func (self *TxPool) add(tx *types.Transaction) error {
 	if self.txs[hash] != nil {
 		return fmt.Errorf("Known transaction (%x)", hash[:4])
 	}
-	err := self.ValidateTransaction(tx)
+	err := self.validateTx(tx)
 	if err != nil {
 		return err
 	}
@@ -148,10 +155,7 @@ func (self *TxPool) add(tx *types.Transaction) error {
 	return nil
 }
 
-func (self *TxPool) Size() int {
-	return len(self.txs)
-}
-
+// Add queues a single transaction in the pool if it is valid.
 func (self *TxPool) Add(tx *types.Transaction) error {
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -159,6 +163,7 @@ func (self *TxPool) Add(tx *types.Transaction) error {
 	return self.add(tx)
 }
 
+// AddTransactions attempts to queue all valid transactions in txs.
 func (self *TxPool) AddTransactions(txs []*types.Transaction) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -173,9 +178,8 @@ func (self *TxPool) AddTransactions(txs []*types.Transaction) {
 	}
 }
 
-// GetTransaction allows you to check the pending and queued transaction in the
-// transaction pool.
-// It has two stategies, first check the pool (map) then check the queue
+// GetTransaction returns a transaction if it is contained in the pool
+// and nil otherwise.
 func (tp *TxPool) GetTransaction(hash common.Hash) *types.Transaction {
 	// check the txs first
 	if tx, ok := tp.txs[hash]; ok {
@@ -190,11 +194,12 @@ func (tp *TxPool) GetTransaction(hash common.Hash) *types.Transaction {
 	return nil
 }
 
+// GetTransactions returns all currently processable transactions.
 func (self *TxPool) GetTransactions() (txs types.Transactions) {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	txs = make(types.Transactions, self.Size())
+	txs = make(types.Transactions, len(self.txs))
 	i := 0
 	for _, tx := range self.txs {
 		txs[i] = tx
@@ -203,6 +208,7 @@ func (self *TxPool) GetTransactions() (txs types.Transactions) {
 	return txs
 }
 
+// GetQueuedTransactions returns all non-processable transactions.
 func (self *TxPool) GetQueuedTransactions() types.Transactions {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
@@ -217,6 +223,7 @@ func (self *TxPool) GetQueuedTransactions() types.Transactions {
 	return ret
 }
 
+// RemoveTransactions removes all given transactions from the pool.
 func (self *TxPool) RemoveTransactions(txs types.Transactions) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -225,14 +232,9 @@ func (self *TxPool) RemoveTransactions(txs types.Transactions) {
 	}
 }
 
-func (pool *TxPool) Flush() {
-	pool.txs = make(map[common.Hash]*types.Transaction)
-}
-
 func (pool *TxPool) Stop() {
-	pool.Flush()
+	pool.txs = make(map[common.Hash]*types.Transaction)
 	close(pool.quit)
-
 	glog.V(logger.Info).Infoln("TX Pool stopped")
 }
 
@@ -254,7 +256,7 @@ func (pool *TxPool) addTx(hash common.Hash, tx *types.Transaction) {
 	}
 }
 
-// check queue will attempt to insert
+// checkQueue moves transactions that have become processable to main pool.
 func (pool *TxPool) checkQueue() {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
@@ -309,12 +311,13 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 	}
 }
 
+// validatePool removes invalid and processed transactions from the main pool.
 func (pool *TxPool) validatePool() {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
 	for hash, tx := range pool.txs {
-		if err := pool.ValidateTransaction(tx); err != nil {
+		if err := pool.validateTx(tx); err != nil {
 			if glog.V(logger.Info) {
 				glog.Infof("removed tx (%x) from pool: %v\n", hash[:4], err)
 			}
