@@ -203,7 +203,7 @@ func (q *queue) TakeBlocks() []*Block {
 
 // Reserve reserves a set of hashes for the given peer, skipping any previously
 // failed download.
-func (q *queue) Reserve(p *peer, max int) *fetchRequest {
+func (q *queue) Reserve(p *peer) *fetchRequest {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -215,11 +215,17 @@ func (q *queue) Reserve(p *peer, max int) *fetchRequest {
 	if _, ok := q.pendPool[p.id]; ok {
 		return nil
 	}
+	// Calculate an upper limit on the hashes we might fetch (i.e. throttling)
+	space := len(q.blockCache) - len(q.blockPool)
+	for _, request := range q.pendPool {
+		space -= len(request.Hashes)
+	}
 	// Retrieve a batch of hashes, skipping previously failed ones
 	send := make(map[common.Hash]int)
 	skip := make(map[common.Hash]int)
 
-	for len(send) < max && !q.hashQueue.Empty() {
+	capacity := p.Capacity()
+	for len(send) < space && len(send) < capacity && !q.hashQueue.Empty() {
 		hash, priority := q.hashQueue.Pop()
 		if p.ignored.Has(hash) {
 			skip[hash.(common.Hash)] = int(priority)

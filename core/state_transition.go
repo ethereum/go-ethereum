@@ -62,7 +62,6 @@ type Message interface {
 
 func AddressFromMessage(msg Message) common.Address {
 	from, _ := msg.From()
-
 	return crypto.CreateAddress(from, msg.Nonce())
 }
 
@@ -109,9 +108,12 @@ func NewStateTransition(env vm.Environment, msg Message, coinbase *state.StateOb
 func (self *StateTransition) Coinbase() *state.StateObject {
 	return self.state.GetOrNewStateObject(self.coinbase)
 }
-func (self *StateTransition) From() *state.StateObject {
-	f, _ := self.msg.From()
-	return self.state.GetOrNewStateObject(f)
+func (self *StateTransition) From() (*state.StateObject, error) {
+	f, err := self.msg.From()
+	if err != nil {
+		return nil, err
+	}
+	return self.state.GetOrNewStateObject(f), nil
 }
 func (self *StateTransition) To() *state.StateObject {
 	if self.msg == nil {
@@ -140,7 +142,10 @@ func (self *StateTransition) AddGas(amount *big.Int) {
 func (self *StateTransition) BuyGas() error {
 	var err error
 
-	sender := self.From()
+	sender, err := self.From()
+	if err != nil {
+		return err
+	}
 	if sender.Balance().Cmp(MessageGasValue(self.msg)) < 0 {
 		return fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", sender.Address().Bytes()[:4], MessageGasValue(self.msg), sender.Balance())
 	}
@@ -159,10 +164,11 @@ func (self *StateTransition) BuyGas() error {
 }
 
 func (self *StateTransition) preCheck() (err error) {
-	var (
-		msg    = self.msg
-		sender = self.From()
-	)
+	msg := self.msg
+	sender, err := self.From()
+	if err != nil {
+		return err
+	}
 
 	// Make sure this transaction's nonce is correct
 	if sender.Nonce() != msg.Nonce() {
@@ -185,10 +191,8 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 		return
 	}
 
-	var (
-		msg    = self.msg
-		sender = self.From()
-	)
+	msg := self.msg
+	sender, _ := self.From() // err checked in preCheck
 
 	// Pay intrinsic gas
 	if err = self.UseGas(IntrinsicGas(self.msg)); err != nil {
@@ -212,7 +216,7 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), sender.Nonce()+1)
-		ret, err = vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+		ret, err = vmenv.Call(sender, self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
 	}
 
 	if err != nil && IsValueTransferErr(err) {
@@ -226,7 +230,8 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 }
 
 func (self *StateTransition) refundGas() {
-	coinbase, sender := self.Coinbase(), self.From()
+	coinbase := self.Coinbase()
+	sender, _ := self.From() // err already checked
 	// Return remaining gas
 	remaining := new(big.Int).Mul(self.gas, self.msg.GasPrice())
 	sender.AddBalance(remaining)
