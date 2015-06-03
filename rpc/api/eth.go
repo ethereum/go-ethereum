@@ -57,6 +57,7 @@ var (
 		"eth_getFilterChanges":                  (*eth).GetFilterChanges,
 		"eth_getFilterLogs":                     (*eth).GetFilterLogs,
 		"eth_getLogs":                           (*eth).GetLogs,
+		"eth_hashrate":                          (*eth).Hashrate,
 		"eth_getWork":                           (*eth).GetWork,
 		"eth_submitWork":                        (*eth).SubmitWork,
 	}
@@ -108,6 +109,10 @@ func (self *eth) Version() string {
 
 func (self *eth) Accounts(req *shared.Request) (interface{}, error) {
 	return self.xeth.Accounts(), nil
+}
+
+func (self *eth) Hashrate(req *shared.Request) (interface{}, error) {
+	return newHexNum(self.xeth.HashRate()), nil
 }
 
 func (self *eth) BlockNumber(req *shared.Request) (interface{}, error) {
