@@ -560,6 +560,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	defer close(nonceQuit)
 
 	for i, block := range chain {
+		bstart := time.Now()
 		// Wait for block i's nonce to be verified before processing
 		// its state transition.
 		for nonceChecked[i] {
@@ -642,11 +643,11 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			queueEvent.canonicalCount++
 
 			if glog.V(logger.Debug) {
-				glog.Infof("[%v] inserted block #%d (%d TXs %d UNCs) (%x...)\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
+				glog.Infof("[%v] inserted block #%d (%d TXs %d UNCs) (%x...). Took %v\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
 			}
 		} else {
 			if glog.V(logger.Detail) {
-				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...)\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
+				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...). Took %v\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
 			}
 
 			queue[i] = ChainSideEvent{block, logs}

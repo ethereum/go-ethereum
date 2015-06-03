@@ -178,7 +178,6 @@ func (sm *BlockProcessor) Process(block *types.Block) (logs state.Logs, err erro
 		return nil, ParentError(header.ParentHash)
 	}
 	parent := sm.bc.GetBlock(header.ParentHash)
-
 	return sm.processWithParent(block, parent)
 }
 
@@ -254,13 +253,8 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 		return nil, err
 	}
 
-	// Calculate the td for this block
-	//td = CalculateTD(block, parent)
 	// Sync the current block's state to the database
 	state.Sync()
-
-	// Remove transactions from the pool
-	sm.txpool.RemoveTransactions(block.Transactions())
 
 	// This puts transactions in a extra db for rpc
 	for i, tx := range block.Transactions() {
