@@ -1,8 +1,6 @@
 package api
 
-import (
-	"github.com/ethereum/go-ethereum/rpc/shared"
-)
+import "github.com/ethereum/go-ethereum/rpc/shared"
 
 // Descriptor for all API implementations
 type Ethereum interface {

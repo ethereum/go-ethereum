@@ -392,8 +392,9 @@ func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
 	web3Api := api.NewWeb3(xeth, codec)
 	ethApi := api.NewEth(xeth, codec)
 	netApi := api.NewNet(xeth, codec)
+	minerApi := api.NewMiner(eth, codec)
 
-	return comms.StartIpc(config, codec, web3Api, ethApi, netApi)
+	return comms.StartIpc(config, codec, web3Api, ethApi, netApi, minerApi)
 }
 
 func StartPProf(ctx *cli.Context) {

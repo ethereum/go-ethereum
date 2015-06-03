@@ -56,7 +56,7 @@ func (self *web3) Execute(req *shared.Request) (interface{}, error) {
 		return callback(self, req)
 	}
 
-	return nil, &NotImplementedError{req.Method}
+	return nil, &shared.NotImplementedError{req.Method}
 }
 
 // Version of the API this instance provides

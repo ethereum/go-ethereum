@@ -13,6 +13,11 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/pow"
+	"fmt"
+)
+
+const (
+	MAX_EXTRA_DATA_SIZE = 1024
 )
 
 type Miner struct {
@@ -126,8 +131,13 @@ func (self *Miner) HashRate() int64 {
 	return self.pow.GetHashrate()
 }
 
-func (self *Miner) SetExtra(extra []byte) {
+func (self *Miner) SetExtra(extra []byte) error {
+	if len(extra) > MAX_EXTRA_DATA_SIZE {
+		return fmt.Errorf("Miner extra data cannot exceed %d bytes", MAX_EXTRA_DATA_SIZE)
+	}
+
 	self.worker.extra = extra
+	return nil
 }
 
 func (self *Miner) PendingState() *state.StateDB {
