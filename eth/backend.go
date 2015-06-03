@@ -198,7 +198,6 @@ type Ethereum struct {
 
 	net      *p2p.Server
 	eventMux *event.TypeMux
-	txSub    event.Subscription
 	miner    *miner.Miner
 
 	// logger logger.LogSystem
@@ -470,10 +469,6 @@ func (s *Ethereum) Start() error {
 		s.whisper.Start()
 	}
 
-	// broadcast transactions
-	s.txSub = s.eventMux.Subscribe(core.TxPreEvent{})
-	go s.txBroadcastLoop()
-
 	glog.V(logger.Info).Infoln("Server started")
 	return nil
 }
@@ -531,8 +526,6 @@ func (self *Ethereum) AddPeer(nodeURL string) error {
 }
 
 func (s *Ethereum) Stop() {
-	s.txSub.Unsubscribe() // quits txBroadcastLoop
-
 	s.net.Stop()
 	s.protocolManager.Stop()
 	s.chainManager.Stop()
@@ -550,28 +543,6 @@ func (s *Ethereum) Stop() {
 func (s *Ethereum) WaitForShutdown() {
 	<-s.databasesClosed
 	<-s.shutdownChan
-}
-
-func (self *Ethereum) txBroadcastLoop() {
-	// automatically stops if unsubscribe
-	for obj := range self.txSub.Chan() {
-		event := obj.(core.TxPreEvent)
-		self.syncAccounts(event.Tx)
-	}
-}
-
-// keep accounts synced up
-func (self *Ethereum) syncAccounts(tx *types.Transaction) {
-	from, err := tx.From()
-	if err != nil {
-		return
-	}
-
-	if self.accountManager.HasAccount(from) {
-		if self.chainManager.TxState().GetNonce(from) < tx.Nonce() {
-			self.chainManager.TxState().SetNonce(from, tx.Nonce())
-		}
-	}
 }
 
 // StartAutoDAG() spawns a go routine that checks the DAG every autoDAGcheckInterval

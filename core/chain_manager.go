@@ -214,19 +214,6 @@ func (self *ChainManager) TransState() *state.StateDB {
 	return self.transState
 }
 
-func (self *ChainManager) TxState() *state.ManagedState {
-	self.tsmu.RLock()
-	defer self.tsmu.RUnlock()
-
-	return self.txState
-}
-
-func (self *ChainManager) setTxState(statedb *state.StateDB) {
-	self.tsmu.Lock()
-	defer self.tsmu.Unlock()
-	self.txState = state.ManageState(statedb)
-}
-
 func (self *ChainManager) setTransState(statedb *state.StateDB) {
 	self.transState = statedb
 }
@@ -751,7 +738,7 @@ out:
 		case ev := <-events.Chan():
 			switch ev := ev.(type) {
 			case queueEvent:
-				for i, event := range ev.queue {
+				for _, event := range ev.queue {
 					switch event := event.(type) {
 					case ChainEvent:
 						// We need some control over the mining operation. Acquiring locks and waiting for the miner to create new block takes too long
@@ -759,12 +746,6 @@ out:
 						if self.lastBlockHash == event.Hash {
 							self.currentGasLimit = CalcGasLimit(event.Block)
 							self.eventMux.Post(ChainHeadEvent{event.Block})
-						}
-					case ChainSplitEvent:
-						// On chain splits we need to reset the transaction state. We can't be sure whether the actual
-						// state of the accounts are still valid.
-						if i == ev.splitCount {
-							self.setTxState(state.New(event.Block.Root(), self.stateDb))
 						}
 					}
 

@@ -37,21 +37,21 @@ func TestInvalidTransactions(t *testing.T) {
 	}
 
 	from, _ := tx.From()
-	pool.currentState().AddBalance(from, big.NewInt(1))
+	pool.state.AddBalance(from, big.NewInt(1))
 	err = pool.Add(tx)
 	if err != ErrInsufficientFunds {
 		t.Error("expected", ErrInsufficientFunds)
 	}
 
 	balance := new(big.Int).Add(tx.Value(), new(big.Int).Mul(tx.Gas(), tx.GasPrice()))
-	pool.currentState().AddBalance(from, balance)
+	pool.state.AddBalance(from, balance)
 	err = pool.Add(tx)
 	if err != ErrIntrinsicGas {
 		t.Error("expected", ErrIntrinsicGas, "got", err)
 	}
 
-	pool.currentState().SetNonce(from, 1)
-	pool.currentState().AddBalance(from, big.NewInt(0xffffffffffffff))
+	pool.state.SetNonce(from, 1)
+	pool.state.AddBalance(from, big.NewInt(0xffffffffffffff))
 	tx.GasLimit = big.NewInt(100000)
 	tx.Price = big.NewInt(1)
 	tx.SignECDSA(key)
@@ -67,7 +67,7 @@ func TestTransactionQueue(t *testing.T) {
 	tx := transaction()
 	tx.SignECDSA(key)
 	from, _ := tx.From()
-	pool.currentState().AddBalance(from, big.NewInt(1))
+	pool.state.AddBalance(from, big.NewInt(1))
 	pool.queueTx(tx.Hash(), tx)
 
 	pool.checkQueue()
@@ -76,17 +76,17 @@ func TestTransactionQueue(t *testing.T) {
 	}
 
 	tx = transaction()
+	tx.SetNonce(1)
 	tx.SignECDSA(key)
 	from, _ = tx.From()
-	pool.currentState().SetNonce(from, 10)
-	tx.SetNonce(1)
+	pool.state.SetNonce(from, 2)
 	pool.queueTx(tx.Hash(), tx)
 	pool.checkQueue()
 	if _, ok := pool.txs[tx.Hash()]; ok {
 		t.Error("expected transaction to be in tx pool")
 	}
 
-	if len(pool.queue[from]) != 0 {
+	if len(pool.queue[from]) > 0 {
 		t.Error("expected transaction queue to be empty. is", len(pool.queue[from]))
 	}
 
@@ -117,7 +117,7 @@ func TestRemoveTx(t *testing.T) {
 	tx := transaction()
 	tx.SignECDSA(key)
 	from, _ := tx.From()
-	pool.currentState().AddBalance(from, big.NewInt(1))
+	pool.state.AddBalance(from, big.NewInt(1))
 	pool.queueTx(tx.Hash(), tx)
 	pool.addTx(tx.Hash(), tx)
 	if len(pool.queue) != 1 {
@@ -146,7 +146,7 @@ func TestNegativeValue(t *testing.T) {
 	tx.Value().Set(big.NewInt(-1))
 	tx.SignECDSA(key)
 	from, _ := tx.From()
-	pool.currentState().AddBalance(from, big.NewInt(1))
+	pool.state.AddBalance(from, big.NewInt(1))
 	err := pool.Add(tx)
 	if err != ErrNegativeValue {
 		t.Error("expected", ErrNegativeValue, "got", err)
