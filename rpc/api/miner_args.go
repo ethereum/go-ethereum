@@ -1,9 +1,10 @@
 package api
+
 import (
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/rpc/shared"
 	"math/big"
-	"fmt"
+
+	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
 type StartMinerArgs struct {
@@ -11,7 +12,6 @@ type StartMinerArgs struct {
 }
 
 func (args *StartMinerArgs) UnmarshalJSON(b []byte) (err error) {
-	fmt.Printf("b=%s\n", string(b))
 	var obj []interface{}
 	if err := json.Unmarshal(b, &obj); err != nil {
 		return shared.NewDecodeParamError(err.Error())
@@ -31,7 +31,7 @@ func (args *StartMinerArgs) UnmarshalJSON(b []byte) (err error) {
 		args.Threads = int(arg0.Int64())
 	}
 
-	return shared.NewValidationError("threads", "Must be in range [0...256]")
+	return shared.NewValidationError("threads", "must be in range [0...256]")
 }
 
 type SetExtraArgs struct {
