@@ -1,171 +1,410 @@
-// Copyright 2013 The Go Authors. All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package sha3
 
-// This file implements the core Keccak permutation function necessary for computing SHA3.
-// This is implemented in a separate file to allow for replacement by an optimized implementation.
-// Nothing in this package is exported.
-// For the detailed specification, refer to the Keccak web site (http://keccak.noekeon.org/).
-
 // rc stores the round constants for use in the ι step.
-var rc = [...]uint64{
-        0x0000000000000001,
-        0x0000000000008082,
-        0x800000000000808A,
-        0x8000000080008000,
-        0x000000000000808B,
-        0x0000000080000001,
-        0x8000000080008081,
-        0x8000000000008009,
-        0x000000000000008A,
-        0x0000000000000088,
-        0x0000000080008009,
-        0x000000008000000A,
-        0x000000008000808B,
-        0x800000000000008B,
-        0x8000000000008089,
-        0x8000000000008003,
-        0x8000000000008002,
-        0x8000000000000080,
-        0x000000000000800A,
-        0x800000008000000A,
-        0x8000000080008081,
-        0x8000000000008080,
-        0x0000000080000001,
-        0x8000000080008008,
+var rc = [24]uint64{
+	0x0000000000000001,
+	0x0000000000008082,
+	0x800000000000808A,
+	0x8000000080008000,
+	0x000000000000808B,
+	0x0000000080000001,
+	0x8000000080008081,
+	0x8000000000008009,
+	0x000000000000008A,
+	0x0000000000000088,
+	0x0000000080008009,
+	0x000000008000000A,
+	0x000000008000808B,
+	0x800000000000008B,
+	0x8000000000008089,
+	0x8000000000008003,
+	0x8000000000008002,
+	0x8000000000000080,
+	0x000000000000800A,
+	0x800000008000000A,
+	0x8000000080008081,
+	0x8000000000008080,
+	0x0000000080000001,
+	0x8000000080008008,
 }
 
-// ro_xx represent the rotation offsets for use in the χ step.
-// Defining them as const instead of in an array allows the compiler to insert constant shifts.
-const (
-        ro_00 = 0
-        ro_01 = 36
-        ro_02 = 3
-        ro_03 = 41
-        ro_04 = 18
-        ro_05 = 1
-        ro_06 = 44
-        ro_07 = 10
-        ro_08 = 45
-        ro_09 = 2
-        ro_10 = 62
-        ro_11 = 6
-        ro_12 = 43
-        ro_13 = 15
-        ro_14 = 61
-        ro_15 = 28
-        ro_16 = 55
-        ro_17 = 25
-        ro_18 = 21
-        ro_19 = 56
-        ro_20 = 27
-        ro_21 = 20
-        ro_22 = 39
-        ro_23 = 8
-        ro_24 = 14
-)
+// keccakF1600 applies the Keccak permutation to a 1600b-wide
+// state represented as a slice of 25 uint64s.
+func keccakF1600(a *[25]uint64) {
+	// Implementation translated from Keccak-inplace.c
+	// in the keccak reference code.
+	var t, bc0, bc1, bc2, bc3, bc4, d0, d1, d2, d3, d4 uint64
 
-// keccakF computes the complete Keccak-f function consisting of 24 rounds with a different
-// constant (rc) in each round. This implementation fully unrolls the round function to avoid
-// inner loops, as well as pre-calculating shift offsets.
-func (d *digest) keccakF() {
-        for _, roundConstant := range rc {
-                // θ step
-                d.c[0] = d.a[0] ^ d.a[5] ^ d.a[10] ^ d.a[15] ^ d.a[20]
-                d.c[1] = d.a[1] ^ d.a[6] ^ d.a[11] ^ d.a[16] ^ d.a[21]
-                d.c[2] = d.a[2] ^ d.a[7] ^ d.a[12] ^ d.a[17] ^ d.a[22]
-                d.c[3] = d.a[3] ^ d.a[8] ^ d.a[13] ^ d.a[18] ^ d.a[23]
-                d.c[4] = d.a[4] ^ d.a[9] ^ d.a[14] ^ d.a[19] ^ d.a[24]
+	for i := 0; i < 24; i += 4 {
+		// Combines the 5 steps in each round into 2 steps.
+		// Unrolls 4 rounds per loop and spreads some steps across rounds.
 
-                d.d[0] = d.c[4] ^ (d.c[1]<<1 ^ d.c[1]>>63)
-                d.d[1] = d.c[0] ^ (d.c[2]<<1 ^ d.c[2]>>63)
-                d.d[2] = d.c[1] ^ (d.c[3]<<1 ^ d.c[3]>>63)
-                d.d[3] = d.c[2] ^ (d.c[4]<<1 ^ d.c[4]>>63)
-                d.d[4] = d.c[3] ^ (d.c[0]<<1 ^ d.c[0]>>63)
+		// Round 1
+		bc0 = a[0] ^ a[5] ^ a[10] ^ a[15] ^ a[20]
+		bc1 = a[1] ^ a[6] ^ a[11] ^ a[16] ^ a[21]
+		bc2 = a[2] ^ a[7] ^ a[12] ^ a[17] ^ a[22]
+		bc3 = a[3] ^ a[8] ^ a[13] ^ a[18] ^ a[23]
+		bc4 = a[4] ^ a[9] ^ a[14] ^ a[19] ^ a[24]
+		d0 = bc4 ^ (bc1<<1 | bc1>>63)
+		d1 = bc0 ^ (bc2<<1 | bc2>>63)
+		d2 = bc1 ^ (bc3<<1 | bc3>>63)
+		d3 = bc2 ^ (bc4<<1 | bc4>>63)
+		d4 = bc3 ^ (bc0<<1 | bc0>>63)
 
-                d.a[0] ^= d.d[0]
-                d.a[1] ^= d.d[1]
-                d.a[2] ^= d.d[2]
-                d.a[3] ^= d.d[3]
-                d.a[4] ^= d.d[4]
-                d.a[5] ^= d.d[0]
-                d.a[6] ^= d.d[1]
-                d.a[7] ^= d.d[2]
-                d.a[8] ^= d.d[3]
-                d.a[9] ^= d.d[4]
-                d.a[10] ^= d.d[0]
-                d.a[11] ^= d.d[1]
-                d.a[12] ^= d.d[2]
-                d.a[13] ^= d.d[3]
-                d.a[14] ^= d.d[4]
-                d.a[15] ^= d.d[0]
-                d.a[16] ^= d.d[1]
-                d.a[17] ^= d.d[2]
-                d.a[18] ^= d.d[3]
-                d.a[19] ^= d.d[4]
-                d.a[20] ^= d.d[0]
-                d.a[21] ^= d.d[1]
-                d.a[22] ^= d.d[2]
-                d.a[23] ^= d.d[3]
-                d.a[24] ^= d.d[4]
+		bc0 = a[0] ^ d0
+		t = a[6] ^ d1
+		bc1 = t<<44 | t>>(64-44)
+		t = a[12] ^ d2
+		bc2 = t<<43 | t>>(64-43)
+		t = a[18] ^ d3
+		bc3 = t<<21 | t>>(64-21)
+		t = a[24] ^ d4
+		bc4 = t<<14 | t>>(64-14)
+		a[0] = bc0 ^ (bc2 &^ bc1) ^ rc[i]
+		a[6] = bc1 ^ (bc3 &^ bc2)
+		a[12] = bc2 ^ (bc4 &^ bc3)
+		a[18] = bc3 ^ (bc0 &^ bc4)
+		a[24] = bc4 ^ (bc1 &^ bc0)
 
-                // ρ and π steps
-                d.b[0] = d.a[0]
-                d.b[1] = d.a[6]<<ro_06 ^ d.a[6]>>(64-ro_06)
-                d.b[2] = d.a[12]<<ro_12 ^ d.a[12]>>(64-ro_12)
-                d.b[3] = d.a[18]<<ro_18 ^ d.a[18]>>(64-ro_18)
-                d.b[4] = d.a[24]<<ro_24 ^ d.a[24]>>(64-ro_24)
-                d.b[5] = d.a[3]<<ro_15 ^ d.a[3]>>(64-ro_15)
-                d.b[6] = d.a[9]<<ro_21 ^ d.a[9]>>(64-ro_21)
-                d.b[7] = d.a[10]<<ro_02 ^ d.a[10]>>(64-ro_02)
-                d.b[8] = d.a[16]<<ro_08 ^ d.a[16]>>(64-ro_08)
-                d.b[9] = d.a[22]<<ro_14 ^ d.a[22]>>(64-ro_14)
-                d.b[10] = d.a[1]<<ro_05 ^ d.a[1]>>(64-ro_05)
-                d.b[11] = d.a[7]<<ro_11 ^ d.a[7]>>(64-ro_11)
-                d.b[12] = d.a[13]<<ro_17 ^ d.a[13]>>(64-ro_17)
-                d.b[13] = d.a[19]<<ro_23 ^ d.a[19]>>(64-ro_23)
-                d.b[14] = d.a[20]<<ro_04 ^ d.a[20]>>(64-ro_04)
-                d.b[15] = d.a[4]<<ro_20 ^ d.a[4]>>(64-ro_20)
-                d.b[16] = d.a[5]<<ro_01 ^ d.a[5]>>(64-ro_01)
-                d.b[17] = d.a[11]<<ro_07 ^ d.a[11]>>(64-ro_07)
-                d.b[18] = d.a[17]<<ro_13 ^ d.a[17]>>(64-ro_13)
-                d.b[19] = d.a[23]<<ro_19 ^ d.a[23]>>(64-ro_19)
-                d.b[20] = d.a[2]<<ro_10 ^ d.a[2]>>(64-ro_10)
-                d.b[21] = d.a[8]<<ro_16 ^ d.a[8]>>(64-ro_16)
-                d.b[22] = d.a[14]<<ro_22 ^ d.a[14]>>(64-ro_22)
-                d.b[23] = d.a[15]<<ro_03 ^ d.a[15]>>(64-ro_03)
-                d.b[24] = d.a[21]<<ro_09 ^ d.a[21]>>(64-ro_09)
+		t = a[10] ^ d0
+		bc2 = t<<3 | t>>(64-3)
+		t = a[16] ^ d1
+		bc3 = t<<45 | t>>(64-45)
+		t = a[22] ^ d2
+		bc4 = t<<61 | t>>(64-61)
+		t = a[3] ^ d3
+		bc0 = t<<28 | t>>(64-28)
+		t = a[9] ^ d4
+		bc1 = t<<20 | t>>(64-20)
+		a[10] = bc0 ^ (bc2 &^ bc1)
+		a[16] = bc1 ^ (bc3 &^ bc2)
+		a[22] = bc2 ^ (bc4 &^ bc3)
+		a[3] = bc3 ^ (bc0 &^ bc4)
+		a[9] = bc4 ^ (bc1 &^ bc0)
 
-                // χ step
-                d.a[0] = d.b[0] ^ (^d.b[1] & d.b[2])
-                d.a[1] = d.b[1] ^ (^d.b[2] & d.b[3])
-                d.a[2] = d.b[2] ^ (^d.b[3] & d.b[4])
-                d.a[3] = d.b[3] ^ (^d.b[4] & d.b[0])
-                d.a[4] = d.b[4] ^ (^d.b[0] & d.b[1])
-                d.a[5] = d.b[5] ^ (^d.b[6] & d.b[7])
-                d.a[6] = d.b[6] ^ (^d.b[7] & d.b[8])
-                d.a[7] = d.b[7] ^ (^d.b[8] & d.b[9])
-                d.a[8] = d.b[8] ^ (^d.b[9] & d.b[5])
-                d.a[9] = d.b[9] ^ (^d.b[5] & d.b[6])
-                d.a[10] = d.b[10] ^ (^d.b[11] & d.b[12])
-                d.a[11] = d.b[11] ^ (^d.b[12] & d.b[13])
-                d.a[12] = d.b[12] ^ (^d.b[13] & d.b[14])
-                d.a[13] = d.b[13] ^ (^d.b[14] & d.b[10])
-                d.a[14] = d.b[14] ^ (^d.b[10] & d.b[11])
-                d.a[15] = d.b[15] ^ (^d.b[16] & d.b[17])
-                d.a[16] = d.b[16] ^ (^d.b[17] & d.b[18])
-                d.a[17] = d.b[17] ^ (^d.b[18] & d.b[19])
-                d.a[18] = d.b[18] ^ (^d.b[19] & d.b[15])
-                d.a[19] = d.b[19] ^ (^d.b[15] & d.b[16])
-                d.a[20] = d.b[20] ^ (^d.b[21] & d.b[22])
-                d.a[21] = d.b[21] ^ (^d.b[22] & d.b[23])
-                d.a[22] = d.b[22] ^ (^d.b[23] & d.b[24])
-                d.a[23] = d.b[23] ^ (^d.b[24] & d.b[20])
-                d.a[24] = d.b[24] ^ (^d.b[20] & d.b[21])
+		t = a[20] ^ d0
+		bc4 = t<<18 | t>>(64-18)
+		t = a[1] ^ d1
+		bc0 = t<<1 | t>>(64-1)
+		t = a[7] ^ d2
+		bc1 = t<<6 | t>>(64-6)
+		t = a[13] ^ d3
+		bc2 = t<<25 | t>>(64-25)
+		t = a[19] ^ d4
+		bc3 = t<<8 | t>>(64-8)
+		a[20] = bc0 ^ (bc2 &^ bc1)
+		a[1] = bc1 ^ (bc3 &^ bc2)
+		a[7] = bc2 ^ (bc4 &^ bc3)
+		a[13] = bc3 ^ (bc0 &^ bc4)
+		a[19] = bc4 ^ (bc1 &^ bc0)
 
-                // ι step
-                d.a[0] ^= roundConstant
-        }
+		t = a[5] ^ d0
+		bc1 = t<<36 | t>>(64-36)
+		t = a[11] ^ d1
+		bc2 = t<<10 | t>>(64-10)
+		t = a[17] ^ d2
+		bc3 = t<<15 | t>>(64-15)
+		t = a[23] ^ d3
+		bc4 = t<<56 | t>>(64-56)
+		t = a[4] ^ d4
+		bc0 = t<<27 | t>>(64-27)
+		a[5] = bc0 ^ (bc2 &^ bc1)
+		a[11] = bc1 ^ (bc3 &^ bc2)
+		a[17] = bc2 ^ (bc4 &^ bc3)
+		a[23] = bc3 ^ (bc0 &^ bc4)
+		a[4] = bc4 ^ (bc1 &^ bc0)
+
+		t = a[15] ^ d0
+		bc3 = t<<41 | t>>(64-41)
+		t = a[21] ^ d1
+		bc4 = t<<2 | t>>(64-2)
+		t = a[2] ^ d2
+		bc0 = t<<62 | t>>(64-62)
+		t = a[8] ^ d3
+		bc1 = t<<55 | t>>(64-55)
+		t = a[14] ^ d4
+		bc2 = t<<39 | t>>(64-39)
+		a[15] = bc0 ^ (bc2 &^ bc1)
+		a[21] = bc1 ^ (bc3 &^ bc2)
+		a[2] = bc2 ^ (bc4 &^ bc3)
+		a[8] = bc3 ^ (bc0 &^ bc4)
+		a[14] = bc4 ^ (bc1 &^ bc0)
+
+		// Round 2
+		bc0 = a[0] ^ a[5] ^ a[10] ^ a[15] ^ a[20]
+		bc1 = a[1] ^ a[6] ^ a[11] ^ a[16] ^ a[21]
+		bc2 = a[2] ^ a[7] ^ a[12] ^ a[17] ^ a[22]
+		bc3 = a[3] ^ a[8] ^ a[13] ^ a[18] ^ a[23]
+		bc4 = a[4] ^ a[9] ^ a[14] ^ a[19] ^ a[24]
+		d0 = bc4 ^ (bc1<<1 | bc1>>63)
+		d1 = bc0 ^ (bc2<<1 | bc2>>63)
+		d2 = bc1 ^ (bc3<<1 | bc3>>63)
+		d3 = bc2 ^ (bc4<<1 | bc4>>63)
+		d4 = bc3 ^ (bc0<<1 | bc0>>63)
+
+		bc0 = a[0] ^ d0
+		t = a[16] ^ d1
+		bc1 = t<<44 | t>>(64-44)
+		t = a[7] ^ d2
+		bc2 = t<<43 | t>>(64-43)
+		t = a[23] ^ d3
+		bc3 = t<<21 | t>>(64-21)
+		t = a[14] ^ d4
+		bc4 = t<<14 | t>>(64-14)
+		a[0] = bc0 ^ (bc2 &^ bc1) ^ rc[i+1]
+		a[16] = bc1 ^ (bc3 &^ bc2)
+		a[7] = bc2 ^ (bc4 &^ bc3)
+		a[23] = bc3 ^ (bc0 &^ bc4)
+		a[14] = bc4 ^ (bc1 &^ bc0)
+
+		t = a[20] ^ d0
+		bc2 = t<<3 | t>>(64-3)
+		t = a[11] ^ d1
+		bc3 = t<<45 | t>>(64-45)
+		t = a[2] ^ d2
+		bc4 = t<<61 | t>>(64-61)
+		t = a[18] ^ d3
+		bc0 = t<<28 | t>>(64-28)
+		t = a[9] ^ d4
+		bc1 = t<<20 | t>>(64-20)
+		a[20] = bc0 ^ (bc2 &^ bc1)
+		a[11] = bc1 ^ (bc3 &^ bc2)
+		a[2] = bc2 ^ (bc4 &^ bc3)
+		a[18] = bc3 ^ (bc0 &^ bc4)
+		a[9] = bc4 ^ (bc1 &^ bc0)
+
+		t = a[15] ^ d0
+		bc4 = t<<18 | t>>(64-18)
+		t = a[6] ^ d1
+		bc0 = t<<1 | t>>(64-1)
+		t = a[22] ^ d2
+		bc1 = t<<6 | t>>(64-6)
+		t = a[13] ^ d3
+		bc2 = t<<25 | t>>(64-25)
+		t = a[4] ^ d4
+		bc3 = t<<8 | t>>(64-8)
+		a[15] = bc0 ^ (bc2 &^ bc1)
+		a[6] = bc1 ^ (bc3 &^ bc2)
+		a[22] = bc2 ^ (bc4 &^ bc3)
+		a[13] = bc3 ^ (bc0 &^ bc4)
+		a[4] = bc4 ^ (bc1 &^ bc0)
+
+		t = a[10] ^ d0
+		bc1 = t<<36 | t>>(64-36)
+		t = a[1] ^ d1
+		bc2 = t<<10 | t>>(64-10)
+		t = a[17] ^ d2
+		bc3 = t<<15 | t>>(64-15)
+		t = a[8] ^ d3
+		bc4 = t<<56 | t>>(64-56)
+		t = a[24] ^ d4
+		bc0 = t<<27 | t>>(64-27)
+		a[10] = bc0 ^ (bc2 &^ bc1)
+		a[1] = bc1 ^ (bc3 &^ bc2)
+		a[17] = bc2 ^ (bc4 &^ bc3)
+		a[8] = bc3 ^ (bc0 &^ bc4)
+		a[24] = bc4 ^ (bc1 &^ bc0)
+
+		t = a[5] ^ d0
+		bc3 = t<<41 | t>>(64-41)
+		t = a[21] ^ d1
+		bc4 = t<<2 | t>>(64-2)
+		t = a[12] ^ d2
+		bc0 = t<<62 | t>>(64-62)
+		t = a[3] ^ d3
+		bc1 = t<<55 | t>>(64-55)
+		t = a[19] ^ d4
+		bc2 = t<<39 | t>>(64-39)
+		a[5] = bc0 ^ (bc2 &^ bc1)
+		a[21] = bc1 ^ (bc3 &^ bc2)
+		a[12] = bc2 ^ (bc4 &^ bc3)
+		a[3] = bc3 ^ (bc0 &^ bc4)
+		a[19] = bc4 ^ (bc1 &^ bc0)
+
+		// Round 3
+		bc0 = a[0] ^ a[5] ^ a[10] ^ a[15] ^ a[20]
+		bc1 = a[1] ^ a[6] ^ a[11] ^ a[16] ^ a[21]
+		bc2 = a[2] ^ a[7] ^ a[12] ^ a[17] ^ a[22]
+		bc3 = a[3] ^ a[8] ^ a[13] ^ a[18] ^ a[23]
+		bc4 = a[4] ^ a[9] ^ a[14] ^ a[19] ^ a[24]
+		d0 = bc4 ^ (bc1<<1 | bc1>>63)
+		d1 = bc0 ^ (bc2<<1 | bc2>>63)
+		d2 = bc1 ^ (bc3<<1 | bc3>>63)
+		d3 = bc2 ^ (bc4<<1 | bc4>>63)
+		d4 = bc3 ^ (bc0<<1 | bc0>>63)
+
+		bc0 = a[0] ^ d0
+		t = a[11] ^ d1
+		bc1 = t<<44 | t>>(64-44)
+		t = a[22] ^ d2
+		bc2 = t<<43 | t>>(64-43)
+		t = a[8] ^ d3
+		bc3 = t<<21 | t>>(64-21)
+		t = a[19] ^ d4
+		bc4 = t<<14 | t>>(64-14)
+		a[0] = bc0 ^ (bc2 &^ bc1) ^ rc[i+2]
+		a[11] = bc1 ^ (bc3 &^ bc2)
+		a[22] = bc2 ^ (bc4 &^ bc3)
+		a[8] = bc3 ^ (bc0 &^ bc4)
+		a[19] = bc4 ^ (bc1 &^ bc0)
+
+		t = a[15] ^ d0
+		bc2 = t<<3 | t>>(64-3)
+		t = a[1] ^ d1
+		bc3 = t<<45 | t>>(64-45)
+		t = a[12] ^ d2
+		bc4 = t<<61 | t>>(64-61)
+		t = a[23] ^ d3
+		bc0 = t<<28 | t>>(64-28)
+		t = a[9] ^ d4
+		bc1 = t<<20 | t>>(64-20)
+		a[15] = bc0 ^ (bc2 &^ bc1)
+		a[1] = bc1 ^ (bc3 &^ bc2)
+		a[12] = bc2 ^ (bc4 &^ bc3)
+		a[23] = bc3 ^ (bc0 &^ bc4)
+		a[9] = bc4 ^ (bc1 &^ bc0)
+
+		t = a[5] ^ d0
+		bc4 = t<<18 | t>>(64-18)
+		t = a[16] ^ d1
+		bc0 = t<<1 | t>>(64-1)
+		t = a[2] ^ d2
+		bc1 = t<<6 | t>>(64-6)
+		t = a[13] ^ d3
+		bc2 = t<<25 | t>>(64-25)
+		t = a[24] ^ d4
+		bc3 = t<<8 | t>>(64-8)
+		a[5] = bc0 ^ (bc2 &^ bc1)
+		a[16] = bc1 ^ (bc3 &^ bc2)
+		a[2] = bc2 ^ (bc4 &^ bc3)
+		a[13] = bc3 ^ (bc0 &^ bc4)
+		a[24] = bc4 ^ (bc1 &^ bc0)
+
+		t = a[20] ^ d0
+		bc1 = t<<36 | t>>(64-36)
+		t = a[6] ^ d1
+		bc2 = t<<10 | t>>(64-10)
+		t = a[17] ^ d2
+		bc3 = t<<15 | t>>(64-15)
+		t = a[3] ^ d3
+		bc4 = t<<56 | t>>(64-56)
+		t = a[14] ^ d4
+		bc0 = t<<27 | t>>(64-27)
+		a[20] = bc0 ^ (bc2 &^ bc1)
+		a[6] = bc1 ^ (bc3 &^ bc2)
+		a[17] = bc2 ^ (bc4 &^ bc3)
+		a[3] = bc3 ^ (bc0 &^ bc4)
+		a[14] = bc4 ^ (bc1 &^ bc0)
+
+		t = a[10] ^ d0
+		bc3 = t<<41 | t>>(64-41)
+		t = a[21] ^ d1
+		bc4 = t<<2 | t>>(64-2)
+		t = a[7] ^ d2
+		bc0 = t<<62 | t>>(64-62)
+		t = a[18] ^ d3
+		bc1 = t<<55 | t>>(64-55)
+		t = a[4] ^ d4
+		bc2 = t<<39 | t>>(64-39)
+		a[10] = bc0 ^ (bc2 &^ bc1)
+		a[21] = bc1 ^ (bc3 &^ bc2)
+		a[7] = bc2 ^ (bc4 &^ bc3)
+		a[18] = bc3 ^ (bc0 &^ bc4)
+		a[4] = bc4 ^ (bc1 &^ bc0)
+
+		// Round 4
+		bc0 = a[0] ^ a[5] ^ a[10] ^ a[15] ^ a[20]
+		bc1 = a[1] ^ a[6] ^ a[11] ^ a[16] ^ a[21]
+		bc2 = a[2] ^ a[7] ^ a[12] ^ a[17] ^ a[22]
+		bc3 = a[3] ^ a[8] ^ a[13] ^ a[18] ^ a[23]
+		bc4 = a[4] ^ a[9] ^ a[14] ^ a[19] ^ a[24]
+		d0 = bc4 ^ (bc1<<1 | bc1>>63)
+		d1 = bc0 ^ (bc2<<1 | bc2>>63)
+		d2 = bc1 ^ (bc3<<1 | bc3>>63)
+		d3 = bc2 ^ (bc4<<1 | bc4>>63)
+		d4 = bc3 ^ (bc0<<1 | bc0>>63)
+
+		bc0 = a[0] ^ d0
+		t = a[1] ^ d1
+		bc1 = t<<44 | t>>(64-44)
+		t = a[2] ^ d2
+		bc2 = t<<43 | t>>(64-43)
+		t = a[3] ^ d3
+		bc3 = t<<21 | t>>(64-21)
+		t = a[4] ^ d4
+		bc4 = t<<14 | t>>(64-14)
+		a[0] = bc0 ^ (bc2 &^ bc1) ^ rc[i+3]
+		a[1] = bc1 ^ (bc3 &^ bc2)
+		a[2] = bc2 ^ (bc4 &^ bc3)
+		a[3] = bc3 ^ (bc0 &^ bc4)
+		a[4] = bc4 ^ (bc1 &^ bc0)
+
+		t = a[5] ^ d0
+		bc2 = t<<3 | t>>(64-3)
+		t = a[6] ^ d1
+		bc3 = t<<45 | t>>(64-45)
+		t = a[7] ^ d2
+		bc4 = t<<61 | t>>(64-61)
+		t = a[8] ^ d3
+		bc0 = t<<28 | t>>(64-28)
+		t = a[9] ^ d4
+		bc1 = t<<20 | t>>(64-20)
+		a[5] = bc0 ^ (bc2 &^ bc1)
+		a[6] = bc1 ^ (bc3 &^ bc2)
+		a[7] = bc2 ^ (bc4 &^ bc3)
+		a[8] = bc3 ^ (bc0 &^ bc4)
+		a[9] = bc4 ^ (bc1 &^ bc0)
+
+		t = a[10] ^ d0
+		bc4 = t<<18 | t>>(64-18)
+		t = a[11] ^ d1
+		bc0 = t<<1 | t>>(64-1)
+		t = a[12] ^ d2
+		bc1 = t<<6 | t>>(64-6)
+		t = a[13] ^ d3
+		bc2 = t<<25 | t>>(64-25)
+		t = a[14] ^ d4
+		bc3 = t<<8 | t>>(64-8)
+		a[10] = bc0 ^ (bc2 &^ bc1)
+		a[11] = bc1 ^ (bc3 &^ bc2)
+		a[12] = bc2 ^ (bc4 &^ bc3)
+		a[13] = bc3 ^ (bc0 &^ bc4)
+		a[14] = bc4 ^ (bc1 &^ bc0)
+
+		t = a[15] ^ d0
+		bc1 = t<<36 | t>>(64-36)
+		t = a[16] ^ d1
+		bc2 = t<<10 | t>>(64-10)
+		t = a[17] ^ d2
+		bc3 = t<<15 | t>>(64-15)
+		t = a[18] ^ d3
+		bc4 = t<<56 | t>>(64-56)
+		t = a[19] ^ d4
+		bc0 = t<<27 | t>>(64-27)
+		a[15] = bc0 ^ (bc2 &^ bc1)
+		a[16] = bc1 ^ (bc3 &^ bc2)
+		a[17] = bc2 ^ (bc4 &^ bc3)
+		a[18] = bc3 ^ (bc0 &^ bc4)
+		a[19] = bc4 ^ (bc1 &^ bc0)
+
+		t = a[20] ^ d0
+		bc3 = t<<41 | t>>(64-41)
+		t = a[21] ^ d1
+		bc4 = t<<2 | t>>(64-2)
+		t = a[22] ^ d2
+		bc0 = t<<62 | t>>(64-62)
+		t = a[23] ^ d3
+		bc1 = t<<55 | t>>(64-55)
+		t = a[24] ^ d4
+		bc2 = t<<39 | t>>(64-39)
+		a[20] = bc0 ^ (bc2 &^ bc1)
+		a[21] = bc1 ^ (bc3 &^ bc2)
+		a[22] = bc2 ^ (bc4 &^ bc3)
+		a[23] = bc3 ^ (bc0 &^ bc4)
+		a[24] = bc4 ^ (bc1 &^ bc0)
+	}
 }
