@@ -27,9 +27,12 @@ import (
 	"golang.org/x/crypto/ripemd160"
 )
 
+var secp256k1n *big.Int
+
 func init() {
 	// specify the params for the s256 curve
 	ecies.AddParamsForCurve(S256(), ecies.ECIES_AES128_SHA256)
+	secp256k1n = common.String2Big("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
 }
 
 func Sha3(data ...[]byte) []byte {
@@ -153,7 +156,6 @@ func GenerateKey() (*ecdsa.PrivateKey, error) {
 }
 
 func ValidateSignatureValues(v byte, r, s *big.Int) bool {
-	secp256k1n := common.String2Big("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
 	vint := uint32(v)
 	if r.Cmp(common.Big0) == 0 || s.Cmp(common.Big0) == 0 {
 		return false
