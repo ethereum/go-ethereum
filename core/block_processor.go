@@ -38,14 +38,12 @@ type BlockProcessor struct {
 	// Proof of work used for validating
 	Pow pow.PoW
 
-	txpool *TxPool
-
 	events event.Subscription
 
 	eventMux *event.TypeMux
 }
 
-func NewBlockProcessor(db, extra common.Database, pow pow.PoW, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+func NewBlockProcessor(db, extra common.Database, pow pow.PoW, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
 		db:       db,
 		extraDb:  extra,
@@ -53,7 +51,6 @@ func NewBlockProcessor(db, extra common.Database, pow pow.PoW, txpool *TxPool, c
 		Pow:      pow,
 		bc:       chainManager,
 		eventMux: eventMux,
-		txpool:   txpool,
 	}
 
 	return sm

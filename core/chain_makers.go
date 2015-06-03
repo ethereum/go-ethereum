@@ -124,8 +124,7 @@ func newChainManager(block *types.Block, eventMux *event.TypeMux, db common.Data
 // block processor with fake pow
 func newBlockProcessor(db common.Database, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	chainMan := newChainManager(nil, eventMux, db)
-	txpool := NewTxPool(eventMux, chainMan.State, chainMan.GasLimit)
-	bman := NewBlockProcessor(db, db, FakePow{}, txpool, chainMan, eventMux)
+	bman := NewBlockProcessor(db, db, FakePow{}, chainMan, eventMux)
 	return bman
 }
 
