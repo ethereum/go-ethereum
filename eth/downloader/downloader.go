@@ -341,12 +341,12 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 				active.getHashes(head)
 				continue
 			}
-			// We're done, allocate the download cache and proceed pulling the blocks
+			// We're done, prepare the download cache and proceed pulling the blocks
 			offset := 0
 			if block := d.getBlock(head); block != nil {
 				offset = int(block.NumberU64() + 1)
 			}
-			d.queue.Alloc(offset)
+			d.queue.Prepare(offset)
 			finished = true
 
 		case blockPack := <-d.blockCh:
@@ -504,7 +504,7 @@ out:
 					}
 					// Get a possible chunk. If nil is returned no chunk
 					// could be returned due to no hashes available.
-					request := d.queue.Reserve(peer)
+					request := d.queue.Reserve(peer, peer.Capacity())
 					if request == nil {
 						continue
 					}
@@ -551,7 +551,7 @@ func (d *Downloader) banBlocks(peerId string, head common.Hash) error {
 	if peer == nil {
 		return nil
 	}
-	request := d.queue.Reserve(peer)
+	request := d.queue.Reserve(peer, MaxBlockFetch)
 	if request == nil {
 		return nil
 	}

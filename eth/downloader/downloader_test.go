@@ -186,7 +186,7 @@ func TestSynchronisation(t *testing.T) {
 	if err := tester.sync("peer", hashes[0]); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
-	if queued := len(tester.downloader.queue.blockCache); queued != targetBlocks {
+	if queued := len(tester.downloader.queue.blockPool); queued != targetBlocks {
 		t.Fatalf("synchronised block mismatch: have %v, want %v", queued, targetBlocks)
 	}
 }
