@@ -88,6 +88,10 @@ func (p *peer) sendBlocks(blocks []*types.Block) error {
 	return p2p.Send(p.rw, BlocksMsg, blocks)
 }
 
+func (p *peer) sendNewBlockHashes(hashes []common.Hash) error {
+	return p2p.Send(p.rw, NewBlockHashesMsg, hashes)
+}
+
 func (p *peer) sendNewBlock(block *types.Block) error {
 	p.blockHashes.Add(block.Hash())
 
