@@ -89,6 +89,9 @@ func (p *peer) sendBlocks(blocks []*types.Block) error {
 }
 
 func (p *peer) sendNewBlockHashes(hashes []common.Hash) error {
+	for _, hash := range hashes {
+		p.blockHashes.Add(hash)
+	}
 	return p2p.Send(p.rw, NewBlockHashesMsg, hashes)
 }
 
