@@ -181,7 +181,7 @@ func (self *testFrontend) applyTxs() {
 
 // end to end test
 func TestNatspecE2E(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	tf := testInit(t)
 	defer tf.ethereum.Stop()
