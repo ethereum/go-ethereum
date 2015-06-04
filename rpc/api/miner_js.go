@@ -1,4 +1,4 @@
-package jsre
+package api
 
 const Miner_JS = `
 web3.extend({

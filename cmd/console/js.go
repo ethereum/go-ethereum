@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
+	"github.com/ethereum/go-ethereum/rpc/api"
 )
 
 type prompter interface {
@@ -122,7 +123,7 @@ func (js *jsre) apiBindings(ipcpath string) {
 		utils.Fatalf("Error requiring web3: %v", err)
 	}
 
-	err = js.re.Compile("miner.js", re.Miner_JS)
+	err = js.re.Compile("miner.js", api.Miner_JS)
 	if err != nil {
 		utils.Fatalf("Error loading miner.js: %v", err)
 	}
