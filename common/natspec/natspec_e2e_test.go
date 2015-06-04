@@ -119,7 +119,7 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 	testAddress := strings.TrimPrefix(testAccount.Address.Hex(), "0x")
 
 	// set up mock genesis with balance on the testAddress
-	core.GenesisData = []byte(`{
+	core.GenesisAccounts = []byte(`{
 	"` + testAddress + `": {"balance": "` + testBalance + `"}
 	}`)
 
