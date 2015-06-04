@@ -5,6 +5,7 @@ package downloader
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -133,6 +134,15 @@ func (p *peer) Demote() {
 			return
 		}
 	}
+}
+
+// String implements fmt.Stringer.
+func (p *peer) String() string {
+	return fmt.Sprintf("Peer %s [%s]", p.id,
+		fmt.Sprintf("reputation %3d, ", atomic.LoadInt32(&p.rep))+
+			fmt.Sprintf("capacity %3d, ", atomic.LoadInt32(&p.capacity))+
+			fmt.Sprintf("ignored %4d", p.ignored.Size()),
+	)
 }
 
 // peerSet represents the collection of active peer participating in the block
