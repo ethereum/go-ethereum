@@ -31,7 +31,7 @@
 		},
 		{
 			"ImportPath": "github.com/huin/goupnp",
-			"Rev": "c57ae84388ab59076fd547f1abeab71c2edb0a21"
+			"Rev": "5cff77a69fb22f5f1774c4451ea2aab63d4d2f20"
 		},
 		{
 			"ImportPath": "github.com/jackpal/go-nat-pmp",

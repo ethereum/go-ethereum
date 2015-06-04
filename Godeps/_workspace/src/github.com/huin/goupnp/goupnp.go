@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-
+	"time"
 	"golang.org/x/net/html/charset"
 
 	"github.com/huin/goupnp/httpu"
@@ -64,7 +64,6 @@ func DiscoverDevices(searchTarget string) ([]MaybeRootDevice, error) {
 		maybe := &results[i]
 		loc, err := response.Location()
 		if err != nil {
-
 			maybe.Err = ContextError{"unexpected bad location from search", err}
 			continue
 		}
@@ -93,7 +92,11 @@ func DiscoverDevices(searchTarget string) ([]MaybeRootDevice, error) {
 }
 
 func requestXml(url string, defaultSpace string, doc interface{}) error {
-	resp, err := http.Get(url)
+	timeout := time.Duration(3 * time.Second)
+	client := http.Client{
+		Timeout: timeout,
+	}
+	resp, err := client.Get(url)
 	if err != nil {
 		return err
 	}
