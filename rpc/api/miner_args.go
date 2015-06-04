@@ -2,13 +2,14 @@ package api
 
 import (
 	"encoding/json"
+
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
 type StartMinerArgs struct {
-	Threads int `json:"threads"`
+	Threads int
 }
 
 func (args *StartMinerArgs) UnmarshalJSON(b []byte) (err error) {
@@ -17,31 +18,76 @@ func (args *StartMinerArgs) UnmarshalJSON(b []byte) (err error) {
 		return shared.NewDecodeParamError(err.Error())
 	}
 
-	if len(obj) == 0 {
+	if len(obj) == 0 || obj[0] == nil {
 		args.Threads = -1
 		return nil
 	}
 
-	var arg0 *big.Int
-	if arg0, err = numString(obj[0]); err != nil {
+	var num *big.Int
+	if num, err = numString(obj[0]); err != nil {
 		return err
 	}
-
-	if arg0.Int64() >= 0 && arg0.Int64() <= 256 {
-		args.Threads = int(arg0.Int64())
-	}
-
-	return shared.NewValidationError("threads", "must be in range [0...256]")
+	args.Threads = int(num.Int64())
+	return nil
 }
 
 type SetExtraArgs struct {
-	Data string `json:"data"`
+	Data string
+}
+
+func (args *SetExtraArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	extrastr, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("Price", "not a string")
+	}
+	args.Data = extrastr
+
+	return nil
 }
 
 type GasPriceArgs struct {
-	Price string `json:"price"`
+	Price string
+}
+
+func (args *GasPriceArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	pricestr, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("Price", "not a string")
+	}
+	args.Price = pricestr
+
+	return nil
 }
 
 type MakeDAGArgs struct {
-	BlockNumber uint64 `json:"blockNumber"`
+	BlockNumber int64
+}
+
+func (args *MakeDAGArgs) UnmarshalJSON(b []byte) (err error) {
+	args.BlockNumber = -1
+	var obj []interface{}
+
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	if err := blockHeight(obj[0], &args.BlockNumber); err != nil {
+		return err
+	}
+
+	return nil
 }

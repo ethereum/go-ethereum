@@ -74,7 +74,7 @@ func (self *miner) StartMiner(req *shared.Request) (interface{}, error) {
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, err
 	}
-	if args.Threads == -1 { // (-1 is set in unmarshalljson when not specified in req)
+	if args.Threads == -1 { // (not specified by user, use default)
 		args.Threads = self.ethereum.MinerThreads
 	}
 
@@ -111,21 +111,21 @@ func (self *miner) SetExtra(req *shared.Request) (interface{}, error) {
 func (self *miner) SetGasPrice(req *shared.Request) (interface{}, error) {
 	args := new(GasPriceArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
-		return nil, err
+		return false, err
 	}
 
 	self.ethereum.Miner().SetGasPrice(common.String2Big(args.Price))
-	return nil, nil
+	return true, nil
 }
 
 func (self *miner) StartAutoDAG(req *shared.Request) (interface{}, error) {
 	self.ethereum.StartAutoDAG()
-	return nil, nil
+	return true, nil
 }
 
 func (self *miner) StopAutoDAG(req *shared.Request) (interface{}, error) {
 	self.ethereum.StopAutoDAG()
-	return nil, nil
+	return true, nil
 }
 
 func (self *miner) MakeDAG(req *shared.Request) (interface{}, error) {
@@ -134,7 +134,11 @@ func (self *miner) MakeDAG(req *shared.Request) (interface{}, error) {
 		return nil, err
 	}
 
-	err := ethash.MakeDAG(args.BlockNumber, "")
+	if args.BlockNumber < 0 {
+		return false, shared.NewValidationError("BlockNumber", "BlockNumber must be positive")
+	}
+
+	err := ethash.MakeDAG(uint64(args.BlockNumber), "")
 	if err == nil {
 		return true, nil
 	}

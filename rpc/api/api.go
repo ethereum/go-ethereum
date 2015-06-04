@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	DEFAULT_IPC_APIS = "admin,debug,eth,miner,net,web3"
-	DEFAULT_HTTP_APIS = "web3,eth"
+	DefaultIpcApis = "admin,debug,eth,miner,net,web3"
+	DefaultHttpApiS = "web3,eth"
 )
 
 // Descriptor for all API implementations

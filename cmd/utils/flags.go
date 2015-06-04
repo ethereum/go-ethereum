@@ -211,7 +211,7 @@ var (
 	IPCApiFlag = cli.StringFlag{
 		Name:  "ipcapi",
 		Usage: "Specify the API's which are offered over this interface",
-		Value: api.DEFAULT_IPC_APIS,
+		Value: api.DefaultIpcApis,
 	}
 	IPCPathFlag = cli.StringFlag{
 		Name:  "ipcpath",
@@ -393,7 +393,7 @@ func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
 		return err
 	}
 
-	glog.V(logger.Error).Infof("IPC api's: %s", ctx.GlobalString(IPCApiFlag.Name))
+	glog.V(logger.Debug).Infof("IPC api's: %s", ctx.GlobalString(IPCApiFlag.Name))
 
 	cfg := comms.IpcConfig{
 		Endpoint: ctx.GlobalString(IPCPathFlag.Name),

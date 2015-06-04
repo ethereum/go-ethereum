@@ -107,14 +107,24 @@ func (js *jsre) apiBindings(ipcpath string) {
 		utils.Fatalf("Error loading bignumber.js: %v", err)
 	}
 
-	err = js.re.Compile("ethereum.js", re.Ethereum_JS)
+//	err = js.re.Compile("ethereum.js", re.Ethereum_JS)
+//	if err != nil {
+//		utils.Fatalf("Error loading ethereum.js: %v", err)
+//	}
+
+	err = js.re.Compile("ethereum.js", re.Web3_JS)
 	if err != nil {
-		utils.Fatalf("Error loading ethereum.js: %v", err)
+		utils.Fatalf("Error loading web3.js: %v", err)
 	}
 
 	_, err = js.re.Eval("var web3 = require('web3');")
 	if err != nil {
 		utils.Fatalf("Error requiring web3: %v", err)
+	}
+
+	err = js.re.Compile("miner.js", re.Miner_JS)
+	if err != nil {
+		utils.Fatalf("Error loading miner.js: %v", err)
 	}
 
 	_, err = js.re.Eval("web3.setProvider(jeth)")
