@@ -64,7 +64,7 @@ func decodeTx(data []byte) (*Transaction, error) {
 	return &tx, rlp.Decode(bytes.NewReader(data), &tx)
 }
 
-func defaultTestKey() (*ecdsa.PrivateKey, []byte) {
+func defaultTestKey() (*ecdsa.PrivateKey, common.Address) {
 	key := crypto.ToECDSA(common.Hex2Bytes("45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8"))
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	return key, addr
@@ -85,7 +85,7 @@ func TestRecipientEmpty(t *testing.T) {
 		t.FailNow()
 	}
 
-	if !bytes.Equal(addr, from.Bytes()) {
+	if addr != from {
 		t.Error("derived address doesn't match")
 	}
 }
@@ -105,7 +105,7 @@ func TestRecipientNormal(t *testing.T) {
 		t.FailNow()
 	}
 
-	if !bytes.Equal(addr, from.Bytes()) {
+	if addr != from {
 		t.Error("derived address doesn't match")
 	}
 }

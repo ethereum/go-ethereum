@@ -124,7 +124,7 @@ func NewKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
 	id := uuid.NewRandom()
 	key := &Key{
 		Id:         id,
-		Address:    common.BytesToAddress(PubkeyToAddress(privateKeyECDSA.PublicKey)),
+		Address:    PubkeyToAddress(privateKeyECDSA.PublicKey),
 		PrivateKey: privateKeyECDSA,
 	}
 	return key
