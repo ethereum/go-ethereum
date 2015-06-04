@@ -44,14 +44,14 @@ type TxPool struct {
 	eventMux     *event.TypeMux
 	events       event.Subscription
 
-	mu    sync.RWMutex
-	txs   map[common.Hash]*types.Transaction // processable transactions
-	queue map[common.Address]map[common.Hash]*types.Transaction
+	mu      sync.RWMutex
+	pending map[common.Hash]*types.Transaction // processable transactions
+	queue   map[common.Address]map[common.Hash]*types.Transaction
 }
 
 func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
 	return &TxPool{
-		txs:          make(map[common.Hash]*types.Transaction),
+		pending:      make(map[common.Hash]*types.Transaction),
 		queue:        make(map[common.Address]map[common.Hash]*types.Transaction),
 		quit:         make(chan bool),
 		eventMux:     eventMux,
@@ -67,7 +67,7 @@ func (pool *TxPool) Start() {
 		pool.mu.Lock()
 		pool.state = state.ManageState(pool.currentState())
 
-		for _, tx := range pool.txs {
+		for _, tx := range pool.pending {
 			if addr, err := tx.From(); err == nil {
 				pool.state.SetNonce(addr, tx.Nonce())
 			}
@@ -79,7 +79,7 @@ func (pool *TxPool) Start() {
 }
 
 func (pool *TxPool) Stop() {
-	pool.txs = make(map[common.Hash]*types.Transaction)
+	pool.pending = make(map[common.Hash]*types.Transaction)
 	close(pool.quit)
 	pool.events.Unsubscribe()
 	glog.V(logger.Info).Infoln("TX Pool stopped")
@@ -143,7 +143,7 @@ func (self *TxPool) add(tx *types.Transaction) error {
 		return fmt.Errorf("Invalid transaction (%x)", hash[:4])
 	}
 	*/
-	if self.txs[hash] != nil {
+	if self.pending[hash] != nil {
 		return fmt.Errorf("Known transaction (%x)", hash[:4])
 	}
 	err := self.validateTx(tx)
@@ -199,7 +199,7 @@ func (self *TxPool) AddTransactions(txs []*types.Transaction) {
 // and nil otherwise.
 func (tp *TxPool) GetTransaction(hash common.Hash) *types.Transaction {
 	// check the txs first
-	if tx, ok := tp.txs[hash]; ok {
+	if tx, ok := tp.pending[hash]; ok {
 		return tx
 	}
 	// check queue
@@ -221,9 +221,9 @@ func (self *TxPool) GetTransactions() (txs types.Transactions) {
 	// invalidate any txs
 	self.validatePool()
 
-	txs = make(types.Transactions, len(self.txs))
+	txs = make(types.Transactions, len(self.pending))
 	i := 0
-	for _, tx := range self.txs {
+	for _, tx := range self.pending {
 		txs[i] = tx
 		i++
 	}
@@ -263,8 +263,8 @@ func (self *TxPool) queueTx(hash common.Hash, tx *types.Transaction) {
 }
 
 func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *types.Transaction) {
-	if _, ok := pool.txs[hash]; !ok {
-		pool.txs[hash] = tx
+	if _, ok := pool.pending[hash]; !ok {
+		pool.pending[hash] = tx
 
 		pool.state.SetNonce(addr, tx.AccountNonce)
 		// Notify the subscribers. This event is posted in a goroutine
@@ -311,7 +311,7 @@ func (pool *TxPool) checkQueue() {
 
 func (pool *TxPool) removeTx(hash common.Hash) {
 	// delete from pending pool
-	delete(pool.txs, hash)
+	delete(pool.pending, hash)
 	// delete from queue
 	for address, txs := range pool.queue {
 		if _, ok := txs[hash]; ok {
@@ -328,12 +328,12 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 
 // validatePool removes invalid and processed transactions from the main pool.
 func (pool *TxPool) validatePool() {
-	for hash, tx := range pool.txs {
+	for hash, tx := range pool.pending {
 		if err := pool.validateTx(tx); err != nil {
-			if glog.V(logger.Info) {
+			if glog.V(logger.Core) {
 				glog.Infof("removed tx (%x) from pool: %v\n", hash[:4], err)
 			}
-			delete(pool.txs, hash)
+			delete(pool.pending, hash)
 		}
 	}
 }

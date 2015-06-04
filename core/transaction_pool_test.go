@@ -71,8 +71,8 @@ func TestTransactionQueue(t *testing.T) {
 	pool.queueTx(tx.Hash(), tx)
 
 	pool.checkQueue()
-	if len(pool.txs) != 1 {
-		t.Error("expected valid txs to be 1 is", len(pool.txs))
+	if len(pool.pending) != 1 {
+		t.Error("expected valid txs to be 1 is", len(pool.pending))
 	}
 
 	tx = transaction()
@@ -82,7 +82,7 @@ func TestTransactionQueue(t *testing.T) {
 	pool.state.SetNonce(from, 2)
 	pool.queueTx(tx.Hash(), tx)
 	pool.checkQueue()
-	if _, ok := pool.txs[tx.Hash()]; ok {
+	if _, ok := pool.pending[tx.Hash()]; ok {
 		t.Error("expected transaction to be in tx pool")
 	}
 
@@ -104,7 +104,7 @@ func TestTransactionQueue(t *testing.T) {
 
 	pool.checkQueue()
 
-	if len(pool.txs) != 1 {
+	if len(pool.pending) != 1 {
 		t.Error("expected tx pool to be 1 =")
 	}
 	if len(pool.queue[from]) != 2 {
@@ -124,8 +124,8 @@ func TestRemoveTx(t *testing.T) {
 		t.Error("expected queue to be 1, got", len(pool.queue))
 	}
 
-	if len(pool.txs) != 1 {
-		t.Error("expected txs to be 1, got", len(pool.txs))
+	if len(pool.pending) != 1 {
+		t.Error("expected txs to be 1, got", len(pool.pending))
 	}
 
 	pool.removeTx(tx.Hash())
@@ -134,8 +134,8 @@ func TestRemoveTx(t *testing.T) {
 		t.Error("expected queue to be 0, got", len(pool.queue))
 	}
 
-	if len(pool.txs) > 0 {
-		t.Error("expected txs to be 0, got", len(pool.txs))
+	if len(pool.pending) > 0 {
+		t.Error("expected txs to be 0, got", len(pool.pending))
 	}
 }
 
