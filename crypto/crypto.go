@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"os"
 
 	"encoding/hex"
@@ -26,9 +27,12 @@ import (
 	"golang.org/x/crypto/ripemd160"
 )
 
+var secp256k1n *big.Int
+
 func init() {
 	// specify the params for the s256 curve
 	ecies.AddParamsForCurve(S256(), ecies.ECIES_AES128_SHA256)
+	secp256k1n = common.String2Big("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
 }
 
 func Sha3(data ...[]byte) []byte {
@@ -149,6 +153,18 @@ func SaveECDSA(file string, key *ecdsa.PrivateKey) error {
 
 func GenerateKey() (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(S256(), rand.Reader)
+}
+
+func ValidateSignatureValues(v byte, r, s *big.Int) bool {
+	vint := uint32(v)
+	if r.Cmp(common.Big0) == 0 || s.Cmp(common.Big0) == 0 {
+		return false
+	}
+	if r.Cmp(secp256k1n) < 0 && s.Cmp(secp256k1n) < 0 && (vint == 27 || vint == 28) {
+		return true
+	} else {
+		return false
+	}
 }
 
 func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {

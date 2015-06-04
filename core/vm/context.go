@@ -16,6 +16,8 @@ type Context struct {
 	caller ContextRef
 	self   ContextRef
 
+	jumpdests destinations // result of JUMPDEST analysis.
+
 	Code     []byte
 	CodeAddr *common.Address
 
@@ -24,9 +26,16 @@ type Context struct {
 	Args []byte
 }
 
-// Create a new context for the given data items
+// Create a new context for the given data items.
 func NewContext(caller ContextRef, object ContextRef, value, gas, price *big.Int) *Context {
 	c := &Context{caller: caller, self: object, Args: nil}
+
+	if parent, ok := caller.(*Context); ok {
+		// Reuse JUMPDEST analysis from parent context if available.
+		c.jumpdests = parent.jumpdests
+	} else {
+		c.jumpdests = make(destinations)
+	}
 
 	// Gas should be a pointer so it can safely be reduced through the run
 	// This pointer will be off the state transition
