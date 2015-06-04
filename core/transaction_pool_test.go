@@ -152,3 +152,52 @@ func TestNegativeValue(t *testing.T) {
 		t.Error("expected", ErrNegativeValue, "got", err)
 	}
 }
+
+func TestTransactionChainFork(t *testing.T) {
+	pool, key := setupTxPool()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	pool.currentState().AddBalance(addr, big.NewInt(100000000000000))
+	tx := transaction()
+	tx.GasLimit = big.NewInt(100000)
+	tx.SignECDSA(key)
+
+	err := pool.add(tx)
+	if err != nil {
+		t.Error("didn't expect error", err)
+	}
+	pool.RemoveTransactions([]*types.Transaction{tx})
+
+	// reset the pool's internal state
+	pool.resetState()
+	err = pool.add(tx)
+	if err != nil {
+		t.Error("didn't expect error", err)
+	}
+}
+
+func TestTransactionDoubleNonce(t *testing.T) {
+	pool, key := setupTxPool()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	pool.currentState().AddBalance(addr, big.NewInt(100000000000000))
+	tx := transaction()
+	tx.GasLimit = big.NewInt(100000)
+	tx.SignECDSA(key)
+
+	err := pool.add(tx)
+	if err != nil {
+		t.Error("didn't expect error", err)
+	}
+
+	tx2 := transaction()
+	tx2.GasLimit = big.NewInt(1000000)
+	tx2.SignECDSA(key)
+
+	err = pool.add(tx2)
+	if err != nil {
+		t.Error("didn't expect error", err)
+	}
+
+	if len(pool.pending) != 2 {
+		t.Error("expected 2 pending txs. Got", len(pool.pending))
+	}
+}

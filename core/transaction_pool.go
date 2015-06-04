@@ -68,29 +68,35 @@ func (pool *TxPool) Start() {
 	pool.events = pool.eventMux.Subscribe(ChainEvent{})
 	for _ = range pool.events.Chan() {
 		pool.mu.Lock()
-		pool.state = state.ManageState(pool.currentState())
 
-		// validate the pool of pending transactions, this will remove
-		// any transactions that have been included in the block or
-		// have been invalidated because of another transaction (e.g.
-		// higher gas price)
-		pool.validatePool()
+		pool.resetState()
 
-		// Loop over the pending transactions and base the nonce of the new
-		// pending transaction set.
-		for _, tx := range pool.pending {
-			if addr, err := tx.From(); err == nil {
-				// Set the nonce. Transaction nonce can never be lower
-				// than the state nonce; validatePool took care of that.
-				pool.state.SetNonce(addr, tx.Nonce())
-			}
-		}
-
-		// Check the queue and move transactions over to the pending if possible
-		// or remove those that have become invalid
-		pool.checkQueue()
 		pool.mu.Unlock()
 	}
+}
+
+func (pool *TxPool) resetState() {
+	pool.state = state.ManageState(pool.currentState())
+
+	// validate the pool of pending transactions, this will remove
+	// any transactions that have been included in the block or
+	// have been invalidated because of another transaction (e.g.
+	// higher gas price)
+	pool.validatePool()
+
+	// Loop over the pending transactions and base the nonce of the new
+	// pending transaction set.
+	for _, tx := range pool.pending {
+		if addr, err := tx.From(); err == nil {
+			// Set the nonce. Transaction nonce can never be lower
+			// than the state nonce; validatePool took care of that.
+			pool.state.SetNonce(addr, tx.Nonce())
+		}
+	}
+
+	// Check the queue and move transactions over to the pending if possible
+	// or remove those that have become invalid
+	pool.checkQueue()
 }
 
 func (pool *TxPool) Stop() {
