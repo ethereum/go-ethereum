@@ -9,7 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/docserver"
-	"github.com/ethereum/go-ethereum/common/resolver"
+	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -99,15 +99,15 @@ func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, ds *docserver
 	}
 	codehash := common.BytesToHash(crypto.Sha3(codeb))
 	// set up nameresolver with natspecreg + urlhint contract addresses
-	res := resolver.New(xeth)
+	reg := registrar.New(xeth)
 
 	// resolve host via HashReg/UrlHint Resolver
-	hash, err := res.KeyToContentHash(codehash)
+	hash, err := reg.HashToHash(codehash)
 	if err != nil {
 		return
 	}
 	if ds.HasScheme("bzz") {
-		content, err = ds.Get("bzz://"+hash.Hex(), "")
+		content, err = ds.Get("bzz://"+hash.Hex()[2:], "")
 		if err == nil { // non-fatal
 			return
 		}
@@ -115,7 +115,7 @@ func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, ds *docserver
 		//falling back to urlhint
 	}
 
-	uri, err := res.ContentHashToUrl(hash)
+	uri, err := reg.HashToUrl(hash)
 	if err != nil {
 		return
 	}

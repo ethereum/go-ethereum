@@ -1,14 +1,9 @@
 package main
 
 import (
-	// "io/ioutil"
 	"os"
-	// "path"
-	// "runtime"
 	"testing"
 
-	// "github.com/ethereum/go-ethereum/bzz"
-	// "github.com/ethereum/go-ethereum/common/resolver"
 	"github.com/ethereum/go-ethereum/eth"
 )
 

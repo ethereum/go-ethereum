@@ -45,12 +45,12 @@ func (self *JSApi) register(call otto.FunctionCall) otto.Value {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
-	contenthash, err = call.Argument(1).ToString()
+	domain, err = call.Argument(1).ToString()
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
-	domain, err = call.Argument(2).ToString()
+	contenthash, err = call.Argument(2).ToString()
 	if err != nil {
 		fmt.Println(err)
 		return otto.UndefinedValue()
@@ -58,7 +58,7 @@ func (self *JSApi) register(call otto.FunctionCall) otto.Value {
 
 	hash := common.HexToHash(contenthash)
 
-	err = self.api.Register(common.HexToAddress(sender), hash, domain)
+	err = self.api.Register(common.HexToAddress(sender), domain, hash)
 	if err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()

@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"net"
+	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,15 +14,16 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/resolver"
+	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 var (
-	hashMatcher = regexp.MustCompile("^[0-9A-Fa-f]{64}")
-	slashes     = regexp.MustCompile("/+")
+	hashMatcher      = regexp.MustCompile("^[0-9A-Fa-f]{64}")
+	slashes          = regexp.MustCompile("/+")
+	domainAndVersion = regexp.MustCompile("[@:;,]+")
 )
 
 /*
@@ -31,11 +32,11 @@ on top of the dpa
 it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
-	Chunker  *TreeChunker
-	Port     string
-	Resolver *resolver.Resolver
-	dpa      *DPA
-	netStore *netStore
+	Chunker   *TreeChunker
+	Port      string
+	Registrar registrar.VersionedRegistrar
+	dpa       *DPA
+	netStore  *netStore
 }
 
 /*
@@ -366,12 +367,12 @@ func (self *Api) Upload(lpath, index string) (string, error) {
 	return hs, err2
 }
 
-func (self *Api) Register(sender common.Address, hash common.Hash, domain string) (err error) {
+func (self *Api) Register(sender common.Address, domain string, hash common.Hash) (err error) {
 	domainhash := common.BytesToHash(crypto.Sha3([]byte(domain)))
 
-	if self.Resolver != nil {
+	if self.Registrar != nil {
 		dpaLogger.Debugf("Swarm: host '%s' (hash: '%v') to be registered as '%v'", domain, domainhash.Hex(), hash.Hex())
-		_, err = self.Resolver.RegisterContentHash(sender, domainhash, hash)
+		_, err = self.Registrar.Registry().SetHashToHash(sender, domainhash, hash)
 	} else {
 		err = fmt.Errorf("no registry: %v", err)
 	}
@@ -381,26 +382,21 @@ func (self *Api) Register(sender common.Address, hash common.Hash, domain string
 type errResolve error
 
 func (self *Api) Resolve(hostPort string) (contentHash Key, err error) {
-	var host string
-	host, _, err = net.SplitHostPort(hostPort)
-	if err != nil {
-		porterr := "missing port in address " + hostPort
-		if err.Error() == porterr {
-			host = hostPort
-			err = nil
-		} else {
-			err = fmt.Errorf("invalid host '%s': %v (<>'%s')", hostPort, err, porterr)
-			return
-		}
-	}
+	host := hostPort
 	if hashMatcher.MatchString(host) {
 		contentHash = Key(common.Hex2Bytes(host))
 		dpaLogger.Debugf("Swarm: host is a contentHash: '%064x'", contentHash)
 	} else {
-		if self.Resolver != nil {
-			hostHash := common.BytesToHash(crypto.Sha3([]byte(host)))
+		if self.Registrar != nil {
 			var hash common.Hash
-			hash, err = self.Resolver.KeyToContentHash(hostHash)
+			var version *big.Int
+			parts := domainAndVersion.Split(host, 3)
+			if len(parts) > 1 && parts[1] != "" {
+				host = parts[0]
+				version = common.Big(parts[1])
+			}
+			hostHash := common.BytesToHash(crypto.Sha3([]byte(host)))
+			hash, err = self.Registrar.Resolver(version).HashToHash(hostHash)
 			if err != nil {
 				err = fmt.Errorf("unable to resolve '%s': %v", hostPort, err)
 			}

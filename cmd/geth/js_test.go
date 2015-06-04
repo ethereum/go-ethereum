@@ -17,7 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
-	"github.com/ethereum/go-ethereum/common/resolver"
+	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -260,7 +260,19 @@ func TestContract(t *testing.T) {
 	defer os.RemoveAll(tmp)
 
 	coinbase := common.HexToAddress(testAddress)
-	resolver.New(repl.xeth).CreateContracts(coinbase)
+	reg := registrar.New(repl.xeth)
+	err := reg.SetGlobalRegistrar("", coinbase)
+	if err != nil {
+		t.Errorf("error setting HashReg: %v", err)
+	}
+	err = reg.SetHashReg("", coinbase)
+	if err != nil {
+		t.Errorf("error setting HashReg: %v", err)
+	}
+	err = reg.SetUrlHint("", coinbase)
+	if err != nil {
+		t.Errorf("error setting HashReg: %v", err)
+	}
 
 	source := `contract test {\n` +
 		"   /// @notice Will multiply `a` by 7." + `\n` +
@@ -313,13 +325,14 @@ func TestContract(t *testing.T) {
 
 	if checkEvalJSON(
 		t, repl,
-		`contractaddress = eth.sendTransaction({from: primary, data: contract.code, gasPrice:"1000", gas:"100000", amount:100 })`,
-		`"0x291293d57e0a0ab47effe97c02577f90d9211567"`,
+		`contractaddress = eth.sendTransaction({from: primary, data: contract.code})`,
+		`"0x46d69d55c3c4b86a924a92c9fc4720bb7bce1d74"`,
+		// `"0x291293d57e0a0ab47effe97c02577f90d9211567"`,
 	) != nil {
 		return
 	}
 
-	if !processTxs(repl, t, 7) {
+	if !processTxs(repl, t, 8) {
 		return
 	}
 
@@ -350,7 +363,7 @@ multiply7 = Multiply7.at(contractaddress);
 		return
 	}
 
-	expNotice = `About to submit transaction (no NatSpec info found for contract: content hash not found for '0x87e2802265838c7f14bb69eecd2112911af6767907a702eeaa445239fb20711b'): {"params":[{"to":"0x291293d57e0a0ab47effe97c02577f90d9211567","data": "0xc6888fa10000000000000000000000000000000000000000000000000000000000000006"}]}`
+	expNotice = `About to submit transaction (no NatSpec info found for contract: content hash not found for '0x87e2802265838c7f14bb69eecd2112911af6767907a702eeaa445239fb20711b'): {"params":[{"to":"0x46d69d55c3c4b86a924a92c9fc4720bb7bce1d74","data": "0xc6888fa10000000000000000000000000000000000000000000000000000000000000006"}]}`
 	if repl.lastConfirm != expNotice {
 		t.Errorf("incorrect confirmation message: expected\n%v, got\n%v", expNotice, repl.lastConfirm)
 		return

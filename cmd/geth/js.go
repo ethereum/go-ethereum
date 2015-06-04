@@ -31,7 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
-	"github.com/ethereum/go-ethereum/common/resolver"
+	"github.com/ethereum/go-ethereum/common/registrar"
+	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
 	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -92,10 +93,10 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, bzzEnabled bool
 	js.adminBindings()
 	if bzzEnabled {
 		// register the swarm rountripper with the bzz scheme on the docserver
-		js.ds.RegisterProtocol("bzz", &bzz.RoundTripper{Port: bzzPort})
+		js.ds.RegisterScheme("bzz", &bzz.RoundTripper{Port: bzzPort})
 		// swarm js bindings
 		bzz.NewJSApi(js.re, js.ethereum.Swarm)
-		js.ethereum.Swarm.Resolver = resolver.New(xeth.New(ethereum, f))
+		js.ethereum.Swarm.Registrar = ethreg.New(js.xeth)
 	}
 
 	if !liner.TerminalSupported() || !interactive {
@@ -155,7 +156,7 @@ var net = web3.net;
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
 
-	js.re.Eval(resolver.GlobalRegistrar + "registrar = GlobalRegistrar.at(\"" + resolver.GlobalRegistrarAddr + "\");")
+	js.re.Eval(`var GlobalRegistrar = eth.contract(` + registrar.GlobalRegistrarAbi + `);	 registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
 }
 
 func (self *jsre) ConfirmTransaction(tx string) bool {

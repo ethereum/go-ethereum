@@ -14,7 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/common/natspec"
-	"github.com/ethereum/go-ethereum/common/resolver"
+	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -50,6 +50,9 @@ func (js *jsre) adminBindings() {
 	admin.Set("verbosity", js.verbosity)
 	admin.Set("progress", js.downloadProgress)
 	admin.Set("setSolc", js.setSolc)
+	admin.Set("setGlobalRegistrar", js.setGlobalRegistrar)
+	admin.Set("setHashReg", js.setHashReg)
+	admin.Set("setUrlHint", js.setUrlHint)
 
 	admin.Set("contractInfo", struct{}{})
 	t, _ = admin.Get("contractInfo")
@@ -57,7 +60,6 @@ func (js *jsre) adminBindings() {
 	// newRegistry officially not documented temporary option
 	cinfo.Set("start", js.startNatSpec)
 	cinfo.Set("stop", js.stopNatSpec)
-	cinfo.Set("newRegistry", js.newRegistry)
 	cinfo.Set("get", js.getContractInfo)
 	cinfo.Set("saveInfo", js.saveInfo)
 	cinfo.Set("register", js.register)
@@ -170,6 +172,112 @@ func (js *jsre) pendingTransactions(call otto.FunctionCall) otto.Value {
 	}
 
 	v, _ := call.Otto.ToValue(ltxs)
+	return v
+}
+
+func (js *jsre) setGlobalRegistrar(call otto.FunctionCall) otto.Value {
+	if len(call.ArgumentList) == 0 {
+		fmt.Println("requires 1 or 2 arguments: admin.setGlobalRegistrar(sender[, contractaddress])")
+		return otto.UndefinedValue()
+	}
+	var namereg, addr string
+	var sender common.Address
+	var err error
+	if len(call.ArgumentList) > 0 {
+		namereg, err = call.Argument(0).ToString()
+		if err != nil {
+			fmt.Println(err)
+			return otto.UndefinedValue()
+		}
+	}
+	if len(call.ArgumentList) > 1 {
+		addr, err = call.Argument(1).ToString()
+		if err != nil {
+			fmt.Println(err)
+			return otto.UndefinedValue()
+		}
+		sender = common.HexToAddress(addr)
+	}
+	reg := registrar.New(js.xeth)
+	err = reg.SetGlobalRegistrar(namereg, sender)
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	v, _ := call.Otto.ToValue(registrar.GlobalRegistrarAddr)
+	return v
+}
+
+func (js *jsre) setHashReg(call otto.FunctionCall) otto.Value {
+	if len(call.ArgumentList) > 2 {
+		fmt.Println("requires 0, 1 or 2 arguments: admin.setHashReg(sender[, contractaddress])")
+		return otto.UndefinedValue()
+	}
+	var hashreg, addr string
+	var sender common.Address
+	var err error
+	if len(call.ArgumentList) > 0 {
+		hashreg, err = call.Argument(0).ToString()
+		if err != nil {
+			fmt.Println(err)
+			return otto.UndefinedValue()
+		}
+	}
+	if len(call.ArgumentList) > 1 {
+		addr, err = call.Argument(1).ToString()
+		if err != nil {
+			fmt.Println(err)
+			return otto.UndefinedValue()
+		}
+		sender = common.HexToAddress(addr)
+	}
+
+	reg := registrar.New(js.xeth)
+	sender = common.HexToAddress(addr)
+	err = reg.SetHashReg(hashreg, sender)
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	v, _ := call.Otto.ToValue(registrar.HashRegAddr)
+	return v
+}
+
+func (js *jsre) setUrlHint(call otto.FunctionCall) otto.Value {
+	if len(call.ArgumentList) > 2 {
+		fmt.Println("requires 0, 1 or 2 arguments: admin.setHashReg(sender[, contractaddress])")
+		return otto.UndefinedValue()
+	}
+	var urlhint, addr string
+	var sender common.Address
+	var err error
+	if len(call.ArgumentList) > 0 {
+		urlhint, err = call.Argument(0).ToString()
+		if err != nil {
+			fmt.Println(err)
+			return otto.UndefinedValue()
+		}
+	}
+	if len(call.ArgumentList) > 1 {
+		addr, err = call.Argument(1).ToString()
+		if err != nil {
+			fmt.Println(err)
+			return otto.UndefinedValue()
+		}
+		sender = common.HexToAddress(addr)
+	}
+
+	reg := registrar.New(js.xeth)
+	sender = common.HexToAddress(addr)
+	err = reg.SetUrlHint(urlhint, sender)
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	v, _ := call.Otto.ToValue(registrar.UrlHintAddr)
 	return v
 }
 
@@ -760,9 +868,9 @@ func (js *jsre) register(call otto.FunctionCall) otto.Value {
 	codeb := js.xeth.CodeAtBytes(address)
 	codeHash := common.BytesToHash(crypto.Sha3(codeb))
 	contentHash := common.HexToHash(contentHashHex)
-	registry := resolver.New(js.xeth)
+	registry := registrar.New(js.xeth)
 
-	_, err = registry.RegisterContentHash(common.HexToAddress(sender), codeHash, contentHash)
+	_, err = registry.SetHashToHash(common.HexToAddress(sender), codeHash, contentHash)
 	if err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
@@ -832,8 +940,8 @@ func (js *jsre) registerUrl(call otto.FunctionCall) otto.Value {
 		return otto.FalseValue()
 	}
 
-	registry := resolver.New(js.xeth)
-	_, err = registry.RegisterUrl(common.HexToAddress(sender), common.HexToHash(contenthash), url)
+	registry := registrar.New(js.xeth)
+	_, err = registry.SetUrlToHash(common.HexToAddress(sender), common.HexToHash(contenthash), url)
 	if err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
@@ -858,7 +966,7 @@ func (js *jsre) getContractInfo(call otto.FunctionCall) otto.Value {
 		fmt.Println(err)
 		return otto.UndefinedValue()
 	}
-	var info compiler.ContractInfo
+	var info interface{}
 	err = json.Unmarshal(infoDoc, &info)
 	if err != nil {
 		fmt.Println(err)
@@ -876,29 +984,6 @@ func (js *jsre) startNatSpec(call otto.FunctionCall) otto.Value {
 func (js *jsre) stopNatSpec(call otto.FunctionCall) otto.Value {
 	js.ethereum.NatSpec = false
 	return otto.TrueValue()
-}
-
-func (js *jsre) newRegistry(call otto.FunctionCall) otto.Value {
-
-	if len(call.ArgumentList) != 1 {
-		fmt.Println("requires 1 argument: admin.contractInfo.newRegistry(adminaddress)")
-		return otto.UndefinedValue()
-	}
-	addr, err := call.Argument(0).ToString()
-	if err != nil {
-		fmt.Println(err)
-		return otto.UndefinedValue()
-	}
-	var hashReg, urlHint string
-	registry := resolver.New(js.xeth)
-	hashReg, urlHint, err = registry.CreateContracts(common.HexToAddress(addr))
-	if err != nil {
-		fmt.Println(err)
-		return otto.UndefinedValue()
-	}
-
-	v, _ := call.Otto.ToValue([]string{hashReg, urlHint})
-	return v
 }
 
 // internal transaction type which will allow us to resend transactions  using `eth.resend`
