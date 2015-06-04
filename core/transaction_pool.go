@@ -69,7 +69,9 @@ func (pool *TxPool) Start() {
 
 		for _, tx := range pool.pending {
 			if addr, err := tx.From(); err == nil {
-				pool.state.SetNonce(addr, tx.Nonce())
+				if pool.state.GetNonce(addr) < tx.Nonce() {
+					pool.state.SetNonce(addr, tx.Nonce())
+				}
 			}
 		}
 
