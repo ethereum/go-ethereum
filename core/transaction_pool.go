@@ -62,19 +62,32 @@ func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func(
 }
 
 func (pool *TxPool) Start() {
+	// Track chain events. When a chain events occurs (new chain canon block)
+	// we need to know the new state. The new state will help us determine
+	// the nonces in the managed state
 	pool.events = pool.eventMux.Subscribe(ChainEvent{})
 	for _ = range pool.events.Chan() {
 		pool.mu.Lock()
 		pool.state = state.ManageState(pool.currentState())
 
+		// validate the pool of pending transactions, this will remove
+		// any transactions that have been included in the block or
+		// have been invalidated because of another transaction (e.g.
+		// higher gas price)
+		pool.validatePool()
+
+		// Loop over the pending transactions and base the nonce of the new
+		// pending transaction set.
 		for _, tx := range pool.pending {
 			if addr, err := tx.From(); err == nil {
-				if pool.state.GetNonce(addr) < tx.Nonce() {
-					pool.state.SetNonce(addr, tx.Nonce())
-				}
+				// Set the nonce. Transaction nonce can never be lower
+				// than the state nonce; validatePool took care of that.
+				pool.state.SetNonce(addr, tx.Nonce())
 			}
 		}
 
+		// Check the queue and move transactions over to the pending if possible
+		// or remove those that have become invalid
 		pool.checkQueue()
 		pool.mu.Unlock()
 	}
@@ -103,32 +116,46 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		err  error
 	)
 
+	// Validate the transaction sender and it's sig. Throw
+	// if the from fields is invalid.
 	if from, err = tx.From(); err != nil {
 		return ErrInvalidSender
 	}
 
+	// Make sure the account exist. Non existant accounts
+	// haven't got funds and well therefor never pass.
 	if !pool.currentState().HasAccount(from) {
 		return ErrNonExistentAccount
 	}
 
+	// Check the transaction doesn't exceed the current
+	// block limit gas.
 	if pool.gasLimit().Cmp(tx.GasLimit) < 0 {
 		return ErrGasLimit
 	}
 
+	// Transactions can't be negative. This may never happen
+	// using RLP decoded transactions but may occur if you create
+	// a transaction using the RPC for example.
 	if tx.Amount.Cmp(common.Big0) < 0 {
 		return ErrNegativeValue
 	}
 
+	// Transactor should have enough funds to cover the costs
+	// cost == V + GP * GL
 	total := new(big.Int).Mul(tx.Price, tx.GasLimit)
 	total.Add(total, tx.Value())
 	if pool.currentState().GetBalance(from).Cmp(total) < 0 {
 		return ErrInsufficientFunds
 	}
 
+	// Should supply enough intrinsic gas
 	if tx.GasLimit.Cmp(IntrinsicGas(tx)) < 0 {
 		return ErrIntrinsicGas
 	}
 
+	// Last but not least check for nonce errors (intensive
+	// operation, saved for last)
 	if pool.currentState().GetNonce(from) > tx.Nonce() {
 		return ErrNonce
 	}
