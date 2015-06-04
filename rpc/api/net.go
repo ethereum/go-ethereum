@@ -54,6 +54,10 @@ func (self *net) Execute(req *shared.Request) (interface{}, error) {
 	return nil, shared.NewNotImplementedError(req.Method)
 }
 
+func (self *net) Id() string {
+	return "net"
+}
+
 // Network version
 func (self *net) Version(req *shared.Request) (interface{}, error) {
 	return self.xeth.NetworkVersion(), nil

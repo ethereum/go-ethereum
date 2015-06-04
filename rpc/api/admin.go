@@ -22,13 +22,13 @@ type adminhandler func(*admin, *shared.Request) (interface{}, error)
 
 // admin api provider
 type admin struct {
-	ethereum ethereum.Ethereum
+	ethereum *ethereum.Ethereum
 	methods  map[string]adminhandler
 	codec    codec.ApiCoder
 }
 
 // create a new admin api instance
-func NewAdmin(ethereum ethereum.Ethereum, coder codec.Codec) *admin {
+func NewAdmin(ethereum *ethereum.Ethereum, coder codec.Codec) *admin {
 	return &admin{
 		ethereum: ethereum,
 		methods:  AdminMapping,
@@ -45,4 +45,17 @@ func (self *admin) Methods() []string {
 		i++
 	}
 	return methods
+}
+
+// Execute given request
+func (self *admin) Execute(req *shared.Request) (interface{}, error) {
+	if callback, ok := self.methods[req.Method]; ok {
+		return callback(self, req)
+	}
+
+	return nil, &shared.NotImplementedError{req.Method}
+}
+
+func (self *admin) Id() string {
+	return "admin"
 }

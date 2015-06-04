@@ -65,6 +65,10 @@ func (self *miner) Methods() []string {
 	return methods
 }
 
+func (self *miner) Id() string {
+	return "miner"
+}
+
 func (self *miner) StartMiner(req *shared.Request) (interface{}, error) {
 	args := new(StartMinerArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {

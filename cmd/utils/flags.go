@@ -208,6 +208,11 @@ var (
 		Name:  "ipcdisable",
 		Usage: "Disable the IPC-RPC server",
 	}
+	IPCApiFlag = cli.StringFlag{
+		Name:  "ipcapi",
+		Usage: "Specify the API's which are offered over this interface",
+		Value: api.DEFAULT_IPC_APIS,
+	}
 	IPCPathFlag = cli.StringFlag{
 		Name:  "ipcpath",
 		Usage: "Filename for IPC socket/pipe",
@@ -382,19 +387,19 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
 }
 
 func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
-	config := comms.IpcConfig{
+	codec := codec.JSON
+	apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, eth)
+	if err != nil {
+		return err
+	}
+
+	glog.V(logger.Error).Infof("IPC api's: %s", ctx.GlobalString(IPCApiFlag.Name))
+
+	cfg := comms.IpcConfig{
 		Endpoint: ctx.GlobalString(IPCPathFlag.Name),
 	}
 
-	xeth := xeth.New(eth, nil)
-	// offered API over IPC
-	codec := codec.JSON
-	web3Api := api.NewWeb3(xeth, codec)
-	ethApi := api.NewEth(xeth, codec)
-	netApi := api.NewNet(xeth, codec)
-	minerApi := api.NewMiner(eth, codec)
-
-	return comms.StartIpc(config, codec, web3Api, ethApi, netApi, minerApi)
+	return comms.StartIpc(cfg, codec, apis...)
 }
 
 func StartPProf(ctx *cli.Context) {

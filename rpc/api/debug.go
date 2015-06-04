@@ -35,13 +35,13 @@ type debughandler func(*debug, *shared.Request) (interface{}, error)
 // admin api provider
 type debug struct {
 	xeth     *xeth.XEth
-	ethereum ethereum.Ethereum
+	ethereum *ethereum.Ethereum
 	methods  map[string]debughandler
 	codec    codec.ApiCoder
 }
 
 // create a new debug api instance
-func NewDebug(xeth *xeth.XEth, ethereum ethereum.Ethereum, coder codec.Codec) *debug {
+func NewDebug(xeth *xeth.XEth, ethereum *ethereum.Ethereum, coder codec.Codec) *debug {
 	return &debug{
 		xeth:     xeth,
 		ethereum: ethereum,
@@ -59,6 +59,19 @@ func (self *debug) Methods() []string {
 		i++
 	}
 	return methods
+}
+
+// Execute given request
+func (self *debug) Execute(req *shared.Request) (interface{}, error) {
+	if callback, ok := self.methods[req.Method]; ok {
+		return callback(self, req)
+	}
+
+	return nil, &shared.NotImplementedError{req.Method}
+}
+
+func (self *debug) Id() string {
+	return "debug"
 }
 
 func (self *debug) PrintBlock(req *shared.Request) (interface{}, error) {

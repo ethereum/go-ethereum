@@ -59,6 +59,10 @@ func (self *web3) Execute(req *shared.Request) (interface{}, error) {
 	return nil, &shared.NotImplementedError{req.Method}
 }
 
+func (self *web3) Id() string {
+	return "web3"
+}
+
 // Version of the API this instance provides
 func (self *web3) Version() string {
 	return Web3Version

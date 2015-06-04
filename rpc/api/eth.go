@@ -107,6 +107,10 @@ func (self *eth) Version() string {
 	return ethVersion
 }
 
+func (self *eth) Id() string {
+	return "eth"
+}
+
 func (self *eth) Accounts(req *shared.Request) (interface{}, error) {
 	return self.xeth.Accounts(), nil
 }
