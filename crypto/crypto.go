@@ -201,7 +201,7 @@ func ImportBlockTestKey(privKeyBytes []byte) error {
 	ecKey := ToECDSA(privKeyBytes)
 	key := &Key{
 		Id:         uuid.NewRandom(),
-		Address:    common.BytesToAddress(PubkeyToAddress(ecKey.PublicKey)),
+		Address:    PubkeyToAddress(ecKey.PublicKey),
 		PrivateKey: ecKey,
 	}
 	err := ks.StoreKey(key, "")
@@ -247,7 +247,7 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	ecKey := ToECDSA(ethPriv)
 	key = &Key{
 		Id:         nil,
-		Address:    common.BytesToAddress(PubkeyToAddress(ecKey.PublicKey)),
+		Address:    PubkeyToAddress(ecKey.PublicKey),
 		PrivateKey: ecKey,
 	}
 	derivedAddr := hex.EncodeToString(key.Address.Bytes()) // needed because .Hex() gives leading "0x"
@@ -305,7 +305,7 @@ func PKCS7Unpad(in []byte) []byte {
 	return in[:len(in)-int(padding)]
 }
 
-func PubkeyToAddress(p ecdsa.PublicKey) []byte {
+func PubkeyToAddress(p ecdsa.PublicKey) common.Address {
 	pubBytes := FromECDSAPub(&p)
-	return Sha3(pubBytes[1:])[12:]
+	return common.BytesToAddress(Sha3(pubBytes[1:])[12:])
 }

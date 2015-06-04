@@ -214,19 +214,6 @@ func (self *ChainManager) TransState() *state.StateDB {
 	return self.transState
 }
 
-func (self *ChainManager) TxState() *state.ManagedState {
-	self.tsmu.RLock()
-	defer self.tsmu.RUnlock()
-
-	return self.txState
-}
-
-func (self *ChainManager) setTxState(statedb *state.StateDB) {
-	self.tsmu.Lock()
-	defer self.tsmu.Unlock()
-	self.txState = state.ManageState(statedb)
-}
-
 func (self *ChainManager) setTransState(statedb *state.StateDB) {
 	self.transState = statedb
 }
@@ -560,6 +547,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	defer close(nonceQuit)
 
 	for i, block := range chain {
+		bstart := time.Now()
 		// Wait for block i's nonce to be verified before processing
 		// its state transition.
 		for nonceChecked[i] {
@@ -642,11 +630,11 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			queueEvent.canonicalCount++
 
 			if glog.V(logger.Debug) {
-				glog.Infof("[%v] inserted block #%d (%d TXs %d UNCs) (%x...)\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
+				glog.Infof("[%v] inserted block #%d (%d TXs %d UNCs) (%x...). Took %v\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
 			}
 		} else {
 			if glog.V(logger.Detail) {
-				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...)\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4])
+				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...). Took %v\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
 			}
 
 			queue[i] = ChainSideEvent{block, logs}
@@ -750,7 +738,7 @@ out:
 		case ev := <-events.Chan():
 			switch ev := ev.(type) {
 			case queueEvent:
-				for i, event := range ev.queue {
+				for _, event := range ev.queue {
 					switch event := event.(type) {
 					case ChainEvent:
 						// We need some control over the mining operation. Acquiring locks and waiting for the miner to create new block takes too long
@@ -758,12 +746,6 @@ out:
 						if self.lastBlockHash == event.Hash {
 							self.currentGasLimit = CalcGasLimit(event.Block)
 							self.eventMux.Post(ChainHeadEvent{event.Block})
-						}
-					case ChainSplitEvent:
-						// On chain splits we need to reset the transaction state. We can't be sure whether the actual
-						// state of the accounts are still valid.
-						if i == ev.splitCount {
-							self.setTxState(state.New(event.Block.Root(), self.stateDb))
 						}
 					}
 
