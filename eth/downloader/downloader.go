@@ -428,24 +428,22 @@ out:
 						return err
 					}
 					// Peer did deliver, but some blocks were off, penalize
-					glog.V(logger.Detail).Infof("%s: block delivery failed: %v", peer, err)
 					peer.Demote()
 					peer.SetIdle()
+					glog.V(logger.Detail).Infof("%s: block delivery failed: %v", peer, err)
 					break
 				}
 				// If no blocks were delivered, demote the peer (above code is needed to mark the packet done!)
 				if len(blockPack.blocks) == 0 {
-					glog.V(logger.Detail).Infof("%s: no blocks delivered", peer)
 					peer.Demote()
 					peer.SetIdle()
+					glog.V(logger.Detail).Infof("%s: no blocks delivered", peer)
 					break
 				}
 				// All was successful, promote the peer
-				if glog.V(logger.Detail) && len(blockPack.blocks) > 0 {
-					glog.Infof("%s: delivered %d blocks", peer, len(blockPack.blocks))
-				}
 				peer.Promote()
 				peer.SetIdle()
+				glog.V(logger.Detail).Infof("%s: delivered %d blocks", peer, len(blockPack.blocks))
 			}
 		case <-ticker.C:
 			// Check for bad peers. Bad peers may indicate a peer not responding
