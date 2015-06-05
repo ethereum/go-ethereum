@@ -142,6 +142,7 @@ var eth = web3.eth;
 var shh = web3.shh;
 var db  = web3.db;
 var net = web3.network;
+var miner = web3.miner;
   `)
 
 	if err != nil {

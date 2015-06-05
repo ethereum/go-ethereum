@@ -6,8 +6,8 @@ web3.extend({
 	methods:
 	[
 		new web3.extend.Method({
-			name: 'version',
-			call: 'net_version',
+			name: 'id',
+			call: 'net_id',
 			params: 0,
 			inputFormatter: [],
 			outputFormatter: web3.extend.formatters.formatOutputString
