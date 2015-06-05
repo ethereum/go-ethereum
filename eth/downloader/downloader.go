@@ -42,7 +42,7 @@ var (
 	errNoPeers          = errors.New("no peers to keep download active")
 	ErrPendingQueue     = errors.New("pending items in queue")
 	ErrTimeout          = errors.New("timeout")
-	errEmptyHashSet     = errors.New("empty hash set by peer")
+	ErrEmptyHashSet     = errors.New("empty hash set by peer")
 	errPeersUnavailable = errors.New("no peers available or all peers tried for block download process")
 	errAlreadyInPool    = errors.New("hash already in pool")
 	ErrInvalidChain     = errors.New("retrieved hash chain is invalid")
@@ -289,7 +289,7 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 			// Make sure the peer actually gave something valid
 			if len(hashPack.hashes) == 0 {
 				glog.V(logger.Debug).Infof("Peer (%s) responded with empty hash set", active.id)
-				return errEmptyHashSet
+				return ErrEmptyHashSet
 			}
 			for _, hash := range hashPack.hashes {
 				if d.banned.Has(hash) {
