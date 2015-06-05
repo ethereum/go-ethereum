@@ -936,24 +936,23 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 		tx = types.NewTransactionMessage(to, value, gas, price, data)
 	}
 
-	state := self.backend.ChainManager().TxState()
+	state := self.backend.TxPool().State()
 
 	var nonce uint64
 	if len(nonceStr) != 0 {
 		nonce = common.Big(nonceStr).Uint64()
 	} else {
-		nonce = state.NewNonce(from)
+		nonce = state.GetNonce(from)
 	}
 	tx.SetNonce(nonce)
 
 	if err := self.sign(tx, from, false); err != nil {
-		state.RemoveNonce(from, tx.Nonce())
 		return "", err
 	}
 	if err := self.backend.TxPool().Add(tx); err != nil {
-		state.RemoveNonce(from, tx.Nonce())
 		return "", err
 	}
+	state.SetNonce(from, nonce+1)
 
 	if contractCreation {
 		addr := core.AddressFromMessage(tx)

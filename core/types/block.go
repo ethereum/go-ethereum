@@ -1,7 +1,9 @@
 package types
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
@@ -78,6 +80,28 @@ func (self *Header) rlpData(withNonce bool) []interface{} {
 
 func (self *Header) RlpData() interface{} {
 	return self.rlpData(true)
+}
+
+func (h *Header) UnmarshalJSON(data []byte) error {
+	var ext struct {
+		ParentHash string
+		Coinbase   string
+		Difficulty string
+		GasLimit   string
+		Time       uint64
+		Extra      string
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := dec.Decode(&ext); err != nil {
+		return err
+	}
+
+	h.ParentHash = common.HexToHash(ext.ParentHash)
+	h.Coinbase = common.HexToAddress(ext.Coinbase)
+	h.Difficulty = common.String2Big(ext.Difficulty)
+	h.Time = ext.Time
+	h.Extra = []byte(ext.Extra)
+	return nil
 }
 
 func rlpHash(x interface{}) (h common.Hash) {

@@ -36,7 +36,7 @@ func GenesisBlock(db common.Database) *types.Block {
 		Balance string
 		Code    string
 	}
-	err := json.Unmarshal(GenesisData, &accounts)
+	err := json.Unmarshal(GenesisAccounts, &accounts)
 	if err != nil {
 		fmt.Println("enable to decode genesis json data:", err)
 		os.Exit(1)
@@ -62,7 +62,7 @@ const (
 	TestBalance = "1000000000000"
 )
 
-var GenesisData = []byte(`{
+var GenesisAccounts = []byte(`{
 	"` + TestAccount + `": {"balance": "` + TestBalance + `"},
 	` + BuiltInContracts + `
 	"0000000000000000000000000000000000000001": {"balance": "1"},
