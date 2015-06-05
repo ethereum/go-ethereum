@@ -2,12 +2,12 @@ package bzz
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"math/big"
+	// "net"
+	// "net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -320,16 +320,19 @@ func (self *Api) Upload(lpath, index string) (string, error) {
 					list[i].Hash = fmt.Sprintf("%064x", hash)
 				}
 				wg.Wait()
-			}
-			if err == nil {
-				cmd := exec.Command("file", "--mime-type", "-b", entry.Path)
-				// cmd := exec.Command("mimetype", "-b", entry.Path)
-				var out bytes.Buffer
-				cmd.Stdout = &out
-				err = cmd.Run()
 				if err == nil {
-					list[i].ContentType = strings.TrimSuffix(out.String(), "\n")
+					first512 := make([]byte, 512)
+					fread, _ := sr.ReadAt(first512, 0)
+					if fread > 0 {
+						mimeType := http.DetectContentType(first512[:fread])
+						if filepath.Ext(entry.Path) == ".css" {
+							mimeType = "text/css"
+						}
+						list[i].ContentType = mimeType
+						//fmt.Printf("%v %v %v\n", entry.Path, mimeType, filepath.Ext(entry.Path))
+					}
 				}
+				f.Close()
 			}
 			errors[i] = err
 			done <- true
