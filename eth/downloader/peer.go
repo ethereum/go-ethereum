@@ -87,6 +87,9 @@ func (p *peer) SetIdle() {
 	scale := 2.0
 	if time.Since(p.started) > blockSoftTTL {
 		scale = 0.5
+		if time.Since(p.started) > blockHardTTL {
+			scale = 1 / float64(MaxBlockFetch) // reduces capacity to 1
+		}
 	}
 	for {
 		// Calculate the new download bandwidth allowance

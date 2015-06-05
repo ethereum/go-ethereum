@@ -460,6 +460,7 @@ out:
 				// 3) Amount and availability.
 				if peer := d.peers.Peer(pid); peer != nil {
 					peer.Demote()
+					glog.V(logger.Detail).Infof("%s: block delivery timeout", peer)
 				}
 			}
 			// After removing bad peers make sure we actually have sufficient peer left to keep downloading
