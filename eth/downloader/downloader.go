@@ -422,28 +422,46 @@ out:
 			// in a reasonable time frame, ignore it's message.
 			if peer := d.peers.Peer(blockPack.peerId); peer != nil {
 				// Deliver the received chunk of blocks, and demote in case of errors
-				if err := d.queue.Deliver(blockPack.peerId, blockPack.blocks); err != nil {
-					if err == ErrInvalidChain {
-						// The hash chain is invalid (blocks are not ordered properly), abort
-						return err
+				err := d.queue.Deliver(blockPack.peerId, blockPack.blocks)
+				switch err {
+				case nil:
+					// If no blocks were delivered, demote the peer (need the delivery above)
+					if len(blockPack.blocks) == 0 {
+						peer.Demote()
+						peer.SetIdle()
+						glog.V(logger.Detail).Infof("%s: no blocks delivered", peer)
+						break
 					}
-					// Peer did deliver, but some blocks were off, penalize
+					// All was successful, promote the peer
+					peer.Promote()
+					peer.SetIdle()
+					glog.V(logger.Detail).Infof("%s: delivered %d blocks", peer, len(blockPack.blocks))
+
+				case ErrInvalidChain:
+					// The hash chain is invalid (blocks are not ordered properly), abort
+					return err
+
+				case errNoFetchesPending:
+					// Peer probably timed out with its delivery but came through
+					// in the end, demote, but allow to to pull from this peer.
 					peer.Demote()
 					peer.SetIdle()
-					glog.V(logger.Detail).Infof("%s: block delivery failed: %v", peer, err)
-					break
-				}
-				// If no blocks were delivered, demote the peer (above code is needed to mark the packet done!)
-				if len(blockPack.blocks) == 0 {
+					glog.V(logger.Detail).Infof("%s: out of bound delivery", peer)
+
+				case errStaleDelivery:
+					// Delivered something completely else than requested, usually
+					// caused by a timeout and delivery during a new sync cycle.
+					// Don't set it to idle as the original request should still be
+					// in flight.
+					peer.Demote()
+					glog.V(logger.Detail).Infof("%s: stale delivery", peer)
+
+				default:
+					// Peer did something semi-useful, demote but keep it around
 					peer.Demote()
 					peer.SetIdle()
-					glog.V(logger.Detail).Infof("%s: no blocks delivered", peer)
-					break
+					glog.V(logger.Detail).Infof("%s: delivery partially failed: %v", peer, err)
 				}
-				// All was successful, promote the peer
-				peer.Promote()
-				peer.SetIdle()
-				glog.V(logger.Detail).Infof("%s: delivered %d blocks", peer, len(blockPack.blocks))
 			}
 		case <-ticker.C:
 			// Check for bad peers. Bad peers may indicate a peer not responding

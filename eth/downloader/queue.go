@@ -20,6 +20,11 @@ const (
 	blockCacheLimit = 8 * MaxBlockFetch // Maximum number of blocks to cache before throttling the download
 )
 
+var (
+	errNoFetchesPending = errors.New("no fetches pending")
+	errStaleDelivery    = errors.New("stale delivery")
+)
+
 // fetchRequest is a currently running block retrieval operation.
 type fetchRequest struct {
 	Peer   *peer               // Peer to which the request was sent
@@ -293,7 +298,7 @@ func (q *queue) Deliver(id string, blocks []*types.Block) (err error) {
 	// Short circuit if the blocks were never requested
 	request := q.pendPool[id]
 	if request == nil {
-		return errors.New("no fetches pending")
+		return errNoFetchesPending
 	}
 	delete(q.pendPool, id)
 
@@ -309,7 +314,7 @@ func (q *queue) Deliver(id string, blocks []*types.Block) (err error) {
 		// Skip any blocks that were not requested
 		hash := block.Hash()
 		if _, ok := request.Hashes[hash]; !ok {
-			errs = append(errs, fmt.Errorf("non-requested block %v", hash))
+			errs = append(errs, fmt.Errorf("non-requested block %x", hash))
 			continue
 		}
 		// If a requested block falls out of the range, the hash chain is invalid
@@ -326,11 +331,15 @@ func (q *queue) Deliver(id string, blocks []*types.Block) (err error) {
 		delete(q.hashPool, hash)
 		q.blockPool[hash] = int(block.NumberU64())
 	}
-	// Return all failed fetches to the queue
+	// Return all failed or missing fetches to the queue
 	for hash, index := range request.Hashes {
 		q.hashQueue.Push(hash, float32(index))
 	}
+	// If none of the blocks were good, it's a stale delivery
 	if len(errs) != 0 {
+		if len(errs) == len(blocks) {
+			return errStaleDelivery
+		}
 		return fmt.Errorf("multiple failures: %v", errs)
 	}
 	return nil
