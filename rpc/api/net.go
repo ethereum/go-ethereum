@@ -4,6 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
+	e "github.com/ethereum/go-ethereum/eth"
 )
 
 var (
@@ -12,6 +13,7 @@ var (
 		"net_version":   (*net).Version,
 		"net_peerCount": (*net).PeerCount,
 		"net_listening": (*net).IsListening,
+		"net_peers":     (*net).Peers,
 	}
 )
 
@@ -21,14 +23,16 @@ type nethandler func(*net, *shared.Request) (interface{}, error)
 // net api provider
 type net struct {
 	xeth    *xeth.XEth
+	ethereum *e.Ethereum
 	methods map[string]nethandler
 	codec   codec.ApiCoder
 }
 
 // create a new net api instance
-func NewNet(xeth *xeth.XEth, coder codec.Codec) *net {
+func NewNet(xeth *xeth.XEth, eth *e.Ethereum, coder codec.Codec) *net {
 	return &net{
 		xeth:    xeth,
+		ethereum: eth,
 		methods: netMapping,
 		codec:   coder.New(nil),
 	}
@@ -65,9 +69,13 @@ func (self *net) Version(req *shared.Request) (interface{}, error) {
 
 // Number of connected peers
 func (self *net) PeerCount(req *shared.Request) (interface{}, error) {
-	return newHexNum(self.xeth.PeerCount()), nil
+	return self.xeth.PeerCount(), nil
 }
 
 func (self *net) IsListening(req *shared.Request) (interface{}, error) {
 	return self.xeth.IsListening(), nil
+}
+
+func (self *net) Peers(req *shared.Request) (interface{}, error) {
+	return self.ethereum.PeersInfo(), nil
 }

@@ -128,6 +128,11 @@ func (js *jsre) apiBindings(ipcpath string) {
 		utils.Fatalf("Error loading miner.js: %v", err)
 	}
 
+	err = js.re.Compile("net.js", api.Net_JS)
+	if err != nil {
+		utils.Fatalf("Error loading net.js: %v", err)
+	}
+
 	_, err = js.re.Eval("web3.setProvider(jeth)")
 	if err != nil {
 		utils.Fatalf("Error setting web3 provider: %v", err)
@@ -136,8 +141,9 @@ func (js *jsre) apiBindings(ipcpath string) {
 var eth = web3.eth;
 var shh = web3.shh;
 var db  = web3.db;
-var net = web3.net;
+var net = web3.network;
   `)
+
 	if err != nil {
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}

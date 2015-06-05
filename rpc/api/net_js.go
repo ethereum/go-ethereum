@@ -2,7 +2,7 @@ package api
 
 const Net_JS = `
 web3.extend({
-	property: 'miner',
+	property: 'network',
 	methods:
 	[
 		new web3.extend.Method({
@@ -13,18 +13,18 @@ web3.extend({
 			outputFormatter: web3.extend.formatters.formatOutputString
 		}),
 		new web3.extend.Method({
-			name: 'stop',
-			call: 'net_getPeerCount',
+			name: 'getPeerCount',
+			call: 'net_peerCount',
 			params: 0,
 			inputFormatter: [],
 			outputFormatter: web3.extend.formatters.formatOutputString
 		}),
 		new web3.extend.Method({
-			name: 'stop',
-			call: 'miner_stop',
+			name: 'peers',
+			call: 'net_peers',
 			params: 0,
 			inputFormatter: [],
-			outputFormatter: web3.extend.formatters.formatOutputBool
+			outputFormatter: function(obj) { return obj; }
 		})
 	],
 	properties:
@@ -36,7 +36,7 @@ web3.extend({
 		}),
 		new web3.extend.Property({
 			name: 'peerCount',
-			getter: 'net_getPeerCount',
+			getter: 'net_peerCount',
 			outputFormatter: web3.extend.utils.toDecimal
 		})
 	]

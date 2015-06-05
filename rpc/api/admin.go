@@ -13,9 +13,43 @@ const (
 var (
 	// mapping between methods and handlers
 	AdminMapping = map[string]adminhandler{
-	//"admin_startMiner":          (*admin).StartMiner,
+//		"admin_startRPC":          (*admin).StartRPC,
+//		"admin_startRPC":          (*admin).StopRPC,
+//		"admin_startRPC":          (*admin).NodeInfo,
+//		"admin_startRPC":          (*admin).StartRPC,
+//		"admin_startRPC":          (*admin).StartRPC,
+//		"admin_startRPC":          (*admin).StartRPC,
+//		"admin_startRPC":          (*admin).StartRPC,
+//		"admin_startRPC":          (*admin).StartRPC,
+//		"admin_startRPC":          (*admin).StartRPC,
+//		"admin_startRPC":          (*admin).StartRPC,
+//		"admin_startRPC":          (*admin).StartRPC,
+//		"admin_startRPC":          (*admin).StartRPC,
 	}
 )
+
+/*
+addPeer: [Function],
+  startRPC: [Function],
+  stopRPC: [Function],
+  nodeInfo: [Function],
+  peers: [Function],
+  newAccount: [Function],
+  unlock: [Function],
+  import: [Function],
+  export: [Function],
+  verbosity: [Function],
+  progress: [Function],
+  setSolc: [Function],
+  contractInfo: {
+    start: [Function],
+    stop: [Function],
+    newRegistry: [Function],
+    get: [Function],
+    register: [Function],
+    registerUrl: [Function]
+  },
+ */
 
 // admin callback handler
 type adminhandler func(*admin, *shared.Request) (interface{}, error)

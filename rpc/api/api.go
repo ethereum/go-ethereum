@@ -77,7 +77,7 @@ func ParseApiString(apiString string, codec codec.Codec, eth *e.Ethereum) ([]Eth
 		case "miner":
 			apis[i] = NewMiner(eth, codec)
 		case "net":
-			apis[i] = NewNet(xeth, codec)
+			apis[i] = NewNet(xeth, eth, codec)
 		case "web3":
 			apis[i] = NewWeb3(xeth, codec)
 		default:
