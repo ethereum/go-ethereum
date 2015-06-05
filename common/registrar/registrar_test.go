@@ -1,4 +1,4 @@
-package resolver
+package registrar
 
 import (
 	"testing"
@@ -20,22 +20,22 @@ var (
 )
 
 func NewTestBackend() *testBackend {
-	HashRegContractAddress = common.BigToAddress(common.Big0).Hex()[2:]
-	UrlHintContractAddress = common.BigToAddress(common.Big1).Hex()[2:]
+	HashRegAddr = common.BigToAddress(common.Big0).Hex() //[2:]
+	UrlHintAddr = common.BigToAddress(common.Big1).Hex() //[2:]
 	self := &testBackend{}
 	self.contracts = make(map[string](map[string]string))
 
-	self.contracts[HashRegContractAddress] = make(map[string]string)
+	self.contracts[HashRegAddr[2:]] = make(map[string]string)
 	key := storageAddress(storageMapping(storageIdx2Addr(1), codehash[:]))
-	self.contracts[HashRegContractAddress][key] = hash.Hex()
+	self.contracts[HashRegAddr[2:]][key] = hash.Hex()
 
-	self.contracts[UrlHintContractAddress] = make(map[string]string)
+	self.contracts[UrlHintAddr[2:]] = make(map[string]string)
 	mapaddr := storageMapping(storageIdx2Addr(1), hash[:])
 
 	key = storageAddress(storageFixedArray(mapaddr, storageIdx2Addr(0)))
-	self.contracts[UrlHintContractAddress][key] = common.ToHex([]byte(url))
+	self.contracts[UrlHintAddr[2:]][key] = common.ToHex([]byte(url))
 	key = storageAddress(storageFixedArray(mapaddr, storageIdx2Addr(1)))
-	self.contracts[UrlHintContractAddress][key] = "0x00"
+	self.contracts[UrlHintAddr[2:]][key] = "0x0"
 	return self
 }
 
@@ -52,11 +52,25 @@ func (self *testBackend) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, ga
 	return "", nil
 }
 
-func TestKeyToContentHash(t *testing.T) {
+func (self *testBackend) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, string, error) {
+	return "", "", nil
+}
+
+func TestSetGlobalRegistrar(t *testing.T) {
 	b := NewTestBackend()
 	res := New(b)
+	err := res.SetGlobalRegistrar("addresshex", common.BigToAddress(common.Big1))
+	if err != nil {
+		t.Errorf("unexpected error: %v'", err)
+	}
+}
 
-	got, err := res.KeyToContentHash(codehash)
+func TestHashToHash(t *testing.T) {
+	b := NewTestBackend()
+	res := New(b)
+	// res.SetHashReg()
+
+	got, err := res.HashToHash(codehash)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	} else {
@@ -66,28 +80,17 @@ func TestKeyToContentHash(t *testing.T) {
 	}
 }
 
-func TestContentHashToUrl(t *testing.T) {
+func TestHashToUrl(t *testing.T) {
 	b := NewTestBackend()
 	res := New(b)
-	got, err := res.ContentHashToUrl(hash)
+	// res.SetUrlHint()
+
+	got, err := res.HashToUrl(hash)
 	if err != nil {
-		t.Errorf("expected no error, got %v", err)
+		t.Errorf("expected 	 error, got %v", err)
 	} else {
 		if got != url {
 			t.Errorf("incorrect result, expected '%v', got '%s'", url, got)
-		}
-	}
-}
-
-func TestKeyToUrl(t *testing.T) {
-	b := NewTestBackend()
-	res := New(b)
-	got, _, err := res.KeyToUrl(codehash)
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	} else {
-		if got != url {
-			t.Errorf("incorrect result, expected \n'%s', got \n'%s'", url, got)
 		}
 	}
 }

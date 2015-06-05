@@ -26,10 +26,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/bzz"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
+	"github.com/ethereum/go-ethereum/common/registrar"
+	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
 	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -63,6 +66,7 @@ func (r dumbterm) PasswordPrompt(p string) (string, error) {
 func (r dumbterm) AppendHistory(string) {}
 
 type jsre struct {
+	ds         *docserver.DocServer
 	re         *re.JSRE
 	ethereum   *eth.Ethereum
 	xeth       *xeth.XEth
@@ -73,19 +77,27 @@ type jsre struct {
 	prompter
 }
 
-func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, interactive bool, f xeth.Frontend) *jsre {
+func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, bzzEnabled bool, bzzPort string, interactive bool, f xeth.Frontend) *jsre {
 	js := &jsre{ethereum: ethereum, ps1: "> "}
 	// set default cors domain used by startRpc from CLI flag
 	js.corsDomain = corsDomain
 	if f == nil {
 		f = js
 	}
+	js.ds = docserver.New("/")
 	js.xeth = xeth.New(ethereum, f)
 	js.wait = js.xeth.UpdateState()
-	// update state in separare forever blocks
 	js.re = re.New(libPath)
+	// js.apiBindings(js.xeth)
 	js.apiBindings(f)
 	js.adminBindings()
+	if bzzEnabled {
+		// register the swarm rountripper with the bzz scheme on the docserver
+		js.ds.RegisterScheme("bzz", &bzz.RoundTripper{Port: bzzPort})
+		// swarm js bindings
+		bzz.NewJSApi(js.re, js.ethereum.Swarm)
+		js.ethereum.Swarm.Registrar = ethreg.New(js.xeth)
+	}
 
 	if !liner.TerminalSupported() || !interactive {
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
@@ -105,6 +117,7 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, interactive boo
 
 func (js *jsre) apiBindings(f xeth.Frontend) {
 	xe := xeth.New(js.ethereum, f)
+	// func (js *jsre) apiBindings(xe *xeth.XEth) {
 	ethApi := rpc.NewEthereumApi(xe)
 	jeth := rpc.NewJeth(ethApi, js.re)
 
@@ -143,14 +156,12 @@ var net = web3.net;
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
 
-	js.re.Eval(globalRegistrar + "registrar = GlobalRegistrar.at(\"" + globalRegistrarAddr + "\");")
+	js.re.Eval(`var GlobalRegistrar = eth.contract(` + registrar.GlobalRegistrarAbi + `);	 registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
 }
-
-var ds, _ = docserver.New("/")
 
 func (self *jsre) ConfirmTransaction(tx string) bool {
 	if self.ethereum.NatSpec {
-		notice := natspec.GetNotice(self.xeth, tx, ds)
+		notice := natspec.GetNotice(self.xeth, tx, self.ds)
 		fmt.Println(notice)
 		answer, _ := self.Prompt("Confirm Transaction [y/n]")
 		return strings.HasPrefix(strings.Trim(answer, " "), "y")

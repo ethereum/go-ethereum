@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/bzz"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/core"
@@ -82,9 +83,12 @@ type Config struct {
 	// If nil, an ephemeral key is used.
 	NodeKey *ecdsa.PrivateKey
 
-	NAT  nat.Interface
-	Shh  bool
-	Dial bool
+	NAT     nat.Interface
+	Shh     bool
+	Dial    bool
+	Bzz     bool
+	BzzPort string
+	PowTest bool
 
 	Etherbase      string
 	GasPrice       *big.Int
@@ -193,6 +197,7 @@ type Ethereum struct {
 	pow             *ethash.Ethash
 	protocolManager *ProtocolManager
 	downloader      *downloader.Downloader
+	Swarm           *bzz.Api
 	SolcPath        string
 	solc            *compiler.Solidity
 
@@ -283,7 +288,15 @@ func New(config *Config) (*Ethereum, error) {
 		AutoDAG:         config.AutoDAG,
 	}
 
-	eth.pow = ethash.New()
+	if config.PowTest {
+		glog.V(logger.Info).Infof("ethash used in test mode")
+		eth.pow, err = ethash.NewForTesting()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		eth.pow = ethash.New()
+	}
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.pow, eth.EventMux())
 	eth.downloader = downloader.New(eth.EventMux(), eth.chainManager.HasBlock, eth.chainManager.GetBlock)
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
@@ -302,7 +315,25 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	protocols := []p2p.Protocol{eth.protocolManager.SubProtocol}
+
+	if config.Bzz {
+		eth.Swarm, err = bzz.NewApi(config.DataDir, config.BzzPort)
+		if err != nil {
+			glog.V(logger.Warn).Infof("BZZ: error creating swarm: %v. Protocol skipped", err)
+		} else {
+			var proto p2p.Protocol
+			proto, err = eth.Swarm.Bzz()
+			if err != nil {
+				glog.V(logger.Warn).Infof("BZZ: error creating swarm: %v. Protocol skipped", err)
+				eth.Swarm = nil
+			} else {
+				protocols = append(protocols, proto)
+			}
+		}
+	}
+
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
 	}
@@ -323,6 +354,8 @@ func New(config *Config) (*Ethereum, error) {
 	if len(config.Port) > 0 {
 		eth.net.ListenAddr = ":" + config.Port
 	}
+
+	eth.net.Protocols = protocols
 
 	vm.Debug = config.VmDebug
 
@@ -450,6 +483,7 @@ func (s *Ethereum) Start() error {
 		ClientString:    s.net.Name,
 		ProtocolVersion: ProtocolVersion,
 	})
+
 	err := s.net.Start()
 	if err != nil {
 		return err
@@ -467,6 +501,10 @@ func (s *Ethereum) Start() error {
 
 	if s.whisper != nil {
 		s.whisper.Start()
+	}
+
+	if s.Swarm != nil {
+		s.Swarm.Start(s.net.Self(), s.AddPeer)
 	}
 
 	glog.V(logger.Info).Infoln("Server started")
@@ -536,6 +574,11 @@ func (s *Ethereum) Stop() {
 	}
 	s.StopAutoDAG()
 
+	if s.Swarm != nil {
+		s.Swarm.Stop()
+	}
+
+	glog.V(logger.Info).Infoln("Server stopped")
 	close(s.shutdownChan)
 }
 

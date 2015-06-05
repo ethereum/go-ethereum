@@ -47,6 +47,14 @@ func newNode(id NodeID, ip net.IP, udpPort, tcpPort uint16) *Node {
 	}
 }
 
+func NewNode(id NodeID, ip net.IP, udpPort, tcpPort uint16) *Node {
+	return newNode(id, ip, udpPort, tcpPort)
+}
+
+func (n *Node) Sha() common.Hash {
+	return n.sha
+}
+
 func (n *Node) addr() *net.UDPAddr {
 	return &net.UDPAddr{IP: n.IP, Port: int(n.UDP)}
 }

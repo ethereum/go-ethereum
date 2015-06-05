@@ -40,8 +40,6 @@ func (e *encodableReader) Read(b []byte) (int, error) {
 	panic("called")
 }
 
-type namedByteType byte
-
 var (
 	_ = Encoder(&testEncoder{})
 	_ = Encoder(byteEncoder(0))

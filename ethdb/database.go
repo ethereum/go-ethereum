@@ -69,6 +69,10 @@ func (self *LDBDatabase) Flush() error {
 	return nil
 }
 
+func (self *LDBDatabase) Write(batch *leveldb.Batch) error {
+	return self.db.Write(batch, nil)
+}
+
 func (self *LDBDatabase) Close() {
 	if err := self.Flush(); err != nil {
 		glog.V(logger.Error).Infof("error: flush '%s': %v\n", self.fn, err)
