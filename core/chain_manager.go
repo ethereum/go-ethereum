@@ -30,8 +30,9 @@ var (
 )
 
 const (
-	blockCacheLimit = 10000
-	maxFutureBlocks = 256
+	blockCacheLimit     = 10000
+	maxFutureBlocks     = 256
+	maxTimeFutureBlocks = 30
 )
 
 func CalcDifficulty(block, parent *types.Header) *big.Int {
@@ -579,6 +580,13 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			}
 
 			if err == BlockFutureErr {
+				// Allow up to MaxFuture second in the future blocks. If this limit
+				// is exceeded the chain is discarded and processed at a later time
+				// if given.
+				if max := time.Now().Unix() + maxTimeFutureBlocks; block.Time() > max {
+					return i, fmt.Errorf("%v: BlockFutureErr, %v > %v", BlockFutureErr, block.Time(), max)
+				}
+
 				block.SetQueued(true)
 				self.futureBlocks.Push(block)
 				stats.queued++
