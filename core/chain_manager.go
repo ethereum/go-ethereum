@@ -351,13 +351,12 @@ func (self *ChainManager) Export(w io.Writer) error {
 func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
-	glog.V(logger.Info).Infof("exporting %v blocks...\n", self.currentBlock.Header().Number)
 
 	if first > last {
 		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
 	}
 
-	glog.V(logger.Info).Infof("exporting %d blocks...\n", last-first)
+	glog.V(logger.Info).Infof("exporting %d blocks...\n", last-first+1)
 
 	for nr := first; nr <= last; nr++ {
 		block := self.GetBlockByNumber(nr)

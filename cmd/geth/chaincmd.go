@@ -69,7 +69,7 @@ func importChain(ctx *cli.Context) {
 }
 
 func exportChain(ctx *cli.Context) {
-	if len(ctx.Args()) != 1 {
+	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 	chain, _, _, _ := utils.MakeChain(ctx)
