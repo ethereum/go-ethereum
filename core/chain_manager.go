@@ -341,7 +341,7 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 
 // Export writes the active chain to the given writer.
 func (self *ChainManager) Export(w io.Writer) error {
-	if err := self.ExportN(w, uint64(1), self.currentBlock.NumberU64()); err != nil {
+	if err := self.ExportN(w, uint64(0), self.currentBlock.NumberU64()); err != nil {
 		return err
 	}
 	return nil
