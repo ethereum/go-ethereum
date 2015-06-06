@@ -76,16 +76,20 @@ func exportChain(ctx *cli.Context) {
 	start := time.Now()
 
 	var err error
+	fp := ctx.Args().First()
 	if len(ctx.Args()) < 3 {
-		err = utils.ExportChain(chain, ctx.Args().First())
+		err = utils.ExportChain(chain, fp)
 	} else {
 		// This can be improved to allow for numbers larger than 9223372036854775807
 		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
 		last, lerr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
 		if ferr != nil || lerr != nil {
-			utils.Fatalf("Export error in parsing parameters\n")
+			utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
 		}
-		err = utils.ExportAppendChain(chain, ctx.Args().First(), uint64(first), uint64(last))
+		if first < 0 || last < 0 {
+			utils.Fatalf("Export error: block number must be greater than 0\n")
+		}
+		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
 	}
 
 	if err != nil {
