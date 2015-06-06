@@ -268,3 +268,18 @@ func ExportChain(chainmgr *core.ChainManager, fn string) error {
 	glog.Infoln("Exported blockchain to", fn)
 	return nil
 }
+
+func ExportAppendChain(chainmgr *core.ChainManager, fn string, first uint64, last uint64) error {
+	glog.Infoln("Exporting blockchain to", fn)
+	// TODO verify mode perms
+	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+	if err := chainmgr.ExportN(fh, first, last); err != nil {
+		return err
+	}
+	glog.Infoln("Exported blockchain to", fn)
+	return nil
+}
