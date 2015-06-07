@@ -230,8 +230,7 @@ func (q *queue) Reserve(p *peer, count int) *fetchRequest {
 	send := make(map[common.Hash]int)
 	skip := make(map[common.Hash]int)
 
-	capacity := p.Capacity()
-	for proc := 0; proc < space && len(send) < capacity && !q.hashQueue.Empty(); proc++ {
+	for proc := 0; proc < space && len(send) < count && !q.hashQueue.Empty(); proc++ {
 		hash, priority := q.hashQueue.Pop()
 		if p.ignored.Has(hash) {
 			skip[hash.(common.Hash)] = int(priority)
