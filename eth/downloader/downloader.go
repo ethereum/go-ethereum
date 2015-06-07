@@ -23,11 +23,11 @@ const (
 	MaxBlockFetch = 128  // Amount of blocks to be fetched per retrieval request
 
 	peerCountTimeout = 12 * time.Second // Amount of time it takes for the peer handler to ignore minDesiredPeerCount
-	hashTTL          = 5 * time.Second  // Time it takes for a hash request to time out
+	hashTTL          = 240 * time.Second  // Time it takes for a hash request to time out
 )
 
 var (
-	blockSoftTTL        = 3 * time.Second  // Request completion threshold for increasing or decreasing a peer's bandwidth
+	blockSoftTTL        = 240 * time.Second  // Request completion threshold for increasing or decreasing a peer's bandwidth
 	blockHardTTL        = 3 * blockSoftTTL // Maximum time allowance before a block request is considered expired
 	crossCheckCycle     = time.Second      // Period after which to check for expired cross checks
 	minDesiredPeerCount = 5                // Amount of peers desired to start syncing
