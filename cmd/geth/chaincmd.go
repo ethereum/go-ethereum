@@ -26,6 +26,12 @@ var (
 		Action: exportChain,
 		Name:   "export",
 		Usage:  `export blockchain into file`,
+		Description: `
+Requires a first argument of the file to write to.
+Optional second and third arguments control the first and
+last block to write. In this mode, the file will be appended
+if already existing.
+		`,
 	}
 	upgradedbCommand = cli.Command{
 		Action: upgradeDB,
@@ -63,12 +69,30 @@ func importChain(ctx *cli.Context) {
 }
 
 func exportChain(ctx *cli.Context) {
-	if len(ctx.Args()) != 1 {
+	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 	chain, _, _, _ := utils.MakeChain(ctx)
 	start := time.Now()
-	if err := utils.ExportChain(chain, ctx.Args().First()); err != nil {
+
+	var err error
+	fp := ctx.Args().First()
+	if len(ctx.Args()) < 3 {
+		err = utils.ExportChain(chain, fp)
+	} else {
+		// This can be improved to allow for numbers larger than 9223372036854775807
+		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
+		last, lerr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+		if ferr != nil || lerr != nil {
+			utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
+		}
+		if first < 0 || last < 0 {
+			utils.Fatalf("Export error: block number must be greater than 0\n")
+		}
+		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
+	}
+
+	if err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 	fmt.Printf("Export done in %v", time.Since(start))

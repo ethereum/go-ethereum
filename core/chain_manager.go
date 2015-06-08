@@ -347,13 +347,24 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 
 // Export writes the active chain to the given writer.
 func (self *ChainManager) Export(w io.Writer) error {
+	if err := self.ExportN(w, uint64(0), self.currentBlock.NumberU64()); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ExportN writes a subset of the active chain to the given writer.
+func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
-	glog.V(logger.Info).Infof("exporting %v blocks...\n", self.currentBlock.Header().Number)
 
-	last := self.currentBlock.NumberU64()
+	if first > last {
+		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
+	}
 
-	for nr := uint64(1); nr <= last; nr++ {
+	glog.V(logger.Info).Infof("exporting %d blocks...\n", last-first+1)
+
+	for nr := first; nr <= last; nr++ {
 		block := self.GetBlockByNumber(nr)
 		if block == nil {
 			return fmt.Errorf("export failed on #%d: not found", nr)
