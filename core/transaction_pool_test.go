@@ -201,3 +201,26 @@ func TestTransactionDoubleNonce(t *testing.T) {
 		t.Error("expected 2 pending txs. Got", len(pool.pending))
 	}
 }
+
+func TestMissingNonce(t *testing.T) {
+	pool, key := setupTxPool()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	pool.currentState().AddBalance(addr, big.NewInt(100000000000000))
+	tx := transaction()
+	tx.AccountNonce = 1
+	tx.GasLimit = big.NewInt(100000)
+	tx.SignECDSA(key)
+
+	err := pool.add(tx)
+	if err != nil {
+		t.Error("didn't expect error", err)
+	}
+
+	if len(pool.pending) != 0 {
+		t.Error("expected 0 pending transactions, got", len(pool.pending))
+	}
+
+	if len(pool.queue[addr]) != 1 {
+		t.Error("expected 1 queued transaction, got", len(pool.queue[addr]))
+	}
+}

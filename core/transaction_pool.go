@@ -331,7 +331,7 @@ func (pool *TxPool) checkQueue() {
 		// current account nonce.
 		sort.Sort(addq)
 		for _, e := range addq {
-			if e.AccountNonce > curnonce+1 {
+			if e.AccountNonce > curnonce {
 				break
 			}
 			delete(txs, e.hash)
