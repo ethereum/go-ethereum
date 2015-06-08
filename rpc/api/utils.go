@@ -25,6 +25,8 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 			apis[i] = NewEthApi(xeth, codec)
 		case MinerApiName:
 			apis[i] = NewMinerApi(eth, codec)
+		case NetApiName:
+			apis[i] = NewNetApi(xeth, eth, codec)
 		case Web3ApiName:
 			apis[i] = NewWeb3(xeth, codec)
 		default:
@@ -39,6 +41,8 @@ func Javascript(name string) string {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case MinerApiName:
 		return Miner_JS
+	case NetApiName:
+		return Net_JS
 	}
 
 	return ""

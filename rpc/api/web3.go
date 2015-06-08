@@ -13,7 +13,7 @@ const (
 )
 
 var (
-// mapping between methods and handlers
+	// mapping between methods and handlers
 	Web3Mapping = map[string]web3handler{
 		"web3_sha3":          (*web3).Sha3,
 		"web3_clientVersion": (*web3).ClientVersion,
