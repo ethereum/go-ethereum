@@ -11,6 +11,10 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/robertkrimen/otto"
+	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/shared"
+	"reflect"
 )
 
 type Jeth struct {
@@ -40,6 +44,13 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 		return self.err(call, -32700, err.Error(), nil)
 	}
 
+	client, err := comms.NewIpcClient(comms.IpcConfig{self.ipcpath}, codec.JSON)
+	if err != nil {
+		fmt.Println("Unable to connect to geth.")
+		return self.err(call, -32603, err.Error(), -1)
+	}
+	defer client.Close()
+
 	jsonreq, err := json.Marshal(reqif)
 	var reqs []RpcRequest
 	batch := true
@@ -54,22 +65,43 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 	call.Otto.Run("var ret_response = new Array(response_len);")
 
 	for i, req := range reqs {
-		var respif interface{}
-		err = self.ethApi.GetRequestReply(&req, &respif)
+		err := client.Send(&req)
 		if err != nil {
-			fmt.Println("Error response:", err)
+			fmt.Println("Error send request:", err)
 			return self.err(call, -32603, err.Error(), req.Id)
 		}
-		call.Otto.Set("ret_jsonrpc", jsonrpcver)
-		call.Otto.Set("ret_id", req.Id)
 
-		res, _ := json.Marshal(respif)
+		respif, err := client.Recv()
+		if err != nil {
+			fmt.Println("Error recv response:", err)
+			return self.err(call, -32603, err.Error(), req.Id)
+		}
 
-		call.Otto.Set("ret_result", string(res))
-		call.Otto.Set("response_idx", i)
-		response, err = call.Otto.Run(`
-		ret_response[response_idx] = { jsonrpc: ret_jsonrpc, id: ret_id, result: JSON.parse(ret_result) };
-		`)
+		if res, ok := respif.(shared.SuccessResponse); ok {
+			call.Otto.Set("ret_id", res.Id)
+			call.Otto.Set("ret_jsonrpc", res.Jsonrpc)
+			resObj, _ := json.Marshal(res.Result)
+			call.Otto.Set("ret_result", string(resObj))
+			call.Otto.Set("response_idx", i)
+
+			response, err = call.Otto.Run(`
+				ret_response[response_idx] = { jsonrpc: ret_jsonrpc, id: ret_id, result: JSON.parse(ret_result) };
+			`)
+		} else if res, ok := respif.(shared.ErrorResponse); ok {
+			fmt.Printf("Error: %s (%d)\n", res.Error.Message, res.Error.Code)
+
+			call.Otto.Set("ret_id", res.Id)
+			call.Otto.Set("ret_jsonrpc", res.Jsonrpc)
+			call.Otto.Set("ret_error", res.Error)
+			call.Otto.Set("response_idx", i)
+
+			response, _ = call.Otto.Run(`
+				ret_response = { jsonrpc: ret_jsonrpc, id: ret_id, error: ret_error };
+			`)
+			return
+		} else {
+			fmt.Printf("unexpected response\n", reflect.TypeOf(respif))
+		}
 	}
 
 	if !batch {

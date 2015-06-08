@@ -307,6 +307,7 @@ func console(ctx *cli.Context) {
 	repl := newJSRE(
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
+		ctx.GlobalString(utils.IPCPathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		ctx.GlobalString(utils.IPCPathFlag.Name),
 		true,
@@ -329,6 +330,7 @@ func execJSFiles(ctx *cli.Context) {
 	repl := newJSRE(
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
+		ctx.GlobalString(utils.IPCPathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		ctx.GlobalString(utils.IPCPathFlag.Name),
 		false,
