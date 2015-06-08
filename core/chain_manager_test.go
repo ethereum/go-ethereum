@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -425,4 +426,56 @@ func TestReorgShortest(t *testing.T) {
 			t.Errorf("parent hash mismatch %x - %x", prev.ParentHash(), block.Hash())
 		}
 	}
+}
+
+func TestInsertNonceError(t *testing.T) {
+	for i := 1; i < 25 && !t.Failed(); i++ {
+		db, _ := ethdb.NewMemDatabase()
+		genesis := GenesisBlock(db)
+		bc := chm(genesis, db)
+		bc.processor = NewBlockProcessor(db, db, bc.pow, bc, bc.eventMux)
+		blocks := makeChain(bc.processor.(*BlockProcessor), bc.currentBlock, i, db, 0)
+
+		fail := rand.Int() % len(blocks)
+		failblock := blocks[fail]
+		bc.pow = failpow{failblock.NumberU64()}
+		n, err := bc.InsertChain(blocks)
+
+		// Check that the returned error indicates the nonce failure.
+		if n != fail {
+			t.Errorf("(i=%d) wrong failed block index: got %d, want %d", i, n, fail)
+		}
+		if !IsBlockNonceErr(err) {
+			t.Fatalf("(i=%d) got %q, want a nonce error", i, err)
+		}
+		nerr := err.(*BlockNonceErr)
+		if nerr.Number.Cmp(failblock.Number()) != 0 {
+			t.Errorf("(i=%d) wrong block number in error, got %v, want %v", i, nerr.Number, failblock.Number())
+		}
+		if nerr.Hash != failblock.Hash() {
+			t.Errorf("(i=%d) wrong block hash in error, got %v, want %v", i, nerr.Hash, failblock.Hash())
+		}
+
+		// Check that all no blocks after the failing block have been inserted.
+		for _, block := range blocks[fail:] {
+			if bc.HasBlock(block.Hash()) {
+				t.Errorf("(i=%d) invalid block %d present in chain", i, block.NumberU64())
+			}
+		}
+	}
+}
+
+// failpow returns false from Verify for a certain block number.
+type failpow struct{ num uint64 }
+
+func (pow failpow) Search(pow.Block, <-chan struct{}) (nonce uint64, mixHash []byte) {
+	return 0, nil
+}
+func (pow failpow) Verify(b pow.Block) bool {
+	return b.NumberU64() != pow.num
+}
+func (pow failpow) GetHashrate() int64 {
+	return 0
+}
+func (pow failpow) Turbo(bool) {
 }

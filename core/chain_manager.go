@@ -551,12 +551,12 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		bstart := time.Now()
 		// Wait for block i's nonce to be verified before processing
 		// its state transition.
-		for nonceChecked[i] {
+		for !nonceChecked[i] {
 			r := <-nonceDone
 			nonceChecked[r.i] = true
 			if !r.valid {
-				block := chain[i]
-				return i, ValidationError("Block (#%v / %x) nonce is invalid (= %x)", block.Number(), block.Hash(), block.Nonce)
+				block := chain[r.i]
+				return r.i, &BlockNonceErr{Hash: block.Hash(), Number: block.Number(), Nonce: block.Nonce()}
 			}
 		}
 
