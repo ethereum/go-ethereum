@@ -26,12 +26,18 @@ import (
 	"path/filepath"
 	"strings"
 
+	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common/docserver"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
+	"github.com/ethereum/go-ethereum/rpc/api"
 )
 
 type prompter interface {
@@ -120,9 +126,27 @@ func (js *jsre) apiBindings(ipcpath string) {
 	if err != nil {
 		utils.Fatalf("Error setting web3 provider: %v", err)
 	}
-	_, err = js.re.Eval(`
-var eth = web3.eth;
-  `)
+
+	apis, err := js.suportedApis(ipcpath)
+	if err != nil {
+		utils.Fatalf("Unable to determine supported api's: %v", err)
+	}
+
+	// load only supported API's in javascript runtime
+	shortcuts := "var eth = web3.eth; "
+	for _, apiName := range apis {
+		if apiName == api.Web3ApiName || apiName == api.EthApiName {
+			continue // manually mapped
+		}
+
+		if err = js.re.Compile(fmt.Sprintf("%s.js", apiName), api.Javascript(apiName)); err == nil {
+			shortcuts += fmt.Sprintf("var %s = web3.%s; ", apiName, apiName)
+		} else {
+			utils.Fatalf("Error loading %s.js: %v", apiName, err)
+		}
+	}
+
+	_, err = js.re.Eval(shortcuts)
 
 	if err != nil {
 		utils.Fatalf("Error setting namespaces: %v", err)
@@ -170,11 +194,59 @@ func (self *jsre) exec(filename string) error {
 	return nil
 }
 
+func (self *jsre) suportedApis(ipcpath string) ([]string, error) {
+	config := comms.IpcConfig{
+		Endpoint: ipcpath,
+	}
+
+	client, err := comms.NewIpcClient(config, codec.JSON)
+	if err != nil {
+		return nil, err
+	}
+
+	req := shared.Request{
+		Id:      1,
+		Jsonrpc: "2.0",
+		Method:  "support_apis",
+	}
+
+	err = client.Send(req)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := client.Recv()
+	if err != nil {
+		return nil, err
+	}
+
+	if sucRes, ok := res.(shared.SuccessResponse); ok {
+		data, _ := json.Marshal(sucRes.Result)
+		apis := make([]string, 0)
+		err = json.Unmarshal(data, &apis)
+		if err == nil {
+			return apis, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Unable to determine supported API's")
+}
+
 // show summary of current geth instance
-func (self *jsre) welcome() {
+func (self *jsre) welcome(ipcpath string) {
 	self.re.Eval(`
-		console.log('Connected to ' + web3.version.client);
+		console.log('   Connected to: ' + web3.version.client);
 	`)
+
+	if apis, err := self.suportedApis(ipcpath); err == nil {
+		apisStr := ""
+		for _, api := range apis {
+			apisStr += api + " "
+		}
+		self.re.Eval(fmt.Sprintf(`console.log("Available api's: %s");`, apisStr))
+	} else {
+		utils.Fatalf("unable to determine supported api's - %v", err)
+	}
 }
 
 func (self *jsre) interactive() {
