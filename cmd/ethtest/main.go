@@ -225,9 +225,29 @@ func main() {
 	helper.Logger.SetLogLevel(5)
 	vm.Debug = true
 
-	if len(os.Args) > 1 {
-		os.Exit(RunVmTest(strings.NewReader(os.Args[1])))
-	} else {
-		os.Exit(RunVmTest(os.Stdin))
+	if len(os.Args) < 2 {
+		glog.Exit("Must specify test type")
 	}
+
+	test := os.Args[1]
+
+	var code int
+	switch test {
+	case "vm", "VMTests":
+		glog.Exit("VMTests not yet implemented")
+	case "state", "StateTest":
+		if len(os.Args) > 2 {
+			code = RunVmTest(strings.NewReader(os.Args[2]))
+		} else {
+			code = RunVmTest(os.Stdin)
+		}
+	case "tx", "TransactionTests":
+		glog.Exit("TransactionTests not yet implemented")
+	case "bc", "BlockChainTest":
+		glog.Exit("BlockChainTest not yet implemented")
+	default:
+		glog.Exit("Invalid test type specified")
+	}
+
+	os.Exit(code)
 }
