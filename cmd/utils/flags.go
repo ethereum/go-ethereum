@@ -24,6 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/rpc/api"
+	"github.com/ethereum/go-ethereum/rpc/codec"
 )
 
 func init() {
@@ -201,6 +204,20 @@ var (
 		Usage: "Domain on which to send Access-Control-Allow-Origin header",
 		Value: "",
 	}
+	IPCDisabledFlag = cli.BoolFlag{
+		Name:  "ipcdisable",
+		Usage: "Disable the IPC-RPC server",
+	}
+	IPCApiFlag = cli.StringFlag{
+		Name:  "ipcapi",
+		Usage: "Specify the API's which are offered over this interface",
+		Value: api.DefaultIpcApis,
+	}
+	IPCPathFlag = cli.StringFlag{
+		Name:  "ipcpath",
+		Usage: "Filename for IPC socket/pipe",
+		Value: common.DefaultIpcPath(),
+	}
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
@@ -366,6 +383,22 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
 
 	xeth := xeth.New(eth, nil)
 	return rpc.Start(xeth, config)
+}
+
+func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
+	codec := codec.JSON
+	apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, eth)
+	if err != nil {
+		return err
+	}
+
+	glog.V(logger.Debug).Infof("IPC api's: %s", ctx.GlobalString(IPCApiFlag.Name))
+
+	cfg := comms.IpcConfig{
+		Endpoint: ctx.GlobalString(IPCPathFlag.Name),
+	}
+
+	return comms.StartIpc(cfg, codec, apis...)
 }
 
 func StartPProf(ctx *cli.Context) {

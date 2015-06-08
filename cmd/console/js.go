@@ -27,15 +27,12 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/docserver"
-	"github.com/ethereum/go-ethereum/common/natspec"
-	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
+	"github.com/ethereum/go-ethereum/rpc/api"
 )
 
 type prompter interface {
@@ -63,31 +60,24 @@ func (r dumbterm) PasswordPrompt(p string) (string, error) {
 func (r dumbterm) AppendHistory(string) {}
 
 type jsre struct {
-	re         *re.JSRE
-	ethereum   *eth.Ethereum
-	xeth       *xeth.XEth
-	wait       chan *big.Int
-	ps1        string
-	atexit     func()
-	corsDomain string
+	re      *re.JSRE
+	wait    chan *big.Int
+	ps1     string
+	atexit  func()
+	datadir string
 	prompter
 }
 
-func newJSRE(ethereum *eth.Ethereum, libPath, ipcpath, corsDomain string, interactive bool, f xeth.Frontend) *jsre {
-	js := &jsre{ethereum: ethereum, ps1: "> "}
-	// set default cors domain used by startRpc from CLI flag
-	js.corsDomain = corsDomain
-	if f == nil {
-		f = js
-	}
-	js.xeth = xeth.New(ethereum, f)
-	js.wait = js.xeth.UpdateState()
+func newJSRE(datadir, libPath, ipcpath string) *jsre {
+	js := &jsre{ps1: "> "}
+	js.wait = make(chan *big.Int)
+
 	// update state in separare forever blocks
 	js.re = re.New(libPath)
-	js.apiBindings(f, ipcpath)
+	js.apiBindings(ipcpath)
 	js.adminBindings()
 
-	if !liner.TerminalSupported() || !interactive {
+	if !liner.TerminalSupported() {
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
 	} else {
 		lr := liner.NewLiner()
@@ -103,9 +93,8 @@ func newJSRE(ethereum *eth.Ethereum, libPath, ipcpath, corsDomain string, intera
 	return js
 }
 
-func (js *jsre) apiBindings(f xeth.Frontend, ipcpath string) {
-	xe := xeth.New(js.ethereum, f)
-	ethApi := rpc.NewEthereumApi(xe)
+func (js *jsre) apiBindings(ipcpath string) {
+	ethApi := rpc.NewEthereumApi(nil)
 	jeth := rpc.NewJeth(ethApi, js.re, ipcpath)
 
 	js.re.Set("jeth", struct{}{})
@@ -119,14 +108,29 @@ func (js *jsre) apiBindings(f xeth.Frontend, ipcpath string) {
 		utils.Fatalf("Error loading bignumber.js: %v", err)
 	}
 
-	err = js.re.Compile("ethereum.js", re.Ethereum_JS)
+//	err = js.re.Compile("ethereum.js", re.Ethereum_JS)
+//	if err != nil {
+//		utils.Fatalf("Error loading ethereum.js: %v", err)
+//	}
+
+	err = js.re.Compile("ethereum.js", re.Web3_JS)
 	if err != nil {
-		utils.Fatalf("Error loading ethereum.js: %v", err)
+		utils.Fatalf("Error loading web3.js: %v", err)
 	}
 
 	_, err = js.re.Eval("var web3 = require('web3');")
 	if err != nil {
 		utils.Fatalf("Error requiring web3: %v", err)
+	}
+
+	err = js.re.Compile("miner.js", api.Miner_JS)
+	if err != nil {
+		utils.Fatalf("Error loading miner.js: %v", err)
+	}
+
+	err = js.re.Compile("net.js", api.Net_JS)
+	if err != nil {
+		utils.Fatalf("Error loading net.js: %v", err)
 	}
 
 	_, err = js.re.Eval("web3.setProvider(jeth)")
@@ -137,8 +141,10 @@ func (js *jsre) apiBindings(f xeth.Frontend, ipcpath string) {
 var eth = web3.eth;
 var shh = web3.shh;
 var db  = web3.db;
-var net = web3.net;
+var net = web3.network;
+var miner = web3.miner;
   `)
+
 	if err != nil {
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
@@ -148,6 +154,7 @@ var net = web3.net;
 
 var ds, _ = docserver.New("/")
 
+/*
 func (self *jsre) ConfirmTransaction(tx string) bool {
 	if self.ethereum.NatSpec {
 		notice := natspec.GetNotice(self.xeth, tx, ds)
@@ -173,6 +180,7 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 		return true
 	}
 }
+*/
 
 func (self *jsre) exec(filename string) error {
 	if err := self.re.Exec(filename); err != nil {
@@ -181,6 +189,13 @@ func (self *jsre) exec(filename string) error {
 	}
 	self.re.Stop(true)
 	return nil
+}
+
+// show summary of current geth instance
+func (self *jsre) welcome() {
+	self.re.Eval(`
+		console.log('Connected to ' + web3.version.client);
+	`)
 }
 
 func (self *jsre) interactive() {
@@ -233,7 +248,7 @@ func (self *jsre) interactive() {
 }
 
 func (self *jsre) withHistory(op func(*os.File)) {
-	hist, err := os.OpenFile(filepath.Join(self.ethereum.DataDir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
+	hist, err := os.OpenFile(filepath.Join(self.datadir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		fmt.Printf("unable to open history file: %v\n", err)
 		return

@@ -238,6 +238,9 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
+		utils.IPCDisabledFlag,
+		utils.IPCApiFlag,
+		utils.IPCPathFlag,
 		utils.WhisperEnabledFlag,
 		utils.VMDebugFlag,
 		utils.ProtocolVersionFlag,
@@ -303,6 +306,7 @@ func console(ctx *cli.Context) {
 	repl := newJSRE(
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
+		ctx.GlobalString(utils.IPCPathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		true,
 		nil,
@@ -324,6 +328,7 @@ func execJSFiles(ctx *cli.Context) {
 	repl := newJSRE(
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
+		ctx.String(utils.IPCPathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		false,
 		nil,
@@ -384,6 +389,11 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
 		if err := utils.StartRPC(eth, ctx); err != nil {
 			utils.Fatalf("Error starting RPC: %v", err)
+		}
+	}
+	if !ctx.GlobalBool(utils.IPCDisabledFlag.Name) {
+		if err := utils.StartIPC(eth, ctx); err != nil {
+			utils.Fatalf("Error starting IPC: %v", err)
 		}
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
