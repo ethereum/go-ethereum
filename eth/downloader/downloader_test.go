@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 )
@@ -557,5 +558,47 @@ func TestBannedChainStarvationAttack(t *testing.T) {
 			t.Fatalf("ban count mismatch: have %v, want %v+", bans, banned+1)
 		}
 		banned = bans
+	}
+}
+
+// Tests that if a peer sends excessively many/large invalid chains that are
+// gradually banned, it will have an upper limit on the consumed memory and also
+// the origin bad hashes will not be evacuated.
+func TestBannedChainMemoryExhaustionAttack(t *testing.T) {
+	// Reduce the test size a bit
+	MaxBlockFetch = 4
+	maxBannedHashes = 256
+
+	// Construct a banned chain with more chunks than the ban limit
+	hashes := createHashes(0, maxBannedHashes*MaxBlockFetch)
+	hashes[len(hashes)-1] = bannedHash // weird index to have non multiple of ban chunk size
+
+	blocks := createBlocksFromHashes(hashes)
+
+	// Create the tester and ban the selected hash
+	tester := newTester(t, hashes, blocks)
+	tester.downloader.banned.Add(bannedHash)
+
+	// Iteratively try to sync, and verify that the banned hash list grows until
+	// the head of the invalid chain is blocked too.
+	tester.newPeer("attack", big.NewInt(10000), hashes[0])
+	for {
+		// Try to sync with the attacker, check hash chain failure
+		if _, err := tester.syncTake("attack", hashes[0]); err != ErrInvalidChain {
+			t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrInvalidChain)
+		}
+		// Short circuit if the entire chain was banned
+		if tester.downloader.banned.Has(hashes[0]) {
+			break
+		}
+		// Otherwise ensure we never exceed the memory allowance and the hard coded bans are untouched
+		if bans := tester.downloader.banned.Size(); bans > maxBannedHashes {
+			t.Fatalf("ban cap exceeded: have %v, want max %v", bans, maxBannedHashes)
+		}
+		for hash, _ := range core.BadHashes {
+			if !tester.downloader.banned.Has(hash) {
+				t.Fatalf("hard coded ban evacuated: %x", hash)
+			}
+		}
 	}
 }

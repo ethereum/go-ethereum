@@ -16,7 +16,7 @@ import (
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
-const (
+var (
 	blockCacheLimit = 8 * MaxBlockFetch // Maximum number of blocks to cache before throttling the download
 )
 

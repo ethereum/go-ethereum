@@ -213,8 +213,8 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "->msg %v: %v", msg, err)
 		}
 
-		if request.Amount > downloader.MaxHashFetch {
-			request.Amount = downloader.MaxHashFetch
+		if request.Amount > uint64(downloader.MaxHashFetch) {
+			request.Amount = uint64(downloader.MaxHashFetch)
 		}
 
 		hashes := self.chainman.GetBlockHashesFromHash(request.Hash, request.Amount)

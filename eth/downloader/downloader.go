@@ -17,18 +17,17 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-const (
+var (
 	MinHashFetch  = 512  // Minimum amount of hashes to not consider a peer stalling
 	MaxHashFetch  = 2048 // Amount of hashes to be fetched per retrieval request
 	MaxBlockFetch = 128  // Amount of blocks to be fetched per retrieval request
 
-	hashTTL = 5 * time.Second // Time it takes for a hash request to time out
-)
-
-var (
+	hashTTL         = 5 * time.Second  // Time it takes for a hash request to time out
 	blockSoftTTL    = 3 * time.Second  // Request completion threshold for increasing or decreasing a peer's bandwidth
 	blockHardTTL    = 3 * blockSoftTTL // Maximum time allowance before a block request is considered expired
 	crossCheckCycle = time.Second      // Period after which to check for expired cross checks
+
+	maxBannedHashes = 4096 // Number of bannable hashes before phasing old ones out
 )
 
 var (
@@ -602,9 +601,19 @@ func (d *Downloader) banBlocks(peerId string, head common.Hash) error {
 				}
 				index++
 			}
+			// Ban the head hash and phase out any excess
 			d.banned.Add(blocks[index].Hash())
-
-			glog.V(logger.Debug).Infof("Banned %d blocks from: %s\n", index+1, peerId)
+			for d.banned.Size() > maxBannedHashes {
+				d.banned.Each(func(item interface{}) bool {
+					// Skip any hard coded bans
+					if core.BadHashes[item.(common.Hash)] {
+						return true
+					}
+					d.banned.Remove(item)
+					return false
+				})
+			}
+			glog.V(logger.Debug).Infof("Banned %d blocks from: %s", index+1, peerId)
 			return nil
 		}
 	}
