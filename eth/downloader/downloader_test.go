@@ -169,8 +169,9 @@ func (dl *downloadTester) getBlocks(id string) func([]common.Hash) error {
 	}
 }
 
-func (dl *downloadTester) newPeer(id string, td *big.Int, hash common.Hash) {
-	dl.downloader.RegisterPeer(id, hash, dl.getHashes, dl.getBlocks(id))
+// newPeer registers a new block download source into the syncer.
+func (dl *downloadTester) newPeer(id string, td *big.Int, hash common.Hash) error {
+	return dl.downloader.RegisterPeer(id, hash, dl.getHashes, dl.getBlocks(id))
 }
 
 // Tests that simple synchronization, without throttling from a good peer works.
@@ -558,6 +559,13 @@ func TestBannedChainStarvationAttack(t *testing.T) {
 			t.Fatalf("ban count mismatch: have %v, want %v+", bans, banned+1)
 		}
 		banned = bans
+	}
+	// Check that after banning an entire chain, bad peers get dropped
+	if err := tester.newPeer("new attacker", big.NewInt(10000), hashes[0]); err != errBannedHead {
+		t.Fatalf("peer registration mismatch: have %v, want %v", err, errBannedHead)
+	}
+	if peer := tester.downloader.peers.Peer("net attacker"); peer != nil {
+		t.Fatalf("banned attacker registered: %v", peer)
 	}
 }
 
