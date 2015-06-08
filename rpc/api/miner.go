@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	MinerVersion = "1.0.0"
+	MinerApiVersion = "1.0"
 )
 
 var (
@@ -67,6 +67,10 @@ func (self *minerApi) Methods() []string {
 
 func (self *minerApi) Name() string {
 	return MinerApiName
+}
+
+func (self *minerApi) ApiVersion() string {
+	return MinerApiVersion
 }
 
 func (self *minerApi) StartMiner(req *shared.Request) (interface{}, error) {
