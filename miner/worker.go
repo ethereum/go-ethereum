@@ -352,7 +352,7 @@ func (self *worker) isBlockLocallyMined(deepBlockNum uint64) bool {
 
 	//Does the block at {deepBlockNum} send earnings to my coinbase?
 	var block = self.chain.GetBlockByNumber(deepBlockNum)
-	return block.Header().Coinbase == self.coinbase
+	return block != nil && block.Header().Coinbase == self.coinbase
 }
 
 func (self *worker) logLocalMinedBlocks(previous *environment) {
