@@ -43,7 +43,7 @@ func (pm *ProtocolManager) fetcher() {
 		select {
 		case notifications := <-pm.newHashCh:
 			// A batch of hashes the notified, schedule them for retrieval
-			glog.V(logger.Detail).Infof("Scheduling %d hash announces from %s", len(notifications), notifications[0].peer.id)
+			glog.V(logger.Debug).Infof("Scheduling %d hash announcements from %s", len(notifications), notifications[0].peer.id)
 			for _, announce := range notifications {
 				announces[announce.hash] = announce
 			}
@@ -70,13 +70,13 @@ func (pm *ProtocolManager) fetcher() {
 			}
 			// Send out all block requests
 			for peer, hashes := range request {
-				glog.V(logger.Detail).Infof("Fetching specific %d blocks from %s", len(hashes), peer.id)
+				glog.V(logger.Debug).Infof("Explicitly fetching %d blocks from %s", len(hashes), peer.id)
 				peer.requestBlocks(hashes)
 			}
 			request = make(map[*peer][]common.Hash)
 
 		case filter := <-pm.newBlockCh:
-			// Blocks arrived, extract any explicit requests, return all else
+			// Blocks arrived, extract any explicit fetches, return all else
 			var blocks types.Blocks
 			select {
 			case blocks = <-filter:
@@ -84,26 +84,38 @@ func (pm *ProtocolManager) fetcher() {
 				return
 			}
 
-			fetch, sync := []*types.Block{}, []*types.Block{}
+			explicit, download := []*types.Block{}, []*types.Block{}
 			for _, block := range blocks {
 				hash := block.Hash()
+
+				// Filter explicitly requested blocks from hash announcements
 				if _, ok := pending[hash]; ok {
-					fetch = append(fetch, block)
+					// Discard if already imported by other means
+					if !pm.chainman.HasBlock(hash) {
+						explicit = append(explicit, block)
+					} else {
+						delete(pending, hash)
+					}
 				} else {
-					sync = append(sync, block)
+					download = append(download, block)
 				}
 			}
 
 			select {
-			case filter <- sync:
+			case filter <- download:
 			case <-pm.quitSync:
 				return
 			}
 			// If any explicit fetches were replied to, import them
-			if len(fetch) > 0 {
+			if count := len(explicit); count > 0 {
+				glog.V(logger.Debug).Infof("Importing %d explicitly fetched blocks", count)
 				go func() {
-					for _, block := range fetch {
-						if announce := pending[block.Hash()]; announce != nil {
+					for _, block := range explicit {
+						hash := block.Hash()
+
+						// Make sure there's still something pending to import
+						if announce := pending[hash]; announce != nil {
+							delete(pending, hash)
 							if err := pm.importBlock(announce.peer, block, nil); err != nil {
 								glog.V(logger.Detail).Infof("Failed to import explicitly fetched block: %v", err)
 								return
@@ -207,15 +219,15 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		return
 	}
 	// Get the hashes from the peer (synchronously)
-	glog.V(logger.Debug).Infof("Attempting synchronisation: %v, 0x%x", peer.id, peer.recentHash)
+	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, 0x%x", peer.id, peer.recentHash)
 
 	err := pm.downloader.Synchronise(peer.id, peer.recentHash)
 	switch err {
 	case nil:
-		glog.V(logger.Debug).Infof("Synchronisation completed")
+		glog.V(logger.Detail).Infof("Synchronisation completed")
 
 	case downloader.ErrBusy:
-		glog.V(logger.Debug).Infof("Synchronisation already in progress")
+		glog.V(logger.Detail).Infof("Synchronisation already in progress")
 
 	case downloader.ErrTimeout, downloader.ErrBadPeer, downloader.ErrEmptyHashSet, downloader.ErrInvalidChain, downloader.ErrCrossCheckFailed:
 		glog.V(logger.Debug).Infof("Removing peer %v: %v", peer.id, err)

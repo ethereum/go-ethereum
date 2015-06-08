@@ -362,7 +362,7 @@ func (pm *ProtocolManager) importBlock(p *peer, block *types.Block, td *big.Int)
 	_, chainHead, _ := pm.chainman.Status()
 	jsonlogger.LogJson(&logger.EthChainReceivedNewBlock{
 		BlockHash:     hash.Hex(),
-		BlockNumber:   block.Number(), // this surely must be zero
+		BlockNumber:   block.Number(),
 		ChainHeadHash: chainHead.Hex(),
 		BlockPrevHash: block.ParentHash().Hex(),
 		RemoteId:      p.ID().String(),
