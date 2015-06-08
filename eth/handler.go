@@ -21,7 +21,8 @@ import (
 const (
 	forceSyncCycle      = 10 * time.Second       // Time interval to force syncs, even if few peers are available
 	blockProcCycle      = 500 * time.Millisecond // Time interval to check for new blocks to process
-	blockArrivalTimeout = 500 * time.Millisecond // Time allowance before an announced block is explicitly requested
+	notifyCheckCycle    = 100 * time.Millisecond // Time interval to allow hash notifies to fulfill before hard fetching
+	notifyArriveTimeout = 500 * time.Millisecond // Time allowance before an announced block is explicitly requested
 	minDesiredPeerCount = 5                      // Amount of peers desired to start syncing
 	blockProcAmount     = 256
 )
@@ -57,6 +58,7 @@ type ProtocolManager struct {
 	minedBlockSub event.Subscription
 
 	newPeerCh chan *peer
+	newHashCh chan []*blockAnnounce
 	quitSync  chan struct{}
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
@@ -74,6 +76,7 @@ func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpo
 		downloader: downloader,
 		peers:      newPeerSet(),
 		newPeerCh:  make(chan *peer, 1),
+		newHashCh:  make(chan []*blockAnnounce, 1),
 		quitSync:   make(chan struct{}),
 	}
 
@@ -121,7 +124,8 @@ func (pm *ProtocolManager) Start() {
 	pm.minedBlockSub = pm.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go pm.minedBroadcastLoop()
 
-	go pm.update()
+	go pm.syncer()
+	go pm.fetcher()
 }
 
 func (pm *ProtocolManager) Stop() {
@@ -302,32 +306,24 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 			p.blockHashes.Add(hash)
 			p.recentHash = hash
 		}
-		// Wait a bit for potentially receiving the blocks, fetch if not
-		go func() {
-			time.Sleep(blockArrivalTimeout)
-
-			// Drop all the hashes that are already known
-			unknown := make([]common.Hash, 0, len(hashes))
-			for _, hash := range hashes {
-				if !self.chainman.HasBlock(hash) {
-					unknown = append(unknown, hash)
-				}
+		// Schedule all the unknown hashes for retrieval
+		unknown := make([]common.Hash, 0, len(hashes))
+		for _, hash := range hashes {
+			if !self.chainman.HasBlock(hash) {
+				unknown = append(unknown, hash)
 			}
-			if len(unknown) == 0 {
-				return
+		}
+		announces := make([]*blockAnnounce, len(unknown))
+		for i, hash := range unknown {
+			announces[i] = &blockAnnounce{
+				hash: hash,
+				peer: p,
+				time: time.Now(),
 			}
-			// Retrieve all the unknown hashes
-			if err := p.requestBlocks(unknown); err != nil {
-				glog.V(logger.Debug).Infof("%s: failed to request blocks: %v", p.id, err)
-			}
-			if glog.V(logger.Detail) {
-				hashes := make([]string, len(unknown))
-				for i, hash := range unknown {
-					hashes[i] = fmt.Sprintf("%x", hash[:4])
-				}
-				glog.Infof("%s: requested blocks explicitly: %v", p.id, hashes)
-			}
-		}()
+		}
+		if len(announces) > 0 {
+			self.newHashCh <- announces
+		}
 
 	case NewBlockMsg:
 		var request newBlockMsgData
@@ -407,13 +403,13 @@ func (pm *ProtocolManager) BroadcastBlock(hash common.Hash, block *types.Block) 
 	split := int(math.Sqrt(float64(len(peers))))
 
 	transfer := peers[:split]
-	nofity := peers[split:]
+	notify := peers[split:]
 
 	// Send out the data transfers and the notifications
-	for _, peer := range nofity {
+	for _, peer := range notify {
 		peer.sendNewBlockHashes([]common.Hash{hash})
 	}
-	glog.V(logger.Detail).Infoln("broadcast hash to", len(nofity), "peers.")
+	glog.V(logger.Detail).Infoln("broadcast hash to", len(notify), "peers.")
 
 	for _, peer := range transfer {
 		peer.sendNewBlock(block)

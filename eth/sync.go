@@ -5,15 +5,67 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-// update periodically tries to synchronise with the network, both downloading
-// hashes and blocks as well as retrieving cached ones.
-func (pm *ProtocolManager) update() {
+// blockAnnounce is the hash notification of the availability of a new block in
+// the network.
+type blockAnnounce struct {
+	hash common.Hash
+	peer *peer
+	time time.Time
+}
+
+// fetcher is responsible for collecting hash notifications, and periodically
+// checking all unknown ones and individually fetching them.
+func (pm *ProtocolManager) fetcher() {
+	announces := make(map[common.Hash]*blockAnnounce)
+	request := make(map[*peer][]common.Hash)
+	cycle := time.Tick(notifyCheckCycle)
+
+	// Iterate the block fetching until a quit is requested
+	for {
+		select {
+		case notifications := <-pm.newHashCh:
+			// A batch of hashes the notified, schedule them for retrieval
+			glog.V(logger.Detail).Infof("Scheduling %d hash announces from %s", len(notifications), notifications[0].peer.id)
+			for _, announce := range notifications {
+				announces[announce.hash] = announce
+			}
+
+		case <-cycle:
+			// Check if any notified blocks failed to arrive
+			for hash, announce := range announces {
+				if time.Since(announce.time) > notifyArriveTimeout {
+					if !pm.chainman.HasBlock(hash) {
+						request[announce.peer] = append(request[announce.peer], hash)
+					}
+					delete(announces, hash)
+				}
+			}
+			if len(request) == 0 {
+				break
+			}
+			// Send out all block requests
+			for peer, hashes := range request {
+				glog.V(logger.Detail).Infof("Fetching specific %d blocks from %s", len(hashes), peer.id)
+				peer.requestBlocks(hashes)
+			}
+			request = make(map[*peer][]common.Hash)
+
+		case <-pm.quitSync:
+			return
+		}
+	}
+}
+
+// syncer is responsible for periodically synchronising with the network, both
+// downloading hashes and blocks as well as retrieving cached ones.
+func (pm *ProtocolManager) syncer() {
 	forceSync := time.Tick(forceSyncCycle)
 	blockProc := time.Tick(blockProcCycle)
 	blockProcPend := int32(0)
