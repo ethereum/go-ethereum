@@ -29,6 +29,21 @@ func thePow() pow.PoW {
 	return pow
 }
 
+func theChainManager(db common.Database, t *testing.T) *ChainManager {
+	var eventMux event.TypeMux
+	genesis := GenesisBlock(0, db)
+	chainMan, err := NewChainManager(genesis, db, db, thePow(), &eventMux)
+	if err != nil {
+		t.Error("failed creating chainmanager:", err)
+		t.FailNow()
+		return nil
+	}
+	blockMan := NewBlockProcessor(db, db, nil, chainMan, &eventMux)
+	chainMan.SetProcessor(blockMan)
+
+	return chainMan
+}
+
 // Test fork of length N starting from block i
 func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big.Int)) {
 	// switch databases to process the new chain
@@ -266,10 +281,7 @@ func TestChainInsertions(t *testing.T) {
 		t.FailNow()
 	}
 
-	var eventMux event.TypeMux
-	chainMan := NewChainManager(db, db, thePow(), &eventMux)
-	blockMan := NewBlockProcessor(db, db, nil, chainMan, &eventMux)
-	chainMan.SetProcessor(blockMan)
+	chainMan := theChainManager(db, t)
 
 	const max = 2
 	done := make(chan bool, max)
@@ -311,10 +323,9 @@ func TestChainMultipleInsertions(t *testing.T) {
 			t.FailNow()
 		}
 	}
-	var eventMux event.TypeMux
-	chainMan := NewChainManager(db, db, thePow(), &eventMux)
-	blockMan := NewBlockProcessor(db, db, nil, chainMan, &eventMux)
-	chainMan.SetProcessor(blockMan)
+
+	chainMan := theChainManager(db, t)
+
 	done := make(chan bool, max)
 	for i, chain := range chains {
 		// XXX the go routine would otherwise reference the same (chain[3]) variable and fail
@@ -339,8 +350,7 @@ func TestGetAncestors(t *testing.T) {
 	t.Skip() // travil fails.
 
 	db, _ := ethdb.NewMemDatabase()
-	var eventMux event.TypeMux
-	chainMan := NewChainManager(db, db, thePow(), &eventMux)
+	chainMan := theChainManager(db, t)
 	chain, err := loadChain("valid1", t)
 	if err != nil {
 		fmt.Println(err)
@@ -391,7 +401,7 @@ func chm(genesis *types.Block, db common.Database) *ChainManager {
 func TestReorgLongest(t *testing.T) {
 	t.Skip("skipped while cache is removed")
 	db, _ := ethdb.NewMemDatabase()
-	genesis := GenesisBlock(db)
+	genesis := GenesisBlock(0, db)
 	bc := chm(genesis, db)
 
 	chain1 := makeChainWithDiff(genesis, []int{1, 2, 4}, 10)
@@ -411,7 +421,7 @@ func TestReorgLongest(t *testing.T) {
 func TestReorgShortest(t *testing.T) {
 	t.Skip("skipped while cache is removed")
 	db, _ := ethdb.NewMemDatabase()
-	genesis := GenesisBlock(db)
+	genesis := GenesisBlock(0, db)
 	bc := chm(genesis, db)
 
 	chain1 := makeChainWithDiff(genesis, []int{1, 2, 3, 4}, 10)
@@ -431,7 +441,7 @@ func TestReorgShortest(t *testing.T) {
 func TestInsertNonceError(t *testing.T) {
 	for i := 1; i < 25 && !t.Failed(); i++ {
 		db, _ := ethdb.NewMemDatabase()
-		genesis := GenesisBlock(db)
+		genesis := GenesisBlock(0, db)
 		bc := chm(genesis, db)
 		bc.processor = NewBlockProcessor(db, db, bc.pow, bc, bc.eventMux)
 		blocks := makeChain(bc.processor.(*BlockProcessor), bc.currentBlock, i, db, 0)
@@ -462,6 +472,21 @@ func TestInsertNonceError(t *testing.T) {
 				t.Errorf("(i=%d) invalid block %d present in chain", i, block.NumberU64())
 			}
 		}
+	}
+}
+
+func TestGenesisMismatch(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	var mux event.TypeMux
+	genesis := GenesisBlock(0, db)
+	_, err := NewChainManager(genesis, db, db, thePow(), &mux)
+	if err != nil {
+		t.Error(err)
+	}
+	genesis = GenesisBlock(1, db)
+	_, err = NewChainManager(genesis, db, db, thePow(), &mux)
+	if err == nil {
+		t.Error("expected genesis mismatch error")
 	}
 }
 

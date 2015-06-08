@@ -109,16 +109,22 @@ type ChainManager struct {
 	pow pow.PoW
 }
 
-func NewChainManager(blockDb, stateDb common.Database, pow pow.PoW, mux *event.TypeMux) *ChainManager {
+func NewChainManager(genesis *types.Block, blockDb, stateDb common.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
 	bc := &ChainManager{
-		blockDb:      blockDb,
-		stateDb:      stateDb,
-		genesisBlock: GenesisBlock(stateDb),
-		eventMux:     mux,
-		quit:         make(chan struct{}),
-		cache:        NewBlockCache(blockCacheLimit),
-		pow:          pow,
+		blockDb:  blockDb,
+		stateDb:  stateDb,
+		eventMux: mux,
+		quit:     make(chan struct{}),
+		cache:    NewBlockCache(blockCacheLimit),
+		pow:      pow,
 	}
+
+	// Check the genesis block given to the chain manager. If the genesis block mismatches block number 0
+	// throw an error. If no block or the same block's found continue.
+	if g := bc.GetBlockByNumber(0); g != nil && g.Hash() != genesis.Hash() {
+		return nil, fmt.Errorf("Genesis mismatch. Maybe different nonce (%d vs %d)? %x / %x", g.Nonce(), genesis.Nonce(), g.Hash().Bytes()[:4], genesis.Hash().Bytes()[:4])
+	}
+	bc.genesisBlock = genesis
 	bc.setLastState()
 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
@@ -144,7 +150,7 @@ func NewChainManager(blockDb, stateDb common.Database, pow pow.PoW, mux *event.T
 
 	go bc.update()
 
-	return bc
+	return bc, nil
 }
 
 func (bc *ChainManager) SetHead(head *types.Block) {

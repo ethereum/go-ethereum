@@ -93,6 +93,11 @@ var (
 		Usage: "Blockchain version (integer)",
 		Value: core.BlockChainVersion,
 	}
+	GenesisNonceFlag = cli.IntFlag{
+		Name:  "genesisnonce",
+		Usage: "Sets the genesis nonce",
+		Value: 42,
+	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
 		Usage: "Custom node name",
@@ -294,6 +299,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		Name:               common.MakeName(clientID, version),
 		DataDir:            ctx.GlobalString(DataDirFlag.Name),
 		ProtocolVersion:    ctx.GlobalInt(ProtocolVersionFlag.Name),
+		GenesisNonce:       ctx.GlobalInt(GenesisNonceFlag.Name),
 		BlockChainVersion:  ctx.GlobalInt(BlockchainVersionFlag.Name),
 		SkipBcVersionCheck: false,
 		NetworkId:          ctx.GlobalInt(NetworkIdFlag.Name),
@@ -344,7 +350,12 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, ex
 
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
-	chain = core.NewChainManager(blockDB, stateDB, pow, eventMux)
+	genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
+	chain, err = core.NewChainManager(genesis, blockDB, stateDB, pow, eventMux)
+	if err != nil {
+		Fatalf("Could not start chainmanager: %v", err)
+	}
+
 	proc := core.NewBlockProcessor(stateDB, extraDB, pow, chain, eventMux)
 	chain.SetProcessor(proc)
 	return chain, blockDB, stateDB, extraDB
