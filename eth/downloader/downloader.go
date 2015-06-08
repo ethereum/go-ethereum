@@ -36,6 +36,7 @@ var (
 	errUnknownPeer      = errors.New("peer is unknown or unhealthy")
 	ErrBadPeer          = errors.New("action from bad peer ignored")
 	ErrStallingPeer     = errors.New("peer is stalling")
+	errBannedHead       = errors.New("peer head hash already banned")
 	errNoPeers          = errors.New("no peers to keep download active")
 	ErrPendingQueue     = errors.New("pending items in queue")
 	ErrTimeout          = errors.New("timeout")
@@ -72,11 +73,10 @@ type crossCheck struct {
 type Downloader struct {
 	mux *event.TypeMux
 
-	mu     sync.RWMutex
 	queue  *queue                      // Scheduler for selecting the hashes to download
 	peers  *peerSet                    // Set of active peers from which download can proceed
 	checks map[common.Hash]*crossCheck // Pending cross checks to verify a hash chain
-	banned *set.SetNonTS               // Set of hashes we've received and banned
+	banned *set.Set                    // Set of hashes we've received and banned
 
 	// Callbacks
 	hasBlock hashCheckFn
@@ -114,7 +114,7 @@ func New(mux *event.TypeMux, hasBlock hashCheckFn, getBlock getBlockFn) *Downloa
 		blockCh:   make(chan blockPack, 1),
 	}
 	// Inject all the known bad hashes
-	downloader.banned = set.NewNonTS()
+	downloader.banned = set.New()
 	for hash, _ := range core.BadHashes {
 		downloader.banned.Add(hash)
 	}
@@ -133,6 +133,12 @@ func (d *Downloader) Synchronising() bool {
 // RegisterPeer injects a new download peer into the set of block source to be
 // used for fetching hashes and blocks from.
 func (d *Downloader) RegisterPeer(id string, head common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) error {
+	// If the peer wants to send a banned hash, reject
+	if d.banned.Has(head) {
+		glog.V(logger.Debug).Infoln("Register rejected, head hash banned:", id)
+		return errBannedHead
+	}
+	// Otherwise try to construct and register the peer
 	glog.V(logger.Detail).Infoln("Registering peer", id)
 	if err := d.peers.Register(newPeer(id, head, getHashes, getBlocks)); err != nil {
 		glog.V(logger.Error).Infoln("Register failed:", err)
@@ -199,6 +205,8 @@ func (d *Downloader) TakeBlocks() []*Block {
 	return d.queue.TakeBlocks()
 }
 
+// Has checks if the downloader knows about a particular hash, meaning that its
+// either already downloaded of pending retrieval.
 func (d *Downloader) Has(hash common.Hash) bool {
 	return d.queue.Has(hash)
 }
@@ -604,14 +612,17 @@ func (d *Downloader) banBlocks(peerId string, head common.Hash) error {
 			// Ban the head hash and phase out any excess
 			d.banned.Add(blocks[index].Hash())
 			for d.banned.Size() > maxBannedHashes {
+				var evacuate common.Hash
+
 				d.banned.Each(func(item interface{}) bool {
 					// Skip any hard coded bans
 					if core.BadHashes[item.(common.Hash)] {
 						return true
 					}
-					d.banned.Remove(item)
+					evacuate = item.(common.Hash)
 					return false
 				})
+				d.banned.Remove(evacuate)
 			}
 			glog.V(logger.Debug).Infof("Banned %d blocks from: %s", index+1, peerId)
 			return nil
