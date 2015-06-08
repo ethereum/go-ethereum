@@ -28,6 +28,8 @@ import (
 
 	"encoding/json"
 
+	"sort"
+
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common/docserver"
 	re "github.com/ethereum/go-ethereum/jsre"
@@ -73,6 +75,79 @@ type jsre struct {
 	prompter
 }
 
+var (
+	loadedModulesMethods map[string][]string
+)
+
+func loadAutoCompletion(js *jsre, ipcpath string) {
+	modules, err := js.suportedApis(ipcpath)
+	if err != nil {
+		utils.Fatalf("Unable to determine supported modules - %v", err)
+	}
+
+	fmt.Printf("load autocompletion %v", modules)
+
+	loadedModulesMethods = make(map[string][]string)
+	for module, _ := range modules {
+		loadedModulesMethods[module] = api.AutoCompletion[module]
+	}
+}
+
+func keywordCompleter(line string) []string {
+	results := make([]string, 0)
+
+	if strings.Contains(line, ".") {
+		elements := strings.Split(line, ".")
+		if len(elements) == 2 {
+			module := elements[0]
+			partialMethod := elements[1]
+			if methods, found := loadedModulesMethods[module]; found {
+				for _, method := range methods {
+					if strings.HasPrefix(method, partialMethod) { // e.g. debug.se
+						results = append(results, module+"."+method)
+					}
+				}
+			}
+		}
+	} else {
+		for module, methods := range loadedModulesMethods {
+			if line == module { // user typed in full module name, show all methods
+				for _, method := range methods {
+					results = append(results, module+"."+method)
+				}
+			} else if strings.HasPrefix(module, line) { // partial method name, e.g. admi
+				results = append(results, module)
+			}
+		}
+	}
+	return results
+}
+
+func apiWordCompleter(line string, pos int) (head string, completions []string, tail string) {
+	if len(line) == 0 {
+		return "", nil, ""
+	}
+
+	i := 0
+	for i = pos - 1; i > 0; i-- {
+		if line[i] == '.' || (line[i] >= 'a' && line[i] <= 'z') || (line[i] >= 'A' && line[i] <= 'Z') {
+			continue
+		}
+		if i >= 3 && line[i] == '3' && line[i-3] == 'w' && line[i-2] == 'e' && line[i-1] == 'b' {
+			continue
+		}
+		i += 1
+		break
+	}
+
+	begin := line[:i]
+	keyword := line[i:pos]
+	end := line[pos:]
+
+	completionWords := keywordCompleter(keyword)
+	return begin, completionWords, end
+}
+
 func newJSRE(libPath, ipcpath string) *jsre {
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
@@ -87,6 +162,9 @@ func newJSRE(libPath, ipcpath string) *jsre {
 		lr := liner.NewLiner()
 		js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
+		loadAutoCompletion(js, ipcpath)
+		lr.SetWordCompleter(apiWordCompleter)
+		lr.SetTabCompletionStyle(liner.TabPrints)
 		js.prompter = lr
 		js.atexit = func() {
 			js.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
@@ -134,7 +212,7 @@ func (js *jsre) apiBindings(ipcpath string) {
 
 	// load only supported API's in javascript runtime
 	shortcuts := "var eth = web3.eth; "
-	for _, apiName := range apis {
+	for apiName, _ := range apis {
 		if apiName == api.Web3ApiName || apiName == api.EthApiName {
 			continue // manually mapped
 		}
@@ -194,7 +272,7 @@ func (self *jsre) exec(filename string) error {
 	return nil
 }
 
-func (self *jsre) suportedApis(ipcpath string) ([]string, error) {
+func (self *jsre) suportedApis(ipcpath string) (map[string]string, error) {
 	config := comms.IpcConfig{
 		Endpoint: ipcpath,
 	}
@@ -207,7 +285,7 @@ func (self *jsre) suportedApis(ipcpath string) ([]string, error) {
 	req := shared.Request{
 		Id:      1,
 		Jsonrpc: "2.0",
-		Method:  "support_apis",
+		Method:  "modules",
 	}
 
 	err = client.Send(req)
@@ -222,7 +300,7 @@ func (self *jsre) suportedApis(ipcpath string) ([]string, error) {
 
 	if sucRes, ok := res.(shared.SuccessResponse); ok {
 		data, _ := json.Marshal(sucRes.Result)
-		apis := make([]string, 0)
+		apis := make(map[string]string)
 		err = json.Unmarshal(data, &apis)
 		if err == nil {
 			return apis, nil
@@ -242,7 +320,13 @@ func (self *jsre) welcome(ipcpath string) {
 		+ " " + new Date(lastBlockTimestamp).toLocaleTimeString() + ")");`)
 
 	if modules, err := self.suportedApis(ipcpath); err == nil {
-		self.re.Eval(fmt.Sprintf("var modules = '%s';", strings.Join(modules, " ")))
+		loadedModules := make([]string, 0)
+		for api, version := range modules {
+			loadedModules = append(loadedModules, fmt.Sprintf("%s:%s", api, version))
+		}
+		sort.Strings(loadedModules)
+
+		self.re.Eval(fmt.Sprintf("var modules = '%s';", strings.Join(loadedModules, " ")))
 		self.re.Eval(`console.log(" modules: " + modules);`)
 	}
 }
