@@ -93,6 +93,10 @@ func (self *EthApi) Execute(req *shared.Request) (interface{}, error) {
 	return nil, shared.NewNotImplementedError(req.Method)
 }
 
+func (self *EthApi) Name() string {
+	return EthApiName
+}
+
 func (self *EthApi) Accounts(req *shared.Request) (interface{}, error) {
 	return self.xeth.Accounts(), nil
 }
