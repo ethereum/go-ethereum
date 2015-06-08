@@ -647,7 +647,7 @@ func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 	return &ipcClient{codec.New(c)}, nil
 }
 
-func startIpc(cfg IpcConfig, codec codec.Codec, api api.Ethereum) error {
+func startIpc(cfg IpcConfig, codec codec.Codec, api api.EthereumApi) error {
     os.Remove(cfg.Endpoint) // in case it still exists from a previous run
     
     l, err := Listen(cfg.Endpoint)
