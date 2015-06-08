@@ -111,6 +111,7 @@ func (js *jsre) apiBindings(ipcpath string, f xeth.Frontend) {
 	js.re.Set("jeth", struct{}{})
 	t, _ := js.re.Get("jeth")
 	jethObj := t.Object()
+
 	jethObj.Set("send", jeth.Send)
 	jethObj.Set("sendAsync", jeth.Send)
 
