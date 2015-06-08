@@ -23,6 +23,8 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 		switch strings.ToLower(strings.TrimSpace(name)) {
 		case EthApiName:
 			apis[i] = NewEthApi(xeth, codec)
+		case MinerApiName:
+			apis[i] = NewMinerApi(eth, codec)
 		case Web3ApiName:
 			apis[i] = NewWeb3(xeth, codec)
 		default:
@@ -31,4 +33,13 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 	}
 
 	return apis, nil
+}
+
+func Javascript(name string) string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case MinerApiName:
+		return Miner_JS
+	}
+
+	return ""
 }
