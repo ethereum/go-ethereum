@@ -4,12 +4,13 @@ import "github.com/ethereum/go-ethereum/rpc/shared"
 
 const (
 	// List with all API's which are offered over the IPC interface by default
-	DefaultIpcApis = "eth,web3,miner"
+	DefaultIpcApis = "eth,miner,net,web3"
 
-	EthApiName = "eth"
+	EthApiName    = "eth"
 	MergedApiName = "merged"
-	MinerApiName = "miner"
-	Web3ApiName = "web3"
+	MinerApiName  = "miner"
+	NetApiName    = "net"
+	Web3ApiName   = "web3"
 )
 
 // Ethereum RPC API interface

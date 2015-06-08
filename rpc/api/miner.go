@@ -13,7 +13,7 @@ const (
 )
 
 var (
-// mapping between methods and handlers
+	// mapping between methods and handlers
 	MinerMapping = map[string]minerhandler{
 		"miner_hashrate":     (*miner).Hashrate,
 		"miner_makeDAG":      (*miner).MakeDAG,

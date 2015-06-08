@@ -4,7 +4,7 @@ import "github.com/ethereum/go-ethereum/rpc/shared"
 
 // combines multiple API's
 type mergedApi struct {
-	apis []string
+	apis    []string
 	methods map[string]EthereumApi
 }
 
@@ -48,7 +48,7 @@ func (self *mergedApi) Name() string {
 }
 
 func (self *mergedApi) handle(req *shared.Request) (interface{}, error) {
-	if req.Method == "support_apis" {	// provided API's
+	if req.Method == "support_apis" { // provided API's
 		return self.apis, nil
 	}
 
