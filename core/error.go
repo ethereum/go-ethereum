@@ -90,6 +90,23 @@ func IsNonceErr(err error) bool {
 	return ok
 }
 
+// BlockNonceErr indicates that a block's nonce is invalid.
+type BlockNonceErr struct {
+	Number *big.Int
+	Hash   common.Hash
+	Nonce  uint64
+}
+
+func (err *BlockNonceErr) Error() string {
+	return fmt.Sprintf("block %d (%v) nonce is invalid (got %d)", err.Number, err.Hash, err.Nonce)
+}
+
+// IsBlockNonceErr returns true for invalid block nonce errors.
+func IsBlockNonceErr(err error) bool {
+	_, ok := err.(*BlockNonceErr)
+	return ok
+}
+
 type InvalidTxErr struct {
 	Message string
 }
