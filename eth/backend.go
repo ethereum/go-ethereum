@@ -58,6 +58,7 @@ type Config struct {
 	Name            string
 	ProtocolVersion int
 	NetworkId       int
+	GenesisNonce    int
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
@@ -284,7 +285,11 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	eth.pow = ethash.New()
-	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.pow, eth.EventMux())
+	genesis := core.GenesisBlock(uint64(config.GenesisNonce), blockDb)
+	eth.chainManager, err = core.NewChainManager(genesis, blockDb, stateDb, eth.pow, eth.EventMux())
+	if err != nil {
+		return nil, err
+	}
 	eth.downloader = downloader.New(eth.EventMux(), eth.chainManager.HasBlock, eth.chainManager.GetBlock)
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.chainManager, eth.EventMux())
