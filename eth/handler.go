@@ -18,6 +18,11 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// This is the target maximum size of returned blocks for the
+// getBlocks message. The reply message may exceed it
+// if a single block is larger than the limit.
+const maxBlockRespSize = 2 * 1024 * 1024
+
 func errResp(code errCode, format string, v ...interface{}) error {
 	return fmt.Errorf("%v - %v", code, fmt.Sprintf(format, v...))
 }
@@ -246,7 +251,10 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		if _, err := msgStream.List(); err != nil {
 			return err
 		}
-		var i int
+		var (
+			i         int
+			totalsize common.StorageSize
+		)
 		for {
 			i++
 			var hash common.Hash
@@ -260,8 +268,9 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 			block := self.chainman.GetBlock(hash)
 			if block != nil {
 				blocks = append(blocks, block)
+				totalsize += block.Size()
 			}
-			if i == downloader.MaxBlockFetch {
+			if i == downloader.MaxBlockFetch || totalsize > maxBlockRespSize {
 				break
 			}
 		}
