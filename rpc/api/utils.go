@@ -29,6 +29,8 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 			apis[i] = NewMinerApi(eth, codec)
 		case NetApiName:
 			apis[i] = NewNetApi(xeth, eth, codec)
+		case PersonalApiName:
+			apis[i] = NewPersonal(xeth, eth, codec)
 		case Web3ApiName:
 			apis[i] = NewWeb3(xeth, codec)
 		default:
@@ -47,6 +49,8 @@ func Javascript(name string) string {
 		return Miner_JS
 	case NetApiName:
 		return Net_JS
+	case PersonalApiName:
+		return Personal_JS
 	}
 
 	return ""
