@@ -376,6 +376,8 @@ func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error 
 	return nil
 }
 
+// insert appends injects a block into the current chain block chain. Note, this
+// function assumes that the `mu` mutex is held!
 func (bc *ChainManager) insert(block *types.Block) {
 	key := append(blockNumPre, block.Number().Bytes()...)
 	bc.blockDb.Put(key, block.Hash().Bytes())
@@ -484,6 +486,8 @@ func (self *ChainManager) GetAncestors(block *types.Block, length int) (blocks [
 	return
 }
 
+// setTotalDifficulty updates the TD of the chain manager. Note, this function
+// assumes that the `mu` mutex is held!
 func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
 	bc.td = new(big.Int).Set(td)
 }
@@ -539,9 +543,6 @@ func (self *ChainManager) procFutureBlocks() {
 func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	self.wg.Add(1)
 	defer self.wg.Done()
-
-	self.mu.Lock()
-	defer self.mu.Unlock()
 
 	self.chainmu.Lock()
 	defer self.chainmu.Unlock()
@@ -625,7 +626,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		cblock := self.currentBlock
 		// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 		// At this point it's possible that a different chain (fork) becomes the new canonical chain.
-		if block.Td.Cmp(self.td) > 0 {
+		if block.Td.Cmp(self.Td()) > 0 {
 			// chain fork
 			if block.ParentHash() != cblock.Hash() {
 				// during split we merge two different chains and create the new canonical chain
@@ -638,8 +639,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 				queueEvent.splitCount++
 			}
 
+			self.mu.Lock()
 			self.setTotalDifficulty(block.Td)
 			self.insert(block)
+			self.mu.Unlock()
 
 			jsonlogger.LogJson(&logger.EthChainNewHead{
 				BlockHash:     block.Hash().Hex(),
@@ -747,9 +750,11 @@ func (self *ChainManager) merge(oldBlock, newBlock *types.Block) error {
 	}
 
 	// insert blocks. Order does not matter. Last block will be written in ImportChain itself which creates the new head properly
+	self.mu.Lock()
 	for _, block := range newChain {
 		self.insert(block)
 	}
+	self.mu.Unlock()
 
 	return nil
 }
