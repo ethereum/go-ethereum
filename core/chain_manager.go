@@ -381,9 +381,6 @@ func (bc *ChainManager) insert(block *types.Block) {
 	bc.blockDb.Put(key, block.Hash().Bytes())
 	bc.blockDb.Put([]byte("LastBlock"), block.Hash().Bytes())
 
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
-
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
 }
@@ -488,10 +485,7 @@ func (self *ChainManager) GetAncestors(block *types.Block, length int) (blocks [
 }
 
 func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
-
-	bc.td.Set(td)
+	bc.td = new(big.Int).Set(td)
 }
 
 func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
@@ -545,6 +539,9 @@ func (self *ChainManager) procFutureBlocks() {
 func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	self.wg.Add(1)
 	defer self.wg.Done()
+
+	self.mu.Lock()
+	defer self.mu.Unlock()
 
 	self.chainmu.Lock()
 	defer self.chainmu.Unlock()
@@ -628,7 +625,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		cblock := self.currentBlock
 		// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 		// At this point it's possible that a different chain (fork) becomes the new canonical chain.
-		if block.Td.Cmp(self.Td()) > 0 {
+		if block.Td.Cmp(self.td) > 0 {
 			// chain fork
 			if block.ParentHash() != cblock.Hash() {
 				// during split we merge two different chains and create the new canonical chain
