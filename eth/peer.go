@@ -102,7 +102,7 @@ func (p *peer) sendTransaction(tx *types.Transaction) error {
 
 func (p *peer) requestHashes(from common.Hash) error {
 	glog.V(logger.Debug).Infof("[%s] fetching hashes (%d) %x...\n", p.id, downloader.MaxHashFetch, from[:4])
-	return p2p.Send(p.rw, GetBlockHashesMsg, getBlockHashesMsgData{from, downloader.MaxHashFetch})
+	return p2p.Send(p.rw, GetBlockHashesMsg, getBlockHashesMsgData{from, uint64(downloader.MaxHashFetch)})
 }
 
 func (p *peer) requestBlocks(hashes []common.Hash) error {

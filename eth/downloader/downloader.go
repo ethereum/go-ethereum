@@ -1,13 +1,12 @@
 package downloader
 
 import (
+	"bytes"
 	"errors"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"gopkg.in/fatih/set.v0"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -15,22 +14,20 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"gopkg.in/fatih/set.v0"
 )
 
-const (
+var (
 	MinHashFetch  = 512  // Minimum amount of hashes to not consider a peer stalling
 	MaxHashFetch  = 2048 // Amount of hashes to be fetched per retrieval request
 	MaxBlockFetch = 128  // Amount of blocks to be fetched per retrieval request
 
-	peerCountTimeout = 12 * time.Second // Amount of time it takes for the peer handler to ignore minDesiredPeerCount
-	hashTTL          = 5 * time.Second  // Time it takes for a hash request to time out
-)
+	hashTTL         = 5 * time.Second  // Time it takes for a hash request to time out
+	blockSoftTTL    = 3 * time.Second  // Request completion threshold for increasing or decreasing a peer's bandwidth
+	blockHardTTL    = 3 * blockSoftTTL // Maximum time allowance before a block request is considered expired
+	crossCheckCycle = time.Second      // Period after which to check for expired cross checks
 
-var (
-	blockSoftTTL        = 3 * time.Second  // Request completion threshold for increasing or decreasing a peer's bandwidth
-	blockHardTTL        = 3 * blockSoftTTL // Maximum time allowance before a block request is considered expired
-	crossCheckCycle     = time.Second      // Period after which to check for expired cross checks
-	minDesiredPeerCount = 5                // Amount of peers desired to start syncing
+	maxBannedHashes = 4096 // Number of bannable hashes before phasing old ones out
 )
 
 var (
@@ -39,6 +36,7 @@ var (
 	errUnknownPeer      = errors.New("peer is unknown or unhealthy")
 	ErrBadPeer          = errors.New("action from bad peer ignored")
 	ErrStallingPeer     = errors.New("peer is stalling")
+	errBannedHead       = errors.New("peer head hash already banned")
 	errNoPeers          = errors.New("no peers to keep download active")
 	ErrPendingQueue     = errors.New("pending items in queue")
 	ErrTimeout          = errors.New("timeout")
@@ -75,11 +73,10 @@ type crossCheck struct {
 type Downloader struct {
 	mux *event.TypeMux
 
-	mu     sync.RWMutex
 	queue  *queue                      // Scheduler for selecting the hashes to download
 	peers  *peerSet                    // Set of active peers from which download can proceed
 	checks map[common.Hash]*crossCheck // Pending cross checks to verify a hash chain
-	banned *set.SetNonTS               // Set of hashes we've received and banned
+	banned *set.Set                    // Set of hashes we've received and banned
 
 	// Callbacks
 	hasBlock hashCheckFn
@@ -117,7 +114,7 @@ func New(mux *event.TypeMux, hasBlock hashCheckFn, getBlock getBlockFn) *Downloa
 		blockCh:   make(chan blockPack, 1),
 	}
 	// Inject all the known bad hashes
-	downloader.banned = set.NewNonTS()
+	downloader.banned = set.New()
 	for hash, _ := range core.BadHashes {
 		downloader.banned.Add(hash)
 	}
@@ -136,6 +133,12 @@ func (d *Downloader) Synchronising() bool {
 // RegisterPeer injects a new download peer into the set of block source to be
 // used for fetching hashes and blocks from.
 func (d *Downloader) RegisterPeer(id string, head common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) error {
+	// If the peer wants to send a banned hash, reject
+	if d.banned.Has(head) {
+		glog.V(logger.Debug).Infoln("Register rejected, head hash banned:", id)
+		return errBannedHead
+	}
+	// Otherwise try to construct and register the peer
 	glog.V(logger.Detail).Infoln("Registering peer", id)
 	if err := d.peers.Register(newPeer(id, head, getHashes, getBlocks)); err != nil {
 		glog.V(logger.Error).Infoln("Register failed:", err)
@@ -165,6 +168,10 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 	}
 	defer atomic.StoreInt32(&d.synchronising, 0)
 
+	// If the head hash is banned, terminate immediately
+	if d.banned.Has(hash) {
+		return ErrInvalidChain
+	}
 	// Post a user notification of the sync (only once per session)
 	if atomic.CompareAndSwapInt32(&d.notified, 0, 1) {
 		glog.V(logger.Info).Infoln("Block synchronisation started")
@@ -198,6 +205,8 @@ func (d *Downloader) TakeBlocks() []*Block {
 	return d.queue.TakeBlocks()
 }
 
+// Has checks if the downloader knows about a particular hash, meaning that its
+// either already downloaded of pending retrieval.
 func (d *Downloader) Has(hash common.Hash) bool {
 	return d.queue.Has(hash)
 }
@@ -291,9 +300,14 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 				glog.V(logger.Debug).Infof("Peer (%s) responded with empty hash set", active.id)
 				return ErrEmptyHashSet
 			}
-			for _, hash := range hashPack.hashes {
+			for index, hash := range hashPack.hashes {
 				if d.banned.Has(hash) {
 					glog.V(logger.Debug).Infof("Peer (%s) sent a known invalid chain", active.id)
+
+					d.queue.Insert(hashPack.hashes[:index+1])
+					if err := d.banBlocks(active.id, hash); err != nil {
+						glog.V(logger.Debug).Infof("Failed to ban batch of blocks: %v", err)
+					}
 					return ErrInvalidChain
 				}
 			}
@@ -334,12 +348,12 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 				active.getHashes(head)
 				continue
 			}
-			// We're done, allocate the download cache and proceed pulling the blocks
+			// We're done, prepare the download cache and proceed pulling the blocks
 			offset := 0
 			if block := d.getBlock(head); block != nil {
 				offset = int(block.NumberU64() + 1)
 			}
-			d.queue.Alloc(offset)
+			d.queue.Prepare(offset)
 			finished = true
 
 		case blockPack := <-d.blockCh:
@@ -401,13 +415,18 @@ func (d *Downloader) fetchBlocks() error {
 	glog.V(logger.Debug).Infoln("Downloading", d.queue.Pending(), "block(s)")
 	start := time.Now()
 
-	// default ticker for re-fetching blocks every now and then
+	// Start a ticker to continue throttled downloads and check for bad peers
 	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+
 out:
 	for {
 		select {
 		case <-d.cancelCh:
 			return errCancelBlockFetch
+
+		case <-d.hashCh:
+			// Out of bounds hashes received, ignore them
 
 		case blockPack := <-d.blockCh:
 			// Short circuit if it's a stale cross check
@@ -415,7 +434,7 @@ out:
 				block := blockPack.blocks[0]
 				if _, ok := d.checks[block.Hash()]; ok {
 					delete(d.checks, block.Hash())
-					continue
+					break
 				}
 			}
 			// If the peer was previously banned and failed to deliver it's pack
@@ -463,34 +482,25 @@ out:
 					glog.V(logger.Detail).Infof("%s: delivery partially failed: %v", peer, err)
 				}
 			}
+
 		case <-ticker.C:
-			// Check for bad peers. Bad peers may indicate a peer not responding
-			// to a `getBlocks` message. A timeout of 5 seconds is set. Peers
-			// that badly or poorly behave are removed from the peer set (not banned).
-			// Bad peers are excluded from the available peer set and therefor won't be
-			// reused. XXX We could re-introduce peers after X time.
+			// Short circuit if we lost all our peers
+			if d.peers.Len() == 0 {
+				return errNoPeers
+			}
+			// Check for block request timeouts and demote the responsible peers
 			badPeers := d.queue.Expire(blockHardTTL)
 			for _, pid := range badPeers {
-				// XXX We could make use of a reputation system here ranking peers
-				// in their performance
-				// 1) Time for them to respond;
-				// 2) Measure their speed;
-				// 3) Amount and availability.
 				if peer := d.peers.Peer(pid); peer != nil {
 					peer.Demote()
 					glog.V(logger.Detail).Infof("%s: block delivery timeout", peer)
 				}
 			}
-			// After removing bad peers make sure we actually have sufficient peer left to keep downloading
-			if d.peers.Len() == 0 {
-				return errNoPeers
-			}
-			// If there are unrequested hashes left start fetching
-			// from the available peers.
+			// If there are unrequested hashes left start fetching from the available peers
 			if d.queue.Pending() > 0 {
 				// Throttle the download if block cache is full and waiting processing
 				if d.queue.Throttle() {
-					continue
+					break
 				}
 				// Send a download request to all idle peers, until throttled
 				idlePeers := d.peers.IdlePeers()
@@ -501,7 +511,7 @@ out:
 					}
 					// Get a possible chunk. If nil is returned no chunk
 					// could be returned due to no hashes available.
-					request := d.queue.Reserve(peer)
+					request := d.queue.Reserve(peer, peer.Capacity())
 					if request == nil {
 						continue
 					}
@@ -531,8 +541,93 @@ out:
 		}
 	}
 	glog.V(logger.Detail).Infoln("Downloaded block(s) in", time.Since(start))
-
 	return nil
+}
+
+// banBlocks retrieves a batch of blocks from a peer feeding us invalid hashes,
+// and bans the head of the retrieved batch.
+//
+// This method only fetches one single batch as the goal is not ban an entire
+// (potentially long) invalid chain - wasting a lot of time in the meanwhile -,
+// but rather to gradually build up a blacklist if the peer keeps reconnecting.
+func (d *Downloader) banBlocks(peerId string, head common.Hash) error {
+	glog.V(logger.Debug).Infof("Banning a batch out of %d blocks from %s", d.queue.Pending(), peerId)
+
+	// Ask the peer being banned for a batch of blocks from the banning point
+	peer := d.peers.Peer(peerId)
+	if peer == nil {
+		return nil
+	}
+	request := d.queue.Reserve(peer, MaxBlockFetch)
+	if request == nil {
+		return nil
+	}
+	if err := peer.Fetch(request); err != nil {
+		return err
+	}
+	// Wait a bit for the reply to arrive, and ban if done so
+	timeout := time.After(blockHardTTL)
+	for {
+		select {
+		case <-d.cancelCh:
+			return errCancelBlockFetch
+
+		case <-timeout:
+			return ErrTimeout
+
+		case <-d.hashCh:
+			// Out of bounds hashes received, ignore them
+
+		case blockPack := <-d.blockCh:
+			blocks := blockPack.blocks
+
+			// Short circuit if it's a stale cross check
+			if len(blocks) == 1 {
+				block := blocks[0]
+				if _, ok := d.checks[block.Hash()]; ok {
+					delete(d.checks, block.Hash())
+					break
+				}
+			}
+			// Short circuit if it's not from the peer being banned
+			if blockPack.peerId != peerId {
+				break
+			}
+			// Short circuit if no blocks were returned
+			if len(blocks) == 0 {
+				return errors.New("no blocks returned to ban")
+			}
+			// Reconstruct the original chain order and ensure we're banning the correct blocks
+			types.BlockBy(types.Number).Sort(blocks)
+			if bytes.Compare(blocks[0].Hash().Bytes(), head.Bytes()) != 0 {
+				return errors.New("head block not the banned one")
+			}
+			index := 0
+			for _, block := range blocks[1:] {
+				if bytes.Compare(block.ParentHash().Bytes(), blocks[index].Hash().Bytes()) != 0 {
+					break
+				}
+				index++
+			}
+			// Ban the head hash and phase out any excess
+			d.banned.Add(blocks[index].Hash())
+			for d.banned.Size() > maxBannedHashes {
+				var evacuate common.Hash
+
+				d.banned.Each(func(item interface{}) bool {
+					// Skip any hard coded bans
+					if core.BadHashes[item.(common.Hash)] {
+						return true
+					}
+					evacuate = item.(common.Hash)
+					return false
+				})
+				d.banned.Remove(evacuate)
+			}
+			glog.V(logger.Debug).Infof("Banned %d blocks from: %s", index+1, peerId)
+			return nil
+		}
+	}
 }
 
 // DeliverBlocks injects a new batch of blocks received from a remote node.

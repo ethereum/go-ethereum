@@ -94,7 +94,7 @@ func (p *peer) SetIdle() {
 	for {
 		// Calculate the new download bandwidth allowance
 		prev := atomic.LoadInt32(&p.capacity)
-		next := int32(math.Max(1, math.Min(MaxBlockFetch, float64(prev)*scale)))
+		next := int32(math.Max(1, math.Min(float64(MaxBlockFetch), float64(prev)*scale)))
 
 		// Try to update the old value
 		if atomic.CompareAndSwapInt32(&p.capacity, prev, next) {
