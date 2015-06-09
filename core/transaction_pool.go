@@ -39,7 +39,7 @@ type stateFn func() *state.StateDB
 type TxPool struct {
 	quit         chan bool // Quiting channel
 	currentState stateFn   // The state function which will allow us to do some pre checkes
-	state        *state.ManagedState
+	pendingState *state.ManagedState
 	gasLimit     func() *big.Int // The current gas limit function callback
 	eventMux     *event.TypeMux
 	events       event.Subscription
@@ -57,7 +57,7 @@ func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func(
 		eventMux:     eventMux,
 		currentState: currentStateFn,
 		gasLimit:     gasLimitFn,
-		state:        state.ManageState(currentStateFn()),
+		pendingState: state.ManageState(currentStateFn()),
 	}
 }
 
@@ -76,7 +76,7 @@ func (pool *TxPool) Start() {
 }
 
 func (pool *TxPool) resetState() {
-	pool.state = state.ManageState(pool.currentState())
+	pool.pendingState = state.ManageState(pool.currentState())
 
 	// validate the pool of pending transactions, this will remove
 	// any transactions that have been included in the block or
@@ -90,7 +90,7 @@ func (pool *TxPool) resetState() {
 		if addr, err := tx.From(); err == nil {
 			// Set the nonce. Transaction nonce can never be lower
 			// than the state nonce; validatePool took care of that.
-			pool.state.SetNonce(addr, tx.Nonce())
+			pool.pendingState.SetNonce(addr, tx.Nonce())
 		}
 	}
 
@@ -110,7 +110,7 @@ func (pool *TxPool) State() *state.ManagedState {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
-	return pool.state
+	return pool.pendingState
 }
 
 // validateTx checks whether a transaction is valid according
@@ -302,7 +302,9 @@ func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *types.Trans
 	if _, ok := pool.pending[hash]; !ok {
 		pool.pending[hash] = tx
 
-		pool.state.SetNonce(addr, tx.AccountNonce)
+		// Increment the nonce on the pending state. This can only happen if
+		// the nonce is +1 to the previous one.
+		pool.pendingState.SetNonce(addr, tx.AccountNonce+1)
 		// Notify the subscribers. This event is posted in a goroutine
 		// because it's possible that somewhere during the post "Remove transaction"
 		// gets called which will then wait for the global tx pool lock and deadlock.
@@ -312,14 +314,17 @@ func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *types.Trans
 
 // checkQueue moves transactions that have become processable to main pool.
 func (pool *TxPool) checkQueue() {
-	state := pool.state
+	state := pool.pendingState
 
 	var addq txQueue
 	for address, txs := range pool.queue {
-		curnonce := state.GetNonce(address)
+		// guessed nonce is the nonce currently kept by the tx pool (pending state)
+		guessedNonce := state.GetNonce(address)
+		// true nonce is the nonce known by the last state
+		trueNonce := pool.currentState().GetNonce(address)
 		addq := addq[:0]
 		for hash, tx := range txs {
-			if tx.AccountNonce < curnonce {
+			if tx.AccountNonce < trueNonce {
 				// Drop queued transactions whose nonce is lower than
 				// the account nonce because they have been processed.
 				delete(txs, hash)
@@ -332,7 +337,7 @@ func (pool *TxPool) checkQueue() {
 		// current account nonce.
 		sort.Sort(addq)
 		for _, e := range addq {
-			if e.AccountNonce > curnonce {
+			if e.AccountNonce > guessedNonce {
 				break
 			}
 			delete(txs, e.hash)
