@@ -214,14 +214,15 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	// FIXME if we have the hash in our chain and the TD of the peer is
 	// much higher than ours, something is wrong with us or the peer.
 	// Check if the hash is on our own chain
-	if pm.chainman.HasBlock(peer.recentHash) {
+	head := peer.Head()
+	if pm.chainman.HasBlock(head) {
 		glog.V(logger.Debug).Infoln("Synchronisation canceled: head already known")
 		return
 	}
 	// Get the hashes from the peer (synchronously)
-	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, 0x%x", peer.id, peer.recentHash)
+	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, 0x%x", peer.id, head)
 
-	err := pm.downloader.Synchronise(peer.id, peer.recentHash)
+	err := pm.downloader.Synchronise(peer.id, head)
 	switch err {
 	case nil:
 		glog.V(logger.Detail).Infof("Synchronisation completed")
