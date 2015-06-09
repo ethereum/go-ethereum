@@ -21,6 +21,8 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 
 	for i, name := range names {
 		switch strings.ToLower(strings.TrimSpace(name)) {
+		case DebugApiName:
+			apis[i] = NewDebugApi(xeth, eth, codec)
 		case EthApiName:
 			apis[i] = NewEthApi(xeth, codec)
 		case MinerApiName:
@@ -39,6 +41,8 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 
 func Javascript(name string) string {
 	switch strings.ToLower(strings.TrimSpace(name)) {
+	case DebugApiName:
+		return Debug_JS
 	case MinerApiName:
 		return Miner_JS
 	case NetApiName:

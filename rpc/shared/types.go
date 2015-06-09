@@ -2,6 +2,7 @@ package shared
 
 import (
 	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
@@ -45,15 +46,15 @@ func NewRpcResponse(id interface{}, jsonrpcver string, reply interface{}, err er
 	var response interface{}
 
 	switch err.(type) {
-		case nil:
+	case nil:
 		response = &SuccessResponse{Jsonrpc: jsonrpcver, Id: id, Result: reply}
-		case *NotImplementedError:
+	case *NotImplementedError:
 		jsonerr := &ErrorObject{-32601, err.Error()}
 		response = &ErrorResponse{Jsonrpc: jsonrpcver, Id: id, Error: jsonerr}
-		case *DecodeParamError, *InsufficientParamsError, *ValidationError, *InvalidTypeError:
+	case *DecodeParamError, *InsufficientParamsError, *ValidationError, *InvalidTypeError:
 		jsonerr := &ErrorObject{-32602, err.Error()}
 		response = &ErrorResponse{Jsonrpc: jsonrpcver, Id: id, Error: jsonerr}
-		default:
+	default:
 		jsonerr := &ErrorObject{-32603, err.Error()}
 		response = &ErrorResponse{Jsonrpc: jsonrpcver, Id: id, Error: jsonerr}
 	}
