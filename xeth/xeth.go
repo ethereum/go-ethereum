@@ -957,7 +957,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	if err := self.backend.TxPool().Add(tx); err != nil {
 		return "", err
 	}
-	state.SetNonce(from, nonce+1)
+	//state.SetNonce(from, nonce+1)
 
 	if contractCreation {
 		addr := core.AddressFromMessage(tx)
