@@ -263,23 +263,29 @@ func (d *Downloader) Cancel() bool {
 
 // XXX Make synchronous
 func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
-	glog.V(logger.Debug).Infof("Downloading hashes (%x) from %s", h[:4], p.id)
-
-	start := time.Now()
-
-	// Add the hash to the queue first, and start hash retrieval
-	d.queue.Insert([]common.Hash{h})
-	p.getHashes(h)
-
 	var (
+		start  = time.Now()
 		active = p             // active peer will help determine the current active peer
 		head   = common.Hash{} // common and last hash
 
-		timeout     = time.NewTimer(hashTTL)          // timer to dump a non-responsive active peer
+		timeout     = time.NewTimer(0)                // timer to dump a non-responsive active peer
 		attempted   = make(map[string]bool)           // attempted peers will help with retries
 		crossTicker = time.NewTicker(crossCheckCycle) // ticker to periodically check expired cross checks
 	)
 	defer crossTicker.Stop()
+	defer timeout.Stop()
+
+	glog.V(logger.Debug).Infof("Downloading hashes (%x) from %s", h[:4], p.id)
+	<-timeout.C // timeout channel should be initially empty.
+
+	getHashes := func(from common.Hash) {
+		active.getHashes(from)
+		timeout.Reset(hashTTL)
+	}
+
+	// Add the hash to the queue, and start hash retrieval.
+	d.queue.Insert([]common.Hash{h})
+	getHashes(h)
 
 	attempted[p.id] = true
 	for finished := false; !finished; {
@@ -293,7 +299,7 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 				glog.V(logger.Debug).Infof("Received hashes from incorrect peer(%s)", hashPack.peerId)
 				break
 			}
-			timeout.Reset(hashTTL)
+			timeout.Stop()
 
 			// Make sure the peer actually gave something valid
 			if len(hashPack.hashes) == 0 {
@@ -345,7 +351,7 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 				active.getBlocks([]common.Hash{origin})
 
 				// Also fetch a fresh
-				active.getHashes(head)
+				getHashes(head)
 				continue
 			}
 			// We're done, prepare the download cache and proceed pulling the blocks
@@ -399,7 +405,7 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 			// set p to the active peer. this will invalidate any hashes that may be returned
 			// by our previous (delayed) peer.
 			active = p
-			p.getHashes(head)
+			getHashes(head)
 			glog.V(logger.Debug).Infof("Hash fetching switched to new peer(%s)", p.id)
 		}
 	}
