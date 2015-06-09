@@ -49,7 +49,7 @@ function pp(object, indent) {
     } else if(typeof(object) === "number") {
         str += "\033[31m" + object;
     } else if(typeof(object) === "function") {
-        str += "\033[35m[Function]";
+        str += "\033[35m" + object.toString().split(" {")[0];
     } else {
         str += object;
     }
