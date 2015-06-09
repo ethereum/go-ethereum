@@ -111,12 +111,13 @@ type ChainManager struct {
 
 func NewChainManager(genesis *types.Block, blockDb, stateDb common.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
 	bc := &ChainManager{
-		blockDb:  blockDb,
-		stateDb:  stateDb,
-		eventMux: mux,
-		quit:     make(chan struct{}),
-		cache:    NewBlockCache(blockCacheLimit),
-		pow:      pow,
+		blockDb:      blockDb,
+		stateDb:      stateDb,
+		genesisBlock: GenesisBlock(42, stateDb),
+		eventMux:     mux,
+		quit:         make(chan struct{}),
+		cache:        NewBlockCache(blockCacheLimit),
+		pow:          pow,
 	}
 
 	// Check the genesis block given to the chain manager. If the genesis block mismatches block number 0
