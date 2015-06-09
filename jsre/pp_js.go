@@ -70,14 +70,31 @@ var redundantFields = [
 ];
 
 var getFields = function (object) {
-    var result = Object.getOwnPropertyNames(object);
+    var members = Object.getOwnPropertyNames(object);
     if (object.constructor && object.constructor.prototype) {
-        result = result.concat(Object.getOwnPropertyNames(object.constructor.prototype));
+        members = members.concat(Object.getOwnPropertyNames(object.constructor.prototype));
     }
-    return result.filter(function (field) {
+
+    var fields = members.filter(function (member) {
+        return !isMemberFunction(object, member)
+    }).sort()
+    var funcs = members.filter(function (member) {
+        return isMemberFunction(object, member)
+    }).sort()
+
+    var results = fields.concat(funcs);
+    return results.filter(function (field) {
         return redundantFields.indexOf(field) === -1;
     });
 };
+
+var isMemberFunction = function(object, member) {
+    try {
+        return typeof(object[member]) === "function";
+    } catch(e) {
+        return false;
+    }
+}
 
 var isBigNumber = function (object) {
     return typeof BigNumber !== 'undefined' && object instanceof BigNumber;
