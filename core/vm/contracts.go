@@ -67,9 +67,7 @@ func ripemd160Func(in []byte) []byte {
 const ecRecoverInputLength = 128
 
 func ecrecoverFunc(in []byte) []byte {
-	if len(in) < ecRecoverInputLength {
-		in = common.RightPadBytes(in, 128)
-	}
+	in = common.RightPadBytes(in, 128)
 	// "in" is (hash, v, r, s), each 32 bytes
 	// but for ecrecover we want (r, s, v)
 
