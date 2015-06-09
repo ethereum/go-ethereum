@@ -67,6 +67,13 @@ func (tx *Transaction) Hash() common.Hash {
 	})
 }
 
+// Size returns the encoded RLP size of tx.
+func (self *Transaction) Size() common.StorageSize {
+	c := writeCounter(0)
+	rlp.Encode(&c, self)
+	return common.StorageSize(c)
+}
+
 func (self *Transaction) Data() []byte {
 	return self.Payload
 }
