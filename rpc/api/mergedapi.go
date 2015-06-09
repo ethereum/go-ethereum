@@ -3,14 +3,14 @@ package api
 import "github.com/ethereum/go-ethereum/rpc/shared"
 
 // combines multiple API's
-type mergedApi struct {
+type MergedApi struct {
 	apis    []string
 	methods map[string]EthereumApi
 }
 
 // create new merged api instance
-func newMergedApi(apis ...EthereumApi) *mergedApi {
-	mergedApi := new(mergedApi)
+func newMergedApi(apis ...EthereumApi) *MergedApi {
+	mergedApi := new(MergedApi)
 	mergedApi.apis = make([]string, len(apis))
 	mergedApi.methods = make(map[string]EthereumApi)
 
@@ -24,7 +24,7 @@ func newMergedApi(apis ...EthereumApi) *mergedApi {
 }
 
 // Supported RPC methods
-func (self *mergedApi) Methods() []string {
+func (self *MergedApi) Methods() []string {
 	all := make([]string, len(self.methods))
 	for method, _ := range self.methods {
 		all = append(all, method)
@@ -33,7 +33,7 @@ func (self *mergedApi) Methods() []string {
 }
 
 // Call the correct API's Execute method for the given request
-func (self *mergedApi) Execute(req *shared.Request) (interface{}, error) {
+func (self *MergedApi) Execute(req *shared.Request) (interface{}, error) {
 	if res, _ := self.handle(req); res != nil {
 		return res, nil
 	}
@@ -43,11 +43,11 @@ func (self *mergedApi) Execute(req *shared.Request) (interface{}, error) {
 	return nil, shared.NewNotImplementedError(req.Method)
 }
 
-func (self *mergedApi) Name() string {
+func (self *MergedApi) Name() string {
 	return MergedApiName
 }
 
-func (self *mergedApi) handle(req *shared.Request) (interface{}, error) {
+func (self *MergedApi) handle(req *shared.Request) (interface{}, error) {
 	if req.Method == "support_apis" { // provided API's
 		return self.apis, nil
 	}

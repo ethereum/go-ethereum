@@ -21,6 +21,8 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 
 	for i, name := range names {
 		switch strings.ToLower(strings.TrimSpace(name)) {
+		case AdminApiName:
+			apis[i] = NewAdminApi(xeth, eth, codec)
 		case DebugApiName:
 			apis[i] = NewDebugApi(xeth, eth, codec)
 		case EthApiName:
@@ -30,9 +32,9 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 		case NetApiName:
 			apis[i] = NewNetApi(xeth, eth, codec)
 		case PersonalApiName:
-			apis[i] = NewPersonal(xeth, eth, codec)
+			apis[i] = NewPersonalApi(xeth, eth, codec)
 		case Web3ApiName:
-			apis[i] = NewWeb3(xeth, codec)
+			apis[i] = NewWeb3Api(xeth, codec)
 		default:
 			return nil, fmt.Errorf("Unknown API '%s'", name)
 		}
@@ -43,6 +45,8 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 
 func Javascript(name string) string {
 	switch strings.ToLower(strings.TrimSpace(name)) {
+	case AdminApiName:
+		return Admin_JS
 	case DebugApiName:
 		return Debug_JS
 	case MinerApiName:

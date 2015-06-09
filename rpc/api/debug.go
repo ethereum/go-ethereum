@@ -20,20 +20,20 @@ const (
 var (
 	// mapping between methods and handlers
 	DebugMapping = map[string]debughandler{
-		"debug_dumpBlock":    (*DebugApi).DumpBlock,
-		"debug_getBlockRlp":  (*DebugApi).GetBlockRlp,
-		"debug_printBlock":   (*DebugApi).PrintBlock,
-		"debug_processBlock": (*DebugApi).ProcessBlock,
-		"debug_seedHash":     (*DebugApi).SeedHash,
-		"debug_setHead":      (*DebugApi).SetHead,
+		"debug_dumpBlock":    (*debugApi).DumpBlock,
+		"debug_getBlockRlp":  (*debugApi).GetBlockRlp,
+		"debug_printBlock":   (*debugApi).PrintBlock,
+		"debug_processBlock": (*debugApi).ProcessBlock,
+		"debug_seedHash":     (*debugApi).SeedHash,
+		"debug_setHead":      (*debugApi).SetHead,
 	}
 )
 
 // debug callback handler
-type debughandler func(*DebugApi, *shared.Request) (interface{}, error)
+type debughandler func(*debugApi, *shared.Request) (interface{}, error)
 
 // admin api provider
-type DebugApi struct {
+type debugApi struct {
 	xeth     *xeth.XEth
 	ethereum *eth.Ethereum
 	methods  map[string]debughandler
@@ -41,8 +41,8 @@ type DebugApi struct {
 }
 
 // create a new debug api instance
-func NewDebugApi(xeth *xeth.XEth, ethereum *eth.Ethereum, coder codec.Codec) *DebugApi {
-	return &DebugApi{
+func NewDebugApi(xeth *xeth.XEth, ethereum *eth.Ethereum, coder codec.Codec) *debugApi {
+	return &debugApi{
 		xeth:     xeth,
 		ethereum: ethereum,
 		methods:  DebugMapping,
@@ -51,7 +51,7 @@ func NewDebugApi(xeth *xeth.XEth, ethereum *eth.Ethereum, coder codec.Codec) *De
 }
 
 // collection with supported methods
-func (self *DebugApi) Methods() []string {
+func (self *debugApi) Methods() []string {
 	methods := make([]string, len(self.methods))
 	i := 0
 	for k := range self.methods {
@@ -62,7 +62,7 @@ func (self *DebugApi) Methods() []string {
 }
 
 // Execute given request
-func (self *DebugApi) Execute(req *shared.Request) (interface{}, error) {
+func (self *debugApi) Execute(req *shared.Request) (interface{}, error) {
 	if callback, ok := self.methods[req.Method]; ok {
 		return callback(self, req)
 	}
@@ -70,11 +70,11 @@ func (self *DebugApi) Execute(req *shared.Request) (interface{}, error) {
 	return nil, &shared.NotImplementedError{req.Method}
 }
 
-func (self *DebugApi) Name() string {
+func (self *debugApi) Name() string {
 	return DebugApiName
 }
 
-func (self *DebugApi) PrintBlock(req *shared.Request) (interface{}, error) {
+func (self *debugApi) PrintBlock(req *shared.Request) (interface{}, error) {
 	args := new(BlockNumArg)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -84,7 +84,7 @@ func (self *DebugApi) PrintBlock(req *shared.Request) (interface{}, error) {
 	return fmt.Sprintf("%s", block), nil
 }
 
-func (self *DebugApi) DumpBlock(req *shared.Request) (interface{}, error) {
+func (self *debugApi) DumpBlock(req *shared.Request) (interface{}, error) {
 	args := new(BlockNumArg)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -103,7 +103,7 @@ func (self *DebugApi) DumpBlock(req *shared.Request) (interface{}, error) {
 	return stateDb.Dump(), nil
 }
 
-func (self *DebugApi) GetBlockRlp(req *shared.Request) (interface{}, error) {
+func (self *debugApi) GetBlockRlp(req *shared.Request) (interface{}, error) {
 	args := new(BlockNumArg)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -117,7 +117,7 @@ func (self *DebugApi) GetBlockRlp(req *shared.Request) (interface{}, error) {
 	return fmt.Sprintf("%x", encoded), err
 }
 
-func (self *DebugApi) SetHead(req *shared.Request) (interface{}, error) {
+func (self *debugApi) SetHead(req *shared.Request) (interface{}, error) {
 	args := new(BlockNumArg)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -133,7 +133,7 @@ func (self *DebugApi) SetHead(req *shared.Request) (interface{}, error) {
 	return nil, nil
 }
 
-func (self *DebugApi) ProcessBlock(req *shared.Request) (interface{}, error) {
+func (self *debugApi) ProcessBlock(req *shared.Request) (interface{}, error) {
 	args := new(BlockNumArg)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -155,7 +155,7 @@ func (self *DebugApi) ProcessBlock(req *shared.Request) (interface{}, error) {
 	return false, err
 }
 
-func (self *DebugApi) SeedHash(req *shared.Request) (interface{}, error) {
+func (self *debugApi) SeedHash(req *shared.Request) (interface{}, error) {
 	args := new(BlockNumArg)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
