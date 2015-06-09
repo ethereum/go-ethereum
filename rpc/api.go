@@ -626,9 +626,9 @@ func (api *EthereumApi) doCall(params json.RawMessage) (string, string, error) {
 
 	var gasprice string
 	if args.GasPrice == nil {
-		gas = ""
+		gasprice = ""
 	} else {
-		gas = args.GasPrice.String()
+		gasprice = args.GasPrice.String()
 	}
 
 	return api.xethAtStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), gas, gasprice, args.Data)
