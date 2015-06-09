@@ -285,7 +285,7 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	eth.pow = ethash.New()
-	genesis := core.GenesisBlock(uint64(config.GenesisNonce), blockDb)
+	genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
 	eth.chainManager, err = core.NewChainManager(genesis, blockDb, stateDb, eth.pow, eth.EventMux())
 	if err != nil {
 		return nil, err
