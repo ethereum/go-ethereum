@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/jsre"
-	"github.com/robertkrimen/otto"
-	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
 	"reflect"
+
+	"github.com/ethereum/go-ethereum/jsre"
+	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/robertkrimen/otto"
 )
 
 type Jeth struct {
