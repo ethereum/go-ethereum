@@ -26,19 +26,19 @@ function pp(object, indent) {
     } else if(typeof(object) === "object") {
         str += "{\n";
         indent += "  ";
-        var last = getFields(object).pop()
-        getFields(object).forEach(function (k) {
-            str += indent + k + ": ";
+
+        var fields = getFields(object);
+        var last   = fields[fields.length - 1];
+        fields.forEach(function (key) {
+            str += indent + key + ": ";
             try {
-                str += pp(object[k], indent);
+                str += pp(object[key], indent);
             } catch (e) {
                 str += pp(e, indent);
             }
-
-            if(k !== last) {
+            if(key !== last) {
                 str += ",";
             }
-
             str += "\n";
         });
         str += indent.substr(2, indent.length) + "}";
@@ -49,7 +49,7 @@ function pp(object, indent) {
     } else if(typeof(object) === "number") {
         str += "\033[31m" + object;
     } else if(typeof(object) === "function") {
-        str += "\033[35m[Function]";
+        str += "\033[35m" + object.toString().split(" {")[0];
     } else {
         str += object;
     }
@@ -70,14 +70,31 @@ var redundantFields = [
 ];
 
 var getFields = function (object) {
-    var result = Object.getOwnPropertyNames(object);
+    var members = Object.getOwnPropertyNames(object);
     if (object.constructor && object.constructor.prototype) {
-        result = result.concat(Object.getOwnPropertyNames(object.constructor.prototype));
+        members = members.concat(Object.getOwnPropertyNames(object.constructor.prototype));
     }
-    return result.filter(function (field) {
+
+    var fields = members.filter(function (member) {
+        return !isMemberFunction(object, member)
+    }).sort()
+    var funcs = members.filter(function (member) {
+        return isMemberFunction(object, member)
+    }).sort()
+
+    var results = fields.concat(funcs);
+    return results.filter(function (field) {
         return redundantFields.indexOf(field) === -1;
     });
 };
+
+var isMemberFunction = function(object, member) {
+    try {
+        return typeof(object[member]) === "function";
+    } catch(e) {
+        return false;
+    }
+}
 
 var isBigNumber = function (object) {
     return typeof BigNumber !== 'undefined' && object instanceof BigNumber;

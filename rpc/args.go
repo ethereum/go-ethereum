@@ -172,13 +172,8 @@ type NewSigArgs struct {
 }
 
 func (args *NewSigArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []json.RawMessage
-	var ext struct {
-		From string
-		Data string
-	}
+	var obj []interface{}
 
-	// Decode byte slice to array of RawMessages
 	if err := json.Unmarshal(b, &obj); err != nil {
 		return NewDecodeParamError(err.Error())
 	}
@@ -188,21 +183,26 @@ func (args *NewSigArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	// Decode 0th RawMessage to temporary struct
-	if err := json.Unmarshal(obj[0], &ext); err != nil {
-		return NewDecodeParamError(err.Error())
+	from, ok := obj[0].(string)
+	if !ok {
+		return NewInvalidTypeError("from", "not a string")
 	}
+	args.From = from
 
-	if len(ext.From) == 0 {
+	if len(args.From) == 0 {
 		return NewValidationError("from", "is required")
 	}
 
-	if len(ext.Data) == 0 {
+	data, ok := obj[1].(string)
+	if !ok {
+		return NewInvalidTypeError("data", "not a string")
+	}
+	args.Data = data
+
+	if len(args.Data) == 0 {
 		return NewValidationError("data", "is required")
 	}
 
-	args.From = ext.From
-	args.Data = ext.Data
 	return nil
 }
 
@@ -261,22 +261,22 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Value = num
 
 	num = nil
-	if ext.Gas == nil {
-		num = big.NewInt(0)
-	} else {
+	if ext.Gas != nil {
 		if num, err = numString(ext.Gas); err != nil {
 			return err
 		}
+	} else {
+		num = nil
 	}
 	args.Gas = num
 
 	num = nil
-	if ext.GasPrice == nil {
-		num = big.NewInt(0)
-	} else {
+	if ext.GasPrice != nil {
 		if num, err = numString(ext.GasPrice); err != nil {
 			return err
 		}
+	} else {
+		num = nil
 	}
 	args.GasPrice = num
 
@@ -346,21 +346,21 @@ func (args *CallArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 	args.Value = num
 
-	if ext.Gas == nil {
-		num = big.NewInt(0)
-	} else {
+	if ext.Gas != nil {
 		if num, err = numString(ext.Gas); err != nil {
 			return err
 		}
+	} else {
+		num = nil
 	}
 	args.Gas = num
 
-	if ext.GasPrice == nil {
-		num = big.NewInt(0)
-	} else {
+	if ext.GasPrice != nil {
 		if num, err = numString(ext.GasPrice); err != nil {
 			return err
 		}
+	} else {
+		num = nil
 	}
 	args.GasPrice = num
 

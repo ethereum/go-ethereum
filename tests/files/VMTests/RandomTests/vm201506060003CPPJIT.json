@@ -1,0 +1,31 @@
+{
+    "randomVMTest" : {
+        "env" : {
+            "currentCoinbase" : "0000000000000000000000000000000000000000",
+            "currentDifficulty" : "0x02993b26",
+            "currentGasLimit" : "0x5cf6486317fdb885",
+            "currentNumber" : "0x7d3c9c2de89b2de8",
+            "currentTimestamp" : "0xb841e027096ca4e2",
+            "previousHash" : "80a7432990555a8058fb2aeeb2c9a87c3fdcc9d8d3fd372cdb07a40fd56991e1"
+        },
+        "exec" : {
+            "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "caller" : "7b646fbc38356d7ef9275d8940dcfa08d73951fd",
+            "code" : "0x7a6bd87691782526a69d0e8b0660d2d1158903d5b7efc9636ab2ef037ab1ba18347fe3f9a4aec5538e8292a6bccc210453571f02a576eab0556980750dabe791355ade04720c6945461bab9f0146c92541b57ca9dcd1448a79a630fb6d8335571fc733b6f604dd4b9872265f940ac36ee4bb436a780b7ed4dbb81b7e9a28827f2f68b9f03392ac83d0b7e45a814a4b9decf445cac3ccffca647ff87e43453b09609968bd5936225a6196edba626e6a718769bfe5795c4a9ba98c60bb63d52beda40b7cd7ea7e766fe9c9e75bdfb2c5738dcced61111a8258dc764b53d910f7da607403718dfc6c5aa7db8b32d21fcdff0ee87721abc760616dfc91e76b77618207579a7dc31ea97c46d9cf868aaa1ccba2c76d0570c0435896a1a6a0037e82580d2af831d8a2",
+            "data" : "0x",
+            "gas" : "0x9606430e52c4d31a",
+            "gasPrice" : "0x1c",
+            "origin" : "14cb9f799b1b93210da7682ef34f28731d041637",
+            "value" : "0x23cb9da58e490f35"
+        },
+        "pre" : {
+            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "balance" : "0x496e8fc2",
+                "code" : "0x7a6bd87691782526a69d0e8b0660d2d1158903d5b7efc9636ab2ef037ab1ba18347fe3f9a4aec5538e8292a6bccc210453571f02a576eab0556980750dabe791355ade04720c6945461bab9f0146c92541b57ca9dcd1448a79a630fb6d8335571fc733b6f604dd4b9872265f940ac36ee4bb436a780b7ed4dbb81b7e9a28827f2f68b9f03392ac83d0b7e45a814a4b9decf445cac3ccffca647ff87e43453b09609968bd5936225a6196edba626e6a718769bfe5795c4a9ba98c60bb63d52beda40b7cd7ea7e766fe9c9e75bdfb2c5738dcced61111a8258dc764b53d910f7da607403718dfc6c5aa7db8b32d21fcdff0ee87721abc760616dfc91e76b77618207579a7dc31ea97c46d9cf868aaa1ccba2c76d0570c0435896a1a6a0037e82580d2af831d8a2",
+                "nonce" : "0x30a3e8694ecb08fe",
+                "storage" : {
+                }
+            }
+        }
+    }
+}

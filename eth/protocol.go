@@ -17,7 +17,7 @@ const (
 // eth protocol message codes
 const (
 	StatusMsg = iota
-	GetTxMsg  // unused
+	NewBlockHashesMsg
 	TxMsg
 	GetBlockHashesMsg
 	BlockHashesMsg
@@ -57,10 +57,12 @@ var errorToString = map[int]string{
 	ErrSuspendedPeer:           "Suspended peer",
 }
 
-// backend is the interface the ethereum protocol backend should implement
-// used as an argument to EthProtocol
 type txPool interface {
+	// AddTransactions should add the given transactions to the pool.
 	AddTransactions([]*types.Transaction)
+
+	// GetTransactions should return pending transactions.
+	// The slice should be modifiable by the caller.
 	GetTransactions() types.Transactions
 }
 

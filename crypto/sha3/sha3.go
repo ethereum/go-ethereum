@@ -38,13 +38,10 @@ const stateSize = laneSize * numLanes
 // O(2^{outputSize/2}) computations (the birthday lower bound). Future standards may modify the
 // capacity/outputSize ratio to allow for more output with lower cryptographic security.
 type digest struct {
-	a          [numLanes]uint64  // main state of the hash
-	b          [numLanes]uint64  // intermediate states
-	c          [sliceSize]uint64 // intermediate states
-	d          [sliceSize]uint64 // intermediate states
-	outputSize int               // desired output size in bytes
-	capacity   int               // number of bytes to leave untouched during squeeze/absorb
-	absorbed   int               // number of bytes absorbed thus far
+	a          [numLanes]uint64 // main state of the hash
+	outputSize int              // desired output size in bytes
+	capacity   int              // number of bytes to leave untouched during squeeze/absorb
+	absorbed   int              // number of bytes absorbed thus far
 }
 
 // minInt returns the lesser of two integer arguments, to simplify the absorption routine.
@@ -116,7 +113,7 @@ func (d *digest) Write(p []byte) (int, error) {
 
 		// For every rate() bytes absorbed, the state must be permuted via the F Function.
 		if (d.absorbed)%d.rate() == 0 {
-			d.keccakF()
+			keccakF1600(&d.a)
 		}
 	}
 
@@ -134,7 +131,7 @@ func (d *digest) Write(p []byte) (int, error) {
 		d.absorbed += (lastLane - firstLane) * laneSize
 		// For every rate() bytes absorbed, the state must be permuted via the F Function.
 		if (d.absorbed)%d.rate() == 0 {
-			d.keccakF()
+			keccakF1600(&d.a)
 		}
 
 		offset = 0
@@ -167,7 +164,7 @@ func (d *digest) pad() {
 // finalize prepares the hash to output data by padding and one final permutation of the state.
 func (d *digest) finalize() {
 	d.pad()
-	d.keccakF()
+	keccakF1600(&d.a)
 }
 
 // squeeze outputs an arbitrary number of bytes from the hash state.
@@ -192,7 +189,7 @@ func (d *digest) squeeze(in []byte, toSqueeze int) []byte {
 			out = out[laneSize:]
 		}
 		if len(out) > 0 {
-			d.keccakF()
+			keccakF1600(&d.a)
 		}
 	}
 	return in[:len(in)+toSqueeze] // Re-slice in case we wrote extra data.

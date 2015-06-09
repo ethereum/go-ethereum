@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"os"
 
 	"encoding/hex"
@@ -26,9 +27,12 @@ import (
 	"golang.org/x/crypto/ripemd160"
 )
 
+var secp256k1n *big.Int
+
 func init() {
 	// specify the params for the s256 curve
 	ecies.AddParamsForCurve(S256(), ecies.ECIES_AES128_SHA256)
+	secp256k1n = common.String2Big("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
 }
 
 func Sha3(data ...[]byte) []byte {
@@ -151,6 +155,18 @@ func GenerateKey() (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(S256(), rand.Reader)
 }
 
+func ValidateSignatureValues(v byte, r, s *big.Int) bool {
+	vint := uint32(v)
+	if r.Cmp(common.Big0) == 0 || s.Cmp(common.Big0) == 0 {
+		return false
+	}
+	if r.Cmp(secp256k1n) < 0 && s.Cmp(secp256k1n) < 0 && (vint == 27 || vint == 28) {
+		return true
+	} else {
+		return false
+	}
+}
+
 func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	s, err := Ecrecover(hash, sig)
 	if err != nil {
@@ -185,7 +201,7 @@ func ImportBlockTestKey(privKeyBytes []byte) error {
 	ecKey := ToECDSA(privKeyBytes)
 	key := &Key{
 		Id:         uuid.NewRandom(),
-		Address:    common.BytesToAddress(PubkeyToAddress(ecKey.PublicKey)),
+		Address:    PubkeyToAddress(ecKey.PublicKey),
 		PrivateKey: ecKey,
 	}
 	err := ks.StoreKey(key, "")
@@ -231,7 +247,7 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	ecKey := ToECDSA(ethPriv)
 	key = &Key{
 		Id:         nil,
-		Address:    common.BytesToAddress(PubkeyToAddress(ecKey.PublicKey)),
+		Address:    PubkeyToAddress(ecKey.PublicKey),
 		PrivateKey: ecKey,
 	}
 	derivedAddr := hex.EncodeToString(key.Address.Bytes()) // needed because .Hex() gives leading "0x"
@@ -289,7 +305,7 @@ func PKCS7Unpad(in []byte) []byte {
 	return in[:len(in)-int(padding)]
 }
 
-func PubkeyToAddress(p ecdsa.PublicKey) []byte {
+func PubkeyToAddress(p ecdsa.PublicKey) common.Address {
 	pubBytes := FromECDSAPub(&p)
-	return Sha3(pubBytes[1:])[12:]
+	return common.BytesToAddress(Sha3(pubBytes[1:])[12:])
 }

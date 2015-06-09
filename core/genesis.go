@@ -19,8 +19,8 @@ var ZeroHash256 = make([]byte, 32)
 var ZeroHash160 = make([]byte, 20)
 var ZeroHash512 = make([]byte, 64)
 
-func GenesisBlock(db common.Database) *types.Block {
-	genesis := types.NewBlock(common.Hash{}, common.Address{}, common.Hash{}, params.GenesisDifficulty, 42, nil)
+func GenesisBlock(nonce uint64, db common.Database) *types.Block {
+	genesis := types.NewBlock(common.Hash{}, common.Address{}, common.Hash{}, params.GenesisDifficulty, nonce, nil)
 	genesis.Header().Number = common.Big0
 	genesis.Header().GasLimit = params.GenesisGasLimit
 	genesis.Header().GasUsed = common.Big0
@@ -36,7 +36,7 @@ func GenesisBlock(db common.Database) *types.Block {
 		Balance string
 		Code    string
 	}
-	err := json.Unmarshal(GenesisData, &accounts)
+	err := json.Unmarshal(GenesisAccounts, &accounts)
 	if err != nil {
 		fmt.Println("enable to decode genesis json data:", err)
 		os.Exit(1)
@@ -57,7 +57,7 @@ func GenesisBlock(db common.Database) *types.Block {
 	return genesis
 }
 
-var GenesisData = []byte(`{
+var GenesisAccounts = []byte(`{
 	"0000000000000000000000000000000000000001": {"balance": "1"},
 	"0000000000000000000000000000000000000002": {"balance": "1"},
 	"0000000000000000000000000000000000000003": {"balance": "1"},

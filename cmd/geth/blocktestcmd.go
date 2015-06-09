@@ -96,9 +96,9 @@ func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, er
 	if err != nil {
 		return nil, err
 	}
-	if err := ethereum.Start(); err != nil {
-		return nil, err
-	}
+	// if err := ethereum.Start(); err != nil {
+	// 	return nil, err
+	// }
 
 	// import the genesis block
 	ethereum.ResetWithGenesisBlock(test.Genesis)

@@ -45,7 +45,7 @@ var (
 	defaultBootNodes = []*discover.Node{
 		// ETH/DEV Go Bootnodes
 		discover.MustParseNode("enode://a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c@52.16.188.185:30303"),
-		discover.MustParseNode("enode://7f25d3eab333a6b98a8b5ed68d962bb22c876ffcd5561fca54e3c2ef27f754df6f7fd7c9b74cc919067abac154fb8e1f8385505954f161ae440abc355855e034@54.207.93.166:30303"),
+		discover.MustParseNode("enode://de471bccee3d042261d52e9bff31458daecc406142b401d4cd848f677479f73104b9fdeb090af9583d3391b7f10cb2ba9e26865dd5fca4fcdc0fb1e3b723c786@54.94.239.50:30303"),
 		// ETH/DEV cpp-ethereum (poc-9.ethdev.com)
 		discover.MustParseNode("enode://487611428e6c99a11a9795a6abe7b529e81315ca6aad66e2a2fc76e3adf263faba0d35466c2f8f68d561dbefa8878d4df5f1f2ddb1fbeab7f42ffb8cd328bd4a@5.1.83.226:30303"),
 	}
@@ -58,6 +58,7 @@ type Config struct {
 	Name            string
 	ProtocolVersion int
 	NetworkId       int
+	GenesisNonce    int
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
@@ -198,7 +199,6 @@ type Ethereum struct {
 
 	net      *p2p.Server
 	eventMux *event.TypeMux
-	txSub    event.Subscription
 	miner    *miner.Miner
 
 	// logger logger.LogSystem
@@ -285,10 +285,14 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	eth.pow = ethash.New()
-	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.pow, eth.EventMux())
+	genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
+	eth.chainManager, err = core.NewChainManager(genesis, blockDb, stateDb, eth.pow, eth.EventMux())
+	if err != nil {
+		return nil, err
+	}
 	eth.downloader = downloader.New(eth.EventMux(), eth.chainManager.HasBlock, eth.chainManager.GetBlock)
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
-	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
+	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
@@ -470,10 +474,6 @@ func (s *Ethereum) Start() error {
 		s.whisper.Start()
 	}
 
-	// broadcast transactions
-	s.txSub = s.eventMux.Subscribe(core.TxPreEvent{})
-	go s.txBroadcastLoop()
-
 	glog.V(logger.Info).Infoln("Server started")
 	return nil
 }
@@ -531,8 +531,6 @@ func (self *Ethereum) AddPeer(nodeURL string) error {
 }
 
 func (s *Ethereum) Stop() {
-	s.txSub.Unsubscribe() // quits txBroadcastLoop
-
 	s.net.Stop()
 	s.protocolManager.Stop()
 	s.chainManager.Stop()
@@ -550,28 +548,6 @@ func (s *Ethereum) Stop() {
 func (s *Ethereum) WaitForShutdown() {
 	<-s.databasesClosed
 	<-s.shutdownChan
-}
-
-func (self *Ethereum) txBroadcastLoop() {
-	// automatically stops if unsubscribe
-	for obj := range self.txSub.Chan() {
-		event := obj.(core.TxPreEvent)
-		self.syncAccounts(event.Tx)
-	}
-}
-
-// keep accounts synced up
-func (self *Ethereum) syncAccounts(tx *types.Transaction) {
-	from, err := tx.From()
-	if err != nil {
-		return
-	}
-
-	if self.accountManager.HasAccount(from) {
-		if self.chainManager.TxState().GetNonce(from) < tx.Nonce() {
-			self.chainManager.TxState().SetNonce(from, tx.Nonce())
-		}
-	}
 }
 
 // StartAutoDAG() spawns a go routine that checks the DAG every autoDAGcheckInterval

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 )
@@ -14,6 +15,7 @@ import (
 var (
 	knownHash   = common.Hash{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	unknownHash = common.Hash{9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9}
+	bannedHash  = common.Hash{5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5}
 )
 
 func createHashes(start, amount int) (hashes []common.Hash) {
@@ -21,7 +23,7 @@ func createHashes(start, amount int) (hashes []common.Hash) {
 	hashes[len(hashes)-1] = knownHash
 
 	for i := range hashes[:len(hashes)-1] {
-		binary.BigEndian.PutUint64(hashes[i][:8], uint64(i+2))
+		binary.BigEndian.PutUint64(hashes[i][:8], uint64(start+i+2))
 	}
 	return
 }
@@ -56,7 +58,6 @@ type downloadTester struct {
 	maxHashFetch int // Overrides the maximum number of retrieved hashes
 
 	t            *testing.T
-	pcount       int
 	done         chan bool
 	activePeerId string
 }
@@ -114,12 +115,6 @@ func (dl *downloadTester) syncTake(peerId string, head common.Hash) ([]*Block, e
 	return took, err
 }
 
-func (dl *downloadTester) insertBlocks(blocks types.Blocks) {
-	for _, block := range blocks {
-		dl.chain = append(dl.chain, block.Hash())
-	}
-}
-
 func (dl *downloadTester) hasBlock(hash common.Hash) bool {
 	for _, h := range dl.chain {
 		if h == hash {
@@ -174,158 +169,131 @@ func (dl *downloadTester) getBlocks(id string) func([]common.Hash) error {
 	}
 }
 
-func (dl *downloadTester) newPeer(id string, td *big.Int, hash common.Hash) {
-	dl.pcount++
-
-	dl.downloader.RegisterPeer(id, hash, dl.getHashes, dl.getBlocks(id))
+// newPeer registers a new block download source into the syncer.
+func (dl *downloadTester) newPeer(id string, td *big.Int, hash common.Hash) error {
+	return dl.downloader.RegisterPeer(id, hash, dl.getHashes, dl.getBlocks(id))
 }
 
-func (dl *downloadTester) badBlocksPeer(id string, td *big.Int, hash common.Hash) {
-	dl.pcount++
-
-	// This bad peer never returns any blocks
-	dl.downloader.RegisterPeer(id, hash, dl.getHashes, func([]common.Hash) error {
-		return nil
-	})
-}
-
-func TestDownload(t *testing.T) {
-	minDesiredPeerCount = 4
-	blockTTL = 1 * time.Second
-
-	targetBlocks := 1000
+// Tests that simple synchronization, without throttling from a good peer works.
+func TestSynchronisation(t *testing.T) {
+	// Create a small enough block chain to download and the tester
+	targetBlocks := blockCacheLimit - 15
 	hashes := createHashes(0, targetBlocks)
 	blocks := createBlocksFromHashes(hashes)
+
 	tester := newTester(t, hashes, blocks)
+	tester.newPeer("peer", big.NewInt(10000), hashes[0])
 
-	tester.newPeer("peer1", big.NewInt(10000), hashes[0])
-	tester.newPeer("peer2", big.NewInt(0), common.Hash{})
-	tester.badBlocksPeer("peer3", big.NewInt(0), common.Hash{})
-	tester.badBlocksPeer("peer4", big.NewInt(0), common.Hash{})
-	tester.activePeerId = "peer1"
-
-	err := tester.sync("peer1", hashes[0])
-	if err != nil {
-		t.Error("download error", err)
-	}
-
-	inqueue := len(tester.downloader.queue.blockCache)
-	if inqueue != targetBlocks {
-		t.Error("expected", targetBlocks, "have", inqueue)
-	}
-}
-
-func TestMissing(t *testing.T) {
-	targetBlocks := 1000
-	hashes := createHashes(0, 1000)
-	extraHashes := createHashes(1001, 1003)
-	blocks := createBlocksFromHashes(append(extraHashes, hashes...))
-	tester := newTester(t, hashes, blocks)
-
-	tester.newPeer("peer1", big.NewInt(10000), hashes[len(hashes)-1])
-
-	hashes = append(extraHashes, hashes[:len(hashes)-1]...)
-	tester.newPeer("peer2", big.NewInt(0), common.Hash{})
-
-	err := tester.sync("peer1", hashes[0])
-	if err != nil {
-		t.Error("download error", err)
-	}
-
-	inqueue := len(tester.downloader.queue.blockCache)
-	if inqueue != targetBlocks {
-		t.Error("expected", targetBlocks, "have", inqueue)
-	}
-}
-
-func TestTaking(t *testing.T) {
-	minDesiredPeerCount = 4
-	blockTTL = 1 * time.Second
-
-	targetBlocks := 1000
-	hashes := createHashes(0, targetBlocks)
-	blocks := createBlocksFromHashes(hashes)
-	tester := newTester(t, hashes, blocks)
-
-	tester.newPeer("peer1", big.NewInt(10000), hashes[0])
-	tester.newPeer("peer2", big.NewInt(0), common.Hash{})
-	tester.badBlocksPeer("peer3", big.NewInt(0), common.Hash{})
-	tester.badBlocksPeer("peer4", big.NewInt(0), common.Hash{})
-
-	err := tester.sync("peer1", hashes[0])
-	if err != nil {
-		t.Error("download error", err)
-	}
-	bs := tester.downloader.TakeBlocks()
-	if len(bs) != targetBlocks {
-		t.Error("retrieved block mismatch: have %v, want %v", len(bs), targetBlocks)
-	}
-}
-
-func TestInactiveDownloader(t *testing.T) {
-	targetBlocks := 1000
-	hashes := createHashes(0, targetBlocks)
-	blocks := createBlocksFromHashSet(createHashSet(hashes))
-	tester := newTester(t, hashes, nil)
-
-	err := tester.downloader.DeliverHashes("bad peer 001", hashes)
-	if err != errNoSyncActive {
-		t.Error("expected no sync error, got", err)
-	}
-
-	err = tester.downloader.DeliverBlocks("bad peer 001", blocks)
-	if err != errNoSyncActive {
-		t.Error("expected no sync error, got", err)
-	}
-}
-
-func TestCancel(t *testing.T) {
-	minDesiredPeerCount = 4
-	blockTTL = 1 * time.Second
-
-	targetBlocks := 1000
-	hashes := createHashes(0, targetBlocks)
-	blocks := createBlocksFromHashes(hashes)
-	tester := newTester(t, hashes, blocks)
-
-	tester.newPeer("peer1", big.NewInt(10000), hashes[0])
-
-	err := tester.sync("peer1", hashes[0])
-	if err != nil {
-		t.Error("download error", err)
-	}
-
-	if !tester.downloader.Cancel() {
-		t.Error("cancel operation unsuccessfull")
-	}
-
-	hashSize, blockSize := tester.downloader.queue.Size()
-	if hashSize > 0 || blockSize > 0 {
-		t.Error("block (", blockSize, ") or hash (", hashSize, ") not 0")
-	}
-}
-
-func TestThrottling(t *testing.T) {
-	minDesiredPeerCount = 4
-	blockTTL = 1 * time.Second
-
-	targetBlocks := 16 * blockCacheLimit
-	hashes := createHashes(0, targetBlocks)
-	blocks := createBlocksFromHashes(hashes)
-	tester := newTester(t, hashes, blocks)
-
-	tester.newPeer("peer1", big.NewInt(10000), hashes[0])
-	tester.newPeer("peer2", big.NewInt(0), common.Hash{})
-	tester.badBlocksPeer("peer3", big.NewInt(0), common.Hash{})
-	tester.badBlocksPeer("peer4", big.NewInt(0), common.Hash{})
-
-	// Concurrently download and take the blocks
-	took, err := tester.syncTake("peer1", hashes[0])
-	if err != nil {
+	// Synchronise with the peer and make sure all blocks were retrieved
+	if err := tester.sync("peer", hashes[0]); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
-	if len(took) != targetBlocks {
-		t.Fatalf("downloaded block mismatch: have %v, want %v", len(took), targetBlocks)
+	if queued := len(tester.downloader.queue.blockPool); queued != targetBlocks {
+		t.Fatalf("synchronised block mismatch: have %v, want %v", queued, targetBlocks)
+	}
+}
+
+// Tests that the synchronized blocks can be correctly retrieved.
+func TestBlockTaking(t *testing.T) {
+	// Create a small enough block chain to download and the tester
+	targetBlocks := blockCacheLimit - 15
+	hashes := createHashes(0, targetBlocks)
+	blocks := createBlocksFromHashes(hashes)
+
+	tester := newTester(t, hashes, blocks)
+	tester.newPeer("peer", big.NewInt(10000), hashes[0])
+
+	// Synchronise with the peer and test block retrieval
+	if err := tester.sync("peer", hashes[0]); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	if took := tester.downloader.TakeBlocks(); len(took) != targetBlocks {
+		t.Fatalf("took block mismatch: have %v, want %v", len(took), targetBlocks)
+	}
+}
+
+// Tests that an inactive downloader will not accept incoming hashes and blocks.
+func TestInactiveDownloader(t *testing.T) {
+	// Create a small enough block chain to download and the tester
+	targetBlocks := blockCacheLimit - 15
+	hashes := createHashes(0, targetBlocks)
+	blocks := createBlocksFromHashSet(createHashSet(hashes))
+
+	tester := newTester(t, nil, nil)
+
+	// Check that neither hashes nor blocks are accepted
+	if err := tester.downloader.DeliverHashes("bad peer", hashes); err != errNoSyncActive {
+		t.Errorf("error mismatch: have %v, want %v", err, errNoSyncActive)
+	}
+	if err := tester.downloader.DeliverBlocks("bad peer", blocks); err != errNoSyncActive {
+		t.Errorf("error mismatch: have %v, want %v", err, errNoSyncActive)
+	}
+}
+
+// Tests that a canceled download wipes all previously accumulated state.
+func TestCancel(t *testing.T) {
+	// Create a small enough block chain to download and the tester
+	targetBlocks := blockCacheLimit - 15
+	hashes := createHashes(0, targetBlocks)
+	blocks := createBlocksFromHashes(hashes)
+
+	tester := newTester(t, hashes, blocks)
+	tester.newPeer("peer", big.NewInt(10000), hashes[0])
+
+	// Synchronise with the peer, but cancel afterwards
+	if err := tester.sync("peer", hashes[0]); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	if !tester.downloader.Cancel() {
+		t.Fatalf("cancel operation failed")
+	}
+	// Make sure the queue reports empty and no blocks can be taken
+	hashCount, blockCount := tester.downloader.queue.Size()
+	if hashCount > 0 || blockCount > 0 {
+		t.Errorf("block or hash count mismatch: %d hashes, %d blocks, want 0", hashCount, blockCount)
+	}
+	if took := tester.downloader.TakeBlocks(); len(took) != 0 {
+		t.Errorf("taken blocks mismatch: have %d, want %d", len(took), 0)
+	}
+}
+
+// Tests that if a large batch of blocks are being downloaded, it is throttled
+// until the cached blocks are retrieved.
+func TestThrottling(t *testing.T) {
+	// Create a long block chain to download and the tester
+	targetBlocks := 8 * blockCacheLimit
+	hashes := createHashes(0, targetBlocks)
+	blocks := createBlocksFromHashes(hashes)
+
+	tester := newTester(t, hashes, blocks)
+	tester.newPeer("peer", big.NewInt(10000), hashes[0])
+
+	// Start a synchronisation concurrently
+	errc := make(chan error)
+	go func() {
+		errc <- tester.sync("peer", hashes[0])
+	}()
+	// Iteratively take some blocks, always checking the retrieval count
+	for total := 0; total < targetBlocks; {
+		// Wait a bit for sync to complete
+		for start := time.Now(); time.Since(start) < 3*time.Second; {
+			time.Sleep(25 * time.Millisecond)
+			if len(tester.downloader.queue.blockPool) == blockCacheLimit {
+				break
+			}
+		}
+		// Fetch the next batch of blocks
+		took := tester.downloader.TakeBlocks()
+		if len(took) != blockCacheLimit {
+			t.Fatalf("block count mismatch: have %v, want %v", len(took), blockCacheLimit)
+		}
+		total += len(took)
+		if total > targetBlocks {
+			t.Fatalf("target block count mismatch: have %v, want %v", total, targetBlocks)
+		}
+	}
+	if err := <-errc; err != nil {
+		t.Fatalf("block synchronization failed: %v", err)
 	}
 }
 
@@ -461,7 +429,7 @@ func TestInvalidHashOrderAttack(t *testing.T) {
 // Tests that if a malicious peer makes up a random hash chain and tries to push
 // indefinitely, it actually gets caught with it.
 func TestMadeupHashChainAttack(t *testing.T) {
-	blockTTL = 100 * time.Millisecond
+	blockSoftTTL = 100 * time.Millisecond
 	crossCheckCycle = 25 * time.Millisecond
 
 	// Create a long chain of hashes without backing blocks
@@ -495,10 +463,10 @@ func TestMadeupHashChainDrippingAttack(t *testing.T) {
 // Tests that if a malicious peer makes up a random block chain, and tried to
 // push indefinitely, it actually gets caught with it.
 func TestMadeupBlockChainAttack(t *testing.T) {
-	defaultBlockTTL := blockTTL
+	defaultBlockTTL := blockSoftTTL
 	defaultCrossCheckCycle := crossCheckCycle
 
-	blockTTL = 100 * time.Millisecond
+	blockSoftTTL = 100 * time.Millisecond
 	crossCheckCycle = 25 * time.Millisecond
 
 	// Create a long chain of blocks and simulate an invalid chain by dropping every second
@@ -516,7 +484,7 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrCrossCheckFailed)
 	}
 	// Ensure that a valid chain can still pass sync
-	blockTTL = defaultBlockTTL
+	blockSoftTTL = defaultBlockTTL
 	crossCheckCycle = defaultCrossCheckCycle
 
 	tester.hashes = hashes
@@ -530,10 +498,10 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 // attacker make up a valid hashes for random blocks, but also forges the block
 // parents to point to existing hashes.
 func TestMadeupParentBlockChainAttack(t *testing.T) {
-	defaultBlockTTL := blockTTL
+	defaultBlockTTL := blockSoftTTL
 	defaultCrossCheckCycle := crossCheckCycle
 
-	blockTTL = 100 * time.Millisecond
+	blockSoftTTL = 100 * time.Millisecond
 	crossCheckCycle = 25 * time.Millisecond
 
 	// Create a long chain of blocks and simulate an invalid chain by dropping every second
@@ -550,12 +518,95 @@ func TestMadeupParentBlockChainAttack(t *testing.T) {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrCrossCheckFailed)
 	}
 	// Ensure that a valid chain can still pass sync
-	blockTTL = defaultBlockTTL
+	blockSoftTTL = defaultBlockTTL
 	crossCheckCycle = defaultCrossCheckCycle
 
 	tester.blocks = blocks
 	tester.newPeer("valid", big.NewInt(20000), hashes[0])
 	if _, err := tester.syncTake("valid", hashes[0]); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+}
+
+// Tests that if one/multiple malicious peers try to feed a banned blockchain to
+// the downloader, it will not keep refetching the same chain indefinitely, but
+// gradually block pieces of it, until it's head is also blocked.
+func TestBannedChainStarvationAttack(t *testing.T) {
+	// Construct a valid chain, but ban one of the hashes in it
+	hashes := createHashes(0, 8*blockCacheLimit)
+	hashes[len(hashes)/2+23] = bannedHash // weird index to have non multiple of ban chunk size
+
+	blocks := createBlocksFromHashes(hashes)
+
+	// Create the tester and ban the selected hash
+	tester := newTester(t, hashes, blocks)
+	tester.downloader.banned.Add(bannedHash)
+
+	// Iteratively try to sync, and verify that the banned hash list grows until
+	// the head of the invalid chain is blocked too.
+	tester.newPeer("attack", big.NewInt(10000), hashes[0])
+	for banned := tester.downloader.banned.Size(); ; {
+		// Try to sync with the attacker, check hash chain failure
+		if _, err := tester.syncTake("attack", hashes[0]); err != ErrInvalidChain {
+			t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrInvalidChain)
+		}
+		// Check that the ban list grew with at least 1 new item, or all banned
+		bans := tester.downloader.banned.Size()
+		if bans < banned+1 {
+			if tester.downloader.banned.Has(hashes[0]) {
+				break
+			}
+			t.Fatalf("ban count mismatch: have %v, want %v+", bans, banned+1)
+		}
+		banned = bans
+	}
+	// Check that after banning an entire chain, bad peers get dropped
+	if err := tester.newPeer("new attacker", big.NewInt(10000), hashes[0]); err != errBannedHead {
+		t.Fatalf("peer registration mismatch: have %v, want %v", err, errBannedHead)
+	}
+	if peer := tester.downloader.peers.Peer("net attacker"); peer != nil {
+		t.Fatalf("banned attacker registered: %v", peer)
+	}
+}
+
+// Tests that if a peer sends excessively many/large invalid chains that are
+// gradually banned, it will have an upper limit on the consumed memory and also
+// the origin bad hashes will not be evacuated.
+func TestBannedChainMemoryExhaustionAttack(t *testing.T) {
+	// Reduce the test size a bit
+	MaxBlockFetch = 4
+	maxBannedHashes = 256
+
+	// Construct a banned chain with more chunks than the ban limit
+	hashes := createHashes(0, maxBannedHashes*MaxBlockFetch)
+	hashes[len(hashes)-1] = bannedHash // weird index to have non multiple of ban chunk size
+
+	blocks := createBlocksFromHashes(hashes)
+
+	// Create the tester and ban the selected hash
+	tester := newTester(t, hashes, blocks)
+	tester.downloader.banned.Add(bannedHash)
+
+	// Iteratively try to sync, and verify that the banned hash list grows until
+	// the head of the invalid chain is blocked too.
+	tester.newPeer("attack", big.NewInt(10000), hashes[0])
+	for {
+		// Try to sync with the attacker, check hash chain failure
+		if _, err := tester.syncTake("attack", hashes[0]); err != ErrInvalidChain {
+			t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrInvalidChain)
+		}
+		// Short circuit if the entire chain was banned
+		if tester.downloader.banned.Has(hashes[0]) {
+			break
+		}
+		// Otherwise ensure we never exceed the memory allowance and the hard coded bans are untouched
+		if bans := tester.downloader.banned.Size(); bans > maxBannedHashes {
+			t.Fatalf("ban cap exceeded: have %v, want max %v", bans, maxBannedHashes)
+		}
+		for hash, _ := range core.BadHashes {
+			if !tester.downloader.banned.Has(hash) {
+				t.Fatalf("hard coded ban evacuated: %x", hash)
+			}
+		}
 	}
 }

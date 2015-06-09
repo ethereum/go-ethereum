@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -16,8 +17,12 @@ func proc() (*BlockProcessor, *ChainManager) {
 	db, _ := ethdb.NewMemDatabase()
 	var mux event.TypeMux
 
-	chainMan := NewChainManager(db, db, thePow(), &mux)
-	return NewBlockProcessor(db, db, ezp.New(), nil, chainMan, &mux), chainMan
+	genesis := GenesisBlock(0, db)
+	chainMan, err := NewChainManager(genesis, db, db, thePow(), &mux)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return NewBlockProcessor(db, db, ezp.New(), chainMan, &mux), chainMan
 }
 
 func TestNumber(t *testing.T) {

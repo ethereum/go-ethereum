@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -26,6 +27,21 @@ func init() {
 func thePow() pow.PoW {
 	pow, _ := ethash.NewForTesting()
 	return pow
+}
+
+func theChainManager(db common.Database, t *testing.T) *ChainManager {
+	var eventMux event.TypeMux
+	genesis := GenesisBlock(0, db)
+	chainMan, err := NewChainManager(genesis, db, db, thePow(), &eventMux)
+	if err != nil {
+		t.Error("failed creating chainmanager:", err)
+		t.FailNow()
+		return nil
+	}
+	blockMan := NewBlockProcessor(db, db, nil, chainMan, &eventMux)
+	chainMan.SetProcessor(blockMan)
+
+	return chainMan
 }
 
 // Test fork of length N starting from block i
@@ -265,11 +281,7 @@ func TestChainInsertions(t *testing.T) {
 		t.FailNow()
 	}
 
-	var eventMux event.TypeMux
-	chainMan := NewChainManager(db, db, thePow(), &eventMux)
-	txPool := NewTxPool(&eventMux, chainMan.State, func() *big.Int { return big.NewInt(100000000) })
-	blockMan := NewBlockProcessor(db, db, nil, txPool, chainMan, &eventMux)
-	chainMan.SetProcessor(blockMan)
+	chainMan := theChainManager(db, t)
 
 	const max = 2
 	done := make(chan bool, max)
@@ -311,11 +323,9 @@ func TestChainMultipleInsertions(t *testing.T) {
 			t.FailNow()
 		}
 	}
-	var eventMux event.TypeMux
-	chainMan := NewChainManager(db, db, thePow(), &eventMux)
-	txPool := NewTxPool(&eventMux, chainMan.State, func() *big.Int { return big.NewInt(100000000) })
-	blockMan := NewBlockProcessor(db, db, nil, txPool, chainMan, &eventMux)
-	chainMan.SetProcessor(blockMan)
+
+	chainMan := theChainManager(db, t)
+
 	done := make(chan bool, max)
 	for i, chain := range chains {
 		// XXX the go routine would otherwise reference the same (chain[3]) variable and fail
@@ -340,8 +350,7 @@ func TestGetAncestors(t *testing.T) {
 	t.Skip() // travil fails.
 
 	db, _ := ethdb.NewMemDatabase()
-	var eventMux event.TypeMux
-	chainMan := NewChainManager(db, db, thePow(), &eventMux)
+	chainMan := theChainManager(db, t)
 	chain, err := loadChain("valid1", t)
 	if err != nil {
 		fmt.Println(err)
@@ -392,7 +401,7 @@ func chm(genesis *types.Block, db common.Database) *ChainManager {
 func TestReorgLongest(t *testing.T) {
 	t.Skip("skipped while cache is removed")
 	db, _ := ethdb.NewMemDatabase()
-	genesis := GenesisBlock(db)
+	genesis := GenesisBlock(0, db)
 	bc := chm(genesis, db)
 
 	chain1 := makeChainWithDiff(genesis, []int{1, 2, 4}, 10)
@@ -412,7 +421,7 @@ func TestReorgLongest(t *testing.T) {
 func TestReorgShortest(t *testing.T) {
 	t.Skip("skipped while cache is removed")
 	db, _ := ethdb.NewMemDatabase()
-	genesis := GenesisBlock(db)
+	genesis := GenesisBlock(0, db)
 	bc := chm(genesis, db)
 
 	chain1 := makeChainWithDiff(genesis, []int{1, 2, 3, 4}, 10)
@@ -427,4 +436,71 @@ func TestReorgShortest(t *testing.T) {
 			t.Errorf("parent hash mismatch %x - %x", prev.ParentHash(), block.Hash())
 		}
 	}
+}
+
+func TestInsertNonceError(t *testing.T) {
+	for i := 1; i < 25 && !t.Failed(); i++ {
+		db, _ := ethdb.NewMemDatabase()
+		genesis := GenesisBlock(0, db)
+		bc := chm(genesis, db)
+		bc.processor = NewBlockProcessor(db, db, bc.pow, bc, bc.eventMux)
+		blocks := makeChain(bc.processor.(*BlockProcessor), bc.currentBlock, i, db, 0)
+
+		fail := rand.Int() % len(blocks)
+		failblock := blocks[fail]
+		bc.pow = failpow{failblock.NumberU64()}
+		n, err := bc.InsertChain(blocks)
+
+		// Check that the returned error indicates the nonce failure.
+		if n != fail {
+			t.Errorf("(i=%d) wrong failed block index: got %d, want %d", i, n, fail)
+		}
+		if !IsBlockNonceErr(err) {
+			t.Fatalf("(i=%d) got %q, want a nonce error", i, err)
+		}
+		nerr := err.(*BlockNonceErr)
+		if nerr.Number.Cmp(failblock.Number()) != 0 {
+			t.Errorf("(i=%d) wrong block number in error, got %v, want %v", i, nerr.Number, failblock.Number())
+		}
+		if nerr.Hash != failblock.Hash() {
+			t.Errorf("(i=%d) wrong block hash in error, got %v, want %v", i, nerr.Hash, failblock.Hash())
+		}
+
+		// Check that all no blocks after the failing block have been inserted.
+		for _, block := range blocks[fail:] {
+			if bc.HasBlock(block.Hash()) {
+				t.Errorf("(i=%d) invalid block %d present in chain", i, block.NumberU64())
+			}
+		}
+	}
+}
+
+func TestGenesisMismatch(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	var mux event.TypeMux
+	genesis := GenesisBlock(0, db)
+	_, err := NewChainManager(genesis, db, db, thePow(), &mux)
+	if err != nil {
+		t.Error(err)
+	}
+	genesis = GenesisBlock(1, db)
+	_, err = NewChainManager(genesis, db, db, thePow(), &mux)
+	if err == nil {
+		t.Error("expected genesis mismatch error")
+	}
+}
+
+// failpow returns false from Verify for a certain block number.
+type failpow struct{ num uint64 }
+
+func (pow failpow) Search(pow.Block, <-chan struct{}) (nonce uint64, mixHash []byte) {
+	return 0, nil
+}
+func (pow failpow) Verify(b pow.Block) bool {
+	return b.NumberU64() != pow.num
+}
+func (pow failpow) GetHashrate() int64 {
+	return 0
+}
+func (pow failpow) Turbo(bool) {
 }

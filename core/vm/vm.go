@@ -71,18 +71,22 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		}
 	}
 
-	var (
-		op OpCode
+	// Don't bother with the execution if there's no code.
+	if len(code) == 0 {
+		return context.Return(nil), nil
+	}
 
-		destinations = analyseJumpDests(context.Code)
-		mem          = NewMemory()
-		stack        = newStack()
-		pc           = new(big.Int)
-		statedb      = self.env.State()
+	var (
+		op       OpCode
+		codehash = crypto.Sha3Hash(code)
+		mem      = NewMemory()
+		stack    = newStack()
+		pc       = new(big.Int)
+		statedb  = self.env.State()
 
 		jump = func(from *big.Int, to *big.Int) error {
-			nop := context.GetOp(to)
-			if !destinations.Has(to) {
+			if !context.jumpdests.has(codehash, code, to) {
+				nop := context.GetOp(to)
 				return fmt.Errorf("invalid jump destination (%v) %v", nop, to)
 			}
 
@@ -94,11 +98,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			return nil
 		}
 	)
-
-	// Don't bother with the execution if there's no code.
-	if len(code) == 0 {
-		return context.Return(nil), nil
-	}
 
 	for {
 		// The base for all big integer arithmetic

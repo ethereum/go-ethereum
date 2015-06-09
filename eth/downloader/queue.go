@@ -16,8 +16,13 @@ import (
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
-const (
+var (
 	blockCacheLimit = 8 * MaxBlockFetch // Maximum number of blocks to cache before throttling the download
+)
+
+var (
+	errNoFetchesPending = errors.New("no fetches pending")
+	errStaleDelivery    = errors.New("stale delivery")
 )
 
 // fetchRequest is a currently running block retrieval operation.
@@ -45,10 +50,11 @@ type queue struct {
 // newQueue creates a new download queue for scheduling block retrieval.
 func newQueue() *queue {
 	return &queue{
-		hashPool:  make(map[common.Hash]int),
-		hashQueue: prque.New(),
-		pendPool:  make(map[string]*fetchRequest),
-		blockPool: make(map[common.Hash]int),
+		hashPool:   make(map[common.Hash]int),
+		hashQueue:  prque.New(),
+		pendPool:   make(map[string]*fetchRequest),
+		blockPool:  make(map[common.Hash]int),
+		blockCache: make([]*Block, blockCacheLimit),
 	}
 }
 
@@ -65,7 +71,7 @@ func (q *queue) Reset() {
 
 	q.blockPool = make(map[common.Hash]int)
 	q.blockOffset = 0
-	q.blockCache = nil
+	q.blockCache = make([]*Block, blockCacheLimit)
 }
 
 // Size retrieves the number of hashes in the queue, returning separately for
@@ -203,7 +209,7 @@ func (q *queue) TakeBlocks() []*Block {
 
 // Reserve reserves a set of hashes for the given peer, skipping any previously
 // failed download.
-func (q *queue) Reserve(p *peer, max int) *fetchRequest {
+func (q *queue) Reserve(p *peer, count int) *fetchRequest {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -215,11 +221,16 @@ func (q *queue) Reserve(p *peer, max int) *fetchRequest {
 	if _, ok := q.pendPool[p.id]; ok {
 		return nil
 	}
+	// Calculate an upper limit on the hashes we might fetch (i.e. throttling)
+	space := len(q.blockCache) - len(q.blockPool)
+	for _, request := range q.pendPool {
+		space -= len(request.Hashes)
+	}
 	// Retrieve a batch of hashes, skipping previously failed ones
 	send := make(map[common.Hash]int)
 	skip := make(map[common.Hash]int)
 
-	for len(send) < max && !q.hashQueue.Empty() {
+	for proc := 0; proc < space && len(send) < count && !q.hashQueue.Empty(); proc++ {
 		hash, priority := q.hashQueue.Pop()
 		if p.ignored.Has(hash) {
 			skip[hash.(common.Hash)] = int(priority)
@@ -287,7 +298,7 @@ func (q *queue) Deliver(id string, blocks []*types.Block) (err error) {
 	// Short circuit if the blocks were never requested
 	request := q.pendPool[id]
 	if request == nil {
-		return errors.New("no fetches pending")
+		return errNoFetchesPending
 	}
 	delete(q.pendPool, id)
 
@@ -303,7 +314,7 @@ func (q *queue) Deliver(id string, blocks []*types.Block) (err error) {
 		// Skip any blocks that were not requested
 		hash := block.Hash()
 		if _, ok := request.Hashes[hash]; !ok {
-			errs = append(errs, fmt.Errorf("non-requested block %v", hash))
+			errs = append(errs, fmt.Errorf("non-requested block %x", hash))
 			continue
 		}
 		// If a requested block falls out of the range, the hash chain is invalid
@@ -320,30 +331,26 @@ func (q *queue) Deliver(id string, blocks []*types.Block) (err error) {
 		delete(q.hashPool, hash)
 		q.blockPool[hash] = int(block.NumberU64())
 	}
-	// Return all failed fetches to the queue
+	// Return all failed or missing fetches to the queue
 	for hash, index := range request.Hashes {
 		q.hashQueue.Push(hash, float32(index))
 	}
+	// If none of the blocks were good, it's a stale delivery
 	if len(errs) != 0 {
+		if len(errs) == len(blocks) {
+			return errStaleDelivery
+		}
 		return fmt.Errorf("multiple failures: %v", errs)
 	}
 	return nil
 }
 
-// Alloc ensures that the block cache is the correct size, given a starting
-// offset, and a memory cap.
-func (q *queue) Alloc(offset int) {
+// Prepare configures the block cache offset to allow accepting inbound blocks.
+func (q *queue) Prepare(offset int) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	if q.blockOffset < offset {
 		q.blockOffset = offset
-	}
-	size := len(q.hashPool)
-	if size > blockCacheLimit {
-		size = blockCacheLimit
-	}
-	if len(q.blockCache) < size {
-		q.blockCache = append(q.blockCache, make([]*Block, size-len(q.blockCache))...)
 	}
 }

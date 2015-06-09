@@ -78,6 +78,12 @@ func (js *jsre) adminBindings() {
 	miner.Set("stopAutoDAG", js.stopAutoDAG)
 	miner.Set("makeDAG", js.makeDAG)
 
+	admin.Set("txPool", struct{}{})
+	t, _ = admin.Get("txPool")
+	txPool := t.Object()
+	txPool.Set("pending", js.allPendingTransactions)
+	txPool.Set("queued", js.allQueuedTransactions)
+
 	admin.Set("debug", struct{}{})
 	t, _ = admin.Get("debug")
 	debug := t.Object()
@@ -89,6 +95,7 @@ func (js *jsre) adminBindings() {
 	debug.Set("setHead", js.setHead)
 	debug.Set("processBlock", js.debugBlock)
 	debug.Set("seedhash", js.seedHash)
+	debug.Set("insertBlock", js.insertBlockRlp)
 	// undocumented temporary
 	debug.Set("waitForBlocks", js.waitForBlocks)
 }
@@ -140,6 +147,32 @@ func (js *jsre) seedHash(call otto.FunctionCall) otto.Value {
 	return otto.UndefinedValue()
 }
 
+func (js *jsre) allPendingTransactions(call otto.FunctionCall) otto.Value {
+	txs := js.ethereum.TxPool().GetTransactions()
+
+	ltxs := make([]*tx, len(txs))
+	for i, tx := range txs {
+		// no need to check err
+		ltxs[i] = newTx(tx)
+	}
+
+	v, _ := call.Otto.ToValue(ltxs)
+	return v
+}
+
+func (js *jsre) allQueuedTransactions(call otto.FunctionCall) otto.Value {
+	txs := js.ethereum.TxPool().GetQueuedTransactions()
+
+	ltxs := make([]*tx, len(txs))
+	for i, tx := range txs {
+		// no need to check err
+		ltxs[i] = newTx(tx)
+	}
+
+	v, _ := call.Otto.ToValue(ltxs)
+	return v
+}
+
 func (js *jsre) pendingTransactions(call otto.FunctionCall) otto.Value {
 	txs := js.ethereum.TxPool().GetTransactions()
 
@@ -160,7 +193,6 @@ func (js *jsre) pendingTransactions(call otto.FunctionCall) otto.Value {
 	//ltxs := make([]*tx, len(txs))
 	var ltxs []*tx
 	for _, tx := range txs {
-		// no need to check err
 		if from, _ := tx.From(); accountSet.Has(from) {
 			ltxs = append(ltxs, newTx(tx))
 		}
@@ -238,16 +270,47 @@ func (js *jsre) debugBlock(call otto.FunctionCall) otto.Value {
 		return otto.UndefinedValue()
 	}
 
+	tstart := time.Now()
+
 	old := vm.Debug
 	vm.Debug = true
 	_, err = js.ethereum.BlockProcessor().RetryProcess(block)
 	if err != nil {
 		fmt.Println(err)
+		r, _ := call.Otto.ToValue(map[string]interface{}{"success": false, "time": time.Since(tstart).Seconds()})
+		return r
 	}
 	vm.Debug = old
 
-	fmt.Println("ok")
-	return otto.UndefinedValue()
+	r, _ := call.Otto.ToValue(map[string]interface{}{"success": true, "time": time.Since(tstart).Seconds()})
+	return r
+}
+
+func (js *jsre) insertBlockRlp(call otto.FunctionCall) otto.Value {
+	tstart := time.Now()
+
+	var block types.Block
+	if call.Argument(0).IsString() {
+		blockRlp, _ := call.Argument(0).ToString()
+		err := rlp.DecodeBytes(common.Hex2Bytes(blockRlp), &block)
+		if err != nil {
+			fmt.Println(err)
+			return otto.UndefinedValue()
+		}
+	}
+
+	old := vm.Debug
+	vm.Debug = true
+	_, err := js.ethereum.BlockProcessor().RetryProcess(&block)
+	if err != nil {
+		fmt.Println(err)
+		r, _ := call.Otto.ToValue(map[string]interface{}{"success": false, "time": time.Since(tstart).Seconds()})
+		return r
+	}
+	vm.Debug = old
+
+	r, _ := call.Otto.ToValue(map[string]interface{}{"success": true, "time": time.Since(tstart).Seconds()})
+	return r
 }
 
 func (js *jsre) setHead(call otto.FunctionCall) otto.Value {

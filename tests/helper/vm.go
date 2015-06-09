@@ -67,7 +67,7 @@ func (self *Env) GetHash(n uint64) common.Hash {
 	return common.BytesToHash(crypto.Sha3([]byte(big.NewInt(int64(n)).String())))
 }
 func (self *Env) AddLog(log *state.Log) {
-	self.logs = append(self.logs, log)
+	self.state.AddLog(log)
 }
 func (self *Env) Depth() int     { return self.depth }
 func (self *Env) SetDepth(i int) { self.depth = i }
@@ -153,7 +153,7 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Log
 	vmenv.initial = true
 	ret, err := vmenv.Call(caller, to, data, gas, price, value)
 
-	return ret, vmenv.logs, vmenv.Gas, err
+	return ret, vmenv.state.Logs(), vmenv.Gas, err
 }
 
 func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.Logs, *big.Int, error) {
@@ -188,7 +188,7 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 	}
 	statedb.Update()
 
-	return ret, vmenv.logs, vmenv.Gas, err
+	return ret, vmenv.state.Logs(), vmenv.Gas, err
 }
 
 type Message struct {

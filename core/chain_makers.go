@@ -108,7 +108,7 @@ func makeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Dat
 // Create a new chain manager starting from given block
 // Effectively a fork factory
 func newChainManager(block *types.Block, eventMux *event.TypeMux, db common.Database) *ChainManager {
-	genesis := GenesisBlock(db)
+	genesis := GenesisBlock(0, db)
 	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: eventMux, pow: FakePow{}}
 	bc.txState = state.ManageState(state.New(genesis.Root(), db))
 	bc.futureBlocks = NewBlockCache(1000)
@@ -124,8 +124,7 @@ func newChainManager(block *types.Block, eventMux *event.TypeMux, db common.Data
 // block processor with fake pow
 func newBlockProcessor(db common.Database, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	chainMan := newChainManager(nil, eventMux, db)
-	txpool := NewTxPool(eventMux, chainMan.State, chainMan.GasLimit)
-	bman := NewBlockProcessor(db, db, FakePow{}, txpool, chainMan, eventMux)
+	bman := NewBlockProcessor(db, db, FakePow{}, chainMan, eventMux)
 	return bman
 }
 

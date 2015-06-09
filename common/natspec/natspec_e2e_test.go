@@ -119,7 +119,7 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 	testAddress := strings.TrimPrefix(testAccount.Address.Hex(), "0x")
 
 	// set up mock genesis with balance on the testAddress
-	core.GenesisData = []byte(`{
+	core.GenesisAccounts = []byte(`{
 	"` + testAddress + `": {"balance": "` + testBalance + `"}
 	}`)
 
@@ -181,7 +181,7 @@ func (self *testFrontend) applyTxs() {
 
 // end to end test
 func TestNatspecE2E(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	tf := testInit(t)
 	defer tf.ethereum.Stop()

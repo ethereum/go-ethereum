@@ -12,6 +12,8 @@ import (
 	"github.com/huin/goupnp/dcps/internetgateway2"
 )
 
+const soapRequestTimeout = 3 * time.Second
+
 type upnp struct {
 	dev     *goupnp.RootDevice
 	service string
@@ -131,6 +133,7 @@ func discover(out chan<- *upnp, target string, matcher func(*goupnp.RootDevice, 
 			}
 			// check for a matching IGD service
 			sc := goupnp.ServiceClient{service.NewSOAPClient(), devs[i].Root, service}
+			sc.SOAPClient.HTTPClient.Timeout = soapRequestTimeout
 			upnp := matcher(devs[i].Root, sc)
 			if upnp == nil {
 				return

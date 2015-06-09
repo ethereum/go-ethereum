@@ -573,14 +573,15 @@ func TestNewTxArgsGasMissing(t *testing.T) {
   "data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"
   }]`
 	expected := new(NewTxArgs)
-	expected.Gas = big.NewInt(0)
+	expected.Gas = nil
 
 	args := new(NewTxArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
 		t.Error(err)
 	}
 
-	if bytes.Compare(expected.Gas.Bytes(), args.Gas.Bytes()) != 0 {
+	if args.Gas != expected.Gas {
+		// if bytes.Compare(expected.Gas.Bytes(), args.Gas.Bytes()) != 0 {
 		t.Errorf("Gas shoud be %v but is %v", expected.Gas, args.Gas)
 	}
 }
@@ -594,14 +595,15 @@ func TestNewTxArgsBlockGaspriceMissing(t *testing.T) {
   "data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"
   }]`
 	expected := new(NewTxArgs)
-	expected.GasPrice = big.NewInt(0)
+	expected.GasPrice = nil
 
 	args := new(NewTxArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
 		t.Error(err)
 	}
 
-	if bytes.Compare(expected.GasPrice.Bytes(), args.GasPrice.Bytes()) != 0 {
+	if args.GasPrice != expected.GasPrice {
+		// if bytes.Compare(expected.GasPrice.Bytes(), args.GasPrice.Bytes()) != 0 {
 		t.Errorf("GasPrice shoud be %v but is %v", expected.GasPrice, args.GasPrice)
 	}
 
@@ -829,9 +831,10 @@ func TestCallArgsGasMissing(t *testing.T) {
 	}
 
 	expected := new(CallArgs)
-	expected.Gas = big.NewInt(0)
+	expected.Gas = nil
 
-	if bytes.Compare(expected.Gas.Bytes(), args.Gas.Bytes()) != 0 {
+	if args.Gas != expected.Gas {
+		// if bytes.Compare(expected.Gas.Bytes(), args.Gas.Bytes()) != 0 {
 		t.Errorf("Gas shoud be %v but is %v", expected.Gas, args.Gas)
 	}
 
@@ -852,9 +855,10 @@ func TestCallArgsBlockGaspriceMissing(t *testing.T) {
 	}
 
 	expected := new(CallArgs)
-	expected.GasPrice = big.NewInt(0)
+	expected.GasPrice = nil
 
-	if bytes.Compare(expected.GasPrice.Bytes(), args.GasPrice.Bytes()) != 0 {
+	if args.GasPrice != expected.GasPrice {
+		// if bytes.Compare(expected.GasPrice.Bytes(), args.GasPrice.Bytes()) != 0 {
 		t.Errorf("GasPrice shoud be %v but is %v", expected.GasPrice, args.GasPrice)
 	}
 }
@@ -2500,6 +2504,67 @@ func TestSourceArgsEmpty(t *testing.T) {
 
 	args := new(SourceArgs)
 	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), &args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestSigArgs(t *testing.T) {
+	input := `["0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b", "0x0"]`
+	expected := new(NewSigArgs)
+	expected.From = "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b"
+	expected.Data = "0x0"
+
+	args := new(NewSigArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestSigArgsEmptyData(t *testing.T) {
+	input := `["0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b", ""]`
+
+	args := new(NewSigArgs)
+	str := ExpectValidationError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestSigArgsDataType(t *testing.T) {
+	input := `["0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b", 13]`
+
+	args := new(NewSigArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestSigArgsEmptyFrom(t *testing.T) {
+	input := `["", "0x0"]`
+
+	args := new(NewSigArgs)
+	str := ExpectValidationError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestSigArgsFromType(t *testing.T) {
+	input := `[false, "0x0"]`
+
+	args := new(NewSigArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestSigArgsEmpty(t *testing.T) {
+	input := `[]`
+	args := new(NewSigArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), args))
 	if len(str) > 0 {
 		t.Error(str)
 	}

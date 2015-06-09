@@ -352,7 +352,7 @@ func (self *worker) isBlockLocallyMined(deepBlockNum uint64) bool {
 
 	//Does the block at {deepBlockNum} send earnings to my coinbase?
 	var block = self.chain.GetBlockByNumber(deepBlockNum)
-	return block.Header().Coinbase == self.coinbase
+	return block != nil && block.Header().Coinbase == self.coinbase
 }
 
 func (self *worker) logLocalMinedBlocks(previous *environment) {
@@ -494,10 +494,6 @@ func (self *worker) commitTransactions(transactions types.Transactions) {
 		err := self.commitTransaction(tx)
 		switch {
 		case core.IsNonceErr(err) || core.IsInvalidTxErr(err):
-			// Remove invalid transactions
-			from, _ := tx.From()
-
-			self.chain.TxState().RemoveNonce(from, tx.Nonce())
 			current.remove.Add(tx.Hash())
 
 			if glog.V(logger.Detail) {

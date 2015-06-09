@@ -8,7 +8,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -68,6 +67,13 @@ func (tx *Transaction) Hash() common.Hash {
 	})
 }
 
+// Size returns the encoded RLP size of tx.
+func (self *Transaction) Size() common.StorageSize {
+	c := writeCounter(0)
+	rlp.Encode(&c, self)
+	return common.StorageSize(c)
+}
+
 func (self *Transaction) Data() []byte {
 	return self.Payload
 }
@@ -93,9 +99,9 @@ func (self *Transaction) SetNonce(AccountNonce uint64) {
 }
 
 func (self *Transaction) From() (common.Address, error) {
-	pubkey := self.PublicKey()
-	if len(pubkey) == 0 || pubkey[0] != 4 {
-		return common.Address{}, errors.New("invalid public key")
+	pubkey, err := self.PublicKey()
+	if err != nil {
+		return common.Address{}, err
 	}
 
 	var addr common.Address
@@ -110,34 +116,34 @@ func (tx *Transaction) To() *common.Address {
 	return tx.Recipient
 }
 
-func (tx *Transaction) Curve() (v byte, r []byte, s []byte) {
+func (tx *Transaction) GetSignatureValues() (v byte, r []byte, s []byte) {
 	v = byte(tx.V)
 	r = common.LeftPadBytes(tx.R.Bytes(), 32)
 	s = common.LeftPadBytes(tx.S.Bytes(), 32)
 	return
 }
 
-func (tx *Transaction) Signature(key []byte) []byte {
-	hash := tx.Hash()
-	sig, _ := secp256k1.Sign(hash[:], key)
-	return sig
-}
+func (tx *Transaction) PublicKey() ([]byte, error) {
+	if !crypto.ValidateSignatureValues(tx.V, tx.R, tx.S) {
+		return nil, errors.New("invalid v, r, s values")
+	}
 
-func (tx *Transaction) PublicKey() []byte {
 	hash := tx.Hash()
-	v, r, s := tx.Curve()
+	v, r, s := tx.GetSignatureValues()
 	sig := append(r, s...)
 	sig = append(sig, v-27)
 
-	//pubkey := crypto.Ecrecover(append(hash[:], sig...))
-	//pubkey, _ := secp256k1.RecoverPubkey(hash[:], sig)
 	p, err := crypto.SigToPub(hash[:], sig)
 	if err != nil {
 		glog.V(logger.Error).Infof("Could not get pubkey from signature: ", err)
-		return nil
+		return nil, err
 	}
+
 	pubkey := crypto.FromECDSAPub(p)
-	return pubkey
+	if len(pubkey) == 0 || pubkey[0] != 4 {
+		return nil, errors.New("invalid public key")
+	}
+	return pubkey, nil
 }
 
 func (tx *Transaction) SetSignatureValues(sig []byte) error {
