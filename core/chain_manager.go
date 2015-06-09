@@ -56,10 +56,7 @@ func CalcTD(block, parent *types.Block) *big.Int {
 	if parent == nil {
 		return block.Difficulty()
 	}
-
-	td := new(big.Int).Add(parent.Td, block.Header().Difficulty)
-
-	return td
+	return new(big.Int).Add(parent.Td, block.Header().Difficulty)
 }
 
 func CalcGasLimit(parent *types.Block) *big.Int {
@@ -178,7 +175,7 @@ func (self *ChainManager) Td() *big.Int {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	return self.td
+	return new(big.Int).Set(self.td)
 }
 
 func (self *ChainManager) GasLimit() *big.Int {
@@ -204,7 +201,7 @@ func (self *ChainManager) Status() (td *big.Int, currentBlock common.Hash, genes
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	return self.td, self.currentBlock.Hash(), self.genesisBlock.Hash()
+	return new(big.Int).Set(self.td), self.currentBlock.Hash(), self.genesisBlock.Hash()
 }
 
 func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
@@ -488,8 +485,10 @@ func (self *ChainManager) GetAncestors(block *types.Block, length int) (blocks [
 }
 
 func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
-	//bc.blockDb.Put([]byte("LTD"), td.Bytes())
-	bc.td = td
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
+	bc.td.Set(td)
 }
 
 func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
@@ -626,7 +625,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		cblock := self.currentBlock
 		// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 		// At this point it's possible that a different chain (fork) becomes the new canonical chain.
-		if block.Td.Cmp(self.td) > 0 {
+		if block.Td.Cmp(self.Td()) > 0 {
 			// chain fork
 			if block.ParentHash() != cblock.Hash() {
 				// during split we merge two different chains and create the new canonical chain
