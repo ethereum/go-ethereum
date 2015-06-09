@@ -208,7 +208,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		return
 	}
 	// Make sure the peer's TD is higher than our own. If not drop.
-	if peer.td.Cmp(pm.chainman.Td()) <= 0 {
+	if peer.Td().Cmp(pm.chainman.Td()) <= 0 {
 		return
 	}
 	// FIXME if we have the hash in our chain and the TD of the peer is

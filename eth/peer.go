@@ -41,10 +41,10 @@ type peer struct {
 	protv, netid int
 
 	id string
-	td *big.Int
 
-	head     common.Hash
-	headLock sync.RWMutex
+	head common.Hash
+	td   *big.Int
+	lock sync.RWMutex
 
 	genesis, ourHash common.Hash
 	ourTd            *big.Int
@@ -72,8 +72,8 @@ func newPeer(protv, netid int, genesis, head common.Hash, td *big.Int, p *p2p.Pe
 
 // Head retrieves a copy of the current head (most recent) hash of the peer.
 func (p *peer) Head() (hash common.Hash) {
-	p.headLock.RLock()
-	defer p.headLock.RUnlock()
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 
 	copy(hash[:], p.head[:])
 	return hash
@@ -81,10 +81,26 @@ func (p *peer) Head() (hash common.Hash) {
 
 // SetHead updates the head (most recent) hash of the peer.
 func (p *peer) SetHead(hash common.Hash) {
-	p.headLock.Lock()
-	defer p.headLock.Unlock()
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
 	copy(p.head[:], hash[:])
+}
+
+// Td retrieves the current total difficulty of a peer.
+func (p *peer) Td() *big.Int {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	return new(big.Int).Set(p.td)
+}
+
+// SetTd updates the current total difficulty of a peer.
+func (p *peer) SetTd(td *big.Int) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	p.td.Set(td)
 }
 
 // sendTransactions sends transactions to the peer and includes the hashes
@@ -275,11 +291,14 @@ func (ps *peerSet) BestPeer() *peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	var best *peer
+	var (
+		bestPeer *peer
+		bestTd   *big.Int
+	)
 	for _, p := range ps.peers {
-		if best == nil || p.td.Cmp(best.td) > 0 {
-			best = p
+		if td := p.Td(); bestPeer == nil || td.Cmp(bestTd) > 0 {
+			bestPeer, bestTd = p, td
 		}
 	}
-	return best
+	return bestPeer
 }
