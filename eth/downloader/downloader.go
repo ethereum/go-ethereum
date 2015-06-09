@@ -78,6 +78,10 @@ type Downloader struct {
 	checks map[common.Hash]*crossCheck // Pending cross checks to verify a hash chain
 	banned *set.Set                    // Set of hashes we've received and banned
 
+	// Statistics
+	importQueue []common.Hash // Hashes of the previously taken blocks to check import progress
+	importLock  sync.Mutex
+
 	// Callbacks
 	hasBlock hashCheckFn
 	getBlock getBlockFn
@@ -121,8 +125,21 @@ func New(mux *event.TypeMux, hasBlock hashCheckFn, getBlock getBlockFn) *Downloa
 	return downloader
 }
 
-func (d *Downloader) Stats() (current int, max int) {
-	return d.queue.Size()
+// Stats retrieves the current status of the downloader.
+func (d *Downloader) Stats() (pending int, cached int, importing int) {
+	// Fetch the download status
+	pending, cached = d.queue.Size()
+
+	// Generate the import status
+	d.importLock.Lock()
+	defer d.importLock.Unlock()
+
+	for len(d.importQueue) > 0 && d.hasBlock(d.importQueue[0]) {
+		d.importQueue = d.importQueue[1:]
+	}
+	importing = len(d.importQueue)
+
+	return
 }
 
 // Synchronising returns the state of the downloader
@@ -202,7 +219,17 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 
 // TakeBlocks takes blocks from the queue and yields them to the caller.
 func (d *Downloader) TakeBlocks() []*Block {
-	return d.queue.TakeBlocks()
+	blocks := d.queue.TakeBlocks()
+	if len(blocks) > 0 {
+		hashes := make([]common.Hash, len(blocks))
+		for i, block := range blocks {
+			hashes[i] = block.RawBlock.Hash()
+		}
+		d.importLock.Lock()
+		d.importQueue = hashes
+		d.importLock.Unlock()
+	}
+	return blocks
 }
 
 // Has checks if the downloader knows about a particular hash, meaning that its
@@ -255,8 +282,12 @@ func (d *Downloader) Cancel() bool {
 	}
 	d.cancelLock.Unlock()
 
-	// reset the queue
+	// Reset the queue and import statistics
 	d.queue.Reset()
+
+	d.importLock.Lock()
+	d.importQueue = nil
+	d.importLock.Unlock()
 
 	return true
 }

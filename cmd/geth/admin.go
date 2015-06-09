@@ -51,7 +51,7 @@ func (js *jsre) adminBindings() {
 	admin.Set("import", js.importChain)
 	admin.Set("export", js.exportChain)
 	admin.Set("verbosity", js.verbosity)
-	admin.Set("progress", js.downloadProgress)
+	admin.Set("progress", js.syncProgress)
 	admin.Set("setSolc", js.setSolc)
 
 	admin.Set("contractInfo", struct{}{})
@@ -324,9 +324,9 @@ func (js *jsre) setHead(call otto.FunctionCall) otto.Value {
 	return otto.UndefinedValue()
 }
 
-func (js *jsre) downloadProgress(call otto.FunctionCall) otto.Value {
-	pending, cached := js.ethereum.Downloader().Stats()
-	v, _ := call.Otto.ToValue(map[string]interface{}{"pending": pending, "cached": cached})
+func (js *jsre) syncProgress(call otto.FunctionCall) otto.Value {
+	pending, cached, importing := js.ethereum.Downloader().Stats()
+	v, _ := call.Otto.ToValue(map[string]interface{}{"pending": pending, "cached": cached, "importing": importing})
 	return v
 }
 
