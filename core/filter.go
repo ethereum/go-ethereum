@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -75,15 +76,19 @@ func (self *Filter) Find() state.Logs {
 	var (
 		logs  state.Logs
 		block = self.eth.ChainManager().GetBlockByNumber(latestBlockNo)
-		quit  bool
 	)
-	for i := 0; !quit && block != nil; i++ {
+
+done:
+	for i := 0; block != nil; i++ {
+		fmt.Println(block.NumberU64() == 0)
 		// Quit on latest
 		switch {
-		case block.NumberU64() == earliestBlockNo, block.NumberU64() == 0:
-			quit = true
+		case block.NumberU64() == 0:
+			break done
+		case block.NumberU64() == earliestBlockNo:
+			break done
 		case self.max <= len(logs):
-			break
+			break done
 		}
 
 		// Use bloom filtering to see if this block is interesting given the
