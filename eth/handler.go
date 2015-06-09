@@ -157,7 +157,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}
 	defer pm.removePeer(p.id)
 
-	if err := pm.downloader.RegisterPeer(p.id, p.recentHash, p.requestHashes, p.requestBlocks); err != nil {
+	if err := pm.downloader.RegisterPeer(p.id, p.Head(), p.requestHashes, p.requestBlocks); err != nil {
 		return err
 	}
 	// propagate existing transactions. new transactions appearing
@@ -303,7 +303,7 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		// Mark the hashes as present at the remote node
 		for _, hash := range hashes {
 			p.blockHashes.Add(hash)
-			p.recentHash = hash
+			p.SetHead(hash)
 		}
 		// Schedule all the unknown hashes for retrieval
 		unknown := make([]common.Hash, 0, len(hashes))
@@ -354,9 +354,9 @@ func (pm *ProtocolManager) importBlock(p *peer, block *types.Block, td *big.Int)
 
 	// Mark the block as present at the remote node (don't duplicate already held data)
 	p.blockHashes.Add(hash)
-	p.recentHash = hash
+	p.SetHead(hash)
 	if td != nil {
-		p.td = td
+		p.SetTd(td)
 	}
 	// Log the block's arrival
 	_, chainHead, _ := pm.chainman.Status()
@@ -369,7 +369,7 @@ func (pm *ProtocolManager) importBlock(p *peer, block *types.Block, td *big.Int)
 	})
 	// If the block's already known or its difficulty is lower than ours, drop
 	if pm.chainman.HasBlock(hash) {
-		p.td = pm.chainman.GetBlock(hash).Td // update the peer's TD to the real value
+		p.SetTd(pm.chainman.GetBlock(hash).Td) // update the peer's TD to the real value
 		return nil
 	}
 	if td != nil && pm.chainman.Td().Cmp(td) > 0 && new(big.Int).Add(block.Number(), big.NewInt(7)).Cmp(pm.chainman.CurrentBlock().Number()) < 0 {

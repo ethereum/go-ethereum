@@ -40,9 +40,11 @@ type peer struct {
 
 	protv, netid int
 
-	recentHash common.Hash
-	id         string
-	td         *big.Int
+	id string
+
+	head common.Hash
+	td   *big.Int
+	lock sync.RWMutex
 
 	genesis, ourHash common.Hash
 	ourTd            *big.Int
@@ -51,14 +53,14 @@ type peer struct {
 	blockHashes *set.Set
 }
 
-func newPeer(protv, netid int, genesis, recentHash common.Hash, td *big.Int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
+func newPeer(protv, netid int, genesis, head common.Hash, td *big.Int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	id := p.ID()
 
 	return &peer{
 		Peer:        p,
 		rw:          rw,
 		genesis:     genesis,
-		ourHash:     recentHash,
+		ourHash:     head,
 		ourTd:       td,
 		protv:       protv,
 		netid:       netid,
@@ -66,6 +68,39 @@ func newPeer(protv, netid int, genesis, recentHash common.Hash, td *big.Int, p *
 		txHashes:    set.New(),
 		blockHashes: set.New(),
 	}
+}
+
+// Head retrieves a copy of the current head (most recent) hash of the peer.
+func (p *peer) Head() (hash common.Hash) {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	copy(hash[:], p.head[:])
+	return hash
+}
+
+// SetHead updates the head (most recent) hash of the peer.
+func (p *peer) SetHead(hash common.Hash) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	copy(p.head[:], hash[:])
+}
+
+// Td retrieves the current total difficulty of a peer.
+func (p *peer) Td() *big.Int {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	return new(big.Int).Set(p.td)
+}
+
+// SetTd updates the current total difficulty of a peer.
+func (p *peer) SetTd(td *big.Int) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	p.td.Set(td)
 }
 
 // sendTransactions sends transactions to the peer and includes the hashes
@@ -160,7 +195,7 @@ func (p *peer) handleStatus() error {
 	// Set the total difficulty of the peer
 	p.td = status.TD
 	// set the best hash of the peer
-	p.recentHash = status.CurrentBlock
+	p.head = status.CurrentBlock
 
 	return <-errc
 }
@@ -256,11 +291,14 @@ func (ps *peerSet) BestPeer() *peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	var best *peer
+	var (
+		bestPeer *peer
+		bestTd   *big.Int
+	)
 	for _, p := range ps.peers {
-		if best == nil || p.td.Cmp(best.td) > 0 {
-			best = p
+		if td := p.Td(); bestPeer == nil || td.Cmp(bestTd) > 0 {
+			bestPeer, bestTd = p, td
 		}
 	}
-	return best
+	return bestPeer
 }

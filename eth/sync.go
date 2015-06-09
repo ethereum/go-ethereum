@@ -109,17 +109,25 @@ func (pm *ProtocolManager) fetcher() {
 			// If any explicit fetches were replied to, import them
 			if count := len(explicit); count > 0 {
 				glog.V(logger.Debug).Infof("Importing %d explicitly fetched blocks", count)
-				go func() {
-					for _, block := range explicit {
-						hash := block.Hash()
 
-						// Make sure there's still something pending to import
-						if announce := pending[hash]; announce != nil {
-							delete(pending, hash)
-							if err := pm.importBlock(announce.peer, block, nil); err != nil {
-								glog.V(logger.Detail).Infof("Failed to import explicitly fetched block: %v", err)
-								return
-							}
+				// Create a closure with the retrieved blocks and origin peers
+				peers := make([]*peer, 0, count)
+				blocks := make([]*types.Block, 0, count)
+				for _, block := range explicit {
+					hash := block.Hash()
+					if announce := pending[hash]; announce != nil {
+						peers = append(peers, announce.peer)
+						blocks = append(blocks, block)
+
+						delete(pending, hash)
+					}
+				}
+				// Run the importer on a new thread
+				go func() {
+					for i := 0; i < len(blocks); i++ {
+						if err := pm.importBlock(peers[i], blocks[i], nil); err != nil {
+							glog.V(logger.Detail).Infof("Failed to import explicitly fetched block: %v", err)
+							return
 						}
 					}
 				}()
@@ -208,20 +216,21 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		return
 	}
 	// Make sure the peer's TD is higher than our own. If not drop.
-	if peer.td.Cmp(pm.chainman.Td()) <= 0 {
+	if peer.Td().Cmp(pm.chainman.Td()) <= 0 {
 		return
 	}
 	// FIXME if we have the hash in our chain and the TD of the peer is
 	// much higher than ours, something is wrong with us or the peer.
 	// Check if the hash is on our own chain
-	if pm.chainman.HasBlock(peer.recentHash) {
+	head := peer.Head()
+	if pm.chainman.HasBlock(head) {
 		glog.V(logger.Debug).Infoln("Synchronisation canceled: head already known")
 		return
 	}
 	// Get the hashes from the peer (synchronously)
-	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, 0x%x", peer.id, peer.recentHash)
+	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, 0x%x", peer.id, head)
 
-	err := pm.downloader.Synchronise(peer.id, peer.recentHash)
+	err := pm.downloader.Synchronise(peer.id, head)
 	switch err {
 	case nil:
 		glog.V(logger.Detail).Infof("Synchronisation completed")

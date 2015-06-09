@@ -56,10 +56,7 @@ func CalcTD(block, parent *types.Block) *big.Int {
 	if parent == nil {
 		return block.Difficulty()
 	}
-
-	td := new(big.Int).Add(parent.Td, block.Header().Difficulty)
-
-	return td
+	return new(big.Int).Add(parent.Td, block.Header().Difficulty)
 }
 
 func CalcGasLimit(parent *types.Block) *big.Int {
@@ -178,7 +175,7 @@ func (self *ChainManager) Td() *big.Int {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	return self.td
+	return new(big.Int).Set(self.td)
 }
 
 func (self *ChainManager) GasLimit() *big.Int {
@@ -204,7 +201,7 @@ func (self *ChainManager) Status() (td *big.Int, currentBlock common.Hash, genes
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	return self.td, self.currentBlock.Hash(), self.genesisBlock.Hash()
+	return new(big.Int).Set(self.td), self.currentBlock.Hash(), self.genesisBlock.Hash()
 }
 
 func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
@@ -382,8 +379,8 @@ func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error 
 func (bc *ChainManager) insert(block *types.Block) {
 	key := append(blockNumPre, block.Number().Bytes()...)
 	bc.blockDb.Put(key, block.Hash().Bytes())
-
 	bc.blockDb.Put([]byte("LastBlock"), block.Hash().Bytes())
+
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
 }
@@ -488,8 +485,7 @@ func (self *ChainManager) GetAncestors(block *types.Block, length int) (blocks [
 }
 
 func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
-	//bc.blockDb.Put([]byte("LTD"), td.Bytes())
-	bc.td = td
+	bc.td = new(big.Int).Set(td)
 }
 
 func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
@@ -543,6 +539,9 @@ func (self *ChainManager) procFutureBlocks() {
 func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	self.wg.Add(1)
 	defer self.wg.Done()
+
+	self.mu.Lock()
+	defer self.mu.Unlock()
 
 	self.chainmu.Lock()
 	defer self.chainmu.Unlock()
