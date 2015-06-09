@@ -179,7 +179,9 @@ func (self *ChainManager) Td() *big.Int {
 }
 
 func (self *ChainManager) GasLimit() *big.Int {
-	// return self.currentGasLimit
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
 	return self.currentBlock.GasLimit()
 }
 
@@ -376,8 +378,8 @@ func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error 
 	return nil
 }
 
-// insert appends injects a block into the current chain block chain. Note, this
-// function assumes that the `mu` mutex is held!
+// insert injects a block into the current chain block chain. Note, this function
+// assumes that the `mu` mutex is held!
 func (bc *ChainManager) insert(block *types.Block) {
 	key := append(blockNumPre, block.Number().Bytes()...)
 	bc.blockDb.Put(key, block.Hash().Bytes())
