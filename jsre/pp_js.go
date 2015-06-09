@@ -26,19 +26,19 @@ function pp(object, indent) {
     } else if(typeof(object) === "object") {
         str += "{\n";
         indent += "  ";
-        var last = getFields(object).pop()
-        getFields(object).forEach(function (k) {
-            str += indent + k + ": ";
+
+        var fields = getFields(object);
+        var last   = fields[fields.length - 1];
+        fields.forEach(function (key) {
+            str += indent + key + ": ";
             try {
-                str += pp(object[k], indent);
+                str += pp(object[key], indent);
             } catch (e) {
                 str += pp(e, indent);
             }
-
-            if(k !== last) {
+            if(key !== last) {
                 str += ",";
             }
-
             str += "\n";
         });
         str += indent.substr(2, indent.length) + "}";
