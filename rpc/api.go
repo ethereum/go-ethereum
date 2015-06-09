@@ -182,7 +182,21 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 			nonce = args.Nonce.String()
 		}
 
-		v, err := api.xeth().Transact(args.From, args.To, nonce, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+		var gas string
+		if args.Gas == nil {
+			gas = ""
+		} else {
+			gas = args.Gas.String()
+		}
+
+		var gasprice string
+		if args.GasPrice == nil {
+			gasprice = ""
+		} else {
+			gasprice = args.GasPrice.String()
+		}
+
+		v, err := api.xeth().Transact(args.From, args.To, nonce, args.Value.String(), gas, gasprice, args.Data)
 		if err != nil {
 			return err
 		}
@@ -603,5 +617,19 @@ func (api *EthereumApi) doCall(params json.RawMessage) (string, string, error) {
 		return "", "", err
 	}
 
-	return api.xethAtStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+	var gas string
+	if args.Gas == nil {
+		gas = ""
+	} else {
+		gas = args.Gas.String()
+	}
+
+	var gasprice string
+	if args.GasPrice == nil {
+		gasprice = ""
+	} else {
+		gasprice = args.GasPrice.String()
+	}
+
+	return api.xethAtStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), gas, gasprice, args.Data)
 }
