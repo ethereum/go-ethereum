@@ -247,6 +247,7 @@ func (tp *TxPool) GetTransaction(hash common.Hash) *types.Transaction {
 }
 
 // GetTransactions returns all currently processable transactions.
+// The returned slice may be modified by the caller.
 func (self *TxPool) GetTransactions() (txs types.Transactions) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
