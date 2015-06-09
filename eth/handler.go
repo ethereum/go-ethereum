@@ -53,9 +53,11 @@ type ProtocolManager struct {
 	txSub         event.Subscription
 	minedBlockSub event.Subscription
 
+	// channels for fetcher, syncer, txsyncLoop
 	newPeerCh  chan *peer
 	newHashCh  chan []*blockAnnounce
 	newBlockCh chan chan []*types.Block
+	txsyncCh   chan *txsync
 	quitSync   chan struct{}
 
 	// wait group is used for graceful shutdowns during downloading
@@ -76,9 +78,9 @@ func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpo
 		newPeerCh:  make(chan *peer, 1),
 		newHashCh:  make(chan []*blockAnnounce, 1),
 		newBlockCh: make(chan chan []*types.Block),
+		txsyncCh:   make(chan *txsync),
 		quitSync:   make(chan struct{}),
 	}
-
 	manager.SubProtocol = p2p.Protocol{
 		Name:    "eth",
 		Version: uint(protocolVersion),
@@ -118,13 +120,14 @@ func (pm *ProtocolManager) Start() {
 	// broadcast transactions
 	pm.txSub = pm.eventMux.Subscribe(core.TxPreEvent{})
 	go pm.txBroadcastLoop()
-
 	// broadcast mined blocks
 	pm.minedBlockSub = pm.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go pm.minedBroadcastLoop()
 
+	// start sync handlers
 	go pm.syncer()
 	go pm.fetcher()
+	go pm.txsyncLoop()
 }
 
 func (pm *ProtocolManager) Stop() {
@@ -135,7 +138,7 @@ func (pm *ProtocolManager) Stop() {
 	pm.quit = true
 	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
-	close(pm.quitSync)             // quits the sync handler
+	close(pm.quitSync)             // quits syncer, fetcher, txsyncLoop
 
 	// Wait for any process action
 	pm.wg.Wait()
@@ -150,11 +153,12 @@ func (pm *ProtocolManager) newPeer(pv, nv int, p *p2p.Peer, rw p2p.MsgReadWriter
 }
 
 func (pm *ProtocolManager) handle(p *peer) error {
-	// Execute the Ethereum handshake, short circuit if fails
+	// Execute the Ethereum handshake.
 	if err := p.handleStatus(); err != nil {
 		return err
 	}
-	// Register the peer locally and in the downloader too
+
+	// Register the peer locally.
 	glog.V(logger.Detail).Infoln("Adding peer", p.id)
 	if err := pm.peers.Register(p); err != nil {
 		glog.V(logger.Error).Infoln("Addition failed:", err)
@@ -162,14 +166,16 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}
 	defer pm.removePeer(p.id)
 
+	// Register the peer in the downloader. If the downloader
+	// considers it banned, we disconnect.
 	if err := pm.downloader.RegisterPeer(p.id, p.Head(), p.requestHashes, p.requestBlocks); err != nil {
 		return err
 	}
-	// propagate existing transactions. new transactions appearing
+
+	// Propagate existing transactions. new transactions appearing
 	// after this will be sent via broadcasts.
-	if err := p.sendTransactions(pm.txpool.GetTransactions()); err != nil {
-		return err
-	}
+	pm.syncTransactions(p)
+
 	// main loop. handle incoming messages.
 	for {
 		if err := pm.handleMsg(p); err != nil {
