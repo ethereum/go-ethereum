@@ -3,9 +3,9 @@
 package comms
 
 import (
-    "io"
+	"io"
 	"net"
-    "os"
+	"os"
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -70,8 +70,8 @@ func startIpc(cfg IpcConfig, codec codec.Codec, api api.EthereumApi) error {
 
 		os.Remove(cfg.Endpoint)
 	}()
-    
-    glog.V(logger.Info).Infof("IPC service started (%s)\n", cfg.Endpoint)
-    
+
+	glog.V(logger.Info).Infof("IPC service started (%s)\n", cfg.Endpoint)
+
 	return nil
 }

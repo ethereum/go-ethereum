@@ -3,16 +3,16 @@
 package comms
 
 import (
-    "fmt"
+	"fmt"
 	"io"
 	"net"
-    "os"
+	"os"
 	"sync"
 	"syscall"
 	"time"
-    "unsafe"
-    
-    "github.com/ethereum/go-ethereum/logger"
+	"unsafe"
+
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
@@ -134,7 +134,6 @@ func getOverlappedResult(handle syscall.Handle, overlapped *syscall.Overlapped, 
 	}
 	return
 }
-
 
 const (
 	// openMode
@@ -636,10 +635,8 @@ func timeout(addr string) PipeError {
 	return PipeError{fmt.Sprintf("Pipe IO timed out waiting for '%s'", addr), true}
 }
 
-
-
 func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
-    c, err := Dial(cfg.Endpoint)
+	c, err := Dial(cfg.Endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -648,15 +645,15 @@ func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 }
 
 func startIpc(cfg IpcConfig, codec codec.Codec, api api.EthereumApi) error {
-    os.Remove(cfg.Endpoint) // in case it still exists from a previous run
-    
-    l, err := Listen(cfg.Endpoint)
-    if err != nil {
-        return err
-    }
-    os.Chmod(cfg.Endpoint, 0600)
-	
-    go func() {
+	os.Remove(cfg.Endpoint) // in case it still exists from a previous run
+
+	l, err := Listen(cfg.Endpoint)
+	if err != nil {
+		return err
+	}
+	os.Chmod(cfg.Endpoint, 0600)
+
+	go func() {
 		for {
 			conn, err := l.Accept()
 			if err != nil {
@@ -691,9 +688,9 @@ func startIpc(cfg IpcConfig, codec codec.Codec, api api.EthereumApi) error {
 				}
 			}(conn)
 		}
-    }()
-    
-    glog.V(logger.Info).Infof("IPC service started (%s)\n", cfg.Endpoint)
-    
-    return nil
+	}()
+
+	glog.V(logger.Info).Infof("IPC service started (%s)\n", cfg.Endpoint)
+
+	return nil
 }
