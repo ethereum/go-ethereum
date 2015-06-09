@@ -13,18 +13,18 @@ import (
 var (
 	// mapping between methods and handlers
 	personalMapping = map[string]personalhandler{
-		"personal_listAccounts":  (*personal).ListAccounts,
-		"personal_newAccount":    (*personal).NewAccount,
-		"personal_deleteAccount": (*personal).DeleteAccount,
-		"personal_unlockAccount": (*personal).UnlockAccount,
+		"personal_listAccounts":  (*personalApi).ListAccounts,
+		"personal_newAccount":    (*personalApi).NewAccount,
+		"personal_deleteAccount": (*personalApi).DeleteAccount,
+		"personal_unlockAccount": (*personalApi).UnlockAccount,
 	}
 )
 
 // net callback handler
-type personalhandler func(*personal, *shared.Request) (interface{}, error)
+type personalhandler func(*personalApi, *shared.Request) (interface{}, error)
 
 // net api provider
-type personal struct {
+type personalApi struct {
 	xeth     *xeth.XEth
 	ethereum *eth.Ethereum
 	methods  map[string]personalhandler
@@ -32,8 +32,8 @@ type personal struct {
 }
 
 // create a new net api instance
-func NewPersonal(xeth *xeth.XEth, eth *eth.Ethereum, coder codec.Codec) *personal {
-	return &personal{
+func NewPersonalApi(xeth *xeth.XEth, eth *eth.Ethereum, coder codec.Codec) *personalApi {
+	return &personalApi{
 		xeth:     xeth,
 		ethereum: eth,
 		methods:  personalMapping,
@@ -42,7 +42,7 @@ func NewPersonal(xeth *xeth.XEth, eth *eth.Ethereum, coder codec.Codec) *persona
 }
 
 // collection with supported methods
-func (self *personal) Methods() []string {
+func (self *personalApi) Methods() []string {
 	methods := make([]string, len(self.methods))
 	i := 0
 	for k := range self.methods {
@@ -53,7 +53,7 @@ func (self *personal) Methods() []string {
 }
 
 // Execute given request
-func (self *personal) Execute(req *shared.Request) (interface{}, error) {
+func (self *personalApi) Execute(req *shared.Request) (interface{}, error) {
 	if callback, ok := self.methods[req.Method]; ok {
 		return callback(self, req)
 	}
@@ -61,15 +61,15 @@ func (self *personal) Execute(req *shared.Request) (interface{}, error) {
 	return nil, shared.NewNotImplementedError(req.Method)
 }
 
-func (self *personal) Name() string {
+func (self *personalApi) Name() string {
 	return PersonalApiName
 }
 
-func (self *personal) ListAccounts(req *shared.Request) (interface{}, error) {
+func (self *personalApi) ListAccounts(req *shared.Request) (interface{}, error) {
 	return self.xeth.Accounts(), nil
 }
 
-func (self *personal) NewAccount(req *shared.Request) (interface{}, error) {
+func (self *personalApi) NewAccount(req *shared.Request) (interface{}, error) {
 	args := new(NewAccountArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -80,7 +80,7 @@ func (self *personal) NewAccount(req *shared.Request) (interface{}, error) {
 	return acc.Address.Hex(), err
 }
 
-func (self *personal) DeleteAccount(req *shared.Request) (interface{}, error) {
+func (self *personalApi) DeleteAccount(req *shared.Request) (interface{}, error) {
 	args := new(DeleteAccountArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -95,7 +95,7 @@ func (self *personal) DeleteAccount(req *shared.Request) (interface{}, error) {
 	}
 }
 
-func (self *personal) UnlockAccount(req *shared.Request) (interface{}, error) {
+func (self *personalApi) UnlockAccount(req *shared.Request) (interface{}, error) {
 	args := new(UnlockAccountArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())

@@ -10,18 +10,18 @@ import (
 var (
 	// mapping between methods and handlers
 	netMapping = map[string]nethandler{
-		"net_id":        (*net).NetworkVersion,
-		"net_peerCount": (*net).PeerCount,
-		"net_listening": (*net).IsListening,
-		"net_peers":     (*net).Peers,
+		"net_id":        (*netApi).NetworkVersion,
+		"net_peerCount": (*netApi).PeerCount,
+		"net_listening": (*netApi).IsListening,
+		"net_peers":     (*netApi).Peers,
 	}
 )
 
 // net callback handler
-type nethandler func(*net, *shared.Request) (interface{}, error)
+type nethandler func(*netApi, *shared.Request) (interface{}, error)
 
 // net api provider
-type net struct {
+type netApi struct {
 	xeth     *xeth.XEth
 	ethereum *eth.Ethereum
 	methods  map[string]nethandler
@@ -29,8 +29,8 @@ type net struct {
 }
 
 // create a new net api instance
-func NewNetApi(xeth *xeth.XEth, eth *eth.Ethereum, coder codec.Codec) *net {
-	return &net{
+func NewNetApi(xeth *xeth.XEth, eth *eth.Ethereum, coder codec.Codec) *netApi {
+	return &netApi{
 		xeth:     xeth,
 		ethereum: eth,
 		methods:  netMapping,
@@ -39,7 +39,7 @@ func NewNetApi(xeth *xeth.XEth, eth *eth.Ethereum, coder codec.Codec) *net {
 }
 
 // collection with supported methods
-func (self *net) Methods() []string {
+func (self *netApi) Methods() []string {
 	methods := make([]string, len(self.methods))
 	i := 0
 	for k := range self.methods {
@@ -50,7 +50,7 @@ func (self *net) Methods() []string {
 }
 
 // Execute given request
-func (self *net) Execute(req *shared.Request) (interface{}, error) {
+func (self *netApi) Execute(req *shared.Request) (interface{}, error) {
 	if callback, ok := self.methods[req.Method]; ok {
 		return callback(self, req)
 	}
@@ -58,24 +58,24 @@ func (self *net) Execute(req *shared.Request) (interface{}, error) {
 	return nil, shared.NewNotImplementedError(req.Method)
 }
 
-func (self *net) Name() string {
+func (self *netApi) Name() string {
 	return NetApiName
 }
 
 // Network version
-func (self *net) NetworkVersion(req *shared.Request) (interface{}, error) {
+func (self *netApi) NetworkVersion(req *shared.Request) (interface{}, error) {
 	return self.xeth.NetworkVersion(), nil
 }
 
 // Number of connected peers
-func (self *net) PeerCount(req *shared.Request) (interface{}, error) {
+func (self *netApi) PeerCount(req *shared.Request) (interface{}, error) {
 	return self.xeth.PeerCount(), nil
 }
 
-func (self *net) IsListening(req *shared.Request) (interface{}, error) {
+func (self *netApi) IsListening(req *shared.Request) (interface{}, error) {
 	return self.xeth.IsListening(), nil
 }
 
-func (self *net) Peers(req *shared.Request) (interface{}, error) {
+func (self *netApi) Peers(req *shared.Request) (interface{}, error) {
 	return self.ethereum.PeersInfo(), nil
 }

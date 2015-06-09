@@ -13,68 +13,68 @@ import (
 
 // eth api provider
 // See https://github.com/ethereum/wiki/wiki/JSON-RPC
-type EthApi struct {
+type ethApi struct {
 	xeth    *xeth.XEth
 	methods map[string]ethhandler
 	codec   codec.ApiCoder
 }
 
 // eth callback handler
-type ethhandler func(*EthApi, *shared.Request) (interface{}, error)
+type ethhandler func(*ethApi, *shared.Request) (interface{}, error)
 
 var (
 	ethMapping = map[string]ethhandler{
-		"eth_accounts":                          (*EthApi).Accounts,
-		"eth_blockNumber":                       (*EthApi).BlockNumber,
-		"eth_getBalance":                        (*EthApi).GetBalance,
-		"eth_protocolVersion":                   (*EthApi).ProtocolVersion,
-		"eth_coinbase":                          (*EthApi).Coinbase,
-		"eth_mining":                            (*EthApi).IsMining,
-		"eth_gasPrice":                          (*EthApi).GasPrice,
-		"eth_getStorage":                        (*EthApi).GetStorage,
-		"eth_storageAt":                         (*EthApi).GetStorage,
-		"eth_getStorageAt":                      (*EthApi).GetStorageAt,
-		"eth_getTransactionCount":               (*EthApi).GetTransactionCount,
-		"eth_getBlockTransactionCountByHash":    (*EthApi).GetBlockTransactionCountByHash,
-		"eth_getBlockTransactionCountByNumber":  (*EthApi).GetBlockTransactionCountByNumber,
-		"eth_getUncleCountByBlockHash":          (*EthApi).GetUncleCountByBlockHash,
-		"eth_getUncleCountByBlockNumber":        (*EthApi).GetUncleCountByBlockNumber,
-		"eth_getData":                           (*EthApi).GetData,
-		"eth_getCode":                           (*EthApi).GetData,
-		"eth_sign":                              (*EthApi).Sign,
-		"eth_sendTransaction":                   (*EthApi).SendTransaction,
-		"eth_transact":                          (*EthApi).SendTransaction,
-		"eth_estimateGas":                       (*EthApi).EstimateGas,
-		"eth_call":                              (*EthApi).Call,
-		"eth_flush":                             (*EthApi).Flush,
-		"eth_getBlockByHash":                    (*EthApi).GetBlockByHash,
-		"eth_getBlockByNumber":                  (*EthApi).GetBlockByNumber,
-		"eth_getTransactionByHash":              (*EthApi).GetTransactionByHash,
-		"eth_getTransactionByBlockHashAndIndex": (*EthApi).GetTransactionByBlockHashAndIndex,
-		"eth_getUncleByBlockHashAndIndex":       (*EthApi).GetUncleByBlockHashAndIndex,
-		"eth_getUncleByBlockNumberAndIndex":     (*EthApi).GetUncleByBlockNumberAndIndex,
-		"eth_getCompilers":                      (*EthApi).GetCompilers,
-		"eth_compileSolidity":                   (*EthApi).CompileSolidity,
-		"eth_newFilter":                         (*EthApi).NewFilter,
-		"eth_newBlockFilter":                    (*EthApi).NewBlockFilter,
-		"eth_newPendingTransactionFilter":       (*EthApi).NewPendingTransactionFilter,
-		"eth_uninstallFilter":                   (*EthApi).UninstallFilter,
-		"eth_getFilterChanges":                  (*EthApi).GetFilterChanges,
-		"eth_getFilterLogs":                     (*EthApi).GetFilterLogs,
-		"eth_getLogs":                           (*EthApi).GetLogs,
-		"eth_hashrate":                          (*EthApi).Hashrate,
-		"eth_getWork":                           (*EthApi).GetWork,
-		"eth_submitWork":                        (*EthApi).SubmitWork,
+		"eth_accounts":                          (*ethApi).Accounts,
+		"eth_blockNumber":                       (*ethApi).BlockNumber,
+		"eth_getBalance":                        (*ethApi).GetBalance,
+		"eth_protocolVersion":                   (*ethApi).ProtocolVersion,
+		"eth_coinbase":                          (*ethApi).Coinbase,
+		"eth_mining":                            (*ethApi).IsMining,
+		"eth_gasPrice":                          (*ethApi).GasPrice,
+		"eth_getStorage":                        (*ethApi).GetStorage,
+		"eth_storageAt":                         (*ethApi).GetStorage,
+		"eth_getStorageAt":                      (*ethApi).GetStorageAt,
+		"eth_getTransactionCount":               (*ethApi).GetTransactionCount,
+		"eth_getBlockTransactionCountByHash":    (*ethApi).GetBlockTransactionCountByHash,
+		"eth_getBlockTransactionCountByNumber":  (*ethApi).GetBlockTransactionCountByNumber,
+		"eth_getUncleCountByBlockHash":          (*ethApi).GetUncleCountByBlockHash,
+		"eth_getUncleCountByBlockNumber":        (*ethApi).GetUncleCountByBlockNumber,
+		"eth_getData":                           (*ethApi).GetData,
+		"eth_getCode":                           (*ethApi).GetData,
+		"eth_sign":                              (*ethApi).Sign,
+		"eth_sendTransaction":                   (*ethApi).SendTransaction,
+		"eth_transact":                          (*ethApi).SendTransaction,
+		"eth_estimateGas":                       (*ethApi).EstimateGas,
+		"eth_call":                              (*ethApi).Call,
+		"eth_flush":                             (*ethApi).Flush,
+		"eth_getBlockByHash":                    (*ethApi).GetBlockByHash,
+		"eth_getBlockByNumber":                  (*ethApi).GetBlockByNumber,
+		"eth_getTransactionByHash":              (*ethApi).GetTransactionByHash,
+		"eth_getTransactionByBlockHashAndIndex": (*ethApi).GetTransactionByBlockHashAndIndex,
+		"eth_getUncleByBlockHashAndIndex":       (*ethApi).GetUncleByBlockHashAndIndex,
+		"eth_getUncleByBlockNumberAndIndex":     (*ethApi).GetUncleByBlockNumberAndIndex,
+		"eth_getCompilers":                      (*ethApi).GetCompilers,
+		"eth_compileSolidity":                   (*ethApi).CompileSolidity,
+		"eth_newFilter":                         (*ethApi).NewFilter,
+		"eth_newBlockFilter":                    (*ethApi).NewBlockFilter,
+		"eth_newPendingTransactionFilter":       (*ethApi).NewPendingTransactionFilter,
+		"eth_uninstallFilter":                   (*ethApi).UninstallFilter,
+		"eth_getFilterChanges":                  (*ethApi).GetFilterChanges,
+		"eth_getFilterLogs":                     (*ethApi).GetFilterLogs,
+		"eth_getLogs":                           (*ethApi).GetLogs,
+		"eth_hashrate":                          (*ethApi).Hashrate,
+		"eth_getWork":                           (*ethApi).GetWork,
+		"eth_submitWork":                        (*ethApi).SubmitWork,
 	}
 )
 
-// create new EthApi instance
-func NewEthApi(xeth *xeth.XEth, codec codec.Codec) *EthApi {
-	return &EthApi{xeth, ethMapping, codec.New(nil)}
+// create new ethApi instance
+func NewEthApi(xeth *xeth.XEth, codec codec.Codec) *ethApi {
+	return &ethApi{xeth, ethMapping, codec.New(nil)}
 }
 
 // collection with supported methods
-func (self *EthApi) Methods() []string {
+func (self *ethApi) Methods() []string {
 	methods := make([]string, len(self.methods))
 	i := 0
 	for k := range self.methods {
@@ -85,7 +85,7 @@ func (self *EthApi) Methods() []string {
 }
 
 // Execute given request
-func (self *EthApi) Execute(req *shared.Request) (interface{}, error) {
+func (self *ethApi) Execute(req *shared.Request) (interface{}, error) {
 	if callback, ok := self.methods[req.Method]; ok {
 		return callback(self, req)
 	}
@@ -93,23 +93,23 @@ func (self *EthApi) Execute(req *shared.Request) (interface{}, error) {
 	return nil, shared.NewNotImplementedError(req.Method)
 }
 
-func (self *EthApi) Name() string {
+func (self *ethApi) Name() string {
 	return EthApiName
 }
 
-func (self *EthApi) Accounts(req *shared.Request) (interface{}, error) {
+func (self *ethApi) Accounts(req *shared.Request) (interface{}, error) {
 	return self.xeth.Accounts(), nil
 }
 
-func (self *EthApi) Hashrate(req *shared.Request) (interface{}, error) {
+func (self *ethApi) Hashrate(req *shared.Request) (interface{}, error) {
 	return newHexNum(self.xeth.HashRate()), nil
 }
 
-func (self *EthApi) BlockNumber(req *shared.Request) (interface{}, error) {
+func (self *ethApi) BlockNumber(req *shared.Request) (interface{}, error) {
 	return self.xeth.CurrentBlock().Number(), nil
 }
 
-func (self *EthApi) GetBalance(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetBalance(req *shared.Request) (interface{}, error) {
 	args := new(GetBalanceArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -118,23 +118,23 @@ func (self *EthApi) GetBalance(req *shared.Request) (interface{}, error) {
 	return self.xeth.AtStateNum(args.BlockNumber).BalanceAt(args.Address), nil
 }
 
-func (self *EthApi) ProtocolVersion(req *shared.Request) (interface{}, error) {
+func (self *ethApi) ProtocolVersion(req *shared.Request) (interface{}, error) {
 	return self.xeth.EthVersion(), nil
 }
 
-func (self *EthApi) Coinbase(req *shared.Request) (interface{}, error) {
+func (self *ethApi) Coinbase(req *shared.Request) (interface{}, error) {
 	return newHexData(self.xeth.Coinbase()), nil
 }
 
-func (self *EthApi) IsMining(req *shared.Request) (interface{}, error) {
+func (self *ethApi) IsMining(req *shared.Request) (interface{}, error) {
 	return self.xeth.IsMining(), nil
 }
 
-func (self *EthApi) GasPrice(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GasPrice(req *shared.Request) (interface{}, error) {
 	return newHexNum(xeth.DefaultGasPrice().Bytes()), nil
 }
 
-func (self *EthApi) GetStorage(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetStorage(req *shared.Request) (interface{}, error) {
 	args := new(GetStorageArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -143,7 +143,7 @@ func (self *EthApi) GetStorage(req *shared.Request) (interface{}, error) {
 	return self.xeth.AtStateNum(args.BlockNumber).State().SafeGet(args.Address).Storage(), nil
 }
 
-func (self *EthApi) GetStorageAt(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetStorageAt(req *shared.Request) (interface{}, error) {
 	args := new(GetStorageAtArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -152,7 +152,7 @@ func (self *EthApi) GetStorageAt(req *shared.Request) (interface{}, error) {
 	return self.xeth.AtStateNum(args.BlockNumber).StorageAt(args.Address, args.Key), nil
 }
 
-func (self *EthApi) GetTransactionCount(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetTransactionCount(req *shared.Request) (interface{}, error) {
 	args := new(GetTxCountArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -162,7 +162,7 @@ func (self *EthApi) GetTransactionCount(req *shared.Request) (interface{}, error
 	return newHexNum(big.NewInt(int64(count)).Bytes()), nil
 }
 
-func (self *EthApi) GetBlockTransactionCountByHash(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetBlockTransactionCountByHash(req *shared.Request) (interface{}, error) {
 	args := new(HashArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -176,7 +176,7 @@ func (self *EthApi) GetBlockTransactionCountByHash(req *shared.Request) (interfa
 	}
 }
 
-func (self *EthApi) GetBlockTransactionCountByNumber(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetBlockTransactionCountByNumber(req *shared.Request) (interface{}, error) {
 	args := new(BlockNumArg)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -190,7 +190,7 @@ func (self *EthApi) GetBlockTransactionCountByNumber(req *shared.Request) (inter
 	}
 }
 
-func (self *EthApi) GetUncleCountByBlockHash(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetUncleCountByBlockHash(req *shared.Request) (interface{}, error) {
 	args := new(HashArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -204,7 +204,7 @@ func (self *EthApi) GetUncleCountByBlockHash(req *shared.Request) (interface{}, 
 	return newHexNum(big.NewInt(int64(len(br.Uncles))).Bytes()), nil
 }
 
-func (self *EthApi) GetUncleCountByBlockNumber(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetUncleCountByBlockNumber(req *shared.Request) (interface{}, error) {
 	args := new(BlockNumArg)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -218,7 +218,7 @@ func (self *EthApi) GetUncleCountByBlockNumber(req *shared.Request) (interface{}
 	return newHexNum(big.NewInt(int64(len(br.Uncles))).Bytes()), nil
 }
 
-func (self *EthApi) GetData(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetData(req *shared.Request) (interface{}, error) {
 	args := new(GetDataArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -227,8 +227,8 @@ func (self *EthApi) GetData(req *shared.Request) (interface{}, error) {
 	return newHexData(v), nil
 }
 
-func (self *EthApi) Sign(req *shared.Request) (interface{}, error) {
-	args := new(NewSignArgs)
+func (self *ethApi) Sign(req *shared.Request) (interface{}, error) {
+	args := new(NewSigArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
@@ -239,7 +239,7 @@ func (self *EthApi) Sign(req *shared.Request) (interface{}, error) {
 	return v, nil
 }
 
-func (self *EthApi) SendTransaction(req *shared.Request) (interface{}, error) {
+func (self *ethApi) SendTransaction(req *shared.Request) (interface{}, error) {
 	args := new(NewTxArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -258,7 +258,7 @@ func (self *EthApi) SendTransaction(req *shared.Request) (interface{}, error) {
 	return v, nil
 }
 
-func (self *EthApi) EstimateGas(req *shared.Request) (interface{}, error) {
+func (self *ethApi) EstimateGas(req *shared.Request) (interface{}, error) {
 	_, gas, err := self.doCall(req.Params)
 	if err != nil {
 		return nil, err
@@ -272,7 +272,7 @@ func (self *EthApi) EstimateGas(req *shared.Request) (interface{}, error) {
 	}
 }
 
-func (self *EthApi) Call(req *shared.Request) (interface{}, error) {
+func (self *ethApi) Call(req *shared.Request) (interface{}, error) {
 	v, _, err := self.doCall(req.Params)
 	if err != nil {
 		return nil, err
@@ -286,11 +286,11 @@ func (self *EthApi) Call(req *shared.Request) (interface{}, error) {
 	}
 }
 
-func (self *EthApi) Flush(req *shared.Request) (interface{}, error) {
+func (self *ethApi) Flush(req *shared.Request) (interface{}, error) {
 	return nil, shared.NewNotImplementedError(req.Method)
 }
 
-func (self *EthApi) doCall(params json.RawMessage) (string, string, error) {
+func (self *ethApi) doCall(params json.RawMessage) (string, string, error) {
 	args := new(CallArgs)
 	if err := self.codec.Decode(params, &args); err != nil {
 		return "", "", err
@@ -299,7 +299,7 @@ func (self *EthApi) doCall(params json.RawMessage) (string, string, error) {
 	return self.xeth.AtStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 }
 
-func (self *EthApi) GetBlockByHash(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetBlockByHash(req *shared.Request) (interface{}, error) {
 	args := new(GetBlockByHashArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -309,7 +309,7 @@ func (self *EthApi) GetBlockByHash(req *shared.Request) (interface{}, error) {
 	return NewBlockRes(block, args.IncludeTxs), nil
 }
 
-func (self *EthApi) GetBlockByNumber(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetBlockByNumber(req *shared.Request) (interface{}, error) {
 	args := new(GetBlockByNumberArgs)
 	if err := json.Unmarshal(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -328,7 +328,7 @@ func (self *EthApi) GetBlockByNumber(req *shared.Request) (interface{}, error) {
 	return br, nil
 }
 
-func (self *EthApi) GetTransactionByHash(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetTransactionByHash(req *shared.Request) (interface{}, error) {
 	args := new(HashArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -348,7 +348,7 @@ func (self *EthApi) GetTransactionByHash(req *shared.Request) (interface{}, erro
 	return nil, nil
 }
 
-func (self *EthApi) GetTransactionByBlockHashAndIndex(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetTransactionByBlockHashAndIndex(req *shared.Request) (interface{}, error) {
 	args := new(HashIndexArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -367,7 +367,7 @@ func (self *EthApi) GetTransactionByBlockHashAndIndex(req *shared.Request) (inte
 	}
 }
 
-func (self *EthApi) GetTransactionByBlockNumberAndIndex(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetTransactionByBlockNumberAndIndex(req *shared.Request) (interface{}, error) {
 	args := new(BlockNumIndexArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -386,7 +386,7 @@ func (self *EthApi) GetTransactionByBlockNumberAndIndex(req *shared.Request) (in
 	return v.Transactions[args.Index], nil
 }
 
-func (self *EthApi) GetUncleByBlockHashAndIndex(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetUncleByBlockHashAndIndex(req *shared.Request) (interface{}, error) {
 	args := new(HashIndexArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -405,7 +405,7 @@ func (self *EthApi) GetUncleByBlockHashAndIndex(req *shared.Request) (interface{
 	return br.Uncles[args.Index], nil
 }
 
-func (self *EthApi) GetUncleByBlockNumberAndIndex(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetUncleByBlockNumberAndIndex(req *shared.Request) (interface{}, error) {
 	args := new(BlockNumIndexArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -425,7 +425,7 @@ func (self *EthApi) GetUncleByBlockNumberAndIndex(req *shared.Request) (interfac
 	}
 }
 
-func (self *EthApi) GetCompilers(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetCompilers(req *shared.Request) (interface{}, error) {
 	var lang string
 	if solc, _ := self.xeth.Solc(); solc != nil {
 		lang = "Solidity"
@@ -434,7 +434,7 @@ func (self *EthApi) GetCompilers(req *shared.Request) (interface{}, error) {
 	return c, nil
 }
 
-func (self *EthApi) CompileSolidity(req *shared.Request) (interface{}, error) {
+func (self *ethApi) CompileSolidity(req *shared.Request) (interface{}, error) {
 	solc, _ := self.xeth.Solc()
 	if solc == nil {
 		return nil, shared.NewNotAvailableError(req.Method, "solc (solidity compiler) not found")
@@ -452,7 +452,7 @@ func (self *EthApi) CompileSolidity(req *shared.Request) (interface{}, error) {
 	return contracts, nil
 }
 
-func (self *EthApi) NewFilter(req *shared.Request) (interface{}, error) {
+func (self *ethApi) NewFilter(req *shared.Request) (interface{}, error) {
 	args := new(BlockFilterArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -462,15 +462,15 @@ func (self *EthApi) NewFilter(req *shared.Request) (interface{}, error) {
 	return newHexNum(big.NewInt(int64(id)).Bytes()), nil
 }
 
-func (self *EthApi) NewBlockFilter(req *shared.Request) (interface{}, error) {
+func (self *ethApi) NewBlockFilter(req *shared.Request) (interface{}, error) {
 	return newHexNum(self.xeth.NewBlockFilter()), nil
 }
 
-func (self *EthApi) NewPendingTransactionFilter(req *shared.Request) (interface{}, error) {
+func (self *ethApi) NewPendingTransactionFilter(req *shared.Request) (interface{}, error) {
 	return newHexNum(self.xeth.NewTransactionFilter()), nil
 }
 
-func (self *EthApi) UninstallFilter(req *shared.Request) (interface{}, error) {
+func (self *ethApi) UninstallFilter(req *shared.Request) (interface{}, error) {
 	args := new(FilterIdArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -478,7 +478,7 @@ func (self *EthApi) UninstallFilter(req *shared.Request) (interface{}, error) {
 	return self.xeth.UninstallFilter(args.Id), nil
 }
 
-func (self *EthApi) GetFilterChanges(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetFilterChanges(req *shared.Request) (interface{}, error) {
 	args := new(FilterIdArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -496,7 +496,7 @@ func (self *EthApi) GetFilterChanges(req *shared.Request) (interface{}, error) {
 	}
 }
 
-func (self *EthApi) GetFilterLogs(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetFilterLogs(req *shared.Request) (interface{}, error) {
 	args := new(FilterIdArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -505,7 +505,7 @@ func (self *EthApi) GetFilterLogs(req *shared.Request) (interface{}, error) {
 	return NewLogsRes(self.xeth.Logs(args.Id)), nil
 }
 
-func (self *EthApi) GetLogs(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetLogs(req *shared.Request) (interface{}, error) {
 	args := new(BlockFilterArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -513,12 +513,12 @@ func (self *EthApi) GetLogs(req *shared.Request) (interface{}, error) {
 	return NewLogsRes(self.xeth.AllLogs(args.Earliest, args.Latest, args.Skip, args.Max, args.Address, args.Topics)), nil
 }
 
-func (self *EthApi) GetWork(req *shared.Request) (interface{}, error) {
+func (self *ethApi) GetWork(req *shared.Request) (interface{}, error) {
 	self.xeth.SetMining(true, 0)
 	return self.xeth.RemoteMining().GetWork(), nil
 }
 
-func (self *EthApi) SubmitWork(req *shared.Request) (interface{}, error) {
+func (self *ethApi) SubmitWork(req *shared.Request) (interface{}, error) {
 	args := new(SubmitWorkArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
