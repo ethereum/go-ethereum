@@ -109,17 +109,25 @@ func (pm *ProtocolManager) fetcher() {
 			// If any explicit fetches were replied to, import them
 			if count := len(explicit); count > 0 {
 				glog.V(logger.Debug).Infof("Importing %d explicitly fetched blocks", count)
-				go func() {
-					for _, block := range explicit {
-						hash := block.Hash()
 
-						// Make sure there's still something pending to import
-						if announce := pending[hash]; announce != nil {
-							delete(pending, hash)
-							if err := pm.importBlock(announce.peer, block, nil); err != nil {
-								glog.V(logger.Detail).Infof("Failed to import explicitly fetched block: %v", err)
-								return
-							}
+				// Create a closure with the retrieved blocks and origin peers
+				peers := make([]*peer, 0, count)
+				blocks := make([]*types.Block, 0, count)
+				for _, block := range explicit {
+					hash := block.Hash()
+					if announce := pending[hash]; announce != nil {
+						peers = append(peers, announce.peer)
+						blocks = append(blocks, block)
+
+						delete(pending, hash)
+					}
+				}
+				// Run the importer on a new thread
+				go func() {
+					for i := 0; i < len(blocks); i++ {
+						if err := pm.importBlock(peers[i], blocks[i], nil); err != nil {
+							glog.V(logger.Detail).Infof("Failed to import explicitly fetched block: %v", err)
+							return
 						}
 					}
 				}()
