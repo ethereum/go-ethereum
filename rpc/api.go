@@ -191,9 +191,9 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 
 		var gasprice string
 		if args.GasPrice == nil {
-			gas = ""
+			gasprice = ""
 		} else {
-			gas = args.GasPrice.String()
+			gasprice = args.GasPrice.String()
 		}
 
 		v, err := api.xeth().Transact(args.From, args.To, nonce, args.Value.String(), gas, gasprice, args.Data)
