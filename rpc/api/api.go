@@ -1,17 +1,30 @@
 package api
 
-import "github.com/ethereum/go-ethereum/rpc/shared"
+import (
+	"strings"
+
+	"github.com/ethereum/go-ethereum/rpc/shared"
+)
 
 const (
-	// List with all API's which are offered over the IPC interface by default
-	DefaultIpcApis = "debug,eth,miner,net,web3"
+	EthApiName      = "eth"
+	DebugApiName    = "debug"
+	MergedApiName   = "merged"
+	MinerApiName    = "miner"
+	NetApiName      = "net"
+	PersonalApiName = "personal"
+	Web3ApiName     = "web3"
+)
 
-	EthApiName    = "eth"
-	DebugApiName  = "debug"
-	MergedApiName = "merged"
-	MinerApiName  = "miner"
-	NetApiName    = "net"
-	Web3ApiName   = "web3"
+var (
+	// List with all API's which are offered over the IPC interface by default
+	DefaultIpcApis = strings.Join([]string{
+		EthApiName,
+		DebugApiName,
+		MinerApiName,
+		NetApiName,
+		PersonalApiName,
+	}, ",")
 )
 
 // Ethereum RPC API interface
