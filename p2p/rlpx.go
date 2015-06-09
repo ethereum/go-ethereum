@@ -102,6 +102,7 @@ func (t *rlpx) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err
 	werr := make(chan error, 1)
 	go func() { werr <- Send(t.rw, handshakeMsg, our) }()
 	if their, err = readProtocolHandshake(t.rw, our); err != nil {
+		<-werr // make sure the write terminates too
 		return nil, err
 	}
 	if err := <-werr; err != nil {
