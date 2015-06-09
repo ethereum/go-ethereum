@@ -35,7 +35,7 @@ func TestCompileSolidity(t *testing.T) {
 	if solc == nil {
 		t.Skip("no solc found: skip")
 	} else if solc.Version() != solcVersion {
-		t.Logf("WARNING: solc different version found (%v, test written for %v, may need to update)", solc.Version(), solcVersion)
+		t.Skip("WARNING: skipping test because of solc different version (%v, test written for %v, may need to update)", solc.Version(), solcVersion)
 	}
 	source := `contract test {\n` +
 		"   /// @notice Will multiply `a` by 7." + `\n` +
