@@ -379,8 +379,11 @@ func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error 
 func (bc *ChainManager) insert(block *types.Block) {
 	key := append(blockNumPre, block.Number().Bytes()...)
 	bc.blockDb.Put(key, block.Hash().Bytes())
-
 	bc.blockDb.Put([]byte("LastBlock"), block.Hash().Bytes())
+
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
 }
