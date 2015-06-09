@@ -183,7 +183,7 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 	vmenv := NewEnvFromMap(statedb, env, tx)
 	vmenv.origin = common.BytesToAddress(keyPair.Address())
 	ret, _, err := core.ApplyMessage(vmenv, message, coinbase)
-	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) {
+	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || state.IsGasLimitErr(err) {
 		statedb.Set(snapshot)
 	}
 	statedb.Update()
