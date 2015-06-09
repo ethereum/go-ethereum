@@ -67,21 +67,25 @@ func ripemd160Func(in []byte) []byte {
 const ecRecoverInputLength = 128
 
 func ecrecoverFunc(in []byte) []byte {
+	in = common.RightPadBytes(in, 128)
 	// "in" is (hash, v, r, s), each 32 bytes
 	// but for ecrecover we want (r, s, v)
-	if len(in) < ecRecoverInputLength {
-		return nil
-	}
 
+	r := common.BytesToBig(in[64:96])
+	s := common.BytesToBig(in[96:128])
 	// Treat V as a 256bit integer
-	v := new(big.Int).Sub(common.Bytes2Big(in[32:64]), big.NewInt(27))
-	// Ethereum requires V to be either 0 or 1 => (27 || 28)
-	if !(v.Cmp(Zero) == 0 || v.Cmp(One) == 0) {
+	vbig := common.Bytes2Big(in[32:64])
+	v := byte(vbig.Uint64())
+
+	if !crypto.ValidateSignatureValues(v, r, s) {
+		glog.V(logger.Error).Infof("EC RECOVER FAIL: v, r or s value invalid")
 		return nil
 	}
 
-	// v needs to be moved to the end
-	rsv := append(in[64:128], byte(v.Uint64()))
+	// v needs to be at the end and normalized for libsecp256k1
+	vbignormal := new(big.Int).Sub(vbig, big.NewInt(27))
+	vnormal := byte(vbignormal.Uint64())
+	rsv := append(in[64:128], vnormal)
 	pubKey, err := crypto.Ecrecover(in[:32], rsv)
 	// make sure the public key is a valid one
 	if err != nil {
