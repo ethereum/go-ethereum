@@ -2504,3 +2504,64 @@ func TestSourceArgsEmpty(t *testing.T) {
 		t.Error(str)
 	}
 }
+
+func TestSigArgs(t *testing.T) {
+	input := `["0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b", "0x0"]`
+	expected := new(NewSigArgs)
+	expected.From = "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b"
+	expected.Data = "0x0"
+
+	args := new(NewSigArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestSigArgsEmptyData(t *testing.T) {
+	input := `["0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b", ""]`
+
+	args := new(NewSigArgs)
+	str := ExpectValidationError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestSigArgsDataType(t *testing.T) {
+	input := `["0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b", 13]`
+
+	args := new(NewSigArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestSigArgsEmptyFrom(t *testing.T) {
+	input := `["", "0x0"]`
+
+	args := new(NewSigArgs)
+	str := ExpectValidationError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestSigArgsFromType(t *testing.T) {
+	input := `[false, "0x0"]`
+
+	args := new(NewSigArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestSigArgsEmpty(t *testing.T) {
+	input := `[]`
+	args := new(NewSigArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
