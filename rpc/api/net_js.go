@@ -6,6 +6,13 @@ web3.extend({
 	methods:
 	[
 		new web3.extend.Method({
+			name: 'addPeer',
+			call: 'net_addPeer',
+			params: 1,
+			inputFormatter: [web3.extend.utils.formatInputString],
+			outputFormatter: web3.extend.formatters.formatOutputBool
+		}),
+		new web3.extend.Method({
 			name: 'id',
 			call: 'net_id',
 			params: 0,

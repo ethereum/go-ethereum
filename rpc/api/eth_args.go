@@ -226,19 +226,14 @@ func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
-type NewSignArgs struct {
+type NewSigArgs struct {
 	From string
 	Data string
 }
 
-func (args *NewSignArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []json.RawMessage
-	var ext struct {
-		From string
-		Data string
-	}
+func (args *NewSigArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
 
-	// Decode byte slice to array of RawMessages
 	if err := json.Unmarshal(b, &obj); err != nil {
 		return shared.NewDecodeParamError(err.Error())
 	}
@@ -248,21 +243,26 @@ func (args *NewSignArgs) UnmarshalJSON(b []byte) (err error) {
 		return shared.NewInsufficientParamsError(len(obj), 1)
 	}
 
-	// Decode 0th RawMessage to temporary struct
-	if err := json.Unmarshal(obj[0], &ext); err != nil {
-		return shared.NewDecodeParamError(err.Error())
+	from, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("from", "not a string")
 	}
+	args.From = from
 
-	if len(ext.From) == 0 {
+	if len(args.From) == 0 {
 		return shared.NewValidationError("from", "is required")
 	}
 
-	if len(ext.Data) == 0 {
+	data, ok := obj[1].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("data", "not a string")
+	}
+	args.Data = data
+
+	if len(args.Data) == 0 {
 		return shared.NewValidationError("data", "is required")
 	}
 
-	args.From = ext.From
-	args.Data = ext.Data
 	return nil
 }
 
