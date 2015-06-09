@@ -1,6 +1,9 @@
 package filter
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestFilters(t *testing.T) {
 	var success bool
@@ -23,6 +26,8 @@ func TestFilters(t *testing.T) {
 	})
 	fm.Notify(Generic{Str1: "hello"}, true)
 	fm.Stop()
+
+	time.Sleep(10 * time.Millisecond) // yield to the notifier
 
 	if !success {
 		t.Error("expected 'hello' to be posted")
