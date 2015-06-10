@@ -81,17 +81,17 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		codehash = crypto.Sha3Hash(code)
 		mem      = NewMemory()
 		stack    = newStack()
-		pc       = new(big.Int)
+		pc       = uint64(0)
 		statedb  = self.env.State()
 
-		jump = func(from *big.Int, to *big.Int) error {
+		jump = func(from uint64, to *big.Int) error {
 			if !context.jumpdests.has(codehash, code, to) {
-				nop := context.GetOp(to)
+				nop := context.GetOp(to.Uint64())
 				return fmt.Errorf("invalid jump destination (%v) %v", nop, to)
 			}
 
 			self.Printf(" ~> %v", to)
-			pc = to
+			pc = to.Uint64()
 
 			self.Endl()
 
@@ -519,11 +519,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			stack.push(self.env.GasLimit())
 
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
-			a := big.NewInt(int64(op - PUSH1 + 1))
-			byts := getData(code, new(big.Int).Add(pc, big.NewInt(1)), a)
+			size := uint64(op - PUSH1 + 1)
+			byts := getData(code, new(big.Int).SetUint64(pc+1), new(big.Int).SetUint64(size))
 			// push value to stack
 			stack.push(common.Bytes2Big(byts))
-			pc.Add(pc, a)
+			pc += size
 
 			self.Printf(" => 0x%x", byts)
 		case POP:
@@ -603,7 +603,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 		case JUMPDEST:
 		case PC:
-			stack.push(pc)
+			stack.push(new(big.Int).SetUint64(pc))
 		case MSIZE:
 			stack.push(big.NewInt(int64(mem.Len())))
 		case GAS:
@@ -708,7 +708,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			return nil, fmt.Errorf("Invalid opcode %x", op)
 		}
 
-		pc.Add(pc, One)
+		pc++
 
 		self.Endl()
 	}
