@@ -58,6 +58,7 @@ func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func(
 		currentState: currentStateFn,
 		gasLimit:     gasLimitFn,
 		pendingState: state.ManageState(currentStateFn()),
+		events:       eventMux.Subscribe(ChainEvent{}),
 	}
 	go pool.eventLoop()
 
@@ -68,7 +69,6 @@ func (pool *TxPool) eventLoop() {
 	// Track chain events. When a chain events occurs (new chain canon block)
 	// we need to know the new state. The new state will help us determine
 	// the nonces in the managed state
-	pool.events = pool.eventMux.Subscribe(ChainEvent{})
 	for _ = range pool.events.Chan() {
 		pool.mu.Lock()
 
@@ -103,7 +103,6 @@ func (pool *TxPool) resetState() {
 }
 
 func (pool *TxPool) Stop() {
-	pool.pending = make(map[common.Hash]*types.Transaction)
 	close(pool.quit)
 	pool.events.Unsubscribe()
 	glog.V(logger.Info).Infoln("TX Pool stopped")
