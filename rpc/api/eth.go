@@ -11,6 +11,10 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
+const (
+	EthApiVersion = "1.0"
+)
+
 // eth api provider
 // See https://github.com/ethereum/wiki/wiki/JSON-RPC
 type ethApi struct {
@@ -95,6 +99,10 @@ func (self *ethApi) Execute(req *shared.Request) (interface{}, error) {
 
 func (self *ethApi) Name() string {
 	return EthApiName
+}
+
+func (self *ethApi) ApiVersion() string {
+	return EthApiVersion
 }
 
 func (self *ethApi) Accounts(req *shared.Request) (interface{}, error) {

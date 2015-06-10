@@ -7,6 +7,10 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
+const (
+	TxPoolApiVersion = "1.0"
+)
+
 var (
 	// mapping between methods and handlers
 	txpoolMapping = map[string]txpoolhandler{
@@ -57,6 +61,10 @@ func (self *txPoolApi) Execute(req *shared.Request) (interface{}, error) {
 
 func (self *txPoolApi) Name() string {
 	return TxPoolApiName
+}
+
+func (self *txPoolApi) ApiVersion() string {
+	return TxPoolApiVersion
 }
 
 func (self *txPoolApi) Status(req *shared.Request) (interface{}, error) {

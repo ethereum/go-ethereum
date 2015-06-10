@@ -7,6 +7,10 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
+const (
+	NetApiVersion = "1.0"
+)
+
 var (
 	// mapping between methods and handlers
 	netMapping = map[string]nethandler{
@@ -60,6 +64,10 @@ func (self *netApi) Execute(req *shared.Request) (interface{}, error) {
 
 func (self *netApi) Name() string {
 	return NetApiName
+}
+
+func (self *netApi) ApiVersion() string {
+	return NetApiVersion
 }
 
 // Network version

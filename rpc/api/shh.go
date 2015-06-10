@@ -9,6 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
+const (
+	ShhApiVersion = "1.0"
+)
+
 var (
 	// mapping between methods and handlers
 	shhMapping = map[string]shhhandler{
@@ -69,6 +73,10 @@ func (self *shhApi) Execute(req *shared.Request) (interface{}, error) {
 
 func (self *shhApi) Name() string {
 	return ShhApiName
+}
+
+func (self *shhApi) ApiVersion() string {
+	return ShhApiVersion
 }
 
 func (self *shhApi) Version(req *shared.Request) (interface{}, error) {

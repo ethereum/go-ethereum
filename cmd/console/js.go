@@ -134,7 +134,7 @@ func (js *jsre) apiBindings(ipcpath string) {
 
 	// load only supported API's in javascript runtime
 	shortcuts := "var eth = web3.eth; "
-	for _, apiName := range apis {
+	for apiName, _ := range apis {
 		if apiName == api.Web3ApiName || apiName == api.EthApiName {
 			continue // manually mapped
 		}
@@ -194,7 +194,7 @@ func (self *jsre) exec(filename string) error {
 	return nil
 }
 
-func (self *jsre) suportedApis(ipcpath string) ([]string, error) {
+func (self *jsre) suportedApis(ipcpath string) (map[string]string, error) {
 	config := comms.IpcConfig{
 		Endpoint: ipcpath,
 	}
@@ -207,7 +207,7 @@ func (self *jsre) suportedApis(ipcpath string) ([]string, error) {
 	req := shared.Request{
 		Id:      1,
 		Jsonrpc: "2.0",
-		Method:  "support_apis",
+		Method:  "modules",
 	}
 
 	err = client.Send(req)
@@ -222,7 +222,7 @@ func (self *jsre) suportedApis(ipcpath string) ([]string, error) {
 
 	if sucRes, ok := res.(shared.SuccessResponse); ok {
 		data, _ := json.Marshal(sucRes.Result)
-		apis := make([]string, 0)
+		apis := make(map[string]string)
 		err = json.Unmarshal(data, &apis)
 		if err == nil {
 			return apis, nil
@@ -242,7 +242,11 @@ func (self *jsre) welcome(ipcpath string) {
 		+ " " + new Date(lastBlockTimestamp).toLocaleTimeString() + ")");`)
 
 	if modules, err := self.suportedApis(ipcpath); err == nil {
-		self.re.Eval(fmt.Sprintf("var modules = '%s';", strings.Join(modules, " ")))
+		modulesVersionString := ""
+		for api, version := range modules {
+			modulesVersionString += fmt.Sprintf("%s:%s ", api, version)
+		}
+		self.re.Eval(fmt.Sprintf("var modules = '%s';", modulesVersionString))
 		self.re.Eval(`console.log(" modules: " + modules);`)
 	}
 }

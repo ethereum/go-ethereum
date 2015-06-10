@@ -32,6 +32,9 @@ type EthereumApi interface {
 	// API identifier
 	Name() string
 
+	// API version
+	ApiVersion() string
+
 	// Execute the given request and returns the response or an error
 	Execute(*shared.Request) (interface{}, error)
 

@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	Web3Version = "1.0.0"
+	Web3ApiVersion = "1.0"
 )
 
 var (
@@ -63,9 +63,8 @@ func (self *web3Api) Name() string {
 	return Web3ApiName
 }
 
-// Version of the API this instance provides
-func (self *web3Api) Version() string {
-	return Web3Version
+func (self *web3Api) ApiVersion() string {
+	return Web3ApiVersion
 }
 
 // Calculates the sha3 over req.Params.Data

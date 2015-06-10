@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	DebugVersion = "1.0.0"
+	DebugApiVersion = "1.0"
 )
 
 var (
@@ -72,6 +72,10 @@ func (self *debugApi) Execute(req *shared.Request) (interface{}, error) {
 
 func (self *debugApi) Name() string {
 	return DebugApiName
+}
+
+func (self *debugApi) ApiVersion() string {
+	return DebugApiVersion
 }
 
 func (self *debugApi) PrintBlock(req *shared.Request) (interface{}, error) {
