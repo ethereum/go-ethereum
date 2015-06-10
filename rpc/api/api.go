@@ -13,6 +13,7 @@ const (
 	MergedApiName   = "merged"
 	MinerApiName    = "miner"
 	NetApiName      = "net"
+	txPoolApiName   = "txpool"
 	PersonalApiName = "personal"
 	Web3ApiName     = "web3"
 )
@@ -20,7 +21,7 @@ const (
 var (
 	// List with all API's which are offered over the IPC interface by default
 	DefaultIpcApis = strings.Join([]string{
-		AdminApiName, EthApiName, DebugApiName, MinerApiName, NetApiName, PersonalApiName, Web3ApiName,
+		AdminApiName, EthApiName, DebugApiName, MinerApiName, NetApiName, txPoolApiName, PersonalApiName, Web3ApiName,
 	}, ",")
 )
 
