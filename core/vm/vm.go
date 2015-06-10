@@ -75,7 +75,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		op       OpCode                  // current opcode
 		codehash = crypto.Sha3Hash(code) // codehash is used when doing jump dest caching
 		mem      = NewMemory()           // bound memory
-		stack    = newStack()            // local stack
+		stack    = newstack()            // local stack
 		pc       = uint64(0)             // program counter
 		statedb  = self.env.State()      // current state
 
@@ -632,7 +632,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 
 // calculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
 // the operation. This does not reduce gas or resizes the memory.
-func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *Stack) (*big.Int, *big.Int, error) {
+func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *stack) (*big.Int, *big.Int, error) {
 	var (
 		gas                 = new(big.Int)
 		newMemSize *big.Int = new(big.Int)
@@ -789,7 +789,7 @@ func (self *Vm) RunPrecompiled(p *PrecompiledAccount, input []byte, context *Con
 
 // log emits a log event to the environment for each opcode encountered. This is not to be confused with the
 // LOG* opcode.
-func (self *Vm) log(pc uint64, op OpCode, gas *big.Int, memory *Memory, stack *Stack, context *Context) {
+func (self *Vm) log(pc uint64, op OpCode, gas *big.Int, memory *Memory, stack *stack, context *Context) {
 	if Debug {
 		mem := make([]byte, len(memory.Data()))
 		copy(mem, memory.Data())
