@@ -1,32 +1,32 @@
 package api
 
 const Net_JS = `
-web3.extend({
+web3._extend({
 	property: 'network',
 	methods:
 	[
-		new web3.extend.Method({
+		new web3._extend.Method({
 			name: 'addPeer',
 			call: 'net_addPeer',
 			params: 1,
-			inputFormatter: [web3.extend.utils.formatInputString],
-			outputFormatter: web3.extend.formatters.formatOutputBool
+			inputFormatter: [web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputBool
 		}),
-		new web3.extend.Method({
+		new web3._extend.Method({
 			name: 'id',
 			call: 'net_id',
 			params: 0,
 			inputFormatter: [],
-			outputFormatter: web3.extend.formatters.formatOutputString
+			outputFormatter: web3._extend.formatters.formatOutputString
 		}),
-		new web3.extend.Method({
+		new web3._extend.Method({
 			name: 'getPeerCount',
 			call: 'net_peerCount',
 			params: 0,
 			inputFormatter: [],
-			outputFormatter: web3.extend.formatters.formatOutputString
+			outputFormatter: web3._extend.formatters.formatOutputString
 		}),
-		new web3.extend.Method({
+		new web3._extend.Method({
 			name: 'peers',
 			call: 'net_peers',
 			params: 0,
@@ -36,15 +36,15 @@ web3.extend({
 	],
 	properties:
 	[
-		new web3.extend.Property({
+		new web3._extend.Property({
 			name: 'listening',
 			getter: 'net_listening',
-			outputFormatter: web3.extend.formatters.formatOutputBool
+			outputFormatter: web3._extend.formatters.formatOutputBool
 		}),
-		new web3.extend.Property({
+		new web3._extend.Property({
 			name: 'peerCount',
 			getter: 'net_peerCount',
-			outputFormatter: web3.extend.utils.toDecimal
+			outputFormatter: web3._extend.utils.toDecimal
 		})
 	]
 });
