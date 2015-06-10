@@ -330,7 +330,7 @@ func (js *jsre) syncProgress(call otto.FunctionCall) otto.Value {
 		"pending":   pending,
 		"cached":    cached,
 		"importing": importing,
-		"estimate":  eta.String(),
+		"estimate":  (eta / time.Second * time.Second).String(),
 	})
 	return v
 }
