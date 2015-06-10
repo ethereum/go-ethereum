@@ -325,8 +325,13 @@ func (js *jsre) setHead(call otto.FunctionCall) otto.Value {
 }
 
 func (js *jsre) syncProgress(call otto.FunctionCall) otto.Value {
-	pending, cached, importing := js.ethereum.Downloader().Stats()
-	v, _ := call.Otto.ToValue(map[string]interface{}{"pending": pending, "cached": cached, "importing": importing})
+	pending, cached, importing, eta := js.ethereum.Downloader().Stats()
+	v, _ := call.Otto.ToValue(map[string]interface{}{
+		"pending":   pending,
+		"cached":    cached,
+		"importing": importing,
+		"estimate":  eta.String(),
+	})
 	return v
 }
 
