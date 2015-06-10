@@ -234,18 +234,15 @@ func (self *jsre) suportedApis(ipcpath string) ([]string, error) {
 
 // show summary of current geth instance
 func (self *jsre) welcome(ipcpath string) {
-	self.re.Eval(`
-		console.log('   Connected to: ' + web3.version.client);
-	`)
+	self.re.Eval(`console.log('instance: ' + web3.version.client);`)
+	self.re.Eval(`console.log("coinbase: " + eth.coinbase);`)
+	self.re.Eval(`var lastBlockTimestamp = 1000 * eth.getBlock(eth.blockNumber).timestamp`)
+	self.re.Eval(`console.log("at block: " + eth.blockNumber + " (" + new Date(lastBlockTimestamp).toLocaleDateString()
+		+ " " + new Date(lastBlockTimestamp).toLocaleTimeString() + ")");`)
 
-	if apis, err := self.suportedApis(ipcpath); err == nil {
-		apisStr := ""
-		for _, api := range apis {
-			apisStr += api + " "
-		}
-		self.re.Eval(fmt.Sprintf(`console.log("Available api's: %s");`, apisStr))
-	} else {
-		utils.Fatalf("unable to determine supported api's - %v", err)
+	if modules, err := self.suportedApis(ipcpath); err == nil {
+		self.re.Eval(fmt.Sprintf("var modules = '%s';", strings.Join(modules, " ")))
+		self.re.Eval(`console.log(" modules: " + modules);`)
 	}
 }
 
