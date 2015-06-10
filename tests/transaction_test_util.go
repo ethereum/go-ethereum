@@ -30,20 +30,29 @@ type TransactionTest struct {
 	Transaction TtTransaction
 }
 
-func RunTransactionTests(file string, notWorking map[string]bool) error {
+func RunTransactionTests(file string) error {
+	skipTest := make(map[string]bool, len(transSkipTests))
+	for _, name := range transSkipTests {
+		skipTest[name] = true
+	}
+
 	bt := make(map[string]TransactionTest)
 	if err := LoadJSON(file, &bt); err != nil {
 		return err
 	}
-	for name, in := range bt {
-		var err error
-		// TODO: remove this, we currently ignore some tests which are broken
-		if !notWorking[name] {
-			if err = runTest(in); err != nil {
-				return fmt.Errorf("bad test %s: %v", name, err)
-			}
-			fmt.Println("Transaction test passed:", name)
+
+	for name, test := range bt {
+		// if the test should be skipped, return
+		if skipTest[name] {
+			fmt.Println("Skipping state test", name)
+			return nil
 		}
+		// test the block
+		if err := runTest(test); err != nil {
+			return err
+		}
+		fmt.Println("Transaction test passed: ", name)
+
 	}
 	return nil
 }

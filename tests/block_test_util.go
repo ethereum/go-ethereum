@@ -86,28 +86,35 @@ type btTransaction struct {
 	Value    string
 }
 
-func runBlockTestsInFile(filepath string, snafus []string) error {
+func RunBlockTest(filepath string) error {
 	bt, err := LoadBlockTests(filepath)
 	if err != nil {
 		return nil
 	}
 
-	notWorking := make(map[string]bool, 100)
-	for _, name := range snafus {
-		notWorking[name] = true
+	// map skipped tests to boolean set
+	skipTest := make(map[string]bool, len(blockSkipTests))
+	for _, name := range blockSkipTests {
+		skipTest[name] = true
 	}
 
 	for name, test := range bt {
-		if !notWorking[name] {
-			if err := runBlockTest(name, test); err != nil {
-				return err
-			}
+		// if the test should be skipped, return
+		if skipTest[name] {
+			fmt.Println("Skipping state test", name)
+			return nil
 		}
+		// test the block
+		if err := testBlock(test); err != nil {
+			return err
+		}
+		fmt.Println("Block test passed: ", name)
+
 	}
 	return nil
 }
 
-func runBlockTest(name string, test *BlockTest) error {
+func testBlock(test *BlockTest) error {
 	cfg := testEthConfig()
 	ethereum, err := eth.New(cfg)
 	if err != nil {
@@ -136,8 +143,6 @@ func runBlockTest(name string, test *BlockTest) error {
 	if err = test.ValidatePostState(statedb); err != nil {
 		return fmt.Errorf("post state validation failed: %v", err)
 	}
-	fmt.Println("Block test passed: ", name)
-	// t.Log("Block test passed: ", name)
 	return nil
 }
 

@@ -15,6 +15,11 @@ var (
 	stateTestDir       = filepath.Join(baseDir, "StateTests")
 	transactionTestDir = filepath.Join(baseDir, "TransactionTests")
 	vmTestDir          = filepath.Join(baseDir, "VMTests")
+
+	blockSkipTests = []string{}
+	transSkipTests = []string{"TransactionWithHihghNonce256"}
+	stateSkipTests = []string{"mload32bitBound_return", "mload32bitBound_return2"}
+	vmSkipTests    = []string{}
 )
 
 func readJSON(reader io.Reader, value interface{}) error {

@@ -13,6 +13,10 @@ import (
 )
 
 func RunVmTest(p string) error {
+	skipTest := make(map[string]bool, len(vmSkipTests))
+	for _, name := range vmSkipTests {
+		skipTest[name] = true
+	}
 
 	tests := make(map[string]VmTest)
 	err := CreateFileTests(p, &tests)
@@ -21,14 +25,10 @@ func RunVmTest(p string) error {
 	}
 
 	for name, test := range tests {
-		/*
-		   vm.Debug = true
-		   glog.SetV(4)
-		   glog.SetToStderr(true)
-		   if name != "Call50000_sha256" {
-		     continue
-		   }
-		*/
+		if skipTest[name] {
+			fmt.Println("Skipping state test", name)
+			return nil
+		}
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(common.Hash{}, db)
 		for addr, account := range test.Pre {

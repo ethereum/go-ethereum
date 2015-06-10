@@ -15,19 +15,19 @@ import (
 )
 
 func RunStateTest(p string) error {
+	skipTest := make(map[string]bool, len(stateSkipTests))
+	for _, name := range stateSkipTests {
+		skipTest[name] = true
+	}
 
 	tests := make(map[string]VmTest)
 	CreateFileTests(p, &tests)
 
 	for name, test := range tests {
-		/*
-		   vm.Debug = true
-		   glog.SetV(4)
-		   glog.SetToStderr(true)
-		   if name != "Call50000_sha256" {
-		     continue
-		   }
-		*/
+		if skipTest[name] {
+			fmt.Println("Skipping state test", name)
+			return nil
+		}
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(common.Hash{}, db)
 		for addr, account := range test.Pre {
@@ -60,17 +60,17 @@ func RunStateTest(p string) error {
 
 		ret, logs, _, _ = RunState(statedb, env, test.Transaction)
 
-		// Compare expected  and actual return
-		switch name {
-		// the memory required for these tests (4294967297 bytes) would take too much time.
-		// on 19 May 2015 decided to skip these tests their output.
-		case "mload32bitBound_return", "mload32bitBound_return2":
-		default:
-			rexp := common.FromHex(test.Out)
-			if bytes.Compare(rexp, ret) != 0 {
-				return fmt.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
-			}
+		// // Compare expected  and actual return
+		// switch name {
+		// // the memory required for these tests (4294967297 bytes) would take too much time.
+		// // on 19 May 2015 decided to skip these tests their output.
+		// case "mload32bitBound_return", "mload32bitBound_return2":
+		// default:
+		rexp := common.FromHex(test.Out)
+		if bytes.Compare(rexp, ret) != 0 {
+			return fmt.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
 		}
+		// }
 
 		// check post state
 		for addr, account := range test.Post {
