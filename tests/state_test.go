@@ -10,62 +10,62 @@ var stateTestDir = filepath.Join(baseDir, "StateTests")
 
 func TestStateSystemOperations(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stSystemOperationsTest.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestStateExample(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stExample.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestStatePreCompiledContracts(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stPreCompiledContracts.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestStateRecursiveCreate(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stRecursiveCreate.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestStateSpecial(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stSpecialTest.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestStateRefund(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stRefundTest.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestStateBlockHash(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stBlockHashTest.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestStateInitCode(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stInitCodeTest.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestStateLog(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stLogTests.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestStateTransaction(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stTransactionTest.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestCallCreateCallCode(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stCallCreateCallCodeTest.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestMemory(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stMemoryTest.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestMemoryStress(t *testing.T) {
@@ -73,7 +73,7 @@ func TestMemoryStress(t *testing.T) {
 		t.Skip()
 	}
 	fn := filepath.Join(stateTestDir, "stMemoryStressTest.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestQuadraticComplexity(t *testing.T) {
@@ -81,22 +81,22 @@ func TestQuadraticComplexity(t *testing.T) {
 		t.Skip()
 	}
 	fn := filepath.Join(stateTestDir, "stQuadraticComplexityTest.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestSolidity(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stSolidityTest.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestWallet(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stWalletTest.json")
-	RunVmTest(fn, t)
+	RunStateTest(fn, t)
 }
 
 func TestStateTestsRandom(t *testing.T) {
 	fns, _ := filepath.Glob("./files/StateTests/RandomTests/*")
 	for _, fn := range fns {
-		RunVmTest(fn, t)
+		RunStateTest(fn, t)
 	}
 }

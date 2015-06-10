@@ -42,7 +42,7 @@ func RunTransactionTests(file string, notWorking map[string]bool) error {
 			if err = runTest(in); err != nil {
 				return fmt.Errorf("bad test %s: %v", name, err)
 			}
-			fmt.Println("Test passed:", name)
+			fmt.Println("Transaction test passed:", name)
 		}
 	}
 	return nil

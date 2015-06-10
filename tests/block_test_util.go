@@ -134,7 +134,8 @@ func runBlockTest(name string, test *BlockTest, t *testing.T) {
 	if err = test.ValidatePostState(statedb); err != nil {
 		t.Fatal("post state validation failed: %v", err)
 	}
-	t.Log("Test passed: ", name)
+	fmt.Println("Block test passed: ", name)
+	// t.Log("Block test passed: ", name)
 }
 
 func testEthConfig() *eth.Config {

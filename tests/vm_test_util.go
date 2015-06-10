@@ -2,15 +2,20 @@ package tests
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"math/big"
 	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
+	// "github.com/ethereum/go-ethereum/logger"
 )
 
 type Account struct {
@@ -118,32 +123,19 @@ func RunVmTest(p string, t *testing.T) {
 			logs state.Logs
 		)
 
-		isVmTest := len(test.Exec) > 0
-		if isVmTest {
-			ret, logs, gas, err = RunVm(statedb, env, test.Exec)
+		ret, logs, gas, err = RunVm(statedb, env, test.Exec)
+
+		rexp := common.FromHex(test.Out)
+		if bytes.Compare(rexp, ret) != 0 {
+			t.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
+		}
+
+		if len(test.Gas) == 0 && err == nil {
+			t.Errorf("%s's gas unspecified, indicating an error. VM returned (incorrectly) successfull", name)
 		} else {
-			ret, logs, gas, err = RunState(statedb, env, test.Transaction)
-		}
-
-		switch name {
-		// the memory required for these tests (4294967297 bytes) would take too much time.
-		// on 19 May 2015 decided to skip these tests their output.
-		case "mload32bitBound_return", "mload32bitBound_return2":
-		default:
-			rexp := common.FromHex(test.Out)
-			if bytes.Compare(rexp, ret) != 0 {
-				t.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
-			}
-		}
-
-		if isVmTest {
-			if len(test.Gas) == 0 && err == nil {
-				t.Errorf("%s's gas unspecified, indicating an error. VM returned (incorrectly) successfull", name)
-			} else {
-				gexp := common.Big(test.Gas)
-				if gexp.Cmp(gas) != 0 {
-					t.Errorf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
-				}
+			gexp := common.Big(test.Gas)
+			if gexp.Cmp(gas) != 0 {
+				t.Errorf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
 			}
 		}
 
@@ -153,17 +145,6 @@ func RunVmTest(p string, t *testing.T) {
 				continue
 			}
 
-			if len(test.Exec) == 0 {
-				if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
-					t.Errorf("%s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
-				}
-
-				if obj.Nonce() != common.String2Big(account.Nonce).Uint64() {
-					t.Errorf("%s's : (%x) nonce failed. Expected %v, got %v\n", name, obj.Address().Bytes()[:4], account.Nonce, obj.Nonce())
-				}
-
-			}
-
 			for addr, value := range account.Storage {
 				v := obj.GetState(common.HexToHash(addr))
 				vexp := common.HexToHash(value)
@@ -171,14 +152,6 @@ func RunVmTest(p string, t *testing.T) {
 				if v != vexp {
 					t.Errorf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address().Bytes()[0:4], addr, vexp, v, vexp.Big(), v.Big())
 				}
-			}
-		}
-
-		if !isVmTest {
-			statedb.Sync()
-			//if !bytes.Equal(common.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
-			if common.HexToHash(test.PostStateRoot) != statedb.Root() {
-				t.Errorf("%s's : Post state root error. Expected %s, got %x", name, test.PostStateRoot, statedb.Root())
 			}
 		}
 
@@ -212,7 +185,176 @@ func RunVmTest(p string, t *testing.T) {
 				}
 			}
 		}
+
+		fmt.Println("VM test passed: ", name)
+
 		//fmt.Println(string(statedb.Dump()))
 	}
-	logger.Flush()
+	// logger.Flush()
 }
+
+type Env struct {
+	depth        int
+	state        *state.StateDB
+	skipTransfer bool
+	initial      bool
+	Gas          *big.Int
+
+	origin common.Address
+	//parent   common.Hash
+	coinbase common.Address
+
+	number     *big.Int
+	time       int64
+	difficulty *big.Int
+	gasLimit   *big.Int
+
+	logs state.Logs
+
+	vmTest bool
+}
+
+func NewEnv(state *state.StateDB) *Env {
+	return &Env{
+		state: state,
+	}
+}
+
+func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
+	env := NewEnv(state)
+
+	env.origin = common.HexToAddress(exeValues["caller"])
+	//env.parent = common.Hex2Bytes(envValues["previousHash"])
+	env.coinbase = common.HexToAddress(envValues["currentCoinbase"])
+	env.number = common.Big(envValues["currentNumber"])
+	env.time = common.Big(envValues["currentTimestamp"]).Int64()
+	env.difficulty = common.Big(envValues["currentDifficulty"])
+	env.gasLimit = common.Big(envValues["currentGasLimit"])
+	env.Gas = new(big.Int)
+
+	return env
+}
+
+func (self *Env) Origin() common.Address { return self.origin }
+func (self *Env) BlockNumber() *big.Int  { return self.number }
+
+//func (self *Env) PrevHash() []byte      { return self.parent }
+func (self *Env) Coinbase() common.Address { return self.coinbase }
+func (self *Env) Time() int64              { return self.time }
+func (self *Env) Difficulty() *big.Int     { return self.difficulty }
+func (self *Env) State() *state.StateDB    { return self.state }
+func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
+func (self *Env) VmType() vm.Type          { return vm.StdVmTy }
+func (self *Env) GetHash(n uint64) common.Hash {
+	return common.BytesToHash(crypto.Sha3([]byte(big.NewInt(int64(n)).String())))
+}
+func (self *Env) AddLog(log *state.Log) {
+	self.state.AddLog(log)
+}
+func (self *Env) Depth() int     { return self.depth }
+func (self *Env) SetDepth(i int) { self.depth = i }
+func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
+	if self.skipTransfer {
+		// ugly hack
+		if self.initial {
+			self.initial = false
+			return nil
+		}
+
+		if from.Balance().Cmp(amount) < 0 {
+			return errors.New("Insufficient balance in account")
+		}
+
+		return nil
+	}
+	return vm.Transfer(from, to, amount)
+}
+
+func (self *Env) vm(addr *common.Address, data []byte, gas, price, value *big.Int) *core.Execution {
+	exec := core.NewExecution(self, addr, data, gas, price, value)
+
+	return exec
+}
+
+func (self *Env) Call(caller vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+	if self.vmTest && self.depth > 0 {
+		caller.ReturnGas(gas, price)
+
+		return nil, nil
+	}
+	exe := self.vm(&addr, data, gas, price, value)
+	ret, err := exe.Call(addr, caller)
+	self.Gas = exe.Gas
+
+	return ret, err
+
+}
+func (self *Env) CallCode(caller vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+	if self.vmTest && self.depth > 0 {
+		caller.ReturnGas(gas, price)
+
+		return nil, nil
+	}
+
+	caddr := caller.Address()
+	exe := self.vm(&caddr, data, gas, price, value)
+	return exe.Call(addr, caller)
+}
+
+func (self *Env) Create(caller vm.ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
+	exe := self.vm(nil, data, gas, price, value)
+	if self.vmTest {
+		caller.ReturnGas(gas, price)
+
+		nonce := self.state.GetNonce(caller.Address())
+		obj := self.state.GetOrNewStateObject(crypto.CreateAddress(caller.Address(), nonce))
+
+		return nil, nil, obj
+	} else {
+		return exe.Create(caller)
+	}
+}
+
+func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Logs, *big.Int, error) {
+	var (
+		to    = common.HexToAddress(exec["address"])
+		from  = common.HexToAddress(exec["caller"])
+		data  = common.FromHex(exec["data"])
+		gas   = common.Big(exec["gas"])
+		price = common.Big(exec["gasPrice"])
+		value = common.Big(exec["value"])
+	)
+	// Reset the pre-compiled contracts for VM tests.
+	vm.Precompiled = make(map[string]*vm.PrecompiledAccount)
+
+	caller := state.GetOrNewStateObject(from)
+
+	vmenv := NewEnvFromMap(state, env, exec)
+	vmenv.vmTest = true
+	vmenv.skipTransfer = true
+	vmenv.initial = true
+	ret, err := vmenv.Call(caller, to, data, gas, price, value)
+
+	return ret, vmenv.state.Logs(), vmenv.Gas, err
+}
+
+type Message struct {
+	from              common.Address
+	to                *common.Address
+	value, gas, price *big.Int
+	data              []byte
+	nonce             uint64
+}
+
+func NewMessage(from common.Address, to *common.Address, data []byte, value, gas, price *big.Int, nonce uint64) Message {
+	return Message{from, to, value, gas, price, data, nonce}
+}
+
+func (self Message) Hash() []byte                  { return nil }
+func (self Message) From() (common.Address, error) { return self.from, nil }
+func (self Message) To() *common.Address           { return self.to }
+func (self Message) GasPrice() *big.Int            { return self.price }
+func (self Message) Gas() *big.Int                 { return self.gas }
+func (self Message) Value() *big.Int               { return self.value }
+func (self Message) Nonce() uint64                 { return self.nonce }
+func (self Message) Data() []byte                  { return self.data }
