@@ -59,6 +59,7 @@ func main() {
 
 	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.LogLevel(*loglevel)))
 
+	vm.Debug = true
 	db, _ := ethdb.NewMemDatabase()
 	statedb := state.New(common.Hash{}, db)
 	sender := statedb.CreateAccount(common.StringToAddress("sender"))
@@ -79,6 +80,8 @@ func main() {
 	if *dump {
 		fmt.Println(string(statedb.Dump()))
 	}
+
+	vm.StdErrFormat(vmenv.StructLogs())
 
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
