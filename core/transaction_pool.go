@@ -50,7 +50,7 @@ type TxPool struct {
 }
 
 func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
-	return &TxPool{
+	pool := &TxPool{
 		pending:      make(map[common.Hash]*types.Transaction),
 		queue:        make(map[common.Address]map[common.Hash]*types.Transaction),
 		quit:         make(chan bool),
@@ -58,14 +58,17 @@ func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func(
 		currentState: currentStateFn,
 		gasLimit:     gasLimitFn,
 		pendingState: state.ManageState(currentStateFn()),
+		events:       eventMux.Subscribe(ChainEvent{}),
 	}
+	go pool.eventLoop()
+
+	return pool
 }
 
-func (pool *TxPool) Start() {
+func (pool *TxPool) eventLoop() {
 	// Track chain events. When a chain events occurs (new chain canon block)
 	// we need to know the new state. The new state will help us determine
 	// the nonces in the managed state
-	pool.events = pool.eventMux.Subscribe(ChainEvent{})
 	for _ = range pool.events.Chan() {
 		pool.mu.Lock()
 
@@ -100,7 +103,6 @@ func (pool *TxPool) resetState() {
 }
 
 func (pool *TxPool) Stop() {
-	pool.pending = make(map[common.Hash]*types.Transaction)
 	close(pool.quit)
 	pool.events.Unsubscribe()
 	glog.V(logger.Info).Infoln("TX Pool stopped")
@@ -169,15 +171,10 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	return nil
 }
 
+// validate and queue transactions.
 func (self *TxPool) add(tx *types.Transaction) error {
 	hash := tx.Hash()
 
-	/* XXX I'm unsure about this. This is extremely dangerous and may result
-	 in total black listing of certain transactions
-	if self.invalidHashes.Has(hash) {
-		return fmt.Errorf("Invalid transaction (%x)", hash[:4])
-	}
-	*/
 	if self.pending[hash] != nil {
 		return fmt.Errorf("Known transaction (%x)", hash[:4])
 	}
@@ -205,6 +202,30 @@ func (self *TxPool) add(tx *types.Transaction) error {
 	self.checkQueue()
 
 	return nil
+}
+
+// queueTx will queue an unknown transaction
+func (self *TxPool) queueTx(hash common.Hash, tx *types.Transaction) {
+	from, _ := tx.From() // already validated
+	if self.queue[from] == nil {
+		self.queue[from] = make(map[common.Hash]*types.Transaction)
+	}
+	self.queue[from][hash] = tx
+}
+
+// addTx will add a transaction to the pending (processable queue) list of transactions
+func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *types.Transaction) {
+	if _, ok := pool.pending[hash]; !ok {
+		pool.pending[hash] = tx
+
+		// Increment the nonce on the pending state. This can only happen if
+		// the nonce is +1 to the previous one.
+		pool.pendingState.SetNonce(addr, tx.AccountNonce+1)
+		// Notify the subscribers. This event is posted in a goroutine
+		// because it's possible that somewhere during the post "Remove transaction"
+		// gets called which will then wait for the global tx pool lock and deadlock.
+		go pool.eventMux.Post(TxPreEvent{tx})
+	}
 }
 
 // Add queues a single transaction in the pool if it is valid.
@@ -287,28 +308,6 @@ func (self *TxPool) RemoveTransactions(txs types.Transactions) {
 	defer self.mu.Unlock()
 	for _, tx := range txs {
 		self.removeTx(tx.Hash())
-	}
-}
-
-func (self *TxPool) queueTx(hash common.Hash, tx *types.Transaction) {
-	from, _ := tx.From() // already validated
-	if self.queue[from] == nil {
-		self.queue[from] = make(map[common.Hash]*types.Transaction)
-	}
-	self.queue[from][hash] = tx
-}
-
-func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *types.Transaction) {
-	if _, ok := pool.pending[hash]; !ok {
-		pool.pending[hash] = tx
-
-		// Increment the nonce on the pending state. This can only happen if
-		// the nonce is +1 to the previous one.
-		pool.pendingState.SetNonce(addr, tx.AccountNonce+1)
-		// Notify the subscribers. This event is posted in a goroutine
-		// because it's possible that somewhere during the post "Remove transaction"
-		// gets called which will then wait for the global tx pool lock and deadlock.
-		go pool.eventMux.Post(TxPreEvent{tx})
 	}
 }
 
