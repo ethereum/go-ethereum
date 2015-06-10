@@ -40,6 +40,8 @@ type Table struct {
 	bonding   map[NodeID]*bondproc
 	bondslots chan struct{} // limits total number of active bonding processes
 
+	nodeAddedHook func(*Node) // for testing
+
 	net  transport
 	self *Node // metadata of the local node
 }
@@ -431,6 +433,9 @@ func (tab *Table) pingreplace(new *Node, b *bucket) {
 	}
 	copy(b.entries[1:], b.entries)
 	b.entries[0] = new
+	if tab.nodeAddedHook != nil {
+		tab.nodeAddedHook(new)
+	}
 }
 
 // ping a remote endpoint and wait for a reply, also updating the node database
@@ -466,6 +471,9 @@ outer:
 		}
 		if len(bucket.entries) < bucketSize {
 			bucket.entries = append(bucket.entries, n)
+			if tab.nodeAddedHook != nil {
+				tab.nodeAddedHook(n)
+			}
 		}
 	}
 }
