@@ -15,7 +15,7 @@ type stack struct {
 }
 
 func (st *stack) Data() []*big.Int {
-	return st.data
+	return st.data[:st.ptr]
 }
 
 func (st *stack) push(d *big.Int) {
