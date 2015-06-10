@@ -200,23 +200,23 @@ func (pm *ProtocolManager) fetcher() {
 			case <-pm.quitSync:
 				return
 			}
-			// If any explicit fetches were replied to, import them
-			if count := len(explicit); count > 0 {
-				glog.V(logger.Debug).Infof("Importing %d explicitly fetched blocks", count)
-
-				// Create a closure with the retrieved blocks and origin peers
-				peers := make([]*peer, 0, count)
-				blocks := make([]*types.Block, 0, count)
-				for _, block := range explicit {
-					hash := block.Hash()
-					if announce := pending[hash]; announce != nil {
+			// Create a closure with the retrieved blocks and origin peers
+			peers := make([]*peer, 0, len(explicit))
+			blocks = make([]*types.Block, 0, len(explicit))
+			for _, block := range explicit {
+				hash := block.Hash()
+				if announce := pending[hash]; announce != nil {
+					// Filter out blocks too new to import anyway
+					if !pm.chainman.HasBlock(hash) && pm.chainman.HasBlock(block.ParentHash()) {
 						peers = append(peers, announce.peer)
 						blocks = append(blocks, block)
-
-						delete(pending, hash)
 					}
+					delete(pending, hash)
 				}
-				// Run the importer on a new thread
+			}
+			// If any explicit fetches were replied to, import them
+			if count := len(blocks); count > 0 {
+				glog.V(logger.Debug).Infof("Importing %d explicitly fetched blocks", len(blocks))
 				go func() {
 					for i := 0; i < len(blocks); i++ {
 						if err := pm.importBlock(peers[i], blocks[i], nil); err != nil {
