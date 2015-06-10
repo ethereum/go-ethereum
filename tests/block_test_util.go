@@ -3,9 +3,7 @@ package tests
 import (
 	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"path/filepath"
 	"runtime"
@@ -87,9 +85,9 @@ type btTransaction struct {
 }
 
 func RunBlockTest(filepath string) error {
-	bt, err := LoadBlockTests(filepath)
+	bt, err := loadBlockTests(filepath)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	// map skipped tests to boolean set
@@ -156,22 +154,6 @@ func testEthConfig() *eth.Config {
 		AccountManager: accounts.NewManager(ks),
 		NewDB:          func(path string) (common.Database, error) { return ethdb.NewMemDatabase() },
 	}
-}
-
-// LoadBlockTests loads a block test JSON file.
-func LoadBlockTests(file string) (map[string]*BlockTest, error) {
-	bt := make(map[string]*btJSON)
-	if err := LoadJSON(file, &bt); err != nil {
-		return nil, err
-	}
-	out := make(map[string]*BlockTest)
-	for name, in := range bt {
-		var err error
-		if out[name], err = convertTest(in); err != nil {
-			return out, fmt.Errorf("bad test %q: %v", name, err)
-		}
-	}
-	return out, nil
 }
 
 // InsertPreState populates the given database with the genesis
@@ -467,34 +449,20 @@ func mustConvertUint(in string, base int) uint64 {
 	return out
 }
 
-// LoadJSON reads the given file and unmarshals its content.
-func LoadJSON(file string, val interface{}) error {
-	content, err := ioutil.ReadFile(file)
-	if err != nil {
-		return err
+func loadBlockTests(file string) (map[string]*BlockTest, error) {
+	bt := make(map[string]*btJSON)
+	if err := readTestFile(file, &bt); err != nil {
+		return nil, err
 	}
-	if err := json.Unmarshal(content, val); err != nil {
-		if syntaxerr, ok := err.(*json.SyntaxError); ok {
-			line := findLine(content, syntaxerr.Offset)
-			return fmt.Errorf("JSON syntax error at %v:%v: %v", file, line, err)
-		}
-		return fmt.Errorf("JSON unmarshal error in %v: %v", file, err)
-	}
-	return nil
-}
 
-// findLine returns the line number for the given offset into data.
-func findLine(data []byte, offset int64) (line int) {
-	line = 1
-	for i, r := range string(data) {
-		if int64(i) >= offset {
-			return
-		}
-		if r == '\n' {
-			line++
+	out := make(map[string]*BlockTest)
+	for name, in := range bt {
+		var err error
+		if out[name], err = convertTest(in); err != nil {
+			return out, fmt.Errorf("bad test %q: %v", name, err)
 		}
 	}
-	return
+	return out, nil
 }
 
 // Nothing to see here, please move along...

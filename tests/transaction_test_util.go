@@ -37,7 +37,7 @@ func RunTransactionTests(file string) error {
 	}
 
 	bt := make(map[string]TransactionTest)
-	if err := LoadJSON(file, &bt); err != nil {
+	if err := readTestFile(file, &bt); err != nil {
 		return err
 	}
 

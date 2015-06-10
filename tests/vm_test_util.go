@@ -19,7 +19,7 @@ func RunVmTest(p string) error {
 	}
 
 	tests := make(map[string]VmTest)
-	err := CreateFileTests(p, &tests)
+	err := readTestFile(p, &tests)
 	if err != nil {
 		return err
 	}

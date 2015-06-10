@@ -21,7 +21,7 @@ func RunStateTest(p string) error {
 	}
 
 	tests := make(map[string]VmTest)
-	CreateFileTests(p, &tests)
+	readTestFile(p, &tests)
 
 	for name, test := range tests {
 		if skipTest[name] {
@@ -61,16 +61,10 @@ func RunStateTest(p string) error {
 		ret, logs, _, _ = RunState(statedb, env, test.Transaction)
 
 		// // Compare expected  and actual return
-		// switch name {
-		// // the memory required for these tests (4294967297 bytes) would take too much time.
-		// // on 19 May 2015 decided to skip these tests their output.
-		// case "mload32bitBound_return", "mload32bitBound_return2":
-		// default:
 		rexp := common.FromHex(test.Out)
 		if bytes.Compare(rexp, ret) != 0 {
 			return fmt.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
 		}
-		// }
 
 		// check post state
 		for addr, account := range test.Post {

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -24,14 +25,35 @@ var (
 
 func readJSON(reader io.Reader, value interface{}) error {
 	data, err := ioutil.ReadAll(reader)
-	err = json.Unmarshal(data, &value)
 	if err != nil {
-		return err
+		return fmt.Errorf("Error reading JSON file", err.Error())
+	}
+
+	if err = json.Unmarshal(data, &value); err != nil {
+		if syntaxerr, ok := err.(*json.SyntaxError); ok {
+			line := findLine(data, syntaxerr.Offset)
+			return fmt.Errorf("JSON syntax error at line %v: %v", line, err)
+		}
+		return fmt.Errorf("JSON unmarshal error: %v", err)
 	}
 	return nil
 }
 
-func CreateHttpTests(uri string, value interface{}) error {
+// findLine returns the line number for the given offset into data.
+func findLine(data []byte, offset int64) (line int) {
+	line = 1
+	for i, r := range string(data) {
+		if int64(i) >= offset {
+			return
+		}
+		if r == '\n' {
+			line++
+		}
+	}
+	return
+}
+
+func readHttpFile(uri string, value interface{}) error {
 	resp, err := http.Get(uri)
 	if err != nil {
 		return err
@@ -45,7 +67,7 @@ func CreateHttpTests(uri string, value interface{}) error {
 	return nil
 }
 
-func CreateFileTests(fn string, value interface{}) error {
+func readTestFile(fn string, value interface{}) error {
 	file, err := os.Open(fn)
 	if err != nil {
 		return err
@@ -54,7 +76,7 @@ func CreateFileTests(fn string, value interface{}) error {
 
 	err = readJSON(file, value)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s in file %s", err.Error(), fn)
 	}
 	return nil
 }
