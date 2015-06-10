@@ -104,7 +104,7 @@ func (self *debugApi) DumpBlock(req *shared.Request) (interface{}, error) {
 		return nil, nil
 	}
 
-	return stateDb.Dump(), nil
+	return stateDb.RawDump(), nil
 }
 
 func (self *debugApi) GetBlockRlp(req *shared.Request) (interface{}, error) {

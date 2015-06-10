@@ -28,6 +28,8 @@ import (
 
 	"encoding/json"
 
+	"sort"
+
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common/docserver"
 	re "github.com/ethereum/go-ethereum/jsre"
@@ -73,6 +75,54 @@ type jsre struct {
 	prompter
 }
 
+var (
+	loadedModulesMethods map[string][]string
+)
+
+func loadAutoCompletion(js *jsre, ipcpath string) {
+	modules, err := js.suportedApis(ipcpath)
+	if err != nil {
+		utils.Fatalf("Unable to determine supported modules - %v", err)
+	}
+
+	fmt.Printf("load autocompletion %v", modules)
+
+	loadedModulesMethods = make(map[string][]string)
+	for module, _ := range modules {
+		loadedModulesMethods[module] = api.AutoCompletion[module]
+	}
+}
+
+func apiWordCompleter(line string) []string {
+	results := make([]string, 0)
+
+	if strings.Contains(line, ".") {
+		elements := strings.Split(line, ".")
+		if len(elements) == 2 {
+			module := elements[0]
+			partialMethod := elements[1]
+			if methods, found := loadedModulesMethods[module]; found {
+				for _, method := range methods {
+					if strings.HasPrefix(method, partialMethod) { // e.g. debug.se
+						results = append(results, module+"."+method)
+					}
+				}
+			}
+		}
+	} else {
+		for module, methods := range loadedModulesMethods {
+			if line == module { // user typed in full module name, show all methods
+				for _, method := range methods {
+					results = append(results, module+"."+method)
+				}
+			} else if strings.HasPrefix(module, line) { // partial method name, e.g. admi
+				results = append(results, module)
+			}
+		}
+	}
+	return results
+}
+
 func newJSRE(libPath, ipcpath string) *jsre {
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
@@ -87,6 +137,9 @@ func newJSRE(libPath, ipcpath string) *jsre {
 		lr := liner.NewLiner()
 		js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
+		loadAutoCompletion(js, ipcpath)
+		lr.SetCompleter(apiWordCompleter)
+		lr.SetTabCompletionStyle(liner.TabPrints)
 		js.prompter = lr
 		js.atexit = func() {
 			js.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
@@ -242,11 +295,13 @@ func (self *jsre) welcome(ipcpath string) {
 		+ " " + new Date(lastBlockTimestamp).toLocaleTimeString() + ")");`)
 
 	if modules, err := self.suportedApis(ipcpath); err == nil {
-		modulesVersionString := ""
+		loadedModules := make([]string, 0)
 		for api, version := range modules {
-			modulesVersionString += fmt.Sprintf("%s:%s ", api, version)
+			loadedModules = append(loadedModules, fmt.Sprintf("%s:%s", api, version))
 		}
-		self.re.Eval(fmt.Sprintf("var modules = '%s';", modulesVersionString))
+		sort.Strings(loadedModules)
+
+		self.re.Eval(fmt.Sprintf("var modules = '%s';", strings.Join(loadedModules, " ")))
 		self.re.Eval(`console.log(" modules: " + modules);`)
 	}
 }
