@@ -8,6 +8,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 )
 
+// Environment is is required by the virtual machine to get information from
+// it's own isolated environment. For an example see `core.VMEnv`
 type Environment interface {
 	State() *state.StateDB
 
@@ -33,6 +35,8 @@ type Environment interface {
 	Create(me ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
 }
 
+// StructLog is emited to the Environment each cycle and lists information about the curent internal state
+// prior to the execution of the statement.
 type StructLog struct {
 	Pc      uint64
 	Op      OpCode

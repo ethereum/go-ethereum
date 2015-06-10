@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// Vm implements VirtualMachine
 type Vm struct {
 	env Environment
 
@@ -27,11 +28,13 @@ type Vm struct {
 	After func(*Context, error)
 }
 
+// New returns a new Virtual Machine
 func New(env Environment) *Vm {
 	return &Vm{env: env, debug: Debug, Recoverable: true}
 }
 
-func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
+// Run loops and evaluates the contract's code with the given input data
+func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
 	defer self.env.SetDepth(self.env.Depth() - 1)
 
@@ -59,7 +62,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 	if context.CodeAddr != nil {
 		if p := Precompiled[context.CodeAddr.Str()]; p != nil {
-			return self.RunPrecompiled(p, callData, context)
+			return self.RunPrecompiled(p, input, context)
 		}
 	}
 
@@ -69,13 +72,15 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 	}
 
 	var (
-		op       OpCode
-		codehash = crypto.Sha3Hash(code)
-		mem      = NewMemory()
-		stack    = newStack()
-		pc       = uint64(0)
-		statedb  = self.env.State()
+		op       OpCode                  // current opcode
+		codehash = crypto.Sha3Hash(code) // codehash is used when doing jump dest caching
+		mem      = NewMemory()           // bound memory
+		stack    = newStack()            // local stack
+		pc       = uint64(0)             // program counter
+		statedb  = self.env.State()      // current state
 
+		// jump evaluates and checks whether the given jump destination is a valid one
+		// if valid move the `pc` otherwise return an error.
 		jump = func(from uint64, to *big.Int) error {
 			if !context.jumpdests.has(codehash, code, to) {
 				nop := context.GetOp(to.Uint64())
@@ -97,20 +102,22 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 		self.log(pc, op, context.Gas, mem, stack, context)
 
+		// calculate the new memory size and gas price for the current executing opcode
 		newMemSize, gas, err := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
 		if err != nil {
 			return nil, err
 		}
 
+		// Use the calculated gas. When insufficient gas is present, use all gas and return an
+		// Out Of Gas error
 		if !context.UseGas(gas) {
-
 			tmp := new(big.Int).Set(context.Gas)
 
 			context.UseGas(context.Gas)
 
 			return context.Return(nil), OOG(gas, tmp)
 		}
-
+		// Resize the memory calculated previously
 		mem.Resize(newMemSize.Uint64())
 
 		switch op {
@@ -364,11 +371,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			stack.push(value)
 
 		case CALLDATALOAD:
-			data := getData(callData, stack.pop(), common.Big32)
+			data := getData(input, stack.pop(), common.Big32)
 
 			stack.push(common.Bytes2Big(data))
 		case CALLDATASIZE:
-			l := int64(len(callData))
+			l := int64(len(input))
 			stack.push(big.NewInt(l))
 
 		case CALLDATACOPY:
@@ -377,7 +384,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				cOff = stack.pop()
 				l    = stack.pop()
 			)
-			data := getData(callData, cOff, l)
+			data := getData(input, cOff, l)
 
 			mem.Set(mOff.Uint64(), l.Uint64(), data)
 
@@ -623,6 +630,8 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 	}
 }
 
+// calculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
+// the operation. This does not reduce gas or resizes the memory.
 func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *Stack) (*big.Int, *big.Int, error) {
 	var (
 		gas                 = new(big.Int)
@@ -764,20 +773,22 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 	return newMemSize, gas, nil
 }
 
-func (self *Vm) RunPrecompiled(p *PrecompiledAccount, callData []byte, context *Context) (ret []byte, err error) {
-	gas := p.Gas(len(callData))
+// RunPrecompile runs and evaluate the output of a precompiled contract defined in contracts.go
+func (self *Vm) RunPrecompiled(p *PrecompiledAccount, input []byte, context *Context) (ret []byte, err error) {
+	gas := p.Gas(len(input))
 	if context.UseGas(gas) {
-		ret = p.Call(callData)
+		ret = p.Call(input)
 
 		return context.Return(ret), nil
 	} else {
-
 		tmp := new(big.Int).Set(context.Gas)
 
 		return nil, OOG(gas, tmp)
 	}
 }
 
+// log emits a log event to the environment for each opcode encountered. This is not to be confused with the
+// LOG* opcode.
 func (self *Vm) log(pc uint64, op OpCode, gas *big.Int, memory *Memory, stack *Stack, context *Context) {
 	if Debug {
 		mem := make([]byte, len(memory.Data()))
@@ -795,6 +806,7 @@ func (self *Vm) log(pc uint64, op OpCode, gas *big.Int, memory *Memory, stack *S
 	}
 }
 
+// Environment returns the current workable state of the VM
 func (self *Vm) Env() Environment {
 	return self.env
 }
