@@ -269,22 +269,6 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	return state.Logs(), nil
 }
 
-func (self *BlockProcessor) GetBlockReceipts(bhash common.Hash) (receipts types.Receipts, err error) {
-	var rdata []byte
-	rdata, err = self.extraDb.Get(append(receiptsPre, bhash[:]...))
-
-	if err == nil {
-		err = rlp.DecodeBytes(rdata, &receipts)
-	} else {
-		glog.V(logger.Detail).Infof("GetBlockReceipts error %v\n", err)
-	}
-	/*if len(receipts) > 0 {
-		glog.V(logger.Info).Infof("GBR len %v\n", len(receipts))
-	}*/
-	return
-
-}
-
 // See YP section 4.3.4. "Block Header Validity"
 // Validates a block. Returns an error if the block is invalid.
 func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header, checkPow bool) error {
@@ -426,6 +410,8 @@ func getBlockReceipts(db common.Database, bhash common.Hash) (receipts types.Rec
 
 	if err == nil {
 		err = rlp.DecodeBytes(rdata, &receipts)
+	} else {
+		glog.V(logger.Detail).Infof("getBlockReceipts error %v\n", err)
 	}
 	return
 }
