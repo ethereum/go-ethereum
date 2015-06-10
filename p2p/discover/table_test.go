@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"testing"
 	"testing/quick"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -74,7 +75,7 @@ func TestBucket_bumpNoDuplicates(t *testing.T) {
 	t.Parallel()
 	cfg := &quick.Config{
 		MaxCount: 1000,
-		Rand:     quickrand,
+		Rand:     rand.New(rand.NewSource(time.Now().Unix())),
 		Values: func(args []reflect.Value, rand *rand.Rand) {
 			// generate a random list of nodes. this will be the content of the bucket.
 			n := rand.Intn(bucketSize-1) + 1
@@ -205,7 +206,7 @@ func TestTable_closest(t *testing.T) {
 		}
 		return true
 	}
-	if err := quick.Check(test, quickcfg); err != nil {
+	if err := quick.Check(test, quickcfg()); err != nil {
 		t.Error(err)
 	}
 }
@@ -213,7 +214,7 @@ func TestTable_closest(t *testing.T) {
 func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 	cfg := &quick.Config{
 		MaxCount: 200,
-		Rand:     quickrand,
+		Rand:     rand.New(rand.NewSource(time.Now().Unix())),
 		Values: func(args []reflect.Value, rand *rand.Rand) {
 			args[0] = reflect.ValueOf(make([]*Node, rand.Intn(1000)))
 		},
@@ -221,7 +222,7 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 	test := func(buf []*Node) bool {
 		tab := newTable(nil, NodeID{}, &net.UDPAddr{}, "")
 		for i := 0; i < len(buf); i++ {
-			ld := quickrand.Intn(len(tab.buckets))
+			ld := cfg.Rand.Intn(len(tab.buckets))
 			tab.add([]*Node{nodeAtDistance(tab.self.sha, ld)})
 		}
 		gotN := tab.ReadRandomNodes(buf)
