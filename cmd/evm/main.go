@@ -104,6 +104,7 @@ type VMEnv struct {
 	depth int
 	Gas   *big.Int
 	time  int64
+	logs  []vm.StructLog
 }
 
 func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int) *VMEnv {
@@ -132,6 +133,12 @@ func (self *VMEnv) GetHash(n uint64) common.Hash {
 		return self.block.Hash()
 	}
 	return common.Hash{}
+}
+func (self *VMEnv) AddStructLog(log vm.StructLog) {
+	self.logs = append(self.logs, log)
+}
+func (self *VMEnv) StructLogs() []vm.StructLog {
+	return self.logs
 }
 func (self *VMEnv) AddLog(log *state.Log) {
 	self.state.AddLog(log)
