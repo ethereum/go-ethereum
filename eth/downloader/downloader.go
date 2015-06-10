@@ -1,5 +1,7 @@
 package downloader
 
+// I'm so cool!
+
 import (
 	"bytes"
 	"errors"
