@@ -31,7 +31,9 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 			apis[i] = NewMinerApi(eth, codec)
 		case NetApiName:
 			apis[i] = NewNetApi(xeth, eth, codec)
-		case txPoolApiName:
+		case ShhApiName:
+			apis[i] = NewShhApi(xeth, eth, codec)
+		case TxPoolApiName:
 			apis[i] = NewTxPoolApi(xeth, eth, codec)
 		case PersonalApiName:
 			apis[i] = NewPersonalApi(xeth, eth, codec)
@@ -55,7 +57,9 @@ func Javascript(name string) string {
 		return Miner_JS
 	case NetApiName:
 		return Net_JS
-	case txPoolApiName:
+	case ShhApiName:
+		return Shh_JS
+	case TxPoolApiName:
 		return TxPool_JS
 	case PersonalApiName:
 		return Personal_JS
