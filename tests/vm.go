@@ -1,4 +1,4 @@
-package helper
+package tests
 
 import (
 	"errors"
@@ -144,7 +144,7 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Log
 	var (
 		to    = common.HexToAddress(exec["address"])
 		from  = common.HexToAddress(exec["caller"])
-		data  = FromHex(exec["data"])
+		data  = common.FromHex(exec["data"])
 		gas   = common.Big(exec["gas"])
 		price = common.Big(exec["gasPrice"])
 		value = common.Big(exec["value"])
@@ -166,7 +166,7 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Log
 func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.Logs, *big.Int, error) {
 	var (
 		keyPair, _ = crypto.NewKeyPairFromSec([]byte(common.Hex2Bytes(tx["secretKey"])))
-		data       = FromHex(tx["data"])
+		data       = common.FromHex(tx["data"])
 		gas        = common.Big(tx["gasLimit"])
 		price      = common.Big(tx["gasPrice"])
 		value      = common.Big(tx["value"])

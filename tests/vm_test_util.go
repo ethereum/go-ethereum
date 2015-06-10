@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/tests/helper"
 )
 
 type Account struct {
@@ -52,7 +51,7 @@ func StateObjectFromAccount(db common.Database, addr string, account Account) *s
 	return obj
 }
 
-type Env struct {
+type VmEnv struct {
 	CurrentCoinbase   string
 	CurrentDifficulty string
 	CurrentGasLimit   string
@@ -64,7 +63,7 @@ type Env struct {
 type VmTest struct {
 	Callcreates interface{}
 	//Env         map[string]string
-	Env           Env
+	Env           VmEnv
 	Exec          map[string]string
 	Transaction   map[string]string
 	Logs          []Log
@@ -78,7 +77,7 @@ type VmTest struct {
 func RunVmTest(p string, t *testing.T) {
 
 	tests := make(map[string]VmTest)
-	helper.CreateFileTests(t, p, &tests)
+	CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
 		/*
@@ -121,9 +120,9 @@ func RunVmTest(p string, t *testing.T) {
 
 		isVmTest := len(test.Exec) > 0
 		if isVmTest {
-			ret, logs, gas, err = helper.RunVm(statedb, env, test.Exec)
+			ret, logs, gas, err = RunVm(statedb, env, test.Exec)
 		} else {
-			ret, logs, gas, err = helper.RunState(statedb, env, test.Transaction)
+			ret, logs, gas, err = RunState(statedb, env, test.Transaction)
 		}
 
 		switch name {
@@ -131,7 +130,7 @@ func RunVmTest(p string, t *testing.T) {
 		// on 19 May 2015 decided to skip these tests their output.
 		case "mload32bitBound_return", "mload32bitBound_return2":
 		default:
-			rexp := helper.FromHex(test.Out)
+			rexp := common.FromHex(test.Out)
 			if bytes.Compare(rexp, ret) != 0 {
 				t.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
 			}
@@ -192,7 +191,7 @@ func RunVmTest(p string, t *testing.T) {
 						t.Errorf("'%s' log address expected %v got %x", name, log.AddressF, logs[i].Address)
 					}
 
-					if !bytes.Equal(logs[i].Data, helper.FromHex(log.DataF)) {
+					if !bytes.Equal(logs[i].Data, common.FromHex(log.DataF)) {
 						t.Errorf("'%s' log data expected %v got %x", name, log.DataF, logs[i].Data)
 					}
 
