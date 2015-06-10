@@ -95,7 +95,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		// Get the memory location of pc
 		op = context.GetOp(pc)
 
-		self.log(pc, op, context.Gas, mem, stack)
+		self.log(pc, op, context.Gas, mem, stack, context)
 
 		newMemSize, gas, err := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
 		if err != nil {
@@ -778,13 +778,20 @@ func (self *Vm) RunPrecompiled(p *PrecompiledAccount, callData []byte, context *
 	}
 }
 
-func (self *Vm) log(pc uint64, op OpCode, gas *big.Int, memory *Memory, stack *Stack) {
+func (self *Vm) log(pc uint64, op OpCode, gas *big.Int, memory *Memory, stack *Stack, context *Context) {
 	if Debug {
 		mem := make([]byte, len(memory.Data()))
 		copy(mem, memory.Data())
 		stck := make([]*big.Int, len(stack.Data()))
 		copy(stck, stack.Data())
-		self.env.AddStructLog(StructLog{pc, op, new(big.Int).Set(gas), mem, stck})
+
+		object := context.self.(*state.StateObject)
+		storage := make(map[common.Hash][]byte)
+		object.EachStorage(func(k, v []byte) {
+			storage[common.BytesToHash(k)] = v
+		})
+
+		self.env.AddStructLog(StructLog{pc, op, new(big.Int).Set(gas), mem, stck, storage})
 	}
 }
 

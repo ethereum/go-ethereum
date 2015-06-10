@@ -34,11 +34,12 @@ type Environment interface {
 }
 
 type StructLog struct {
-	Pc     uint64
-	Op     OpCode
-	Gas    *big.Int
-	Memory []byte
-	Stack  []*big.Int
+	Pc      uint64
+	Op      OpCode
+	Gas     *big.Int
+	Memory  []byte
+	Stack   []*big.Int
+	Storage map[common.Hash][]byte
 }
 
 type Account interface {

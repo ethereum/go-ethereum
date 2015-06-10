@@ -12,7 +12,7 @@ import (
 func VmStdErrFormat(logs []vm.StructLog) {
 	fmt.Fprintf(os.Stderr, "VM Stats %d ops\n", len(logs))
 	for _, log := range logs {
-		fmt.Fprintf(os.Stderr, "PC %-3d - %-14s\n", log.Pc, log.Op)
+		fmt.Fprintf(os.Stderr, "PC %08d: %s\n", log.Pc, log.Op)
 		fmt.Fprintln(os.Stderr, "STACK =", len(log.Stack))
 		for i, item := range log.Stack {
 			fmt.Fprintf(os.Stderr, "%04d: %x\n", i, common.LeftPadBytes(item.Bytes(), 32))
@@ -36,5 +36,11 @@ func VmStdErrFormat(logs []vm.StructLog) {
 			addr++
 			fmt.Fprintln(os.Stderr, str)
 		}
+
+		fmt.Fprintln(os.Stderr, "STORAGE =", len(log.Storage))
+		for h, item := range log.Storage {
+			fmt.Fprintf(os.Stderr, "%x: %x\n", h, common.LeftPadBytes(item, 32))
+		}
+
 	}
 }
