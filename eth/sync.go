@@ -127,7 +127,7 @@ func (pm *ProtocolManager) txsyncLoop() {
 // fetcher is responsible for collecting hash notifications, and periodically
 // checking all unknown ones and individually fetching them.
 func (pm *ProtocolManager) fetcher() {
-	announces := make(map[common.Hash]*blockAnnounce)
+	announces := make(map[common.Hash][]*blockAnnounce)
 	request := make(map[*peer][]common.Hash)
 	pending := make(map[common.Hash]*blockAnnounce)
 	cycle := time.Tick(notifyCheckCycle)
@@ -139,7 +139,7 @@ func (pm *ProtocolManager) fetcher() {
 			// A batch of hashes the notified, schedule them for retrieval
 			glog.V(logger.Debug).Infof("Scheduling %d hash announcements from %s", len(notifications), notifications[0].peer.id)
 			for _, announce := range notifications {
-				announces[announce.hash] = announce
+				announces[announce.hash] = append(announces[announce.hash], announce)
 			}
 
 		case <-cycle:
@@ -150,8 +150,9 @@ func (pm *ProtocolManager) fetcher() {
 				}
 			}
 			// Check if any notified blocks failed to arrive
-			for hash, announce := range announces {
-				if time.Since(announce.time) > notifyArriveTimeout {
+			for hash, all := range announces {
+				if time.Since(all[0].time) > notifyArriveTimeout {
+					announce := all[rand.Intn(len(all))]
 					if !pm.chainman.HasBlock(hash) {
 						request[announce.peer] = append(request[announce.peer], hash)
 						pending[hash] = announce
