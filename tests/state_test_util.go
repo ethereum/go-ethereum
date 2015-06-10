@@ -75,22 +75,20 @@ func RunStateTest(p string, t *testing.T) {
 			}
 		}
 
+		// check post state
 		for addr, account := range test.Post {
 			obj := statedb.GetStateObject(common.HexToAddress(addr))
 			if obj == nil {
 				continue
 			}
 
-			// if len(test.Exec) == 0 {
 			if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
 				t.Errorf("%s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
 			}
 
-			// if obj.Nonce() != common.String2Big(account.Nonce).Uint64() {
-			//  t.Errorf("%s's : (%x) nonce failed. Expected %v, got %v\n", name, obj.Address().Bytes()[:4], account.Nonce, obj.Nonce())
-			// }
-
-			// }
+			if obj.Nonce() != common.String2Big(account.Nonce).Uint64() {
+				t.Errorf("%s's : (%x) nonce failed. Expected %v, got %v\n", name, obj.Address().Bytes()[:4], account.Nonce, obj.Nonce())
+			}
 
 			for addr, value := range account.Storage {
 				v := obj.GetState(common.HexToHash(addr)).Bytes()
@@ -108,34 +106,11 @@ func RunStateTest(p string, t *testing.T) {
 			t.Errorf("%s's : Post state root error. Expected %s, got %x", name, test.PostStateRoot, statedb.Root())
 		}
 
+		// check logs
 		if len(test.Logs) > 0 {
-			if len(test.Logs) != len(logs) {
-				t.Errorf("log length mismatch. Expected %d, got %d", len(test.Logs), len(logs))
-			} else {
-				for i, log := range test.Logs {
-					if common.HexToAddress(log.AddressF) != logs[i].Address {
-						t.Errorf("'%s' log address expected %v got %x", name, log.AddressF, logs[i].Address)
-					}
-
-					if !bytes.Equal(logs[i].Data, common.FromHex(log.DataF)) {
-						t.Errorf("'%s' log data expected %v got %x", name, log.DataF, logs[i].Data)
-					}
-
-					if len(log.TopicsF) != len(logs[i].Topics) {
-						t.Errorf("'%s' log topics length expected %d got %d", name, len(log.TopicsF), logs[i].Topics)
-					} else {
-						for j, topic := range log.TopicsF {
-							if common.HexToHash(topic) != logs[i].Topics[j] {
-								t.Errorf("'%s' log topic[%d] expected %v got %x", name, j, topic, logs[i].Topics[j])
-							}
-						}
-					}
-					genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
-
-					if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
-						t.Errorf("'%s' bloom mismatch", name)
-					}
-				}
+			lerr := CheckLogs(test.Logs, logs, t)
+			if lerr != nil {
+				t.Errorf("'%s' ", name, lerr.Error())
 			}
 		}
 
@@ -143,6 +118,39 @@ func RunStateTest(p string, t *testing.T) {
 		//fmt.Println(string(statedb.Dump()))
 	}
 	// logger.Flush()
+}
+
+func CheckLogs(tlog []Log, logs state.Logs, t *testing.T) error {
+
+	if len(tlog) != len(logs) {
+		return fmt.Errorf("log length mismatch. Expected %d, got %d", len(tlog), len(logs))
+	} else {
+		for i, log := range tlog {
+			if common.HexToAddress(log.AddressF) != logs[i].Address {
+				return fmt.Errorf("log address expected %v got %x", log.AddressF, logs[i].Address)
+			}
+
+			if !bytes.Equal(logs[i].Data, common.FromHex(log.DataF)) {
+				return fmt.Errorf("log data expected %v got %x", log.DataF, logs[i].Data)
+			}
+
+			if len(log.TopicsF) != len(logs[i].Topics) {
+				return fmt.Errorf("log topics length expected %d got %d", len(log.TopicsF), logs[i].Topics)
+			} else {
+				for j, topic := range log.TopicsF {
+					if common.HexToHash(topic) != logs[i].Topics[j] {
+						return fmt.Errorf("log topic[%d] expected %v got %x", j, topic, logs[i].Topics[j])
+					}
+				}
+			}
+			genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
+
+			if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
+				return fmt.Errorf("bloom mismatch")
+			}
+		}
+	}
+	return nil
 }
 
 func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.Logs, *big.Int, error) {

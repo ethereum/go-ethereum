@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
+	// "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -125,11 +125,13 @@ func RunVmTest(p string, t *testing.T) {
 
 		ret, logs, gas, err = RunVm(statedb, env, test.Exec)
 
+		// Compare expectedand actual return
 		rexp := common.FromHex(test.Out)
 		if bytes.Compare(rexp, ret) != 0 {
 			t.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
 		}
 
+		// Check gas usage
 		if len(test.Gas) == 0 && err == nil {
 			t.Errorf("%s's gas unspecified, indicating an error. VM returned (incorrectly) successfull", name)
 		} else {
@@ -139,6 +141,7 @@ func RunVmTest(p string, t *testing.T) {
 			}
 		}
 
+		// check post state
 		for addr, account := range test.Post {
 			obj := statedb.GetStateObject(common.HexToAddress(addr))
 			if obj == nil {
@@ -155,35 +158,9 @@ func RunVmTest(p string, t *testing.T) {
 			}
 		}
 
+		// check logs
 		if len(test.Logs) > 0 {
-			if len(test.Logs) != len(logs) {
-				t.Errorf("log length mismatch. Expected %d, got %d", len(test.Logs), len(logs))
-			} else {
-				for i, log := range test.Logs {
-					if common.HexToAddress(log.AddressF) != logs[i].Address {
-						t.Errorf("'%s' log address expected %v got %x", name, log.AddressF, logs[i].Address)
-					}
-
-					if !bytes.Equal(logs[i].Data, common.FromHex(log.DataF)) {
-						t.Errorf("'%s' log data expected %v got %x", name, log.DataF, logs[i].Data)
-					}
-
-					if len(log.TopicsF) != len(logs[i].Topics) {
-						t.Errorf("'%s' log topics length expected %d got %d", name, len(log.TopicsF), logs[i].Topics)
-					} else {
-						for j, topic := range log.TopicsF {
-							if common.HexToHash(topic) != logs[i].Topics[j] {
-								t.Errorf("'%s' log topic[%d] expected %v got %x", name, j, topic, logs[i].Topics[j])
-							}
-						}
-					}
-					genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
-
-					if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
-						t.Errorf("'%s' bloom mismatch", name)
-					}
-				}
-			}
+			CheckLogs(test.Logs, logs, t)
 		}
 
 		fmt.Println("VM test passed: ", name)
