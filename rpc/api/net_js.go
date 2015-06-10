@@ -13,25 +13,11 @@ web3._extend({
 			outputFormatter: web3._extend.formatters.formatOutputBool
 		}),
 		new web3._extend.Method({
-			name: 'id',
-			call: 'net_id',
-			params: 0,
-			inputFormatter: [],
-			outputFormatter: web3._extend.formatters.formatOutputString
-		}),
-		new web3._extend.Method({
 			name: 'getPeerCount',
 			call: 'net_peerCount',
 			params: 0,
 			inputFormatter: [],
 			outputFormatter: web3._extend.formatters.formatOutputString
-		}),
-		new web3._extend.Method({
-			name: 'peers',
-			call: 'net_peers',
-			params: 0,
-			inputFormatter: [],
-			outputFormatter: function(obj) { return obj; }
 		})
 	],
 	properties:
@@ -45,6 +31,16 @@ web3._extend({
 			name: 'peerCount',
 			getter: 'net_peerCount',
 			outputFormatter: web3._extend.utils.toDecimal
+		}),
+		new web3._extend.Property({
+			name: 'peers',
+			getter: 'net_peers',
+			outputFormatter: function(obj) { return obj; }
+		}),
+		new web3._extend.Property({
+			name: 'version',
+			getter: 'net_version',
+			outputFormatter: web3._extend.formatters.formatOutputString
 		})
 	]
 });

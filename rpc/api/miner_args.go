@@ -41,6 +41,10 @@ func (args *SetExtraArgs) UnmarshalJSON(b []byte) (err error) {
 		return shared.NewDecodeParamError(err.Error())
 	}
 
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
 	extrastr, ok := obj[0].(string)
 	if !ok {
 		return shared.NewInvalidTypeError("Price", "not a string")
@@ -60,13 +64,16 @@ func (args *GasPriceArgs) UnmarshalJSON(b []byte) (err error) {
 		return shared.NewDecodeParamError(err.Error())
 	}
 
-	pricestr, ok := obj[0].(string)
-	if !ok {
-		return shared.NewInvalidTypeError("Price", "not a string")
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
 	}
-	args.Price = pricestr
 
-	return nil
+	if pricestr, ok := obj[0].(string); ok {
+		args.Price = pricestr
+		return nil
+	}
+
+	return shared.NewInvalidTypeError("Price", "not a string")
 }
 
 type MakeDAGArgs struct {

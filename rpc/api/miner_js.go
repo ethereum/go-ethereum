@@ -20,13 +20,6 @@ web3._extend({
 			outputFormatter: web3._extend.formatters.formatOutputBool
 		}),
 		new web3._extend.Method({
-			name: 'getHashrate',
-			call: 'miner_hashrate',
-			params: 0,
-			inputFormatter: [],
-			outputFormatter: web3._extend.utils.toDecimal
-		}),
-		new web3._extend.Method({
 			name: 'setExtra',
 			call: 'miner_setExtra',
 			params: 1,
