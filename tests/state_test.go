@@ -1,64 +1,70 @@
 package tests
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+var stateTestDir = filepath.Join(baseDir, "StateTests")
 
 func TestStateSystemOperations(t *testing.T) {
-	const fn = "../files/StateTests/stSystemOperationsTest.json"
+	fn := filepath.Join(stateTestDir, "stSystemOperationsTest.json")
 	RunVmTest(fn, t)
 }
 
 func TestStateExample(t *testing.T) {
-	const fn = "../files/StateTests/stExample.json"
+	fn := filepath.Join(stateTestDir, "stExample.json")
 	RunVmTest(fn, t)
 }
 
 func TestStatePreCompiledContracts(t *testing.T) {
-	const fn = "../files/StateTests/stPreCompiledContracts.json"
+	fn := filepath.Join(stateTestDir, "stPreCompiledContracts.json")
 	RunVmTest(fn, t)
 }
 
 func TestStateRecursiveCreate(t *testing.T) {
-	const fn = "../files/StateTests/stRecursiveCreate.json"
+	fn := filepath.Join(stateTestDir, "stRecursiveCreate.json")
 	RunVmTest(fn, t)
 }
 
 func TestStateSpecial(t *testing.T) {
-	const fn = "../files/StateTests/stSpecialTest.json"
+	fn := filepath.Join(stateTestDir, "stSpecialTest.json")
 	RunVmTest(fn, t)
 }
 
 func TestStateRefund(t *testing.T) {
-	const fn = "../files/StateTests/stRefundTest.json"
+	fn := filepath.Join(stateTestDir, "stRefundTest.json")
 	RunVmTest(fn, t)
 }
 
 func TestStateBlockHash(t *testing.T) {
-	const fn = "../files/StateTests/stBlockHashTest.json"
+	fn := filepath.Join(stateTestDir, "stBlockHashTest.json")
 	RunVmTest(fn, t)
 }
 
 func TestStateInitCode(t *testing.T) {
-	const fn = "../files/StateTests/stInitCodeTest.json"
+	fn := filepath.Join(stateTestDir, "stInitCodeTest.json")
 	RunVmTest(fn, t)
 }
 
 func TestStateLog(t *testing.T) {
-	const fn = "../files/StateTests/stLogTests.json"
+	fn := filepath.Join(stateTestDir, "stLogTests.json")
 	RunVmTest(fn, t)
 }
 
 func TestStateTransaction(t *testing.T) {
-	const fn = "../files/StateTests/stTransactionTest.json"
+	fn := filepath.Join(stateTestDir, "stTransactionTest.json")
 	RunVmTest(fn, t)
 }
 
 func TestCallCreateCallCode(t *testing.T) {
-	const fn = "../files/StateTests/stCallCreateCallCodeTest.json"
+	fn := filepath.Join(stateTestDir, "stCallCreateCallCodeTest.json")
 	RunVmTest(fn, t)
 }
 
 func TestMemory(t *testing.T) {
-	const fn = "../files/StateTests/stMemoryTest.json"
+	fn := filepath.Join(stateTestDir, "stMemoryTest.json")
 	RunVmTest(fn, t)
 }
 
@@ -66,7 +72,7 @@ func TestMemoryStress(t *testing.T) {
 	if os.Getenv("TEST_VM_COMPLEX") == "" {
 		t.Skip()
 	}
-	const fn = "../files/StateTests/stMemoryStressTest.json"
+	fn := filepath.Join(stateTestDir, "stMemoryStressTest.json")
 	RunVmTest(fn, t)
 }
 
@@ -74,22 +80,22 @@ func TestQuadraticComplexity(t *testing.T) {
 	if os.Getenv("TEST_VM_COMPLEX") == "" {
 		t.Skip()
 	}
-	const fn = "../files/StateTests/stQuadraticComplexityTest.json"
+	fn := filepath.Join(stateTestDir, "stQuadraticComplexityTest.json")
 	RunVmTest(fn, t)
 }
 
 func TestSolidity(t *testing.T) {
-	const fn = "../files/StateTests/stSolidityTest.json"
+	fn := filepath.Join(stateTestDir, "stSolidityTest.json")
 	RunVmTest(fn, t)
 }
 
 func TestWallet(t *testing.T) {
-	const fn = "../files/StateTests/stWalletTest.json"
+	fn := filepath.Join(stateTestDir, "stWalletTest.json")
 	RunVmTest(fn, t)
 }
 
 func TestStateTestsRandom(t *testing.T) {
-	fns, _ := filepath.Glob("../files/StateTests/RandomTests/*")
+	fns, _ := filepath.Glob("./files/StateTests/RandomTests/*")
 	for _, fn := range fns {
 		RunVmTest(fn, t)
 	}

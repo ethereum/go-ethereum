@@ -1,8 +1,11 @@
 package tests
 
 import (
+	"path/filepath"
 	"testing"
 )
+
+var transactionTestDir = filepath.Join(baseDir, "TransactionTests")
 
 func TestTransactions(t *testing.T) {
 	notWorking := make(map[string]bool, 100)
@@ -17,7 +20,7 @@ func TestTransactions(t *testing.T) {
 	}
 
 	var err error
-	err = RunTransactionTests("./files/TransactionTests/ttTransactionTest.json",
+	err = RunTransactionTests(filepath.Join(transactionTestDir, "ttTransactionTest.json"),
 		notWorking)
 	if err != nil {
 		t.Fatal(err)
@@ -27,7 +30,7 @@ func TestTransactions(t *testing.T) {
 func TestWrongRLPTransactions(t *testing.T) {
 	notWorking := make(map[string]bool, 100)
 	var err error
-	err = RunTransactionTests("./files/TransactionTests/ttWrongRLPTransaction.json",
+	err = RunTransactionTests(filepath.Join(transactionTestDir, "ttWrongRLPTransaction.json"),
 		notWorking)
 	if err != nil {
 		t.Fatal(err)
@@ -37,7 +40,7 @@ func TestWrongRLPTransactions(t *testing.T) {
 func Test10MBtx(t *testing.T) {
 	notWorking := make(map[string]bool, 100)
 	var err error
-	err = RunTransactionTests("./files/TransactionTests/tt10mbDataField.json",
+	err = RunTransactionTests(filepath.Join(transactionTestDir, "tt10mbDataField.json"),
 		notWorking)
 	if err != nil {
 		t.Fatal(err)
