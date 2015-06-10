@@ -1,44 +1,44 @@
 package api
 
 const Debug_JS = `
-web3.extend({
+web3._extend({
 	property: 'debug',
 	methods:
 	[
-		new web3.extend.Method({
+		new web3._extend.Method({
 			name: 'printBlock',
 			call: 'debug_printBlock',
 			params: 1,
-			inputFormatter: [web3.extend.formatters.formatInputInt],
-			outputFormatter: web3.extend.formatters.formatOutputString
+			inputFormatter: [web3._extend.formatters.formatInputInt],
+			outputFormatter: web3._extend.formatters.formatOutputString
 		}),
-		new web3.extend.Method({
+		new web3._extend.Method({
 			name: 'getBlockRlp',
 			call: 'debug_getBlockRlp',
 			params: 1,
-			inputFormatter: [web3.extend.formatters.formatInputInt],
-			outputFormatter: web3.extend.formatters.formatOutputString
+			inputFormatter: [web3._extend.formatters.formatInputInt],
+			outputFormatter: web3._extend.formatters.formatOutputString
 		}),
-		new web3.extend.Method({
+		new web3._extend.Method({
 			name: 'setHead',
 			call: 'debug_setHead',
 			params: 1,
-			inputFormatter: [web3.extend.formatters.formatInputInt],
-			outputFormatter: web3.extend.formatters.formatOutputBool
+			inputFormatter: [web3._extend.formatters.formatInputInt],
+			outputFormatter: web3._extend.formatters.formatOutputBool
 		}),
-		new web3.extend.Method({
+		new web3._extend.Method({
 			name: 'processBlock',
 			call: 'debug_processBlock',
 			params: 1,
-			inputFormatter: [web3.extend.formatters.formatInputInt],
+			inputFormatter: [web3._extend.formatters.formatInputInt],
 			outputFormatter: function(obj) { return obj; }
 		}),
-		new web3.extend.Method({
+		new web3._extend.Method({
 			name: 'seedHash',
 			call: 'debug_seedHash',
 			params: 1,
-			inputFormatter: [web3.extend.formatters.formatInputInt],
-			outputFormatter: web3.extend.formatters.formatOutputString
+			inputFormatter: [web3._extend.formatters.formatInputInt],
+			outputFormatter: web3._extend.formatters.formatOutputString
 		})
 	],
 	properties:
