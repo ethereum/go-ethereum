@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -87,10 +86,10 @@ type btTransaction struct {
 	Value    string
 }
 
-func runBlockTestsInFile(filepath string, snafus []string, t *testing.T) {
+func runBlockTestsInFile(filepath string, snafus []string) error {
 	bt, err := LoadBlockTests(filepath)
 	if err != nil {
-		t.Fatal(err)
+		return nil
 	}
 
 	notWorking := make(map[string]bool, 100)
@@ -100,21 +99,24 @@ func runBlockTestsInFile(filepath string, snafus []string, t *testing.T) {
 
 	for name, test := range bt {
 		if !notWorking[name] {
-			runBlockTest(name, test, t)
+			if err := runBlockTest(name, test); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
-func runBlockTest(name string, test *BlockTest, t *testing.T) {
+func runBlockTest(name string, test *BlockTest) error {
 	cfg := testEthConfig()
 	ethereum, err := eth.New(cfg)
 	if err != nil {
-		t.Fatalf("%v", err)
+		return err
 	}
 
 	err = ethereum.Start()
 	if err != nil {
-		t.Fatalf("%v", err)
+		return err
 	}
 
 	// import the genesis block
@@ -123,19 +125,20 @@ func runBlockTest(name string, test *BlockTest, t *testing.T) {
 	// import pre accounts
 	statedb, err := test.InsertPreState(ethereum)
 	if err != nil {
-		t.Fatalf("InsertPreState: %v", err)
+		return fmt.Errorf("InsertPreState: %v", err)
 	}
 
 	err = test.TryBlocksInsert(ethereum.ChainManager())
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
 
 	if err = test.ValidatePostState(statedb); err != nil {
-		t.Fatal("post state validation failed: %v", err)
+		return fmt.Errorf("post state validation failed: %v", err)
 	}
 	fmt.Println("Block test passed: ", name)
 	// t.Log("Block test passed: ", name)
+	return nil
 }
 
 func testEthConfig() *eth.Config {

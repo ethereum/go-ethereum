@@ -10,62 +10,86 @@ var stateTestDir = filepath.Join(baseDir, "StateTests")
 
 func TestStateSystemOperations(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stSystemOperationsTest.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestStateExample(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stExample.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestStatePreCompiledContracts(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stPreCompiledContracts.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestStateRecursiveCreate(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stRecursiveCreate.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestStateSpecial(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stSpecialTest.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestStateRefund(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stRefundTest.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestStateBlockHash(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stBlockHashTest.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestStateInitCode(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stInitCodeTest.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestStateLog(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stLogTests.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestStateTransaction(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stTransactionTest.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestCallCreateCallCode(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stCallCreateCallCodeTest.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestMemory(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stMemoryTest.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestMemoryStress(t *testing.T) {
@@ -73,7 +97,9 @@ func TestMemoryStress(t *testing.T) {
 		t.Skip()
 	}
 	fn := filepath.Join(stateTestDir, "stMemoryStressTest.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestQuadraticComplexity(t *testing.T) {
@@ -81,22 +107,30 @@ func TestQuadraticComplexity(t *testing.T) {
 		t.Skip()
 	}
 	fn := filepath.Join(stateTestDir, "stQuadraticComplexityTest.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestSolidity(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stSolidityTest.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestWallet(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stWalletTest.json")
-	RunStateTest(fn, t)
+	if err := RunStateTest(fn); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestStateTestsRandom(t *testing.T) {
 	fns, _ := filepath.Glob("./files/StateTests/RandomTests/*")
 	for _, fn := range fns {
-		RunStateTest(fn, t)
+		if err := RunStateTest(fn); err != nil {
+			t.Error(err)
+		}
 	}
 }

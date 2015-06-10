@@ -1,13 +1,14 @@
 package tests
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	// "log"
 	"net/http"
 	"os"
-	"testing"
 
 	// logpkg "github.com/ethereum/go-ethereum/logger"
 )
@@ -20,34 +21,40 @@ import (
 // 	logpkg.AddLogSystem(Logger)
 // }
 
-func readJSON(t *testing.T, reader io.Reader, value interface{}) {
+func readJSON(reader io.Reader, value interface{}) error {
 	data, err := ioutil.ReadAll(reader)
 	err = json.Unmarshal(data, &value)
 	if err != nil {
-		t.Error(err)
+		return err
 	}
+	return nil
 }
 
-func CreateHttpTests(t *testing.T, uri string, value interface{}) {
+func CreateHttpTests(uri string, value interface{}) error {
 	resp, err := http.Get(uri)
 	if err != nil {
-		t.Error(err)
-
-		return
+		return err
 	}
 	defer resp.Body.Close()
 
-	readJSON(t, resp.Body, value)
+	err = readJSON(resp.Body, value)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func CreateFileTests(t *testing.T, fn string, value interface{}) {
+func CreateFileTests(fn string, value interface{}) error {
 	file, err := os.Open(fn)
 	if err != nil {
-		t.Error(err)
-
-		return
+		return err
 	}
 	defer file.Close()
 
-	readJSON(t, file, value)
+	err = readJSON(file, value)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 }

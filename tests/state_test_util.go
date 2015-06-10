@@ -6,22 +6,22 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
-	"testing"
+	// "testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
+	// "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	// "github.com/ethereum/go-ethereum/logger"
 )
 
-func RunStateTest(p string, t *testing.T) {
+func RunStateTest(p string) error {
 
 	tests := make(map[string]VmTest)
-	CreateFileTests(t, p, &tests)
+	CreateFileTests(p, &tests)
 
 	for name, test := range tests {
 		/*
@@ -38,7 +38,7 @@ func RunStateTest(p string, t *testing.T) {
 			obj := StateObjectFromAccount(db, addr, account)
 			statedb.SetStateObject(obj)
 			for a, v := range account.Storage {
-				obj.SetState(common.HexToHash(a), common.NewValue(common.FromHex(v)))
+				obj.SetState(common.HexToHash(a), common.HexToHash(s))
 			}
 		}
 
@@ -64,6 +64,7 @@ func RunStateTest(p string, t *testing.T) {
 
 		ret, logs, _, _ = RunState(statedb, env, test.Transaction)
 
+		// Compare expected  and actual return
 		switch name {
 		// the memory required for these tests (4294967297 bytes) would take too much time.
 		// on 19 May 2015 decided to skip these tests their output.
@@ -71,7 +72,7 @@ func RunStateTest(p string, t *testing.T) {
 		default:
 			rexp := common.FromHex(test.Out)
 			if bytes.Compare(rexp, ret) != 0 {
-				t.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
+				return fmt.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
 			}
 		}
 
@@ -83,11 +84,11 @@ func RunStateTest(p string, t *testing.T) {
 			}
 
 			if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
-				t.Errorf("%s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
+				return fmt.Errorf("%s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
 			}
 
 			if obj.Nonce() != common.String2Big(account.Nonce).Uint64() {
-				t.Errorf("%s's : (%x) nonce failed. Expected %v, got %v\n", name, obj.Address().Bytes()[:4], account.Nonce, obj.Nonce())
+				return fmt.Errorf("%s's : (%x) nonce failed. Expected %v, got %v\n", name, obj.Address().Bytes()[:4], account.Nonce, obj.Nonce())
 			}
 
 			for addr, value := range account.Storage {
@@ -95,7 +96,7 @@ func RunStateTest(p string, t *testing.T) {
 				vexp := common.FromHex(value)
 
 				if bytes.Compare(v, vexp) != 0 {
-					t.Errorf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address().Bytes()[0:4], addr, vexp, v, common.BigD(vexp), common.BigD(v))
+					return fmt.Errorf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address().Bytes()[0:4], addr, vexp, v, common.BigD(vexp), common.BigD(v))
 				}
 			}
 		}
@@ -103,14 +104,14 @@ func RunStateTest(p string, t *testing.T) {
 		statedb.Sync()
 		//if !bytes.Equal(common.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
 		if common.HexToHash(test.PostStateRoot) != statedb.Root() {
-			t.Errorf("%s's : Post state root error. Expected %s, got %x", name, test.PostStateRoot, statedb.Root())
+			return fmt.Errorf("%s's : Post state root error. Expected %s, got %x", name, test.PostStateRoot, statedb.Root())
 		}
 
 		// check logs
 		if len(test.Logs) > 0 {
 			lerr := CheckLogs(test.Logs, logs, t)
 			if lerr != nil {
-				t.Errorf("'%s' ", name, lerr.Error())
+				return fmt.Errorf("'%s' ", name, lerr.Error())
 			}
 		}
 

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
-	"testing"
+	// "testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -79,10 +79,13 @@ type VmTest struct {
 	PostStateRoot string
 }
 
-func RunVmTest(p string, t *testing.T) {
+func RunVmTest(p string) error {
 
 	tests := make(map[string]VmTest)
-	CreateFileTests(t, p, &tests)
+	err := CreateFileTests(p, &tests)
+	if err != nil {
+		return err
+	}
 
 	for name, test := range tests {
 		/*
@@ -128,16 +131,16 @@ func RunVmTest(p string, t *testing.T) {
 		// Compare expectedand actual return
 		rexp := common.FromHex(test.Out)
 		if bytes.Compare(rexp, ret) != 0 {
-			t.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
+			return fmt.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
 		}
 
 		// Check gas usage
 		if len(test.Gas) == 0 && err == nil {
-			t.Errorf("%s's gas unspecified, indicating an error. VM returned (incorrectly) successfull", name)
+			return fmt.Errorf("%s's gas unspecified, indicating an error. VM returned (incorrectly) successfull", name)
 		} else {
 			gexp := common.Big(test.Gas)
 			if gexp.Cmp(gas) != 0 {
-				t.Errorf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
+				return fmt.Errorf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
 			}
 		}
 
@@ -153,7 +156,7 @@ func RunVmTest(p string, t *testing.T) {
 				vexp := common.HexToHash(value)
 
 				if v != vexp {
-					t.Errorf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address().Bytes()[0:4], addr, vexp, v, vexp.Big(), v.Big())
+					return t.Errorf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address().Bytes()[0:4], addr, vexp, v, vexp.Big(), v.Big())
 				}
 			}
 		}
@@ -168,6 +171,7 @@ func RunVmTest(p string, t *testing.T) {
 		//fmt.Println(string(statedb.Dump()))
 	}
 	// logger.Flush()
+	return nil
 }
 
 type Env struct {
