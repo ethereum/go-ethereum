@@ -11,10 +11,18 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+type log struct {
+	op     OpCode
+	gas    *big.Int
+	memory []byte
+	stack  []*big.Int
+}
+
 type Vm struct {
 	env Environment
 
-	logTy  byte
+	// structured logging
+	Logs   []log
 	logStr string
 
 	err error
@@ -32,9 +40,7 @@ type Vm struct {
 }
 
 func New(env Environment) *Vm {
-	lt := LogTyPretty
-
-	return &Vm{debug: Debug, env: env, logTy: lt, Recoverable: true}
+	return &Vm{env: env, Recoverable: true}
 }
 
 func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
@@ -105,6 +111,8 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 		// Get the memory location of pc
 		op = context.GetOp(pc)
+
+		self.Log(op, context.Gas, mem, stack)
 
 		self.Printf("(pc) %-3d -o- %-14s (m) %-4d (s) %-4d ", pc, op.String(), mem.Len(), stack.len())
 		newMemSize, gas, err := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
@@ -853,6 +861,16 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 	}
 
 	return newMemSize, gas, nil
+}
+
+func (vm *Vm) Log(op OpCode, gas *big.Int, memory *Memory, stack *stack) {
+	if vm.debug {
+		mem := make([]byte, len(memory.store))
+		copy(mem, memory.store)
+		stck := make([]*big.Int, len(stack.data))
+		copy(stck, stack.data)
+		vm.Logs = append(vm.Logs, log{op, new(big.Int).Set(gas), mem, stck})
+	}
 }
 
 func (self *Vm) RunPrecompiled(p *PrecompiledAccount, callData []byte, context *Context) (ret []byte, err error) {
