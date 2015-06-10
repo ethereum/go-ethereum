@@ -39,6 +39,13 @@ web3._extend({
 			params: 1,
 			inputFormatter: [web3._extend.formatters.formatInputInt],
 			outputFormatter: web3._extend.formatters.formatOutputString
+		})		,
+		new web3._extend.Method({
+			name: 'dumpBlock',
+			call: 'debug_dumpBlock',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.formatInputInt],
+			outputFormatter: function(obj) { return obj; }
 		})
 	],
 	properties:

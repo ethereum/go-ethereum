@@ -23,7 +23,7 @@ web3._extend({
 	properties:
 	[
 		new web3._extend.Property({
-			name: 'accounts',
+			name: 'listAccounts',
 			getter: 'personal_listAccounts',
 			outputFormatter: function(obj) { return obj; }
 		})

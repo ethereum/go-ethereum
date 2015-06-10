@@ -10,6 +10,10 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
+const (
+	PersonalApiVersion = "1.0"
+)
+
 var (
 	// mapping between methods and handlers
 	personalMapping = map[string]personalhandler{
@@ -63,6 +67,10 @@ func (self *personalApi) Execute(req *shared.Request) (interface{}, error) {
 
 func (self *personalApi) Name() string {
 	return PersonalApiName
+}
+
+func (self *personalApi) ApiVersion() string {
+	return PersonalApiVersion
 }
 
 func (self *personalApi) ListAccounts(req *shared.Request) (interface{}, error) {

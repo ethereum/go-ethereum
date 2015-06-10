@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	AdminVersion    = "1.0.0"
+	AdminApiversion = "1.0"
 	importBatchSize = 2500
 )
 
@@ -80,6 +80,10 @@ func (self *adminApi) Execute(req *shared.Request) (interface{}, error) {
 
 func (self *adminApi) Name() string {
 	return AdminApiName
+}
+
+func (self *adminApi) ApiVersion() string {
+	return AdminApiversion
 }
 
 func (self *adminApi) AddPeer(req *shared.Request) (interface{}, error) {
@@ -215,8 +219,14 @@ func (self *adminApi) Verbosity(req *shared.Request) (interface{}, error) {
 }
 
 func (self *adminApi) ChainSyncStatus(req *shared.Request) (interface{}, error) {
-	pending, cached := self.ethereum.Downloader().Stats()
-	return map[string]interface{}{"blocksAvailable": pending, "blocksWaitingForImport": cached}, nil
+	pending, cached, importing, estimate := self.ethereum.Downloader().Stats()
+
+	return map[string]interface{}{
+		"blocksAvailable": pending,
+		"blocksWaitingForImport": cached,
+		"importing": importing,
+		"estimate": estimate.String(),
+	}, nil
 }
 
 func (self *adminApi) SetSolc(req *shared.Request) (interface{}, error) {

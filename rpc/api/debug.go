@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	DebugVersion = "1.0.0"
+	DebugApiVersion = "1.0"
 )
 
 var (
@@ -74,6 +74,10 @@ func (self *debugApi) Name() string {
 	return DebugApiName
 }
 
+func (self *debugApi) ApiVersion() string {
+	return DebugApiVersion
+}
+
 func (self *debugApi) PrintBlock(req *shared.Request) (interface{}, error) {
 	args := new(BlockNumArg)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
@@ -100,7 +104,7 @@ func (self *debugApi) DumpBlock(req *shared.Request) (interface{}, error) {
 		return nil, nil
 	}
 
-	return stateDb.Dump(), nil
+	return stateDb.RawDump(), nil
 }
 
 func (self *debugApi) GetBlockRlp(req *shared.Request) (interface{}, error) {
