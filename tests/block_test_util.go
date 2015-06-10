@@ -7,17 +7,21 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -81,6 +85,68 @@ type btTransaction struct {
 	To       string
 	V        string
 	Value    string
+}
+
+func runBlockTestsInFile(filepath string, snafus []string, t *testing.T) {
+	bt, err := LoadBlockTests(filepath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	notWorking := make(map[string]bool, 100)
+	for _, name := range snafus {
+		notWorking[name] = true
+	}
+
+	for name, test := range bt {
+		if !notWorking[name] {
+			runBlockTest(name, test, t)
+		}
+	}
+}
+
+func runBlockTest(name string, test *BlockTest, t *testing.T) {
+	cfg := testEthConfig()
+	ethereum, err := eth.New(cfg)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	err = ethereum.Start()
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	// import the genesis block
+	ethereum.ResetWithGenesisBlock(test.Genesis)
+
+	// import pre accounts
+	statedb, err := test.InsertPreState(ethereum)
+	if err != nil {
+		t.Fatalf("InsertPreState: %v", err)
+	}
+
+	err = test.TryBlocksInsert(ethereum.ChainManager())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = test.ValidatePostState(statedb); err != nil {
+		t.Fatal("post state validation failed: %v", err)
+	}
+	t.Log("Test passed: ", name)
+}
+
+func testEthConfig() *eth.Config {
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"))
+
+	return &eth.Config{
+		DataDir:        common.DefaultDataDir(),
+		Verbosity:      5,
+		Etherbase:      "primary",
+		AccountManager: accounts.NewManager(ks),
+		NewDB:          func(path string) (common.Database, error) { return ethdb.NewMemDatabase() },
+	}
 }
 
 // LoadBlockTests loads a block test JSON file.
