@@ -13,8 +13,9 @@ func StdErrFormat(logs []StructLog) {
 	for _, log := range logs {
 		fmt.Fprintf(os.Stderr, "PC %08d: %s GAS: %v COST: %v\n", log.Pc, log.Op, log.Gas, log.GasCost)
 		fmt.Fprintln(os.Stderr, "STACK =", len(log.Stack))
-		for i, item := range log.Stack {
-			fmt.Fprintf(os.Stderr, "%04d: %x\n", i, common.LeftPadBytes(item.Bytes(), 32))
+
+		for i := len(log.Stack) - 1; i >= 0; i-- {
+			fmt.Fprintf(os.Stderr, "%04d: %x\n", len(log.Stack)-i-1, common.LeftPadBytes(log.Stack[i].Bytes(), 32))
 		}
 
 		const maxMem = 10
