@@ -79,9 +79,9 @@ type Downloader struct {
 	banned *set.Set                    // Set of hashes we've received and banned
 
 	// Statistics
-	importStart time.Time     // Instance when the last blocks were taken from the cache
-	importQueue []common.Hash // Hashes of the previously taken blocks to check import progress
-	importDone  int           // Number of taken blocks already imported from the last batch
+	importStart time.Time // Instance when the last blocks were taken from the cache
+	importQueue []*Block  // Previously taken blocks to check import progress
+	importDone  int       // Number of taken blocks already imported from the last batch
 	importLock  sync.Mutex
 
 	// Callbacks
@@ -136,7 +136,7 @@ func (d *Downloader) Stats() (pending int, cached int, importing int, estimate t
 	d.importLock.Lock()
 	defer d.importLock.Unlock()
 
-	for len(d.importQueue) > 0 && d.hasBlock(d.importQueue[0]) {
+	for len(d.importQueue) > 0 && d.hasBlock(d.importQueue[0].RawBlock.Hash()) {
 		d.importQueue = d.importQueue[1:]
 		d.importDone++
 	}
@@ -229,13 +229,9 @@ func (d *Downloader) Synchronise(id string, hash common.Hash) error {
 func (d *Downloader) TakeBlocks() []*Block {
 	blocks := d.queue.TakeBlocks()
 	if len(blocks) > 0 {
-		hashes := make([]common.Hash, len(blocks))
-		for i, block := range blocks {
-			hashes[i] = block.RawBlock.Hash()
-		}
 		d.importLock.Lock()
 		d.importStart = time.Now()
-		d.importQueue = hashes
+		d.importQueue = blocks
 		d.importDone = 0
 		d.importLock.Unlock()
 	}
