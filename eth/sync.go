@@ -131,6 +131,7 @@ func (pm *ProtocolManager) fetcher() {
 	request := make(map[*peer][]common.Hash)
 	pending := make(map[common.Hash]*blockAnnounce)
 	cycle := time.Tick(notifyCheckCycle)
+	done := make(chan common.Hash)
 
 	// Iterate the block fetching until a quit is requested
 	for {
@@ -139,8 +140,17 @@ func (pm *ProtocolManager) fetcher() {
 			// A batch of hashes the notified, schedule them for retrieval
 			glog.V(logger.Debug).Infof("Scheduling %d hash announcements from %s", len(notifications), notifications[0].peer.id)
 			for _, announce := range notifications {
+				// Skip if it's already pending fetch
+				if _, ok := pending[announce.hash]; ok {
+					continue
+				}
+				// Otherwise queue up the peer as a potential source
 				announces[announce.hash] = append(announces[announce.hash], announce)
 			}
+
+		case hash := <-done:
+			// A pending import finished, remove all traces
+			delete(pending, hash)
 
 		case <-cycle:
 			// Clean up any expired block fetches
@@ -207,18 +217,26 @@ func (pm *ProtocolManager) fetcher() {
 			for _, block := range explicit {
 				hash := block.Hash()
 				if announce := pending[hash]; announce != nil {
-					// Filter out blocks too new to import anyway
-					if !pm.chainman.HasBlock(hash) && pm.chainman.HasBlock(block.ParentHash()) {
-						peers = append(peers, announce.peer)
-						blocks = append(blocks, block)
+					// Drop the block if it surely cannot fit
+					if pm.chainman.HasBlock(hash) || !pm.chainman.HasBlock(block.ParentHash()) {
+						delete(pending, hash)
+						continue
 					}
-					delete(pending, hash)
+					// Otherwise accumulate for import
+					peers = append(peers, announce.peer)
+					blocks = append(blocks, block)
 				}
 			}
 			// If any explicit fetches were replied to, import them
 			if count := len(blocks); count > 0 {
 				glog.V(logger.Debug).Infof("Importing %d explicitly fetched blocks", len(blocks))
 				go func() {
+					// Make sure all hashes are cleaned up
+					for _, block := range blocks {
+						hash := block.Hash()
+						defer func() { done <- hash }()
+					}
+					// Try and actually import the blocks
 					for i := 0; i < len(blocks); i++ {
 						if err := pm.importBlock(peers[i], blocks[i], nil); err != nil {
 							glog.V(logger.Detail).Infof("Failed to import explicitly fetched block: %v", err)
