@@ -20,6 +20,8 @@ type Environment interface {
 	GasLimit() *big.Int
 	Transfer(from, to Account, amount *big.Int) error
 	AddLog(*state.Log)
+	AddStructLog(StructLog)
+	StructLogs() []StructLog
 
 	VmType() Type
 
@@ -29,6 +31,14 @@ type Environment interface {
 	Call(me ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
 	CallCode(me ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
 	Create(me ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
+}
+
+type StructLog struct {
+	Pc     uint64
+	Op     OpCode
+	Gas    *big.Int
+	Memory []byte
+	Stack  []*big.Int
 }
 
 type Account interface {

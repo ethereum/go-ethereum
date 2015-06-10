@@ -5,16 +5,20 @@ import (
 	"math/big"
 )
 
-func newStack() *stack {
-	return &stack{}
+func newStack() *Stack {
+	return &Stack{}
 }
 
-type stack struct {
+type Stack struct {
 	data []*big.Int
 	ptr  int
 }
 
-func (st *stack) push(d *big.Int) {
+func (st *Stack) Data() []*big.Int {
+	return st.data
+}
+
+func (st *Stack) push(d *big.Int) {
 	// NOTE push limit (1024) is checked in baseCheck
 	stackItem := new(big.Int).Set(d)
 	if len(st.data) > st.ptr {
@@ -25,36 +29,36 @@ func (st *stack) push(d *big.Int) {
 	st.ptr++
 }
 
-func (st *stack) pop() (ret *big.Int) {
+func (st *Stack) pop() (ret *big.Int) {
 	st.ptr--
 	ret = st.data[st.ptr]
 	return
 }
 
-func (st *stack) len() int {
+func (st *Stack) len() int {
 	return st.ptr
 }
 
-func (st *stack) swap(n int) {
+func (st *Stack) swap(n int) {
 	st.data[st.len()-n], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-n]
 }
 
-func (st *stack) dup(n int) {
+func (st *Stack) dup(n int) {
 	st.push(st.data[st.len()-n])
 }
 
-func (st *stack) peek() *big.Int {
+func (st *Stack) peek() *big.Int {
 	return st.data[st.len()-1]
 }
 
-func (st *stack) require(n int) error {
+func (st *Stack) require(n int) error {
 	if st.len() < n {
 		return fmt.Errorf("stack underflow (%d <=> %d)", len(st.data), n)
 	}
 	return nil
 }
 
-func (st *stack) Print() {
+func (st *Stack) Print() {
 	fmt.Println("### stack ###")
 	if len(st.data) > 0 {
 		for i, val := range st.data {

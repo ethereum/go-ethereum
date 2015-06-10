@@ -7,23 +7,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 )
 
-type log struct {
-	op     OpCode
-	gas    *big.Int
-	memory []byte
-	stack  []*big.Int
-}
-
 type Vm struct {
 	env Environment
-
-	// structured logging
-	Logs   []log
-	logStr string
 
 	err error
 	// For logging
@@ -40,7 +28,7 @@ type Vm struct {
 }
 
 func New(env Environment) *Vm {
-	return &Vm{env: env, Recoverable: true}
+	return &Vm{env: env, debug: Debug, Recoverable: true}
 }
 
 func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
@@ -54,8 +42,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		price  = context.Price
 	)
 
-	self.Printf("(%d) (%x) %x (code=%d) gas: %v (d) %x", self.env.Depth(), caller.Address().Bytes()[:4], context.Address(), len(code), context.Gas, callData).Endl()
-
 	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
 	defer func() {
 		if self.After != nil {
@@ -63,7 +49,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		}
 
 		if err != nil {
-			self.Printf(" %v", err).Endl()
+
 			// In case of a VM exception (known exceptions) all gas consumed (panics NOT included).
 			context.UseGas(context.Gas)
 
@@ -96,10 +82,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				return fmt.Errorf("invalid jump destination (%v) %v", nop, to)
 			}
 
-			self.Printf(" ~> %v", to)
 			pc = to.Uint64()
-
-			self.Endl()
 
 			return nil
 		}
@@ -112,18 +95,14 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		// Get the memory location of pc
 		op = context.GetOp(pc)
 
-		self.Log(op, context.Gas, mem, stack)
+		self.log(pc, op, context.Gas, mem, stack)
 
-		self.Printf("(pc) %-3d -o- %-14s (m) %-4d (s) %-4d ", pc, op.String(), mem.Len(), stack.len())
 		newMemSize, gas, err := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
 		if err != nil {
 			return nil, err
 		}
 
-		self.Printf("(g) %-3v (%v)", gas, context.Gas)
-
 		if !context.UseGas(gas) {
-			self.Endl()
 
 			tmp := new(big.Int).Set(context.Gas)
 
@@ -137,40 +116,33 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		switch op {
 		case ADD:
 			x, y := stack.pop(), stack.pop()
-			self.Printf(" %v + %v", y, x)
 
 			base.Add(x, y)
 
 			U256(base)
 
-			self.Printf(" = %v", base)
 			// pop result back on the stack
 			stack.push(base)
 		case SUB:
 			x, y := stack.pop(), stack.pop()
-			self.Printf(" %v - %v", x, y)
 
 			base.Sub(x, y)
 
 			U256(base)
 
-			self.Printf(" = %v", base)
 			// pop result back on the stack
 			stack.push(base)
 		case MUL:
 			x, y := stack.pop(), stack.pop()
-			self.Printf(" %v * %v", y, x)
 
 			base.Mul(x, y)
 
 			U256(base)
 
-			self.Printf(" = %v", base)
 			// pop result back on the stack
 			stack.push(base)
 		case DIV:
 			x, y := stack.pop(), stack.pop()
-			self.Printf(" %v / %v", x, y)
 
 			if y.Cmp(common.Big0) != 0 {
 				base.Div(x, y)
@@ -178,13 +150,10 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			U256(base)
 
-			self.Printf(" = %v", base)
 			// pop result back on the stack
 			stack.push(base)
 		case SDIV:
 			x, y := S256(stack.pop()), S256(stack.pop())
-
-			self.Printf(" %v / %v", x, y)
 
 			if y.Cmp(common.Big0) == 0 {
 				base.Set(common.Big0)
@@ -201,12 +170,9 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				U256(base)
 			}
 
-			self.Printf(" = %v", base)
 			stack.push(base)
 		case MOD:
 			x, y := stack.pop(), stack.pop()
-
-			self.Printf(" %v %% %v", x, y)
 
 			if y.Cmp(common.Big0) == 0 {
 				base.Set(common.Big0)
@@ -216,12 +182,9 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			U256(base)
 
-			self.Printf(" = %v", base)
 			stack.push(base)
 		case SMOD:
 			x, y := S256(stack.pop()), S256(stack.pop())
-
-			self.Printf(" %v %% %v", x, y)
 
 			if y.Cmp(common.Big0) == 0 {
 				base.Set(common.Big0)
@@ -238,19 +201,14 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				U256(base)
 			}
 
-			self.Printf(" = %v", base)
 			stack.push(base)
 
 		case EXP:
 			x, y := stack.pop(), stack.pop()
 
-			self.Printf(" %v ** %v", x, y)
-
 			base.Exp(x, y, Pow256)
 
 			U256(base)
-
-			self.Printf(" = %v", base)
 
 			stack.push(base)
 		case SIGNEXTEND:
@@ -268,15 +226,13 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 				num = U256(num)
 
-				self.Printf(" = %v", num)
-
 				stack.push(num)
 			}
 		case NOT:
 			stack.push(U256(new(big.Int).Not(stack.pop())))
 		case LT:
 			x, y := stack.pop(), stack.pop()
-			self.Printf(" %v < %v", x, y)
+
 			// x < y
 			if x.Cmp(y) < 0 {
 				stack.push(common.BigTrue)
@@ -285,7 +241,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			}
 		case GT:
 			x, y := stack.pop(), stack.pop()
-			self.Printf(" %v > %v", x, y)
 
 			// x > y
 			if x.Cmp(y) > 0 {
@@ -296,7 +251,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 		case SLT:
 			x, y := S256(stack.pop()), S256(stack.pop())
-			self.Printf(" %v < %v", x, y)
+
 			// x < y
 			if x.Cmp(S256(y)) < 0 {
 				stack.push(common.BigTrue)
@@ -305,7 +260,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			}
 		case SGT:
 			x, y := S256(stack.pop()), S256(stack.pop())
-			self.Printf(" %v > %v", x, y)
 
 			// x > y
 			if x.Cmp(y) > 0 {
@@ -316,7 +270,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 		case EQ:
 			x, y := stack.pop(), stack.pop()
-			self.Printf(" %v == %v", y, x)
 
 			// x == y
 			if x.Cmp(y) == 0 {
@@ -334,17 +287,14 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 		case AND:
 			x, y := stack.pop(), stack.pop()
-			self.Printf(" %v & %v", y, x)
 
 			stack.push(base.And(x, y))
 		case OR:
 			x, y := stack.pop(), stack.pop()
-			self.Printf(" %v | %v", x, y)
 
 			stack.push(base.Or(x, y))
 		case XOR:
 			x, y := stack.pop(), stack.pop()
-			self.Printf(" %v ^ %v", x, y)
 
 			stack.push(base.Xor(x, y))
 		case BYTE:
@@ -357,8 +307,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			} else {
 				base.Set(common.BigFalse)
 			}
-
-			self.Printf(" => 0x%x", base.Bytes())
 
 			stack.push(base)
 		case ADDMOD:
@@ -373,8 +321,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				base = U256(base)
 			}
 
-			self.Printf(" %v + %v %% %v = %v", x, y, z, base)
-
 			stack.push(base)
 		case MULMOD:
 			x := stack.pop()
@@ -388,8 +334,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				U256(base)
 			}
 
-			self.Printf(" %v + %v %% %v = %v", x, y, z, base)
-
 			stack.push(base)
 
 		case SHA3:
@@ -398,44 +342,35 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			stack.push(common.BigD(data))
 
-			self.Printf(" => (%v) %x", size, data)
 		case ADDRESS:
 			stack.push(common.Bytes2Big(context.Address().Bytes()))
 
-			self.Printf(" => %x", context.Address())
 		case BALANCE:
 			addr := common.BigToAddress(stack.pop())
 			balance := statedb.GetBalance(addr)
 
 			stack.push(balance)
 
-			self.Printf(" => %v (%x)", balance, addr)
 		case ORIGIN:
 			origin := self.env.Origin()
 
 			stack.push(origin.Big())
 
-			self.Printf(" => %x", origin)
 		case CALLER:
 			caller := context.caller.Address()
 			stack.push(common.Bytes2Big(caller.Bytes()))
 
-			self.Printf(" => %x", caller)
 		case CALLVALUE:
 			stack.push(value)
 
-			self.Printf(" => %v", value)
 		case CALLDATALOAD:
 			data := getData(callData, stack.pop(), common.Big32)
-
-			self.Printf(" => 0x%x", data)
 
 			stack.push(common.Bytes2Big(data))
 		case CALLDATASIZE:
 			l := int64(len(callData))
 			stack.push(big.NewInt(l))
 
-			self.Printf(" => %d", l)
 		case CALLDATACOPY:
 			var (
 				mOff = stack.pop()
@@ -446,7 +381,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			mem.Set(mOff.Uint64(), l.Uint64(), data)
 
-			self.Printf(" => [%v, %v, %v]", mOff, cOff, l)
 		case CODESIZE, EXTCODESIZE:
 			var code []byte
 			if op == EXTCODESIZE {
@@ -460,7 +394,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			l := big.NewInt(int64(len(code)))
 			stack.push(l)
 
-			self.Printf(" => %d", l)
 		case CODECOPY, EXTCODECOPY:
 			var code []byte
 			if op == EXTCODECOPY {
@@ -480,11 +413,8 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			mem.Set(mOff.Uint64(), l.Uint64(), codeCopy)
 
-			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, codeCopy)
 		case GASPRICE:
 			stack.push(context.Price)
-
-			self.Printf(" => %x", context.Price)
 
 		case BLOCKHASH:
 			num := stack.pop()
@@ -496,33 +426,27 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				stack.push(common.Big0)
 			}
 
-			self.Printf(" => 0x%x", stack.peek().Bytes())
 		case COINBASE:
 			coinbase := self.env.Coinbase()
 
 			stack.push(coinbase.Big())
 
-			self.Printf(" => 0x%x", coinbase)
 		case TIMESTAMP:
 			time := self.env.Time()
 
 			stack.push(big.NewInt(time))
 
-			self.Printf(" => 0x%x", time)
 		case NUMBER:
 			number := self.env.BlockNumber()
 
 			stack.push(U256(number))
 
-			self.Printf(" => 0x%x", number.Bytes())
 		case DIFFICULTY:
 			difficulty := self.env.Difficulty()
 
 			stack.push(difficulty)
 
-			self.Printf(" => 0x%x", difficulty.Bytes())
 		case GASLIMIT:
-			self.Printf(" => %v", self.env.GasLimit())
 
 			stack.push(self.env.GasLimit())
 
@@ -533,19 +457,16 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			stack.push(common.Bytes2Big(byts))
 			pc += size
 
-			self.Printf(" => 0x%x", byts)
 		case POP:
 			stack.pop()
 		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
 			n := int(op - DUP1 + 1)
 			stack.dup(n)
 
-			self.Printf(" => [%d] 0x%x", n, stack.peek().Bytes())
 		case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
 			n := int(op - SWAP1 + 2)
 			stack.swap(n)
 
-			self.Printf(" => [%d]", n)
 		case LOG0, LOG1, LOG2, LOG3, LOG4:
 			n := int(op - LOG0)
 			topics := make([]common.Hash, n)
@@ -558,38 +479,32 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			log := state.NewLog(context.Address(), topics, data, self.env.BlockNumber().Uint64())
 			self.env.AddLog(log)
 
-			self.Printf(" => %v", log)
 		case MLOAD:
 			offset := stack.pop()
 			val := common.BigD(mem.Get(offset.Int64(), 32))
 			stack.push(val)
 
-			self.Printf(" => 0x%x", val.Bytes())
 		case MSTORE:
 			// pop value of the stack
 			mStart, val := stack.pop(), stack.pop()
 			mem.Set(mStart.Uint64(), 32, common.BigToBytes(val, 256))
 
-			self.Printf(" => 0x%x", val)
 		case MSTORE8:
 			off, val := stack.pop().Int64(), stack.pop().Int64()
 
 			mem.store[off] = byte(val & 0xff)
 
-			self.Printf(" => [%v] 0x%x", off, mem.store[off])
 		case SLOAD:
 			loc := common.BigToHash(stack.pop())
 			val := common.Bytes2Big(statedb.GetState(context.Address(), loc))
 			stack.push(val)
 
-			self.Printf(" {0x%x : 0x%x}", loc, val.Bytes())
 		case SSTORE:
 			loc := common.BigToHash(stack.pop())
 			val := stack.pop()
 
 			statedb.SetState(context.Address(), loc, val)
 
-			self.Printf(" {0x%x : 0x%x}", loc, val.Bytes())
 		case JUMP:
 			if err := jump(pc, stack.pop()); err != nil {
 				return nil, err
@@ -607,8 +522,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				continue
 			}
 
-			self.Printf(" ~> false")
-
 		case JUMPDEST:
 		case PC:
 			stack.push(new(big.Int).SetUint64(pc))
@@ -617,7 +530,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		case GAS:
 			stack.push(context.Gas)
 
-			self.Printf(" => %x", context.Gas)
 		case CREATE:
 
 			var (
@@ -627,14 +539,12 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				gas          = new(big.Int).Set(context.Gas)
 				addr         common.Address
 			)
-			self.Endl()
 
 			context.UseGas(context.Gas)
 			ret, suberr, ref := self.env.Create(context, input, gas, price, value)
 			if suberr != nil {
 				stack.push(common.BigFalse)
 
-				self.Printf(" (*) 0x0 %v", suberr)
 			} else {
 				// gas < len(ret) * CreateDataGas == NO_CODE
 				dataGas := big.NewInt(int64(len(ret)))
@@ -659,7 +569,6 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			retOffset, retSize := stack.pop(), stack.pop()
 
 			address := common.BigToAddress(addr)
-			self.Printf(" => %x", address).Endl()
 
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
@@ -681,25 +590,20 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			if err != nil {
 				stack.push(common.BigFalse)
 
-				self.Printf("%v").Endl()
 			} else {
 				stack.push(common.BigTrue)
 
 				mem.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 			}
-			self.Printf("resume %x (%v)", context.Address(), context.Gas)
+
 		case RETURN:
 			offset, size := stack.pop(), stack.pop()
 			ret := mem.GetPtr(offset.Int64(), size.Int64())
-
-			self.Printf(" => [%v, %v] (%d) 0x%x", offset, size, len(ret), ret).Endl()
 
 			return context.Return(ret), nil
 		case SUICIDE:
 			receiver := statedb.GetOrNewStateObject(common.BigToAddress(stack.pop()))
 			balance := statedb.GetBalance(context.Address())
-
-			self.Printf(" => (%x) %v", receiver.Address().Bytes()[:4], balance)
 
 			receiver.AddBalance(balance)
 
@@ -707,22 +611,19 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			fallthrough
 		case STOP: // Stop the context
-			self.Endl()
 
 			return context.Return(nil), nil
 		default:
-			self.Printf("(pc) %-3v Invalid opcode %x\n", pc, op).Endl()
 
 			return nil, fmt.Errorf("Invalid opcode %x", op)
 		}
 
 		pc++
 
-		self.Endl()
 	}
 }
 
-func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *stack) (*big.Int, *big.Int, error) {
+func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *Stack) (*big.Int, *big.Int, error) {
 	var (
 		gas                 = new(big.Int)
 		newMemSize *big.Int = new(big.Int)
@@ -863,26 +764,13 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 	return newMemSize, gas, nil
 }
 
-func (vm *Vm) Log(op OpCode, gas *big.Int, memory *Memory, stack *stack) {
-	if vm.debug {
-		mem := make([]byte, len(memory.store))
-		copy(mem, memory.store)
-		stck := make([]*big.Int, len(stack.data))
-		copy(stck, stack.data)
-		vm.Logs = append(vm.Logs, log{op, new(big.Int).Set(gas), mem, stck})
-	}
-}
-
 func (self *Vm) RunPrecompiled(p *PrecompiledAccount, callData []byte, context *Context) (ret []byte, err error) {
 	gas := p.Gas(len(callData))
 	if context.UseGas(gas) {
 		ret = p.Call(callData)
-		self.Printf("NATIVE_FUNC => %x", ret)
-		self.Endl()
 
 		return context.Return(ret), nil
 	} else {
-		self.Printf("NATIVE_FUNC => failed").Endl()
 
 		tmp := new(big.Int).Set(context.Gas)
 
@@ -890,21 +778,14 @@ func (self *Vm) RunPrecompiled(p *PrecompiledAccount, callData []byte, context *
 	}
 }
 
-func (self *Vm) Printf(format string, v ...interface{}) VirtualMachine {
-	if self.debug {
-		self.logStr += fmt.Sprintf(format, v...)
+func (self *Vm) log(pc uint64, op OpCode, gas *big.Int, memory *Memory, stack *Stack) {
+	if Debug {
+		mem := make([]byte, len(memory.Data()))
+		copy(mem, memory.Data())
+		stck := make([]*big.Int, len(stack.Data()))
+		copy(stck, stack.Data())
+		self.env.AddStructLog(StructLog{pc, op, new(big.Int).Set(gas), mem, stck})
 	}
-
-	return self
-}
-
-func (self *Vm) Endl() VirtualMachine {
-	if self.debug {
-		glog.V(0).Infoln(self.logStr)
-		self.logStr = ""
-	}
-
-	return self
 }
 
 func (self *Vm) Env() Environment {

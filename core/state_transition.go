@@ -223,6 +223,10 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 		return nil, nil, InvalidTxError(err)
 	}
 
+	if vm.Debug {
+		VmStdErrFormat(vmenv.StructLogs())
+	}
+
 	self.refundGas()
 	self.state.AddBalance(self.coinbase, new(big.Int).Mul(self.gasUsed(), self.gasPrice))
 
