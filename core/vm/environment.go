@@ -41,6 +41,7 @@ type StructLog struct {
 	Pc      uint64
 	Op      OpCode
 	Gas     *big.Int
+	GasCost *big.Int
 	Memory  []byte
 	Stack   []*big.Int
 	Storage map[common.Hash][]byte

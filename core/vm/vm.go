@@ -100,13 +100,13 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		// Get the memory location of pc
 		op = context.GetOp(pc)
 
-		self.log(pc, op, context.Gas, mem, stack, context)
-
 		// calculate the new memory size and gas price for the current executing opcode
 		newMemSize, gas, err := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
 		if err != nil {
 			return nil, err
 		}
+
+		self.log(pc, op, context.Gas, gas, mem, stack, context)
 
 		// Use the calculated gas. When insufficient gas is present, use all gas and return an
 		// Out Of Gas error
@@ -789,7 +789,7 @@ func (self *Vm) RunPrecompiled(p *PrecompiledAccount, input []byte, context *Con
 
 // log emits a log event to the environment for each opcode encountered. This is not to be confused with the
 // LOG* opcode.
-func (self *Vm) log(pc uint64, op OpCode, gas *big.Int, memory *Memory, stack *stack, context *Context) {
+func (self *Vm) log(pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *stack, context *Context) {
 	if Debug {
 		mem := make([]byte, len(memory.Data()))
 		copy(mem, memory.Data())
@@ -802,7 +802,7 @@ func (self *Vm) log(pc uint64, op OpCode, gas *big.Int, memory *Memory, stack *s
 			storage[common.BytesToHash(k)] = v
 		})
 
-		self.env.AddStructLog(StructLog{pc, op, new(big.Int).Set(gas), mem, stck, storage})
+		self.env.AddStructLog(StructLog{pc, op, new(big.Int).Set(gas), cost, mem, stck, storage})
 	}
 }
 

@@ -1,4 +1,4 @@
-package core
+package vm
 
 import (
 	"fmt"
@@ -6,13 +6,12 @@ import (
 	"unicode/utf8"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-func VmStdErrFormat(logs []vm.StructLog) {
+func StdErrFormat(logs []StructLog) {
 	fmt.Fprintf(os.Stderr, "VM Stats %d ops\n", len(logs))
 	for _, log := range logs {
-		fmt.Fprintf(os.Stderr, "PC %08d: %s\n", log.Pc, log.Op)
+		fmt.Fprintf(os.Stderr, "PC %08d: %s GAS: %v COST: %v\n", log.Pc, log.Op, log.Gas, log.GasCost)
 		fmt.Fprintln(os.Stderr, "STACK =", len(log.Stack))
 		for i, item := range log.Stack {
 			fmt.Fprintf(os.Stderr, "%04d: %x\n", i, common.LeftPadBytes(item.Bytes(), 32))
@@ -41,6 +40,6 @@ func VmStdErrFormat(logs []vm.StructLog) {
 		for h, item := range log.Storage {
 			fmt.Fprintf(os.Stderr, "%x: %x\n", h, common.LeftPadBytes(item, 32))
 		}
-
+		fmt.Fprintln(os.Stderr)
 	}
 }

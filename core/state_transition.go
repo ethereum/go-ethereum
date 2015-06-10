@@ -224,7 +224,7 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 	}
 
 	if vm.Debug {
-		VmStdErrFormat(vmenv.StructLogs())
+		vm.StdErrFormat(vmenv.StructLogs())
 	}
 
 	self.refundGas()
