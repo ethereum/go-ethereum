@@ -6,13 +6,6 @@ web3._extend({
 	methods:
 	[
 		new web3._extend.Method({
-			name: 'listAccounts',
-			call: 'personal_listAccounts',
-			params: 0,
-			inputFormatter: [],
-			outputFormatter: function(obj) { return obj; }
-		}),
-		new web3._extend.Method({
 			name: 'newAccount',
 			call: 'personal_newAccount',
 			params: 1,
@@ -29,6 +22,11 @@ web3._extend({
 	],
 	properties:
 	[
+		new web3._extend.Property({
+			name: 'accounts',
+			getter: 'personal_listAccounts',
+			outputFormatter: function(obj) { return obj; }
+		})
 	]
 });
 `

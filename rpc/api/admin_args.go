@@ -3,8 +3,6 @@ package api
 import (
 	"encoding/json"
 
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
@@ -68,16 +66,8 @@ func (args *VerbosityArgs) UnmarshalJSON(b []byte) (err error) {
 		return shared.NewDecodeParamError("Expected enode as argument")
 	}
 
-	if levelint, ok := obj[0].(int); ok {
-		args.Level = levelint
-	} else if levelstr, ok := obj[0].(string); ok {
-		if !ok {
-			return shared.NewInvalidTypeError("level", "not a string")
-		}
-		level, success := new(big.Int).SetString(levelstr, 0)
-		if !success {
-			return shared.NewDecodeParamError("Unable to parse verbosity level")
-		}
+	level, err := numString(obj[0])
+	if err == nil {
 		args.Level = int(level.Int64())
 	}
 
