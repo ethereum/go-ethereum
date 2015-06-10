@@ -10,7 +10,7 @@ import (
 var (
 	// mapping between methods and handlers
 	netMapping = map[string]nethandler{
-		"net_id":        (*netApi).NetworkVersion,
+		"net_version":   (*netApi).Version,
 		"net_peerCount": (*netApi).PeerCount,
 		"net_listening": (*netApi).IsListening,
 		"net_peers":     (*netApi).Peers,
@@ -63,7 +63,7 @@ func (self *netApi) Name() string {
 }
 
 // Network version
-func (self *netApi) NetworkVersion(req *shared.Request) (interface{}, error) {
+func (self *netApi) Version(req *shared.Request) (interface{}, error) {
 	return self.xeth.NetworkVersion(), nil
 }
 

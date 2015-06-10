@@ -25,14 +25,15 @@ var (
 	AdminMapping = map[string]adminhandler{
 		//		"admin_startRPC": (*adminApi).StartRPC,
 		//		"admin_stopRPC":  (*adminApi).StopRPC,
-		"admin_addPeer":     (*adminApi).AddPeer,
-		"admin_peers":       (*adminApi).Peers,
-		"admin_nodeInfo":    (*adminApi).NodeInfo,
-		"admin_exportChain": (*adminApi).ExportChain,
-		"admin_importChain": (*adminApi).ImportChain,
-		"admin_verbosity":   (*adminApi).Verbosity,
-		"admin_syncStatus":  (*adminApi).SyncStatus,
-		"admin_setSolc":     (*adminApi).SetSolc,
+		"admin_addPeer":         (*adminApi).AddPeer,
+		"admin_peers":           (*adminApi).Peers,
+		"admin_nodeInfo":        (*adminApi).NodeInfo,
+		"admin_exportChain":     (*adminApi).ExportChain,
+		"admin_importChain":     (*adminApi).ImportChain,
+		"admin_verbosity":       (*adminApi).Verbosity,
+		"admin_chainSyncStatus": (*adminApi).ChainSyncStatus,
+		"admin_setSolc":         (*adminApi).SetSolc,
+		"admin_datadir":         (*adminApi).DataDir,
 	}
 )
 
@@ -129,6 +130,10 @@ func (self *adminApi) NodeInfo(req *shared.Request) (interface{}, error) {
 	return self.ethereum.NodeInfo(), nil
 }
 
+func (self *adminApi) DataDir(req *shared.Request) (interface{}, error) {
+	return self.ethereum.DataDir, nil
+}
+
 func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
 	for _, b := range bs {
 		if !chain.HasBlock(b.Hash()) {
@@ -209,9 +214,9 @@ func (self *adminApi) Verbosity(req *shared.Request) (interface{}, error) {
 	return true, nil
 }
 
-func (self *adminApi) SyncStatus(req *shared.Request) (interface{}, error) {
+func (self *adminApi) ChainSyncStatus(req *shared.Request) (interface{}, error) {
 	pending, cached := self.ethereum.Downloader().Stats()
-	return map[string]interface{}{"available": pending, "waitingForImport": cached}, nil
+	return map[string]interface{}{"blocksAvailable": pending, "blocksWaitingForImport": cached}, nil
 }
 
 func (self *adminApi) SetSolc(req *shared.Request) (interface{}, error) {

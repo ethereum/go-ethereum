@@ -32,12 +32,12 @@ import (
 	"github.com/ethereum/go-ethereum/common/docserver"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
-	"github.com/ethereum/go-ethereum/rpc/api"
 )
 
 type prompter interface {
@@ -235,6 +235,7 @@ func (self *jsre) suportedApis(ipcpath string) ([]string, error) {
 // show summary of current geth instance
 func (self *jsre) welcome(ipcpath string) {
 	self.re.Eval(`console.log('instance: ' + web3.version.client);`)
+	self.re.Eval(`console.log(' datadir: ' + admin.datadir);`)
 	self.re.Eval(`console.log("coinbase: " + eth.coinbase);`)
 	self.re.Eval(`var lastBlockTimestamp = 1000 * eth.getBlock(eth.blockNumber).timestamp`)
 	self.re.Eval(`console.log("at block: " + eth.blockNumber + " (" + new Date(lastBlockTimestamp).toLocaleDateString()

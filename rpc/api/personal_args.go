@@ -16,13 +16,16 @@ func (args *NewAccountArgs) UnmarshalJSON(b []byte) (err error) {
 		return shared.NewDecodeParamError(err.Error())
 	}
 
-	passhrase, ok := obj[0].(string)
-	if !ok {
-		return shared.NewInvalidTypeError("passhrase", "not a string")
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
 	}
-	args.Passphrase = passhrase
 
-	return nil
+	if passhrase, ok := obj[0].(string); ok {
+		args.Passphrase = passhrase
+		return nil
+	}
+
+	return shared.NewInvalidTypeError("passhrase", "not a string")
 }
 
 type DeleteAccountArgs struct {
@@ -36,17 +39,21 @@ func (args *DeleteAccountArgs) UnmarshalJSON(b []byte) (err error) {
 		return shared.NewDecodeParamError(err.Error())
 	}
 
-	addr, ok := obj[0].(string)
-	if !ok {
+	if len(obj) < 2 {
+		return shared.NewInsufficientParamsError(len(obj), 2)
+	}
+
+	if addr, ok := obj[0].(string); ok {
+		args.Address = addr
+	} else {
 		return shared.NewInvalidTypeError("address", "not a string")
 	}
-	args.Address = addr
 
-	passhrase, ok := obj[1].(string)
-	if !ok {
+	if passhrase, ok := obj[1].(string); ok {
+		args.Passphrase = passhrase
+	} else {
 		return shared.NewInvalidTypeError("passhrase", "not a string")
 	}
-	args.Passphrase = passhrase
 
 	return nil
 }
@@ -65,17 +72,21 @@ func (args *UnlockAccountArgs) UnmarshalJSON(b []byte) (err error) {
 
 	args.Duration = -1
 
-	addrstr, ok := obj[0].(string)
-	if !ok {
+	if len(obj) < 2 {
+		return shared.NewInsufficientParamsError(len(obj), 2)
+	}
+
+	if addrstr, ok := obj[0].(string); ok {
+		args.Address = addrstr
+	} else {
 		return shared.NewInvalidTypeError("address", "not a string")
 	}
-	args.Address = addrstr
 
-	passphrasestr, ok := obj[1].(string)
-	if !ok {
+	if passphrasestr, ok := obj[1].(string); ok {
+		args.Passphrase = passphrasestr
+	} else {
 		return shared.NewInvalidTypeError("passphrase", "not a string")
 	}
-	args.Passphrase = passphrasestr
 
 	return nil
 }
