@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-var vmTestDir = filepath.Join(baseDir, "VMTests")
-
 // I've created a new function for each tests so it's easier to identify where the problem lies if any of them fail.
 func TestVMArithmetic(t *testing.T) {
 	fn := filepath.Join(vmTestDir, "vmArithmeticTest.json")

@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-var transactionTestDir = filepath.Join(baseDir, "TransactionTests")
-
 func TestTransactions(t *testing.T) {
 	notWorking := make(map[string]bool, 100)
 

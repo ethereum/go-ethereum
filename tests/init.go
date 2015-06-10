@@ -1,25 +1,21 @@
 package tests
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
-	// "log"
 	"net/http"
 	"os"
-
-	// logpkg "github.com/ethereum/go-ethereum/logger"
+	"path/filepath"
 )
 
-// var Logger *logpkg.StdLogSystem
-// var Log = logpkg.NewLogger("TEST")
-
-// func init() {
-// 	Logger = logpkg.NewStdLogSystem(os.Stdout, log.LstdFlags, logpkg.InfoLevel)
-// 	logpkg.AddLogSystem(Logger)
-// }
+var (
+	baseDir            = filepath.Join(".", "files")
+	blockTestDir       = filepath.Join(baseDir, "BlockTests")
+	stateTestDir       = filepath.Join(baseDir, "StateTests")
+	transactionTestDir = filepath.Join(baseDir, "TransactionTests")
+	vmTestDir          = filepath.Join(baseDir, "VMTests")
+)
 
 func readJSON(reader io.Reader, value interface{}) error {
 	data, err := ioutil.ReadAll(reader)
@@ -56,5 +52,4 @@ func CreateFileTests(fn string, value interface{}) error {
 		return err
 	}
 	return nil
-}
 }

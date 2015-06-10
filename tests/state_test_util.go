@@ -2,20 +2,16 @@ package tests
 
 import (
 	"bytes"
-	// "errors"
 	"fmt"
 	"math/big"
 	"strconv"
-	// "testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
-	// "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	// "github.com/ethereum/go-ethereum/logger"
 )
 
 func RunStateTest(p string) error {
@@ -109,7 +105,7 @@ func RunStateTest(p string) error {
 
 		// check logs
 		if len(test.Logs) > 0 {
-			lerr := CheckLogs(test.Logs, logs, t)
+			lerr := checkLogs(test.Logs, logs)
 			if lerr != nil {
 				return fmt.Errorf("'%s' ", name, lerr.Error())
 			}
@@ -117,39 +113,6 @@ func RunStateTest(p string) error {
 
 		fmt.Println("State test passed: ", name)
 		//fmt.Println(string(statedb.Dump()))
-	}
-	// logger.Flush()
-}
-
-func CheckLogs(tlog []Log, logs state.Logs, t *testing.T) error {
-
-	if len(tlog) != len(logs) {
-		return fmt.Errorf("log length mismatch. Expected %d, got %d", len(tlog), len(logs))
-	} else {
-		for i, log := range tlog {
-			if common.HexToAddress(log.AddressF) != logs[i].Address {
-				return fmt.Errorf("log address expected %v got %x", log.AddressF, logs[i].Address)
-			}
-
-			if !bytes.Equal(logs[i].Data, common.FromHex(log.DataF)) {
-				return fmt.Errorf("log data expected %v got %x", log.DataF, logs[i].Data)
-			}
-
-			if len(log.TopicsF) != len(logs[i].Topics) {
-				return fmt.Errorf("log topics length expected %d got %d", len(log.TopicsF), logs[i].Topics)
-			} else {
-				for j, topic := range log.TopicsF {
-					if common.HexToHash(topic) != logs[i].Topics[j] {
-						return fmt.Errorf("log topic[%d] expected %v got %x", j, topic, logs[i].Topics[j])
-					}
-				}
-			}
-			genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
-
-			if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
-				return fmt.Errorf("bloom mismatch")
-			}
-		}
 	}
 	return nil
 }

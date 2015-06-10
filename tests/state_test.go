@@ -6,8 +6,6 @@ import (
 	"testing"
 )
 
-var stateTestDir = filepath.Join(baseDir, "StateTests")
-
 func TestStateSystemOperations(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stSystemOperationsTest.json")
 	if err := RunStateTest(fn); err != nil {

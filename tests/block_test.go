@@ -5,10 +5,6 @@ import (
 	"testing"
 )
 
-var baseDir = filepath.Join(".", "files")
-var blockTestDir = filepath.Join(baseDir, "BlockTests")
-
-// TODO: refactor test setup & execution to better align with vm and tx tests
 func TestBcValidBlockTests(t *testing.T) {
 	runBlockTestsInFile(filepath.Join(blockTestDir, "bcValidBlockTest.json"), []string{"SimpleTx3"})
 }
