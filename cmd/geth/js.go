@@ -73,7 +73,7 @@ type jsre struct {
 	prompter
 }
 
-func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, interactive bool, f xeth.Frontend) *jsre {
+func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain, ipcpath string, interactive bool, f xeth.Frontend) *jsre {
 	js := &jsre{ethereum: ethereum, ps1: "> "}
 	// set default cors domain used by startRpc from CLI flag
 	js.corsDomain = corsDomain
@@ -84,7 +84,7 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, interactive boo
 	js.wait = js.xeth.UpdateState()
 	// update state in separare forever blocks
 	js.re = re.New(libPath)
-	js.apiBindings(f)
+	js.apiBindings(ipcpath, f)
 	js.adminBindings()
 
 	if !liner.TerminalSupported() || !interactive {
@@ -103,14 +103,15 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, interactive boo
 	return js
 }
 
-func (js *jsre) apiBindings(f xeth.Frontend) {
+func (js *jsre) apiBindings(ipcpath string, f xeth.Frontend) {
 	xe := xeth.New(js.ethereum, f)
 	ethApi := rpc.NewEthereumApi(xe)
-	jeth := rpc.NewJeth(ethApi, js.re)
+	jeth := rpc.NewJeth(ethApi, js.re, ipcpath)
 
 	js.re.Set("jeth", struct{}{})
 	t, _ := js.re.Get("jeth")
 	jethObj := t.Object()
+
 	jethObj.Set("send", jeth.Send)
 	jethObj.Set("sendAsync", jeth.Send)
 
@@ -119,7 +120,7 @@ func (js *jsre) apiBindings(f xeth.Frontend) {
 		utils.Fatalf("Error loading bignumber.js: %v", err)
 	}
 
-	err = js.re.Compile("ethereum.js", re.Ethereum_JS)
+	err = js.re.Compile("ethereum.js", re.Web3_JS)
 	if err != nil {
 		utils.Fatalf("Error loading ethereum.js: %v", err)
 	}
