@@ -76,8 +76,10 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		codehash = crypto.Sha3Hash(code) // codehash is used when doing jump dest caching
 		mem      = NewMemory()           // bound memory
 		stack    = newstack()            // local stack
-		pc       = uint64(0)             // program counter
 		statedb  = self.env.State()      // current state
+		// For optimisation reason we're using uint64 as the program counter.
+		// It's theoretically possible to go above 2^64. The YP defines the PC to be uint256. Pratically much less so feasible.
+		pc = uint64(0) // program counter
 
 		// jump evaluates and checks whether the given jump destination is a valid one
 		// if valid move the `pc` otherwise return an error.
