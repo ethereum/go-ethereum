@@ -31,7 +31,6 @@ var (
 )
 
 var (
-	errLowTd            = errors.New("peers TD is too low")
 	errBusy             = errors.New("busy")
 	errUnknownPeer      = errors.New("peer is unknown or unhealthy")
 	errBadPeer          = errors.New("action from bad peer ignored")
@@ -94,8 +93,9 @@ type Downloader struct {
 	dropPeer peerDropFn       // Retrieved the TD of our own chain
 
 	// Status
-	synchronising int32
-	notified      int32
+	synchroniseMock func(id string, hash common.Hash) error // Replacement for synchronise during testing
+	synchronising   int32
+	notified        int32
 
 	// Channels
 	newPeerCh chan *peer
@@ -202,7 +202,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash) {
 	case errBusy:
 		glog.V(logger.Detail).Infof("Synchronisation already in progress")
 
-	case errTimeout, errBadPeer, errEmptyHashSet, errInvalidChain, errCrossCheckFailed:
+	case errTimeout, errBadPeer, errStallingPeer, errBannedHead, errEmptyHashSet, errPeersUnavailable, errInvalidChain, errCrossCheckFailed:
 		glog.V(logger.Debug).Infof("Removing peer %v: %v", id, err)
 		d.dropPeer(id)
 
@@ -218,6 +218,10 @@ func (d *Downloader) Synchronise(id string, head common.Hash) {
 // it will use the best peer possible and synchronize if it's TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
 func (d *Downloader) synchronise(id string, hash common.Hash) error {
+	// Mock out the synchonisation if testing
+	if d.synchroniseMock != nil {
+		return d.synchroniseMock(id, hash)
+	}
 	// Make sure only one goroutine is ever allowed past this point at once
 	if !atomic.CompareAndSwapInt32(&d.synchronising, 0, 1) {
 		return errBusy
@@ -226,7 +230,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash) error {
 
 	// If the head hash is banned, terminate immediately
 	if d.banned.Has(hash) {
-		return errInvalidChain
+		return errBannedHead
 	}
 	// Post a user notification of the sync (only once per session)
 	if atomic.CompareAndSwapInt32(&d.notified, 0, 1) {

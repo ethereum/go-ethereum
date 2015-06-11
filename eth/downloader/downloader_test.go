@@ -2,6 +2,7 @@ package downloader
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -69,7 +70,7 @@ func newTester() *downloadTester {
 		peerBlocks: make(map[string]map[common.Hash]*types.Block),
 	}
 	var mux event.TypeMux
-	downloader := New(&mux, tester.hasBlock, tester.getBlock, nil)
+	downloader := New(&mux, tester.hasBlock, tester.getBlock, tester.dropPeer)
 	tester.downloader = downloader
 
 	return tester
@@ -128,6 +129,14 @@ func (dl *downloadTester) newPeer(id string, hashes []common.Hash, blocks map[co
 		dl.peerBlocks[id] = blocks
 	}
 	return err
+}
+
+// dropPeer simulates a hard peer removal from the connection pool.
+func (dl *downloadTester) dropPeer(id string) {
+	delete(dl.peerHashes, id)
+	delete(dl.peerBlocks, id)
+
+	dl.downloader.UnregisterPeer(id)
 }
 
 // peerGetBlocksFn constructs a getHashes function associated with a particular
@@ -544,14 +553,14 @@ func TestBannedChainStarvationAttack(t *testing.T) {
 	for banned := tester.downloader.banned.Size(); ; {
 		// Try to sync with the attacker, check hash chain failure
 		if _, err := tester.syncTake("attack", hashes[0]); err != errInvalidChain {
+			if tester.downloader.banned.Has(hashes[0]) && err == errBannedHead {
+				break
+			}
 			t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errInvalidChain)
 		}
 		// Check that the ban list grew with at least 1 new item, or all banned
 		bans := tester.downloader.banned.Size()
 		if bans < banned+1 {
-			if tester.downloader.banned.Has(hashes[0]) {
-				break
-			}
 			t.Fatalf("ban count mismatch: have %v, want %v+", bans, banned+1)
 		}
 		banned = bans
@@ -603,6 +612,50 @@ func TestBannedChainMemoryExhaustionAttack(t *testing.T) {
 			if !tester.downloader.banned.Has(hash) {
 				t.Fatalf("hard coded ban evacuated: %x", hash)
 			}
+		}
+	}
+}
+
+// Tests that misbehaving peers are disconnected, whilst behaving ones are not.
+func TestAttackerDropping(t *testing.T) {
+	// Define the disconnection requirement for individual errors
+	tests := []struct {
+		result error
+		drop   bool
+	}{
+		{nil, false},                 // Sync succeeded, all is well
+		{errBusy, false},             // Sync is already in progress, no problem
+		{errUnknownPeer, false},      // Peer is unknown, was already dropped, don't double drop
+		{errBadPeer, true},           // Peer was deemed bad for some reason, drop it
+		{errStallingPeer, true},      // Peer was detected to be stalling, drop it
+		{errBannedHead, true},        // Peer's head hash is a known bad hash, drop it
+		{errNoPeers, false},          // No peers to download from, soft race, no issue
+		{errPendingQueue, false},     // There are blocks still cached, wait to exhaust, no issue
+		{errTimeout, true},           // No hashes received in due time, drop the peer
+		{errEmptyHashSet, true},      // No hashes were returned as a response, drop as it's a dead end
+		{errPeersUnavailable, true},  // Nobody had the advertised blocks, drop the advertiser
+		{errInvalidChain, true},      // Hash chain was detected as invalid, definitely drop
+		{errCrossCheckFailed, true},  // Hash-origin failed to pass a block cross check, drop
+		{errCancelHashFetch, false},  // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelBlockFetch, false}, // Synchronisation was canceled, origin may be innocent, don't drop
+	}
+	// Run the tests and check disconnection status
+	tester := newTester()
+	for i, tt := range tests {
+		// Register a new peer and ensure it's presence
+		id := fmt.Sprintf("test %d", i)
+		if err := tester.newPeer(id, []common.Hash{knownHash}, nil); err != nil {
+			t.Fatalf("test %d: failed to register new peer: %v", i, err)
+		}
+		if _, ok := tester.peerHashes[id]; !ok {
+			t.Fatalf("test %d: registered peer not found", i)
+		}
+		// Simulate a synchronisation and check the required result
+		tester.downloader.synchroniseMock = func(string, common.Hash) error { return tt.result }
+
+		tester.downloader.Synchronise(id, knownHash)
+		if _, ok := tester.peerHashes[id]; !ok != tt.drop {
+			t.Errorf("test %d: peer drop mismatch for %v: have %v, want %v", i, tt.result, !ok, tt.drop)
 		}
 	}
 }
