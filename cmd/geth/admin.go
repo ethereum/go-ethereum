@@ -271,9 +271,12 @@ func (js *jsre) debugBlock(call otto.FunctionCall) otto.Value {
 	}
 
 	tstart := time.Now()
-
 	old := vm.Debug
-	vm.Debug = true
+
+	if len(call.ArgumentList) > 1 {
+		vm.Debug, _ = call.Argument(1).ToBoolean()
+	}
+
 	_, err = js.ethereum.BlockProcessor().RetryProcess(block)
 	if err != nil {
 		fmt.Println(err)
