@@ -162,27 +162,25 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 
 	// Check the transaction doesn't exceed the current
 	// block limit gas.
-	if pool.gasLimit().Cmp(tx.GasLimit) < 0 {
+	if pool.gasLimit().Cmp(tx.Gas()) < 0 {
 		return ErrGasLimit
 	}
 
 	// Transactions can't be negative. This may never happen
 	// using RLP decoded transactions but may occur if you create
 	// a transaction using the RPC for example.
-	if tx.Amount.Cmp(common.Big0) < 0 {
+	if tx.Value().Cmp(common.Big0) < 0 {
 		return ErrNegativeValue
 	}
 
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	total := new(big.Int).Mul(tx.Price, tx.GasLimit)
-	total.Add(total, tx.Value())
-	if pool.currentState().GetBalance(from).Cmp(total) < 0 {
+	if pool.currentState().GetBalance(from).Cmp(tx.Cost()) < 0 {
 		return ErrInsufficientFunds
 	}
 
 	// Should supply enough intrinsic gas
-	if tx.GasLimit.Cmp(IntrinsicGas(tx)) < 0 {
+	if tx.Gas().Cmp(IntrinsicGas(tx)) < 0 {
 		return ErrIntrinsicGas
 	}
 
@@ -238,7 +236,7 @@ func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *types.Trans
 
 		// Increment the nonce on the pending state. This can only happen if
 		// the nonce is +1 to the previous one.
-		pool.pendingState.SetNonce(addr, tx.AccountNonce+1)
+		pool.pendingState.SetNonce(addr, tx.Nonce()+1)
 		// Notify the subscribers. This event is posted in a goroutine
 		// because it's possible that somewhere during the post "Remove transaction"
 		// gets called which will then wait for the global tx pool lock and deadlock.
@@ -341,7 +339,7 @@ func (pool *TxPool) checkQueue() {
 		trueNonce := pool.currentState().GetNonce(address)
 		addq := addq[:0]
 		for hash, tx := range txs {
-			if tx.AccountNonce < trueNonce {
+			if tx.Nonce() < trueNonce {
 				// Drop queued transactions whose nonce is lower than
 				// the account nonce because they have been processed.
 				delete(txs, hash)
@@ -362,8 +360,7 @@ func (pool *TxPool) checkQueue() {
 				delete(pool.queue[address], e.hash)
 				continue
 			}
-
-			if e.AccountNonce > guessedNonce {
+			if e.Nonce() > guessedNonce {
 				break
 			}
 			delete(txs, e.hash)
@@ -418,4 +415,4 @@ type txQueueEntry struct {
 
 func (q txQueue) Len() int           { return len(q) }
 func (q txQueue) Swap(i, j int)      { q[i], q[j] = q[j], q[i] }
-func (q txQueue) Less(i, j int) bool { return q[i].AccountNonce < q[j].AccountNonce }
+func (q txQueue) Less(i, j int) bool { return q[i].Nonce() < q[j].Nonce() }
