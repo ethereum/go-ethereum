@@ -14,29 +14,40 @@ import (
 )
 
 var (
-	knownHash   = common.Hash{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	unknownHash = common.Hash{9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9}
-	bannedHash  = common.Hash{5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5}
+	knownHash   = common.Hash{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+	unknownHash = common.Hash{2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}
+	bannedHash  = common.Hash{3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}
 
 	genesis = createBlock(1, common.Hash{}, knownHash)
 )
 
-func createHashes(start, amount int) (hashes []common.Hash) {
-	hashes = make([]common.Hash, amount+1)
-	hashes[len(hashes)-1] = knownHash
+// idCounter is used by the createHashes method the generate deterministic but unique hashes
+var idCounter = int64(2) // #1 is the genesis block
 
-	for i := range hashes[:len(hashes)-1] {
-		binary.BigEndian.PutUint64(hashes[i][:8], uint64(start+i+2))
+// createHashes generates a batch of hashes rooted at a specific point in the chain.
+func createHashes(amount int, root common.Hash) (hashes []common.Hash) {
+	hashes = make([]common.Hash, amount+1)
+	hashes[len(hashes)-1] = root
+
+	for i := 0; i < len(hashes)-1; i++ {
+		binary.BigEndian.PutUint64(hashes[i][:8], uint64(idCounter))
+		idCounter++
 	}
 	return
 }
 
+// createBlock assembles a new block at the given chain height.
 func createBlock(i int, parent, hash common.Hash) *types.Block {
 	header := &types.Header{Number: big.NewInt(int64(i))}
 	block := types.NewBlockWithHeader(header)
 	block.HeaderHash = hash
 	block.ParentHeaderHash = parent
 	return block
+}
+
+// copyBlock makes a deep copy of a block suitable for local modifications.
+func copyBlock(block *types.Block) *types.Block {
+	return createBlock(int(block.Number().Int64()), block.ParentHeaderHash, block.HeaderHash)
 }
 
 func createBlocksFromHashes(hashes []common.Hash) map[common.Hash]*types.Block {
@@ -76,10 +87,15 @@ func newTester() *downloadTester {
 	return tester
 }
 
+// sync starts synchronizing with a remote peer, blocking until it completes.
+func (dl *downloadTester) sync(id string) error {
+	return dl.downloader.synchronise(id, dl.peerHashes[id][0])
+}
+
 // syncTake is starts synchronising with a remote peer, but concurrently it also
 // starts fetching blocks that the downloader retrieved. IT blocks until both go
 // routines terminate.
-func (dl *downloadTester) syncTake(peerId string, head common.Hash) ([]*Block, error) {
+func (dl *downloadTester) syncTake(id string) ([]*Block, error) {
 	// Start a block collector to take blocks as they become available
 	done := make(chan struct{})
 	took := []*Block{}
@@ -102,7 +118,7 @@ func (dl *downloadTester) syncTake(peerId string, head common.Hash) ([]*Block, e
 		done <- struct{}{}
 	}()
 	// Start the downloading, sync the taker and return
-	err := dl.downloader.synchronise(peerId, head)
+	err := dl.sync(id)
 
 	done <- struct{}{}
 	<-done
@@ -124,9 +140,14 @@ func (dl *downloadTester) getBlock(hash common.Hash) *types.Block {
 func (dl *downloadTester) newPeer(id string, hashes []common.Hash, blocks map[common.Hash]*types.Block) error {
 	err := dl.downloader.RegisterPeer(id, hashes[0], dl.peerGetHashesFn(id), dl.peerGetBlocksFn(id))
 	if err == nil {
-		// Assign the owned hashes and blocks to the peer
-		dl.peerHashes[id] = hashes
-		dl.peerBlocks[id] = blocks
+		// Assign the owned hashes and blocks to the peer (deep copy)
+		dl.peerHashes[id] = make([]common.Hash, len(hashes))
+		copy(dl.peerHashes[id], hashes)
+
+		dl.peerBlocks[id] = make(map[common.Hash]*types.Block)
+		for hash, block := range blocks {
+			dl.peerBlocks[id][hash] = copyBlock(block)
+		}
 	}
 	return err
 }
@@ -192,14 +213,14 @@ func (dl *downloadTester) peerGetBlocksFn(id string) func([]common.Hash) error {
 func TestSynchronisation(t *testing.T) {
 	// Create a small enough block chain to download and the tester
 	targetBlocks := blockCacheLimit - 15
-	hashes := createHashes(0, targetBlocks)
+	hashes := createHashes(targetBlocks, knownHash)
 	blocks := createBlocksFromHashes(hashes)
 
 	tester := newTester()
 	tester.newPeer("peer", hashes, blocks)
 
 	// Synchronise with the peer and make sure all blocks were retrieved
-	if err := tester.downloader.synchronise("peer", hashes[0]); err != nil {
+	if err := tester.sync("peer"); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	if queued := len(tester.downloader.queue.blockPool); queued != targetBlocks {
@@ -211,14 +232,14 @@ func TestSynchronisation(t *testing.T) {
 func TestBlockTaking(t *testing.T) {
 	// Create a small enough block chain to download and the tester
 	targetBlocks := blockCacheLimit - 15
-	hashes := createHashes(0, targetBlocks)
+	hashes := createHashes(targetBlocks, knownHash)
 	blocks := createBlocksFromHashes(hashes)
 
 	tester := newTester()
 	tester.newPeer("peer", hashes, blocks)
 
 	// Synchronise with the peer and test block retrieval
-	if err := tester.downloader.synchronise("peer", hashes[0]); err != nil {
+	if err := tester.sync("peer"); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	if took := tester.downloader.TakeBlocks(); len(took) != targetBlocks {
@@ -243,14 +264,14 @@ func TestInactiveDownloader(t *testing.T) {
 func TestCancel(t *testing.T) {
 	// Create a small enough block chain to download and the tester
 	targetBlocks := blockCacheLimit - 15
-	hashes := createHashes(0, targetBlocks)
+	hashes := createHashes(targetBlocks, knownHash)
 	blocks := createBlocksFromHashes(hashes)
 
 	tester := newTester()
 	tester.newPeer("peer", hashes, blocks)
 
 	// Synchronise with the peer, but cancel afterwards
-	if err := tester.downloader.synchronise("peer", hashes[0]); err != nil {
+	if err := tester.sync("peer"); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	if !tester.downloader.Cancel() {
@@ -271,7 +292,7 @@ func TestCancel(t *testing.T) {
 func TestThrottling(t *testing.T) {
 	// Create a long block chain to download and the tester
 	targetBlocks := 8 * blockCacheLimit
-	hashes := createHashes(0, targetBlocks)
+	hashes := createHashes(targetBlocks, knownHash)
 	blocks := createBlocksFromHashes(hashes)
 
 	tester := newTester()
@@ -280,7 +301,7 @@ func TestThrottling(t *testing.T) {
 	// Start a synchronisation concurrently
 	errc := make(chan error)
 	go func() {
-		errc <- tester.downloader.synchronise("peer", hashes[0])
+		errc <- tester.sync("peer")
 	}()
 	// Iteratively take some blocks, always checking the retrieval count
 	for total := 0; total < targetBlocks; {
@@ -309,17 +330,20 @@ func TestThrottling(t *testing.T) {
 // Tests that if a peer returns an invalid chain with a block pointing to a non-
 // existing parent, it is correctly detected and handled.
 func TestNonExistingParentAttack(t *testing.T) {
-	// Forge a single-link chain with a forged header
-	hashes := createHashes(0, 1)
-	blocks := createBlocksFromHashes(hashes)
+	tester := newTester()
 
-	forged := blocks[hashes[0]]
-	forged.ParentHeaderHash = unknownHash
+	// Forge a single-link chain with a forged header
+	hashes := createHashes(1, knownHash)
+	blocks := createBlocksFromHashes(hashes)
+	tester.newPeer("valid", hashes, blocks)
+
+	hashes = createHashes(1, knownHash)
+	blocks = createBlocksFromHashes(hashes)
+	blocks[hashes[0]].ParentHeaderHash = unknownHash
+	tester.newPeer("attack", hashes, blocks)
 
 	// Try and sync with the malicious node and check that it fails
-	tester := newTester()
-	tester.newPeer("attack", hashes, blocks)
-	if err := tester.downloader.synchronise("attack", hashes[0]); err != nil {
+	if err := tester.sync("attack"); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	bs := tester.downloader.TakeBlocks()
@@ -331,10 +355,8 @@ func TestNonExistingParentAttack(t *testing.T) {
 	}
 	tester.downloader.Cancel()
 
-	// Reconstruct a valid chain, and try to synchronize with it
-	forged.ParentHeaderHash = knownHash
-	tester.newPeer("valid", hashes, blocks)
-	if err := tester.downloader.synchronise("valid", hashes[0]); err != nil {
+	// Try to synchronize with the valid chain and make sure it succeeds
+	if err := tester.sync("valid"); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	bs = tester.downloader.TakeBlocks()
@@ -348,21 +370,20 @@ func TestNonExistingParentAttack(t *testing.T) {
 
 // Tests that if a malicious peers keeps sending us repeating hashes, we don't
 // loop indefinitely.
-func TestRepeatingHashAttack(t *testing.T) {
+func TestRepeatingHashAttack(t *testing.T) { // TODO: Is this thing valid??
+	tester := newTester()
+
 	// Create a valid chain, but drop the last link
-	hashes := createHashes(0, blockCacheLimit)
+	hashes := createHashes(blockCacheLimit, knownHash)
 	blocks := createBlocksFromHashes(hashes)
-	forged := hashes[:len(hashes)-1]
+	tester.newPeer("valid", hashes, blocks)
+	tester.newPeer("attack", hashes[:len(hashes)-1], blocks)
 
 	// Try and sync with the malicious node
-	tester := newTester()
-	tester.newPeer("attack", forged, blocks)
-
 	errc := make(chan error)
 	go func() {
-		errc <- tester.downloader.synchronise("attack", hashes[0])
+		errc <- tester.sync("attack")
 	}()
-
 	// Make sure that syncing returns and does so with a failure
 	select {
 	case <-time.After(time.Second):
@@ -373,8 +394,7 @@ func TestRepeatingHashAttack(t *testing.T) {
 		}
 	}
 	// Ensure that a valid chain can still pass sync
-	tester.newPeer("valid", hashes, blocks)
-	if err := tester.downloader.synchronise("valid", hashes[0]); err != nil {
+	if err := tester.sync("valid"); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
@@ -382,23 +402,22 @@ func TestRepeatingHashAttack(t *testing.T) {
 // Tests that if a malicious peers returns a non-existent block hash, it should
 // eventually time out and the sync reattempted.
 func TestNonExistingBlockAttack(t *testing.T) {
+	tester := newTester()
+
 	// Create a valid chain, but forge the last link
-	hashes := createHashes(0, blockCacheLimit)
+	hashes := createHashes(blockCacheLimit, knownHash)
 	blocks := createBlocksFromHashes(hashes)
-	origin := hashes[len(hashes)/2]
+	tester.newPeer("valid", hashes, blocks)
 
 	hashes[len(hashes)/2] = unknownHash
+	tester.newPeer("attack", hashes, blocks)
 
 	// Try and sync with the malicious node and check that it fails
-	tester := newTester()
-	tester.newPeer("attack", hashes, blocks)
-	if err := tester.downloader.synchronise("attack", hashes[0]); err != errPeersUnavailable {
+	if err := tester.sync("attack"); err != errPeersUnavailable {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errPeersUnavailable)
 	}
 	// Ensure that a valid chain can still pass sync
-	hashes[len(hashes)/2] = origin
-	tester.newPeer("valid", hashes, blocks)
-	if err := tester.downloader.synchronise("valid", hashes[0]); err != nil {
+	if err := tester.sync("valid"); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
@@ -406,29 +425,28 @@ func TestNonExistingBlockAttack(t *testing.T) {
 // Tests that if a malicious peer is returning hashes in a weird order, that the
 // sync throttler doesn't choke on them waiting for the valid blocks.
 func TestInvalidHashOrderAttack(t *testing.T) {
+	tester := newTester()
+
 	// Create a valid long chain, but reverse some hashes within
-	hashes := createHashes(0, 4*blockCacheLimit)
+	hashes := createHashes(4*blockCacheLimit, knownHash)
 	blocks := createBlocksFromHashes(hashes)
+	tester.newPeer("valid", hashes, blocks)
 
 	chunk1 := make([]common.Hash, blockCacheLimit)
 	chunk2 := make([]common.Hash, blockCacheLimit)
 	copy(chunk1, hashes[blockCacheLimit:2*blockCacheLimit])
 	copy(chunk2, hashes[2*blockCacheLimit:3*blockCacheLimit])
 
-	reverse := make([]common.Hash, len(hashes))
-	copy(reverse, hashes)
-	copy(reverse[2*blockCacheLimit:], chunk1)
-	copy(reverse[blockCacheLimit:], chunk2)
+	copy(hashes[2*blockCacheLimit:], chunk1)
+	copy(hashes[blockCacheLimit:], chunk2)
+	tester.newPeer("attack", hashes, blocks)
 
 	// Try and sync with the malicious node and check that it fails
-	tester := newTester()
-	tester.newPeer("attack", reverse, blocks)
-	if _, err := tester.syncTake("attack", reverse[0]); err != errInvalidChain {
+	if _, err := tester.syncTake("attack"); err != errInvalidChain {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errInvalidChain)
 	}
 	// Ensure that a valid chain can still pass sync
-	tester.newPeer("valid", hashes, blocks)
-	if _, err := tester.syncTake("valid", hashes[0]); err != nil {
+	if _, err := tester.syncTake("valid"); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
@@ -436,17 +454,24 @@ func TestInvalidHashOrderAttack(t *testing.T) {
 // Tests that if a malicious peer makes up a random hash chain and tries to push
 // indefinitely, it actually gets caught with it.
 func TestMadeupHashChainAttack(t *testing.T) {
+	tester := newTester()
 	blockSoftTTL = 100 * time.Millisecond
 	crossCheckCycle = 25 * time.Millisecond
 
 	// Create a long chain of hashes without backing blocks
-	hashes := createHashes(0, 1024*blockCacheLimit)
+	hashes := createHashes(4*blockCacheLimit, knownHash)
+	blocks := createBlocksFromHashes(hashes)
+
+	tester.newPeer("valid", hashes, blocks)
+	tester.newPeer("attack", createHashes(1024*blockCacheLimit, knownHash), nil)
 
 	// Try and sync with the malicious node and check that it fails
-	tester := newTester()
-	tester.newPeer("attack", hashes, nil)
-	if _, err := tester.syncTake("attack", hashes[0]); err != errCrossCheckFailed {
+	if _, err := tester.syncTake("attack"); err != errCrossCheckFailed {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errCrossCheckFailed)
+	}
+	// Ensure that a valid chain can still pass sync
+	if _, err := tester.syncTake("valid"); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
 
@@ -456,13 +481,13 @@ func TestMadeupHashChainAttack(t *testing.T) {
 // one by one prevents reliable block/parent verification.
 func TestMadeupHashChainDrippingAttack(t *testing.T) {
 	// Create a random chain of hashes to drip
-	hashes := createHashes(0, 16*blockCacheLimit)
+	hashes := createHashes(16*blockCacheLimit, knownHash)
 	tester := newTester()
 
 	// Try and sync with the attacker, one hash at a time
 	tester.maxHashFetch = 1
 	tester.newPeer("attack", hashes, nil)
-	if _, err := tester.syncTake("attack", hashes[0]); err != errStallingPeer {
+	if _, err := tester.syncTake("attack"); err != errStallingPeer {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errStallingPeer)
 	}
 }
@@ -477,7 +502,7 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 	crossCheckCycle = 25 * time.Millisecond
 
 	// Create a long chain of blocks and simulate an invalid chain by dropping every second
-	hashes := createHashes(0, 16*blockCacheLimit)
+	hashes := createHashes(16*blockCacheLimit, knownHash)
 	blocks := createBlocksFromHashes(hashes)
 
 	gapped := make([]common.Hash, len(hashes)/2)
@@ -487,7 +512,7 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 	// Try and sync with the malicious node and check that it fails
 	tester := newTester()
 	tester.newPeer("attack", gapped, blocks)
-	if _, err := tester.syncTake("attack", gapped[0]); err != errCrossCheckFailed {
+	if _, err := tester.syncTake("attack"); err != errCrossCheckFailed {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errCrossCheckFailed)
 	}
 	// Ensure that a valid chain can still pass sync
@@ -495,7 +520,7 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 	crossCheckCycle = defaultCrossCheckCycle
 
 	tester.newPeer("valid", hashes, blocks)
-	if _, err := tester.syncTake("valid", hashes[0]); err != nil {
+	if _, err := tester.syncTake("valid"); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
@@ -504,6 +529,8 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 // attacker make up a valid hashes for random blocks, but also forges the block
 // parents to point to existing hashes.
 func TestMadeupParentBlockChainAttack(t *testing.T) {
+	tester := newTester()
+
 	defaultBlockTTL := blockSoftTTL
 	defaultCrossCheckCycle := crossCheckCycle
 
@@ -511,24 +538,24 @@ func TestMadeupParentBlockChainAttack(t *testing.T) {
 	crossCheckCycle = 25 * time.Millisecond
 
 	// Create a long chain of blocks and simulate an invalid chain by dropping every second
-	hashes := createHashes(0, 16*blockCacheLimit)
+	hashes := createHashes(16*blockCacheLimit, knownHash)
 	blocks := createBlocksFromHashes(hashes)
-	forges := createBlocksFromHashes(hashes)
-	for hash, block := range forges {
-		block.ParentHeaderHash = hash // Simulate pointing to already known hash
+	tester.newPeer("valid", hashes, blocks)
+
+	for _, block := range blocks {
+		block.ParentHeaderHash = knownHash // Simulate pointing to already known hash
 	}
+	tester.newPeer("attack", hashes, blocks)
+
 	// Try and sync with the malicious node and check that it fails
-	tester := newTester()
-	tester.newPeer("attack", hashes, forges)
-	if _, err := tester.syncTake("attack", hashes[0]); err != errCrossCheckFailed {
+	if _, err := tester.syncTake("attack"); err != errCrossCheckFailed {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errCrossCheckFailed)
 	}
 	// Ensure that a valid chain can still pass sync
 	blockSoftTTL = defaultBlockTTL
 	crossCheckCycle = defaultCrossCheckCycle
 
-	tester.newPeer("valid", hashes, blocks)
-	if _, err := tester.syncTake("valid", hashes[0]); err != nil {
+	if _, err := tester.syncTake("valid"); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
@@ -537,22 +564,25 @@ func TestMadeupParentBlockChainAttack(t *testing.T) {
 // the downloader, it will not keep refetching the same chain indefinitely, but
 // gradually block pieces of it, until it's head is also blocked.
 func TestBannedChainStarvationAttack(t *testing.T) {
-	// Construct a valid chain, but ban one of the hashes in it
-	hashes := createHashes(0, 8*blockCacheLimit)
-	hashes[len(hashes)/2+23] = bannedHash // weird index to have non multiple of ban chunk size
-
-	blocks := createBlocksFromHashes(hashes)
-
 	// Create the tester and ban the selected hash
 	tester := newTester()
 	tester.downloader.banned.Add(bannedHash)
 
+	// Construct a valid chain, for it and ban the fork
+	hashes := createHashes(8*blockCacheLimit, knownHash)
+	blocks := createBlocksFromHashes(hashes)
+	tester.newPeer("valid", hashes, blocks)
+
+	fork := len(hashes)/2 - 23
+	hashes = append(createHashes(4*blockCacheLimit, bannedHash), hashes[fork:]...)
+	blocks = createBlocksFromHashes(hashes)
+	tester.newPeer("attack", hashes, blocks)
+
 	// Iteratively try to sync, and verify that the banned hash list grows until
 	// the head of the invalid chain is blocked too.
-	tester.newPeer("attack", hashes, blocks)
 	for banned := tester.downloader.banned.Size(); ; {
 		// Try to sync with the attacker, check hash chain failure
-		if _, err := tester.syncTake("attack", hashes[0]); err != errInvalidChain {
+		if _, err := tester.syncTake("attack"); err != errInvalidChain {
 			if tester.downloader.banned.Has(hashes[0]) && err == errBannedHead {
 				break
 			}
@@ -569,8 +599,12 @@ func TestBannedChainStarvationAttack(t *testing.T) {
 	if err := tester.newPeer("new attacker", hashes, blocks); err != errBannedHead {
 		t.Fatalf("peer registration mismatch: have %v, want %v", err, errBannedHead)
 	}
-	if peer := tester.downloader.peers.Peer("net attacker"); peer != nil {
+	if peer := tester.downloader.peers.Peer("new attacker"); peer != nil {
 		t.Fatalf("banned attacker registered: %v", peer)
+	}
+	// Ensure that a valid chain can still pass sync
+	if _, err := tester.syncTake("valid"); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
 
@@ -578,26 +612,32 @@ func TestBannedChainStarvationAttack(t *testing.T) {
 // gradually banned, it will have an upper limit on the consumed memory and also
 // the origin bad hashes will not be evacuated.
 func TestBannedChainMemoryExhaustionAttack(t *testing.T) {
-	// Reduce the test size a bit
-	MaxBlockFetch = 4
-	maxBannedHashes = 256
-
-	// Construct a banned chain with more chunks than the ban limit
-	hashes := createHashes(0, maxBannedHashes*MaxBlockFetch)
-	hashes[len(hashes)-1] = bannedHash // weird index to have non multiple of ban chunk size
-
-	blocks := createBlocksFromHashes(hashes)
-
 	// Create the tester and ban the selected hash
 	tester := newTester()
 	tester.downloader.banned.Add(bannedHash)
 
+	// Reduce the test size a bit
+	defaultMaxBlockFetch := MaxBlockFetch
+	defaultMaxBannedHashes := maxBannedHashes
+
+	MaxBlockFetch = 4
+	maxBannedHashes = 256
+
+	// Construct a banned chain with more chunks than the ban limit
+	hashes := createHashes(8*blockCacheLimit, knownHash)
+	blocks := createBlocksFromHashes(hashes)
+	tester.newPeer("valid", hashes, blocks)
+
+	fork := len(hashes)/2 - 23
+	hashes = append(createHashes(maxBannedHashes*MaxBlockFetch, bannedHash), hashes[fork:]...)
+	blocks = createBlocksFromHashes(hashes)
+	tester.newPeer("attack", hashes, blocks)
+
 	// Iteratively try to sync, and verify that the banned hash list grows until
 	// the head of the invalid chain is blocked too.
-	tester.newPeer("attack", hashes, blocks)
 	for {
 		// Try to sync with the attacker, check hash chain failure
-		if _, err := tester.syncTake("attack", hashes[0]); err != errInvalidChain {
+		if _, err := tester.syncTake("attack"); err != errInvalidChain {
 			t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errInvalidChain)
 		}
 		// Short circuit if the entire chain was banned
@@ -613,6 +653,13 @@ func TestBannedChainMemoryExhaustionAttack(t *testing.T) {
 				t.Fatalf("hard coded ban evacuated: %x", hash)
 			}
 		}
+	}
+	// Ensure that a valid chain can still pass sync
+	MaxBlockFetch = defaultMaxBlockFetch
+	maxBannedHashes = defaultMaxBannedHashes
+
+	if _, err := tester.syncTake("valid"); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
 
