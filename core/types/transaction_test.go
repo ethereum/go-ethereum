@@ -15,40 +15,35 @@ import (
 // at github.com/ethereum/tests.
 
 var (
-	emptyTx = NewTransactionMessage(
+	emptyTx = NewTransaction(
+		0,
 		common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
 		big.NewInt(0), big.NewInt(0), big.NewInt(0),
 		nil,
 	)
 
-	rightvrsRecipient = common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b")
-	rightvrsTx        = &Transaction{
-		Recipient:    &rightvrsRecipient,
-		AccountNonce: 3,
-		Price:        big.NewInt(1),
-		GasLimit:     big.NewInt(2000),
-		Amount:       big.NewInt(10),
-		Payload:      common.FromHex("5544"),
-		V:            28,
-		R:            common.String2Big("0x98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a"),
-		S:            common.String2Big("0x8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"),
-	}
+	rightvrsTx, _ = NewTransaction(
+		3,
+		common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"),
+		big.NewInt(10),
+		big.NewInt(2000),
+		big.NewInt(1),
+		common.FromHex("5544"),
+	).WithSignature(
+		common.Hex2Bytes("98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a301"),
+	)
 )
 
 func TestTransactionHash(t *testing.T) {
-	// "EmptyTransaction"
 	if emptyTx.Hash() != common.HexToHash("c775b99e7ad12f50d819fcd602390467e28141316969f4b57f0626f74fe3b386") {
 		t.Errorf("empty transaction hash mismatch, got %x", emptyTx.Hash())
 	}
-
-	// "RightVRSTest"
 	if rightvrsTx.Hash() != common.HexToHash("fe7a79529ed5f7c3375d06b26b186a8644e0e16c373d7a12be41c62d6042b77a") {
 		t.Errorf("RightVRS transaction hash mismatch, got %x", rightvrsTx.Hash())
 	}
 }
 
 func TestTransactionEncode(t *testing.T) {
-	// "RightVRSTest"
 	txb, err := rlp.EncodeToBytes(rightvrsTx)
 	if err != nil {
 		t.Fatalf("encode error: %v", err)
@@ -72,19 +67,16 @@ func defaultTestKey() (*ecdsa.PrivateKey, common.Address) {
 
 func TestRecipientEmpty(t *testing.T) {
 	_, addr := defaultTestKey()
-
 	tx, err := decodeTx(common.Hex2Bytes("f8498080808080011ca09b16de9d5bdee2cf56c28d16275a4da68cd30273e2525f3959f5d62557489921a0372ebd8fb3345f7db7b5a86d42e24d36e983e259b0664ceb8c227ec9af572f3d"))
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
 	}
-
 	from, err := tx.From()
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
 	}
-
 	if addr != from {
 		t.Error("derived address doesn't match")
 	}
