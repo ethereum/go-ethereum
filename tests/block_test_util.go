@@ -85,7 +85,7 @@ type btTransaction struct {
 }
 
 func RunBlockTest(filepath string) error {
-	bt, err := loadBlockTests(filepath)
+	bt, err := LoadBlockTests(filepath)
 	if err != nil {
 		return err
 	}
@@ -449,7 +449,7 @@ func mustConvertUint(in string, base int) uint64 {
 	return out
 }
 
-func loadBlockTests(file string) (map[string]*BlockTest, error) {
+func LoadBlockTests(file string) (map[string]*BlockTest, error) {
 	bt := make(map[string]*btJSON)
 	if err := readTestFile(file, &bt); err != nil {
 		return nil, err
