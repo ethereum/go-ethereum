@@ -110,6 +110,13 @@ var (
 		"web3": []string{
 			"sha3",
 			"version",
+			"fromWei",
+			"toWei",
+			"toHex",
+			"toAscii",
+			"fromAscii",
+			"toBigNumber",
+			"isAddress",
 		},
 	}
 )

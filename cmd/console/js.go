@@ -93,7 +93,7 @@ func loadAutoCompletion(js *jsre, ipcpath string) {
 	}
 }
 
-func apiWordCompleter(line string) []string {
+func keywordCompleter(line string) []string {
 	results := make([]string, 0)
 
 	if strings.Contains(line, ".") {
@@ -123,6 +123,31 @@ func apiWordCompleter(line string) []string {
 	return results
 }
 
+func apiWordCompleter(line string, pos int) (head string, completions []string, tail string) {
+	if len(line) == 0 {
+		return "", nil, ""
+	}
+
+	i := 0
+	for i = pos - 1; i > 0; i-- {
+		if line[i] == '.' || (line[i] >= 'a' && line[i] <= 'z') || (line[i] >= 'A' && line[i] <= 'Z') {
+			continue
+		}
+		if i >= 3 && line[i] == '3' && line[i-3] == 'w' && line[i-2] == 'e' && line[i-1] == 'b' {
+			continue
+		}
+		i += 1
+		break
+	}
+
+	begin := line[:i]
+	keyword := line[i:pos]
+	end := line[pos:]
+
+	completionWords := keywordCompleter(keyword)
+	return begin, completionWords, end
+}
+
 func newJSRE(libPath, ipcpath string) *jsre {
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
@@ -138,7 +163,7 @@ func newJSRE(libPath, ipcpath string) *jsre {
 		js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
 		loadAutoCompletion(js, ipcpath)
-		lr.SetCompleter(apiWordCompleter)
+		lr.SetWordCompleter(apiWordCompleter)
 		lr.SetTabCompletionStyle(liner.TabPrints)
 		js.prompter = lr
 		js.atexit = func() {
