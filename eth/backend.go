@@ -193,7 +193,6 @@ type Ethereum struct {
 	whisper         *whisper.Whisper
 	pow             *ethash.Ethash
 	protocolManager *ProtocolManager
-	downloader      *downloader.Downloader
 	SolcPath        string
 	solc            *compiler.Solidity
 
@@ -290,14 +289,13 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	eth.downloader = downloader.New(eth.EventMux(), eth.chainManager.HasBlock, eth.chainManager.GetBlock)
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
+	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.eventMux, eth.txPool, eth.chainManager)
+
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
-
-	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.eventMux, eth.txPool, eth.chainManager, eth.downloader)
 	if config.Shh {
 		eth.whisper = whisper.New()
 		eth.shhVersionId = int(eth.whisper.Version())
@@ -447,7 +445,7 @@ func (s *Ethereum) ClientVersion() string                { return s.clientVersio
 func (s *Ethereum) EthVersion() int                      { return s.ethVersionId }
 func (s *Ethereum) NetVersion() int                      { return s.netVersionId }
 func (s *Ethereum) ShhVersion() int                      { return s.shhVersionId }
-func (s *Ethereum) Downloader() *downloader.Downloader   { return s.downloader }
+func (s *Ethereum) Downloader() *downloader.Downloader   { return s.protocolManager.downloader }
 
 // Start the ethereum
 func (s *Ethereum) Start() error {

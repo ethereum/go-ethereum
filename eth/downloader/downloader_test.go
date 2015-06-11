@@ -73,7 +73,7 @@ func newTester(t *testing.T, hashes []common.Hash, blocks map[common.Hash]*types
 		done: make(chan bool),
 	}
 	var mux event.TypeMux
-	downloader := New(&mux, tester.hasBlock, tester.getBlock)
+	downloader := New(&mux, tester.hasBlock, tester.getBlock, nil)
 	tester.downloader = downloader
 
 	return tester
@@ -83,7 +83,7 @@ func newTester(t *testing.T, hashes []common.Hash, blocks map[common.Hash]*types
 // block until it returns
 func (dl *downloadTester) sync(peerId string, head common.Hash) error {
 	dl.activePeerId = peerId
-	return dl.downloader.Synchronise(peerId, head)
+	return dl.downloader.synchronise(peerId, head)
 }
 
 // syncTake is starts synchronising with a remote peer, but concurrently it also
@@ -415,8 +415,8 @@ func TestInvalidHashOrderAttack(t *testing.T) {
 	// Try and sync with the malicious node and check that it fails
 	tester := newTester(t, reverse, blocks)
 	tester.newPeer("attack", big.NewInt(10000), reverse[0])
-	if _, err := tester.syncTake("attack", reverse[0]); err != ErrInvalidChain {
-		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrInvalidChain)
+	if _, err := tester.syncTake("attack", reverse[0]); err != errInvalidChain {
+		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errInvalidChain)
 	}
 	// Ensure that a valid chain can still pass sync
 	tester.hashes = hashes
@@ -438,8 +438,8 @@ func TestMadeupHashChainAttack(t *testing.T) {
 	// Try and sync with the malicious node and check that it fails
 	tester := newTester(t, hashes, nil)
 	tester.newPeer("attack", big.NewInt(10000), hashes[0])
-	if _, err := tester.syncTake("attack", hashes[0]); err != ErrCrossCheckFailed {
-		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrCrossCheckFailed)
+	if _, err := tester.syncTake("attack", hashes[0]); err != errCrossCheckFailed {
+		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errCrossCheckFailed)
 	}
 }
 
@@ -455,8 +455,8 @@ func TestMadeupHashChainDrippingAttack(t *testing.T) {
 	// Try and sync with the attacker, one hash at a time
 	tester.maxHashFetch = 1
 	tester.newPeer("attack", big.NewInt(10000), hashes[0])
-	if _, err := tester.syncTake("attack", hashes[0]); err != ErrStallingPeer {
-		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrStallingPeer)
+	if _, err := tester.syncTake("attack", hashes[0]); err != errStallingPeer {
+		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errStallingPeer)
 	}
 }
 
@@ -480,8 +480,8 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 	// Try and sync with the malicious node and check that it fails
 	tester := newTester(t, gapped, blocks)
 	tester.newPeer("attack", big.NewInt(10000), gapped[0])
-	if _, err := tester.syncTake("attack", gapped[0]); err != ErrCrossCheckFailed {
-		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrCrossCheckFailed)
+	if _, err := tester.syncTake("attack", gapped[0]); err != errCrossCheckFailed {
+		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errCrossCheckFailed)
 	}
 	// Ensure that a valid chain can still pass sync
 	blockSoftTTL = defaultBlockTTL
@@ -514,8 +514,8 @@ func TestMadeupParentBlockChainAttack(t *testing.T) {
 	// Try and sync with the malicious node and check that it fails
 	tester := newTester(t, hashes, forges)
 	tester.newPeer("attack", big.NewInt(10000), hashes[0])
-	if _, err := tester.syncTake("attack", hashes[0]); err != ErrCrossCheckFailed {
-		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrCrossCheckFailed)
+	if _, err := tester.syncTake("attack", hashes[0]); err != errCrossCheckFailed {
+		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errCrossCheckFailed)
 	}
 	// Ensure that a valid chain can still pass sync
 	blockSoftTTL = defaultBlockTTL
@@ -547,8 +547,8 @@ func TestBannedChainStarvationAttack(t *testing.T) {
 	tester.newPeer("attack", big.NewInt(10000), hashes[0])
 	for banned := tester.downloader.banned.Size(); ; {
 		// Try to sync with the attacker, check hash chain failure
-		if _, err := tester.syncTake("attack", hashes[0]); err != ErrInvalidChain {
-			t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrInvalidChain)
+		if _, err := tester.syncTake("attack", hashes[0]); err != errInvalidChain {
+			t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errInvalidChain)
 		}
 		// Check that the ban list grew with at least 1 new item, or all banned
 		bans := tester.downloader.banned.Size()
@@ -592,8 +592,8 @@ func TestBannedChainMemoryExhaustionAttack(t *testing.T) {
 	tester.newPeer("attack", big.NewInt(10000), hashes[0])
 	for {
 		// Try to sync with the attacker, check hash chain failure
-		if _, err := tester.syncTake("attack", hashes[0]); err != ErrInvalidChain {
-			t.Fatalf("synchronisation error mismatch: have %v, want %v", err, ErrInvalidChain)
+		if _, err := tester.syncTake("attack", hashes[0]); err != errInvalidChain {
+			t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errInvalidChain)
 		}
 		// Short circuit if the entire chain was banned
 		if tester.downloader.banned.Has(hashes[0]) {

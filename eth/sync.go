@@ -8,7 +8,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -332,33 +331,6 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	if peer.Td().Cmp(pm.chainman.Td()) <= 0 {
 		return
 	}
-	// FIXME if we have the hash in our chain and the TD of the peer is
-	// much higher than ours, something is wrong with us or the peer.
-	// Check if the hash is on our own chain
-	head := peer.Head()
-	if pm.chainman.HasBlock(head) {
-		glog.V(logger.Debug).Infoln("Synchronisation canceled: head already known")
-		return
-	}
-	// Get the hashes from the peer (synchronously)
-	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, 0x%x", peer.id, head)
-
-	err := pm.downloader.Synchronise(peer.id, head)
-	switch err {
-	case nil:
-		glog.V(logger.Detail).Infof("Synchronisation completed")
-
-	case downloader.ErrBusy:
-		glog.V(logger.Detail).Infof("Synchronisation already in progress")
-
-	case downloader.ErrTimeout, downloader.ErrBadPeer, downloader.ErrEmptyHashSet, downloader.ErrInvalidChain, downloader.ErrCrossCheckFailed:
-		glog.V(logger.Debug).Infof("Removing peer %v: %v", peer.id, err)
-		pm.removePeer(peer.id)
-
-	case downloader.ErrPendingQueue:
-		glog.V(logger.Debug).Infoln("Synchronisation aborted:", err)
-
-	default:
-		glog.V(logger.Warn).Infof("Synchronisation failed: %v", err)
-	}
+	// Otherwise try to sync with the downloader
+	pm.downloader.Synchronise(peer.id, peer.Head())
 }
