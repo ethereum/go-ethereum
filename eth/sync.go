@@ -127,10 +127,11 @@ func (pm *ProtocolManager) txsyncLoop() {
 // fetcher is responsible for collecting hash notifications, and periodically
 // checking all unknown ones and individually fetching them.
 func (pm *ProtocolManager) fetcher() {
-	announces := make(map[common.Hash]*blockAnnounce)
+	announces := make(map[common.Hash][]*blockAnnounce)
 	request := make(map[*peer][]common.Hash)
 	pending := make(map[common.Hash]*blockAnnounce)
 	cycle := time.Tick(notifyCheckCycle)
+	done := make(chan common.Hash)
 
 	// Iterate the block fetching until a quit is requested
 	for {
@@ -139,8 +140,17 @@ func (pm *ProtocolManager) fetcher() {
 			// A batch of hashes the notified, schedule them for retrieval
 			glog.V(logger.Debug).Infof("Scheduling %d hash announcements from %s", len(notifications), notifications[0].peer.id)
 			for _, announce := range notifications {
-				announces[announce.hash] = announce
+				// Skip if it's already pending fetch
+				if _, ok := pending[announce.hash]; ok {
+					continue
+				}
+				// Otherwise queue up the peer as a potential source
+				announces[announce.hash] = append(announces[announce.hash], announce)
 			}
+
+		case hash := <-done:
+			// A pending import finished, remove all traces
+			delete(pending, hash)
 
 		case <-cycle:
 			// Clean up any expired block fetches
@@ -150,8 +160,9 @@ func (pm *ProtocolManager) fetcher() {
 				}
 			}
 			// Check if any notified blocks failed to arrive
-			for hash, announce := range announces {
-				if time.Since(announce.time) > notifyArriveTimeout {
+			for hash, all := range announces {
+				if time.Since(all[0].time) > notifyArriveTimeout {
+					announce := all[rand.Intn(len(all))]
 					if !pm.chainman.HasBlock(hash) {
 						request[announce.peer] = append(request[announce.peer], hash)
 						pending[hash] = announce
@@ -200,24 +211,32 @@ func (pm *ProtocolManager) fetcher() {
 			case <-pm.quitSync:
 				return
 			}
-			// If any explicit fetches were replied to, import them
-			if count := len(explicit); count > 0 {
-				glog.V(logger.Debug).Infof("Importing %d explicitly fetched blocks", count)
-
-				// Create a closure with the retrieved blocks and origin peers
-				peers := make([]*peer, 0, count)
-				blocks := make([]*types.Block, 0, count)
-				for _, block := range explicit {
-					hash := block.Hash()
-					if announce := pending[hash]; announce != nil {
-						peers = append(peers, announce.peer)
-						blocks = append(blocks, block)
-
+			// Create a closure with the retrieved blocks and origin peers
+			peers := make([]*peer, 0, len(explicit))
+			blocks = make([]*types.Block, 0, len(explicit))
+			for _, block := range explicit {
+				hash := block.Hash()
+				if announce := pending[hash]; announce != nil {
+					// Drop the block if it surely cannot fit
+					if pm.chainman.HasBlock(hash) || !pm.chainman.HasBlock(block.ParentHash()) {
 						delete(pending, hash)
+						continue
 					}
+					// Otherwise accumulate for import
+					peers = append(peers, announce.peer)
+					blocks = append(blocks, block)
 				}
-				// Run the importer on a new thread
+			}
+			// If any explicit fetches were replied to, import them
+			if count := len(blocks); count > 0 {
+				glog.V(logger.Debug).Infof("Importing %d explicitly fetched blocks", len(blocks))
 				go func() {
+					// Make sure all hashes are cleaned up
+					for _, block := range blocks {
+						hash := block.Hash()
+						defer func() { done <- hash }()
+					}
+					// Try and actually import the blocks
 					for i := 0; i < len(blocks); i++ {
 						if err := pm.importBlock(peers[i], blocks[i], nil); err != nil {
 							glog.V(logger.Detail).Infof("Failed to import explicitly fetched block: %v", err)
