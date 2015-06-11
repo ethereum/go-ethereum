@@ -387,7 +387,7 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 
 func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
 	config := comms.IpcConfig{
-		Endpoint: ctx.GlobalString(IPCPathFlag.Name),
+		Endpoint: filepath.Join(ctx.GlobalString(DataDirFlag.Name), "geth.ipc"),
 	}
 
 	xeth := xeth.New(eth, nil)
