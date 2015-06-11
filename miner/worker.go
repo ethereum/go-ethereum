@@ -270,7 +270,6 @@ func (self *worker) wait() {
 
 func (self *worker) push() {
 	if atomic.LoadInt32(&self.mining) == 1 {
-		self.current.block.Header().GasUsed = self.current.totalUsedGas
 		self.current.block.SetRoot(self.current.state.Root())
 
 		// push new work to agents
@@ -510,6 +509,8 @@ func (self *worker) commitTransactions(transactions types.Transactions) {
 			current.tcount++
 		}
 	}
+
+	self.current.block.Header().GasUsed = self.current.totalUsedGas
 }
 
 func (self *worker) commitTransaction(tx *types.Transaction) error {

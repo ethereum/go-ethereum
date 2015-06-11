@@ -151,11 +151,17 @@ func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs state.Logs, err
 		return nil, ParentError(header.ParentHash)
 	}
 	parent := sm.bc.GetBlock(header.ParentHash)
-	if !sm.Pow.Verify(block) {
+
+	// FIXME Change to full header validation. See #1225
+	errch := make(chan bool)
+	go func() { errch <- sm.Pow.Verify(block) }()
+
+	logs, err = sm.processWithParent(block, parent)
+	if !<-errch {
 		return nil, ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
 	}
 
-	return sm.processWithParent(block, parent)
+	return logs, err
 }
 
 // Process block will attempt to process the given block's transactions and applies them

@@ -59,6 +59,7 @@ func main() {
 
 	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.LogLevel(*loglevel)))
 
+	vm.Debug = true
 	db, _ := ethdb.NewMemDatabase()
 	statedb := state.New(common.Hash{}, db)
 	sender := statedb.CreateAccount(common.StringToAddress("sender"))
@@ -79,6 +80,8 @@ func main() {
 	if *dump {
 		fmt.Println(string(statedb.Dump()))
 	}
+
+	vm.StdErrFormat(vmenv.StructLogs())
 
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
@@ -104,6 +107,7 @@ type VMEnv struct {
 	depth int
 	Gas   *big.Int
 	time  int64
+	logs  []vm.StructLog
 }
 
 func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int) *VMEnv {
@@ -132,6 +136,12 @@ func (self *VMEnv) GetHash(n uint64) common.Hash {
 		return self.block.Hash()
 	}
 	return common.Hash{}
+}
+func (self *VMEnv) AddStructLog(log vm.StructLog) {
+	self.logs = append(self.logs, log)
+}
+func (self *VMEnv) StructLogs() []vm.StructLog {
+	return self.logs
 }
 func (self *VMEnv) AddLog(log *state.Log) {
 	self.state.AddLog(log)

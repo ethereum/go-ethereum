@@ -16,6 +16,8 @@ type VMEnv struct {
 	depth int
 	chain *ChainManager
 	typ   vm.Type
+	// structured logging
+	logs []vm.StructLog
 }
 
 func NewEnv(state *state.StateDB, chain *ChainManager, msg Message, block *types.Block) *VMEnv {
@@ -47,6 +49,7 @@ func (self *VMEnv) GetHash(n uint64) common.Hash {
 
 	return common.Hash{}
 }
+
 func (self *VMEnv) AddLog(log *state.Log) {
 	self.state.AddLog(log)
 }
@@ -67,4 +70,12 @@ func (self *VMEnv) CallCode(me vm.ContextRef, addr common.Address, data []byte, 
 func (self *VMEnv) Create(me vm.ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
 	exe := NewExecution(self, nil, data, gas, price, value)
 	return exe.Create(me)
+}
+
+func (self *VMEnv) StructLogs() []vm.StructLog {
+	return self.logs
+}
+
+func (self *VMEnv) AddStructLog(log vm.StructLog) {
+	self.logs = append(self.logs, log)
 }

@@ -5,13 +5,17 @@ import (
 	"math/big"
 )
 
-func newStack() *stack {
+func newstack() *stack {
 	return &stack{}
 }
 
 type stack struct {
 	data []*big.Int
 	ptr  int
+}
+
+func (st *stack) Data() []*big.Int {
+	return st.data[:st.ptr]
 }
 
 func (st *stack) push(d *big.Int) {
