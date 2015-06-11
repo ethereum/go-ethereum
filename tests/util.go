@@ -124,7 +124,7 @@ type Env struct {
 	difficulty *big.Int
 	gasLimit   *big.Int
 
-	logs state.Logs
+	logs []vm.StructLog
 
 	vmTest bool
 }
@@ -133,6 +133,14 @@ func NewEnv(state *state.StateDB) *Env {
 	return &Env{
 		state: state,
 	}
+}
+
+func (self *Env) StructLogs() []vm.StructLog {
+	return self.logs
+}
+
+func (self *Env) AddStructLog(log vm.StructLog) {
+	self.logs = append(self.logs, log)
 }
 
 func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
