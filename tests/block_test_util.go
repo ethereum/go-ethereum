@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -99,15 +100,14 @@ func RunBlockTest(filepath string) error {
 	for name, test := range bt {
 		// if the test should be skipped, return
 		if skipTest[name] {
-			fmt.Println("Skipping state test", name)
+			glog.Infoln("Skipping block test", name)
 			return nil
 		}
 		// test the block
 		if err := testBlock(test); err != nil {
 			return err
 		}
-		fmt.Println("Block test passed: ", name)
-
+		glog.Infoln("Block test passed: ", name)
 	}
 	return nil
 }

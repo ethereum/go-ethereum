@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 func RunVmTest(p string) error {
@@ -26,7 +27,7 @@ func RunVmTest(p string) error {
 
 	for name, test := range tests {
 		if skipTest[name] {
-			fmt.Println("Skipping state test", name)
+			glog.Infoln("Skipping VM test", name)
 			return nil
 		}
 		db, _ := ethdb.NewMemDatabase()
@@ -102,8 +103,7 @@ func RunVmTest(p string) error {
 			}
 		}
 
-		fmt.Println("VM test passed: ", name)
-
+		glog.Infoln("VM test passed: ", name)
 		//fmt.Println(string(statedb.Dump()))
 	}
 	return nil

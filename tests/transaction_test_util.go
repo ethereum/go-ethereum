@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -44,14 +45,14 @@ func RunTransactionTests(file string) error {
 	for name, test := range bt {
 		// if the test should be skipped, return
 		if skipTest[name] {
-			fmt.Println("Skipping state test", name)
+			glog.Infoln("Skipping transaction test", name)
 			return nil
 		}
 		// test the block
 		if err := runTest(test); err != nil {
 			return err
 		}
-		fmt.Println("Transaction test passed: ", name)
+		glog.Infoln("Transaction test passed: ", name)
 
 	}
 	return nil

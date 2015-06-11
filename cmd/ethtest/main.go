@@ -29,7 +29,8 @@ import (
 )
 
 func main() {
-	// helper.Logger.SetLogLevel(5)
+	glog.SetToStderr(true)
+
 	// vm.Debug = true
 
 	if len(os.Args) < 2 {
