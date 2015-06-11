@@ -308,7 +308,7 @@ func console(ctx *cli.Context) {
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		ctx.GlobalString(utils.IPCPathFlag.Name),
+		filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "geth.ipc"),
 		true,
 		nil,
 	)
