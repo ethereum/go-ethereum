@@ -214,18 +214,13 @@ func TestBlockTaking(t *testing.T) {
 
 // Tests that an inactive downloader will not accept incoming hashes and blocks.
 func TestInactiveDownloader(t *testing.T) {
-	// Create a small enough block chain to download and the tester
-	targetBlocks := blockCacheLimit - 15
-	hashes := createHashes(0, targetBlocks)
-	blocks := createBlocksFromHashSet(createHashSet(hashes))
-
 	tester := newTester(t, nil, nil)
 
 	// Check that neither hashes nor blocks are accepted
-	if err := tester.downloader.DeliverHashes("bad peer", hashes); err != errNoSyncActive {
+	if err := tester.downloader.DeliverHashes("bad peer", []common.Hash{}); err != errNoSyncActive {
 		t.Errorf("error mismatch: have %v, want %v", err, errNoSyncActive)
 	}
-	if err := tester.downloader.DeliverBlocks("bad peer", blocks); err != errNoSyncActive {
+	if err := tester.downloader.DeliverBlocks("bad peer", []*types.Block{}); err != errNoSyncActive {
 		t.Errorf("error mismatch: have %v, want %v", err, errNoSyncActive)
 	}
 }
