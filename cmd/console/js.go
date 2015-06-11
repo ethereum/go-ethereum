@@ -84,7 +84,7 @@ func loadAutoCompletion(js *jsre, ipcpath string) {
 	if err != nil {
 		utils.Fatalf("Unable to determine supported modules - %v", err)
 	}
-	
+
 	loadedModulesMethods = make(map[string][]string)
 	for module, _ := range modules {
 		loadedModulesMethods[module] = api.AutoCompletion[module]
