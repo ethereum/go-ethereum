@@ -71,14 +71,10 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 
 func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
 	// If we are mining this block and validating we want to set the logs back to 0
-	//statedb.EmptyLogs()
 
 	cb := statedb.GetStateObject(coinbase.Address())
 	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, block), tx, cb)
 	if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
-		// If the account is managed, remove the invalid nonce.
-		//from, _ := tx.From()
-		//self.bc.TxState().RemoveNonce(from, tx.Nonce())
 		return nil, nil, err
 	}
 

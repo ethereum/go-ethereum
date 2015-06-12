@@ -3,7 +3,7 @@ package vm
 import (
 	"fmt"
 	"os"
-	"unicode/utf8"
+	"unicode"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -27,7 +27,7 @@ func StdErrFormat(logs []StructLog) {
 			for _, r := range data {
 				if r == 0 {
 					str += "."
-				} else if utf8.ValidRune(rune(r)) {
+				} else if unicode.IsPrint(rune(r)) {
 					str += fmt.Sprintf("%s", string(r))
 				} else {
 					str += "?"
