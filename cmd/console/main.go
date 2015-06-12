@@ -52,7 +52,6 @@ func init() {
 
 	app.Action = run
 	app.Flags = []cli.Flag{
-		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
 		utils.VerbosityFlag,
 		utils.JSpathFlag,
@@ -93,7 +92,7 @@ func main() {
 
 func run(ctx *cli.Context) {
 	jspath := ctx.GlobalString(utils.JSpathFlag.Name)
-	ipcpath := ctx.GlobalString(utils.IPCPathFlag.Name)
+	ipcpath := utils.IpcSocketPath(ctx)
 
 	repl := newJSRE(jspath, ipcpath)
 	repl.welcome(ipcpath)

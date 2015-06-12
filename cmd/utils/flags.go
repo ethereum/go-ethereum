@@ -385,9 +385,28 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 	return accounts.NewManager(ks)
 }
 
+func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
+	if common.IsWindows() {
+		ipcpath = common.DefaultIpcPath()
+		if ipcpath != ctx.GlobalString(IPCPathFlag.Name) {
+			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
+		}
+	} else {
+		ipcpath = common.DefaultIpcPath()
+		if ctx.GlobalString(IPCPathFlag.Name) != common.DefaultIpcPath() {
+			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
+		} else if ctx.GlobalString(DataDirFlag.Name) != "" &&
+		ctx.GlobalString(DataDirFlag.Name) != common.DefaultDataDir() {
+			ipcpath = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "geth.ipc")
+		}
+	}
+
+	return
+}
+
 func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
 	config := comms.IpcConfig{
-		Endpoint: filepath.Join(ctx.GlobalString(DataDirFlag.Name), "geth.ipc"),
+		Endpoint: IpcSocketPath(ctx),
 	}
 
 	xeth := xeth.New(eth, nil)
