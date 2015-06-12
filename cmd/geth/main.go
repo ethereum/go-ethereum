@@ -308,7 +308,7 @@ func console(ctx *cli.Context) {
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "geth.ipc"),
+		utils.IpcSocketPath(ctx),
 		true,
 		nil,
 	)
@@ -330,7 +330,7 @@ func execJSFiles(ctx *cli.Context) {
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		ctx.GlobalString(utils.IPCPathFlag.Name),
+		utils.IpcSocketPath(ctx),
 		false,
 		nil,
 	)

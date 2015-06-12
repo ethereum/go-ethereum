@@ -93,7 +93,7 @@ func main() {
 
 func run(ctx *cli.Context) {
 	jspath := ctx.GlobalString(utils.JSpathFlag.Name)
-	ipcpath := ctx.GlobalString(utils.IPCPathFlag.Name)
+	ipcpath := utils.IpcSocketPath(ctx)
 
 	repl := newJSRE(jspath, ipcpath)
 	repl.welcome(ipcpath)
