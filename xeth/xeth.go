@@ -42,6 +42,9 @@ const (
 func DefaultGas() *big.Int { return new(big.Int).Set(defaultGas) }
 
 func (self *XEth) DefaultGasPrice() *big.Int {
+	if self.gpo == nil {
+		self.gpo = eth.NewGasPriceOracle(self.backend)
+	}
 	return self.gpo.SuggestPrice()
 }
 
@@ -96,7 +99,6 @@ func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 		transactionQueue: make(map[int]*hashQueue),
 		messages:         make(map[int]*whisperFilter),
 		agent:            miner.NewRemoteAgent(),
-		gpo:              eth.NewGasPriceOracle(ethereum),
 	}
 	if ethereum.Whisper() != nil {
 		xeth.whisper = NewWhisper(ethereum.Whisper())
@@ -233,6 +235,7 @@ func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 	xeth := &XEth{
 		backend:  self.backend,
 		frontend: self.frontend,
+		gpo:      self.gpo,
 	}
 
 	xeth.state = NewState(xeth, statedb)
