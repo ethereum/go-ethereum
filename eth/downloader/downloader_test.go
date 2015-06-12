@@ -309,6 +309,37 @@ func TestThrottling(t *testing.T) {
 	}
 }
 
+// Tests that synchronisation from multiple peers works as intended (multi thread sanity test).
+func TestMultiSynchronisation(t *testing.T) {
+	// Create various peers with various parts of the chain
+	targetPeers := 16
+	targetBlocks := targetPeers*blockCacheLimit - 15
+
+	hashes := createHashes(targetBlocks, knownHash)
+	blocks := createBlocksFromHashes(hashes)
+
+	tester := newTester()
+	for i := 0; i < targetPeers; i++ {
+		id := fmt.Sprintf("peer #%d", i)
+		tester.newPeer(id, hashes[i*blockCacheLimit:], blocks)
+	}
+	// Synchronise with the middle peer and make sure half of the blocks were retrieved
+	id := fmt.Sprintf("peer #%d", targetPeers/2)
+	if err := tester.sync(id); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	if imported := len(tester.ownBlocks); imported != len(tester.peerHashes[id]) {
+		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, len(tester.peerHashes[id]))
+	}
+	// Synchronise with the best peer and make sure everything is retrieved
+	if err := tester.sync("peer #0"); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	if imported := len(tester.ownBlocks); imported != targetBlocks+1 {
+		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, targetBlocks+1)
+	}
+}
+
 // Tests that if a peer returns an invalid chain with a block pointing to a non-
 // existing parent, it is correctly detected and handled.
 func TestNonExistingParentAttack(t *testing.T) {
