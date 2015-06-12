@@ -43,35 +43,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		code   = context.Code
 		value  = context.value
 		price  = context.Price
-	)
 
-	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
-	defer func() {
-		if self.After != nil {
-			self.After(context, err)
-		}
-
-		if err != nil {
-
-			// In case of a VM exception (known exceptions) all gas consumed (panics NOT included).
-			context.UseGas(context.Gas)
-
-			ret = context.Return(nil)
-		}
-	}()
-
-	if context.CodeAddr != nil {
-		if p := Precompiled[context.CodeAddr.Str()]; p != nil {
-			return self.RunPrecompiled(p, input, context)
-		}
-	}
-
-	// Don't bother with the execution if there's no code.
-	if len(code) == 0 {
-		return context.Return(nil), nil
-	}
-
-	var (
 		op       OpCode                  // current opcode
 		codehash = crypto.Sha3Hash(code) // codehash is used when doing jump dest caching
 		mem      = NewMemory()           // bound memory
@@ -93,7 +65,37 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 
 			return nil
 		}
+
+		newMemSize *big.Int
+		cost       *big.Int
 	)
+
+	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
+	defer func() {
+		if self.After != nil {
+			self.After(context, err)
+		}
+
+		if err != nil {
+			self.log(pc, op, context.Gas, cost, mem, stack, context, err)
+
+			// In case of a VM exception (known exceptions) all gas consumed (panics NOT included).
+			context.UseGas(context.Gas)
+
+			ret = context.Return(nil)
+		}
+	}()
+
+	if context.CodeAddr != nil {
+		if p := Precompiled[context.CodeAddr.Str()]; p != nil {
+			return self.RunPrecompiled(p, input, context)
+		}
+	}
+
+	// Don't bother with the execution if there's no code.
+	if len(code) == 0 {
+		return context.Return(nil), nil
+	}
 
 	for {
 		// The base for all big integer arithmetic
@@ -103,24 +105,23 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		op = context.GetOp(pc)
 
 		// calculate the new memory size and gas price for the current executing opcode
-		newMemSize, gas, err := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
+		newMemSize, cost, err = self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
 		if err != nil {
 			return nil, err
 		}
 
-		self.log(pc, op, context.Gas, gas, mem, stack, context)
-
 		// Use the calculated gas. When insufficient gas is present, use all gas and return an
 		// Out Of Gas error
-		if !context.UseGas(gas) {
-			tmp := new(big.Int).Set(context.Gas)
+		if !context.UseGas(cost) {
 
 			context.UseGas(context.Gas)
 
-			return context.Return(nil), OOG(gas, tmp)
+			return context.Return(nil), OutOfGasError{}
 		}
 		// Resize the memory calculated previously
 		mem.Resize(newMemSize.Uint64())
+		// Add a log message
+		self.log(pc, op, context.Gas, cost, mem, stack, context, nil)
 
 		switch op {
 		case ADD:
@@ -783,15 +784,13 @@ func (self *Vm) RunPrecompiled(p *PrecompiledAccount, input []byte, context *Con
 
 		return context.Return(ret), nil
 	} else {
-		tmp := new(big.Int).Set(context.Gas)
-
-		return nil, OOG(gas, tmp)
+		return nil, OutOfGasError{}
 	}
 }
 
 // log emits a log event to the environment for each opcode encountered. This is not to be confused with the
 // LOG* opcode.
-func (self *Vm) log(pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *stack, context *Context) {
+func (self *Vm) log(pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *stack, context *Context, err error) {
 	if Debug {
 		mem := make([]byte, len(memory.Data()))
 		copy(mem, memory.Data())
@@ -804,7 +803,7 @@ func (self *Vm) log(pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, st
 			storage[common.BytesToHash(k)] = v
 		})
 
-		self.env.AddStructLog(StructLog{pc, op, new(big.Int).Set(gas), cost, mem, stck, storage})
+		self.env.AddStructLog(StructLog{pc, op, new(big.Int).Set(gas), cost, mem, stck, storage, err})
 	}
 }
 

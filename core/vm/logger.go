@@ -9,9 +9,14 @@ import (
 )
 
 func StdErrFormat(logs []StructLog) {
-	fmt.Fprintf(os.Stderr, "VM Stats %d ops\n", len(logs))
+	fmt.Fprintf(os.Stderr, "VM STAT %d OPs\n", len(logs))
 	for _, log := range logs {
-		fmt.Fprintf(os.Stderr, "PC %08d: %s GAS: %v COST: %v\n", log.Pc, log.Op, log.Gas, log.GasCost)
+		fmt.Fprintf(os.Stderr, "PC %08d: %s GAS: %v COST: %v", log.Pc, log.Op, log.Gas, log.GasCost)
+		if log.Err != nil {
+			fmt.Fprintf(os.Stderr, " ERROR: %v", log.Err)
+		}
+		fmt.Fprintf(os.Stderr, "\n")
+
 		fmt.Fprintln(os.Stderr, "STACK =", len(log.Stack))
 
 		for i := len(log.Stack) - 1; i >= 0; i-- {

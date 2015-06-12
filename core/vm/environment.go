@@ -45,6 +45,7 @@ type StructLog struct {
 	Memory  []byte
 	Stack   []*big.Int
 	Storage map[common.Hash][]byte
+	Err     error
 }
 
 type Account interface {
