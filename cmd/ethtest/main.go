@@ -17,6 +17,7 @@
 /**
  * @authors:
  * 	Jeffrey Wilcke <i@jev.io>
+ * 	Taylor Gerring <taylor.gerring@gmail.com>
  */
 
 package main
@@ -52,7 +53,7 @@ var (
 	}
 	ContinueOnErrorFlag = cli.BoolFlag{
 		Name:  "continue",
-		Usage: "Continue running tests on error (true) or exit immediately (false)",
+		Usage: "Continue running tests on error (true) or [default] exit immediately (false)",
 	}
 )
 
@@ -75,7 +76,7 @@ func runTest(test, file string) error {
 }
 
 func getFiles(path string) ([]string, error) {
-	// glog.Infoln("getFiles ", path)
+	// glog.Infoln("getFiles", path)
 	var files []string
 	f, err := os.Open(path)
 	if err != nil {
@@ -96,7 +97,7 @@ func getFiles(path string) ([]string, error) {
 			// only go 1 depth and leave directory entires blank
 			if !v.IsDir() && v.Name()[len(v.Name())-len(testExtension):len(v.Name())] == testExtension {
 				files[i] = filepath.Join(path, v.Name())
-				// glog.Infoln(files[i])
+				// glog.Infoln("Found file", files[i])
 			}
 		}
 	case mode.IsRegular():
@@ -107,28 +108,24 @@ func getFiles(path string) ([]string, error) {
 	return files, nil
 }
 
-func runSuite(c *cli.Context) {
-	flagTest := c.GlobalString(TestFlag.Name)
-	flagFile := c.GlobalString(FileFlag.Name)
-	continueOnError = c.GlobalBool(ContinueOnErrorFlag.Name)
-
+func runSuite(test, file string) {
 	var tests []string
 
-	if flagTest == defaultTest {
+	if test == defaultTest {
 		tests = allTests
 	} else {
-		tests = []string{flagTest}
+		tests = []string{test}
 	}
 
 	for _, curTest := range tests {
-		// glog.Infoln("runSuite", curTest, flagFile)
+		// glog.Infoln("runSuite", curTest, file)
 		var err error
 		var files []string
-		if flagTest == defaultTest {
-			files, err = getFiles(filepath.Join(flagFile, curTest))
+		if test == defaultTest {
+			files, err = getFiles(filepath.Join(file, curTest))
 
 		} else {
-			files, err = getFiles(flagFile)
+			files, err = getFiles(file)
 		}
 		if err != nil {
 			glog.Fatalln(err)
@@ -159,15 +156,24 @@ func runSuite(c *cli.Context) {
 	}
 }
 
+func setupApp(c *cli.Context) {
+	flagTest := c.GlobalString(TestFlag.Name)
+	flagFile := c.GlobalString(FileFlag.Name)
+	continueOnError = c.GlobalBool(ContinueOnErrorFlag.Name)
+
+	runSuite(flagTest, flagFile)
+}
+
 func main() {
 	glog.SetToStderr(true)
-
-	// vm.Debug = true
 
 	app := cli.NewApp()
 	app.Name = "ethtest"
 	app.Usage = "go-ethereum test interface"
-	app.Action = runSuite
+	app.Action = setupApp
+	app.Version = "0.2.0"
+	app.Author = "go-ethereum team"
+
 	app.Flags = []cli.Flag{
 		TestFlag,
 		FileFlag,
