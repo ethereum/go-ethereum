@@ -92,7 +92,7 @@ func TestEthashConcurrentVerify(t *testing.T) {
 	defer os.RemoveAll(eth.Full.Dir)
 
 	block := &testBlock{difficulty: big.NewInt(10)}
-	nonce, md := eth.Search(block, nil)
+	nonce, md := eth.Search(block, nil, 0)
 	block.nonce = nonce
 	block.mixDigest = common.BytesToHash(md)
 
@@ -135,7 +135,7 @@ func TestEthashConcurrentSearch(t *testing.T) {
 	// launch n searches concurrently.
 	for i := 0; i < nsearch; i++ {
 		go func() {
-			nonce, md := eth.Search(block, stop)
+			nonce, md := eth.Search(block, stop, 0)
 			select {
 			case found <- searchRes{n: nonce, md: md}:
 			case <-stop:
@@ -167,7 +167,7 @@ func TestEthashSearchAcrossEpoch(t *testing.T) {
 	for i := epochLength - 40; i < epochLength+40; i++ {
 		block := &testBlock{number: i, difficulty: big.NewInt(90)}
 		rand.Read(block.hashNoNonce[:])
-		nonce, md := eth.Search(block, nil)
+		nonce, md := eth.Search(block, nil, 0)
 		block.nonce = nonce
 		block.mixDigest = common.BytesToHash(md)
 		if !eth.Verify(block) {

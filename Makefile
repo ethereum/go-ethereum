@@ -6,7 +6,7 @@
 GOBIN = build/bin
 
 geth:
-	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/geth
+	build/env.sh go install -v $(shell build/flags.sh) ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
@@ -39,12 +39,12 @@ evm:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/evm to start the evm."
 mist:
-	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/mist
+	build/env.sh go install -v $(shell build/flags.sh) ./cmd/mist
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/mist --asset_path=cmd/mist/assets\" to launch mist."
 
 all:
-	build/env.sh go install -v $(shell build/ldflags.sh) ./...
+	build/env.sh go install -v $(shell build/flags.sh) ./...
 
 test: all
 	build/env.sh go test ./...

@@ -481,18 +481,6 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.chainManager.ResetWithGenesisBlock(gb)
 }
 
-func (s *Ethereum) StartMining(threads int) error {
-	eb, err := s.Etherbase()
-	if err != nil {
-		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
-		glog.V(logger.Error).Infoln(err)
-		return err
-	}
-
-	go s.miner.Start(eb, threads)
-	return nil
-}
-
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	eb = s.etherbase
 	if (eb == common.Address{}) {

@@ -34,7 +34,7 @@ type failPow struct {
 	failing uint64
 }
 
-func (pow failPow) Search(pow.Block, <-chan struct{}) (uint64, []byte) {
+func (pow failPow) Search(pow.Block, <-chan struct{}, int) (uint64, []byte) {
 	return 0, nil
 }
 func (pow failPow) Verify(block pow.Block) bool { return block.NumberU64() != pow.failing }
@@ -47,7 +47,7 @@ type delayedPow struct {
 	delay time.Duration
 }
 
-func (pow delayedPow) Search(pow.Block, <-chan struct{}) (uint64, []byte) {
+func (pow delayedPow) Search(pow.Block, <-chan struct{}, int) (uint64, []byte) {
 	return 0, nil
 }
 func (pow delayedPow) Verify(block pow.Block) bool { time.Sleep(pow.delay); return true }

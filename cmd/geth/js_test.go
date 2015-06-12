@@ -468,8 +468,7 @@ func processTxs(repl *testjethre, t *testing.T, expTxc int) bool {
 		t.Errorf("incorrect number of pending transactions, expected %v, got %v", expTxc, txc)
 		return false
 	}
-
-	err = repl.ethereum.StartMining(runtime.NumCPU())
+	err = repl.ethereum.StartMining(runtime.NumCPU(), "")
 	if err != nil {
 		t.Errorf("unexpected error mining: %v", err)
 		return false

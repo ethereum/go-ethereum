@@ -30,8 +30,8 @@ import (
 )
 
 var (
-	minDifficulty = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
-	sharedLight   = new(Light)
+	maxUint256  = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+	sharedLight = new(Light)
 )
 
 const (
@@ -140,7 +140,7 @@ func (l *Light) Verify(block pow.Block) bool {
 	// the finalizer before the call completes.
 	_ = cache
 	// The actual check.
-	target := new(big.Int).Div(minDifficulty, difficulty)
+	target := new(big.Int).Div(maxUint256, difficulty)
 	return h256ToHash(ret.result).Big().Cmp(target) <= 0
 }
 
@@ -199,7 +199,7 @@ func (d *dag) generate() {
 		if d.dir == "" {
 			d.dir = DefaultDir
 		}
-		glog.V(logger.Info).Infof("Generating DAG for epoch %d (%x)", d.epoch, seedHash)
+		glog.V(logger.Info).Infof("Generating DAG for epoch %d (size %d) (%x)", d.epoch, dagSize, seedHash)
 		// Generate a temporary cache.
 		// TODO: this could share the cache with Light
 		cache := C.ethash_light_new_internal(cacheSize, (*C.ethash_h256_t)(unsafe.Pointer(&seedHash[0])))
@@ -220,14 +220,18 @@ func (d *dag) generate() {
 	})
 }
 
-func freeDAG(h *dag) {
-	C.ethash_full_delete(h.ptr)
-	h.ptr = nil
+func freeDAG(d *dag) {
+	C.ethash_full_delete(d.ptr)
+	d.ptr = nil
+}
+
+func (d *dag) Ptr() unsafe.Pointer {
+	return unsafe.Pointer(d.ptr.data)
 }
 
 //export ethashGoCallback
 func ethashGoCallback(percent C.unsigned) C.int {
-	glog.V(logger.Info).Infof("Still generating DAG: %d%%", percent)
+	glog.V(logger.Info).Infof("Generating DAG: %d%%", percent)
 	return 0
 }
 
@@ -273,7 +277,7 @@ func (pow *Full) getDAG(blockNum uint64) (d *dag) {
 	return d
 }
 
-func (pow *Full) Search(block pow.Block, stop <-chan struct{}) (nonce uint64, mixDigest []byte) {
+func (pow *Full) Search(block pow.Block, stop <-chan struct{}, index int) (nonce uint64, mixDigest []byte) {
 	dag := pow.getDAG(block.NumberU64())
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -286,7 +290,7 @@ func (pow *Full) Search(block pow.Block, stop <-chan struct{}) (nonce uint64, mi
 
 	nonce = uint64(r.Int63())
 	hash := hashToH256(block.HashNoNonce())
-	target := new(big.Int).Div(minDifficulty, diff)
+	target := new(big.Int).Div(maxUint256, diff)
 	for {
 		select {
 		case <-stop:
