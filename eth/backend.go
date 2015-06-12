@@ -527,8 +527,8 @@ func (self *Ethereum) AddPeer(nodeURL string) error {
 
 func (s *Ethereum) Stop() {
 	s.net.Stop()
-	s.protocolManager.Stop()
 	s.chainManager.Stop()
+	s.protocolManager.Stop()
 	s.txPool.Stop()
 	s.eventMux.Stop()
 	if s.whisper != nil {

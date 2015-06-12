@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -101,7 +102,9 @@ type ChainManager struct {
 	futureBlocks *BlockCache
 
 	quit chan struct{}
-	wg   sync.WaitGroup
+	// procInterrupt must be atomically called
+	procInterrupt int32 // interrupt signaler for block processing
+	wg            sync.WaitGroup
 
 	pow pow.PoW
 }
@@ -516,6 +519,7 @@ func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
 
 func (bc *ChainManager) Stop() {
 	close(bc.quit)
+	atomic.StoreInt32(&bc.procInterrupt, 1)
 
 	bc.wg.Wait()
 
@@ -569,6 +573,11 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 
 	txcount := 0
 	for i, block := range chain {
+		if atomic.LoadInt32(&self.procInterrupt) == 1 {
+			glog.V(logger.Debug).Infoln("Premature abort during chain processing")
+			break
+		}
+
 		bstart := time.Now()
 		// Wait for block i's nonce to be verified before processing
 		// its state transition.
