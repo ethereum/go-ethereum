@@ -52,7 +52,6 @@ func init() {
 
 	app.Action = run
 	app.Flags = []cli.Flag{
-		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
 		utils.VerbosityFlag,
 		utils.JSpathFlag,
