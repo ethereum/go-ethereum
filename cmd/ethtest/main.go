@@ -22,14 +22,60 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 
+	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/tests"
 )
 
+var (
+	continueOnError = false
+	testExtension   = ".json"
+	defaultTest     = "all"
+	defaultDir      = "."
+	allTests        = []string{"BlockTests", "StateTests", "TransactionTests", "VMTests"}
+
+	TestFlag = cli.StringFlag{
+		Name:  "test",
+		Usage: "Test type (string): VMTests, TransactionTests, StateTests, BlockTests",
+		Value: defaultTest,
+	}
+	FileFlag = cli.StringFlag{
+		Name:   "file",
+		Usage:  "Test file or directory. Directories are searched for .json files 1 level deep",
+		Value:  defaultDir,
+		EnvVar: "ETHEREUM_TEST_PATH",
+	}
+	ContinueOnErrorFlag = cli.BoolFlag{
+		Name:  "continue",
+		Usage: "Continue running tests on error (true) or exit immediately (false)",
+	}
+)
+
+func runTest(test, file string) error {
+	// glog.Infoln("runTest", test, file)
+	var err error
+	switch test {
+	case "bc", "BlockTest", "BlockTests", "BlockChainTest":
+		err = tests.RunBlockTest(file)
+	case "st", "state", "StateTest", "StateTests":
+		err = tests.RunStateTest(file)
+	case "tx", "TransactionTest", "TransactionTests":
+		err = tests.RunTransactionTests(file)
+	case "vm", "VMTest", "VMTests":
+		err = tests.RunVmTest(file)
+	default:
+		err = fmt.Errorf("Invalid test type specified:", test)
+	}
+	return err
+}
+
 func getFiles(path string) ([]string, error) {
+	// glog.Infoln("getFiles ", path)
 	var files []string
 	f, err := os.Open(path)
 	if err != nil {
@@ -48,8 +94,9 @@ func getFiles(path string) ([]string, error) {
 		files = make([]string, len(fi))
 		for i, v := range fi {
 			// only go 1 depth and leave directory entires blank
-			if !v.IsDir() {
-				files[i] = path + v.Name()
+			if !v.IsDir() && v.Name()[len(v.Name())-len(testExtension):len(v.Name())] == testExtension {
+				files[i] = filepath.Join(path, v.Name())
+				// glog.Infoln(files[i])
 			}
 		}
 	case mode.IsRegular():
@@ -60,54 +107,75 @@ func getFiles(path string) ([]string, error) {
 	return files, nil
 }
 
+func runSuite(c *cli.Context) {
+	flagTest := c.GlobalString(TestFlag.Name)
+	flagFile := c.GlobalString(FileFlag.Name)
+	continueOnError = c.GlobalBool(ContinueOnErrorFlag.Name)
+
+	var tests []string
+
+	if flagTest == defaultTest {
+		tests = allTests
+	} else {
+		tests = []string{flagTest}
+	}
+
+	for _, curTest := range tests {
+		// glog.Infoln("runSuite", curTest, flagFile)
+		var err error
+		var files []string
+		if flagTest == defaultTest {
+			files, err = getFiles(filepath.Join(flagFile, curTest))
+
+		} else {
+			files, err = getFiles(flagFile)
+		}
+		if err != nil {
+			glog.Fatalln(err)
+		}
+
+		if len(files) == 0 {
+			glog.Warningln("No files matched path")
+		}
+		for _, testfile := range files {
+			// Skip blank entries
+			if len(testfile) == 0 {
+				continue
+			}
+
+			// TODO allow io.Reader to be passed so Stdin can be piped
+			// RunVmTest(strings.NewReader(os.Args[2]))
+			// RunVmTest(os.Stdin)
+			err := runTest(curTest, testfile)
+			if err != nil {
+				if continueOnError {
+					glog.Errorln(err)
+				} else {
+					glog.Fatalln(err)
+				}
+			}
+
+		}
+	}
+}
+
 func main() {
 	glog.SetToStderr(true)
-	var continueOnError bool = false
+
 	// vm.Debug = true
 
-	if len(os.Args) < 2 {
-		glog.Exit("Must specify test type")
+	app := cli.NewApp()
+	app.Name = "ethtest"
+	app.Usage = "go-ethereum test interface"
+	app.Action = runSuite
+	app.Flags = []cli.Flag{
+		TestFlag,
+		FileFlag,
+		ContinueOnErrorFlag,
 	}
 
-	testtype := os.Args[1]
-	var pattern string
-	if len(os.Args) > 2 {
-		pattern = os.Args[2]
+	if err := app.Run(os.Args); err != nil {
+		glog.Fatalln(err)
 	}
 
-	files, err := getFiles(pattern)
-	if err != nil {
-		glog.Fatal(err)
-	}
-
-	for _, testfile := range files {
-		// Skip blank entries
-		if len(testfile) == 0 {
-			continue
-		}
-		// TODO allow io.Reader to be passed so Stdin can be piped
-		// RunVmTest(strings.NewReader(os.Args[2]))
-		// RunVmTest(os.Stdin)
-		var err error
-		switch testtype {
-		case "vm", "VMTests":
-			err = tests.RunVmTest(testfile)
-		case "state", "StateTest":
-			err = tests.RunStateTest(testfile)
-		case "tx", "TransactionTests":
-			err = tests.RunTransactionTests(testfile)
-		case "bc", "BlockChainTest":
-			err = tests.RunBlockTest(testfile)
-		default:
-			glog.Fatalln("Invalid test type specified")
-		}
-
-		if err != nil {
-			if continueOnError {
-				glog.Errorln(err)
-			} else {
-				glog.Fatalln(err)
-			}
-		}
-	}
 }
