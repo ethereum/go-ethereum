@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/ethereum/go-ethereum",
-	"GoVersion": "go1.4",
+	"GoVersion": "go1.4.2",
 	"Packages": [
 		"./..."
 	],
@@ -9,6 +9,10 @@
 			"ImportPath": "code.google.com/p/go-uuid/uuid",
 			"Comment": "null-12",
 			"Rev": "7dda39b2e7d5e265014674c5af696ba4186679e9"
+		},
+		{
+			"ImportPath": "github.com/Gustav-Simonsson/go-opencl/cl",
+			"Rev": "593e01cfc4f3353585015321e01951d4a907d3ef"
 		},
 		{
 			"ImportPath": "github.com/codegangsta/cli",
@@ -21,12 +25,8 @@
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",
-			"Comment": "v23.1-227-g8f6ccaa",
-			"Rev": "8f6ccaaef9b418553807a73a95cb5f49cd3ea39f"
-		},
-		{
-			"ImportPath": "github.com/gizak/termui",
-			"Rev": "bab8dce01c193d82bc04888a0a9a7814d505f532"
+			"Comment": "v23.1-231-g291dc2c",
+			"Rev": "291dc2c1e43b7a903572328d2acc0b840dc4e7a7"
 		},
 		{
 			"ImportPath": "github.com/howeyc/fsnotify",
@@ -54,13 +54,8 @@
 			"Rev": "fdbe02a1b44e75977b2690062b83cf507d70c013"
 		},
 		{
-			"ImportPath": "github.com/mattn/go-runewidth",
-			"Comment": "travisish-33-g5890272",
-			"Rev": "5890272cd41c5103531cd7b79e428d99c9e97f76"
-		},
-		{
-			"ImportPath": "github.com/nsf/termbox-go",
-			"Rev": "675ffd907b7401b8a709a5ef2249978af5616bb2"
+			"ImportPath": "github.com/obscuren/qml",
+			"Rev": "c288002b52e905973b131089a8a7c761d4a2c36a"
 		},
 		{
 			"ImportPath": "github.com/peterh/liner",
@@ -73,10 +68,6 @@
 		{
 			"ImportPath": "github.com/rakyll/goini",
 			"Rev": "907cca0f578a5316fb864ec6992dc3d9730ec58c"
-		},
-		{
-			"ImportPath": "github.com/rcrowley/go-metrics",
-			"Rev": "a5cfc242a56ba7fa70b785f678d6214837bf93b9"
 		},
 		{
 			"ImportPath": "github.com/robertkrimen/otto",
@@ -130,6 +121,14 @@
 		{
 			"ImportPath": "gopkg.in/karalabe/cookiejar.v2/collections/prque",
 			"Rev": "0b2e270613f5d7ba262a5749b9e32270131497a2"
+		},
+		{
+			"ImportPath": "gopkg.in/qml.v1/cdata",
+			"Rev": "1116cb9cd8dee23f8d444ded354eb53122739f99"
+		},
+		{
+			"ImportPath": "gopkg.in/qml.v1/gl/glbase",
+			"Rev": "1116cb9cd8dee23f8d444ded354eb53122739f99"
 		}
 	]
 }

@@ -107,6 +107,16 @@ var (
 	}
 
 	// miner settings
+	// TODO: refactor CPU vs GPU mining flags
+	MiningGPUFlag = cli.StringFlag{
+		Name:  "minegpu",
+		Usage: "Mine with given GPUs. '--minegpu 0,1' will mine with the first two GPUs found.",
+	}
+	MiningGPUChunksFlag = cli.BoolFlag{
+		Name:  "gpuchunks",
+		Usage: "Load DAG as chunks onto GPU memory",
+	}
+
 	MinerThreadsFlag = cli.IntFlag{
 		Name:  "minerthreads",
 		Usage: "Number of miner threads",
