@@ -139,7 +139,7 @@ func (self *ethApi) IsMining(req *shared.Request) (interface{}, error) {
 }
 
 func (self *ethApi) GasPrice(req *shared.Request) (interface{}, error) {
-	return newHexNum(xeth.DefaultGasPrice().Bytes()), nil
+	return newHexNum(self.xeth.DefaultGasPrice().Bytes()), nil
 }
 
 func (self *ethApi) GetStorage(req *shared.Request) (interface{}, error) {
