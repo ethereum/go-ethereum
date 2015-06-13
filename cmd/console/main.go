@@ -40,7 +40,7 @@ const (
 var (
 	gitCommit       string // set via linker flag
 	nodeNameVersion string
-	app             = utils.NewApp(Version, "the ether console")
+	app             = utils.NewApp(Version, "the geth console")
 )
 
 func init() {
@@ -93,8 +93,11 @@ func main() {
 func run(ctx *cli.Context) {
 	jspath := ctx.GlobalString(utils.JSpathFlag.Name)
 	ipcpath := utils.IpcSocketPath(ctx)
-
 	repl := newJSRE(jspath, ipcpath)
-	repl.welcome(ipcpath)
-	repl.interactive()
+
+	if ctx.Args().Present() {
+		repl.batch(ctx.Args())
+	} else {
+		repl.interactive(ipcpath)
+	}
 }
