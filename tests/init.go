@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
+	// "github.com/ethereum/go-ethereum/logger/glog"
 )
 
 var (
@@ -17,13 +19,40 @@ var (
 	transactionTestDir = filepath.Join(baseDir, "TransactionTests")
 	vmTestDir          = filepath.Join(baseDir, "VMTests")
 
-	blockSkipTests = []string{"SimpleTx3"}
-	transSkipTests = []string{"TransactionWithHihghNonce256"}
-	stateSkipTests = []string{"mload32bitBound_return", "mload32bitBound_return2"}
-	vmSkipTests    = []string{}
+	BlockSkipTests = []string{"SimpleTx3"}
+	TransSkipTests = []string{"TransactionWithHihghNonce256"}
+	StateSkipTests = []string{"mload32bitBound_return", "mload32bitBound_return2"}
+	VmSkipTests    = []string{}
 )
 
-func readJSON(reader io.Reader, value interface{}) error {
+// type TestRunner interface {
+// 	// LoadTest()
+// 	RunTest() error
+// }
+
+// func RunTests(bt map[string]TestRunner, skipTests []string) error {
+// 	// map skipped tests to boolean set
+// 	skipTest := make(map[string]bool, len(skipTests))
+// 	for _, name := range skipTests {
+// 		skipTest[name] = true
+// 	}
+
+// 	for name, test := range bt {
+// 		// if the test should be skipped, return
+// 		if skipTest[name] {
+// 			glog.Infoln("Skipping block test", name)
+// 			return nil
+// 		}
+// 		// test the block
+// 		if err := test.RunTest(); err != nil {
+// 			return err
+// 		}
+// 		glog.Infoln("Block test passed: ", name)
+// 	}
+// 	return nil
+// }
+
+func readJson(reader io.Reader, value interface{}) error {
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return fmt.Errorf("Error reading JSON file", err.Error())
@@ -35,6 +64,34 @@ func readJSON(reader io.Reader, value interface{}) error {
 			return fmt.Errorf("JSON syntax error at line %v: %v", line, err)
 		}
 		return fmt.Errorf("JSON unmarshal error: %v", err)
+	}
+	return nil
+}
+
+func readJsonHttp(uri string, value interface{}) error {
+	resp, err := http.Get(uri)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	err = readJson(resp.Body, value)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func readJsonFile(fn string, value interface{}) error {
+	file, err := os.Open(fn)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	err = readJson(file, value)
+	if err != nil {
+		return fmt.Errorf("%s in file %s", err.Error(), fn)
 	}
 	return nil
 }
@@ -51,32 +108,4 @@ func findLine(data []byte, offset int64) (line int) {
 		}
 	}
 	return
-}
-
-func readHttpFile(uri string, value interface{}) error {
-	resp, err := http.Get(uri)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	err = readJSON(resp.Body, value)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func readTestFile(fn string, value interface{}) error {
-	file, err := os.Open(fn)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	err = readJSON(file, value)
-	if err != nil {
-		return fmt.Errorf("%s in file %s", err.Error(), fn)
-	}
-	return nil
 }

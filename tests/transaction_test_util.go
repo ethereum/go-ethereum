@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -31,14 +32,14 @@ type TransactionTest struct {
 	Transaction TtTransaction
 }
 
-func RunTransactionTests(file string) error {
-	skipTest := make(map[string]bool, len(transSkipTests))
-	for _, name := range transSkipTests {
+func RunTransactionTestsWithReader(r io.Reader) error {
+	skipTest := make(map[string]bool, len(TransSkipTests))
+	for _, name := range TransSkipTests {
 		skipTest[name] = true
 	}
 
 	bt := make(map[string]TransactionTest)
-	if err := readTestFile(file, &bt); err != nil {
+	if err := readJson(r, &bt); err != nil {
 		return err
 	}
 
@@ -49,7 +50,7 @@ func RunTransactionTests(file string) error {
 			return nil
 		}
 		// test the block
-		if err := runTest(test); err != nil {
+		if err := runTransactionTest(test); err != nil {
 			return err
 		}
 		glog.Infoln("Transaction test passed: ", name)
@@ -58,7 +59,35 @@ func RunTransactionTests(file string) error {
 	return nil
 }
 
-func runTest(txTest TransactionTest) (err error) {
+func RunTransactionTests(file string) error {
+	skipTest := make(map[string]bool, len(TransSkipTests))
+	for _, name := range TransSkipTests {
+		skipTest[name] = true
+	}
+
+	bt := make(map[string]TransactionTest)
+	if err := readJsonFile(file, &bt); err != nil {
+		return err
+	}
+
+	for name, test := range bt {
+		// if the test should be skipped, return
+		if skipTest[name] {
+			glog.Infoln("Skipping transaction test", name)
+			return nil
+		}
+
+		// test the block
+		if err := runTransactionTest(test); err != nil {
+			return err
+		}
+		glog.Infoln("Transaction test passed: ", name)
+
+	}
+	return nil
+}
+
+func runTransactionTest(txTest TransactionTest) (err error) {
 	tx := new(types.Transaction)
 	err = rlp.DecodeBytes(mustConvertBytes(txTest.Rlp), tx)
 

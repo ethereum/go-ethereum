@@ -24,6 +24,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -55,28 +56,37 @@ var (
 		Name:  "continue",
 		Usage: "Continue running tests on error (true) or [default] exit immediately (false)",
 	}
+	ReadStdInFlag = cli.BoolFlag{
+		Name:  "stdin",
+		Usage: "Accept input from stdin instead of reading from file",
+	}
 )
 
-func runTest(test, file string) error {
-	// glog.Infoln("runTest", test, file)
+func runTestWithReader(test string, r io.Reader) error {
+	glog.Infoln("runTest", test)
 	var err error
 	switch test {
-	case "bc", "BlockTest", "BlockTests", "BlockChainTest":
-		err = tests.RunBlockTest(file)
+	case "bt", "BlockTest", "BlockTests", "BlockChainTest":
+		err = tests.RunBlockTestWithReader(r)
 	case "st", "state", "StateTest", "StateTests":
-		err = tests.RunStateTest(file)
+		err = tests.RunStateTestWithReader(r)
 	case "tx", "TransactionTest", "TransactionTests":
-		err = tests.RunTransactionTests(file)
+		err = tests.RunTransactionTestsWithReader(r)
 	case "vm", "VMTest", "VMTests":
-		err = tests.RunVmTest(file)
+		err = tests.RunVmTestWithReader(r)
 	default:
-		err = fmt.Errorf("Invalid test type specified:", test)
+		err = fmt.Errorf("Invalid test type specified: %v", test)
 	}
-	return err
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getFiles(path string) ([]string, error) {
-	// glog.Infoln("getFiles", path)
+	glog.Infoln("getFiles", path)
 	var files []string
 	f, err := os.Open(path)
 	if err != nil {
@@ -97,7 +107,7 @@ func getFiles(path string) ([]string, error) {
 			// only go 1 depth and leave directory entires blank
 			if !v.IsDir() && v.Name()[len(v.Name())-len(testExtension):len(v.Name())] == testExtension {
 				files[i] = filepath.Join(path, v.Name())
-				// glog.Infoln("Found file", files[i])
+				glog.Infoln("Found file", files[i])
 			}
 		}
 	case mode.IsRegular():
@@ -118,7 +128,7 @@ func runSuite(test, file string) {
 	}
 
 	for _, curTest := range tests {
-		// glog.Infoln("runSuite", curTest, file)
+		glog.Infoln("runSuite", curTest, file)
 		var err error
 		var files []string
 		if test == defaultTest {
@@ -134,16 +144,19 @@ func runSuite(test, file string) {
 		if len(files) == 0 {
 			glog.Warningln("No files matched path")
 		}
-		for _, testfile := range files {
+		for _, curFile := range files {
 			// Skip blank entries
-			if len(testfile) == 0 {
+			if len(curFile) == 0 {
 				continue
 			}
 
-			// TODO allow io.Reader to be passed so Stdin can be piped
-			// RunVmTest(strings.NewReader(os.Args[2]))
-			// RunVmTest(os.Stdin)
-			err := runTest(curTest, testfile)
+			r, err := os.Open(curFile)
+			if err != nil {
+				glog.Fatalln(err)
+			}
+			defer r.Close()
+
+			err = runTestWithReader(curTest, r)
 			if err != nil {
 				if continueOnError {
 					glog.Errorln(err)
@@ -160,8 +173,16 @@ func setupApp(c *cli.Context) {
 	flagTest := c.GlobalString(TestFlag.Name)
 	flagFile := c.GlobalString(FileFlag.Name)
 	continueOnError = c.GlobalBool(ContinueOnErrorFlag.Name)
+	useStdIn := c.GlobalBool(ReadStdInFlag.Name)
 
-	runSuite(flagTest, flagFile)
+	if !useStdIn {
+		runSuite(flagTest, flagFile)
+	} else {
+		if err := runTestWithReader(flagTest, os.Stdin); err != nil {
+			glog.Fatalln(err)
+		}
+
+	}
 }
 
 func main() {
@@ -178,6 +199,7 @@ func main() {
 		TestFlag,
 		FileFlag,
 		ContinueOnErrorFlag,
+		ReadStdInFlag,
 	}
 
 	if err := app.Run(os.Args); err != nil {

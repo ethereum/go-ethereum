@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math/big"
 	"path/filepath"
 	"runtime"
@@ -85,15 +86,42 @@ type btTransaction struct {
 	Value    string
 }
 
-func RunBlockTest(filepath string) error {
-	bt, err := LoadBlockTests(filepath)
+func RunBlockTestWithReader(r io.Reader) error {
+	btjs := make(map[string]*btJSON)
+	if err := readJson(r, &btjs); err != nil {
+		return err
+	}
+
+	bt, err := convertBlockTests(btjs)
 	if err != nil {
 		return err
 	}
 
-	// map skipped tests to boolean set
-	skipTest := make(map[string]bool, len(blockSkipTests))
-	for _, name := range blockSkipTests {
+	if err := runBlockTests(bt); err != nil {
+		return err
+	}
+	return nil
+}
+
+func RunBlockTest(file string) error {
+	btjs := make(map[string]*btJSON)
+	if err := readJsonFile(file, &btjs); err != nil {
+		return err
+	}
+
+	bt, err := convertBlockTests(btjs)
+	if err != nil {
+		return err
+	}
+	if err := runBlockTests(bt); err != nil {
+		return err
+	}
+	return nil
+}
+
+func runBlockTests(bt map[string]*BlockTest) error {
+	skipTest := make(map[string]bool, len(BlockSkipTests))
+	for _, name := range BlockSkipTests {
 		skipTest[name] = true
 	}
 
@@ -103,17 +131,19 @@ func RunBlockTest(filepath string) error {
 			glog.Infoln("Skipping block test", name)
 			return nil
 		}
+
 		// test the block
-		if err := testBlock(test); err != nil {
+		if err := runBlockTest(test); err != nil {
 			return err
 		}
 		glog.Infoln("Block test passed: ", name)
+
 	}
 	return nil
-}
 
-func testBlock(test *BlockTest) error {
-	cfg := testEthConfig()
+}
+func runBlockTest(test *BlockTest) error {
+	cfg := test.makeEthConfig()
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		return err
@@ -144,7 +174,7 @@ func testBlock(test *BlockTest) error {
 	return nil
 }
 
-func testEthConfig() *eth.Config {
+func (test *BlockTest) makeEthConfig() *eth.Config {
 	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"))
 
 	return &eth.Config{
@@ -230,7 +260,7 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
 		if b.BlockHeader == nil {
 			return fmt.Errorf("Block insertion should have failed")
 		}
-		err = validateBlockHeader(b.BlockHeader, cb.Header())
+		err = t.validateBlockHeader(b.BlockHeader, cb.Header())
 		if err != nil {
 			return fmt.Errorf("Block header validation failed: ", err)
 		}
@@ -238,7 +268,7 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
 	return nil
 }
 
-func validateBlockHeader(h *btHeader, h2 *types.Header) error {
+func (s *BlockTest) validateBlockHeader(h *btHeader, h2 *types.Header) error {
 	expectedBloom := mustConvertBytes(h.Bloom)
 	if !bytes.Equal(expectedBloom, h2.Bloom.Bytes()) {
 		return fmt.Errorf("Bloom: expected: %v, decoded: %v", expectedBloom, h2.Bloom.Bytes())
@@ -341,7 +371,18 @@ func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 	return nil
 }
 
-func convertTest(in *btJSON) (out *BlockTest, err error) {
+func convertBlockTests(in map[string]*btJSON) (map[string]*BlockTest, error) {
+	out := make(map[string]*BlockTest)
+	for name, test := range in {
+		var err error
+		if out[name], err = convertBlockTest(test); err != nil {
+			return out, fmt.Errorf("bad test %q: %v", name, err)
+		}
+	}
+	return out, nil
+}
+
+func convertBlockTest(in *btJSON) (out *BlockTest, err error) {
 	// the conversion handles errors by catching panics.
 	// you might consider this ugly, but the alternative (passing errors)
 	// would be much harder to read.
@@ -450,19 +491,12 @@ func mustConvertUint(in string, base int) uint64 {
 }
 
 func LoadBlockTests(file string) (map[string]*BlockTest, error) {
-	bt := make(map[string]*btJSON)
-	if err := readTestFile(file, &bt); err != nil {
+	btjs := make(map[string]*btJSON)
+	if err := readJsonFile(file, &btjs); err != nil {
 		return nil, err
 	}
 
-	out := make(map[string]*BlockTest)
-	for name, in := range bt {
-		var err error
-		if out[name], err = convertTest(in); err != nil {
-			return out, fmt.Errorf("bad test %q: %v", name, err)
-		}
-	}
-	return out, nil
+	return convertBlockTests(btjs)
 }
 
 // Nothing to see here, please move along...

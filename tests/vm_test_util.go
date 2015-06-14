@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"math/big"
 	"strconv"
 
@@ -13,16 +14,43 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-func RunVmTest(p string) error {
-	skipTest := make(map[string]bool, len(vmSkipTests))
-	for _, name := range vmSkipTests {
-		skipTest[name] = true
-	}
-
+func RunVmTestWithReader(r io.Reader) error {
 	tests := make(map[string]VmTest)
-	err := readTestFile(p, &tests)
+	err := readJson(r, &tests)
 	if err != nil {
 		return err
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if err := runVmTests(tests); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func RunVmTest(p string) error {
+
+	tests := make(map[string]VmTest)
+	err := readJsonFile(p, &tests)
+	if err != nil {
+		return err
+	}
+
+	if err := runVmTests(tests); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func runVmTests(tests map[string]VmTest) error {
+	skipTest := make(map[string]bool, len(VmSkipTests))
+	for _, name := range VmSkipTests {
+		skipTest[name] = true
 	}
 
 	for name, test := range tests {
@@ -30,82 +58,91 @@ func RunVmTest(p string) error {
 			glog.Infoln("Skipping VM test", name)
 			return nil
 		}
-		db, _ := ethdb.NewMemDatabase()
-		statedb := state.New(common.Hash{}, db)
-		for addr, account := range test.Pre {
-			obj := StateObjectFromAccount(db, addr, account)
-			statedb.SetStateObject(obj)
-			for a, v := range account.Storage {
-				obj.SetState(common.HexToHash(a), common.HexToHash(v))
-			}
-		}
 
-		// XXX Yeah, yeah...
-		env := make(map[string]string)
-		env["currentCoinbase"] = test.Env.CurrentCoinbase
-		env["currentDifficulty"] = test.Env.CurrentDifficulty
-		env["currentGasLimit"] = test.Env.CurrentGasLimit
-		env["currentNumber"] = test.Env.CurrentNumber
-		env["previousHash"] = test.Env.PreviousHash
-		if n, ok := test.Env.CurrentTimestamp.(float64); ok {
-			env["currentTimestamp"] = strconv.Itoa(int(n))
-		} else {
-			env["currentTimestamp"] = test.Env.CurrentTimestamp.(string)
-		}
-
-		var (
-			ret  []byte
-			gas  *big.Int
-			err  error
-			logs state.Logs
-		)
-
-		ret, logs, gas, err = RunVm(statedb, env, test.Exec)
-
-		// Compare expectedand actual return
-		rexp := common.FromHex(test.Out)
-		if bytes.Compare(rexp, ret) != 0 {
-			return fmt.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
-		}
-
-		// Check gas usage
-		if len(test.Gas) == 0 && err == nil {
-			return fmt.Errorf("%s's gas unspecified, indicating an error. VM returned (incorrectly) successfull", name)
-		} else {
-			gexp := common.Big(test.Gas)
-			if gexp.Cmp(gas) != 0 {
-				return fmt.Errorf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
-			}
-		}
-
-		// check post state
-		for addr, account := range test.Post {
-			obj := statedb.GetStateObject(common.HexToAddress(addr))
-			if obj == nil {
-				continue
-			}
-
-			for addr, value := range account.Storage {
-				v := obj.GetState(common.HexToHash(addr))
-				vexp := common.HexToHash(value)
-
-				if v != vexp {
-					return t.Errorf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address().Bytes()[0:4], addr, vexp, v, vexp.Big(), v.Big())
-				}
-			}
-		}
-
-		// check logs
-		if len(test.Logs) > 0 {
-			lerr := checkLogs(test.Logs, logs)
-			if lerr != nil {
-				return fmt.Errorf("'%s' ", name, lerr.Error())
-			}
+		if err := runVmTest(test); err != nil {
+			return fmt.Errorf("%s %s", name, err.Error())
 		}
 
 		glog.Infoln("VM test passed: ", name)
 		//fmt.Println(string(statedb.Dump()))
 	}
+	return nil
+}
+
+func runVmTest(test VmTest) error {
+	db, _ := ethdb.NewMemDatabase()
+	statedb := state.New(common.Hash{}, db)
+	for addr, account := range test.Pre {
+		obj := StateObjectFromAccount(db, addr, account)
+		statedb.SetStateObject(obj)
+		for a, v := range account.Storage {
+			obj.SetState(common.HexToHash(a), common.HexToHash(v))
+		}
+	}
+
+	// XXX Yeah, yeah...
+	env := make(map[string]string)
+	env["currentCoinbase"] = test.Env.CurrentCoinbase
+	env["currentDifficulty"] = test.Env.CurrentDifficulty
+	env["currentGasLimit"] = test.Env.CurrentGasLimit
+	env["currentNumber"] = test.Env.CurrentNumber
+	env["previousHash"] = test.Env.PreviousHash
+	if n, ok := test.Env.CurrentTimestamp.(float64); ok {
+		env["currentTimestamp"] = strconv.Itoa(int(n))
+	} else {
+		env["currentTimestamp"] = test.Env.CurrentTimestamp.(string)
+	}
+
+	var (
+		ret  []byte
+		gas  *big.Int
+		err  error
+		logs state.Logs
+	)
+
+	ret, logs, gas, err = RunVm(statedb, env, test.Exec)
+
+	// Compare expectedand actual return
+	rexp := common.FromHex(test.Out)
+	if bytes.Compare(rexp, ret) != 0 {
+		return fmt.Errorf("return failed. Expected %x, got %x\n", rexp, ret)
+	}
+
+	// Check gas usage
+	if len(test.Gas) == 0 && err == nil {
+		return fmt.Errorf("gas unspecified, indicating an error. VM returned (incorrectly) successfull")
+	} else {
+		gexp := common.Big(test.Gas)
+		if gexp.Cmp(gas) != 0 {
+			return fmt.Errorf("gas failed. Expected %v, got %v\n", gexp, gas)
+		}
+	}
+
+	// check post state
+	for addr, account := range test.Post {
+		obj := statedb.GetStateObject(common.HexToAddress(addr))
+		if obj == nil {
+			continue
+		}
+
+		for addr, value := range account.Storage {
+			v := obj.GetState(common.HexToHash(addr))
+			vexp := common.HexToHash(value)
+
+			if v != vexp {
+				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", obj.Address().Bytes()[0:4], addr, vexp, v, vexp.BigD(vexp), v.Big(v))
+			}
+		}
+	}
+
+	// check logs
+	if len(test.Logs) > 0 {
+		lerr := checkLogs(test.Logs, logs)
+		if lerr != nil {
+			return lerr
+		}
+	}
+
 	return nil
 }
 
