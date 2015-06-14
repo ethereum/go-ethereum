@@ -51,6 +51,7 @@ var (
 			"getData",
 			"getCode",
 			"sign",
+			"pushTx",
 			"sendTransaction",
 			"transact",
 			"estimateGas",

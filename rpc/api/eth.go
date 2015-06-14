@@ -46,6 +46,7 @@ var (
 		"eth_getData":                           (*ethApi).GetData,
 		"eth_getCode":                           (*ethApi).GetData,
 		"eth_sign":                              (*ethApi).Sign,
+		"eth_pushTx":                            (*ethApi).PushTx,
 		"eth_sendTransaction":                   (*ethApi).SendTransaction,
 		"eth_transact":                          (*ethApi).SendTransaction,
 		"eth_estimateGas":                       (*ethApi).EstimateGas,
@@ -241,6 +242,26 @@ func (self *ethApi) Sign(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 	v, err := self.xeth.Sign(args.From, args.Data, false)
+	if err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+
+func (self *ethApi) PushTx(req *shared.Request) (interface{}, error) {
+	args := new(NewTxArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	// nonce may be nil ("guess" mode)
+	var nonce string
+	if args.Nonce != nil {
+		nonce = args.Nonce.String()
+	}
+
+	v, err := self.xeth.PushTx(args.encodedTx)
 	if err != nil {
 		return nil, err
 	}
