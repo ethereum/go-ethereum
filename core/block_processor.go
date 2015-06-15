@@ -260,6 +260,12 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 		putTx(sm.extraDb, tx, block, uint64(i))
 	}
 
+	receiptsRlp := receipts.RlpEncode()
+	/*if len(receipts) > 0 {
+		glog.V(logger.Info).Infof("Saving %v receipts, rlp len is %v\n", len(receipts), len(receiptsRlp))
+	}*/
+	sm.extraDb.Put(append(receiptsPre, block.Hash().Bytes()...), receiptsRlp)
+
 	return state.Logs(), nil
 }
 
@@ -404,6 +410,8 @@ func getBlockReceipts(db common.Database, bhash common.Hash) (receipts types.Rec
 
 	if err == nil {
 		err = rlp.DecodeBytes(rdata, &receipts)
+	} else {
+		glog.V(logger.Detail).Infof("getBlockReceipts error %v\n", err)
 	}
 	return
 }

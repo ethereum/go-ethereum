@@ -23,10 +23,10 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/ethereum/go-ethereum/rpc/api"
-	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
 func init() {
@@ -132,7 +132,7 @@ var (
 	GasPriceFlag = cli.StringFlag{
 		Name:  "gasprice",
 		Usage: "Sets the minimal gasprice when mining transactions",
-		Value: new(big.Int).Mul(big.NewInt(10), common.Szabo).String(),
+		Value: new(big.Int).Mul(big.NewInt(1), common.Szabo).String(),
 	}
 
 	UnlockedAccountFlag = cli.StringFlag{
@@ -276,6 +276,36 @@ var (
 		Usage: "solidity compiler to be used",
 		Value: "solc",
 	}
+	GpoMinGasPriceFlag = cli.StringFlag{
+		Name:  "gpomin",
+		Usage: "Minimum suggested gas price",
+		Value: new(big.Int).Mul(big.NewInt(1), common.Szabo).String(),
+	}
+	GpoMaxGasPriceFlag = cli.StringFlag{
+		Name:  "gpomax",
+		Usage: "Maximum suggested gas price",
+		Value: new(big.Int).Mul(big.NewInt(100), common.Szabo).String(),
+	}
+	GpoFullBlockRatioFlag = cli.IntFlag{
+		Name:  "gpofull",
+		Usage: "Full block threshold for gas price calculation (%)",
+		Value: 80,
+	}
+	GpobaseStepDownFlag = cli.IntFlag{
+		Name:  "gpobasedown",
+		Usage: "Suggested gas price base step down ratio (1/1000)",
+		Value: 10,
+	}
+	GpobaseStepUpFlag = cli.IntFlag{
+		Name:  "gpobaseup",
+		Usage: "Suggested gas price base step up ratio (1/1000)",
+		Value: 100,
+	}
+	GpobaseCorrectionFactorFlag = cli.IntFlag{
+		Name:  "gpobasecf",
+		Usage: "Suggested gas price base correction factor (%)",
+		Value: 110,
+	}
 )
 
 // MakeNAT creates a port mapper from set command line flags.
@@ -313,33 +343,39 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		clientID += "/" + customName
 	}
 	return &eth.Config{
-		Name:               common.MakeName(clientID, version),
-		DataDir:            ctx.GlobalString(DataDirFlag.Name),
-		ProtocolVersion:    ctx.GlobalInt(ProtocolVersionFlag.Name),
-		GenesisNonce:       ctx.GlobalInt(GenesisNonceFlag.Name),
-		BlockChainVersion:  ctx.GlobalInt(BlockchainVersionFlag.Name),
-		SkipBcVersionCheck: false,
-		NetworkId:          ctx.GlobalInt(NetworkIdFlag.Name),
-		LogFile:            ctx.GlobalString(LogFileFlag.Name),
-		Verbosity:          ctx.GlobalInt(VerbosityFlag.Name),
-		LogJSON:            ctx.GlobalString(LogJSONFlag.Name),
-		Etherbase:          ctx.GlobalString(EtherbaseFlag.Name),
-		MinerThreads:       ctx.GlobalInt(MinerThreadsFlag.Name),
-		AccountManager:     MakeAccountManager(ctx),
-		VmDebug:            ctx.GlobalBool(VMDebugFlag.Name),
-		MaxPeers:           ctx.GlobalInt(MaxPeersFlag.Name),
-		MaxPendingPeers:    ctx.GlobalInt(MaxPendingPeersFlag.Name),
-		Port:               ctx.GlobalString(ListenPortFlag.Name),
-		NAT:                MakeNAT(ctx),
-		NatSpec:            ctx.GlobalBool(NatspecEnabledFlag.Name),
-		Discovery:          !ctx.GlobalBool(NoDiscoverFlag.Name),
-		NodeKey:            MakeNodeKey(ctx),
-		Shh:                ctx.GlobalBool(WhisperEnabledFlag.Name),
-		Dial:               true,
-		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
-		GasPrice:           common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
-		SolcPath:           ctx.GlobalString(SolcPathFlag.Name),
-		AutoDAG:            ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
+		Name:                    common.MakeName(clientID, version),
+		DataDir:                 ctx.GlobalString(DataDirFlag.Name),
+		ProtocolVersion:         ctx.GlobalInt(ProtocolVersionFlag.Name),
+		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
+		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
+		SkipBcVersionCheck:      false,
+		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
+		LogFile:                 ctx.GlobalString(LogFileFlag.Name),
+		Verbosity:               ctx.GlobalInt(VerbosityFlag.Name),
+		LogJSON:                 ctx.GlobalString(LogJSONFlag.Name),
+		Etherbase:               ctx.GlobalString(EtherbaseFlag.Name),
+		MinerThreads:            ctx.GlobalInt(MinerThreadsFlag.Name),
+		AccountManager:          MakeAccountManager(ctx),
+		VmDebug:                 ctx.GlobalBool(VMDebugFlag.Name),
+		MaxPeers:                ctx.GlobalInt(MaxPeersFlag.Name),
+		MaxPendingPeers:         ctx.GlobalInt(MaxPendingPeersFlag.Name),
+		Port:                    ctx.GlobalString(ListenPortFlag.Name),
+		NAT:                     MakeNAT(ctx),
+		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
+		Discovery:               !ctx.GlobalBool(NoDiscoverFlag.Name),
+		NodeKey:                 MakeNodeKey(ctx),
+		Shh:                     ctx.GlobalBool(WhisperEnabledFlag.Name),
+		Dial:                    true,
+		BootNodes:               ctx.GlobalString(BootnodesFlag.Name),
+		GasPrice:                common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
+		GpoMinGasPrice:          common.String2Big(ctx.GlobalString(GpoMinGasPriceFlag.Name)),
+		GpoMaxGasPrice:          common.String2Big(ctx.GlobalString(GpoMaxGasPriceFlag.Name)),
+		GpoFullBlockRatio:       ctx.GlobalInt(GpoFullBlockRatioFlag.Name),
+		GpobaseStepDown:         ctx.GlobalInt(GpobaseStepDownFlag.Name),
+		GpobaseStepUp:           ctx.GlobalInt(GpobaseStepUpFlag.Name),
+		GpobaseCorrectionFactor: ctx.GlobalInt(GpobaseCorrectionFactorFlag.Name),
+		SolcPath:                ctx.GlobalString(SolcPathFlag.Name),
+		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
 	}
 }
 
@@ -396,7 +432,7 @@ func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
 		if ctx.GlobalString(IPCPathFlag.Name) != common.DefaultIpcPath() {
 			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
 		} else if ctx.GlobalString(DataDirFlag.Name) != "" &&
-		ctx.GlobalString(DataDirFlag.Name) != common.DefaultDataDir() {
+			ctx.GlobalString(DataDirFlag.Name) != common.DefaultDataDir() {
 			ipcpath = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "geth.ipc")
 		}
 	}
