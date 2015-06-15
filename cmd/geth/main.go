@@ -44,7 +44,7 @@ import (
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.29"
+	Version          = "0.9.30"
 )
 
 var (
