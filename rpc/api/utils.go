@@ -51,7 +51,7 @@ var (
 			"getData",
 			"getCode",
 			"sign",
-			"pushTx",
+			"eth_sendRawTransaction",
 			"sendTransaction",
 			"transact",
 			"estimateGas",
