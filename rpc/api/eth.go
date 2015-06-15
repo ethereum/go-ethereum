@@ -46,7 +46,7 @@ var (
 		"eth_getData":                           (*ethApi).GetData,
 		"eth_getCode":                           (*ethApi).GetData,
 		"eth_sign":                              (*ethApi).Sign,
-		"eth_pushTx":                            (*ethApi).PushTx,
+		"eth_sendRawTransaction":                (*ethApi).PushTx,
 		"eth_sendTransaction":                   (*ethApi).SendTransaction,
 		"eth_transact":                          (*ethApi).SendTransaction,
 		"eth_estimateGas":                       (*ethApi).EstimateGas,
