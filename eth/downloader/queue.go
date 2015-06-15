@@ -320,7 +320,7 @@ func (q *queue) Deliver(id string, blocks []*types.Block) (err error) {
 		// If a requested block falls out of the range, the hash chain is invalid
 		index := int(block.NumberU64()) - q.blockOffset
 		if index >= len(q.blockCache) || index < 0 {
-			return ErrInvalidChain
+			return errInvalidChain
 		}
 		// Otherwise merge the block and mark the hash block
 		q.blockCache[index] = &Block{

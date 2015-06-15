@@ -1,14 +1,11 @@
 package eth
 
 import (
-	"math"
 	"math/rand"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -16,12 +13,10 @@ import (
 
 const (
 	forceSyncCycle      = 10 * time.Second       // Time interval to force syncs, even if few peers are available
-	blockProcCycle      = 500 * time.Millisecond // Time interval to check for new blocks to process
 	notifyCheckCycle    = 100 * time.Millisecond // Time interval to allow hash notifies to fulfill before hard fetching
 	notifyArriveTimeout = 500 * time.Millisecond // Time allowance before an announced block is explicitly requested
 	notifyFetchTimeout  = 5 * time.Second        // Maximum alloted time to return an explicitly requested block
 	minDesiredPeerCount = 5                      // Amount of peers desired to start syncing
-	blockProcAmount     = 256
 
 	// This is the target size for the packs of transactions sent by txsyncLoop.
 	// A pack can get larger than this if a single transactions exceeds this size.
@@ -176,7 +171,7 @@ func (pm *ProtocolManager) fetcher() {
 			// Send out all block requests
 			for peer, hashes := range request {
 				glog.V(logger.Debug).Infof("Explicitly fetching %d blocks from %s", len(hashes), peer.id)
-				peer.requestBlocks(hashes)
+				go peer.requestBlocks(hashes)
 			}
 			request = make(map[*peer][]common.Hash)
 
@@ -219,7 +214,7 @@ func (pm *ProtocolManager) fetcher() {
 				if announce := pending[hash]; announce != nil {
 					// Drop the block if it surely cannot fit
 					if pm.chainman.HasBlock(hash) || !pm.chainman.HasBlock(block.ParentHash()) {
-						delete(pending, hash)
+						// delete(pending, hash) // if we drop, it will re-fetch it, wait for timeout?
 						continue
 					}
 					// Otherwise accumulate for import
@@ -255,10 +250,10 @@ func (pm *ProtocolManager) fetcher() {
 // syncer is responsible for periodically synchronising with the network, both
 // downloading hashes and blocks as well as retrieving cached ones.
 func (pm *ProtocolManager) syncer() {
-	forceSync := time.Tick(forceSyncCycle)
-	blockProc := time.Tick(blockProcCycle)
-	blockProcPend := int32(0)
+	// Abort any pending syncs if we terminate
+	defer pm.downloader.Cancel()
 
+	forceSync := time.Tick(forceSyncCycle)
 	for {
 		select {
 		case <-pm.newPeerCh:
@@ -272,53 +267,10 @@ func (pm *ProtocolManager) syncer() {
 			// Force a sync even if not enough peers are present
 			go pm.synchronise(pm.peers.BestPeer())
 
-		case <-blockProc:
-			// Try to pull some blocks from the downloaded
-			if atomic.CompareAndSwapInt32(&blockProcPend, 0, 1) {
-				go func() {
-					pm.processBlocks()
-					atomic.StoreInt32(&blockProcPend, 0)
-				}()
-			}
-
 		case <-pm.quitSync:
 			return
 		}
 	}
-}
-
-// processBlocks retrieves downloaded blocks from the download cache and tries
-// to construct the local block chain with it. Note, since the block retrieval
-// order matters, access to this function *must* be synchronized/serialized.
-func (pm *ProtocolManager) processBlocks() error {
-	pm.wg.Add(1)
-	defer pm.wg.Done()
-
-	// Short circuit if no blocks are available for insertion
-	blocks := pm.downloader.TakeBlocks()
-	if len(blocks) == 0 {
-		return nil
-	}
-	glog.V(logger.Debug).Infof("Inserting chain with %d blocks (#%v - #%v)\n", len(blocks), blocks[0].RawBlock.Number(), blocks[len(blocks)-1].RawBlock.Number())
-
-	for len(blocks) != 0 && !pm.quit {
-		// Retrieve the first batch of blocks to insert
-		max := int(math.Min(float64(len(blocks)), float64(blockProcAmount)))
-		raw := make(types.Blocks, 0, max)
-		for _, block := range blocks[:max] {
-			raw = append(raw, block.RawBlock)
-		}
-		// Try to inset the blocks, drop the originating peer if there's an error
-		index, err := pm.chainman.InsertChain(raw)
-		if err != nil {
-			glog.V(logger.Debug).Infoln("Downloaded block import failed:", err)
-			pm.removePeer(blocks[index].OriginPeer)
-			pm.downloader.Cancel()
-			return err
-		}
-		blocks = blocks[max:]
-	}
-	return nil
 }
 
 // synchronise tries to sync up our local block chain with a remote peer, both
@@ -332,33 +284,6 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	if peer.Td().Cmp(pm.chainman.Td()) <= 0 {
 		return
 	}
-	// FIXME if we have the hash in our chain and the TD of the peer is
-	// much higher than ours, something is wrong with us or the peer.
-	// Check if the hash is on our own chain
-	head := peer.Head()
-	if pm.chainman.HasBlock(head) {
-		glog.V(logger.Debug).Infoln("Synchronisation canceled: head already known")
-		return
-	}
-	// Get the hashes from the peer (synchronously)
-	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, 0x%x", peer.id, head)
-
-	err := pm.downloader.Synchronise(peer.id, head)
-	switch err {
-	case nil:
-		glog.V(logger.Detail).Infof("Synchronisation completed")
-
-	case downloader.ErrBusy:
-		glog.V(logger.Detail).Infof("Synchronisation already in progress")
-
-	case downloader.ErrTimeout, downloader.ErrBadPeer, downloader.ErrEmptyHashSet, downloader.ErrInvalidChain, downloader.ErrCrossCheckFailed:
-		glog.V(logger.Debug).Infof("Removing peer %v: %v", peer.id, err)
-		pm.removePeer(peer.id)
-
-	case downloader.ErrPendingQueue:
-		glog.V(logger.Debug).Infoln("Synchronisation aborted:", err)
-
-	default:
-		glog.V(logger.Warn).Infof("Synchronisation failed: %v", err)
-	}
+	// Otherwise try to sync with the downloader
+	pm.downloader.Synchronise(peer.id, peer.Head())
 }
