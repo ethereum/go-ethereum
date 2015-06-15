@@ -170,7 +170,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		}
 		*reply = v
 
-	case "eth_pushTx":
+	case "eth_sendRawTransaction":
 		args := new(NewSigArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
