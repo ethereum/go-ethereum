@@ -28,6 +28,10 @@ var (
 	ErrNegativeValue      = errors.New("Negative value")
 )
 
+const (
+	maxQueued = 200 // max limit of queued txs per address
+)
+
 type stateFn func() *state.StateDB
 
 // TxPool contains all currently known transactions. Transactions
@@ -224,6 +228,21 @@ func (self *TxPool) queueTx(hash common.Hash, tx *types.Transaction) {
 		self.queue[from] = make(map[common.Hash]*types.Transaction)
 	}
 	self.queue[from][hash] = tx
+
+	if len(self.queue[from]) > maxQueued {
+		var (
+			worstHash  common.Hash
+			worstNonce uint64
+		)
+		for hash, tx := range self.queue[from] {
+			if tx.Nonce() > worstNonce {
+				worstNonce = tx.Nonce()
+				worstHash = hash
+			}
+		}
+		glog.V(logger.Debug).Infof("Queued tx limit exceeded for %x. Removed worst nonce tx: %x\n", common.PP(from[:]), common.PP(worstHash[:]))
+		delete(self.queue[from], worstHash)
+	}
 }
 
 // addTx will add a transaction to the pending (processable queue) list of transactions
