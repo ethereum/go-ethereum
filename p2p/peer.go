@@ -138,24 +138,27 @@ loop:
 			// A write finished. Allow the next write to start if
 			// there was no error.
 			if err != nil {
-				glog.V(logger.Detail).Infof("%v: Write error: %v\n", p, err)
+				glog.V(logger.Detail).Infof("%v: write error: %v\n", p, err)
 				reason = DiscNetworkError
 				break loop
 			}
 			writeStart <- struct{}{}
 		case err := <-readErr:
 			if r, ok := err.(DiscReason); ok {
+				glog.V(logger.Debug).Infof("%v: remote requested disconnect: %v\n", p, r)
+				requested = true
 				reason = r
 			} else {
-				glog.V(logger.Detail).Infof("%v: Read error: %v\n", p, err)
+				glog.V(logger.Detail).Infof("%v: read error: %v\n", p, err)
 				reason = DiscNetworkError
 			}
 			break loop
 		case err := <-p.protoErr:
 			reason = discReasonForError(err)
+			glog.V(logger.Debug).Infof("%v: protocol error: %v (%v)\n", p, err, reason)
 			break loop
 		case reason = <-p.disc:
-			requested = true
+			glog.V(logger.Debug).Infof("%v: locally requested disconnect: %v\n", p, reason)
 			break loop
 		}
 	}
@@ -166,7 +169,6 @@ loop:
 	if requested {
 		reason = DiscRequested
 	}
-	glog.V(logger.Debug).Infof("%v: Disconnected: %v\n", p, reason)
 	return reason
 }
 
@@ -213,7 +215,6 @@ func (p *Peer) handle(msg Msg) error {
 		// This is the last message. We don't need to discard or
 		// check errors because, the connection will be closed after it.
 		rlp.Decode(msg.Payload, &reason)
-		glog.V(logger.Debug).Infof("%v: Disconnect Requested: %v\n", p, reason[0])
 		return reason[0]
 	case msg.Code < baseProtocolLength:
 		// ignore other base protocol messages
