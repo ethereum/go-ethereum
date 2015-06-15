@@ -316,13 +316,8 @@ func (d *Downloader) Cancel() {
 	}
 	d.cancelLock.Unlock()
 
-	// Reset the queue and import statistics
+	// Reset the queue
 	d.queue.Reset()
-
-	d.importLock.Lock()
-	d.importQueue = nil
-	d.importDone = 0
-	d.importLock.Unlock()
 }
 
 // fetchHahes starts retrieving hashes backwards from a specific peer and hash,
@@ -345,7 +340,7 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 	<-timeout.C // timeout channel should be initially empty.
 
 	getHashes := func(from common.Hash) {
-		active.getHashes(from)
+		go active.getHashes(from)
 		timeout.Reset(hashTTL)
 	}
 
@@ -414,9 +409,9 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 					expire: time.Now().Add(blockSoftTTL),
 					parent: parent,
 				}
-				active.getBlocks([]common.Hash{origin})
+				go active.getBlocks([]common.Hash{origin})
 
-				// Also fetch a fresh
+				// Also fetch a fresh batch of hashes
 				getHashes(head)
 				continue
 			}
@@ -720,8 +715,16 @@ func (d *Downloader) process() (err error) {
 			err = d.process()
 		}
 	}()
-	// Release the lock upon exit (note, before checking for reentry!)
-	defer atomic.StoreInt32(&d.processing, 0)
+	// Release the lock upon exit (note, before checking for reentry!), and set
+	// the import statistics to zero.
+	defer func() {
+		d.importLock.Lock()
+		d.importQueue = nil
+		d.importDone = 0
+		d.importLock.Unlock()
+
+		atomic.StoreInt32(&d.processing, 0)
+	}()
 
 	// Fetch the current cancel channel to allow termination
 	d.cancelLock.RLock()
