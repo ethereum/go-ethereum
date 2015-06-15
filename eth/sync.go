@@ -214,7 +214,7 @@ func (pm *ProtocolManager) fetcher() {
 				if announce := pending[hash]; announce != nil {
 					// Drop the block if it surely cannot fit
 					if pm.chainman.HasBlock(hash) || !pm.chainman.HasBlock(block.ParentHash()) {
-						delete(pending, hash)
+						// delete(pending, hash) // if we drop, it will re-fetch it, wait for timeout?
 						continue
 					}
 					// Otherwise accumulate for import
