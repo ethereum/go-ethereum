@@ -175,7 +175,7 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		v, err := api.xeth().PushTx(args.encodedTx)
+		v, err := api.xeth().PushTx(args.Data)
 		if err != nil {
 			return err
 		}

@@ -255,13 +255,7 @@ func (self *ethApi) PushTx(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	// nonce may be nil ("guess" mode)
-	var nonce string
-	if args.Nonce != nil {
-		nonce = args.Nonce.String()
-	}
-
-	v, err := self.xeth.PushTx(args.encodedTx)
+	v, err := self.xeth.PushTx(args.Data)
 	if err != nil {
 		return nil, err
 	}
