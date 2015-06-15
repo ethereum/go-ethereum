@@ -259,7 +259,14 @@ func (self *ethApi) SendTransaction(req *shared.Request) (interface{}, error) {
 		nonce = args.Nonce.String()
 	}
 
-	v, err := self.xeth.Transact(args.From, args.To, nonce, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+	var gas, price string
+	if args.Gas != nil {
+		gas = args.Gas.String()
+	}
+	if args.GasPrice != nil {
+		price = args.GasPrice.String()
+	}
+	v, err := self.xeth.Transact(args.From, args.To, nonce, args.Value.String(), gas, price, args.Data)
 	if err != nil {
 		return nil, err
 	}

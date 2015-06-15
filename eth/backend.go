@@ -310,6 +310,7 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
+
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.eventMux, eth.txPool, eth.chainManager)
