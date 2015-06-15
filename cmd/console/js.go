@@ -332,11 +332,13 @@ func (self *jsre) welcome(ipcpath string) {
 
 func (self *jsre) batch(args cli.Args) {
 	statement := strings.Join(args, " ")
-
 	val, err := self.re.Run(statement)
 
 	if err != nil {
 		fmt.Printf("error: %v", err)
+	} else if val.IsDefined() && val.IsObject() {
+		obj, _ := self.re.Get("ret_result")
+		fmt.Printf("%v", obj)
 	} else if val.IsDefined() {
 		fmt.Printf("%v", val)
 	}
@@ -346,7 +348,6 @@ func (self *jsre) batch(args cli.Args) {
 	}
 
 	self.re.Stop(false)
-	
 }
 
 func (self *jsre) interactive(ipcpath string) {
