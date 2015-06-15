@@ -2519,6 +2519,14 @@ func TestSigArgs(t *testing.T) {
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
 		t.Error(err)
 	}
+
+	if expected.From != args.From {
+		t.Errorf("From should be %v but is %v", expected.From, args.From)
+	}
+
+	if expected.Data != args.Data {
+		t.Errorf("Data should be %v but is %v", expected.Data, args.Data)
+	}
 }
 
 func TestSigArgsEmptyData(t *testing.T) {

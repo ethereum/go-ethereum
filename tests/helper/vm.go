@@ -27,15 +27,22 @@ type Env struct {
 	difficulty *big.Int
 	gasLimit   *big.Int
 
-	logs state.Logs
-
 	vmTest bool
+	logs   []vm.StructLog
 }
 
 func NewEnv(state *state.StateDB) *Env {
 	return &Env{
 		state: state,
 	}
+}
+
+func (self *Env) StructLogs() []vm.StructLog {
+	return self.logs
+}
+
+func (self *Env) AddStructLog(log vm.StructLog) {
+	self.logs = append(self.logs, log)
 }
 
 func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
@@ -183,7 +190,7 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 	vmenv := NewEnvFromMap(statedb, env, tx)
 	vmenv.origin = common.BytesToAddress(keyPair.Address())
 	ret, _, err := core.ApplyMessage(vmenv, message, coinbase)
-	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) {
+	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || state.IsGasLimitErr(err) {
 		statedb.Set(snapshot)
 	}
 	statedb.Update()

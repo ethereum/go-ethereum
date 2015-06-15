@@ -44,7 +44,7 @@ import (
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.28"
+	Version          = "0.9.30"
 )
 
 var (
@@ -239,6 +239,9 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
+		utils.IPCDisabledFlag,
+		utils.IPCApiFlag,
+		utils.IPCPathFlag,
 		utils.WhisperEnabledFlag,
 		utils.VMDebugFlag,
 		utils.ProtocolVersionFlag,
@@ -253,6 +256,12 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.PProfEanbledFlag,
 		utils.PProfPortFlag,
 		utils.SolcPathFlag,
+		utils.GpoMinGasPriceFlag,
+		utils.GpoMaxGasPriceFlag,
+		utils.GpoFullBlockRatioFlag,
+		utils.GpobaseStepDownFlag,
+		utils.GpobaseStepUpFlag,
+		utils.GpobaseCorrectionFactorFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		utils.SetupLogger(ctx)
@@ -305,6 +314,7 @@ func console(ctx *cli.Context) {
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
+		utils.IpcSocketPath(ctx),
 		true,
 		nil,
 	)
@@ -326,6 +336,7 @@ func execJSFiles(ctx *cli.Context) {
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
+		utils.IpcSocketPath(ctx),
 		false,
 		nil,
 	)
@@ -382,6 +393,11 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 		}
 	}
 	// Start auxiliary services if enabled.
+	if !ctx.GlobalBool(utils.IPCDisabledFlag.Name) {
+		if err := utils.StartIPC(eth, ctx); err != nil {
+			utils.Fatalf("Error string IPC: %v", err)
+		}
+	}
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
 		if err := utils.StartRPC(eth, ctx); err != nil {
 			utils.Fatalf("Error starting RPC: %v", err)

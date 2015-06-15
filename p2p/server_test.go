@@ -117,7 +117,6 @@ func TestServerDial(t *testing.T) {
 			t.Error("accept error:", err)
 			return
 		}
-		conn.Close()
 		accepted <- conn
 	}()
 
@@ -134,6 +133,8 @@ func TestServerDial(t *testing.T) {
 
 	select {
 	case conn := <-accepted:
+		defer conn.Close()
+
 		select {
 		case peer := <-connected:
 			if peer.ID() != remid {

@@ -71,14 +71,10 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 
 func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
 	// If we are mining this block and validating we want to set the logs back to 0
-	//statedb.EmptyLogs()
 
 	cb := statedb.GetStateObject(coinbase.Address())
 	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, block), tx, cb)
 	if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
-		// If the account is managed, remove the invalid nonce.
-		//from, _ := tx.From()
-		//self.bc.TxState().RemoveNonce(from, tx.Nonce())
 		return nil, nil, err
 	}
 
@@ -151,11 +147,17 @@ func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs state.Logs, err
 		return nil, ParentError(header.ParentHash)
 	}
 	parent := sm.bc.GetBlock(header.ParentHash)
-	if !sm.Pow.Verify(block) {
+
+	// FIXME Change to full header validation. See #1225
+	errch := make(chan bool)
+	go func() { errch <- sm.Pow.Verify(block) }()
+
+	logs, err = sm.processWithParent(block, parent)
+	if !<-errch {
 		return nil, ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
 	}
 
-	return sm.processWithParent(block, parent)
+	return logs, err
 }
 
 // Process block will attempt to process the given block's transactions and applies them
@@ -257,6 +259,12 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	for i, tx := range block.Transactions() {
 		putTx(sm.extraDb, tx, block, uint64(i))
 	}
+
+	receiptsRlp := receipts.RlpEncode()
+	/*if len(receipts) > 0 {
+		glog.V(logger.Info).Infof("Saving %v receipts, rlp len is %v\n", len(receipts), len(receiptsRlp))
+	}*/
+	sm.extraDb.Put(append(receiptsPre, block.Hash().Bytes()...), receiptsRlp)
 
 	return state.Logs(), nil
 }
@@ -402,6 +410,8 @@ func getBlockReceipts(db common.Database, bhash common.Hash) (receipts types.Rec
 
 	if err == nil {
 		err = rlp.DecodeBytes(rdata, &receipts)
+	} else {
+		glog.V(logger.Detail).Infof("getBlockReceipts error %v\n", err)
 	}
 	return
 }

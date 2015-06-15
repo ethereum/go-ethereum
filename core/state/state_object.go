@@ -336,6 +336,22 @@ func (self *StateObject) Nonce() uint64 {
 	return self.nonce
 }
 
+func (self *StateObject) EachStorage(cb func(key, value []byte)) {
+	// When iterating over the storage check the cache first
+	for h, v := range self.storage {
+		cb([]byte(h), v.Bytes())
+	}
+
+	it := self.State.trie.Iterator()
+	for it.Next() {
+		// ignore cached values
+		key := self.State.trie.GetKey(it.Key)
+		if _, ok := self.storage[string(key)]; !ok {
+			cb(key, it.Value)
+		}
+	}
+}
+
 //
 // Encoding
 //

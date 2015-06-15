@@ -13,11 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-var (
-	quickrand = rand.New(rand.NewSource(time.Now().Unix()))
-	quickcfg  = &quick.Config{MaxCount: 5000, Rand: quickrand}
-)
-
 var parseNodeTests = []struct {
 	rawurl     string
 	wantError  string
@@ -176,7 +171,7 @@ func TestNodeID_distcmp(t *testing.T) {
 		bbig := new(big.Int).SetBytes(b[:])
 		return new(big.Int).Xor(tbig, abig).Cmp(new(big.Int).Xor(tbig, bbig))
 	}
-	if err := quick.CheckEqual(distcmp, distcmpBig, quickcfg); err != nil {
+	if err := quick.CheckEqual(distcmp, distcmpBig, quickcfg()); err != nil {
 		t.Error(err)
 	}
 }
@@ -195,7 +190,7 @@ func TestNodeID_logdist(t *testing.T) {
 		abig, bbig := new(big.Int).SetBytes(a[:]), new(big.Int).SetBytes(b[:])
 		return new(big.Int).Xor(abig, bbig).BitLen()
 	}
-	if err := quick.CheckEqual(logdist, logdistBig, quickcfg); err != nil {
+	if err := quick.CheckEqual(logdist, logdistBig, quickcfg()); err != nil {
 		t.Error(err)
 	}
 }
@@ -211,9 +206,10 @@ func TestNodeID_logdistEqual(t *testing.T) {
 func TestNodeID_hashAtDistance(t *testing.T) {
 	// we don't use quick.Check here because its output isn't
 	// very helpful when the test fails.
-	for i := 0; i < quickcfg.MaxCount; i++ {
-		a := gen(common.Hash{}, quickrand).(common.Hash)
-		dist := quickrand.Intn(len(common.Hash{}) * 8)
+	cfg := quickcfg()
+	for i := 0; i < cfg.MaxCount; i++ {
+		a := gen(common.Hash{}, cfg.Rand).(common.Hash)
+		dist := cfg.Rand.Intn(len(common.Hash{}) * 8)
 		result := hashAtDistance(a, dist)
 		actualdist := logdist(result, a)
 
@@ -225,7 +221,14 @@ func TestNodeID_hashAtDistance(t *testing.T) {
 	}
 }
 
-// TODO: this can be dropped when we require Go >= 1.5
+func quickcfg() *quick.Config {
+	return &quick.Config{
+		MaxCount: 5000,
+		Rand:     rand.New(rand.NewSource(time.Now().Unix())),
+	}
+}
+
+// TODO: The Generate method can be dropped when we require Go >= 1.5
 // because testing/quick learned to generate arrays in 1.5.
 
 func (NodeID) Generate(rand *rand.Rand, size int) reflect.Value {

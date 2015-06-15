@@ -6,6 +6,7 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -270,7 +271,6 @@ func (self *worker) wait() {
 
 func (self *worker) push() {
 	if atomic.LoadInt32(&self.mining) == 1 {
-		self.current.block.Header().GasUsed = self.current.totalUsedGas
 		self.current.block.SetRoot(self.current.state.Root())
 
 		// push new work to agents
@@ -375,6 +375,8 @@ func (self *worker) commitNewWork() {
 	self.currentMu.Lock()
 	defer self.currentMu.Unlock()
 
+	tstart := time.Now()
+
 	previous := self.current
 	self.makeCurrent()
 	current := self.current
@@ -410,7 +412,7 @@ func (self *worker) commitNewWork() {
 
 	// We only care about logging if we're actually mining
 	if atomic.LoadInt32(&self.mining) == 1 {
-		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles\n", current.block.Number(), current.tcount, len(uncles))
+		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles. Took %v\n", current.block.Number(), current.tcount, len(uncles), time.Since(tstart))
 		self.logLocalMinedBlocks(previous)
 	}
 
@@ -438,7 +440,6 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 		// Error not unique
 		return core.UncleError("Uncle not unique")
 	}
-	self.current.uncles.Add(uncle.Hash())
 
 	if !self.current.ancestors.Has(uncle.ParentHash) {
 		return core.UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
@@ -447,6 +448,7 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 	if self.current.family.Has(uncle.Hash()) {
 		return core.UncleError(fmt.Sprintf("Uncle already in family (%x)", uncle.Hash()))
 	}
+	self.current.uncles.Add(uncle.Hash())
 
 	return nil
 }
@@ -510,6 +512,8 @@ func (self *worker) commitTransactions(transactions types.Transactions) {
 			current.tcount++
 		}
 	}
+
+	self.current.block.Header().GasUsed = self.current.totalUsedGas
 }
 
 func (self *worker) commitTransaction(tx *types.Transaction) error {

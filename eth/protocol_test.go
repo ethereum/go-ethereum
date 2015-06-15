@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -168,8 +167,7 @@ func newProtocolManagerForTesting(txAdded chan<- []*types.Transaction) *Protocol
 		db, _    = ethdb.NewMemDatabase()
 		chain, _ = core.NewChainManager(core.GenesisBlock(0, db), db, db, core.FakePow{}, em)
 		txpool   = &fakeTxPool{added: txAdded}
-		dl       = downloader.New(em, chain.HasBlock, chain.GetBlock)
-		pm       = NewProtocolManager(ProtocolVersion, 0, em, txpool, chain, dl)
+		pm       = NewProtocolManager(ProtocolVersion, 0, em, txpool, chain)
 	)
 	pm.Start()
 	return pm

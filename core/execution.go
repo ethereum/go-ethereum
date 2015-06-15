@@ -2,7 +2,6 @@ package core
 
 import (
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -49,8 +48,6 @@ func (self *Execution) Create(caller vm.ContextRef) (ret []byte, err error, acco
 }
 
 func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.ContextRef) (ret []byte, err error) {
-	start := time.Now()
-
 	env := self.env
 	evm := self.evm
 	if env.Depth() > int(params.CallCreateDepth.Int64()) {
@@ -96,7 +93,6 @@ func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.
 	context.SetCallCode(contextAddr, code)
 
 	ret, err = evm.Run(context, self.input)
-	evm.Printf("message call took %v", time.Since(start)).Endl()
 	if err != nil {
 		env.State().Set(snapshot)
 	}

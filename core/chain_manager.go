@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"os"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -101,7 +101,9 @@ type ChainManager struct {
 	futureBlocks *BlockCache
 
 	quit chan struct{}
-	wg   sync.WaitGroup
+	// procInterrupt must be atomically called
+	procInterrupt int32 // interrupt signaler for block processing
+	wg            sync.WaitGroup
 
 	pow pow.PoW
 }
@@ -232,15 +234,8 @@ func (bc *ChainManager) setLastState() {
 		if block != nil {
 			bc.currentBlock = block
 			bc.lastBlockHash = block.Hash()
-		} else { // TODO CLEAN THIS UP TMP CODE
-			block = bc.GetBlockByNumber(400000)
-			if block == nil {
-				fmt.Println("Fatal. LastBlock not found. Report this issue")
-				os.Exit(1)
-			}
-			bc.currentBlock = block
-			bc.lastBlockHash = block.Hash()
-			bc.insert(block)
+		} else {
+			glog.Fatalf("Fatal. LastBlock not found. Please run removedb and resync")
 		}
 	} else {
 		bc.Reset()
@@ -516,6 +511,7 @@ func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
 
 func (bc *ChainManager) Stop() {
 	close(bc.quit)
+	atomic.StoreInt32(&bc.procInterrupt, 1)
 
 	bc.wg.Wait()
 
@@ -567,7 +563,13 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	go verifyNonces(self.pow, chain, nonceQuit, nonceDone)
 	defer close(nonceQuit)
 
+	txcount := 0
 	for i, block := range chain {
+		if atomic.LoadInt32(&self.procInterrupt) == 1 {
+			glog.V(logger.Debug).Infoln("Premature abort during chain processing")
+			break
+		}
+
 		bstart := time.Now()
 		// Wait for block i's nonce to be verified before processing
 		// its state transition.
@@ -624,6 +626,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 
 			return i, err
 		}
+
+		txcount += len(block.Transactions())
 
 		cblock := self.currentBlock
 		// Compare the TD of the last known block in the canonical chain to make sure it's greater.
@@ -683,7 +687,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	if (stats.queued > 0 || stats.processed > 0 || stats.ignored > 0) && bool(glog.V(logger.Info)) {
 		tend := time.Since(tstart)
 		start, end := chain[0], chain[len(chain)-1]
-		glog.Infof("imported %d block(s) (%d queued %d ignored) in %v. #%v [%x / %x]\n", stats.processed, stats.queued, stats.ignored, tend, end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
+		glog.Infof("imported %d block(s) (%d queued %d ignored) including %d txs in %v. #%v [%x / %x]\n", stats.processed, stats.queued, stats.ignored, txcount, tend, end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
 	}
 
 	go self.eventMux.Post(queueEvent)

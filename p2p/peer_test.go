@@ -121,7 +121,7 @@ func TestPeerDisconnect(t *testing.T) {
 	}
 	select {
 	case reason := <-disc:
-		if reason != DiscQuitting {
+		if reason != DiscRequested {
 			t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscRequested)
 		}
 	case <-time.After(500 * time.Millisecond):

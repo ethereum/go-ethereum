@@ -68,12 +68,11 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpool txPool, chainman *core.ChainManager, downloader *downloader.Downloader) *ProtocolManager {
+func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpool txPool, chainman *core.ChainManager) *ProtocolManager {
 	manager := &ProtocolManager{
 		eventMux:   mux,
 		txpool:     txpool,
 		chainman:   chainman,
-		downloader: downloader,
 		peers:      newPeerSet(),
 		newPeerCh:  make(chan *peer, 1),
 		newHashCh:  make(chan []*blockAnnounce, 1),
@@ -81,6 +80,7 @@ func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpo
 		txsyncCh:   make(chan *txsync),
 		quitSync:   make(chan struct{}),
 	}
+	manager.downloader = downloader.New(manager.eventMux, manager.chainman.HasBlock, manager.chainman.GetBlock, manager.chainman.InsertChain, manager.removePeer)
 	manager.SubProtocol = p2p.Protocol{
 		Name:    "eth",
 		Version: uint(protocolVersion),

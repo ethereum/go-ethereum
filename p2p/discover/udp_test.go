@@ -234,14 +234,12 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 
 func TestUDP_successfulPing(t *testing.T) {
 	test := newUDPTest(t)
+	added := make(chan *Node, 1)
+	test.table.nodeAddedHook = func(n *Node) { added <- n }
 	defer test.table.Close()
 
-	done := make(chan struct{})
-	go func() {
-		// The remote side sends a ping packet to initiate the exchange.
-		test.packetIn(nil, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: Version, Expiration: futureExp})
-		close(done)
-	}()
+	// The remote side sends a ping packet to initiate the exchange.
+	go test.packetIn(nil, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: Version, Expiration: futureExp})
 
 	// the ping is replied to.
 	test.waitPacketOut(func(p *pong) {
@@ -277,35 +275,26 @@ func TestUDP_successfulPing(t *testing.T) {
 	})
 	test.packetIn(nil, pongPacket, &pong{Expiration: futureExp})
 
-	// ping should return shortly after getting the pong packet.
-	<-done
-
-	// check that the node was added.
-	rid := PubkeyID(&test.remotekey.PublicKey)
-	rnode := find(test.table, rid)
-	if rnode == nil {
-		t.Fatalf("node %v not found in table", rid)
-	}
-	if !bytes.Equal(rnode.IP, test.remoteaddr.IP) {
-		t.Errorf("node has wrong IP: got %v, want: %v", rnode.IP, test.remoteaddr.IP)
-	}
-	if int(rnode.UDP) != test.remoteaddr.Port {
-		t.Errorf("node has wrong UDP port: got %v, want: %v", rnode.UDP, test.remoteaddr.Port)
-	}
-	if rnode.TCP != testRemote.TCP {
-		t.Errorf("node has wrong TCP port: got %v, want: %v", rnode.TCP, testRemote.TCP)
-	}
-}
-
-func find(tab *Table, id NodeID) *Node {
-	for _, b := range tab.buckets {
-		for _, e := range b.entries {
-			if e.ID == id {
-				return e
-			}
+	// the node should be added to the table shortly after getting the
+	// pong packet.
+	select {
+	case n := <-added:
+		rid := PubkeyID(&test.remotekey.PublicKey)
+		if n.ID != rid {
+			t.Errorf("node has wrong ID: got %v, want %v", n.ID, rid)
 		}
+		if !bytes.Equal(n.IP, test.remoteaddr.IP) {
+			t.Errorf("node has wrong IP: got %v, want: %v", n.IP, test.remoteaddr.IP)
+		}
+		if int(n.UDP) != test.remoteaddr.Port {
+			t.Errorf("node has wrong UDP port: got %v, want: %v", n.UDP, test.remoteaddr.Port)
+		}
+		if n.TCP != testRemote.TCP {
+			t.Errorf("node has wrong TCP port: got %v, want: %v", n.TCP, testRemote.TCP)
+		}
+	case <-time.After(2 * time.Second):
+		t.Errorf("node was not added within 2 seconds")
 	}
-	return nil
 }
 
 // dgramPipe is a fake UDP socket. It queues all sent datagrams.

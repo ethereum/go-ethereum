@@ -93,6 +93,13 @@ type Config struct {
 	AccountManager *accounts.Manager
 	SolcPath       string
 
+	GpoMinGasPrice          *big.Int
+	GpoMaxGasPrice          *big.Int
+	GpoFullBlockRatio       int
+	GpobaseStepDown         int
+	GpobaseStepUp           int
+	GpobaseCorrectionFactor int
+
 	// NewDB is used to create databases.
 	// If nil, the default is to create leveldb databases on disk.
 	NewDB func(path string) (common.Database, error)
@@ -193,9 +200,15 @@ type Ethereum struct {
 	whisper         *whisper.Whisper
 	pow             *ethash.Ethash
 	protocolManager *ProtocolManager
-	downloader      *downloader.Downloader
 	SolcPath        string
 	solc            *compiler.Solidity
+
+	GpoMinGasPrice          *big.Int
+	GpoMaxGasPrice          *big.Int
+	GpoFullBlockRatio       int
+	GpobaseStepDown         int
+	GpobaseStepUp           int
+	GpobaseCorrectionFactor int
 
 	net      *p2p.Server
 	eventMux *event.TypeMux
@@ -266,22 +279,28 @@ func New(config *Config) (*Ethereum, error) {
 	glog.V(logger.Info).Infof("Blockchain DB Version: %d", config.BlockChainVersion)
 
 	eth := &Ethereum{
-		shutdownChan:    make(chan bool),
-		databasesClosed: make(chan bool),
-		blockDb:         blockDb,
-		stateDb:         stateDb,
-		extraDb:         extraDb,
-		eventMux:        &event.TypeMux{},
-		accountManager:  config.AccountManager,
-		DataDir:         config.DataDir,
-		etherbase:       common.HexToAddress(config.Etherbase),
-		clientVersion:   config.Name, // TODO should separate from Name
-		ethVersionId:    config.ProtocolVersion,
-		netVersionId:    config.NetworkId,
-		NatSpec:         config.NatSpec,
-		MinerThreads:    config.MinerThreads,
-		SolcPath:        config.SolcPath,
-		AutoDAG:         config.AutoDAG,
+		shutdownChan:            make(chan bool),
+		databasesClosed:         make(chan bool),
+		blockDb:                 blockDb,
+		stateDb:                 stateDb,
+		extraDb:                 extraDb,
+		eventMux:                &event.TypeMux{},
+		accountManager:          config.AccountManager,
+		DataDir:                 config.DataDir,
+		etherbase:               common.HexToAddress(config.Etherbase),
+		clientVersion:           config.Name, // TODO should separate from Name
+		ethVersionId:            config.ProtocolVersion,
+		netVersionId:            config.NetworkId,
+		NatSpec:                 config.NatSpec,
+		MinerThreads:            config.MinerThreads,
+		SolcPath:                config.SolcPath,
+		AutoDAG:                 config.AutoDAG,
+		GpoMinGasPrice:          config.GpoMinGasPrice,
+		GpoMaxGasPrice:          config.GpoMaxGasPrice,
+		GpoFullBlockRatio:       config.GpoFullBlockRatio,
+		GpobaseStepDown:         config.GpobaseStepDown,
+		GpobaseStepUp:           config.GpobaseStepUp,
+		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
 	}
 
 	eth.pow = ethash.New()
@@ -290,14 +309,14 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	eth.downloader = downloader.New(eth.EventMux(), eth.chainManager.HasBlock, eth.chainManager.GetBlock)
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
+
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
+	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.eventMux, eth.txPool, eth.chainManager)
+
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
-
-	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.eventMux, eth.txPool, eth.chainManager, eth.downloader)
 	if config.Shh {
 		eth.whisper = whisper.New()
 		eth.shhVersionId = int(eth.whisper.Version())
@@ -447,7 +466,7 @@ func (s *Ethereum) ClientVersion() string                { return s.clientVersio
 func (s *Ethereum) EthVersion() int                      { return s.ethVersionId }
 func (s *Ethereum) NetVersion() int                      { return s.netVersionId }
 func (s *Ethereum) ShhVersion() int                      { return s.shhVersionId }
-func (s *Ethereum) Downloader() *downloader.Downloader   { return s.downloader }
+func (s *Ethereum) Downloader() *downloader.Downloader   { return s.protocolManager.downloader }
 
 // Start the ethereum
 func (s *Ethereum) Start() error {
@@ -466,8 +485,6 @@ func (s *Ethereum) Start() error {
 		s.StartAutoDAG()
 	}
 
-	// Start services
-	go s.txPool.Start()
 	s.protocolManager.Start()
 
 	if s.whisper != nil {
@@ -513,9 +530,6 @@ func (s *Ethereum) StartForTest() {
 		ClientString:    s.net.Name,
 		ProtocolVersion: ProtocolVersion,
 	})
-
-	// Start services
-	s.txPool.Start()
 }
 
 // AddPeer connects to the given node and maintains the connection until the
@@ -532,8 +546,8 @@ func (self *Ethereum) AddPeer(nodeURL string) error {
 
 func (s *Ethereum) Stop() {
 	s.net.Stop()
-	s.protocolManager.Stop()
 	s.chainManager.Stop()
+	s.protocolManager.Stop()
 	s.txPool.Stop()
 	s.eventMux.Stop()
 	if s.whisper != nil {

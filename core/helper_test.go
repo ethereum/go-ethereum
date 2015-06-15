@@ -6,8 +6,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	// "github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -75,9 +75,6 @@ func NewTestManager() *TestManager {
 	// testManager.txPool = NewTxPool(testManager)
 	// testManager.blockChain = NewChainManager(testManager)
 	// testManager.stateManager = NewStateManager(testManager)
-
-	// Start the tx pool
-	testManager.txPool.Start()
 
 	return testManager
 }
