@@ -228,21 +228,6 @@ func (self *TxPool) queueTx(hash common.Hash, tx *types.Transaction) {
 		self.queue[from] = make(map[common.Hash]*types.Transaction)
 	}
 	self.queue[from][hash] = tx
-
-	if len(self.queue[from]) > maxQueued {
-		var (
-			worstHash  common.Hash
-			worstNonce uint64
-		)
-		for hash, tx := range self.queue[from] {
-			if tx.Nonce() > worstNonce {
-				worstNonce = tx.Nonce()
-				worstHash = hash
-			}
-		}
-		glog.V(logger.Debug).Infof("Queued tx limit exceeded for %x. Removed worst nonce tx: %x\n", common.PP(from[:]), common.PP(worstHash[:]))
-		delete(self.queue[from], worstHash)
-	}
 }
 
 // addTx will add a transaction to the pending (processable queue) list of transactions
@@ -367,7 +352,16 @@ func (pool *TxPool) checkQueue() {
 		// Find the next consecutive nonce range starting at the
 		// current account nonce.
 		sort.Sort(addq)
-		for _, e := range addq {
+		for i, e := range addq {
+			// start deleting the transactions from the queue if they exceed the limit
+			if i > maxQueued {
+				if glog.V(logger.Debug) {
+					glog.Infof("Queued tx limit exceeded for %s. Tx %s removed\n", common.PP(address[:]), common.PP(e.hash[:]))
+				}
+				delete(pool.queue[address], e.hash)
+				continue
+			}
+
 			if e.AccountNonce > guessedNonce {
 				break
 			}
