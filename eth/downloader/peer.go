@@ -74,7 +74,7 @@ func (p *peer) Fetch(request *fetchRequest) error {
 	for hash, _ := range request.Hashes {
 		hashes = append(hashes, hash)
 	}
-	p.getBlocks(hashes)
+	go p.getBlocks(hashes)
 
 	return nil
 }

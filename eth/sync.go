@@ -171,7 +171,7 @@ func (pm *ProtocolManager) fetcher() {
 			// Send out all block requests
 			for peer, hashes := range request {
 				glog.V(logger.Debug).Infof("Explicitly fetching %d blocks from %s", len(hashes), peer.id)
-				peer.requestBlocks(hashes)
+				go peer.requestBlocks(hashes)
 			}
 			request = make(map[*peer][]common.Hash)
 
