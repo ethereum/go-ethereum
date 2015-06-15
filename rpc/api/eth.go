@@ -250,7 +250,7 @@ func (self *ethApi) Sign(req *shared.Request) (interface{}, error) {
 
 
 func (self *ethApi) PushTx(req *shared.Request) (interface{}, error) {
-	args := new(NewTxArgs)
+	args := new(NewSigArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
