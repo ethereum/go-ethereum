@@ -77,7 +77,7 @@ func (m *Miner) SetGasPrice(price *big.Int) {
 		return
 	}
 
-	m.worker.gasPrice = price
+	m.worker.setGasPrice(price)
 }
 
 func (self *Miner) Start(coinbase common.Address, threads int) {

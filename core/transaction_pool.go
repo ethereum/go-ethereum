@@ -19,6 +19,7 @@ var (
 	// Transaction Pool Errors
 	ErrInvalidSender      = errors.New("Invalid sender")
 	ErrNonce              = errors.New("Nonce too low")
+	ErrCheap              = errors.New("Gas price too low for acceptance")
 	ErrBalance            = errors.New("Insufficient balance")
 	ErrNonExistentAccount = errors.New("Account does not exist or account balance too low")
 	ErrInsufficientFunds  = errors.New("Insufficient funds for gas * price + value")
@@ -41,6 +42,7 @@ type TxPool struct {
 	currentState stateFn   // The state function which will allow us to do some pre checkes
 	pendingState *state.ManagedState
 	gasLimit     func() *big.Int // The current gas limit function callback
+	minGasPrice  *big.Int
 	eventMux     *event.TypeMux
 	events       event.Subscription
 
@@ -57,8 +59,9 @@ func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func(
 		eventMux:     eventMux,
 		currentState: currentStateFn,
 		gasLimit:     gasLimitFn,
+		minGasPrice:  new(big.Int),
 		pendingState: state.ManageState(currentStateFn()),
-		events:       eventMux.Subscribe(ChainEvent{}),
+		events:       eventMux.Subscribe(ChainEvent{}, GasPriceChanged{}),
 	}
 	go pool.eventLoop()
 
@@ -69,10 +72,15 @@ func (pool *TxPool) eventLoop() {
 	// Track chain events. When a chain events occurs (new chain canon block)
 	// we need to know the new state. The new state will help us determine
 	// the nonces in the managed state
-	for _ = range pool.events.Chan() {
+	for ev := range pool.events.Chan() {
 		pool.mu.Lock()
 
-		pool.resetState()
+		switch ev := ev.(type) {
+		case ChainEvent:
+			pool.resetState()
+		case GasPriceChanged:
+			pool.minGasPrice = ev.Price
+		}
 
 		pool.mu.Unlock()
 	}
@@ -123,6 +131,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		from common.Address
 		err  error
 	)
+
+	// Drop transactions under our own minimal accepted gas price
+	if pool.minGasPrice.Cmp(tx.GasPrice()) > 0 {
+		return ErrCheap
+	}
 
 	// Validate the transaction sender and it's sig. Throw
 	// if the from fields is invalid.
