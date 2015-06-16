@@ -77,7 +77,7 @@ func (self *netApi) Version(req *shared.Request) (interface{}, error) {
 
 // Number of connected peers
 func (self *netApi) PeerCount(req *shared.Request) (interface{}, error) {
-	return self.xeth.PeerCount(), nil
+	return newHexNum(self.xeth.PeerCount()), nil
 }
 
 func (self *netApi) IsListening(req *shared.Request) (interface{}, error) {
