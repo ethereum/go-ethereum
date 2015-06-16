@@ -335,3 +335,31 @@ func TestImportDeduplication(t *testing.T) {
 		t.Fatalf("import invocation count mismatch: have %v, want %v", counter, 2)
 	}
 }
+
+// Tests that blocks with numbers much lower or higher than out current head get
+// discarded no prevent wasting resources on useless blocks from faulty peers.
+func TestDistantDiscarding(t *testing.T) {
+	// Create a long chain to import
+	hashes := createHashes(3*maxQueueDist, knownHash)
+	blocks := createBlocksFromHashes(hashes)
+
+	head := hashes[len(hashes)/2]
+
+	// Create a tester and simulate a head block being the middle of the above chain
+	tester := newTester()
+	tester.ownHashes = []common.Hash{head}
+	tester.ownBlocks = map[common.Hash]*types.Block{head: blocks[head]}
+
+	// Ensure that a block with a lower number than the threshold is discarded
+	tester.fetcher.Enqueue("lower", blocks[hashes[0]])
+	time.Sleep(10 * time.Millisecond)
+	if !tester.fetcher.queue.Empty() {
+		t.Fatalf("fetcher queued stale block")
+	}
+	// Ensure that a block with a higher number than the threshold is discarded
+	tester.fetcher.Enqueue("higher", blocks[hashes[len(hashes)-1]])
+	time.Sleep(10 * time.Millisecond)
+	if !tester.fetcher.queue.Empty() {
+		t.Fatalf("fetcher queued future block")
+	}
+}

@@ -3,6 +3,7 @@ package fetcher
 
 import (
 	"errors"
+	"math"
 	"math/rand"
 	"time"
 
@@ -60,6 +61,10 @@ type Fetcher struct {
 	filter chan chan []*types.Block
 	quit   chan struct{}
 
+	// Block cache
+	queue  *prque.Prque             // Queue containing the import operations (block number sorted)
+	queued map[common.Hash]struct{} // Presence set of already queued blocks (to dedup imports)
+
 	// Callbacks
 	hasBlock    hashCheckFn     // Checks if a block is present in the chain
 	importBlock blockImporterFn // Injects a block from an origin peer into the chain
@@ -73,6 +78,8 @@ func New(hasBlock hashCheckFn, importBlock blockImporterFn, chainHeight chainHei
 		insert:      make(chan *inject),
 		filter:      make(chan chan []*types.Block),
 		quit:        make(chan struct{}),
+		queue:       prque.New(),
+		queued:      make(map[common.Hash]struct{}),
 		hasBlock:    hasBlock,
 		importBlock: importBlock,
 		chainHeight: chainHeight,
@@ -154,23 +161,6 @@ func (f *Fetcher) loop() {
 	announced := make(map[common.Hash][]*announce)
 	fetching := make(map[common.Hash]*announce)
 
-	// Create the priority queue and a matching presence set
-	queue := prque.New()
-	queued := make(map[common.Hash]struct{})
-	enqueue := func(peer string, block *types.Block) {
-		// Make sure the block isn't in some weird place
-		if f.chainHeight()+maxQueueDist < block.NumberU64() {
-			return
-		}
-		// If not, schedule the block for future import
-		hash := block.Hash()
-		if _, ok := queued[hash]; !ok {
-			queued[hash] = struct{}{}
-			queue.Push(&inject{origin: peer, block: block}, -float32(block.NumberU64()))
-
-			glog.V(logger.Detail).Infof("Peer %s: queued block %x, total %v", peer, hash.Bytes()[:4], queue.Size())
-		}
-	}
 	// Iterate the block fetching until a quit is requested
 	fetch := time.NewTimer(0)
 	done := make(chan common.Hash)
@@ -185,16 +175,16 @@ func (f *Fetcher) loop() {
 		}
 		// Import any queued blocks that could potentially fit
 		height := f.chainHeight()
-		for !queue.Empty() {
+		for !f.queue.Empty() {
 			// If too high up the chain, continue later
-			op := queue.PopItem().(*inject)
+			op := f.queue.PopItem().(*inject)
 			if number := op.block.NumberU64(); number > height+1 {
-				queue.Push(op, -float32(op.block.NumberU64()))
+				f.queue.Push(op, -float32(op.block.NumberU64()))
 				break
 			}
 			// Otherwise if not known yet, try and import
 			hash := op.block.Hash()
-			delete(queued, hash)
+			delete(f.queued, hash)
 			if f.hasBlock(hash) {
 				continue
 			}
@@ -229,7 +219,7 @@ func (f *Fetcher) loop() {
 
 		case op := <-f.insert:
 			// A direct block insertion was requested, try and fill any pending gaps
-			enqueue(op.origin, op.block)
+			f.enqueue(op.origin, op.block)
 
 		case hash := <-done:
 			// A pending import finished, remove all traces of the notification
@@ -301,9 +291,28 @@ func (f *Fetcher) loop() {
 			// Schedule the retrieved blocks for ordered import
 			for _, block := range explicit {
 				if announce := fetching[block.Hash()]; announce != nil {
-					enqueue(announce.origin, block)
+					f.enqueue(announce.origin, block)
 				}
 			}
+		}
+	}
+}
+
+// enqueue schedules a new future import operation, if the block to be imported
+// has not yet been seen.
+func (f *Fetcher) enqueue(peer string, block *types.Block) {
+	// Make sure the block isn't in some weird place
+	if math.Abs(float64(f.chainHeight())-float64(block.NumberU64())) > maxQueueDist {
+		return
+	}
+	// Schedule the block for future importing
+	hash := block.Hash()
+	if _, ok := f.queued[hash]; !ok {
+		f.queued[hash] = struct{}{}
+		f.queue.Push(&inject{origin: peer, block: block}, -float32(block.NumberU64()))
+
+		if glog.V(logger.Detail) {
+			glog.Infof("Peer %s: queued block %x, total %v", peer, hash.Bytes()[:4], f.queue.Size())
 		}
 	}
 }
