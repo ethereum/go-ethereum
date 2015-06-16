@@ -52,6 +52,8 @@ func copyBlock(block *types.Block) *types.Block {
 	return createBlock(int(block.Number().Int64()), block.ParentHeaderHash, block.HeaderHash)
 }
 
+// createBlocksFromHashes assembles a collection of blocks, each having a correct
+// place in the given hash chain.
 func createBlocksFromHashes(hashes []common.Hash) map[common.Hash]*types.Block {
 	blocks := make(map[common.Hash]*types.Block)
 	for i := 0; i < len(hashes); i++ {
@@ -64,6 +66,7 @@ func createBlocksFromHashes(hashes []common.Hash) map[common.Hash]*types.Block {
 	return blocks
 }
 
+// downloadTester is a test simulator for mocking out local block chain.
 type downloadTester struct {
 	downloader *Downloader
 
@@ -75,6 +78,7 @@ type downloadTester struct {
 	maxHashFetch int // Overrides the maximum number of retrieved hashes
 }
 
+// newTester creates a new downloader test mocker.
 func newTester() *downloadTester {
 	tester := &downloadTester{
 		ownHashes:  []common.Hash{knownHash},
@@ -82,9 +86,7 @@ func newTester() *downloadTester {
 		peerHashes: make(map[string][]common.Hash),
 		peerBlocks: make(map[string]map[common.Hash]*types.Block),
 	}
-	var mux event.TypeMux
-	downloader := New(&mux, tester.hasBlock, tester.getBlock, tester.insertChain, tester.dropPeer)
-	tester.downloader = downloader
+	tester.downloader = New(new(event.TypeMux), tester.hasBlock, tester.getBlock, tester.insertChain, tester.dropPeer)
 
 	return tester
 }

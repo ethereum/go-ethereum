@@ -149,7 +149,8 @@ func (f *Fetcher) loop() {
 				break
 			}
 			if len(announced) == 0 {
-				fetch.Reset(arriveTimeout)
+				glog.V(logger.Detail).Infof("Scheduling fetch in %v, at %v", arriveTimeout-time.Since(notification.time), notification.time.Add(arriveTimeout))
+				fetch.Reset(arriveTimeout - time.Since(notification.time))
 			}
 			announced[notification.hash] = append(announced[notification.hash], notification)
 
@@ -181,11 +182,12 @@ func (f *Fetcher) loop() {
 			if len(announced) > 0 {
 				nearest := time.Now()
 				for _, announces := range announced {
-					if nearest.Before(announces[0].time) {
+					if nearest.After(announces[0].time) {
 						nearest = announces[0].time
 					}
 				}
-				fetch.Reset(arriveTimeout + time.Since(nearest))
+				glog.V(logger.Detail).Infof("Rescheduling fetch in %v, at %v", arriveTimeout-time.Since(nearest), nearest.Add(arriveTimeout))
+				fetch.Reset(arriveTimeout - time.Since(nearest))
 			}
 
 		case filter := <-f.filter:
