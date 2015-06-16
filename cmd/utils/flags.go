@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
@@ -209,13 +208,18 @@ var (
 		Usage: "Domain on which to send Access-Control-Allow-Origin header",
 		Value: "",
 	}
+	RpcApiFlag = cli.StringFlag{
+		Name:  "rpcapi",
+		Usage: "Specify the API's which are offered over the HTTP RPC interface",
+		Value: api.DefaultHttpRpcApis,
+	}
 	IPCDisabledFlag = cli.BoolFlag{
 		Name:  "ipcdisable",
 		Usage: "Disable the IPC-RPC server",
 	}
 	IPCApiFlag = cli.StringFlag{
 		Name:  "ipcapi",
-		Usage: "Specify the API's which are offered over this interface",
+		Usage: "Specify the API's which are offered over the IPC interface",
 		Value: api.DefaultIpcApis,
 	}
 	IPCPathFlag = DirectoryFlag{
@@ -457,14 +461,21 @@ func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
 }
 
 func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
-	config := rpc.RpcConfig{
+	config := comms.HttpConfig{
 		ListenAddress: ctx.GlobalString(RPCListenAddrFlag.Name),
 		ListenPort:    uint(ctx.GlobalInt(RPCPortFlag.Name)),
 		CorsDomain:    ctx.GlobalString(RPCCORSDomainFlag.Name),
 	}
 
 	xeth := xeth.New(eth, nil)
-	return rpc.Start(xeth, config)
+	codec := codec.JSON
+
+	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth)
+	if err != nil {
+		return err
+	}
+
+	return comms.StartHttp(config, codec, apis...)
 }
 
 func StartPProf(ctx *cli.Context) {

@@ -20,6 +20,10 @@ const (
 )
 
 var (
+	DefaultHttpRpcApis = strings.Join([]string{
+		EthApiName, NetApiName, Web3ApiName,
+	}, ",")
+
 	// List with all API's which are offered over the IPC interface by default
 	DefaultIpcApis = strings.Join([]string{
 		AdminApiName, EthApiName, DebugApiName, MinerApiName, NetApiName,
