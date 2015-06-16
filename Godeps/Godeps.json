@@ -21,8 +21,8 @@
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",
-			"Comment": "v23.1-206-gf0e6321",
-			"Rev": "f0e63218b721dc2f696920a92d5de1f6364e9bf7"
+			"Comment": "v23.1-222-g5cfdcba",
+			"Rev": "5cfdcba92e634db228d1ddb140e3b7a3c4b38177"
 		},
 		{
 			"ImportPath": "github.com/howeyc/fsnotify",

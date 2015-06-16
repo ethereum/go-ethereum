@@ -8,6 +8,7 @@ int ethashGoCallback_cgo(unsigned);
 import "C"
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -119,6 +120,12 @@ func (l *Light) Verify(block pow.Block) bool {
 	if !ret.success {
 		return false
 	}
+
+	// avoid mixdigest malleability as it's not included in a block's "hashNononce"
+	if !bytes.Equal(block.MixDigest().Bytes(), C.GoBytes(unsafe.Pointer(&ret.mix_hash), C.int(32))) {
+		return false
+	}
+
 	// Make sure cache is live until after the C call.
 	// This is important because a GC might happen and execute
 	// the finalizer before the call completes.
