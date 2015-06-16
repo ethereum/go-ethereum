@@ -1,6 +1,8 @@
 package api
 
 import (
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
@@ -40,6 +42,8 @@ func (self *MergedApi) Methods() []string {
 
 // Call the correct API's Execute method for the given request
 func (self *MergedApi) Execute(req *shared.Request) (interface{}, error) {
+	glog.V(logger.Detail).Infof("rpc method: %s", req.Method)
+
 	if res, _ := self.handle(req); res != nil {
 		return res, nil
 	}

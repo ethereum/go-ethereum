@@ -42,6 +42,18 @@ type ErrorObject struct {
 	// Data    interface{} `json:"data"`
 }
 
+// Create RPC error response, this allows for custom error codes
+func NewRpcErrorResponse(id interface{}, jsonrpcver string, errCode int, err error) *interface{} {
+	var response interface{}
+
+	jsonerr := &ErrorObject{errCode, err.Error()}
+	response = ErrorResponse{Jsonrpc: jsonrpcver, Id: id, Error: jsonerr}
+
+	glog.V(logger.Detail).Infof("Generated error response: %s", response)
+	return &response
+}
+
+// Create RPC response
 func NewRpcResponse(id interface{}, jsonrpcver string, reply interface{}, err error) *interface{} {
 	var response interface{}
 

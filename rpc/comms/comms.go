@@ -11,6 +11,11 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
+const (
+	jsonrpcver           = "2.0"
+	maxHttpSizeReqLength = 1024 * 1024 // 1MB
+)
+
 type EthereumClient interface {
 	Close()
 	Send(interface{}) error
@@ -26,7 +31,7 @@ func handle(conn net.Conn, api api.EthereumApi, c codec.Codec) {
 			codec.Close()
 			return
 		} else if err != nil {
-			glog.V(logger.Error).Infof("IPC recv err - %v\n", err)
+			glog.V(logger.Error).Infof("comms recv err - %v\n", err)
 			codec.Close()
 			return
 		}
