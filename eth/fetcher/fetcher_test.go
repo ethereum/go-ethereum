@@ -200,3 +200,41 @@ func TestOverlappingAnnouncements(t *testing.T) {
 		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, targetBlocks+1)
 	}
 }
+
+// Tests that announces already being retrieved will not be duplicated.
+func TestPendingDeduplication(t *testing.T) {
+	// Create a hash and corresponding block
+	hashes := createHashes(1, knownHash)
+	blocks := createBlocksFromHashes(hashes)
+
+	// Assemble a tester with a built in counter and delayed fetcher
+	tester := newTester()
+	fetcher := tester.makeFetcher(blocks)
+
+	delay := 50 * time.Millisecond
+	counter := uint32(0)
+	wrapper := func(hashes []common.Hash) error {
+		atomic.AddUint32(&counter, uint32(len(hashes)))
+
+		// Simulate a long running fetch
+		go func() {
+			time.Sleep(delay)
+			fetcher(hashes)
+		}()
+		return nil
+	}
+	// Announce the same block many times until it's fetched (wait for any pending ops)
+	for !tester.hasBlock(hashes[0]) {
+		tester.fetcher.Notify("repeater", hashes[0], time.Now().Add(-arriveTimeout), wrapper)
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(delay)
+
+	// Check that all blocks were imported and none fetched twice
+	if imported := len(tester.ownBlocks); imported != 2 {
+		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, 2)
+	}
+	if int(counter) != 1 {
+		t.Fatalf("retrieval count mismatch: have %v, want %v", counter, 1)
+	}
+}
