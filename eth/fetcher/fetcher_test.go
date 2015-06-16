@@ -299,3 +299,39 @@ func TestQueueGapFill(t *testing.T) {
 		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, targetBlocks+1)
 	}
 }
+
+// Tests that blocks arriving from various sources (multiple propagations, hash
+// announces, etc) do not get scheduled for import multiple times.
+func TestImportDeduplication(t *testing.T) {
+	// Create two blocks to import (one for duplication, the other for stalling)
+	hashes := createHashes(2, knownHash)
+	blocks := createBlocksFromHashes(hashes)
+
+	// Create the tester and wrap the importer with a counter
+	tester := newTester()
+	fetcher := tester.makeFetcher(blocks)
+
+	counter := uint32(0)
+	tester.fetcher.importBlock = func(peer string, block *types.Block) error {
+		atomic.AddUint32(&counter, 1)
+		return tester.importBlock(peer, block)
+	}
+	// Announce the duplicating block, wait for retrieval, and also propagate directly
+	tester.fetcher.Notify("valid", hashes[0], time.Now().Add(-arriveTimeout), fetcher)
+	time.Sleep(50 * time.Millisecond)
+
+	tester.fetcher.Enqueue("valid", blocks[hashes[0]])
+	tester.fetcher.Enqueue("valid", blocks[hashes[0]])
+	tester.fetcher.Enqueue("valid", blocks[hashes[0]])
+
+	// Fill the missing block directly as if propagated, and check import uniqueness
+	tester.fetcher.Enqueue("valid", blocks[hashes[1]])
+	time.Sleep(50 * time.Millisecond)
+
+	if imported := len(tester.ownBlocks); imported != 3 {
+		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, 3)
+	}
+	if counter != 2 {
+		t.Fatalf("import invocation count mismatch: have %v, want %v", counter, 2)
+	}
+}

@@ -153,11 +153,28 @@ func (f *Fetcher) Filter(blocks types.Blocks) types.Blocks {
 func (f *Fetcher) loop() {
 	announced := make(map[common.Hash][]*announce)
 	fetching := make(map[common.Hash]*announce)
-	queued := prque.New()
+
+	// Create the priority queue and a matching presence set
+	queue := prque.New()
+	queued := make(map[common.Hash]struct{})
+	enqueue := func(peer string, block *types.Block) {
+		// Make sure the block isn't in some weird place
+		if f.chainHeight()+maxQueueDist < block.NumberU64() {
+			return
+		}
+		// If not, schedule the block for future import
+		hash := block.Hash()
+		if _, ok := queued[hash]; !ok {
+			queued[hash] = struct{}{}
+			queue.Push(&inject{origin: peer, block: block}, -float32(block.NumberU64()))
+
+			glog.V(logger.Detail).Infof("Peer %s: queued block %x, total %v", peer, hash.Bytes()[:4], queue.Size())
+		}
+	}
+	// Iterate the block fetching until a quit is requested
 	fetch := time.NewTimer(0)
 	done := make(chan common.Hash)
 
-	// Iterate the block fetching until a quit is requested
 	for {
 		// Clean up any expired block fetches
 		for hash, announce := range fetching {
@@ -168,24 +185,26 @@ func (f *Fetcher) loop() {
 		}
 		// Import any queued blocks that could potentially fit
 		height := f.chainHeight()
-		for !queued.Empty() {
-			// Fetch the next block, and skip if already known
-			op := queued.PopItem().(*inject)
-			if f.hasBlock(op.block.Hash()) {
-				continue
-			}
-			// If unknown, but too high up the chain, continue later
+		for !queue.Empty() {
+			// If too high up the chain, continue later
+			op := queue.PopItem().(*inject)
 			if number := op.block.NumberU64(); number > height+1 {
-				queued.Push(op, -float32(op.block.NumberU64()))
+				queue.Push(op, -float32(op.block.NumberU64()))
 				break
 			}
+			// Otherwise if not known yet, try and import
+			hash := op.block.Hash()
+			delete(queued, hash)
+			if f.hasBlock(hash) {
+				continue
+			}
 			// Block may just fit, try to import it
-			glog.V(logger.Debug).Infof("Peer %s: importing block %x", op.origin, op.block.Hash().Bytes()[:4])
+			glog.V(logger.Debug).Infof("Peer %s: importing block %x", op.origin, hash.Bytes()[:4])
 			go func() {
-				defer func() { done <- op.block.Hash() }()
+				defer func() { done <- hash }()
 
 				if err := f.importBlock(op.origin, op.block); err != nil {
-					glog.V(logger.Detail).Infof("Peer %s: block %x import failed: %v", op.origin, op.block.Hash().Bytes()[:4], err)
+					glog.V(logger.Detail).Infof("Peer %s: block %x import failed: %v", op.origin, hash.Bytes()[:4], err)
 					return
 				}
 			}()
@@ -210,8 +229,7 @@ func (f *Fetcher) loop() {
 
 		case op := <-f.insert:
 			// A direct block insertion was requested, try and fill any pending gaps
-			queued.Push(op, -float32(op.block.NumberU64()))
-			glog.V(logger.Detail).Infof("Peer %s: filled block %x, total %v", op.origin, op.block.Hash().Bytes()[:4], queued.Size())
+			enqueue(op.origin, op.block)
 
 		case hash := <-done:
 			// A pending import finished, remove all traces of the notification
@@ -281,17 +299,9 @@ func (f *Fetcher) loop() {
 				return
 			}
 			// Schedule the retrieved blocks for ordered import
-			height := f.chainHeight()
 			for _, block := range explicit {
-				// Skip any blocks too far into the future
-				if height+maxQueueDist < block.NumberU64() {
-					continue
-				}
-				// Otherwise if the announce is still pending, schedule
-				hash := block.Hash()
-				if announce := fetching[hash]; announce != nil {
-					queued.Push(&inject{origin: announce.origin, block: block}, -float32(block.NumberU64()))
-					glog.V(logger.Detail).Infof("Peer %s: scheduled block %x, total %v", announce.origin, hash[:4], queued.Size())
+				if announce := fetching[block.Hash()]; announce != nil {
+					enqueue(announce.origin, block)
 				}
 			}
 		}
