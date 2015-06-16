@@ -10,11 +10,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
 const (
 	arriveTimeout = 500 * time.Millisecond // Time allowance before an announced block is explicitly requested
 	fetchTimeout  = 5 * time.Second        // Maximum alloted time to return an explicitly requested block
+	maxQueueDist  = 256                    // Maximum allowed distance from the chain head to queue
 )
 
 var (
@@ -30,6 +32,9 @@ type blockRequesterFn func([]common.Hash) error
 // blockImporterFn is a callback type for trying to inject a block into the local chain.
 type blockImporterFn func(peer string, block *types.Block) error
 
+// chainHeightFn is a callback type to retrieve the current chain height.
+type chainHeightFn func() uint64
+
 // announce is the hash notification of the availability of a new block in the
 // network.
 type announce struct {
@@ -38,6 +43,12 @@ type announce struct {
 
 	origin string           // Identifier of the peer originating the notification
 	fetch  blockRequesterFn // Fetcher function to retrieve
+}
+
+// inject represents a schedules import operation.
+type inject struct {
+	origin string
+	block  *types.Block
 }
 
 // Fetcher is responsible for accumulating block announcements from various peers
@@ -51,16 +62,18 @@ type Fetcher struct {
 	// Callbacks
 	hasBlock    hashCheckFn     // Checks if a block is present in the chain
 	importBlock blockImporterFn // Injects a block from an origin peer into the chain
+	chainHeight chainHeightFn   // Retrieves the current chain's height
 }
 
 // New creates a block fetcher to retrieve blocks based on hash announcements.
-func New(hasBlock hashCheckFn, importBlock blockImporterFn) *Fetcher {
+func New(hasBlock hashCheckFn, importBlock blockImporterFn, chainHeight chainHeightFn) *Fetcher {
 	return &Fetcher{
 		notify:      make(chan *announce),
 		filter:      make(chan chan []*types.Block),
 		quit:        make(chan struct{}),
 		hasBlock:    hasBlock,
 		importBlock: importBlock,
+		chainHeight: chainHeight,
 	}
 }
 
@@ -124,6 +137,7 @@ func (f *Fetcher) Filter(blocks types.Blocks) types.Blocks {
 func (f *Fetcher) loop() {
 	announced := make(map[common.Hash][]*announce)
 	fetching := make(map[common.Hash]*announce)
+	queued := prque.New()
 	fetch := time.NewTimer(0)
 	done := make(chan common.Hash)
 
@@ -135,6 +149,30 @@ func (f *Fetcher) loop() {
 				delete(announced, hash)
 				delete(fetching, hash)
 			}
+		}
+		// Import any queued blocks that could potentially fit
+		height := f.chainHeight()
+		for !queued.Empty() {
+			// Fetch the next block, and skip if already known
+			op := queued.PopItem().(*inject)
+			if f.hasBlock(op.block.Hash()) {
+				continue
+			}
+			// If unknown, but too high up the chain, continue later
+			if number := op.block.NumberU64(); number > height+1 {
+				queued.Push(op, -float32(op.block.NumberU64()))
+				break
+			}
+			// Block may just fit, try to import it
+			glog.V(logger.Debug).Infof("Peer %s: importing block %x", op.origin, op.block.Hash().Bytes()[:4])
+			go func() {
+				defer func() { done <- op.block.Hash() }()
+
+				if err := f.importBlock(op.origin, op.block); err != nil {
+					glog.V(logger.Detail).Infof("Peer %s: block %x import failed: %v", op.origin, op.block.Hash().Bytes()[:4], err)
+					return
+				}
+			}()
 		}
 		// Wait for an outside event to occur
 		select {
@@ -221,39 +259,19 @@ func (f *Fetcher) loop() {
 			case <-f.quit:
 				return
 			}
-			// Create a closure with the retrieved blocks and origin peers
-			peers := make([]string, 0, len(explicit))
-			blocks = make([]*types.Block, 0, len(explicit))
+			// Schedule the retrieved blocks for ordered import
+			height := f.chainHeight()
 			for _, block := range explicit {
+				// Skip any blocks too far into the future
+				if height+maxQueueDist < block.NumberU64() {
+					continue
+				}
+				// Otherwise if the announce is still pending, schedule
 				hash := block.Hash()
 				if announce := fetching[hash]; announce != nil {
-					// Drop the block if it surely cannot fit
-					if f.hasBlock(hash) || !f.hasBlock(block.ParentHash()) {
-						// delete(fetching, hash) // if we drop, it will re-fetch it, wait for timeout?
-						continue
-					}
-					// Otherwise accumulate for import
-					peers = append(peers, announce.origin)
-					blocks = append(blocks, block)
+					queued.Push(&inject{origin: announce.origin, block: block}, -float32(block.NumberU64()))
+					glog.V(logger.Detail).Infof("Peer %s: scheduled block %x, total %v", announce.origin, hash[:4], queued.Size())
 				}
-			}
-			// If any explicit fetches were replied to, import them
-			if count := len(blocks); count > 0 {
-				glog.V(logger.Debug).Infof("Importing %d explicitly fetched blocks", len(blocks))
-				go func() {
-					// Make sure all hashes are cleaned up
-					for _, block := range blocks {
-						hash := block.Hash()
-						defer func() { done <- hash }()
-					}
-					// Try and actually import the blocks
-					for i := 0; i < len(blocks); i++ {
-						if err := f.importBlock(peers[i], blocks[i]); err != nil {
-							glog.V(logger.Detail).Infof("Failed to import explicitly fetched block: %v", err)
-							return
-						}
-					}
-				}()
 			}
 		}
 	}

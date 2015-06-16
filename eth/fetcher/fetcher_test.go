@@ -77,7 +77,7 @@ func newTester() *fetcherTester {
 		ownHashes: []common.Hash{knownHash},
 		ownBlocks: map[common.Hash]*types.Block{knownHash: genesis},
 	}
-	tester.fetcher = New(tester.hasBlock, tester.importBlock)
+	tester.fetcher = New(tester.hasBlock, tester.importBlock, tester.chainHeight)
 	tester.fetcher.Start()
 
 	return tester
@@ -97,6 +97,11 @@ func (f *fetcherTester) importBlock(peer string, block *types.Block) error {
 	f.ownHashes = append(f.ownHashes, block.Hash())
 	f.ownBlocks[block.Hash()] = block
 	return nil
+}
+
+// chainHeight retrieves the current height (block number) of the chain.
+func (f *fetcherTester) chainHeight() uint64 {
+	return f.ownBlocks[f.ownHashes[len(f.ownHashes)-1]].NumberU64()
 }
 
 // peerFetcher retrieves a fetcher associated with a simulated peer.
@@ -236,5 +241,33 @@ func TestPendingDeduplication(t *testing.T) {
 	}
 	if int(counter) != 1 {
 		t.Fatalf("retrieval count mismatch: have %v, want %v", counter, 1)
+	}
+}
+
+// Tests that announcements retrieved in a random order are cached and eventually
+// imported when all the gaps are filled in.
+func TestRandomArrivalImport(t *testing.T) {
+	// Create a chain of blocks to import, and choose one to delay
+	targetBlocks := 24
+	hashes := createHashes(targetBlocks, knownHash)
+	blocks := createBlocksFromHashes(hashes)
+	skip := targetBlocks / 2
+
+	tester := newTester()
+	fetcher := tester.makeFetcher(blocks)
+
+	// Iteratively announce blocks, skipping one entry
+	for i := len(hashes) - 1; i >= 0; i-- {
+		if i != skip {
+			tester.fetcher.Notify("valid", hashes[i], time.Now().Add(-arriveTimeout), fetcher)
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	// Finally announce the skipped entry and check full import
+	tester.fetcher.Notify("valid", hashes[skip], time.Now().Add(-arriveTimeout), fetcher)
+	time.Sleep(50 * time.Millisecond)
+
+	if imported := len(tester.ownBlocks); imported != targetBlocks+1 {
+		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, targetBlocks+1)
 	}
 }

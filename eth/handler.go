@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -94,9 +95,15 @@ func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpo
 	manager.downloader = downloader.New(manager.eventMux, manager.chainman.HasBlock, manager.chainman.GetBlock, manager.chainman.InsertChain, manager.removePeer)
 
 	importer := func(peer string, block *types.Block) error {
-		return manager.importBlock(manager.peers.Peer(peer), block, nil)
+		if p := manager.peers.Peer(peer); p != nil {
+			return manager.importBlock(manager.peers.Peer(peer), block, nil)
+		}
+		return errors.New("unknown peer")
 	}
-	manager.fetcher = fetcher.New(manager.chainman.HasBlock, importer)
+	heighter := func() uint64 {
+		return manager.chainman.CurrentBlock().NumberU64()
+	}
+	manager.fetcher = fetcher.New(manager.chainman.HasBlock, importer, heighter)
 
 	return manager
 }
