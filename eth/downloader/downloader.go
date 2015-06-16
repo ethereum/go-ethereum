@@ -1,3 +1,4 @@
+// Package downloader contains the manual full chain synchronisation.
 package downloader
 
 import (
