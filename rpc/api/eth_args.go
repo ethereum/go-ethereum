@@ -226,6 +226,35 @@ func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
+type NewDataArgs struct {
+    Data string
+}
+
+func (args *NewDataArgs) UnmarshalJSON(b []byte) (err error) {
+    var obj []interface{}
+
+    if err := json.Unmarshal(b, &obj); err != nil {
+        return shared.NewDecodeParamError(err.Error())
+    }
+
+    // Check for sufficient params
+    if len(obj) < 1 {
+        return shared.NewInsufficientParamsError(len(obj), 1)
+    }
+
+    data, ok := obj[0].(string)
+    if !ok {
+        return shared.NewInvalidTypeError("data", "not a string")
+    }
+    args.Data = data
+
+    if len(args.Data) == 0 {
+        return shared.NewValidationError("data", "is required")
+    }
+
+    return nil
+}
+
 type NewSigArgs struct {
 	From string
 	Data string

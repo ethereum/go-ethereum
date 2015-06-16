@@ -787,6 +787,9 @@ func (self *XEth) FromNumber(str string) string {
 
 func (self *XEth) PushTx(encodedTx string) (string, error) {
 	tx := types.NewTransactionFromBytes(common.FromHex(encodedTx))
+
+	glog.V(logger.Info).Infof("Tx(%x) gas: %x\n", tx.Hash(), tx.Gas())
+
 	err := self.backend.TxPool().Add(tx)
 	if err != nil {
 		return "", err
@@ -965,7 +968,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 
 		return core.AddressFromMessage(tx).Hex(), nil
 	} else {
-		glog.V(logger.Info).Infof("Tx(%x) to: %x\n", tx.Hash(), tx.To())
+		glog.V(logger.Info).Infof("YEYEYE!! Tx(%x) to: %x\n, gas: %x", tx.Hash(), tx.To(), tx.Gas())
 	}
 	return tx.Hash().Hex(), nil
 }
