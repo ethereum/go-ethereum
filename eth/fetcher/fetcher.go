@@ -56,6 +56,7 @@ type inject struct {
 type Fetcher struct {
 	// Various event channels
 	notify chan *announce
+	insert chan *inject
 	filter chan chan []*types.Block
 	quit   chan struct{}
 
@@ -69,6 +70,7 @@ type Fetcher struct {
 func New(hasBlock hashCheckFn, importBlock blockImporterFn, chainHeight chainHeightFn) *Fetcher {
 	return &Fetcher{
 		notify:      make(chan *announce),
+		insert:      make(chan *inject),
 		filter:      make(chan chan []*types.Block),
 		quit:        make(chan struct{}),
 		hasBlock:    hasBlock,
@@ -100,6 +102,20 @@ func (f *Fetcher) Notify(peer string, hash common.Hash, time time.Time, fetcher 
 	}
 	select {
 	case f.notify <- block:
+		return nil
+	case <-f.quit:
+		return errTerminated
+	}
+}
+
+// Enqueue tries to fill gaps the the fetcher's future import queue.
+func (f *Fetcher) Enqueue(peer string, block *types.Block) error {
+	op := &inject{
+		origin: peer,
+		block:  block,
+	}
+	select {
+	case f.insert <- op:
 		return nil
 	case <-f.quit:
 		return errTerminated
@@ -191,6 +207,11 @@ func (f *Fetcher) loop() {
 				fetch.Reset(arriveTimeout - time.Since(notification.time))
 			}
 			announced[notification.hash] = append(announced[notification.hash], notification)
+
+		case op := <-f.insert:
+			// A direct block insertion was requested, try and fill any pending gaps
+			queued.Push(op, -float32(op.block.NumberU64()))
+			glog.V(logger.Detail).Infof("Peer %s: filled block %x, total %v", op.origin, op.block.Hash().Bytes()[:4], queued.Size())
 
 		case hash := <-done:
 			// A pending import finished, remove all traces of the notification

@@ -340,6 +340,8 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		}
 		request.Block.ReceivedAt = msg.ReceivedAt
 
+		// Try to import the propagated block, also making it fill any fetcher gaps
+		self.fetcher.Enqueue(p.id, request.Block)
 		if err := self.importBlock(p, request.Block, request.TD); err != nil {
 			return err
 		}

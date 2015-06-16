@@ -271,3 +271,31 @@ func TestRandomArrivalImport(t *testing.T) {
 		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, targetBlocks+1)
 	}
 }
+
+// Tests that direct block enqueues (due to block propagation vs. hash announce)
+// are correctly schedule, filling and import queue gaps.
+func TestQueueGapFill(t *testing.T) {
+	// Create a chain of blocks to import, and choose one to not announce at all
+	targetBlocks := 24
+	hashes := createHashes(targetBlocks, knownHash)
+	blocks := createBlocksFromHashes(hashes)
+	skip := targetBlocks / 2
+
+	tester := newTester()
+	fetcher := tester.makeFetcher(blocks)
+
+	// Iteratively announce blocks, skipping one entry
+	for i := len(hashes) - 1; i >= 0; i-- {
+		if i != skip {
+			tester.fetcher.Notify("valid", hashes[i], time.Now().Add(-arriveTimeout), fetcher)
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	// Fill the missing block directly as if propagated
+	tester.fetcher.Enqueue("valid", blocks[hashes[skip]])
+	time.Sleep(50 * time.Millisecond)
+
+	if imported := len(tester.ownBlocks); imported != targetBlocks+1 {
+		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, targetBlocks+1)
+	}
+}
