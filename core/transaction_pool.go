@@ -180,7 +180,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	}
 
 	// Should supply enough intrinsic gas
-	if tx.Gas().Cmp(IntrinsicGas(tx)) < 0 {
+	if tx.Gas().Cmp(IntrinsicGas(tx.Data())) < 0 {
 		return ErrIntrinsicGas
 	}
 
