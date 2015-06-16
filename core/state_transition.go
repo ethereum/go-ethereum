@@ -73,16 +73,17 @@ func MessageGasValue(msg Message) *big.Int {
 	return new(big.Int).Mul(msg.Gas(), msg.GasPrice())
 }
 
-func IntrinsicGas(msg Message) *big.Int {
+// IntrinsicGas computes the 'intrisic gas' for a message
+// with the given data.
+func IntrinsicGas(data []byte) *big.Int {
 	igas := new(big.Int).Set(params.TxGas)
-	for _, byt := range msg.Data() {
+	for _, byt := range data {
 		if byt != 0 {
 			igas.Add(igas, params.TxDataNonZeroGas)
 		} else {
 			igas.Add(igas, params.TxDataZeroGas)
 		}
 	}
-
 	return igas
 }
 
@@ -195,7 +196,7 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 	sender, _ := self.From() // err checked in preCheck
 
 	// Pay intrinsic gas
-	if err = self.UseGas(IntrinsicGas(self.msg)); err != nil {
+	if err = self.UseGas(IntrinsicGas(self.msg.Data())); err != nil {
 		return nil, nil, InvalidTxError(err)
 	}
 
