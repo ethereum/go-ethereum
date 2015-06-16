@@ -9,6 +9,7 @@ import (
 const (
 	AdminApiName    = "admin"
 	EthApiName      = "eth"
+	DbApiName       = "db"
 	DebugApiName    = "debug"
 	MergedApiName   = "merged"
 	MinerApiName    = "miner"
@@ -21,12 +22,12 @@ const (
 
 var (
 	DefaultHttpRpcApis = strings.Join([]string{
-		EthApiName, NetApiName, Web3ApiName,
+		DbApiName, EthApiName, NetApiName, Web3ApiName,
 	}, ",")
 
 	// List with all API's which are offered over the IPC interface by default
 	DefaultIpcApis = strings.Join([]string{
-		AdminApiName, EthApiName, DebugApiName, MinerApiName, NetApiName,
+		AdminApiName, DbApiName, EthApiName, DebugApiName, MinerApiName, NetApiName,
 		ShhApiName, TxPoolApiName, PersonalApiName, Web3ApiName,
 	}, ",")
 )

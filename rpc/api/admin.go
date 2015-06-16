@@ -222,10 +222,10 @@ func (self *adminApi) ChainSyncStatus(req *shared.Request) (interface{}, error) 
 	pending, cached, importing, estimate := self.ethereum.Downloader().Stats()
 
 	return map[string]interface{}{
-		"blocksAvailable": pending,
+		"blocksAvailable":        pending,
 		"blocksWaitingForImport": cached,
-		"importing": importing,
-		"estimate": estimate.String(),
+		"importing":              importing,
+		"estimate":               estimate.String(),
 	}, nil
 }
 

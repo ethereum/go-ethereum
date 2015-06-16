@@ -24,6 +24,12 @@ var (
 			"setSolc",
 			"datadir",
 		},
+		"db": []string{
+			"getString",
+			"putString",
+			"getHex",
+			"putHex",
+		},
 		"debug": []string{
 			"dumpBlock",
 			"getBlockRlp",
@@ -137,6 +143,8 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 			apis[i] = NewAdminApi(xeth, eth, codec)
 		case DebugApiName:
 			apis[i] = NewDebugApi(xeth, eth, codec)
+		case DbApiName:
+			apis[i] = NewDbApi(xeth, eth, codec)
 		case EthApiName:
 			apis[i] = NewEthApi(xeth, codec)
 		case MinerApiName:
@@ -165,6 +173,8 @@ func Javascript(name string) string {
 		return Admin_JS
 	case DebugApiName:
 		return Debug_JS
+	case DbApiName:
+		return Db_JS
 	case MinerApiName:
 		return Miner_JS
 	case NetApiName:
