@@ -29,12 +29,8 @@ var (
 
 // Utility functions for making chains on the fly
 // Exposed for sake of testing from other packages (eg. go-ethash)
-func NewBlockFromParent(addr common.Address, parent *types.Block) *types.Block {
-	return newBlockFromParent(addr, parent)
-}
-
 func MakeBlock(bman *BlockProcessor, parent *types.Block, i int, db common.Database, seed int) *types.Block {
-	return makeBlock(bman, parent, i, db, seed)
+	return types.NewBlock(makeHeader(parent, i, db, seed), nil, nil, nil)
 }
 
 func MakeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Database, seed int) types.Blocks {
@@ -53,46 +49,38 @@ func NewCanonical(n int, db common.Database) (*BlockProcessor, error) {
 	return newCanonical(n, db)
 }
 
-// block time is fixed at 10 seconds
-func newBlockFromParent(addr common.Address, parent *types.Block) *types.Block {
-	block := types.NewBlock(parent.Hash(), addr, parent.Root(), common.BigPow(2, 32), 0, nil)
-	block.SetUncles(nil)
-	block.SetTransactions(nil)
-	block.SetReceipts(nil)
-
-	header := block.Header()
-	header.Difficulty = CalcDifficulty(block.Header(), parent.Header())
-	header.Number = new(big.Int).Add(parent.Header().Number, common.Big1)
-	header.Time = parent.Header().Time + 10
-	header.GasLimit = CalcGasLimit(parent)
-
-	block.Td = parent.Td
-
-	return block
-}
-
-// Actually make a block by simulating what miner would do
-// we seed chains by the first byte of the coinbase
-func makeBlock(bman *BlockProcessor, parent *types.Block, i int, db common.Database, seed int) *types.Block {
+// makeHeader creates the header for a new empty block, simulating
+// what miner would do. We seed chains by the first byte of the coinbase.
+func makeHeader(parent *types.Block, i int, db common.Database, seed int) *types.Header {
 	var addr common.Address
-	addr[0], addr[19] = byte(seed), byte(i)
-	block := newBlockFromParent(addr, parent)
-	state := state.New(block.Root(), db)
+	addr[0], addr[19] = byte(seed), byte(i) // 'random' coinbase
+	time := parent.Time() + 10              // block time is fixed at 10 seconds
+
+	// ensure that the block's coinbase has the block reward in the state.
+	state := state.New(parent.Root(), db)
 	cbase := state.GetOrNewStateObject(addr)
 	cbase.SetGasLimit(CalcGasLimit(parent))
 	cbase.AddBalance(BlockReward)
 	state.Update()
-	block.SetRoot(state.Root())
-	return block
+
+	return &types.Header{
+		Root:       state.Root(),
+		ParentHash: parent.Hash(),
+		Coinbase:   addr,
+		Difficulty: CalcDifficulty(time, parent.Time(), parent.Difficulty()),
+		Number:     new(big.Int).Add(parent.Number(), common.Big1),
+		Time:       uint64(time),
+		GasLimit:   CalcGasLimit(parent),
+	}
 }
 
-// Make a chain with real blocks
-// Runs ProcessWithParent to get proper state roots
+// makeChain creates a valid chain of empty blocks.
 func makeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Database, seed int) types.Blocks {
 	bman.bc.currentBlock = parent
 	blocks := make(types.Blocks, max)
 	for i := 0; i < max; i++ {
-		block := makeBlock(bman, parent, i, db, seed)
+		block := types.NewBlock(makeHeader(parent, i, db, seed), nil, nil, nil)
+		// Use ProcessWithParent to verify that we have produced a valid block.
 		_, err := bman.processWithParent(block, parent)
 		if err != nil {
 			fmt.Println("process with parent failed", err)
@@ -129,7 +117,7 @@ func newBlockProcessor(db common.Database, cman *ChainManager, eventMux *event.T
 }
 
 // Make a new, deterministic canonical chain by running InsertChain
-// on result of makeChain
+// on result of makeChain.
 func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
 	eventMux := &event.TypeMux{}
 

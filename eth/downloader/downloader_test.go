@@ -40,7 +40,10 @@ func createHashes(amount int, root common.Hash) (hashes []common.Hash) {
 
 // createBlock assembles a new block at the given chain height.
 func createBlock(i int, parent, hash common.Hash) *types.Block {
-	header := &types.Header{Number: big.NewInt(int64(i))}
+	header := &types.Header{
+		Hash: hash,
+		Number: big.NewInt(int64(i))
+	}
 	block := types.NewBlockWithHeader(header)
 	block.HeaderHash = hash
 	block.ParentHeaderHash = parent

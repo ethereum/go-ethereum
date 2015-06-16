@@ -245,7 +245,7 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
-				return fmt.Errorf("Block RLP decoding failed when expected to succeed: ", err)
+				return fmt.Errorf("Block RLP decoding failed when expected to succeed: %v", err)
 			}
 		}
 		// RLP decoding worked, try to insert into chain:
@@ -254,7 +254,7 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
-				return fmt.Errorf("Block insertion into chain failed: ", err)
+				return fmt.Errorf("Block insertion into chain failed: %v", err)
 			}
 		}
 		if b.BlockHeader == nil {
@@ -262,7 +262,7 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
 		}
 		err = t.validateBlockHeader(b.BlockHeader, cb.Header())
 		if err != nil {
-			return fmt.Errorf("Block header validation failed: ", err)
+			return fmt.Errorf("Block header validation failed: %v", err)
 		}
 	}
 	return nil
@@ -286,7 +286,7 @@ func (s *BlockTest) validateBlockHeader(h *btHeader, h2 *types.Header) error {
 
 	expectedNonce := mustConvertBytes(h.Nonce)
 	if !bytes.Equal(expectedNonce, h2.Nonce[:]) {
-		return fmt.Errorf("Nonce: expected: %v, decoded: %v", expectedNonce, h2.Nonce[:])
+		return fmt.Errorf("Nonce: expected: %v, decoded: %v", expectedNonce, h2.Nonce)
 	}
 
 	expectedNumber := mustConvertBigInt(h.Number, 16)
@@ -423,9 +423,8 @@ func mustConvertHeader(in btHeader) *types.Header {
 		GasLimit:    mustConvertBigInt(in.GasLimit, 16),
 		Difficulty:  mustConvertBigInt(in.Difficulty, 16),
 		Time:        mustConvertUint(in.Timestamp, 16),
+		Nonce:       types.EncodeNonce(mustConvertUint(in.Nonce, 16)),
 	}
-	// XXX cheats? :-)
-	header.SetNonce(mustConvertUint(in.Nonce, 16))
 	return header
 }
 

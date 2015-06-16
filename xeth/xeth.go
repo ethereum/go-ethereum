@@ -209,8 +209,8 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 // - could be removed in favour of mining on testdag (natspec e2e + networking)
 // + filters
 func (self *XEth) ApplyTestTxs(statedb *state.StateDB, address common.Address, txc uint64) (uint64, *XEth) {
-
-	block := self.backend.ChainManager().NewBlock(address)
+	chain := self.backend.ChainManager()
+	header := chain.CurrentBlock().Header()
 	coinbase := statedb.GetStateObject(address)
 	coinbase.SetGasLimit(big.NewInt(10000000))
 	txs := self.backend.TxPool().GetQueuedTransactions()
@@ -218,7 +218,7 @@ func (self *XEth) ApplyTestTxs(statedb *state.StateDB, address common.Address, t
 	for i := 0; i < len(txs); i++ {
 		for _, tx := range txs {
 			if tx.Nonce() == txc {
-				_, _, err := core.ApplyMessage(core.NewEnv(statedb, self.backend.ChainManager(), tx, block), tx, coinbase)
+				_, _, err := core.ApplyMessage(core.NewEnv(statedb, self.backend.ChainManager(), tx, header), tx, coinbase)
 				if err != nil {
 					panic(err)
 				}
@@ -845,8 +845,8 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		msg.gasPrice = self.DefaultGasPrice()
 	}
 
-	block := self.CurrentBlock()
-	vmenv := core.NewEnv(statedb, self.backend.ChainManager(), msg, block)
+	header := self.CurrentBlock().Header()
+	vmenv := core.NewEnv(statedb, self.backend.ChainManager(), msg, header)
 
 	res, gas, err := core.ApplyMessage(vmenv, msg, from)
 	return common.ToHex(res), gas.String(), err
