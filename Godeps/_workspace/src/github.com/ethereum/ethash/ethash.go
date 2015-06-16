@@ -8,7 +8,6 @@ int ethashGoCallback_cgo(unsigned);
 import "C"
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -122,7 +121,7 @@ func (l *Light) Verify(block pow.Block) bool {
 	}
 
 	// avoid mixdigest malleability as it's not included in a block's "hashNononce"
-	if !bytes.Equal(block.MixDigest().Bytes(), C.GoBytes(unsafe.Pointer(&ret.mix_hash), C.int(32))) {
+	if block.MixDigest() != h256ToHash(ret.mix_hash) {
 		return false
 	}
 
