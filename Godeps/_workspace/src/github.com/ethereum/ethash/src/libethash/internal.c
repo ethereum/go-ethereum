@@ -364,6 +364,7 @@ static bool ethash_mmap(struct ethash_full* ret, FILE* f)
 {
 	int fd;
 	char* mmapped_data;
+	errno = 0;
 	ret->file = f;
 	if ((fd = ethash_fileno(ret->file)) == -1) {
 		return false;
@@ -400,38 +401,48 @@ ethash_full_t ethash_full_new_internal(
 	ret->file_size = (size_t)full_size;
 	switch (ethash_io_prepare(dirname, seed_hash, &f, (size_t)full_size, false)) {
 	case ETHASH_IO_FAIL:
+		// ethash_io_prepare will do all ETHASH_CRITICAL() logging in fail case
 		goto fail_free_full;
 	case ETHASH_IO_MEMO_MATCH:
 		if (!ethash_mmap(ret, f)) {
+			ETHASH_CRITICAL("mmap failure()");
 			goto fail_close_file;
 		}
 		return ret;
 	case ETHASH_IO_MEMO_SIZE_MISMATCH:
 		// if a DAG of same filename but unexpected size is found, silently force new file creation
 		if (ethash_io_prepare(dirname, seed_hash, &f, (size_t)full_size, true) != ETHASH_IO_MEMO_MISMATCH) {
+			ETHASH_CRITICAL("Could not recreate DAG file after finding existing DAG with unexpected size.");
 			goto fail_free_full;
 		}
 		// fallthrough to the mismatch case here, DO NOT go through match
 	case ETHASH_IO_MEMO_MISMATCH:
 		if (!ethash_mmap(ret, f)) {
+			ETHASH_CRITICAL("mmap failure()");
 			goto fail_close_file;
 		}
 		break;
 	}
 
 	if (!ethash_compute_full_data(ret->data, full_size, light, callback)) {
+		ETHASH_CRITICAL("Failure at computing DAG data.");
 		goto fail_free_full_data;
 	}
 
 	// after the DAG has been filled then we finalize it by writting the magic number at the beginning
 	if (fseek(f, 0, SEEK_SET) != 0) {
+		ETHASH_CRITICAL("Could not seek to DAG file start to write magic number.");
 		goto fail_free_full_data;
 	}
 	uint64_t const magic_num = ETHASH_DAG_MAGIC_NUM;
 	if (fwrite(&magic_num, ETHASH_DAG_MAGIC_NUM_SIZE, 1, f) != 1) {
+		ETHASH_CRITICAL("Could not write magic number to DAG's beginning.");
 		goto fail_free_full_data;
 	}
-	fflush(f); // make sure the magic number IS there
+	if (fflush(f) != 0) {// make sure the magic number IS there
+		ETHASH_CRITICAL("Could not flush memory mapped data to DAG file. Insufficient space?");
+		goto fail_free_full_data;
+	}
 	return ret;
 
 fail_free_full_data:
