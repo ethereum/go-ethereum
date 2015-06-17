@@ -749,22 +749,21 @@ func TestHashAttackerDropping(t *testing.T) {
 		result error
 		drop   bool
 	}{
-		{nil, false},                  // Sync succeeded, all is well
-		{errBusy, false},              // Sync is already in progress, no problem
-		{errUnknownPeer, false},       // Peer is unknown, was already dropped, don't double drop
-		{errBadPeer, true},            // Peer was deemed bad for some reason, drop it
-		{errStallingPeer, true},       // Peer was detected to be stalling, drop it
-		{errBannedHead, true},         // Peer's head hash is a known bad hash, drop it
-		{errNoPeers, false},           // No peers to download from, soft race, no issue
-		{errPendingQueue, false},      // There are blocks still cached, wait to exhaust, no issue
-		{errTimeout, true},            // No hashes received in due time, drop the peer
-		{errEmptyHashSet, true},       // No hashes were returned as a response, drop as it's a dead end
-		{errPeersUnavailable, true},   // Nobody had the advertised blocks, drop the advertiser
-		{errInvalidChain, true},       // Hash chain was detected as invalid, definitely drop
-		{errCrossCheckFailed, true},   // Hash-origin failed to pass a block cross check, drop
-		{errCancelHashFetch, false},   // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelBlockFetch, false},  // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelChainImport, false}, // Synchronisation was canceled, origin may be innocent, don't drop
+		{nil, false},                 // Sync succeeded, all is well
+		{errBusy, false},             // Sync is already in progress, no problem
+		{errUnknownPeer, false},      // Peer is unknown, was already dropped, don't double drop
+		{errBadPeer, true},           // Peer was deemed bad for some reason, drop it
+		{errStallingPeer, true},      // Peer was detected to be stalling, drop it
+		{errBannedHead, true},        // Peer's head hash is a known bad hash, drop it
+		{errNoPeers, false},          // No peers to download from, soft race, no issue
+		{errPendingQueue, false},     // There are blocks still cached, wait to exhaust, no issue
+		{errTimeout, true},           // No hashes received in due time, drop the peer
+		{errEmptyHashSet, true},      // No hashes were returned as a response, drop as it's a dead end
+		{errPeersUnavailable, true},  // Nobody had the advertised blocks, drop the advertiser
+		{errInvalidChain, true},      // Hash chain was detected as invalid, definitely drop
+		{errCrossCheckFailed, true},  // Hash-origin failed to pass a block cross check, drop
+		{errCancelHashFetch, false},  // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelBlockFetch, false}, // Synchronisation was canceled, origin may be innocent, don't drop
 	}
 	// Run the tests and check disconnection status
 	tester := newTester()

@@ -33,23 +33,22 @@ var (
 )
 
 var (
-	errBusy              = errors.New("busy")
-	errUnknownPeer       = errors.New("peer is unknown or unhealthy")
-	errBadPeer           = errors.New("action from bad peer ignored")
-	errStallingPeer      = errors.New("peer is stalling")
-	errBannedHead        = errors.New("peer head hash already banned")
-	errNoPeers           = errors.New("no peers to keep download active")
-	errPendingQueue      = errors.New("pending items in queue")
-	errTimeout           = errors.New("timeout")
-	errEmptyHashSet      = errors.New("empty hash set by peer")
-	errPeersUnavailable  = errors.New("no peers available or all peers tried for block download process")
-	errAlreadyInPool     = errors.New("hash already in pool")
-	errInvalidChain      = errors.New("retrieved hash chain is invalid")
-	errCrossCheckFailed  = errors.New("block cross-check failed")
-	errCancelHashFetch   = errors.New("hash fetching canceled (requested)")
-	errCancelBlockFetch  = errors.New("block downloading canceled (requested)")
-	errCancelChainImport = errors.New("chain importing canceled (requested)")
-	errNoSyncActive      = errors.New("no sync active")
+	errBusy             = errors.New("busy")
+	errUnknownPeer      = errors.New("peer is unknown or unhealthy")
+	errBadPeer          = errors.New("action from bad peer ignored")
+	errStallingPeer     = errors.New("peer is stalling")
+	errBannedHead       = errors.New("peer head hash already banned")
+	errNoPeers          = errors.New("no peers to keep download active")
+	errPendingQueue     = errors.New("pending items in queue")
+	errTimeout          = errors.New("timeout")
+	errEmptyHashSet     = errors.New("empty hash set by peer")
+	errPeersUnavailable = errors.New("no peers available or all peers tried for block download process")
+	errAlreadyInPool    = errors.New("hash already in pool")
+	errInvalidChain     = errors.New("retrieved hash chain is invalid")
+	errCrossCheckFailed = errors.New("block cross-check failed")
+	errCancelHashFetch  = errors.New("hash fetching canceled (requested)")
+	errCancelBlockFetch = errors.New("block downloading canceled (requested)")
+	errNoSyncActive     = errors.New("no sync active")
 )
 
 // hashCheckFn is a callback type for verifying a hash's presence in the local chain.
@@ -719,7 +718,7 @@ func (d *Downloader) banBlocks(peerId string, head common.Hash) error {
 //       between these state changes, a block may have arrived, but a processing
 //       attempt denied, so we need to re-enter to ensure the block isn't left
 //       to idle in the cache.
-func (d *Downloader) process() (err error) {
+func (d *Downloader) process() {
 	// Make sure only one goroutine is ever allowed to process blocks at once
 	if !atomic.CompareAndSwapInt32(&d.processing, 0, 1) {
 		return
@@ -729,8 +728,8 @@ func (d *Downloader) process() (err error) {
 	// the fresh blocks might have been rejected entry to to this present thread
 	// not yet releasing the `processing` state.
 	defer func() {
-		if err == nil && d.queue.GetHeadBlock() != nil {
-			err = d.process()
+		if atomic.LoadInt32(&d.interrupt) == 0 && d.queue.GetHeadBlock() != nil {
+			d.process()
 		}
 	}()
 	// Release the lock upon exit (note, before checking for reentry!), and set
@@ -748,7 +747,7 @@ func (d *Downloader) process() (err error) {
 		// Fetch the next batch of blocks
 		blocks := d.queue.TakeBlocks()
 		if len(blocks) == 0 {
-			return nil
+			return
 		}
 		// Reset the import statistics
 		d.importLock.Lock()
@@ -762,7 +761,7 @@ func (d *Downloader) process() (err error) {
 		for len(blocks) != 0 {
 			// Check for any termination requests
 			if atomic.LoadInt32(&d.interrupt) == 1 {
-				return errCancelChainImport
+				return
 			}
 			// Retrieve the first batch of blocks to insert
 			max := int(math.Min(float64(len(blocks)), float64(maxBlockProcess)))
@@ -776,7 +775,7 @@ func (d *Downloader) process() (err error) {
 				glog.V(logger.Debug).Infof("Block #%d import failed: %v", raw[index].NumberU64(), err)
 				d.dropPeer(blocks[index].OriginPeer)
 				d.cancel()
-				return errCancelChainImport
+				return
 			}
 			blocks = blocks[max:]
 		}
