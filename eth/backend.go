@@ -464,10 +464,9 @@ func (s *Ethereum) StartMining(threads int) error {
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	eb = s.etherbase
 	if (eb == common.Address{}) {
-		err = fmt.Errorf("no accounts found")
-		return eb, err
+		err = fmt.Errorf("etherbase address must be explicitly specified")
 	}
-	return eb, nil
+	return
 }
 
 func (s *Ethereum) StopMining()         { s.miner.Stop() }
