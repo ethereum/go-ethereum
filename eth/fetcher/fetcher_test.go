@@ -91,9 +91,15 @@ func (f *fetcherTester) hasBlock(hash common.Hash) bool {
 
 // importBlock injects a new blocks into the simulated chain.
 func (f *fetcherTester) importBlock(peer string, block *types.Block) error {
+	// Make sure the parent in known
 	if _, ok := f.ownBlocks[block.ParentHash()]; !ok {
 		return errors.New("unknown parent")
 	}
+	// Discard any new blocks if the same height already exists
+	if block.NumberU64() <= f.ownBlocks[f.ownHashes[len(f.ownHashes)-1]].NumberU64() {
+		return nil
+	}
+	// Otherwise build our current chain
 	f.ownHashes = append(f.ownHashes, block.Hash())
 	f.ownBlocks[block.Hash()] = block
 	return nil
@@ -361,5 +367,56 @@ func TestDistantDiscarding(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	if !tester.fetcher.queue.Empty() {
 		t.Fatalf("fetcher queued future block")
+	}
+}
+
+// Tests that if multiple uncles (i.e. blocks at the same height) are queued for
+// importing, then they will get inserted in phases, previous heights needing to
+// complete before the next numbered blocks can begin.
+func TestCompetingImports(t *testing.T) {
+	// Generate a few soft-forks for concurrent imports
+	hashesA := createHashes(16, knownHash)
+	hashesB := createHashes(16, knownHash)
+	hashesC := createHashes(16, knownHash)
+
+	blocksA := createBlocksFromHashes(hashesA)
+	blocksB := createBlocksFromHashes(hashesB)
+	blocksC := createBlocksFromHashes(hashesC)
+
+	// Create a tester, and override the import to check number reversals
+	tester := newTester()
+
+	first := int32(1)
+	height := uint64(1)
+	tester.fetcher.importBlock = func(peer string, block *types.Block) error {
+		// Check for any phase reordering
+		if prev := atomic.LoadUint64(&height); block.NumberU64() < prev {
+			t.Errorf("phase reversal: have %v, want %v", block.NumberU64(), prev)
+		}
+		atomic.StoreUint64(&height, block.NumberU64())
+
+		// Sleep a bit on the first import not to race with the enqueues
+		if atomic.CompareAndSwapInt32(&first, 1, 0) {
+			time.Sleep(50 * time.Millisecond)
+		}
+		return tester.importBlock(peer, block)
+	}
+	// Queue up everything but with a missing link
+	for i := 0; i < len(hashesA)-2; i++ {
+		tester.fetcher.Enqueue("chain A", blocksA[hashesA[i]])
+		tester.fetcher.Enqueue("chain B", blocksB[hashesB[i]])
+		tester.fetcher.Enqueue("chain C", blocksC[hashesC[i]])
+	}
+	// Add the three missing links, and wait for a full import
+	tester.fetcher.Enqueue("chain A", blocksA[hashesA[len(hashesA)-2]])
+	tester.fetcher.Enqueue("chain B", blocksB[hashesB[len(hashesB)-2]])
+	tester.fetcher.Enqueue("chain C", blocksC[hashesC[len(hashesC)-2]])
+
+	start := time.Now()
+	for len(tester.ownHashes) != len(hashesA) && time.Since(start) < time.Second {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(tester.ownHashes) != len(hashesA) {
+		t.Fatalf("chain length mismatch: have %v, want %v", len(tester.ownHashes), len(hashesA))
 	}
 }
