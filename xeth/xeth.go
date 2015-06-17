@@ -488,7 +488,7 @@ func (self *XEth) NumberToHuman(balance string) string {
 }
 
 func (self *XEth) StorageAt(addr, storageAddr string) string {
-	return common.ToHex(self.State().state.GetState(common.HexToAddress(addr), common.HexToHash(storageAddr)))
+	return self.State().state.GetState(common.HexToAddress(addr), common.HexToHash(storageAddr)).Hex()
 }
 
 func (self *XEth) BalanceAt(addr string) string {
