@@ -548,6 +548,7 @@ out:
 					peer.Demote()
 					peer.SetIdle()
 					glog.V(logger.Detail).Infof("%s: delivery partially failed: %v", peer, err)
+					go d.process()
 				}
 			}
 
