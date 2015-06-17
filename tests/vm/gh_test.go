@@ -97,7 +97,7 @@ func RunVmTest(p string, t *testing.T) {
 			obj := StateObjectFromAccount(db, addr, account)
 			statedb.SetStateObject(obj)
 			for a, v := range account.Storage {
-				obj.SetState(common.HexToHash(a), common.NewValue(helper.FromHex(v)))
+				obj.SetState(common.HexToHash(a), common.HexToHash(v))
 			}
 		}
 
@@ -168,11 +168,11 @@ func RunVmTest(p string, t *testing.T) {
 			}
 
 			for addr, value := range account.Storage {
-				v := obj.GetState(common.HexToHash(addr)).Bytes()
-				vexp := helper.FromHex(value)
+				v := obj.GetState(common.HexToHash(addr))
+				vexp := common.HexToHash(value)
 
-				if bytes.Compare(v, vexp) != 0 {
-					t.Errorf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address().Bytes()[0:4], addr, vexp, v, common.BigD(vexp), common.BigD(v))
+				if v != vexp {
+					t.Errorf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address().Bytes()[0:4], addr, vexp, v, vexp.Big(), v.Big())
 				}
 			}
 		}

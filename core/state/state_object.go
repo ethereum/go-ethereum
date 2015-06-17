@@ -19,11 +19,11 @@ func (self Code) String() string {
 	return string(self) //strings.Join(Disassemble(self), " ")
 }
 
-type Storage map[string]*common.Value
+type Storage map[string]common.Hash
 
 func (self Storage) String() (str string) {
 	for key, value := range self {
-		str += fmt.Sprintf("%X : %X\n", key, value.Bytes())
+		str += fmt.Sprintf("%X : %X\n", key, value)
 	}
 
 	return
@@ -32,7 +32,6 @@ func (self Storage) String() (str string) {
 func (self Storage) Copy() Storage {
 	cpy := make(Storage)
 	for key, value := range self {
-		// XXX Do we need a 'value' copy or is this sufficient?
 		cpy[key] = value
 	}
 
@@ -112,7 +111,7 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db common.Data
 	object.balance = extobject.Balance
 	object.codeHash = extobject.CodeHash
 	object.State = New(extobject.Root, db)
-	object.storage = make(map[string]*common.Value)
+	object.storage = make(map[string]common.Hash)
 	object.gasPool = new(big.Int)
 	object.prepaid = new(big.Int)
 	object.code, _ = db.Get(extobject.CodeHash)
@@ -129,35 +128,29 @@ func (self *StateObject) MarkForDeletion() {
 	}
 }
 
-func (c *StateObject) getAddr(addr common.Hash) *common.Value {
-	return common.NewValueFromBytes([]byte(c.State.trie.Get(addr[:])))
+func (c *StateObject) getAddr(addr common.Hash) (ret common.Hash) {
+	return common.BytesToHash(common.NewValueFromBytes([]byte(c.State.trie.Get(addr[:]))).Bytes())
 }
 
-func (c *StateObject) setAddr(addr []byte, value interface{}) {
-	c.State.trie.Update(addr, common.Encode(value))
-}
-
-func (self *StateObject) GetStorage(key *big.Int) *common.Value {
-	fmt.Printf("%v: get %v %v", self.address.Hex(), key)
-	return self.GetState(common.BytesToHash(key.Bytes()))
-}
-
-func (self *StateObject) SetStorage(key *big.Int, value *common.Value) {
-	fmt.Printf("%v: set %v -> %v", self.address.Hex(), key, value)
-	self.SetState(common.BytesToHash(key.Bytes()), value)
+func (c *StateObject) setAddr(addr []byte, value common.Hash) {
+	v, err := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
+	if err != nil {
+		// if RLPing failed we better panic and not fail silently. This would be considered a consensus issue
+		panic(err)
+	}
+	c.State.trie.Update(addr, v)
 }
 
 func (self *StateObject) Storage() Storage {
 	return self.storage
 }
 
-func (self *StateObject) GetState(key common.Hash) *common.Value {
+func (self *StateObject) GetState(key common.Hash) common.Hash {
 	strkey := key.Str()
-	value := self.storage[strkey]
-	if value == nil {
+	value, exists := self.storage[strkey]
+	if !exists {
 		value = self.getAddr(key)
-
-		if !value.IsNil() {
+		if (value != common.Hash{}) {
 			self.storage[strkey] = value
 		}
 	}
@@ -165,14 +158,14 @@ func (self *StateObject) GetState(key common.Hash) *common.Value {
 	return value
 }
 
-func (self *StateObject) SetState(k common.Hash, value *common.Value) {
-	self.storage[k.Str()] = value.Copy()
+func (self *StateObject) SetState(k, value common.Hash) {
+	self.storage[k.Str()] = value
 	self.dirty = true
 }
 
 func (self *StateObject) Sync() {
 	for key, value := range self.storage {
-		if value.Len() == 0 {
+		if (value == common.Hash{}) {
 			self.State.trie.Delete([]byte(key))
 			continue
 		}
@@ -370,7 +363,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 	c.nonce = decoder.Get(0).Uint()
 	c.balance = decoder.Get(1).BigInt()
 	c.State = New(common.BytesToHash(decoder.Get(2).Bytes()), c.db) //New(trie.New(common.Config.Db, decoder.Get(2).Interface()))
-	c.storage = make(map[string]*common.Value)
+	c.storage = make(map[string]common.Hash)
 	c.gasPool = new(big.Int)
 
 	c.codeHash = decoder.Get(3).Bytes()

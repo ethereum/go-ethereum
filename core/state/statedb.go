@@ -103,13 +103,13 @@ func (self *StateDB) GetCode(addr common.Address) []byte {
 	return nil
 }
 
-func (self *StateDB) GetState(a common.Address, b common.Hash) []byte {
+func (self *StateDB) GetState(a common.Address, b common.Hash) common.Hash {
 	stateObject := self.GetStateObject(a)
 	if stateObject != nil {
-		return stateObject.GetState(b).Bytes()
+		return stateObject.GetState(b)
 	}
 
-	return nil
+	return common.Hash{}
 }
 
 func (self *StateDB) IsDeleted(addr common.Address) bool {
@@ -145,10 +145,10 @@ func (self *StateDB) SetCode(addr common.Address, code []byte) {
 	}
 }
 
-func (self *StateDB) SetState(addr common.Address, key common.Hash, value interface{}) {
+func (self *StateDB) SetState(addr common.Address, key common.Hash, value common.Hash) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.SetState(key, common.NewValue(value))
+		stateObject.SetState(key, value)
 	}
 }
 
