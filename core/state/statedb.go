@@ -259,7 +259,7 @@ func (s *StateDB) Cmp(other *StateDB) bool {
 
 func (self *StateDB) Copy() *StateDB {
 	state := New(common.Hash{}, self.db)
-	state.trie = self.trie.Copy()
+	state.trie = self.trie
 	for k, stateObject := range self.stateObjects {
 		state.stateObjects[k] = stateObject.Copy()
 	}
