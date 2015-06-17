@@ -708,6 +708,40 @@ func TestBannedChainMemoryExhaustionAttack(t *testing.T) {
 	}
 }
 
+// Tests a corner case (potential attack) where a peer delivers both good as well
+// as unrequested blocks to a hash request. This may trigger a different code
+// path than the fully correct or fully invalid delivery, potentially causing
+// internal state problems
+//
+// No, don't delete this test, it actually did happen!
+func TestOverlappingDeliveryAttack(t *testing.T) {
+	// Create an arbitrary batch of blocks ( < cache-size not to block)
+	targetBlocks := blockCacheLimit - 23
+	hashes := createHashes(targetBlocks, knownHash)
+	blocks := createBlocksFromHashes(hashes)
+
+	// Register an attacker that always returns non-requested blocks too
+	tester := newTester()
+	tester.newPeer("attack", hashes, blocks)
+
+	rawGetBlocks := tester.downloader.peers.Peer("attack").getBlocks
+	tester.downloader.peers.Peer("attack").getBlocks = func(request []common.Hash) error {
+		// Add a non requested hash the screw the delivery (genesis should be fine)
+		return rawGetBlocks(append(request, hashes[0]))
+	}
+	// Test that synchronisation can complete, check for import success
+	if err := tester.sync("attack"); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	start := time.Now()
+	for len(tester.ownHashes) != len(hashes) && time.Since(start) < time.Second {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(tester.ownHashes) != len(hashes) {
+		t.Fatalf("chain length mismatch: have %v, want %v", len(tester.ownHashes), len(hashes))
+	}
+}
+
 // Tests that misbehaving peers are disconnected, whilst behaving ones are not.
 func TestHashAttackerDropping(t *testing.T) {
 	// Define the disconnection requirement for individual hash fetch errors
