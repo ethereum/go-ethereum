@@ -690,7 +690,7 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 			// 0 => non 0
 			g = params.SstoreSetGas
 		} else if len(val) > 0 && len(y.Bytes()) == 0 {
-			statedb.Refund(self.env.Origin(), params.SstoreRefundGas)
+			statedb.Refund(params.SstoreRefundGas)
 
 			g = params.SstoreClearGas
 		} else {
@@ -700,7 +700,7 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		gas.Set(g)
 	case SUICIDE:
 		if !statedb.IsDeleted(context.Address()) {
-			statedb.Refund(self.env.Origin(), params.SuicideRefundGas)
+			statedb.Refund(params.SuicideRefundGas)
 		}
 	case MLOAD:
 		newMemSize = calcMemSize(stack.peek(), u256(32))

@@ -21,7 +21,7 @@ type StateDB struct {
 
 	stateObjects map[string]*StateObject
 
-	refund map[string]*big.Int
+	refund *big.Int
 
 	thash, bhash common.Hash
 	txIndex      int
@@ -31,7 +31,7 @@ type StateDB struct {
 // Create a new state from a given trie
 func New(root common.Hash, db common.Database) *StateDB {
 	trie := trie.NewSecure(root[:], db)
-	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: make(map[string]*big.Int), logs: make(map[common.Hash]Logs)}
+	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: new(big.Int), logs: make(map[common.Hash]Logs)}
 }
 
 func (self *StateDB) PrintRoot() {
@@ -63,12 +63,8 @@ func (self *StateDB) Logs() Logs {
 	return logs
 }
 
-func (self *StateDB) Refund(address common.Address, gas *big.Int) {
-	addr := address.Str()
-	if self.refund[addr] == nil {
-		self.refund[addr] = new(big.Int)
-	}
-	self.refund[addr].Add(self.refund[addr], gas)
+func (self *StateDB) Refund(gas *big.Int) {
+	self.refund.Add(self.refund, gas)
 }
 
 /*
@@ -268,9 +264,7 @@ func (self *StateDB) Copy() *StateDB {
 		state.stateObjects[k] = stateObject.Copy()
 	}
 
-	for addr, refund := range self.refund {
-		state.refund[addr] = new(big.Int).Set(refund)
-	}
+	state.refund.Set(self.refund)
 
 	for hash, logs := range self.logs {
 		state.logs[hash] = make(Logs, len(logs))
@@ -330,15 +324,15 @@ func (s *StateDB) Sync() {
 
 func (self *StateDB) Empty() {
 	self.stateObjects = make(map[string]*StateObject)
-	self.refund = make(map[string]*big.Int)
+	self.refund = new(big.Int)
 }
 
-func (self *StateDB) Refunds() map[string]*big.Int {
+func (self *StateDB) Refunds() *big.Int {
 	return self.refund
 }
 
 func (self *StateDB) Update() {
-	self.refund = make(map[string]*big.Int)
+	self.refund = new(big.Int)
 
 	for _, stateObject := range self.stateObjects {
 		if stateObject.dirty {

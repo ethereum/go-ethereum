@@ -241,11 +241,9 @@ func (self *StateTransition) refundGas() {
 	sender.AddBalance(remaining)
 
 	uhalf := new(big.Int).Div(self.gasUsed(), common.Big2)
-	for addr, ref := range self.state.Refunds() {
-		refund := common.BigMin(uhalf, ref)
-		self.gas.Add(self.gas, refund)
-		self.state.AddBalance(common.StringToAddress(addr), refund.Mul(refund, self.msg.GasPrice()))
-	}
+	refund := common.BigMin(uhalf, self.state.Refunds())
+	self.gas.Add(self.gas, refund)
+	self.state.AddBalance(sender.Address(), refund.Mul(refund, self.msg.GasPrice()))
 
 	coinbase.RefundGas(self.gas, self.msg.GasPrice())
 }
