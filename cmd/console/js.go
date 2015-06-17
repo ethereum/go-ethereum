@@ -30,6 +30,7 @@ import (
 
 	"sort"
 
+	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common/docserver"
 	re "github.com/ethereum/go-ethereum/jsre"
@@ -329,7 +330,29 @@ func (self *jsre) welcome(ipcpath string) {
 	}
 }
 
-func (self *jsre) interactive() {
+func (self *jsre) batch(args cli.Args) {
+	statement := strings.Join(args, " ")
+	val, err := self.re.Run(statement)
+
+	if err != nil {
+		fmt.Printf("error: %v", err)
+	} else if val.IsDefined() && val.IsObject() {
+		obj, _ := self.re.Get("ret_result")
+		fmt.Printf("%v", obj)
+	} else if val.IsDefined() {
+		fmt.Printf("%v", val)
+	}
+
+	if self.atexit != nil {
+		self.atexit()
+	}
+
+	self.re.Stop(false)
+}
+
+func (self *jsre) interactive(ipcpath string) {
+	self.welcome(ipcpath)
+
 	// Read input lines.
 	prompt := make(chan string)
 	inputln := make(chan string)
