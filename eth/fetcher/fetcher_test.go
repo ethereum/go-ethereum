@@ -80,7 +80,7 @@ func newTester() *fetcherTester {
 		hashes: []common.Hash{knownHash},
 		blocks: map[common.Hash]*types.Block{knownHash: genesis},
 	}
-	tester.fetcher = New(tester.hasBlock, tester.importBlock, tester.chainHeight)
+	tester.fetcher = New(tester.hasBlock, tester.broadcastBlock, tester.chainHeight, tester.insertChain, tester.dropPeer)
 	tester.fetcher.Start()
 
 	return tester
@@ -95,23 +95,8 @@ func (f *fetcherTester) hasBlock(hash common.Hash) bool {
 	return ok
 }
 
-// importBlock injects a new blocks into the simulated chain.
-func (f *fetcherTester) importBlock(peer string, block *types.Block) error {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
-	// Make sure the parent in known
-	if _, ok := f.blocks[block.ParentHash()]; !ok {
-		return errors.New("unknown parent")
-	}
-	// Discard any new blocks if the same height already exists
-	if block.NumberU64() <= f.blocks[f.hashes[len(f.hashes)-1]].NumberU64() {
-		return nil
-	}
-	// Otherwise build our current chain
-	f.hashes = append(f.hashes, block.Hash())
-	f.blocks[block.Hash()] = block
-	return nil
+// broadcastBlock is a nop placeholder for the block broadcasting.
+func (f *fetcherTester) broadcastBlock(block *types.Block) {
 }
 
 // chainHeight retrieves the current height (block number) of the chain.
@@ -120,6 +105,31 @@ func (f *fetcherTester) chainHeight() uint64 {
 	defer f.lock.RUnlock()
 
 	return f.blocks[f.hashes[len(f.hashes)-1]].NumberU64()
+}
+
+// insertChain injects a new blocks into the simulated chain.
+func (f *fetcherTester) insertChain(blocks types.Blocks) (int, error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	for i, block := range blocks {
+		// Make sure the parent in known
+		if _, ok := f.blocks[block.ParentHash()]; !ok {
+			return i, errors.New("unknown parent")
+		}
+		// Discard any new blocks if the same height already exists
+		if block.NumberU64() <= f.blocks[f.hashes[len(f.hashes)-1]].NumberU64() {
+			return i, nil
+		}
+		// Otherwise build our current chain
+		f.hashes = append(f.hashes, block.Hash())
+		f.blocks[block.Hash()] = block
+	}
+	return 0, nil
+}
+
+// dropPeer is a nop placeholder for the peer removal.
+func (f *fetcherTester) dropPeer(peer string) {
 }
 
 // peerFetcher retrieves a fetcher associated with a simulated peer.
@@ -330,9 +340,9 @@ func TestImportDeduplication(t *testing.T) {
 	fetcher := tester.makeFetcher(blocks)
 
 	counter := uint32(0)
-	tester.fetcher.importBlock = func(peer string, block *types.Block) error {
-		atomic.AddUint32(&counter, 1)
-		return tester.importBlock(peer, block)
+	tester.fetcher.insertChain = func(blocks types.Blocks) (int, error) {
+		atomic.AddUint32(&counter, uint32(len(blocks)))
+		return tester.insertChain(blocks)
 	}
 	// Announce the duplicating block, wait for retrieval, and also propagate directly
 	tester.fetcher.Notify("valid", hashes[0], time.Now().Add(-arriveTimeout), fetcher)
@@ -400,18 +410,18 @@ func TestCompetingImports(t *testing.T) {
 
 	first := int32(1)
 	height := uint64(1)
-	tester.fetcher.importBlock = func(peer string, block *types.Block) error {
+	tester.fetcher.insertChain = func(blocks types.Blocks) (int, error) {
 		// Check for any phase reordering
-		if prev := atomic.LoadUint64(&height); block.NumberU64() < prev {
-			t.Errorf("phase reversal: have %v, want %v", block.NumberU64(), prev)
+		if prev := atomic.LoadUint64(&height); blocks[0].NumberU64() < prev {
+			t.Errorf("phase reversal: have %v, want %v", blocks[0].NumberU64(), prev)
 		}
-		atomic.StoreUint64(&height, block.NumberU64())
+		atomic.StoreUint64(&height, blocks[0].NumberU64())
 
 		// Sleep a bit on the first import not to race with the enqueues
 		if atomic.CompareAndSwapInt32(&first, 1, 0) {
 			time.Sleep(50 * time.Millisecond)
 		}
-		return tester.importBlock(peer, block)
+		return tester.insertChain(blocks)
 	}
 	// Queue up everything but with a missing link
 	for i := 0; i < len(hashesA)-2; i++ {
