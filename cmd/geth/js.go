@@ -279,57 +279,6 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 	return nil
 }
 
-/*
-func (js *jsre) apiBindings(ipcpath string, f xeth.Frontend) {
-	xe := xeth.New(js.ethereum, f)
-	apiNames, err := js.suportedApis(ipcpath)
-	if err != nil {
-		return
-	}
-
-	ethApi := rpc.NewEthereumApi(xe)
-	jeth := rpc.NewJeth(ethApi, js.re, ipcpath)
-
-	js.re.Set("jeth", struct{}{})
-	t, _ := js.re.Get("jeth")
-	jethObj := t.Object()
-
-	jethObj.Set("send", jeth.Send)
-	jethObj.Set("sendAsync", jeth.Send)
-
-	err := js.re.Compile("bignumber.js", re.BigNumber_JS)
-	if err != nil {
-		utils.Fatalf("Error loading bignumber.js: %v", err)
-	}
-
-	err = js.re.Compile("ethereum.js", re.Web3_JS)
-	if err != nil {
-		utils.Fatalf("Error loading ethereum.js: %v", err)
-	}
-
-	_, err = js.re.Eval("var web3 = require('web3');")
-	if err != nil {
-		utils.Fatalf("Error requiring web3: %v", err)
-	}
-
-	_, err = js.re.Eval("web3.setProvider(jeth)")
-	if err != nil {
-		utils.Fatalf("Error setting web3 provider: %v", err)
-	}
-	_, err = js.re.Eval(`
-var eth = web3.eth;
-var shh = web3.shh;
-var db  = web3.db;
-var net = web3.net;
-  `)
-	if err != nil {
-		utils.Fatalf("Error setting namespaces: %v", err)
-	}
-
-	js.re.Eval(globalRegistrar + "registrar = GlobalRegistrar.at(\"" + globalRegistrarAddr + "\");")
-}
-*/
-
 var ds, _ = docserver.New("/")
 
 func (self *jsre) ConfirmTransaction(tx string) bool {

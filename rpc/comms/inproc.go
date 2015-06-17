@@ -1,21 +1,22 @@
 package comms
 
 import (
-	"github.com/ethereum/go-ethereum/rpc/api"
-	"github.com/ethereum/go-ethereum/rpc/shared"
 	"fmt"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/xeth"
+
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/rpc/api"
+	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
 type InProcClient struct {
-	api api.EthereumApi
-	codec codec.Codec
-	lastId interface{}
+	api         api.EthereumApi
+	codec       codec.Codec
+	lastId      interface{}
 	lastJsonrpc string
-	lastErr error
-	lastRes interface{}
+	lastErr     error
+	lastRes     interface{}
 }
 
 // Create a new in process client
@@ -49,5 +50,4 @@ func (self *InProcClient) Send(req interface{}) error {
 
 func (self *InProcClient) Recv() (interface{}, error) {
 	return self.lastRes, self.lastErr
-	//return *shared.NewRpcResponse(self.lastId, self.lastJsonrpc, self.lastRes, self.lastErr), nil
 }
