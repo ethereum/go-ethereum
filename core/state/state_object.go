@@ -40,9 +40,8 @@ func (self Storage) Copy() Storage {
 
 type StateObject struct {
 	// State database for storing state changes
-	db common.Database
-	// The state object
-	State *StateDB
+	db   common.Database
+	trie *trie.SecureTrie
 
 	// Address belonging to this account
 	address common.Address
@@ -75,7 +74,6 @@ type StateObject struct {
 
 func (self *StateObject) Reset() {
 	self.storage = make(Storage)
-	self.State.Reset()
 }
 
 func NewStateObject(address common.Address, db common.Database) *StateObject {
@@ -83,7 +81,7 @@ func NewStateObject(address common.Address, db common.Database) *StateObject {
 	//address := common.ToAddress(addr)
 
 	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
-	object.State = New(common.Hash{}, db) //New(trie.New(common.Config.Db, ""))
+	object.trie = trie.NewSecure((common.Hash{}).Bytes(), db)
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
 	object.prepaid = new(big.Int)
@@ -110,7 +108,7 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db common.Data
 	object.nonce = extobject.Nonce
 	object.balance = extobject.Balance
 	object.codeHash = extobject.CodeHash
-	object.State = New(extobject.Root, db)
+	object.trie = trie.NewSecure(extobject.Root[:], db)
 	object.storage = make(map[string]common.Hash)
 	object.gasPool = new(big.Int)
 	object.prepaid = new(big.Int)
@@ -130,7 +128,7 @@ func (self *StateObject) MarkForDeletion() {
 
 func (c *StateObject) getAddr(addr common.Hash) common.Hash {
 	var ret []byte
-	rlp.DecodeBytes(c.State.trie.Get(addr[:]), &ret)
+	rlp.DecodeBytes(c.trie.Get(addr[:]), &ret)
 	return common.BytesToHash(ret)
 }
 
@@ -140,7 +138,7 @@ func (c *StateObject) setAddr(addr []byte, value common.Hash) {
 		// if RLPing failed we better panic and not fail silently. This would be considered a consensus issue
 		panic(err)
 	}
-	c.State.trie.Update(addr, v)
+	c.trie.Update(addr, v)
 }
 
 func (self *StateObject) Storage() Storage {
@@ -165,10 +163,11 @@ func (self *StateObject) SetState(k, value common.Hash) {
 	self.dirty = true
 }
 
-func (self *StateObject) Sync() {
+// Update updates the current cached storage to the trie
+func (self *StateObject) Update() {
 	for key, value := range self.storage {
 		if (value == common.Hash{}) {
-			self.State.trie.Delete([]byte(key))
+			self.trie.Delete([]byte(key))
 			continue
 		}
 
@@ -261,9 +260,7 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.balance.Set(self.balance)
 	stateObject.codeHash = common.CopyBytes(self.codeHash)
 	stateObject.nonce = self.nonce
-	if self.State != nil {
-		stateObject.State = self.State.Copy()
-	}
+	stateObject.trie = self.trie
 	stateObject.code = common.CopyBytes(self.code)
 	stateObject.initCode = common.CopyBytes(self.initCode)
 	stateObject.storage = self.storage.Copy()
@@ -301,11 +298,11 @@ func (c *StateObject) Init() Code {
 }
 
 func (self *StateObject) Trie() *trie.SecureTrie {
-	return self.State.trie
+	return self.trie
 }
 
 func (self *StateObject) Root() []byte {
-	return self.Trie().Root()
+	return self.trie.Root()
 }
 
 func (self *StateObject) Code() []byte {
@@ -337,10 +334,10 @@ func (self *StateObject) EachStorage(cb func(key, value []byte)) {
 		cb([]byte(h), v.Bytes())
 	}
 
-	it := self.State.trie.Iterator()
+	it := self.trie.Iterator()
 	for it.Next() {
 		// ignore cached values
-		key := self.State.trie.GetKey(it.Key)
+		key := self.trie.GetKey(it.Key)
 		if _, ok := self.storage[string(key)]; !ok {
 			cb(key, it.Value)
 		}
@@ -364,7 +361,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 	decoder := common.NewValueFromBytes(data)
 	c.nonce = decoder.Get(0).Uint()
 	c.balance = decoder.Get(1).BigInt()
-	c.State = New(common.BytesToHash(decoder.Get(2).Bytes()), c.db) //New(trie.New(common.Config.Db, decoder.Get(2).Interface()))
+	c.trie = trie.NewSecure(decoder.Get(2).Bytes(), c.db)
 	c.storage = make(map[string]common.Hash)
 	c.gasPool = new(big.Int)
 

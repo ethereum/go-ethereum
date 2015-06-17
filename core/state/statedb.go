@@ -296,10 +296,6 @@ func (s *StateDB) Reset() {
 
 	// Reset all nested states
 	for _, stateObject := range s.stateObjects {
-		if stateObject.State == nil {
-			continue
-		}
-
 		stateObject.Reset()
 	}
 
@@ -310,11 +306,7 @@ func (s *StateDB) Reset() {
 func (s *StateDB) Sync() {
 	// Sync all nested states
 	for _, stateObject := range s.stateObjects {
-		if stateObject.State == nil {
-			continue
-		}
-
-		stateObject.State.Sync()
+		stateObject.trie.Commit()
 	}
 
 	s.trie.Commit()
@@ -339,7 +331,7 @@ func (self *StateDB) Update() {
 			if stateObject.remove {
 				self.DeleteStateObject(stateObject)
 			} else {
-				stateObject.Sync()
+				stateObject.Update()
 
 				self.UpdateStateObject(stateObject)
 			}
