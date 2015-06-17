@@ -246,25 +246,18 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 		return
 	}
 
-	// store the receipts
-	err = putReceipts(sm.extraDb, block.Hash(), receipts)
-	if err != nil {
-		return nil, err
-	}
-
 	// Sync the current block's state to the database
 	state.Sync()
 
-	// This puts transactions in a extra db for rpc
-	for i, tx := range block.Transactions() {
-		putTx(sm.extraDb, tx, block, uint64(i))
-	}
+	go func() {
+		// This puts transactions in a extra db for rpc
+		for i, tx := range block.Transactions() {
+			putTx(sm.extraDb, tx, block, uint64(i))
+		}
 
-	receiptsRlp := receipts.RlpEncode()
-	/*if len(receipts) > 0 {
-		glog.V(logger.Info).Infof("Saving %v receipts, rlp len is %v\n", len(receipts), len(receiptsRlp))
-	}*/
-	sm.extraDb.Put(append(receiptsPre, block.Hash().Bytes()...), receiptsRlp)
+		// store the receipts
+		putReceipts(sm.extraDb, block.Hash(), receipts)
+	}()
 
 	return state.Logs(), nil
 }
