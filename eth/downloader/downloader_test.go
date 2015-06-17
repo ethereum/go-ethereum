@@ -247,7 +247,7 @@ func TestCancel(t *testing.T) {
 	tester.newPeer("peer", hashes, blocks)
 
 	// Make sure canceling works with a pristine downloader
-	tester.downloader.Cancel()
+	tester.downloader.cancel()
 	hashCount, blockCount := tester.downloader.queue.Size()
 	if hashCount > 0 || blockCount > 0 {
 		t.Errorf("block or hash count mismatch: %d hashes, %d blocks, want 0", hashCount, blockCount)
@@ -256,7 +256,7 @@ func TestCancel(t *testing.T) {
 	if err := tester.sync("peer"); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
-	tester.downloader.Cancel()
+	tester.downloader.cancel()
 	hashCount, blockCount = tester.downloader.queue.Size()
 	if hashCount > 0 || blockCount > 0 {
 		t.Errorf("block or hash count mismatch: %d hashes, %d blocks, want 0", hashCount, blockCount)

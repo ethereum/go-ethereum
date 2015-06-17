@@ -251,7 +251,7 @@ func (pm *ProtocolManager) fetcher() {
 // downloading hashes and blocks as well as retrieving cached ones.
 func (pm *ProtocolManager) syncer() {
 	// Abort any pending syncs if we terminate
-	defer pm.downloader.Cancel()
+	defer pm.downloader.Terminate()
 
 	forceSync := time.Tick(forceSyncCycle)
 	for {
