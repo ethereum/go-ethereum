@@ -249,15 +249,13 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	// Sync the current block's state to the database
 	state.Sync()
 
-	go func() {
-		// This puts transactions in a extra db for rpc
-		for i, tx := range block.Transactions() {
-			putTx(sm.extraDb, tx, block, uint64(i))
-		}
+	// This puts transactions in a extra db for rpc
+	for i, tx := range block.Transactions() {
+		putTx(sm.extraDb, tx, block, uint64(i))
+	}
 
-		// store the receipts
-		putReceipts(sm.extraDb, block.Hash(), receipts)
-	}()
+	// store the receipts
+	putReceipts(sm.extraDb, block.Hash(), receipts)
 
 	return state.Logs(), nil
 }

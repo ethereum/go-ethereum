@@ -105,7 +105,9 @@ func (pool *TxPool) resetState() {
 		if addr, err := tx.From(); err == nil {
 			// Set the nonce. Transaction nonce can never be lower
 			// than the state nonce; validatePool took care of that.
-			pool.pendingState.SetNonce(addr, tx.Nonce())
+			if pool.pendingState.GetNonce(addr) < tx.Nonce() {
+				pool.pendingState.SetNonce(addr, tx.Nonce())
+			}
 		}
 	}
 
@@ -153,6 +155,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		return ErrNonExistentAccount
 	}
 
+	// Last but not least check for nonce errors
+	if pool.currentState().GetNonce(from) > tx.Nonce() {
+		return ErrNonce
+	}
+
 	// Check the transaction doesn't exceed the current
 	// block limit gas.
 	if pool.gasLimit().Cmp(tx.GasLimit) < 0 {
@@ -177,12 +184,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	// Should supply enough intrinsic gas
 	if tx.GasLimit.Cmp(IntrinsicGas(tx)) < 0 {
 		return ErrIntrinsicGas
-	}
-
-	// Last but not least check for nonce errors (intensive
-	// operation, saved for last)
-	if pool.currentState().GetNonce(from) > tx.Nonce() {
-		return ErrNonce
 	}
 
 	return nil
@@ -394,10 +395,13 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 
 // validatePool removes invalid and processed transactions from the main pool.
 func (pool *TxPool) validatePool() {
+	state := pool.currentState()
 	for hash, tx := range pool.pending {
-		if err := pool.validateTx(tx); err != nil {
+		from, _ := tx.From() // err already checked
+		// perform light nonce validation
+		if state.GetNonce(from) > tx.Nonce() {
 			if glog.V(logger.Core) {
-				glog.Infof("removed tx (%x) from pool: %v\n", hash[:4], err)
+				glog.Infof("removed tx (%x) from pool: low tx nonce\n", hash[:4])
 			}
 			delete(pool.pending, hash)
 		}
