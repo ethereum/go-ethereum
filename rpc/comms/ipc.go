@@ -10,19 +10,19 @@ type IpcConfig struct {
 }
 
 type ipcClient struct {
-	c codec.ApiCoder
+	codec codec.ApiCoder
 }
 
 func (self *ipcClient) Close() {
-	self.c.Close()
+	self.codec.Close()
 }
 
 func (self *ipcClient) Send(req interface{}) error {
-	return self.c.WriteResponse(req)
+	return self.codec.WriteResponse(req)
 }
 
 func (self *ipcClient) Recv() (interface{}, error) {
-	return self.c.ReadResponse()
+	return self.codec.ReadResponse()
 }
 
 // Create a new IPC client, UNIX domain socket on posix, named pipe on Windows

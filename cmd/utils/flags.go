@@ -211,7 +211,7 @@ var (
 	RpcApiFlag = cli.StringFlag{
 		Name:  "rpcapi",
 		Usage: "Specify the API's which are offered over the HTTP RPC interface",
-		Value: api.DefaultHttpRpcApis,
+		Value: comms.DefaultHttpRpcApis,
 	}
 	IPCDisabledFlag = cli.BoolFlag{
 		Name:  "ipcdisable",
@@ -220,7 +220,7 @@ var (
 	IPCApiFlag = cli.StringFlag{
 		Name:  "ipcapi",
 		Usage: "Specify the API's which are offered over the IPC interface",
-		Value: api.DefaultIpcApis,
+		Value: comms.DefaultIpcApis,
 	}
 	IPCPathFlag = DirectoryFlag{
 		Name:  "ipcpath",

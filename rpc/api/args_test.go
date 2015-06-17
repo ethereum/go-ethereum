@@ -1,4 +1,4 @@
-package rpc
+package api
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
+	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
 func TestBlockheightInvalidString(t *testing.T) {
@@ -68,7 +69,7 @@ func ExpectValidationError(err error) string {
 	switch err.(type) {
 	case nil:
 		str = "Expected error but didn't get one"
-	case *ValidationError:
+	case *shared.ValidationError:
 		break
 	default:
 		str = fmt.Sprintf("Expected *rpc.ValidationError but got %T with message `%s`", err, err.Error())
@@ -81,7 +82,7 @@ func ExpectInvalidTypeError(err error) string {
 	switch err.(type) {
 	case nil:
 		str = "Expected error but didn't get one"
-	case *InvalidTypeError:
+	case *shared.InvalidTypeError:
 		break
 	default:
 		str = fmt.Sprintf("Expected *rpc.InvalidTypeError but got %T with message `%s`", err, err.Error())
@@ -94,7 +95,7 @@ func ExpectInsufficientParamsError(err error) string {
 	switch err.(type) {
 	case nil:
 		str = "Expected error but didn't get one"
-	case *InsufficientParamsError:
+	case *shared.InsufficientParamsError:
 		break
 	default:
 		str = fmt.Sprintf("Expected *rpc.InsufficientParamsError but got %T with message %s", err, err.Error())
@@ -107,7 +108,7 @@ func ExpectDecodeParamError(err error) string {
 	switch err.(type) {
 	case nil:
 		str = "Expected error but didn't get one"
-	case *DecodeParamError:
+	case *shared.DecodeParamError:
 		break
 	default:
 		str = fmt.Sprintf("Expected *rpc.DecodeParamError but got %T with message `%s`", err, err.Error())

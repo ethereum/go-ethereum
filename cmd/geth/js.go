@@ -33,6 +33,10 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/rpc/api"
+	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
@@ -70,10 +74,70 @@ type jsre struct {
 	ps1        string
 	atexit     func()
 	corsDomain string
+	client     comms.EthereumClient
 	prompter
 }
 
-func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain, ipcpath string, interactive bool, f xeth.Frontend) *jsre {
+var (
+	loadedModulesMethods map[string][]string
+)
+
+func keywordCompleter(line string) []string {
+	results := make([]string, 0)
+
+	if strings.Contains(line, ".") {
+		elements := strings.Split(line, ".")
+		if len(elements) == 2 {
+			module := elements[0]
+			partialMethod := elements[1]
+			if methods, found := loadedModulesMethods[module]; found {
+				for _, method := range methods {
+					if strings.HasPrefix(method, partialMethod) { // e.g. debug.se
+						results = append(results, module+"."+method)
+					}
+				}
+			}
+		}
+	} else {
+		for module, methods := range loadedModulesMethods {
+			if line == module { // user typed in full module name, show all methods
+				for _, method := range methods {
+					results = append(results, module+"."+method)
+				}
+			} else if strings.HasPrefix(module, line) { // partial method name, e.g. admi
+				results = append(results, module)
+			}
+		}
+	}
+	return results
+}
+
+func apiWordCompleter(line string, pos int) (head string, completions []string, tail string) {
+	if len(line) == 0 {
+		return "", nil, ""
+	}
+
+	i := 0
+	for i = pos - 1; i > 0; i-- {
+		if line[i] == '.' || (line[i] >= 'a' && line[i] <= 'z') || (line[i] >= 'A' && line[i] <= 'Z') {
+			continue
+		}
+		if i >= 3 && line[i] == '3' && line[i-3] == 'w' && line[i-2] == 'e' && line[i-1] == 'b' {
+			continue
+		}
+		i += 1
+		break
+	}
+
+	begin := line[:i]
+	keyword := line[i:pos]
+	end := line[pos:]
+
+	completionWords := keywordCompleter(keyword)
+	return begin, completionWords, end
+}
+
+func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
 	js := &jsre{ethereum: ethereum, ps1: "> "}
 	// set default cors domain used by startRpc from CLI flag
 	js.corsDomain = corsDomain
@@ -82,10 +146,16 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain, ipcpath string, intera
 	}
 	js.xeth = xeth.New(ethereum, f)
 	js.wait = js.xeth.UpdateState()
+	js.client = client
+	if clt, ok := js.client.(*comms.InProcClient); ok {
+		clt.Initialize(js.xeth, ethereum)
+	}
+
 	// update state in separare forever blocks
 	js.re = re.New(libPath)
-	js.apiBindings(ipcpath, f)
-	js.adminBindings()
+	if err := js.apiBindings(f); err != nil {
+		utils.Fatalf("Unable to connect - %v", err)
+	}
 
 	if !liner.TerminalSupported() || !interactive {
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
@@ -93,6 +163,9 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain, ipcpath string, intera
 		lr := liner.NewLiner()
 		js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
+		js.loadAutoCompletion()
+		lr.SetWordCompleter(apiWordCompleter)
+		lr.SetTabCompletionStyle(liner.TabPrints)
 		js.prompter = lr
 		js.atexit = func() {
 			js.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
@@ -103,8 +176,117 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain, ipcpath string, intera
 	return js
 }
 
+func (self *jsre) loadAutoCompletion() {
+	if modules, err := self.suportedApis(); err == nil {
+		loadedModulesMethods = make(map[string][]string)
+		for module, _ := range modules {
+			loadedModulesMethods[module] = api.AutoCompletion[module]
+		}
+	}
+}
+
+func (self *jsre) suportedApis() (map[string]string, error) {
+	req := shared.Request{
+		Id:      1,
+		Jsonrpc: "2.0",
+		Method:  "modules",
+	}
+
+	err := self.client.Send(&req)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := self.client.Recv()
+	if err != nil {
+		return nil, err
+	}
+
+	if sucRes, ok := res.(map[string]string); ok {
+		if err == nil {
+			return sucRes, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Unable to determine supported API's")
+}
+
+func (js *jsre) apiBindings(f xeth.Frontend) error {
+	apis, err := js.suportedApis()
+	if err != nil {
+		return err
+	}
+
+	apiNames := make([]string, 0, len(apis))
+	for a, _ := range apis {
+		apiNames = append(apiNames, a)
+	}
+
+	apiImpl, err := api.ParseApiString(strings.Join(apiNames, ","), codec.JSON, js.xeth, js.ethereum)
+	if err != nil {
+		utils.Fatalf("Unable to determine supported api's: %v", err)
+	}
+
+	jeth := rpc.NewJeth(api.Merge(apiImpl...), js.re, js.client)
+	js.re.Set("jeth", struct{}{})
+	t, _ := js.re.Get("jeth")
+	jethObj := t.Object()
+
+	jethObj.Set("send", jeth.Send)
+	jethObj.Set("sendAsync", jeth.Send)
+
+	err = js.re.Compile("bignumber.js", re.BigNumber_JS)
+	if err != nil {
+		utils.Fatalf("Error loading bignumber.js: %v", err)
+	}
+
+	err = js.re.Compile("ethereum.js", re.Web3_JS)
+	if err != nil {
+		utils.Fatalf("Error loading web3.js: %v", err)
+	}
+
+	_, err = js.re.Eval("var web3 = require('web3');")
+	if err != nil {
+		utils.Fatalf("Error requiring web3: %v", err)
+	}
+
+	_, err = js.re.Eval("web3.setProvider(jeth)")
+	if err != nil {
+		utils.Fatalf("Error setting web3 provider: %v", err)
+	}
+
+	// load only supported API's in javascript runtime
+	shortcuts := "var eth = web3.eth; "
+	for _, apiName := range apiNames {
+		if apiName == api.Web3ApiName || apiName == api.EthApiName {
+			continue // manually mapped
+		}
+
+		if err = js.re.Compile(fmt.Sprintf("%s.js", apiName), api.Javascript(apiName)); err == nil {
+			shortcuts += fmt.Sprintf("var %s = web3.%s; ", apiName, apiName)
+		} else {
+			utils.Fatalf("Error loading %s.js: %v", apiName, err)
+		}
+	}
+
+	_, err = js.re.Eval(shortcuts)
+
+	if err != nil {
+		utils.Fatalf("Error setting namespaces: %v", err)
+	}
+
+	js.re.Eval(globalRegistrar + "registrar = GlobalRegistrar.at(\"" + globalRegistrarAddr + "\");")
+	return nil
+}
+
+/*
 func (js *jsre) apiBindings(ipcpath string, f xeth.Frontend) {
 	xe := xeth.New(js.ethereum, f)
+	apiNames, err := js.suportedApis(ipcpath)
+	if err != nil {
+		return
+	}
+
 	ethApi := rpc.NewEthereumApi(xe)
 	jeth := rpc.NewJeth(ethApi, js.re, ipcpath)
 
@@ -146,6 +328,7 @@ var net = web3.net;
 
 	js.re.Eval(globalRegistrar + "registrar = GlobalRegistrar.at(\"" + globalRegistrarAddr + "\");")
 }
+*/
 
 var ds, _ = docserver.New("/")
 

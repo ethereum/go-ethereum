@@ -90,7 +90,7 @@ func newStoppableHandler(h http.Handler, stop chan struct{}) http.Handler {
 		case <-stop:
 			w.Header().Set("Content-Type", "application/json")
 			err := fmt.Errorf("RPC service stopped")
-			response := shared.NewRpcResponse(-1, jsonrpcver, nil, err)
+			response := shared.NewRpcResponse(-1, api.JsonRpcVersion, nil, err)
 			httpSend(w, response)
 		default:
 			h.ServeHTTP(w, r)
@@ -110,14 +110,14 @@ func httpSend(writer io.Writer, v interface{}) (n int, err error) {
 	return writer.Write(payload)
 }
 
-func gethHttpHandler(codec codec.Codec, api api.EthereumApi) http.Handler {
+func gethHttpHandler(codec codec.Codec, a api.EthereumApi) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		// Limit request size to resist DoS
 		if req.ContentLength > maxHttpSizeReqLength {
 			err := fmt.Errorf("Request too large")
-			response := shared.NewRpcErrorResponse(-1, jsonrpcver, -32700, err)
+			response := shared.NewRpcErrorResponse(-1, api.JsonRpcVersion, -32700, err)
 			httpSend(w, &response)
 			return
 		}
@@ -126,7 +126,7 @@ func gethHttpHandler(codec codec.Codec, api api.EthereumApi) http.Handler {
 		payload, err := ioutil.ReadAll(req.Body)
 		if err != nil {
 			err := fmt.Errorf("Could not read request body")
-			response := shared.NewRpcErrorResponse(-1, jsonrpcver, -32700, err)
+			response := shared.NewRpcErrorResponse(-1, api.JsonRpcVersion, -32700, err)
 			httpSend(w, &response)
 			return
 		}
@@ -134,7 +134,7 @@ func gethHttpHandler(codec codec.Codec, api api.EthereumApi) http.Handler {
 		c := codec.New(nil)
 		var rpcReq shared.Request
 		if err = c.Decode(payload, &rpcReq); err == nil {
-			reply, err := api.Execute(&rpcReq)
+			reply, err := a.Execute(&rpcReq)
 			res := shared.NewRpcResponse(rpcReq.Id, rpcReq.Jsonrpc, reply, err)
 			httpSend(w, &res)
 			return
@@ -146,7 +146,7 @@ func gethHttpHandler(codec codec.Codec, api api.EthereumApi) http.Handler {
 			resCount := 0
 
 			for i, rpcReq := range reqBatch {
-				reply, err := api.Execute(&rpcReq)
+				reply, err := a.Execute(&rpcReq)
 				if rpcReq.Id != nil { // this leaves nil entries in the response batch for later removal
 					resBatch[i] = shared.NewRpcResponse(rpcReq.Id, rpcReq.Jsonrpc, reply, err)
 					resCount += 1
@@ -161,7 +161,7 @@ func gethHttpHandler(codec codec.Codec, api api.EthereumApi) http.Handler {
 
 		// invalid request
 		err = fmt.Errorf("Could not decode request")
-		res := shared.NewRpcErrorResponse(-1, jsonrpcver, -32600, err)
+		res := shared.NewRpcErrorResponse(-1, api.JsonRpcVersion, -32600, err)
 		httpSend(w, res)
 	})
 }

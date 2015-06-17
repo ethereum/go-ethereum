@@ -18,15 +18,13 @@ const (
 	TxPoolApiName   = "txpool"
 	PersonalApiName = "personal"
 	Web3ApiName     = "web3"
+
+	JsonRpcVersion = "2.0"
 )
 
 var (
-	DefaultHttpRpcApis = strings.Join([]string{
-		DbApiName, EthApiName, NetApiName, Web3ApiName,
-	}, ",")
-
-	// List with all API's which are offered over the IPC interface by default
-	DefaultIpcApis = strings.Join([]string{
+	// All API's
+	AllApis = strings.Join([]string{
 		AdminApiName, DbApiName, EthApiName, DebugApiName, MinerApiName, NetApiName,
 		ShhApiName, TxPoolApiName, PersonalApiName, Web3ApiName,
 	}, ",")

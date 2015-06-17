@@ -38,6 +38,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 )
@@ -310,12 +312,14 @@ func console(ctx *cli.Context) {
 		utils.Fatalf("%v", err)
 	}
 
+	client := comms.NewInProcClient(codec.JSON)
+
 	startEth(ctx, ethereum)
 	repl := newJSRE(
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		utils.IpcSocketPath(ctx),
+		client,
 		true,
 		nil,
 	)
@@ -332,12 +336,13 @@ func execJSFiles(ctx *cli.Context) {
 		utils.Fatalf("%v", err)
 	}
 
+	client := comms.NewInProcClient(codec.JSON)
 	startEth(ctx, ethereum)
 	repl := newJSRE(
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		utils.IpcSocketPath(ctx),
+		client,
 		false,
 		nil,
 	)

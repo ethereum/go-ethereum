@@ -1,31 +1,28 @@
 package rpc
 
 import (
-	"encoding/json"
-	"fmt"
-
-	"reflect"
-
 	"github.com/ethereum/go-ethereum/jsre"
-	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/robertkrimen/otto"
+	"encoding/json"
+	"fmt"
 )
 
 type Jeth struct {
-	ethApi  *EthereumApi
-	re      *jsre.JSRE
-	ipcpath string
+	ethApi api.EthereumApi
+	re     *jsre.JSRE
+	client comms.EthereumClient
 }
 
-func NewJeth(ethApi *EthereumApi, re *jsre.JSRE, ipcpath string) *Jeth {
-	return &Jeth{ethApi, re, ipcpath}
+func NewJeth(ethApi api.EthereumApi, re *jsre.JSRE, client comms.EthereumClient) *Jeth {
+	return &Jeth{ethApi, re, client}
 }
 
 func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id interface{}) (response otto.Value) {
-	rpcerr := &RpcErrorObject{code, msg}
-	call.Otto.Set("ret_jsonrpc", jsonrpcver)
+	rpcerr := &shared.ErrorObject{code, msg}
+	call.Otto.Set("ret_jsonrpc", api.JsonRpcVersion)
 	call.Otto.Set("ret_id", id)
 	call.Otto.Set("ret_error", rpcerr)
 	response, _ = call.Otto.Run(`
@@ -34,6 +31,7 @@ func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id interface
 	return
 }
 
+
 func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 	reqif, err := call.Argument(0).Export()
 	if err != nil {
@@ -41,11 +39,11 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 	}
 
 	jsonreq, err := json.Marshal(reqif)
-	var reqs []RpcRequest
+	var reqs []shared.Request
 	batch := true
 	err = json.Unmarshal(jsonreq, &reqs)
 	if err != nil {
-		reqs = make([]RpcRequest, 1)
+		reqs = make([]shared.Request, 1)
 		err = json.Unmarshal(jsonreq, &reqs[0])
 		batch = false
 	}
@@ -55,12 +53,18 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 
 	for i, req := range reqs {
 		var respif interface{}
-		err = self.ethApi.GetRequestReply(&req, &respif)
+		err := self.client.Send(&req)//self.ethApi.Execute(&req)
+		if err != nil {
+			fmt.Println("Error request:", err)
+			return self.err(call, -32603, err.Error(), req.Id)
+		}
+		respif, err = self.client.Recv()
 		if err != nil {
 			fmt.Println("Error response:", err)
 			return self.err(call, -32603, err.Error(), req.Id)
 		}
-		call.Otto.Set("ret_jsonrpc", jsonrpcver)
+
+		call.Otto.Set("ret_jsonrpc", api.JsonRpcVersion)
 		call.Otto.Set("ret_id", req.Id)
 
 		res, _ := json.Marshal(respif)
@@ -88,6 +92,7 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 	return
 }
 
+/*
 func (self *Jeth) SendIpc(call otto.FunctionCall) (response otto.Value) {
 	reqif, err := call.Argument(0).Export()
 	if err != nil {
@@ -102,11 +107,11 @@ func (self *Jeth) SendIpc(call otto.FunctionCall) (response otto.Value) {
 	defer client.Close()
 
 	jsonreq, err := json.Marshal(reqif)
-	var reqs []RpcRequest
+	var reqs []shared.Request
 	batch := true
 	err = json.Unmarshal(jsonreq, &reqs)
 	if err != nil {
-		reqs = make([]RpcRequest, 1)
+		reqs = make([]shared.Request, 1)
 		err = json.Unmarshal(jsonreq, &reqs[0])
 		batch = false
 	}
@@ -169,3 +174,4 @@ func (self *Jeth) SendIpc(call otto.FunctionCall) (response otto.Value) {
 
 	return
 }
+*/

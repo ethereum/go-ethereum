@@ -63,3 +63,27 @@ func StopHttp() {
 		httpListener = nil
 	}
 }
+
+
+type httpClient struct {
+	codec codec.ApiCoder
+}
+
+// Create a new in process client
+func NewHttpClient(cfg HttpConfig, codec codec.Codec) *httpClient {
+	return &httpClient{
+		codec: codec.New(nil),
+	}
+}
+
+func (self *httpClient) Close() {
+	// do nothing
+}
+
+func (self *httpClient) Send(req interface{}) error {
+	return nil
+}
+
+func (self *httpClient) Recv() (interface{}, error) {
+	return nil, nil
+}
