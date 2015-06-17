@@ -128,8 +128,10 @@ func (self *StateObject) MarkForDeletion() {
 	}
 }
 
-func (c *StateObject) getAddr(addr common.Hash) (ret common.Hash) {
-	return common.BytesToHash(common.NewValueFromBytes([]byte(c.State.trie.Get(addr[:]))).Bytes())
+func (c *StateObject) getAddr(addr common.Hash) common.Hash {
+	var ret []byte
+	rlp.DecodeBytes(c.State.trie.Get(addr[:]), &ret)
+	return common.BytesToHash(ret)
 }
 
 func (c *StateObject) setAddr(addr []byte, value common.Hash) {
