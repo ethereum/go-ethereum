@@ -359,7 +359,7 @@ func TestSlowSynchronisation(t *testing.T) {
 	// Create a batch of blocks, with a slow and a full speed peer
 	targetCycles := 2
 	targetBlocks := targetCycles*blockCacheLimit - 15
-	targetIODelay := 500 * time.Millisecond
+	targetIODelay := time.Second
 
 	hashes := createHashes(targetBlocks, knownHash)
 	blocks := createBlocksFromHashes(hashes)
