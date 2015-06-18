@@ -130,7 +130,7 @@ func runVmTest(test VmTest) error {
 			vexp := common.HexToHash(value)
 
 			if v != vexp {
-				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", obj.Address().Bytes()[0:4], addr, vexp, v, vexp.BigD(vexp), v.Big(v))
+				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", obj.Address().Bytes()[0:4], addr, vexp, v, vexp.Big(), v.Big())
 			}
 		}
 	}

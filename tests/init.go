@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-
-	// "github.com/ethereum/go-ethereum/logger/glog"
 )
 
 var (
@@ -24,33 +22,6 @@ var (
 	StateSkipTests = []string{"mload32bitBound_return", "mload32bitBound_return2"}
 	VmSkipTests    = []string{}
 )
-
-// type TestRunner interface {
-// 	// LoadTest()
-// 	RunTest() error
-// }
-
-// func RunTests(bt map[string]TestRunner, skipTests []string) error {
-// 	// map skipped tests to boolean set
-// 	skipTest := make(map[string]bool, len(skipTests))
-// 	for _, name := range skipTests {
-// 		skipTest[name] = true
-// 	}
-
-// 	for name, test := range bt {
-// 		// if the test should be skipped, return
-// 		if skipTest[name] {
-// 			glog.Infoln("Skipping block test", name)
-// 			return nil
-// 		}
-// 		// test the block
-// 		if err := test.RunTest(); err != nil {
-// 			return err
-// 		}
-// 		glog.Infoln("Block test passed: ", name)
-// 	}
-// 	return nil
-// }
 
 func readJson(reader io.Reader, value interface{}) error {
 	data, err := ioutil.ReadAll(reader)
