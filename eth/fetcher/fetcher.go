@@ -16,6 +16,7 @@ import (
 const (
 	arriveTimeout = 500 * time.Millisecond // Time allowance before an announced block is explicitly requested
 	fetchTimeout  = 5 * time.Second        // Maximum alloted time to return an explicitly requested block
+	maxUncleDist  = 7                      // Maximum allowed backward distance from the chain head
 	maxQueueDist  = 256                    // Maximum allowed distance from the chain head to queue
 )
 
@@ -202,7 +203,7 @@ func (f *Fetcher) loop() {
 				break
 			}
 			// Otherwise if fresh and still unknown, try and import
-			if number <= height || f.getBlock(op.block.Hash()) != nil {
+			if number+maxUncleDist < height || f.getBlock(op.block.Hash()) != nil {
 				continue
 			}
 			f.insert(op.origin, op.block)
@@ -317,7 +318,7 @@ func (f *Fetcher) enqueue(peer string, block *types.Block) {
 	hash := block.Hash()
 
 	// Discard any past or too distant blocks
-	if dist := int64(block.NumberU64()) - int64(f.chainHeight()); dist <= 0 || dist > maxQueueDist {
+	if dist := int64(block.NumberU64()) - int64(f.chainHeight()); dist < -maxUncleDist || dist > maxQueueDist {
 		glog.V(logger.Detail).Infof("Peer %s: discarded block #%d [%x], distance %d", peer, block.NumberU64(), hash.Bytes()[:4], dist)
 		return
 	}
