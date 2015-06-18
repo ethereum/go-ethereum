@@ -167,7 +167,7 @@ func newProtocolManagerForTesting(txAdded chan<- []*types.Transaction) *Protocol
 		db, _    = ethdb.NewMemDatabase()
 		chain, _ = core.NewChainManager(core.GenesisBlock(0, db), db, db, core.FakePow{}, em)
 		txpool   = &fakeTxPool{added: txAdded}
-		pm       = NewProtocolManager(ProtocolVersion, 0, em, txpool, chain)
+		pm       = NewProtocolManager(ProtocolVersion, 0, em, txpool, core.FakePow{}, chain)
 	)
 	pm.Start()
 	return pm

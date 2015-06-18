@@ -1,3 +1,4 @@
+// Package downloader contains the manual full chain synchronisation.
 package downloader
 
 import (
@@ -98,7 +99,7 @@ type Downloader struct {
 	hasBlock    hashCheckFn      // Checks if a block is present in the chain
 	getBlock    blockRetrievalFn // Retrieves a block from the chain
 	insertChain chainInsertFn    // Injects a batch of blocks into the chain
-	dropPeer    peerDropFn       // Retrieved the TD of our own chain
+	dropPeer    peerDropFn       // Drops a peer for misbehaving
 
 	// Status
 	synchroniseMock func(id string, hash common.Hash) error // Replacement for synchronise during testing
