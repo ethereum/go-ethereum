@@ -153,8 +153,11 @@ Note that exporting your key in unencrypted format is NOT supported.
 
 Keys are stored under <DATADIR>/keys.
 It is safe to transfer the entire directory or the individual keys therein
-between ethereum nodes.
+between ethereum nodes by simply copying.
 Make sure you backup your keys regularly.
+
+In order to use your account to send transactions, you need to unlock them using the
+'--unlock' option. The argument is a comma
 
 And finally. DO NOT FORGET YOUR PASSWORD.
 `,
@@ -430,7 +433,7 @@ func execJSFiles(ctx *cli.Context) {
 	ethereum.WaitForShutdown()
 }
 
-func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (passphrase string) {
+func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string, i int) {
 	var err error
 	// Load startup keys. XXX we are going to need a different format
 
@@ -441,7 +444,7 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 	attempts := 3
 	for tries := 0; tries < attempts; tries++ {
 		msg := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", account, tries+1, attempts)
-		passphrase = getPassPhrase(ctx, msg, false)
+		passphrase := getPassPhrase(ctx, msg, false, i)
 		err = am.Unlock(common.HexToAddress(account), passphrase)
 		if err == nil {
 			break
@@ -451,7 +454,6 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 		utils.Fatalf("Unlock account failed '%v'", err)
 	}
 	fmt.Printf("Account '%s' unlocked.\n", account)
-	return
 }
 
 func blockRecovery(ctx *cli.Context) {
@@ -492,16 +494,12 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	accounts := strings.Split(account, " ")
-	for _, account := range accounts {
+	for i, account := range accounts {
 		if len(account) > 0 {
 			if account == "primary" {
-				primaryAcc, err := am.Primary()
-				if err != nil {
-					utils.Fatalf("no primary account: %v", err)
-				}
-				account = primaryAcc.Hex()
+				utils.Fatalf("the 'primary' keyword is deprecated. You can use indexes, but the indexes are not permanent, they can change if you add external keys, export your keys or copy your keystore to another node.")
 			}
-			unlockAccount(ctx, am, account)
+			unlockAccount(ctx, am, account, i)
 		}
 	}
 	// Start auxiliary services if enabled.
@@ -535,7 +533,7 @@ func accountList(ctx *cli.Context) {
 	}
 }
 
-func getPassPhrase(ctx *cli.Context, desc string, confirmation bool) (passphrase string) {
+func getPassPhrase(ctx *cli.Context, desc string, confirmation bool, i int) (passphrase string) {
 	passfile := ctx.GlobalString(utils.PasswordFileFlag.Name)
 	if len(passfile) == 0 {
 		fmt.Println(desc)
@@ -559,14 +557,22 @@ func getPassPhrase(ctx *cli.Context, desc string, confirmation bool) (passphrase
 		if err != nil {
 			utils.Fatalf("Unable to read password file '%s': %v", passfile, err)
 		}
-		passphrase = string(passbytes)
+		// this is backwards compatible if the same password unlocks several accounts
+		// it also has the consequence that trailing newlines will not count as part
+		// of the password, so --password <(echo -n 'pass') will now work without -n
+		passphrases := strings.Split(string(passbytes), "\n")
+		if i >= len(passphrases) {
+			passphrase = passphrases[len(passphrases)-1]
+		} else {
+			passphrase = passphrases[i]
+		}
 	}
 	return
 }
 
 func accountCreate(ctx *cli.Context) {
 	am := utils.MakeAccountManager(ctx)
-	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true)
+	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0)
 	acct, err := am.NewAccount(passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
@@ -585,7 +591,7 @@ func importWallet(ctx *cli.Context) {
 	}
 
 	am := utils.MakeAccountManager(ctx)
-	passphrase := getPassPhrase(ctx, "", false)
+	passphrase := getPassPhrase(ctx, "", false, 0)
 
 	acct, err := am.ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
@@ -600,7 +606,7 @@ func accountImport(ctx *cli.Context) {
 		utils.Fatalf("keyfile must be given as argument")
 	}
 	am := utils.MakeAccountManager(ctx)
-	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true)
+	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0)
 	acct, err := am.Import(keyfile, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)

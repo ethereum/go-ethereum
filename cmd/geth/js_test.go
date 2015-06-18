@@ -140,7 +140,7 @@ func TestAccounts(t *testing.T) {
 	defer os.RemoveAll(tmp)
 
 	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`"]`)
-	checkEvalJSON(t, repl, `eth.coinbase`, `"`+testAddress+`"`)
+	checkEvalJSON(t, repl, `eth.coinbase`, `"`+common.Address{}.Hex()+`"`)
 
 	val, err := repl.re.Run(`personal.newAccount("password")`)
 	if err != nil {

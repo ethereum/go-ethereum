@@ -133,7 +133,7 @@ var (
 
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
-		Usage: "Unlock the account given until this program exits (prompts for password). '--unlock primary' unlocks the primary account",
+		Usage: "Unlock the account given until this program exits (prompts for password). '--unlock n' unlocks the n-th account in order or creation.",
 		Value: "",
 	}
 	PasswordFileFlag = cli.StringFlag{

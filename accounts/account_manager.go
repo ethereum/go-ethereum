@@ -81,19 +81,6 @@ func (am *Manager) HasAccount(addr common.Address) bool {
 	return false
 }
 
-func (am *Manager) Primary() (addr common.Address, err error) {
-	addrs, err := am.keyStore.GetKeyAddresses()
-	if os.IsNotExist(err) {
-		return common.Address{}, ErrNoKeys
-	} else if err != nil {
-		return common.Address{}, err
-	}
-	if len(addrs) == 0 {
-		return common.Address{}, ErrNoKeys
-	}
-	return addrs[0], nil
-}
-
 func (am *Manager) DeleteAccount(address common.Address, auth string) error {
 	return am.keyStore.DeleteKey(address, auth)
 }

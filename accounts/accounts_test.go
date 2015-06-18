@@ -18,7 +18,7 @@ func TestSign(t *testing.T) {
 	pass := "" // not used but required by API
 	a1, err := am.NewAccount(pass)
 	toSign := randentropy.GetEntropyCSPRNG(32)
-	am.Unlock(a1.Address, "", 0)
+	am.Unlock(a1.Address, "")
 
 	_, err = am.Sign(a1, toSign)
 	if err != nil {
