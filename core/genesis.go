@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -56,3 +57,20 @@ var GenesisAccounts = []byte(`{
 	"e6716f9544a56c530d868e4bfbacb172315bdead": {"balance": "1606938044258990275541962092341162602522202993782792835301376"},
 	"1a26338f0d905e295fccb71fa9ea849ffa12aaf4": {"balance": "1606938044258990275541962092341162602522202993782792835301376"}
 }`)
+
+// GenesisBlockForTesting creates a block in which addr has the given wei balance.
+// The state trie of the block is written to db.
+func GenesisBlockForTesting(db common.Database, addr common.Address, balance *big.Int) *types.Block {
+	statedb := state.New(common.Hash{}, db)
+	obj := statedb.GetOrNewStateObject(addr)
+	obj.SetBalance(balance)
+	statedb.Update()
+	statedb.Sync()
+	block := types.NewBlock(&types.Header{
+		Difficulty: params.GenesisDifficulty,
+		GasLimit:   params.GenesisGasLimit,
+		Root:       statedb.Root(),
+	}, nil, nil, nil)
+	block.Td = params.GenesisDifficulty
+	return block
+}

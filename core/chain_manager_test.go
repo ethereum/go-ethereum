@@ -67,7 +67,7 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 
 	// extend the fork
 	parent := bman2.bc.CurrentBlock()
-	chainB := makeChain(bman2, parent, N, db, ForkSeed)
+	chainB := makeChain(parent, N, db, forkSeed)
 	_, err = bman2.bc.InsertChain(chainB)
 	if err != nil {
 		t.Fatal("Insert chain error for fork:", err)
@@ -256,7 +256,7 @@ func TestBrokenChain(t *testing.T) {
 	}
 	bman2.bc.SetProcessor(bman2)
 	parent := bman2.bc.CurrentBlock()
-	chainB := makeChain(bman2, parent, 5, db2, ForkSeed)
+	chainB := makeChain(parent, 5, db2, forkSeed)
 	chainB = chainB[1:]
 	_, err = testChain(chainB, bman)
 	if err == nil {
@@ -444,7 +444,7 @@ func TestInsertNonceError(t *testing.T) {
 		genesis := GenesisBlock(0, db)
 		bc := chm(genesis, db)
 		bc.processor = NewBlockProcessor(db, db, bc.pow, bc, bc.eventMux)
-		blocks := makeChain(bc.processor.(*BlockProcessor), bc.currentBlock, i, db, 0)
+		blocks := makeChain(bc.currentBlock, i, db, 0)
 
 		fail := rand.Int() % len(blocks)
 		failblock := blocks[fail]
