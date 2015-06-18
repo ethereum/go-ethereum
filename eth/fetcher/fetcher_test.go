@@ -80,23 +80,27 @@ func newTester() *fetcherTester {
 		hashes: []common.Hash{knownHash},
 		blocks: map[common.Hash]*types.Block{knownHash: genesis},
 	}
-	tester.fetcher = New(tester.hasBlock, tester.broadcastBlock, tester.chainHeight, tester.insertChain, tester.dropPeer)
+	tester.fetcher = New(tester.getBlock, tester.verifyBlock, tester.broadcastBlock, tester.chainHeight, tester.insertChain, tester.dropPeer)
 	tester.fetcher.Start()
 
 	return tester
 }
 
-// hasBlock checks if a block is pres	ent in the testers canonical chain.
-func (f *fetcherTester) hasBlock(hash common.Hash) bool {
+// getBlock retrieves a block from the tester's block chain.
+func (f *fetcherTester) getBlock(hash common.Hash) *types.Block {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
-	_, ok := f.blocks[hash]
-	return ok
+	return f.blocks[hash]
+}
+
+// verifyBlock is a nop placeholder for the block header verification.
+func (f *fetcherTester) verifyBlock(block *types.Block, parent *types.Block) error {
+	return nil
 }
 
 // broadcastBlock is a nop placeholder for the block broadcasting.
-func (f *fetcherTester) broadcastBlock(block *types.Block) {
+func (f *fetcherTester) broadcastBlock(block *types.Block, propagate bool) {
 }
 
 // chainHeight retrieves the current height (block number) of the chain.
@@ -257,7 +261,7 @@ func TestPendingDeduplication(t *testing.T) {
 		return nil
 	}
 	// Announce the same block many times until it's fetched (wait for any pending ops)
-	for !tester.hasBlock(hashes[0]) {
+	for tester.getBlock(hashes[0]) == nil {
 		tester.fetcher.Notify("repeater", hashes[0], time.Now().Add(-arriveTimeout), wrapper)
 		time.Sleep(time.Millisecond)
 	}
