@@ -51,6 +51,7 @@ var (
 			"getData",
 			"getCode",
 			"sign",
+			"sendRawTransaction",
 			"sendTransaction",
 			"transact",
 			"estimateGas",

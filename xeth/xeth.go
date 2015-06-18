@@ -803,8 +803,12 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 
 	if tx.To() == nil {
 		addr := core.AddressFromMessage(tx)
+		glog.V(logger.Info).Infof("Tx(%x) created: %x\n", tx.Hash(), addr)
 		return addr.Hex(), nil
+	} else {
+		glog.V(logger.Info).Infof("Tx(%x) to: %x\n", tx.Hash(), tx.To())
 	}
+
 	return tx.Hash().Hex(), nil
 }
 
