@@ -185,7 +185,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	state := state.New(parent.Root(), sm.db)
 
 	// Block validation
-	if err = sm.ValidateHeader(block.Header(), parent.Header(), false); err != nil {
+	if err = ValidateHeader(sm.Pow, block.Header(), parent.Header(), false); err != nil {
 		return
 	}
 
@@ -246,12 +246,6 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 		return
 	}
 
-	// store the receipts
-	err = putReceipts(sm.extraDb, block.Hash(), receipts)
-	if err != nil {
-		return nil, err
-	}
-
 	// Sync the current block's state to the database
 	state.Sync()
 
@@ -260,74 +254,10 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 		putTx(sm.extraDb, tx, block, uint64(i))
 	}
 
-	receiptsRlp := receipts.RlpEncode()
-	/*if len(receipts) > 0 {
-		glog.V(logger.Info).Infof("Saving %v receipts, rlp len is %v\n", len(receipts), len(receiptsRlp))
-	}*/
-	sm.extraDb.Put(append(receiptsPre, block.Hash().Bytes()...), receiptsRlp)
+	// store the receipts
+	putReceipts(sm.extraDb, block.Hash(), receipts)
 
 	return state.Logs(), nil
-}
-
-// See YP section 4.3.4. "Block Header Validity"
-// Validates a block. Returns an error if the block is invalid.
-func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header, checkPow bool) error {
-	if big.NewInt(int64(len(block.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
-		return fmt.Errorf("Block extra data too long (%d)", len(block.Extra))
-	}
-
-	expd := CalcDifficulty(block, parent)
-	if expd.Cmp(block.Difficulty) != 0 {
-		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
-	}
-
-	a := new(big.Int).Sub(block.GasLimit, parent.GasLimit)
-	a.Abs(a)
-	b := new(big.Int).Div(parent.GasLimit, params.GasLimitBoundDivisor)
-	if !(a.Cmp(b) < 0) || (block.GasLimit.Cmp(params.MinGasLimit) == -1) {
-		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
-	}
-
-	if int64(block.Time) > time.Now().Unix() {
-		return BlockFutureErr
-	}
-
-	if new(big.Int).Sub(block.Number, parent.Number).Cmp(big.NewInt(1)) != 0 {
-		return BlockNumberErr
-	}
-
-	if block.Time <= parent.Time {
-		return BlockEqualTSErr //ValidationError("Block timestamp equal or less than previous block (%v - %v)", block.Time, parent.Time)
-	}
-
-	if checkPow {
-		// Verify the nonce of the block. Return an error if it's not valid
-		if !sm.Pow.Verify(types.NewBlockWithHeader(block)) {
-			return ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
-		}
-	}
-
-	return nil
-}
-
-func AccumulateRewards(statedb *state.StateDB, block *types.Block) {
-	reward := new(big.Int).Set(BlockReward)
-
-	for _, uncle := range block.Uncles() {
-		num := new(big.Int).Add(big.NewInt(8), uncle.Number)
-		num.Sub(num, block.Number())
-
-		r := new(big.Int)
-		r.Mul(BlockReward, num)
-		r.Div(r, big.NewInt(8))
-
-		statedb.AddBalance(uncle.Coinbase, r)
-
-		reward.Add(reward, new(big.Int).Div(BlockReward, big.NewInt(32)))
-	}
-
-	// Get the account associated with the coinbase
-	statedb.AddBalance(block.Header().Coinbase, reward)
 }
 
 func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *types.Block) error {
@@ -367,7 +297,7 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 			return UncleError("uncle[%d](%x)'s parent is not ancestor (%x)", i, hash[:4], uncle.ParentHash[0:4])
 		}
 
-		if err := sm.ValidateHeader(uncle, ancestorHeaders[uncle.ParentHash], true); err != nil {
+		if err := ValidateHeader(sm.Pow, uncle, ancestorHeaders[uncle.ParentHash], true); err != nil {
 			return ValidationError(fmt.Sprintf("uncle[%d](%x) header invalid: %v", i, hash[:4], err))
 		}
 	}
@@ -402,6 +332,67 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 	sm.TransitionState(state, parent, block, true)
 
 	return state.Logs(), nil
+}
+
+// See YP section 4.3.4. "Block Header Validity"
+// Validates a block. Returns an error if the block is invalid.
+func ValidateHeader(pow pow.PoW, block, parent *types.Header, checkPow bool) error {
+	if big.NewInt(int64(len(block.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
+		return fmt.Errorf("Block extra data too long (%d)", len(block.Extra))
+	}
+
+	expd := CalcDifficulty(block, parent)
+	if expd.Cmp(block.Difficulty) != 0 {
+		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
+	}
+
+	a := new(big.Int).Sub(block.GasLimit, parent.GasLimit)
+	a.Abs(a)
+	b := new(big.Int).Div(parent.GasLimit, params.GasLimitBoundDivisor)
+	if !(a.Cmp(b) < 0) || (block.GasLimit.Cmp(params.MinGasLimit) == -1) {
+		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
+	}
+
+	if int64(block.Time) > time.Now().Unix() {
+		return BlockFutureErr
+	}
+
+	if new(big.Int).Sub(block.Number, parent.Number).Cmp(big.NewInt(1)) != 0 {
+		return BlockNumberErr
+	}
+
+	if block.Time <= parent.Time {
+		return BlockEqualTSErr //ValidationError("Block timestamp equal or less than previous block (%v - %v)", block.Time, parent.Time)
+	}
+
+	if checkPow {
+		// Verify the nonce of the block. Return an error if it's not valid
+		if !pow.Verify(types.NewBlockWithHeader(block)) {
+			return ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
+		}
+	}
+
+	return nil
+}
+
+func AccumulateRewards(statedb *state.StateDB, block *types.Block) {
+	reward := new(big.Int).Set(BlockReward)
+
+	for _, uncle := range block.Uncles() {
+		num := new(big.Int).Add(big.NewInt(8), uncle.Number)
+		num.Sub(num, block.Number())
+
+		r := new(big.Int)
+		r.Mul(BlockReward, num)
+		r.Div(r, big.NewInt(8))
+
+		statedb.AddBalance(uncle.Coinbase, r)
+
+		reward.Add(reward, new(big.Int).Div(BlockReward, big.NewInt(32)))
+	}
+
+	// Get the account associated with the coinbase
+	statedb.AddBalance(block.Header().Coinbase, reward)
 }
 
 func getBlockReceipts(db common.Database, bhash common.Hash) (receipts types.Receipts, err error) {

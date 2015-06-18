@@ -124,7 +124,7 @@ func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, erro
 		obj.SetBalance(balance)
 		obj.SetNonce(nonce)
 		for k, v := range acct.Storage {
-			statedb.SetState(common.HexToAddress(addrString), common.HexToHash(k), common.FromHex(v))
+			statedb.SetState(common.HexToAddress(addrString), common.HexToHash(k), common.HexToHash(v))
 		}
 	}
 	// sync objects to trie

@@ -70,37 +70,34 @@ func TestNull(t *testing.T) {
 	address := common.HexToAddress("0x823140710bf13990e4500136726d8b55")
 	state.CreateAccount(address)
 	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
-	value := make([]byte, 16)
+	var value common.Hash
 	state.SetState(address, common.Hash{}, value)
 	state.Update()
 	state.Sync()
 	value = state.GetState(address, common.Hash{})
+	if !common.EmptyHash(value) {
+		t.Errorf("expected empty hash. got %x", value)
+	}
 }
 
 func (s *StateSuite) TestSnapshot(c *checker.C) {
 	stateobjaddr := toAddr([]byte("aa"))
-	storageaddr := common.Big("0")
-	data1 := common.NewValue(42)
-	data2 := common.NewValue(43)
+	var storageaddr common.Hash
+	data1 := common.BytesToHash([]byte{42})
+	data2 := common.BytesToHash([]byte{43})
 
-	// get state object
-	stateObject := s.state.GetOrNewStateObject(stateobjaddr)
 	// set inital state object value
-	stateObject.SetStorage(storageaddr, data1)
+	s.state.SetState(stateobjaddr, storageaddr, data1)
 	// get snapshot of current state
 	snapshot := s.state.Copy()
 
-	// get state object. is this strictly necessary?
-	stateObject = s.state.GetStateObject(stateobjaddr)
 	// set new state object value
-	stateObject.SetStorage(storageaddr, data2)
+	s.state.SetState(stateobjaddr, storageaddr, data2)
 	// restore snapshot
 	s.state.Set(snapshot)
 
-	// get state object
-	stateObject = s.state.GetStateObject(stateobjaddr)
 	// get state storage value
-	res := stateObject.GetStorage(storageaddr)
+	res := s.state.GetState(stateobjaddr, storageaddr)
 
 	c.Assert(data1, checker.DeepEquals, res)
 }

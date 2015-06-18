@@ -22,7 +22,7 @@ func NewObject(state *state.StateObject) *Object {
 	return &Object{state}
 }
 
-func (self *Object) StorageString(str string) *common.Value {
+func (self *Object) StorageString(str string) []byte {
 	if common.IsHex(str) {
 		return self.storage(common.Hex2Bytes(str[2:]))
 	} else {
@@ -30,12 +30,12 @@ func (self *Object) StorageString(str string) *common.Value {
 	}
 }
 
-func (self *Object) StorageValue(addr *common.Value) *common.Value {
+func (self *Object) StorageValue(addr *common.Value) []byte {
 	return self.storage(addr.Bytes())
 }
 
-func (self *Object) storage(addr []byte) *common.Value {
-	return self.StateObject.GetStorage(common.BigD(addr))
+func (self *Object) storage(addr []byte) []byte {
+	return self.StateObject.GetState(common.BytesToHash(addr)).Bytes()
 }
 
 func (self *Object) Storage() (storage map[string]string) {
