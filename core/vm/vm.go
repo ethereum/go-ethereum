@@ -686,6 +686,11 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		var g *big.Int
 		y, x := stack.data[stack.len()-2], stack.data[stack.len()-1]
 		val := statedb.GetState(context.Address(), common.BigToHash(x))
+
+		// This checks for 3 scenario's and calculates gas accordingly
+		// 1. From a zero-value address to a non-zero value         (NEW VALUE)
+		// 2. From a non-zero value address to a zero-value address (DELETE)
+		// 3. From a nen-zero to a non-zero                         (CHANGE)
 		if common.EmptyHash(val) && !common.EmptyHash(common.BigToHash(y)) {
 			// 0 => non 0
 			g = params.SstoreSetGas
@@ -697,13 +702,6 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 			// non 0 => non 0 (or 0 => 0)
 			g = params.SstoreClearGas
 		}
-
-		/*
-			if len(val) == 0 && len(y.Bytes()) > 0 {
-			} else if len(val) > 0 && len(y.Bytes()) == 0 {
-			} else {
-			}
-		*/
 		gas.Set(g)
 	case SUICIDE:
 		if !statedb.IsDeleted(context.Address()) {
