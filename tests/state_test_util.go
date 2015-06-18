@@ -121,17 +121,16 @@ func runStateTest(test VmTest) error {
 		}
 
 		for addr, value := range account.Storage {
-			v := obj.GetState(common.HexToHash(addr)).Bytes()
-			vexp := common.FromHex(value)
+			v := obj.GetState(common.HexToHash(addr))
+			vexp := common.HexToHash(value)
 
-			if bytes.Compare(v, vexp) != 0 {
-				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", obj.Address().Bytes()[0:4], addr, vexp, v, common.BigD(vexp), common.BigD(v))
+			if v != vexp {
+				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", obj.Address().Bytes()[0:4], addr, vexp, v, vexp.Big(), v.Big())
 			}
 		}
 	}
 
 	statedb.Sync()
-	//if !bytes.Equal(common.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
 	if common.HexToHash(test.PostStateRoot) != statedb.Root() {
 		return fmt.Errorf("Post state root error. Expected %s, got %x", test.PostStateRoot, statedb.Root())
 	}
