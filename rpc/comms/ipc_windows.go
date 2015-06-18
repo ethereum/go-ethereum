@@ -641,7 +641,15 @@ func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 		return nil, err
 	}
 
-	return &ipcClient{codec.New(c)}, nil
+	return &ipcClient{cfg.Endpoint, codec, codec.New(c)}, nil
+}
+
+func (self *ipcClient) reconnect() error {
+	c, err := Dial(self.endpoint)
+	if err == nil {
+		self.coder = self.codec.New(c)
+	}
+	return err
 }
 
 func startIpc(cfg IpcConfig, codec codec.Codec, api api.EthereumApi) error {

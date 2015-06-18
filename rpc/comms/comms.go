@@ -4,12 +4,14 @@ import (
 	"io"
 	"net"
 
+	"fmt"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
-	"strings"
 )
 
 const (
@@ -26,7 +28,7 @@ var (
 	// List with API's which are offered over thr HTTP/RPC interface by default
 	DefaultHttpRpcApis = strings.Join([]string{
 		api.DbApiName, api.EthApiName, api.NetApiName, api.Web3ApiName,
-		}, ",")
+	}, ",")
 )
 
 type EthereumClient interface {
@@ -36,6 +38,8 @@ type EthereumClient interface {
 	Send(interface{}) error
 	// Receive response
 	Recv() (interface{}, error)
+	// List with modules this client supports
+	SupportedModules() (map[string]string, error)
 }
 
 func handle(conn net.Conn, api api.EthereumApi, c codec.Codec) {
@@ -63,4 +67,23 @@ func handle(conn net.Conn, api api.EthereumApi, c codec.Codec) {
 			return
 		}
 	}
+}
+
+// Endpoint must be in the form of:
+// ${protocol}:${path}
+// e.g. ipc:/tmp/geth.ipc
+//      rpc:localhost:8545
+func ClientFromEndpoint(endpoint string, c codec.Codec) (EthereumClient, error) {
+	if strings.HasPrefix(endpoint, "ipc:") {
+		cfg := IpcConfig{
+			Endpoint: endpoint[4:],
+		}
+		return NewIpcClient(cfg, codec.JSON)
+	}
+
+	if strings.HasPrefix(endpoint, "rpc:") {
+
+	}
+
+	return nil, fmt.Errorf("Invalid endpoint")
 }

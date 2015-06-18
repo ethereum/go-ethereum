@@ -51,3 +51,21 @@ func (self *InProcClient) Send(req interface{}) error {
 func (self *InProcClient) Recv() (interface{}, error) {
 	return self.lastRes, self.lastErr
 }
+
+func (self *InProcClient) SupportedModules() (map[string]string, error) {
+	req := shared.Request{
+		Id:      1,
+		Jsonrpc: "2.0",
+		Method:  "modules",
+	}
+
+	if res, err := self.api.Execute(&req); err == nil {
+		if result, ok := res.(map[string]string); ok {
+			return result, nil
+		}
+	} else {
+		return nil, err
+	}
+
+	return nil, fmt.Errorf("Invalid response")
+}

@@ -26,6 +26,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"sort"
+
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/docserver"
@@ -36,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
@@ -137,6 +138,40 @@ func apiWordCompleter(line string, pos int) (head string, completions []string, 
 	return begin, completionWords, end
 }
 
+func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
+	js := &jsre{ps1: "> "}
+	js.wait = make(chan *big.Int)
+	js.client = client
+
+	if f == nil {
+		f = js
+	}
+
+	// update state in separare forever blocks
+	js.re = re.New(libPath)
+	if err := js.apiBindings(f); err != nil {
+		utils.Fatalf("Unable to initialize console - %v", err)
+	}
+
+	if !liner.TerminalSupported() || !interactive {
+		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
+	} else {
+		lr := liner.NewLiner()
+		//js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
+		lr.SetCtrlCAborts(true)
+		js.loadAutoCompletion()
+		lr.SetWordCompleter(apiWordCompleter)
+		lr.SetTabCompletionStyle(liner.TabPrints)
+		js.prompter = lr
+		js.atexit = func() {
+			js.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
+			lr.Close()
+			close(js.wait)
+		}
+	}
+	return js
+}
+
 func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
 	js := &jsre{ethereum: ethereum, ps1: "> "}
 	// set default cors domain used by startRpc from CLI flag
@@ -177,7 +212,7 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, client comms.Et
 }
 
 func (self *jsre) loadAutoCompletion() {
-	if modules, err := self.suportedApis(); err == nil {
+	if modules, err := self.supportedApis(); err == nil {
 		loadedModulesMethods = make(map[string][]string)
 		for module, _ := range modules {
 			loadedModulesMethods[module] = api.AutoCompletion[module]
@@ -185,34 +220,33 @@ func (self *jsre) loadAutoCompletion() {
 	}
 }
 
-func (self *jsre) suportedApis() (map[string]string, error) {
-	req := shared.Request{
-		Id:      1,
-		Jsonrpc: "2.0",
-		Method:  "modules",
-	}
+// show summary of current geth instance
+func (self *jsre) welcome() {
+	self.re.Eval(`console.log('instance: ' + web3.version.client);`)
+	self.re.Eval(`console.log(' datadir: ' + admin.datadir);`)
+	self.re.Eval(`console.log("coinbase: " + eth.coinbase);`)
+	self.re.Eval(`var lastBlockTimestamp = 1000 * eth.getBlock(eth.blockNumber).timestamp`)
+	self.re.Eval(`console.log("at block: " + eth.blockNumber + " (" + new Date(lastBlockTimestamp).toLocaleDateString()
+		+ " " + new Date(lastBlockTimestamp).toLocaleTimeString() + ")");`)
 
-	err := self.client.Send(&req)
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := self.client.Recv()
-	if err != nil {
-		return nil, err
-	}
-
-	if sucRes, ok := res.(map[string]string); ok {
-		if err == nil {
-			return sucRes, nil
+	if modules, err := self.supportedApis(); err == nil {
+		loadedModules := make([]string, 0)
+		for api, version := range modules {
+			loadedModules = append(loadedModules, fmt.Sprintf("%s:%s", api, version))
 		}
-	}
+		sort.Strings(loadedModules)
 
-	return nil, fmt.Errorf("Unable to determine supported API's")
+		self.re.Eval(fmt.Sprintf("var modules = '%s';", strings.Join(loadedModules, " ")))
+		self.re.Eval(`console.log(" modules: " + modules);`)
+	}
+}
+
+func (self *jsre) supportedApis() (map[string]string, error) {
+	return self.client.SupportedModules()
 }
 
 func (js *jsre) apiBindings(f xeth.Frontend) error {
-	apis, err := js.suportedApis()
+	apis, err := js.supportedApis()
 	if err != nil {
 		return err
 	}
@@ -366,7 +400,12 @@ func (self *jsre) interactive() {
 }
 
 func (self *jsre) withHistory(op func(*os.File)) {
-	hist, err := os.OpenFile(filepath.Join(self.ethereum.DataDir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
+	datadir := common.DefaultDataDir()
+	if self.ethereum != nil {
+		datadir = self.ethereum.DataDir
+	}
+
+	hist, err := os.OpenFile(filepath.Join(datadir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		fmt.Printf("unable to open history file: %v\n", err)
 		return

@@ -64,7 +64,6 @@ func StopHttp() {
 	}
 }
 
-
 type httpClient struct {
 	codec codec.ApiCoder
 }

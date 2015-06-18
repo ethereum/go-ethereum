@@ -204,6 +204,16 @@ nodes.
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
+`},
+		{
+			Action: attach,
+			Name:   "attach",
+			Usage:  `Geth Console: interactive JavaScript environment`,
+			Description: `
+The Geth console is an interactive shell for the JavaScript runtime environment
+which exposes a node admin interface as well as the Ðapp JavaScript API.
+See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console.
+This command allows to open a console on a running geth node.
 `,
 		},
 		{
@@ -297,6 +307,40 @@ func run(ctx *cli.Context) {
 	ethereum.WaitForShutdown()
 }
 
+func attach(ctx *cli.Context) {
+	// Wrap the standard output with a colorified stream (windows)
+	if isatty.IsTerminal(os.Stdout.Fd()) {
+		if pr, pw, err := os.Pipe(); err == nil {
+			go io.Copy(colorable.NewColorableStdout(), pr)
+			os.Stdout = pw
+		}
+	}
+
+	var client comms.EthereumClient
+	var err error
+	if ctx.Args().Present() {
+		client, err = comms.ClientFromEndpoint(ctx.Args().First(), codec.JSON)
+	} else {
+		cfg := comms.IpcConfig{
+			Endpoint: ctx.GlobalString(utils.IPCPathFlag.Name),
+		}
+		client, err = comms.NewIpcClient(cfg, codec.JSON)
+	}
+
+	if err != nil {
+		utils.Fatalf("Unable to attach to geth node - %v", err)
+	}
+
+	repl := newLightweightJSRE(
+		ctx.String(utils.JSpathFlag.Name),
+		client,
+		true,
+		nil)
+
+	repl.welcome()
+	repl.interactive()
+}
+
 func console(ctx *cli.Context) {
 	// Wrap the standard output with a colorified stream (windows)
 	if isatty.IsTerminal(os.Stdout.Fd()) {
@@ -323,6 +367,8 @@ func console(ctx *cli.Context) {
 		true,
 		nil,
 	)
+
+	repl.welcome()
 	repl.interactive()
 
 	ethereum.Stop()
