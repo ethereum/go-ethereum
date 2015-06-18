@@ -33,23 +33,22 @@ var (
 )
 
 var (
-	errBusy              = errors.New("busy")
-	errUnknownPeer       = errors.New("peer is unknown or unhealthy")
-	errBadPeer           = errors.New("action from bad peer ignored")
-	errStallingPeer      = errors.New("peer is stalling")
-	errBannedHead        = errors.New("peer head hash already banned")
-	errNoPeers           = errors.New("no peers to keep download active")
-	errPendingQueue      = errors.New("pending items in queue")
-	errTimeout           = errors.New("timeout")
-	errEmptyHashSet      = errors.New("empty hash set by peer")
-	errPeersUnavailable  = errors.New("no peers available or all peers tried for block download process")
-	errAlreadyInPool     = errors.New("hash already in pool")
-	errInvalidChain      = errors.New("retrieved hash chain is invalid")
-	errCrossCheckFailed  = errors.New("block cross-check failed")
-	errCancelHashFetch   = errors.New("hash fetching canceled (requested)")
-	errCancelBlockFetch  = errors.New("block downloading canceled (requested)")
-	errCancelChainImport = errors.New("chain importing canceled (requested)")
-	errNoSyncActive      = errors.New("no sync active")
+	errBusy             = errors.New("busy")
+	errUnknownPeer      = errors.New("peer is unknown or unhealthy")
+	errBadPeer          = errors.New("action from bad peer ignored")
+	errStallingPeer     = errors.New("peer is stalling")
+	errBannedHead       = errors.New("peer head hash already banned")
+	errNoPeers          = errors.New("no peers to keep download active")
+	errPendingQueue     = errors.New("pending items in queue")
+	errTimeout          = errors.New("timeout")
+	errEmptyHashSet     = errors.New("empty hash set by peer")
+	errPeersUnavailable = errors.New("no peers available or all peers tried for block download process")
+	errAlreadyInPool    = errors.New("hash already in pool")
+	errInvalidChain     = errors.New("retrieved hash chain is invalid")
+	errCrossCheckFailed = errors.New("block cross-check failed")
+	errCancelHashFetch  = errors.New("hash fetching canceled (requested)")
+	errCancelBlockFetch = errors.New("block downloading canceled (requested)")
+	errNoSyncActive     = errors.New("no sync active")
 )
 
 // hashCheckFn is a callback type for verifying a hash's presence in the local chain.
@@ -86,6 +85,8 @@ type Downloader struct {
 	peers  *peerSet                    // Set of active peers from which download can proceed
 	checks map[common.Hash]*crossCheck // Pending cross checks to verify a hash chain
 	banned *set.Set                    // Set of hashes we've received and banned
+
+	interrupt int32 // Atomic boolean to signal termination
 
 	// Statistics
 	importStart time.Time // Instance when the last blocks were taken from the cache
@@ -245,12 +246,6 @@ func (d *Downloader) synchronise(id string, hash common.Hash) error {
 	if atomic.CompareAndSwapInt32(&d.notified, 0, 1) {
 		glog.V(logger.Info).Infoln("Block synchronisation started")
 	}
-
-	// Create cancel channel for aborting mid-flight
-	d.cancelLock.Lock()
-	d.cancelCh = make(chan struct{})
-	d.cancelLock.Unlock()
-
 	// Abort if the queue still contains some leftover data
 	if _, cached := d.queue.Size(); cached > 0 && d.queue.GetHeadBlock() != nil {
 		return errPendingQueue
@@ -260,12 +255,16 @@ func (d *Downloader) synchronise(id string, hash common.Hash) error {
 	d.peers.Reset()
 	d.checks = make(map[common.Hash]*crossCheck)
 
+	// Create cancel channel for aborting mid-flight
+	d.cancelLock.Lock()
+	d.cancelCh = make(chan struct{})
+	d.cancelLock.Unlock()
+
 	// Retrieve the origin peer and initiate the downloading process
 	p := d.peers.Peer(id)
 	if p == nil {
 		return errUnknownPeer
 	}
-
 	return d.syncWithPeer(p, hash)
 }
 
@@ -282,7 +281,7 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash) (err error) {
 	defer func() {
 		// reset on error
 		if err != nil {
-			d.Cancel()
+			d.cancel()
 			d.mux.Post(FailedEvent{err})
 		} else {
 			d.mux.Post(DoneEvent{})
@@ -301,9 +300,9 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash) (err error) {
 	return nil
 }
 
-// Cancel cancels all of the operations and resets the queue. It returns true
+// cancel cancels all of the operations and resets the queue. It returns true
 // if the cancel operation was completed.
-func (d *Downloader) Cancel() {
+func (d *Downloader) cancel() {
 	// Close the current cancel channel
 	d.cancelLock.Lock()
 	if d.cancelCh != nil {
@@ -318,6 +317,12 @@ func (d *Downloader) Cancel() {
 
 	// Reset the queue
 	d.queue.Reset()
+}
+
+// Terminate interrupts the downloader, canceling all pending operations.
+func (d *Downloader) Terminate() {
+	atomic.StoreInt32(&d.interrupt, 1)
+	d.cancel()
 }
 
 // fetchHahes starts retrieving hashes backwards from a specific peer and hash,
@@ -713,7 +718,7 @@ func (d *Downloader) banBlocks(peerId string, head common.Hash) error {
 //       between these state changes, a block may have arrived, but a processing
 //       attempt denied, so we need to re-enter to ensure the block isn't left
 //       to idle in the cache.
-func (d *Downloader) process() (err error) {
+func (d *Downloader) process() {
 	// Make sure only one goroutine is ever allowed to process blocks at once
 	if !atomic.CompareAndSwapInt32(&d.processing, 0, 1) {
 		return
@@ -723,8 +728,8 @@ func (d *Downloader) process() (err error) {
 	// the fresh blocks might have been rejected entry to to this present thread
 	// not yet releasing the `processing` state.
 	defer func() {
-		if err == nil && d.queue.GetHeadBlock() != nil {
-			err = d.process()
+		if atomic.LoadInt32(&d.interrupt) == 0 && d.queue.GetHeadBlock() != nil {
+			d.process()
 		}
 	}()
 	// Release the lock upon exit (note, before checking for reentry!), and set
@@ -737,18 +742,12 @@ func (d *Downloader) process() (err error) {
 
 		atomic.StoreInt32(&d.processing, 0)
 	}()
-
-	// Fetch the current cancel channel to allow termination
-	d.cancelLock.RLock()
-	cancel := d.cancelCh
-	d.cancelLock.RUnlock()
-
 	// Repeat the processing as long as there are blocks to import
 	for {
 		// Fetch the next batch of blocks
 		blocks := d.queue.TakeBlocks()
 		if len(blocks) == 0 {
-			return nil
+			return
 		}
 		// Reset the import statistics
 		d.importLock.Lock()
@@ -759,12 +758,10 @@ func (d *Downloader) process() (err error) {
 
 		// Actually import the blocks
 		glog.V(logger.Debug).Infof("Inserting chain with %d blocks (#%v - #%v)\n", len(blocks), blocks[0].RawBlock.Number(), blocks[len(blocks)-1].RawBlock.Number())
-		for len(blocks) != 0 { // TODO: quit
+		for len(blocks) != 0 {
 			// Check for any termination requests
-			select {
-			case <-cancel:
-				return errCancelChainImport
-			default:
+			if atomic.LoadInt32(&d.interrupt) == 1 {
+				return
 			}
 			// Retrieve the first batch of blocks to insert
 			max := int(math.Min(float64(len(blocks)), float64(maxBlockProcess)))
@@ -777,8 +774,8 @@ func (d *Downloader) process() (err error) {
 			if err != nil {
 				glog.V(logger.Debug).Infof("Block #%d import failed: %v", raw[index].NumberU64(), err)
 				d.dropPeer(blocks[index].OriginPeer)
-				d.Cancel()
-				return errCancelChainImport
+				d.cancel()
+				return
 			}
 			blocks = blocks[max:]
 		}
