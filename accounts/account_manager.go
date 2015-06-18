@@ -49,11 +49,6 @@ var (
 	ErrNoKeys = errors.New("no keys in store")
 )
 
-const (
-    // Default unlock duration (in seconds) when an account is unlocked from the console
-    DefaultAccountUnlockDuration = 300
-)
-
 type Account struct {
 	Address common.Address
 }
@@ -114,28 +109,58 @@ func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) 
 	return signature, err
 }
 
-// TimedUnlock unlocks the account with the given address.
-// When timeout has passed, the account will be locked again.
+// unlock indefinitely
+func (am *Manager) Unlock(addr common.Address, keyAuth string) error {
+	return am.TimedUnlock(addr, keyAuth, 0)
+}
+
+// Unlock unlocks the account with the given address. The account
+// stays unlocked for the duration of timeout
+// it timeout is 0 the account is unlocked for the entire session
 func (am *Manager) TimedUnlock(addr common.Address, keyAuth string, timeout time.Duration) error {
 	key, err := am.keyStore.GetKey(addr, keyAuth)
 	if err != nil {
 		return err
 	}
-	u := am.addUnlocked(addr, key)
-	go am.dropLater(addr, u, timeout)
+	var u *unlocked
+	am.mutex.Lock()
+	defer am.mutex.Unlock()
+	var found bool
+	u, found = am.unlocked[addr]
+	if found {
+		// terminate dropLater for this key to avoid unexpected drops.
+		if u.abort != nil {
+			close(u.abort)
+		}
+	}
+	if timeout > 0 {
+		u = &unlocked{Key: key, abort: make(chan struct{})}
+		go am.expire(addr, u, timeout)
+	} else {
+		u = &unlocked{Key: key}
+	}
+	am.unlocked[addr] = u
 	return nil
 }
 
-// Unlock unlocks the account with the given address. The account
-// stays unlocked until the program exits or until a TimedUnlock
-// timeout (started after the call to Unlock) expires.
-func (am *Manager) Unlock(addr common.Address, keyAuth string) error {
-	key, err := am.keyStore.GetKey(addr, keyAuth)
-	if err != nil {
-		return err
+func (am *Manager) expire(addr common.Address, u *unlocked, timeout time.Duration) {
+	t := time.NewTimer(timeout)
+	defer t.Stop()
+	select {
+	case <-u.abort:
+		// just quit
+	case <-t.C:
+		am.mutex.Lock()
+		// only drop if it's still the same key instance that dropLater
+		// was launched with. we can check that using pointer equality
+		// because the map stores a new pointer every time the key is
+		// unlocked.
+		if am.unlocked[addr] == u {
+			zeroKey(u.PrivateKey)
+			delete(am.unlocked, addr)
+		}
+		am.mutex.Unlock()
 	}
-	am.addUnlocked(addr, key)
-	return nil
 }
 
 func (am *Manager) NewAccount(auth string) (Account, error) {
@@ -160,43 +185,6 @@ func (am *Manager) Accounts() ([]Account, error) {
 		}
 	}
 	return accounts, err
-}
-
-func (am *Manager) addUnlocked(addr common.Address, key *crypto.Key) *unlocked {
-	u := &unlocked{Key: key, abort: make(chan struct{})}
-	am.mutex.Lock()
-	prev, found := am.unlocked[addr]
-	if found {
-		// terminate dropLater for this key to avoid unexpected drops.
-		close(prev.abort)
-		// the key is zeroed here instead of in dropLater because
-		// there might not actually be a dropLater running for this
-		// key, i.e. when Unlock was used.
-		zeroKey(prev.PrivateKey)
-	}
-	am.unlocked[addr] = u
-	am.mutex.Unlock()
-	return u
-}
-
-func (am *Manager) dropLater(addr common.Address, u *unlocked, timeout time.Duration) {
-	t := time.NewTimer(timeout)
-	defer t.Stop()
-	select {
-	case <-u.abort:
-		// just quit
-	case <-t.C:
-		am.mutex.Lock()
-		// only drop if it's still the same key instance that dropLater
-		// was launched with. we can check that using pointer equality
-		// because the map stores a new pointer every time the key is
-		// unlocked.
-		if am.unlocked[addr] == u {
-			zeroKey(u.PrivateKey)
-			delete(am.unlocked, addr)
-		}
-		am.mutex.Unlock()
-	}
 }
 
 // zeroKey zeroes a private key in memory.
