@@ -252,33 +252,31 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case GetBlocksMsg:
-		var blocks []*types.Block
-
+		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
 			return err
 		}
+		// Gather blocks until the fetch or network limits is reached
 		var (
-			i         int
-			totalsize common.StorageSize
+			hash   common.Hash
+			bytes  common.StorageSize
+			blocks []*types.Block
 		)
 		for {
-			i++
-			var hash common.Hash
 			err := msgStream.Decode(&hash)
 			if err == rlp.EOL {
 				break
 			} else if err != nil {
 				return errResp(ErrDecode, "msg %v: %v", msg, err)
 			}
-
-			block := pm.chainman.GetBlock(hash)
-			if block != nil {
+			// Retrieve the requested block, stopping if enough was found
+			if block := pm.chainman.GetBlock(hash); block != nil {
 				blocks = append(blocks, block)
-				totalsize += block.Size()
-			}
-			if i == downloader.MaxBlockFetch || totalsize > maxBlockRespSize {
-				break
+				bytes += block.Size()
+				if len(blocks) >= downloader.MaxBlockFetch || bytes > maxBlockRespSize {
+					break
+				}
 			}
 		}
 		return p.sendBlocks(blocks)
@@ -360,8 +358,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 // BroadcastBlock will propagate the block to a subset of its connected peers,
 // only notifying the rest of the block's appearance.
 func (pm *ProtocolManager) BroadcastBlock(block *types.Block) {
+	hash := block.Hash()
+
 	// Retrieve all the target peers and split between full broadcast or only notification
-	peers := pm.peers.PeersWithoutBlock(block.Hash())
+	peers := pm.peers.PeersWithoutBlock(hash)
 	split := int(math.Sqrt(float64(len(peers))))
 
 	transfer := peers[:split]
@@ -369,14 +369,14 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block) {
 
 	// Send out the data transfers and the notifications
 	for _, peer := range notify {
-		peer.sendNewBlockHashes([]common.Hash{block.Hash()})
+		peer.sendNewBlockHashes([]common.Hash{hash})
 	}
-	glog.V(logger.Detail).Infoln("broadcast hash to", len(notify), "peers.")
+	glog.V(logger.Detail).Infof("broadcast hash %x to %d peers.", hash[:4], len(notify))
 
 	for _, peer := range transfer {
 		peer.sendNewBlock(block)
 	}
-	glog.V(logger.Detail).Infoln("broadcast block to", len(transfer), "peers. Total processing time:", time.Since(block.ReceivedAt))
+	glog.V(logger.Detail).Infof("broadcast block %x to %d peers. Total processing time: %v", hash[:4], len(transfer), time.Since(block.ReceivedAt))
 }
 
 // BroadcastTx will propagate the block to its connected peers. It will sort
