@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"net"
 
+	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
-	"encoding/json"
 )
 
 type IpcConfig struct {
