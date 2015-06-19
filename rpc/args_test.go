@@ -2577,3 +2577,57 @@ func TestSigArgsEmpty(t *testing.T) {
 		t.Error(str)
 	}
 }
+
+func TestDataArgs(t *testing.T) {
+	input := `["0x0123"]`
+	expected := new(NewDataArgs)
+	expected.Data = "0x0123"
+
+	args := new(NewDataArgs)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		t.Error(err)
+	}
+
+	if expected.Data != args.Data {
+		t.Errorf("Data should be %v but is %v", expected.Data, args.Data)
+	}
+}
+
+func TestDataArgsEmptyData(t *testing.T) {
+	input := `[""]`
+
+	args := new(NewDataArgs)
+	str := ExpectValidationError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestDataArgsDataType(t *testing.T) {
+	input := `[13]`
+
+	args := new(NewDataArgs)
+	str := ExpectInvalidTypeError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestDataArgsEmpty(t *testing.T) {
+	input := `[]`
+	args := new(NewDataArgs)
+	str := ExpectInsufficientParamsError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
+
+func TestDataArgsInvalid(t *testing.T) {
+	input := `{}`
+
+	args := new(NewDataArgs)
+	str := ExpectDecodeParamError(json.Unmarshal([]byte(input), args))
+	if len(str) > 0 {
+		t.Error(str)
+	}
+}
