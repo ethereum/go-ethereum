@@ -115,3 +115,7 @@ func (self *LDBDatabase) Close() {
 	self.db.Close()
 	glog.V(logger.Error).Infoln("flushed and closed db:", self.fn)
 }
+
+func (self *LDBDatabase) LDB() *leveldb.DB {
+	return self.db
+}
