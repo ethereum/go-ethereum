@@ -157,7 +157,7 @@ func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
 	} else {
 		lr := liner.NewLiner()
-		//js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
+		js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
 		js.loadAutoCompletion()
 		lr.SetWordCompleter(apiWordCompleter)
