@@ -32,9 +32,9 @@ type TransactionTest struct {
 	Transaction TtTransaction
 }
 
-func RunTransactionTestsWithReader(r io.Reader) error {
-	skipTest := make(map[string]bool, len(TransSkipTests))
-	for _, name := range TransSkipTests {
+func RunTransactionTestsWithReader(r io.Reader, skipTests []string) error {
+	skipTest := make(map[string]bool, len(skipTests))
+	for _, name := range skipTests {
 		skipTest[name] = true
 	}
 
@@ -59,18 +59,25 @@ func RunTransactionTestsWithReader(r io.Reader) error {
 	return nil
 }
 
-func RunTransactionTests(file string) error {
-	skipTest := make(map[string]bool, len(TransSkipTests))
-	for _, name := range TransSkipTests {
-		skipTest[name] = true
-	}
-
-	bt := make(map[string]TransactionTest)
-	if err := readJsonFile(file, &bt); err != nil {
+func RunTransactionTests(file string, skipTests []string) error {
+	tests := make(map[string]TransactionTest)
+	if err := readJsonFile(file, &tests); err != nil {
 		return err
 	}
 
-	for name, test := range bt {
+	if err := runTransactionTests(tests, skipTests); err != nil {
+		return err
+	}
+	return nil
+}
+
+func runTransactionTests(tests map[string]TransactionTest, skipTests []string) error {
+	skipTest := make(map[string]bool, len(skipTests))
+	for _, name := range skipTests {
+		skipTest[name] = true
+	}
+
+	for name, test := range tests {
 		// if the test should be skipped, return
 		if skipTest[name] {
 			glog.Infoln("Skipping transaction test", name)

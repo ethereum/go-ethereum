@@ -86,7 +86,7 @@ type btTransaction struct {
 	Value    string
 }
 
-func RunBlockTestWithReader(r io.Reader) error {
+func RunBlockTestWithReader(r io.Reader, skipTests []string) error {
 	btjs := make(map[string]*btJSON)
 	if err := readJson(r, &btjs); err != nil {
 		return err
@@ -97,13 +97,13 @@ func RunBlockTestWithReader(r io.Reader) error {
 		return err
 	}
 
-	if err := runBlockTests(bt); err != nil {
+	if err := runBlockTests(bt, skipTests); err != nil {
 		return err
 	}
 	return nil
 }
 
-func RunBlockTest(file string) error {
+func RunBlockTest(file string, skipTests []string) error {
 	btjs := make(map[string]*btJSON)
 	if err := readJsonFile(file, &btjs); err != nil {
 		return err
@@ -113,15 +113,15 @@ func RunBlockTest(file string) error {
 	if err != nil {
 		return err
 	}
-	if err := runBlockTests(bt); err != nil {
+	if err := runBlockTests(bt, skipTests); err != nil {
 		return err
 	}
 	return nil
 }
 
-func runBlockTests(bt map[string]*BlockTest) error {
-	skipTest := make(map[string]bool, len(BlockSkipTests))
-	for _, name := range BlockSkipTests {
+func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
+	skipTest := make(map[string]bool, len(skipTests))
+	for _, name := range skipTests {
 		skipTest[name] = true
 	}
 

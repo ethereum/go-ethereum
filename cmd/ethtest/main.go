@@ -28,6 +28,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -40,6 +41,7 @@ var (
 	defaultTest     = "all"
 	defaultDir      = "."
 	allTests        = []string{"BlockTests", "StateTests", "TransactionTests", "VMTests"}
+	skipTests       = []string{}
 
 	TestFlag = cli.StringFlag{
 		Name:  "test",
@@ -60,6 +62,10 @@ var (
 		Name:  "stdin",
 		Usage: "Accept input from stdin instead of reading from file",
 	}
+	SkipTestsFlag = cli.StringFlag{
+		Name:  "skip",
+		Usage: "Tests names to skip",
+	}
 )
 
 func runTestWithReader(test string, r io.Reader) error {
@@ -67,13 +73,13 @@ func runTestWithReader(test string, r io.Reader) error {
 	var err error
 	switch test {
 	case "bt", "BlockTest", "BlockTests", "BlockChainTest":
-		err = tests.RunBlockTestWithReader(r)
+		err = tests.RunBlockTestWithReader(r, skipTests)
 	case "st", "state", "StateTest", "StateTests":
-		err = tests.RunStateTestWithReader(r)
+		err = tests.RunStateTestWithReader(r, skipTests)
 	case "tx", "TransactionTest", "TransactionTests":
-		err = tests.RunTransactionTestsWithReader(r)
+		err = tests.RunTransactionTestsWithReader(r, skipTests)
 	case "vm", "VMTest", "VMTests":
-		err = tests.RunVmTestWithReader(r)
+		err = tests.RunVmTestWithReader(r, skipTests)
 	default:
 		err = fmt.Errorf("Invalid test type specified: %v", test)
 	}
@@ -174,6 +180,7 @@ func setupApp(c *cli.Context) {
 	flagFile := c.GlobalString(FileFlag.Name)
 	continueOnError = c.GlobalBool(ContinueOnErrorFlag.Name)
 	useStdIn := c.GlobalBool(ReadStdInFlag.Name)
+	skipTests = strings.Split(c.GlobalString(SkipTestsFlag.Name), " ")
 
 	if !useStdIn {
 		runSuite(flagTest, flagFile)
@@ -200,6 +207,7 @@ func main() {
 		FileFlag,
 		ContinueOnErrorFlag,
 		ReadStdInFlag,
+		SkipTestsFlag,
 	}
 
 	if err := app.Run(os.Args); err != nil {

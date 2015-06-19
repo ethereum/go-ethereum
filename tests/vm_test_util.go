@@ -14,7 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-func RunVmTestWithReader(r io.Reader) error {
+func RunVmTestWithReader(r io.Reader, skipTests []string) error {
 	tests := make(map[string]VmTest)
 	err := readJson(r, &tests)
 	if err != nil {
@@ -25,14 +25,14 @@ func RunVmTestWithReader(r io.Reader) error {
 		return err
 	}
 
-	if err := runVmTests(tests); err != nil {
+	if err := runVmTests(tests, skipTests); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func RunVmTest(p string) error {
+func RunVmTest(p string, skipTests []string) error {
 
 	tests := make(map[string]VmTest)
 	err := readJsonFile(p, &tests)
@@ -40,16 +40,16 @@ func RunVmTest(p string) error {
 		return err
 	}
 
-	if err := runVmTests(tests); err != nil {
+	if err := runVmTests(tests, skipTests); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func runVmTests(tests map[string]VmTest) error {
-	skipTest := make(map[string]bool, len(VmSkipTests))
-	for _, name := range VmSkipTests {
+func runVmTests(tests map[string]VmTest, skipTests []string) error {
+	skipTest := make(map[string]bool, len(skipTests))
+	for _, name := range skipTests {
 		skipTest[name] = true
 	}
 
