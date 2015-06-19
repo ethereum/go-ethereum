@@ -227,6 +227,10 @@ var (
 		Usage: "Filename for IPC socket/pipe",
 		Value: DirectoryString{common.DefaultIpcPath()},
 	}
+	ExecFlag = cli.StringFlag{
+		Name:  "exec",
+		Usage: "Execute javascript statement (only in combination with console/attach)",
+	}
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",

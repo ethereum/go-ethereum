@@ -3,12 +3,13 @@ package api
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/rpc/codec"
 	"encoding/json"
 	"strconv"
+
 	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -58,11 +59,11 @@ func TestCompileSolidity(t *testing.T) {
 		t.Skip("WARNING: skipping test because of solc different version (%v, test written for %v, may need to update)", solc.Version(), solcVersion)
 	}
 	source := `contract test {\n` +
-	"   /// @notice Will multiply `a` by 7." + `\n` +
-	`   function multiply(uint a) returns(uint d) {\n` +
-	`       return a * 7;\n` +
-	`   }\n` +
-	`}\n`
+		"   /// @notice Will multiply `a` by 7." + `\n` +
+		`   function multiply(uint a) returns(uint d) {\n` +
+		`       return a * 7;\n` +
+		`   }\n` +
+		`}\n`
 
 	jsonstr := `{"jsonrpc":"2.0","method":"eth_compileSolidity","params":["` + source + `"],"id":64}`
 

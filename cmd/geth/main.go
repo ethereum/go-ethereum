@@ -255,6 +255,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IPCDisabledFlag,
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
+		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
 		utils.VMDebugFlag,
 		utils.ProtocolVersionFlag,
@@ -337,8 +338,12 @@ func attach(ctx *cli.Context) {
 		true,
 		nil)
 
-	repl.welcome()
-	repl.interactive()
+	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
+		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))
+	} else {
+		repl.welcome()
+		repl.interactive()
+	}
 }
 
 func console(ctx *cli.Context) {
@@ -368,8 +373,12 @@ func console(ctx *cli.Context) {
 		nil,
 	)
 
-	repl.welcome()
-	repl.interactive()
+	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
+		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))
+	} else {
+		repl.welcome()
+		repl.interactive()
+	}
 
 	ethereum.Stop()
 	ethereum.WaitForShutdown()
