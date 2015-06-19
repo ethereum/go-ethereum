@@ -71,14 +71,14 @@ var (
 func runTestWithReader(test string, r io.Reader) error {
 	glog.Infoln("runTest", test)
 	var err error
-	switch test {
-	case "bt", "BlockTest", "BlockTests", "BlockChainTest":
+	switch strings.ToLower(test) {
+	case "bk", "block", "blocktest", "blockchaintest", "blocktests", "blockchaintests":
 		err = tests.RunBlockTestWithReader(r, skipTests)
-	case "st", "state", "StateTest", "StateTests":
+	case "st", "state", "statetest", "statetests":
 		err = tests.RunStateTestWithReader(r, skipTests)
-	case "tx", "TransactionTest", "TransactionTests":
+	case "tx", "transactiontest", "transactiontests":
 		err = tests.RunTransactionTestsWithReader(r, skipTests)
-	case "vm", "VMTest", "VMTests":
+	case "vm", "vmtest", "vmtests":
 		err = tests.RunVmTestWithReader(r, skipTests)
 	default:
 		err = fmt.Errorf("Invalid test type specified: %v", test)
