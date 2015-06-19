@@ -21,7 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/golang/groupcache/lru"
+	"github.com/hashicorp/golang-lru"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -121,13 +121,14 @@ type ChainManager struct {
 }
 
 func NewChainManager(genesis *types.Block, blockDb, stateDb common.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
+	cache, _ := lru.New(blockCacheLimit)
 	bc := &ChainManager{
 		blockDb:      blockDb,
 		stateDb:      stateDb,
 		genesisBlock: GenesisBlock(42, stateDb),
 		eventMux:     mux,
 		quit:         make(chan struct{}),
-		cache:        lru.New(blockCacheLimit),
+		cache:        cache,
 		pow:          pow,
 	}
 	// Check the genesis block given to the chain manager. If the genesis block mismatches block number 0
@@ -172,7 +173,7 @@ func (bc *ChainManager) SetHead(head *types.Block) {
 		bc.removeBlock(block)
 	}
 
-	bc.cache = lru.New(blockCacheLimit)
+	bc.cache, _ = lru.New(blockCacheLimit)
 	bc.currentBlock = head
 	bc.makeCache()
 
@@ -260,9 +261,7 @@ func (bc *ChainManager) setLastState() {
 }
 
 func (bc *ChainManager) makeCache() {
-	if bc.cache == nil {
-		bc.cache = lru.New(blockCacheLimit)
-	}
+	bc.cache, _ = lru.New(blockCacheLimit)
 	// load in last `blockCacheLimit` - 1 blocks. Last block is the current.
 	ancestors := bc.GetAncestors(bc.currentBlock, blockCacheLimit-1)
 	ancestors = append(ancestors, bc.currentBlock)
@@ -279,9 +278,7 @@ func (bc *ChainManager) Reset() {
 		bc.removeBlock(block)
 	}
 
-	if bc.cache == nil {
-		bc.cache = lru.New(blockCacheLimit)
-	}
+	bc.cache, _ = lru.New(blockCacheLimit)
 
 	// Prepare the genesis block
 	bc.write(bc.genesisBlock)
