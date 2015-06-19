@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -16,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -307,7 +307,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			blocks = nil
 		}
 		// Update the receive timestamp of each block
-		for i:=0; i<len(blocks); i++ {
+		for i := 0; i < len(blocks); i++ {
 			blocks[i].ReceivedAt = msg.ReceivedAt
 		}
 		// Filter out any explicitly requested blocks, deliver the rest to the downloader
@@ -417,8 +417,8 @@ func (self *ProtocolManager) minedBroadcastLoop() {
 	for obj := range self.minedBlockSub.Chan() {
 		switch ev := obj.(type) {
 		case core.NewMinedBlockEvent:
-			self.BroadcastBlock(ev.Block, false)
-			self.BroadcastBlock(ev.Block, true)
+			self.BroadcastBlock(ev.Block, true)  // First propagate block to peers
+			self.BroadcastBlock(ev.Block, false) // Only then announce to the rest
 		}
 	}
 }
