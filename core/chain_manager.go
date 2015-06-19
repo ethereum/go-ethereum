@@ -36,7 +36,7 @@ var (
 )
 
 const (
-	blockCacheLimit     = 10000
+	blockCacheLimit     = 256
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 )
