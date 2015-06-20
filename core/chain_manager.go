@@ -377,8 +377,14 @@ func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error 
 // assumes that the `mu` mutex is held!
 func (bc *ChainManager) insert(block *types.Block) {
 	key := append(blockNumPre, block.Number().Bytes()...)
-	bc.blockDb.Put(key, block.Hash().Bytes())
-	bc.blockDb.Put([]byte("LastBlock"), block.Hash().Bytes())
+	err := bc.blockDb.Put(key, block.Hash().Bytes())
+	if err != nil {
+		glog.Fatal("db write fail:", err)
+	}
+	err = bc.blockDb.Put([]byte("LastBlock"), block.Hash().Bytes())
+	if err != nil {
+		glog.Fatal("db write fail:", err)
+	}
 
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
@@ -387,7 +393,11 @@ func (bc *ChainManager) insert(block *types.Block) {
 func (bc *ChainManager) write(block *types.Block) {
 	enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
 	key := append(blockHashPre, block.Hash().Bytes()...)
-	bc.blockDb.Put(key, enc)
+	err := bc.blockDb.Put(key, enc)
+	if err != nil {
+		glog.Fatal("db write fail:", err)
+	}
+
 	// Push block to cache
 	bc.cache.Push(block)
 }
