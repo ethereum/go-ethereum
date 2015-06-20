@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/hashicorp/golang-lru"
 )
 
 func init() {
@@ -109,7 +110,8 @@ func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 
 		bman.bc.mu.Lock()
 		{
-			bman.bc.write(block)
+			bman.bc.enqueueForWrite(block)
+			//bman.bc.write(block)
 		}
 		bman.bc.mu.Unlock()
 	}
@@ -391,7 +393,7 @@ func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block 
 func chm(genesis *types.Block, db common.Database) *ChainManager {
 	var eventMux event.TypeMux
 	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
-	bc.cache = NewBlockCache(100)
+	bc.cache, _ = lru.New(100)
 	bc.futureBlocks = NewBlockCache(100)
 	bc.processor = bproc{}
 	bc.ResetWithGenesisBlock(genesis)
