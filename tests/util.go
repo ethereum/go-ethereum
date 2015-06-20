@@ -1,15 +1,112 @@
-package helper
+package tests
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 )
+
+func checkLogs(tlog []Log, logs state.Logs) error {
+
+	if len(tlog) != len(logs) {
+		return fmt.Errorf("log length mismatch. Expected %d, got %d", len(tlog), len(logs))
+	} else {
+		for i, log := range tlog {
+			if common.HexToAddress(log.AddressF) != logs[i].Address {
+				return fmt.Errorf("log address expected %v got %x", log.AddressF, logs[i].Address)
+			}
+
+			if !bytes.Equal(logs[i].Data, common.FromHex(log.DataF)) {
+				return fmt.Errorf("log data expected %v got %x", log.DataF, logs[i].Data)
+			}
+
+			if len(log.TopicsF) != len(logs[i].Topics) {
+				return fmt.Errorf("log topics length expected %d got %d", len(log.TopicsF), logs[i].Topics)
+			} else {
+				for j, topic := range log.TopicsF {
+					if common.HexToHash(topic) != logs[i].Topics[j] {
+						return fmt.Errorf("log topic[%d] expected %v got %x", j, topic, logs[i].Topics[j])
+					}
+				}
+			}
+			genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
+
+			if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
+				return fmt.Errorf("bloom mismatch")
+			}
+		}
+	}
+	return nil
+}
+
+type Account struct {
+	Balance string
+	Code    string
+	Nonce   string
+	Storage map[string]string
+}
+
+type Log struct {
+	AddressF string   `json:"address"`
+	DataF    string   `json:"data"`
+	TopicsF  []string `json:"topics"`
+	BloomF   string   `json:"bloom"`
+}
+
+func (self Log) Address() []byte      { return common.Hex2Bytes(self.AddressF) }
+func (self Log) Data() []byte         { return common.Hex2Bytes(self.DataF) }
+func (self Log) RlpData() interface{} { return nil }
+func (self Log) Topics() [][]byte {
+	t := make([][]byte, len(self.TopicsF))
+	for i, topic := range self.TopicsF {
+		t[i] = common.Hex2Bytes(topic)
+	}
+	return t
+}
+
+func StateObjectFromAccount(db common.Database, addr string, account Account) *state.StateObject {
+	obj := state.NewStateObject(common.HexToAddress(addr), db)
+	obj.SetBalance(common.Big(account.Balance))
+
+	if common.IsHex(account.Code) {
+		account.Code = account.Code[2:]
+	}
+	obj.SetCode(common.Hex2Bytes(account.Code))
+	obj.SetNonce(common.Big(account.Nonce).Uint64())
+
+	return obj
+}
+
+type VmEnv struct {
+	CurrentCoinbase   string
+	CurrentDifficulty string
+	CurrentGasLimit   string
+	CurrentNumber     string
+	CurrentTimestamp  interface{}
+	PreviousHash      string
+}
+
+type VmTest struct {
+	Callcreates interface{}
+	//Env         map[string]string
+	Env           VmEnv
+	Exec          map[string]string
+	Transaction   map[string]string
+	Logs          []Log
+	Gas           string
+	Out           string
+	Post          map[string]Account
+	Pre           map[string]Account
+	PostStateRoot string
+}
 
 type Env struct {
 	depth        int
@@ -27,8 +124,9 @@ type Env struct {
 	difficulty *big.Int
 	gasLimit   *big.Int
 
+	logs []vm.StructLog
+
 	vmTest bool
-	logs   []vm.StructLog
 }
 
 func NewEnv(state *state.StateDB) *Env {
@@ -138,64 +236,6 @@ func (self *Env) Create(caller vm.ContextRef, data []byte, gas, price, value *bi
 	} else {
 		return exe.Create(caller)
 	}
-}
-
-func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Logs, *big.Int, error) {
-	var (
-		to    = common.HexToAddress(exec["address"])
-		from  = common.HexToAddress(exec["caller"])
-		data  = FromHex(exec["data"])
-		gas   = common.Big(exec["gas"])
-		price = common.Big(exec["gasPrice"])
-		value = common.Big(exec["value"])
-	)
-	// Reset the pre-compiled contracts for VM tests.
-	vm.Precompiled = make(map[string]*vm.PrecompiledAccount)
-
-	caller := state.GetOrNewStateObject(from)
-
-	vmenv := NewEnvFromMap(state, env, exec)
-	vmenv.vmTest = true
-	vmenv.skipTransfer = true
-	vmenv.initial = true
-	ret, err := vmenv.Call(caller, to, data, gas, price, value)
-
-	return ret, vmenv.state.Logs(), vmenv.Gas, err
-}
-
-func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.Logs, *big.Int, error) {
-	var (
-		keyPair, _ = crypto.NewKeyPairFromSec([]byte(common.Hex2Bytes(tx["secretKey"])))
-		data       = FromHex(tx["data"])
-		gas        = common.Big(tx["gasLimit"])
-		price      = common.Big(tx["gasPrice"])
-		value      = common.Big(tx["value"])
-		nonce      = common.Big(tx["nonce"]).Uint64()
-		caddr      = common.HexToAddress(env["currentCoinbase"])
-	)
-
-	var to *common.Address
-	if len(tx["to"]) > 2 {
-		t := common.HexToAddress(tx["to"])
-		to = &t
-	}
-	// Set pre compiled contracts
-	vm.Precompiled = vm.PrecompiledContracts()
-
-	snapshot := statedb.Copy()
-	coinbase := statedb.GetOrNewStateObject(caddr)
-	coinbase.SetGasPool(common.Big(env["currentGasLimit"]))
-
-	message := NewMessage(common.BytesToAddress(keyPair.Address()), to, data, value, gas, price, nonce)
-	vmenv := NewEnvFromMap(statedb, env, tx)
-	vmenv.origin = common.BytesToAddress(keyPair.Address())
-	ret, _, err := core.ApplyMessage(vmenv, message, coinbase)
-	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || state.IsGasLimitErr(err) {
-		statedb.Set(snapshot)
-	}
-	statedb.Update()
-
-	return ret, vmenv.state.Logs(), vmenv.Gas, err
 }
 
 type Message struct {

@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -30,25 +32,69 @@ type TransactionTest struct {
 	Transaction TtTransaction
 }
 
-func RunTransactionTests(file string, notWorking map[string]bool) error {
+func RunTransactionTestsWithReader(r io.Reader, skipTests []string) error {
+	skipTest := make(map[string]bool, len(skipTests))
+	for _, name := range skipTests {
+		skipTest[name] = true
+	}
+
 	bt := make(map[string]TransactionTest)
-	if err := LoadJSON(file, &bt); err != nil {
+	if err := readJson(r, &bt); err != nil {
 		return err
 	}
-	for name, in := range bt {
-		var err error
-		// TODO: remove this, we currently ignore some tests which are broken
-		if !notWorking[name] {
-			if err = runTest(in); err != nil {
-				return fmt.Errorf("bad test %s: %v", name, err)
-			}
-			fmt.Println("Test passed:", name)
+
+	for name, test := range bt {
+		// if the test should be skipped, return
+		if skipTest[name] {
+			glog.Infoln("Skipping transaction test", name)
+			return nil
 		}
+		// test the block
+		if err := runTransactionTest(test); err != nil {
+			return err
+		}
+		glog.Infoln("Transaction test passed: ", name)
+
 	}
 	return nil
 }
 
-func runTest(txTest TransactionTest) (err error) {
+func RunTransactionTests(file string, skipTests []string) error {
+	tests := make(map[string]TransactionTest)
+	if err := readJsonFile(file, &tests); err != nil {
+		return err
+	}
+
+	if err := runTransactionTests(tests, skipTests); err != nil {
+		return err
+	}
+	return nil
+}
+
+func runTransactionTests(tests map[string]TransactionTest, skipTests []string) error {
+	skipTest := make(map[string]bool, len(skipTests))
+	for _, name := range skipTests {
+		skipTest[name] = true
+	}
+
+	for name, test := range tests {
+		// if the test should be skipped, return
+		if skipTest[name] {
+			glog.Infoln("Skipping transaction test", name)
+			return nil
+		}
+
+		// test the block
+		if err := runTransactionTest(test); err != nil {
+			return err
+		}
+		glog.Infoln("Transaction test passed: ", name)
+
+	}
+	return nil
+}
+
+func runTransactionTest(txTest TransactionTest) (err error) {
 	tx := new(types.Transaction)
 	err = rlp.DecodeBytes(mustConvertBytes(txTest.Rlp), tx)
 
