@@ -58,7 +58,7 @@ func NewBlockProcessor(db, extra common.Database, pow pow.PoW, chainManager *Cha
 
 func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block *types.Block, transientProcess bool) (receipts types.Receipts, err error) {
 	coinbase := statedb.GetOrNewStateObject(block.Header().Coinbase)
-	coinbase.SetGasPool(block.Header().GasLimit)
+	coinbase.SetGasLimit(block.Header().GasLimit)
 
 	// Process the transactions on to parent state
 	receipts, err = sm.ApplyTransactions(coinbase, statedb, block, block.Transactions(), transientProcess)

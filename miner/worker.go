@@ -319,7 +319,7 @@ func (self *worker) makeCurrent() {
 		current.localMinedBlocks = self.current.localMinedBlocks
 	}
 
-	current.coinbase.SetGasPool(core.CalcGasLimit(parent))
+	current.coinbase.SetGasLimit(core.CalcGasLimit(parent))
 
 	self.current = current
 }

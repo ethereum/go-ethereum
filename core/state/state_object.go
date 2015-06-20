@@ -104,7 +104,6 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db common.Data
 	}
 
 	object := &StateObject{address: address, db: db}
-	//object.RlpDecode(data)
 	object.nonce = extobject.Nonce
 	object.balance = extobject.Balance
 	object.codeHash = extobject.CodeHash
@@ -215,20 +214,8 @@ func (c *StateObject) St() Storage {
 
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (c *StateObject) ReturnGas(gas, price *big.Int) {}
-func (c *StateObject) ConvertGas(gas, price *big.Int) error {
-	total := new(big.Int).Mul(gas, price)
-	if total.Cmp(c.balance) > 0 {
-		return fmt.Errorf("insufficient amount: %v, %v", c.balance, total)
-	}
 
-	c.SubBalance(total)
-
-	c.dirty = true
-
-	return nil
-}
-
-func (self *StateObject) SetGasPool(gasLimit *big.Int) {
+func (self *StateObject) SetGasLimit(gasLimit *big.Int) {
 	self.gasPool = new(big.Int).Set(gasLimit)
 
 	if glog.V(logger.Core) {
@@ -236,7 +223,7 @@ func (self *StateObject) SetGasPool(gasLimit *big.Int) {
 	}
 }
 
-func (self *StateObject) BuyGas(gas, price *big.Int) error {
+func (self *StateObject) SubGas(gas, price *big.Int) error {
 	if self.gasPool.Cmp(gas) < 0 {
 		return GasLimitError(self.gasPool, gas)
 	}
@@ -251,7 +238,7 @@ func (self *StateObject) BuyGas(gas, price *big.Int) error {
 	return nil
 }
 
-func (self *StateObject) RefundGas(gas, price *big.Int) {
+func (self *StateObject) AddGas(gas, price *big.Int) {
 	self.gasPool.Add(self.gasPool, gas)
 }
 

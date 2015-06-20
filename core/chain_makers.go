@@ -79,7 +79,7 @@ func makeBlock(bman *BlockProcessor, parent *types.Block, i int, db common.Datab
 	block := newBlockFromParent(addr, parent)
 	state := state.New(block.Root(), db)
 	cbase := state.GetOrNewStateObject(addr)
-	cbase.SetGasPool(CalcGasLimit(parent))
+	cbase.SetGasLimit(CalcGasLimit(parent))
 	cbase.AddBalance(BlockReward)
 	state.Update()
 	block.SetRoot(state.Root())
