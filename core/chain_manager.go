@@ -108,9 +108,9 @@ type ChainManager struct {
 	transState *state.StateDB
 	txState    *state.ManagedState
 
-	cache        *lru.Cache  // cache is the LRU caching
-	futureBlocks *BlockCache // future blocks are blocks added for later processing
-	nextBlocks   *BlockCache // next blocks is used during large inserts
+	cache         *lru.Cache  // cache is the LRU caching
+	futureBlocks  *BlockCache // future blocks are blocks added for later processing
+	pendingBlocks *BlockCache // pending blocks contain blocks not yet written to the db
 
 	quit chan struct{}
 	// procInterrupt must be atomically called
@@ -389,8 +389,8 @@ func (bc *ChainManager) HasBlock(hash common.Hash) bool {
 		return true
 	}
 
-	if bc.nextBlocks != nil {
-		if block := bc.nextBlocks.Get(hash); block != nil {
+	if bc.pendingBlocks != nil {
+		if block := bc.pendingBlocks.Get(hash); block != nil {
 			return true
 		}
 	}
@@ -425,8 +425,8 @@ func (self *ChainManager) GetBlock(hash common.Hash) *types.Block {
 		return block.(*types.Block)
 	}
 
-	if self.nextBlocks != nil {
-		if block := self.nextBlocks.Get(hash); block != nil {
+	if self.pendingBlocks != nil {
+		if block := self.pendingBlocks.Get(hash); block != nil {
 			return block
 		}
 	}
@@ -521,13 +521,13 @@ func (self *ChainManager) procFutureBlocks() {
 }
 
 func (self *ChainManager) enqueueForWrite(block *types.Block) {
-	self.nextBlocks.Push(block)
+	self.pendingBlocks.Push(block)
 }
 
 func (self *ChainManager) flushQueuedBlocks() {
 	db, batchWrite := self.blockDb.(*ethdb.LDBDatabase)
 	batch := new(leveldb.Batch)
-	self.nextBlocks.Each(func(i int, block *types.Block) {
+	self.pendingBlocks.Each(func(i int, block *types.Block) {
 		enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
 		key := append(blockHashPre, block.Hash().Bytes()...)
 		if batchWrite {
@@ -539,10 +539,6 @@ func (self *ChainManager) flushQueuedBlocks() {
 	if batchWrite {
 		db.LDB().Write(batch, nil)
 	}
-
-	// reset the next blocks cache
-	self.nextBlocks = nil
-
 }
 
 // InsertChain will attempt to insert the given chain in to the canonical chain or, otherwise, create a fork. It an error is returned
@@ -554,7 +550,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	self.chainmu.Lock()
 	defer self.chainmu.Unlock()
 
-	self.nextBlocks = NewBlockCache(len(chain))
+	self.pendingBlocks = NewBlockCache(len(chain))
 
 	// A queued approach to delivering events. This is generally
 	// faster than direct delivery and requires much less mutex
@@ -687,7 +683,6 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			queue[i] = ChainSideEvent{block, logs}
 			queueEvent.sideCount++
 		}
-		// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
 		// not in the canonical chain.
 		self.enqueueForWrite(block)
 		// Delete from future blocks
