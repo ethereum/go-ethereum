@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -20,8 +21,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
 )
 
 const (
@@ -141,7 +142,6 @@ func TestAccounts(t *testing.T) {
 
 	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`"]`)
 	checkEvalJSON(t, repl, `eth.coinbase`, `null`)
-
 	val, err := repl.re.Run(`personal.newAccount("password")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -151,7 +151,7 @@ func TestAccounts(t *testing.T) {
 		t.Errorf("address not hex: %q", addr)
 	}
 
-	// checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`", "`+addr+`"]`)
+	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`","`+addr+`"]`)
 }
 
 func TestBlockChain(t *testing.T) {

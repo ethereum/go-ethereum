@@ -27,11 +27,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
+	"syscall"
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // TODO: rename to KeyStore when replacing existing KeyStore
@@ -118,12 +122,31 @@ func GetKeyAddresses(keysDirPath string) (addresses []common.Address, err error)
 	if err != nil {
 		return nil, err
 	}
+	var kfis keyFileInfos
 	for _, fileInfo := range fileInfos {
-		address, err := hex.DecodeString(fileInfo.Name())
+		stat := fileInfo.Sys().(*syscall.Stat_t)
+		ctime := time.Unix(int64(stat.Ctimespec.Sec), int64(stat.Ctimespec.Nsec))
+		kfis = append(kfis, keyFileInfo{fileInfo.Name(), ctime})
+	}
+	sort.Sort(kfis)
+	for _, kfi := range kfis {
+		address, err := hex.DecodeString(kfi.name)
 		if err != nil {
 			continue
 		}
 		addresses = append(addresses, common.BytesToAddress(address))
 	}
 	return addresses, err
+}
+
+type keyFileInfo struct {
+	name  string
+	ctime time.Time
+}
+type keyFileInfos []keyFileInfo
+
+func (a keyFileInfos) Len() int      { return len(a) }
+func (a keyFileInfos) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a keyFileInfos) Less(i, j int) bool {
+	return a[i].ctime.Before(a[j].ctime)
 }
