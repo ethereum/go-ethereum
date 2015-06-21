@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 	"time"
-
-	"github.com/rcrowley/go-metrics"
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -25,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/rcrowley/go-metrics"
 	"github.com/robertkrimen/otto"
 	"gopkg.in/fatih/set.v0"
 )
@@ -723,17 +723,56 @@ func (js *jsre) waitForBlocks(call otto.FunctionCall) otto.Value {
 }
 
 func (js *jsre) metrics(call otto.FunctionCall) otto.Value {
+	// Create a rate formatter
+	units := []string{"", "K", "M", "G", "T", "E", "P"}
+	round := func(value float64, prec int) string {
+		unit := 0
+		for value >= 1000 {
+			unit, value, prec = unit+1, value/1000, 2
+		}
+		return fmt.Sprintf(fmt.Sprintf("%%.%df%s", prec, units[unit]), value)
+	}
+	format := func(total float64, rate float64) string {
+		return fmt.Sprintf("%s (%s/s)", round(total, 0), round(rate, 2))
+	}
+
 	// Iterate over all the metrics, and just dump for now
 	counters := make(map[string]interface{})
 	metrics.DefaultRegistry.Each(func(name string, metric interface{}) {
+		// Create or retrieve the counter hierarchy for this metric
+		root, parts := counters, strings.Split(name, "/")
+		for _, part := range parts[:len(parts)-1] {
+			if _, ok := root[part]; !ok {
+				root[part] = make(map[string]interface{})
+			}
+			root = root[part].(map[string]interface{})
+		}
+		name = parts[len(parts)-1]
+
+		// Fill the counter with the metric details
 		switch metric := metric.(type) {
 		case metrics.Meter:
-			counters[name+"( 1 min)"] = int(metric.Rate1() * 60)
-			counters[name+"( 5 min)"] = int(metric.Rate5() * 300)
-			counters[name+"(15 min)"] = int(metric.Rate15() * 900)
+			root[name] = map[string]interface{}{
+				"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
+				"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
+				"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
+				"Overall":  format(float64(metric.Count()), metric.RateMean()),
+			}
+
+		case metrics.Timer:
+			root[name] = map[string]interface{}{
+				"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
+				"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
+				"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
+				"Overall":  format(float64(metric.Count()), metric.RateMean()),
+				"Perc01":   round(metric.Percentile(1), 2),
+				"Perc05":   round(metric.Percentile(5), 2),
+				"Perc25":   round(metric.Percentile(25), 2),
+				"Perc90":   round(metric.Percentile(90), 2),
+			}
 
 		default:
-			counters[name] = "Unknown metric type"
+			root[name] = "Unknown metric type"
 		}
 	})
 	// Flatten the counters into some metrics and return
