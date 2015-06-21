@@ -4,7 +4,7 @@ go:
 before_install:
   - sudo add-apt-repository ppa:beineri/opt-qt541 -y
   - sudo apt-get update -qq
-  - sudo apt-get install -yqq libgmp3-dev qt54quickcontrols qt54webengine
+  - sudo apt-get install -yqq libgmp3-dev
 install:
   # - go get code.google.com/p/go.tools/cmd/goimports
   # - go get github.com/golang/lint/golint
