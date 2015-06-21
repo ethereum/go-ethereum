@@ -196,7 +196,9 @@ func (t *dialTask) Do(srv *Server) {
 		glog.V(logger.Detail).Infof("dial error: %v", err)
 		return
 	}
-	srv.setupConn(fd, t.flags, t.dest)
+	mfd := newMeteredConn(fd, false)
+
+	srv.setupConn(mfd, t.flags, t.dest)
 }
 func (t *dialTask) String() string {
 	return fmt.Sprintf("%v %x %v:%d", t.flags, t.dest.ID[:8], t.dest.IP, t.dest.TCP)
