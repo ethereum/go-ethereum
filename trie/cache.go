@@ -1,8 +1,10 @@
 package trie
 
+import "github.com/ethereum/go-ethereum/logger/glog"
+
 type Backend interface {
 	Get([]byte) ([]byte, error)
-	Put([]byte, []byte)
+	Put([]byte, []byte) error
 }
 
 type Cache struct {
@@ -29,7 +31,9 @@ func (self *Cache) Put(key []byte, data []byte) {
 
 func (self *Cache) Flush() {
 	for k, v := range self.store {
-		self.backend.Put([]byte(k), v)
+		if err := self.backend.Put([]byte(k), v); err != nil {
+			glog.Fatal("db write err:", err)
+		}
 	}
 
 	// This will eventually grow too large. We'd could

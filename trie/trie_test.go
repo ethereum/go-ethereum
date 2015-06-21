@@ -12,7 +12,7 @@ import (
 type Db map[string][]byte
 
 func (self Db) Get(k []byte) ([]byte, error) { return self[string(k)], nil }
-func (self Db) Put(k, v []byte)              { self[string(k)] = v }
+func (self Db) Put(k, v []byte) error        { self[string(k)] = v; return nil }
 
 // Used for testing
 func NewEmpty() *Trie {
