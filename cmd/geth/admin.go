@@ -735,7 +735,6 @@ func (js *jsre) metrics(call otto.FunctionCall) otto.Value {
 	format := func(total float64, rate float64) string {
 		return fmt.Sprintf("%s (%s/s)", round(total, 0), round(rate, 2))
 	}
-
 	// Iterate over all the metrics, and just dump for now
 	counters := make(map[string]interface{})
 	metrics.DefaultRegistry.Each(func(name string, metric interface{}) {
@@ -756,7 +755,7 @@ func (js *jsre) metrics(call otto.FunctionCall) otto.Value {
 				"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
 				"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
 				"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
-				"Overall":  format(float64(metric.Count()), metric.RateMean()),
+				"Total":    format(float64(metric.Count()), metric.RateMean()),
 			}
 
 		case metrics.Timer:
@@ -764,11 +763,16 @@ func (js *jsre) metrics(call otto.FunctionCall) otto.Value {
 				"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
 				"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
 				"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
-				"Overall":  format(float64(metric.Count()), metric.RateMean()),
-				"Perc01":   round(metric.Percentile(1), 2),
-				"Perc05":   round(metric.Percentile(5), 2),
-				"Perc25":   round(metric.Percentile(25), 2),
-				"Perc90":   round(metric.Percentile(90), 2),
+				"Count":    format(float64(metric.Count()), metric.RateMean()),
+				"Maximum":  time.Duration(metric.Max()).String(),
+				"Minimum":  time.Duration(metric.Min()).String(),
+				"Percentile": map[string]interface{}{
+					"20": time.Duration(metric.Percentile(0.2)).String(),
+					"50": time.Duration(metric.Percentile(0.5)).String(),
+					"80": time.Duration(metric.Percentile(0.8)).String(),
+					"95": time.Duration(metric.Percentile(0.95)).String(),
+					"99": time.Duration(metric.Percentile(0.99)).String(),
+				},
 			}
 
 		default:
