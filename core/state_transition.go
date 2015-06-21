@@ -151,7 +151,7 @@ func (self *StateTransition) BuyGas() error {
 	}
 
 	coinbase := self.Coinbase()
-	err = coinbase.BuyGas(self.msg.Gas(), self.msg.GasPrice())
+	err = coinbase.SubGas(self.msg.Gas(), self.msg.GasPrice())
 	if err != nil {
 		return err
 	}
@@ -245,20 +245,9 @@ func (self *StateTransition) refundGas() {
 	self.gas.Add(self.gas, refund)
 	self.state.AddBalance(sender.Address(), refund.Mul(refund, self.msg.GasPrice()))
 
-	coinbase.RefundGas(self.gas, self.msg.GasPrice())
+	coinbase.AddGas(self.gas, self.msg.GasPrice())
 }
 
 func (self *StateTransition) gasUsed() *big.Int {
 	return new(big.Int).Sub(self.initialGas, self.gas)
-}
-
-// Converts an message in to a state object
-func makeContract(msg Message, state *state.StateDB) *state.StateObject {
-	faddr, _ := msg.From()
-	addr := crypto.CreateAddress(faddr, msg.Nonce())
-
-	contract := state.GetOrNewStateObject(addr)
-	contract.SetInitCode(msg.Data())
-
-	return contract
 }

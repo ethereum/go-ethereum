@@ -212,7 +212,7 @@ func (self *XEth) ApplyTestTxs(statedb *state.StateDB, address common.Address, t
 
 	block := self.backend.ChainManager().NewBlock(address)
 	coinbase := statedb.GetStateObject(address)
-	coinbase.SetGasPool(big.NewInt(10000000))
+	coinbase.SetGasLimit(big.NewInt(10000000))
 	txs := self.backend.TxPool().GetQueuedTransactions()
 
 	for i := 0; i < len(txs); i++ {
@@ -827,7 +827,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	}
 
 	from.SetBalance(common.MaxBig)
-	from.SetGasPool(self.backend.ChainManager().GasLimit())
+	from.SetGasLimit(self.backend.ChainManager().GasLimit())
 	msg := callmsg{
 		from:     from,
 		to:       common.HexToAddress(toStr),
