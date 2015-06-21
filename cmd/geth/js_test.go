@@ -140,7 +140,7 @@ func TestAccounts(t *testing.T) {
 	defer os.RemoveAll(tmp)
 
 	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`"]`)
-	checkEvalJSON(t, repl, `eth.coinbase`, `"`+common.Address{}.Hex()+`"`)
+	checkEvalJSON(t, repl, `eth.coinbase`, `null`)
 
 	val, err := repl.re.Run(`personal.newAccount("password")`)
 	if err != nil {
@@ -151,9 +151,7 @@ func TestAccounts(t *testing.T) {
 		t.Errorf("address not hex: %q", addr)
 	}
 
-	// skip until order fixed #824
 	// checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`", "`+addr+`"]`)
-	// checkEvalJSON(t, repl, `eth.coinbase`, `"`+testAddress+`"`)
 }
 
 func TestBlockChain(t *testing.T) {
