@@ -497,7 +497,7 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	for i, account := range accounts {
 		if len(account) > 0 {
 			if account == "primary" {
-				utils.Fatalf("the 'primary' keyword is deprecated. You can use indexes, but the indexes are not permanent, they can change if you add external keys, export your keys or copy your keystore to another node.")
+				utils.Fatalf("the 'primary' keyword is deprecated. You can use integer indexes, but the indexes are not permanent, they can change if you add external keys, export your keys or copy your keystore to another node.")
 			}
 			unlockAccount(ctx, am, account, i)
 		}
@@ -526,10 +526,8 @@ func accountList(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
 	}
-	name := "Primary"
 	for i, acct := range accts {
-		fmt.Printf("%s #%d: %x\n", name, i, acct)
-		name = "Account"
+		fmt.Printf("Account #%d: %x\n", i, acct)
 	}
 }
 
