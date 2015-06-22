@@ -25,4 +25,3 @@ var (
 		ShhApiName, TxPoolApiName, PersonalApiName, Web3ApiName,
 	}, ",")
 )
-

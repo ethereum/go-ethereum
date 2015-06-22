@@ -178,6 +178,8 @@ func Javascript(name string) string {
 		return Debug_JS
 	case shared.DbApiName:
 		return Db_JS
+	case shared.EthApiName:
+		return Eth_JS
 	case shared.MinerApiName:
 		return Miner_JS
 	case shared.NetApiName:

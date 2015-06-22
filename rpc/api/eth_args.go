@@ -466,21 +466,21 @@ func (args *CallArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 	args.Value = num
 
-	if ext.Gas == nil {
-		num = big.NewInt(0)
-	} else {
+	if ext.Gas != nil {
 		if num, err = numString(ext.Gas); err != nil {
 			return err
 		}
+	} else {
+		num = nil
 	}
 	args.Gas = num
 
-	if ext.GasPrice == nil {
-		num = big.NewInt(0)
-	} else {
+	if ext.GasPrice != nil {
 		if num, err = numString(ext.GasPrice); err != nil {
 			return err
 		}
+	} else {
+		num = nil
 	}
 	args.GasPrice = num
 

@@ -46,7 +46,7 @@ var (
 		"eth_getData":                             (*ethApi).GetData,
 		"eth_getCode":                             (*ethApi).GetData,
 		"eth_sign":                                (*ethApi).Sign,
-		"eth_sendRawTransaction":                  (*ethApi).PushTx,
+		"eth_sendRawTransaction":                  (*ethApi).SendRawTransaction,
 		"eth_sendTransaction":                     (*ethApi).SendTransaction,
 		"eth_transact":                            (*ethApi).SendTransaction,
 		"eth_estimateGas":                         (*ethApi).EstimateGas,
@@ -250,7 +250,7 @@ func (self *ethApi) Sign(req *shared.Request) (interface{}, error) {
 	return v, nil
 }
 
-func (self *ethApi) PushTx(req *shared.Request) (interface{}, error) {
+func (self *ethApi) SendRawTransaction(req *shared.Request) (interface{}, error) {
 	args := new(NewDataArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
