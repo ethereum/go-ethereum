@@ -4,6 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/rcrowley/go-metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -13,10 +14,11 @@ import (
 var OpenFileLimit = 64
 
 type LDBDatabase struct {
-	// filename for reporting
-	fn string
-	// LevelDB instance
-	db *leveldb.DB
+	fn string      // filename for reporting
+	db *leveldb.DB // LevelDB instance
+
+	GetMeter metrics.Meter // Meter for measuring the database get requests
+	PutMeter metrics.Meter // Meter for measuring the database put requests
 }
 
 // NewLDBDatabase returns a LevelDB wrapped object. LDBDatabase does not persist data by
@@ -43,7 +45,11 @@ func NewLDBDatabase(file string) (*LDBDatabase, error) {
 
 // Put puts the given key / value to the queue
 func (self *LDBDatabase) Put(key []byte, value []byte) error {
-	return self.db.Put(key, rle.Compress(value), nil)
+	dat := rle.Compress(value)
+	if self.PutMeter != nil {
+		self.PutMeter.Mark(int64(len(dat)))
+	}
+	return self.db.Put(key, dat, nil)
 }
 
 // Get returns the given key if it's present.
@@ -51,6 +57,9 @@ func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
 	dat, err := self.db.Get(key, nil)
 	if err != nil {
 		return nil, err
+	}
+	if self.GetMeter != nil {
+		self.GetMeter.Mark(int64(len(dat)))
 	}
 	return rle.Decompress(dat)
 }
