@@ -66,6 +66,10 @@
 			"Rev": "907cca0f578a5316fb864ec6992dc3d9730ec58c"
 		},
 		{
+			"ImportPath": "github.com/rcrowley/go-metrics",
+			"Rev": "a5cfc242a56ba7fa70b785f678d6214837bf93b9"
+		},
+		{
 			"ImportPath": "github.com/robertkrimen/otto",
 			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
 		},
