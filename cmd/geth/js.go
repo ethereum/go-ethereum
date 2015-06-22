@@ -314,7 +314,7 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 	// load only supported API's in javascript runtime
 	shortcuts := "var eth = web3.eth; "
 	for _, apiName := range apiNames {
-		if apiName == shared.Web3ApiName || apiName == shared.EthApiName {
+		if apiName == shared.Web3ApiName {
 			continue // manually mapped
 		}
 
