@@ -20,6 +20,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/rpc/codec"
 )
 
 const (
@@ -105,7 +107,8 @@ func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
 		t.Errorf("Error creating DocServer: %v", err)
 	}
 	tf := &testjethre{ds: ds, stateDb: ethereum.ChainManager().State().Copy()}
-	repl := newJSRE(ethereum, assetPath, "", "", false, tf)
+	client := comms.NewInProcClient(codec.JSON)
+	repl := newJSRE(ethereum, assetPath, "", client, false, tf)
 	tf.jsre = repl
 	return tmp, tf, ethereum
 }
@@ -125,7 +128,7 @@ func TestNodeInfo(t *testing.T) {
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
 	want := `{"DiscPort":0,"IP":"0.0.0.0","ListenAddr":"","Name":"test","NodeID":"4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5","NodeUrl":"enode://4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5@0.0.0.0:0","TCPPort":0,"Td":"131072"}`
-	checkEvalJSON(t, repl, `admin.nodeInfo()`, want)
+	checkEvalJSON(t, repl, `admin.nodeInfo`, want)
 }
 
 func TestAccounts(t *testing.T) {
@@ -139,7 +142,7 @@ func TestAccounts(t *testing.T) {
 	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`"]`)
 	checkEvalJSON(t, repl, `eth.coinbase`, `"`+testAddress+`"`)
 
-	val, err := repl.re.Run(`admin.newAccount("password")`)
+	val, err := repl.re.Run(`personal.newAccount("password")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -161,7 +164,7 @@ func TestBlockChain(t *testing.T) {
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
 	// get current block dump before export/import.
-	val, err := repl.re.Run("JSON.stringify(admin.debug.dumpBlock())")
+	val, err := repl.re.Run("JSON.stringify(debug.dumpBlock(eth.blockNumber))")
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -178,14 +181,14 @@ func TestBlockChain(t *testing.T) {
 
 	ethereum.ChainManager().Reset()
 
-	checkEvalJSON(t, repl, `admin.export(`+tmpfileq+`)`, `true`)
+	checkEvalJSON(t, repl, `admin.exportChain(`+tmpfileq+`)`, `true`)
 	if _, err := os.Stat(tmpfile); err != nil {
 		t.Fatal(err)
 	}
 
 	// check import, verify that dumpBlock gives the same result.
-	checkEvalJSON(t, repl, `admin.import(`+tmpfileq+`)`, `true`)
-	checkEvalJSON(t, repl, `admin.debug.dumpBlock()`, beforeExport)
+	checkEvalJSON(t, repl, `admin.importChain(`+tmpfileq+`)`, `true`)
+	checkEvalJSON(t, repl, `debug.dumpBlock(eth.blockNumber)`, beforeExport)
 }
 
 func TestMining(t *testing.T) {

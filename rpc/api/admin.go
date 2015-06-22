@@ -23,8 +23,6 @@ const (
 var (
 	// mapping between methods and handlers
 	AdminMapping = map[string]adminhandler{
-		//		"admin_startRPC": (*adminApi).StartRPC,
-		//		"admin_stopRPC":  (*adminApi).StopRPC,
 		"admin_addPeer":         (*adminApi).AddPeer,
 		"admin_peers":           (*adminApi).Peers,
 		"admin_nodeInfo":        (*adminApi).NodeInfo,
@@ -101,33 +99,6 @@ func (self *adminApi) AddPeer(req *shared.Request) (interface{}, error) {
 
 func (self *adminApi) Peers(req *shared.Request) (interface{}, error) {
 	return self.ethereum.PeersInfo(), nil
-}
-
-func (self *adminApi) StartRPC(req *shared.Request) (interface{}, error) {
-	return false, nil
-	//	Enable when http rpc interface is refactored to prevent import cycles
-	//	args := new(StartRpcArgs)
-	//	if err := self.codec.Decode(req.Params, &args); err != nil {
-	//		return nil, shared.NewDecodeParamError(err.Error())
-	//	}
-	//
-	//	cfg := rpc.RpcConfig{
-	//		ListenAddress: args.Address,
-	//		ListenPort:    args.Port,
-	//	}
-	//
-	//	err := rpc.Start(self.xeth, cfg)
-	//	if err == nil {
-	//		return true, nil
-	//	}
-	//	return false, err
-}
-
-func (self *adminApi) StopRPC(req *shared.Request) (interface{}, error) {
-	return false, nil
-	//	Enable when http rpc interface is refactored to prevent import cycles
-	//	rpc.Stop()
-	//	return true, nil
 }
 
 func (self *adminApi) NodeInfo(req *shared.Request) (interface{}, error) {
