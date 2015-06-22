@@ -92,6 +92,10 @@ type Fetcher struct {
 	chainHeight    chainHeightFn      // Retrieves the current chain's height
 	insertChain    chainInsertFn      // Injects a batch of blocks into the chain
 	dropPeer       peerDropFn         // Drops a peer for misbehaving
+
+	// Testing hooks
+	fetchingHook func([]common.Hash) // Method to call upon starting a block fetch
+	importedHook func(*types.Block)  // Method to call upon successful block import
 }
 
 // New creates a block fetcher to retrieve blocks based on hash announcements.
@@ -277,7 +281,13 @@ func (f *Fetcher) loop() {
 
 					glog.V(logger.Detail).Infof("Peer %s: fetching %s", peer, list)
 				}
-				go f.fetching[hashes[0]].fetch(hashes)
+				hashes := hashes // closure!
+				go func() {
+					if f.fetchingHook != nil {
+						f.fetchingHook(hashes)
+					}
+					f.fetching[hashes[0]].fetch(hashes)
+				}()
 			}
 			// Schedule the next fetch if blocks are still pending
 			f.reschedule(fetch)
@@ -402,6 +412,11 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 		}
 		// If import succeeded, broadcast the block
 		go f.broadcastBlock(block, false)
+
+		// Invoke the testing hook if needed
+		if f.importedHook != nil {
+			f.importedHook(block)
+		}
 	}()
 }
 
