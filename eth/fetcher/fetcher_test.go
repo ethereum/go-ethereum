@@ -395,3 +395,46 @@ func TestDistantDiscarding(t *testing.T) {
 		t.Fatalf("fetcher queued future block")
 	}
 }
+
+// Tests that a peer is unable to use unbounded memory with sending infinite
+// block announcements to a node, but that even in the face of such an attack,
+// the fetcher remains operational.
+func TestAnnounceMemoryExhaustionAttack(t *testing.T) {
+	tester := newTester()
+
+	// Create a valid chain and an infinite junk chain
+	hashes := createHashes(announceLimit+2*maxQueueDist, knownHash)
+	blocks := createBlocksFromHashes(hashes)
+	valid := tester.makeFetcher(blocks)
+
+	attack := createHashes(announceLimit+2*maxQueueDist, unknownHash)
+	attacker := tester.makeFetcher(nil)
+
+	// Feed the tester a huge hashset from the attacker, and a limited from the valid peer
+	for i := 0; i < len(attack); i++ {
+		if i < maxQueueDist {
+			tester.fetcher.Notify("valid", hashes[len(hashes)-1-i], time.Now().Add(arriveTimeout/2), valid)
+		}
+		tester.fetcher.Notify("attacker", attack[i], time.Now().Add(arriveTimeout/2), attacker)
+	}
+	if len(tester.fetcher.announced) != announceLimit+maxQueueDist {
+		t.Fatalf("queued announce count mismatch: have %d, want %d", len(tester.fetcher.announced), announceLimit+maxQueueDist)
+	}
+	// Wait for synchronisation to complete and check success for the valid peer
+	time.Sleep(2 * arriveTimeout)
+	if imported := len(tester.blocks); imported != maxQueueDist {
+		t.Fatalf("partial synchronised block mismatch: have %v, want %v", imported, maxQueueDist)
+	}
+	// Feed the remaining valid hashes to ensure DOS protection state remains clean
+	for i := len(hashes) - maxQueueDist; i >= 0; {
+		for j := 0; j < maxQueueDist && i >= 0; j++ {
+			tester.fetcher.Notify("valid", hashes[i], time.Now().Add(time.Millisecond), valid)
+			i--
+		}
+		time.Sleep(256 * time.Millisecond)
+	}
+	time.Sleep(256 * time.Millisecond)
+	if imported := len(tester.blocks); imported != len(hashes) {
+		t.Fatalf("fully synchronised block mismatch: have %v, want %v", imported, len(hashes))
+	}
+}
