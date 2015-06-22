@@ -281,12 +281,13 @@ func (f *Fetcher) loop() {
 
 					glog.V(logger.Detail).Infof("Peer %s: fetching %s", peer, list)
 				}
-				hashes := hashes // closure!
+				// Create a closure of the fetch and schedule in on a new thread
+				fetcher, hashes := f.fetching[hashes[0]].fetch, hashes
 				go func() {
 					if f.fetchingHook != nil {
 						f.fetchingHook(hashes)
 					}
-					f.fetching[hashes[0]].fetch(hashes)
+					fetcher(hashes)
 				}()
 			}
 			// Schedule the next fetch if blocks are still pending
