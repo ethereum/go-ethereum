@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
+
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 

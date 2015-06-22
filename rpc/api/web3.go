@@ -60,7 +60,7 @@ func (self *web3Api) Execute(req *shared.Request) (interface{}, error) {
 }
 
 func (self *web3Api) Name() string {
-	return Web3ApiName
+	return shared.Web3ApiName
 }
 
 func (self *web3Api) ApiVersion() string {

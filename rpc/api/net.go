@@ -63,7 +63,7 @@ func (self *netApi) Execute(req *shared.Request) (interface{}, error) {
 }
 
 func (self *netApi) Name() string {
-	return NetApiName
+	return shared.NetApiName
 }
 
 func (self *netApi) ApiVersion() string {

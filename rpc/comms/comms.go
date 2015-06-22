@@ -11,7 +11,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
@@ -22,14 +21,14 @@ const (
 
 var (
 	// List with all API's which are offered over the in proc interface by default
-	DefaultInProcApis = api.AllApis
+	DefaultInProcApis = shared.AllApis
 
 	// List with all API's which are offered over the IPC interface by default
-	DefaultIpcApis = api.AllApis
+	DefaultIpcApis = shared.AllApis
 
 	// List with API's which are offered over thr HTTP/RPC interface by default
 	DefaultHttpRpcApis = strings.Join([]string{
-		api.DbApiName, api.EthApiName, api.NetApiName, api.Web3ApiName,
+		shared.DbApiName, shared.EthApiName, shared.NetApiName, shared.Web3ApiName,
 	}, ",")
 )
 
@@ -44,7 +43,7 @@ type EthereumClient interface {
 	SupportedModules() (map[string]string, error)
 }
 
-func handle(conn net.Conn, api api.EthereumApi, c codec.Codec) {
+func handle(conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 	codec := c.New(conn)
 
 	for {

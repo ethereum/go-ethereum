@@ -10,7 +10,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/rs/cors"
@@ -28,7 +27,7 @@ type HttpConfig struct {
 	CorsDomain    string
 }
 
-func StartHttp(cfg HttpConfig, codec codec.Codec, apis ...api.EthereumApi) error {
+func StartHttp(cfg HttpConfig, codec codec.Codec, api shared.EthereumApi) error {
 	if httpListener != nil {
 		if fmt.Sprintf("%s:%d", cfg.ListenAddress, cfg.ListenPort) != httpListener.Addr().String() {
 			return fmt.Errorf("RPC service already running on %s ", httpListener.Addr().String())
@@ -43,7 +42,6 @@ func StartHttp(cfg HttpConfig, codec codec.Codec, apis ...api.EthereumApi) error
 	}
 	httpListener = l
 
-	api := api.Merge(apis...)
 	var handler http.Handler
 	if len(cfg.CorsDomain) > 0 {
 		var opts cors.Options

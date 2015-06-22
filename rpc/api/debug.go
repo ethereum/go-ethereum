@@ -71,7 +71,7 @@ func (self *debugApi) Execute(req *shared.Request) (interface{}, error) {
 }
 
 func (self *debugApi) Name() string {
-	return DebugApiName
+	return shared.DebugApiName
 }
 
 func (self *debugApi) ApiVersion() string {

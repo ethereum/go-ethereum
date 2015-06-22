@@ -210,7 +210,7 @@ func TestRPC(t *testing.T) {
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
 
-	checkEvalJSON(t, repl, `admin.startRPC("127.0.0.1", 5004)`, `true`)
+	checkEvalJSON(t, repl, `admin.startRPC("127.0.0.1", 5004, "*", "web3,eth,net")`, `true`)
 }
 
 func TestCheckTestAccountBalance(t *testing.T) {

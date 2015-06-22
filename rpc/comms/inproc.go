@@ -3,15 +3,12 @@ package comms
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
 )
 
 type InProcClient struct {
-	api         api.EthereumApi
+	api         shared.EthereumApi
 	codec       codec.Codec
 	lastId      interface{}
 	lastJsonrpc string
@@ -31,10 +28,8 @@ func (self *InProcClient) Close() {
 }
 
 // Need to setup api support
-func (self *InProcClient) Initialize(xeth *xeth.XEth, eth *eth.Ethereum) {
-	if apis, err := api.ParseApiString(api.AllApis, self.codec, xeth, eth); err == nil {
-		self.api = api.Merge(apis...)
-	}
+func (self *InProcClient) Initialize(offeredApi shared.EthereumApi) {
+	self.api = offeredApi
 }
 
 func (self *InProcClient) Send(req interface{}) error {

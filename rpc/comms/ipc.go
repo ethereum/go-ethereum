@@ -6,7 +6,6 @@ import (
 
 	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
@@ -92,7 +91,6 @@ func NewIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 }
 
 // Start IPC server
-func StartIpc(cfg IpcConfig, codec codec.Codec, apis ...api.EthereumApi) error {
-	offeredApi := api.Merge(apis...)
+func StartIpc(cfg IpcConfig, codec codec.Codec, offeredApi shared.EthereumApi) error {
 	return startIpc(cfg, codec, offeredApi)
 }

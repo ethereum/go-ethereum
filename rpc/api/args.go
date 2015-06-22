@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 

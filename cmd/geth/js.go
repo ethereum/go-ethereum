@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
+	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
 type prompter interface {
@@ -183,7 +184,9 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, client comms.Et
 	js.wait = js.xeth.UpdateState()
 	js.client = client
 	if clt, ok := js.client.(*comms.InProcClient); ok {
-		clt.Initialize(js.xeth, ethereum)
+		if offeredApis, err := api.ParseApiString(shared.AllApis, codec.JSON, js.xeth, ethereum); err == nil {
+			clt.Initialize(api.Merge(offeredApis...))
+		}
 	}
 
 	// update state in separare forever blocks
@@ -311,7 +314,7 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 	// load only supported API's in javascript runtime
 	shortcuts := "var eth = web3.eth; "
 	for _, apiName := range apiNames {
-		if apiName == api.Web3ApiName || apiName == api.EthApiName {
+		if apiName == shared.Web3ApiName || apiName == shared.EthApiName {
 			continue // manually mapped
 		}
 

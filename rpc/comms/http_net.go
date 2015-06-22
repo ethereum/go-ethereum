@@ -11,7 +11,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
@@ -90,7 +89,7 @@ func newStoppableHandler(h http.Handler, stop chan struct{}) http.Handler {
 		case <-stop:
 			w.Header().Set("Content-Type", "application/json")
 			err := fmt.Errorf("RPC service stopped")
-			response := shared.NewRpcResponse(-1, api.JsonRpcVersion, nil, err)
+			response := shared.NewRpcResponse(-1, shared.JsonRpcVersion, nil, err)
 			httpSend(w, response)
 		default:
 			h.ServeHTTP(w, r)
@@ -110,14 +109,14 @@ func httpSend(writer io.Writer, v interface{}) (n int, err error) {
 	return writer.Write(payload)
 }
 
-func gethHttpHandler(codec codec.Codec, a api.EthereumApi) http.Handler {
+func gethHttpHandler(codec codec.Codec, a shared.EthereumApi) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		// Limit request size to resist DoS
 		if req.ContentLength > maxHttpSizeReqLength {
 			err := fmt.Errorf("Request too large")
-			response := shared.NewRpcErrorResponse(-1, api.JsonRpcVersion, -32700, err)
+			response := shared.NewRpcErrorResponse(-1, shared.JsonRpcVersion, -32700, err)
 			httpSend(w, &response)
 			return
 		}
@@ -126,7 +125,7 @@ func gethHttpHandler(codec codec.Codec, a api.EthereumApi) http.Handler {
 		payload, err := ioutil.ReadAll(req.Body)
 		if err != nil {
 			err := fmt.Errorf("Could not read request body")
-			response := shared.NewRpcErrorResponse(-1, api.JsonRpcVersion, -32700, err)
+			response := shared.NewRpcErrorResponse(-1, shared.JsonRpcVersion, -32700, err)
 			httpSend(w, &response)
 			return
 		}
@@ -161,7 +160,7 @@ func gethHttpHandler(codec codec.Codec, a api.EthereumApi) http.Handler {
 
 		// invalid request
 		err = fmt.Errorf("Could not decode request")
-		res := shared.NewRpcErrorResponse(-1, api.JsonRpcVersion, -32600, err)
+		res := shared.NewRpcErrorResponse(-1, shared.JsonRpcVersion, -32600, err)
 		httpSend(w, res)
 	})
 }

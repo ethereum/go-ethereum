@@ -63,7 +63,7 @@ func (self *dbApi) Execute(req *shared.Request) (interface{}, error) {
 }
 
 func (self *dbApi) Name() string {
-	return DbApiName
+	return shared.DbApiName
 }
 
 func (self *dbApi) ApiVersion() string {

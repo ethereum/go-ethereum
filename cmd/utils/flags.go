@@ -461,7 +461,7 @@ func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
 		return err
 	}
 
-	return comms.StartIpc(config, codec, apis...)
+	return comms.StartIpc(config, codec, api.Merge(apis...))
 }
 
 func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
@@ -479,7 +479,7 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
 		return err
 	}
 
-	return comms.StartHttp(config, codec, apis...)
+	return comms.StartHttp(config, codec, api.Merge(apis...))
 }
 
 func StartPProf(ctx *cli.Context) {

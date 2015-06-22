@@ -4,25 +4,24 @@ import (
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/jsre"
-	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/robertkrimen/otto"
 )
 
 type Jeth struct {
-	ethApi api.EthereumApi
+	ethApi shared.EthereumApi
 	re     *jsre.JSRE
 	client comms.EthereumClient
 }
 
-func NewJeth(ethApi api.EthereumApi, re *jsre.JSRE, client comms.EthereumClient) *Jeth {
+func NewJeth(ethApi shared.EthereumApi, re *jsre.JSRE, client comms.EthereumClient) *Jeth {
 	return &Jeth{ethApi, re, client}
 }
 
 func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id interface{}) (response otto.Value) {
 	rpcerr := &shared.ErrorObject{code, msg}
-	call.Otto.Set("ret_jsonrpc", api.JsonRpcVersion)
+	call.Otto.Set("ret_jsonrpc", shared.JsonRpcVersion)
 	call.Otto.Set("ret_id", id)
 	call.Otto.Set("ret_error", rpcerr)
 	response, _ = call.Otto.Run(`
@@ -61,7 +60,7 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 			return self.err(call, -32603, err.Error(), req.Id)
 		}
 
-		call.Otto.Set("ret_jsonrpc", api.JsonRpcVersion)
+		call.Otto.Set("ret_jsonrpc", shared.JsonRpcVersion)
 		call.Otto.Set("ret_id", req.Id)
 
 		res, _ := json.Marshal(respif)

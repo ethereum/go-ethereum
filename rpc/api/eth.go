@@ -100,7 +100,7 @@ func (self *ethApi) Execute(req *shared.Request) (interface{}, error) {
 }
 
 func (self *ethApi) Name() string {
-	return EthApiName
+	return shared.EthApiName
 }
 
 func (self *ethApi) ApiVersion() string {

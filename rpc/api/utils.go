@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -23,6 +24,8 @@ var (
 			"chainSyncStatus",
 			"setSolc",
 			"datadir",
+			"startRPC",
+			"stopRPC",
 		},
 		"db": []string{
 			"getString",
@@ -129,35 +132,35 @@ var (
 )
 
 // Parse a comma separated API string to individual api's
-func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.Ethereum) ([]EthereumApi, error) {
+func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.Ethereum) ([]shared.EthereumApi, error) {
 	if len(strings.TrimSpace(apistr)) == 0 {
 		return nil, fmt.Errorf("Empty apistr provided")
 	}
 
 	names := strings.Split(apistr, ",")
-	apis := make([]EthereumApi, len(names))
+	apis := make([]shared.EthereumApi, len(names))
 
 	for i, name := range names {
 		switch strings.ToLower(strings.TrimSpace(name)) {
-		case AdminApiName:
+		case shared.AdminApiName:
 			apis[i] = NewAdminApi(xeth, eth, codec)
-		case DebugApiName:
+		case shared.DebugApiName:
 			apis[i] = NewDebugApi(xeth, eth, codec)
-		case DbApiName:
+		case shared.DbApiName:
 			apis[i] = NewDbApi(xeth, eth, codec)
-		case EthApiName:
+		case shared.EthApiName:
 			apis[i] = NewEthApi(xeth, codec)
-		case MinerApiName:
+		case shared.MinerApiName:
 			apis[i] = NewMinerApi(eth, codec)
-		case NetApiName:
+		case shared.NetApiName:
 			apis[i] = NewNetApi(xeth, eth, codec)
-		case ShhApiName:
+		case shared.ShhApiName:
 			apis[i] = NewShhApi(xeth, eth, codec)
-		case TxPoolApiName:
+		case shared.TxPoolApiName:
 			apis[i] = NewTxPoolApi(xeth, eth, codec)
-		case PersonalApiName:
+		case shared.PersonalApiName:
 			apis[i] = NewPersonalApi(xeth, eth, codec)
-		case Web3ApiName:
+		case shared.Web3ApiName:
 			apis[i] = NewWeb3Api(xeth, codec)
 		default:
 			return nil, fmt.Errorf("Unknown API '%s'", name)
@@ -169,21 +172,21 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 
 func Javascript(name string) string {
 	switch strings.ToLower(strings.TrimSpace(name)) {
-	case AdminApiName:
+	case shared.AdminApiName:
 		return Admin_JS
-	case DebugApiName:
+	case shared.DebugApiName:
 		return Debug_JS
-	case DbApiName:
+	case shared.DbApiName:
 		return Db_JS
-	case MinerApiName:
+	case shared.MinerApiName:
 		return Miner_JS
-	case NetApiName:
+	case shared.NetApiName:
 		return Net_JS
-	case ShhApiName:
+	case shared.ShhApiName:
 		return Shh_JS
-	case TxPoolApiName:
+	case shared.TxPoolApiName:
 		return TxPool_JS
-	case PersonalApiName:
+	case shared.PersonalApiName:
 		return Personal_JS
 	}
 

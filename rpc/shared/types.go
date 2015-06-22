@@ -7,6 +7,21 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
+// Ethereum RPC API interface
+type EthereumApi interface {
+	// API identifier
+	Name() string
+
+	// API version
+	ApiVersion() string
+
+	// Execute the given request and returns the response or an error
+	Execute(*Request) (interface{}, error)
+
+	// List of supported RCP methods this API provides
+	Methods() []string
+}
+
 // RPC request
 type Request struct {
 	Id      interface{}     `json:"id"`
