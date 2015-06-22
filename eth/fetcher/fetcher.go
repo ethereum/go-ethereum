@@ -20,7 +20,8 @@ const (
 	fetchTimeout  = 5 * time.Second        // Maximum alloted time to return an explicitly requested block
 	maxUncleDist  = 7                      // Maximum allowed backward distance from the chain head
 	maxQueueDist  = 32                     // Maximum allowed distance from the chain head to queue
-	announceLimit = 256                    // Maximum number of unique blocks a peer may have announced
+	hashLimit     = 256                    // Maximum number of unique blocks a peer may have announced
+	blockLimit    = 64                     // Maximum number of unique blocks a per may have delivered
 )
 
 var (
@@ -80,8 +81,9 @@ type Fetcher struct {
 	fetching  map[common.Hash]*announce   // Announced blocks, currently fetching
 
 	// Block cache
-	queue  *prque.Prque             // Queue containing the import operations (block number sorted)
-	queued map[common.Hash]struct{} // Presence set of already queued blocks (to dedup imports)
+	queue  *prque.Prque            // Queue containing the import operations (block number sorted)
+	queues map[string]int          // Per peer block counts to prevent memory exhaustion
+	queued map[common.Hash]*inject // Set of already queued blocks (to dedup imports)
 
 	// Callbacks
 	getBlock       blockRetrievalFn   // Retrieves a block from the local chain
@@ -104,7 +106,8 @@ func New(getBlock blockRetrievalFn, validateBlock blockValidatorFn, broadcastBlo
 		announced:      make(map[common.Hash][]*announce),
 		fetching:       make(map[common.Hash]*announce),
 		queue:          prque.New(),
-		queued:         make(map[common.Hash]struct{}),
+		queues:         make(map[string]int),
+		queued:         make(map[common.Hash]*inject),
 		getBlock:       getBlock,
 		validateBlock:  validateBlock,
 		broadcastBlock: broadcastBlock,
@@ -192,22 +195,24 @@ func (f *Fetcher) loop() {
 		// Clean up any expired block fetches
 		for hash, announce := range f.fetching {
 			if time.Since(announce.time) > fetchTimeout {
-				f.forgetBlock(hash)
+				f.forgetHash(hash)
 			}
 		}
 		// Import any queued blocks that could potentially fit
 		height := f.chainHeight()
 		for !f.queue.Empty() {
 			op := f.queue.PopItem().(*inject)
-			number := op.block.NumberU64()
 
 			// If too high up the chain or phase, continue later
+			number := op.block.NumberU64()
 			if number > height+1 {
 				f.queue.Push(op, -float32(op.block.NumberU64()))
 				break
 			}
 			// Otherwise if fresh and still unknown, try and import
-			if number+maxUncleDist < height || f.getBlock(op.block.Hash()) != nil {
+			hash := op.block.Hash()
+			if number+maxUncleDist < height || f.getBlock(hash) != nil {
+				f.forgetBlock(hash)
 				continue
 			}
 			f.insert(op.origin, op.block)
@@ -221,8 +226,8 @@ func (f *Fetcher) loop() {
 		case notification := <-f.notify:
 			// A block was announced, make sure the peer isn't DOSing us
 			count := f.announces[notification.origin] + 1
-			if count > announceLimit {
-				glog.V(logger.Debug).Infof("Peer %s: exceeded outstanding announces (%d)", notification.origin, announceLimit)
+			if count > hashLimit {
+				glog.V(logger.Debug).Infof("Peer %s: exceeded outstanding announces (%d)", notification.origin, hashLimit)
 				break
 			}
 			// All is well, schedule the announce if block's not yet downloading
@@ -241,8 +246,8 @@ func (f *Fetcher) loop() {
 
 		case hash := <-f.done:
 			// A pending import finished, remove all traces of the notification
+			f.forgetHash(hash)
 			f.forgetBlock(hash)
-			delete(f.queued, hash)
 
 		case <-fetch.C:
 			// At least one block's timer ran out, check for needing retrieval
@@ -252,7 +257,7 @@ func (f *Fetcher) loop() {
 				if time.Since(announces[0].time) > arriveTimeout-gatherSlack {
 					// Pick a random peer to retrieve from, reset all others
 					announce := announces[rand.Intn(len(announces))]
-					f.forgetBlock(hash)
+					f.forgetHash(hash)
 
 					// If the block still didn't arrive, queue for fetching
 					if f.getBlock(hash) == nil {
@@ -296,7 +301,7 @@ func (f *Fetcher) loop() {
 					if f.getBlock(hash) == nil {
 						explicit = append(explicit, block)
 					} else {
-						f.forgetBlock(hash)
+						f.forgetHash(hash)
 					}
 				} else {
 					download = append(download, block)
@@ -339,6 +344,12 @@ func (f *Fetcher) reschedule(fetch *time.Timer) {
 func (f *Fetcher) enqueue(peer string, block *types.Block) {
 	hash := block.Hash()
 
+	// Ensure the peer isn't DOSing us
+	count := f.queues[peer] + 1
+	if count > blockLimit {
+		glog.V(logger.Debug).Infof("Peer %s: discarded block #%d [%x], exceeded allowance (%d)", peer, block.NumberU64(), hash.Bytes()[:4], blockLimit)
+		return
+	}
 	// Discard any past or too distant blocks
 	if dist := int64(block.NumberU64()) - int64(f.chainHeight()); dist < -maxUncleDist || dist > maxQueueDist {
 		glog.V(logger.Debug).Infof("Peer %s: discarded block #%d [%x], distance %d", peer, block.NumberU64(), hash.Bytes()[:4], dist)
@@ -346,8 +357,13 @@ func (f *Fetcher) enqueue(peer string, block *types.Block) {
 	}
 	// Schedule the block for future importing
 	if _, ok := f.queued[hash]; !ok {
-		f.queued[hash] = struct{}{}
-		f.queue.Push(&inject{origin: peer, block: block}, -float32(block.NumberU64()))
+		op := &inject{
+			origin: peer,
+			block:  block,
+		}
+		f.queues[peer] = count
+		f.queued[hash] = op
+		f.queue.Push(op, -float32(block.NumberU64()))
 
 		if glog.V(logger.Debug) {
 			glog.Infof("Peer %s: queued block #%d [%x], total %v", peer, block.NumberU64(), hash.Bytes()[:4], f.queue.Size())
@@ -389,8 +405,9 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 	}()
 }
 
-// forgetBlock removes all traces of a block from the fetcher's internal state.
-func (f *Fetcher) forgetBlock(hash common.Hash) {
+// forgetHash removes all traces of a block announcement from the fetcher's
+// internal state.
+func (f *Fetcher) forgetHash(hash common.Hash) {
 	// Remove all pending announces and decrement DOS counters
 	for _, announce := range f.announced[hash] {
 		f.announces[announce.origin]--
@@ -407,5 +424,17 @@ func (f *Fetcher) forgetBlock(hash common.Hash) {
 			delete(f.announces, announce.origin)
 		}
 		delete(f.fetching, hash)
+	}
+}
+
+// forgetBlock removes all traces of a queued block frmo the fetcher's internal
+// state.
+func (f *Fetcher) forgetBlock(hash common.Hash) {
+	if insert := f.queued[hash]; insert != nil {
+		f.queues[insert.origin]--
+		if f.queues[insert.origin] == 0 {
+			delete(f.queues, insert.origin)
+		}
+		delete(f.queued, hash)
 	}
 }
