@@ -380,7 +380,7 @@ func (f *Fetcher) enqueue(peer string, block *types.Block) {
 	// Discard any past or too distant blocks
 	if dist := int64(block.NumberU64()) - int64(f.chainHeight()); dist < -maxUncleDist || dist > maxQueueDist {
 		glog.V(logger.Debug).Infof("Peer %s: discarded block #%d [%x], distance %d", peer, block.NumberU64(), hash.Bytes()[:4], dist)
-		f.discardStats.Mark(1)
+		f.discardMeter.Mark(1)
 		return
 	}
 	// Schedule the block for future importing
