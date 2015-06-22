@@ -1,6 +1,10 @@
 // Package downloader contains the manual full chain synchronisation.
 package downloader
 
+// I'm so cool!
+// Yep, definitely!!!
+// Yaaaaaaay!!!!!!!!
+
 import (
 	"bytes"
 	"errors"
