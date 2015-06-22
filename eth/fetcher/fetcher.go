@@ -20,6 +20,7 @@ const (
 	fetchTimeout  = 5 * time.Second        // Maximum alloted time to return an explicitly requested block
 	maxUncleDist  = 7                      // Maximum allowed backward distance from the chain head
 	maxQueueDist  = 32                     // Maximum allowed distance from the chain head to queue
+	announceLimit = 256                    // Maximum number of unique blocks a peer may have announced
 )
 
 var (
@@ -74,6 +75,7 @@ type Fetcher struct {
 	quit   chan struct{}
 
 	// Announce states
+	announces map[string]int              // Per peer announce counts to prevent memory exhaustion
 	announced map[common.Hash][]*announce // Announced blocks, scheduled for fetching
 	fetching  map[common.Hash]*announce   // Announced blocks, currently fetching
 
@@ -98,6 +100,7 @@ func New(getBlock blockRetrievalFn, validateBlock blockValidatorFn, broadcastBlo
 		filter:         make(chan chan []*types.Block),
 		done:           make(chan common.Hash),
 		quit:           make(chan struct{}),
+		announces:      make(map[string]int),
 		announced:      make(map[common.Hash][]*announce),
 		fetching:       make(map[common.Hash]*announce),
 		queue:          prque.New(),
@@ -189,8 +192,7 @@ func (f *Fetcher) loop() {
 		// Clean up any expired block fetches
 		for hash, announce := range f.fetching {
 			if time.Since(announce.time) > fetchTimeout {
-				delete(f.announced, hash)
-				delete(f.fetching, hash)
+				f.forgetBlock(hash)
 			}
 		}
 		// Import any queued blocks that could potentially fit
@@ -217,10 +219,17 @@ func (f *Fetcher) loop() {
 			return
 
 		case notification := <-f.notify:
-			// A block was announced, schedule if it's not yet downloading
+			// A block was announced, make sure the peer isn't DOSing us
+			count := f.announces[notification.origin] + 1
+			if count > announceLimit {
+				glog.V(logger.Debug).Infof("Peer %s: exceeded outstanding announces (%d)", notification.origin, announceLimit)
+				break
+			}
+			// All is well, schedule the announce if block's not yet downloading
 			if _, ok := f.fetching[notification.hash]; ok {
 				break
 			}
+			f.announces[notification.origin] = count
 			f.announced[notification.hash] = append(f.announced[notification.hash], notification)
 			if len(f.announced) == 1 {
 				f.reschedule(fetch)
@@ -232,8 +241,7 @@ func (f *Fetcher) loop() {
 
 		case hash := <-f.done:
 			// A pending import finished, remove all traces of the notification
-			delete(f.announced, hash)
-			delete(f.fetching, hash)
+			f.forgetBlock(hash)
 			delete(f.queued, hash)
 
 		case <-fetch.C:
@@ -242,12 +250,15 @@ func (f *Fetcher) loop() {
 
 			for hash, announces := range f.announced {
 				if time.Since(announces[0].time) > arriveTimeout-gatherSlack {
+					// Pick a random peer to retrieve from, reset all others
 					announce := announces[rand.Intn(len(announces))]
+					f.forgetBlock(hash)
+
+					// If the block still didn't arrive, queue for fetching
 					if f.getBlock(hash) == nil {
 						request[announce.origin] = append(request[announce.origin], hash)
 						f.fetching[hash] = announce
 					}
-					delete(f.announced, hash)
 				}
 			}
 			// Send out all block requests
@@ -285,7 +296,7 @@ func (f *Fetcher) loop() {
 					if f.getBlock(hash) == nil {
 						explicit = append(explicit, block)
 					} else {
-						delete(f.fetching, hash)
+						f.forgetBlock(hash)
 					}
 				} else {
 					download = append(download, block)
@@ -376,4 +387,25 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 		// If import succeeded, broadcast the block
 		go f.broadcastBlock(block, false)
 	}()
+}
+
+// forgetBlock removes all traces of a block from the fetcher's internal state.
+func (f *Fetcher) forgetBlock(hash common.Hash) {
+	// Remove all pending announces and decrement DOS counters
+	for _, announce := range f.announced[hash] {
+		f.announces[announce.origin]--
+		if f.announces[announce.origin] == 0 {
+			delete(f.announces, announce.origin)
+		}
+	}
+	delete(f.announced, hash)
+
+	// Remove any pending fetches and decrement the DOS counters
+	if announce := f.fetching[hash]; announce != nil {
+		f.announces[announce.origin]--
+		if f.announces[announce.origin] == 0 {
+			delete(f.announces, announce.origin)
+		}
+		delete(f.fetching, hash)
+	}
 }
