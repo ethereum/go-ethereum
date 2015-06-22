@@ -159,6 +159,37 @@ func (f *fetcherTester) makeFetcher(blocks map[common.Hash]*types.Block) blockRe
 	}
 }
 
+// verifyImportEvent verifies that one single event arrive on an import channel.
+func verifyImportEvent(t *testing.T, imported chan *types.Block) {
+	select {
+	case <-imported:
+	case <-time.After(time.Second):
+		t.Fatalf("import timeout")
+	}
+}
+
+// verifyImportCount verifies that exactly count number of events arrive on an
+// import hook channel.
+func verifyImportCount(t *testing.T, imported chan *types.Block, count int) {
+	for i := 0; i < count; i++ {
+		select {
+		case <-imported:
+		case <-time.After(time.Second):
+			t.Fatalf("block %d: import timeout", i)
+		}
+	}
+	verifyImportDone(t, imported)
+}
+
+// verifyImportDone verifies that no more events are arriving on an import channel.
+func verifyImportDone(t *testing.T, imported chan *types.Block) {
+	select {
+	case <-imported:
+		t.Fatalf("extra block imported")
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
 // Tests that a fetcher accepts block announcements and initiates retrievals for
 // them, successfully importing into the local chain.
 func TestSequentialAnnouncements(t *testing.T) {
@@ -176,18 +207,9 @@ func TestSequentialAnnouncements(t *testing.T) {
 
 	for i := len(hashes) - 2; i >= 0; i-- {
 		tester.fetcher.Notify("valid", hashes[i], time.Now().Add(-arriveTimeout), fetcher)
-
-		select {
-		case <-imported:
-		case <-time.After(time.Second):
-			t.Fatalf("block %d: import timeout", len(hashes)-i)
-		}
+		verifyImportEvent(t, imported)
 	}
-	select {
-	case <-imported:
-		t.Fatalf("extra block imported")
-	case <-time.After(50 * time.Millisecond):
-	}
+	verifyImportDone(t, imported)
 }
 
 // Tests that if blocks are announced by multiple peers (or even the same buggy
@@ -216,17 +238,10 @@ func TestConcurrentAnnouncements(t *testing.T) {
 		tester.fetcher.Notify("second", hashes[i], time.Now().Add(-arriveTimeout+time.Millisecond), wrapper)
 		tester.fetcher.Notify("second", hashes[i], time.Now().Add(-arriveTimeout-time.Millisecond), wrapper)
 
-		select {
-		case <-imported:
-		case <-time.After(time.Second):
-			t.Fatalf("block %d: import timeout", len(hashes)-i)
-		}
+		verifyImportEvent(t, imported)
 	}
-	select {
-	case <-imported:
-		t.Fatalf("extra block imported")
-	case <-time.After(50 * time.Millisecond):
-	}
+	verifyImportDone(t, imported)
+
 	// Make sure no blocks were retrieved twice
 	if int(counter) != targetBlocks {
 		t.Fatalf("retrieval count mismatch: have %v, want %v", counter, targetBlocks)
@@ -259,18 +274,7 @@ func TestOverlappingAnnouncements(t *testing.T) {
 		}
 	}
 	// Wait for all the imports to complete and check count
-	for i := 0; i < len(hashes)-1; i++ {
-		select {
-		case <-imported:
-		case <-time.After(time.Second):
-			t.Fatalf("block %d: import timeout", i)
-		}
-	}
-	select {
-	case <-imported:
-		t.Fatalf("extra block imported")
-	case <-time.After(50 * time.Millisecond):
-	}
+	verifyImportCount(t, imported, len(hashes)-1)
 }
 
 // Tests that announces already being retrieved will not be duplicated.
@@ -334,19 +338,7 @@ func TestRandomArrivalImport(t *testing.T) {
 	}
 	// Finally announce the skipped entry and check full import
 	tester.fetcher.Notify("valid", hashes[skip], time.Now().Add(-arriveTimeout), fetcher)
-
-	for i := 0; i < len(hashes)-1; i++ {
-		select {
-		case <-imported:
-		case <-time.After(time.Second):
-			t.Fatalf("block %d: import timeout", i)
-		}
-	}
-	select {
-	case <-imported:
-		t.Fatalf("extra block imported")
-	case <-time.After(50 * time.Millisecond):
-	}
+	verifyImportCount(t, imported, len(hashes)-1)
 }
 
 // Tests that direct block enqueues (due to block propagation vs. hash announce)
@@ -372,19 +364,7 @@ func TestQueueGapFill(t *testing.T) {
 	}
 	// Fill the missing block directly as if propagated
 	tester.fetcher.Enqueue("valid", blocks[hashes[skip]])
-
-	for i := 0; i < len(hashes)-1; i++ {
-		select {
-		case <-imported:
-		case <-time.After(time.Second):
-			t.Fatalf("block %d: import timeout", i)
-		}
-	}
-	select {
-	case <-imported:
-		t.Fatalf("extra block imported")
-	case <-time.After(50 * time.Millisecond):
-	}
+	verifyImportCount(t, imported, len(hashes)-1)
 }
 
 // Tests that blocks arriving from various sources (multiple propagations, hash
@@ -419,16 +399,8 @@ func TestImportDeduplication(t *testing.T) {
 
 	// Fill the missing block directly as if propagated, and check import uniqueness
 	tester.fetcher.Enqueue("valid", blocks[hashes[1]])
-	for done := false; !done; {
-		select {
-		case <-imported:
-		case <-time.After(50 * time.Millisecond):
-			done = true
-		}
-	}
-	if imported := len(tester.blocks); imported != 3 {
-		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, 3)
-	}
+	verifyImportCount(t, imported, 2)
+
 	if counter != 2 {
 		t.Fatalf("import invocation count mismatch: have %v, want %v", counter, 2)
 	}
@@ -491,32 +463,14 @@ func TestHashMemoryExhaustionAttack(t *testing.T) {
 		t.Fatalf("queued announce count mismatch: have %d, want %d", len(tester.fetcher.announced), hashLimit+maxQueueDist)
 	}
 	// Wait for fetches to complete
-	for i := 0; i < maxQueueDist; i++ {
-		select {
-		case <-imported:
-		case <-time.After(time.Second):
-			t.Fatalf("block %d: import timeout", i)
-		}
-	}
-	select {
-	case <-imported:
-		t.Fatalf("extra block imported")
-	case <-time.After(50 * time.Millisecond):
-	}
+	verifyImportCount(t, imported, maxQueueDist)
+
 	// Feed the remaining valid hashes to ensure DOS protection state remains clean
 	for i := len(hashes) - maxQueueDist - 2; i >= 0; i-- {
 		tester.fetcher.Notify("valid", hashes[i], time.Now().Add(-arriveTimeout), valid)
-		select {
-		case <-imported:
-		case <-time.After(time.Second):
-			t.Fatalf("block %d: import timeout", len(hashes)-i)
-		}
+		verifyImportEvent(t, imported)
 	}
-	select {
-	case <-imported:
-		t.Fatalf("extra block imported")
-	case <-time.After(50 * time.Millisecond):
-	}
+	verifyImportDone(t, imported)
 }
 
 // Tests that blocks sent to the fetcher (either through propagation or via hash
@@ -559,28 +513,12 @@ func TestBlockMemoryExhaustionAttack(t *testing.T) {
 	}
 	// Insert the missing piece (and sanity check the import)
 	tester.fetcher.Enqueue("valid", blocks[hashes[len(hashes)-2]])
-	for i := 0; i < maxQueueDist; i++ {
-		select {
-		case <-imported:
-		case <-time.After(time.Second):
-			t.Fatalf("block %d: import timeout", i)
-		}
-	}
-	select {
-	case <-imported:
-		t.Fatalf("extra block imported")
-	case <-time.After(50 * time.Millisecond):
-	}
+	verifyImportCount(t, imported, maxQueueDist)
+
 	// Insert the remaining blocks in chunks to ensure clean DOS protection
 	for i := maxQueueDist; i < len(hashes)-1; i++ {
 		tester.fetcher.Enqueue("valid", blocks[hashes[len(hashes)-2-i]])
-		select {
-		case <-imported:
-		case <-time.After(time.Second):
-			t.Fatalf("block %d: import timeout", len(hashes)-i)
-		}
+		verifyImportEvent(t, imported)
 	}
-	if imported := len(tester.blocks); imported != len(hashes) {
-		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, len(hashes))
-	}
+	verifyImportDone(t, imported)
 }
