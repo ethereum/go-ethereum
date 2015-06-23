@@ -335,7 +335,7 @@ func (o OpCode) String() string {
 
 func isDynamic(op OpCode) bool {
 	switch op {
-	case CREATE, CALL, CALLCODE, JUMP, JUMPI, SUICIDE, STOP, RETURN, EXTCODECOPY, CODECOPY, MSTORE, MSTORE8:
+	case CREATE, CALL, CALLCODE, JUMP, JUMPI, SUICIDE, STOP, RETURN, EXTCODECOPY, CODECOPY, MSTORE, MSTORE8, SSTORE:
 		return true
 	}
 	if _, ok := opCodeToString[op]; !ok {
