@@ -17,8 +17,11 @@ type LDBDatabase struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
 
-	GetMeter metrics.Meter // Meter for measuring the database get requests
-	PutMeter metrics.Meter // Meter for measuring the database put requests
+	GetMeter   metrics.Meter // Meter for measuring the database get request counts
+	PutMeter   metrics.Meter // Meter for measuring the database put request counts
+	DelMeter   metrics.Meter // Meter for measuring the database delete request counts
+	ReadMeter  metrics.Meter // Meter for measuring the database get request data usage
+	WriteMeter metrics.Meter // Meter for measuring the database put request data usage
 }
 
 // NewLDBDatabase returns a LevelDB wrapped object. LDBDatabase does not persist data by
@@ -47,7 +50,10 @@ func NewLDBDatabase(file string) (*LDBDatabase, error) {
 func (self *LDBDatabase) Put(key []byte, value []byte) error {
 	dat := rle.Compress(value)
 	if self.PutMeter != nil {
-		self.PutMeter.Mark(int64(len(dat)))
+		self.PutMeter.Mark(1)
+	}
+	if self.WriteMeter != nil {
+		self.WriteMeter.Mark(int64(len(dat)))
 	}
 	return self.db.Put(key, dat, nil)
 }
@@ -59,13 +65,19 @@ func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
 		return nil, err
 	}
 	if self.GetMeter != nil {
-		self.GetMeter.Mark(int64(len(dat)))
+		self.GetMeter.Mark(1)
+	}
+	if self.ReadMeter != nil {
+		self.ReadMeter.Mark(int64(len(dat)))
 	}
 	return rle.Decompress(dat)
 }
 
 // Delete deletes the key from the queue and database
 func (self *LDBDatabase) Delete(key []byte) error {
+	if self.DelMeter != nil {
+		self.DelMeter.Mark(1)
+	}
 	return self.db.Delete(key, nil)
 }
 

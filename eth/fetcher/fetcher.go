@@ -126,11 +126,11 @@ func New(getBlock blockRetrievalFn, validateBlock blockValidatorFn, broadcastBlo
 		chainHeight:    chainHeight,
 		insertChain:    insertChain,
 		dropPeer:       dropPeer,
-		announceMeter:  metrics.GetOrRegisterMeter("eth/RemoteAnnounces", metrics.DefaultRegistry),
-		announceTimer:  metrics.GetOrRegisterTimer("eth/LocalAnnounces", metrics.DefaultRegistry),
-		broadcastMeter: metrics.GetOrRegisterMeter("eth/RemoteBroadcasts", metrics.DefaultRegistry),
-		broadcastTimer: metrics.GetOrRegisterTimer("eth/LocalBroadcasts", metrics.DefaultRegistry),
-		discardMeter:   metrics.GetOrRegisterMeter("eth/DiscardedBlocks", metrics.DefaultRegistry),
+		announceMeter:  metrics.GetOrRegisterMeter("eth/sync/RemoteAnnounces", metrics.DefaultRegistry),
+		announceTimer:  metrics.GetOrRegisterTimer("eth/sync/LocalAnnounces", metrics.DefaultRegistry),
+		broadcastMeter: metrics.GetOrRegisterMeter("eth/sync/RemoteBroadcasts", metrics.DefaultRegistry),
+		broadcastTimer: metrics.GetOrRegisterTimer("eth/sync/LocalBroadcasts", metrics.DefaultRegistry),
+		discardMeter:   metrics.GetOrRegisterMeter("eth/sync/DiscardedBlocks", metrics.DefaultRegistry),
 	}
 }
 
