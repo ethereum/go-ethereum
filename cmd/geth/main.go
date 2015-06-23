@@ -208,7 +208,7 @@ See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
 		{
 			Action: attach,
 			Name:   "attach",
-			Usage:  `Geth Console: interactive JavaScript environment`,
+			Usage:  `Geth Console: interactive JavaScript environment (connect to node)`,
 			Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
