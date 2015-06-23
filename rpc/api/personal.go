@@ -66,7 +66,7 @@ func (self *personalApi) Execute(req *shared.Request) (interface{}, error) {
 }
 
 func (self *personalApi) Name() string {
-	return PersonalApiName
+	return shared.PersonalApiName
 }
 
 func (self *personalApi) ApiVersion() string {

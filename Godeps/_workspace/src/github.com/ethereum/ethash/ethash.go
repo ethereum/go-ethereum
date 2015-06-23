@@ -119,6 +119,12 @@ func (l *Light) Verify(block pow.Block) bool {
 	if !ret.success {
 		return false
 	}
+
+	// avoid mixdigest malleability as it's not included in a block's "hashNononce"
+	if block.MixDigest() != h256ToHash(ret.mix_hash) {
+		return false
+	}
+
 	// Make sure cache is live until after the C call.
 	// This is important because a GC might happen and execute
 	// the finalizer before the call completes.

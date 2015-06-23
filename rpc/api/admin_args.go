@@ -95,3 +95,55 @@ func (args *SetSolcArgs) UnmarshalJSON(b []byte) (err error) {
 
 	return shared.NewInvalidTypeError("path", "not a string")
 }
+
+type StartRPCArgs struct {
+	ListenAddress string
+	ListenPort    uint
+	CorsDomain    string
+	Apis          string
+}
+
+func (args *StartRPCArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	args.ListenAddress = "127.0.0.1"
+	args.ListenPort = 8545
+	args.Apis = "net,eth,web3"
+
+	if len(obj) >= 1 {
+		if addr, ok := obj[0].(string); ok {
+			args.ListenAddress = addr
+		} else {
+			return shared.NewInvalidTypeError("listenAddress", "not a string")
+		}
+	}
+
+	if len(obj) >= 2 {
+		if port, ok := obj[1].(float64); ok && port >= 0 && port <= 64*1024 {
+			args.ListenPort = uint(port)
+		} else {
+			return shared.NewInvalidTypeError("listenPort", "not a valid port number")
+		}
+	}
+
+	if len(obj) >= 3 {
+		if corsDomain, ok := obj[2].(string); ok {
+			args.CorsDomain = corsDomain
+		} else {
+			return shared.NewInvalidTypeError("corsDomain", "not a string")
+		}
+	}
+
+	if len(obj) >= 4 {
+		if apis, ok := obj[3].(string); ok {
+			args.Apis = apis
+		} else {
+			return shared.NewInvalidTypeError("apis", "not a string")
+		}
+	}
+
+	return nil
+}

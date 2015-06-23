@@ -87,9 +87,9 @@ bool ethash_file_size(FILE* f, size_t* ret_size)
 
 bool ethash_get_default_dirname(char* strbuf, size_t buffsize)
 {
-	static const char dir_suffix[] = "Appdata\\Ethash\\";
+	static const char dir_suffix[] = "Ethash\\";
 	strbuf[0] = '\0';
-	if (!SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_PROFILE, NULL, 0, (WCHAR*)strbuf))) {
+	if (!SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, (CHAR*)strbuf))) {
 		return false;
 	}
 	if (!ethash_strncat(strbuf, buffsize, "\\", 1)) {

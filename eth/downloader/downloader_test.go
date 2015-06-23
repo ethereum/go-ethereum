@@ -52,6 +52,8 @@ func copyBlock(block *types.Block) *types.Block {
 	return createBlock(int(block.Number().Int64()), block.ParentHeaderHash, block.HeaderHash)
 }
 
+// createBlocksFromHashes assembles a collection of blocks, each having a correct
+// place in the given hash chain.
 func createBlocksFromHashes(hashes []common.Hash) map[common.Hash]*types.Block {
 	blocks := make(map[common.Hash]*types.Block)
 	for i := 0; i < len(hashes); i++ {
@@ -64,6 +66,7 @@ func createBlocksFromHashes(hashes []common.Hash) map[common.Hash]*types.Block {
 	return blocks
 }
 
+// downloadTester is a test simulator for mocking out local block chain.
 type downloadTester struct {
 	downloader *Downloader
 
@@ -75,6 +78,7 @@ type downloadTester struct {
 	maxHashFetch int // Overrides the maximum number of retrieved hashes
 }
 
+// newTester creates a new downloader test mocker.
 func newTester() *downloadTester {
 	tester := &downloadTester{
 		ownHashes:  []common.Hash{knownHash},
@@ -82,9 +86,7 @@ func newTester() *downloadTester {
 		peerHashes: make(map[string][]common.Hash),
 		peerBlocks: make(map[string]map[common.Hash]*types.Block),
 	}
-	var mux event.TypeMux
-	downloader := New(&mux, tester.hasBlock, tester.getBlock, tester.insertChain, tester.dropPeer)
-	tester.downloader = downloader
+	tester.downloader = New(new(event.TypeMux), tester.hasBlock, tester.getBlock, tester.insertChain, tester.dropPeer)
 
 	return tester
 }
@@ -247,7 +249,7 @@ func TestCancel(t *testing.T) {
 	tester.newPeer("peer", hashes, blocks)
 
 	// Make sure canceling works with a pristine downloader
-	tester.downloader.Cancel()
+	tester.downloader.cancel()
 	hashCount, blockCount := tester.downloader.queue.Size()
 	if hashCount > 0 || blockCount > 0 {
 		t.Errorf("block or hash count mismatch: %d hashes, %d blocks, want 0", hashCount, blockCount)
@@ -256,7 +258,7 @@ func TestCancel(t *testing.T) {
 	if err := tester.sync("peer"); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
-	tester.downloader.Cancel()
+	tester.downloader.cancel()
 	hashCount, blockCount = tester.downloader.queue.Size()
 	if hashCount > 0 || blockCount > 0 {
 		t.Errorf("block or hash count mismatch: %d hashes, %d blocks, want 0", hashCount, blockCount)
@@ -359,7 +361,7 @@ func TestSlowSynchronisation(t *testing.T) {
 	// Create a batch of blocks, with a slow and a full speed peer
 	targetCycles := 2
 	targetBlocks := targetCycles*blockCacheLimit - 15
-	targetIODelay := 500 * time.Millisecond
+	targetIODelay := time.Second
 
 	hashes := createHashes(targetBlocks, knownHash)
 	blocks := createBlocksFromHashes(hashes)
@@ -708,6 +710,40 @@ func TestBannedChainMemoryExhaustionAttack(t *testing.T) {
 	}
 }
 
+// Tests a corner case (potential attack) where a peer delivers both good as well
+// as unrequested blocks to a hash request. This may trigger a different code
+// path than the fully correct or fully invalid delivery, potentially causing
+// internal state problems
+//
+// No, don't delete this test, it actually did happen!
+func TestOverlappingDeliveryAttack(t *testing.T) {
+	// Create an arbitrary batch of blocks ( < cache-size not to block)
+	targetBlocks := blockCacheLimit - 23
+	hashes := createHashes(targetBlocks, knownHash)
+	blocks := createBlocksFromHashes(hashes)
+
+	// Register an attacker that always returns non-requested blocks too
+	tester := newTester()
+	tester.newPeer("attack", hashes, blocks)
+
+	rawGetBlocks := tester.downloader.peers.Peer("attack").getBlocks
+	tester.downloader.peers.Peer("attack").getBlocks = func(request []common.Hash) error {
+		// Add a non requested hash the screw the delivery (genesis should be fine)
+		return rawGetBlocks(append(request, hashes[0]))
+	}
+	// Test that synchronisation can complete, check for import success
+	if err := tester.sync("attack"); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	start := time.Now()
+	for len(tester.ownHashes) != len(hashes) && time.Since(start) < time.Second {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(tester.ownHashes) != len(hashes) {
+		t.Fatalf("chain length mismatch: have %v, want %v", len(tester.ownHashes), len(hashes))
+	}
+}
+
 // Tests that misbehaving peers are disconnected, whilst behaving ones are not.
 func TestHashAttackerDropping(t *testing.T) {
 	// Define the disconnection requirement for individual hash fetch errors
@@ -715,22 +751,21 @@ func TestHashAttackerDropping(t *testing.T) {
 		result error
 		drop   bool
 	}{
-		{nil, false},                  // Sync succeeded, all is well
-		{errBusy, false},              // Sync is already in progress, no problem
-		{errUnknownPeer, false},       // Peer is unknown, was already dropped, don't double drop
-		{errBadPeer, true},            // Peer was deemed bad for some reason, drop it
-		{errStallingPeer, true},       // Peer was detected to be stalling, drop it
-		{errBannedHead, true},         // Peer's head hash is a known bad hash, drop it
-		{errNoPeers, false},           // No peers to download from, soft race, no issue
-		{errPendingQueue, false},      // There are blocks still cached, wait to exhaust, no issue
-		{errTimeout, true},            // No hashes received in due time, drop the peer
-		{errEmptyHashSet, true},       // No hashes were returned as a response, drop as it's a dead end
-		{errPeersUnavailable, true},   // Nobody had the advertised blocks, drop the advertiser
-		{errInvalidChain, true},       // Hash chain was detected as invalid, definitely drop
-		{errCrossCheckFailed, true},   // Hash-origin failed to pass a block cross check, drop
-		{errCancelHashFetch, false},   // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelBlockFetch, false},  // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelChainImport, false}, // Synchronisation was canceled, origin may be innocent, don't drop
+		{nil, false},                 // Sync succeeded, all is well
+		{errBusy, false},             // Sync is already in progress, no problem
+		{errUnknownPeer, false},      // Peer is unknown, was already dropped, don't double drop
+		{errBadPeer, true},           // Peer was deemed bad for some reason, drop it
+		{errStallingPeer, true},      // Peer was detected to be stalling, drop it
+		{errBannedHead, true},        // Peer's head hash is a known bad hash, drop it
+		{errNoPeers, false},          // No peers to download from, soft race, no issue
+		{errPendingQueue, false},     // There are blocks still cached, wait to exhaust, no issue
+		{errTimeout, true},           // No hashes received in due time, drop the peer
+		{errEmptyHashSet, true},      // No hashes were returned as a response, drop as it's a dead end
+		{errPeersUnavailable, true},  // Nobody had the advertised blocks, drop the advertiser
+		{errInvalidChain, true},      // Hash chain was detected as invalid, definitely drop
+		{errCrossCheckFailed, true},  // Hash-origin failed to pass a block cross check, drop
+		{errCancelHashFetch, false},  // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelBlockFetch, false}, // Synchronisation was canceled, origin may be innocent, don't drop
 	}
 	// Run the tests and check disconnection status
 	tester := newTester()

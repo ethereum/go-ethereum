@@ -17,217 +17,201 @@
 /**
  * @authors:
  * 	Jeffrey Wilcke <i@jev.io>
+ * 	Taylor Gerring <taylor.gerring@gmail.com>
  */
 
 package main
 
 import (
-	"bytes"
-	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
-	"math/big"
 	"os"
-	"strconv"
+	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
+	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/tests/helper"
+	"github.com/ethereum/go-ethereum/tests"
 )
 
-type Log struct {
-	AddressF string   `json:"address"`
-	DataF    string   `json:"data"`
-	TopicsF  []string `json:"topics"`
-	BloomF   string   `json:"bloom"`
-}
+var (
+	continueOnError = false
+	testExtension   = ".json"
+	defaultTest     = "all"
+	defaultDir      = "."
+	allTests        = []string{"BlockTests", "StateTests", "TransactionTests", "VMTests"}
+	skipTests       = []string{}
 
-func (self Log) Address() []byte      { return common.Hex2Bytes(self.AddressF) }
-func (self Log) Data() []byte         { return common.Hex2Bytes(self.DataF) }
-func (self Log) RlpData() interface{} { return nil }
-func (self Log) Topics() [][]byte {
-	t := make([][]byte, len(self.TopicsF))
-	for i, topic := range self.TopicsF {
-		t[i] = common.Hex2Bytes(topic)
+	TestFlag = cli.StringFlag{
+		Name:  "test",
+		Usage: "Test type (string): VMTests, TransactionTests, StateTests, BlockTests",
+		Value: defaultTest,
 	}
-	return t
-}
-
-type Account struct {
-	Balance string
-	Code    string
-	Nonce   string
-	Storage map[string]string
-}
-
-func StateObjectFromAccount(db common.Database, addr string, account Account) *state.StateObject {
-	obj := state.NewStateObject(common.HexToAddress(addr), db)
-	obj.SetBalance(common.Big(account.Balance))
-
-	if common.IsHex(account.Code) {
-		account.Code = account.Code[2:]
+	FileFlag = cli.StringFlag{
+		Name:   "file",
+		Usage:  "Test file or directory. Directories are searched for .json files 1 level deep",
+		Value:  defaultDir,
+		EnvVar: "ETHEREUM_TEST_PATH",
 	}
-	obj.SetCode(common.Hex2Bytes(account.Code))
-	obj.SetNonce(common.Big(account.Nonce).Uint64())
+	ContinueOnErrorFlag = cli.BoolFlag{
+		Name:  "continue",
+		Usage: "Continue running tests on error (true) or [default] exit immediately (false)",
+	}
+	ReadStdInFlag = cli.BoolFlag{
+		Name:  "stdin",
+		Usage: "Accept input from stdin instead of reading from file",
+	}
+	SkipTestsFlag = cli.StringFlag{
+		Name:  "skip",
+		Usage: "Tests names to skip",
+	}
+)
 
-	return obj
-}
+func runTestWithReader(test string, r io.Reader) error {
+	glog.Infoln("runTest", test)
+	var err error
+	switch strings.ToLower(test) {
+	case "bk", "block", "blocktest", "blockchaintest", "blocktests", "blockchaintests":
+		err = tests.RunBlockTestWithReader(r, skipTests)
+	case "st", "state", "statetest", "statetests":
+		err = tests.RunStateTestWithReader(r, skipTests)
+	case "tx", "transactiontest", "transactiontests":
+		err = tests.RunTransactionTestsWithReader(r, skipTests)
+	case "vm", "vmtest", "vmtests":
+		err = tests.RunVmTestWithReader(r, skipTests)
+	default:
+		err = fmt.Errorf("Invalid test type specified: %v", test)
+	}
 
-type VmTest struct {
-	Callcreates   interface{}
-	Env           Env
-	Exec          map[string]string
-	Transaction   map[string]string
-	Logs          []Log
-	Gas           string
-	Out           string
-	Post          map[string]Account
-	Pre           map[string]Account
-	PostStateRoot string
-}
-
-type Env struct {
-	CurrentCoinbase   string
-	CurrentDifficulty string
-	CurrentGasLimit   string
-	CurrentNumber     string
-	CurrentTimestamp  interface{}
-	PreviousHash      string
-}
-
-func RunVmTest(r io.Reader) (failed int) {
-	tests := make(map[string]VmTest)
-
-	data, _ := ioutil.ReadAll(r)
-	err := json.Unmarshal(data, &tests)
 	if err != nil {
-		log.Fatalln(err)
+		return err
 	}
 
-	vm.Debug = true
-	glog.SetV(4)
-	glog.SetToStderr(true)
-	for name, test := range tests {
-		db, _ := ethdb.NewMemDatabase()
-		statedb := state.New(common.Hash{}, db)
-		for addr, account := range test.Pre {
-			obj := StateObjectFromAccount(db, addr, account)
-			statedb.SetStateObject(obj)
-		}
+	return nil
+}
 
-		env := make(map[string]string)
-		env["currentCoinbase"] = test.Env.CurrentCoinbase
-		env["currentDifficulty"] = test.Env.CurrentDifficulty
-		env["currentGasLimit"] = test.Env.CurrentGasLimit
-		env["currentNumber"] = test.Env.CurrentNumber
-		env["previousHash"] = test.Env.PreviousHash
-		if n, ok := test.Env.CurrentTimestamp.(float64); ok {
-			env["currentTimestamp"] = strconv.Itoa(int(n))
+func getFiles(path string) ([]string, error) {
+	glog.Infoln("getFiles", path)
+	var files []string
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	switch mode := fi.Mode(); {
+	case mode.IsDir():
+		fi, _ := ioutil.ReadDir(path)
+		files = make([]string, len(fi))
+		for i, v := range fi {
+			// only go 1 depth and leave directory entires blank
+			if !v.IsDir() && v.Name()[len(v.Name())-len(testExtension):len(v.Name())] == testExtension {
+				files[i] = filepath.Join(path, v.Name())
+				glog.Infoln("Found file", files[i])
+			}
+		}
+	case mode.IsRegular():
+		files = make([]string, 1)
+		files[0] = path
+	}
+
+	return files, nil
+}
+
+func runSuite(test, file string) {
+	var tests []string
+
+	if test == defaultTest {
+		tests = allTests
+	} else {
+		tests = []string{test}
+	}
+
+	for _, curTest := range tests {
+		glog.Infoln("runSuite", curTest, file)
+		var err error
+		var files []string
+		if test == defaultTest {
+			files, err = getFiles(filepath.Join(file, curTest))
+
 		} else {
-			env["currentTimestamp"] = test.Env.CurrentTimestamp.(string)
+			files, err = getFiles(file)
+		}
+		if err != nil {
+			glog.Fatalln(err)
 		}
 
-		ret, logs, _, _ := helper.RunState(statedb, env, test.Transaction)
-		statedb.Sync()
-
-		rexp := helper.FromHex(test.Out)
-		if bytes.Compare(rexp, ret) != 0 {
-			glog.V(logger.Info).Infof("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
-			failed = 1
+		if len(files) == 0 {
+			glog.Warningln("No files matched path")
 		}
-
-		for addr, account := range test.Post {
-			obj := statedb.GetStateObject(common.HexToAddress(addr))
-			if obj == nil {
+		for _, curFile := range files {
+			// Skip blank entries
+			if len(curFile) == 0 {
 				continue
 			}
 
-			if len(test.Exec) == 0 {
-				if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
-					glog.V(logger.Info).Infof("%s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
-					failed = 1
+			r, err := os.Open(curFile)
+			if err != nil {
+				glog.Fatalln(err)
+			}
+			defer r.Close()
+
+			err = runTestWithReader(curTest, r)
+			if err != nil {
+				if continueOnError {
+					glog.Errorln(err)
+				} else {
+					glog.Fatalln(err)
 				}
 			}
 
-			for addr, value := range account.Storage {
-				v := obj.GetState(common.HexToHash(addr)).Bytes()
-				vexp := helper.FromHex(value)
-
-				if bytes.Compare(v, vexp) != 0 {
-					glog.V(logger.Info).Infof("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address().Bytes()[0:4], addr, vexp, v, common.BigD(vexp), common.BigD(v))
-					failed = 1
-				}
-			}
 		}
-
-		statedb.Sync()
-		//if !bytes.Equal(common.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
-		if common.HexToHash(test.PostStateRoot) != statedb.Root() {
-			glog.V(logger.Info).Infof("%s's : Post state root failed. Expected %s, got %x", name, test.PostStateRoot, statedb.Root())
-			failed = 1
-		}
-
-		if len(test.Logs) > 0 {
-			if len(test.Logs) != len(logs) {
-				glog.V(logger.Info).Infof("log length failed. Expected %d, got %d", len(test.Logs), len(logs))
-				failed = 1
-			} else {
-				for i, log := range test.Logs {
-					if common.HexToAddress(log.AddressF) != logs[i].Address {
-						glog.V(logger.Info).Infof("'%s' log address failed. Expected %v got %x", name, log.AddressF, logs[i].Address)
-						failed = 1
-					}
-
-					if !bytes.Equal(logs[i].Data, helper.FromHex(log.DataF)) {
-						glog.V(logger.Info).Infof("'%s' log data failed. Expected %v got %x", name, log.DataF, logs[i].Data)
-						failed = 1
-					}
-
-					if len(log.TopicsF) != len(logs[i].Topics) {
-						glog.V(logger.Info).Infof("'%s' log topics length failed. Expected %d got %d", name, len(log.TopicsF), logs[i].Topics)
-						failed = 1
-					} else {
-						for j, topic := range log.TopicsF {
-							if common.HexToHash(topic) != logs[i].Topics[j] {
-								glog.V(logger.Info).Infof("'%s' log topic[%d] failed. Expected %v got %x", name, j, topic, logs[i].Topics[j])
-								failed = 1
-							}
-						}
-					}
-					genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
-
-					if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
-						glog.V(logger.Info).Infof("'%s' bloom failed.", name)
-						failed = 1
-					}
-				}
-			}
-		}
-
-		if failed == 1 {
-			glog.V(logger.Info).Infoln(string(statedb.Dump()))
-		}
-
-		logger.Flush()
 	}
+}
 
-	return
+func setupApp(c *cli.Context) {
+	flagTest := c.GlobalString(TestFlag.Name)
+	flagFile := c.GlobalString(FileFlag.Name)
+	continueOnError = c.GlobalBool(ContinueOnErrorFlag.Name)
+	useStdIn := c.GlobalBool(ReadStdInFlag.Name)
+	skipTests = strings.Split(c.GlobalString(SkipTestsFlag.Name), " ")
+
+	if !useStdIn {
+		runSuite(flagTest, flagFile)
+	} else {
+		if err := runTestWithReader(flagTest, os.Stdin); err != nil {
+			glog.Fatalln(err)
+		}
+
+	}
 }
 
 func main() {
-	helper.Logger.SetLogLevel(5)
-	vm.Debug = true
+	glog.SetToStderr(true)
 
-	if len(os.Args) > 1 {
-		os.Exit(RunVmTest(strings.NewReader(os.Args[1])))
-	} else {
-		os.Exit(RunVmTest(os.Stdin))
+	app := cli.NewApp()
+	app.Name = "ethtest"
+	app.Usage = "go-ethereum test interface"
+	app.Action = setupApp
+	app.Version = "0.2.0"
+	app.Author = "go-ethereum team"
+
+	app.Flags = []cli.Flag{
+		TestFlag,
+		FileFlag,
+		ContinueOnErrorFlag,
+		ReadStdInFlag,
+		SkipTestsFlag,
 	}
+
+	if err := app.Run(os.Args); err != nil {
+		glog.Fatalln(err)
+	}
+
 }

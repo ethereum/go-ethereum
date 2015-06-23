@@ -38,13 +38,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 )
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.30"
+	Version          = "0.9.32"
 )
 
 var (
@@ -202,6 +204,16 @@ nodes.
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
+`},
+		{
+			Action: attach,
+			Name:   "attach",
+			Usage:  `Geth Console: interactive JavaScript environment (connect to node)`,
+			Description: `
+The Geth console is an interactive shell for the JavaScript runtime environment
+which exposes a node admin interface as well as the Ðapp JavaScript API.
+See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console.
+This command allows to open a console on a running geth node.
 `,
 		},
 		{
@@ -239,9 +251,11 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
+		utils.RpcApiFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
+		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
 		utils.VMDebugFlag,
 		utils.ProtocolVersionFlag,
@@ -294,6 +308,44 @@ func run(ctx *cli.Context) {
 	ethereum.WaitForShutdown()
 }
 
+func attach(ctx *cli.Context) {
+	// Wrap the standard output with a colorified stream (windows)
+	if isatty.IsTerminal(os.Stdout.Fd()) {
+		if pr, pw, err := os.Pipe(); err == nil {
+			go io.Copy(colorable.NewColorableStdout(), pr)
+			os.Stdout = pw
+		}
+	}
+
+	var client comms.EthereumClient
+	var err error
+	if ctx.Args().Present() {
+		client, err = comms.ClientFromEndpoint(ctx.Args().First(), codec.JSON)
+	} else {
+		cfg := comms.IpcConfig{
+			Endpoint: ctx.GlobalString(utils.IPCPathFlag.Name),
+		}
+		client, err = comms.NewIpcClient(cfg, codec.JSON)
+	}
+
+	if err != nil {
+		utils.Fatalf("Unable to attach to geth node - %v", err)
+	}
+
+	repl := newLightweightJSRE(
+		ctx.GlobalString(utils.JSpathFlag.Name),
+		client,
+		true,
+		nil)
+
+	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
+		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))
+	} else {
+		repl.welcome()
+		repl.interactive()
+	}
+}
+
 func console(ctx *cli.Context) {
 	// Wrap the standard output with a colorified stream (windows)
 	if isatty.IsTerminal(os.Stdout.Fd()) {
@@ -309,16 +361,24 @@ func console(ctx *cli.Context) {
 		utils.Fatalf("%v", err)
 	}
 
+	client := comms.NewInProcClient(codec.JSON)
+
 	startEth(ctx, ethereum)
 	repl := newJSRE(
 		ethereum,
-		ctx.String(utils.JSpathFlag.Name),
+		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		utils.IpcSocketPath(ctx),
+		client,
 		true,
 		nil,
 	)
-	repl.interactive()
+
+	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
+		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))
+	} else {
+		repl.welcome()
+		repl.interactive()
+	}
 
 	ethereum.Stop()
 	ethereum.WaitForShutdown()
@@ -331,12 +391,13 @@ func execJSFiles(ctx *cli.Context) {
 		utils.Fatalf("%v", err)
 	}
 
+	client := comms.NewInProcClient(codec.JSON)
 	startEth(ctx, ethereum)
 	repl := newJSRE(
 		ethereum,
-		ctx.String(utils.JSpathFlag.Name),
+		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		utils.IpcSocketPath(ctx),
+		client,
 		false,
 		nil,
 	)

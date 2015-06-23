@@ -42,8 +42,8 @@ func NewLDBDatabase(file string) (*LDBDatabase, error) {
 }
 
 // Put puts the given key / value to the queue
-func (self *LDBDatabase) Put(key []byte, value []byte) {
-	self.db.Put(key, rle.Compress(value), nil)
+func (self *LDBDatabase) Put(key []byte, value []byte) error {
+	return self.db.Put(key, rle.Compress(value), nil)
 }
 
 // Get returns the given key if it's present.

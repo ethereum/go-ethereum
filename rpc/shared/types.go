@@ -7,6 +7,21 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
+// Ethereum RPC API interface
+type EthereumApi interface {
+	// API identifier
+	Name() string
+
+	// API version
+	ApiVersion() string
+
+	// Execute the given request and returns the response or an error
+	Execute(*Request) (interface{}, error)
+
+	// List of supported RCP methods this API provides
+	Methods() []string
+}
+
 // RPC request
 type Request struct {
 	Id      interface{}     `json:"id"`
@@ -42,6 +57,18 @@ type ErrorObject struct {
 	// Data    interface{} `json:"data"`
 }
 
+// Create RPC error response, this allows for custom error codes
+func NewRpcErrorResponse(id interface{}, jsonrpcver string, errCode int, err error) *interface{} {
+	var response interface{}
+
+	jsonerr := &ErrorObject{errCode, err.Error()}
+	response = ErrorResponse{Jsonrpc: jsonrpcver, Id: id, Error: jsonerr}
+
+	glog.V(logger.Detail).Infof("Generated error response: %s", response)
+	return &response
+}
+
+// Create RPC response
 func NewRpcResponse(id interface{}, jsonrpcver string, reply interface{}, err error) *interface{} {
 	var response interface{}
 

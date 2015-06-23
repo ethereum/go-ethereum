@@ -3,21 +3,24 @@ package tests
 import (
 	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/big"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -83,20 +86,104 @@ type btTransaction struct {
 	Value    string
 }
 
-// LoadBlockTests loads a block test JSON file.
-func LoadBlockTests(file string) (map[string]*BlockTest, error) {
-	bt := make(map[string]*btJSON)
-	if err := LoadJSON(file, &bt); err != nil {
-		return nil, err
+func RunBlockTestWithReader(r io.Reader, skipTests []string) error {
+	btjs := make(map[string]*btJSON)
+	if err := readJson(r, &btjs); err != nil {
+		return err
 	}
-	out := make(map[string]*BlockTest)
-	for name, in := range bt {
-		var err error
-		if out[name], err = convertTest(in); err != nil {
-			return out, fmt.Errorf("bad test %q: %v", name, err)
+
+	bt, err := convertBlockTests(btjs)
+	if err != nil {
+		return err
+	}
+
+	if err := runBlockTests(bt, skipTests); err != nil {
+		return err
+	}
+	return nil
+}
+
+func RunBlockTest(file string, skipTests []string) error {
+	btjs := make(map[string]*btJSON)
+	if err := readJsonFile(file, &btjs); err != nil {
+		return err
+	}
+
+	bt, err := convertBlockTests(btjs)
+	if err != nil {
+		return err
+	}
+	if err := runBlockTests(bt, skipTests); err != nil {
+		return err
+	}
+	return nil
+}
+
+func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
+	skipTest := make(map[string]bool, len(skipTests))
+	for _, name := range skipTests {
+		skipTest[name] = true
+	}
+
+	for name, test := range bt {
+		// if the test should be skipped, return
+		if skipTest[name] {
+			glog.Infoln("Skipping block test", name)
+			return nil
 		}
+
+		// test the block
+		if err := runBlockTest(test); err != nil {
+			return err
+		}
+		glog.Infoln("Block test passed: ", name)
+
 	}
-	return out, nil
+	return nil
+
+}
+func runBlockTest(test *BlockTest) error {
+	cfg := test.makeEthConfig()
+	ethereum, err := eth.New(cfg)
+	if err != nil {
+		return err
+	}
+
+	err = ethereum.Start()
+	if err != nil {
+		return err
+	}
+
+	// import the genesis block
+	ethereum.ResetWithGenesisBlock(test.Genesis)
+
+	// import pre accounts
+	statedb, err := test.InsertPreState(ethereum)
+	if err != nil {
+		return fmt.Errorf("InsertPreState: %v", err)
+	}
+
+	err = test.TryBlocksInsert(ethereum.ChainManager())
+	if err != nil {
+		return err
+	}
+
+	if err = test.ValidatePostState(statedb); err != nil {
+		return fmt.Errorf("post state validation failed: %v", err)
+	}
+	return nil
+}
+
+func (test *BlockTest) makeEthConfig() *eth.Config {
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"))
+
+	return &eth.Config{
+		DataDir:        common.DefaultDataDir(),
+		Verbosity:      5,
+		Etherbase:      "primary",
+		AccountManager: accounts.NewManager(ks),
+		NewDB:          func(path string) (common.Database, error) { return ethdb.NewMemDatabase() },
+	}
 }
 
 // InsertPreState populates the given database with the genesis
@@ -124,7 +211,7 @@ func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, erro
 		obj.SetBalance(balance)
 		obj.SetNonce(nonce)
 		for k, v := range acct.Storage {
-			statedb.SetState(common.HexToAddress(addrString), common.HexToHash(k), common.FromHex(v))
+			statedb.SetState(common.HexToAddress(addrString), common.HexToHash(k), common.HexToHash(v))
 		}
 	}
 	// sync objects to trie
@@ -173,7 +260,7 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
 		if b.BlockHeader == nil {
 			return fmt.Errorf("Block insertion should have failed")
 		}
-		err = validateBlockHeader(b.BlockHeader, cb.Header())
+		err = t.validateBlockHeader(b.BlockHeader, cb.Header())
 		if err != nil {
 			return fmt.Errorf("Block header validation failed: ", err)
 		}
@@ -181,7 +268,7 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
 	return nil
 }
 
-func validateBlockHeader(h *btHeader, h2 *types.Header) error {
+func (s *BlockTest) validateBlockHeader(h *btHeader, h2 *types.Header) error {
 	expectedBloom := mustConvertBytes(h.Bloom)
 	if !bytes.Equal(expectedBloom, h2.Bloom.Bytes()) {
 		return fmt.Errorf("Bloom: expected: %v, decoded: %v", expectedBloom, h2.Bloom.Bytes())
@@ -284,7 +371,18 @@ func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 	return nil
 }
 
-func convertTest(in *btJSON) (out *BlockTest, err error) {
+func convertBlockTests(in map[string]*btJSON) (map[string]*BlockTest, error) {
+	out := make(map[string]*BlockTest)
+	for name, test := range in {
+		var err error
+		if out[name], err = convertBlockTest(test); err != nil {
+			return out, fmt.Errorf("bad test %q: %v", name, err)
+		}
+	}
+	return out, nil
+}
+
+func convertBlockTest(in *btJSON) (out *BlockTest, err error) {
 	// the conversion handles errors by catching panics.
 	// you might consider this ugly, but the alternative (passing errors)
 	// would be much harder to read.
@@ -392,34 +490,13 @@ func mustConvertUint(in string, base int) uint64 {
 	return out
 }
 
-// LoadJSON reads the given file and unmarshals its content.
-func LoadJSON(file string, val interface{}) error {
-	content, err := ioutil.ReadFile(file)
-	if err != nil {
-		return err
+func LoadBlockTests(file string) (map[string]*BlockTest, error) {
+	btjs := make(map[string]*btJSON)
+	if err := readJsonFile(file, &btjs); err != nil {
+		return nil, err
 	}
-	if err := json.Unmarshal(content, val); err != nil {
-		if syntaxerr, ok := err.(*json.SyntaxError); ok {
-			line := findLine(content, syntaxerr.Offset)
-			return fmt.Errorf("JSON syntax error at %v:%v: %v", file, line, err)
-		}
-		return fmt.Errorf("JSON unmarshal error in %v: %v", file, err)
-	}
-	return nil
-}
 
-// findLine returns the line number for the given offset into data.
-func findLine(data []byte, offset int64) (line int) {
-	line = 1
-	for i, r := range string(data) {
-		if int64(i) >= offset {
-			return
-		}
-		if r == '\n' {
-			line++
-		}
-	}
-	return
+	return convertBlockTests(btjs)
 }
 
 // Nothing to see here, please move along...

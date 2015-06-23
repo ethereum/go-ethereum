@@ -3,13 +3,11 @@
 package comms
 
 import (
-	"io"
 	"net"
 	"os"
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
@@ -20,10 +18,20 @@ func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 		return nil, err
 	}
 
-	return &ipcClient{codec.New(c)}, nil
+	return &ipcClient{cfg.Endpoint, codec, codec.New(c)}, nil
 }
 
-func startIpc(cfg IpcConfig, codec codec.Codec, api api.EthereumApi) error {
+func (self *ipcClient) reconnect() error {
+	self.coder.Close()
+	c, err := net.DialUnix("unix", nil, &net.UnixAddr{self.endpoint, "unix"})
+	if err == nil {
+		self.coder = self.codec.New(c)
+	}
+
+	return err
+}
+
+func startIpc(cfg IpcConfig, codec codec.Codec, api shared.EthereumApi) error {
 	os.Remove(cfg.Endpoint) // in case it still exists from a previous run
 
 	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: cfg.Endpoint, Net: "unix"})
@@ -40,32 +48,7 @@ func startIpc(cfg IpcConfig, codec codec.Codec, api api.EthereumApi) error {
 				continue
 			}
 
-			go func(conn net.Conn) {
-				codec := codec.New(conn)
-
-				for {
-					req, err := codec.ReadRequest()
-					if err == io.EOF {
-						codec.Close()
-						return
-					} else if err != nil {
-						glog.V(logger.Error).Infof("IPC recv err - %v\n", err)
-						codec.Close()
-						return
-					}
-
-					var rpcResponse interface{}
-					res, err := api.Execute(req)
-
-					rpcResponse = shared.NewRpcResponse(req.Id, req.Jsonrpc, res, err)
-					err = codec.WriteResponse(rpcResponse)
-					if err != nil {
-						glog.V(logger.Error).Infof("IPC send err - %v\n", err)
-						codec.Close()
-						return
-					}
-				}
-			}(conn)
+			go handle(conn, api, codec)
 		}
 
 		os.Remove(cfg.Endpoint)

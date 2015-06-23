@@ -212,7 +212,7 @@ func (self *XEth) ApplyTestTxs(statedb *state.StateDB, address common.Address, t
 
 	block := self.backend.ChainManager().NewBlock(address)
 	coinbase := statedb.GetStateObject(address)
-	coinbase.SetGasPool(big.NewInt(10000000))
+	coinbase.SetGasLimit(big.NewInt(10000000))
 	txs := self.backend.TxPool().GetQueuedTransactions()
 
 	for i := 0; i < len(txs); i++ {
@@ -488,7 +488,7 @@ func (self *XEth) NumberToHuman(balance string) string {
 }
 
 func (self *XEth) StorageAt(addr, storageAddr string) string {
-	return common.ToHex(self.State().state.GetState(common.HexToAddress(addr), common.HexToHash(storageAddr)))
+	return self.State().state.GetState(common.HexToAddress(addr), common.HexToHash(storageAddr)).Hex()
 }
 
 func (self *XEth) BalanceAt(addr string) string {
@@ -803,8 +803,12 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 
 	if tx.To() == nil {
 		addr := core.AddressFromMessage(tx)
+		glog.V(logger.Info).Infof("Tx(%x) created: %x\n", tx.Hash(), addr)
 		return addr.Hex(), nil
+	} else {
+		glog.V(logger.Info).Infof("Tx(%x) to: %x\n", tx.Hash(), tx.To())
 	}
+
 	return tx.Hash().Hex(), nil
 }
 
@@ -823,7 +827,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	}
 
 	from.SetBalance(common.MaxBig)
-	from.SetGasPool(self.backend.ChainManager().GasLimit())
+	from.SetGasLimit(self.backend.ChainManager().GasLimit())
 	msg := callmsg{
 		from:     from,
 		to:       common.HexToAddress(toStr),

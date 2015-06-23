@@ -9,13 +9,6 @@ if (WIN32 AND WANT_CRYPTOPP)
 endif()
 
 add_subdirectory(src/libethash)
-# bin2h.cmake doesn't work
-if (NOT OpenCL_FOUND)
-	find_package(OpenCL)
-endif()
 
-if (OpenCL_FOUND)
-	add_subdirectory(src/libethash-cl)
-endif()
 add_subdirectory(src/benchmark EXCLUDE_FROM_ALL)
 add_subdirectory(test/c)
