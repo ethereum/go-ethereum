@@ -333,7 +333,7 @@ func attach(ctx *cli.Context) {
 	}
 
 	repl := newLightweightJSRE(
-		ctx.String(utils.JSpathFlag.Name),
+		ctx.GlobalString(utils.JSpathFlag.Name),
 		client,
 		true,
 		nil)
@@ -366,7 +366,7 @@ func console(ctx *cli.Context) {
 	startEth(ctx, ethereum)
 	repl := newJSRE(
 		ethereum,
-		ctx.String(utils.JSpathFlag.Name),
+		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		client,
 		true,
@@ -395,7 +395,7 @@ func execJSFiles(ctx *cli.Context) {
 	startEth(ctx, ethereum)
 	repl := newJSRE(
 		ethereum,
-		ctx.String(utils.JSpathFlag.Name),
+		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		client,
 		false,
