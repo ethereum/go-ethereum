@@ -115,6 +115,7 @@ type Server struct {
 	ntab         discoverTable
 	listener     net.Listener
 	ourHandshake *protoHandshake
+	lastLookup   time.Time
 
 	// These are for Peers, PeerCount (and nothing else).
 	peerOp     chan peerOpFunc
