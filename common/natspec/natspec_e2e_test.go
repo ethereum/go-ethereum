@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/docserver"
-	"github.com/ethereum/go-ethereum/common/resolver"
+	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -73,8 +73,7 @@ const (
 )
 
 type testFrontend struct {
-	t *testing.T
-	// resolver    *resolver.Resolver
+	t           *testing.T
 	ethereum    *eth.Ethereum
 	xeth        *xe.XEth
 	coinbase    common.Address
@@ -91,10 +90,7 @@ func (self *testFrontend) UnlockAccount(acc []byte) bool {
 
 func (self *testFrontend) ConfirmTransaction(tx string) bool {
 	if self.wantNatSpec {
-		ds, err := docserver.New("/tmp/")
-		if err != nil {
-			self.t.Errorf("Error creating DocServer: %v", err)
-		}
+		ds := docserver.New("/tmp/")
 		self.lastConfirm = GetNotice(self.xeth, tx, ds)
 	}
 	return true
@@ -159,11 +155,16 @@ func testInit(t *testing.T) (self *testFrontend) {
 	self.stateDb = self.ethereum.ChainManager().State().Copy()
 
 	// initialise the registry contracts
-	// self.resolver.CreateContracts(addr)
-	resolver.New(self.xeth).CreateContracts(addr)
+	reg := registrar.New(self.xeth)
+	err = reg.SetHashReg("", addr)
+	if err != nil {
+		t.Errorf("error creating HashReg: %v", err)
+	}
+	err = reg.SetUrlHint("", addr)
+	if err != nil {
+		t.Errorf("error creating UrlHint: %v", err)
+	}
 	self.applyTxs()
-	// t.Logf("HashReg contract registered at %v", resolver.HashRegContractAddress)
-	// t.Logf("URLHint contract registered at %v", resolver.UrlHintContractAddress)
 
 	return
 
@@ -192,13 +193,20 @@ func TestNatspecE2E(t *testing.T) {
 	dochash := common.BytesToHash(crypto.Sha3([]byte(testContractInfo)))
 
 	// take the codehash for the contract we wanna test
-	// codehex := tf.xeth.CodeAt(resolver.HashRegContractAddress)
-	codeb := tf.xeth.CodeAtBytes(resolver.HashRegContractAddress)
+	// codehex := tf.xeth.CodeAt(registar.HashRegAddr)
+	codeb := tf.xeth.CodeAtBytes(registrar.HashRegAddr)
 	codehash := common.BytesToHash(crypto.Sha3(codeb))
 
 	// use resolver to register codehash->dochash->url
-	registry := resolver.New(tf.xeth)
-	_, err := registry.Register(tf.coinbase, codehash, dochash, "file:///"+testFileName)
+	// test if globalregistry works
+	// registrar.HashRefAddr = "0x0"
+	// registrar.UrlHintAddr = "0x0"
+	reg := registrar.New(tf.xeth)
+	_, err := reg.SetHashToHash(tf.coinbase, codehash, dochash)
+	if err != nil {
+		t.Errorf("error registering: %v", err)
+	}
+	_, err = reg.SetUrlToHash(tf.coinbase, dochash, "file:///"+testFileName)
 	if err != nil {
 		t.Errorf("error registering: %v", err)
 	}
@@ -209,18 +217,19 @@ func TestNatspecE2E(t *testing.T) {
 	// now using the same transactions to check confirm messages
 
 	tf.wantNatSpec = true // this is set so now the backend uses natspec confirmation
-	_, err = registry.RegisterContentHash(tf.coinbase, codehash, dochash)
+	_, err = reg.SetHashToHash(tf.coinbase, codehash, dochash)
 	if err != nil {
 		t.Errorf("error calling contract registry: %v", err)
 	}
 
+	fmt.Printf("GlobalRegistrar: %v, HashReg: %v, UrlHint: %v\n", registrar.GlobalRegistrarAddr, registrar.HashRegAddr, registrar.UrlHintAddr)
 	if tf.lastConfirm != testExpNotice {
 		t.Errorf("Wrong confirm message. expected '%v', got '%v'", testExpNotice, tf.lastConfirm)
 	}
 
 	// test unknown method
-	exp := fmt.Sprintf(testExpNotice2, resolver.HashRegContractAddress)
-	_, err = registry.SetOwner(tf.coinbase)
+	exp := fmt.Sprintf(testExpNotice2, registrar.HashRegAddr)
+	_, err = reg.SetOwner(tf.coinbase)
 	if err != nil {
 		t.Errorf("error setting owner: %v", err)
 	}
@@ -230,9 +239,9 @@ func TestNatspecE2E(t *testing.T) {
 	}
 
 	// test unknown contract
-	exp = fmt.Sprintf(testExpNotice3, resolver.UrlHintContractAddress)
+	exp = fmt.Sprintf(testExpNotice3, registrar.UrlHintAddr)
 
-	_, err = registry.RegisterUrl(tf.coinbase, dochash, "file:///test.content")
+	_, err = reg.SetUrlToHash(tf.coinbase, dochash, "file:///test.content")
 	if err != nil {
 		t.Errorf("error registering: %v", err)
 	}
