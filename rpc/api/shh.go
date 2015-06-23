@@ -72,7 +72,7 @@ func (self *shhApi) Execute(req *shared.Request) (interface{}, error) {
 }
 
 func (self *shhApi) Name() string {
-	return ShhApiName
+	return shared.ShhApiName
 }
 
 func (self *shhApi) ApiVersion() string {

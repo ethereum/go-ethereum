@@ -149,7 +149,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		return ErrInvalidSender
 	}
 
-	// Make sure the account exist. Non existant accounts
+	// Make sure the account exist. Non existent accounts
 	// haven't got funds and well therefor never pass.
 	if !pool.currentState().HasAccount(from) {
 		return ErrNonExistentAccount

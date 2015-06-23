@@ -60,7 +60,7 @@ func (self *txPoolApi) Execute(req *shared.Request) (interface{}, error) {
 }
 
 func (self *txPoolApi) Name() string {
-	return TxPoolApiName
+	return shared.TxPoolApiName
 }
 
 func (self *txPoolApi) ApiVersion() string {

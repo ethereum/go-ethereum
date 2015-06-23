@@ -1,6 +1,8 @@
 package api
 
 import (
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
@@ -11,14 +13,14 @@ const (
 // combines multiple API's
 type MergedApi struct {
 	apis    map[string]string
-	methods map[string]EthereumApi
+	methods map[string]shared.EthereumApi
 }
 
 // create new merged api instance
-func newMergedApi(apis ...EthereumApi) *MergedApi {
+func newMergedApi(apis ...shared.EthereumApi) *MergedApi {
 	mergedApi := new(MergedApi)
 	mergedApi.apis = make(map[string]string, len(apis))
-	mergedApi.methods = make(map[string]EthereumApi)
+	mergedApi.methods = make(map[string]shared.EthereumApi)
 
 	for _, api := range apis {
 		mergedApi.apis[api.Name()] = api.ApiVersion()
@@ -40,6 +42,8 @@ func (self *MergedApi) Methods() []string {
 
 // Call the correct API's Execute method for the given request
 func (self *MergedApi) Execute(req *shared.Request) (interface{}, error) {
+	glog.V(logger.Detail).Infof("rpc method: %s", req.Method)
+
 	if res, _ := self.handle(req); res != nil {
 		return res, nil
 	}
@@ -50,7 +54,7 @@ func (self *MergedApi) Execute(req *shared.Request) (interface{}, error) {
 }
 
 func (self *MergedApi) Name() string {
-	return MergedApiName
+	return shared.MergedApiName
 }
 
 func (self *MergedApi) ApiVersion() string {

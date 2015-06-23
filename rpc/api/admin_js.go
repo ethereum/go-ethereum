@@ -39,6 +39,20 @@ web3._extend({
 			params: 1,
 			inputFormatter: [web3._extend.utils.formatInputString],
 			outputFormatter: web3._extend.formatters.formatOutputString
+		}),
+		new web3._extend.Method({
+			name: 'startRPC',
+			call: 'admin_startRPC',
+			params: 4,
+			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputInteger,web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputBool
+		}),
+		new web3._extend.Method({
+			name: 'stopRPC',
+			call: 'admin_stopRPC',
+			params: 0,
+			inputFormatter: [],
+			outputFormatter: web3._extend.formatters.formatOutputBool
 		})
 	],
 	properties:

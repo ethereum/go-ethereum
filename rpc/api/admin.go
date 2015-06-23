@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -23,8 +24,6 @@ const (
 var (
 	// mapping between methods and handlers
 	AdminMapping = map[string]adminhandler{
-		//		"admin_startRPC": (*adminApi).StartRPC,
-		//		"admin_stopRPC":  (*adminApi).StopRPC,
 		"admin_addPeer":         (*adminApi).AddPeer,
 		"admin_peers":           (*adminApi).Peers,
 		"admin_nodeInfo":        (*adminApi).NodeInfo,
@@ -34,6 +33,8 @@ var (
 		"admin_chainSyncStatus": (*adminApi).ChainSyncStatus,
 		"admin_setSolc":         (*adminApi).SetSolc,
 		"admin_datadir":         (*adminApi).DataDir,
+		"admin_startRPC":        (*adminApi).StartRPC,
+		"admin_stopRPC":         (*adminApi).StopRPC,
 	}
 )
 
@@ -44,25 +45,25 @@ type adminhandler func(*adminApi, *shared.Request) (interface{}, error)
 type adminApi struct {
 	xeth     *xeth.XEth
 	ethereum *eth.Ethereum
-	methods  map[string]adminhandler
-	codec    codec.ApiCoder
+	codec    codec.Codec
+	coder    codec.ApiCoder
 }
 
 // create a new admin api instance
-func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, coder codec.Codec) *adminApi {
+func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec) *adminApi {
 	return &adminApi{
 		xeth:     xeth,
 		ethereum: ethereum,
-		methods:  AdminMapping,
-		codec:    coder.New(nil),
+		codec:    codec,
+		coder:    codec.New(nil),
 	}
 }
 
 // collection with supported methods
 func (self *adminApi) Methods() []string {
-	methods := make([]string, len(self.methods))
+	methods := make([]string, len(AdminMapping))
 	i := 0
-	for k := range self.methods {
+	for k := range AdminMapping {
 		methods[i] = k
 		i++
 	}
@@ -71,7 +72,7 @@ func (self *adminApi) Methods() []string {
 
 // Execute given request
 func (self *adminApi) Execute(req *shared.Request) (interface{}, error) {
-	if callback, ok := self.methods[req.Method]; ok {
+	if callback, ok := AdminMapping[req.Method]; ok {
 		return callback(self, req)
 	}
 
@@ -79,7 +80,7 @@ func (self *adminApi) Execute(req *shared.Request) (interface{}, error) {
 }
 
 func (self *adminApi) Name() string {
-	return AdminApiName
+	return shared.AdminApiName
 }
 
 func (self *adminApi) ApiVersion() string {
@@ -88,7 +89,7 @@ func (self *adminApi) ApiVersion() string {
 
 func (self *adminApi) AddPeer(req *shared.Request) (interface{}, error) {
 	args := new(AddPeerArgs)
-	if err := self.codec.Decode(req.Params, &args); err != nil {
+	if err := self.coder.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
@@ -101,33 +102,6 @@ func (self *adminApi) AddPeer(req *shared.Request) (interface{}, error) {
 
 func (self *adminApi) Peers(req *shared.Request) (interface{}, error) {
 	return self.ethereum.PeersInfo(), nil
-}
-
-func (self *adminApi) StartRPC(req *shared.Request) (interface{}, error) {
-	return false, nil
-	//	Enable when http rpc interface is refactored to prevent import cycles
-	//	args := new(StartRpcArgs)
-	//	if err := self.codec.Decode(req.Params, &args); err != nil {
-	//		return nil, shared.NewDecodeParamError(err.Error())
-	//	}
-	//
-	//	cfg := rpc.RpcConfig{
-	//		ListenAddress: args.Address,
-	//		ListenPort:    args.Port,
-	//	}
-	//
-	//	err := rpc.Start(self.xeth, cfg)
-	//	if err == nil {
-	//		return true, nil
-	//	}
-	//	return false, err
-}
-
-func (self *adminApi) StopRPC(req *shared.Request) (interface{}, error) {
-	return false, nil
-	//	Enable when http rpc interface is refactored to prevent import cycles
-	//	rpc.Stop()
-	//	return true, nil
 }
 
 func (self *adminApi) NodeInfo(req *shared.Request) (interface{}, error) {
@@ -149,7 +123,7 @@ func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
 
 func (self *adminApi) ImportChain(req *shared.Request) (interface{}, error) {
 	args := new(ImportExportChainArgs)
-	if err := self.codec.Decode(req.Params, &args); err != nil {
+	if err := self.coder.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
@@ -192,7 +166,7 @@ func (self *adminApi) ImportChain(req *shared.Request) (interface{}, error) {
 
 func (self *adminApi) ExportChain(req *shared.Request) (interface{}, error) {
 	args := new(ImportExportChainArgs)
-	if err := self.codec.Decode(req.Params, &args); err != nil {
+	if err := self.coder.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
@@ -210,7 +184,7 @@ func (self *adminApi) ExportChain(req *shared.Request) (interface{}, error) {
 
 func (self *adminApi) Verbosity(req *shared.Request) (interface{}, error) {
 	args := new(VerbosityArgs)
-	if err := self.codec.Decode(req.Params, &args); err != nil {
+	if err := self.coder.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
@@ -222,16 +196,16 @@ func (self *adminApi) ChainSyncStatus(req *shared.Request) (interface{}, error) 
 	pending, cached, importing, estimate := self.ethereum.Downloader().Stats()
 
 	return map[string]interface{}{
-		"blocksAvailable": pending,
+		"blocksAvailable":        pending,
 		"blocksWaitingForImport": cached,
-		"importing": importing,
-		"estimate": estimate.String(),
+		"importing":              importing,
+		"estimate":               estimate.String(),
 	}, nil
 }
 
 func (self *adminApi) SetSolc(req *shared.Request) (interface{}, error) {
 	args := new(SetSolcArgs)
-	if err := self.codec.Decode(req.Params, &args); err != nil {
+	if err := self.coder.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
@@ -240,4 +214,33 @@ func (self *adminApi) SetSolc(req *shared.Request) (interface{}, error) {
 		return nil, err
 	}
 	return solc.Info(), nil
+}
+
+func (self *adminApi) StartRPC(req *shared.Request) (interface{}, error) {
+	args := new(StartRPCArgs)
+	if err := self.coder.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	cfg := comms.HttpConfig{
+		ListenAddress: args.ListenAddress,
+		ListenPort:    args.ListenPort,
+		CorsDomain:    args.CorsDomain,
+	}
+
+	apis, err := ParseApiString(args.Apis, self.codec, self.xeth, self.ethereum)
+	if err != nil {
+		return false, err
+	}
+
+	err = comms.StartHttp(cfg, self.codec, Merge(apis...))
+	if err == nil {
+		return true, nil
+	}
+	return false, err
+}
+
+func (self *adminApi) StopRPC(req *shared.Request) (interface{}, error) {
+	comms.StopHttp()
+	return true, nil
 }
