@@ -197,8 +197,11 @@ func TestNatspecE2E(t *testing.T) {
 	codehash := common.BytesToHash(crypto.Sha3(codeb))
 
 	// use resolver to register codehash->dochash->url
+	// test if globalregistry works
+	// resolver.HashRefContractAddress = "0x0"
+	// resolver.UrlHintContractAddress = "0x0"
 	registry := resolver.New(tf.xeth)
-	_, err := registry.Register(tf.coinbase, codehash, dochash, "file:///"+testFileName)
+	_, err := registry.RegisterAddrWithUrl(tf.coinbase, codehash, dochash, "file:///"+testFileName)
 	if err != nil {
 		t.Errorf("error registering: %v", err)
 	}

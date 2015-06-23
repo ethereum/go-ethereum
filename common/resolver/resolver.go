@@ -20,7 +20,10 @@ of a url scheme
 */
 
 // // contract addresses will be hardcoded after they're created
-var UrlHintContractAddress, HashRegContractAddress string
+var (
+	UrlHintContractAddress = "0x0"
+	HashRegContractAddress = "0x0"
+)
 
 const (
 	txValue    = "0"
@@ -28,42 +31,167 @@ const (
 	txGasPrice = "1000000000000"
 )
 
-func abi(s string) string {
+func abiSignature(s string) string {
 	return common.ToHex(crypto.Sha3([]byte(s))[:4])
 }
 
 var (
-	registerContentHashAbi = abi("register(uint256,uint256)")
-	registerUrlAbi         = abi("register(uint256,uint8,uint256)")
-	setOwnerAbi            = abi("setowner()")
+	HashReg = "HashReg"
+	UrlHint = "UrlHint"
+
+	registerContentHashAbi = abiSignature("register(uint256,uint256)")
+	registerUrlAbi         = abiSignature("register(uint256,uint8,uint256)")
+	setOwnerAbi            = abiSignature("setowner()")
+	reserveAbi             = abiSignature("reserve(bytes32)")
+	resolveAbi             = abiSignature("addr(bytes32)")
+	registerAbi            = abiSignature("setAddress(bytes32,address,bool)")
+	addressAbiPrefix       = string(make([]byte, 24))
 )
 
 type Backend interface {
 	StorageAt(string, string) string
 	Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error)
+	Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, string, error)
 }
 
 type Resolver struct {
 	backend Backend
 }
 
-func New(eth Backend) *Resolver {
-	return &Resolver{eth}
+func New(eth Backend) (res *Resolver) {
+	res = &Resolver{eth}
+	res.setContracts()
+	return
 }
 
-// for testing and play temporarily
-// ideally the HashReg and UrlHint contracts should be in the genesis block
-// if we got build-in support for natspec/contract info
-// there should be only one of these officially endorsed
-// addresses as constants
-// TODO: could get around this with namereg, check
-func (self *Resolver) CreateContracts(addr common.Address) (err error) {
-	HashRegContractAddress, err = self.backend.Transact(addr.Hex(), "", "", txValue, txGas, txGasPrice, ContractCodeHashReg)
+func (self *Resolver) setContracts() {
+	var err error
+	if HashRegContractAddress != "0x0" {
+		return
+	}
+	// reset iff error anywhere
+	defer func() {
+		if err != nil {
+			HashRegContractAddress = "0x0"
+		}
+	}()
+	hashRegAbi := registerAbi + string(common.Hex2BytesFixed(HashRegContractAddress[2:], 32))
+	HashRegContractAddress, _, err = self.backend.Call("", GlobalRegistrarAddr, "", "", "", hashRegAbi)
+	if err != nil {
+		err = fmt.Errorf("HashReg address not found: %v", err)
+		return
+	}
+
+	if UrlHintContractAddress != "0x0" {
+		return
+	}
+	// reset iff error anywhere
+	defer func() {
+		if err != nil {
+			UrlHintContractAddress = "0x0"
+		}
+	}()
+
+	urlHintAbi := registerAbi + string(common.Hex2BytesFixed(UrlHintContractAddress[2:], 32))
+	UrlHintContractAddress, _, err = self.backend.Call("", GlobalRegistrarAddr, "", "", "", urlHintAbi)
+	if err != nil {
+		err = fmt.Errorf("UrlHint address not found: %v", err)
+		return
+	}
+
+	glog.V(logger.Detail).Infof("HashReg @ %v\nUrlHint @ %v\n", HashRegContractAddress, UrlHintContractAddress)
+}
+
+// This can be safely called from tests to or private chains to create
+// new HashReg and UrlHint contracts (requires transaction)
+// It does nothing if addresses are set
+func (self *Resolver) CreateContracts(addr common.Address) (hashReg, urlHint string, err error) {
+	if HashRegContractAddress != "0x0" {
+		err = fmt.Errorf("HashReg already exists at %v", HashRegContractAddress)
+		return
+	}
+	hashReg, err = self.backend.Transact(addr.Hex(), "", "", txValue, txGas, txGasPrice, ContractCodeHashReg)
 	if err != nil {
 		return
 	}
-	UrlHintContractAddress, err = self.backend.Transact(addr.Hex(), "", "", txValue, txGas, txGasPrice, ContractCodeURLhint)
+	_, err = self.Reserve(addr, HashReg)
+	if err != nil {
+		return
+	}
+	_, err = self.RegisterAddress(addr, HashReg, common.HexToAddress(hashReg))
+	if err != nil {
+		return
+	}
+
+	if UrlHintContractAddress != "0x0" {
+		err = fmt.Errorf("UrlHint already exists at %v", UrlHintContractAddress)
+		return
+	}
+	urlHint, err = self.backend.Transact(addr.Hex(), "", "", txValue, txGas, txGasPrice, ContractCodeURLhint)
+	if err != nil {
+		return
+	}
+	_, err = self.Reserve(addr, UrlHint)
+	if err != nil {
+		return
+	}
+	_, err = self.RegisterAddress(addr, UrlHint, common.HexToAddress(urlHint))
+	if err != nil {
+		return
+	}
+	HashRegContractAddress = hashReg
+	UrlHintContractAddress = urlHint
 	glog.V(logger.Detail).Infof("HashReg @ %v\nUrlHint @ %v\n", HashRegContractAddress, UrlHintContractAddress)
+
+	return
+}
+
+// Reserve(from, name) reserves name for the sender address in the globalRegistrar
+// the tx needs to be mined to take effect
+func (self *Resolver) Reserve(address common.Address, name string) (txh string, err error) {
+	nameHex, extra := encodeName(name, 6)
+	abi := reserveAbi + nameHex + extra
+	return self.backend.Transact(
+		address.Hex(),
+		GlobalRegistrarAddr,
+		"", txValue, txGas, txGasPrice,
+		abi,
+	)
+}
+
+// RegisterAddress(from, name, addr) will set the Address to address for name
+// in the globalRegistrar using from as the sender of the transaction
+// the tx needs to be mined to take effect
+func (self *Resolver) RegisterAddress(from common.Address, name string, address common.Address) (txh string, err error) {
+	nameHex, extra := encodeName(name, 6)
+	addrHex := encodeAddress(address)
+
+	trueHex := make([]byte, 64)
+	trueHex[63] = 1
+
+	abi := registerAbi + nameHex + addrHex + extra
+	return self.backend.Transact(
+		from.Hex(),
+		GlobalRegistrarAddr,
+		"", txValue, txGas, txGasPrice,
+		abi,
+	)
+}
+
+// NameToAddr(from, name) queries the registrar for the address on
+func (self *Resolver) NameToAddr(from common.Address, name string) (address common.Address, err error) {
+	nameHex, extra := encodeName(name, 2)
+	abi := resolveAbi + nameHex + extra
+	res, _, err := self.backend.Call(
+		from.Hex(),
+		GlobalRegistrarAddr,
+		txValue, txGas, txGasPrice,
+		abi,
+	)
+	if err != nil {
+		return
+	}
+	address = common.HexToAddress(res)
 	return
 }
 
@@ -138,7 +266,7 @@ func (self *Resolver) RegisterUrl(address common.Address, hash common.Hash, url 
 	return
 }
 
-func (self *Resolver) Register(address common.Address, codehash, dochash common.Hash, url string) (txh string, err error) {
+func (self *Resolver) RegisterAddrWithUrl(address common.Address, codehash, dochash common.Hash, url string) (txh string, err error) {
 
 	_, err = self.RegisterContentHash(address, codehash, dochash)
 	if err != nil {
@@ -151,7 +279,7 @@ func (self *Resolver) Register(address common.Address, codehash, dochash common.
 // implemented as direct retrieval from  db
 func (self *Resolver) KeyToContentHash(khash common.Hash) (chash common.Hash, err error) {
 	// look up in hashReg
-	at := common.Bytes2Hex(common.FromHex(HashRegContractAddress))
+	at := HashRegContractAddress[2:]
 	key := storageAddress(storageMapping(storageIdx2Addr(1), khash[:]))
 	hash := self.backend.StorageAt(at, key)
 
@@ -172,7 +300,7 @@ func (self *Resolver) ContentHashToUrl(chash common.Hash) (uri string, err error
 	for len(str) > 0 {
 		mapaddr := storageMapping(storageIdx2Addr(1), chash[:])
 		key := storageAddress(storageFixedArray(mapaddr, storageIdx2Addr(idx)))
-		hex := self.backend.StorageAt(UrlHintContractAddress, key)
+		hex := self.backend.StorageAt(UrlHintContractAddress[2:], key)
 		str = string(common.Hex2Bytes(hex[2:]))
 		l := len(str)
 		for (l > 0) && (str[l-1] == 0) {
@@ -229,4 +357,19 @@ func storageFixedArray(addr, idx []byte) []byte {
 
 func storageAddress(addr []byte) string {
 	return common.ToHex(addr)
+}
+
+func encodeAddress(address common.Address) string {
+	return addressAbiPrefix + address.Hex()[2:]
+}
+
+func encodeName(name string, index uint8) (nameHex, extra string) {
+	nameHexBytes := make([]byte, 64)
+	if len(name) > 32 {
+		nameHexBytes[63] = byte(index)
+		extra = common.Bytes2Hex([]byte(name))
+	} else {
+		copy(nameHexBytes, []byte(name))
+	}
+	return string(nameHexBytes), extra
 }

@@ -310,7 +310,7 @@ func TestContract(t *testing.T) {
 	checkEvalJSON(
 		t, repl,
 		`contractaddress = eth.sendTransaction({from: primary, data: contract.code })`,
-		`"0x5dcaace5982778b409c524873b319667eba5d074"`,
+		`"0x291293d57e0a0ab47effe97c02577f90d9211567"`,
 	)
 
 	callSetup := `abiDef = JSON.parse('[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}]');
@@ -336,7 +336,7 @@ multiply7 = Multiply7.at(contractaddress);
 
 	checkEvalJSON(t, repl, `admin.contractInfo.start()`, `true`)
 	checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary, gas: "1000000", gasPrice: "100000" })`, `undefined`)
-	expNotice = `About to submit transaction (no NatSpec info found for contract: content hash not found for '0x87e2802265838c7f14bb69eecd2112911af6767907a702eeaa445239fb20711b'): {"params":[{"to":"0x5dcaace5982778b409c524873b319667eba5d074","data": "0xc6888fa10000000000000000000000000000000000000000000000000000000000000006"}]}`
+	expNotice = `About to submit transaction (no NatSpec info found for contract: content hash not found for '0x87e2802265838c7f14bb69eecd2112911af6767907a702eeaa445239fb20711b'): {"params":[{"to":"0x291293d57e0a0ab47effe97c02577f90d9211567","data": "0xc6888fa10000000000000000000000000000000000000000000000000000000000000006"}]}`
 	if repl.lastConfirm != expNotice {
 		t.Errorf("incorrect confirmation message: expected %v, got %v", expNotice, repl.lastConfirm)
 	}
