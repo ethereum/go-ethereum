@@ -53,7 +53,71 @@ web3._extend({
 			params: 0,
 			inputFormatter: [],
 			outputFormatter: web3._extend.formatters.formatOutputBool
+		}),
+		new web3._extend.Method({
+			name: 'setGlobalRegistrar',
+			call: 'admin_setGlobalRegistrar',
+			params: 2,
+			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputString
+		}),
+		new web3._extend.Method({
+			name: 'setHashReg',
+			call: 'admin_setHashReg',
+			params: 2,
+			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputString
+		}),
+		new web3._extend.Method({
+			name: 'saveInfo',
+			call: 'admin_saveInfo',
+			params: 2,
+			inputFormatter: [function(obj) { return obj; },web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputString
+		}),
+		new web3._extend.Method({
+			name: 'register',
+			call: 'admin_register',
+			params: 2,
+			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputBool
+		}),
+		new web3._extend.Method({
+			name: 'registerUrl',
+			call: 'admin_registerUrl',
+			params: 3,
+			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputBool
+		}),
+		new web3._extend.Method({
+			name: 'StartNatSpec',
+			call: 'admin_startNatSpec',
+			params: 0,
+			inputFormatter: [],
+			outputFormatter: web3._extend.formatters.formatOutputBool
+		}),
+		new web3._extend.Method({
+			name: 'StopNatSpec',
+			call: 'admin_stopNatSpec',
+			params: 0,
+			inputFormatter: [],
+			outputFormatter: web3._extend.formatters.formatOutputBool
+		}),
+		new web3._extend.Method({
+			name: 'getContractInfo',
+			call: 'admin_getContractInfo',
+			params: 1,
+			inputFormatter: [web3._extend.utils.formatInputString],
+			outputFormatter: function(obj) { return json.parse(obj); }
+		}),
+		new web3._extend.Method({
+			name: 'httpGet',
+			call: 'admin_httpGet',
+			params: 2,
+			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputString
 		})
+
 	],
 	properties:
 	[
