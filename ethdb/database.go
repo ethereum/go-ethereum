@@ -1,6 +1,7 @@
 package ethdb
 
 import (
+        "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -10,7 +11,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
-var OpenFileLimit = 64
+
+var OpenFileLimit = common.MaxOpenFileLimit()
 
 type LDBDatabase struct {
 	// filename for reporting
