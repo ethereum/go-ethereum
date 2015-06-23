@@ -3,7 +3,9 @@ package api
 import (
 	"fmt"
 	"io"
+	"math/big"
 	"os"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -244,3 +246,49 @@ func (self *adminApi) StopRPC(req *shared.Request) (interface{}, error) {
 	comms.StopHttp()
 	return true, nil
 }
+
+func (self *adminApi) SleepBlocks(req *shared.Request) (interface{}, error) {
+	args := new(SleepBlocksArgs)
+	if err := self.coder.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+	var timer <-chan time.Time
+	var height *big.Int
+	var err error
+	if args.Timeout > 0 {
+		timer = time.NewTimer(time.Duration(args.Timeout) * time.Second).C
+	}
+
+	height = new(big.Int).Add(self.xeth.CurrentBlock().Number(), big.NewInt(args.N))
+	height, err = sleepBlocks(self.xeth.UpdateState(), height, timer)
+	if err != nil {
+		return nil, err
+	}
+	return height.Uint64(), nil
+}
+
+func sleepBlocks(wait chan *big.Int, height *big.Int, timer <-chan time.Time) (newHeight *big.Int, err error) {
+	wait <- height
+	select {
+	case <-timer:
+		// if times out make sure the xeth loop does not block
+		go func() {
+			select {
+			case wait <- nil:
+			case <-wait:
+			}
+		}()
+		return nil, fmt.Errorf("timeout")
+	case newHeight = <-wait:
+	}
+	return
+}
+
+// 	sec, err := call.Argument(0).ToInteger()
+// 	if err != nil {
+// 		fmt.Println(err)
+// 		return otto.FalseValue()
+// 	}
+// 	time.Sleep(time.Duration(sec) * time.Second)
+// 	return otto.UndefinedValue()
+// }

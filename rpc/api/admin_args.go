@@ -147,3 +147,34 @@ func (args *StartRPCArgs) UnmarshalJSON(b []byte) (err error) {
 
 	return nil
 }
+
+type SleepBlocksArgs struct {
+	N       int64
+	Timeout int64
+}
+
+func (args *SleepBlocksArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	args.N = 1
+	args.Timeout = 0
+	if len(obj) >= 1 {
+		if n, ok := obj[0].(int64); ok {
+			args.N = n
+		} else {
+			return shared.NewInvalidTypeError("N", "not an integer")
+		}
+	}
+
+	if len(obj) >= 2 {
+		if n, ok := obj[1].(int64); ok {
+			args.N = n
+		} else {
+			return shared.NewInvalidTypeError("Timeout", "not an integer")
+		}
+	}
+	return nil
+}
