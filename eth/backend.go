@@ -249,32 +249,35 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, fmt.Errorf("blockchain db err: %v", err)
 	}
-	blockDb.(*ethdb.LDBDatabase).GetMeter = metrics.GetOrRegisterMeter("eth/db/block/Gets", metrics.DefaultRegistry)
-	blockDb.(*ethdb.LDBDatabase).PutMeter = metrics.GetOrRegisterMeter("eth/db/block/Puts", metrics.DefaultRegistry)
-	blockDb.(*ethdb.LDBDatabase).DelMeter = metrics.GetOrRegisterMeter("eth/db/block/Dels", metrics.DefaultRegistry)
-	blockDb.(*ethdb.LDBDatabase).ReadMeter = metrics.GetOrRegisterMeter("eth/db/block/Reads", metrics.DefaultRegistry)
-	blockDb.(*ethdb.LDBDatabase).WriteMeter = metrics.GetOrRegisterMeter("eth/db/block/Writes", metrics.DefaultRegistry)
-
+	if db, ok := blockDb.(*ethdb.LDBDatabase); ok {
+		db.GetMeter = metrics.GetOrRegisterMeter("eth/db/block/Gets", metrics.DefaultRegistry)
+		db.PutMeter = metrics.GetOrRegisterMeter("eth/db/block/Puts", metrics.DefaultRegistry)
+		db.DelMeter = metrics.GetOrRegisterMeter("eth/db/block/Dels", metrics.DefaultRegistry)
+		db.ReadMeter = metrics.GetOrRegisterMeter("eth/db/block/Reads", metrics.DefaultRegistry)
+		db.WriteMeter = metrics.GetOrRegisterMeter("eth/db/block/Writes", metrics.DefaultRegistry)
+	}
 	stateDb, err := newdb(filepath.Join(config.DataDir, "state"))
 	if err != nil {
 		return nil, fmt.Errorf("state db err: %v", err)
 	}
-	stateDb.(*ethdb.LDBDatabase).GetMeter = metrics.GetOrRegisterMeter("eth/db/state/Gets", metrics.DefaultRegistry)
-	stateDb.(*ethdb.LDBDatabase).PutMeter = metrics.GetOrRegisterMeter("eth/db/state/Puts", metrics.DefaultRegistry)
-	stateDb.(*ethdb.LDBDatabase).DelMeter = metrics.GetOrRegisterMeter("eth/db/state/Dels", metrics.DefaultRegistry)
-	stateDb.(*ethdb.LDBDatabase).ReadMeter = metrics.GetOrRegisterMeter("eth/db/state/Reads", metrics.DefaultRegistry)
-	stateDb.(*ethdb.LDBDatabase).WriteMeter = metrics.GetOrRegisterMeter("eth/db/state/Writes", metrics.DefaultRegistry)
-
+	if db, ok := stateDb.(*ethdb.LDBDatabase); ok {
+		db.GetMeter = metrics.GetOrRegisterMeter("eth/db/state/Gets", metrics.DefaultRegistry)
+		db.PutMeter = metrics.GetOrRegisterMeter("eth/db/state/Puts", metrics.DefaultRegistry)
+		db.DelMeter = metrics.GetOrRegisterMeter("eth/db/state/Dels", metrics.DefaultRegistry)
+		db.ReadMeter = metrics.GetOrRegisterMeter("eth/db/state/Reads", metrics.DefaultRegistry)
+		db.WriteMeter = metrics.GetOrRegisterMeter("eth/db/state/Writes", metrics.DefaultRegistry)
+	}
 	extraDb, err := newdb(filepath.Join(config.DataDir, "extra"))
 	if err != nil {
 		return nil, fmt.Errorf("extra db err: %v", err)
 	}
-	extraDb.(*ethdb.LDBDatabase).GetMeter = metrics.GetOrRegisterMeter("eth/db/extra/Gets", metrics.DefaultRegistry)
-	extraDb.(*ethdb.LDBDatabase).PutMeter = metrics.GetOrRegisterMeter("eth/db/extra/Puts", metrics.DefaultRegistry)
-	extraDb.(*ethdb.LDBDatabase).DelMeter = metrics.GetOrRegisterMeter("eth/db/extra/Dels", metrics.DefaultRegistry)
-	extraDb.(*ethdb.LDBDatabase).ReadMeter = metrics.GetOrRegisterMeter("eth/db/extra/Reads", metrics.DefaultRegistry)
-	extraDb.(*ethdb.LDBDatabase).WriteMeter = metrics.GetOrRegisterMeter("eth/db/extra/Writes", metrics.DefaultRegistry)
-
+	if db, ok := extraDb.(*ethdb.LDBDatabase); ok {
+		db.GetMeter = metrics.GetOrRegisterMeter("eth/db/extra/Gets", metrics.DefaultRegistry)
+		db.PutMeter = metrics.GetOrRegisterMeter("eth/db/extra/Puts", metrics.DefaultRegistry)
+		db.DelMeter = metrics.GetOrRegisterMeter("eth/db/extra/Dels", metrics.DefaultRegistry)
+		db.ReadMeter = metrics.GetOrRegisterMeter("eth/db/extra/Reads", metrics.DefaultRegistry)
+		db.WriteMeter = metrics.GetOrRegisterMeter("eth/db/extra/Writes", metrics.DefaultRegistry)
+	}
 	nodeDb := filepath.Join(config.DataDir, "nodes")
 
 	// Perform database sanity checks
