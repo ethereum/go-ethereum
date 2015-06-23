@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -33,6 +34,15 @@ func init() {
 	// specify the params for the s256 curve
 	ecies.AddParamsForCurve(S256(), ecies.ECIES_AES128_SHA256)
 	secp256k1n = common.String2Big("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
+}
+
+func FnvHash(data ...[]byte) (h common.Hash) {
+	fnvHash := fnv.New32()
+	for _, b := range data {
+		fnvHash.Write(b)
+	}
+	fnvHash.Sum(h[:0])
+	return h
 }
 
 func Sha3(data ...[]byte) []byte {
