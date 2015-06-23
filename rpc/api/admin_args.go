@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
@@ -154,6 +155,7 @@ type SleepBlocksArgs struct {
 }
 
 func (args *SleepBlocksArgs) UnmarshalJSON(b []byte) (err error) {
+
 	var obj []interface{}
 	if err := json.Unmarshal(b, &obj); err != nil {
 		return shared.NewDecodeParamError(err.Error())
@@ -171,10 +173,276 @@ func (args *SleepBlocksArgs) UnmarshalJSON(b []byte) (err error) {
 
 	if len(obj) >= 2 {
 		if n, ok := obj[1].(int64); ok {
-			args.N = n
+			args.Timeout = n
 		} else {
-			return shared.NewInvalidTypeError("Timeout", "not an integer")
+			return shared.NewInvalidTypeError("N", "not an integer")
 		}
 	}
+
+	return nil
+}
+
+type SetGlobalRegistrarArgs struct {
+	NameReg         string
+	ContractAddress string
+}
+
+func (args *SetGlobalRegistrarArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) == 0 {
+		return shared.NewDecodeParamError("Expected namereg address")
+	}
+
+	if len(obj) >= 1 {
+		if namereg, ok := obj[0].(string); ok {
+			args.NameReg = namereg
+		} else {
+			return shared.NewInvalidTypeError("NameReg", "not a string")
+		}
+	}
+
+	if len(obj) >= 2 {
+		if addr, ok := obj[1].(string); ok {
+			args.ContractAddress = addr
+		} else {
+			return shared.NewInvalidTypeError("ContractAddress", "not a string")
+		}
+	}
+
+	return nil
+}
+
+type SetHashRegArgs struct {
+	HashReg string
+	Sender  string
+}
+
+func (args *SetHashRegArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) >= 1 {
+		if hashreg, ok := obj[0].(string); ok {
+			args.HashReg = hashreg
+		} else {
+			return shared.NewInvalidTypeError("HashReg", "not a string")
+		}
+	}
+
+	if len(obj) >= 2 {
+		if sender, ok := obj[1].(string); ok {
+			args.Sender = sender
+		} else {
+			return shared.NewInvalidTypeError("Sender", "not a string")
+		}
+	}
+
+	return nil
+}
+
+type SetUrlHintArgs struct {
+	UrlHint string
+	Sender  string
+}
+
+func (args *SetUrlHintArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) >= 1 {
+		if urlhint, ok := obj[0].(string); ok {
+			args.UrlHint = urlhint
+		} else {
+			return shared.NewInvalidTypeError("UrlHint", "not a string")
+		}
+	}
+
+	if len(obj) >= 2 {
+		if sender, ok := obj[1].(string); ok {
+			args.Sender = sender
+		} else {
+			return shared.NewInvalidTypeError("Sender", "not a string")
+		}
+	}
+
+	return nil
+}
+
+type SaveInfoArgs struct {
+	ContractInfo compiler.ContractInfo
+	Filename     string
+}
+
+func (args *SaveInfoArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 2 {
+		return shared.NewInsufficientParamsError(len(obj), 2)
+	}
+
+	if jsonraw, err := json.Marshal(obj[0]); err == nil {
+		if err = json.Unmarshal(jsonraw, &args.ContractInfo); err != nil {
+			return err
+		}
+	} else {
+		return err
+	}
+
+	if filename, ok := obj[1].(string); ok {
+		args.Filename = filename
+	} else {
+		return shared.NewInvalidTypeError("Filename", "not a string")
+	}
+
+	return nil
+}
+
+type RegisterArgs struct {
+	Sender         string
+	Address        string
+	ContentHashHex string
+}
+
+func (args *RegisterArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 3 {
+		return shared.NewInsufficientParamsError(len(obj), 3)
+	}
+
+	if len(obj) >= 1 {
+		if sender, ok := obj[0].(string); ok {
+			args.Sender = sender
+		} else {
+			return shared.NewInvalidTypeError("Sender", "not a string")
+		}
+	}
+
+	if len(obj) >= 2 {
+		if address, ok := obj[1].(string); ok {
+			args.Address = address
+		} else {
+			return shared.NewInvalidTypeError("Address", "not a string")
+		}
+	}
+
+	if len(obj) >= 3 {
+		if hex, ok := obj[2].(string); ok {
+			args.ContentHashHex = hex
+		} else {
+			return shared.NewInvalidTypeError("ContentHashHex", "not a string")
+		}
+	}
+
+	return nil
+}
+
+type RegisterUrlArgs struct {
+	Sender      string
+	ContentHash string
+	Url         string
+}
+
+func (args *RegisterUrlArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) >= 1 {
+		if sender, ok := obj[1].(string); ok {
+			args.Sender = sender
+		} else {
+			return shared.NewInvalidTypeError("Sender", "not a string")
+		}
+	}
+
+	if sender, ok := obj[1].(string); ok {
+		args.ContentHash = sender
+	} else {
+		return shared.NewInvalidTypeError("ContentHash", "not a string")
+	}
+
+	if len(obj) >= 3 {
+		if sender, ok := obj[2].(string); ok {
+			args.Url = sender
+		} else {
+			return shared.NewInvalidTypeError("Url", "not a string")
+		}
+	}
+
+	return nil
+}
+
+type GetContractInfoArgs struct {
+	Contract string
+}
+
+func (args *GetContractInfoArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	if len(obj) >= 1 {
+		if contract, ok := obj[0].(string); ok {
+			args.Contract = contract
+		} else {
+			return shared.NewInvalidTypeError("Contract", "not a string")
+		}
+	}
+
+	return nil
+}
+
+type HttpGetArgs struct {
+	Uri  string
+	Path string
+}
+
+func (args *HttpGetArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	if len(obj) >= 1 {
+		if uri, ok := obj[0].(string); ok {
+			args.Uri = uri
+		} else {
+			return shared.NewInvalidTypeError("Uri", "not a string")
+		}
+	}
+
+	if len(obj) >= 2 {
+		if path, ok := obj[1].(string); ok {
+			args.Path = path
+		} else {
+			return shared.NewInvalidTypeError("Path", "not a string")
+		}
+	}
+
 	return nil
 }
