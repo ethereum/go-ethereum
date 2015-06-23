@@ -1,6 +1,8 @@
 package ethdb
 
 import (
+	"time"
+
 	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -17,9 +19,10 @@ type LDBDatabase struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
 
-	GetMeter   metrics.Meter // Meter for measuring the database get request counts
-	PutMeter   metrics.Meter // Meter for measuring the database put request counts
-	DelMeter   metrics.Meter // Meter for measuring the database delete request counts
+	GetTimer   metrics.Timer // Timer for measuring the database get request counts and latencies
+	PutTimer   metrics.Timer // Timer for measuring the database put request counts and latencies
+	DelTimer   metrics.Timer // Timer for measuring the database delete request counts and latencies
+	MissMeter  metrics.Meter // MEter for measuring the missed database get requests
 	ReadMeter  metrics.Meter // Meter for measuring the database get request data usage
 	WriteMeter metrics.Meter // Meter for measuring the database put request data usage
 }
@@ -48,10 +51,14 @@ func NewLDBDatabase(file string) (*LDBDatabase, error) {
 
 // Put puts the given key / value to the queue
 func (self *LDBDatabase) Put(key []byte, value []byte) error {
-	dat := rle.Compress(value)
-	if self.PutMeter != nil {
-		self.PutMeter.Mark(1)
+	// Measure the database put latency, if requested
+	if self.PutTimer != nil {
+		start := time.Now()
+		defer self.PutTimer.UpdateSince(start)
 	}
+	// Generate the data to write to disk, update the meter and write
+	dat := rle.Compress(value)
+
 	if self.WriteMeter != nil {
 		self.WriteMeter.Mark(int64(len(dat)))
 	}
@@ -60,13 +67,20 @@ func (self *LDBDatabase) Put(key []byte, value []byte) error {
 
 // Get returns the given key if it's present.
 func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
+	// Measure the database get latency, if requested
+	if self.GetTimer != nil {
+		start := time.Now()
+		defer self.GetTimer.UpdateSince(start)
+	}
+	// Retrieve the key and increment the miss counter if not found
 	dat, err := self.db.Get(key, nil)
 	if err != nil {
+		if self.MissMeter != nil {
+			self.MissMeter.Mark(1)
+		}
 		return nil, err
 	}
-	if self.GetMeter != nil {
-		self.GetMeter.Mark(1)
-	}
+	// Otherwise update the actually retrieved amount of data
 	if self.ReadMeter != nil {
 		self.ReadMeter.Mark(int64(len(dat)))
 	}
@@ -75,9 +89,12 @@ func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
 
 // Delete deletes the key from the queue and database
 func (self *LDBDatabase) Delete(key []byte) error {
-	if self.DelMeter != nil {
-		self.DelMeter.Mark(1)
+	// Measure the database delete latency, if requested
+	if self.DelTimer != nil {
+		start := time.Now()
+		defer self.DelTimer.UpdateSince(start)
 	}
+	// Execute the actual operation
 	return self.db.Delete(key, nil)
 }
 

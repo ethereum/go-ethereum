@@ -250,9 +250,9 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("blockchain db err: %v", err)
 	}
 	if db, ok := blockDb.(*ethdb.LDBDatabase); ok {
-		db.GetMeter = metrics.GetOrRegisterMeter("eth/db/block/Gets", metrics.DefaultRegistry)
-		db.PutMeter = metrics.GetOrRegisterMeter("eth/db/block/Puts", metrics.DefaultRegistry)
-		db.DelMeter = metrics.GetOrRegisterMeter("eth/db/block/Dels", metrics.DefaultRegistry)
+		db.GetTimer = metrics.GetOrRegisterTimer("eth/db/block/Gets", metrics.DefaultRegistry)
+		db.PutTimer = metrics.GetOrRegisterTimer("eth/db/block/Puts", metrics.DefaultRegistry)
+		db.MissMeter = metrics.GetOrRegisterMeter("eth/db/block/Misses", metrics.DefaultRegistry)
 		db.ReadMeter = metrics.GetOrRegisterMeter("eth/db/block/Reads", metrics.DefaultRegistry)
 		db.WriteMeter = metrics.GetOrRegisterMeter("eth/db/block/Writes", metrics.DefaultRegistry)
 	}
@@ -261,9 +261,9 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("state db err: %v", err)
 	}
 	if db, ok := stateDb.(*ethdb.LDBDatabase); ok {
-		db.GetMeter = metrics.GetOrRegisterMeter("eth/db/state/Gets", metrics.DefaultRegistry)
-		db.PutMeter = metrics.GetOrRegisterMeter("eth/db/state/Puts", metrics.DefaultRegistry)
-		db.DelMeter = metrics.GetOrRegisterMeter("eth/db/state/Dels", metrics.DefaultRegistry)
+		db.GetTimer = metrics.GetOrRegisterTimer("eth/db/state/Gets", metrics.DefaultRegistry)
+		db.PutTimer = metrics.GetOrRegisterTimer("eth/db/state/Puts", metrics.DefaultRegistry)
+		db.MissMeter = metrics.GetOrRegisterMeter("eth/db/state/Misses", metrics.DefaultRegistry)
 		db.ReadMeter = metrics.GetOrRegisterMeter("eth/db/state/Reads", metrics.DefaultRegistry)
 		db.WriteMeter = metrics.GetOrRegisterMeter("eth/db/state/Writes", metrics.DefaultRegistry)
 	}
@@ -272,9 +272,9 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("extra db err: %v", err)
 	}
 	if db, ok := extraDb.(*ethdb.LDBDatabase); ok {
-		db.GetMeter = metrics.GetOrRegisterMeter("eth/db/extra/Gets", metrics.DefaultRegistry)
-		db.PutMeter = metrics.GetOrRegisterMeter("eth/db/extra/Puts", metrics.DefaultRegistry)
-		db.DelMeter = metrics.GetOrRegisterMeter("eth/db/extra/Dels", metrics.DefaultRegistry)
+		db.GetTimer = metrics.GetOrRegisterTimer("eth/db/extra/Gets", metrics.DefaultRegistry)
+		db.PutTimer = metrics.GetOrRegisterTimer("eth/db/extra/Puts", metrics.DefaultRegistry)
+		db.MissMeter = metrics.GetOrRegisterMeter("eth/db/extra/Misses", metrics.DefaultRegistry)
 		db.ReadMeter = metrics.GetOrRegisterMeter("eth/db/extra/Reads", metrics.DefaultRegistry)
 		db.WriteMeter = metrics.GetOrRegisterMeter("eth/db/extra/Writes", metrics.DefaultRegistry)
 	}
