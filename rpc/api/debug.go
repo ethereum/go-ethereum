@@ -2,6 +2,8 @@ package api
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -11,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/rcrowley/go-metrics"
 )
 
 const (
@@ -26,6 +29,7 @@ var (
 		"debug_processBlock": (*debugApi).ProcessBlock,
 		"debug_seedHash":     (*debugApi).SeedHash,
 		"debug_setHead":      (*debugApi).SetHead,
+		"debug_metrics":      (*debugApi).Metrics,
 	}
 )
 
@@ -170,4 +174,64 @@ func (self *debugApi) SeedHash(req *shared.Request) (interface{}, error) {
 	} else {
 		return nil, err
 	}
+}
+
+func (self *debugApi) Metrics(req *shared.Request) (interface{}, error) {
+	// Create a rate formatter
+	units := []string{"", "K", "M", "G", "T", "E", "P"}
+	round := func(value float64, prec int) string {
+		unit := 0
+		for value >= 1000 {
+			unit, value, prec = unit+1, value/1000, 2
+		}
+		return fmt.Sprintf(fmt.Sprintf("%%.%df%s", prec, units[unit]), value)
+	}
+	format := func(total float64, rate float64) string {
+		return fmt.Sprintf("%s (%s/s)", round(total, 0), round(rate, 2))
+	}
+	// Iterate over all the metrics, and just dump for now
+	counters := make(map[string]interface{})
+	metrics.DefaultRegistry.Each(func(name string, metric interface{}) {
+		// Create or retrieve the counter hierarchy for this metric
+		root, parts := counters, strings.Split(name, "/")
+		for _, part := range parts[:len(parts)-1] {
+			if _, ok := root[part]; !ok {
+				root[part] = make(map[string]interface{})
+			}
+			root = root[part].(map[string]interface{})
+		}
+		name = parts[len(parts)-1]
+
+		// Fill the counter with the metric details
+		switch metric := metric.(type) {
+		case metrics.Meter:
+			root[name] = map[string]interface{}{
+				"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
+				"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
+				"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
+				"Total":    format(float64(metric.Count()), metric.RateMean()),
+			}
+
+		case metrics.Timer:
+			root[name] = map[string]interface{}{
+				"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
+				"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
+				"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
+				"Count":    format(float64(metric.Count()), metric.RateMean()),
+				"Maximum":  time.Duration(metric.Max()).String(),
+				"Minimum":  time.Duration(metric.Min()).String(),
+				"Percentile": map[string]interface{}{
+					"20": time.Duration(metric.Percentile(0.2)).String(),
+					"50": time.Duration(metric.Percentile(0.5)).String(),
+					"80": time.Duration(metric.Percentile(0.8)).String(),
+					"95": time.Duration(metric.Percentile(0.95)).String(),
+					"99": time.Duration(metric.Percentile(0.99)).String(),
+				},
+			}
+
+		default:
+			root[name] = "Unknown metric type"
+		}
+	})
+	return counters, nil
 }
