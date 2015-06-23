@@ -217,7 +217,6 @@ func (self *adminApi) SetSolc(req *shared.Request) (interface{}, error) {
 }
 
 func (self *adminApi) StartRPC(req *shared.Request) (interface{}, error) {
-	var err error
 	args := new(StartRPCArgs)
 	if err := self.coder.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -229,14 +228,15 @@ func (self *adminApi) StartRPC(req *shared.Request) (interface{}, error) {
 		CorsDomain:    args.CorsDomain,
 	}
 
-	if apis, err := ParseApiString(args.Apis, self.codec, self.xeth, self.ethereum); err == nil {
-		err = comms.StartHttp(cfg, self.codec, Merge(apis...))
+	apis, err := ParseApiString(args.Apis, self.codec, self.xeth, self.ethereum)
+	if err != nil {
+		return false, err
 	}
 
+	err = comms.StartHttp(cfg, self.codec, Merge(apis...))
 	if err == nil {
 		return true, nil
 	}
-
 	return false, err
 }
 
