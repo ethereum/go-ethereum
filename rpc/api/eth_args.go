@@ -892,3 +892,53 @@ func newTx(t *types.Transaction) *tx {
 		GasPrice: t.GasPrice().String(),
 	}
 }
+
+type ResendArgs struct {
+	Tx       *tx
+	GasPrice string
+	GasLimit string
+}
+
+func (args *ResendArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err = json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	data, err := json.Marshal(obj[0])
+	if err != nil {
+		return shared.NewDecodeParamError("Unable to parse transaction object")
+	}
+
+	trans := new(tx)
+	err = json.Unmarshal(data, trans)
+	if err != nil {
+		return shared.NewDecodeParamError("Unable to parse transaction object.")
+	}
+
+	gasLimit, gasPrice := trans.GasLimit, trans.GasPrice
+
+	if len(obj) > 1 && obj[1] != nil {
+		if gp, ok := obj[1].(string); ok {
+			gasPrice = gp
+		} else {
+			return shared.NewInvalidTypeError("gasPrice", "not a string")
+		}
+	}
+	if len(obj) > 2 && obj[2] != nil {
+		if gl, ok := obj[2].(string); ok {
+			gasLimit = gl
+		} else {
+			return shared.NewInvalidTypeError("gasLimit", "not a string")
+		}
+	}
+	args.Tx = trans
+	args.GasPrice = gasPrice
+	args.GasLimit = gasLimit
+
+	return nil
+}
