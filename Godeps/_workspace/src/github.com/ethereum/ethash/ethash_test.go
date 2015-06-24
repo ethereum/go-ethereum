@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func init() {
@@ -59,12 +60,27 @@ var validBlocks = []*testBlock{
 	},
 }
 
+var invalidZeroDiffBlock = testBlock{
+	number:      61440000,
+	hashNoNonce: crypto.Sha3Hash([]byte("foo")),
+	difficulty:  big.NewInt(0),
+	nonce:       0xcafebabec00000fe,
+	mixDigest:   crypto.Sha3Hash([]byte("bar")),
+}
+
 func TestEthashVerifyValid(t *testing.T) {
 	eth := New()
 	for i, block := range validBlocks {
 		if !eth.Verify(block) {
 			t.Errorf("block %d (%x) did not validate.", i, block.hashNoNonce[:6])
 		}
+	}
+}
+
+func TestEthashVerifyInvalid(t *testing.T) {
+	eth := New()
+	if eth.Verify(&invalidZeroDiffBlock) {
+		t.Errorf("should not validate - we just ensure it does not panic on this block")
 	}
 }
 
