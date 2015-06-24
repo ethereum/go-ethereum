@@ -177,6 +177,10 @@ func (self *debugApi) SeedHash(req *shared.Request) (interface{}, error) {
 }
 
 func (self *debugApi) Metrics(req *shared.Request) (interface{}, error) {
+	args := new(MetricsArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
 	// Create a rate formatter
 	units := []string{"", "K", "M", "G", "T", "E", "P"}
 	round := func(value float64, prec int) string {
@@ -202,35 +206,69 @@ func (self *debugApi) Metrics(req *shared.Request) (interface{}, error) {
 		}
 		name = parts[len(parts)-1]
 
-		// Fill the counter with the metric details
-		switch metric := metric.(type) {
-		case metrics.Meter:
-			root[name] = map[string]interface{}{
-				"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
-				"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
-				"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
-				"Total":    format(float64(metric.Count()), metric.RateMean()),
-			}
+		// Fill the counter with the metric details, formatting if requested
+		if args.Raw {
+			switch metric := metric.(type) {
+			case metrics.Meter:
+				root[name] = map[string]interface{}{
+					"Avg01Min": metric.Rate1(),
+					"Avg05Min": metric.Rate5(),
+					"Avg15Min": metric.Rate15(),
+					"AvgTotal": metric.RateMean(),
+					"Total":    float64(metric.Count()),
+				}
 
-		case metrics.Timer:
-			root[name] = map[string]interface{}{
-				"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
-				"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
-				"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
-				"Count":    format(float64(metric.Count()), metric.RateMean()),
-				"Maximum":  time.Duration(metric.Max()).String(),
-				"Minimum":  time.Duration(metric.Min()).String(),
-				"Percentile": map[string]interface{}{
-					"20": time.Duration(metric.Percentile(0.2)).String(),
-					"50": time.Duration(metric.Percentile(0.5)).String(),
-					"80": time.Duration(metric.Percentile(0.8)).String(),
-					"95": time.Duration(metric.Percentile(0.95)).String(),
-					"99": time.Duration(metric.Percentile(0.99)).String(),
-				},
-			}
+			case metrics.Timer:
+				root[name] = map[string]interface{}{
+					"Avg01Min": metric.Rate1(),
+					"Avg05Min": metric.Rate5(),
+					"Avg15Min": metric.Rate15(),
+					"AvgTotal": metric.RateMean(),
+					"Total":    float64(metric.Count()),
+					"Maximum":  metric.Max(),
+					"Minimum":  metric.Min(),
+					"Percentile": map[string]interface{}{
+						"20": metric.Percentile(0.2),
+						"50": metric.Percentile(0.5),
+						"80": metric.Percentile(0.8),
+						"95": metric.Percentile(0.95),
+						"99": metric.Percentile(0.99),
+					},
+				}
 
-		default:
-			root[name] = "Unknown metric type"
+			default:
+				root[name] = "Unknown metric type"
+			}
+		} else {
+			switch metric := metric.(type) {
+			case metrics.Meter:
+				root[name] = map[string]interface{}{
+					"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
+					"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
+					"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
+					"Total":    format(float64(metric.Count()), metric.RateMean()),
+				}
+
+			case metrics.Timer:
+				root[name] = map[string]interface{}{
+					"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
+					"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
+					"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
+					"Count":    format(float64(metric.Count()), metric.RateMean()),
+					"Maximum":  time.Duration(metric.Max()).String(),
+					"Minimum":  time.Duration(metric.Min()).String(),
+					"Percentile": map[string]interface{}{
+						"20": time.Duration(metric.Percentile(0.2)).String(),
+						"50": time.Duration(metric.Percentile(0.5)).String(),
+						"80": time.Duration(metric.Percentile(0.8)).String(),
+						"95": time.Duration(metric.Percentile(0.95)).String(),
+						"99": time.Duration(metric.Percentile(0.99)).String(),
+					},
+				}
+
+			default:
+				root[name] = "Unknown metric type"
+			}
 		}
 	})
 	return counters, nil

@@ -217,6 +217,16 @@ This command allows to open a console on a running geth node.
 `,
 		},
 		{
+			Action: monitor,
+			Name:   "monitor",
+			Usage:  `Geth Monitor: node metrics monitoring and visualization`,
+			Description: `
+The Geth monitor is a tool to collect and visualize various internal metrics
+gathered by the node, supporting different chart types as well as the capacity
+to display multiple metrics simultaneously.
+`,
+		},
+		{
 			Action: execJSFiles,
 			Name:   "js",
 			Usage:  `executes the given JavaScript files in the Geth JavaScript VM`,

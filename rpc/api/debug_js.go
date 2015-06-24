@@ -46,15 +46,17 @@ web3._extend({
 			params: 1,
 			inputFormatter: [web3._extend.formatters.formatInputInt],
 			outputFormatter: function(obj) { return obj; }
+		}),
+		new web3._extend.Method({
+			name: 'metrics',
+			call: 'debug_metrics',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.formatInputBool],
+			outputFormatter: function(obj) { return obj; }
 		})
 	],
 	properties:
 	[
-		new web3._extend.Property({
-			name: 'metrics',
-			getter: 'debug_metrics',
-			outputFormatter: function(obj) { return obj; }
-		})
 	]
 });
 `
