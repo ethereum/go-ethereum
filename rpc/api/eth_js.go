@@ -15,6 +15,14 @@ web3._extend({
 			inputFormatter: [web3._extend.formatters.formatInputString,web3._extend.formatters.formatInputString],
 			outputFormatter: web3._extend.formatters.formatOutputString
 		})
+	],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'pendingTransactions',
+			getter: 'eth_pendingTransactions',
+			outputFormatter: function(obj) { return obj; }
+		})
 	]
 });
 `

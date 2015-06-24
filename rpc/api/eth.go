@@ -6,9 +6,11 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
+	"gopkg.in/fatih/set.v0"
 )
 
 const (
@@ -18,9 +20,10 @@ const (
 // eth api provider
 // See https://github.com/ethereum/wiki/wiki/JSON-RPC
 type ethApi struct {
-	xeth    *xeth.XEth
-	methods map[string]ethhandler
-	codec   codec.ApiCoder
+	xeth     *xeth.XEth
+	ethereum *eth.Ethereum
+	methods  map[string]ethhandler
+	codec    codec.ApiCoder
 }
 
 // eth callback handler
@@ -71,12 +74,13 @@ var (
 		"eth_hashrate":                            (*ethApi).Hashrate,
 		"eth_getWork":                             (*ethApi).GetWork,
 		"eth_submitWork":                          (*ethApi).SubmitWork,
+		"eth_pendingTransactions":                 (*ethApi).PendingTransactions,
 	}
 )
 
 // create new ethApi instance
-func NewEthApi(xeth *xeth.XEth, codec codec.Codec) *ethApi {
-	return &ethApi{xeth, ethMapping, codec.New(nil)}
+func NewEthApi(xeth *xeth.XEth, eth *eth.Ethereum, codec codec.Codec) *ethApi {
+	return &ethApi{xeth, eth, ethMapping, codec.New(nil)}
 }
 
 // collection with supported methods
@@ -555,4 +559,30 @@ func (self *ethApi) SubmitWork(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 	return self.xeth.RemoteMining().SubmitWork(args.Nonce, common.HexToHash(args.Digest), common.HexToHash(args.Header)), nil
+}
+
+func (self *ethApi) PendingTransactions(req *shared.Request) (interface{}, error) {
+	txs := self.ethereum.TxPool().GetTransactions()
+
+	// grab the accounts from the account manager. This will help with determening which
+	// transactions should be returned.
+	accounts, err := self.ethereum.AccountManager().Accounts()
+	if err != nil {
+		return nil, err
+	}
+
+	// Add the accouns to a new set
+	accountSet := set.New()
+	for _, account := range accounts {
+		accountSet.Add(account.Address)
+	}
+
+	var ltxs []*tx
+	for _, tx := range txs {
+		if from, _ := tx.From(); accountSet.Has(from) {
+			ltxs = append(ltxs, newTx(tx))
+		}
+	}
+
+	return ltxs, nil
 }
