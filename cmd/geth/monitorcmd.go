@@ -76,7 +76,10 @@ func monitor(ctx *cli.Context) {
 
 	termui.UseTheme("helloworld")
 
-	rows := 5
+	rows := len(monitored)
+	if rows > 5 {
+		rows = 5
+	}
 	cols := (len(monitored) + rows - 1) / rows
 	for i := 0; i < rows; i++ {
 		termui.Body.AddRows(termui.NewRow())
@@ -207,8 +210,9 @@ func expandMetrics(metrics map[string]interface{}, path string) []string {
 // updateChart inserts a dataset into a line chart, scaling appropriately as to
 // not display weird labels, also updating the chart label accordingly.
 func updateChart(metric string, data []float64, chart *termui.LineChart) {
-	units := []string{"", "K", "M", "G", "T", "E", "P"}
-	colors := []termui.Attribute{termui.ColorBlue, termui.ColorCyan, termui.ColorGreen, termui.ColorYellow, termui.ColorRed, termui.ColorRed, termui.ColorRed}
+	dataUnits := []string{"", "K", "M", "G", "T", "E"}
+	timeUnits := []string{"ns", "µs", "ms", "s", "ks", "ms"}
+	colors := []termui.Attribute{termui.ColorBlue, termui.ColorCyan, termui.ColorGreen, termui.ColorYellow, termui.ColorRed, termui.ColorRed}
 
 	// Find the maximum value and scale under 1K
 	high := data[0]
@@ -225,7 +229,12 @@ func updateChart(metric string, data []float64, chart *termui.LineChart) {
 	}
 	// Update the chart's label with the scale units
 	chart.Border.Label = metric
-	if unit > 0 {
+
+	units := dataUnits
+	if strings.Contains(metric, "Percentiles") {
+		units = timeUnits
+	}
+	if len(units[unit]) > 0 {
 		chart.Border.Label += " [" + units[unit] + "]"
 	}
 	chart.LineColor = colors[unit]
