@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"math/big"
 
+	"strconv"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
@@ -857,4 +860,35 @@ func (args *SubmitWorkArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Digest = objstr
 
 	return nil
+}
+
+type tx struct {
+	tx *types.Transaction
+
+	To       string
+	From     string
+	Nonce    string
+	Value    string
+	Data     string
+	GasLimit string
+	GasPrice string
+}
+
+func newTx(t *types.Transaction) *tx {
+	from, _ := t.From()
+	var to string
+	if t := t.To(); t != nil {
+		to = t.Hex()
+	}
+
+	return &tx{
+		tx:       t,
+		To:       to,
+		From:     from.Hex(),
+		Value:    t.Amount.String(),
+		Nonce:    strconv.Itoa(int(t.Nonce())),
+		Data:     "0x" + common.Bytes2Hex(t.Data()),
+		GasLimit: t.GasLimit.String(),
+		GasPrice: t.GasPrice().String(),
+	}
 }

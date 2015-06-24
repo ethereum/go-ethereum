@@ -84,6 +84,7 @@ var (
 			"hashrate",
 			"getWork",
 			"submitWork",
+			"pendingTransactions",
 		},
 		"miner": []string{
 			"hashrate",
@@ -149,7 +150,7 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 		case shared.DbApiName:
 			apis[i] = NewDbApi(xeth, eth, codec)
 		case shared.EthApiName:
-			apis[i] = NewEthApi(xeth, codec)
+			apis[i] = NewEthApi(xeth, eth, codec)
 		case shared.MinerApiName:
 			apis[i] = NewMinerApi(eth, codec)
 		case shared.NetApiName:
