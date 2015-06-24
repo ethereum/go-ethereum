@@ -76,8 +76,9 @@ func TestCompileSolidity(t *testing.T) {
 	expLanguageVersion := "0"
 	expSource := source
 
-	xeth := xeth.NewTest(&eth.Ethereum{}, nil)
-	api := NewEthApi(xeth, codec.JSON)
+	eth := &eth.Ethereum{}
+	xeth := xeth.NewTest(eth, nil)
+	api := NewEthApi(xeth, eth, codec.JSON)
 
 	var rpcRequest shared.Request
 	json.Unmarshal([]byte(jsonstr), &rpcRequest)
