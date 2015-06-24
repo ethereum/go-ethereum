@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"reflect"
 	"sort"
 	"strings"
@@ -67,7 +68,7 @@ func monitor(ctx *cli.Context) {
 		utils.Fatalf("Metric not float64: %s", metric)
 		return 0
 	}
-	// Assemble the terminal UI
+	// Create and configure the chart UI defaults
 	if err := termui.Init(); err != nil {
 		utils.Fatalf("Unable to initialize terminal UI: %v", err)
 	}
@@ -75,17 +76,33 @@ func monitor(ctx *cli.Context) {
 
 	termui.UseTheme("helloworld")
 
+	rows := 5
+	cols := (len(monitored) + rows - 1) / rows
+	for i := 0; i < rows; i++ {
+		termui.Body.AddRows(termui.NewRow())
+	}
+	// Create each individual data chart
 	charts := make([]*termui.LineChart, len(monitored))
+	data := make([][]float64, len(monitored))
+	for i := 0; i < len(data); i++ {
+		data[i] = make([]float64, 512)
+	}
 	for i, metric := range monitored {
 		charts[i] = termui.NewLineChart()
-		charts[i].Border.Label = metric
+
 		charts[i].Data = make([]float64, 512)
 		charts[i].DataLabels = []string{""}
-		charts[i].Height = termui.TermHeight() / len(monitored)
+		charts[i].Height = termui.TermHeight() / rows
 		charts[i].AxesColor = termui.ColorWhite
 		charts[i].LineColor = termui.ColorGreen
+		charts[i].PaddingBottom = -1
 
-		termui.Body.AddRows(termui.NewRow(termui.NewCol(12, 0, charts[i])))
+		charts[i].Border.Label = metric
+		charts[i].Border.LabelFgColor = charts[i].Border.FgColor
+		charts[i].Border.FgColor = charts[i].Border.BgColor
+
+		row := termui.Body.Rows[i%rows]
+		row.Cols = append(row.Cols, termui.NewCol(12/cols, 0, charts[i]))
 	}
 	termui.Body.Align()
 	termui.Render(termui.Body)
@@ -100,7 +117,7 @@ func monitor(ctx *cli.Context) {
 			if event.Type == termui.EventResize {
 				termui.Body.Width = termui.TermWidth()
 				for _, chart := range charts {
-					chart.Height = termui.TermHeight() / len(monitored)
+					chart.Height = termui.TermHeight() / rows
 				}
 				termui.Body.Align()
 				termui.Render(termui.Body)
@@ -111,7 +128,8 @@ func monitor(ctx *cli.Context) {
 				utils.Fatalf("Failed to retrieve system metrics: %v", err)
 			}
 			for i, metric := range monitored {
-				charts[i].Data = append([]float64{value(metrics, metric)}, charts[i].Data[:len(charts[i].Data)-1]...)
+				data[i] = append([]float64{value(metrics, metric)}, data[i][:len(data[i])-1]...)
+				updateChart(metric, data[i], charts[i])
 			}
 			termui.Render(termui.Body)
 		}
@@ -177,4 +195,31 @@ func expandMetrics(metrics map[string]interface{}, path string) []string {
 		}
 	}
 	return list
+}
+
+// updateChart inserts a dataset into a line chart, scaling appropriately as to
+// not display weird labels, also updating the chart label accordingly.
+func updateChart(metric string, data []float64, chart *termui.LineChart) {
+	units := []string{"", "K", "M", "G", "T", "E", "P"}
+	colors := []termui.Attribute{termui.ColorBlue, termui.ColorCyan, termui.ColorGreen, termui.ColorYellow, termui.ColorRed, termui.ColorRed, termui.ColorRed}
+
+	// Find the maximum value and scale under 1K
+	high := data[0]
+	for _, value := range data[1:] {
+		high = math.Max(high, value)
+	}
+	unit, scale := 0, 1.0
+	for high >= 1000 {
+		high, unit, scale = high/1000, unit+1, scale*1000
+	}
+	// Update the chart's data points with the scaled values
+	for i, value := range data {
+		chart.Data[i] = value / scale
+	}
+	// Update the chart's label with the scale units
+	chart.Border.Label = metric
+	if unit > 0 {
+		chart.Border.Label += " [" + units[unit] + "]"
+	}
+	chart.LineColor = colors[unit]
 }
