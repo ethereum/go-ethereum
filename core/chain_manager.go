@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/hashicorp/golang-lru"
+	"github.com/rcrowley/go-metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -263,9 +264,7 @@ func (bc *ChainManager) setLastState() {
 func (bc *ChainManager) makeCache() {
 	bc.cache, _ = lru.New(blockCacheLimit)
 	// load in last `blockCacheLimit` - 1 blocks. Last block is the current.
-	ancestors := bc.GetAncestors(bc.currentBlock, blockCacheLimit-1)
-	ancestors = append(ancestors, bc.currentBlock)
-	for _, block := range ancestors {
+	for _, block := range bc.GetBlocksFromHash(bc.currentBlock.Hash(), blockCacheLimit) {
 		bc.cache.Add(block.Hash(), block)
 	}
 }
@@ -571,9 +570,6 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	defer close(nonceQuit)
 	defer self.flushQueuedBlocks()
 
-	defer func() {
-	}()
-
 	txcount := 0
 	for i, block := range chain {
 		if atomic.LoadInt32(&self.procInterrupt) == 1 {
@@ -683,7 +679,6 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			queue[i] = ChainSideEvent{block, logs}
 			queueEvent.sideCount++
 		}
-		// not in the canonical chain.
 		self.enqueueForWrite(block)
 		// Delete from future blocks
 		self.futureBlocks.Delete(block.Hash())
