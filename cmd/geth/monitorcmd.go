@@ -149,30 +149,37 @@ func resolveMetrics(metrics map[string]interface{}, patterns []string) []string 
 // resolveMetrics takes a single of input metric pattern, and resolves it to one
 // or more canonical metric names.
 func resolveMetric(metrics map[string]interface{}, pattern string, path string) []string {
-	var ok bool
+	results := []string{}
 
-	// Build up the canonical metric path
-	parts := strings.Split(pattern, "/")
-	for len(parts) > 1 {
-		if metrics, ok = metrics[parts[0]].(map[string]interface{}); !ok {
-			utils.Fatalf("Failed to retrieve system metrics: %s", path+parts[0])
+	// If a nested metric was requested, recurse optionally branching (via comma)
+	parts := strings.SplitN(pattern, "/", 2)
+	if len(parts) > 1 {
+		for _, variation := range strings.Split(parts[0], ",") {
+			if submetrics, ok := metrics[variation].(map[string]interface{}); !ok {
+				utils.Fatalf("Failed to retrieve system metrics: %s", path+variation)
+				return nil
+			} else {
+				results = append(results, resolveMetric(submetrics, parts[1], path+variation+"/")...)
+			}
 		}
-		path += parts[0] + "/"
-		parts = parts[1:]
+		return results
 	}
 	// Depending what the last link is, return or expand
-	switch metric := metrics[parts[0]].(type) {
-	case float64:
-		// Final metric value found, return as singleton
-		return []string{path + parts[0]}
+	for _, variation := range strings.Split(pattern, ",") {
+		switch metric := metrics[variation].(type) {
+		case float64:
+			// Final metric value found, return as singleton
+			results = append(results, path+variation)
 
-	case map[string]interface{}:
-		return expandMetrics(metric, path+parts[0]+"/")
+		case map[string]interface{}:
+			results = append(results, expandMetrics(metric, path+variation+"/")...)
 
-	default:
-		utils.Fatalf("Metric pattern resolved to unexpected type: %v", reflect.TypeOf(metric))
-		return nil
+		default:
+			utils.Fatalf("Metric pattern resolved to unexpected type: %v", reflect.TypeOf(metric))
+			return nil
+		}
 	}
+	return results
 }
 
 // expandMetrics expands the entire tree of metrics into a flat list of paths.
