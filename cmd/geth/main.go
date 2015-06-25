@@ -30,6 +30,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
@@ -42,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
+	"github.com/rcrowley/go-metrics"
 )
 
 const (
@@ -285,6 +287,28 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		}
 		return nil
 	}
+	// Start system runtime metrics collection
+	go func() {
+		used := metrics.GetOrRegisterMeter("system/memory/used", metrics.DefaultRegistry)
+		total := metrics.GetOrRegisterMeter("system/memory/total", metrics.DefaultRegistry)
+		mallocs := metrics.GetOrRegisterMeter("system/memory/mallocs", metrics.DefaultRegistry)
+		frees := metrics.GetOrRegisterMeter("system/memory/frees", metrics.DefaultRegistry)
+
+		stats := make([]*runtime.MemStats, 2)
+		for i := 0; i < len(stats); i++ {
+			stats[i] = new(runtime.MemStats)
+		}
+		for i := 1; ; i++ {
+			runtime.ReadMemStats(stats[i%2])
+
+			used.Mark(int64(stats[i%2].Alloc - stats[(i-1)%2].Alloc))
+			total.Mark(int64(stats[i%2].TotalAlloc - stats[(i-1)%2].TotalAlloc))
+			mallocs.Mark(int64(stats[i%2].Mallocs - stats[(i-1)%2].Mallocs))
+			frees.Mark(int64(stats[i%2].Frees - stats[(i-1)%2].Frees))
+
+			time.Sleep(3 * time.Second)
+		}
+	}()
 }
 
 func main() {
