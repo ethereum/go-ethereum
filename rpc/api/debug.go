@@ -193,11 +193,6 @@ func (self *debugApi) Metrics(req *shared.Request) (interface{}, error) {
 	format := func(total float64, rate float64) string {
 		return fmt.Sprintf("%s (%s/s)", round(total, 0), round(rate, 2))
 	}
-	// Create the percentile units
-	percentiles := make([]float64, 101)
-	for i := 0; i <= 100; i++ {
-		percentiles[i] = float64(i) / 100
-	}
 	// Iterate over all the metrics, and just dump for now
 	counters := make(map[string]interface{})
 	metrics.DefaultRegistry.Each(func(name string, metric interface{}) {
@@ -220,21 +215,23 @@ func (self *debugApi) Metrics(req *shared.Request) (interface{}, error) {
 					"AvgRate05Min": metric.Rate5(),
 					"AvgRate15Min": metric.Rate15(),
 					"MeanRate":     metric.RateMean(),
-					"Total":        float64(metric.Count()),
+					"Overall":      float64(metric.Count()),
 				}
 
 			case metrics.Timer:
-				ps := make(map[string]interface{})
-				for i, p := range metric.Percentiles(percentiles) {
-					ps[fmt.Sprintf("%d", i)] = p
-				}
 				root[name] = map[string]interface{}{
 					"AvgRate01Min": metric.Rate1(),
 					"AvgRate05Min": metric.Rate5(),
 					"AvgRate15Min": metric.Rate15(),
 					"MeanRate":     metric.RateMean(),
-					"Total":        float64(metric.Count()),
-					"Percentiles":  ps,
+					"Overall":      float64(metric.Count()),
+					"Percentiles": map[string]interface{}{
+						"5":  metric.Percentile(0.05),
+						"20": metric.Percentile(0.2),
+						"50": metric.Percentile(0.5),
+						"80": metric.Percentile(0.8),
+						"95": metric.Percentile(0.95),
+					},
 				}
 
 			default:
@@ -247,7 +244,7 @@ func (self *debugApi) Metrics(req *shared.Request) (interface{}, error) {
 					"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
 					"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
 					"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
-					"Total":    format(float64(metric.Count()), metric.RateMean()),
+					"Overall":  format(float64(metric.Count()), metric.RateMean()),
 				}
 
 			case metrics.Timer:
@@ -255,15 +252,15 @@ func (self *debugApi) Metrics(req *shared.Request) (interface{}, error) {
 					"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
 					"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
 					"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
-					"Total":    format(float64(metric.Count()), metric.RateMean()),
+					"Overall":  format(float64(metric.Count()), metric.RateMean()),
 					"Maximum":  time.Duration(metric.Max()).String(),
 					"Minimum":  time.Duration(metric.Min()).String(),
 					"Percentiles": map[string]interface{}{
+						"5":  time.Duration(metric.Percentile(0.05)).String(),
 						"20": time.Duration(metric.Percentile(0.2)).String(),
 						"50": time.Duration(metric.Percentile(0.5)).String(),
 						"80": time.Duration(metric.Percentile(0.8)).String(),
 						"95": time.Duration(metric.Percentile(0.95)).String(),
-						"99": time.Duration(metric.Percentile(0.99)).String(),
 					},
 				}
 

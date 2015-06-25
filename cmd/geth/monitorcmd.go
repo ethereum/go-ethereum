@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -72,15 +73,7 @@ func monitor(ctx *cli.Context) {
 	}
 	monitored := resolveMetrics(metrics, ctx.Args())
 	if len(monitored) == 0 {
-		list := []string{}
-		for _, metric := range expandMetrics(metrics, "") {
-			switch {
-			case strings.HasSuffix(metric, "/0"):
-				list = append(list, strings.Replace(metric, "/0", "/[0-100]", -1))
-			case !strings.Contains(metric, "Percentiles"):
-				list = append(list, metric)
-			}
-		}
+		list := expandMetrics(metrics, "")
 		sort.Strings(list)
 		utils.Fatalf("No metrics specified.\n\nAvailable:\n - %s", strings.Join(list, "\n - "))
 	}
@@ -116,11 +109,14 @@ func monitor(ctx *cli.Context) {
 	}
 	for i, metric := range monitored {
 		charts[i] = termui.NewLineChart()
+		if runtime.GOOS == "windows" {
+			charts[i].Mode = "dot"
+		}
 		charts[i].Data = make([]float64, 512)
 		charts[i].DataLabels = []string{""}
 		charts[i].Height = (termui.TermHeight() - footer.Height) / rows
 		charts[i].AxesColor = termui.ColorWhite
-		charts[i].PaddingBottom = -1
+		charts[i].PaddingBottom = -2
 
 		charts[i].Border.Label = metric
 		charts[i].Border.LabelFgColor = charts[i].Border.FgColor | termui.AttrBold
@@ -141,7 +137,7 @@ func monitor(ctx *cli.Context) {
 	for {
 		select {
 		case event := <-termui.EventCh():
-			if event.Type == termui.EventKey && event.Ch == 'q' {
+			if event.Type == termui.EventKey && event.Key == termui.KeyCtrlC {
 				return
 			}
 			if event.Type == termui.EventResize {
@@ -302,7 +298,7 @@ func updateChart(metric string, data []float64, chart *termui.LineChart, err err
 func updateFooter(ctx *cli.Context, err error, footer *termui.Par) {
 	// Generate the basic footer
 	refresh := time.Duration(ctx.Int(monitorCommandRefreshFlag.Name)) * time.Second
-	footer.Text = fmt.Sprintf("Press q to quit. Refresh interval: %v.", refresh)
+	footer.Text = fmt.Sprintf("Press Ctrl+C to quit. Refresh interval: %v.", refresh)
 	footer.TextFgColor = termui.Theme().ParTextFg | termui.AttrBold
 
 	// Append any encountered errors
