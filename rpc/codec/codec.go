@@ -12,7 +12,7 @@ type Codec int
 // (de)serialization support for rpc interface
 type ApiCoder interface {
 	// Parse message to request from underlying stream
-	ReadRequest() (*shared.Request, error)
+	ReadRequest() ([]*shared.Request, bool, error)
 	// Parse response message from underlying stream
 	ReadResponse() (interface{}, error)
 	// Encode response to encoded form in underlying stream
