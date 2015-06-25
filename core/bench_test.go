@@ -72,16 +72,24 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 	}
 }
 
+var (
+	ringKeys  = make([]*ecdsa.PrivateKey, 1000)
+	ringAddrs = make([]common.Address, len(ringKeys))
+)
+
+func init() {
+	ringKeys[0] = benchRootKey
+	ringAddrs[0] = benchRootAddr
+	for i := 1; i < len(ringKeys); i++ {
+		ringKeys[i], _ = crypto.GenerateKey()
+		ringAddrs[i] = crypto.PubkeyToAddress(ringKeys[i].PublicKey)
+	}
+}
+
 // genTxRing returns a block generator that sends ether in a ring
 // among n accounts. This is creates n entries in the state database
 // and fills the blocks with many small transactions.
 func genTxRing(naccounts int) func(int, *BlockGen) {
-	keys := make([]*ecdsa.PrivateKey, naccounts)
-	keys[0] = benchRootKey
-	for i := 1; i < naccounts; i++ {
-		keys[i], _ = crypto.GenerateKey()
-	}
-
 	from := 0
 	return func(i int, gen *BlockGen) {
 		gas := CalcGasLimit(gen.PrevBlock(i - 1))
@@ -91,9 +99,15 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 				break
 			}
 			to := (from + 1) % naccounts
-			fromaddr := crypto.PubkeyToAddress(keys[from].PublicKey)
-			toaddr := crypto.PubkeyToAddress(keys[to].PublicKey)
-			tx, _ := types.NewTransaction(gen.TxNonce(fromaddr), toaddr, benchRootFunds, params.TxGas, nil, nil).SignECDSA(keys[from])
+			tx := types.NewTransaction(
+				gen.TxNonce(ringAddrs[from]),
+				ringAddrs[to],
+				benchRootFunds,
+				params.TxGas,
+				nil,
+				nil,
+			)
+			tx, _ = tx.SignECDSA(ringKeys[from])
 			gen.AddTx(tx)
 			from = to
 		}
