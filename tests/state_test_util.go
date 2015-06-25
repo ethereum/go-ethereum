@@ -50,6 +50,13 @@ func runStateTests(tests map[string]VmTest, skipTests []string) error {
 	}
 
 	for name, test := range tests {
+		//vm.Debug = true
+		//vm.DisableSegmentation = true
+		/*
+			if name != "Call10" {
+				continue
+			}
+		*/
 		if skipTest[name] {
 			glog.Infoln("Skipping state test", name)
 			return nil

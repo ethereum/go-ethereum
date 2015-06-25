@@ -11,6 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var t int
+
 // Vm implements VirtualMachine
 type Vm struct {
 	env Environment
@@ -38,6 +40,13 @@ func New(env Environment) *Vm {
 func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
 	defer self.env.SetDepth(self.env.Depth() - 1)
+	defer func() {
+		if r := recover(); r != nil {
+			StdErrFormat(self.env.StructLogs())
+			ret = nil
+			err = fmt.Errorf("%v", r)
+		}
+	}()
 
 	var (
 		caller = context.caller
@@ -98,17 +107,14 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 			ret = context.Return(nil)
 		}
 
-		if csegment != nil && err != nil && csegment.cend == 0 {
-			// delete this tracking segment. We couldn't fully determine the stats
-			delete(csegments, csegment.cstart)
-		} else if csegment != nil && err == nil && csegment.cend == 0 {
-			csegment.cend = pc
-			csegment.ssize = int(math.Abs(math.Min(float64(stack.len()-csegment.ssize), 0)))
-		}
-
-		t, _ := segments.Get(codehash)
-		for _, segment := range t.(codeSegments) {
-			fmt.Println(segment)
+		if !DisableSegmentation && csegment != nil && csegment.cend == 0 {
+			if err != nil {
+				// delete this tracking segment. We couldn't fully determine the stats
+				delete(csegments, csegment.cstart)
+			} else {
+				csegment.cend = pc
+				csegment.ssize = int(math.Abs(math.Min(float64(stack.len()-csegment.ssize), 0)))
+			}
 		}
 	}()
 
@@ -124,27 +130,34 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 	}
 
 	for {
+		cost = new(big.Int)
 		// Get the current operation location of pc
 		op = context.GetOp(pc)
 		if !DisableSegmentation {
-			if isDynamic(op) && csegment != nil {
-				// end of segment bound
-				csegment.cend = ppc
-				csegment.next = pc
-				// write out the required required elements on the stack. i.e. the amount of items
-				// required outside of the segment itself.
-				// 0: P, 1
-				// 1: J, 2
-				// 2: D      -+
-				// 3: P, 2    |- M,0 = M,0 pushes 1. Requires 2. 1 outside bounds of M,0
-				// 4: ADD    -+
-				// 5: J, 2
-				csegment.ssize = int(math.Abs(math.Min(float64(stack.len()-csegment.ssize), 0)))
+			if isDynamic(op) {
+				//fmt.Println("encountered dyn")
+				if csegment != nil && csegment.cend == 0 {
+					//fmt.Println("closing segment with", op, "@", ppc, csegment.gas)
+					// mark end of segment bound
+					csegment.cend = ppc
+					// set the next op for continuation
+					csegment.next = pc
+					// write out the required required elements on the stack. i.e. the amount of items
+					// required outside of the segment itself.
+					// 0: P, 1
+					// 1: J, 2
+					// 2: D      -+
+					// 3: P, 2    |- M,0 = M,0 pushes 1. Requires 2. 1 outside bounds of M,0
+					// 4: ADD    -+
+					// 5: J, 2
+					csegment.ssize = int(math.Abs(math.Min(float64(stack.len()-csegment.ssize), 0)))
+				}
 				csegment = nil
 				nopay = 0
 			} else if csegment == nil && pc != 0 {
 				// check if a segment is available to us and set it.
 				if seg, ok := csegments[pc]; ok {
+					//fmt.Println(pc, "using seg", seg)
 					nopay = seg.cend
 
 					// make sure there's enough stack items to complete the segment
@@ -152,32 +165,45 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 						return context.Return(nil), err
 					}
 
+					cost.Set(seg.gas)
 					// use required gas for this segment
 					if !context.UseGas(seg.gas) {
 						context.UseGas(context.Gas)
 
 						return context.Return(nil), OutOfGasError{}
 					}
+					csegment = seg
 
-					for _, operation := range seg.ops {
-						operation.fn(stack, operation.data)
-					}
+					/*
+						for _, operation := range seg.ops {
+							operation.fn(stack, operation.data)
+						}
 
-					pc = seg.next
-					continue
+						pc = seg.next
+						continue
+					*/
 				} else {
+					//fmt.Println("creating", pc)
 					// allocate a new segment for tracking information
 					csegment = &segment{pc, 0, 0, 0, new(big.Int), stack.len(), nil}
 					csegments[pc] = csegment
+					nopay = 0
 				}
 			}
 		}
+		// set previous program counter
+		ppc = pc
 
+		//fmt.Println(pc, nopay, pc > nopay, pc == 0)
 		if pc > nopay || pc == 0 || DisableSegmentation {
 			// calculate the new memory size and gas price for the current executing opcode
 			newMemSize, cost, err = self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
 			if err != nil {
 				return nil, err
+			}
+
+			if csegment != nil {
+				csegment.gas.Add(csegment.gas, cost)
 			}
 
 			// Use the calculated gas. When insufficient gas is present, use all gas and return an
@@ -191,15 +217,10 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 			// Resize the memory calculated previously
 			mem.Resize(newMemSize.Uint64())
 
-			if csegment != nil {
-				csegment.msize = uint64(len(mem.store))
-				csegment.gas.Add(csegment.gas, cost)
-			}
 		}
 		// Add a log message
 		self.log(pc, op, context.Gas, cost, mem, stack, context, nil)
 
-		ppc = pc
 		// The base for all big integer arithmetic
 		base := new(big.Int)
 
@@ -227,12 +248,12 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		case MUL:
 			x, y := stack.pop(), stack.pop()
 
-			base.Mul(x, y)
+			res := new(big.Int).Mul(x, y)
 
-			U256(base)
+			U256(res)
 
 			// pop result back on the stack
-			stack.push(base)
+			stack.push(res)
 		case DIV:
 			x, y := stack.pop(), stack.pop()
 
@@ -625,6 +646,10 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		case MSIZE:
 			stack.push(big.NewInt(int64(mem.Len())))
 		case GAS:
+			if t > 1 {
+				//return context.Return(nil), nil
+			}
+			t++
 			stack.push(context.Gas)
 
 		case CREATE:
@@ -887,7 +912,9 @@ func (self *Vm) log(pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, st
 		mem := make([]byte, len(memory.Data()))
 		copy(mem, memory.Data())
 		stck := make([]*big.Int, len(stack.Data()))
-		copy(stck, stack.Data())
+		for i, item := range stack.Data() {
+			stck[i] = new(big.Int).Set(item)
+		}
 
 		object := context.self.(*state.StateObject)
 		storage := make(map[common.Hash][]byte)
@@ -895,7 +922,7 @@ func (self *Vm) log(pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, st
 			storage[common.BytesToHash(k)] = v
 		})
 
-		self.env.AddStructLog(StructLog{pc, op, new(big.Int).Set(gas), cost, mem, stck, storage, err})
+		self.env.AddStructLog(StructLog{pc, op, new(big.Int).Set(gas), new(big.Int).Set(cost), mem, stck, storage, err})
 	}
 }
 

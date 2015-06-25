@@ -110,8 +110,6 @@ func run(ctx *cli.Context) {
 	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)))
 
 	tstart := time.Now()
-
-	vmstart := time.Now()
 	ret, e := vmenv.Call(
 		sender,
 		receiver.Address(),
@@ -120,31 +118,11 @@ func run(ctx *cli.Context) {
 		common.Big(ctx.GlobalString(PriceFlag.Name)),
 		common.Big(ctx.GlobalString(ValueFlag.Name)),
 	)
+	vmdone := time.Since(tstart)
 
 	if e != nil {
 		fmt.Println(e)
 		os.Exit(1)
-	}
-	fmt.Println("no segmentation", time.Since(vmstart))
-
-	fmt.Println()
-
-	if !vm.DisableSegmentation {
-		vmstart = time.Now()
-		ret, e = vmenv.Call(
-			sender,
-			receiver.Address(),
-			common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)),
-			common.Big(ctx.GlobalString(GasFlag.Name)),
-			common.Big(ctx.GlobalString(PriceFlag.Name)),
-			common.Big(ctx.GlobalString(ValueFlag.Name)),
-		)
-
-		if e != nil {
-			fmt.Println(e)
-			os.Exit(1)
-		}
-		fmt.Println("with segmentation", time.Since(vmstart))
 	}
 
 	if ctx.GlobalBool(DumpFlag.Name) {
@@ -155,7 +133,7 @@ func run(ctx *cli.Context) {
 	if ctx.GlobalBool(SysStatFlag.Name) {
 		var mem runtime.MemStats
 		runtime.ReadMemStats(&mem)
-		fmt.Printf("vm took %v\n", time.Since(tstart))
+		fmt.Printf("vm took %v\n", vmdone)
 		fmt.Printf(`alloc:      %d
 tot alloc:  %d
 no. malloc: %d

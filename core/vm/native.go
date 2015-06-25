@@ -36,7 +36,7 @@ type segment struct {
 }
 
 func (c *segment) String() string {
-	return fmt.Sprintf("{%d %d %d %v}", c.cstart, c.cend, c.msize, c.gas)
+	return fmt.Sprintf("{start: %d end: %d ssize: %d gas: %v}", c.cstart, c.cend, c.ssize, c.gas)
 }
 
 // native operations
