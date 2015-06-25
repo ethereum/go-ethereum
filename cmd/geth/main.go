@@ -72,6 +72,7 @@ func init() {
 		upgradedbCommand,
 		removedbCommand,
 		dumpCommand,
+		monitorCommand,
 		{
 			Action: makedag,
 			Name:   "makedag",
@@ -214,16 +215,6 @@ The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console.
 This command allows to open a console on a running geth node.
-`,
-		},
-		{
-			Action: monitor,
-			Name:   "monitor",
-			Usage:  `Geth Monitor: node metrics monitoring and visualization`,
-			Description: `
-The Geth monitor is a tool to collect and visualize various internal metrics
-gathered by the node, supporting different chart types as well as the capacity
-to display multiple metrics simultaneously.
 `,
 		},
 		{

@@ -9,48 +9,61 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/gizak/termui"
 )
 
+var (
+	monitorCommandAttachFlag = cli.StringFlag{
+		Name:  "attach",
+		Value: "ipc:" + common.DefaultIpcPath(),
+		Usage: "IPC or RPC API endpoint to attach to",
+	}
+	monitorCommandRowsFlag = cli.IntFlag{
+		Name:  "rows",
+		Value: 5,
+		Usage: "Rows (maximum) to display the charts in",
+	}
+	monitorCommand = cli.Command{
+		Action: monitor,
+		Name:   "monitor",
+		Usage:  `Geth Monitor: node metrics monitoring and visualization`,
+		Description: `
+The Geth monitor is a tool to collect and visualize various internal metrics
+gathered by the node, supporting different chart types as well as the capacity
+to display multiple metrics simultaneously.
+`,
+		Flags: []cli.Flag{
+			monitorCommandAttachFlag,
+			monitorCommandRowsFlag,
+		},
+	}
+)
+
 // monitor starts a terminal UI based monitoring tool for the requested metrics.
 func monitor(ctx *cli.Context) {
 	var (
 		client comms.EthereumClient
-		args   []string
 		err    error
 	)
 	// Attach to an Ethereum node over IPC or RPC
-	if ctx.Args().Present() {
-		// Try to interpret the first parameter as an endpoint
-		client, err = comms.ClientFromEndpoint(ctx.Args().First(), codec.JSON)
-		if err == nil {
-			args = ctx.Args().Tail()
-		}
-	}
-	if !ctx.Args().Present() || err != nil {
-		// Either no args were given, or not endpoint, use defaults
-		cfg := comms.IpcConfig{
-			Endpoint: ctx.GlobalString(utils.IPCPathFlag.Name),
-		}
-		args = ctx.Args()
-		client, err = comms.NewIpcClient(cfg, codec.JSON)
-	}
-	if err != nil {
-		utils.Fatalf("Unable to attach to geth node - %v", err)
+	endpoint := ctx.String(monitorCommandAttachFlag.Name)
+	if client, err = comms.ClientFromEndpoint(endpoint, codec.JSON); err != nil {
+		utils.Fatalf("Unable to attach to geth node: %v", err)
 	}
 	defer client.Close()
 
 	xeth := rpc.NewXeth(client)
 
 	// Retrieve all the available metrics and resolve the user pattens
-	metrics, err := xeth.Call("debug_metrics", []interface{}{true})
+	metrics, err := retrieveMetrics(xeth)
 	if err != nil {
 		utils.Fatalf("Failed to retrieve system metrics: %v", err)
 	}
-	monitored := resolveMetrics(metrics, args)
+	monitored := resolveMetrics(metrics, ctx.Args())
 	sort.Strings(monitored)
 
 	// Create the access function and check that the metric exists
@@ -77,8 +90,8 @@ func monitor(ctx *cli.Context) {
 	termui.UseTheme("helloworld")
 
 	rows := len(monitored)
-	if rows > 5 {
-		rows = 5
+	if max := ctx.Int(monitorCommandRowsFlag.Name); rows > max {
+		rows = max
 	}
 	cols := (len(monitored) + rows - 1) / rows
 	for i := 0; i < rows; i++ {
@@ -126,7 +139,7 @@ func monitor(ctx *cli.Context) {
 				termui.Render(termui.Body)
 			}
 		case <-refresh:
-			metrics, err := xeth.Call("debug_metrics", []interface{}{true})
+			metrics, err := retrieveMetrics(xeth)
 			if err != nil {
 				utils.Fatalf("Failed to retrieve system metrics: %v", err)
 			}
@@ -137,6 +150,12 @@ func monitor(ctx *cli.Context) {
 			termui.Render(termui.Body)
 		}
 	}
+}
+
+// retrieveMetrics contacts the attached geth node and retrieves the entire set
+// of collected system metrics.
+func retrieveMetrics(xeth *rpc.Xeth) (map[string]interface{}, error) {
+	return xeth.Call("debug_metrics", []interface{}{true})
 }
 
 // resolveMetrics takes a list of input metric patterns, and resolves each to one
