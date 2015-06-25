@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/big"
 	"sort"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -105,8 +106,15 @@ type Block struct {
 	transactions Transactions
 	receipts     Receipts
 
-	Td         *big.Int
-	queued     bool // flag for blockpool to skip TD check
+	// caches
+	hash atomic.Value
+	size atomic.Value
+
+	// Td is used by package core to store the total difficulty
+	// of the chain up to and including the block.
+	Td *big.Int
+
+	// ReceivedAt is used by package eth to track block propagation time.
 	ReceivedAt time.Time
 }
 
@@ -223,10 +231,12 @@ func (b *Block) ValidateFields() error {
 
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock
+	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
 	b.header, b.uncles, b.transactions = eb.Header, eb.Uncles, eb.Txs
+	b.size.Store(common.StorageSize(rlp.ListSize(size)))
 	return nil
 }
 
@@ -295,8 +305,12 @@ func (b *Block) HashNoNonce() common.Hash {
 }
 
 func (b *Block) Size() common.StorageSize {
+	if size := b.size.Load(); size != nil {
+		return size.(common.StorageSize)
+	}
 	c := writeCounter(0)
 	rlp.Encode(&c, b)
+	b.size.Store(common.StorageSize(c))
 	return common.StorageSize(c)
 }
 
@@ -329,7 +343,12 @@ func (b *Block) WithMiningResult(nonce uint64, mixDigest common.Hash) *Block {
 // Implement pow.Block
 
 func (b *Block) Hash() common.Hash {
-	return b.header.Hash()
+	if hash := b.hash.Load(); hash != nil {
+		return hash.(common.Hash)
+	}
+	v := rlpHash(b.header)
+	b.hash.Store(v)
+	return v
 }
 
 func (b *Block) String() string {
