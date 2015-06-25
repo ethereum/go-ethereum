@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"sort"
@@ -20,12 +21,17 @@ var (
 	monitorCommandAttachFlag = cli.StringFlag{
 		Name:  "attach",
 		Value: "ipc:" + common.DefaultIpcPath(),
-		Usage: "IPC or RPC API endpoint to attach to",
+		Usage: "API endpoint to attach to",
 	}
 	monitorCommandRowsFlag = cli.IntFlag{
 		Name:  "rows",
 		Value: 5,
-		Usage: "Rows (maximum) to display the charts in",
+		Usage: "Maximum rows in the chart grid",
+	}
+	monitorCommandRefreshFlag = cli.IntFlag{
+		Name:  "refresh",
+		Value: 3,
+		Usage: "Refresh interval in seconds",
 	}
 	monitorCommand = cli.Command{
 		Action: monitor,
@@ -39,6 +45,7 @@ to display multiple metrics simultaneously.
 		Flags: []cli.Flag{
 			monitorCommandAttachFlag,
 			monitorCommandRowsFlag,
+			monitorCommandRefreshFlag,
 		},
 	}
 )
@@ -66,21 +73,6 @@ func monitor(ctx *cli.Context) {
 	monitored := resolveMetrics(metrics, ctx.Args())
 	sort.Strings(monitored)
 
-	// Create the access function and check that the metric exists
-	value := func(metrics map[string]interface{}, metric string) float64 {
-		parts, found := strings.Split(metric, "/"), true
-		for _, part := range parts[:len(parts)-1] {
-			metrics, found = metrics[part].(map[string]interface{})
-			if !found {
-				utils.Fatalf("Metric not found: %s", metric)
-			}
-		}
-		if v, ok := metrics[parts[len(parts)-1]].(float64); ok {
-			return v
-		}
-		utils.Fatalf("Metric not float64: %s", metric)
-		return 0
-	}
 	// Create and configure the chart UI defaults
 	if err := termui.Init(); err != nil {
 		utils.Fatalf("Unable to initialize terminal UI: %v", err)
@@ -98,6 +90,10 @@ func monitor(ctx *cli.Context) {
 		termui.Body.AddRows(termui.NewRow())
 	}
 	// Create each individual data chart
+	footer := termui.NewPar("")
+	footer.HasBorder = true
+	footer.Height = 3
+
 	charts := make([]*termui.LineChart, len(monitored))
 	data := make([][]float64, len(monitored))
 	for i := 0; i < len(data); i++ {
@@ -105,25 +101,28 @@ func monitor(ctx *cli.Context) {
 	}
 	for i, metric := range monitored {
 		charts[i] = termui.NewLineChart()
-
 		charts[i].Data = make([]float64, 512)
 		charts[i].DataLabels = []string{""}
-		charts[i].Height = termui.TermHeight() / rows
+		charts[i].Height = (termui.TermHeight() - footer.Height) / rows
 		charts[i].AxesColor = termui.ColorWhite
-		charts[i].LineColor = termui.ColorGreen
 		charts[i].PaddingBottom = -1
 
 		charts[i].Border.Label = metric
-		charts[i].Border.LabelFgColor = charts[i].Border.FgColor
+		charts[i].Border.LabelFgColor = charts[i].Border.FgColor | termui.AttrBold
 		charts[i].Border.FgColor = charts[i].Border.BgColor
 
 		row := termui.Body.Rows[i%rows]
 		row.Cols = append(row.Cols, termui.NewCol(12/cols, 0, charts[i]))
 	}
+	termui.Body.AddRows(termui.NewRow(termui.NewCol(12, 0, footer)))
 	termui.Body.Align()
 	termui.Render(termui.Body)
 
-	refresh := time.Tick(time.Second)
+	refreshCharts(xeth, monitored, data, charts, ctx, footer)
+	termui.Render(termui.Body)
+
+	// Watch for various system events, and periodically refresh the charts
+	refresh := time.Tick(time.Duration(ctx.Int(monitorCommandRefreshFlag.Name)) * time.Second)
 	for {
 		select {
 		case event := <-termui.EventCh():
@@ -133,20 +132,13 @@ func monitor(ctx *cli.Context) {
 			if event.Type == termui.EventResize {
 				termui.Body.Width = termui.TermWidth()
 				for _, chart := range charts {
-					chart.Height = termui.TermHeight() / rows
+					chart.Height = (termui.TermHeight() - footer.Height) / rows
 				}
 				termui.Body.Align()
 				termui.Render(termui.Body)
 			}
 		case <-refresh:
-			metrics, err := retrieveMetrics(xeth)
-			if err != nil {
-				utils.Fatalf("Failed to retrieve system metrics: %v", err)
-			}
-			for i, metric := range monitored {
-				data[i] = append([]float64{value(metrics, metric)}, data[i][:len(data[i])-1]...)
-				updateChart(metric, data[i], charts[i])
-			}
+			refreshCharts(xeth, monitored, data, charts, ctx, footer)
 			termui.Render(termui.Body)
 		}
 	}
@@ -226,12 +218,41 @@ func expandMetrics(metrics map[string]interface{}, path string) []string {
 	return list
 }
 
+// fetchMetric iterates over the metrics map and retrieves a specific one.
+func fetchMetric(metrics map[string]interface{}, metric string) float64 {
+	parts, found := strings.Split(metric, "/"), true
+	for _, part := range parts[:len(parts)-1] {
+		metrics, found = metrics[part].(map[string]interface{})
+		if !found {
+			return 0
+		}
+	}
+	if v, ok := metrics[parts[len(parts)-1]].(float64); ok {
+		return v
+	}
+	return 0
+}
+
+// refreshCharts retrieves a next batch of metrics, and inserts all the new
+// values into the active datasets and charts
+func refreshCharts(xeth *rpc.Xeth, metrics []string, data [][]float64, charts []*termui.LineChart, ctx *cli.Context, footer *termui.Par) {
+	values, err := retrieveMetrics(xeth)
+	for i, metric := range metrics {
+		data[i] = append([]float64{fetchMetric(values, metric)}, data[i][:len(data[i])-1]...)
+		updateChart(metric, data[i], charts[i], err)
+	}
+	updateFooter(ctx, err, footer)
+}
+
 // updateChart inserts a dataset into a line chart, scaling appropriately as to
 // not display weird labels, also updating the chart label accordingly.
-func updateChart(metric string, data []float64, chart *termui.LineChart) {
+func updateChart(metric string, data []float64, chart *termui.LineChart, err error) {
 	dataUnits := []string{"", "K", "M", "G", "T", "E"}
 	timeUnits := []string{"ns", "µs", "ms", "s", "ks", "ms"}
 	colors := []termui.Attribute{termui.ColorBlue, termui.ColorCyan, termui.ColorGreen, termui.ColorYellow, termui.ColorRed, termui.ColorRed}
+
+	// Extract only part of the data that's actually visible
+	data = data[:chart.Width*2]
 
 	// Find the maximum value and scale under 1K
 	high := data[0]
@@ -256,5 +277,22 @@ func updateChart(metric string, data []float64, chart *termui.LineChart) {
 	if len(units[unit]) > 0 {
 		chart.Border.Label += " [" + units[unit] + "]"
 	}
-	chart.LineColor = colors[unit]
+	chart.LineColor = colors[unit] | termui.AttrBold
+	if err != nil {
+		chart.LineColor = termui.ColorRed | termui.AttrBold
+	}
+}
+
+// updateFooter updates the footer contents based on any encountered errors.
+func updateFooter(ctx *cli.Context, err error, footer *termui.Par) {
+	// Generate the basic footer
+	refresh := time.Duration(ctx.Int(monitorCommandRefreshFlag.Name)) * time.Second
+	footer.Text = fmt.Sprintf("Press q to quit. Refresh interval: %v.", refresh)
+	footer.TextFgColor = termui.Theme().ParTextFg | termui.AttrBold
+
+	// Append any encountered errors
+	if err != nil {
+		footer.Text = fmt.Sprintf("Error: %v.", err)
+		footer.TextFgColor = termui.ColorRed | termui.AttrBold
+	}
 }
