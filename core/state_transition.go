@@ -203,14 +203,14 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 	sender, _ := self.From() // err checked in preCheck
 
 	// Pay intrinsic gas
-	if err = self.UseGas(IntrinsicGas(self.msg.Data())); err != nil {
+	if err = self.UseGas(IntrinsicGas(self.data)); err != nil {
 		return nil, nil, InvalidTxError(err)
 	}
 
 	vmenv := self.env
 	var ref vm.ContextRef
 	if MessageCreatesContract(msg) {
-		ret, err, ref = vmenv.Create(sender, self.msg.Data(), self.gas, self.gasPrice, self.value)
+		ret, err, ref = vmenv.Create(sender, self.data, self.gas, self.gasPrice, self.value)
 		if err == nil {
 			dataGas := big.NewInt(int64(len(ret)))
 			dataGas.Mul(dataGas, params.CreateDataGas)
@@ -224,7 +224,7 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), sender.Nonce()+1)
-		ret, err = vmenv.Call(sender, self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+		ret, err = vmenv.Call(sender, self.To().Address(), self.data, self.gas, self.gasPrice, self.value)
 	}
 
 	if err != nil && IsValueTransferErr(err) {
