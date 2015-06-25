@@ -85,7 +85,9 @@ func monitor(ctx *cli.Context) {
 		utils.Fatalf("No metrics specified.\n\nAvailable:\n - %s", strings.Join(list, "\n - "))
 	}
 	sort.Strings(monitored)
-
+	if cols := len(monitored) / ctx.Int(monitorCommandRowsFlag.Name); cols > 6 {
+		utils.Fatalf("Requested metrics (%d) spans more that 6 columns:\n - %s", len(monitored), strings.Join(monitored, "\n - "))
+	}
 	// Create and configure the chart UI defaults
 	if err := termui.Init(); err != nil {
 		utils.Fatalf("Unable to initialize terminal UI: %v", err)
