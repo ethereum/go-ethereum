@@ -47,7 +47,7 @@ func handle(conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 	codec := c.New(conn)
 
 	for {
-		req, err := codec.ReadRequest()
+		requests, isBatch, err := codec.ReadRequest()
 		if err == io.EOF {
 			codec.Close()
 			return
@@ -57,15 +57,35 @@ func handle(conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 			return
 		}
 
-		var rpcResponse interface{}
-		res, err := api.Execute(req)
+		if isBatch {
+			responses := make([]*interface{}, len(requests))
+			responseCount := 0
+			for _, req := range requests {
+				res, err := api.Execute(req)
+				if req.Id != nil {
+					rpcResponse := shared.NewRpcResponse(req.Id, req.Jsonrpc, res, err)
+					responses[responseCount] = rpcResponse
+					responseCount += 1
+				}
+			}
 
-		rpcResponse = shared.NewRpcResponse(req.Id, req.Jsonrpc, res, err)
-		err = codec.WriteResponse(rpcResponse)
-		if err != nil {
-			glog.V(logger.Error).Infof("comms send err - %v\n", err)
-			codec.Close()
-			return
+			err = codec.WriteResponse(responses[:responseCount])
+			if err != nil {
+				glog.V(logger.Error).Infof("comms send err - %v\n", err)
+				codec.Close()
+				return
+			}
+		} else {
+			var rpcResponse interface{}
+			res, err := api.Execute(requests[0])
+
+			rpcResponse = shared.NewRpcResponse(requests[0].Id, requests[0].Jsonrpc, res, err)
+			err = codec.WriteResponse(rpcResponse)
+			if err != nil {
+				glog.V(logger.Error).Infof("comms send err - %v\n", err)
+				codec.Close()
+				return
+			}
 		}
 	}
 }
