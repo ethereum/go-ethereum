@@ -16,6 +16,7 @@ type IpcConfig struct {
 
 type ipcClient struct {
 	endpoint string
+	c        net.Conn
 	codec    codec.Codec
 	coder    codec.ApiCoder
 }

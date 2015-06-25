@@ -2,28 +2,30 @@ package codec
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
+	"time"
 
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
 const (
-	MAX_REQUEST_SIZE = 1024 * 1024
+	MAX_REQUEST_SIZE  = 1024 * 1024
 	MAX_RESPONSE_SIZE = 1024 * 1024
 )
 
 // Json serialization support
 type JsonCodec struct {
-	c net.Conn
-	buffer []byte
+	c             net.Conn
+	buffer        []byte
 	bytesInBuffer int
 }
 
 // Create new JSON coder instance
 func NewJsonCoder(conn net.Conn) ApiCoder {
 	return &JsonCodec{
-		c: conn,
-		buffer: make([]byte, MAX_REQUEST_SIZE),
+		c:             conn,
+		buffer:        make([]byte, MAX_REQUEST_SIZE),
 		bytesInBuffer: 0,
 	}
 }
@@ -58,28 +60,40 @@ func (self *JsonCodec) ReadRequest() (requests []*shared.Request, isBatch bool, 
 }
 
 func (self *JsonCodec) ReadResponse() (interface{}, error) {
-	var err error
+	bytesInBuffer := 0
 	buf := make([]byte, MAX_RESPONSE_SIZE)
-	n, _ := self.c.Read(buf)
 
-	var failure shared.ErrorResponse
-	if err = json.Unmarshal(buf[:n], &failure); err == nil && failure.Error != nil {
-		return failure, nil
+	deadline := time.Now().Add(15 * time.Second)
+	self.c.SetDeadline(deadline)
+
+	for {
+		n, err := self.c.Read(buf[bytesInBuffer:])
+		if err != nil {
+			return nil, err
+		}
+		bytesInBuffer += n
+
+		var success shared.SuccessResponse
+		if err = json.Unmarshal(buf[:bytesInBuffer], &success); err == nil {
+			return success, nil
+		}
+
+		var failure shared.ErrorResponse
+		if err = json.Unmarshal(buf[:bytesInBuffer], &failure); err == nil && failure.Error != nil {
+			return failure, nil
+		}
 	}
 
-	var success shared.SuccessResponse
-	if err = json.Unmarshal(buf[:n], &success); err == nil {
-		return success, nil
-	}
-
-	return nil, err
+	self.c.Close()
+	return nil, fmt.Errorf("Unable to read response")
 }
 
-// Encode response to encoded form in underlying stream
+// Decode data
 func (self *JsonCodec) Decode(data []byte, msg interface{}) error {
 	return json.Unmarshal(data, msg)
 }
 
+// Encode message
 func (self *JsonCodec) Encode(msg interface{}) ([]byte, error) {
 	return json.Marshal(msg)
 }

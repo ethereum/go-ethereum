@@ -18,7 +18,7 @@ func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 		return nil, err
 	}
 
-	return &ipcClient{cfg.Endpoint, codec, codec.New(c)}, nil
+	return &ipcClient{cfg.Endpoint, c, codec, codec.New(c)}, nil
 }
 
 func (self *ipcClient) reconnect() error {
