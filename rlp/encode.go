@@ -5,11 +5,8 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+	"sync"
 )
-
-// TODO: put encbufs in a sync.Pool.
-//     Doing that requires zeroing the buffers after use.
-//     encReader will need to drop it's buffer when done.
 
 var (
 	// Common encoded values.
@@ -112,7 +109,9 @@ func Encode(w io.Writer, val interface{}) error {
 		// Avoid copying by writing to the outer encbuf directly.
 		return outer.encode(val)
 	}
-	eb := newencbuf()
+	eb := encbufPool.Get().(*encbuf)
+	eb.reset()
+	defer encbufPool.Put(eb)
 	if err := eb.encode(val); err != nil {
 		return err
 	}
@@ -122,7 +121,9 @@ func Encode(w io.Writer, val interface{}) error {
 // EncodeBytes returns the RLP encoding of val.
 // Please see the documentation of Encode for the encoding rules.
 func EncodeToBytes(val interface{}) ([]byte, error) {
-	eb := newencbuf()
+	eb := encbufPool.Get().(*encbuf)
+	eb.reset()
+	defer encbufPool.Put(eb)
 	if err := eb.encode(val); err != nil {
 		return nil, err
 	}
@@ -135,7 +136,8 @@ func EncodeToBytes(val interface{}) ([]byte, error) {
 //
 // Please see the documentation of Encode for the encoding rules.
 func EncodeToReader(val interface{}) (size int, r io.Reader, err error) {
-	eb := newencbuf()
+	eb := encbufPool.Get().(*encbuf)
+	eb.reset()
 	if err := eb.encode(val); err != nil {
 		return 0, nil, err
 	}
@@ -182,8 +184,19 @@ func puthead(buf []byte, smalltag, largetag byte, size uint64) int {
 	}
 }
 
-func newencbuf() *encbuf {
-	return &encbuf{sizebuf: make([]byte, 9)}
+// encbufs are pooled.
+var encbufPool = sync.Pool{
+	New: func() interface{} { return &encbuf{sizebuf: make([]byte, 9)} },
+}
+
+func (w *encbuf) reset() {
+	w.lhsize = 0
+	if w.str != nil {
+		w.str = w.str[:0]
+	}
+	if w.lheads != nil {
+		w.lheads = w.lheads[:0]
+	}
 }
 
 // encbuf implements io.Writer so it can be passed it into EncodeRLP.
@@ -295,6 +308,8 @@ type encReader struct {
 func (r *encReader) Read(b []byte) (n int, err error) {
 	for {
 		if r.piece = r.next(); r.piece == nil {
+			encbufPool.Put(r.buf)
+			r.buf = nil
 			return n, io.EOF
 		}
 		nn := copy(b[n:], r.piece)
@@ -313,6 +328,9 @@ func (r *encReader) Read(b []byte) (n int, err error) {
 // it returns nil at EOF.
 func (r *encReader) next() []byte {
 	switch {
+	case r.buf == nil:
+		return nil
+
 	case r.piece != nil:
 		// There is still data available for reading.
 		return r.piece
