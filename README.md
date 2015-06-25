@@ -44,11 +44,10 @@ Executables
 Go Ethereum comes with several wrappers/executables found in 
 [the `cmd` directory](https://github.com/ethereum/go-ethereum/tree/develop/cmd):
 
-* `mist` Official Ethereum Browser (ethereum GUI client)
 * `geth` Ethereum CLI (ethereum command line interface client)
 * `bootnode` runs a bootstrap node for the Discovery Protocol
-* `ethtest` test tool which runs with the [tests](https://github.com/ethereum/testes) suite: 
-  `cat file | ethtest`.
+* `ethtest` test tool which runs with the [tests](https://github.com/ethereum/tests) suite: 
+  `/path/to/test.json > ethtest --test BlockTests --stdin`.
 * `evm` is a generic Ethereum Virtual Machine: `evm -code 60ff60ff -gas
   10000 -price 0 -dump`. See `-h` for a detailed description.
 * `disasm` disassembles EVM code: `echo "6001" | disasm`
@@ -57,7 +56,7 @@ Go Ethereum comes with several wrappers/executables found in
 Command line options
 ====================
 
-Both `mist` and `geth` can be configured via command line options, environment variables and config files.
+`geth` can be configured via command line options, environment variables and config files.
 
 To get the options available:
 
