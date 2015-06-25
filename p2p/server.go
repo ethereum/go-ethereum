@@ -548,9 +548,11 @@ func (srv *Server) listenLoop() {
 		if err != nil {
 			return
 		}
-		glog.V(logger.Debug).Infof("Accepted conn %v\n", fd.RemoteAddr())
+		mfd := newMeteredConn(fd, true)
+
+		glog.V(logger.Debug).Infof("Accepted conn %v\n", mfd.RemoteAddr())
 		go func() {
-			srv.setupConn(fd, inboundConn, nil)
+			srv.setupConn(mfd, inboundConn, nil)
 			slots <- struct{}{}
 		}()
 	}

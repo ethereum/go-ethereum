@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/rcrowley/go-metrics"
 )
 
 var (
@@ -27,6 +28,8 @@ var (
 
 	blockHashPre = []byte("block-hash-")
 	blockNumPre  = []byte("block-num-")
+
+	blockInsertTimer = metrics.GetOrRegisterTimer("core/BlockInsertions", metrics.DefaultRegistry)
 )
 
 const (
@@ -118,7 +121,6 @@ func NewChainManager(genesis *types.Block, blockDb, stateDb common.Database, pow
 		cache:        NewBlockCache(blockCacheLimit),
 		pow:          pow,
 	}
-
 	// Check the genesis block given to the chain manager. If the genesis block mismatches block number 0
 	// throw an error. If no block or the same block's found continue.
 	if g := bc.GetBlockByNumber(0); g != nil && g.Hash() != genesis.Hash() {
@@ -691,7 +693,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		self.futureBlocks.Delete(block.Hash())
 
 		stats.processed++
-
+		blockInsertTimer.UpdateSince(bstart)
 	}
 
 	if (stats.queued > 0 || stats.processed > 0 || stats.ignored > 0) && bool(glog.V(logger.Info)) {

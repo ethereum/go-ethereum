@@ -30,6 +30,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
@@ -42,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
+	"github.com/rcrowley/go-metrics"
 )
 
 const (
@@ -72,6 +74,7 @@ func init() {
 		upgradedbCommand,
 		removedbCommand,
 		dumpCommand,
+		monitorCommand,
 		{
 			Action: makedag,
 			Name:   "makedag",
@@ -284,6 +287,28 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		}
 		return nil
 	}
+	// Start system runtime metrics collection
+	go func() {
+		allocs := metrics.GetOrRegisterMeter("system/memory/allocs", metrics.DefaultRegistry)
+		frees := metrics.GetOrRegisterMeter("system/memory/frees", metrics.DefaultRegistry)
+		inuse := metrics.GetOrRegisterMeter("system/memory/inuse", metrics.DefaultRegistry)
+		pauses := metrics.GetOrRegisterMeter("system/memory/pauses", metrics.DefaultRegistry)
+
+		stats := make([]*runtime.MemStats, 2)
+		for i := 0; i < len(stats); i++ {
+			stats[i] = new(runtime.MemStats)
+		}
+		for i := 1; ; i++ {
+			runtime.ReadMemStats(stats[i%2])
+
+			allocs.Mark(int64(stats[i%2].Mallocs - stats[(i-1)%2].Mallocs))
+			frees.Mark(int64(stats[i%2].Frees - stats[(i-1)%2].Frees))
+			inuse.Mark(int64(stats[i%2].Alloc - stats[(i-1)%2].Alloc))
+			pauses.Mark(int64(stats[i%2].PauseTotalNs - stats[(i-1)%2].PauseTotalNs))
+
+			time.Sleep(3 * time.Second)
+		}
+	}()
 }
 
 func main() {

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/whisper"
+	"github.com/rcrowley/go-metrics"
 )
 
 const (
@@ -248,13 +249,34 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, fmt.Errorf("blockchain db err: %v", err)
 	}
+	if db, ok := blockDb.(*ethdb.LDBDatabase); ok {
+		db.GetTimer = metrics.GetOrRegisterTimer("eth/db/block/Gets", metrics.DefaultRegistry)
+		db.PutTimer = metrics.GetOrRegisterTimer("eth/db/block/Puts", metrics.DefaultRegistry)
+		db.MissMeter = metrics.GetOrRegisterMeter("eth/db/block/Misses", metrics.DefaultRegistry)
+		db.ReadMeter = metrics.GetOrRegisterMeter("eth/db/block/Reads", metrics.DefaultRegistry)
+		db.WriteMeter = metrics.GetOrRegisterMeter("eth/db/block/Writes", metrics.DefaultRegistry)
+	}
 	stateDb, err := newdb(filepath.Join(config.DataDir, "state"))
 	if err != nil {
 		return nil, fmt.Errorf("state db err: %v", err)
 	}
+	if db, ok := stateDb.(*ethdb.LDBDatabase); ok {
+		db.GetTimer = metrics.GetOrRegisterTimer("eth/db/state/Gets", metrics.DefaultRegistry)
+		db.PutTimer = metrics.GetOrRegisterTimer("eth/db/state/Puts", metrics.DefaultRegistry)
+		db.MissMeter = metrics.GetOrRegisterMeter("eth/db/state/Misses", metrics.DefaultRegistry)
+		db.ReadMeter = metrics.GetOrRegisterMeter("eth/db/state/Reads", metrics.DefaultRegistry)
+		db.WriteMeter = metrics.GetOrRegisterMeter("eth/db/state/Writes", metrics.DefaultRegistry)
+	}
 	extraDb, err := newdb(filepath.Join(config.DataDir, "extra"))
 	if err != nil {
 		return nil, fmt.Errorf("extra db err: %v", err)
+	}
+	if db, ok := extraDb.(*ethdb.LDBDatabase); ok {
+		db.GetTimer = metrics.GetOrRegisterTimer("eth/db/extra/Gets", metrics.DefaultRegistry)
+		db.PutTimer = metrics.GetOrRegisterTimer("eth/db/extra/Puts", metrics.DefaultRegistry)
+		db.MissMeter = metrics.GetOrRegisterMeter("eth/db/extra/Misses", metrics.DefaultRegistry)
+		db.ReadMeter = metrics.GetOrRegisterMeter("eth/db/extra/Reads", metrics.DefaultRegistry)
+		db.WriteMeter = metrics.GetOrRegisterMeter("eth/db/extra/Writes", metrics.DefaultRegistry)
 	}
 	nodeDb := filepath.Join(config.DataDir, "nodes")
 
