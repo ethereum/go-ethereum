@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -20,6 +21,10 @@ func IsContractAddr(addr []byte) bool {
 
 type Transaction struct {
 	data txdata
+	// caches
+	hash atomic.Value
+	size atomic.Value
+	from atomic.Value
 }
 
 type txdata struct {
@@ -88,7 +93,12 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 }
 
 func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
-	return s.Decode(&tx.data)
+	_, size, _ := s.Kind()
+	err := s.Decode(&tx.data)
+	if err == nil {
+		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
+	}
+	return err
 }
 
 func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Payload) }
@@ -107,6 +117,9 @@ func (tx *Transaction) To() *common.Address {
 }
 
 func (tx *Transaction) Hash() common.Hash {
+	if hash := tx.hash.Load(); hash != nil {
+		return hash.(common.Hash)
+	}
 	v := rlpHash([]interface{}{
 		tx.data.AccountNonce,
 		tx.data.Price,
@@ -115,21 +128,31 @@ func (tx *Transaction) Hash() common.Hash {
 		tx.data.Amount,
 		tx.data.Payload,
 	})
+	tx.hash.Store(v)
 	return v
 }
 
 func (tx *Transaction) Size() common.StorageSize {
-	v, _, _ := rlp.EncodeToReader(&tx.data)
-	return common.StorageSize(v)
+	if size := tx.size.Load(); size != nil {
+		return size.(common.StorageSize)
+	}
+	c := writeCounter(0)
+	rlp.Encode(&c, &tx.data)
+	tx.size.Store(common.StorageSize(c))
+	return common.StorageSize(c)
 }
 
 func (tx *Transaction) From() (common.Address, error) {
-	pubkey, err := tx.PublicKey()
+	if from := tx.from.Load(); from != nil {
+		return from.(common.Address), nil
+	}
+	pubkey, err := tx.publicKey()
 	if err != nil {
 		return common.Address{}, err
 	}
 	var addr common.Address
 	copy(addr[:], crypto.Sha3(pubkey[1:])[12:])
+	tx.from.Store(addr)
 	return addr, nil
 }
 
@@ -144,7 +167,7 @@ func (tx *Transaction) SignatureValues() (v byte, r *big.Int, s *big.Int) {
 	return tx.data.V, new(big.Int).Set(tx.data.R), new(big.Int).Set(tx.data.S)
 }
 
-func (tx *Transaction) PublicKey() ([]byte, error) {
+func (tx *Transaction) publicKey() ([]byte, error) {
 	if !crypto.ValidateSignatureValues(tx.data.V, tx.data.R, tx.data.S) {
 		return nil, errors.New("invalid v, r, s values")
 	}
