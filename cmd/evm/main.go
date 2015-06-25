@@ -129,21 +129,23 @@ func run(ctx *cli.Context) {
 
 	fmt.Println()
 
-	vmstart = time.Now()
-	ret, e = vmenv.Call(
-		sender,
-		receiver.Address(),
-		common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)),
-		common.Big(ctx.GlobalString(GasFlag.Name)),
-		common.Big(ctx.GlobalString(PriceFlag.Name)),
-		common.Big(ctx.GlobalString(ValueFlag.Name)),
-	)
+	if !vm.DisableSegmentation {
+		vmstart = time.Now()
+		ret, e = vmenv.Call(
+			sender,
+			receiver.Address(),
+			common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)),
+			common.Big(ctx.GlobalString(GasFlag.Name)),
+			common.Big(ctx.GlobalString(PriceFlag.Name)),
+			common.Big(ctx.GlobalString(ValueFlag.Name)),
+		)
 
-	if e != nil {
-		fmt.Println(e)
-		os.Exit(1)
+		if e != nil {
+			fmt.Println(e)
+			os.Exit(1)
+		}
+		fmt.Println("with segmentation", time.Since(vmstart))
 	}
-	fmt.Println("with segmentation", time.Since(vmstart))
 
 	if ctx.GlobalBool(DumpFlag.Name) {
 		fmt.Println(string(statedb.Dump()))

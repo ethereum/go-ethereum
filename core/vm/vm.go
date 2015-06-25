@@ -9,45 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/hashicorp/golang-lru"
 )
-
-type operation struct {
-	fn   func(*stack, []byte)
-	data []byte
-}
-
-func Add(s *stack, data []byte) {
-	s.push(new(big.Int).Add(s.pop(), s.pop()))
-}
-
-func Push(s *stack, data []byte) {
-	s.push(common.BytesToBig(data))
-}
-
-type codeSegments map[uint64]*segment
-
-var segments *lru.Cache
-
-func init() {
-	segments, _ = lru.New(256)
-}
-
-var DisableSegmentation bool
-
-type segment struct {
-	cstart, cend, next uint64
-	msize              uint64
-	gas                *big.Int
-
-	ssize int
-
-	ops []operation
-}
-
-func (c *segment) String() string {
-	return fmt.Sprintf("{%d %d %d %v}", c.cstart, c.cend, c.msize, c.gas)
-}
 
 // Vm implements VirtualMachine
 type Vm struct {
@@ -164,48 +126,50 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 	for {
 		// Get the current operation location of pc
 		op = context.GetOp(pc)
-		if isDynamic(op) && csegment != nil && !DisableSegmentation {
-			// end of segment bound
-			csegment.cend = ppc
-			csegment.next = pc
-			// write out the required required elements on the stack. i.e. the amount of items
-			// required outside of the segment itself.
-			// 0: P, 1
-			// 1: J, 2
-			// 2: D      -+
-			// 3: P, 2    |- M,0 = M,0 pushes 1. Requires 2. 1 outside bounds of M,0
-			// 4: ADD    -+
-			// 5: J, 2
-			csegment.ssize = int(math.Abs(math.Min(float64(stack.len()-csegment.ssize), 0)))
-			csegment = nil
-			nopay = 0
-		} else if csegment == nil && pc != 0 && !DisableSegmentation {
-			// check if a segment is available to us and set it.
-			if seg, ok := csegments[pc]; ok {
-				nopay = seg.cend
+		if !DisableSegmentation {
+			if isDynamic(op) && csegment != nil {
+				// end of segment bound
+				csegment.cend = ppc
+				csegment.next = pc
+				// write out the required required elements on the stack. i.e. the amount of items
+				// required outside of the segment itself.
+				// 0: P, 1
+				// 1: J, 2
+				// 2: D      -+
+				// 3: P, 2    |- M,0 = M,0 pushes 1. Requires 2. 1 outside bounds of M,0
+				// 4: ADD    -+
+				// 5: J, 2
+				csegment.ssize = int(math.Abs(math.Min(float64(stack.len()-csegment.ssize), 0)))
+				csegment = nil
+				nopay = 0
+			} else if csegment == nil && pc != 0 {
+				// check if a segment is available to us and set it.
+				if seg, ok := csegments[pc]; ok {
+					nopay = seg.cend
 
-				// make sure there's enough stack items to complete the segment
-				if err := stack.require(seg.ssize); err != nil {
-					return context.Return(nil), err
+					// make sure there's enough stack items to complete the segment
+					if err := stack.require(seg.ssize); err != nil {
+						return context.Return(nil), err
+					}
+
+					// use required gas for this segment
+					if !context.UseGas(seg.gas) {
+						context.UseGas(context.Gas)
+
+						return context.Return(nil), OutOfGasError{}
+					}
+
+					for _, operation := range seg.ops {
+						operation.fn(stack, operation.data)
+					}
+
+					pc = seg.next
+					continue
+				} else {
+					// allocate a new segment for tracking information
+					csegment = &segment{pc, 0, 0, 0, new(big.Int), stack.len(), nil}
+					csegments[pc] = csegment
 				}
-
-				// use required gas for this segment
-				if !context.UseGas(seg.gas) {
-					context.UseGas(context.Gas)
-
-					return context.Return(nil), OutOfGasError{}
-				}
-
-				for _, operation := range seg.ops {
-					operation.fn(stack, operation.data)
-				}
-
-				pc = seg.next
-				continue
-			} else {
-				// allocate a new segment for tracking information
-				csegment = &segment{pc, 0, 0, 0, new(big.Int), stack.len(), nil}
-				csegments[pc] = csegment
 			}
 		}
 
@@ -247,7 +211,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 
 			U256(base)
 
-			addop(operation{Add, nil})
+			addop(operation{opAdd, nil})
 
 			// pop result back on the stack
 			stack.push(base)
@@ -339,6 +303,8 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 			U256(base)
 
 			stack.push(base)
+
+			addop(operation{opExp, nil})
 		case SIGNEXTEND:
 			back := stack.pop()
 			if back.Cmp(big.NewInt(31)) < 0 {
@@ -582,7 +548,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 			size := uint64(op - PUSH1 + 1)
 			byts := getData(code, new(big.Int).SetUint64(pc+1), new(big.Int).SetUint64(size))
 
-			addop(operation{Push, byts})
+			addop(operation{opPush, byts})
 
 			// push value to stack
 			stack.push(common.Bytes2Big(byts))
