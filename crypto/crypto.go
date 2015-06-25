@@ -258,19 +258,31 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	return key, err
 }
 
-func aesCBCDecrypt(key []byte, cipherText []byte, iv []byte) (plainText []byte, err error) {
+// AES-128 is selected due to size of encryptKey
+func aesCTRXOR(key, inText, iv []byte) ([]byte, error) {
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {
-		return plainText, err
+		return nil, err
+	}
+	stream := cipher.NewCTR(aesBlock, iv)
+	outText := make([]byte, len(inText))
+	stream.XORKeyStream(outText, inText)
+	return outText, err
+}
+
+func aesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
+	aesBlock, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
 	}
 	decrypter := cipher.NewCBCDecrypter(aesBlock, iv)
-	paddedPlainText := make([]byte, len(cipherText))
-	decrypter.CryptBlocks(paddedPlainText, cipherText)
-	plainText = PKCS7Unpad(paddedPlainText)
-	if plainText == nil {
+	paddedPlaintext := make([]byte, len(cipherText))
+	decrypter.CryptBlocks(paddedPlaintext, cipherText)
+	plaintext := PKCS7Unpad(paddedPlaintext)
+	if plaintext == nil {
 		err = errors.New("Decryption failed: PKCS7Unpad failed after AES decryption")
 	}
-	return plainText, err
+	return plaintext, err
 }
 
 // From https://leanpub.com/gocrypto/read#leanpub-auto-block-cipher-modes
