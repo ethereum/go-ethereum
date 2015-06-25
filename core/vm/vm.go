@@ -2,6 +2,7 @@ package vm
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -11,14 +12,17 @@ import (
 	"github.com/hashicorp/golang-lru"
 )
 
-type segment struct {
-	cstart, cend uint64
-	msize        uint64
-	gas          *big.Int
+type operation struct {
+	fn   func(*stack, []byte)
+	data []byte
 }
 
-func (c *segment) String() string {
-	return fmt.Sprintf("{%d %d %d %v}", c.cstart, c.cend, c.msize, c.gas)
+func Add(s *stack, data []byte) {
+	s.push(new(big.Int).Add(s.pop(), s.pop()))
+}
+
+func Push(s *stack, data []byte) {
+	s.push(common.BytesToBig(data))
 }
 
 type codeSegments map[uint64]*segment
@@ -27,6 +31,22 @@ var segments *lru.Cache
 
 func init() {
 	segments, _ = lru.New(256)
+}
+
+var DisableSegmentation bool
+
+type segment struct {
+	cstart, cend, next uint64
+	msize              uint64
+	gas                *big.Int
+
+	ssize int
+
+	ops []operation
+}
+
+func (c *segment) String() string {
+	return fmt.Sprintf("{%d %d %d %v}", c.cstart, c.cend, c.msize, c.gas)
 }
 
 // Vm implements VirtualMachine
@@ -70,12 +90,17 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		statedb  = self.env.State()     // current state
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC to be uint256. Pratically much less so feasible.
-		pc           = uint64(0)  // program counter
-		ppc          = uint64(0)  // previous program counter
-		csegment     *segment     // current code segment
-		csegments    codeSegments // program segments
-		nopay        uint64       = 0
-		disableOptim bool
+		pc        = uint64(0)  // program counter
+		ppc       = uint64(0)  // previous program counter
+		csegment  *segment     // current code segment
+		csegments codeSegments // program segments
+		nopay     uint64       = 0
+
+		addop = func(op operation) {
+			if csegment != nil && !DisableSegmentation {
+				csegment.ops = append(csegment.ops, op)
+			}
+		}
 
 		// jump evaluates and checks whether the given jump destination is a valid one
 		// if valid move the `pc` otherwise return an error.
@@ -116,6 +141,12 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 			delete(csegments, csegment.cstart)
 		} else if csegment != nil && err == nil && csegment.cend == 0 {
 			csegment.cend = pc
+			csegment.ssize = int(math.Abs(math.Min(float64(stack.len()-csegment.ssize), 0)))
+		}
+
+		t, _ := segments.Get(codehash)
+		for _, segment := range t.(codeSegments) {
+			fmt.Println(segment)
 		}
 	}()
 
@@ -133,26 +164,52 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 	for {
 		// Get the current operation location of pc
 		op = context.GetOp(pc)
-		if isDynamic(op) && csegment != nil {
+		if isDynamic(op) && csegment != nil && !DisableSegmentation {
+			// end of segment bound
 			csegment.cend = ppc
+			csegment.next = pc
+			// write out the required required elements on the stack. i.e. the amount of items
+			// required outside of the segment itself.
+			// 0: P, 1
+			// 1: J, 2
+			// 2: D      -+
+			// 3: P, 2    |- M,0 = M,0 pushes 1. Requires 2. 1 outside bounds of M,0
+			// 4: ADD    -+
+			// 5: J, 2
+			csegment.ssize = int(math.Abs(math.Min(float64(stack.len()-csegment.ssize), 0)))
 			csegment = nil
 			nopay = 0
-		} else if csegment == nil && pc != 0 {
-			// allocate a new segment for tracking information
-			csegment = &segment{pc, 0, 0, new(big.Int)}
-			csegments[pc] = csegment
-		} else {
-			if segment, ok := csegments[pc]; ok && !disableOptim {
-				nopay = segment.cend
-				if !context.UseGas(segment.gas) {
+		} else if csegment == nil && pc != 0 && !DisableSegmentation {
+			// check if a segment is available to us and set it.
+			if seg, ok := csegments[pc]; ok {
+				nopay = seg.cend
+
+				// make sure there's enough stack items to complete the segment
+				if err := stack.require(seg.ssize); err != nil {
+					return context.Return(nil), err
+				}
+
+				// use required gas for this segment
+				if !context.UseGas(seg.gas) {
 					context.UseGas(context.Gas)
 
 					return context.Return(nil), OutOfGasError{}
 				}
+
+				for _, operation := range seg.ops {
+					operation.fn(stack, operation.data)
+				}
+
+				pc = seg.next
+				continue
+			} else {
+				// allocate a new segment for tracking information
+				csegment = &segment{pc, 0, 0, 0, new(big.Int), stack.len(), nil}
+				csegments[pc] = csegment
 			}
 		}
 
-		if pc > nopay || pc == 0 || disableOptim {
+		if pc > nopay || pc == 0 || DisableSegmentation {
 			// calculate the new memory size and gas price for the current executing opcode
 			newMemSize, cost, err = self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
 			if err != nil {
@@ -189,6 +246,8 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 			base.Add(x, y)
 
 			U256(base)
+
+			addop(operation{Add, nil})
 
 			// pop result back on the stack
 			stack.push(base)
@@ -522,6 +581,9 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
 			size := uint64(op - PUSH1 + 1)
 			byts := getData(code, new(big.Int).SetUint64(pc+1), new(big.Int).SetUint64(size))
+
+			addop(operation{Push, byts})
+
 			// push value to stack
 			stack.push(common.Bytes2Big(byts))
 			pc += size

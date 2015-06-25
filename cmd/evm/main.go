@@ -44,6 +44,10 @@ var (
 		Name:  "debug",
 		Usage: "output full trace logs",
 	}
+	SegmentationFlag = cli.BoolFlag{
+		Name:  "nosegmentation",
+		Usage: "Disabled VM segmentation",
+	}
 	CodeFlag = cli.StringFlag{
 		Name:  "code",
 		Usage: "EVM code",
@@ -81,6 +85,7 @@ func init() {
 	app = utils.NewApp("0.2", "the evm command line interface")
 	app.Flags = []cli.Flag{
 		DebugFlag,
+		SegmentationFlag,
 		SysStatFlag,
 		CodeFlag,
 		GasFlag,
@@ -94,6 +99,7 @@ func init() {
 
 func run(ctx *cli.Context) {
 	vm.Debug = ctx.GlobalBool(DebugFlag.Name)
+	vm.DisableSegmentation = ctx.GlobalBool(SegmentationFlag.Name)
 
 	db, _ := ethdb.NewMemDatabase()
 	statedb := state.New(common.Hash{}, db)
@@ -119,7 +125,9 @@ func run(ctx *cli.Context) {
 		fmt.Println(e)
 		os.Exit(1)
 	}
-	fmt.Println("no analysis", time.Since(vmstart))
+	fmt.Println("no segmentation", time.Since(vmstart))
+
+	fmt.Println()
 
 	vmstart = time.Now()
 	ret, e = vmenv.Call(
@@ -135,7 +143,7 @@ func run(ctx *cli.Context) {
 		fmt.Println(e)
 		os.Exit(1)
 	}
-	fmt.Println("with analysis", time.Since(vmstart))
+	fmt.Println("with segmentation", time.Since(vmstart))
 
 	if ctx.GlobalBool(DumpFlag.Name) {
 		fmt.Println(string(statedb.Dump()))
@@ -156,12 +164,6 @@ num gc:     %d
 	}
 
 	fmt.Printf("OUT: 0x%x\n", ret)
-
-	for codehash, chunks := range vm.Chunks {
-		for _, chunk := range chunks {
-			fmt.Printf("%x => %v\n", codehash, chunk)
-		}
-	}
 }
 
 func main() {
