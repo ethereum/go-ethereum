@@ -77,12 +77,19 @@ func MessageGasValue(msg Message) *big.Int {
 // with the given data.
 func IntrinsicGas(data []byte) *big.Int {
 	igas := new(big.Int).Set(params.TxGas)
-	for _, byt := range data {
-		if byt != 0 {
-			igas.Add(igas, params.TxDataNonZeroGas)
-		} else {
-			igas.Add(igas, params.TxDataZeroGas)
+	if len(data) > 0 {
+		var nz int64
+		for _, byt := range data {
+			if byt != 0 {
+				nz++
+			}
 		}
+		m := big.NewInt(nz)
+		m.Mul(m, params.TxDataNonZeroGas)
+		igas.Add(igas, m)
+		m.SetInt64(int64(len(data)) - nz)
+		m.Mul(m, params.TxDataZeroGas)
+		igas.Add(igas, m)
 	}
 	return igas
 }
