@@ -43,7 +43,7 @@ type EthereumClient interface {
 	SupportedModules() (map[string]string, error)
 }
 
-func handle(conn net.Conn, api shared.EthereumApi, c codec.Codec) {
+func handle(id int, conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 	codec := c.New(conn)
 
 	for {
@@ -52,8 +52,8 @@ func handle(conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 			codec.Close()
 			return
 		} else if err != nil {
-			glog.V(logger.Error).Infof("comms recv err - %v\n", err)
 			codec.Close()
+			glog.V(logger.Debug).Infof("Closed IPC Conn %06d recv err - %v\n", id, err)
 			return
 		}
 
@@ -71,8 +71,8 @@ func handle(conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 
 			err = codec.WriteResponse(responses[:responseCount])
 			if err != nil {
-				glog.V(logger.Error).Infof("comms send err - %v\n", err)
 				codec.Close()
+				glog.V(logger.Debug).Infof("Closed IPC Conn %06d send err - %v\n", id, err)
 				return
 			}
 		} else {
@@ -82,8 +82,8 @@ func handle(conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 			rpcResponse = shared.NewRpcResponse(requests[0].Id, requests[0].Jsonrpc, res, err)
 			err = codec.WriteResponse(rpcResponse)
 			if err != nil {
-				glog.V(logger.Error).Infof("comms send err - %v\n", err)
 				codec.Close()
+				glog.V(logger.Debug).Infof("Closed IPC Conn %06d send err - %v\n", id, err)
 				return
 			}
 		}

@@ -667,13 +667,16 @@ func startIpc(cfg IpcConfig, codec codec.Codec, api shared.EthereumApi) error {
 				glog.V(logger.Error).Infof("Error accepting ipc connection - %v\n", err)
 				continue
 			}
-            
-            go handle(conn, api, codec)
-        }
-        
-        os.Remove(cfg.Endpoint)
-    }()
-    
+
+			id := newIpcConnId()
+			glog.V(logger.Debug).Infof("New IPC connection with id %06d started\n", id)
+
+			go handle(id, conn, api, codec)
+		}
+
+		os.Remove(cfg.Endpoint)
+	}()
+
 	glog.V(logger.Info).Infof("IPC service started (%s)\n", cfg.Endpoint)
 
 	return nil
