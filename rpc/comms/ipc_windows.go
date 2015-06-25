@@ -640,7 +640,7 @@ func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 		return nil, err
 	}
 
-	return &ipcClient{cfg.Endpoint, codec, codec.New(c)}, nil
+	return &ipcClient{cfg.Endpoint, c, codec, codec.New(c)}, nil
 }
 
 func (self *ipcClient) reconnect() error {
@@ -667,36 +667,13 @@ func startIpc(cfg IpcConfig, codec codec.Codec, api shared.EthereumApi) error {
 				glog.V(logger.Error).Infof("Error accepting ipc connection - %v\n", err)
 				continue
 			}
-
-			go func(conn net.Conn) {
-				codec := codec.New(conn)
-
-				for {
-					req, err := codec.ReadRequest()
-					if err == io.EOF {
-						codec.Close()
-						return
-					} else if err != nil {
-						glog.V(logger.Error).Infof("IPC recv err - %v\n", err)
-						codec.Close()
-						return
-					}
-
-					var rpcResponse interface{}
-					res, err := api.Execute(req)
-
-					rpcResponse = shared.NewRpcResponse(req.Id, req.Jsonrpc, res, err)
-					err = codec.WriteResponse(rpcResponse)
-					if err != nil {
-						glog.V(logger.Error).Infof("IPC send err - %v\n", err)
-						codec.Close()
-						return
-					}
-				}
-			}(conn)
-		}
-	}()
-
+            
+            go handle(conn, api, codec)
+        }
+        
+        os.Remove(cfg.Endpoint)
+    }()
+    
 	glog.V(logger.Info).Infof("IPC service started (%s)\n", cfg.Endpoint)
 
 	return nil
