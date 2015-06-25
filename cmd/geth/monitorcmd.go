@@ -71,6 +71,19 @@ func monitor(ctx *cli.Context) {
 		utils.Fatalf("Failed to retrieve system metrics: %v", err)
 	}
 	monitored := resolveMetrics(metrics, ctx.Args())
+	if len(monitored) == 0 {
+		list := []string{}
+		for _, metric := range expandMetrics(metrics, "") {
+			switch {
+			case strings.HasSuffix(metric, "/0"):
+				list = append(list, strings.Replace(metric, "/0", "/[0-100]", -1))
+			case !strings.Contains(metric, "Percentiles"):
+				list = append(list, metric)
+			}
+		}
+		sort.Strings(list)
+		utils.Fatalf("No metrics specified.\n\nAvailable:\n - %s", strings.Join(list, "\n - "))
+	}
 	sort.Strings(monitored)
 
 	// Create and configure the chart UI defaults
