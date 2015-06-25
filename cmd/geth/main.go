@@ -289,10 +289,10 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 	}
 	// Start system runtime metrics collection
 	go func() {
-		used := metrics.GetOrRegisterMeter("system/memory/used", metrics.DefaultRegistry)
-		total := metrics.GetOrRegisterMeter("system/memory/total", metrics.DefaultRegistry)
-		mallocs := metrics.GetOrRegisterMeter("system/memory/mallocs", metrics.DefaultRegistry)
+		allocs := metrics.GetOrRegisterMeter("system/memory/allocs", metrics.DefaultRegistry)
 		frees := metrics.GetOrRegisterMeter("system/memory/frees", metrics.DefaultRegistry)
+		inuse := metrics.GetOrRegisterMeter("system/memory/inuse", metrics.DefaultRegistry)
+		pauses := metrics.GetOrRegisterMeter("system/memory/pauses", metrics.DefaultRegistry)
 
 		stats := make([]*runtime.MemStats, 2)
 		for i := 0; i < len(stats); i++ {
@@ -301,10 +301,10 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		for i := 1; ; i++ {
 			runtime.ReadMemStats(stats[i%2])
 
-			used.Mark(int64(stats[i%2].Alloc - stats[(i-1)%2].Alloc))
-			total.Mark(int64(stats[i%2].TotalAlloc - stats[(i-1)%2].TotalAlloc))
-			mallocs.Mark(int64(stats[i%2].Mallocs - stats[(i-1)%2].Mallocs))
+			allocs.Mark(int64(stats[i%2].Mallocs - stats[(i-1)%2].Mallocs))
 			frees.Mark(int64(stats[i%2].Frees - stats[(i-1)%2].Frees))
+			inuse.Mark(int64(stats[i%2].Alloc - stats[(i-1)%2].Alloc))
+			pauses.Mark(int64(stats[i%2].PauseTotalNs - stats[(i-1)%2].PauseTotalNs))
 
 			time.Sleep(3 * time.Second)
 		}

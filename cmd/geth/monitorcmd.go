@@ -282,7 +282,7 @@ func updateChart(metric string, data []float64, chart *termui.LineChart, err err
 	chart.Border.Label = metric
 
 	units := dataUnits
-	if strings.Contains(metric, "Percentiles") {
+	if strings.Contains(metric, "/Percentiles/") || strings.Contains(metric, "/pauses/") {
 		units = timeUnits
 	}
 	if len(units[unit]) > 0 {
