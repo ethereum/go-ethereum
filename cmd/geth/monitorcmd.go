@@ -103,33 +103,20 @@ func monitor(ctx *cli.Context) {
 	footer.Height = 3
 
 	charts := make([]*termui.LineChart, len(monitored))
+	units := make([]int, len(monitored))
 	data := make([][]float64, len(monitored))
 	for i := 0; i < len(data); i++ {
 		data[i] = make([]float64, 512)
 	}
-	for i, metric := range monitored {
-		charts[i] = termui.NewLineChart()
-		if runtime.GOOS == "windows" {
-			charts[i].Mode = "dot"
-		}
-		charts[i].Data = make([]float64, 512)
-		charts[i].DataLabels = []string{""}
-		charts[i].Height = (termui.TermHeight() - footer.Height) / rows
-		charts[i].AxesColor = termui.ColorWhite
-		charts[i].PaddingBottom = -2
-
-		charts[i].Border.Label = metric
-		charts[i].Border.LabelFgColor = charts[i].Border.FgColor | termui.AttrBold
-		charts[i].Border.FgColor = charts[i].Border.BgColor
-
+	for i := 0; i < len(monitored); i++ {
+		charts[i] = createChart((termui.TermHeight() - footer.Height) / rows)
 		row := termui.Body.Rows[i%rows]
 		row.Cols = append(row.Cols, termui.NewCol(12/cols, 0, charts[i]))
 	}
 	termui.Body.AddRows(termui.NewRow(termui.NewCol(12, 0, footer)))
-	termui.Body.Align()
-	termui.Render(termui.Body)
 
-	refreshCharts(xeth, monitored, data, charts, ctx, footer)
+	refreshCharts(xeth, monitored, data, units, charts, ctx, footer)
+	termui.Body.Align()
 	termui.Render(termui.Body)
 
 	// Watch for various system events, and periodically refresh the charts
@@ -149,7 +136,9 @@ func monitor(ctx *cli.Context) {
 				termui.Render(termui.Body)
 			}
 		case <-refresh:
-			refreshCharts(xeth, monitored, data, charts, ctx, footer)
+			if refreshCharts(xeth, monitored, data, units, charts, ctx, footer) {
+				termui.Body.Align()
+			}
 			termui.Render(termui.Body)
 		}
 	}
@@ -246,18 +235,21 @@ func fetchMetric(metrics map[string]interface{}, metric string) float64 {
 
 // refreshCharts retrieves a next batch of metrics, and inserts all the new
 // values into the active datasets and charts
-func refreshCharts(xeth *rpc.Xeth, metrics []string, data [][]float64, charts []*termui.LineChart, ctx *cli.Context, footer *termui.Par) {
+func refreshCharts(xeth *rpc.Xeth, metrics []string, data [][]float64, units []int, charts []*termui.LineChart, ctx *cli.Context, footer *termui.Par) (realign bool) {
 	values, err := retrieveMetrics(xeth)
 	for i, metric := range metrics {
 		data[i] = append([]float64{fetchMetric(values, metric)}, data[i][:len(data[i])-1]...)
-		updateChart(metric, data[i], charts[i], err)
+		if updateChart(metric, data[i], &units[i], charts[i], err) {
+			realign = true
+		}
 	}
 	updateFooter(ctx, err, footer)
+	return
 }
 
 // updateChart inserts a dataset into a line chart, scaling appropriately as to
 // not display weird labels, also updating the chart label accordingly.
-func updateChart(metric string, data []float64, chart *termui.LineChart, err error) {
+func updateChart(metric string, data []float64, base *int, chart *termui.LineChart, err error) (realign bool) {
 	dataUnits := []string{"", "K", "M", "G", "T", "E"}
 	timeUnits := []string{"ns", "µs", "ms", "s", "ks", "ms"}
 	colors := []termui.Attribute{termui.ColorBlue, termui.ColorCyan, termui.ColorGreen, termui.ColorYellow, termui.ColorRed, termui.ColorRed}
@@ -274,17 +266,20 @@ func updateChart(metric string, data []float64, chart *termui.LineChart, err err
 	for high >= 1000 {
 		high, unit, scale = high/1000, unit+1, scale*1000
 	}
+	// If the unit changes, re-create the chart (hack to set max height...)
+	if unit != *base {
+		realign, *base, *chart = true, unit, *createChart(chart.Height)
+	}
 	// Update the chart's data points with the scaled values
 	for i, value := range data {
 		chart.Data[i] = value / scale
 	}
 	// Update the chart's label with the scale units
-	chart.Border.Label = metric
-
 	units := dataUnits
 	if strings.Contains(metric, "/Percentiles/") || strings.Contains(metric, "/pauses/") {
 		units = timeUnits
 	}
+	chart.Border.Label = metric
 	if len(units[unit]) > 0 {
 		chart.Border.Label += " [" + units[unit] + "]"
 	}
@@ -292,6 +287,25 @@ func updateChart(metric string, data []float64, chart *termui.LineChart, err err
 	if err != nil {
 		chart.LineColor = termui.ColorRed | termui.AttrBold
 	}
+	return
+}
+
+// createChart creates an empty line chart with the default configs.
+func createChart(height int) *termui.LineChart {
+	chart := termui.NewLineChart()
+	if runtime.GOOS == "windows" {
+		chart.Mode = "dot"
+	}
+	chart.Data = make([]float64, 512)
+	chart.DataLabels = []string{""}
+	chart.Height = height
+	chart.AxesColor = termui.ColorWhite
+	chart.PaddingBottom = -2
+
+	chart.Border.LabelFgColor = chart.Border.FgColor | termui.AttrBold
+	chart.Border.FgColor = chart.Border.BgColor
+
+	return chart
 }
 
 // updateFooter updates the footer contents based on any encountered errors.
