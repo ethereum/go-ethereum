@@ -105,9 +105,6 @@ func monitor(ctx *cli.Context) {
 	charts := make([]*termui.LineChart, len(monitored))
 	units := make([]int, len(monitored))
 	data := make([][]float64, len(monitored))
-	for i := 0; i < len(data); i++ {
-		data[i] = make([]float64, 512)
-	}
 	for i := 0; i < len(monitored); i++ {
 		charts[i] = createChart((termui.TermHeight() - footer.Height) / rows)
 		row := termui.Body.Rows[i%rows]
@@ -238,7 +235,11 @@ func fetchMetric(metrics map[string]interface{}, metric string) float64 {
 func refreshCharts(xeth *rpc.Xeth, metrics []string, data [][]float64, units []int, charts []*termui.LineChart, ctx *cli.Context, footer *termui.Par) (realign bool) {
 	values, err := retrieveMetrics(xeth)
 	for i, metric := range metrics {
-		data[i] = append([]float64{fetchMetric(values, metric)}, data[i][:len(data[i])-1]...)
+		if len(data) < 512 {
+			data[i] = append([]float64{fetchMetric(values, metric)}, data[i]...)
+		} else {
+			data[i] = append([]float64{fetchMetric(values, metric)}, data[i][:len(data[i])-1]...)
+		}
 		if updateChart(metric, data[i], &units[i], charts[i], err) {
 			realign = true
 		}
@@ -255,12 +256,16 @@ func updateChart(metric string, data []float64, base *int, chart *termui.LineCha
 	colors := []termui.Attribute{termui.ColorBlue, termui.ColorCyan, termui.ColorGreen, termui.ColorYellow, termui.ColorRed, termui.ColorRed}
 
 	// Extract only part of the data that's actually visible
-	data = data[:chart.Width*2]
-
+	if chart.Width*2 < len(data) {
+		data = data[:chart.Width*2]
+	}
 	// Find the maximum value and scale under 1K
-	high := data[0]
-	for _, value := range data[1:] {
-		high = math.Max(high, value)
+	high := 0.0
+	if len(data) > 0 {
+		high = data[0]
+		for _, value := range data[1:] {
+			high = math.Max(high, value)
+		}
 	}
 	unit, scale := 0, 1.0
 	for high >= 1000 {
@@ -271,6 +276,10 @@ func updateChart(metric string, data []float64, base *int, chart *termui.LineCha
 		realign, *base, *chart = true, unit, *createChart(chart.Height)
 	}
 	// Update the chart's data points with the scaled values
+	if cap(chart.Data) < len(data) {
+		chart.Data = make([]float64, len(data))
+	}
+	chart.Data = chart.Data[:len(data)]
 	for i, value := range data {
 		chart.Data[i] = value / scale
 	}
@@ -296,7 +305,6 @@ func createChart(height int) *termui.LineChart {
 	if runtime.GOOS == "windows" {
 		chart.Mode = "dot"
 	}
-	chart.Data = make([]float64, 512)
 	chart.DataLabels = []string{""}
 	chart.Height = height
 	chart.AxesColor = termui.ColorWhite
