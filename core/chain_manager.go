@@ -60,7 +60,9 @@ func CalcTD(block, parent *types.Block) *big.Int {
 	if parent == nil {
 		return block.Difficulty()
 	}
-	return new(big.Int).Add(parent.Td, block.Header().Difficulty)
+	d := block.Difficulty()
+	d.Add(d, parent.Td)
+	return d
 }
 
 // CalcGasLimit computes the gas limit of the next block after parent.
@@ -463,26 +465,6 @@ func (self *ChainManager) GetUnclesInChain(block *types.Block, length int) (uncl
 // assumes that the `mu` mutex is held!
 func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
 	bc.td = new(big.Int).Set(td)
-}
-
-func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
-	parent := self.GetBlock(block.Header().ParentHash)
-	if parent == nil {
-		return nil, fmt.Errorf("Unable to calculate total diff without known parent %x", block.Header().ParentHash)
-	}
-
-	parentTd := parent.Td
-
-	uncleDiff := new(big.Int)
-	for _, uncle := range block.Uncles() {
-		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
-	}
-
-	td := new(big.Int)
-	td = td.Add(parentTd, uncleDiff)
-	td = td.Add(td, block.Header().Difficulty)
-
-	return td, nil
 }
 
 func (bc *ChainManager) Stop() {
