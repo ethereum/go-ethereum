@@ -38,7 +38,8 @@ type peer struct {
 
 	rw p2p.MsgReadWriter
 
-	protv, netid int
+	version int // Protocol version negotiated
+	network int // Network ID being on
 
 	id string
 
@@ -53,7 +54,7 @@ type peer struct {
 	blockHashes *set.Set
 }
 
-func newPeer(protv, netid int, genesis, head common.Hash, td *big.Int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
+func newPeer(version, network int, genesis, head common.Hash, td *big.Int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	id := p.ID()
 
 	return &peer{
@@ -62,8 +63,8 @@ func newPeer(protv, netid int, genesis, head common.Hash, td *big.Int, p *p2p.Pe
 		genesis:     genesis,
 		ourHash:     head,
 		ourTd:       td,
-		protv:       protv,
-		netid:       netid,
+		version:     version,
+		network:     network,
 		id:          fmt.Sprintf("%x", id[:8]),
 		txHashes:    set.New(),
 		blockHashes: set.New(),
@@ -104,46 +105,58 @@ func (p *peer) SetTd(td *big.Int) {
 }
 
 // sendTransactions sends transactions to the peer and includes the hashes
-// in it's tx hash set for future reference. The tx hash will allow the
-// manager to check whether the peer has already received this particular
-// transaction
+// in its transaction hash set for future reference.
 func (p *peer) sendTransactions(txs types.Transactions) error {
+	propTxnOutPacketsMeter.Mark(1)
 	for _, tx := range txs {
+		propTxnOutTrafficMeter.Mark(tx.Size().Int64())
 		p.txHashes.Add(tx.Hash())
 	}
-
 	return p2p.Send(p.rw, TxMsg, txs)
 }
 
+// sendBlockHashes sends a batch of known hashes to the remote peer.
 func (p *peer) sendBlockHashes(hashes []common.Hash) error {
+	reqHashOutPacketsMeter.Mark(1)
+	reqHashOutTrafficMeter.Mark(int64(32 * len(hashes)))
+
 	return p2p.Send(p.rw, BlockHashesMsg, hashes)
 }
 
+// sendBlocks sends a batch of blocks to the remote peer.
 func (p *peer) sendBlocks(blocks []*types.Block) error {
+	reqBlockOutPacketsMeter.Mark(1)
+	for _, block := range blocks {
+		reqBlockOutTrafficMeter.Mark(block.Size().Int64())
+	}
 	return p2p.Send(p.rw, BlocksMsg, blocks)
 }
 
+// sendNewBlockHashes announces the availability of a number of blocks through
+// a hash notification.
 func (p *peer) sendNewBlockHashes(hashes []common.Hash) error {
+	propHashOutPacketsMeter.Mark(1)
+	propHashOutTrafficMeter.Mark(int64(32 * len(hashes)))
+
 	for _, hash := range hashes {
 		p.blockHashes.Add(hash)
 	}
 	return p2p.Send(p.rw, NewBlockHashesMsg, hashes)
 }
 
+// sendNewBlock propagates an entire block to a remote peer.
 func (p *peer) sendNewBlock(block *types.Block) error {
-	p.blockHashes.Add(block.Hash())
+	propBlockOutPacketsMeter.Mark(1)
+	propBlockOutTrafficMeter.Mark(block.Size().Int64())
 
+	p.blockHashes.Add(block.Hash())
 	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, block.Td})
 }
 
-func (p *peer) sendTransaction(tx *types.Transaction) error {
-	p.txHashes.Add(tx.Hash())
-
-	return p2p.Send(p.rw, TxMsg, []*types.Transaction{tx})
-}
-
+// requestHashes fetches a batch of hashes from a peer, starting at from, going
+// towards the genesis block.
 func (p *peer) requestHashes(from common.Hash) error {
-	glog.V(logger.Debug).Infof("[%s] fetching hashes (%d) %x...\n", p.id, downloader.MaxHashFetch, from[:4])
+	glog.V(logger.Debug).Infof("Peer [%s] fetching hashes (%d) %x...\n", p.id, downloader.MaxHashFetch, from[:4])
 	return p2p.Send(p.rw, GetBlockHashesMsg, getBlockHashesMsgData{from, uint64(downloader.MaxHashFetch)})
 }
 
@@ -156,8 +169,8 @@ func (p *peer) handleStatus() error {
 	errc := make(chan error, 1)
 	go func() {
 		errc <- p2p.Send(p.rw, StatusMsg, &statusMsgData{
-			ProtocolVersion: uint32(p.protv),
-			NetworkId:       uint32(p.netid),
+			ProtocolVersion: uint32(p.version),
+			NetworkId:       uint32(p.network),
 			TD:              p.ourTd,
 			CurrentBlock:    p.ourHash,
 			GenesisBlock:    p.genesis,
@@ -185,12 +198,12 @@ func (p *peer) handleStatus() error {
 		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", status.GenesisBlock, p.genesis)
 	}
 
-	if int(status.NetworkId) != p.netid {
-		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, p.netid)
+	if int(status.NetworkId) != p.network {
+		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, p.network)
 	}
 
-	if int(status.ProtocolVersion) != p.protv {
-		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, p.protv)
+	if int(status.ProtocolVersion) != p.version {
+		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, p.version)
 	}
 	// Set the total difficulty of the peer
 	p.td = status.TD
@@ -198,6 +211,13 @@ func (p *peer) handleStatus() error {
 	p.head = status.CurrentBlock
 
 	return <-errc
+}
+
+// String implements fmt.Stringer.
+func (p *peer) String() string {
+	return fmt.Sprintf("Peer %s [%s]", p.id,
+		fmt.Sprintf("eth/%2d", p.version),
+	)
 }
 
 // peerSet represents the collection of active peers currently participating in
