@@ -7,11 +7,15 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// Supported versions of the eth protocol (first is primary).
+var ProtocolVersions = []uint{61, 60}
+
+// Number of implemented message corresponding to different protocol versions.
+var ProtocolLengths = []uint64{9, 8}
+
 const (
-	ProtocolVersion    = 60
 	NetworkId          = 0
-	ProtocolLength     = uint64(8)
-	ProtocolMaxMsgSize = 10 * 1024 * 1024
+	ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 )
 
 // eth protocol message codes
@@ -24,6 +28,7 @@ const (
 	GetBlocksMsg
 	BlocksMsg
 	NewBlockMsg
+	BlockHashesFromNumbers
 )
 
 type errCode int

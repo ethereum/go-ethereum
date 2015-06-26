@@ -49,7 +49,7 @@ type ProtocolManager struct {
 	fetcher        *fetcher.Fetcher
 	peers          *peerSet
 
-	SubProtocol p2p.Protocol
+	SubProtocols []p2p.Protocol
 
 	eventMux      *event.TypeMux
 	txSub         event.Subscription
@@ -68,8 +68,8 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager) *ProtocolManager {
-	// Create the protocol manager and initialize peer handlers
+func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager) *ProtocolManager {
+	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		eventMux:  mux,
 		txpool:    txpool,
@@ -79,15 +79,21 @@ func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpo
 		txsyncCh:  make(chan *txsync),
 		quitSync:  make(chan struct{}),
 	}
-	manager.SubProtocol = p2p.Protocol{
-		Name:    "eth",
-		Version: uint(protocolVersion),
-		Length:  ProtocolLength,
-		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			peer := manager.newPeer(protocolVersion, networkId, p, rw)
-			manager.newPeerCh <- peer
-			return manager.handle(peer)
-		},
+	// Initiate a sub-protocol for every implemented version we can handle
+	manager.SubProtocols = make([]p2p.Protocol, len(ProtocolVersions))
+	for i := 0; i < len(manager.SubProtocols); i++ {
+		version := ProtocolVersions[i]
+
+		manager.SubProtocols[i] = p2p.Protocol{
+			Name:    "eth",
+			Version: version,
+			Length:  ProtocolLengths[i],
+			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+				peer := manager.newPeer(int(version), networkId, p, rw)
+				manager.newPeerCh <- peer
+				return manager.handle(peer)
+			},
+		}
 	}
 	// Construct the different synchronisation mechanisms
 	manager.downloader = downloader.New(manager.eventMux, manager.chainman.HasBlock, manager.chainman.GetBlock, manager.chainman.InsertChain, manager.removePeer)

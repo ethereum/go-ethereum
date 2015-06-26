@@ -82,11 +82,6 @@ var (
 		Usage: "Data directory to be used",
 		Value: DirectoryString{common.DefaultDataDir()},
 	}
-	ProtocolVersionFlag = cli.IntFlag{
-		Name:  "protocolversion",
-		Usage: "ETH protocol version (integer)",
-		Value: eth.ProtocolVersion,
-	}
 	NetworkIdFlag = cli.IntFlag{
 		Name:  "networkid",
 		Usage: "Network Id (integer)",
@@ -359,7 +354,6 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	return &eth.Config{
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 ctx.GlobalString(DataDirFlag.Name),
-		ProtocolVersion:         ctx.GlobalInt(ProtocolVersionFlag.Name),
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
 		SkipBcVersionCheck:      false,
