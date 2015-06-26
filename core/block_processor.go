@@ -81,9 +81,8 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	// Update the state with pending changes
 	statedb.Update()
 
-	cumulative := new(big.Int).Set(usedGas.Add(usedGas, gas))
-	receipt := types.NewReceipt(statedb.Root().Bytes(), cumulative)
-
+	usedGas.Add(usedGas, gas)
+	receipt := types.NewReceipt(statedb.Root().Bytes(), usedGas)
 	logs := statedb.GetLogs(tx.Hash())
 	receipt.SetLogs(logs)
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
@@ -260,26 +259,28 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	return state.Logs(), nil
 }
 
+var (
+	big8  = big.NewInt(8)
+	big32 = big.NewInt(32)
+)
+
 // AccumulateRewards credits the coinbase of the given block with the
 // mining reward. The total reward consists of the static block reward
-// and rewards for included uncles.
+// and rewards for included uncles. The coinbase of each uncle block is
+// also rewarded.
 func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*types.Header) {
 	reward := new(big.Int).Set(BlockReward)
-
+	r := new(big.Int)
 	for _, uncle := range uncles {
-		num := new(big.Int).Add(big.NewInt(8), uncle.Number)
-		num.Sub(num, header.Number)
-
-		r := new(big.Int)
-		r.Mul(BlockReward, num)
-		r.Div(r, big.NewInt(8))
-
+		r.Add(uncle.Number, big8)
+		r.Sub(r, header.Number)
+		r.Mul(r, BlockReward)
+		r.Div(r, big8)
 		statedb.AddBalance(uncle.Coinbase, r)
 
-		reward.Add(reward, new(big.Int).Div(BlockReward, big.NewInt(32)))
+		r.Div(BlockReward, big32)
+		reward.Add(reward, r)
 	}
-
-	// Get the account associated with the coinbase
 	statedb.AddBalance(header.Coinbase, reward)
 }
 
