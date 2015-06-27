@@ -29,6 +29,12 @@ type Encoder interface {
 	EncodeRLP(io.Writer) error
 }
 
+// ListSize returns the encoded size of an RLP list with the given
+// content size.
+func ListSize(contentSize uint64) uint64 {
+	return uint64(headsize(contentSize)) + contentSize
+}
+
 // Encode writes the RLP encoding of val to w. Note that Encode may
 // perform many small writes in some cases. Consider making w
 // buffered.
