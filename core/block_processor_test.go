@@ -32,13 +32,13 @@ func TestNumber(t *testing.T) {
 	statedb := state.New(chain.Genesis().Root(), chain.stateDb)
 	header := makeHeader(chain.Genesis(), statedb)
 	header.Number = big.NewInt(3)
-	err := ValidateHeader(pow, header, chain.Genesis().Header(), false)
+	err := ValidateHeader(pow, header, chain.Genesis(), false)
 	if err != BlockNumberErr {
 		t.Errorf("expected block number error, got %q", err)
 	}
 
 	header = makeHeader(chain.Genesis(), statedb)
-	err = ValidateHeader(pow, header, chain.Genesis().Header(), false)
+	err = ValidateHeader(pow, header, chain.Genesis(), false)
 	if err == BlockNumberErr {
 		t.Errorf("didn't expect block number error")
 	}

@@ -270,29 +270,31 @@ func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
 	res.BlockHash = newHexData(block.Hash())
 	res.ParentHash = newHexData(block.ParentHash())
 	res.Nonce = newHexData(block.Nonce())
-	res.Sha3Uncles = newHexData(block.Header().UncleHash)
+	res.Sha3Uncles = newHexData(block.UncleHash())
 	res.LogsBloom = newHexData(block.Bloom())
-	res.TransactionRoot = newHexData(block.Header().TxHash)
+	res.TransactionRoot = newHexData(block.TxHash())
 	res.StateRoot = newHexData(block.Root())
-	res.Miner = newHexData(block.Header().Coinbase)
+	res.Miner = newHexData(block.Coinbase())
 	res.Difficulty = newHexNum(block.Difficulty())
 	res.TotalDifficulty = newHexNum(block.Td)
 	res.Size = newHexNum(block.Size().Int64())
-	res.ExtraData = newHexData(block.Header().Extra)
+	res.ExtraData = newHexData(block.Extra())
 	res.GasLimit = newHexNum(block.GasLimit())
 	res.GasUsed = newHexNum(block.GasUsed())
 	res.UnixTimestamp = newHexNum(block.Time())
 
-	res.Transactions = make([]*TransactionRes, len(block.Transactions()))
-	for i, tx := range block.Transactions() {
+	txs := block.Transactions()
+	res.Transactions = make([]*TransactionRes, len(txs))
+	for i, tx := range txs {
 		res.Transactions[i] = NewTransactionRes(tx)
 		res.Transactions[i].BlockHash = res.BlockHash
 		res.Transactions[i].BlockNumber = res.BlockNumber
 		res.Transactions[i].TxIndex = newHexNum(i)
 	}
 
-	res.Uncles = make([]*UncleRes, len(block.Uncles()))
-	for i, uncle := range block.Uncles() {
+	uncles := block.Uncles()
+	res.Uncles = make([]*UncleRes, len(uncles))
+	for i, uncle := range uncles {
 		res.Uncles[i] = NewUncleRes(uncle)
 	}
 

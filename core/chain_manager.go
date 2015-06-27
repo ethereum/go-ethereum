@@ -164,7 +164,7 @@ func (bc *ChainManager) SetHead(head *types.Block) {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	for block := bc.currentBlock; block != nil && block.Hash() != head.Hash(); block = bc.GetBlock(block.Header().ParentHash) {
+	for block := bc.currentBlock; block != nil && block.Hash() != head.Hash(); block = bc.GetBlock(block.ParentHash()) {
 		bc.removeBlock(block)
 	}
 
@@ -269,7 +269,7 @@ func (bc *ChainManager) Reset() {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.Header().ParentHash) {
+	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.ParentHash()) {
 		bc.removeBlock(block)
 	}
 
@@ -294,7 +294,7 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.Header().ParentHash) {
+	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.ParentHash()) {
 		bc.removeBlock(block)
 	}
 
