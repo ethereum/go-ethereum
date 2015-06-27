@@ -60,7 +60,7 @@ func ExampleGenerateChain() {
 	evmux := &event.TypeMux{}
 	chainman, _ := NewChainManager(genesis, db, db, FakePow{}, evmux)
 	chainman.SetProcessor(NewBlockProcessor(db, db, FakePow{}, chainman, evmux))
-	if i, err := chainman.InsertChain(chain[1:]); err != nil {
+	if i, err := chainman.InsertChain(chain); err != nil {
 		fmt.Printf("insert error (block %d): %v\n", i, err)
 		return
 	}

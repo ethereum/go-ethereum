@@ -264,6 +264,7 @@ func (bc *ChainManager) setLastState() {
 func (bc *ChainManager) makeCache() {
 	bc.cache, _ = lru.New(blockCacheLimit)
 	// load in last `blockCacheLimit` - 1 blocks. Last block is the current.
+	bc.cache.Add(bc.genesisBlock.Hash(), bc.genesisBlock)
 	for _, block := range bc.GetBlocksFromHash(bc.currentBlock.Hash(), blockCacheLimit) {
 		bc.cache.Add(block.Hash(), block)
 	}
