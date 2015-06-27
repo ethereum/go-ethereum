@@ -63,7 +63,6 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 	if bi1 != bi2 {
 		t.Fatal("chains do not have the same hash at height", i)
 	}
-
 	bman2.bc.SetProcessor(bman2)
 
 	// extend the fork
