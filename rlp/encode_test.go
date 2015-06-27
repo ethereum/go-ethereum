@@ -189,15 +189,6 @@ var encTests = []encTest{
 	{val: &recstruct{5, nil}, output: "C205C0"},
 	{val: &recstruct{5, &recstruct{4, &recstruct{3, nil}}}, output: "C605C404C203C0"},
 
-	// flat
-	{val: Flat(uint(1)), error: "rlp.Flat: uint did not encode as list"},
-	{val: Flat(simplestruct{A: 3, B: "foo"}), output: "0383666F6F"},
-	{
-		// value generates more list headers after the Flat
-		val:    []interface{}{"foo", []uint{1, 2}, Flat([]uint{3, 4}), []uint{5, 6}, "bar"},
-		output: "D083666F6FC201020304C2050683626172",
-	},
-
 	// nil
 	{val: (*uint)(nil), output: "80"},
 	{val: (*string)(nil), output: "80"},
