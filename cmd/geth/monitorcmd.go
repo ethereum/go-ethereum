@@ -285,7 +285,7 @@ func updateChart(metric string, data []float64, base *int, chart *termui.LineCha
 	}
 	// Update the chart's label with the scale units
 	units := dataUnits
-	if strings.Contains(metric, "/Percentiles/") || strings.Contains(metric, "/pauses/") {
+	if strings.Contains(metric, "/Percentiles/") || strings.Contains(metric, "/pauses/") || strings.Contains(metric, "/time/") {
 		units = timeUnits
 	}
 	chart.Border.Label = metric
