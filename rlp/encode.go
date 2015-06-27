@@ -29,48 +29,6 @@ type Encoder interface {
 	EncodeRLP(io.Writer) error
 }
 
-// Flat wraps a value (which must encode as a list) so
-// it encodes as the list's elements.
-//
-// Example: suppose you have defined a type
-//
-//     type foo struct { A, B uint }
-//
-// Under normal encoding rules,
-//
-//     rlp.Encode(foo{1, 2}) --> 0xC20102
-//
-// This function can help you achieve the following encoding:
-//
-//     rlp.Encode(rlp.Flat(foo{1, 2})) --> 0x0102
-func Flat(val interface{}) Encoder {
-	return flatenc{val}
-}
-
-type flatenc struct{ val interface{} }
-
-func (e flatenc) EncodeRLP(out io.Writer) error {
-	// record current output position
-	var (
-		eb          = out.(*encbuf)
-		prevstrsize = len(eb.str)
-		prevnheads  = len(eb.lheads)
-	)
-	if err := eb.encode(e.val); err != nil {
-		return err
-	}
-	// check that a new list header has appeared
-	if len(eb.lheads) == prevnheads || eb.lheads[prevnheads].offset == prevstrsize-1 {
-		return fmt.Errorf("rlp.Flat: %T did not encode as list", e.val)
-	}
-	// remove the new list header
-	newhead := eb.lheads[prevnheads]
-	copy(eb.lheads[prevnheads:], eb.lheads[prevnheads+1:])
-	eb.lheads = eb.lheads[:len(eb.lheads)-1]
-	eb.lhsize -= headsize(uint64(newhead.size))
-	return nil
-}
-
 // Encode writes the RLP encoding of val to w. Note that Encode may
 // perform many small writes in some cases. Consider making w
 // buffered.
