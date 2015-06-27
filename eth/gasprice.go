@@ -133,20 +133,20 @@ func (self *GasPriceOracle) lowestPrice(block *types.Block) *big.Int {
 		gasUsed = recepits[len(recepits)-1].CumulativeGasUsed
 	}
 
-	if new(big.Int).Mul(gasUsed, big.NewInt(100)).Cmp(new(big.Int).Mul(block.Header().GasLimit,
+	if new(big.Int).Mul(gasUsed, big.NewInt(100)).Cmp(new(big.Int).Mul(block.GasLimit(),
 		big.NewInt(int64(self.eth.GpoFullBlockRatio)))) < 0 {
 		// block is not full, could have posted a tx with MinGasPrice
 		return self.eth.GpoMinGasPrice
 	}
 
-	if len(block.Transactions()) < 1 {
+	txs := block.Transactions()
+	if len(txs) == 0 {
 		return self.eth.GpoMinGasPrice
 	}
-
 	// block is full, find smallest gasPrice
-	minPrice := block.Transactions()[0].GasPrice()
-	for i := 1; i < len(block.Transactions()); i++ {
-		price := block.Transactions()[i].GasPrice()
+	minPrice := txs[0].GasPrice()
+	for i := 1; i < len(txs); i++ {
+		price := txs[i].GasPrice()
 		if price.Cmp(minPrice) < 0 {
 			minPrice = price
 		}

@@ -186,7 +186,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	txs := block.Transactions()
 
 	// Block validation
-	if err = ValidateHeader(sm.Pow, header, parent.Header(), false); err != nil {
+	if err = ValidateHeader(sm.Pow, header, parent, false); err != nil {
 		return
 	}
 
@@ -285,19 +285,18 @@ func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*t
 }
 
 func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *types.Block) error {
-	ancestors := set.New()
 	uncles := set.New()
-	ancestorHeaders := make(map[common.Hash]*types.Header)
+	ancestors := make(map[common.Hash]*types.Block)
 	for _, ancestor := range sm.bc.GetBlocksFromHash(block.ParentHash(), 7) {
-		ancestorHeaders[ancestor.Hash()] = ancestor.Header()
-		ancestors.Add(ancestor.Hash())
+		ancestors[ancestor.Hash()] = ancestor
 		// Include ancestors uncles in the uncle set. Uncles must be unique.
 		for _, uncle := range ancestor.Uncles() {
 			uncles.Add(uncle.Hash())
 		}
 	}
-
+	ancestors[block.Hash()] = block
 	uncles.Add(block.Hash())
+
 	for i, uncle := range block.Uncles() {
 		hash := uncle.Hash()
 		if uncles.Has(hash) {
@@ -306,22 +305,20 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 		}
 		uncles.Add(hash)
 
-		if ancestors.Has(hash) {
+		if ancestors[hash] != nil {
 			branch := fmt.Sprintf("  O - %x\n  |\n", block.Hash())
-			ancestors.Each(func(item interface{}) bool {
-				branch += fmt.Sprintf("  O - %x\n  |\n", hash)
-				return true
-			})
+			for h := range ancestors {
+				branch += fmt.Sprintf("  O - %x\n  |\n", h)
+			}
 			glog.Infoln(branch)
-
 			return UncleError("uncle[%d](%x) is ancestor", i, hash[:4])
 		}
 
-		if !ancestors.Has(uncle.ParentHash) || uncle.ParentHash == parent.Hash() {
+		if ancestors[uncle.ParentHash] == nil || uncle.ParentHash == parent.Hash() {
 			return UncleError("uncle[%d](%x)'s parent is not ancestor (%x)", i, hash[:4], uncle.ParentHash[0:4])
 		}
 
-		if err := ValidateHeader(sm.Pow, uncle, ancestorHeaders[uncle.ParentHash], true); err != nil {
+		if err := ValidateHeader(sm.Pow, uncle, ancestors[uncle.ParentHash], true); err != nil {
 			return ValidationError(fmt.Sprintf("uncle[%d](%x) header invalid: %v", i, hash[:4], err))
 		}
 	}
@@ -360,19 +357,22 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 
 // See YP section 4.3.4. "Block Header Validity"
 // Validates a block. Returns an error if the block is invalid.
-func ValidateHeader(pow pow.PoW, block, parent *types.Header, checkPow bool) error {
+func ValidateHeader(pow pow.PoW, block *types.Header, parent *types.Block, checkPow bool) error {
 	if big.NewInt(int64(len(block.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
 		return fmt.Errorf("Block extra data too long (%d)", len(block.Extra))
 	}
 
-	expd := CalcDifficulty(int64(block.Time), int64(parent.Time), parent.Difficulty)
+	expd := CalcDifficulty(int64(block.Time), int64(parent.Time()), parent.Difficulty())
 	if expd.Cmp(block.Difficulty) != 0 {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
 	}
 
-	a := new(big.Int).Sub(block.GasLimit, parent.GasLimit)
+	var a, b *big.Int
+	a = parent.GasLimit()
+	a = a.Sub(a, block.GasLimit)
 	a.Abs(a)
-	b := new(big.Int).Div(parent.GasLimit, params.GasLimitBoundDivisor)
+	b = parent.GasLimit()
+	b = b.Div(b, params.GasLimitBoundDivisor)
 	if !(a.Cmp(b) < 0) || (block.GasLimit.Cmp(params.MinGasLimit) == -1) {
 		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
 	}
@@ -381,11 +381,13 @@ func ValidateHeader(pow pow.PoW, block, parent *types.Header, checkPow bool) err
 		return BlockFutureErr
 	}
 
-	if new(big.Int).Sub(block.Number, parent.Number).Cmp(big.NewInt(1)) != 0 {
+	num := parent.Number()
+	num.Sub(block.Number, num)
+	if num.Cmp(big.NewInt(1)) != 0 {
 		return BlockNumberErr
 	}
 
-	if block.Time <= parent.Time {
+	if block.Time <= uint64(parent.Time()) {
 		return BlockEqualTSErr //ValidationError("Block timestamp equal or less than previous block (%v - %v)", block.Time, parent.Time)
 	}
 
