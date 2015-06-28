@@ -196,3 +196,98 @@ func TestNewPeer(t *testing.T) {
 
 	p.Disconnect(DiscAlreadyConnected) // Should not hang
 }
+
+func TestMatchProtocols(t *testing.T) {
+	tests := []struct {
+		Remote []Cap
+		Local  []Protocol
+		Match  map[string]protoRW
+	}{
+		{
+			// No remote capabilities
+			Local: []Protocol{{Name: "a"}},
+		},
+		{
+			// No local protocols
+			Remote: []Cap{{Name: "a"}},
+		},
+		{
+			// No mutual protocols
+			Remote: []Cap{{Name: "a"}},
+			Local:  []Protocol{{Name: "b"}},
+		},
+		{
+			// Some matches, some differences
+			Remote: []Cap{{Name: "local"}, {Name: "match1"}, {Name: "match2"}},
+			Local:  []Protocol{{Name: "match1"}, {Name: "match2"}, {Name: "remote"}},
+			Match:  map[string]protoRW{"match1": {Protocol: Protocol{Name: "match1"}}, "match2": {Protocol: Protocol{Name: "match2"}}},
+		},
+		{
+			// Various alphabetical ordering
+			Remote: []Cap{{Name: "aa"}, {Name: "ab"}, {Name: "bb"}, {Name: "ba"}},
+			Local:  []Protocol{{Name: "ba"}, {Name: "bb"}, {Name: "ab"}, {Name: "aa"}},
+			Match:  map[string]protoRW{"aa": {Protocol: Protocol{Name: "aa"}}, "ab": {Protocol: Protocol{Name: "ab"}}, "ba": {Protocol: Protocol{Name: "ba"}}, "bb": {Protocol: Protocol{Name: "bb"}}},
+		},
+		{
+			// No mutual versions
+			Remote: []Cap{{Version: 1}},
+			Local:  []Protocol{{Version: 2}},
+		},
+		{
+			// Multiple versions, single common
+			Remote: []Cap{{Version: 1}, {Version: 2}},
+			Local:  []Protocol{{Version: 2}, {Version: 3}},
+			Match:  map[string]protoRW{"": {Protocol: Protocol{Version: 2}}},
+		},
+		{
+			// Multiple versions, multiple common
+			Remote: []Cap{{Version: 1}, {Version: 2}, {Version: 3}, {Version: 4}},
+			Local:  []Protocol{{Version: 2}, {Version: 3}},
+			Match:  map[string]protoRW{"": {Protocol: Protocol{Version: 3}}},
+		},
+		{
+			// Various version orderings
+			Remote: []Cap{{Version: 4}, {Version: 1}, {Version: 3}, {Version: 2}},
+			Local:  []Protocol{{Version: 2}, {Version: 3}, {Version: 1}},
+			Match:  map[string]protoRW{"": {Protocol: Protocol{Version: 3}}},
+		},
+		{
+			// Versions overriding sub-protocol lengths
+			Remote: []Cap{{Version: 1}, {Version: 2}, {Version: 3}, {Name: "a"}},
+			Local:  []Protocol{{Version: 1, Length: 1}, {Version: 2, Length: 2}, {Version: 3, Length: 3}, {Name: "a"}},
+			Match:  map[string]protoRW{"": {Protocol: Protocol{Version: 3}}, "a": {Protocol: Protocol{Name: "a"}, offset: 3}},
+		},
+	}
+
+	for i, tt := range tests {
+		result := matchProtocols(tt.Local, tt.Remote, nil)
+		if len(result) != len(tt.Match) {
+			t.Errorf("test %d: negotiation mismatch: have %v, want %v", i, len(result), len(tt.Match))
+			continue
+		}
+		// Make sure all negotiated protocols are needed and correct
+		for name, proto := range result {
+			match, ok := tt.Match[name]
+			if !ok {
+				t.Errorf("test %d, proto '%s': negotiated but shouldn't have", i, name)
+				continue
+			}
+			if proto.Name != match.Name {
+				t.Errorf("test %d, proto '%s': name mismatch: have %v, want %v", i, name, proto.Name, match.Name)
+			}
+			if proto.Version != match.Version {
+				t.Errorf("test %d, proto '%s': version mismatch: have %v, want %v", i, name, proto.Version, match.Version)
+			}
+			if proto.offset-baseProtocolLength != match.offset {
+				t.Errorf("test %d, proto '%s': offset mismatch: have %v, want %v", i, name, proto.offset-baseProtocolLength, match.offset)
+			}
+		}
+		// Make sure no protocols missed negotiation
+		for name, _ := range tt.Match {
+			if _, ok := result[name]; !ok {
+				t.Errorf("test %d, proto '%s': not negotiated, should have", i, name)
+				continue
+			}
+		}
+	}
+}
