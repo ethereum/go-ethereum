@@ -239,12 +239,16 @@ func (self *worker) wait() {
 				continue
 			}
 
+			// broadcast before waiting for validation
+			go self.mux.Post(core.NewMinedBlockEvent{block})
+			// insert mined block in to our own chain
 			if _, err := self.chain.InsertChain(types.Blocks{block}); err == nil {
+				// remove uncles we've previously inserted
 				for _, uncle := range block.Uncles() {
 					delete(self.possibleUncles, uncle.Hash())
 				}
-				self.mux.Post(core.NewMinedBlockEvent{block})
 
+				// check staleness and display confirmation
 				var stale, confirm string
 				canonBlock := self.chain.GetBlockByNumber(block.NumberU64())
 				if canonBlock != nil && canonBlock.Hash() != block.Hash() {
@@ -256,6 +260,7 @@ func (self *worker) wait() {
 
 				glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
 
+				// XXX remove old structured json logging
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     block.Hash().Hex(),
 					BlockNumber:   block.Number(),
