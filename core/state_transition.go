@@ -13,10 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-const tryJit = false
-
-var ()
-
 /*
  * The State transitioning model
  *
@@ -69,20 +65,24 @@ func MessageCreatesContract(msg Message) bool {
 	return msg.To() == nil
 }
 
-func MessageGasValue(msg Message) *big.Int {
-	return new(big.Int).Mul(msg.Gas(), msg.GasPrice())
-}
-
-func IntrinsicGas(msg Message) *big.Int {
+// IntrinsicGas computes the 'intrisic gas' for a message
+// with the given data.
+func IntrinsicGas(data []byte) *big.Int {
 	igas := new(big.Int).Set(params.TxGas)
-	for _, byt := range msg.Data() {
-		if byt != 0 {
-			igas.Add(igas, params.TxDataNonZeroGas)
-		} else {
-			igas.Add(igas, params.TxDataZeroGas)
+	if len(data) > 0 {
+		var nz int64
+		for _, byt := range data {
+			if byt != 0 {
+				nz++
+			}
 		}
+		m := big.NewInt(nz)
+		m.Mul(m, params.TxDataNonZeroGas)
+		igas.Add(igas, m)
+		m.SetInt64(int64(len(data)) - nz)
+		m.Mul(m, params.TxDataZeroGas)
+		igas.Add(igas, m)
 	}
-
 	return igas
 }
 
@@ -96,7 +96,7 @@ func NewStateTransition(env vm.Environment, msg Message, coinbase *state.StateOb
 		env:        env,
 		msg:        msg,
 		gas:        new(big.Int),
-		gasPrice:   new(big.Int).Set(msg.GasPrice()),
+		gasPrice:   msg.GasPrice(),
 		initialGas: new(big.Int),
 		value:      msg.Value(),
 		data:       msg.Data(),
@@ -140,26 +140,22 @@ func (self *StateTransition) AddGas(amount *big.Int) {
 }
 
 func (self *StateTransition) BuyGas() error {
-	var err error
+	mgas := self.msg.Gas()
+	mgval := new(big.Int).Mul(mgas, self.gasPrice)
 
 	sender, err := self.From()
 	if err != nil {
 		return err
 	}
-	if sender.Balance().Cmp(MessageGasValue(self.msg)) < 0 {
-		return fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", sender.Address().Bytes()[:4], MessageGasValue(self.msg), sender.Balance())
+	if sender.Balance().Cmp(mgval) < 0 {
+		return fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", sender.Address().Bytes()[:4], mgval, sender.Balance())
 	}
-
-	coinbase := self.Coinbase()
-	err = coinbase.SubGas(self.msg.Gas(), self.msg.GasPrice())
-	if err != nil {
+	if err = self.Coinbase().SubGas(mgas, self.gasPrice); err != nil {
 		return err
 	}
-
-	self.AddGas(self.msg.Gas())
-	self.initialGas.Set(self.msg.Gas())
-	sender.SubBalance(MessageGasValue(self.msg))
-
+	self.AddGas(mgas)
+	self.initialGas.Set(mgas)
+	sender.SubBalance(mgval)
 	return nil
 }
 
@@ -195,14 +191,14 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 	sender, _ := self.From() // err checked in preCheck
 
 	// Pay intrinsic gas
-	if err = self.UseGas(IntrinsicGas(self.msg)); err != nil {
+	if err = self.UseGas(IntrinsicGas(self.data)); err != nil {
 		return nil, nil, InvalidTxError(err)
 	}
 
 	vmenv := self.env
 	var ref vm.ContextRef
 	if MessageCreatesContract(msg) {
-		ret, err, ref = vmenv.Create(sender, self.msg.Data(), self.gas, self.gasPrice, self.value)
+		ret, err, ref = vmenv.Create(sender, self.data, self.gas, self.gasPrice, self.value)
 		if err == nil {
 			dataGas := big.NewInt(int64(len(ret)))
 			dataGas.Mul(dataGas, params.CreateDataGas)
@@ -216,7 +212,7 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), sender.Nonce()+1)
-		ret, err = vmenv.Call(sender, self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+		ret, err = vmenv.Call(sender, self.To().Address(), self.data, self.gas, self.gasPrice, self.value)
 	}
 
 	if err != nil && IsValueTransferErr(err) {
@@ -237,15 +233,15 @@ func (self *StateTransition) refundGas() {
 	coinbase := self.Coinbase()
 	sender, _ := self.From() // err already checked
 	// Return remaining gas
-	remaining := new(big.Int).Mul(self.gas, self.msg.GasPrice())
+	remaining := new(big.Int).Mul(self.gas, self.gasPrice)
 	sender.AddBalance(remaining)
 
-	uhalf := new(big.Int).Div(self.gasUsed(), common.Big2)
+	uhalf := remaining.Div(self.gasUsed(), common.Big2)
 	refund := common.BigMin(uhalf, self.state.Refunds())
 	self.gas.Add(self.gas, refund)
-	self.state.AddBalance(sender.Address(), refund.Mul(refund, self.msg.GasPrice()))
+	self.state.AddBalance(sender.Address(), refund.Mul(refund, self.gasPrice))
 
-	coinbase.AddGas(self.gas, self.msg.GasPrice())
+	coinbase.AddGas(self.gas, self.gasPrice)
 }
 
 func (self *StateTransition) gasUsed() *big.Int {

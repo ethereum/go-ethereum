@@ -38,30 +38,35 @@ const (
 	maxTimeFutureBlocks = 30
 )
 
-func CalcDifficulty(block, parent *types.Header) *big.Int {
+// CalcDifficulty is the difficulty adjustment algorithm. It returns
+// the difficulty that a new block b should have when created at time
+// given the parent block's time and difficulty.
+func CalcDifficulty(time int64, parentTime int64, parentDiff *big.Int) *big.Int {
 	diff := new(big.Int)
-
-	adjust := new(big.Int).Div(parent.Difficulty, params.DifficultyBoundDivisor)
-	if big.NewInt(int64(block.Time)-int64(parent.Time)).Cmp(params.DurationLimit) < 0 {
-		diff.Add(parent.Difficulty, adjust)
+	adjust := new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
+	if big.NewInt(time-parentTime).Cmp(params.DurationLimit) < 0 {
+		diff.Add(parentDiff, adjust)
 	} else {
-		diff.Sub(parent.Difficulty, adjust)
+		diff.Sub(parentDiff, adjust)
 	}
-
 	if diff.Cmp(params.MinimumDifficulty) < 0 {
 		return params.MinimumDifficulty
 	}
-
 	return diff
 }
 
+// CalcTD computes the total difficulty of block.
 func CalcTD(block, parent *types.Block) *big.Int {
 	if parent == nil {
 		return block.Difficulty()
 	}
-	return new(big.Int).Add(parent.Td, block.Header().Difficulty)
+	d := block.Difficulty()
+	d.Add(d, parent.Td)
+	return d
 }
 
+// CalcGasLimit computes the gas limit of the next block after parent.
+// The result may be modified by the caller.
 func CalcGasLimit(parent *types.Block) *big.Int {
 	decay := new(big.Int).Div(parent.GasLimit(), params.GasLimitBoundDivisor)
 	contrib := new(big.Int).Mul(parent.GasUsed(), big.NewInt(3))
@@ -71,11 +76,11 @@ func CalcGasLimit(parent *types.Block) *big.Int {
 	gl := new(big.Int).Sub(parent.GasLimit(), decay)
 	gl = gl.Add(gl, contrib)
 	gl = gl.Add(gl, big.NewInt(1))
-	gl = common.BigMax(gl, params.MinGasLimit)
+	gl.Set(common.BigMax(gl, params.MinGasLimit))
 
 	if gl.Cmp(params.GenesisGasLimit) < 0 {
-		gl2 := new(big.Int).Add(parent.GasLimit(), decay)
-		return common.BigMin(params.GenesisGasLimit, gl2)
+		gl.Add(parent.GasLimit(), decay)
+		gl.Set(common.BigMin(gl, params.GenesisGasLimit))
 	}
 	return gl
 }
@@ -159,7 +164,7 @@ func (bc *ChainManager) SetHead(head *types.Block) {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	for block := bc.currentBlock; block != nil && block.Hash() != head.Hash(); block = bc.GetBlock(block.Header().ParentHash) {
+	for block := bc.currentBlock; block != nil && block.Hash() != head.Hash(); block = bc.GetBlock(block.ParentHash()) {
 		bc.removeBlock(block)
 	}
 
@@ -255,55 +260,16 @@ func (bc *ChainManager) makeCache() {
 		bc.cache = NewBlockCache(blockCacheLimit)
 	}
 	// load in last `blockCacheLimit` - 1 blocks. Last block is the current.
-	ancestors := bc.GetAncestors(bc.currentBlock, blockCacheLimit-1)
-	ancestors = append(ancestors, bc.currentBlock)
-	for _, block := range ancestors {
+	for _, block := range bc.GetBlocksFromHash(bc.currentBlock.Hash(), blockCacheLimit) {
 		bc.cache.Push(block)
 	}
-}
-
-// Block creation & chain handling
-func (bc *ChainManager) NewBlock(coinbase common.Address) *types.Block {
-	bc.mu.RLock()
-	defer bc.mu.RUnlock()
-
-	var (
-		root       common.Hash
-		parentHash common.Hash
-	)
-
-	if bc.currentBlock != nil {
-		root = bc.currentBlock.Header().Root
-		parentHash = bc.lastBlockHash
-	}
-
-	block := types.NewBlock(
-		parentHash,
-		coinbase,
-		root,
-		common.BigPow(2, 32),
-		0,
-		nil)
-	block.SetUncles(nil)
-	block.SetTransactions(nil)
-	block.SetReceipts(nil)
-
-	parent := bc.currentBlock
-	if parent != nil {
-		header := block.Header()
-		header.Difficulty = CalcDifficulty(block.Header(), parent.Header())
-		header.Number = new(big.Int).Add(parent.Header().Number, common.Big1)
-		header.GasLimit = CalcGasLimit(parent)
-	}
-
-	return block
 }
 
 func (bc *ChainManager) Reset() {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.Header().ParentHash) {
+	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.ParentHash()) {
 		bc.removeBlock(block)
 	}
 
@@ -328,7 +294,7 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.Header().ParentHash) {
+	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.ParentHash()) {
 		bc.removeBlock(block)
 	}
 
@@ -463,6 +429,19 @@ func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
 
 }
 
+// GetBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
+func (self *ChainManager) GetBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
+	for i := 0; i < n; i++ {
+		block := self.GetBlock(hash)
+		if block == nil {
+			break
+		}
+		blocks = append(blocks, block)
+		hash = block.ParentHash()
+	}
+	return
+}
+
 // non blocking version
 func (self *ChainManager) getBlockByNumber(num uint64) *types.Block {
 	key, _ := self.blockDb.Get(append(blockNumPre, big.NewInt(int64(num)).Bytes()...))
@@ -482,43 +461,10 @@ func (self *ChainManager) GetUnclesInChain(block *types.Block, length int) (uncl
 	return
 }
 
-func (self *ChainManager) GetAncestors(block *types.Block, length int) (blocks []*types.Block) {
-	for i := 0; i < length; i++ {
-		block = self.GetBlock(block.ParentHash())
-		if block == nil {
-			break
-		}
-
-		blocks = append(blocks, block)
-	}
-
-	return
-}
-
 // setTotalDifficulty updates the TD of the chain manager. Note, this function
 // assumes that the `mu` mutex is held!
 func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
 	bc.td = new(big.Int).Set(td)
-}
-
-func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
-	parent := self.GetBlock(block.Header().ParentHash)
-	if parent == nil {
-		return nil, fmt.Errorf("Unable to calculate total diff without known parent %x", block.Header().ParentHash)
-	}
-
-	parentTd := parent.Td
-
-	uncleDiff := new(big.Int)
-	for _, uncle := range block.Uncles() {
-		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
-	}
-
-	td := new(big.Int)
-	td = td.Add(parentTd, uncleDiff)
-	td = td.Add(td, block.Header().Difficulty)
-
-	return td, nil
 }
 
 func (bc *ChainManager) Stop() {
@@ -621,14 +567,12 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 					return i, fmt.Errorf("%v: BlockFutureErr, %v > %v", BlockFutureErr, block.Time(), max)
 				}
 
-				block.SetQueued(true)
 				self.futureBlocks.Push(block)
 				stats.queued++
 				continue
 			}
 
 			if IsParentErr(err) && self.futureBlocks.Has(block.ParentHash()) {
-				block.SetQueued(true)
 				self.futureBlocks.Push(block)
 				stats.queued++
 				continue

@@ -234,7 +234,7 @@ func (pool *fakeTxPool) GetTransactions() types.Transactions {
 
 func newtx(from *crypto.Key, nonce uint64, datasize int) *types.Transaction {
 	data := make([]byte, datasize)
-	tx := types.NewTransactionMessage(common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), data)
-	tx.SetNonce(nonce)
+	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), data)
+	tx, _ = tx.SignECDSA(from.PrivateKey)
 	return tx
 }

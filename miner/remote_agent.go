@@ -81,9 +81,7 @@ func (a *RemoteAgent) SubmitWork(nonce uint64, mixDigest, seedHash common.Hash) 
 
 	// Make sure the external miner was working on the right hash
 	if a.currentWork != nil && a.work != nil {
-		a.currentWork.SetNonce(nonce)
-		a.currentWork.Header().MixDigest = mixDigest
-		a.returnCh <- a.currentWork
+		a.returnCh <- a.currentWork.WithMiningResult(nonce, mixDigest)
 		//a.returnCh <- Work{a.currentWork.Number().Uint64(), nonce, mixDigest.Bytes(), seedHash.Bytes()}
 		return true
 	}
