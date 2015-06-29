@@ -7,6 +7,8 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/logger"
@@ -104,6 +106,7 @@ type Fetcher struct {
 	broadcastMeter metrics.Meter // Counter for metering the inbound propagations
 	broadcastTimer metrics.Timer // Counter and timer for metering the block forwarding
 	discardMeter   metrics.Meter // Counter for metering the discarded blocks
+	futureMeter    metrics.Meter // Counter for metering future blocks
 }
 
 // New creates a block fetcher to retrieve blocks based on hash announcements.
@@ -131,6 +134,7 @@ func New(getBlock blockRetrievalFn, validateBlock blockValidatorFn, broadcastBlo
 		broadcastMeter: metrics.GetOrRegisterMeter("eth/sync/RemoteBroadcasts", metrics.DefaultRegistry),
 		broadcastTimer: metrics.GetOrRegisterTimer("eth/sync/LocalBroadcasts", metrics.DefaultRegistry),
 		discardMeter:   metrics.GetOrRegisterMeter("eth/sync/DiscardedBlocks", metrics.DefaultRegistry),
+		futureMeter:    metrics.GetOrRegisterMeter("eth/sync/FutureBlocks", metrics.DefaultRegistry),
 	}
 }
 
@@ -416,14 +420,22 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			return
 		}
 		// Quickly validate the header and propagate the block if it passes
-		if err := f.validateBlock(block, parent); err != nil {
+		switch err := f.validateBlock(block, parent); err {
+		case nil:
+			// All ok, quickly propagate to our peers
+			f.broadcastTimer.UpdateSince(block.ReceivedAt)
+			go f.broadcastBlock(block, true)
+
+		case core.BlockFutureErr:
+			f.futureMeter.Mark(1)
+			// Weird future block, don't fail, but neither propagate
+
+		default:
+			// Something went very wrong, drop the peer
 			glog.V(logger.Debug).Infof("Peer %s: block #%d [%x] verification failed: %v", peer, block.NumberU64(), hash[:4], err)
 			f.dropPeer(peer)
 			return
 		}
-		f.broadcastTimer.UpdateSince(block.ReceivedAt)
-		go f.broadcastBlock(block, true)
-
 		// Run the actual import and log any issues
 		if _, err := f.insertChain(types.Blocks{block}); err != nil {
 			glog.V(logger.Warn).Infof("Peer %s: block #%d [%x] import failed: %v", peer, block.NumberU64(), hash[:4], err)
