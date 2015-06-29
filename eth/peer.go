@@ -20,6 +20,11 @@ var (
 	errNotRegistered     = errors.New("peer is not registered")
 )
 
+const (
+	maxKnownTxs    = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownBlocks = 1024  // Maximum block hashes to keep in the known list (prevent DOS)
+)
+
 type statusMsgData struct {
 	ProtocolVersion uint32
 	NetworkId       uint32
@@ -101,12 +106,26 @@ func (p *peer) SetTd(td *big.Int) {
 // MarkBlock marks a block as known for the peer, ensuring that the block will
 // never be propagated to this particular peer.
 func (p *peer) MarkBlock(hash common.Hash) {
+	// If we reached the memory allowance, drop a previously known block hash
+	if p.knownBlocks.Size() >= maxKnownBlocks {
+		p.knownBlocks.Each(func(item interface{}) bool {
+			p.knownBlocks.Remove(item)
+			return p.knownBlocks.Size() >= maxKnownBlocks
+		})
+	}
 	p.knownBlocks.Add(hash)
 }
 
 // MarkTransaction marks a transaction as known for the peer, ensuring that it
 // will never be propagated to this particular peer.
 func (p *peer) MarkTransaction(hash common.Hash) {
+	// If we reached the memory allowance, drop a previously known transaction hash
+	if p.knownTxs.Size() >= maxKnownTxs {
+		p.knownTxs.Each(func(item interface{}) bool {
+			p.knownTxs.Remove(item)
+			return p.knownTxs.Size() >= maxKnownTxs
+		})
+	}
 	p.knownTxs.Add(hash)
 }
 
