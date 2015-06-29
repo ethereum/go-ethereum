@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-
 	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -897,6 +897,81 @@ type ResendArgs struct {
 	Tx       *tx
 	GasPrice string
 	GasLimit string
+}
+
+func (tx *tx) UnmarshalJSON(b []byte) (err error) {
+	var fields map[string]interface{}
+	if err := json.Unmarshal(b, &fields); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	trans := new(types.Transaction)
+
+	if val, found := fields["To"]; found {
+		if strVal, ok := val.(string); ok && len(strVal) > 0 {
+			tx.To = strVal
+			to := common.StringToAddress(strVal)
+			trans.Recipient = &to
+		}
+	}
+
+	if val, found := fields["From"]; found {
+		if strVal, ok := val.(string); ok {
+			tx.From = strVal
+		}
+	}
+
+	if val, found := fields["Nonce"]; found {
+		if strVal, ok := val.(string); ok {
+			tx.Nonce = strVal
+			if trans.AccountNonce, err = strconv.ParseUint(strVal, 10, 64); err != nil {
+				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.Nonce - %v", err))
+			}
+		}
+	}
+
+	var parseOk bool
+	if val, found := fields["Value"]; found {
+		if strVal, ok := val.(string); ok {
+			tx.Value = strVal
+			if trans.Amount, parseOk = new(big.Int).SetString(strVal, 0); !parseOk {
+				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.Amount - %v", err))
+			}
+		}
+	}
+
+	if val, found := fields["Data"]; found {
+		if strVal, ok := val.(string); ok {
+			tx.Data = strVal
+			if strings.HasPrefix(strVal, "0x") {
+				trans.Payload = common.Hex2Bytes(strVal[2:])
+			} else {
+				trans.Payload = common.Hex2Bytes(strVal)
+			}
+		}
+	}
+
+	if val, found := fields["GasLimit"]; found {
+		if strVal, ok := val.(string); ok {
+			tx.GasLimit = strVal
+			if trans.GasLimit, parseOk = new(big.Int).SetString(strVal, 0); !parseOk {
+				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.GasLimit - %v", err))
+			}
+		}
+	}
+
+	if val, found := fields["GasPrice"]; found {
+		if strVal, ok := val.(string); ok {
+			tx.GasPrice = strVal
+			if trans.Price, parseOk = new(big.Int).SetString(strVal, 0); !parseOk {
+				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.GasPrice - %v", err))
+			}
+		}
+	}
+
+	tx.tx = trans
+
+	return nil
 }
 
 func (args *ResendArgs) UnmarshalJSON(b []byte) (err error) {
