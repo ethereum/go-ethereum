@@ -239,43 +239,35 @@ func (self *worker) wait() {
 				continue
 			}
 
+			_, err := self.chain.WriteBlock(block)
+			if err != nil {
+				glog.V(logger.Error).Infoln("error writing block to chain", err)
+				continue
+			}
+
+			// check staleness and display confirmation
+			var stale, confirm string
+			canonBlock := self.chain.GetBlockByNumber(block.NumberU64())
+			if canonBlock != nil && canonBlock.Hash() != block.Hash() {
+				stale = "stale "
+			} else {
+				confirm = "Wait 5 blocks for confirmation"
+				self.current.localMinedBlocks = newLocalMinedBlock(block.Number().Uint64(), self.current.localMinedBlocks)
+			}
+
+			glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
+
 			// broadcast before waiting for validation
 			go self.mux.Post(core.NewMinedBlockEvent{block})
-			// insert mined block in to our own chain
-			if _, err := self.chain.InsertChain(types.Blocks{block}); err == nil {
-				// remove uncles we've previously inserted
-				for _, uncle := range block.Uncles() {
-					delete(self.possibleUncles, uncle.Hash())
-				}
 
-				// check staleness and display confirmation
-				var stale, confirm string
-				canonBlock := self.chain.GetBlockByNumber(block.NumberU64())
-				if canonBlock != nil && canonBlock.Hash() != block.Hash() {
-					stale = "stale "
-				} else {
-					confirm = "Wait 5 blocks for confirmation"
-					self.current.localMinedBlocks = newLocalMinedBlock(block.Number().Uint64(), self.current.localMinedBlocks)
-				}
-
-				glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
-
-				// XXX remove old structured json logging
-				jsonlogger.LogJson(&logger.EthMinerNewBlock{
-					BlockHash:     block.Hash().Hex(),
-					BlockNumber:   block.Number(),
-					ChainHeadHash: block.ParentHeaderHash.Hex(),
-					BlockPrevHash: block.ParentHeaderHash.Hex(),
-				})
-			} else {
-				self.commitNewWork()
-			}
+			self.commitNewWork()
 		}
 	}
 }
 
 func (self *worker) push() {
 	if atomic.LoadInt32(&self.mining) == 1 {
+		self.current.state.Sync()
 		self.current.block.SetRoot(self.current.state.Root())
 
 		// push new work to agents
@@ -302,6 +294,13 @@ func (self *worker) makeCurrent() {
 	if block.Time() <= parent.Time() {
 		block.Header().Time = parent.Header().Time + 1
 	}
+	// this will ensure we're not going off too far in the future
+	if now := time.Now().Unix(); block.Time() > now+4 {
+		wait := time.Duration(block.Time()-now) * time.Second
+		glog.V(logger.Info).Infoln("We are too far in the future. Waiting for", wait)
+		time.Sleep(wait)
+	}
+
 	block.Header().Extra = self.extra
 
 	// when 08 is processed ancestors contain 07 (quick block)
@@ -428,6 +427,7 @@ func (self *worker) commitNewWork() {
 	self.current.block.SetUncles(uncles)
 
 	core.AccumulateRewards(self.current.state, self.current.block)
+	self.current.block.Td = new(big.Int).Set(core.CalcTD(self.current.block, self.chain.GetBlock(self.current.block.ParentHash())))
 
 	self.current.state.Update()
 
