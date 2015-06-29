@@ -267,6 +267,12 @@ func (self *worker) wait() {
 
 func (self *worker) push() {
 	if atomic.LoadInt32(&self.mining) == 1 {
+		if core.Canary(self.current.state) {
+			glog.Infoln("Toxicity levels rising to deadly levels. Your canary has died. You can go back or continue down the mineshaft --more--")
+			glog.Infoln("You turn back and abort mining")
+			return
+		}
+
 		self.current.state.Sync()
 		self.current.block.SetRoot(self.current.state.Root())
 
