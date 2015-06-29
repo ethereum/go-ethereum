@@ -47,27 +47,21 @@ type peer struct {
 	td   *big.Int
 	lock sync.RWMutex
 
-	genesis, ourHash common.Hash
-	ourTd            *big.Int
-
-	txHashes    *set.Set
-	blockHashes *set.Set
+	knownTxs    *set.Set // Set of transaction hashes known to be known by this peer
+	knownBlocks *set.Set // Set of block hashes known to be known by this peer
 }
 
-func newPeer(version, network int, genesis, head common.Hash, td *big.Int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
+func newPeer(version, network int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	id := p.ID()
 
 	return &peer{
 		Peer:        p,
 		rw:          rw,
-		genesis:     genesis,
-		ourHash:     head,
-		ourTd:       td,
 		version:     version,
 		network:     network,
 		id:          fmt.Sprintf("%x", id[:8]),
-		txHashes:    set.New(),
-		blockHashes: set.New(),
+		knownTxs:    set.New(),
+		knownBlocks: set.New(),
 	}
 }
 
@@ -104,27 +98,39 @@ func (p *peer) SetTd(td *big.Int) {
 	p.td.Set(td)
 }
 
-// sendTransactions sends transactions to the peer and includes the hashes
+// MarkBlock marks a block as known for the peer, ensuring that the block will
+// never be propagated to this particular peer.
+func (p *peer) MarkBlock(hash common.Hash) {
+	p.knownBlocks.Add(hash)
+}
+
+// MarkTransaction marks a transaction as known for the peer, ensuring that it
+// will never be propagated to this particular peer.
+func (p *peer) MarkTransaction(hash common.Hash) {
+	p.knownTxs.Add(hash)
+}
+
+// SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
-func (p *peer) sendTransactions(txs types.Transactions) error {
+func (p *peer) SendTransactions(txs types.Transactions) error {
 	propTxnOutPacketsMeter.Mark(1)
 	for _, tx := range txs {
 		propTxnOutTrafficMeter.Mark(tx.Size().Int64())
-		p.txHashes.Add(tx.Hash())
+		p.knownTxs.Add(tx.Hash())
 	}
 	return p2p.Send(p.rw, TxMsg, txs)
 }
 
-// sendBlockHashes sends a batch of known hashes to the remote peer.
-func (p *peer) sendBlockHashes(hashes []common.Hash) error {
+// SendBlockHashes sends a batch of known hashes to the remote peer.
+func (p *peer) SendBlockHashes(hashes []common.Hash) error {
 	reqHashOutPacketsMeter.Mark(1)
 	reqHashOutTrafficMeter.Mark(int64(32 * len(hashes)))
 
 	return p2p.Send(p.rw, BlockHashesMsg, hashes)
 }
 
-// sendBlocks sends a batch of blocks to the remote peer.
-func (p *peer) sendBlocks(blocks []*types.Block) error {
+// SendBlocks sends a batch of blocks to the remote peer.
+func (p *peer) SendBlocks(blocks []*types.Block) error {
 	reqBlockOutPacketsMeter.Mark(1)
 	for _, block := range blocks {
 		reqBlockOutTrafficMeter.Mark(block.Size().Int64())
@@ -132,52 +138,55 @@ func (p *peer) sendBlocks(blocks []*types.Block) error {
 	return p2p.Send(p.rw, BlocksMsg, blocks)
 }
 
-// sendNewBlockHashes announces the availability of a number of blocks through
+// SendNewBlockHashes announces the availability of a number of blocks through
 // a hash notification.
-func (p *peer) sendNewBlockHashes(hashes []common.Hash) error {
+func (p *peer) SendNewBlockHashes(hashes []common.Hash) error {
 	propHashOutPacketsMeter.Mark(1)
 	propHashOutTrafficMeter.Mark(int64(32 * len(hashes)))
 
 	for _, hash := range hashes {
-		p.blockHashes.Add(hash)
+		p.knownBlocks.Add(hash)
 	}
 	return p2p.Send(p.rw, NewBlockHashesMsg, hashes)
 }
 
-// sendNewBlock propagates an entire block to a remote peer.
-func (p *peer) sendNewBlock(block *types.Block) error {
+// SendNewBlock propagates an entire block to a remote peer.
+func (p *peer) SendNewBlock(block *types.Block) error {
 	propBlockOutPacketsMeter.Mark(1)
 	propBlockOutTrafficMeter.Mark(block.Size().Int64())
 
-	p.blockHashes.Add(block.Hash())
+	p.knownBlocks.Add(block.Hash())
 	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, block.Td})
 }
 
-// requestHashes fetches a batch of hashes from a peer, starting at from, going
+// RequestHashes fetches a batch of hashes from a peer, starting at from, going
 // towards the genesis block.
-func (p *peer) requestHashes(from common.Hash) error {
+func (p *peer) RequestHashes(from common.Hash) error {
 	glog.V(logger.Debug).Infof("Peer [%s] fetching hashes (%d) %x...\n", p.id, downloader.MaxHashFetch, from[:4])
 	return p2p.Send(p.rw, GetBlockHashesMsg, getBlockHashesMsgData{from, uint64(downloader.MaxHashFetch)})
 }
 
-func (p *peer) requestBlocks(hashes []common.Hash) error {
+// RequestBlocks fetches a batch of blocks corresponding to the specified hashes.
+func (p *peer) RequestBlocks(hashes []common.Hash) error {
 	glog.V(logger.Debug).Infof("[%s] fetching %v blocks\n", p.id, len(hashes))
 	return p2p.Send(p.rw, GetBlocksMsg, hashes)
 }
 
-func (p *peer) handleStatus() error {
+// Handshake executes the eth protocol handshake, negotiating version number,
+// network IDs, difficulties, head and genesis blocks.
+func (p *peer) Handshake(td *big.Int, head common.Hash, genesis common.Hash) error {
+	// Send out own handshake in a new thread
 	errc := make(chan error, 1)
 	go func() {
 		errc <- p2p.Send(p.rw, StatusMsg, &statusMsgData{
 			ProtocolVersion: uint32(p.version),
 			NetworkId:       uint32(p.network),
-			TD:              p.ourTd,
-			CurrentBlock:    p.ourHash,
-			GenesisBlock:    p.genesis,
+			TD:              td,
+			CurrentBlock:    head,
+			GenesisBlock:    genesis,
 		})
 	}()
-
-	// read and handle remote status
+	// In the mean time retrieve the remote status message
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
 		return err
@@ -188,28 +197,22 @@ func (p *peer) handleStatus() error {
 	if msg.Size > ProtocolMaxMsgSize {
 		return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 	}
-
+	// Decode the handshake and make sure everything matches
 	var status statusMsgData
 	if err := msg.Decode(&status); err != nil {
 		return errResp(ErrDecode, "msg %v: %v", msg, err)
 	}
-
-	if status.GenesisBlock != p.genesis {
-		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", status.GenesisBlock, p.genesis)
+	if status.GenesisBlock != genesis {
+		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", status.GenesisBlock, genesis)
 	}
-
 	if int(status.NetworkId) != p.network {
 		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, p.network)
 	}
-
 	if int(status.ProtocolVersion) != p.version {
 		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, p.version)
 	}
-	// Set the total difficulty of the peer
-	p.td = status.TD
-	// set the best hash of the peer
-	p.head = status.CurrentBlock
-
+	// Configure the remote peer, and sanity check out handshake too
+	p.td, p.head = status.TD, status.CurrentBlock
 	return <-errc
 }
 
@@ -284,7 +287,7 @@ func (ps *peerSet) PeersWithoutBlock(hash common.Hash) []*peer {
 
 	list := make([]*peer, 0, len(ps.peers))
 	for _, p := range ps.peers {
-		if !p.blockHashes.Has(hash) {
+		if !p.knownBlocks.Has(hash) {
 			list = append(list, p)
 		}
 	}
@@ -299,7 +302,7 @@ func (ps *peerSet) PeersWithoutTx(hash common.Hash) []*peer {
 
 	list := make([]*peer, 0, len(ps.peers))
 	for _, p := range ps.peers {
-		if !p.txHashes.Has(hash) {
+		if !p.knownTxs.Has(hash) {
 			list = append(list, p)
 		}
 	}

@@ -43,11 +43,11 @@ func TestStatusMsgErrors(t *testing.T) {
 			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusMsgData{ProtocolVersion, 999, td, currentBlock, genesis},
+			code: StatusMsg, data: statusMsgData{uint32(ProtocolVersions[0]), 999, td, currentBlock, genesis},
 			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusMsgData{ProtocolVersion, NetworkId, td, currentBlock, common.Hash{3}},
+			code: StatusMsg, data: statusMsgData{uint32(ProtocolVersions[0]), NetworkId, td, currentBlock, common.Hash{3}},
 			wantError: errResp(ErrGenesisBlockMismatch, "0300000000000000000000000000000000000000000000000000000000000000 (!= %x)", genesis),
 		},
 	}
@@ -167,7 +167,7 @@ func newProtocolManagerForTesting(txAdded chan<- []*types.Transaction) *Protocol
 		db, _    = ethdb.NewMemDatabase()
 		chain, _ = core.NewChainManager(core.GenesisBlock(0, db), db, db, core.FakePow{}, em)
 		txpool   = &fakeTxPool{added: txAdded}
-		pm       = NewProtocolManager(ProtocolVersion, 0, em, txpool, core.FakePow{}, chain)
+		pm       = NewProtocolManager(0, em, txpool, core.FakePow{}, chain)
 	)
 	pm.Start()
 	return pm
