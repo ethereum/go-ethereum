@@ -28,7 +28,7 @@ const (
 	GetBlocksMsg
 	BlocksMsg
 	NewBlockMsg
-	BlockHashesFromNumbers
+	GetBlockHashesFromNumberMsg
 )
 
 type errCode int
@@ -77,8 +77,31 @@ type chainManager interface {
 	Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash)
 }
 
-// message structs used for RLP serialization
-type newBlockMsgData struct {
+// statusData is the network packet for the status message.
+type statusData struct {
+	ProtocolVersion uint32
+	NetworkId       uint32
+	TD              *big.Int
+	CurrentBlock    common.Hash
+	GenesisBlock    common.Hash
+}
+
+// getBlockHashesData is the network packet for the hash based block retrieval
+// message.
+type getBlockHashesData struct {
+	Hash   common.Hash
+	Amount uint64
+}
+
+// getBlockHashesFromNumberData is the network packet for the number based block
+// retrieval message.
+type getBlockHashesFromNumberData struct {
+	Number uint64
+	Amount uint64
+}
+
+// newBlockData is the network packet for the block propagation message.
+type newBlockData struct {
 	Block *types.Block
 	TD    *big.Int
 }

@@ -240,7 +240,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		pm.txpool.AddTransactions(txs)
 
 	case GetBlockHashesMsg:
-		var request getBlockHashesMsgData
+		var request getBlockHashesData
 		if err := msg.Decode(&request); err != nil {
 			return errResp(ErrDecode, "->msg %v: %v", msg, err)
 		}
@@ -368,7 +368,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	case NewBlockMsg:
 		// Retrieve and decode the propagated block
-		var request newBlockMsgData
+		var request newBlockData
 		if err := msg.Decode(&request); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}

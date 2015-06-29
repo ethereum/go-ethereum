@@ -39,15 +39,15 @@ func TestStatusMsgErrors(t *testing.T) {
 			wantError: errResp(ErrNoStatusMsg, "first msg has code 2 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusMsgData{10, NetworkId, td, currentBlock, genesis},
+			code: StatusMsg, data: statusData{10, NetworkId, td, currentBlock, genesis},
 			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusMsgData{uint32(ProtocolVersions[0]), 999, td, currentBlock, genesis},
+			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), 999, td, currentBlock, genesis},
 			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusMsgData{uint32(ProtocolVersions[0]), NetworkId, td, currentBlock, common.Hash{3}},
+			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), NetworkId, td, currentBlock, common.Hash{3}},
 			wantError: errResp(ErrGenesisBlockMismatch, "0300000000000000000000000000000000000000000000000000000000000000 (!= %x)", genesis),
 		},
 	}
@@ -188,7 +188,7 @@ func newTestPeer(pm *ProtocolManager) (*testPeer, <-chan error) {
 
 func (p *testPeer) handshake(t *testing.T) {
 	td, currentBlock, genesis := p.pm.chainman.Status()
-	msg := &statusMsgData{
+	msg := &statusData{
 		ProtocolVersion: uint32(p.pm.protVer),
 		NetworkId:       uint32(p.pm.netId),
 		TD:              td,

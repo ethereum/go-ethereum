@@ -25,19 +25,6 @@ const (
 	maxKnownBlocks = 1024  // Maximum block hashes to keep in the known list (prevent DOS)
 )
 
-type statusMsgData struct {
-	ProtocolVersion uint32
-	NetworkId       uint32
-	TD              *big.Int
-	CurrentBlock    common.Hash
-	GenesisBlock    common.Hash
-}
-
-type getBlockHashesMsgData struct {
-	Hash   common.Hash
-	Amount uint64
-}
-
 type peer struct {
 	*p2p.Peer
 
@@ -181,8 +168,15 @@ func (p *peer) SendNewBlock(block *types.Block) error {
 // RequestHashes fetches a batch of hashes from a peer, starting at from, going
 // towards the genesis block.
 func (p *peer) RequestHashes(from common.Hash) error {
-	glog.V(logger.Debug).Infof("Peer [%s] fetching hashes (%d) %x...\n", p.id, downloader.MaxHashFetch, from[:4])
-	return p2p.Send(p.rw, GetBlockHashesMsg, getBlockHashesMsgData{from, uint64(downloader.MaxHashFetch)})
+	glog.V(logger.Debug).Infof("Peer [%s] fetching hashes (%d) from %x...\n", p.id, downloader.MaxHashFetch, from[:4])
+	return p2p.Send(p.rw, GetBlockHashesMsg, getBlockHashesData{from, uint64(downloader.MaxHashFetch)})
+}
+
+// RequestHashesFromNumber fetches a batch of hashes from a peer, starting at the
+// requested block number, going upwards towards the genesis block.
+func (p *peer) RequestHashesFromNumber(from uint64) error {
+	glog.V(logger.Debug).Infof("Peer [%s] fetching hashes (%d) from #%d...\n", p.id, downloader.MaxHashFetch, from)
+	return p2p.Send(p.rw, GetBlockHashesFromNumberMsg, getBlockHashesFromNumberData{from, uint64(downloader.MaxHashFetch)})
 }
 
 // RequestBlocks fetches a batch of blocks corresponding to the specified hashes.
@@ -197,7 +191,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, genesis common.Hash) err
 	// Send out own handshake in a new thread
 	errc := make(chan error, 1)
 	go func() {
-		errc <- p2p.Send(p.rw, StatusMsg, &statusMsgData{
+		errc <- p2p.Send(p.rw, StatusMsg, &statusData{
 			ProtocolVersion: uint32(p.version),
 			NetworkId:       uint32(p.network),
 			TD:              td,
@@ -217,7 +211,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, genesis common.Hash) err
 		return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 	}
 	// Decode the handshake and make sure everything matches
-	var status statusMsgData
+	var status statusData
 	if err := msg.Decode(&status); err != nil {
 		return errResp(ErrDecode, "msg %v: %v", msg, err)
 	}
