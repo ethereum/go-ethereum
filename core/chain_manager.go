@@ -16,10 +16,10 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/rcrowley/go-metrics"
 )
 
 var (
@@ -29,7 +29,7 @@ var (
 	blockHashPre = []byte("block-hash-")
 	blockNumPre  = []byte("block-num-")
 
-	blockInsertTimer = metrics.GetOrRegisterTimer("core/BlockInsertions", metrics.DefaultRegistry)
+	blockInsertTimer = metrics.NewTimer("chain/inserts")
 )
 
 const (

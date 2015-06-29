@@ -75,7 +75,12 @@ func monitor(ctx *cli.Context) {
 	if len(monitored) == 0 {
 		list := expandMetrics(metrics, "")
 		sort.Strings(list)
-		utils.Fatalf("No metrics specified.\n\nAvailable:\n - %s", strings.Join(list, "\n - "))
+
+		if len(list) > 0 {
+			utils.Fatalf("No metrics specified.\n\nAvailable:\n - %s", strings.Join(list, "\n - "))
+		} else {
+			utils.Fatalf("No metrics collected by geth (--%s).\n", utils.MetricsEnabledFlag.Name)
+		}
 	}
 	sort.Strings(monitored)
 	if cols := len(monitored) / ctx.Int(monitorCommandRowsFlag.Name); cols > 6 {
@@ -285,7 +290,7 @@ func updateChart(metric string, data []float64, base *int, chart *termui.LineCha
 	}
 	// Update the chart's label with the scale units
 	units := dataUnits
-	if strings.Contains(metric, "/Percentiles/") || strings.Contains(metric, "/pauses/") {
+	if strings.Contains(metric, "/Percentiles/") || strings.Contains(metric, "/pauses/") || strings.Contains(metric, "/time/") {
 		units = timeUnits
 	}
 	chart.Border.Label = metric
