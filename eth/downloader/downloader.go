@@ -175,7 +175,7 @@ func (d *Downloader) Synchronising() bool {
 
 // RegisterPeer injects a new download peer into the set of block source to be
 // used for fetching hashes and blocks from.
-func (d *Downloader) RegisterPeer(id string, head common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) error {
+func (d *Downloader) RegisterPeer(id string, version int, head common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) error {
 	// If the peer wants to send a banned hash, reject
 	if d.banned.Has(head) {
 		glog.V(logger.Debug).Infoln("Register rejected, head hash banned:", id)
@@ -183,7 +183,7 @@ func (d *Downloader) RegisterPeer(id string, head common.Hash, getHashes hashFet
 	}
 	// Otherwise try to construct and register the peer
 	glog.V(logger.Detail).Infoln("Registering peer", id)
-	if err := d.peers.Register(newPeer(id, head, getHashes, getBlocks)); err != nil {
+	if err := d.peers.Register(newPeer(id, version, head, getHashes, getBlocks)); err != nil {
 		glog.V(logger.Error).Infoln("Register failed:", err)
 		return err
 	}

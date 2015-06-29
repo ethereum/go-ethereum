@@ -39,11 +39,13 @@ type peer struct {
 
 	getHashes hashFetcherFn  // Method to retrieve a batch of hashes (mockable for testing)
 	getBlocks blockFetcherFn // Method to retrieve a batch of blocks (mockable for testing)
+
+	version int // Eth protocol version number to switch strategies
 }
 
 // newPeer create a new downloader peer, with specific hash and block retrieval
 // mechanisms.
-func newPeer(id string, head common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) *peer {
+func newPeer(id string, version int, head common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) *peer {
 	return &peer{
 		id:        id,
 		head:      head,
@@ -51,6 +53,7 @@ func newPeer(id string, head common.Hash, getHashes hashFetcherFn, getBlocks blo
 		getHashes: getHashes,
 		getBlocks: getBlocks,
 		ignored:   set.New(),
+		version:   version,
 	}
 }
 
