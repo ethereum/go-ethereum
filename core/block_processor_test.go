@@ -26,20 +26,19 @@ func proc() (*BlockProcessor, *ChainManager) {
 }
 
 func TestNumber(t *testing.T) {
-	_, chain := proc()
-	block1 := chain.NewBlock(common.Address{})
-	block1.Header().Number = big.NewInt(3)
-	block1.Header().Time--
-
 	pow := ezp.New()
+	_, chain := proc()
 
-	err := ValidateHeader(pow, block1.Header(), chain.Genesis().Header(), false)
+	statedb := state.New(chain.Genesis().Root(), chain.stateDb)
+	header := makeHeader(chain.Genesis(), statedb)
+	header.Number = big.NewInt(3)
+	err := ValidateHeader(pow, header, chain.Genesis(), false)
 	if err != BlockNumberErr {
-		t.Errorf("expected block number error %v", err)
+		t.Errorf("expected block number error, got %q", err)
 	}
 
-	block1 = chain.NewBlock(common.Address{})
-	err = ValidateHeader(pow, block1.Header(), chain.Genesis().Header(), false)
+	header = makeHeader(chain.Genesis(), statedb)
+	err = ValidateHeader(pow, header, chain.Genesis(), false)
 	if err == BlockNumberErr {
 		t.Errorf("didn't expect block number error")
 	}

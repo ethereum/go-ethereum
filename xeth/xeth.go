@@ -209,8 +209,8 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 // - could be removed in favour of mining on testdag (natspec e2e + networking)
 // + filters
 func (self *XEth) ApplyTestTxs(statedb *state.StateDB, address common.Address, txc uint64) (uint64, *XEth) {
-
-	block := self.backend.ChainManager().NewBlock(address)
+	chain := self.backend.ChainManager()
+	header := chain.CurrentBlock().Header()
 	coinbase := statedb.GetStateObject(address)
 	coinbase.SetGasLimit(big.NewInt(10000000))
 	txs := self.backend.TxPool().GetQueuedTransactions()
@@ -218,7 +218,7 @@ func (self *XEth) ApplyTestTxs(statedb *state.StateDB, address common.Address, t
 	for i := 0; i < len(txs); i++ {
 		for _, tx := range txs {
 			if tx.Nonce() == txc {
-				_, _, err := core.ApplyMessage(core.NewEnv(statedb, self.backend.ChainManager(), tx, block), tx, coinbase)
+				_, _, err := core.ApplyMessage(core.NewEnv(statedb, self.backend.ChainManager(), tx, header), tx, coinbase)
 				if err != nil {
 					panic(err)
 				}
@@ -845,8 +845,8 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		msg.gasPrice = self.DefaultGasPrice()
 	}
 
-	block := self.CurrentBlock()
-	vmenv := core.NewEnv(statedb, self.backend.ChainManager(), msg, block)
+	header := self.CurrentBlock().Header()
+	vmenv := core.NewEnv(statedb, self.backend.ChainManager(), msg, header)
 
 	res, gas, err := core.ApplyMessage(vmenv, msg, from)
 	return common.ToHex(res), gas.String(), err
@@ -946,51 +946,45 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 
 	// TODO: align default values to have the same type, e.g. not depend on
 	// common.Value conversions later on
-
-	var tx *types.Transaction
-	if contractCreation {
-		tx = types.NewContractCreationTx(value, gas, price, data)
-	} else {
-		tx = types.NewTransactionMessage(to, value, gas, price, data)
-	}
-
-	state := self.backend.TxPool().State()
-
 	var nonce uint64
 	if len(nonceStr) != 0 {
 		nonce = common.Big(nonceStr).Uint64()
 	} else {
+		state := self.backend.TxPool().State()
 		nonce = state.GetNonce(from)
 	}
-	tx.SetNonce(nonce)
+	var tx *types.Transaction
+	if contractCreation {
+		tx = types.NewContractCreation(nonce, value, gas, price, data)
+	} else {
+		tx = types.NewTransaction(nonce, to, value, gas, price, data)
+	}
 
-	if err := self.sign(tx, from, false); err != nil {
+	signed, err := self.sign(tx, from, false)
+	if err != nil {
 		return "", err
 	}
-	if err := self.backend.TxPool().Add(tx); err != nil {
+	if err = self.backend.TxPool().Add(signed); err != nil {
 		return "", err
 	}
-	//state.SetNonce(from, nonce+1)
 
 	if contractCreation {
 		addr := core.AddressFromMessage(tx)
 		glog.V(logger.Info).Infof("Tx(%x) created: %x\n", tx.Hash(), addr)
-
-		return core.AddressFromMessage(tx).Hex(), nil
+		return addr.Hex(), nil
 	} else {
 		glog.V(logger.Info).Infof("Tx(%x) to: %x\n", tx.Hash(), tx.To())
 	}
 	return tx.Hash().Hex(), nil
 }
 
-func (self *XEth) sign(tx *types.Transaction, from common.Address, didUnlock bool) error {
+func (self *XEth) sign(tx *types.Transaction, from common.Address, didUnlock bool) (*types.Transaction, error) {
 	hash := tx.Hash()
 	sig, err := self.doSign(from, hash, didUnlock)
 	if err != nil {
-		return err
+		return tx, err
 	}
-	tx.SetSignatureValues(sig)
-	return nil
+	return tx.WithSignature(sig)
 }
 
 // callmsg is the message type used for call transations.

@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -11,38 +12,18 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-/*
- * This is the special genesis block.
- */
-
-var ZeroHash256 = make([]byte, 32)
-var ZeroHash160 = make([]byte, 20)
-var ZeroHash512 = make([]byte, 64)
-
+// GenesisBlock creates a genesis block with the given nonce.
 func GenesisBlock(nonce uint64, db common.Database) *types.Block {
-	genesis := types.NewBlock(common.Hash{}, common.Address{}, common.Hash{}, params.GenesisDifficulty, nonce, nil)
-	genesis.Header().Number = common.Big0
-	genesis.Header().GasLimit = params.GenesisGasLimit
-	genesis.Header().GasUsed = common.Big0
-	genesis.Header().Time = 0
-
-	genesis.Td = common.Big0
-
-	genesis.SetUncles([]*types.Header{})
-	genesis.SetTransactions(types.Transactions{})
-	genesis.SetReceipts(types.Receipts{})
-
 	var accounts map[string]struct {
 		Balance string
 		Code    string
 	}
 	err := json.Unmarshal(GenesisAccounts, &accounts)
 	if err != nil {
-		fmt.Println("enable to decode genesis json data:", err)
+		fmt.Println("unable to decode genesis json data:", err)
 		os.Exit(1)
 	}
-
-	statedb := state.New(genesis.Root(), db)
+	statedb := state.New(common.Hash{}, db)
 	for addr, account := range accounts {
 		codedAddr := common.Hex2Bytes(addr)
 		accountState := statedb.CreateAccount(common.BytesToAddress(codedAddr))
@@ -51,10 +32,15 @@ func GenesisBlock(nonce uint64, db common.Database) *types.Block {
 		statedb.UpdateStateObject(accountState)
 	}
 	statedb.Sync()
-	genesis.Header().Root = statedb.Root()
-	genesis.Td = params.GenesisDifficulty
 
-	return genesis
+	block := types.NewBlock(&types.Header{
+		Difficulty: params.GenesisDifficulty,
+		GasLimit:   params.GenesisGasLimit,
+		Nonce:      types.EncodeNonce(nonce),
+		Root:       statedb.Root(),
+	}, nil, nil, nil)
+	block.Td = params.GenesisDifficulty
+	return block
 }
 
 var GenesisAccounts = []byte(`{
@@ -71,3 +57,20 @@ var GenesisAccounts = []byte(`{
 	"e6716f9544a56c530d868e4bfbacb172315bdead": {"balance": "1606938044258990275541962092341162602522202993782792835301376"},
 	"1a26338f0d905e295fccb71fa9ea849ffa12aaf4": {"balance": "1606938044258990275541962092341162602522202993782792835301376"}
 }`)
+
+// GenesisBlockForTesting creates a block in which addr has the given wei balance.
+// The state trie of the block is written to db.
+func GenesisBlockForTesting(db common.Database, addr common.Address, balance *big.Int) *types.Block {
+	statedb := state.New(common.Hash{}, db)
+	obj := statedb.GetOrNewStateObject(addr)
+	obj.SetBalance(balance)
+	statedb.Update()
+	statedb.Sync()
+	block := types.NewBlock(&types.Header{
+		Difficulty: params.GenesisDifficulty,
+		GasLimit:   params.GenesisGasLimit,
+		Root:       statedb.Root(),
+	}, nil, nil, nil)
+	block.Td = params.GenesisDifficulty
+	return block
+}

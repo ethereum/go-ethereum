@@ -1,7 +1,6 @@
 package fetcher
 
 import (
-	"encoding/binary"
 	"errors"
 	"math/big"
 	"sync"
@@ -10,58 +9,32 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 var (
-	knownHash   = common.Hash{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
-	unknownHash = common.Hash{2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}
-	bannedHash  = common.Hash{3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}
-
-	genesis = createBlock(1, common.Hash{}, knownHash)
+	testdb, _    = ethdb.NewMemDatabase()
+	genesis      = core.GenesisBlockForTesting(testdb, common.Address{}, big.NewInt(0))
+	unknownBlock = types.NewBlock(&types.Header{}, nil, nil, nil)
 )
 
-// idCounter is used by the createHashes method the generate deterministic but unique hashes
-var idCounter = int64(2) // #1 is the genesis block
-
-// createHashes generates a batch of hashes rooted at a specific point in the chain.
-func createHashes(amount int, root common.Hash) (hashes []common.Hash) {
-	hashes = make([]common.Hash, amount+1)
-	hashes[len(hashes)-1] = root
-
-	for i := 0; i < len(hashes)-1; i++ {
-		binary.BigEndian.PutUint64(hashes[i][:8], uint64(idCounter))
-		idCounter++
+// makeChain creates a chain of n blocks starting at and including parent.
+// the returned hash chain is ordered head->parent.
+func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common.Hash]*types.Block) {
+	blocks := core.GenerateChain(parent, testdb, n, func(i int, gen *core.BlockGen) {
+		gen.SetCoinbase(common.Address{seed})
+	})
+	hashes := make([]common.Hash, n+1)
+	hashes[len(hashes)-1] = parent.Hash()
+	blockm := make(map[common.Hash]*types.Block, n+1)
+	blockm[parent.Hash()] = parent
+	for i, b := range blocks {
+		hashes[len(hashes)-i-2] = b.Hash()
+		blockm[b.Hash()] = b
 	}
-	return
-}
-
-// createBlock assembles a new block at the given chain height.
-func createBlock(i int, parent, hash common.Hash) *types.Block {
-	header := &types.Header{Number: big.NewInt(int64(i))}
-	block := types.NewBlockWithHeader(header)
-	block.HeaderHash = hash
-	block.ParentHeaderHash = parent
-	return block
-}
-
-// copyBlock makes a deep copy of a block suitable for local modifications.
-func copyBlock(block *types.Block) *types.Block {
-	return createBlock(int(block.Number().Int64()), block.ParentHeaderHash, block.HeaderHash)
-}
-
-// createBlocksFromHashes assembles a collection of blocks, each having a correct
-// place in the given hash chain.
-func createBlocksFromHashes(hashes []common.Hash) map[common.Hash]*types.Block {
-	blocks := make(map[common.Hash]*types.Block)
-	for i := 0; i < len(hashes); i++ {
-		parent := knownHash
-		if i < len(hashes)-1 {
-			parent = hashes[i+1]
-		}
-		blocks[hashes[i]] = createBlock(len(hashes)-i, parent, hashes[i])
-	}
-	return blocks
+	return hashes, blockm
 }
 
 // fetcherTester is a test simulator for mocking out local block chain.
@@ -77,8 +50,8 @@ type fetcherTester struct {
 // newTester creates a new fetcher test mocker.
 func newTester() *fetcherTester {
 	tester := &fetcherTester{
-		hashes: []common.Hash{knownHash},
-		blocks: map[common.Hash]*types.Block{knownHash: genesis},
+		hashes: []common.Hash{genesis.Hash()},
+		blocks: map[common.Hash]*types.Block{genesis.Hash(): genesis},
 	}
 	tester.fetcher = New(tester.getBlock, tester.verifyBlock, tester.broadcastBlock, tester.chainHeight, tester.insertChain, tester.dropPeer)
 	tester.fetcher.Start()
@@ -138,10 +111,9 @@ func (f *fetcherTester) dropPeer(peer string) {
 
 // peerFetcher retrieves a fetcher associated with a simulated peer.
 func (f *fetcherTester) makeFetcher(blocks map[common.Hash]*types.Block) blockRequesterFn {
-	// Copy all the blocks to ensure they are not tampered with
 	closure := make(map[common.Hash]*types.Block)
 	for hash, block := range blocks {
-		closure[hash] = copyBlock(block)
+		closure[hash] = block
 	}
 	// Create a function that returns blocks from the closure
 	return func(hashes []common.Hash) error {
@@ -195,8 +167,7 @@ func verifyImportDone(t *testing.T, imported chan *types.Block) {
 func TestSequentialAnnouncements(t *testing.T) {
 	// Create a chain of blocks to import
 	targetBlocks := 4 * hashLimit
-	hashes := createHashes(targetBlocks, knownHash)
-	blocks := createBlocksFromHashes(hashes)
+	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 
 	tester := newTester()
 	fetcher := tester.makeFetcher(blocks)
@@ -217,8 +188,7 @@ func TestSequentialAnnouncements(t *testing.T) {
 func TestConcurrentAnnouncements(t *testing.T) {
 	// Create a chain of blocks to import
 	targetBlocks := 4 * hashLimit
-	hashes := createHashes(targetBlocks, knownHash)
-	blocks := createBlocksFromHashes(hashes)
+	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 
 	// Assemble a tester with a built in counter for the requests
 	tester := newTester()
@@ -253,8 +223,7 @@ func TestConcurrentAnnouncements(t *testing.T) {
 func TestOverlappingAnnouncements(t *testing.T) {
 	// Create a chain of blocks to import
 	targetBlocks := 4 * hashLimit
-	hashes := createHashes(targetBlocks, knownHash)
-	blocks := createBlocksFromHashes(hashes)
+	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 
 	tester := newTester()
 	fetcher := tester.makeFetcher(blocks)
@@ -280,8 +249,7 @@ func TestOverlappingAnnouncements(t *testing.T) {
 // Tests that announces already being retrieved will not be duplicated.
 func TestPendingDeduplication(t *testing.T) {
 	// Create a hash and corresponding block
-	hashes := createHashes(1, knownHash)
-	blocks := createBlocksFromHashes(hashes)
+	hashes, blocks := makeChain(1, 0, genesis)
 
 	// Assemble a tester with a built in counter and delayed fetcher
 	tester := newTester()
@@ -319,9 +287,9 @@ func TestPendingDeduplication(t *testing.T) {
 // imported when all the gaps are filled in.
 func TestRandomArrivalImport(t *testing.T) {
 	// Create a chain of blocks to import, and choose one to delay
-	hashes := createHashes(maxQueueDist, knownHash)
-	blocks := createBlocksFromHashes(hashes)
-	skip := maxQueueDist / 2
+	targetBlocks := maxQueueDist
+	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+	skip := targetBlocks / 2
 
 	tester := newTester()
 	fetcher := tester.makeFetcher(blocks)
@@ -345,9 +313,9 @@ func TestRandomArrivalImport(t *testing.T) {
 // are correctly schedule, filling and import queue gaps.
 func TestQueueGapFill(t *testing.T) {
 	// Create a chain of blocks to import, and choose one to not announce at all
-	hashes := createHashes(maxQueueDist, knownHash)
-	blocks := createBlocksFromHashes(hashes)
-	skip := maxQueueDist / 2
+	targetBlocks := maxQueueDist
+	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+	skip := targetBlocks / 2
 
 	tester := newTester()
 	fetcher := tester.makeFetcher(blocks)
@@ -371,8 +339,7 @@ func TestQueueGapFill(t *testing.T) {
 // announces, etc) do not get scheduled for import multiple times.
 func TestImportDeduplication(t *testing.T) {
 	// Create two blocks to import (one for duplication, the other for stalling)
-	hashes := createHashes(2, knownHash)
-	blocks := createBlocksFromHashes(hashes)
+	hashes, blocks := makeChain(2, 0, genesis)
 
 	// Create the tester and wrap the importer with a counter
 	tester := newTester()
@@ -410,9 +377,7 @@ func TestImportDeduplication(t *testing.T) {
 // discarded no prevent wasting resources on useless blocks from faulty peers.
 func TestDistantDiscarding(t *testing.T) {
 	// Create a long chain to import
-	hashes := createHashes(3*maxQueueDist, knownHash)
-	blocks := createBlocksFromHashes(hashes)
-
+	hashes, blocks := makeChain(3*maxQueueDist, 0, genesis)
 	head := hashes[len(hashes)/2]
 
 	// Create a tester and simulate a head block being the middle of the above chain
@@ -445,11 +410,11 @@ func TestHashMemoryExhaustionAttack(t *testing.T) {
 	tester.fetcher.importedHook = func(block *types.Block) { imported <- block }
 
 	// Create a valid chain and an infinite junk chain
-	hashes := createHashes(hashLimit+2*maxQueueDist, knownHash)
-	blocks := createBlocksFromHashes(hashes)
+	targetBlocks := hashLimit + 2*maxQueueDist
+	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 	valid := tester.makeFetcher(blocks)
 
-	attack := createHashes(hashLimit+2*maxQueueDist, unknownHash)
+	attack, _ := makeChain(targetBlocks, 0, unknownBlock)
 	attacker := tester.makeFetcher(nil)
 
 	// Feed the tester a huge hashset from the attacker, and a limited from the valid peer
@@ -484,13 +449,11 @@ func TestBlockMemoryExhaustionAttack(t *testing.T) {
 	tester.fetcher.importedHook = func(block *types.Block) { imported <- block }
 
 	// Create a valid chain and a batch of dangling (but in range) blocks
-	hashes := createHashes(blockLimit+2*maxQueueDist, knownHash)
-	blocks := createBlocksFromHashes(hashes)
-
+	targetBlocks := hashLimit + 2*maxQueueDist
+	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 	attack := make(map[common.Hash]*types.Block)
-	for len(attack) < blockLimit+2*maxQueueDist {
-		hashes := createHashes(maxQueueDist-1, unknownHash)
-		blocks := createBlocksFromHashes(hashes)
+	for i := byte(0); len(attack) < blockLimit+2*maxQueueDist; i++ {
+		hashes, blocks := makeChain(maxQueueDist-1, i, unknownBlock)
 		for _, hash := range hashes[:maxQueueDist-2] {
 			attack[hash] = blocks[hash]
 		}
@@ -499,7 +462,7 @@ func TestBlockMemoryExhaustionAttack(t *testing.T) {
 	for _, block := range attack {
 		tester.fetcher.Enqueue("attacker", block)
 	}
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	if queued := tester.fetcher.queue.Size(); queued != blockLimit {
 		t.Fatalf("queued block count mismatch: have %d, want %d", queued, blockLimit)
 	}
