@@ -47,14 +47,21 @@ func NewGasPriceOracle(eth *Ethereum) (self *GasPriceOracle) {
 }
 
 func (self *GasPriceOracle) processPastBlocks() {
-	last := self.chain.CurrentBlock().NumberU64()
-	first := uint64(0)
+	last := int64(-1)
+	cblock := self.chain.CurrentBlock()
+	if cblock != nil {
+		last = int64(cblock.NumberU64())
+	}
+	first := int64(0)
 	if last > gpoProcessPastBlocks {
 		first = last - gpoProcessPastBlocks
 	}
-	self.firstProcessed = first
+	self.firstProcessed = uint64(first)
 	for i := first; i <= last; i++ {
-		self.processBlock(self.chain.GetBlockByNumber(i))
+		block := self.chain.GetBlockByNumber(uint64(i))
+		if block != nil {
+			self.processBlock(block)
+		}
 	}
 
 }
