@@ -906,6 +906,9 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	trans := new(types.Transaction)
+	trans.Amount = new(big.Int)
+	trans.GasLimit = new(big.Int)
+	trans.Price = new(big.Int)
 
 	if val, found := fields["To"]; found {
 		if strVal, ok := val.(string); ok && len(strVal) > 0 {
@@ -928,13 +931,15 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.Nonce - %v", err))
 			}
 		}
+	} else {
+		return shared.NewDecodeParamError("tx.Nonce not found")
 	}
 
 	var parseOk bool
 	if val, found := fields["Value"]; found {
 		if strVal, ok := val.(string); ok {
 			tx.Value = strVal
-			if trans.Amount, parseOk = new(big.Int).SetString(strVal, 0); !parseOk {
+			if _, parseOk = trans.Amount.SetString(strVal, 0); !parseOk {
 				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.Amount - %v", err))
 			}
 		}
@@ -954,7 +959,7 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 	if val, found := fields["GasLimit"]; found {
 		if strVal, ok := val.(string); ok {
 			tx.GasLimit = strVal
-			if trans.GasLimit, parseOk = new(big.Int).SetString(strVal, 0); !parseOk {
+			if _, parseOk = trans.GasLimit.SetString(strVal, 0); !parseOk {
 				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.GasLimit - %v", err))
 			}
 		}
@@ -963,7 +968,7 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 	if val, found := fields["GasPrice"]; found {
 		if strVal, ok := val.(string); ok {
 			tx.GasPrice = strVal
-			if trans.Price, parseOk = new(big.Int).SetString(strVal, 0); !parseOk {
+			if _, parseOk = trans.Price.SetString(strVal, 0); !parseOk {
 				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.GasPrice - %v", err))
 			}
 		}
