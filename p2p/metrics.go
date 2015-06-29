@@ -5,14 +5,14 @@ package p2p
 import (
 	"net"
 
-	"github.com/rcrowley/go-metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 var (
-	ingressConnectMeter = metrics.GetOrRegisterMeter("p2p/InboundConnects", metrics.DefaultRegistry)
-	ingressTrafficMeter = metrics.GetOrRegisterMeter("p2p/InboundTraffic", metrics.DefaultRegistry)
-	egressConnectMeter  = metrics.GetOrRegisterMeter("p2p/OutboundConnects", metrics.DefaultRegistry)
-	egressTrafficMeter  = metrics.GetOrRegisterMeter("p2p/OutboundTraffic", metrics.DefaultRegistry)
+	ingressConnectMeter = metrics.NewMeter("p2p/InboundConnects")
+	ingressTrafficMeter = metrics.NewMeter("p2p/InboundTraffic")
+	egressConnectMeter  = metrics.NewMeter("p2p/OutboundConnects")
+	egressTrafficMeter  = metrics.NewMeter("p2p/OutboundTraffic")
 )
 
 // meteredConn is a wrapper around a network TCP connection that meters both the

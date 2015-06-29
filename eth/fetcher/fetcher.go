@@ -7,13 +7,11 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/rcrowley/go-metrics"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -99,14 +97,6 @@ type Fetcher struct {
 	// Testing hooks
 	fetchingHook func([]common.Hash) // Method to call upon starting a block fetch
 	importedHook func(*types.Block)  // Method to call upon successful block import
-
-	// Runtime metrics
-	announceMeter  metrics.Meter // Counter for metering the inbound announcements
-	announceTimer  metrics.Timer // Counter and timer for metering the announce forwarding
-	broadcastMeter metrics.Meter // Counter for metering the inbound propagations
-	broadcastTimer metrics.Timer // Counter and timer for metering the block forwarding
-	discardMeter   metrics.Meter // Counter for metering the discarded blocks
-	futureMeter    metrics.Meter // Counter for metering future blocks
 }
 
 // New creates a block fetcher to retrieve blocks based on hash announcements.
@@ -129,12 +119,6 @@ func New(getBlock blockRetrievalFn, validateBlock blockValidatorFn, broadcastBlo
 		chainHeight:    chainHeight,
 		insertChain:    insertChain,
 		dropPeer:       dropPeer,
-		announceMeter:  metrics.GetOrRegisterMeter("eth/sync/RemoteAnnounces", metrics.DefaultRegistry),
-		announceTimer:  metrics.GetOrRegisterTimer("eth/sync/LocalAnnounces", metrics.DefaultRegistry),
-		broadcastMeter: metrics.GetOrRegisterMeter("eth/sync/RemoteBroadcasts", metrics.DefaultRegistry),
-		broadcastTimer: metrics.GetOrRegisterTimer("eth/sync/LocalBroadcasts", metrics.DefaultRegistry),
-		discardMeter:   metrics.GetOrRegisterMeter("eth/sync/DiscardedBlocks", metrics.DefaultRegistry),
-		futureMeter:    metrics.GetOrRegisterMeter("eth/sync/FutureBlocks", metrics.DefaultRegistry),
 	}
 }
 
@@ -246,7 +230,7 @@ func (f *Fetcher) loop() {
 
 		case notification := <-f.notify:
 			// A block was announced, make sure the peer isn't DOSing us
-			f.announceMeter.Mark(1)
+			announceMeter.Mark(1)
 
 			count := f.announces[notification.origin] + 1
 			if count > hashLimit {
@@ -265,7 +249,7 @@ func (f *Fetcher) loop() {
 
 		case op := <-f.inject:
 			// A direct block insertion was requested, try and fill any pending gaps
-			f.broadcastMeter.Mark(1)
+			broadcastMeter.Mark(1)
 			f.enqueue(op.origin, op.block)
 
 		case hash := <-f.done:
@@ -384,7 +368,7 @@ func (f *Fetcher) enqueue(peer string, block *types.Block) {
 	// Discard any past or too distant blocks
 	if dist := int64(block.NumberU64()) - int64(f.chainHeight()); dist < -maxUncleDist || dist > maxQueueDist {
 		glog.V(logger.Debug).Infof("Peer %s: discarded block #%d [%x], distance %d", peer, block.NumberU64(), hash.Bytes()[:4], dist)
-		f.discardMeter.Mark(1)
+		discardMeter.Mark(1)
 		return
 	}
 	// Schedule the block for future importing
@@ -423,11 +407,11 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 		switch err := f.validateBlock(block, parent); err {
 		case nil:
 			// All ok, quickly propagate to our peers
-			f.broadcastTimer.UpdateSince(block.ReceivedAt)
+			broadcastTimer.UpdateSince(block.ReceivedAt)
 			go f.broadcastBlock(block, true)
 
 		case core.BlockFutureErr:
-			f.futureMeter.Mark(1)
+			futureMeter.Mark(1)
 			// Weird future block, don't fail, but neither propagate
 
 		default:
@@ -442,7 +426,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			return
 		}
 		// If import succeeded, broadcast the block
-		f.announceTimer.UpdateSince(block.ReceivedAt)
+		announceTimer.UpdateSince(block.ReceivedAt)
 		go f.broadcastBlock(block, false)
 
 		// Invoke the testing hook if needed
