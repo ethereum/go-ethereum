@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/hashicorp/golang-lru"
-	"github.com/rcrowley/go-metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
