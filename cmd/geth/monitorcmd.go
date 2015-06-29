@@ -75,7 +75,12 @@ func monitor(ctx *cli.Context) {
 	if len(monitored) == 0 {
 		list := expandMetrics(metrics, "")
 		sort.Strings(list)
-		utils.Fatalf("No metrics specified.\n\nAvailable:\n - %s", strings.Join(list, "\n - "))
+
+		if len(list) > 0 {
+			utils.Fatalf("No metrics specified.\n\nAvailable:\n - %s", strings.Join(list, "\n - "))
+		} else {
+			utils.Fatalf("No metrics specified.\n\nNo metrics collected (--metrics)\n")
+		}
 	}
 	sort.Strings(monitored)
 	if cols := len(monitored) / ctx.Int(monitorCommandRowsFlag.Name); cols > 6 {
