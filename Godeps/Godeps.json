@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/ethereum/go-ethereum",
-	"GoVersion": "go1.4.2",
+	"GoVersion": "go1.4",
 	"Packages": [
 		"./..."
 	],
@@ -27,6 +27,11 @@
 		{
 			"ImportPath": "github.com/gizak/termui",
 			"Rev": "bab8dce01c193d82bc04888a0a9a7814d505f532"
+		},
+		{
+			"ImportPath": "github.com/howeyc/fsnotify",
+			"Comment": "v0.9.0-11-g6b1ef89",
+			"Rev": "6b1ef893dc11e0447abda6da20a5203481878dda"
 		},
 		{
 			"ImportPath": "github.com/huin/goupnp",
