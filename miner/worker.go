@@ -416,10 +416,12 @@ func (self *worker) commitNewWork() {
 		delete(self.possibleUncles, hash)
 	}
 
-	// commit state root after all state transitions.
-	core.AccumulateRewards(self.current.state, header, uncles)
-	current.state.Update()
-	header.Root = current.state.Root()
+	if atomic.LoadInt32(&self.mining) == 1 {
+		// commit state root after all state transitions.
+		core.AccumulateRewards(self.current.state, header, uncles)
+		current.state.Update()
+		header.Root = current.state.Root()
+	}
 
 	// create the new block whose nonce will be mined.
 	current.block = types.NewBlock(header, current.txs, uncles, current.receipts)
