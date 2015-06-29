@@ -233,38 +233,40 @@ func (self *worker) wait() {
 				continue
 			}
 
-			if _, err := self.chain.InsertChain(types.Blocks{block}); err == nil {
-				for _, uncle := range block.Uncles() {
-					delete(self.possibleUncles, uncle.Hash())
-				}
-				self.mux.Post(core.NewMinedBlockEvent{block})
-
-				var stale, confirm string
-				canonBlock := self.chain.GetBlockByNumber(block.NumberU64())
-				if canonBlock != nil && canonBlock.Hash() != block.Hash() {
-					stale = "stale "
-				} else {
-					confirm = "Wait 5 blocks for confirmation"
-					self.current.localMinedBlocks = newLocalMinedBlock(block.Number().Uint64(), self.current.localMinedBlocks)
-				}
-
-				glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
-
-				jsonlogger.LogJson(&logger.EthMinerNewBlock{
-					BlockHash:     block.Hash().Hex(),
-					BlockNumber:   block.Number(),
-					ChainHeadHash: block.ParentHash().Hex(),
-					BlockPrevHash: block.ParentHash().Hex(),
-				})
-			} else {
-				self.commitNewWork()
+			_, err := self.chain.WriteBlock(block)
+			if err != nil {
+				glog.V(logger.Error).Infoln("error writing block to chain", err)
+				continue
 			}
+
+			// check staleness and display confirmation
+			var stale, confirm string
+			canonBlock := self.chain.GetBlockByNumber(block.NumberU64())
+			if canonBlock != nil && canonBlock.Hash() != block.Hash() {
+				stale = "stale "
+			} else {
+				confirm = "Wait 5 blocks for confirmation"
+				self.current.localMinedBlocks = newLocalMinedBlock(block.Number().Uint64(), self.current.localMinedBlocks)
+			}
+
+			glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
+
+			// broadcast before waiting for validation
+			go self.mux.Post(core.NewMinedBlockEvent{block})
+
+			self.commitNewWork()
 		}
 	}
 }
 
 func (self *worker) push() {
 	if atomic.LoadInt32(&self.mining) == 1 {
+		if core.Canary(self.current.state) {
+			glog.Infoln("Toxicity levels rising to deadly levels. Your canary has died. You can go back or continue down the mineshaft --more--")
+			glog.Infoln("You turn back and abort mining")
+			return
+		}
+
 		// push new work to agents
 		for _, agent := range self.agents {
 			atomic.AddInt32(&self.atWork, 1)
@@ -369,6 +371,13 @@ func (self *worker) commitNewWork() {
 	if tstamp <= parent.Time() {
 		tstamp = parent.Time() + 1
 	}
+	// this will ensure we're not going off too far in the future
+	if now := time.Now().Unix(); tstamp > now+4 {
+		wait := time.Duration(tstamp-now) * time.Second
+		glog.V(logger.Info).Infoln("We are too far in the future. Waiting for", wait)
+		time.Sleep(wait)
+	}
+
 	num := parent.Number()
 	header := &types.Header{
 		ParentHash: parent.Hash(),
@@ -420,11 +429,13 @@ func (self *worker) commitNewWork() {
 		// commit state root after all state transitions.
 		core.AccumulateRewards(self.current.state, header, uncles)
 		current.state.Update()
+		self.current.state.Sync()
 		header.Root = current.state.Root()
 	}
 
 	// create the new block whose nonce will be mined.
 	current.block = types.NewBlock(header, current.txs, uncles, current.receipts)
+	self.current.block.Td = new(big.Int).Set(core.CalcTD(self.current.block, self.chain.GetBlock(self.current.block.ParentHash())))
 
 	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {

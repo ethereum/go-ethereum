@@ -541,6 +541,58 @@ func (self *ChainManager) flushQueuedBlocks() {
 	}
 }
 
+type writeStatus byte
+
+const (
+	nonStatTy writeStatus = iota
+	canonStatTy
+	splitStatTy
+	sideStatTy
+)
+
+func (self *ChainManager) WriteBlock(block *types.Block) (status writeStatus, err error) {
+	self.wg.Add(1)
+	defer self.wg.Done()
+
+	cblock := self.currentBlock
+	// Compare the TD of the last known block in the canonical chain to make sure it's greater.
+	// At this point it's possible that a different chain (fork) becomes the new canonical chain.
+	if block.Td.Cmp(self.Td()) > 0 {
+		// chain fork
+		if block.ParentHash() != cblock.Hash() {
+			// during split we merge two different chains and create the new canonical chain
+			err := self.merge(cblock, block)
+			if err != nil {
+				return nonStatTy, err
+			}
+
+			status = splitStatTy
+		}
+
+		self.mu.Lock()
+		self.setTotalDifficulty(block.Td)
+		self.insert(block)
+		self.mu.Unlock()
+
+		self.setTransState(state.New(block.Root(), self.stateDb))
+		self.txState.SetState(state.New(block.Root(), self.stateDb))
+
+		status = canonStatTy
+	} else {
+		status = sideStatTy
+	}
+
+	// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
+	// not in the canonical chain.
+	self.mu.Lock()
+	self.enqueueForWrite(block)
+	self.mu.Unlock()
+	// Delete from future blocks
+	self.futureBlocks.Delete(block.Hash())
+
+	return
+}
+
 // InsertChain will attempt to insert the given chain in to the canonical chain or, otherwise, create a fork. It an error is returned
 // it will return the index number of the failing block as well an error describing what went wrong (for possible errors see core/errors.go).
 func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
@@ -635,57 +687,29 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 
 		txcount += len(block.Transactions())
 
-		cblock := self.currentBlock
-		// Compare the TD of the last known block in the canonical chain to make sure it's greater.
-		// At this point it's possible that a different chain (fork) becomes the new canonical chain.
-		if block.Td.Cmp(self.Td()) > 0 {
-			// chain fork
-			if block.ParentHash() != cblock.Hash() {
-				// during split we merge two different chains and create the new canonical chain
-				err := self.merge(cblock, block)
-				if err != nil {
-					return i, err
-				}
-
-				queue[i] = ChainSplitEvent{block, logs}
-				queueEvent.splitCount++
-			}
-
-			self.mu.Lock()
-			self.setTotalDifficulty(block.Td)
-			self.insert(block)
-			self.mu.Unlock()
-
-			jsonlogger.LogJson(&logger.EthChainNewHead{
-				BlockHash:     block.Hash().Hex(),
-				BlockNumber:   block.Number(),
-				ChainHeadHash: cblock.Hash().Hex(),
-				BlockPrevHash: block.ParentHash().Hex(),
-			})
-
-			self.setTransState(state.New(block.Root(), self.stateDb))
-			self.txState.SetState(state.New(block.Root(), self.stateDb))
-
-			queue[i] = ChainEvent{block, block.Hash(), logs}
-			queueEvent.canonicalCount++
-
+		// write the block to the chain and get the status
+		status, err := self.WriteBlock(block)
+		if err != nil {
+			return i, err
+		}
+		switch status {
+		case canonStatTy:
 			if glog.V(logger.Debug) {
 				glog.Infof("[%v] inserted block #%d (%d TXs %d UNCs) (%x...). Took %v\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
 			}
-		} else {
+			queue[i] = ChainEvent{block, block.Hash(), logs}
+			queueEvent.canonicalCount++
+		case sideStatTy:
 			if glog.V(logger.Detail) {
 				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...). Took %v\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
 			}
-
 			queue[i] = ChainSideEvent{block, logs}
 			queueEvent.sideCount++
+		case splitStatTy:
+			queue[i] = ChainSplitEvent{block, logs}
+			queueEvent.splitCount++
 		}
-		self.enqueueForWrite(block)
-		// Delete from future blocks
-		self.futureBlocks.Delete(block.Hash())
-
 		stats.processed++
-		blockInsertTimer.UpdateSince(bstart)
 	}
 
 	if (stats.queued > 0 || stats.processed > 0 || stats.ignored > 0) && bool(glog.V(logger.Info)) {
@@ -744,9 +768,9 @@ func (self *ChainManager) diff(oldBlock, newBlock *types.Block) (types.Blocks, e
 		}
 	}
 
-	if glog.V(logger.Info) {
+	if glog.V(logger.Debug) {
 		commonHash := commonBlock.Hash()
-		glog.Infof("Fork detected @ %x. Reorganising chain from #%v %x to %x", commonHash[:4], numSplit, oldStart.Hash().Bytes()[:4], newStart.Hash().Bytes()[:4])
+		glog.Infof("Chain split detected @ %x. Reorganising chain from #%v %x to %x", commonHash[:4], numSplit, oldStart.Hash().Bytes()[:4], newStart.Hash().Bytes()[:4])
 	}
 
 	return newChain, nil
