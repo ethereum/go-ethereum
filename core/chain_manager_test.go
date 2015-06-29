@@ -393,7 +393,7 @@ func chm(genesis *types.Block, db common.Database) *ChainManager {
 	var eventMux event.TypeMux
 	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
 	bc.cache, _ = lru.New(100)
-	bc.futureBlocks = NewBlockCache(100)
+	bc.futureBlocks, _ = lru.New(100)
 	bc.processor = bproc{}
 	bc.ResetWithGenesisBlock(genesis)
 	bc.txState = state.ManageState(bc.State())

@@ -109,9 +109,9 @@ type ChainManager struct {
 	transState *state.StateDB
 	txState    *state.ManagedState
 
-	cache         *lru.Cache  // cache is the LRU caching
-	futureBlocks  *BlockCache // future blocks are blocks added for later processing
-	pendingBlocks *BlockCache // pending blocks contain blocks not yet written to the db
+	cache         *lru.Cache // cache is the LRU caching
+	futureBlocks  *lru.Cache // future blocks are blocks added for later processing
+	pendingBlocks *lru.Cache // pending blocks contain blocks not yet written to the db
 
 	quit chan struct{}
 	// procInterrupt must be atomically called
@@ -158,7 +158,7 @@ func NewChainManager(genesis *types.Block, blockDb, stateDb common.Database, pow
 	// Take ownership of this particular state
 	bc.txState = state.ManageState(bc.State().Copy())
 
-	bc.futureBlocks = NewBlockCache(maxFutureBlocks)
+	bc.futureBlocks, _ = lru.New(maxFutureBlocks)
 	bc.makeCache()
 
 	go bc.update()
@@ -390,7 +390,7 @@ func (bc *ChainManager) HasBlock(hash common.Hash) bool {
 	}
 
 	if bc.pendingBlocks != nil {
-		if block := bc.pendingBlocks.Get(hash); block != nil {
+		if _, exist := bc.pendingBlocks.Get(hash); exist {
 			return true
 		}
 	}
@@ -426,8 +426,8 @@ func (self *ChainManager) GetBlock(hash common.Hash) *types.Block {
 	}
 
 	if self.pendingBlocks != nil {
-		if block := self.pendingBlocks.Get(hash); block != nil {
-			return block
+		if block, _ := self.pendingBlocks.Get(hash); block != nil {
+			return block.(*types.Block)
 		}
 	}
 
@@ -510,10 +510,11 @@ type queueEvent struct {
 }
 
 func (self *ChainManager) procFutureBlocks() {
-	var blocks []*types.Block
-	self.futureBlocks.Each(func(i int, block *types.Block) {
-		blocks = append(blocks, block)
-	})
+	blocks := make([]*types.Block, self.futureBlocks.Len())
+	for i, hash := range self.futureBlocks.Keys() {
+		block, _ := self.futureBlocks.Get(hash)
+		blocks[i] = block.(*types.Block)
+	}
 	if len(blocks) > 0 {
 		types.BlockBy(types.Number).Sort(blocks)
 		self.InsertChain(blocks)
@@ -521,13 +522,16 @@ func (self *ChainManager) procFutureBlocks() {
 }
 
 func (self *ChainManager) enqueueForWrite(block *types.Block) {
-	self.pendingBlocks.Push(block)
+	self.pendingBlocks.Add(block.Hash(), block)
 }
 
 func (self *ChainManager) flushQueuedBlocks() {
 	db, batchWrite := self.blockDb.(*ethdb.LDBDatabase)
 	batch := new(leveldb.Batch)
-	self.pendingBlocks.Each(func(i int, block *types.Block) {
+	for _, key := range self.pendingBlocks.Keys() {
+		b, _ := self.pendingBlocks.Get(key)
+		block := b.(*types.Block)
+
 		enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
 		key := append(blockHashPre, block.Hash().Bytes()...)
 		if batchWrite {
@@ -535,7 +539,8 @@ func (self *ChainManager) flushQueuedBlocks() {
 		} else {
 			self.blockDb.Put(key, enc)
 		}
-	})
+	}
+
 	if batchWrite {
 		db.LDB().Write(batch, nil)
 	}
@@ -588,7 +593,7 @@ func (self *ChainManager) WriteBlock(block *types.Block) (status writeStatus, er
 	self.enqueueForWrite(block)
 	self.mu.Unlock()
 	// Delete from future blocks
-	self.futureBlocks.Delete(block.Hash())
+	self.futureBlocks.Remove(block.Hash())
 
 	return
 }
@@ -602,7 +607,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	self.chainmu.Lock()
 	defer self.chainmu.Unlock()
 
-	self.pendingBlocks = NewBlockCache(len(chain))
+	self.pendingBlocks, _ = lru.New(len(chain))
 
 	// A queued approach to delivering events. This is generally
 	// faster than direct delivery and requires much less mutex
@@ -669,13 +674,13 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 					return i, fmt.Errorf("%v: BlockFutureErr, %v > %v", BlockFutureErr, block.Time(), max)
 				}
 
-				self.futureBlocks.Push(block)
+				self.futureBlocks.Add(block.Hash(), block)
 				stats.queued++
 				continue
 			}
 
-			if IsParentErr(err) && self.futureBlocks.Has(block.ParentHash()) {
-				self.futureBlocks.Push(block)
+			if IsParentErr(err) && self.futureBlocks.Contains(block.ParentHash()) {
+				self.futureBlocks.Add(block.Hash(), block)
 				stats.queued++
 				continue
 			}
