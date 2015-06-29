@@ -917,7 +917,11 @@ func (args *ResendArgs) UnmarshalJSON(b []byte) (err error) {
 	trans := new(tx)
 	err = json.Unmarshal(data, trans)
 	if err != nil {
-		return shared.NewDecodeParamError("Unable to parse transaction object.")
+		return shared.NewDecodeParamError("Unable to parse transaction object")
+	}
+
+	if trans == nil || trans.tx == nil {
+		return shared.NewDecodeParamError("Unable to parse transaction object")
 	}
 
 	gasLimit, gasPrice := trans.GasLimit, trans.GasPrice
@@ -936,6 +940,7 @@ func (args *ResendArgs) UnmarshalJSON(b []byte) (err error) {
 			return shared.NewInvalidTypeError("gasLimit", "not a string")
 		}
 	}
+
 	args.Tx = trans
 	args.GasPrice = gasPrice
 	args.GasLimit = gasLimit
