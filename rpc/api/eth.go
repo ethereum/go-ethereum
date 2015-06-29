@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
 	"gopkg.in/fatih/set.v0"
-	"fmt"
 )
 
 const (
