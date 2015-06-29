@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
 	"gopkg.in/fatih/set.v0"
+	"fmt"
 )
 
 const (
@@ -582,7 +583,7 @@ func (self *ethApi) Resend(req *shared.Request) (interface{}, error) {
 func (self *ethApi) PendingTransactions(req *shared.Request) (interface{}, error) {
 	txs := self.ethereum.TxPool().GetTransactions()
 
-	// grab the accounts from the account manager. This will help with determening which
+	// grab the accounts from the account manager. This will help with determining which
 	// transactions should be returned.
 	accounts, err := self.ethereum.AccountManager().Accounts()
 	if err != nil {
