@@ -323,7 +323,7 @@ func (f *Fetcher) loop() {
 				hash := block.Hash()
 
 				// Filter explicitly requested blocks from hash announcements
-				if _, ok := f.fetching[hash]; ok {
+				if f.fetching[hash] != nil && f.queued[hash] == nil {
 					// Discard if already imported by other means
 					if f.getBlock(hash) == nil {
 						explicit = append(explicit, block)
