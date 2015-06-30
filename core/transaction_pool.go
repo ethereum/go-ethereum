@@ -65,7 +65,7 @@ func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func(
 		gasLimit:     gasLimitFn,
 		minGasPrice:  new(big.Int),
 		pendingState: state.ManageState(currentStateFn()),
-		events:       eventMux.Subscribe(ChainEvent{}, GasPriceChanged{}),
+		events:       eventMux.Subscribe(ChainHeadEvent{}, GasPriceChanged{}),
 	}
 	go pool.eventLoop()
 
@@ -80,7 +80,7 @@ func (pool *TxPool) eventLoop() {
 		pool.mu.Lock()
 
 		switch ev := ev.(type) {
-		case ChainEvent:
+		case ChainHeadEvent:
 			pool.resetState()
 		case GasPriceChanged:
 			pool.minGasPrice = ev.Price
