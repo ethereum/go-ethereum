@@ -885,10 +885,10 @@ func newTx(t *types.Transaction) *tx {
 		tx:       t,
 		To:       to,
 		From:     from.Hex(),
-		Value:    t.Amount.String(),
+		Value:    t.Value().String(),
 		Nonce:    strconv.Itoa(int(t.Nonce())),
 		Data:     "0x" + common.Bytes2Hex(t.Data()),
-		GasLimit: t.GasLimit.String(),
+		GasLimit: t.Gas().String(),
 		GasPrice: t.GasPrice().String(),
 	}
 }
@@ -905,16 +905,21 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 		return shared.NewDecodeParamError(err.Error())
 	}
 
-	trans := new(types.Transaction)
-	trans.Amount = new(big.Int)
-	trans.GasLimit = new(big.Int)
-	trans.Price = new(big.Int)
+	var (
+		nonce            uint64
+		to               common.Address
+		amount           = new(big.Int).Set(common.Big0)
+		gasLimit         = new(big.Int).Set(common.Big0)
+		gasPrice         = new(big.Int).Set(common.Big0)
+		data             []byte
+		contractCreation = true
+	)
 
 	if val, found := fields["To"]; found {
 		if strVal, ok := val.(string); ok && len(strVal) > 0 {
 			tx.To = strVal
-			to := common.StringToAddress(strVal)
-			trans.Recipient = &to
+			to = common.HexToAddress(strVal)
+			contractCreation = false
 		}
 	}
 
@@ -927,7 +932,7 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 	if val, found := fields["Nonce"]; found {
 		if strVal, ok := val.(string); ok {
 			tx.Nonce = strVal
-			if trans.AccountNonce, err = strconv.ParseUint(strVal, 10, 64); err != nil {
+			if nonce, err = strconv.ParseUint(strVal, 10, 64); err != nil {
 				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.Nonce - %v", err))
 			}
 		}
@@ -939,7 +944,7 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 	if val, found := fields["Value"]; found {
 		if strVal, ok := val.(string); ok {
 			tx.Value = strVal
-			if _, parseOk = trans.Amount.SetString(strVal, 0); !parseOk {
+			if _, parseOk = amount.SetString(strVal, 0); !parseOk {
 				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.Amount - %v", err))
 			}
 		}
@@ -949,9 +954,9 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 		if strVal, ok := val.(string); ok {
 			tx.Data = strVal
 			if strings.HasPrefix(strVal, "0x") {
-				trans.Payload = common.Hex2Bytes(strVal[2:])
+				data = common.Hex2Bytes(strVal[2:])
 			} else {
-				trans.Payload = common.Hex2Bytes(strVal)
+				data = common.Hex2Bytes(strVal)
 			}
 		}
 	}
@@ -959,7 +964,7 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 	if val, found := fields["GasLimit"]; found {
 		if strVal, ok := val.(string); ok {
 			tx.GasLimit = strVal
-			if _, parseOk = trans.GasLimit.SetString(strVal, 0); !parseOk {
+			if _, parseOk = gasLimit.SetString(strVal, 0); !parseOk {
 				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.GasLimit - %v", err))
 			}
 		}
@@ -968,13 +973,17 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 	if val, found := fields["GasPrice"]; found {
 		if strVal, ok := val.(string); ok {
 			tx.GasPrice = strVal
-			if _, parseOk = trans.Price.SetString(strVal, 0); !parseOk {
+			if _, parseOk = gasPrice.SetString(strVal, 0); !parseOk {
 				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.GasPrice - %v", err))
 			}
 		}
 	}
 
-	tx.tx = trans
+	if contractCreation {
+		tx.tx = types.NewContractCreation(nonce, amount, gasLimit, gasPrice, data)
+	} else {
+		tx.tx = types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
+	}
 
 	return nil
 }
