@@ -249,15 +249,22 @@ func countMatchingProtocols(protocols []Protocol, caps []Cap) int {
 
 // matchProtocols creates structures for matching named subprotocols.
 func matchProtocols(protocols []Protocol, caps []Cap, rw MsgReadWriter) map[string]*protoRW {
-	sort.Sort(capsByName(caps))
+	sort.Sort(capsByNameAndVersion(caps))
 	offset := baseProtocolLength
 	result := make(map[string]*protoRW)
+
 outer:
 	for _, cap := range caps {
 		for _, proto := range protocols {
-			if proto.Name == cap.Name && proto.Version == cap.Version && result[cap.Name] == nil {
+			if proto.Name == cap.Name && proto.Version == cap.Version {
+				// If an old protocol version matched, revert it
+				if old := result[cap.Name]; old != nil {
+					offset -= old.Length
+				}
+				// Assign the new match
 				result[cap.Name] = &protoRW{Protocol: proto, offset: offset, in: make(chan Msg), w: rw}
 				offset += proto.Length
+
 				continue outer
 			}
 		}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -229,6 +230,8 @@ func (f *Fetcher) loop() {
 
 		case notification := <-f.notify:
 			// A block was announced, make sure the peer isn't DOSing us
+			announceMeter.Mark(1)
+
 			count := f.announces[notification.origin] + 1
 			if count > hashLimit {
 				glog.V(logger.Debug).Infof("Peer %s: exceeded outstanding announces (%d)", notification.origin, hashLimit)
@@ -246,6 +249,7 @@ func (f *Fetcher) loop() {
 
 		case op := <-f.inject:
 			// A direct block insertion was requested, try and fill any pending gaps
+			broadcastMeter.Mark(1)
 			f.enqueue(op.origin, op.block)
 
 		case hash := <-f.done:
@@ -307,7 +311,7 @@ func (f *Fetcher) loop() {
 				hash := block.Hash()
 
 				// Filter explicitly requested blocks from hash announcements
-				if _, ok := f.fetching[hash]; ok {
+				if f.fetching[hash] != nil && f.queued[hash] == nil {
 					// Discard if already imported by other means
 					if f.getBlock(hash) == nil {
 						explicit = append(explicit, block)
@@ -364,6 +368,7 @@ func (f *Fetcher) enqueue(peer string, block *types.Block) {
 	// Discard any past or too distant blocks
 	if dist := int64(block.NumberU64()) - int64(f.chainHeight()); dist < -maxUncleDist || dist > maxQueueDist {
 		glog.V(logger.Debug).Infof("Peer %s: discarded block #%d [%x], distance %d", peer, block.NumberU64(), hash.Bytes()[:4], dist)
+		discardMeter.Mark(1)
 		return
 	}
 	// Schedule the block for future importing
@@ -399,19 +404,29 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			return
 		}
 		// Quickly validate the header and propagate the block if it passes
-		if err := f.validateBlock(block, parent); err != nil {
+		switch err := f.validateBlock(block, parent); err {
+		case nil:
+			// All ok, quickly propagate to our peers
+			broadcastTimer.UpdateSince(block.ReceivedAt)
+			go f.broadcastBlock(block, true)
+
+		case core.BlockFutureErr:
+			futureMeter.Mark(1)
+			// Weird future block, don't fail, but neither propagate
+
+		default:
+			// Something went very wrong, drop the peer
 			glog.V(logger.Debug).Infof("Peer %s: block #%d [%x] verification failed: %v", peer, block.NumberU64(), hash[:4], err)
 			f.dropPeer(peer)
 			return
 		}
-		go f.broadcastBlock(block, true)
-
 		// Run the actual import and log any issues
 		if _, err := f.insertChain(types.Blocks{block}); err != nil {
 			glog.V(logger.Warn).Infof("Peer %s: block #%d [%x] import failed: %v", peer, block.NumberU64(), hash[:4], err)
 			return
 		}
 		// If import succeeded, broadcast the block
+		announceTimer.UpdateSince(block.ReceivedAt)
 		go f.broadcastBlock(block, false)
 
 		// Invoke the testing hook if needed

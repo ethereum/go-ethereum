@@ -2,6 +2,8 @@ package api
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -11,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/rcrowley/go-metrics"
 )
 
 const (
@@ -26,6 +29,7 @@ var (
 		"debug_processBlock": (*debugApi).ProcessBlock,
 		"debug_seedHash":     (*debugApi).SeedHash,
 		"debug_setHead":      (*debugApi).SetHead,
+		"debug_metrics":      (*debugApi).Metrics,
 	}
 )
 
@@ -170,4 +174,100 @@ func (self *debugApi) SeedHash(req *shared.Request) (interface{}, error) {
 	} else {
 		return nil, err
 	}
+}
+
+func (self *debugApi) Metrics(req *shared.Request) (interface{}, error) {
+	args := new(MetricsArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+	// Create a rate formatter
+	units := []string{"", "K", "M", "G", "T", "E", "P"}
+	round := func(value float64, prec int) string {
+		unit := 0
+		for value >= 1000 {
+			unit, value, prec = unit+1, value/1000, 2
+		}
+		return fmt.Sprintf(fmt.Sprintf("%%.%df%s", prec, units[unit]), value)
+	}
+	format := func(total float64, rate float64) string {
+		return fmt.Sprintf("%s (%s/s)", round(total, 0), round(rate, 2))
+	}
+	// Iterate over all the metrics, and just dump for now
+	counters := make(map[string]interface{})
+	metrics.DefaultRegistry.Each(func(name string, metric interface{}) {
+		// Create or retrieve the counter hierarchy for this metric
+		root, parts := counters, strings.Split(name, "/")
+		for _, part := range parts[:len(parts)-1] {
+			if _, ok := root[part]; !ok {
+				root[part] = make(map[string]interface{})
+			}
+			root = root[part].(map[string]interface{})
+		}
+		name = parts[len(parts)-1]
+
+		// Fill the counter with the metric details, formatting if requested
+		if args.Raw {
+			switch metric := metric.(type) {
+			case metrics.Meter:
+				root[name] = map[string]interface{}{
+					"AvgRate01Min": metric.Rate1(),
+					"AvgRate05Min": metric.Rate5(),
+					"AvgRate15Min": metric.Rate15(),
+					"MeanRate":     metric.RateMean(),
+					"Overall":      float64(metric.Count()),
+				}
+
+			case metrics.Timer:
+				root[name] = map[string]interface{}{
+					"AvgRate01Min": metric.Rate1(),
+					"AvgRate05Min": metric.Rate5(),
+					"AvgRate15Min": metric.Rate15(),
+					"MeanRate":     metric.RateMean(),
+					"Overall":      float64(metric.Count()),
+					"Percentiles": map[string]interface{}{
+						"5":  metric.Percentile(0.05),
+						"20": metric.Percentile(0.2),
+						"50": metric.Percentile(0.5),
+						"80": metric.Percentile(0.8),
+						"95": metric.Percentile(0.95),
+					},
+				}
+
+			default:
+				root[name] = "Unknown metric type"
+			}
+		} else {
+			switch metric := metric.(type) {
+			case metrics.Meter:
+				root[name] = map[string]interface{}{
+					"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
+					"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
+					"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
+					"Overall":  format(float64(metric.Count()), metric.RateMean()),
+				}
+
+			case metrics.Timer:
+				root[name] = map[string]interface{}{
+					"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
+					"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
+					"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
+					"Overall":  format(float64(metric.Count()), metric.RateMean()),
+					"Maximum":  time.Duration(metric.Max()).String(),
+					"Minimum":  time.Duration(metric.Min()).String(),
+					"Percentiles": map[string]interface{}{
+						"5":  time.Duration(metric.Percentile(0.05)).String(),
+						"20": time.Duration(metric.Percentile(0.2)).String(),
+						"50": time.Duration(metric.Percentile(0.5)).String(),
+						"80": time.Duration(metric.Percentile(0.8)).String(),
+						"95": time.Duration(metric.Percentile(0.95)).String(),
+					},
+				}
+
+			default:
+				root[name] = "Unknown metric type"
+			}
+		}
+	})
+	return counters, nil
 }

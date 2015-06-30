@@ -18,7 +18,7 @@ func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 		return nil, err
 	}
 
-	return &ipcClient{cfg.Endpoint, codec, codec.New(c)}, nil
+	return &ipcClient{cfg.Endpoint, c, codec, codec.New(c)}, nil
 }
 
 func (self *ipcClient) reconnect() error {
@@ -48,7 +48,10 @@ func startIpc(cfg IpcConfig, codec codec.Codec, api shared.EthereumApi) error {
 				continue
 			}
 
-			go handle(conn, api, codec)
+			id := newIpcConnId()
+			glog.V(logger.Debug).Infof("New IPC connection with id %06d started\n", id)
+
+			go handle(id, conn, api, codec)
 		}
 
 		os.Remove(cfg.Endpoint)

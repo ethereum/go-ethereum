@@ -46,27 +46,36 @@ static inline void ethash_h256_reset(ethash_h256_t* hash)
 	memset(hash, 0, 32);
 }
 
-// Returns if hash is less than or equal to difficulty
+// Returns if hash is less than or equal to boundary (2^256/difficulty)
 static inline bool ethash_check_difficulty(
 	ethash_h256_t const* hash,
-	ethash_h256_t const* difficulty
+	ethash_h256_t const* boundary
 )
 {
-	// Difficulty is big endian
+	// Boundary is big endian
 	for (int i = 0; i < 32; i++) {
-		if (ethash_h256_get(hash, i) == ethash_h256_get(difficulty, i)) {
+		if (ethash_h256_get(hash, i) == ethash_h256_get(boundary, i)) {
 			continue;
 		}
-		return ethash_h256_get(hash, i) < ethash_h256_get(difficulty, i);
+		return ethash_h256_get(hash, i) < ethash_h256_get(boundary, i);
 	}
 	return true;
 }
 
+/**
+ *  Difficulty quick check for POW preverification
+ *
+ * @param header_hash      The hash of the header
+ * @param nonce            The block's nonce
+ * @param mix_hash         The mix digest hash
+ * @param boundary         The boundary is defined as (2^256 / difficulty)
+ * @return                 true for succesful pre-verification and false otherwise
+ */
 bool ethash_quick_check_difficulty(
 	ethash_h256_t const* header_hash,
 	uint64_t const nonce,
 	ethash_h256_t const* mix_hash,
-	ethash_h256_t const* difficulty
+	ethash_h256_t const* boundary
 );
 
 struct ethash_light {

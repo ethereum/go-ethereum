@@ -348,14 +348,6 @@ func (self *ethApi) GetBlockByNumber(req *shared.Request) (interface{}, error) {
 
 	block := self.xeth.EthBlockByNumber(args.BlockNumber)
 	br := NewBlockRes(block, args.IncludeTxs)
-	// If request was for "pending", nil nonsensical fields
-	if args.BlockNumber == -2 {
-		br.BlockHash = nil
-		br.BlockNumber = nil
-		br.Miner = nil
-		br.Nonce = nil
-		br.LogsBloom = nil
-	}
 	return br, nil
 }
 

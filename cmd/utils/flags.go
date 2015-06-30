@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/ethereum/go-ethereum/metrics"
+
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -186,6 +188,10 @@ var (
 		Name:  "pprofport",
 		Usage: "Port on which the profiler should listen",
 		Value: 6060,
+	}
+	MetricsEnabledFlag = cli.BoolFlag{
+		Name:  metrics.MetricsEnabledFlag,
+		Usage: "Enables metrics collection and reporting",
 	}
 
 	// RPC settings

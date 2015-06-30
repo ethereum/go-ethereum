@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -11,7 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/pow"
 )
 
-// So we can generate blocks easily
+// FakePow is a non-validating proof of work implementation.
+// It returns true from Verify for any block.
 type FakePow struct{}
 
 func (f FakePow) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte) {
@@ -23,81 +23,125 @@ func (f FakePow) Turbo(bool)                  {}
 
 // So we can deterministically seed different blockchains
 var (
-	CanonicalSeed = 1
-	ForkSeed      = 2
+	canonicalSeed = 1
+	forkSeed      = 2
 )
 
-// Utility functions for making chains on the fly
-// Exposed for sake of testing from other packages (eg. go-ethash)
-func NewBlockFromParent(addr common.Address, parent *types.Block) *types.Block {
-	return newBlockFromParent(addr, parent)
+// BlockGen creates blocks for testing.
+// See GenerateChain for a detailed explanation.
+type BlockGen struct {
+	i       int
+	parent  *types.Block
+	chain   []*types.Block
+	header  *types.Header
+	statedb *state.StateDB
+
+	coinbase *state.StateObject
+	txs      []*types.Transaction
+	receipts []*types.Receipt
+	uncles   []*types.Header
 }
 
-func MakeBlock(bman *BlockProcessor, parent *types.Block, i int, db common.Database, seed int) *types.Block {
-	return makeBlock(bman, parent, i, db, seed)
-}
-
-func MakeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Database, seed int) types.Blocks {
-	return makeChain(bman, parent, max, db, seed)
-}
-
-func NewChainMan(block *types.Block, eventMux *event.TypeMux, db common.Database) *ChainManager {
-	return newChainManager(block, eventMux, db)
-}
-
-func NewBlockProc(db common.Database, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
-	return newBlockProcessor(db, cman, eventMux)
-}
-
-func NewCanonical(n int, db common.Database) (*BlockProcessor, error) {
-	return newCanonical(n, db)
-}
-
-// block time is fixed at 10 seconds
-func newBlockFromParent(addr common.Address, parent *types.Block) *types.Block {
-	block := types.NewBlock(parent.Hash(), addr, parent.Root(), common.BigPow(2, 32), 0, nil)
-	block.SetUncles(nil)
-	block.SetTransactions(nil)
-	block.SetReceipts(nil)
-
-	header := block.Header()
-	header.Difficulty = CalcDifficulty(block.Header(), parent.Header())
-	header.Number = new(big.Int).Add(parent.Header().Number, common.Big1)
-	header.Time = parent.Header().Time + 10
-	header.GasLimit = CalcGasLimit(parent)
-
-	block.Td = parent.Td
-
-	return block
-}
-
-// Actually make a block by simulating what miner would do
-// we seed chains by the first byte of the coinbase
-func makeBlock(bman *BlockProcessor, parent *types.Block, i int, db common.Database, seed int) *types.Block {
-	var addr common.Address
-	addr[0], addr[19] = byte(seed), byte(i)
-	block := newBlockFromParent(addr, parent)
-	state := state.New(block.Root(), db)
-	cbase := state.GetOrNewStateObject(addr)
-	cbase.SetGasLimit(CalcGasLimit(parent))
-	cbase.AddBalance(BlockReward)
-	state.Update()
-	block.SetRoot(state.Root())
-	return block
-}
-
-// Make a chain with real blocks
-// Runs ProcessWithParent to get proper state roots
-func makeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Database, seed int) types.Blocks {
-	bman.bc.currentBlock = parent
-	blocks := make(types.Blocks, max)
-	for i := 0; i < max; i++ {
-		block := makeBlock(bman, parent, i, db, seed)
-		_, err := bman.processWithParent(block, parent)
-		if err != nil {
-			fmt.Println("process with parent failed", err)
-			panic(err)
+// SetCoinbase sets the coinbase of the generated block.
+// It can be called at most once.
+func (b *BlockGen) SetCoinbase(addr common.Address) {
+	if b.coinbase != nil {
+		if len(b.txs) > 0 {
+			panic("coinbase must be set before adding transactions")
 		}
+		panic("coinbase can only be set once")
+	}
+	b.header.Coinbase = addr
+	b.coinbase = b.statedb.GetOrNewStateObject(addr)
+	b.coinbase.SetGasLimit(b.header.GasLimit)
+}
+
+// SetExtra sets the extra data field of the generated block.
+func (b *BlockGen) SetExtra(data []byte) {
+	b.header.Extra = data
+}
+
+// AddTx adds a transaction to the generated block. If no coinbase has
+// been set, the block's coinbase is set to the zero address.
+//
+// AddTx panics if the transaction cannot be executed. In addition to
+// the protocol-imposed limitations (gas limit, etc.), there are some
+// further limitations on the content of transactions that can be
+// added. Notably, contract code relying on the BLOCKHASH instruction
+// will panic during execution.
+func (b *BlockGen) AddTx(tx *types.Transaction) {
+	if b.coinbase == nil {
+		b.SetCoinbase(common.Address{})
+	}
+	_, gas, err := ApplyMessage(NewEnv(b.statedb, nil, tx, b.header), tx, b.coinbase)
+	if err != nil {
+		panic(err)
+	}
+	b.statedb.Update()
+	b.header.GasUsed.Add(b.header.GasUsed, gas)
+	receipt := types.NewReceipt(b.statedb.Root().Bytes(), b.header.GasUsed)
+	logs := b.statedb.GetLogs(tx.Hash())
+	receipt.SetLogs(logs)
+	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	b.txs = append(b.txs, tx)
+	b.receipts = append(b.receipts, receipt)
+}
+
+// TxNonce returns the next valid transaction nonce for the
+// account at addr. It panics if the account does not exist.
+func (b *BlockGen) TxNonce(addr common.Address) uint64 {
+	if !b.statedb.HasAccount(addr) {
+		panic("account does not exist")
+	}
+	return b.statedb.GetNonce(addr)
+}
+
+// AddUncle adds an uncle header to the generated block.
+func (b *BlockGen) AddUncle(h *types.Header) {
+	b.uncles = append(b.uncles, h)
+}
+
+// PrevBlock returns a previously generated block by number. It panics if
+// num is greater or equal to the number of the block being generated.
+// For index -1, PrevBlock returns the parent block given to GenerateChain.
+func (b *BlockGen) PrevBlock(index int) *types.Block {
+	if index >= b.i {
+		panic("block index out of range")
+	}
+	if index == -1 {
+		return b.parent
+	}
+	return b.chain[index]
+}
+
+// GenerateChain creates a chain of n blocks. The first block's
+// parent will be the provided parent. db is used to store
+// intermediate states and should contain the parent's state trie.
+//
+// The generator function is called with a new block generator for
+// every block. Any transactions and uncles added to the generator
+// become part of the block. If gen is nil, the blocks will be empty
+// and their coinbase will be the zero address.
+//
+// Blocks created by GenerateChain do not contain valid proof of work
+// values. Inserting them into ChainManager requires use of FakePow or
+// a similar non-validating proof of work implementation.
+func GenerateChain(parent *types.Block, db common.Database, n int, gen func(int, *BlockGen)) []*types.Block {
+	statedb := state.New(parent.Root(), db)
+	blocks := make(types.Blocks, n)
+	genblock := func(i int, h *types.Header) *types.Block {
+		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb}
+		if gen != nil {
+			gen(i, b)
+		}
+		AccumulateRewards(statedb, h, b.uncles)
+		statedb.Update()
+		h.Root = statedb.Root()
+		return types.NewBlock(h, b.txs, b.uncles, b.receipts)
+	}
+	for i := 0; i < n; i++ {
+		header := makeHeader(parent, statedb)
+		block := genblock(i, header)
 		block.Td = CalcTD(block, parent)
 		blocks[i] = block
 		parent = block
@@ -105,41 +149,38 @@ func makeChain(bman *BlockProcessor, parent *types.Block, max int, db common.Dat
 	return blocks
 }
 
-// Create a new chain manager starting from given block
-// Effectively a fork factory
-func newChainManager(block *types.Block, eventMux *event.TypeMux, db common.Database) *ChainManager {
-	genesis := GenesisBlock(0, db)
-	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: eventMux, pow: FakePow{}}
-	bc.txState = state.ManageState(state.New(genesis.Root(), db))
-	bc.futureBlocks = NewBlockCache(1000)
-	if block == nil {
-		bc.Reset()
-	} else {
-		bc.currentBlock = block
-		bc.td = block.Td
+func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
+	time := parent.Time() + 10 // block time is fixed at 10 seconds
+	return &types.Header{
+		Root:       state.Root(),
+		ParentHash: parent.Hash(),
+		Coinbase:   parent.Coinbase(),
+		Difficulty: CalcDifficulty(time, parent.Time(), parent.Difficulty()),
+		GasLimit:   CalcGasLimit(parent),
+		GasUsed:    new(big.Int),
+		Number:     new(big.Int).Add(parent.Number(), common.Big1),
+		Time:       uint64(time),
 	}
-	return bc
 }
 
-// block processor with fake pow
-func newBlockProcessor(db common.Database, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
-	chainMan := newChainManager(nil, eventMux, db)
-	bman := NewBlockProcessor(db, db, FakePow{}, chainMan, eventMux)
-	return bman
-}
-
-// Make a new, deterministic canonical chain by running InsertChain
-// on result of makeChain
+// newCanonical creates a new deterministic canonical chain by running
+// InsertChain on the result of makeChain.
 func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
-	eventMux := &event.TypeMux{}
-
-	bman := newBlockProcessor(db, newChainManager(nil, eventMux, db), eventMux)
+	evmux := &event.TypeMux{}
+	chainman, _ := NewChainManager(GenesisBlock(0, db), db, db, FakePow{}, evmux)
+	bman := NewBlockProcessor(db, db, FakePow{}, chainman, evmux)
 	bman.bc.SetProcessor(bman)
 	parent := bman.bc.CurrentBlock()
 	if n == 0 {
 		return bman, nil
 	}
-	lchain := makeChain(bman, parent, n, db, CanonicalSeed)
+	lchain := makeChain(parent, n, db, canonicalSeed)
 	_, err := bman.bc.InsertChain(lchain)
 	return bman, err
+}
+
+func makeChain(parent *types.Block, n int, db common.Database, seed int) []*types.Block {
+	return GenerateChain(parent, db, n, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
+	})
 }

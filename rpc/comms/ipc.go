@@ -2,6 +2,7 @@ package comms
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 
 	"encoding/json"
@@ -16,6 +17,7 @@ type IpcConfig struct {
 
 type ipcClient struct {
 	endpoint string
+	c        net.Conn
 	codec    codec.Codec
 	coder    codec.ApiCoder
 }
@@ -93,4 +95,8 @@ func NewIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 // Start IPC server
 func StartIpc(cfg IpcConfig, codec codec.Codec, offeredApi shared.EthereumApi) error {
 	return startIpc(cfg, codec, offeredApi)
+}
+
+func newIpcConnId() int {
+	return rand.Int() % 1000000
 }

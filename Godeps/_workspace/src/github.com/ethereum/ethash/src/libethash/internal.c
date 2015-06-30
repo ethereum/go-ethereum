@@ -284,13 +284,13 @@ bool ethash_quick_check_difficulty(
 	ethash_h256_t const* header_hash,
 	uint64_t const nonce,
 	ethash_h256_t const* mix_hash,
-	ethash_h256_t const* difficulty
+	ethash_h256_t const* boundary
 )
 {
 
 	ethash_h256_t return_hash;
 	ethash_quick_hash(&return_hash, header_hash, nonce, mix_hash);
-	return ethash_check_difficulty(&return_hash, difficulty);
+	return ethash_check_difficulty(&return_hash, boundary);
 }
 
 ethash_light_t ethash_light_new_internal(uint64_t cache_size, ethash_h256_t const* seed)
