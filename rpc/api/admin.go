@@ -43,6 +43,7 @@ var (
 		"admin_datadir":            (*adminApi).DataDir,
 		"admin_startRPC":           (*adminApi).StartRPC,
 		"admin_stopRPC":            (*adminApi).StopRPC,
+		"admin_sleepBlocks":        (*adminApi).SleepBlocks,
 		"admin_setGlobalRegistrar": (*adminApi).SetGlobalRegistrar,
 		"admin_setHashReg":         (*adminApi).SetHashReg,
 		"admin_setUrlHint":         (*adminApi).SetUrlHint,
