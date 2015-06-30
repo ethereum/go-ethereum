@@ -181,6 +181,8 @@ func TestTransactionDoubleNonce(t *testing.T) {
 	if err := pool.add(tx2); err != nil {
 		t.Error("didn't expect error", err)
 	}
+
+	pool.checkQueue()
 	if len(pool.pending) != 2 {
 		t.Error("expected 2 pending txs. Got", len(pool.pending))
 	}
