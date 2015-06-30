@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
@@ -68,6 +69,15 @@ func init() {
 	app.Action = run
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
+		{
+			Action: blockRecovery,
+			Name:   "recover",
+			Usage:  "attempts to recover a corrupted database by setting a new block head by number",
+			Description: `
+The recover commands will attempt to read out the last
+block based on that.
+`,
+		},
 		blocktestCommand,
 		importCommand,
 		exportCommand,
@@ -437,6 +447,20 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 	}
 	fmt.Printf("Account '%s' unlocked.\n", account)
 	return
+}
+
+func blockRecovery(ctx *cli.Context) {
+	num := ctx.Args().First()
+	if len(ctx.Args()) < 1 {
+		glog.Fatal("recover requires block number")
+	}
+
+	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	ethereum, err := eth.New(cfg)
+	if err != nil {
+		utils.Fatalf("%v", err)
+	}
+	ethereum.ChainManager().Recover(common.String2Big(num).Uint64())
 }
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {

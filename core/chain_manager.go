@@ -238,6 +238,16 @@ func (self *ChainManager) setTransState(statedb *state.StateDB) {
 	self.transState = statedb
 }
 
+func (bc *ChainManager) Recover(num uint64) {
+	block := bc.GetBlockByNumber(num)
+	if block != nil {
+		bc.insert(block)
+		glog.Infof("Recovery succesful. New HEAD %x\n", block.Hash())
+	} else {
+		glog.Fatalln("Recovery failed")
+	}
+}
+
 func (bc *ChainManager) recover() bool {
 	data, _ := bc.blockDb.Get([]byte("checkpoint"))
 	if len(data) != 0 {
@@ -261,8 +271,6 @@ func (bc *ChainManager) setLastState() {
 	if len(data) != 0 {
 		block := bc.GetBlock(common.BytesToHash(data))
 		if block != nil {
-			bc.blockDb.Put([]byte("checkpoint"), block.Hash().Bytes())
-
 			bc.currentBlock = block
 			bc.lastBlockHash = block.Hash()
 		} else {
