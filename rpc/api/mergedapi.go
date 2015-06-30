@@ -42,7 +42,7 @@ func (self *MergedApi) Methods() []string {
 
 // Call the correct API's Execute method for the given request
 func (self *MergedApi) Execute(req *shared.Request) (interface{}, error) {
-	glog.V(logger.Detail).Infof("rpc method: %s", req.Method)
+	glog.V(logger.Detail).Infof("%s %s", req.Method, req.Params)
 
 	if res, _ := self.handle(req); res != nil {
 		return res, nil
