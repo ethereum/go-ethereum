@@ -68,8 +68,9 @@ func (self *txPoolApi) ApiVersion() string {
 }
 
 func (self *txPoolApi) Status(req *shared.Request) (interface{}, error) {
+	pending, queue := self.ethereum.TxPool().Stats()
 	return map[string]int{
-		"pending": self.ethereum.TxPool().GetTransactions().Len(),
-		"queued":  self.ethereum.TxPool().GetQueuedTransactions().Len(),
+		"pending": pending,
+		"queued":  queue,
 	}, nil
 }
