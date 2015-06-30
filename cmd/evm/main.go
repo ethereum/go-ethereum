@@ -106,7 +106,7 @@ type VMEnv struct {
 
 	depth int
 	Gas   *big.Int
-	time  int64
+	time  uint64
 	logs  []vm.StructLog
 }
 
@@ -115,7 +115,7 @@ func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int) *VM
 		state:      state,
 		transactor: &transactor,
 		value:      value,
-		time:       time.Now().Unix(),
+		time:       uint64(time.Now().Unix()),
 	}
 }
 
@@ -123,7 +123,7 @@ func (self *VMEnv) State() *state.StateDB    { return self.state }
 func (self *VMEnv) Origin() common.Address   { return *self.transactor }
 func (self *VMEnv) BlockNumber() *big.Int    { return common.Big0 }
 func (self *VMEnv) Coinbase() common.Address { return *self.transactor }
-func (self *VMEnv) Time() int64              { return self.time }
+func (self *VMEnv) Time() uint64             { return self.time }
 func (self *VMEnv) Difficulty() *big.Int     { return common.Big1 }
 func (self *VMEnv) BlockHash() []byte        { return make([]byte, 32) }
 func (self *VMEnv) Value() *big.Int          { return self.value }

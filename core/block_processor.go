@@ -362,6 +362,13 @@ func ValidateHeader(pow pow.PoW, block *types.Header, parent *types.Block, check
 		return fmt.Errorf("Block extra data too long (%d)", len(block.Extra))
 	}
 
+	if block.Time > uint64(time.Now().Unix()) {
+		return BlockFutureErr
+	}
+	if block.Time <= parent.Time() {
+		return BlockEqualTSErr
+	}
+
 	expd := CalcDifficulty(int64(block.Time), int64(parent.Time()), parent.Difficulty())
 	if expd.Cmp(block.Difficulty) != 0 {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
@@ -377,18 +384,10 @@ func ValidateHeader(pow pow.PoW, block *types.Header, parent *types.Block, check
 		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
 	}
 
-	if int64(block.Time) > time.Now().Unix() {
-		return BlockFutureErr
-	}
-
 	num := parent.Number()
 	num.Sub(block.Number, num)
 	if num.Cmp(big.NewInt(1)) != 0 {
 		return BlockNumberErr
-	}
-
-	if block.Time <= uint64(parent.Time()) {
-		return BlockEqualTSErr //ValidationError("Block timestamp equal or less than previous block (%v - %v)", block.Time, parent.Time)
 	}
 
 	if checkPow {
