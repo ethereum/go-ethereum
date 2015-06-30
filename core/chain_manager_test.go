@@ -109,8 +109,7 @@ func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 
 		bman.bc.mu.Lock()
 		{
-			bman.bc.enqueueForWrite(block)
-			//bman.bc.write(block)
+			bman.bc.write(block)
 		}
 		bman.bc.mu.Unlock()
 	}
