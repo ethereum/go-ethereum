@@ -174,9 +174,9 @@ func (p *peer) RequestHashes(from common.Hash) error {
 
 // RequestHashesFromNumber fetches a batch of hashes from a peer, starting at the
 // requested block number, going upwards towards the genesis block.
-func (p *peer) RequestHashesFromNumber(from uint64) error {
-	glog.V(logger.Debug).Infof("Peer [%s] fetching hashes (%d) from #%d...\n", p.id, downloader.MaxHashFetch, from)
-	return p2p.Send(p.rw, GetBlockHashesFromNumberMsg, getBlockHashesFromNumberData{from, uint64(downloader.MaxHashFetch)})
+func (p *peer) RequestHashesFromNumber(from uint64, count int) error {
+	glog.V(logger.Debug).Infof("Peer [%s] fetching hashes (%d) from #%d...\n", p.id, count, from)
+	return p2p.Send(p.rw, GetBlockHashesFromNumberMsg, getBlockHashesFromNumberData{from, uint64(count)})
 }
 
 // RequestBlocks fetches a batch of blocks corresponding to the specified hashes.

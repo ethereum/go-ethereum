@@ -96,7 +96,7 @@ func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow po
 		}
 	}
 	// Construct the different synchronisation mechanisms
-	manager.downloader = downloader.New(manager.eventMux, manager.chainman.HasBlock, manager.chainman.GetBlock, manager.chainman.InsertChain, manager.removePeer)
+	manager.downloader = downloader.New(manager.eventMux, manager.chainman.HasBlock, manager.chainman.GetBlock, manager.chainman.CurrentBlock, manager.chainman.InsertChain, manager.removePeer)
 
 	validator := func(block *types.Block, parent *types.Block) error {
 		return core.ValidateHeader(pow, block.Header(), parent, true)
@@ -181,7 +181,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	defer pm.removePeer(p.id)
 
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
-	if err := pm.downloader.RegisterPeer(p.id, p.version, p.Head(), p.RequestHashes, p.RequestBlocks); err != nil {
+	if err := pm.downloader.RegisterPeer(p.id, p.version, p.Head(), p.RequestHashes, p.RequestHashesFromNumber, p.RequestBlocks); err != nil {
 		return err
 	}
 	// Propagate existing transactions. new transactions appearing
@@ -214,50 +214,50 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	// Handle the message depending on its contents
 	switch msg.Code {
 	case StatusMsg:
+		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
 
-	case TxMsg:
-		// Transactions arrived, parse all of them and deliver to the pool
-		var txs []*types.Transaction
-		if err := msg.Decode(&txs); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
-		}
-		propTxnInPacketsMeter.Mark(1)
-		for i, tx := range txs {
-			// Validate and mark the remote transaction
-			if tx == nil {
-				return errResp(ErrDecode, "transaction %d is nil", i)
-			}
-			p.MarkTransaction(tx.Hash())
-
-			// Log it's arrival for later analysis
-			propTxnInTrafficMeter.Mark(tx.Size().Int64())
-			jsonlogger.LogJson(&logger.EthTxReceived{
-				TxHash:   tx.Hash().Hex(),
-				RemoteId: p.ID().String(),
-			})
-		}
-		pm.txpool.AddTransactions(txs)
-
 	case GetBlockHashesMsg:
+		// Retrieve the number of hashes to return and from which origin hash
 		var request getBlockHashesData
 		if err := msg.Decode(&request); err != nil {
-			return errResp(ErrDecode, "->msg %v: %v", msg, err)
+			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-
 		if request.Amount > uint64(downloader.MaxHashFetch) {
 			request.Amount = uint64(downloader.MaxHashFetch)
 		}
-
+		// Retrieve the hashes from the block chain and return them
 		hashes := pm.chainman.GetBlockHashesFromHash(request.Hash, request.Amount)
-
-		if glog.V(logger.Debug) {
-			if len(hashes) == 0 {
-				glog.Infof("invalid block hash %x", request.Hash.Bytes()[:4])
-			}
+		if len(hashes) == 0 {
+			glog.V(logger.Debug).Infof("invalid block hash %x", request.Hash.Bytes()[:4])
 		}
+		return p.SendBlockHashes(hashes)
 
-		// returns either requested hashes or nothing (i.e. not found)
+	case GetBlockHashesFromNumberMsg:
+		// Retrieve and decode the number of hashes to return and from which origin number
+		var request getBlockHashesFromNumberData
+		if err := msg.Decode(&request); err != nil {
+			return errResp(ErrDecode, "%v: %v", msg, err)
+		}
+		if request.Amount > uint64(downloader.MaxHashFetch) {
+			request.Amount = uint64(downloader.MaxHashFetch)
+		}
+		// Calculate the last block that should be retrieved, and short circuit if unavailable
+		last := pm.chainman.GetBlockByNumber(request.Number + request.Amount - 1)
+		if last == nil {
+			last = pm.chainman.CurrentBlock()
+			request.Amount = last.NumberU64() - request.Number + 1
+		}
+		if last.NumberU64() < request.Number {
+			return p.SendBlockHashes(nil)
+		}
+		// Retrieve the hashes from the last block backwards, reverse and return
+		hashes := []common.Hash{last.Hash()}
+		hashes = append(hashes, pm.chainman.GetBlockHashesFromHash(last.Hash(), request.Amount-1)...)
+
+		for i := 0; i < len(hashes)/2; i++ {
+			hashes[i], hashes[len(hashes)-1-i] = hashes[len(hashes)-1-i], hashes[i]
+		}
 		return p.SendBlockHashes(hashes)
 
 	case BlockHashesMsg:
@@ -398,6 +398,29 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// TODO: Schedule a sync to cover potential gaps (this needs proto update)
 		p.SetTd(request.TD)
 		go pm.synchronise(p)
+
+	case TxMsg:
+		// Transactions arrived, parse all of them and deliver to the pool
+		var txs []*types.Transaction
+		if err := msg.Decode(&txs); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		propTxnInPacketsMeter.Mark(1)
+		for i, tx := range txs {
+			// Validate and mark the remote transaction
+			if tx == nil {
+				return errResp(ErrDecode, "transaction %d is nil", i)
+			}
+			p.MarkTransaction(tx.Hash())
+
+			// Log it's arrival for later analysis
+			propTxnInTrafficMeter.Mark(tx.Size().Int64())
+			jsonlogger.LogJson(&logger.EthTxReceived{
+				TxHash:   tx.Hash().Hex(),
+				RemoteId: p.ID().String(),
+			})
+		}
+		pm.txpool.AddTransactions(txs)
 
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
