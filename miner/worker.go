@@ -233,7 +233,7 @@ func (self *worker) wait() {
 				continue
 			}
 
-			_, err := self.chain.WriteBlock(block)
+			_, err := self.chain.WriteBlock(block, false)
 			if err != nil {
 				glog.V(logger.Error).Infoln("error writing block to chain", err)
 				continue

@@ -364,14 +364,12 @@ func (bc *ChainManager) insert(block *types.Block) {
 func (bc *ChainManager) write(block *types.Block) {
 	tstart := time.Now()
 
-	go func() {
-		enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
-		key := append(blockHashPre, block.Hash().Bytes()...)
-		err := bc.blockDb.Put(key, enc)
-		if err != nil {
-			glog.Fatal("db write fail:", err)
-		}
-	}()
+	enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
+	key := append(blockHashPre, block.Hash().Bytes()...)
+	err := bc.blockDb.Put(key, enc)
+	if err != nil {
+		glog.Fatal("db write fail:", err)
+	}
 
 	if glog.V(logger.Debug) {
 		glog.Infof("wrote block #%v %s. Took %v\n", block.Number(), common.PP(block.Hash().Bytes()), time.Since(tstart))
@@ -555,7 +553,8 @@ const (
 	sideStatTy
 )
 
-func (self *ChainManager) WriteBlock(block *types.Block) (status writeStatus, err error) {
+// WriteBlock writes the block to the chain (or pending queue)
+func (self *ChainManager) WriteBlock(block *types.Block, queued bool) (status writeStatus, err error) {
 	self.wg.Add(1)
 	defer self.wg.Done()
 
@@ -587,11 +586,15 @@ func (self *ChainManager) WriteBlock(block *types.Block) (status writeStatus, er
 		status = sideStatTy
 	}
 
-	// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
-	// not in the canonical chain.
-	self.mu.Lock()
-	self.enqueueForWrite(block)
-	self.mu.Unlock()
+	if queued {
+		// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
+		// not in the canonical chain.
+		self.mu.Lock()
+		self.enqueueForWrite(block)
+		self.mu.Unlock()
+	} else {
+		self.write(block)
+	}
 	// Delete from future blocks
 	self.futureBlocks.Remove(block.Hash())
 
@@ -693,7 +696,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		txcount += len(block.Transactions())
 
 		// write the block to the chain and get the status
-		status, err := self.WriteBlock(block)
+		status, err := self.WriteBlock(block, true)
 		if err != nil {
 			return i, err
 		}
