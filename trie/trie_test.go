@@ -18,11 +18,15 @@ package trie
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 type Db map[string][]byte
@@ -100,7 +104,6 @@ func TestGet(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	trie := NewEmpty()
-
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
 		{"ether", "wookiedoo"},
@@ -254,39 +257,6 @@ func TestOutput(t *testing.T) {
 	fmt.Println(trie2.root)
 }
 
-func BenchmarkGets(b *testing.B) {
-	trie := NewEmpty()
-	vals := []struct{ k, v string }{
-		{"do", "verb"},
-		{"ether", "wookiedoo"},
-		{"horse", "stallion"},
-		{"shaman", "horse"},
-		{"doge", "coin"},
-		{"ether", ""},
-		{"dog", "puppy"},
-		{"shaman", ""},
-		{"somethingveryoddindeedthis is", "myothernodedata"},
-	}
-	for _, val := range vals {
-		trie.UpdateString(val.k, val.v)
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		trie.Get([]byte("horse"))
-	}
-}
-
-func BenchmarkUpdate(b *testing.B) {
-	trie := NewEmpty()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		trie.UpdateString(fmt.Sprintf("aaaaaaaaa%d", i), "value")
-	}
-	trie.Hash()
-}
-
 type kv struct {
 	k, v []byte
 	t    bool
@@ -351,4 +321,72 @@ func TestSecureDelete(t *testing.T) {
 	if !bytes.Equal(hash, exp) {
 		t.Errorf("expected %x got %x", exp, hash)
 	}
+}
+
+func BenchmarkGet(b *testing.B)      { benchGet(b, false) }
+func BenchmarkGetDB(b *testing.B)    { benchGet(b, true) }
+func BenchmarkUpdateBE(b *testing.B) { benchUpdate(b, binary.BigEndian) }
+func BenchmarkUpdateLE(b *testing.B) { benchUpdate(b, binary.LittleEndian) }
+func BenchmarkHashBE(b *testing.B)   { benchHash(b, binary.BigEndian) }
+func BenchmarkHashLE(b *testing.B)   { benchHash(b, binary.LittleEndian) }
+
+const benchElemCount = 20000
+
+func benchGet(b *testing.B, commit bool) {
+	trie := New(nil, nil)
+	if commit {
+		dir, tmpdb := tempDB()
+		defer os.RemoveAll(dir)
+		trie = New(nil, tmpdb)
+	}
+	k := make([]byte, 32)
+	for i := 0; i < benchElemCount; i++ {
+		binary.LittleEndian.PutUint64(k, uint64(i))
+		trie.Update(k, k)
+	}
+	binary.LittleEndian.PutUint64(k, benchElemCount/2)
+	if commit {
+		trie.Commit()
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		trie.Get(k)
+	}
+}
+
+func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
+	trie := NewEmpty()
+	k := make([]byte, 32)
+	for i := 0; i < b.N; i++ {
+		e.PutUint64(k, uint64(i))
+		trie.Update(k, k)
+	}
+	return trie
+}
+
+func benchHash(b *testing.B, e binary.ByteOrder) {
+	trie := NewEmpty()
+	k := make([]byte, 32)
+	for i := 0; i < benchElemCount; i++ {
+		e.PutUint64(k, uint64(i))
+		trie.Update(k, k)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		trie.Hash()
+	}
+}
+
+func tempDB() (string, Backend) {
+	dir, err := ioutil.TempDir("", "trie-bench")
+	if err != nil {
+		panic(fmt.Sprintf("can't create temporary directory: %v", err))
+	}
+	db, err := ethdb.NewLDBDatabase(dir, 300*1024)
+	if err != nil {
+		panic(fmt.Sprintf("can't create temporary database: %v", err))
+	}
+	return dir, db
 }
