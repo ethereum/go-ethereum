@@ -243,7 +243,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 
 	// Commit state objects/accounts to a temporary trie (does not save)
 	// used to calculate the state root.
-	state.Update()
+	state.CleanUpdate()
 	if header.Root != state.Root() {
 		err = fmt.Errorf("invalid merkle root. received=%x got=%x", header.Root, state.Root())
 		return

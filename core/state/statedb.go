@@ -18,6 +18,7 @@ import (
 type StateDB struct {
 	db   common.Database
 	trie *trie.SecureTrie
+	root common.Hash
 
 	stateObjects map[string]*StateObject
 
@@ -31,7 +32,7 @@ type StateDB struct {
 // Create a new state from a given trie
 func New(root common.Hash, db common.Database) *StateDB {
 	trie := trie.NewSecure(root[:], db)
-	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: new(big.Int), logs: make(map[common.Hash]Logs)}
+	return &StateDB{root: root, db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: new(big.Int), logs: make(map[common.Hash]Logs)}
 }
 
 func (self *StateDB) PrintRoot() {
@@ -185,7 +186,7 @@ func (self *StateDB) DeleteStateObject(stateObject *StateObject) {
 	addr := stateObject.Address()
 	self.trie.Delete(addr[:])
 
-	delete(self.stateObjects, addr.Str())
+	//delete(self.stateObjects, addr.Str())
 }
 
 // Retrieve a state object given my the address. Nil if not found
@@ -337,6 +338,23 @@ func (self *StateDB) Update() {
 			}
 			stateObject.dirty = false
 		}
+	}
+}
+
+func (self *StateDB) CleanUpdate() {
+	self.trie = trie.NewSecure(self.root[:], self.db)
+
+	self.refund = new(big.Int)
+
+	for _, stateObject := range self.stateObjects {
+		if stateObject.remove {
+			self.DeleteStateObject(stateObject)
+		} else {
+			stateObject.Update()
+
+			self.UpdateStateObject(stateObject)
+		}
+		stateObject.dirty = false
 	}
 }
 
