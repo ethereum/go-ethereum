@@ -34,8 +34,9 @@ var (
 	blockHardTTL    = 3 * blockSoftTTL // Maximum time allowance before a block request is considered expired
 	crossCheckCycle = time.Second      // Period after which to check for expired cross checks
 
-	maxBannedHashes = 4096 // Number of bannable hashes before phasing old ones out
-	maxBlockProcess = 256  // Number of blocks to import at once into the chain
+	maxQueuedHashes = 256 * 1024 // Maximum number of hashes to queue for import (DOS protection)
+	maxBannedHashes = 4096       // Number of bannable hashes before phasing old ones out
+	maxBlockProcess = 256        // Number of blocks to import at once into the chain
 )
 
 var (
@@ -780,6 +781,8 @@ func (d *Downloader) fetchHashes(p *peer, from uint64) error {
 	defer timeout.Stop()
 
 	getHashes := func(from uint64) {
+		glog.V(logger.Detail).Infof("%v: fetching %d hashes from #%d", p, MaxHashFetch, from)
+
 		go p.getAbsHashes(from, MaxHashFetch)
 		timeout.Reset(hashTTL)
 	}
@@ -809,16 +812,23 @@ func (d *Downloader) fetchHashes(p *peer, from uint64) error {
 				return nil
 			}
 			// Otherwise insert all the new hashes, aborting in case of junk
+			glog.V(logger.Detail).Infof("%v: inserting %d hashes from #%d", p, len(hashPack.hashes), from)
+
 			inserts := d.queue.Insert(hashPack.hashes, true)
 			if len(inserts) != len(hashPack.hashes) {
 				glog.V(logger.Debug).Infof("%v: stale hashes", p)
 				return errBadPeer
 			}
-			// Notify the block fetcher of new hashes, and continue fetching
+			// Notify the block fetcher of new hashes, but stop if queue is full
+			cont := d.queue.Pending() < maxQueuedHashes
 			select {
-			case d.processCh <- true:
+			case d.processCh <- cont:
 			default:
 			}
+			if !cont {
+				return nil
+			}
+			// Queue not yet full, fetch the next batch
 			from += uint64(len(hashPack.hashes))
 			getHashes(from)
 
