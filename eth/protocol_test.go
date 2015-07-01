@@ -39,15 +39,15 @@ func TestStatusMsgErrors(t *testing.T) {
 			wantError: errResp(ErrNoStatusMsg, "first msg has code 2 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusMsgData{10, NetworkId, td, currentBlock, genesis},
+			code: StatusMsg, data: statusData{10, NetworkId, td, currentBlock, genesis},
 			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusMsgData{ProtocolVersion, 999, td, currentBlock, genesis},
+			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), 999, td, currentBlock, genesis},
 			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusMsgData{ProtocolVersion, NetworkId, td, currentBlock, common.Hash{3}},
+			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), NetworkId, td, currentBlock, common.Hash{3}},
 			wantError: errResp(ErrGenesisBlockMismatch, "0300000000000000000000000000000000000000000000000000000000000000 (!= %x)", genesis),
 		},
 	}
@@ -167,7 +167,7 @@ func newProtocolManagerForTesting(txAdded chan<- []*types.Transaction) *Protocol
 		db, _    = ethdb.NewMemDatabase()
 		chain, _ = core.NewChainManager(core.GenesisBlock(0, db), db, db, core.FakePow{}, em)
 		txpool   = &fakeTxPool{added: txAdded}
-		pm       = NewProtocolManager(ProtocolVersion, 0, em, txpool, core.FakePow{}, chain)
+		pm       = NewProtocolManager(0, em, txpool, core.FakePow{}, chain)
 	)
 	pm.Start()
 	return pm
@@ -188,7 +188,7 @@ func newTestPeer(pm *ProtocolManager) (*testPeer, <-chan error) {
 
 func (p *testPeer) handshake(t *testing.T) {
 	td, currentBlock, genesis := p.pm.chainman.Status()
-	msg := &statusMsgData{
+	msg := &statusData{
 		ProtocolVersion: uint32(p.pm.protVer),
 		NetworkId:       uint32(p.pm.netId),
 		TD:              td,

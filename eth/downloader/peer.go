@@ -15,7 +15,8 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-type hashFetcherFn func(common.Hash) error
+type relativeHashFetcherFn func(common.Hash) error
+type absoluteHashFetcherFn func(uint64, int) error
 type blockFetcherFn func([]common.Hash) error
 
 var (
@@ -37,20 +38,25 @@ type peer struct {
 
 	ignored *set.Set // Set of hashes not to request (didn't have previously)
 
-	getHashes hashFetcherFn  // Method to retrieve a batch of hashes (mockable for testing)
-	getBlocks blockFetcherFn // Method to retrieve a batch of blocks (mockable for testing)
+	getRelHashes relativeHashFetcherFn // Method to retrieve a batch of hashes from an origin hash
+	getAbsHashes absoluteHashFetcherFn // Method to retrieve a batch of hashes from an absolute position
+	getBlocks    blockFetcherFn        // Method to retrieve a batch of blocks
+
+	version int // Eth protocol version number to switch strategies
 }
 
 // newPeer create a new downloader peer, with specific hash and block retrieval
 // mechanisms.
-func newPeer(id string, head common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) *peer {
+func newPeer(id string, version int, head common.Hash, getRelHashes relativeHashFetcherFn, getAbsHashes absoluteHashFetcherFn, getBlocks blockFetcherFn) *peer {
 	return &peer{
-		id:        id,
-		head:      head,
-		capacity:  1,
-		getHashes: getHashes,
-		getBlocks: getBlocks,
-		ignored:   set.New(),
+		id:           id,
+		head:         head,
+		capacity:     1,
+		getRelHashes: getRelHashes,
+		getAbsHashes: getAbsHashes,
+		getBlocks:    getBlocks,
+		ignored:      set.New(),
+		version:      version,
 	}
 }
 

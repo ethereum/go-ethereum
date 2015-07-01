@@ -20,14 +20,6 @@ const (
 	txsyncPackSize = 100 * 1024
 )
 
-// blockAnnounce is the hash notification of the availability of a new block in
-// the network.
-type blockAnnounce struct {
-	hash common.Hash
-	peer *peer
-	time time.Time
-}
-
 type txsync struct {
 	p   *peer
 	txs []*types.Transaction
@@ -75,7 +67,7 @@ func (pm *ProtocolManager) txsyncLoop() {
 		// Send the pack in the background.
 		glog.V(logger.Detail).Infof("%v: sending %d transactions (%v)", s.p.Peer, len(pack.txs), size)
 		sending = true
-		go func() { done <- pack.p.sendTransactions(pack.txs) }()
+		go func() { done <- pack.p.SendTransactions(pack.txs) }()
 	}
 
 	// pick chooses the next pending sync.
