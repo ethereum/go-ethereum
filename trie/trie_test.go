@@ -152,7 +152,7 @@ func TestReplication(t *testing.T) {
 	}
 	trie.Commit()
 
-	trie2 := New(trie.roothash, trie.cache.backend)
+	trie2 := New(trie.Root(), trie.cache.backend)
 	if string(trie2.GetString("horse")) != "stallion" {
 		t.Error("expected to have horse => stallion")
 	}
