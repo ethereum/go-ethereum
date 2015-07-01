@@ -24,6 +24,7 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -725,7 +726,7 @@ func encodeTestSlice(n uint) []byte {
 }
 
 func unhex(str string) []byte {
-	b, err := hex.DecodeString(str)
+	b, err := hex.DecodeString(strings.Replace(str, " ", "", -1))
 	if err != nil {
 		panic(fmt.Sprintf("invalid hex string: %q", str))
 	}
