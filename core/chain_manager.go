@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"math/big"
@@ -17,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/hashicorp/golang-lru"
@@ -39,53 +37,6 @@ const (
 	maxTimeFutureBlocks = 30
 	checkpointLimit     = 200
 )
-
-// CalcDifficulty is the difficulty adjustment algorithm. It returns
-// the difficulty that a new block b should have when created at time
-// given the parent block's time and difficulty.
-func CalcDifficulty(time int64, parentTime int64, parentDiff *big.Int) *big.Int {
-	diff := new(big.Int)
-	adjust := new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
-	if big.NewInt(time-parentTime).Cmp(params.DurationLimit) < 0 {
-		diff.Add(parentDiff, adjust)
-	} else {
-		diff.Sub(parentDiff, adjust)
-	}
-	if diff.Cmp(params.MinimumDifficulty) < 0 {
-		return params.MinimumDifficulty
-	}
-	return diff
-}
-
-// CalcTD computes the total difficulty of block.
-func CalcTD(block, parent *types.Block) *big.Int {
-	if parent == nil {
-		return block.Difficulty()
-	}
-	d := block.Difficulty()
-	d.Add(d, parent.Td)
-	return d
-}
-
-// CalcGasLimit computes the gas limit of the next block after parent.
-// The result may be modified by the caller.
-func CalcGasLimit(parent *types.Block) *big.Int {
-	decay := new(big.Int).Div(parent.GasLimit(), params.GasLimitBoundDivisor)
-	contrib := new(big.Int).Mul(parent.GasUsed(), big.NewInt(3))
-	contrib = contrib.Div(contrib, big.NewInt(2))
-	contrib = contrib.Div(contrib, params.GasLimitBoundDivisor)
-
-	gl := new(big.Int).Sub(parent.GasLimit(), decay)
-	gl = gl.Add(gl, contrib)
-	gl = gl.Add(gl, big.NewInt(1))
-	gl.Set(common.BigMax(gl, params.MinGasLimit))
-
-	if gl.Cmp(params.GenesisGasLimit) < 0 {
-		gl.Add(parent.GasLimit(), decay)
-		gl.Set(common.BigMin(gl, params.GenesisGasLimit))
-	}
-	return gl
-}
 
 type ChainManager struct {
 	//eth          EthManager
@@ -238,16 +189,6 @@ func (self *ChainManager) setTransState(statedb *state.StateDB) {
 	self.transState = statedb
 }
 
-func (bc *ChainManager) Recover(num uint64) {
-	block := bc.GetBlockByNumber(num)
-	if block != nil {
-		bc.insert(block)
-		glog.Infof("Recovery succesful. New HEAD %x\n", block.Hash())
-	} else {
-		glog.Fatalln("Recovery failed")
-	}
-}
-
 func (bc *ChainManager) recover() bool {
 	data, _ := bc.blockDb.Get([]byte("checkpoint"))
 	if len(data) != 0 {
@@ -378,12 +319,7 @@ func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error 
 // insert injects a block into the current chain block chain. Note, this function
 // assumes that the `mu` mutex is held!
 func (bc *ChainManager) insert(block *types.Block) {
-	key := append(blockNumPre, block.Number().Bytes()...)
-	err := bc.blockDb.Put(key, block.Hash().Bytes())
-	if err != nil {
-		glog.Fatal("db write fail:", err)
-	}
-	err = bc.blockDb.Put([]byte("LastBlock"), block.Hash().Bytes())
+	err := WriteHead(bc.blockDb, block)
 	if err != nil {
 		glog.Fatal("db write fail:", err)
 	}
@@ -458,20 +394,15 @@ func (self *ChainManager) GetBlock(hash common.Hash) *types.Block {
 		return block.(*types.Block)
 	}
 
-	data, _ := self.blockDb.Get(append(blockHashPre, hash[:]...))
-	if len(data) == 0 {
-		return nil
-	}
-	var block types.StorageBlock
-	if err := rlp.Decode(bytes.NewReader(data), &block); err != nil {
-		glog.V(logger.Error).Infof("invalid block RLP for hash %x: %v", hash, err)
+	block := GetBlockByHash(self.blockDb, hash)
+	if block == nil {
 		return nil
 	}
 
 	// Add the block to the cache
-	self.cache.Add(hash, (*types.Block)(&block))
+	self.cache.Add(hash, (*types.Block)(block))
 
-	return (*types.Block)(&block)
+	return (*types.Block)(block)
 }
 
 func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
@@ -497,12 +428,7 @@ func (self *ChainManager) GetBlocksFromHash(hash common.Hash, n int) (blocks []*
 
 // non blocking version
 func (self *ChainManager) getBlockByNumber(num uint64) *types.Block {
-	key, _ := self.blockDb.Get(append(blockNumPre, big.NewInt(int64(num)).Bytes()...))
-	if len(key) == 0 {
-		return nil
-	}
-
-	return self.GetBlock(common.BytesToHash(key))
+	return GetBlockByNumber(self.blockDb, num)
 }
 
 func (self *ChainManager) GetUnclesInChain(block *types.Block, length int) (uncles []*types.Header) {
