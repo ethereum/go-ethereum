@@ -368,8 +368,8 @@ func (self *worker) commitNewWork() {
 	tstart := time.Now()
 	parent := self.chain.CurrentBlock()
 	tstamp := tstart.Unix()
-	if tstamp <= parent.Time() {
-		tstamp = parent.Time() + 1
+	if tstamp <= int64(parent.Time()) {
+		tstamp = int64(parent.Time()) + 1
 	}
 	// this will ensure we're not going off too far in the future
 	if now := time.Now().Unix(); tstamp > now+4 {
@@ -382,7 +382,7 @@ func (self *worker) commitNewWork() {
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
-		Difficulty: core.CalcDifficulty(tstamp, parent.Time(), parent.Difficulty()),
+		Difficulty: core.CalcDifficulty(int64(tstamp), int64(parent.Time()), parent.Difficulty()),
 		GasLimit:   core.CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Coinbase:   self.coinbase,

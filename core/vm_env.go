@@ -33,7 +33,7 @@ func NewEnv(state *state.StateDB, chain *ChainManager, msg Message, header *type
 func (self *VMEnv) Origin() common.Address   { f, _ := self.msg.From(); return f }
 func (self *VMEnv) BlockNumber() *big.Int    { return self.header.Number }
 func (self *VMEnv) Coinbase() common.Address { return self.header.Coinbase }
-func (self *VMEnv) Time() int64              { return int64(self.header.Time) }
+func (self *VMEnv) Time() uint64             { return self.header.Time }
 func (self *VMEnv) Difficulty() *big.Int     { return self.header.Difficulty }
 func (self *VMEnv) GasLimit() *big.Int       { return self.header.GasLimit }
 func (self *VMEnv) Value() *big.Int          { return self.msg.Value() }
