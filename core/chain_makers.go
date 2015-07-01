@@ -77,7 +77,7 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	if err != nil {
 		panic(err)
 	}
-	b.statedb.Update()
+	b.statedb.SyncIntermediate()
 	b.header.GasUsed.Add(b.header.GasUsed, gas)
 	receipt := types.NewReceipt(b.statedb.Root().Bytes(), b.header.GasUsed)
 	logs := b.statedb.GetLogs(tx.Hash())
@@ -135,7 +135,7 @@ func GenerateChain(parent *types.Block, db common.Database, n int, gen func(int,
 			gen(i, b)
 		}
 		AccumulateRewards(statedb, h, b.uncles)
-		statedb.Update()
+		statedb.SyncIntermediate()
 		h.Root = statedb.Root()
 		return types.NewBlock(h, b.txs, b.uncles, b.receipts)
 	}

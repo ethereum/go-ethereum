@@ -64,7 +64,7 @@ func GenesisBlockForTesting(db common.Database, addr common.Address, balance *bi
 	statedb := state.New(common.Hash{}, db)
 	obj := statedb.GetOrNewStateObject(addr)
 	obj.SetBalance(balance)
-	statedb.Update()
+	statedb.SyncObjects()
 	statedb.Sync()
 	block := types.NewBlock(&types.Header{
 		Difficulty: params.GenesisDifficulty,

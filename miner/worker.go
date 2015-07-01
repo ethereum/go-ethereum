@@ -453,7 +453,7 @@ func (self *worker) commitNewWork() {
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// commit state root after all state transitions.
 		core.AccumulateRewards(self.current.state, header, uncles)
-		current.state.Update()
+		current.state.SyncObjects()
 		self.current.state.Sync()
 		header.Root = current.state.Root()
 	}

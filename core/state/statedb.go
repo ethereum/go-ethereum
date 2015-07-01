@@ -324,7 +324,8 @@ func (self *StateDB) Refunds() *big.Int {
 	return self.refund
 }
 
-func (self *StateDB) Update() {
+// SyncIntermediate updates the intermediate state and all mid steps
+func (self *StateDB) SyncIntermediate() {
 	self.refund = new(big.Int)
 
 	for _, stateObject := range self.stateObjects {
@@ -341,7 +342,8 @@ func (self *StateDB) Update() {
 	}
 }
 
-func (self *StateDB) CleanUpdate() {
+// SyncObjects syncs the changed objects to the trie
+func (self *StateDB) SyncObjects() {
 	self.trie = trie.NewSecure(self.root[:], self.db)
 
 	self.refund = new(big.Int)
