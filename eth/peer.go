@@ -94,11 +94,8 @@ func (p *peer) SetTd(td *big.Int) {
 // never be propagated to this particular peer.
 func (p *peer) MarkBlock(hash common.Hash) {
 	// If we reached the memory allowance, drop a previously known block hash
-	if p.knownBlocks.Size() >= maxKnownBlocks {
-		p.knownBlocks.Each(func(item interface{}) bool {
-			p.knownBlocks.Remove(item)
-			return p.knownBlocks.Size() >= maxKnownBlocks
-		})
+	for p.knownBlocks.Size() >= maxKnownBlocks {
+		p.knownBlocks.Pop()
 	}
 	p.knownBlocks.Add(hash)
 }
@@ -107,11 +104,8 @@ func (p *peer) MarkBlock(hash common.Hash) {
 // will never be propagated to this particular peer.
 func (p *peer) MarkTransaction(hash common.Hash) {
 	// If we reached the memory allowance, drop a previously known transaction hash
-	if p.knownTxs.Size() >= maxKnownTxs {
-		p.knownTxs.Each(func(item interface{}) bool {
-			p.knownTxs.Remove(item)
-			return p.knownTxs.Size() >= maxKnownTxs
-		})
+	for p.knownTxs.Size() >= maxKnownTxs {
+		p.knownTxs.Pop()
 	}
 	p.knownTxs.Add(hash)
 }
