@@ -37,7 +37,10 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -72,10 +75,13 @@ func init() {
 		{
 			Action: blockRecovery,
 			Name:   "recover",
-			Usage:  "attempts to recover a corrupted database by setting a new block head by number",
+			Usage:  "attempts to recover a corrupted database by setting a new block by number or hash. See help recover.",
 			Description: `
 The recover commands will attempt to read out the last
 block based on that.
+
+recover #number recovers by number
+recover <hex> recovers by hash
 `,
 		},
 		blocktestCommand,
@@ -450,17 +456,33 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 }
 
 func blockRecovery(ctx *cli.Context) {
-	num := ctx.Args().First()
-	if len(ctx.Args()) < 1 {
-		glog.Fatal("recover requires block number")
+	arg := ctx.Args().First()
+	if len(ctx.Args()) < 1 && len(arg) > 0 {
+		glog.Fatal("recover requires block number or hash")
 	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	ethereum, err := eth.New(cfg)
+	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"))
 	if err != nil {
-		utils.Fatalf("%v", err)
+		glog.Fatalln("could not open db:", err)
 	}
-	ethereum.ChainManager().Recover(common.String2Big(num).Uint64())
+
+	var block *types.Block
+	if arg[0] == '#' {
+		block = core.GetBlockByNumber(blockDb, common.String2Big(arg[1:]).Uint64())
+	} else {
+		block = core.GetBlockByHash(blockDb, common.HexToHash(arg))
+	}
+
+	if block == nil {
+		glog.Fatalln("block not found. Recovery failed")
+	}
+
+	err = core.WriteHead(blockDb, block)
+	if err != nil {
+		glog.Fatalln("block write err", err)
+	}
+	glog.Infof("Recovery succesful. New HEAD %x\n", block.Hash())
 }
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
