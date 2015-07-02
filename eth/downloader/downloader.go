@@ -39,6 +39,7 @@ import (
 const (
 	eth60 = 60 // Constant to check for old protocol support
 	eth61 = 61 // Constant to check for new protocol support
+	eth62 = 62 // Constant to check for experimental protocol support
 )
 
 var (
@@ -329,7 +330,7 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 		if err = d.fetchBlocks60(); err != nil {
 			return err
 		}
-	case eth61:
+	case eth61, eth62:
 		// New eth/61, use forward, concurrent hash and block retrieval algorithm
 		number, err := d.findAncestor(p)
 		if err != nil {
