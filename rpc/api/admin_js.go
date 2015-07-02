@@ -57,7 +57,7 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'stopRPC',
 			call: 'admin_stopRPC',
-			params: 0,
+			params: 2,
 			inputFormatter: [],
 			outputFormatter: web3._extend.formatters.formatOutputBool
 		}),

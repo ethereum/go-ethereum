@@ -43,7 +43,6 @@ var (
 		"admin_datadir":            (*adminApi).DataDir,
 		"admin_startRPC":           (*adminApi).StartRPC,
 		"admin_stopRPC":            (*adminApi).StopRPC,
-		"admin_sleepBlocks":        (*adminApi).SleepBlocks,
 		"admin_setGlobalRegistrar": (*adminApi).SetGlobalRegistrar,
 		"admin_setHashReg":         (*adminApi).SetHashReg,
 		"admin_setUrlHint":         (*adminApi).SetUrlHint,
@@ -54,6 +53,8 @@ var (
 		"admin_stopNatSpec":        (*adminApi).StopNatSpec,
 		"admin_getContractInfo":    (*adminApi).GetContractInfo,
 		"admin_httpGet":            (*adminApi).HttpGet,
+		"admin_sleepBlocks":        (*adminApi).SleepBlocks,
+		"admin_sleep":              (*adminApi).Sleep,
 	}
 )
 
@@ -303,14 +304,15 @@ func sleepBlocks(wait chan *big.Int, height *big.Int, timer <-chan time.Time) (n
 	return
 }
 
-// 	sec, err := call.Argument(0).ToInteger()
-// 	if err != nil {
-// 		fmt.Println(err)
-// 		return otto.FalseValue()
-// 	}
-// 	time.Sleep(time.Duration(sec) * time.Second)
-// 	return otto.UndefinedValue()
-// }
+func (self *adminApi) Sleep(req *shared.Request) (interface{}, error) {
+	args := new(SleepArgs)
+	if err := self.coder.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+	time.Sleep(time.Duration(args.S) * time.Second)
+	return nil, nil
+}
+
 func (self *adminApi) SetGlobalRegistrar(req *shared.Request) (interface{}, error) {
 	args := new(SetGlobalRegistrarArgs)
 	if err := self.coder.Decode(req.Params, &args); err != nil {
