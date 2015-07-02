@@ -34,11 +34,18 @@ var (
 // If two or more are set to anything other than a 0 the canary
 // dies a horrible death.
 func Canary(statedb *state.StateDB) bool {
-	r := new(big.Int)
-	r.Add(r, statedb.GetState(jeff, common.Hash{}).Big())
-	r.Add(r, statedb.GetState(vitalik, common.Hash{}).Big())
-	r.Add(r, statedb.GetState(christoph, common.Hash{}).Big())
-	r.Add(r, statedb.GetState(gav, common.Hash{}).Big())
-
-	return r.Cmp(big.NewInt(1)) > 0
+	var r int
+	if (statedb.GetState(jeff, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
+		r++
+	}
+	if (statedb.GetState(gav, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
+		r++
+	}
+	if (statedb.GetState(christoph, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
+		r++
+	}
+	if (statedb.GetState(vitalik, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
+		r++
+	}
+	return r > 1
 }
