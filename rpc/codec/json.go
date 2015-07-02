@@ -10,64 +10,134 @@ import (
 )
 
 const (
-	READ_TIMEOUT      = 15 // read timeout in seconds
+	READ_TIMEOUT      = 60 // in seconds
 	MAX_REQUEST_SIZE  = 1024 * 1024
 	MAX_RESPONSE_SIZE = 1024 * 1024
 )
 
+var (
+	// No new requests in buffer
+	EmptyRequestQueueError = fmt.Errorf("No incoming requests")
+	// Next request in buffer isn't yet complete
+	IncompleteRequestError = fmt.Errorf("Request incomplete")
+)
+
 // Json serialization support
 type JsonCodec struct {
-	c net.Conn
-	d *json.Decoder
+	c                net.Conn
+	reqBuffer        []byte
+	bytesInReqBuffer int
+	reqLastPos       int
 }
 
 // Create new JSON coder instance
 func NewJsonCoder(conn net.Conn) ApiCoder {
 	return &JsonCodec{
-		c: conn,
-		d: json.NewDecoder(conn),
+		c:                conn,
+		reqBuffer:        make([]byte, MAX_REQUEST_SIZE),
+		bytesInReqBuffer: 0,
+		reqLastPos:       0,
+	}
+}
+
+// Indication if the next request in the buffer is a batch request
+func (self *JsonCodec) isNextBatchReq() (bool, error) {
+	for i := 0; i < self.bytesInReqBuffer; i++ {
+		switch self.reqBuffer[i] {
+		case 0x20, 0x09, 0x0a, 0x0d: // allow leading whitespace (JSON whitespace RFC4627)
+			continue
+		case 0x7b: // single req
+			return false, nil
+		case 0x5b: // batch req
+			return true, nil
+		default:
+			return false, &json.InvalidUnmarshalError{}
+		}
+	}
+
+	return false, EmptyRequestQueueError
+}
+
+// remove parsed request from buffer
+func (self *JsonCodec) resetReqbuffer(pos int) {
+	copy(self.reqBuffer, self.reqBuffer[pos:self.bytesInReqBuffer])
+	self.reqLastPos = 0
+	self.bytesInReqBuffer -= pos
+}
+
+// parse request in buffer
+func (self *JsonCodec) nextRequest() (requests []*shared.Request, isBatch bool, err error) {
+	if isBatch, err := self.isNextBatchReq(); err == nil {
+		if isBatch {
+			requests = make([]*shared.Request, 0)
+			for ; self.reqLastPos <= self.bytesInReqBuffer; self.reqLastPos++ {
+				if err = json.Unmarshal(self.reqBuffer[:self.reqLastPos], &requests); err == nil {
+					self.resetReqbuffer(self.reqLastPos)
+					return requests, true, nil
+				}
+			}
+			return nil, true, IncompleteRequestError
+		} else {
+			request := shared.Request{}
+			for ; self.reqLastPos <= self.bytesInReqBuffer; self.reqLastPos++ {
+				if err = json.Unmarshal(self.reqBuffer[:self.reqLastPos], &request); err == nil {
+					requests := make([]*shared.Request, 1)
+					requests[0] = &request
+					self.resetReqbuffer(self.reqLastPos)
+					return requests, false, nil
+				}
+			}
+			return nil, true, IncompleteRequestError
+		}
+	} else {
+		return nil, false, err
 	}
 }
 
 // Serialize obj to JSON and write it to conn
 func (self *JsonCodec) ReadRequest() (requests []*shared.Request, isBatch bool, err error) {
+	if self.bytesInReqBuffer != 0 {
+		req, batch, err := self.nextRequest()
+		if err == nil {
+			return req, batch, err
+		}
 
+		if err != IncompleteRequestError {
+			return nil, false, err
+		}
+	}
+
+	// no/incomplete request in buffer -> read more data first
 	deadline := time.Now().Add(READ_TIMEOUT * time.Second)
 	if err := self.c.SetDeadline(deadline); err != nil {
 		return nil, false, err
 	}
 
+	var retErr error
 	for {
-		var err error
-		singleRequest := shared.Request{}
-		if err = self.d.Decode(&singleRequest); err == nil {
-			requests := make([]*shared.Request, 1)
-			requests[0] = &singleRequest
-			return requests, false, nil
+		n, err := self.c.Read(self.reqBuffer[self.bytesInReqBuffer:])
+		if err != nil {
+			retErr = err
+			break
 		}
 
-		fmt.Printf("err %T %v\n", err)
+		self.bytesInReqBuffer += n
 
-		if opErr, ok := err.(*net.OpError); ok {
-			if opErr.Timeout() {
-				break
-			}
+		requests, isBatch, err := self.nextRequest()
+		if err == nil {
+			return requests, isBatch, nil
 		}
 
-		requests = make([]*shared.Request, 0)
-		if err = self.d.Decode(&requests); err == nil {
-			return requests, true, nil
+		if err == IncompleteRequestError || err == EmptyRequestQueueError {
+			continue // need more data
 		}
 
-		if opErr, ok := err.(*net.OpError); ok {
-			if opErr.Timeout() {
-				break
-			}
-		}
+		retErr = err
+		break
 	}
 
-	self.c.Close() // timeout
-	return nil, false, fmt.Errorf("Timeout reading request")
+	self.c.Close()
+	return nil, false, retErr
 }
 
 func (self *JsonCodec) ReadResponse() (interface{}, error) {
