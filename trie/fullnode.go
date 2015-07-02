@@ -23,7 +23,7 @@ func (self *FullNode) Copy(t *Trie) Node {
 	nnode := NewFullNode(t)
 	for i, node := range self.nodes {
 		if node != nil {
-			nnode.nodes[i] = node.Copy(t)
+			nnode.nodes[i] = node
 		}
 	}
 	nnode.dirty = true
