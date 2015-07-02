@@ -18,19 +18,15 @@ package eth
 
 import (
 	"crypto/rand"
-	"math/big"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 func init() {
@@ -41,7 +37,7 @@ func init() {
 var testAccount = crypto.NewKey(rand.Reader)
 
 func TestStatusMsgErrors(t *testing.T) {
-	pm := newProtocolManagerForTesting(nil)
+	pm := newTestProtocolManager(0, nil)
 	td, currentBlock, genesis := pm.chainman.Status()
 	defer pm.Stop()
 
@@ -56,7 +52,7 @@ func TestStatusMsgErrors(t *testing.T) {
 		},
 		{
 			code: StatusMsg, data: statusData{10, NetworkId, td, currentBlock, genesis},
-			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= 0)"),
+			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= %d)", ProtocolVersions[0]),
 		},
 		{
 			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), 999, td, currentBlock, genesis},
@@ -69,10 +65,10 @@ func TestStatusMsgErrors(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		p, errc := newTestPeer(pm)
+		p, errc := newTestPeer("peer", pm, false)
 		// The send call might hang until reset because
 		// the protocol might not read the payload.
-		go p2p.Send(p, test.code, test.data)
+		go p2p.Send(p.app, test.code, test.data)
 
 		select {
 		case err := <-errc:
@@ -91,14 +87,13 @@ func TestStatusMsgErrors(t *testing.T) {
 // This test checks that received transactions are added to the local pool.
 func TestRecvTransactions(t *testing.T) {
 	txAdded := make(chan []*types.Transaction)
-	pm := newProtocolManagerForTesting(txAdded)
-	p, _ := newTestPeer(pm)
+	pm := newTestProtocolManager(0, txAdded)
+	p, _ := newTestPeer("peer", pm, true)
 	defer pm.Stop()
 	defer p.close()
-	p.handshake(t)
 
-	tx := newtx(testAccount, 0, 0)
-	if err := p2p.Send(p, TxMsg, []interface{}{tx}); err != nil {
+	tx := newTestTransaction(testAccount, 0, 0)
+	if err := p2p.Send(p.app, TxMsg, []interface{}{tx}); err != nil {
 		t.Fatalf("send error: %v", err)
 	}
 	select {
@@ -115,14 +110,14 @@ func TestRecvTransactions(t *testing.T) {
 
 // This test checks that pending transactions are sent.
 func TestSendTransactions(t *testing.T) {
-	pm := newProtocolManagerForTesting(nil)
+	pm := newTestProtocolManager(0, nil)
 	defer pm.Stop()
 
 	// Fill the pool with big transactions.
 	const txsize = txsyncPackSize / 10
 	alltxs := make([]*types.Transaction, 100)
 	for nonce := range alltxs {
-		alltxs[nonce] = newtx(testAccount, uint64(nonce), txsize)
+		alltxs[nonce] = newTestTransaction(testAccount, uint64(nonce), txsize)
 	}
 	pm.txpool.AddTransactions(alltxs)
 
@@ -137,7 +132,7 @@ func TestSendTransactions(t *testing.T) {
 		}
 		for n := 0; n < len(alltxs) && !t.Failed(); {
 			var txs []*types.Transaction
-			msg, err := p.ReadMsg()
+			msg, err := p.app.ReadMsg()
 			if err != nil {
 				t.Errorf("%v: read error: %v", p.Peer, err)
 			} else if msg.Code != TxMsg {
@@ -161,97 +156,9 @@ func TestSendTransactions(t *testing.T) {
 		}
 	}
 	for i := 0; i < 3; i++ {
-		p, _ := newTestPeer(pm)
-		p.handshake(t)
+		p, _ := newTestPeer(fmt.Sprintf("peer #%d", i), pm, true)
 		wg.Add(1)
 		go checktxs(p)
 	}
 	wg.Wait()
-}
-
-// testPeer wraps all peer-related data for tests.
-type testPeer struct {
-	p2p.MsgReadWriter                // writing to the test peer feeds the protocol
-	pipe              *p2p.MsgPipeRW // the protocol read/writes on this end
-	pm                *ProtocolManager
-	*peer
-}
-
-func newProtocolManagerForTesting(txAdded chan<- []*types.Transaction) *ProtocolManager {
-	db, _ := ethdb.NewMemDatabase()
-	core.WriteTestNetGenesisBlock(db, 0)
-	var (
-		em       = new(event.TypeMux)
-		chain, _ = core.NewChainManager(db, core.FakePow{}, em)
-		txpool   = &fakeTxPool{added: txAdded}
-		pm       = NewProtocolManager(NetworkId, em, txpool, core.FakePow{}, chain)
-	)
-	pm.Start()
-	return pm
-}
-
-func newTestPeer(pm *ProtocolManager) (*testPeer, <-chan error) {
-	var id discover.NodeID
-	rand.Read(id[:])
-	rw1, rw2 := p2p.MsgPipe()
-	peer := pm.newPeer(pm.protVer, pm.netId, p2p.NewPeer(id, "test peer", nil), rw2)
-	errc := make(chan error, 1)
-	go func() {
-		pm.newPeerCh <- peer
-		errc <- pm.handle(peer)
-	}()
-	return &testPeer{rw1, rw2, pm, peer}, errc
-}
-
-func (p *testPeer) handshake(t *testing.T) {
-	td, currentBlock, genesis := p.pm.chainman.Status()
-	msg := &statusData{
-		ProtocolVersion: uint32(p.pm.protVer),
-		NetworkId:       uint32(p.pm.netId),
-		TD:              td,
-		CurrentBlock:    currentBlock,
-		GenesisBlock:    genesis,
-	}
-	if err := p2p.ExpectMsg(p, StatusMsg, msg); err != nil {
-		t.Fatalf("status recv: %v", err)
-	}
-	if err := p2p.Send(p, StatusMsg, msg); err != nil {
-		t.Fatalf("status send: %v", err)
-	}
-}
-
-func (p *testPeer) close() {
-	p.pipe.Close()
-}
-
-type fakeTxPool struct {
-	// all transactions are collected.
-	mu  sync.Mutex
-	all []*types.Transaction
-	// if added is non-nil, it receives added transactions.
-	added chan<- []*types.Transaction
-}
-
-func (pool *fakeTxPool) AddTransactions(txs []*types.Transaction) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	pool.all = append(pool.all, txs...)
-	if pool.added != nil {
-		pool.added <- txs
-	}
-}
-
-func (pool *fakeTxPool) GetTransactions() types.Transactions {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	txs := make([]*types.Transaction, len(pool.all))
-	copy(txs, pool.all)
-	return types.Transactions(txs)
-}
-
-func newtx(from *crypto.Key, nonce uint64, datasize int) *types.Transaction {
-	data := make([]byte, datasize)
-	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), data)
-	tx, _ = tx.SignECDSA(from.PrivateKey)
-	return tx
 }

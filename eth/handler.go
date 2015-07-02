@@ -36,10 +36,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// This is the target maximum size of returned blocks for the
-// getBlocks message. The reply message may exceed it
-// if a single block is larger than the limit.
-const maxBlockRespSize = 2 * 1024 * 1024
+// This is the target maximum size of returned blocks or headers.
+const softResponseLimit = 2 * 1024 * 1024
 
 func errResp(code errCode, format string, v ...interface{}) error {
 	return fmt.Errorf("%v - %v", code, fmt.Sprintf(format, v...))
@@ -59,12 +57,11 @@ func (ep extProt) GetHashes(hash common.Hash) error    { return ep.getHashes(has
 func (ep extProt) GetBlock(hashes []common.Hash) error { return ep.getBlocks(hashes) }
 
 type ProtocolManager struct {
-	protVer, netId int
-	txpool         txPool
-	chainman       *core.ChainManager
-	downloader     *downloader.Downloader
-	fetcher        *fetcher.Fetcher
-	peers          *peerSet
+	txpool     txPool
+	chainman   *core.ChainManager
+	downloader *downloader.Downloader
+	fetcher    *fetcher.Fetcher
+	peers      *peerSet
 
 	SubProtocols []p2p.Protocol
 
@@ -95,7 +92,6 @@ func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow po
 		newPeerCh: make(chan *peer, 1),
 		txsyncCh:  make(chan *txsync),
 		quitSync:  make(chan struct{}),
-		netId:     networkId,
 	}
 	// Initiate a sub-protocol for every implemented version we can handle
 	manager.SubProtocols = make([]p2p.Protocol, len(ProtocolVersions))
@@ -302,35 +298,21 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		var (
 			hash   common.Hash
 			bytes  common.StorageSize
-			hashes []common.Hash
 			blocks []*types.Block
 		)
-		for {
+		for len(blocks) < downloader.MaxBlockFetch && bytes < softResponseLimit {
+			//Retrieve the hash of the next block
 			err := msgStream.Decode(&hash)
 			if err == rlp.EOL {
 				break
 			} else if err != nil {
 				return errResp(ErrDecode, "msg %v: %v", msg, err)
 			}
-			hashes = append(hashes, hash)
-
 			// Retrieve the requested block, stopping if enough was found
 			if block := pm.chainman.GetBlock(hash); block != nil {
 				blocks = append(blocks, block)
 				bytes += block.Size()
-				if len(blocks) >= downloader.MaxBlockFetch || bytes > maxBlockRespSize {
-					break
-				}
 			}
-		}
-		if glog.V(logger.Detail) && len(blocks) == 0 && len(hashes) > 0 {
-			list := "["
-			for _, hash := range hashes {
-				list += fmt.Sprintf("%x, ", hash[:4])
-			}
-			list = list[:len(list)-2] + "]"
-
-			glog.Infof("%v: no blocks found for requested hashes %s", p, list)
 		}
 		return p.SendBlocks(blocks)
 
@@ -351,6 +333,33 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if blocks := pm.fetcher.Filter(blocks); len(blocks) > 0 {
 			pm.downloader.DeliverBlocks(p.id, blocks)
 		}
+
+	case GetBlockHeadersMsg:
+		// Decode the retrieval message
+		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
+		if _, err := msgStream.List(); err != nil {
+			return err
+		}
+		// Gather blocks until the fetch or network limits is reached
+		var (
+			hash    common.Hash
+			bytes   common.StorageSize
+			headers []*types.Header
+		)
+		for bytes < softResponseLimit && len(headers) < downloader.MaxHeaderFetch {
+			//Retrieve the hash of the next block
+			if err := msgStream.Decode(&hash); err == rlp.EOL {
+				break
+			} else if err != nil {
+				return errResp(ErrDecode, "msg %v: %v", msg, err)
+			}
+			// Retrieve the requested block, stopping if enough was found
+			if block := pm.chainman.GetBlock(hash); block != nil {
+				headers = append(headers, block.Header())
+				bytes += block.Size()
+			}
+		}
+		return p.SendBlockHeaders(headers)
 
 	case NewBlockHashesMsg:
 		// Retrieve and deseralize the remote new block hashes notification
