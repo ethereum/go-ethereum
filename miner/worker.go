@@ -275,13 +275,13 @@ func (self *worker) wait() {
 			glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
 
 			// broadcast before waiting for validation
-			go func() {
+			go func(block *types.Block, logs state.Logs) {
 				self.mux.Post(core.NewMinedBlockEvent{block})
-				self.mux.Post(core.ChainEvent{block, block.Hash(), self.current.state.Logs()})
+				self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
 				if stat == core.CanonStatTy {
 					self.mux.Post(core.ChainHeadEvent{block})
 				}
-			}()
+			}(block, self.current.state.Logs())
 
 			self.commitNewWork()
 		}
