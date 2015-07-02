@@ -165,10 +165,21 @@ func (p *peer) SendBlockHeaders(headers []*types.Header) error {
 	return p2p.Send(p.rw, BlockHeadersMsg, headers)
 }
 
+// SendBlockBodies sends a batch of block contents to the remote peer.
+func (p *peer) SendBlockBodies(bodies []*blockBody) error {
+	return p2p.Send(p.rw, BlockBodiesMsg, blockBodiesData(bodies))
+}
+
 // SendNodeData sends a batch of arbitrary internal data, corresponding to the
 // hashes requested.
 func (p *peer) SendNodeData(data [][]byte) error {
 	return p2p.Send(p.rw, NodeDataMsg, data)
+}
+
+// SendReceipts sends a batch of transaction receipts, corresponding to the ones
+// requested.
+func (p *peer) SendReceipts(receipts []*types.Receipt) error {
+	return p2p.Send(p.rw, ReceiptsMsg, receipts)
 }
 
 // RequestHashes fetches a batch of hashes from a peer, starting at from, going
@@ -203,6 +214,12 @@ func (p *peer) RequestHeaders(hashes []common.Hash) error {
 func (p *peer) RequestNodeData(hashes []common.Hash) error {
 	glog.V(logger.Debug).Infof("%v fetching %v state data\n", p, len(hashes))
 	return p2p.Send(p.rw, GetNodeDataMsg, hashes)
+}
+
+// RequestReceipts fetches a batch of transaction receipts from a remote node.
+func (p *peer) RequestReceipts(hashes []common.Hash) error {
+	glog.V(logger.Debug).Infof("%v fetching %v receipts\n", p, len(hashes))
+	return p2p.Send(p.rw, GetReceiptsMsg, hashes)
 }
 
 // Handshake executes the eth protocol handshake, negotiating version number,

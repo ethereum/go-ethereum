@@ -69,8 +69,9 @@ type peerDropFn func(id string)
 // announce is the hash notification of the availability of a new block in the
 // network.
 type announce struct {
-	hash common.Hash // Hash of the block being announced
-	time time.Time   // Timestamp of the announcement
+	hash   common.Hash // Hash of the block being announced
+	number uint64      // Number of the block being announced (0 = unknown | old protocol)
+	time   time.Time   // Timestamp of the announcement
 
 	origin string           // Identifier of the peer originating the notification
 	fetch  blockRequesterFn // Fetcher function to retrieve
@@ -152,9 +153,10 @@ func (f *Fetcher) Stop() {
 
 // Notify announces the fetcher of the potential availability of a new block in
 // the network.
-func (f *Fetcher) Notify(peer string, hash common.Hash, time time.Time, fetcher blockRequesterFn) error {
+func (f *Fetcher) Notify(peer string, hash common.Hash, number uint64, time time.Time, fetcher blockRequesterFn) error {
 	block := &announce{
 		hash:   hash,
+		number: number,
 		time:   time,
 		origin: peer,
 		fetch:  fetcher,

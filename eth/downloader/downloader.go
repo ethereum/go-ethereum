@@ -39,13 +39,15 @@ import (
 const (
 	eth60 = 60 // Constant to check for old protocol support
 	eth61 = 61 // Constant to check for new protocol support
-	eth62 = 62 // Constant to check for experimental protocol support
 )
 
 var (
-	MinHashFetch  = 512 // Minimum amount of hashes to not consider a peer stalling
-	MaxHashFetch  = 512 // Amount of hashes to be fetched per retrieval request
-	MaxBlockFetch = 128 // Amount of blocks to be fetched per retrieval request
+	MinHashFetch     = 512 // Minimum amount of hashes to not consider a peer stalling
+	MaxHashFetch     = 512 // Amount of hashes to be fetched per retrieval request
+	MaxBlockFetch    = 128 // Amount of blocks to be fetched per retrieval request
+	MaxHeaderFetch   = 256 // Amount of block headers to be fetched per retrieval request
+	MaxStateFetch    = 384 // Amount of node state values to allow fetching per request
+	MaxReceiptsFetch = 384 // Amount of transaction receipts to allow fetching per request
 
 	hashTTL         = 5 * time.Second  // Time it takes for a hash request to time out
 	blockSoftTTL    = 3 * time.Second  // Request completion threshold for increasing or decreasing a peer's bandwidth
@@ -330,7 +332,7 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 		if err = d.fetchBlocks60(); err != nil {
 			return err
 		}
-	case eth61, eth62:
+	case eth61:
 		// New eth/61, use forward, concurrent hash and block retrieval algorithm
 		number, err := d.findAncestor(p)
 		if err != nil {
