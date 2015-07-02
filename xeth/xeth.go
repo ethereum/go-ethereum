@@ -802,7 +802,12 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 	}
 
 	if tx.To() == nil {
-		addr := core.AddressFromMessage(tx)
+		from, err := tx.From()
+		if err != nil {
+			return "", err
+		}
+
+		addr := crypto.CreateAddress(from, tx.Nonce())
 		glog.V(logger.Info).Infof("Tx(%x) created: %x\n", tx.Hash(), addr)
 		return addr.Hex(), nil
 	} else {
@@ -969,7 +974,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	}
 
 	if contractCreation {
-		addr := core.AddressFromMessage(tx)
+		addr := crypto.CreateAddress(from, nonce)
 		glog.V(logger.Info).Infof("Tx(%x) created: %x\n", tx.Hash(), addr)
 		return addr.Hex(), nil
 	} else {

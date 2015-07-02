@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
@@ -54,11 +53,6 @@ type Message interface {
 
 	Nonce() uint64
 	Data() []byte
-}
-
-func AddressFromMessage(msg Message) common.Address {
-	from, _ := msg.From()
-	return crypto.CreateAddress(from, msg.Nonce())
 }
 
 func MessageCreatesContract(msg Message) bool {

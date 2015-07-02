@@ -149,7 +149,8 @@ func NewTx(tx *types.Transaction) *Transaction {
 	if to := tx.To(); to != nil {
 		receiver = to.Hex()
 	} else {
-		receiver = core.AddressFromMessage(tx).Hex()
+		from, _ := tx.From()
+		receiver = crypto.CreateAddress(from, tx.Nonce()).Hex()
 	}
 	createsContract := core.MessageCreatesContract(tx)
 
