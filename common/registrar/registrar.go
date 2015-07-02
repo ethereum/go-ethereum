@@ -129,7 +129,7 @@ func (self *Registrar) SetHashReg(hashreg string, addr common.Address) (err erro
 				return
 			}
 
-			HashRegAddr, err = self.backend.Transact(addr.Hex(), "", "", "", "200000", "", HashRegCode)
+			HashRegAddr, err = self.backend.Transact(addr.Hex(), "", "", "", "", "", HashRegCode)
 			if err != nil {
 				err = fmt.Errorf("HashReg address not found and sender for creation failed: %v", err)
 			}
