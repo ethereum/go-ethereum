@@ -129,9 +129,7 @@ func (p *peer) MarkTransaction(hash common.Hash) {
 // SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
 func (p *peer) SendTransactions(txs types.Transactions) error {
-	propTxnOutPacketsMeter.Mark(1)
 	for _, tx := range txs {
-		propTxnOutTrafficMeter.Mark(tx.Size().Int64())
 		p.knownTxs.Add(tx.Hash())
 	}
 	return p2p.Send(p.rw, TxMsg, txs)
@@ -139,27 +137,17 @@ func (p *peer) SendTransactions(txs types.Transactions) error {
 
 // SendBlockHashes sends a batch of known hashes to the remote peer.
 func (p *peer) SendBlockHashes(hashes []common.Hash) error {
-	reqHashOutPacketsMeter.Mark(1)
-	reqHashOutTrafficMeter.Mark(int64(32 * len(hashes)))
-
 	return p2p.Send(p.rw, BlockHashesMsg, hashes)
 }
 
 // SendBlocks sends a batch of blocks to the remote peer.
 func (p *peer) SendBlocks(blocks []*types.Block) error {
-	reqBlockOutPacketsMeter.Mark(1)
-	for _, block := range blocks {
-		reqBlockOutTrafficMeter.Mark(block.Size().Int64())
-	}
 	return p2p.Send(p.rw, BlocksMsg, blocks)
 }
 
 // SendNewBlockHashes announces the availability of a number of blocks through
 // a hash notification.
 func (p *peer) SendNewBlockHashes(hashes []common.Hash) error {
-	propHashOutPacketsMeter.Mark(1)
-	propHashOutTrafficMeter.Mark(int64(32 * len(hashes)))
-
 	for _, hash := range hashes {
 		p.knownBlocks.Add(hash)
 	}
@@ -168,31 +156,53 @@ func (p *peer) SendNewBlockHashes(hashes []common.Hash) error {
 
 // SendNewBlock propagates an entire block to a remote peer.
 func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
-	propBlockOutPacketsMeter.Mark(1)
-	propBlockOutTrafficMeter.Mark(block.Size().Int64())
-
 	p.knownBlocks.Add(block.Hash())
 	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
+}
+
+// SendBlockHeaders sends a batch of block headers to the remote peer.
+func (p *peer) SendBlockHeaders(headers []*types.Header) error {
+	return p2p.Send(p.rw, BlockHeadersMsg, headers)
+}
+
+// SendNodeData sends a batch of arbitrary internal data, corresponding to the
+// hashes requested.
+func (p *peer) SendNodeData(data [][]byte) error {
+	return p2p.Send(p.rw, NodeDataMsg, data)
 }
 
 // RequestHashes fetches a batch of hashes from a peer, starting at from, going
 // towards the genesis block.
 func (p *peer) RequestHashes(from common.Hash) error {
-	glog.V(logger.Debug).Infof("Peer [%s] fetching hashes (%d) from %x...\n", p.id, downloader.MaxHashFetch, from[:4])
+	glog.V(logger.Debug).Infof("%v fetching hashes (%d) from %x...\n", p, downloader.MaxHashFetch, from[:4])
 	return p2p.Send(p.rw, GetBlockHashesMsg, getBlockHashesData{from, uint64(downloader.MaxHashFetch)})
 }
 
-// RequestHashesFromNumber fetches a batch of hashes from a peer, starting at the
-// requested block number, going upwards towards the genesis block.
+// RequestHashesFromNumber fetches a batch of hashes from a peer, starting at
+// the requested block number, going upwards towards the genesis block.
 func (p *peer) RequestHashesFromNumber(from uint64, count int) error {
-	glog.V(logger.Debug).Infof("Peer [%s] fetching hashes (%d) from #%d...\n", p.id, count, from)
+	glog.V(logger.Debug).Infof("%v fetching hashes (%d) from #%d...\n", p, count, from)
 	return p2p.Send(p.rw, GetBlockHashesFromNumberMsg, getBlockHashesFromNumberData{from, uint64(count)})
 }
 
 // RequestBlocks fetches a batch of blocks corresponding to the specified hashes.
 func (p *peer) RequestBlocks(hashes []common.Hash) error {
-	glog.V(logger.Debug).Infof("[%s] fetching %v blocks\n", p.id, len(hashes))
+	glog.V(logger.Debug).Infof("%v fetching %v blocks\n", p, len(hashes))
 	return p2p.Send(p.rw, GetBlocksMsg, hashes)
+}
+
+// RequestHeaders fetches a batch of blocks' headers corresponding to the
+// specified hashes.
+func (p *peer) RequestHeaders(hashes []common.Hash) error {
+	glog.V(logger.Debug).Infof("%v fetching %v headers\n", p, len(hashes))
+	return p2p.Send(p.rw, GetBlockHeadersMsg, hashes)
+}
+
+// RequestNodeData fetches a batch of arbitrary data from a node's known state
+// data, corresponding to the specified hashes.
+func (p *peer) RequestNodeData(hashes []common.Hash) error {
+	glog.V(logger.Debug).Infof("%v fetching %v state data\n", p, len(hashes))
+	return p2p.Send(p.rw, GetNodeDataMsg, hashes)
 }
 
 // Handshake executes the eth protocol handshake, negotiating version number,

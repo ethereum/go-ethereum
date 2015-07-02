@@ -24,10 +24,10 @@ import (
 )
 
 // Supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{61, 60}
+var ProtocolVersions = []uint{62, 61, 60}
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{9, 8}
+var ProtocolLengths = []uint64{13, 9, 8}
 
 const (
 	NetworkId          = 1
@@ -36,6 +36,7 @@ const (
 
 // eth protocol message codes
 const (
+	// Protocol messages belonging to eth/60
 	StatusMsg = iota
 	NewBlockHashesMsg
 	TxMsg
@@ -44,7 +45,15 @@ const (
 	GetBlocksMsg
 	BlocksMsg
 	NewBlockMsg
+
+	// Protocol messages belonging to eth/61
 	GetBlockHashesFromNumberMsg
+
+	// Protocol messages belonging to eth/62
+	GetBlockHeadersMsg
+	BlockHeadersMsg
+	GetNodeDataMsg
+	NodeDataMsg
 )
 
 type errCode int
@@ -102,15 +111,14 @@ type statusData struct {
 	GenesisBlock    common.Hash
 }
 
-// getBlockHashesData is the network packet for the hash based block retrieval
-// message.
+// getBlockHashesData is the network packet for the hash based hash retrieval.
 type getBlockHashesData struct {
 	Hash   common.Hash
 	Amount uint64
 }
 
-// getBlockHashesFromNumberData is the network packet for the number based block
-// retrieval message.
+// getBlockHashesFromNumberData is the network packet for the number based hash
+// retrieval.
 type getBlockHashesFromNumberData struct {
 	Number uint64
 	Amount uint64
@@ -120,4 +128,9 @@ type getBlockHashesFromNumberData struct {
 type newBlockData struct {
 	Block *types.Block
 	TD    *big.Int
+}
+
+// nodeDataData is the network response packet for a node data retrieval.
+type nodeDataData []struct {
+	Value []byte
 }

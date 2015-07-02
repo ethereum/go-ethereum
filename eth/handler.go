@@ -176,7 +176,7 @@ func (pm *ProtocolManager) Stop() {
 }
 
 func (pm *ProtocolManager) newPeer(pv, nv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
-	return newPeer(pv, nv, p, rw)
+	return newPeer(pv, nv, p, newMeteredMsgWriter(rw))
 }
 
 // handle is the callback invoked to manage the life cycle of an eth peer. When
@@ -281,14 +281,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	case BlockHashesMsg:
 		// A batch of hashes arrived to one of our previous requests
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-		reqHashInPacketsMeter.Mark(1)
 
 		var hashes []common.Hash
 		if err := msgStream.Decode(&hashes); err != nil {
 			break
 		}
-		reqHashInTrafficMeter.Mark(int64(32 * len(hashes)))
-
 		// Deliver them all to the downloader for queuing
 		err := pm.downloader.DeliverHashes(p.id, hashes)
 		if err != nil {
@@ -340,7 +337,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	case BlocksMsg:
 		// Decode the arrived block message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-		reqBlockInPacketsMeter.Mark(1)
 
 		var blocks []*types.Block
 		if err := msgStream.Decode(&blocks); err != nil {
@@ -349,7 +345,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Update the receive timestamp of each block
 		for _, block := range blocks {
-			reqBlockInTrafficMeter.Mark(block.Size().Int64())
 			block.ReceivedAt = msg.ReceivedAt
 		}
 		// Filter out any explicitly requested blocks, deliver the rest to the downloader
@@ -365,9 +360,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msgStream.Decode(&hashes); err != nil {
 			break
 		}
-		propHashInPacketsMeter.Mark(1)
-		propHashInTrafficMeter.Mark(int64(32 * len(hashes)))
-
 		// Mark the hashes as present at the remote node
 		for _, hash := range hashes {
 			p.MarkBlock(hash)
@@ -390,9 +382,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&request); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-		propBlockInPacketsMeter.Mark(1)
-		propBlockInTrafficMeter.Mark(request.Block.Size().Int64())
-
 		if err := request.Block.ValidateFields(); err != nil {
 			return errResp(ErrDecode, "block validation %v: %v", msg, err)
 		}
@@ -427,7 +416,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&txs); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		propTxnInPacketsMeter.Mark(1)
 		for i, tx := range txs {
 			// Validate and mark the remote transaction
 			if tx == nil {
@@ -436,7 +424,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			p.MarkTransaction(tx.Hash())
 
 			// Log it's arrival for later analysis
-			propTxnInTrafficMeter.Mark(tx.Size().Int64())
 			jsonlogger.LogJson(&logger.EthTxReceived{
 				TxHash:   tx.Hash().Hex(),
 				RemoteId: p.ID().String(),
