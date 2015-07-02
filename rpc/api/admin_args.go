@@ -149,6 +149,30 @@ func (args *StartRPCArgs) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
+type SleepArgs struct {
+	S int
+}
+
+func (args *SleepArgs) UnmarshalJSON(b []byte) (err error) {
+
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+	if len(obj) >= 1 {
+		if obj[0] != nil {
+			if n, err := numString(obj[0]); err == nil {
+				args.S = int(n.Int64())
+			} else {
+				return shared.NewInvalidTypeError("N", "not an integer: "+err.Error())
+			}
+		} else {
+			return shared.NewInsufficientParamsError(0, 1)
+		}
+	}
+	return nil
+}
+
 type SleepBlocksArgs struct {
 	N       int64
 	Timeout int64
@@ -163,19 +187,19 @@ func (args *SleepBlocksArgs) UnmarshalJSON(b []byte) (err error) {
 
 	args.N = 1
 	args.Timeout = 0
-	if len(obj) >= 1 {
-		if n, ok := obj[0].(int64); ok {
-			args.N = n
+	if len(obj) >= 1 && obj[0] != nil {
+		if n, err := numString(obj[0]); err == nil {
+			args.N = n.Int64()
 		} else {
-			return shared.NewInvalidTypeError("N", "not an integer")
+			return shared.NewInvalidTypeError("N", "not an integer: "+err.Error())
 		}
 	}
 
-	if len(obj) >= 2 {
-		if n, ok := obj[1].(int64); ok {
-			args.Timeout = n
+	if len(obj) >= 2 && obj[1] != nil {
+		if n, err := numString(obj[1]); err == nil {
+			args.Timeout = n.Int64()
 		} else {
-			return shared.NewInvalidTypeError("N", "not an integer")
+			return shared.NewInvalidTypeError("Timeout", "not an integer: "+err.Error())
 		}
 	}
 
