@@ -41,8 +41,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"reflect"
 
 	"code.google.com/p/go-uuid/uuid"
@@ -65,7 +63,7 @@ type keyStorePassphrase struct {
 	keysDirPath string
 }
 
-func NewKeyStorePassphrase(path string) KeyStore2 {
+func NewKeyStorePassphrase(path string) KeyStore {
 	return &keyStorePassphrase{path}
 }
 
@@ -74,7 +72,7 @@ func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *K
 }
 
 func (ks keyStorePassphrase) GetKey(keyAddr common.Address, auth string) (key *Key, err error) {
-	keyBytes, keyId, err := DecryptKeyFromFile(ks, keyAddr, auth)
+	keyBytes, keyId, err := decryptKeyFromFile(ks, keyAddr, auth)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +85,7 @@ func (ks keyStorePassphrase) GetKey(keyAddr common.Address, auth string) (key *K
 }
 
 func (ks keyStorePassphrase) GetKeyAddresses() (addresses []common.Address, err error) {
-	return GetKeyAddresses(ks.keysDirPath)
+	return getKeyAddresses(ks.keysDirPath)
 }
 
 func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
@@ -139,42 +137,40 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		return err
 	}
 
-	return WriteKeyFile(key.Address, ks.keysDirPath, keyJSON)
+	return writeKeyFile(key.Address, ks.keysDirPath, keyJSON)
 }
 
 func (ks keyStorePassphrase) DeleteKey(keyAddr common.Address, auth string) (err error) {
 	// only delete if correct passphrase is given
-	_, _, err = DecryptKeyFromFile(ks, keyAddr, auth)
+	_, _, err = decryptKeyFromFile(ks, keyAddr, auth)
 	if err != nil {
 		return err
 	}
 
-	keyDirPath := filepath.Join(ks.keysDirPath, hex.EncodeToString(keyAddr[:]))
-	return os.RemoveAll(keyDirPath)
+	return deleteKey(ks.keysDirPath, keyAddr)
 }
 
-func DecryptKeyFromFile(ks keyStorePassphrase, keyAddr common.Address, auth string) (keyBytes []byte, keyId []byte, err error) {
-	fileContent, err := GetKeyFile(ks.keysDirPath, keyAddr)
-	if err != nil {
-		return nil, nil, err
-	}
-
+func decryptKeyFromFile(ks keyStorePassphrase, keyAddr common.Address, auth string) (keyBytes []byte, keyId []byte, err error) {
 	m := make(map[string]interface{})
-	err = json.Unmarshal(fileContent, &m)
+	err = getKey(ks.keysDirPath, keyAddr, &m)
+	if err != nil {
+		fmt.Printf("get key error: %v\n", err)
+		return
+	}
 
 	v := reflect.ValueOf(m["version"])
 	if v.Kind() == reflect.String && v.String() == "1" {
 		k := new(encryptedKeyJSONV1)
-		err := json.Unmarshal(fileContent, k)
+		getKey(ks.keysDirPath, keyAddr, &k)
 		if err != nil {
-			return nil, nil, err
+			return
 		}
 		return decryptKeyV1(k, auth)
 	} else {
 		k := new(encryptedKeyJSONV3)
-		err := json.Unmarshal(fileContent, k)
+		getKey(ks.keysDirPath, keyAddr, &k)
 		if err != nil {
-			return nil, nil, err
+			return
 		}
 		return decryptKeyV3(k, auth)
 	}

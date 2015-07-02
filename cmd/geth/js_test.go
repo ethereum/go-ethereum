@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -128,6 +127,7 @@ func TestNodeInfo(t *testing.T) {
 	}
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
+
 	want := `{"DiscPort":0,"IP":"0.0.0.0","ListenAddr":"","Name":"test","NodeID":"4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5","NodeUrl":"enode://4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5@0.0.0.0:0","TCPPort":0,"Td":"131072"}`
 	checkEvalJSON(t, repl, `admin.nodeInfo`, want)
 }

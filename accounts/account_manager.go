@@ -26,7 +26,7 @@ This abstracts part of a user's interaction with an account she controls.
 It's not an abstraction of core Ethereum accounts data type / logic -
 for that see the core processing code of blocks / txs.
 
-Currently this is pretty much a passthrough to the KeyStore2 interface,
+Currently this is pretty much a passthrough to the KeyStore interface,
 and accounts persistence is derived from stored keys' addresses
 
 */
@@ -54,7 +54,7 @@ type Account struct {
 }
 
 type Manager struct {
-	keyStore crypto.KeyStore2
+	keyStore crypto.KeyStore
 	unlocked map[common.Address]*unlocked
 	mutex    sync.RWMutex
 }
@@ -64,7 +64,7 @@ type unlocked struct {
 	abort chan struct{}
 }
 
-func NewManager(keyStore crypto.KeyStore2) *Manager {
+func NewManager(keyStore crypto.KeyStore) *Manager {
 	return &Manager{
 		keyStore: keyStore,
 		unlocked: make(map[common.Address]*unlocked),
