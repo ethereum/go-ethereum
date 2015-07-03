@@ -79,9 +79,10 @@ type worker struct {
 	quit   chan struct{}
 	pow    pow.PoW
 
-	eth   core.Backend
-	chain *core.ChainManager
-	proc  *core.BlockProcessor
+	eth     core.Backend
+	chain   *core.ChainManager
+	proc    *core.BlockProcessor
+	extraDb common.Database
 
 	coinbase common.Address
 	gasPrice *big.Int
@@ -105,6 +106,7 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 	worker := &worker{
 		eth:            eth,
 		mux:            eth.EventMux(),
+		extraDb:        eth.ExtraDb(),
 		recv:           make(chan *types.Block),
 		gasPrice:       new(big.Int),
 		chain:          eth.ChainManager(),
@@ -233,10 +235,27 @@ func (self *worker) wait() {
 				continue
 			}
 
-			_, err := self.chain.WriteBlock(block, false)
+			parent := self.chain.GetBlock(block.ParentHash())
+			if parent == nil {
+				glog.V(logger.Error).Infoln("Invalid block found during mining")
+				continue
+			}
+			if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true); err != nil {
+				glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
+				continue
+			}
+
+			stat, err := self.chain.WriteBlock(block, false)
 			if err != nil {
 				glog.V(logger.Error).Infoln("error writing block to chain", err)
 				continue
+			}
+			// check if canon block and write transactions
+			if stat == core.CanonStatTy {
+				// This puts transactions in a extra db for rpc
+				core.PutTransactions(self.extraDb, block, block.Transactions())
+				// store the receipts
+				core.PutReceipts(self.extraDb, block.Hash(), self.current.receipts)
 			}
 
 			// check staleness and display confirmation
@@ -252,7 +271,13 @@ func (self *worker) wait() {
 			glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
 
 			// broadcast before waiting for validation
-			go self.mux.Post(core.NewMinedBlockEvent{block})
+			go func(block *types.Block, logs state.Logs) {
+				self.mux.Post(core.NewMinedBlockEvent{block})
+				self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
+				if stat == core.CanonStatTy {
+					self.mux.Post(core.ChainHeadEvent{block})
+				}
+			}(block, self.current.state.Logs())
 
 			self.commitNewWork()
 		}

@@ -42,6 +42,7 @@ type ChainManager struct {
 	//eth          EthManager
 	blockDb      common.Database
 	stateDb      common.Database
+	extraDb      common.Database
 	processor    types.BlockProcessor
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
@@ -70,11 +71,12 @@ type ChainManager struct {
 	pow pow.PoW
 }
 
-func NewChainManager(genesis *types.Block, blockDb, stateDb common.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
+func NewChainManager(genesis *types.Block, blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
 	cache, _ := lru.New(blockCacheLimit)
 	bc := &ChainManager{
 		blockDb:      blockDb,
 		stateDb:      stateDb,
+		extraDb:      extraDb,
 		genesisBlock: GenesisBlock(42, stateDb),
 		eventMux:     mux,
 		quit:         make(chan struct{}),
@@ -477,10 +479,10 @@ func (self *ChainManager) procFutureBlocks() {
 type writeStatus byte
 
 const (
-	nonStatTy writeStatus = iota
-	canonStatTy
-	splitStatTy
-	sideStatTy
+	NonStatTy writeStatus = iota
+	CanonStatTy
+	SplitStatTy
+	SideStatTy
 )
 
 // WriteBlock writes the block to the chain (or pending queue)
@@ -497,10 +499,10 @@ func (self *ChainManager) WriteBlock(block *types.Block, queued bool) (status wr
 			// during split we merge two different chains and create the new canonical chain
 			err := self.merge(cblock, block)
 			if err != nil {
-				return nonStatTy, err
+				return NonStatTy, err
 			}
 
-			status = splitStatTy
+			status = SplitStatTy
 		}
 
 		self.mu.Lock()
@@ -511,9 +513,9 @@ func (self *ChainManager) WriteBlock(block *types.Block, queued bool) (status wr
 		self.setTransState(state.New(block.Root(), self.stateDb))
 		self.txState.SetState(state.New(block.Root(), self.stateDb))
 
-		status = canonStatTy
+		status = CanonStatTy
 	} else {
-		status = sideStatTy
+		status = SideStatTy
 	}
 
 	self.write(block)
@@ -581,7 +583,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 
 		// Call in to the block processor and check for errors. It's likely that if one block fails
 		// all others will fail too (unless a known block is returned).
-		logs, err := self.processor.Process(block)
+		logs, receipts, err := self.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				stats.ignored++
@@ -620,19 +622,24 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			return i, err
 		}
 		switch status {
-		case canonStatTy:
+		case CanonStatTy:
 			if glog.V(logger.Debug) {
 				glog.Infof("[%v] inserted block #%d (%d TXs %d UNCs) (%x...). Took %v\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
 			}
 			queue[i] = ChainEvent{block, block.Hash(), logs}
 			queueEvent.canonicalCount++
-		case sideStatTy:
+
+			// This puts transactions in a extra db for rpc
+			PutTransactions(self.extraDb, block, block.Transactions())
+			// store the receipts
+			PutReceipts(self.extraDb, block.Hash(), receipts)
+		case SideStatTy:
 			if glog.V(logger.Detail) {
 				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...). Took %v\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
 			}
 			queue[i] = ChainSideEvent{block, logs}
 			queueEvent.sideCount++
-		case splitStatTy:
+		case SplitStatTy:
 			queue[i] = ChainSplitEvent{block, logs}
 			queueEvent.splitCount++
 		}
