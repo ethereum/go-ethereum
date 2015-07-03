@@ -47,6 +47,7 @@ var (
 	MaxHashFetch   = 512 // Amount of hashes to be fetched per retrieval request
 	MaxBlockFetch  = 128 // Amount of blocks to be fetched per retrieval request
 	MaxHeaderFetch = 256 // Amount of block headers to be fetched per retrieval request
+	MaxStateFetch  = 384 // Amount of node
 
 	hashTTL         = 5 * time.Second  // Time it takes for a hash request to time out
 	blockSoftTTL    = 3 * time.Second  // Request completion threshold for increasing or decreasing a peer's bandwidth
