@@ -116,7 +116,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 
 			context.UseGas(context.Gas)
 
-			return context.Return(nil), OutOfGasError{}
+			return context.Return(nil), OutOfGasError
 		}
 		// Resize the memory calculated previously
 		mem.Resize(newMemSize.Uint64())
@@ -789,7 +789,7 @@ func (self *Vm) RunPrecompiled(p *PrecompiledAccount, input []byte, context *Con
 
 		return context.Return(ret), nil
 	} else {
-		return nil, OutOfGasError{}
+		return nil, OutOfGasError
 	}
 }
 

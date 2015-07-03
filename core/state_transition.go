@@ -122,7 +122,7 @@ func (self *StateTransition) To() *state.StateObject {
 
 func (self *StateTransition) UseGas(amount *big.Int) error {
 	if self.gas.Cmp(amount) < 0 {
-		return OutOfGasError()
+		return vm.OutOfGasError
 	}
 	self.gas.Sub(self.gas, amount)
 

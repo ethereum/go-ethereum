@@ -20,11 +20,6 @@ var (
 	BlockSkipTests = []string{
 		"SimpleTx3",
 
-		// these panic in block_processor.go:84 , see https://github.com/ethereum/go-ethereum/issues/1384
-		"TRANSCT_rvalue_TooShort",
-		"TRANSCT_rvalue_TooLarge",
-		"TRANSCT_svalue_TooLarge",
-
 		// TODO: check why these fail
 		"BLOCK__RandomByteAtTheEnd",
 		"TRANSCT__RandomByteAtTheEnd",

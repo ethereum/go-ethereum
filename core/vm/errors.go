@@ -1,21 +1,14 @@
 package vm
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/params"
 )
 
-type OutOfGasError struct{}
-
-func (self OutOfGasError) Error() string {
-	return "Out Of Gas"
-}
-
-func IsOOGErr(err error) bool {
-	_, ok := err.(OutOfGasError)
-	return ok
-}
+var OutOfGasError = errors.New("Out of gas")
+var DepthError = fmt.Errorf("Max call depth exceeded (%d)", params.CallCreateDepth)
 
 type StackError struct {
 	req, has int
@@ -31,16 +24,5 @@ func (self StackError) Error() string {
 
 func IsStack(err error) bool {
 	_, ok := err.(StackError)
-	return ok
-}
-
-type DepthError struct{}
-
-func (self DepthError) Error() string {
-	return fmt.Sprintf("Max call depth exceeded (%d)", params.CallCreateDepth)
-}
-
-func IsDepthErr(err error) bool {
-	_, ok := err.(DepthError)
 	return ok
 }

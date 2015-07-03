@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -72,7 +73,7 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 
 	cb := statedb.GetStateObject(coinbase.Address())
 	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, header), tx, cb)
-	if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
+	if err != nil && err != vm.OutOfGasError {
 		return nil, nil, err
 	}
 
@@ -118,7 +119,7 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
 
 		receipt, txGas, err := self.ApplyTransaction(coinbase, statedb, header, tx, totalUsedGas, transientProcess)
-		if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
+		if err != nil && err != vm.OutOfGasError {
 			return nil, err
 		}
 
