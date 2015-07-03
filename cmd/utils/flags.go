@@ -412,7 +412,7 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, ex
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
 	genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
-	chain, err = core.NewChainManager(genesis, blockDB, stateDB, pow, eventMux)
+	chain, err = core.NewChainManager(genesis, blockDB, stateDB, extraDB, pow, eventMux)
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}
@@ -432,16 +432,16 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
 	if common.IsWindows() {
 		ipcpath = common.DefaultIpcPath()
-		if ipcpath != ctx.GlobalString(IPCPathFlag.Name) {
+		if ctx.GlobalIsSet(IPCPathFlag.Name) {
 			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
 		}
 	} else {
 		ipcpath = common.DefaultIpcPath()
-		if ctx.GlobalString(IPCPathFlag.Name) != common.DefaultIpcPath() {
-			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
-		} else if ctx.GlobalString(DataDirFlag.Name) != "" &&
-			ctx.GlobalString(DataDirFlag.Name) != common.DefaultDataDir() {
+		if ctx.GlobalIsSet(DataDirFlag.Name) {
 			ipcpath = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "geth.ipc")
+		}
+		if ctx.GlobalIsSet(IPCPathFlag.Name) {
+			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
 		}
 	}
 
