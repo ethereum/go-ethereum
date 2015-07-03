@@ -112,42 +112,6 @@ func TestJsonDecoderWithValidBatchRequest(t *testing.T) {
 	}
 }
 
-func TestJsonDecoderWithIncompleteMessage(t *testing.T) {
-	reqdata := []byte(`{"jsonrpc":"2.0","method":"modules","pa`)
-	decoder := newJsonTestConn(reqdata)
-
-	jsonDecoder := NewJsonCoder(decoder)
-	requests, batch, err := jsonDecoder.ReadRequest()
-
-	if err != io.EOF {
-		t.Errorf("Expected to read an incomplete request err but got %v", err)
-	}
-
-	// remaining message
-	decoder.Write([]byte(`rams":[],"id":64}`))
-	requests, batch, err = jsonDecoder.ReadRequest()
-
-	if err != nil {
-		t.Errorf("Read valid request failed - %v", err)
-	}
-
-	if len(requests) != 1 {
-		t.Errorf("Expected to get a single request but got %d", len(requests))
-	}
-
-	if batch {
-		t.Errorf("Got batch indication while expecting single request")
-	}
-
-	if requests[0].Id != float64(64) {
-		t.Errorf("Expected req.Id == 64 but got %v", requests[0].Id)
-	}
-
-	if requests[0].Method != "modules" {
-		t.Errorf("Expected req.Method == 'modules' got '%s'", requests[0].Method)
-	}
-}
-
 func TestJsonDecoderWithInvalidIncompleteMessage(t *testing.T) {
 	reqdata := []byte(`{"jsonrpc":"2.0","method":"modules","pa`)
 	decoder := newJsonTestConn(reqdata)
@@ -155,7 +119,7 @@ func TestJsonDecoderWithInvalidIncompleteMessage(t *testing.T) {
 	jsonDecoder := NewJsonCoder(decoder)
 	requests, batch, err := jsonDecoder.ReadRequest()
 
-	if err != io.EOF {
+	if err != io.ErrUnexpectedEOF {
 		t.Errorf("Expected to read an incomplete request err but got %v", err)
 	}
 
