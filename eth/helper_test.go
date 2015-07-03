@@ -19,22 +19,29 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
+var (
+	testBankKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
+	testBankFunds   = big.NewInt(1000000)
+)
+
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, and potential notification
 // channels for different events.
-func newTestProtocolManager(blocks int, newtx chan<- []*types.Transaction) *ProtocolManager {
+func newTestProtocolManager(blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) *ProtocolManager {
 	var (
-		emux        = new(event.TypeMux)
+		evmux       = new(event.TypeMux)
 		pow         = new(core.FakePow)
 		db, _       = ethdb.NewMemDatabase()
-		genesis     = core.WriteGenesisBlockForTesting(db, common.Address{}, big.NewInt(0))
-		chainman, _ = core.NewChainManager(db, pow, emux)
-		blockproc   = core.NewBlockProcessor(db, pow, chainman, emux)
+		genesis     = core.WriteGenesisBlockForTesting(db, testBankAddress, testBankFunds)
+		chainman, _ = core.NewChainManager(db, pow, evmux)
+		blockproc   = core.NewBlockProcessor(db, pow, chainman, evmux)
 	)
 	chainman.SetProcessor(blockproc)
-	chainman.InsertChain(core.GenerateChain(genesis, db, blocks, nil))
-
-	pm := NewProtocolManager(NetworkId, emux, &testTxPool{added: newtx}, pow, chainman)
+	if _, err := chainman.InsertChain(core.GenerateChain(genesis, db, blocks, generator)); err != nil {
+		panic(err)
+	}
+	pm := NewProtocolManager(NetworkId, evmux, &testTxPool{added: newtx}, pow, chainman, db)
 	pm.Start()
 	return pm
 }

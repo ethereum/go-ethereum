@@ -37,7 +37,7 @@ func init() {
 var testAccount = crypto.NewKey(rand.Reader)
 
 func TestStatusMsgErrors(t *testing.T) {
-	pm := newTestProtocolManager(0, nil)
+	pm := newTestProtocolManager(0, nil, nil)
 	td, currentBlock, genesis := pm.chainman.Status()
 	defer pm.Stop()
 
@@ -87,7 +87,7 @@ func TestStatusMsgErrors(t *testing.T) {
 // This test checks that received transactions are added to the local pool.
 func TestRecvTransactions(t *testing.T) {
 	txAdded := make(chan []*types.Transaction)
-	pm := newTestProtocolManager(0, txAdded)
+	pm := newTestProtocolManager(0, nil, txAdded)
 	p, _ := newTestPeer("peer", pm, true)
 	defer pm.Stop()
 	defer p.close()
@@ -110,7 +110,7 @@ func TestRecvTransactions(t *testing.T) {
 
 // This test checks that pending transactions are sent.
 func TestSendTransactions(t *testing.T) {
-	pm := newTestProtocolManager(0, nil)
+	pm := newTestProtocolManager(0, nil, nil)
 	defer pm.Stop()
 
 	// Fill the pool with big transactions.

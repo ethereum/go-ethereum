@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// This is the target maximum size of returned blocks or headers.
+// This is the target maximum size of returned blocks, headers or node data.
 const softResponseLimit = 2 * 1024 * 1024
 
 func errResp(code errCode, format string, v ...interface{}) error {
@@ -59,6 +59,7 @@ func (ep extProt) GetBlock(hashes []common.Hash) error { return ep.getBlocks(has
 type ProtocolManager struct {
 	txpool     txPool
 	chainman   *core.ChainManager
+	statedb    common.Database
 	downloader *downloader.Downloader
 	fetcher    *fetcher.Fetcher
 	peers      *peerSet
@@ -82,12 +83,13 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager) *ProtocolManager {
+func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager, statedb common.Database) *ProtocolManager {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		eventMux:  mux,
 		txpool:    txpool,
 		chainman:  chainman,
+		statedb:   statedb,
 		peers:     newPeerSet(),
 		newPeerCh: make(chan *peer, 1),
 		txsyncCh:  make(chan *txsync),
@@ -276,10 +278,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	case BlockHashesMsg:
 		// A batch of hashes arrived to one of our previous requests
-		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-
 		var hashes []common.Hash
-		if err := msgStream.Decode(&hashes); err != nil {
+		if err := msg.Decode(&hashes); err != nil {
 			break
 		}
 		// Deliver them all to the downloader for queuing
@@ -318,10 +318,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	case BlocksMsg:
 		// Decode the arrived block message
-		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-
 		var blocks []*types.Block
-		if err := msgStream.Decode(&blocks); err != nil {
+		if err := msg.Decode(&blocks); err != nil {
 			glog.V(logger.Detail).Infoln("Decode error", err)
 			blocks = nil
 		}
@@ -361,12 +359,37 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendBlockHeaders(headers)
 
+	case GetNodeDataMsg:
+		// Decode the retrieval message
+		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
+		if _, err := msgStream.List(); err != nil {
+			return err
+		}
+		// Gather state data until the fetch or network limits is reached
+		var (
+			hash  common.Hash
+			bytes int
+			data  [][]byte
+		)
+		for bytes < softResponseLimit && len(data) < downloader.MaxStateFetch {
+			//Retrieve the hash of the next state entry
+			if err := msgStream.Decode(&hash); err == rlp.EOL {
+				break
+			} else if err != nil {
+				return errResp(ErrDecode, "msg %v: %v", msg, err)
+			}
+			// Retrieve the requested state entry, stopping if enough was found
+			if entry, err := pm.statedb.Get(hash.Bytes()); err == nil {
+				data = append(data, entry)
+				bytes += len(entry)
+			}
+		}
+		return p.SendNodeData(data)
+
 	case NewBlockHashesMsg:
 		// Retrieve and deseralize the remote new block hashes notification
-		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-
 		var hashes []common.Hash
-		if err := msgStream.Decode(&hashes); err != nil {
+		if err := msg.Decode(&hashes); err != nil {
 			break
 		}
 		// Mark the hashes as present at the remote node
