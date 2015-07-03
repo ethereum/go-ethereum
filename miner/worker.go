@@ -240,11 +240,7 @@ func (self *worker) wait() {
 				glog.V(logger.Error).Infoln("Invalid block found during mining")
 				continue
 			}
-<<<<<<< HEAD
 			if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true); err != nil && err != core.BlockFutureErr {
-=======
-			if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true); err != nil {
->>>>>>> core, miner: miner header validation, transaction & receipt writing
 				glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
 				continue
 			}
@@ -259,7 +255,7 @@ func (self *worker) wait() {
 				// This puts transactions in a extra db for rpc
 				core.PutTransactions(self.extraDb, block, block.Transactions())
 				// store the receipts
-				core.PutReceipts(self.extraDb, block.Hash(), self.current.receipts)
+				core.PutReceipts(self.extraDb, self.current.receipts)
 			}
 
 			// check staleness and display confirmation
