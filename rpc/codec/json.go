@@ -156,14 +156,14 @@ func (self *JsonCodec) ReadResponse() (interface{}, error) {
 		}
 		bytesInBuffer += n
 
+		var failure shared.ErrorResponse
+		if err = json.Unmarshal(buf[:bytesInBuffer], &failure); err == nil && failure.Error != nil {
+			return failure, fmt.Errorf(failure.Error.Message)
+		}
+
 		var success shared.SuccessResponse
 		if err = json.Unmarshal(buf[:bytesInBuffer], &success); err == nil {
 			return success, nil
-		}
-
-		var failure shared.ErrorResponse
-		if err = json.Unmarshal(buf[:bytesInBuffer], &failure); err == nil && failure.Error != nil {
-			return failure, nil
 		}
 	}
 
