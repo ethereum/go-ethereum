@@ -14,6 +14,5 @@ type Backend interface {
 	TxPool() *TxPool
 	BlockDb() common.Database
 	StateDb() common.Database
-	ExtraDb() common.Database
 	EventMux() *event.TypeMux
 }
