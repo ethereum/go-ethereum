@@ -83,13 +83,7 @@ func newTester() *downloadTester {
 // sync starts synchronizing with a remote peer, blocking until it completes.
 func (dl *downloadTester) sync(id string) error {
 	err := dl.downloader.synchronise(id, dl.peerHashes[id][0])
-	for {
-		// If the queue is empty and processing stopped, break
-		hashes, blocks := dl.downloader.queue.Size()
-		if hashes+blocks == 0 && atomic.LoadInt32(&dl.downloader.processing) == 0 {
-			break
-		}
-		// Otherwise sleep a bit and retry
+	for atomic.LoadInt32(&dl.downloader.processing) == 1 {
 		time.Sleep(time.Millisecond)
 	}
 	return err
