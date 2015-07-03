@@ -10,7 +10,7 @@ import (
 )
 
 type BlockProcessor interface {
-	Process(*Block) (state.Logs, Receipts, error)
+	Process(*Block) (state.Logs, error)
 }
 
 const bloomLength = 256

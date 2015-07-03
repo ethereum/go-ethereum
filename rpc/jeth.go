@@ -3,8 +3,6 @@ package rpc
 import (
 	"encoding/json"
 
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/shared"
@@ -22,13 +20,14 @@ func NewJeth(ethApi shared.EthereumApi, re *jsre.JSRE, client comms.EthereumClie
 }
 
 func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id interface{}) (response otto.Value) {
-	errObj := fmt.Sprintf("{\"message\": \"%s\", \"code\": %d}", msg, code)
-	retResponse := fmt.Sprintf("ret_response = JSON.parse('{\"jsonrpc\": \"%s\", \"id\": %v, \"error\": %s}');", shared.JsonRpcVersion, id, errObj)
-
-	call.Otto.Run("ret_error = " + errObj)
-	res, _ := call.Otto.Run(retResponse)
-
-	return res
+	rpcerr := &shared.ErrorObject{code, msg}
+	call.Otto.Set("ret_jsonrpc", shared.JsonRpcVersion)
+	call.Otto.Set("ret_id", id)
+	call.Otto.Set("ret_error", rpcerr)
+	response, _ = call.Otto.Run(`
+		ret_response = { jsonrpc: ret_jsonrpc, id: ret_id, error: ret_error };
+	`)
+	return
 }
 
 func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
@@ -57,7 +56,6 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 			return self.err(call, -32603, err.Error(), req.Id)
 		}
 		respif, err = self.client.Recv()
-
 		if err != nil {
 			return self.err(call, -32603, err.Error(), req.Id)
 		}
