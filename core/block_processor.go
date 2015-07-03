@@ -400,3 +400,15 @@ func ValidateHeader(pow pow.PoW, block *types.Header, parent *types.Block, check
 
 	return nil
 }
+
+func getBlockReceipts(db common.Database, bhash common.Hash) (receipts types.Receipts, err error) {
+	var rdata []byte
+	rdata, err = db.Get(append(receiptsPre, bhash[:]...))
+
+	if err == nil {
+		err = rlp.DecodeBytes(rdata, &receipts)
+	} else {
+		glog.V(logger.Detail).Infof("getBlockReceipts error %v\n", err)
+	}
+	return
+}
