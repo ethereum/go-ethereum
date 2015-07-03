@@ -402,6 +402,29 @@ func NewUncleRes(h *types.Header) *UncleRes {
 // 	WorkProved string `json:"workProved"`
 // }
 
+type ReceiptRes struct {
+	TransactionHash   *hexdata       `json:transactionHash`
+	TransactionIndex  *hexnum        `json:transactionIndex`
+	BlockNumber       *hexnum        `json:blockNumber`
+	BlockHash         *hexdata       `json:blockHash`
+	CumulativeGasUsed *hexnum        `json:cumulativeGasUsed`
+	GasUsed           *hexnum        `json:gasUsed`
+	ContractAddress   *hexdata       `json:contractAddress`
+	Logs              *[]interface{} `json:logs`
+}
+
+func NewReceiptRes(rec *types.Receipt) *ReceiptRes {
+	if rec == nil {
+		return nil
+	}
+
+	var v = new(ReceiptRes)
+	// TODO fill out rest of object
+	v.CumulativeGasUsed = newHexNum(rec.CumulativeGasUsed)
+
+	return v
+}
+
 func numString(raw interface{}) (*big.Int, error) {
 	var number *big.Int
 	// Parse as integer
