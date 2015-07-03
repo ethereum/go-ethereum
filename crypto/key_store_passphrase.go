@@ -72,16 +72,19 @@ func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *K
 }
 
 func (ks keyStorePassphrase) GetKey(keyAddr common.Address, auth string) (key *Key, err error) {
-	keyBytes, keyId, err := decryptKeyFromFile(ks, keyAddr, auth)
-	if err != nil {
-		return nil, err
+	keyBytes, keyId, err := decryptKeyFromFile(ks.keysDirPath, keyAddr, auth)
+	if err == nil {
+		key = &Key{
+			Id:         uuid.UUID(keyId),
+			Address:    keyAddr,
+			PrivateKey: ToECDSA(keyBytes),
+		}
 	}
-	key = &Key{
-		Id:         uuid.UUID(keyId),
-		Address:    keyAddr,
-		PrivateKey: ToECDSA(keyBytes),
-	}
-	return key, err
+	return
+}
+
+func (ks keyStorePassphrase) Cleanup(keyAddr common.Address) (err error) {
+	return cleanup(ks.keysDirPath, keyAddr)
 }
 
 func (ks keyStorePassphrase) GetKeyAddresses() (addresses []common.Address, err error) {
@@ -142,7 +145,7 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 
 func (ks keyStorePassphrase) DeleteKey(keyAddr common.Address, auth string) (err error) {
 	// only delete if correct passphrase is given
-	_, _, err = decryptKeyFromFile(ks, keyAddr, auth)
+	_, _, err = decryptKeyFromFile(ks.keysDirPath, keyAddr, auth)
 	if err != nil {
 		return err
 	}
@@ -150,25 +153,25 @@ func (ks keyStorePassphrase) DeleteKey(keyAddr common.Address, auth string) (err
 	return deleteKey(ks.keysDirPath, keyAddr)
 }
 
-func decryptKeyFromFile(ks keyStorePassphrase, keyAddr common.Address, auth string) (keyBytes []byte, keyId []byte, err error) {
+func decryptKeyFromFile(keysDirPath string, keyAddr common.Address, auth string) (keyBytes []byte, keyId []byte, err error) {
+	fmt.Printf("%v\n", keyAddr.Hex())
 	m := make(map[string]interface{})
-	err = getKey(ks.keysDirPath, keyAddr, &m)
+	err = getKey(keysDirPath, keyAddr, &m)
 	if err != nil {
-		fmt.Printf("get key error: %v\n", err)
 		return
 	}
 
 	v := reflect.ValueOf(m["version"])
 	if v.Kind() == reflect.String && v.String() == "1" {
 		k := new(encryptedKeyJSONV1)
-		getKey(ks.keysDirPath, keyAddr, &k)
+		err = getKey(keysDirPath, keyAddr, &k)
 		if err != nil {
 			return
 		}
 		return decryptKeyV1(k, auth)
 	} else {
 		k := new(encryptedKeyJSONV3)
-		getKey(ks.keysDirPath, keyAddr, &k)
+		err = getKey(keysDirPath, keyAddr, &k)
 		if err != nil {
 			return
 		}

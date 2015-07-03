@@ -190,6 +190,33 @@ password to file or expose in any other way.
 					`,
 				},
 				{
+					Action: accountUpdate,
+					Name:   "update",
+					Usage:  "update an existing account",
+					Description: `
+
+    ethereum account update <address>
+
+Update an existing account.
+
+The account is saved in the newest version in encrypted format, you are prompted
+for a passphrase to unlock the account and another to save the updated file.
+
+This same command can therefore be used to migrate an account of a deprecated
+format to the newest format or change the password for an account.
+
+For non-interactive use the passphrase can be specified with the --password flag:
+
+    ethereum --password <passwordfile> account new
+
+Since only one password can be given, only format update can be performed,
+changing your password is only possible interactively.
+
+Note that account update has the a side effect that the order of your accounts
+changes.
+					`,
+				},
+				{
 					Action: accountImport,
 					Name:   "import",
 					Usage:  "import a private key into a new account",
@@ -433,19 +460,30 @@ func execJSFiles(ctx *cli.Context) {
 	ethereum.WaitForShutdown()
 }
 
-func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string, i int) {
+func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (addrHex, auth string) {
 	var err error
 	// Load startup keys. XXX we are going to need a different format
 
-	if !((len(account) == 40) || (len(account) == 42)) { // with or without 0x
-		utils.Fatalf("Invalid account address '%s'", account)
+	if !((len(addr) == 40) || (len(addr) == 42)) { // with or without 0x
+		var index int
+		index, err = strconv.Atoi(addr)
+		if err != nil {
+			utils.Fatalf("Invalid account address '%s'", addr)
+		}
+
+		addrHex, err = am.AddressByIndex(index)
+		if err != nil {
+			utils.Fatalf("%v", err)
+		}
+	} else {
+		addrHex = addr
 	}
 	// Attempt to unlock the account 3 times
 	attempts := 3
 	for tries := 0; tries < attempts; tries++ {
-		msg := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", account, tries+1, attempts)
-		passphrase := getPassPhrase(ctx, msg, false, i)
-		err = am.Unlock(common.HexToAddress(account), passphrase)
+		msg := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", addr, tries+1, attempts)
+		auth = getPassPhrase(ctx, msg, false, i)
+		err = am.Unlock(common.HexToAddress(addrHex), auth)
 		if err == nil {
 			break
 		}
@@ -453,7 +491,8 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string, i int
 	if err != nil {
 		utils.Fatalf("Unlock account failed '%v'", err)
 	}
-	fmt.Printf("Account '%s' unlocked.\n", account)
+	fmt.Printf("Account '%s' unlocked.\n", addr)
+	return
 }
 
 func blockRecovery(ctx *cli.Context) {
@@ -576,6 +615,21 @@ func accountCreate(ctx *cli.Context) {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
 	fmt.Printf("Address: %x\n", acct)
+}
+
+func accountUpdate(ctx *cli.Context) {
+	am := utils.MakeAccountManager(ctx)
+	arg := ctx.Args().First()
+	if len(arg) == 0 {
+		utils.Fatalf("account address or index must be given as argument")
+	}
+
+	addr, authFrom := unlockAccount(ctx, am, arg, 0)
+	authTo := getPassPhrase(ctx, "Please give a new password. Do not forget this password.", true, 0)
+	err := am.Update(common.HexToAddress(addr), authFrom, authTo)
+	if err != nil {
+		utils.Fatalf("Could not update the account: %v", err)
+	}
 }
 
 func importWallet(ctx *cli.Context) {

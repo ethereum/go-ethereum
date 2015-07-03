@@ -36,6 +36,7 @@ import (
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -158,6 +159,20 @@ func (am *Manager) NewAccount(auth string) (Account, error) {
 	return Account{Address: key.Address}, nil
 }
 
+func (am *Manager) AddressByIndex(index int) (addr string, err error) {
+	var addrs []common.Address
+	addrs, err = am.keyStore.GetKeyAddresses()
+	if err != nil {
+		return
+	}
+	if index < 0 || index >= len(addrs) {
+		err = fmt.Errorf("index out of range: %d (should be 0-%d)", index, len(addrs)-1)
+	} else {
+		addr = addrs[index].Hex()
+	}
+	return
+}
+
 func (am *Manager) Accounts() ([]Account, error) {
 	addresses, err := am.keyStore.GetKeyAddresses()
 	if os.IsNotExist(err) {
@@ -202,6 +217,19 @@ func (am *Manager) Import(path string, keyAuth string) (Account, error) {
 		return Account{}, err
 	}
 	return Account{Address: key.Address}, nil
+}
+
+func (am *Manager) Update(addr common.Address, authFrom, authTo string) (err error) {
+	var key *crypto.Key
+	key, err = am.keyStore.GetKey(addr, authFrom)
+
+	if err == nil {
+		err = am.keyStore.StoreKey(key, authTo)
+		if err == nil {
+			am.keyStore.Cleanup(addr)
+		}
+	}
+	return
 }
 
 func (am *Manager) ImportPreSaleKey(keyJSON []byte, password string) (acc Account, err error) {
