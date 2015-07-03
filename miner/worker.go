@@ -240,7 +240,7 @@ func (self *worker) wait() {
 				glog.V(logger.Error).Infoln("Invalid block found during mining")
 				continue
 			}
-			if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true); err != nil {
+			if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true); err != nil && err != core.BlockFutureErr {
 				glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
 				continue
 			}
