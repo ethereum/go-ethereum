@@ -18,7 +18,7 @@ func proc() (*BlockProcessor, *ChainManager) {
 	var mux event.TypeMux
 
 	genesis := GenesisBlock(0, db)
-	chainMan, err := NewChainManager(genesis, db, db, thePow(), &mux)
+	chainMan, err := NewChainManager(genesis, db, db, db, thePow(), &mux)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -64,7 +64,7 @@ func TestPutReceipt(t *testing.T) {
 		Index:     0,
 	}})
 
-	putReceipts(db, hash, types.Receipts{receipt})
+	PutReceipts(db, hash, types.Receipts{receipt})
 	receipts, err := getBlockReceipts(db, hash)
 	if err != nil {
 		t.Error("got err:", err)

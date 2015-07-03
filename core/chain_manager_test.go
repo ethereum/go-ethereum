@@ -33,7 +33,7 @@ func thePow() pow.PoW {
 func theChainManager(db common.Database, t *testing.T) *ChainManager {
 	var eventMux event.TypeMux
 	genesis := GenesisBlock(0, db)
-	chainMan, err := NewChainManager(genesis, db, db, thePow(), &eventMux)
+	chainMan, err := NewChainManager(genesis, db, db, db, thePow(), &eventMux)
 	if err != nil {
 		t.Error("failed creating chainmanager:", err)
 		t.FailNow()
@@ -96,7 +96,7 @@ func printChain(bc *ChainManager) {
 func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 	td := new(big.Int)
 	for _, block := range chainB {
-		_, err := bman.bc.processor.Process(block)
+		_, _, err := bman.bc.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
@@ -367,7 +367,7 @@ func TestGetBlocksFromHash(t *testing.T) {
 
 type bproc struct{}
 
-func (bproc) Process(*types.Block) (state.Logs, error) { return nil, nil }
+func (bproc) Process(*types.Block) (state.Logs, types.Receipts, error) { return nil, nil, nil }
 
 func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block {
 	var chain []*types.Block
@@ -390,7 +390,7 @@ func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block 
 
 func chm(genesis *types.Block, db common.Database) *ChainManager {
 	var eventMux event.TypeMux
-	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
+	bc := &ChainManager{extraDb: db, blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
 	bc.cache, _ = lru.New(100)
 	bc.futureBlocks, _ = lru.New(100)
 	bc.processor = bproc{}
@@ -479,12 +479,12 @@ func TestGenesisMismatch(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 	var mux event.TypeMux
 	genesis := GenesisBlock(0, db)
-	_, err := NewChainManager(genesis, db, db, thePow(), &mux)
+	_, err := NewChainManager(genesis, db, db, db, thePow(), &mux)
 	if err != nil {
 		t.Error(err)
 	}
 	genesis = GenesisBlock(1, db)
-	_, err = NewChainManager(genesis, db, db, thePow(), &mux)
+	_, err = NewChainManager(genesis, db, db, db, thePow(), &mux)
 	if err == nil {
 		t.Error("expected genesis mismatch error")
 	}

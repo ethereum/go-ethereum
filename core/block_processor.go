@@ -151,7 +151,7 @@ func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs state.Logs, err
 	errch := make(chan bool)
 	go func() { errch <- sm.Pow.Verify(block) }()
 
-	logs, err = sm.processWithParent(block, parent)
+	logs, _, err = sm.processWithParent(block, parent)
 	if !<-errch {
 		return nil, ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
 	}
@@ -162,23 +162,23 @@ func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs state.Logs, err
 // Process block will attempt to process the given block's transactions and applies them
 // on top of the block's parent state (given it exists) and will return wether it was
 // successful or not.
-func (sm *BlockProcessor) Process(block *types.Block) (logs state.Logs, err error) {
+func (sm *BlockProcessor) Process(block *types.Block) (logs state.Logs, receipts types.Receipts, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
 	if sm.bc.HasBlock(block.Hash()) {
-		return nil, &KnownBlockError{block.Number(), block.Hash()}
+		return nil, nil, &KnownBlockError{block.Number(), block.Hash()}
 	}
 
 	if !sm.bc.HasBlock(block.ParentHash()) {
-		return nil, ParentError(block.ParentHash())
+		return nil, nil, ParentError(block.ParentHash())
 	}
 	parent := sm.bc.GetBlock(block.ParentHash())
 	return sm.processWithParent(block, parent)
 }
 
-func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs state.Logs, err error) {
+func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs state.Logs, receipts types.Receipts, err error) {
 	// Create a new state based on the parent's root (e.g., create copy)
 	state := state.New(parent.Root(), sm.db)
 	header := block.Header()
@@ -192,10 +192,10 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 
 	// There can be at most two uncles
 	if len(uncles) > 2 {
-		return nil, ValidationError("Block can only contain maximum 2 uncles (contained %v)", len(uncles))
+		return nil, nil, ValidationError("Block can only contain maximum 2 uncles (contained %v)", len(uncles))
 	}
 
-	receipts, err := sm.TransitionState(state, parent, block, false)
+	receipts, err = sm.TransitionState(state, parent, block, false)
 	if err != nil {
 		return
 	}
@@ -248,15 +248,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	// Sync the current block's state to the database
 	state.Sync()
 
-	// This puts transactions in a extra db for rpc
-	for i, tx := range block.Transactions() {
-		putTx(sm.extraDb, tx, block, uint64(i))
-	}
-
-	// store the receipts
-	putReceipts(sm.extraDb, block.Hash(), receipts)
-
-	return state.Logs(), nil
+	return state.Logs(), receipts, nil
 }
 
 var (
@@ -410,44 +402,4 @@ func getBlockReceipts(db common.Database, bhash common.Hash) (receipts types.Rec
 		glog.V(logger.Detail).Infof("getBlockReceipts error %v\n", err)
 	}
 	return
-}
-
-func putTx(db common.Database, tx *types.Transaction, block *types.Block, i uint64) {
-	rlpEnc, err := rlp.EncodeToBytes(tx)
-	if err != nil {
-		glog.V(logger.Debug).Infoln("Failed encoding tx", err)
-		return
-	}
-	db.Put(tx.Hash().Bytes(), rlpEnc)
-
-	var txExtra struct {
-		BlockHash  common.Hash
-		BlockIndex uint64
-		Index      uint64
-	}
-	txExtra.BlockHash = block.Hash()
-	txExtra.BlockIndex = block.NumberU64()
-	txExtra.Index = i
-	rlpMeta, err := rlp.EncodeToBytes(txExtra)
-	if err != nil {
-		glog.V(logger.Debug).Infoln("Failed encoding tx meta data", err)
-		return
-	}
-	db.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)
-}
-
-func putReceipts(db common.Database, hash common.Hash, receipts types.Receipts) error {
-	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
-	for i, receipt := range receipts {
-		storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
-	}
-
-	bytes, err := rlp.EncodeToBytes(storageReceipts)
-	if err != nil {
-		return err
-	}
-
-	db.Put(append(receiptsPre, hash[:]...), bytes)
-
-	return nil
 }

@@ -980,6 +980,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	} else {
 		glog.V(logger.Info).Infof("Tx(%x) to: %x\n", tx.Hash(), tx.To())
 	}
+
 	return tx.Hash().Hex(), nil
 }
 
