@@ -129,7 +129,7 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 		// if the test should be skipped, return
 		if skipTest[name] {
 			glog.Infoln("Skipping block test", name)
-			return nil
+			continue
 		}
 
 		// test the block

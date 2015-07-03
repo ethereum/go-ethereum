@@ -8,7 +8,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
         "logs" : [
         ],
         "out" : "0x",
@@ -64,7 +63,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x0000000000000000000000000000000000000000000000000000000000000000",
         "logs" : [
         ],
         "out" : "0x",
@@ -120,7 +118,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x",
         "logs" : [
         ],
         "out" : "0x",
@@ -162,7 +159,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x0000000000000000000000000000000000000000000000000000000000000000",
         "logs" : [
         ],
         "out" : "0x",
@@ -218,7 +214,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x0000000000000000000000000000000000000000000000000000000000000000",
         "logs" : [
         ],
         "out" : "0x",
@@ -274,7 +269,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x000000000000000000000000e4319f4b631c6d0fcfc84045dbcb676865fe5e13",
         "logs" : [
         ],
         "out" : "0x",
@@ -330,7 +324,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x0000000000000000000000003f17f1962b36e491b30a40b2405849e597ba5fb5",
         "logs" : [
         ],
         "out" : "0x",
@@ -386,7 +379,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x0000000000000000000000000000000000000000000000000000000000000001",
         "logs" : [
         ],
         "out" : "0x",
@@ -442,7 +434,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x",
         "logs" : [
         ],
         "out" : "0x",
@@ -498,7 +489,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x",
         "logs" : [
         ],
         "out" : "0x",
@@ -554,7 +544,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x0000000000000000000000000000000000000000000000000000000000000000f34578907f",
         "logs" : [
         ],
         "out" : "0x",
@@ -610,7 +599,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x000000000000000000000000000000000000000000000000000000f34578907f0000000000",
         "logs" : [
         ],
         "out" : "0x",
@@ -666,7 +654,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
         "logs" : [
         ],
         "out" : "0x",
@@ -722,7 +709,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x",
         "logs" : [
         ],
         "out" : "0x",
@@ -771,7 +757,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "#35659",
         "logs" : [
         ],
         "out" : "0x",
@@ -827,7 +812,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x000000000000000000000000ae387fcfeb723c3f5964509af111cf5a67f30661",
         "logs" : [
         ],
         "out" : "0x",
@@ -883,7 +867,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x0000000000000000000000009c1185a5c5e9fc54612808977ee8f548b2258d31",
         "logs" : [
         ],
         "out" : "0x",
@@ -939,7 +922,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x000000000000000000000000dbc100f916bfbc53535573d98cf0cbb3a5b36124",
         "logs" : [
         ],
         "out" : "0x",
@@ -995,7 +977,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x000000000000000000000000316750573f9be26bc17727b47cacedbd0ab3e6ca",
         "logs" : [
         ],
         "out" : "0x",
@@ -1051,7 +1032,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x0000000000000000000000001cf4e77f5966e13e109703cd8a0df7ceda7f3dc3",
         "logs" : [
         ],
         "out" : "0x",
@@ -1107,7 +1087,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x",
         "logs" : [
         ],
         "out" : "0x",
@@ -1156,7 +1135,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0xec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5",
         "logs" : [
         ],
         "out" : "0x",
@@ -1212,7 +1190,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "logs" : [
         ],
         "out" : "0x",
@@ -1268,7 +1245,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0xcb39b3bde22925b2f931111130c774761d8895e0e08437c9b396c1e97d10f34d",
         "logs" : [
         ],
         "out" : "0x",
@@ -1324,7 +1300,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x7392925565d67be8e9620aacbcfaecd8cb6ec58d709d25da9eccf1d08a41ce35",
         "logs" : [
         ],
         "out" : "0x",
@@ -1380,7 +1355,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0xaf9613760f72635fbdb44a5a0a63c39f12af30f950a6ee5c971be188e89c4051",
         "logs" : [
         ],
         "out" : "0x",
@@ -1436,7 +1410,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x259911ec9f4b02b7975dfa3f5da78fc58b7066604bdaea66c4485c90f6f55bec",
         "logs" : [
         ],
         "out" : "0x",
@@ -1492,7 +1465,6 @@
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "expectOut" : "0x0000000000000000000000000000000000000000000000000000000000000000",
         "logs" : [
         ],
         "out" : "0x",
