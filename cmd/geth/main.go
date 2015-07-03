@@ -30,21 +30,29 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 )
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.31"
+	Version          = "0.9.35"
 )
 
 var (
@@ -64,12 +72,25 @@ func init() {
 	app.Action = run
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
+		{
+			Action: blockRecovery,
+			Name:   "recover",
+			Usage:  "attempts to recover a corrupted database by setting a new block by number or hash. See help recover.",
+			Description: `
+The recover commands will attempt to read out the last
+block based on that.
+
+recover #number recovers by number
+recover <hex> recovers by hash
+`,
+		},
 		blocktestCommand,
 		importCommand,
 		exportCommand,
 		upgradedbCommand,
 		removedbCommand,
 		dumpCommand,
+		monitorCommand,
 		{
 			Action: makedag,
 			Name:   "makedag",
@@ -202,6 +223,16 @@ nodes.
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
+`},
+		{
+			Action: attach,
+			Name:   "attach",
+			Usage:  `Geth Console: interactive JavaScript environment (connect to node)`,
+			Description: `
+The Geth console is an interactive shell for the JavaScript runtime environment
+which exposes a node admin interface as well as the Ðapp JavaScript API.
+See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console.
+This command allows to open a console on a running geth node.
 `,
 		},
 		{
@@ -239,12 +270,13 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
+		utils.RpcApiFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
+		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
 		utils.VMDebugFlag,
-		utils.ProtocolVersionFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
 		utils.VerbosityFlag,
@@ -255,6 +287,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.LogJSONFlag,
 		utils.PProfEanbledFlag,
 		utils.PProfPortFlag,
+		utils.MetricsEnabledFlag,
 		utils.SolcPathFlag,
 		utils.GpoMinGasPriceFlag,
 		utils.GpoMaxGasPriceFlag,
@@ -270,6 +303,8 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		}
 		return nil
 	}
+	// Start system runtime metrics collection
+	go metrics.CollectProcessMetrics(3 * time.Second)
 }
 
 func main() {
@@ -294,6 +329,44 @@ func run(ctx *cli.Context) {
 	ethereum.WaitForShutdown()
 }
 
+func attach(ctx *cli.Context) {
+	// Wrap the standard output with a colorified stream (windows)
+	if isatty.IsTerminal(os.Stdout.Fd()) {
+		if pr, pw, err := os.Pipe(); err == nil {
+			go io.Copy(colorable.NewColorableStdout(), pr)
+			os.Stdout = pw
+		}
+	}
+
+	var client comms.EthereumClient
+	var err error
+	if ctx.Args().Present() {
+		client, err = comms.ClientFromEndpoint(ctx.Args().First(), codec.JSON)
+	} else {
+		cfg := comms.IpcConfig{
+			Endpoint: ctx.GlobalString(utils.IPCPathFlag.Name),
+		}
+		client, err = comms.NewIpcClient(cfg, codec.JSON)
+	}
+
+	if err != nil {
+		utils.Fatalf("Unable to attach to geth node - %v", err)
+	}
+
+	repl := newLightweightJSRE(
+		ctx.GlobalString(utils.JSpathFlag.Name),
+		client,
+		true,
+		nil)
+
+	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
+		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))
+	} else {
+		repl.welcome()
+		repl.interactive()
+	}
+}
+
 func console(ctx *cli.Context) {
 	// Wrap the standard output with a colorified stream (windows)
 	if isatty.IsTerminal(os.Stdout.Fd()) {
@@ -309,16 +382,24 @@ func console(ctx *cli.Context) {
 		utils.Fatalf("%v", err)
 	}
 
+	client := comms.NewInProcClient(codec.JSON)
+
 	startEth(ctx, ethereum)
 	repl := newJSRE(
 		ethereum,
-		ctx.String(utils.JSpathFlag.Name),
+		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		utils.IpcSocketPath(ctx),
+		client,
 		true,
 		nil,
 	)
-	repl.interactive()
+
+	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
+		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))
+	} else {
+		repl.welcome()
+		repl.interactive()
+	}
 
 	ethereum.Stop()
 	ethereum.WaitForShutdown()
@@ -331,12 +412,13 @@ func execJSFiles(ctx *cli.Context) {
 		utils.Fatalf("%v", err)
 	}
 
+	client := comms.NewInProcClient(codec.JSON)
 	startEth(ctx, ethereum)
 	repl := newJSRE(
 		ethereum,
-		ctx.String(utils.JSpathFlag.Name),
+		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		utils.IpcSocketPath(ctx),
+		client,
 		false,
 		nil,
 	)
@@ -370,6 +452,36 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (pass
 	}
 	fmt.Printf("Account '%s' unlocked.\n", account)
 	return
+}
+
+func blockRecovery(ctx *cli.Context) {
+	arg := ctx.Args().First()
+	if len(ctx.Args()) < 1 && len(arg) > 0 {
+		glog.Fatal("recover requires block number or hash")
+	}
+
+	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"))
+	if err != nil {
+		glog.Fatalln("could not open db:", err)
+	}
+
+	var block *types.Block
+	if arg[0] == '#' {
+		block = core.GetBlockByNumber(blockDb, common.String2Big(arg[1:]).Uint64())
+	} else {
+		block = core.GetBlockByHash(blockDb, common.HexToHash(arg))
+	}
+
+	if block == nil {
+		glog.Fatalln("block not found. Recovery failed")
+	}
+
+	err = core.WriteHead(blockDb, block)
+	if err != nil {
+		glog.Fatalln("block write err", err)
+	}
+	glog.Infof("Recovery succesful. New HEAD %x\n", block.Hash())
 }
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
@@ -531,7 +643,7 @@ func version(c *cli.Context) {
 	if gitCommit != "" {
 		fmt.Println("Git Commit:", gitCommit)
 	}
-	fmt.Println("Protocol Version:", c.GlobalInt(utils.ProtocolVersionFlag.Name))
+	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
 	fmt.Println("Network Id:", c.GlobalInt(utils.NetworkIdFlag.Name))
 	fmt.Println("Go Version:", runtime.Version())
 	fmt.Println("OS:", runtime.GOOS)

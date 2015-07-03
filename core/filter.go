@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -80,7 +79,6 @@ func (self *Filter) Find() state.Logs {
 
 done:
 	for i := 0; block != nil; i++ {
-		fmt.Println(block.NumberU64() == 0)
 		// Quit on latest
 		switch {
 		case block.NumberU64() == 0:

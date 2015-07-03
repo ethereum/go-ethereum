@@ -166,7 +166,7 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 
 	snapshot := statedb.Copy()
 	coinbase := statedb.GetOrNewStateObject(caddr)
-	coinbase.SetGasPool(common.Big(env["currentGasLimit"]))
+	coinbase.SetGasLimit(common.Big(env["currentGasLimit"]))
 
 	message := NewMessage(common.BytesToAddress(keyPair.Address()), to, data, value, gas, price, nonce)
 	vmenv := NewEnvFromMap(statedb, env, tx)

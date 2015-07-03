@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/ethereum/go-ethereum/metrics"
+
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -22,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
@@ -80,11 +81,6 @@ var (
 		Name:  "datadir",
 		Usage: "Data directory to be used",
 		Value: DirectoryString{common.DefaultDataDir()},
-	}
-	ProtocolVersionFlag = cli.IntFlag{
-		Name:  "protocolversion",
-		Usage: "ETH protocol version (integer)",
-		Value: eth.ProtocolVersion,
 	}
 	NetworkIdFlag = cli.IntFlag{
 		Name:  "networkid",
@@ -188,6 +184,10 @@ var (
 		Usage: "Port on which the profiler should listen",
 		Value: 6060,
 	}
+	MetricsEnabledFlag = cli.BoolFlag{
+		Name:  metrics.MetricsEnabledFlag,
+		Usage: "Enables metrics collection and reporting",
+	}
 
 	// RPC settings
 	RPCEnabledFlag = cli.BoolFlag{
@@ -209,19 +209,28 @@ var (
 		Usage: "Domain on which to send Access-Control-Allow-Origin header",
 		Value: "",
 	}
+	RpcApiFlag = cli.StringFlag{
+		Name:  "rpcapi",
+		Usage: "Specify the API's which are offered over the HTTP RPC interface",
+		Value: comms.DefaultHttpRpcApis,
+	}
 	IPCDisabledFlag = cli.BoolFlag{
 		Name:  "ipcdisable",
 		Usage: "Disable the IPC-RPC server",
 	}
 	IPCApiFlag = cli.StringFlag{
 		Name:  "ipcapi",
-		Usage: "Specify the API's which are offered over this interface",
-		Value: api.DefaultIpcApis,
+		Usage: "Specify the API's which are offered over the IPC interface",
+		Value: comms.DefaultIpcApis,
 	}
 	IPCPathFlag = DirectoryFlag{
 		Name:  "ipcpath",
 		Usage: "Filename for IPC socket/pipe",
 		Value: DirectoryString{common.DefaultIpcPath()},
+	}
+	ExecFlag = cli.StringFlag{
+		Name:  "exec",
+		Usage: "Execute javascript statement (only in combination with console/attach)",
 	}
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
@@ -345,7 +354,6 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	return &eth.Config{
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 ctx.GlobalString(DataDirFlag.Name),
-		ProtocolVersion:         ctx.GlobalInt(ProtocolVersionFlag.Name),
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
 		SkipBcVersionCheck:      false,
@@ -404,7 +412,7 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, ex
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
 	genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
-	chain, err = core.NewChainManager(genesis, blockDB, stateDB, pow, eventMux)
+	chain, err = core.NewChainManager(genesis, blockDB, stateDB, extraDB, pow, eventMux)
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}
@@ -424,16 +432,16 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
 	if common.IsWindows() {
 		ipcpath = common.DefaultIpcPath()
-		if ipcpath != ctx.GlobalString(IPCPathFlag.Name) {
+		if ctx.GlobalIsSet(IPCPathFlag.Name) {
 			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
 		}
 	} else {
 		ipcpath = common.DefaultIpcPath()
-		if ctx.GlobalString(IPCPathFlag.Name) != common.DefaultIpcPath() {
-			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
-		} else if ctx.GlobalString(DataDirFlag.Name) != "" &&
-			ctx.GlobalString(DataDirFlag.Name) != common.DefaultDataDir() {
+		if ctx.GlobalIsSet(DataDirFlag.Name) {
 			ipcpath = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "geth.ipc")
+		}
+		if ctx.GlobalIsSet(IPCPathFlag.Name) {
+			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
 		}
 	}
 
@@ -453,18 +461,25 @@ func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
 		return err
 	}
 
-	return comms.StartIpc(config, codec, apis...)
+	return comms.StartIpc(config, codec, api.Merge(apis...))
 }
 
 func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
-	config := rpc.RpcConfig{
+	config := comms.HttpConfig{
 		ListenAddress: ctx.GlobalString(RPCListenAddrFlag.Name),
 		ListenPort:    uint(ctx.GlobalInt(RPCPortFlag.Name)),
 		CorsDomain:    ctx.GlobalString(RPCCORSDomainFlag.Name),
 	}
 
 	xeth := xeth.New(eth, nil)
-	return rpc.Start(xeth, config)
+	codec := codec.JSON
+
+	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth)
+	if err != nil {
+		return err
+	}
+
+	return comms.StartHttp(config, codec, api.Merge(apis...))
 }
 
 func StartPProf(ctx *cli.Context) {

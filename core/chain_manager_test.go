@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/hashicorp/golang-lru"
 )
 
 func init() {
@@ -32,7 +33,7 @@ func thePow() pow.PoW {
 func theChainManager(db common.Database, t *testing.T) *ChainManager {
 	var eventMux event.TypeMux
 	genesis := GenesisBlock(0, db)
-	chainMan, err := NewChainManager(genesis, db, db, thePow(), &eventMux)
+	chainMan, err := NewChainManager(genesis, db, db, db, thePow(), &eventMux)
 	if err != nil {
 		t.Error("failed creating chainmanager:", err)
 		t.FailNow()
@@ -62,12 +63,11 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 	if bi1 != bi2 {
 		t.Fatal("chains do not have the same hash at height", i)
 	}
-
 	bman2.bc.SetProcessor(bman2)
 
 	// extend the fork
 	parent := bman2.bc.CurrentBlock()
-	chainB := makeChain(bman2, parent, N, db, ForkSeed)
+	chainB := makeChain(parent, N, db, forkSeed)
 	_, err = bman2.bc.InsertChain(chainB)
 	if err != nil {
 		t.Fatal("Insert chain error for fork:", err)
@@ -96,7 +96,7 @@ func printChain(bc *ChainManager) {
 func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 	td := new(big.Int)
 	for _, block := range chainB {
-		_, err := bman.bc.processor.Process(block)
+		_, _, err := bman.bc.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
@@ -117,7 +117,7 @@ func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 }
 
 func loadChain(fn string, t *testing.T) (types.Blocks, error) {
-	fh, err := os.OpenFile(filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "_data", fn), os.O_RDONLY, os.ModePerm)
+	fh, err := os.OpenFile(filepath.Join("..", "_data", fn), os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +256,7 @@ func TestBrokenChain(t *testing.T) {
 	}
 	bman2.bc.SetProcessor(bman2)
 	parent := bman2.bc.CurrentBlock()
-	chainB := makeChain(bman2, parent, 5, db2, ForkSeed)
+	chainB := makeChain(parent, 5, db2, forkSeed)
 	chainB = chainB[1:]
 	_, err = testChain(chainB, bman)
 	if err == nil {
@@ -265,7 +265,7 @@ func TestBrokenChain(t *testing.T) {
 }
 
 func TestChainInsertions(t *testing.T) {
-	t.Skip() // travil fails.
+	t.Skip("Skipped: outdated test files")
 
 	db, _ := ethdb.NewMemDatabase()
 
@@ -303,7 +303,7 @@ func TestChainInsertions(t *testing.T) {
 }
 
 func TestChainMultipleInsertions(t *testing.T) {
-	t.Skip() // travil fails.
+	t.Skip("Skipped: outdated test files")
 
 	db, _ := ethdb.NewMemDatabase()
 
@@ -346,8 +346,8 @@ func TestChainMultipleInsertions(t *testing.T) {
 	}
 }
 
-func TestGetAncestors(t *testing.T) {
-	t.Skip() // travil fails.
+func TestGetBlocksFromHash(t *testing.T) {
+	t.Skip("Skipped: outdated test files")
 
 	db, _ := ethdb.NewMemDatabase()
 	chainMan := theChainManager(db, t)
@@ -361,26 +361,28 @@ func TestGetAncestors(t *testing.T) {
 		chainMan.write(block)
 	}
 
-	ancestors := chainMan.GetAncestors(chain[len(chain)-1], 4)
-	fmt.Println(ancestors)
+	blocks := chainMan.GetBlocksFromHash(chain[len(chain)-1].Hash(), 4)
+	fmt.Println(blocks)
 }
 
 type bproc struct{}
 
-func (bproc) Process(*types.Block) (state.Logs, error) { return nil, nil }
+func (bproc) Process(*types.Block) (state.Logs, types.Receipts, error) { return nil, nil, nil }
 
 func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block {
 	var chain []*types.Block
 	for i, difficulty := range d {
-		header := &types.Header{Number: big.NewInt(int64(i + 1)), Difficulty: big.NewInt(int64(difficulty))}
-		block := types.NewBlockWithHeader(header)
-		copy(block.HeaderHash[:2], []byte{byte(i + 1), seed})
-		if i == 0 {
-			block.ParentHeaderHash = genesis.Hash()
-		} else {
-			copy(block.ParentHeaderHash[:2], []byte{byte(i), seed})
+		header := &types.Header{
+			Coinbase:   common.Address{seed},
+			Number:     big.NewInt(int64(i + 1)),
+			Difficulty: big.NewInt(int64(difficulty)),
 		}
-
+		if i == 0 {
+			header.ParentHash = genesis.Hash()
+		} else {
+			header.ParentHash = chain[i-1].Hash()
+		}
+		block := types.NewBlockWithHeader(header)
 		chain = append(chain, block)
 	}
 	return chain
@@ -388,9 +390,9 @@ func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block 
 
 func chm(genesis *types.Block, db common.Database) *ChainManager {
 	var eventMux event.TypeMux
-	bc := &ChainManager{blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
-	bc.cache = NewBlockCache(100)
-	bc.futureBlocks = NewBlockCache(100)
+	bc := &ChainManager{extraDb: db, blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
+	bc.cache, _ = lru.New(100)
+	bc.futureBlocks, _ = lru.New(100)
 	bc.processor = bproc{}
 	bc.ResetWithGenesisBlock(genesis)
 	bc.txState = state.ManageState(bc.State())
@@ -399,7 +401,6 @@ func chm(genesis *types.Block, db common.Database) *ChainManager {
 }
 
 func TestReorgLongest(t *testing.T) {
-	t.Skip("skipped while cache is removed")
 	db, _ := ethdb.NewMemDatabase()
 	genesis := GenesisBlock(0, db)
 	bc := chm(genesis, db)
@@ -419,7 +420,6 @@ func TestReorgLongest(t *testing.T) {
 }
 
 func TestReorgShortest(t *testing.T) {
-	t.Skip("skipped while cache is removed")
 	db, _ := ethdb.NewMemDatabase()
 	genesis := GenesisBlock(0, db)
 	bc := chm(genesis, db)
@@ -444,7 +444,7 @@ func TestInsertNonceError(t *testing.T) {
 		genesis := GenesisBlock(0, db)
 		bc := chm(genesis, db)
 		bc.processor = NewBlockProcessor(db, db, bc.pow, bc, bc.eventMux)
-		blocks := makeChain(bc.processor.(*BlockProcessor), bc.currentBlock, i, db, 0)
+		blocks := makeChain(bc.currentBlock, i, db, 0)
 
 		fail := rand.Int() % len(blocks)
 		failblock := blocks[fail]
@@ -479,12 +479,12 @@ func TestGenesisMismatch(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 	var mux event.TypeMux
 	genesis := GenesisBlock(0, db)
-	_, err := NewChainManager(genesis, db, db, thePow(), &mux)
+	_, err := NewChainManager(genesis, db, db, db, thePow(), &mux)
 	if err != nil {
 		t.Error(err)
 	}
 	genesis = GenesisBlock(1, db)
-	_, err = NewChainManager(genesis, db, db, thePow(), &mux)
+	_, err = NewChainManager(genesis, db, db, db, thePow(), &mux)
 	if err == nil {
 		t.Error("expected genesis mismatch error")
 	}

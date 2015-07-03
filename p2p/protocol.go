@@ -43,8 +43,10 @@ func (cap Cap) String() string {
 	return fmt.Sprintf("%s/%d", cap.Name, cap.Version)
 }
 
-type capsByName []Cap
+type capsByNameAndVersion []Cap
 
-func (cs capsByName) Len() int           { return len(cs) }
-func (cs capsByName) Less(i, j int) bool { return cs[i].Name < cs[j].Name }
-func (cs capsByName) Swap(i, j int)      { cs[i], cs[j] = cs[j], cs[i] }
+func (cs capsByNameAndVersion) Len() int      { return len(cs) }
+func (cs capsByNameAndVersion) Swap(i, j int) { cs[i], cs[j] = cs[j], cs[i] }
+func (cs capsByNameAndVersion) Less(i, j int) bool {
+	return cs[i].Name < cs[j].Name || (cs[i].Name == cs[j].Name && cs[i].Version < cs[j].Version)
+}

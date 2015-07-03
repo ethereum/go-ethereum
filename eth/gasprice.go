@@ -47,14 +47,21 @@ func NewGasPriceOracle(eth *Ethereum) (self *GasPriceOracle) {
 }
 
 func (self *GasPriceOracle) processPastBlocks() {
-	last := self.chain.CurrentBlock().NumberU64()
-	first := uint64(0)
+	last := int64(-1)
+	cblock := self.chain.CurrentBlock()
+	if cblock != nil {
+		last = int64(cblock.NumberU64())
+	}
+	first := int64(0)
 	if last > gpoProcessPastBlocks {
 		first = last - gpoProcessPastBlocks
 	}
-	self.firstProcessed = first
+	self.firstProcessed = uint64(first)
 	for i := first; i <= last; i++ {
-		self.processBlock(self.chain.GetBlockByNumber(i))
+		block := self.chain.GetBlockByNumber(uint64(i))
+		if block != nil {
+			self.processBlock(block)
+		}
 	}
 
 }
@@ -133,20 +140,20 @@ func (self *GasPriceOracle) lowestPrice(block *types.Block) *big.Int {
 		gasUsed = recepits[len(recepits)-1].CumulativeGasUsed
 	}
 
-	if new(big.Int).Mul(gasUsed, big.NewInt(100)).Cmp(new(big.Int).Mul(block.Header().GasLimit,
+	if new(big.Int).Mul(gasUsed, big.NewInt(100)).Cmp(new(big.Int).Mul(block.GasLimit(),
 		big.NewInt(int64(self.eth.GpoFullBlockRatio)))) < 0 {
 		// block is not full, could have posted a tx with MinGasPrice
 		return self.eth.GpoMinGasPrice
 	}
 
-	if len(block.Transactions()) < 1 {
+	txs := block.Transactions()
+	if len(txs) == 0 {
 		return self.eth.GpoMinGasPrice
 	}
-
 	// block is full, find smallest gasPrice
-	minPrice := block.Transactions()[0].GasPrice()
-	for i := 1; i < len(block.Transactions()); i++ {
-		price := block.Transactions()[i].GasPrice()
+	minPrice := txs[0].GasPrice()
+	for i := 1; i < len(txs); i++ {
+		price := txs[i].GasPrice()
 		if price.Cmp(minPrice) < 0 {
 			minPrice = price
 		}

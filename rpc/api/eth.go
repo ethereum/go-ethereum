@@ -6,9 +6,12 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
+	"gopkg.in/fatih/set.v0"
 )
 
 const (
@@ -18,9 +21,10 @@ const (
 // eth api provider
 // See https://github.com/ethereum/wiki/wiki/JSON-RPC
 type ethApi struct {
-	xeth    *xeth.XEth
-	methods map[string]ethhandler
-	codec   codec.ApiCoder
+	xeth     *xeth.XEth
+	ethereum *eth.Ethereum
+	methods  map[string]ethhandler
+	codec    codec.ApiCoder
 }
 
 // eth callback handler
@@ -28,54 +32,57 @@ type ethhandler func(*ethApi, *shared.Request) (interface{}, error)
 
 var (
 	ethMapping = map[string]ethhandler{
-		"eth_accounts":                          (*ethApi).Accounts,
-		"eth_blockNumber":                       (*ethApi).BlockNumber,
-		"eth_getBalance":                        (*ethApi).GetBalance,
-		"eth_protocolVersion":                   (*ethApi).ProtocolVersion,
-		"eth_coinbase":                          (*ethApi).Coinbase,
-		"eth_mining":                            (*ethApi).IsMining,
-		"eth_gasPrice":                          (*ethApi).GasPrice,
-		"eth_getStorage":                        (*ethApi).GetStorage,
-		"eth_storageAt":                         (*ethApi).GetStorage,
-		"eth_getStorageAt":                      (*ethApi).GetStorageAt,
-		"eth_getTransactionCount":               (*ethApi).GetTransactionCount,
-		"eth_getBlockTransactionCountByHash":    (*ethApi).GetBlockTransactionCountByHash,
-		"eth_getBlockTransactionCountByNumber":  (*ethApi).GetBlockTransactionCountByNumber,
-		"eth_getUncleCountByBlockHash":          (*ethApi).GetUncleCountByBlockHash,
-		"eth_getUncleCountByBlockNumber":        (*ethApi).GetUncleCountByBlockNumber,
-		"eth_getData":                           (*ethApi).GetData,
-		"eth_getCode":                           (*ethApi).GetData,
-		"eth_sign":                              (*ethApi).Sign,
-		"eth_sendRawTransaction":                (*ethApi).PushTx,
-		"eth_sendTransaction":                   (*ethApi).SendTransaction,
-		"eth_transact":                          (*ethApi).SendTransaction,
-		"eth_estimateGas":                       (*ethApi).EstimateGas,
-		"eth_call":                              (*ethApi).Call,
-		"eth_flush":                             (*ethApi).Flush,
-		"eth_getBlockByHash":                    (*ethApi).GetBlockByHash,
-		"eth_getBlockByNumber":                  (*ethApi).GetBlockByNumber,
-		"eth_getTransactionByHash":              (*ethApi).GetTransactionByHash,
-		"eth_getTransactionByBlockHashAndIndex": (*ethApi).GetTransactionByBlockHashAndIndex,
-		"eth_getUncleByBlockHashAndIndex":       (*ethApi).GetUncleByBlockHashAndIndex,
-		"eth_getUncleByBlockNumberAndIndex":     (*ethApi).GetUncleByBlockNumberAndIndex,
-		"eth_getCompilers":                      (*ethApi).GetCompilers,
-		"eth_compileSolidity":                   (*ethApi).CompileSolidity,
-		"eth_newFilter":                         (*ethApi).NewFilter,
-		"eth_newBlockFilter":                    (*ethApi).NewBlockFilter,
-		"eth_newPendingTransactionFilter":       (*ethApi).NewPendingTransactionFilter,
-		"eth_uninstallFilter":                   (*ethApi).UninstallFilter,
-		"eth_getFilterChanges":                  (*ethApi).GetFilterChanges,
-		"eth_getFilterLogs":                     (*ethApi).GetFilterLogs,
-		"eth_getLogs":                           (*ethApi).GetLogs,
-		"eth_hashrate":                          (*ethApi).Hashrate,
-		"eth_getWork":                           (*ethApi).GetWork,
-		"eth_submitWork":                        (*ethApi).SubmitWork,
+		"eth_accounts":                            (*ethApi).Accounts,
+		"eth_blockNumber":                         (*ethApi).BlockNumber,
+		"eth_getBalance":                          (*ethApi).GetBalance,
+		"eth_protocolVersion":                     (*ethApi).ProtocolVersion,
+		"eth_coinbase":                            (*ethApi).Coinbase,
+		"eth_mining":                              (*ethApi).IsMining,
+		"eth_gasPrice":                            (*ethApi).GasPrice,
+		"eth_getStorage":                          (*ethApi).GetStorage,
+		"eth_storageAt":                           (*ethApi).GetStorage,
+		"eth_getStorageAt":                        (*ethApi).GetStorageAt,
+		"eth_getTransactionCount":                 (*ethApi).GetTransactionCount,
+		"eth_getBlockTransactionCountByHash":      (*ethApi).GetBlockTransactionCountByHash,
+		"eth_getBlockTransactionCountByNumber":    (*ethApi).GetBlockTransactionCountByNumber,
+		"eth_getUncleCountByBlockHash":            (*ethApi).GetUncleCountByBlockHash,
+		"eth_getUncleCountByBlockNumber":          (*ethApi).GetUncleCountByBlockNumber,
+		"eth_getData":                             (*ethApi).GetData,
+		"eth_getCode":                             (*ethApi).GetData,
+		"eth_sign":                                (*ethApi).Sign,
+		"eth_sendRawTransaction":                  (*ethApi).SendRawTransaction,
+		"eth_sendTransaction":                     (*ethApi).SendTransaction,
+		"eth_transact":                            (*ethApi).SendTransaction,
+		"eth_estimateGas":                         (*ethApi).EstimateGas,
+		"eth_call":                                (*ethApi).Call,
+		"eth_flush":                               (*ethApi).Flush,
+		"eth_getBlockByHash":                      (*ethApi).GetBlockByHash,
+		"eth_getBlockByNumber":                    (*ethApi).GetBlockByNumber,
+		"eth_getTransactionByHash":                (*ethApi).GetTransactionByHash,
+		"eth_getTransactionByBlockNumberAndIndex": (*ethApi).GetTransactionByBlockNumberAndIndex,
+		"eth_getTransactionByBlockHashAndIndex":   (*ethApi).GetTransactionByBlockHashAndIndex,
+		"eth_getUncleByBlockHashAndIndex":         (*ethApi).GetUncleByBlockHashAndIndex,
+		"eth_getUncleByBlockNumberAndIndex":       (*ethApi).GetUncleByBlockNumberAndIndex,
+		"eth_getCompilers":                        (*ethApi).GetCompilers,
+		"eth_compileSolidity":                     (*ethApi).CompileSolidity,
+		"eth_newFilter":                           (*ethApi).NewFilter,
+		"eth_newBlockFilter":                      (*ethApi).NewBlockFilter,
+		"eth_newPendingTransactionFilter":         (*ethApi).NewPendingTransactionFilter,
+		"eth_uninstallFilter":                     (*ethApi).UninstallFilter,
+		"eth_getFilterChanges":                    (*ethApi).GetFilterChanges,
+		"eth_getFilterLogs":                       (*ethApi).GetFilterLogs,
+		"eth_getLogs":                             (*ethApi).GetLogs,
+		"eth_hashrate":                            (*ethApi).Hashrate,
+		"eth_getWork":                             (*ethApi).GetWork,
+		"eth_submitWork":                          (*ethApi).SubmitWork,
+		"eth_resend":                              (*ethApi).Resend,
+		"eth_pendingTransactions":                 (*ethApi).PendingTransactions,
 	}
 )
 
 // create new ethApi instance
-func NewEthApi(xeth *xeth.XEth, codec codec.Codec) *ethApi {
-	return &ethApi{xeth, ethMapping, codec.New(nil)}
+func NewEthApi(xeth *xeth.XEth, eth *eth.Ethereum, codec codec.Codec) *ethApi {
+	return &ethApi{xeth, eth, ethMapping, codec.New(nil)}
 }
 
 // collection with supported methods
@@ -99,7 +106,7 @@ func (self *ethApi) Execute(req *shared.Request) (interface{}, error) {
 }
 
 func (self *ethApi) Name() string {
-	return EthApiName
+	return shared.EthApiName
 }
 
 func (self *ethApi) ApiVersion() string {
@@ -115,7 +122,8 @@ func (self *ethApi) Hashrate(req *shared.Request) (interface{}, error) {
 }
 
 func (self *ethApi) BlockNumber(req *shared.Request) (interface{}, error) {
-	return self.xeth.CurrentBlock().Number(), nil
+	num := self.xeth.CurrentBlock().Number()
+	return newHexNum(num.Bytes()), nil
 }
 
 func (self *ethApi) GetBalance(req *shared.Request) (interface{}, error) {
@@ -248,8 +256,7 @@ func (self *ethApi) Sign(req *shared.Request) (interface{}, error) {
 	return v, nil
 }
 
-
-func (self *ethApi) PushTx(req *shared.Request) (interface{}, error) {
+func (self *ethApi) SendRawTransaction(req *shared.Request) (interface{}, error) {
 	args := new(NewDataArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
@@ -347,14 +354,6 @@ func (self *ethApi) GetBlockByNumber(req *shared.Request) (interface{}, error) {
 
 	block := self.xeth.EthBlockByNumber(args.BlockNumber)
 	br := NewBlockRes(block, args.IncludeTxs)
-	// If request was for "pending", nil nonsensical fields
-	if args.BlockNumber == -2 {
-		br.BlockHash = nil
-		br.BlockNumber = nil
-		br.Miner = nil
-		br.Nonce = nil
-		br.LogsBloom = nil
-	}
 	return br, nil
 }
 
@@ -554,4 +553,46 @@ func (self *ethApi) SubmitWork(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 	return self.xeth.RemoteMining().SubmitWork(args.Nonce, common.HexToHash(args.Digest), common.HexToHash(args.Header)), nil
+}
+
+func (self *ethApi) Resend(req *shared.Request) (interface{}, error) {
+	args := new(ResendArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	ret, err := self.xeth.Transact(args.Tx.From, args.Tx.To, args.Tx.Nonce, args.Tx.Value, args.GasLimit, args.GasPrice, args.Tx.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	self.ethereum.TxPool().RemoveTransactions(types.Transactions{args.Tx.tx})
+
+	return ret, nil
+}
+
+func (self *ethApi) PendingTransactions(req *shared.Request) (interface{}, error) {
+	txs := self.ethereum.TxPool().GetTransactions()
+
+	// grab the accounts from the account manager. This will help with determining which
+	// transactions should be returned.
+	accounts, err := self.ethereum.AccountManager().Accounts()
+	if err != nil {
+		return nil, err
+	}
+
+	// Add the accouns to a new set
+	accountSet := set.New()
+	for _, account := range accounts {
+		accountSet.Add(account.Address)
+	}
+
+	var ltxs []*tx
+	for _, tx := range txs {
+		if from, _ := tx.From(); accountSet.Has(from) {
+			ltxs = append(ltxs, newTx(tx))
+		}
+	}
+
+	return ltxs, nil
 }

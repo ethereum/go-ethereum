@@ -57,8 +57,8 @@ func NewBlockProcessor(db, extra common.Database, pow pow.PoW, chainManager *Cha
 }
 
 func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block *types.Block, transientProcess bool) (receipts types.Receipts, err error) {
-	coinbase := statedb.GetOrNewStateObject(block.Header().Coinbase)
-	coinbase.SetGasPool(block.Header().GasLimit)
+	coinbase := statedb.GetOrNewStateObject(block.Coinbase())
+	coinbase.SetGasLimit(block.GasLimit())
 
 	// Process the transactions on to parent state
 	receipts, err = sm.ApplyTransactions(coinbase, statedb, block, block.Transactions(), transientProcess)
@@ -69,11 +69,11 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 	return receipts, nil
 }
 
-func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
+func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
 	// If we are mining this block and validating we want to set the logs back to 0
 
 	cb := statedb.GetStateObject(coinbase.Address())
-	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, block), tx, cb)
+	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, header), tx, cb)
 	if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
 		return nil, nil, err
 	}
@@ -81,9 +81,8 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	// Update the state with pending changes
 	statedb.Update()
 
-	cumulative := new(big.Int).Set(usedGas.Add(usedGas, gas))
-	receipt := types.NewReceipt(statedb.Root().Bytes(), cumulative)
-
+	usedGas.Add(usedGas, gas)
+	receipt := types.NewReceipt(statedb.Root().Bytes(), usedGas)
 	logs := statedb.GetLogs(tx.Hash())
 	receipt.SetLogs(logs)
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
@@ -108,12 +107,13 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 		totalUsedGas  = big.NewInt(0)
 		err           error
 		cumulativeSum = new(big.Int)
+		header        = block.Header()
 	)
 
 	for i, tx := range txs {
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
 
-		receipt, txGas, err := self.ApplyTransaction(coinbase, statedb, block, tx, totalUsedGas, transientProcess)
+		receipt, txGas, err := self.ApplyTransaction(coinbase, statedb, header, tx, totalUsedGas, transientProcess)
 		if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
 			return nil, err
 		}
@@ -142,17 +142,16 @@ func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs state.Logs, err
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
-	header := block.Header()
-	if !sm.bc.HasBlock(header.ParentHash) {
-		return nil, ParentError(header.ParentHash)
+	if !sm.bc.HasBlock(block.ParentHash()) {
+		return nil, ParentError(block.ParentHash())
 	}
-	parent := sm.bc.GetBlock(header.ParentHash)
+	parent := sm.bc.GetBlock(block.ParentHash())
 
 	// FIXME Change to full header validation. See #1225
 	errch := make(chan bool)
 	go func() { errch <- sm.Pow.Verify(block) }()
 
-	logs, err = sm.processWithParent(block, parent)
+	logs, _, err = sm.processWithParent(block, parent)
 	if !<-errch {
 		return nil, ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
 	}
@@ -163,43 +162,43 @@ func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs state.Logs, err
 // Process block will attempt to process the given block's transactions and applies them
 // on top of the block's parent state (given it exists) and will return wether it was
 // successful or not.
-func (sm *BlockProcessor) Process(block *types.Block) (logs state.Logs, err error) {
+func (sm *BlockProcessor) Process(block *types.Block) (logs state.Logs, receipts types.Receipts, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
-	header := block.Header()
-	if sm.bc.HasBlock(header.Hash()) {
-		return nil, &KnownBlockError{header.Number, header.Hash()}
+	if sm.bc.HasBlock(block.Hash()) {
+		return nil, nil, &KnownBlockError{block.Number(), block.Hash()}
 	}
 
-	if !sm.bc.HasBlock(header.ParentHash) {
-		return nil, ParentError(header.ParentHash)
+	if !sm.bc.HasBlock(block.ParentHash()) {
+		return nil, nil, ParentError(block.ParentHash())
 	}
-	parent := sm.bc.GetBlock(header.ParentHash)
+	parent := sm.bc.GetBlock(block.ParentHash())
 	return sm.processWithParent(block, parent)
 }
 
-func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs state.Logs, err error) {
+func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs state.Logs, receipts types.Receipts, err error) {
 	// Create a new state based on the parent's root (e.g., create copy)
 	state := state.New(parent.Root(), sm.db)
+	header := block.Header()
+	uncles := block.Uncles()
+	txs := block.Transactions()
 
 	// Block validation
-	if err = ValidateHeader(sm.Pow, block.Header(), parent.Header(), false); err != nil {
+	if err = ValidateHeader(sm.Pow, header, parent, false); err != nil {
 		return
 	}
 
 	// There can be at most two uncles
-	if len(block.Uncles()) > 2 {
-		return nil, ValidationError("Block can only contain maximum 2 uncles (contained %v)", len(block.Uncles()))
+	if len(uncles) > 2 {
+		return nil, nil, ValidationError("Block can only contain maximum 2 uncles (contained %v)", len(uncles))
 	}
 
-	receipts, err := sm.TransitionState(state, parent, block, false)
+	receipts, err = sm.TransitionState(state, parent, block, false)
 	if err != nil {
 		return
 	}
-
-	header := block.Header()
 
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
@@ -211,7 +210,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 
 	// The transactions Trie's root (R = (Tr [[i, RLP(T1)], [i, RLP(T2)], ... [n, RLP(Tn)]]))
 	// can be used by light clients to make sure they've received the correct Txs
-	txSha := types.DeriveSha(block.Transactions())
+	txSha := types.DeriveSha(txs)
 	if txSha != header.TxHash {
 		err = fmt.Errorf("invalid transaction root hash. received=%x calculated=%x", header.TxHash, txSha)
 		return
@@ -225,7 +224,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	}
 
 	// Verify UncleHash before running other uncle validations
-	unclesSha := block.CalculateUnclesHash()
+	unclesSha := types.CalcUncleHash(uncles)
 	if unclesSha != header.UncleHash {
 		err = fmt.Errorf("invalid uncles root hash. received=%x calculated=%x", header.UncleHash, unclesSha)
 		return
@@ -236,7 +235,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 		return
 	}
 	// Accumulate static rewards; block reward, uncle's and uncle inclusion.
-	AccumulateRewards(state, block)
+	AccumulateRewards(state, header, uncles)
 
 	// Commit state objects/accounts to a temporary trie (does not save)
 	// used to calculate the state root.
@@ -249,31 +248,47 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	// Sync the current block's state to the database
 	state.Sync()
 
-	// This puts transactions in a extra db for rpc
-	for i, tx := range block.Transactions() {
-		putTx(sm.extraDb, tx, block, uint64(i))
+	return state.Logs(), receipts, nil
+}
+
+var (
+	big8  = big.NewInt(8)
+	big32 = big.NewInt(32)
+)
+
+// AccumulateRewards credits the coinbase of the given block with the
+// mining reward. The total reward consists of the static block reward
+// and rewards for included uncles. The coinbase of each uncle block is
+// also rewarded.
+func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*types.Header) {
+	reward := new(big.Int).Set(BlockReward)
+	r := new(big.Int)
+	for _, uncle := range uncles {
+		r.Add(uncle.Number, big8)
+		r.Sub(r, header.Number)
+		r.Mul(r, BlockReward)
+		r.Div(r, big8)
+		statedb.AddBalance(uncle.Coinbase, r)
+
+		r.Div(BlockReward, big32)
+		reward.Add(reward, r)
 	}
-
-	// store the receipts
-	putReceipts(sm.extraDb, block.Hash(), receipts)
-
-	return state.Logs(), nil
+	statedb.AddBalance(header.Coinbase, reward)
 }
 
 func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *types.Block) error {
-	ancestors := set.New()
 	uncles := set.New()
-	ancestorHeaders := make(map[common.Hash]*types.Header)
-	for _, ancestor := range sm.bc.GetAncestors(block, 7) {
-		ancestorHeaders[ancestor.Hash()] = ancestor.Header()
-		ancestors.Add(ancestor.Hash())
+	ancestors := make(map[common.Hash]*types.Block)
+	for _, ancestor := range sm.bc.GetBlocksFromHash(block.ParentHash(), 7) {
+		ancestors[ancestor.Hash()] = ancestor
 		// Include ancestors uncles in the uncle set. Uncles must be unique.
 		for _, uncle := range ancestor.Uncles() {
 			uncles.Add(uncle.Hash())
 		}
 	}
-
+	ancestors[block.Hash()] = block
 	uncles.Add(block.Hash())
+
 	for i, uncle := range block.Uncles() {
 		hash := uncle.Hash()
 		if uncles.Has(hash) {
@@ -282,22 +297,20 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 		}
 		uncles.Add(hash)
 
-		if ancestors.Has(hash) {
+		if ancestors[hash] != nil {
 			branch := fmt.Sprintf("  O - %x\n  |\n", block.Hash())
-			ancestors.Each(func(item interface{}) bool {
-				branch += fmt.Sprintf("  O - %x\n  |\n", hash)
-				return true
-			})
+			for h := range ancestors {
+				branch += fmt.Sprintf("  O - %x\n  |\n", h)
+			}
 			glog.Infoln(branch)
-
 			return UncleError("uncle[%d](%x) is ancestor", i, hash[:4])
 		}
 
-		if !ancestors.Has(uncle.ParentHash) || uncle.ParentHash == parent.Hash() {
+		if ancestors[uncle.ParentHash] == nil || uncle.ParentHash == parent.Hash() {
 			return UncleError("uncle[%d](%x)'s parent is not ancestor (%x)", i, hash[:4], uncle.ParentHash[0:4])
 		}
 
-		if err := ValidateHeader(sm.Pow, uncle, ancestorHeaders[uncle.ParentHash], true); err != nil {
+		if err := ValidateHeader(sm.Pow, uncle, ancestors[uncle.ParentHash], true); err != nil {
 			return ValidationError(fmt.Sprintf("uncle[%d](%x) header invalid: %v", i, hash[:4], err))
 		}
 	}
@@ -325,7 +338,7 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 
 	// TODO: remove backward compatibility
 	var (
-		parent = sm.bc.GetBlock(block.Header().ParentHash)
+		parent = sm.bc.GetBlock(block.ParentHash())
 		state  = state.New(parent.Root(), sm.db)
 	)
 
@@ -336,33 +349,37 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 
 // See YP section 4.3.4. "Block Header Validity"
 // Validates a block. Returns an error if the block is invalid.
-func ValidateHeader(pow pow.PoW, block, parent *types.Header, checkPow bool) error {
+func ValidateHeader(pow pow.PoW, block *types.Header, parent *types.Block, checkPow bool) error {
 	if big.NewInt(int64(len(block.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
 		return fmt.Errorf("Block extra data too long (%d)", len(block.Extra))
 	}
 
-	expd := CalcDifficulty(block, parent)
+	if block.Time > uint64(time.Now().Unix()) {
+		return BlockFutureErr
+	}
+	if block.Time <= parent.Time() {
+		return BlockEqualTSErr
+	}
+
+	expd := CalcDifficulty(int64(block.Time), int64(parent.Time()), parent.Difficulty())
 	if expd.Cmp(block.Difficulty) != 0 {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
 	}
 
-	a := new(big.Int).Sub(block.GasLimit, parent.GasLimit)
+	var a, b *big.Int
+	a = parent.GasLimit()
+	a = a.Sub(a, block.GasLimit)
 	a.Abs(a)
-	b := new(big.Int).Div(parent.GasLimit, params.GasLimitBoundDivisor)
+	b = parent.GasLimit()
+	b = b.Div(b, params.GasLimitBoundDivisor)
 	if !(a.Cmp(b) < 0) || (block.GasLimit.Cmp(params.MinGasLimit) == -1) {
 		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
 	}
 
-	if int64(block.Time) > time.Now().Unix() {
-		return BlockFutureErr
-	}
-
-	if new(big.Int).Sub(block.Number, parent.Number).Cmp(big.NewInt(1)) != 0 {
+	num := parent.Number()
+	num.Sub(block.Number, num)
+	if num.Cmp(big.NewInt(1)) != 0 {
 		return BlockNumberErr
-	}
-
-	if block.Time <= parent.Time {
-		return BlockEqualTSErr //ValidationError("Block timestamp equal or less than previous block (%v - %v)", block.Time, parent.Time)
 	}
 
 	if checkPow {
@@ -375,26 +392,6 @@ func ValidateHeader(pow pow.PoW, block, parent *types.Header, checkPow bool) err
 	return nil
 }
 
-func AccumulateRewards(statedb *state.StateDB, block *types.Block) {
-	reward := new(big.Int).Set(BlockReward)
-
-	for _, uncle := range block.Uncles() {
-		num := new(big.Int).Add(big.NewInt(8), uncle.Number)
-		num.Sub(num, block.Number())
-
-		r := new(big.Int)
-		r.Mul(BlockReward, num)
-		r.Div(r, big.NewInt(8))
-
-		statedb.AddBalance(uncle.Coinbase, r)
-
-		reward.Add(reward, new(big.Int).Div(BlockReward, big.NewInt(32)))
-	}
-
-	// Get the account associated with the coinbase
-	statedb.AddBalance(block.Header().Coinbase, reward)
-}
-
 func getBlockReceipts(db common.Database, bhash common.Hash) (receipts types.Receipts, err error) {
 	var rdata []byte
 	rdata, err = db.Get(append(receiptsPre, bhash[:]...))
@@ -405,44 +402,4 @@ func getBlockReceipts(db common.Database, bhash common.Hash) (receipts types.Rec
 		glog.V(logger.Detail).Infof("getBlockReceipts error %v\n", err)
 	}
 	return
-}
-
-func putTx(db common.Database, tx *types.Transaction, block *types.Block, i uint64) {
-	rlpEnc, err := rlp.EncodeToBytes(tx)
-	if err != nil {
-		glog.V(logger.Debug).Infoln("Failed encoding tx", err)
-		return
-	}
-	db.Put(tx.Hash().Bytes(), rlpEnc)
-
-	var txExtra struct {
-		BlockHash  common.Hash
-		BlockIndex uint64
-		Index      uint64
-	}
-	txExtra.BlockHash = block.Hash()
-	txExtra.BlockIndex = block.NumberU64()
-	txExtra.Index = i
-	rlpMeta, err := rlp.EncodeToBytes(txExtra)
-	if err != nil {
-		glog.V(logger.Debug).Infoln("Failed encoding tx meta data", err)
-		return
-	}
-	db.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)
-}
-
-func putReceipts(db common.Database, hash common.Hash, receipts types.Receipts) error {
-	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
-	for i, receipt := range receipts {
-		storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
-	}
-
-	bytes, err := rlp.EncodeToBytes(storageReceipts)
-	if err != nil {
-		return err
-	}
-
-	db.Put(append(receiptsPre, hash[:]...), bytes)
-
-	return nil
 }

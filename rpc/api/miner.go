@@ -66,7 +66,7 @@ func (self *minerApi) Methods() []string {
 }
 
 func (self *minerApi) Name() string {
-	return MinerApiName
+	return shared.MinerApiName
 }
 
 func (self *minerApi) ApiVersion() string {

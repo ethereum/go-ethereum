@@ -444,7 +444,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		case TIMESTAMP:
 			time := self.env.Time()
 
-			stack.push(big.NewInt(time))
+			stack.push(new(big.Int).SetUint64(time))
 
 		case NUMBER:
 			number := self.env.BlockNumber()

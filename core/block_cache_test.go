@@ -11,12 +11,12 @@ import (
 func newChain(size int) (chain []*types.Block) {
 	var parentHash common.Hash
 	for i := 0; i < size; i++ {
-		block := types.NewBlock(parentHash, common.Address{}, common.Hash{}, new(big.Int), 0, nil)
-		block.Header().Number = big.NewInt(int64(i))
+		head := &types.Header{ParentHash: parentHash, Number: big.NewInt(int64(i))}
+		block := types.NewBlock(head, nil, nil, nil)
 		chain = append(chain, block)
 		parentHash = block.Hash()
 	}
-	return
+	return chain
 }
 
 func insertChainCache(cache *BlockCache, chain []*types.Block) {

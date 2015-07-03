@@ -4,7 +4,9 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -18,38 +20,63 @@ func IsContractAddr(addr []byte) bool {
 }
 
 type Transaction struct {
-	AccountNonce uint64
-	Price        *big.Int
-	GasLimit     *big.Int
-	Recipient    *common.Address `rlp:"nil"` // nil means contract creation
-	Amount       *big.Int
-	Payload      []byte
-	V            byte
-	R, S         *big.Int
+	data txdata
+	// caches
+	hash atomic.Value
+	size atomic.Value
+	from atomic.Value
 }
 
-func NewContractCreationTx(amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
-	return &Transaction{
-		Recipient: nil,
-		Amount:    amount,
-		GasLimit:  gasLimit,
-		Price:     gasPrice,
-		Payload:   data,
-		R:         new(big.Int),
-		S:         new(big.Int),
-	}
+type txdata struct {
+	AccountNonce    uint64
+	Price, GasLimit *big.Int
+	Recipient       *common.Address `rlp:"nil"` // nil means contract creation
+	Amount          *big.Int
+	Payload         []byte
+	V               byte     // signature
+	R, S            *big.Int // signature
 }
 
-func NewTransactionMessage(to common.Address, amount, gasAmount, gasPrice *big.Int, data []byte) *Transaction {
-	return &Transaction{
-		Recipient: &to,
-		Amount:    amount,
-		GasLimit:  gasAmount,
-		Price:     gasPrice,
-		Payload:   data,
-		R:         new(big.Int),
-		S:         new(big.Int),
+func NewContractCreation(nonce uint64, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
+	if len(data) > 0 {
+		data = common.CopyBytes(data)
 	}
+	return &Transaction{data: txdata{
+		AccountNonce: nonce,
+		Recipient:    nil,
+		Amount:       new(big.Int).Set(amount),
+		GasLimit:     new(big.Int).Set(gasLimit),
+		Price:        new(big.Int).Set(gasPrice),
+		Payload:      data,
+		R:            new(big.Int),
+		S:            new(big.Int),
+	}}
+}
+
+func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
+	if len(data) > 0 {
+		data = common.CopyBytes(data)
+	}
+	d := txdata{
+		AccountNonce: nonce,
+		Recipient:    &to,
+		Payload:      data,
+		Amount:       new(big.Int),
+		GasLimit:     new(big.Int),
+		Price:        new(big.Int),
+		R:            new(big.Int),
+		S:            new(big.Int),
+	}
+	if amount != nil {
+		d.Amount.Set(amount)
+	}
+	if gasLimit != nil {
+		d.GasLimit.Set(gasLimit)
+	}
+	if gasPrice != nil {
+		d.Price.Set(gasPrice)
+	}
+	return &Transaction{data: d}
 }
 
 func NewTransactionFromBytes(data []byte) *Transaction {
@@ -61,112 +88,128 @@ func NewTransactionFromBytes(data []byte) *Transaction {
 	return tx
 }
 
-func (tx *Transaction) Hash() common.Hash {
-	return rlpHash([]interface{}{
-		tx.AccountNonce, tx.Price, tx.GasLimit, tx.Recipient, tx.Amount, tx.Payload,
-	})
+func (tx *Transaction) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, &tx.data)
 }
 
-// Size returns the encoded RLP size of tx.
-func (self *Transaction) Size() common.StorageSize {
+func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
+	_, size, _ := s.Kind()
+	err := s.Decode(&tx.data)
+	if err == nil {
+		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
+	}
+	return err
+}
+
+func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Payload) }
+func (tx *Transaction) Gas() *big.Int      { return new(big.Int).Set(tx.data.GasLimit) }
+func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Price) }
+func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amount) }
+func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
+
+func (tx *Transaction) To() *common.Address {
+	if tx.data.Recipient == nil {
+		return nil
+	} else {
+		to := *tx.data.Recipient
+		return &to
+	}
+}
+
+func (tx *Transaction) Hash() common.Hash {
+	if hash := tx.hash.Load(); hash != nil {
+		return hash.(common.Hash)
+	}
+	v := rlpHash([]interface{}{
+		tx.data.AccountNonce,
+		tx.data.Price,
+		tx.data.GasLimit,
+		tx.data.Recipient,
+		tx.data.Amount,
+		tx.data.Payload,
+	})
+	tx.hash.Store(v)
+	return v
+}
+
+func (tx *Transaction) Size() common.StorageSize {
+	if size := tx.size.Load(); size != nil {
+		return size.(common.StorageSize)
+	}
 	c := writeCounter(0)
-	rlp.Encode(&c, self)
+	rlp.Encode(&c, &tx.data)
+	tx.size.Store(common.StorageSize(c))
 	return common.StorageSize(c)
 }
 
-func (self *Transaction) Data() []byte {
-	return self.Payload
-}
-
-func (self *Transaction) Gas() *big.Int {
-	return self.GasLimit
-}
-
-func (self *Transaction) GasPrice() *big.Int {
-	return self.Price
-}
-
-func (self *Transaction) Value() *big.Int {
-	return self.Amount
-}
-
-func (self *Transaction) Nonce() uint64 {
-	return self.AccountNonce
-}
-
-func (self *Transaction) SetNonce(AccountNonce uint64) {
-	self.AccountNonce = AccountNonce
-}
-
-func (self *Transaction) From() (common.Address, error) {
-	pubkey, err := self.PublicKey()
+func (tx *Transaction) From() (common.Address, error) {
+	if from := tx.from.Load(); from != nil {
+		return from.(common.Address), nil
+	}
+	pubkey, err := tx.publicKey()
 	if err != nil {
 		return common.Address{}, err
 	}
-
 	var addr common.Address
 	copy(addr[:], crypto.Sha3(pubkey[1:])[12:])
+	tx.from.Store(addr)
 	return addr, nil
 }
 
-// To returns the recipient of the transaction.
-// If transaction is a contract creation (with no recipient address)
-// To returns nil.
-func (tx *Transaction) To() *common.Address {
-	return tx.Recipient
+// Cost returns amount + gasprice * gaslimit.
+func (tx *Transaction) Cost() *big.Int {
+	total := new(big.Int).Mul(tx.data.Price, tx.data.GasLimit)
+	total.Add(total, tx.data.Amount)
+	return total
 }
 
-func (tx *Transaction) GetSignatureValues() (v byte, r []byte, s []byte) {
-	v = byte(tx.V)
-	r = common.LeftPadBytes(tx.R.Bytes(), 32)
-	s = common.LeftPadBytes(tx.S.Bytes(), 32)
-	return
+func (tx *Transaction) SignatureValues() (v byte, r *big.Int, s *big.Int) {
+	return tx.data.V, new(big.Int).Set(tx.data.R), new(big.Int).Set(tx.data.S)
 }
 
-func (tx *Transaction) PublicKey() ([]byte, error) {
-	if !crypto.ValidateSignatureValues(tx.V, tx.R, tx.S) {
+func (tx *Transaction) publicKey() ([]byte, error) {
+	if !crypto.ValidateSignatureValues(tx.data.V, tx.data.R, tx.data.S) {
 		return nil, errors.New("invalid v, r, s values")
 	}
 
-	hash := tx.Hash()
-	v, r, s := tx.GetSignatureValues()
-	sig := append(r, s...)
-	sig = append(sig, v-27)
+	// encode the signature in uncompressed format
+	r, s := tx.data.R.Bytes(), tx.data.S.Bytes()
+	sig := make([]byte, 65)
+	copy(sig[32-len(r):32], r)
+	copy(sig[64-len(s):64], s)
+	sig[64] = tx.data.V - 27
 
-	p, err := crypto.SigToPub(hash[:], sig)
+	// recover the public key from the signature
+	hash := tx.Hash()
+	pub, err := crypto.Ecrecover(hash[:], sig)
 	if err != nil {
 		glog.V(logger.Error).Infof("Could not get pubkey from signature: ", err)
 		return nil, err
 	}
-
-	pubkey := crypto.FromECDSAPub(p)
-	if len(pubkey) == 0 || pubkey[0] != 4 {
+	if len(pub) == 0 || pub[0] != 4 {
 		return nil, errors.New("invalid public key")
 	}
-	return pubkey, nil
+	return pub, nil
 }
 
-func (tx *Transaction) SetSignatureValues(sig []byte) error {
-	tx.R = common.Bytes2Big(sig[:32])
-	tx.S = common.Bytes2Big(sig[32:64])
-	tx.V = sig[64] + 27
-	return nil
+func (tx *Transaction) WithSignature(sig []byte) (*Transaction, error) {
+	if len(sig) != 65 {
+		panic(fmt.Sprintf("wrong size for signature: got %d, want 65", len(sig)))
+	}
+	cpy := &Transaction{data: tx.data}
+	cpy.data.R = new(big.Int).SetBytes(sig[:32])
+	cpy.data.S = new(big.Int).SetBytes(sig[32:64])
+	cpy.data.V = sig[64] + 27
+	return cpy, nil
 }
 
-func (tx *Transaction) SignECDSA(prv *ecdsa.PrivateKey) error {
+func (tx *Transaction) SignECDSA(prv *ecdsa.PrivateKey) (*Transaction, error) {
 	h := tx.Hash()
 	sig, err := crypto.Sign(h[:], prv)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	tx.SetSignatureValues(sig)
-	return nil
-}
-
-// TODO: remove
-func (tx *Transaction) RlpData() interface{} {
-	data := []interface{}{tx.AccountNonce, tx.Price, tx.GasLimit, tx.Recipient, tx.Amount, tx.Payload}
-	return append(data, tx.V, tx.R.Bytes(), tx.S.Bytes())
+	return tx.WithSignature(sig)
 }
 
 func (tx *Transaction) String() string {
@@ -176,12 +219,12 @@ func (tx *Transaction) String() string {
 	} else {
 		from = fmt.Sprintf("%x", f[:])
 	}
-	if t := tx.To(); t == nil {
+	if tx.data.Recipient == nil {
 		to = "[contract creation]"
 	} else {
-		to = fmt.Sprintf("%x", t[:])
+		to = fmt.Sprintf("%x", tx.data.Recipient[:])
 	}
-	enc, _ := rlp.EncodeToBytes(tx)
+	enc, _ := rlp.EncodeToBytes(&tx.data)
 	return fmt.Sprintf(`
 	TX(%x)
 	Contract: %v
@@ -198,35 +241,23 @@ func (tx *Transaction) String() string {
 	Hex:      %x
 `,
 		tx.Hash(),
-		len(tx.Recipient) == 0,
+		len(tx.data.Recipient) == 0,
 		from,
 		to,
-		tx.AccountNonce,
-		tx.Price,
-		tx.GasLimit,
-		tx.Amount,
-		tx.Payload,
-		tx.V,
-		tx.R,
-		tx.S,
+		tx.data.AccountNonce,
+		tx.data.Price,
+		tx.data.GasLimit,
+		tx.data.Amount,
+		tx.data.Payload,
+		tx.data.V,
+		tx.data.R,
+		tx.data.S,
 		enc,
 	)
 }
 
-// Transaction slice type for basic sorting
+// Transaction slice type for basic sorting.
 type Transactions []*Transaction
-
-// TODO: remove
-func (self Transactions) RlpData() interface{} {
-	// Marshal the transactions of this block
-	enc := make([]interface{}, len(self))
-	for i, tx := range self {
-		// Cast it to a string (safe)
-		enc[i] = tx.RlpData()
-	}
-
-	return enc
-}
 
 func (s Transactions) Len() int      { return len(s) }
 func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
@@ -239,5 +270,5 @@ func (s Transactions) GetRlp(i int) []byte {
 type TxByNonce struct{ Transactions }
 
 func (s TxByNonce) Less(i, j int) bool {
-	return s.Transactions[i].AccountNonce < s.Transactions[j].AccountNonce
+	return s.Transactions[i].data.AccountNonce < s.Transactions[j].data.AccountNonce
 }

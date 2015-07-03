@@ -14,7 +14,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
@@ -641,10 +640,18 @@ func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 		return nil, err
 	}
 
-	return &ipcClient{codec.New(c)}, nil
+	return &ipcClient{cfg.Endpoint, c, codec, codec.New(c)}, nil
 }
 
-func startIpc(cfg IpcConfig, codec codec.Codec, api api.EthereumApi) error {
+func (self *ipcClient) reconnect() error {
+	c, err := Dial(self.endpoint)
+	if err == nil {
+		self.coder = self.codec.New(c)
+	}
+	return err
+}
+
+func startIpc(cfg IpcConfig, codec codec.Codec, api shared.EthereumApi) error {
 	os.Remove(cfg.Endpoint) // in case it still exists from a previous run
 
 	l, err := Listen(cfg.Endpoint)
@@ -661,33 +668,13 @@ func startIpc(cfg IpcConfig, codec codec.Codec, api api.EthereumApi) error {
 				continue
 			}
 
-			go func(conn net.Conn) {
-				codec := codec.New(conn)
+			id := newIpcConnId()
+			glog.V(logger.Debug).Infof("New IPC connection with id %06d started\n", id)
 
-				for {
-					req, err := codec.ReadRequest()
-					if err == io.EOF {
-						codec.Close()
-						return
-					} else if err != nil {
-						glog.V(logger.Error).Infof("IPC recv err - %v\n", err)
-						codec.Close()
-						return
-					}
-
-					var rpcResponse interface{}
-					res, err := api.Execute(req)
-
-					rpcResponse = shared.NewRpcResponse(req.Id, req.Jsonrpc, res, err)
-					err = codec.WriteResponse(rpcResponse)
-					if err != nil {
-						glog.V(logger.Error).Infof("IPC send err - %v\n", err)
-						codec.Close()
-						return
-					}
-				}
-			}(conn)
+			go handle(id, conn, api, codec)
 		}
+
+		os.Remove(cfg.Endpoint)
 	}()
 
 	glog.V(logger.Info).Infof("IPC service started (%s)\n", cfg.Endpoint)

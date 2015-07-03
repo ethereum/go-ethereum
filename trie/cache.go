@@ -1,17 +1,25 @@
 package trie
 
+import (
+	"github.com/ethereum/go-ethereum/compression/rle"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/syndtr/goleveldb/leveldb"
+)
+
 type Backend interface {
 	Get([]byte) ([]byte, error)
-	Put([]byte, []byte)
+	Put([]byte, []byte) error
 }
 
 type Cache struct {
+	batch   *leveldb.Batch
 	store   map[string][]byte
 	backend Backend
 }
 
 func NewCache(backend Backend) *Cache {
-	return &Cache{make(map[string][]byte), backend}
+	return &Cache{new(leveldb.Batch), make(map[string][]byte), backend}
 }
 
 func (self *Cache) Get(key []byte) []byte {
@@ -24,17 +32,23 @@ func (self *Cache) Get(key []byte) []byte {
 }
 
 func (self *Cache) Put(key []byte, data []byte) {
+	// write the data to the ldb batch
+	self.batch.Put(key, rle.Compress(data))
 	self.store[string(key)] = data
 }
 
+// Flush flushes the trie to the backing layer. If this is a leveldb instance
+// we'll use a batched write, otherwise we'll use regular put.
 func (self *Cache) Flush() {
-	for k, v := range self.store {
-		self.backend.Put([]byte(k), v)
+	if db, ok := self.backend.(*ethdb.LDBDatabase); ok {
+		if err := db.LDB().Write(self.batch, nil); err != nil {
+			glog.Fatal("db write err:", err)
+		}
+	} else {
+		for k, v := range self.store {
+			self.backend.Put([]byte(k), v)
+		}
 	}
-
-	// This will eventually grow too large. We'd could
-	// do a make limit on storage and push out not-so-popular nodes.
-	//self.Reset()
 }
 
 func (self *Cache) Copy() *Cache {

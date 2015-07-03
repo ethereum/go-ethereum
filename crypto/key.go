@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	version = "1"
+	version = 3
 )
 
 type Key struct {
@@ -51,10 +51,17 @@ type plainKeyJSON struct {
 	Address    string `json:"address"`
 	PrivateKey string `json:"privatekey"`
 	Id         string `json:"id"`
-	Version    string `json:"version"`
+	Version    int    `json:"version"`
 }
 
-type encryptedKeyJSON struct {
+type encryptedKeyJSONV3 struct {
+	Address string `json:"address"`
+	Crypto  cryptoJSON
+	Id      string `json:"id"`
+	Version int    `json:"version"`
+}
+
+type encryptedKeyJSONV1 struct {
 	Address string `json:"address"`
 	Crypto  cryptoJSON
 	Id      string `json:"id"`
@@ -62,13 +69,12 @@ type encryptedKeyJSON struct {
 }
 
 type cryptoJSON struct {
-	Cipher       string           `json:"cipher"`
-	CipherText   string           `json:"ciphertext"`
-	CipherParams cipherparamsJSON `json:"cipherparams"`
-	KDF          string           `json:"kdf"`
-	KDFParams    scryptParamsJSON `json:"kdfparams"`
-	MAC          string           `json:"mac"`
-	Version      string           `json:"version"`
+	Cipher       string                 `json:"cipher"`
+	CipherText   string                 `json:"ciphertext"`
+	CipherParams cipherparamsJSON       `json:"cipherparams"`
+	KDF          string                 `json:"kdf"`
+	KDFParams    map[string]interface{} `json:"kdfparams"`
+	MAC          string                 `json:"mac"`
 }
 
 type cipherparamsJSON struct {
