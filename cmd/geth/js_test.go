@@ -254,7 +254,7 @@ func TestSignature(t *testing.T) {
 }
 
 func TestContract(t *testing.T) {
-	t.Skip("contract testing is implemented with mining in ethash test mode. This takes about 7seconds to run. Unskip and run on demand")
+	// t.Skip("contract testing is implemented with mining in ethash test mode. This takes about 7seconds to run. Unskip and run on demand")
 	tmp, repl, ethereum := testJEthRE(t)
 	if err := ethereum.Start(); err != nil {
 		t.Errorf("error starting ethereum: %v", err)
@@ -285,7 +285,7 @@ func TestContract(t *testing.T) {
 		`   }\n` +
 		`}\n`
 
-	if checkEvalJSON(t, repl, `admin.contractInfo.stop()`, `true`) != nil {
+	if checkEvalJSON(t, repl, `admin.stopNatSpec()`, `true`) != nil {
 		return
 	}
 
@@ -355,7 +355,7 @@ multiply7 = Multiply7.at(contractaddress);
 		return
 	}
 
-	if checkEvalJSON(t, repl, `admin.contractInfo.start()`, `true`) != nil {
+	if checkEvalJSON(t, repl, `admin.startNatSpec()`, `true`) != nil {
 		return
 	}
 	if checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary })`, `"0xcb08355dff8f8cadb5dc3d72e652ef5c33792cb0d871229dd1aef5db1c4ba1f2"`) != nil {
@@ -381,17 +381,17 @@ multiply7 = Multiply7.at(contractaddress);
 	if checkEvalJSON(t, repl, `filename = "/tmp/info.json"`, `"/tmp/info.json"`) != nil {
 		return
 	}
-	if checkEvalJSON(t, repl, `contentHash = admin.contractInfo.saveInfo(contract.info, filename)`, contentHash) != nil {
+	if checkEvalJSON(t, repl, `contentHash = admin.saveInfo(contract.info, filename)`, contentHash) != nil {
 		return
 	}
-	if checkEvalJSON(t, repl, `admin.contractInfo.register(primary, contractaddress, contentHash)`, `true`) != nil {
+	if checkEvalJSON(t, repl, `admin.register(primary, contractaddress, contentHash)`, `true`) != nil {
 		return
 	}
-	if checkEvalJSON(t, repl, `admin.contractInfo.registerUrl(primary, contentHash, "file://"+filename)`, `true`) != nil {
+	if checkEvalJSON(t, repl, `admin.registerUrl(primary, contentHash, "file://"+filename)`, `true`) != nil {
 		return
 	}
 
-	if checkEvalJSON(t, repl, `admin.contractInfo.start()`, `true`) != nil {
+	if checkEvalJSON(t, repl, `admin.startNatSpec()`, `true`) != nil {
 		return
 	}
 
