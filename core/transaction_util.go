@@ -8,9 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var receiptsPre = []byte("receipts-")
-
-// PutTransactions stores the transactions in the given database
 func PutTransactions(db common.Database, block *types.Block, txs types.Transactions) {
 	for i, tx := range block.Transactions() {
 		rlpEnc, err := rlp.EncodeToBytes(tx)
@@ -37,6 +34,7 @@ func PutTransactions(db common.Database, block *types.Block, txs types.Transacti
 	}
 }
 
+<<<<<<< HEAD
 // PutReceipts stores the receipts in the current database
 func PutReceipts(db common.Database, receipts types.Receipts) error {
 	for _, receipt := range receipts {
@@ -82,4 +80,20 @@ func GetReceiptsFromBlock(db common.Database, block *types.Block) types.Receipts
 	}
 
 	return receipts
+=======
+func PutReceipts(db common.Database, hash common.Hash, receipts types.Receipts) error {
+	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
+	for i, receipt := range receipts {
+		storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
+	}
+
+	bytes, err := rlp.EncodeToBytes(storageReceipts)
+	if err != nil {
+		return err
+	}
+
+	db.Put(append(receiptsPre, hash[:]...), bytes)
+
+	return nil
+>>>>>>> core, miner: miner header validation, transaction & receipt writing
 }

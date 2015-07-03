@@ -240,7 +240,11 @@ func (self *worker) wait() {
 				glog.V(logger.Error).Infoln("Invalid block found during mining")
 				continue
 			}
+<<<<<<< HEAD
 			if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true); err != nil && err != core.BlockFutureErr {
+=======
+			if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true); err != nil {
+>>>>>>> core, miner: miner header validation, transaction & receipt writing
 				glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
 				continue
 			}
@@ -255,7 +259,7 @@ func (self *worker) wait() {
 				// This puts transactions in a extra db for rpc
 				core.PutTransactions(self.extraDb, block, block.Transactions())
 				// store the receipts
-				core.PutReceipts(self.extraDb, self.current.receipts)
+				core.PutReceipts(self.extraDb, block.Hash(), self.current.receipts)
 			}
 
 			// check staleness and display confirmation
@@ -271,13 +275,13 @@ func (self *worker) wait() {
 			glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
 
 			// broadcast before waiting for validation
-			go func(block *types.Block, logs state.Logs) {
+			go func() {
 				self.mux.Post(core.NewMinedBlockEvent{block})
-				self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
+				self.mux.Post(core.ChainEvent{block, block.Hash(), self.current.state.Logs()})
 				if stat == core.CanonStatTy {
 					self.mux.Post(core.ChainHeadEvent{block})
 				}
-			}(block, self.current.state.Logs())
+			}()
 
 			self.commitNewWork()
 		}
