@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -419,11 +420,18 @@ func NewReceiptRes(rec *types.Receipt) *ReceiptRes {
 	}
 
 	var v = new(ReceiptRes)
-	// TODO fill out rest of object
-	// ContractAddress is all 0 when not a creation tx
-	v.ContractAddress = newHexData(rec.ContractAddress)
-	v.CumulativeGasUsed = newHexNum(rec.CumulativeGasUsed)
 	v.TransactionHash = newHexData(rec.TxHash)
+	// v.TransactionIndex = newHexNum(input) // transaction
+	// v.BlockNumber = newHexNum(input)			//		transaction
+	// v.BlockHash = newHexData(input)				//transaction
+	v.CumulativeGasUsed = newHexNum(rec.CumulativeGasUsed)
+	// v.GasUsed = newHexNum(input)        // CumulativeGasUsed (blocknum-1)
+	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
+	if bytes.Compare(rec.ContractAddress.Bytes(), bytes.Repeat([]byte{0}, 20)) != 0 {
+		v.ContractAddress = newHexData(rec.ContractAddress)
+	}
+	// v.Logs = rec.Logs()
+
 	return v
 }
 
