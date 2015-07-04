@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/ethereum/go-ethereum/core"
 )
 
 var (
@@ -48,6 +50,7 @@ func readJson(reader io.Reader, value interface{}) error {
 		return fmt.Errorf("Error reading JSON file", err.Error())
 	}
 
+	core.DisableBadBlockReporting = true
 	if err = json.Unmarshal(data, &value); err != nil {
 		if syntaxerr, ok := err.(*json.SyntaxError); ok {
 			line := findLine(data, syntaxerr.Offset)

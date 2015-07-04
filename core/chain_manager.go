@@ -611,6 +611,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 
 			blockErr(block, err)
 
+			go ReportBlock(block, err)
+
 			return i, err
 		}
 
