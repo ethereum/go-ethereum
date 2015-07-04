@@ -421,11 +421,11 @@ func NewReceiptRes(rec *types.Receipt) *ReceiptRes {
 
 	var v = new(ReceiptRes)
 	v.TransactionHash = newHexData(rec.TxHash)
-	// v.TransactionIndex = newHexNum(input) // transaction
-	// v.BlockNumber = newHexNum(input)			//		transaction
-	// v.BlockHash = newHexData(input)				//transaction
+	// v.TransactionIndex = newHexNum(input)
+	// v.BlockNumber = newHexNum(input)
+	// v.BlockHash = newHexData(input)
 	v.CumulativeGasUsed = newHexNum(rec.CumulativeGasUsed)
-	// v.GasUsed = newHexNum(input)        // CumulativeGasUsed (blocknum-1)
+	// v.GasUsed = newHexNum(input)
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if bytes.Compare(rec.ContractAddress.Bytes(), bytes.Repeat([]byte{0}, 20)) != 0 {
 		v.ContractAddress = newHexData(rec.ContractAddress)
