@@ -413,7 +413,7 @@ type ReceiptRes struct {
 	Logs              *[]interface{} `json:logs`
 }
 
-func NewReceiptRes(rec *types.ReceiptForStorage) *ReceiptRes {
+func NewReceiptRes(rec *types.Receipt) *ReceiptRes {
 	if rec == nil {
 		return nil
 	}
