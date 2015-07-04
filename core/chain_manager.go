@@ -632,7 +632,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			// This puts transactions in a extra db for rpc
 			PutTransactions(self.extraDb, block, block.Transactions())
 			// store the receipts
-			PutReceipts(self.extraDb, block.Hash(), receipts)
+			PutReceipts(self.extraDb, receipts)
 		case SideStatTy:
 			if glog.V(logger.Detail) {
 				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...). Took %v\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))

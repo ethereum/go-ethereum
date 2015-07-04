@@ -364,22 +364,12 @@ func (self *XEth) CurrentBlock() *types.Block {
 	return self.backend.ChainManager().CurrentBlock()
 }
 
-func (self *XEth) GetBlockReceipts(bhash common.Hash) (receipts types.Receipts, err error) {
+func (self *XEth) GetBlockReceipts(bhash common.Hash) types.Receipts {
 	return self.backend.BlockProcessor().GetBlockReceipts(bhash)
 }
 
-func (self *XEth) GetTxReceipt(txhash common.Hash) (receipt *types.Receipt, err error) {
-	_, bhash, _, txi := self.EthTransactionByHash(common.ToHex(txhash[:]))
-	var receipts types.Receipts
-	receipts, err = self.backend.BlockProcessor().GetBlockReceipts(bhash)
-	if err == nil {
-		if txi < uint64(len(receipts)) {
-			receipt = receipts[txi]
-		} else {
-			err = fmt.Errorf("Invalid tx index")
-		}
-	}
-	return
+func (self *XEth) GetTxReceipt(txhash common.Hash) *types.Receipt {
+	return core.GetReceipt(self.backend.ExtraDb(), txhash)
 }
 
 func (self *XEth) GasLimit() *big.Int {

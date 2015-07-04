@@ -64,12 +64,9 @@ func TestPutReceipt(t *testing.T) {
 		Index:     0,
 	}})
 
-	PutReceipts(db, hash, types.Receipts{receipt})
-	receipts, err := getBlockReceipts(db, hash)
-	if err != nil {
-		t.Error("got err:", err)
-	}
-	if len(receipts) != 1 {
-		t.Error("expected to get 1 receipt, got", len(receipts))
+	PutReceipts(db, types.Receipts{receipt})
+	receipt = GetReceipt(db, common.Hash{})
+	if receipt == nil {
+		t.Error("expected to get 1 receipt, got none.")
 	}
 }
