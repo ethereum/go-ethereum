@@ -26,7 +26,7 @@ This abstracts part of a user's interaction with an account she controls.
 It's not an abstraction of core Ethereum accounts data type / logic -
 for that see the core processing code of blocks / txs.
 
-Currently this is pretty much a passthrough to the KeyStore2 interface,
+Currently this is pretty much a passthrough to the KeyStore interface,
 and accounts persistence is derived from stored keys' addresses
 
 */
@@ -36,6 +36,7 @@ import (
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -49,17 +50,12 @@ var (
 	ErrNoKeys = errors.New("no keys in store")
 )
 
-const (
-    // Default unlock duration (in seconds) when an account is unlocked from the console
-    DefaultAccountUnlockDuration = 300
-)
-
 type Account struct {
 	Address common.Address
 }
 
 type Manager struct {
-	keyStore crypto.KeyStore2
+	keyStore crypto.KeyStore
 	unlocked map[common.Address]*unlocked
 	mutex    sync.RWMutex
 }
@@ -69,7 +65,7 @@ type unlocked struct {
 	abort chan struct{}
 }
 
-func NewManager(keyStore crypto.KeyStore2) *Manager {
+func NewManager(keyStore crypto.KeyStore) *Manager {
 	return &Manager{
 		keyStore: keyStore,
 		unlocked: make(map[common.Address]*unlocked),
@@ -84,19 +80,6 @@ func (am *Manager) HasAccount(addr common.Address) bool {
 		}
 	}
 	return false
-}
-
-func (am *Manager) Primary() (addr common.Address, err error) {
-	addrs, err := am.keyStore.GetKeyAddresses()
-	if os.IsNotExist(err) {
-		return common.Address{}, ErrNoKeys
-	} else if err != nil {
-		return common.Address{}, err
-	}
-	if len(addrs) == 0 {
-		return common.Address{}, ErrNoKeys
-	}
-	return addrs[0], nil
 }
 
 func (am *Manager) DeleteAccount(address common.Address, auth string) error {
@@ -114,72 +97,41 @@ func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) 
 	return signature, err
 }
 
-// TimedUnlock unlocks the account with the given address.
-// When timeout has passed, the account will be locked again.
+// unlock indefinitely
+func (am *Manager) Unlock(addr common.Address, keyAuth string) error {
+	return am.TimedUnlock(addr, keyAuth, 0)
+}
+
+// Unlock unlocks the account with the given address. The account
+// stays unlocked for the duration of timeout
+// it timeout is 0 the account is unlocked for the entire session
 func (am *Manager) TimedUnlock(addr common.Address, keyAuth string, timeout time.Duration) error {
 	key, err := am.keyStore.GetKey(addr, keyAuth)
 	if err != nil {
 		return err
 	}
-	u := am.addUnlocked(addr, key)
-	go am.dropLater(addr, u, timeout)
-	return nil
-}
-
-// Unlock unlocks the account with the given address. The account
-// stays unlocked until the program exits or until a TimedUnlock
-// timeout (started after the call to Unlock) expires.
-func (am *Manager) Unlock(addr common.Address, keyAuth string) error {
-	key, err := am.keyStore.GetKey(addr, keyAuth)
-	if err != nil {
-		return err
-	}
-	am.addUnlocked(addr, key)
-	return nil
-}
-
-func (am *Manager) NewAccount(auth string) (Account, error) {
-	key, err := am.keyStore.GenerateNewKey(crand.Reader, auth)
-	if err != nil {
-		return Account{}, err
-	}
-	return Account{Address: key.Address}, nil
-}
-
-func (am *Manager) Accounts() ([]Account, error) {
-	addresses, err := am.keyStore.GetKeyAddresses()
-	if os.IsNotExist(err) {
-		return nil, ErrNoKeys
-	} else if err != nil {
-		return nil, err
-	}
-	accounts := make([]Account, len(addresses))
-	for i, addr := range addresses {
-		accounts[i] = Account{
-			Address: addr,
-		}
-	}
-	return accounts, err
-}
-
-func (am *Manager) addUnlocked(addr common.Address, key *crypto.Key) *unlocked {
-	u := &unlocked{Key: key, abort: make(chan struct{})}
+	var u *unlocked
 	am.mutex.Lock()
-	prev, found := am.unlocked[addr]
+	defer am.mutex.Unlock()
+	var found bool
+	u, found = am.unlocked[addr]
 	if found {
 		// terminate dropLater for this key to avoid unexpected drops.
-		close(prev.abort)
-		// the key is zeroed here instead of in dropLater because
-		// there might not actually be a dropLater running for this
-		// key, i.e. when Unlock was used.
-		zeroKey(prev.PrivateKey)
+		if u.abort != nil {
+			close(u.abort)
+		}
+	}
+	if timeout > 0 {
+		u = &unlocked{Key: key, abort: make(chan struct{})}
+		go am.expire(addr, u, timeout)
+	} else {
+		u = &unlocked{Key: key}
 	}
 	am.unlocked[addr] = u
-	am.mutex.Unlock()
-	return u
+	return nil
 }
 
-func (am *Manager) dropLater(addr common.Address, u *unlocked, timeout time.Duration) {
+func (am *Manager) expire(addr common.Address, u *unlocked, timeout time.Duration) {
 	t := time.NewTimer(timeout)
 	defer t.Stop()
 	select {
@@ -197,6 +149,44 @@ func (am *Manager) dropLater(addr common.Address, u *unlocked, timeout time.Dura
 		}
 		am.mutex.Unlock()
 	}
+}
+
+func (am *Manager) NewAccount(auth string) (Account, error) {
+	key, err := am.keyStore.GenerateNewKey(crand.Reader, auth)
+	if err != nil {
+		return Account{}, err
+	}
+	return Account{Address: key.Address}, nil
+}
+
+func (am *Manager) AddressByIndex(index int) (addr string, err error) {
+	var addrs []common.Address
+	addrs, err = am.keyStore.GetKeyAddresses()
+	if err != nil {
+		return
+	}
+	if index < 0 || index >= len(addrs) {
+		err = fmt.Errorf("index out of range: %d (should be 0-%d)", index, len(addrs)-1)
+	} else {
+		addr = addrs[index].Hex()
+	}
+	return
+}
+
+func (am *Manager) Accounts() ([]Account, error) {
+	addresses, err := am.keyStore.GetKeyAddresses()
+	if os.IsNotExist(err) {
+		return nil, ErrNoKeys
+	} else if err != nil {
+		return nil, err
+	}
+	accounts := make([]Account, len(addresses))
+	for i, addr := range addresses {
+		accounts[i] = Account{
+			Address: addr,
+		}
+	}
+	return accounts, err
 }
 
 // zeroKey zeroes a private key in memory.
@@ -227,6 +217,19 @@ func (am *Manager) Import(path string, keyAuth string) (Account, error) {
 		return Account{}, err
 	}
 	return Account{Address: key.Address}, nil
+}
+
+func (am *Manager) Update(addr common.Address, authFrom, authTo string) (err error) {
+	var key *crypto.Key
+	key, err = am.keyStore.GetKey(addr, authFrom)
+
+	if err == nil {
+		err = am.keyStore.StoreKey(key, authTo)
+		if err == nil {
+			am.keyStore.Cleanup(addr)
+		}
+	}
+	return
 }
 
 func (am *Manager) ImportPreSaleKey(keyJSON []byte, password string) (acc Account, err error) {

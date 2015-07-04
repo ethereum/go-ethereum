@@ -20,8 +20,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
 )
 
 const (
@@ -127,6 +127,7 @@ func TestNodeInfo(t *testing.T) {
 	}
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
+
 	want := `{"DiscPort":0,"IP":"0.0.0.0","ListenAddr":"","Name":"test","NodeID":"4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5","NodeUrl":"enode://4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5@0.0.0.0:0","TCPPort":0,"Td":"131072"}`
 	checkEvalJSON(t, repl, `admin.nodeInfo`, want)
 }
@@ -140,8 +141,7 @@ func TestAccounts(t *testing.T) {
 	defer os.RemoveAll(tmp)
 
 	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`"]`)
-	checkEvalJSON(t, repl, `eth.coinbase`, `"`+testAddress+`"`)
-
+	checkEvalJSON(t, repl, `eth.coinbase`, `null`)
 	val, err := repl.re.Run(`personal.newAccount("password")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -151,9 +151,7 @@ func TestAccounts(t *testing.T) {
 		t.Errorf("address not hex: %q", addr)
 	}
 
-	// skip until order fixed #824
-	// checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`", "`+addr+`"]`)
-	// checkEvalJSON(t, repl, `eth.coinbase`, `"`+testAddress+`"`)
+	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`","`+addr+`"]`)
 }
 
 func TestBlockChain(t *testing.T) {

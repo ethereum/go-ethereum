@@ -209,7 +209,7 @@ func ImportBlockTestKey(privKeyBytes []byte) error {
 }
 
 // creates a Key and stores that in the given KeyStore by decrypting a presale key JSON
-func ImportPreSaleKey(keyStore KeyStore2, keyJSON []byte, password string) (*Key, error) {
+func ImportPreSaleKey(keyStore KeyStore, keyJSON []byte, password string) (*Key, error) {
 	key, err := decryptPreSaleKey(keyJSON, password)
 	if err != nil {
 		return nil, err
