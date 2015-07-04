@@ -298,8 +298,6 @@ func (self *worker) push() {
 
 			if agent.Work() != nil {
 				agent.Work() <- self.current.block
-			} else {
-				common.Report(fmt.Sprintf("%v %T\n", agent, agent))
 			}
 		}
 	}
