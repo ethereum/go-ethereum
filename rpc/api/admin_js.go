@@ -92,8 +92,8 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'register',
 			call: 'admin_register',
-			params: 2,
-			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
+			params: 3,
+			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
 			outputFormatter: web3._extend.formatters.formatOutputBool
 		}),
 		new web3._extend.Method({
