@@ -332,3 +332,15 @@ func (o OpCode) String() string {
 
 	return str
 }
+
+func isDynamic(op OpCode) bool {
+	switch op {
+	case CREATE, CALL, CALLCODE, CALLDATACOPY, GAS, MLOAD, JUMP, JUMPI, SUICIDE, STOP, RETURN, EXTCODECOPY, CODECOPY, MSTORE, MSTORE8, SSTORE:
+		return true
+	}
+	if _, ok := opCodeToString[op]; !ok {
+		return true
+	}
+
+	return false
+}

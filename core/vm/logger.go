@@ -9,7 +9,6 @@ import (
 )
 
 func StdErrFormat(logs []StructLog) {
-	fmt.Fprintf(os.Stderr, "VM STAT %d OPs\n", len(logs))
 	for _, log := range logs {
 		fmt.Fprintf(os.Stderr, "PC %08d: %s GAS: %v COST: %v", log.Pc, log.Op, log.Gas, log.GasCost)
 		if log.Err != nil {

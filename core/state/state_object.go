@@ -235,7 +235,7 @@ func (self *StateObject) AddGas(gas, price *big.Int) {
 }
 
 func (self *StateObject) Copy() *StateObject {
-	stateObject := NewStateObject(self.Address(), self.db)
+	stateObject := &StateObject{db: self.db, address: self.address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
 	stateObject.balance.Set(self.balance)
 	stateObject.codeHash = common.CopyBytes(self.codeHash)
 	stateObject.nonce = self.nonce

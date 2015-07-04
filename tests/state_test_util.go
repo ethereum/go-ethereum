@@ -50,6 +50,13 @@ func runStateTests(tests map[string]VmTest, skipTests []string) error {
 	}
 
 	for name, test := range tests {
+		//vm.Debug = true
+		//vm.DisableSegmentation = true
+		/*
+			if name != "Call10" {
+				continue
+			}
+		*/
 		if skipTest[name] {
 			glog.Infoln("Skipping state test", name)
 			return nil
@@ -91,9 +98,7 @@ func runStateTest(test VmTest) error {
 	}
 
 	var (
-		ret []byte
-		// gas  *big.Int
-		// err  error
+		ret  []byte
 		logs state.Logs
 	)
 
@@ -113,7 +118,7 @@ func runStateTest(test VmTest) error {
 		}
 
 		if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
-			return fmt.Errorf("(%x) balance failed. Expected %v, got %v => %v\n", obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
+			return fmt.Errorf("(%x) balance failed. Expected %v, got %v => %v\n", obj.Address().Bytes()[:4], common.Big(account.Balance), obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
 		}
 
 		if obj.Nonce() != common.String2Big(account.Nonce).Uint64() {
