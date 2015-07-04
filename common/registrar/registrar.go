@@ -39,10 +39,10 @@ So the caller needs to make sure the relevant environment initialised the desire
 contracts
 */
 var (
-	UrlHintAddr = "0x0"
-	HashRegAddr = "0x0"
-	// GlobalRegistrarAddr = "0x0"
-	GlobalRegistrarAddr = "0xc6d9d2cd449a754c494264e1809c50e34d64562b"
+	UrlHintAddr         = "0x0"
+	HashRegAddr         = "0x0"
+	GlobalRegistrarAddr = "0x0"
+	// GlobalRegistrarAddr = "0xc6d9d2cd449a754c494264e1809c50e34d64562b"
 
 	zero = regexp.MustCompile("^(0x)?0*$")
 )
@@ -122,7 +122,11 @@ func (self *Registrar) SetHashReg(hashreg string, addr common.Address) (err erro
 		nameHex, extra := encodeName(HashRegName, 2)
 		hashRegAbi := resolveAbi + nameHex + extra
 		glog.V(logger.Detail).Infof("\ncall HashRegAddr %v with %v\n", GlobalRegistrarAddr, hashRegAbi)
-		HashRegAddr, _, err = self.backend.Call("", GlobalRegistrarAddr, "", "", "", hashRegAbi)
+		var res string
+		res, _, err = self.backend.Call("", GlobalRegistrarAddr, "", "", "", hashRegAbi)
+		if len(res) >= 40 {
+			HashRegAddr = "0x" + res[len(res)-40:len(res)]
+		}
 		if err != nil || zero.MatchString(HashRegAddr) {
 			if (addr == common.Address{}) {
 				err = fmt.Errorf("HashReg address not found and sender for creation not given")
@@ -157,7 +161,11 @@ func (self *Registrar) SetUrlHint(urlhint string, addr common.Address) (err erro
 		nameHex, extra := encodeName(UrlHintName, 2)
 		urlHintAbi := resolveAbi + nameHex + extra
 		glog.V(logger.Detail).Infof("UrlHint address query data: %s to %s", urlHintAbi, GlobalRegistrarAddr)
-		UrlHintAddr, _, err = self.backend.Call("", GlobalRegistrarAddr, "", "", "", urlHintAbi)
+		var res string
+		res, _, err = self.backend.Call("", GlobalRegistrarAddr, "", "", "", urlHintAbi)
+		if len(res) >= 40 {
+			UrlHintAddr = "0x" + res[len(res)-40:len(res)]
+		}
 		if err != nil || zero.MatchString(UrlHintAddr) {
 			if (addr == common.Address{}) {
 				err = fmt.Errorf("UrlHint address not found and sender for creation not given")
