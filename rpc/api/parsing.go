@@ -413,15 +413,17 @@ type ReceiptRes struct {
 	Logs              *[]interface{} `json:logs`
 }
 
-func NewReceiptRes(rec *types.Receipt) *ReceiptRes {
+func NewReceiptRes(rec *types.ReceiptForStorage) *ReceiptRes {
 	if rec == nil {
 		return nil
 	}
 
 	var v = new(ReceiptRes)
 	// TODO fill out rest of object
+	// ContractAddress is all 0 when not a creation tx
+	v.ContractAddress = newHexData(rec.ContractAddress)
 	v.CumulativeGasUsed = newHexNum(rec.CumulativeGasUsed)
-
+	v.TransactionHash = newHexData(rec.TxHash)
 	return v
 }
 

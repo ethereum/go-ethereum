@@ -368,8 +368,8 @@ func (self *XEth) GetBlockReceipts(bhash common.Hash) types.Receipts {
 	return self.backend.BlockProcessor().GetBlockReceipts(bhash)
 }
 
-func (self *XEth) GetTxReceipt(txhash common.Hash) *types.Receipt {
-	return core.GetReceipt(self.backend.ExtraDb(), txhash)
+func (self *XEth) GetTxReceipt(txhash common.Hash) *types.ReceiptForStorage {
+	return core.GetFullReceipt(self.backend.ExtraDb(), txhash)
 }
 
 func (self *XEth) GasLimit() *big.Int {
