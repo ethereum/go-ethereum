@@ -1,17 +1,16 @@
 package trie
 
-import "fmt"
-
 type FullNode struct {
 	trie  *Trie
 	nodes [17]Node
+	dirty bool
 }
 
 func NewFullNode(t *Trie) *FullNode {
 	return &FullNode{trie: t}
 }
 
-func (self *FullNode) Dirty() bool { return true }
+func (self *FullNode) Dirty() bool { return self.dirty }
 func (self *FullNode) Value() Node {
 	self.nodes[16] = self.trie.trans(self.nodes[16])
 	return self.nodes[16]
@@ -24,9 +23,10 @@ func (self *FullNode) Copy(t *Trie) Node {
 	nnode := NewFullNode(t)
 	for i, node := range self.nodes {
 		if node != nil {
-			nnode.nodes[i] = node.Copy(t)
+			nnode.nodes[i] = node
 		}
 	}
+	nnode.dirty = true
 
 	return nnode
 }
@@ -60,11 +60,8 @@ func (self *FullNode) RlpData() interface{} {
 }
 
 func (self *FullNode) set(k byte, value Node) {
-	if _, ok := value.(*ValueNode); ok && k != 16 {
-		fmt.Println(value, k)
-	}
-
 	self.nodes[int(k)] = value
+	self.dirty = true
 }
 
 func (self *FullNode) branch(i byte) Node {
@@ -74,4 +71,8 @@ func (self *FullNode) branch(i byte) Node {
 		return self.nodes[int(i)]
 	}
 	return nil
+}
+
+func (self *FullNode) setDirty(dirty bool) {
+	self.dirty = dirty
 }

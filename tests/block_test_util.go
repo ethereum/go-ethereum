@@ -215,7 +215,7 @@ func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, erro
 		}
 	}
 	// sync objects to trie
-	statedb.Update()
+	statedb.SyncObjects()
 	// sync trie to disk
 	statedb.Sync()
 

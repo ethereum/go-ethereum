@@ -3,12 +3,13 @@ package trie
 import "github.com/ethereum/go-ethereum/common"
 
 type HashNode struct {
-	key  []byte
-	trie *Trie
+	key   []byte
+	trie  *Trie
+	dirty bool
 }
 
 func NewHash(key []byte, trie *Trie) *HashNode {
-	return &HashNode{key, trie}
+	return &HashNode{key, trie, false}
 }
 
 func (self *HashNode) RlpData() interface{} {
@@ -17,6 +18,10 @@ func (self *HashNode) RlpData() interface{} {
 
 func (self *HashNode) Hash() interface{} {
 	return self.key
+}
+
+func (self *HashNode) setDirty(dirty bool) {
+	self.dirty = dirty
 }
 
 // These methods will never be called but we have to satisfy Node interface

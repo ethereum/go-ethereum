@@ -11,6 +11,7 @@ type Node interface {
 	fstring(string) string
 	Hash() interface{}
 	RlpData() interface{}
+	setDirty(dirty bool)
 }
 
 // Value node
