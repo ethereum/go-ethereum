@@ -604,7 +604,8 @@ func (self *ethApi) GetTransactionReceipt(req *shared.Request) (interface{}, err
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	rec, _ := self.xeth.GetTxReceipt(common.StringToHash(args.Hash))
+	v := common.BytesToHash(common.FromHex(args.Hash))
+	rec := self.xeth.GetTxReceipt(v)
 	// We could have an error of "not found". Should disambiguate
 	// if err != nil {
 	// 	return err, nil
