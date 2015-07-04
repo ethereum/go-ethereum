@@ -55,6 +55,21 @@ func PutReceipts(db common.Database, receipts types.Receipts) error {
 }
 
 // GetReceipt returns a receipt by hash
+func GetFullReceipt(db common.Database, txHash common.Hash) *types.ReceiptForStorage {
+	data, _ := db.Get(append(receiptsPre, txHash[:]...))
+	if len(data) == 0 {
+		return nil
+	}
+
+	var receipt types.ReceiptForStorage
+	err := rlp.DecodeBytes(data, &receipt)
+	if err != nil {
+		glog.V(logger.Error).Infoln("GetReceipt err:", err)
+	}
+	return &receipt
+}
+
+// GetReceipt returns a receipt by hash
 func GetReceipt(db common.Database, txHash common.Hash) *types.Receipt {
 	data, _ := db.Get(append(receiptsPre, txHash[:]...))
 	if len(data) == 0 {
