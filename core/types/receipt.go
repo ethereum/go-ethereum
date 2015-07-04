@@ -15,6 +15,8 @@ type Receipt struct {
 	PostState         []byte
 	CumulativeGasUsed *big.Int
 	Bloom             Bloom
+	TxHash            common.Hash
+	ContractAddress   common.Address
 	logs              state.Logs
 }
 
@@ -39,12 +41,14 @@ func (self *Receipt) DecodeRLP(s *rlp.Stream) error {
 		PostState         []byte
 		CumulativeGasUsed *big.Int
 		Bloom             Bloom
+		TxHash            common.Hash
+		ContractAddress   common.Address
 		Logs              state.Logs
 	}
 	if err := s.Decode(&r); err != nil {
 		return err
 	}
-	self.PostState, self.CumulativeGasUsed, self.Bloom, self.logs = r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs
+	self.PostState, self.CumulativeGasUsed, self.Bloom, self.TxHash, self.ContractAddress, self.logs = r.PostState, r.CumulativeGasUsed, r.Bloom, r.TxHash, r.ContractAddress, r.Logs
 
 	return nil
 }
@@ -56,7 +60,7 @@ func (self *ReceiptForStorage) EncodeRLP(w io.Writer) error {
 	for i, log := range self.logs {
 		storageLogs[i] = (*state.LogForStorage)(log)
 	}
-	return rlp.Encode(w, []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, storageLogs})
+	return rlp.Encode(w, []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, self.TxHash, self.ContractAddress, storageLogs})
 }
 
 func (self *Receipt) RlpEncode() []byte {

@@ -131,13 +131,10 @@ func (self *GasPriceOracle) processBlock(block *types.Block) {
 // returns the lowers possible price with which a tx was or could have been included
 func (self *GasPriceOracle) lowestPrice(block *types.Block) *big.Int {
 	gasUsed := new(big.Int)
-	recepits, err := self.eth.BlockProcessor().GetBlockReceipts(block.Hash())
-	if err != nil {
-		return self.eth.GpoMinGasPrice
-	}
 
-	if len(recepits) > 0 {
-		gasUsed = recepits[len(recepits)-1].CumulativeGasUsed
+	receipts := self.eth.BlockProcessor().GetBlockReceipts(block.Hash())
+	if len(receipts) > 0 {
+		gasUsed = receipts[len(receipts)-1].CumulativeGasUsed
 	}
 
 	if new(big.Int).Mul(gasUsed, big.NewInt(100)).Cmp(new(big.Int).Mul(block.GasLimit(),

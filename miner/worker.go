@@ -255,7 +255,7 @@ func (self *worker) wait() {
 				// This puts transactions in a extra db for rpc
 				core.PutTransactions(self.extraDb, block, block.Transactions())
 				// store the receipts
-				core.PutReceipts(self.extraDb, block.Hash(), self.current.receipts)
+				core.PutReceipts(self.extraDb, self.current.receipts)
 			}
 
 			// check staleness and display confirmation
