@@ -36,8 +36,7 @@ func NewMemDatabase() (*MemDatabase, error) {
 }
 
 func (db *MemDatabase) Put(key []byte, value []byte) error {
-	db.db[string(key)] = value
-
+	db.db[string(key)] = common.CopyBytes(value)
 	return nil
 }
 
