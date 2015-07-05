@@ -86,6 +86,7 @@ var (
 			"submitWork",
 			"pendingTransactions",
 			"resend",
+			"getTransactionReceipt",
 		},
 		"miner": []string{
 			"hashrate",
