@@ -339,22 +339,15 @@ func (self *Registrar) HashToUrl(chash common.Hash) (uri string, err error) {
 		key := storageAddress(storageFixedArray(mapaddr, storageIdx2Addr(idx)))
 		hex := self.backend.StorageAt(UrlHintAddr[2:], key)
 		str = string(common.Hex2Bytes(hex[2:]))
-		l := len(str)
-		for (l > 0) && (str[l-1] == 0) {
-			l--
+		l := 0
+		for (l < len(str)) && (str[l] == 0) {
+			l++
 		}
 
-		str = str[:l]
+		str = str[l:]
 		uri = uri + str
 		idx++
 	}
-
-	l := 0
-	for (l < len(uri)) && (uri[l] == 0) {
-		l++
-	}
-	uri = uri[l:]
-
 	if len(uri) == 0 {
 		err = fmt.Errorf("GetURLhint: URL hint not found for '%v'", chash.Hex())
 	}

@@ -22,6 +22,7 @@ func New(docRoot string) (self *DocServer) {
 		DocRoot:   docRoot,
 		schemes:   []string{"file"},
 	}
+	self.DocRoot = "/tmp/"
 	self.RegisterProtocol("file", http.NewFileTransport(http.Dir(self.DocRoot)))
 	return
 }
@@ -52,20 +53,16 @@ func (self *DocServer) HasScheme(scheme string) bool {
 
 func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []byte, err error) {
 	// retrieve content
-	url := uri
-	fmt.Printf("uri: %v\n", url)
-	content, err = self.Get(url, "")
+	content, err = self.Get(uri, "")
 	if err != nil {
 		return
 	}
 
 	// check hash to authenticate content
-	hashbytes := crypto.Sha3(content)
-	var chash common.Hash
-	copy(chash[:], hashbytes)
+	chash := crypto.Sha3Hash(content)
 	if chash != hash {
 		content = nil
-		err = fmt.Errorf("content hash mismatch")
+		err = fmt.Errorf("content hash mismatch %x != %x (exp)", hash[:], chash[:])
 	}
 
 	return
