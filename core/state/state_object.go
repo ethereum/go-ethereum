@@ -90,15 +90,13 @@ type StateObject struct {
 
 func NewStateObject(address common.Address, db ethdb.Database) *StateObject {
 	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
-	object.trie = trie.NewSecure((common.Hash{}).Bytes(), db)
+	object.trie, _ = trie.NewSecure(common.Hash{}, db)
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
-
 	return object
 }
 
 func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Database) *StateObject {
-	// TODO clean me up
 	var extobject struct {
 		Nonce    uint64
 		Balance  *big.Int
@@ -107,7 +105,13 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Datab
 	}
 	err := rlp.Decode(bytes.NewReader(data), &extobject)
 	if err != nil {
-		fmt.Println(err)
+		glog.Errorf("can't decode state object %x: %v", address, err)
+		return nil
+	}
+	trie, err := trie.NewSecure(extobject.Root, db)
+	if err != nil {
+		// TODO: bubble this up or panic
+		glog.Errorf("can't create account trie with root %x: %v", extobject.Root[:], err)
 		return nil
 	}
 
@@ -115,11 +119,10 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Datab
 	object.nonce = extobject.Nonce
 	object.balance = extobject.Balance
 	object.codeHash = extobject.CodeHash
-	object.trie = trie.NewSecure(extobject.Root[:], db)
+	object.trie = trie
 	object.storage = make(map[string]common.Hash)
 	object.gasPool = new(big.Int)
 	object.code, _ = db.Get(extobject.CodeHash)
-
 	return object
 }
 

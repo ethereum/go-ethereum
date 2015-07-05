@@ -49,12 +49,20 @@ type StateDB struct {
 
 // Create a new state from a given trie
 func New(root common.Hash, db ethdb.Database) *StateDB {
-	trie := trie.NewSecure(root[:], db)
-	return &StateDB{root: root, db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: new(big.Int), logs: make(map[common.Hash]Logs)}
-}
-
-func (self *StateDB) PrintRoot() {
-	self.trie.Trie.PrintRoot()
+	tr, err := trie.NewSecure(root, db)
+	if err != nil {
+		// TODO: bubble this up
+		tr, _ = trie.NewSecure(common.Hash{}, db)
+		glog.Errorf("can't create state trie with root %x: %v", root[:], err)
+	}
+	return &StateDB{
+		root:         root,
+		db:           db,
+		trie:         tr,
+		stateObjects: make(map[string]*StateObject),
+		refund:       new(big.Int),
+		logs:         make(map[common.Hash]Logs),
+	}
 }
 
 func (self *StateDB) StartRecord(thash, bhash common.Hash, ti int) {
@@ -304,7 +312,7 @@ func (self *StateDB) Set(state *StateDB) {
 }
 
 func (s *StateDB) Root() common.Hash {
-	return common.BytesToHash(s.trie.Root())
+	return s.trie.Hash()
 }
 
 // Syncs the trie and all siblings
@@ -348,7 +356,7 @@ func (self *StateDB) SyncIntermediate() {
 
 // SyncObjects syncs the changed objects to the trie
 func (self *StateDB) SyncObjects() {
-	self.trie = trie.NewSecure(self.root[:], self.db)
+	self.trie, _ = trie.NewSecure(self.root, self.db)
 
 	self.refund = new(big.Int)
 
