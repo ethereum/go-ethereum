@@ -966,7 +966,6 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	if contractCreation {
 		addr := crypto.CreateAddress(from, nonce)
 		glog.V(logger.Info).Infof("Tx(%x) created: %x\n", tx.Hash(), addr)
-		return addr.Hex(), nil
 	} else {
 		glog.V(logger.Info).Infof("Tx(%x) to: %x\n", tx.Hash(), tx.To())
 	}
