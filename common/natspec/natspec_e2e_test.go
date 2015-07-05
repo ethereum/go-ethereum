@@ -3,16 +3,18 @@ package natspec
 import (
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	xe "github.com/ethereum/go-ethereum/xeth"
@@ -76,9 +78,7 @@ type testFrontend struct {
 	t           *testing.T
 	ethereum    *eth.Ethereum
 	xeth        *xe.XEth
-	coinbase    common.Address
-	stateDb     *state.StateDB
-	txc         uint64
+	wait        chan *big.Int
 	lastConfirm string
 	wantNatSpec bool
 }
@@ -124,6 +124,8 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 		DataDir:        "/tmp/eth-natspec",
 		AccountManager: am,
 		MaxPeers:       0,
+		PowTest:        true,
+		Etherbase:      testAddress,
 	})
 
 	if err != nil {
@@ -149,13 +151,16 @@ func testInit(t *testing.T) (self *testFrontend) {
 	// mock frontend
 	self = &testFrontend{t: t, ethereum: ethereum}
 	self.xeth = xe.New(ethereum, self)
-
-	addr, _ := ethereum.Etherbase()
-	self.coinbase = addr
-	self.stateDb = self.ethereum.ChainManager().State().Copy()
+	self.wait = self.xeth.UpdateState()
+	addr, _ := self.ethereum.Etherbase()
 
 	// initialise the registry contracts
 	reg := registrar.New(self.xeth)
+	err = reg.SetGlobalRegistrar("", addr)
+	if err != nil {
+		t.Errorf("error creating GlobalRegistrar: %v", err)
+	}
+
 	err = reg.SetHashReg("", addr)
 	if err != nil {
 		t.Errorf("error creating HashReg: %v", err)
@@ -164,84 +169,75 @@ func testInit(t *testing.T) (self *testFrontend) {
 	if err != nil {
 		t.Errorf("error creating UrlHint: %v", err)
 	}
-	self.applyTxs()
+	if !processTxs(self, t, 7) {
+		t.Errorf("error mining txs")
+	}
 
 	return
 
-}
-
-// this is needed for transaction to be applied to the state in testing
-// the heavy lifing is done in XEth.ApplyTestTxs
-// this is fragile,
-// and does process leaking since xeth loops cannot quit safely
-// should be replaced by proper mining with testDAG for easy full integration tests
-func (self *testFrontend) applyTxs() {
-	self.txc, self.xeth = self.xeth.ApplyTestTxs(self.stateDb, self.coinbase, self.txc)
-	return
 }
 
 // end to end test
 func TestNatspecE2E(t *testing.T) {
-	t.Skip()
-
 	tf := testInit(t)
 	defer tf.ethereum.Stop()
+	addr, _ := tf.ethereum.Etherbase()
 
 	// create a contractInfo file (mock cloud-deployed contract metadocs)
 	// incidentally this is the info for the registry contract itself
 	ioutil.WriteFile("/tmp/"+testFileName, []byte(testContractInfo), os.ModePerm)
-	dochash := common.BytesToHash(crypto.Sha3([]byte(testContractInfo)))
+	dochash := crypto.Sha3Hash([]byte(testContractInfo))
 
 	// take the codehash for the contract we wanna test
-	// codehex := tf.xeth.CodeAt(registar.HashRegAddr)
 	codeb := tf.xeth.CodeAtBytes(registrar.HashRegAddr)
-	codehash := common.BytesToHash(crypto.Sha3(codeb))
+	codehash := crypto.Sha3Hash(codeb)
 
 	// use resolver to register codehash->dochash->url
 	// test if globalregistry works
 	// registrar.HashRefAddr = "0x0"
 	// registrar.UrlHintAddr = "0x0"
 	reg := registrar.New(tf.xeth)
-	_, err := reg.SetHashToHash(tf.coinbase, codehash, dochash)
+	_, err := reg.SetHashToHash(addr, codehash, dochash)
 	if err != nil {
 		t.Errorf("error registering: %v", err)
 	}
-	_, err = reg.SetUrlToHash(tf.coinbase, dochash, "file:///"+testFileName)
+	_, err = reg.SetUrlToHash(addr, dochash, "file:///"+testFileName)
 	if err != nil {
 		t.Errorf("error registering: %v", err)
 	}
-	// apply txs to the state
-	tf.applyTxs()
+	if !processTxs(tf, t, 5) {
+		return
+	}
 
 	// NatSpec info for register method of HashReg contract installed
 	// now using the same transactions to check confirm messages
 
 	tf.wantNatSpec = true // this is set so now the backend uses natspec confirmation
-	_, err = reg.SetHashToHash(tf.coinbase, codehash, dochash)
+	_, err = reg.SetHashToHash(addr, codehash, dochash)
 	if err != nil {
 		t.Errorf("error calling contract registry: %v", err)
 	}
 
 	fmt.Printf("GlobalRegistrar: %v, HashReg: %v, UrlHint: %v\n", registrar.GlobalRegistrarAddr, registrar.HashRegAddr, registrar.UrlHintAddr)
 	if tf.lastConfirm != testExpNotice {
-		t.Errorf("Wrong confirm message. expected '%v', got '%v'", testExpNotice, tf.lastConfirm)
+		t.Errorf("Wrong confirm message. expected\n'%v', got\n'%v'", testExpNotice, tf.lastConfirm)
 	}
 
 	// test unknown method
 	exp := fmt.Sprintf(testExpNotice2, registrar.HashRegAddr)
-	_, err = reg.SetOwner(tf.coinbase)
+	_, err = reg.SetOwner(addr)
 	if err != nil {
 		t.Errorf("error setting owner: %v", err)
 	}
 
 	if tf.lastConfirm != exp {
-		t.Errorf("Wrong confirm message, expected '%v', got '%v'", exp, tf.lastConfirm)
+		t.Errorf("Wrong confirm message, expected\n'%v', got\n'%v'", exp, tf.lastConfirm)
 	}
 
 	// test unknown contract
 	exp = fmt.Sprintf(testExpNotice3, registrar.UrlHintAddr)
 
-	_, err = reg.SetUrlToHash(tf.coinbase, dochash, "file:///test.content")
+	_, err = reg.SetUrlToHash(addr, dochash, "file:///test.content")
 	if err != nil {
 		t.Errorf("error registering: %v", err)
 	}
@@ -250,4 +246,64 @@ func TestNatspecE2E(t *testing.T) {
 		t.Errorf("Wrong confirm message, expected '%v', got '%v'", exp, tf.lastConfirm)
 	}
 
+}
+
+func pendingTransactions(repl *testFrontend, t *testing.T) (txc int64, err error) {
+	txs := repl.ethereum.TxPool().GetTransactions()
+	return int64(len(txs)), nil
+}
+
+func processTxs(repl *testFrontend, t *testing.T, expTxc int) bool {
+	var txc int64
+	var err error
+	for i := 0; i < 50; i++ {
+		txc, err = pendingTransactions(repl, t)
+		if err != nil {
+			t.Errorf("unexpected error checking pending transactions: %v", err)
+			return false
+		}
+		if expTxc < int(txc) {
+			t.Errorf("too many pending transactions: expected %v, got %v", expTxc, txc)
+			return false
+		} else if expTxc == int(txc) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if int(txc) != expTxc {
+		t.Errorf("incorrect number of pending transactions, expected %v, got %v", expTxc, txc)
+		return false
+	}
+
+	err = repl.ethereum.StartMining(runtime.NumCPU())
+	if err != nil {
+		t.Errorf("unexpected error mining: %v", err)
+		return false
+	}
+	defer repl.ethereum.StopMining()
+
+	timer := time.NewTimer(100 * time.Second)
+	height := new(big.Int).Add(repl.xeth.CurrentBlock().Number(), big.NewInt(1))
+	repl.wait <- height
+	select {
+	case <-timer.C:
+		// if times out make sure the xeth loop does not block
+		go func() {
+			select {
+			case repl.wait <- nil:
+			case <-repl.wait:
+			}
+		}()
+	case <-repl.wait:
+	}
+	txc, err = pendingTransactions(repl, t)
+	if err != nil {
+		t.Errorf("unexpected error checking pending transactions: %v", err)
+		return false
+	}
+	if txc != 0 {
+		t.Errorf("%d trasactions were not mined", txc)
+		return false
+	}
+	return true
 }
