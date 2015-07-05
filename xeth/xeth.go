@@ -203,34 +203,6 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 	return self.WithState(st)
 }
 
-// applies queued transactions originating from address onto the latest state
-// and creates a block
-// only used in tests
-// - could be removed in favour of mining on testdag (natspec e2e + networking)
-// + filters
-func (self *XEth) ApplyTestTxs(statedb *state.StateDB, address common.Address, txc uint64) (uint64, *XEth) {
-	chain := self.backend.ChainManager()
-	header := chain.CurrentBlock().Header()
-	coinbase := statedb.GetStateObject(address)
-	coinbase.SetGasLimit(big.NewInt(10000000))
-	txs := self.backend.TxPool().GetQueuedTransactions()
-
-	for i := 0; i < len(txs); i++ {
-		for _, tx := range txs {
-			if tx.Nonce() == txc {
-				_, _, err := core.ApplyMessage(core.NewEnv(statedb, self.backend.ChainManager(), tx, header), tx, coinbase)
-				if err != nil {
-					panic(err)
-				}
-				txc++
-			}
-		}
-	}
-
-	xeth := self.WithState(statedb)
-	return txc, xeth
-}
-
 func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 	xeth := &XEth{
 		backend:  self.backend,
