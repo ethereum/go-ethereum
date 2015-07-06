@@ -347,7 +347,6 @@ func main() {
 }
 
 func run(ctx *cli.Context) {
-	utils.HandleInterrupt()
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
@@ -527,10 +526,9 @@ func blockRecovery(ctx *cli.Context) {
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	// Start Ethereum itself
-
 	utils.StartEthereum(eth)
-	am := eth.AccountManager()
 
+	am := eth.AccountManager()
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	accounts := strings.Split(account, " ")
 	for i, account := range accounts {
