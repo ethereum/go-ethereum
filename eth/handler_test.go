@@ -19,9 +19,12 @@ import (
 
 // Tests that hashes can be retrieved from a remote chain by hashes in reverse
 // order.
-func TestGetBlockHashes(t *testing.T) {
+func TestGetBlockHashes60(t *testing.T) { testGetBlockHashes(t, 60) }
+func TestGetBlockHashes61(t *testing.T) { testGetBlockHashes(t, 61) }
+
+func testGetBlockHashes(t *testing.T, protocol int) {
 	pm := newTestProtocolManager(downloader.MaxHashFetch+15, nil, nil)
-	peer, _ := newTestPeer("peer", pm, true)
+	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
 	// Create a batch of tests for various scenarios
@@ -60,9 +63,12 @@ func TestGetBlockHashes(t *testing.T) {
 
 // Tests that hashes can be retrieved from a remote chain by numbers in forward
 // order.
-func TestGetBlockHashesFromNumber(t *testing.T) {
+func TestGetBlockHashesFromNumber60(t *testing.T) { testGetBlockHashesFromNumber(t, 60) }
+func TestGetBlockHashesFromNumber61(t *testing.T) { testGetBlockHashesFromNumber(t, 61) }
+
+func testGetBlockHashesFromNumber(t *testing.T, protocol int) {
 	pm := newTestProtocolManager(downloader.MaxHashFetch+15, nil, nil)
-	peer, _ := newTestPeer("peer", pm, true)
+	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
 	// Create a batch of tests for various scenarios
@@ -98,9 +104,12 @@ func TestGetBlockHashesFromNumber(t *testing.T) {
 }
 
 // Tests that blocks can be retrieved from a remote chain based on their hashes.
-func TestGetBlocks(t *testing.T) {
+func TestGetBlocks60(t *testing.T) { testGetBlocks(t, 60) }
+func TestGetBlocks61(t *testing.T) { testGetBlocks(t, 61) }
+
+func testGetBlocks(t *testing.T, protocol int) {
 	pm := newTestProtocolManager(downloader.MaxHashFetch+15, nil, nil)
-	peer, _ := newTestPeer("peer", pm, true)
+	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
 	// Create a batch of tests for various scenarios
@@ -166,9 +175,9 @@ func TestGetBlocks(t *testing.T) {
 }
 
 // Tests that block headers can be retrieved from a remote chain based on their hashes.
-func TestGetBlockHeaders(t *testing.T) {
+func TestGetBlockHeaders62(t *testing.T) {
 	pm := newTestProtocolManager(downloader.MaxHashFetch+15, nil, nil)
-	peer, _ := newTestPeer("peer", pm, true)
+	peer, _ := newTestPeer("peer", 62, pm, true)
 	defer peer.close()
 
 	// Create a batch of tests for various scenarios
@@ -226,15 +235,15 @@ func TestGetBlockHeaders(t *testing.T) {
 			}
 		}
 		// Send the hash request and verify the response
-		p2p.Send(peer.app, 0x09, hashes)
-		if err := p2p.ExpectMsg(peer.app, 0x0a, headers); err != nil {
+		p2p.Send(peer.app, 0x03, hashes)
+		if err := p2p.ExpectMsg(peer.app, 0x04, headers); err != nil {
 			t.Errorf("test %d: headers mismatch: %v", i, err)
 		}
 	}
 }
 
 // Tests that the node state database can be retrieved based on hashes.
-func TestGetNodeData(t *testing.T) {
+func TestGetNodeData63(t *testing.T) {
 	// Define three accounts to simulate transactions with
 	acc1Key, _ := crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 	acc2Key, _ := crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
@@ -271,7 +280,7 @@ func TestGetNodeData(t *testing.T) {
 	}
 	// Assemble the test environment
 	pm := newTestProtocolManager(4, generator, nil)
-	peer, _ := newTestPeer("peer", pm, true)
+	peer, _ := newTestPeer("peer", 63, pm, true)
 	defer peer.close()
 
 	// Fetch for now the entire state db
@@ -279,12 +288,12 @@ func TestGetNodeData(t *testing.T) {
 	for _, key := range pm.statedb.(*ethdb.MemDatabase).Keys() {
 		hashes = append(hashes, common.BytesToHash(key))
 	}
-	p2p.Send(peer.app, 0x0b, hashes)
+	p2p.Send(peer.app, 0x0d, hashes)
 	msg, err := peer.app.ReadMsg()
 	if err != nil {
 		t.Fatalf("failed to read node data response: %v", err)
 	}
-	if msg.Code != 0x0c {
+	if msg.Code != 0x0e {
 		t.Fatalf("response packet code mismatch: have %x, want %x", msg.Code, 0x0c)
 	}
 	var data [][]byte

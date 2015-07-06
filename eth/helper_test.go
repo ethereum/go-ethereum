@@ -93,7 +93,7 @@ type testPeer struct {
 }
 
 // newTestPeer creates a new peer registered at the given protocol manager.
-func newTestPeer(name string, pm *ProtocolManager, shake bool) (*testPeer, <-chan error) {
+func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*testPeer, <-chan error) {
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
@@ -101,7 +101,7 @@ func newTestPeer(name string, pm *ProtocolManager, shake bool) (*testPeer, <-cha
 	var id discover.NodeID
 	rand.Read(id[:])
 
-	peer := pm.newPeer(int(ProtocolVersions[0]), NetworkId, p2p.NewPeer(id, name, nil), net)
+	peer := pm.newPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
 
 	// Start the peer on a new thread
 	errc := make(chan error, 1)
@@ -126,7 +126,7 @@ func newTestPeer(name string, pm *ProtocolManager, shake bool) (*testPeer, <-cha
 // remote side as we are simulating locally.
 func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, genesis common.Hash) {
 	msg := &statusData{
-		ProtocolVersion: uint32(ProtocolVersions[0]),
+		ProtocolVersion: uint32(p.version),
 		NetworkId:       uint32(NetworkId),
 		TD:              td,
 		CurrentBlock:    head,
