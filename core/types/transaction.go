@@ -116,11 +116,21 @@ func (tx *Transaction) To() *common.Address {
 	}
 }
 
+// Hash hashes the RLP encoding of tx.
+// It uniquely identifies the transaction.
 func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
-	v := rlpHash([]interface{}{
+	v := rlpHash(tx)
+	tx.hash.Store(v)
+	return v
+}
+
+// SigHash returns the hash to be signed by the sender.
+// It does not uniquely identify the transaction.
+func (tx *Transaction) SigHash() common.Hash {
+	return rlpHash([]interface{}{
 		tx.data.AccountNonce,
 		tx.data.Price,
 		tx.data.GasLimit,
@@ -128,8 +138,6 @@ func (tx *Transaction) Hash() common.Hash {
 		tx.data.Amount,
 		tx.data.Payload,
 	})
-	tx.hash.Store(v)
-	return v
 }
 
 func (tx *Transaction) Size() common.StorageSize {
@@ -180,7 +188,7 @@ func (tx *Transaction) publicKey() ([]byte, error) {
 	sig[64] = tx.data.V - 27
 
 	// recover the public key from the signature
-	hash := tx.Hash()
+	hash := tx.SigHash()
 	pub, err := crypto.Ecrecover(hash[:], sig)
 	if err != nil {
 		glog.V(logger.Error).Infof("Could not get pubkey from signature: ", err)
@@ -204,7 +212,7 @@ func (tx *Transaction) WithSignature(sig []byte) (*Transaction, error) {
 }
 
 func (tx *Transaction) SignECDSA(prv *ecdsa.PrivateKey) (*Transaction, error) {
-	h := tx.Hash()
+	h := tx.SigHash()
 	sig, err := crypto.Sign(h[:], prv)
 	if err != nil {
 		return nil, err
