@@ -9,22 +9,19 @@ web3._extend({
 			name: 'addPeer',
 			call: 'admin_addPeer',
 			params: 1,
-			inputFormatter: [web3._extend.utils.formatInputString],
-			outputFormatter: web3._extend.formatters.formatOutputBool
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'exportChain',
 			call: 'admin_exportChain',
 			params: 1,
-			inputFormatter: [web3._extend.utils.formatInputString],
-			outputFormatter: function(obj) { return obj; }
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'importChain',
 			call: 'admin_importChain',
 			params: 1,
-			inputFormatter: [web3._extend.utils.formatInputString],
-			outputFormatter: function(obj) { return obj; }
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'sleepBlocks',
@@ -37,22 +34,19 @@ web3._extend({
 			name: 'verbosity',
 			call: 'admin_verbosity',
 			params: 1,
-			inputFormatter: [web3._extend.utils.formatInputInt],
-			outputFormatter: web3._extend.formatters.formatOutputBool
+			inputFormatter: [web3._extend.utils.toDecimal]
 		}),
 		new web3._extend.Method({
 			name: 'setSolc',
 			call: 'admin_setSolc',
 			params: 1,
-			inputFormatter: [web3._extend.utils.formatInputString],
-			outputFormatter: web3._extend.formatters.formatOutputString
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'startRPC',
 			call: 'admin_startRPC',
 			params: 4,
-			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputInteger,web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
-			outputFormatter: web3._extend.formatters.formatOutputBool
+			inputFormatter: [null, web3._extend.utils.toDecimal, null, null]
 		}),
 		new web3._extend.Method({
 			name: 'stopRPC',
@@ -114,22 +108,19 @@ web3._extend({
 			name: 'stopNatSpec',
 			call: 'admin_stopNatSpec',
 			params: 0,
-			inputFormatter: [],
-			outputFormatter: web3._extend.formatters.formatOutputBool
+			inputFormatter: []
 		}),
 		new web3._extend.Method({
 			name: 'getContractInfo',
 			call: 'admin_getContractInfo',
 			params: 1,
-			inputFormatter: [web3._extend.utils.formatInputString],
-			outputFormatter: function(obj) { return json.parse(obj); }
+			inputFormatter: [null],
 		}),
 		new web3._extend.Method({
 			name: 'httpGet',
 			call: 'admin_httpGet',
 			params: 2,
-			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
-			outputFormatter: web3._extend.formatters.formatOutputString
+			inputFormatter: [null, null]
 		})
 
 	],
@@ -137,23 +128,19 @@ web3._extend({
 	[
 		new web3._extend.Property({
 			name: 'nodeInfo',
-			getter: 'admin_nodeInfo',
-			outputFormatter: web3._extend.formatters.formatOutputString
+			getter: 'admin_nodeInfo'
 		}),
 		new web3._extend.Property({
 			name: 'peers',
-			getter: 'admin_peers',
-			outputFormatter: function(obj) { return obj; }
+			getter: 'admin_peers'
 		}),
 		new web3._extend.Property({
 			name: 'datadir',
-			getter: 'admin_datadir',
-			outputFormatter: web3._extend.formatters.formatOutputString
+			getter: 'admin_datadir'
 		}),
 		new web3._extend.Property({
 			name: 'chainSyncStatus',
-			getter: 'admin_chainSyncStatus',
-			outputFormatter: function(obj) { return obj; }
+			getter: 'admin_chainSyncStatus'
 		})
 	]
 });
