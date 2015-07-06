@@ -94,7 +94,7 @@ func (self *CpuAgent) mine(block *types.Block, stop <-chan struct{}) {
 	glog.V(logger.Debug).Infof("(re)started agent[%d]. mining...\n", self.index)
 
 	// Mine
-	nonce, mixDigest := self.pow.Search(block, stop)
+	nonce, mixDigest := self.pow.Search(block, stop, self.index)
 	if nonce != 0 {
 		self.returnCh <- block.WithMiningResult(nonce, common.BytesToHash(mixDigest))
 	} else {

@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/mattn/go-colorable"
@@ -100,6 +101,22 @@ The makedag command generates an ethash DAG in /tmp/dag.
 
 This command exists to support the system testing project.
 Regular users do not need to execute it.
+`,
+		},
+		{
+			Action: gpuinfo,
+			Name:   "gpuinfo",
+			Usage:  "gpuinfo",
+			Description: `
+Prints OpenCL device info for all found GPUs.
+`,
+		},
+		{
+			Action: gpubench,
+			Name:   "gpubench",
+			Usage:  "benchmark GPU",
+			Description: `
+Runs quick benchmark on first GPU found.
 `,
 		},
 		{
@@ -291,6 +308,8 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.GasPriceFlag,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
+		utils.MiningGPUFlag,
+		utils.MiningGPUChunksFlag,
 		utils.AutoDAGFlag,
 		utils.NATFlag,
 		utils.NatspecEnabledFlag,
@@ -550,9 +569,20 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 			utils.Fatalf("Error starting RPC: %v", err)
 		}
 	}
-	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		if err := eth.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
+
+	// TODO: refactor CPU/GPU mining flags &1 logic
+	gpus := ctx.GlobalString(utils.MiningGPUFlag.Name)
+	chunks := ctx.GlobalBool(utils.MiningGPUChunksFlag.Name)
+	if gpus != "" {
+		if err := eth.StartGPUMining(gpus, chunks); err != nil {
 			utils.Fatalf("%v", err)
+		}
+	} else {
+		// CPU mining
+		if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
+			if err := eth.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
+				utils.Fatalf("%v", err)
+			}
 		}
 	}
 }
@@ -688,6 +718,29 @@ func makedag(ctx *cli.Context) {
 			fmt.Println("making DAG, this could take awhile...")
 			ethash.MakeDAG(blockNum, dir)
 		}
+	default:
+		wrongArgs()
+	}
+}
+
+func gpuinfo(ctx *cli.Context) {
+	miner.PrintOpenCLDevices()
+}
+
+func gpubench(ctx *cli.Context) {
+	args := ctx.Args()
+	wrongArgs := func() {
+		utils.Fatalf(`Usage: geth gpubench <gpu number>`)
+	}
+	switch {
+	case len(args) == 1:
+		n, err := strconv.ParseUint(args[0], 0, 64)
+		if err != nil {
+			wrongArgs()
+		}
+		miner.GPUBench(n)
+	case len(args) == 0:
+		miner.GPUBench(0)
 	default:
 		wrongArgs()
 	}

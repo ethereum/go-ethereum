@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -458,6 +459,38 @@ func (s *Ethereum) StartMining(threads int) error {
 	}
 
 	go s.miner.Start(eb, threads)
+	return nil
+}
+
+func (s *Ethereum) StartGPUMining(gpus string, dagChunks bool) error {
+	eb, err := s.Etherbase()
+	if err != nil {
+		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
+		glog.V(logger.Error).Infoln(err)
+		return err
+	}
+
+	var ids []int
+	for _, s := range strings.Split(gpus, ",") {
+		i, err := strconv.Atoi(s)
+		if err != nil {
+			return fmt.Errorf("Invalid GPU id(s): %v", err)
+		}
+		if i < 0 {
+			return fmt.Errorf("Invalid GPU id: %v", i)
+		}
+		ids = append(ids, i)
+	}
+
+	// TODO: multiple chunks
+	// TODO: re-creating miner is a bit ugly
+	dagChunksNum := 1
+	if dagChunks {
+		dagChunksNum = 4
+	}
+	cl := ethash.NewCL(uint64(dagChunksNum), ids)
+	s.miner = miner.New(s, s.EventMux(), cl)
+	go s.miner.Start(eb, len(ids))
 	return nil
 }
 
