@@ -27,8 +27,7 @@ web3._extend({
 			name: 'sleepBlocks',
 			call: 'admin_sleepBlocks',
 			params: 2,
-			inputFormatter: [web3._extend.utils.formatInputInt,web3._extend.utils.formatInputInt],
-			outputFormatter: web3._extend.formatters.formatOutputInt
+			inputFormatter: [null, null]
 		}),
 		new web3._extend.Method({
 			name: 'verbosity',
@@ -51,58 +50,50 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'stopRPC',
 			call: 'admin_stopRPC',
-			params: 2,
-			inputFormatter: [],
-			outputFormatter: web3._extend.formatters.formatOutputBool
+			params: 0,
+			inputFormatter: []
 		}),
 		new web3._extend.Method({
 			name: 'setGlobalRegistrar',
 			call: 'admin_setGlobalRegistrar',
 			params: 2,
-			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
-			outputFormatter: web3._extend.formatters.formatOutputString
+			inputFormatter: [null,null]
 		}),
 		new web3._extend.Method({
 			name: 'setHashReg',
 			call: 'admin_setHashReg',
 			params: 2,
-			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
-			outputFormatter: web3._extend.formatters.formatOutputString
+			inputFormatter: [null,null]
 		}),
 		new web3._extend.Method({
 			name: 'setUrlHint',
 			call: 'admin_setUrlHint',
 			params: 2,
-			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
-			outputFormatter: web3._extend.formatters.formatOutputString
+			inputFormatter: [null,null]
 		}),
 		new web3._extend.Method({
 			name: 'saveInfo',
 			call: 'admin_saveInfo',
 			params: 2,
-			inputFormatter: [function(obj) { return obj; },web3._extend.utils.formatInputString],
-			outputFormatter: web3._extend.formatters.formatOutputString
+			inputFormatter: [null,null]
 		}),
 		new web3._extend.Method({
 			name: 'register',
 			call: 'admin_register',
 			params: 3,
-			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
-			outputFormatter: web3._extend.formatters.formatOutputBool
+			inputFormatter: [null,null,null]
 		}),
 		new web3._extend.Method({
 			name: 'registerUrl',
 			call: 'admin_registerUrl',
 			params: 3,
-			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
-			outputFormatter: web3._extend.formatters.formatOutputBool
+			inputFormatter: [null,null,null]
 		}),
 		new web3._extend.Method({
 			name: 'startNatSpec',
 			call: 'admin_startNatSpec',
 			params: 0,
-			inputFormatter: [],
-			outputFormatter: web3._extend.formatters.formatOutputBool
+			inputFormatter: []
 		}),
 		new web3._extend.Method({
 			name: 'stopNatSpec',
@@ -122,7 +113,6 @@ web3._extend({
 			params: 2,
 			inputFormatter: [null, null]
 		})
-
 	],
 	properties:
 	[
