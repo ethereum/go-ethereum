@@ -134,7 +134,9 @@ func (self *GasPriceOracle) lowestPrice(block *types.Block) *big.Int {
 
 	receipts := self.eth.BlockProcessor().GetBlockReceipts(block.Hash())
 	if len(receipts) > 0 {
-		gasUsed = receipts[len(receipts)-1].CumulativeGasUsed
+		if cgu := receipts[len(receipts)-1].CumulativeGasUsed; cgu != nil {
+			gasUsed = receipts[len(receipts)-1].CumulativeGasUsed
+		}
 	}
 
 	if new(big.Int).Mul(gasUsed, big.NewInt(100)).Cmp(new(big.Int).Mul(block.GasLimit(),

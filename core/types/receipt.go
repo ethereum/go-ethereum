@@ -18,6 +18,7 @@ type Receipt struct {
 	TxHash            common.Hash
 	ContractAddress   common.Address
 	logs              state.Logs
+	GasUsed           *big.Int
 }
 
 func NewReceipt(root []byte, cumalativeGasUsed *big.Int) *Receipt {
@@ -44,11 +45,12 @@ func (self *Receipt) DecodeRLP(s *rlp.Stream) error {
 		TxHash            common.Hash
 		ContractAddress   common.Address
 		Logs              state.Logs
+		GasUsed           *big.Int
 	}
 	if err := s.Decode(&r); err != nil {
 		return err
 	}
-	self.PostState, self.CumulativeGasUsed, self.Bloom, self.TxHash, self.ContractAddress, self.logs = r.PostState, r.CumulativeGasUsed, r.Bloom, r.TxHash, r.ContractAddress, r.Logs
+	self.PostState, self.CumulativeGasUsed, self.Bloom, self.TxHash, self.ContractAddress, self.logs, self.GasUsed = r.PostState, r.CumulativeGasUsed, r.Bloom, r.TxHash, r.ContractAddress, r.Logs, r.GasUsed
 
 	return nil
 }
@@ -60,7 +62,7 @@ func (self *ReceiptForStorage) EncodeRLP(w io.Writer) error {
 	for i, log := range self.logs {
 		storageLogs[i] = (*state.LogForStorage)(log)
 	}
-	return rlp.Encode(w, []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, self.TxHash, self.ContractAddress, storageLogs})
+	return rlp.Encode(w, []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, self.TxHash, self.ContractAddress, storageLogs, self.GasUsed})
 }
 
 func (self *Receipt) RlpEncode() []byte {
