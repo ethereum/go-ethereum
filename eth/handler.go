@@ -57,9 +57,10 @@ func (ep extProt) GetHashes(hash common.Hash) error    { return ep.getHashes(has
 func (ep extProt) GetBlock(hashes []common.Hash) error { return ep.getBlocks(hashes) }
 
 type ProtocolManager struct {
-	txpool     txPool
-	chainman   *core.ChainManager
-	statedb    common.Database
+	txpool   txPool
+	chainman *core.ChainManager
+	chaindb  common.Database
+
 	downloader *downloader.Downloader
 	fetcher    *fetcher.Fetcher
 	peers      *peerSet
@@ -83,13 +84,13 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager, statedb common.Database) *ProtocolManager {
+func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager, chaindb common.Database) *ProtocolManager {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		eventMux:  mux,
 		txpool:    txpool,
 		chainman:  chainman,
-		statedb:   statedb,
+		chaindb:   chaindb,
 		peers:     newPeerSet(),
 		newPeerCh: make(chan *peer, 1),
 		txsyncCh:  make(chan *txsync),
@@ -375,19 +376,46 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			data  [][]byte
 		)
 		for bytes < softResponseLimit && len(data) < downloader.MaxStateFetch {
-			//Retrieve the hash of the next state entry
+			// Retrieve the hash of the next state entry
 			if err := msgStream.Decode(&hash); err == rlp.EOL {
 				break
 			} else if err != nil {
 				return errResp(ErrDecode, "msg %v: %v", msg, err)
 			}
 			// Retrieve the requested state entry, stopping if enough was found
-			if entry, err := pm.statedb.Get(hash.Bytes()); err == nil {
+			if entry, err := pm.chaindb.Get(hash.Bytes()); err == nil {
 				data = append(data, entry)
 				bytes += len(entry)
 			}
 		}
 		return p.SendNodeData(data)
+
+	case p.version == eth63 && msg.Code == GetReceiptsMsg:
+		// Decode the retrieval message
+		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
+		if _, err := msgStream.List(); err != nil {
+			return err
+		}
+		// Gather state data until the fetch or network limits is reached
+		var (
+			hash     common.Hash
+			bytes    int
+			receipts []*types.Receipt
+		)
+		for bytes < softResponseLimit && len(receipts) < downloader.MaxReceiptsFetch {
+			// Retrieve the hash of the next transaction receipt
+			if err := msgStream.Decode(&hash); err == rlp.EOL {
+				break
+			} else if err != nil {
+				return errResp(ErrDecode, "msg %v: %v", msg, err)
+			}
+			// Retrieve the requested receipt, stopping if enough was found
+			if receipt := core.GetReceipt(pm.chaindb, hash); receipt != nil {
+				receipts = append(receipts, receipt)
+				bytes += len(receipt.RlpEncode())
+			}
+		}
+		return p.SendReceipts(receipts)
 
 	case msg.Code == NewBlockHashesMsg:
 		// Retrieve and deseralize the remote new block hashes notification
