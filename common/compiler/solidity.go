@@ -185,12 +185,12 @@ func (sol *Solidity) Compile(source string) (contracts map[string]*Contract, err
 	return
 }
 
-func ExtractInfo(contract *Contract, filename string) (contenthash common.Hash, err error) {
-	contractInfo, err := json.Marshal(contract.Info)
+func SaveInfo(info *ContractInfo, filename string) (contenthash common.Hash, err error) {
+	infojson, err := json.Marshal(info)
 	if err != nil {
 		return
 	}
-	contenthash = common.BytesToHash(crypto.Sha3(contractInfo))
-	err = ioutil.WriteFile(filename, contractInfo, 0600)
+	contenthash = common.BytesToHash(crypto.Sha3(infojson))
+	err = ioutil.WriteFile(filename, infojson, 0600)
 	return
 }

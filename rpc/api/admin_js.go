@@ -27,6 +27,13 @@ web3._extend({
 			outputFormatter: function(obj) { return obj; }
 		}),
 		new web3._extend.Method({
+			name: 'sleepBlocks',
+			call: 'admin_sleepBlocks',
+			params: 2,
+			inputFormatter: [web3._extend.utils.formatInputInt,web3._extend.utils.formatInputInt],
+			outputFormatter: web3._extend.formatters.formatOutputInt
+		}),
+		new web3._extend.Method({
 			name: 'verbosity',
 			call: 'admin_verbosity',
 			params: 1,
@@ -50,10 +57,81 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'stopRPC',
 			call: 'admin_stopRPC',
+			params: 2,
+			inputFormatter: [],
+			outputFormatter: web3._extend.formatters.formatOutputBool
+		}),
+		new web3._extend.Method({
+			name: 'setGlobalRegistrar',
+			call: 'admin_setGlobalRegistrar',
+			params: 2,
+			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputString
+		}),
+		new web3._extend.Method({
+			name: 'setHashReg',
+			call: 'admin_setHashReg',
+			params: 2,
+			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputString
+		}),
+		new web3._extend.Method({
+			name: 'setUrlHint',
+			call: 'admin_setUrlHint',
+			params: 2,
+			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputString
+		}),
+		new web3._extend.Method({
+			name: 'saveInfo',
+			call: 'admin_saveInfo',
+			params: 2,
+			inputFormatter: [function(obj) { return obj; },web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputString
+		}),
+		new web3._extend.Method({
+			name: 'register',
+			call: 'admin_register',
+			params: 3,
+			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputBool
+		}),
+		new web3._extend.Method({
+			name: 'registerUrl',
+			call: 'admin_registerUrl',
+			params: 3,
+			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputBool
+		}),
+		new web3._extend.Method({
+			name: 'startNatSpec',
+			call: 'admin_startNatSpec',
 			params: 0,
 			inputFormatter: [],
 			outputFormatter: web3._extend.formatters.formatOutputBool
+		}),
+		new web3._extend.Method({
+			name: 'stopNatSpec',
+			call: 'admin_stopNatSpec',
+			params: 0,
+			inputFormatter: [],
+			outputFormatter: web3._extend.formatters.formatOutputBool
+		}),
+		new web3._extend.Method({
+			name: 'getContractInfo',
+			call: 'admin_getContractInfo',
+			params: 1,
+			inputFormatter: [web3._extend.utils.formatInputString],
+			outputFormatter: function(obj) { return json.parse(obj); }
+		}),
+		new web3._extend.Method({
+			name: 'httpGet',
+			call: 'admin_httpGet',
+			params: 2,
+			inputFormatter: [web3._extend.utils.formatInputString,web3._extend.utils.formatInputString],
+			outputFormatter: web3._extend.formatters.formatOutputString
 		})
+
 	],
 	properties:
 	[

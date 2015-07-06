@@ -70,6 +70,7 @@ type Config struct {
 	VmDebug   bool
 	NatSpec   bool
 	AutoDAG   bool
+	PowTest   bool
 
 	MaxPeers        int
 	MaxPendingPeers int
@@ -221,6 +222,7 @@ type Ethereum struct {
 	NatSpec       bool
 	DataDir       string
 	AutoDAG       bool
+	PowTest       bool
 	autodagquit   chan bool
 	etherbase     common.Address
 	clientVersion string
@@ -329,6 +331,7 @@ func New(config *Config) (*Ethereum, error) {
 		MinerThreads:            config.MinerThreads,
 		SolcPath:                config.SolcPath,
 		AutoDAG:                 config.AutoDAG,
+		PowTest:                 config.PowTest,
 		GpoMinGasPrice:          config.GpoMinGasPrice,
 		GpoMaxGasPrice:          config.GpoMaxGasPrice,
 		GpoFullBlockRatio:       config.GpoFullBlockRatio,
@@ -337,7 +340,15 @@ func New(config *Config) (*Ethereum, error) {
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
 	}
 
-	eth.pow = ethash.New()
+	if config.PowTest {
+		glog.V(logger.Info).Infof("ethash used in test mode")
+		eth.pow, err = ethash.NewForTesting()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		eth.pow = ethash.New()
+	}
 	genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
 	eth.chainManager, err = core.NewChainManager(genesis, blockDb, stateDb, extraDb, eth.pow, eth.EventMux())
 	if err != nil {
