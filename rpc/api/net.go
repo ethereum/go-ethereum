@@ -14,10 +14,8 @@ const (
 var (
 	// mapping between methods and handlers
 	netMapping = map[string]nethandler{
-		"net_version":   (*netApi).Version,
 		"net_peerCount": (*netApi).PeerCount,
 		"net_listening": (*netApi).IsListening,
-		"net_peers":     (*netApi).Peers,
 	}
 )
 
@@ -70,11 +68,6 @@ func (self *netApi) ApiVersion() string {
 	return NetApiVersion
 }
 
-// Network version
-func (self *netApi) Version(req *shared.Request) (interface{}, error) {
-	return self.xeth.NetworkVersion(), nil
-}
-
 // Number of connected peers
 func (self *netApi) PeerCount(req *shared.Request) (interface{}, error) {
 	return newHexNum(self.xeth.PeerCount()), nil
@@ -84,6 +77,3 @@ func (self *netApi) IsListening(req *shared.Request) (interface{}, error) {
 	return self.xeth.IsListening(), nil
 }
 
-func (self *netApi) Peers(req *shared.Request) (interface{}, error) {
-	return self.ethereum.PeersInfo(), nil
-}

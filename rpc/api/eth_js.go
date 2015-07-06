@@ -18,7 +18,7 @@ web3._extend({
 			name: 'resend',
 			call: 'eth_resend',
 			params: 3,
-			inputFormatter: [null, null, null]
+			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, web3._extend.utils.fromDecimal, web3._extend.utils.fromDecimal]
 		})
 	],
 	properties:
