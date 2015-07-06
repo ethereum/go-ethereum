@@ -404,14 +404,14 @@ func NewUncleRes(h *types.Header) *UncleRes {
 // }
 
 type ReceiptRes struct {
-	TransactionHash   *hexdata       `json:transactionHash`
-	TransactionIndex  *hexnum        `json:transactionIndex`
-	BlockNumber       *hexnum        `json:blockNumber`
-	BlockHash         *hexdata       `json:blockHash`
-	CumulativeGasUsed *hexnum        `json:cumulativeGasUsed`
-	GasUsed           *hexnum        `json:gasUsed`
-	ContractAddress   *hexdata       `json:contractAddress`
-	Logs              *[]interface{} `json:logs`
+	TransactionHash   *hexdata       `json:"transactionHash"`
+	TransactionIndex  *hexnum        `json:"transactionIndex"`
+	BlockNumber       *hexnum        `json:"blockNumber"`
+	BlockHash         *hexdata       `json:"blockHash"`
+	CumulativeGasUsed *hexnum        `json:"cumulativeGasUsed"`
+	GasUsed           *hexnum        `json:"gasUsed"`
+	ContractAddress   *hexdata       `json:"contractAddress"`
+	Logs              *[]interface{} `json:"logs"`
 }
 
 func NewReceiptRes(rec *types.Receipt) *ReceiptRes {
@@ -430,7 +430,12 @@ func NewReceiptRes(rec *types.Receipt) *ReceiptRes {
 	if bytes.Compare(rec.ContractAddress.Bytes(), bytes.Repeat([]byte{0}, 20)) != 0 {
 		v.ContractAddress = newHexData(rec.ContractAddress)
 	}
-	// v.Logs = rec.Logs()
+
+	logs := make([]interface{}, len(rec.Logs()))
+	for i, log := range rec.Logs() {
+		logs[i] = NewLogRes(log)
+	}
+	v.Logs = &logs
 
 	return v
 }
