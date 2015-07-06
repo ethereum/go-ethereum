@@ -132,7 +132,7 @@ func StartEthereum(ethereum *eth.Ethereum) {
 		defer signal.Stop(sigc)
 		<-sigc
 		glog.V(logger.Info).Infoln("Got interrupt, shutting down...")
-		ethereum.Stop()
+		go ethereum.Stop()
 		logger.Flush()
 		for i := 10; i > 0; i-- {
 			<-sigc
