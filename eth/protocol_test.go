@@ -36,7 +36,13 @@ func init() {
 
 var testAccount = crypto.NewKey(rand.Reader)
 
-func TestStatusMsgErrors(t *testing.T) {
+// Tests that handshake failures are detected and reported correctly.
+func TestStatusMsgErrors60(t *testing.T) { testStatusMsgErrors(t, 60) }
+func TestStatusMsgErrors61(t *testing.T) { testStatusMsgErrors(t, 61) }
+func TestStatusMsgErrors62(t *testing.T) { testStatusMsgErrors(t, 62) }
+func TestStatusMsgErrors63(t *testing.T) { testStatusMsgErrors(t, 63) }
+
+func testStatusMsgErrors(t *testing.T, protocol int) {
 	pm := newTestProtocolManager(0, nil, nil)
 	td, currentBlock, genesis := pm.chainman.Status()
 	defer pm.Stop()
@@ -52,20 +58,20 @@ func TestStatusMsgErrors(t *testing.T) {
 		},
 		{
 			code: StatusMsg, data: statusData{10, NetworkId, td, currentBlock, genesis},
-			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= %d)", ProtocolVersions[0]),
+			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= %d)", protocol),
 		},
 		{
-			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), 999, td, currentBlock, genesis},
+			code: StatusMsg, data: statusData{uint32(protocol), 999, td, currentBlock, genesis},
 			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 1)"),
 		},
 		{
-			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), NetworkId, td, currentBlock, common.Hash{3}},
+			code: StatusMsg, data: statusData{uint32(protocol), NetworkId, td, currentBlock, common.Hash{3}},
 			wantError: errResp(ErrGenesisBlockMismatch, "0300000000000000000000000000000000000000000000000000000000000000 (!= %x)", genesis),
 		},
 	}
 
 	for i, test := range tests {
-		p, errc := newTestPeer("peer", pm, false)
+		p, errc := newTestPeer("peer", protocol, pm, false)
 		// The send call might hang until reset because
 		// the protocol might not read the payload.
 		go p2p.Send(p.app, test.code, test.data)
@@ -85,10 +91,15 @@ func TestStatusMsgErrors(t *testing.T) {
 }
 
 // This test checks that received transactions are added to the local pool.
-func TestRecvTransactions(t *testing.T) {
+func TestRecvTransactions60(t *testing.T) { testRecvTransactions(t, 60) }
+func TestRecvTransactions61(t *testing.T) { testRecvTransactions(t, 61) }
+func TestRecvTransactions62(t *testing.T) { testRecvTransactions(t, 62) }
+func TestRecvTransactions63(t *testing.T) { testRecvTransactions(t, 63) }
+
+func testRecvTransactions(t *testing.T, protocol int) {
 	txAdded := make(chan []*types.Transaction)
 	pm := newTestProtocolManager(0, nil, txAdded)
-	p, _ := newTestPeer("peer", pm, true)
+	p, _ := newTestPeer("peer", protocol, pm, true)
 	defer pm.Stop()
 	defer p.close()
 
@@ -109,7 +120,12 @@ func TestRecvTransactions(t *testing.T) {
 }
 
 // This test checks that pending transactions are sent.
-func TestSendTransactions(t *testing.T) {
+func TestSendTransactions60(t *testing.T) { testSendTransactions(t, 60) }
+func TestSendTransactions61(t *testing.T) { testSendTransactions(t, 61) }
+func TestSendTransactions62(t *testing.T) { testSendTransactions(t, 62) }
+func TestSendTransactions63(t *testing.T) { testSendTransactions(t, 63) }
+
+func testSendTransactions(t *testing.T, protocol int) {
 	pm := newTestProtocolManager(0, nil, nil)
 	defer pm.Stop()
 
@@ -156,7 +172,7 @@ func TestSendTransactions(t *testing.T) {
 		}
 	}
 	for i := 0; i < 3; i++ {
-		p, _ := newTestPeer(fmt.Sprintf("peer #%d", i), pm, true)
+		p, _ := newTestPeer(fmt.Sprintf("peer #%d", i), protocol, pm, true)
 		wg.Add(1)
 		go checktxs(p)
 	}

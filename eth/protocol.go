@@ -23,11 +23,19 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// Constants to match up protocol versions and messages
+const (
+	eth60 = 60
+	eth61 = 61
+	eth62 = 62
+	eth63 = 63
+)
+
 // Supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{62, 61, 60}
+var ProtocolVersions = []uint{61, 60}
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{13, 9, 8}
+var ProtocolLengths = []uint64{9, 8}
 
 const (
 	NetworkId          = 1
@@ -37,23 +45,29 @@ const (
 // eth protocol message codes
 const (
 	// Protocol messages belonging to eth/60
-	StatusMsg = iota
-	NewBlockHashesMsg
-	TxMsg
-	GetBlockHashesMsg
-	BlockHashesMsg
-	GetBlocksMsg
-	BlocksMsg
-	NewBlockMsg
+	StatusMsg         = 0x00
+	NewBlockHashesMsg = 0x01
+	TxMsg             = 0x02
+	GetBlockHashesMsg = 0x03
+	BlockHashesMsg    = 0x04
+	GetBlocksMsg      = 0x05
+	BlocksMsg         = 0x06
+	NewBlockMsg       = 0x07
 
 	// Protocol messages belonging to eth/61
-	GetBlockHashesFromNumberMsg
+	GetBlockHashesFromNumberMsg = 0x08
 
 	// Protocol messages belonging to eth/62
-	GetBlockHeadersMsg
-	BlockHeadersMsg
-	GetNodeDataMsg
-	NodeDataMsg
+	GetBlockHeadersMsg = 0x03
+	BlockHeadersMsg    = 0x04
+	GetBlockBodiesMsg  = 0x05
+	BlockBodiesMsg     = 0x06
+
+	// Protocol messages belonging to eth/63
+	GetNodeDataMsg = 0x0d
+	NodeDataMsg    = 0x0e
+	GetReceiptsMsg = 0x0f
+	ReceiptsMsg    = 0x10
 )
 
 type errCode int

@@ -188,6 +188,9 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		glog.V(logger.Debug).Infof("%v: handshake failed: %v", p, err)
 		return err
 	}
+	if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
+		rw.Init(p.version)
+	}
 	// Register the peer locally
 	glog.V(logger.Detail).Infof("%v: adding peer", p)
 	if err := pm.peers.Register(p); err != nil {
@@ -228,12 +231,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	defer msg.Discard()
 
 	// Handle the message depending on its contents
-	switch msg.Code {
-	case StatusMsg:
+	switch {
+	case msg.Code == StatusMsg:
 		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
 
-	case GetBlockHashesMsg:
+	case (p.version == eth60 || p.version == eth61) && msg.Code == GetBlockHashesMsg:
 		// Retrieve the number of hashes to return and from which origin hash
 		var request getBlockHashesData
 		if err := msg.Decode(&request); err != nil {
@@ -249,7 +252,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendBlockHashes(hashes)
 
-	case GetBlockHashesFromNumberMsg:
+	case (p.version == eth60 || p.version == eth61) && msg.Code == GetBlockHashesFromNumberMsg:
 		// Retrieve and decode the number of hashes to return and from which origin number
 		var request getBlockHashesFromNumberData
 		if err := msg.Decode(&request); err != nil {
@@ -276,7 +279,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendBlockHashes(hashes)
 
-	case BlockHashesMsg:
+	case (p.version == eth60 || p.version == eth61) && msg.Code == BlockHashesMsg:
 		// A batch of hashes arrived to one of our previous requests
 		var hashes []common.Hash
 		if err := msg.Decode(&hashes); err != nil {
@@ -288,7 +291,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			glog.V(logger.Debug).Infoln(err)
 		}
 
-	case GetBlocksMsg:
+	case (p.version == eth60 || p.version == eth61) && msg.Code == GetBlocksMsg:
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
@@ -316,7 +319,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendBlocks(blocks)
 
-	case BlocksMsg:
+	case (p.version == eth60 || p.version == eth61) && msg.Code == BlocksMsg:
 		// Decode the arrived block message
 		var blocks []*types.Block
 		if err := msg.Decode(&blocks); err != nil {
@@ -332,7 +335,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			pm.downloader.DeliverBlocks(p.id, blocks)
 		}
 
-	case GetBlockHeadersMsg:
+	case p.version == eth62 && msg.Code == GetBlockHeadersMsg:
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
@@ -359,7 +362,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendBlockHeaders(headers)
 
-	case GetNodeDataMsg:
+	case p.version == eth63 && msg.Code == GetNodeDataMsg:
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
@@ -386,7 +389,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendNodeData(data)
 
-	case NewBlockHashesMsg:
+	case msg.Code == NewBlockHashesMsg:
 		// Retrieve and deseralize the remote new block hashes notification
 		var hashes []common.Hash
 		if err := msg.Decode(&hashes); err != nil {
@@ -408,7 +411,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			pm.fetcher.Notify(p.id, hash, time.Now(), p.RequestBlocks)
 		}
 
-	case NewBlockMsg:
+	case msg.Code == NewBlockMsg:
 		// Retrieve and decode the propagated block
 		var request newBlockData
 		if err := msg.Decode(&request); err != nil {
@@ -442,7 +445,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 		}
 
-	case TxMsg:
+	case msg.Code == TxMsg:
 		// Transactions arrived, parse all of them and deliver to the pool
 		var txs []*types.Transaction
 		if err := msg.Decode(&txs); err != nil {

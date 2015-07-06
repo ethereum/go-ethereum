@@ -22,44 +22,53 @@ import (
 )
 
 var (
-	propTxnInPacketsMeter    = metrics.NewMeter("eth/prop/txns/in/packets")
-	propTxnInTrafficMeter    = metrics.NewMeter("eth/prop/txns/in/traffic")
-	propTxnOutPacketsMeter   = metrics.NewMeter("eth/prop/txns/out/packets")
-	propTxnOutTrafficMeter   = metrics.NewMeter("eth/prop/txns/out/traffic")
-	propHashInPacketsMeter   = metrics.NewMeter("eth/prop/hashes/in/packets")
-	propHashInTrafficMeter   = metrics.NewMeter("eth/prop/hashes/in/traffic")
-	propHashOutPacketsMeter  = metrics.NewMeter("eth/prop/hashes/out/packets")
-	propHashOutTrafficMeter  = metrics.NewMeter("eth/prop/hashes/out/traffic")
-	propBlockInPacketsMeter  = metrics.NewMeter("eth/prop/blocks/in/packets")
-	propBlockInTrafficMeter  = metrics.NewMeter("eth/prop/blocks/in/traffic")
-	propBlockOutPacketsMeter = metrics.NewMeter("eth/prop/blocks/out/packets")
-	propBlockOutTrafficMeter = metrics.NewMeter("eth/prop/blocks/out/traffic")
-	reqHashInPacketsMeter    = metrics.NewMeter("eth/req/hashes/in/packets")
-	reqHashInTrafficMeter    = metrics.NewMeter("eth/req/hashes/in/traffic")
-	reqHashOutPacketsMeter   = metrics.NewMeter("eth/req/hashes/out/packets")
-	reqHashOutTrafficMeter   = metrics.NewMeter("eth/req/hashes/out/traffic")
-	reqBlockInPacketsMeter   = metrics.NewMeter("eth/req/blocks/in/packets")
-	reqBlockInTrafficMeter   = metrics.NewMeter("eth/req/blocks/in/traffic")
-	reqBlockOutPacketsMeter  = metrics.NewMeter("eth/req/blocks/out/packets")
-	reqBlockOutTrafficMeter  = metrics.NewMeter("eth/req/blocks/out/traffic")
-	reqHeaderInPacketsMeter  = metrics.NewMeter("eth/req/header/in/packets")
-	reqHeaderInTrafficMeter  = metrics.NewMeter("eth/req/header/in/traffic")
-	reqHeaderOutPacketsMeter = metrics.NewMeter("eth/req/header/out/packets")
-	reqHeaderOutTrafficMeter = metrics.NewMeter("eth/req/header/out/traffic")
-	reqStateInPacketsMeter   = metrics.NewMeter("eth/req/state/in/packets")
-	reqStateInTrafficMeter   = metrics.NewMeter("eth/req/state/in/traffic")
-	reqStateOutPacketsMeter  = metrics.NewMeter("eth/req/state/out/packets")
-	reqStateOutTrafficMeter  = metrics.NewMeter("eth/req/state/out/traffic")
-	miscInPacketsMeter       = metrics.NewMeter("eth/misc/in/packets")
-	miscInTrafficMeter       = metrics.NewMeter("eth/misc/in/traffic")
-	miscOutPacketsMeter      = metrics.NewMeter("eth/misc/out/packets")
-	miscOutTrafficMeter      = metrics.NewMeter("eth/misc/out/traffic")
+	propTxnInPacketsMeter     = metrics.NewMeter("eth/prop/txns/in/packets")
+	propTxnInTrafficMeter     = metrics.NewMeter("eth/prop/txns/in/traffic")
+	propTxnOutPacketsMeter    = metrics.NewMeter("eth/prop/txns/out/packets")
+	propTxnOutTrafficMeter    = metrics.NewMeter("eth/prop/txns/out/traffic")
+	propHashInPacketsMeter    = metrics.NewMeter("eth/prop/hashes/in/packets")
+	propHashInTrafficMeter    = metrics.NewMeter("eth/prop/hashes/in/traffic")
+	propHashOutPacketsMeter   = metrics.NewMeter("eth/prop/hashes/out/packets")
+	propHashOutTrafficMeter   = metrics.NewMeter("eth/prop/hashes/out/traffic")
+	propBlockInPacketsMeter   = metrics.NewMeter("eth/prop/blocks/in/packets")
+	propBlockInTrafficMeter   = metrics.NewMeter("eth/prop/blocks/in/traffic")
+	propBlockOutPacketsMeter  = metrics.NewMeter("eth/prop/blocks/out/packets")
+	propBlockOutTrafficMeter  = metrics.NewMeter("eth/prop/blocks/out/traffic")
+	reqHashInPacketsMeter     = metrics.NewMeter("eth/req/hashes/in/packets")
+	reqHashInTrafficMeter     = metrics.NewMeter("eth/req/hashes/in/traffic")
+	reqHashOutPacketsMeter    = metrics.NewMeter("eth/req/hashes/out/packets")
+	reqHashOutTrafficMeter    = metrics.NewMeter("eth/req/hashes/out/traffic")
+	reqBlockInPacketsMeter    = metrics.NewMeter("eth/req/blocks/in/packets")
+	reqBlockInTrafficMeter    = metrics.NewMeter("eth/req/blocks/in/traffic")
+	reqBlockOutPacketsMeter   = metrics.NewMeter("eth/req/blocks/out/packets")
+	reqBlockOutTrafficMeter   = metrics.NewMeter("eth/req/blocks/out/traffic")
+	reqHeaderInPacketsMeter   = metrics.NewMeter("eth/req/header/in/packets")
+	reqHeaderInTrafficMeter   = metrics.NewMeter("eth/req/header/in/traffic")
+	reqHeaderOutPacketsMeter  = metrics.NewMeter("eth/req/header/out/packets")
+	reqHeaderOutTrafficMeter  = metrics.NewMeter("eth/req/header/out/traffic")
+	reqBodyInPacketsMeter     = metrics.NewMeter("eth/req/body/in/packets")
+	reqBodyInTrafficMeter     = metrics.NewMeter("eth/req/body/in/traffic")
+	reqBodyOutPacketsMeter    = metrics.NewMeter("eth/req/body/out/packets")
+	reqBodyOutTrafficMeter    = metrics.NewMeter("eth/req/body/out/traffic")
+	reqStateInPacketsMeter    = metrics.NewMeter("eth/req/state/in/packets")
+	reqStateInTrafficMeter    = metrics.NewMeter("eth/req/state/in/traffic")
+	reqStateOutPacketsMeter   = metrics.NewMeter("eth/req/state/out/packets")
+	reqStateOutTrafficMeter   = metrics.NewMeter("eth/req/state/out/traffic")
+	reqReceiptInPacketsMeter  = metrics.NewMeter("eth/req/receipt/in/packets")
+	reqReceiptInTrafficMeter  = metrics.NewMeter("eth/req/receipt/in/traffic")
+	reqReceiptOutPacketsMeter = metrics.NewMeter("eth/req/receipt/out/packets")
+	reqReceiptOutTrafficMeter = metrics.NewMeter("eth/req/receipt/out/traffic")
+	miscInPacketsMeter        = metrics.NewMeter("eth/misc/in/packets")
+	miscInTrafficMeter        = metrics.NewMeter("eth/misc/in/traffic")
+	miscOutPacketsMeter       = metrics.NewMeter("eth/misc/out/packets")
+	miscOutTrafficMeter       = metrics.NewMeter("eth/misc/out/traffic")
 )
 
 // meteredMsgReadWriter is a wrapper around a p2p.MsgReadWriter, capable of
 // accumulating the above defined metrics based on the data stream contents.
 type meteredMsgReadWriter struct {
-	p2p.MsgReadWriter
+	p2p.MsgReadWriter     // Wrapped message stream to meter
+	version           int // Protocol version to select correct meters
 }
 
 // newMeteredMsgWriter wraps a p2p MsgReadWriter with metering support. If the
@@ -68,7 +77,13 @@ func newMeteredMsgWriter(rw p2p.MsgReadWriter) p2p.MsgReadWriter {
 	if !metrics.Enabled {
 		return rw
 	}
-	return &meteredMsgReadWriter{rw}
+	return &meteredMsgReadWriter{MsgReadWriter: rw}
+}
+
+// Init sets the protocol version used by the stream to know which meters to
+// increment in case of overlapping message ids between protocol versions.
+func (rw *meteredMsgReadWriter) Init(version int) {
+	rw.version = version
 }
 
 func (rw *meteredMsgReadWriter) ReadMsg() (p2p.Msg, error) {
@@ -79,20 +94,27 @@ func (rw *meteredMsgReadWriter) ReadMsg() (p2p.Msg, error) {
 	}
 	// Account for the data traffic
 	packets, traffic := miscInPacketsMeter, miscInTrafficMeter
-	switch msg.Code {
-	case BlockHashesMsg:
+	switch {
+	case (rw.version == eth60 || rw.version == eth61) && msg.Code == BlockHashesMsg:
 		packets, traffic = reqHashInPacketsMeter, reqHashInTrafficMeter
-	case BlocksMsg:
+	case (rw.version == eth60 || rw.version == eth61) && msg.Code == BlocksMsg:
 		packets, traffic = reqBlockInPacketsMeter, reqBlockInTrafficMeter
-	case BlockHeadersMsg:
-		packets, traffic = reqHeaderInPacketsMeter, reqHeaderInTrafficMeter
-	case NodeDataMsg:
+
+	case rw.version == eth62 && msg.Code == BlockHeadersMsg:
+		packets, traffic = reqBlockInPacketsMeter, reqBlockInTrafficMeter
+	case rw.version == eth62 && msg.Code == BlockBodiesMsg:
+		packets, traffic = reqBodyInPacketsMeter, reqBodyInTrafficMeter
+
+	case rw.version == eth63 && msg.Code == NodeDataMsg:
 		packets, traffic = reqStateInPacketsMeter, reqStateInTrafficMeter
-	case NewBlockHashesMsg:
+	case rw.version == eth63 && msg.Code == ReceiptsMsg:
+		packets, traffic = reqReceiptInPacketsMeter, reqReceiptInTrafficMeter
+
+	case msg.Code == NewBlockHashesMsg:
 		packets, traffic = propHashInPacketsMeter, propHashInTrafficMeter
-	case NewBlockMsg:
+	case msg.Code == NewBlockMsg:
 		packets, traffic = propBlockInPacketsMeter, propBlockInTrafficMeter
-	case TxMsg:
+	case msg.Code == TxMsg:
 		packets, traffic = propTxnInPacketsMeter, propTxnInTrafficMeter
 	}
 	packets.Mark(1)
@@ -104,20 +126,27 @@ func (rw *meteredMsgReadWriter) ReadMsg() (p2p.Msg, error) {
 func (rw *meteredMsgReadWriter) WriteMsg(msg p2p.Msg) error {
 	// Account for the data traffic
 	packets, traffic := miscOutPacketsMeter, miscOutTrafficMeter
-	switch msg.Code {
-	case BlockHashesMsg:
+	switch {
+	case (rw.version == eth60 || rw.version == eth61) && msg.Code == BlockHashesMsg:
 		packets, traffic = reqHashOutPacketsMeter, reqHashOutTrafficMeter
-	case BlocksMsg:
+	case (rw.version == eth60 || rw.version == eth61) && msg.Code == BlocksMsg:
 		packets, traffic = reqBlockOutPacketsMeter, reqBlockOutTrafficMeter
-	case BlockHeadersMsg:
+
+	case rw.version == eth62 && msg.Code == BlockHeadersMsg:
 		packets, traffic = reqHeaderOutPacketsMeter, reqHeaderOutTrafficMeter
-	case NodeDataMsg:
+	case rw.version == eth62 && msg.Code == BlockBodiesMsg:
+		packets, traffic = reqBodyOutPacketsMeter, reqBodyOutTrafficMeter
+
+	case rw.version == eth63 && msg.Code == NodeDataMsg:
 		packets, traffic = reqStateOutPacketsMeter, reqStateOutTrafficMeter
-	case NewBlockHashesMsg:
+	case rw.version == eth63 && msg.Code == ReceiptsMsg:
+		packets, traffic = reqReceiptOutPacketsMeter, reqReceiptOutTrafficMeter
+
+	case msg.Code == NewBlockHashesMsg:
 		packets, traffic = propHashOutPacketsMeter, propHashOutTrafficMeter
-	case NewBlockMsg:
+	case msg.Code == NewBlockMsg:
 		packets, traffic = propBlockOutPacketsMeter, propBlockOutTrafficMeter
-	case TxMsg:
+	case msg.Code == TxMsg:
 		packets, traffic = propTxnOutPacketsMeter, propTxnOutTrafficMeter
 	}
 	packets.Mark(1)
