@@ -615,7 +615,6 @@ func (self *ethApi) GetTransactionReceipt(req *shared.Request) (interface{}, err
 		v := NewReceiptRes(rec)
 		v.BlockHash = newHexData(bhash)
 		v.BlockNumber = newHexNum(bnum)
-		v.GasUsed = newHexNum(tx.Gas().Bytes())
 		v.TransactionIndex = newHexNum(txi)
 		return v, nil
 	}

@@ -82,6 +82,7 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	usedGas.Add(usedGas, gas)
 	receipt := types.NewReceipt(statedb.Root().Bytes(), usedGas)
 	receipt.TxHash = tx.Hash()
+	receipt.GasUsed = new(big.Int).Set(gas)
 	if MessageCreatesContract(tx) {
 		from, _ := tx.From()
 		receipt.ContractAddress = crypto.CreateAddress(from, tx.Nonce())
