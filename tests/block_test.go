@@ -71,3 +71,10 @@ func TestBcWallet(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestBcGasPricer(t *testing.T) {
+	err := RunBlockTest(filepath.Join(blockTestDir, "bcGasPricerTest.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}

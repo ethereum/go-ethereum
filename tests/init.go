@@ -20,22 +20,26 @@ var (
 	vmTestDir          = filepath.Join(baseDir, "VMTests")
 
 	BlockSkipTests = []string{
+		// Fails in InsertPreState with: computed state root does not
+		// match genesis block bba25a96 0d8f85c8 Christoph said it will be
+		// fixed eventually
 		"SimpleTx3",
 
-		// TODO: check why these fail
+		// These tests are not valid, as they are out of scope for RLP and
+		// the consensus protocol.
 		"BLOCK__RandomByteAtTheEnd",
 		"TRANSCT__RandomByteAtTheEnd",
 		"BLOCK__ZeroByteAtTheEnd",
 		"TRANSCT__ZeroByteAtTheEnd",
-
-		// TODO: why does this fail? should be check in ethash now
-		"DifficultyIsZero",
-
-		// TODO: why does this fail?
-		"wrongMixHash",
 	}
+
+	/* Go does not support transaction (account) nonces above 2^64. This
+	technically breaks consensus but is regarded as "reasonable
+	engineering constraint" as accounts cannot easily reach such high
+	nonce values in practice
+	*/
 	TransSkipTests = []string{"TransactionWithHihghNonce256"}
-	StateSkipTests = []string{"mload32bitBound_return", "mload32bitBound_return2"}
+	StateSkipTests = []string{}
 	VmSkipTests    = []string{}
 )
 
