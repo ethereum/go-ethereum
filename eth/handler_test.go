@@ -283,9 +283,9 @@ func TestGetNodeData63(t *testing.T) {
 	peer, _ := newTestPeer("peer", 63, pm, true)
 	defer peer.close()
 
-	// Fetch for now the entire state db
+	// Fetch for now the entire chain db
 	hashes := []common.Hash{}
-	for _, key := range pm.statedb.(*ethdb.MemDatabase).Keys() {
+	for _, key := range pm.chaindb.(*ethdb.MemDatabase).Keys() {
 		hashes = append(hashes, common.BytesToHash(key))
 	}
 	p2p.Send(peer.app, 0x0d, hashes)
@@ -325,5 +325,64 @@ func TestGetNodeData63(t *testing.T) {
 				t.Errorf("test %d, account %d: balance mismatch: have %v, want %v", i, j, bh, bw)
 			}
 		}
+	}
+}
+
+// Tests that the transaction receipts can be retrieved based on hashes.
+func TestGetReceipts63(t *testing.T) {
+	// Define three accounts to simulate transactions with
+	acc1Key, _ := crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+	acc2Key, _ := crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
+	acc1Addr := crypto.PubkeyToAddress(acc1Key.PublicKey)
+	acc2Addr := crypto.PubkeyToAddress(acc2Key.PublicKey)
+
+	// Create a chain generator with some simple transactions (blatantly stolen from @fjl/chain_makerts_test)
+	generator := func(i int, block *core.BlockGen) {
+		switch i {
+		case 0:
+			// In block 1, the test bank sends account #1 some ether.
+			tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(testBankKey)
+			block.AddTx(tx)
+		case 1:
+			// In block 2, the test bank sends some more ether to account #1.
+			// acc1Addr passes it on to account #2.
+			tx1, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(testBankKey)
+			tx2, _ := types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(acc1Key)
+			block.AddTx(tx1)
+			block.AddTx(tx2)
+		case 2:
+			// Block 3 is empty but was mined by account #2.
+			block.SetCoinbase(acc2Addr)
+			block.SetExtra([]byte("yeehaw"))
+		case 3:
+			// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
+			b2 := block.PrevBlock(1).Header()
+			b2.Extra = []byte("foo")
+			block.AddUncle(b2)
+			b3 := block.PrevBlock(2).Header()
+			b3.Extra = []byte("foo")
+			block.AddUncle(b3)
+		}
+	}
+	// Assemble the test environment
+	pm := newTestProtocolManager(4, generator, nil)
+	peer, _ := newTestPeer("peer", 63, pm, true)
+	defer peer.close()
+
+	// Collect the hashes to request, and the response to expect
+	hashes := []common.Hash{}
+	for i := uint64(0); i <= pm.chainman.CurrentBlock().NumberU64(); i++ {
+		for _, tx := range pm.chainman.GetBlockByNumber(i).Transactions() {
+			hashes = append(hashes, tx.Hash())
+		}
+	}
+	receipts := make([]*types.Receipt, len(hashes))
+	for i, hash := range hashes {
+		receipts[i] = core.GetReceipt(pm.chaindb, hash)
+	}
+	// Send the hash request and verify the response
+	p2p.Send(peer.app, 0x0f, hashes)
+	if err := p2p.ExpectMsg(peer.app, 0x10, receipts); err != nil {
+		t.Errorf("receipts mismatch: %v", err)
 	}
 }
