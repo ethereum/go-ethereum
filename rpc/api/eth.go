@@ -77,6 +77,7 @@ var (
 		"eth_submitWork":                          (*ethApi).SubmitWork,
 		"eth_resend":                              (*ethApi).Resend,
 		"eth_pendingTransactions":                 (*ethApi).PendingTransactions,
+		"eth_getTransactionReceipt":               (*ethApi).GetTransactionReceipt,
 	}
 )
 
@@ -595,4 +596,29 @@ func (self *ethApi) PendingTransactions(req *shared.Request) (interface{}, error
 	}
 
 	return ltxs, nil
+}
+
+func (self *ethApi) GetTransactionReceipt(req *shared.Request) (interface{}, error) {
+	args := new(HashArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	txhash := common.BytesToHash(common.FromHex(args.Hash))
+	tx, bhash, bnum, txi := self.xeth.EthTransactionByHash(args.Hash)
+	rec := self.xeth.GetTxReceipt(txhash)
+	// We could have an error of "not found". Should disambiguate
+	// if err != nil {
+	// 	return err, nil
+	// }
+	if rec != nil && tx != nil {
+		v := NewReceiptRes(rec)
+		v.BlockHash = newHexData(bhash)
+		v.BlockNumber = newHexNum(bnum)
+		v.GasUsed = newHexNum(tx.Gas().Bytes())
+		v.TransactionIndex = newHexNum(txi)
+		return v, nil
+	}
+
+	return nil, nil
 }

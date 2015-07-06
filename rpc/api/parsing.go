@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -401,6 +402,38 @@ func NewUncleRes(h *types.Header) *UncleRes {
 // 	Payload    string `json:"payload"`
 // 	WorkProved string `json:"workProved"`
 // }
+
+type ReceiptRes struct {
+	TransactionHash   *hexdata       `json:transactionHash`
+	TransactionIndex  *hexnum        `json:transactionIndex`
+	BlockNumber       *hexnum        `json:blockNumber`
+	BlockHash         *hexdata       `json:blockHash`
+	CumulativeGasUsed *hexnum        `json:cumulativeGasUsed`
+	GasUsed           *hexnum        `json:gasUsed`
+	ContractAddress   *hexdata       `json:contractAddress`
+	Logs              *[]interface{} `json:logs`
+}
+
+func NewReceiptRes(rec *types.Receipt) *ReceiptRes {
+	if rec == nil {
+		return nil
+	}
+
+	var v = new(ReceiptRes)
+	v.TransactionHash = newHexData(rec.TxHash)
+	// v.TransactionIndex = newHexNum(input)
+	// v.BlockNumber = newHexNum(input)
+	// v.BlockHash = newHexData(input)
+	v.CumulativeGasUsed = newHexNum(rec.CumulativeGasUsed)
+	// v.GasUsed = newHexNum(input)
+	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
+	if bytes.Compare(rec.ContractAddress.Bytes(), bytes.Repeat([]byte{0}, 20)) != 0 {
+		v.ContractAddress = newHexData(rec.ContractAddress)
+	}
+	// v.Logs = rec.Logs()
+
+	return v
+}
 
 func numString(raw interface{}) (*big.Int, error) {
 	var number *big.Int
