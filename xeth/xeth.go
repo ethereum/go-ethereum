@@ -978,7 +978,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 }
 
 func (self *XEth) sign(tx *types.Transaction, from common.Address, didUnlock bool) (*types.Transaction, error) {
-	hash := tx.Hash()
+	hash := tx.SigHash()
 	sig, err := self.doSign(from, hash, didUnlock)
 	if err != nil {
 		return tx, err
