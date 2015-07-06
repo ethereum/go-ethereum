@@ -25,7 +25,8 @@ var (
 		// fixed eventually
 		"SimpleTx3",
 
-		// TODO: check why these fail
+		// These tests are not valid, as they are out of scope for RLP and
+		// the consensus protocol.
 		"BLOCK__RandomByteAtTheEnd",
 		"TRANSCT__RandomByteAtTheEnd",
 		"BLOCK__ZeroByteAtTheEnd",
