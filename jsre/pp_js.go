@@ -97,7 +97,15 @@ var isMemberFunction = function(object, member) {
 }
 
 var isBigNumber = function (object) {
-    return typeof BigNumber !== 'undefined' && object instanceof BigNumber;
+    var result = typeof BigNumber !== 'undefined' && object instanceof BigNumber;
+
+    if (!result) {
+    	if(typeof(object) === "object") {
+			result = object.constructor.toString().indexOf("function BigNumber(") == 0;
+		}
+    }
+
+    return result
 };
 
 function prettyPrint(/* */) {
