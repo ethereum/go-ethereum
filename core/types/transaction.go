@@ -15,6 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+var ErrInvalidSig = errors.New("invalid v, r, s values")
+
 func IsContractAddr(addr []byte) bool {
 	return len(addr) == 0
 }
@@ -177,7 +179,7 @@ func (tx *Transaction) SignatureValues() (v byte, r *big.Int, s *big.Int) {
 
 func (tx *Transaction) publicKey() ([]byte, error) {
 	if !crypto.ValidateSignatureValues(tx.data.V, tx.data.R, tx.data.S) {
-		return nil, errors.New("invalid v, r, s values")
+		return nil, ErrInvalidSig
 	}
 
 	// encode the signature in uncompressed format

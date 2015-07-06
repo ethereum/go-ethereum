@@ -524,18 +524,18 @@ func (env *environment) commitTransactions(transactions types.Transactions, gasP
 
 		err := env.commitTransaction(tx, proc)
 		switch {
-		case core.IsNonceErr(err) || core.IsInvalidTxErr(err):
-			env.remove.Add(tx.Hash())
-
-			if glog.V(logger.Detail) {
-				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
-			}
 		case state.IsGasLimitErr(err):
 			// ignore the transactor so no nonce errors will be thrown for this account
 			// next time the worker is run, they'll be picked up again.
 			env.ignoredTransactors.Add(from)
 
 			glog.V(logger.Detail).Infof("Gas limit reached for (%x) in this block. Continue to try smaller txs\n", from[:4])
+		case err != nil:
+			env.remove.Add(tx.Hash())
+
+			if glog.V(logger.Detail) {
+				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
+			}
 		default:
 			env.tcount++
 		}
@@ -545,7 +545,7 @@ func (env *environment) commitTransactions(transactions types.Transactions, gasP
 func (env *environment) commitTransaction(tx *types.Transaction, proc *core.BlockProcessor) error {
 	snap := env.state.Copy()
 	receipt, _, err := proc.ApplyTransaction(env.coinbase, env.state, env.header, tx, env.header.GasUsed, true)
-	if err != nil && (core.IsNonceErr(err) || state.IsGasLimitErr(err) || core.IsInvalidTxErr(err)) {
+	if err != nil {
 		env.state.Set(snap)
 		return err
 	}
