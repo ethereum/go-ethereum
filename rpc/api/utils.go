@@ -91,8 +91,6 @@ var (
 		"net": []string{
 			"peerCount",
 			"listening",
-			"version",
-			"peers",
 		},
 		"personal": []string{
 			"listAccounts",

@@ -34,7 +34,7 @@ web3._extend({
 			name: 'verbosity',
 			call: 'admin_verbosity',
 			params: 1,
-			inputFormatter: [web3._extend.utils.toDecimal]
+			inputFormatter: [web3._extend.utils.fromDecimal]
 		}),
 		new web3._extend.Method({
 			name: 'setSolc',
@@ -46,7 +46,7 @@ web3._extend({
 			name: 'startRPC',
 			call: 'admin_startRPC',
 			params: 4,
-			inputFormatter: [null, web3._extend.utils.toDecimal, null, null]
+			inputFormatter: [null, null, null, null]
 		}),
 		new web3._extend.Method({
 			name: 'stopRPC',

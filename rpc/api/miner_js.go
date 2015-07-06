@@ -27,7 +27,7 @@ web3._extend({
 			name: 'setGasPrice',
 			call: 'miner_setGasPrice',
 			params: 1,
-			inputFormatter: [null]
+			inputFormatter: [web3._extend.utils.fromDecial]
 		}),
 		new web3._extend.Method({
 			name: 'startAutoDAG',
