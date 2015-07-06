@@ -30,7 +30,6 @@ func ParentError(hash common.Hash) error {
 
 func IsParentErr(err error) bool {
 	_, ok := err.(*ParentErr)
-
 	return ok
 }
 
@@ -48,7 +47,6 @@ func UncleError(format string, v ...interface{}) error {
 
 func IsUncleErr(err error) bool {
 	_, ok := err.(*UncleErr)
-
 	return ok
 }
 
@@ -67,7 +65,6 @@ func ValidationError(format string, v ...interface{}) *ValidationErr {
 
 func IsValidationErr(err error) bool {
 	_, ok := err.(*ValidationErr)
-
 	return ok
 }
 
@@ -86,7 +83,6 @@ func NonceError(is, exp uint64) *NonceErr {
 
 func IsNonceErr(err error) bool {
 	_, ok := err.(*NonceErr)
-
 	return ok
 }
 
@@ -121,24 +117,6 @@ func InvalidTxError(err error) *InvalidTxErr {
 
 func IsInvalidTxErr(err error) bool {
 	_, ok := err.(*InvalidTxErr)
-
-	return ok
-}
-
-type OutOfGasErr struct {
-	Message string
-}
-
-func OutOfGasError() *OutOfGasErr {
-	return &OutOfGasErr{Message: "Out of gas"}
-}
-func (self *OutOfGasErr) Error() string {
-	return self.Message
-}
-
-func IsOutOfGasErr(err error) bool {
-	_, ok := err.(*OutOfGasErr)
-
 	return ok
 }
 

@@ -53,7 +53,7 @@ func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.
 	if env.Depth() > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(self.Gas, self.price)
 
-		return nil, vm.DepthError{}
+		return nil, vm.DepthError
 	}
 
 	vsnapshot := env.State().Copy()
