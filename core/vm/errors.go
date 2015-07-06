@@ -22,7 +22,7 @@ func (self StackError) Error() string {
 	return fmt.Sprintf("stack error! require %v, have %v", self.req, self.has)
 }
 
-func IsStack(err error) bool {
+func IsStackErr(err error) bool {
 	_, ok := err.(StackError)
 	return ok
 }
