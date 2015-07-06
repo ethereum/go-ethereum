@@ -203,14 +203,21 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 				glog.V(logger.Core).Infoln("Insufficient gas for creating code. Require", dataGas, "and have", self.gas)
 			}
 		}
+		glog.V(logger.Core).Infoln("VM create err:", err)
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), sender.Nonce()+1)
 		ret, err = vmenv.Call(sender, self.To().Address(), self.data, self.gas, self.gasPrice, self.value)
+		glog.V(logger.Core).Infoln("VM call err:", err)
 	}
 
 	if err != nil && IsValueTransferErr(err) {
 		return nil, nil, InvalidTxError(err)
+	}
+
+	// We aren't interested in errors here. Errors returned by the VM are non-consensus errors and therefor shouldn't bubble up
+	if err != nil {
+		err = nil
 	}
 
 	if vm.Debug {
