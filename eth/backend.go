@@ -87,7 +87,7 @@ type Config struct {
 	Shh  bool
 	Dial bool
 
-	Etherbase      string
+	Etherbase      common.Address
 	GasPrice       *big.Int
 	MinerThreads   int
 	AccountManager *accounts.Manager
@@ -322,7 +322,7 @@ func New(config *Config) (*Ethereum, error) {
 		eventMux:                &event.TypeMux{},
 		accountManager:          config.AccountManager,
 		DataDir:                 config.DataDir,
-		etherbase:               common.HexToAddress(config.Etherbase),
+		etherbase:               config.Etherbase,
 		clientVersion:           config.Name, // TODO should separate from Name
 		netVersionId:            config.NetworkId,
 		NatSpec:                 config.NatSpec,
@@ -467,6 +467,11 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 		err = fmt.Errorf("etherbase address must be explicitly specified")
 	}
 	return
+}
+
+// set in js console via admin interface or wrapper from cli flags
+func (self *Ethereum) SetEtherbase(etherbase common.Address) {
+	self.etherbase = etherbase
 }
 
 func (s *Ethereum) StopMining()         { s.miner.Stop() }

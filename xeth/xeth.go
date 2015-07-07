@@ -504,15 +504,6 @@ func (self *XEth) IsContract(address string) bool {
 	return len(self.State().SafeGet(address).Code()) > 0
 }
 
-func (self *XEth) SecretToAddress(key string) string {
-	pair, err := crypto.NewKeyPairFromSec(common.FromHex(key))
-	if err != nil {
-		return ""
-	}
-
-	return common.ToHex(pair.Address())
-}
-
 func (self *XEth) UninstallFilter(id int) bool {
 	defer self.filterManager.UninstallFilter(id)
 

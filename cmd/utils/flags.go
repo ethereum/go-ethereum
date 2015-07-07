@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/metrics"
 
@@ -122,8 +123,8 @@ var (
 	}
 	EtherbaseFlag = cli.StringFlag{
 		Name:  "etherbase",
-		Usage: "Public address for block mining rewards. By default the address of your primary account is used",
-		Value: "primary",
+		Usage: "Public address for block mining rewards. By default the address first created is used",
+		Value: "0",
 	}
 	GasPriceFlag = cli.StringFlag{
 		Name:  "gasprice",
@@ -351,6 +352,8 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	if len(customName) > 0 {
 		clientID += "/" + customName
 	}
+	am := MakeAccountManager(ctx)
+
 	return &eth.Config{
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 ctx.GlobalString(DataDirFlag.Name),
@@ -361,9 +364,9 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		LogFile:                 ctx.GlobalString(LogFileFlag.Name),
 		Verbosity:               ctx.GlobalInt(VerbosityFlag.Name),
 		LogJSON:                 ctx.GlobalString(LogJSONFlag.Name),
-		Etherbase:               ctx.GlobalString(EtherbaseFlag.Name),
+		Etherbase:               common.HexToAddress(ParamToAddress(ctx.GlobalString(EtherbaseFlag.Name), am)),
 		MinerThreads:            ctx.GlobalInt(MinerThreadsFlag.Name),
-		AccountManager:          MakeAccountManager(ctx),
+		AccountManager:          am,
 		VmDebug:                 ctx.GlobalBool(VMDebugFlag.Name),
 		MaxPeers:                ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers:         ctx.GlobalInt(MaxPendingPeersFlag.Name),
@@ -487,4 +490,21 @@ func StartPProf(ctx *cli.Context) {
 	go func() {
 		log.Println(http.ListenAndServe(address, nil))
 	}()
+}
+
+func ParamToAddress(addr string, am *accounts.Manager) (addrHex string) {
+	if !((len(addr) == 40) || (len(addr) == 42)) { // with or without 0x
+		index, err := strconv.Atoi(addr)
+		if err != nil {
+			Fatalf("Invalid account address '%s'", addr)
+		}
+
+		addrHex, err = am.AddressByIndex(index)
+		if err != nil {
+			Fatalf("%v", err)
+		}
+	} else {
+		addrHex = addr
+	}
+	return
 }
