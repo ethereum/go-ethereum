@@ -14,12 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-/**
- * @authors:
- * 	Jeffrey Wilcke <i@jev.io>
- * 	Taylor Gerring <taylor.gerring@gmail.com>
- */
-
 package main
 
 import (

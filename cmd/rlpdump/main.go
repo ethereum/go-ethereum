@@ -14,11 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-/**
- * @authors
- * 	Felix Lange <felix@ethdev.com>
- */
-
 // rlpdump is a pretty-printer for RLP data.
 package main
 

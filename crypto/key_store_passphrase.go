@@ -14,13 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-/**
- * @authors
- * 	Gustav Simonsson <gustav.simonsson@gmail.com>
- * @date 2015
- *
- */
-
 /*
 
 This key store behaves as KeyStorePlain with the difference that

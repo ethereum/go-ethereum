@@ -14,12 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-/**
- * @authors
- * 	Gustav Simonsson <gustav.simonsson@gmail.com>
- * @date 2015
- *
- */
 /*
 
 This abstracts part of a user's interaction with an account she controls.
