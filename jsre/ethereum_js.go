@@ -1417,7 +1417,7 @@ module.exports = {
 
 },{"bignumber.js":"bignumber.js"}],8:[function(require,module,exports){
 module.exports={
-    "version": "0.7.1"
+    "version": "0.8.0"
 }
 
 },{}],9:[function(require,module,exports){
@@ -1840,6 +1840,55 @@ var contract = function (abi) {
 };
 
 /**
+ * Should be called to create new ContractFactory
+ *
+ * @method checkForContractAddress
+ * @param {Object} contract
+ * @param {Function} callback
+ * @returns {Undefined}
+ */
+var checkForContractAddress = function(contract, callback){
+    var count = 0;
+
+    // wait for receipt
+    var filter = web3.eth.filter('latest', function(e){
+        if(!e) {
+            count++;
+
+            // stop watching after 50 blocks (timeout)
+            if(count > 50) {
+                if(callback)
+                    callback(new Error('Contract couldn\'t be deployed'));
+
+                filter.stopWatching();
+
+            } else {
+
+                web3.eth.getTransactionReceipt(contract.transactionHash, function(e, receipt){
+                    if(receipt) {
+
+                        web3.eth.getCode(receipt.contractAddress, function(e, code){
+                            if(code.length > 2) {
+
+                                contract.address = receipt.contractAddress;
+
+                                if(callback)
+                                    callback(null, contract);
+
+                            } else if(callback) {
+                                callback(new Error('The contract code couldn\'t be stored'));
+                            }
+
+                            filter.stopWatching();
+                        });
+                    }
+                });
+            }
+        }
+    });
+};
+
+/**
  * Should be called to create new ContractFactory instance
  *
  * @method ContractFactory
@@ -1857,10 +1906,11 @@ var ContractFactory = function (abi) {
  * @param {Any} contract constructor param2 (optional)
  * @param {Object} contract transaction object (required)
  * @param {Function} callback
- * @returns {Contract} returns contract if no callback was passed,
- * otherwise calls callback function (err, contract)
+ * @returns {Contract} returns contract instance
  */
 ContractFactory.prototype.new = function () {
+    var contract = new Contract(this.abi);
+
     // parse arguments
     var options = {}; // required!
     var callback;
@@ -1880,18 +1930,27 @@ ContractFactory.prototype.new = function () {
     var bytes = encodeConstructorParams(this.abi, args);
     options.data += bytes;
 
-    if (!callback) {
-        var address = web3.eth.sendTransaction(options);
-        return this.at(address);
+
+    if(callback) {
+
+        // wait for the contract address adn check if the code was deployed
+        web3.eth.sendTransaction(options, function (err, hash) {
+            if (err) {
+                callback(err);
+            } else {
+                // add the transaction hash
+                contract.transactionHash = hash;
+                checkForContractAddress(contract, callback);
+            }
+        });
+    } else {
+        var hash = web3.eth.sendTransaction(options);
+        // add the transaction hash
+        contract.transactionHash = hash;
+        checkForContractAddress(contract);
     }
-  
-    var self = this;
-    web3.eth.sendTransaction(options, function (err, address) {
-        if (err) {
-            callback(err);
-        }
-        self.at(address, callback); 
-    }); 
+
+    return contract;
 };
 
 /**
