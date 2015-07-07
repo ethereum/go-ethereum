@@ -92,7 +92,7 @@ func New(b Backend) (res *Registrar) {
 	return
 }
 
-func (self *Registrar) SetGlobalRegistrar(namereg string, addr common.Address) (err error) {
+func (self *Registrar) SetGlobalRegistrar(namereg string, addr common.Address) (txhash string, err error) {
 	if namereg != "" {
 		GlobalRegistrarAddr = namereg
 		return
@@ -102,7 +102,7 @@ func (self *Registrar) SetGlobalRegistrar(namereg string, addr common.Address) (
 			err = fmt.Errorf("GlobalRegistrar address not found and sender for creation not given")
 			return
 		} else {
-			GlobalRegistrarAddr, err = self.backend.Transact(addr.Hex(), "", "", "", "800000", "", GlobalRegistrarCode)
+			txhash, err = self.backend.Transact(addr.Hex(), "", "", "", "800000", "", GlobalRegistrarCode)
 			if err != nil {
 				err = fmt.Errorf("GlobalRegistrar address not found and sender for creation failed: %v", err)
 				return
@@ -112,7 +112,7 @@ func (self *Registrar) SetGlobalRegistrar(namereg string, addr common.Address) (
 	return
 }
 
-func (self *Registrar) SetHashReg(hashreg string, addr common.Address) (err error) {
+func (self *Registrar) SetHashReg(hashreg string, addr common.Address) (txhash string, err error) {
 	if hashreg != "" {
 		HashRegAddr = hashreg
 	} else {
@@ -133,25 +133,21 @@ func (self *Registrar) SetHashReg(hashreg string, addr common.Address) (err erro
 				return
 			}
 
-			HashRegAddr, err = self.backend.Transact(addr.Hex(), "", "", "", "", "", HashRegCode)
+			txhash, err = self.backend.Transact(addr.Hex(), "", "", "", "", "", HashRegCode)
 			if err != nil {
 				err = fmt.Errorf("HashReg address not found and sender for creation failed: %v", err)
 			}
-			glog.V(logger.Detail).Infof("created HashRegAddr @ %v\n", HashRegAddr)
+			glog.V(logger.Detail).Infof("created HashRegAddr @ txhash %v\n", txhash)
 		} else {
 			glog.V(logger.Detail).Infof("HashRegAddr found at @ %v\n", HashRegAddr)
 			return
 		}
 	}
 
-	// register as HashReg
-	self.ReserveName(addr, HashRegName)
-	self.SetAddressToName(addr, HashRegName, common.HexToAddress(HashRegAddr))
-
 	return
 }
 
-func (self *Registrar) SetUrlHint(urlhint string, addr common.Address) (err error) {
+func (self *Registrar) SetUrlHint(urlhint string, addr common.Address) (txhash string, err error) {
 	if urlhint != "" {
 		UrlHintAddr = urlhint
 	} else {
@@ -171,20 +167,16 @@ func (self *Registrar) SetUrlHint(urlhint string, addr common.Address) (err erro
 				err = fmt.Errorf("UrlHint address not found and sender for creation not given")
 				return
 			}
-			UrlHintAddr, err = self.backend.Transact(addr.Hex(), "", "", "", "210000", "", UrlHintCode)
+			txhash, err = self.backend.Transact(addr.Hex(), "", "", "", "210000", "", UrlHintCode)
 			if err != nil {
 				err = fmt.Errorf("UrlHint address not found and sender for creation failed: %v", err)
 			}
-			glog.V(logger.Detail).Infof("created UrlHint @ %v\n", HashRegAddr)
+			glog.V(logger.Detail).Infof("created UrlHint @ txhash %v\n", txhash)
 		} else {
 			glog.V(logger.Detail).Infof("UrlHint found @ %v\n", HashRegAddr)
 			return
 		}
 	}
-
-	// register as UrlHint
-	self.ReserveName(addr, UrlHintName)
-	self.SetAddressToName(addr, UrlHintName, common.HexToAddress(UrlHintAddr))
 
 	return
 }
@@ -348,6 +340,7 @@ func (self *Registrar) HashToUrl(chash common.Hash) (uri string, err error) {
 		uri = uri + str
 		idx++
 	}
+
 	if len(uri) == 0 {
 		err = fmt.Errorf("GetURLhint: URL hint not found for '%v'", chash.Hex())
 	}

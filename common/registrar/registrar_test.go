@@ -59,7 +59,7 @@ func (self *testBackend) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, cod
 func TestSetGlobalRegistrar(t *testing.T) {
 	b := NewTestBackend()
 	res := New(b)
-	err := res.SetGlobalRegistrar("addresshex", common.BigToAddress(common.Big1))
+	_, err := res.SetGlobalRegistrar("addresshex", common.BigToAddress(common.Big1))
 	if err != nil {
 		t.Errorf("unexpected error: %v'", err)
 	}
