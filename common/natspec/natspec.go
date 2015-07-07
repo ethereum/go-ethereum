@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/robertkrimen/otto"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/robertkrimen/otto"
 )
 
 type abi2method map[[8]byte]*method

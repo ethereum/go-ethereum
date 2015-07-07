@@ -18,8 +18,9 @@ package randentropy
 
 import (
 	crand "crypto/rand"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"io"
+
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
 var Reader io.Reader = &randEntropy{}
