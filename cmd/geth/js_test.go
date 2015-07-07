@@ -257,7 +257,7 @@ func TestContract(t *testing.T) {
 	t.Skip("contract testing is implemented with mining in ethash test mode. This takes about 7seconds to run. Unskip and run on demand")
 	coinbase := common.HexToAddress(testAddress)
 	tmp, repl, ethereum := testREPL(t, func(conf *eth.Config) {
-		conf.Etherbase = testAddress
+		conf.Etherbase = coinbase
 		conf.PowTest = true
 	})
 	if err := ethereum.Start(); err != nil {
