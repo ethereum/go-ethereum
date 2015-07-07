@@ -54,7 +54,7 @@ var (
 
 	// this regexp must match the entire license comment at the
 	// beginning of each file.
-	licenseCommentRE = regexp.MustCompile(`(?s)^/\*\s*(Copyright|This file is part of) .*?\*/\n*`)
+	licenseCommentRE = regexp.MustCompile(`^//\s*(Copyright|This file is part of).*?\n(?://.*?\n)*\n*`)
 
 	// this text appears at the start of AUTHORS
 	authorsFileHeader = "# This is the official list of go-ethereum authors for copyright purposes.\n\n"
