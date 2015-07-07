@@ -72,19 +72,15 @@ func TestNoCompiler(t *testing.T) {
 	}
 }
 
-func TestExtractInfo(t *testing.T) {
+func TestSaveInfo(t *testing.T) {
 	var cinfo ContractInfo
 	err := json.Unmarshal([]byte(info), &cinfo)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	contract := &Contract{
-		Code: "",
-		Info: cinfo,
-	}
 	filename := "/tmp/solctest.info.json"
 	os.Remove(filename)
-	cinfohash, err := ExtractInfo(contract, filename)
+	cinfohash, err := SaveInfo(&cinfo, filename)
 	if err != nil {
 		t.Errorf("error extracting info: %v", err)
 	}

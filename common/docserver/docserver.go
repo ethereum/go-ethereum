@@ -4,34 +4,26 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// http://golang.org/pkg/net/http/#RoundTripper
-var (
-	schemes = map[string]func(*DocServer) http.RoundTripper{
-		// Simple File server from local disk file:///etc/passwd :)
-		"file": fileServerOnDocRoot,
-	}
-)
-
-func fileServerOnDocRoot(ds *DocServer) http.RoundTripper {
-	return http.NewFileTransport(http.Dir(ds.DocRoot))
-}
-
 type DocServer struct {
 	*http.Transport
 	DocRoot string
+	schemes []string
 }
 
-func New(docRoot string) (self *DocServer, err error) {
+func New(docRoot string) (self *DocServer) {
 	self = &DocServer{
 		Transport: &http.Transport{},
 		DocRoot:   docRoot,
+		schemes:   []string{"file"},
 	}
-	err = self.RegisterProtocols(schemes)
+	self.DocRoot = "/tmp/"
+	self.RegisterProtocol("file", http.NewFileTransport(http.Dir(self.DocRoot)))
 	return
 }
 
@@ -45,16 +37,44 @@ func (self *DocServer) Client() *http.Client {
 	}
 }
 
-func (self *DocServer) RegisterProtocols(schemes map[string]func(*DocServer) http.RoundTripper) (err error) {
-	for scheme, rtf := range schemes {
-		self.RegisterProtocol(scheme, rtf(self))
+func (self *DocServer) RegisterScheme(scheme string, rt http.RoundTripper) {
+	self.schemes = append(self.schemes, scheme)
+	self.RegisterProtocol(scheme, rt)
+}
+
+func (self *DocServer) HasScheme(scheme string) bool {
+	for _, s := range self.schemes {
+		if s == scheme {
+			return true
+		}
 	}
-	return
+	return false
 }
 
 func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []byte, err error) {
 	// retrieve content
+	content, err = self.Get(uri, "")
+	if err != nil {
+		return
+	}
+
+	// check hash to authenticate content
+	chash := crypto.Sha3Hash(content)
+	if chash != hash {
+		content = nil
+		err = fmt.Errorf("content hash mismatch %x != %x (exp)", hash[:], chash[:])
+	}
+
+	return
+
+}
+
+// Get(uri, path) downloads the document at uri, if path is non-empty it
+// is interpreted as a filepath to which the contents are saved
+func (self *DocServer) Get(uri, path string) (content []byte, err error) {
+	// retrieve content
 	resp, err := self.Client().Get(uri)
+
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
@@ -68,13 +88,10 @@ func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []b
 		return
 	}
 
-	// check hash to authenticate content
-	hashbytes := crypto.Sha3(content)
-	var chash common.Hash
-	copy(chash[:], hashbytes)
-	if chash != hash {
-		content = nil
-		err = fmt.Errorf("content hash mismatch")
+	if path != "" {
+		var abspath string
+		abspath, err = filepath.Abs(path)
+		ioutil.WriteFile(abspath, content, 0700)
 	}
 
 	return

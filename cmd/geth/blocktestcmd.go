@@ -86,7 +86,6 @@ func runBlockTest(ctx *cli.Context) {
 }
 
 func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, error) {
-	// TODO remove in favor of logic contained in tests package
 	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
 	cfg.NewDB = func(path string) (common.Database, error) { return ethdb.NewMemDatabase() }
 	cfg.MaxPeers = 0 // disable network
