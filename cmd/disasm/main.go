@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+// disasm is a pretty-printer for EVM bytecode.
 package main
 
 import (

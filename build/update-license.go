@@ -16,6 +16,7 @@ address for each author. See git-shortlog(1) for an explanation of the
 Please review the resulting diff to check whether the correct
 copyright assignments are performed.
 */
+
 package main
 
 import (

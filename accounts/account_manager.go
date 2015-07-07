@@ -14,17 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-/*
-
-This abstracts part of a user's interaction with an account she controls.
-It's not an abstraction of core Ethereum accounts data type / logic -
-for that see the core processing code of blocks / txs.
-
-Currently this is pretty much a passthrough to the KeyStore interface,
-and accounts persistence is derived from stored keys' addresses
-
-*/
+// Package implements a private key management facility.
+//
+// This abstracts part of a user's interaction with an account she controls.
 package accounts
+
+// Currently this is pretty much a passthrough to the KeyStore interface,
+// and accounts persistence is derived from stored keys' addresses
 
 import (
 	"crypto/ecdsa"
