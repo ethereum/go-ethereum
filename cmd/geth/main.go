@@ -461,22 +461,7 @@ func execJSFiles(ctx *cli.Context) {
 
 func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (addrHex, auth string) {
 	var err error
-	// Load startup keys. XXX we are going to need a different format
-
-	if !((len(addr) == 40) || (len(addr) == 42)) { // with or without 0x
-		var index int
-		index, err = strconv.Atoi(addr)
-		if err != nil {
-			utils.Fatalf("Invalid account address '%s'", addr)
-		}
-
-		addrHex, err = am.AddressByIndex(index)
-		if err != nil {
-			utils.Fatalf("%v", err)
-		}
-	} else {
-		addrHex = addr
-	}
+	addrHex = utils.ParamToAddress(addr, am)
 	// Attempt to unlock the account 3 times
 	attempts := 3
 	for tries := 0; tries < attempts; tries++ {

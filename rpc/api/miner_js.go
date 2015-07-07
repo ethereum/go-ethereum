@@ -18,6 +18,13 @@ web3._extend({
 			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
+			name: 'setEtherbase',
+			call: 'miner_setEtherbase',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.formatInputInt],
+			outputFormatter: web3._extend.formatters.formatOutputBool
+		}),
+		new web3._extend.Method({
 			name: 'setExtra',
 			call: 'miner_setExtra',
 			params: 1,
