@@ -369,6 +369,10 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		clientID += "/" + customName
 	}
 	am := MakeAccountManager(ctx)
+	etherbase, err := ParamToAddress(ctx.GlobalString(EtherbaseFlag.Name), am)
+	if err != nil {
+		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
+	}
 
 	return &eth.Config{
 		Name:                    common.MakeName(clientID, version),
@@ -380,7 +384,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		LogFile:                 ctx.GlobalString(LogFileFlag.Name),
 		Verbosity:               ctx.GlobalInt(VerbosityFlag.Name),
 		LogJSON:                 ctx.GlobalString(LogJSONFlag.Name),
-		Etherbase:               common.HexToAddress(ParamToAddress(ctx.GlobalString(EtherbaseFlag.Name), am)),
+		Etherbase:               common.HexToAddress(etherbase),
 		MinerThreads:            ctx.GlobalInt(MinerThreadsFlag.Name),
 		AccountManager:          am,
 		VmDebug:                 ctx.GlobalBool(VMDebugFlag.Name),
@@ -508,7 +512,7 @@ func StartPProf(ctx *cli.Context) {
 	}()
 }
 
-func ParamToAddress(addr string, am *accounts.Manager) (addrHex string) {
+func ParamToAddress(addr string, am *accounts.Manager) (addrHex string, err error) {
 	if !((len(addr) == 40) || (len(addr) == 42)) { // with or without 0x
 		index, err := strconv.Atoi(addr)
 		if err != nil {
@@ -517,7 +521,7 @@ func ParamToAddress(addr string, am *accounts.Manager) (addrHex string) {
 
 		addrHex, err = am.AddressByIndex(index)
 		if err != nil {
-			Fatalf("%v", err)
+			return "", err
 		}
 	} else {
 		addrHex = addr
