@@ -268,18 +268,24 @@ func TestContract(t *testing.T) {
 	defer os.RemoveAll(tmp)
 
 	reg := registrar.New(repl.xeth)
-	err := reg.SetGlobalRegistrar("", coinbase)
+	_, err := reg.SetGlobalRegistrar("", coinbase)
 	if err != nil {
 		t.Errorf("error setting HashReg: %v", err)
 	}
-	err = reg.SetHashReg("", coinbase)
+	_, err = reg.SetHashReg("", coinbase)
 	if err != nil {
 		t.Errorf("error setting HashReg: %v", err)
 	}
-	err = reg.SetUrlHint("", coinbase)
+	_, err = reg.SetUrlHint("", coinbase)
 	if err != nil {
 		t.Errorf("error setting HashReg: %v", err)
 	}
+	/* TODO:
+	* lookup receipt and contract addresses by tx hash
+	* name registration for HashReg and UrlHint addresses
+	* mine those transactions
+	* then set once more SetHashReg SetUrlHint
+	 */
 
 	source := `contract test {\n` +
 		"   /// @notice Will multiply `a` by 7." + `\n` +

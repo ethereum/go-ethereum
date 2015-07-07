@@ -322,12 +322,12 @@ func (self *adminApi) SetGlobalRegistrar(req *shared.Request) (interface{}, erro
 	sender := common.HexToAddress(args.ContractAddress)
 
 	reg := registrar.New(self.xeth)
-	err := reg.SetGlobalRegistrar(args.NameReg, sender)
+	txhash, err := reg.SetGlobalRegistrar(args.NameReg, sender)
 	if err != nil {
 		return false, err
 	}
 
-	return registrar.GlobalRegistrarAddr, nil
+	return txhash, nil
 }
 
 func (self *adminApi) SetHashReg(req *shared.Request) (interface{}, error) {
@@ -338,12 +338,12 @@ func (self *adminApi) SetHashReg(req *shared.Request) (interface{}, error) {
 
 	reg := registrar.New(self.xeth)
 	sender := common.HexToAddress(args.Sender)
-	err := reg.SetHashReg(args.HashReg, sender)
+	txhash, err := reg.SetHashReg(args.HashReg, sender)
 	if err != nil {
 		return false, err
 	}
 
-	return registrar.HashRegAddr, nil
+	return txhash, nil
 }
 
 func (self *adminApi) SetUrlHint(req *shared.Request) (interface{}, error) {
@@ -356,12 +356,12 @@ func (self *adminApi) SetUrlHint(req *shared.Request) (interface{}, error) {
 	sender := common.HexToAddress(args.Sender)
 
 	reg := registrar.New(self.xeth)
-	err := reg.SetUrlHint(urlHint, sender)
+	txhash, err := reg.SetUrlHint(urlHint, sender)
 	if err != nil {
 		return nil, err
 	}
 
-	return registrar.UrlHintAddr, nil
+	return txhash, nil
 }
 
 func (self *adminApi) SaveInfo(req *shared.Request) (interface{}, error) {
