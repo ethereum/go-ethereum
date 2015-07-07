@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package types
 
 import (
@@ -14,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+var ErrInvalidSig = errors.New("invalid v, r, s values")
 
 func IsContractAddr(addr []byte) bool {
 	return len(addr) == 0
@@ -116,11 +134,21 @@ func (tx *Transaction) To() *common.Address {
 	}
 }
 
+// Hash hashes the RLP encoding of tx.
+// It uniquely identifies the transaction.
 func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
-	v := rlpHash([]interface{}{
+	v := rlpHash(tx)
+	tx.hash.Store(v)
+	return v
+}
+
+// SigHash returns the hash to be signed by the sender.
+// It does not uniquely identify the transaction.
+func (tx *Transaction) SigHash() common.Hash {
+	return rlpHash([]interface{}{
 		tx.data.AccountNonce,
 		tx.data.Price,
 		tx.data.GasLimit,
@@ -128,8 +156,6 @@ func (tx *Transaction) Hash() common.Hash {
 		tx.data.Amount,
 		tx.data.Payload,
 	})
-	tx.hash.Store(v)
-	return v
 }
 
 func (tx *Transaction) Size() common.StorageSize {
@@ -169,7 +195,7 @@ func (tx *Transaction) SignatureValues() (v byte, r *big.Int, s *big.Int) {
 
 func (tx *Transaction) publicKey() ([]byte, error) {
 	if !crypto.ValidateSignatureValues(tx.data.V, tx.data.R, tx.data.S) {
-		return nil, errors.New("invalid v, r, s values")
+		return nil, ErrInvalidSig
 	}
 
 	// encode the signature in uncompressed format
@@ -180,7 +206,7 @@ func (tx *Transaction) publicKey() ([]byte, error) {
 	sig[64] = tx.data.V - 27
 
 	// recover the public key from the signature
-	hash := tx.Hash()
+	hash := tx.SigHash()
 	pub, err := crypto.Ecrecover(hash[:], sig)
 	if err != nil {
 		glog.V(logger.Error).Infof("Could not get pubkey from signature: ", err)
@@ -204,7 +230,7 @@ func (tx *Transaction) WithSignature(sig []byte) (*Transaction, error) {
 }
 
 func (tx *Transaction) SignECDSA(prv *ecdsa.PrivateKey) (*Transaction, error) {
-	h := tx.Hash()
+	h := tx.SigHash()
 	sig, err := crypto.Sign(h[:], prv)
 	if err != nil {
 		return nil, err

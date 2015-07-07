@@ -1,0 +1,11 @@
+{
+	"int32Overflow": {
+		"in": "INVALID", 
+		"out": "bf0f000000000000021111"
+	},
+
+	"int32Overflow2": {
+		"in": "INVALID", 
+		"out": "ff0f000000000000021111"
+	},
+}

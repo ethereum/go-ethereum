@@ -1,25 +1,18 @@
-/*
-	This file is part of go-ethereum
-
-	go-ethereum is free software: you can redistribute it and/or modify
-	it under the terms of the GNU Lesser General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
-
-	go-ethereum is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
-
-	You should have received a copy of the GNU Lesser General Public License
-	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/**
- * @authors
- * 	Gustav Simonsson <gustav.simonsson@gmail.com>
- * @date 2015
- *
- */
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 /*
 
@@ -41,8 +34,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"reflect"
 
 	"code.google.com/p/go-uuid/uuid"
@@ -65,7 +56,7 @@ type keyStorePassphrase struct {
 	keysDirPath string
 }
 
-func NewKeyStorePassphrase(path string) KeyStore2 {
+func NewKeyStorePassphrase(path string) KeyStore {
 	return &keyStorePassphrase{path}
 }
 
@@ -74,20 +65,23 @@ func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *K
 }
 
 func (ks keyStorePassphrase) GetKey(keyAddr common.Address, auth string) (key *Key, err error) {
-	keyBytes, keyId, err := DecryptKeyFromFile(ks, keyAddr, auth)
-	if err != nil {
-		return nil, err
+	keyBytes, keyId, err := decryptKeyFromFile(ks.keysDirPath, keyAddr, auth)
+	if err == nil {
+		key = &Key{
+			Id:         uuid.UUID(keyId),
+			Address:    keyAddr,
+			PrivateKey: ToECDSA(keyBytes),
+		}
 	}
-	key = &Key{
-		Id:         uuid.UUID(keyId),
-		Address:    keyAddr,
-		PrivateKey: ToECDSA(keyBytes),
-	}
-	return key, err
+	return
+}
+
+func (ks keyStorePassphrase) Cleanup(keyAddr common.Address) (err error) {
+	return cleanup(ks.keysDirPath, keyAddr)
 }
 
 func (ks keyStorePassphrase) GetKeyAddresses() (addresses []common.Address, err error) {
-	return GetKeyAddresses(ks.keysDirPath)
+	return getKeyAddresses(ks.keysDirPath)
 }
 
 func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
@@ -139,42 +133,40 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		return err
 	}
 
-	return WriteKeyFile(key.Address, ks.keysDirPath, keyJSON)
+	return writeKeyFile(key.Address, ks.keysDirPath, keyJSON)
 }
 
 func (ks keyStorePassphrase) DeleteKey(keyAddr common.Address, auth string) (err error) {
 	// only delete if correct passphrase is given
-	_, _, err = DecryptKeyFromFile(ks, keyAddr, auth)
+	_, _, err = decryptKeyFromFile(ks.keysDirPath, keyAddr, auth)
 	if err != nil {
 		return err
 	}
 
-	keyDirPath := filepath.Join(ks.keysDirPath, hex.EncodeToString(keyAddr[:]))
-	return os.RemoveAll(keyDirPath)
+	return deleteKey(ks.keysDirPath, keyAddr)
 }
 
-func DecryptKeyFromFile(ks keyStorePassphrase, keyAddr common.Address, auth string) (keyBytes []byte, keyId []byte, err error) {
-	fileContent, err := GetKeyFile(ks.keysDirPath, keyAddr)
-	if err != nil {
-		return nil, nil, err
-	}
-
+func decryptKeyFromFile(keysDirPath string, keyAddr common.Address, auth string) (keyBytes []byte, keyId []byte, err error) {
+	fmt.Printf("%v\n", keyAddr.Hex())
 	m := make(map[string]interface{})
-	err = json.Unmarshal(fileContent, &m)
+	err = getKey(keysDirPath, keyAddr, &m)
+	if err != nil {
+		return
+	}
 
 	v := reflect.ValueOf(m["version"])
 	if v.Kind() == reflect.String && v.String() == "1" {
 		k := new(encryptedKeyJSONV1)
-		err := json.Unmarshal(fileContent, k)
+		err = getKey(keysDirPath, keyAddr, &k)
 		if err != nil {
-			return nil, nil, err
+			return
 		}
 		return decryptKeyV1(k, auth)
 	} else {
 		k := new(encryptedKeyJSONV3)
-		err := json.Unmarshal(fileContent, k)
+		err = getKey(keysDirPath, keyAddr, &k)
 		if err != nil {
-			return nil, nil, err
+			return
 		}
 		return decryptKeyV3(k, auth)
 	}

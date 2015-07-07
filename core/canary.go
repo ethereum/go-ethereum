@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package core
 
 import (
@@ -8,10 +24,10 @@ import (
 )
 
 var (
-	jeff      = common.HexToAddress("9d38997c624a71b21278389ea2fdc460d000e4b2")
-	vitalik   = common.HexToAddress("b1e570be07eaa673e4fd0c8265b64ef739385709")
-	christoph = common.HexToAddress("529bc43a5d93789fa28de1961db6a07e752204ae")
-	gav       = common.HexToAddress("e3e942b2aa524293c84ff6c7f87a6635790ad5e4")
+	jeff      = common.HexToAddress("a8edb1ac2c86d3d9d78f96cd18001f60df29e52c")
+	vitalik   = common.HexToAddress("1baf27b88c48dd02b744999cf3522766929d2b2a")
+	christoph = common.HexToAddress("60d11b58744784dc97f878f7e3749c0f1381a004")
+	gav       = common.HexToAddress("4bb7e8ae99b645c2b7860b8f3a2328aae28bd80a")
 )
 
 // Canary will check the 0'd address of the 4 contracts above.

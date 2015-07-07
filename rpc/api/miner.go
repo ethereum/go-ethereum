@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
@@ -19,6 +35,7 @@ var (
 		"miner_makeDAG":      (*minerApi).MakeDAG,
 		"miner_setExtra":     (*minerApi).SetExtra,
 		"miner_setGasPrice":  (*minerApi).SetGasPrice,
+		"miner_setEtherbase": (*minerApi).SetEtherbase,
 		"miner_startAutoDAG": (*minerApi).StartAutoDAG,
 		"miner_start":        (*minerApi).StartMiner,
 		"miner_stopAutoDAG":  (*minerApi).StopAutoDAG,
@@ -117,6 +134,15 @@ func (self *minerApi) SetGasPrice(req *shared.Request) (interface{}, error) {
 
 	self.ethereum.Miner().SetGasPrice(common.String2Big(args.Price))
 	return true, nil
+}
+
+func (self *minerApi) SetEtherbase(req *shared.Request) (interface{}, error) {
+	args := new(SetEtherbaseArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return false, err
+	}
+	self.ethereum.SetEtherbase(args.Etherbase)
+	return nil, nil
 }
 
 func (self *minerApi) StartAutoDAG(req *shared.Request) (interface{}, error) {

@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 // Contains the active peer-set of the downloader, maintaining both failures
 // as well as reputation metrics to prioritize the block retrievals.
 
@@ -15,7 +31,8 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-type hashFetcherFn func(common.Hash) error
+type relativeHashFetcherFn func(common.Hash) error
+type absoluteHashFetcherFn func(uint64, int) error
 type blockFetcherFn func([]common.Hash) error
 
 var (
@@ -37,20 +54,25 @@ type peer struct {
 
 	ignored *set.Set // Set of hashes not to request (didn't have previously)
 
-	getHashes hashFetcherFn  // Method to retrieve a batch of hashes (mockable for testing)
-	getBlocks blockFetcherFn // Method to retrieve a batch of blocks (mockable for testing)
+	getRelHashes relativeHashFetcherFn // Method to retrieve a batch of hashes from an origin hash
+	getAbsHashes absoluteHashFetcherFn // Method to retrieve a batch of hashes from an absolute position
+	getBlocks    blockFetcherFn        // Method to retrieve a batch of blocks
+
+	version int // Eth protocol version number to switch strategies
 }
 
 // newPeer create a new downloader peer, with specific hash and block retrieval
 // mechanisms.
-func newPeer(id string, head common.Hash, getHashes hashFetcherFn, getBlocks blockFetcherFn) *peer {
+func newPeer(id string, version int, head common.Hash, getRelHashes relativeHashFetcherFn, getAbsHashes absoluteHashFetcherFn, getBlocks blockFetcherFn) *peer {
 	return &peer{
-		id:        id,
-		head:      head,
-		capacity:  1,
-		getHashes: getHashes,
-		getBlocks: getBlocks,
-		ignored:   set.New(),
+		id:           id,
+		head:         head,
+		capacity:     1,
+		getRelHashes: getRelHashes,
+		getAbsHashes: getAbsHashes,
+		getBlocks:    getBlocks,
+		ignored:      set.New(),
+		version:      version,
 	}
 }
 

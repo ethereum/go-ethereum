@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
@@ -36,6 +52,7 @@ var (
 		"debug": []string{
 			"dumpBlock",
 			"getBlockRlp",
+			"metrics",
 			"printBlock",
 			"processBlock",
 			"seedHash",
@@ -44,46 +61,38 @@ var (
 		"eth": []string{
 			"accounts",
 			"blockNumber",
-			"getBalance",
-			"protocolVersion",
+			"call",
+			"contract",
 			"coinbase",
-			"mining",
-			"gasPrice",
-			"getStorage",
-			"storageAt",
-			"getStorageAt",
-			"getTransactionCount",
-			"getBlockTransactionCountByHash",
-			"getBlockTransactionCountByNumber",
-			"getUncleCountByBlockHash",
-			"getUncleCountByBlockNumber",
-			"getData",
+			"compile.lll",
+			"compile.serpent",
+			"compile.solidity",
+			"contract",
+			"defaultAccount",
+			"defaultBlock",
+			"estimateGas",
+			"filter",
+			"getBalance",
+			"getBlock",
+			"getBlockTransactionCount",
+			"getBlockUncleCount",
 			"getCode",
-			"sign",
+			"getCompilers",
+			"gasPrice",
+			"getStorageAt",
+			"getTransaction",
+			"getTransactionCount",
+			"getTransactionFromBlock",
+			"getTransactionReceipt",
+			"getUncle",
+			"hashrate",
+			"mining",
+			"namereg",
+			"pendingTransactions",
+			"resend",
 			"sendRawTransaction",
 			"sendTransaction",
-			"transact",
-			"estimateGas",
-			"call",
-			"flush",
-			"getBlockByHash",
-			"getBlockByNumber",
-			"getTransactionByHash",
-			"getTransactionByBlockHashAndIndex",
-			"getUncleByBlockHashAndIndex",
-			"getUncleByBlockNumberAndIndex",
-			"getCompilers",
-			"compileSolidity",
-			"newFilter",
-			"newBlockFilter",
-			"newPendingTransactionFilter",
-			"uninstallFilter",
-			"getFilterChanges",
-			"getFilterLogs",
-			"getLogs",
-			"hashrate",
-			"getWork",
-			"submitWork",
+			"sign",
 		},
 		"miner": []string{
 			"hashrate",
@@ -106,13 +115,12 @@ var (
 			"unlockAccount",
 		},
 		"shh": []string{
-			"version",
 			"post",
+			"newIdentify",
 			"hasIdentity",
-			"newIdentity",
-			"newFilter",
-			"uninstallFilter",
-			"getFilterChanges",
+			"newGroup",
+			"addToGroup",
+			"filter",
 		},
 		"txpool": []string{
 			"status",
@@ -149,7 +157,7 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 		case shared.DbApiName:
 			apis[i] = NewDbApi(xeth, eth, codec)
 		case shared.EthApiName:
-			apis[i] = NewEthApi(xeth, codec)
+			apis[i] = NewEthApi(xeth, eth, codec)
 		case shared.MinerApiName:
 			apis[i] = NewMinerApi(eth, codec)
 		case shared.NetApiName:

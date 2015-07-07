@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package core
 
 import (
@@ -7,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
@@ -54,11 +69,6 @@ type Message interface {
 
 	Nonce() uint64
 	Data() []byte
-}
-
-func AddressFromMessage(msg Message) common.Address {
-	from, _ := msg.From()
-	return crypto.CreateAddress(from, msg.Nonce())
 }
 
 func MessageCreatesContract(msg Message) bool {
@@ -128,7 +138,7 @@ func (self *StateTransition) To() *state.StateObject {
 
 func (self *StateTransition) UseGas(amount *big.Int) error {
 	if self.gas.Cmp(amount) < 0 {
-		return OutOfGasError()
+		return vm.OutOfGasError
 	}
 	self.gas.Sub(self.gas, amount)
 
@@ -209,14 +219,21 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 				glog.V(logger.Core).Infoln("Insufficient gas for creating code. Require", dataGas, "and have", self.gas)
 			}
 		}
+		glog.V(logger.Core).Infoln("VM create err:", err)
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), sender.Nonce()+1)
 		ret, err = vmenv.Call(sender, self.To().Address(), self.data, self.gas, self.gasPrice, self.value)
+		glog.V(logger.Core).Infoln("VM call err:", err)
 	}
 
 	if err != nil && IsValueTransferErr(err) {
 		return nil, nil, InvalidTxError(err)
+	}
+
+	// We aren't interested in errors here. Errors returned by the VM are non-consensus errors and therefor shouldn't bubble up
+	if err != nil {
+		err = nil
 	}
 
 	if vm.Debug {

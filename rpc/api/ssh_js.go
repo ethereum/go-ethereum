@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 const Shh_JS = `
@@ -5,25 +21,13 @@ web3._extend({
 	property: 'shh',
 	methods:
 	[
-		new web3._extend.Method({
-			name: 'post',
-			call: 'shh_post',
-			params: 6,
-			inputFormatter: [web3._extend.formatters.formatInputString,
-							  web3._extend.formatters.formatInputString,
-							  web3._extend.formatters.formatInputString,
-							,
-							, web3._extend.formatters.formatInputInt
-							, web3._extend.formatters.formatInputInt],
-			outputFormatter: web3._extend.formatters.formatOutputBool
-		}),
+
 	],
 	properties:
 	[
 		new web3._extend.Property({
 			name: 'version',
-			getter: 'shh_version',
-			outputFormatter: web3._extend.formatters.formatOutputInt
+			getter: 'shh_version'
 		})
 	]
 });

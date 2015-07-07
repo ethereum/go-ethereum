@@ -1,3 +1,20 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
+// Package state provides a caching layer atop the Ethereum state trie.
 package state
 
 import (
@@ -18,6 +35,7 @@ import (
 type StateDB struct {
 	db   common.Database
 	trie *trie.SecureTrie
+	root common.Hash
 
 	stateObjects map[string]*StateObject
 
@@ -31,7 +49,7 @@ type StateDB struct {
 // Create a new state from a given trie
 func New(root common.Hash, db common.Database) *StateDB {
 	trie := trie.NewSecure(root[:], db)
-	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: new(big.Int), logs: make(map[common.Hash]Logs)}
+	return &StateDB{root: root, db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: new(big.Int), logs: make(map[common.Hash]Logs)}
 }
 
 func (self *StateDB) PrintRoot() {
@@ -185,7 +203,7 @@ func (self *StateDB) DeleteStateObject(stateObject *StateObject) {
 	addr := stateObject.Address()
 	self.trie.Delete(addr[:])
 
-	delete(self.stateObjects, addr.Str())
+	//delete(self.stateObjects, addr.Str())
 }
 
 // Retrieve a state object given my the address. Nil if not found
@@ -323,7 +341,8 @@ func (self *StateDB) Refunds() *big.Int {
 	return self.refund
 }
 
-func (self *StateDB) Update() {
+// SyncIntermediate updates the intermediate state and all mid steps
+func (self *StateDB) SyncIntermediate() {
 	self.refund = new(big.Int)
 
 	for _, stateObject := range self.stateObjects {
@@ -337,6 +356,24 @@ func (self *StateDB) Update() {
 			}
 			stateObject.dirty = false
 		}
+	}
+}
+
+// SyncObjects syncs the changed objects to the trie
+func (self *StateDB) SyncObjects() {
+	self.trie = trie.NewSecure(self.root[:], self.db)
+
+	self.refund = new(big.Int)
+
+	for _, stateObject := range self.stateObjects {
+		if stateObject.remove {
+			self.DeleteStateObject(stateObject)
+		} else {
+			stateObject.Update()
+
+			self.UpdateStateObject(stateObject)
+		}
+		stateObject.dirty = false
 	}
 }
 

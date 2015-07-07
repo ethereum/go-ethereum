@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package core
 
 import (
@@ -30,7 +46,6 @@ func ParentError(hash common.Hash) error {
 
 func IsParentErr(err error) bool {
 	_, ok := err.(*ParentErr)
-
 	return ok
 }
 
@@ -48,7 +63,6 @@ func UncleError(format string, v ...interface{}) error {
 
 func IsUncleErr(err error) bool {
 	_, ok := err.(*UncleErr)
-
 	return ok
 }
 
@@ -67,7 +81,6 @@ func ValidationError(format string, v ...interface{}) *ValidationErr {
 
 func IsValidationErr(err error) bool {
 	_, ok := err.(*ValidationErr)
-
 	return ok
 }
 
@@ -86,7 +99,6 @@ func NonceError(is, exp uint64) *NonceErr {
 
 func IsNonceErr(err error) bool {
 	_, ok := err.(*NonceErr)
-
 	return ok
 }
 
@@ -121,24 +133,6 @@ func InvalidTxError(err error) *InvalidTxErr {
 
 func IsInvalidTxErr(err error) bool {
 	_, ok := err.(*InvalidTxErr)
-
-	return ok
-}
-
-type OutOfGasErr struct {
-	Message string
-}
-
-func OutOfGasError() *OutOfGasErr {
-	return &OutOfGasErr{Message: "Out of gas"}
-}
-func (self *OutOfGasErr) Error() string {
-	return self.Message
-}
-
-func IsOutOfGasErr(err error) bool {
-	_, ok := err.(*OutOfGasErr)
-
 	return ok
 }
 

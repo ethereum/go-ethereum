@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package tests
 
 import (
@@ -120,7 +136,7 @@ type Env struct {
 	coinbase common.Address
 
 	number     *big.Int
-	time       int64
+	time       uint64
 	difficulty *big.Int
 	gasLimit   *big.Int
 
@@ -150,7 +166,7 @@ func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues 
 	//env.parent = common.Hex2Bytes(envValues["previousHash"])
 	env.coinbase = common.HexToAddress(envValues["currentCoinbase"])
 	env.number = common.Big(envValues["currentNumber"])
-	env.time = common.Big(envValues["currentTimestamp"]).Int64()
+	env.time = common.Big(envValues["currentTimestamp"]).Uint64()
 	env.difficulty = common.Big(envValues["currentDifficulty"])
 	env.gasLimit = common.Big(envValues["currentGasLimit"])
 	env.Gas = new(big.Int)
@@ -163,7 +179,7 @@ func (self *Env) BlockNumber() *big.Int  { return self.number }
 
 //func (self *Env) PrevHash() []byte      { return self.parent }
 func (self *Env) Coinbase() common.Address { return self.coinbase }
-func (self *Env) Time() int64              { return self.time }
+func (self *Env) Time() uint64             { return self.time }
 func (self *Env) Difficulty() *big.Int     { return self.difficulty }
 func (self *Env) State() *state.StateDB    { return self.state }
 func (self *Env) GasLimit() *big.Int       { return self.gasLimit }

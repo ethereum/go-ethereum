@@ -1,12 +1,31 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
@@ -855,6 +874,181 @@ func (args *SubmitWorkArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	args.Digest = objstr
+
+	return nil
+}
+
+type tx struct {
+	tx *types.Transaction
+
+	To       string
+	From     string
+	Nonce    string
+	Value    string
+	Data     string
+	GasLimit string
+	GasPrice string
+}
+
+func newTx(t *types.Transaction) *tx {
+	from, _ := t.From()
+	var to string
+	if t := t.To(); t != nil {
+		to = t.Hex()
+	}
+
+	return &tx{
+		tx:       t,
+		To:       to,
+		From:     from.Hex(),
+		Value:    t.Value().String(),
+		Nonce:    strconv.Itoa(int(t.Nonce())),
+		Data:     "0x" + common.Bytes2Hex(t.Data()),
+		GasLimit: t.Gas().String(),
+		GasPrice: t.GasPrice().String(),
+	}
+}
+
+type ResendArgs struct {
+	Tx       *tx
+	GasPrice string
+	GasLimit string
+}
+
+func (tx *tx) UnmarshalJSON(b []byte) (err error) {
+	var fields map[string]interface{}
+	if err := json.Unmarshal(b, &fields); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	var (
+		nonce            uint64
+		to               common.Address
+		amount           = new(big.Int).Set(common.Big0)
+		gasLimit         = new(big.Int).Set(common.Big0)
+		gasPrice         = new(big.Int).Set(common.Big0)
+		data             []byte
+		contractCreation = true
+	)
+
+	if val, found := fields["To"]; found {
+		if strVal, ok := val.(string); ok && len(strVal) > 0 {
+			tx.To = strVal
+			to = common.HexToAddress(strVal)
+			contractCreation = false
+		}
+	}
+
+	if val, found := fields["From"]; found {
+		if strVal, ok := val.(string); ok {
+			tx.From = strVal
+		}
+	}
+
+	if val, found := fields["Nonce"]; found {
+		if strVal, ok := val.(string); ok {
+			tx.Nonce = strVal
+			if nonce, err = strconv.ParseUint(strVal, 10, 64); err != nil {
+				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.Nonce - %v", err))
+			}
+		}
+	} else {
+		return shared.NewDecodeParamError("tx.Nonce not found")
+	}
+
+	var parseOk bool
+	if val, found := fields["Value"]; found {
+		if strVal, ok := val.(string); ok {
+			tx.Value = strVal
+			if _, parseOk = amount.SetString(strVal, 0); !parseOk {
+				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.Amount - %v", err))
+			}
+		}
+	}
+
+	if val, found := fields["Data"]; found {
+		if strVal, ok := val.(string); ok {
+			tx.Data = strVal
+			if strings.HasPrefix(strVal, "0x") {
+				data = common.Hex2Bytes(strVal[2:])
+			} else {
+				data = common.Hex2Bytes(strVal)
+			}
+		}
+	}
+
+	if val, found := fields["GasLimit"]; found {
+		if strVal, ok := val.(string); ok {
+			tx.GasLimit = strVal
+			if _, parseOk = gasLimit.SetString(strVal, 0); !parseOk {
+				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.GasLimit - %v", err))
+			}
+		}
+	}
+
+	if val, found := fields["GasPrice"]; found {
+		if strVal, ok := val.(string); ok {
+			tx.GasPrice = strVal
+			if _, parseOk = gasPrice.SetString(strVal, 0); !parseOk {
+				return shared.NewDecodeParamError(fmt.Sprintf("Unable to decode tx.GasPrice - %v", err))
+			}
+		}
+	}
+
+	if contractCreation {
+		tx.tx = types.NewContractCreation(nonce, amount, gasLimit, gasPrice, data)
+	} else {
+		tx.tx = types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
+	}
+
+	return nil
+}
+
+func (args *ResendArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err = json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	data, err := json.Marshal(obj[0])
+	if err != nil {
+		return shared.NewDecodeParamError("Unable to parse transaction object")
+	}
+
+	trans := new(tx)
+	err = json.Unmarshal(data, trans)
+	if err != nil {
+		return shared.NewDecodeParamError("Unable to parse transaction object")
+	}
+
+	if trans == nil || trans.tx == nil {
+		return shared.NewDecodeParamError("Unable to parse transaction object")
+	}
+
+	gasLimit, gasPrice := trans.GasLimit, trans.GasPrice
+
+	if len(obj) > 1 && obj[1] != nil {
+		if gp, ok := obj[1].(string); ok {
+			gasPrice = gp
+		} else {
+			return shared.NewInvalidTypeError("gasPrice", "not a string")
+		}
+	}
+	if len(obj) > 2 && obj[2] != nil {
+		if gl, ok := obj[2].(string); ok {
+			gasLimit = gl
+		} else {
+			return shared.NewInvalidTypeError("gasLimit", "not a string")
+		}
+	}
+
+	args.Tx = trans
+	args.GasPrice = gasPrice
+	args.GasLimit = gasLimit
 
 	return nil
 }

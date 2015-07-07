@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package core
 
 import (
@@ -18,7 +34,7 @@ func proc() (*BlockProcessor, *ChainManager) {
 	var mux event.TypeMux
 
 	genesis := GenesisBlock(0, db)
-	chainMan, err := NewChainManager(genesis, db, db, thePow(), &mux)
+	chainMan, err := NewChainManager(genesis, db, db, db, thePow(), &mux)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -64,12 +80,9 @@ func TestPutReceipt(t *testing.T) {
 		Index:     0,
 	}})
 
-	putReceipts(db, hash, types.Receipts{receipt})
-	receipts, err := getBlockReceipts(db, hash)
-	if err != nil {
-		t.Error("got err:", err)
-	}
-	if len(receipts) != 1 {
-		t.Error("expected to get 1 receipt, got", len(receipts))
+	PutReceipts(db, types.Receipts{receipt})
+	receipt = GetReceipt(db, common.Hash{})
+	if receipt == nil {
+		t.Error("expected to get 1 receipt, got none.")
 	}
 }

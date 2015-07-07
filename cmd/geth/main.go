@@ -1,23 +1,20 @@
-/*
-	This file is part of go-ethereum
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-	go-ethereum is free software: you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
-
-	go-ethereum is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
-
-	You should have received a copy of the GNU General Public License
-	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/**
- * @authors
- * 	Jeffrey Wilcke <i@jev.io>
- */
+// geth is the official command-line client for Ethereum.
 package main
 
 import (
@@ -37,8 +34,12 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
@@ -48,7 +49,7 @@ import (
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.34"
+	Version          = "0.9.36"
 )
 
 var (
@@ -68,6 +69,18 @@ func init() {
 	app.Action = run
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
+		{
+			Action: blockRecovery,
+			Name:   "recover",
+			Usage:  "attempts to recover a corrupted database by setting a new block by number or hash. See help recover.",
+			Description: `
+The recover commands will attempt to read out the last
+block based on that.
+
+recover #number recovers by number
+recover <hex> recovers by hash
+`,
+		},
 		blocktestCommand,
 		importCommand,
 		exportCommand,
@@ -137,8 +150,11 @@ Note that exporting your key in unencrypted format is NOT supported.
 
 Keys are stored under <DATADIR>/keys.
 It is safe to transfer the entire directory or the individual keys therein
-between ethereum nodes.
+between ethereum nodes by simply copying.
 Make sure you backup your keys regularly.
+
+In order to use your account to send transactions, you need to unlock them using the
+'--unlock' option. The argument is a comma
 
 And finally. DO NOT FORGET YOUR PASSWORD.
 `,
@@ -168,6 +184,33 @@ For non-interactive use the passphrase can be specified with the --password flag
 
 Note, this is meant to be used for testing only, it is a bad idea to save your
 password to file or expose in any other way.
+					`,
+				},
+				{
+					Action: accountUpdate,
+					Name:   "update",
+					Usage:  "update an existing account",
+					Description: `
+
+    ethereum account update <address>
+
+Update an existing account.
+
+The account is saved in the newest version in encrypted format, you are prompted
+for a passphrase to unlock the account and another to save the updated file.
+
+This same command can therefore be used to migrate an account of a deprecated
+format to the newest format or change the password for an account.
+
+For non-interactive use the passphrase can be specified with the --password flag:
+
+    ethereum --password <passwordfile> account new
+
+Since only one password can be given, only format update can be performed,
+changing your password is only possible interactively.
+
+Note that account update has the a side effect that the order of your accounts
+changes.
 					`,
 				},
 				{
@@ -261,7 +304,6 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
 		utils.VMDebugFlag,
-		utils.ProtocolVersionFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
 		utils.VerbosityFlag,
@@ -302,7 +344,6 @@ func main() {
 }
 
 func run(ctx *cli.Context) {
-	utils.HandleInterrupt()
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
@@ -415,48 +456,72 @@ func execJSFiles(ctx *cli.Context) {
 	ethereum.WaitForShutdown()
 }
 
-func unlockAccount(ctx *cli.Context, am *accounts.Manager, account string) (passphrase string) {
+func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (addrHex, auth string) {
 	var err error
-	// Load startup keys. XXX we are going to need a different format
-
-	if !((len(account) == 40) || (len(account) == 42)) { // with or without 0x
-		utils.Fatalf("Invalid account address '%s'", account)
-	}
-	// Attempt to unlock the account 3 times
-	attempts := 3
-	for tries := 0; tries < attempts; tries++ {
-		msg := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", account, tries+1, attempts)
-		passphrase = getPassPhrase(ctx, msg, false)
-		err = am.Unlock(common.HexToAddress(account), passphrase)
-		if err == nil {
-			break
+	addrHex, err = utils.ParamToAddress(addr, am)
+	if err == nil {
+		// Attempt to unlock the account 3 times
+		attempts := 3
+		for tries := 0; tries < attempts; tries++ {
+			msg := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", addr, tries+1, attempts)
+			auth = getPassPhrase(ctx, msg, false, i)
+			err = am.Unlock(common.HexToAddress(addrHex), auth)
+			if err == nil {
+				break
+			}
 		}
 	}
+
 	if err != nil {
 		utils.Fatalf("Unlock account failed '%v'", err)
 	}
-	fmt.Printf("Account '%s' unlocked.\n", account)
+	fmt.Printf("Account '%s' unlocked.\n", addr)
 	return
+}
+
+func blockRecovery(ctx *cli.Context) {
+	arg := ctx.Args().First()
+	if len(ctx.Args()) < 1 && len(arg) > 0 {
+		glog.Fatal("recover requires block number or hash")
+	}
+
+	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"))
+	if err != nil {
+		glog.Fatalln("could not open db:", err)
+	}
+
+	var block *types.Block
+	if arg[0] == '#' {
+		block = core.GetBlockByNumber(blockDb, common.String2Big(arg[1:]).Uint64())
+	} else {
+		block = core.GetBlockByHash(blockDb, common.HexToHash(arg))
+	}
+
+	if block == nil {
+		glog.Fatalln("block not found. Recovery failed")
+	}
+
+	err = core.WriteHead(blockDb, block)
+	if err != nil {
+		glog.Fatalln("block write err", err)
+	}
+	glog.Infof("Recovery succesful. New HEAD %x\n", block.Hash())
 }
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	// Start Ethereum itself
-
 	utils.StartEthereum(eth)
-	am := eth.AccountManager()
 
+	am := eth.AccountManager()
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	accounts := strings.Split(account, " ")
-	for _, account := range accounts {
+	for i, account := range accounts {
 		if len(account) > 0 {
 			if account == "primary" {
-				primaryAcc, err := am.Primary()
-				if err != nil {
-					utils.Fatalf("no primary account: %v", err)
-				}
-				account = primaryAcc.Hex()
+				utils.Fatalf("the 'primary' keyword is deprecated. You can use integer indexes, but the indexes are not permanent, they can change if you add external keys, export your keys or copy your keystore to another node.")
 			}
-			unlockAccount(ctx, am, account)
+			unlockAccount(ctx, am, account, i)
 		}
 	}
 	// Start auxiliary services if enabled.
@@ -483,14 +548,12 @@ func accountList(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
 	}
-	name := "Primary"
 	for i, acct := range accts {
-		fmt.Printf("%s #%d: %x\n", name, i, acct)
-		name = "Account"
+		fmt.Printf("Account #%d: %x\n", i, acct)
 	}
 }
 
-func getPassPhrase(ctx *cli.Context, desc string, confirmation bool) (passphrase string) {
+func getPassPhrase(ctx *cli.Context, desc string, confirmation bool, i int) (passphrase string) {
 	passfile := ctx.GlobalString(utils.PasswordFileFlag.Name)
 	if len(passfile) == 0 {
 		fmt.Println(desc)
@@ -514,19 +577,42 @@ func getPassPhrase(ctx *cli.Context, desc string, confirmation bool) (passphrase
 		if err != nil {
 			utils.Fatalf("Unable to read password file '%s': %v", passfile, err)
 		}
-		passphrase = string(passbytes)
+		// this is backwards compatible if the same password unlocks several accounts
+		// it also has the consequence that trailing newlines will not count as part
+		// of the password, so --password <(echo -n 'pass') will now work without -n
+		passphrases := strings.Split(string(passbytes), "\n")
+		if i >= len(passphrases) {
+			passphrase = passphrases[len(passphrases)-1]
+		} else {
+			passphrase = passphrases[i]
+		}
 	}
 	return
 }
 
 func accountCreate(ctx *cli.Context) {
 	am := utils.MakeAccountManager(ctx)
-	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true)
+	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0)
 	acct, err := am.NewAccount(passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
 	fmt.Printf("Address: %x\n", acct)
+}
+
+func accountUpdate(ctx *cli.Context) {
+	am := utils.MakeAccountManager(ctx)
+	arg := ctx.Args().First()
+	if len(arg) == 0 {
+		utils.Fatalf("account address or index must be given as argument")
+	}
+
+	addr, authFrom := unlockAccount(ctx, am, arg, 0)
+	authTo := getPassPhrase(ctx, "Please give a new password. Do not forget this password.", true, 0)
+	err := am.Update(common.HexToAddress(addr), authFrom, authTo)
+	if err != nil {
+		utils.Fatalf("Could not update the account: %v", err)
+	}
 }
 
 func importWallet(ctx *cli.Context) {
@@ -540,7 +626,7 @@ func importWallet(ctx *cli.Context) {
 	}
 
 	am := utils.MakeAccountManager(ctx)
-	passphrase := getPassPhrase(ctx, "", false)
+	passphrase := getPassPhrase(ctx, "", false, 0)
 
 	acct, err := am.ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
@@ -555,7 +641,7 @@ func accountImport(ctx *cli.Context) {
 		utils.Fatalf("keyfile must be given as argument")
 	}
 	am := utils.MakeAccountManager(ctx)
-	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true)
+	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0)
 	acct, err := am.Import(keyfile, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
@@ -598,7 +684,7 @@ func version(c *cli.Context) {
 	if gitCommit != "" {
 		fmt.Println("Git Commit:", gitCommit)
 	}
-	fmt.Println("Protocol Version:", c.GlobalInt(utils.ProtocolVersionFlag.Name))
+	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
 	fmt.Println("Network Id:", c.GlobalInt(utils.NetworkIdFlag.Name))
 	fmt.Println("Go Version:", runtime.Version())
 	fmt.Println("OS:", runtime.GOOS)

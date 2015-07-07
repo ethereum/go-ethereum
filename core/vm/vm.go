@@ -1,3 +1,20 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
+// Package vm implements the Ethereum Virtual Machine.
 package vm
 
 import (
@@ -116,7 +133,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 
 			context.UseGas(context.Gas)
 
-			return context.Return(nil), OutOfGasError{}
+			return context.Return(nil), OutOfGasError
 		}
 		// Resize the memory calculated previously
 		mem.Resize(newMemSize.Uint64())
@@ -444,7 +461,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		case TIMESTAMP:
 			time := self.env.Time()
 
-			stack.push(big.NewInt(time))
+			stack.push(new(big.Int).SetUint64(time))
 
 		case NUMBER:
 			number := self.env.BlockNumber()
@@ -789,7 +806,7 @@ func (self *Vm) RunPrecompiled(p *PrecompiledAccount, input []byte, context *Con
 
 		return context.Return(ret), nil
 	} else {
-		return nil, OutOfGasError{}
+		return nil, OutOfGasError
 	}
 }
 

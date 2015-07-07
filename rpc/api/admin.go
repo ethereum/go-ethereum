@@ -1,12 +1,36 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
 	"fmt"
 	"io"
+	"math/big"
 	"os"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/compiler"
+	"github.com/ethereum/go-ethereum/common/docserver"
+	"github.com/ethereum/go-ethereum/common/natspec"
+	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -24,17 +48,29 @@ const (
 var (
 	// mapping between methods and handlers
 	AdminMapping = map[string]adminhandler{
-		"admin_addPeer":         (*adminApi).AddPeer,
-		"admin_peers":           (*adminApi).Peers,
-		"admin_nodeInfo":        (*adminApi).NodeInfo,
-		"admin_exportChain":     (*adminApi).ExportChain,
-		"admin_importChain":     (*adminApi).ImportChain,
-		"admin_verbosity":       (*adminApi).Verbosity,
-		"admin_chainSyncStatus": (*adminApi).ChainSyncStatus,
-		"admin_setSolc":         (*adminApi).SetSolc,
-		"admin_datadir":         (*adminApi).DataDir,
-		"admin_startRPC":        (*adminApi).StartRPC,
-		"admin_stopRPC":         (*adminApi).StopRPC,
+		"admin_addPeer":            (*adminApi).AddPeer,
+		"admin_peers":              (*adminApi).Peers,
+		"admin_nodeInfo":           (*adminApi).NodeInfo,
+		"admin_exportChain":        (*adminApi).ExportChain,
+		"admin_importChain":        (*adminApi).ImportChain,
+		"admin_verbosity":          (*adminApi).Verbosity,
+		"admin_chainSyncStatus":    (*adminApi).ChainSyncStatus,
+		"admin_setSolc":            (*adminApi).SetSolc,
+		"admin_datadir":            (*adminApi).DataDir,
+		"admin_startRPC":           (*adminApi).StartRPC,
+		"admin_stopRPC":            (*adminApi).StopRPC,
+		"admin_setGlobalRegistrar": (*adminApi).SetGlobalRegistrar,
+		"admin_setHashReg":         (*adminApi).SetHashReg,
+		"admin_setUrlHint":         (*adminApi).SetUrlHint,
+		"admin_saveInfo":           (*adminApi).SaveInfo,
+		"admin_register":           (*adminApi).Register,
+		"admin_registerUrl":        (*adminApi).RegisterUrl,
+		"admin_startNatSpec":       (*adminApi).StartNatSpec,
+		"admin_stopNatSpec":        (*adminApi).StopNatSpec,
+		"admin_getContractInfo":    (*adminApi).GetContractInfo,
+		"admin_httpGet":            (*adminApi).HttpGet,
+		"admin_sleepBlocks":        (*adminApi).SleepBlocks,
+		"admin_sleep":              (*adminApi).Sleep,
 	}
 )
 
@@ -47,6 +83,7 @@ type adminApi struct {
 	ethereum *eth.Ethereum
 	codec    codec.Codec
 	coder    codec.ApiCoder
+	ds       *docserver.DocServer
 }
 
 // create a new admin api instance
@@ -56,6 +93,7 @@ func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec) *ad
 		ethereum: ethereum,
 		codec:    codec,
 		coder:    codec.New(nil),
+		ds:       docserver.New("/"),
 	}
 }
 
@@ -243,4 +281,196 @@ func (self *adminApi) StartRPC(req *shared.Request) (interface{}, error) {
 func (self *adminApi) StopRPC(req *shared.Request) (interface{}, error) {
 	comms.StopHttp()
 	return true, nil
+}
+
+func (self *adminApi) SleepBlocks(req *shared.Request) (interface{}, error) {
+	args := new(SleepBlocksArgs)
+	if err := self.coder.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+	var timer <-chan time.Time
+	var height *big.Int
+	var err error
+	if args.Timeout > 0 {
+		timer = time.NewTimer(time.Duration(args.Timeout) * time.Second).C
+	}
+
+	height = new(big.Int).Add(self.xeth.CurrentBlock().Number(), big.NewInt(args.N))
+	height, err = sleepBlocks(self.xeth.UpdateState(), height, timer)
+	if err != nil {
+		return nil, err
+	}
+	return height.Uint64(), nil
+}
+
+func sleepBlocks(wait chan *big.Int, height *big.Int, timer <-chan time.Time) (newHeight *big.Int, err error) {
+	wait <- height
+	select {
+	case <-timer:
+		// if times out make sure the xeth loop does not block
+		go func() {
+			select {
+			case wait <- nil:
+			case <-wait:
+			}
+		}()
+		return nil, fmt.Errorf("timeout")
+	case newHeight = <-wait:
+	}
+	return
+}
+
+func (self *adminApi) Sleep(req *shared.Request) (interface{}, error) {
+	args := new(SleepArgs)
+	if err := self.coder.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+	time.Sleep(time.Duration(args.S) * time.Second)
+	return nil, nil
+}
+
+func (self *adminApi) SetGlobalRegistrar(req *shared.Request) (interface{}, error) {
+	args := new(SetGlobalRegistrarArgs)
+	if err := self.coder.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	sender := common.HexToAddress(args.ContractAddress)
+
+	reg := registrar.New(self.xeth)
+	txhash, err := reg.SetGlobalRegistrar(args.NameReg, sender)
+	if err != nil {
+		return false, err
+	}
+
+	return txhash, nil
+}
+
+func (self *adminApi) SetHashReg(req *shared.Request) (interface{}, error) {
+	args := new(SetHashRegArgs)
+	if err := self.coder.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	reg := registrar.New(self.xeth)
+	sender := common.HexToAddress(args.Sender)
+	txhash, err := reg.SetHashReg(args.HashReg, sender)
+	if err != nil {
+		return false, err
+	}
+
+	return txhash, nil
+}
+
+func (self *adminApi) SetUrlHint(req *shared.Request) (interface{}, error) {
+	args := new(SetUrlHintArgs)
+	if err := self.coder.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	urlHint := args.UrlHint
+	sender := common.HexToAddress(args.Sender)
+
+	reg := registrar.New(self.xeth)
+	txhash, err := reg.SetUrlHint(urlHint, sender)
+	if err != nil {
+		return nil, err
+	}
+
+	return txhash, nil
+}
+
+func (self *adminApi) SaveInfo(req *shared.Request) (interface{}, error) {
+	args := new(SaveInfoArgs)
+	if err := self.coder.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	contenthash, err := compiler.SaveInfo(&args.ContractInfo, args.Filename)
+	if err != nil {
+		return nil, err
+	}
+
+	return contenthash.Hex(), nil
+}
+
+func (self *adminApi) Register(req *shared.Request) (interface{}, error) {
+	args := new(RegisterArgs)
+	if err := self.coder.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	sender := common.HexToAddress(args.Sender)
+	// sender and contract address are passed as hex strings
+	codeb := self.xeth.CodeAtBytes(args.Address)
+	codeHash := common.BytesToHash(crypto.Sha3(codeb))
+	contentHash := common.HexToHash(args.ContentHashHex)
+	registry := registrar.New(self.xeth)
+
+	_, err := registry.SetHashToHash(sender, codeHash, contentHash)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func (self *adminApi) RegisterUrl(req *shared.Request) (interface{}, error) {
+	args := new(RegisterUrlArgs)
+	if err := self.coder.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	sender := common.HexToAddress(args.Sender)
+	registry := registrar.New(self.xeth)
+	_, err := registry.SetUrlToHash(sender, common.HexToHash(args.ContentHash), args.Url)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func (self *adminApi) StartNatSpec(req *shared.Request) (interface{}, error) {
+	self.ethereum.NatSpec = true
+	return true, nil
+}
+
+func (self *adminApi) StopNatSpec(req *shared.Request) (interface{}, error) {
+	self.ethereum.NatSpec = false
+	return true, nil
+}
+
+func (self *adminApi) GetContractInfo(req *shared.Request) (interface{}, error) {
+	args := new(GetContractInfoArgs)
+	if err := self.coder.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	infoDoc, err := natspec.FetchDocsForContract(args.Contract, self.xeth, self.ds)
+	if err != nil {
+		return nil, err
+	}
+
+	var info interface{}
+	err = self.coder.Decode(infoDoc, &info)
+	if err != nil {
+		return nil, err
+	}
+
+	return info, nil
+}
+
+func (self *adminApi) HttpGet(req *shared.Request) (interface{}, error) {
+	args := new(HttpGetArgs)
+	if err := self.coder.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	resp, err := self.ds.Get(args.Uri, args.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	return string(resp), nil
 }

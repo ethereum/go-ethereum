@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package core
 
 import (
@@ -77,7 +93,7 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	if err != nil {
 		panic(err)
 	}
-	b.statedb.Update()
+	b.statedb.SyncIntermediate()
 	b.header.GasUsed.Add(b.header.GasUsed, gas)
 	receipt := types.NewReceipt(b.statedb.Root().Bytes(), b.header.GasUsed)
 	logs := b.statedb.GetLogs(tx.Hash())
@@ -135,7 +151,7 @@ func GenerateChain(parent *types.Block, db common.Database, n int, gen func(int,
 			gen(i, b)
 		}
 		AccumulateRewards(statedb, h, b.uncles)
-		statedb.Update()
+		statedb.SyncIntermediate()
 		h.Root = statedb.Root()
 		return types.NewBlock(h, b.txs, b.uncles, b.receipts)
 	}
@@ -155,7 +171,7 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 		Root:       state.Root(),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: CalcDifficulty(time, parent.Time(), parent.Difficulty()),
+		Difficulty: CalcDifficulty(int64(time), int64(parent.Time()), parent.Difficulty()),
 		GasLimit:   CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
@@ -167,7 +183,7 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 // InsertChain on the result of makeChain.
 func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
 	evmux := &event.TypeMux{}
-	chainman, _ := NewChainManager(GenesisBlock(0, db), db, db, FakePow{}, evmux)
+	chainman, _ := NewChainManager(GenesisBlock(0, db), db, db, db, FakePow{}, evmux)
 	bman := NewBlockProcessor(db, db, FakePow{}, chainman, evmux)
 	bman.bc.SetProcessor(bman)
 	parent := bman.bc.CurrentBlock()

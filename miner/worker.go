@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package miner
 
 import (
@@ -79,9 +95,10 @@ type worker struct {
 	quit   chan struct{}
 	pow    pow.PoW
 
-	eth   core.Backend
-	chain *core.ChainManager
-	proc  *core.BlockProcessor
+	eth     core.Backend
+	chain   *core.ChainManager
+	proc    *core.BlockProcessor
+	extraDb common.Database
 
 	coinbase common.Address
 	gasPrice *big.Int
@@ -105,6 +122,7 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 	worker := &worker{
 		eth:            eth,
 		mux:            eth.EventMux(),
+		extraDb:        eth.ExtraDb(),
 		recv:           make(chan *types.Block),
 		gasPrice:       new(big.Int),
 		chain:          eth.ChainManager(),
@@ -120,6 +138,12 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 	worker.commitNewWork()
 
 	return worker
+}
+
+func (self *worker) setEtherbase(addr common.Address) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.coinbase = addr
 }
 
 func (self *worker) pendingState() *state.StateDB {
@@ -233,10 +257,27 @@ func (self *worker) wait() {
 				continue
 			}
 
-			_, err := self.chain.WriteBlock(block, false)
+			parent := self.chain.GetBlock(block.ParentHash())
+			if parent == nil {
+				glog.V(logger.Error).Infoln("Invalid block found during mining")
+				continue
+			}
+			if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true); err != nil && err != core.BlockFutureErr {
+				glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
+				continue
+			}
+
+			stat, err := self.chain.WriteBlock(block, false)
 			if err != nil {
 				glog.V(logger.Error).Infoln("error writing block to chain", err)
 				continue
+			}
+			// check if canon block and write transactions
+			if stat == core.CanonStatTy {
+				// This puts transactions in a extra db for rpc
+				core.PutTransactions(self.extraDb, block, block.Transactions())
+				// store the receipts
+				core.PutReceipts(self.extraDb, self.current.receipts)
 			}
 
 			// check staleness and display confirmation
@@ -252,7 +293,13 @@ func (self *worker) wait() {
 			glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
 
 			// broadcast before waiting for validation
-			go self.mux.Post(core.NewMinedBlockEvent{block})
+			go func(block *types.Block, logs state.Logs) {
+				self.mux.Post(core.NewMinedBlockEvent{block})
+				self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
+				if stat == core.CanonStatTy {
+					self.mux.Post(core.ChainHeadEvent{block})
+				}
+			}(block, self.current.state.Logs())
 
 			self.commitNewWork()
 		}
@@ -273,8 +320,6 @@ func (self *worker) push() {
 
 			if agent.Work() != nil {
 				agent.Work() <- self.current.block
-			} else {
-				common.Report(fmt.Sprintf("%v %T\n", agent, agent))
 			}
 		}
 	}
@@ -368,8 +413,8 @@ func (self *worker) commitNewWork() {
 	tstart := time.Now()
 	parent := self.chain.CurrentBlock()
 	tstamp := tstart.Unix()
-	if tstamp <= parent.Time() {
-		tstamp = parent.Time() + 1
+	if tstamp <= int64(parent.Time()) {
+		tstamp = int64(parent.Time()) + 1
 	}
 	// this will ensure we're not going off too far in the future
 	if now := time.Now().Unix(); tstamp > now+4 {
@@ -382,7 +427,7 @@ func (self *worker) commitNewWork() {
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
-		Difficulty: core.CalcDifficulty(tstamp, parent.Time(), parent.Difficulty()),
+		Difficulty: core.CalcDifficulty(int64(tstamp), int64(parent.Time()), parent.Difficulty()),
 		GasLimit:   core.CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Coinbase:   self.coinbase,
@@ -428,7 +473,7 @@ func (self *worker) commitNewWork() {
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// commit state root after all state transitions.
 		core.AccumulateRewards(self.current.state, header, uncles)
-		current.state.Update()
+		current.state.SyncObjects()
 		self.current.state.Sync()
 		header.Root = current.state.Root()
 	}
@@ -501,18 +546,18 @@ func (env *environment) commitTransactions(transactions types.Transactions, gasP
 
 		err := env.commitTransaction(tx, proc)
 		switch {
-		case core.IsNonceErr(err) || core.IsInvalidTxErr(err):
-			env.remove.Add(tx.Hash())
-
-			if glog.V(logger.Detail) {
-				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
-			}
 		case state.IsGasLimitErr(err):
 			// ignore the transactor so no nonce errors will be thrown for this account
 			// next time the worker is run, they'll be picked up again.
 			env.ignoredTransactors.Add(from)
 
 			glog.V(logger.Detail).Infof("Gas limit reached for (%x) in this block. Continue to try smaller txs\n", from[:4])
+		case err != nil:
+			env.remove.Add(tx.Hash())
+
+			if glog.V(logger.Detail) {
+				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
+			}
 		default:
 			env.tcount++
 		}
@@ -522,7 +567,7 @@ func (env *environment) commitTransactions(transactions types.Transactions, gasP
 func (env *environment) commitTransaction(tx *types.Transaction, proc *core.BlockProcessor) error {
 	snap := env.state.Copy()
 	receipt, _, err := proc.ApplyTransaction(env.coinbase, env.state, env.header, tx, env.header.GasUsed, true)
-	if err != nil && (core.IsNonceErr(err) || state.IsGasLimitErr(err) || core.IsInvalidTxErr(err)) {
+	if err != nil {
 		env.state.Set(snap)
 		return err
 	}

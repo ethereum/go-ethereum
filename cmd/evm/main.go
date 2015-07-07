@@ -1,24 +1,20 @@
-/*
-	This file is part of go-ethereum
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-	go-ethereum is free software: you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
-
-	go-ethereum is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
-
-	You should have received a copy of the GNU General Public License
-	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/**
- * @authors
- * 	Jeffrey Wilcke <i@jev.io>
- */
-
+// evm executes EVM code snippets.
 package main
 
 import (
@@ -106,7 +102,7 @@ type VMEnv struct {
 
 	depth int
 	Gas   *big.Int
-	time  int64
+	time  uint64
 	logs  []vm.StructLog
 }
 
@@ -115,7 +111,7 @@ func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int) *VM
 		state:      state,
 		transactor: &transactor,
 		value:      value,
-		time:       time.Now().Unix(),
+		time:       uint64(time.Now().Unix()),
 	}
 }
 
@@ -123,7 +119,7 @@ func (self *VMEnv) State() *state.StateDB    { return self.state }
 func (self *VMEnv) Origin() common.Address   { return *self.transactor }
 func (self *VMEnv) BlockNumber() *big.Int    { return common.Big0 }
 func (self *VMEnv) Coinbase() common.Address { return *self.transactor }
-func (self *VMEnv) Time() int64              { return self.time }
+func (self *VMEnv) Time() uint64             { return self.time }
 func (self *VMEnv) Difficulty() *big.Int     { return common.Big1 }
 func (self *VMEnv) BlockHash() []byte        { return make([]byte, 32) }
 func (self *VMEnv) Value() *big.Int          { return self.value }

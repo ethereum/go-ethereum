@@ -1,3 +1,20 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
+// Package eth implements the Ethereum protocol.
 package eth
 
 import (
@@ -10,8 +27,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/ethereum/go-ethereum/metrics"
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -26,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -57,10 +73,9 @@ var (
 )
 
 type Config struct {
-	Name            string
-	ProtocolVersion int
-	NetworkId       int
-	GenesisNonce    int
+	Name         string
+	NetworkId    int
+	GenesisNonce int
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
@@ -72,6 +87,7 @@ type Config struct {
 	VmDebug   bool
 	NatSpec   bool
 	AutoDAG   bool
+	PowTest   bool
 
 	MaxPeers        int
 	MaxPendingPeers int
@@ -89,7 +105,7 @@ type Config struct {
 	Shh  bool
 	Dial bool
 
-	Etherbase      string
+	Etherbase      common.Address
 	GasPrice       *big.Int
 	MinerThreads   int
 	AccountManager *accounts.Manager
@@ -223,10 +239,10 @@ type Ethereum struct {
 	NatSpec       bool
 	DataDir       string
 	AutoDAG       bool
+	PowTest       bool
 	autodagquit   chan bool
 	etherbase     common.Address
 	clientVersion string
-	ethVersionId  int
 	netVersionId  int
 	shhVersionId  int
 }
@@ -291,14 +307,20 @@ func New(config *Config) (*Ethereum, error) {
 	nodeDb := filepath.Join(config.DataDir, "nodes")
 
 	// Perform database sanity checks
-	d, _ := blockDb.Get([]byte("ProtocolVersion"))
-	protov := int(common.NewValue(d).Uint())
-	if protov != config.ProtocolVersion && protov != 0 {
-		path := filepath.Join(config.DataDir, "blockchain")
-		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
-	}
-	saveProtocolVersion(blockDb, config.ProtocolVersion)
-	glog.V(logger.Info).Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
+	/*
+		// The databases were previously tied to protocol versions. Currently we
+		// are moving away from this decision as approaching Frontier. The below
+		// check was left in for now but should eventually be just dropped.
+
+		d, _ := blockDb.Get([]byte("ProtocolVersion"))
+		protov := int(common.NewValue(d).Uint())
+		if protov != config.ProtocolVersion && protov != 0 {
+			path := filepath.Join(config.DataDir, "blockchain")
+			return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
+		}
+		saveProtocolVersion(blockDb, config.ProtocolVersion)
+	*/
+	glog.V(logger.Info).Infof("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId)
 
 	if !config.SkipBcVersionCheck {
 		b, _ := blockDb.Get([]byte("BlockchainVersion"))
@@ -319,14 +341,14 @@ func New(config *Config) (*Ethereum, error) {
 		eventMux:                &event.TypeMux{},
 		accountManager:          config.AccountManager,
 		DataDir:                 config.DataDir,
-		etherbase:               common.HexToAddress(config.Etherbase),
+		etherbase:               config.Etherbase,
 		clientVersion:           config.Name, // TODO should separate from Name
-		ethVersionId:            config.ProtocolVersion,
 		netVersionId:            config.NetworkId,
 		NatSpec:                 config.NatSpec,
 		MinerThreads:            config.MinerThreads,
 		SolcPath:                config.SolcPath,
 		AutoDAG:                 config.AutoDAG,
+		PowTest:                 config.PowTest,
 		GpoMinGasPrice:          config.GpoMinGasPrice,
 		GpoMaxGasPrice:          config.GpoMaxGasPrice,
 		GpoFullBlockRatio:       config.GpoFullBlockRatio,
@@ -335,9 +357,17 @@ func New(config *Config) (*Ethereum, error) {
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
 	}
 
-	eth.pow = ethash.New()
+	if config.PowTest {
+		glog.V(logger.Info).Infof("ethash used in test mode")
+		eth.pow, err = ethash.NewForTesting()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		eth.pow = ethash.New()
+	}
 	genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
-	eth.chainManager, err = core.NewChainManager(genesis, blockDb, stateDb, eth.pow, eth.EventMux())
+	eth.chainManager, err = core.NewChainManager(genesis, blockDb, stateDb, extraDb, eth.pow, eth.EventMux())
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +375,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
-	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.chainManager)
+	eth.protocolManager = NewProtocolManager(config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.chainManager)
 
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
@@ -358,7 +388,7 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	protocols := []p2p.Protocol{eth.protocolManager.SubProtocol}
+	protocols := append([]p2p.Protocol{}, eth.protocolManager.SubProtocols...)
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
 	}
@@ -462,17 +492,15 @@ func (s *Ethereum) StartMining(threads int) error {
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	eb = s.etherbase
 	if (eb == common.Address{}) {
-		primary, err := s.accountManager.Primary()
-		if err != nil {
-			return eb, err
-		}
-		if (primary == common.Address{}) {
-			err = fmt.Errorf("no accounts found")
-			return eb, err
-		}
-		eb = primary
+		err = fmt.Errorf("etherbase address must be explicitly specified")
 	}
-	return eb, nil
+	return
+}
+
+// set in js console via admin interface or wrapper from cli flags
+func (self *Ethereum) SetEtherbase(etherbase common.Address) {
+	self.etherbase = etherbase
+	self.miner.SetEtherbase(etherbase)
 }
 
 func (s *Ethereum) StopMining()         { s.miner.Stop() }
@@ -495,7 +523,7 @@ func (s *Ethereum) PeerCount() int                       { return s.net.PeerCoun
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
 func (s *Ethereum) MaxPeers() int                        { return s.net.MaxPeers }
 func (s *Ethereum) ClientVersion() string                { return s.clientVersion }
-func (s *Ethereum) EthVersion() int                      { return s.ethVersionId }
+func (s *Ethereum) EthVersion() int                      { return int(s.protocolManager.SubProtocols[0].Version) }
 func (s *Ethereum) NetVersion() int                      { return s.netVersionId }
 func (s *Ethereum) ShhVersion() int                      { return s.shhVersionId }
 func (s *Ethereum) Downloader() *downloader.Downloader   { return s.protocolManager.downloader }
@@ -504,7 +532,7 @@ func (s *Ethereum) Downloader() *downloader.Downloader   { return s.protocolMana
 func (s *Ethereum) Start() error {
 	jsonlogger.LogJson(&logger.LogStarting{
 		ClientString:    s.net.Name,
-		ProtocolVersion: ProtocolVersion,
+		ProtocolVersion: s.EthVersion(),
 	})
 	err := s.net.Start()
 	if err != nil {
@@ -560,7 +588,7 @@ done:
 func (s *Ethereum) StartForTest() {
 	jsonlogger.LogJson(&logger.LogStarting{
 		ClientString:    s.net.Name,
-		ProtocolVersion: ProtocolVersion,
+		ProtocolVersion: s.EthVersion(),
 	})
 }
 
@@ -667,14 +695,20 @@ func (self *Ethereum) StopAutoDAG() {
 	glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
 }
 
-func saveProtocolVersion(db common.Database, protov int) {
-	d, _ := db.Get([]byte("ProtocolVersion"))
-	protocolVersion := common.NewValue(d).Uint()
+/*
+	// The databases were previously tied to protocol versions. Currently we
+	// are moving away from this decision as approaching Frontier. The below
+	// code was left in for now but should eventually be just dropped.
 
-	if protocolVersion == 0 {
-		db.Put([]byte("ProtocolVersion"), common.NewValue(protov).Bytes())
+	func saveProtocolVersion(db common.Database, protov int) {
+		d, _ := db.Get([]byte("ProtocolVersion"))
+		protocolVersion := common.NewValue(d).Uint()
+
+		if protocolVersion == 0 {
+			db.Put([]byte("ProtocolVersion"), common.NewValue(protov).Bytes())
+		}
 	}
-}
+*/
 
 func saveBlockchainVersion(db common.Database, bcVersion int) {
 	d, _ := db.Get([]byte("BlockchainVersion"))
