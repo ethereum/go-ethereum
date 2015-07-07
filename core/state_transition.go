@@ -255,10 +255,18 @@ func (self *StateTransition) refundGas() {
 
 	uhalf := remaining.Div(self.gasUsed(), common.Big2)
 	refund := common.BigMin(uhalf, self.state.Refunds())
-	self.gas.Add(self.gas, refund)
-	self.state.AddBalance(sender.Address(), refund.Mul(refund, self.gasPrice))
 
-	coinbase.AddGas(self.gas, self.gasPrice)
+	gas := new(big.Int).Set(self.gas)
+	gas.Add(gas, refund)
+	self.state.AddBalance(sender.Address(), refund.Mul(refund, self.gasPrice))
+	coinbase.AddGas(gas, self.gasPrice)
+	// XXX !!HARD FORK!! XXX
+	// Above 830.000 receipts should no longer have have reduced gas used
+	// from refunds. This prevents clever tricks to add 2x more used gas in
+	// a block.
+	if self.env.BlockNumber().Cmp(big.NewInt(830000)) < 0 {
+		self.gas.Set(gas)
+	}
 }
 
 func (self *StateTransition) gasUsed() *big.Int {
