@@ -180,7 +180,7 @@ func (test *BlockTest) makeEthConfig() *eth.Config {
 	return &eth.Config{
 		DataDir:        common.DefaultDataDir(),
 		Verbosity:      5,
-		Etherbase:      "primary",
+		Etherbase:      common.Address{},
 		AccountManager: accounts.NewManager(ks),
 		NewDB:          func(path string) (common.Database, error) { return ethdb.NewMemDatabase() },
 	}

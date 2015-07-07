@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"math/big"
@@ -147,13 +148,12 @@ func runStateTest(test VmTest) error {
 
 func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.Logs, *big.Int, error) {
 	var (
-		keyPair, _ = crypto.NewKeyPairFromSec([]byte(common.Hex2Bytes(tx["secretKey"])))
-		data       = common.FromHex(tx["data"])
-		gas        = common.Big(tx["gasLimit"])
-		price      = common.Big(tx["gasPrice"])
-		value      = common.Big(tx["value"])
-		nonce      = common.Big(tx["nonce"]).Uint64()
-		caddr      = common.HexToAddress(env["currentCoinbase"])
+		data  = common.FromHex(tx["data"])
+		gas   = common.Big(tx["gasLimit"])
+		price = common.Big(tx["gasPrice"])
+		value = common.Big(tx["value"])
+		nonce = common.Big(tx["nonce"]).Uint64()
+		caddr = common.HexToAddress(env["currentCoinbase"])
 	)
 
 	var to *common.Address
@@ -168,9 +168,11 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 	coinbase := statedb.GetOrNewStateObject(caddr)
 	coinbase.SetGasLimit(common.Big(env["currentGasLimit"]))
 
-	message := NewMessage(common.BytesToAddress(keyPair.Address()), to, data, value, gas, price, nonce)
+	key, _ := hex.DecodeString(tx["secretKey"])
+	addr := crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
+	message := NewMessage(addr, to, data, value, gas, price, nonce)
 	vmenv := NewEnvFromMap(statedb, env, tx)
-	vmenv.origin = common.BytesToAddress(keyPair.Address())
+	vmenv.origin = addr
 	ret, _, err := core.ApplyMessage(vmenv, message, coinbase)
 	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || state.IsGasLimitErr(err) {
 		statedb.Set(snapshot)

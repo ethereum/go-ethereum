@@ -168,16 +168,6 @@ func (self *Transaction) ToString() string {
 	return self.ref.String()
 }
 
-type Key struct {
-	Address    string `json:"address"`
-	PrivateKey string `json:"privateKey"`
-	PublicKey  string `json:"publicKey"`
-}
-
-func NewKey(key *crypto.KeyPair) *Key {
-	return &Key{common.ToHex(key.Address()), common.ToHex(key.PrivateKey), common.ToHex(key.PublicKey)}
-}
-
 type PReceipt struct {
 	CreatedContract bool   `json:"createdContract"`
 	Address         string `json:"address"`

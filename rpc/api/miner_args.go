@@ -5,6 +5,7 @@ import (
 
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
@@ -74,6 +75,31 @@ func (args *GasPriceArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	return shared.NewInvalidTypeError("Price", "not a string")
+}
+
+type SetEtherbaseArgs struct {
+	Etherbase common.Address
+}
+
+func (args *SetEtherbaseArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	if addr, ok := obj[0].(string); ok {
+		args.Etherbase = common.HexToAddress(addr)
+		if (args.Etherbase == common.Address{}) {
+			return shared.NewInvalidTypeError("Etherbase", "not a valid address")
+		}
+		return nil
+	}
+
+	return shared.NewInvalidTypeError("Etherbase", "not a string")
 }
 
 type MakeDAGArgs struct {
