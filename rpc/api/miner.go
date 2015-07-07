@@ -19,7 +19,7 @@ var (
 		"miner_makeDAG":      (*minerApi).MakeDAG,
 		"miner_setExtra":     (*minerApi).SetExtra,
 		"miner_setGasPrice":  (*minerApi).SetGasPrice,
-		"admin_setEtherbase": (*minerApi).SetEtherbase,
+		"miner_setEtherbase": (*minerApi).SetEtherbase,
 		"miner_startAutoDAG": (*minerApi).StartAutoDAG,
 		"miner_start":        (*minerApi).StartMiner,
 		"miner_stopAutoDAG":  (*minerApi).StopAutoDAG,

@@ -472,6 +472,7 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 // set in js console via admin interface or wrapper from cli flags
 func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 	self.etherbase = etherbase
+	self.miner.SetEtherbase(etherbase)
 }
 
 func (s *Ethereum) StopMining()         { s.miner.Stop() }

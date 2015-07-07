@@ -124,6 +124,12 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 	return worker
 }
 
+func (self *worker) setEtherbase(addr common.Address) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.coinbase = addr
+}
+
 func (self *worker) pendingState() *state.StateDB {
 	self.currentMu.Lock()
 	defer self.currentMu.Unlock()
