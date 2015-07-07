@@ -141,7 +141,7 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 		AccountManager: am,
 		MaxPeers:       0,
 		PowTest:        true,
-		Etherbase:      testAddress,
+		Etherbase:      common.HexToAddress(testAddress),
 	})
 
 	if err != nil {
