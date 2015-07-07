@@ -32,16 +32,17 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
+	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
-	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
 type prompter interface {
@@ -69,6 +70,7 @@ func (r dumbterm) PasswordPrompt(p string) (string, error) {
 func (r dumbterm) AppendHistory(string) {}
 
 type jsre struct {
+	ds         *docserver.DocServer
 	re         *re.JSRE
 	ethereum   *eth.Ethereum
 	xeth       *xeth.XEth
@@ -143,6 +145,7 @@ func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
 	js.client = client
+	js.ds = docserver.New("/")
 
 	if f == nil {
 		f = js
@@ -180,6 +183,7 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, client comms.Et
 	if f == nil {
 		f = js
 	}
+	js.ds = docserver.New("/")
 	js.xeth = xeth.New(ethereum, f)
 	js.wait = js.xeth.UpdateState()
 	js.client = client
@@ -331,15 +335,13 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
 
-	js.re.Eval(globalRegistrar + "registrar = GlobalRegistrar.at(\"" + globalRegistrarAddr + "\");")
+	js.re.Eval(`var GlobalRegistrar = eth.contract(` + registrar.GlobalRegistrarAbi + `);	 registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
 	return nil
 }
 
-var ds, _ = docserver.New("/")
-
 func (self *jsre) ConfirmTransaction(tx string) bool {
 	if self.ethereum.NatSpec {
-		notice := natspec.GetNotice(self.xeth, tx, ds)
+		notice := natspec.GetNotice(self.xeth, tx, self.ds)
 		fmt.Println(notice)
 		answer, _ := self.Prompt("Confirm Transaction [y/n]")
 		return strings.HasPrefix(strings.Trim(answer, " "), "y")

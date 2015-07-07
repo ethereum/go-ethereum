@@ -9,50 +9,43 @@ web3._extend({
 			name: 'printBlock',
 			call: 'debug_printBlock',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.formatInputInt],
-			outputFormatter: web3._extend.formatters.formatOutputString
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'getBlockRlp',
 			call: 'debug_getBlockRlp',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.formatInputInt],
-			outputFormatter: web3._extend.formatters.formatOutputString
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'setHead',
 			call: 'debug_setHead',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.formatInputInt],
-			outputFormatter: web3._extend.formatters.formatOutputBool
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'processBlock',
 			call: 'debug_processBlock',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.formatInputInt],
-			outputFormatter: function(obj) { return obj; }
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'seedHash',
 			call: 'debug_seedHash',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.formatInputInt],
-			outputFormatter: web3._extend.formatters.formatOutputString
-		})		,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
 		new web3._extend.Method({
 			name: 'dumpBlock',
 			call: 'debug_dumpBlock',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.formatInputInt],
-			outputFormatter: function(obj) { return obj; }
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'metrics',
 			call: 'debug_metrics',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.formatInputBool],
-			outputFormatter: function(obj) { return obj; }
+			inputFormatter: [null]
 		})
 	],
 	properties:
