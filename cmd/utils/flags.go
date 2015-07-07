@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package utils
 
 import (
@@ -9,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/metrics"
 
@@ -122,8 +139,8 @@ var (
 	}
 	EtherbaseFlag = cli.StringFlag{
 		Name:  "etherbase",
-		Usage: "Public address for block mining rewards. By default the address of your primary account is used",
-		Value: "primary",
+		Usage: "Public address for block mining rewards. By default the address first created is used",
+		Value: "0",
 	}
 	GasPriceFlag = cli.StringFlag{
 		Name:  "gasprice",
@@ -133,7 +150,7 @@ var (
 
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
-		Usage: "Unlock the account given until this program exits (prompts for password). '--unlock primary' unlocks the primary account",
+		Usage: "Unlock the account given until this program exits (prompts for password). '--unlock n' unlocks the n-th account in order or creation.",
 		Value: "",
 	}
 	PasswordFileFlag = cli.StringFlag{
@@ -351,6 +368,12 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	if len(customName) > 0 {
 		clientID += "/" + customName
 	}
+	am := MakeAccountManager(ctx)
+	etherbase, err := ParamToAddress(ctx.GlobalString(EtherbaseFlag.Name), am)
+	if err != nil {
+		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
+	}
+
 	return &eth.Config{
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 ctx.GlobalString(DataDirFlag.Name),
@@ -361,9 +384,9 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		LogFile:                 ctx.GlobalString(LogFileFlag.Name),
 		Verbosity:               ctx.GlobalInt(VerbosityFlag.Name),
 		LogJSON:                 ctx.GlobalString(LogJSONFlag.Name),
-		Etherbase:               ctx.GlobalString(EtherbaseFlag.Name),
+		Etherbase:               common.HexToAddress(etherbase),
 		MinerThreads:            ctx.GlobalInt(MinerThreadsFlag.Name),
-		AccountManager:          MakeAccountManager(ctx),
+		AccountManager:          am,
 		VmDebug:                 ctx.GlobalBool(VMDebugFlag.Name),
 		MaxPeers:                ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers:         ctx.GlobalInt(MaxPendingPeersFlag.Name),
@@ -487,4 +510,21 @@ func StartPProf(ctx *cli.Context) {
 	go func() {
 		log.Println(http.ListenAndServe(address, nil))
 	}()
+}
+
+func ParamToAddress(addr string, am *accounts.Manager) (addrHex string, err error) {
+	if !((len(addr) == 40) || (len(addr) == 42)) { // with or without 0x
+		index, err := strconv.Atoi(addr)
+		if err != nil {
+			Fatalf("Invalid account address '%s'", addr)
+		}
+
+		addrHex, err = am.AddressByIndex(index)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		addrHex = addr
+	}
+	return
 }

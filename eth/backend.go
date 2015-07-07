@@ -1,3 +1,20 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
+// Package eth implements the Ethereum protocol.
 package eth
 
 import (
@@ -70,6 +87,7 @@ type Config struct {
 	VmDebug   bool
 	NatSpec   bool
 	AutoDAG   bool
+	PowTest   bool
 
 	MaxPeers        int
 	MaxPendingPeers int
@@ -87,7 +105,7 @@ type Config struct {
 	Shh  bool
 	Dial bool
 
-	Etherbase      string
+	Etherbase      common.Address
 	GasPrice       *big.Int
 	MinerThreads   int
 	AccountManager *accounts.Manager
@@ -221,6 +239,7 @@ type Ethereum struct {
 	NatSpec       bool
 	DataDir       string
 	AutoDAG       bool
+	PowTest       bool
 	autodagquit   chan bool
 	etherbase     common.Address
 	clientVersion string
@@ -322,13 +341,14 @@ func New(config *Config) (*Ethereum, error) {
 		eventMux:                &event.TypeMux{},
 		accountManager:          config.AccountManager,
 		DataDir:                 config.DataDir,
-		etherbase:               common.HexToAddress(config.Etherbase),
+		etherbase:               config.Etherbase,
 		clientVersion:           config.Name, // TODO should separate from Name
 		netVersionId:            config.NetworkId,
 		NatSpec:                 config.NatSpec,
 		MinerThreads:            config.MinerThreads,
 		SolcPath:                config.SolcPath,
 		AutoDAG:                 config.AutoDAG,
+		PowTest:                 config.PowTest,
 		GpoMinGasPrice:          config.GpoMinGasPrice,
 		GpoMaxGasPrice:          config.GpoMaxGasPrice,
 		GpoFullBlockRatio:       config.GpoFullBlockRatio,
@@ -337,7 +357,15 @@ func New(config *Config) (*Ethereum, error) {
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
 	}
 
-	eth.pow = ethash.New()
+	if config.PowTest {
+		glog.V(logger.Info).Infof("ethash used in test mode")
+		eth.pow, err = ethash.NewForTesting()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		eth.pow = ethash.New()
+	}
 	genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
 	eth.chainManager, err = core.NewChainManager(genesis, blockDb, stateDb, extraDb, eth.pow, eth.EventMux())
 	if err != nil {
@@ -464,17 +492,15 @@ func (s *Ethereum) StartMining(threads int) error {
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	eb = s.etherbase
 	if (eb == common.Address{}) {
-		primary, err := s.accountManager.Primary()
-		if err != nil {
-			return eb, err
-		}
-		if (primary == common.Address{}) {
-			err = fmt.Errorf("no accounts found")
-			return eb, err
-		}
-		eb = primary
+		err = fmt.Errorf("etherbase address must be explicitly specified")
 	}
-	return eb, nil
+	return
+}
+
+// set in js console via admin interface or wrapper from cli flags
+func (self *Ethereum) SetEtherbase(etherbase common.Address) {
+	self.etherbase = etherbase
+	self.miner.SetEtherbase(etherbase)
 }
 
 func (s *Ethereum) StopMining()         { s.miner.Stop() }

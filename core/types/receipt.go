@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package types
 
 import (
@@ -15,7 +31,10 @@ type Receipt struct {
 	PostState         []byte
 	CumulativeGasUsed *big.Int
 	Bloom             Bloom
+	TxHash            common.Hash
+	ContractAddress   common.Address
 	logs              state.Logs
+	GasUsed           *big.Int
 }
 
 func NewReceipt(root []byte, cumalativeGasUsed *big.Int) *Receipt {
@@ -39,12 +58,15 @@ func (self *Receipt) DecodeRLP(s *rlp.Stream) error {
 		PostState         []byte
 		CumulativeGasUsed *big.Int
 		Bloom             Bloom
+		TxHash            common.Hash
+		ContractAddress   common.Address
 		Logs              state.Logs
+		GasUsed           *big.Int
 	}
 	if err := s.Decode(&r); err != nil {
 		return err
 	}
-	self.PostState, self.CumulativeGasUsed, self.Bloom, self.logs = r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs
+	self.PostState, self.CumulativeGasUsed, self.Bloom, self.TxHash, self.ContractAddress, self.logs, self.GasUsed = r.PostState, r.CumulativeGasUsed, r.Bloom, r.TxHash, r.ContractAddress, r.Logs, r.GasUsed
 
 	return nil
 }
@@ -56,7 +78,7 @@ func (self *ReceiptForStorage) EncodeRLP(w io.Writer) error {
 	for i, log := range self.logs {
 		storageLogs[i] = (*state.LogForStorage)(log)
 	}
-	return rlp.Encode(w, []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, storageLogs})
+	return rlp.Encode(w, []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, self.TxHash, self.ContractAddress, storageLogs, self.GasUsed})
 }
 
 func (self *Receipt) RlpEncode() []byte {

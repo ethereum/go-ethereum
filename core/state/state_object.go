@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package state
 
 import (
@@ -57,8 +73,6 @@ type StateObject struct {
 	initCode Code
 	// Cached storage (flushed when updated)
 	storage Storage
-	// Temporary prepaid gas, reward after transition
-	prepaid *big.Int
 
 	// Total gas pool is the total amount of gas currently
 	// left if this object is the coinbase. Gas is directly
@@ -77,14 +91,10 @@ func (self *StateObject) Reset() {
 }
 
 func NewStateObject(address common.Address, db common.Database) *StateObject {
-	// This to ensure that it has 20 bytes (and not 0 bytes), thus left or right pad doesn't matter.
-	//address := common.ToAddress(addr)
-
 	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
 	object.trie = trie.NewSecure((common.Hash{}).Bytes(), db)
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
-	object.prepaid = new(big.Int)
 
 	return object
 }
@@ -110,7 +120,6 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db common.Data
 	object.trie = trie.NewSecure(extobject.Root[:], db)
 	object.storage = make(map[string]common.Hash)
 	object.gasPool = new(big.Int)
-	object.prepaid = new(big.Int)
 	object.code, _ = db.Get(extobject.CodeHash)
 
 	return object
@@ -172,7 +181,6 @@ func (self *StateObject) Update() {
 
 		self.setAddr([]byte(key), value)
 	}
-	self.storage = make(Storage)
 }
 
 func (c *StateObject) GetInstr(pc *big.Int) *common.Value {

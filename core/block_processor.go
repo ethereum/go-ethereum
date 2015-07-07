@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package core
 
 import (
@@ -9,12 +25,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
-	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -23,8 +39,6 @@ const (
 	// command to be run (forces the blocks to be imported again using the new algorithm)
 	BlockChainVersion = 3
 )
-
-var receiptsPre = []byte("receipts-")
 
 type BlockProcessor struct {
 	db      common.Database
@@ -74,15 +88,22 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 
 	cb := statedb.GetStateObject(coinbase.Address())
 	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, header), tx, cb)
-	if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
+	if err != nil {
 		return nil, nil, err
 	}
 
 	// Update the state with pending changes
-	statedb.Update()
+	statedb.SyncIntermediate()
 
 	usedGas.Add(usedGas, gas)
 	receipt := types.NewReceipt(statedb.Root().Bytes(), usedGas)
+	receipt.TxHash = tx.Hash()
+	receipt.GasUsed = new(big.Int).Set(gas)
+	if MessageCreatesContract(tx) {
+		from, _ := tx.From()
+		receipt.ContractAddress = crypto.CreateAddress(from, tx.Nonce())
+	}
+
 	logs := statedb.GetLogs(tx.Hash())
 	receipt.SetLogs(logs)
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
@@ -114,7 +135,7 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
 
 		receipt, txGas, err := self.ApplyTransaction(coinbase, statedb, header, tx, totalUsedGas, transientProcess)
-		if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
+		if err != nil {
 			return nil, err
 		}
 
@@ -239,7 +260,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 
 	// Commit state objects/accounts to a temporary trie (does not save)
 	// used to calculate the state root.
-	state.Update()
+	state.SyncObjects()
 	if header.Root != state.Root() {
 		err = fmt.Errorf("invalid merkle root. received=%x got=%x", header.Root, state.Root())
 		return
@@ -319,16 +340,20 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 }
 
 // GetBlockReceipts returns the receipts beloniging to the block hash
-func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) (receipts types.Receipts, err error) {
-	return getBlockReceipts(sm.extraDb, bhash)
+func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
+	if block := sm.ChainManager().GetBlock(bhash); block != nil {
+		return GetReceiptsFromBlock(sm.extraDb, block)
+	}
+
+	return nil
 }
 
 // GetLogs returns the logs of the given block. This method is using a two step approach
 // where it tries to get it from the (updated) method which gets them from the receipts or
 // the depricated way by re-processing the block.
 func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err error) {
-	receipts, err := sm.GetBlockReceipts(block.Hash())
-	if err == nil && len(receipts) > 0 {
+	receipts := GetReceiptsFromBlock(sm.extraDb, block)
+	if len(receipts) > 0 {
 		// coalesce logs
 		for _, receipt := range receipts {
 			logs = append(logs, receipt.Logs()...)
@@ -390,16 +415,4 @@ func ValidateHeader(pow pow.PoW, block *types.Header, parent *types.Block, check
 	}
 
 	return nil
-}
-
-func getBlockReceipts(db common.Database, bhash common.Hash) (receipts types.Receipts, err error) {
-	var rdata []byte
-	rdata, err = db.Get(append(receiptsPre, bhash[:]...))
-
-	if err == nil {
-		err = rlp.DecodeBytes(rdata, &receipts)
-	} else {
-		glog.V(logger.Detail).Infof("getBlockReceipts error %v\n", err)
-	}
-	return
 }

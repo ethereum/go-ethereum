@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package miner
 
 import (
@@ -122,6 +138,12 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 	worker.commitNewWork()
 
 	return worker
+}
+
+func (self *worker) setEtherbase(addr common.Address) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.coinbase = addr
 }
 
 func (self *worker) pendingState() *state.StateDB {
@@ -255,7 +277,7 @@ func (self *worker) wait() {
 				// This puts transactions in a extra db for rpc
 				core.PutTransactions(self.extraDb, block, block.Transactions())
 				// store the receipts
-				core.PutReceipts(self.extraDb, block.Hash(), self.current.receipts)
+				core.PutReceipts(self.extraDb, self.current.receipts)
 			}
 
 			// check staleness and display confirmation
@@ -298,8 +320,6 @@ func (self *worker) push() {
 
 			if agent.Work() != nil {
 				agent.Work() <- self.current.block
-			} else {
-				common.Report(fmt.Sprintf("%v %T\n", agent, agent))
 			}
 		}
 	}
@@ -453,7 +473,7 @@ func (self *worker) commitNewWork() {
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// commit state root after all state transitions.
 		core.AccumulateRewards(self.current.state, header, uncles)
-		current.state.Update()
+		current.state.SyncObjects()
 		self.current.state.Sync()
 		header.Root = current.state.Root()
 	}
@@ -526,18 +546,18 @@ func (env *environment) commitTransactions(transactions types.Transactions, gasP
 
 		err := env.commitTransaction(tx, proc)
 		switch {
-		case core.IsNonceErr(err) || core.IsInvalidTxErr(err):
-			env.remove.Add(tx.Hash())
-
-			if glog.V(logger.Detail) {
-				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
-			}
 		case state.IsGasLimitErr(err):
 			// ignore the transactor so no nonce errors will be thrown for this account
 			// next time the worker is run, they'll be picked up again.
 			env.ignoredTransactors.Add(from)
 
 			glog.V(logger.Detail).Infof("Gas limit reached for (%x) in this block. Continue to try smaller txs\n", from[:4])
+		case err != nil:
+			env.remove.Add(tx.Hash())
+
+			if glog.V(logger.Detail) {
+				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
+			}
 		default:
 			env.tcount++
 		}
@@ -547,7 +567,7 @@ func (env *environment) commitTransactions(transactions types.Transactions, gasP
 func (env *environment) commitTransaction(tx *types.Transaction, proc *core.BlockProcessor) error {
 	snap := env.state.Copy()
 	receipt, _, err := proc.ApplyTransaction(env.coinbase, env.state, env.header, tx, env.header.GasUsed, true)
-	if err != nil && (core.IsNonceErr(err) || state.IsGasLimitErr(err) || core.IsInvalidTxErr(err)) {
+	if err != nil {
 		env.state.Set(snap)
 		return err
 	}

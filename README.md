@@ -1,6 +1,6 @@
 ## Ethereum Go
 
-Ethereum Go Client © 2014 Jeffrey Wilcke.
+Ethereum Go Client, by Jeffrey Wilcke (and some other people).
 
           | Linux   | OSX | ARM | Windows | Tests
 ----------|---------|-----|-----|---------|------

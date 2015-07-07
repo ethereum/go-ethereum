@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
@@ -77,6 +93,7 @@ var (
 		"eth_submitWork":                          (*ethApi).SubmitWork,
 		"eth_resend":                              (*ethApi).Resend,
 		"eth_pendingTransactions":                 (*ethApi).PendingTransactions,
+		"eth_getTransactionReceipt":               (*ethApi).GetTransactionReceipt,
 	}
 )
 
@@ -595,4 +612,28 @@ func (self *ethApi) PendingTransactions(req *shared.Request) (interface{}, error
 	}
 
 	return ltxs, nil
+}
+
+func (self *ethApi) GetTransactionReceipt(req *shared.Request) (interface{}, error) {
+	args := new(HashArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	txhash := common.BytesToHash(common.FromHex(args.Hash))
+	tx, bhash, bnum, txi := self.xeth.EthTransactionByHash(args.Hash)
+	rec := self.xeth.GetTxReceipt(txhash)
+	// We could have an error of "not found". Should disambiguate
+	// if err != nil {
+	// 	return err, nil
+	// }
+	if rec != nil && tx != nil {
+		v := NewReceiptRes(rec)
+		v.BlockHash = newHexData(bhash)
+		v.BlockNumber = newHexNum(bnum)
+		v.TransactionIndex = newHexNum(txi)
+		return v, nil
+	}
+
+	return nil, nil
 }

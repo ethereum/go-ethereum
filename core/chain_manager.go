@@ -1,3 +1,20 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
+// Package core implements the Ethereum consensus protocol.
 package core
 
 import (
@@ -611,6 +628,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 
 			blockErr(block, err)
 
+			go ReportBlock(block, err)
+
 			return i, err
 		}
 
@@ -632,7 +651,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			// This puts transactions in a extra db for rpc
 			PutTransactions(self.extraDb, block, block.Transactions())
 			// store the receipts
-			PutReceipts(self.extraDb, block.Hash(), receipts)
+			PutReceipts(self.extraDb, receipts)
 		case SideStatTy:
 			if glog.V(logger.Detail) {
 				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...). Took %v\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))

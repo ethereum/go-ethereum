@@ -1,6 +1,23 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -401,6 +418,43 @@ func NewUncleRes(h *types.Header) *UncleRes {
 // 	Payload    string `json:"payload"`
 // 	WorkProved string `json:"workProved"`
 // }
+
+type ReceiptRes struct {
+	TransactionHash   *hexdata       `json:"transactionHash"`
+	TransactionIndex  *hexnum        `json:"transactionIndex"`
+	BlockNumber       *hexnum        `json:"blockNumber"`
+	BlockHash         *hexdata       `json:"blockHash"`
+	CumulativeGasUsed *hexnum        `json:"cumulativeGasUsed"`
+	GasUsed           *hexnum        `json:"gasUsed"`
+	ContractAddress   *hexdata       `json:"contractAddress"`
+	Logs              *[]interface{} `json:"logs"`
+}
+
+func NewReceiptRes(rec *types.Receipt) *ReceiptRes {
+	if rec == nil {
+		return nil
+	}
+
+	var v = new(ReceiptRes)
+	v.TransactionHash = newHexData(rec.TxHash)
+	if rec.GasUsed != nil {
+		v.GasUsed = newHexNum(rec.GasUsed.Bytes())
+	}
+	v.CumulativeGasUsed = newHexNum(rec.CumulativeGasUsed)
+
+	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
+	if bytes.Compare(rec.ContractAddress.Bytes(), bytes.Repeat([]byte{0}, 20)) != 0 {
+		v.ContractAddress = newHexData(rec.ContractAddress)
+	}
+
+	logs := make([]interface{}, len(rec.Logs()))
+	for i, log := range rec.Logs() {
+		logs[i] = NewLogRes(log)
+	}
+	v.Logs = &logs
+
+	return v
+}
 
 func numString(raw interface{}) (*big.Int, error) {
 	var number *big.Int

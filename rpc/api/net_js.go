@@ -1,47 +1,35 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 const Net_JS = `
 web3._extend({
-	property: 'network',
+	property: 'net',
 	methods:
 	[
 		new web3._extend.Method({
 			name: 'addPeer',
 			call: 'net_addPeer',
 			params: 1,
-			inputFormatter: [web3._extend.utils.formatInputString],
-			outputFormatter: web3._extend.formatters.formatOutputBool
-		}),
-		new web3._extend.Method({
-			name: 'getPeerCount',
-			call: 'net_peerCount',
-			params: 0,
-			inputFormatter: [],
-			outputFormatter: web3._extend.formatters.formatOutputString
+			inputFormatter: [null]
 		})
 	],
 	properties:
 	[
-		new web3._extend.Property({
-			name: 'listening',
-			getter: 'net_listening',
-			outputFormatter: web3._extend.formatters.formatOutputBool
-		}),
-		new web3._extend.Property({
-			name: 'peerCount',
-			getter: 'net_peerCount',
-			outputFormatter: web3._extend.utils.toDecimal
-		}),
-		new web3._extend.Property({
-			name: 'peers',
-			getter: 'net_peers',
-			outputFormatter: function(obj) { return obj; }
-		}),
-		new web3._extend.Property({
-			name: 'version',
-			getter: 'net_version',
-			outputFormatter: web3._extend.formatters.formatOutputString
-		})
 	]
 });
 `

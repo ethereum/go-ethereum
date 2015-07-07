@@ -1,3 +1,20 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
+// Package tests implements execution of Ethereum JSON tests.
 package tests
 
 import (
@@ -8,6 +25,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/ethereum/go-ethereum/core"
 )
 
 var (
@@ -18,27 +37,26 @@ var (
 	vmTestDir          = filepath.Join(baseDir, "VMTests")
 
 	BlockSkipTests = []string{
+		// Fails in InsertPreState with: computed state root does not
+		// match genesis block bba25a96 0d8f85c8 Christoph said it will be
+		// fixed eventually
 		"SimpleTx3",
 
-		// these panic in block_processor.go:84 , see https://github.com/ethereum/go-ethereum/issues/1384
-		"TRANSCT_rvalue_TooShort",
-		"TRANSCT_rvalue_TooLarge",
-		"TRANSCT_svalue_TooLarge",
-
-		// TODO: check why these fail
+		// These tests are not valid, as they are out of scope for RLP and
+		// the consensus protocol.
 		"BLOCK__RandomByteAtTheEnd",
 		"TRANSCT__RandomByteAtTheEnd",
 		"BLOCK__ZeroByteAtTheEnd",
 		"TRANSCT__ZeroByteAtTheEnd",
-
-		// TODO: why does this fail? should be check in ethash now
-		"DifficultyIsZero",
-
-		// TODO: why does this fail?
-		"wrongMixHash",
 	}
+
+	/* Go does not support transaction (account) nonces above 2^64. This
+	technically breaks consensus but is regarded as "reasonable
+	engineering constraint" as accounts cannot easily reach such high
+	nonce values in practice
+	*/
 	TransSkipTests = []string{"TransactionWithHihghNonce256"}
-	StateSkipTests = []string{"mload32bitBound_return", "mload32bitBound_return2"}
+	StateSkipTests = []string{}
 	VmSkipTests    = []string{}
 )
 
@@ -48,6 +66,7 @@ func readJson(reader io.Reader, value interface{}) error {
 		return fmt.Errorf("Error reading JSON file", err.Error())
 	}
 
+	core.DisableBadBlockReporting = true
 	if err = json.Unmarshal(data, &value); err != nil {
 		if syntaxerr, ok := err.(*json.SyntaxError); ok {
 			line := findLine(data, syntaxerr.Offset)
