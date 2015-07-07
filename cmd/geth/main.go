@@ -458,17 +458,20 @@ func execJSFiles(ctx *cli.Context) {
 
 func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (addrHex, auth string) {
 	var err error
-	addrHex = utils.ParamToAddress(addr, am)
-	// Attempt to unlock the account 3 times
-	attempts := 3
-	for tries := 0; tries < attempts; tries++ {
-		msg := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", addr, tries+1, attempts)
-		auth = getPassPhrase(ctx, msg, false, i)
-		err = am.Unlock(common.HexToAddress(addrHex), auth)
-		if err == nil {
-			break
+	addrHex, err = utils.ParamToAddress(addr, am)
+	if err == nil {
+		// Attempt to unlock the account 3 times
+		attempts := 3
+		for tries := 0; tries < attempts; tries++ {
+			msg := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", addr, tries+1, attempts)
+			auth = getPassPhrase(ctx, msg, false, i)
+			err = am.Unlock(common.HexToAddress(addrHex), auth)
+			if err == nil {
+				break
+			}
 		}
 	}
+
 	if err != nil {
 		utils.Fatalf("Unlock account failed '%v'", err)
 	}
