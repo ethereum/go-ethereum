@@ -781,7 +781,6 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 
 		addr := crypto.CreateAddress(from, tx.Nonce())
 		glog.V(logger.Info).Infof("Tx(%x) created: %x\n", tx.Hash(), addr)
-		return addr.Hex(), nil
 	} else {
 		glog.V(logger.Info).Infof("Tx(%x) to: %x\n", tx.Hash(), tx.To())
 	}

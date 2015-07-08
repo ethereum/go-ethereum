@@ -99,7 +99,7 @@ done:
 		switch {
 		case block.NumberU64() == 0:
 			break done
-		case block.NumberU64() == earliestBlockNo:
+		case block.NumberU64() < earliestBlockNo:
 			break done
 		case self.max <= len(logs):
 			break done
