@@ -1417,7 +1417,7 @@ module.exports = {
 
 },{"bignumber.js":"bignumber.js"}],8:[function(require,module,exports){
 module.exports={
-    "version": "0.8.0"
+    "version": "0.8.1"
 }
 
 },{}],9:[function(require,module,exports){
@@ -1840,20 +1840,22 @@ var contract = function (abi) {
 };
 
 /**
- * Should be called to create new ContractFactory
+ * Should be called to check if the contract gets properly deployed on the blockchain.
  *
  * @method checkForContractAddress
  * @param {Object} contract
  * @param {Function} callback
  * @returns {Undefined}
  */
-var checkForContractAddress = function(contract, callback){
+var checkForContractAddress = function(contract, abi, callback){
     var count = 0;
 
     // wait for receipt
     var filter = web3.eth.filter('latest', function(e){
         if(!e) {
             count++;
+
+            // console.log('Checking for contract address', count);
 
             // stop watching after 50 blocks (timeout)
             if(count > 50) {
@@ -1870,7 +1872,13 @@ var checkForContractAddress = function(contract, callback){
                         web3.eth.getCode(receipt.contractAddress, function(e, code){
                             if(code.length > 2) {
 
+                                // console.log('Contract code deployed!');
+
                                 contract.address = receipt.contractAddress;
+
+                                // attach events and methods
+                                addFunctionsToContract(contract, abi);
+                                addEventsToContract(contract, abi);
 
                                 if(callback)
                                     callback(null, contract);
@@ -1909,6 +1917,7 @@ var ContractFactory = function (abi) {
  * @returns {Contract} returns contract instance
  */
 ContractFactory.prototype.new = function () {
+    var _this = this;
     var contract = new Contract(this.abi);
 
     // parse arguments
@@ -1940,14 +1949,14 @@ ContractFactory.prototype.new = function () {
             } else {
                 // add the transaction hash
                 contract.transactionHash = hash;
-                checkForContractAddress(contract, callback);
+                checkForContractAddress(contract, _this.abi, callback);
             }
         });
     } else {
         var hash = web3.eth.sendTransaction(options);
         // add the transaction hash
         contract.transactionHash = hash;
-        checkForContractAddress(contract);
+        checkForContractAddress(contract, _this.abi);
     }
 
     return contract;
@@ -1963,12 +1972,17 @@ ContractFactory.prototype.new = function () {
  * otherwise calls callback function (err, contract)
  */
 ContractFactory.prototype.at = function (address, callback) {
+    var contract = new Contract(this.abi, address);
     // TODO: address is required
+
+    // attach functions
+    addFunctionsToContract(contract, this.abi);
+    addEventsToContract(contract, this.abi);
     
     if (callback) {
-        callback(null, new Contract(this.abi, address));
+        callback(null, contract);
     } 
-    return new Contract(this.abi, address);
+    return contract;
 };
 
 /**
@@ -1980,8 +1994,6 @@ ContractFactory.prototype.at = function (address, callback) {
  */
 var Contract = function (abi, address) {
     this.address = address;
-    addFunctionsToContract(this, abi);
-    addEventsToContract(this, abi);
 };
 
 module.exports = contract;
@@ -2484,8 +2496,8 @@ SolidityEvent.prototype.encode = function (indexed, options) {
 
     result.topics = [];
 
+    result.address = this._address;
     if (!this._anonymous) {
-        result.address = this._address;
         result.topics.push('0x' + this.signature());
     }
 
