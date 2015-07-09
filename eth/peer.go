@@ -167,12 +167,12 @@ func (p *peer) SendNewBlockHashes(hashes []common.Hash) error {
 }
 
 // SendNewBlock propagates an entire block to a remote peer.
-func (p *peer) SendNewBlock(block *types.Block) error {
+func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
 	propBlockOutPacketsMeter.Mark(1)
 	propBlockOutTrafficMeter.Mark(block.Size().Int64())
 
 	p.knownBlocks.Add(block.Hash())
-	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, block.Td})
+	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
 }
 
 // RequestHashes fetches a batch of hashes from a peer, starting at from, going
