@@ -19,16 +19,19 @@ package ethdb
 import (
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/rcrowley/go-metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+
+	gometrics "github.com/rcrowley/go-metrics"
 )
 
 var OpenFileLimit = 64
@@ -37,15 +40,18 @@ type LDBDatabase struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
 
-	GetTimer       metrics.Timer // Timer for measuring the database get request counts and latencies
-	PutTimer       metrics.Timer // Timer for measuring the database put request counts and latencies
-	DelTimer       metrics.Timer // Timer for measuring the database delete request counts and latencies
-	MissMeter      metrics.Meter // Meter for measuring the missed database get requests
-	ReadMeter      metrics.Meter // Meter for measuring the database get request data usage
-	WriteMeter     metrics.Meter // Meter for measuring the database put request data usage
-	CompTimeMeter  metrics.Meter // Meter for measuring the total time spent in database compaction
-	CompReadMeter  metrics.Meter // Meter for measuring the data read during compaction
-	CompWriteMeter metrics.Meter // Meter for measuring the data written during compaction
+	getTimer       gometrics.Timer // Timer for measuring the database get request counts and latencies
+	putTimer       gometrics.Timer // Timer for measuring the database put request counts and latencies
+	delTimer       gometrics.Timer // Timer for measuring the database delete request counts and latencies
+	missMeter      gometrics.Meter // Meter for measuring the missed database get requests
+	readMeter      gometrics.Meter // Meter for measuring the database get request data usage
+	writeMeter     gometrics.Meter // Meter for measuring the database put request data usage
+	compTimeMeter  gometrics.Meter // Meter for measuring the total time spent in database compaction
+	compReadMeter  gometrics.Meter // Meter for measuring the data read during compaction
+	compWriteMeter gometrics.Meter // Meter for measuring the data written during compaction
+
+	quitLock sync.Mutex      // Mutex protecting the quit channel access
+	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 }
 
 // NewLDBDatabase returns a LevelDB wrapped object. LDBDatabase does not persist data by
@@ -54,7 +60,7 @@ type LDBDatabase struct {
 func NewLDBDatabase(file string) (*LDBDatabase, error) {
 	// Open the db
 	db, err := leveldb.OpenFile(file, &opt.Options{OpenFilesCacheCapacity: OpenFileLimit})
-	// check for curruption and attempt to recover
+	// check for corruption and attempt to recover
 	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
 		db, err = leveldb.RecoverFile(file, nil)
 	}
@@ -62,26 +68,23 @@ func NewLDBDatabase(file string) (*LDBDatabase, error) {
 	if err != nil {
 		return nil, err
 	}
-	database := &LDBDatabase{
+	return &LDBDatabase{
 		fn: file,
 		db: db,
-	}
-	go database.meter(3 * time.Second)
-
-	return database, nil
+	}, nil
 }
 
 // Put puts the given key / value to the queue
 func (self *LDBDatabase) Put(key []byte, value []byte) error {
 	// Measure the database put latency, if requested
-	if self.PutTimer != nil {
-		defer self.PutTimer.UpdateSince(time.Now())
+	if self.putTimer != nil {
+		defer self.putTimer.UpdateSince(time.Now())
 	}
 	// Generate the data to write to disk, update the meter and write
 	dat := rle.Compress(value)
 
-	if self.WriteMeter != nil {
-		self.WriteMeter.Mark(int64(len(dat)))
+	if self.writeMeter != nil {
+		self.writeMeter.Mark(int64(len(dat)))
 	}
 	return self.db.Put(key, dat, nil)
 }
@@ -89,20 +92,20 @@ func (self *LDBDatabase) Put(key []byte, value []byte) error {
 // Get returns the given key if it's present.
 func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
 	// Measure the database get latency, if requested
-	if self.GetTimer != nil {
-		defer self.GetTimer.UpdateSince(time.Now())
+	if self.getTimer != nil {
+		defer self.getTimer.UpdateSince(time.Now())
 	}
 	// Retrieve the key and increment the miss counter if not found
 	dat, err := self.db.Get(key, nil)
 	if err != nil {
-		if self.MissMeter != nil {
-			self.MissMeter.Mark(1)
+		if self.missMeter != nil {
+			self.missMeter.Mark(1)
 		}
 		return nil, err
 	}
 	// Otherwise update the actually retrieved amount of data
-	if self.ReadMeter != nil {
-		self.ReadMeter.Mark(int64(len(dat)))
+	if self.readMeter != nil {
+		self.readMeter.Mark(int64(len(dat)))
 	}
 	return rle.Decompress(dat)
 }
@@ -110,8 +113,8 @@ func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
 // Delete deletes the key from the queue and database
 func (self *LDBDatabase) Delete(key []byte) error {
 	// Measure the database delete latency, if requested
-	if self.DelTimer != nil {
-		defer self.DelTimer.UpdateSince(time.Now())
+	if self.delTimer != nil {
+		defer self.delTimer.UpdateSince(time.Now())
 	}
 	// Execute the actual operation
 	return self.db.Delete(key, nil)
@@ -127,8 +130,20 @@ func (self *LDBDatabase) Flush() error {
 }
 
 func (self *LDBDatabase) Close() {
+	// Stop the metrics collection to avoid internal database races
+	self.quitLock.Lock()
+	defer self.quitLock.Unlock()
+
+	if self.quitChan != nil {
+		errc := make(chan error)
+		self.quitChan <- errc
+		if err := <-errc; err != nil {
+			glog.V(logger.Error).Infof("metrics failure in '%s': %v\n", self.fn, err)
+		}
+	}
+	// Flush and close the database
 	if err := self.Flush(); err != nil {
-		glog.V(logger.Error).Infof("error: flush '%s': %v\n", self.fn, err)
+		glog.V(logger.Error).Infof("flushing '%s' failed: %v\n", self.fn, err)
 	}
 	self.db.Close()
 	glog.V(logger.Error).Infoln("flushed and closed db:", self.fn)
@@ -136,6 +151,27 @@ func (self *LDBDatabase) Close() {
 
 func (self *LDBDatabase) LDB() *leveldb.DB {
 	return self.db
+}
+
+// Meter configures the database metrics collectors and
+func (self *LDBDatabase) Meter(prefix string) {
+	// Initialize all the metrics collector at the requested prefix
+	self.getTimer = metrics.NewTimer(prefix + "user/gets")
+	self.putTimer = metrics.NewTimer(prefix + "user/puts")
+	self.delTimer = metrics.NewTimer(prefix + "user/dels")
+	self.missMeter = metrics.NewMeter(prefix + "user/misses")
+	self.readMeter = metrics.NewMeter(prefix + "user/reads")
+	self.writeMeter = metrics.NewMeter(prefix + "user/writes")
+	self.compTimeMeter = metrics.NewMeter(prefix + "compact/time")
+	self.compReadMeter = metrics.NewMeter(prefix + "compact/input")
+	self.compWriteMeter = metrics.NewMeter(prefix + "compact/output")
+
+	// Create a quit channel for the periodic collector and run it
+	self.quitLock.Lock()
+	self.quitChan = make(chan chan error)
+	self.quitLock.Unlock()
+
+	go self.meter(3 * time.Second)
 }
 
 // meter periodically retrieves internal leveldb counters and reports them to
@@ -193,16 +229,24 @@ func (self *LDBDatabase) meter(refresh time.Duration) {
 			}
 		}
 		// Update all the requested meters
-		if self.CompTimeMeter != nil {
-			self.CompTimeMeter.Mark(int64((counters[i%2][0] - counters[(i-1)%2][0]) * 1000 * 1000 * 1000))
+		if self.compTimeMeter != nil {
+			self.compTimeMeter.Mark(int64((counters[i%2][0] - counters[(i-1)%2][0]) * 1000 * 1000 * 1000))
 		}
-		if self.CompReadMeter != nil {
-			self.CompReadMeter.Mark(int64((counters[i%2][1] - counters[(i-1)%2][1]) * 1024 * 1024))
+		if self.compReadMeter != nil {
+			self.compReadMeter.Mark(int64((counters[i%2][1] - counters[(i-1)%2][1]) * 1024 * 1024))
 		}
-		if self.CompWriteMeter != nil {
-			self.CompWriteMeter.Mark(int64((counters[i%2][2] - counters[(i-1)%2][2]) * 1024 * 1024))
+		if self.compWriteMeter != nil {
+			self.compWriteMeter.Mark(int64((counters[i%2][2] - counters[(i-1)%2][2]) * 1024 * 1024))
 		}
 		// Sleep a bit, then repeat the stats collection
-		time.Sleep(refresh)
+		select {
+		case errc := <-self.quitChan:
+			// Quit requesting, stop hammering the database
+			errc <- nil
+			return
+
+		case <-time.After(refresh):
+			// Timeout, gather a new set of stats
+		}
 	}
 }

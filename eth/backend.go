@@ -41,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -267,42 +266,21 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("blockchain db err: %v", err)
 	}
 	if db, ok := blockDb.(*ethdb.LDBDatabase); ok {
-		db.GetTimer = metrics.NewTimer("eth/db/block/user/gets")
-		db.PutTimer = metrics.NewTimer("eth/db/block/user/puts")
-		db.MissMeter = metrics.NewMeter("eth/db/block/user/misses")
-		db.ReadMeter = metrics.NewMeter("eth/db/block/user/reads")
-		db.WriteMeter = metrics.NewMeter("eth/db/block/user/writes")
-		db.CompTimeMeter = metrics.NewMeter("eth/db/block/compact/time")
-		db.CompReadMeter = metrics.NewMeter("eth/db/block/compact/input")
-		db.CompWriteMeter = metrics.NewMeter("eth/db/block/compact/output")
+		db.Meter("eth/db/block/")
 	}
 	stateDb, err := newdb(filepath.Join(config.DataDir, "state"))
 	if err != nil {
 		return nil, fmt.Errorf("state db err: %v", err)
 	}
 	if db, ok := stateDb.(*ethdb.LDBDatabase); ok {
-		db.GetTimer = metrics.NewTimer("eth/db/state/user/gets")
-		db.PutTimer = metrics.NewTimer("eth/db/state/user/puts")
-		db.MissMeter = metrics.NewMeter("eth/db/state/user/misses")
-		db.ReadMeter = metrics.NewMeter("eth/db/state/user/reads")
-		db.WriteMeter = metrics.NewMeter("eth/db/state/user/writes")
-		db.CompTimeMeter = metrics.NewMeter("eth/db/state/compact/time")
-		db.CompReadMeter = metrics.NewMeter("eth/db/state/compact/input")
-		db.CompWriteMeter = metrics.NewMeter("eth/db/state/compact/output")
+		db.Meter("eth/db/state/")
 	}
 	extraDb, err := newdb(filepath.Join(config.DataDir, "extra"))
 	if err != nil {
 		return nil, fmt.Errorf("extra db err: %v", err)
 	}
 	if db, ok := extraDb.(*ethdb.LDBDatabase); ok {
-		db.GetTimer = metrics.NewTimer("eth/db/extra/user/gets")
-		db.PutTimer = metrics.NewTimer("eth/db/extra/user/puts")
-		db.MissMeter = metrics.NewMeter("eth/db/extra/user/misses")
-		db.ReadMeter = metrics.NewMeter("eth/db/extra/user/reads")
-		db.WriteMeter = metrics.NewMeter("eth/db/extra/user/writes")
-		db.CompTimeMeter = metrics.NewMeter("eth/db/extra/compact/time")
-		db.CompReadMeter = metrics.NewMeter("eth/db/extra/compact/input")
-		db.CompWriteMeter = metrics.NewMeter("eth/db/extra/compact/output")
+		db.Meter("eth/db/extra/")
 	}
 	nodeDb := filepath.Join(config.DataDir, "nodes")
 
