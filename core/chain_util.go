@@ -31,10 +31,16 @@ import (
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block b should have when created at time
 // given the parent block's time and difficulty.
-func CalcDifficulty(time int64, parentTime int64, parentDiff *big.Int) *big.Int {
+func CalcDifficulty(time, parentTime uint64, parentDiff *big.Int) *big.Int {
 	diff := new(big.Int)
 	adjust := new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
-	if big.NewInt(time-parentTime).Cmp(params.DurationLimit) < 0 {
+	bigTime := new(big.Int)
+	bigParentTime := new(big.Int)
+
+	bigTime.SetUint64(time)
+	bigParentTime.SetUint64(parentTime)
+
+	if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
 		diff.Add(parentDiff, adjust)
 	} else {
 		diff.Sub(parentDiff, adjust)
