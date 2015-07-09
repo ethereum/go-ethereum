@@ -19,6 +19,7 @@ package eth
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"sync"
 	"time"
 
@@ -412,8 +413,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		pm.fetcher.Enqueue(p.id, request.Block)
 
 		// TODO: Schedule a sync to cover potential gaps (this needs proto update)
-		p.SetTd(request.TD)
-		go pm.synchronise(p)
+		if request.TD.Cmp(p.Td()) > 0 {
+			p.SetTd(request.TD)
+			go pm.synchronise(p)
+		}
 
 	case TxMsg:
 		// Transactions arrived, parse all of them and deliver to the pool
@@ -452,9 +455,18 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
+		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
+		var td *big.Int
+		if parent := pm.chainman.GetBlock(block.ParentHash()); parent != nil {
+			td = new(big.Int).Add(parent.Td, block.Difficulty())
+		} else {
+			glog.V(logger.Error).Infof("propagating dangling block #%d [%x]", block.NumberU64(), hash[:4])
+			return
+		}
+		// Send the block to a subset of our peers
 		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
 		for _, peer := range transfer {
-			peer.SendNewBlock(block)
+			peer.SendNewBlock(block, td)
 		}
 		glog.V(logger.Detail).Infof("propagated block %x to %d peers in %v", hash[:4], len(transfer), time.Since(block.ReceivedAt))
 	}
