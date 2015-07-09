@@ -272,7 +272,7 @@ func TestSynchronisation60(t *testing.T) {
 // Tests that simple synchronization against a canonical chain works correctly.
 // In this test common ancestor lookup should be short circuited and not require
 // binary searching.
-func TestCanonicalSynchronisation(t *testing.T) {
+func TestCanonicalSynchronisation61(t *testing.T) {
 	// Create a small enough block chain to download
 	targetBlocks := blockCacheLimit - 15
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
@@ -291,69 +291,16 @@ func TestCanonicalSynchronisation(t *testing.T) {
 
 // Tests that if a large batch of blocks are being downloaded, it is throttled
 // until the cached blocks are retrieved.
-func TestThrottling60(t *testing.T) {
+func TestThrottling60(t *testing.T) { testThrottling(t, eth60) }
+func TestThrottling61(t *testing.T) { testThrottling(t, eth61) }
+
+func testThrottling(t *testing.T, protocol int) {
 	// Create a long block chain to download and the tester
 	targetBlocks := 8 * blockCacheLimit
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 
 	tester := newTester()
-	tester.newPeer("peer", eth60, hashes, blocks)
-
-	// Wrap the importer to allow stepping
-	done := make(chan int)
-	tester.downloader.insertChain = func(blocks types.Blocks) (int, error) {
-		n, err := tester.insertChain(blocks)
-		done <- n
-		return n, err
-	}
-	// Start a synchronisation concurrently
-	errc := make(chan error)
-	go func() {
-		errc <- tester.sync("peer")
-	}()
-	// Iteratively take some blocks, always checking the retrieval count
-	for len(tester.ownBlocks) < targetBlocks+1 {
-		// Wait a bit for sync to throttle itself
-		var cached int
-		for start := time.Now(); time.Since(start) < 3*time.Second; {
-			time.Sleep(25 * time.Millisecond)
-
-			cached = len(tester.downloader.queue.blockPool)
-			if cached == blockCacheLimit || len(tester.ownBlocks)+cached == targetBlocks+1 {
-				break
-			}
-		}
-		// Make sure we filled up the cache, then exhaust it
-		time.Sleep(25 * time.Millisecond) // give it a chance to screw up
-		if cached != blockCacheLimit && len(tester.ownBlocks)+cached < targetBlocks+1 {
-			t.Fatalf("block count mismatch: have %v, want %v", cached, blockCacheLimit)
-		}
-		<-done // finish previous blocking import
-		for cached > maxBlockProcess {
-			cached -= <-done
-		}
-		time.Sleep(25 * time.Millisecond) // yield to the insertion
-	}
-	<-done // finish the last blocking import
-
-	// Check that we haven't pulled more blocks than available
-	if len(tester.ownBlocks) > targetBlocks+1 {
-		t.Fatalf("target block count mismatch: have %v, want %v", len(tester.ownBlocks), targetBlocks+1)
-	}
-	if err := <-errc; err != nil {
-		t.Fatalf("block synchronization failed: %v", err)
-	}
-}
-
-// Tests that if a large batch of blocks are being downloaded, it is throttled
-// until the cached blocks are retrieved.
-func TestThrottling(t *testing.T) {
-	// Create a long block chain to download and the tester
-	targetBlocks := 8 * blockCacheLimit
-	hashes, blocks := makeChain(targetBlocks, 0, genesis)
-
-	tester := newTester()
-	tester.newPeer("peer", eth61, hashes, blocks)
+	tester.newPeer("peer", protocol, hashes, blocks)
 
 	// Wrap the importer to allow stepping
 	done := make(chan int)
@@ -404,7 +351,7 @@ func TestThrottling(t *testing.T) {
 // Tests that simple synchronization against a forked chain works correctly. In
 // this test common ancestor lookup should *not* be short circuited, and a full
 // binary search should be executed.
-func TestForkedSynchronisation(t *testing.T) {
+func TestForkedSynchronisation61(t *testing.T) {
 	// Create a long enough forked chain
 	common, fork := MaxHashFetch, 2*MaxHashFetch
 	hashesA, hashesB, blocksA, blocksB := makeChainFork(common+fork, fork, genesis)
@@ -443,33 +390,10 @@ func TestInactiveDownloader(t *testing.T) {
 }
 
 // Tests that a canceled download wipes all previously accumulated state.
-func TestCancel60(t *testing.T) {
-	// Create a small enough block chain to download and the tester
-	targetBlocks := blockCacheLimit - 15
-	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+func TestCancel60(t *testing.T) { testCancel(t, eth60) }
+func TestCancel61(t *testing.T) { testCancel(t, eth61) }
 
-	tester := newTester()
-	tester.newPeer("peer", eth60, hashes, blocks)
-
-	// Make sure canceling works with a pristine downloader
-	tester.downloader.cancel()
-	hashCount, blockCount := tester.downloader.queue.Size()
-	if hashCount > 0 || blockCount > 0 {
-		t.Errorf("block or hash count mismatch: %d hashes, %d blocks, want 0", hashCount, blockCount)
-	}
-	// Synchronise with the peer, but cancel afterwards
-	if err := tester.sync("peer"); err != nil {
-		t.Fatalf("failed to synchronise blocks: %v", err)
-	}
-	tester.downloader.cancel()
-	hashCount, blockCount = tester.downloader.queue.Size()
-	if hashCount > 0 || blockCount > 0 {
-		t.Errorf("block or hash count mismatch: %d hashes, %d blocks, want 0", hashCount, blockCount)
-	}
-}
-
-// Tests that a canceled download wipes all previously accumulated state.
-func TestCancel(t *testing.T) {
+func testCancel(t *testing.T, protocol int) {
 	// Create a small enough block chain to download and the tester
 	targetBlocks := blockCacheLimit - 15
 	if targetBlocks >= MaxHashFetch {
@@ -478,7 +402,7 @@ func TestCancel(t *testing.T) {
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 
 	tester := newTester()
-	tester.newPeer("peer", eth61, hashes, blocks)
+	tester.newPeer("peer", protocol, hashes, blocks)
 
 	// Make sure canceling works with a pristine downloader
 	tester.downloader.cancel()
@@ -498,7 +422,10 @@ func TestCancel(t *testing.T) {
 }
 
 // Tests that synchronisation from multiple peers works as intended (multi thread sanity test).
-func TestMultiSynchronisation(t *testing.T) {
+func TestMultiSynchronisation60(t *testing.T) { testMultiSynchronisation(t, eth60) }
+func TestMultiSynchronisation61(t *testing.T) { testMultiSynchronisation(t, eth61) }
+
+func testMultiSynchronisation(t *testing.T, protocol int) {
 	// Create various peers with various parts of the chain
 	targetPeers := 16
 	targetBlocks := targetPeers*blockCacheLimit - 15
@@ -507,7 +434,7 @@ func TestMultiSynchronisation(t *testing.T) {
 	tester := newTester()
 	for i := 0; i < targetPeers; i++ {
 		id := fmt.Sprintf("peer #%d", i)
-		tester.newPeer(id, eth60, hashes[i*blockCacheLimit:], blocks)
+		tester.newPeer(id, protocol, hashes[i*blockCacheLimit:], blocks)
 	}
 	// Synchronise with the middle peer and make sure half of the blocks were retrieved
 	id := fmt.Sprintf("peer #%d", targetPeers/2)
@@ -528,7 +455,7 @@ func TestMultiSynchronisation(t *testing.T) {
 
 // Tests that synchronising with a peer who's very slow at network IO does not
 // stall the other peers in the system.
-func TestSlowSynchronisation(t *testing.T) {
+func TestSlowSynchronisation60(t *testing.T) {
 	tester := newTester()
 
 	// Create a batch of blocks, with a slow and a full speed peer
@@ -557,7 +484,7 @@ func TestSlowSynchronisation(t *testing.T) {
 
 // Tests that if a peer returns an invalid chain with a block pointing to a non-
 // existing parent, it is correctly detected and handled.
-func TestNonExistingParentAttack(t *testing.T) {
+func TestNonExistingParentAttack60(t *testing.T) {
 	tester := newTester()
 
 	// Forge a single-link chain with a forged header
@@ -587,7 +514,7 @@ func TestNonExistingParentAttack(t *testing.T) {
 
 // Tests that if a malicious peers keeps sending us repeating hashes, we don't
 // loop indefinitely.
-func TestRepeatingHashAttack(t *testing.T) { // TODO: Is this thing valid??
+func TestRepeatingHashAttack60(t *testing.T) { // TODO: Is this thing valid??
 	tester := newTester()
 
 	// Create a valid chain, but drop the last link
@@ -617,7 +544,7 @@ func TestRepeatingHashAttack(t *testing.T) { // TODO: Is this thing valid??
 
 // Tests that if a malicious peers returns a non-existent block hash, it should
 // eventually time out and the sync reattempted.
-func TestNonExistingBlockAttack(t *testing.T) {
+func TestNonExistingBlockAttack60(t *testing.T) {
 	tester := newTester()
 
 	// Create a valid chain, but forge the last link
@@ -639,7 +566,7 @@ func TestNonExistingBlockAttack(t *testing.T) {
 
 // Tests that if a malicious peer is returning hashes in a weird order, that the
 // sync throttler doesn't choke on them waiting for the valid blocks.
-func TestInvalidHashOrderAttack(t *testing.T) {
+func TestInvalidHashOrderAttack60(t *testing.T) {
 	tester := newTester()
 
 	// Create a valid long chain, but reverse some hashes within
@@ -667,7 +594,7 @@ func TestInvalidHashOrderAttack(t *testing.T) {
 
 // Tests that if a malicious peer makes up a random hash chain and tries to push
 // indefinitely, it actually gets caught with it.
-func TestMadeupHashChainAttack(t *testing.T) {
+func TestMadeupHashChainAttack60(t *testing.T) {
 	tester := newTester()
 	blockSoftTTL = 100 * time.Millisecond
 	crossCheckCycle = 25 * time.Millisecond
@@ -697,7 +624,7 @@ func TestMadeupHashChainAttack(t *testing.T) {
 // indefinitely, one hash at a time, it actually gets caught with it. The reason
 // this is separate from the classical made up chain attack is that sending hashes
 // one by one prevents reliable block/parent verification.
-func TestMadeupHashChainDrippingAttack(t *testing.T) {
+func TestMadeupHashChainDrippingAttack60(t *testing.T) {
 	// Create a random chain of hashes to drip
 	randomHashes := make([]common.Hash, 16*blockCacheLimit)
 	for i := range randomHashes {
@@ -716,7 +643,7 @@ func TestMadeupHashChainDrippingAttack(t *testing.T) {
 
 // Tests that if a malicious peer makes up a random block chain, and tried to
 // push indefinitely, it actually gets caught with it.
-func TestMadeupBlockChainAttack(t *testing.T) {
+func TestMadeupBlockChainAttack60(t *testing.T) {
 	defaultBlockTTL := blockSoftTTL
 	defaultCrossCheckCycle := crossCheckCycle
 
@@ -748,7 +675,7 @@ func TestMadeupBlockChainAttack(t *testing.T) {
 // Tests that if one/multiple malicious peers try to feed a banned blockchain to
 // the downloader, it will not keep refetching the same chain indefinitely, but
 // gradually block pieces of it, until its head is also blocked.
-func TestBannedChainStarvationAttack(t *testing.T) {
+func TestBannedChainStarvationAttack60(t *testing.T) {
 	n := 8 * blockCacheLimit
 	fork := n/2 - 23
 	hashes, forkHashes, blocks, forkBlocks := makeChainFork(n, fork, genesis)
@@ -792,7 +719,7 @@ func TestBannedChainStarvationAttack(t *testing.T) {
 // Tests that if a peer sends excessively many/large invalid chains that are
 // gradually banned, it will have an upper limit on the consumed memory and also
 // the origin bad hashes will not be evacuated.
-func TestBannedChainMemoryExhaustionAttack(t *testing.T) {
+func TestBannedChainMemoryExhaustionAttack60(t *testing.T) {
 	// Construct a banned chain with more chunks than the ban limit
 	n := 8 * blockCacheLimit
 	fork := n/2 - 23
@@ -848,7 +775,7 @@ func TestBannedChainMemoryExhaustionAttack(t *testing.T) {
 // internal state problems
 //
 // No, don't delete this test, it actually did happen!
-func TestOverlappingDeliveryAttack(t *testing.T) {
+func TestOverlappingDeliveryAttack60(t *testing.T) {
 	// Create an arbitrary batch of blocks ( < cache-size not to block)
 	targetBlocks := blockCacheLimit - 23
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
@@ -872,6 +799,16 @@ func TestOverlappingDeliveryAttack(t *testing.T) {
 	}
 	if len(tester.ownHashes) != len(hashes) {
 		t.Fatalf("chain length mismatch: have %v, want %v", len(tester.ownHashes), len(hashes))
+	}
+}
+
+// Tests that a peer advertising an high TD doesn't get to stall the downloader
+// afterwards by not sending any useful hashes.
+func TestHighTDStarvationAttack61(t *testing.T) {
+	tester := newTester()
+	tester.newPeer("attack", eth61, []common.Hash{genesis.Hash()}, nil)
+	if err := tester.sync("attack"); err != errStallingPeer {
+		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errStallingPeer)
 	}
 }
 
