@@ -804,6 +804,8 @@ func (d *Downloader) fetchHashes(p *peer, from uint64) error {
 	}
 	// Start pulling hashes, until all are exhausted
 	getHashes(from)
+	gotHashes := false
+
 	for {
 		select {
 		case <-d.cancelCh:
@@ -825,8 +827,14 @@ func (d *Downloader) fetchHashes(p *peer, from uint64) error {
 				case d.processCh <- false:
 				case <-d.cancelCh:
 				}
+				// Error out if no hashes were retrieved at all
+				if !gotHashes {
+					return errStallingPeer
+				}
 				return nil
 			}
+			gotHashes = true
+
 			// Otherwise insert all the new hashes, aborting in case of junk
 			glog.V(logger.Detail).Infof("%v: inserting %d hashes from #%d", p, len(hashPack.hashes), from)
 

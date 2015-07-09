@@ -208,10 +208,22 @@ func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, erro
 	db := ethereum.StateDb()
 	statedb := state.New(common.Hash{}, db)
 	for addrString, acct := range t.preAccounts {
-		addr, _ := hex.DecodeString(addrString)
-		code, _ := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
-		balance, _ := new(big.Int).SetString(acct.Balance, 0)
-		nonce, _ := strconv.ParseUint(acct.Nonce, 16, 64)
+		addr, err := hex.DecodeString(addrString)
+		if err != nil {
+			return nil, err
+		}
+		code, err := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
+		if err != nil {
+			return nil, err
+		}
+		balance, ok := new(big.Int).SetString(acct.Balance, 0)
+		if !ok {
+			return nil, err
+		}
+		nonce, err := strconv.ParseUint(prepInt(16, acct.Nonce), 16, 64)
+		if err != nil {
+			return nil, err
+		}
 
 		if acct.PrivateKey != "" {
 			privkey, err := hex.DecodeString(strings.TrimPrefix(acct.PrivateKey, "0x"))
@@ -365,10 +377,22 @@ func (s *BlockTest) validateBlockHeader(h *btHeader, h2 *types.Header) error {
 func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 	for addrString, acct := range t.preAccounts {
 		// XXX: is is worth it checking for errors here?
-		addr, _ := hex.DecodeString(addrString)
-		code, _ := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
-		balance, _ := new(big.Int).SetString(acct.Balance, 0)
-		nonce, _ := strconv.ParseUint(acct.Nonce, 16, 64)
+		addr, err := hex.DecodeString(addrString)
+		if err != nil {
+			return err
+		}
+		code, err := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
+		if err != nil {
+			return err
+		}
+		balance, ok := new(big.Int).SetString(acct.Balance, 0)
+		if !ok {
+			return err
+		}
+		nonce, err := strconv.ParseUint(prepInt(16, acct.Nonce), 16, 64)
+		if err != nil {
+			return err
+		}
 
 		// address is indirectly verified by the other fields, as it's the db key
 		code2 := statedb.GetCode(common.BytesToAddress(addr))

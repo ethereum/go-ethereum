@@ -298,6 +298,7 @@ func (self *worker) wait() {
 				self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
 				if stat == core.CanonStatTy {
 					self.mux.Post(core.ChainHeadEvent{block})
+					self.mux.Post(logs)
 				}
 			}(block, self.current.state.Logs())
 
@@ -427,7 +428,7 @@ func (self *worker) commitNewWork() {
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
-		Difficulty: core.CalcDifficulty(int64(tstamp), int64(parent.Time()), parent.Difficulty()),
+		Difficulty: core.CalcDifficulty(uint64(tstamp), parent.Time(), parent.Difficulty()),
 		GasLimit:   core.CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Coinbase:   self.coinbase,
