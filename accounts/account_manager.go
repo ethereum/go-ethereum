@@ -228,8 +228,5 @@ func (am *Manager) ImportPreSaleKey(keyJSON []byte, password string) (acc Accoun
 	if err != nil {
 		return
 	}
-	if err = am.keyStore.StoreKey(key, password); err != nil {
-		return
-	}
 	return Account{Address: key.Address}, nil
 }
