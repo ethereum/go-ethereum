@@ -26,8 +26,7 @@ web3._extend({
 	[
 		new web3._extend.Property({
 			name: 'status',
-			getter: 'txpool_status',
-			outputFormatter: function(obj) { return obj; }
+			getter: 'txpool_status'
 		})
 	]
 });

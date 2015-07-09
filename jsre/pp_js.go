@@ -116,7 +116,7 @@ var isBigNumber = function (object) {
     var result = typeof BigNumber !== 'undefined' && object instanceof BigNumber;
 
     if (!result) {
-    	if(typeof(object) === "object") {
+    	if (typeof(object) === "object" && object.constructor != null) {
 			result = object.constructor.toString().indexOf("function BigNumber(") == 0;
 		}
     }
