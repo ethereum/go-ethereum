@@ -298,6 +298,7 @@ func (self *worker) wait() {
 				self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
 				if stat == core.CanonStatTy {
 					self.mux.Post(core.ChainHeadEvent{block})
+					self.mux.Post(logs)
 				}
 			}(block, self.current.state.Logs())
 
