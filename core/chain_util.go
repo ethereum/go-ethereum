@@ -19,6 +19,7 @@ package core
 import (
 	"bytes"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -26,6 +27,11 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+)
+
+var (
+	blockHashPre = []byte("block-hash-")
+	blockNumPre  = []byte("block-num-")
 )
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
@@ -116,5 +122,24 @@ func WriteHead(db common.Database, block *types.Block) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+// WriteBlock writes a block to the database
+func WriteBlock(db common.Database, block *types.Block) error {
+	tstart := time.Now()
+
+	enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
+	key := append(blockHashPre, block.Hash().Bytes()...)
+	err := db.Put(key, enc)
+	if err != nil {
+		glog.Fatal("db write fail:", err)
+		return err
+	}
+
+	if glog.V(logger.Debug) {
+		glog.Infof("wrote block #%v %s. Took %v\n", block.Number(), common.PP(block.Hash().Bytes()), time.Since(tstart))
+	}
+
 	return nil
 }

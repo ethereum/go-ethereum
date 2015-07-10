@@ -75,6 +75,8 @@ type Config struct {
 	Name         string
 	NetworkId    int
 	GenesisNonce int
+	GenesisFile  string
+	GenesisBlock *types.Block // used by block tests
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
@@ -283,22 +285,26 @@ func New(config *Config) (*Ethereum, error) {
 		db.Meter("eth/db/extra/")
 	}
 	nodeDb := filepath.Join(config.DataDir, "nodes")
-
-	// Perform database sanity checks
-	/*
-		// The databases were previously tied to protocol versions. Currently we
-		// are moving away from this decision as approaching Frontier. The below
-		// check was left in for now but should eventually be just dropped.
-
-		d, _ := blockDb.Get([]byte("ProtocolVersion"))
-		protov := int(common.NewValue(d).Uint())
-		if protov != config.ProtocolVersion && protov != 0 {
-			path := filepath.Join(config.DataDir, "blockchain")
-			return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
-		}
-		saveProtocolVersion(blockDb, config.ProtocolVersion)
-	*/
 	glog.V(logger.Info).Infof("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId)
+
+	if len(config.GenesisFile) > 0 {
+		fr, err := os.Open(config.GenesisFile)
+		if err != nil {
+			return nil, err
+		}
+
+		block, err := core.WriteGenesisBlock(stateDb, blockDb, fr)
+		if err != nil {
+			return nil, err
+		}
+		glog.V(logger.Info).Infof("Successfully wrote genesis block. New genesis hash = %x\n", block.Hash())
+	}
+
+	// This is for testing only.
+	if config.GenesisBlock != nil {
+		core.WriteBlock(blockDb, config.GenesisBlock)
+		core.WriteHead(blockDb, config.GenesisBlock)
+	}
 
 	if !config.SkipBcVersionCheck {
 		b, _ := blockDb.Get([]byte("BlockchainVersion"))
@@ -344,9 +350,13 @@ func New(config *Config) (*Ethereum, error) {
 	} else {
 		eth.pow = ethash.New()
 	}
-	genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
-	eth.chainManager, err = core.NewChainManager(genesis, blockDb, stateDb, extraDb, eth.pow, eth.EventMux())
+	//genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
+	eth.chainManager, err = core.NewChainManager(blockDb, stateDb, extraDb, eth.pow, eth.EventMux())
 	if err != nil {
+		if err == core.ErrNoGenesis {
+			return nil, fmt.Errorf(`Genesis block not found. Please supply a genesis block with the "--genesis /path/to/file" argument`)
+		}
+
 		return nil, err
 	}
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)

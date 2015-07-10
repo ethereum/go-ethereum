@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethdb"
 	xe "github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -128,12 +129,12 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 	if err != nil {
 		panic(err)
 	}
+
 	testAddress := strings.TrimPrefix(testAccount.Address.Hex(), "0x")
 
+	db, _ := ethdb.NewMemDatabase()
 	// set up mock genesis with balance on the testAddress
-	core.GenesisAccounts = []byte(`{
-	"` + testAddress + `": {"balance": "` + testBalance + `"}
-	}`)
+	core.WriteGenesisBlockForTesting(db, common.HexToAddress(testAddress), common.String2Big(testBalance))
 
 	// only use minimalistic stack with no networking
 	ethereum, err = eth.New(&eth.Config{
@@ -142,6 +143,7 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 		MaxPeers:       0,
 		PowTest:        true,
 		Etherbase:      common.HexToAddress(testAddress),
+		NewDB:          func(path string) (common.Database, error) { return db, nil },
 	})
 
 	if err != nil {
