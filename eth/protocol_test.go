@@ -178,10 +178,11 @@ type testPeer struct {
 }
 
 func newProtocolManagerForTesting(txAdded chan<- []*types.Transaction) *ProtocolManager {
+	db, _ := ethdb.NewMemDatabase()
+	core.WriteTestNetGenesisBlock(db, db, 0)
 	var (
 		em       = new(event.TypeMux)
-		db, _    = ethdb.NewMemDatabase()
-		chain, _ = core.NewChainManager(core.GenesisBlock(0, db), db, db, db, core.FakePow{}, em)
+		chain, _ = core.NewChainManager(db, db, db, core.FakePow{}, em)
 		txpool   = &fakeTxPool{added: txAdded}
 		pm       = NewProtocolManager(0, em, txpool, core.FakePow{}, chain)
 	)
