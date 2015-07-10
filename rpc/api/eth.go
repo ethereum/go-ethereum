@@ -21,8 +21,9 @@ import (
 	"encoding/json"
 	"math/big"
 
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
@@ -578,14 +579,17 @@ func (self *ethApi) Resend(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	ret, err := self.xeth.Transact(args.Tx.From, args.Tx.To, args.Tx.Nonce, args.Tx.Value, args.GasLimit, args.GasPrice, args.Tx.Data)
-	if err != nil {
-		return nil, err
+	from := common.HexToAddress(args.Tx.From)
+
+	pending := self.ethereum.TxPool().GetTransactions()
+	for _, p := range pending {
+		if pFrom, err := p.From(); err == nil && pFrom == from && p.SigHash() == args.Tx.tx.SigHash() {
+			self.ethereum.TxPool().RemoveTx(common.HexToHash(args.Tx.Hash))
+			return self.xeth.Transact(args.Tx.From, args.Tx.To, args.Tx.Nonce, args.Tx.Value, args.GasLimit, args.GasPrice, args.Tx.Data)
+		}
 	}
 
-	self.ethereum.TxPool().RemoveTransactions(types.Transactions{args.Tx.tx})
-
-	return ret, nil
+	return nil, fmt.Errorf("Transaction %s not found", args.Tx.Hash)
 }
 
 func (self *ethApi) PendingTransactions(req *shared.Request) (interface{}, error) {

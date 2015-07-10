@@ -130,7 +130,7 @@ func TestRemoveTx(t *testing.T) {
 		t.Error("expected txs to be 1, got", len(pool.pending))
 	}
 
-	pool.removeTx(tx.Hash())
+	pool.RemoveTx(tx.Hash())
 
 	if len(pool.queue) > 0 {
 		t.Error("expected queue to be 0, got", len(pool.queue))
