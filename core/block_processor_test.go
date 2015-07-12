@@ -33,8 +33,8 @@ func proc() (*BlockProcessor, *ChainManager) {
 	db, _ := ethdb.NewMemDatabase()
 	var mux event.TypeMux
 
-	genesis := GenesisBlock(0, db)
-	chainMan, err := NewChainManager(genesis, db, db, db, thePow(), &mux)
+	WriteTestNetGenesisBlock(db, db, 0)
+	chainMan, err := NewChainManager(db, db, db, thePow(), &mux)
 	if err != nil {
 		fmt.Println(err)
 	}
