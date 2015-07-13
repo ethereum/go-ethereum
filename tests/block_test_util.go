@@ -160,6 +160,8 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 }
 func runBlockTest(test *BlockTest) error {
 	cfg := test.makeEthConfig()
+	cfg.GenesisBlock = test.Genesis
+
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		return err
@@ -169,9 +171,6 @@ func runBlockTest(test *BlockTest) error {
 	if err != nil {
 		return err
 	}
-
-	// import the genesis block
-	ethereum.ResetWithGenesisBlock(test.Genesis)
 
 	// import pre accounts
 	statedb, err := test.InsertPreState(ethereum)
