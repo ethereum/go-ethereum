@@ -342,7 +342,7 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 // GetBlockReceipts returns the receipts beloniging to the block hash
 func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
 	if block := sm.ChainManager().GetBlock(bhash); block != nil {
-		return GetReceiptsFromBlock(sm.extraDb, block)
+		return GetBlockReceipts(sm.extraDb, block.Hash())
 	}
 
 	return nil
@@ -352,7 +352,7 @@ func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
 // where it tries to get it from the (updated) method which gets them from the receipts or
 // the depricated way by re-processing the block.
 func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err error) {
-	receipts := GetReceiptsFromBlock(sm.extraDb, block)
+	receipts := GetBlockReceipts(sm.extraDb, block.Hash())
 	if len(receipts) > 0 {
 		// coalesce logs
 		for _, receipt := range receipts {
