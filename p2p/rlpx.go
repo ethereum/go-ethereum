@@ -267,6 +267,10 @@ func initiatorEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, remoteID d
 }
 
 func newInitiatorHandshake(remoteID discover.NodeID) (*encHandshake, error) {
+	rpub, err := remoteID.Pubkey()
+	if err != nil {
+		return nil, fmt.Errorf("bad remoteID: %v", err)
+	}
 	// generate random initiator nonce
 	n := make([]byte, shaLen)
 	if _, err := rand.Read(n); err != nil {
@@ -276,10 +280,6 @@ func newInitiatorHandshake(remoteID discover.NodeID) (*encHandshake, error) {
 	randpriv, err := ecies.GenerateKey(rand.Reader, crypto.S256(), nil)
 	if err != nil {
 		return nil, err
-	}
-	rpub, err := remoteID.Pubkey()
-	if err != nil {
-		return nil, fmt.Errorf("bad remoteID: %v", err)
 	}
 	h := &encHandshake{
 		initiator:     true,
@@ -417,6 +417,14 @@ func decodeAuthMsg(prv *ecdsa.PrivateKey, token []byte, auth []byte) (*encHandsh
 	if err != nil {
 		return nil, err
 	}
+
+	// validate the sha3 of recovered pubkey
+	remoteRandomPubMAC := msg[sigLen : sigLen+shaLen]
+	shaRemoteRandomPub := crypto.Sha3(remoteRandomPub[1:])
+	if !bytes.Equal(remoteRandomPubMAC, shaRemoteRandomPub) {
+		return nil, fmt.Errorf("sha3 of recovered ephemeral pubkey does not match checksum in auth message")
+	}
+
 	h.remoteRandomPub, _ = importPublicKey(remoteRandomPub)
 	return h, nil
 }
