@@ -667,6 +667,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			queue[i] = ChainSplitEvent{block, logs}
 			queueEvent.splitCount++
 		}
+		PutBlockReceipts(self.extraDb, block, receipts)
+
 		stats.processed++
 	}
 
@@ -744,7 +746,12 @@ func (self *ChainManager) merge(oldBlock, newBlock *types.Block) error {
 	// insert blocks. Order does not matter. Last block will be written in ImportChain itself which creates the new head properly
 	self.mu.Lock()
 	for _, block := range newChain {
+		// insert the block in the canonical way, re-writing history
 		self.insert(block)
+		// write canonical receipts and transactions
+		PutTransactions(self.extraDb, block, block.Transactions())
+		PutReceipts(self.extraDb, GetBlockReceipts(self.extraDb, block.Hash()))
+
 	}
 	self.mu.Unlock()
 
