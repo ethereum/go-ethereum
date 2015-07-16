@@ -609,9 +609,6 @@ func (self *XEth) TransactionFilterChanged(id int) []common.Hash {
 }
 
 func (self *XEth) Logs(id int) state.Logs {
-	self.logMu.Lock()
-	defer self.logMu.Unlock()
-
 	filter := self.filterManager.GetFilter(id)
 	if filter != nil {
 		return filter.Find()
