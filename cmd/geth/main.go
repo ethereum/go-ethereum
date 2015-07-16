@@ -346,6 +346,7 @@ func main() {
 
 func run(ctx *cli.Context) {
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	utils.CheckLegalese(cfg.DataDir)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -404,6 +405,7 @@ func console(ctx *cli.Context) {
 	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	utils.CheckLegalese(cfg.DataDir)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -434,6 +436,7 @@ func console(ctx *cli.Context) {
 
 func execJSFiles(ctx *cli.Context) {
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	utils.CheckLegalese(cfg.DataDir)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -487,6 +490,8 @@ func blockRecovery(ctx *cli.Context) {
 	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	utils.CheckLegalese(cfg.DataDir)
+
 	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"))
 	if err != nil {
 		glog.Fatalln("could not open db:", err)
