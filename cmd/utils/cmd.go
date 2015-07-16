@@ -92,12 +92,12 @@ func PromptPassword(prompt string, warnTerm bool) (string, error) {
 	return input, err
 }
 
-func initDataDir(Datadir string) {
-	_, err := os.Stat(Datadir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			fmt.Printf("Data directory '%s' doesn't exist, creating it\n", Datadir)
-			os.Mkdir(Datadir, 0777)
+func CheckLegalese(datadir string) {
+	// check "first run"
+	if !common.FileExist(datadir) {
+		r, _ := PromptConfirm(legalese)
+		if !r {
+			Fatalf("Must accept to continue. Shutting down...\n")
 		}
 	}
 }
