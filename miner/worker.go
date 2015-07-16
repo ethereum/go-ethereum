@@ -38,24 +38,19 @@ import (
 
 var jsonlogger = logger.NewJsonLogger()
 
-// Work holds the current work
-type Work struct {
-	Number    uint64
-	Nonce     uint64
-	MixDigest []byte
-	SeedHash  []byte
-}
+const (
+	resultQueueSize  = 10
+	miningLogAtDepth = 5
+)
 
 // Agent can register themself with the worker
 type Agent interface {
-	Work() chan<- *types.Block
-	SetReturnCh(chan<- *types.Block)
+	Work() chan<- *Work
+	SetReturnCh(chan<- *Result)
 	Stop()
 	Start()
 	GetHashRate() int64
 }
-
-const miningLogAtDepth = 5
 
 type uint64RingBuffer struct {
 	ints []uint64 //array of all integers in buffer
@@ -64,7 +59,7 @@ type uint64RingBuffer struct {
 
 // environment is the workers current environment and holds
 // all of the current state information
-type environment struct {
+type Work struct {
 	state              *state.StateDB     // apply state changes here
 	coinbase           *state.StateObject // the miner's account
 	ancestors          *set.Set           // ancestor set (used for checking uncle parent validity)
@@ -78,11 +73,18 @@ type environment struct {
 	lowGasTxs          types.Transactions
 	localMinedBlocks   *uint64RingBuffer // the most recent block numbers that were mined locally (used to check block inclusion)
 
-	block *types.Block // the new block
+	Block *types.Block // the new block
 
 	header   *types.Header
 	txs      []*types.Transaction
 	receipts []*types.Receipt
+
+	createdAt time.Time
+}
+
+type Result struct {
+	Work  *Work
+	Block *types.Block
 }
 
 // worker is the main object which takes care of applying messages to the new state
@@ -90,7 +92,7 @@ type worker struct {
 	mu sync.Mutex
 
 	agents []Agent
-	recv   chan *types.Block
+	recv   chan *Result
 	mux    *event.TypeMux
 	quit   chan struct{}
 	pow    pow.PoW
@@ -105,7 +107,7 @@ type worker struct {
 	extra    []byte
 
 	currentMu sync.Mutex
-	current   *environment
+	current   *Work
 
 	uncleMu        sync.Mutex
 	possibleUncles map[common.Hash]*types.Block
@@ -116,6 +118,8 @@ type worker struct {
 	// atomic status counters
 	mining int32
 	atWork int32
+
+	fullValidation bool
 }
 
 func newWorker(coinbase common.Address, eth core.Backend) *worker {
@@ -123,7 +127,7 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 		eth:            eth,
 		mux:            eth.EventMux(),
 		extraDb:        eth.ExtraDb(),
-		recv:           make(chan *types.Block),
+		recv:           make(chan *Result, resultQueueSize),
 		gasPrice:       new(big.Int),
 		chain:          eth.ChainManager(),
 		proc:           eth.BlockProcessor(),
@@ -131,6 +135,7 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 		coinbase:       coinbase,
 		txQueue:        make(map[common.Hash]*types.Transaction),
 		quit:           make(chan struct{}),
+		fullValidation: false,
 	}
 	go worker.update()
 	go worker.wait()
@@ -163,7 +168,7 @@ func (self *worker) pendingBlock() *types.Block {
 			self.current.receipts,
 		)
 	}
-	return self.current.block
+	return self.current.Block
 }
 
 func (self *worker) start() {
@@ -250,34 +255,53 @@ func newLocalMinedBlock(blockNumber uint64, prevMinedBlocks *uint64RingBuffer) (
 
 func (self *worker) wait() {
 	for {
-		for block := range self.recv {
+		for result := range self.recv {
 			atomic.AddInt32(&self.atWork, -1)
 
-			if block == nil {
+			if result == nil {
 				continue
 			}
+			block := result.Block
 
-			parent := self.chain.GetBlock(block.ParentHash())
-			if parent == nil {
-				glog.V(logger.Error).Infoln("Invalid block found during mining")
-				continue
-			}
-			if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true); err != nil && err != core.BlockFutureErr {
-				glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
-				continue
-			}
+			if self.fullValidation {
+				if _, err := self.chain.InsertChain(types.Blocks{block}); err != nil {
+					glog.V(logger.Error).Infoln("mining err", err)
+					continue
+				}
+				go self.mux.Post(core.NewMinedBlockEvent{block})
+			} else {
+				parent := self.chain.GetBlock(block.ParentHash())
+				if parent == nil {
+					glog.V(logger.Error).Infoln("Invalid block found during mining")
+					continue
+				}
+				if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true); err != nil && err != core.BlockFutureErr {
+					glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
+					continue
+				}
 
-			stat, err := self.chain.WriteBlock(block, false)
-			if err != nil {
-				glog.V(logger.Error).Infoln("error writing block to chain", err)
-				continue
-			}
-			// check if canon block and write transactions
-			if stat == core.CanonStatTy {
-				// This puts transactions in a extra db for rpc
-				core.PutTransactions(self.extraDb, block, block.Transactions())
-				// store the receipts
-				core.PutReceipts(self.extraDb, self.current.receipts)
+				stat, err := self.chain.WriteBlock(block, false)
+				if err != nil {
+					glog.V(logger.Error).Infoln("error writing block to chain", err)
+					continue
+				}
+				// check if canon block and write transactions
+				if stat == core.CanonStatTy {
+					// This puts transactions in a extra db for rpc
+					core.PutTransactions(self.extraDb, block, block.Transactions())
+					// store the receipts
+					core.PutReceipts(self.extraDb, self.current.receipts)
+				}
+
+				// broadcast before waiting for validation
+				go func(block *types.Block, logs state.Logs) {
+					self.mux.Post(core.NewMinedBlockEvent{block})
+					self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
+					if stat == core.CanonStatTy {
+						self.mux.Post(core.ChainHeadEvent{block})
+						self.mux.Post(logs)
+					}
+				}(block, self.current.state.Logs())
 			}
 
 			// check staleness and display confirmation
@@ -289,18 +313,7 @@ func (self *worker) wait() {
 				confirm = "Wait 5 blocks for confirmation"
 				self.current.localMinedBlocks = newLocalMinedBlock(block.Number().Uint64(), self.current.localMinedBlocks)
 			}
-
 			glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
-
-			// broadcast before waiting for validation
-			go func(block *types.Block, logs state.Logs) {
-				self.mux.Post(core.NewMinedBlockEvent{block})
-				self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
-				if stat == core.CanonStatTy {
-					self.mux.Post(core.ChainHeadEvent{block})
-					self.mux.Post(logs)
-				}
-			}(block, self.current.state.Logs())
 
 			self.commitNewWork()
 		}
@@ -320,7 +333,7 @@ func (self *worker) push() {
 			atomic.AddInt32(&self.atWork, 1)
 
 			if agent.Work() != nil {
-				agent.Work() <- self.current.block
+				agent.Work() <- self.current
 			}
 		}
 	}
@@ -329,13 +342,14 @@ func (self *worker) push() {
 // makeCurrent creates a new environment for the current cycle.
 func (self *worker) makeCurrent(parent *types.Block, header *types.Header) {
 	state := state.New(parent.Root(), self.eth.StateDb())
-	current := &environment{
+	current := &Work{
 		state:     state,
 		ancestors: set.New(),
 		family:    set.New(),
 		uncles:    set.New(),
 		header:    header,
 		coinbase:  state.GetOrNewStateObject(self.coinbase),
+		createdAt: time.Now(),
 	}
 
 	// when 08 is processed ancestors contain 07 (quick block)
@@ -391,10 +405,10 @@ func (self *worker) isBlockLocallyMined(deepBlockNum uint64) bool {
 	return block != nil && block.Coinbase() == self.coinbase
 }
 
-func (self *worker) logLocalMinedBlocks(previous *environment) {
+func (self *worker) logLocalMinedBlocks(previous *Work) {
 	if previous != nil && self.current.localMinedBlocks != nil {
-		nextBlockNum := self.current.block.NumberU64()
-		for checkBlockNum := previous.block.NumberU64(); checkBlockNum < nextBlockNum; checkBlockNum++ {
+		nextBlockNum := self.current.Block.NumberU64()
+		for checkBlockNum := previous.Block.NumberU64(); checkBlockNum < nextBlockNum; checkBlockNum++ {
 			inspectBlockNum := checkBlockNum - miningLogAtDepth
 			if self.isBlockLocallyMined(inspectBlockNum) {
 				glog.V(logger.Info).Infof("🔨 🔗  Mined %d blocks back: block #%v", miningLogAtDepth, inspectBlockNum)
@@ -480,12 +494,12 @@ func (self *worker) commitNewWork() {
 	}
 
 	// create the new block whose nonce will be mined.
-	current.block = types.NewBlock(header, current.txs, uncles, current.receipts)
-	self.current.block.Td = new(big.Int).Set(core.CalcTD(self.current.block, self.chain.GetBlock(self.current.block.ParentHash())))
+	current.Block = types.NewBlock(header, current.txs, uncles, current.receipts)
+	self.current.Block.Td = new(big.Int).Set(core.CalcTD(self.current.Block, self.chain.GetBlock(self.current.Block.ParentHash())))
 
 	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
-		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles. Took %v\n", current.block.Number(), current.tcount, len(uncles), time.Since(tstart))
+		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles. Took %v\n", current.Block.Number(), current.tcount, len(uncles), time.Since(tstart))
 		self.logLocalMinedBlocks(previous)
 	}
 
@@ -507,7 +521,7 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 	return nil
 }
 
-func (env *environment) commitTransactions(transactions types.Transactions, gasPrice *big.Int, proc *core.BlockProcessor) {
+func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *big.Int, proc *core.BlockProcessor) {
 	for _, tx := range transactions {
 		// We can skip err. It has already been validated in the tx pool
 		from, _ := tx.From()
@@ -565,7 +579,7 @@ func (env *environment) commitTransactions(transactions types.Transactions, gasP
 	}
 }
 
-func (env *environment) commitTransaction(tx *types.Transaction, proc *core.BlockProcessor) error {
+func (env *Work) commitTransaction(tx *types.Transaction, proc *core.BlockProcessor) error {
 	snap := env.state.Copy()
 	receipt, _, err := proc.ApplyTransaction(env.coinbase, env.state, env.header, tx, env.header.GasUsed, true)
 	if err != nil {
