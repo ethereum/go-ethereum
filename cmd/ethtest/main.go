@@ -36,6 +36,7 @@ var (
 	defaultTest     = "all"
 	defaultDir      = "."
 	allTests        = []string{"BlockTests", "StateTests", "TransactionTests", "VMTests", "RLPTests"}
+	testDirMapping  = map[string]string{"BlockTests": "BlockchainTests"}
 	skipTests       = []string{}
 
 	TestFlag = cli.StringFlag{
@@ -135,8 +136,13 @@ func runSuite(test, file string) {
 		var err error
 		var files []string
 		if test == defaultTest {
-			files, err = getFiles(filepath.Join(file, curTest))
-
+			// check if we have an explicit directory mapping for the test
+			if _, ok := testDirMapping[curTest]; ok {
+				files, err = getFiles(filepath.Join(file, testDirMapping[curTest]))
+			} else {
+				// otherwise assume test name
+				files, err = getFiles(filepath.Join(file, curTest))
+			}
 		} else {
 			files, err = getFiles(file)
 		}
