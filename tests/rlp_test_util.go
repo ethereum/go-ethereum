@@ -13,11 +13,22 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// RLPTest is the JSON structure of a single RLP test.
 type RLPTest struct {
-	In  interface{}
+	// If the value of In is "INVALID" or "VALID", the test
+	// checks whether Out can be decoded into a value of
+	// type interface{}.
+	//
+	// For other JSON values, In is treated as a driver for
+	// calls to rlp.Stream. The test also verifies that encoding
+	// In produces the bytes in Out.
+	In interface{}
+
+	// Out is a hex-encoded RLP value.
 	Out string
 }
 
+// RunRLPTest runs the tests in the given file, skipping tests by name.
 func RunRLPTest(file string, skip []string) error {
 	f, err := os.Open(file)
 	if err != nil {
@@ -27,6 +38,7 @@ func RunRLPTest(file string, skip []string) error {
 	return RunRLPTestWithReader(f, skip)
 }
 
+// RunRLPTest runs the tests encoded in r, skipping tests by name.
 func RunRLPTestWithReader(r io.Reader, skip []string) error {
 	var tests map[string]*RLPTest
 	if err := readJson(r, &tests); err != nil {
@@ -49,6 +61,8 @@ func (t *RLPTest) Run() error {
 	if err != nil {
 		return fmt.Errorf("invalid hex in Out")
 	}
+
+	// Handle simple decoding tests with no actual In value.
 	if t.In == "VALID" || t.In == "INVALID" {
 		return checkDecodeInterface(outb, t.In == "VALID")
 	}
@@ -62,7 +76,7 @@ func (t *RLPTest) Run() error {
 	if !bytes.Equal(b, outb) {
 		return fmt.Errorf("encode produced %x, want %x", b, outb)
 	}
-	// Test decoding from a stream.
+	// Test stream decoding.
 	s := rlp.NewStream(bytes.NewReader(outb), 0)
 	return checkDecodeFromJSON(s, in)
 }
@@ -103,8 +117,10 @@ func translateJSON(v interface{}) interface{} {
 	}
 }
 
-// checkDecodeFromJSON decodes from s guided by exp. For each JSON
-// value, the value decoded from the RLP stream must match.
+// checkDecodeFromJSON decodes from s guided by exp. exp drives the
+// Stream by invoking decoding operations (Uint, Big, List, ...) based
+// on the type of each value. The value decoded from the RLP stream
+// must match the JSON value.
 func checkDecodeFromJSON(s *rlp.Stream, exp interface{}) error {
 	switch exp := exp.(type) {
 	case uint64:
