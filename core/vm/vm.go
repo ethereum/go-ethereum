@@ -376,7 +376,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 			addr := common.BigToAddress(stack.pop())
 			balance := statedb.GetBalance(addr)
 
-			stack.push(balance)
+			stack.push(new(big.Int).Set(balance))
 
 		case ORIGIN:
 			origin := self.env.Origin()
@@ -388,7 +388,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 			stack.push(common.Bytes2Big(caller.Bytes()))
 
 		case CALLVALUE:
-			stack.push(value)
+			stack.push(new(big.Int).Set(value))
 
 		case CALLDATALOAD:
 			data := getData(input, stack.pop(), common.Big32)
@@ -441,7 +441,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 			mem.Set(mOff.Uint64(), l.Uint64(), codeCopy)
 
 		case GASPRICE:
-			stack.push(context.Price)
+			stack.push(new(big.Int).Set(context.Price))
 
 		case BLOCKHASH:
 			num := stack.pop()
@@ -471,11 +471,11 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		case DIFFICULTY:
 			difficulty := self.env.Difficulty()
 
-			stack.push(difficulty)
+			stack.push(new(big.Int).Set(difficulty))
 
 		case GASLIMIT:
 
-			stack.push(self.env.GasLimit())
+			stack.push(new(big.Int).Set(self.env.GasLimit()))
 
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
 			size := uint64(op - PUSH1 + 1)
@@ -555,7 +555,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		case MSIZE:
 			stack.push(big.NewInt(int64(mem.Len())))
 		case GAS:
-			stack.push(context.Gas)
+			stack.push(new(big.Int).Set(context.Gas))
 
 		case CREATE:
 
