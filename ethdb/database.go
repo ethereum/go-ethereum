@@ -59,7 +59,7 @@ type LDBDatabase struct {
 // when data needs to be stored and written to disk.
 func NewLDBDatabase(file string) (*LDBDatabase, error) {
 	// Open the db
-	db, err := leveldb.OpenFile(file, &opt.Options{OpenFilesCacheCapacity: OpenFileLimit})
+	db, err := leveldb.OpenFile(file, &opt.Options{OpenFilesCacheCapacity: OpenFileLimit, BlockSize: 1 * opt.KiB, BlockCacheCapacity: 32 * opt.MiB})
 	// check for corruption and attempt to recover
 	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
 		db, err = leveldb.RecoverFile(file, nil)

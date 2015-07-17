@@ -123,7 +123,7 @@ func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}
-	xeth.state = NewState(xeth, xeth.backend.ChainManager().TransState())
+	xeth.state = NewState(xeth, xeth.backend.ChainManager().State())
 
 	go xeth.start()
 	go xeth.filterManager.Start()
