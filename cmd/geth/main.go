@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 )
@@ -338,6 +339,10 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	defer logger.Flush()
+	defer func() {
+		fmt.Println("written using the trie:", trie.Written, "bytes")
+		fmt.Println("written by the database:", ethdb.Written, "bytes")
+	}()
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

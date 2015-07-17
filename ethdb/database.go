@@ -34,6 +34,8 @@ import (
 	gometrics "github.com/rcrowley/go-metrics"
 )
 
+var Written uint64
+
 var OpenFileLimit = 64
 
 type LDBDatabase struct {
@@ -59,7 +61,7 @@ type LDBDatabase struct {
 // when data needs to be stored and written to disk.
 func NewLDBDatabase(file string) (*LDBDatabase, error) {
 	// Open the db
-	db, err := leveldb.OpenFile(file, &opt.Options{OpenFilesCacheCapacity: OpenFileLimit})
+	db, err := leveldb.OpenFile(file, &opt.Options{OpenFilesCacheCapacity: OpenFileLimit, BlockSize: 1 * opt.KiB})
 	// check for corruption and attempt to recover
 	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
 		db, err = leveldb.RecoverFile(file, nil)
@@ -76,6 +78,7 @@ func NewLDBDatabase(file string) (*LDBDatabase, error) {
 
 // Put puts the given key / value to the queue
 func (self *LDBDatabase) Put(key []byte, value []byte) error {
+	Written += uint64(len(value))
 	// Measure the database put latency, if requested
 	if self.putTimer != nil {
 		defer self.putTimer.UpdateSince(time.Now())

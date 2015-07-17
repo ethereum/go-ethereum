@@ -27,6 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+var Written uint64
+
 func ParanoiaCheck(t1 *Trie, backend Backend) (bool, *Trie) {
 	t2 := New(nil, backend)
 
@@ -373,9 +375,9 @@ func (self *Trie) store(node Node) interface{} {
 	if len(data) >= 32 {
 		key := crypto.Sha3(data)
 		if node.Dirty() {
-			//fmt.Println("save", node)
-			//fmt.Println()
+			Written += uint64(len(data))
 			self.cache.Put(key, data)
+			node.setDirty(false)
 		}
 
 		return key

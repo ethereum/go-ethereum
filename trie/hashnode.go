@@ -42,5 +42,5 @@ func (self *HashNode) setDirty(dirty bool) {
 
 // These methods will never be called but we have to satisfy Node interface
 func (self *HashNode) Value() Node       { return nil }
-func (self *HashNode) Dirty() bool       { return true }
+func (self *HashNode) Dirty() bool       { return false }
 func (self *HashNode) Copy(t *Trie) Node { return NewHash(common.CopyBytes(self.key), t) }
