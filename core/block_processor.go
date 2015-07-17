@@ -84,8 +84,6 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 }
 
 func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
-	// If we are mining this block and validating we want to set the logs back to 0
-
 	cb := statedb.GetStateObject(coinbase.Address())
 	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, header), tx, cb)
 	if err != nil {

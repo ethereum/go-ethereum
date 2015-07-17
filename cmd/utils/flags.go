@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/metrics"
 
 	"github.com/codegangsta/cli"
@@ -172,6 +173,25 @@ var (
 		Value: "",
 	}
 
+	// vm flags
+	VMDebugFlag = cli.BoolFlag{
+		Name:  "vmdebug",
+		Usage: "Virtual Machine debug output",
+	}
+	VMForceJitFlag = cli.BoolFlag{
+		Name:  "forcejit",
+		Usage: "Force the JIT VM to take precedence",
+	}
+	VMJitCacheFlag = cli.IntFlag{
+		Name:  "jitcache",
+		Usage: "Amount of cached JIT VM programs",
+		Value: 64,
+	}
+	VMEnableJitFlag = cli.BoolFlag{
+		Name:  "jitvm",
+		Usage: "Enable the JIT VM",
+	}
+
 	// logging and debug settings
 	LogFileFlag = cli.StringFlag{
 		Name:  "logfile",
@@ -195,10 +215,6 @@ var (
 		Name:  "vmodule",
 		Usage: "The syntax of the argument is a comma-separated list of pattern=N, where pattern is a literal file name (minus the \".go\" suffix) or \"glob\" pattern and N is a log verbosity level.",
 		Value: glog.GetVModule(),
-	}
-	VMDebugFlag = cli.BoolFlag{
-		Name:  "vmdebug",
-		Usage: "Virtual Machine debug output",
 	}
 	BacktraceAtFlag = cli.GenericFlag{
 		Name:  "backtrace_at",
@@ -432,6 +448,13 @@ func SetupLogger(ctx *cli.Context) {
 	glog.CopyStandardLogTo("INFO")
 	glog.SetToStderr(true)
 	glog.SetLogDir(ctx.GlobalString(LogFileFlag.Name))
+}
+
+// SetupVM configured the VM package's global settings
+func SetupVM(ctx *cli.Context) {
+	vm.DisableJit = !ctx.GlobalBool(VMEnableJitFlag.Name)
+	vm.ForceJit = ctx.GlobalBool(VMForceJitFlag.Name)
+	vm.SetJITCacheSize(ctx.GlobalInt(VMJitCacheFlag.Name))
 }
 
 // MakeChain creates a chain manager from set command line flags.

@@ -54,8 +54,8 @@ func baseCheck(op OpCode, stack *stack, gas *big.Int) error {
 			return err
 		}
 
-		if r.stackPush > 0 && len(stack.data)-r.stackPop+r.stackPush > int(params.StackLimit.Int64())+1 {
-			return fmt.Errorf("stack limit reached %d (%d)", len(stack.data), params.StackLimit.Int64())
+		if r.stackPush > 0 && stack.len()-r.stackPop+r.stackPush > int(params.StackLimit.Int64()) {
+			return fmt.Errorf("stack limit reached %d (%d)", stack.len(), params.StackLimit.Int64())
 		}
 
 		gas.Add(gas, r.gas)
