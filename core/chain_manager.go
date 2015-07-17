@@ -73,9 +73,6 @@ type ChainManager struct {
 	lastBlockHash   common.Hash
 	currentGasLimit *big.Int
 
-	transState *state.StateDB
-	txState    *state.ManagedState
-
 	cache        *lru.Cache // cache is the LRU caching
 	futureBlocks *lru.Cache // future blocks are blocks added for later processing
 
@@ -128,9 +125,7 @@ func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux
 		}
 	}
 
-	bc.transState = bc.State().Copy()
 	// Take ownership of this particular state
-	bc.txState = state.ManageState(bc.State().Copy())
 
 	bc.futureBlocks, _ = lru.New(maxFutureBlocks)
 	bc.makeCache()
@@ -152,9 +147,6 @@ func (bc *ChainManager) SetHead(head *types.Block) {
 	bc.currentBlock = head
 	bc.makeCache()
 
-	statedb := state.New(head.Root(), bc.stateDb)
-	bc.txState = state.ManageState(statedb)
-	bc.transState = statedb.Copy()
 	bc.setTotalDifficulty(head.Td)
 	bc.insert(head)
 	bc.setLastState()
@@ -201,17 +193,6 @@ func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
 
 func (self *ChainManager) State() *state.StateDB {
 	return state.New(self.CurrentBlock().Root(), self.stateDb)
-}
-
-func (self *ChainManager) TransState() *state.StateDB {
-	self.tsmu.RLock()
-	defer self.tsmu.RUnlock()
-
-	return self.transState
-}
-
-func (self *ChainManager) setTransState(statedb *state.StateDB) {
-	self.transState = statedb
 }
 
 func (bc *ChainManager) recover() bool {
@@ -528,9 +509,6 @@ func (self *ChainManager) WriteBlock(block *types.Block, queued bool) (status wr
 		self.setTotalDifficulty(block.Td)
 		self.insert(block)
 		self.mu.Unlock()
-
-		self.setTransState(state.New(block.Root(), self.stateDb))
-		self.txState.SetState(state.New(block.Root(), self.stateDb))
 
 		status = CanonStatTy
 	} else {

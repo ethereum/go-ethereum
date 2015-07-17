@@ -19,9 +19,11 @@ package core
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var (
@@ -31,13 +33,21 @@ var (
 
 // PutTransactions stores the transactions in the given database
 func PutTransactions(db common.Database, block *types.Block, txs types.Transactions) {
+	batch := new(leveldb.Batch)
+	_, batchWrite := db.(*ethdb.LDBDatabase)
+
 	for i, tx := range block.Transactions() {
 		rlpEnc, err := rlp.EncodeToBytes(tx)
 		if err != nil {
 			glog.V(logger.Debug).Infoln("Failed encoding tx", err)
 			return
 		}
-		db.Put(tx.Hash().Bytes(), rlpEnc)
+
+		if batchWrite {
+			batch.Put(tx.Hash().Bytes(), rlpEnc)
+		} else {
+			db.Put(tx.Hash().Bytes(), rlpEnc)
+		}
 
 		var txExtra struct {
 			BlockHash  common.Hash
@@ -52,20 +62,44 @@ func PutTransactions(db common.Database, block *types.Block, txs types.Transacti
 			glog.V(logger.Debug).Infoln("Failed encoding tx meta data", err)
 			return
 		}
-		db.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)
+
+		if batchWrite {
+			batch.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)
+		} else {
+			db.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)
+		}
+	}
+
+	if db, ok := db.(*ethdb.LDBDatabase); ok {
+		if err := db.LDB().Write(batch, nil); err != nil {
+			glog.V(logger.Error).Infoln("db write err:", err)
+		}
 	}
 }
 
 // PutReceipts stores the receipts in the current database
 func PutReceipts(db common.Database, receipts types.Receipts) error {
+	batch := new(leveldb.Batch)
+	_, batchWrite := db.(*ethdb.LDBDatabase)
+
 	for _, receipt := range receipts {
 		storageReceipt := (*types.ReceiptForStorage)(receipt)
 		bytes, err := rlp.EncodeToBytes(storageReceipt)
 		if err != nil {
 			return err
 		}
-		err = db.Put(append(receiptsPre, receipt.TxHash[:]...), bytes)
-		if err != nil {
+
+		if batchWrite {
+			batch.Put(append(receiptsPre, receipt.TxHash[:]...), bytes)
+		} else {
+			err = db.Put(append(receiptsPre, receipt.TxHash[:]...), bytes)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if db, ok := db.(*ethdb.LDBDatabase); ok {
+		if err := db.LDB().Write(batch, nil); err != nil {
 			return err
 		}
 	}
