@@ -110,9 +110,17 @@ func Decode(r io.Reader, val interface{}) error {
 
 // DecodeBytes parses RLP data from b into val.
 // Please see the documentation of Decode for the decoding rules.
+// The input must contain exactly one value and no trailing data.
 func DecodeBytes(b []byte, val interface{}) error {
 	// TODO: this could use a Stream from a pool.
-	return NewStream(bytes.NewReader(b), uint64(len(b))).Decode(val)
+	r := bytes.NewReader(b)
+	if err := NewStream(r, uint64(len(b))).Decode(val); err != nil {
+		return err
+	}
+	if r.Len() > 0 {
+		return ErrMoreThanOneValue
+	}
+	return nil
 }
 
 type decodeError struct {
@@ -516,6 +524,10 @@ var (
 	ErrCanonSize      = errors.New("rlp: non-canonical size information")
 	ErrElemTooLarge   = errors.New("rlp: element is larger than containing list")
 	ErrValueTooLarge  = errors.New("rlp: value size exceeds available input length")
+
+	// This error is reported by DecodeBytes if the slice contains
+	// additional data after the first RLP value.
+	ErrMoreThanOneValue = errors.New("rlp: input contains more than one value")
 
 	// internal errors
 	errNotInList    = errors.New("rlp: call of ListEnd outside of any list")
