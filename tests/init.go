@@ -35,6 +35,7 @@ var (
 	stateTestDir       = filepath.Join(baseDir, "StateTests")
 	transactionTestDir = filepath.Join(baseDir, "TransactionTests")
 	vmTestDir          = filepath.Join(baseDir, "VMTests")
+	rlpTestDir         = filepath.Join(baseDir, "RLPTests")
 
 	BlockSkipTests = []string{
 		// These tests are not valid, as they are out of scope for RLP and
