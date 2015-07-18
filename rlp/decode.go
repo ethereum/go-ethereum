@@ -361,7 +361,7 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 			return err
 		}
 		// Reject cases where single byte encoding should have been used.
-		if size == 1 && slice[0] < 56 {
+		if size == 1 && slice[0] < 128 {
 			return wrapStreamError(ErrCanonSize, val.Type())
 		}
 	case List:
@@ -623,7 +623,7 @@ func (s *Stream) Bytes() ([]byte, error) {
 		if err = s.readFull(b); err != nil {
 			return nil, err
 		}
-		if size == 1 && b[0] < 56 {
+		if size == 1 && b[0] < 128 {
 			return nil, ErrCanonSize
 		}
 		return b, nil
@@ -687,7 +687,7 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 			return 0, ErrCanonInt
 		case err != nil:
 			return 0, err
-		case size > 0 && v < 56:
+		case size > 0 && v < 128:
 			return 0, ErrCanonSize
 		default:
 			return v, nil

@@ -113,12 +113,16 @@ func TestStreamErrors(t *testing.T) {
 		{"00", calls{"Uint"}, nil, ErrCanonInt},
 		{"820002", calls{"Uint"}, nil, ErrCanonInt},
 		{"8133", calls{"Uint"}, nil, ErrCanonSize},
-		{"8156", calls{"Uint"}, nil, nil},
+		{"817F", calls{"Uint"}, nil, ErrCanonSize},
+		{"8180", calls{"Uint"}, nil, nil},
 
 		// Size tags must use the smallest possible encoding.
 		// Leading zero bytes in the size tag are also rejected.
 		{"8100", calls{"Uint"}, nil, ErrCanonSize},
 		{"8100", calls{"Bytes"}, nil, ErrCanonSize},
+		{"8101", calls{"Bytes"}, nil, ErrCanonSize},
+		{"817F", calls{"Bytes"}, nil, ErrCanonSize},
+		{"8180", calls{"Bytes"}, nil, nil},
 		{"B800", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
 		{"B90000", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
 		{"B90055", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
@@ -132,11 +136,11 @@ func TestStreamErrors(t *testing.T) {
 		{"", calls{"Kind"}, nil, io.EOF},
 		{"", calls{"Uint"}, nil, io.EOF},
 		{"", calls{"List"}, nil, io.EOF},
-		{"8158", calls{"Uint", "Uint"}, nil, io.EOF},
+		{"8180", calls{"Uint", "Uint"}, nil, io.EOF},
 		{"C0", calls{"List", "ListEnd", "List"}, nil, io.EOF},
 
 		{"", calls{"List"}, withoutInputLimit, io.EOF},
-		{"8158", calls{"Uint", "Uint"}, withoutInputLimit, io.EOF},
+		{"8180", calls{"Uint", "Uint"}, withoutInputLimit, io.EOF},
 		{"C0", calls{"List", "ListEnd", "List"}, withoutInputLimit, io.EOF},
 
 		// Input limit errors.
@@ -153,11 +157,11 @@ func TestStreamErrors(t *testing.T) {
 		// down toward zero in Stream.remaining, reading too far can overflow
 		// remaining to a large value, effectively disabling the limit.
 		{"C40102030401", calls{"Raw", "Uint"}, withCustomInputLimit(5), io.EOF},
-		{"C4010203048158", calls{"Raw", "Uint"}, withCustomInputLimit(6), ErrValueTooLarge},
+		{"C4010203048180", calls{"Raw", "Uint"}, withCustomInputLimit(6), ErrValueTooLarge},
 
 		// Check that the same calls are fine without a limit.
 		{"C40102030401", calls{"Raw", "Uint"}, withoutInputLimit, nil},
-		{"C4010203048158", calls{"Raw", "Uint"}, withoutInputLimit, nil},
+		{"C4010203048180", calls{"Raw", "Uint"}, withoutInputLimit, nil},
 
 		// Unexpected EOF. This only happens when there is
 		// no input limit, so the reader needs to be 'dumbed down'.
@@ -349,6 +353,7 @@ var decodeTests = []decodeTest{
 
 	// byte arrays
 	{input: "02", ptr: new([1]byte), value: [1]byte{2}},
+	{input: "8180", ptr: new([1]byte), value: [1]byte{128}},
 	{input: "850102030405", ptr: new([5]byte), value: [5]byte{1, 2, 3, 4, 5}},
 
 	// byte array errors
@@ -359,6 +364,7 @@ var decodeTests = []decodeTest{
 	{input: "C3010203", ptr: new([5]byte), error: "rlp: expected input string or byte for [5]uint8"},
 	{input: "86010203040506", ptr: new([5]byte), error: "rlp: input string too long for [5]uint8"},
 	{input: "8105", ptr: new([1]byte), error: "rlp: non-canonical size information for [1]uint8"},
+	{input: "817F", ptr: new([1]byte), error: "rlp: non-canonical size information for [1]uint8"},
 
 	// zero sized byte arrays
 	{input: "80", ptr: new([0]byte), value: [0]byte{}},
@@ -427,7 +433,8 @@ var decodeTests = []decodeTest{
 	{input: "80", ptr: new(*uint), value: uintp(0)},
 	{input: "C0", ptr: new(*uint), error: "rlp: expected input string or byte for uint"},
 	{input: "07", ptr: new(*uint), value: uintp(7)},
-	{input: "8158", ptr: new(*uint), value: uintp(0x58)},
+	{input: "817F", ptr: new(*uint), error: "rlp: non-canonical size information for uint"},
+	{input: "8180", ptr: new(*uint), value: uintp(0x80)},
 	{input: "C109", ptr: new(*[]uint), value: &[]uint{9}},
 	{input: "C58403030303", ptr: new(*[][]byte), value: &[][]byte{{3, 3, 3, 3}}},
 
