@@ -110,9 +110,17 @@ func Decode(r io.Reader, val interface{}) error {
 
 // DecodeBytes parses RLP data from b into val.
 // Please see the documentation of Decode for the decoding rules.
+// The input must contain exactly one value and no trailing data.
 func DecodeBytes(b []byte, val interface{}) error {
 	// TODO: this could use a Stream from a pool.
-	return NewStream(bytes.NewReader(b), uint64(len(b))).Decode(val)
+	r := bytes.NewReader(b)
+	if err := NewStream(r, uint64(len(b))).Decode(val); err != nil {
+		return err
+	}
+	if r.Len() > 0 {
+		return ErrMoreThanOneValue
+	}
+	return nil
 }
 
 type decodeError struct {
@@ -353,7 +361,7 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 			return err
 		}
 		// Reject cases where single byte encoding should have been used.
-		if size == 1 && slice[0] < 56 {
+		if size == 1 && slice[0] < 128 {
 			return wrapStreamError(ErrCanonSize, val.Type())
 		}
 	case List:
@@ -517,6 +525,10 @@ var (
 	ErrElemTooLarge   = errors.New("rlp: element is larger than containing list")
 	ErrValueTooLarge  = errors.New("rlp: value size exceeds available input length")
 
+	// This error is reported by DecodeBytes if the slice contains
+	// additional data after the first RLP value.
+	ErrMoreThanOneValue = errors.New("rlp: input contains more than one value")
+
 	// internal errors
 	errNotInList    = errors.New("rlp: call of ListEnd outside of any list")
 	errNotAtEOL     = errors.New("rlp: call of ListEnd not positioned at EOL")
@@ -611,7 +623,7 @@ func (s *Stream) Bytes() ([]byte, error) {
 		if err = s.readFull(b); err != nil {
 			return nil, err
 		}
-		if size == 1 && b[0] < 56 {
+		if size == 1 && b[0] < 128 {
 			return nil, ErrCanonSize
 		}
 		return b, nil
@@ -675,7 +687,7 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 			return 0, ErrCanonInt
 		case err != nil:
 			return 0, err
-		case size > 0 && v < 56:
+		case size > 0 && v < 128:
 			return 0, ErrCanonSize
 		default:
 			return v, nil

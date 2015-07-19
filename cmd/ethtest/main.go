@@ -35,7 +35,7 @@ var (
 	testExtension   = ".json"
 	defaultTest     = "all"
 	defaultDir      = "."
-	allTests        = []string{"BlockTests", "StateTests", "TransactionTests", "VMTests"}
+	allTests        = []string{"BlockTests", "StateTests", "TransactionTests", "VMTests", "RLPTests"}
 	skipTests       = []string{}
 
 	TestFlag = cli.StringFlag{
@@ -75,6 +75,8 @@ func runTestWithReader(test string, r io.Reader) error {
 		err = tests.RunTransactionTestsWithReader(r, skipTests)
 	case "vm", "vmtest", "vmtests":
 		err = tests.RunVmTestWithReader(r, skipTests)
+	case "rlp", "rlptest", "rlptests":
+		err = tests.RunRLPTestWithReader(r, skipTests)
 	default:
 		err = fmt.Errorf("Invalid test type specified: %v", test)
 	}
