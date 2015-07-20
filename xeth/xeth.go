@@ -518,6 +518,9 @@ func (self *XEth) UninstallFilter(id int) bool {
 }
 
 func (self *XEth) NewLogFilter(earliest, latest int64, skip, max int, address []string, topics [][]string) int {
+	self.logMu.Lock()
+	defer self.logMu.Unlock()
+
 	var id int
 	filter := core.NewFilter(self.backend)
 	filter.SetEarliestBlock(earliest)
@@ -539,6 +542,9 @@ func (self *XEth) NewLogFilter(earliest, latest int64, skip, max int, address []
 }
 
 func (self *XEth) NewTransactionFilter() int {
+	self.transactionMu.Lock()
+	defer self.transactionMu.Unlock()
+
 	var id int
 	filter := core.NewFilter(self.backend)
 	filter.TransactionCallback = func(tx *types.Transaction) {
@@ -553,6 +559,9 @@ func (self *XEth) NewTransactionFilter() int {
 }
 
 func (self *XEth) NewBlockFilter() int {
+	self.blockMu.Lock()
+	defer self.blockMu.Unlock()
+
 	var id int
 	filter := core.NewFilter(self.backend)
 	filter.BlockCallback = func(block *types.Block, logs state.Logs) {
