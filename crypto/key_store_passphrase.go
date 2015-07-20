@@ -147,7 +147,6 @@ func (ks keyStorePassphrase) DeleteKey(keyAddr common.Address, auth string) (err
 }
 
 func decryptKeyFromFile(keysDirPath string, keyAddr common.Address, auth string) (keyBytes []byte, keyId []byte, err error) {
-	fmt.Printf("%v\n", keyAddr.Hex())
 	m := make(map[string]interface{})
 	err = getKey(keysDirPath, keyAddr, &m)
 	if err != nil {
