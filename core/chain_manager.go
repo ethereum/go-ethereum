@@ -582,6 +582,15 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		}
 
 		bstart := time.Now()
+
+		// Recover signatures in parallel
+		var wg sync.WaitGroup
+		wg.Add(len(block.Transactions()))
+		for _, tx := range block.Transactions() {
+			go func(tx *types.Transaction) { defer wg.Done(); tx.From() }(tx)
+		}
+		wg.Wait()
+
 		// Wait for block i's nonce to be verified before processing
 		// its state transition.
 		for !nonceChecked[i] {
