@@ -17,7 +17,6 @@
 package trie
 
 import (
-	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -49,7 +48,8 @@ func (self *Cache) Get(key []byte) []byte {
 
 func (self *Cache) Put(key []byte, data []byte) {
 	// write the data to the ldb batch
-	self.batch.Put(key, rle.Compress(data))
+	//self.batch.Put(key, rle.Compress(data))
+	self.batch.Put(key, data)
 	self.store[string(key)] = data
 }
 
