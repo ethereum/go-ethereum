@@ -257,7 +257,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-func (b Block) EncodeRLP(w io.Writer) error {
+func (b *Block) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extblock{
 		Header: b.header,
 		Txs:    b.transactions,
@@ -274,7 +274,7 @@ func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-func (b StorageBlock) EncodeRLP(w io.Writer) error {
+func (b *StorageBlock) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, storageblock{
 		Header: b.header,
 		Txs:    b.transactions,
