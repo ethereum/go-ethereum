@@ -98,13 +98,7 @@ func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux
 
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
-		// XXX Uncomment me before Frontier
-		//return nil, ErrNoGenesis
-		genesis, err := WriteTestNetGenesisBlock(bc.stateDb, bc.blockDb, 42)
-		if err != nil {
-			glog.Fatalln("genisis err", err)
-		}
-		bc.genesisBlock = genesis
+		return nil, ErrNoGenesis
 	}
 
 	if err := bc.setLastState(); err != nil {
