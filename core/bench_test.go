@@ -153,7 +153,7 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 			b.Fatalf("cannot create temporary directory: %v", err)
 		}
 		defer os.RemoveAll(dir)
-		db, err = ethdb.NewLDBDatabase(dir)
+		db, err = ethdb.NewLDBDatabase(dir, 0)
 		if err != nil {
 			b.Fatalf("cannot create temporary database: %v", err)
 		}
