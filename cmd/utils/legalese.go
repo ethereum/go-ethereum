@@ -1,15 +1,25 @@
 package utils
 
 const (
-	legalese = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse a tincidunt magna. Phasellus a eros volutpat, sagittis ipsum sit amet, eleifend quam. Aenean venenatis ultricies feugiat. Nulla finibus arcu blandit tincidunt rutrum. Aliquam maximus convallis elementum. Etiam ornare molestie tortor, quis scelerisque est laoreet et. Sed lobortis pellentesque metus, et bibendum libero efficitur quis. Sed posuere sapien erat, vitae tempus neque maximus tincidunt. Nam fermentum lectus in scelerisque convallis. In laoreet volutpat enim, eget laoreet nulla vehicula iaculis. Pellentesque vel mattis lorem. Fusce consectetur orci at bibendum fermentum. Vestibulum venenatis vitae ipsum vel rhoncus. Nulla facilisi. Donec imperdiet, eros a eleifend dignissim, mauris lacus pharetra arcu, et aliquam lacus enim a magna. Phasellus congue consectetur tellus a vehicula.
+	legalese = `
+=======================================
+Disclaimer of Liabilites and Warranties
+=======================================
 
-Praesent laoreet quis leo et lacinia. Cras a laoreet orci. Quisque magna nisl, dignissim eget aliquet ut, bibendum mattis justo. Fusce at tortor ligula. Nulla sollicitudin mollis euismod. Nulla enim sem, interdum ac auctor non, faucibus id risus. Duis nisi mauris, maximus vel ex ut, ullamcorper vehicula arcu. Sed nec lobortis nibh. Sed malesuada semper nulla sit amet tristique. Fusce at leo orci. Quisque nec porttitor ante. Nunc scelerisque dolor lectus, iaculis auctor mi mattis id. Donec tempor non tellus id ultricies. Praesent at felis non augue auctor efficitur.
-
-Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Quisque cursus ullamcorper dapibus. Suspendisse fringilla erat eget nunc dapibus pellentesque eget eget ante. Morbi sollicitudin nec ex eget finibus. Nam volutpat nunc at elit varius, id fringilla lectus sollicitudin. Curabitur ac varius ex. Nam commodo nibh a neque aliquam fringilla. Morbi suscipit magna sit amet enim tincidunt sollicitudin. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae;
-
-Ut pretium iaculis pellentesque. Nam eros tortor, malesuada a varius nec, aliquet placerat magna. Integer rutrum porttitor cursus. Praesent in pharetra turpis, eget fringilla neque. Aliquam venenatis tellus lectus, nec imperdiet nibh accumsan vel. Maecenas semper dapibus velit, ac pretium tortor. Maecenas dapibus, nunc sit amet egestas porttitor, arcu ipsum maximus lorem, non varius lorem turpis eget tortor. Cras at purus aliquam, blandit nunc placerat, imperdiet tellus. Phasellus dignissim venenatis dictum. Aliquam eu nisi nibh. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Suspendisse sit amet ultrices metus, at pulvinar eros. Suspendisse sollicitudin posuere metus sed pulvinar. Cras et velit vel sem gravida faucibus quis quis mi. Vivamus eleifend ante sit amet ultricies tincidunt.
-
-Mauris et elementum nulla. Fusce at scelerisque purus. Proin molestie sapien id velit viverra, a pharetra quam tempor. Fusce orci risus, semper et interdum at, imperdiet eget lectus. Praesent feugiat ante ut egestas tempor. Morbi convallis, quam sed mattis consequat, libero diam interdum sem, quis tempor enim nibh a ligula. Quisque est felis, pharetra nec pharetra vel, euismod et tellus. Nulla et dui nulla. Aliquam consectetur nunc ligula, sed molestie odio elementum vitae. Mauris neque nisi, venenatis et est ut, vehicula accumsan lectus.
+THE USER EXPRESSLY KNOWS AND AGREES THAT THE USER IS USING THE ETHEREUM PLATFORM AT THE USER’S SOLE
+RISK. THE USER REPRESENTS THAT THE USER HAS AN ADEQUATE UNDERSTANDING OF THE RISKS, USAGE AND
+INTRICACIES OF CRYPTOGRAPHIC TOKENS AND BLOCKCHAIN-BASED OPEN SOURCE SOFTWARE, ETH PLATFORM AND ETH.
+THE USER ACKNOWLEDGES AND AGREES THAT, TO THE FULLEST EXTENT PERMITTED BY ANY APPLICABLE LAW, THE
+DISCLAIMERS OF LIABILITY CONTAINED HEREIN APPLY TO ANY AND ALL DAMAGES OR INJURY WHATSOEVER CAUSED
+BY OR RELATED TO RISKS OF, USE OF, OR INABILITY TO USE, ETH OR THE ETHEREUM PLATFORM UNDER ANY CAUSE
+OR ACTION WHATSOEVER OF ANY KIND IN ANY JURISDICTION, INCLUDING, WITHOUT LIMITATION, ACTIONS FOR
+BREACH OF WARRANTY, BREACH OF CONTRACT OR TORT (INCLUDING NEGLIGENCE) AND THAT NEITHER STIFTUNG
+ETHEREUM NOR ETHEREUM TEAM SHALL BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY OR
+CONSEQUENTIAL DAMAGES, INCLUDING FOR LOSS OF PROFITS, GOODWILL OR DATA. SOME JURISDICTIONS DO NOT
+ALLOW THE EXCLUSION OF CERTAIN WARRANTIES OR THE LIMITATION OR EXCLUSION OF LIABILITY FOR CERTAIN
+TYPES OF DAMAGES. THEREFORE, SOME OF THE ABOVE LIMITATIONS IN THIS SECTION MAY NOT APPLY TO A USER.
+IN PARTICULAR, NOTHING IN THESE TERMS SHALL AFFECT THE STATUTORY RIGHTS OF ANY USER OR EXCLUDE
+INJURY ARISING FROM ANY WILLFUL MISCONDUCT OR FRAUD OF STIFTUNG ETHEREUM.
 
 Do you accept this agreement?`
 )

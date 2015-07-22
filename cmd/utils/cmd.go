@@ -58,15 +58,16 @@ func PromptConfirm(prompt string) (bool, error) {
 	)
 	prompt = prompt + " [y/N] "
 
-	if liner.TerminalSupported() {
-		lr := liner.NewLiner()
-		defer lr.Close()
-		input, err = lr.Prompt(prompt)
-	} else {
-		fmt.Print(prompt)
-		input, err = bufio.NewReader(os.Stdin).ReadString('\n')
-		fmt.Println()
-	}
+	// if liner.TerminalSupported() {
+	// 	fmt.Println("term")
+	// 	lr := liner.NewLiner()
+	// 	defer lr.Close()
+	// 	input, err = lr.Prompt(prompt)
+	// } else {
+	fmt.Print(prompt)
+	input, err = bufio.NewReader(os.Stdin).ReadString('\n')
+	fmt.Println()
+	// }
 
 	if len(input) > 0 && strings.ToUpper(input[:1]) == "Y" {
 		return true, nil
