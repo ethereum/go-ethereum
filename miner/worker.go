@@ -160,6 +160,7 @@ func (self *worker) pendingState() *state.StateDB {
 func (self *worker) pendingBlock() *types.Block {
 	self.currentMu.Lock()
 	defer self.currentMu.Unlock()
+
 	if atomic.LoadInt32(&self.mining) == 0 {
 		return types.NewBlock(
 			self.current.header,
@@ -228,9 +229,9 @@ out:
 			case core.TxPreEvent:
 				// Apply transaction to the pending state if we're not mining
 				if atomic.LoadInt32(&self.mining) == 0 {
-					self.mu.Lock()
+					self.currentMu.Lock()
 					self.current.commitTransactions(types.Transactions{ev.Tx}, self.gasPrice, self.proc)
-					self.mu.Unlock()
+					self.currentMu.Unlock()
 				}
 			}
 		case <-self.quit:
