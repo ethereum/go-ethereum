@@ -28,8 +28,7 @@ func newDb() *LDBDatabase {
 	if common.FileExist(file) {
 		os.RemoveAll(file)
 	}
-
-	db, _ := NewLDBDatabase(file)
+	db, _ := NewLDBDatabase(file, 0)
 
 	return db
 }
