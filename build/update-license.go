@@ -68,7 +68,7 @@ var licenseT = template.Must(template.New("").Parse(`
 // Copyright {{.Year}} The go-ethereum Authors
 // This file is part of {{.Whole false}}.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// {{.Whole true}} is free software: you can redistribute it and/or modify
 // it under the terms of the GNU {{.License}} as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
