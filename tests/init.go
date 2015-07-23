@@ -37,11 +37,6 @@ var (
 	vmTestDir          = filepath.Join(baseDir, "VMTests")
 
 	BlockSkipTests = []string{
-		// Fails in InsertPreState with: computed state root does not
-		// match genesis block bba25a96 0d8f85c8 Christoph said it will be
-		// fixed eventually
-		"SimpleTx3",
-
 		// These tests are not valid, as they are out of scope for RLP and
 		// the consensus protocol.
 		"BLOCK__RandomByteAtTheEnd",
@@ -50,7 +45,7 @@ var (
 		"TRANSCT__ZeroByteAtTheEnd",
 	}
 
-	/* Go does not support transaction (account) nonces above 2^64. This
+	/* Go client does not support transaction (account) nonces above 2^64. This
 	technically breaks consensus but is regarded as "reasonable
 	engineering constraint" as accounts cannot easily reach such high
 	nonce values in practice

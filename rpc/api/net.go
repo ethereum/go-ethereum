@@ -32,6 +32,7 @@ var (
 	netMapping = map[string]nethandler{
 		"net_peerCount": (*netApi).PeerCount,
 		"net_listening": (*netApi).IsListening,
+		"net_version": (*netApi).Version,
 	}
 )
 
@@ -91,5 +92,9 @@ func (self *netApi) PeerCount(req *shared.Request) (interface{}, error) {
 
 func (self *netApi) IsListening(req *shared.Request) (interface{}, error) {
 	return self.xeth.IsListening(), nil
+}
+
+func (self *netApi) Version(req *shared.Request) (interface{}, error) {
+	return self.xeth.NetworkVersion(), nil
 }
 

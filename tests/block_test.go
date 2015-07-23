@@ -94,3 +94,11 @@ func TestBcGasPricer(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TODO: iterate over files once we got more than a few
+func TestBcRandom(t *testing.T) {
+	err := RunBlockTest(filepath.Join(blockTestDir, "RandomTests/bl201507071825GO.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
