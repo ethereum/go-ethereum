@@ -368,6 +368,13 @@ func New(config *Config) (*Ethereum, error) {
 
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
+
+	extra := config.Name
+	if len(extra) > 1024 {
+		extra = extra[:1024]
+	}
+	eth.miner.SetExtra([]byte(extra))
+
 	if config.Shh {
 		eth.whisper = whisper.New()
 		eth.shhVersionId = int(eth.whisper.Version())
