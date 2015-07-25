@@ -111,10 +111,19 @@ func GetBlockByNumber(db common.Database, number uint64) *types.Block {
 	return GetBlockByHash(db, common.BytesToHash(key))
 }
 
-// WriteHead force writes the current head
-func WriteHead(db common.Database, block *types.Block) error {
+// WriteCanonNumber writes the canonical hash for the given block
+func WriteCanonNumber(db common.Database, block *types.Block) error {
 	key := append(blockNumPre, block.Number().Bytes()...)
 	err := db.Put(key, block.Hash().Bytes())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// WriteHead force writes the current head
+func WriteHead(db common.Database, block *types.Block) error {
+	err := WriteCanonNumber(db, block)
 	if err != nil {
 		return err
 	}
