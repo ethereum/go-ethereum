@@ -60,7 +60,7 @@ func TestStatusMsgErrors(t *testing.T) {
 		},
 		{
 			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), 999, td, currentBlock, genesis},
-			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 0)"),
+			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 1)"),
 		},
 		{
 			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), NetworkId, td, currentBlock, common.Hash{3}},
@@ -184,7 +184,7 @@ func newProtocolManagerForTesting(txAdded chan<- []*types.Transaction) *Protocol
 		em       = new(event.TypeMux)
 		chain, _ = core.NewChainManager(db, db, db, core.FakePow{}, em)
 		txpool   = &fakeTxPool{added: txAdded}
-		pm       = NewProtocolManager(0, em, txpool, core.FakePow{}, chain)
+		pm       = NewProtocolManager(NetworkId, em, txpool, core.FakePow{}, chain)
 	)
 	pm.Start()
 	return pm

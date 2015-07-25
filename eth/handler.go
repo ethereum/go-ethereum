@@ -95,6 +95,7 @@ func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow po
 		newPeerCh: make(chan *peer, 1),
 		txsyncCh:  make(chan *txsync),
 		quitSync:  make(chan struct{}),
+		netId:     networkId,
 	}
 	// Initiate a sub-protocol for every implemented version we can handle
 	manager.SubProtocols = make([]p2p.Protocol, len(ProtocolVersions))
