@@ -17,9 +17,17 @@
 package tests
 
 import (
+	"math/big"
 	"path/filepath"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/core"
 )
+
+func init() {
+	// XXX remove me when block tests have been updated
+	core.BlockReward = big.NewInt(1.5e+18)
+}
 
 func TestBcValidBlockTests(t *testing.T) {
 	err := RunBlockTest(filepath.Join(blockTestDir, "bcValidBlockTest.json"), BlockSkipTests)
