@@ -82,6 +82,10 @@ func WriteGenesisBlock(stateDb, blockDb common.Database, reader io.Reader) (*typ
 	}, nil, nil, nil)
 	block.Td = difficulty
 
+	if block := GetBlockByHash(blockDb, block.Hash()); block != nil {
+		return nil, fmt.Errorf("Block %x already in database", block.Hash())
+	}
+
 	statedb.Sync()
 
 	err = WriteBlock(blockDb, block)
