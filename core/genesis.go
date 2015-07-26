@@ -75,7 +75,7 @@ func WriteGenesisBlock(stateDb, blockDb common.Database, reader io.Reader) (*typ
 		Nonce:      types.EncodeNonce(common.String2Big(genesis.Nonce).Uint64()),
 		Time:       common.String2Big(genesis.Timestamp).Uint64(),
 		ParentHash: common.HexToHash(genesis.ParentHash),
-		Extra:      common.Hex2Bytes(genesis.ExtraData),
+		Extra:      common.FromHex(genesis.ExtraData),
 		GasLimit:   common.String2Big(genesis.GasLimit),
 		Difficulty: difficulty,
 		MixDigest:  common.HexToHash(genesis.Mixhash),
