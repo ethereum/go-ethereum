@@ -45,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -370,8 +371,8 @@ func New(config *Config) (*Ethereum, error) {
 	eth.miner.SetGasPrice(config.GasPrice)
 
 	extra := config.Name
-	if len(extra) > 1024 {
-		extra = extra[:1024]
+	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+		extra = extra[:params.MaximumExtraDataSize.Uint64()]
 	}
 	eth.miner.SetExtra([]byte(extra))
 

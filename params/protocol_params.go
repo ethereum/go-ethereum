@@ -22,7 +22,7 @@ package params
 import "math/big"
 
 var (
-	MaximumExtraDataSize   = big.NewInt(1024)   // Maximum size extra data may be after Genesis.
+	MaximumExtraDataSize   = big.NewInt(32)     // Maximum size extra data may be after Genesis.
 	ExpByteGas             = big.NewInt(10)     // Times ceil(log256(exponent)) for the EXP instruction.
 	SloadGas               = big.NewInt(50)     // Multiplied by the number of 32-byte words that are copied (round up) for any *COPY operation and added.
 	CallValueTransferGas   = big.NewInt(9000)   // Paid for CALL when the value transfor is non-zero.
@@ -32,7 +32,7 @@ var (
 	DifficultyBoundDivisor = big.NewInt(2048)   // The bound divisor of the difficulty, used in the update calculations.
 	QuadCoeffDiv           = big.NewInt(512)    // Divisor for the quadratic particle of the memory cost equation.
 	GenesisDifficulty      = big.NewInt(131072) // Difficulty of the Genesis block.
-	DurationLimit          = big.NewInt(8)      // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 	SstoreSetGas           = big.NewInt(20000)  // Once per SLOAD operation.
 	LogDataGas             = big.NewInt(8)      // Per byte in a LOG* operation's data.
 	CallStipend            = big.NewInt(2300)   // Free gas given at beginning of call.
