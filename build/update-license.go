@@ -48,6 +48,7 @@ var (
 		"Godeps/", "tests/files/", "build/",
 		// don't relicense vendored packages
 		"crypto/sha3/", "crypto/ecies/", "logger/glog/",
+		"crypto/curve.go",
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.
@@ -65,20 +66,20 @@ var (
 // its input is an info structure.
 var licenseT = template.Must(template.New("").Parse(`
 // Copyright {{.Year}} The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of {{.Whole false}}.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU {{.License}} as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// {{.Whole true}} is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU {{.License}} for more details.
 //
 // You should have received a copy of the GNU {{.License}}
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with {{.Whole false}}. If not, see <http://www.gnu.org/licenses/>.
 
 `[1:]))
 
@@ -90,17 +91,25 @@ type info struct {
 func (i info) License() string {
 	if i.gpl() {
 		return "General Public License"
-	} else {
-		return "Lesser General Public License"
 	}
+	return "Lesser General Public License"
 }
 
 func (i info) ShortLicense() string {
 	if i.gpl() {
 		return "GPL"
-	} else {
-		return "LGPL"
 	}
+	return "LGPL"
+}
+
+func (i info) Whole(startOfSentence bool) string {
+	if i.gpl() {
+		return "go-ethereum"
+	}
+	if startOfSentence {
+		return "The go-ethereum library"
+	}
+	return "the go-ethereum library"
 }
 
 func (i info) gpl() bool {

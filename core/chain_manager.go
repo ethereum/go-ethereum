@@ -1,23 +1,24 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package core implements the Ethereum consensus protocol.
 package core
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -34,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/pow"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/hashicorp/golang-lru"
 )
 
@@ -42,10 +42,9 @@ var (
 	chainlogger = logger.NewLogger("CHAIN")
 	jsonlogger  = logger.NewJsonLogger()
 
-	blockHashPre = []byte("block-hash-")
-	blockNumPre  = []byte("block-num-")
-
 	blockInsertTimer = metrics.NewTimer("chain/inserts")
+
+	ErrNoGenesis = errors.New("Genesis not found in chain")
 )
 
 const (
@@ -88,25 +87,26 @@ type ChainManager struct {
 	pow pow.PoW
 }
 
-func NewChainManager(genesis *types.Block, blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
+func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
 	cache, _ := lru.New(blockCacheLimit)
 	bc := &ChainManager{
-		blockDb:      blockDb,
-		stateDb:      stateDb,
-		extraDb:      extraDb,
-		genesisBlock: GenesisBlock(42, stateDb),
-		eventMux:     mux,
-		quit:         make(chan struct{}),
-		cache:        cache,
-		pow:          pow,
+		blockDb:  blockDb,
+		stateDb:  stateDb,
+		extraDb:  extraDb,
+		eventMux: mux,
+		quit:     make(chan struct{}),
+		cache:    cache,
+		pow:      pow,
 	}
-	// Check the genesis block given to the chain manager. If the genesis block mismatches block number 0
-	// throw an error. If no block or the same block's found continue.
-	if g := bc.GetBlockByNumber(0); g != nil && g.Hash() != genesis.Hash() {
-		return nil, fmt.Errorf("Genesis mismatch. Maybe different nonce (%d vs %d)? %x / %x", g.Nonce(), genesis.Nonce(), g.Hash().Bytes()[:4], genesis.Hash().Bytes()[:4])
+
+	bc.genesisBlock = bc.GetBlockByNumber(0)
+	if bc.genesisBlock == nil {
+		return nil, ErrNoGenesis
 	}
-	bc.genesisBlock = genesis
-	bc.setLastState()
+
+	if err := bc.setLastState(); err != nil {
+		return nil, err
+	}
 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash, _ := range BadHashes {
@@ -226,7 +226,7 @@ func (bc *ChainManager) recover() bool {
 	return false
 }
 
-func (bc *ChainManager) setLastState() {
+func (bc *ChainManager) setLastState() error {
 	data, _ := bc.blockDb.Get([]byte("LastBlock"))
 	if len(data) != 0 {
 		block := bc.GetBlock(common.BytesToHash(data))
@@ -250,6 +250,8 @@ func (bc *ChainManager) setLastState() {
 	if glog.V(logger.Info) {
 		glog.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
 	}
+
+	return nil
 }
 
 func (bc *ChainManager) makeCache() {
@@ -272,7 +274,11 @@ func (bc *ChainManager) Reset() {
 	bc.cache, _ = lru.New(blockCacheLimit)
 
 	// Prepare the genesis block
-	bc.write(bc.genesisBlock)
+	err := WriteBlock(bc.blockDb, bc.genesisBlock)
+	if err != nil {
+		glog.Fatalln("db err:", err)
+	}
+
 	bc.insert(bc.genesisBlock)
 	bc.currentBlock = bc.genesisBlock
 	bc.makeCache()
@@ -295,7 +301,12 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 	// Prepare the genesis block
 	gb.Td = gb.Difficulty()
 	bc.genesisBlock = gb
-	bc.write(bc.genesisBlock)
+
+	err := WriteBlock(bc.blockDb, bc.genesisBlock)
+	if err != nil {
+		glog.Fatalln("db err:", err)
+	}
+
 	bc.insert(bc.genesisBlock)
 	bc.currentBlock = bc.genesisBlock
 	bc.makeCache()
@@ -355,21 +366,6 @@ func (bc *ChainManager) insert(block *types.Block) {
 
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
-}
-
-func (bc *ChainManager) write(block *types.Block) {
-	tstart := time.Now()
-
-	enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
-	key := append(blockHashPre, block.Hash().Bytes()...)
-	err := bc.blockDb.Put(key, enc)
-	if err != nil {
-		glog.Fatal("db write fail:", err)
-	}
-
-	if glog.V(logger.Debug) {
-		glog.Infof("wrote block #%v %s. Took %v\n", block.Number(), common.PP(block.Hash().Bytes()), time.Since(tstart))
-	}
 }
 
 // Accessors
@@ -535,7 +531,10 @@ func (self *ChainManager) WriteBlock(block *types.Block, queued bool) (status wr
 		status = SideStatTy
 	}
 
-	self.write(block)
+	err = WriteBlock(self.blockDb, block)
+	if err != nil {
+		glog.Fatalln("db err:", err)
+	}
 	// Delete from future blocks
 	self.futureBlocks.Remove(block.Hash())
 
@@ -662,6 +661,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			queue[i] = ChainSplitEvent{block, logs}
 			queueEvent.splitCount++
 		}
+		PutBlockReceipts(self.extraDb, block, receipts)
+
 		stats.processed++
 	}
 
@@ -739,7 +740,12 @@ func (self *ChainManager) merge(oldBlock, newBlock *types.Block) error {
 	// insert blocks. Order does not matter. Last block will be written in ImportChain itself which creates the new head properly
 	self.mu.Lock()
 	for _, block := range newChain {
+		// insert the block in the canonical way, re-writing history
 		self.insert(block)
+		// write canonical receipts and transactions
+		PutTransactions(self.extraDb, block, block.Transactions())
+		PutReceipts(self.extraDb, GetBlockReceipts(self.extraDb, block.Hash()))
+
 	}
 	self.mu.Unlock()
 

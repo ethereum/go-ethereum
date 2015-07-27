@@ -8,11 +8,11 @@
 //
 // go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 // Package utils contains internal helper functions for go-ethereum commands.
 package utils
@@ -58,15 +58,16 @@ func PromptConfirm(prompt string) (bool, error) {
 	)
 	prompt = prompt + " [y/N] "
 
-	if liner.TerminalSupported() {
-		lr := liner.NewLiner()
-		defer lr.Close()
-		input, err = lr.Prompt(prompt)
-	} else {
-		fmt.Print(prompt)
-		input, err = bufio.NewReader(os.Stdin).ReadString('\n')
-		fmt.Println()
-	}
+	// if liner.TerminalSupported() {
+	// 	fmt.Println("term")
+	// 	lr := liner.NewLiner()
+	// 	defer lr.Close()
+	// 	input, err = lr.Prompt(prompt)
+	// } else {
+	fmt.Print(prompt)
+	input, err = bufio.NewReader(os.Stdin).ReadString('\n')
+	fmt.Println()
+	// }
 
 	if len(input) > 0 && strings.ToUpper(input[:1]) == "Y" {
 		return true, nil
@@ -92,12 +93,12 @@ func PromptPassword(prompt string, warnTerm bool) (string, error) {
 	return input, err
 }
 
-func initDataDir(Datadir string) {
-	_, err := os.Stat(Datadir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			fmt.Printf("Data directory '%s' doesn't exist, creating it\n", Datadir)
-			os.Mkdir(Datadir, 0777)
+func CheckLegalese(datadir string) {
+	// check "first run"
+	if !common.FileExist(datadir) {
+		r, _ := PromptConfirm(legalese)
+		if !r {
+			Fatalf("Must accept to continue. Shutting down...\n")
 		}
 	}
 }

@@ -1,18 +1,18 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package ethdb
 
@@ -23,7 +23,6 @@ import (
         "github.com/ethereum/go-ethereum/common"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -83,12 +82,12 @@ func (self *LDBDatabase) Put(key []byte, value []byte) error {
 		defer self.putTimer.UpdateSince(time.Now())
 	}
 	// Generate the data to write to disk, update the meter and write
-	dat := rle.Compress(value)
+	//value = rle.Compress(value)
 
 	if self.writeMeter != nil {
-		self.writeMeter.Mark(int64(len(dat)))
+		self.writeMeter.Mark(int64(len(value)))
 	}
-	return self.db.Put(key, dat, nil)
+	return self.db.Put(key, value, nil)
 }
 
 // Get returns the given key if it's present.
@@ -109,7 +108,8 @@ func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
 	if self.readMeter != nil {
 		self.readMeter.Mark(int64(len(dat)))
 	}
-	return rle.Decompress(dat)
+	return dat, nil
+	//return rle.Decompress(dat)
 }
 
 // Delete deletes the key from the queue and database

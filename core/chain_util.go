@@ -1,24 +1,25 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
 import (
 	"bytes"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -26,6 +27,11 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+)
+
+var (
+	blockHashPre = []byte("block-hash-")
+	blockNumPre  = []byte("block-num-")
 )
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
@@ -105,10 +111,19 @@ func GetBlockByNumber(db common.Database, number uint64) *types.Block {
 	return GetBlockByHash(db, common.BytesToHash(key))
 }
 
-// WriteHead force writes the current head
-func WriteHead(db common.Database, block *types.Block) error {
+// WriteCanonNumber writes the canonical hash for the given block
+func WriteCanonNumber(db common.Database, block *types.Block) error {
 	key := append(blockNumPre, block.Number().Bytes()...)
 	err := db.Put(key, block.Hash().Bytes())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// WriteHead force writes the current head
+func WriteHead(db common.Database, block *types.Block) error {
+	err := WriteCanonNumber(db, block)
 	if err != nil {
 		return err
 	}
@@ -116,5 +131,24 @@ func WriteHead(db common.Database, block *types.Block) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+// WriteBlock writes a block to the database
+func WriteBlock(db common.Database, block *types.Block) error {
+	tstart := time.Now()
+
+	enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
+	key := append(blockHashPre, block.Hash().Bytes()...)
+	err := db.Put(key, enc)
+	if err != nil {
+		glog.Fatal("db write fail:", err)
+		return err
+	}
+
+	if glog.V(logger.Debug) {
+		glog.Infof("wrote block #%v %s. Took %v\n", block.Number(), common.PP(block.Hash().Bytes()), time.Since(tstart))
+	}
+
 	return nil
 }

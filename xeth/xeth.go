@@ -1,18 +1,18 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package xeth is the interface to all Ethereum functionality.
 package xeth
@@ -518,6 +518,9 @@ func (self *XEth) UninstallFilter(id int) bool {
 }
 
 func (self *XEth) NewLogFilter(earliest, latest int64, skip, max int, address []string, topics [][]string) int {
+	self.logMu.Lock()
+	defer self.logMu.Unlock()
+
 	var id int
 	filter := core.NewFilter(self.backend)
 	filter.SetEarliestBlock(earliest)
@@ -539,6 +542,9 @@ func (self *XEth) NewLogFilter(earliest, latest int64, skip, max int, address []
 }
 
 func (self *XEth) NewTransactionFilter() int {
+	self.transactionMu.Lock()
+	defer self.transactionMu.Unlock()
+
 	var id int
 	filter := core.NewFilter(self.backend)
 	filter.TransactionCallback = func(tx *types.Transaction) {
@@ -553,6 +559,9 @@ func (self *XEth) NewTransactionFilter() int {
 }
 
 func (self *XEth) NewBlockFilter() int {
+	self.blockMu.Lock()
+	defer self.blockMu.Unlock()
+
 	var id int
 	filter := core.NewFilter(self.backend)
 	filter.BlockCallback = func(block *types.Block, logs state.Logs) {
@@ -609,9 +618,6 @@ func (self *XEth) TransactionFilterChanged(id int) []common.Hash {
 }
 
 func (self *XEth) Logs(id int) state.Logs {
-	self.logMu.Lock()
-	defer self.logMu.Unlock()
-
 	filter := self.filterManager.GetFilter(id)
 	if filter != nil {
 		return filter.Find()
@@ -946,9 +952,9 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 
 	if contractCreation {
 		addr := crypto.CreateAddress(from, nonce)
-		glog.V(logger.Info).Infof("Tx(%x) created: %x\n", tx.Hash(), addr)
+		glog.V(logger.Info).Infof("Tx(%s) created: %s\n", signed.Hash().Hex(), addr.Hex())
 	} else {
-		glog.V(logger.Info).Infof("Tx(%x) to: %x\n", tx.Hash(), tx.To())
+		glog.V(logger.Info).Infof("Tx(%s) to: %s\n", signed.Hash().Hex(), tx.To().Hex())
 	}
 
 	return signed.Hash().Hex(), nil

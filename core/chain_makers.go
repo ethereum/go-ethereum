@@ -1,18 +1,18 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
@@ -183,7 +183,9 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 // InsertChain on the result of makeChain.
 func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
 	evmux := &event.TypeMux{}
-	chainman, _ := NewChainManager(GenesisBlock(0, db), db, db, db, FakePow{}, evmux)
+
+	WriteTestNetGenesisBlock(db, db, 0)
+	chainman, _ := NewChainManager(db, db, db, FakePow{}, evmux)
 	bman := NewBlockProcessor(db, db, FakePow{}, chainman, evmux)
 	bman.bc.SetProcessor(bman)
 	parent := bman.bc.CurrentBlock()

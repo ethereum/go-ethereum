@@ -14,21 +14,23 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package api
+package tests
 
-const Shh_JS = `
-web3._extend({
-	property: 'shh',
-	methods:
-	[
+import (
+	"path/filepath"
+	"testing"
+)
 
-	],
-	properties:
-	[
-		new web3._extend.Property({
-			name: 'version',
-			getter: 'shh_version'
-		})
-	]
-});
-`
+func TestRLP(t *testing.T) {
+	err := RunRLPTest(filepath.Join(rlpTestDir, "rlptest.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRLP_invalid(t *testing.T) {
+	err := RunRLPTest(filepath.Join(rlpTestDir, "invalidRLPTest.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+}

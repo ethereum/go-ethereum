@@ -8,11 +8,11 @@
 //
 // go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package utils
 
@@ -114,6 +114,10 @@ var (
 		Usage: "Sets the genesis nonce",
 		Value: 42,
 	}
+	GenesisFileFlag = cli.StringFlag{
+		Name:  "genesis",
+		Usage: "Inserts/Overwrites the genesis block (json format)",
+	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
 		Usage: "Custom node name",
@@ -145,7 +149,7 @@ var (
 	GasPriceFlag = cli.StringFlag{
 		Name:  "gasprice",
 		Usage: "Sets the minimal gasprice when mining transactions",
-		Value: new(big.Int).Mul(big.NewInt(1), common.Szabo).String(),
+		Value: new(big.Int).Mul(big.NewInt(500), common.Shannon).String(),
 	}
 
 	UnlockedAccountFlag = cli.StringFlag{
@@ -378,6 +382,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 ctx.GlobalString(DataDirFlag.Name),
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
+		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
 		SkipBcVersionCheck:      false,
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
@@ -434,8 +439,8 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, ex
 
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
-	genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
-	chain, err = core.NewChainManager(genesis, blockDB, stateDB, extraDB, pow, eventMux)
+	//genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
+	chain, err = core.NewChainManager(blockDB, stateDB, extraDB, pow, eventMux)
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}
