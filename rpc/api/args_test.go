@@ -935,9 +935,9 @@ func TestCallArgsNotStrings(t *testing.T) {
 func TestCallArgsToEmpty(t *testing.T) {
 	input := `[{"from": "0xb60e8dd61c5d32be8058bb8eb970870f07233155"}]`
 	args := new(CallArgs)
-	str := ExpectValidationError(json.Unmarshal([]byte(input), &args))
-	if len(str) > 0 {
-		t.Error(str)
+	err := json.Unmarshal([]byte(input), &args)
+	if err != nil {
+		t.Error("Did not expect error. Got", err)
 	}
 }
 
