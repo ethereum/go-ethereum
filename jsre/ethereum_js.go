@@ -1137,10 +1137,10 @@ var toHex = function (val) {
     if (isString(val)) {
         if (val.indexOf('-0x') === 0)
             return fromDecimal(val);
-        else if (!isFinite(val))
-            return fromAscii(val);
         else if(val.indexOf('0x') === 0)
             return val;
+        else if (!isFinite(val))
+            return fromAscii(val);
     }
 
     return fromDecimal(val);
