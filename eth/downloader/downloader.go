@@ -243,8 +243,9 @@ func (d *Downloader) Synchronise(id string, head common.Hash) {
 		glog.V(logger.Detail).Infof("Synchronisation already in progress")
 
 	case errTimeout, errBadPeer, errStallingPeer, errBannedHead, errEmptyHashSet, errPeersUnavailable, errInvalidChain, errCrossCheckFailed:
-		glog.V(logger.Debug).Infof("Removing peer %v: %v", id, err)
-		d.dropPeer(id)
+		glog.V(logger.Debug).Infof("Potential peer %v error: %v", id, err)
+		//glog.V(logger.Debug).Infof("Removing peer %v: %v", id, err)
+		//d.dropPeer(id)
 
 	case errPendingQueue:
 		glog.V(logger.Debug).Infoln("Synchronisation aborted:", err)
