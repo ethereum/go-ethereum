@@ -97,15 +97,6 @@ func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice 
 	return &Transaction{data: d}
 }
 
-func NewTransactionFromBytes(data []byte) *Transaction {
-	// TODO: remove this function if possible. callers would
-	// much better off decoding into transaction directly.
-	// it's not that hard.
-	tx := new(Transaction)
-	rlp.DecodeBytes(data, tx)
-	return tx
-}
-
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &tx.data)
 }
