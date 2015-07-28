@@ -489,7 +489,11 @@ func (s *Ethereum) StartMining(threads int) error {
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	eb = s.etherbase
 	if (eb == common.Address{}) {
-		err = fmt.Errorf("etherbase address must be explicitly specified")
+		addr, e := s.AccountManager().AddressByIndex(0)
+		if e != nil {
+			err = fmt.Errorf("etherbase address must be explicitly specified")
+		}
+		eb = common.HexToAddress(addr)
 	}
 	return
 }
