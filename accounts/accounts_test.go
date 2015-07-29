@@ -128,7 +128,7 @@ func TestSignRace(t *testing.T) {
 	if err := am.TimedUnlock(a1.Address, "", 15*time.Millisecond); err != nil {
 		t.Fatalf("could not unlock the test account", err)
 	}
-	end := time.Now().Add(80 * time.Millisecond)
+	end := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(end) {
 		if _, err := am.Sign(a1, testSigData); err == ErrLocked {
 			return
@@ -136,6 +136,7 @@ func TestSignRace(t *testing.T) {
 			t.Errorf("Sign error: %v", err)
 			return
 		}
+		time.Sleep(1 * time.Millisecond)
 	}
 	t.Errorf("Account did not lock within the timeout")
 }
