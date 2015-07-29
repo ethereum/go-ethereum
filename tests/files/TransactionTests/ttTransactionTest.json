@@ -425,5 +425,8 @@
             "v" : "0x1c",
             "value" : "0x00"
         }
+    },
+    "ECSigPointAtInfinity" : {
+        "rlp" : "0xf84c01028332dcd58004801ba024843272ee176277535489859cbd275686023fe64aabd158b6fcdf2ae6a1ab6ba02f252a5016a48e5ec8d17aefaf4324d29b9e123fa623dc5a60539b3ad3610c95"
     }
 }
