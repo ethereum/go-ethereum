@@ -164,5 +164,5 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		return
 	}
 	// Otherwise try to sync with the downloader
-	pm.downloader.Synchronise(peer.id, peer.Head())
+	pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td())
 }

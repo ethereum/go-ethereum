@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"errors"
 	"math"
+	"math/big"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -232,10 +233,10 @@ func (d *Downloader) UnregisterPeer(id string) error {
 
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
-func (d *Downloader) Synchronise(id string, head common.Hash) {
-	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, 0x%x", id, head)
+func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int) {
+	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, head 0x%x, TD %v", id, head[:4], td)
 
-	switch err := d.synchronise(id, head); err {
+	switch err := d.synchronise(id, head, td); err {
 	case nil:
 		glog.V(logger.Detail).Infof("Synchronisation completed")
 
@@ -257,7 +258,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash) {
 // synchronise will select the peer and use it for synchronising. If an empty string is given
 // it will use the best peer possible and synchronize if it's TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
-func (d *Downloader) synchronise(id string, hash common.Hash) error {
+func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int) error {
 	// Mock out the synchonisation if testing
 	if d.synchroniseMock != nil {
 		return d.synchroniseMock(id, hash)
@@ -295,7 +296,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash) error {
 	if p == nil {
 		return errUnknownPeer
 	}
-	return d.syncWithPeer(p, hash)
+	return d.syncWithPeer(p, hash, td)
 }
 
 // Has checks if the downloader knows about a particular hash, meaning that its
@@ -306,7 +307,7 @@ func (d *Downloader) Has(hash common.Hash) bool {
 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
-func (d *Downloader) syncWithPeer(p *peer, hash common.Hash) (err error) {
+func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err error) {
 	d.mux.Post(StartEvent{})
 	defer func() {
 		// reset on error
@@ -335,7 +336,7 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash) (err error) {
 			return err
 		}
 		errc := make(chan error, 2)
-		go func() { errc <- d.fetchHashes(p, number+1) }()
+		go func() { errc <- d.fetchHashes(p, td, number+1) }()
 		go func() { errc <- d.fetchBlocks(number + 1) }()
 
 		// If any fetcher fails, cancel the other
@@ -788,7 +789,7 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 
 // fetchHashes keeps retrieving hashes from the requested number, until no more
 // are returned, potentially throttling on the way.
-func (d *Downloader) fetchHashes(p *peer, from uint64) error {
+func (d *Downloader) fetchHashes(p *peer, td *big.Int, from uint64) error {
 	glog.V(logger.Debug).Infof("%v: downloading hashes from #%d", p, from)
 
 	// Create a timeout timer, and the associated hash fetcher
@@ -827,8 +828,19 @@ func (d *Downloader) fetchHashes(p *peer, from uint64) error {
 				case d.processCh <- false:
 				case <-d.cancelCh:
 				}
-				// Error out if no hashes were retrieved at all
-				if !gotHashes {
+				// If no hashes were retrieved at all, the peer violated it's TD promise that it had a
+				// better chain compared to ours. The only exception is if it's promised blocks were
+				// already imported by other means (e.g. fecher):
+				//
+				// R <remote peer>, L <local node>: Both at block 10
+				// R: Mine block 11, and propagate it to L
+				// L: Queue block 11 for import
+				// L: Notice that R's head and TD increased compared to ours, start sync
+				// L: Import of block 11 finishes
+				// L: Sync begins, and finds common ancestor at 11
+				// L: Request new hashes up from 11 (R's TD was higher, it must have something)
+				// R: Nothing to give
+				if !gotHashes && td.Cmp(d.headBlock().Td) > 0 {
 					return errStallingPeer
 				}
 				return nil
