@@ -7,5 +7,40 @@
 	"int32Overflow2": {
 		"in": "INVALID", 
 		"out": "ff0f000000000000021111"
+	},
+
+	"wrongSizeList": {
+		"in": "INVALID", 
+		"out": "f80180"
+	},
+
+	"wrongSizeList2": {
+		"in": "INVALID", 
+		"out": "f80100"
+	},
+
+	"incorrectLengthInArray": {
+		"in": "INVALID", 
+		"out": "b9002100dc2b275d0f74e8a53e6f4ec61b27f24278820be3f82ea2110e582081b0565df0"
+	},
+
+	"randomRLP": {
+		"in": "INVALID", 
+		"out": "f861f83eb9002100dc2b275d0f74e8a53e6f4ec61b27f24278820be3f82ea2110e582081b0565df027b90015002d5ef8325ae4d034df55d4b58d0dfba64d61ddd17be00000b9001a00dae30907045a2f66fa36f2bb8aa9029cbb0b8a7b3b5c435ab331"
+	},
+
+	"bytesShouldBeSingleByte00": {
+		"in": "INVALID",
+		"out": "8100"
+	},
+
+	"bytesShouldBeSingleByte01": {
+		"in": "INVALID",
+		"out": "8100"
+	},
+
+	"bytesShouldBeSingleByte7F": {
+		"in": "INVALID",
+		"out": "817F"
 	}
 }
