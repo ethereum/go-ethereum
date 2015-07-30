@@ -322,7 +322,7 @@ func (self *ethApi) EstimateGas(req *shared.Request) (interface{}, error) {
 	if len(gas) == 0 {
 		return newHexNum(0), nil
 	} else {
-		return newHexNum(gas), nil
+		return newHexNum(common.String2Big(gas)), err
 	}
 }
 

@@ -469,10 +469,6 @@ func (args *CallArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	args.From = ext.From
-
-	if len(ext.To) == 0 {
-		return shared.NewValidationError("to", "is required")
-	}
 	args.To = ext.To
 
 	var num *big.Int
