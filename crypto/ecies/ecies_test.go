@@ -408,6 +408,11 @@ type testCase struct {
 
 var testCases = []testCase{
 	testCase{
+		Curve:    elliptic.P224(),
+		Name:     "P224",
+		Expected: false,
+	},
+	testCase{
 		Curve:    elliptic.P256(),
 		Name:     "P256",
 		Expected: true,

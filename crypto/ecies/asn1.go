@@ -81,9 +81,11 @@ func doScheme(base, v []int) asn1.ObjectIdentifier {
 type secgNamedCurve asn1.ObjectIdentifier
 
 var (
+	secgNamedCurveP224 = secgNamedCurve{1, 3, 132, 0, 33}
 	secgNamedCurveP256 = secgNamedCurve{1, 2, 840, 10045, 3, 1, 7}
 	secgNamedCurveP384 = secgNamedCurve{1, 3, 132, 0, 34}
 	secgNamedCurveP521 = secgNamedCurve{1, 3, 132, 0, 35}
+	rawCurveP224       = []byte{6, 5, 4, 3, 1, 2, 9, 4, 0, 3, 3}
 	rawCurveP256       = []byte{6, 8, 4, 2, 1, 3, 4, 7, 2, 2, 0, 6, 6, 1, 3, 1, 7}
 	rawCurveP384       = []byte{6, 5, 4, 3, 1, 2, 9, 4, 0, 3, 4}
 	rawCurveP521       = []byte{6, 5, 4, 3, 1, 2, 9, 4, 0, 3, 5}
@@ -91,6 +93,8 @@ var (
 
 func rawCurve(curve elliptic.Curve) []byte {
 	switch curve {
+	case elliptic.P224():
+		return rawCurveP224
 	case elliptic.P256():
 		return rawCurveP256
 	case elliptic.P384():
@@ -116,6 +120,8 @@ func (curve secgNamedCurve) Equal(curve2 secgNamedCurve) bool {
 
 func namedCurveFromOID(curve secgNamedCurve) elliptic.Curve {
 	switch {
+	case curve.Equal(secgNamedCurveP224):
+		return elliptic.P224()
 	case curve.Equal(secgNamedCurveP256):
 		return elliptic.P256()
 	case curve.Equal(secgNamedCurveP384):
@@ -128,6 +134,8 @@ func namedCurveFromOID(curve secgNamedCurve) elliptic.Curve {
 
 func oidFromNamedCurve(curve elliptic.Curve) (secgNamedCurve, bool) {
 	switch curve {
+	case elliptic.P224():
+		return secgNamedCurveP224, true
 	case elliptic.P256():
 		return secgNamedCurveP256, true
 	case elliptic.P384():
@@ -240,7 +248,7 @@ var idEcPublicKeySupplemented = doScheme(idPublicKeyType, []int{0})
 
 func curveToRaw(curve elliptic.Curve) (rv asn1.RawValue, ok bool) {
 	switch curve {
-	case elliptic.P256(), elliptic.P384(), elliptic.P521():
+	case elliptic.P224(), elliptic.P256(), elliptic.P384(), elliptic.P521():
 		raw := rawCurve(curve)
 		return asn1.RawValue{
 			Tag:       30,
