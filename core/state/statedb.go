@@ -44,6 +44,7 @@ type StateDB struct {
 	thash, bhash common.Hash
 	txIndex      int
 	logs         map[common.Hash]Logs
+	logSize      uint
 }
 
 // Create a new state from a given trie
@@ -66,7 +67,9 @@ func (self *StateDB) AddLog(log *Log) {
 	log.TxHash = self.thash
 	log.BlockHash = self.bhash
 	log.TxIndex = uint(self.txIndex)
+	log.Index = self.logSize
 	self.logs[self.thash] = append(self.logs[self.thash], log)
+	self.logSize++
 }
 
 func (self *StateDB) GetLogs(hash common.Hash) Logs {
@@ -288,6 +291,7 @@ func (self *StateDB) Copy() *StateDB {
 		state.logs[hash] = make(Logs, len(logs))
 		copy(state.logs[hash], logs)
 	}
+	state.logSize = self.logSize
 
 	return state
 }
@@ -298,6 +302,7 @@ func (self *StateDB) Set(state *StateDB) {
 
 	self.refund = state.refund
 	self.logs = state.logs
+	self.logSize = state.logSize
 }
 
 func (s *StateDB) Root() common.Hash {
