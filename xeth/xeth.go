@@ -310,7 +310,12 @@ func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blha
 	// some chain, this probably needs to be refactored for more expressiveness
 	data, _ := self.backend.ExtraDb().Get(common.FromHex(hash))
 	if len(data) != 0 {
-		tx = types.NewTransactionFromBytes(data)
+		dtx := new(types.Transaction)
+		if err := rlp.DecodeBytes(data, dtx); err != nil {
+			glog.V(logger.Error).Infoln(err)
+			return
+		}
+		tx = dtx
 	} else { // check pending transactions
 		tx = self.backend.TxPool().GetTransaction(common.HexToHash(hash))
 	}
@@ -773,8 +778,14 @@ func (self *XEth) FromNumber(str string) string {
 }
 
 func (self *XEth) PushTx(encodedTx string) (string, error) {
-	tx := types.NewTransactionFromBytes(common.FromHex(encodedTx))
-	err := self.backend.TxPool().Add(tx)
+	tx := new(types.Transaction)
+	err := rlp.DecodeBytes(common.FromHex(encodedTx), tx)
+	if err != nil {
+		glog.V(logger.Error).Infoln(err)
+		return "", err
+	}
+
+	err = self.backend.TxPool().Add(tx)
 	if err != nil {
 		return "", err
 	}
