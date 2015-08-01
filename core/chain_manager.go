@@ -76,7 +76,8 @@ type ChainManager struct {
 	cache        *lru.Cache // cache is the LRU caching
 	futureBlocks *lru.Cache // future blocks are blocks added for later processing
 
-	quit chan struct{}
+	quit    chan struct{}
+	running int32 // running must be called automically
 	// procInterrupt must be atomically called
 	procInterrupt int32 // interrupt signaler for block processing
 	wg            sync.WaitGroup
@@ -443,6 +444,9 @@ func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
 }
 
 func (bc *ChainManager) Stop() {
+	if !atomic.CompareAndSwapInt32(&bc.running, 0, 1) {
+		return
+	}
 	close(bc.quit)
 	atomic.StoreInt32(&bc.procInterrupt, 1)
 
