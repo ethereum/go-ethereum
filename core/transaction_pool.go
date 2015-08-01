@@ -135,7 +135,7 @@ func (pool *TxPool) resetState() {
 func (pool *TxPool) Stop() {
 	close(pool.quit)
 	pool.events.Unsubscribe()
-	glog.V(logger.Info).Infoln("TX Pool stopped")
+	glog.V(logger.Info).Infoln("Transaction pool stopped")
 }
 
 func (pool *TxPool) State() *state.ManagedState {
