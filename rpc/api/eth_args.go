@@ -884,6 +884,7 @@ type tx struct {
 	Data     string
 	GasLimit string
 	GasPrice string
+	Hash     string
 }
 
 func newTx(t *types.Transaction) *tx {
@@ -902,6 +903,7 @@ func newTx(t *types.Transaction) *tx {
 		Data:     "0x" + common.Bytes2Hex(t.Data()),
 		GasLimit: t.Gas().String(),
 		GasPrice: t.GasPrice().String(),
+		Hash:     t.Hash().Hex(),
 	}
 }
 
@@ -926,6 +928,12 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 		data             []byte
 		contractCreation = true
 	)
+
+	if val, found := fields["Hash"]; found {
+		if hashVal, ok := val.(string); ok {
+			tx.Hash = hashVal
+		}
+	}
 
 	if val, found := fields["To"]; found {
 		if strVal, ok := val.(string); ok && len(strVal) > 0 {
