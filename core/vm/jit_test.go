@@ -105,6 +105,9 @@ func (self *Env) AddLog(log *state.Log) {
 }
 func (self *Env) Depth() int     { return self.depth }
 func (self *Env) SetDepth(i int) { self.depth = i }
+func (self *Env) CanTransfer(from Account, balance *big.Int) bool {
+	return from.Balance().Cmp(balance) >= 0
+}
 func (self *Env) Transfer(from, to Account, amount *big.Int) error {
 	return nil
 }

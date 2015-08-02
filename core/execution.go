@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// Execution is the execution environment for the given call or create action.
 type Execution struct {
 	env     vm.Environment
 	address *common.Address
@@ -35,12 +36,15 @@ type Execution struct {
 	Gas, price, value *big.Int
 }
 
+// NewExecution returns a new execution environment that handles all calling
+// and creation logic defined by the YP.
 func NewExecution(env vm.Environment, address *common.Address, input []byte, gas, gasPrice, value *big.Int) *Execution {
 	exe := &Execution{env: env, address: address, input: input, Gas: gas, price: gasPrice, value: value}
 	exe.evm = vm.NewVm(env)
 	return exe
 }
 
+// Call executes within the given context
 func (self *Execution) Call(codeAddr common.Address, caller vm.ContextRef) ([]byte, error) {
 	// Retrieve the executing code
 	code := self.env.State().GetCode(codeAddr)
@@ -48,6 +52,9 @@ func (self *Execution) Call(codeAddr common.Address, caller vm.ContextRef) ([]by
 	return self.exec(&codeAddr, code, caller)
 }
 
+// Create creates a new contract and runs the initialisation procedure of the
+// contract. This returns the returned code for the contract and is stored
+// elsewhere.
 func (self *Execution) Create(caller vm.ContextRef) (ret []byte, err error, account *state.StateObject) {
 	// Input must be nil for create
 	code := self.input
@@ -63,16 +70,24 @@ func (self *Execution) Create(caller vm.ContextRef) (ret []byte, err error, acco
 	return
 }
 
+// exec executes the given code and executes within the contextAddr context.
 func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.ContextRef) (ret []byte, err error) {
 	env := self.env
 	evm := self.evm
+	// Depth check execution. Fail if we're trying to execute above the
+	// limit.
 	if env.Depth() > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(self.Gas, self.price)
 
 		return nil, vm.DepthError
 	}
 
-	vsnapshot := env.State().Copy()
+	if !env.CanTransfer(env.State().GetStateObject(caller.Address()), self.value) {
+		caller.ReturnGas(self.Gas, self.price)
+
+		return nil, ValueTransferErr("insufficient funds to transfer value. Req %v, has %v", self.value, env.State().GetBalance(caller.Address()))
+	}
+
 	var createAccount bool
 	if self.address == nil {
 		// Generate a new address
@@ -95,15 +110,7 @@ func (self *Execution) exec(contextAddr *common.Address, code []byte, caller vm.
 	} else {
 		to = env.State().GetOrNewStateObject(*self.address)
 	}
-
-	err = env.Transfer(from, to, self.value)
-	if err != nil {
-		env.State().Set(vsnapshot)
-
-		caller.ReturnGas(self.Gas, self.price)
-
-		return nil, ValueTransferErr("insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance())
-	}
+	vm.Transfer(from, to, self.value)
 
 	context := vm.NewContext(caller, to, self.value, self.Gas, self.price)
 	context.SetCallCode(contextAddr, code)

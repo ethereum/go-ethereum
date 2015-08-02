@@ -206,6 +206,9 @@ func (self *VMEnv) StructLogs() []vm.StructLog {
 func (self *VMEnv) AddLog(log *state.Log) {
 	self.state.AddLog(log)
 }
+func (self *VMEnv) CanTransfer(from vm.Account, balance *big.Int) bool {
+	return from.Balance().Cmp(balance) >= 0
+}
 func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
 	return vm.Transfer(from, to, amount)
 }

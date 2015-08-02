@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package vm
 
 import (
@@ -48,7 +49,7 @@ func SetJITCacheSize(size int) {
 	programs, _ = lru.New(size)
 }
 
-// GetProgram returns the program by id or nil when non-existant
+// GetProgram returns the program by id or nil when non-existent
 func GetProgram(id common.Hash) *Program {
 	if p, ok := programs.Get(id); ok {
 		return p.(*Program)
