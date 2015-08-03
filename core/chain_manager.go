@@ -98,7 +98,15 @@ func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux
 
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
-		return nil, ErrNoGenesis
+		reader, err := NewDefaultGenesisReader()
+		if err != nil {
+			return nil, err
+		}
+		bc.genesisBlock, err = WriteGenesisBlock(stateDb, blockDb, reader)
+		if err != nil {
+			return nil, err
+		}
+		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
 	}
 
 	if err := bc.setLastState(); err != nil {
