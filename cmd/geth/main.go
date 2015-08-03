@@ -280,6 +280,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.BlockchainVersionFlag,
+		utils.OlympicFlag,
 		utils.CacheFlag,
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
@@ -346,6 +347,9 @@ func main() {
 
 func run(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	if ctx.GlobalBool(utils.OlympicFlag.Name) {
+		utils.InitOlympic()
+	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)

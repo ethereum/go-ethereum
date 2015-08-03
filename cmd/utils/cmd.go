@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"os/signal"
 	"regexp"
@@ -32,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/peterh/liner"
 )
@@ -143,6 +145,15 @@ func StartEthereum(ethereum *eth.Ethereum) {
 	}()
 }
 
+func InitOlympic() {
+	params.DurationLimit = big.NewInt(8)
+	params.GenesisGasLimit = big.NewInt(3141592)
+	params.MinGasLimit = big.NewInt(125000)
+	params.MaximumExtraDataSize = big.NewInt(1024)
+	NetworkIdFlag.Value = 0
+	core.BlockReward = big.NewInt(1.5e+18)
+}
+
 func FormatTransactionData(data string) []byte {
 	d := common.StringToByteFunc(data, func(s string) (ret []byte) {
 		slice := regexp.MustCompile("\\n|\\s").Split(s, 1000000000)
@@ -203,6 +214,11 @@ func ImportChain(chain *core.ChainManager, fn string) error {
 			} else if err != nil {
 				return fmt.Errorf("at block %d: %v", n, err)
 			}
+			// don't import first block
+			if b.NumberU64() == 0 {
+				i--
+				continue
+			}
 			blocks[i] = &b
 			n++
 		}
@@ -218,6 +234,7 @@ func ImportChain(chain *core.ChainManager, fn string) error {
 				batch, blocks[0].Hash().Bytes()[:4], blocks[i-1].Hash().Bytes()[:4])
 			continue
 		}
+
 		if _, err := chain.InsertChain(blocks[:i]); err != nil {
 			return fmt.Errorf("invalid block %d: %v", n, err)
 		}
