@@ -28,12 +28,13 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
 	testdb, _    = ethdb.NewMemDatabase()
 	genesis      = core.GenesisBlockForTesting(testdb, common.Address{}, big.NewInt(0))
-	unknownBlock = types.NewBlock(&types.Header{}, nil, nil, nil)
+	unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit}, nil, nil, nil)
 )
 
 // makeChain creates a chain of n blocks starting at and including parent.

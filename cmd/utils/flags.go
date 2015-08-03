@@ -158,7 +158,7 @@ var (
 	GasPriceFlag = cli.StringFlag{
 		Name:  "gasprice",
 		Usage: "Sets the minimal gasprice when mining transactions",
-		Value: new(big.Int).Mul(big.NewInt(500), common.Shannon).String(),
+		Value: new(big.Int).Mul(big.NewInt(50), common.Shannon).String(),
 	}
 
 	UnlockedAccountFlag = cli.StringFlag{
@@ -318,12 +318,12 @@ var (
 	GpoMinGasPriceFlag = cli.StringFlag{
 		Name:  "gpomin",
 		Usage: "Minimum suggested gas price",
-		Value: new(big.Int).Mul(big.NewInt(1), common.Szabo).String(),
+		Value: new(big.Int).Mul(big.NewInt(50), common.Shannon).String(),
 	}
 	GpoMaxGasPriceFlag = cli.StringFlag{
 		Name:  "gpomax",
 		Usage: "Maximum suggested gas price",
-		Value: new(big.Int).Mul(big.NewInt(100), common.Szabo).String(),
+		Value: new(big.Int).Mul(big.NewInt(500), common.Shannon).String(),
 	}
 	GpoFullBlockRatioFlag = cli.IntFlag{
 		Name:  "gpofull",
