@@ -1,7 +1,7 @@
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
@@ -17,31 +17,12 @@
 package tests
 
 import (
-	"math/big"
 	"path/filepath"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/core"
 )
-
-func init() {
-	// XXX remove me when block tests have been updated
-	core.BlockReward = big.NewInt(1.5e+18)
-}
 
 func TestBcValidBlockTests(t *testing.T) {
 	err := RunBlockTest(filepath.Join(blockTestDir, "bcValidBlockTest.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestBcUncleTests(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcUncleTest.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = RunBlockTest(filepath.Join(blockTestDir, "bcBruncleTest.json"), BlockSkipTests)
 	if err != nil {
 		t.Fatal(err)
 	}

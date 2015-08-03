@@ -1,7 +1,7 @@
 // Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
@@ -488,7 +488,11 @@ func (s *Ethereum) StartMining(threads int) error {
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	eb = s.etherbase
 	if (eb == common.Address{}) {
-		err = fmt.Errorf("etherbase address must be explicitly specified")
+		addr, e := s.AccountManager().AddressByIndex(0)
+		if e != nil {
+			err = fmt.Errorf("etherbase address must be explicitly specified")
+		}
+		eb = common.HexToAddress(addr)
 	}
 	return
 }
