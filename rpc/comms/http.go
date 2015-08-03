@@ -29,6 +29,7 @@ import (
 	"io"
 	"io/ioutil"
 
+	"github.com/ethereum/go-ethereum/fdtrack"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/codec"
@@ -177,6 +178,7 @@ func listenHTTP(addr string, h http.Handler) (*stopServer, error) {
 	if err != nil {
 		return nil, err
 	}
+	l = fdtrack.WrapListener("rpc", l)
 	s := &stopServer{l: l, idle: make(map[net.Conn]struct{})}
 	s.Server = &http.Server{
 		Addr:         addr,
