@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/fdtrack"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -531,6 +532,9 @@ func blockRecovery(ctx *cli.Context) {
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	// Start Ethereum itself
 	utils.StartEthereum(eth)
+
+	// Start logging file descriptor stats.
+	fdtrack.Start()
 
 	am := eth.AccountManager()
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
