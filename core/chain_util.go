@@ -30,14 +30,15 @@ import (
 )
 
 var (
-	blockHashPre = []byte("block-hash-")
-	blockNumPre  = []byte("block-num-")
+	blockHashPre  = []byte("block-hash-")
+	blockNumPre   = []byte("block-num-")
+	expDiffPeriod = big.NewInt(100000)
 )
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block b should have when created at time
 // given the parent block's time and difficulty.
-func CalcDifficulty(time, parentTime uint64, parentDiff *big.Int) *big.Int {
+func CalcDifficulty(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
 	diff := new(big.Int)
 	adjust := new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
 	bigTime := new(big.Int)
@@ -52,8 +53,19 @@ func CalcDifficulty(time, parentTime uint64, parentDiff *big.Int) *big.Int {
 		diff.Sub(parentDiff, adjust)
 	}
 	if diff.Cmp(params.MinimumDifficulty) < 0 {
-		return params.MinimumDifficulty
+		diff = params.MinimumDifficulty
 	}
+
+	periodCount := new(big.Int).Add(parentNumber, common.Big1)
+	periodCount.Div(periodCount, expDiffPeriod)
+	if periodCount.Cmp(common.Big1) > 0 {
+		// diff = diff + 2^(periodCount - 2)
+		expDiff := periodCount.Sub(periodCount, common.Big2)
+		expDiff.Exp(common.Big2, expDiff, nil)
+		diff.Add(diff, expDiff)
+		diff = common.BigMax(diff, params.MinimumDifficulty)
+	}
+
 	return diff
 }
 
