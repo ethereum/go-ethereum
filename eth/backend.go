@@ -78,6 +78,7 @@ type Config struct {
 	GenesisNonce int
 	GenesisFile  string
 	GenesisBlock *types.Block // used by block tests
+	Olympic      bool
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
@@ -300,6 +301,14 @@ func New(config *Config) (*Ethereum, error) {
 			return nil, err
 		}
 		glog.V(logger.Info).Infof("Successfully wrote genesis block. New genesis hash = %x\n", block.Hash())
+	}
+
+	if config.Olympic {
+		_, err := core.WriteTestNetGenesisBlock(stateDb, blockDb, 42)
+		if err != nil {
+			return nil, err
+		}
+		glog.V(logger.Error).Infoln("Starting Olympic network")
 	}
 
 	// This is for testing only.

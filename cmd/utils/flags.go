@@ -131,6 +131,10 @@ var (
 		Usage: "Megabytes of memory allocated to internal caching",
 		Value: 0,
 	}
+	OlympicFlag = cli.BoolFlag{
+		Name:  "olympic",
+		Usage: "Use olympic style protocol",
+	}
 
 	// miner settings
 	MinerThreadsFlag = cli.IntFlag{
@@ -402,6 +406,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		MaxPeers:                ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers:         ctx.GlobalInt(MaxPendingPeersFlag.Name),
 		Port:                    ctx.GlobalString(ListenPortFlag.Name),
+		Olympic:                 ctx.GlobalBool(OlympicFlag.Name),
 		NAT:                     MakeNAT(ctx),
 		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
 		Discovery:               !ctx.GlobalBool(NoDiscoverFlag.Name),
@@ -443,6 +448,13 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, ex
 	}
 	if extraDB, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "extra"), cache); err != nil {
 		Fatalf("Could not open database: %v", err)
+	}
+	if ctx.GlobalBool(OlympicFlag.Name) {
+		InitOlympic()
+		_, err := core.WriteTestNetGenesisBlock(stateDB, blockDB, 42)
+		if err != nil {
+			glog.Fatalln(err)
+		}
 	}
 
 	eventMux := new(event.TypeMux)
