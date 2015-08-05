@@ -386,7 +386,7 @@ func ValidateHeader(pow pow.PoW, block *types.Header, parent *types.Block, check
 		return BlockEqualTSErr
 	}
 
-	expd := CalcDifficulty(block.Time, parent.Time(), parent.Difficulty())
+	expd := CalcDifficulty(block.Time, parent.Time(), parent.Number(), parent.Difficulty())
 	if expd.Cmp(block.Difficulty) != 0 {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
 	}

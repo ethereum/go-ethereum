@@ -171,7 +171,7 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 		Root:       state.Root(),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: CalcDifficulty(time, parent.Time(), parent.Difficulty()),
+		Difficulty: CalcDifficulty(time, parent.Time(), parent.Number(), parent.Difficulty()),
 		GasLimit:   CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
