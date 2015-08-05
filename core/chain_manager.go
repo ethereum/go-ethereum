@@ -99,9 +99,6 @@ func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux
 
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
-<<<<<<< HEAD
-		return nil, ErrNoGenesis
-=======
 		reader, err := NewDefaultGenesisReader()
 		if err != nil {
 			return nil, err
@@ -111,7 +108,6 @@ func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux
 			return nil, err
 		}
 		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
->>>>>>> 9a02f537260f64cc91a66074d920ae20b99b0a40
 	}
 
 	if err := bc.setLastState(); err != nil {

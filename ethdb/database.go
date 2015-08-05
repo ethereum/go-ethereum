@@ -17,16 +17,11 @@
 package ethdb
 
 import (
-<<<<<<< HEAD
         "strconv"
         "strings"
         "time"
         "github.com/ethereum/go-ethereum/common"
-=======
 	"path/filepath"
-	"strconv"
-	"strings"
->>>>>>> 9a02f537260f64cc91a66074d920ae20b99b0a40
 	"sync"
 
 	"github.com/ethereum/go-ethereum/logger"
