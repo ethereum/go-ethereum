@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/fdtrack"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
@@ -369,6 +370,8 @@ func (fw fileWrap) Close() error {
 	err := fw.File.Close()
 	if err != nil {
 		f.fs.log(fmt.Sprintf("close %s.%d: %v", f.Type(), f.Num(), err))
+	} else {
+		fdtrack.Close("leveldb")
 	}
 	return err
 }
@@ -400,6 +403,7 @@ func (f *file) Open() (Reader, error) {
 		return nil, err
 	}
 ok:
+	fdtrack.Open("leveldb")
 	f.open = true
 	f.fs.open++
 	return fileWrap{of, f}, nil
@@ -418,6 +422,7 @@ func (f *file) Create() (Writer, error) {
 	if err != nil {
 		return nil, err
 	}
+	fdtrack.Open("leveldb")
 	f.open = true
 	f.fs.open++
 	return fileWrap{of, f}, nil

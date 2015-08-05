@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/ethereum/go-ethereum/fdtrack"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/codec"
@@ -50,15 +51,16 @@ func (self *ipcClient) reconnect() error {
 func startIpc(cfg IpcConfig, codec codec.Codec, api shared.EthereumApi) error {
 	os.Remove(cfg.Endpoint) // in case it still exists from a previous run
 
-	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: cfg.Endpoint, Net: "unix"})
+	l, err := net.Listen("unix", cfg.Endpoint)
 	if err != nil {
 		return err
 	}
+	l = fdtrack.WrapListener("ipc", l)
 	os.Chmod(cfg.Endpoint, 0600)
 
 	go func() {
 		for {
-			conn, err := l.AcceptUnix()
+			conn, err := l.Accept()
 			if err != nil {
 				glog.V(logger.Error).Infof("Error accepting ipc connection - %v\n", err)
 				continue

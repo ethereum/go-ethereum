@@ -73,13 +73,11 @@ type ChainManager struct {
 	lastBlockHash   common.Hash
 	currentGasLimit *big.Int
 
-	transState *state.StateDB
-	txState    *state.ManagedState
-
 	cache        *lru.Cache // cache is the LRU caching
 	futureBlocks *lru.Cache // future blocks are blocks added for later processing
 
-	quit chan struct{}
+	quit    chan struct{}
+	running int32 // running must be called automically
 	// procInterrupt must be atomically called
 	procInterrupt int32 // interrupt signaler for block processing
 	wg            sync.WaitGroup
@@ -101,7 +99,19 @@ func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux
 
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
+<<<<<<< HEAD
 		return nil, ErrNoGenesis
+=======
+		reader, err := NewDefaultGenesisReader()
+		if err != nil {
+			return nil, err
+		}
+		bc.genesisBlock, err = WriteGenesisBlock(stateDb, blockDb, reader)
+		if err != nil {
+			return nil, err
+		}
+		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
+>>>>>>> 9a02f537260f64cc91a66074d920ae20b99b0a40
 	}
 
 	if err := bc.setLastState(); err != nil {
@@ -122,9 +132,7 @@ func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux
 		}
 	}
 
-	bc.transState = bc.State().Copy()
 	// Take ownership of this particular state
-	bc.txState = state.ManageState(bc.State().Copy())
 
 	bc.futureBlocks, _ = lru.New(maxFutureBlocks)
 	bc.makeCache()
@@ -146,9 +154,6 @@ func (bc *ChainManager) SetHead(head *types.Block) {
 	bc.currentBlock = head
 	bc.makeCache()
 
-	statedb := state.New(head.Root(), bc.stateDb)
-	bc.txState = state.ManageState(statedb)
-	bc.transState = statedb.Copy()
 	bc.setTotalDifficulty(head.Td)
 	bc.insert(head)
 	bc.setLastState()
@@ -195,17 +200,6 @@ func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
 
 func (self *ChainManager) State() *state.StateDB {
 	return state.New(self.CurrentBlock().Root(), self.stateDb)
-}
-
-func (self *ChainManager) TransState() *state.StateDB {
-	self.tsmu.RLock()
-	defer self.tsmu.RUnlock()
-
-	return self.transState
-}
-
-func (self *ChainManager) setTransState(statedb *state.StateDB) {
-	self.transState = statedb
 }
 
 func (bc *ChainManager) recover() bool {
@@ -462,6 +456,9 @@ func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
 }
 
 func (bc *ChainManager) Stop() {
+	if !atomic.CompareAndSwapInt32(&bc.running, 0, 1) {
+		return
+	}
 	close(bc.quit)
 	atomic.StoreInt32(&bc.procInterrupt, 1)
 
@@ -522,9 +519,6 @@ func (self *ChainManager) WriteBlock(block *types.Block, queued bool) (status wr
 		self.setTotalDifficulty(block.Td)
 		self.insert(block)
 		self.mu.Unlock()
-
-		self.setTransState(state.New(block.Root(), self.stateDb))
-		self.txState.SetState(state.New(block.Root(), self.stateDb))
 
 		status = CanonStatTy
 	} else {

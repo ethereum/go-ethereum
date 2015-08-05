@@ -126,6 +126,15 @@ var (
 		Name:  "natspec",
 		Usage: "Enable NatSpec confirmation notice",
 	}
+	CacheFlag = cli.IntFlag{
+		Name:  "cache",
+		Usage: "Megabytes of memory allocated to internal caching",
+		Value: 0,
+	}
+	OlympicFlag = cli.BoolFlag{
+		Name:  "olympic",
+		Usage: "Use olympic style protocol",
+	}
 
 	// miner settings
 	MinerThreadsFlag = cli.IntFlag{
@@ -149,7 +158,7 @@ var (
 	GasPriceFlag = cli.StringFlag{
 		Name:  "gasprice",
 		Usage: "Sets the minimal gasprice when mining transactions",
-		Value: new(big.Int).Mul(big.NewInt(500), common.Shannon).String(),
+		Value: new(big.Int).Mul(big.NewInt(50), common.Shannon).String(),
 	}
 
 	UnlockedAccountFlag = cli.StringFlag{
@@ -309,12 +318,12 @@ var (
 	GpoMinGasPriceFlag = cli.StringFlag{
 		Name:  "gpomin",
 		Usage: "Minimum suggested gas price",
-		Value: new(big.Int).Mul(big.NewInt(1), common.Szabo).String(),
+		Value: new(big.Int).Mul(big.NewInt(50), common.Shannon).String(),
 	}
 	GpoMaxGasPriceFlag = cli.StringFlag{
 		Name:  "gpomax",
 		Usage: "Maximum suggested gas price",
-		Value: new(big.Int).Mul(big.NewInt(100), common.Szabo).String(),
+		Value: new(big.Int).Mul(big.NewInt(500), common.Shannon).String(),
 	}
 	GpoFullBlockRatioFlag = cli.IntFlag{
 		Name:  "gpofull",
@@ -384,6 +393,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
 		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
+		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
 		SkipBcVersionCheck:      false,
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
 		LogFile:                 ctx.GlobalString(LogFileFlag.Name),
@@ -396,6 +406,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		MaxPeers:                ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers:         ctx.GlobalInt(MaxPendingPeersFlag.Name),
 		Port:                    ctx.GlobalString(ListenPortFlag.Name),
+		Olympic:                 ctx.GlobalBool(OlympicFlag.Name),
 		NAT:                     MakeNAT(ctx),
 		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
 		Discovery:               !ctx.GlobalBool(NoDiscoverFlag.Name),
@@ -425,16 +436,25 @@ func SetupLogger(ctx *cli.Context) {
 
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, extraDB common.Database) {
-	dd := ctx.GlobalString(DataDirFlag.Name)
+	datadir := ctx.GlobalString(DataDirFlag.Name)
+	cache := ctx.GlobalInt(CacheFlag.Name)
+
 	var err error
-	if blockDB, err = ethdb.NewLDBDatabase(filepath.Join(dd, "blockchain")); err != nil {
+	if blockDB, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "blockchain"), cache); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
-	if stateDB, err = ethdb.NewLDBDatabase(filepath.Join(dd, "state")); err != nil {
+	if stateDB, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "state"), cache); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
-	if extraDB, err = ethdb.NewLDBDatabase(filepath.Join(dd, "extra")); err != nil {
+	if extraDB, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "extra"), cache); err != nil {
 		Fatalf("Could not open database: %v", err)
+	}
+	if ctx.GlobalBool(OlympicFlag.Name) {
+		InitOlympic()
+		_, err := core.WriteTestNetGenesisBlock(stateDB, blockDB, 42)
+		if err != nil {
+			glog.Fatalln(err)
+		}
 	}
 
 	eventMux := new(event.TypeMux)

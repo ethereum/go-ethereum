@@ -17,10 +17,16 @@
 package ethdb
 
 import (
+<<<<<<< HEAD
         "strconv"
         "strings"
         "time"
         "github.com/ethereum/go-ethereum/common"
+=======
+	"path/filepath"
+	"strconv"
+	"strings"
+>>>>>>> 9a02f537260f64cc91a66074d920ae20b99b0a40
 	"sync"
 
 	"github.com/ethereum/go-ethereum/logger"
@@ -36,6 +42,14 @@ import (
 
 
 var OpenFileLimit = common.MaxOpenFileLimit()
+
+// cacheRatio specifies how the total alloted cache is distributed between the
+// various system databases.
+var cacheRatio = map[string]float64{
+	"blockchain": 1.0 / 13.0,
+	"extra":      2.0 / 13.0,
+	"state":      10.0 / 13.0,
+}
 
 type LDBDatabase struct {
 	fn string      // filename for reporting
@@ -58,14 +72,24 @@ type LDBDatabase struct {
 // NewLDBDatabase returns a LevelDB wrapped object. LDBDatabase does not persist data by
 // it self but requires a background poller which syncs every X. `Flush` should be called
 // when data needs to be stored and written to disk.
-func NewLDBDatabase(file string) (*LDBDatabase, error) {
-	// Open the db
-	db, err := leveldb.OpenFile(file, &opt.Options{OpenFilesCacheCapacity: OpenFileLimit})
-	// check for corruption and attempt to recover
-	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
+func NewLDBDatabase(file string, cache int) (*LDBDatabase, error) {
+	// Calculate the cache allowance for this particular database
+	cache = int(float64(cache) * cacheRatio[filepath.Base(file)])
+	if cache < 16 {
+		cache = 16
+	}
+	glog.V(logger.Info).Infof("Alloted %dMB cache to %s", cache, file)
+
+	// Open the db and recover any potential corruptions
+	db, err := leveldb.OpenFile(file, &opt.Options{
+		OpenFilesCacheCapacity: OpenFileLimit,
+		BlockCacheCapacity:     cache / 2 * opt.MiB,
+		WriteBuffer:            cache / 4 * opt.MiB, // Two of these are used internally
+	})
+	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
 		db, err = leveldb.RecoverFile(file, nil)
 	}
-	// (re) check for errors and abort if opening of the db failed
+	// (Re)check for errors and abort if opening of the db failed
 	if err != nil {
 		return nil, err
 	}

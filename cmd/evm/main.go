@@ -18,79 +18,129 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"log"
 	"math/big"
 	"os"
 	"runtime"
 	"time"
 
+	"github.com/codegangsta/cli"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
 )
 
 var (
-	code     = flag.String("code", "", "evm code")
-	loglevel = flag.Int("log", 4, "log level")
-	gas      = flag.String("gas", "1000000000", "gas amount")
-	price    = flag.String("price", "0", "gas price")
-	value    = flag.String("value", "0", "tx value")
-	dump     = flag.Bool("dump", false, "dump state after run")
-	data     = flag.String("data", "", "data")
+	app       *cli.App
+	DebugFlag = cli.BoolFlag{
+		Name:  "debug",
+		Usage: "output full trace logs",
+	}
+	CodeFlag = cli.StringFlag{
+		Name:  "code",
+		Usage: "EVM code",
+	}
+	GasFlag = cli.StringFlag{
+		Name:  "gas",
+		Usage: "gas limit for the evm",
+		Value: "10000000000",
+	}
+	PriceFlag = cli.StringFlag{
+		Name:  "price",
+		Usage: "price set for the evm",
+		Value: "0",
+	}
+	ValueFlag = cli.StringFlag{
+		Name:  "value",
+		Usage: "value set for the evm",
+		Value: "0",
+	}
+	DumpFlag = cli.BoolFlag{
+		Name:  "dump",
+		Usage: "dumps the state after the run",
+	}
+	InputFlag = cli.StringFlag{
+		Name:  "input",
+		Usage: "input for the EVM",
+	}
+	SysStatFlag = cli.BoolFlag{
+		Name:  "sysstat",
+		Usage: "display system stats",
+	}
 )
 
-func perr(v ...interface{}) {
-	fmt.Println(v...)
-	//os.Exit(1)
+func init() {
+	app = utils.NewApp("0.2", "the evm command line interface")
+	app.Flags = []cli.Flag{
+		DebugFlag,
+		SysStatFlag,
+		CodeFlag,
+		GasFlag,
+		PriceFlag,
+		ValueFlag,
+		DumpFlag,
+		InputFlag,
+	}
+	app.Action = run
 }
 
-func main() {
-	flag.Parse()
+func run(ctx *cli.Context) {
+	vm.Debug = ctx.GlobalBool(DebugFlag.Name)
 
-	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.LogLevel(*loglevel)))
-
-	vm.Debug = true
 	db, _ := ethdb.NewMemDatabase()
 	statedb := state.New(common.Hash{}, db)
 	sender := statedb.CreateAccount(common.StringToAddress("sender"))
 	receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
-	receiver.SetCode(common.Hex2Bytes(*code))
+	receiver.SetCode(common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name)))
 
-	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(*value))
+	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)))
 
 	tstart := time.Now()
+	ret, e := vmenv.Call(
+		sender,
+		receiver.Address(),
+		common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)),
+		common.Big(ctx.GlobalString(GasFlag.Name)),
+		common.Big(ctx.GlobalString(PriceFlag.Name)),
+		common.Big(ctx.GlobalString(ValueFlag.Name)),
+	)
+	vmdone := time.Since(tstart)
 
-	ret, e := vmenv.Call(sender, receiver.Address(), common.Hex2Bytes(*data), common.Big(*gas), common.Big(*price), common.Big(*value))
-
-	logger.Flush()
 	if e != nil {
-		perr(e)
+		fmt.Println(e)
+		os.Exit(1)
 	}
 
-	if *dump {
+	if ctx.GlobalBool(DumpFlag.Name) {
 		fmt.Println(string(statedb.Dump()))
 	}
-
 	vm.StdErrFormat(vmenv.StructLogs())
 
-	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
-	fmt.Printf("vm took %v\n", time.Since(tstart))
-	fmt.Printf(`alloc:      %d
+	if ctx.GlobalBool(SysStatFlag.Name) {
+		var mem runtime.MemStats
+		runtime.ReadMemStats(&mem)
+		fmt.Printf("vm took %v\n", vmdone)
+		fmt.Printf(`alloc:      %d
 tot alloc:  %d
 no. malloc: %d
 heap alloc: %d
 heap objs:  %d
 num gc:     %d
 `, mem.Alloc, mem.TotalAlloc, mem.Mallocs, mem.HeapAlloc, mem.HeapObjects, mem.NumGC)
+	}
 
-	fmt.Printf("%x\n", ret)
+	fmt.Printf("OUT: 0x%x\n", ret)
+}
+
+func main() {
+	if err := app.Run(os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
 type VMEnv struct {

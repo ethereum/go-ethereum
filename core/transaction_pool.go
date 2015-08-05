@@ -135,7 +135,7 @@ func (pool *TxPool) resetState() {
 func (pool *TxPool) Stop() {
 	close(pool.quit)
 	pool.events.Unsubscribe()
-	glog.V(logger.Info).Infoln("TX Pool stopped")
+	glog.V(logger.Info).Infoln("Transaction pool stopped")
 }
 
 func (pool *TxPool) State() *state.ManagedState {
@@ -356,11 +356,12 @@ func (self *TxPool) RemoveTransactions(txs types.Transactions) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	for _, tx := range txs {
-		self.removeTx(tx.Hash())
+		self.RemoveTx(tx.Hash())
 	}
 }
 
-func (pool *TxPool) removeTx(hash common.Hash) {
+// RemoveTx removes the transaction with the given hash from the pool.
+func (pool *TxPool) RemoveTx(hash common.Hash) {
 	// delete from pending pool
 	delete(pool.pending, hash)
 	// delete from queue

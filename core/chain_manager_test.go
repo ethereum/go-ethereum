@@ -392,7 +392,6 @@ func chm(genesis *types.Block, db common.Database) *ChainManager {
 	bc.futureBlocks, _ = lru.New(100)
 	bc.processor = bproc{}
 	bc.ResetWithGenesisBlock(genesis)
-	bc.txState = state.ManageState(bc.State())
 
 	return bc
 }

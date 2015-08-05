@@ -97,15 +97,6 @@ func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice 
 	return &Transaction{data: d}
 }
 
-func NewTransactionFromBytes(data []byte) *Transaction {
-	// TODO: remove this function if possible. callers would
-	// much better off decoding into transaction directly.
-	// it's not that hard.
-	tx := new(Transaction)
-	rlp.DecodeBytes(data, tx)
-	return tx
-}
-
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &tx.data)
 }
@@ -297,4 +288,23 @@ type TxByNonce struct{ Transactions }
 
 func (s TxByNonce) Less(i, j int) bool {
 	return s.Transactions[i].data.AccountNonce < s.Transactions[j].data.AccountNonce
+}
+
+type TxByPrice struct{ Transactions }
+
+func (s TxByPrice) Less(i, j int) bool {
+	return s.Transactions[i].data.Price.Cmp(s.Transactions[j].data.Price) > 0
+}
+
+type TxByPriceAndNonce struct{ Transactions }
+
+func (s TxByPriceAndNonce) Less(i, j int) bool {
+	// we can ignore the error here. Sorting shouldn't care about validness
+	ifrom, _ := s.Transactions[i].From()
+	jfrom, _ := s.Transactions[j].From()
+	// favour nonce if they are from the same recipient
+	if ifrom == jfrom {
+		return s.Transactions[i].data.AccountNonce < s.Transactions[j].data.AccountNonce
+	}
+	return s.Transactions[i].data.Price.Cmp(s.Transactions[j].data.Price) > 0
 }

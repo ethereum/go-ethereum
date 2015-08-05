@@ -34,6 +34,7 @@ func ReadDiskStats(stats *DiskStats) error {
 	if err != nil {
 		return err
 	}
+	defer inf.Close()
 	in := bufio.NewReader(inf)
 
 	// Iterate over the IO counter, and extract what we need

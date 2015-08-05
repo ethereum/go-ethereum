@@ -78,9 +78,14 @@ type Config struct {
 	GenesisNonce int
 	GenesisFile  string
 	GenesisBlock *types.Block // used by block tests
+<<<<<<< HEAD
+=======
+	Olympic      bool
+>>>>>>> 9a02f537260f64cc91a66074d920ae20b99b0a40
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
+	DatabaseCache      int
 
 	DataDir   string
 	LogFile   string
@@ -262,7 +267,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	newdb := config.NewDB
 	if newdb == nil {
-		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path) }
+		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path, config.DatabaseCache) }
 	}
 	blockDb, err := newdb(filepath.Join(config.DataDir, "blockchain"))
 	if err != nil {
@@ -301,6 +306,17 @@ func New(config *Config) (*Ethereum, error) {
 		glog.V(logger.Info).Infof("Successfully wrote genesis block. New genesis hash = %x\n", block.Hash())
 	}
 
+<<<<<<< HEAD
+=======
+	if config.Olympic {
+		_, err := core.WriteTestNetGenesisBlock(stateDb, blockDb, 42)
+		if err != nil {
+			return nil, err
+		}
+		glog.V(logger.Error).Infoln("Starting Olympic network")
+	}
+
+>>>>>>> 9a02f537260f64cc91a66074d920ae20b99b0a40
 	// This is for testing only.
 	if config.GenesisBlock != nil {
 		core.WriteBlock(blockDb, config.GenesisBlock)

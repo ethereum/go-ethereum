@@ -78,8 +78,8 @@ func (am *Manager) DeleteAccount(address common.Address, auth string) error {
 
 func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) {
 	am.mutex.RLock()
+	defer am.mutex.RUnlock()
 	unlockedKey, found := am.unlocked[a.Address]
-	am.mutex.RUnlock()
 	if !found {
 		return nil, ErrLocked
 	}
@@ -87,14 +87,17 @@ func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) 
 	return signature, err
 }
 
-// unlock indefinitely
+// Unlock unlocks the given account indefinitely.
 func (am *Manager) Unlock(addr common.Address, keyAuth string) error {
 	return am.TimedUnlock(addr, keyAuth, 0)
 }
 
-// Unlock unlocks the account with the given address. The account
-// stays unlocked for the duration of timeout
-// it timeout is 0 the account is unlocked for the entire session
+// TimedUnlock unlocks the account with the given address. The account
+// stays unlocked for the duration of timeout. A timeout of 0 unlocks the account
+// until the program exits.
+//
+// If the accout is already unlocked, TimedUnlock extends or shortens
+// the active unlock timeout.
 func (am *Manager) TimedUnlock(addr common.Address, keyAuth string, timeout time.Duration) error {
 	key, err := am.keyStore.GetKey(addr, keyAuth)
 	if err != nil {
