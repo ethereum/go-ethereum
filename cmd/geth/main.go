@@ -54,7 +54,7 @@ const (
 )
 
 var (
-	gitCommit       string // set via linker flag
+	gitCommit       string // set via linker flagg
 	nodeNameVersion string
 	app             *cli.App
 )
