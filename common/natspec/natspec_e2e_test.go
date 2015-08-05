@@ -1,18 +1,18 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package natspec
 
@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethdb"
 	xe "github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -128,12 +129,12 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 	if err != nil {
 		panic(err)
 	}
+
 	testAddress := strings.TrimPrefix(testAccount.Address.Hex(), "0x")
 
+	db, _ := ethdb.NewMemDatabase()
 	// set up mock genesis with balance on the testAddress
-	core.GenesisAccounts = []byte(`{
-	"` + testAddress + `": {"balance": "` + testBalance + `"}
-	}`)
+	core.WriteGenesisBlockForTesting(db, common.HexToAddress(testAddress), common.String2Big(testBalance))
 
 	// only use minimalistic stack with no networking
 	ethereum, err = eth.New(&eth.Config{
@@ -142,6 +143,7 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 		MaxPeers:       0,
 		PowTest:        true,
 		Etherbase:      common.HexToAddress(testAddress),
+		NewDB:          func(path string) (common.Database, error) { return db, nil },
 	})
 
 	if err != nil {

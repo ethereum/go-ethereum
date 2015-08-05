@@ -67,14 +67,6 @@
 			"Rev": "29f6a646557d83e2b6e9ba05c45fbea9c006dbe8"
 		},
 		{
-			"ImportPath": "github.com/rakyll/globalconf",
-			"Rev": "415abc325023f1a00cd2d9fa512e0e71745791a2"
-		},
-		{
-			"ImportPath": "github.com/rakyll/goini",
-			"Rev": "907cca0f578a5316fb864ec6992dc3d9730ec58c"
-		},
-		{
 			"ImportPath": "github.com/rcrowley/go-metrics",
 			"Rev": "a5cfc242a56ba7fa70b785f678d6214837bf93b9"
 		},
@@ -129,7 +121,7 @@
 		},
 		{
 			"ImportPath": "gopkg.in/karalabe/cookiejar.v2/collections/prque",
-			"Rev": "0b2e270613f5d7ba262a5749b9e32270131497a2"
+			"Rev": "8dcd6a7f4951f6ff3ee9cbb919a06d8925822e57"
 		}
 	]
 }

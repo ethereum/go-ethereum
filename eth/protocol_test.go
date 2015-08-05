@@ -1,18 +1,18 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package eth
 
@@ -60,7 +60,7 @@ func TestStatusMsgErrors(t *testing.T) {
 		},
 		{
 			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), 999, td, currentBlock, genesis},
-			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 0)"),
+			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 1)"),
 		},
 		{
 			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), NetworkId, td, currentBlock, common.Hash{3}},
@@ -178,12 +178,13 @@ type testPeer struct {
 }
 
 func newProtocolManagerForTesting(txAdded chan<- []*types.Transaction) *ProtocolManager {
+	db, _ := ethdb.NewMemDatabase()
+	core.WriteTestNetGenesisBlock(db, db, 0)
 	var (
 		em       = new(event.TypeMux)
-		db, _    = ethdb.NewMemDatabase()
-		chain, _ = core.NewChainManager(core.GenesisBlock(0, db), db, db, db, core.FakePow{}, em)
+		chain, _ = core.NewChainManager(db, db, db, core.FakePow{}, em)
 		txpool   = &fakeTxPool{added: txAdded}
-		pm       = NewProtocolManager(0, em, txpool, core.FakePow{}, chain)
+		pm       = NewProtocolManager(NetworkId, em, txpool, core.FakePow{}, chain)
 	)
 	pm.Start()
 	return pm

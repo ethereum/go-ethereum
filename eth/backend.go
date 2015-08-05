@@ -1,18 +1,18 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package eth implements the Ethereum protocol.
 package eth
@@ -45,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -75,9 +76,13 @@ type Config struct {
 	Name         string
 	NetworkId    int
 	GenesisNonce int
+	GenesisFile  string
+	GenesisBlock *types.Block // used by block tests
+	Olympic      bool
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
+	DatabaseCache      int
 
 	DataDir   string
 	LogFile   string
@@ -259,7 +264,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	newdb := config.NewDB
 	if newdb == nil {
-		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path) }
+		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path, config.DatabaseCache) }
 	}
 	blockDb, err := newdb(filepath.Join(config.DataDir, "blockchain"))
 	if err != nil {
@@ -283,22 +288,34 @@ func New(config *Config) (*Ethereum, error) {
 		db.Meter("eth/db/extra/")
 	}
 	nodeDb := filepath.Join(config.DataDir, "nodes")
-
-	// Perform database sanity checks
-	/*
-		// The databases were previously tied to protocol versions. Currently we
-		// are moving away from this decision as approaching Frontier. The below
-		// check was left in for now but should eventually be just dropped.
-
-		d, _ := blockDb.Get([]byte("ProtocolVersion"))
-		protov := int(common.NewValue(d).Uint())
-		if protov != config.ProtocolVersion && protov != 0 {
-			path := filepath.Join(config.DataDir, "blockchain")
-			return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
-		}
-		saveProtocolVersion(blockDb, config.ProtocolVersion)
-	*/
 	glog.V(logger.Info).Infof("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId)
+
+	if len(config.GenesisFile) > 0 {
+		fr, err := os.Open(config.GenesisFile)
+		if err != nil {
+			return nil, err
+		}
+
+		block, err := core.WriteGenesisBlock(stateDb, blockDb, fr)
+		if err != nil {
+			return nil, err
+		}
+		glog.V(logger.Info).Infof("Successfully wrote genesis block. New genesis hash = %x\n", block.Hash())
+	}
+
+	if config.Olympic {
+		_, err := core.WriteTestNetGenesisBlock(stateDb, blockDb, 42)
+		if err != nil {
+			return nil, err
+		}
+		glog.V(logger.Error).Infoln("Starting Olympic network")
+	}
+
+	// This is for testing only.
+	if config.GenesisBlock != nil {
+		core.WriteBlock(blockDb, config.GenesisBlock)
+		core.WriteHead(blockDb, config.GenesisBlock)
+	}
 
 	if !config.SkipBcVersionCheck {
 		b, _ := blockDb.Get([]byte("BlockchainVersion"))
@@ -344,9 +361,13 @@ func New(config *Config) (*Ethereum, error) {
 	} else {
 		eth.pow = ethash.New()
 	}
-	genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
-	eth.chainManager, err = core.NewChainManager(genesis, blockDb, stateDb, extraDb, eth.pow, eth.EventMux())
+	//genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
+	eth.chainManager, err = core.NewChainManager(blockDb, stateDb, extraDb, eth.pow, eth.EventMux())
 	if err != nil {
+		if err == core.ErrNoGenesis {
+			return nil, fmt.Errorf(`Genesis block not found. Please supply a genesis block with the "--genesis /path/to/file" argument`)
+		}
+
 		return nil, err
 	}
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
@@ -357,6 +378,13 @@ func New(config *Config) (*Ethereum, error) {
 
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
+
+	extra := config.Name
+	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+		extra = extra[:params.MaximumExtraDataSize.Uint64()]
+	}
+	eth.miner.SetExtra([]byte(extra))
+
 	if config.Shh {
 		eth.whisper = whisper.New()
 		eth.shhVersionId = int(eth.whisper.Version())
@@ -470,7 +498,11 @@ func (s *Ethereum) StartMining(threads int) error {
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	eb = s.etherbase
 	if (eb == common.Address{}) {
-		err = fmt.Errorf("etherbase address must be explicitly specified")
+		addr, e := s.AccountManager().AddressByIndex(0)
+		if e != nil {
+			err = fmt.Errorf("etherbase address must be explicitly specified")
+		}
+		eb = common.HexToAddress(addr)
 	}
 	return
 }

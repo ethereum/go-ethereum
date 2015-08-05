@@ -1,18 +1,18 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package miner
 
@@ -20,7 +20,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/pow"
@@ -29,10 +28,10 @@ import (
 type CpuAgent struct {
 	mu sync.Mutex
 
-	workCh        chan *types.Block
+	workCh        chan *Work
 	quit          chan struct{}
 	quitCurrentOp chan struct{}
-	returnCh      chan<- *types.Block
+	returnCh      chan<- *Result
 
 	index int
 	pow   pow.PoW
@@ -47,9 +46,9 @@ func NewCpuAgent(index int, pow pow.PoW) *CpuAgent {
 	return miner
 }
 
-func (self *CpuAgent) Work() chan<- *types.Block          { return self.workCh }
-func (self *CpuAgent) Pow() pow.PoW                       { return self.pow }
-func (self *CpuAgent) SetReturnCh(ch chan<- *types.Block) { self.returnCh = ch }
+func (self *CpuAgent) Work() chan<- *Work            { return self.workCh }
+func (self *CpuAgent) Pow() pow.PoW                  { return self.pow }
+func (self *CpuAgent) SetReturnCh(ch chan<- *Result) { self.returnCh = ch }
 
 func (self *CpuAgent) Stop() {
 	self.mu.Lock()
@@ -65,7 +64,7 @@ func (self *CpuAgent) Start() {
 	self.quit = make(chan struct{})
 	// creating current op ch makes sure we're not closing a nil ch
 	// later on
-	self.workCh = make(chan *types.Block, 1)
+	self.workCh = make(chan *Work, 1)
 
 	go self.update()
 }
@@ -74,13 +73,13 @@ func (self *CpuAgent) update() {
 out:
 	for {
 		select {
-		case block := <-self.workCh:
+		case work := <-self.workCh:
 			self.mu.Lock()
 			if self.quitCurrentOp != nil {
 				close(self.quitCurrentOp)
 			}
 			self.quitCurrentOp = make(chan struct{})
-			go self.mine(block, self.quitCurrentOp)
+			go self.mine(work, self.quitCurrentOp)
 			self.mu.Unlock()
 		case <-self.quit:
 			self.mu.Lock()
@@ -106,13 +105,14 @@ done:
 	}
 }
 
-func (self *CpuAgent) mine(block *types.Block, stop <-chan struct{}) {
+func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
 	glog.V(logger.Debug).Infof("(re)started agent[%d]. mining...\n", self.index)
 
 	// Mine
-	nonce, mixDigest := self.pow.Search(block, stop)
+	nonce, mixDigest := self.pow.Search(work.Block, stop)
 	if nonce != 0 {
-		self.returnCh <- block.WithMiningResult(nonce, common.BytesToHash(mixDigest))
+		block := work.Block.WithMiningResult(nonce, common.BytesToHash(mixDigest))
+		self.returnCh <- &Result{work, block}
 	} else {
 		self.returnCh <- nil
 	}

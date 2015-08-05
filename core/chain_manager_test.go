@@ -1,18 +1,18 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
@@ -48,8 +48,8 @@ func thePow() pow.PoW {
 
 func theChainManager(db common.Database, t *testing.T) *ChainManager {
 	var eventMux event.TypeMux
-	genesis := GenesisBlock(0, db)
-	chainMan, err := NewChainManager(genesis, db, db, db, thePow(), &eventMux)
+	WriteTestNetGenesisBlock(db, db, 0)
+	chainMan, err := NewChainManager(db, db, db, thePow(), &eventMux)
 	if err != nil {
 		t.Error("failed creating chainmanager:", err)
 		t.FailNow()
@@ -125,7 +125,7 @@ func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 
 		bman.bc.mu.Lock()
 		{
-			bman.bc.write(block)
+			WriteBlock(bman.bc.blockDb, block)
 		}
 		bman.bc.mu.Unlock()
 	}
@@ -362,25 +362,6 @@ func TestChainMultipleInsertions(t *testing.T) {
 	}
 }
 
-func TestGetBlocksFromHash(t *testing.T) {
-	t.Skip("Skipped: outdated test files")
-
-	db, _ := ethdb.NewMemDatabase()
-	chainMan := theChainManager(db, t)
-	chain, err := loadChain("valid1", t)
-	if err != nil {
-		fmt.Println(err)
-		t.FailNow()
-	}
-
-	for _, block := range chain {
-		chainMan.write(block)
-	}
-
-	blocks := chainMan.GetBlocksFromHash(chain[len(chain)-1].Hash(), 4)
-	fmt.Println(blocks)
-}
-
 type bproc struct{}
 
 func (bproc) Process(*types.Block) (state.Logs, types.Receipts, error) { return nil, nil, nil }
@@ -411,14 +392,18 @@ func chm(genesis *types.Block, db common.Database) *ChainManager {
 	bc.futureBlocks, _ = lru.New(100)
 	bc.processor = bproc{}
 	bc.ResetWithGenesisBlock(genesis)
-	bc.txState = state.ManageState(bc.State())
 
 	return bc
 }
 
 func TestReorgLongest(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	genesis := GenesisBlock(0, db)
+
+	genesis, err := WriteTestNetGenesisBlock(db, db, 0)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
 	bc := chm(genesis, db)
 
 	chain1 := makeChainWithDiff(genesis, []int{1, 2, 4}, 10)
@@ -437,7 +422,11 @@ func TestReorgLongest(t *testing.T) {
 
 func TestReorgShortest(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	genesis := GenesisBlock(0, db)
+	genesis, err := WriteTestNetGenesisBlock(db, db, 0)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
 	bc := chm(genesis, db)
 
 	chain1 := makeChainWithDiff(genesis, []int{1, 2, 3, 4}, 10)
@@ -457,7 +446,11 @@ func TestReorgShortest(t *testing.T) {
 func TestInsertNonceError(t *testing.T) {
 	for i := 1; i < 25 && !t.Failed(); i++ {
 		db, _ := ethdb.NewMemDatabase()
-		genesis := GenesisBlock(0, db)
+		genesis, err := WriteTestNetGenesisBlock(db, db, 0)
+		if err != nil {
+			t.Error(err)
+			t.FailNow()
+		}
 		bc := chm(genesis, db)
 		bc.processor = NewBlockProcessor(db, db, bc.pow, bc, bc.eventMux)
 		blocks := makeChain(bc.currentBlock, i, db, 0)
@@ -491,6 +484,7 @@ func TestInsertNonceError(t *testing.T) {
 	}
 }
 
+/*
 func TestGenesisMismatch(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 	var mux event.TypeMux
@@ -505,6 +499,7 @@ func TestGenesisMismatch(t *testing.T) {
 		t.Error("expected genesis mismatch error")
 	}
 }
+*/
 
 // failpow returns false from Verify for a certain block number.
 type failpow struct{ num uint64 }

@@ -1,18 +1,18 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package api
 
@@ -21,8 +21,9 @@ import (
 	"encoding/json"
 	"math/big"
 
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
@@ -322,7 +323,7 @@ func (self *ethApi) EstimateGas(req *shared.Request) (interface{}, error) {
 	if len(gas) == 0 {
 		return newHexNum(0), nil
 	} else {
-		return newHexNum(gas), nil
+		return newHexNum(common.String2Big(gas)), err
 	}
 }
 
@@ -578,14 +579,17 @@ func (self *ethApi) Resend(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	ret, err := self.xeth.Transact(args.Tx.From, args.Tx.To, args.Tx.Nonce, args.Tx.Value, args.GasLimit, args.GasPrice, args.Tx.Data)
-	if err != nil {
-		return nil, err
+	from := common.HexToAddress(args.Tx.From)
+
+	pending := self.ethereum.TxPool().GetTransactions()
+	for _, p := range pending {
+		if pFrom, err := p.From(); err == nil && pFrom == from && p.SigHash() == args.Tx.tx.SigHash() {
+			self.ethereum.TxPool().RemoveTx(common.HexToHash(args.Tx.Hash))
+			return self.xeth.Transact(args.Tx.From, args.Tx.To, args.Tx.Nonce, args.Tx.Value, args.GasLimit, args.GasPrice, args.Tx.Data)
+		}
 	}
 
-	self.ethereum.TxPool().RemoveTransactions(types.Transactions{args.Tx.tx})
-
-	return ret, nil
+	return nil, fmt.Errorf("Transaction %s not found", args.Tx.Hash)
 }
 
 func (self *ethApi) PendingTransactions(req *shared.Request) (interface{}, error) {

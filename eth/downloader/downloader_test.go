@@ -1,18 +1,18 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package downloader
 
@@ -97,8 +97,18 @@ func newTester() *downloadTester {
 }
 
 // sync starts synchronizing with a remote peer, blocking until it completes.
-func (dl *downloadTester) sync(id string) error {
-	err := dl.downloader.synchronise(id, dl.peerHashes[id][0])
+func (dl *downloadTester) sync(id string, td *big.Int) error {
+	hash := dl.peerHashes[id][0]
+
+	// If no particular TD was requested, load from the peer's blockchain
+	if td == nil {
+		td = big.NewInt(1)
+		if block, ok := dl.peerBlocks[id][hash]; ok {
+			td = block.Td
+		}
+	}
+	err := dl.downloader.synchronise(id, hash, td)
+
 	for {
 		// If the queue is empty and processing stopped, break
 		hashes, blocks := dl.downloader.queue.Size()
@@ -261,7 +271,7 @@ func TestSynchronisation60(t *testing.T) {
 	tester.newPeer("peer", eth60, hashes, blocks)
 
 	// Synchronise with the peer and make sure all blocks were retrieved
-	if err := tester.sync("peer"); err != nil {
+	if err := tester.sync("peer", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	if imported := len(tester.ownBlocks); imported != targetBlocks+1 {
@@ -281,7 +291,7 @@ func TestCanonicalSynchronisation61(t *testing.T) {
 	tester.newPeer("peer", eth61, hashes, blocks)
 
 	// Synchronise with the peer and make sure all blocks were retrieved
-	if err := tester.sync("peer"); err != nil {
+	if err := tester.sync("peer", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	if imported := len(tester.ownBlocks); imported != targetBlocks+1 {
@@ -312,7 +322,7 @@ func testThrottling(t *testing.T, protocol int) {
 	// Start a synchronisation concurrently
 	errc := make(chan error)
 	go func() {
-		errc <- tester.sync("peer")
+		errc <- tester.sync("peer", nil)
 	}()
 	// Iteratively take some blocks, always checking the retrieval count
 	for len(tester.ownBlocks) < targetBlocks+1 {
@@ -361,14 +371,14 @@ func TestForkedSynchronisation61(t *testing.T) {
 	tester.newPeer("fork B", eth61, hashesB, blocksB)
 
 	// Synchronise with the peer and make sure all blocks were retrieved
-	if err := tester.sync("fork A"); err != nil {
+	if err := tester.sync("fork A", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	if imported := len(tester.ownBlocks); imported != common+fork+1 {
 		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, common+fork+1)
 	}
 	// Synchronise with the second peer and make sure that fork is pulled too
-	if err := tester.sync("fork B"); err != nil {
+	if err := tester.sync("fork B", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	if imported := len(tester.ownBlocks); imported != common+2*fork+1 {
@@ -411,7 +421,7 @@ func testCancel(t *testing.T, protocol int) {
 		t.Errorf("block or hash count mismatch: %d hashes, %d blocks, want 0", hashCount, blockCount)
 	}
 	// Synchronise with the peer, but cancel afterwards
-	if err := tester.sync("peer"); err != nil {
+	if err := tester.sync("peer", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	tester.downloader.cancel()
@@ -438,14 +448,14 @@ func testMultiSynchronisation(t *testing.T, protocol int) {
 	}
 	// Synchronise with the middle peer and make sure half of the blocks were retrieved
 	id := fmt.Sprintf("peer #%d", targetPeers/2)
-	if err := tester.sync(id); err != nil {
+	if err := tester.sync(id, nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	if imported := len(tester.ownBlocks); imported != len(tester.peerHashes[id]) {
 		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, len(tester.peerHashes[id]))
 	}
 	// Synchronise with the best peer and make sure everything is retrieved
-	if err := tester.sync("peer #0"); err != nil {
+	if err := tester.sync("peer #0", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	if imported := len(tester.ownBlocks); imported != targetBlocks+1 {
@@ -469,7 +479,7 @@ func TestSlowSynchronisation60(t *testing.T) {
 
 	// Try to sync with the peers (pull hashes from fast)
 	start := time.Now()
-	if err := tester.sync("fast"); err != nil {
+	if err := tester.sync("fast", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	if imported := len(tester.ownBlocks); imported != targetBlocks+1 {
@@ -497,14 +507,14 @@ func TestNonExistingParentAttack60(t *testing.T) {
 	tester.newPeer("attack", eth60, hashes, blocks)
 
 	// Try and sync with the malicious node and check that it fails
-	if err := tester.sync("attack"); err == nil {
+	if err := tester.sync("attack", nil); err == nil {
 		t.Fatalf("block synchronization succeeded")
 	}
 	if tester.hasBlock(hashes[0]) {
 		t.Fatalf("tester accepted unknown-parent block: %v", blocks[hashes[0]])
 	}
 	// Try to synchronize with the valid chain and make sure it succeeds
-	if err := tester.sync("valid"); err != nil {
+	if err := tester.sync("valid", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	if !tester.hasBlock(tester.peerHashes["valid"][0]) {
@@ -525,7 +535,7 @@ func TestRepeatingHashAttack60(t *testing.T) { // TODO: Is this thing valid??
 	// Try and sync with the malicious node
 	errc := make(chan error)
 	go func() {
-		errc <- tester.sync("attack")
+		errc <- tester.sync("attack", nil)
 	}()
 	// Make sure that syncing returns and does so with a failure
 	select {
@@ -537,7 +547,7 @@ func TestRepeatingHashAttack60(t *testing.T) { // TODO: Is this thing valid??
 		}
 	}
 	// Ensure that a valid chain can still pass sync
-	if err := tester.sync("valid"); err != nil {
+	if err := tester.sync("valid", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
@@ -555,11 +565,11 @@ func TestNonExistingBlockAttack60(t *testing.T) {
 	tester.newPeer("attack", eth60, hashes, blocks)
 
 	// Try and sync with the malicious node and check that it fails
-	if err := tester.sync("attack"); err != errPeersUnavailable {
+	if err := tester.sync("attack", nil); err != errPeersUnavailable {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errPeersUnavailable)
 	}
 	// Ensure that a valid chain can still pass sync
-	if err := tester.sync("valid"); err != nil {
+	if err := tester.sync("valid", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
@@ -583,11 +593,11 @@ func TestInvalidHashOrderAttack60(t *testing.T) {
 	tester.newPeer("attack", eth60, hashes, blocks)
 
 	// Try and sync with the malicious node and check that it fails
-	if err := tester.sync("attack"); err != errInvalidChain {
+	if err := tester.sync("attack", nil); err != errInvalidChain {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errInvalidChain)
 	}
 	// Ensure that a valid chain can still pass sync
-	if err := tester.sync("valid"); err != nil {
+	if err := tester.sync("valid", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
@@ -611,11 +621,11 @@ func TestMadeupHashChainAttack60(t *testing.T) {
 	tester.newPeer("attack", eth60, randomHashes, nil)
 
 	// Try and sync with the malicious node and check that it fails
-	if err := tester.sync("attack"); err != errCrossCheckFailed {
+	if err := tester.sync("attack", nil); err != errCrossCheckFailed {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errCrossCheckFailed)
 	}
 	// Ensure that a valid chain can still pass sync
-	if err := tester.sync("valid"); err != nil {
+	if err := tester.sync("valid", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
@@ -636,7 +646,7 @@ func TestMadeupHashChainDrippingAttack60(t *testing.T) {
 	// Try and sync with the attacker, one hash at a time
 	tester.maxHashFetch = 1
 	tester.newPeer("attack", eth60, randomHashes, nil)
-	if err := tester.sync("attack"); err != errStallingPeer {
+	if err := tester.sync("attack", nil); err != errStallingPeer {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errStallingPeer)
 	}
 }
@@ -659,7 +669,7 @@ func TestMadeupBlockChainAttack60(t *testing.T) {
 	// Try and sync with the malicious node and check that it fails
 	tester := newTester()
 	tester.newPeer("attack", eth60, gapped, blocks)
-	if err := tester.sync("attack"); err != errCrossCheckFailed {
+	if err := tester.sync("attack", nil); err != errCrossCheckFailed {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errCrossCheckFailed)
 	}
 	// Ensure that a valid chain can still pass sync
@@ -667,7 +677,7 @@ func TestMadeupBlockChainAttack60(t *testing.T) {
 	crossCheckCycle = defaultCrossCheckCycle
 
 	tester.newPeer("valid", eth60, hashes, blocks)
-	if err := tester.sync("valid"); err != nil {
+	if err := tester.sync("valid", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
@@ -690,7 +700,7 @@ func TestBannedChainStarvationAttack60(t *testing.T) {
 	// the head of the invalid chain is blocked too.
 	for banned := tester.downloader.banned.Size(); ; {
 		// Try to sync with the attacker, check hash chain failure
-		if err := tester.sync("attack"); err != errInvalidChain {
+		if err := tester.sync("attack", nil); err != errInvalidChain {
 			if tester.downloader.banned.Has(forkHashes[0]) && err == errBannedHead {
 				break
 			}
@@ -711,7 +721,7 @@ func TestBannedChainStarvationAttack60(t *testing.T) {
 		t.Fatalf("banned attacker registered: %v", peer)
 	}
 	// Ensure that a valid chain can still pass sync
-	if err := tester.sync("valid"); err != nil {
+	if err := tester.sync("valid", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
@@ -743,7 +753,7 @@ func TestBannedChainMemoryExhaustionAttack60(t *testing.T) {
 	// the head of the invalid chain is blocked too.
 	for {
 		// Try to sync with the attacker, check hash chain failure
-		if err := tester.sync("attack"); err != errInvalidChain {
+		if err := tester.sync("attack", nil); err != errInvalidChain {
 			t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errInvalidChain)
 		}
 		// Short circuit if the entire chain was banned.
@@ -754,7 +764,7 @@ func TestBannedChainMemoryExhaustionAttack60(t *testing.T) {
 		if bans := tester.downloader.banned.Size(); bans > maxBannedHashes {
 			t.Fatalf("ban cap exceeded: have %v, want max %v", bans, maxBannedHashes)
 		}
-		for hash, _ := range core.BadHashes {
+		for hash := range core.BadHashes {
 			if !tester.downloader.banned.Has(hash) {
 				t.Fatalf("hard coded ban evacuated: %x", hash)
 			}
@@ -764,7 +774,7 @@ func TestBannedChainMemoryExhaustionAttack60(t *testing.T) {
 	MaxBlockFetch = defaultMaxBlockFetch
 	maxBannedHashes = defaultMaxBannedHashes
 
-	if err := tester.sync("valid"); err != nil {
+	if err := tester.sync("valid", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 }
@@ -790,7 +800,7 @@ func TestOverlappingDeliveryAttack60(t *testing.T) {
 		return rawGetBlocks(append(request, hashes[0]))
 	}
 	// Test that synchronisation can complete, check for import success
-	if err := tester.sync("attack"); err != nil {
+	if err := tester.sync("attack", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	start := time.Now()
@@ -807,7 +817,7 @@ func TestOverlappingDeliveryAttack60(t *testing.T) {
 func TestHighTDStarvationAttack61(t *testing.T) {
 	tester := newTester()
 	tester.newPeer("attack", eth61, []common.Hash{genesis.Hash()}, nil)
-	if err := tester.sync("attack"); err != errStallingPeer {
+	if err := tester.sync("attack", big.NewInt(1000000)); err != errStallingPeer {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errStallingPeer)
 	}
 }
@@ -849,7 +859,7 @@ func TestHashAttackerDropping(t *testing.T) {
 		// Simulate a synchronisation and check the required result
 		tester.downloader.synchroniseMock = func(string, common.Hash) error { return tt.result }
 
-		tester.downloader.Synchronise(id, genesis.Hash())
+		tester.downloader.Synchronise(id, genesis.Hash(), big.NewInt(1000))
 		if _, ok := tester.peerHashes[id]; !ok != tt.drop {
 			t.Errorf("test %d: peer drop mismatch for %v: have %v, want %v", i, tt.result, !ok, tt.drop)
 		}

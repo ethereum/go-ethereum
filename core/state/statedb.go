@@ -1,18 +1,18 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package state provides a caching layer atop the Ethereum state trie.
 package state
@@ -44,6 +44,7 @@ type StateDB struct {
 	thash, bhash common.Hash
 	txIndex      int
 	logs         map[common.Hash]Logs
+	logSize      uint
 }
 
 // Create a new state from a given trie
@@ -66,7 +67,9 @@ func (self *StateDB) AddLog(log *Log) {
 	log.TxHash = self.thash
 	log.BlockHash = self.bhash
 	log.TxIndex = uint(self.txIndex)
+	log.Index = self.logSize
 	self.logs[self.thash] = append(self.logs[self.thash], log)
+	self.logSize++
 }
 
 func (self *StateDB) GetLogs(hash common.Hash) Logs {
@@ -288,6 +291,7 @@ func (self *StateDB) Copy() *StateDB {
 		state.logs[hash] = make(Logs, len(logs))
 		copy(state.logs[hash], logs)
 	}
+	state.logSize = self.logSize
 
 	return state
 }
@@ -298,6 +302,7 @@ func (self *StateDB) Set(state *StateDB) {
 
 	self.refund = state.refund
 	self.logs = state.logs
+	self.logSize = state.logSize
 }
 
 func (s *StateDB) Root() common.Hash {

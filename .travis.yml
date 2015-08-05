@@ -1,9 +1,6 @@
 language: go
 go:
   - 1.4.2
-before_install:
-  - sudo apt-get update -qq
-  - sudo apt-get install -yqq libgmp3-dev
 install:
   # - go get code.google.com/p/go.tools/cmd/goimports
   # - go get github.com/golang/lint/golint
@@ -22,7 +19,11 @@ after_success:
 env:
   global:
     - secure: "U2U1AmkU4NJBgKR/uUAebQY87cNL0+1JHjnLOmmXwxYYyj5ralWb1aSuSH3qSXiT93qLBmtaUkuv9fberHVqrbAeVlztVdUsKAq7JMQH+M99iFkC9UiRMqHmtjWJ0ok4COD1sRYixxi21wb/JrMe3M1iL4QJVS61iltjHhVdM64="
-
+sudo: false
+addons:
+  apt:
+    packages:
+    - libgmp3-dev
 notifications:
   webhooks:
     urls:

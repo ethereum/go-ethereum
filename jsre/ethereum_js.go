@@ -1,18 +1,18 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package jsre
 
@@ -373,10 +373,10 @@ var formatInputBytes = function (value) {
  * @returns {SolidityParam}
  */
 var formatInputDynamicBytes = function (value) {
-    value = utils.toHex(value).substr(2);
-    var l = Math.floor((value.length + 63) / 64);
-    var result = utils.padRight(value, l * 64);
-    var length = Math.floor(value.length / 2);
+    var result = utils.toHex(value).substr(2);
+    var length = result.length / 2;
+    var l = Math.floor((result.length + 63) / 64);
+    var result = utils.padRight(result, l * 64);
     return new SolidityParam(formatInputInt(length).value + result, 32);
 };
 
@@ -389,9 +389,10 @@ var formatInputDynamicBytes = function (value) {
  */
 var formatInputString = function (value) {
     var result = utils.fromAscii(value).substr(2);
+    var length = result.length / 2;
     var l = Math.floor((result.length + 63) / 64);
     result = utils.padRight(result, l * 64);
-    return new SolidityParam(formatInputInt(value.length).value + result, 32);
+    return new SolidityParam(formatInputInt(length).value + result, 32);
 };
 
 /**
@@ -996,6 +997,7 @@ var padRight = function (string, chars, sign) {
 
 /** 
  * Should be called to get sting from it's hex representation
+ * TODO: it should be called toUTF8
  *
  * @method toAscii
  * @param {String} string in hex
@@ -1013,7 +1015,7 @@ var toAscii = function(hex) {
         str += String.fromCharCode(code);
     }
 
-    return str;
+    return decodeURIComponent(escape(str));
 };
     
 /**
@@ -1024,6 +1026,7 @@ var toAscii = function(hex) {
  * @returns {String} hex representation of input string
  */
 var toHexNative = function(str) {
+    str = unescape(encodeURIComponent(str));
     var hex = "";
     for(var i = 0; i < str.length; i++) {
         var n = str.charCodeAt(i).toString(16);
@@ -1417,7 +1420,7 @@ module.exports = {
 
 },{"bignumber.js":"bignumber.js"}],8:[function(require,module,exports){
 module.exports={
-    "version": "0.8.1"
+    "version": "0.9.1"
 }
 
 },{}],9:[function(require,module,exports){
@@ -1524,6 +1527,9 @@ web3.setProvider = function (provider) {
     this.currentProvider = provider;
     RequestManager.getInstance().setProvider(provider);
 };
+web3.isConnected = function(){
+     return (this.currentProvider && this.currentProvider.isConnected());
+};
 web3.reset = function () {
     RequestManager.getInstance().reset();
     c.defaultBlock = 'latest';
@@ -1594,7 +1600,7 @@ setupMethods(web3.shh, shh.methods);
 module.exports = web3;
 
 
-},{"./utils/config":5,"./utils/sha3":6,"./utils/utils":7,"./version.json":8,"./web3/batch":11,"./web3/db":13,"./web3/eth":15,"./web3/filter":17,"./web3/formatters":18,"./web3/method":23,"./web3/net":25,"./web3/property":26,"./web3/requestmanager":28,"./web3/shh":29,"./web3/watches":31}],10:[function(require,module,exports){
+},{"./utils/config":5,"./utils/sha3":6,"./utils/utils":7,"./version.json":8,"./web3/batch":11,"./web3/db":13,"./web3/eth":15,"./web3/filter":17,"./web3/formatters":18,"./web3/method":24,"./web3/net":26,"./web3/property":27,"./web3/requestmanager":28,"./web3/shh":29,"./web3/watches":31}],10:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1639,7 +1645,6 @@ AllSolidityEvents.prototype.encode = function (options) {
         result[f] = formatters.inputBlockNumberFormatter(options[f]);
     });
 
-    result.topics = [null, null, null, null, null]; // match all topics
     result.address = this._address;
 
     return result;
@@ -1701,6 +1706,8 @@ module.exports = AllSolidityEvents;
  */
 
 var RequestManager = require('./requestmanager');
+var Jsonrpc = require('./jsonrpc');
+var errors = require('./errors');
 
 var Batch = function () {
     this.requests = [];
@@ -1727,11 +1734,14 @@ Batch.prototype.execute = function () {
         results = results || [];
         requests.map(function (request, index) {
             return results[index] || {};
-        }).map(function (result, index) {
-            return requests[index].format ? requests[index].format(result.result) : result.result;
         }).forEach(function (result, index) {
             if (requests[index].callback) {
-                requests[index].callback(err, result);
+
+                if (!Jsonrpc.getInstance().isValidResponse(result)) {
+                    return requests[index].callback(errors.InvalidResponse(result));
+                }
+
+                requests[index].callback(null, (requests[index].format ? requests[index].format(result.result) : result.result));
             }
         });
     }); 
@@ -1740,7 +1750,7 @@ Batch.prototype.execute = function () {
 module.exports = Batch;
 
 
-},{"./requestmanager":28}],12:[function(require,module,exports){
+},{"./errors":14,"./jsonrpc":23,"./requestmanager":28}],12:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1848,28 +1858,42 @@ var contract = function (abi) {
  * @returns {Undefined}
  */
 var checkForContractAddress = function(contract, abi, callback){
-    var count = 0;
+    var count = 0,
+        callbackFired = false;
 
     // wait for receipt
     var filter = web3.eth.filter('latest', function(e){
-        if(!e) {
+        if(!e && !callbackFired) {
             count++;
 
             // console.log('Checking for contract address', count);
 
             // stop watching after 50 blocks (timeout)
             if(count > 50) {
-                if(callback)
-                    callback(new Error('Contract couldn\'t be deployed'));
-
+                
                 filter.stopWatching();
+                callbackFired = true;
+
+                if(callback)
+                    callback(new Error('Contract transaction couldn\'t be found after 50 blocks'));
+                else
+                    throw new Error('Contract transaction couldn\'t be found after 50 blocks');
+
 
             } else {
 
                 web3.eth.getTransactionReceipt(contract.transactionHash, function(e, receipt){
-                    if(receipt) {
+                    if(receipt && !callbackFired) {
 
                         web3.eth.getCode(receipt.contractAddress, function(e, code){
+                            /*jshint maxcomplexity: 5 */
+
+                            if(callbackFired)
+                                return;
+                            
+                            filter.stopWatching();
+                            callbackFired = true;
+
                             if(code.length > 2) {
 
                                 // console.log('Contract code deployed!');
@@ -1880,14 +1904,16 @@ var checkForContractAddress = function(contract, abi, callback){
                                 addFunctionsToContract(contract, abi);
                                 addEventsToContract(contract, abi);
 
+                                // call callback for the second time
                                 if(callback)
                                     callback(null, contract);
 
-                            } else if(callback) {
-                                callback(new Error('The contract code couldn\'t be stored'));
+                            } else {
+                                if(callback)
+                                    callback(new Error('The contract code couldn\'t be stored, please check your gas amount.'));
+                                else
+                                    throw new Error('The contract code couldn\'t be stored, please check your gas amount.');
                             }
-
-                            filter.stopWatching();
                         });
                     }
                 });
@@ -1949,6 +1975,10 @@ ContractFactory.prototype.new = function () {
             } else {
                 // add the transaction hash
                 contract.transactionHash = hash;
+
+                // call callback for the first time
+                callback(null, contract);
+
                 checkForContractAddress(contract, _this.abi, callback);
             }
         });
@@ -2057,7 +2087,7 @@ module.exports = {
     methods: methods
 };
 
-},{"./method":23}],14:[function(require,module,exports){
+},{"./method":24}],14:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -2091,7 +2121,7 @@ module.exports = {
         return new Error('Providor not set or invalid');
     },
     InvalidResponse: function (result){
-        var message = !!result && !!result.error && !!result.error.message ? result.error.message : 'Invalid JSON RPC response';
+        var message = !!result && !!result.error && !!result.error.message ? result.error.message : 'Invalid JSON RPC response: '+ result;
         return new Error(message);
     }
 };
@@ -2271,7 +2301,7 @@ var sendRawTransaction = new Method({
     name: 'sendRawTransaction',
     call: 'eth_sendRawTransaction',
     params: 1,
-    inputFormatter: []
+    inputFormatter: [null]
 });
 
 var sendTransaction = new Method({
@@ -2390,7 +2420,7 @@ module.exports = {
 };
 
 
-},{"../utils/utils":7,"./formatters":18,"./method":23,"./property":26}],16:[function(require,module,exports){
+},{"../utils/utils":7,"./formatters":18,"./method":24,"./property":27}],16:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -2692,9 +2722,11 @@ var getLogsAtStart = function(self, callback){
                 callback(err);
             }
 
-            messages.forEach(function (message) {
-                callback(null, message);
-            });
+            if(utils.isArray(messages)) {
+                messages.forEach(function (message) {
+                    callback(null, message);
+                });
+            }
         });
     }
 };
@@ -3314,17 +3346,35 @@ module.exports = SolidityFunction;
  *   Marek Kotewicz <marek@ethdev.com>
  *   Marian Oancea <marian@ethdev.com>
  *   Fabian Vogelsteller <fabian@ethdev.com>
- * @date 2014
+ * @date 2015
  */
 
 "use strict";
 
-// resolves the problem for electron/atom shell environments, which use node integration, but have no process variable available
 var XMLHttpRequest = (typeof window !== 'undefined' && window.XMLHttpRequest) ? window.XMLHttpRequest : require('xmlhttprequest').XMLHttpRequest; // jshint ignore:line
 var errors = require('./errors');
 
 var HttpProvider = function (host) {
     this.host = host || 'http://localhost:8545';
+};
+
+HttpProvider.prototype.isConnected = function() {
+    var request = new XMLHttpRequest();
+
+    request.open('POST', this.host, false);
+    request.setRequestHeader('Content-type','application/json');
+    
+    try {
+        request.send(JSON.stringify({
+            id: 9999999999,
+            jsonrpc: '2.0',
+            method: 'net_listening',
+            params: []
+        }));
+        return true;
+    } catch(e) {
+        return false;
+    }
 };
 
 HttpProvider.prototype.send = function (payload) {
@@ -3351,7 +3401,7 @@ HttpProvider.prototype.send = function (payload) {
     try {
         result = JSON.parse(result);
     } catch(e) {
-        throw errors.InvalidResponse(result);                
+        throw errors.InvalidResponse(request.responseText);                
     }
 
     return result;
@@ -3367,7 +3417,7 @@ HttpProvider.prototype.sendAsync = function (payload, callback) {
             try {
                 result = JSON.parse(result);
             } catch(e) {
-                error = errors.InvalidResponse(result);                
+                error = errors.InvalidResponse(request.responseText);                
             }
 
             callback(error, result);
@@ -3514,6 +3564,219 @@ module.exports = ICAP;
     You should have received a copy of the GNU Lesser General Public License
     along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
 */
+/** @file ipcprovider.js
+ * @authors:
+ *   Fabian Vogelsteller <fabian@ethdev.com>
+ * @date 2015
+ */
+
+"use strict";
+
+var utils = require('../utils/utils');
+var errors = require('./errors');
+
+var errorTimeout = '{"jsonrpc": "2.0", "error": {"code": -32603, "message": "IPC Request timed out for method  \'__method__\'"}, "id": "__id__"}';
+
+
+var IpcProvider = function (path, net) {
+    var _this = this;
+    this.responseCallbacks = {};
+    this.path = path;
+    
+    net = net || require('net');
+
+    this.connection = net.connect({path: this.path});
+
+    this.connection.on('error', function(e){
+        console.error('IPC Connection Error', e);
+        _this._timeout();
+    });
+
+    this.connection.on('end', function(){
+        _this._timeout();
+    }); 
+
+
+    // LISTEN FOR CONNECTION RESPONSES
+    this.connection.on('data', function(data) {
+        /*jshint maxcomplexity: 6 */
+
+        _this._parseResponse(data.toString()).forEach(function(result){
+
+            var id = null;
+
+            // get the id which matches the returned id
+            if(utils.isArray(result)) {
+                result.forEach(function(load){
+                    if(_this.responseCallbacks[load.id])
+                        id = load.id;
+                });
+            } else {
+                id = result.id;
+            }
+
+            // fire the callback
+            if(_this.responseCallbacks[id]) {
+                _this.responseCallbacks[id](null, result);
+                delete _this.responseCallbacks[id];
+            }
+        });
+    });
+};
+
+/**
+Will parse the response and make an array out of it.
+
+@method _parseResponse
+@param {String} data
+*/
+IpcProvider.prototype._parseResponse = function(data) {
+    var _this = this,
+        returnValues = [];
+    
+    // DE-CHUNKER
+    var dechunkedData = data
+        .replace(/\}\{/g,'}|--|{') // }{
+        .replace(/\}\]\[\{/g,'}]|--|[{') // }][{
+        .replace(/\}\[\{/g,'}|--|[{') // }[{
+        .replace(/\}\]\{/g,'}]|--|{') // }]{
+        .split('|--|');
+
+    dechunkedData.forEach(function(data){
+
+        // prepend the last chunk
+        if(_this.lastChunk)
+            data = _this.lastChunk + data;
+
+        var result = null;
+
+        try {
+            result = JSON.parse(data);
+
+        } catch(e) {
+
+            _this.lastChunk = data;
+
+            // start timeout to cancel all requests
+            clearTimeout(_this.lastChunkTimeout);
+            _this.lastChunkTimeout = setTimeout(function(){
+                _this.timeout();
+                throw errors.InvalidResponse(data);
+            }, 1000 * 15);
+
+            return;
+        }
+
+        // cancel timeout and set chunk to null
+        clearTimeout(_this.lastChunkTimeout);
+        _this.lastChunk = null;
+
+        if(result)
+            returnValues.push(result);
+    });
+
+    return returnValues;
+};
+
+
+/**
+Get the adds a callback to the responseCallbacks object,
+which will be called if a response matching the response Id will arrive.
+
+@method _addResponseCallback
+*/
+IpcProvider.prototype._addResponseCallback = function(payload, callback) {
+    var id = payload.id || payload[0].id;
+    var method = payload.method || payload[0].method;
+
+    this.responseCallbacks[id] = callback;
+    this.responseCallbacks[id].method = method;
+};
+
+/**
+Timeout all requests when the end/error event is fired
+
+@method _timeout
+*/
+IpcProvider.prototype._timeout = function() {
+    for(var key in this.responseCallbacks) {
+        if(this.responseCallbacks.hasOwnProperty(key)){
+            this.responseCallbacks[key](errorTimeout.replace('__id__', key).replace('__method__', this.responseCallbacks[key].method));
+            delete this.responseCallbacks[key];
+        }
+    }
+};
+
+
+/**
+Check if the current connection is still valid.
+
+@method isConnected
+*/
+IpcProvider.prototype.isConnected = function() {
+    var _this = this;
+
+    // try reconnect, when connection is gone
+    if(!_this.connection.writable)
+        _this.connection.connect({path: _this.path});
+
+    return !!this.connection.writable;
+};
+
+IpcProvider.prototype.send = function (payload) {
+
+    if(this.connection.writeSync) {
+        var result;
+
+        // try reconnect, when connection is gone
+        if(!this.connection.writable)
+            this.connection.connect({path: this.path});
+
+        var data = this.connection.writeSync(JSON.stringify(payload));
+
+        try {
+            result = JSON.parse(data);
+        } catch(e) {
+            throw errors.InvalidResponse(data);                
+        }
+
+        return result;
+
+    } else {
+        throw new Error('You tried to send "'+ payload.method +'" synchronously. Synchronous requests are not supported by the IPC provider.');
+    }
+};
+
+IpcProvider.prototype.sendAsync = function (payload, callback) {
+    // try reconnect, when connection is gone
+    if(!this.connection.writable)
+        this.connection.connect({path: this.path});
+
+
+    this.connection.write(JSON.stringify(payload));
+    this._addResponseCallback(payload, callback);
+};
+
+module.exports = IpcProvider;
+
+
+},{"../utils/utils":7,"./errors":14,"net":32}],23:[function(require,module,exports){
+/*
+    This file is part of ethereum.js.
+
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
 /** @file jsonrpc.js
  * @authors:
  *   Marek Kotewicz <marek@ethdev.com>
@@ -3590,7 +3853,7 @@ Jsonrpc.prototype.toBatchPayload = function (messages) {
 module.exports = Jsonrpc;
 
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -3687,7 +3950,7 @@ Method.prototype.formatInput = function (args) {
  * @return {Object}
  */
 Method.prototype.formatOutput = function (result) {
-    return this.outputFormatter && result !== null ? this.outputFormatter(result) : result;
+    return this.outputFormatter && result ? this.outputFormatter(result) : result;
 };
 
 /**
@@ -3764,7 +4027,7 @@ Method.prototype.send = function () {
 module.exports = Method;
 
 
-},{"../utils/utils":7,"./errors":14,"./requestmanager":28}],24:[function(require,module,exports){
+},{"../utils/utils":7,"./errors":14,"./requestmanager":28}],25:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -3812,7 +4075,7 @@ var abi = [
 module.exports = contract(abi).at(address);
 
 
-},{"./contract":12}],25:[function(require,module,exports){
+},{"./contract":12}],26:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -3862,7 +4125,7 @@ module.exports = {
 };
 
 
-},{"../utils/utils":7,"./property":26}],26:[function(require,module,exports){
+},{"../utils/utils":7,"./property":27}],27:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -3887,6 +4150,7 @@ module.exports = {
  */
 
 var RequestManager = require('./requestmanager');
+var utils = require('../utils/utils');
 
 var Property = function (options) {
     this.name = options.name;
@@ -3919,6 +4183,19 @@ Property.prototype.formatOutput = function (result) {
 };
 
 /**
+ * Should be used to extract callback from array of arguments. Modifies input param
+ *
+ * @method extractCallback
+ * @param {Array} arguments
+ * @return {Function|Null} callback, if exists
+ */
+Property.prototype.extractCallback = function (args) {
+    if (utils.isFunction(args[args.length - 1])) {
+        return args.pop(); // modify the args array!
+    }
+};
+
+/**
  * Should attach function to method
  * 
  * @method attachToObject
@@ -3944,7 +4221,10 @@ Property.prototype.attachToObject = function (obj) {
         return prefix + name.charAt(0).toUpperCase() + name.slice(1);
     };
 
-    obj[toAsyncName('get', name)] = this.getAsync.bind(this);
+    var func = this.getAsync.bind(this);
+    func.request = this.request.bind(this);
+
+    obj[toAsyncName('get', name)] = func;
 };
 
 /**
@@ -3977,45 +4257,27 @@ Property.prototype.getAsync = function (callback) {
     });
 };
 
+/**
+ * Should be called to create pure JSONRPC request which can be used in batch request
+ *
+ * @method request
+ * @param {...} params
+ * @return {Object} jsonrpc request
+ */
+Property.prototype.request = function () {
+    var payload = {
+        method: this.getter,
+        params: [],
+        callback: this.extractCallback(Array.prototype.slice.call(arguments))
+    };
+    payload.format = this.formatOutput.bind(this);
+    return payload;
+};
+
 module.exports = Property;
 
 
-},{"./requestmanager":28}],27:[function(require,module,exports){
-/*
-    This file is part of ethereum.js.
-
-    ethereum.js is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    ethereum.js is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/** @file qtsync.js
- * @authors:
- *   Marek Kotewicz <marek@ethdev.com>
- *   Marian Oancea <marian@ethdev.com>
- * @date 2014
- */
-
-var QtSyncProvider = function () {
-};
-
-QtSyncProvider.prototype.send = function (payload) {
-    var result = navigator.qt.callMethod(JSON.stringify(payload));
-    return JSON.parse(result);
-};
-
-module.exports = QtSyncProvider;
-
-
-},{}],28:[function(require,module,exports){
+},{"../utils/utils":7,"./requestmanager":28}],28:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -4280,7 +4542,7 @@ RequestManager.prototype.poll = function () {
 module.exports = RequestManager;
 
 
-},{"../utils/config":5,"../utils/utils":7,"./errors":14,"./jsonrpc":22}],29:[function(require,module,exports){
+},{"../utils/config":5,"../utils/utils":7,"./errors":14,"./jsonrpc":23}],29:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -4350,7 +4612,7 @@ module.exports = {
 };
 
 
-},{"./formatters":18,"./method":23}],30:[function(require,module,exports){
+},{"./formatters":18,"./method":24}],30:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -4446,7 +4708,7 @@ var deposit = function (from, address, value, client, callback) {
 module.exports = transfer;
 
 
-},{"../web3":9,"./contract":12,"./icap":21,"./namereg":24}],31:[function(require,module,exports){
+},{"../web3":9,"./contract":12,"./icap":21,"./namereg":25}],31:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -4562,7 +4824,7 @@ module.exports = {
 };
 
 
-},{"./method":23}],32:[function(require,module,exports){
+},{"./method":24}],32:[function(require,module,exports){
 
 },{}],33:[function(require,module,exports){
 ;(function (root, factory) {
@@ -5944,8 +6206,10 @@ module.exports = BigNumber; // jshint ignore:line
 
 },{}],"web3":[function(require,module,exports){
 var web3 = require('./lib/web3');
+
 web3.providers.HttpProvider = require('./lib/web3/httpprovider');
-web3.providers.QtSyncProvider = require('./lib/web3/qtsync');
+web3.providers.IpcProvider = require('./lib/web3/ipcprovider');
+
 web3.eth.contract = require('./lib/web3/contract');
 web3.eth.namereg = require('./lib/web3/namereg');
 web3.eth.sendIBANTransaction = require('./lib/web3/transfer');
@@ -5958,6 +6222,6 @@ if (typeof window !== 'undefined' && typeof window.web3 === 'undefined') {
 module.exports = web3;
 
 
-},{"./lib/web3":9,"./lib/web3/contract":12,"./lib/web3/httpprovider":20,"./lib/web3/namereg":24,"./lib/web3/qtsync":27,"./lib/web3/transfer":30}]},{},["web3"])
+},{"./lib/web3":9,"./lib/web3/contract":12,"./lib/web3/httpprovider":20,"./lib/web3/ipcprovider":22,"./lib/web3/namereg":25,"./lib/web3/transfer":30}]},{},["web3"])
 //# sourceMappingURL=web3-light.js.map
 `

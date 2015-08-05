@@ -3,10 +3,22 @@
 		"in": "", 
 		"out": "80"
 	},
+	"bytestring00": {
+		"in": "\u0000",
+		"out": "00"
+	},
+	"bytestring01": {
+		"in": "\u0001",
+		"out": "01"
+	},
+	"bytestring7F": {
+		"in": "\u007F",
+		"out": "7F"
+	},
 	"shortstring": {
 		"in": "dog", 
 		"out": "83646f67"
-    },
+	},
 	"shortstring2": {
 		"in": "Lorem ipsum dolor sit amet, consectetur adipisicing eli", 
 		"out": "b74c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c69"

@@ -1,18 +1,18 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package api
 
@@ -469,10 +469,6 @@ func (args *CallArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	args.From = ext.From
-
-	if len(ext.To) == 0 {
-		return shared.NewValidationError("to", "is required")
-	}
 	args.To = ext.To
 
 	var num *big.Int
@@ -888,6 +884,7 @@ type tx struct {
 	Data     string
 	GasLimit string
 	GasPrice string
+	Hash     string
 }
 
 func newTx(t *types.Transaction) *tx {
@@ -906,6 +903,7 @@ func newTx(t *types.Transaction) *tx {
 		Data:     "0x" + common.Bytes2Hex(t.Data()),
 		GasLimit: t.Gas().String(),
 		GasPrice: t.GasPrice().String(),
+		Hash:     t.Hash().Hex(),
 	}
 }
 
@@ -930,6 +928,12 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 		data             []byte
 		contractCreation = true
 	)
+
+	if val, found := fields["Hash"]; found {
+		if hashVal, ok := val.(string); ok {
+			tx.Hash = hashVal
+		}
+	}
 
 	if val, found := fields["To"]; found {
 		if strVal, ok := val.(string); ok && len(strVal) > 0 {

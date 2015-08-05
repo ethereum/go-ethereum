@@ -1,56 +1,61 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package miner
 
 import (
 	"math/big"
+	"sync"
+	"time"
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 type RemoteAgent struct {
-	work        *types.Block
-	currentWork *types.Block
+	mu sync.Mutex
 
 	quit     chan struct{}
-	workCh   chan *types.Block
-	returnCh chan<- *types.Block
+	workCh   chan *Work
+	returnCh chan<- *Result
+
+	currentWork *Work
+	work        map[common.Hash]*Work
 }
 
 func NewRemoteAgent() *RemoteAgent {
-	agent := &RemoteAgent{}
+	agent := &RemoteAgent{work: make(map[common.Hash]*Work)}
 
 	return agent
 }
 
-func (a *RemoteAgent) Work() chan<- *types.Block {
+func (a *RemoteAgent) Work() chan<- *Work {
 	return a.workCh
 }
 
-func (a *RemoteAgent) SetReturnCh(returnCh chan<- *types.Block) {
+func (a *RemoteAgent) SetReturnCh(returnCh chan<- *Result) {
 	a.returnCh = returnCh
 }
 
 func (a *RemoteAgent) Start() {
 	a.quit = make(chan struct{})
-	a.workCh = make(chan *types.Block, 1)
-	go a.run()
+	a.workCh = make(chan *Work, 1)
+	go a.maintainLoop()
 }
 
 func (a *RemoteAgent) Stop() {
@@ -60,47 +65,72 @@ func (a *RemoteAgent) Stop() {
 
 func (a *RemoteAgent) GetHashRate() int64 { return 0 }
 
-func (a *RemoteAgent) run() {
+func (a *RemoteAgent) GetWork() [3]string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	var res [3]string
+
+	if a.currentWork != nil {
+		block := a.currentWork.Block
+
+		res[0] = block.HashNoNonce().Hex()
+		seedHash, _ := ethash.GetSeedHash(block.NumberU64())
+		res[1] = common.BytesToHash(seedHash).Hex()
+		// Calculate the "target" to be returned to the external miner
+		n := big.NewInt(1)
+		n.Lsh(n, 255)
+		n.Div(n, block.Difficulty())
+		n.Lsh(n, 1)
+		res[2] = common.BytesToHash(n.Bytes()).Hex()
+
+		a.work[block.HashNoNonce()] = a.currentWork
+	}
+
+	return res
+}
+
+// Returns true or false, but does not indicate if the PoW was correct
+func (a *RemoteAgent) SubmitWork(nonce uint64, mixDigest, hash common.Hash) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	// Make sure the work submitted is present
+	if a.work[hash] != nil {
+		block := a.work[hash].Block.WithMiningResult(nonce, mixDigest)
+		a.returnCh <- &Result{a.work[hash], block}
+
+		delete(a.work, hash)
+
+		return true
+	} else {
+		glog.V(logger.Info).Infof("Work was submitted for %x but no pending work found\n", hash)
+	}
+
+	return false
+}
+
+func (a *RemoteAgent) maintainLoop() {
+	ticker := time.Tick(5 * time.Second)
+
 out:
 	for {
 		select {
 		case <-a.quit:
 			break out
 		case work := <-a.workCh:
-			a.work = work
+			a.mu.Lock()
+			a.currentWork = work
+			a.mu.Unlock()
+		case <-ticker:
+			// cleanup
+			a.mu.Lock()
+			for hash, work := range a.work {
+				if time.Since(work.createdAt) > 7*(12*time.Second) {
+					delete(a.work, hash)
+				}
+			}
+			a.mu.Unlock()
 		}
 	}
-}
-
-func (a *RemoteAgent) GetWork() [3]string {
-	var res [3]string
-
-	if a.work != nil {
-		a.currentWork = a.work
-
-		res[0] = a.work.HashNoNonce().Hex()
-		seedHash, _ := ethash.GetSeedHash(a.currentWork.NumberU64())
-		res[1] = common.BytesToHash(seedHash).Hex()
-		// Calculate the "target" to be returned to the external miner
-		n := big.NewInt(1)
-		n.Lsh(n, 255)
-		n.Div(n, a.work.Difficulty())
-		n.Lsh(n, 1)
-		res[2] = common.BytesToHash(n.Bytes()).Hex()
-	}
-
-	return res
-}
-
-func (a *RemoteAgent) SubmitWork(nonce uint64, mixDigest, seedHash common.Hash) bool {
-	// Return true or false, but does not indicate if the PoW was correct
-
-	// Make sure the external miner was working on the right hash
-	if a.currentWork != nil && a.work != nil {
-		a.returnCh <- a.currentWork.WithMiningResult(nonce, mixDigest)
-		//a.returnCh <- Work{a.currentWork.Number().Uint64(), nonce, mixDigest.Bytes(), seedHash.Bytes()}
-		return true
-	}
-
-	return false
 }

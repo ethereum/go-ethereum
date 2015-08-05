@@ -1,18 +1,18 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package types
 
@@ -95,15 +95,6 @@ func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice 
 		d.Price.Set(gasPrice)
 	}
 	return &Transaction{data: d}
-}
-
-func NewTransactionFromBytes(data []byte) *Transaction {
-	// TODO: remove this function if possible. callers would
-	// much better off decoding into transaction directly.
-	// it's not that hard.
-	tx := new(Transaction)
-	rlp.DecodeBytes(data, tx)
-	return tx
 }
 
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
@@ -297,4 +288,23 @@ type TxByNonce struct{ Transactions }
 
 func (s TxByNonce) Less(i, j int) bool {
 	return s.Transactions[i].data.AccountNonce < s.Transactions[j].data.AccountNonce
+}
+
+type TxByPrice struct{ Transactions }
+
+func (s TxByPrice) Less(i, j int) bool {
+	return s.Transactions[i].data.Price.Cmp(s.Transactions[j].data.Price) > 0
+}
+
+type TxByPriceAndNonce struct{ Transactions }
+
+func (s TxByPriceAndNonce) Less(i, j int) bool {
+	// we can ignore the error here. Sorting shouldn't care about validness
+	ifrom, _ := s.Transactions[i].From()
+	jfrom, _ := s.Transactions[j].From()
+	// favour nonce if they are from the same recipient
+	if ifrom == jfrom {
+		return s.Transactions[i].data.AccountNonce < s.Transactions[j].data.AccountNonce
+	}
+	return s.Transactions[i].data.Price.Cmp(s.Transactions[j].data.Price) > 0
 }

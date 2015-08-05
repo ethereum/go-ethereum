@@ -8,11 +8,11 @@
 //
 // go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 // Package utils contains internal helper functions for go-ethereum commands.
 package utils
@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"os/signal"
 	"regexp"
@@ -32,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/peterh/liner"
 )
@@ -58,15 +60,16 @@ func PromptConfirm(prompt string) (bool, error) {
 	)
 	prompt = prompt + " [y/N] "
 
-	if liner.TerminalSupported() {
-		lr := liner.NewLiner()
-		defer lr.Close()
-		input, err = lr.Prompt(prompt)
-	} else {
-		fmt.Print(prompt)
-		input, err = bufio.NewReader(os.Stdin).ReadString('\n')
-		fmt.Println()
-	}
+	// if liner.TerminalSupported() {
+	// 	fmt.Println("term")
+	// 	lr := liner.NewLiner()
+	// 	defer lr.Close()
+	// 	input, err = lr.Prompt(prompt)
+	// } else {
+	fmt.Print(prompt)
+	input, err = bufio.NewReader(os.Stdin).ReadString('\n')
+	fmt.Println()
+	// }
 
 	if len(input) > 0 && strings.ToUpper(input[:1]) == "Y" {
 		return true, nil
@@ -92,12 +95,12 @@ func PromptPassword(prompt string, warnTerm bool) (string, error) {
 	return input, err
 }
 
-func initDataDir(Datadir string) {
-	_, err := os.Stat(Datadir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			fmt.Printf("Data directory '%s' doesn't exist, creating it\n", Datadir)
-			os.Mkdir(Datadir, 0777)
+func CheckLegalese(datadir string) {
+	// check "first run"
+	if !common.FileExist(datadir) {
+		r, _ := PromptConfirm(legalese)
+		if !r {
+			Fatalf("Must accept to continue. Shutting down...\n")
 		}
 	}
 }
@@ -140,6 +143,15 @@ func StartEthereum(ethereum *eth.Ethereum) {
 		glog.V(logger.Error).Infof("Force quitting: this might not end so well.")
 		panic("boom")
 	}()
+}
+
+func InitOlympic() {
+	params.DurationLimit = big.NewInt(8)
+	params.GenesisGasLimit = big.NewInt(3141592)
+	params.MinGasLimit = big.NewInt(125000)
+	params.MaximumExtraDataSize = big.NewInt(1024)
+	NetworkIdFlag.Value = 0
+	core.BlockReward = big.NewInt(1.5e+18)
 }
 
 func FormatTransactionData(data string) []byte {
@@ -202,6 +214,11 @@ func ImportChain(chain *core.ChainManager, fn string) error {
 			} else if err != nil {
 				return fmt.Errorf("at block %d: %v", n, err)
 			}
+			// don't import first block
+			if b.NumberU64() == 0 {
+				i--
+				continue
+			}
 			blocks[i] = &b
 			n++
 		}
@@ -217,6 +234,7 @@ func ImportChain(chain *core.ChainManager, fn string) error {
 				batch, blocks[0].Hash().Bytes()[:4], blocks[i-1].Hash().Bytes()[:4])
 			continue
 		}
+
 		if _, err := chain.InsertChain(blocks[:i]); err != nil {
 			return fmt.Errorf("invalid block %d: %v", n, err)
 		}

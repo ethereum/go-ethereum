@@ -1,18 +1,18 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package secp256k1
 
@@ -21,9 +21,11 @@ package secp256k1
 /*
 #cgo CFLAGS: -I./secp256k1
 #cgo darwin CFLAGS: -I/usr/local/include
+#cgo freebsd CFLAGS: -I/usr/local/include
 #cgo linux,arm CFLAGS: -I/usr/local/arm/include
 #cgo LDFLAGS: -lgmp
 #cgo darwin LDFLAGS: -L/usr/local/lib
+#cgo freebsd LDFLAGS: -L/usr/local/lib
 #cgo linux,arm LDFLAGS: -L/usr/local/arm/lib
 #define USE_NUM_GMP
 #define USE_FIELD_10X26

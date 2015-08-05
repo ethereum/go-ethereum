@@ -1,18 +1,18 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
@@ -34,11 +34,18 @@ var (
 // If two or more are set to anything other than a 0 the canary
 // dies a horrible death.
 func Canary(statedb *state.StateDB) bool {
-	r := new(big.Int)
-	r.Add(r, statedb.GetState(jeff, common.Hash{}).Big())
-	r.Add(r, statedb.GetState(vitalik, common.Hash{}).Big())
-	r.Add(r, statedb.GetState(christoph, common.Hash{}).Big())
-	r.Add(r, statedb.GetState(gav, common.Hash{}).Big())
-
-	return r.Cmp(big.NewInt(1)) > 0
+	var r int
+	if (statedb.GetState(jeff, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
+		r++
+	}
+	if (statedb.GetState(gav, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
+		r++
+	}
+	if (statedb.GetState(christoph, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
+		r++
+	}
+	if (statedb.GetState(vitalik, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
+		r++
+	}
+	return r > 1
 }

@@ -8,11 +8,11 @@
 //
 // go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 // geth is the official command-line client for Ethereum.
 package main
@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/fdtrack"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -49,7 +50,7 @@ import (
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "0.9.38"
+	Version          = "1.0.0"
 )
 
 var (
@@ -276,10 +277,12 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
-		utils.GenesisNonceFlag,
+		utils.GenesisFileFlag,
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.BlockchainVersionFlag,
+		utils.OlympicFlag,
+		utils.CacheFlag,
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
@@ -344,6 +347,11 @@ func main() {
 }
 
 func run(ctx *cli.Context) {
+	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	if ctx.GlobalBool(utils.OlympicFlag.Name) {
+		utils.InitOlympic()
+	}
+
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
@@ -356,6 +364,8 @@ func run(ctx *cli.Context) {
 }
 
 func attach(ctx *cli.Context) {
+	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+
 	// Wrap the standard output with a colorified stream (windows)
 	if isatty.IsTerminal(os.Stdout.Fd()) {
 		if pr, pw, err := os.Pipe(); err == nil {
@@ -394,6 +404,8 @@ func attach(ctx *cli.Context) {
 }
 
 func console(ctx *cli.Context) {
+	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+
 	// Wrap the standard output with a colorified stream (windows)
 	if isatty.IsTerminal(os.Stdout.Fd()) {
 		if pr, pw, err := os.Pipe(); err == nil {
@@ -432,6 +444,8 @@ func console(ctx *cli.Context) {
 }
 
 func execJSFiles(ctx *cli.Context) {
+	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
@@ -457,6 +471,8 @@ func execJSFiles(ctx *cli.Context) {
 }
 
 func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (addrHex, auth string) {
+	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+
 	var err error
 	addrHex, err = utils.ParamToAddress(addr, am)
 	if err == nil {
@@ -480,13 +496,17 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (
 }
 
 func blockRecovery(ctx *cli.Context) {
+	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+
 	arg := ctx.Args().First()
 	if len(ctx.Args()) < 1 && len(arg) > 0 {
 		glog.Fatal("recover requires block number or hash")
 	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"))
+	utils.CheckLegalese(cfg.DataDir)
+
+	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"), cfg.DatabaseCache)
 	if err != nil {
 		glog.Fatalln("could not open db:", err)
 	}
@@ -512,6 +532,9 @@ func blockRecovery(ctx *cli.Context) {
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	// Start Ethereum itself
 	utils.StartEthereum(eth)
+
+	// Start logging file descriptor stats.
+	fdtrack.Start()
 
 	am := eth.AccountManager()
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
@@ -543,6 +566,8 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 }
 
 func accountList(ctx *cli.Context) {
+	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+
 	am := utils.MakeAccountManager(ctx)
 	accts, err := am.Accounts()
 	if err != nil {
@@ -591,6 +616,8 @@ func getPassPhrase(ctx *cli.Context, desc string, confirmation bool, i int) (pas
 }
 
 func accountCreate(ctx *cli.Context) {
+	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+
 	am := utils.MakeAccountManager(ctx)
 	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0)
 	acct, err := am.NewAccount(passphrase)
@@ -601,6 +628,8 @@ func accountCreate(ctx *cli.Context) {
 }
 
 func accountUpdate(ctx *cli.Context) {
+	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+
 	am := utils.MakeAccountManager(ctx)
 	arg := ctx.Args().First()
 	if len(arg) == 0 {
@@ -616,6 +645,8 @@ func accountUpdate(ctx *cli.Context) {
 }
 
 func importWallet(ctx *cli.Context) {
+	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
@@ -636,6 +667,8 @@ func importWallet(ctx *cli.Context) {
 }
 
 func accountImport(ctx *cli.Context) {
+	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
@@ -650,6 +683,8 @@ func accountImport(ctx *cli.Context) {
 }
 
 func makedag(ctx *cli.Context) {
+	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+
 	args := ctx.Args()
 	wrongArgs := func() {
 		utils.Fatalf(`Usage: geth makedag <block number> <outputdir>`)

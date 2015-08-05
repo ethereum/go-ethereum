@@ -8,11 +8,11 @@
 //
 // go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
 )
@@ -89,9 +90,9 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth
 		t.Fatal(err)
 	}
 
-	// set up mock genesis with balance on the testAddress
-	core.GenesisAccounts = []byte(testGenesis)
+	db, _ := ethdb.NewMemDatabase()
 
+	core.WriteGenesisBlockForTesting(db, common.HexToAddress(testAddress), common.String2Big(testBalance))
 	ks := crypto.NewKeyStorePlain(filepath.Join(tmp, "keystore"))
 	am := accounts.NewManager(ks)
 	conf := &eth.Config{
@@ -102,6 +103,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth
 		Name:           "test",
 		SolcPath:       testSolcPath,
 		PowTest:        true,
+		NewDB:          func(path string) (common.Database, error) { return db, nil },
 	}
 	if config != nil {
 		config(conf)
@@ -157,7 +159,7 @@ func TestAccounts(t *testing.T) {
 	defer os.RemoveAll(tmp)
 
 	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`"]`)
-	checkEvalJSON(t, repl, `eth.coinbase`, `null`)
+	checkEvalJSON(t, repl, `eth.coinbase`, `"`+testAddress+`"`)
 	val, err := repl.re.Run(`personal.newAccount("password")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -168,6 +170,7 @@ func TestAccounts(t *testing.T) {
 	}
 
 	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`","`+addr+`"]`)
+
 }
 
 func TestBlockChain(t *testing.T) {

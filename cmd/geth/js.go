@@ -8,11 +8,11 @@
 //
 // go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"sort"
@@ -43,6 +44,10 @@ import (
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
 )
+
+var passwordRegexp = regexp.MustCompile("personal.[nu]")
+
+const passwordRepl = ""
 
 type prompter interface {
 	AppendHistory(string)
@@ -413,12 +418,22 @@ func (self *jsre) interactive() {
 			str += input + "\n"
 			self.setIndent()
 			if indentCount <= 0 {
-				hist := str[:len(str)-1]
-				self.AppendHistory(hist)
+				hist := hidepassword(str[:len(str)-1])
+				if len(hist) > 0 {
+					self.AppendHistory(hist)
+				}
 				self.parseInput(str)
 				str = ""
 			}
 		}
+	}
+}
+
+func hidepassword(input string) string {
+	if passwordRegexp.MatchString(input) {
+		return passwordRepl
+	} else {
+		return input
 	}
 }
 
