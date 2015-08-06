@@ -35,6 +35,7 @@ func TestTable_pingReplace(t *testing.T) {
 	doit := func(newNodeIsResponding, lastInBucketIsResponding bool) {
 		transport := newPingRecorder()
 		tab := newTable(transport, NodeID{}, &net.UDPAddr{}, "")
+		defer tab.Close()
 		pingSender := newNode(MustHexID("a502af0f59b2aab7746995408c79e9ca312d2793cc997e44fc55eda62f0150bbb8c59a6f9269ba3a081518b62699ee807c7c19c20125ddfccca872608af9e370"), net.IP{}, 99, 99)
 
 		// fill up the sender's bucket.
@@ -158,9 +159,7 @@ func newPingRecorder() *pingRecorder {
 func (t *pingRecorder) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
 	panic("findnode called on pingRecorder")
 }
-func (t *pingRecorder) close() {
-	panic("close called on pingRecorder")
-}
+func (t *pingRecorder) close() {}
 func (t *pingRecorder) waitping(from NodeID) error {
 	return nil // remote always pings
 }
@@ -180,6 +179,7 @@ func TestTable_closest(t *testing.T) {
 		// for any node table, Target and N
 		tab := newTable(nil, test.Self, &net.UDPAddr{}, "")
 		tab.add(test.All)
+		defer tab.Close()
 
 		// check that doClosest(Target, N) returns nodes
 		result := tab.closest(test.Target, test.N).entries
@@ -237,6 +237,7 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 	}
 	test := func(buf []*Node) bool {
 		tab := newTable(nil, NodeID{}, &net.UDPAddr{}, "")
+		defer tab.Close()
 		for i := 0; i < len(buf); i++ {
 			ld := cfg.Rand.Intn(len(tab.buckets))
 			tab.add([]*Node{nodeAtDistance(tab.self.sha, ld)})
@@ -279,6 +280,7 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 func TestTable_Lookup(t *testing.T) {
 	self := nodeAtDistance(common.Hash{}, 0)
 	tab := newTable(lookupTestnet, self.ID, &net.UDPAddr{}, "")
+	defer tab.Close()
 
 	// lookup on empty table returns no nodes
 	if results := tab.Lookup(lookupTestnet.target); len(results) > 0 {
