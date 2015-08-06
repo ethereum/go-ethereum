@@ -40,7 +40,7 @@ func (s *SizeSuite) TestStorageSizeString(c *checker.C) {
 	c.Assert(StorageSize(data3).String(), checker.Equals, exp3)
 }
 
-func (s *CommonSuite) TestCommon(c *checker.C) {
+func (s *SizeSuite) TestCommon(c *checker.C) {
 	ether := CurrencyToString(BigPow(10, 19))
 	finney := CurrencyToString(BigPow(10, 16))
 	szabo := CurrencyToString(BigPow(10, 13))
