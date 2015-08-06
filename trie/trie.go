@@ -69,7 +69,7 @@ func (self *Trie) Iterator() *Iterator {
 
 func (self *Trie) Copy() *Trie {
 	cpy := make([]byte, 32)
-	copy(cpy, self.roothash)
+	copy(cpy, self.roothash) // NOTE: cpy isn't being used anywhere?
 	trie := New(nil, nil)
 	trie.cache = self.cache.Copy()
 	if self.root != nil {
@@ -131,7 +131,7 @@ func (self *Trie) Update(key, value []byte) Node {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	k := CompactHexDecode(string(key))
+	k := CompactHexDecode(key)
 
 	if len(value) != 0 {
 		node := NewValueNode(self, value)
@@ -149,7 +149,7 @@ func (self *Trie) Get(key []byte) []byte {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	k := CompactHexDecode(string(key))
+	k := CompactHexDecode(key)
 
 	n := self.get(self.root, k)
 	if n != nil {
@@ -164,7 +164,7 @@ func (self *Trie) Delete(key []byte) Node {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	k := CompactHexDecode(string(key))
+	k := CompactHexDecode(key)
 	self.root = self.delete(self.root, k)
 
 	return self.root
@@ -336,7 +336,7 @@ func (self *Trie) mknode(value *common.Value) Node {
 	case 2:
 		// A value node may consists of 2 bytes.
 		if value.Get(0).Len() != 0 {
-			key := CompactDecode(string(value.Get(0).Bytes()))
+			key := CompactDecode(value.Get(0).Bytes())
 			if key[len(key)-1] == 16 {
 				return NewShortNode(self, key, NewValueNode(self, value.Get(1).Bytes()))
 			} else {
