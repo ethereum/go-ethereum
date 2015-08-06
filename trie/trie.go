@@ -27,6 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+var StatePre = []byte("state-")
+
 func ParanoiaCheck(t1 *Trie, backend Backend) (bool, *Trie) {
 	t2 := New(nil, backend)
 

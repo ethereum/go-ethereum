@@ -48,14 +48,14 @@ func thePow() pow.PoW {
 
 func theChainManager(db common.Database, t *testing.T) *ChainManager {
 	var eventMux event.TypeMux
-	WriteTestNetGenesisBlock(db, db, 0)
-	chainMan, err := NewChainManager(db, db, db, thePow(), &eventMux)
+	WriteTestNetGenesisBlock(db, 0)
+	chainMan, err := NewChainManager(db, thePow(), &eventMux)
 	if err != nil {
 		t.Error("failed creating chainmanager:", err)
 		t.FailNow()
 		return nil
 	}
-	blockMan := NewBlockProcessor(db, db, nil, chainMan, &eventMux)
+	blockMan := NewBlockProcessor(db, nil, chainMan, &eventMux)
 	chainMan.SetProcessor(blockMan)
 
 	return chainMan
@@ -125,7 +125,7 @@ func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 
 		bman.bc.mu.Lock()
 		{
-			WriteBlock(bman.bc.blockDb, block)
+			WriteBlock(bman.bc.chainDb, block)
 		}
 		bman.bc.mu.Unlock()
 	}
@@ -387,7 +387,7 @@ func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block 
 
 func chm(genesis *types.Block, db common.Database) *ChainManager {
 	var eventMux event.TypeMux
-	bc := &ChainManager{extraDb: db, blockDb: db, stateDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
+	bc := &ChainManager{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
 	bc.cache, _ = lru.New(100)
 	bc.futureBlocks, _ = lru.New(100)
 	bc.processor = bproc{}
@@ -399,7 +399,7 @@ func chm(genesis *types.Block, db common.Database) *ChainManager {
 func TestReorgLongest(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
-	genesis, err := WriteTestNetGenesisBlock(db, db, 0)
+	genesis, err := WriteTestNetGenesisBlock(db, 0)
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -422,7 +422,7 @@ func TestReorgLongest(t *testing.T) {
 
 func TestReorgShortest(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	genesis, err := WriteTestNetGenesisBlock(db, db, 0)
+	genesis, err := WriteTestNetGenesisBlock(db, 0)
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -446,13 +446,13 @@ func TestReorgShortest(t *testing.T) {
 func TestInsertNonceError(t *testing.T) {
 	for i := 1; i < 25 && !t.Failed(); i++ {
 		db, _ := ethdb.NewMemDatabase()
-		genesis, err := WriteTestNetGenesisBlock(db, db, 0)
+		genesis, err := WriteTestNetGenesisBlock(db, 0)
 		if err != nil {
 			t.Error(err)
 			t.FailNow()
 		}
 		bc := chm(genesis, db)
-		bc.processor = NewBlockProcessor(db, db, bc.pow, bc, bc.eventMux)
+		bc.processor = NewBlockProcessor(db, bc.pow, bc, bc.eventMux)
 		blocks := makeChain(bc.currentBlock, i, db, 0)
 
 		fail := rand.Int() % len(blocks)
