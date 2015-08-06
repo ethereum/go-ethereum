@@ -167,7 +167,7 @@ func TestUDP_findnode(t *testing.T) {
 	for i := 0; i < bucketSize; i++ {
 		nodes.push(nodeAtDistance(test.table.self.sha, i+2), bucketSize)
 	}
-	test.table.add(nodes.entries)
+	test.table.stuff(nodes.entries)
 
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
