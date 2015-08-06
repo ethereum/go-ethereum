@@ -16,10 +16,6 @@
 
 package trie
 
-import (
-	"bytes"
-)
-
 func CompactEncode(hexSlice []byte) []byte {
 	terminator := 0
 	if hexSlice[len(hexSlice)-1] == 16 {
@@ -38,12 +34,12 @@ func CompactEncode(hexSlice []byte) []byte {
 		hexSlice = append([]byte{flags, 0}, hexSlice...)
 	}
 
-	var buff bytes.Buffer
-	for i := 0; i < len(hexSlice); i += 2 {
-		buff.WriteByte(byte(16*hexSlice[i] + hexSlice[i+1]))
+	l := len(hexSlice) / 2
+	var buf = make([]byte, l)
+	for i := 0; i < l; i++ {
+		buf[i] = 16*hexSlice[2*i] + hexSlice[2*i+1]
 	}
-
-	return buff.Bytes()
+	return buf
 }
 
 func CompactDecode(str []byte) []byte {
@@ -62,22 +58,22 @@ func CompactDecode(str []byte) []byte {
 }
 
 func CompactHexDecode(str []byte) []byte {
-	var nibbles []byte
-
-	for _, b := range str {
-		nibbles = append(nibbles, b/16)
-		nibbles = append(nibbles, b%16)
+	l := len(str)*2 + 1
+	var nibbles = make([]byte, l)
+	for i, b := range str {
+		nibbles[i*2] = b / 16
+		nibbles[i*2+1] = b % 16
 	}
-	nibbles = append(nibbles, 16)
+	nibbles[l-1] = 16
 	return nibbles
 }
 
-// assumes key is odd length
 func DecodeCompact(key []byte) []byte {
-	var res []byte
-	for i := 0; i < len(key)-1; i += 2 {
-		v1, v0 := key[i], key[i+1]
-		res = append(res, v1*16+v0)
+	l := len(key) / 2
+	var res = make([]byte, l)
+	for i := 0; i < l; i++ {
+		v1, v0 := key[2*i], key[2*i+1]
+		res[i] = v1*16 + v0
 	}
 	return res
 }
