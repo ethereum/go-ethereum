@@ -478,7 +478,7 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 }
 
 func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
-	if common.IsWindows() {
+	if runtime.GOOS == "windows" {
 		ipcpath = common.DefaultIpcPath()
 		if ctx.GlobalIsSet(IPCPathFlag.Name) {
 			ipcpath = ctx.GlobalString(IPCPathFlag.Name)

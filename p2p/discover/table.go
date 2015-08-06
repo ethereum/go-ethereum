@@ -164,7 +164,9 @@ func randUint(max uint32) uint32 {
 
 // Close terminates the network listener and flushes the node database.
 func (tab *Table) Close() {
-	tab.net.close()
+	if tab.net != nil {
+		tab.net.close()
+	}
 	tab.db.close()
 }
 
