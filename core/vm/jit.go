@@ -404,9 +404,10 @@ func jitCalculateGasAndSize(env Environment, context *Context, caller ContextRef
 
 		mSize, mStart := stack.data[stack.len()-2], stack.data[stack.len()-1]
 
+		add := new(big.Int)
 		gas.Add(gas, params.LogGas)
-		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(n)), params.LogTopicGas))
-		gas.Add(gas, new(big.Int).Mul(mSize, params.LogDataGas))
+		gas.Add(gas, add.Mul(big.NewInt(int64(n)), params.LogTopicGas))
+		gas.Add(gas, add.Mul(mSize, params.LogDataGas))
 
 		newMemSize = calcMemSize(mStart, mSize)
 	case EXP:
@@ -496,18 +497,20 @@ func jitCalculateGasAndSize(env Environment, context *Context, caller ContextRef
 		newMemSize.Mul(newMemSizeWords, u256(32))
 
 		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
+			// be careful reusing variables here when changing.
+			// The order has been optimised to reduce allocation
 			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
 			pow := new(big.Int).Exp(oldSize, common.Big2, Zero)
-			linCoef := new(big.Int).Mul(oldSize, params.MemoryGas)
+			linCoef := oldSize.Mul(oldSize, params.MemoryGas)
 			quadCoef := new(big.Int).Div(pow, params.QuadCoeffDiv)
 			oldTotalFee := new(big.Int).Add(linCoef, quadCoef)
 
 			pow.Exp(newMemSizeWords, common.Big2, Zero)
-			linCoef = new(big.Int).Mul(newMemSizeWords, params.MemoryGas)
-			quadCoef = new(big.Int).Div(pow, params.QuadCoeffDiv)
-			newTotalFee := new(big.Int).Add(linCoef, quadCoef)
+			linCoef = linCoef.Mul(newMemSizeWords, params.MemoryGas)
+			quadCoef = quadCoef.Div(pow, params.QuadCoeffDiv)
+			newTotalFee := linCoef.Add(linCoef, quadCoef)
 
-			fee := new(big.Int).Sub(newTotalFee, oldTotalFee)
+			fee := newTotalFee.Sub(newTotalFee, oldTotalFee)
 			gas.Add(gas, fee)
 		}
 	}

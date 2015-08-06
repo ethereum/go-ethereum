@@ -21,12 +21,15 @@ import (
 	"math/big"
 )
 
-func newstack() *stack {
-	return &stack{}
-}
-
+// stack is an object for basic stack operations. Items popped to the stack are
+// expected to be changed and modified. stack does not take care of adding newly
+// initialised objects.
 type stack struct {
 	data []*big.Int
+}
+
+func newstack() *stack {
+	return &stack{}
 }
 
 func (st *stack) Data() []*big.Int {

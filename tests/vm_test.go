@@ -30,7 +30,7 @@ func BenchmarkVmAckermann32Tests(b *testing.B) {
 
 func BenchmarkVmFibonacci16Tests(b *testing.B) {
 	fn := filepath.Join(vmTestDir, "vmPerformanceTest.json")
-	if err := BenchVmTest(fn, bconf{"fibonacci16", true, true}, b); err != nil {
+	if err := BenchVmTest(fn, bconf{"fibonacci16", true, false}, b); err != nil {
 		b.Error(err)
 	}
 }
