@@ -48,28 +48,28 @@ func (s *TrieEncodingSuite) TestCompactEncode(c *checker.C) {
 
 func (s *TrieEncodingSuite) TestCompactHexDecode(c *checker.C) {
 	exp := []byte{7, 6, 6, 5, 7, 2, 6, 2, 16}
-	res := CompactHexDecode("verb")
+	res := CompactHexDecode([]byte("verb"))
 	c.Assert(res, checker.DeepEquals, exp)
 }
 
 func (s *TrieEncodingSuite) TestCompactDecode(c *checker.C) {
 	// odd compact decode
 	exp := []byte{1, 2, 3, 4, 5}
-	res := CompactDecode("\x11\x23\x45")
+	res := CompactDecode([]byte("\x11\x23\x45"))
 	c.Assert(res, checker.DeepEquals, exp)
 
 	// even compact decode
 	exp = []byte{0, 1, 2, 3, 4, 5}
-	res = CompactDecode("\x00\x01\x23\x45")
+	res = CompactDecode([]byte("\x00\x01\x23\x45"))
 	c.Assert(res, checker.DeepEquals, exp)
 
 	// even terminated compact decode
 	exp = []byte{0, 15, 1, 12, 11, 8 /*term*/, 16}
-	res = CompactDecode("\x20\x0f\x1c\xb8")
+	res = CompactDecode([]byte("\x20\x0f\x1c\xb8"))
 	c.Assert(res, checker.DeepEquals, exp)
 
 	// even terminated compact decode
 	exp = []byte{15, 1, 12, 11, 8 /*term*/, 16}
-	res = CompactDecode("\x3f\x1c\xb8")
+	res = CompactDecode([]byte("\x3f\x1c\xb8"))
 	c.Assert(res, checker.DeepEquals, exp)
 }
