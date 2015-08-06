@@ -42,6 +42,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/mattn/go-colorable"
@@ -49,11 +51,14 @@ import (
 )
 
 const (
-	ClientIdentifier = "Geth"
-	Version          = "1.0.1"
+	ClientIdentifier = "Geth                                                                                                   "
+	VersionMajor     = 1
+	VersionMinor     = 0
+	VersionPatch     = 1
 )
 
 var (
+	Version         = fmt.Sprintf("%d.%d.%d", VersionMajor, VersionMinor, VersionPatch)
 	gitCommit       string // set via linker flagg
 	nodeNameVersion string
 	app             *cli.App
@@ -346,6 +351,27 @@ func main() {
 	}
 }
 
+func makeDefaultExtra() []byte {
+	var clientInfo = struct {
+		Version   uint
+		Name      string
+		GoVersion string
+		Os        string
+	}{uint(VersionMajor<<16 | VersionMinor<<8 | VersionPatch), ClientIdentifier, runtime.Version(), runtime.GOOS}
+	extra, err := rlp.EncodeToBytes(clientInfo)
+	if err != nil {
+		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
+	}
+
+	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
+		glog.V(logger.Debug).Infof("extra: %x\n", extra)
+		return nil
+	}
+
+	return extra
+}
+
 func run(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
 	if ctx.GlobalBool(utils.OlympicFlag.Name) {
@@ -353,6 +379,8 @@ func run(ctx *cli.Context) {
 	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	cfg.ExtraData = makeDefaultExtra()
+
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
