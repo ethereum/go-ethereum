@@ -139,8 +139,15 @@ func (self *Miner) Mining() bool {
 	return atomic.LoadInt32(&self.mining) > 0
 }
 
-func (self *Miner) HashRate() int64 {
-	return self.pow.GetHashrate()
+func (self *Miner) HashRate() (tot int64) {
+	tot += self.pow.GetHashrate()
+	// do we care this might race? is it worth we're rewriting some
+	// aspects of the worker/locking up agents so we can get an accurate
+	// hashrate?
+	for _, agent := range self.worker.agents {
+		tot += agent.GetHashRate()
+	}
+	return
 }
 
 func (self *Miner) SetExtra(extra []byte) {

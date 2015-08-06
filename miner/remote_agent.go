@@ -27,6 +27,11 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
+type hashrate struct {
+	ping time.Time
+	rate uint64
+}
+
 type RemoteAgent struct {
 	mu sync.Mutex
 
@@ -36,12 +41,22 @@ type RemoteAgent struct {
 
 	currentWork *Work
 	work        map[common.Hash]*Work
+
+	hashrateMu sync.RWMutex
+	hashrate   map[common.Hash]hashrate
 }
 
 func NewRemoteAgent() *RemoteAgent {
-	agent := &RemoteAgent{work: make(map[common.Hash]*Work)}
+	agent := &RemoteAgent{work: make(map[common.Hash]*Work), hashrate: make(map[common.Hash]hashrate)}
 
 	return agent
+}
+
+func (a *RemoteAgent) SubmitHashrate(id common.Hash, rate uint64) {
+	a.hashrateMu.Lock()
+	defer a.hashrateMu.Unlock()
+
+	a.hashrate[id] = hashrate{time.Now(), rate}
 }
 
 func (a *RemoteAgent) Work() chan<- *Work {
@@ -63,7 +78,17 @@ func (a *RemoteAgent) Stop() {
 	close(a.workCh)
 }
 
-func (a *RemoteAgent) GetHashRate() int64 { return 0 }
+// GetHashRate returns the accumulated hashrate of all identifier combined
+func (a *RemoteAgent) GetHashRate() (tot int64) {
+	a.hashrateMu.RLock()
+	defer a.hashrateMu.RUnlock()
+
+	// this could overflow
+	for _, hashrate := range a.hashrate {
+		tot += int64(hashrate.rate)
+	}
+	return
+}
 
 func (a *RemoteAgent) GetWork() [3]string {
 	a.mu.Lock()
@@ -131,6 +156,14 @@ out:
 				}
 			}
 			a.mu.Unlock()
+
+			a.hashrateMu.Lock()
+			for id, hashrate := range a.hashrate {
+				if time.Since(hashrate.ping) > 10*time.Second {
+					delete(a.hashrate, id)
+				}
+			}
+			a.hashrateMu.Unlock()
 		}
 	}
 }
