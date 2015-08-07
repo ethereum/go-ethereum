@@ -52,13 +52,13 @@ import (
 
 const (
 	ClientIdentifier = "Geth                                                                                                   "
+	Version          = "1.0.1"
 	VersionMajor     = 1
 	VersionMinor     = 0
 	VersionPatch     = 1
 )
 
 var (
-	Version         = fmt.Sprintf("%d.%d.%d", VersionMajor, VersionMinor, VersionPatch)
 	gitCommit       string // set via linker flagg
 	nodeNameVersion string
 	app             *cli.App
