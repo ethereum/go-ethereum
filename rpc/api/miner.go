@@ -126,7 +126,7 @@ func (self *minerApi) SetExtra(req *shared.Request) (interface{}, error) {
 		return nil, err
 	}
 
-	if uint64(len(args.Data)) > params.MaximumExtraDataSize.Uint64()*2 {
+	if uint64(len(args.Data)) > params.MaximumExtraDataSize.Uint64() {
 		return false, fmt.Errorf("extra datasize can be no longer than %v bytes", params.MaximumExtraDataSize)
 	}
 
