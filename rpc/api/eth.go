@@ -92,6 +92,7 @@ var (
 		"eth_hashrate":                            (*ethApi).Hashrate,
 		"eth_getWork":                             (*ethApi).GetWork,
 		"eth_submitWork":                          (*ethApi).SubmitWork,
+		"eth_submitHashrate":                      (*ethApi).SubmitHashrate,
 		"eth_resend":                              (*ethApi).Resend,
 		"eth_pendingTransactions":                 (*ethApi).PendingTransactions,
 		"eth_getTransactionReceipt":               (*ethApi).GetTransactionReceipt,
@@ -571,6 +572,15 @@ func (self *ethApi) SubmitWork(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 	return self.xeth.RemoteMining().SubmitWork(args.Nonce, common.HexToHash(args.Digest), common.HexToHash(args.Header)), nil
+}
+
+func (self *ethApi) SubmitHashrate(req *shared.Request) (interface{}, error) {
+	args := new(SubmitHashRateArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+	self.xeth.RemoteMining().SubmitHashrate(common.HexToHash(args.Id), args.Rate)
+	return nil, nil
 }
 
 func (self *ethApi) Resend(req *shared.Request) (interface{}, error) {
