@@ -57,7 +57,7 @@ contracts
 var (
 	UrlHintAddr         = "0x0"
 	HashRegAddr         = "0x0"
-	GlobalRegistrarAddr = "0x0"
+	GlobalRegistrarAddr = "0x90c4384bb05d96d2f54b27e0102da5240f7833ae"
 	// GlobalRegistrarAddr = "0xc6d9d2cd449a754c494264e1809c50e34d64562b"
 
 	zero = regexp.MustCompile("^(0x)?0*$")
