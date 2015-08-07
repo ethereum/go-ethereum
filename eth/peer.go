@@ -1,20 +1,20 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+package exp
 
 import (
 	"errors"
@@ -22,12 +22,12 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/exp/downloader"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/p2p"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -195,7 +195,7 @@ func (p *peer) RequestBlocks(hashes []common.Hash) error {
 	return p2p.Send(p.rw, GetBlocksMsg, hashes)
 }
 
-// Handshake executes the eth protocol handshake, negotiating version number,
+// Handshake executes the exp protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *peer) Handshake(td *big.Int, head common.Hash, genesis common.Hash) error {
 	// Send out own handshake in a new thread
@@ -242,12 +242,12 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, genesis common.Hash) err
 // String implements fmt.Stringer.
 func (p *peer) String() string {
 	return fmt.Sprintf("Peer %s [%s]", p.id,
-		fmt.Sprintf("eth/%2d", p.version),
+		fmt.Sprintf("exp/%2d", p.version),
 	)
 }
 
 // peerSet represents the collection of active peers currently participating in
-// the Ethereum sub-protocol.
+// the Expanse sub-protocol.
 type peerSet struct {
 	peers map[string]*peer
 	lock  sync.RWMutex

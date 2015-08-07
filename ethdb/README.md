@@ -1,10 +1,10 @@
 # ethdb
 
-The ethdb package contains the ethereum database interfaces
+The ethdb package contains the expanse database interfaces
 
 # Installation
 
-`go get github.com/ethereum/ethdb-go`
+`go get github.com/expanse-project/ethdb-go`
 
 # Usage
 

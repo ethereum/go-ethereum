@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package jsre
 
@@ -635,20 +635,20 @@ module.exports = SolidityTypeBytes;
 
 },{"./formatters":9,"./type":14}],7:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file coder.js
@@ -923,20 +923,20 @@ module.exports = SolidityTypeDynamicBytes;
 
 },{"./formatters":9,"./type":14}],9:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file formatters.js
@@ -1213,20 +1213,20 @@ module.exports = SolidityTypeInt;
 
 },{"./formatters":9,"./type":14}],11:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file param.js
@@ -1845,20 +1845,20 @@ module.exports = {
 
 },{"bignumber.js":"bignumber.js"}],19:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file sha3.js
@@ -1874,7 +1874,7 @@ module.exports = function (str, isNew) {
     if (str.substr(0, 2) === '0x' && !isNew) {
         console.warn('requirement of using web3.fromAscii before sha3 is deprecated');
         console.warn('new usage: \'web3.sha3("hello")\'');
-        console.warn('see https://github.com/ethereum/web3.js/pull/205');
+        console.warn('see https://github.com/expanse-project/web3.js/pull/205');
         console.warn('if you need to hash hex value, you can do \'sha3("0xfff", true)\'');
         str = utils.toAscii(str);
     }
@@ -1887,20 +1887,20 @@ module.exports = function (str, isNew) {
 
 },{"./utils":20,"crypto-js/sha3":47}],20:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file utils.js
@@ -2394,20 +2394,20 @@ module.exports={
 
 },{}],22:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file web3.js
  * @authors:
@@ -2420,11 +2420,11 @@ module.exports={
  */
 
 var version = require('./version.json');
-var net = require('./web3/methods/net');
-var eth = require('./web3/methods/eth');
-var db = require('./web3/methods/db');
-var shh = require('./web3/methods/shh');
-var watches = require('./web3/methods/watches');
+var net = require('./web3/net');
+var exp = require('./web3/exp');
+var db = require('./web3/db');
+var shh = require('./web3/shh');
+var watches = require('./web3/watches');
 var Filter = require('./web3/filter');
 var utils = require('./utils/utils');
 var formatters = require('./web3/formatters');
@@ -2445,7 +2445,7 @@ var web3Properties = [
         inputFormatter: utils.toDecimal
     }),
     new Property({
-        name: 'version.ethereum',
+        name: 'version.expanse',
         getter: 'eth_protocolVersion',
         inputFormatter: utils.toDecimal
     }),
@@ -2478,11 +2478,11 @@ web3.providers = {};
 web3.currentProvider = null;
 web3.version = {};
 web3.version.api = version.version;
-web3.eth = {};
+web3.exp = {};
 
 /*jshint maxparams:4 */
-web3.eth.filter = function (fil, callback) {
-    return new Filter(fil, watches.eth(), formatters.outputLogFormatter, callback);
+web3.exp.filter = function (fil, callback) {
+    return new Filter(fil, watches.exp(), formatters.outputLogFormatter, callback);
 };
 /*jshint maxparams:3 */
 
@@ -2520,7 +2520,7 @@ web3.createBatch = function () {
 };
 
 // ADD defaultblock
-Object.defineProperty(web3.eth, 'defaultBlock', {
+Object.defineProperty(web3.exp, 'defaultBlock', {
     get: function () {
         return c.defaultBlock;
     },
@@ -2530,7 +2530,7 @@ Object.defineProperty(web3.eth, 'defaultBlock', {
     }
 });
 
-Object.defineProperty(web3.eth, 'defaultAccount', {
+Object.defineProperty(web3.exp, 'defaultAccount', {
     get: function () {
         return c.defaultAccount;
     },
@@ -2561,8 +2561,8 @@ web3._extend.Property = require('./web3/property');
 setupProperties(web3, web3Properties);
 setupMethods(web3.net, net.methods);
 setupProperties(web3.net, net.properties);
-setupMethods(web3.eth, eth.methods);
-setupProperties(web3.eth, eth.properties);
+setupMethods(web3.exp, exp.methods);
+setupProperties(web3.exp, exp.properties);
 setupMethods(web3.db, db.methods);
 setupMethods(web3.shh, shh.methods);
 
@@ -2571,20 +2571,20 @@ module.exports = web3;
 
 },{"./utils/config":18,"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/filter":28,"./web3/formatters":29,"./web3/method":35,"./web3/methods/db":36,"./web3/methods/eth":37,"./web3/methods/net":38,"./web3/methods/shh":39,"./web3/methods/watches":40,"./web3/property":42,"./web3/requestmanager":43}],23:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file allevents.js
@@ -2647,7 +2647,7 @@ AllSolidityEvents.prototype.execute = function (options, callback) {
 
     var o = this.encode(options);
     var formatter = this.decode.bind(this);
-    return new Filter(o, watches.eth(), formatter, callback);
+    return new Filter(o, watches.exp(), formatter, callback);
 };
 
 AllSolidityEvents.prototype.attachToContract = function (contract) {
@@ -2660,20 +2660,20 @@ module.exports = AllSolidityEvents;
 
 },{"../utils/sha3":19,"../utils/utils":20,"./event":27,"./filter":28,"./formatters":29,"./methods/watches":40}],24:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file batch.js
@@ -2728,20 +2728,20 @@ module.exports = Batch;
 
 },{"./errors":26,"./jsonrpc":34,"./requestmanager":43}],25:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file contract.js
@@ -2838,7 +2838,7 @@ var checkForContractAddress = function(contract, abi, callback){
         callbackFired = false;
 
     // wait for receipt
-    var filter = web3.eth.filter('latest', function(e){
+    var filter = web3.exp.filter('latest', function(e){
         if(!e && !callbackFired) {
             count++;
 
@@ -2858,10 +2858,10 @@ var checkForContractAddress = function(contract, abi, callback){
 
             } else {
 
-                web3.eth.getTransactionReceipt(contract.transactionHash, function(e, receipt){
+                web3.exp.getTransactionReceipt(contract.transactionHash, function(e, receipt){
                     if(receipt && !callbackFired) {
 
-                        web3.eth.getCode(receipt.contractAddress, function(e, code){
+                        web3.exp.getCode(receipt.contractAddress, function(e, code){
                             /*jshint maxcomplexity: 5 */
 
                             if(callbackFired)
@@ -2945,7 +2945,7 @@ ContractFactory.prototype.new = function () {
     if(callback) {
 
         // wait for the contract address adn check if the code was deployed
-        web3.eth.sendTransaction(options, function (err, hash) {
+        web3.exp.sendTransaction(options, function (err, hash) {
             if (err) {
                 callback(err);
             } else {
@@ -2959,7 +2959,7 @@ ContractFactory.prototype.new = function () {
             }
         });
     } else {
-        var hash = web3.eth.sendTransaction(options);
+        var hash = web3.exp.sendTransaction(options);
         // add the transaction hash
         contract.transactionHash = hash;
         checkForContractAddress(contract, _this.abi);
@@ -3007,20 +3007,20 @@ module.exports = contract;
 
 },{"../solidity/coder":7,"../utils/utils":20,"../web3":22,"./allevents":23,"./event":27,"./function":30}],26:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file errors.js
@@ -3047,20 +3047,20 @@ module.exports = {
 
 },{}],27:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file event.js
@@ -3253,23 +3253,22 @@ SolidityEvent.prototype.attachToContract = function (contract) {
 
 module.exports = SolidityEvent;
 
-
 },{"../solidity/coder":7,"../utils/sha3":19,"../utils/utils":20,"./filter":28,"./formatters":29,"./methods/watches":40}],28:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file filter.js
  * @authors:
@@ -3468,20 +3467,20 @@ module.exports = Filter;
 
 },{"../utils/utils":20,"./formatters":29,"./requestmanager":43}],29:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file formatters.js
@@ -3757,20 +3756,20 @@ module.exports = {
 
 },{"../utils/config":18,"../utils/utils":20,"./iban":32}],30:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file function.js
@@ -3867,12 +3866,12 @@ SolidityFunction.prototype.call = function () {
 
 
     if (!callback) {
-        var output = web3.eth.call(payload, defaultBlock);
+        var output = web3.exp.call(payload, defaultBlock);
         return this.unpackOutput(output);
     } 
         
     var self = this;
-    web3.eth.call(payload, defaultBlock, function (error, output) {
+    web3.exp.call(payload, defaultBlock, function (error, output) {
         callback(error, self.unpackOutput(output));
     });
 };
@@ -3889,10 +3888,10 @@ SolidityFunction.prototype.sendTransaction = function () {
     var payload = this.toPayload(args);
 
     if (!callback) {
-        return web3.eth.sendTransaction(payload);
+        return web3.exp.sendTransaction(payload);
     }
 
-    web3.eth.sendTransaction(payload, callback);
+    web3.exp.sendTransaction(payload, callback);
 };
 
 /**
@@ -3907,10 +3906,10 @@ SolidityFunction.prototype.estimateGas = function () {
     var payload = this.toPayload(args);
 
     if (!callback) {
-        return web3.eth.estimateGas(payload);
+        return web3.exp.estimateGas(payload);
     }
 
-    web3.eth.estimateGas(payload, callback);
+    web3.exp.estimateGas(payload, callback);
 };
 
 /**
@@ -3994,20 +3993,20 @@ module.exports = SolidityFunction;
 
 },{"../solidity/coder":7,"../utils/sha3":19,"../utils/utils":20,"../web3":22,"./formatters":29}],31:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file httpprovider.js
  * @authors:
@@ -4041,7 +4040,7 @@ if (typeof Meteor !== 'undefined' && Meteor.isServer) { // jshint ignore: line
  * HttpProvider should be used to send rpc calls over http
  */
 var HttpProvider = function (host) {
-    this.host = host || 'http://localhost:8545';
+    this.host = host || 'http://localhost:9656';
 };
 
 /**
@@ -4142,20 +4141,20 @@ module.exports = HttpProvider;
 
 },{"./errors":26,"xmlhttprequest":17}],32:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file iban.js
@@ -5209,20 +5208,20 @@ module.exports = {
 
 },{"../../utils/utils":20,"../formatters":29,"../method":35,"../property":42}],38:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file eth.js
  * @authors:
@@ -5259,20 +5258,20 @@ module.exports = {
 
 },{"../../utils/utils":20,"../property":42}],39:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file shh.js
  * @authors:
@@ -5329,20 +5328,20 @@ module.exports = {
 
 },{"../formatters":29,"../method":35}],40:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file watches.js
  * @authors:
@@ -5445,20 +5444,20 @@ module.exports = {
 
 },{"../method":35}],41:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file namereg.js
@@ -5481,20 +5480,20 @@ module.exports = {
 
 },{"../contracts/GlobalRegistrar.json":1,"../contracts/ICAPRegistrar.json":2,"./contract":25}],42:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file property.js
@@ -5633,20 +5632,20 @@ module.exports = Property;
 
 },{"../utils/utils":20,"./requestmanager":43}],43:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file requestmanager.js
@@ -5665,7 +5664,7 @@ var errors = require('./errors');
 
 /**
  * It's responsible for passing messages to providers
- * It's also responsible for polling the ethereum node for incoming messages
+ * It's also responsible for polling the expanse node for incoming messages
  * Default poll timeout is 1 second
  * Singleton
  */
@@ -5895,20 +5894,20 @@ module.exports = RequestManager;
 
 },{"../utils/config":18,"../utils/utils":20,"./errors":26,"./jsonrpc":34}],44:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** 
  * @file transfer.js
@@ -5991,7 +5990,6 @@ module.exports = transfer;
 
 
 },{"../contracts/SmartExchange.json":3,"../web3":22,"./contract":25,"./iban":32,"./namereg":41}],45:[function(require,module,exports){
-
 },{}],46:[function(require,module,exports){
 ;(function (root, factory) {
 	if (typeof exports === "object") {
@@ -7377,11 +7375,11 @@ var namereg = require('./lib/web3/namereg');
 web3.providers.HttpProvider = require('./lib/web3/httpprovider');
 web3.providers.IpcProvider = require('./lib/web3/ipcprovider');
 
-web3.eth.contract = require('./lib/web3/contract');
-web3.eth.namereg = namereg.namereg;
-web3.eth.ibanNamereg = namereg.ibanNamereg;
-web3.eth.sendIBANTransaction = require('./lib/web3/transfer');
-web3.eth.iban = require('./lib/web3/iban');
+web3.exp.contract = require('./lib/web3/contract');
+web3.exp.namereg = namereg.namereg;
+web3.exp.ibanNamereg = namereg.ibanNamereg;
+web3.exp.sendIBANTransaction = require('./lib/web3/transfer');
+web3.exp.iban = require('./lib/web3/iban');
 
 // dont override global variable
 if (typeof window !== 'undefined' && typeof window.web3 === 'undefined') {

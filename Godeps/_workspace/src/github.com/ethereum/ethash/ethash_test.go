@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/crypto"
 )
 
 func init() {
@@ -69,30 +69,30 @@ var invalidZeroDiffBlock = testBlock{
 }
 
 func TestEthashVerifyValid(t *testing.T) {
-	eth := New()
+	exp := New()
 	for i, block := range validBlocks {
-		if !eth.Verify(block) {
+		if !exp.Verify(block) {
 			t.Errorf("block %d (%x) did not validate.", i, block.hashNoNonce[:6])
 		}
 	}
 }
 
 func TestEthashVerifyInvalid(t *testing.T) {
-	eth := New()
-	if eth.Verify(&invalidZeroDiffBlock) {
+	exp := New()
+	if exp.Verify(&invalidZeroDiffBlock) {
 		t.Errorf("should not validate - we just ensure it does not panic on this block")
 	}
 }
 
 func TestEthashConcurrentVerify(t *testing.T) {
-	eth, err := NewForTesting()
+	exp, err := NewForTesting()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(eth.Full.Dir)
+	defer os.RemoveAll(exp.Full.Dir)
 
 	block := &testBlock{difficulty: big.NewInt(10)}
-	nonce, md := eth.Search(block, nil)
+	nonce, md := exp.Search(block, nil)
 	block.nonce = nonce
 	block.mixDigest = common.BytesToHash(md)
 
@@ -101,7 +101,7 @@ func TestEthashConcurrentVerify(t *testing.T) {
 	wg.Add(100)
 	for i := 0; i < 100; i++ {
 		go func() {
-			if !eth.Verify(block) {
+			if !exp.Verify(block) {
 				t.Error("Block could not be verified")
 			}
 			wg.Done()
@@ -111,12 +111,12 @@ func TestEthashConcurrentVerify(t *testing.T) {
 }
 
 func TestEthashConcurrentSearch(t *testing.T) {
-	eth, err := NewForTesting()
+	exp, err := NewForTesting()
 	if err != nil {
 		t.Fatal(err)
 	}
-	eth.Turbo(true)
-	defer os.RemoveAll(eth.Full.Dir)
+	exp.Turbo(true)
+	defer os.RemoveAll(exp.Full.Dir)
 
 	type searchRes struct {
 		n  uint64
@@ -135,7 +135,7 @@ func TestEthashConcurrentSearch(t *testing.T) {
 	// launch n searches concurrently.
 	for i := 0; i < nsearch; i++ {
 		go func() {
-			nonce, md := eth.Search(block, stop)
+			nonce, md := exp.Search(block, stop)
 			select {
 			case found <- searchRes{n: nonce, md: md}:
 			case <-stop:
@@ -152,25 +152,25 @@ func TestEthashConcurrentSearch(t *testing.T) {
 
 	block.nonce = res.n
 	block.mixDigest = common.BytesToHash(res.md)
-	if !eth.Verify(block) {
+	if !exp.Verify(block) {
 		t.Error("Block could not be verified")
 	}
 }
 
 func TestEthashSearchAcrossEpoch(t *testing.T) {
-	eth, err := NewForTesting()
+	exp, err := NewForTesting()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(eth.Full.Dir)
+	defer os.RemoveAll(exp.Full.Dir)
 
 	for i := epochLength - 40; i < epochLength+40; i++ {
 		block := &testBlock{number: i, difficulty: big.NewInt(90)}
 		rand.Read(block.hashNoNonce[:])
-		nonce, md := eth.Search(block, nil)
+		nonce, md := exp.Search(block, nil)
 		block.nonce = nonce
 		block.mixDigest = common.BytesToHash(md)
-		if !eth.Verify(block) {
+		if !exp.Verify(block) {
 			t.Fatalf("Block could not be verified")
 		}
 	}

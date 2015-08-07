@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package api
 
@@ -21,10 +21,10 @@ import (
 
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/rpc/codec"
+	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/xeth"
 )
 
 var (
@@ -64,7 +64,7 @@ var (
 			"seedHash",
 			"setHead",
 		},
-		"eth": []string{
+		"exp": []string{
 			"accounts",
 			"blockNumber",
 			"call",
@@ -147,34 +147,34 @@ var (
 )
 
 // Parse a comma separated API string to individual api's
-func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.Ethereum) ([]shared.EthereumApi, error) {
+func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, exp *exp.Expanse) ([]shared.ExpanseApi, error) {
 	if len(strings.TrimSpace(apistr)) == 0 {
 		return nil, fmt.Errorf("Empty apistr provided")
 	}
 
 	names := strings.Split(apistr, ",")
-	apis := make([]shared.EthereumApi, len(names))
+	apis := make([]shared.ExpanseApi, len(names))
 
 	for i, name := range names {
 		switch strings.ToLower(strings.TrimSpace(name)) {
 		case shared.AdminApiName:
-			apis[i] = NewAdminApi(xeth, eth, codec)
+			apis[i] = NewAdminApi(xeth, exp, codec)
 		case shared.DebugApiName:
-			apis[i] = NewDebugApi(xeth, eth, codec)
+			apis[i] = NewDebugApi(xeth, exp, codec)
 		case shared.DbApiName:
-			apis[i] = NewDbApi(xeth, eth, codec)
+			apis[i] = NewDbApi(xeth, exp, codec)
 		case shared.EthApiName:
-			apis[i] = NewEthApi(xeth, eth, codec)
+			apis[i] = NewEthApi(xeth, exp, codec)
 		case shared.MinerApiName:
-			apis[i] = NewMinerApi(eth, codec)
+			apis[i] = NewMinerApi(exp, codec)
 		case shared.NetApiName:
-			apis[i] = NewNetApi(xeth, eth, codec)
+			apis[i] = NewNetApi(xeth, exp, codec)
 		case shared.ShhApiName:
-			apis[i] = NewShhApi(xeth, eth, codec)
+			apis[i] = NewShhApi(xeth, exp, codec)
 		case shared.TxPoolApiName:
-			apis[i] = NewTxPoolApi(xeth, eth, codec)
+			apis[i] = NewTxPoolApi(xeth, exp, codec)
 		case shared.PersonalApiName:
-			apis[i] = NewPersonalApi(xeth, eth, codec)
+			apis[i] = NewPersonalApi(xeth, exp, codec)
 		case shared.Web3ApiName:
 			apis[i] = NewWeb3Api(xeth, codec)
 		default:

@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2015 The go-expanse Authors
+// This file is part of go-expanse.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-expanse is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-expanse is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -26,11 +26,11 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/expanse-project/go-expanse/cmd/utils"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-project/go-expanse/rpc/codec"
+	"github.com/expanse-project/go-expanse/rpc/comms"
 	"github.com/gizak/termui"
 )
 
@@ -70,13 +70,13 @@ to display multiple metrics simultaneously.
 // monitor starts a terminal UI based monitoring tool for the requested metrics.
 func monitor(ctx *cli.Context) {
 	var (
-		client comms.EthereumClient
+		client comms.ExpanseClient
 		err    error
 	)
-	// Attach to an Ethereum node over IPC or RPC
+	// Attach to an Expanse node over IPC or RPC
 	endpoint := ctx.String(monitorCommandAttachFlag.Name)
 	if client, err = comms.ClientFromEndpoint(endpoint, codec.JSON); err != nil {
-		utils.Fatalf("Unable to attach to geth node: %v", err)
+		utils.Fatalf("Unable to attach to gexp node: %v", err)
 	}
 	defer client.Close()
 
@@ -95,7 +95,7 @@ func monitor(ctx *cli.Context) {
 		if len(list) > 0 {
 			utils.Fatalf("No metrics specified.\n\nAvailable:\n - %s", strings.Join(list, "\n - "))
 		} else {
-			utils.Fatalf("No metrics collected by geth (--%s).\n", utils.MetricsEnabledFlag.Name)
+			utils.Fatalf("No metrics collected by gexp (--%s).\n", utils.MetricsEnabledFlag.Name)
 		}
 	}
 	sort.Strings(monitored)
@@ -162,7 +162,7 @@ func monitor(ctx *cli.Context) {
 	}
 }
 
-// retrieveMetrics contacts the attached geth node and retrieves the entire set
+// retrieveMetrics contacts the attached gexp node and retrieves the entire set
 // of collected system metrics.
 func retrieveMetrics(xeth *rpc.Xeth) (map[string]interface{}, error) {
 	return xeth.Call("debug_metrics", []interface{}{true})

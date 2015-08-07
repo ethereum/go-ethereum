@@ -1,31 +1,31 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+package exp
 
 import (
 	"math/big"
 	"math/rand"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
 )
 
 const gpoProcessPastBlocks = 100
@@ -35,7 +35,7 @@ type blockPriceInfo struct {
 }
 
 type GasPriceOracle struct {
-	eth                           *Ethereum
+	exp                           *Expanse
 	chain                         *core.ChainManager
 	events                        event.Subscription
 	blocks                        map[uint64]*blockPriceInfo
@@ -44,12 +44,12 @@ type GasPriceOracle struct {
 	lastBase, minBase             *big.Int
 }
 
-func NewGasPriceOracle(eth *Ethereum) (self *GasPriceOracle) {
+func NewGasPriceOracle(exp *Expanse) (self *GasPriceOracle) {
 	self = &GasPriceOracle{}
 	self.blocks = make(map[uint64]*blockPriceInfo)
-	self.eth = eth
-	self.chain = eth.chainManager
-	self.events = eth.EventMux().Subscribe(
+	self.exp = exp
+	self.chain = exp.chainManager
+	self.events = exp.EventMux().Subscribe(
 		core.ChainEvent{},
 		core.ChainSplitEvent{},
 	)
@@ -105,7 +105,7 @@ func (self *GasPriceOracle) processBlock(block *types.Block) {
 		self.lastProcessed = i
 	}
 
-	lastBase := self.eth.GpoMinGasPrice
+	lastBase := self.exp.GpoMinGasPrice
 	bpl := self.blocks[i-1]
 	if bpl != nil {
 		lastBase = bpl.baseGasPrice
@@ -121,9 +121,9 @@ func (self *GasPriceOracle) processBlock(block *types.Block) {
 	}
 
 	if lastBase.Cmp(lp) < 0 {
-		corr = self.eth.GpobaseStepUp
+		corr = self.exp.GpobaseStepUp
 	} else {
-		corr = -self.eth.GpobaseStepDown
+		corr = -self.exp.GpobaseStepDown
 	}
 
 	crand := int64(corr * (900 + rand.Intn(201)))
@@ -151,7 +151,7 @@ func (self *GasPriceOracle) processBlock(block *types.Block) {
 func (self *GasPriceOracle) lowestPrice(block *types.Block) *big.Int {
 	gasUsed := big.NewInt(0)
 
-	receipts := self.eth.BlockProcessor().GetBlockReceipts(block.Hash())
+	receipts := self.exp.BlockProcessor().GetBlockReceipts(block.Hash())
 	if len(receipts) > 0 {
 		if cgu := receipts[len(receipts)-1].CumulativeGasUsed; cgu != nil {
 			gasUsed = receipts[len(receipts)-1].CumulativeGasUsed
@@ -159,7 +159,7 @@ func (self *GasPriceOracle) lowestPrice(block *types.Block) *big.Int {
 	}
 
 	if new(big.Int).Mul(gasUsed, big.NewInt(100)).Cmp(new(big.Int).Mul(block.GasLimit(),
-		big.NewInt(int64(self.eth.GpoFullBlockRatio)))) < 0 {
+		big.NewInt(int64(self.exp.GpoFullBlockRatio)))) < 0 {
 		// block is not full, could have posted a tx with MinGasPrice
 		return big.NewInt(0)
 	}
@@ -185,21 +185,21 @@ func (self *GasPriceOracle) SuggestPrice() *big.Int {
 	self.lastBaseMutex.Unlock()
 
 	if base == nil {
-		base = self.eth.GpoMinGasPrice
+		base = self.exp.GpoMinGasPrice
 	}
 	if base == nil {
 		return big.NewInt(10000000000000) // apparently MinGasPrice is not initialized during some tests
 	}
 
-	baseCorr := new(big.Int).Mul(base, big.NewInt(int64(self.eth.GpobaseCorrectionFactor)))
+	baseCorr := new(big.Int).Mul(base, big.NewInt(int64(self.exp.GpobaseCorrectionFactor)))
 	baseCorr.Div(baseCorr, big.NewInt(100))
 
-	if baseCorr.Cmp(self.eth.GpoMinGasPrice) < 0 {
-		return self.eth.GpoMinGasPrice
+	if baseCorr.Cmp(self.exp.GpoMinGasPrice) < 0 {
+		return self.exp.GpoMinGasPrice
 	}
 
-	if baseCorr.Cmp(self.eth.GpoMaxGasPrice) > 0 {
-		return self.eth.GpoMaxGasPrice
+	if baseCorr.Cmp(self.exp.GpoMaxGasPrice) > 0 {
+		return self.exp.GpoMaxGasPrice
 	}
 
 	return baseCorr

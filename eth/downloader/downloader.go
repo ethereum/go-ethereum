@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package downloader contains the manual full chain synchronisation.
 package downloader
@@ -27,12 +27,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -319,10 +319,10 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 		}
 	}()
 
-	glog.V(logger.Debug).Infof("Synchronizing with the network using: %s, eth/%d", p.id, p.version)
+	glog.V(logger.Debug).Infof("Synchronizing with the network using: %s, exp/%d", p.id, p.version)
 	switch p.version {
 	case eth60:
-		// Old eth/60 version, use reverse hash retrieval algorithm
+		// Old exp/60 version, use reverse hash retrieval algorithm
 		if err = d.fetchHashes60(p, hash); err != nil {
 			return err
 		}
@@ -330,7 +330,7 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 			return err
 		}
 	case eth61:
-		// New eth/61, use forward, concurrent hash and block retrieval algorithm
+		// New exp/61, use forward, concurrent hash and block retrieval algorithm
 		number, err := d.findAncestor(p)
 		if err != nil {
 			return err
@@ -349,7 +349,7 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 
 	default:
 		// Something very wrong, stop right here
-		glog.V(logger.Error).Infof("Unsupported eth protocol: %d", p.version)
+		glog.V(logger.Error).Infof("Unsupported exp protocol: %d", p.version)
 		return errBadPeer
 	}
 	glog.V(logger.Debug).Infoln("Synchronization completed")

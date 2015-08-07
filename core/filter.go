@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2014 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
@@ -32,7 +32,7 @@ type AccountChange struct {
 
 // Filtering interface
 type Filter struct {
-	eth      Backend
+	exp      Backend
 	earliest int64
 	latest   int64
 	skip     int
@@ -47,8 +47,8 @@ type Filter struct {
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
 // is interesting or not.
-func NewFilter(eth Backend) *Filter {
-	return &Filter{eth: eth}
+func NewFilter(exp Backend) *Filter {
+	return &Filter{exp: exp}
 }
 
 // Set the earliest and latest block for filtering.
@@ -80,7 +80,7 @@ func (self *Filter) SetSkip(skip int) {
 
 // Run filters logs with the current parameters set
 func (self *Filter) Find() state.Logs {
-	earliestBlock := self.eth.ChainManager().CurrentBlock()
+	earliestBlock := self.exp.ChainManager().CurrentBlock()
 	var earliestBlockNo uint64 = uint64(self.earliest)
 	if self.earliest == -1 {
 		earliestBlockNo = earliestBlock.NumberU64()
@@ -92,7 +92,7 @@ func (self *Filter) Find() state.Logs {
 
 	var (
 		logs  state.Logs
-		block = self.eth.ChainManager().GetBlockByNumber(latestBlockNo)
+		block = self.exp.ChainManager().GetBlockByNumber(latestBlockNo)
 	)
 
 done:
@@ -111,7 +111,7 @@ done:
 		// current parameters
 		if self.bloomFilter(block) {
 			// Get the logs of the block
-			unfiltered, err := self.eth.BlockProcessor().GetLogs(block)
+			unfiltered, err := self.exp.BlockProcessor().GetLogs(block)
 			if err != nil {
 				glog.V(logger.Warn).Infoln("err: filter get logs ", err)
 
@@ -121,7 +121,7 @@ done:
 			logs = append(logs, self.FilterLogs(unfiltered)...)
 		}
 
-		block = self.eth.ChainManager().GetBlock(block.ParentHash())
+		block = self.exp.ChainManager().GetBlock(block.ParentHash())
 	}
 
 	skip := int(math.Min(float64(len(logs)), float64(self.skip)))

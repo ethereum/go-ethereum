@@ -1,20 +1,20 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2014 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package xeth is the interface to all Ethereum functionality.
+// Package xeth is the interface to all Expanse functionality.
 package xeth
 
 import (
@@ -27,19 +27,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/event/filter"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/expanse-project/go-expanse/accounts"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/common/compiler"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/state"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/event/filter"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/miner"
+	"github.com/expanse-project/go-expanse/rlp"
 )
 
 var (
@@ -62,13 +62,13 @@ func DefaultGas() *big.Int { return new(big.Int).Set(defaultGas) }
 
 func (self *XEth) DefaultGasPrice() *big.Int {
 	if self.gpo == nil {
-		self.gpo = eth.NewGasPriceOracle(self.backend)
+		self.gpo = exp.NewGasPriceOracle(self.backend)
 	}
 	return self.gpo.SuggestPrice()
 }
 
 type XEth struct {
-	backend  *eth.Ethereum
+	backend  *exp.Expanse
 	frontend Frontend
 
 	state   *State
@@ -93,12 +93,12 @@ type XEth struct {
 
 	agent *miner.RemoteAgent
 
-	gpo *eth.GasPriceOracle
+	gpo *exp.GasPriceOracle
 }
 
-func NewTest(eth *eth.Ethereum, frontend Frontend) *XEth {
+func NewTest(exp *exp.Expanse, frontend Frontend) *XEth {
 	return &XEth{
-		backend:  eth,
+		backend:  exp,
 		frontend: frontend,
 	}
 }
@@ -106,22 +106,22 @@ func NewTest(eth *eth.Ethereum, frontend Frontend) *XEth {
 // New creates an XEth that uses the given frontend.
 // If a nil Frontend is provided, a default frontend which
 // confirms all transactions will be used.
-func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
+func New(expanse *exp.Expanse, frontend Frontend) *XEth {
 	xeth := &XEth{
-		backend:          ethereum,
+		backend:          expanse,
 		frontend:         frontend,
 		quit:             make(chan struct{}),
-		filterManager:    filter.NewFilterManager(ethereum.EventMux()),
+		filterManager:    filter.NewFilterManager(expanse.EventMux()),
 		logQueue:         make(map[int]*logQueue),
 		blockQueue:       make(map[int]*hashQueue),
 		transactionQueue: make(map[int]*hashQueue),
 		messages:         make(map[int]*whisperFilter),
 		agent:            miner.NewRemoteAgent(),
 	}
-	if ethereum.Whisper() != nil {
-		xeth.whisper = NewWhisper(ethereum.Whisper())
+	if expanse.Whisper() != nil {
+		xeth.whisper = NewWhisper(expanse.Whisper())
 	}
-	ethereum.Miner().Register(xeth.agent)
+	expanse.Miner().Register(xeth.agent)
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}

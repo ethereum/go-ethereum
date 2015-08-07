@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -e
+<<<<<<< HEAD
 echo "" > coverage.txt
 
 for d in $(find ./* -maxdepth 10 -type d -not -path "./build" -not -path "./Godeps/*" ); do

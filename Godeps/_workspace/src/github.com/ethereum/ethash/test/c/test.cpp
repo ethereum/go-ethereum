@@ -36,7 +36,7 @@ namespace fs = boost::filesystem;
 #define our_alloca(param__) alloca((size_t)(param__))
 
 
-// some functions taken from eth::dev for convenience.
+// some functions taken from exp::dev for convenience.
 std::string bytesToHexString(const uint8_t *str, const uint64_t s)
 {
 	std::ostringstream ret;

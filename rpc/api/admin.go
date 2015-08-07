@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package api
 
@@ -82,17 +82,17 @@ type adminhandler func(*adminApi, *shared.Request) (interface{}, error)
 // admin api provider
 type adminApi struct {
 	xeth     *xeth.XEth
-	ethereum *eth.Ethereum
+	expanse *exp.Expanse
 	codec    codec.Codec
 	coder    codec.ApiCoder
 	ds       *docserver.DocServer
 }
 
 // create a new admin api instance
-func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec) *adminApi {
+func NewAdminApi(xeth *xeth.XEth, expanse *exp.Expanse, codec codec.Codec) *adminApi {
 	return &adminApi{
 		xeth:     xeth,
-		ethereum: ethereum,
+		expanse: expanse,
 		codec:    codec,
 		coder:    codec.New(nil),
 		ds:       docserver.New("/"),
@@ -133,7 +133,7 @@ func (self *adminApi) AddPeer(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	err := self.ethereum.AddPeer(args.Url)
+	err := self.expanse.AddPeer(args.Url)
 	if err == nil {
 		return true, nil
 	}
@@ -141,15 +141,15 @@ func (self *adminApi) AddPeer(req *shared.Request) (interface{}, error) {
 }
 
 func (self *adminApi) Peers(req *shared.Request) (interface{}, error) {
-	return self.ethereum.PeersInfo(), nil
+	return self.expanse.PeersInfo(), nil
 }
 
 func (self *adminApi) NodeInfo(req *shared.Request) (interface{}, error) {
-	return self.ethereum.NodeInfo(), nil
+	return self.expanse.NodeInfo(), nil
 }
 
 func (self *adminApi) DataDir(req *shared.Request) (interface{}, error) {
-	return self.ethereum.DataDir, nil
+	return self.expanse.DataDir, nil
 }
 
 func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
@@ -194,10 +194,10 @@ func (self *adminApi) ImportChain(req *shared.Request) (interface{}, error) {
 			break
 		}
 		// Import the batch.
-		if hasAllBlocks(self.ethereum.ChainManager(), blocks[:i]) {
+		if hasAllBlocks(self.expanse.ChainManager(), blocks[:i]) {
 			continue
 		}
-		if _, err := self.ethereum.ChainManager().InsertChain(blocks[:i]); err != nil {
+		if _, err := self.expanse.ChainManager().InsertChain(blocks[:i]); err != nil {
 			return false, fmt.Errorf("invalid block %d: %v", n, err)
 		}
 	}
@@ -215,7 +215,7 @@ func (self *adminApi) ExportChain(req *shared.Request) (interface{}, error) {
 		return false, err
 	}
 	defer fh.Close()
-	if err := self.ethereum.ChainManager().Export(fh); err != nil {
+	if err := self.expanse.ChainManager().Export(fh); err != nil {
 		return false, err
 	}
 
@@ -233,7 +233,7 @@ func (self *adminApi) Verbosity(req *shared.Request) (interface{}, error) {
 }
 
 func (self *adminApi) ChainSyncStatus(req *shared.Request) (interface{}, error) {
-	pending, cached, importing, estimate := self.ethereum.Downloader().Stats()
+	pending, cached, importing, estimate := self.expanse.Downloader().Stats()
 
 	return map[string]interface{}{
 		"blocksAvailable":        pending,
@@ -268,7 +268,7 @@ func (self *adminApi) StartRPC(req *shared.Request) (interface{}, error) {
 		CorsDomain:    args.CorsDomain,
 	}
 
-	apis, err := ParseApiString(args.Apis, self.codec, self.xeth, self.ethereum)
+	apis, err := ParseApiString(args.Apis, self.codec, self.xeth, self.expanse)
 	if err != nil {
 		return false, err
 	}
@@ -434,12 +434,12 @@ func (self *adminApi) RegisterUrl(req *shared.Request) (interface{}, error) {
 }
 
 func (self *adminApi) StartNatSpec(req *shared.Request) (interface{}, error) {
-	self.ethereum.NatSpec = true
+	self.expanse.NatSpec = true
 	return true, nil
 }
 
 func (self *adminApi) StopNatSpec(req *shared.Request) (interface{}, error) {
-	self.ethereum.NatSpec = false
+	self.expanse.NatSpec = false
 	return true, nil
 }
 

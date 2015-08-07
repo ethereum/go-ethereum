@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package api
 
@@ -48,15 +48,15 @@ type minerhandler func(*minerApi, *shared.Request) (interface{}, error)
 
 // miner api provider
 type minerApi struct {
-	ethereum *eth.Ethereum
+	expanse *exp.Expanse
 	methods  map[string]minerhandler
 	codec    codec.ApiCoder
 }
 
 // create a new miner api instance
-func NewMinerApi(ethereum *eth.Ethereum, coder codec.Codec) *minerApi {
+func NewMinerApi(expanse *exp.Expanse, coder codec.Codec) *minerApi {
 	return &minerApi{
-		ethereum: ethereum,
+		expanse: expanse,
 		methods:  MinerMapping,
 		codec:    coder.New(nil),
 	}
@@ -96,11 +96,11 @@ func (self *minerApi) StartMiner(req *shared.Request) (interface{}, error) {
 		return nil, err
 	}
 	if args.Threads == -1 { // (not specified by user, use default)
-		args.Threads = self.ethereum.MinerThreads
+		args.Threads = self.expanse.MinerThreads
 	}
 
-	self.ethereum.StartAutoDAG()
-	err := self.ethereum.StartMining(args.Threads)
+	self.expanse.StartAutoDAG()
+	err := self.expanse.StartMining(args.Threads)
 	if err == nil {
 		return true, nil
 	}
@@ -109,12 +109,12 @@ func (self *minerApi) StartMiner(req *shared.Request) (interface{}, error) {
 }
 
 func (self *minerApi) StopMiner(req *shared.Request) (interface{}, error) {
-	self.ethereum.StopMining()
+	self.expanse.StopMining()
 	return true, nil
 }
 
 func (self *minerApi) Hashrate(req *shared.Request) (interface{}, error) {
-	return self.ethereum.Miner().HashRate(), nil
+	return self.expanse.Miner().HashRate(), nil
 }
 
 func (self *minerApi) SetExtra(req *shared.Request) (interface{}, error) {
@@ -136,7 +136,7 @@ func (self *minerApi) SetGasPrice(req *shared.Request) (interface{}, error) {
 		return false, err
 	}
 
-	self.ethereum.Miner().SetGasPrice(common.String2Big(args.Price))
+	self.expanse.Miner().SetGasPrice(common.String2Big(args.Price))
 	return true, nil
 }
 
@@ -145,17 +145,17 @@ func (self *minerApi) SetEtherbase(req *shared.Request) (interface{}, error) {
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return false, err
 	}
-	self.ethereum.SetEtherbase(args.Etherbase)
+	self.expanse.SetEtherbase(args.Etherbase)
 	return nil, nil
 }
 
 func (self *minerApi) StartAutoDAG(req *shared.Request) (interface{}, error) {
-	self.ethereum.StartAutoDAG()
+	self.expanse.StartAutoDAG()
 	return true, nil
 }
 
 func (self *minerApi) StopAutoDAG(req *shared.Request) (interface{}, error) {
-	self.ethereum.StopAutoDAG()
+	self.expanse.StopAutoDAG()
 	return true, nil
 }
 

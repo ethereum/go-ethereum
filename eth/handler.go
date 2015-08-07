@@ -1,20 +1,20 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+package exp
 
 import (
 	"fmt"
@@ -23,17 +23,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/fetcher"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/pow"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/exp/downloader"
+	"github.com/expanse-project/go-expanse/exp/fetcher"
+	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/p2p"
+	"github.com/expanse-project/go-expanse/pow"
+	"github.com/expanse-project/go-expanse/rlp"
 )
 
 // This is the target maximum size of returned blocks for the
@@ -83,8 +83,8 @@ type ProtocolManager struct {
 	quit bool
 }
 
-// NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
-// with the ethereum network.
+// NewProtocolManager returns a new expanse sub protocol manager. The Expanse sub protocol manages peers capable
+// with the expanse network.
 func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager) *ProtocolManager {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
@@ -103,7 +103,7 @@ func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow po
 		version := ProtocolVersions[i]
 
 		manager.SubProtocols[i] = p2p.Protocol{
-			Name:    "eth",
+			Name:    "exp",
 			Version: version,
 			Length:  ProtocolLengths[i],
 			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
@@ -135,7 +135,7 @@ func (pm *ProtocolManager) removePeer(id string) {
 	}
 	glog.V(logger.Debug).Infoln("Removing peer", id)
 
-	// Unregister the peer from the downloader and Ethereum peer set
+	// Unregister the peer from the downloader and Expanse peer set
 	pm.downloader.UnregisterPeer(id)
 	if err := pm.peers.Unregister(id); err != nil {
 		glog.V(logger.Error).Infoln("Removal failed:", err)
@@ -162,7 +162,7 @@ func (pm *ProtocolManager) Start() {
 func (pm *ProtocolManager) Stop() {
 	// Showing a log message. During download / process this could actually
 	// take between 5 to 10 seconds and therefor feedback is required.
-	glog.V(logger.Info).Infoln("Stopping ethereum protocol handler...")
+	glog.V(logger.Info).Infoln("Stopping expanse protocol handler...")
 
 	pm.quit = true
 	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
@@ -172,19 +172,19 @@ func (pm *ProtocolManager) Stop() {
 	// Wait for any process action
 	pm.wg.Wait()
 
-	glog.V(logger.Info).Infoln("Ethereum protocol handler stopped")
+	glog.V(logger.Info).Infoln("Expanse protocol handler stopped")
 }
 
 func (pm *ProtocolManager) newPeer(pv, nv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	return newPeer(pv, nv, p, rw)
 }
 
-// handle is the callback invoked to manage the life cycle of an eth peer. When
+// handle is the callback invoked to manage the life cycle of an exp peer. When
 // this function terminates, the peer is disconnected.
 func (pm *ProtocolManager) handle(p *peer) error {
 	glog.V(logger.Debug).Infof("%v: peer connected [%s]", p, p.Name())
 
-	// Execute the Ethereum handshake
+	// Execute the Expanse handshake
 	td, head, genesis := pm.chainman.Status()
 	if err := p.Handshake(td, head, genesis); err != nil {
 		glog.V(logger.Debug).Infof("%v: handshake failed: %v", p, err)

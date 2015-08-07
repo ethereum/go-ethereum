@@ -1,25 +1,25 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package api
 
 import (
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/rpc/shared"
 )
 
 const (
@@ -29,14 +29,14 @@ const (
 // combines multiple API's
 type MergedApi struct {
 	apis    map[string]string
-	methods map[string]shared.EthereumApi
+	methods map[string]shared.ExpanseApi
 }
 
 // create new merged api instance
-func newMergedApi(apis ...shared.EthereumApi) *MergedApi {
+func newMergedApi(apis ...shared.ExpanseApi) *MergedApi {
 	mergedApi := new(MergedApi)
 	mergedApi.apis = make(map[string]string, len(apis))
-	mergedApi.methods = make(map[string]shared.EthereumApi)
+	mergedApi.methods = make(map[string]shared.ExpanseApi)
 
 	for _, api := range apis {
 		mergedApi.apis[api.Name()] = api.ApiVersion()
