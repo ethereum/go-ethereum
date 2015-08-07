@@ -18,6 +18,7 @@
 package miner
 
 import (
+	"fmt"
 	"math/big"
 	"sync/atomic"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
@@ -150,8 +152,13 @@ func (self *Miner) HashRate() (tot int64) {
 	return
 }
 
-func (self *Miner) SetExtra(extra []byte) {
+func (self *Miner) SetExtra(extra []byte) error {
+	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+		return fmt.Errorf("Extra exceeds max length. %d > %v", len(extra), params.MaximumExtraDataSize)
+	}
+
 	self.worker.extra = extra
+	return nil
 }
 
 func (self *Miner) PendingState() *state.StateDB {

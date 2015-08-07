@@ -17,12 +17,9 @@
 package api
 
 import (
-	"fmt"
-
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
@@ -126,11 +123,10 @@ func (self *minerApi) SetExtra(req *shared.Request) (interface{}, error) {
 		return nil, err
 	}
 
-	if uint64(len(args.Data)) > params.MaximumExtraDataSize.Uint64()*2 {
-		return false, fmt.Errorf("extra datasize can be no longer than %v bytes", params.MaximumExtraDataSize)
+	if err := self.ethereum.Miner().SetExtra([]byte(args.Data)); err != nil {
+		return false, err
 	}
 
-	self.ethereum.Miner().SetExtra([]byte(args.Data))
 	return true, nil
 }
 
