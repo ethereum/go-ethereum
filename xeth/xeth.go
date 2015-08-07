@@ -894,7 +894,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 		return "", err
 	}
 
-	if !isAddress(toStr) {
+	if len(toStr) > 0 && toStr != "0x" && !isAddress(toStr) {
 		return "", errors.New("Invalid address")
 	}
 
