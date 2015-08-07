@@ -44,35 +44,18 @@ func (self *ipcClient) Close() {
 
 func (self *ipcClient) Send(req interface{}) error {
 	var err error
-	if r, ok := req.(*shared.Request); ok {
-		if err = self.coder.WriteResponse(r); err != nil {
-			if _, ok := err.(*net.OpError); ok { // connection lost, retry once
-				if err = self.reconnect(); err == nil {
-					err = self.coder.WriteResponse(r)
-				}
+	if err = self.coder.WriteResponse(req); err != nil {
+		if _, ok := err.(*net.OpError); ok { // connection lost, retry once
+			if err = self.reconnect(); err == nil {
+				err = self.coder.WriteResponse(req)
 			}
 		}
-		return err
 	}
-
-	return fmt.Errorf("Invalid request (%T)", req)
+	return err
 }
 
 func (self *ipcClient) Recv() (interface{}, error) {
-	res, err := self.coder.ReadResponse()
-	if err != nil {
-		return nil, err
-	}
-
-	if r, ok := res.(shared.SuccessResponse); ok {
-		return r.Result, nil
-	}
-
-	if r, ok := res.(shared.ErrorResponse); ok {
-		return r.Error, nil
-	}
-
-	return res, err
+	return self.coder.ReadResponse()
 }
 
 func (self *ipcClient) SupportedModules() (map[string]string, error) {
@@ -91,7 +74,7 @@ func (self *ipcClient) SupportedModules() (map[string]string, error) {
 		return nil, err
 	}
 
-	if sucRes, ok := res.(shared.SuccessResponse); ok {
+	if sucRes, ok := res.(*shared.SuccessResponse); ok {
 		data, _ := json.Marshal(sucRes.Result)
 		modules := make(map[string]string)
 		err = json.Unmarshal(data, &modules)
@@ -109,8 +92,8 @@ func NewIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 }
 
 // Start IPC server
-func StartIpc(cfg IpcConfig, codec codec.Codec, offeredApi shared.EthereumApi) error {
-	return startIpc(cfg, codec, offeredApi)
+func StartIpc(cfg IpcConfig, codec codec.Codec, initializer func(conn net.Conn) (shared.EthereumApi, error)) error {
+	return startIpc(cfg, codec, initializer)
 }
 
 func newIpcConnId() int {
