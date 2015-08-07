@@ -20,8 +20,10 @@ package xeth
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
+	"regexp"
 	"sync"
 	"time"
 
@@ -45,6 +47,7 @@ var (
 	defaultGasPrice  = big.NewInt(10000000000000) //150000000000
 	defaultGas       = big.NewInt(90000)          //500000
 	dappStorePre     = []byte("dapp-")
+	addrReg          = regexp.MustCompile(`^(0x)?[a-fA-F0-9]{40}$`)
 )
 
 // byte will be inferred
@@ -878,6 +881,10 @@ func (self *XEth) Sign(fromStr, hashStr string, didUnlock bool) (string, error) 
 	return common.ToHex(sig), nil
 }
 
+func isAddress(addr string) bool {
+	return addrReg.MatchString(addr)
+}
+
 func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 
 	// this minimalistic recoding is enough (works for natspec.js)
@@ -885,6 +892,10 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	if !self.ConfirmTransaction(jsontx) {
 		err := fmt.Errorf("Transaction not confirmed")
 		return "", err
+	}
+
+	if !isAddress(toStr) {
+		return "", errors.New("Invalid address")
 	}
 
 	var (
