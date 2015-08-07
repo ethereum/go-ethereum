@@ -1,26 +1,26 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package api
 
 import (
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/rpc/codec"
+	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/xeth"
 )
 
 const (
@@ -40,16 +40,16 @@ type txpoolhandler func(*txPoolApi, *shared.Request) (interface{}, error)
 // txpool api provider
 type txPoolApi struct {
 	xeth     *xeth.XEth
-	ethereum *eth.Ethereum
+	expanse *exp.Expanse
 	methods  map[string]txpoolhandler
 	codec    codec.ApiCoder
 }
 
 // create a new txpool api instance
-func NewTxPoolApi(xeth *xeth.XEth, eth *eth.Ethereum, coder codec.Codec) *txPoolApi {
+func NewTxPoolApi(xeth *xeth.XEth, exp *exp.Expanse, coder codec.Codec) *txPoolApi {
 	return &txPoolApi{
 		xeth:     xeth,
-		ethereum: eth,
+		expanse: exp,
 		methods:  txpoolMapping,
 		codec:    coder.New(nil),
 	}
@@ -84,7 +84,7 @@ func (self *txPoolApi) ApiVersion() string {
 }
 
 func (self *txPoolApi) Status(req *shared.Request) (interface{}, error) {
-	pending, queue := self.ethereum.TxPool().Stats()
+	pending, queue := self.expanse.TxPool().Stats()
 	return map[string]int{
 		"pending": pending,
 		"queued":  queue,

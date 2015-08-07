@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/ethereum/go-ethereum/fdtrack"
+	"github.com/expanse-project/go-expanse/fdtrack"
 )
 
 // Implement the NAT-PMP protocol, typically supported by Apple routers and open source

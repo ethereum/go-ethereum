@@ -14,7 +14,7 @@ echo "mode: count" > profile.cov
 
 for pkg in $(go list ./...); do
     # drop the namespace prefix.
-    dir=${pkg##github.com/ethereum/go-ethereum/}
+    dir=${pkg##github.com/expanse-project/go-expanse/}
     
     if [[ $dir != "tests" ]]; then
         go test -covermode=count -coverprofile=$dir/profile.tmp $pkg

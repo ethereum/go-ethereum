@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package api
 
@@ -23,11 +23,11 @@ import (
 
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/rpc/codec"
+	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/xeth"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -35,16 +35,16 @@ const (
 	EthApiVersion = "1.0"
 )
 
-// eth api provider
-// See https://github.com/ethereum/wiki/wiki/JSON-RPC
+// exp api provider
+// See https://github.com/expanse-project/wiki/wiki/JSON-RPC
 type ethApi struct {
 	xeth     *xeth.XEth
-	ethereum *eth.Ethereum
+	expanse *exp.Expanse
 	methods  map[string]ethhandler
 	codec    codec.ApiCoder
 }
 
-// eth callback handler
+// exp callback handler
 type ethhandler func(*ethApi, *shared.Request) (interface{}, error)
 
 var (
@@ -99,8 +99,8 @@ var (
 )
 
 // create new ethApi instance
-func NewEthApi(xeth *xeth.XEth, eth *eth.Ethereum, codec codec.Codec) *ethApi {
-	return &ethApi{xeth, eth, ethMapping, codec.New(nil)}
+func NewEthApi(xeth *xeth.XEth, exp *exp.Expanse, codec codec.Codec) *ethApi {
+	return &ethApi{xeth, exp, ethMapping, codec.New(nil)}
 }
 
 // collection with supported methods
@@ -581,10 +581,10 @@ func (self *ethApi) Resend(req *shared.Request) (interface{}, error) {
 
 	from := common.HexToAddress(args.Tx.From)
 
-	pending := self.ethereum.TxPool().GetTransactions()
+	pending := self.expanse.TxPool().GetTransactions()
 	for _, p := range pending {
 		if pFrom, err := p.From(); err == nil && pFrom == from && p.SigHash() == args.Tx.tx.SigHash() {
-			self.ethereum.TxPool().RemoveTx(common.HexToHash(args.Tx.Hash))
+			self.expanse.TxPool().RemoveTx(common.HexToHash(args.Tx.Hash))
 			return self.xeth.Transact(args.Tx.From, args.Tx.To, args.Tx.Nonce, args.Tx.Value, args.GasLimit, args.GasPrice, args.Tx.Data)
 		}
 	}
@@ -593,11 +593,11 @@ func (self *ethApi) Resend(req *shared.Request) (interface{}, error) {
 }
 
 func (self *ethApi) PendingTransactions(req *shared.Request) (interface{}, error) {
-	txs := self.ethereum.TxPool().GetTransactions()
+	txs := self.expanse.TxPool().GetTransactions()
 
 	// grab the accounts from the account manager. This will help with determining which
 	// transactions should be returned.
-	accounts, err := self.ethereum.AccountManager().Accounts()
+	accounts, err := self.expanse.AccountManager().Accounts()
 	if err != nil {
 		return nil, err
 	}

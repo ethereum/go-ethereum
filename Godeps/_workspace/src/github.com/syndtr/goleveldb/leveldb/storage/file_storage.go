@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/fdtrack"
+	"github.com/expanse-project/go-expanse/fdtrack"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 

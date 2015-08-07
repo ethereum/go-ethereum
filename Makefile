@@ -2,13 +2,13 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth mist all test travis-test-with-coverage clean
+.PHONY: gexp mist all test travis-test-with-coverage clean
 GOBIN = build/bin
 
-geth:
-	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/geth
+gexp:
+	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/gexp
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/geth\" to launch geth."
+	@echo "Run \"$(GOBIN)/gexp\" to launch gexp."
 
 mist:
 	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/mist

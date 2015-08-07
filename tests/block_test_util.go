@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package tests
 
@@ -28,16 +28,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/expanse-project/go-expanse/accounts"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/state"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/rlp"
 )
 
 // Block Test JSON Format
@@ -162,23 +162,23 @@ func runBlockTest(test *BlockTest) error {
 	cfg := test.makeEthConfig()
 	cfg.GenesisBlock = test.Genesis
 
-	ethereum, err := eth.New(cfg)
+	expanse, err := exp.New(cfg)
 	if err != nil {
 		return err
 	}
 
-	err = ethereum.Start()
+	err = expanse.Start()
 	if err != nil {
 		return err
 	}
 
 	// import pre accounts
-	statedb, err := test.InsertPreState(ethereum)
+	statedb, err := test.InsertPreState(expanse)
 	if err != nil {
 		return fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	err = test.TryBlocksInsert(ethereum.ChainManager())
+	err = test.TryBlocksInsert(expanse.ChainManager())
 	if err != nil {
 		return err
 	}
@@ -189,10 +189,10 @@ func runBlockTest(test *BlockTest) error {
 	return nil
 }
 
-func (test *BlockTest) makeEthConfig() *eth.Config {
+func (test *BlockTest) makeEthConfig() *exp.Config {
 	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"))
 
-	return &eth.Config{
+	return &exp.Config{
 		DataDir:        common.DefaultDataDir(),
 		Verbosity:      5,
 		Etherbase:      common.Address{},
@@ -203,8 +203,8 @@ func (test *BlockTest) makeEthConfig() *eth.Config {
 
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
-func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, error) {
-	db := ethereum.StateDb()
+func (t *BlockTest) InsertPreState(expanse *exp.Expanse) (*state.StateDB, error) {
+	db := expanse.StateDb()
 	statedb := state.New(common.Hash{}, db)
 	for addrString, acct := range t.preAccounts {
 		addr, err := hex.DecodeString(addrString)
@@ -227,7 +227,7 @@ func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, erro
 		if acct.PrivateKey != "" {
 			privkey, err := hex.DecodeString(strings.TrimPrefix(acct.PrivateKey, "0x"))
 			err = crypto.ImportBlockTestKey(privkey)
-			err = ethereum.AccountManager().TimedUnlock(common.BytesToAddress(addr), "", 999999*time.Second)
+			err = expanse.AccountManager().TimedUnlock(common.BytesToAddress(addr), "", 999999*time.Second)
 			if err != nil {
 				return nil, err
 			}
@@ -252,7 +252,7 @@ func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, erro
 	return statedb, nil
 }
 
-/* See https://github.com/ethereum/tests/wiki/Blockchain-Tests-II
+/* See https://github.com/expanse-project/tests/wiki/Blockchain-Tests-II
 
    Whether a block is valid or not is a bit subtle, it's defined by presence of
    blockHeader, transactions and uncleHeaders fields. If they are missing, the block is

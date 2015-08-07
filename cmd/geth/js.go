@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2014 The go-expanse Authors
+// This file is part of go-expanse.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-expanse is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-expanse is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -28,19 +28,19 @@ import (
 
 	"sort"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/docserver"
-	"github.com/ethereum/go-ethereum/common/natspec"
-	"github.com/ethereum/go-ethereum/common/registrar"
-	"github.com/ethereum/go-ethereum/eth"
-	re "github.com/ethereum/go-ethereum/jsre"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/rpc/api"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/expanse-project/go-expanse/cmd/utils"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/common/docserver"
+	"github.com/expanse-project/go-expanse/common/natspec"
+	"github.com/expanse-project/go-expanse/common/registrar"
+	"github.com/expanse-project/go-expanse/exp"
+	re "github.com/expanse-project/go-expanse/jsre"
+	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-project/go-expanse/rpc/api"
+	"github.com/expanse-project/go-expanse/rpc/codec"
+	"github.com/expanse-project/go-expanse/rpc/comms"
+	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/xeth"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
 )
@@ -76,13 +76,13 @@ func (r dumbterm) AppendHistory(string) {}
 type jsre struct {
 	ds         *docserver.DocServer
 	re         *re.JSRE
-	ethereum   *eth.Ethereum
+	expanse   *exp.Expanse
 	xeth       *xeth.XEth
 	wait       chan *big.Int
 	ps1        string
 	atexit     func()
 	corsDomain string
-	client     comms.EthereumClient
+	client     comms.ExpanseClient
 	prompter
 }
 
@@ -145,7 +145,7 @@ func apiWordCompleter(line string, pos int) (head string, completions []string, 
 	return begin, completionWords, end
 }
 
-func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
+func newLightweightJSRE(libPath string, client comms.ExpanseClient, interactive bool, f xeth.Frontend) *jsre {
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
 	js.client = client
@@ -180,19 +180,19 @@ func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive
 	return js
 }
 
-func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
-	js := &jsre{ethereum: ethereum, ps1: "> "}
+func newJSRE(expanse *exp.Expanse, libPath, corsDomain string, client comms.ExpanseClient, interactive bool, f xeth.Frontend) *jsre {
+	js := &jsre{expanse: expanse, ps1: "> "}
 	// set default cors domain used by startRpc from CLI flag
 	js.corsDomain = corsDomain
 	if f == nil {
 		f = js
 	}
 	js.ds = docserver.New("/")
-	js.xeth = xeth.New(ethereum, f)
+	js.xeth = xeth.New(expanse, f)
 	js.wait = js.xeth.UpdateState()
 	js.client = client
 	if clt, ok := js.client.(*comms.InProcClient); ok {
-		if offeredApis, err := api.ParseApiString(shared.AllApis, codec.JSON, js.xeth, ethereum); err == nil {
+		if offeredApis, err := api.ParseApiString(shared.AllApis, codec.JSON, js.xeth, expanse); err == nil {
 			clt.Initialize(api.Merge(offeredApis...))
 		}
 	}
@@ -250,13 +250,13 @@ func (self *jsre) batch(statement string) {
 	self.re.Stop(false)
 }
 
-// show summary of current geth instance
+// show summary of current gexp instance
 func (self *jsre) welcome() {
 	self.re.Eval(`console.log('instance: ' + web3.version.client);`)
 	self.re.Eval(`console.log(' datadir: ' + admin.datadir);`)
-	self.re.Eval(`console.log("coinbase: " + eth.coinbase);`)
-	self.re.Eval(`var lastBlockTimestamp = 1000 * eth.getBlock(eth.blockNumber).timestamp`)
-	self.re.Eval(`console.log("at block: " + eth.blockNumber + " (" + new Date(lastBlockTimestamp).toLocaleDateString()
+	self.re.Eval(`console.log("coinbase: " + exp.coinbase);`)
+	self.re.Eval(`var lastBlockTimestamp = 1000 * exp.getBlock(exp.blockNumber).timestamp`)
+	self.re.Eval(`console.log("at block: " + exp.blockNumber + " (" + new Date(lastBlockTimestamp).toLocaleDateString()
 		+ " " + new Date(lastBlockTimestamp).toLocaleTimeString() + ")");`)
 
 	if modules, err := self.supportedApis(); err == nil {
@@ -286,7 +286,7 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		apiNames = append(apiNames, a)
 	}
 
-	apiImpl, err := api.ParseApiString(strings.Join(apiNames, ","), codec.JSON, js.xeth, js.ethereum)
+	apiImpl, err := api.ParseApiString(strings.Join(apiNames, ","), codec.JSON, js.xeth, js.expanse)
 	if err != nil {
 		utils.Fatalf("Unable to determine supported api's: %v", err)
 	}
@@ -304,7 +304,7 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		utils.Fatalf("Error loading bignumber.js: %v", err)
 	}
 
-	err = js.re.Compile("ethereum.js", re.Web3_JS)
+	err = js.re.Compile("expanse.js", re.Web3_JS)
 	if err != nil {
 		utils.Fatalf("Error loading web3.js: %v", err)
 	}
@@ -320,7 +320,7 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 	}
 
 	// load only supported API's in javascript runtime
-	shortcuts := "var eth = web3.eth; "
+	shortcuts := "var exp = web3.exp; "
 	for _, apiName := range apiNames {
 		if apiName == shared.Web3ApiName {
 			continue // manually mapped
@@ -339,12 +339,12 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
 
-	js.re.Eval(`var GlobalRegistrar = eth.contract(` + registrar.GlobalRegistrarAbi + `);	 registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
+	js.re.Eval(`var GlobalRegistrar = exp.contract(` + registrar.GlobalRegistrarAbi + `);	 registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
 	return nil
 }
 
 func (self *jsre) ConfirmTransaction(tx string) bool {
-	if self.ethereum.NatSpec {
+	if self.expanse.NatSpec {
 		notice := natspec.GetNotice(self.xeth, tx, self.ds)
 		fmt.Println(notice)
 		answer, _ := self.Prompt("Confirm Transaction [y/n]")
@@ -361,7 +361,7 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 		return false
 	}
 	// TODO: allow retry
-	if err := self.ethereum.AccountManager().Unlock(common.BytesToAddress(addr), pass); err != nil {
+	if err := self.expanse.AccountManager().Unlock(common.BytesToAddress(addr), pass); err != nil {
 		return false
 	} else {
 		fmt.Println("Account is now unlocked for this session.")
@@ -439,8 +439,8 @@ func hidepassword(input string) string {
 
 func (self *jsre) withHistory(op func(*os.File)) {
 	datadir := common.DefaultDataDir()
-	if self.ethereum != nil {
-		datadir = self.ethereum.DataDir
+	if self.expanse != nil {
+		datadir = self.expanse.DataDir
 	}
 
 	hist, err := os.OpenFile(filepath.Join(datadir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)

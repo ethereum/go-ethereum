@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/fdtrack"
+	"github.com/expanse-project/go-expanse/fdtrack"
 )
 
 // HTTPUClient is a client for dealing with HTTPU (HTTP over UDP). Its typical

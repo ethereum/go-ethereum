@@ -1,21 +1,21 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2014 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package eth implements the Ethereum protocol.
-package eth
+// Package exp implements the Expanse protocol.
+package exp
 
 import (
 	"crypto/ecdsa"
@@ -28,25 +28,25 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/ethash"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/whisper"
+	"github.com/expanse-project/ethash"
+	"github.com/expanse-project/go-expanse/accounts"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/common/compiler"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/core/vm"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/exp/downloader"
+	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/miner"
+	"github.com/expanse-project/go-expanse/p2p"
+	"github.com/expanse-project/go-expanse/p2p/discover"
+	"github.com/expanse-project/go-expanse/p2p/nat"
+	"github.com/expanse-project/go-expanse/params"
+	"github.com/expanse-project/go-expanse/whisper"
 )
 
 const (
@@ -62,10 +62,10 @@ var (
 
 	defaultBootNodes = []*discover.Node{
 		// ETH/DEV Go Bootnodes
-		discover.MustParseNode("enode://a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c@52.16.188.185:30303"),
-		discover.MustParseNode("enode://de471bccee3d042261d52e9bff31458daecc406142b401d4cd848f677479f73104b9fdeb090af9583d3391b7f10cb2ba9e26865dd5fca4fcdc0fb1e3b723c786@54.94.239.50:30303"),
-		// ETH/DEV cpp-ethereum (poc-9.ethdev.com)
-		discover.MustParseNode("enode://487611428e6c99a11a9795a6abe7b529e81315ca6aad66e2a2fc76e3adf263faba0d35466c2f8f68d561dbefa8878d4df5f1f2ddb1fbeab7f42ffb8cd328bd4a@5.1.83.226:30303"),
+		discover.MustParseNode("enode://a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c@52.16.188.185:60606"),
+		discover.MustParseNode("enode://de471bccee3d042261d52e9bff31458daecc406142b401d4cd848f677479f73104b9fdeb090af9583d3391b7f10cb2ba9e26865dd5fca4fcdc0fb1e3b723c786@54.94.239.50:60606"),
+		// ETH/DEV cpp-expanse (poc-9.ethdev.com)
+		discover.MustParseNode("enode://487611428e6c99a11a9795a6abe7b529e81315ca6aad66e2a2fc76e3adf263faba0d35466c2f8f68d561dbefa8878d4df5f1f2ddb1fbeab7f42ffb8cd328bd4a@5.1.83.226:60606"),
 	}
 
 	staticNodes  = "static-nodes.json"  // Path within <datadir> to search for the static node list
@@ -201,8 +201,8 @@ func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
 	return key, nil
 }
 
-type Ethereum struct {
-	// Channel for shutting down the ethereum
+type Expanse struct {
+	// Channel for shutting down the expanse
 	shutdownChan chan bool
 
 	// DB interfaces
@@ -251,7 +251,7 @@ type Ethereum struct {
 	shhVersionId  int
 }
 
-func New(config *Config) (*Ethereum, error) {
+func New(config *Config) (*Expanse, error) {
 	// Bootstrap database
 	logger.New(config.DataDir, config.LogFile, config.Verbosity)
 	if len(config.LogJSON) > 0 {
@@ -271,21 +271,21 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("blockchain db err: %v", err)
 	}
 	if db, ok := blockDb.(*ethdb.LDBDatabase); ok {
-		db.Meter("eth/db/block/")
+		db.Meter("exp/db/block/")
 	}
 	stateDb, err := newdb(filepath.Join(config.DataDir, "state"))
 	if err != nil {
 		return nil, fmt.Errorf("state db err: %v", err)
 	}
 	if db, ok := stateDb.(*ethdb.LDBDatabase); ok {
-		db.Meter("eth/db/state/")
+		db.Meter("exp/db/state/")
 	}
 	extraDb, err := newdb(filepath.Join(config.DataDir, "extra"))
 	if err != nil {
 		return nil, fmt.Errorf("extra db err: %v", err)
 	}
 	if db, ok := extraDb.(*ethdb.LDBDatabase); ok {
-		db.Meter("eth/db/extra/")
+		db.Meter("exp/db/extra/")
 	}
 	nodeDb := filepath.Join(config.DataDir, "nodes")
 	glog.V(logger.Info).Infof("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId)
@@ -321,13 +321,13 @@ func New(config *Config) (*Ethereum, error) {
 		b, _ := blockDb.Get([]byte("BlockchainVersion"))
 		bcVersion := int(common.NewValue(b).Uint())
 		if bcVersion != config.BlockChainVersion && bcVersion != 0 {
-			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run geth upgradedb.\n", bcVersion, config.BlockChainVersion)
+			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run gexp upgradedb.\n", bcVersion, config.BlockChainVersion)
 		}
 		saveBlockchainVersion(blockDb, config.BlockChainVersion)
 	}
 	glog.V(logger.Info).Infof("Blockchain DB Version: %d", config.BlockChainVersion)
 
-	eth := &Ethereum{
+	exp := &Expanse{
 		shutdownChan:            make(chan bool),
 		databasesClosed:         make(chan bool),
 		blockDb:                 blockDb,
@@ -354,15 +354,15 @@ func New(config *Config) (*Ethereum, error) {
 
 	if config.PowTest {
 		glog.V(logger.Info).Infof("ethash used in test mode")
-		eth.pow, err = ethash.NewForTesting()
+		exp.pow, err = ethash.NewForTesting()
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		eth.pow = ethash.New()
+		exp.pow = ethash.New()
 	}
 	//genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
-	eth.chainManager, err = core.NewChainManager(blockDb, stateDb, extraDb, eth.pow, eth.EventMux())
+	exp.chainManager, err = core.NewChainManager(blockDb, stateDb, extraDb, exp.pow, exp.EventMux())
 	if err != nil {
 		if err == core.ErrNoGenesis {
 			return nil, fmt.Errorf(`Genesis block not found. Please supply a genesis block with the "--genesis /path/to/file" argument`)
@@ -370,35 +370,35 @@ func New(config *Config) (*Ethereum, error) {
 
 		return nil, err
 	}
-	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
+	exp.txPool = core.NewTxPool(exp.EventMux(), exp.chainManager.State, exp.chainManager.GasLimit)
 
-	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.chainManager, eth.EventMux())
-	eth.chainManager.SetProcessor(eth.blockProcessor)
-	eth.protocolManager = NewProtocolManager(config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.chainManager)
+	exp.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, exp.pow, exp.chainManager, exp.EventMux())
+	exp.chainManager.SetProcessor(exp.blockProcessor)
+	exp.protocolManager = NewProtocolManager(config.NetworkId, exp.eventMux, exp.txPool, exp.pow, exp.chainManager)
 
-	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
-	eth.miner.SetGasPrice(config.GasPrice)
+	exp.miner = miner.New(exp, exp.EventMux(), exp.pow)
+	exp.miner.SetGasPrice(config.GasPrice)
 
 	extra := config.Name
 	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
 		extra = extra[:params.MaximumExtraDataSize.Uint64()]
 	}
-	eth.miner.SetExtra([]byte(extra))
+	exp.miner.SetExtra([]byte(extra))
 
 	if config.Shh {
-		eth.whisper = whisper.New()
-		eth.shhVersionId = int(eth.whisper.Version())
+		exp.whisper = whisper.New()
+		exp.shhVersionId = int(exp.whisper.Version())
 	}
 
 	netprv, err := config.nodeKey()
 	if err != nil {
 		return nil, err
 	}
-	protocols := append([]p2p.Protocol{}, eth.protocolManager.SubProtocols...)
+	protocols := append([]p2p.Protocol{}, exp.protocolManager.SubProtocols...)
 	if config.Shh {
-		protocols = append(protocols, eth.whisper.Protocol())
+		protocols = append(protocols, exp.whisper.Protocol())
 	}
-	eth.net = &p2p.Server{
+	exp.net = &p2p.Server{
 		PrivateKey:      netprv,
 		Name:            config.Name,
 		MaxPeers:        config.MaxPeers,
@@ -413,12 +413,12 @@ func New(config *Config) (*Ethereum, error) {
 		NodeDatabase:    nodeDb,
 	}
 	if len(config.Port) > 0 {
-		eth.net.ListenAddr = ":" + config.Port
+		exp.net.ListenAddr = ":" + config.Port
 	}
 
 	vm.Debug = config.VmDebug
 
-	return eth, nil
+	return exp, nil
 }
 
 type NodeInfo struct {
@@ -432,7 +432,7 @@ type NodeInfo struct {
 	ListenAddr string
 }
 
-func (s *Ethereum) NodeInfo() *NodeInfo {
+func (s *Expanse) NodeInfo() *NodeInfo {
 	node := s.net.Self()
 
 	return &NodeInfo{
@@ -470,7 +470,7 @@ func newPeerInfo(peer *p2p.Peer) *PeerInfo {
 }
 
 // PeersInfo returns an array of PeerInfo objects describing connected peers
-func (s *Ethereum) PeersInfo() (peersinfo []*PeerInfo) {
+func (s *Expanse) PeersInfo() (peersinfo []*PeerInfo) {
 	for _, peer := range s.net.Peers() {
 		if peer != nil {
 			peersinfo = append(peersinfo, newPeerInfo(peer))
@@ -479,11 +479,11 @@ func (s *Ethereum) PeersInfo() (peersinfo []*PeerInfo) {
 	return
 }
 
-func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
+func (s *Expanse) ResetWithGenesisBlock(gb *types.Block) {
 	s.chainManager.ResetWithGenesisBlock(gb)
 }
 
-func (s *Ethereum) StartMining(threads int) error {
+func (s *Expanse) StartMining(threads int) error {
 	eb, err := s.Etherbase()
 	if err != nil {
 		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
@@ -495,7 +495,7 @@ func (s *Ethereum) StartMining(threads int) error {
 	return nil
 }
 
-func (s *Ethereum) Etherbase() (eb common.Address, err error) {
+func (s *Expanse) Etherbase() (eb common.Address, err error) {
 	eb = s.etherbase
 	if (eb == common.Address{}) {
 		addr, e := s.AccountManager().AddressByIndex(0)
@@ -508,38 +508,38 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 }
 
 // set in js console via admin interface or wrapper from cli flags
-func (self *Ethereum) SetEtherbase(etherbase common.Address) {
+func (self *Expanse) SetEtherbase(etherbase common.Address) {
 	self.etherbase = etherbase
 	self.miner.SetEtherbase(etherbase)
 }
 
-func (s *Ethereum) StopMining()         { s.miner.Stop() }
-func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
-func (s *Ethereum) Miner() *miner.Miner { return s.miner }
+func (s *Expanse) StopMining()         { s.miner.Stop() }
+func (s *Expanse) IsMining() bool      { return s.miner.Mining() }
+func (s *Expanse) Miner() *miner.Miner { return s.miner }
 
-// func (s *Ethereum) Logger() logger.LogSystem             { return s.logger }
-func (s *Ethereum) Name() string                         { return s.net.Name }
-func (s *Ethereum) AccountManager() *accounts.Manager    { return s.accountManager }
-func (s *Ethereum) ChainManager() *core.ChainManager     { return s.chainManager }
-func (s *Ethereum) BlockProcessor() *core.BlockProcessor { return s.blockProcessor }
-func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
-func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
-func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
-func (s *Ethereum) BlockDb() common.Database             { return s.blockDb }
-func (s *Ethereum) StateDb() common.Database             { return s.stateDb }
-func (s *Ethereum) ExtraDb() common.Database             { return s.extraDb }
-func (s *Ethereum) IsListening() bool                    { return true } // Always listening
-func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
-func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
-func (s *Ethereum) MaxPeers() int                        { return s.net.MaxPeers }
-func (s *Ethereum) ClientVersion() string                { return s.clientVersion }
-func (s *Ethereum) EthVersion() int                      { return int(s.protocolManager.SubProtocols[0].Version) }
-func (s *Ethereum) NetVersion() int                      { return s.netVersionId }
-func (s *Ethereum) ShhVersion() int                      { return s.shhVersionId }
-func (s *Ethereum) Downloader() *downloader.Downloader   { return s.protocolManager.downloader }
+// func (s *Expanse) Logger() logger.LogSystem             { return s.logger }
+func (s *Expanse) Name() string                         { return s.net.Name }
+func (s *Expanse) AccountManager() *accounts.Manager    { return s.accountManager }
+func (s *Expanse) ChainManager() *core.ChainManager     { return s.chainManager }
+func (s *Expanse) BlockProcessor() *core.BlockProcessor { return s.blockProcessor }
+func (s *Expanse) TxPool() *core.TxPool                 { return s.txPool }
+func (s *Expanse) Whisper() *whisper.Whisper            { return s.whisper }
+func (s *Expanse) EventMux() *event.TypeMux             { return s.eventMux }
+func (s *Expanse) BlockDb() common.Database             { return s.blockDb }
+func (s *Expanse) StateDb() common.Database             { return s.stateDb }
+func (s *Expanse) ExtraDb() common.Database             { return s.extraDb }
+func (s *Expanse) IsListening() bool                    { return true } // Always listening
+func (s *Expanse) PeerCount() int                       { return s.net.PeerCount() }
+func (s *Expanse) Peers() []*p2p.Peer                   { return s.net.Peers() }
+func (s *Expanse) MaxPeers() int                        { return s.net.MaxPeers }
+func (s *Expanse) ClientVersion() string                { return s.clientVersion }
+func (s *Expanse) EthVersion() int                      { return int(s.protocolManager.SubProtocols[0].Version) }
+func (s *Expanse) NetVersion() int                      { return s.netVersionId }
+func (s *Expanse) ShhVersion() int                      { return s.shhVersionId }
+func (s *Expanse) Downloader() *downloader.Downloader   { return s.protocolManager.downloader }
 
-// Start the ethereum
-func (s *Ethereum) Start() error {
+// Start the expanse
+func (s *Expanse) Start() error {
 	jsonlogger.LogJson(&logger.LogStarting{
 		ClientString:    s.net.Name,
 		ProtocolVersion: s.EthVersion(),
@@ -567,7 +567,7 @@ func (s *Ethereum) Start() error {
 
 // sync databases every minute. If flushing fails we exit immediatly. The system
 // may not continue under any circumstances.
-func (s *Ethereum) syncDatabases() {
+func (s *Expanse) syncDatabases() {
 	ticker := time.NewTicker(1 * time.Minute)
 done:
 	for {
@@ -595,7 +595,7 @@ done:
 	close(s.databasesClosed)
 }
 
-func (s *Ethereum) StartForTest() {
+func (s *Expanse) StartForTest() {
 	jsonlogger.LogJson(&logger.LogStarting{
 		ClientString:    s.net.Name,
 		ProtocolVersion: s.EthVersion(),
@@ -605,7 +605,7 @@ func (s *Ethereum) StartForTest() {
 // AddPeer connects to the given node and maintains the connection until the
 // server is shut down. If the connection fails for any reason, the server will
 // attempt to reconnect the peer.
-func (self *Ethereum) AddPeer(nodeURL string) error {
+func (self *Expanse) AddPeer(nodeURL string) error {
 	n, err := discover.ParseNode(nodeURL)
 	if err != nil {
 		return fmt.Errorf("invalid node URL: %v", err)
@@ -614,7 +614,7 @@ func (self *Ethereum) AddPeer(nodeURL string) error {
 	return nil
 }
 
-func (s *Ethereum) Stop() {
+func (s *Expanse) Stop() {
 	s.net.Stop()
 	s.chainManager.Stop()
 	s.protocolManager.Stop()
@@ -629,7 +629,7 @@ func (s *Ethereum) Stop() {
 }
 
 // This function will wait for a shutdown and resumes main thread execution
-func (s *Ethereum) WaitForShutdown() {
+func (s *Expanse) WaitForShutdown() {
 	<-s.databasesClosed
 	<-s.shutdownChan
 }
@@ -643,7 +643,7 @@ func (s *Ethereum) WaitForShutdown() {
 // stop any number of times.
 // For any more sophisticated pattern of DAG generation, use CLI subcommand
 // makedag
-func (self *Ethereum) StartAutoDAG() {
+func (self *Expanse) StartAutoDAG() {
 	if self.autodagquit != nil {
 		return // already started
 	}
@@ -697,7 +697,7 @@ func dagFiles(epoch uint64) (string, string) {
 }
 
 // stopAutoDAG stops automatic DAG pregeneration by quitting the loop
-func (self *Ethereum) StopAutoDAG() {
+func (self *Expanse) StopAutoDAG() {
 	if self.autodagquit != nil {
 		close(self.autodagquit)
 		self.autodagquit = nil
@@ -729,7 +729,7 @@ func saveBlockchainVersion(db common.Database, bcVersion int) {
 	}
 }
 
-func (self *Ethereum) Solc() (*compiler.Solidity, error) {
+func (self *Expanse) Solc() (*compiler.Solidity, error) {
 	var err error
 	if self.solc == nil {
 		self.solc, err = compiler.New(self.SolcPath)
@@ -738,7 +738,7 @@ func (self *Ethereum) Solc() (*compiler.Solidity, error) {
 }
 
 // set in js console via admin interface or wrapper from cli flags
-func (self *Ethereum) SetSolc(solcPath string) (*compiler.Solidity, error) {
+func (self *Expanse) SetSolc(solcPath string) (*compiler.Solidity, error) {
 	self.SolcPath = solcPath
 	self.solc = nil
 	return self.Solc()

@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/fdtrack"
+	"github.com/expanse-project/go-expanse/fdtrack"
 )
 
 const (

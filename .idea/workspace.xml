@@ -1,0 +1,1143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="bcfd724f-6896-424a-9d98-673f9d913556" name="Default" comment="">
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.gitignore" afterPath="$PROJECT_DIR$/.gitignore" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/ethtest/.gitignore" afterPath="$PROJECT_DIR$/cmd/ethtest/.gitignore" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.gitmodules" afterPath="$PROJECT_DIR$/.gitmodules" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.mailmap" afterPath="$PROJECT_DIR$/.mailmap" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/.travis.yml" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/.travis.yml" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/AUTHORS" afterPath="$PROJECT_DIR$/AUTHORS" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/COPYING" afterPath="$PROJECT_DIR$/COPYING" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/docker/Dockerfile" afterPath="$PROJECT_DIR$/docker/Dockerfile" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/files/ansible/test-files/docker-cpp/Dockerfile" afterPath="$PROJECT_DIR$/tests/files/ansible/test-files/docker-cpp/Dockerfile" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/files/ansible/test-files/docker-cppjit/Dockerfile" afterPath="$PROJECT_DIR$/tests/files/ansible/test-files/docker-cppjit/Dockerfile" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/files/ansible/test-files/docker-go/Dockerfile" afterPath="$PROJECT_DIR$/tests/files/ansible/test-files/docker-go/Dockerfile" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/files/ansible/test-files/docker-python/Dockerfile" afterPath="$PROJECT_DIR$/tests/files/ansible/test-files/docker-python/Dockerfile" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/Godeps.json" afterPath="$PROJECT_DIR$/Godeps/Godeps.json" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Makefile" afterPath="$PROJECT_DIR$/Makefile" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/README.md" afterPath="$PROJECT_DIR$/README.md" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/README.md" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/README.md" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/README.md" afterPath="$PROJECT_DIR$/common/README.md" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/ethdb/README.md" afterPath="$PROJECT_DIR$/ethdb/README.md" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/accounts/abi/abi.go" afterPath="$PROJECT_DIR$/accounts/abi/abi.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/accounts/abi/abi_test.go" afterPath="$PROJECT_DIR$/accounts/abi/abi_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/accounts/account_manager.go" afterPath="$PROJECT_DIR$/accounts/account_manager.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/accounts/accounts_test.go" afterPath="$PROJECT_DIR$/accounts/accounts_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/admin.go" afterPath="$PROJECT_DIR$/rpc/api/admin.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/admin_args.go" afterPath="$PROJECT_DIR$/rpc/api/admin_args.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/admin_js.go" afterPath="$PROJECT_DIR$/rpc/api/admin_js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/miner/agent.go" afterPath="$PROJECT_DIR$/miner/agent.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/analysis.go" afterPath="$PROJECT_DIR$/core/vm/analysis.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/api.go" afterPath="$PROJECT_DIR$/rpc/api/api.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/api_test.go" afterPath="$PROJECT_DIR$/rpc/api/api_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/args.go" afterPath="$PROJECT_DIR$/rpc/api/args.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/args_test.go" afterPath="$PROJECT_DIR$/rpc/api/args_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/asm.go" afterPath="$PROJECT_DIR$/core/asm.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/asm.go" afterPath="$PROJECT_DIR$/core/vm/asm.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/backend.go" afterPath="$PROJECT_DIR$/eth/backend.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/bad_block.go" afterPath="$PROJECT_DIR$/core/bad_block.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/bench_test.go" afterPath="$PROJECT_DIR$/core/bench_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/benchmark/benchmark.cpp" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/benchmark/benchmark.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/big.go" afterPath="$PROJECT_DIR$/common/big.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/big_test.go" afterPath="$PROJECT_DIR$/common/big_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/jsre/bignumber_js.go" afterPath="$PROJECT_DIR$/jsre/bignumber_js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/types/block.go" afterPath="$PROJECT_DIR$/core/types/block.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/pow/block.go" afterPath="$PROJECT_DIR$/pow/block.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/block_cache.go" afterPath="$PROJECT_DIR$/core/block_cache.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/block_cache_test.go" afterPath="$PROJECT_DIR$/core/block_cache_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/block_processor.go" afterPath="$PROJECT_DIR$/core/block_processor.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/block_processor_test.go" afterPath="$PROJECT_DIR$/core/block_processor_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/types/block_test.go" afterPath="$PROJECT_DIR$/core/types/block_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/block_test.go" afterPath="$PROJECT_DIR$/tests/block_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/block_test_util.go" afterPath="$PROJECT_DIR$/tests/block_test_util.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/blocks.go" afterPath="$PROJECT_DIR$/core/blocks.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/geth/blocktestcmd.go" afterPath="$PROJECT_DIR$/cmd/geth/blocktestcmd.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/types/bloom9.go" afterPath="$PROJECT_DIR$/core/types/bloom9.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/types/bloom9_test.go" afterPath="$PROJECT_DIR$/core/types/bloom9_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/bytes.go" afterPath="$PROJECT_DIR$/common/bytes.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/bytes_test.go" afterPath="$PROJECT_DIR$/common/bytes_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/cache.go" afterPath="$PROJECT_DIR$/trie/cache.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/canary.go" afterPath="$PROJECT_DIR$/core/canary.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/chain_makers.go" afterPath="$PROJECT_DIR$/core/chain_makers.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/chain_makers_test.go" afterPath="$PROJECT_DIR$/core/chain_makers_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/chain_manager.go" afterPath="$PROJECT_DIR$/core/chain_manager.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/chain_manager_test.go" afterPath="$PROJECT_DIR$/core/chain_manager_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/chain_util.go" afterPath="$PROJECT_DIR$/core/chain_util.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/chain_util_test.go" afterPath="$PROJECT_DIR$/core/chain_util_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/geth/chaincmd.go" afterPath="$PROJECT_DIR$/cmd/geth/chaincmd.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/utils/cmd.go" afterPath="$PROJECT_DIR$/cmd/utils/cmd.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/codec/codec.go" afterPath="$PROJECT_DIR$/rpc/codec/codec.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/types/common.go" afterPath="$PROJECT_DIR$/core/types/common.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/common.go" afterPath="$PROJECT_DIR$/core/vm/common.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/comms/comms.go" afterPath="$PROJECT_DIR$/rpc/comms/comms.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/compiler.h" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/compiler.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/context.go" afterPath="$PROJECT_DIR$/core/vm/context.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/registrar/contracts.go" afterPath="$PROJECT_DIR$/common/registrar/contracts.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/contracts.go" afterPath="$PROJECT_DIR$/core/vm/contracts.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/python/core.c" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/python/core.c" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/files/ansible/test-files/create-docker-images.sh" afterPath="$PROJECT_DIR$/tests/files/ansible/test-files/create-docker-images.sh" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/crypto.go" afterPath="$PROJECT_DIR$/crypto/crypto.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/crypto_test.go" afterPath="$PROJECT_DIR$/crypto/crypto_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/utils/customflags.go" afterPath="$PROJECT_DIR$/cmd/utils/customflags.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/utils/customflags_test.go" afterPath="$PROJECT_DIR$/cmd/utils/customflags_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/pow/dagger/dagger.go" afterPath="$PROJECT_DIR$/pow/dagger/dagger.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/pow/dagger/dagger_test.go" afterPath="$PROJECT_DIR$/pow/dagger/dagger_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/data_sizes.h" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/data_sizes.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/ethdb/database.go" afterPath="$PROJECT_DIR$/ethdb/database.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/discover/database.go" afterPath="$PROJECT_DIR$/p2p/discover/database.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/ethdb/database_test.go" afterPath="$PROJECT_DIR$/ethdb/database_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/discover/database_test.go" afterPath="$PROJECT_DIR$/p2p/discover/database_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/db.go" afterPath="$PROJECT_DIR$/common/db.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/db.go" afterPath="$PROJECT_DIR$/rpc/api/db.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/db_args.go" afterPath="$PROJECT_DIR$/rpc/api/db_args.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/db_js.go" afterPath="$PROJECT_DIR$/rpc/api/db_js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/debug.go" afterPath="$PROJECT_DIR$/common/debug.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/debug.go" afterPath="$PROJECT_DIR$/rpc/api/debug.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/debug_args.go" afterPath="$PROJECT_DIR$/rpc/api/debug_args.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/debug_js.go" afterPath="$PROJECT_DIR$/rpc/api/debug_js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rlp/decode.go" afterPath="$PROJECT_DIR$/rlp/decode.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rlp/decode_test.go" afterPath="$PROJECT_DIR$/rlp/decode_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/default_genesis.go" afterPath="$PROJECT_DIR$/core/default_genesis.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/generators/defaults.go" afterPath="$PROJECT_DIR$/generators/defaults.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/types/derive_sha.go" afterPath="$PROJECT_DIR$/core/types/derive_sha.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/dial.go" afterPath="$PROJECT_DIR$/p2p/dial.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/dial_test.go" afterPath="$PROJECT_DIR$/p2p/dial_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/disasm.go" afterPath="$PROJECT_DIR$/core/vm/disasm.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/metrics/disk.go" afterPath="$PROJECT_DIR$/metrics/disk.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/metrics/disk_linux.go" afterPath="$PROJECT_DIR$/metrics/disk_linux.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/metrics/disk_nop.go" afterPath="$PROJECT_DIR$/metrics/disk_nop.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/math/dist.go" afterPath="$PROJECT_DIR$/common/math/dist.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/math/dist_test.go" afterPath="$PROJECT_DIR$/common/math/dist_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/accounts/abi/doc.go" afterPath="$PROJECT_DIR$/accounts/abi/doc.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rlp/doc.go" afterPath="$PROJECT_DIR$/rlp/doc.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/doc.go" afterPath="$PROJECT_DIR$/whisper/doc.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/docserver/docserver.go" afterPath="$PROJECT_DIR$/common/docserver/docserver.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/docserver/docserver_test.go" afterPath="$PROJECT_DIR$/common/docserver/docserver_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/downloader/downloader.go" afterPath="$PROJECT_DIR$/eth/downloader/downloader.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/downloader/downloader_test.go" afterPath="$PROJECT_DIR$/eth/downloader/downloader_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/state/dump.go" afterPath="$PROJECT_DIR$/core/state/dump.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rlp/encode.go" afterPath="$PROJECT_DIR$/rlp/encode.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rlp/encode_test.go" afterPath="$PROJECT_DIR$/rlp/encode_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rlp/encoder_example_test.go" afterPath="$PROJECT_DIR$/rlp/encoder_example_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/encoding.go" afterPath="$PROJECT_DIR$/trie/encoding.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/encoding_test.go" afterPath="$PROJECT_DIR$/trie/encoding_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/encrypt_decrypt_test.go" afterPath="$PROJECT_DIR$/crypto/encrypt_decrypt_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/golang.org/x/net/html/entity.go" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/golang.org/x/net/html/entity.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/build/env.sh" afterPath="$PROJECT_DIR$/build/env.sh" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/envelope.go" afterPath="$PROJECT_DIR$/whisper/envelope.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/envelope_test.go" afterPath="$PROJECT_DIR$/whisper/envelope_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/environment.go" afterPath="$PROJECT_DIR$/core/vm/environment.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/error.go" afterPath="$PROJECT_DIR$/core/error.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/state/errors.go" afterPath="$PROJECT_DIR$/core/state/errors.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/errors.go" afterPath="$PROJECT_DIR$/core/vm/errors.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/errs/errors.go" afterPath="$PROJECT_DIR$/errs/errors.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/shared/errors.go" afterPath="$PROJECT_DIR$/rpc/shared/errors.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/errs/errors_test.go" afterPath="$PROJECT_DIR$/errs/errors_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/eth.go" afterPath="$PROJECT_DIR$/rpc/api/eth.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/eth_args.go" afterPath="$PROJECT_DIR$/rpc/api/eth_args.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/event/filter/eth_filter.go" afterPath="$PROJECT_DIR$/event/filter/eth_filter.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/eth_js.go" afterPath="$PROJECT_DIR$/rpc/api/eth_js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/ethash.go" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/ethash.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/ethash_test.go" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/ethash_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/jsre/ethereum_js.go" afterPath="$PROJECT_DIR$/jsre/ethereum_js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/registrar/ethreg/ethreg.go" afterPath="$PROJECT_DIR$/common/registrar/ethreg/ethreg.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/event/event.go" afterPath="$PROJECT_DIR$/event/event.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/event/event_test.go" afterPath="$PROJECT_DIR$/event/event_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/events.go" afterPath="$PROJECT_DIR$/core/events.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/downloader/events.go" afterPath="$PROJECT_DIR$/eth/downloader/events.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/event/example_test.go" afterPath="$PROJECT_DIR$/event/example_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/logger/example_test.go" afterPath="$PROJECT_DIR$/logger/example_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/execution.go" afterPath="$PROJECT_DIR$/core/execution.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/fdtrack/fdtrack.go" afterPath="$PROJECT_DIR$/fdtrack/fdtrack.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/fdtrack/fdusage.go" afterPath="$PROJECT_DIR$/fdtrack/fdusage.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/fdtrack/fdusage_darwin.go" afterPath="$PROJECT_DIR$/fdtrack/fdusage_darwin.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/fdtrack/fdusage_linux.go" afterPath="$PROJECT_DIR$/fdtrack/fdusage_linux.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/fees.go" afterPath="$PROJECT_DIR$/core/fees.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/fetcher/fetcher.go" afterPath="$PROJECT_DIR$/eth/fetcher/fetcher.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/fetcher/fetcher_test.go" afterPath="$PROJECT_DIR$/eth/fetcher/fetcher_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/storage/file_storage.go" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/storage/file_storage.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/filter.go" afterPath="$PROJECT_DIR$/core/filter.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/event/filter/filter.go" afterPath="$PROJECT_DIR$/event/filter/filter.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/filter.go" afterPath="$PROJECT_DIR$/whisper/filter.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/filter_test.go" afterPath="$PROJECT_DIR$/core/filter_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/event/filter/filter_test.go" afterPath="$PROJECT_DIR$/event/filter/filter_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/filter_test.go" afterPath="$PROJECT_DIR$/whisper/filter_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/utils/flags.go" afterPath="$PROJECT_DIR$/cmd/utils/flags.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/fnv.h" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/fnv.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/xeth/frontend.go" afterPath="$PROJECT_DIR$/xeth/frontend.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/fullnode.go" afterPath="$PROJECT_DIR$/trie/fullnode.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/gas.go" afterPath="$PROJECT_DIR$/core/vm/gas.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/gasprice.go" afterPath="$PROJECT_DIR$/eth/gasprice.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/event/filter/generic_filter.go" afterPath="$PROJECT_DIR$/event/filter/generic_filter.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/genesis.go" afterPath="$PROJECT_DIR$/core/genesis.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/handler.go" afterPath="$PROJECT_DIR$/eth/handler.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/hashnode.go" afterPath="$PROJECT_DIR$/trie/hashnode.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/helper_test.go" afterPath="$PROJECT_DIR$/core/helper_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/comms/http.go" afterPath="$PROJECT_DIR$/rpc/comms/http.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/huin/goupnp/httpu/httpu.go" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/huin/goupnp/httpu/httpu.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/init.go" afterPath="$PROJECT_DIR$/tests/init.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/comms/inproc.go" afterPath="$PROJECT_DIR$/rpc/comms/inproc.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/number/int.go" afterPath="$PROJECT_DIR$/common/number/int.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/internal.c" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/internal.c" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/io.h" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/io.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/comms/ipc.go" afterPath="$PROJECT_DIR$/rpc/comms/ipc.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/comms/ipc_unix.go" afterPath="$PROJECT_DIR$/rpc/comms/ipc_unix.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/comms/ipc_windows.go" afterPath="$PROJECT_DIR$/rpc/comms/ipc_windows.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/iterator.go" afterPath="$PROJECT_DIR$/trie/iterator.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/iterator_test.go" afterPath="$PROJECT_DIR$/trie/iterator_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/jeth.go" afterPath="$PROJECT_DIR$/rpc/jeth.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/geth/js.go" afterPath="$PROJECT_DIR$/cmd/geth/js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/geth/js_test.go" afterPath="$PROJECT_DIR$/cmd/geth/js_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/codec/json.go" afterPath="$PROJECT_DIR$/rpc/codec/json.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/codec/json_test.go" afterPath="$PROJECT_DIR$/rpc/codec/json_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/jsre/jsre.go" afterPath="$PROJECT_DIR$/jsre/jsre.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/jsre/jsre_test.go" afterPath="$PROJECT_DIR$/jsre/jsre_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/key.go" afterPath="$PROJECT_DIR$/crypto/key.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/key_store_passphrase.go" afterPath="$PROJECT_DIR$/crypto/key_store_passphrase.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/key_store_plain.go" afterPath="$PROJECT_DIR$/crypto/key_store_plain.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/key_store_test.go" afterPath="$PROJECT_DIR$/crypto/key_store_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/keypair.go" afterPath="$PROJECT_DIR$/crypto/keypair.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/utils/legalese.go" afterPath="$PROJECT_DIR$/cmd/utils/legalese.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/list.go" afterPath="$PROJECT_DIR$/common/list.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/state/log.go" afterPath="$PROJECT_DIR$/core/state/log.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/logger/log.go" afterPath="$PROJECT_DIR$/logger/log.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/logger.go" afterPath="$PROJECT_DIR$/core/vm/logger.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/logger/loggers.go" afterPath="$PROJECT_DIR$/logger/loggers.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/logger/loggers_test.go" afterPath="$PROJECT_DIR$/logger/loggers_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/logger/logsystem.go" afterPath="$PROJECT_DIR$/logger/logsystem.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/bootnode/main.go" afterPath="$PROJECT_DIR$/cmd/bootnode/main.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/disasm/main.go" afterPath="$PROJECT_DIR$/cmd/disasm/main.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/ethtest/main.go" afterPath="$PROJECT_DIR$/cmd/ethtest/main.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/evm/main.go" afterPath="$PROJECT_DIR$/cmd/evm/main.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/geth/main.go" afterPath="$PROJECT_DIR$/cmd/geth/main.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/rlpdump/main.go" afterPath="$PROJECT_DIR$/cmd/rlpdump/main.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/main.go" afterPath="$PROJECT_DIR$/whisper/main.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/files/ansible/roles/common/tasks/main.yml" afterPath="$PROJECT_DIR$/tests/files/ansible/roles/common/tasks/main.yml" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/files/ansible/roles/ec2/vars/main.yml" afterPath="$PROJECT_DIR$/tests/files/ansible/roles/ec2/vars/main.yml" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/files/ansible/roles/testrunner/tasks/main.yml" afterPath="$PROJECT_DIR$/tests/files/ansible/roles/testrunner/tasks/main.yml" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/main_test.go" afterPath="$PROJECT_DIR$/common/main_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/state/main_test.go" afterPath="$PROJECT_DIR$/core/state/main_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/state/managed_state.go" afterPath="$PROJECT_DIR$/core/state/managed_state.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/state/managed_state_test.go" afterPath="$PROJECT_DIR$/core/state/managed_state_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/manager.go" afterPath="$PROJECT_DIR$/core/manager.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/memory.go" afterPath="$PROJECT_DIR$/core/vm/memory.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/ethdb/memory_database.go" afterPath="$PROJECT_DIR$/ethdb/memory_database.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/mergedapi.go" afterPath="$PROJECT_DIR$/rpc/api/mergedapi.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/message.go" afterPath="$PROJECT_DIR$/p2p/message.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/message.go" afterPath="$PROJECT_DIR$/whisper/message.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/message_test.go" afterPath="$PROJECT_DIR$/p2p/message_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/message_test.go" afterPath="$PROJECT_DIR$/whisper/message_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/metrics.go" afterPath="$PROJECT_DIR$/eth/metrics.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/fetcher/metrics.go" afterPath="$PROJECT_DIR$/eth/fetcher/metrics.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/metrics/metrics.go" afterPath="$PROJECT_DIR$/metrics/metrics.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/metrics.go" afterPath="$PROJECT_DIR$/p2p/metrics.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/miner/miner.go" afterPath="$PROJECT_DIR$/miner/miner.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/miner.go" afterPath="$PROJECT_DIR$/rpc/api/miner.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/miner_args.go" afterPath="$PROJECT_DIR$/rpc/api/miner_args.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/miner_js.go" afterPath="$PROJECT_DIR$/rpc/api/miner_js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/mnemonic.go" afterPath="$PROJECT_DIR$/crypto/mnemonic.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/mnemonic_test.go" afterPath="$PROJECT_DIR$/crypto/mnemonic_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/mnemonic_words.go" afterPath="$PROJECT_DIR$/crypto/mnemonic_words.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmd/geth/monitorcmd.go" afterPath="$PROJECT_DIR$/cmd/geth/monitorcmd.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/nat/nat.go" afterPath="$PROJECT_DIR$/p2p/nat/nat.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/nat/nat_test.go" afterPath="$PROJECT_DIR$/p2p/nat/nat_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/jackpal/go-nat-pmp/natpmp.go" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/jackpal/go-nat-pmp/natpmp.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/nat/natpmp.go" afterPath="$PROJECT_DIR$/p2p/nat/natpmp.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/natspec/natspec.go" afterPath="$PROJECT_DIR$/common/natspec/natspec.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/natspec/natspec_e2e_test.go.orig" afterPath="$PROJECT_DIR$/common/natspec/natspec_e2e_test.go.orig" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/natspec/natspec_e2e_test.go" afterPath="$PROJECT_DIR$/common/natspec/natspec_e2e_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/natspec/natspec_js.go" afterPath="$PROJECT_DIR$/common/natspec/natspec_js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/natspec/natspec_test.go" afterPath="$PROJECT_DIR$/common/natspec/natspec_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/nat/natupnp.go" afterPath="$PROJECT_DIR$/p2p/nat/natupnp.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/nat/natupnp_test.go" afterPath="$PROJECT_DIR$/p2p/nat/natupnp_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/net.go" afterPath="$PROJECT_DIR$/rpc/api/net.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/net_js.go" afterPath="$PROJECT_DIR$/rpc/api/net_js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/discover/node.go" afterPath="$PROJECT_DIR$/p2p/discover/node.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/node.go" afterPath="$PROJECT_DIR$/trie/node.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/discover/node_test.go" afterPath="$PROJECT_DIR$/p2p/discover/node_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/secp256k1/notes.go" afterPath="$PROJECT_DIR$/crypto/secp256k1/notes.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/accounts/abi/numbers.go" afterPath="$PROJECT_DIR$/accounts/abi/numbers.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/accounts/abi/numbers_test.go" afterPath="$PROJECT_DIR$/accounts/abi/numbers_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/opcodes.go" afterPath="$PROJECT_DIR$/core/vm/opcodes.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/package.go" afterPath="$PROJECT_DIR$/common/package.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/files/package.json" afterPath="$PROJECT_DIR$/tests/files/package.json" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/parsing.go" afterPath="$PROJECT_DIR$/rpc/api/parsing.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/path.go" afterPath="$PROJECT_DIR$/common/path.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/path_test.go" afterPath="$PROJECT_DIR$/common/path_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/peer.go" afterPath="$PROJECT_DIR$/eth/peer.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/downloader/peer.go" afterPath="$PROJECT_DIR$/eth/downloader/peer.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/peer.go" afterPath="$PROJECT_DIR$/p2p/peer.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/peer.go" afterPath="$PROJECT_DIR$/whisper/peer.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/peer_error.go" afterPath="$PROJECT_DIR$/p2p/peer_error.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/peer_test.go" afterPath="$PROJECT_DIR$/p2p/peer_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/peer_test.go" afterPath="$PROJECT_DIR$/whisper/peer_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/personal.go" afterPath="$PROJECT_DIR$/rpc/api/personal.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/personal_args.go" afterPath="$PROJECT_DIR$/rpc/api/personal_args.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/personal_js.go" afterPath="$PROJECT_DIR$/rpc/api/personal_js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/pow/pow.go" afterPath="$PROJECT_DIR$/pow/pow.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/pow/ezp/pow.go" afterPath="$PROJECT_DIR$/pow/ezp/pow.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/jsre/pp_js.go" afterPath="$PROJECT_DIR$/jsre/pp_js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/protocol.go" afterPath="$PROJECT_DIR$/eth/protocol.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/protocol.go" afterPath="$PROJECT_DIR$/p2p/protocol.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/params/protocol_params.go" afterPath="$PROJECT_DIR$/params/protocol_params.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/protocol_test.go" afterPath="$PROJECT_DIR$/eth/protocol_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/downloader/queue.go" afterPath="$PROJECT_DIR$/eth/downloader/queue.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/randentropy/rand_entropy.go" afterPath="$PROJECT_DIR$/crypto/randentropy/rand_entropy.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/compression/rle/read_write.go" afterPath="$PROJECT_DIR$/compression/rle/read_write.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/compression/rle/read_write_test.go" afterPath="$PROJECT_DIR$/compression/rle/read_write_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/types/receipt.go" afterPath="$PROJECT_DIR$/core/types/receipt.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/registrar/registrar.go" afterPath="$PROJECT_DIR$/common/registrar/registrar.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/registrar/registrar_test.go" afterPath="$PROJECT_DIR$/common/registrar/registrar_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/miner/remote_agent.go" afterPath="$PROJECT_DIR$/miner/remote_agent.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/rlp.go" afterPath="$PROJECT_DIR$/common/rlp.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/rlp_test.go" afterPath="$PROJECT_DIR$/common/rlp_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/rlp_test.go" afterPath="$PROJECT_DIR$/tests/rlp_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/rlp_test_util.go" afterPath="$PROJECT_DIR$/tests/rlp_test_util.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/rlpx.go" afterPath="$PROJECT_DIR$/p2p/rlpx.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/rlpx_test.go" afterPath="$PROJECT_DIR$/p2p/rlpx_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/secp256k1/secp256.go" afterPath="$PROJECT_DIR$/crypto/secp256k1/secp256.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/crypto/secp256k1/secp256_test.go" afterPath="$PROJECT_DIR$/crypto/secp256k1/secp256_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/secure_trie.go" afterPath="$PROJECT_DIR$/trie/secure_trie.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/server.go" afterPath="$PROJECT_DIR$/p2p/server.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/server_test.go" afterPath="$PROJECT_DIR$/p2p/server_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/setup.py" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/setup.py" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/shh.go" afterPath="$PROJECT_DIR$/rpc/api/shh.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/shh_args.go" afterPath="$PROJECT_DIR$/rpc/api/shh_args.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/shortnode.go" afterPath="$PROJECT_DIR$/trie/shortnode.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/size.go" afterPath="$PROJECT_DIR$/common/size.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/size_test.go" afterPath="$PROJECT_DIR$/common/size_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/slice.go" afterPath="$PROJECT_DIR$/trie/slice.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/huin/goupnp/soap/soap.go" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/huin/goupnp/soap/soap.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/compiler/solidity.go" afterPath="$PROJECT_DIR$/common/compiler/solidity.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/compiler/solidity_test.go" afterPath="$PROJECT_DIR$/common/compiler/solidity_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/ssh_js.go" afterPath="$PROJECT_DIR$/rpc/api/ssh_js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/stack.go" afterPath="$PROJECT_DIR$/core/vm/stack.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/xeth/state.go" afterPath="$PROJECT_DIR$/xeth/state.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/state/state_object.go" afterPath="$PROJECT_DIR$/core/state/state_object.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/state/state_test.go" afterPath="$PROJECT_DIR$/core/state/state_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/state_test.go" afterPath="$PROJECT_DIR$/tests/state_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/state_test_util.go" afterPath="$PROJECT_DIR$/tests/state_test_util.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/state_transition.go" afterPath="$PROJECT_DIR$/core/state_transition.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/state/statedb.go" afterPath="$PROJECT_DIR$/core/state/statedb.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/docker/supervisord.conf" afterPath="$PROJECT_DIR$/docker/supervisord.conf" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/eth/sync.go" afterPath="$PROJECT_DIR$/eth/sync.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/logger/sys.go" afterPath="$PROJECT_DIR$/logger/sys.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/discover/table.go" afterPath="$PROJECT_DIR$/p2p/discover/table.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/discover/table_test.go" afterPath="$PROJECT_DIR$/p2p/discover/table_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/build/test-global-coverage.sh" afterPath="$PROJECT_DIR$/build/test-global-coverage.sh" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/test/c/test.cpp" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/test/c/test.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/test_utils.go" afterPath="$PROJECT_DIR$/common/test_utils.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/files/ansible/test-files/testrunner.sh" afterPath="$PROJECT_DIR$/tests/files/ansible/test-files/testrunner.sh" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/topic.go" afterPath="$PROJECT_DIR$/whisper/topic.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/topic_test.go" afterPath="$PROJECT_DIR$/whisper/topic_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/types/transaction.go" afterPath="$PROJECT_DIR$/core/types/transaction.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/transaction_pool.go" afterPath="$PROJECT_DIR$/core/transaction_pool.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/transaction_pool_test.go" afterPath="$PROJECT_DIR$/core/transaction_pool_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/types/transaction_test.go" afterPath="$PROJECT_DIR$/core/types/transaction_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/transaction_test.go" afterPath="$PROJECT_DIR$/tests/transaction_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/transaction_test_util.go" afterPath="$PROJECT_DIR$/tests/transaction_test_util.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/transaction_util.go" afterPath="$PROJECT_DIR$/core/transaction_util.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/trie.go" afterPath="$PROJECT_DIR$/trie/trie.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/trie_test.go" afterPath="$PROJECT_DIR$/trie/trie_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/txpool.go" afterPath="$PROJECT_DIR$/rpc/api/txpool.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/txpool_js.go" afterPath="$PROJECT_DIR$/rpc/api/txpool_js.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/accounts/abi/type.go" afterPath="$PROJECT_DIR$/accounts/abi/type.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rlp/typecache.go" afterPath="$PROJECT_DIR$/rlp/typecache.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/types.go" afterPath="$PROJECT_DIR$/common/types.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/logger/types.go" afterPath="$PROJECT_DIR$/logger/types.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/shared/types.go" afterPath="$PROJECT_DIR$/rpc/shared/types.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/xeth/types.go" afterPath="$PROJECT_DIR$/xeth/types.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/types_template.go" afterPath="$PROJECT_DIR$/common/types_template.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/types_test.go" afterPath="$PROJECT_DIR$/common/types_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/discover/udp.go" afterPath="$PROJECT_DIR$/p2p/discover/udp.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/p2p/discover/udp_test.go" afterPath="$PROJECT_DIR$/p2p/discover/udp_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/number/uint_test.go" afterPath="$PROJECT_DIR$/common/number/uint_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/build/update-license.go" afterPath="$PROJECT_DIR$/build/update-license.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/util.go" afterPath="$PROJECT_DIR$/tests/util.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/util_win32.c" afterPath="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/util_win32.c" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/utils.go" afterPath="$PROJECT_DIR$/rpc/api/utils.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/shared/utils.go" afterPath="$PROJECT_DIR$/rpc/shared/utils.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/value.go" afterPath="$PROJECT_DIR$/common/value.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/common/value_test.go" afterPath="$PROJECT_DIR$/common/value_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/trie/valuenode.go" afterPath="$PROJECT_DIR$/trie/valuenode.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/logger/verbosity.go" afterPath="$PROJECT_DIR$/logger/verbosity.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/virtual_machine.go" afterPath="$PROJECT_DIR$/core/vm/virtual_machine.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/vm.go" afterPath="$PROJECT_DIR$/core/vm/vm.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm_env.go" afterPath="$PROJECT_DIR$/core/vm_env.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/vm_jit.go" afterPath="$PROJECT_DIR$/core/vm/vm_jit.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/core/vm/vm_jit_fake.go" afterPath="$PROJECT_DIR$/core/vm/vm_jit_fake.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/vm_test.go" afterPath="$PROJECT_DIR$/tests/vm_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/tests/vm_test_util.go" afterPath="$PROJECT_DIR$/tests/vm_test_util.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/web3.go" afterPath="$PROJECT_DIR$/rpc/api/web3.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/api/web3_args.go" afterPath="$PROJECT_DIR$/rpc/api/web3_args.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/whisper.go" afterPath="$PROJECT_DIR$/whisper/whisper.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/xeth/whisper.go" afterPath="$PROJECT_DIR$/xeth/whisper.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/xeth/whisper_filter.go" afterPath="$PROJECT_DIR$/xeth/whisper_filter.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/xeth/whisper_message.go" afterPath="$PROJECT_DIR$/xeth/whisper_message.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/whisper/whisper_test.go" afterPath="$PROJECT_DIR$/whisper/whisper_test.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/miner/worker.go" afterPath="$PROJECT_DIR$/miner/worker.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rpc/xeth.go" afterPath="$PROJECT_DIR$/rpc/xeth.go" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/xeth/xeth.go" afterPath="$PROJECT_DIR$/xeth/xeth.go" />
+    </list>
+    <ignored path="go-expanse.iws" />
+    <ignored path=".idea/workspace.xml" />
+    <ignored path=".idea/dataSources.local.xml" />
+    <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
+    <option name="TRACKING_ENABLED" value="true" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ChangesViewManager" flattened_view="true" show_ignored="false" />
+  <component name="CreatePatchCommitExecutor">
+    <option name="PATCH_PATH" value="" />
+  </component>
+  <component name="DaemonCodeAnalyzer">
+    <disable_hints />
+  </component>
+  <component name="ExecutionTargetManager" SELECTED_TARGET="default_target" />
+  <component name="FavoritesManager">
+    <favorites_list name="go-expanse" />
+  </component>
+  <component name="FileEditorManager">
+    <leaf>
+      <file leaf-file-name="README.md" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/README.md">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="-4.08" vertical-offset="0" max-vertical-offset="476">
+              <caret line="6" column="45" selection-start-line="6" selection-start-column="45" selection-end-line="6" selection-end-column="45" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="ethash.go" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/ethash.go">
+          <provider editor-type-id="com.intellij.database.editor.CsvTableFileEditorProvider">
+            <state />
+          </provider>
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="-5.90625" vertical-offset="5914" max-vertical-offset="6494">
+              <caret line="359" column="12" selection-start-line="359" selection-start-column="12" selection-end-line="359" selection-end-column="12" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="ethash_test.go" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/ethash_test.go">
+          <provider editor-type-id="com.intellij.database.editor.CsvTableFileEditorProvider">
+            <state />
+          </provider>
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="-5.90625" vertical-offset="2514" max-vertical-offset="3570">
+              <caret line="159" column="9" selection-start-line="159" selection-start-column="9" selection-end-line="159" selection-end-column="9" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="ethash.js" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/js/ethash.js">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.0" vertical-offset="2129" max-vertical-offset="3298">
+              <caret line="139" column="8" selection-start-line="139" selection-start-column="8" selection-end-line="139" selection-end-column="8" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="test.js" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/js/test.js">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.0" vertical-offset="366" max-vertical-offset="986">
+              <caret line="34" column="13" selection-start-line="34" selection-start-column="13" selection-end-line="34" selection-end-column="13" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="io.h" pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/io.h">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.33333334" vertical-offset="480" max-vertical-offset="3536">
+              <caret line="40" column="59" selection-start-line="40" selection-start-column="59" selection-end-line="40" selection-end-column="59" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="main.go" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/cmd/ethtest/main.go">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.0" vertical-offset="72" max-vertical-offset="3842">
+              <caret line="16" column="20" selection-start-line="16" selection-start-column="20" selection-end-line="16" selection-end-column="20" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="blocktestcmd.go" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/cmd/geth/blocktestcmd.go">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.0" vertical-offset="1551" max-vertical-offset="2414">
+              <caret line="103" column="68" selection-start-line="103" selection-start-column="68" selection-end-line="103" selection-end-column="68" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="js.go" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/cmd/geth/js.go">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.0" vertical-offset="1228" max-vertical-offset="8517">
+              <caret line="84" column="21" selection-start-line="84" selection-start-column="21" selection-end-line="84" selection-end-column="21" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="AUTHORS" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/AUTHORS">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="510">
+              <caret line="6" column="0" selection-start-line="6" selection-start-column="0" selection-end-line="6" selection-end-column="0" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+    </leaf>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="IdeDocumentHistory">
+    <option name="CHANGED_PATHS">
+      <list>
+        <option value="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/setup.py" />
+        <option value="$PROJECT_DIR$/.gitignore" />
+        <option value="$PROJECT_DIR$/.gitmodules" />
+        <option value="$PROJECT_DIR$/Makefile" />
+        <option value="$PROJECT_DIR$/core/fees.go" />
+        <option value="$PROJECT_DIR$/p2p/discover/database_test.go" />
+        <option value="$PROJECT_DIR$/p2p/discover/node.go" />
+        <option value="$PROJECT_DIR$/p2p/discover/udp_test.go" />
+        <option value="$PROJECT_DIR$/tests/files/ansible/test-files/docker-python/Dockerfile" />
+        <option value="$PROJECT_DIR$/docker/Dockerfile" />
+        <option value="$PROJECT_DIR$/rpc/api/admin_args.go" />
+        <option value="$PROJECT_DIR$/rpc/comms/comms.go" />
+        <option value="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/ethash_test.go" />
+        <option value="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/test/c/test.cpp" />
+        <option value="$PROJECT_DIR$/Godeps/_workspace/src/golang.org/x/net/html/entity.go" />
+        <option value="$PROJECT_DIR$/accounts/accounts_test.go" />
+        <option value="$PROJECT_DIR$/cmd/geth/js_test.go" />
+        <option value="$PROJECT_DIR$/cmd/geth/main.go" />
+        <option value="$PROJECT_DIR$/cmd/utils/cmd.go" />
+        <option value="$PROJECT_DIR$/cmd/utils/flags.go" />
+        <option value="$PROJECT_DIR$/common/natspec/natspec_e2e_test.go" />
+        <option value="$PROJECT_DIR$/common/natspec/natspec_e2e_test.go.orig" />
+        <option value="$PROJECT_DIR$/common/path_test.go" />
+        <option value="$PROJECT_DIR$/core/bench_test.go" />
+        <option value="$PROJECT_DIR$/core/chain_manager.go" />
+        <option value="$PROJECT_DIR$/core/filter.go" />
+        <option value="$PROJECT_DIR$/core/types/block.go" />
+        <option value="$PROJECT_DIR$/eth/backend.go" />
+        <option value="$PROJECT_DIR$/eth/downloader/downloader.go" />
+        <option value="$PROJECT_DIR$/eth/downloader/downloader_test.go" />
+        <option value="$PROJECT_DIR$/eth/fetcher/metrics.go" />
+        <option value="$PROJECT_DIR$/eth/gasprice.go" />
+        <option value="$PROJECT_DIR$/eth/handler.go" />
+        <option value="$PROJECT_DIR$/eth/metrics.go" />
+        <option value="$PROJECT_DIR$/eth/peer.go" />
+        <option value="$PROJECT_DIR$/eth/protocol.go" />
+        <option value="$PROJECT_DIR$/eth/protocol_test.go" />
+        <option value="$PROJECT_DIR$/eth/sync.go" />
+        <option value="$PROJECT_DIR$/logger/types.go" />
+        <option value="$PROJECT_DIR$/miner/miner.go" />
+        <option value="$PROJECT_DIR$/miner/worker.go" />
+        <option value="$PROJECT_DIR$/eth/downloader/peer.go" />
+        <option value="$PROJECT_DIR$/jsre/ethereum_js.go" />
+        <option value="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/README.md" />
+        <option value="$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/ethash.go" />
+        <option value="$PROJECT_DIR$/README.md" />
+        <option value="$PROJECT_DIR$/accounts/abi/doc.go" />
+        <option value="$PROJECT_DIR$/cmd/bootnode/main.go" />
+        <option value="$PROJECT_DIR$/cmd/ethtest/main.go" />
+        <option value="$PROJECT_DIR$/cmd/geth/blocktestcmd.go" />
+        <option value="$PROJECT_DIR$/cmd/geth/js.go" />
+      </list>
+    </option>
+  </component>
+  <component name="JsGulpfileManager">
+    <detection-done>true</detection-done>
+  </component>
+  <component name="PhpWorkspaceProjectConfiguration" backward_compatibility_performed="true" />
+  <component name="ProjectFrameBounds">
+    <option name="x" value="-8" />
+    <option name="y" value="-8" />
+    <option name="width" value="1936" />
+    <option name="height" value="1053" />
+  </component>
+  <component name="ProjectLevelVcsManager" settingsEditedManually="false">
+    <OptionsSetting value="true" id="Add" />
+    <OptionsSetting value="true" id="Remove" />
+    <OptionsSetting value="true" id="Checkout" />
+    <OptionsSetting value="true" id="Update" />
+    <OptionsSetting value="true" id="Status" />
+    <OptionsSetting value="true" id="Edit" />
+    <ConfirmationsSetting value="0" id="Add" />
+    <ConfirmationsSetting value="0" id="Remove" />
+  </component>
+  <component name="ProjectView">
+    <navigator currentView="ProjectPane" proportions="" version="1">
+      <flattenPackages />
+      <showMembers />
+      <showModules />
+      <showLibraryContents />
+      <hideEmptyPackages />
+      <abbreviatePackageNames />
+      <autoscrollToSource />
+      <autoscrollFromSource />
+      <sortByType />
+    </navigator>
+    <panes>
+      <pane id="ProjectPane">
+        <subPane>
+          <PATH>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="go-expanse" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.ProjectViewProjectNode" />
+            </PATH_ELEMENT>
+          </PATH>
+          <PATH>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="go-expanse" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.ProjectViewProjectNode" />
+            </PATH_ELEMENT>
+            <PATH_ELEMENT>
+              <option name="myItemId" value="go-expanse" />
+              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
+            </PATH_ELEMENT>
+          </PATH>
+        </subPane>
+      </pane>
+      <pane id="Scope" />
+    </panes>
+  </component>
+  <component name="PropertiesComponent">
+    <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+  </component>
+  <component name="RunManager">
+    <configuration default="true" type="PHPUnitRunConfigurationType" factoryName="PHPUnit">
+      <TestRunner />
+      <method />
+    </configuration>
+    <configuration default="true" type="PhpLocalRunConfigurationType" factoryName="PHP Console">
+      <method />
+    </configuration>
+    <configuration default="true" type="JavascriptDebugType" factoryName="JavaScript Debug">
+      <method />
+    </configuration>
+    <configuration default="true" type="PhpBehatConfigurationType" factoryName="Behat">
+      <BehatRunner />
+      <method />
+    </configuration>
+    <configuration default="true" type="PhpUnitRemoteRunConfigurationType" factoryName="PHPUnit on Server">
+      <method />
+    </configuration>
+    <configuration default="true" type="js.build_tools.gulp" factoryName="Gulp.js">
+      <method />
+    </configuration>
+    <list size="0" />
+  </component>
+  <component name="ShelveChangesManager" show_recycled="false" />
+  <component name="SvnConfiguration">
+    <configuration />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="bcfd724f-6896-424a-9d98-673f9d913556" name="Default" comment="" />
+      <created>1438971860269</created>
+      <option name="number" value="Default" />
+      <updated>1438971860269</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="ToolWindowManager">
+    <frame x="-8" y="-8" width="1936" height="1053" extended-state="7" />
+    <editor active="false" />
+    <layout>
+      <window_info id="Changes" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="4" side_tool="false" content_ui="tabs" />
+      <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
+      <window_info id="Find" active="true" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" weight="0.3290735" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
+      <window_info id="Database" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
+      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.4" sideWeight="0.5" order="8" side_tool="false" content_ui="tabs" />
+      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="1" side_tool="true" content_ui="tabs" />
+      <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="0" side_tool="true" content_ui="tabs" />
+      <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="11" side_tool="false" content_ui="tabs" />
+      <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Application Servers" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="combo" />
+      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="Cvs" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="9" side_tool="false" content_ui="tabs" />
+      <window_info id="Message" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="5" side_tool="false" content_ui="tabs" />
+      <window_info id="Ant Build" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Commander" active="false" anchor="right" auto_hide="false" internal_type="SLIDING" type="SLIDING" visible="false" weight="0.4" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
+      <window_info id="Inspection" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.4" sideWeight="0.5" order="10" side_tool="false" content_ui="tabs" />
+      <window_info id="Hierarchy" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.25" sideWeight="0.5" order="3" side_tool="false" content_ui="combo" />
+    </layout>
+  </component>
+  <component name="Vcs.Log.UiProperties">
+    <option name="RECENTLY_FILTERED_USER_GROUPS">
+      <collection />
+    </option>
+    <option name="RECENTLY_FILTERED_BRANCH_GROUPS">
+      <collection />
+    </option>
+  </component>
+  <component name="VcsContentAnnotationSettings">
+    <option name="myLimit" value="2678400000" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="myTodoPanelSettings">
+      <TodoPanelSettings />
+    </option>
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager />
+    <watches-manager />
+  </component>
+  <component name="editorHistoryManager">
+    <entry file="file://$PROJECT_DIR$/tests/files/BlockchainTests/bcInvalidHeaderTest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-7.5" vertical-offset="7897" max-vertical-offset="19176">
+          <caret line="476" column="1220" selection-start-line="476" selection-start-column="1220" selection-end-line="476" selection-end-column="1220" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/files/BlockchainTests/bcUncleTest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-7.1923075" vertical-offset="70448" max-vertical-offset="77384">
+          <caret line="4155" column="976" selection-start-line="4155" selection-start-column="976" selection-end-line="4155" selection-end-column="976" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/files/BlockchainTests/bcValidBlockTest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-7.1923075" vertical-offset="13566" max-vertical-offset="21012">
+          <caret line="809" column="63" selection-start-line="809" selection-start-column="63" selection-end-line="809" selection-end-column="63" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/files/BlockchainTests/bcWalletTest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-7.5" vertical-offset="67006" max-vertical-offset="185623">
+          <caret line="3953" column="1036" selection-start-line="3953" selection-start-column="1036" selection-end-line="3953" selection-end-column="1036" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/files/StateTests/RandomTests/st201503181625GO.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-11.115385" vertical-offset="765" max-vertical-offset="1326">
+          <caret line="62" column="429" selection-start-line="62" selection-start-column="429" selection-end-line="62" selection-end-column="429" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/files/StateTests/RandomTests/st201504101150CPPJIT.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-7.5" vertical-offset="298" max-vertical-offset="1309">
+          <caret line="29" column="40" selection-start-line="29" selection-start-column="40" selection-end-line="29" selection-end-column="40" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/files/StateTests/stCallCreateCallCodeTest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-7.5" vertical-offset="2950" max-vertical-offset="47158">
+          <caret line="185" column="39" selection-start-line="185" selection-start-column="39" selection-end-line="185" selection-end-column="39" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/files/StateTests/stWalletTest.json">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-7.1923075" vertical-offset="25670" max-vertical-offset="57256">
+          <caret line="1521" column="1539" selection-start-line="1521" selection-start-column="1539" selection-end-line="1521" selection-end-column="1539" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/test/c/test.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="451" max-vertical-offset="11475">
+          <caret line="38" column="29" selection-start-line="38" selection-start-column="29" selection-end-line="38" selection-end-column="29" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/golang.org/x/net/html/entity.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="35568" max-vertical-offset="38403">
+          <caret line="2104" column="5" selection-start-line="2104" selection-start-column="5" selection-end-line="2104" selection-end-column="5" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/accounts/accounts_test.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="2052" max-vertical-offset="2652">
+          <caret line="144" column="34" selection-start-line="144" selection-start-column="34" selection-end-line="144" selection-end-column="34" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/cmd/geth/js_test.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="6095" max-vertical-offset="8891">
+          <caret line="370" column="12" selection-start-line="370" selection-start-column="12" selection-end-line="370" selection-end-column="12" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/cmd/geth/main.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="11891" max-vertical-offset="12478">
+          <caret line="721" column="38" selection-start-line="721" selection-start-column="38" selection-end-line="721" selection-end-column="38" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/cmd/utils/cmd.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="1874" max-vertical-offset="4879">
+          <caret line="122" column="28" selection-start-line="122" selection-start-column="28" selection-end-line="122" selection-end-column="28" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/cmd/utils/flags.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="8713" max-vertical-offset="9537">
+          <caret line="524" column="84" selection-start-line="524" selection-start-column="84" selection-end-line="524" selection-end-column="84" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/common/natspec/natspec_e2e_test.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="2185" max-vertical-offset="5882">
+          <caret line="140" column="30" selection-start-line="140" selection-start-column="30" selection-end-line="140" selection-end-column="30" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/common/natspec/natspec_e2e_test.go.orig">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="1896" max-vertical-offset="4403">
+          <caret line="123" column="26" selection-start-line="123" selection-start-column="26" selection-end-line="123" selection-end-column="26" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/common/path_test.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="386" max-vertical-offset="986">
+          <caret line="42" column="18" selection-start-line="42" selection-start-column="18" selection-end-line="42" selection-end-column="18" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/core/bench_test.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="2350" max-vertical-offset="3145">
+          <caret line="150" column="40" selection-start-line="150" selection-start-column="40" selection-end-line="150" selection-end-column="40" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/core/chain_manager.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="774" max-vertical-offset="14008">
+          <caret line="57" column="6" selection-start-line="57" selection-start-column="6" selection-end-line="57" selection-end-column="6" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/core/filter.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="1857" max-vertical-offset="3672">
+          <caret line="121" column="21" selection-start-line="121" selection-start-column="21" selection-end-line="121" selection-end-column="21" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/core/types/block.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="2214" max-vertical-offset="7378">
+          <caret line="142" column="39" selection-start-line="142" selection-start-column="39" selection-end-line="142" selection-end-column="39" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/eth/backend.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="6940" max-vertical-offset="12767">
+          <caret line="420" column="11" selection-start-line="420" selection-start-column="11" selection-end-line="420" selection-end-column="11" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/eth/downloader/downloader.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="5767" max-vertical-offset="20978">
+          <caret line="351" column="48" selection-start-line="351" selection-start-column="48" selection-end-line="351" selection-end-column="48" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/eth/downloader/downloader_test.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="3489" max-vertical-offset="15504">
+          <caret line="217" column="34" selection-start-line="217" selection-start-column="34" selection-end-line="217" selection-end-column="34" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/eth/fetcher/metrics.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="46" max-vertical-offset="646">
+          <caret line="30" column="39" selection-start-line="30" selection-start-column="39" selection-end-line="30" selection-end-column="39" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/eth/gasprice.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="2953" max-vertical-offset="3553">
+          <caret line="198" column="20" selection-start-line="198" selection-start-column="20" selection-end-line="198" selection-end-column="20" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/eth/handler.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="2877" max-vertical-offset="8823">
+          <caret line="181" column="65" selection-start-line="181" selection-start-column="65" selection-end-line="181" selection-end-column="65" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/eth/metrics.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="250" max-vertical-offset="850">
+          <caret line="42" column="49" selection-start-line="42" selection-start-column="49" selection-end-line="42" selection-end-column="49" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/eth/peer.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="3948" max-vertical-offset="6052">
+          <caret line="244" column="21" selection-start-line="244" selection-start-column="21" selection-end-line="244" selection-end-column="21" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/eth/protocol.go">
+      <provider editor-type-id="com.intellij.database.editor.CsvTableFileEditorProvider">
+        <state />
+      </provider>
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-5.90625" vertical-offset="423" max-vertical-offset="2193">
+          <caret line="36" column="3" selection-start-line="36" selection-start-column="3" selection-end-line="36" selection-end-column="3" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/eth/protocol_test.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="72" max-vertical-offset="4471">
+          <caret line="16" column="8" selection-start-line="16" selection-start-column="8" selection-end-line="16" selection-end-column="8" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/eth/sync.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="72" max-vertical-offset="2958">
+          <caret line="16" column="8" selection-start-line="16" selection-start-column="8" selection-end-line="16" selection-end-column="8" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/logger/types.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="5979" max-vertical-offset="6579">
+          <caret line="379" column="12" selection-start-line="379" selection-start-column="12" selection-end-line="379" selection-end-column="12" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/miner/miner.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="684" max-vertical-offset="2839">
+          <caret line="52" column="86" selection-start-line="52" selection-start-column="86" selection-end-line="52" selection-end-column="86" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/miner/worker.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="7710" max-vertical-offset="11135">
+          <caret line="465" column="25" selection-start-line="465" selection-start-column="25" selection-end-line="465" selection-end-column="25" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/eth/downloader/peer.go">
+      <provider editor-type-id="com.intellij.database.editor.CsvTableFileEditorProvider">
+        <state />
+      </provider>
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-5.90625" vertical-offset="831" max-vertical-offset="4641">
+          <caret line="60" column="19" selection-start-line="60" selection-start-column="19" selection-end-line="60" selection-end-column="19" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/jsre/ethereum_js.go">
+      <provider editor-type-id="com.intellij.database.editor.CsvTableFileEditorProvider">
+        <state />
+      </provider>
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-5.78125" vertical-offset="36535" max-vertical-offset="105961">
+          <caret line="2160" column="3" selection-start-line="2160" selection-start-column="3" selection-end-line="2160" selection-end-column="3" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/README.md">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-7.48" vertical-offset="663" max-vertical-offset="1428">
+          <caret line="50" column="21" selection-start-line="50" selection-start-column="21" selection-end-line="50" selection-end-column="21" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/accounts/abi/doc.go">
+      <provider editor-type-id="com.intellij.database.editor.CsvTableFileEditorProvider">
+        <state />
+      </provider>
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-10.09375" vertical-offset="0" max-vertical-offset="544">
+          <caret line="19" column="7" selection-start-line="19" selection-start-column="7" selection-end-line="19" selection-end-column="7" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/cmd/bootnode/main.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="72" max-vertical-offset="1666">
+          <caret line="16" column="42" selection-start-line="16" selection-start-column="42" selection-end-line="16" selection-end-column="42" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/cmd/ethtest/main.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="72" max-vertical-offset="3842">
+          <caret line="16" column="20" selection-start-line="16" selection-start-column="20" selection-end-line="16" selection-end-column="20" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/cmd/geth/blocktestcmd.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="1551" max-vertical-offset="2414">
+          <caret line="103" column="68" selection-start-line="103" selection-start-column="68" selection-end-line="103" selection-end-column="68" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/cmd/geth/js.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="1228" max-vertical-offset="8517">
+          <caret line="84" column="21" selection-start-line="84" selection-start-column="21" selection-end-line="84" selection-end-column="21" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/AUTHORS">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="510">
+          <caret line="6" column="0" selection-start-line="6" selection-start-column="0" selection-end-line="6" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/README.md">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-4.08" vertical-offset="0" max-vertical-offset="476">
+          <caret line="6" column="45" selection-start-line="6" selection-start-column="45" selection-end-line="6" selection-end-column="45" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/ethash.go">
+      <provider editor-type-id="com.intellij.database.editor.CsvTableFileEditorProvider">
+        <state />
+      </provider>
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-5.90625" vertical-offset="5914" max-vertical-offset="6494">
+          <caret line="359" column="12" selection-start-line="359" selection-start-column="12" selection-end-line="359" selection-end-column="12" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/ethash_test.go">
+      <provider editor-type-id="com.intellij.database.editor.CsvTableFileEditorProvider">
+        <state />
+      </provider>
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="-5.90625" vertical-offset="2514" max-vertical-offset="3570">
+          <caret line="159" column="9" selection-start-line="159" selection-start-column="9" selection-end-line="159" selection-end-column="9" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/js/ethash.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="2129" max-vertical-offset="3298">
+          <caret line="139" column="8" selection-start-line="139" selection-start-column="8" selection-end-line="139" selection-end-column="8" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/js/test.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="366" max-vertical-offset="986">
+          <caret line="34" column="13" selection-start-line="34" selection-start-column="13" selection-end-line="34" selection-end-column="13" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Godeps/_workspace/src/github.com/ethereum/ethash/src/libethash/io.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.33333334" vertical-offset="480" max-vertical-offset="3536">
+          <caret line="40" column="59" selection-start-line="40" selection-start-column="59" selection-end-line="40" selection-end-column="59" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+  </component>
+</project>

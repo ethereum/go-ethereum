@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2015 The go-expanse Authors
+// This file is part of go-expanse.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-expanse is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-expanse is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -28,18 +28,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/common/docserver"
-	"github.com/ethereum/go-ethereum/common/natspec"
-	"github.com/ethereum/go-ethereum/common/registrar"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/expanse-project/go-expanse/accounts"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/common/compiler"
+	"github.com/expanse-project/go-expanse/common/docserver"
+	"github.com/expanse-project/go-expanse/common/natspec"
+	"github.com/expanse-project/go-expanse/common/registrar"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/rpc/codec"
+	"github.com/expanse-project/go-expanse/rpc/comms"
 )
 
 const (
@@ -66,7 +66,7 @@ type testjethre struct {
 }
 
 func (self *testjethre) UnlockAccount(acc []byte) bool {
-	err := self.ethereum.AccountManager().Unlock(common.BytesToAddress(acc), "")
+	err := self.expanse.AccountManager().Unlock(common.BytesToAddress(acc), "")
 	if err != nil {
 		panic("unable to unlock")
 	}
@@ -74,18 +74,18 @@ func (self *testjethre) UnlockAccount(acc []byte) bool {
 }
 
 func (self *testjethre) ConfirmTransaction(tx string) bool {
-	if self.ethereum.NatSpec {
+	if self.expanse.NatSpec {
 		self.lastConfirm = natspec.GetNotice(self.xeth, tx, self.ds)
 	}
 	return true
 }
 
-func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
+func testJEthRE(t *testing.T) (string, *testjethre, *exp.Expanse) {
 	return testREPL(t, nil)
 }
 
-func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth.Ethereum) {
-	tmp, err := ioutil.TempDir("", "geth-test")
+func testREPL(t *testing.T, config func(*exp.Config)) (string, *testjethre, *exp.Expanse) {
+	tmp, err := ioutil.TempDir("", "gexp-test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth
 	core.WriteGenesisBlockForTesting(db, common.HexToAddress(testAddress), common.String2Big(testBalance))
 	ks := crypto.NewKeyStorePlain(filepath.Join(tmp, "keystore"))
 	am := accounts.NewManager(ks)
-	conf := &eth.Config{
+	conf := &exp.Config{
 		NodeKey:        testNodeKey,
 		DataDir:        tmp,
 		AccountManager: am,
@@ -108,7 +108,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth
 	if config != nil {
 		config(conf)
 	}
-	ethereum, err := eth.New(conf)
+	expanse, err := exp.New(conf)
 	if err != nil {
 		t.Fatal("%v", err)
 	}
@@ -128,22 +128,22 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth
 		t.Fatal(err)
 	}
 
-	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
+	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "expanse", "go-expanse", "cmd", "mist", "assets", "ext")
 	client := comms.NewInProcClient(codec.JSON)
 	ds := docserver.New("/")
 	tf := &testjethre{ds: ds}
-	repl := newJSRE(ethereum, assetPath, "", client, false, tf)
+	repl := newJSRE(expanse, assetPath, "", client, false, tf)
 	tf.jsre = repl
-	return tmp, tf, ethereum
+	return tmp, tf, expanse
 }
 
 func TestNodeInfo(t *testing.T) {
 	t.Skip("broken after p2p update")
-	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Fatalf("error starting ethereum: %v", err)
+	tmp, repl, expanse := testJEthRE(t)
+	if err := expanse.Start(); err != nil {
+		t.Fatalf("error starting expanse: %v", err)
 	}
-	defer ethereum.Stop()
+	defer expanse.Stop()
 	defer os.RemoveAll(tmp)
 
 	want := `{"DiscPort":0,"IP":"0.0.0.0","ListenAddr":"","Name":"test","NodeID":"4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5","NodeUrl":"enode://4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5@0.0.0.0:0","TCPPort":0,"Td":"131072"}`
@@ -151,15 +151,15 @@ func TestNodeInfo(t *testing.T) {
 }
 
 func TestAccounts(t *testing.T) {
-	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Fatalf("error starting ethereum: %v", err)
+	tmp, repl, expanse := testJEthRE(t)
+	if err := expanse.Start(); err != nil {
+		t.Fatalf("error starting expanse: %v", err)
 	}
-	defer ethereum.Stop()
+	defer expanse.Stop()
 	defer os.RemoveAll(tmp)
 
-	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`"]`)
-	checkEvalJSON(t, repl, `eth.coinbase`, `"`+testAddress+`"`)
+	checkEvalJSON(t, repl, `exp.accounts`, `["`+testAddress+`"]`)
+	checkEvalJSON(t, repl, `exp.coinbase`, `"`+testAddress+`"`)
 	val, err := repl.re.Run(`personal.newAccount("password")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -169,26 +169,26 @@ func TestAccounts(t *testing.T) {
 		t.Errorf("address not hex: %q", addr)
 	}
 
-	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`","`+addr+`"]`)
+	checkEvalJSON(t, repl, `exp.accounts`, `["`+testAddress+`","`+addr+`"]`)
 
 }
 
 func TestBlockChain(t *testing.T) {
-	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Fatalf("error starting ethereum: %v", err)
+	tmp, repl, expanse := testJEthRE(t)
+	if err := expanse.Start(); err != nil {
+		t.Fatalf("error starting expanse: %v", err)
 	}
-	defer ethereum.Stop()
+	defer expanse.Stop()
 	defer os.RemoveAll(tmp)
 	// get current block dump before export/import.
-	val, err := repl.re.Run("JSON.stringify(debug.dumpBlock(eth.blockNumber))")
+	val, err := repl.re.Run("JSON.stringify(debug.dumpBlock(exp.blockNumber))")
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
 	beforeExport := val.String()
 
 	// do the export
-	extmp, err := ioutil.TempDir("", "geth-test-export")
+	extmp, err := ioutil.TempDir("", "gexp-test-export")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +196,7 @@ func TestBlockChain(t *testing.T) {
 	tmpfile := filepath.Join(extmp, "export.chain")
 	tmpfileq := strconv.Quote(tmpfile)
 
-	ethereum.ChainManager().Reset()
+	expanse.ChainManager().Reset()
 
 	checkEvalJSON(t, repl, `admin.exportChain(`+tmpfileq+`)`, `true`)
 	if _, err := os.Stat(tmpfile); err != nil {
@@ -205,57 +205,57 @@ func TestBlockChain(t *testing.T) {
 
 	// check import, verify that dumpBlock gives the same result.
 	checkEvalJSON(t, repl, `admin.importChain(`+tmpfileq+`)`, `true`)
-	checkEvalJSON(t, repl, `debug.dumpBlock(eth.blockNumber)`, beforeExport)
+	checkEvalJSON(t, repl, `debug.dumpBlock(exp.blockNumber)`, beforeExport)
 }
 
 func TestMining(t *testing.T) {
-	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Fatalf("error starting ethereum: %v", err)
+	tmp, repl, expanse := testJEthRE(t)
+	if err := expanse.Start(); err != nil {
+		t.Fatalf("error starting expanse: %v", err)
 	}
-	defer ethereum.Stop()
+	defer expanse.Stop()
 	defer os.RemoveAll(tmp)
-	checkEvalJSON(t, repl, `eth.mining`, `false`)
+	checkEvalJSON(t, repl, `exp.mining`, `false`)
 }
 
 func TestRPC(t *testing.T) {
-	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Errorf("error starting ethereum: %v", err)
+	tmp, repl, expanse := testJEthRE(t)
+	if err := expanse.Start(); err != nil {
+		t.Errorf("error starting expanse: %v", err)
 		return
 	}
-	defer ethereum.Stop()
+	defer expanse.Stop()
 	defer os.RemoveAll(tmp)
 
-	checkEvalJSON(t, repl, `admin.startRPC("127.0.0.1", 5004, "*", "web3,eth,net")`, `true`)
+	checkEvalJSON(t, repl, `admin.startRPC("127.0.0.1", 5004, "*", "web3,exp,net")`, `true`)
 }
 
 func TestCheckTestAccountBalance(t *testing.T) {
 	t.Skip() // i don't think it tests the correct behaviour here. it's actually testing
 	// internals which shouldn't be tested. This now fails because of a change in the core
 	// and i have no means to fix this, sorry - @obscuren
-	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Errorf("error starting ethereum: %v", err)
+	tmp, repl, expanse := testJEthRE(t)
+	if err := expanse.Start(); err != nil {
+		t.Errorf("error starting expanse: %v", err)
 		return
 	}
-	defer ethereum.Stop()
+	defer expanse.Stop()
 	defer os.RemoveAll(tmp)
 
 	repl.re.Run(`primary = "` + testAddress + `"`)
-	checkEvalJSON(t, repl, `eth.getBalance(primary)`, `"`+testBalance+`"`)
+	checkEvalJSON(t, repl, `exp.getBalance(primary)`, `"`+testBalance+`"`)
 }
 
 func TestSignature(t *testing.T) {
-	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Errorf("error starting ethereum: %v", err)
+	tmp, repl, expanse := testJEthRE(t)
+	if err := expanse.Start(); err != nil {
+		t.Errorf("error starting expanse: %v", err)
 		return
 	}
-	defer ethereum.Stop()
+	defer expanse.Stop()
 	defer os.RemoveAll(tmp)
 
-	val, err := repl.re.Run(`eth.sign("` + testAddress + `", "` + testHash + `")`)
+	val, err := repl.re.Run(`exp.sign("` + testAddress + `", "` + testHash + `")`)
 
 	// This is a very preliminary test, lacking actual signature verification
 	if err != nil {
@@ -275,15 +275,15 @@ func TestSignature(t *testing.T) {
 func TestContract(t *testing.T) {
 	t.Skip("contract testing is implemented with mining in ethash test mode. This takes about 7seconds to run. Unskip and run on demand")
 	coinbase := common.HexToAddress(testAddress)
-	tmp, repl, ethereum := testREPL(t, func(conf *eth.Config) {
+	tmp, repl, expanse := testREPL(t, func(conf *exp.Config) {
 		conf.Etherbase = coinbase
 		conf.PowTest = true
 	})
-	if err := ethereum.Start(); err != nil {
-		t.Errorf("error starting ethereum: %v", err)
+	if err := expanse.Start(); err != nil {
+		t.Errorf("error starting expanse: %v", err)
 		return
 	}
-	defer ethereum.Stop()
+	defer expanse.Stop()
 	defer os.RemoveAll(tmp)
 
 	reg := registrar.New(repl.xeth)
@@ -321,7 +321,7 @@ func TestContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if checkEvalJSON(t, repl, `primary = eth.accounts[0]`, `"`+testAddress+`"`) != nil {
+	if checkEvalJSON(t, repl, `primary = exp.accounts[0]`, `"`+testAddress+`"`) != nil {
 		return
 	}
 	if checkEvalJSON(t, repl, `source = "`+source+`"`, `"`+source+`"`) != nil {
@@ -346,7 +346,7 @@ func TestContract(t *testing.T) {
 			t.Errorf("%v", err)
 		}
 	} else {
-		if checkEvalJSON(t, repl, `contract = eth.compile.solidity(source).test`, string(contractInfo)) != nil {
+		if checkEvalJSON(t, repl, `contract = exp.compile.solidity(source).test`, string(contractInfo)) != nil {
 			return
 		}
 	}
@@ -357,7 +357,7 @@ func TestContract(t *testing.T) {
 
 	if checkEvalJSON(
 		t, repl,
-		`contractaddress = eth.sendTransaction({from: primary, data: contract.code})`,
+		`contractaddress = exp.sendTransaction({from: primary, data: contract.code})`,
 		`"0x46d69d55c3c4b86a924a92c9fc4720bb7bce1d74"`,
 	) != nil {
 		return
@@ -368,7 +368,7 @@ func TestContract(t *testing.T) {
 	}
 
 	callSetup := `abiDef = JSON.parse('[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}]');
-Multiply7 = eth.contract(abiDef);
+Multiply7 = exp.contract(abiDef);
 multiply7 = Multiply7.at(contractaddress);
 `
 	_, err = repl.re.Run(callSetup)
@@ -443,7 +443,7 @@ multiply7 = Multiply7.at(contractaddress);
 }
 
 func pendingTransactions(repl *testjethre, t *testing.T) (txc int64, err error) {
-	txs := repl.ethereum.TxPool().GetTransactions()
+	txs := repl.expanse.TxPool().GetTransactions()
 	return int64(len(txs)), nil
 }
 
@@ -469,12 +469,12 @@ func processTxs(repl *testjethre, t *testing.T, expTxc int) bool {
 		return false
 	}
 
-	err = repl.ethereum.StartMining(runtime.NumCPU())
+	err = repl.expanse.StartMining(runtime.NumCPU())
 	if err != nil {
 		t.Errorf("unexpected error mining: %v", err)
 		return false
 	}
-	defer repl.ethereum.StopMining()
+	defer repl.expanse.StopMining()
 
 	timer := time.NewTimer(100 * time.Second)
 	height := new(big.Int).Add(repl.xeth.CurrentBlock().Number(), big.NewInt(1))

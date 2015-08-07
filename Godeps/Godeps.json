@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/ethereum/go-ethereum",
+	"ImportPath": "github.com/expanse-project/go-expanse",
 	"GoVersion": "go1.4",
 	"Packages": [
 		"./..."
@@ -20,7 +20,7 @@
 			"Rev": "3e6e67c4dcea3ac2f25fd4731abc0e1deaf36216"
 		},
 		{
-			"ImportPath": "github.com/ethereum/ethash",
+			"ImportPath": "github.com/expanse-project/ethash",
 			"Comment": "v23.1-227-g8f6ccaa",
 			"Rev": "8f6ccaaef9b418553807a73a95cb5f49cd3ea39f"
 		},

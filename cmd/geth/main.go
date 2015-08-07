@@ -1,20 +1,20 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2014 The go-expanse Authors
+// This file is part of go-expanse.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-expanse is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-expanse is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
 
-// geth is the official command-line client for Ethereum.
+// gexp is the official command-line client for Expanse.
 package main
 
 import (
@@ -30,20 +30,20 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
-	"github.com/ethereum/ethash"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/fdtrack"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/expanse-project/ethash"
+	"github.com/expanse-project/go-expanse/accounts"
+	"github.com/expanse-project/go-expanse/cmd/utils"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/fdtrack"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/metrics"
+	"github.com/expanse-project/go-expanse/rpc/codec"
+	"github.com/expanse-project/go-expanse/rpc/comms"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 )
@@ -66,7 +66,7 @@ func init() {
 		nodeNameVersion = Version + "-" + gitCommit[:8]
 	}
 
-	app = utils.NewApp(Version, "the go-ethereum command line interface")
+	app = utils.NewApp(Version, "the go-expanse command line interface")
 	app.Action = run
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
@@ -103,7 +103,7 @@ Regular users do not need to execute it.
 		{
 			Action: version,
 			Name:   "version",
-			Usage:  "print ethereum version numbers",
+			Usage:  "print expanse version numbers",
 			Description: `
 The output of this command is supposed to be machine-readable.
 `,
@@ -111,12 +111,12 @@ The output of this command is supposed to be machine-readable.
 
 		{
 			Name:  "wallet",
-			Usage: "ethereum presale wallet",
+			Usage: "expanse presale wallet",
 			Subcommands: []cli.Command{
 				{
 					Action: importWallet,
 					Name:   "import",
-					Usage:  "import ethereum presale wallet",
+					Usage:  "import expanse presale wallet",
 				},
 			},
 			Description: `
@@ -151,7 +151,7 @@ Note that exporting your key in unencrypted format is NOT supported.
 
 Keys are stored under <DATADIR>/keys.
 It is safe to transfer the entire directory or the individual keys therein
-between ethereum nodes by simply copying.
+between expanse nodes by simply copying.
 Make sure you backup your keys regularly.
 
 In order to use your account to send transactions, you need to unlock them using the
@@ -171,7 +171,7 @@ And finally. DO NOT FORGET YOUR PASSWORD.
 					Usage:  "create a new account",
 					Description: `
 
-    ethereum account new
+    expanse account new
 
 Creates a new account. Prints the address.
 
@@ -181,7 +181,7 @@ You must remember this passphrase to unlock your account in the future.
 
 For non-interactive use the passphrase can be specified with the --password flag:
 
-    ethereum --password <passwordfile> account new
+    expanse --password <passwordfile> account new
 
 Note, this is meant to be used for testing only, it is a bad idea to save your
 password to file or expose in any other way.
@@ -193,7 +193,7 @@ password to file or expose in any other way.
 					Usage:  "update an existing account",
 					Description: `
 
-    ethereum account update <address>
+    expanse account update <address>
 
 Update an existing account.
 
@@ -205,7 +205,7 @@ format to the newest format or change the password for an account.
 
 For non-interactive use the passphrase can be specified with the --password flag:
 
-    ethereum --password <passwordfile> account new
+    expanse --password <passwordfile> account new
 
 Since only one password can be given, only format update can be performed,
 changing your password is only possible interactively.
@@ -220,7 +220,7 @@ changes.
 					Usage:  "import a private key into a new account",
 					Description: `
 
-    ethereum account import <keyfile>
+    expanse account import <keyfile>
 
 Imports an unencrypted private key from <keyfile> and creates a new account.
 Prints the address.
@@ -233,10 +233,10 @@ You must remember this passphrase to unlock your account in the future.
 
 For non-interactive use the passphrase can be specified with the -password flag:
 
-    ethereum --password <passwordfile> account import <keyfile>
+    expanse --password <passwordfile> account import <keyfile>
 
 Note:
-As you can directly copy your encrypted accounts to another ethereum instance,
+As you can directly copy your encrypted accounts to another expanse instance,
 this import mechanism is not needed when you transfer an account between
 nodes.
 					`,
@@ -250,7 +250,7 @@ nodes.
 			Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
-See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
+See https://github.com/expanse-project/go-expanse/wiki/Javascipt-Console
 `},
 		{
 			Action: attach,
@@ -259,8 +259,8 @@ See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
 			Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
-See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console.
-This command allows to open a console on a running geth node.
+See https://github.com/expanse-project/go-expanse/wiki/Javascipt-Console.
+This command allows to open a console on a running gexp node.
 `,
 		},
 		{
@@ -269,7 +269,7 @@ This command allows to open a console on a running geth node.
 			Usage:  `executes the given JavaScript files in the Geth JavaScript VM`,
 			Description: `
 The JavaScript VM exposes a node admin interface as well as the Ðapp
-JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
+JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt-Console
 `,
 		},
 	}
@@ -353,14 +353,14 @@ func run(ctx *cli.Context) {
 	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	ethereum, err := eth.New(cfg)
+	expanse, err := exp.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
 
-	startEth(ctx, ethereum)
+	startEth(ctx, expanse)
 	// this blocks the thread
-	ethereum.WaitForShutdown()
+	expanse.WaitForShutdown()
 }
 
 func attach(ctx *cli.Context) {
@@ -374,7 +374,7 @@ func attach(ctx *cli.Context) {
 		}
 	}
 
-	var client comms.EthereumClient
+	var client comms.ExpanseClient
 	var err error
 	if ctx.Args().Present() {
 		client, err = comms.ClientFromEndpoint(ctx.Args().First(), codec.JSON)
@@ -386,7 +386,7 @@ func attach(ctx *cli.Context) {
 	}
 
 	if err != nil {
-		utils.Fatalf("Unable to attach to geth node - %v", err)
+		utils.Fatalf("Unable to attach to gexp node - %v", err)
 	}
 
 	repl := newLightweightJSRE(
@@ -415,16 +415,16 @@ func console(ctx *cli.Context) {
 	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	ethereum, err := eth.New(cfg)
+	expanse, err := exp.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
 
 	client := comms.NewInProcClient(codec.JSON)
 
-	startEth(ctx, ethereum)
+	startEth(ctx, expanse)
 	repl := newJSRE(
-		ethereum,
+		expanse,
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		client,
@@ -439,23 +439,23 @@ func console(ctx *cli.Context) {
 		repl.interactive()
 	}
 
-	ethereum.Stop()
-	ethereum.WaitForShutdown()
+	expanse.Stop()
+	expanse.WaitForShutdown()
 }
 
 func execJSFiles(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	ethereum, err := eth.New(cfg)
+	expanse, err := exp.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
 
 	client := comms.NewInProcClient(codec.JSON)
-	startEth(ctx, ethereum)
+	startEth(ctx, expanse)
 	repl := newJSRE(
-		ethereum,
+		expanse,
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		client,
@@ -466,8 +466,8 @@ func execJSFiles(ctx *cli.Context) {
 		repl.exec(file)
 	}
 
-	ethereum.Stop()
-	ethereum.WaitForShutdown()
+	expanse.Stop()
+	expanse.WaitForShutdown()
 }
 
 func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (addrHex, auth string) {
@@ -529,14 +529,14 @@ func blockRecovery(ctx *cli.Context) {
 	glog.Infof("Recovery succesful. New HEAD %x\n", block.Hash())
 }
 
-func startEth(ctx *cli.Context, eth *eth.Ethereum) {
-	// Start Ethereum itself
-	utils.StartEthereum(eth)
+func startEth(ctx *cli.Context, exp *exp.Expanse) {
+	// Start Expanse itself
+	utils.StartExpanse(exp)
 
 	// Start logging file descriptor stats.
 	fdtrack.Start()
 
-	am := eth.AccountManager()
+	am := exp.AccountManager()
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	accounts := strings.Split(account, " ")
 	for i, account := range accounts {
@@ -549,17 +549,17 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	}
 	// Start auxiliary services if enabled.
 	if !ctx.GlobalBool(utils.IPCDisabledFlag.Name) {
-		if err := utils.StartIPC(eth, ctx); err != nil {
+		if err := utils.StartIPC(exp, ctx); err != nil {
 			utils.Fatalf("Error string IPC: %v", err)
 		}
 	}
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
-		if err := utils.StartRPC(eth, ctx); err != nil {
+		if err := utils.StartRPC(exp, ctx); err != nil {
 			utils.Fatalf("Error starting RPC: %v", err)
 		}
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		if err := eth.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
+		if err := exp.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}
@@ -687,7 +687,7 @@ func makedag(ctx *cli.Context) {
 
 	args := ctx.Args()
 	wrongArgs := func() {
-		utils.Fatalf(`Usage: geth makedag <block number> <outputdir>`)
+		utils.Fatalf(`Usage: gexp makedag <block number> <outputdir>`)
 	}
 	switch {
 	case len(args) == 2:
@@ -719,7 +719,7 @@ func version(c *cli.Context) {
 	if gitCommit != "" {
 		fmt.Println("Git Commit:", gitCommit)
 	}
-	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
+	fmt.Println("Protocol Versions:", exp.ProtocolVersions)
 	fmt.Println("Network Id:", c.GlobalInt(utils.NetworkIdFlag.Name))
 	fmt.Println("Go Version:", runtime.Version())
 	fmt.Println("OS:", runtime.GOOS)
