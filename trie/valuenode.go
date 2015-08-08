@@ -18,6 +18,8 @@ package trie
 
 import "github.com/ethereum/go-ethereum/common"
 
+// ValueNode represents a leaf node, a terminal point in the tree.
+// It is implied that if you found the ValueNode, then you know its key
 type ValueNode struct {
 	trie  *Trie
 	data  []byte

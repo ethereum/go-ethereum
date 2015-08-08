@@ -25,7 +25,7 @@ type Node interface {
 	Copy(*Trie) Node // All nodes, for now, return them self
 	Dirty() bool
 	fstring(string) string
-	Hash() interface{}
+	Hash() interface{} // only really a hash if size(node) > 32
 	RlpData() interface{}
 	setDirty(dirty bool)
 }

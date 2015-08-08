@@ -358,6 +358,7 @@ func (self *Trie) mknode(value *common.Value) Node {
 	return NewValueNode(self, value.Bytes())
 }
 
+// resolve HashNodes by fetching from the db
 func (self *Trie) trans(node Node) Node {
 	switch node := node.(type) {
 	case *HashNode:

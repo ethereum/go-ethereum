@@ -16,6 +16,9 @@
 
 package trie
 
+// FullNode represents the main node type for a radix tree.
+// The first 16 children are branches for each possible next letter in the key.
+// The final slot is for a terminating node (a ValueNode), whose key ends at the FullNode.
 type FullNode struct {
 	trie  *Trie
 	nodes [17]Node
