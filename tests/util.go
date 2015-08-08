@@ -18,7 +18,6 @@ package tests
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -192,18 +191,19 @@ func (self *Env) AddLog(log *state.Log) {
 }
 func (self *Env) Depth() int     { return self.depth }
 func (self *Env) SetDepth(i int) { self.depth = i }
-func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
+func (self *Env) CanTransfer(from vm.Account, balance *big.Int) bool {
 	if self.skipTransfer {
-		// ugly hack
 		if self.initial {
 			self.initial = false
-			return nil
+			return true
 		}
+	}
 
-		if from.Balance().Cmp(amount) < 0 {
-			return errors.New("Insufficient balance in account")
-		}
+	return from.Balance().Cmp(balance) >= 0
+}
 
+func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
+	if self.skipTransfer {
 		return nil
 	}
 	return vm.Transfer(from, to, amount)

@@ -94,7 +94,7 @@ func ecrecoverFunc(in []byte) []byte {
 	v := byte(vbig.Uint64())
 
 	if !crypto.ValidateSignatureValues(v, r, s) {
-		glog.V(logger.Error).Infof("EC RECOVER FAIL: v, r or s value invalid")
+		glog.V(logger.Debug).Infof("EC RECOVER FAIL: v, r or s value invalid")
 		return nil
 	}
 
