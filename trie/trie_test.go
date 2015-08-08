@@ -18,11 +18,14 @@ package trie
 
 import (
 	"bytes"
+	crand "crypto/rand"
 	"fmt"
+	mrand "math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type Db map[string][]byte
@@ -350,5 +353,186 @@ func TestSecureDelete(t *testing.T) {
 	exp := common.Hex2Bytes("29b235a58c3c25ab83010c327d5932bcf05324b7d6b1185e650798034783ca9d")
 	if !bytes.Equal(hash, exp) {
 		t.Errorf("expected %x got %x", exp, hash)
+	}
+}
+
+//------------------------------------------------------------------------------------
+// proof tests (and helpers)
+
+func randBytes(n int) []byte {
+	r := make([]byte, n)
+	crand.Read(r)
+	return r
+}
+
+func randInt(m int) int {
+	return int(mrand.Int31n(int32(m)))
+}
+
+// genuinely new byte
+func newByte(c byte) byte {
+	c2 := byte(randInt(255))
+	if c == c2 {
+		return newByte(c)
+	}
+	return c2
+}
+
+// genuinely change a byte
+func mutateBytes(b []byte) []byte {
+	b2 := make([]byte, len(b))
+	copy(b2, b)
+	b = b2
+
+	// Mutate a single byte
+	r := randInt(len(b))
+	c := b[r]
+	if c == byte(128) || c == byte(32) { // indeterminacy in rlp?
+		return mutateBytes(b)
+	}
+	d := newByte(c)
+	b[r] = d
+	return b
+}
+
+func makeTrieForProofs(n int) (*Trie, map[string]*kv) {
+	trie := NewEmpty()
+	vals := make(map[string]*kv)
+
+	for i := byte(0); i < 100; i++ {
+		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
+		value2 := &kv{common.LeftPadBytes([]byte{i + 10}, 32), []byte{i}, false}
+		trie.Update(value.k, value.v)
+		trie.Update(value2.k, value2.v)
+		vals[string(value.k)] = value
+		vals[string(value2.k)] = value2
+	}
+
+	for i := 0; i < n; i++ {
+		value := &kv{randBytes(32), randBytes(20), false}
+		trie.Update(value.k, value.v)
+		vals[string(value.k)] = value
+	}
+
+	return trie, vals
+}
+
+func TestProof(t *testing.T) {
+	trie, vals := makeTrieForProofs(100)
+	// prove things are in the tree
+	for _, kvv := range vals {
+		proof := trie.Prove(kvv.k)
+		if proof == nil {
+			t.Fatalf("Failed to find key %X while constructing proof", kvv.k)
+		}
+		proven := proof.Verify(kvv.k, kvv.v, trie.Hash())
+		if !proven {
+			t.Fatalf("failed to prove key %X", kvv.k)
+		}
+	}
+}
+
+func testBadProof(t *testing.T, trie *Trie, kvv *kv, originalProofBytes []byte) {
+	proofBytes := mutateBytes(originalProofBytes)
+
+	proof2 := new(TrieProof)
+	if err := rlp.Decode(bytes.NewBuffer(proofBytes), proof2); err == nil {
+		proven := proof2.Verify(kvv.k, kvv.v, trie.Hash())
+		if proven {
+			t.Fatalf("expected proof to fail for %X", kvv.k)
+		}
+	} else {
+		// if we failed to decode, we mutated the rlp too badly.
+		// try again
+		testBadProof(t, trie, kvv, originalProofBytes)
+	}
+}
+
+func TestBadProof(t *testing.T) {
+	trie, vals := makeTrieForProofs(100)
+	for _, kvv := range vals {
+		proof := trie.Prove(kvv.k)
+		proven := proof.Verify(kvv.k, kvv.v, trie.Hash())
+		if !proven {
+			t.Fatalf("expected proof not to fail for %X", kvv.k)
+		}
+		proofBytes := common.Encode(proof)
+		testBadProof(t, trie, kvv, proofBytes)
+	}
+}
+
+func compareProofs(proof, proof2 *TrieProof) error {
+	if !bytes.Equal(proof.Key, proof2.Key) {
+		return fmt.Errorf("codec error: keys are not same. got %X, expected %X\n", proof2.Key, proof.Key)
+	}
+	if !bytes.Equal(proof.Value, proof2.Value) {
+		return fmt.Errorf("codec error: values are not same. got %X, expected %X\n", proof2.Value, proof.Value)
+	}
+	if !bytes.Equal(proof.RootHash, proof2.RootHash) {
+		return fmt.Errorf("codec error: root hashes are not same. got %X, expected %X\n", proof2.RootHash, proof.RootHash)
+	}
+	if len(proof.InnerNodes) != len(proof2.InnerNodes) {
+		return fmt.Errorf("codec error: wrong number of inner nodes. got %d, expected %d\n", len(proof2.InnerNodes), len(proof.InnerNodes))
+	}
+
+	for i, in := range proof.InnerNodes {
+		in2 := proof2.InnerNodes[i]
+		if !bytes.Equal(in.Key, in2.Key) {
+			return fmt.Errorf("codec error: inner keys for node %d are not same. got %X, expected %X\n", i, in2.Key, in.Key)
+		}
+		for j, n := range in.Nodes {
+			if !bytes.Equal(n, in2.Nodes[j]) {
+				return fmt.Errorf("codec error: inner nodes %d (%d) are not same. got %X, expected %X\n", i, j, in2.Nodes[j], n)
+			}
+		}
+	}
+	return nil
+}
+
+func TestProofCodec(t *testing.T) {
+	trie, vals := makeTrieForProofs(100)
+	for _, kvv := range vals {
+		proof := trie.Prove(kvv.k)
+		proofBytes := common.Encode(proof)
+
+		proof2 := new(TrieProof)
+		if err := rlp.Decode(bytes.NewBuffer(proofBytes), proof2); err != nil {
+			t.Fatalf("error decoding proof bytes: %v", err)
+		}
+
+		if err := compareProofs(proof, proof2); err != nil {
+			t.Fatal(err)
+		}
+
+		proven := proof2.Verify(kvv.k, kvv.v, trie.Hash())
+		if !proven {
+			t.Fatalf("failed to prove key %X", kvv.k)
+		}
+	}
+}
+
+func BenchmarkProof(b *testing.B) {
+	trie, vals := makeTrieForProofs(100)
+
+	proofs := make([]*TrieProof, len(vals))
+
+	i := 0
+	for _, kvv := range vals {
+		proof := trie.Prove(kvv.k)
+		if proof == nil {
+			b.Fatalf("Failed to find key %X while constructing proof", kvv.k)
+		}
+		proofs[i] = proof
+		i += 1
+	}
+
+	N := len(vals)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		im := i % N
+		v := proofs[im].Verify(proofs[im].Key, proofs[im].Value, proofs[im].RootHash)
+		if !v {
+			b.Fatalf("failed to prove key %X", proofs[im].Key)
+		}
 	}
 }
