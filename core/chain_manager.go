@@ -56,9 +56,7 @@ const (
 
 type ChainManager struct {
 	//eth          EthManager
-	blockDb      common.Database
-	stateDb      common.Database
-	extraDb      common.Database
+	chainDb      common.Database
 	processor    types.BlockProcessor
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
@@ -85,12 +83,10 @@ type ChainManager struct {
 	pow pow.PoW
 }
 
-func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
+func NewChainManager(chainDb common.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
 	cache, _ := lru.New(blockCacheLimit)
 	bc := &ChainManager{
-		blockDb:  blockDb,
-		stateDb:  stateDb,
-		extraDb:  extraDb,
+		chainDb:  chainDb,
 		eventMux: mux,
 		quit:     make(chan struct{}),
 		cache:    cache,
@@ -103,7 +99,7 @@ func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux
 		if err != nil {
 			return nil, err
 		}
-		bc.genesisBlock, err = WriteGenesisBlock(stateDb, blockDb, reader)
+		bc.genesisBlock, err = WriteGenesisBlock(chainDb, reader)
 		if err != nil {
 			return nil, err
 		}
@@ -195,15 +191,15 @@ func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
 }
 
 func (self *ChainManager) State() *state.StateDB {
-	return state.New(self.CurrentBlock().Root(), self.stateDb)
+	return state.New(self.CurrentBlock().Root(), self.chainDb)
 }
 
 func (bc *ChainManager) recover() bool {
-	data, _ := bc.blockDb.Get([]byte("checkpoint"))
+	data, _ := bc.chainDb.Get([]byte("checkpoint"))
 	if len(data) != 0 {
 		block := bc.GetBlock(common.BytesToHash(data))
 		if block != nil {
-			err := bc.blockDb.Put([]byte("LastBlock"), block.Hash().Bytes())
+			err := bc.chainDb.Put([]byte("LastBlock"), block.Hash().Bytes())
 			if err != nil {
 				glog.Fatalln("db write err:", err)
 			}
@@ -217,7 +213,7 @@ func (bc *ChainManager) recover() bool {
 }
 
 func (bc *ChainManager) setLastState() error {
-	data, _ := bc.blockDb.Get([]byte("LastBlock"))
+	data, _ := bc.chainDb.Get([]byte("LastBlock"))
 	if len(data) != 0 {
 		block := bc.GetBlock(common.BytesToHash(data))
 		if block != nil {
@@ -264,7 +260,7 @@ func (bc *ChainManager) Reset() {
 	bc.cache, _ = lru.New(blockCacheLimit)
 
 	// Prepare the genesis block
-	err := WriteBlock(bc.blockDb, bc.genesisBlock)
+	err := WriteBlock(bc.chainDb, bc.genesisBlock)
 	if err != nil {
 		glog.Fatalln("db err:", err)
 	}
@@ -277,7 +273,7 @@ func (bc *ChainManager) Reset() {
 }
 
 func (bc *ChainManager) removeBlock(block *types.Block) {
-	bc.blockDb.Delete(append(blockHashPre, block.Hash().Bytes()...))
+	bc.chainDb.Delete(append(blockHashPre, block.Hash().Bytes()...))
 }
 
 func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
@@ -292,7 +288,7 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 	gb.Td = gb.Difficulty()
 	bc.genesisBlock = gb
 
-	err := WriteBlock(bc.blockDb, bc.genesisBlock)
+	err := WriteBlock(bc.chainDb, bc.genesisBlock)
 	if err != nil {
 		glog.Fatalln("db err:", err)
 	}
@@ -339,14 +335,14 @@ func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error 
 // insert injects a block into the current chain block chain. Note, this function
 // assumes that the `mu` mutex is held!
 func (bc *ChainManager) insert(block *types.Block) {
-	err := WriteHead(bc.blockDb, block)
+	err := WriteHead(bc.chainDb, block)
 	if err != nil {
 		glog.Fatal("db write fail:", err)
 	}
 
 	bc.checkpoint++
 	if bc.checkpoint > checkpointLimit {
-		err = bc.blockDb.Put([]byte("checkpoint"), block.Hash().Bytes())
+		err = bc.chainDb.Put([]byte("checkpoint"), block.Hash().Bytes())
 		if err != nil {
 			glog.Fatal("db write fail:", err)
 		}
@@ -369,7 +365,7 @@ func (bc *ChainManager) HasBlock(hash common.Hash) bool {
 		return true
 	}
 
-	data, _ := bc.blockDb.Get(append(blockHashPre, hash[:]...))
+	data, _ := bc.chainDb.Get(append(blockHashPre, hash[:]...))
 	return len(data) != 0
 }
 
@@ -399,7 +395,7 @@ func (self *ChainManager) GetBlock(hash common.Hash) *types.Block {
 		return block.(*types.Block)
 	}
 
-	block := GetBlockByHash(self.blockDb, hash)
+	block := GetBlockByHash(self.chainDb, hash)
 	if block == nil {
 		return nil
 	}
@@ -433,7 +429,7 @@ func (self *ChainManager) GetBlocksFromHash(hash common.Hash, n int) (blocks []*
 
 // non blocking version
 func (self *ChainManager) getBlockByNumber(num uint64) *types.Block {
-	return GetBlockByNumber(self.blockDb, num)
+	return GetBlockByNumber(self.chainDb, num)
 }
 
 func (self *ChainManager) GetUnclesInChain(block *types.Block, length int) (uncles []*types.Header) {
@@ -521,7 +517,7 @@ func (self *ChainManager) WriteBlock(block *types.Block, queued bool) (status wr
 		status = SideStatTy
 	}
 
-	err = WriteBlock(self.blockDb, block)
+	err = WriteBlock(self.chainDb, block)
 	if err != nil {
 		glog.Fatalln("db err:", err)
 	}
@@ -638,9 +634,9 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			queueEvent.canonicalCount++
 
 			// This puts transactions in a extra db for rpc
-			PutTransactions(self.extraDb, block, block.Transactions())
+			PutTransactions(self.chainDb, block, block.Transactions())
 			// store the receipts
-			PutReceipts(self.extraDb, receipts)
+			PutReceipts(self.chainDb, receipts)
 		case SideStatTy:
 			if glog.V(logger.Detail) {
 				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...). Took %v\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
@@ -651,7 +647,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			queue[i] = ChainSplitEvent{block, logs}
 			queueEvent.splitCount++
 		}
-		PutBlockReceipts(self.extraDb, block, receipts)
+		PutBlockReceipts(self.chainDb, block, receipts)
 
 		stats.processed++
 	}
@@ -733,8 +729,8 @@ func (self *ChainManager) merge(oldBlock, newBlock *types.Block) error {
 		// insert the block in the canonical way, re-writing history
 		self.insert(block)
 		// write canonical receipts and transactions
-		PutTransactions(self.extraDb, block, block.Transactions())
-		PutReceipts(self.extraDb, GetBlockReceipts(self.extraDb, block.Hash()))
+		PutTransactions(self.chainDb, block, block.Transactions())
+		PutReceipts(self.chainDb, GetBlockReceipts(self.chainDb, block.Hash()))
 
 	}
 	self.mu.Unlock()

@@ -458,23 +458,17 @@ func SetupVM(ctx *cli.Context) {
 }
 
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, extraDB common.Database) {
+func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb common.Database) {
 	datadir := ctx.GlobalString(DataDirFlag.Name)
 	cache := ctx.GlobalInt(CacheFlag.Name)
 
 	var err error
-	if blockDB, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "blockchain"), cache); err != nil {
-		Fatalf("Could not open database: %v", err)
-	}
-	if stateDB, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "state"), cache); err != nil {
-		Fatalf("Could not open database: %v", err)
-	}
-	if extraDB, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "extra"), cache); err != nil {
+	if chainDb, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "chaindata"), cache); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
 	if ctx.GlobalBool(OlympicFlag.Name) {
 		InitOlympic()
-		_, err := core.WriteTestNetGenesisBlock(stateDB, blockDB, 42)
+		_, err := core.WriteTestNetGenesisBlock(chainDb, 42)
 		if err != nil {
 			glog.Fatalln(err)
 		}
@@ -483,14 +477,14 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, ex
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
 	//genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
-	chain, err = core.NewChainManager(blockDB, stateDB, extraDB, pow, eventMux)
+	chain, err = core.NewChainManager(chainDb, pow, eventMux)
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}
 
-	proc := core.NewBlockProcessor(stateDB, extraDB, pow, chain, eventMux)
+	proc := core.NewBlockProcessor(chainDb, pow, chain, eventMux)
 	chain.SetProcessor(proc)
-	return chain, blockDB, stateDB, extraDB
+	return chain, chainDb
 }
 
 // MakeChain creates an account manager from set command line flags.

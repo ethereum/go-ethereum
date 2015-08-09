@@ -77,8 +77,8 @@ func ExampleGenerateChain() {
 
 	// Import the chain. This runs all block validation rules.
 	evmux := &event.TypeMux{}
-	chainman, _ := NewChainManager(db, db, db, FakePow{}, evmux)
-	chainman.SetProcessor(NewBlockProcessor(db, db, FakePow{}, chainman, evmux))
+	chainman, _ := NewChainManager(db, FakePow{}, evmux)
+	chainman.SetProcessor(NewBlockProcessor(db, FakePow{}, chainman, evmux))
 	if i, err := chainman.InsertChain(chain); err != nil {
 		fmt.Printf("insert error (block %d): %v\n", i, err)
 		return

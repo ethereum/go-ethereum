@@ -213,9 +213,9 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 		st = self.backend.Miner().PendingState().Copy()
 	default:
 		if block := self.getBlockByHeight(num); block != nil {
-			st = state.New(block.Root(), self.backend.StateDb())
+			st = state.New(block.Root(), self.backend.ChainDb())
 		} else {
-			st = state.New(self.backend.ChainManager().GetBlockByNumber(0).Root(), self.backend.StateDb())
+			st = state.New(self.backend.ChainManager().GetBlockByNumber(0).Root(), self.backend.ChainDb())
 		}
 	}
 
@@ -259,7 +259,7 @@ func (self *XEth) UpdateState() (wait chan *big.Int) {
 						wait <- n
 						n = nil
 					}
-					statedb := state.New(ev.Block.Root(), self.backend.StateDb())
+					statedb := state.New(ev.Block.Root(), self.backend.ChainDb())
 					self.state = NewState(self, statedb)
 				}
 			case n, ok = <-wait:
@@ -311,7 +311,7 @@ func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blhash common.Hash, blnum *big.Int, txi uint64) {
 	// Due to increasing return params and need to determine if this is from transaction pool or
 	// some chain, this probably needs to be refactored for more expressiveness
-	data, _ := self.backend.ExtraDb().Get(common.FromHex(hash))
+	data, _ := self.backend.ChainDb().Get(common.FromHex(hash))
 	if len(data) != 0 {
 		dtx := new(types.Transaction)
 		if err := rlp.DecodeBytes(data, dtx); err != nil {
@@ -330,7 +330,7 @@ func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blha
 		Index      uint64
 	}
 
-	v, dberr := self.backend.ExtraDb().Get(append(common.FromHex(hash), 0x0001))
+	v, dberr := self.backend.ChainDb().Get(append(common.FromHex(hash), 0x0001))
 	// TODO check specifically for ErrNotFound
 	if dberr != nil {
 		return
@@ -365,7 +365,7 @@ func (self *XEth) GetBlockReceipts(bhash common.Hash) types.Receipts {
 }
 
 func (self *XEth) GetTxReceipt(txhash common.Hash) *types.Receipt {
-	return core.GetReceipt(self.backend.ExtraDb(), txhash)
+	return core.GetReceipt(self.backend.ChainDb(), txhash)
 }
 
 func (self *XEth) GasLimit() *big.Int {
@@ -408,13 +408,13 @@ func (self *XEth) SetSolc(solcPath string) (*compiler.Solidity, error) {
 
 // store DApp value in extra database
 func (self *XEth) DbPut(key, val []byte) bool {
-	self.backend.ExtraDb().Put(append(dappStorePre, key...), val)
+	self.backend.DappDb().Put(append(dappStorePre, key...), val)
 	return true
 }
 
 // retrieve DApp value from extra database
 func (self *XEth) DbGet(key []byte) ([]byte, error) {
-	val, err := self.backend.ExtraDb().Get(append(dappStorePre, key...))
+	val, err := self.backend.DappDb().Get(append(dappStorePre, key...))
 	return val, err
 }
 
