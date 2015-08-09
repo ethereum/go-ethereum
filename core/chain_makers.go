@@ -172,7 +172,7 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
 		Difficulty: CalcDifficulty(time, parent.Time(), parent.Number(), parent.Difficulty()),
-		GasLimit:   CalcGasLimit(parent),
+		GasLimit:   parent.GasLimit(),
 		GasUsed:    new(big.Int),
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
 		Time:       uint64(time),
@@ -185,7 +185,7 @@ func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
 	evmux := &event.TypeMux{}
 
 	WriteTestNetGenesisBlock(db, db, 0)
-	chainman, _ := NewChainManager(db, db, db, FakePow{}, evmux)
+	chainman, _ := NewChainManager(db, db, db, FakePow{}, evmux, nil)
 	bman := NewBlockProcessor(db, db, FakePow{}, chainman, evmux)
 	bman.bc.SetProcessor(bman)
 	parent := bman.bc.CurrentBlock()

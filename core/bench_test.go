@@ -108,7 +108,7 @@ func init() {
 func genTxRing(naccounts int) func(int, *BlockGen) {
 	from := 0
 	return func(i int, gen *BlockGen) {
-		gas := CalcGasLimit(gen.PrevBlock(i - 1))
+		gas := gen.PrevBlock(i - 1).GasLimit() // CalcGasLimit(gen.PrevBlock(i - 1))
 		for {
 			gas.Sub(gas, params.TxGas)
 			if gas.Cmp(params.TxGas) < 0 {
@@ -168,7 +168,7 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
 	evmux := new(event.TypeMux)
-	chainman, _ := NewChainManager(db, db, db, FakePow{}, evmux)
+	chainman, _ := NewChainManager(db, db, db, FakePow{}, evmux, nil)
 	chainman.SetProcessor(NewBlockProcessor(db, db, FakePow{}, chainman, evmux))
 	defer chainman.Stop()
 	b.ReportAllocs()

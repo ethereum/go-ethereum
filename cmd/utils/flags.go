@@ -361,6 +361,31 @@ var (
 		Usage: "Suggested gas price base correction factor (%)",
 		Value: 110,
 	}
+	GlsFlag = cli.StringFlag{
+		Name:  "gls",
+		Usage: "Gas limit adjustment strategy ( none | target | blkutil )",
+		Value: "target",
+	}
+	GlsTargetFlag = cli.StringFlag{
+		Name:  "glstarget",
+		Usage: "Constant gas limit target",
+		Value: "3141592",
+	}
+	GlsBlkUtilFlag = cli.IntFlag{
+		Name:  "glsblkutil",
+		Usage: "Block utilization target (%)",
+		Value: 67,
+	}
+	GlsMinFlag = cli.StringFlag{
+		Name:  "glsmin",
+		Usage: "Gas limit adjustment range minimum (applies to all strategies)",
+		Value: "1000000",
+	}
+	GlsMaxFlag = cli.StringFlag{
+		Name:  "glsmax",
+		Usage: "Gas limit adjustment range maximum (applies to all strategies)",
+		Value: "10000000",
+	}
 )
 
 // MakeNAT creates a port mapper from set command line flags.
@@ -437,8 +462,13 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		GpobaseStepDown:         ctx.GlobalInt(GpobaseStepDownFlag.Name),
 		GpobaseStepUp:           ctx.GlobalInt(GpobaseStepUpFlag.Name),
 		GpobaseCorrectionFactor: ctx.GlobalInt(GpobaseCorrectionFactorFlag.Name),
-		SolcPath:                ctx.GlobalString(SolcPathFlag.Name),
-		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
+		Gls:        ctx.GlobalString(GlsFlag.Name),
+		GlsTarget:  common.String2Big(ctx.GlobalString(GlsTargetFlag.Name)),
+		GlsBlkUtil: ctx.GlobalInt(GlsBlkUtilFlag.Name),
+		GlsMin:     common.String2Big(ctx.GlobalString(GlsMinFlag.Name)),
+		GlsMax:     common.String2Big(ctx.GlobalString(GlsMaxFlag.Name)),
+		SolcPath:   ctx.GlobalString(SolcPathFlag.Name),
+		AutoDAG:    ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
 	}
 }
 
@@ -483,7 +513,7 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, ex
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
 	//genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
-	chain, err = core.NewChainManager(blockDB, stateDB, extraDB, pow, eventMux)
+	chain, err = core.NewChainManager(blockDB, stateDB, extraDB, pow, eventMux, nil)
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}

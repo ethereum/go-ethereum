@@ -182,7 +182,7 @@ func newProtocolManagerForTesting(txAdded chan<- []*types.Transaction) *Protocol
 	core.WriteTestNetGenesisBlock(db, db, 0)
 	var (
 		em       = new(event.TypeMux)
-		chain, _ = core.NewChainManager(db, db, db, core.FakePow{}, em)
+		chain, _ = core.NewChainManager(db, db, db, core.FakePow{}, em, nil)
 		txpool   = &fakeTxPool{added: txAdded}
 		pm       = NewProtocolManager(NetworkId, em, txpool, core.FakePow{}, chain)
 	)

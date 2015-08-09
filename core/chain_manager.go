@@ -54,8 +54,11 @@ const (
 	checkpointLimit     = 200
 )
 
+type GlsFunc func(*types.Block) *big.Int
+
 type ChainManager struct {
 	//eth          EthManager
+	glsfunc      GlsFunc
 	blockDb      common.Database
 	stateDb      common.Database
 	extraDb      common.Database
@@ -85,9 +88,10 @@ type ChainManager struct {
 	pow pow.PoW
 }
 
-func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
+func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux *event.TypeMux, glsfunc GlsFunc) (*ChainManager, error) {
 	cache, _ := lru.New(blockCacheLimit)
 	bc := &ChainManager{
+		glsfunc:  glsfunc,
 		blockDb:  blockDb,
 		stateDb:  stateDb,
 		extraDb:  extraDb,
@@ -235,7 +239,7 @@ func (bc *ChainManager) setLastState() error {
 		bc.Reset()
 	}
 	bc.td = bc.currentBlock.Td
-	bc.currentGasLimit = CalcGasLimit(bc.currentBlock)
+	bc.currentGasLimit = bc.glsfunc(bc.currentBlock)
 
 	if glog.V(logger.Info) {
 		glog.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
@@ -757,7 +761,7 @@ out:
 						// We need some control over the mining operation. Acquiring locks and waiting for the miner to create new block takes too long
 						// and in most cases isn't even necessary.
 						if self.lastBlockHash == event.Hash {
-							self.currentGasLimit = CalcGasLimit(event.Block)
+							self.currentGasLimit = self.glsfunc(event.Block)
 							self.eventMux.Post(ChainHeadEvent{event.Block})
 						}
 					}
