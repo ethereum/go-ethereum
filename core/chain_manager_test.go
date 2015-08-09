@@ -49,7 +49,7 @@ func thePow() pow.PoW {
 func theChainManager(db common.Database, t *testing.T) *ChainManager {
 	var eventMux event.TypeMux
 	WriteTestNetGenesisBlock(db, db, 0)
-	chainMan, err := NewChainManager(db, db, db, thePow(), &eventMux)
+	chainMan, err := NewChainManager(db, db, db, thePow(), &eventMux, nil)
 	if err != nil {
 		t.Error("failed creating chainmanager:", err)
 		t.FailNow()

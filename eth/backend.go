@@ -122,6 +122,12 @@ type Config struct {
 	GpobaseStepUp           int
 	GpobaseCorrectionFactor int
 
+	Gls        string
+	GlsTarget  *big.Int
+	GlsBlkUtil int
+	GlsMin     *big.Int
+	GlsMax     *big.Int
+
 	// NewDB is used to create databases.
 	// If nil, the default is to create leveldb databases on disk.
 	NewDB func(path string) (common.Database, error)
@@ -231,6 +237,12 @@ type Ethereum struct {
 	GpobaseStepDown         int
 	GpobaseStepUp           int
 	GpobaseCorrectionFactor int
+
+	Gls        string
+	GlsTarget  *big.Int
+	GlsBlkUtil int
+	GlsMin     *big.Int
+	GlsMax     *big.Int
 
 	net      *p2p.Server
 	eventMux *event.TypeMux
@@ -350,6 +362,11 @@ func New(config *Config) (*Ethereum, error) {
 		GpobaseStepDown:         config.GpobaseStepDown,
 		GpobaseStepUp:           config.GpobaseStepUp,
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
+		Gls:        config.Gls,
+		GlsTarget:  config.GlsTarget,
+		GlsBlkUtil: config.GlsBlkUtil,
+		GlsMin:     config.GlsMin,
+		GlsMax:     config.GlsMax,
 	}
 
 	if config.PowTest {
@@ -362,7 +379,8 @@ func New(config *Config) (*Ethereum, error) {
 		eth.pow = ethash.New()
 	}
 	//genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
-	eth.chainManager, err = core.NewChainManager(blockDb, stateDb, extraDb, eth.pow, eth.EventMux())
+
+	eth.chainManager, err = core.NewChainManager(blockDb, stateDb, extraDb, eth.pow, eth.EventMux(), eth.CalcGasLimit)
 	if err != nil {
 		if err == core.ErrNoGenesis {
 			return nil, fmt.Errorf(`Genesis block not found. Please supply a genesis block with the "--genesis /path/to/file" argument`)

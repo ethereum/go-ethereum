@@ -34,7 +34,7 @@ func proc() (*BlockProcessor, *ChainManager) {
 	var mux event.TypeMux
 
 	WriteTestNetGenesisBlock(db, db, 0)
-	chainMan, err := NewChainManager(db, db, db, thePow(), &mux)
+	chainMan, err := NewChainManager(db, db, db, thePow(), &mux, nil)
 	if err != nil {
 		fmt.Println(err)
 	}

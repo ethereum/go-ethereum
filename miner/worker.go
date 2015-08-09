@@ -446,7 +446,7 @@ func (self *worker) commitNewWork() {
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
 		Difficulty: core.CalcDifficulty(uint64(tstamp), parent.Time(), parent.Number(), parent.Difficulty()),
-		GasLimit:   core.CalcGasLimit(parent),
+		GasLimit:   self.eth.CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Coinbase:   self.coinbase,
 		Extra:      self.extra,

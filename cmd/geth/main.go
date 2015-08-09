@@ -333,6 +333,11 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.GpobaseStepDownFlag,
 		utils.GpobaseStepUpFlag,
 		utils.GpobaseCorrectionFactorFlag,
+		utils.GlsFlag,
+		utils.GlsTargetFlag,
+		utils.GlsBlkUtilFlag,
+		utils.GlsMinFlag,
+		utils.GlsMaxFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		utils.SetupLogger(ctx)

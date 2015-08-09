@@ -17,8 +17,11 @@
 package core
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -32,4 +35,5 @@ type Backend interface {
 	StateDb() common.Database
 	ExtraDb() common.Database
 	EventMux() *event.TypeMux
+	CalcGasLimit(*types.Block) *big.Int
 }
