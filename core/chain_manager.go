@@ -142,6 +142,14 @@ func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux
 	return bc, nil
 }
 
+func (bc *ChainManager) evalGlsFunc(parent *types.Block) *big.Int {
+	if bc.glsfunc == nil {
+		return parent.GasLimit()
+	} else {
+		return bc.glsfunc(parent)
+	}
+}
+
 func (bc *ChainManager) SetHead(head *types.Block) {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
@@ -239,7 +247,7 @@ func (bc *ChainManager) setLastState() error {
 		bc.Reset()
 	}
 	bc.td = bc.currentBlock.Td
-	bc.currentGasLimit = bc.glsfunc(bc.currentBlock)
+	bc.currentGasLimit = bc.evalGlsFunc(bc.currentBlock)
 
 	if glog.V(logger.Info) {
 		glog.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
@@ -761,7 +769,7 @@ out:
 						// We need some control over the mining operation. Acquiring locks and waiting for the miner to create new block takes too long
 						// and in most cases isn't even necessary.
 						if self.lastBlockHash == event.Hash {
-							self.currentGasLimit = self.glsfunc(event.Block)
+							self.currentGasLimit = self.evalGlsFunc(event.Block)
 							self.eventMux.Post(ChainHeadEvent{event.Block})
 						}
 					}
