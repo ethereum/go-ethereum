@@ -102,7 +102,7 @@ func init() {
 func run(ctx *cli.Context) {
 	vm.Debug = ctx.GlobalBool(DebugFlag.Name)
 	vm.ForceJit = ctx.GlobalBool(ForceJitFlag.Name)
-	vm.DisableJit = ctx.GlobalBool(DisableJitFlag.Name)
+	vm.EnableJit = !ctx.GlobalBool(DisableJitFlag.Name)
 
 	glog.SetToStderr(true)
 

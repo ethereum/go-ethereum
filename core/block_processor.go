@@ -354,18 +354,8 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 		for _, receipt := range receipts {
 			logs = append(logs, receipt.Logs()...)
 		}
-		return
 	}
-
-	// TODO: remove backward compatibility
-	var (
-		parent = sm.bc.GetBlock(block.ParentHash())
-		state  = state.New(parent.Root(), sm.chainDb)
-	)
-
-	sm.TransitionState(state, parent, block, true)
-
-	return state.Logs(), nil
+	return logs, nil
 }
 
 // See YP section 4.3.4. "Block Header Validity"

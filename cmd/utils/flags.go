@@ -452,7 +452,7 @@ func SetupLogger(ctx *cli.Context) {
 
 // SetupVM configured the VM package's global settings
 func SetupVM(ctx *cli.Context) {
-	vm.DisableJit = !ctx.GlobalBool(VMEnableJitFlag.Name)
+	vm.EnableJit = ctx.GlobalBool(VMEnableJitFlag.Name)
 	vm.ForceJit = ctx.GlobalBool(VMForceJitFlag.Name)
 	vm.SetJITCacheSize(ctx.GlobalInt(VMJitCacheFlag.Name))
 }

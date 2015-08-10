@@ -17,9 +17,9 @@
 package vm
 
 var (
-	DisableJit  bool = true // Disable the JIT VM
-	ForceJit    bool        // Force the JIT, skip byte VM
-	MaxProgSize int         // Max cache size for JIT Programs
+	EnableJit   bool // Enables the JIT VM
+	ForceJit    bool // Force the JIT, skip byte VM
+	MaxProgSize int  // Max cache size for JIT Programs
 )
 
 const defaultJitMaxCache int = 64
