@@ -178,8 +178,8 @@ func TestTable_closest(t *testing.T) {
 	test := func(test *closeTest) bool {
 		// for any node table, Target and N
 		tab := newTable(nil, test.Self, &net.UDPAddr{}, "")
-		tab.add(test.All)
 		defer tab.Close()
+		tab.stuff(test.All)
 
 		// check that doClosest(Target, N) returns nodes
 		result := tab.closest(test.Target, test.N).entries
@@ -240,7 +240,7 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 		defer tab.Close()
 		for i := 0; i < len(buf); i++ {
 			ld := cfg.Rand.Intn(len(tab.buckets))
-			tab.add([]*Node{nodeAtDistance(tab.self.sha, ld)})
+			tab.stuff([]*Node{nodeAtDistance(tab.self.sha, ld)})
 		}
 		gotN := tab.ReadRandomNodes(buf)
 		if gotN != tab.len() {
@@ -288,7 +288,7 @@ func TestTable_Lookup(t *testing.T) {
 	}
 	// seed table with initial node (otherwise lookup will terminate immediately)
 	seed := newNode(lookupTestnet.dists[256][0], net.IP{}, 256, 0)
-	tab.add([]*Node{seed})
+	tab.stuff([]*Node{seed})
 
 	results := tab.Lookup(lookupTestnet.target)
 	t.Logf("results:")
