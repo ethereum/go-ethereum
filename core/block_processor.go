@@ -41,8 +41,7 @@ const (
 )
 
 type BlockProcessor struct {
-	db      common.Database
-	extraDb common.Database
+	chainDb common.Database
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 	// Canonical block chain
@@ -57,10 +56,9 @@ type BlockProcessor struct {
 	eventMux *event.TypeMux
 }
 
-func NewBlockProcessor(db, extra common.Database, pow pow.PoW, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+func NewBlockProcessor(db common.Database, pow pow.PoW, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
-		db:       db,
-		extraDb:  extra,
+		chainDb:  db,
 		mem:      make(map[string]*big.Int),
 		Pow:      pow,
 		bc:       chainManager,
@@ -84,8 +82,6 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 }
 
 func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
-	// If we are mining this block and validating we want to set the logs back to 0
-
 	cb := statedb.GetStateObject(coinbase.Address())
 	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, header), tx, cb)
 	if err != nil {
@@ -201,7 +197,7 @@ func (sm *BlockProcessor) Process(block *types.Block) (logs state.Logs, receipts
 
 func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs state.Logs, receipts types.Receipts, err error) {
 	// Create a new state based on the parent's root (e.g., create copy)
-	state := state.New(parent.Root(), sm.db)
+	state := state.New(parent.Root(), sm.chainDb)
 	header := block.Header()
 	uncles := block.Uncles()
 	txs := block.Transactions()
@@ -342,7 +338,7 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 // GetBlockReceipts returns the receipts beloniging to the block hash
 func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
 	if block := sm.ChainManager().GetBlock(bhash); block != nil {
-		return GetBlockReceipts(sm.extraDb, block.Hash())
+		return GetBlockReceipts(sm.chainDb, block.Hash())
 	}
 
 	return nil
@@ -352,7 +348,7 @@ func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
 // where it tries to get it from the (updated) method which gets them from the receipts or
 // the depricated way by re-processing the block.
 func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err error) {
-	receipts := GetBlockReceipts(sm.extraDb, block.Hash())
+	receipts := GetBlockReceipts(sm.chainDb, block.Hash())
 	if len(receipts) > 0 {
 		// coalesce logs
 		for _, receipt := range receipts {
@@ -364,7 +360,7 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 	// TODO: remove backward compatibility
 	var (
 		parent = sm.bc.GetBlock(block.ParentHash())
-		state  = state.New(parent.Root(), sm.db)
+		state  = state.New(parent.Root(), sm.chainDb)
 	)
 
 	sm.TransitionState(state, parent, block, true)

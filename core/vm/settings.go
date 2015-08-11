@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,21 +14,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package vm
 
-import (
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/event"
+var (
+	DisableJit  bool = true // Disable the JIT VM
+	ForceJit    bool        // Force the JIT, skip byte VM
+	MaxProgSize int         // Max cache size for JIT Programs
 )
 
-// TODO move this to types?
-type Backend interface {
-	AccountManager() *accounts.Manager
-	BlockProcessor() *BlockProcessor
-	ChainManager() *ChainManager
-	TxPool() *TxPool
-	ChainDb() common.Database
-	DappDb() common.Database
-	EventMux() *event.TypeMux
-}
+const defaultJitMaxCache int = 64

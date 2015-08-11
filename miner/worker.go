@@ -100,7 +100,7 @@ type worker struct {
 	eth     core.Backend
 	chain   *core.ChainManager
 	proc    *core.BlockProcessor
-	extraDb common.Database
+	chainDb common.Database
 
 	coinbase common.Address
 	gasPrice *big.Int
@@ -126,7 +126,7 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 	worker := &worker{
 		eth:            eth,
 		mux:            eth.EventMux(),
-		extraDb:        eth.ExtraDb(),
+		chainDb:        eth.ChainDb(),
 		recv:           make(chan *Result, resultQueueSize),
 		gasPrice:       new(big.Int),
 		chain:          eth.ChainManager(),
@@ -291,9 +291,9 @@ func (self *worker) wait() {
 				// check if canon block and write transactions
 				if stat == core.CanonStatTy {
 					// This puts transactions in a extra db for rpc
-					core.PutTransactions(self.extraDb, block, block.Transactions())
+					core.PutTransactions(self.chainDb, block, block.Transactions())
 					// store the receipts
-					core.PutReceipts(self.extraDb, work.receipts)
+					core.PutReceipts(self.chainDb, work.receipts)
 				}
 
 				// broadcast before waiting for validation
@@ -344,7 +344,7 @@ func (self *worker) push(work *Work) {
 
 // makeCurrent creates a new environment for the current cycle.
 func (self *worker) makeCurrent(parent *types.Block, header *types.Header) {
-	state := state.New(parent.Root(), self.eth.StateDb())
+	state := state.New(parent.Root(), self.eth.ChainDb())
 	work := &Work{
 		state:     state,
 		ancestors: set.New(),

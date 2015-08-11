@@ -184,9 +184,9 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
 	evmux := &event.TypeMux{}
 
-	WriteTestNetGenesisBlock(db, db, 0)
-	chainman, _ := NewChainManager(db, db, db, FakePow{}, evmux)
-	bman := NewBlockProcessor(db, db, FakePow{}, chainman, evmux)
+	WriteTestNetGenesisBlock(db, 0)
+	chainman, _ := NewChainManager(db, FakePow{}, evmux)
+	bman := NewBlockProcessor(db, FakePow{}, chainman, evmux)
 	bman.bc.SetProcessor(bman)
 	parent := bman.bc.CurrentBlock()
 	if n == 0 {

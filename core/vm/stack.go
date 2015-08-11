@@ -21,38 +21,36 @@ import (
 	"math/big"
 )
 
+// stack is an object for basic stack operations. Items popped to the stack are
+// expected to be changed and modified. stack does not take care of adding newly
+// initialised objects.
+type stack struct {
+	data []*big.Int
+}
+
 func newstack() *stack {
 	return &stack{}
 }
 
-type stack struct {
-	data []*big.Int
-	ptr  int
-}
-
 func (st *stack) Data() []*big.Int {
-	return st.data[:st.ptr]
+	return st.data
 }
 
 func (st *stack) push(d *big.Int) {
 	// NOTE push limit (1024) is checked in baseCheck
-	stackItem := new(big.Int).Set(d)
-	if len(st.data) > st.ptr {
-		st.data[st.ptr] = stackItem
-	} else {
-		st.data = append(st.data, stackItem)
-	}
-	st.ptr++
+	//stackItem := new(big.Int).Set(d)
+	//st.data = append(st.data, stackItem)
+	st.data = append(st.data, d)
 }
 
 func (st *stack) pop() (ret *big.Int) {
-	st.ptr--
-	ret = st.data[st.ptr]
+	ret = st.data[len(st.data)-1]
+	st.data = st.data[:len(st.data)-1]
 	return
 }
 
 func (st *stack) len() int {
-	return st.ptr
+	return len(st.data)
 }
 
 func (st *stack) swap(n int) {
@@ -60,7 +58,7 @@ func (st *stack) swap(n int) {
 }
 
 func (st *stack) dup(n int) {
-	st.push(st.data[st.len()-n])
+	st.push(new(big.Int).Set(st.data[st.len()-n]))
 }
 
 func (st *stack) peek() *big.Int {

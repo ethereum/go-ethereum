@@ -38,6 +38,8 @@ func NewCache(backend Backend) *Cache {
 }
 
 func (self *Cache) Get(key []byte) []byte {
+	key = append(StatePre, key...)
+
 	data := self.store[string(key)]
 	if data == nil {
 		data, _ = self.backend.Get(key)
@@ -47,8 +49,8 @@ func (self *Cache) Get(key []byte) []byte {
 }
 
 func (self *Cache) Put(key []byte, data []byte) {
-	// write the data to the ldb batch
-	//self.batch.Put(key, rle.Compress(data))
+	key = append(StatePre, key...)
+
 	self.batch.Put(key, data)
 	self.store[string(key)] = data
 }

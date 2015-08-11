@@ -33,19 +33,19 @@ func proc() (*BlockProcessor, *ChainManager) {
 	db, _ := ethdb.NewMemDatabase()
 	var mux event.TypeMux
 
-	WriteTestNetGenesisBlock(db, db, 0)
-	chainMan, err := NewChainManager(db, db, db, thePow(), &mux)
+	WriteTestNetGenesisBlock(db, 0)
+	chainMan, err := NewChainManager(db, thePow(), &mux)
 	if err != nil {
 		fmt.Println(err)
 	}
-	return NewBlockProcessor(db, db, ezp.New(), chainMan, &mux), chainMan
+	return NewBlockProcessor(db, ezp.New(), chainMan, &mux), chainMan
 }
 
 func TestNumber(t *testing.T) {
 	pow := ezp.New()
 	_, chain := proc()
 
-	statedb := state.New(chain.Genesis().Root(), chain.stateDb)
+	statedb := state.New(chain.Genesis().Root(), chain.chainDb)
 	header := makeHeader(chain.Genesis(), statedb)
 	header.Number = big.NewInt(3)
 	err := ValidateHeader(pow, header, chain.Genesis(), false)

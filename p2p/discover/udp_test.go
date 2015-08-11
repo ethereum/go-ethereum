@@ -19,10 +19,12 @@ package discover
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	logpkg "log"
+	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
@@ -138,6 +140,77 @@ func TestUDP_pingTimeout(t *testing.T) {
 	}
 }
 
+func TestUDP_responseTimeouts(t *testing.T) {
+	t.Parallel()
+	test := newUDPTest(t)
+	defer test.table.Close()
+
+	rand.Seed(time.Now().UnixNano())
+	randomDuration := func(max time.Duration) time.Duration {
+		return time.Duration(rand.Int63n(int64(max)))
+	}
+
+	var (
+		nReqs      = 200
+		nTimeouts  = 0                       // number of requests with ptype > 128
+		nilErr     = make(chan error, nReqs) // for requests that get a reply
+		timeoutErr = make(chan error, nReqs) // for requests that time out
+	)
+	for i := 0; i < nReqs; i++ {
+		// Create a matcher for a random request in udp.loop. Requests
+		// with ptype <= 128 will not get a reply and should time out.
+		// For all other requests, a reply is scheduled to arrive
+		// within the timeout window.
+		p := &pending{
+			ptype:    byte(rand.Intn(255)),
+			callback: func(interface{}) bool { return true },
+		}
+		binary.BigEndian.PutUint64(p.from[:], uint64(i))
+		if p.ptype <= 128 {
+			p.errc = timeoutErr
+			nTimeouts++
+		} else {
+			p.errc = nilErr
+			time.AfterFunc(randomDuration(60*time.Millisecond), func() {
+				if !test.udp.handleReply(p.from, p.ptype, nil) {
+					t.Logf("not matched: %v", p)
+				}
+			})
+		}
+		test.udp.addpending <- p
+		time.Sleep(randomDuration(30 * time.Millisecond))
+	}
+
+	// Check that all timeouts were delivered and that the rest got nil errors.
+	// The replies must be delivered.
+	var (
+		recvDeadline        = time.After(20 * time.Second)
+		nTimeoutsRecv, nNil = 0, 0
+	)
+	for i := 0; i < nReqs; i++ {
+		select {
+		case err := <-timeoutErr:
+			if err != errTimeout {
+				t.Fatalf("got non-timeout error on timeoutErr %d: %v", i, err)
+			}
+			nTimeoutsRecv++
+		case err := <-nilErr:
+			if err != nil {
+				t.Fatalf("got non-nil error on nilErr %d: %v", i, err)
+			}
+			nNil++
+		case <-recvDeadline:
+			t.Fatalf("exceeded recv deadline")
+		}
+	}
+	if nTimeoutsRecv != nTimeouts {
+		t.Errorf("wrong number of timeout errors received: got %d, want %d", nTimeoutsRecv, nTimeouts)
+	}
+	if nNil != nReqs-nTimeouts {
+		t.Errorf("wrong number of successful replies: got %d, want %d", nNil, nReqs-nTimeouts)
+	}
+}
+
 func TestUDP_findnodeTimeout(t *testing.T) {
 	t.Parallel()
 	test := newUDPTest(t)
@@ -167,7 +240,7 @@ func TestUDP_findnode(t *testing.T) {
 	for i := 0; i < bucketSize; i++ {
 		nodes.push(nodeAtDistance(test.table.self.sha, i+2), bucketSize)
 	}
-	test.table.add(nodes.entries)
+	test.table.stuff(nodes.entries)
 
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.

@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -27,12 +28,18 @@ import (
 )
 
 func TestGetAuthContent(t *testing.T) {
-	text := "test"
-	hash := common.Hash{}
-	copy(hash[:], crypto.Sha3([]byte(text)))
-	ioutil.WriteFile("/tmp/test.content", []byte(text), os.ModePerm)
+	dir, err := ioutil.TempDir("", "docserver-test")
+	if err != nil {
+		t.Fatal("cannot create temporary directory:", err)
+	}
+	defer os.RemoveAll(dir)
+	ds := New(dir)
 
-	ds := New("/tmp/")
+	text := "test"
+	hash := crypto.Sha3Hash([]byte(text))
+	if err := ioutil.WriteFile(path.Join(dir, "test.content"), []byte(text), os.ModePerm); err != nil {
+		t.Fatal("could not write test file", err)
+	}
 	content, err := ds.GetAuthContent("file:///test.content", hash)
 	if err != nil {
 		t.Errorf("no error expected, got %v", err)

@@ -204,7 +204,7 @@ func (test *BlockTest) makeEthConfig() *eth.Config {
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
 func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, error) {
-	db := ethereum.StateDb()
+	db := ethereum.ChainDb()
 	statedb := state.New(common.Hash{}, db)
 	for addrString, acct := range t.preAccounts {
 		addr, err := hex.DecodeString(addrString)

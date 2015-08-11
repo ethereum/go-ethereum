@@ -2,7 +2,7 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth mist all test travis-test-with-coverage clean
+.PHONY: geth evm mist all test travis-test-with-coverage clean
 GOBIN = build/bin
 
 geth:
@@ -10,6 +10,10 @@ geth:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
+evm:
+	build/env.sh $(GOROOT)/bin/go install -v $(shell build/ldflags.sh) ./cmd/evm
+	@echo "Done building."
+	@echo "Run \"$(GOBIN)/evm to start the evm."
 mist:
 	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/mist
 	@echo "Done building."
