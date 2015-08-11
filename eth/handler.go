@@ -237,7 +237,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
 
-	case (p.version == eth60 || p.version == eth61) && msg.Code == GetBlockHashesMsg:
+	case p.version < eth62 && msg.Code == GetBlockHashesMsg:
 		// Retrieve the number of hashes to return and from which origin hash
 		var request getBlockHashesData
 		if err := msg.Decode(&request); err != nil {
@@ -253,7 +253,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendBlockHashes(hashes)
 
-	case (p.version == eth60 || p.version == eth61) && msg.Code == GetBlockHashesFromNumberMsg:
+	case p.version < eth62 && msg.Code == GetBlockHashesFromNumberMsg:
 		// Retrieve and decode the number of hashes to return and from which origin number
 		var request getBlockHashesFromNumberData
 		if err := msg.Decode(&request); err != nil {
@@ -280,7 +280,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendBlockHashes(hashes)
 
-	case (p.version == eth60 || p.version == eth61) && msg.Code == BlockHashesMsg:
+	case p.version < eth62 && msg.Code == BlockHashesMsg:
 		// A batch of hashes arrived to one of our previous requests
 		var hashes []common.Hash
 		if err := msg.Decode(&hashes); err != nil {
@@ -292,7 +292,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			glog.V(logger.Debug).Infoln(err)
 		}
 
-	case (p.version == eth60 || p.version == eth61) && msg.Code == GetBlocksMsg:
+	case p.version < eth62 && msg.Code == GetBlocksMsg:
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
@@ -320,7 +320,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendBlocks(blocks)
 
-	case (p.version == eth60 || p.version == eth61) && msg.Code == BlocksMsg:
+	case p.version < eth62 && msg.Code == BlocksMsg:
 		// Decode the arrived block message
 		var blocks []*types.Block
 		if err := msg.Decode(&blocks); err != nil {
@@ -336,7 +336,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			pm.downloader.DeliverBlocks(p.id, blocks)
 		}
 
-	case p.version == eth62 && msg.Code == GetBlockHeadersMsg:
+	case p.version >= eth62 && msg.Code == GetBlockHeadersMsg:
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
@@ -363,7 +363,34 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendBlockHeaders(headers)
 
-	case p.version == eth63 && msg.Code == GetNodeDataMsg:
+	case p.version >= eth62 && msg.Code == GetBlockBodiesMsg:
+		// Decode the retrieval message
+		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
+		if _, err := msgStream.List(); err != nil {
+			return err
+		}
+		// Gather blocks until the fetch or network limits is reached
+		var (
+			hash   common.Hash
+			bytes  common.StorageSize
+			bodies []*blockBody
+		)
+		for bytes < softResponseLimit && len(bodies) < downloader.MaxBlockFetch {
+			//Retrieve the hash of the next block
+			if err := msgStream.Decode(&hash); err == rlp.EOL {
+				break
+			} else if err != nil {
+				return errResp(ErrDecode, "msg %v: %v", msg, err)
+			}
+			// Retrieve the requested block, stopping if enough was found
+			if block := pm.chainman.GetBlock(hash); block != nil {
+				bodies = append(bodies, &blockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
+				bytes += block.Size()
+			}
+		}
+		return p.SendBlockBodies(bodies)
+
+	case p.version >= eth63 && msg.Code == GetNodeDataMsg:
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
@@ -390,7 +417,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendNodeData(data)
 
-	case p.version == eth63 && msg.Code == GetReceiptsMsg:
+	case p.version >= eth63 && msg.Code == GetReceiptsMsg:
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
@@ -419,24 +446,45 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	case msg.Code == NewBlockHashesMsg:
 		// Retrieve and deseralize the remote new block hashes notification
-		var hashes []common.Hash
-		if err := msg.Decode(&hashes); err != nil {
-			break
+		type announce struct {
+			Hash   common.Hash
+			Number uint64
 		}
-		// Mark the hashes as present at the remote node
-		for _, hash := range hashes {
-			p.MarkBlock(hash)
-			p.SetHead(hash)
-		}
-		// Schedule all the unknown hashes for retrieval
-		unknown := make([]common.Hash, 0, len(hashes))
-		for _, hash := range hashes {
-			if !pm.chainman.HasBlock(hash) {
-				unknown = append(unknown, hash)
+		var announces = []announce{}
+
+		if p.version < eth62 {
+			// We're running the old protocol, make block number unknown (0)
+			var hashes []common.Hash
+			if err := msg.Decode(&hashes); err != nil {
+				return errResp(ErrDecode, "%v: %v", msg, err)
+			}
+			for _, hash := range hashes {
+				announces = append(announces, announce{hash, 0})
+			}
+		} else {
+			// Otherwise extract both block hash and number
+			var request newBlockHashesData
+			if err := msg.Decode(&request); err != nil {
+				return errResp(ErrDecode, "%v: %v", msg, err)
+			}
+			for _, block := range request {
+				announces = append(announces, announce{block.Hash, block.Number})
 			}
 		}
-		for _, hash := range unknown {
-			pm.fetcher.Notify(p.id, hash, time.Now(), p.RequestBlocks)
+		// Mark the hashes as present at the remote node
+		for _, block := range announces {
+			p.MarkBlock(block.Hash)
+			p.SetHead(block.Hash)
+		}
+		// Schedule all the unknown hashes for retrieval
+		unknown := make([]announce, 0, len(announces))
+		for _, block := range announces {
+			if !pm.chainman.HasBlock(block.Hash) {
+				unknown = append(unknown, block)
+			}
+		}
+		for _, block := range unknown {
+			pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), p.RequestBlocks)
 		}
 
 	case msg.Code == NewBlockMsg:

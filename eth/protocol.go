@@ -29,6 +29,7 @@ const (
 	eth61 = 61
 	eth62 = 62
 	eth63 = 63
+	eth64 = 64
 )
 
 // Supported versions of the eth protocol (first is primary).
@@ -54,10 +55,13 @@ const (
 	BlocksMsg         = 0x06
 	NewBlockMsg       = 0x07
 
-	// Protocol messages belonging to eth/61
+	// Protocol messages belonging to eth/61 (extension of eth/60)
 	GetBlockHashesFromNumberMsg = 0x08
 
-	// Protocol messages belonging to eth/62
+	// Protocol messages belonging to eth/62 (new protocol from scratch)
+	// StatusMsg          = 0x00 (uncomment after eth/61 deprecation)
+	// NewBlockHashesMsg  = 0x01 (uncomment after eth/61 deprecation)
+	// TxMsg              = 0x02 (uncomment after eth/61 deprecation)
 	GetBlockHeadersMsg = 0x03
 	BlockHeadersMsg    = 0x04
 	GetBlockBodiesMsg  = 0x05
@@ -68,6 +72,11 @@ const (
 	NodeDataMsg    = 0x0e
 	GetReceiptsMsg = 0x0f
 	ReceiptsMsg    = 0x10
+
+	// Protocol messages belonging to eth/64
+	GetAcctProofMsg     = 0x11
+	GetStorageDataProof = 0x12
+	Proof               = 0x13
 )
 
 type errCode int
@@ -125,6 +134,12 @@ type statusData struct {
 	GenesisBlock    common.Hash
 }
 
+// newBlockHashesData is the network packet for the block announcements.
+type newBlockHashesData []struct {
+	Hash   common.Hash // Hash of one particular block being announced
+	Number uint64      // Number of one particular block being announced
+}
+
 // getBlockHashesData is the network packet for the hash based hash retrieval.
 type getBlockHashesData struct {
 	Hash   common.Hash
@@ -143,6 +158,15 @@ type newBlockData struct {
 	Block *types.Block
 	TD    *big.Int
 }
+
+// blockBody represents the data content of a single block.
+type blockBody struct {
+	Transactions []*types.Transaction // Transactions contained within a block
+	Uncles       []*types.Header      // Uncles contained within a block
+}
+
+// blockBodiesData is the network packet for block content distribution.
+type blockBodiesData []*blockBody
 
 // nodeDataData is the network response packet for a node data retrieval.
 type nodeDataData []struct {

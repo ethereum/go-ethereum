@@ -194,7 +194,7 @@ func TestSequentialAnnouncements(t *testing.T) {
 	tester.fetcher.importedHook = func(block *types.Block) { imported <- block }
 
 	for i := len(hashes) - 2; i >= 0; i-- {
-		tester.fetcher.Notify("valid", hashes[i], time.Now().Add(-arriveTimeout), fetcher)
+		tester.fetcher.Notify("valid", hashes[i], 0, time.Now().Add(-arriveTimeout), fetcher)
 		verifyImportEvent(t, imported)
 	}
 	verifyImportDone(t, imported)
@@ -221,9 +221,9 @@ func TestConcurrentAnnouncements(t *testing.T) {
 	tester.fetcher.importedHook = func(block *types.Block) { imported <- block }
 
 	for i := len(hashes) - 2; i >= 0; i-- {
-		tester.fetcher.Notify("first", hashes[i], time.Now().Add(-arriveTimeout), wrapper)
-		tester.fetcher.Notify("second", hashes[i], time.Now().Add(-arriveTimeout+time.Millisecond), wrapper)
-		tester.fetcher.Notify("second", hashes[i], time.Now().Add(-arriveTimeout-time.Millisecond), wrapper)
+		tester.fetcher.Notify("first", hashes[i], 0, time.Now().Add(-arriveTimeout), wrapper)
+		tester.fetcher.Notify("second", hashes[i], 0, time.Now().Add(-arriveTimeout+time.Millisecond), wrapper)
+		tester.fetcher.Notify("second", hashes[i], 0, time.Now().Add(-arriveTimeout-time.Millisecond), wrapper)
 
 		verifyImportEvent(t, imported)
 	}
@@ -252,7 +252,7 @@ func TestOverlappingAnnouncements(t *testing.T) {
 	tester.fetcher.importedHook = func(block *types.Block) { imported <- block }
 
 	for i := len(hashes) - 2; i >= 0; i-- {
-		tester.fetcher.Notify("valid", hashes[i], time.Now().Add(-arriveTimeout), fetcher)
+		tester.fetcher.Notify("valid", hashes[i], 0, time.Now().Add(-arriveTimeout), fetcher)
 		select {
 		case <-fetching:
 		case <-time.After(time.Second):
@@ -286,7 +286,7 @@ func TestPendingDeduplication(t *testing.T) {
 	}
 	// Announce the same block many times until it's fetched (wait for any pending ops)
 	for tester.getBlock(hashes[0]) == nil {
-		tester.fetcher.Notify("repeater", hashes[0], time.Now().Add(-arriveTimeout), wrapper)
+		tester.fetcher.Notify("repeater", hashes[0], 0, time.Now().Add(-arriveTimeout), wrapper)
 		time.Sleep(time.Millisecond)
 	}
 	time.Sleep(delay)
@@ -317,12 +317,12 @@ func TestRandomArrivalImport(t *testing.T) {
 
 	for i := len(hashes) - 1; i >= 0; i-- {
 		if i != skip {
-			tester.fetcher.Notify("valid", hashes[i], time.Now().Add(-arriveTimeout), fetcher)
+			tester.fetcher.Notify("valid", hashes[i], 0, time.Now().Add(-arriveTimeout), fetcher)
 			time.Sleep(time.Millisecond)
 		}
 	}
 	// Finally announce the skipped entry and check full import
-	tester.fetcher.Notify("valid", hashes[skip], time.Now().Add(-arriveTimeout), fetcher)
+	tester.fetcher.Notify("valid", hashes[skip], 0, time.Now().Add(-arriveTimeout), fetcher)
 	verifyImportCount(t, imported, len(hashes)-1)
 }
 
@@ -343,7 +343,7 @@ func TestQueueGapFill(t *testing.T) {
 
 	for i := len(hashes) - 1; i >= 0; i-- {
 		if i != skip {
-			tester.fetcher.Notify("valid", hashes[i], time.Now().Add(-arriveTimeout), fetcher)
+			tester.fetcher.Notify("valid", hashes[i], 0, time.Now().Add(-arriveTimeout), fetcher)
 			time.Sleep(time.Millisecond)
 		}
 	}
@@ -374,7 +374,7 @@ func TestImportDeduplication(t *testing.T) {
 	tester.fetcher.importedHook = func(block *types.Block) { imported <- block }
 
 	// Announce the duplicating block, wait for retrieval, and also propagate directly
-	tester.fetcher.Notify("valid", hashes[0], time.Now().Add(-arriveTimeout), fetcher)
+	tester.fetcher.Notify("valid", hashes[0], 0, time.Now().Add(-arriveTimeout), fetcher)
 	<-fetching
 
 	tester.fetcher.Enqueue("valid", blocks[hashes[0]])
@@ -437,9 +437,9 @@ func TestHashMemoryExhaustionAttack(t *testing.T) {
 	// Feed the tester a huge hashset from the attacker, and a limited from the valid peer
 	for i := 0; i < len(attack); i++ {
 		if i < maxQueueDist {
-			tester.fetcher.Notify("valid", hashes[len(hashes)-2-i], time.Now(), valid)
+			tester.fetcher.Notify("valid", hashes[len(hashes)-2-i], 0, time.Now(), valid)
 		}
-		tester.fetcher.Notify("attacker", attack[i], time.Now(), attacker)
+		tester.fetcher.Notify("attacker", attack[i], 0, time.Now(), attacker)
 	}
 	if len(tester.fetcher.announced) != hashLimit+maxQueueDist {
 		t.Fatalf("queued announce count mismatch: have %d, want %d", len(tester.fetcher.announced), hashLimit+maxQueueDist)
@@ -449,7 +449,7 @@ func TestHashMemoryExhaustionAttack(t *testing.T) {
 
 	// Feed the remaining valid hashes to ensure DOS protection state remains clean
 	for i := len(hashes) - maxQueueDist - 2; i >= 0; i-- {
-		tester.fetcher.Notify("valid", hashes[i], time.Now().Add(-arriveTimeout), valid)
+		tester.fetcher.Notify("valid", hashes[i], 0, time.Now().Add(-arriveTimeout), valid)
 		verifyImportEvent(t, imported)
 	}
 	verifyImportDone(t, imported)
