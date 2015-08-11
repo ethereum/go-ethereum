@@ -208,7 +208,6 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, client comms.Et
 	} else {
 		lr := liner.NewLiner()
 		js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
-		lr.SetCtrlCAborts(true)
 		js.loadAutoCompletion()
 		lr.SetWordCompleter(apiWordCompleter)
 		lr.SetTabCompletionStyle(liner.TabPrints)
