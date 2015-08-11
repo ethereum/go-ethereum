@@ -252,22 +252,22 @@ func (self *jsre) batch(statement string) {
 
 // show summary of current geth instance
 func (self *jsre) welcome() {
-	self.re.Eval(`console.log('instance: ' + web3.version.client);`)
-	self.re.Eval(`console.log(' datadir: ' + admin.datadir);`)
-	self.re.Eval(`console.log("coinbase: " + eth.coinbase);`)
-	self.re.Eval(`var lastBlockTimestamp = 1000 * eth.getBlock(eth.blockNumber).timestamp`)
-	self.re.Eval(`console.log("at block: " + eth.blockNumber + " (" + new Date(lastBlockTimestamp).toLocaleDateString()
-		+ " " + new Date(lastBlockTimestamp).toLocaleTimeString() + ")");`)
-
+	self.re.Run(`
+		(function () {
+			console.log('instance: ' + web3.version.client);
+			console.log(' datadir: ' + admin.datadir);
+			console.log("coinbase: " + eth.coinbase);
+			var ts = 1000 * eth.getBlock(eth.blockNumber).timestamp;
+			console.log("at block: " + eth.blockNumber + " (" + new Date(ts) + ")");
+		})();
+	`)
 	if modules, err := self.supportedApis(); err == nil {
 		loadedModules := make([]string, 0)
 		for api, version := range modules {
 			loadedModules = append(loadedModules, fmt.Sprintf("%s:%s", api, version))
 		}
 		sort.Strings(loadedModules)
-
-		self.re.Eval(fmt.Sprintf("var modules = '%s';", strings.Join(loadedModules, " ")))
-		self.re.Eval(`console.log(" modules: " + modules);`)
+		fmt.Println("modules:", strings.Join(loadedModules, " "))
 	}
 }
 
@@ -309,12 +309,12 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		utils.Fatalf("Error loading web3.js: %v", err)
 	}
 
-	_, err = js.re.Eval("var web3 = require('web3');")
+	_, err = js.re.Run("var web3 = require('web3');")
 	if err != nil {
 		utils.Fatalf("Error requiring web3: %v", err)
 	}
 
-	_, err = js.re.Eval("web3.setProvider(jeth)")
+	_, err = js.re.Run("web3.setProvider(jeth)")
 	if err != nil {
 		utils.Fatalf("Error setting web3 provider: %v", err)
 	}
@@ -333,13 +333,13 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		}
 	}
 
-	_, err = js.re.Eval(shortcuts)
+	_, err = js.re.Run(shortcuts)
 
 	if err != nil {
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
 
-	js.re.Eval(`var GlobalRegistrar = eth.contract(` + registrar.GlobalRegistrarAbi + `);	 registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
+	js.re.Run(`var GlobalRegistrar = eth.contract(` + registrar.GlobalRegistrarAbi + `);	 registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
 	return nil
 }
 
@@ -458,8 +458,7 @@ func (self *jsre) parseInput(code string) {
 			fmt.Println("[native] error", r)
 		}
 	}()
-	value, err := self.re.Run(code)
-	if err != nil {
+	if err := self.re.EvalAndPrettyPrint(code); err != nil {
 		if ottoErr, ok := err.(*otto.Error); ok {
 			fmt.Println(ottoErr.String())
 		} else {
@@ -467,7 +466,6 @@ func (self *jsre) parseInput(code string) {
 		}
 		return
 	}
-	self.printValue(value)
 }
 
 var indentCount = 0
@@ -484,12 +482,5 @@ func (self *jsre) setIndent() {
 	} else {
 		self.ps1 = strings.Join(make([]string, indentCount*2), "..")
 		self.ps1 += " "
-	}
-}
-
-func (self *jsre) printValue(v interface{}) {
-	val, err := self.re.PrettyPrint(v)
-	if err == nil {
-		fmt.Printf("%v", val)
 	}
 }
