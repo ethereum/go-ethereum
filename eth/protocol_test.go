@@ -41,6 +41,7 @@ func TestStatusMsgErrors60(t *testing.T) { testStatusMsgErrors(t, 60) }
 func TestStatusMsgErrors61(t *testing.T) { testStatusMsgErrors(t, 61) }
 func TestStatusMsgErrors62(t *testing.T) { testStatusMsgErrors(t, 62) }
 func TestStatusMsgErrors63(t *testing.T) { testStatusMsgErrors(t, 63) }
+func TestStatusMsgErrors64(t *testing.T) { testStatusMsgErrors(t, 64) }
 
 func testStatusMsgErrors(t *testing.T, protocol int) {
 	pm := newTestProtocolManager(0, nil, nil)
@@ -95,6 +96,7 @@ func TestRecvTransactions60(t *testing.T) { testRecvTransactions(t, 60) }
 func TestRecvTransactions61(t *testing.T) { testRecvTransactions(t, 61) }
 func TestRecvTransactions62(t *testing.T) { testRecvTransactions(t, 62) }
 func TestRecvTransactions63(t *testing.T) { testRecvTransactions(t, 63) }
+func TestRecvTransactions64(t *testing.T) { testRecvTransactions(t, 64) }
 
 func testRecvTransactions(t *testing.T, protocol int) {
 	txAdded := make(chan []*types.Transaction)
@@ -124,6 +126,7 @@ func TestSendTransactions60(t *testing.T) { testSendTransactions(t, 60) }
 func TestSendTransactions61(t *testing.T) { testSendTransactions(t, 61) }
 func TestSendTransactions62(t *testing.T) { testSendTransactions(t, 62) }
 func TestSendTransactions63(t *testing.T) { testSendTransactions(t, 63) }
+func TestSendTransactions64(t *testing.T) { testSendTransactions(t, 64) }
 
 func testSendTransactions(t *testing.T, protocol int) {
 	pm := newTestProtocolManager(0, nil, nil)

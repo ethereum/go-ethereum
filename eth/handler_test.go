@@ -175,9 +175,13 @@ func testGetBlocks(t *testing.T, protocol int) {
 }
 
 // Tests that block headers can be retrieved from a remote chain based on their hashes.
-func TestGetBlockHeaders62(t *testing.T) {
+func TestGetBlockHeaders62(t *testing.T) { testGetBlockHeaders(t, 62) }
+func TestGetBlockHeaders63(t *testing.T) { testGetBlockHeaders(t, 63) }
+func TestGetBlockHeaders64(t *testing.T) { testGetBlockHeaders(t, 64) }
+
+func testGetBlockHeaders(t *testing.T, protocol int) {
 	pm := newTestProtocolManager(downloader.MaxHashFetch+15, nil, nil)
-	peer, _ := newTestPeer("peer", 62, pm, true)
+	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
 	// Create a batch of tests for various scenarios
@@ -242,8 +246,84 @@ func TestGetBlockHeaders62(t *testing.T) {
 	}
 }
 
+// Tests that block contents can be retrieved from a remote chain based on their hashes.
+func TestGetBlockBodies62(t *testing.T) { testGetBlockBodies(t, 62) }
+func TestGetBlockBodies63(t *testing.T) { testGetBlockBodies(t, 63) }
+func TestGetBlockBodies64(t *testing.T) { testGetBlockBodies(t, 64) }
+
+func testGetBlockBodies(t *testing.T, protocol int) {
+	pm := newTestProtocolManager(downloader.MaxBlockFetch+15, nil, nil)
+	peer, _ := newTestPeer("peer", protocol, pm, true)
+	defer peer.close()
+
+	// Create a batch of tests for various scenarios
+	limit := downloader.MaxBlockFetch
+	tests := []struct {
+		random    int           // Number of blocks to fetch randomly from the chain
+		explicit  []common.Hash // Explicitly requested blocks
+		available []bool        // Availability of explicitly requested blocks
+		expected  int           // Total number of existing blocks to expect
+	}{
+		{1, nil, nil, 1},                                                       // A single random block should be retrievable
+		{10, nil, nil, 10},                                                     // Multiple random blocks should be retrievable
+		{limit, nil, nil, limit},                                               // The maximum possible blocks should be retrievable
+		{limit + 1, nil, nil, limit},                                           // No more that the possible block count should be returned
+		{0, []common.Hash{pm.chainman.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
+		{0, []common.Hash{pm.chainman.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
+		{0, []common.Hash{common.Hash{}}, []bool{false}, 0},                    // A non existent block should not be returned
+
+		// Existing and non-existing blocks interleaved should not cause problems
+		{0, []common.Hash{
+			common.Hash{},
+			pm.chainman.GetBlockByNumber(1).Hash(),
+			common.Hash{},
+			pm.chainman.GetBlockByNumber(10).Hash(),
+			common.Hash{},
+			pm.chainman.GetBlockByNumber(100).Hash(),
+			common.Hash{},
+		}, []bool{false, true, false, true, false, true, false}, 3},
+	}
+	// Run each of the tests and verify the results against the chain
+	for i, tt := range tests {
+		// Collect the hashes to request, and the response to expect
+		hashes, seen := []common.Hash{}, make(map[int64]bool)
+		bodies := []*blockBody{}
+
+		for j := 0; j < tt.random; j++ {
+			for {
+				num := rand.Int63n(int64(pm.chainman.CurrentBlock().NumberU64()))
+				if !seen[num] {
+					seen[num] = true
+
+					block := pm.chainman.GetBlockByNumber(uint64(num))
+					hashes = append(hashes, block.Hash())
+					if len(bodies) < tt.expected {
+						bodies = append(bodies, &blockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
+					}
+					break
+				}
+			}
+		}
+		for j, hash := range tt.explicit {
+			hashes = append(hashes, hash)
+			if tt.available[j] && len(bodies) < tt.expected {
+				block := pm.chainman.GetBlock(hash)
+				bodies = append(bodies, &blockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
+			}
+		}
+		// Send the hash request and verify the response
+		p2p.Send(peer.app, 0x05, hashes)
+		if err := p2p.ExpectMsg(peer.app, 0x06, bodies); err != nil {
+			t.Errorf("test %d: bodies mismatch: %v", i, err)
+		}
+	}
+}
+
 // Tests that the node state database can be retrieved based on hashes.
-func TestGetNodeData63(t *testing.T) {
+func TestGetNodeData63(t *testing.T) { testGetNodeData(t, 63) }
+func TestGetNodeData64(t *testing.T) { testGetNodeData(t, 64) }
+
+func testGetNodeData(t *testing.T, protocol int) {
 	// Define three accounts to simulate transactions with
 	acc1Key, _ := crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 	acc2Key, _ := crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
@@ -280,7 +360,7 @@ func TestGetNodeData63(t *testing.T) {
 	}
 	// Assemble the test environment
 	pm := newTestProtocolManager(4, generator, nil)
-	peer, _ := newTestPeer("peer", 63, pm, true)
+	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
 	// Fetch for now the entire chain db
@@ -329,7 +409,10 @@ func TestGetNodeData63(t *testing.T) {
 }
 
 // Tests that the transaction receipts can be retrieved based on hashes.
-func TestGetReceipts63(t *testing.T) {
+func TestGetReceipt63(t *testing.T) { testGetReceipt(t, 63) }
+func TestGetReceipt64(t *testing.T) { testGetReceipt(t, 64) }
+
+func testGetReceipt(t *testing.T, protocol int) {
 	// Define three accounts to simulate transactions with
 	acc1Key, _ := crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 	acc2Key, _ := crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
@@ -366,7 +449,7 @@ func TestGetReceipts63(t *testing.T) {
 	}
 	// Assemble the test environment
 	pm := newTestProtocolManager(4, generator, nil)
-	peer, _ := newTestPeer("peer", 63, pm, true)
+	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
 	// Collect the hashes to request, and the response to expect
