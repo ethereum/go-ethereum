@@ -51,7 +51,7 @@ import (
 )
 
 const (
-	ClientIdentifier = "Geth                                                                                                   "
+	ClientIdentifier = "Geth"
 	Version          = "1.0.1"
 	VersionMajor     = 1
 	VersionMinor     = 0
