@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func init() {
@@ -180,4 +181,48 @@ func testSendTransactions(t *testing.T, protocol int) {
 		go checktxs(p)
 	}
 	wg.Wait()
+}
+
+// Tests that the custom union field encoder and decoder works correctly.
+func TestGetBlockHeadersDataEncodeDecode(t *testing.T) {
+	// Create a "random" hash for testing
+	var hash common.Hash
+	for i, _ := range hash {
+		hash[i] = byte(i)
+	}
+	// Assemble some table driven tests
+	tests := []struct {
+		packet *getBlockHeadersData
+		fail   bool
+	}{
+		// Providing the origin as either a hash or a number should both work
+		{fail: false, packet: &getBlockHeadersData{Origin: hashOrNumber{Number: 314}}},
+		{fail: false, packet: &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}}},
+
+		// Providing arbitrary query field should also work
+		{fail: false, packet: &getBlockHeadersData{Origin: hashOrNumber{Number: 314}, Amount: 314, Skip: 1, Reverse: true}},
+		{fail: false, packet: &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}, Amount: 314, Skip: 1, Reverse: true}},
+
+		// Providing both the origin hash and origin number must fail
+		{fail: true, packet: &getBlockHeadersData{Origin: hashOrNumber{Hash: hash, Number: 314}}},
+	}
+	// Iterate over each of the tests and try to encode and then decode
+	for i, tt := range tests {
+		bytes, err := rlp.EncodeToBytes(tt.packet)
+		if err != nil && !tt.fail {
+			t.Fatalf("test %d: failed to encode packet: %v", i, err)
+		} else if err == nil && tt.fail {
+			t.Fatalf("test %d: encode should have failed", i)
+		}
+		if !tt.fail {
+			packet := new(getBlockHeadersData)
+			if err := rlp.DecodeBytes(bytes, packet); err != nil {
+				t.Fatalf("test %d: failed to decode packet: %v", i, err)
+			}
+			if packet.Origin.Hash != tt.packet.Origin.Hash || packet.Origin.Number != tt.packet.Origin.Number || packet.Amount != tt.packet.Amount ||
+				packet.Skip != tt.packet.Skip || packet.Reverse != tt.packet.Reverse {
+				t.Fatalf("test %d: encode decode mismatch: have %+v, want %+v", i, packet, tt.packet)
+			}
+		}
+	}
 }
