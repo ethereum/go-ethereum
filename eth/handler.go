@@ -336,29 +336,67 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			pm.downloader.DeliverBlocks(p.id, blocks)
 		}
 
+	// Block header query, collect the requested headers and reply
 	case p.version >= eth62 && msg.Code == GetBlockHeadersMsg:
-		// Decode the retrieval message
-		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-		if _, err := msgStream.List(); err != nil {
-			return err
+		// Decode the complex header query
+		var query getBlockHeadersData
+		if err := msg.Decode(&query); err != nil {
+			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
 		// Gather blocks until the fetch or network limits is reached
 		var (
-			hash    common.Hash
 			bytes   common.StorageSize
 			headers []*types.Header
+			unknown bool
 		)
-		for bytes < softResponseLimit && len(headers) < downloader.MaxHeaderFetch {
-			//Retrieve the hash of the next block
-			if err := msgStream.Decode(&hash); err == rlp.EOL {
-				break
-			} else if err != nil {
-				return errResp(ErrDecode, "msg %v: %v", msg, err)
+		for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit && len(headers) < downloader.MaxHeaderFetch {
+			// Retrieve the next block satisfying the query
+			var origin *types.Block
+			if query.Origin.Hash != (common.Hash{}) {
+				origin = pm.chainman.GetBlock(query.Origin.Hash)
+			} else {
+				origin = pm.chainman.GetBlockByNumber(query.Origin.Number)
 			}
-			// Retrieve the requested block, stopping if enough was found
-			if block := pm.chainman.GetBlock(hash); block != nil {
-				headers = append(headers, block.Header())
-				bytes += block.Size()
+			if origin == nil {
+				break
+			}
+			headers = append(headers, origin.Header())
+			bytes += origin.Size()
+
+			// Advance to the next block of the query
+			switch {
+			case query.Origin.Hash != (common.Hash{}) && query.Reverse:
+				// Hash based traversal towards the genesis block
+				for i := 0; i < int(query.Skip)+1; i++ {
+					if block := pm.chainman.GetBlock(query.Origin.Hash); block != nil {
+						query.Origin.Hash = block.ParentHash()
+					} else {
+						unknown = true
+						break
+					}
+				}
+			case query.Origin.Hash != (common.Hash{}) && !query.Reverse:
+				// Hash based traversal towards the leaf block
+				if block := pm.chainman.GetBlockByNumber(origin.NumberU64() + query.Skip + 1); block != nil {
+					if pm.chainman.GetBlockHashesFromHash(block.Hash(), query.Skip+1)[query.Skip] == query.Origin.Hash {
+						query.Origin.Hash = block.Hash()
+					} else {
+						unknown = true
+					}
+				} else {
+					unknown = true
+				}
+			case query.Reverse:
+				// Number based traversal towards the genesis block
+				if query.Origin.Number >= query.Skip+1 {
+					query.Origin.Number -= (query.Skip + 1)
+				} else {
+					unknown = true
+				}
+
+			case !query.Reverse:
+				// Number based traversal towards the leaf block
+				query.Origin.Number += (query.Skip + 1)
 			}
 		}
 		return p.SendBlockHeaders(headers)
