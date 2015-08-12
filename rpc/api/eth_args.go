@@ -908,14 +908,14 @@ func (args *SubmitWorkArgs) UnmarshalJSON(b []byte) (err error) {
 type tx struct {
 	tx *types.Transaction
 
-	To       string
-	From     string
-	Nonce    string
-	Value    string
-	Data     string
-	GasLimit string
-	GasPrice string
-	Hash     string
+	To       string `json:"to"`
+	From     string `json:"from"`
+	Nonce    string `json:"nonce"`
+	Value    string `json:"value"`
+	Data     string `json:"data"`
+	GasLimit string `json:"gas"`
+	GasPrice string `json:"gasPrice"`
+	Hash     string `json:"hash"`
 }
 
 func newTx(t *types.Transaction) *tx {
