@@ -145,19 +145,15 @@ func apiWordCompleter(line string, pos int) (head string, completions []string, 
 	return begin, completionWords, end
 }
 
-func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
+func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive bool) *jsre {
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
 	js.client = client
 	js.ds = docserver.New("/")
 
-	if f == nil {
-		f = js
-	}
-
 	// update state in separare forever blocks
 	js.re = re.New(libPath)
-	if err := js.apiBindings(f); err != nil {
+	if err := js.apiBindings(js); err != nil {
 		utils.Fatalf("Unable to initialize console - %v", err)
 	}
 
@@ -291,7 +287,7 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		utils.Fatalf("Unable to determine supported api's: %v", err)
 	}
 
-	jeth := rpc.NewJeth(api.Merge(apiImpl...), js.re, js.client)
+	jeth := rpc.NewJeth(api.Merge(apiImpl...), js.re, js.client, f)
 	js.re.Set("jeth", struct{}{})
 	t, _ := js.re.Get("jeth")
 	jethObj := t.Object()

@@ -425,7 +425,7 @@ func attach(ctx *cli.Context) {
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		client,
 		true,
-		nil)
+	)
 
 	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
 		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))

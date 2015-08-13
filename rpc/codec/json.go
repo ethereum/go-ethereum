@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"time"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
@@ -73,35 +74,41 @@ func (self *JsonCodec) ReadRequest() (requests []*shared.Request, isBatch bool, 
 	return nil, false, err
 }
 
-func (self *JsonCodec) ReadResponse() (interface{}, error) {
-	bytesInBuffer := 0
-	buf := make([]byte, MAX_RESPONSE_SIZE)
-
-	deadline := time.Now().Add(READ_TIMEOUT * time.Second)
-	if err := self.c.SetDeadline(deadline); err != nil {
+func (self *JsonCodec) Recv() (interface{}, error) {
+	var msg json.RawMessage
+	err := self.d.Decode(&msg)
+	if err != nil {
+		self.c.Close()
 		return nil, err
 	}
 
-	for {
-		n, err := self.c.Read(buf[bytesInBuffer:])
-		if err != nil {
-			return nil, err
-		}
-		bytesInBuffer += n
+	return msg, err
+}
 
-		var failure shared.ErrorResponse
-		if err = json.Unmarshal(buf[:bytesInBuffer], &failure); err == nil && failure.Error != nil {
+func (self *JsonCodec) ReadResponse() (interface{}, error) {
+	in, err := self.Recv()
+	if err != nil {
+		return nil, err
+	}
+
+	if msg, ok := in.(json.RawMessage); ok {
+		var req *shared.Request
+		if err = json.Unmarshal(msg, &req); err == nil && strings.HasPrefix(req.Method, "agent_") {
+			return req, nil
+		}
+
+		var failure *shared.ErrorResponse
+		if err = json.Unmarshal(msg, &failure); err == nil && failure.Error != nil {
 			return failure, fmt.Errorf(failure.Error.Message)
 		}
 
-		var success shared.SuccessResponse
-		if err = json.Unmarshal(buf[:bytesInBuffer], &success); err == nil {
+		var success *shared.SuccessResponse
+		if err = json.Unmarshal(msg, &success); err == nil {
 			return success, nil
 		}
 	}
 
-	self.c.Close()
-	return nil, fmt.Errorf("Unable to read response")
+	return in, err
 }
 
 // Decode data

@@ -885,6 +885,10 @@ func isAddress(addr string) bool {
 	return addrReg.MatchString(addr)
 }
 
+func (self *XEth) Frontend() Frontend {
+	return self.frontend
+}
+
 func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 
 	// this minimalistic recoding is enough (works for natspec.js)
