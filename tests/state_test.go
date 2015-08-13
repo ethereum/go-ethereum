@@ -27,14 +27,13 @@ import (
 func init() {
 	if os.Getenv("JITVM") == "true" {
 		vm.ForceJit = true
-	} else {
-		vm.DisableJit = true
+		vm.EnableJit = true
 	}
 }
 
 func BenchmarkStateCall1024(b *testing.B) {
 	fn := filepath.Join(stateTestDir, "stCallCreateCallCodeTest.json")
-	if err := BenchVmTest(fn, bconf{"Call1024BalanceTooLow", true, false}, b); err != nil {
+	if err := BenchVmTest(fn, bconf{"Call1024BalanceTooLow", true, os.Getenv("JITVM") == "true"}, b); err != nil {
 		b.Error(err)
 	}
 }

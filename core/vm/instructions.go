@@ -341,19 +341,19 @@ func opCoinbase(instr instruction, env Environment, context *Context, memory *Me
 }
 
 func opTimestamp(instr instruction, env Environment, context *Context, memory *Memory, stack *stack) {
-	stack.push(new(big.Int).SetUint64(env.Time()))
+	stack.push(U256(new(big.Int).SetUint64(env.Time())))
 }
 
 func opNumber(instr instruction, env Environment, context *Context, memory *Memory, stack *stack) {
-	stack.push(U256(env.BlockNumber()))
+	stack.push(U256(new(big.Int).Set(env.BlockNumber())))
 }
 
 func opDifficulty(instr instruction, env Environment, context *Context, memory *Memory, stack *stack) {
-	stack.push(new(big.Int).Set(env.Difficulty()))
+	stack.push(U256(new(big.Int).Set(env.Difficulty())))
 }
 
 func opGasLimit(instr instruction, env Environment, context *Context, memory *Memory, stack *stack) {
-	stack.push(new(big.Int).Set(env.GasLimit()))
+	stack.push(U256(new(big.Int).Set(env.GasLimit())))
 }
 
 func opPop(instr instruction, env Environment, context *Context, memory *Memory, stack *stack) {
@@ -415,15 +415,12 @@ func opSstore(instr instruction, env Environment, context *Context, memory *Memo
 	env.State().SetState(context.Address(), loc, common.BigToHash(val))
 }
 
-func opJump(instr instruction, env Environment, context *Context, memory *Memory, stack *stack) {
-}
-func opJumpi(instr instruction, env Environment, context *Context, memory *Memory, stack *stack) {
-}
-func opJumpdest(instr instruction, env Environment, context *Context, memory *Memory, stack *stack) {
-}
+func opJump(instr instruction, env Environment, context *Context, memory *Memory, stack *stack)     {}
+func opJumpi(instr instruction, env Environment, context *Context, memory *Memory, stack *stack)    {}
+func opJumpdest(instr instruction, env Environment, context *Context, memory *Memory, stack *stack) {}
 
 func opPc(instr instruction, env Environment, context *Context, memory *Memory, stack *stack) {
-	stack.push(instr.data)
+	stack.push(new(big.Int).Set(instr.data))
 }
 
 func opMsize(instr instruction, env Environment, context *Context, memory *Memory, stack *stack) {

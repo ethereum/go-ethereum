@@ -46,7 +46,7 @@ func runVmBench(test vmBench, b *testing.B) {
 	}
 	env := NewEnv()
 
-	DisableJit = test.nojit
+	EnableJit = !test.nojit
 	ForceJit = test.forcejit
 
 	b.ResetTimer()

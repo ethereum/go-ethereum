@@ -64,7 +64,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		codehash = crypto.Sha3Hash(context.Code) // codehash is used when doing jump dest caching
 		program  *Program
 	)
-	if !DisableJit {
+	if EnableJit {
 		// Fetch program status.
 		// * If ready run using JIT
 		// * If unknown, compile in a seperate goroutine
