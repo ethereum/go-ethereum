@@ -36,10 +36,10 @@ const (
 )
 
 // Supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{61, 60}
+var ProtocolVersions = []uint{eth64, eth63, eth62, eth61, eth60}
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{9, 8}
+var ProtocolLengths = []uint64{15, 12, 8, 9, 8}
 
 const (
 	NetworkId          = 1
@@ -69,6 +69,7 @@ const (
 	BlockHeadersMsg    = 0x04
 	GetBlockBodiesMsg  = 0x05
 	BlockBodiesMsg     = 0x06
+	// 	NewBlockMsg       = 0x07 (uncomment after eth/61 deprecation)
 
 	// Protocol messages belonging to eth/63
 	GetNodeDataMsg = 0x0d
