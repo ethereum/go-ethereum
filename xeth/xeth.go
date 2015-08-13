@@ -823,18 +823,22 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	}
 
 	from.SetBalance(common.MaxBig)
-	from.SetGasLimit(self.backend.ChainManager().GasLimit())
+	from.SetGasLimit(common.MaxBig)
+
 	msg := callmsg{
 		from:     from,
-		to:       common.HexToAddress(toStr),
 		gas:      common.Big(gasStr),
 		gasPrice: common.Big(gasPriceStr),
 		value:    common.Big(valueStr),
 		data:     common.FromHex(dataStr),
 	}
+	if len(toStr) > 0 {
+		addr := common.HexToAddress(toStr)
+		msg.to = &addr
+	}
 
 	if msg.gas.Cmp(big.NewInt(0)) == 0 {
-		msg.gas = DefaultGas()
+		msg.gas = big.NewInt(50000000)
 	}
 
 	if msg.gasPrice.Cmp(big.NewInt(0)) == 0 {
@@ -998,7 +1002,7 @@ func (self *XEth) sign(tx *types.Transaction, from common.Address, didUnlock boo
 // callmsg is the message type used for call transations.
 type callmsg struct {
 	from          *state.StateObject
-	to            common.Address
+	to            *common.Address
 	gas, gasPrice *big.Int
 	value         *big.Int
 	data          []byte
@@ -1007,7 +1011,7 @@ type callmsg struct {
 // accessor boilerplate to implement core.Message
 func (m callmsg) From() (common.Address, error) { return m.from.Address(), nil }
 func (m callmsg) Nonce() uint64                 { return m.from.Nonce() }
-func (m callmsg) To() *common.Address           { return &m.to }
+func (m callmsg) To() *common.Address           { return m.to }
 func (m callmsg) GasPrice() *big.Int            { return m.gasPrice }
 func (m callmsg) Gas() *big.Int                 { return m.gas }
 func (m callmsg) Value() *big.Int               { return m.value }
