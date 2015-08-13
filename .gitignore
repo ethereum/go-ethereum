@@ -10,7 +10,7 @@
 *un~
 .DS_Store
 */**/.DS_Store
-.ethtest
+.exptest
 */**/*tx_database*
 */**/*dapps*
 Godeps/_workspace/pkg

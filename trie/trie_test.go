@@ -103,11 +103,11 @@ func TestDelete(t *testing.T) {
 
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
-		{"ether", "wookiedoo"},
+		{"expanse", "wookiedoo"},
 		{"horse", "stallion"},
 		{"shaman", "horse"},
 		{"doge", "coin"},
-		{"ether", ""},
+		{"expanse", ""},
 		{"dog", "puppy"},
 		{"shaman", ""},
 	}
@@ -131,11 +131,11 @@ func TestEmptyValues(t *testing.T) {
 
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
-		{"ether", "wookiedoo"},
+		{"expanse", "wookiedoo"},
 		{"horse", "stallion"},
 		{"shaman", "horse"},
 		{"doge", "coin"},
-		{"ether", ""},
+		{"expanse", ""},
 		{"dog", "puppy"},
 		{"shaman", ""},
 	}
@@ -154,11 +154,11 @@ func TestReplication(t *testing.T) {
 	trie := NewEmpty()
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
-		{"ether", "wookiedoo"},
+		{"expanse", "wookiedoo"},
 		{"horse", "stallion"},
 		{"shaman", "horse"},
 		{"doge", "coin"},
-		{"ether", ""},
+		{"expanse", ""},
 		{"dog", "puppy"},
 		{"shaman", ""},
 		{"somethingveryoddindeedthis is", "myothernodedata"},
@@ -185,7 +185,7 @@ func TestReset(t *testing.T) {
 	trie := NewEmpty()
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
-		{"ether", "wookiedoo"},
+		{"expanse", "wookiedoo"},
 		{"horse", "stallion"},
 	}
 	for _, val := range vals {
@@ -215,11 +215,11 @@ func TestParanoia(t *testing.T) {
 
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
-		{"ether", "wookiedoo"},
+		{"expanse", "wookiedoo"},
 		{"horse", "stallion"},
 		{"shaman", "horse"},
 		{"doge", "coin"},
-		{"ether", ""},
+		{"expanse", ""},
 		{"dog", "puppy"},
 		{"shaman", ""},
 		{"somethingveryoddindeedthis is", "myothernodedata"},
@@ -258,11 +258,11 @@ func BenchmarkGets(b *testing.B) {
 	trie := NewEmpty()
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
-		{"ether", "wookiedoo"},
+		{"expanse", "wookiedoo"},
 		{"horse", "stallion"},
 		{"shaman", "horse"},
 		{"doge", "coin"},
-		{"ether", ""},
+		{"expanse", ""},
 		{"dog", "puppy"},
 		{"shaman", ""},
 		{"somethingveryoddindeedthis is", "myothernodedata"},
@@ -330,11 +330,11 @@ func TestSecureDelete(t *testing.T) {
 
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
-		{"ether", "wookiedoo"},
+		{"expanse", "wookiedoo"},
 		{"horse", "stallion"},
 		{"shaman", "horse"},
 		{"doge", "coin"},
-		{"ether", ""},
+		{"expanse", ""},
 		{"dog", "puppy"},
 		{"shaman", ""},
 	}

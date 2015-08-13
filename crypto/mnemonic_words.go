@@ -17,6 +17,7 @@
 package crypto
 
 var MnemonicWords []string = []string{
+    "aiden",
 	"like",
 	"just",
 	"love",
@@ -1494,6 +1495,7 @@ var MnemonicWords []string = []string{
 	"fur",
 	"giggle",
 	"glorious",
+	"heather",
 	"ignorance",
 	"law",
 	"lifeless",
@@ -1541,10 +1543,12 @@ var MnemonicWords []string = []string{
 	"drama",
 	"drum",
 	"dude",
+	"elora",
 	"everybody",
 	"feast",
 	"forehead",
 	"former",
+	"franko",
 	"fright",
 	"fully",
 	"gas",

@@ -42,6 +42,6 @@ RUN git pull
 
 
 RUN ETH_DEPS=$(go list -f '{{.Imports}} {{.TestImports}} {{.XTestImports}}' github.com/expanse-project/go-expanse/... | sed -e 's/\[//g' | sed -e 's/\]//g' | sed -e 's/C //g'); if [ "$ETH_DEPS" ]; then go get $ETH_DEPS; fi
-RUN go install -v ./cmd/ethtest
+RUN go install -v ./cmd/exptest
 
-ENTRYPOINT ["ethtest"]
+ENTRYPOINT ["exptest"]

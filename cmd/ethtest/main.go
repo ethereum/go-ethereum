@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
 
-// ethtest executes Expanse JSON tests.
+// exptest executes Expanse JSON tests.
 package main
 
 import (
@@ -199,7 +199,7 @@ func main() {
 	glog.SetToStderr(true)
 
 	app := cli.NewApp()
-	app.Name = "ethtest"
+	app.Name = "exptest"
 	app.Usage = "go-expanse test interface"
 	app.Action = setupApp
 	app.Version = "0.2.0"
