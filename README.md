@@ -21,7 +21,7 @@ The following builds are build automatically by our build servers after each pus
 * Ubuntu
   [trusty](https://build.ethdev.com/builds/Linux%20Go%20develop%20deb%20i386-trusty/latest/) |
   [utopic](https://build.ethdev.com/builds/Linux%20Go%20develop%20deb%20i386-utopic/latest/)
-* [Windows 64-bit](https://build.ethdev.com/builds/Windows%20Go%20develop%20branch/Geth-Win64-latest.zip)
+* [Windows 64-bit](https://build.ethdev.com/builds/Windows%20Go%20develop%20branch/Gexp-Win64-latest.zip)
 * [ARM](https://build.ethdev.com/builds/ARM%20Go%20develop%20branch/gexp-ARM-latest.tar.bz2)
 
 ## Building the source
@@ -43,8 +43,8 @@ Go Expanse comes with several wrappers/executables found in
 
 * `gexp` Expanse CLI (expanse command line interface client)
 * `bootnode` runs a bootstrap node for the Discovery Protocol
-* `ethtest` test tool which runs with the [tests](https://github.com/expanse-project/tests) suite:
-  `/path/to/test.json > ethtest --test BlockTests --stdin`.
+* `exptest` test tool which runs with the [tests](https://github.com/expanse-project/tests) suite:
+  `/path/to/test.json > exptest --test BlockTests --stdin`.
 * `evm` is a generic Expanse Virtual Machine: `evm -code 60ff60ff -gas
   10000 -price 0 -dump`. See `-h` for a detailed description.
 * `disasm` disassembles EVM code: `echo "6001" | disasm`

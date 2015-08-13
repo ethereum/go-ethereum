@@ -53,9 +53,9 @@ var (
 	monitorCommand = cli.Command{
 		Action: monitor,
 		Name:   "monitor",
-		Usage:  `Geth Monitor: node metrics monitoring and visualization`,
+		Usage:  `Gexp Monitor: node metrics monitoring and visualization`,
 		Description: `
-The Geth monitor is a tool to collect and visualize various internal metrics
+The Gexp monitor is a tool to collect and visualize various internal metrics
 gathered by the node, supporting different chart types as well as the capacity
 to display multiple metrics simultaneously.
 `,

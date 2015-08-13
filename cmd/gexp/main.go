@@ -48,7 +48,7 @@ import (
 )
 
 const (
-	ClientIdentifier = "Geth"
+	ClientIdentifier = "Gexp"
 	Version          = "1.1.0"
 	VersionMajor     = 1
 	VersionMinor     = 1
@@ -125,7 +125,7 @@ The output of this command is supposed to be machine-readable.
 
     get wallet import /path/to/my/presale.wallet
 
-will prompt for your password and imports your ether presale account.
+will prompt for your password and imports your expanse presale account.
 It can be used non-interactively with the --password option taking a
 passwordfile as argument containing the wallet password in plaintext.
 
@@ -248,18 +248,18 @@ nodes.
 		{
 			Action: console,
 			Name:   "console",
-			Usage:  `Geth Console: interactive JavaScript environment`,
+			Usage:  `Gexp Console: interactive JavaScript environment`,
 			Description: `
-The Geth console is an interactive shell for the JavaScript runtime environment
+The Gexp console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://github.com/expanse-project/go-expanse/wiki/Javascipt-Console
 `},
 		{
 			Action: attach,
 			Name:   "attach",
-			Usage:  `Geth Console: interactive JavaScript environment (connect to node)`,
+			Usage:  `Gexp Console: interactive JavaScript environment (connect to node)`,
 			Description: `
-The Geth console is an interactive shell for the JavaScript runtime environment
+The Gexp console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://github.com/expanse-project/go-expanse/wiki/Javascipt-Console.
 This command allows to open a console on a running gexp node.
@@ -268,7 +268,7 @@ This command allows to open a console on a running gexp node.
 		{
 			Action: execJSFiles,
 			Name:   "js",
-			Usage:  `executes the given JavaScript files in the Geth JavaScript VM`,
+			Usage:  `executes the given JavaScript files in the Gexp JavaScript VM`,
 			Description: `
 The JavaScript VM exposes a node admin interface as well as the Ðapp
 JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt-Console
@@ -395,19 +395,7 @@ func run(ctx *cli.Context) {
 func attach(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
 
-<<<<<<< HEAD
-	var client comms.EthereumClient
-=======
-	// Wrap the standard output with a colorified stream (windows)
-	if isatty.IsTerminal(os.Stdout.Fd()) {
-		if pr, pw, err := os.Pipe(); err == nil {
-			go io.Copy(colorable.NewColorableStdout(), pr)
-			os.Stdout = pw
-		}
-	}
-
 	var client comms.ExpanseClient
->>>>>>> test change lol
 	var err error
 	if ctx.Args().Present() {
 		client, err = comms.ClientFromEndpoint(ctx.Args().First(), codec.JSON)
@@ -558,14 +546,7 @@ func startEth(ctx *cli.Context, exp *exp.Expanse) {
 	// Start Expanse itself
 	utils.StartExpanse(exp)
 
-<<<<<<< HEAD
-	am := eth.AccountManager()
-=======
-	// Start logging file descriptor stats.
-	fdtrack.Start()
-
 	am := exp.AccountManager()
->>>>>>> test change lol
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	accounts := strings.Split(account, " ")
 	for i, account := range accounts {
