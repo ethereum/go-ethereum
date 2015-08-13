@@ -45,7 +45,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -738,48 +737,53 @@ func mergeDatabases(datadir string, newdb func(path string) (common.Database, er
 	}
 	defer database.Close()
 
-	glog.Infoln("Merging blockchain database...")
+	// Migrate blocks
 	chainDb, err := newdb(chainPath)
 	if err != nil {
 		return fmt.Errorf("state db err: %v", err)
 	}
 	defer chainDb.Close()
 
-	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
-		it := db.NewIterator()
+	if chain, ok := chainDb.(*ethdb.LDBDatabase); ok {
+		glog.Infoln("Merging blockchain database...")
+		it := chain.NewIterator()
 		for it.Next() {
 			database.Put(it.Key(), it.Value())
 		}
+		it.Release()
 	}
 
-	glog.Infoln("Merging state database...")
-	state := filepath.Join(datadir, "state")
-	stateDb, err := newdb(state)
+	// Migrate state
+	stateDb, err := newdb(filepath.Join(datadir, "state"))
 	if err != nil {
 		return fmt.Errorf("state db err: %v", err)
 	}
 	defer stateDb.Close()
 
-	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
-		it := db.NewIterator()
+	if state, ok := stateDb.(*ethdb.LDBDatabase); ok {
+		glog.Infoln("Merging state database...")
+		it := state.NewIterator()
 		for it.Next() {
-			database.Put(append(trie.StatePre, it.Key()...), it.Value())
+			database.Put(it.Key(), it.Value())
 		}
+		it.Release()
 	}
 
-	glog.Infoln("Merging transaction database...")
-	extra := filepath.Join(datadir, "extra")
-	extraDb, err := newdb(extra)
+	// Migrate transaction / receipts
+	extraDb, err := newdb(filepath.Join(datadir, "extra"))
 	if err != nil {
 		return fmt.Errorf("state db err: %v", err)
 	}
 	defer extraDb.Close()
 
-	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
-		it := db.NewIterator()
+	if extra, ok := extraDb.(*ethdb.LDBDatabase); ok {
+		glog.Infoln("Merging transaction database...")
+
+		it := extra.NewIterator()
 		for it.Next() {
 			database.Put(it.Key(), it.Value())
 		}
+		it.Release()
 	}
 
 	return nil

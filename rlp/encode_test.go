@@ -71,6 +71,10 @@ type encTest struct {
 }
 
 var encTests = []encTest{
+	// booleans
+	{val: true, output: "01"},
+	{val: false, output: "80"},
+
 	// integers
 	{val: uint32(0), output: "80"},
 	{val: uint32(127), output: "7F"},
