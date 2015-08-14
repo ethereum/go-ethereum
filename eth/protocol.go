@@ -28,7 +28,6 @@ import (
 
 // Constants to match up protocol versions and messages
 const (
-	eth60 = 60
 	eth61 = 61
 	eth62 = 62
 	eth63 = 63
@@ -36,10 +35,10 @@ const (
 )
 
 // Supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{eth64, eth63, eth62, eth61, eth60}
+var ProtocolVersions = []uint{eth64, eth63, eth62, eth61}
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{15, 12, 8, 9, 8}
+var ProtocolLengths = []uint64{15, 12, 8, 9}
 
 const (
 	NetworkId          = 1
@@ -48,17 +47,15 @@ const (
 
 // eth protocol message codes
 const (
-	// Protocol messages belonging to eth/60
-	StatusMsg         = 0x00
-	NewBlockHashesMsg = 0x01
-	TxMsg             = 0x02
-	GetBlockHashesMsg = 0x03
-	BlockHashesMsg    = 0x04
-	GetBlocksMsg      = 0x05
-	BlocksMsg         = 0x06
-	NewBlockMsg       = 0x07
-
-	// Protocol messages belonging to eth/61 (extension of eth/60)
+	// Protocol messages belonging to eth/61
+	StatusMsg                   = 0x00
+	NewBlockHashesMsg           = 0x01
+	TxMsg                       = 0x02
+	GetBlockHashesMsg           = 0x03
+	BlockHashesMsg              = 0x04
+	GetBlocksMsg                = 0x05
+	BlocksMsg                   = 0x06
+	NewBlockMsg                 = 0x07
 	GetBlockHashesFromNumberMsg = 0x08
 
 	// Protocol messages belonging to eth/62 (new protocol from scratch)

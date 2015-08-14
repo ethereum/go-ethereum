@@ -19,7 +19,6 @@ import (
 
 // Tests that hashes can be retrieved from a remote chain by hashes in reverse
 // order.
-func TestGetBlockHashes60(t *testing.T) { testGetBlockHashes(t, 60) }
 func TestGetBlockHashes61(t *testing.T) { testGetBlockHashes(t, 61) }
 
 func testGetBlockHashes(t *testing.T, protocol int) {
@@ -63,7 +62,6 @@ func testGetBlockHashes(t *testing.T, protocol int) {
 
 // Tests that hashes can be retrieved from a remote chain by numbers in forward
 // order.
-func TestGetBlockHashesFromNumber60(t *testing.T) { testGetBlockHashesFromNumber(t, 60) }
 func TestGetBlockHashesFromNumber61(t *testing.T) { testGetBlockHashesFromNumber(t, 61) }
 
 func testGetBlockHashesFromNumber(t *testing.T, protocol int) {
@@ -104,7 +102,6 @@ func testGetBlockHashesFromNumber(t *testing.T, protocol int) {
 }
 
 // Tests that blocks can be retrieved from a remote chain based on their hashes.
-func TestGetBlocks60(t *testing.T) { testGetBlocks(t, 60) }
 func TestGetBlocks61(t *testing.T) { testGetBlocks(t, 61) }
 
 func testGetBlocks(t *testing.T, protocol int) {
