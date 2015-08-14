@@ -383,6 +383,11 @@ func (self *jsre) interactive() {
 		for {
 			line, err := self.Prompt(<-prompt)
 			if err != nil {
+				if err == liner.ErrPromptAborted { // ctrl-C
+					self.resetPrompt()
+					inputln <- ""
+					continue
+				}
 				return
 			}
 			inputln <- line
@@ -468,6 +473,12 @@ func (self *jsre) parseInput(code string) {
 
 var indentCount = 0
 var str = ""
+
+func (self *jsre) resetPrompt() {
+	indentCount = 0
+	str = ""
+	self.ps1 = "> "
+}
 
 func (self *jsre) setIndent() {
 	open := strings.Count(str, "{")
