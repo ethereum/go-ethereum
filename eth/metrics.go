@@ -95,19 +95,19 @@ func (rw *meteredMsgReadWriter) ReadMsg() (p2p.Msg, error) {
 	// Account for the data traffic
 	packets, traffic := miscInPacketsMeter, miscInTrafficMeter
 	switch {
-	case (rw.version == eth60 || rw.version == eth61) && msg.Code == BlockHashesMsg:
+	case rw.version < eth62 && msg.Code == BlockHashesMsg:
 		packets, traffic = reqHashInPacketsMeter, reqHashInTrafficMeter
-	case (rw.version == eth60 || rw.version == eth61) && msg.Code == BlocksMsg:
+	case rw.version < eth62 && msg.Code == BlocksMsg:
 		packets, traffic = reqBlockInPacketsMeter, reqBlockInTrafficMeter
 
-	case rw.version == eth62 && msg.Code == BlockHeadersMsg:
+	case rw.version >= eth62 && msg.Code == BlockHeadersMsg:
 		packets, traffic = reqBlockInPacketsMeter, reqBlockInTrafficMeter
-	case rw.version == eth62 && msg.Code == BlockBodiesMsg:
+	case rw.version >= eth62 && msg.Code == BlockBodiesMsg:
 		packets, traffic = reqBodyInPacketsMeter, reqBodyInTrafficMeter
 
-	case rw.version == eth63 && msg.Code == NodeDataMsg:
+	case rw.version >= eth63 && msg.Code == NodeDataMsg:
 		packets, traffic = reqStateInPacketsMeter, reqStateInTrafficMeter
-	case rw.version == eth63 && msg.Code == ReceiptsMsg:
+	case rw.version >= eth63 && msg.Code == ReceiptsMsg:
 		packets, traffic = reqReceiptInPacketsMeter, reqReceiptInTrafficMeter
 
 	case msg.Code == NewBlockHashesMsg:
@@ -127,19 +127,19 @@ func (rw *meteredMsgReadWriter) WriteMsg(msg p2p.Msg) error {
 	// Account for the data traffic
 	packets, traffic := miscOutPacketsMeter, miscOutTrafficMeter
 	switch {
-	case (rw.version == eth60 || rw.version == eth61) && msg.Code == BlockHashesMsg:
+	case rw.version < eth62 && msg.Code == BlockHashesMsg:
 		packets, traffic = reqHashOutPacketsMeter, reqHashOutTrafficMeter
-	case (rw.version == eth60 || rw.version == eth61) && msg.Code == BlocksMsg:
+	case rw.version < eth62 && msg.Code == BlocksMsg:
 		packets, traffic = reqBlockOutPacketsMeter, reqBlockOutTrafficMeter
 
-	case rw.version == eth62 && msg.Code == BlockHeadersMsg:
+	case rw.version >= eth62 && msg.Code == BlockHeadersMsg:
 		packets, traffic = reqHeaderOutPacketsMeter, reqHeaderOutTrafficMeter
-	case rw.version == eth62 && msg.Code == BlockBodiesMsg:
+	case rw.version >= eth62 && msg.Code == BlockBodiesMsg:
 		packets, traffic = reqBodyOutPacketsMeter, reqBodyOutTrafficMeter
 
-	case rw.version == eth63 && msg.Code == NodeDataMsg:
+	case rw.version >= eth63 && msg.Code == NodeDataMsg:
 		packets, traffic = reqStateOutPacketsMeter, reqStateOutTrafficMeter
-	case rw.version == eth63 && msg.Code == ReceiptsMsg:
+	case rw.version >= eth63 && msg.Code == ReceiptsMsg:
 		packets, traffic = reqReceiptOutPacketsMeter, reqReceiptOutTrafficMeter
 
 	case msg.Code == NewBlockHashesMsg:

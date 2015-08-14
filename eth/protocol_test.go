@@ -38,7 +38,6 @@ func init() {
 var testAccount = crypto.NewKey(rand.Reader)
 
 // Tests that handshake failures are detected and reported correctly.
-func TestStatusMsgErrors60(t *testing.T) { testStatusMsgErrors(t, 60) }
 func TestStatusMsgErrors61(t *testing.T) { testStatusMsgErrors(t, 61) }
 func TestStatusMsgErrors62(t *testing.T) { testStatusMsgErrors(t, 62) }
 func TestStatusMsgErrors63(t *testing.T) { testStatusMsgErrors(t, 63) }
@@ -93,7 +92,6 @@ func testStatusMsgErrors(t *testing.T, protocol int) {
 }
 
 // This test checks that received transactions are added to the local pool.
-func TestRecvTransactions60(t *testing.T) { testRecvTransactions(t, 60) }
 func TestRecvTransactions61(t *testing.T) { testRecvTransactions(t, 61) }
 func TestRecvTransactions62(t *testing.T) { testRecvTransactions(t, 62) }
 func TestRecvTransactions63(t *testing.T) { testRecvTransactions(t, 63) }
@@ -123,7 +121,6 @@ func testRecvTransactions(t *testing.T, protocol int) {
 }
 
 // This test checks that pending transactions are sent.
-func TestSendTransactions60(t *testing.T) { testSendTransactions(t, 60) }
 func TestSendTransactions61(t *testing.T) { testSendTransactions(t, 61) }
 func TestSendTransactions62(t *testing.T) { testSendTransactions(t, 62) }
 func TestSendTransactions63(t *testing.T) { testSendTransactions(t, 63) }
