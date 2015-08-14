@@ -19,7 +19,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	_ "net/http/pprof"
 	"os"
@@ -46,8 +45,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 )
 
 const (
@@ -398,14 +395,6 @@ func run(ctx *cli.Context) {
 func attach(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
 
-	// Wrap the standard output with a colorified stream (windows)
-	if isatty.IsTerminal(os.Stdout.Fd()) {
-		if pr, pw, err := os.Pipe(); err == nil {
-			go io.Copy(colorable.NewColorableStdout(), pr)
-			os.Stdout = pw
-		}
-	}
-
 	var client comms.EthereumClient
 	var err error
 	if ctx.Args().Present() {
@@ -437,14 +426,6 @@ func attach(ctx *cli.Context) {
 
 func console(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
-
-	// Wrap the standard output with a colorified stream (windows)
-	if isatty.IsTerminal(os.Stdout.Fd()) {
-		if pr, pw, err := os.Pipe(); err == nil {
-			go io.Copy(colorable.NewColorableStdout(), pr)
-			os.Stdout = pw
-		}
-	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
