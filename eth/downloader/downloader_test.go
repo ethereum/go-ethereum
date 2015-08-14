@@ -78,8 +78,6 @@ type downloadTester struct {
 	ownBlocks  map[common.Hash]*types.Block            // Blocks belonging to the tester
 	peerHashes map[string][]common.Hash                // Hash chain belonging to different test peers
 	peerBlocks map[string]map[common.Hash]*types.Block // Blocks belonging to different test peers
-
-	maxHashFetch int // Overrides the maximum number of retrieved hashes
 }
 
 // newTester creates a new downloader test mocker.
@@ -156,7 +154,9 @@ func (dl *downloadTester) newPeer(id string, version int, hashes []common.Hash, 
 // specific delay time on processing the network packets sent to it, simulating
 // potentially slow network IO.
 func (dl *downloadTester) newSlowPeer(id string, version int, hashes []common.Hash, blocks map[common.Hash]*types.Block, delay time.Duration) error {
-	err := dl.downloader.RegisterPeer(id, version, hashes[0], dl.peerGetRelHashesFn(id, delay), dl.peerGetAbsHashesFn(id, version, delay), dl.peerGetBlocksFn(id, delay))
+	err := dl.downloader.RegisterPeer(id, version, hashes[0],
+		dl.peerGetRelHashesFn(id, delay), dl.peerGetAbsHashesFn(id, version, delay), dl.peerGetBlocksFn(id, delay),
+		nil, dl.peerGetAbsHeadersFn(id, version, delay), nil)
 	if err == nil {
 		// Assign the owned hashes and blocks to the peer (deep copy)
 		dl.peerHashes[id] = make([]common.Hash, len(hashes))
@@ -184,13 +184,9 @@ func (dl *downloadTester) peerGetRelHashesFn(id string, delay time.Duration) fun
 	return func(head common.Hash) error {
 		time.Sleep(delay)
 
-		limit := MaxHashFetch
-		if dl.maxHashFetch > 0 {
-			limit = dl.maxHashFetch
-		}
 		// Gather the next batch of hashes
 		hashes := dl.peerHashes[id]
-		result := make([]common.Hash, 0, limit)
+		result := make([]common.Hash, 0, MaxHashFetch)
 		for i, hash := range hashes {
 			if hash == head {
 				i++
@@ -204,7 +200,7 @@ func (dl *downloadTester) peerGetRelHashesFn(id string, delay time.Duration) fun
 		// Delay delivery a bit to allow attacks to unfold
 		go func() {
 			time.Sleep(time.Millisecond)
-			dl.downloader.DeliverHashes(id, result)
+			dl.downloader.DeliverHashes61(id, result)
 		}()
 		return nil
 	}
@@ -217,20 +213,16 @@ func (dl *downloadTester) peerGetAbsHashesFn(id string, version int, delay time.
 	return func(head uint64, count int) error {
 		time.Sleep(delay)
 
-		limit := count
-		if dl.maxHashFetch > 0 {
-			limit = dl.maxHashFetch
-		}
 		// Gather the next batch of hashes
 		hashes := dl.peerHashes[id]
-		result := make([]common.Hash, 0, limit)
-		for i := 0; i < limit && len(hashes)-int(head)-1-i >= 0; i++ {
+		result := make([]common.Hash, 0, count)
+		for i := 0; i < count && len(hashes)-int(head)-1-i >= 0; i++ {
 			result = append(result, hashes[len(hashes)-int(head)-1-i])
 		}
 		// Delay delivery a bit to allow attacks to unfold
 		go func() {
 			time.Sleep(time.Millisecond)
-			dl.downloader.DeliverHashes(id, result)
+			dl.downloader.DeliverHashes61(id, result)
 		}()
 		return nil
 	}
@@ -249,8 +241,31 @@ func (dl *downloadTester) peerGetBlocksFn(id string, delay time.Duration) func([
 				result = append(result, block)
 			}
 		}
-		go dl.downloader.DeliverBlocks(id, result)
+		go dl.downloader.DeliverBlocks61(id, result)
 
+		return nil
+	}
+}
+
+// peerGetAbsHeadersFn constructs a GetBlockHeaders function based on a numbered
+// origin; associated with a particular peer in the download tester. The returned
+// function can be used to retrieve batches of headers from the particular peer.
+func (dl *downloadTester) peerGetAbsHeadersFn(id string, version int, delay time.Duration) func(uint64, int, int, bool) error {
+	return func(origin uint64, amount int, skip int, reverse bool) error {
+		time.Sleep(delay)
+
+		// Gather the next batch of hashes
+		hashes := dl.peerHashes[id]
+		blocks := dl.peerBlocks[id]
+		result := make([]*types.Header, 0, amount)
+		for i := 0; i < amount && len(hashes)-int(origin)-1-i >= 0; i++ {
+			result = append(result, blocks[hashes[len(hashes)-int(origin)-1-i]].Header())
+		}
+		// Delay delivery a bit to allow attacks to unfold
+		go func() {
+			time.Sleep(time.Millisecond)
+			dl.downloader.DeliverHeaders(id, result)
+		}()
 		return nil
 	}
 }
@@ -258,13 +273,16 @@ func (dl *downloadTester) peerGetBlocksFn(id string, delay time.Duration) func([
 // Tests that simple synchronization against a canonical chain works correctly.
 // In this test common ancestor lookup should be short circuited and not require
 // binary searching.
-func TestCanonicalSynchronisation61(t *testing.T) {
+func TestCanonicalSynchronisation61(t *testing.T) { testCanonicalSynchronisation(t, 61) }
+func TestCanonicalSynchronisation62(t *testing.T) { testCanonicalSynchronisation(t, 62) }
+
+func testCanonicalSynchronisation(t *testing.T, protocol int) {
 	// Create a small enough block chain to download
 	targetBlocks := blockCacheLimit - 15
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 
 	tester := newTester()
-	tester.newPeer("peer", eth61, hashes, blocks)
+	tester.newPeer("peer", protocol, hashes, blocks)
 
 	// Synchronise with the peer and make sure all blocks were retrieved
 	if err := tester.sync("peer", nil); err != nil {
@@ -336,14 +354,17 @@ func testThrottling(t *testing.T, protocol int) {
 // Tests that simple synchronization against a forked chain works correctly. In
 // this test common ancestor lookup should *not* be short circuited, and a full
 // binary search should be executed.
-func TestForkedSynchronisation61(t *testing.T) {
+func TestForkedSynchronisation61(t *testing.T) { testForkedSynchronisation(t, 61) }
+func TestForkedSynchronisation62(t *testing.T) { testForkedSynchronisation(t, 62) }
+
+func testForkedSynchronisation(t *testing.T, protocol int) {
 	// Create a long enough forked chain
 	common, fork := MaxHashFetch, 2*MaxHashFetch
 	hashesA, hashesB, blocksA, blocksB := makeChainFork(common+fork, fork, genesis)
 
 	tester := newTester()
-	tester.newPeer("fork A", eth61, hashesA, blocksA)
-	tester.newPeer("fork B", eth61, hashesB, blocksB)
+	tester.newPeer("fork A", protocol, hashesA, blocksA)
+	tester.newPeer("fork B", protocol, hashesB, blocksB)
 
 	// Synchronise with the peer and make sure all blocks were retrieved
 	if err := tester.sync("fork A", nil); err != nil {
@@ -366,10 +387,10 @@ func TestInactiveDownloader(t *testing.T) {
 	tester := newTester()
 
 	// Check that neither hashes nor blocks are accepted
-	if err := tester.downloader.DeliverHashes("bad peer", []common.Hash{}); err != errNoSyncActive {
+	if err := tester.downloader.DeliverHashes61("bad peer", []common.Hash{}); err != errNoSyncActive {
 		t.Errorf("error mismatch: have %v, want %v", err, errNoSyncActive)
 	}
-	if err := tester.downloader.DeliverBlocks("bad peer", []*types.Block{}); err != errNoSyncActive {
+	if err := tester.downloader.DeliverBlocks61("bad peer", []*types.Block{}); err != errNoSyncActive {
 		t.Errorf("error mismatch: have %v, want %v", err, errNoSyncActive)
 	}
 }
@@ -463,6 +484,7 @@ func TestHashAttackerDropping(t *testing.T) {
 		{errPendingQueue, false},     // There are blocks still cached, wait to exhaust, no issue
 		{errTimeout, true},           // No hashes received in due time, drop the peer
 		{errEmptyHashSet, true},      // No hashes were returned as a response, drop as it's a dead end
+		{errEmptyHeaderSet, true},    // No headers were returned as a response, drop as it's a dead end
 		{errPeersUnavailable, true},  // Nobody had the advertised blocks, drop the advertiser
 		{errInvalidChain, true},      // Hash chain was detected as invalid, definitely drop
 		{errCrossCheckFailed, true},  // Hash-origin failed to pass a block cross check, drop

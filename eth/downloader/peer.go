@@ -31,9 +31,15 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
+// Hash and block fetchers belonging to eth/61 and below
 type relativeHashFetcherFn func(common.Hash) error
 type absoluteHashFetcherFn func(uint64, int) error
 type blockFetcherFn func([]common.Hash) error
+
+// Block header and body fethers belonging to eth/62 and above
+type relativeHeaderFetcherFn func(common.Hash, int, int, bool) error
+type absoluteHeaderFetcherFn func(uint64, int, int, bool) error
+type blockBodyFetcherFn func([]common.Hash) error
 
 var (
 	errAlreadyFetching   = errors.New("already fetching blocks from peer")
@@ -54,25 +60,37 @@ type peer struct {
 
 	ignored *set.Set // Set of hashes not to request (didn't have previously)
 
-	getRelHashes relativeHashFetcherFn // Method to retrieve a batch of hashes from an origin hash
-	getAbsHashes absoluteHashFetcherFn // Method to retrieve a batch of hashes from an absolute position
-	getBlocks    blockFetcherFn        // Method to retrieve a batch of blocks
+	getRelHashes relativeHashFetcherFn // [eth/61] Method to retrieve a batch of hashes from an origin hash
+	getAbsHashes absoluteHashFetcherFn // [eth/61] Method to retrieve a batch of hashes from an absolute position
+	getBlocks    blockFetcherFn        // [eth/61] Method to retrieve a batch of blocks
+
+	getRelHeaders  relativeHeaderFetcherFn // [eth/62] Method to retrieve a batch of headers from an origin hash
+	getAbsHeaders  absoluteHeaderFetcherFn // [eth/62] Method to retrieve a batch of headers from an absolute position
+	getBlockBodies blockBodyFetcherFn      // [eth/62] Method to retrieve a batch of block bodies
 
 	version int // Eth protocol version number to switch strategies
 }
 
 // newPeer create a new downloader peer, with specific hash and block retrieval
 // mechanisms.
-func newPeer(id string, version int, head common.Hash, getRelHashes relativeHashFetcherFn, getAbsHashes absoluteHashFetcherFn, getBlocks blockFetcherFn) *peer {
+func newPeer(id string, version int, head common.Hash,
+	getRelHashes relativeHashFetcherFn, getAbsHashes absoluteHashFetcherFn, getBlocks blockFetcherFn, // eth/61 callbacks, remove when upgrading
+	getRelHeaders relativeHeaderFetcherFn, getAbsHeaders absoluteHeaderFetcherFn, getBlockBodies blockBodyFetcherFn) *peer {
 	return &peer{
-		id:           id,
-		head:         head,
-		capacity:     1,
+		id:       id,
+		head:     head,
+		capacity: 1,
+		ignored:  set.New(),
+
 		getRelHashes: getRelHashes,
 		getAbsHashes: getAbsHashes,
 		getBlocks:    getBlocks,
-		ignored:      set.New(),
-		version:      version,
+
+		getRelHeaders:  getRelHeaders,
+		getAbsHeaders:  getAbsHeaders,
+		getBlockBodies: getBlockBodies,
+
+		version: version,
 	}
 }
 

@@ -201,7 +201,9 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	defer pm.removePeer(p.id)
 
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
-	if err := pm.downloader.RegisterPeer(p.id, p.version, p.Head(), p.RequestHashes, p.RequestHashesFromNumber, p.RequestBlocks); err != nil {
+	if err := pm.downloader.RegisterPeer(p.id, p.version, p.Head(),
+		p.RequestHashes, p.RequestHashesFromNumber, p.RequestBlocks,
+		p.RequestHeadersByHash, p.RequestHeadersByNumber, nil); err != nil {
 		return err
 	}
 	// Propagate existing transactions. new transactions appearing
@@ -287,7 +289,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			break
 		}
 		// Deliver them all to the downloader for queuing
-		err := pm.downloader.DeliverHashes(p.id, hashes)
+		err := pm.downloader.DeliverHashes61(p.id, hashes)
 		if err != nil {
 			glog.V(logger.Debug).Infoln(err)
 		}
@@ -333,7 +335,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Filter out any explicitly requested blocks, deliver the rest to the downloader
 		if blocks := pm.fetcher.Filter(blocks); len(blocks) > 0 {
-			pm.downloader.DeliverBlocks(p.id, blocks)
+			pm.downloader.DeliverBlocks61(p.id, blocks)
 		}
 
 	// Block header query, collect the requested headers and reply
@@ -399,7 +401,20 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				query.Origin.Number += (query.Skip + 1)
 			}
 		}
+		fmt.Println("Sending headers", len(headers))
 		return p.SendBlockHeaders(headers)
+
+	case p.version >= eth62 && msg.Code == BlockHeadersMsg:
+		// A batch of headers arrived to one of our previous requests
+		var headers []*types.Header
+		if err := msg.Decode(&headers); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		// Deliver them all to the downloader for queuing
+		err := pm.downloader.DeliverHeaders(p.id, headers)
+		if err != nil {
+			glog.V(logger.Debug).Infoln(err)
+		}
 
 	case p.version >= eth62 && msg.Code == GetBlockBodiesMsg:
 		// Decode the retrieval message

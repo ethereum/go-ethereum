@@ -19,6 +19,7 @@ package downloader
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -67,6 +68,7 @@ var (
 	errPendingQueue     = errors.New("pending items in queue")
 	errTimeout          = errors.New("timeout")
 	errEmptyHashSet     = errors.New("empty hash set by peer")
+	errEmptyHeaderSet   = errors.New("empty header set by peer")
 	errPeersUnavailable = errors.New("no peers available or all peers tried for block download process")
 	errAlreadyInPool    = errors.New("hash already in pool")
 	errInvalidChain     = errors.New("retrieved hash chain is invalid")
@@ -91,28 +93,37 @@ type chainInsertFn func(types.Blocks) (int, error)
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)
 
-type blockPack struct {
-	peerId string
-	blocks []*types.Block
-}
-
+// hashPack is a batch of block hashes returned by a peer (eth/61).
 type hashPack struct {
 	peerId string
 	hashes []common.Hash
 }
 
-type crossCheck struct {
-	expire time.Time
-	parent common.Hash
+// blockPack is a batch of blocks returned by a peer (eth/61).
+type blockPack struct {
+	peerId string
+	blocks []*types.Block
+}
+
+// headerPack is a batch of block headers returned by a peer.
+type headerPack struct {
+	peerId  string
+	headers []*types.Header
+}
+
+// bodyPack is a batch of block bodies returned by a peer.
+type bodyPack struct {
+	peerId       string
+	transactions [][]*types.Transaction
+	uncles       [][]*types.Header
 }
 
 type Downloader struct {
 	mux *event.TypeMux
 
-	queue  *queue                      // Scheduler for selecting the hashes to download
-	peers  *peerSet                    // Set of active peers from which download can proceed
-	checks map[common.Hash]*crossCheck // Pending cross checks to verify a hash chain
-	banned *set.Set                    // Set of hashes we've received and banned
+	queue  *queue   // Scheduler for selecting the hashes to download
+	peers  *peerSet // Set of active peers from which download can proceed
+	banned *set.Set // Set of hashes we've received and banned
 
 	interrupt int32 // Atomic boolean to signal termination
 
@@ -137,9 +148,11 @@ type Downloader struct {
 
 	// Channels
 	newPeerCh chan *peer
-	hashCh    chan hashPack  // Channel receiving inbound hashes
-	blockCh   chan blockPack // Channel receiving inbound blocks
-	processCh chan bool      // Channel to signal the block fetcher of new or finished work
+	hashCh    chan hashPack   // [eth/61] Channel receiving inbound hashes
+	blockCh   chan blockPack  // [eth/61] Channel receiving inbound blocks
+	headerCh  chan headerPack // [eth/62] Channel receiving inbound block headers
+	bodyCh    chan bodyPack   // [eth/62] Channel receiving inbound block bodies
+	processCh chan bool       // Channel to signal the block fetcher of new or finished work
 
 	cancelCh   chan struct{} // Channel to cancel mid-flight syncs
 	cancelLock sync.RWMutex  // Lock to protect the cancel channel in delivers
@@ -166,6 +179,8 @@ func New(mux *event.TypeMux, hasBlock hashCheckFn, getBlock blockRetrievalFn, he
 		newPeerCh:   make(chan *peer, 1),
 		hashCh:      make(chan hashPack, 1),
 		blockCh:     make(chan blockPack, 1),
+		headerCh:    make(chan headerPack, 1),
+		bodyCh:      make(chan bodyPack, 1),
 		processCh:   make(chan bool, 1),
 	}
 	// Inject all the known bad hashes
@@ -206,7 +221,9 @@ func (d *Downloader) Synchronising() bool {
 
 // RegisterPeer injects a new download peer into the set of block source to be
 // used for fetching hashes and blocks from.
-func (d *Downloader) RegisterPeer(id string, version int, head common.Hash, getRelHashes relativeHashFetcherFn, getAbsHashes absoluteHashFetcherFn, getBlocks blockFetcherFn) error {
+func (d *Downloader) RegisterPeer(id string, version int, head common.Hash,
+	getRelHashes relativeHashFetcherFn, getAbsHashes absoluteHashFetcherFn, getBlocks blockFetcherFn, // eth/61 callbacks, remove when upgrading
+	getRelHeaders relativeHeaderFetcherFn, getAbsHeaders absoluteHeaderFetcherFn, getBlockBodies blockBodyFetcherFn) error {
 	// If the peer wants to send a banned hash, reject
 	if d.banned.Has(head) {
 		glog.V(logger.Debug).Infoln("Register rejected, head hash banned:", id)
@@ -214,7 +231,7 @@ func (d *Downloader) RegisterPeer(id string, version int, head common.Hash, getR
 	}
 	// Otherwise try to construct and register the peer
 	glog.V(logger.Detail).Infoln("Registering peer", id)
-	if err := d.peers.Register(newPeer(id, version, head, getRelHashes, getAbsHashes, getBlocks)); err != nil {
+	if err := d.peers.Register(newPeer(id, version, head, getRelHashes, getAbsHashes, getBlocks, getRelHeaders, getAbsHeaders, getBlockBodies)); err != nil {
 		glog.V(logger.Error).Infoln("Register failed:", err)
 		return err
 	}
@@ -244,7 +261,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int) {
 	case errBusy:
 		glog.V(logger.Detail).Infof("Synchronisation already in progress")
 
-	case errTimeout, errBadPeer, errStallingPeer, errBannedHead, errEmptyHashSet, errPeersUnavailable, errInvalidChain, errCrossCheckFailed:
+	case errTimeout, errBadPeer, errStallingPeer, errBannedHead, errEmptyHashSet, errEmptyHeaderSet, errPeersUnavailable, errInvalidChain, errCrossCheckFailed:
 		glog.V(logger.Debug).Infof("Removing peer %v: %v", id, err)
 		d.dropPeer(id)
 
@@ -285,7 +302,6 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int) error
 	// Reset the queue and peer set to clean any internal leftover state
 	d.queue.Reset()
 	d.peers.Reset()
-	d.checks = make(map[common.Hash]*crossCheck)
 
 	// Create cancel channel for aborting mid-flight
 	d.cancelLock.Lock()
@@ -324,13 +340,13 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 	switch p.version {
 	case eth61:
 		// Old eth/61, use forward, concurrent hash and block retrieval algorithm
-		number, err := d.findAncestor(p)
+		number, err := d.findAncestor61(p)
 		if err != nil {
 			return err
 		}
 		errc := make(chan error, 2)
-		go func() { errc <- d.fetchHashes(p, td, number+1) }()
-		go func() { errc <- d.fetchBlocks(number + 1) }()
+		go func() { errc <- d.fetchHashes61(p, td, number+1) }()
+		go func() { errc <- d.fetchBlocks61(number + 1) }()
 
 		// If any fetcher fails, cancel the other
 		if err := <-errc; err != nil {
@@ -339,6 +355,16 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 			return err
 		}
 		return <-errc
+
+	case eth62:
+		// New eth/62, use forward, concurrent header and block body retrieval algorithm
+		fmt.Println("Looking for common ancestor:", p)
+		number, err := d.findAncestor(p)
+		if err != nil {
+			return err
+		}
+		fmt.Println("Common ancestor:", number)
+		return errBadPeer
 
 	default:
 		// Something very wrong, stop right here
@@ -373,12 +399,12 @@ func (d *Downloader) Terminate() {
 	d.cancel()
 }
 
-// findAncestor tries to locate the common ancestor block of the local chain and
+// findAncestor61 tries to locate the common ancestor block of the local chain and
 // a remote peers blockchain. In the general case when our node was in sync and
 // on the correct chain, checking the top N blocks should already get us a match.
 // In the rare scenario when we ended up on a long soft fork (i.e. none of the
 // head blocks match), we do a binary search to find the common ancestor.
-func (d *Downloader) findAncestor(p *peer) (uint64, error) {
+func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
 	glog.V(logger.Debug).Infof("%v: looking for common ancestor", p)
 
 	// Request out head blocks to short circuit ancestor location
@@ -421,6 +447,12 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 
 		case <-d.blockCh:
 			// Out of bounds blocks received, ignore them
+
+		case <-d.headerCh:
+			// Out of bounds eth/62 block headers received, ignore them
+
+		case <-d.bodyCh:
+			// Out of bounds eth/62 block bodies received, ignore them
 
 		case <-timeout:
 			glog.V(logger.Debug).Infof("%v: head hash timeout", p)
@@ -476,6 +508,12 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 			case <-d.blockCh:
 				// Out of bounds blocks received, ignore them
 
+			case <-d.headerCh:
+				// Out of bounds eth/62 block headers received, ignore them
+
+			case <-d.bodyCh:
+				// Out of bounds eth/62 block bodies received, ignore them
+
 			case <-timeout:
 				glog.V(logger.Debug).Infof("%v: search hash timeout", p)
 				return 0, errTimeout
@@ -485,9 +523,9 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 	return start, nil
 }
 
-// fetchHashes keeps retrieving hashes from the requested number, until no more
+// fetchHashes61 keeps retrieving hashes from the requested number, until no more
 // are returned, potentially throttling on the way.
-func (d *Downloader) fetchHashes(p *peer, td *big.Int, from uint64) error {
+func (d *Downloader) fetchHashes61(p *peer, td *big.Int, from uint64) error {
 	glog.V(logger.Debug).Infof("%v: downloading hashes from #%d", p, from)
 
 	// Create a timeout timer, and the associated hash fetcher
@@ -573,10 +611,10 @@ func (d *Downloader) fetchHashes(p *peer, td *big.Int, from uint64) error {
 	}
 }
 
-// fetchBlocks iteratively downloads the scheduled hashes, taking any available
+// fetchBlocks61 iteratively downloads the scheduled hashes, taking any available
 // peers, reserving a chunk of blocks for each, waiting for delivery and also
 // periodically checking for timeouts.
-func (d *Downloader) fetchBlocks(from uint64) error {
+func (d *Downloader) fetchBlocks61(from uint64) error {
 	glog.V(logger.Debug).Infof("Downloading blocks from #%d", from)
 	defer glog.V(logger.Debug).Infof("Block download terminated")
 
@@ -718,6 +756,130 @@ func (d *Downloader) fetchBlocks(from uint64) error {
 	}
 }
 
+// findAncestor tries to locate the common ancestor block of the local chain and
+// a remote peers blockchain. In the general case when our node was in sync and
+// on the correct chain, checking the top N blocks should already get us a match.
+// In the rare scenario when we ended up on a long soft fork (i.e. none of the
+// head blocks match), we do a binary search to find the common ancestor.
+func (d *Downloader) findAncestor(p *peer) (uint64, error) {
+	glog.V(logger.Debug).Infof("%v: looking for common ancestor", p)
+
+	// Request our head blocks to short circuit ancestor location
+	head := d.headBlock().NumberU64()
+	from := int64(head) - int64(MaxHashFetch)
+	if from < 0 {
+		from = 0
+	}
+	go p.getAbsHeaders(uint64(from), MaxHeaderFetch, 0, false)
+
+	// Wait for the remote response to the head fetch
+	number, hash := uint64(0), common.Hash{}
+	timeout := time.After(hashTTL)
+
+	for finished := false; !finished; {
+		select {
+		case <-d.cancelCh:
+			return 0, errCancelHashFetch
+
+		case headerPack := <-d.headerCh:
+			// Discard anything not from the origin peer
+			if headerPack.peerId != p.id {
+				glog.V(logger.Debug).Infof("Received headers from incorrect peer(%s)", headerPack.peerId)
+				break
+			}
+			// Make sure the peer actually gave something valid
+			headers := headerPack.headers
+			if len(headers) == 0 {
+				glog.V(logger.Debug).Infof("%v: empty head hash set", p)
+				return 0, errEmptyHashSet
+			}
+			// Check if a common ancestor was found
+			finished = true
+			for i := len(headers) - 1; i >= 0; i-- {
+				if d.hasBlock(headers[i].Hash()) {
+					number, hash = headers[i].Number.Uint64(), headers[i].Hash()
+					break
+				}
+			}
+
+		case <-d.bodyCh:
+			// Out of bounds block bodies received, ignore them
+
+		case <-d.hashCh:
+			// Out of bounds eth/61 hashes received, ignore them
+
+		case <-d.blockCh:
+			// Out of bounds eth/61 blocks received, ignore them
+
+		case <-timeout:
+			glog.V(logger.Debug).Infof("%v: head hash timeout", p)
+			return 0, errTimeout
+		}
+	}
+	// If the head fetch already found an ancestor, return
+	if !common.EmptyHash(hash) {
+		glog.V(logger.Debug).Infof("%v: common ancestor: #%d [%x]", p, number, hash[:4])
+		return number, nil
+	}
+	// Ancestor not found, we need to binary search over our chain
+	start, end := uint64(0), head
+	for start+1 < end {
+		// Split our chain interval in two, and request the hash to cross check
+		check := (start + end) / 2
+
+		timeout := time.After(hashTTL)
+		go p.getAbsHeaders(uint64(check), 1, 0, false)
+
+		// Wait until a reply arrives to this request
+		for arrived := false; !arrived; {
+			select {
+			case <-d.cancelCh:
+				return 0, errCancelHashFetch
+
+			case headerPack := <-d.headerCh:
+				// Discard anything not from the origin peer
+				if headerPack.peerId != p.id {
+					glog.V(logger.Debug).Infof("Received hashes from incorrect peer(%s)", headerPack.peerId)
+					break
+				}
+				// Make sure the peer actually gave something valid
+				headers := headerPack.headers
+				if len(headers) != 1 {
+					glog.V(logger.Debug).Infof("%v: invalid search header set (%d)", p, len(headers))
+					return 0, errBadPeer
+				}
+				arrived = true
+
+				// Modify the search interval based on the response
+				block := d.getBlock(headers[0].Hash())
+				if block == nil {
+					end = check
+					break
+				}
+				if block.NumberU64() != check {
+					glog.V(logger.Debug).Infof("%v: non requested header #%d [%x], instead of #%d", p, block.NumberU64(), block.Hash().Bytes()[:4], check)
+					return 0, errBadPeer
+				}
+				start = check
+
+			case <-d.bodyCh:
+				// Out of bounds block bodies received, ignore them
+
+			case <-d.hashCh:
+				// Out of bounds eth/61 hashes received, ignore them
+
+			case <-d.blockCh:
+				// Out of bounds eth/61 blocks received, ignore them
+
+			case <-timeout:
+				glog.V(logger.Debug).Infof("%v: search hash timeout", p)
+				return 0, errTimeout
+			}
+		}
+	}
+	return start, nil
+}
+
 // process takes blocks from the queue and tries to import them into the chain.
 //
 // The algorithmic flow is as follows:
@@ -796,9 +958,31 @@ func (d *Downloader) process() {
 	}
 }
 
-// DeliverBlocks injects a new batch of blocks received from a remote node.
+// DeliverHashes61 injects a new batch of hashes received from a remote node into
+// the download schedule. This is usually invoked through the BlockHashesMsg by
+// the protocol handler.
+func (d *Downloader) DeliverHashes61(id string, hashes []common.Hash) error {
+	// Make sure the downloader is active
+	if atomic.LoadInt32(&d.synchronising) == 0 {
+		return errNoSyncActive
+	}
+	// Deliver or abort if the sync is canceled while queuing
+	d.cancelLock.RLock()
+	cancel := d.cancelCh
+	d.cancelLock.RUnlock()
+
+	select {
+	case d.hashCh <- hashPack{id, hashes}:
+		return nil
+
+	case <-cancel:
+		return errNoSyncActive
+	}
+}
+
+// DeliverBlocks61 injects a new batch of blocks received from a remote node.
 // This is usually invoked through the BlocksMsg by the protocol handler.
-func (d *Downloader) DeliverBlocks(id string, blocks []*types.Block) error {
+func (d *Downloader) DeliverBlocks61(id string, blocks []*types.Block) error {
 	// Make sure the downloader is active
 	if atomic.LoadInt32(&d.synchronising) == 0 {
 		return errNoSyncActive
@@ -817,10 +1001,9 @@ func (d *Downloader) DeliverBlocks(id string, blocks []*types.Block) error {
 	}
 }
 
-// DeliverHashes injects a new batch of hashes received from a remote node into
-// the download schedule. This is usually invoked through the BlockHashesMsg by
-// the protocol handler.
-func (d *Downloader) DeliverHashes(id string, hashes []common.Hash) error {
+// DeliverHeaders injects a new batch of blck headers received from a remote
+// node into the download schedule.
+func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) error {
 	// Make sure the downloader is active
 	if atomic.LoadInt32(&d.synchronising) == 0 {
 		return errNoSyncActive
@@ -831,7 +1014,27 @@ func (d *Downloader) DeliverHashes(id string, hashes []common.Hash) error {
 	d.cancelLock.RUnlock()
 
 	select {
-	case d.hashCh <- hashPack{id, hashes}:
+	case d.headerCh <- headerPack{id, headers}:
+		return nil
+
+	case <-cancel:
+		return errNoSyncActive
+	}
+}
+
+// DeliverBodies injects a new batch of block bodies received from a remote node.
+func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header) error {
+	// Make sure the downloader is active
+	if atomic.LoadInt32(&d.synchronising) == 0 {
+		return errNoSyncActive
+	}
+	// Deliver or abort if the sync is canceled while queuing
+	d.cancelLock.RLock()
+	cancel := d.cancelCh
+	d.cancelLock.RUnlock()
+
+	select {
+	case d.bodyCh <- bodyPack{id, transactions, uncles}:
 		return nil
 
 	case <-cancel:
