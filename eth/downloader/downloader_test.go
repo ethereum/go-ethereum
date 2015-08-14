@@ -27,20 +27,39 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
-	testdb, _ = ethdb.NewMemDatabase()
-	genesis   = core.GenesisBlockForTesting(testdb, common.Address{}, big.NewInt(0))
+	testdb, _   = ethdb.NewMemDatabase()
+	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
+	genesis     = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000))
 )
 
-// makeChain creates a chain of n blocks starting at but not including
-// parent. the returned hash chain is ordered head->parent.
+// makeChain creates a chain of n blocks starting at and including parent.
+// the returned hash chain is ordered head->parent. In addition, every 3rd block
+// contains a transaction and every 5th an uncle to allow testing correct block
+// reassembly.
 func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common.Hash]*types.Block) {
-	blocks := core.GenerateChain(parent, testdb, n, func(i int, gen *core.BlockGen) {
-		gen.SetCoinbase(common.Address{seed})
+	blocks := core.GenerateChain(parent, testdb, n, func(i int, block *core.BlockGen) {
+		block.SetCoinbase(common.Address{seed})
+
+		// If the block number is multiple of 3, send a bonus transaction to the miner
+		if parent == genesis && i%3 == 0 {
+			tx, err := types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(testKey)
+			if err != nil {
+				panic(err)
+			}
+			block.AddTx(tx)
+		}
+		// If the block number is a multiple of 5, add a bonus uncle to the block
+		if i%5 == 0 {
+			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
+		}
 	})
 	hashes := make([]common.Hash, n+1)
 	hashes[len(hashes)-1] = parent.Hash()
@@ -78,8 +97,6 @@ type downloadTester struct {
 	ownBlocks  map[common.Hash]*types.Block            // Blocks belonging to the tester
 	peerHashes map[string][]common.Hash                // Hash chain belonging to different test peers
 	peerBlocks map[string]map[common.Hash]*types.Block // Blocks belonging to different test peers
-
-	maxHashFetch int // Overrides the maximum number of retrieved hashes
 }
 
 // newTester creates a new downloader test mocker.
@@ -156,7 +173,9 @@ func (dl *downloadTester) newPeer(id string, version int, hashes []common.Hash, 
 // specific delay time on processing the network packets sent to it, simulating
 // potentially slow network IO.
 func (dl *downloadTester) newSlowPeer(id string, version int, hashes []common.Hash, blocks map[common.Hash]*types.Block, delay time.Duration) error {
-	err := dl.downloader.RegisterPeer(id, version, hashes[0], dl.peerGetRelHashesFn(id, delay), dl.peerGetAbsHashesFn(id, version, delay), dl.peerGetBlocksFn(id, delay))
+	err := dl.downloader.RegisterPeer(id, version, hashes[0],
+		dl.peerGetRelHashesFn(id, delay), dl.peerGetAbsHashesFn(id, delay), dl.peerGetBlocksFn(id, delay),
+		nil, dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay))
 	if err == nil {
 		// Assign the owned hashes and blocks to the peer (deep copy)
 		dl.peerHashes[id] = make([]common.Hash, len(hashes))
@@ -184,13 +203,9 @@ func (dl *downloadTester) peerGetRelHashesFn(id string, delay time.Duration) fun
 	return func(head common.Hash) error {
 		time.Sleep(delay)
 
-		limit := MaxHashFetch
-		if dl.maxHashFetch > 0 {
-			limit = dl.maxHashFetch
-		}
 		// Gather the next batch of hashes
 		hashes := dl.peerHashes[id]
-		result := make([]common.Hash, 0, limit)
+		result := make([]common.Hash, 0, MaxHashFetch)
 		for i, hash := range hashes {
 			if hash == head {
 				i++
@@ -204,7 +219,7 @@ func (dl *downloadTester) peerGetRelHashesFn(id string, delay time.Duration) fun
 		// Delay delivery a bit to allow attacks to unfold
 		go func() {
 			time.Sleep(time.Millisecond)
-			dl.downloader.DeliverHashes(id, result)
+			dl.downloader.DeliverHashes61(id, result)
 		}()
 		return nil
 	}
@@ -213,24 +228,20 @@ func (dl *downloadTester) peerGetRelHashesFn(id string, delay time.Duration) fun
 // peerGetAbsHashesFn constructs a GetHashesFromNumber function associated with
 // a particular peer in the download tester. The returned function can be used to
 // retrieve batches of hashes from the particularly requested peer.
-func (dl *downloadTester) peerGetAbsHashesFn(id string, version int, delay time.Duration) func(uint64, int) error {
+func (dl *downloadTester) peerGetAbsHashesFn(id string, delay time.Duration) func(uint64, int) error {
 	return func(head uint64, count int) error {
 		time.Sleep(delay)
 
-		limit := count
-		if dl.maxHashFetch > 0 {
-			limit = dl.maxHashFetch
-		}
 		// Gather the next batch of hashes
 		hashes := dl.peerHashes[id]
-		result := make([]common.Hash, 0, limit)
-		for i := 0; i < limit && len(hashes)-int(head)-1-i >= 0; i++ {
+		result := make([]common.Hash, 0, count)
+		for i := 0; i < count && len(hashes)-int(head)-1-i >= 0; i++ {
 			result = append(result, hashes[len(hashes)-int(head)-1-i])
 		}
 		// Delay delivery a bit to allow attacks to unfold
 		go func() {
 			time.Sleep(time.Millisecond)
-			dl.downloader.DeliverHashes(id, result)
+			dl.downloader.DeliverHashes61(id, result)
 		}()
 		return nil
 	}
@@ -249,7 +260,55 @@ func (dl *downloadTester) peerGetBlocksFn(id string, delay time.Duration) func([
 				result = append(result, block)
 			}
 		}
-		go dl.downloader.DeliverBlocks(id, result)
+		go dl.downloader.DeliverBlocks61(id, result)
+
+		return nil
+	}
+}
+
+// peerGetAbsHeadersFn constructs a GetBlockHeaders function based on a numbered
+// origin; associated with a particular peer in the download tester. The returned
+// function can be used to retrieve batches of headers from the particular peer.
+func (dl *downloadTester) peerGetAbsHeadersFn(id string, delay time.Duration) func(uint64, int, int, bool) error {
+	return func(origin uint64, amount int, skip int, reverse bool) error {
+		time.Sleep(delay)
+
+		// Gather the next batch of hashes
+		hashes := dl.peerHashes[id]
+		blocks := dl.peerBlocks[id]
+		result := make([]*types.Header, 0, amount)
+		for i := 0; i < amount && len(hashes)-int(origin)-1-i >= 0; i++ {
+			if block, ok := blocks[hashes[len(hashes)-int(origin)-1-i]]; ok {
+				result = append(result, block.Header())
+			}
+		}
+		// Delay delivery a bit to allow attacks to unfold
+		go func() {
+			time.Sleep(time.Millisecond)
+			dl.downloader.DeliverHeaders(id, result)
+		}()
+		return nil
+	}
+}
+
+// peerGetBodiesFn constructs a getBlockBodies method associated with a particular
+// peer in the download tester. The returned function can be used to retrieve
+// batches of block bodies from the particularly requested peer.
+func (dl *downloadTester) peerGetBodiesFn(id string, delay time.Duration) func([]common.Hash) error {
+	return func(hashes []common.Hash) error {
+		time.Sleep(delay)
+		blocks := dl.peerBlocks[id]
+
+		transactions := make([][]*types.Transaction, 0, len(hashes))
+		uncles := make([][]*types.Header, 0, len(hashes))
+
+		for _, hash := range hashes {
+			if block, ok := blocks[hash]; ok {
+				transactions = append(transactions, block.Transactions())
+				uncles = append(uncles, block.Uncles())
+			}
+		}
+		go dl.downloader.DeliverBodies(id, transactions, uncles)
 
 		return nil
 	}
@@ -258,13 +317,18 @@ func (dl *downloadTester) peerGetBlocksFn(id string, delay time.Duration) func([
 // Tests that simple synchronization against a canonical chain works correctly.
 // In this test common ancestor lookup should be short circuited and not require
 // binary searching.
-func TestCanonicalSynchronisation61(t *testing.T) {
+func TestCanonicalSynchronisation61(t *testing.T) { testCanonicalSynchronisation(t, 61) }
+func TestCanonicalSynchronisation62(t *testing.T) { testCanonicalSynchronisation(t, 62) }
+func TestCanonicalSynchronisation63(t *testing.T) { testCanonicalSynchronisation(t, 63) }
+func TestCanonicalSynchronisation64(t *testing.T) { testCanonicalSynchronisation(t, 64) }
+
+func testCanonicalSynchronisation(t *testing.T, protocol int) {
 	// Create a small enough block chain to download
 	targetBlocks := blockCacheLimit - 15
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 
 	tester := newTester()
-	tester.newPeer("peer", eth61, hashes, blocks)
+	tester.newPeer("peer", protocol, hashes, blocks)
 
 	// Synchronise with the peer and make sure all blocks were retrieved
 	if err := tester.sync("peer", nil); err != nil {
@@ -277,7 +341,10 @@ func TestCanonicalSynchronisation61(t *testing.T) {
 
 // Tests that if a large batch of blocks are being downloaded, it is throttled
 // until the cached blocks are retrieved.
-func TestThrottling61(t *testing.T) { testThrottling(t, eth61) }
+func TestThrottling61(t *testing.T) { testThrottling(t, 61) }
+func TestThrottling62(t *testing.T) { testThrottling(t, 62) }
+func TestThrottling63(t *testing.T) { testThrottling(t, 63) }
+func TestThrottling64(t *testing.T) { testThrottling(t, 64) }
 
 func testThrottling(t *testing.T, protocol int) {
 	// Create a long block chain to download and the tester
@@ -288,11 +355,10 @@ func testThrottling(t *testing.T, protocol int) {
 	tester.newPeer("peer", protocol, hashes, blocks)
 
 	// Wrap the importer to allow stepping
-	done := make(chan int)
-	tester.downloader.insertChain = func(blocks types.Blocks) (int, error) {
-		n, err := tester.insertChain(blocks)
-		done <- n
-		return n, err
+	blocked, proceed := uint32(0), make(chan struct{})
+	tester.downloader.chainInsertHook = func(blocks []*Block) {
+		atomic.StoreUint32(&blocked, uint32(len(blocks)))
+		<-proceed
 	}
 	// Start a synchronisation concurrently
 	errc := make(chan error)
@@ -303,27 +369,25 @@ func testThrottling(t *testing.T, protocol int) {
 	for len(tester.ownBlocks) < targetBlocks+1 {
 		// Wait a bit for sync to throttle itself
 		var cached int
-		for start := time.Now(); time.Since(start) < 3*time.Second; {
+		for start := time.Now(); time.Since(start) < time.Second; {
 			time.Sleep(25 * time.Millisecond)
 
 			cached = len(tester.downloader.queue.blockPool)
-			if cached == blockCacheLimit || len(tester.ownBlocks)+cached == targetBlocks+1 {
+			if cached == blockCacheLimit || len(tester.ownBlocks)+cached+int(atomic.LoadUint32(&blocked)) == targetBlocks+1 {
 				break
 			}
 		}
 		// Make sure we filled up the cache, then exhaust it
 		time.Sleep(25 * time.Millisecond) // give it a chance to screw up
-		if cached != blockCacheLimit && len(tester.ownBlocks)+cached < targetBlocks+1 {
-			t.Fatalf("block count mismatch: have %v, want %v", cached, blockCacheLimit)
+		if cached != blockCacheLimit && len(tester.ownBlocks)+cached+int(atomic.LoadUint32(&blocked)) != targetBlocks+1 {
+			t.Fatalf("block count mismatch: have %v, want %v (owned %v, target %v)", cached, blockCacheLimit, len(tester.ownBlocks), targetBlocks+1)
 		}
-		<-done // finish previous blocking import
-		for cached > maxBlockProcess {
-			cached -= <-done
+		// Permit the blocked blocks to import
+		if atomic.LoadUint32(&blocked) > 0 {
+			atomic.StoreUint32(&blocked, uint32(0))
+			proceed <- struct{}{}
 		}
-		time.Sleep(25 * time.Millisecond) // yield to the insertion
 	}
-	<-done // finish the last blocking import
-
 	// Check that we haven't pulled more blocks than available
 	if len(tester.ownBlocks) > targetBlocks+1 {
 		t.Fatalf("target block count mismatch: have %v, want %v", len(tester.ownBlocks), targetBlocks+1)
@@ -336,14 +400,19 @@ func testThrottling(t *testing.T, protocol int) {
 // Tests that simple synchronization against a forked chain works correctly. In
 // this test common ancestor lookup should *not* be short circuited, and a full
 // binary search should be executed.
-func TestForkedSynchronisation61(t *testing.T) {
+func TestForkedSynchronisation61(t *testing.T) { testForkedSynchronisation(t, 61) }
+func TestForkedSynchronisation62(t *testing.T) { testForkedSynchronisation(t, 62) }
+func TestForkedSynchronisation63(t *testing.T) { testForkedSynchronisation(t, 63) }
+func TestForkedSynchronisation64(t *testing.T) { testForkedSynchronisation(t, 64) }
+
+func testForkedSynchronisation(t *testing.T, protocol int) {
 	// Create a long enough forked chain
 	common, fork := MaxHashFetch, 2*MaxHashFetch
 	hashesA, hashesB, blocksA, blocksB := makeChainFork(common+fork, fork, genesis)
 
 	tester := newTester()
-	tester.newPeer("fork A", eth61, hashesA, blocksA)
-	tester.newPeer("fork B", eth61, hashesB, blocksB)
+	tester.newPeer("fork A", protocol, hashesA, blocksA)
+	tester.newPeer("fork B", protocol, hashesB, blocksB)
 
 	// Synchronise with the peer and make sure all blocks were retrieved
 	if err := tester.sync("fork A", nil); err != nil {
@@ -362,26 +431,45 @@ func TestForkedSynchronisation61(t *testing.T) {
 }
 
 // Tests that an inactive downloader will not accept incoming hashes and blocks.
-func TestInactiveDownloader(t *testing.T) {
+func TestInactiveDownloader61(t *testing.T) {
 	tester := newTester()
 
 	// Check that neither hashes nor blocks are accepted
-	if err := tester.downloader.DeliverHashes("bad peer", []common.Hash{}); err != errNoSyncActive {
+	if err := tester.downloader.DeliverHashes61("bad peer", []common.Hash{}); err != errNoSyncActive {
 		t.Errorf("error mismatch: have %v, want %v", err, errNoSyncActive)
 	}
-	if err := tester.downloader.DeliverBlocks("bad peer", []*types.Block{}); err != errNoSyncActive {
+	if err := tester.downloader.DeliverBlocks61("bad peer", []*types.Block{}); err != errNoSyncActive {
+		t.Errorf("error mismatch: have %v, want %v", err, errNoSyncActive)
+	}
+}
+
+// Tests that an inactive downloader will not accept incoming block headers and bodies.
+func TestInactiveDownloader62(t *testing.T) {
+	tester := newTester()
+
+	// Check that neither block headers nor bodies are accepted
+	if err := tester.downloader.DeliverHeaders("bad peer", []*types.Header{}); err != errNoSyncActive {
+		t.Errorf("error mismatch: have %v, want %v", err, errNoSyncActive)
+	}
+	if err := tester.downloader.DeliverBodies("bad peer", [][]*types.Transaction{}, [][]*types.Header{}); err != errNoSyncActive {
 		t.Errorf("error mismatch: have %v, want %v", err, errNoSyncActive)
 	}
 }
 
 // Tests that a canceled download wipes all previously accumulated state.
-func TestCancel61(t *testing.T) { testCancel(t, eth61) }
+func TestCancel61(t *testing.T) { testCancel(t, 61) }
+func TestCancel62(t *testing.T) { testCancel(t, 62) }
+func TestCancel63(t *testing.T) { testCancel(t, 63) }
+func TestCancel64(t *testing.T) { testCancel(t, 64) }
 
 func testCancel(t *testing.T, protocol int) {
 	// Create a small enough block chain to download and the tester
 	targetBlocks := blockCacheLimit - 15
 	if targetBlocks >= MaxHashFetch {
 		targetBlocks = MaxHashFetch - 15
+	}
+	if targetBlocks >= MaxHeaderFetch {
+		targetBlocks = MaxHeaderFetch - 15
 	}
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 
@@ -390,27 +478,30 @@ func testCancel(t *testing.T, protocol int) {
 
 	// Make sure canceling works with a pristine downloader
 	tester.downloader.cancel()
-	hashCount, blockCount := tester.downloader.queue.Size()
-	if hashCount > 0 || blockCount > 0 {
-		t.Errorf("block or hash count mismatch: %d hashes, %d blocks, want 0", hashCount, blockCount)
+	downloading, importing := tester.downloader.queue.Size()
+	if downloading > 0 || importing > 0 {
+		t.Errorf("download or import count mismatch: %d downloading, %d importing, want 0", downloading, importing)
 	}
 	// Synchronise with the peer, but cancel afterwards
 	if err := tester.sync("peer", nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
 	tester.downloader.cancel()
-	hashCount, blockCount = tester.downloader.queue.Size()
-	if hashCount > 0 || blockCount > 0 {
-		t.Errorf("block or hash count mismatch: %d hashes, %d blocks, want 0", hashCount, blockCount)
+	downloading, importing = tester.downloader.queue.Size()
+	if downloading > 0 || importing > 0 {
+		t.Errorf("download or import count mismatch: %d downloading, %d importing, want 0", downloading, importing)
 	}
 }
 
 // Tests that synchronisation from multiple peers works as intended (multi thread sanity test).
-func TestMultiSynchronisation61(t *testing.T) { testMultiSynchronisation(t, eth61) }
+func TestMultiSynchronisation61(t *testing.T) { testMultiSynchronisation(t, 61) }
+func TestMultiSynchronisation62(t *testing.T) { testMultiSynchronisation(t, 62) }
+func TestMultiSynchronisation63(t *testing.T) { testMultiSynchronisation(t, 63) }
+func TestMultiSynchronisation64(t *testing.T) { testMultiSynchronisation(t, 64) }
 
 func testMultiSynchronisation(t *testing.T, protocol int) {
 	// Create various peers with various parts of the chain
-	targetPeers := 16
+	targetPeers := 8
 	targetBlocks := targetPeers*blockCacheLimit - 15
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 
@@ -436,45 +527,130 @@ func testMultiSynchronisation(t *testing.T, protocol int) {
 	}
 }
 
+// Tests that if a block is empty (i.e. header only), no body request should be
+// made, and instead the header should be assembled into a whole block in itself.
+func TestEmptyBlockShortCircuit62(t *testing.T) { testEmptyBlockShortCircuit(t, 62) }
+func TestEmptyBlockShortCircuit63(t *testing.T) { testEmptyBlockShortCircuit(t, 63) }
+func TestEmptyBlockShortCircuit64(t *testing.T) { testEmptyBlockShortCircuit(t, 64) }
+
+func testEmptyBlockShortCircuit(t *testing.T, protocol int) {
+	// Create a small enough block chain to download
+	targetBlocks := blockCacheLimit - 15
+	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+
+	tester := newTester()
+	tester.newPeer("peer", protocol, hashes, blocks)
+
+	// Instrument the downloader to signal body requests
+	requested := int32(0)
+	tester.downloader.bodyFetchHook = func(headers []*types.Header) {
+		atomic.AddInt32(&requested, int32(len(headers)))
+	}
+	// Synchronise with the peer and make sure all blocks were retrieved
+	if err := tester.sync("peer", nil); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	if imported := len(tester.ownBlocks); imported != targetBlocks+1 {
+		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, targetBlocks+1)
+	}
+	// Validate the number of block bodies that should have been requested
+	needed := 0
+	for _, block := range blocks {
+		if block != genesis && (len(block.Transactions()) > 0 || len(block.Uncles()) > 0) {
+			needed++
+		}
+	}
+	if int(requested) != needed {
+		t.Fatalf("block body retrieval count mismatch: have %v, want %v", requested, needed)
+	}
+}
+
+// Tests that if a peer sends an invalid body for a requested block, it gets
+// dropped immediately by the downloader.
+func TestInvalidBlockBodyAttack62(t *testing.T) { testInvalidBlockBodyAttack(t, 62) }
+func TestInvalidBlockBodyAttack63(t *testing.T) { testInvalidBlockBodyAttack(t, 63) }
+func TestInvalidBlockBodyAttack64(t *testing.T) { testInvalidBlockBodyAttack(t, 64) }
+
+func testInvalidBlockBodyAttack(t *testing.T, protocol int) {
+	// Create two peers, one feeding invalid block bodies
+	targetBlocks := 4*blockCacheLimit - 15
+	hashes, validBlocks := makeChain(targetBlocks, 0, genesis)
+
+	invalidBlocks := make(map[common.Hash]*types.Block)
+	for hash, block := range validBlocks {
+		invalidBlocks[hash] = types.NewBlockWithHeader(block.Header())
+	}
+
+	tester := newTester()
+	tester.newPeer("valid", protocol, hashes, validBlocks)
+	tester.newPeer("attack", protocol, hashes, invalidBlocks)
+
+	// Synchronise with the valid peer (will pull contents from the attacker too)
+	if err := tester.sync("valid", nil); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	if imported := len(tester.ownBlocks); imported != len(hashes) {
+		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, len(hashes))
+	}
+	// Make sure the attacker was detected and dropped in the mean time
+	if _, ok := tester.peerHashes["attack"]; ok {
+		t.Fatalf("block body attacker not detected/dropped")
+	}
+}
+
 // Tests that a peer advertising an high TD doesn't get to stall the downloader
 // afterwards by not sending any useful hashes.
-func TestHighTDStarvationAttack61(t *testing.T) {
+func TestHighTDStarvationAttack61(t *testing.T) { testHighTDStarvationAttack(t, 61) }
+func TestHighTDStarvationAttack62(t *testing.T) { testHighTDStarvationAttack(t, 62) }
+func TestHighTDStarvationAttack63(t *testing.T) { testHighTDStarvationAttack(t, 63) }
+func TestHighTDStarvationAttack64(t *testing.T) { testHighTDStarvationAttack(t, 64) }
+
+func testHighTDStarvationAttack(t *testing.T, protocol int) {
 	tester := newTester()
-	tester.newPeer("attack", eth61, []common.Hash{genesis.Hash()}, nil)
+	hashes, blocks := makeChain(0, 0, genesis)
+
+	tester.newPeer("attack", protocol, []common.Hash{hashes[0]}, blocks)
 	if err := tester.sync("attack", big.NewInt(1000000)); err != errStallingPeer {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errStallingPeer)
 	}
 }
 
 // Tests that misbehaving peers are disconnected, whilst behaving ones are not.
-func TestHashAttackerDropping(t *testing.T) {
+func TestBlockHeaderAttackerDropping61(t *testing.T) { testBlockHeaderAttackerDropping(t, 61) }
+func TestBlockHeaderAttackerDropping62(t *testing.T) { testBlockHeaderAttackerDropping(t, 62) }
+func TestBlockHeaderAttackerDropping63(t *testing.T) { testBlockHeaderAttackerDropping(t, 63) }
+func TestBlockHeaderAttackerDropping64(t *testing.T) { testBlockHeaderAttackerDropping(t, 64) }
+
+func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
 	// Define the disconnection requirement for individual hash fetch errors
 	tests := []struct {
 		result error
 		drop   bool
 	}{
-		{nil, false},                 // Sync succeeded, all is well
-		{errBusy, false},             // Sync is already in progress, no problem
-		{errUnknownPeer, false},      // Peer is unknown, was already dropped, don't double drop
-		{errBadPeer, true},           // Peer was deemed bad for some reason, drop it
-		{errStallingPeer, true},      // Peer was detected to be stalling, drop it
-		{errBannedHead, true},        // Peer's head hash is a known bad hash, drop it
-		{errNoPeers, false},          // No peers to download from, soft race, no issue
-		{errPendingQueue, false},     // There are blocks still cached, wait to exhaust, no issue
-		{errTimeout, true},           // No hashes received in due time, drop the peer
-		{errEmptyHashSet, true},      // No hashes were returned as a response, drop as it's a dead end
-		{errPeersUnavailable, true},  // Nobody had the advertised blocks, drop the advertiser
-		{errInvalidChain, true},      // Hash chain was detected as invalid, definitely drop
-		{errCrossCheckFailed, true},  // Hash-origin failed to pass a block cross check, drop
-		{errCancelHashFetch, false},  // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelBlockFetch, false}, // Synchronisation was canceled, origin may be innocent, don't drop
+		{nil, false},                  // Sync succeeded, all is well
+		{errBusy, false},              // Sync is already in progress, no problem
+		{errUnknownPeer, false},       // Peer is unknown, was already dropped, don't double drop
+		{errBadPeer, true},            // Peer was deemed bad for some reason, drop it
+		{errStallingPeer, true},       // Peer was detected to be stalling, drop it
+		{errNoPeers, false},           // No peers to download from, soft race, no issue
+		{errPendingQueue, false},      // There are blocks still cached, wait to exhaust, no issue
+		{errTimeout, true},            // No hashes received in due time, drop the peer
+		{errEmptyHashSet, true},       // No hashes were returned as a response, drop as it's a dead end
+		{errEmptyHeaderSet, true},     // No headers were returned as a response, drop as it's a dead end
+		{errPeersUnavailable, true},   // Nobody had the advertised blocks, drop the advertiser
+		{errInvalidChain, true},       // Hash chain was detected as invalid, definitely drop
+		{errInvalidBody, false},       // A bad peer was detected, but not the sync origin
+		{errCancelHashFetch, false},   // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelBlockFetch, false},  // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelHeaderFetch, false}, // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelBodyFetch, false},   // Synchronisation was canceled, origin may be innocent, don't drop
 	}
 	// Run the tests and check disconnection status
 	tester := newTester()
 	for i, tt := range tests {
 		// Register a new peer and ensure it's presence
 		id := fmt.Sprintf("test %d", i)
-		if err := tester.newPeer(id, eth61, []common.Hash{genesis.Hash()}, nil); err != nil {
+		if err := tester.newPeer(id, protocol, []common.Hash{genesis.Hash()}, nil); err != nil {
 			t.Fatalf("test %d: failed to register new peer: %v", i, err)
 		}
 		if _, ok := tester.peerHashes[id]; !ok {
@@ -491,7 +667,12 @@ func TestHashAttackerDropping(t *testing.T) {
 }
 
 // Tests that feeding bad blocks will result in a peer drop.
-func TestBlockAttackerDropping(t *testing.T) {
+func TestBlockBodyAttackerDropping61(t *testing.T) { testBlockBodyAttackerDropping(t, 61) }
+func TestBlockBodyAttackerDropping62(t *testing.T) { testBlockBodyAttackerDropping(t, 62) }
+func TestBlockBodyAttackerDropping63(t *testing.T) { testBlockBodyAttackerDropping(t, 63) }
+func TestBlockBodyAttackerDropping64(t *testing.T) { testBlockBodyAttackerDropping(t, 64) }
+
+func testBlockBodyAttackerDropping(t *testing.T, protocol int) {
 	// Define the disconnection requirement for individual block import errors
 	tests := []struct {
 		failure bool
@@ -506,7 +687,7 @@ func TestBlockAttackerDropping(t *testing.T) {
 	for i, tt := range tests {
 		// Register a new peer and ensure it's presence
 		id := fmt.Sprintf("test %d", i)
-		if err := tester.newPeer(id, eth61, []common.Hash{common.Hash{}}, nil); err != nil {
+		if err := tester.newPeer(id, protocol, []common.Hash{common.Hash{}}, nil); err != nil {
 			t.Fatalf("test %d: failed to register new peer: %v", i, err)
 		}
 		if _, ok := tester.peerHashes[id]; !ok {
