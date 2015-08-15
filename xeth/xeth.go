@@ -89,8 +89,7 @@ type XEth struct {
 	messagesMu sync.RWMutex
 	messages   map[int]*whisperFilter
 
-	// regmut   sync.Mutex
-	// register map[string][]*interface{} // TODO improve return type
+	transactMu sync.Mutex
 
 	agent *miner.RemoteAgent
 
@@ -952,8 +951,9 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 		}
 	*/
 
-	// TODO: align default values to have the same type, e.g. not depend on
-	// common.Value conversions later on
+	self.transactMu.Lock()
+	defer self.transactMu.Unlock()
+
 	var nonce uint64
 	if len(nonceStr) != 0 {
 		nonce = common.Big(nonceStr).Uint64()
