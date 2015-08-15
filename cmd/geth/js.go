@@ -228,15 +228,10 @@ func (self *jsre) loadAutoCompletion() {
 }
 
 func (self *jsre) batch(statement string) {
-	val, err := self.re.Run(statement)
+	err := self.re.EvalAndPrettyPrint(statement)
 
 	if err != nil {
 		fmt.Printf("error: %v", err)
-	} else if val.IsDefined() && val.IsObject() {
-		obj, _ := self.re.Get("ret_result")
-		fmt.Printf("%v", obj)
-	} else if val.IsDefined() {
-		fmt.Printf("%v", val)
 	}
 
 	if self.atexit != nil {
