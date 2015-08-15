@@ -101,8 +101,8 @@ func (p *peer) Reset() {
 	p.ignored.Clear()
 }
 
-// Fetch sends a block retrieval request to the remote peer.
-func (p *peer) Fetch(request *fetchRequest) error {
+// Fetch61 sends a block retrieval request to the remote peer.
+func (p *peer) Fetch61(request *fetchRequest) error {
 	// Short circuit if the peer is already fetching
 	if !atomic.CompareAndSwapInt32(&p.idle, 0, 1) {
 		return errAlreadyFetching
@@ -119,10 +119,28 @@ func (p *peer) Fetch(request *fetchRequest) error {
 	return nil
 }
 
-// SetIdle sets the peer to idle, allowing it to execute new retrieval requests.
+// Fetch sends a block body retrieval request to the remote peer.
+func (p *peer) Fetch(request *fetchRequest) error {
+	// Short circuit if the peer is already fetching
+	if !atomic.CompareAndSwapInt32(&p.idle, 0, 1) {
+		return errAlreadyFetching
+	}
+	p.started = time.Now()
+
+	// Convert the header set to a retrievable slice
+	hashes := make([]common.Hash, 0, len(request.Headers))
+	for _, header := range request.Headers {
+		hashes = append(hashes, header.Hash())
+	}
+	go p.getBlockBodies(hashes)
+
+	return nil
+}
+
+// SetIdle61 sets the peer to idle, allowing it to execute new retrieval requests.
 // Its block retrieval allowance will also be updated either up- or downwards,
 // depending on whether the previous fetch completed in time or not.
-func (p *peer) SetIdle() {
+func (p *peer) SetIdle61() {
 	// Update the peer's download allowance based on previous performance
 	scale := 2.0
 	if time.Since(p.started) > blockSoftTTL {
@@ -135,6 +153,36 @@ func (p *peer) SetIdle() {
 		// Calculate the new download bandwidth allowance
 		prev := atomic.LoadInt32(&p.capacity)
 		next := int32(math.Max(1, math.Min(float64(MaxBlockFetch), float64(prev)*scale)))
+
+		// Try to update the old value
+		if atomic.CompareAndSwapInt32(&p.capacity, prev, next) {
+			// If we're having problems at 1 capacity, try to find better peers
+			if next == 1 {
+				p.Demote()
+			}
+			break
+		}
+	}
+	// Set the peer to idle to allow further block requests
+	atomic.StoreInt32(&p.idle, 0)
+}
+
+// SetIdle sets the peer to idle, allowing it to execute new retrieval requests.
+// Its block body retrieval allowance will also be updated either up- or downwards,
+// depending on whether the previous fetch completed in time or not.
+func (p *peer) SetIdle() {
+	// Update the peer's download allowance based on previous performance
+	scale := 2.0
+	if time.Since(p.started) > bodySoftTTL {
+		scale = 0.5
+		if time.Since(p.started) > bodyHardTTL {
+			scale = 1 / float64(MaxBodyFetch) // reduces capacity to 1
+		}
+	}
+	for {
+		// Calculate the new download bandwidth allowance
+		prev := atomic.LoadInt32(&p.capacity)
+		next := int32(math.Max(1, math.Min(float64(MaxBodyFetch), float64(prev)*scale)))
 
 		// Try to update the old value
 		if atomic.CompareAndSwapInt32(&p.capacity, prev, next) {

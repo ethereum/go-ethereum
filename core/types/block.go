@@ -357,6 +357,20 @@ func (b *Block) WithMiningResult(nonce uint64, mixDigest common.Hash) *Block {
 	}
 }
 
+// WithBody returns a new block with the given transaction and uncle contents.
+func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
+	block := &Block{
+		header:       copyHeader(b.header),
+		transactions: make([]*Transaction, len(transactions)),
+		uncles:       make([]*Header, len(uncles)),
+	}
+	copy(block.transactions, transactions)
+	for i := range uncles {
+		block.uncles[i] = copyHeader(uncles[i])
+	}
+	return block
+}
+
 // Implement pow.Block
 
 func (b *Block) Hash() common.Hash {

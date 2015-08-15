@@ -203,7 +203,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
 	if err := pm.downloader.RegisterPeer(p.id, p.version, p.Head(),
 		p.RequestHashes, p.RequestHashesFromNumber, p.RequestBlocks,
-		p.RequestHeadersByHash, p.RequestHeadersByNumber, nil); err != nil {
+		p.RequestHeadersByHash, p.RequestHeadersByNumber, p.RequestBodies); err != nil {
 		return err
 	}
 	// Propagate existing transactions. new transactions appearing
@@ -401,7 +401,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				query.Origin.Number += (query.Skip + 1)
 			}
 		}
-		fmt.Println("Sending headers", len(headers))
 		return p.SendBlockHeaders(headers)
 
 	case p.version >= eth62 && msg.Code == BlockHeadersMsg:
@@ -412,6 +411,25 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Deliver them all to the downloader for queuing
 		err := pm.downloader.DeliverHeaders(p.id, headers)
+		if err != nil {
+			glog.V(logger.Debug).Infoln(err)
+		}
+
+	case p.version >= eth62 && msg.Code == BlockBodiesMsg:
+		// A batch of block bodies arrived to one of our previous requests
+		var request blockBodiesData
+		if err := msg.Decode(&request); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		// Deliver them all to the downloader for queuing
+		trasactions := make([][]*types.Transaction, len(request))
+		uncles := make([][]*types.Header, len(request))
+
+		for i, body := range request {
+			trasactions[i] = body.Transactions
+			uncles[i] = body.Uncles
+		}
+		err := pm.downloader.DeliverBodies(p.id, trasactions, uncles)
 		if err != nil {
 			glog.V(logger.Debug).Infoln(err)
 		}
@@ -625,7 +643,11 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 	// Otherwise if the block is indeed in out own chain, announce it
 	if pm.chainman.HasBlock(hash) {
 		for _, peer := range peers {
-			peer.SendNewBlockHashes([]common.Hash{hash})
+			if peer.version < eth62 {
+				peer.SendNewBlockHashes61([]common.Hash{hash})
+			} else {
+				peer.SendNewBlockHashes([]common.Hash{hash}, []uint64{block.NumberU64()})
+			}
 		}
 		glog.V(logger.Detail).Infof("announced block %x to %d peers in %v", hash[:4], len(peers), time.Since(block.ReceivedAt))
 	}

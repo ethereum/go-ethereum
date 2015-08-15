@@ -145,13 +145,27 @@ func (p *peer) SendBlocks(blocks []*types.Block) error {
 	return p2p.Send(p.rw, BlocksMsg, blocks)
 }
 
-// SendNewBlockHashes announces the availability of a number of blocks through
+// SendNewBlockHashes61 announces the availability of a number of blocks through
 // a hash notification.
-func (p *peer) SendNewBlockHashes(hashes []common.Hash) error {
+func (p *peer) SendNewBlockHashes61(hashes []common.Hash) error {
 	for _, hash := range hashes {
 		p.knownBlocks.Add(hash)
 	}
 	return p2p.Send(p.rw, NewBlockHashesMsg, hashes)
+}
+
+// SendNewBlockHashes announces the availability of a number of blocks through
+// a hash notification.
+func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
+	for _, hash := range hashes {
+		p.knownBlocks.Add(hash)
+	}
+	request := make(newBlockHashesData, len(hashes))
+	for i := 0; i < len(hashes); i++ {
+		request[i].Hash = hashes[i]
+		request[i].Number = numbers[i]
+	}
+	return p2p.Send(p.rw, NewBlockHashesMsg, request)
 }
 
 // SendNewBlock propagates an entire block to a remote peer.
@@ -205,15 +219,22 @@ func (p *peer) RequestBlocks(hashes []common.Hash) error {
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
 func (p *peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
-	glog.V(logger.Debug).Infof("%v fetching %d headers from %x, skipping %d (reverse = )", p, amount, origin[:4], skip, reverse)
+	glog.V(logger.Debug).Infof("%v fetching %d headers from %x, skipping %d (reverse = %v)", p, amount, origin[:4], skip, reverse)
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
 }
 
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
-	glog.V(logger.Debug).Infof("%v fetching %d headers from #%d, skipping %d (reverse = )", p, amount, origin, skip, reverse)
+	glog.V(logger.Debug).Infof("%v fetching %d headers from #%d, skipping %d (reverse = %v)", p, amount, origin, skip, reverse)
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+}
+
+// RequestBodies fetches a batch of blocks' bodies corresponding to the hashes
+// specified.
+func (p *peer) RequestBodies(hashes []common.Hash) error {
+	glog.V(logger.Debug).Infof("%v fetching %d block bodies", p, len(hashes))
+	return p2p.Send(p.rw, GetBlockBodiesMsg, hashes)
 }
 
 // RequestNodeData fetches a batch of arbitrary data from a node's known state
