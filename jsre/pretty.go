@@ -54,6 +54,14 @@ func prettyPrint(vm *otto.Otto, value otto.Value) {
 	ppctx{vm}.printValue(value, 0)
 }
 
+func prettyPrintJS(call otto.FunctionCall) otto.Value {
+	for _, v := range call.ArgumentList {
+		prettyPrint(call.Otto, v)
+		fmt.Println()
+	}
+	return otto.UndefinedValue()
+}
+
 type ppctx struct{ vm *otto.Otto }
 
 func (ctx ppctx) indent(level int) string {
