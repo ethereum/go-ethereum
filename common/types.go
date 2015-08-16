@@ -117,6 +117,33 @@ func (a *Address) Set(other Address) {
 	}
 }
 
+// ChecksumAddress is an address with an included checksum. A checksum address
+// is usually made out of SHA3(A) + A
+type ChecksumAddress struct {
+	Checksum [4]byte
+	Address
+}
+
+// HexToChecksumAddress converts a hex checksum address to a ChecksumAddress
+// type
+func HexToChecksumAddress(s string) ChecksumAddress {
+	if len(s) > 2 && s[:2] == "0x" {
+		s = s[2:]
+	}
+	if len(s) != 48 {
+		return ChecksumAddress{}
+	}
+
+	addr := ChecksumAddress{[4]byte{}, HexToAddress(s[4:])}
+	copy(addr.Checksum[:], Hex2Bytes(s[:8]))
+	return addr
+}
+
+// Hex returns the hexadecimal representation of a checksum address
+func (ca ChecksumAddress) Hex() string {
+	return "0x" + Bytes2Hex(ca.Checksum[:]) + ca.Address.Hex()[2:]
+}
+
 // PP Pretty Prints a byte slice in the following format:
 // 	hex(value[:4])...(hex[len(value)-4:])
 func PP(value []byte) string {

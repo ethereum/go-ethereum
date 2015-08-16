@@ -389,7 +389,7 @@ func (self *XEth) Accounts() []string {
 	accounts, _ := self.backend.AccountManager().Accounts()
 	accountAddresses := make([]string, len(accounts))
 	for i, ac := range accounts {
-		accountAddresses[i] = ac.Address.Hex()
+		accountAddresses[i] = crypto.ChecksumAddress(ac.Address).Hex()
 	}
 	return accountAddresses
 }
@@ -890,7 +890,6 @@ func (self *XEth) Frontend() Frontend {
 }
 
 func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
-
 	// this minimalistic recoding is enough (works for natspec.js)
 	var jsontx = fmt.Sprintf(`{"params":[{"to":"%s","data": "%s"}]}`, toStr, codeStr)
 	if !self.ConfirmTransaction(jsontx) {
@@ -898,13 +897,27 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 		return "", err
 	}
 
-	if len(toStr) > 0 && toStr != "0x" && !isAddress(toStr) {
-		return "", errors.New("Invalid address")
+	var (
+		to  common.Address
+		err error
+	)
+	// If the address is larges than 20 bytes (+ 0x) assume a checksum
+	// address and verify.
+	if len(toStr) > 42 {
+		checkAddr := common.HexToChecksumAddress(toStr)
+		to, err = crypto.ValidateAddress(checkAddr)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		if len(toStr) > 0 && toStr != "0x" && !isAddress(toStr) {
+			return "", errors.New("Invalid address")
+		}
+		to = common.HexToAddress(toStr)
 	}
 
 	var (
 		from             = common.HexToAddress(fromStr)
-		to               = common.HexToAddress(toStr)
 		value            = common.Big(valueStr)
 		gas              *big.Int
 		price            *big.Int
