@@ -134,7 +134,7 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 
 	db, _ := ethdb.NewMemDatabase()
 	// set up mock genesis with balance on the testAddress
-	core.WriteGenesisBlockForTesting(db, common.HexToAddress(testAddress), common.String2Big(testBalance))
+	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{common.HexToAddress(testAddress), common.String2Big(testBalance)})
 
 	// only use minimalistic stack with no networking
 	ethereum, err = eth.New(&eth.Config{

@@ -81,7 +81,7 @@ func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func(
 		gasLimit:     gasLimitFn,
 		minGasPrice:  new(big.Int),
 		pendingState: state.ManageState(currentStateFn()),
-		events:       eventMux.Subscribe(ChainHeadEvent{}, GasPriceChanged{}),
+		events:       eventMux.Subscribe(ChainHeadEvent{}, GasPriceChanged{}, RemovedTransactionEvent{}),
 	}
 	go pool.eventLoop()
 
@@ -93,16 +93,18 @@ func (pool *TxPool) eventLoop() {
 	// we need to know the new state. The new state will help us determine
 	// the nonces in the managed state
 	for ev := range pool.events.Chan() {
-		pool.mu.Lock()
-
 		switch ev := ev.(type) {
 		case ChainHeadEvent:
+			pool.mu.Lock()
 			pool.resetState()
+			pool.mu.Unlock()
 		case GasPriceChanged:
+			pool.mu.Lock()
 			pool.minGasPrice = ev.Price
+			pool.mu.Unlock()
+		case RemovedTransactionEvent:
+			pool.AddTransactions(ev.Txs)
 		}
-
-		pool.mu.Unlock()
 	}
 }
 

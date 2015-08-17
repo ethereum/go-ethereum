@@ -77,6 +77,22 @@ func PutTransactions(db ethdb.Database, block *types.Block, txs types.Transactio
 	}
 }
 
+func DeleteTransaction(db ethdb.Database, txHash common.Hash) {
+	db.Delete(txHash[:])
+}
+
+func GetTransaction(db ethdb.Database, txhash common.Hash) *types.Transaction {
+	data, _ := db.Get(txhash[:])
+	if len(data) != 0 {
+		var tx types.Transaction
+		if err := rlp.DecodeBytes(data, &tx); err != nil {
+			return nil
+		}
+		return &tx
+	}
+	return nil
+}
+
 // PutReceipts stores the receipts in the current database
 func PutReceipts(db ethdb.Database, receipts types.Receipts) error {
 	batch := new(leveldb.Batch)
@@ -105,6 +121,11 @@ func PutReceipts(db ethdb.Database, receipts types.Receipts) error {
 	}
 
 	return nil
+}
+
+// Delete a receipts from the database
+func DeleteReceipt(db ethdb.Database, txHash common.Hash) {
+	db.Delete(append(receiptsPre, txHash[:]...))
 }
 
 // GetReceipt returns a receipt by hash

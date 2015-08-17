@@ -125,15 +125,27 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 	return block
 }
 
-func WriteGenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
+type GenesisAccount struct {
+	Address common.Address
+	Balance *big.Int
+}
+
+func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) *types.Block {
+	accountJson := "{"
+	for i, account := range accounts {
+		if i != 0 {
+			accountJson += ","
+		}
+		accountJson += fmt.Sprintf(`"0x%x":{"balance":"0x%x"}`, account.Address, account.Balance.Bytes())
+	}
+	accountJson += "}"
+
 	testGenesis := fmt.Sprintf(`{
 	"nonce":"0x%x",
 	"gasLimit":"0x%x",
 	"difficulty":"0x%x",
-	"alloc": {
-		"0x%x":{"balance":"0x%x"}
-	}
-}`, types.EncodeNonce(0), params.GenesisGasLimit.Bytes(), params.GenesisDifficulty.Bytes(), addr, balance.Bytes())
+	"alloc": %s
+}`, types.EncodeNonce(0), params.GenesisGasLimit.Bytes(), params.GenesisDifficulty.Bytes(), accountJson)
 	block, _ := WriteGenesisBlock(db, strings.NewReader(testGenesis))
 	return block
 }
