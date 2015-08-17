@@ -138,6 +138,11 @@ func (self *LDBDatabase) Delete(key []byte) error {
 	return self.db.Delete(key, nil)
 }
 
+func (self *LDBDatabase) Has(key []byte) bool {
+	b, _ := self.db.Has(key, nil)
+	return b
+}
+
 func (self *LDBDatabase) NewIterator() iterator.Iterator {
 	return self.db.NewIterator(nil, nil)
 }
