@@ -37,12 +37,11 @@ type blockPriceInfo struct {
 type GasPriceOracle struct {
 	eth                           *Ethereum
 	chain                         *core.ChainManager
-	pool                          *core.TxPool
 	events                        event.Subscription
 	blocks                        map[uint64]*blockPriceInfo
 	firstProcessed, lastProcessed uint64
 	lastBaseMutex                 sync.Mutex
-	lastBase                      *big.Int
+	lastBase, minBase             *big.Int
 }
 
 func NewGasPriceOracle(eth *Ethereum) (self *GasPriceOracle) {
@@ -50,13 +49,15 @@ func NewGasPriceOracle(eth *Ethereum) (self *GasPriceOracle) {
 	self.blocks = make(map[uint64]*blockPriceInfo)
 	self.eth = eth
 	self.chain = eth.chainManager
-	self.pool = eth.txPool
 	self.events = eth.EventMux().Subscribe(
 		core.ChainEvent{},
 		core.ChainSplitEvent{},
-		core.TxPreEvent{},
-		core.TxPostEvent{},
 	)
+
+	minbase := new(big.Int).Mul(self.eth.GpoMinGasPrice, big.NewInt(100))
+	minbase = minbase.Div(minbase, big.NewInt(int64(self.eth.GpobaseCorrectionFactor)))
+	self.minBase = minbase
+
 	self.processPastBlocks()
 	go self.listenLoop()
 	return
@@ -93,8 +94,6 @@ func (self *GasPriceOracle) listenLoop() {
 			self.processBlock(ev.Block)
 		case core.ChainSplitEvent:
 			self.processBlock(ev.Block)
-		case core.TxPreEvent:
-		case core.TxPostEvent:
 		}
 	}
 	self.events.Unsubscribe()
@@ -131,6 +130,10 @@ func (self *GasPriceOracle) processBlock(block *types.Block) {
 	newBase := new(big.Int).Mul(lastBase, big.NewInt(1000000+crand))
 	newBase.Div(newBase, big.NewInt(1000000))
 
+	if newBase.Cmp(self.minBase) < 0 {
+		newBase = self.minBase
+	}
+
 	bpi := self.blocks[i]
 	if bpi == nil {
 		bpi = &blockPriceInfo{}
@@ -146,7 +149,7 @@ func (self *GasPriceOracle) processBlock(block *types.Block) {
 
 // returns the lowers possible price with which a tx was or could have been included
 func (self *GasPriceOracle) lowestPrice(block *types.Block) *big.Int {
-	gasUsed := new(big.Int)
+	gasUsed := big.NewInt(0)
 
 	receipts := self.eth.BlockProcessor().GetBlockReceipts(block.Hash())
 	if len(receipts) > 0 {
@@ -158,12 +161,12 @@ func (self *GasPriceOracle) lowestPrice(block *types.Block) *big.Int {
 	if new(big.Int).Mul(gasUsed, big.NewInt(100)).Cmp(new(big.Int).Mul(block.GasLimit(),
 		big.NewInt(int64(self.eth.GpoFullBlockRatio)))) < 0 {
 		// block is not full, could have posted a tx with MinGasPrice
-		return self.eth.GpoMinGasPrice
+		return big.NewInt(0)
 	}
 
 	txs := block.Transactions()
 	if len(txs) == 0 {
-		return self.eth.GpoMinGasPrice
+		return big.NewInt(0)
 	}
 	// block is full, find smallest gasPrice
 	minPrice := txs[0].GasPrice()
