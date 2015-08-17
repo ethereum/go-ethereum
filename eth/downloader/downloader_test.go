@@ -300,6 +300,8 @@ func (dl *downloadTester) peerGetBodiesFn(id string, delay time.Duration) func([
 // binary searching.
 func TestCanonicalSynchronisation61(t *testing.T) { testCanonicalSynchronisation(t, 61) }
 func TestCanonicalSynchronisation62(t *testing.T) { testCanonicalSynchronisation(t, 62) }
+func TestCanonicalSynchronisation63(t *testing.T) { testCanonicalSynchronisation(t, 63) }
+func TestCanonicalSynchronisation64(t *testing.T) { testCanonicalSynchronisation(t, 64) }
 
 func testCanonicalSynchronisation(t *testing.T, protocol int) {
 	// Create a small enough block chain to download
@@ -322,6 +324,8 @@ func testCanonicalSynchronisation(t *testing.T, protocol int) {
 // until the cached blocks are retrieved.
 func TestThrottling61(t *testing.T) { testThrottling(t, 61) }
 func TestThrottling62(t *testing.T) { testThrottling(t, 62) }
+func TestThrottling63(t *testing.T) { testThrottling(t, 63) }
+func TestThrottling64(t *testing.T) { testThrottling(t, 64) }
 
 func testThrottling(t *testing.T, protocol int) {
 	// Create a long block chain to download and the tester
@@ -382,6 +386,8 @@ func testThrottling(t *testing.T, protocol int) {
 // binary search should be executed.
 func TestForkedSynchronisation61(t *testing.T) { testForkedSynchronisation(t, 61) }
 func TestForkedSynchronisation62(t *testing.T) { testForkedSynchronisation(t, 62) }
+func TestForkedSynchronisation63(t *testing.T) { testForkedSynchronisation(t, 63) }
+func TestForkedSynchronisation64(t *testing.T) { testForkedSynchronisation(t, 64) }
 
 func testForkedSynchronisation(t *testing.T, protocol int) {
 	// Create a long enough forked chain
@@ -437,6 +443,8 @@ func TestInactiveDownloader62(t *testing.T) {
 // Tests that a canceled download wipes all previously accumulated state.
 func TestCancel61(t *testing.T) { testCancel(t, 61) }
 func TestCancel62(t *testing.T) { testCancel(t, 62) }
+func TestCancel63(t *testing.T) { testCancel(t, 63) }
+func TestCancel64(t *testing.T) { testCancel(t, 64) }
 
 func testCancel(t *testing.T, protocol int) {
 	// Create a small enough block chain to download and the tester
@@ -472,6 +480,8 @@ func testCancel(t *testing.T, protocol int) {
 // Tests that synchronisation from multiple peers works as intended (multi thread sanity test).
 func TestMultiSynchronisation61(t *testing.T) { testMultiSynchronisation(t, 61) }
 func TestMultiSynchronisation62(t *testing.T) { testMultiSynchronisation(t, 62) }
+func TestMultiSynchronisation63(t *testing.T) { testMultiSynchronisation(t, 63) }
+func TestMultiSynchronisation64(t *testing.T) { testMultiSynchronisation(t, 64) }
 
 func testMultiSynchronisation(t *testing.T, protocol int) {
 	// Create various peers with various parts of the chain
@@ -505,6 +515,8 @@ func testMultiSynchronisation(t *testing.T, protocol int) {
 // afterwards by not sending any useful hashes.
 func TestHighTDStarvationAttack61(t *testing.T) { testHighTDStarvationAttack(t, 61) }
 func TestHighTDStarvationAttack62(t *testing.T) { testHighTDStarvationAttack(t, 62) }
+func TestHighTDStarvationAttack63(t *testing.T) { testHighTDStarvationAttack(t, 63) }
+func TestHighTDStarvationAttack64(t *testing.T) { testHighTDStarvationAttack(t, 64) }
 
 func testHighTDStarvationAttack(t *testing.T, protocol int) {
 	tester := newTester()
@@ -519,6 +531,8 @@ func testHighTDStarvationAttack(t *testing.T, protocol int) {
 // Tests that misbehaving peers are disconnected, whilst behaving ones are not.
 func TestBlockHeaderAttackerDropping61(t *testing.T) { testBlockHeaderAttackerDropping(t, 61) }
 func TestBlockHeaderAttackerDropping62(t *testing.T) { testBlockHeaderAttackerDropping(t, 62) }
+func TestBlockHeaderAttackerDropping63(t *testing.T) { testBlockHeaderAttackerDropping(t, 63) }
+func TestBlockHeaderAttackerDropping64(t *testing.T) { testBlockHeaderAttackerDropping(t, 64) }
 
 func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
 	// Define the disconnection requirement for individual hash fetch errors
@@ -568,6 +582,8 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
 // Tests that feeding bad blocks will result in a peer drop.
 func TestBlockBodyAttackerDropping61(t *testing.T) { testBlockBodyAttackerDropping(t, 61) }
 func TestBlockBodyAttackerDropping62(t *testing.T) { testBlockBodyAttackerDropping(t, 62) }
+func TestBlockBodyAttackerDropping63(t *testing.T) { testBlockBodyAttackerDropping(t, 63) }
+func TestBlockBodyAttackerDropping64(t *testing.T) { testBlockBodyAttackerDropping(t, 64) }
 
 func testBlockBodyAttackerDropping(t *testing.T, protocol int) {
 	// Define the disconnection requirement for individual block import errors

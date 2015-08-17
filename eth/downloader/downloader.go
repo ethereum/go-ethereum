@@ -320,8 +320,8 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 	}()
 
 	glog.V(logger.Debug).Infof("Synchronizing with the network using: %s, eth/%d", p.id, p.version)
-	switch p.version {
-	case eth61:
+	switch {
+	case p.version == eth61:
 		// Old eth/61, use forward, concurrent hash and block retrieval algorithm
 		number, err := d.findAncestor61(p)
 		if err != nil {
@@ -339,7 +339,7 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 		}
 		return <-errc
 
-	case eth62:
+	case p.version >= eth62:
 		// New eth/62, use forward, concurrent header and block body retrieval algorithm
 		number, err := d.findAncestor(p)
 		if err != nil {
