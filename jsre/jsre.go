@@ -66,6 +66,7 @@ func New(assetPath string) *JSRE {
 	re.loopWg.Add(1)
 	go re.runEventLoop()
 	re.Set("loadScript", re.loadScript)
+	re.Set("inspect", prettyPrintJS)
 	return re
 }
 

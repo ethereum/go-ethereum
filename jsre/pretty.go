@@ -51,7 +51,15 @@ var boringKeys = map[string]bool{
 
 // prettyPrint writes value to standard output.
 func prettyPrint(vm *otto.Otto, value otto.Value) {
-	ppctx{vm}.printValue(value, 0)
+	ppctx{vm}.printValue(value, 0, false)
+}
+
+func prettyPrintJS(call otto.FunctionCall) otto.Value {
+	for _, v := range call.ArgumentList {
+		prettyPrint(call.Otto, v)
+		fmt.Println()
+	}
+	return otto.UndefinedValue()
 }
 
 type ppctx struct{ vm *otto.Otto }
@@ -60,10 +68,10 @@ func (ctx ppctx) indent(level int) string {
 	return strings.Repeat(indentString, level)
 }
 
-func (ctx ppctx) printValue(v otto.Value, level int) {
+func (ctx ppctx) printValue(v otto.Value, level int, inArray bool) {
 	switch {
 	case v.IsObject():
-		ctx.printObject(v.Object(), level)
+		ctx.printObject(v.Object(), level, inArray)
 	case v.IsNull():
 		specialColor.Print("null")
 	case v.IsUndefined():
@@ -84,7 +92,7 @@ func (ctx ppctx) printValue(v otto.Value, level int) {
 	}
 }
 
-func (ctx ppctx) printObject(obj *otto.Object, level int) {
+func (ctx ppctx) printObject(obj *otto.Object, level int, inArray bool) {
 	switch obj.Class() {
 	case "Array":
 		lv, _ := obj.Get("length")
@@ -101,7 +109,7 @@ func (ctx ppctx) printObject(obj *otto.Object, level int) {
 		for i := int64(0); i < len; i++ {
 			el, err := obj.Get(strconv.FormatInt(i, 10))
 			if err == nil {
-				ctx.printValue(el, level+1)
+				ctx.printValue(el, level+1, true)
 			}
 			if i < len-1 {
 				fmt.Printf(", ")
@@ -129,11 +137,14 @@ func (ctx ppctx) printObject(obj *otto.Object, level int) {
 		for i, k := range keys {
 			v, _ := obj.Get(k)
 			fmt.Printf("%s%s: ", ctx.indent(level+1), k)
-			ctx.printValue(v, level+1)
+			ctx.printValue(v, level+1, false)
 			if i < len(keys)-1 {
 				fmt.Printf(",")
 			}
 			fmt.Println()
+		}
+		if inArray {
+			level--
 		}
 		fmt.Printf("%s}", ctx.indent(level))
 
