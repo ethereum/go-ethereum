@@ -364,9 +364,7 @@ func (bc *ChainManager) HasBlock(hash common.Hash) bool {
 	if bc.cache.Contains(hash) {
 		return true
 	}
-
-	data, _ := bc.chainDb.Get(append(blockHashPre, hash[:]...))
-	return len(data) != 0
+	return bc.chainDb.Has(append(blockHashPre, hash[:]...))
 }
 
 func (self *ChainManager) GetBlockHashesFromHash(hash common.Hash, max uint64) (chain []common.Hash) {
@@ -559,6 +557,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		if atomic.LoadInt32(&self.procInterrupt) == 1 {
 			glog.V(logger.Debug).Infoln("Premature abort during chain processing")
 			break
+		}
+		if self.HasBlock(block.Hash()) {
+			stats.ignored++
+			continue
 		}
 
 		bstart := time.Now()

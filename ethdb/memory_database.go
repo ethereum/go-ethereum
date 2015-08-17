@@ -57,6 +57,11 @@ func (db *MemDatabase) GetKeys() []*common.Key {
 }
 */
 
+func (db *MemDatabase) Has(key []byte) bool {
+	_, ok := db.db[string(key)]
+	return ok
+}
+
 func (db *MemDatabase) Delete(key []byte) error {
 	delete(db.db, string(key))
 
