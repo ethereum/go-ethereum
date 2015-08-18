@@ -268,3 +268,23 @@ func (self *LDBDatabase) meter(refresh time.Duration) {
 		}
 	}
 }
+
+// TODO: remove this stuff and expose leveldb directly
+
+func (db *LDBDatabase) NewBatch() Batch {
+	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
+}
+
+type ldbBatch struct {
+	db *leveldb.DB
+	b  *leveldb.Batch
+}
+
+func (b *ldbBatch) Put(key, value []byte) error {
+	b.b.Put(key, value)
+	return nil
+}
+
+func (b *ldbBatch) Write() error {
+	return b.db.Write(b.b, nil)
+}

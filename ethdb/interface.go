@@ -22,4 +22,10 @@ type Database interface {
 	Delete(key []byte) error
 	Close()
 	Flush() error
+	NewBatch() Batch
+}
+
+type Batch interface {
+	Put(key, value []byte) error
+	Write() error
 }
