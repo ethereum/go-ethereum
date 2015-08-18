@@ -1,26 +1,15 @@
-#!/bin/bash
-
-# This script runs all package tests and merges the resulting coverage
-# profiles. Coverage is accounted per package under test.
+#!/usr/bin/env bash
 
 set -e
+echo "" > coverage.txt
 
-if [ ! -f "build/env.sh" ]; then
-    echo "$0 must be run from the root of the repository."
-    exit 2
-fi
-
-echo "mode: count" > profile.cov
-
-for pkg in $(go list ./...); do
-    # drop the namespace prefix.
-    dir=${pkg##github.com/ethereum/go-ethereum/}
-    
-    if [[ $dir != "tests" ]]; then
-        go test -covermode=count -coverprofile=$dir/profile.tmp $pkg
-    fi
-    if [[ -f $dir/profile.tmp ]]; then
-        tail -n +2 $dir/profile.tmp >> profile.cov
-        rm $dir/profile.tmp
+for d in $(find ./* -maxdepth 10 -type d -not -path "./build" -not -path "./Godeps/*" ); do
+    if ls $d/*.go &> /dev/null; then
+        go test  -coverprofile=profile.out -covermode=atomic $d
+        if [ -f profile.out ]; then
+            cat profile.out >> coverage.txt
+            echo '<<<<<< EOF' >> coverage.txt
+            rm profile.out
+        fi
     fi
 done
