@@ -22,6 +22,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 type AccountChange struct {
@@ -111,7 +113,7 @@ done:
 			// Get the logs of the block
 			unfiltered, err := self.eth.BlockProcessor().GetLogs(block)
 			if err != nil {
-				chainlogger.Warnln("err: filter get logs ", err)
+				glog.V(logger.Warn).Infoln("err: filter get logs ", err)
 
 				break
 			}
