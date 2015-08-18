@@ -349,11 +349,9 @@ func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
 // the depricated way by re-processing the block.
 func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err error) {
 	receipts := GetBlockReceipts(sm.chainDb, block.Hash())
-	if len(receipts) > 0 {
-		// coalesce logs
-		for _, receipt := range receipts {
-			logs = append(logs, receipt.Logs()...)
-		}
+	// coalesce logs
+	for _, receipt := range receipts {
+		logs = append(logs, receipt.Logs()...)
 	}
 	return logs, nil
 }

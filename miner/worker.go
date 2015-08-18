@@ -297,14 +297,17 @@ func (self *worker) wait() {
 				}
 
 				// broadcast before waiting for validation
-				go func(block *types.Block, logs state.Logs) {
+				go func(block *types.Block, logs state.Logs, receipts []*types.Receipt) {
 					self.mux.Post(core.NewMinedBlockEvent{block})
 					self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
 					if stat == core.CanonStatTy {
 						self.mux.Post(core.ChainHeadEvent{block})
 						self.mux.Post(logs)
 					}
-				}(block, work.state.Logs())
+					if err := core.PutBlockReceipts(self.chainDb, block, receipts); err != nil {
+						glog.V(logger.Warn).Infoln("error writing block receipts:", err)
+					}
+				}(block, work.state.Logs(), work.receipts)
 			}
 
 			// check staleness and display confirmation
