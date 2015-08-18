@@ -839,8 +839,8 @@ out:
 }
 
 func blockErr(block *types.Block, err error) {
-	h := block.Header()
-	glog.V(logger.Error).Infof("Bad block #%v (%x)\n", h.Number, h.Hash().Bytes())
-	glog.V(logger.Error).Infoln(err)
-	glog.V(logger.Debug).Infoln(verifyNonces)
+	if glog.V(logger.Error) {
+		glog.Errorf("Bad block #%v (%s)\n", block.Number(), block.Hash().Hex())
+		glog.Errorf("    %v", err)
+	}
 }

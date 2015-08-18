@@ -218,6 +218,7 @@ func (c *StateObject) ReturnGas(gas, price *big.Int) {}
 
 func (self *StateObject) SetGasLimit(gasLimit *big.Int) {
 	self.gasPool = new(big.Int).Set(gasLimit)
+	self.dirty = true
 
 	if glog.V(logger.Core) {
 		glog.Infof("%x: gas (+ %v)", self.Address(), self.gasPool)
@@ -228,19 +229,14 @@ func (self *StateObject) SubGas(gas, price *big.Int) error {
 	if self.gasPool.Cmp(gas) < 0 {
 		return GasLimitError(self.gasPool, gas)
 	}
-
 	self.gasPool.Sub(self.gasPool, gas)
-
-	rGas := new(big.Int).Set(gas)
-	rGas.Mul(rGas, price)
-
 	self.dirty = true
-
 	return nil
 }
 
 func (self *StateObject) AddGas(gas, price *big.Int) {
 	self.gasPool.Add(self.gasPool, gas)
+	self.dirty = true
 }
 
 func (self *StateObject) Copy() *StateObject {

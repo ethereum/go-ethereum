@@ -69,7 +69,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 			statedb.SetState(address, common.HexToHash(key), common.HexToHash(value))
 		}
 	}
-	statedb.SyncObjects()
+	root, stateBatch := statedb.CommitBatch()
 
 	difficulty := common.String2Big(genesis.Difficulty)
 	block := types.NewBlock(&types.Header{
@@ -81,7 +81,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 		Difficulty: difficulty,
 		MixDigest:  common.HexToHash(genesis.Mixhash),
 		Coinbase:   common.HexToAddress(genesis.Coinbase),
-		Root:       statedb.Root(),
+		Root:       root,
 	}, nil, nil, nil)
 
 	if block := GetBlock(chainDb, block.Hash()); block != nil {
@@ -92,8 +92,10 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 		}
 		return block, nil
 	}
-	statedb.Sync()
 
+	if err := stateBatch.Write(); err != nil {
+		return nil, fmt.Errorf("cannot write state: %v", err)
+	}
 	if err := WriteTd(chainDb, block.Hash(), difficulty); err != nil {
 		return nil, err
 	}
@@ -115,12 +117,14 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 	statedb := state.New(common.Hash{}, db)
 	obj := statedb.GetOrNewStateObject(addr)
 	obj.SetBalance(balance)
-	statedb.SyncObjects()
-	statedb.Sync()
+	root, err := statedb.Commit()
+	if err != nil {
+		panic(fmt.Sprintf("cannot write state: %v", err))
+	}
 	block := types.NewBlock(&types.Header{
 		Difficulty: params.GenesisDifficulty,
 		GasLimit:   params.GenesisGasLimit,
-		Root:       statedb.Root(),
+		Root:       root,
 	}, nil, nil, nil)
 	return block
 }

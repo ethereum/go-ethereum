@@ -100,10 +100,8 @@ func (self *BlockProcessor) ApplyTransaction(gp GasPool, statedb *state.StateDB,
 	}
 
 	// Update the state with pending changes
-	statedb.SyncIntermediate()
-
 	usedGas.Add(usedGas, gas)
-	receipt := types.NewReceipt(statedb.Root().Bytes(), usedGas)
+	receipt := types.NewReceipt(statedb.IntermediateRoot().Bytes(), usedGas)
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = new(big.Int).Set(gas)
 	if MessageCreatesContract(tx) {
@@ -265,16 +263,16 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	// Accumulate static rewards; block reward, uncle's and uncle inclusion.
 	AccumulateRewards(state, header, uncles)
 
-	// Commit state objects/accounts to a temporary trie (does not save)
-	// used to calculate the state root.
-	state.SyncObjects()
-	if header.Root != state.Root() {
-		err = fmt.Errorf("invalid merkle root. received=%x got=%x", header.Root, state.Root())
-		return
+	// Commit state objects/accounts to a database batch and calculate
+	// the state root. The database is not modified if the root
+	// doesn't match.
+	root, batch := state.CommitBatch()
+	if header.Root != root {
+		return nil, nil, fmt.Errorf("invalid merkle root: header=%x computed=%x", header.Root, root)
 	}
 
-	// Sync the current block's state to the database
-	state.Sync()
+	// Execute the database writes.
+	batch.Write()
 
 	return state.Logs(), receipts, nil
 }

@@ -17,6 +17,7 @@
 package core
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -94,9 +95,9 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	if err != nil {
 		panic(err)
 	}
-	b.statedb.SyncIntermediate()
+	root := b.statedb.IntermediateRoot()
 	b.header.GasUsed.Add(b.header.GasUsed, gas)
-	receipt := types.NewReceipt(b.statedb.Root().Bytes(), b.header.GasUsed)
+	receipt := types.NewReceipt(root.Bytes(), b.header.GasUsed)
 	logs := b.statedb.GetLogs(tx.Hash())
 	receipt.SetLogs(logs)
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
@@ -163,8 +164,11 @@ func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, 
 			gen(i, b)
 		}
 		AccumulateRewards(statedb, h, b.uncles)
-		statedb.SyncIntermediate()
-		h.Root = statedb.Root()
+		root, err := statedb.Commit()
+		if err != nil {
+			panic(fmt.Sprintf("state write error: %v", err))
+		}
+		h.Root = root
 		return types.NewBlock(h, b.txs, b.uncles, b.receipts)
 	}
 	for i := 0; i < n; i++ {
@@ -184,7 +188,7 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 		time = new(big.Int).Add(parent.Time(), big.NewInt(10)) // block time is fixed at 10 seconds
 	}
 	return &types.Header{
-		Root:       state.Root(),
+		Root:       state.IntermediateRoot(),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
 		Difficulty: CalcDifficulty(time.Uint64(), new(big.Int).Sub(time, big.NewInt(10)).Uint64(), parent.Number(), parent.Difficulty()),

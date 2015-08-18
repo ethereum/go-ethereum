@@ -253,13 +253,13 @@ func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, erro
 			statedb.SetState(common.HexToAddress(addrString), common.HexToHash(k), common.HexToHash(v))
 		}
 	}
-	// sync objects to trie
-	statedb.SyncObjects()
-	// sync trie to disk
-	statedb.Sync()
 
-	if !bytes.Equal(t.Genesis.Root().Bytes(), statedb.Root().Bytes()) {
-		return nil, fmt.Errorf("computed state root does not match genesis block %x %x", t.Genesis.Root().Bytes()[:4], statedb.Root().Bytes()[:4])
+	root, err := statedb.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("error writing state: %v", err)
+	}
+	if t.Genesis.Root() != root {
+		return nil, fmt.Errorf("computed state root does not match genesis block: genesis=%x computed=%x", t.Genesis.Root().Bytes()[:4], root.Bytes()[:4])
 	}
 	return statedb, nil
 }
