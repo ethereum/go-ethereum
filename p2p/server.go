@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/fdtrack"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -373,7 +372,7 @@ func (srv *Server) startListening() error {
 	}
 	laddr := listener.Addr().(*net.TCPAddr)
 	srv.ListenAddr = laddr.String()
-	srv.listener = fdtrack.WrapListener("p2p", listener)
+	srv.listener = listener
 	srv.loopWG.Add(1)
 	go srv.listenLoop()
 	// Map the TCP listening port if NAT is configured.

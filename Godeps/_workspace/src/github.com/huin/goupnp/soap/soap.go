@@ -7,12 +7,9 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"reflect"
-
-	"github.com/ethereum/go-ethereum/fdtrack"
 )
 
 const (
@@ -29,17 +26,6 @@ type SOAPClient struct {
 func NewSOAPClient(endpointURL url.URL) *SOAPClient {
 	return &SOAPClient{
 		EndpointURL: endpointURL,
-		HTTPClient: http.Client{
-			Transport: &http.Transport{
-				Dial: func(network, addr string) (net.Conn, error) {
-					c, err := net.Dial(network, addr)
-					if c != nil {
-						c = fdtrack.WrapConn("upnp", c)
-					}
-					return c, err
-				},
-			},
-		},
 	}
 }
 

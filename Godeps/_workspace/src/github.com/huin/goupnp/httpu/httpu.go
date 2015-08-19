@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/ethereum/go-ethereum/fdtrack"
 )
 
 // HTTPUClient is a client for dealing with HTTPU (HTTP over UDP). Its typical
@@ -27,7 +25,6 @@ func NewHTTPUClient() (*HTTPUClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	fdtrack.Open("upnp")
 	return &HTTPUClient{conn: conn}, nil
 }
 
@@ -36,7 +33,6 @@ func NewHTTPUClient() (*HTTPUClient, error) {
 func (httpu *HTTPUClient) Close() error {
 	httpu.connLock.Lock()
 	defer httpu.connLock.Unlock()
-	fdtrack.Close("upnp")
 	return httpu.conn.Close()
 }
 
