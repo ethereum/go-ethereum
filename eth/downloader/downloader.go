@@ -400,7 +400,7 @@ func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
 
 	// Request out head blocks to short circuit ancestor location
 	head := d.headBlock().NumberU64()
-	from := int64(head) - int64(MaxHashFetch)
+	from := int64(head) - int64(MaxHashFetch) + 1
 	if from < 0 {
 		from = 0
 	}
@@ -769,7 +769,7 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 
 	// Request our head blocks to short circuit ancestor location
 	head := d.headBlock().NumberU64()
-	from := int64(head) - int64(MaxHashFetch)
+	from := int64(head) - int64(MaxHeaderFetch) + 1
 	if from < 0 {
 		from = 0
 	}
@@ -1033,6 +1033,7 @@ func (d *Downloader) fetchBodies(from uint64) error {
 				case errInvalidBody:
 					// The peer delivered something very bad, drop immediately
 					glog.V(logger.Error).Infof("%s: delivered invalid block, DROP DROP DROP (i.e. implement)!!!", peer)
+					return err
 
 				case errNoFetchesPending:
 					// Peer probably timed out with its delivery but came through

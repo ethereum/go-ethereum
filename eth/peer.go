@@ -216,6 +216,13 @@ func (p *peer) RequestBlocks(hashes []common.Hash) error {
 	return p2p.Send(p.rw, GetBlocksMsg, hashes)
 }
 
+// RequestHeaders is a wrapper around the header query functions to fetch a
+// single header. It is used solely by the fetcher.
+func (p *peer) RequestOneHeader(hash common.Hash) error {
+	glog.V(logger.Debug).Infof("%v fetching a single header: %x", p, hash)
+	return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}, Amount: uint64(1), Skip: uint64(0), Reverse: false})
+}
+
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
 func (p *peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {

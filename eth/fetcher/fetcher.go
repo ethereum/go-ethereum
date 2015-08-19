@@ -51,6 +51,12 @@ type blockRetrievalFn func(common.Hash) *types.Block
 // blockRequesterFn is a callback type for sending a block retrieval request.
 type blockRequesterFn func([]common.Hash) error
 
+// headerRequesterFn is a callback type for sending a header retrieval request.
+type headerRequesterFn func(common.Hash) error
+
+// bodyRequesterFn is a callback type for sending a body retrieval request.
+type bodyRequesterFn func([]common.Hash) error
+
 // blockValidatorFn is a callback type to verify a block's header for fast propagation.
 type blockValidatorFn func(block *types.Block, parent *types.Block) error
 
@@ -69,12 +75,28 @@ type peerDropFn func(id string)
 // announce is the hash notification of the availability of a new block in the
 // network.
 type announce struct {
-	hash   common.Hash // Hash of the block being announced
-	number uint64      // Number of the block being announced (0 = unknown | old protocol)
-	time   time.Time   // Timestamp of the announcement
+	hash   common.Hash   // Hash of the block being announced
+	number uint64        // Number of the block being announced (0 = unknown | old protocol)
+	header *types.Header // Header of the block partially reassembled (new protocol)
+	time   time.Time     // Timestamp of the announcement
 
-	origin string           // Identifier of the peer originating the notification
-	fetch  blockRequesterFn // Fetcher function to retrieve
+	origin string // Identifier of the peer originating the notification
+
+	fetch61     blockRequesterFn  // [eth/61] Fetcher function to retrieve an announced block
+	fetchHeader headerRequesterFn // [eth/62] Fetcher function to retrieve the header of an announced block
+	fetchBodies bodyRequesterFn   // [eth/62] Fetcher function to retrieve the body of an announced block
+}
+
+// headerFilterTask represents a batch of headers needing fetcher filtering.
+type headerFilterTask struct {
+	headers []*types.Header // Collection of headers to filter
+	time    time.Time       // Arrival time of the headers
+}
+
+// body represents the data contents (transactions and uncles) of a block.
+type body struct {
+	transactions []*types.Transaction
+	uncles       []*types.Header
 }
 
 // inject represents a schedules import operation.
@@ -89,14 +111,20 @@ type Fetcher struct {
 	// Various event channels
 	notify chan *announce
 	inject chan *inject
-	filter chan chan []*types.Block
-	done   chan common.Hash
-	quit   chan struct{}
+
+	blockFilter  chan chan []*types.Block
+	headerFilter chan chan *headerFilterTask
+	bodyFilter   chan chan []*body
+
+	done chan common.Hash
+	quit chan struct{}
 
 	// Announce states
-	announces map[string]int              // Per peer announce counts to prevent memory exhaustion
-	announced map[common.Hash][]*announce // Announced blocks, scheduled for fetching
-	fetching  map[common.Hash]*announce   // Announced blocks, currently fetching
+	announces  map[string]int              // Per peer announce counts to prevent memory exhaustion
+	announced  map[common.Hash][]*announce // Announced blocks, scheduled for fetching
+	fetching   map[common.Hash]*announce   // Announced blocks, currently fetching
+	fetched    map[common.Hash][]*announce // Blocks with headers fetched, scheduled for body retrieval
+	completing map[common.Hash]*announce   // Blocks with headers, currently body-completing
 
 	// Block cache
 	queue  *prque.Prque            // Queue containing the import operations (block number sorted)
@@ -121,12 +149,16 @@ func New(getBlock blockRetrievalFn, validateBlock blockValidatorFn, broadcastBlo
 	return &Fetcher{
 		notify:         make(chan *announce),
 		inject:         make(chan *inject),
-		filter:         make(chan chan []*types.Block),
+		blockFilter:    make(chan chan []*types.Block),
+		headerFilter:   make(chan chan *headerFilterTask),
+		bodyFilter:     make(chan chan []*body),
 		done:           make(chan common.Hash),
 		quit:           make(chan struct{}),
 		announces:      make(map[string]int),
 		announced:      make(map[common.Hash][]*announce),
 		fetching:       make(map[common.Hash]*announce),
+		fetched:        make(map[common.Hash][]*announce),
+		completing:     make(map[common.Hash]*announce),
 		queue:          prque.New(),
 		queues:         make(map[string]int),
 		queued:         make(map[common.Hash]*inject),
@@ -153,13 +185,17 @@ func (f *Fetcher) Stop() {
 
 // Notify announces the fetcher of the potential availability of a new block in
 // the network.
-func (f *Fetcher) Notify(peer string, hash common.Hash, number uint64, time time.Time, fetcher blockRequesterFn) error {
+func (f *Fetcher) Notify(peer string, hash common.Hash, number uint64, time time.Time,
+	blockFetcher blockRequesterFn, // eth/61 specific whole block fetcher
+	headerFetcher headerRequesterFn, bodyFetcher bodyRequesterFn) error {
 	block := &announce{
-		hash:   hash,
-		number: number,
-		time:   time,
-		origin: peer,
-		fetch:  fetcher,
+		hash:        hash,
+		number:      number,
+		time:        time,
+		origin:      peer,
+		fetch61:     blockFetcher,
+		fetchHeader: headerFetcher,
+		fetchBodies: bodyFetcher,
 	}
 	select {
 	case f.notify <- block:
@@ -183,14 +219,16 @@ func (f *Fetcher) Enqueue(peer string, block *types.Block) error {
 	}
 }
 
-// Filter extracts all the blocks that were explicitly requested by the fetcher,
+// FilterBlocks extracts all the blocks that were explicitly requested by the fetcher,
 // returning those that should be handled differently.
-func (f *Fetcher) Filter(blocks types.Blocks) types.Blocks {
+func (f *Fetcher) FilterBlocks(blocks types.Blocks) types.Blocks {
+	glog.V(logger.Detail).Infof("[eth/61] filtering %d blocks", len(blocks))
+
 	// Send the filter channel to the fetcher
 	filter := make(chan []*types.Block)
 
 	select {
-	case f.filter <- filter:
+	case f.blockFilter <- filter:
 	case <-f.quit:
 		return nil
 	}
@@ -209,11 +247,79 @@ func (f *Fetcher) Filter(blocks types.Blocks) types.Blocks {
 	}
 }
 
+// FilterHeaders extracts all the headers that were explicitly requested by the fetcher,
+// returning those that should be handled differently.
+func (f *Fetcher) FilterHeaders(headers []*types.Header, time time.Time) []*types.Header {
+	glog.V(logger.Detail).Infof("[eth/62] filtering %d headers", len(headers))
+
+	// Send the filter channel to the fetcher
+	filter := make(chan *headerFilterTask)
+
+	select {
+	case f.headerFilter <- filter:
+	case <-f.quit:
+		return nil
+	}
+	// Request the filtering of the header list
+	select {
+	case filter <- &headerFilterTask{headers: headers, time: time}:
+	case <-f.quit:
+		return nil
+	}
+	// Retrieve the headers remaining after filtering
+	select {
+	case task := <-filter:
+		return task.headers
+	case <-f.quit:
+		return nil
+	}
+}
+
+// FilterBodies extracts all the block bodies that were explicitly requested by
+// the fetcher, returning those that should be handled differently.
+func (f *Fetcher) FilterBodies(transactions [][]*types.Transaction, uncles [][]*types.Header) ([][]*types.Transaction, [][]*types.Header) {
+	glog.V(logger.Detail).Infof("[eth/62] filtering %d:%d bodies", len(transactions), len(uncles))
+
+	// Assemble the body contents into a single data struct
+	bodies := make([]*body, 0, len(transactions))
+	for i := 0; i < len(transactions) && i < len(uncles); i++ {
+		bodies = append(bodies, &body{transactions[i], uncles[i]})
+	}
+	// Send the filter channel to the fetcher
+	filter := make(chan []*body)
+
+	select {
+	case f.bodyFilter <- filter:
+	case <-f.quit:
+		return nil, nil
+	}
+	// Request the filtering of the body list
+	select {
+	case filter <- bodies:
+	case <-f.quit:
+		return nil, nil
+	}
+	// Retrieve the bodies remaining after filtering
+	select {
+	case bodies := <-filter:
+		transactions, uncles = transactions[:0], uncles[:0]
+		for _, body := range bodies {
+			transactions = append(transactions, body.transactions)
+			uncles = append(uncles, body.uncles)
+		}
+		return transactions, uncles
+	case <-f.quit:
+		return nil, nil
+	}
+}
+
 // Loop is the main fetcher loop, checking and processing various notification
 // events.
 func (f *Fetcher) loop() {
 	// Iterate the block fetching until a quit is requested
 	fetch := time.NewTimer(0)
+	complete := time.NewTimer(0)
+
 	for {
 		// Clean up any expired block fetches
 		for hash, announce := range f.fetching {
@@ -259,10 +365,58 @@ func (f *Fetcher) loop() {
 			if _, ok := f.fetching[notification.hash]; ok {
 				break
 			}
+			if _, ok := f.completing[notification.hash]; ok {
+				break
+			}
 			f.announces[notification.origin] = count
 			f.announced[notification.hash] = append(f.announced[notification.hash], notification)
 			if len(f.announced) == 1 {
-				f.reschedule(fetch)
+				f.rescheduleFetch(fetch)
+			}
+
+		case filter := <-f.headerFilter:
+			// Headers arrived, extract any explicit fetches, return all else
+			var task *headerFilterTask
+			select {
+			case task = <-filter:
+			case <-f.quit:
+				return
+			}
+
+			explicit, download := []*announce{}, []*types.Header{}
+			for _, header := range task.headers {
+				hash := header.Hash()
+
+				// Filter explicitly requested headers from hash announcements
+				if announce := f.fetching[hash]; announce != nil && f.fetched[hash] == nil && f.completing[hash] == nil && f.queued[hash] == nil {
+					// Discard if already imported by other means
+					if f.getBlock(hash) == nil {
+						announce.header = header
+						announce.time = task.time
+						explicit = append(explicit, announce)
+					} else {
+						f.forgetHash(hash)
+					}
+				} else {
+					download = append(download, header)
+				}
+			}
+
+			select {
+			case filter <- &headerFilterTask{headers: download, time: task.time}:
+			case <-f.quit:
+				return
+			}
+			// Schedule the retrieved headers for body completion
+			for _, announce := range explicit {
+				hash := announce.header.Hash()
+				if _, ok := f.completing[hash]; ok {
+					continue
+				}
+				f.fetched[hash] = append(f.fetched[hash], announce)
+				if len(f.fetched) == 1 {
+					f.rescheduleComplete(complete)
+				}
 			}
 
 		case op := <-f.inject:
@@ -292,7 +446,7 @@ func (f *Fetcher) loop() {
 					}
 				}
 			}
-			// Send out all block requests
+			// Send out all block (eth/61) or header (eth/62) requests
 			for peer, hashes := range request {
 				if glog.V(logger.Detail) && len(hashes) > 0 {
 					list := "["
@@ -301,21 +455,65 @@ func (f *Fetcher) loop() {
 					}
 					list = list[:len(list)-2] + "]"
 
-					glog.V(logger.Detail).Infof("Peer %s: fetching %s", peer, list)
+					if f.fetching[hashes[0]].fetch61 != nil {
+						glog.V(logger.Detail).Infof("[eth/61] Peer %s: fetching blocks %s", peer, list)
+					} else {
+						glog.V(logger.Detail).Infof("[eth/62] Peer %s: fetching headers %s", peer, list)
+					}
 				}
 				// Create a closure of the fetch and schedule in on a new thread
-				fetcher, hashes := f.fetching[hashes[0]].fetch, hashes
+				fetchBlocks, fetchHeader, hashes := f.fetching[hashes[0]].fetch61, f.fetching[hashes[0]].fetchHeader, hashes
 				go func() {
 					if f.fetchingHook != nil {
 						f.fetchingHook(hashes)
 					}
-					fetcher(hashes)
+					if fetchBlocks != nil {
+						// Use old eth/61 protocol to retrieve whole blocks
+						fetchBlocks(hashes)
+					} else {
+						// Use new eth/62 protocol to retrieve headers first
+						for _, hash := range hashes {
+							fetchHeader(hash) // Suboptimal, but protocol doesn't allow batch header retrievals
+						}
+					}
 				}()
 			}
 			// Schedule the next fetch if blocks are still pending
-			f.reschedule(fetch)
+			f.rescheduleFetch(fetch)
 
-		case filter := <-f.filter:
+		case <-complete.C:
+			// At least one header's timer ran out, retrieve everything
+			request := make(map[string][]common.Hash)
+
+			for hash, announces := range f.fetched {
+				// Pick a random peer to retrieve from, reset all others
+				announce := announces[rand.Intn(len(announces))]
+				f.forgetHash(hash)
+
+				// If the block still didn't arrive, queue for completion
+				if f.getBlock(hash) == nil {
+					request[announce.origin] = append(request[announce.origin], hash)
+					f.completing[hash] = announce
+				}
+			}
+			// Send out all block body requests
+			for peer, hashes := range request {
+				if glog.V(logger.Detail) && len(hashes) > 0 {
+					list := "["
+					for _, hash := range hashes {
+						list += fmt.Sprintf("%x, ", hash[:4])
+					}
+					list = list[:len(list)-2] + "]"
+
+					glog.V(logger.Detail).Infof("[eth/62] Peer %s: fetching bodies %s", peer, list)
+				}
+				// Create a closure of the fetch and schedule in on a new thread
+				go f.completing[hashes[0]].fetchBodies(hashes)
+			}
+			// Schedule the next fetch if blocks are still pending
+			f.rescheduleComplete(complete)
+
+		case filter := <-f.blockFilter:
 			// Blocks arrived, extract any explicit fetches, return all else
 			var blocks types.Blocks
 			select {
@@ -352,12 +550,61 @@ func (f *Fetcher) loop() {
 					f.enqueue(announce.origin, block)
 				}
 			}
+
+		case filter := <-f.bodyFilter:
+			// Block bodies arrived, extract any explicit completions, return all else
+			var bodies []*body
+			select {
+			case bodies = <-filter:
+			case <-f.quit:
+				return
+			}
+
+			explicit, download := []*types.Block{}, []*body{}
+			for _, body := range bodies {
+				// Match up a body to any possible completion request
+				matched := false
+
+				for hash, announce := range f.completing {
+					if f.queued[hash] == nil {
+						txnHash := types.DeriveSha(types.Transactions(body.transactions))
+						uncleHash := types.CalcUncleHash(body.uncles)
+
+						if txnHash == announce.header.TxHash && uncleHash == announce.header.UncleHash {
+							// Mark the body matched, reassemble if still unknown
+							matched = true
+
+							if f.getBlock(hash) == nil {
+								explicit = append(explicit, types.NewBlockWithHeader(announce.header).WithBody(body.transactions, body.uncles))
+							} else {
+								f.forgetHash(hash)
+							}
+						}
+					}
+				}
+				if !matched {
+					download = append(download, body)
+					continue
+				}
+			}
+
+			select {
+			case filter <- download:
+			case <-f.quit:
+				return
+			}
+			// Schedule the retrieved blocks for ordered import
+			for _, block := range explicit {
+				if announce := f.completing[block.Hash()]; announce != nil {
+					f.enqueue(announce.origin, block)
+				}
+			}
 		}
 	}
 }
 
-// reschedule resets the specified fetch timer to the next announce timeout.
-func (f *Fetcher) reschedule(fetch *time.Timer) {
+// rescheduleFetch resets the specified fetch timer to the next announce timeout.
+func (f *Fetcher) rescheduleFetch(fetch *time.Timer) {
 	// Short circuit if no blocks are announced
 	if len(f.announced) == 0 {
 		return
@@ -372,6 +619,22 @@ func (f *Fetcher) reschedule(fetch *time.Timer) {
 	fetch.Reset(arriveTimeout - time.Since(earliest))
 }
 
+// rescheduleComplete resets the specified completion timer to the next fetch timeout.
+func (f *Fetcher) rescheduleComplete(complete *time.Timer) {
+	// Short circuit if no headers are fetched
+	if len(f.fetched) == 0 {
+		return
+	}
+	// Otherwise find the earliest expiring announcement
+	earliest := time.Now()
+	for _, announces := range f.fetched {
+		if earliest.After(announces[0].time) {
+			earliest = announces[0].time
+		}
+	}
+	complete.Reset(gatherSlack - time.Since(earliest))
+}
+
 // enqueue schedules a new future import operation, if the block to be imported
 // has not yet been seen.
 func (f *Fetcher) enqueue(peer string, block *types.Block) {
@@ -381,12 +644,14 @@ func (f *Fetcher) enqueue(peer string, block *types.Block) {
 	count := f.queues[peer] + 1
 	if count > blockLimit {
 		glog.V(logger.Debug).Infof("Peer %s: discarded block #%d [%x], exceeded allowance (%d)", peer, block.NumberU64(), hash.Bytes()[:4], blockLimit)
+		f.forgetHash(hash)
 		return
 	}
 	// Discard any past or too distant blocks
 	if dist := int64(block.NumberU64()) - int64(f.chainHeight()); dist < -maxUncleDist || dist > maxQueueDist {
 		glog.V(logger.Debug).Infof("Peer %s: discarded block #%d [%x], distance %d", peer, block.NumberU64(), hash.Bytes()[:4], dist)
 		discardMeter.Mark(1)
+		f.forgetHash(hash)
 		return
 	}
 	// Schedule the block for future importing
@@ -419,6 +684,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 		// If the parent's unknown, abort insertion
 		parent := f.getBlock(block.ParentHash())
 		if parent == nil {
+			glog.V(logger.Debug).Infof("Peer %s: parent []%x] of block #%d [%x] unknown", block.ParentHash().Bytes()[:4], peer, block.NumberU64(), hash[:4])
 			return
 		}
 		// Quickly validate the header and propagate the block if it passes
@@ -474,9 +740,27 @@ func (f *Fetcher) forgetHash(hash common.Hash) {
 		}
 		delete(f.fetching, hash)
 	}
+
+	// Remove any pending completion requests and decrement the DOS counters
+	for _, announce := range f.fetched[hash] {
+		f.announces[announce.origin]--
+		if f.announces[announce.origin] == 0 {
+			delete(f.announces, announce.origin)
+		}
+	}
+	delete(f.fetched, hash)
+
+	// Remove any pending completions and decrement the DOS counters
+	if announce := f.completing[hash]; announce != nil {
+		f.announces[announce.origin]--
+		if f.announces[announce.origin] == 0 {
+			delete(f.announces, announce.origin)
+		}
+		delete(f.completing, hash)
+	}
 }
 
-// forgetBlock removes all traces of a queued block frmo the fetcher's internal
+// forgetBlock removes all traces of a queued block from the fetcher's internal
 // state.
 func (f *Fetcher) forgetBlock(hash common.Hash) {
 	if insert := f.queued[hash]; insert != nil {

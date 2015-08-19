@@ -334,7 +334,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			block.ReceivedAt = msg.ReceivedAt
 		}
 		// Filter out any explicitly requested blocks, deliver the rest to the downloader
-		if blocks := pm.fetcher.Filter(blocks); len(blocks) > 0 {
+		if blocks := pm.fetcher.FilterBlocks(blocks); len(blocks) > 0 {
 			pm.downloader.DeliverBlocks61(p.id, blocks)
 		}
 
@@ -409,10 +409,16 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&headers); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		// Deliver them all to the downloader for queuing
-		err := pm.downloader.DeliverHeaders(p.id, headers)
-		if err != nil {
-			glog.V(logger.Debug).Infoln(err)
+		// Filter out any explicitly requested headers, deliver the rest to the downloader
+		filter := len(headers) == 1
+		if filter {
+			headers = pm.fetcher.FilterHeaders(headers, time.Now())
+		}
+		if len(headers) > 0 || !filter {
+			err := pm.downloader.DeliverHeaders(p.id, headers)
+			if err != nil {
+				glog.V(logger.Debug).Infoln(err)
+			}
 		}
 
 	case p.version >= eth62 && msg.Code == BlockBodiesMsg:
@@ -429,9 +435,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			trasactions[i] = body.Transactions
 			uncles[i] = body.Uncles
 		}
-		err := pm.downloader.DeliverBodies(p.id, trasactions, uncles)
-		if err != nil {
-			glog.V(logger.Debug).Infoln(err)
+		// Filter out any explicitly requested bodies, deliver the rest to the downloader
+		if trasactions, uncles := pm.fetcher.FilterBodies(trasactions, uncles); len(trasactions) > 0 || len(uncles) > 0 {
+			err := pm.downloader.DeliverBodies(p.id, trasactions, uncles)
+			if err != nil {
+				glog.V(logger.Debug).Infoln(err)
+			}
 		}
 
 	case p.version >= eth62 && msg.Code == GetBlockBodiesMsg:
@@ -555,7 +564,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 		}
 		for _, block := range unknown {
-			pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), p.RequestBlocks)
+			if p.version < eth62 {
+				pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), p.RequestBlocks, nil, nil)
+			} else {
+				pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), nil, p.RequestOneHeader, p.RequestBodies)
+			}
 		}
 
 	case msg.Code == NewBlockMsg:
@@ -584,10 +597,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		pm.fetcher.Enqueue(p.id, request.Block)
 
-		// TODO: Schedule a sync to cover potential gaps (this needs proto update)
+		// Update the peers total difficulty if needed, schedule a download if gapped
 		if request.TD.Cmp(p.Td()) > 0 {
 			p.SetTd(request.TD)
-			go pm.synchronise(p)
+			if request.TD.Cmp(new(big.Int).Add(pm.chainman.Td(), request.Block.Difficulty())) > 0 {
+				go pm.synchronise(p)
+			}
 		}
 
 	case msg.Code == TxMsg:
