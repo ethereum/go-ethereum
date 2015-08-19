@@ -48,6 +48,10 @@ type Node struct {
 	// In those tests, the content of sha will not actually correspond
 	// with ID.
 	sha common.Hash
+
+	// whether this node is currently being pinged in order to replace
+	// it in a bucket
+	contested bool
 }
 
 func newNode(id NodeID, ip net.IP, udpPort, tcpPort uint16) *Node {
