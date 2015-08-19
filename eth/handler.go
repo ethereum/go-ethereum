@@ -436,7 +436,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			uncles[i] = body.Uncles
 		}
 		// Filter out any explicitly requested bodies, deliver the rest to the downloader
-		if trasactions, uncles := pm.fetcher.FilterBodies(trasactions, uncles); len(trasactions) > 0 || len(uncles) > 0 {
+		if trasactions, uncles := pm.fetcher.FilterBodies(trasactions, uncles, time.Now()); len(trasactions) > 0 || len(uncles) > 0 {
 			err := pm.downloader.DeliverBodies(p.id, trasactions, uncles)
 			if err != nil {
 				glog.V(logger.Debug).Infoln(err)

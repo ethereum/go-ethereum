@@ -169,7 +169,7 @@ func (f *fetcherTester) makeHeaderFetcher(blocks map[common.Hash]*types.Block, d
 }
 
 // makeBodyFetcher retrieves a block body fetcher associated with a simulated peer.
-func (f *fetcherTester) makeBodyFetcher(blocks map[common.Hash]*types.Block) bodyRequesterFn {
+func (f *fetcherTester) makeBodyFetcher(blocks map[common.Hash]*types.Block, drift time.Duration) bodyRequesterFn {
 	closure := make(map[common.Hash]*types.Block)
 	for hash, block := range blocks {
 		closure[hash] = block
@@ -187,7 +187,7 @@ func (f *fetcherTester) makeBodyFetcher(blocks map[common.Hash]*types.Block) bod
 			}
 		}
 		// Return on a new thread
-		go f.fetcher.FilterBodies(transactions, uncles)
+		go f.fetcher.FilterBodies(transactions, uncles, time.Now().Add(drift))
 
 		return nil
 	}
@@ -242,7 +242,7 @@ func testConcurrentAnnouncements(t *testing.T, protocol int) {
 	tester := newTester()
 	blockFetcher := tester.makeBlockFetcher(blocks)
 	headerFetcher := tester.makeHeaderFetcher(blocks, -gatherSlack)
-	bodyFetcher := tester.makeBodyFetcher(blocks)
+	bodyFetcher := tester.makeBodyFetcher(blocks, 0)
 
 	counter := uint32(0)
 	blockWrapper := func(hashes []common.Hash) error {
@@ -292,7 +292,7 @@ func testOverlappingAnnouncements(t *testing.T, protocol int) {
 	tester := newTester()
 	blockFetcher := tester.makeBlockFetcher(blocks)
 	headerFetcher := tester.makeHeaderFetcher(blocks, -gatherSlack)
-	bodyFetcher := tester.makeBodyFetcher(blocks)
+	bodyFetcher := tester.makeBodyFetcher(blocks, 0)
 
 	// Iteratively announce blocks, but overlap them continuously
 	fetching := make(chan []common.Hash)
@@ -330,7 +330,7 @@ func testPendingDeduplication(t *testing.T, protocol int) {
 	tester := newTester()
 	blockFetcher := tester.makeBlockFetcher(blocks)
 	headerFetcher := tester.makeHeaderFetcher(blocks, -gatherSlack)
-	bodyFetcher := tester.makeBodyFetcher(blocks)
+	bodyFetcher := tester.makeBodyFetcher(blocks, 0)
 
 	delay := 50 * time.Millisecond
 	counter := uint32(0)
@@ -390,7 +390,7 @@ func testRandomArrivalImport(t *testing.T, protocol int) {
 	tester := newTester()
 	blockFetcher := tester.makeBlockFetcher(blocks)
 	headerFetcher := tester.makeHeaderFetcher(blocks, -gatherSlack)
-	bodyFetcher := tester.makeBodyFetcher(blocks)
+	bodyFetcher := tester.makeBodyFetcher(blocks, 0)
 
 	// Iteratively announce blocks, skipping one entry
 	imported := make(chan *types.Block, len(hashes)-1)
@@ -431,7 +431,7 @@ func testQueueGapFill(t *testing.T, protocol int) {
 	tester := newTester()
 	blockFetcher := tester.makeBlockFetcher(blocks)
 	headerFetcher := tester.makeHeaderFetcher(blocks, -gatherSlack)
-	bodyFetcher := tester.makeBodyFetcher(blocks)
+	bodyFetcher := tester.makeBodyFetcher(blocks, 0)
 
 	// Iteratively announce blocks, skipping one entry
 	imported := make(chan *types.Block, len(hashes)-1)
@@ -467,7 +467,7 @@ func testImportDeduplication(t *testing.T, protocol int) {
 	tester := newTester()
 	blockFetcher := tester.makeBlockFetcher(blocks)
 	headerFetcher := tester.makeHeaderFetcher(blocks, -gatherSlack)
-	bodyFetcher := tester.makeBodyFetcher(blocks)
+	bodyFetcher := tester.makeBodyFetcher(blocks, 0)
 
 	counter := uint32(0)
 	tester.fetcher.insertChain = func(blocks types.Blocks) (int, error) {
@@ -502,11 +502,13 @@ func testImportDeduplication(t *testing.T, protocol int) {
 }
 
 // Tests that blocks with numbers much lower or higher than out current head get
-// discarded no prevent wasting resources on useless blocks from faulty peers.
-func TestDistantDiscarding(t *testing.T) {
-	// Create a long chain to import
+// discarded to prevent wasting resources on useless blocks from faulty peers.
+func TestDistantPropagationDiscarding(t *testing.T) {
+	// Create a long chain to import and define the discard boundaries
 	hashes, blocks := makeChain(3*maxQueueDist, 0, genesis)
 	head := hashes[len(hashes)/2]
+
+	low, high := len(hashes)/2+maxUncleDist+1, len(hashes)/2-maxQueueDist-1
 
 	// Create a tester and simulate a head block being the middle of the above chain
 	tester := newTester()
@@ -514,16 +516,57 @@ func TestDistantDiscarding(t *testing.T) {
 	tester.blocks = map[common.Hash]*types.Block{head: blocks[head]}
 
 	// Ensure that a block with a lower number than the threshold is discarded
-	tester.fetcher.Enqueue("lower", blocks[hashes[0]])
+	tester.fetcher.Enqueue("lower", blocks[hashes[low]])
 	time.Sleep(10 * time.Millisecond)
 	if !tester.fetcher.queue.Empty() {
 		t.Fatalf("fetcher queued stale block")
 	}
 	// Ensure that a block with a higher number than the threshold is discarded
-	tester.fetcher.Enqueue("higher", blocks[hashes[len(hashes)-1]])
+	tester.fetcher.Enqueue("higher", blocks[hashes[high]])
 	time.Sleep(10 * time.Millisecond)
 	if !tester.fetcher.queue.Empty() {
 		t.Fatalf("fetcher queued future block")
+	}
+}
+
+// Tests that announcements with numbers much lower or higher than out current
+// head get discarded to prevent wasting resources on useless blocks from faulty
+// peers.
+func TestDistantAnnouncementDiscarding62(t *testing.T) { testDistantAnnouncementDiscarding(t, 62) }
+func TestDistantAnnouncementDiscarding63(t *testing.T) { testDistantAnnouncementDiscarding(t, 63) }
+func TestDistantAnnouncementDiscarding64(t *testing.T) { testDistantAnnouncementDiscarding(t, 64) }
+
+func testDistantAnnouncementDiscarding(t *testing.T, protocol int) {
+	// Create a long chain to import and define the discard boundaries
+	hashes, blocks := makeChain(3*maxQueueDist, 0, genesis)
+	head := hashes[len(hashes)/2]
+
+	low, high := len(hashes)/2+maxUncleDist+1, len(hashes)/2-maxQueueDist-1
+
+	// Create a tester and simulate a head block being the middle of the above chain
+	tester := newTester()
+	tester.hashes = []common.Hash{head}
+	tester.blocks = map[common.Hash]*types.Block{head: blocks[head]}
+
+	headerFetcher := tester.makeHeaderFetcher(blocks, -gatherSlack)
+	bodyFetcher := tester.makeBodyFetcher(blocks, 0)
+
+	fetching := make(chan struct{}, 2)
+	tester.fetcher.fetchingHook = func(hashes []common.Hash) { fetching <- struct{}{} }
+
+	// Ensure that a block with a lower number than the threshold is discarded
+	tester.fetcher.Notify("lower", hashes[low], blocks[hashes[low]].NumberU64(), time.Now().Add(-arriveTimeout), nil, headerFetcher, bodyFetcher)
+	select {
+	case <-time.After(50 * time.Millisecond):
+	case <-fetching:
+		t.Fatalf("fetcher requested stale header")
+	}
+	// Ensure that a block with a higher number than the threshold is discarded
+	tester.fetcher.Notify("higher", hashes[high], blocks[hashes[high]].NumberU64(), time.Now().Add(-arriveTimeout), nil, headerFetcher, bodyFetcher)
+	select {
+	case <-time.After(50 * time.Millisecond):
+	case <-fetching:
+		t.Fatalf("fetcher requested future header")
 	}
 }
 
@@ -547,12 +590,12 @@ func testHashMemoryExhaustionAttack(t *testing.T, protocol int) {
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 	validBlockFetcher := tester.makeBlockFetcher(blocks)
 	validHeaderFetcher := tester.makeHeaderFetcher(blocks, -gatherSlack)
-	validBodyFetcher := tester.makeBodyFetcher(blocks)
+	validBodyFetcher := tester.makeBodyFetcher(blocks, 0)
 
 	attack, _ := makeChain(targetBlocks, 0, unknownBlock)
 	attackerBlockFetcher := tester.makeBlockFetcher(nil)
 	attackerHeaderFetcher := tester.makeHeaderFetcher(nil, -gatherSlack)
-	attackerBodyFetcher := tester.makeBodyFetcher(nil)
+	attackerBodyFetcher := tester.makeBodyFetcher(nil, 0)
 
 	// Feed the tester a huge hashset from the attacker, and a limited from the valid peer
 	for i := 0; i < len(attack); i++ {
@@ -566,7 +609,7 @@ func testHashMemoryExhaustionAttack(t *testing.T, protocol int) {
 		if protocol < 62 {
 			tester.fetcher.Notify("attacker", attack[i], 0, time.Now(), attackerBlockFetcher, nil, nil)
 		} else {
-			tester.fetcher.Notify("attacker", attack[i], uint64(i+1), time.Now(), nil, attackerHeaderFetcher, attackerBodyFetcher)
+			tester.fetcher.Notify("attacker", attack[i], 1 /* don't distance drop */, time.Now(), nil, attackerHeaderFetcher, attackerBodyFetcher)
 		}
 	}
 	if len(tester.fetcher.announced) != hashLimit+maxQueueDist {
@@ -580,7 +623,7 @@ func testHashMemoryExhaustionAttack(t *testing.T, protocol int) {
 		if protocol < 62 {
 			tester.fetcher.Notify("valid", hashes[i], 0, time.Now().Add(-arriveTimeout), validBlockFetcher, nil, nil)
 		} else {
-			tester.fetcher.Notify("valid", hashes[i], uint64(i+1), time.Now().Add(-arriveTimeout), nil, validHeaderFetcher, validBodyFetcher)
+			tester.fetcher.Notify("valid", hashes[i], uint64(len(hashes)-i-1), time.Now().Add(-arriveTimeout), nil, validHeaderFetcher, validBodyFetcher)
 		}
 		verifyImportEvent(t, imported)
 	}

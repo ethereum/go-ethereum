@@ -93,10 +93,12 @@ type headerFilterTask struct {
 	time    time.Time       // Arrival time of the headers
 }
 
-// body represents the data contents (transactions and uncles) of a block.
-type body struct {
-	transactions []*types.Transaction
-	uncles       []*types.Header
+// headerFilterTask represents a batch of block bodies (transactions and uncles)
+// needing fetcher filtering.
+type bodyFilterTask struct {
+	transactions [][]*types.Transaction // Collection of transactions per block bodies
+	uncles       [][]*types.Header      // Collection of uncles per block bodies
+	time         time.Time              // Arrival time of the blocks' contents
 }
 
 // inject represents a schedules import operation.
@@ -114,7 +116,7 @@ type Fetcher struct {
 
 	blockFilter  chan chan []*types.Block
 	headerFilter chan chan *headerFilterTask
-	bodyFilter   chan chan []*body
+	bodyFilter   chan chan *bodyFilterTask
 
 	done chan common.Hash
 	quit chan struct{}
@@ -151,7 +153,7 @@ func New(getBlock blockRetrievalFn, validateBlock blockValidatorFn, broadcastBlo
 		inject:         make(chan *inject),
 		blockFilter:    make(chan chan []*types.Block),
 		headerFilter:   make(chan chan *headerFilterTask),
-		bodyFilter:     make(chan chan []*body),
+		bodyFilter:     make(chan chan *bodyFilterTask),
 		done:           make(chan common.Hash),
 		quit:           make(chan struct{}),
 		announces:      make(map[string]int),
@@ -277,16 +279,11 @@ func (f *Fetcher) FilterHeaders(headers []*types.Header, time time.Time) []*type
 
 // FilterBodies extracts all the block bodies that were explicitly requested by
 // the fetcher, returning those that should be handled differently.
-func (f *Fetcher) FilterBodies(transactions [][]*types.Transaction, uncles [][]*types.Header) ([][]*types.Transaction, [][]*types.Header) {
+func (f *Fetcher) FilterBodies(transactions [][]*types.Transaction, uncles [][]*types.Header, time time.Time) ([][]*types.Transaction, [][]*types.Header) {
 	glog.V(logger.Detail).Infof("[eth/62] filtering %d:%d bodies", len(transactions), len(uncles))
 
-	// Assemble the body contents into a single data struct
-	bodies := make([]*body, 0, len(transactions))
-	for i := 0; i < len(transactions) && i < len(uncles); i++ {
-		bodies = append(bodies, &body{transactions[i], uncles[i]})
-	}
 	// Send the filter channel to the fetcher
-	filter := make(chan []*body)
+	filter := make(chan *bodyFilterTask)
 
 	select {
 	case f.bodyFilter <- filter:
@@ -295,19 +292,14 @@ func (f *Fetcher) FilterBodies(transactions [][]*types.Transaction, uncles [][]*
 	}
 	// Request the filtering of the body list
 	select {
-	case filter <- bodies:
+	case filter <- &bodyFilterTask{transactions: transactions, uncles: uncles, time: time}:
 	case <-f.quit:
 		return nil, nil
 	}
 	// Retrieve the bodies remaining after filtering
 	select {
-	case bodies := <-filter:
-		transactions, uncles = transactions[:0], uncles[:0]
-		for _, body := range bodies {
-			transactions = append(transactions, body.transactions)
-			uncles = append(uncles, body.uncles)
-		}
-		return transactions, uncles
+	case task := <-filter:
+		return task.transactions, task.uncles
 	case <-f.quit:
 		return nil, nil
 	}
@@ -360,6 +352,14 @@ func (f *Fetcher) loop() {
 			if count > hashLimit {
 				glog.V(logger.Debug).Infof("Peer %s: exceeded outstanding announces (%d)", notification.origin, hashLimit)
 				break
+			}
+			// If we have a valid block number, check that it's potentially useful
+			if notification.number > 0 {
+				if dist := int64(notification.number) - int64(f.chainHeight()); dist < -maxUncleDist || dist > maxQueueDist {
+					glog.V(logger.Debug).Infof("[eth/62] Peer %s: discarded announcement #%d [%x], distance %d", notification.origin, notification.number, notification.hash[:4], dist)
+					discardMeter.Mark(1)
+					break
+				}
 			}
 			// All is well, schedule the announce if block's not yet downloading
 			if _, ok := f.fetching[notification.hash]; ok {
@@ -552,49 +552,51 @@ func (f *Fetcher) loop() {
 			}
 
 		case filter := <-f.bodyFilter:
-			// Block bodies arrived, extract any explicit completions, return all else
-			var bodies []*body
+			// Block bodies arrived, extract any explicitly requested blocks, return the rest
+			var task *bodyFilterTask
 			select {
-			case bodies = <-filter:
+			case task = <-filter:
 			case <-f.quit:
 				return
 			}
 
-			explicit, download := []*types.Block{}, []*body{}
-			for _, body := range bodies {
+			blocks := []*types.Block{}
+			for i := 0; i < len(task.transactions) && i < len(task.uncles); i++ {
 				// Match up a body to any possible completion request
 				matched := false
 
 				for hash, announce := range f.completing {
 					if f.queued[hash] == nil {
-						txnHash := types.DeriveSha(types.Transactions(body.transactions))
-						uncleHash := types.CalcUncleHash(body.uncles)
+						txnHash := types.DeriveSha(types.Transactions(task.transactions[i]))
+						uncleHash := types.CalcUncleHash(task.uncles[i])
 
 						if txnHash == announce.header.TxHash && uncleHash == announce.header.UncleHash {
 							// Mark the body matched, reassemble if still unknown
 							matched = true
 
 							if f.getBlock(hash) == nil {
-								explicit = append(explicit, types.NewBlockWithHeader(announce.header).WithBody(body.transactions, body.uncles))
+								blocks = append(blocks, types.NewBlockWithHeader(announce.header).WithBody(task.transactions[i], task.uncles[i]))
 							} else {
 								f.forgetHash(hash)
 							}
 						}
 					}
 				}
-				if !matched {
-					download = append(download, body)
+				if matched {
+					task.transactions = append(task.transactions[:i], task.transactions[i+1:]...)
+					task.uncles = append(task.uncles[:i], task.uncles[i+1:]...)
+					i--
 					continue
 				}
 			}
 
 			select {
-			case filter <- download:
+			case filter <- task:
 			case <-f.quit:
 				return
 			}
 			// Schedule the retrieved blocks for ordered import
-			for _, block := range explicit {
+			for _, block := range blocks {
 				if announce := f.completing[block.Hash()]; announce != nil {
 					f.enqueue(announce.origin, block)
 				}
