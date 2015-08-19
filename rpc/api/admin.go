@@ -285,7 +285,7 @@ func (self *adminApi) SleepBlocks(req *shared.Request) (interface{}, error) {
 		timer = time.NewTimer(time.Duration(args.Timeout) * time.Second).C
 	}
 
-	height = new(big.Int).Add(self.xeth.CurrentBlock().Number(), big.NewInt(args.N))
+	height = new(big.Int).Add(self.xeth.CurrentHeader().Number, big.NewInt(args.N))
 	height, err = sleepBlocks(self.xeth.UpdateState(), height, timer)
 	if err != nil {
 		return nil, err

@@ -21,13 +21,14 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 func newEmptySecure() *SecureTrie {
 	db, _ := ethdb.NewMemDatabase()
-	trie, _ := NewSecure(common.Hash{}, db)
+	trie, _ := NewSecure(common.Hash{}, db, nil)
 	return trie
 }
 
@@ -45,9 +46,9 @@ func TestSecureDelete(t *testing.T) {
 	}
 	for _, val := range vals {
 		if val.v != "" {
-			trie.Update([]byte(val.k), []byte(val.v))
+			trie.Update([]byte(val.k), []byte(val.v), access.NoOdr)
 		} else {
-			trie.Delete([]byte(val.k))
+			trie.Delete([]byte(val.k), access.NoOdr)
 		}
 	}
 	hash := trie.Hash()
@@ -59,13 +60,13 @@ func TestSecureDelete(t *testing.T) {
 
 func TestSecureGetKey(t *testing.T) {
 	trie := newEmptySecure()
-	trie.Update([]byte("foo"), []byte("bar"))
+	trie.Update([]byte("foo"), []byte("bar"), access.NoOdr)
 
 	key := []byte("foo")
 	value := []byte("bar")
 	seckey := crypto.Sha3(key)
 
-	if !bytes.Equal(trie.Get(key), value) {
+	if !bytes.Equal(trie.Get(key, access.NoOdr), value) {
 		t.Errorf("Get did not return bar")
 	}
 	if k := trie.GetKey(seckey); !bytes.Equal(k, key) {

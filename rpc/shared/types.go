@@ -19,6 +19,7 @@ package shared
 import (
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
@@ -44,6 +45,7 @@ type Request struct {
 	Jsonrpc string          `json:"jsonrpc"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params"`
+	ctx 	*access.OdrContext
 }
 
 // RPC response
@@ -71,6 +73,14 @@ type ErrorObject struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	// Data    interface{} `json:"data"`
+}
+
+func (req *Request) GetCtx() *access.OdrContext {
+	return req.ctx
+}
+
+func (req *Request) SetCtx(ctx *access.OdrContext) {
+	req.ctx = ctx
 }
 
 // Create RPC error response, this allows for custom error codes

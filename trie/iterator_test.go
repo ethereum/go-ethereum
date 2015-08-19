@@ -16,7 +16,11 @@
 
 package trie
 
-import "testing"
+import (
+	"testing"
+	
+	"github.com/ethereum/go-ethereum/core/access"
+)
 
 func TestIterator(t *testing.T) {
 	trie := newEmpty()
@@ -32,7 +36,7 @@ func TestIterator(t *testing.T) {
 	v := make(map[string]bool)
 	for _, val := range vals {
 		v[val.k] = false
-		trie.Update([]byte(val.k), []byte(val.v))
+		trie.Update([]byte(val.k), []byte(val.v), access.NoOdr)
 	}
 	trie.Commit()
 

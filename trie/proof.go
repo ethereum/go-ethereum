@@ -6,9 +6,12 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+type MerkleProof []rlp.RawValue
 
 // Prove constructs a merkle proof for key. The result contains all
 // encoded nodes on the path to the value at key. The value itself is
@@ -17,29 +20,28 @@ import (
 //
 // The returned proof is nil if the trie does not contain a value for key.
 // For existing keys, the proof will have at least one element.
-func (t *Trie) Prove(key []byte) []rlp.RawValue {
+func (t *Trie) Prove(key []byte) MerkleProof {
 	// Collect all nodes on the path to key.
 	key = compactHexDecode(key)
 	nodes := []node{}
 	tn := t.root
-	for len(key) > 0 {
+	for len(key) > 0 && tn != nil {
 		switch n := tn.(type) {
 		case shortNode:
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
 				// The trie doesn't contain the key.
-				return nil
+				tn = nil
+			} else {
+				tn = n.Val
 			}
-			tn = n.Val
 			key = key[len(n.Key):]
 			nodes = append(nodes, n)
 		case fullNode:
 			tn = n[key[0]]
 			key = key[1:]
 			nodes = append(nodes, n)
-		case nil:
-			return nil
 		case hashNode:
-			tn = t.resolveHash(n)
+			tn = t.resolveHash(n, nil, nil, access.NoOdr)
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
@@ -67,7 +69,7 @@ func (t *Trie) Prove(key []byte) []rlp.RawValue {
 // value for key in a trie with the given root hash. VerifyProof
 // returns an error if the proof contains invalid trie nodes or the
 // wrong value.
-func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value []byte, err error) {
+func VerifyProof(rootHash common.Hash, key []byte, proof MerkleProof) (value []byte, err error) {
 	key = compactHexDecode(key)
 	sha := sha3.NewKeccak256()
 	wantHash := rootHash.Bytes()
@@ -84,7 +86,12 @@ func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value 
 		keyrest, cld := get(n, key)
 		switch cld := cld.(type) {
 		case nil:
-			return nil, fmt.Errorf("key mismatch at proof node %d", i)
+			if i != len(proof)-1 {
+				return nil, fmt.Errorf("key mismatch at proof node %d", i)
+			} else {
+				// The trie doesn't contain the key.
+				return nil, nil
+			}
 		case hashNode:
 			key = keyrest
 			wantHash = cld
@@ -96,6 +103,19 @@ func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value 
 		}
 	}
 	return nil, errors.New("unexpected end of proof")
+}
+
+func StoreProof(db Database, proof MerkleProof) {
+	sha := sha3.NewKeccak256()
+	for _, buf := range proof {
+		sha.Reset()
+		sha.Write(buf)
+		hash := sha.Sum(nil)
+		val, _ := db.Get(hash)
+		if val == nil {
+			db.Put(hash, buf)
+		}
+	}
 }
 
 func get(tn node, key []byte) ([]byte, node) {

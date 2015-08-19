@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -32,6 +33,7 @@ type AccountChange struct {
 
 // Filtering interface
 type Filter struct {
+	ca       *access.ChainAccess
 	db         ethdb.Database
 	begin, end int64
 	addresses  []common.Address
@@ -44,8 +46,12 @@ type Filter struct {
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
 // is interesting or not.
-func New(db ethdb.Database) *Filter {
-	return &Filter{db: db}
+func New(ca *access.ChainAccess) *Filter {
+	return &Filter{ca: ca, db: ca.Db()}
+}
+
+func NewWithDb(db ethdb.Database) *Filter {
+	return &Filter{ca: access.NewDbChainAccess(db), db: db}
 }
 
 // Set the earliest and latest block for filtering.
@@ -69,7 +75,7 @@ func (self *Filter) SetTopics(topics [][]common.Hash) {
 
 // Run filters logs with the current parameters set
 func (self *Filter) Find() vm.Logs {
-	latestBlock := core.GetBlock(self.db, core.GetHeadBlockHash(self.db))
+	latestBlock := core.GetBlock(self.ca, core.GetHeadBlockHash(self.db), access.NoOdr)
 	var beginBlockNo uint64 = uint64(self.begin)
 	if self.begin == -1 {
 		beginBlockNo = latestBlock.NumberU64()
@@ -124,7 +130,7 @@ func (self *Filter) getLogs(start, end uint64) (logs vm.Logs) {
 	for i := start; i <= end; i++ {
 		hash := core.GetCanonicalHash(self.db, i)
 		if hash != (common.Hash{}) {
-			block = core.GetBlock(self.db, hash)
+			block = core.GetBlock(self.ca, hash, access.NoOdr)
 		} else { // block not found
 			return logs
 		}
@@ -134,7 +140,7 @@ func (self *Filter) getLogs(start, end uint64) (logs vm.Logs) {
 		if self.bloomFilter(block) {
 			// Get the logs of the block
 			var (
-				receipts   = core.GetBlockReceipts(self.db, block.Hash())
+				receipts   = core.GetBlockReceipts(self.ca, block.Hash(), access.NoOdr)
 				unfiltered vm.Logs
 			)
 			for _, receipt := range receipts {
@@ -142,6 +148,7 @@ func (self *Filter) getLogs(start, end uint64) (logs vm.Logs) {
 			}
 			logs = append(logs, self.FilterLogs(unfiltered)...)
 		}
+		block = core.GetBlock(self.ca, block.ParentHash(), access.NoOdr)
 	}
 
 	return logs

@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -150,7 +151,7 @@ func newTester() *downloadTester {
 		peerChainTds: make(map[string]map[common.Hash]*big.Int),
 	}
 	tester.stateDb, _ = ethdb.NewMemDatabase()
-	tester.downloader = New(tester.stateDb, new(event.TypeMux), tester.hasHeader, tester.hasBlock, tester.getHeader,
+	tester.downloader = New(FullSync, tester.stateDb, new(event.TypeMux), tester.hasHeader, tester.hasBlock, tester.getHeader,
 		tester.getBlock, tester.headHeader, tester.headBlock, tester.headFastBlock, tester.commitHeadBlock, tester.getTd,
 		tester.insertHeaders, tester.insertBlocks, tester.insertReceipts, tester.rollback, tester.dropPeer)
 
@@ -253,7 +254,7 @@ func (dl *downloadTester) headFastBlock() *types.Block {
 func (dl *downloadTester) commitHeadBlock(hash common.Hash) error {
 	// For now only check that the state trie is correct
 	if block := dl.getBlock(hash); block != nil {
-		_, err := trie.NewSecure(block.Root(), dl.stateDb)
+		_, err := trie.NewSecure(block.Root(), dl.stateDb, nil)
 		return err
 	}
 	return fmt.Errorf("non existent block: %x", hash[:4])
@@ -682,7 +683,7 @@ func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, leng
 			index = len(tester.ownHashes) - lengths[len(lengths)-1] + int(tester.downloader.queue.fastSyncPivot)
 		}
 		if index > 0 {
-			if statedb, err := state.New(tester.ownHeaders[tester.ownHashes[index]].Root, tester.stateDb); statedb == nil || err != nil {
+			if statedb, err := state.New(tester.ownHeaders[tester.ownHashes[index]].Root, access.NewDbChainAccess(tester.stateDb), access.NullCtx); statedb == nil || err != nil {
 				t.Fatalf("state reconstruction failed: %v", err)
 			}
 		}

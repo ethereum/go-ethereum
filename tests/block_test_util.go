@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -203,7 +204,7 @@ func runBlockTest(test *BlockTest) error {
 		return fmt.Errorf("lastblockhash validation mismatch: want: %x, have: %x", lastblockhash, cmlast)
 	}
 
-	newDB, err := cm.State()
+	newDB, err := cm.State(access.NullCtx)
 	if err != nil {
 		return err
 	}
@@ -217,7 +218,7 @@ func runBlockTest(test *BlockTest) error {
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
 func (t *BlockTest) InsertPreState(db ethdb.Database, am *accounts.Manager) (*state.StateDB, error) {
-	statedb, err := state.New(common.Hash{}, db)
+	statedb, err := state.New(common.Hash{}, access.NewDbChainAccess(db), access.NullCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +442,7 @@ func (test *BlockTest) ValidateImportedHeaders(cm *core.BlockChain, validBlocks 
 	// block-by-block, so we can only validate imported headers after
 	// all blocks have been processed by ChainManager, as they may not
 	// be part of the longest chain until last block is imported.
-	for b := cm.CurrentBlock(); b != nil && b.NumberU64() != 0; b = cm.GetBlock(b.Header().ParentHash) {
+	for b := cm.CurrentBlock(); b != nil && b.NumberU64() != 0; b = cm.GetBlock(b.Header().ParentHash, access.NoOdr) {
 		bHash := common.Bytes2Hex(b.Hash().Bytes()) // hex without 0x prefix
 		if err := validateHeader(bmap[bHash].BlockHeader, b.Header()); err != nil {
 			return fmt.Errorf("Imported block header validation failed: %v", err)

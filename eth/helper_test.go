@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -28,21 +29,22 @@ var (
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, and potential notification
 // channels for different events.
-func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) (*ProtocolManager, error) {
+func newTestProtocolManager(mode Mode, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) (*ProtocolManager, error) {
 	var (
 		evmux         = new(event.TypeMux)
 		pow           = new(core.FakePow)
 		db, _         = ethdb.NewMemDatabase()
+		ca            = access.NewDbChainAccess(db)
 		genesis       = core.WriteGenesisBlockForTesting(db, core.GenesisAccount{testBankAddress, testBankFunds})
-		blockchain, _ = core.NewBlockChain(db, pow, evmux)
-		blockproc     = core.NewBlockProcessor(db, pow, blockchain, evmux)
+		blockchain, _ = core.NewBlockChain(ca, pow, evmux)
+		blockproc     = core.NewBlockProcessor(ca, pow, blockchain, evmux)
 	)
 	blockchain.SetProcessor(blockproc)
 	chain, _ := core.GenerateChain(genesis, db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
 	}
-	pm, err := NewProtocolManager(fastSync, NetworkId, evmux, &testTxPool{added: newtx}, pow, blockchain, db)
+	pm, err := NewProtocolManager(mode, NetworkId, evmux, &testTxPool{added: newtx}, pow, blockchain, ca)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +57,11 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 // channels for different events. In case of an error, the constructor force-
 // fails the test.
 func newTestProtocolManagerMust(t *testing.T, fastSync bool, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) *ProtocolManager {
-	pm, err := newTestProtocolManager(fastSync, blocks, generator, newtx)
+	mode := ArchiveMode
+	if fastSync {
+		mode = FullMode
+	}
+	pm, err := newTestProtocolManager(mode, blocks, generator, newtx)
 	if err != nil {
 		t.Fatalf("Failed to create protocol manager: %v", err)
 	}

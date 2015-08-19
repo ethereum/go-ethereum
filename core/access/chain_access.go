@@ -1,0 +1,183 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+// Package access provides a layer to handle local blockchain database and
+// on-demand network retrieval
+package access
+
+import (
+	"errors"
+	"sync"
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
+)
+
+var (
+	ErrCancel = errors.New("ODR cancelled")
+	errNotInDb    = errors.New("object not found in database")
+)
+
+const LogLevel = logger.Info
+
+var (
+	requestTimeout = time.Millisecond * 300
+	retryPeers = time.Second * 1
+)
+
+type ChainAccess struct {
+	db          ethdb.Database
+	odr         bool // light client mode, odr enabled
+	lock        sync.Mutex
+	valFunc     validatorFunc
+	deliverChan chan *Msg
+	peers       *peerSet
+
+	// p2p access objects
+	// parameters (light/full/archive)
+}
+
+func NewDbChainAccess(db ethdb.Database) *ChainAccess {
+	return NewChainAccess(db, false)
+}
+
+func NewChainAccess(db ethdb.Database, odr bool) *ChainAccess {
+	return &ChainAccess{db: db, peers: newPeerSet(), odr: odr}
+}
+
+func (self *ChainAccess) Db() ethdb.Database {
+	return self.db
+}
+
+func (self *ChainAccess) OdrEnabled() bool {
+	return self.odr
+}
+
+func (self *ChainAccess) RegisterPeer(id string, version int, head common.Hash, getBlockBodies getBlockBodiesFn, getNodeData getNodeDataFn, getReceipts getReceiptsFn, getProofs getProofsFn) error {
+	glog.V(logger.Detail).Infoln("Registering peer", id)
+	if err := self.peers.Register(newPeer(id, version, head, getBlockBodies, getNodeData, getReceipts, getProofs)); err != nil {
+		glog.V(logger.Error).Infoln("Register failed:", err)
+		return err
+	}
+	return nil
+}
+
+func (self *ChainAccess) UnregisterPeer(id string) {
+	self.peers.Unregister(id)
+}
+
+const (
+	MsgBlockBodies = iota
+	MsgNodeData
+	MsgReceipts
+	MsgProofs
+)
+
+type Msg struct {
+	MsgType int
+	Obj     interface{}
+}
+
+type ObjectAccess interface {
+	// database storage
+	DbGet() bool
+	DbPut()
+	// network retrieval
+	Request(*Peer) error
+	Valid(*Msg) bool // if true, keeps the retrieved object
+}
+
+type requestFunc func(*Peer) error
+type validatorFunc func(*Msg) bool
+
+func (self *ChainAccess) Deliver(id string, msg *Msg) (processed bool) {
+	self.lock.Lock()
+	valFunc := self.valFunc
+	chn := self.deliverChan
+	self.lock.Unlock()
+	if (valFunc != nil) && (chn != nil) && valFunc(msg) {
+		chn <- msg
+		return true
+	}
+	return false
+}
+
+func (self *ChainAccess) networkRequest(rqFunc requestFunc, valFunc validatorFunc, ctx *OdrContext) (*Msg, error) {
+
+	self.lock.Lock()
+	self.deliverChan = make(chan *Msg)
+	self.valFunc = valFunc
+	self.lock.Unlock()
+
+	defer func() {
+		self.lock.Lock()
+		self.deliverChan = nil
+		self.valFunc = nil
+		self.lock.Unlock()
+	}()
+
+	//fmt.Println("networkRequest")
+
+	var msg *Msg
+
+	for {
+	peers := self.peers.BestPeers()
+	if len(peers) == 0 {
+		select {
+		case <-ctx.cancelOrTimeout:
+			return nil, ErrCancel
+		case <-time.After(retryPeers):
+		}
+	}
+	for _, peer := range peers {
+		rqFunc(peer)
+		select {
+		case <-ctx.cancelOrTimeout:
+			return nil, ErrCancel
+		case msg = <-self.deliverChan:
+			peer.Promote()
+			glog.V(LogLevel).Infof("networkRequest success")
+			return msg, nil
+		case <-time.After(requestTimeout):
+			peer.Demote()
+			glog.V(LogLevel).Infof("networkRequest timeout")
+		}
+	}
+	}
+}
+
+func (self *ChainAccess) Retrieve(obj ObjectAccess, ctx *OdrContext) (err error) {
+	// look in db
+	if obj.DbGet() {
+		return nil
+	}
+	if ctx != nil {
+		// not found in db, trying the network
+		_, err = self.networkRequest(obj.Request, obj.Valid, ctx)
+		if err == nil {
+			// retrieved from network, store in db
+			obj.DbPut()
+		} else {
+			glog.V(LogLevel).Infof("networkRequest  err = %v", err)
+		}
+		return
+	} else {
+		return errNotInDb
+	}
+}

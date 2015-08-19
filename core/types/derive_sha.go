@@ -20,6 +20,7 @@ import (
 	"bytes"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -35,7 +36,7 @@ func DeriveSha(list DerivableList) common.Hash {
 	for i := 0; i < list.Len(); i++ {
 		keybuf.Reset()
 		rlp.Encode(keybuf, uint(i))
-		trie.Update(keybuf.Bytes(), list.GetRlp(i))
+		trie.Update(keybuf.Bytes(), list.GetRlp(i), access.NoOdr)
 	}
 	return trie.Hash()
 }

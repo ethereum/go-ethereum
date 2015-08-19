@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -38,7 +39,7 @@ type testAccount struct {
 func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 	// Create an empty state
 	db, _ := ethdb.NewMemDatabase()
-	state, _ := New(common.Hash{}, db)
+	state, _ := New(common.Hash{}, access.NewDbChainAccess(db), access.NullCtx)
 
 	// Fill it with some arbitrary data
 	accounts := []*testAccount{}
@@ -68,7 +69,7 @@ func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 // checkStateAccounts cross references a reconstructed state with an expected
 // account array.
 func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accounts []*testAccount) {
-	state, _ := New(root, db)
+	state, _ := New(root, access.NewDbChainAccess(db), access.NullCtx)
 	for i, acc := range accounts {
 
 		if balance := state.GetBalance(acc.address); balance.Cmp(acc.balance) != 0 {

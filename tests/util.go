@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -89,7 +90,7 @@ func (self Log) Topics() [][]byte {
 }
 
 func StateObjectFromAccount(db ethdb.Database, addr string, account Account) *state.StateObject {
-	obj := state.NewStateObject(common.HexToAddress(addr), db)
+	obj := state.NewStateObject(common.HexToAddress(addr), access.NewDbChainAccess(db))
 	obj.SetBalance(common.Big(account.Balance))
 
 	if common.IsHex(account.Code) {
@@ -201,7 +202,7 @@ func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
 	return self.state.GetBalance(from).Cmp(balance) >= 0
 }
 func (self *Env) MakeSnapshot() vm.Database {
-	return self.state.Copy()
+	return self.state.Copy(access.NullCtx)
 }
 func (self *Env) SetSnapshot(copy vm.Database) {
 	self.state.Set(copy.(*state.StateDB))

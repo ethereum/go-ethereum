@@ -29,6 +29,7 @@ import (
 	"io"
 	"io/ioutil"
 
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/codec"
@@ -67,13 +68,14 @@ type stopServer struct {
 type handler struct {
 	codec codec.Codec
 	api   shared.EthereumApi
+	channelID	*access.OdrChannelID
 }
 
 // StartHTTP starts listening for RPC requests sent via HTTP.
 func StartHttp(cfg HttpConfig, codec codec.Codec, api shared.EthereumApi) error {
 	httpServerMu.Lock()
 	defer httpServerMu.Unlock()
-
+	
 	addr := fmt.Sprintf("%s:%d", cfg.ListenAddress, cfg.ListenPort)
 	if httpServer != nil {
 		if addr != httpServer.Addr {
@@ -82,7 +84,8 @@ func StartHttp(cfg HttpConfig, codec codec.Codec, api shared.EthereumApi) error 
 		return nil // RPC service already running on given host/port
 	}
 	// Set up the request handler, wrapping it with CORS headers if configured.
-	handler := http.Handler(&handler{codec, api})
+	channelID := access.NewChannelID(time.Second)
+	handler := http.Handler(&handler{codec, api, channelID})
 	if len(cfg.CorsDomain) > 0 {
 		opts := cors.Options{
 			AllowedMethods: []string{"POST"},
@@ -121,9 +124,15 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	c := h.codec.New(nil)
+	ctx := access.NewContext(h.channelID)
 	var rpcReq shared.Request
 	if err = c.Decode(payload, &rpcReq); err == nil {
+		rpcReq.SetCtx(ctx)
 		reply, err := h.api.Execute(&rpcReq)
+		if ctx.IsCancelled() {
+			reply = nil
+			err = access.ErrCancel
+		}
 		res := shared.NewRpcResponse(rpcReq.Id, rpcReq.Jsonrpc, reply, err)
 		sendJSON(w, &res)
 		return
@@ -133,8 +142,17 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if err = c.Decode(payload, &reqBatch); err == nil {
 		resBatch := make([]*interface{}, len(reqBatch))
 		resCount := 0
+		var reply interface{}
+		var err error
 		for i, rpcReq := range reqBatch {
-			reply, err := h.api.Execute(&rpcReq)
+			if !ctx.IsCancelled() {
+				rpcReq.SetCtx(ctx)
+				reply, err = h.api.Execute(&rpcReq)
+			}
+			if ctx.IsCancelled() {
+				reply = nil
+				err = access.ErrCancel
+			}
 			if rpcReq.Id != nil { // this leaves nil entries in the response batch for later removal
 				resBatch[i] = shared.NewRpcResponse(rpcReq.Id, rpcReq.Jsonrpc, reply, err)
 				resCount += 1

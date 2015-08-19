@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -74,6 +75,9 @@ func NewGasPriceOracle(eth *Ethereum) *GasPriceOracle {
 }
 
 func (gpo *GasPriceOracle) init() {
+	if gpo.eth.Mode == LightMode {
+		return
+	}
 	gpo.initOnce.Do(func() {
 		gpo.processPastBlocks(gpo.eth.BlockChain())
 		go gpo.listenLoop()
@@ -92,7 +96,7 @@ func (self *GasPriceOracle) processPastBlocks(chain *core.BlockChain) {
 	}
 	self.firstProcessed = uint64(first)
 	for i := first; i <= last; i++ {
-		block := chain.GetBlockByNumber(uint64(i))
+		block := chain.GetBlockByNumber(uint64(i), access.NoOdr)
 		if block != nil {
 			self.processBlock(block)
 		}

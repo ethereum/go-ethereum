@@ -38,12 +38,14 @@ import (
 	"github.com/ethereum/go-ethereum/common/httpclient"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/miner"
@@ -60,6 +62,8 @@ const (
 
 	autoDAGcheckInterval = 10 * time.Hour
 	autoDAGepochHeight   = epochLength / 2
+
+	useLightProtocol = true
 )
 
 var (
@@ -96,6 +100,7 @@ type Config struct {
 	GenesisBlock *types.Block // used by block tests
 	FastSync     bool
 	Olympic      bool
+	Mode         Mode
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
@@ -231,17 +236,20 @@ type Ethereum struct {
 	chainDb ethdb.Database // Block chain database
 	dappDb  ethdb.Database // Dapp database
 
+	chainAccess *access.ChainAccess // blockchain access layer
+
 	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
-	blockProcessor  *core.BlockProcessor
-	txPool          *core.TxPool
-	blockchain      *core.BlockChain
-	accountManager  *accounts.Manager
-	whisper         *whisper.Whisper
-	pow             *ethash.Ethash
-	protocolManager *ProtocolManager
-	SolcPath        string
-	solc            *compiler.Solidity
+	blockProcessor       *core.BlockProcessor
+	txPool               *core.TxPool
+	blockchain           *core.BlockChain
+	accountManager       *accounts.Manager
+	whisper              *whisper.Whisper
+	pow                  *ethash.Ethash
+	protocolManager      *ProtocolManager
+	lightProtocolManager *les.ProtocolManager
+	SolcPath             string
+	solc                 *compiler.Solidity
 
 	GpoMinGasPrice          *big.Int
 	GpoMaxGasPrice          *big.Int
@@ -251,6 +259,7 @@ type Ethereum struct {
 	GpobaseCorrectionFactor int
 
 	httpclient *httpclient.HTTPClient
+	Mode Mode
 
 	net      *p2p.Server
 	eventMux *event.TypeMux
@@ -305,10 +314,10 @@ func New(config *Config) (*Ethereum, error) {
 	if err := upgradeChainDatabase(chainDb); err != nil {
 		return nil, err
 	}
-	if err := addMipmapBloomBins(chainDb); err != nil {
+	chainAccess := access.NewChainAccess(chainDb, config.Mode == LightMode)
+	if err := addMipmapBloomBins(chainAccess); err != nil {
 		return nil, err
 	}
-
 	dappDb, err := newdb(filepath.Join(config.DataDir, "dapp"))
 	if err != nil {
 		var ok bool
@@ -381,6 +390,7 @@ func New(config *Config) (*Ethereum, error) {
 	eth := &Ethereum{
 		shutdownChan:            make(chan bool),
 		chainDb:                 chainDb,
+		chainAccess:             chainAccess,
 		dappDb:                  dappDb,
 		eventMux:                &event.TypeMux{},
 		accountManager:          config.AccountManager,
@@ -400,6 +410,7 @@ func New(config *Config) (*Ethereum, error) {
 		GpobaseStepUp:           config.GpobaseStepUp,
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
 		httpclient:              httpclient.New(config.DocRoot),
+		Mode: config.Mode,
 	}
 
 	if config.PowTest {
@@ -412,22 +423,36 @@ func New(config *Config) (*Ethereum, error) {
 		eth.pow = ethash.New()
 	}
 	//genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
-	eth.blockchain, err = core.NewBlockChain(chainDb, eth.pow, eth.EventMux())
+	eth.blockchain, err = core.NewBlockChain(chainAccess, eth.pow, eth.EventMux())
 	if err != nil {
 		if err == core.ErrNoGenesis {
 			return nil, fmt.Errorf(`Genesis block not found. Please supply a genesis block with the "--genesis /path/to/file" argument`)
 		}
 		return nil, err
 	}
-	newPool := core.NewTxPool(eth.EventMux(), eth.blockchain.State, eth.blockchain.GasLimit)
+	newPool := core.NewTxPool(eth.EventMux(), eth.blockchain.StateNoOdr, eth.blockchain.GasLimit)
 	eth.txPool = newPool
 
-	eth.blockProcessor = core.NewBlockProcessor(chainDb, eth.pow, eth.blockchain, eth.EventMux())
+	eth.blockProcessor = core.NewBlockProcessor(chainAccess, eth.pow, eth.blockchain, eth.EventMux())
 	eth.blockchain.SetProcessor(eth.blockProcessor)
-	if eth.protocolManager, err = NewProtocolManager(config.FastSync, config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb); err != nil {
-		return nil, err
+
+	if config.Mode != LightMode {
+		if eth.protocolManager, err = NewProtocolManager(config.Mode, config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainAccess); err != nil {
+			return nil, err
+		}
 	}
-	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
+
+	if useLightProtocol {
+		if eth.lightProtocolManager, err = les.NewProtocolManager(les.Mode(config.Mode), config.NetworkId, eth.eventMux, eth.pow, eth.blockchain, chainAccess); err != nil {
+			return nil, err
+		}
+	}
+
+	if config.Mode == LightMode {
+		eth.miner = miner.NewDummy(eth, eth.EventMux(), eth.pow)
+	} else {
+		eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
+	}
 	eth.miner.SetGasPrice(config.GasPrice)
 	eth.miner.SetExtra(config.ExtraData)
 
@@ -440,7 +465,14 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	protocols := append([]p2p.Protocol{}, eth.protocolManager.SubProtocols...)
+	protocols := []p2p.Protocol{}
+
+	if eth.protocolManager != nil {
+		protocols = append(protocols, eth.protocolManager.SubProtocols...)
+	}
+	if eth.lightProtocolManager != nil {
+		protocols = append(protocols, eth.lightProtocolManager.SubProtocols...)
+	}
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
 	}
@@ -508,16 +540,29 @@ func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
 func (s *Ethereum) ChainDb() ethdb.Database              { return s.chainDb }
+func (s *Ethereum) ChainAccess() *access.ChainAccess     { return s.chainAccess }
 func (s *Ethereum) DappDb() ethdb.Database               { return s.dappDb }
 func (s *Ethereum) IsListening() bool                    { return true } // Always listening
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
 func (s *Ethereum) MaxPeers() int                        { return s.net.MaxPeers }
 func (s *Ethereum) ClientVersion() string                { return s.clientVersion }
-func (s *Ethereum) EthVersion() int                      { return int(s.protocolManager.SubProtocols[0].Version) }
-func (s *Ethereum) NetVersion() int                      { return s.netVersionId }
-func (s *Ethereum) ShhVersion() int                      { return s.shhVersionId }
-func (s *Ethereum) Downloader() *downloader.Downloader   { return s.protocolManager.downloader }
+func (s *Ethereum) EthVersion() int {
+	if s.protocolManager == nil {
+		return 0
+	} else {
+		return int(s.protocolManager.SubProtocols[0].Version)
+	}
+}
+func (s *Ethereum) NetVersion() int { return s.netVersionId }
+func (s *Ethereum) ShhVersion() int { return s.shhVersionId }
+func (s *Ethereum) Downloader() *downloader.Downloader {
+	if s.protocolManager == nil {
+		return nil
+	} else {
+		return s.protocolManager.downloader
+	}
+}
 
 // Start the ethereum
 func (s *Ethereum) Start() error {
@@ -537,7 +582,13 @@ func (s *Ethereum) Start() error {
 		s.StartAutoDAG()
 	}
 
-	s.protocolManager.Start()
+	if s.protocolManager != nil {
+		s.protocolManager.Start()
+	}
+
+	if s.lightProtocolManager != nil {
+		s.lightProtocolManager.Start()
+	}
 
 	if s.whisper != nil {
 		s.whisper.Start()
@@ -569,9 +620,14 @@ func (self *Ethereum) AddPeer(nodeURL string) error {
 func (s *Ethereum) Stop() {
 	s.net.Stop()
 	s.blockchain.Stop()
-	s.protocolManager.Stop()
+	if s.protocolManager != nil {
+		s.protocolManager.Stop()
+	}
 	s.txPool.Stop()
 	s.eventMux.Stop()
+	if s.lightProtocolManager != nil {
+		s.lightProtocolManager.Stop()
+	}
 	if s.whisper != nil {
 		s.whisper.Stop()
 	}
@@ -609,7 +665,7 @@ func (self *Ethereum) StartAutoDAG() {
 			select {
 			case <-timer:
 				glog.V(logger.Info).Infof("checking DAG (ethash dir: %s)", ethash.DefaultDir)
-				currentBlock := self.BlockChain().CurrentBlock().NumberU64()
+				currentBlock := self.BlockChain().LastBlockNumberU64()
 				thisEpoch := currentBlock / epochLength
 				if nextEpoch <= thisEpoch {
 					if currentBlock%epochLength > autoDAGepochHeight {
@@ -747,9 +803,10 @@ func upgradeChainDatabase(db ethdb.Database) error {
 	return nil
 }
 
-func addMipmapBloomBins(db ethdb.Database) (err error) {
+func addMipmapBloomBins(ca *access.ChainAccess) (err error) {
 	const mipmapVersion uint = 2
 
+	db := ca.Db()
 	// check if the version is set. We ignore data for now since there's
 	// only one version so we can easily ignore it for now
 	var data []byte
@@ -771,7 +828,7 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 			return
 		}
 	}()
-	latestBlock := core.GetBlock(db, core.GetHeadBlockHash(db))
+	latestBlock := core.GetBlock(ca, core.GetHeadBlockHash(db), access.NoOdr)
 	if latestBlock == nil { // clean database
 		return
 	}
@@ -783,7 +840,7 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 		if (hash == common.Hash{}) {
 			return fmt.Errorf("chain db corrupted. Could not find block %d.", i)
 		}
-		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(db, hash))
+		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(ca, hash, access.NoOdr))
 	}
 	glog.V(logger.Info).Infoln("upgrade completed in", time.Since(tstart))
 	return nil

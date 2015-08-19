@@ -14,18 +14,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+// Package les implements the Light Ethereum Subprotocol.
+package les
 
 import (
 	"errors"
 	"fmt"
 	"math/big"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -39,53 +39,36 @@ var (
 )
 
 const (
-	maxKnownTxs      = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
-	maxKnownBlocks   = 1024  // Maximum block hashes to keep in the known list (prevent DOS)
-	handshakeTimeout = 5 * time.Second
+	maxKnownBlocks = 1024 // Maximum block hashes to keep in the known list (prevent DOS)
 )
 
-// PeerInfo represents a short summary of the Ethereum sub-protocol metadata known
-// about a connected peer.
-type PeerInfo struct {
-	Version    int      `json:"version"`    // Ethereum protocol version negotiated
-	Difficulty *big.Int `json:"difficulty"` // Total difficulty of the peer's blockchain
-	Head       string   `json:"head"`       // SHA3 hash of the peer's best owned block
-}
-
 type peer struct {
-	id string
-
 	*p2p.Peer
+
 	rw p2p.MsgReadWriter
 
 	version int // Protocol version negotiated
-	head    common.Hash
-	td      *big.Int
-	lock    sync.RWMutex
+	network int // Network ID being on
 
-	knownTxs    *set.Set // Set of transaction hashes known to be known by this peer
+	id string
+
+	head common.Hash
+	td   *big.Int
+	lock sync.RWMutex
+
 	knownBlocks *set.Set // Set of block hashes known to be known by this peer
 }
 
-func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
+func newPeer(version, network int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	id := p.ID()
 
 	return &peer{
 		Peer:        p,
 		rw:          rw,
 		version:     version,
+		network:     network,
 		id:          fmt.Sprintf("%x", id[:8]),
-		knownTxs:    set.New(),
 		knownBlocks: set.New(),
-	}
-}
-
-// Info gathers and returns a collection of metadata known about a peer.
-func (p *peer) Info() *PeerInfo {
-	return &PeerInfo{
-		Version:    p.version,
-		Difficulty: p.Td(),
-		Head:       fmt.Sprintf("%x", p.Head()),
 	}
 }
 
@@ -132,44 +115,6 @@ func (p *peer) MarkBlock(hash common.Hash) {
 	p.knownBlocks.Add(hash)
 }
 
-// MarkTransaction marks a transaction as known for the peer, ensuring that it
-// will never be propagated to this particular peer.
-func (p *peer) MarkTransaction(hash common.Hash) {
-	// If we reached the memory allowance, drop a previously known transaction hash
-	for p.knownTxs.Size() >= maxKnownTxs {
-		p.knownTxs.Pop()
-	}
-	p.knownTxs.Add(hash)
-}
-
-// SendTransactions sends transactions to the peer and includes the hashes
-// in its transaction hash set for future reference.
-func (p *peer) SendTransactions(txs types.Transactions) error {
-	for _, tx := range txs {
-		p.knownTxs.Add(tx.Hash())
-	}
-	return p2p.Send(p.rw, TxMsg, txs)
-}
-
-// SendBlockHashes sends a batch of known hashes to the remote peer.
-func (p *peer) SendBlockHashes(hashes []common.Hash) error {
-	return p2p.Send(p.rw, BlockHashesMsg, hashes)
-}
-
-// SendBlocks sends a batch of blocks to the remote peer.
-func (p *peer) SendBlocks(blocks []*types.Block) error {
-	return p2p.Send(p.rw, BlocksMsg, blocks)
-}
-
-// SendNewBlockHashes61 announces the availability of a number of blocks through
-// a hash notification.
-func (p *peer) SendNewBlockHashes61(hashes []common.Hash) error {
-	for _, hash := range hashes {
-		p.knownBlocks.Add(hash)
-	}
-	return p2p.Send(p.rw, NewBlockHashesMsg, hashes)
-}
-
 // SendNewBlockHashes announces the availability of a number of blocks through
 // a hash notification.
 func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
@@ -182,12 +127,6 @@ func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 		request[i].Number = numbers[i]
 	}
 	return p2p.Send(p.rw, NewBlockHashesMsg, request)
-}
-
-// SendNewBlock propagates an entire block to a remote peer.
-func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
-	p.knownBlocks.Add(block.Hash())
-	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
 }
 
 // SendBlockHeaders sends a batch of block headers to the remote peer.
@@ -218,24 +157,9 @@ func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 	return p2p.Send(p.rw, ReceiptsMsg, receipts)
 }
 
-// RequestHashes fetches a batch of hashes from a peer, starting at from, going
-// towards the genesis block.
-func (p *peer) RequestHashes(from common.Hash) error {
-	glog.V(logger.Debug).Infof("%v fetching hashes (%d) from %x...", p, downloader.MaxHashFetch, from[:4])
-	return p2p.Send(p.rw, GetBlockHashesMsg, getBlockHashesData{from, uint64(downloader.MaxHashFetch)})
-}
-
-// RequestHashesFromNumber fetches a batch of hashes from a peer, starting at
-// the requested block number, going upwards towards the genesis block.
-func (p *peer) RequestHashesFromNumber(from uint64, count int) error {
-	glog.V(logger.Debug).Infof("%v fetching hashes (%d) from #%d...", p, count, from)
-	return p2p.Send(p.rw, GetBlockHashesFromNumberMsg, getBlockHashesFromNumberData{from, uint64(count)})
-}
-
-// RequestBlocks fetches a batch of blocks corresponding to the specified hashes.
-func (p *peer) RequestBlocks(hashes []common.Hash) error {
-	glog.V(logger.Debug).Infof("%v fetching %v blocks", p, len(hashes))
-	return p2p.Send(p.rw, GetBlocksMsg, hashes)
+// SendProofs sends a batch of merkle proofs, corresponding to the ones requested.
+func (p *peer) SendProofs(proofs proofsData) error {
+	return p2p.Send(p.rw, ProofsMsg, proofs)
 }
 
 // RequestHeaders is a wrapper around the header query functions to fetch a
@@ -279,42 +203,27 @@ func (p *peer) RequestReceipts(hashes []common.Hash) error {
 	return p2p.Send(p.rw, GetReceiptsMsg, hashes)
 }
 
-// Handshake executes the eth protocol handshake, negotiating version number,
-// network IDs, difficulties, head and genesis blocks.
-func (p *peer) Handshake(network int, td *big.Int, head common.Hash, genesis common.Hash) error {
-	// Send out own handshake in a new thread
-	errc := make(chan error, 2)
-	var status statusData // safe to read after two values have been received from errc
+// RequestProofs fetches a batch of merkle proofs from a remote node.
+func (p *peer) RequestProofs(reqs []*access.ProofReq) error {
+	glog.V(logger.Debug).Infof("%v fetching %v proofs", p, len(reqs))
+	return p2p.Send(p.rw, GetProofsMsg, reqs)
+}
 
+// Handshake executes the les protocol handshake, negotiating version number,
+// network IDs, difficulties, head and genesis blocks.
+func (p *peer) Handshake(td *big.Int, head common.Hash, genesis common.Hash) error {
+	// Send out own handshake in a new thread
+	errc := make(chan error, 1)
 	go func() {
 		errc <- p2p.Send(p.rw, StatusMsg, &statusData{
 			ProtocolVersion: uint32(p.version),
-			NetworkId:       uint32(network),
+			NetworkId:       uint32(p.network),
 			TD:              td,
 			CurrentBlock:    head,
 			GenesisBlock:    genesis,
 		})
 	}()
-	go func() {
-		errc <- p.readStatus(network, &status, genesis)
-	}()
-	timeout := time.NewTimer(handshakeTimeout)
-	defer timeout.Stop()
-	for i := 0; i < 2; i++ {
-		select {
-		case err := <-errc:
-			if err != nil {
-				return err
-			}
-		case <-timeout.C:
-			return p2p.DiscReadTimeout
-		}
-	}
-	p.td, p.head = status.TD, status.CurrentBlock
-	return nil
-}
-
-func (p *peer) readStatus(network int, status *statusData, genesis common.Hash) (err error) {
+	// In the mean time retrieve the remote status message
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
 		return err
@@ -326,30 +235,33 @@ func (p *peer) readStatus(network int, status *statusData, genesis common.Hash) 
 		return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 	}
 	// Decode the handshake and make sure everything matches
+	var status statusData
 	if err := msg.Decode(&status); err != nil {
 		return errResp(ErrDecode, "msg %v: %v", msg, err)
 	}
 	if status.GenesisBlock != genesis {
 		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", status.GenesisBlock, genesis)
 	}
-	if int(status.NetworkId) != network {
-		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, network)
+	if int(status.NetworkId) != p.network {
+		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, p.network)
 	}
 	if int(status.ProtocolVersion) != p.version {
 		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, p.version)
 	}
-	return nil
+	// Configure the remote peer, and sanity check out handshake too
+	p.td, p.head = status.TD, status.CurrentBlock
+	return <-errc
 }
 
 // String implements fmt.Stringer.
 func (p *peer) String() string {
 	return fmt.Sprintf("Peer %s [%s]", p.id,
-		fmt.Sprintf("eth/%2d", p.version),
+		fmt.Sprintf("les/%d", p.version),
 	)
 }
 
 // peerSet represents the collection of active peers currently participating in
-// the Ethereum sub-protocol.
+// the Light Ethereum sub-protocol.
 type peerSet struct {
 	peers map[string]*peer
 	lock  sync.RWMutex
@@ -413,21 +325,6 @@ func (ps *peerSet) PeersWithoutBlock(hash common.Hash) []*peer {
 	list := make([]*peer, 0, len(ps.peers))
 	for _, p := range ps.peers {
 		if !p.knownBlocks.Has(hash) {
-			list = append(list, p)
-		}
-	}
-	return list
-}
-
-// PeersWithoutTx retrieves a list of peers that do not have a given transaction
-// in their set of known hashes.
-func (ps *peerSet) PeersWithoutTx(hash common.Hash) []*peer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	list := make([]*peer, 0, len(ps.peers))
-	for _, p := range ps.peers {
-		if !p.knownTxs.Has(hash) {
 			list = append(list, p)
 		}
 	}

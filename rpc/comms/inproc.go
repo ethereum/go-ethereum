@@ -18,7 +18,9 @@ package comms
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
@@ -30,12 +32,14 @@ type InProcClient struct {
 	lastJsonrpc string
 	lastErr     error
 	lastRes     interface{}
+	channelID	*access.OdrChannelID
 }
 
 // Create a new in process client
 func NewInProcClient(codec codec.Codec) *InProcClient {
 	return &InProcClient{
 		codec: codec,
+		channelID: access.NewChannelID(time.Second),
 	}
 }
 
@@ -52,7 +56,13 @@ func (self *InProcClient) Send(req interface{}) error {
 	if r, ok := req.(*shared.Request); ok {
 		self.lastId = r.Id
 		self.lastJsonrpc = r.Jsonrpc
+		ctx := access.NewContext(self.channelID)
+		r.SetCtx(ctx)
 		self.lastRes, self.lastErr = self.api.Execute(r)
+		if ctx.IsCancelled() {
+			self.lastRes = nil
+			self.lastErr = access.ErrCancel
+		}
 		return self.lastErr
 	}
 

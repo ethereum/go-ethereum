@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -59,7 +60,7 @@ func (self *VMEnv) SetDepth(i int)           { self.depth = i }
 func (self *VMEnv) VmType() vm.Type          { return self.typ }
 func (self *VMEnv) SetVmType(t vm.Type)      { self.typ = t }
 func (self *VMEnv) GetHash(n uint64) common.Hash {
-	for block := self.chain.GetBlock(self.header.ParentHash); block != nil; block = self.chain.GetBlock(block.ParentHash()) {
+	for block := self.chain.GetBlock(self.header.ParentHash, access.NoOdr); block != nil; block = self.chain.GetBlock(block.ParentHash(), access.NoOdr) {
 		if block.NumberU64() == n {
 			return block.Hash()
 		}
@@ -76,7 +77,7 @@ func (self *VMEnv) CanTransfer(from common.Address, balance *big.Int) bool {
 }
 
 func (self *VMEnv) MakeSnapshot() vm.Database {
-	return self.state.Copy()
+	return self.state.CopyWithCtx()
 }
 
 func (self *VMEnv) SetSnapshot(copy vm.Database) {

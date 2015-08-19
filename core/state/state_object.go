@@ -22,8 +22,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -57,7 +57,7 @@ func (self Storage) Copy() Storage {
 
 type StateObject struct {
 	// State database for storing state changes
-	db   ethdb.Database
+	ca   *access.ChainAccess
 	trie *trie.SecureTrie
 
 	// Address belonging to this account
@@ -83,14 +83,14 @@ type StateObject struct {
 	dirty   bool
 }
 
-func NewStateObject(address common.Address, db ethdb.Database) *StateObject {
-	object := &StateObject{db: db, address: address, balance: new(big.Int), dirty: true}
-	object.trie, _ = trie.NewSecure(common.Hash{}, db)
+func NewStateObject(address common.Address, ca *access.ChainAccess) *StateObject {
+	object := &StateObject{ca: ca, address: address, balance: new(big.Int), dirty: true}
+	object.trie, _ = trie.NewSecure(common.Hash{}, ca.Db(), nil)
 	object.storage = make(Storage)
 	return object
 }
 
-func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Database) *StateObject {
+func NewStateObjectFromBytes(address common.Address, data []byte, ca *access.ChainAccess, ctx *access.OdrContext) *StateObject {
 	var extobject struct {
 		Nonce    uint64
 		Balance  *big.Int
@@ -102,20 +102,20 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Datab
 		glog.Errorf("can't decode state object %x: %v", address, err)
 		return nil
 	}
-	trie, err := trie.NewSecure(extobject.Root, db)
+	trie, err := trie.NewSecure(extobject.Root, ca.Db(), NewTrieAccess(ca, extobject.Root, ca.Db()))
 	if err != nil {
 		// TODO: bubble this up or panic
 		glog.Errorf("can't create account trie with root %x: %v", extobject.Root[:], err)
 		return nil
 	}
 
-	object := &StateObject{address: address, db: db}
+	object := &StateObject{address: address, ca: ca}
 	object.nonce = extobject.Nonce
 	object.balance = extobject.Balance
 	object.codeHash = extobject.CodeHash
 	object.trie = trie
 	object.storage = make(map[string]common.Hash)
-	object.code, _ = db.Get(extobject.CodeHash)
+	object.code = RetrieveNodeData(ca, common.BytesToHash(extobject.CodeHash), ctx)
 	return object
 }
 
@@ -128,30 +128,31 @@ func (self *StateObject) MarkForDeletion() {
 	}
 }
 
-func (c *StateObject) getAddr(addr common.Hash) common.Hash {
+func (c *StateObject) getAddr(addr common.Hash, ctx *access.OdrContext) common.Hash {
 	var ret []byte
-	rlp.DecodeBytes(c.trie.Get(addr[:]), &ret)
+	value := c.trie.Get(addr[:], ctx)
+	rlp.DecodeBytes(value, &ret)
 	return common.BytesToHash(ret)
 }
 
-func (c *StateObject) setAddr(addr []byte, value common.Hash) {
+func (c *StateObject) setAddr(addr []byte, value common.Hash, ctx *access.OdrContext) {
 	v, err := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
 	if err != nil {
 		// if RLPing failed we better panic and not fail silently. This would be considered a consensus issue
 		panic(err)
 	}
-	c.trie.Update(addr, v)
+	c.trie.Update(addr, v, ctx)
 }
 
 func (self *StateObject) Storage() Storage {
 	return self.storage
 }
 
-func (self *StateObject) GetState(key common.Hash) common.Hash {
+func (self *StateObject) GetState(key common.Hash, ctx *access.OdrContext) common.Hash {
 	strkey := key.Str()
 	value, exists := self.storage[strkey]
 	if !exists {
-		value = self.getAddr(key)
+		value = self.getAddr(key, ctx)
 		if (value != common.Hash{}) {
 			self.storage[strkey] = value
 		}
@@ -166,14 +167,14 @@ func (self *StateObject) SetState(k, value common.Hash) {
 }
 
 // Update updates the current cached storage to the trie
-func (self *StateObject) Update() {
+func (self *StateObject) Update(ctx *access.OdrContext) {
 	for key, value := range self.storage {
 		if (value == common.Hash{}) {
-			self.trie.Delete([]byte(key))
+			self.trie.Delete([]byte(key), ctx)
 			continue
 		}
 
-		self.setAddr([]byte(key), value)
+		self.setAddr([]byte(key), value, ctx)
 	}
 }
 
@@ -206,7 +207,7 @@ func (c *StateObject) St() Storage {
 func (c *StateObject) ReturnGas(gas, price *big.Int) {}
 
 func (self *StateObject) Copy() *StateObject {
-	stateObject := NewStateObject(self.Address(), self.db)
+	stateObject := NewStateObject(self.Address(), self.ca)
 	stateObject.balance.Set(self.balance)
 	stateObject.codeHash = common.CopyBytes(self.codeHash)
 	stateObject.nonce = self.nonce

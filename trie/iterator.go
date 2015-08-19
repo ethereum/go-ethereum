@@ -16,7 +16,11 @@
 
 package trie
 
-import "bytes"
+import (
+	"bytes"
+
+	"github.com/ethereum/go-ethereum/core/access"
+)
 
 type Iterator struct {
 	trie *Trie
@@ -100,7 +104,7 @@ func (self *Iterator) next(node interface{}, key []byte, isIterStart bool) []byt
 		}
 
 	case hashNode:
-		return self.next(self.trie.resolveHash(node), key, isIterStart)
+		return self.next(self.trie.resolveHash(node, nil, nil, access.NoOdr), key, isIterStart)
 	}
 	return nil
 }
@@ -127,7 +131,7 @@ func (self *Iterator) key(node interface{}) []byte {
 			}
 		}
 	case hashNode:
-		return self.key(self.trie.resolveHash(node))
+		return self.key(self.trie.resolveHash(node, nil, nil, access.NoOdr))
 	}
 
 	return nil

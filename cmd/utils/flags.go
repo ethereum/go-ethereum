@@ -28,12 +28,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -155,6 +157,11 @@ var (
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
 		Usage: "Reduce KDF memory & CPU usage at some expense of KDF strength",
+	}
+	EthModeFlag = cli.StringFlag{
+		Name:  "mode",
+		Value: "archive",
+		Usage: "Client mode of operation (archive, full, light)",
 	}
 	// Miner settings
 	// TODO: refactor CPU vs GPU mining flags
@@ -424,12 +431,25 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	if err != nil {
 		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
 	}
+	// Resolve the mode of opeation from the string flag
+	var clientMode eth.Mode
+	switch strings.ToLower(ctx.GlobalString(EthModeFlag.Name)) {
+	case "archive":
+		clientMode = eth.ArchiveMode
+	case "full":
+		clientMode = eth.FullMode
+	case "light":
+		clientMode = eth.LightMode
+	default:
+		glog.Fatalf("Unknown node type requested: %s", ctx.GlobalString(EthModeFlag.Name))
+	}
 	// Assemble the entire eth configuration and return
 	cfg := &eth.Config{
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 MustDataDir(ctx),
 		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
+		Mode:                    clientMode,
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
 		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
 		SkipBcVersionCheck:      false,
@@ -552,12 +572,12 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
 	//genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
-	chain, err = core.NewBlockChain(chainDb, pow, eventMux)
+	chain, err = core.NewBlockChain(access.NewDbChainAccess(chainDb), pow, eventMux)
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}
 
-	proc := core.NewBlockProcessor(chainDb, pow, chain, eventMux)
+	proc := core.NewBlockProcessor(access.NewDbChainAccess(chainDb), pow, chain, eventMux)
 	chain.SetProcessor(proc)
 	return chain, chainDb
 }
