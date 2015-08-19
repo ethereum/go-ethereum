@@ -413,10 +413,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		pm.fetcher.Enqueue(p.id, request.Block)
 
-		// TODO: Schedule a sync to cover potential gaps (this needs proto update)
+		// Update the peers total difficulty if needed, schedule a download if gapped
 		if request.TD.Cmp(p.Td()) > 0 {
 			p.SetTd(request.TD)
-			go pm.synchronise(p)
+			if request.TD.Cmp(new(big.Int).Add(pm.chainman.Td(), request.Block.Difficulty())) > 0 {
+				go pm.synchronise(p)
+			}
 		}
 
 	case TxMsg:
