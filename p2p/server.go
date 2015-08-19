@@ -542,6 +542,10 @@ func (srv *Server) encHandshakeChecks(peers map[discover.NodeID]*Peer, c *conn) 
 	}
 }
 
+type tempError interface {
+	Temporary() bool
+}
+
 // listenLoop runs in its own goroutine and accepts
 // inbound connections.
 func (srv *Server) listenLoop() {
@@ -561,16 +565,31 @@ func (srv *Server) listenLoop() {
 	}
 
 	for {
+		// Wait for a handshake slot before accepting.
 		<-slots
-		fd, err := srv.listener.Accept()
-		if err != nil {
-			return
-		}
-		mfd := newMeteredConn(fd, true)
 
-		glog.V(logger.Debug).Infof("Accepted conn %v\n", mfd.RemoteAddr())
+		var (
+			fd  net.Conn
+			err error
+		)
+		for {
+			fd, err = srv.listener.Accept()
+			if tempErr, ok := err.(tempError); ok && tempErr.Temporary() {
+				glog.V(logger.Debug).Infof("Temporary read error: %v", err)
+				continue
+			} else if err != nil {
+				glog.V(logger.Debug).Infof("Read error: %v", err)
+				return
+			}
+			break
+		}
+		fd = newMeteredConn(fd, true)
+		glog.V(logger.Debug).Infof("Accepted conn %v\n", fd.RemoteAddr())
+
+		// Spawn the handler. It will give the slot back when the connection
+		// has been established.
 		go func() {
-			srv.setupConn(mfd, inboundConn, nil)
+			srv.setupConn(fd, inboundConn, nil)
 			slots <- struct{}{}
 		}()
 	}
