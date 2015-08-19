@@ -5,8 +5,6 @@ import (
 	"log"
 	"net"
 	"time"
-
-	"github.com/ethereum/go-ethereum/fdtrack"
 )
 
 // Implement the NAT-PMP protocol, typically supported by Apple routers and open source
@@ -104,8 +102,6 @@ func (n *Client) rpc(msg []byte, resultSize int) (result []byte, err error) {
 	if err != nil {
 		return
 	}
-	fdtrack.Open("natpmp")
-	defer fdtrack.Close("natpmp")
 	defer conn.Close()
 
 	result = make([]byte, resultSize)

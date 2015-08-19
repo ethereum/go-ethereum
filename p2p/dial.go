@@ -23,7 +23,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/ethereum/go-ethereum/fdtrack"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -213,7 +212,6 @@ func (t *dialTask) Do(srv *Server) {
 		glog.V(logger.Detail).Infof("dial error: %v", err)
 		return
 	}
-	fd = fdtrack.WrapConn("p2p", fd)
 	mfd := newMeteredConn(fd, false)
 
 	srv.setupConn(mfd, t.flags, t.dest)
