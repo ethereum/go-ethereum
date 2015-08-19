@@ -24,11 +24,13 @@ import (
 	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/net/context"
 )
 
 const defaultCacheCapacity = 800
@@ -45,6 +47,12 @@ var (
 )
 
 var ErrMissingRoot = errors.New("missing root node")
+
+// OdrAccess is an interface to on-demand network access layer
+type OdrAccess interface {
+	OdrEnabled() bool		// is network access actually enabled
+	RetrieveKey(ctx context.Context, key []byte) bool // retrieve key from network and store it in local db
+}
 
 // Database must be implemented by backing stores for the trie.
 type Database interface {
@@ -67,8 +75,10 @@ type DatabaseWriter interface {
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
-	root node
-	db   Database
+	root   node
+	db     Database
+	access OdrAccess
+	ctx context.Context
 	*hasher
 }
 
@@ -79,17 +89,30 @@ type Trie struct {
 // New will panics if db is nil or root does not exist in the
 // database. Accessing the trie loads nodes from db on demand.
 func New(root common.Hash, db Database) (*Trie, error) {
-	trie := &Trie{db: db}
+	return NewOdr(access.NoOdr, root, db, nil)
+}
+
+// NewOdr creates a trie with optional ODR. If ODR is enabled, an existing
+// root node in db is not required.
+func NewOdr(ctx context.Context, root common.Hash, db Database, access OdrAccess) (*Trie, error) {
+	trie := &Trie{db: db, access: access, ctx: ctx}
 	if (root != common.Hash{}) && root != emptyRoot {
 		if db == nil {
 			panic("trie.New: cannot use existing root without a database")
 		}
-		if v, _ := trie.db.Get(root[:]); len(v) == 0 {
-			return nil, ErrMissingRoot
+		if access == nil || !access.OdrEnabled() {
+			if v, _ := trie.db.Get(root[:]); len(v) == 0 {
+				return nil, ErrMissingRoot
+			}
 		}
 		trie.root = hashNode(root.Bytes())
 	}
 	return trie, nil
+}
+
+// CopyWithOdr creates a copy of a trie with additional ODR capability
+func (t *Trie) CopyWithOdr(ctx context.Context, access OdrAccess) *Trie {
+	return &Trie{db: t.db, root: t.root, access: access, ctx: ctx}
 }
 
 // Iterator returns an iterator over all mappings in the trie.
@@ -101,22 +124,23 @@ func (t *Trie) Iterator() *Iterator {
 // The value bytes must not be modified by the caller.
 func (t *Trie) Get(key []byte) []byte {
 	key = compactHexDecode(key)
+	pos := 0
 	tn := t.root
-	for len(key) > 0 {
+	for pos < len(key) {
 		switch n := tn.(type) {
 		case shortNode:
-			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
+			if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
 				return nil
 			}
 			tn = n.Val
-			key = key[len(n.Key):]
+			pos += len(n.Key)
 		case fullNode:
-			tn = n[key[0]]
-			key = key[1:]
+			tn = n[key[pos]]
+			pos++
 		case nil:
 			return nil
 		case hashNode:
-			tn = t.resolveHash(n)
+			tn = t.resolveHash(n, key[:pos], key[pos:])
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
@@ -133,13 +157,13 @@ func (t *Trie) Get(key []byte) []byte {
 func (t *Trie) Update(key, value []byte) {
 	k := compactHexDecode(key)
 	if len(value) != 0 {
-		t.root = t.insert(t.root, k, valueNode(value))
+		t.root = t.insert(t.root, nil, k, valueNode(value))
 	} else {
-		t.root = t.delete(t.root, k)
+		t.root = t.delete(t.root, nil, k)
 	}
 }
 
-func (t *Trie) insert(n node, key []byte, value node) node {
+func (t *Trie) insert(n node, prefix, key []byte, value node) node {
 	if len(key) == 0 {
 		return value
 	}
@@ -149,12 +173,12 @@ func (t *Trie) insert(n node, key []byte, value node) node {
 		// If the whole key matches, keep this short node as is
 		// and only update the value.
 		if matchlen == len(n.Key) {
-			return shortNode{n.Key, t.insert(n.Val, key[matchlen:], value)}
+			return shortNode{n.Key, t.insert(n.Val, append(prefix, key[:matchlen]...), key[matchlen:], value)}
 		}
 		// Otherwise branch out at the index where they differ.
 		var branch fullNode
-		branch[n.Key[matchlen]] = t.insert(nil, n.Key[matchlen+1:], n.Val)
-		branch[key[matchlen]] = t.insert(nil, key[matchlen+1:], value)
+		branch[n.Key[matchlen]] = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
+		branch[key[matchlen]] = t.insert(nil, append(prefix, key[:matchlen+1]...), key[matchlen+1:], value)
 		// Replace this shortNode with the branch if it occurs at index 0.
 		if matchlen == 0 {
 			return branch
@@ -163,7 +187,7 @@ func (t *Trie) insert(n node, key []byte, value node) node {
 		return shortNode{key[:matchlen], branch}
 
 	case fullNode:
-		n[key[0]] = t.insert(n[key[0]], key[1:], value)
+		n[key[0]] = t.insert(n[key[0]], append(prefix, key[0]), key[1:], value)
 		return n
 
 	case nil:
@@ -176,7 +200,7 @@ func (t *Trie) insert(n node, key []byte, value node) node {
 		//
 		// TODO: track whether insertion changed the value and keep
 		// n as a hash node if it didn't.
-		return t.insert(t.resolveHash(n), key, value)
+		return t.insert(t.resolveHash(n, prefix, key), prefix, key, value)
 
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
@@ -186,13 +210,13 @@ func (t *Trie) insert(n node, key []byte, value node) node {
 // Delete removes any existing value for key from the trie.
 func (t *Trie) Delete(key []byte) {
 	k := compactHexDecode(key)
-	t.root = t.delete(t.root, k)
+	t.root = t.delete(t.root, nil, k)
 }
 
 // delete returns the new root of the trie with key deleted.
 // It reduces the trie to minimal form by simplifying
 // nodes on the way up after deleting recursively.
-func (t *Trie) delete(n node, key []byte) node {
+func (t *Trie) delete(n node, prefix, key []byte) node {
 	switch n := n.(type) {
 	case shortNode:
 		matchlen := prefixLen(key, n.Key)
@@ -206,7 +230,7 @@ func (t *Trie) delete(n node, key []byte) node {
 		// from the subtrie. Child can never be nil here since the
 		// subtrie must contain at least two other values with keys
 		// longer than n.Key.
-		child := t.delete(n.Val, key[len(n.Key):])
+		child := t.delete(n.Val, append(prefix, key[:len(n.Key)]...), key[len(n.Key):])
 		switch child := child.(type) {
 		case shortNode:
 			// Deleting from the subtrie reduced it to another
@@ -221,7 +245,7 @@ func (t *Trie) delete(n node, key []byte) node {
 		}
 
 	case fullNode:
-		n[key[0]] = t.delete(n[key[0]], key[1:])
+		n[key[0]] = t.delete(n[key[0]], append(prefix, key[0]), key[1:])
 		// Check how many non-nil entries are left after deleting and
 		// reduce the full node to a short node if only one entry is
 		// left. Since n must've contained at least two children
@@ -250,7 +274,7 @@ func (t *Trie) delete(n node, key []byte) node {
 				// shortNode{..., shortNode{...}}.  Since the entry
 				// might not be loaded yet, resolve it just for this
 				// check.
-				cnode := t.resolve(n[pos])
+				cnode := t.resolve(n[pos], prefix, []byte{byte(pos)})
 				if cnode, ok := cnode.(shortNode); ok {
 					k := append([]byte{byte(pos)}, cnode.Key...)
 					return shortNode{k, cnode.Val}
@@ -273,7 +297,7 @@ func (t *Trie) delete(n node, key []byte) node {
 		//
 		// TODO: track whether deletion actually hit a key and keep
 		// n as a hash node if it didn't.
-		return t.delete(t.resolveHash(n), key)
+		return t.delete(t.resolveHash(n, prefix, key), prefix, key)
 
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v (%v)", n, n, key))
@@ -287,19 +311,28 @@ func concat(s1 []byte, s2 ...byte) []byte {
 	return r
 }
 
-func (t *Trie) resolve(n node) node {
+func (t *Trie) resolve(n node, prefix, suffix []byte) node {
 	if n, ok := n.(hashNode); ok {
-		return t.resolveHash(n)
+		return t.resolveHash(n, prefix, suffix)
 	}
 	return n
 }
 
-func (t *Trie) resolveHash(n hashNode) node {
+func (t *Trie) resolveHash(n hashNode, prefix, suffix []byte) node {
 	if v, ok := globalCache.Get(n); ok {
 		return v
 	}
 	enc, err := t.db.Get(n)
 	if err != nil || enc == nil {
+		if prefix != nil || suffix != nil {
+			key := compactHexEncode(append(prefix, suffix...))
+			if t.access != nil && t.access.RetrieveKey(t.ctx, key) {
+				enc, err = t.db.Get(n)
+			}
+		}
+	}
+	if err != nil || enc == nil {
+
 		// TODO: This needs to be improved to properly distinguish errors.
 		// Disk I/O errors shouldn't produce nil (and cause a
 		// consensus failure or weird crash), but it is unclear how
@@ -348,6 +381,11 @@ func (t *Trie) Commit() (root common.Hash, err error) {
 // the changes made to db are written back to the trie's attached
 // database before using the trie.
 func (t *Trie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
+	if access.Terminated(t.ctx) {
+		// we should never commit potentially corrupt trie nodes to the db
+		return common.Hash{}, t.ctx.Err()
+	}	
+	
 	n, err := t.hashRoot(db)
 	if err != nil {
 		return (common.Hash{}), err

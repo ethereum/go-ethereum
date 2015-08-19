@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"golang.org/x/net/context"
 )
 
 // Ethereum RPC API interface
@@ -39,11 +40,14 @@ type EthereumApi interface {
 }
 
 // RPC request
+// (ODR context is propagated inside the request struct because every
+//  request has its own context. It does not influence JSON encoding.)
 type Request struct {
 	Id      interface{}     `json:"id"`
 	Jsonrpc string          `json:"jsonrpc"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params"`
+	ctx 	context.Context
 }
 
 // RPC response
@@ -71,6 +75,16 @@ type ErrorObject struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	// Data    interface{} `json:"data"`
+}
+
+// GetCtx returns the ODR context assigned to the request
+func (req *Request) GetCtx() context.Context {
+	return req.ctx
+}
+
+// SetCtx assigns an ODR context to the request
+func (req *Request) SetCtx(ctx context.Context) {
+	req.ctx = ctx
 }
 
 // Create RPC error response, this allows for custom error codes

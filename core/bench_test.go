@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -168,8 +169,9 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
 	evmux := new(event.TypeMux)
-	chainman, _ := NewBlockChain(db, FakePow{}, evmux)
-	chainman.SetProcessor(NewBlockProcessor(db, FakePow{}, chainman, evmux))
+	ca := access.NewDbChainAccess(db)
+	chainman, _ := NewBlockChain(ca, FakePow{}, evmux)
+	chainman.SetProcessor(NewBlockProcessor(ca, FakePow{}, chainman, evmux))
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -217,7 +218,7 @@ func runBlockTest(test *BlockTest) error {
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
 func (t *BlockTest) InsertPreState(db ethdb.Database, am *accounts.Manager) (*state.StateDB, error) {
-	statedb, err := state.New(common.Hash{}, db)
+	statedb, err := state.New(common.Hash{}, access.NewDbChainAccess(db))
 	if err != nil {
 		return nil, err
 	}

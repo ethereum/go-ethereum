@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -84,6 +85,7 @@ type XEth struct {
 	state         *State
 	whisper       *Whisper
 	filterManager *filters.FilterSystem
+	ctx context.Context
 }
 
 func NewTest(eth *eth.Ethereum, frontend Frontend) *XEth {
@@ -207,15 +209,15 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 	var err error
 	switch num {
 	case -2:
-		st = self.backend.Miner().PendingState().Copy()
+		st = self.backend.Miner().PendingState().CopyOdr(self.ctx)
 	default:
 		if block := self.getBlockByHeight(num); block != nil {
-			st, err = state.New(block.Root(), self.backend.ChainDb())
+			st, err = state.NewOdr(self.ctx, block.Root(), self.backend.ChainAccess())
 			if err != nil {
 				return nil
 			}
 		} else {
-			st, err = state.New(self.backend.BlockChain().GetBlockByNumber(0).Root(), self.backend.ChainDb())
+			st, err = state.NewOdr(self.ctx, self.backend.BlockChain().GetBlockByNumberOdr(self.ctx, 0).Root(), self.backend.ChainAccess())
 			if err != nil {
 				return nil
 			}
@@ -237,6 +239,19 @@ func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 }
 
 func (self *XEth) State() *State { return self.state }
+
+// WithCtx creates a copy of the XEth object with a new ODR context
+func (self *XEth) WithCtx(ctx context.Context) *XEth {
+	xeth := &XEth{
+		backend:  self.backend,
+		frontend: self.frontend,
+		gpo:      self.gpo,
+		ctx:      ctx,
+	}
+
+	xeth.state = NewState(xeth, self.state.State().CopyOdr(ctx))
+	return xeth
+}
 
 // subscribes to new head block events and
 // waits until blockchain height is greater n at any time
@@ -270,7 +285,7 @@ func (self *XEth) UpdateState() (wait chan *big.Int) {
 						wait <- n
 						n = nil
 					}
-					statedb, err := state.New(event.Block.Root(), self.backend.ChainDb())
+					statedb, err := state.New(event.Block.Root(), self.backend.ChainAccess())
 					if err != nil {
 						glog.V(logger.Error).Infoln("Could not create new state: %v", err)
 						return
@@ -305,19 +320,19 @@ func (self *XEth) getBlockByHeight(height int64) *types.Block {
 		num = uint64(height)
 	}
 
-	return self.backend.BlockChain().GetBlockByNumber(num)
+	return self.backend.BlockChain().GetBlockByNumberOdr(self.ctx, num)
 }
 
 func (self *XEth) BlockByHash(strHash string) *Block {
 	hash := common.HexToHash(strHash)
-	block := self.backend.BlockChain().GetBlock(hash)
+	block := self.backend.BlockChain().GetBlockOdr(self.ctx, hash)
 
 	return NewBlock(block)
 }
 
 func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 	hash := common.HexToHash(strHash)
-	block := self.backend.BlockChain().GetBlock(hash)
+	block := self.backend.BlockChain().GetBlockOdr(self.ctx, hash)
 
 	return block
 }
@@ -379,11 +394,11 @@ func (self *XEth) CurrentBlock() *types.Block {
 }
 
 func (self *XEth) GetBlockReceipts(bhash common.Hash) types.Receipts {
-	return self.backend.BlockProcessor().GetBlockReceipts(bhash)
+	return self.backend.BlockProcessor().GetBlockReceipts(bhash) //ODR
 }
 
-func (self *XEth) GetTxReceipt(txhash common.Hash) *types.Receipt {
-	return core.GetReceipt(self.backend.ChainDb(), txhash)
+func (self *XEth) GetTxReceipt(txhash common.Hash) *types.Receipt { //ODR
+	return core.GetReceipt(self.backend.ChainAccess(), txhash) //TODO
 }
 
 func (self *XEth) GasLimit() *big.Int {
@@ -547,7 +562,7 @@ func (self *XEth) NewLogFilter(earliest, latest int64, skip, max int, address []
 	self.logMu.Lock()
 	defer self.logMu.Unlock()
 
-	filter := filters.New(self.backend.ChainDb())
+	filter := filters.New(self.backend.ChainAccess())
 	id := self.filterManager.Add(filter)
 	self.logQueue[id] = &logQueue{timeout: time.Now()}
 
@@ -571,7 +586,7 @@ func (self *XEth) NewTransactionFilter() int {
 	self.transactionMu.Lock()
 	defer self.transactionMu.Unlock()
 
-	filter := filters.New(self.backend.ChainDb())
+	filter := filters.New(self.backend.ChainAccess())
 	id := self.filterManager.Add(filter)
 	self.transactionQueue[id] = &hashQueue{timeout: time.Now()}
 
@@ -590,7 +605,7 @@ func (self *XEth) NewBlockFilter() int {
 	self.blockMu.Lock()
 	defer self.blockMu.Unlock()
 
-	filter := filters.New(self.backend.ChainDb())
+	filter := filters.New(self.backend.ChainAccess())
 	id := self.filterManager.Add(filter)
 	self.blockQueue[id] = &hashQueue{timeout: time.Now()}
 
@@ -657,7 +672,7 @@ func (self *XEth) Logs(id int) vm.Logs {
 }
 
 func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []string, topics [][]string) vm.Logs {
-	filter := filters.New(self.backend.ChainDb())
+	filter := filters.New(self.backend.ChainAccess())
 	filter.SetBeginBlock(earliest)
 	filter.SetEndBlock(latest)
 	filter.SetAddresses(cAddress(address))
@@ -829,7 +844,7 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 }
 
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, string, error) {
-	statedb := self.State().State().Copy()
+	statedb := self.State().State().CopyWithCtx()
 	var from *state.StateObject
 	if len(fromStr) == 0 {
 		accounts, err := self.backend.AccountManager().Accounts()

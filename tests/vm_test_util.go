@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -108,7 +109,7 @@ func BenchVmTest(p string, conf bconf, b *testing.B) error {
 func benchVmTest(test VmTest, env map[string]string, b *testing.B) {
 	b.StopTimer()
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, access.NewDbChainAccess(db))
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)
@@ -159,7 +160,7 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 
 func runVmTest(test VmTest) error {
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, access.NewDbChainAccess(db))
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)

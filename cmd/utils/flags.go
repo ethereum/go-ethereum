@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -552,12 +553,12 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
 	//genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
-	chain, err = core.NewBlockChain(chainDb, pow, eventMux)
+	chain, err = core.NewBlockChain(access.NewDbChainAccess(chainDb), pow, eventMux)
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}
 
-	proc := core.NewBlockProcessor(chainDb, pow, chain, eventMux)
+	proc := core.NewBlockProcessor(access.NewDbChainAccess(chainDb), pow, chain, eventMux)
 	chain.SetProcessor(proc)
 	return chain, chainDb
 }

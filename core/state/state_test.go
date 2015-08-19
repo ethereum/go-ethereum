@@ -24,6 +24,7 @@ import (
 	checker "gopkg.in/check.v1"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -77,12 +78,12 @@ func (s *StateSuite) TestDump(c *checker.C) {
 
 func (s *StateSuite) SetUpTest(c *checker.C) {
 	db, _ := ethdb.NewMemDatabase()
-	s.state, _ = New(common.Hash{}, db)
+	s.state, _ = New(common.Hash{}, access.NewDbChainAccess(db))
 }
 
 func TestNull(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	state, _ := New(common.Hash{}, db)
+	state, _ := New(common.Hash{}, access.NewDbChainAccess(db))
 
 	address := common.HexToAddress("0x823140710bf13990e4500136726d8b55")
 	state.CreateAccount(address)
@@ -122,7 +123,7 @@ func (s *StateSuite) TestSnapshot(c *checker.C) {
 // printing/logging in tests (-check.vv does not work)
 func TestSnapshot2(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	state, _ := New(common.Hash{}, db)
+	state, _ := New(common.Hash{}, access.NewDbChainAccess(db))
 
 	stateobjaddr0 := toAddr([]byte("so0"))
 	stateobjaddr1 := toAddr([]byte("so1"))

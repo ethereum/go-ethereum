@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -555,12 +556,13 @@ func blockRecovery(ctx *cli.Context) {
 	if err != nil {
 		glog.Fatalln("could not open db:", err)
 	}
+	ca := access.NewDbChainAccess(blockDb)
 
 	var block *types.Block
 	if arg[0] == '#' {
-		block = core.GetBlock(blockDb, core.GetCanonicalHash(blockDb, common.String2Big(arg[1:]).Uint64()))
+		block = core.GetBlock(ca, core.GetCanonicalHash(blockDb, common.String2Big(arg[1:]).Uint64()))
 	} else {
-		block = core.GetBlock(blockDb, common.HexToHash(arg))
+		block = core.GetBlock(ca, common.HexToHash(arg))
 	}
 
 	if block == nil {

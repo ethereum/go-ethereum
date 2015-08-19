@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/common/httpclient"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -231,6 +232,8 @@ type Ethereum struct {
 	chainDb ethdb.Database // Block chain database
 	dappDb  ethdb.Database // Dapp database
 
+	chainAccess *access.ChainAccess // blockchain access layer
+
 	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
 	blockProcessor  *core.BlockProcessor
@@ -297,10 +300,10 @@ func New(config *Config) (*Ethereum, error) {
 	if err := upgradeChainDatabase(chainDb); err != nil {
 		return nil, err
 	}
-	if err := addMipmapBloomBins(chainDb); err != nil {
+	chainAccess := access.NewChainAccess(chainDb, false)
+	if err := addMipmapBloomBins(chainAccess); err != nil {
 		return nil, err
 	}
-
 	dappDb, err := newdb(filepath.Join(config.DataDir, "dapp"))
 	if err != nil {
 		if errno, ok := err.(syscall.Errno); ok && datadirInUseErrnos[uint(errno)] {
@@ -366,6 +369,7 @@ func New(config *Config) (*Ethereum, error) {
 	eth := &Ethereum{
 		shutdownChan:            make(chan bool),
 		chainDb:                 chainDb,
+		chainAccess:             chainAccess,
 		dappDb:                  dappDb,
 		eventMux:                &event.TypeMux{},
 		accountManager:          config.AccountManager,
@@ -397,7 +401,7 @@ func New(config *Config) (*Ethereum, error) {
 		eth.pow = ethash.New()
 	}
 	//genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
-	eth.blockchain, err = core.NewBlockChain(chainDb, eth.pow, eth.EventMux())
+	eth.blockchain, err = core.NewBlockChain(chainAccess, eth.pow, eth.EventMux())
 	if err != nil {
 		if err == core.ErrNoGenesis {
 			return nil, fmt.Errorf(`Genesis block not found. Please supply a genesis block with the "--genesis /path/to/file" argument`)
@@ -407,11 +411,13 @@ func New(config *Config) (*Ethereum, error) {
 	newPool := core.NewTxPool(eth.EventMux(), eth.blockchain.State, eth.blockchain.GasLimit)
 	eth.txPool = newPool
 
-	eth.blockProcessor = core.NewBlockProcessor(chainDb, eth.pow, eth.blockchain, eth.EventMux())
+	eth.blockProcessor = core.NewBlockProcessor(chainAccess, eth.pow, eth.blockchain, eth.EventMux())
 	eth.blockchain.SetProcessor(eth.blockProcessor)
-	if eth.protocolManager, err = NewProtocolManager(config.FastSync, config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb); err != nil {
+
+	if eth.protocolManager, err = NewProtocolManager(config.FastSync, config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainAccess); err != nil {
 		return nil, err
 	}
+
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
 	eth.miner.SetExtra(config.ExtraData)
@@ -493,6 +499,7 @@ func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
 func (s *Ethereum) ChainDb() ethdb.Database              { return s.chainDb }
+func (s *Ethereum) ChainAccess() *access.ChainAccess     { return s.chainAccess }
 func (s *Ethereum) DappDb() ethdb.Database               { return s.dappDb }
 func (s *Ethereum) IsListening() bool                    { return true } // Always listening
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
@@ -732,9 +739,10 @@ func upgradeChainDatabase(db ethdb.Database) error {
 	return nil
 }
 
-func addMipmapBloomBins(db ethdb.Database) (err error) {
+func addMipmapBloomBins(ca *access.ChainAccess) (err error) {
 	const mipmapVersion uint = 2
 
+	db := ca.Db()
 	// check if the version is set. We ignore data for now since there's
 	// only one version so we can easily ignore it for now
 	var data []byte
@@ -756,7 +764,7 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 			return
 		}
 	}()
-	latestBlock := core.GetBlock(db, core.GetHeadBlockHash(db))
+	latestBlock := core.GetBlock(ca, core.GetHeadBlockHash(db))
 	if latestBlock == nil { // clean database
 		return
 	}
@@ -768,7 +776,7 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 		if (hash == common.Hash{}) {
 			return fmt.Errorf("chain db corrupted. Could not find block %d.", i)
 		}
-		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(db, hash))
+		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(ca, hash))
 	}
 	glog.V(logger.Info).Infoln("upgrade completed in", time.Since(tstart))
 	return nil

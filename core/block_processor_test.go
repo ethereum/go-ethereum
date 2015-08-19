@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -32,21 +33,22 @@ import (
 
 func proc() (*BlockProcessor, *BlockChain) {
 	db, _ := ethdb.NewMemDatabase()
+	ca := access.NewDbChainAccess(db)
 	var mux event.TypeMux
 
 	WriteTestNetGenesisBlock(db, 0)
-	blockchain, err := NewBlockChain(db, thePow(), &mux)
+	blockchain, err := NewBlockChain(ca, thePow(), &mux)
 	if err != nil {
 		fmt.Println(err)
 	}
-	return NewBlockProcessor(db, ezp.New(), blockchain, &mux), blockchain
+	return NewBlockProcessor(ca, ezp.New(), blockchain, &mux), blockchain
 }
 
 func TestNumber(t *testing.T) {
 	pow := ezp.New()
 	_, chain := proc()
 
-	statedb, _ := state.New(chain.Genesis().Root(), chain.chainDb)
+	statedb, _ := state.New(chain.Genesis().Root(), access.NewDbChainAccess(chain.chainDb))
 	header := makeHeader(chain.Genesis(), statedb)
 	header.Number = big.NewInt(3)
 	err := ValidateHeader(pow, header, chain.Genesis().Header(), false, false)
@@ -82,7 +84,7 @@ func TestPutReceipt(t *testing.T) {
 	}}
 
 	PutReceipts(db, types.Receipts{receipt})
-	receipt = GetReceipt(db, common.Hash{})
+	receipt = GetReceipt(access.NewDbChainAccess(db), common.Hash{})
 	if receipt == nil {
 		t.Error("expected to get 1 receipt, got none.")
 	}

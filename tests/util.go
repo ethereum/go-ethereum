@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -89,7 +90,7 @@ func (self Log) Topics() [][]byte {
 }
 
 func StateObjectFromAccount(db ethdb.Database, addr string, account Account) *state.StateObject {
-	obj := state.NewStateObject(common.HexToAddress(addr), db)
+	obj := state.NewStateObject(access.NoOdr, common.HexToAddress(addr), access.NewDbChainAccess(db))
 	obj.SetBalance(common.Big(account.Balance))
 
 	if common.IsHex(account.Code) {

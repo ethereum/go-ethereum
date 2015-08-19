@@ -23,11 +23,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -43,7 +43,7 @@ const (
 )
 
 type BlockProcessor struct {
-	chainDb ethdb.Database
+	chainAccess *access.ChainAccess
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 	// Canonical block chain
@@ -85,9 +85,9 @@ func (gp *GasPool) String() string {
 	return (*big.Int)(gp).String()
 }
 
-func NewBlockProcessor(db ethdb.Database, pow pow.PoW, blockchain *BlockChain, eventMux *event.TypeMux) *BlockProcessor {
+func NewBlockProcessor(ca *access.ChainAccess, pow pow.PoW, blockchain *BlockChain, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
-		chainDb:  db,
+		chainAccess: ca,
 		mem:      make(map[string]*big.Int),
 		Pow:      pow,
 		bc:       blockchain,
@@ -212,12 +212,12 @@ func (sm *BlockProcessor) Process(block *types.Block) (logs vm.Logs, receipts ty
 	defer sm.mutex.Unlock()
 
 	if sm.bc.HasBlock(block.Hash()) {
-		if _, err := state.New(block.Root(), sm.chainDb); err == nil {
+		if _, err := state.New(block.Root(), sm.chainAccess); err == nil {
 			return nil, nil, &KnownBlockError{block.Number(), block.Hash()}
 		}
 	}
 	if parent := sm.bc.GetBlock(block.ParentHash()); parent != nil {
-		if _, err := state.New(parent.Root(), sm.chainDb); err == nil {
+		if _, err := state.New(parent.Root(), sm.chainAccess); err == nil {
 			return sm.processWithParent(block, parent)
 		}
 	}
@@ -226,7 +226,7 @@ func (sm *BlockProcessor) Process(block *types.Block) (logs vm.Logs, receipts ty
 
 func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs vm.Logs, receipts types.Receipts, err error) {
 	// Create a new state based on the parent's root (e.g., create copy)
-	state, err := state.New(parent.Root(), sm.chainDb)
+	state, err := state.New(parent.Root(), sm.chainAccess)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -370,7 +370,7 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 // GetBlockReceipts returns the receipts beloniging to the block hash
 func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
 	if block := sm.BlockChain().GetBlock(bhash); block != nil {
-		return GetBlockReceipts(sm.chainDb, block.Hash())
+		return GetBlockReceipts(sm.chainAccess, block.Hash())
 	}
 
 	return nil
@@ -380,7 +380,7 @@ func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
 // where it tries to get it from the (updated) method which gets them from the receipts or
 // the depricated way by re-processing the block.
 func (sm *BlockProcessor) GetLogs(block *types.Block) (logs vm.Logs, err error) {
-	receipts := GetBlockReceipts(sm.chainDb, block.Hash())
+	receipts := GetBlockReceipts(sm.chainAccess, block.Hash())
 	// coalesce logs
 	for _, receipt := range receipts {
 		logs = append(logs, receipt.Logs...)
