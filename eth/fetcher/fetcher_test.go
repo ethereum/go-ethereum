@@ -27,21 +27,39 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
 	testdb, _    = ethdb.NewMemDatabase()
-	genesis      = core.GenesisBlockForTesting(testdb, common.Address{}, big.NewInt(0))
+	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddress  = crypto.PubkeyToAddress(testKey.PublicKey)
+	genesis      = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000))
 	unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit}, nil, nil, nil)
 )
 
 // makeChain creates a chain of n blocks starting at and including parent.
-// the returned hash chain is ordered head->parent.
+// the returned hash chain is ordered head->parent. In addition, every 3rd block
+// contains a transaction and every 5th an uncle to allow testing correct block
+// reassembly.
 func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common.Hash]*types.Block) {
-	blocks := core.GenerateChain(parent, testdb, n, func(i int, gen *core.BlockGen) {
-		gen.SetCoinbase(common.Address{seed})
+	blocks := core.GenerateChain(parent, testdb, n, func(i int, block *core.BlockGen) {
+		block.SetCoinbase(common.Address{seed})
+
+		// If the block number is multiple of 3, send a bonus transaction to the miner
+		if parent == genesis && i%3 == 0 {
+			tx, err := types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(testKey)
+			if err != nil {
+				panic(err)
+			}
+			block.AddTx(tx)
+		}
+		// If the block number is a multiple of 5, add a bonus uncle to the block
+		if i%5 == 0 {
+			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
+		}
 	})
 	hashes := make([]common.Hash, n+1)
 	hashes[len(hashes)-1] = parent.Hash()
@@ -193,6 +211,40 @@ func (f *fetcherTester) makeBodyFetcher(blocks map[common.Hash]*types.Block, dri
 	}
 }
 
+// verifyFetchingEvent verifies that one single event arrive on an fetching channel.
+func verifyFetchingEvent(t *testing.T, fetching chan []common.Hash, arrive bool) {
+	if arrive {
+		select {
+		case <-fetching:
+		case <-time.After(time.Second):
+			t.Fatalf("fetching timeout")
+		}
+	} else {
+		select {
+		case <-fetching:
+			t.Fatalf("fetching invoked")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+// verifyCompletingEvent verifies that one single event arrive on an completing channel.
+func verifyCompletingEvent(t *testing.T, completing chan []common.Hash, arrive bool) {
+	if arrive {
+		select {
+		case <-completing:
+		case <-time.After(time.Second):
+			t.Fatalf("completing timeout")
+		}
+	} else {
+		select {
+		case <-completing:
+			t.Fatalf("completing invoked")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
 // verifyImportEvent verifies that one single event arrive on an import channel.
 func verifyImportEvent(t *testing.T, imported chan *types.Block) {
 	select {
@@ -225,6 +277,38 @@ func verifyImportDone(t *testing.T, imported chan *types.Block) {
 }
 
 // TODO: Test that the block number matches with the advertised one
+
+// Tests that a fetcher accepts block announcements and initiates retrievals for
+// them, successfully importing into the local chain.
+func TestSequentialAnnouncements61(t *testing.T) { testSequentialAnnouncements(t, 61) }
+func TestSequentialAnnouncements62(t *testing.T) { testSequentialAnnouncements(t, 62) }
+func TestSequentialAnnouncements63(t *testing.T) { testSequentialAnnouncements(t, 63) }
+func TestSequentialAnnouncements64(t *testing.T) { testSequentialAnnouncements(t, 64) }
+
+func testSequentialAnnouncements(t *testing.T, protocol int) {
+	// Create a chain of blocks to import
+	targetBlocks := 4 * hashLimit
+	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+
+	tester := newTester()
+	blockFetcher := tester.makeBlockFetcher(blocks)
+	headerFetcher := tester.makeHeaderFetcher(blocks, -gatherSlack)
+	bodyFetcher := tester.makeBodyFetcher(blocks, 0)
+
+	// Iteratively announce blocks until all are imported
+	imported := make(chan *types.Block)
+	tester.fetcher.importedHook = func(block *types.Block) { imported <- block }
+
+	for i := len(hashes) - 2; i >= 0; i-- {
+		if protocol < 62 {
+			tester.fetcher.Notify("valid", hashes[i], 0, time.Now().Add(-arriveTimeout), blockFetcher, nil, nil)
+		} else {
+			tester.fetcher.Notify("valid", hashes[i], uint64(len(hashes)-i-1), time.Now().Add(-arriveTimeout), nil, headerFetcher, bodyFetcher)
+		}
+		verifyImportEvent(t, imported)
+	}
+	verifyImportDone(t, imported)
+}
 
 // Tests that if blocks are announced by multiple peers (or even the same buggy
 // peer), they will only get downloaded at most once.
@@ -568,6 +652,46 @@ func testDistantAnnouncementDiscarding(t *testing.T, protocol int) {
 	case <-fetching:
 		t.Fatalf("fetcher requested future header")
 	}
+}
+
+// Tests that if a block is empty (i.e. header only), no body request should be
+// made, and instead the header should be assembled into a whole block in itself.
+func TestEmptyBlockShortCircuit62(t *testing.T) { testEmptyBlockShortCircuit(t, 62) }
+func TestEmptyBlockShortCircuit63(t *testing.T) { testEmptyBlockShortCircuit(t, 63) }
+func TestEmptyBlockShortCircuit64(t *testing.T) { testEmptyBlockShortCircuit(t, 64) }
+
+func testEmptyBlockShortCircuit(t *testing.T, protocol int) {
+	// Create a chain of blocks to import
+	hashes, blocks := makeChain(32, 0, genesis)
+
+	tester := newTester()
+	headerFetcher := tester.makeHeaderFetcher(blocks, -gatherSlack)
+	bodyFetcher := tester.makeBodyFetcher(blocks, 0)
+
+	// Add a monitoring hook for all internal events
+	fetching := make(chan []common.Hash)
+	tester.fetcher.fetchingHook = func(hashes []common.Hash) { fetching <- hashes }
+
+	completing := make(chan []common.Hash)
+	tester.fetcher.completingHook = func(hashes []common.Hash) { completing <- hashes }
+
+	imported := make(chan *types.Block)
+	tester.fetcher.importedHook = func(block *types.Block) { imported <- block }
+
+	// Iteratively announce blocks until all are imported
+	for i := len(hashes) - 2; i >= 0; i-- {
+		tester.fetcher.Notify("valid", hashes[i], uint64(len(hashes)-i-1), time.Now().Add(-arriveTimeout), nil, headerFetcher, bodyFetcher)
+
+		// All announces should fetch the header
+		verifyFetchingEvent(t, fetching, true)
+
+		// Only blocks with data contents should request bodies
+		verifyCompletingEvent(t, completing, len(blocks[hashes[i]].Transactions()) > 0 || len(blocks[hashes[i]].Uncles()) > 0)
+
+		// Irrelevant of the construct, import should succeed
+		verifyImportEvent(t, imported)
+	}
+	verifyImportDone(t, imported)
 }
 
 // Tests that a peer is unable to use unbounded memory with sending infinite

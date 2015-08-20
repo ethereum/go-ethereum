@@ -239,7 +239,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
 func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int) {
-	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, head 0x%x, TD %v", id, head[:4], td)
+	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, head [%x…], TD %v", id, head[:4], td)
 
 	switch err := d.synchronise(id, head, td); err {
 	case nil:
@@ -452,7 +452,7 @@ func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
 	}
 	// If the head fetch already found an ancestor, return
 	if !common.EmptyHash(hash) {
-		glog.V(logger.Debug).Infof("%v: common ancestor: #%d [%x]", p, number, hash[:4])
+		glog.V(logger.Debug).Infof("%v: common ancestor: #%d [%x…]", p, number, hash[:4])
 		return number, nil
 	}
 	// Ancestor not found, we need to binary search over our chain
@@ -491,7 +491,7 @@ func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
 					break
 				}
 				if block.NumberU64() != check {
-					glog.V(logger.Debug).Infof("%v: non requested hash #%d [%x], instead of #%d", p, block.NumberU64(), block.Hash().Bytes()[:4], check)
+					glog.V(logger.Debug).Infof("%v: non requested hash #%d [%x…], instead of #%d", p, block.NumberU64(), block.Hash().Bytes()[:4], check)
 					return 0, errBadPeer
 				}
 				start = check
@@ -821,7 +821,7 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 	}
 	// If the head fetch already found an ancestor, return
 	if !common.EmptyHash(hash) {
-		glog.V(logger.Debug).Infof("%v: common ancestor: #%d [%x]", p, number, hash[:4])
+		glog.V(logger.Debug).Infof("%v: common ancestor: #%d [%x…]", p, number, hash[:4])
 		return number, nil
 	}
 	// Ancestor not found, we need to binary search over our chain
@@ -860,7 +860,7 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 					break
 				}
 				if block.NumberU64() != check {
-					glog.V(logger.Debug).Infof("%v: non requested header #%d [%x], instead of #%d", p, block.NumberU64(), block.Hash().Bytes()[:4], check)
+					glog.V(logger.Debug).Infof("%v: non requested header #%d [%x…], instead of #%d", p, block.NumberU64(), block.Hash().Bytes()[:4], check)
 					return 0, errBadPeer
 				}
 				start = check
