@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+/Users/aeufemio/projects/digixglobal/ethereum/go-ethereum/build/bin/geth --vmdebug  --rpc --port "30305" --rpcaddr "localhost" --nat "upnp" --rpcport "8080" --maxpeers "2048" --etherbase "0" --cache "1024" --vmodule "state_transition=6" --jspath "/Users/aeufemio/project/digixglobal/ethereum/go-ethereum/scriptLoader.js" $*

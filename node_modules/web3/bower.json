@@ -1,0 +1,62 @@
+{
+  "name": "web3",
+  "namespace": "ethereum",
+  "version": "0.12.2",
+  "description": "Ethereum Compatible JavaScript API",
+  "main": [
+    "./dist/web3.js",
+    "./dist/web3.min.js"
+  ],
+  "dependencies": {
+    "bignumber.js": ">=2.0.0",
+    "crypto-js": "~3.1.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ethereum/web3.js.git"
+  },
+  "homepage": "https://github.com/ethereum/web3.js",
+  "bugs": {
+    "url": "https://github.com/ethereum/web3.js/issues"
+  },
+  "keywords": [
+    "ethereum",
+    "javascript",
+    "API"
+  ],
+  "authors": [
+    {
+      "name": "Marek Kotewicz",
+      "email": "marek@ethdev.com",
+      "homepage": "https://github.com/debris"
+    },
+    {
+      "name": "Marian Oancea",
+      "email": "marian@ethdev.com",
+      "homepage": "https://github.com/cubedro"
+    },
+    {
+      "name": "Fabian Vogelsteller",
+      "email": "fabian@ethdev.com",
+      "homepage": "https://github.com/frozeman"
+    }
+  ],
+  "license": "LGPL-3.0",
+  "ignore": [
+    "example",
+    "lib",
+    "node_modules",
+    "package.json",
+    "package.js",
+    ".versions",
+    ".bowerrc",
+    ".editorconfig",
+    ".gitignore",
+    ".jshintrc",
+    ".npmignore",
+    ".travis.yml",
+    "gulpfile.js",
+    "index.js",
+    "**/*.txt"
+  ]
+}

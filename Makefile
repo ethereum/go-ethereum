@@ -14,10 +14,26 @@ evm:
 	build/env.sh $(GOROOT)/bin/go install -v $(shell build/ldflags.sh) ./cmd/evm
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/evm to start the evm."
-mist:
-	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/mist
+
+rlpdump:
+	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/rlpdump
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/mist --asset_path=cmd/mist/assets\" to launch mist."
+	@echo "Run \"$(GOBIN)/rlpdump\" to launch rlpdump."
+
+disasm:
+	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/disasm
+	@echo "Done building."
+	@echo "Run \"$(GOBIN)/disasm\" to launch disasm."
+
+ethtest:
+	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/ethtest
+	@echo "Done building."
+	@echo "Run \"$(GOBIN)/ethtest\" to launch ethtest."
+
+bootnode:
+	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/bootnode
+	@echo "Done building."
+	@echo "Run \"$(GOBIN)/bootnode\" to launch bootnode."
 
 all:
 	build/env.sh go install -v $(shell build/ldflags.sh) ./...

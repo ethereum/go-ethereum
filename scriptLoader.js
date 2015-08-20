@@ -1,0 +1,1 @@
+loadScript("/Users/aeufemio/projects/digixglobal/ethereum/go-ethereum/geth.js")

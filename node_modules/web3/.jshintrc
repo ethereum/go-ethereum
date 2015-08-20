@@ -1,0 +1,19 @@
+{
+    "browserify": true,
+    "bitwise": true,
+    "camelcase": true,
+    "eqeqeq": true,
+    "freeze": true,
+    "funcscope": false,
+    "maxcomplexity": 4, /* our target is 3! */
+    "maxdepth": 3,
+    "maxerr": 50,
+    /*"maxlen": 80*/ /*this should be our goal*/
+    /*"maxparams": 3,*/
+    "nonew": true,
+    "unused": true,
+    "undef": true,
+    "predef": [
+        "console"
+    ]
+}
