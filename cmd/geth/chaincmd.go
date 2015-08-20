@@ -115,17 +115,16 @@ func exportChain(ctx *cli.Context) {
 }
 
 func removeDB(ctx *cli.Context) {
-	confirm, err := utils.PromptConfirm("Remove local databases?")
+	confirm, err := utils.PromptConfirm("Remove local database?")
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
 
 	if confirm {
-		fmt.Println("Removing chain and state databases...")
+		fmt.Println("Removing chaindata...")
 		start := time.Now()
 
-		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "blockchain"))
-		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "state"))
+		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "chaindata"))
 
 		fmt.Printf("Removed in %v\n", time.Since(start))
 	} else {

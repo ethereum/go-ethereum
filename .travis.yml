@@ -5,7 +5,7 @@ install:
   # - go get code.google.com/p/go.tools/cmd/goimports
   # - go get github.com/golang/lint/golint
   # - go get golang.org/x/tools/cmd/vet 
-  - go get golang.org/x/tools/cmd/cover github.com/mattn/goveralls
+  - go get golang.org/x/tools/cmd/cover
 before_script:
   # - gofmt -l -w .
   # - goimports -l -w .
@@ -15,7 +15,7 @@ before_script:
 script:
   - make travis-test-with-coverage
 after_success:
-  - if [ "$COVERALLS_TOKEN" ]; then goveralls -coverprofile=profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN; fi
+  - bash <(curl -s https://codecov.io/bash)
 env:
   global:
     - secure: "U2U1AmkU4NJBgKR/uUAebQY87cNL0+1JHjnLOmmXwxYYyj5ralWb1aSuSH3qSXiT93qLBmtaUkuv9fberHVqrbAeVlztVdUsKAq7JMQH+M99iFkC9UiRMqHmtjWJ0ok4COD1sRYixxi21wb/JrMe3M1iL4QJVS61iltjHhVdM64="

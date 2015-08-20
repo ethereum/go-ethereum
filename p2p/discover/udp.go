@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/fdtrack"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -200,7 +199,6 @@ func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, nodeDBP
 	if err != nil {
 		return nil, err
 	}
-	fdtrack.Open("p2p")
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		return nil, err
@@ -238,7 +236,6 @@ func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, nodeDBPath strin
 
 func (t *udp) close() {
 	close(t.closing)
-	fdtrack.Close("p2p")
 	t.conn.Close()
 	// TODO: wait for the loops to end.
 }
@@ -458,6 +455,10 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, 
 	return packet, nil
 }
 
+type tempError interface {
+	Temporary() bool
+}
+
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
 func (t *udp) readLoop() {
 	defer t.conn.Close()
@@ -467,7 +468,13 @@ func (t *udp) readLoop() {
 	buf := make([]byte, 1280)
 	for {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
-		if err != nil {
+		if tempErr, ok := err.(tempError); ok && tempErr.Temporary() {
+			// Ignore temporary read errors.
+			glog.V(logger.Debug).Infof("Temporary read error: %v", err)
+			continue
+		} else if err != nil {
+			// Shut down the loop for permament errors.
+			glog.V(logger.Debug).Infof("Read error: %v", err)
 			return
 		}
 		t.handlePacket(from, buf[:nbytes])

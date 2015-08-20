@@ -647,7 +647,9 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			queue[i] = ChainSplitEvent{block, logs}
 			queueEvent.splitCount++
 		}
-		PutBlockReceipts(self.chainDb, block, receipts)
+		if err := PutBlockReceipts(self.chainDb, block, receipts); err != nil {
+			glog.V(logger.Warn).Infoln("error writing block receipts:", err)
+		}
 
 		stats.processed++
 	}

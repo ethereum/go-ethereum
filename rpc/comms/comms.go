@@ -49,7 +49,7 @@ var (
 )
 
 type EthereumClient interface {
-	// Close underlaying connection
+	// Close underlying connection
 	Close()
 	// Send request
 	Send(interface{}) error

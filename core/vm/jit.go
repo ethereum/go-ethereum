@@ -83,6 +83,7 @@ type Program struct {
 	code []byte
 }
 
+// NewProgram returns a new JIT program
 func NewProgram(code []byte) *Program {
 	program := &Program{
 		Id:           crypto.Sha3Hash(code),
@@ -113,6 +114,7 @@ func (p *Program) addInstr(op OpCode, pc uint64, fn instrFn, data *big.Int) {
 	p.mapping[pc] = len(p.instructions) - 1
 }
 
+// CompileProgram compiles the given program and return an error when it fails
 func CompileProgram(program *Program) (err error) {
 	if progStatus(atomic.LoadInt32(&program.status)) == progCompile {
 		return nil
@@ -272,6 +274,8 @@ func CompileProgram(program *Program) (err error) {
 	return nil
 }
 
+// RunProgram runs the program given the enviroment and context and returns an
+// error if the execution failed (non-consensus)
 func RunProgram(program *Program, env Environment, context *Context, input []byte) ([]byte, error) {
 	return runProgram(program, 0, NewMemory(), newstack(), env, context, input)
 }
@@ -351,6 +355,8 @@ func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env
 
 		pc++
 	}
+
+	context.Input = nil
 
 	return context.Return(nil), nil
 }

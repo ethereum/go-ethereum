@@ -103,19 +103,14 @@ func TestNatto(t *testing.T) {
 
 func TestBind(t *testing.T) {
 	jsre := New("")
+	defer jsre.Stop(false)
 
 	jsre.Bind("no", &testNativeObjectBinding{})
 
-	val, err := jsre.Run(`no.TestMethod("testMsg")`)
+	_, err := jsre.Run(`no.TestMethod("testMsg")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
-	pp, err := jsre.PrettyPrint(val)
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
-	t.Logf("no: %v", pp)
-	jsre.Stop(false)
 }
 
 func TestLoadScript(t *testing.T) {

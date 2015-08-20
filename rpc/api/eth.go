@@ -577,10 +577,10 @@ func (self *ethApi) SubmitWork(req *shared.Request) (interface{}, error) {
 func (self *ethApi) SubmitHashrate(req *shared.Request) (interface{}, error) {
 	args := new(SubmitHashRateArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
-		return nil, shared.NewDecodeParamError(err.Error())
+		return false, shared.NewDecodeParamError(err.Error())
 	}
 	self.xeth.RemoteMining().SubmitHashrate(common.HexToHash(args.Id), args.Rate)
-	return nil, nil
+	return true, nil
 }
 
 func (self *ethApi) Resend(req *shared.Request) (interface{}, error) {

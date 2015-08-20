@@ -667,7 +667,7 @@ func (self *ipcClient) reconnect() error {
 	return err
 }
 
-func startIpc(cfg IpcConfig, codec codec.Codec, api shared.EthereumApi) error {
+func startIpc(cfg IpcConfig, codec codec.Codec, initializer func(conn net.Conn) (shared.EthereumApi, error)) error {
 	os.Remove(cfg.Endpoint) // in case it still exists from a previous run
 
 	l, err := Listen(cfg.Endpoint)
@@ -686,6 +686,13 @@ func startIpc(cfg IpcConfig, codec codec.Codec, api shared.EthereumApi) error {
 
 			id := newIpcConnId()
 			glog.V(logger.Debug).Infof("New IPC connection with id %06d started\n", id)
+
+			api, err := initializer(conn)
+			if err != nil {
+				glog.V(logger.Error).Infof("Unable to initialize IPC connection - %v\n", err)
+				conn.Close()
+				continue
+			}
 
 			go handle(id, conn, api, codec)
 		}

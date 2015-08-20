@@ -31,6 +31,8 @@ type ApiCoder interface {
 	ReadRequest() ([]*shared.Request, bool, error)
 	// Parse response message from underlying stream
 	ReadResponse() (interface{}, error)
+	// Read raw message from underlying stream
+	Recv() (interface{}, error)
 	// Encode response to encoded form in underlying stream
 	WriteResponse(interface{}) error
 	// Decode single message from data

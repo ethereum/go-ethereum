@@ -19,7 +19,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	_ "net/http/pprof"
 	"os"
@@ -38,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/fdtrack"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -46,16 +44,14 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 )
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "1.0.1"
+	Version          = "1.0.3"
 	VersionMajor     = 1
 	VersionMinor     = 0
-	VersionPatch     = 1
+	VersionPatch     = 3
 )
 
 var (
@@ -398,14 +394,6 @@ func run(ctx *cli.Context) {
 func attach(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
 
-	// Wrap the standard output with a colorified stream (windows)
-	if isatty.IsTerminal(os.Stdout.Fd()) {
-		if pr, pw, err := os.Pipe(); err == nil {
-			go io.Copy(colorable.NewColorableStdout(), pr)
-			os.Stdout = pw
-		}
-	}
-
 	var client comms.EthereumClient
 	var err error
 	if ctx.Args().Present() {
@@ -425,7 +413,7 @@ func attach(ctx *cli.Context) {
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		client,
 		true,
-		nil)
+	)
 
 	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
 		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))
@@ -437,14 +425,6 @@ func attach(ctx *cli.Context) {
 
 func console(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
-
-	// Wrap the standard output with a colorified stream (windows)
-	if isatty.IsTerminal(os.Stdout.Fd()) {
-		if pr, pw, err := os.Pipe(); err == nil {
-			go io.Copy(colorable.NewColorableStdout(), pr)
-			os.Stdout = pw
-		}
-	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
@@ -564,9 +544,6 @@ func blockRecovery(ctx *cli.Context) {
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	// Start Ethereum itself
 	utils.StartEthereum(eth)
-
-	// Start logging file descriptor stats.
-	fdtrack.Start()
 
 	am := eth.AccountManager()
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)

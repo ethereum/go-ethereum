@@ -52,7 +52,7 @@ func RunVmTestWithReader(r io.Reader, skipTests []string) error {
 type bconf struct {
 	name    string
 	precomp bool
-	nojit   bool
+	jit     bool
 }
 
 func BenchVmTest(p string, conf bconf, b *testing.B) error {
@@ -67,8 +67,8 @@ func BenchVmTest(p string, conf bconf, b *testing.B) error {
 		return fmt.Errorf("test not found: %s", conf.name)
 	}
 
-	pNoJit := vm.DisableJit
-	vm.DisableJit = conf.nojit
+	pJit := vm.EnableJit
+	vm.EnableJit = conf.jit
 	pForceJit := vm.ForceJit
 	vm.ForceJit = conf.precomp
 
@@ -99,7 +99,7 @@ func BenchVmTest(p string, conf bconf, b *testing.B) error {
 		benchVmTest(test, env, b)
 	}
 
-	vm.DisableJit = pNoJit
+	vm.EnableJit = pJit
 	vm.ForceJit = pForceJit
 
 	return nil
