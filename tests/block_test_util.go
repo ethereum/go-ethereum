@@ -150,7 +150,7 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 
 		// test the block
 		if err := runBlockTest(test); err != nil {
-			return err
+			return fmt.Errorf("%s: %v", name, err)
 		}
 		glog.Infoln("Block test passed: ", name)
 
