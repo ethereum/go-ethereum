@@ -129,9 +129,7 @@ func (p *peer) MarkTransaction(hash common.Hash) {
 // SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
 func (p *peer) SendTransactions(txs types.Transactions) error {
-	propTxnOutPacketsMeter.Mark(1)
 	for _, tx := range txs {
-		propTxnOutTrafficMeter.Mark(tx.Size().Int64())
 		p.knownTxs.Add(tx.Hash())
 	}
 	return p2p.Send(p.rw, TxMsg, txs)
@@ -139,60 +137,124 @@ func (p *peer) SendTransactions(txs types.Transactions) error {
 
 // SendBlockHashes sends a batch of known hashes to the remote peer.
 func (p *peer) SendBlockHashes(hashes []common.Hash) error {
-	reqHashOutPacketsMeter.Mark(1)
-	reqHashOutTrafficMeter.Mark(int64(32 * len(hashes)))
-
 	return p2p.Send(p.rw, BlockHashesMsg, hashes)
 }
 
 // SendBlocks sends a batch of blocks to the remote peer.
 func (p *peer) SendBlocks(blocks []*types.Block) error {
-	reqBlockOutPacketsMeter.Mark(1)
-	for _, block := range blocks {
-		reqBlockOutTrafficMeter.Mark(block.Size().Int64())
-	}
 	return p2p.Send(p.rw, BlocksMsg, blocks)
 }
 
-// SendNewBlockHashes announces the availability of a number of blocks through
+// SendNewBlockHashes61 announces the availability of a number of blocks through
 // a hash notification.
-func (p *peer) SendNewBlockHashes(hashes []common.Hash) error {
-	propHashOutPacketsMeter.Mark(1)
-	propHashOutTrafficMeter.Mark(int64(32 * len(hashes)))
-
+func (p *peer) SendNewBlockHashes61(hashes []common.Hash) error {
 	for _, hash := range hashes {
 		p.knownBlocks.Add(hash)
 	}
 	return p2p.Send(p.rw, NewBlockHashesMsg, hashes)
 }
 
+// SendNewBlockHashes announces the availability of a number of blocks through
+// a hash notification.
+func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
+	for _, hash := range hashes {
+		p.knownBlocks.Add(hash)
+	}
+	request := make(newBlockHashesData, len(hashes))
+	for i := 0; i < len(hashes); i++ {
+		request[i].Hash = hashes[i]
+		request[i].Number = numbers[i]
+	}
+	return p2p.Send(p.rw, NewBlockHashesMsg, request)
+}
+
 // SendNewBlock propagates an entire block to a remote peer.
 func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
-	propBlockOutPacketsMeter.Mark(1)
-	propBlockOutTrafficMeter.Mark(block.Size().Int64())
-
 	p.knownBlocks.Add(block.Hash())
 	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
+}
+
+// SendBlockHeaders sends a batch of block headers to the remote peer.
+func (p *peer) SendBlockHeaders(headers []*types.Header) error {
+	return p2p.Send(p.rw, BlockHeadersMsg, headers)
+}
+
+// SendBlockBodies sends a batch of block contents to the remote peer.
+func (p *peer) SendBlockBodies(bodies []*blockBody) error {
+	return p2p.Send(p.rw, BlockBodiesMsg, blockBodiesData(bodies))
+}
+
+// SendNodeData sends a batch of arbitrary internal data, corresponding to the
+// hashes requested.
+func (p *peer) SendNodeData(data [][]byte) error {
+	return p2p.Send(p.rw, NodeDataMsg, data)
+}
+
+// SendReceipts sends a batch of transaction receipts, corresponding to the ones
+// requested.
+func (p *peer) SendReceipts(receipts []*types.Receipt) error {
+	return p2p.Send(p.rw, ReceiptsMsg, receipts)
 }
 
 // RequestHashes fetches a batch of hashes from a peer, starting at from, going
 // towards the genesis block.
 func (p *peer) RequestHashes(from common.Hash) error {
-	glog.V(logger.Debug).Infof("Peer [%s] fetching hashes (%d) from %x...\n", p.id, downloader.MaxHashFetch, from[:4])
+	glog.V(logger.Debug).Infof("%v fetching hashes (%d) from %x...", p, downloader.MaxHashFetch, from[:4])
 	return p2p.Send(p.rw, GetBlockHashesMsg, getBlockHashesData{from, uint64(downloader.MaxHashFetch)})
 }
 
-// RequestHashesFromNumber fetches a batch of hashes from a peer, starting at the
-// requested block number, going upwards towards the genesis block.
+// RequestHashesFromNumber fetches a batch of hashes from a peer, starting at
+// the requested block number, going upwards towards the genesis block.
 func (p *peer) RequestHashesFromNumber(from uint64, count int) error {
-	glog.V(logger.Debug).Infof("Peer [%s] fetching hashes (%d) from #%d...\n", p.id, count, from)
+	glog.V(logger.Debug).Infof("%v fetching hashes (%d) from #%d...", p, count, from)
 	return p2p.Send(p.rw, GetBlockHashesFromNumberMsg, getBlockHashesFromNumberData{from, uint64(count)})
 }
 
 // RequestBlocks fetches a batch of blocks corresponding to the specified hashes.
 func (p *peer) RequestBlocks(hashes []common.Hash) error {
-	glog.V(logger.Debug).Infof("[%s] fetching %v blocks\n", p.id, len(hashes))
+	glog.V(logger.Debug).Infof("%v fetching %v blocks", p, len(hashes))
 	return p2p.Send(p.rw, GetBlocksMsg, hashes)
+}
+
+// RequestHeaders is a wrapper around the header query functions to fetch a
+// single header. It is used solely by the fetcher.
+func (p *peer) RequestOneHeader(hash common.Hash) error {
+	glog.V(logger.Debug).Infof("%v fetching a single header: %x", p, hash)
+	return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}, Amount: uint64(1), Skip: uint64(0), Reverse: false})
+}
+
+// RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
+// specified header query, based on the hash of an origin block.
+func (p *peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
+	glog.V(logger.Debug).Infof("%v fetching %d headers from %x, skipping %d (reverse = %v)", p, amount, origin[:4], skip, reverse)
+	return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+}
+
+// RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
+// specified header query, based on the number of an origin block.
+func (p *peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
+	glog.V(logger.Debug).Infof("%v fetching %d headers from #%d, skipping %d (reverse = %v)", p, amount, origin, skip, reverse)
+	return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+}
+
+// RequestBodies fetches a batch of blocks' bodies corresponding to the hashes
+// specified.
+func (p *peer) RequestBodies(hashes []common.Hash) error {
+	glog.V(logger.Debug).Infof("%v fetching %d block bodies", p, len(hashes))
+	return p2p.Send(p.rw, GetBlockBodiesMsg, hashes)
+}
+
+// RequestNodeData fetches a batch of arbitrary data from a node's known state
+// data, corresponding to the specified hashes.
+func (p *peer) RequestNodeData(hashes []common.Hash) error {
+	glog.V(logger.Debug).Infof("%v fetching %v state data", p, len(hashes))
+	return p2p.Send(p.rw, GetNodeDataMsg, hashes)
+}
+
+// RequestReceipts fetches a batch of transaction receipts from a remote node.
+func (p *peer) RequestReceipts(hashes []common.Hash) error {
+	glog.V(logger.Debug).Infof("%v fetching %v receipts", p, len(hashes))
+	return p2p.Send(p.rw, GetReceiptsMsg, hashes)
 }
 
 // Handshake executes the eth protocol handshake, negotiating version number,
