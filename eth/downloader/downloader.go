@@ -319,7 +319,9 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 		}
 	}()
 
-	glog.V(logger.Debug).Infof("Synchronizing with the network using: %s, eth/%d", p.id, p.version)
+	glog.V(logger.Debug).Infof("Synchronising with the network using: %s [eth/%d]", p.id, p.version)
+	defer glog.V(logger.Debug).Infof("Synchronisation terminated")
+
 	switch {
 	case p.version == eth61:
 		// Old eth/61, use forward, concurrent hash and block retrieval algorithm
@@ -887,6 +889,7 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 // are returned, potentially throttling on the way.
 func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 	glog.V(logger.Debug).Infof("%v: downloading headers from #%d", p, from)
+	defer glog.V(logger.Debug).Infof("%v: header download terminated", p)
 
 	// Create a timeout timer, and the associated hash fetcher
 	timeout := time.NewTimer(0) // timer to dump a non-responsive active peer
@@ -1103,6 +1106,7 @@ func (d *Downloader) fetchBodies(from uint64) error {
 				break
 			}
 			// Send a download request to all idle peers, until throttled
+			queuedEmptyBlocks := false
 			for _, peer := range d.peers.IdlePeers() {
 				// Short circuit if throttling activated
 				if d.queue.Throttle() {
@@ -1111,7 +1115,14 @@ func (d *Downloader) fetchBodies(from uint64) error {
 				// Reserve a chunk of hashes for a peer. A nil can mean either that
 				// no more hashes are available, or that the peer is known not to
 				// have them.
-				request := d.queue.Reserve(peer, peer.Capacity())
+				request, process, err := d.queue.Reserve(peer, peer.Capacity())
+				if err != nil {
+					return err
+				}
+				if process {
+					queuedEmptyBlocks = true
+					go d.process()
+				}
 				if request == nil {
 					continue
 				}
@@ -1126,7 +1137,7 @@ func (d *Downloader) fetchBodies(from uint64) error {
 			}
 			// Make sure that we have peers available for fetching. If all peers have been tried
 			// and all failed throw an error
-			if !d.queue.Throttle() && d.queue.InFlight() == 0 {
+			if !queuedEmptyBlocks && !d.queue.Throttle() && d.queue.InFlight() == 0 {
 				return errPeersUnavailable
 			}
 		}

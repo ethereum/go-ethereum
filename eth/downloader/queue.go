@@ -312,18 +312,19 @@ func (q *queue) Reserve61(p *peer, count int) *fetchRequest {
 }
 
 // Reserve reserves a set of headers for the given peer, skipping any previously
-// failed download.
-func (q *queue) Reserve(p *peer, count int) *fetchRequest {
+// failed download. Beside the next batch of needed fetches, it also returns a
+// flag whether empty blocks were queued requiring processing.
+func (q *queue) Reserve(p *peer, count int) (*fetchRequest, bool, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	// Short circuit if the pool has been depleted, or if the peer's already
 	// downloading something (sanity check not to corrupt state)
 	if q.headerQueue.Empty() {
-		return nil
+		return nil, false, nil
 	}
 	if _, ok := q.pendPool[p.id]; ok {
-		return nil
+		return nil, false, nil
 	}
 	// Calculate an upper limit on the bodies we might fetch (i.e. throttling)
 	space := len(q.blockCache) - len(q.blockPool)
@@ -334,8 +335,20 @@ func (q *queue) Reserve(p *peer, count int) *fetchRequest {
 	send := make([]*types.Header, 0, count)
 	skip := make([]*types.Header, 0)
 
+	process := false
 	for proc := 0; proc < space && len(send) < count && !q.headerQueue.Empty(); proc++ {
 		header := q.headerQueue.PopItem().(*types.Header)
+
+		// If the header defines an empty block, deliver straight
+		if header.TxHash == types.DeriveSha(types.Transactions{}) && header.UncleHash == types.CalcUncleHash([]*types.Header{}) {
+			if err := q.enqueue("", types.NewBlockWithHeader(header)); err != nil {
+				return nil, false, errInvalidChain
+			}
+			delete(q.headerPool, header.Hash())
+			process, space, proc = true, space-1, proc-1
+			continue
+		}
+		// If it's a content block, add to the body fetch request
 		if p.ignored.Has(header.Hash()) {
 			skip = append(skip, header)
 		} else {
@@ -348,7 +361,7 @@ func (q *queue) Reserve(p *peer, count int) *fetchRequest {
 	}
 	// Assemble and return the block download request
 	if len(send) == 0 {
-		return nil
+		return nil, process, nil
 	}
 	request := &fetchRequest{
 		Peer:    p,
@@ -357,7 +370,7 @@ func (q *queue) Reserve(p *peer, count int) *fetchRequest {
 	}
 	q.pendPool[p.id] = request
 
-	return request
+	return request, process, nil
 }
 
 // Cancel aborts a fetch request, returning all pending hashes to the queue.
@@ -424,19 +437,12 @@ func (q *queue) Deliver61(id string, blocks []*types.Block) (err error) {
 			errs = append(errs, fmt.Errorf("non-requested block %x", hash))
 			continue
 		}
-		// If a requested block falls out of the range, the hash chain is invalid
-		index := int(int64(block.NumberU64()) - int64(q.blockOffset))
-		if index >= len(q.blockCache) || index < 0 {
-			return errInvalidChain
-		}
-		// Otherwise merge the block and mark the hash block
-		q.blockCache[index] = &Block{
-			RawBlock:   block,
-			OriginPeer: id,
+		// Queue the block up for processing
+		if err := q.enqueue(id, block); err != nil {
+			return err
 		}
 		delete(request.Hashes, hash)
 		delete(q.hashPool, hash)
-		q.blockPool[hash] = block.NumberU64()
 	}
 	// Return all failed or missing fetches to the queue
 	for hash, index := range request.Hashes {
@@ -483,19 +489,12 @@ func (q *queue) Deliver(id string, transactions [][]*types.Transaction, uncles [
 		}
 		block := types.NewBlockWithHeader(header).WithBody(transactions[i], uncles[i])
 
-		// If a requested block falls out of the range, the hash chain is invalid
-		index := int(int64(block.NumberU64()) - int64(q.blockOffset))
-		if index >= len(q.blockCache) || index < 0 {
-			return errInvalidChain
-		}
-		// Otherwise merge the block and mark the hash done
-		q.blockCache[index] = &Block{
-			RawBlock:   block,
-			OriginPeer: id,
+		// Queue the block up for processing
+		if err := q.enqueue(id, block); err != nil {
+			return err
 		}
 		request.Headers[i] = nil
 		delete(q.headerPool, header.Hash())
-		q.blockPool[header.Hash()] = block.NumberU64()
 	}
 	// Return all failed or missing fetches to the queue
 	for _, header := range request.Headers {
@@ -510,6 +509,23 @@ func (q *queue) Deliver(id string, transactions [][]*types.Transaction, uncles [
 		}
 		return fmt.Errorf("multiple failures: %v", errs)
 	}
+	return nil
+}
+
+// enqueue inserts a new block into the final delivery queue, waiting for pickup
+// by the processor.
+func (q *queue) enqueue(origin string, block *types.Block) error {
+	// If a requested block falls out of the range, the hash chain is invalid
+	index := int(int64(block.NumberU64()) - int64(q.blockOffset))
+	if index >= len(q.blockCache) || index < 0 {
+		return errInvalidChain
+	}
+	// Otherwise merge the block and mark the hash done
+	q.blockCache[index] = &Block{
+		RawBlock:   block,
+		OriginPeer: origin,
+	}
+	q.blockPool[block.Header().Hash()] = block.NumberU64()
 	return nil
 }
 
