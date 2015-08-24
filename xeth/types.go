@@ -19,6 +19,7 @@ package xeth
 import (
 	"bytes"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -76,7 +77,7 @@ type Block struct {
 	Hash         string       `json:"hash"`
 	Transactions *common.List `json:"transactions"`
 	Uncles       *common.List `json:"uncles"`
-	Time         uint64       `json:"time"`
+	Time         *big.Int     `json:"time"`
 	Coinbase     string       `json:"coinbase"`
 	Name         string       `json:"name"`
 	GasLimit     string       `json:"gasLimit"`

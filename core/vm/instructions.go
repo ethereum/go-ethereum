@@ -341,7 +341,7 @@ func opCoinbase(instr instruction, env Environment, context *Context, memory *Me
 }
 
 func opTimestamp(instr instruction, env Environment, context *Context, memory *Memory, stack *stack) {
-	stack.push(U256(new(big.Int).SetUint64(env.Time())))
+	stack.push(U256(new(big.Int).Set(env.Time())))
 }
 
 func opNumber(instr instruction, env Environment, context *Context, memory *Memory, stack *stack) {

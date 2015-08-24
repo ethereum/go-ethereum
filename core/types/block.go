@@ -60,7 +60,7 @@ type Header struct {
 	Number      *big.Int       // The block number
 	GasLimit    *big.Int       // Gas limit
 	GasUsed     *big.Int       // Gas used
-	Time        uint64         // Creation time
+	Time        *big.Int       // Creation time
 	Extra       []byte         // Extra data
 	MixDigest   common.Hash    // for quick difficulty verification
 	Nonce       BlockNonce
@@ -94,7 +94,7 @@ func (h *Header) UnmarshalJSON(data []byte) error {
 		Coinbase   string
 		Difficulty string
 		GasLimit   string
-		Time       uint64
+		Time       *big.Int
 		Extra      string
 	}
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -210,6 +210,9 @@ func NewBlockWithHeader(header *Header) *Block {
 
 func copyHeader(h *Header) *Header {
 	cpy := *h
+	if cpy.Time = new(big.Int); h.Time != nil {
+		cpy.Time.Set(h.Time)
+	}
 	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
 		cpy.Difficulty.Set(h.Difficulty)
 	}
@@ -301,13 +304,13 @@ func (b *Block) Number() *big.Int     { return new(big.Int).Set(b.header.Number)
 func (b *Block) GasLimit() *big.Int   { return new(big.Int).Set(b.header.GasLimit) }
 func (b *Block) GasUsed() *big.Int    { return new(big.Int).Set(b.header.GasUsed) }
 func (b *Block) Difficulty() *big.Int { return new(big.Int).Set(b.header.Difficulty) }
+func (b *Block) Time() *big.Int       { return new(big.Int).Set(b.header.Time) }
 
 func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
 func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
 func (b *Block) Nonce() uint64            { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
 func (b *Block) Bloom() Bloom             { return b.header.Bloom }
 func (b *Block) Coinbase() common.Address { return b.header.Coinbase }
-func (b *Block) Time() uint64             { return b.header.Time }
 func (b *Block) Root() common.Hash        { return b.header.Root }
 func (b *Block) ParentHash() common.Hash  { return b.header.ParentHash }
 func (b *Block) TxHash() common.Hash      { return b.header.TxHash }

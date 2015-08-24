@@ -166,16 +166,21 @@ func GenerateChain(parent *types.Block, db common.Database, n int, gen func(int,
 }
 
 func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
-	time := parent.Time() + 10 // block time is fixed at 10 seconds
+	var time *big.Int
+	if parent.Time() == nil {
+		time = big.NewInt(10)
+	} else {
+		time = new(big.Int).Add(parent.Time(), big.NewInt(10)) // block time is fixed at 10 seconds
+	}
 	return &types.Header{
 		Root:       state.Root(),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: CalcDifficulty(time, parent.Time(), parent.Number(), parent.Difficulty()),
+		Difficulty: CalcDifficulty(time.Uint64(), new(big.Int).Sub(time, big.NewInt(10)).Uint64(), parent.Number(), parent.Difficulty()),
 		GasLimit:   CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
-		Time:       uint64(time),
+		Time:       time,
 	}
 }
 

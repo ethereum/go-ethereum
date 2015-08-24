@@ -117,7 +117,7 @@ func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow po
 	manager.downloader = downloader.New(manager.eventMux, manager.chainman.HasBlock, manager.chainman.GetBlock, manager.chainman.CurrentBlock, manager.chainman.InsertChain, manager.removePeer)
 
 	validator := func(block *types.Block, parent *types.Block) error {
-		return core.ValidateHeader(pow, block.Header(), parent, true)
+		return core.ValidateHeader(pow, block.Header(), parent, true, false)
 	}
 	heighter := func() uint64 {
 		return manager.chainman.CurrentBlock().NumberU64()
