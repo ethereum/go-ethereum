@@ -40,16 +40,6 @@ type Jeth struct {
 }
 
 func NewJeth(ethApi shared.EthereumApi, re *jsre.JSRE, client comms.EthereumClient, fe xeth.Frontend) *Jeth {
-	// enable the jeth as the user agent
-	req := shared.Request{
-		Id:      0,
-		Method:  useragent.EnableUserAgentMethod,
-		Jsonrpc: shared.JsonRpcVersion,
-		Params:  []byte("[]"),
-	}
-	client.Send(&req)
-	client.Recv()
-
 	return &Jeth{ethApi, re, client, fe}
 }
 

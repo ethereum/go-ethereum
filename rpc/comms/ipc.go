@@ -42,16 +42,12 @@ func (self *ipcClient) Close() {
 	self.coder.Close()
 }
 
-func (self *ipcClient) Send(req interface{}) error {
+func (self *ipcClient) Send(msg interface{}) error {
 	var err error
-	if r, ok := req.(*shared.Request); ok {
-		if err = self.coder.WriteResponse(r); err != nil {
-			if err = self.reconnect(); err == nil {
-				err = self.coder.WriteResponse(r)
-			}
+	if err = self.coder.WriteResponse(msg); err != nil {
+		if err = self.reconnect(); err == nil {
+			err = self.coder.WriteResponse(msg)
 		}
-
-		return err
 	}
 	return err
 }
