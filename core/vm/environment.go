@@ -33,7 +33,7 @@ type Environment interface {
 	BlockNumber() *big.Int
 	GetHash(n uint64) common.Hash
 	Coinbase() common.Address
-	Time() uint64
+	Time() *big.Int
 	Difficulty() *big.Int
 	GasLimit() *big.Int
 	CanTransfer(from Account, balance *big.Int) bool

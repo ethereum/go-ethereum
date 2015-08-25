@@ -203,7 +203,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	txs := block.Transactions()
 
 	// Block validation
-	if err = ValidateHeader(sm.Pow, header, parent, false); err != nil {
+	if err = ValidateHeader(sm.Pow, header, parent, false, false); err != nil {
 		return
 	}
 
@@ -327,7 +327,7 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 			return UncleError("uncle[%d](%x)'s parent is not ancestor (%x)", i, hash[:4], uncle.ParentHash[0:4])
 		}
 
-		if err := ValidateHeader(sm.Pow, uncle, ancestors[uncle.ParentHash], true); err != nil {
+		if err := ValidateHeader(sm.Pow, uncle, ancestors[uncle.ParentHash], true, true); err != nil {
 			return ValidationError(fmt.Sprintf("uncle[%d](%x) header invalid: %v", i, hash[:4], err))
 		}
 	}
@@ -358,19 +358,25 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 
 // See YP section 4.3.4. "Block Header Validity"
 // Validates a block. Returns an error if the block is invalid.
-func ValidateHeader(pow pow.PoW, block *types.Header, parent *types.Block, checkPow bool) error {
+func ValidateHeader(pow pow.PoW, block *types.Header, parent *types.Block, checkPow, uncle bool) error {
 	if big.NewInt(int64(len(block.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
 		return fmt.Errorf("Block extra data too long (%d)", len(block.Extra))
 	}
 
-	if block.Time > uint64(time.Now().Unix()) {
-		return BlockFutureErr
+	if uncle {
+		if block.Time.Cmp(common.MaxBig) == 1 {
+			return BlockTSTooBigErr
+		}
+	} else {
+		if block.Time.Cmp(big.NewInt(time.Now().Unix())) == 1 {
+			return BlockFutureErr
+		}
 	}
-	if block.Time <= parent.Time() {
+	if block.Time.Cmp(parent.Time()) != 1 {
 		return BlockEqualTSErr
 	}
 
-	expd := CalcDifficulty(block.Time, parent.Time(), parent.Number(), parent.Difficulty())
+	expd := CalcDifficulty(block.Time.Uint64(), parent.Time().Uint64(), parent.Number(), parent.Difficulty())
 	if expd.Cmp(block.Difficulty) != 0 {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
 	}

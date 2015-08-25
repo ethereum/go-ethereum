@@ -93,7 +93,7 @@ func (self *Env) StructLogs() []StructLog {
 
 //func (self *Env) PrevHash() []byte      { return self.parent }
 func (self *Env) Coinbase() common.Address { return common.Address{} }
-func (self *Env) Time() uint64             { return uint64(time.Now().Unix()) }
+func (self *Env) Time() *big.Int           { return big.NewInt(time.Now().Unix()) }
 func (self *Env) Difficulty() *big.Int     { return big.NewInt(0) }
 func (self *Env) State() *state.StateDB    { return nil }
 func (self *Env) GasLimit() *big.Int       { return self.gasLimit }

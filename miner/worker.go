@@ -278,7 +278,7 @@ func (self *worker) wait() {
 					glog.V(logger.Error).Infoln("Invalid block found during mining")
 					continue
 				}
-				if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true); err != nil && err != core.BlockFutureErr {
+				if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true, false); err != nil && err != core.BlockFutureErr {
 					glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
 					continue
 				}
@@ -434,8 +434,8 @@ func (self *worker) commitNewWork() {
 	tstart := time.Now()
 	parent := self.chain.CurrentBlock()
 	tstamp := tstart.Unix()
-	if tstamp <= int64(parent.Time()) {
-		tstamp = int64(parent.Time()) + 1
+	if parent.Time().Cmp(new(big.Int).SetInt64(tstamp)) != 1 {
+		tstamp = parent.Time().Int64() + 1
 	}
 	// this will ensure we're not going off too far in the future
 	if now := time.Now().Unix(); tstamp > now+4 {
@@ -448,12 +448,12 @@ func (self *worker) commitNewWork() {
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
-		Difficulty: core.CalcDifficulty(uint64(tstamp), parent.Time(), parent.Number(), parent.Difficulty()),
+		Difficulty: core.CalcDifficulty(uint64(tstamp), parent.Time().Uint64(), parent.Number(), parent.Difficulty()),
 		GasLimit:   core.CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Coinbase:   self.coinbase,
 		Extra:      self.extra,
-		Time:       uint64(tstamp),
+		Time:       big.NewInt(tstamp),
 	}
 
 	previous := self.current

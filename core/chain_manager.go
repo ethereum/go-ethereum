@@ -596,7 +596,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 				// Allow up to MaxFuture second in the future blocks. If this limit
 				// is exceeded the chain is discarded and processed at a later time
 				// if given.
-				if max := uint64(time.Now().Unix()) + maxTimeFutureBlocks; block.Time() > max {
+				max := big.NewInt(time.Now().Unix() + maxTimeFutureBlocks)
+				if block.Time().Cmp(max) == 1 {
 					return i, fmt.Errorf("%v: BlockFutureErr, %v > %v", BlockFutureErr, block.Time(), max)
 				}
 
