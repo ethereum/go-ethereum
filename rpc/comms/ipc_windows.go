@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/ethereum/go-ethereum/rpc/useragent"
 )
 
 var (
@@ -656,13 +657,33 @@ func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 		return nil, err
 	}
 
-	return &ipcClient{cfg.Endpoint, c, codec, codec.New(c)}, nil
+	coder := codec.New(c)
+	msg := shared.Request{
+		Id:      0,
+		Method:  useragent.EnableUserAgentMethod,
+		Jsonrpc: shared.JsonRpcVersion,
+		Params:  []byte("[]"),
+	}
+
+	coder.WriteResponse(msg)
+	coder.Recv()
+
+	return &ipcClient{cfg.Endpoint, c, codec, coder}, nil
 }
 
 func (self *ipcClient) reconnect() error {
 	c, err := Dial(self.endpoint)
 	if err == nil {
 		self.coder = self.codec.New(c)
+
+		req := shared.Request{
+			Id:      0,
+			Method:  useragent.EnableUserAgentMethod,
+			Jsonrpc: shared.JsonRpcVersion,
+			Params:  []byte("[]"),
+		}
+		self.coder.WriteResponse(req)
+		self.coder.Recv()
 	}
 	return err
 }
