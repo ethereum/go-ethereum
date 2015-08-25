@@ -526,6 +526,7 @@ func (d *Downloader) fetchHashes61(p *peer, td *big.Int, from uint64) error {
 	glog.V(logger.Debug).Infof("%v: downloading hashes from #%d", p, from)
 
 	// Create a timeout timer, and the associated hash fetcher
+	request := time.Now()       // time of the last fetch request
 	timeout := time.NewTimer(0) // timer to dump a non-responsive active peer
 	<-timeout.C                 // timeout channel should be initially empty
 	defer timeout.Stop()
@@ -534,6 +535,7 @@ func (d *Downloader) fetchHashes61(p *peer, td *big.Int, from uint64) error {
 		glog.V(logger.Detail).Infof("%v: fetching %d hashes from #%d", p, MaxHashFetch, from)
 
 		go p.getAbsHashes(from, MaxHashFetch)
+		request = time.Now()
 		timeout.Reset(hashTTL)
 	}
 	// Start pulling hashes, until all are exhausted
@@ -557,6 +559,7 @@ func (d *Downloader) fetchHashes61(p *peer, td *big.Int, from uint64) error {
 				glog.V(logger.Debug).Infof("Received hashes from incorrect peer(%s)", hashPack.peerId)
 				break
 			}
+			hashReqTimer.UpdateSince(request)
 			timeout.Stop()
 
 			// If no more hashes are inbound, notify the block fetcher and return
@@ -609,6 +612,7 @@ func (d *Downloader) fetchHashes61(p *peer, td *big.Int, from uint64) error {
 
 		case <-timeout.C:
 			glog.V(logger.Debug).Infof("%v: hash request timed out", p)
+			hashTimeoutMeter.Mark(1)
 			return errTimeout
 		}
 	}
@@ -896,6 +900,7 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 	defer glog.V(logger.Debug).Infof("%v: header download terminated", p)
 
 	// Create a timeout timer, and the associated hash fetcher
+	request := time.Now()       // time of the last fetch request
 	timeout := time.NewTimer(0) // timer to dump a non-responsive active peer
 	<-timeout.C                 // timeout channel should be initially empty
 	defer timeout.Stop()
@@ -904,6 +909,7 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 		glog.V(logger.Detail).Infof("%v: fetching %d headers from #%d", p, MaxHeaderFetch, from)
 
 		go p.getAbsHeaders(from, MaxHeaderFetch, 0, false)
+		request = time.Now()
 		timeout.Reset(headerTTL)
 	}
 	// Start pulling headers, until all are exhausted
@@ -927,6 +933,7 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 				glog.V(logger.Debug).Infof("Received headers from incorrect peer (%s)", headerPack.peerId)
 				break
 			}
+			headerReqTimer.UpdateSince(request)
 			timeout.Stop()
 
 			// If no more headers are inbound, notify the body fetcher and return
@@ -980,6 +987,7 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 		case <-timeout.C:
 			// Header retrieval timed out, consider the peer bad and drop
 			glog.V(logger.Debug).Infof("%v: header request timed out", p)
+			headerTimeoutMeter.Mark(1)
 			d.dropPeer(p.id)
 
 			// Finish the sync gracefully instead of dumping the gathered data though
@@ -1244,7 +1252,14 @@ func (d *Downloader) process() {
 // DeliverHashes61 injects a new batch of hashes received from a remote node into
 // the download schedule. This is usually invoked through the BlockHashesMsg by
 // the protocol handler.
-func (d *Downloader) DeliverHashes61(id string, hashes []common.Hash) error {
+func (d *Downloader) DeliverHashes61(id string, hashes []common.Hash) (err error) {
+	// Update the delivery metrics for both good and failed deliveries
+	hashInMeter.Mark(int64(len(hashes)))
+	defer func() {
+		if err != nil {
+			hashDropMeter.Mark(int64(len(hashes)))
+		}
+	}()
 	// Make sure the downloader is active
 	if atomic.LoadInt32(&d.synchronising) == 0 {
 		return errNoSyncActive
@@ -1265,7 +1280,14 @@ func (d *Downloader) DeliverHashes61(id string, hashes []common.Hash) error {
 
 // DeliverBlocks61 injects a new batch of blocks received from a remote node.
 // This is usually invoked through the BlocksMsg by the protocol handler.
-func (d *Downloader) DeliverBlocks61(id string, blocks []*types.Block) error {
+func (d *Downloader) DeliverBlocks61(id string, blocks []*types.Block) (err error) {
+	// Update the delivery metrics for both good and failed deliveries
+	blockInMeter.Mark(int64(len(blocks)))
+	defer func() {
+		if err != nil {
+			blockDropMeter.Mark(int64(len(blocks)))
+		}
+	}()
 	// Make sure the downloader is active
 	if atomic.LoadInt32(&d.synchronising) == 0 {
 		return errNoSyncActive
@@ -1286,7 +1308,14 @@ func (d *Downloader) DeliverBlocks61(id string, blocks []*types.Block) error {
 
 // DeliverHeaders injects a new batch of blck headers received from a remote
 // node into the download schedule.
-func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) error {
+func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) (err error) {
+	// Update the delivery metrics for both good and failed deliveries
+	headerInMeter.Mark(int64(len(headers)))
+	defer func() {
+		if err != nil {
+			headerDropMeter.Mark(int64(len(headers)))
+		}
+	}()
 	// Make sure the downloader is active
 	if atomic.LoadInt32(&d.synchronising) == 0 {
 		return errNoSyncActive
@@ -1306,7 +1335,14 @@ func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) error {
 }
 
 // DeliverBodies injects a new batch of block bodies received from a remote node.
-func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header) error {
+func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header) (err error) {
+	// Update the delivery metrics for both good and failed deliveries
+	bodyInMeter.Mark(int64(len(transactions)))
+	defer func() {
+		if err != nil {
+			bodyDropMeter.Mark(int64(len(transactions)))
+		}
+	}()
 	// Make sure the downloader is active
 	if atomic.LoadInt32(&d.synchronising) == 0 {
 		return errNoSyncActive

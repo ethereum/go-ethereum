@@ -397,8 +397,18 @@ func (q *queue) Expire(timeout time.Duration) []string {
 	peers := []string{}
 	for id, request := range q.pendPool {
 		if time.Since(request.Time) > timeout {
+			// Update the metrics with the timeout
+			if len(request.Hashes) > 0 {
+				blockTimeoutMeter.Mark(1)
+			} else {
+				bodyTimeoutMeter.Mark(1)
+			}
+			// Return any non satisfied requests to the pool
 			for hash, index := range request.Hashes {
 				q.hashQueue.Push(hash, float32(index))
+			}
+			for _, header := range request.Headers {
+				q.headerQueue.Push(header, -float32(header.Number.Uint64()))
 			}
 			peers = append(peers, id)
 		}
@@ -420,6 +430,7 @@ func (q *queue) Deliver61(id string, blocks []*types.Block) (err error) {
 	if request == nil {
 		return errNoFetchesPending
 	}
+	blockReqTimer.UpdateSince(request.Time)
 	delete(q.pendPool, id)
 
 	// If no blocks were retrieved, mark them as unavailable for the origin peer
@@ -468,6 +479,7 @@ func (q *queue) Deliver(id string, txLists [][]*types.Transaction, uncleLists []
 	if request == nil {
 		return errNoFetchesPending
 	}
+	bodyReqTimer.UpdateSince(request.Time)
 	delete(q.pendPool, id)
 
 	// If no block bodies were retrieved, mark them as unavailable for the origin peer

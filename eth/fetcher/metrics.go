@@ -23,10 +23,24 @@ import (
 )
 
 var (
-	announceMeter  = metrics.NewMeter("eth/sync/RemoteAnnounces")
-	announceTimer  = metrics.NewTimer("eth/sync/LocalAnnounces")
-	broadcastMeter = metrics.NewMeter("eth/sync/RemoteBroadcasts")
-	broadcastTimer = metrics.NewTimer("eth/sync/LocalBroadcasts")
-	discardMeter   = metrics.NewMeter("eth/sync/DiscardedBlocks")
-	futureMeter    = metrics.NewMeter("eth/sync/FutureBlocks")
+	propAnnounceInMeter   = metrics.NewMeter("eth/fetcher/prop/announces/in")
+	propAnnounceOutTimer  = metrics.NewTimer("eth/fetcher/prop/announces/out")
+	propAnnounceDropMeter = metrics.NewMeter("eth/fetcher/prop/announces/drop")
+	propAnnounceDOSMeter  = metrics.NewMeter("eth/fetcher/prop/announces/dos")
+
+	propBroadcastInMeter   = metrics.NewMeter("eth/fetcher/prop/broadcasts/in")
+	propBroadcastOutTimer  = metrics.NewTimer("eth/fetcher/prop/broadcasts/out")
+	propBroadcastDropMeter = metrics.NewMeter("eth/fetcher/prop/broadcasts/drop")
+	propBroadcastDOSMeter  = metrics.NewMeter("eth/fetcher/prop/broadcasts/dos")
+
+	blockFetchMeter  = metrics.NewMeter("eth/fetcher/fetch/blocks")
+	headerFetchMeter = metrics.NewMeter("eth/fetcher/fetch/headers")
+	bodyFetchMeter   = metrics.NewMeter("eth/fetcher/fetch/bodies")
+
+	blockFilterInMeter   = metrics.NewMeter("eth/fetcher/filter/blocks/in")
+	blockFilterOutMeter  = metrics.NewMeter("eth/fetcher/filter/blocks/out")
+	headerFilterInMeter  = metrics.NewMeter("eth/fetcher/filter/headers/in")
+	headerFilterOutMeter = metrics.NewMeter("eth/fetcher/filter/headers/out")
+	bodyFilterInMeter    = metrics.NewMeter("eth/fetcher/filter/bodies/in")
+	bodyFilterOutMeter   = metrics.NewMeter("eth/fetcher/filter/bodies/out")
 )
