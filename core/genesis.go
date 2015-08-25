@@ -73,7 +73,7 @@ func WriteGenesisBlock(chainDb common.Database, reader io.Reader) (*types.Block,
 	difficulty := common.String2Big(genesis.Difficulty)
 	block := types.NewBlock(&types.Header{
 		Nonce:      types.EncodeNonce(common.String2Big(genesis.Nonce).Uint64()),
-		Time:       common.String2Big(genesis.Timestamp).Uint64(),
+		Time:       common.String2Big(genesis.Timestamp),
 		ParentHash: common.HexToHash(genesis.ParentHash),
 		Extra:      common.FromHex(genesis.ExtraData),
 		GasLimit:   common.String2Big(genesis.GasLimit),
