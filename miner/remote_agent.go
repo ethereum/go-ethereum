@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"errors"
 	"math/big"
 	"sync"
 	"time"
@@ -90,7 +91,7 @@ func (a *RemoteAgent) GetHashRate() (tot int64) {
 	return
 }
 
-func (a *RemoteAgent) GetWork() [3]string {
+func (a *RemoteAgent) GetWork() ([3]string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -110,9 +111,10 @@ func (a *RemoteAgent) GetWork() [3]string {
 		res[2] = common.BytesToHash(n.Bytes()).Hex()
 
 		a.work[block.HashNoNonce()] = a.currentWork
+		return res, nil
+	} else {
+		return res, errors.New("No work available yet, don't panic.")
 	}
-
-	return res
 }
 
 // Returns true or false, but does not indicate if the PoW was correct

@@ -563,7 +563,12 @@ func (self *ethApi) GetLogs(req *shared.Request) (interface{}, error) {
 
 func (self *ethApi) GetWork(req *shared.Request) (interface{}, error) {
 	self.xeth.SetMining(true, 0)
-	return self.xeth.RemoteMining().GetWork(), nil
+	ret, err := self.xeth.RemoteMining().GetWork()
+	if err != nil {
+		return nil, shared.NewNotReadyError("getWork")
+	} else {
+		return ret, nil
+	}
 }
 
 func (self *ethApi) SubmitWork(req *shared.Request) (interface{}, error) {
