@@ -44,36 +44,6 @@ func (args *NewAccountArgs) UnmarshalJSON(b []byte) (err error) {
 	return shared.NewInvalidTypeError("passhrase", "not a string")
 }
 
-type DeleteAccountArgs struct {
-	Address    string
-	Passphrase string
-}
-
-func (args *DeleteAccountArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []interface{}
-	if err := json.Unmarshal(b, &obj); err != nil {
-		return shared.NewDecodeParamError(err.Error())
-	}
-
-	if len(obj) < 2 {
-		return shared.NewInsufficientParamsError(len(obj), 2)
-	}
-
-	if addr, ok := obj[0].(string); ok {
-		args.Address = addr
-	} else {
-		return shared.NewInvalidTypeError("address", "not a string")
-	}
-
-	if passhrase, ok := obj[1].(string); ok {
-		args.Passphrase = passhrase
-	} else {
-		return shared.NewInvalidTypeError("passhrase", "not a string")
-	}
-
-	return nil
-}
-
 type UnlockAccountArgs struct {
 	Address    string
 	Passphrase string
