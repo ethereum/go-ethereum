@@ -19,6 +19,7 @@ package compiler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -110,95 +111,82 @@ func (sol *Solidity) Version() string {
 	return sol.version
 }
 
-func (sol *Solidity) Compile(source string) (contracts map[string]*Contract, err error) {
-
+// Compile builds and returns all the contracts contained within a source string.
+func (sol *Solidity) Compile(source string) (map[string]*Contract, error) {
+	// Short circuit if no source code was specified
 	if len(source) == 0 {
-		err = fmt.Errorf("empty source")
-		return
+		return nil, errors.New("solc: empty source string")
 	}
-
+	// Create a safe place to dump compilation output
 	wd, err := ioutil.TempDir("", "solc")
 	if err != nil {
-		return
+		return nil, fmt.Errorf("solc: failed to create temporary build folder: %v", err)
 	}
 	defer os.RemoveAll(wd)
 
-	in := strings.NewReader(source)
-	var out bytes.Buffer
-	// cwd set to temp dir
+	// Assemble the compiler command, change to the temp folder and capture any errors
+	stderr := new(bytes.Buffer)
+
 	cmd := exec.Command(sol.solcPath, params...)
 	cmd.Dir = wd
-	cmd.Stdin = in
-	cmd.Stdout = &out
-	err = cmd.Run()
-	if err != nil {
-		err = fmt.Errorf("solc error: %v", err)
-		return
-	}
+	cmd.Stdin = strings.NewReader(source)
+	cmd.Stderr = stderr
 
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("solc: %v\n%s", err, string(stderr.Bytes()))
+	}
+	// Sanity check that something was actually built
 	matches, _ := filepath.Glob(wd + "/*.binary")
 	if len(matches) < 1 {
-		err = fmt.Errorf("solc error: missing code output")
-		return
+		return nil, fmt.Errorf("solc: no build results found")
 	}
-
-	contracts = make(map[string]*Contract)
+	// Compilation succeeded, assemble and return the contracts
+	contracts := make(map[string]*Contract)
 	for _, path := range matches {
 		_, file := filepath.Split(path)
 		base := strings.Split(file, ".")[0]
 
-		codeFile := filepath.Join(wd, base+".binary")
-		abiDefinitionFile := filepath.Join(wd, base+".abi")
-		userDocFile := filepath.Join(wd, base+".docuser")
-		developerDocFile := filepath.Join(wd, base+".docdev")
-
-		var code, abiDefinitionJson, userDocJson, developerDocJson []byte
-		code, err = ioutil.ReadFile(codeFile)
-		if err != nil {
-			err = fmt.Errorf("error reading compiler output for code: %v", err)
-			return
+		// Parse the individual compilation results (code binary, ABI definitions, user and dev docs)
+		var binary []byte
+		if binary, err = ioutil.ReadFile(filepath.Join(wd, base+".binary")); err != nil {
+			return nil, fmt.Errorf("solc: error reading compiler output for code: %v", err)
 		}
-		abiDefinitionJson, err = ioutil.ReadFile(abiDefinitionFile)
-		if err != nil {
-			err = fmt.Errorf("error reading compiler output for abiDefinition: %v", err)
-			return
-		}
-		var abiDefinition interface{}
-		err = json.Unmarshal(abiDefinitionJson, &abiDefinition)
 
-		userDocJson, err = ioutil.ReadFile(userDocFile)
-		if err != nil {
-			err = fmt.Errorf("error reading compiler output for userDoc: %v", err)
-			return
+		var abi interface{}
+		if blob, err := ioutil.ReadFile(filepath.Join(wd, base+".abi")); err != nil {
+			return nil, fmt.Errorf("solc: error reading abi definition: %v", err)
+		} else if err = json.Unmarshal(blob, &abi); err != nil {
+			return nil, fmt.Errorf("solc: error parsing abi definition: %v", err)
 		}
-		var userDoc interface{}
-		err = json.Unmarshal(userDocJson, &userDoc)
 
-		developerDocJson, err = ioutil.ReadFile(developerDocFile)
-		if err != nil {
-			err = fmt.Errorf("error reading compiler output for developerDoc: %v", err)
-			return
+		var userdoc interface{}
+		if blob, err := ioutil.ReadFile(filepath.Join(wd, base+".docuser")); err != nil {
+			return nil, fmt.Errorf("solc: error reading user doc: %v", err)
+		} else if err = json.Unmarshal(blob, &userdoc); err != nil {
+			return nil, fmt.Errorf("solc: error parsing user doc: %v", err)
 		}
-		var developerDoc interface{}
-		err = json.Unmarshal(developerDocJson, &developerDoc)
 
-		contract := &Contract{
-			Code: "0x" + string(code),
+		var devdoc interface{}
+		if blob, err := ioutil.ReadFile(filepath.Join(wd, base+".docdev")); err != nil {
+			return nil, fmt.Errorf("solc: error reading dev doc: %v", err)
+		} else if err = json.Unmarshal(blob, &devdoc); err != nil {
+			return nil, fmt.Errorf("solc: error parsing dev doc: %v", err)
+		}
+		// Assemble the final contract
+		contracts[base] = &Contract{
+			Code: "0x" + string(binary),
 			Info: ContractInfo{
 				Source:          source,
 				Language:        "Solidity",
 				LanguageVersion: languageVersion,
 				CompilerVersion: sol.version,
-				AbiDefinition:   abiDefinition,
-				UserDoc:         userDoc,
-				DeveloperDoc:    developerDoc,
+				AbiDefinition:   abi,
+				UserDoc:         userdoc,
+				DeveloperDoc:    devdoc,
 			},
 		}
-
-		contracts[base] = contract
 	}
-
-	return
+	return contracts, nil
 }
 
 func SaveInfo(info *ContractInfo, filename string) (contenthash common.Hash, err error) {
