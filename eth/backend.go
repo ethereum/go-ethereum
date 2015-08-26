@@ -373,7 +373,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	eth.blockProcessor = core.NewBlockProcessor(chainDb, eth.pow, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
-	eth.protocolManager = NewProtocolManager(config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.chainManager)
+	eth.protocolManager = NewProtocolManager(config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.chainManager, chainDb)
 
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)

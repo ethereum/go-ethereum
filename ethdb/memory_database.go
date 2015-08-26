@@ -49,6 +49,14 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	return db.db[string(key)], nil
 }
 
+func (db *MemDatabase) Keys() [][]byte {
+	keys := [][]byte{}
+	for key, _ := range db.db {
+		keys = append(keys, []byte(key))
+	}
+	return keys
+}
+
 /*
 func (db *MemDatabase) GetKeys() []*common.Key {
 	data, _ := db.Get([]byte("KeyRing"))
