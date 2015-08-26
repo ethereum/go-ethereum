@@ -118,7 +118,6 @@ var (
 		"personal": []string{
 			"listAccounts",
 			"newAccount",
-			"deleteAccount",
 			"unlockAccount",
 		},
 		"shh": []string{
