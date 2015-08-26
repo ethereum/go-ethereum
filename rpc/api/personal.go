@@ -126,7 +126,7 @@ func (self *personalApi) UnlockAccount(req *shared.Request) (interface{}, error)
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	if len(args.Passphrase) == 0 {
+	if !args.HasPW {
 		fe := self.xeth.Frontend()
 		if fe == nil {
 			return false, fmt.Errorf("No password provided")
