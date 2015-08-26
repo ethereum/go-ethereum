@@ -9,5 +9,5 @@ fi
 
 # set gitCommit when running from a Git checkout.
 if [ -f ".git/HEAD" ]; then
-    echo "-ldflags '-X main.gitCommit $(git rev-parse HEAD)'"
+    echo "-ldflags '-X main.gitCommit=$(git rev-parse HEAD)'"
 fi
