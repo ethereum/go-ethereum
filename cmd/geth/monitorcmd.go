@@ -165,7 +165,11 @@ func monitor(ctx *cli.Context) {
 // retrieveMetrics contacts the attached geth node and retrieves the entire set
 // of collected system metrics.
 func retrieveMetrics(xeth *rpc.Xeth) (map[string]interface{}, error) {
-	return xeth.Call("debug_metrics", []interface{}{true})
+	reply, err := xeth.Call("debug_metrics", []interface{}{true})
+	if err != nil {
+		return nil, err
+	}
+	return reply.(map[string]interface{}), nil
 }
 
 // resolveMetrics takes a list of input metric patterns, and resolves each to one

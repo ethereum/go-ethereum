@@ -41,7 +41,7 @@ func NewXeth(client comms.EthereumClient) *Xeth {
 }
 
 // Call invokes a method with the given parameters are the remote node.
-func (self *Xeth) Call(method string, params []interface{}) (map[string]interface{}, error) {
+func (self *Xeth) Call(method string, params []interface{}) (interface{}, error) {
 	// Assemble the json RPC request
 	data, err := json.Marshal(params)
 	if err != nil {
@@ -69,7 +69,7 @@ func (self *Xeth) Call(method string, params []interface{}) (map[string]interfac
 		return nil, fmt.Errorf("Method invocation failed: %v", failure.Error)
 
 	case isSuccessResponse:
-		return success.Result.(map[string]interface{}), nil
+		return success.Result, nil
 
 	default:
 		return nil, fmt.Errorf("Invalid response type: %v", reflect.TypeOf(res))
