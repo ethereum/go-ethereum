@@ -25,10 +25,12 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -59,12 +61,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to collect API declarations: %v", err)
 	}
-	// Create the collectors for the sobmodules
-	modules := make(map[string][]*Endpoint)
+	// Create the collectors for the submodules
+	modules := []string{}
+	methods := make(map[string][]*Endpoint)
 
 	// Iterate over all the API mappings, and locate the RPC function associations
 	for variable, val := range values {
 		if strings.HasSuffix(variable, "Mapping") {
+			// Iterate over all the exposed functionality and extract them
 			for _, mapping := range val.(*ast.CompositeLit).Elts {
 				// Fetch the name of the RPC function, and the associated argument definition
 				call := strings.Trim(mapping.(*ast.KeyValueExpr).Key.(*ast.BasicLit).Value, "\"")
@@ -105,36 +109,58 @@ func main() {
 						paramList = append(paramList, variable)
 					}
 				}
-				// Append the function to the sobmodule collection
-				modules[module] = append(modules[module], &Endpoint{
+				// Insert the function to the submodule collection (alphabetically)
+				endpoint := &Endpoint{
 					Method:   call,
 					Function: fmt.Sprintf("%s(%s)", function, strings.Join(params, ",")),
 					Argument: args,
 					Params:   paramList,
-				})
+				}
+				for i := 0; i < len(methods[module]); i++ {
+					if methods[module][i].Function > endpoint.Function {
+						methods[module] = append(methods[module], nil)
+						copy(methods[module][i+1:], methods[module][i:])
+						methods[module][i] = endpoint
+
+						endpoint = nil
+						break
+					}
+				}
+				if endpoint != nil {
+					methods[module] = append(methods[module], endpoint)
+				}
+				// Register the module if first occurance
+				if len(methods[module]) == 1 {
+					modules = append(modules, module)
+				}
 			}
 		}
 	}
+	sort.Strings(modules)
+
 	// Start generating the client API
 	client := "package rpc\n"
 
 	// Generate the client struct with all its submodules
 	client += fmt.Sprintf("type GenApi struct {\n")
-	for module, _ := range modules {
+	for _, module := range modules {
 		client += fmt.Sprintf("%s *%s\n", module, module)
 	}
 	client += fmt.Sprintf("}\n")
 
 	// Generate the API constructor to create the individual submodules
-	client += fmt.Sprint("func NewGenApi(xeth *Xeth) *GenApi {\n")
+	client += fmt.Sprint("func NewGenApi(client comms.EthereumClient) *GenApi {\n")
+	client += fmt.Sprint("xeth := NewXeth(client)\n\n")
 	client += fmt.Sprint("return &GenApi{\n")
-	for module, _ := range modules {
+	for _, module := range modules {
 		client += fmt.Sprintf("%s: &%s{xeth},\n", module, module)
 	}
 	client += fmt.Sprintf("}}\n")
 
 	// Generate each of the client API calls
-	for module, endpoints := range modules {
+	for _, module := range modules {
+		endpoints := methods[module]
+
 		client += fmt.Sprintf("\ntype %s struct {\n xeth *Xeth\n}\n", module)
 		for _, endpoint := range endpoints {
 			client += fmt.Sprintf("func (self *%s) %s (interface{}, error) {\n", module, endpoint.Function)
@@ -149,8 +175,8 @@ func main() {
 	// Format the final code and output
 	if blob, err := imports.Process("", []byte(client), nil); err != nil {
 		log.Fatalf("Failed to format output code: %v", err)
-	} else {
-		fmt.Println(string(blob))
+	} else if err := ioutil.WriteFile("../genapi.go", blob, 0600); err != nil {
+		log.Fatalf("Failed to write output code: %v", err)
 	}
 }
 
