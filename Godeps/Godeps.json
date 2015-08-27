@@ -119,6 +119,22 @@
 			"Rev": "69f53eb622e0f41d0e91debd71d6694148b52a30"
 		},
 		{
+			"ImportPath": "golang.org/x/tools/go/buildutil",
+			"Rev": "69f53eb622e0f41d0e91debd71d6694148b52a30"
+		},
+		{
+			"ImportPath": "golang.org/x/tools/go/exact",
+			"Rev": "69f53eb622e0f41d0e91debd71d6694148b52a30"
+		},
+		{
+			"ImportPath": "golang.org/x/tools/go/loader",
+			"Rev": "69f53eb622e0f41d0e91debd71d6694148b52a30"
+		},
+		{
+			"ImportPath": "golang.org/x/tools/go/types",
+			"Rev": "69f53eb622e0f41d0e91debd71d6694148b52a30"
+		},
+		{
 			"ImportPath": "golang.org/x/tools/imports",
 			"Rev": "69f53eb622e0f41d0e91debd71d6694148b52a30"
 		},

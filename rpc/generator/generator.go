@@ -31,10 +31,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode"
 
+	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/types"
 	"golang.org/x/tools/imports"
 )
 
@@ -53,6 +56,16 @@ type Endpoint struct {
 }
 
 func main() {
+	// Load the entire package and dependencies for static analysis
+	conf := new(loader.Config)
+	conf.Import("github.com/ethereum/go-ethereum/rpc/api")
+
+	prog, err := conf.Load()
+	if err != nil {
+		log.Fatalf("Failed to load API package: %v", err)
+	}
+	info := prog.Imported["github.com/ethereum/go-ethereum/rpc/api"].Info
+
 	// Iterate over all the API files and collect the top level declarations
 	api, err := details("github.com/ethereum/go-ethereum/rpc/api")
 	if err != nil {
@@ -63,7 +76,7 @@ func main() {
 		log.Fatalf("Failed to collect API declarations: %v", err)
 	}
 	// Gather all the deteced API endpoints
-	methods, err := endpoints(funs, types, values)
+	methods, err := endpoints(info, funs, types, values)
 	if err != nil {
 		log.Fatalf("Failed to gather API endpoints: %v", err)
 	}
@@ -163,8 +176,23 @@ func returns(block *ast.BlockStmt) []*ast.ReturnStmt {
 	return results
 }
 
+// flatten converts a possibly multi selextor expression into a string identifier.
+func flatten(sel ast.Expr) string {
+	switch x := sel.(type) {
+	case *ast.Ident:
+		return x.String()
+	case *ast.SelectorExpr:
+		return flatten(x.X) + "." + x.Sel.String()
+	case *ast.CallExpr:
+		return flatten(x.Fun) + "()"
+	default:
+		//fmt.Println("unknown selector to flatten", reflect.TypeOf(sel.X))
+	}
+	return ""
+}
+
 // endpoints collects the detected RPC API method endpoints.
-func endpoints(funs map[string]*ast.BlockStmt, types map[string]*ast.TypeSpec, values map[string]ast.Expr) (map[string][]*Endpoint, error) {
+func endpoints(info types.Info, funs map[string]*ast.BlockStmt, typeDecls map[string]*ast.TypeSpec, values map[string]ast.Expr) (map[string][]*Endpoint, error) {
 	methods := make(map[string][]*Endpoint)
 
 	// Iterate over all the API mappings, and locate the RPC function associations
@@ -185,7 +213,7 @@ func endpoints(funs map[string]*ast.BlockStmt, types map[string]*ast.TypeSpec, v
 
 				// Generate the parameter list
 				params, paramList := []string{}, []string{}
-				if arg := types[args]; arg != nil {
+				if arg := typeDecls[args]; arg != nil {
 					for _, field := range arg.Type.(*ast.StructType).Fields.List {
 						variable := field.Names[0].String()
 						variable = string(unicode.ToLower(rune(variable[0]))) + variable[1:]
@@ -219,8 +247,7 @@ func endpoints(funs map[string]*ast.BlockStmt, types map[string]*ast.TypeSpec, v
 
 				result := "interface{}"
 				for _, ret := range rets {
-					res := ret.Results[0]
-					switch res := res.(type) {
+					switch res := ret.Results[0].(type) {
 					case *ast.Ident:
 						if res.String() == "nil" {
 							break
@@ -235,14 +262,37 @@ func endpoints(funs map[string]*ast.BlockStmt, types map[string]*ast.TypeSpec, v
 								result = "string"
 							} else if ident.String() == "newHexNum" {
 								result = "int64"
+							} else if ident.String() == "newHexData" {
+								result = "[]byte"
 							} else {
-								fmt.Println(owner, method, res, "unknown ident funcion")
+								for match, def := range info.Defs {
+									if ident.String() == match.String() {
+										result = def.Type().(*types.Signature).Results().At(0).Type().String()
+										if strings.Contains(result, "/") {
+											result = regexp.MustCompile("[a-zA-Z0-9-\\.]+/").ReplaceAllString(result, "")
+										}
+									}
+								}
+								if result == "interface{}" {
+									fmt.Println(owner, method, res, "unknown ident funcion")
+								}
+							}
+						} else if sel, ok := res.Fun.(*ast.SelectorExpr); ok {
+							if selector := flatten(sel); selector != "" {
+								for match, selection := range info.Selections {
+									if flatten(match) == selector {
+										result = selection.Type().(*types.Signature).Results().At(0).Type().String()
+										if strings.Contains(result, "/") {
+											result = regexp.MustCompile("[a-zA-Z0-9-\\.]+/").ReplaceAllString(result, "")
+										}
+									}
+								}
 							}
 						} else {
 							fmt.Println(owner, method, res, "call", res.Fun, reflect.TypeOf(res.Fun))
 						}
 					default:
-						fmt.Println(owner, method, res, reflect.TypeOf(res))
+						fmt.Println(owner, method, res, reflect.TypeOf(ret.Results[0]))
 					}
 				}
 				// Insert the function to the submodule collection (alphabetically)
@@ -323,6 +373,12 @@ func generate(methods map[string][]*Endpoint) ([]byte, error) {
 
 				if endpoint.Return == "int64" {
 					client += fmt.Sprintf("return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil\n")
+				} else if endpoint.Return == "*big.Int" {
+					client += fmt.Sprintf("return new(big.Int).SetBytes(common.FromHex(res.(string))), nil\n")
+				} else if endpoint.Return == "[]byte" {
+					client += fmt.Sprintf("return res.([]byte), nil\n")
+				} else if strings.HasPrefix(endpoint.Return, "[]") {
+					client += fmt.Sprintf("for _, item := range res.([]interface{}) { result = append(result, item.(%s))}; return\n", endpoint.Return[2:])
 				} else {
 					client += fmt.Sprintf("return res.(%s), nil\n", endpoint.Return)
 				}
