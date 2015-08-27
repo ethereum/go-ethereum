@@ -115,6 +115,14 @@
 			"Rev": "c93e7c9fff19fb9139b5ab04ce041833add0134e"
 		},
 		{
+			"ImportPath": "golang.org/x/tools/go/ast/astutil",
+			"Rev": "69f53eb622e0f41d0e91debd71d6694148b52a30"
+		},
+		{
+			"ImportPath": "golang.org/x/tools/imports",
+			"Rev": "69f53eb622e0f41d0e91debd71d6694148b52a30"
+		},
+		{
 			"ImportPath": "gopkg.in/check.v1",
 			"Rev": "64131543e7896d5bcc6bd5a76287eb75ea96c673"
 		},
