@@ -42,8 +42,13 @@ type Admin struct {
 	xeth *Xeth
 }
 
-func (self *Admin) AddPeer(url string) (interface{}, error) {
-	return self.xeth.Call("admin_addPeer", []interface{}{url})
+func (self *Admin) AddPeer(url string) (result bool, failure error) {
+	res, err := self.xeth.Call("admin_addPeer", []interface{}{url})
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
 func (self *Admin) ChainSyncStatus() (interface{}, error) {
 	return self.xeth.Call("admin_chainSyncStatus", nil)
@@ -51,20 +56,40 @@ func (self *Admin) ChainSyncStatus() (interface{}, error) {
 func (self *Admin) Datadir() (interface{}, error) {
 	return self.xeth.Call("admin_datadir", nil)
 }
-func (self *Admin) EnableUserAgent() (interface{}, error) {
-	return self.xeth.Call("admin_enableUserAgent", nil)
+func (self *Admin) EnableUserAgent() (result bool, failure error) {
+	res, err := self.xeth.Call("admin_enableUserAgent", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
-func (self *Admin) ExportChain() (interface{}, error) {
-	return self.xeth.Call("admin_exportChain", nil)
+func (self *Admin) ExportChain() (result bool, failure error) {
+	res, err := self.xeth.Call("admin_exportChain", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
 func (self *Admin) GetContractInfo(contract string) (interface{}, error) {
 	return self.xeth.Call("admin_getContractInfo", []interface{}{contract})
 }
-func (self *Admin) HttpGet(uri string, path string) (interface{}, error) {
-	return self.xeth.Call("admin_httpGet", []interface{}{uri, path})
+func (self *Admin) HttpGet(uri string, path string) (result string, failure error) {
+	res, err := self.xeth.Call("admin_httpGet", []interface{}{uri, path})
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(string), nil
 }
-func (self *Admin) ImportChain() (interface{}, error) {
-	return self.xeth.Call("admin_importChain", nil)
+func (self *Admin) ImportChain() (result bool, failure error) {
+	res, err := self.xeth.Call("admin_importChain", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
 func (self *Admin) NodeInfo() (interface{}, error) {
 	return self.xeth.Call("admin_nodeInfo", nil)
@@ -72,11 +97,21 @@ func (self *Admin) NodeInfo() (interface{}, error) {
 func (self *Admin) Peers() (interface{}, error) {
 	return self.xeth.Call("admin_peers", nil)
 }
-func (self *Admin) Register(sender string, address string, contentHashHex string) (interface{}, error) {
-	return self.xeth.Call("admin_register", []interface{}{sender, address, contentHashHex})
+func (self *Admin) Register(sender string, address string, contentHashHex string) (result bool, failure error) {
+	res, err := self.xeth.Call("admin_register", []interface{}{sender, address, contentHashHex})
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
-func (self *Admin) RegisterUrl(sender string, contentHash string, url string) (interface{}, error) {
-	return self.xeth.Call("admin_registerUrl", []interface{}{sender, contentHash, url})
+func (self *Admin) RegisterUrl(sender string, contentHash string, url string) (result bool, failure error) {
+	res, err := self.xeth.Call("admin_registerUrl", []interface{}{sender, contentHash, url})
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
 func (self *Admin) SaveInfo(contractInfo compiler.ContractInfo, filename string) (interface{}, error) {
 	return self.xeth.Call("admin_saveInfo", []interface{}{contractInfo, filename})
@@ -99,20 +134,45 @@ func (self *Admin) Sleep(s int) (interface{}, error) {
 func (self *Admin) SleepBlocks(n int64, timeout int64) (interface{}, error) {
 	return self.xeth.Call("admin_sleepBlocks", []interface{}{n, timeout})
 }
-func (self *Admin) StartNatSpec() (interface{}, error) {
-	return self.xeth.Call("admin_startNatSpec", nil)
+func (self *Admin) StartNatSpec() (result bool, failure error) {
+	res, err := self.xeth.Call("admin_startNatSpec", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
-func (self *Admin) StartRPC(listenAddress string, listenPort uint, corsDomain string, apis string) (interface{}, error) {
-	return self.xeth.Call("admin_startRPC", []interface{}{listenAddress, listenPort, corsDomain, apis})
+func (self *Admin) StartRPC(listenAddress string, listenPort uint, corsDomain string, apis string) (result bool, failure error) {
+	res, err := self.xeth.Call("admin_startRPC", []interface{}{listenAddress, listenPort, corsDomain, apis})
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
-func (self *Admin) StopNatSpec() (interface{}, error) {
-	return self.xeth.Call("admin_stopNatSpec", nil)
+func (self *Admin) StopNatSpec() (result bool, failure error) {
+	res, err := self.xeth.Call("admin_stopNatSpec", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
-func (self *Admin) StopRPC() (interface{}, error) {
-	return self.xeth.Call("admin_stopRPC", nil)
+func (self *Admin) StopRPC() (result bool, failure error) {
+	res, err := self.xeth.Call("admin_stopRPC", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
-func (self *Admin) Verbosity(level int) (interface{}, error) {
-	return self.xeth.Call("admin_verbosity", []interface{}{level})
+func (self *Admin) Verbosity(level int) (result bool, failure error) {
+	res, err := self.xeth.Call("admin_verbosity", []interface{}{level})
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
 
 type Db struct {
@@ -122,8 +182,13 @@ type Db struct {
 func (self *Db) GetHex() (interface{}, error) {
 	return self.xeth.Call("db_getHex", nil)
 }
-func (self *Db) GetString() (interface{}, error) {
-	return self.xeth.Call("db_getString", nil)
+func (self *Db) GetString() (result string, failure error) {
+	res, err := self.xeth.Call("db_getString", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(string), nil
 }
 func (self *Db) PutHex() (interface{}, error) {
 	return self.xeth.Call("db_putHex", nil)
@@ -148,8 +213,13 @@ func (self *Debug) Metrics(raw bool) (interface{}, error) {
 func (self *Debug) PrintBlock() (interface{}, error) {
 	return self.xeth.Call("debug_printBlock", nil)
 }
-func (self *Debug) ProcessBlock() (interface{}, error) {
-	return self.xeth.Call("debug_processBlock", nil)
+func (self *Debug) ProcessBlock() (result bool, failure error) {
+	res, err := self.xeth.Call("debug_processBlock", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
 func (self *Debug) SeedHash() (interface{}, error) {
 	return self.xeth.Call("debug_seedHash", nil)
@@ -165,8 +235,13 @@ type Eth struct {
 func (self *Eth) Accounts() (interface{}, error) {
 	return self.xeth.Call("eth_accounts", nil)
 }
-func (self *Eth) BlockNumber() (interface{}, error) {
-	return self.xeth.Call("eth_blockNumber", nil)
+func (self *Eth) BlockNumber() (result int64, failure error) {
+	res, err := self.xeth.Call("eth_blockNumber", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil
 }
 func (self *Eth) Call(from string, to string, value *big.Int, gas *big.Int, gasPrice *big.Int, data string, blockNumber int64) (interface{}, error) {
 	return self.xeth.Call("eth_call", []interface{}{from, to, value, gas, gasPrice, data, blockNumber})
@@ -177,14 +252,24 @@ func (self *Eth) Coinbase() (interface{}, error) {
 func (self *Eth) CompileSolidity() (interface{}, error) {
 	return self.xeth.Call("eth_compileSolidity", nil)
 }
-func (self *Eth) EstimateGas() (interface{}, error) {
-	return self.xeth.Call("eth_estimateGas", nil)
+func (self *Eth) EstimateGas() (result int64, failure error) {
+	res, err := self.xeth.Call("eth_estimateGas", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil
 }
 func (self *Eth) Flush() (interface{}, error) {
 	return self.xeth.Call("eth_flush", nil)
 }
-func (self *Eth) GasPrice(price string) (interface{}, error) {
-	return self.xeth.Call("eth_gasPrice", []interface{}{price})
+func (self *Eth) GasPrice(price string) (result int64, failure error) {
+	res, err := self.xeth.Call("eth_gasPrice", []interface{}{price})
+	if err != nil {
+		failure = err
+		return
+	}
+	return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil
 }
 func (self *Eth) GetBalance(address string, blockNumber int64) (interface{}, error) {
 	return self.xeth.Call("eth_getBalance", []interface{}{address, blockNumber})
@@ -234,8 +319,13 @@ func (self *Eth) GetTransactionByBlockNumberAndIndex() (interface{}, error) {
 func (self *Eth) GetTransactionByHash() (interface{}, error) {
 	return self.xeth.Call("eth_getTransactionByHash", nil)
 }
-func (self *Eth) GetTransactionCount() (interface{}, error) {
-	return self.xeth.Call("eth_getTransactionCount", nil)
+func (self *Eth) GetTransactionCount() (result int64, failure error) {
+	res, err := self.xeth.Call("eth_getTransactionCount", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil
 }
 func (self *Eth) GetTransactionReceipt() (interface{}, error) {
 	return self.xeth.Call("eth_getTransactionReceipt", nil)
@@ -246,29 +336,59 @@ func (self *Eth) GetUncleByBlockHashAndIndex() (interface{}, error) {
 func (self *Eth) GetUncleByBlockNumberAndIndex() (interface{}, error) {
 	return self.xeth.Call("eth_getUncleByBlockNumberAndIndex", nil)
 }
-func (self *Eth) GetUncleCountByBlockHash() (interface{}, error) {
-	return self.xeth.Call("eth_getUncleCountByBlockHash", nil)
+func (self *Eth) GetUncleCountByBlockHash() (result int64, failure error) {
+	res, err := self.xeth.Call("eth_getUncleCountByBlockHash", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil
 }
-func (self *Eth) GetUncleCountByBlockNumber() (interface{}, error) {
-	return self.xeth.Call("eth_getUncleCountByBlockNumber", nil)
+func (self *Eth) GetUncleCountByBlockNumber() (result int64, failure error) {
+	res, err := self.xeth.Call("eth_getUncleCountByBlockNumber", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil
 }
 func (self *Eth) GetWork() (interface{}, error) {
 	return self.xeth.Call("eth_getWork", nil)
 }
-func (self *Eth) Hashrate() (interface{}, error) {
-	return self.xeth.Call("eth_hashrate", nil)
+func (self *Eth) Hashrate() (result int64, failure error) {
+	res, err := self.xeth.Call("eth_hashrate", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil
 }
 func (self *Eth) Mining() (interface{}, error) {
 	return self.xeth.Call("eth_mining", nil)
 }
-func (self *Eth) NewBlockFilter() (interface{}, error) {
-	return self.xeth.Call("eth_newBlockFilter", nil)
+func (self *Eth) NewBlockFilter() (result int64, failure error) {
+	res, err := self.xeth.Call("eth_newBlockFilter", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil
 }
-func (self *Eth) NewFilter() (interface{}, error) {
-	return self.xeth.Call("eth_newFilter", nil)
+func (self *Eth) NewFilter() (result int64, failure error) {
+	res, err := self.xeth.Call("eth_newFilter", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil
 }
-func (self *Eth) NewPendingTransactionFilter() (interface{}, error) {
-	return self.xeth.Call("eth_newPendingTransactionFilter", nil)
+func (self *Eth) NewPendingTransactionFilter() (result int64, failure error) {
+	res, err := self.xeth.Call("eth_newPendingTransactionFilter", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil
 }
 func (self *Eth) PendingTransactions() (interface{}, error) {
 	return self.xeth.Call("eth_pendingTransactions", nil)
@@ -288,8 +408,13 @@ func (self *Eth) Sign() (interface{}, error) {
 func (self *Eth) StorageAt(address string, blockNumber int64) (interface{}, error) {
 	return self.xeth.Call("eth_storageAt", []interface{}{address, blockNumber})
 }
-func (self *Eth) SubmitHashrate() (interface{}, error) {
-	return self.xeth.Call("eth_submitHashrate", nil)
+func (self *Eth) SubmitHashrate() (result bool, failure error) {
+	res, err := self.xeth.Call("eth_submitHashrate", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
 func (self *Eth) SubmitWork(nonce uint64, header string, digest string) (interface{}, error) {
 	return self.xeth.Call("eth_submitWork", []interface{}{nonce, header, digest})
@@ -308,29 +433,64 @@ type Miner struct {
 func (self *Miner) Hashrate() (interface{}, error) {
 	return self.xeth.Call("miner_hashrate", nil)
 }
-func (self *Miner) MakeDAG(blockNumber int64) (interface{}, error) {
-	return self.xeth.Call("miner_makeDAG", []interface{}{blockNumber})
+func (self *Miner) MakeDAG(blockNumber int64) (result bool, failure error) {
+	res, err := self.xeth.Call("miner_makeDAG", []interface{}{blockNumber})
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
 func (self *Miner) SetEtherbase(etherbase common.Address) (interface{}, error) {
 	return self.xeth.Call("miner_setEtherbase", []interface{}{etherbase})
 }
-func (self *Miner) SetExtra(data string) (interface{}, error) {
-	return self.xeth.Call("miner_setExtra", []interface{}{data})
+func (self *Miner) SetExtra(data string) (result bool, failure error) {
+	res, err := self.xeth.Call("miner_setExtra", []interface{}{data})
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
-func (self *Miner) SetGasPrice() (interface{}, error) {
-	return self.xeth.Call("miner_setGasPrice", nil)
+func (self *Miner) SetGasPrice() (result bool, failure error) {
+	res, err := self.xeth.Call("miner_setGasPrice", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
-func (self *Miner) Start(threads int) (interface{}, error) {
-	return self.xeth.Call("miner_start", []interface{}{threads})
+func (self *Miner) Start(threads int) (result bool, failure error) {
+	res, err := self.xeth.Call("miner_start", []interface{}{threads})
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
-func (self *Miner) StartAutoDAG() (interface{}, error) {
-	return self.xeth.Call("miner_startAutoDAG", nil)
+func (self *Miner) StartAutoDAG() (result bool, failure error) {
+	res, err := self.xeth.Call("miner_startAutoDAG", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
-func (self *Miner) Stop() (interface{}, error) {
-	return self.xeth.Call("miner_stop", nil)
+func (self *Miner) Stop() (result bool, failure error) {
+	res, err := self.xeth.Call("miner_stop", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
-func (self *Miner) StopAutoDAG() (interface{}, error) {
-	return self.xeth.Call("miner_stopAutoDAG", nil)
+func (self *Miner) StopAutoDAG() (result bool, failure error) {
+	res, err := self.xeth.Call("miner_stopAutoDAG", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
 
 type Net struct {
@@ -340,8 +500,13 @@ type Net struct {
 func (self *Net) Listening() (interface{}, error) {
 	return self.xeth.Call("net_listening", nil)
 }
-func (self *Net) PeerCount() (interface{}, error) {
-	return self.xeth.Call("net_peerCount", nil)
+func (self *Net) PeerCount() (result int64, failure error) {
+	res, err := self.xeth.Call("net_peerCount", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil
 }
 func (self *Net) Version() (interface{}, error) {
 	return self.xeth.Call("net_version", nil)
@@ -374,14 +539,24 @@ func (self *Shh) GetMessages() (interface{}, error) {
 func (self *Shh) HasIdentity() (interface{}, error) {
 	return self.xeth.Call("shh_hasIdentity", nil)
 }
-func (self *Shh) NewFilter() (interface{}, error) {
-	return self.xeth.Call("shh_newFilter", nil)
+func (self *Shh) NewFilter() (result int64, failure error) {
+	res, err := self.xeth.Call("shh_newFilter", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil
 }
 func (self *Shh) NewIdentity() (interface{}, error) {
 	return self.xeth.Call("shh_newIdentity", nil)
 }
-func (self *Shh) Post() (interface{}, error) {
-	return self.xeth.Call("shh_post", nil)
+func (self *Shh) Post() (result bool, failure error) {
+	res, err := self.xeth.Call("shh_post", nil)
+	if err != nil {
+		failure = err
+		return
+	}
+	return res.(bool), nil
 }
 func (self *Shh) UninstallFilter() (interface{}, error) {
 	return self.xeth.Call("shh_uninstallFilter", nil)

@@ -30,6 +30,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"unicode"
@@ -47,8 +48,8 @@ type Package struct {
 type Endpoint struct {
 	Method   string
 	Function string
-	Argument string
 	Params   []string
+	Return   string
 }
 
 func main() {
@@ -57,130 +58,24 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to retrieve API package details: %v", err)
 	}
-	types, values, err := declarations(api)
+	funs, types, values, err := declarations(api)
 	if err != nil {
 		log.Fatalf("Failed to collect API declarations: %v", err)
 	}
-	// Create the collectors for the submodules
-	modules := []string{}
-	methods := make(map[string][]*Endpoint)
-
-	// Iterate over all the API mappings, and locate the RPC function associations
-	for variable, val := range values {
-		if strings.HasSuffix(variable, "Mapping") {
-			// Iterate over all the exposed functionality and extract them
-			for _, mapping := range val.(*ast.CompositeLit).Elts {
-				// Fetch the name of the RPC function, and the associated argument definition
-				call := strings.Trim(mapping.(*ast.KeyValueExpr).Key.(*ast.BasicLit).Value, "\"")
-				args := mapping.(*ast.KeyValueExpr).Value.(*ast.SelectorExpr).Sel.Name + "Args"
-
-				// Generate the submodule and function names
-				module := strings.Split(call, "_")[0]
-				module = string(unicode.ToUpper(rune(module[0]))) + module[1:]
-				function := strings.Split(call, "_")[1]
-				function = string(unicode.ToUpper(rune(function[0]))) + function[1:]
-
-				// Generate the parameter list
-				params, paramList := []string{}, []string{}
-				if arg := types[args]; arg != nil {
-					for _, field := range arg.Type.(*ast.StructType).Fields.List {
-						variable := field.Names[0].String()
-						variable = string(unicode.ToLower(rune(variable[0]))) + variable[1:]
-
-						kind := ""
-						switch t := field.Type.(type) {
-						case *ast.Ident:
-							kind = t.String()
-						case *ast.SelectorExpr:
-							kind = t.X.(*ast.Ident).String() + "." + t.Sel.String()
-						case *ast.StarExpr:
-							switch sub := t.X.(type) {
-							case *ast.Ident:
-								kind = "*" + sub.String()
-							case *ast.SelectorExpr:
-								kind = "*" + sub.X.(*ast.Ident).String() + "." + sub.Sel.String()
-							default:
-								log.Fatalf("Unknown pointer subtype: %v", sub)
-							}
-						default:
-							log.Fatalf("Unknown type: %v", t)
-						}
-						params = append(params, fmt.Sprintf("%s %s", variable, kind))
-						paramList = append(paramList, variable)
-					}
-				}
-				// Insert the function to the submodule collection (alphabetically)
-				endpoint := &Endpoint{
-					Method:   call,
-					Function: fmt.Sprintf("%s(%s)", function, strings.Join(params, ",")),
-					Argument: args,
-					Params:   paramList,
-				}
-				for i := 0; i < len(methods[module]); i++ {
-					if methods[module][i].Function > endpoint.Function {
-						methods[module] = append(methods[module], nil)
-						copy(methods[module][i+1:], methods[module][i:])
-						methods[module][i] = endpoint
-
-						endpoint = nil
-						break
-					}
-				}
-				if endpoint != nil {
-					methods[module] = append(methods[module], endpoint)
-				}
-				// Register the module if first occurance
-				if len(methods[module]) == 1 {
-					modules = append(modules, module)
-				}
-			}
-		}
+	// Gather all the deteced API endpoints
+	methods, err := endpoints(funs, types, values)
+	if err != nil {
+		log.Fatalf("Failed to gather API endpoints: %v", err)
 	}
-	sort.Strings(modules)
-
-	// Start generating the client API
-	client := "package rpc\n"
-
-	// Generate the client struct with all its submodules
-	client += fmt.Sprintf("type GenApi struct {\n")
-	for _, module := range modules {
-		client += fmt.Sprintf("%s *%s\n", module, module)
-	}
-	client += fmt.Sprintf("}\n")
-
-	// Generate the API constructor to create the individual submodules
-	client += fmt.Sprint("func NewGenApi(client comms.EthereumClient) *GenApi {\n")
-	client += fmt.Sprint("xeth := NewXeth(client)\n\n")
-	client += fmt.Sprint("return &GenApi{\n")
-	for _, module := range modules {
-		client += fmt.Sprintf("%s: &%s{xeth},\n", module, module)
-	}
-	client += fmt.Sprintf("}}\n")
-
-	// Generate each of the client API calls
-	for _, module := range modules {
-		endpoints := methods[module]
-
-		client += fmt.Sprintf("\ntype %s struct {\n xeth *Xeth\n}\n", module)
-		for _, endpoint := range endpoints {
-			client += fmt.Sprintf("func (self *%s) %s (interface{}, error) {\n", module, endpoint.Function)
-			if len(endpoint.Params) == 0 {
-				client += fmt.Sprintf("return self.xeth.Call(\"%s\", nil)\n", endpoint.Method)
-			} else {
-				client += fmt.Sprintf("return self.xeth.Call(\"%s\", []interface{}{%s})\n", endpoint.Method, strings.Join(endpoint.Params, ","))
-			}
-			client += fmt.Sprintf("}\n")
-		}
-	}
-	// Format the final code and output
-	if blob, err := imports.Process("", []byte(client), nil); err != nil {
+	// Generate the client API and output if successfull
+	if code, err := generate(methods); err != nil {
 		log.Fatalf("Failed to format output code: %v", err)
-	} else if err := ioutil.WriteFile("../genapi.go", blob, 0600); err != nil {
+	} else if err := ioutil.WriteFile("../genapi.go", code, 0600); err != nil {
 		log.Fatalf("Failed to write output code: %v", err)
 	}
 }
 
-// Loads the details of the Go package.
+// details loads the metadata of the Go package.
 func details(name string) (*Package, error) {
 	// Create the command to retrieve the package infos
 	cmd := exec.Command("go", "list", "-e", "-json", name)
@@ -209,8 +104,9 @@ func details(name string) (*Package, error) {
 	return info, nil
 }
 
-// Iterates over a package contents and collects interesting declarations.
-func declarations(pack *Package) (map[string]*ast.TypeSpec, map[string]ast.Expr, error) {
+// declarations iterates over a package contents and collects type and value declarations.
+func declarations(pack *Package) (map[string]*ast.BlockStmt, map[string]*ast.TypeSpec, map[string]ast.Expr, error) {
+	funs := make(map[string]*ast.BlockStmt)
 	types := make(map[string]*ast.TypeSpec)
 	values := make(map[string]ast.Expr)
 
@@ -219,11 +115,17 @@ func declarations(pack *Package) (map[string]*ast.TypeSpec, map[string]ast.Expr,
 		fileSet := token.NewFileSet()
 		tree, err := parser.ParseFile(fileSet, filepath.Join(pack.Dir, path), nil, parser.ParseComments)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		// Collect all top level declarations
 		for _, decl := range tree.Decls {
 			switch decl := decl.(type) {
+			case *ast.FuncDecl:
+				if decl.Recv != nil {
+					recv := decl.Recv.List[0].Type.(*ast.StarExpr).X.(*ast.Ident).String()
+					call := decl.Name.String()
+					funs[recv+"."+call] = decl.Body
+				}
 			case *ast.GenDecl:
 				for _, spec := range decl.Specs {
 					switch spec := spec.(type) {
@@ -238,5 +140,196 @@ func declarations(pack *Package) (map[string]*ast.TypeSpec, map[string]ast.Expr,
 			}
 		}
 	}
-	return types, values, nil
+	return funs, types, values, nil
+}
+
+// returns recursively iterates over a block statement and extracts all the
+// return statements that contain nil errors.
+func returns(block *ast.BlockStmt) []*ast.ReturnStmt {
+	results := []*ast.ReturnStmt{}
+
+	for _, stmt := range block.List {
+		switch stmt := stmt.(type) {
+		case *ast.ReturnStmt:
+			if ident, ok := stmt.Results[1].(*ast.Ident); ok {
+				if ident.String() == "nil" {
+					results = append(results, stmt)
+				}
+			}
+		case *ast.IfStmt:
+			results = append(results, returns(stmt.Body)...)
+		}
+	}
+	return results
+}
+
+// endpoints collects the detected RPC API method endpoints.
+func endpoints(funs map[string]*ast.BlockStmt, types map[string]*ast.TypeSpec, values map[string]ast.Expr) (map[string][]*Endpoint, error) {
+	methods := make(map[string][]*Endpoint)
+
+	// Iterate over all the API mappings, and locate the RPC function associations
+	for variable, val := range values {
+		if strings.HasSuffix(variable, "Mapping") {
+			// Iterate over all the exposed functionality and extract them
+			for _, mapping := range val.(*ast.CompositeLit).Elts {
+				// Fetch the name of the RPC function, and the associated argument definition
+				call := strings.Trim(mapping.(*ast.KeyValueExpr).Key.(*ast.BasicLit).Value, "\"")
+				impl := mapping.(*ast.KeyValueExpr).Value.(*ast.SelectorExpr)
+				args := mapping.(*ast.KeyValueExpr).Value.(*ast.SelectorExpr).Sel.Name + "Args"
+
+				// Generate the submodule and function names
+				module := strings.Split(call, "_")[0]
+				module = string(unicode.ToUpper(rune(module[0]))) + module[1:]
+				function := strings.Split(call, "_")[1]
+				function = string(unicode.ToUpper(rune(function[0]))) + function[1:]
+
+				// Generate the parameter list
+				params, paramList := []string{}, []string{}
+				if arg := types[args]; arg != nil {
+					for _, field := range arg.Type.(*ast.StructType).Fields.List {
+						variable := field.Names[0].String()
+						variable = string(unicode.ToLower(rune(variable[0]))) + variable[1:]
+
+						kind := ""
+						switch t := field.Type.(type) {
+						case *ast.Ident:
+							kind = t.String()
+						case *ast.SelectorExpr:
+							kind = t.X.(*ast.Ident).String() + "." + t.Sel.String()
+						case *ast.StarExpr:
+							switch sub := t.X.(type) {
+							case *ast.Ident:
+								kind = "*" + sub.String()
+							case *ast.SelectorExpr:
+								kind = "*" + sub.X.(*ast.Ident).String() + "." + sub.Sel.String()
+							default:
+								return nil, fmt.Errorf("Unknown pointer subtype: %v", sub)
+							}
+						default:
+							return nil, fmt.Errorf("Unknown type: %v", t)
+						}
+						params = append(params, fmt.Sprintf("%s %s", variable, kind))
+						paramList = append(paramList, variable)
+					}
+				}
+				// Try to detect and generate the return type
+				owner := impl.X.(*ast.ParenExpr).X.(*ast.StarExpr).X.(*ast.Ident).String()
+				method := mapping.(*ast.KeyValueExpr).Value.(*ast.SelectorExpr).Sel.String()
+				rets := returns(funs[owner+"."+method])
+
+				result := "interface{}"
+				for _, ret := range rets {
+					res := ret.Results[0]
+					switch res := res.(type) {
+					case *ast.Ident:
+						if res.String() == "nil" {
+							break
+						} else if res.String() == "true" || res.String() == "false" {
+							result = "bool"
+						} else {
+							fmt.Println(owner, method, res, "unknown ident")
+						}
+					case *ast.CallExpr:
+						if ident, ok := res.Fun.(*ast.Ident); ok {
+							if ident.String() == "string" {
+								result = "string"
+							} else if ident.String() == "newHexNum" {
+								result = "int64"
+							} else {
+								fmt.Println(owner, method, res, "unknown ident funcion")
+							}
+						} else {
+							fmt.Println(owner, method, res, "call", res.Fun, reflect.TypeOf(res.Fun))
+						}
+					default:
+						fmt.Println(owner, method, res, reflect.TypeOf(res))
+					}
+				}
+				// Insert the function to the submodule collection (alphabetically)
+				methods[module] = append(methods[module], &Endpoint{
+					Method:   call,
+					Function: fmt.Sprintf("%s(%s)", function, strings.Join(params, ",")),
+					Params:   paramList,
+					Return:   result,
+				})
+			}
+		}
+	}
+	return methods, nil
+}
+
+// generate creates the client code belonging to a set of API method endpoints.
+func generate(methods map[string][]*Endpoint) ([]byte, error) {
+	// Create a sorted list of API modules and endpoints to generate
+	modules := make([]string, 0, len(methods))
+	for module, _ := range methods {
+		modules = append(modules, module)
+	}
+	sort.Strings(modules)
+
+	for _, module := range modules {
+		for i := 0; i < len(methods[module]); i++ {
+			for j := i + 1; j < len(methods[module]); j++ {
+				if methods[module][i].Function > methods[module][j].Function {
+					methods[module][i], methods[module][j] = methods[module][j], methods[module][i]
+				}
+			}
+		}
+	}
+	// Start generating the client API
+	client := "package rpc\n"
+
+	// Generate the client struct with all its submodules
+	client += fmt.Sprintf("type GenApi struct {\n")
+	for _, module := range modules {
+		client += fmt.Sprintf("%s *%s\n", module, module)
+	}
+	client += fmt.Sprintf("}\n")
+
+	// Generate the API constructor to create the individual submodules
+	client += fmt.Sprint("func NewGenApi(client comms.EthereumClient) *GenApi {\n")
+	client += fmt.Sprint("xeth := NewXeth(client)\n\n")
+	client += fmt.Sprint("return &GenApi{\n")
+	for _, module := range modules {
+		client += fmt.Sprintf("%s: &%s{xeth},\n", module, module)
+	}
+	client += fmt.Sprintf("}}\n")
+
+	// Generate each of the client API calls
+	for _, module := range modules {
+		endpoints := methods[module]
+
+		client += fmt.Sprintf("\ntype %s struct {\n xeth *Xeth\n}\n", module)
+		for _, endpoint := range endpoints {
+			// Generate the header (only add variables if conversions are required)
+			if endpoint.Return == "interface{}" {
+				client += fmt.Sprintf("func (self *%s) %s (interface{}, error) {\n", module, endpoint.Function)
+			} else {
+				client += fmt.Sprintf("func (self *%s) %s (result %s, failure error) {\n", module, endpoint.Function, endpoint.Return)
+			}
+			// Generate the actual function invocation (straight return if no return type is known)
+			invocation := fmt.Sprintf("self.xeth.Call(\"%s\", nil)", endpoint.Method)
+			if len(endpoint.Params) > 0 {
+				invocation = fmt.Sprintf("self.xeth.Call(\"%s\", []interface{}{%s})", endpoint.Method, strings.Join(endpoint.Params, ","))
+			}
+			if endpoint.Return == "interface{}" {
+				client += fmt.Sprintf("return %s\n", invocation)
+			} else {
+				client += fmt.Sprintf("res, err := %s\n", invocation)
+			}
+			// If conversions are needed, check for errors and post process
+			if endpoint.Return != "interface{}" {
+				client += fmt.Sprintf("if err != nil { failure = err; return; }\n")
+
+				if endpoint.Return == "int64" {
+					client += fmt.Sprintf("return new(big.Int).SetBytes(common.FromHex(res.(string))).Int64(), nil\n")
+				} else {
+					client += fmt.Sprintf("return res.(%s), nil\n", endpoint.Return)
+				}
+			}
+			client += fmt.Sprintf("}\n")
+		}
+	}
+	// Format the final code and return
+	return imports.Process("", []byte(client), nil)
 }

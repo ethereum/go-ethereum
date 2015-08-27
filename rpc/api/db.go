@@ -97,7 +97,10 @@ func (self *dbApi) GetString(req *shared.Request) (interface{}, error) {
 	}
 
 	ret, err := self.xeth.DbGet([]byte(args.Database + args.Key))
-	return string(ret), err
+	if err != nil {
+		return nil, err
+	}
+	return string(ret), nil
 }
 
 func (self *dbApi) PutString(req *shared.Request) (interface{}, error) {
