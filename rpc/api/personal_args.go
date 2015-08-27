@@ -47,6 +47,7 @@ func (args *NewAccountArgs) UnmarshalJSON(b []byte) (err error) {
 type UnlockAccountArgs struct {
 	Address    string
 	Passphrase string
+	HasPW      bool
 	Duration   int
 }
 
@@ -57,6 +58,7 @@ func (args *UnlockAccountArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	args.Duration = 0
+	args.HasPW = false
 
 	if len(obj) < 1 {
 		return shared.NewInsufficientParamsError(len(obj), 1)
@@ -71,6 +73,7 @@ func (args *UnlockAccountArgs) UnmarshalJSON(b []byte) (err error) {
 	if len(obj) >= 2 && obj[1] != nil {
 		if passphrasestr, ok := obj[1].(string); ok {
 			args.Passphrase = passphrasestr
+			args.HasPW = true
 		} else {
 			return shared.NewInvalidTypeError("passphrase", "not a string")
 		}
