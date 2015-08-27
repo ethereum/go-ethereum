@@ -138,7 +138,10 @@ func (self *debugApi) GetBlockRlp(req *shared.Request) (interface{}, error) {
 		return nil, fmt.Errorf("block #%d not found", args.BlockNumber)
 	}
 	encoded, err := rlp.EncodeToBytes(block)
-	return fmt.Sprintf("%x", encoded), err
+	if err != nil {
+		return nil, err
+	}
+	return fmt.Sprintf("%x", encoded), nil
 }
 
 func (self *debugApi) SetHead(req *shared.Request) (interface{}, error) {

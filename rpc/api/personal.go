@@ -101,7 +101,10 @@ func (self *personalApi) NewAccount(req *shared.Request) (interface{}, error) {
 
 	am := self.ethereum.AccountManager()
 	acc, err := am.NewAccount(args.Passphrase)
-	return acc.Address.Hex(), err
+	if err != nil {
+		return nil, err
+	}
+	return acc.Address.Hex(), nil
 }
 
 func (self *personalApi) UnlockAccount(req *shared.Request) (interface{}, error) {
