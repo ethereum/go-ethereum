@@ -110,7 +110,7 @@ func (self *personalApi) UnlockAccount(req *shared.Request) (interface{}, error)
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	if len(args.Passphrase) == 0 {
+	if args.Passphrase == nil {
 		fe := self.xeth.Frontend()
 		if fe == nil {
 			return false, fmt.Errorf("No password provided")
@@ -121,6 +121,6 @@ func (self *personalApi) UnlockAccount(req *shared.Request) (interface{}, error)
 	am := self.ethereum.AccountManager()
 	addr := common.HexToAddress(args.Address)
 
-	err := am.TimedUnlock(addr, args.Passphrase, time.Duration(args.Duration)*time.Second)
+	err := am.TimedUnlock(addr, *args.Passphrase, time.Duration(args.Duration)*time.Second)
 	return err == nil, err
 }
