@@ -65,16 +65,16 @@ func NewNotImplementedError(method string) *NotImplementedError {
 }
 
 type NotReadyError struct {
-	Method string
+	Resource string
 }
 
 func (e *NotReadyError) Error() string {
-	return fmt.Sprintf("%s method not ready", e.Method)
+	return fmt.Sprintf("%s not ready", e.Resource)
 }
 
-func NewNotReadyError(method string) *NotReadyError {
+func NewNotReadyError(resource string) *NotReadyError {
 	return &NotReadyError{
-		Method: method,
+		Resource: resource,
 	}
 }
 

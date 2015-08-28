@@ -112,9 +112,8 @@ func (a *RemoteAgent) GetWork() ([3]string, error) {
 
 		a.work[block.HashNoNonce()] = a.currentWork
 		return res, nil
-	} else {
-		return res, errors.New("No work available yet, don't panic.")
 	}
+	return res, errors.New("No work available yet, don't panic.")
 }
 
 // Returns true or false, but does not indicate if the PoW was correct

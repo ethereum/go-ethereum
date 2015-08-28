@@ -565,7 +565,7 @@ func (self *ethApi) GetWork(req *shared.Request) (interface{}, error) {
 	self.xeth.SetMining(true, 0)
 	ret, err := self.xeth.RemoteMining().GetWork()
 	if err != nil {
-		return nil, shared.NewNotReadyError("getWork")
+		return nil, shared.NewNotReadyError("mining work")
 	} else {
 		return ret, nil
 	}
