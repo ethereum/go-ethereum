@@ -17,7 +17,6 @@
 package api
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -108,14 +107,6 @@ func (self *personalApi) UnlockAccount(req *shared.Request) (interface{}, error)
 	args := new(UnlockAccountArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
-	}
-
-	if len(args.Passphrase) == 0 {
-		fe := self.xeth.Frontend()
-		if fe == nil {
-			return false, fmt.Errorf("No password provided")
-		}
-		return fe.UnlockAccount(common.HexToAddress(args.Address).Bytes()), nil
 	}
 
 	am := self.ethereum.AccountManager()
