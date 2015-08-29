@@ -169,6 +169,7 @@ type BlockRes struct {
 	LogsBloom       *hexdata          `json:"logsBloom"`
 	TransactionRoot *hexdata          `json:"transactionsRoot"`
 	StateRoot       *hexdata          `json:"stateRoot"`
+	ReceiptRoot     *hexdata          `json:"receiptRoot"`
 	Miner           *hexdata          `json:"miner"`
 	Difficulty      *hexnum           `json:"difficulty"`
 	TotalDifficulty *hexnum           `json:"totalDifficulty"`
@@ -192,6 +193,7 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 			LogsBloom       *hexdata          `json:"logsBloom"`
 			TransactionRoot *hexdata          `json:"transactionsRoot"`
 			StateRoot       *hexdata          `json:"stateRoot"`
+			ReceiptRoot     *hexdata          `json:"receiptRoot"`
 			Miner           *hexdata          `json:"miner"`
 			Difficulty      *hexnum           `json:"difficulty"`
 			TotalDifficulty *hexnum           `json:"totalDifficulty"`
@@ -212,6 +214,7 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 		ext.LogsBloom = b.LogsBloom
 		ext.TransactionRoot = b.TransactionRoot
 		ext.StateRoot = b.StateRoot
+		ext.ReceiptRoot = b.ReceiptRoot
 		ext.Miner = b.Miner
 		ext.Difficulty = b.Difficulty
 		ext.TotalDifficulty = b.TotalDifficulty
@@ -236,6 +239,7 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 			LogsBloom       *hexdata   `json:"logsBloom"`
 			TransactionRoot *hexdata   `json:"transactionsRoot"`
 			StateRoot       *hexdata   `json:"stateRoot"`
+			ReceiptRoot     *hexdata   `json:"receiptRoot"`
 			Miner           *hexdata   `json:"miner"`
 			Difficulty      *hexnum    `json:"difficulty"`
 			TotalDifficulty *hexnum    `json:"totalDifficulty"`
@@ -256,6 +260,7 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 		ext.LogsBloom = b.LogsBloom
 		ext.TransactionRoot = b.TransactionRoot
 		ext.StateRoot = b.StateRoot
+		ext.ReceiptRoot = b.ReceiptRoot
 		ext.Miner = b.Miner
 		ext.Difficulty = b.Difficulty
 		ext.TotalDifficulty = b.TotalDifficulty
@@ -291,6 +296,7 @@ func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
 	res.LogsBloom = newHexData(block.Bloom())
 	res.TransactionRoot = newHexData(block.TxHash())
 	res.StateRoot = newHexData(block.Root())
+	res.ReceiptRoot = newHexData(block.ReceiptHash())
 	res.Miner = newHexData(block.Coinbase())
 	res.Difficulty = newHexNum(block.Difficulty())
 	res.TotalDifficulty = newHexNum(block.Td)
