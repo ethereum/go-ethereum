@@ -244,7 +244,7 @@ var (
 	}
 	RPCListenAddrFlag = cli.StringFlag{
 		Name:  "rpcaddr",
-		Usage: "Listening address for the JSON-RPC server",
+		Usage: "Listening address for the JSON-RPC server (warning: incorrect use of this flag can give anyone access)",
 		Value: "127.0.0.1",
 	}
 	RPCPortFlag = cli.IntFlag{
