@@ -92,6 +92,9 @@ func NewRpcResponse(id interface{}, jsonrpcver string, reply interface{}, err er
 	case *NotImplementedError:
 		jsonerr := &ErrorObject{-32601, err.Error()}
 		response = &ErrorResponse{Jsonrpc: jsonrpcver, Id: id, Error: jsonerr}
+	case *NotReadyError:
+		jsonerr := &ErrorObject{-32000, err.Error()}
+		response = &ErrorResponse{Jsonrpc: jsonrpcver, Id: id, Error: jsonerr}
 	case *DecodeParamError, *InsufficientParamsError, *ValidationError, *InvalidTypeError:
 		jsonerr := &ErrorObject{-32602, err.Error()}
 		response = &ErrorResponse{Jsonrpc: jsonrpcver, Id: id, Error: jsonerr}
