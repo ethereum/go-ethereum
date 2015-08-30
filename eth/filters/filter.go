@@ -14,16 +14,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package filters
 
 import (
 	"math"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 type AccountChange struct {
@@ -32,7 +31,7 @@ type AccountChange struct {
 
 // Filtering interface
 type Filter struct {
-	eth      Backend
+	db       common.Database
 	earliest int64
 	latest   int64
 	skip     int
@@ -47,8 +46,8 @@ type Filter struct {
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
 // is interesting or not.
-func NewFilter(eth Backend) *Filter {
-	return &Filter{eth: eth}
+func New(db common.Database) *Filter {
+	return &Filter{db: db}
 }
 
 // Set the earliest and latest block for filtering.
@@ -80,7 +79,7 @@ func (self *Filter) SetSkip(skip int) {
 
 // Run filters logs with the current parameters set
 func (self *Filter) Find() state.Logs {
-	earliestBlock := self.eth.ChainManager().CurrentBlock()
+	earliestBlock := core.GetCurrentBlock(self.db)
 	var earliestBlockNo uint64 = uint64(self.earliest)
 	if self.earliest == -1 {
 		earliestBlockNo = earliestBlock.NumberU64()
@@ -92,7 +91,7 @@ func (self *Filter) Find() state.Logs {
 
 	var (
 		logs  state.Logs
-		block = self.eth.ChainManager().GetBlockByNumber(latestBlockNo)
+		block = core.GetBlockByNumber(self.db, latestBlockNo)
 	)
 
 done:
@@ -111,17 +110,17 @@ done:
 		// current parameters
 		if self.bloomFilter(block) {
 			// Get the logs of the block
-			unfiltered, err := self.eth.BlockProcessor().GetLogs(block)
-			if err != nil {
-				glog.V(logger.Warn).Infoln("err: filter get logs ", err)
-
-				break
+			var (
+				receipts   = core.GetBlockReceipts(self.db, block.Hash())
+				unfiltered state.Logs
+			)
+			for _, receipt := range receipts {
+				unfiltered = append(unfiltered, receipt.Logs()...)
 			}
-
 			logs = append(logs, self.FilterLogs(unfiltered)...)
 		}
 
-		block = self.eth.ChainManager().GetBlock(block.ParentHash())
+		block = core.GetBlockByHash(self.db, block.ParentHash())
 	}
 
 	skip := int(math.Min(float64(len(logs)), float64(self.skip)))

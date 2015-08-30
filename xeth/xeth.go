@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/event/filter"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/miner"
@@ -75,7 +75,7 @@ type XEth struct {
 	whisper *Whisper
 
 	quit          chan struct{}
-	filterManager *filter.FilterManager
+	filterManager *filters.FilterSystem
 
 	logMu    sync.RWMutex
 	logQueue map[int]*logQueue
@@ -111,7 +111,7 @@ func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 		backend:          ethereum,
 		frontend:         frontend,
 		quit:             make(chan struct{}),
-		filterManager:    filter.NewFilterManager(ethereum.EventMux()),
+		filterManager:    filters.NewFilterSystem(ethereum.EventMux()),
 		logQueue:         make(map[int]*logQueue),
 		blockQueue:       make(map[int]*hashQueue),
 		transactionQueue: make(map[int]*hashQueue),
@@ -128,7 +128,6 @@ func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 	xeth.state = NewState(xeth, xeth.backend.ChainManager().State())
 
 	go xeth.start()
-	go xeth.filterManager.Start()
 
 	return xeth
 }
@@ -142,7 +141,7 @@ done:
 			self.logMu.Lock()
 			for id, filter := range self.logQueue {
 				if time.Since(filter.timeout) > filterTickerTime {
-					self.filterManager.UninstallFilter(id)
+					self.filterManager.Remove(id)
 					delete(self.logQueue, id)
 				}
 			}
@@ -151,7 +150,7 @@ done:
 			self.blockMu.Lock()
 			for id, filter := range self.blockQueue {
 				if time.Since(filter.timeout) > filterTickerTime {
-					self.filterManager.UninstallFilter(id)
+					self.filterManager.Remove(id)
 					delete(self.blockQueue, id)
 				}
 			}
@@ -160,7 +159,7 @@ done:
 			self.transactionMu.Lock()
 			for id, filter := range self.transactionQueue {
 				if time.Since(filter.timeout) > filterTickerTime {
-					self.filterManager.UninstallFilter(id)
+					self.filterManager.Remove(id)
 					delete(self.transactionQueue, id)
 				}
 			}
@@ -504,7 +503,7 @@ func (self *XEth) IsContract(address string) bool {
 }
 
 func (self *XEth) UninstallFilter(id int) bool {
-	defer self.filterManager.UninstallFilter(id)
+	defer self.filterManager.Remove(id)
 
 	if _, ok := self.logQueue[id]; ok {
 		self.logMu.Lock()
@@ -532,8 +531,8 @@ func (self *XEth) NewLogFilter(earliest, latest int64, skip, max int, address []
 	self.logMu.Lock()
 	defer self.logMu.Unlock()
 
-	filter := core.NewFilter(self.backend)
-	id := self.filterManager.InstallFilter(filter)
+	filter := filters.New(self.backend.ChainDb())
+	id := self.filterManager.Add(filter)
 	self.logQueue[id] = &logQueue{timeout: time.Now()}
 
 	filter.SetEarliestBlock(earliest)
@@ -558,8 +557,8 @@ func (self *XEth) NewTransactionFilter() int {
 	self.transactionMu.Lock()
 	defer self.transactionMu.Unlock()
 
-	filter := core.NewFilter(self.backend)
-	id := self.filterManager.InstallFilter(filter)
+	filter := filters.New(self.backend.ChainDb())
+	id := self.filterManager.Add(filter)
 	self.transactionQueue[id] = &hashQueue{timeout: time.Now()}
 
 	filter.TransactionCallback = func(tx *types.Transaction) {
@@ -577,8 +576,8 @@ func (self *XEth) NewBlockFilter() int {
 	self.blockMu.Lock()
 	defer self.blockMu.Unlock()
 
-	filter := core.NewFilter(self.backend)
-	id := self.filterManager.InstallFilter(filter)
+	filter := filters.New(self.backend.ChainDb())
+	id := self.filterManager.Add(filter)
 	self.blockQueue[id] = &hashQueue{timeout: time.Now()}
 
 	filter.BlockCallback = func(block *types.Block, logs state.Logs) {
@@ -635,7 +634,7 @@ func (self *XEth) TransactionFilterChanged(id int) []common.Hash {
 }
 
 func (self *XEth) Logs(id int) state.Logs {
-	filter := self.filterManager.GetFilter(id)
+	filter := self.filterManager.Get(id)
 	if filter != nil {
 		return filter.Find()
 	}
@@ -644,7 +643,7 @@ func (self *XEth) Logs(id int) state.Logs {
 }
 
 func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []string, topics [][]string) state.Logs {
-	filter := core.NewFilter(self.backend)
+	filter := filters.New(self.backend.ChainDb())
 	filter.SetEarliestBlock(earliest)
 	filter.SetLatestBlock(latest)
 	filter.SetSkip(skip)
