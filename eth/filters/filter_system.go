@@ -22,7 +22,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -89,7 +89,7 @@ func (fs *FilterSystem) filterLoop() {
 		//core.PendingBlockEvent{},
 		core.ChainEvent{},
 		core.TxPreEvent{},
-		state.Logs(nil))
+		vm.Logs(nil))
 
 out:
 	for {
@@ -116,7 +116,7 @@ out:
 				}
 				fs.filterMu.RUnlock()
 
-			case state.Logs:
+			case vm.Logs:
 				fs.filterMu.RLock()
 				for _, filter := range fs.filters {
 					if filter.LogsCallback != nil {

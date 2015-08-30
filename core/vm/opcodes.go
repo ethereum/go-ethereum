@@ -20,9 +20,9 @@ import (
 	"fmt"
 )
 
+// OpCode is an EVM opcode
 type OpCode byte
 
-// Op codes
 const (
 	// 0x0 range - arithmetic ops
 	STOP OpCode = iota

@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -163,7 +164,7 @@ func (self *BlockProcessor) ApplyTransactions(gp GasPool, statedb *state.StateDB
 	return receipts, err
 }
 
-func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs state.Logs, err error) {
+func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs vm.Logs, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -188,7 +189,7 @@ func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs state.Logs, err
 // Process block will attempt to process the given block's transactions and applies them
 // on top of the block's parent state (given it exists) and will return wether it was
 // successful or not.
-func (sm *BlockProcessor) Process(block *types.Block) (logs state.Logs, receipts types.Receipts, err error) {
+func (sm *BlockProcessor) Process(block *types.Block) (logs vm.Logs, receipts types.Receipts, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -204,7 +205,7 @@ func (sm *BlockProcessor) Process(block *types.Block) (logs state.Logs, receipts
 	return sm.processWithParent(block, parent)
 }
 
-func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs state.Logs, receipts types.Receipts, err error) {
+func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs vm.Logs, receipts types.Receipts, err error) {
 	// Create a new state based on the parent's root (e.g., create copy)
 	state := state.New(parent.Root(), sm.chainDb)
 	header := block.Header()
@@ -356,7 +357,7 @@ func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
 // GetLogs returns the logs of the given block. This method is using a two step approach
 // where it tries to get it from the (updated) method which gets them from the receipts or
 // the depricated way by re-processing the block.
-func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err error) {
+func (sm *BlockProcessor) GetLogs(block *types.Block) (logs vm.Logs, err error) {
 	receipts := GetBlockReceipts(sm.chainDb, block.Hash())
 	// coalesce logs
 	for _, receipt := range receipts {

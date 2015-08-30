@@ -22,34 +22,34 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // Global Debug flag indicating Debug VM (full logging)
 var Debug bool
 
+// Type is the VM type accepted by **NewVm**
 type Type byte
 
 const (
-	StdVmTy Type = iota
-	JitVmTy
+	StdVmTy Type = iota // Default standard VM
+	JitVmTy             // LLVM JIT VM
 	MaxVmTy
-
-	LogTyPretty byte = 0x1
-	LogTyDiff   byte = 0x2
 )
 
 var (
-	Pow256 = common.BigPow(2, 256)
+	Pow256 = common.BigPow(2, 256) // Pew256 is 2**256
 
-	U256 = common.U256
-	S256 = common.S256
+	U256 = common.U256 // Shortcut to common.U256
+	S256 = common.S256 // Shortcut to common.S256
 
-	Zero = common.Big0
-	One  = common.Big1
+	Zero = common.Big0 // Shortcut to common.Big0
+	One  = common.Big1 // Shortcut to common.Big1
 
-	max = big.NewInt(math.MaxInt64)
+	max = big.NewInt(math.MaxInt64) // Maximum 256 bit integer
 )
 
+// NewVm returns a new VM based on the Environment
 func NewVm(env Environment) VirtualMachine {
 	switch env.VmType() {
 	case JitVmTy:
@@ -62,12 +62,39 @@ func NewVm(env Environment) VirtualMachine {
 	}
 }
 
+// calculates the memory size required for a step
 func calcMemSize(off, l *big.Int) *big.Int {
 	if l.Cmp(common.Big0) == 0 {
 		return common.Big0
 	}
 
 	return new(big.Int).Add(off, l)
+}
+
+// calculates the quadratic gas
+func quadMemGas(mem *Memory, newMemSize, gas *big.Int) {
+	if newMemSize.Cmp(common.Big0) > 0 {
+		newMemSizeWords := toWordSize(newMemSize)
+		newMemSize.Mul(newMemSizeWords, u256(32))
+
+		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
+			// be careful reusing variables here when changing.
+			// The order has been optimised to reduce allocation
+			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
+			pow := new(big.Int).Exp(oldSize, common.Big2, Zero)
+			linCoef := oldSize.Mul(oldSize, params.MemoryGas)
+			quadCoef := new(big.Int).Div(pow, params.QuadCoeffDiv)
+			oldTotalFee := new(big.Int).Add(linCoef, quadCoef)
+
+			pow.Exp(newMemSizeWords, common.Big2, Zero)
+			linCoef = linCoef.Mul(newMemSizeWords, params.MemoryGas)
+			quadCoef = quadCoef.Div(pow, params.QuadCoeffDiv)
+			newTotalFee := linCoef.Add(linCoef, quadCoef)
+
+			fee := newTotalFee.Sub(newTotalFee, oldTotalFee)
+			gas.Add(gas, fee)
+		}
+	}
 }
 
 // Simple helper
@@ -86,6 +113,8 @@ func toValue(val *big.Int) interface{} {
 	return val
 }
 
+// getData returns a slice from the data based on the start and size and pads
+// up to size with zero's. This function is overflow safe.
 func getData(data []byte, start, size *big.Int) []byte {
 	dlen := big.NewInt(int64(len(data)))
 
@@ -94,7 +123,9 @@ func getData(data []byte, start, size *big.Int) []byte {
 	return common.RightPadBytes(data[s.Uint64():e.Uint64()], int(size.Uint64()))
 }
 
-func UseGas(gas, amount *big.Int) bool {
+// useGas attempts to subtract the amount of gas and returns whether it was
+// successful
+func useGas(gas, amount *big.Int) bool {
 	if gas.Cmp(amount) < 0 {
 		return false
 	}

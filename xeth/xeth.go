@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -541,7 +542,7 @@ func (self *XEth) NewLogFilter(earliest, latest int64, skip, max int, address []
 	filter.SetMax(max)
 	filter.SetAddress(cAddress(address))
 	filter.SetTopics(cTopics(topics))
-	filter.LogsCallback = func(logs state.Logs) {
+	filter.LogsCallback = func(logs vm.Logs) {
 		self.logMu.Lock()
 		defer self.logMu.Unlock()
 
@@ -580,7 +581,7 @@ func (self *XEth) NewBlockFilter() int {
 	id := self.filterManager.Add(filter)
 	self.blockQueue[id] = &hashQueue{timeout: time.Now()}
 
-	filter.BlockCallback = func(block *types.Block, logs state.Logs) {
+	filter.BlockCallback = func(block *types.Block, logs vm.Logs) {
 		self.blockMu.Lock()
 		defer self.blockMu.Unlock()
 
@@ -603,7 +604,7 @@ func (self *XEth) GetFilterType(id int) byte {
 	return UnknownFilterTy
 }
 
-func (self *XEth) LogFilterChanged(id int) state.Logs {
+func (self *XEth) LogFilterChanged(id int) vm.Logs {
 	self.logMu.Lock()
 	defer self.logMu.Unlock()
 
@@ -633,7 +634,7 @@ func (self *XEth) TransactionFilterChanged(id int) []common.Hash {
 	return nil
 }
 
-func (self *XEth) Logs(id int) state.Logs {
+func (self *XEth) Logs(id int) vm.Logs {
 	filter := self.filterManager.Get(id)
 	if filter != nil {
 		return filter.Find()
@@ -642,7 +643,7 @@ func (self *XEth) Logs(id int) state.Logs {
 	return nil
 }
 
-func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []string, topics [][]string) state.Logs {
+func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []string, topics [][]string) vm.Logs {
 	filter := filters.New(self.backend.ChainDb())
 	filter.SetEarliestBlock(earliest)
 	filter.SetLatestBlock(latest)
@@ -1029,19 +1030,19 @@ func (m callmsg) Data() []byte                  { return m.data }
 type logQueue struct {
 	mu sync.Mutex
 
-	logs    state.Logs
+	logs    vm.Logs
 	timeout time.Time
 	id      int
 }
 
-func (l *logQueue) add(logs ...*state.Log) {
+func (l *logQueue) add(logs ...*vm.Log) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	l.logs = append(l.logs, logs...)
 }
 
-func (l *logQueue) get() state.Logs {
+func (l *logQueue) get() vm.Logs {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

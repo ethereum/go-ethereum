@@ -18,6 +18,7 @@ package vm
 
 import "fmt"
 
+// Memory implements ethereum RAM backed by a simple byte slice
 type Memory struct {
 	store []byte
 }
@@ -26,6 +27,7 @@ func NewMemory() *Memory {
 	return &Memory{nil}
 }
 
+// Set sets offset + size to value
 func (m *Memory) Set(offset, size uint64, value []byte) {
 	// length of store may never be less than offset + size.
 	// The store should be resized PRIOR to setting the memory
@@ -40,12 +42,14 @@ func (m *Memory) Set(offset, size uint64, value []byte) {
 	}
 }
 
+// Resize resizes the memory to size
 func (m *Memory) Resize(size uint64) {
 	if uint64(m.Len()) < size {
 		m.store = append(m.store, make([]byte, size-uint64(m.Len()))...)
 	}
 }
 
+// Get returns offset + size as a new slice
 func (self *Memory) Get(offset, size int64) (cpy []byte) {
 	if size == 0 {
 		return nil
@@ -61,6 +65,7 @@ func (self *Memory) Get(offset, size int64) (cpy []byte) {
 	return
 }
 
+// GetPtr returns the offset + size
 func (self *Memory) GetPtr(offset, size int64) []byte {
 	if size == 0 {
 		return nil
@@ -73,10 +78,12 @@ func (self *Memory) GetPtr(offset, size int64) []byte {
 	return nil
 }
 
+// Len returns the length of the backing slice
 func (m *Memory) Len() int {
 	return len(m.store)
 }
 
+// Data returns the backing slice
 func (m *Memory) Data() []byte {
 	return m.store
 }

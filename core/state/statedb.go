@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -42,7 +43,7 @@ type StateDB struct {
 
 	thash, bhash common.Hash
 	txIndex      int
-	logs         map[common.Hash]Logs
+	logs         map[common.Hash]vm.Logs
 	logSize      uint
 }
 
@@ -59,7 +60,7 @@ func New(root common.Hash, db ethdb.Database) *StateDB {
 		trie:         tr,
 		stateObjects: make(map[string]*StateObject),
 		refund:       new(big.Int),
-		logs:         make(map[common.Hash]Logs),
+		logs:         make(map[common.Hash]vm.Logs),
 	}
 }
 
@@ -69,7 +70,7 @@ func (self *StateDB) StartRecord(thash, bhash common.Hash, ti int) {
 	self.txIndex = ti
 }
 
-func (self *StateDB) AddLog(log *Log) {
+func (self *StateDB) AddLog(log *vm.Log) {
 	log.TxHash = self.thash
 	log.BlockHash = self.bhash
 	log.TxIndex = uint(self.txIndex)
@@ -78,28 +79,32 @@ func (self *StateDB) AddLog(log *Log) {
 	self.logSize++
 }
 
-func (self *StateDB) GetLogs(hash common.Hash) Logs {
+func (self *StateDB) GetLogs(hash common.Hash) vm.Logs {
 	return self.logs[hash]
 }
 
-func (self *StateDB) Logs() Logs {
-	var logs Logs
+func (self *StateDB) Logs() vm.Logs {
+	var logs vm.Logs
 	for _, lgs := range self.logs {
 		logs = append(logs, lgs...)
 	}
 	return logs
 }
 
-func (self *StateDB) Refund(gas *big.Int) {
+func (self *StateDB) AddRefund(gas *big.Int) {
 	self.refund.Add(self.refund, gas)
 }
 
-/*
- * GETTERS
- */
-
 func (self *StateDB) HasAccount(addr common.Address) bool {
 	return self.GetStateObject(addr) != nil
+}
+
+func (self *StateDB) Exist(addr common.Address) bool {
+	return self.GetStateObject(addr) != nil
+}
+
+func (self *StateDB) GetAccount(addr common.Address) vm.Account {
+	return self.GetStateObject(addr)
 }
 
 // Retrieve the balance from the given address or 0 if object not found
@@ -245,7 +250,7 @@ func (self *StateDB) SetStateObject(object *StateObject) {
 func (self *StateDB) GetOrNewStateObject(addr common.Address) *StateObject {
 	stateObject := self.GetStateObject(addr)
 	if stateObject == nil || stateObject.deleted {
-		stateObject = self.CreateAccount(addr)
+		stateObject = self.CreateStateObject(addr)
 	}
 
 	return stateObject
@@ -264,7 +269,7 @@ func (self *StateDB) newStateObject(addr common.Address) *StateObject {
 }
 
 // Creates creates a new state object and takes ownership. This is different from "NewStateObject"
-func (self *StateDB) CreateAccount(addr common.Address) *StateObject {
+func (self *StateDB) CreateStateObject(addr common.Address) *StateObject {
 	// Get previous (if any)
 	so := self.GetStateObject(addr)
 	// Create a new one
@@ -276,6 +281,10 @@ func (self *StateDB) CreateAccount(addr common.Address) *StateObject {
 	}
 
 	return newSo
+}
+
+func (self *StateDB) CreateAccount(addr common.Address) vm.Account {
+	return self.CreateStateObject(addr)
 }
 
 //
@@ -292,7 +301,7 @@ func (self *StateDB) Copy() *StateDB {
 	state.refund.Set(self.refund)
 
 	for hash, logs := range self.logs {
-		state.logs[hash] = make(Logs, len(logs))
+		state.logs[hash] = make(vm.Logs, len(logs))
 		copy(state.logs[hash], logs)
 	}
 	state.logSize = self.logSize
@@ -307,6 +316,10 @@ func (self *StateDB) Set(state *StateDB) {
 	self.refund = state.refund
 	self.logs = state.logs
 	self.logSize = state.logSize
+}
+
+func (self *StateDB) GetRefund() *big.Int {
+	return self.refund
 }
 
 // IntermediateRoot computes the current root hash of the state trie.

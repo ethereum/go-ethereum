@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-func checkLogs(tlog []Log, logs state.Logs) error {
+func checkLogs(tlog []Log, logs vm.Logs) error {
 
 	if len(tlog) != len(logs) {
 		return fmt.Errorf("log length mismatch. Expected %d, got %d", len(tlog), len(logs))
@@ -53,7 +53,7 @@ func checkLogs(tlog []Log, logs state.Logs) error {
 					}
 				}
 			}
-			genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
+			genBloom := common.LeftPadBytes(types.LogsBloom(vm.Logs{logs[i]}).Bytes(), 256)
 
 			if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
 				return fmt.Errorf("bloom mismatch")
@@ -181,18 +181,18 @@ func (self *Env) BlockNumber() *big.Int  { return self.number }
 func (self *Env) Coinbase() common.Address { return self.coinbase }
 func (self *Env) Time() *big.Int           { return self.time }
 func (self *Env) Difficulty() *big.Int     { return self.difficulty }
-func (self *Env) State() *state.StateDB    { return self.state }
+func (self *Env) Db() vm.Database          { return self.state }
 func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
 func (self *Env) VmType() vm.Type          { return vm.StdVmTy }
 func (self *Env) GetHash(n uint64) common.Hash {
 	return common.BytesToHash(crypto.Sha3([]byte(big.NewInt(int64(n)).String())))
 }
-func (self *Env) AddLog(log *state.Log) {
+func (self *Env) AddLog(log *vm.Log) {
 	self.state.AddLog(log)
 }
 func (self *Env) Depth() int     { return self.depth }
 func (self *Env) SetDepth(i int) { self.depth = i }
-func (self *Env) CanTransfer(from vm.Account, balance *big.Int) bool {
+func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
 	if self.skipTransfer {
 		if self.initial {
 			self.initial = false
@@ -200,58 +200,53 @@ func (self *Env) CanTransfer(from vm.Account, balance *big.Int) bool {
 		}
 	}
 
-	return from.Balance().Cmp(balance) >= 0
+	return self.state.GetBalance(from).Cmp(balance) >= 0
+}
+func (self *Env) MakeSnapshot() vm.Database {
+	return self.state.Copy()
+}
+func (self *Env) SetSnapshot(copy vm.Database) {
+	self.state.Set(copy.(*state.StateDB))
 }
 
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
 	if self.skipTransfer {
 		return nil
 	}
-	return vm.Transfer(from, to, amount)
+	return core.Transfer(from, to, amount)
 }
 
-func (self *Env) vm(addr *common.Address, data []byte, gas, price, value *big.Int) *core.Execution {
-	exec := core.NewExecution(self, addr, data, gas, price, value)
-
-	return exec
-}
-
-func (self *Env) Call(caller vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *Env) Call(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
 	if self.vmTest && self.depth > 0 {
 		caller.ReturnGas(gas, price)
 
 		return nil, nil
 	}
-	exe := self.vm(&addr, data, gas, price, value)
-	ret, err := exe.Call(addr, caller)
-	self.Gas = exe.Gas
+	ret, err := core.Call(self, caller, addr, data, gas, price, value)
+	self.Gas = gas
 
 	return ret, err
 
 }
-func (self *Env) CallCode(caller vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *Env) CallCode(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
 	if self.vmTest && self.depth > 0 {
 		caller.ReturnGas(gas, price)
 
 		return nil, nil
 	}
-
-	caddr := caller.Address()
-	exe := self.vm(&caddr, data, gas, price, value)
-	return exe.Call(addr, caller)
+	return core.CallCode(self, caller, addr, data, gas, price, value)
 }
 
-func (self *Env) Create(caller vm.ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
-	exe := self.vm(nil, data, gas, price, value)
+func (self *Env) Create(caller vm.ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
 	if self.vmTest {
 		caller.ReturnGas(gas, price)
 
 		nonce := self.state.GetNonce(caller.Address())
 		obj := self.state.GetOrNewStateObject(crypto.CreateAddress(caller.Address(), nonce))
 
-		return nil, nil, obj
+		return nil, obj.Address(), nil
 	} else {
-		return exe.Create(caller)
+		return core.Create(self, caller, data, gas, price, value)
 	}
 }
 

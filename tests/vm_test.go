@@ -24,14 +24,14 @@ import (
 
 func BenchmarkVmAckermann32Tests(b *testing.B) {
 	fn := filepath.Join(vmTestDir, "vmPerformanceTest.json")
-	if err := BenchVmTest(fn, bconf{"ackermann32", true, os.Getenv("JITVM") == "true"}, b); err != nil {
+	if err := BenchVmTest(fn, bconf{"ackermann32", os.Getenv("JITFORCE") == "true", os.Getenv("JITVM") == "true"}, b); err != nil {
 		b.Error(err)
 	}
 }
 
 func BenchmarkVmFibonacci16Tests(b *testing.B) {
 	fn := filepath.Join(vmTestDir, "vmPerformanceTest.json")
-	if err := BenchVmTest(fn, bconf{"fibonacci16", true, os.Getenv("JITVM") == "true"}, b); err != nil {
+	if err := BenchVmTest(fn, bconf{"fibonacci16", os.Getenv("JITFORCE") == "true", os.Getenv("JITVM") == "true"}, b); err != nil {
 		b.Error(err)
 	}
 }

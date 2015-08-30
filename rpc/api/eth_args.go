@@ -24,8 +24,8 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
@@ -830,7 +830,7 @@ type LogRes struct {
 	TransactionIndex *hexnum    `json:"transactionIndex"`
 }
 
-func NewLogRes(log *state.Log) LogRes {
+func NewLogRes(log *vm.Log) LogRes {
 	var l LogRes
 	l.Topics = make([]*hexdata, len(log.Topics))
 	for j, topic := range log.Topics {
@@ -847,7 +847,7 @@ func NewLogRes(log *state.Log) LogRes {
 	return l
 }
 
-func NewLogsRes(logs state.Logs) (ls []LogRes) {
+func NewLogsRes(logs vm.Logs) (ls []LogRes) {
 	ls = make([]LogRes, len(logs))
 
 	for i, log := range logs {

@@ -53,7 +53,7 @@ func (self *VMEnv) Time() *big.Int           { return self.header.Time }
 func (self *VMEnv) Difficulty() *big.Int     { return self.header.Difficulty }
 func (self *VMEnv) GasLimit() *big.Int       { return self.header.GasLimit }
 func (self *VMEnv) Value() *big.Int          { return self.msg.Value() }
-func (self *VMEnv) State() *state.StateDB    { return self.state }
+func (self *VMEnv) Db() vm.Database          { return self.state }
 func (self *VMEnv) Depth() int               { return self.depth }
 func (self *VMEnv) SetDepth(i int)           { self.depth = i }
 func (self *VMEnv) VmType() vm.Type          { return self.typ }
@@ -66,30 +66,34 @@ func (self *VMEnv) GetHash(n uint64) common.Hash {
 	return common.Hash{}
 }
 
-func (self *VMEnv) AddLog(log *state.Log) {
+func (self *VMEnv) AddLog(log *vm.Log) {
 	self.state.AddLog(log)
 }
-func (self *VMEnv) CanTransfer(from vm.Account, balance *big.Int) bool {
-	return from.Balance().Cmp(balance) >= 0
+func (self *VMEnv) CanTransfer(from common.Address, balance *big.Int) bool {
+	return self.state.GetBalance(from).Cmp(balance) >= 0
+}
+
+func (self *VMEnv) MakeSnapshot() vm.Database {
+	return self.state.Copy()
+}
+
+func (self *VMEnv) SetSnapshot(copy vm.Database) {
+	self.state.Set(copy.(*state.StateDB))
 }
 
 func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
-	return vm.Transfer(from, to, amount)
+	return Transfer(from, to, amount)
 }
 
-func (self *VMEnv) Call(me vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	exe := NewExecution(self, &addr, data, gas, price, value)
-	return exe.Call(addr, me)
+func (self *VMEnv) Call(me vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+	return Call(self, me, addr, data, gas, price, value)
 }
-func (self *VMEnv) CallCode(me vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	maddr := me.Address()
-	exe := NewExecution(self, &maddr, data, gas, price, value)
-	return exe.Call(addr, me)
+func (self *VMEnv) CallCode(me vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+	return CallCode(self, me, addr, data, gas, price, value)
 }
 
-func (self *VMEnv) Create(me vm.ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
-	exe := NewExecution(self, nil, data, gas, price, value)
-	return exe.Create(me)
+func (self *VMEnv) Create(me vm.ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
+	return Create(self, me, data, gas, price, value)
 }
 
 func (self *VMEnv) StructLogs() []vm.StructLog {

@@ -21,8 +21,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 type AccountChange struct {
@@ -39,9 +39,9 @@ type Filter struct {
 	max      int
 	topics   [][]common.Hash
 
-	BlockCallback       func(*types.Block, state.Logs)
+	BlockCallback       func(*types.Block, vm.Logs)
 	TransactionCallback func(*types.Transaction)
-	LogsCallback        func(state.Logs)
+	LogsCallback        func(vm.Logs)
 }
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
@@ -78,7 +78,7 @@ func (self *Filter) SetSkip(skip int) {
 }
 
 // Run filters logs with the current parameters set
-func (self *Filter) Find() state.Logs {
+func (self *Filter) Find() vm.Logs {
 	earliestBlock := core.GetCurrentBlock(self.db)
 	var earliestBlockNo uint64 = uint64(self.earliest)
 	if self.earliest == -1 {
@@ -90,7 +90,7 @@ func (self *Filter) Find() state.Logs {
 	}
 
 	var (
-		logs  state.Logs
+		logs  vm.Logs
 		block = core.GetBlockByNumber(self.db, latestBlockNo)
 	)
 
@@ -112,7 +112,7 @@ done:
 			// Get the logs of the block
 			var (
 				receipts   = core.GetBlockReceipts(self.db, block.Hash())
-				unfiltered state.Logs
+				unfiltered vm.Logs
 			)
 			for _, receipt := range receipts {
 				unfiltered = append(unfiltered, receipt.Logs()...)
@@ -138,8 +138,8 @@ func includes(addresses []common.Address, a common.Address) bool {
 	return false
 }
 
-func (self *Filter) FilterLogs(logs state.Logs) state.Logs {
-	var ret state.Logs
+func (self *Filter) FilterLogs(logs vm.Logs) vm.Logs {
+	var ret vm.Logs
 
 	// Filter the logs for interesting stuff
 Logs:

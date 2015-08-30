@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// StdErrFormat formats a slice of StructLogs to human readable format
 func StdErrFormat(logs []StructLog) {
 	fmt.Fprintf(os.Stderr, "VM STAT %d OPs\n", len(logs))
 	for _, log := range logs {
