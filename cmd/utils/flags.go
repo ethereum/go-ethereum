@@ -138,6 +138,11 @@ var (
 		Name:  "olympic",
 		Usage: "Use olympic style protocol",
 	}
+	EthVersionFlag = cli.IntFlag{
+		Name:  "eth",
+		Value: 62,
+		Usage: "Highest eth protocol to advertise (temporary, dev option)",
+	}
 
 	// miner settings
 	MinerThreadsFlag = cli.IntFlag{
@@ -457,6 +462,18 @@ func SetupVM(ctx *cli.Context) {
 	vm.EnableJit = ctx.GlobalBool(VMEnableJitFlag.Name)
 	vm.ForceJit = ctx.GlobalBool(VMForceJitFlag.Name)
 	vm.SetJITCacheSize(ctx.GlobalInt(VMJitCacheFlag.Name))
+}
+
+// SetupEth configures the eth packages global settings
+func SetupEth(ctx *cli.Context) {
+	version := ctx.GlobalInt(EthVersionFlag.Name)
+	for len(eth.ProtocolVersions) > 0 && eth.ProtocolVersions[0] > uint(version) {
+		eth.ProtocolVersions = eth.ProtocolVersions[1:]
+		eth.ProtocolLengths = eth.ProtocolLengths[1:]
+	}
+	if len(eth.ProtocolVersions) == 0 {
+		Fatalf("No valid eth protocols remaining")
+	}
 }
 
 // MakeChain creates a chain manager from set command line flags.

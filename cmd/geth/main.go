@@ -283,6 +283,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.DataDirFlag,
 		utils.BlockchainVersionFlag,
 		utils.OlympicFlag,
+		utils.EthVersionFlag,
 		utils.CacheFlag,
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
@@ -333,6 +334,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 	app.Before = func(ctx *cli.Context) error {
 		utils.SetupLogger(ctx)
 		utils.SetupVM(ctx)
+		utils.SetupEth(ctx)
 		if ctx.GlobalBool(utils.PProfEanbledFlag.Name) {
 			utils.StartPProf(ctx)
 		}

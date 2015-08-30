@@ -38,6 +38,7 @@ var (
 		"shh_newIdentity":      (*shhApi).NewIdentity,
 		"shh_newFilter":        (*shhApi).NewFilter,
 		"shh_uninstallFilter":  (*shhApi).UninstallFilter,
+		"shh_getMessages":      (*shhApi).GetMessages,
 		"shh_getFilterChanges": (*shhApi).GetFilterChanges,
 	}
 )

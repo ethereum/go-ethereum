@@ -64,6 +64,20 @@ func NewNotImplementedError(method string) *NotImplementedError {
 	}
 }
 
+type NotReadyError struct {
+	Resource string
+}
+
+func (e *NotReadyError) Error() string {
+	return fmt.Sprintf("%s not ready", e.Resource)
+}
+
+func NewNotReadyError(resource string) *NotReadyError {
+	return &NotReadyError{
+		Resource: resource,
+	}
+}
+
 type DecodeParamError struct {
 	err string
 }
