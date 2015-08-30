@@ -100,7 +100,7 @@ func (self *minerApi) StartMiner(req *shared.Request) (interface{}, error) {
 	}
 
 	self.ethereum.StartAutoDAG()
-	err := self.ethereum.StartMining(args.Threads)
+	err := self.ethereum.StartMining(args.Threads, "")
 	if err == nil {
 		return true, nil
 	}

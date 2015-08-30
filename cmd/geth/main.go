@@ -102,6 +102,22 @@ Regular users do not need to execute it.
 `,
 		},
 		{
+			Action: gpuinfo,
+			Name:   "gpuinfo",
+			Usage:  "gpuinfo",
+			Description: `
+Prints OpenCL device info for all found GPUs.
+`,
+		},
+		{
+			Action: gpubench,
+			Name:   "gpubench",
+			Usage:  "benchmark GPU",
+			Description: `
+Runs quick benchmark on first GPU found.
+`,
+		},
+		{
 			Action: version,
 			Name:   "version",
 			Usage:  "print ethereum version numbers",
@@ -293,6 +309,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.GasPriceFlag,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
+		utils.MiningGPUFlag,
 		utils.AutoDAGFlag,
 		utils.NATFlag,
 		utils.NatspecEnabledFlag,
@@ -570,7 +587,10 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 		}
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		if err := eth.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
+		err := eth.StartMining(
+			ctx.GlobalInt(utils.MinerThreadsFlag.Name),
+			ctx.GlobalString(utils.MiningGPUFlag.Name))
+		if err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}
@@ -719,6 +739,30 @@ func makedag(ctx *cli.Context) {
 			fmt.Println("making DAG, this could take awhile...")
 			ethash.MakeDAG(blockNum, dir)
 		}
+	default:
+		wrongArgs()
+	}
+}
+
+func gpuinfo(ctx *cli.Context) {
+	//os.Getenv("GO_OPENCL")
+	eth.PrintOpenCLDevices()
+}
+
+func gpubench(ctx *cli.Context) {
+	args := ctx.Args()
+	wrongArgs := func() {
+		utils.Fatalf(`Usage: geth gpubench <gpu number>`)
+	}
+	switch {
+	case len(args) == 1:
+		n, err := strconv.ParseUint(args[0], 0, 64)
+		if err != nil {
+			wrongArgs()
+		}
+		eth.GPUBench(n)
+	case len(args) == 0:
+		eth.GPUBench(0)
 	default:
 		wrongArgs()
 	}
