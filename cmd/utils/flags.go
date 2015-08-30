@@ -179,6 +179,10 @@ var (
 		Usage: "Path to password file to use with options and subcommands needing a password",
 		Value: "",
 	}
+	DangerZoneFlag = cli.BoolFlag{
+		Name:  "dangerzone",
+		Usage: "Enables unlocking of accounts when RPC is enabled.",
+	}
 
 	// vm flags
 	VMDebugFlag = cli.BoolFlag{
@@ -554,8 +558,12 @@ func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
 }
 
 func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
+	listenAddr := ctx.GlobalString(RPCListenAddrFlag.Name)
+	if listenAddr == "0.0.0.0" {
+		glog.V(logger.Info).Infoln("WARNING: RPC reachable from any IP!")
+	}
 	config := comms.HttpConfig{
-		ListenAddress: ctx.GlobalString(RPCListenAddrFlag.Name),
+		ListenAddress: listenAddr,
 		ListenPort:    uint(ctx.GlobalInt(RPCPortFlag.Name)),
 		CorsDomain:    ctx.GlobalString(RPCCORSDomainFlag.Name),
 	}

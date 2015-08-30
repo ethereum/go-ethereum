@@ -278,6 +278,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
+		utils.DangerZoneFlag,
 		utils.GenesisFileFlag,
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
@@ -548,7 +549,12 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	utils.StartEthereum(eth)
 
 	am := eth.AccountManager()
+	dangerZone := ctx.GlobalBool(utils.DangerZoneFlag.Name)
+	am.SetDangerZone(dangerZone)
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
+	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) && account != "" && !dangerZone {
+		utils.Fatalf("Accounts cannot be unlocked if RPC is enabled. To force this combination, run with --dangerzone")
+	}
 	accounts := strings.Split(account, " ")
 	for i, account := range accounts {
 		if len(account) > 0 {
