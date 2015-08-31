@@ -19,7 +19,6 @@ package core
 import (
 	"bytes"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -30,9 +29,12 @@ import (
 )
 
 var (
-	blockHashPre  = []byte("block-hash-")
+	headerHashPre = []byte("header-hash-")
+	bodyHashPre   = []byte("body-hash-")
 	blockNumPre   = []byte("block-num-")
 	ExpDiffPeriod = big.NewInt(100000)
+
+	blockHashPre = []byte("block-hash-") // [deprecated by eth/63]
 )
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
@@ -112,27 +114,91 @@ func CalcGasLimit(parent *types.Block) *big.Int {
 	return gl
 }
 
-// GetBlockByHash returns the block corresponding to the hash or nil if not found
-func GetBlockByHash(db common.Database, hash common.Hash) *types.Block {
-	data, _ := db.Get(append(blockHashPre, hash[:]...))
+// storageBody is the block body encoding used for the database.
+type storageBody struct {
+	Transactions []*types.Transaction
+	Uncles       []*types.Header
+}
+
+// GetHeaderRLPByHash retrieves a block header in its raw RLP database encoding,
+// or nil if the header's not found.
+func GetHeaderRLPByHash(db common.Database, hash common.Hash) []byte {
+	data, _ := db.Get(append(headerHashPre, hash[:]...))
+	return data
+}
+
+// GetHeaderByHash retrieves the block header corresponding to the hash, nil if
+// none found.
+func GetHeaderByHash(db common.Database, hash common.Hash) *types.Header {
+	data := GetHeaderRLPByHash(db, hash)
 	if len(data) == 0 {
 		return nil
 	}
-	var block types.StorageBlock
-	if err := rlp.Decode(bytes.NewReader(data), &block); err != nil {
-		glog.V(logger.Error).Infof("invalid block RLP for hash %x: %v", hash, err)
+	header := new(types.Header)
+	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
+		glog.V(logger.Error).Infof("invalid block header RLP for hash %x: %v", hash, err)
 		return nil
 	}
-	return (*types.Block)(&block)
+	return header
 }
 
-// GetBlockByHash returns the canonical block by number or nil if not found
+// GetBodyRLPByHash retrieves the block body (transactions and uncles) in RLP
+// encoding, and the associated total difficulty.
+func GetBodyRLPByHash(db common.Database, hash common.Hash) ([]byte, *big.Int) {
+	combo, _ := db.Get(append(bodyHashPre, hash[:]...))
+	if len(combo) == 0 {
+		return nil, nil
+	}
+	buffer := bytes.NewBuffer(combo)
+
+	td := new(big.Int)
+	if err := rlp.Decode(buffer, td); err != nil {
+		glog.V(logger.Error).Infof("invalid block td RLP for hash %x: %v", hash, err)
+		return nil, nil
+	}
+	return buffer.Bytes(), td
+}
+
+// GetBodyByHash retrieves the block body (transactons, uncles, total difficulty)
+// corresponding to the hash, nils if none found.
+func GetBodyByHash(db common.Database, hash common.Hash) ([]*types.Transaction, []*types.Header, *big.Int) {
+	data, td := GetBodyRLPByHash(db, hash)
+	if len(data) == 0 || td == nil {
+		return nil, nil, nil
+	}
+	body := new(storageBody)
+	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
+		glog.V(logger.Error).Infof("invalid block body RLP for hash %x: %v", hash, err)
+		return nil, nil, nil
+	}
+	return body.Transactions, body.Uncles, td
+}
+
+// GetBlockByHash retrieves an entire block corresponding to the hash, assembling
+// it back from the stored header and body.
+func GetBlockByHash(db common.Database, hash common.Hash) *types.Block {
+	// Retrieve the block header and body contents
+	header := GetHeaderByHash(db, hash)
+	if header == nil {
+		return nil
+	}
+	transactions, uncles, td := GetBodyByHash(db, hash)
+	if td == nil {
+		return nil
+	}
+	// Reassemble the block and return
+	block := types.NewBlockWithHeader(header).WithBody(transactions, uncles)
+	block.Td = td
+
+	return block
+}
+
+// GetBlockByNumber returns the canonical block by number or nil if not found.
 func GetBlockByNumber(db common.Database, number uint64) *types.Block {
 	key, _ := db.Get(append(blockNumPre, big.NewInt(int64(number)).Bytes()...))
 	if len(key) == 0 {
 		return nil
 	}
-
 	return GetBlockByHash(db, common.BytesToHash(key))
 }
 
@@ -159,21 +225,67 @@ func WriteHead(db common.Database, block *types.Block) error {
 	return nil
 }
 
-// WriteBlock writes a block to the database
-func WriteBlock(db common.Database, block *types.Block) error {
-	tstart := time.Now()
-
-	enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
-	key := append(blockHashPre, block.Hash().Bytes()...)
-	err := db.Put(key, enc)
+// WriteHeader serializes a block header into the database.
+func WriteHeader(db common.Database, header *types.Header) error {
+	data, err := rlp.EncodeToBytes(header)
 	if err != nil {
-		glog.Fatal("db write fail:", err)
 		return err
 	}
-
-	if glog.V(logger.Debug) {
-		glog.Infof("wrote block #%v %s. Took %v\n", block.Number(), common.PP(block.Hash().Bytes()), time.Since(tstart))
+	key := append(headerHashPre, header.Hash().Bytes()...)
+	if err := db.Put(key, data); err != nil {
+		glog.Fatalf("failed to store header into database: %v", err)
+		return err
 	}
-
+	glog.V(logger.Debug).Infof("stored header #%v [%x…]", header.Number, header.Hash().Bytes()[:4])
 	return nil
+}
+
+// WriteBody serializes the body of a block into the database.
+func WriteBody(db common.Database, block *types.Block) error {
+	body, err := rlp.EncodeToBytes(&storageBody{block.Transactions(), block.Uncles()})
+	if err != nil {
+		return err
+	}
+	td, err := rlp.EncodeToBytes(block.Td)
+	if err != nil {
+		return err
+	}
+	key := append(bodyHashPre, block.Hash().Bytes()...)
+	if err := db.Put(key, append(td, body...)); err != nil {
+		glog.Fatalf("failed to store block body into database: %v", err)
+		return err
+	}
+	glog.V(logger.Debug).Infof("stored block body #%v [%x…]", block.Number, block.Hash().Bytes()[:4])
+	return nil
+}
+
+// WriteBlock serializes a block into the database, header and body separately.
+func WriteBlock(db common.Database, block *types.Block) error {
+	// Store the body first to retain database consistency
+	if err := WriteBody(db, block); err != nil {
+		return err
+	}
+	// Store the header too, signaling full block ownership
+	if err := WriteHeader(db, block.Header()); err != nil {
+		return err
+	}
+	return nil
+}
+
+// [deprecated by eth/63]
+// GetBlockByHashOld returns the old combined block corresponding to the hash
+// or nil if not found. This method is only used by the upgrade mechanism to
+// access the old combined block representation. It will be dropped after the
+// network transitions to eth/63.
+func GetBlockByHashOld(db common.Database, hash common.Hash) *types.Block {
+	data, _ := db.Get(append(blockHashPre, hash[:]...))
+	if len(data) == 0 {
+		return nil
+	}
+	var block types.StorageBlock
+	if err := rlp.Decode(bytes.NewReader(data), &block); err != nil {
+		glog.V(logger.Error).Infof("invalid block RLP for hash %x: %v", hash, err)
+		return nil
+	}
+	return (*types.Block)(&block)
 }

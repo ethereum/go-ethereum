@@ -361,12 +361,7 @@ func (bc *ChainManager) Genesis() *types.Block {
 
 // Block fetching methods
 func (bc *ChainManager) HasBlock(hash common.Hash) bool {
-	if bc.cache.Contains(hash) {
-		return true
-	}
-
-	data, _ := bc.chainDb.Get(append(blockHashPre, hash[:]...))
-	return len(data) != 0
+	return bc.GetBlock(hash) != nil
 }
 
 func (self *ChainManager) GetBlockHashesFromHash(hash common.Hash, max uint64) (chain []common.Hash) {
