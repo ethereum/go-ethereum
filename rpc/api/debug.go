@@ -152,7 +152,7 @@ func (self *debugApi) SetHead(req *shared.Request) (interface{}, error) {
 		return nil, fmt.Errorf("block #%d not found", args.BlockNumber)
 	}
 
-	self.ethereum.ChainManager().SetHead(block)
+	self.ethereum.BlockChain().SetHead(block)
 
 	return nil, nil
 }

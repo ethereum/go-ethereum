@@ -55,11 +55,9 @@ const (
 	blockCacheLimit     = 256
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
-	checkpointLimit     = 200
 )
 
-type ChainManager struct {
-	//eth          EthManager
+type BlockChain struct {
 	chainDb      ethdb.Database
 	processor    types.BlockProcessor
 	eventMux     *event.TypeMux
@@ -69,7 +67,6 @@ type ChainManager struct {
 	chainmu sync.RWMutex
 	tsmu    sync.RWMutex
 
-	checkpoint      int // checkpoint counts towards the new checkpoint
 	td              *big.Int
 	currentBlock    *types.Block
 	currentGasLimit *big.Int
@@ -90,7 +87,7 @@ type ChainManager struct {
 	pow pow.PoW
 }
 
-func NewChainManager(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
+func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*BlockChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
@@ -98,7 +95,7 @@ func NewChainManager(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*
 	blockCache, _ := lru.New(blockCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 
-	bc := &ChainManager{
+	bc := &BlockChain{
 		chainDb:      chainDb,
 		eventMux:     mux,
 		quit:         make(chan struct{}),
@@ -144,7 +141,7 @@ func NewChainManager(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*
 	return bc, nil
 }
 
-func (bc *ChainManager) SetHead(head *types.Block) {
+func (bc *BlockChain) SetHead(head *types.Block) {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
@@ -163,80 +160,55 @@ func (bc *ChainManager) SetHead(head *types.Block) {
 	bc.setLastState()
 }
 
-func (self *ChainManager) Td() *big.Int {
+func (self *BlockChain) Td() *big.Int {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
 	return new(big.Int).Set(self.td)
 }
 
-func (self *ChainManager) GasLimit() *big.Int {
+func (self *BlockChain) GasLimit() *big.Int {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
 	return self.currentBlock.GasLimit()
 }
 
-func (self *ChainManager) LastBlockHash() common.Hash {
+func (self *BlockChain) LastBlockHash() common.Hash {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
 	return self.currentBlock.Hash()
 }
 
-func (self *ChainManager) CurrentBlock() *types.Block {
+func (self *BlockChain) CurrentBlock() *types.Block {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
 	return self.currentBlock
 }
 
-func (self *ChainManager) Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash) {
+func (self *BlockChain) Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash) {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
 	return new(big.Int).Set(self.td), self.currentBlock.Hash(), self.genesisBlock.Hash()
 }
 
-func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
+func (self *BlockChain) SetProcessor(proc types.BlockProcessor) {
 	self.processor = proc
 }
 
-func (self *ChainManager) State() *state.StateDB {
+func (self *BlockChain) State() *state.StateDB {
 	return state.New(self.CurrentBlock().Root(), self.chainDb)
 }
 
-func (bc *ChainManager) recover() bool {
-	data, _ := bc.chainDb.Get([]byte("checkpoint"))
-	if len(data) != 0 {
-		block := bc.GetBlock(common.BytesToHash(data))
-		if block != nil {
-			if err := WriteCanonicalHash(bc.chainDb, block.Hash(), block.NumberU64()); err != nil {
-				glog.Fatalf("failed to write database head number: %v", err)
-			}
-			if err := WriteHeadBlockHash(bc.chainDb, block.Hash()); err != nil {
-				glog.Fatalf("failed to write database head hash: %v", err)
-			}
-			bc.currentBlock = block
-			return true
-		}
-	}
-	return false
-}
-
-func (bc *ChainManager) setLastState() error {
+func (bc *BlockChain) setLastState() error {
 	head := GetHeadBlockHash(bc.chainDb)
 	if head != (common.Hash{}) {
 		block := bc.GetBlock(head)
 		if block != nil {
 			bc.currentBlock = block
-		} else {
-			glog.Infof("LastBlock (%x) not found. Recovering...\n", head)
-			if bc.recover() {
-				glog.Infof("Recover successful")
-			} else {
-				glog.Fatalf("Recover failed. Please report")
-			}
 		}
 	} else {
 		bc.Reset()
@@ -252,13 +224,13 @@ func (bc *ChainManager) setLastState() error {
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
-func (bc *ChainManager) Reset() {
+func (bc *BlockChain) Reset() {
 	bc.ResetWithGenesisBlock(bc.genesisBlock)
 }
 
 // ResetWithGenesisBlock purges the entire blockchain, restoring it to the
 // specified genesis state.
-func (bc *ChainManager) ResetWithGenesisBlock(genesis *types.Block) {
+func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
@@ -286,7 +258,7 @@ func (bc *ChainManager) ResetWithGenesisBlock(genesis *types.Block) {
 }
 
 // Export writes the active chain to the given writer.
-func (self *ChainManager) Export(w io.Writer) error {
+func (self *BlockChain) Export(w io.Writer) error {
 	if err := self.ExportN(w, uint64(0), self.currentBlock.NumberU64()); err != nil {
 		return err
 	}
@@ -294,7 +266,7 @@ func (self *ChainManager) Export(w io.Writer) error {
 }
 
 // ExportN writes a subset of the active chain to the given writer.
-func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error {
+func (self *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
@@ -320,40 +292,28 @@ func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error 
 
 // insert injects a block into the current chain block chain. Note, this function
 // assumes that the `mu` mutex is held!
-func (bc *ChainManager) insert(block *types.Block) {
+func (bc *BlockChain) insert(block *types.Block) {
 	// Add the block to the canonical chain number scheme and mark as the head
 	if err := WriteCanonicalHash(bc.chainDb, block.Hash(), block.NumberU64()); err != nil {
 		glog.Fatalf("failed to insert block number: %v", err)
 	}
-	if err := WriteHeadBlockHash(bc.chainDb, block.Hash()); err != nil {
-		glog.Fatalf("failed to insert block number: %v", err)
-	}
-	// Add a new restore point if we reached some limit
-	bc.checkpoint++
-	if bc.checkpoint > checkpointLimit {
-		if err := bc.chainDb.Put([]byte("checkpoint"), block.Hash().Bytes()); err != nil {
-			glog.Fatalf("failed to create checkpoint: %v", err)
-		}
-		bc.checkpoint = 0
-	}
-	// Update the internal internal state with the head block
 	bc.currentBlock = block
 }
 
 // Accessors
-func (bc *ChainManager) Genesis() *types.Block {
+func (bc *BlockChain) Genesis() *types.Block {
 	return bc.genesisBlock
 }
 
 // HasHeader checks if a block header is present in the database or not, caching
 // it if present.
-func (bc *ChainManager) HasHeader(hash common.Hash) bool {
+func (bc *BlockChain) HasHeader(hash common.Hash) bool {
 	return bc.GetHeader(hash) != nil
 }
 
 // GetHeader retrieves a block header from the database by hash, caching it if
 // found.
-func (self *ChainManager) GetHeader(hash common.Hash) *types.Header {
+func (self *BlockChain) GetHeader(hash common.Hash) *types.Header {
 	// Short circuit if the header's already in the cache, retrieve otherwise
 	if header, ok := self.headerCache.Get(hash); ok {
 		return header.(*types.Header)
@@ -369,7 +329,7 @@ func (self *ChainManager) GetHeader(hash common.Hash) *types.Header {
 
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
-func (self *ChainManager) GetHeaderByNumber(number uint64) *types.Header {
+func (self *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
 	hash := GetCanonicalHash(self.chainDb, number)
 	if hash == (common.Hash{}) {
 		return nil
@@ -379,7 +339,7 @@ func (self *ChainManager) GetHeaderByNumber(number uint64) *types.Header {
 
 // GetBody retrieves a block body (transactions and uncles) from the database by
 // hash, caching it if found.
-func (self *ChainManager) GetBody(hash common.Hash) *types.Body {
+func (self *BlockChain) GetBody(hash common.Hash) *types.Body {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := self.bodyCache.Get(hash); ok {
 		body := cached.(*types.Body)
@@ -396,7 +356,7 @@ func (self *ChainManager) GetBody(hash common.Hash) *types.Body {
 
 // GetBodyRLP retrieves a block body in RLP encoding from the database by hash,
 // caching it if found.
-func (self *ChainManager) GetBodyRLP(hash common.Hash) rlp.RawValue {
+func (self *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := self.bodyRLPCache.Get(hash); ok {
 		return cached.(rlp.RawValue)
@@ -412,7 +372,7 @@ func (self *ChainManager) GetBodyRLP(hash common.Hash) rlp.RawValue {
 
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash, caching it if found.
-func (self *ChainManager) GetTd(hash common.Hash) *big.Int {
+func (self *BlockChain) GetTd(hash common.Hash) *big.Int {
 	// Short circuit if the td's already in the cache, retrieve otherwise
 	if cached, ok := self.tdCache.Get(hash); ok {
 		return cached.(*big.Int)
@@ -428,12 +388,12 @@ func (self *ChainManager) GetTd(hash common.Hash) *big.Int {
 
 // HasBlock checks if a block is fully present in the database or not, caching
 // it if present.
-func (bc *ChainManager) HasBlock(hash common.Hash) bool {
+func (bc *BlockChain) HasBlock(hash common.Hash) bool {
 	return bc.GetBlock(hash) != nil
 }
 
 // GetBlock retrieves a block from the database by hash, caching it if found.
-func (self *ChainManager) GetBlock(hash common.Hash) *types.Block {
+func (self *BlockChain) GetBlock(hash common.Hash) *types.Block {
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := self.blockCache.Get(hash); ok {
 		return block.(*types.Block)
@@ -449,7 +409,7 @@ func (self *ChainManager) GetBlock(hash common.Hash) *types.Block {
 
 // GetBlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
-func (self *ChainManager) GetBlockByNumber(number uint64) *types.Block {
+func (self *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 	hash := GetCanonicalHash(self.chainDb, number)
 	if hash == (common.Hash{}) {
 		return nil
@@ -459,7 +419,7 @@ func (self *ChainManager) GetBlockByNumber(number uint64) *types.Block {
 
 // GetBlockHashesFromHash retrieves a number of block hashes starting at a given
 // hash, fetching towards the genesis block.
-func (self *ChainManager) GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash {
+func (self *BlockChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash {
 	// Get the origin header from which to fetch
 	header := self.GetHeader(hash)
 	if header == nil {
@@ -481,7 +441,7 @@ func (self *ChainManager) GetBlockHashesFromHash(hash common.Hash, max uint64) [
 
 // [deprecated by eth/62]
 // GetBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
-func (self *ChainManager) GetBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
+func (self *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
 	for i := 0; i < n; i++ {
 		block := self.GetBlock(hash)
 		if block == nil {
@@ -493,7 +453,7 @@ func (self *ChainManager) GetBlocksFromHash(hash common.Hash, n int) (blocks []*
 	return
 }
 
-func (self *ChainManager) GetUnclesInChain(block *types.Block, length int) (uncles []*types.Header) {
+func (self *BlockChain) GetUnclesInChain(block *types.Block, length int) (uncles []*types.Header) {
 	for i := 0; block != nil && i < length; i++ {
 		uncles = append(uncles, block.Uncles()...)
 		block = self.GetBlock(block.ParentHash())
@@ -504,11 +464,11 @@ func (self *ChainManager) GetUnclesInChain(block *types.Block, length int) (uncl
 
 // setTotalDifficulty updates the TD of the chain manager. Note, this function
 // assumes that the `mu` mutex is held!
-func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
+func (bc *BlockChain) setTotalDifficulty(td *big.Int) {
 	bc.td = new(big.Int).Set(td)
 }
 
-func (bc *ChainManager) Stop() {
+func (bc *BlockChain) Stop() {
 	if !atomic.CompareAndSwapInt32(&bc.running, 0, 1) {
 		return
 	}
@@ -527,7 +487,7 @@ type queueEvent struct {
 	splitCount     int
 }
 
-func (self *ChainManager) procFutureBlocks() {
+func (self *BlockChain) procFutureBlocks() {
 	blocks := make([]*types.Block, self.futureBlocks.Len())
 	for i, hash := range self.futureBlocks.Keys() {
 		block, _ := self.futureBlocks.Get(hash)
@@ -549,7 +509,7 @@ const (
 )
 
 // WriteBlock writes the block to the chain.
-func (self *ChainManager) WriteBlock(block *types.Block) (status writeStatus, err error) {
+func (self *BlockChain) WriteBlock(block *types.Block) (status writeStatus, err error) {
 	self.wg.Add(1)
 	defer self.wg.Done()
 
@@ -599,7 +559,7 @@ func (self *ChainManager) WriteBlock(block *types.Block) (status writeStatus, er
 
 // InsertChain will attempt to insert the given chain in to the canonical chain or, otherwise, create a fork. It an error is returned
 // it will return the index number of the failing block as well an error describing what went wrong (for possible errors see core/errors.go).
-func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
+func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	self.wg.Add(1)
 	defer self.wg.Done()
 
@@ -730,7 +690,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 // reorgs takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them
 // to be part of the new canonical chain and accumulates potential missing transactions and post an
 // event about them
-func (self *ChainManager) reorg(oldBlock, newBlock *types.Block) error {
+func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
@@ -811,7 +771,7 @@ func (self *ChainManager) reorg(oldBlock, newBlock *types.Block) error {
 	return nil
 }
 
-func (self *ChainManager) update() {
+func (self *BlockChain) update() {
 	events := self.eventMux.Subscribe(queueEvent{})
 	futureTimer := time.Tick(5 * time.Second)
 out:

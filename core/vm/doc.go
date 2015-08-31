@@ -18,15 +18,15 @@
 Package vm implements the Ethereum Virtual Machine.
 
 The vm package implements two EVMs, a byte code VM and a JIT VM. The BC
-(Byte Code) VM loops over a set of bytes and executes them according to a set
-of rules defined in the Ethereum yellow paper. When the BC VM is invokes it
+(Byte Code) VM loops over a set of bytes and executes them according to the set
+of rules defined in the Ethereum yellow paper. When the BC VM is invoked it
 invokes the JIT VM in a seperate goroutine and compiles the byte code in JIT
 instructions.
 
 The JIT VM, when invoked, loops around a set of pre-defined instructions until
-it either runs of gas, causes an internel error, returns or stops. At a later
+it either runs of gas, causes an internal error, returns or stops. At a later
 stage the JIT VM will see some additional features that will cause sets of
 instructions to be compiled down to segments. Segments are sets of instructions
-that can be ran in one go saving precious time during execution.
+that can be run in one go saving precious time during execution.
 */
 package vm

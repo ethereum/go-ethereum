@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 type AccountChange struct {
@@ -31,7 +32,7 @@ type AccountChange struct {
 
 // Filtering interface
 type Filter struct {
-	db       common.Database
+	db       ethdb.Database
 	earliest int64
 	latest   int64
 	skip     int
@@ -46,7 +47,7 @@ type Filter struct {
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
 // is interesting or not.
-func New(db common.Database) *Filter {
+func New(db ethdb.Database) *Filter {
 	return &Filter{db: db}
 }
 
@@ -79,7 +80,7 @@ func (self *Filter) SetSkip(skip int) {
 
 // Run filters logs with the current parameters set
 func (self *Filter) Find() vm.Logs {
-	earliestBlock := core.GetCurrentBlock(self.db)
+	earliestBlock := core.GetBlock(self.db, core.GetHeadBlockHash(self.db))
 	var earliestBlockNo uint64 = uint64(self.earliest)
 	if self.earliest == -1 {
 		earliestBlockNo = earliestBlock.NumberU64()
@@ -91,8 +92,12 @@ func (self *Filter) Find() vm.Logs {
 
 	var (
 		logs  vm.Logs
-		block = core.GetBlockByNumber(self.db, latestBlockNo)
+		block *types.Block
 	)
+	hash := core.GetCanonicalHash(self.db, latestBlockNo)
+	if hash != (common.Hash{}) {
+		block = core.GetBlock(self.db, hash)
+	}
 
 done:
 	for i := 0; block != nil; i++ {
@@ -120,7 +125,7 @@ done:
 			logs = append(logs, self.FilterLogs(unfiltered)...)
 		}
 
-		block = core.GetBlockByHash(self.db, block.ParentHash())
+		block = core.GetBlock(self.db, block.ParentHash())
 	}
 
 	skip := int(math.Min(float64(len(logs)), float64(self.skip)))

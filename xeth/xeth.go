@@ -126,7 +126,7 @@ func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}
-	xeth.state = NewState(xeth, xeth.backend.ChainManager().State())
+	xeth.state = NewState(xeth, xeth.backend.BlockChain().State())
 
 	go xeth.start()
 
@@ -214,7 +214,7 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 		if block := self.getBlockByHeight(num); block != nil {
 			st = state.New(block.Root(), self.backend.ChainDb())
 		} else {
-			st = state.New(self.backend.ChainManager().GetBlockByNumber(0).Root(), self.backend.ChainDb())
+			st = state.New(self.backend.BlockChain().GetBlockByNumber(0).Root(), self.backend.ChainDb())
 		}
 	}
 
@@ -290,19 +290,19 @@ func (self *XEth) getBlockByHeight(height int64) *types.Block {
 		num = uint64(height)
 	}
 
-	return self.backend.ChainManager().GetBlockByNumber(num)
+	return self.backend.BlockChain().GetBlockByNumber(num)
 }
 
 func (self *XEth) BlockByHash(strHash string) *Block {
 	hash := common.HexToHash(strHash)
-	block := self.backend.ChainManager().GetBlock(hash)
+	block := self.backend.BlockChain().GetBlock(hash)
 
 	return NewBlock(block)
 }
 
 func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 	hash := common.HexToHash(strHash)
-	block := self.backend.ChainManager().GetBlock(hash)
+	block := self.backend.BlockChain().GetBlock(hash)
 
 	return block
 }
@@ -356,11 +356,11 @@ func (self *XEth) EthBlockByNumber(num int64) *types.Block {
 }
 
 func (self *XEth) Td(hash common.Hash) *big.Int {
-	return self.backend.ChainManager().GetTd(hash)
+	return self.backend.BlockChain().GetTd(hash)
 }
 
 func (self *XEth) CurrentBlock() *types.Block {
-	return self.backend.ChainManager().CurrentBlock()
+	return self.backend.BlockChain().CurrentBlock()
 }
 
 func (self *XEth) GetBlockReceipts(bhash common.Hash) types.Receipts {
@@ -372,7 +372,7 @@ func (self *XEth) GetTxReceipt(txhash common.Hash) *types.Receipt {
 }
 
 func (self *XEth) GasLimit() *big.Int {
-	return self.backend.ChainManager().GasLimit()
+	return self.backend.BlockChain().GasLimit()
 }
 
 func (self *XEth) Block(v interface{}) *Block {
@@ -855,7 +855,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	}
 
 	header := self.CurrentBlock().Header()
-	vmenv := core.NewEnv(statedb, self.backend.ChainManager(), msg, header)
+	vmenv := core.NewEnv(statedb, self.backend.BlockChain(), msg, header)
 
 	res, gas, err := core.ApplyMessage(vmenv, msg, from)
 	return common.ToHex(res), gas.String(), err

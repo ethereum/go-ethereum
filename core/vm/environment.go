@@ -26,7 +26,7 @@ import (
 // it's own isolated environment.
 
 // Environment is an EVM requirement and helper which allows access to outside
-// information such like states.
+// information such as states.
 type Environment interface {
 	// The state database
 	Db() Database
@@ -50,7 +50,7 @@ type Environment interface {
 	GasLimit() *big.Int
 	// Determines whether it's possible to transact
 	CanTransfer(from common.Address, balance *big.Int) bool
-	// Transfer from to to with amount set
+	// Transfers amount from one account to the other
 	Transfer(from, to Account, amount *big.Int) error
 	// Adds a LOG to the state
 	AddLog(*Log)

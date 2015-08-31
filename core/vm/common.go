@@ -38,7 +38,7 @@ const (
 )
 
 var (
-	Pow256 = common.BigPow(2, 256) // Pew256 is 2**256
+	Pow256 = common.BigPow(2, 256) // Pow256 is 2**256
 
 	U256 = common.U256 // Shortcut to common.U256
 	S256 = common.S256 // Shortcut to common.S256
@@ -46,7 +46,7 @@ var (
 	Zero = common.Big0 // Shortcut to common.Big0
 	One  = common.Big1 // Shortcut to common.Big1
 
-	max = big.NewInt(math.MaxInt64) // Maximum 256 bit integer
+	max = big.NewInt(math.MaxInt64) // Maximum 64 bit integer
 )
 
 // NewVm returns a new VM based on the Environment

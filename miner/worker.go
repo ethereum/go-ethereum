@@ -100,7 +100,7 @@ type worker struct {
 	pow    pow.PoW
 
 	eth     core.Backend
-	chain   *core.ChainManager
+	chain   *core.BlockChain
 	proc    *core.BlockProcessor
 	chainDb ethdb.Database
 
@@ -131,7 +131,7 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 		chainDb:        eth.ChainDb(),
 		recv:           make(chan *Result, resultQueueSize),
 		gasPrice:       new(big.Int),
-		chain:          eth.ChainManager(),
+		chain:          eth.BlockChain(),
 		proc:           eth.BlockProcessor(),
 		possibleUncles: make(map[common.Hash]*types.Block),
 		coinbase:       coinbase,

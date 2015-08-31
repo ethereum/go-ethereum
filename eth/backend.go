@@ -217,7 +217,7 @@ type Ethereum struct {
 	// State manager for processing new blocks and managing the over all states
 	blockProcessor  *core.BlockProcessor
 	txPool          *core.TxPool
-	chainManager    *core.ChainManager
+	blockchain      *core.BlockChain
 	accountManager  *accounts.Manager
 	whisper         *whisper.Whisper
 	pow             *ethash.Ethash
@@ -365,7 +365,7 @@ func New(config *Config) (*Ethereum, error) {
 		eth.pow = ethash.New()
 	}
 	//genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
-	eth.chainManager, err = core.NewChainManager(chainDb, eth.pow, eth.EventMux())
+	eth.blockchain, err = core.NewBlockChain(chainDb, eth.pow, eth.EventMux())
 	if err != nil {
 		if err == core.ErrNoGenesis {
 			return nil, fmt.Errorf(`Genesis block not found. Please supply a genesis block with the "--genesis /path/to/file" argument`)
@@ -373,11 +373,11 @@ func New(config *Config) (*Ethereum, error) {
 
 		return nil, err
 	}
-	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
+	eth.txPool = core.NewTxPool(eth.EventMux(), eth.blockchain.State, eth.blockchain.GasLimit)
 
-	eth.blockProcessor = core.NewBlockProcessor(chainDb, eth.pow, eth.chainManager, eth.EventMux())
-	eth.chainManager.SetProcessor(eth.blockProcessor)
-	eth.protocolManager = NewProtocolManager(config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.chainManager, chainDb)
+	eth.blockProcessor = core.NewBlockProcessor(chainDb, eth.pow, eth.blockchain, eth.EventMux())
+	eth.blockchain.SetProcessor(eth.blockProcessor)
+	eth.protocolManager = NewProtocolManager(config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb)
 
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
@@ -441,7 +441,7 @@ func (s *Ethereum) NodeInfo() *NodeInfo {
 		DiscPort:   int(node.UDP),
 		TCPPort:    int(node.TCP),
 		ListenAddr: s.net.ListenAddr,
-		Td:         s.ChainManager().Td().String(),
+		Td:         s.BlockChain().Td().String(),
 	}
 }
 
@@ -478,7 +478,7 @@ func (s *Ethereum) PeersInfo() (peersinfo []*PeerInfo) {
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
-	s.chainManager.ResetWithGenesisBlock(gb)
+	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
 func (s *Ethereum) StartMining(threads int) error {
@@ -518,7 +518,7 @@ func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 // func (s *Ethereum) Logger() logger.LogSystem             { return s.logger }
 func (s *Ethereum) Name() string                         { return s.net.Name }
 func (s *Ethereum) AccountManager() *accounts.Manager    { return s.accountManager }
-func (s *Ethereum) ChainManager() *core.ChainManager     { return s.chainManager }
+func (s *Ethereum) BlockChain() *core.BlockChain         { return s.blockchain }
 func (s *Ethereum) BlockProcessor() *core.BlockProcessor { return s.blockProcessor }
 func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
@@ -581,7 +581,7 @@ func (self *Ethereum) AddPeer(nodeURL string) error {
 
 func (s *Ethereum) Stop() {
 	s.net.Stop()
-	s.chainManager.Stop()
+	s.blockchain.Stop()
 	s.protocolManager.Stop()
 	s.txPool.Stop()
 	s.eventMux.Stop()
@@ -622,7 +622,7 @@ func (self *Ethereum) StartAutoDAG() {
 			select {
 			case <-timer:
 				glog.V(logger.Info).Infof("checking DAG (ethash dir: %s)", ethash.DefaultDir)
-				currentBlock := self.ChainManager().CurrentBlock().NumberU64()
+				currentBlock := self.BlockChain().CurrentBlock().NumberU64()
 				thisEpoch := currentBlock / epochLength
 				if nextEpoch <= thisEpoch {
 					if currentBlock%epochLength > autoDAGepochHeight {

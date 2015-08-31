@@ -26,7 +26,7 @@ import (
 type Backend interface {
 	AccountManager() *accounts.Manager
 	BlockProcessor() *BlockProcessor
-	ChainManager() *ChainManager
+	BlockChain() *BlockChain
 	TxPool() *TxPool
 	ChainDb() ethdb.Database
 	DappDb() ethdb.Database

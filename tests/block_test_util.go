@@ -181,7 +181,7 @@ func runBlockTest(test *BlockTest) error {
 		return fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	cm := ethereum.ChainManager()
+	cm := ethereum.BlockChain()
 	validBlocks, err := test.TryBlocksInsert(cm)
 	if err != nil {
 		return err
@@ -276,7 +276,7 @@ func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, erro
    expected we are expected to ignore it and continue processing and then validate the
    post state.
 */
-func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) ([]btBlock, error) {
+func (t *BlockTest) TryBlocksInsert(blockchain *core.BlockChain) ([]btBlock, error) {
 	validBlocks := make([]btBlock, 0)
 	// insert the test blocks, which will execute all transactions
 	for _, b := range t.Json.Blocks {
@@ -289,7 +289,7 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) ([]btBlock,
 			}
 		}
 		// RLP decoding worked, try to insert into chain:
-		_, err = chainManager.InsertChain(types.Blocks{cb})
+		_, err = blockchain.InsertChain(types.Blocks{cb})
 		if err != nil {
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
@@ -426,7 +426,7 @@ func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 	return nil
 }
 
-func (test *BlockTest) ValidateImportedHeaders(cm *core.ChainManager, validBlocks []btBlock) error {
+func (test *BlockTest) ValidateImportedHeaders(cm *core.BlockChain, validBlocks []btBlock) error {
 	// to get constant lookup when verifying block headers by hash (some tests have many blocks)
 	bmap := make(map[string]btBlock, len(test.Json.Blocks))
 	for _, b := range validBlocks {

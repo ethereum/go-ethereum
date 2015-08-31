@@ -118,7 +118,7 @@ func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, er
 		return ethereum, fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	cm := ethereum.ChainManager()
+	cm := ethereum.BlockChain()
 	validBlocks, err := test.TryBlocksInsert(cm)
 	if err != nil {
 		return ethereum, fmt.Errorf("Block Test load error: %v", err)

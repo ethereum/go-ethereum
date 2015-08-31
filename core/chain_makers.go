@@ -153,7 +153,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // and their coinbase will be the zero address.
 //
 // Blocks created by GenerateChain do not contain valid proof of work
-// values. Inserting them into ChainManager requires use of FakePow or
+// values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
 func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) []*types.Block {
 	statedb := state.New(parent.Root(), db)
@@ -205,7 +205,7 @@ func newCanonical(n int, db ethdb.Database) (*BlockProcessor, error) {
 	evmux := &event.TypeMux{}
 
 	WriteTestNetGenesisBlock(db, 0)
-	chainman, _ := NewChainManager(db, FakePow{}, evmux)
+	chainman, _ := NewBlockChain(db, FakePow{}, evmux)
 	bman := NewBlockProcessor(db, FakePow{}, chainman, evmux)
 	bman.bc.SetProcessor(bman)
 	parent := bman.bc.CurrentBlock()

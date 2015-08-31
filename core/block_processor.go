@@ -47,7 +47,7 @@ type BlockProcessor struct {
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 	// Canonical block chain
-	bc *ChainManager
+	bc *BlockChain
 	// non-persistent key/value memory storage
 	mem map[string]*big.Int
 	// Proof of work used for validating
@@ -70,12 +70,12 @@ type GasPool interface {
 	SubGas(gas, price *big.Int) error
 }
 
-func NewBlockProcessor(db ethdb.Database, pow pow.PoW, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+func NewBlockProcessor(db ethdb.Database, pow pow.PoW, blockchain *BlockChain, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
 		chainDb:  db,
 		mem:      make(map[string]*big.Int),
 		Pow:      pow,
-		bc:       chainManager,
+		bc:       blockchain,
 		eventMux: eventMux,
 	}
 	return sm
@@ -124,7 +124,7 @@ func (self *BlockProcessor) ApplyTransaction(gp GasPool, statedb *state.StateDB,
 
 	return receipt, gas, err
 }
-func (self *BlockProcessor) ChainManager() *ChainManager {
+func (self *BlockProcessor) BlockChain() *BlockChain {
 	return self.bc
 }
 
@@ -347,7 +347,7 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 
 // GetBlockReceipts returns the receipts beloniging to the block hash
 func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
-	if block := sm.ChainManager().GetBlock(bhash); block != nil {
+	if block := sm.BlockChain().GetBlock(bhash); block != nil {
 		return GetBlockReceipts(sm.chainDb, block.Hash())
 	}
 

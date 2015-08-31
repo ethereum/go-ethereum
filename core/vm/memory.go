@@ -18,7 +18,7 @@ package vm
 
 import "fmt"
 
-// Memory implements ethereum RAM backed by a simple byte slice
+// Memory implements a simple memory model for the ethereum virtual machine.
 type Memory struct {
 	store []byte
 }

@@ -118,8 +118,8 @@ func (self *Contract) SetCode(code []byte) {
 	self.Code = code
 }
 
-// SetCallCode sets the address of the code address and sets the code
-// of the contract according to the backing database.
+// SetCallCode sets the code of the contract and address of the backing data
+// object
 func (self *Contract) SetCallCode(addr *common.Address, code []byte) {
 	self.Code = code
 	self.CodeAddr = addr

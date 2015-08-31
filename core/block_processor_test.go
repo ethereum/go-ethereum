@@ -30,16 +30,16 @@ import (
 	"github.com/ethereum/go-ethereum/pow/ezp"
 )
 
-func proc() (*BlockProcessor, *ChainManager) {
+func proc() (*BlockProcessor, *BlockChain) {
 	db, _ := ethdb.NewMemDatabase()
 	var mux event.TypeMux
 
 	WriteTestNetGenesisBlock(db, 0)
-	chainMan, err := NewChainManager(db, thePow(), &mux)
+	blockchain, err := NewBlockChain(db, thePow(), &mux)
 	if err != nil {
 		fmt.Println(err)
 	}
-	return NewBlockProcessor(db, ezp.New(), chainMan, &mux), chainMan
+	return NewBlockProcessor(db, ezp.New(), blockchain, &mux), blockchain
 }
 
 func TestNumber(t *testing.T) {

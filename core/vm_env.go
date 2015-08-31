@@ -30,13 +30,13 @@ type VMEnv struct {
 	header *types.Header
 	msg    Message
 	depth  int
-	chain  *ChainManager
+	chain  *BlockChain
 	typ    vm.Type
 	// structured logging
 	logs []vm.StructLog
 }
 
-func NewEnv(state *state.StateDB, chain *ChainManager, msg Message, header *types.Header) *VMEnv {
+func NewEnv(state *state.StateDB, chain *BlockChain, msg Message, header *types.Header) *VMEnv {
 	return &VMEnv{
 		chain:  chain,
 		state:  state,

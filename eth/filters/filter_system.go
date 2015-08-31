@@ -28,7 +28,7 @@ import (
 
 // FilterSystem manages filters that filter specific events such as
 // block, transaction and log events. The Filtering system can be used to listen
-// for specific LOG events fires by the EVM (Ethereum Virtual Machine).
+// for specific LOG events fired by the EVM (Ethereum Virtual Machine).
 type FilterSystem struct {
 	eventMux *event.TypeMux
 

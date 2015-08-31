@@ -33,23 +33,23 @@ func testGetBlockHashes(t *testing.T, protocol int) {
 		number int
 		result int
 	}{
-		{common.Hash{}, 1, 0},                                 // Make sure non existent hashes don't return results
-		{pm.chainman.Genesis().Hash(), 1, 0},                  // There are no hashes to retrieve up from the genesis
-		{pm.chainman.GetBlockByNumber(5).Hash(), 5, 5},        // All the hashes including the genesis requested
-		{pm.chainman.GetBlockByNumber(5).Hash(), 10, 5},       // More hashes than available till the genesis requested
-		{pm.chainman.GetBlockByNumber(100).Hash(), 10, 10},    // All hashes available from the middle of the chain
-		{pm.chainman.CurrentBlock().Hash(), 10, 10},           // All hashes available from the head of the chain
-		{pm.chainman.CurrentBlock().Hash(), limit, limit},     // Request the maximum allowed hash count
-		{pm.chainman.CurrentBlock().Hash(), limit + 1, limit}, // Request more than the maximum allowed hash count
+		{common.Hash{}, 1, 0},                                   // Make sure non existent hashes don't return results
+		{pm.blockchain.Genesis().Hash(), 1, 0},                  // There are no hashes to retrieve up from the genesis
+		{pm.blockchain.GetBlockByNumber(5).Hash(), 5, 5},        // All the hashes including the genesis requested
+		{pm.blockchain.GetBlockByNumber(5).Hash(), 10, 5},       // More hashes than available till the genesis requested
+		{pm.blockchain.GetBlockByNumber(100).Hash(), 10, 10},    // All hashes available from the middle of the chain
+		{pm.blockchain.CurrentBlock().Hash(), 10, 10},           // All hashes available from the head of the chain
+		{pm.blockchain.CurrentBlock().Hash(), limit, limit},     // Request the maximum allowed hash count
+		{pm.blockchain.CurrentBlock().Hash(), limit + 1, limit}, // Request more than the maximum allowed hash count
 	}
 	// Run each of the tests and verify the results against the chain
 	for i, tt := range tests {
 		// Assemble the hash response we would like to receive
 		resp := make([]common.Hash, tt.result)
 		if len(resp) > 0 {
-			from := pm.chainman.GetBlock(tt.origin).NumberU64() - 1
+			from := pm.blockchain.GetBlock(tt.origin).NumberU64() - 1
 			for j := 0; j < len(resp); j++ {
-				resp[j] = pm.chainman.GetBlockByNumber(uint64(int(from) - j)).Hash()
+				resp[j] = pm.blockchain.GetBlockByNumber(uint64(int(from) - j)).Hash()
 			}
 		}
 		// Send the hash request and verify the response
@@ -76,11 +76,11 @@ func testGetBlockHashesFromNumber(t *testing.T, protocol int) {
 		number int
 		result int
 	}{
-		{pm.chainman.CurrentBlock().NumberU64() + 1, 1, 0},     // Out of bounds requests should return empty
-		{pm.chainman.CurrentBlock().NumberU64(), 1, 1},         // Make sure the head hash can be retrieved
-		{pm.chainman.CurrentBlock().NumberU64() - 4, 5, 5},     // All hashes, including the head hash requested
-		{pm.chainman.CurrentBlock().NumberU64() - 4, 10, 5},    // More hashes requested than available till the head
-		{pm.chainman.CurrentBlock().NumberU64() - 100, 10, 10}, // All hashes available from the middle of the chain
+		{pm.blockchain.CurrentBlock().NumberU64() + 1, 1, 0},     // Out of bounds requests should return empty
+		{pm.blockchain.CurrentBlock().NumberU64(), 1, 1},         // Make sure the head hash can be retrieved
+		{pm.blockchain.CurrentBlock().NumberU64() - 4, 5, 5},     // All hashes, including the head hash requested
+		{pm.blockchain.CurrentBlock().NumberU64() - 4, 10, 5},    // More hashes requested than available till the head
+		{pm.blockchain.CurrentBlock().NumberU64() - 100, 10, 10}, // All hashes available from the middle of the chain
 		{0, 10, 10},           // All hashes available from the root of the chain
 		{0, limit, limit},     // Request the maximum allowed hash count
 		{0, limit + 1, limit}, // Request more than the maximum allowed hash count
@@ -91,7 +91,7 @@ func testGetBlockHashesFromNumber(t *testing.T, protocol int) {
 		// Assemble the hash response we would like to receive
 		resp := make([]common.Hash, tt.result)
 		for j := 0; j < len(resp); j++ {
-			resp[j] = pm.chainman.GetBlockByNumber(tt.origin + uint64(j)).Hash()
+			resp[j] = pm.blockchain.GetBlockByNumber(tt.origin + uint64(j)).Hash()
 		}
 		// Send the hash request and verify the response
 		p2p.Send(peer.app, 0x08, getBlockHashesFromNumberData{tt.origin, uint64(tt.number)})
@@ -117,22 +117,22 @@ func testGetBlocks(t *testing.T, protocol int) {
 		available []bool        // Availability of explicitly requested blocks
 		expected  int           // Total number of existing blocks to expect
 	}{
-		{1, nil, nil, 1},                                                       // A single random block should be retrievable
-		{10, nil, nil, 10},                                                     // Multiple random blocks should be retrievable
-		{limit, nil, nil, limit},                                               // The maximum possible blocks should be retrievable
-		{limit + 1, nil, nil, limit},                                           // No more that the possible block count should be returned
-		{0, []common.Hash{pm.chainman.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
-		{0, []common.Hash{pm.chainman.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
-		{0, []common.Hash{common.Hash{}}, []bool{false}, 0},                    // A non existent block should not be returned
+		{1, nil, nil, 1},                                                         // A single random block should be retrievable
+		{10, nil, nil, 10},                                                       // Multiple random blocks should be retrievable
+		{limit, nil, nil, limit},                                                 // The maximum possible blocks should be retrievable
+		{limit + 1, nil, nil, limit},                                             // No more than the possible block count should be returned
+		{0, []common.Hash{pm.blockchain.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
+		{0, []common.Hash{pm.blockchain.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
+		{0, []common.Hash{common.Hash{}}, []bool{false}, 0},                      // A non existent block should not be returned
 
 		// Existing and non-existing blocks interleaved should not cause problems
 		{0, []common.Hash{
 			common.Hash{},
-			pm.chainman.GetBlockByNumber(1).Hash(),
+			pm.blockchain.GetBlockByNumber(1).Hash(),
 			common.Hash{},
-			pm.chainman.GetBlockByNumber(10).Hash(),
+			pm.blockchain.GetBlockByNumber(10).Hash(),
 			common.Hash{},
-			pm.chainman.GetBlockByNumber(100).Hash(),
+			pm.blockchain.GetBlockByNumber(100).Hash(),
 			common.Hash{},
 		}, []bool{false, true, false, true, false, true, false}, 3},
 	}
@@ -144,11 +144,11 @@ func testGetBlocks(t *testing.T, protocol int) {
 
 		for j := 0; j < tt.random; j++ {
 			for {
-				num := rand.Int63n(int64(pm.chainman.CurrentBlock().NumberU64()))
+				num := rand.Int63n(int64(pm.blockchain.CurrentBlock().NumberU64()))
 				if !seen[num] {
 					seen[num] = true
 
-					block := pm.chainman.GetBlockByNumber(uint64(num))
+					block := pm.blockchain.GetBlockByNumber(uint64(num))
 					hashes = append(hashes, block.Hash())
 					if len(blocks) < tt.expected {
 						blocks = append(blocks, block)
@@ -160,7 +160,7 @@ func testGetBlocks(t *testing.T, protocol int) {
 		for j, hash := range tt.explicit {
 			hashes = append(hashes, hash)
 			if tt.available[j] && len(blocks) < tt.expected {
-				blocks = append(blocks, pm.chainman.GetBlock(hash))
+				blocks = append(blocks, pm.blockchain.GetBlock(hash))
 			}
 		}
 		// Send the hash request and verify the response
@@ -194,83 +194,83 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 	}{
 		// A single random block should be retrievable by hash and number too
 		{
-			&getBlockHeadersData{Origin: hashOrNumber{Hash: pm.chainman.GetBlockByNumber(limit / 2).Hash()}, Amount: 1},
-			[]common.Hash{pm.chainman.GetBlockByNumber(limit / 2).Hash()},
+			&getBlockHeadersData{Origin: hashOrNumber{Hash: pm.blockchain.GetBlockByNumber(limit / 2).Hash()}, Amount: 1},
+			[]common.Hash{pm.blockchain.GetBlockByNumber(limit / 2).Hash()},
 		}, {
 			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 1},
-			[]common.Hash{pm.chainman.GetBlockByNumber(limit / 2).Hash()},
+			[]common.Hash{pm.blockchain.GetBlockByNumber(limit / 2).Hash()},
 		},
 		// Multiple headers should be retrievable in both directions
 		{
 			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 3},
 			[]common.Hash{
-				pm.chainman.GetBlockByNumber(limit / 2).Hash(),
-				pm.chainman.GetBlockByNumber(limit/2 + 1).Hash(),
-				pm.chainman.GetBlockByNumber(limit/2 + 2).Hash(),
+				pm.blockchain.GetBlockByNumber(limit / 2).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2 + 1).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2 + 2).Hash(),
 			},
 		}, {
 			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 3, Reverse: true},
 			[]common.Hash{
-				pm.chainman.GetBlockByNumber(limit / 2).Hash(),
-				pm.chainman.GetBlockByNumber(limit/2 - 1).Hash(),
-				pm.chainman.GetBlockByNumber(limit/2 - 2).Hash(),
+				pm.blockchain.GetBlockByNumber(limit / 2).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2 - 1).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2 - 2).Hash(),
 			},
 		},
 		// Multiple headers with skip lists should be retrievable
 		{
 			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3},
 			[]common.Hash{
-				pm.chainman.GetBlockByNumber(limit / 2).Hash(),
-				pm.chainman.GetBlockByNumber(limit/2 + 4).Hash(),
-				pm.chainman.GetBlockByNumber(limit/2 + 8).Hash(),
+				pm.blockchain.GetBlockByNumber(limit / 2).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2 + 4).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2 + 8).Hash(),
 			},
 		}, {
 			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3, Reverse: true},
 			[]common.Hash{
-				pm.chainman.GetBlockByNumber(limit / 2).Hash(),
-				pm.chainman.GetBlockByNumber(limit/2 - 4).Hash(),
-				pm.chainman.GetBlockByNumber(limit/2 - 8).Hash(),
+				pm.blockchain.GetBlockByNumber(limit / 2).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2 - 4).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2 - 8).Hash(),
 			},
 		},
 		// The chain endpoints should be retrievable
 		{
 			&getBlockHeadersData{Origin: hashOrNumber{Number: 0}, Amount: 1},
-			[]common.Hash{pm.chainman.GetBlockByNumber(0).Hash()},
+			[]common.Hash{pm.blockchain.GetBlockByNumber(0).Hash()},
 		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.chainman.CurrentBlock().NumberU64()}, Amount: 1},
-			[]common.Hash{pm.chainman.CurrentBlock().Hash()},
+			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.blockchain.CurrentBlock().NumberU64()}, Amount: 1},
+			[]common.Hash{pm.blockchain.CurrentBlock().Hash()},
 		},
 		// Ensure protocol limits are honored
 		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.chainman.CurrentBlock().NumberU64() - 1}, Amount: limit + 10, Reverse: true},
-			pm.chainman.GetBlockHashesFromHash(pm.chainman.CurrentBlock().Hash(), limit),
+			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.blockchain.CurrentBlock().NumberU64() - 1}, Amount: limit + 10, Reverse: true},
+			pm.blockchain.GetBlockHashesFromHash(pm.blockchain.CurrentBlock().Hash(), limit),
 		},
 		// Check that requesting more than available is handled gracefully
 		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.chainman.CurrentBlock().NumberU64() - 4}, Skip: 3, Amount: 3},
+			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.blockchain.CurrentBlock().NumberU64() - 4}, Skip: 3, Amount: 3},
 			[]common.Hash{
-				pm.chainman.GetBlockByNumber(pm.chainman.CurrentBlock().NumberU64() - 4).Hash(),
-				pm.chainman.GetBlockByNumber(pm.chainman.CurrentBlock().NumberU64()).Hash(),
+				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64() - 4).Hash(),
+				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64()).Hash(),
 			},
 		}, {
 			&getBlockHeadersData{Origin: hashOrNumber{Number: 4}, Skip: 3, Amount: 3, Reverse: true},
 			[]common.Hash{
-				pm.chainman.GetBlockByNumber(4).Hash(),
-				pm.chainman.GetBlockByNumber(0).Hash(),
+				pm.blockchain.GetBlockByNumber(4).Hash(),
+				pm.blockchain.GetBlockByNumber(0).Hash(),
 			},
 		},
 		// Check that requesting more than available is handled gracefully, even if mid skip
 		{
-			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.chainman.CurrentBlock().NumberU64() - 4}, Skip: 2, Amount: 3},
+			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.blockchain.CurrentBlock().NumberU64() - 4}, Skip: 2, Amount: 3},
 			[]common.Hash{
-				pm.chainman.GetBlockByNumber(pm.chainman.CurrentBlock().NumberU64() - 4).Hash(),
-				pm.chainman.GetBlockByNumber(pm.chainman.CurrentBlock().NumberU64() - 1).Hash(),
+				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64() - 4).Hash(),
+				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64() - 1).Hash(),
 			},
 		}, {
 			&getBlockHeadersData{Origin: hashOrNumber{Number: 4}, Skip: 2, Amount: 3, Reverse: true},
 			[]common.Hash{
-				pm.chainman.GetBlockByNumber(4).Hash(),
-				pm.chainman.GetBlockByNumber(1).Hash(),
+				pm.blockchain.GetBlockByNumber(4).Hash(),
+				pm.blockchain.GetBlockByNumber(1).Hash(),
 			},
 		},
 		// Check that non existing headers aren't returned
@@ -278,7 +278,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 			&getBlockHeadersData{Origin: hashOrNumber{Hash: unknown}, Amount: 1},
 			[]common.Hash{},
 		}, {
-			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.chainman.CurrentBlock().NumberU64() + 1}, Amount: 1},
+			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.blockchain.CurrentBlock().NumberU64() + 1}, Amount: 1},
 			[]common.Hash{},
 		},
 	}
@@ -287,7 +287,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		// Collect the headers to expect in the response
 		headers := []*types.Header{}
 		for _, hash := range tt.expect {
-			headers = append(headers, pm.chainman.GetBlock(hash).Header())
+			headers = append(headers, pm.blockchain.GetBlock(hash).Header())
 		}
 		// Send the hash request and verify the response
 		p2p.Send(peer.app, 0x03, tt.query)
@@ -315,22 +315,22 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 		available []bool        // Availability of explicitly requested blocks
 		expected  int           // Total number of existing blocks to expect
 	}{
-		{1, nil, nil, 1},                                                       // A single random block should be retrievable
-		{10, nil, nil, 10},                                                     // Multiple random blocks should be retrievable
-		{limit, nil, nil, limit},                                               // The maximum possible blocks should be retrievable
-		{limit + 1, nil, nil, limit},                                           // No more that the possible block count should be returned
-		{0, []common.Hash{pm.chainman.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
-		{0, []common.Hash{pm.chainman.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
-		{0, []common.Hash{common.Hash{}}, []bool{false}, 0},                    // A non existent block should not be returned
+		{1, nil, nil, 1},                                                         // A single random block should be retrievable
+		{10, nil, nil, 10},                                                       // Multiple random blocks should be retrievable
+		{limit, nil, nil, limit},                                                 // The maximum possible blocks should be retrievable
+		{limit + 1, nil, nil, limit},                                             // No more than the possible block count should be returned
+		{0, []common.Hash{pm.blockchain.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
+		{0, []common.Hash{pm.blockchain.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
+		{0, []common.Hash{common.Hash{}}, []bool{false}, 0},                      // A non existent block should not be returned
 
 		// Existing and non-existing blocks interleaved should not cause problems
 		{0, []common.Hash{
 			common.Hash{},
-			pm.chainman.GetBlockByNumber(1).Hash(),
+			pm.blockchain.GetBlockByNumber(1).Hash(),
 			common.Hash{},
-			pm.chainman.GetBlockByNumber(10).Hash(),
+			pm.blockchain.GetBlockByNumber(10).Hash(),
 			common.Hash{},
-			pm.chainman.GetBlockByNumber(100).Hash(),
+			pm.blockchain.GetBlockByNumber(100).Hash(),
 			common.Hash{},
 		}, []bool{false, true, false, true, false, true, false}, 3},
 	}
@@ -342,11 +342,11 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 
 		for j := 0; j < tt.random; j++ {
 			for {
-				num := rand.Int63n(int64(pm.chainman.CurrentBlock().NumberU64()))
+				num := rand.Int63n(int64(pm.blockchain.CurrentBlock().NumberU64()))
 				if !seen[num] {
 					seen[num] = true
 
-					block := pm.chainman.GetBlockByNumber(uint64(num))
+					block := pm.blockchain.GetBlockByNumber(uint64(num))
 					hashes = append(hashes, block.Hash())
 					if len(bodies) < tt.expected {
 						bodies = append(bodies, &blockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
@@ -358,7 +358,7 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 		for j, hash := range tt.explicit {
 			hashes = append(hashes, hash)
 			if tt.available[j] && len(bodies) < tt.expected {
-				block := pm.chainman.GetBlock(hash)
+				block := pm.blockchain.GetBlock(hash)
 				bodies = append(bodies, &blockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
 			}
 		}
@@ -442,11 +442,11 @@ func testGetNodeData(t *testing.T, protocol int) {
 		statedb.Put(hashes[i].Bytes(), data[i])
 	}
 	accounts := []common.Address{testBankAddress, acc1Addr, acc2Addr}
-	for i := uint64(0); i <= pm.chainman.CurrentBlock().NumberU64(); i++ {
-		trie := state.New(pm.chainman.GetBlockByNumber(i).Root(), statedb)
+	for i := uint64(0); i <= pm.blockchain.CurrentBlock().NumberU64(); i++ {
+		trie := state.New(pm.blockchain.GetBlockByNumber(i).Root(), statedb)
 
 		for j, acc := range accounts {
-			bw := pm.chainman.State().GetBalance(acc)
+			bw := pm.blockchain.State().GetBalance(acc)
 			bh := trie.GetBalance(acc)
 
 			if (bw != nil && bh == nil) || (bw == nil && bh != nil) {
@@ -505,8 +505,8 @@ func testGetReceipt(t *testing.T, protocol int) {
 
 	// Collect the hashes to request, and the response to expect
 	hashes := []common.Hash{}
-	for i := uint64(0); i <= pm.chainman.CurrentBlock().NumberU64(); i++ {
-		for _, tx := range pm.chainman.GetBlockByNumber(i).Transactions() {
+	for i := uint64(0); i <= pm.blockchain.CurrentBlock().NumberU64(); i++ {
+		for _, tx := range pm.blockchain.GetBlockByNumber(i).Transactions() {
 			hashes = append(hashes, tx.Hash())
 		}
 	}
