@@ -388,7 +388,10 @@ func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block 
 func chm(genesis *types.Block, db common.Database) *ChainManager {
 	var eventMux event.TypeMux
 	bc := &ChainManager{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
-	bc.cache, _ = lru.New(100)
+	bc.headerCache, _ = lru.New(100)
+	bc.bodyCache, _ = lru.New(100)
+	bc.bodyRLPCache, _ = lru.New(100)
+	bc.blockCache, _ = lru.New(100)
 	bc.futureBlocks, _ = lru.New(100)
 	bc.processor = bproc{}
 	bc.ResetWithGenesisBlock(genesis)

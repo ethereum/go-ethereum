@@ -86,7 +86,7 @@ func WriteGenesisBlock(chainDb common.Database, reader io.Reader) (*types.Block,
 
 	if block := GetBlockByHash(chainDb, block.Hash()); block != nil {
 		glog.V(logger.Info).Infoln("Genesis block already in chain. Writing canonical number")
-		err := WriteCanonNumber(chainDb, block)
+		err := WriteCanonNumber(chainDb, block.Hash(), block.NumberU64())
 		if err != nil {
 			return nil, err
 		}
