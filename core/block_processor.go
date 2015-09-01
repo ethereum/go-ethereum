@@ -73,23 +73,21 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 	coinbase.SetGasLimit(block.GasLimit())
 
 	// Process the transactions on to parent state
-	receipts, err = sm.ApplyTransactions(coinbase, statedb, block, block.Transactions(), transientProcess)
+	receipts, err = sm.ApplyTransactions(&coinbase, statedb, block, block.Transactions(), transientProcess)
 	if err != nil {
 		return nil, err
 	}
-
 	return receipts, nil
 }
 
-func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
-	cb := statedb.GetStateObject(coinbase.Address())
+func (self *BlockProcessor) ApplyTransaction(coinbasePtr **state.StateObject, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
+	cb := statedb.GetStateObject((*coinbasePtr).Address())
 	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, header), tx, cb)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	// Update the state with pending changes
-	statedb.SyncIntermediate(coinbase)
+	statedb.SyncIntermediate(coinbasePtr)
 
 	usedGas.Add(usedGas, gas)
 	receipt := types.NewReceipt(statedb.Root().Bytes(), usedGas)
@@ -118,7 +116,7 @@ func (self *BlockProcessor) ChainManager() *ChainManager {
 	return self.bc
 }
 
-func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, error) {
+func (self *BlockProcessor) ApplyTransactions(coinbasePtr **state.StateObject, statedb *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, error) {
 	var (
 		receipts      types.Receipts
 		totalUsedGas  = big.NewInt(0)
@@ -130,7 +128,7 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 	for i, tx := range txs {
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
 
-		receipt, txGas, err := self.ApplyTransaction(coinbase, statedb, header, tx, totalUsedGas, transientProcess)
+		receipt, txGas, err := self.ApplyTransaction(coinbasePtr, statedb, header, tx, totalUsedGas, transientProcess)
 		if err != nil {
 			return nil, err
 		}
