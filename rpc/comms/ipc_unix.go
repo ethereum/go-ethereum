@@ -22,11 +22,11 @@ import (
 	"net"
 	"os"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/rpc/useragent"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/rpc/codec"
+	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/rpc/useragent"
 )
 
 func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {

@@ -18,10 +18,10 @@ package api
 
 import (
 	"github.com/ethereum/ethash"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/eth"
+	"github.com/expanse-project/go-expanse/rpc/codec"
+	"github.com/expanse-project/go-expanse/rpc/shared"
 )
 
 const (

@@ -23,9 +23,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/p2p/discover"
 )
 
 const (

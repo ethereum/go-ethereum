@@ -20,14 +20,14 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/jsre"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/rpc/useragent"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/expanse-project/go-expanse/cmd/utils"
+	"github.com/expanse-project/go-expanse/jsre"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/rpc/comms"
+	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/rpc/useragent"
+	"github.com/expanse-project/go-expanse/xeth"
 
 	"github.com/robertkrimen/otto"
 )

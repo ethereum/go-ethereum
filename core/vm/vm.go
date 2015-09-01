@@ -21,12 +21,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core/state"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/params"
 )
 
 // Vm implements VirtualMachine

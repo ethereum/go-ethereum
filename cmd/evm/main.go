@@ -25,14 +25,14 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/expanse-project/go-expanse/cmd/utils"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/state"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/core/vm"
+	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/logger/glog"
 )
 
 var (

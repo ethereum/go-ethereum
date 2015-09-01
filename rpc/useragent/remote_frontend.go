@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/expanse-project/go-expanse/accounts"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/rpc/shared"
 )
 
 // remoteFrontend implements xeth.Frontend and will communicate with an external
