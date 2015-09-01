@@ -370,7 +370,6 @@ func New(config *Config) (*Expanse, error) {
 	}
 	exp.txPool = core.NewTxPool(exp.EventMux(), exp.chainManager.State, exp.chainManager.GasLimit)
 
-<<<<<<< HEAD:exp/backend.go
 	exp.blockProcessor = core.NewBlockProcessor(chainDb, exp.pow, exp.chainManager, exp.EventMux())
 	exp.chainManager.SetProcessor(exp.blockProcessor)
 	exp.protocolManager = NewProtocolManager(config.NetworkId, exp.eventMux, eth.txPool, exp.pow, exp.chainManager)
