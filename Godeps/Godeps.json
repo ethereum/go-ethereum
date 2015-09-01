@@ -21,8 +21,7 @@
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",
-			"Comment": "v23.1-227-g8f6ccaa",
-			"Rev": "8f6ccaaef9b418553807a73a95cb5f49cd3ea39f"
+			"Rev": "227ec953eae56f4f6c7f5e7dc93b4bbebf0cda2e"
 		},
 		{
 			"ImportPath": "github.com/fatih/color",
@@ -51,7 +50,7 @@
 		},
 		{
 			"ImportPath": "github.com/mattn/go-isatty",
-			"Rev": "fdbe02a1b44e75977b2690062b83cf507d70c013"
+			"Rev": "7fcbc72f853b92b5720db4a6b8482be612daef24"
 		},
 		{
 			"ImportPath": "github.com/mattn/go-runewidth",

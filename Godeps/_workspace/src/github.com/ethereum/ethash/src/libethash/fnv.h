@@ -29,6 +29,10 @@ extern "C" {
 
 #define FNV_PRIME 0x01000193
 
+/* The FNV-1 spec multiplies the prime with the input one byte (octet) in turn.
+   We instead multiply it with the full 32-bit input.
+   This gives a different result compared to a canonical FNV-1 implementation.
+*/
 static inline uint32_t fnv_hash(uint32_t const x, uint32_t const y)
 {
 	return x * FNV_PRIME ^ y;
