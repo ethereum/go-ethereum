@@ -29,6 +29,8 @@ import (
 )
 
 var (
+	headKey = []byte("LastBlock")
+
 	headerHashPre = []byte("header-hash-")
 	bodyHashPre   = []byte("body-hash-")
 	blockNumPre   = []byte("block-num-")
@@ -120,6 +122,24 @@ type storageBody struct {
 	Uncles       []*types.Header
 }
 
+// GetHashByNumber retrieves a hash assigned to a canonical block number.
+func GetHashByNumber(db common.Database, number uint64) common.Hash {
+	data, _ := db.Get(append(blockNumPre, big.NewInt(int64(number)).Bytes()...))
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
+}
+
+// GetHeadHash retrieves the hash of the current canonical head block.
+func GetHeadHash(db common.Database) common.Hash {
+	data, _ := db.Get(headKey)
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
+}
+
 // GetHeaderRLPByHash retrieves a block header in its raw RLP database encoding,
 // or nil if the header's not found.
 func GetHeaderRLPByHash(db common.Database, hash common.Hash) []byte {
@@ -202,24 +222,24 @@ func GetBlockByNumber(db common.Database, number uint64) *types.Block {
 	return GetBlockByHash(db, common.BytesToHash(key))
 }
 
-// WriteCanonNumber writes the canonical hash for the given block
-func WriteCanonNumber(db common.Database, block *types.Block) error {
-	key := append(blockNumPre, block.Number().Bytes()...)
-	err := db.Put(key, block.Hash().Bytes())
-	if err != nil {
+// WriteCanonNumber stores the canonical hash for the given block number.
+func WriteCanonNumber(db common.Database, hash common.Hash, number uint64) error {
+	key := append(blockNumPre, big.NewInt(int64(number)).Bytes()...)
+	if err := db.Put(key, hash.Bytes()); err != nil {
+		glog.Fatalf("failed to store number to hash mapping into database: %v", err)
 		return err
 	}
 	return nil
 }
 
-// WriteHead force writes the current head
+// WriteHead updates the head block of the chain database.
 func WriteHead(db common.Database, block *types.Block) error {
-	err := WriteCanonNumber(db, block)
-	if err != nil {
+	if err := WriteCanonNumber(db, block.Hash(), block.NumberU64()); err != nil {
+		glog.Fatalf("failed to store canonical number into database: %v", err)
 		return err
 	}
-	err = db.Put([]byte("LastBlock"), block.Hash().Bytes())
-	if err != nil {
+	if err := db.Put(headKey, block.Hash().Bytes()); err != nil {
+		glog.Fatalf("failed to store last block into database: %v", err)
 		return err
 	}
 	return nil
@@ -270,6 +290,22 @@ func WriteBlock(db common.Database, block *types.Block) error {
 		return err
 	}
 	return nil
+}
+
+// DeleteHeader removes all block header data associated with a hash.
+func DeleteHeader(db common.Database, hash common.Hash) {
+	db.Delete(append(headerHashPre, hash.Bytes()...))
+}
+
+// DeleteBody removes all block body data associated with a hash.
+func DeleteBody(db common.Database, hash common.Hash) {
+	db.Delete(append(bodyHashPre, hash.Bytes()...))
+}
+
+// DeleteBlock removes all block data associated with a hash.
+func DeleteBlock(db common.Database, hash common.Hash) {
+	DeleteHeader(db, hash)
+	DeleteBody(db, hash)
 }
 
 // [deprecated by eth/63]
