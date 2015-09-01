@@ -370,14 +370,14 @@ func New(config *Config) (*Expanse, error) {
 	}
 	exp.txPool = core.NewTxPool(exp.EventMux(), exp.chainManager.State, exp.chainManager.GasLimit)
 
-<<<<<<< HEAD
+<<<<<<< HEAD:exp/backend.go
 	exp.blockProcessor = core.NewBlockProcessor(chainDb, exp.pow, exp.chainManager, exp.EventMux())
 	exp.chainManager.SetProcessor(exp.blockProcessor)
 	exp.protocolManager = NewProtocolManager(config.NetworkId, exp.eventMux, eth.txPool, exp.pow, exp.chainManager)
 
-	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
-	eth.miner.SetGasPrice(config.GasPrice)
-	eth.miner.SetExtra(config.ExtraData)
+	exp.miner = miner.New(eth, exp.EventMux(), exp.pow)
+	exp.miner.SetGasPrice(config.GasPrice)
+	exp.miner.SetExtra(config.ExtraData)
 
 	if config.Shh {
 		exp.whisper = whisper.New()
@@ -531,7 +531,7 @@ func (s *Expanse) NetVersion() int                      { return s.netVersionId 
 func (s *Expanse) ShhVersion() int                      { return s.shhVersionId }
 func (s *Expanse) Downloader() *downloader.Downloader   { return s.protocolManager.downloader }
 
-// Start the ethereum
+// Start the expanse
 func (s *Expanse) Start() error {
 	jsonlogger.LogJson(&logger.LogStarting{
 		ClientString:    s.net.Name,

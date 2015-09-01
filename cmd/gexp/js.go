@@ -145,7 +145,7 @@ func apiWordCompleter(line string, pos int) (head string, completions []string, 
 	return begin, completionWords, end
 }
 
-func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive bool) *jsre {
+func newLightweightJSRE(libPath string, client comms.ExpanseClient, interactive bool) *jsre {
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
 	js.client = client
@@ -330,7 +330,7 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
 
-	js.re.Run(`var GlobalRegistrar = eth.contract(` + registrar.GlobalRegistrarAbi + `);	 registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
+	js.re.Run(`var GlobalRegistrar = exp.contract(` + registrar.GlobalRegistrarAbi + `);	 registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
 	return nil
 }
 

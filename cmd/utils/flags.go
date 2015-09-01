@@ -518,12 +518,12 @@ func StartIPC(exp *exp.Expanse, ctx *cli.Context) error {
 		Endpoint: IpcSocketPath(ctx),
 	}
 
-	initializer := func(conn net.Conn) (shared.EthereumApi, error) {
+	initializer := func(conn net.Conn) (shared.ExpanseApi, error) {
 		fe := useragent.NewRemoteFrontend(conn, eth.AccountManager())
-		xeth := xeth.New(eth, fe)
+		xeth := xeth.New(exp, fe)
 		codec := codec.JSON
 
-		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, eth)
+		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, exp)
 		if err != nil {
 			return nil, err
 		}

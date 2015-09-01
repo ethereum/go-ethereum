@@ -56,7 +56,6 @@ Go Expanse comes with several wrappers/executables found in
 
 To get the options available:
 
-<<<<<<< HEAD
     geth help
 
 For further details on options, see the [wiki](https://github.com/expanse-project/go-expanse/wiki/Command-Line-Options)
