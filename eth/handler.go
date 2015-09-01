@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -36,8 +37,12 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// This is the target maximum size of returned blocks, headers or node data.
+// softResponseLimit is the target maximum size of returned blocks, headers or node data.
 const softResponseLimit = 2 * 1024 * 1024
+
+// errIncompatibleConfig is returned if the requested protocols and configs are
+// not compatible (low protocol version restrictions and high requirements).
+var errIncompatibleConfig = errors.New("incompatible configuration")
 
 func errResp(code errCode, format string, v ...interface{}) error {
 	return fmt.Errorf("%v - %v", code, fmt.Sprintf(format, v...))
@@ -46,17 +51,8 @@ func errResp(code errCode, format string, v ...interface{}) error {
 type hashFetcherFn func(common.Hash) error
 type blockFetcherFn func([]common.Hash) error
 
-// extProt is an interface which is passed around so we can expose GetHashes and GetBlock without exposing it to the rest of the protocol
-// extProt is passed around to peers which require to GetHashes and GetBlocks
-type extProt struct {
-	getHashes hashFetcherFn
-	getBlocks blockFetcherFn
-}
-
-func (ep extProt) GetHashes(hash common.Hash) error    { return ep.getHashes(hash) }
-func (ep extProt) GetBlock(hashes []common.Hash) error { return ep.getBlocks(hashes) }
-
 type ProtocolManager struct {
+	mode     Mode
 	txpool   txPool
 	chainman *core.ChainManager
 	chaindb  common.Database
@@ -84,9 +80,10 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager, chaindb common.Database) *ProtocolManager {
+func NewProtocolManager(mode Mode, networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager, chaindb common.Database) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
+		mode:      mode,
 		eventMux:  mux,
 		txpool:    txpool,
 		chainman:  chainman,
@@ -97,11 +94,14 @@ func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow po
 		quitSync:  make(chan struct{}),
 	}
 	// Initiate a sub-protocol for every implemented version we can handle
-	manager.SubProtocols = make([]p2p.Protocol, len(ProtocolVersions))
-	for i := 0; i < len(manager.SubProtocols); i++ {
-		version := ProtocolVersions[i]
-
-		manager.SubProtocols[i] = p2p.Protocol{
+	manager.SubProtocols = make([]p2p.Protocol, 0, len(ProtocolVersions))
+	for i, version := range ProtocolVersions {
+		// Skip protocol version if incompatible with the mode of operation
+		if minimumProtocolVersion[mode] > version {
+			continue
+		}
+		// Compatible, initialize the sub-protocol
+		manager.SubProtocols = append(manager.SubProtocols, p2p.Protocol{
 			Name:    "eth",
 			Version: version,
 			Length:  ProtocolLengths[i],
@@ -110,7 +110,10 @@ func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow po
 				manager.newPeerCh <- peer
 				return manager.handle(peer)
 			},
-		}
+		})
+	}
+	if len(manager.SubProtocols) == 0 {
+		return nil, errIncompatibleConfig
 	}
 	// Construct the different synchronisation mechanisms
 	manager.downloader = downloader.New(manager.eventMux, manager.chainman.HasBlock, manager.chainman.GetBlock, manager.chainman.CurrentBlock, manager.chainman.InsertChain, manager.removePeer)
@@ -123,7 +126,7 @@ func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow po
 	}
 	manager.fetcher = fetcher.New(manager.chainman.GetBlock, validator, manager.BroadcastBlock, heighter, manager.chainman.InsertChain, manager.removePeer)
 
-	return manager
+	return manager, nil
 }
 
 func (pm *ProtocolManager) removePeer(id string) {
