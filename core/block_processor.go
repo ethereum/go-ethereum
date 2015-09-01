@@ -57,6 +57,18 @@ type BlockProcessor struct {
 	eventMux *event.TypeMux
 }
 
+// TODO: type GasPool big.Int
+//
+// GasPool is implemented by state.StateObject. This is a historical
+// coincidence. Gas tracking should move out of StateObject.
+
+// GasPool tracks the amount of gas available during
+// execution of the transactions in a block.
+type GasPool interface {
+	AddGas(gas, price *big.Int)
+	SubGas(gas, price *big.Int) error
+}
+
 func NewBlockProcessor(db, extra common.Database, pow pow.PoW, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
 		db:       db,
@@ -66,16 +78,15 @@ func NewBlockProcessor(db, extra common.Database, pow pow.PoW, chainManager *Cha
 		bc:       chainManager,
 		eventMux: eventMux,
 	}
-
 	return sm
 }
 
 func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block *types.Block, transientProcess bool) (receipts types.Receipts, err error) {
-	coinbase := statedb.GetOrNewStateObject(block.Coinbase())
-	coinbase.SetGasLimit(block.GasLimit())
+	gp := statedb.GetOrNewStateObject(block.Coinbase())
+	gp.SetGasLimit(block.GasLimit())
 
 	// Process the transactions on to parent state
-	receipts, err = sm.ApplyTransactions(coinbase, statedb, block, block.Transactions(), transientProcess)
+	receipts, err = sm.ApplyTransactions(gp, statedb, block, block.Transactions(), transientProcess)
 	if err != nil {
 		return nil, err
 	}
@@ -83,11 +94,8 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 	return receipts, nil
 }
 
-func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
-	// If we are mining this block and validating we want to set the logs back to 0
-
-	cb := statedb.GetStateObject(coinbase.Address())
-	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, header), tx, cb)
+func (self *BlockProcessor) ApplyTransaction(gp GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
+	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, header), tx, gp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -122,7 +130,7 @@ func (self *BlockProcessor) ChainManager() *ChainManager {
 	return self.bc
 }
 
-func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, error) {
+func (self *BlockProcessor) ApplyTransactions(gp GasPool, statedb *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, error) {
 	var (
 		receipts      types.Receipts
 		totalUsedGas  = big.NewInt(0)
@@ -134,7 +142,7 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 	for i, tx := range txs {
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
 
-		receipt, txGas, err := self.ApplyTransaction(coinbase, statedb, header, tx, totalUsedGas, transientProcess)
+		receipt, txGas, err := self.ApplyTransaction(gp, statedb, header, tx, totalUsedGas, transientProcess)
 		if err != nil {
 			return nil, err
 		}
