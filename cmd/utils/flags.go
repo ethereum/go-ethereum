@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
@@ -148,9 +149,14 @@ var (
 		Name:  "olympic",
 		Usage: "Use olympic style protocol",
 	}
+	EthModeFlag = cli.StringFlag{
+		Name:  "mode",
+		Value: "archive",
+		Usage: "Client mode of operation (archive, full, light)",
+	}
 	EthVersionFlag = cli.IntFlag{
 		Name:  "eth",
-		Value: 62,
+		Value: 63,
 		Usage: "Highest eth protocol to advertise (temporary, dev option)",
 	}
 
@@ -425,12 +431,25 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	if err != nil {
 		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
 	}
-
+	// Resolve the mode of opeation from the string flag
+	var clientMode eth.Mode
+	switch strings.ToLower(ctx.GlobalString(EthModeFlag.Name)) {
+	case "archive":
+		clientMode = eth.ArchiveMode
+	case "full":
+		clientMode = eth.FullMode
+	case "light":
+		clientMode = eth.LightMode
+	default:
+		glog.Fatalf("Unknown node type requested: %s", ctx.GlobalString(EthModeFlag.Name))
+	}
+	// Assemble the entire eth configuration and return
 	cfg := &eth.Config{
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 MustDataDir(ctx),
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
 		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
+		Mode:                    clientMode,
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
 		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
 		SkipBcVersionCheck:      false,
@@ -499,7 +518,6 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 
 		glog.V(logger.Info).Infoln("dev mode enabled")
 	}
-
 	return cfg
 }
 

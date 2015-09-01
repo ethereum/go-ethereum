@@ -17,12 +17,42 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// Tests that protocol versions and modes of operations are matched up properly.
+func TestProtocolCompatibility(t *testing.T) {
+	// Define the compatibility chart
+	tests := []struct {
+		version    uint
+		mode       Mode
+		compatible bool
+	}{
+		{61, ArchiveMode, true}, {62, ArchiveMode, true}, {63, ArchiveMode, true}, {64, ArchiveMode, true},
+		{61, FullMode, false}, {62, FullMode, false}, {63, FullMode, true}, {64, FullMode, true},
+		{61, LightMode, false}, {62, LightMode, false}, {63, LightMode, false}, {64, LightMode, true},
+	}
+	// Make sure anything we screw up is restored
+	backup := ProtocolVersions
+	defer func() { ProtocolVersions = backup }()
+
+	// Try all available compatibility configs and check for errors
+	for i, tt := range tests {
+		ProtocolVersions = []uint{tt.version}
+
+		pm, err := newTestProtocolManager(tt.mode, 0, nil, nil)
+		if pm != nil {
+			defer pm.Stop()
+		}
+		if (err == nil && !tt.compatible) || (err != nil && tt.compatible) {
+			t.Errorf("test %d: compatibility mismatch: have error %v, want compatibility %v", i, err, tt.compatible)
+		}
+	}
+}
+
 // Tests that hashes can be retrieved from a remote chain by hashes in reverse
 // order.
 func TestGetBlockHashes61(t *testing.T) { testGetBlockHashes(t, 61) }
 
 func testGetBlockHashes(t *testing.T, protocol int) {
-	pm := newTestProtocolManager(downloader.MaxHashFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, ArchiveMode, downloader.MaxHashFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -65,7 +95,7 @@ func testGetBlockHashes(t *testing.T, protocol int) {
 func TestGetBlockHashesFromNumber61(t *testing.T) { testGetBlockHashesFromNumber(t, 61) }
 
 func testGetBlockHashesFromNumber(t *testing.T, protocol int) {
-	pm := newTestProtocolManager(downloader.MaxHashFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, ArchiveMode, downloader.MaxHashFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -105,7 +135,7 @@ func testGetBlockHashesFromNumber(t *testing.T, protocol int) {
 func TestGetBlocks61(t *testing.T) { testGetBlocks(t, 61) }
 
 func testGetBlocks(t *testing.T, protocol int) {
-	pm := newTestProtocolManager(downloader.MaxHashFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, ArchiveMode, downloader.MaxHashFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -177,7 +207,7 @@ func TestGetBlockHeaders63(t *testing.T) { testGetBlockHeaders(t, 63) }
 func TestGetBlockHeaders64(t *testing.T) { testGetBlockHeaders(t, 64) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
-	pm := newTestProtocolManager(downloader.MaxHashFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, ArchiveMode, downloader.MaxHashFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -303,7 +333,7 @@ func TestGetBlockBodies63(t *testing.T) { testGetBlockBodies(t, 63) }
 func TestGetBlockBodies64(t *testing.T) { testGetBlockBodies(t, 64) }
 
 func testGetBlockBodies(t *testing.T, protocol int) {
-	pm := newTestProtocolManager(downloader.MaxBlockFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, ArchiveMode, downloader.MaxBlockFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -410,7 +440,7 @@ func testGetNodeData(t *testing.T, protocol int) {
 		}
 	}
 	// Assemble the test environment
-	pm := newTestProtocolManager(4, generator, nil)
+	pm := newTestProtocolManagerMust(t, ArchiveMode, 4, generator, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -500,7 +530,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 		}
 	}
 	// Assemble the test environment
-	pm := newTestProtocolManager(4, generator, nil)
+	pm := newTestProtocolManagerMust(t, ArchiveMode, 4, generator, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
