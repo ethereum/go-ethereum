@@ -45,15 +45,13 @@ import (
  * 6) Derive new state root
  */
 type StateTransition struct {
-	coinbase      common.Address
+	gp            GasPool
 	msg           Message
 	gas, gasPrice *big.Int
 	initialGas    *big.Int
 	value         *big.Int
 	data          []byte
 	state         *state.StateDB
-
-	cb, rec, sen *state.StateObject
 
 	env vm.Environment
 }
@@ -96,13 +94,13 @@ func IntrinsicGas(data []byte) *big.Int {
 	return igas
 }
 
-func ApplyMessage(env vm.Environment, msg Message, coinbase *state.StateObject) ([]byte, *big.Int, error) {
-	return NewStateTransition(env, msg, coinbase).transitionState()
+func ApplyMessage(env vm.Environment, msg Message, gp GasPool) ([]byte, *big.Int, error) {
+	return NewStateTransition(env, msg, gp).transitionState()
 }
 
-func NewStateTransition(env vm.Environment, msg Message, coinbase *state.StateObject) *StateTransition {
+func NewStateTransition(env vm.Environment, msg Message, gp GasPool) *StateTransition {
 	return &StateTransition{
-		coinbase:   coinbase.Address(),
+		gp:         gp,
 		env:        env,
 		msg:        msg,
 		gas:        new(big.Int),
@@ -111,13 +109,9 @@ func NewStateTransition(env vm.Environment, msg Message, coinbase *state.StateOb
 		value:      msg.Value(),
 		data:       msg.Data(),
 		state:      env.State(),
-		cb:         coinbase,
 	}
 }
 
-func (self *StateTransition) Coinbase() *state.StateObject {
-	return self.state.GetOrNewStateObject(self.coinbase)
-}
 func (self *StateTransition) From() (*state.StateObject, error) {
 	f, err := self.msg.From()
 	if err != nil {
@@ -160,7 +154,7 @@ func (self *StateTransition) BuyGas() error {
 	if sender.Balance().Cmp(mgval) < 0 {
 		return fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", sender.Address().Bytes()[:4], mgval, sender.Balance())
 	}
-	if err = self.Coinbase().SubGas(mgas, self.gasPrice); err != nil {
+	if err = self.gp.SubGas(mgas, self.gasPrice); err != nil {
 		return err
 	}
 	self.AddGas(mgas)
@@ -241,13 +235,12 @@ func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, er
 	}
 
 	self.refundGas()
-	self.state.AddBalance(self.coinbase, new(big.Int).Mul(self.gasUsed(), self.gasPrice))
+	self.state.AddBalance(self.env.Coinbase(), new(big.Int).Mul(self.gasUsed(), self.gasPrice))
 
 	return ret, self.gasUsed(), err
 }
 
 func (self *StateTransition) refundGas() {
-	coinbase := self.Coinbase()
 	sender, _ := self.From() // err already checked
 	// Return remaining gas
 	remaining := new(big.Int).Mul(self.gas, self.gasPrice)
@@ -258,7 +251,7 @@ func (self *StateTransition) refundGas() {
 	self.gas.Add(self.gas, refund)
 	self.state.AddBalance(sender.Address(), refund.Mul(refund, self.gasPrice))
 
-	coinbase.AddGas(self.gas, self.gasPrice)
+	self.gp.AddGas(self.gas, self.gasPrice)
 }
 
 func (self *StateTransition) gasUsed() *big.Int {
