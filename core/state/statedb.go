@@ -361,7 +361,7 @@ func (self *StateDB) SyncIntermediate(coinbase *StateObject) {
 					self.DeleteStateObject(stateObject)
 
 					// Resurrect the coinbase and restore the gas allowance
-					*coinbase = *self.CreateAccount(address)
+					coinbase = self.CreateAccount(address)
 					coinbase.SetGasLimit(gas)
 				} else {
 					self.DeleteStateObject(stateObject)
