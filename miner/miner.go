@@ -26,7 +26,7 @@ import (
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/eth/downloader"
+	"github.com/expanse-project/go-expanse/exp/downloader"
 	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"

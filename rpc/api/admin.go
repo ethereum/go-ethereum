@@ -31,7 +31,7 @@ import (
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/eth"
+	"github.com/expanse-project/go-expanse/exp"
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/rlp"
 	"github.com/expanse-project/go-expanse/rpc/codec"
