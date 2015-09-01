@@ -619,7 +619,7 @@ func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *b
 
 func (env *Work) commitTransaction(tx *types.Transaction, proc *core.BlockProcessor) error {
 	snap := env.state.Copy()
-	receipt, _, err := proc.ApplyTransaction(env.coinbase, env.state, env.header, tx, env.header.GasUsed, true)
+	receipt, _, err := proc.ApplyTransaction(&env.coinbase, env.state, env.header, tx, env.header.GasUsed, true)
 	if err != nil {
 		env.state.Set(snap)
 		return err
