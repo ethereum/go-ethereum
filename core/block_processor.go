@@ -89,7 +89,7 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	}
 
 	// Update the state with pending changes
-	statedb.SyncIntermediate()
+	statedb.SyncIntermediate(header.Coinbase, header.GasLimit)
 
 	usedGas.Add(usedGas, gas)
 	receipt := types.NewReceipt(statedb.Root().Bytes(), usedGas)

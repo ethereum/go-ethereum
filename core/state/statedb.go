@@ -349,13 +349,21 @@ func (self *StateDB) Refunds() *big.Int {
 }
 
 // SyncIntermediate updates the intermediate state and all mid steps
-func (self *StateDB) SyncIntermediate() {
+func (self *StateDB) SyncIntermediate(headerCoinbase common.Address, headerGasLimit *big.Int) {
 	self.refund = new(big.Int)
 
 	for _, stateObject := range self.stateObjects {
 		if stateObject.dirty {
 			if stateObject.remove {
-				self.DeleteStateObject(stateObject)
+				if stateObject.address == headerCoinbase {
+					gasPoolCopy := new(big.Int).Set(stateObject.gasPool)
+					self.DeleteStateObject(stateObject)
+					coinbase := self.CreateAccount(headerCoinbase)
+					coinbase.SetGasLimit(headerGasLimit)
+					coinbase.gasPool = gasPoolCopy
+				} else {
+					self.DeleteStateObject(stateObject)
+				}
 			} else {
 				stateObject.Update()
 
