@@ -23,6 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/big"
+	"sync"
 	"testing"
 )
 
@@ -305,4 +306,26 @@ func TestEncodeToReaderPiecewise(t *testing.T) {
 		}
 		return output, nil
 	})
+}
+
+// This is a regression test verifying that encReader
+// returns its encbuf to the pool only once.
+func TestEncodeToReaderReturnToPool(t *testing.T) {
+	buf := make([]byte, 50)
+	wg := new(sync.WaitGroup)
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			for i := 0; i < 1000; i++ {
+				_, r, _ := EncodeToReader("foo")
+				ioutil.ReadAll(r)
+				r.Read(buf)
+				r.Read(buf)
+				r.Read(buf)
+				r.Read(buf)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
