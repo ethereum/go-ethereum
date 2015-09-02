@@ -43,8 +43,6 @@ import (
 	"github.com/expanse-project/go-expanse/metrics"
 	"github.com/expanse-project/go-expanse/rpc/codec"
 	"github.com/expanse-project/go-expanse/rpc/comms"
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 )
 
 const (
