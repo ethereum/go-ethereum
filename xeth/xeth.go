@@ -850,7 +850,6 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	}
 
 	from.SetBalance(common.MaxBig)
-	from.SetGasLimit(common.MaxBig)
 
 	msg := callmsg{
 		from:     from,
@@ -874,8 +873,8 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 
 	header := self.CurrentBlock().Header()
 	vmenv := core.NewEnv(statedb, self.backend.BlockChain(), msg, header)
-
-	res, gas, err := core.ApplyMessage(vmenv, msg, from)
+	gp := new(core.GasPool).AddGas(common.MaxBig)
+	res, gas, err := core.ApplyMessage(vmenv, msg, gp)
 	return common.ToHex(res), gas.String(), err
 }
 

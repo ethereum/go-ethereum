@@ -138,7 +138,6 @@ func TestSnapshot2(t *testing.T) {
 	so0 := state.GetStateObject(stateobjaddr0)
 	so0.balance = big.NewInt(42)
 	so0.nonce = 43
-	so0.gasPool = big.NewInt(44)
 	so0.code = []byte{'c', 'a', 'f', 'e'}
 	so0.codeHash = so0.CodeHash()
 	so0.remove = true
@@ -150,7 +149,6 @@ func TestSnapshot2(t *testing.T) {
 	so1 := state.GetStateObject(stateobjaddr1)
 	so1.balance = big.NewInt(52)
 	so1.nonce = 53
-	so1.gasPool = big.NewInt(54)
 	so1.code = []byte{'c', 'a', 'f', 'e', '2'}
 	so1.codeHash = so1.CodeHash()
 	so1.remove = true
@@ -207,9 +205,6 @@ func compareStateObjects(so0, so1 *StateObject, t *testing.T) {
 		}
 	}
 
-	if so0.gasPool.Cmp(so1.gasPool) != 0 {
-		t.Fatalf("GasPool mismatch: have %v, want %v", so0.gasPool, so1.gasPool)
-	}
 	if so0.remove != so1.remove {
 		t.Fatalf("Remove mismatch: have %v, want %v", so0.remove, so1.remove)
 	}

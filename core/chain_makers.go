@@ -54,7 +54,7 @@ type BlockGen struct {
 	header  *types.Header
 	statedb *state.StateDB
 
-	coinbase *state.StateObject
+	gasPool  *GasPool
 	txs      []*types.Transaction
 	receipts []*types.Receipt
 	uncles   []*types.Header
@@ -63,15 +63,14 @@ type BlockGen struct {
 // SetCoinbase sets the coinbase of the generated block.
 // It can be called at most once.
 func (b *BlockGen) SetCoinbase(addr common.Address) {
-	if b.coinbase != nil {
+	if b.gasPool != nil {
 		if len(b.txs) > 0 {
 			panic("coinbase must be set before adding transactions")
 		}
 		panic("coinbase can only be set once")
 	}
 	b.header.Coinbase = addr
-	b.coinbase = b.statedb.GetOrNewStateObject(addr)
-	b.coinbase.SetGasLimit(b.header.GasLimit)
+	b.gasPool = new(GasPool).AddGas(b.header.GasLimit)
 }
 
 // SetExtra sets the extra data field of the generated block.
@@ -88,10 +87,10 @@ func (b *BlockGen) SetExtra(data []byte) {
 // added. Notably, contract code relying on the BLOCKHASH instruction
 // will panic during execution.
 func (b *BlockGen) AddTx(tx *types.Transaction) {
-	if b.coinbase == nil {
+	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
-	_, gas, err := ApplyMessage(NewEnv(b.statedb, nil, tx, b.header), tx, b.coinbase)
+	_, gas, err := ApplyMessage(NewEnv(b.statedb, nil, tx, b.header), tx, b.gasPool)
 	if err != nil {
 		panic(err)
 	}
