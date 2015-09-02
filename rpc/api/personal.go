@@ -134,7 +134,7 @@ func (self *personalApi) UnlockAccount(req *shared.Request) (interface{}, error)
 		return fe.UnlockAccount(common.HexToAddress(args.Address).Bytes()), nil
 	}
 
-	am := self.ethereum.AccountManager()
+	am := self.expanse.AccountManager()
 	addr := common.HexToAddress(args.Address)
 
 	err := am.TimedUnlock(addr, args.Passphrase, time.Duration(args.Duration)*time.Second)

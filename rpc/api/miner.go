@@ -123,7 +123,7 @@ func (self *minerApi) SetExtra(req *shared.Request) (interface{}, error) {
 		return nil, err
 	}
 
-	if err := self.ethereum.Miner().SetExtra([]byte(args.Data)); err != nil {
+	if err := self.expanse.Miner().SetExtra([]byte(args.Data)); err != nil {
 		return false, err
 	}
 

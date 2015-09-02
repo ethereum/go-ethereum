@@ -381,7 +381,7 @@ func run(ctx *cli.Context) {
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	cfg.ExtraData = makeDefaultExtra()
 
-	ethereum, err := eth.New(cfg)
+	expanse, err := exp.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}

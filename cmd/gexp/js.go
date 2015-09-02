@@ -247,9 +247,9 @@ func (self *jsre) welcome() {
 		(function () {
 			console.log('instance: ' + web3.version.client);
 			console.log(' datadir: ' + admin.datadir);
-			console.log("coinbase: " + eth.coinbase);
-			var ts = 1000 * eth.getBlock(eth.blockNumber).timestamp;
-			console.log("at block: " + eth.blockNumber + " (" + new Date(ts) + ")");
+			console.log("coinbase: " + exp.coinbase);
+			var ts = 1000 * exp.getBlock(exp.blockNumber).timestamp;
+			console.log("at block: " + exp.blockNumber + " (" + new Date(ts) + ")");
 		})();
 	`)
 	if modules, err := self.supportedApis(); err == nil {

@@ -54,8 +54,8 @@ func NewGasPriceOracle(exp *Expanse) (self *GasPriceOracle) {
 		core.ChainSplitEvent{},
 	)
 
-	minbase := new(big.Int).Mul(self.eth.GpoMinGasPrice, big.NewInt(100))
-	minbase = minbase.Div(minbase, big.NewInt(int64(self.eth.GpobaseCorrectionFactor)))
+	minbase := new(big.Int).Mul(self.exp.GpoMinGasPrice, big.NewInt(100))
+	minbase = minbase.Div(minbase, big.NewInt(int64(self.exp.GpobaseCorrectionFactor)))
 	self.minBase = minbase
 
 	self.processPastBlocks()

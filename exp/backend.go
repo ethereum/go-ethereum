@@ -372,7 +372,7 @@ func New(config *Config) (*Expanse, error) {
 
 	exp.blockProcessor = core.NewBlockProcessor(chainDb, exp.pow, exp.chainManager, exp.EventMux())
 	exp.chainManager.SetProcessor(exp.blockProcessor)
-	exp.protocolManager = NewProtocolManager(config.NetworkId, exp.eventMux, eth.txPool, exp.pow, exp.chainManager)
+	exp.protocolManager = NewProtocolManager(config.NetworkId, exp.eventMux, exp.txPool, exp.pow, exp.chainManager)
 
 	exp.miner = miner.New(eth, exp.EventMux(), exp.pow)
 	exp.miner.SetGasPrice(config.GasPrice)

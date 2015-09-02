@@ -519,7 +519,7 @@ func StartIPC(exp *exp.Expanse, ctx *cli.Context) error {
 	}
 
 	initializer := func(conn net.Conn) (shared.ExpanseApi, error) {
-		fe := useragent.NewRemoteFrontend(conn, eth.AccountManager())
+		fe := useragent.NewRemoteFrontend(conn, exp.AccountManager())
 		xeth := xeth.New(exp, fe)
 		codec := codec.JSON
 

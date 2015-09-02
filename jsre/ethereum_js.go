@@ -1764,20 +1764,20 @@ if (typeof XMLHttpRequest === 'undefined') {
 
 },{}],18:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
-    ethereum.js is free software: you can redistribute it and/or modify
+    expanse.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    ethereum.js is distributed in the hope that it will be useful,
+    expanse.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file config.js
  * @authors:
@@ -4231,7 +4231,7 @@ var Iban = function (iban) {
 };
 
 /**
- * This method should be used to create iban object from ethereum address
+ * This method should be used to create iban object from expanse address
  *
  * @method fromAddress
  * @param {String} address
@@ -4935,7 +4935,7 @@ module.exports = {
     along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * @file eth.js
+ * @file exp.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @author Fabian Vogelsteller <fabian@ethdev.com>
  * @date 2015
@@ -5227,7 +5227,7 @@ module.exports = {
     You should have received a copy of the GNU Lesser General Public License
     along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file eth.js
+/** @file exp.js
  * @authors:
  *   Marek Kotewicz <marek@ethdev.com>
  * @date 2015
@@ -5355,7 +5355,7 @@ module.exports = {
 
 var Method = require('../method');
 
-/// @returns an array of objects describing web3.eth.filter api methods
+/// @returns an array of objects describing web3.exp.filter api methods
 var eth = function () {
     var newFilterCall = function (args) {
         var type = args[0];
@@ -5965,7 +5965,7 @@ var transfer = function (from, to, value, callback) {
  * @param {Function} callback, callback
  */
 var transferToAddress = function (from, to, value, callback) {
-    return web3.eth.sendTransaction({
+    return web3.exp.sendTransaction({
         address: to,
         from: from,
         value: value
