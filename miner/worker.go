@@ -126,7 +126,7 @@ func newWorker(coinbase common.Address, exp core.Backend) *worker {
 	worker := &worker{
 		exp:            exp,
 		mux:            exp.EventMux(),
-		extraDb:        exp.ExtraDb(),
+		chainDb:        exp.ChainDb(),
 		recv:           make(chan *Result, resultQueueSize),
 		gasPrice:       new(big.Int),
 		chain:          exp.ChainManager(),
@@ -278,7 +278,7 @@ func (self *worker) wait() {
 					glog.V(logger.Error).Infoln("Invalid block found during mining")
 					continue
 				}
-				if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true, false); err != nil && err != core.BlockFutureErr {
+				if err := core.ValidateHeader(self.exp.BlockProcessor().Pow, block.Header(), parent, true, false); err != nil && err != core.BlockFutureErr {
 					glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
 					continue
 				}
