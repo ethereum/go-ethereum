@@ -374,7 +374,7 @@ func New(config *Config) (*Expanse, error) {
 	exp.chainManager.SetProcessor(exp.blockProcessor)
 	exp.protocolManager = NewProtocolManager(config.NetworkId, exp.eventMux, exp.txPool, exp.pow, exp.chainManager)
 
-	exp.miner = miner.New(eth, exp.EventMux(), exp.pow)
+	exp.miner = miner.New(exp, exp.EventMux(), exp.pow)
 	exp.miner.SetGasPrice(config.GasPrice)
 	exp.miner.SetExtra(config.ExtraData)
 
@@ -685,7 +685,7 @@ func (self *Expanse) StopAutoDAG() {
 	glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
 }
 
-func (self *Ethereum) Solc() (*compiler.Solidity, error) {
+func (self *Expanse) Solc() (*compiler.Solidity, error) {
 	var err error
 	if self.solc == nil {
 		self.solc, err = compiler.New(self.SolcPath)
@@ -694,7 +694,7 @@ func (self *Ethereum) Solc() (*compiler.Solidity, error) {
 }
 
 // set in js console via admin interface or wrapper from cli flags
-func (self *Ethereum) SetSolc(solcPath string) (*compiler.Solidity, error) {
+func (self *Expanse) SetSolc(solcPath string) (*compiler.Solidity, error) {
 	self.SolcPath = solcPath
 	self.solc = nil
 	return self.Solc()
