@@ -47,6 +47,7 @@ import (
 	"github.com/expanse-project/go-expanse/rpc/codec"
 	"github.com/expanse-project/go-expanse/rpc/comms"
 	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/rpc/useragent"
 	"github.com/expanse-project/go-expanse/xeth"
 )
 
