@@ -13,10 +13,17 @@ RUN apt-get install -q -y unattended-upgrades
 
 # Install Expanse
 RUN apt-get install -q -y curl git mercurial binutils bison gcc make libgmp3-dev build-essential
-RUN curl -s -S -L https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer | bash
-RUN /bin/bash -c "source /root/.gvm/scripts/gvm"
-RUN gvm install go1.4
-RUN gvm use go1.4 --default
+
+# Install Go
+RUN \
+  mkdir -p /goroot && \
+  curl https://storage.googleapis.com/golang/go1.4.2.linux-amd64.tar.gz | tar xvzf - -C /goroot --strip-components=1
+
+# Set environment variables.
+ENV GOROOT /goroot
+ENV GOPATH /gopath
+ENV PATH $GOROOT/bin:$GOPATH/bin:$PATH
+
 RUN git clone http://www.github.com/expanse-project/go-expanse.git && cd go-expanse
 RUN git checkout develop
 RUN make gexp
