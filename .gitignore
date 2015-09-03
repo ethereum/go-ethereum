@@ -36,3 +36,4 @@ profile.tmp
 profile.cov
 
 .idea/workspace.xml
+*.idea/
