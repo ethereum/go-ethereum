@@ -25,7 +25,7 @@ ENV GOPATH /gopath
 ENV PATH $GOROOT/bin:$GOPATH/bin:$PATH
 
 RUN git clone http://www.github.com/expanse-project/go-expanse.git
-RUN cd go-expanse && git checkout develop && make develop
+RUN cd go-expanse && git checkout develop && make gexp
 
 # Install supervisor
 RUN apt-get install -q -y supervisor
