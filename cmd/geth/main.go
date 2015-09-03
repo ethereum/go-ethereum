@@ -402,7 +402,7 @@ func attach(ctx *cli.Context) {
 		client, err = comms.ClientFromEndpoint(ctx.Args().First(), codec.JSON)
 	} else {
 		cfg := comms.IpcConfig{
-			Endpoint: ctx.GlobalString(utils.IPCPathFlag.Name),
+			Endpoint: utils.IpcSocketPath(ctx),
 		}
 		client, err = comms.NewIpcClient(cfg, codec.JSON)
 	}
