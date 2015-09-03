@@ -24,10 +24,10 @@ import (
 )
 
 var (
-	jeff      = common.HexToAddress("a8edb1ac2c86d3d9d78f96cd18001f60df29e52c")
-	vitalik   = common.HexToAddress("1baf27b88c48dd02b744999cf3522766929d2b2a")
-	christoph = common.HexToAddress("60d11b58744784dc97f878f7e3749c0f1381a004")
-	gav       = common.HexToAddress("4bb7e8ae99b645c2b7860b8f3a2328aae28bd80a")
+	jeff      = common.HexToAddress("959c33de5961820567930eccce51ea715c496f85")
+	vitalik   = common.HexToAddress("c8158da0b567a8cc898991c2c2a073af67dc03a9")
+	christoph = common.HexToAddress("7a19a893f91d5b6e2cdf941b6acbba2cbcf431ee")
+	gav       = common.HexToAddress("539dd9aaf45c3feb03f9c004f4098bd3268fef6b")
 )
 
 // Canary will check the 0'd address of the 4 contracts above.

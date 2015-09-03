@@ -19,7 +19,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	_ "net/http/pprof"
 	"os"
@@ -38,19 +37,21 @@ import (
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/exp"
 	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/fdtrack"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/metrics"
+	"github.com/expanse-project/go-expanse/params"
+    "github.com/expanse-project/go-expanse/rlp"
 	"github.com/expanse-project/go-expanse/rpc/codec"
 	"github.com/expanse-project/go-expanse/rpc/comms"
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 )
 
 const (
 	ClientIdentifier = "Gexp"
-	Version          = "1.0.1"
+	Version          = "1.1.2"
+	VersionMajor     = 1
+	VersionMinor     = 1
+	VersionPatch     = 2
 )
 
 var (
@@ -307,6 +308,9 @@ JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt
 		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
 		utils.VMDebugFlag,
+		utils.VMForceJitFlag,
+		utils.VMJitCacheFlag,
+		utils.VMEnableJitFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
 		utils.VerbosityFlag,
@@ -328,6 +332,7 @@ JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt
 	}
 	app.Before = func(ctx *cli.Context) error {
 		utils.SetupLogger(ctx)
+		utils.SetupVM(ctx)
 		if ctx.GlobalBool(utils.PProfEanbledFlag.Name) {
 			utils.StartPProf(ctx)
 		}
@@ -346,6 +351,27 @@ func main() {
 	}
 }
 
+func makeDefaultExtra() []byte {
+	var clientInfo = struct {
+		Version   uint
+		Name      string
+		GoVersion string
+		Os        string
+	}{uint(VersionMajor<<16 | VersionMinor<<8 | VersionPatch), ClientIdentifier, runtime.Version(), runtime.GOOS}
+	extra, err := rlp.EncodeToBytes(clientInfo)
+	if err != nil {
+		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
+	}
+
+	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
+		glog.V(logger.Debug).Infof("extra: %x\n", extra)
+		return nil
+	}
+
+	return extra
+}
+
 func run(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
 	if ctx.GlobalBool(utils.OlympicFlag.Name) {
@@ -353,6 +379,8 @@ func run(ctx *cli.Context) {
 	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	cfg.ExtraData = makeDefaultExtra()
+
 	expanse, err := exp.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -365,14 +393,6 @@ func run(ctx *cli.Context) {
 
 func attach(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
-
-	// Wrap the standard output with a colorified stream (windows)
-	if isatty.IsTerminal(os.Stdout.Fd()) {
-		if pr, pw, err := os.Pipe(); err == nil {
-			go io.Copy(colorable.NewColorableStdout(), pr)
-			os.Stdout = pw
-		}
-	}
 
 	var client comms.ExpanseClient
 	var err error
@@ -393,7 +413,7 @@ func attach(ctx *cli.Context) {
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		client,
 		true,
-		nil)
+	)
 
 	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
 		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))
@@ -405,14 +425,6 @@ func attach(ctx *cli.Context) {
 
 func console(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
-
-	// Wrap the standard output with a colorified stream (windows)
-	if isatty.IsTerminal(os.Stdout.Fd()) {
-		if pr, pw, err := os.Pipe(); err == nil {
-			go io.Copy(colorable.NewColorableStdout(), pr)
-			os.Stdout = pw
-		}
-	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	expanse, err := exp.New(cfg)
@@ -532,9 +544,6 @@ func blockRecovery(ctx *cli.Context) {
 func startEth(ctx *cli.Context, exp *exp.Expanse) {
 	// Start Expanse itself
 	utils.StartExpanse(exp)
-
-	// Start logging file descriptor stats.
-	fdtrack.Start()
 
 	am := exp.AccountManager()
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)

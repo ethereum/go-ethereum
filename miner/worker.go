@@ -100,7 +100,7 @@ type worker struct {
 	exp     core.Backend
 	chain   *core.ChainManager
 	proc    *core.BlockProcessor
-	extraDb common.Database
+	chainDb common.Database
 
 	coinbase common.Address
 	gasPrice *big.Int
@@ -126,7 +126,7 @@ func newWorker(coinbase common.Address, exp core.Backend) *worker {
 	worker := &worker{
 		exp:            exp,
 		mux:            exp.EventMux(),
-		extraDb:        exp.ExtraDb(),
+		chainDb:        exp.ChainDb(),
 		recv:           make(chan *Result, resultQueueSize),
 		gasPrice:       new(big.Int),
 		chain:          exp.ChainManager(),
@@ -278,7 +278,7 @@ func (self *worker) wait() {
 					glog.V(logger.Error).Infoln("Invalid block found during mining")
 					continue
 				}
-				if err := core.ValidateHeader(self.exp.BlockProcessor().Pow, block.Header(), parent, true); err != nil && err != core.BlockFutureErr {
+				if err := core.ValidateHeader(self.exp.BlockProcessor().Pow, block.Header(), parent, true, false); err != nil && err != core.BlockFutureErr {
 					glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
 					continue
 				}
@@ -291,20 +291,23 @@ func (self *worker) wait() {
 				// check if canon block and write transactions
 				if stat == core.CanonStatTy {
 					// This puts transactions in a extra db for rpc
-					core.PutTransactions(self.extraDb, block, block.Transactions())
+					core.PutTransactions(self.chainDb, block, block.Transactions())
 					// store the receipts
-					core.PutReceipts(self.extraDb, work.receipts)
+					core.PutReceipts(self.chainDb, work.receipts)
 				}
 
 				// broadcast before waiting for validation
-				go func(block *types.Block, logs state.Logs) {
+				go func(block *types.Block, logs state.Logs, receipts []*types.Receipt) {
 					self.mux.Post(core.NewMinedBlockEvent{block})
 					self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
 					if stat == core.CanonStatTy {
 						self.mux.Post(core.ChainHeadEvent{block})
 						self.mux.Post(logs)
 					}
-				}(block, work.state.Logs())
+					if err := core.PutBlockReceipts(self.chainDb, block, receipts); err != nil {
+						glog.V(logger.Warn).Infoln("error writing block receipts:", err)
+					}
+				}(block, work.state.Logs(), work.receipts)
 			}
 
 			// check staleness and display confirmation
@@ -344,7 +347,7 @@ func (self *worker) push(work *Work) {
 
 // makeCurrent creates a new environment for the current cycle.
 func (self *worker) makeCurrent(parent *types.Block, header *types.Header) {
-	state := state.New(parent.Root(), self.exp.StateDb())
+	state := state.New(parent.Root(), self.exp.ChainDb())
 	work := &Work{
 		state:     state,
 		ancestors: set.New(),
@@ -431,8 +434,8 @@ func (self *worker) commitNewWork() {
 	tstart := time.Now()
 	parent := self.chain.CurrentBlock()
 	tstamp := tstart.Unix()
-	if tstamp <= int64(parent.Time()) {
-		tstamp = int64(parent.Time()) + 1
+	if parent.Time().Cmp(new(big.Int).SetInt64(tstamp)) >= 0 {
+		tstamp = parent.Time().Int64() + 1
 	}
 	// this will ensure we're not going off too far in the future
 	if now := time.Now().Unix(); tstamp > now+4 {
@@ -445,12 +448,12 @@ func (self *worker) commitNewWork() {
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
-		Difficulty: core.CalcDifficulty(uint64(tstamp), parent.Time(), parent.Number(), parent.Difficulty()),
+		Difficulty: core.CalcDifficulty(uint64(tstamp), parent.Time().Uint64(), parent.Number(), parent.Difficulty()),
 		GasLimit:   core.CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Coinbase:   self.coinbase,
 		Extra:      self.extra,
-		Time:       uint64(tstamp),
+		Time:       big.NewInt(tstamp),
 	}
 
 	previous := self.current

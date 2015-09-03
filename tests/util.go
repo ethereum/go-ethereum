@@ -18,7 +18,6 @@ package tests
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -136,7 +135,7 @@ type Env struct {
 	coinbase common.Address
 
 	number     *big.Int
-	time       uint64
+	time       *big.Int
 	difficulty *big.Int
 	gasLimit   *big.Int
 
@@ -166,7 +165,7 @@ func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues 
 	//env.parent = common.Hex2Bytes(envValues["previousHash"])
 	env.coinbase = common.HexToAddress(envValues["currentCoinbase"])
 	env.number = common.Big(envValues["currentNumber"])
-	env.time = common.Big(envValues["currentTimestamp"]).Uint64()
+	env.time = common.Big(envValues["currentTimestamp"])
 	env.difficulty = common.Big(envValues["currentDifficulty"])
 	env.gasLimit = common.Big(envValues["currentGasLimit"])
 	env.Gas = new(big.Int)
@@ -179,7 +178,7 @@ func (self *Env) BlockNumber() *big.Int  { return self.number }
 
 //func (self *Env) PrevHash() []byte      { return self.parent }
 func (self *Env) Coinbase() common.Address { return self.coinbase }
-func (self *Env) Time() uint64             { return self.time }
+func (self *Env) Time() *big.Int           { return self.time }
 func (self *Env) Difficulty() *big.Int     { return self.difficulty }
 func (self *Env) State() *state.StateDB    { return self.state }
 func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
@@ -192,18 +191,19 @@ func (self *Env) AddLog(log *state.Log) {
 }
 func (self *Env) Depth() int     { return self.depth }
 func (self *Env) SetDepth(i int) { self.depth = i }
-func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
+func (self *Env) CanTransfer(from vm.Account, balance *big.Int) bool {
 	if self.skipTransfer {
-		// ugly hack
 		if self.initial {
 			self.initial = false
-			return nil
+			return true
 		}
+	}
 
-		if from.Balance().Cmp(amount) < 0 {
-			return errors.New("Insufficient balance in account")
-		}
+	return from.Balance().Cmp(balance) >= 0
+}
 
+func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
+	if self.skipTransfer {
 		return nil
 	}
 	return vm.Transfer(from, to, amount)

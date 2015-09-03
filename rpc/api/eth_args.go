@@ -169,6 +169,37 @@ func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
+type SubmitHashRateArgs struct {
+	Id   string
+	Rate uint64
+}
+
+func (args *SubmitHashRateArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 2 {
+		return shared.NewInsufficientParamsError(len(obj), 2)
+	}
+
+	arg0, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("hash", "not a string")
+	}
+	args.Id = arg0
+
+	arg1, ok := obj[1].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("rate", "not a string")
+	}
+
+	args.Rate = common.String2Big(arg1).Uint64()
+
+	return nil
+}
+
 type HashArgs struct {
 	Hash string
 }
@@ -877,14 +908,14 @@ func (args *SubmitWorkArgs) UnmarshalJSON(b []byte) (err error) {
 type tx struct {
 	tx *types.Transaction
 
-	To       string
-	From     string
-	Nonce    string
-	Value    string
-	Data     string
-	GasLimit string
-	GasPrice string
-	Hash     string
+	To       string `json:"to"`
+	From     string `json:"from"`
+	Nonce    string `json:"nonce"`
+	Value    string `json:"value"`
+	Data     string `json:"data"`
+	GasLimit string `json:"gas"`
+	GasPrice string `json:"gasPrice"`
+	Hash     string `json:"hash"`
 }
 
 func newTx(t *types.Transaction) *tx {

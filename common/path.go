@@ -116,14 +116,3 @@ func DefaultIpcPath() string {
 	}
 	return filepath.Join(DefaultDataDir(), "gexp.ipc")
 }
-
-func IsWindows() bool {
-	return runtime.GOOS == "windows"
-}
-
-func WindonizePath(path string) string {
-	if string(path[0]) == "/" && IsWindows() {
-		path = path[1:]
-	}
-	return path
-}

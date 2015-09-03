@@ -16,13 +16,7 @@
 
 package trie
 
-import (
-	"bytes"
-	"encoding/hex"
-	"strings"
-)
-
-func CompactEncode(hexSlice []byte) string {
+func CompactEncode(hexSlice []byte) []byte {
 	terminator := 0
 	if hexSlice[len(hexSlice)-1] == 16 {
 		terminator = 1
@@ -40,15 +34,15 @@ func CompactEncode(hexSlice []byte) string {
 		hexSlice = append([]byte{flags, 0}, hexSlice...)
 	}
 
-	var buff bytes.Buffer
-	for i := 0; i < len(hexSlice); i += 2 {
-		buff.WriteByte(byte(16*hexSlice[i] + hexSlice[i+1]))
+	l := len(hexSlice) / 2
+	var buf = make([]byte, l)
+	for i := 0; i < l; i++ {
+		buf[i] = 16*hexSlice[2*i] + hexSlice[2*i+1]
 	}
-
-	return buff.String()
+	return buf
 }
 
-func CompactDecode(str string) []byte {
+func CompactDecode(str []byte) []byte {
 	base := CompactHexDecode(str)
 	base = base[:len(base)-1]
 	if base[0] >= 2 {
@@ -63,30 +57,23 @@ func CompactDecode(str string) []byte {
 	return base
 }
 
-func CompactHexDecode(str string) []byte {
-	base := "0123456789abcdef"
-	var hexSlice []byte
-
-	enc := hex.EncodeToString([]byte(str))
-	for _, v := range enc {
-		hexSlice = append(hexSlice, byte(strings.IndexByte(base, byte(v))))
+func CompactHexDecode(str []byte) []byte {
+	l := len(str)*2 + 1
+	var nibbles = make([]byte, l)
+	for i, b := range str {
+		nibbles[i*2] = b / 16
+		nibbles[i*2+1] = b % 16
 	}
-	hexSlice = append(hexSlice, 16)
-
-	return hexSlice
+	nibbles[l-1] = 16
+	return nibbles
 }
 
-func DecodeCompact(key []byte) string {
-	const base = "0123456789abcdef"
-	var str string
-
-	for _, v := range key {
-		if v < 16 {
-			str += string(base[v])
-		}
+func DecodeCompact(key []byte) []byte {
+	l := len(key) / 2
+	var res = make([]byte, l)
+	for i := 0; i < l; i++ {
+		v1, v0 := key[2*i], key[2*i+1]
+		res[i] = v1*16 + v0
 	}
-
-	res, _ := hex.DecodeString(str)
-
-	return string(res)
+	return res
 }

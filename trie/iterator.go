@@ -41,7 +41,7 @@ func (self *Iterator) Next() bool {
 		self.Key = make([]byte, 32)
 	}
 
-	key := RemTerm(CompactHexDecode(string(self.Key)))
+	key := RemTerm(CompactHexDecode(self.Key))
 	k := self.next(self.trie.root, key, isIterStart)
 
 	self.Key = []byte(DecodeCompact(k))

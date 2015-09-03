@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -34,6 +35,7 @@ import (
 	"github.com/expanse-project/go-expanse/accounts"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/vm"
 	"github.com/expanse-project/go-expanse/crypto"
 	"github.com/expanse-project/go-expanse/exp"
 	"github.com/expanse-project/go-expanse/ethdb"
@@ -44,6 +46,8 @@ import (
 	"github.com/expanse-project/go-expanse/rpc/api"
 	"github.com/expanse-project/go-expanse/rpc/codec"
 	"github.com/expanse-project/go-expanse/rpc/comms"
+	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/rpc/useragent"
 	"github.com/expanse-project/go-expanse/xeth"
 )
 
@@ -172,6 +176,25 @@ var (
 		Value: "",
 	}
 
+	// vm flags
+	VMDebugFlag = cli.BoolFlag{
+		Name:  "vmdebug",
+		Usage: "Virtual Machine debug output",
+	}
+	VMForceJitFlag = cli.BoolFlag{
+		Name:  "forcejit",
+		Usage: "Force the JIT VM to take precedence",
+	}
+	VMJitCacheFlag = cli.IntFlag{
+		Name:  "jitcache",
+		Usage: "Amount of cached JIT VM programs",
+		Value: 64,
+	}
+	VMEnableJitFlag = cli.BoolFlag{
+		Name:  "jitvm",
+		Usage: "Enable the JIT VM",
+	}
+
 	// logging and debug settings
 	LogFileFlag = cli.StringFlag{
 		Name:  "logfile",
@@ -195,10 +218,6 @@ var (
 		Name:  "vmodule",
 		Usage: "The syntax of the argument is a comma-separated list of pattern=N, where pattern is a literal file name (minus the \".go\" suffix) or \"glob\" pattern and N is a log verbosity level.",
 		Value: glog.GetVModule(),
-	}
-	VMDebugFlag = cli.BoolFlag{
-		Name:  "vmdebug",
-		Usage: "Virtual Machine debug output",
 	}
 	BacktraceAtFlag = cli.GenericFlag{
 		Name:  "backtrace_at",
@@ -434,24 +453,25 @@ func SetupLogger(ctx *cli.Context) {
 	glog.SetLogDir(ctx.GlobalString(LogFileFlag.Name))
 }
 
+// SetupVM configured the VM package's global settings
+func SetupVM(ctx *cli.Context) {
+	vm.EnableJit = ctx.GlobalBool(VMEnableJitFlag.Name)
+	vm.ForceJit = ctx.GlobalBool(VMForceJitFlag.Name)
+	vm.SetJITCacheSize(ctx.GlobalInt(VMJitCacheFlag.Name))
+}
+
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, extraDB common.Database) {
+func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb common.Database) {
 	datadir := ctx.GlobalString(DataDirFlag.Name)
 	cache := ctx.GlobalInt(CacheFlag.Name)
 
 	var err error
-	if blockDB, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "blockchain"), cache); err != nil {
-		Fatalf("Could not open database: %v", err)
-	}
-	if stateDB, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "state"), cache); err != nil {
-		Fatalf("Could not open database: %v", err)
-	}
-	if extraDB, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "extra"), cache); err != nil {
+	if chainDb, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "chaindata"), cache); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
 	if ctx.GlobalBool(OlympicFlag.Name) {
 		InitOlympic()
-		_, err := core.WriteTestNetGenesisBlock(stateDB, blockDB, 42)
+		_, err := core.WriteTestNetGenesisBlock(chainDb, 42)
 		if err != nil {
 			glog.Fatalln(err)
 		}
@@ -460,14 +480,14 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, ex
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
 	//genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
-	chain, err = core.NewChainManager(blockDB, stateDB, extraDB, pow, eventMux)
+	chain, err = core.NewChainManager(chainDb, pow, eventMux)
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}
 
-	proc := core.NewBlockProcessor(stateDB, extraDB, pow, chain, eventMux)
+	proc := core.NewBlockProcessor(chainDb, pow, chain, eventMux)
 	chain.SetProcessor(proc)
-	return chain, blockDB, stateDB, extraDB
+	return chain, chainDb
 }
 
 // MakeChain creates an account manager from set command line flags.
@@ -478,7 +498,7 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 }
 
 func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
-	if common.IsWindows() {
+	if runtime.GOOS == "windows" {
 		ipcpath = common.DefaultIpcPath()
 		if ctx.GlobalIsSet(IPCPathFlag.Name) {
 			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
@@ -501,15 +521,20 @@ func StartIPC(exp *exp.Expanse, ctx *cli.Context) error {
 		Endpoint: IpcSocketPath(ctx),
 	}
 
-	xeth := xeth.New(exp, nil)
-	codec := codec.JSON
+	initializer := func(conn net.Conn) (shared.ExpanseApi, error) {
+		fe := useragent.NewRemoteFrontend(conn, exp.AccountManager())
+		xeth := xeth.New(exp, fe)
+		codec := codec.JSON
 
-	apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, exp)
-	if err != nil {
-		return err
+		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, exp)
+		if err != nil {
+			return nil, err
+		}
+
+		return api.Merge(apis...), nil
 	}
 
-	return comms.StartIpc(config, codec, api.Merge(apis...))
+	return comms.StartIpc(config, codec.JSON, initializer)
 }
 
 func StartRPC(exp *exp.Expanse, ctx *cli.Context) error {

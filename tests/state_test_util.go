@@ -23,6 +23,7 @@ import (
 	"io"
 	"math/big"
 	"strconv"
+	"testing"
 
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core"
@@ -58,6 +59,61 @@ func RunStateTest(p string, skipTests []string) error {
 
 	return nil
 
+}
+
+func BenchStateTest(p string, conf bconf, b *testing.B) error {
+	tests := make(map[string]VmTest)
+	if err := readJsonFile(p, &tests); err != nil {
+		return err
+	}
+	test, ok := tests[conf.name]
+	if !ok {
+		return fmt.Errorf("test not found: %s", conf.name)
+	}
+
+	pJit := vm.EnableJit
+	vm.EnableJit = conf.jit
+	pForceJit := vm.ForceJit
+	vm.ForceJit = conf.precomp
+
+	// XXX Yeah, yeah...
+	env := make(map[string]string)
+	env["currentCoinbase"] = test.Env.CurrentCoinbase
+	env["currentDifficulty"] = test.Env.CurrentDifficulty
+	env["currentGasLimit"] = test.Env.CurrentGasLimit
+	env["currentNumber"] = test.Env.CurrentNumber
+	env["previousHash"] = test.Env.PreviousHash
+	if n, ok := test.Env.CurrentTimestamp.(float64); ok {
+		env["currentTimestamp"] = strconv.Itoa(int(n))
+	} else {
+		env["currentTimestamp"] = test.Env.CurrentTimestamp.(string)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchStateTest(test, env, b)
+	}
+
+	vm.EnableJit = pJit
+	vm.ForceJit = pForceJit
+
+	return nil
+}
+
+func benchStateTest(test VmTest, env map[string]string, b *testing.B) {
+	b.StopTimer()
+	db, _ := ethdb.NewMemDatabase()
+	statedb := state.New(common.Hash{}, db)
+	for addr, account := range test.Pre {
+		obj := StateObjectFromAccount(db, addr, account)
+		statedb.SetStateObject(obj)
+		for a, v := range account.Storage {
+			obj.SetState(common.HexToHash(a), common.HexToHash(v))
+		}
+	}
+	b.StartTimer()
+
+	RunState(statedb, env, test.Exec)
 }
 
 func runStateTests(tests map[string]VmTest, skipTests []string) error {

@@ -39,9 +39,8 @@ var OpenFileLimit = 64
 // cacheRatio specifies how the total alloted cache is distributed between the
 // various system databases.
 var cacheRatio = map[string]float64{
-	"blockchain": 1.0 / 13.0,
-	"extra":      2.0 / 13.0,
-	"state":      10.0 / 13.0,
+	"dapp":      2.0 / 13.0,
+	"chaindata": 11.0 / 13.0,
 }
 
 type LDBDatabase struct {

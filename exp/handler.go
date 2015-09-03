@@ -117,7 +117,7 @@ func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow po
 	manager.downloader = downloader.New(manager.eventMux, manager.chainman.HasBlock, manager.chainman.GetBlock, manager.chainman.CurrentBlock, manager.chainman.InsertChain, manager.removePeer)
 
 	validator := func(block *types.Block, parent *types.Block) error {
-		return core.ValidateHeader(pow, block.Header(), parent, true)
+		return core.ValidateHeader(pow, block.Header(), parent, true, false)
 	}
 	heighter := func() uint64 {
 		return manager.chainman.CurrentBlock().NumberU64()
@@ -413,10 +413,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		pm.fetcher.Enqueue(p.id, request.Block)
 
-		// TODO: Schedule a sync to cover potential gaps (this needs proto update)
+		// Update the peers total difficulty if needed, schedule a download if gapped
 		if request.TD.Cmp(p.Td()) > 0 {
 			p.SetTd(request.TD)
-			go pm.synchronise(p)
+			if request.TD.Cmp(new(big.Int).Add(pm.chainman.Td(), request.Block.Difficulty())) > 0 {
+				go pm.synchronise(p)
+			}
 		}
 
 	case TxMsg:

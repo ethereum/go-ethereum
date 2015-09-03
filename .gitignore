@@ -35,3 +35,4 @@ cmd/mist/assets/ext/expanse.js/
 profile.tmp
 profile.cov
 
+.idea/workspace.xml

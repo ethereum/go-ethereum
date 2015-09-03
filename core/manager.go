@@ -28,8 +28,7 @@ type Backend interface {
 	BlockProcessor() *BlockProcessor
 	ChainManager() *ChainManager
 	TxPool() *TxPool
-	BlockDb() common.Database
-	StateDb() common.Database
-	ExtraDb() common.Database
+	ChainDb() common.Database
+	DappDb() common.Database
 	EventMux() *event.TypeMux
 }

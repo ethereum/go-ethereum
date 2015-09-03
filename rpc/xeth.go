@@ -53,7 +53,7 @@ func (self *Xeth) Call(method string, params []interface{}) (map[string]interfac
 		Method:  method,
 		Params:  data,
 	}
-	// Send the request over and process the response
+	// Send the request over and retrieve the response
 	if err := self.client.Send(req); err != nil {
 		return nil, err
 	}
@@ -61,9 +61,17 @@ func (self *Xeth) Call(method string, params []interface{}) (map[string]interfac
 	if err != nil {
 		return nil, err
 	}
-	value, ok := res.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("Invalid response type: have %v, want %v", reflect.TypeOf(res), reflect.TypeOf(make(map[string]interface{})))
+	// Ensure the response is valid, and extract the results
+	success, isSuccessResponse := res.(*shared.SuccessResponse)
+	failure, isFailureResponse := res.(*shared.ErrorResponse)
+	switch {
+	case isFailureResponse:
+		return nil, fmt.Errorf("Method invocation failed: %v", failure.Error)
+
+	case isSuccessResponse:
+		return success.Result.(map[string]interface{}), nil
+
+	default:
+		return nil, fmt.Errorf("Invalid response type: %v", reflect.TypeOf(res))
 	}
-	return value, nil
 }

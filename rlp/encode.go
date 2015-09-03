@@ -361,6 +361,8 @@ func makeWriter(typ reflect.Type) (writer, error) {
 		return writeBigIntNoPtr, nil
 	case isUint(kind):
 		return writeUint, nil
+	case kind == reflect.Bool:
+		return writeBool, nil
 	case kind == reflect.String:
 		return writeString, nil
 	case kind == reflect.Slice && isByte(typ.Elem()):
@@ -394,6 +396,15 @@ func writeUint(val reflect.Value, w *encbuf) error {
 		s := putint(w.sizebuf[1:], i)
 		w.sizebuf[0] = 0x80 + byte(s)
 		w.str = append(w.str, w.sizebuf[:s+1]...)
+	}
+	return nil
+}
+
+func writeBool(val reflect.Value, w *encbuf) error {
+	if val.Bool() {
+		w.str = append(w.str, 0x01)
+	} else {
+		w.str = append(w.str, 0x80)
 	}
 	return nil
 }

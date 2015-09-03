@@ -23,7 +23,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/expanse-project/go-expanse/fdtrack"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/p2p/discover"
@@ -213,7 +212,6 @@ func (t *dialTask) Do(srv *Server) {
 		glog.V(logger.Detail).Infof("dial error: %v", err)
 		return
 	}
-	fd = fdtrack.WrapConn("p2p", fd)
 	mfd := newMeteredConn(fd, false)
 
 	srv.setupConn(mfd, t.flags, t.dest)

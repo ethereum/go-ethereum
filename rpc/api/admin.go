@@ -37,6 +37,7 @@ import (
 	"github.com/expanse-project/go-expanse/rpc/codec"
 	"github.com/expanse-project/go-expanse/rpc/comms"
 	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/rpc/useragent"
 	"github.com/expanse-project/go-expanse/xeth"
 )
 
@@ -71,6 +72,7 @@ var (
 		"admin_httpGet":            (*adminApi).HttpGet,
 		"admin_sleepBlocks":        (*adminApi).SleepBlocks,
 		"admin_sleep":              (*adminApi).Sleep,
+		"admin_enableUserAgent":    (*adminApi).EnableUserAgent,
 	}
 )
 
@@ -473,4 +475,11 @@ func (self *adminApi) HttpGet(req *shared.Request) (interface{}, error) {
 	}
 
 	return string(resp), nil
+}
+
+func (self *adminApi) EnableUserAgent(req *shared.Request) (interface{}, error) {
+	if fe, ok := self.xeth.Frontend().(*useragent.RemoteFrontend); ok {
+		fe.Enable()
+	}
+	return true, nil
 }

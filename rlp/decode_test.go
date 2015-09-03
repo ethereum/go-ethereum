@@ -19,6 +19,7 @@ package rlp
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -115,6 +116,9 @@ func TestStreamErrors(t *testing.T) {
 		{"8133", calls{"Uint"}, nil, ErrCanonSize},
 		{"817F", calls{"Uint"}, nil, ErrCanonSize},
 		{"8180", calls{"Uint"}, nil, nil},
+
+		// Non-valid boolean
+		{"02", calls{"Bool"}, nil, errors.New("rlp: invalid boolean value: 2")},
 
 		// Size tags must use the smallest possible encoding.
 		// Leading zero bytes in the size tag are also rejected.
@@ -315,6 +319,11 @@ var (
 )
 
 var decodeTests = []decodeTest{
+	// booleans
+	{input: "01", ptr: new(bool), value: true},
+	{input: "80", ptr: new(bool), value: false},
+	{input: "02", ptr: new(bool), error: "rlp: invalid boolean value: 2"},
+
 	// integers
 	{input: "05", ptr: new(uint32), value: uint32(5)},
 	{input: "80", ptr: new(uint32), value: uint32(0)},

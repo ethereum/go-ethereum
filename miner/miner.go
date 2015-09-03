@@ -18,6 +18,7 @@
 package miner
 
 import (
+	"fmt"
 	"math/big"
 	"sync/atomic"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/params"
 	"github.com/expanse-project/go-expanse/pow"
 )
 
@@ -139,12 +141,24 @@ func (self *Miner) Mining() bool {
 	return atomic.LoadInt32(&self.mining) > 0
 }
 
-func (self *Miner) HashRate() int64 {
-	return self.pow.GetHashrate()
+func (self *Miner) HashRate() (tot int64) {
+	tot += self.pow.GetHashrate()
+	// do we care this might race? is it worth we're rewriting some
+	// aspects of the worker/locking up agents so we can get an accurate
+	// hashrate?
+	for _, agent := range self.worker.agents {
+		tot += agent.GetHashRate()
+	}
+	return
 }
 
-func (self *Miner) SetExtra(extra []byte) {
+func (self *Miner) SetExtra(extra []byte) error {
+	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+		return fmt.Errorf("Extra exceeds max length. %d > %v", len(extra), params.MaximumExtraDataSize)
+	}
+
 	self.worker.extra = extra
+	return nil
 }
 
 func (self *Miner) PendingState() *state.StateDB {

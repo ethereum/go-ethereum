@@ -26,7 +26,7 @@ type ShortNode struct {
 }
 
 func NewShortNode(t *Trie, key []byte, value Node) *ShortNode {
-	return &ShortNode{t, []byte(CompactEncode(key)), value, false}
+	return &ShortNode{t, CompactEncode(key), value, false}
 }
 func (self *ShortNode) Value() Node {
 	self.value = self.trie.trans(self.value)
@@ -49,7 +49,7 @@ func (self *ShortNode) Hash() interface{} {
 }
 
 func (self *ShortNode) Key() []byte {
-	return CompactDecode(string(self.key))
+	return CompactDecode(self.key)
 }
 
 func (self *ShortNode) setDirty(dirty bool) {

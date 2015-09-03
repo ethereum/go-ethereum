@@ -32,6 +32,7 @@ import (
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/core/vm"
 	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/logger/glog"
 )
 
 var (
@@ -39,6 +40,14 @@ var (
 	DebugFlag = cli.BoolFlag{
 		Name:  "debug",
 		Usage: "output full trace logs",
+	}
+	ForceJitFlag = cli.BoolFlag{
+		Name:  "forcejit",
+		Usage: "forces jit compilation",
+	}
+	DisableJitFlag = cli.BoolFlag{
+		Name:  "nojit",
+		Usage: "disabled jit compilation",
 	}
 	CodeFlag = cli.StringFlag{
 		Name:  "code",
@@ -77,6 +86,8 @@ func init() {
 	app = utils.NewApp("0.2", "the evm command line interface")
 	app.Flags = []cli.Flag{
 		DebugFlag,
+		ForceJitFlag,
+		DisableJitFlag,
 		SysStatFlag,
 		CodeFlag,
 		GasFlag,
@@ -90,6 +101,10 @@ func init() {
 
 func run(ctx *cli.Context) {
 	vm.Debug = ctx.GlobalBool(DebugFlag.Name)
+	vm.ForceJit = ctx.GlobalBool(ForceJitFlag.Name)
+	vm.EnableJit = !ctx.GlobalBool(DisableJitFlag.Name)
+
+	glog.SetToStderr(true)
 
 	db, _ := ethdb.NewMemDatabase()
 	statedb := state.New(common.Hash{}, db)
@@ -110,11 +125,6 @@ func run(ctx *cli.Context) {
 	)
 	vmdone := time.Since(tstart)
 
-	if e != nil {
-		fmt.Println(e)
-		os.Exit(1)
-	}
-
 	if ctx.GlobalBool(DumpFlag.Name) {
 		fmt.Println(string(statedb.Dump()))
 	}
@@ -133,7 +143,11 @@ num gc:     %d
 `, mem.Alloc, mem.TotalAlloc, mem.Mallocs, mem.HeapAlloc, mem.HeapObjects, mem.NumGC)
 	}
 
-	fmt.Printf("OUT: 0x%x\n", ret)
+	fmt.Printf("OUT: 0x%x", ret)
+	if e != nil {
+		fmt.Printf(" error: %v", e)
+	}
+	fmt.Println()
 }
 
 func main() {
@@ -152,7 +166,7 @@ type VMEnv struct {
 
 	depth int
 	Gas   *big.Int
-	time  uint64
+	time  *big.Int
 	logs  []vm.StructLog
 }
 
@@ -161,7 +175,7 @@ func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int) *VM
 		state:      state,
 		transactor: &transactor,
 		value:      value,
-		time:       uint64(time.Now().Unix()),
+		time:       big.NewInt(time.Now().Unix()),
 	}
 }
 
@@ -169,7 +183,7 @@ func (self *VMEnv) State() *state.StateDB    { return self.state }
 func (self *VMEnv) Origin() common.Address   { return *self.transactor }
 func (self *VMEnv) BlockNumber() *big.Int    { return common.Big0 }
 func (self *VMEnv) Coinbase() common.Address { return *self.transactor }
-func (self *VMEnv) Time() uint64             { return self.time }
+func (self *VMEnv) Time() *big.Int           { return self.time }
 func (self *VMEnv) Difficulty() *big.Int     { return common.Big1 }
 func (self *VMEnv) BlockHash() []byte        { return make([]byte, 32) }
 func (self *VMEnv) Value() *big.Int          { return self.value }
@@ -191,6 +205,9 @@ func (self *VMEnv) StructLogs() []vm.StructLog {
 }
 func (self *VMEnv) AddLog(log *state.Log) {
 	self.state.AddLog(log)
+}
+func (self *VMEnv) CanTransfer(from vm.Account, balance *big.Int) bool {
+	return from.Balance().Cmp(balance) >= 0
 }
 func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
 	return vm.Transfer(from, to, amount)

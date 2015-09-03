@@ -20,7 +20,23 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/expanse-project/go-expanse/core/vm"
 )
+
+func init() {
+	if os.Getenv("JITVM") == "true" {
+		vm.ForceJit = true
+		vm.EnableJit = true
+	}
+}
+
+func BenchmarkStateCall1024(b *testing.B) {
+	fn := filepath.Join(stateTestDir, "stCallCreateCallCodeTest.json")
+	if err := BenchVmTest(fn, bconf{"Call1024BalanceTooLow", true, os.Getenv("JITVM") == "true"}, b); err != nil {
+		b.Error(err)
+	}
+}
 
 func TestStateSystemOperations(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stSystemOperationsTest.json")

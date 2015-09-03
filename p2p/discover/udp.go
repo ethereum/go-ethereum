@@ -18,6 +18,7 @@ package discover
 
 import (
 	"bytes"
+	"container/list"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -25,7 +26,6 @@ import (
 	"time"
 
 	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/fdtrack"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/p2p/nat"
@@ -43,6 +43,7 @@ var (
 	errUnsolicitedReply = errors.New("unsolicited reply")
 	errUnknownNode      = errors.New("unknown node")
 	errTimeout          = errors.New("RPC timeout")
+	errClockWarp        = errors.New("reply deadline too far in the future")
 	errClosed           = errors.New("socket closed")
 )
 
@@ -198,7 +199,6 @@ func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, nodeDBP
 	if err != nil {
 		return nil, err
 	}
-	fdtrack.Open("p2p")
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		return nil, err
@@ -236,7 +236,6 @@ func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, nodeDBPath strin
 
 func (t *udp) close() {
 	close(t.closing)
-	fdtrack.Close("p2p")
 	t.conn.Close()
 	// TODO: wait for the loops to end.
 }
@@ -296,7 +295,7 @@ func (t *udp) pending(id NodeID, ptype byte, callback func(interface{}) bool) <-
 }
 
 func (t *udp) handleReply(from NodeID, ptype byte, req packet) bool {
-	matched := make(chan bool)
+	matched := make(chan bool, 1)
 	select {
 	case t.gotreply <- reply{from, ptype, req, matched}:
 		// loop will handle it
@@ -310,68 +309,82 @@ func (t *udp) handleReply(from NodeID, ptype byte, req packet) bool {
 // the refresh timer and the pending reply queue.
 func (t *udp) loop() {
 	var (
-		pending      []*pending
-		nextDeadline time.Time
-		timeout      = time.NewTimer(0)
-		refresh      = time.NewTicker(refreshInterval)
+		plist       = list.New()
+		timeout     = time.NewTimer(0)
+		nextTimeout *pending // head of plist when timeout was last reset
+		refresh     = time.NewTicker(refreshInterval)
 	)
 	<-timeout.C // ignore first timeout
 	defer refresh.Stop()
 	defer timeout.Stop()
 
-	rearmTimeout := func() {
-		now := time.Now()
-		if len(pending) == 0 || now.Before(nextDeadline) {
+	resetTimeout := func() {
+		if plist.Front() == nil || nextTimeout == plist.Front().Value {
 			return
 		}
-		nextDeadline = pending[0].deadline
-		timeout.Reset(nextDeadline.Sub(now))
+		// Start the timer so it fires when the next pending reply has expired.
+		now := time.Now()
+		for el := plist.Front(); el != nil; el = el.Next() {
+			nextTimeout = el.Value.(*pending)
+			if dist := nextTimeout.deadline.Sub(now); dist < 2*respTimeout {
+				timeout.Reset(dist)
+				return
+			}
+			// Remove pending replies whose deadline is too far in the
+			// future. These can occur if the system clock jumped
+			// backwards after the deadline was assigned.
+			nextTimeout.errc <- errClockWarp
+			plist.Remove(el)
+		}
+		nextTimeout = nil
+		timeout.Stop()
 	}
 
 	for {
+		resetTimeout()
+
 		select {
 		case <-refresh.C:
 			go t.refresh()
 
 		case <-t.closing:
-			for _, p := range pending {
-				p.errc <- errClosed
+			for el := plist.Front(); el != nil; el = el.Next() {
+				el.Value.(*pending).errc <- errClosed
 			}
-			pending = nil
 			return
 
 		case p := <-t.addpending:
 			p.deadline = time.Now().Add(respTimeout)
-			pending = append(pending, p)
-			rearmTimeout()
+			plist.PushBack(p)
 
 		case r := <-t.gotreply:
 			var matched bool
-			for i := 0; i < len(pending); i++ {
-				if p := pending[i]; p.from == r.from && p.ptype == r.ptype {
+			for el := plist.Front(); el != nil; el = el.Next() {
+				p := el.Value.(*pending)
+				if p.from == r.from && p.ptype == r.ptype {
 					matched = true
+					// Remove the matcher if its callback indicates
+					// that all replies have been received. This is
+					// required for packet types that expect multiple
+					// reply packets.
 					if p.callback(r.data) {
-						// callback indicates the request is done, remove it.
 						p.errc <- nil
-						copy(pending[i:], pending[i+1:])
-						pending = pending[:len(pending)-1]
-						i--
+						plist.Remove(el)
 					}
 				}
 			}
 			r.matched <- matched
 
 		case now := <-timeout.C:
-			// notify and remove callbacks whose deadline is in the past.
-			i := 0
-			for ; i < len(pending) && now.After(pending[i].deadline); i++ {
-				pending[i].errc <- errTimeout
+			nextTimeout = nil
+			// Notify and remove callbacks whose deadline is in the past.
+			for el := plist.Front(); el != nil; el = el.Next() {
+				p := el.Value.(*pending)
+				if now.After(p.deadline) || now.Equal(p.deadline) {
+					p.errc <- errTimeout
+					plist.Remove(el)
+				}
 			}
-			if i > 0 {
-				copy(pending, pending[i:])
-				pending = pending[:len(pending)-i]
-			}
-			rearmTimeout()
 		}
 	}
 }
@@ -385,7 +398,7 @@ const (
 var (
 	headSpace = make([]byte, headSize)
 
-	// Neighbors responses are sent across multiple packets to
+	// Neighbors replies are sent across multiple packets to
 	// stay below the 1280 byte limit. We compute the maximum number
 	// of entries by stuffing a packet until it grows too large.
 	maxNeighbors int
@@ -442,6 +455,10 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, 
 	return packet, nil
 }
 
+type tempError interface {
+	Temporary() bool
+}
+
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
 func (t *udp) readLoop() {
 	defer t.conn.Close()
@@ -451,7 +468,13 @@ func (t *udp) readLoop() {
 	buf := make([]byte, 1280)
 	for {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
-		if err != nil {
+		if tempErr, ok := err.(tempError); ok && tempErr.Temporary() {
+			// Ignore temporary read errors.
+			glog.V(logger.Debug).Infof("Temporary read error: %v", err)
+			continue
+		} else if err != nil {
+			// Shut down the loop for permament errors.
+			glog.V(logger.Debug).Infof("Read error: %v", err)
 			return
 		}
 		t.handlePacket(from, buf[:nbytes])

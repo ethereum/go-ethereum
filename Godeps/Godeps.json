@@ -25,13 +25,17 @@
 			"Rev": "8f6ccaaef9b418553807a73a95cb5f49cd3ea39f"
 		},
 		{
+			"ImportPath": "github.com/fatih/color",
+			"Comment": "v0.1-5-gf773d4c",
+			"Rev": "f773d4c806cc8e4a5749d6a35e2a4bbcd71443d6"
+		},
+		{
 			"ImportPath": "github.com/gizak/termui",
 			"Rev": "bab8dce01c193d82bc04888a0a9a7814d505f532"
 		},
 		{
-			"ImportPath": "github.com/howeyc/fsnotify",
-			"Comment": "v0.9.0-11-g6b1ef89",
-			"Rev": "6b1ef893dc11e0447abda6da20a5203481878dda"
+			"ImportPath": "github.com/hashicorp/golang-lru",
+			"Rev": "7f9ef20a0256f494e24126014135cf893ab71e9e"
 		},
 		{
 			"ImportPath": "github.com/huin/goupnp",
@@ -44,10 +48,6 @@
 		{
 			"ImportPath": "github.com/kardianos/osext",
 			"Rev": "ccfcd0245381f0c94c68f50626665eed3c6b726a"
-		},
-		{
-			"ImportPath": "github.com/mattn/go-colorable",
-			"Rev": "043ae16291351db8465272edf465c9f388161627"
 		},
 		{
 			"ImportPath": "github.com/mattn/go-isatty",
@@ -77,6 +77,10 @@
 		{
 			"ImportPath": "github.com/rs/cors",
 			"Rev": "6e0c3cb65fc0fdb064c743d176a620e3ca446dfb"
+		},
+		{
+			"ImportPath": "github.com/shiena/ansicolor",
+			"Rev": "a5e2b567a4dd6cc74545b8a4f27c9d63b9e7735b"
 		},
 		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",

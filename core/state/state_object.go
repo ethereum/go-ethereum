@@ -82,8 +82,9 @@ type StateObject struct {
 	// Mark for deletion
 	// When an object is marked for deletion it will be delete from the trie
 	// during the "update" phase of the state transition
-	remove bool
-	dirty  bool
+	remove  bool
+	deleted bool
+	dirty   bool
 }
 
 func (self *StateObject) Reset() {

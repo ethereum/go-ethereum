@@ -12,8 +12,7 @@ master    | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=L
 [![Stories in Progress](https://badge.waffle.io/expanse/go-expanse.svg?label=in%20progress&title=In Progress)](http://waffle.io/expanse/go-expanse)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/expanse/go-expanse?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-Automated development builds
-======================
+## Automated development builds
 
 The following builds are build automatically by our build servers after each push to the [develop](https://github.com/expanse-project/go-expanse/tree/develop) branch.
 
@@ -25,8 +24,7 @@ The following builds are build automatically by our build servers after each pus
 * [Windows 64-bit](https://build.ethdev.com/builds/Windows%20Go%20develop%20branch/Gexp-Win64-latest.zip)
 * [ARM](https://build.ethdev.com/builds/ARM%20Go%20develop%20branch/gexp-ARM-latest.tar.bz2)
 
-Building the source
-===================
+## Building the source
 
 For prerequisites and detailed build instructions please read the
 [Installation Instructions](https://github.com/expanse-project/go-expanse/wiki/Building-Expanse)
@@ -38,8 +36,7 @@ Once the dependencies are installed, run
 
     make gexp
 
-Executables
-===========
+## Executables
 
 Go Expanse comes with several wrappers/executables found in
 [the `cmd` directory](https://github.com/expanse-project/go-expanse/tree/develop/cmd):
@@ -53,19 +50,17 @@ Go Expanse comes with several wrappers/executables found in
 * `disasm` disassembles EVM code: `echo "6001" | disasm`
 * `rlpdump` prints RLP structures
 
-Command line options
-====================
+## Command line options
 
 `gexp` can be configured via command line options, environment variables and config files.
 
 To get the options available:
 
-    gexp --help
+    geth help
 
 For further details on options, see the [wiki](https://github.com/expanse-project/go-expanse/wiki/Command-Line-Options)
 
-Contribution
-============
+## Contribution
 
 If you'd like to contribute to go-expanse please fork, fix, commit and
 send a pull request. Commits who do not comply with the coding standards

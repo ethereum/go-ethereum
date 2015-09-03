@@ -32,7 +32,7 @@ import (
 var (
 	blockHashPre  = []byte("block-hash-")
 	blockNumPre   = []byte("block-num-")
-	expDiffPeriod = big.NewInt(100000)
+	ExpDiffPeriod = big.NewInt(100000)
 )
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
@@ -57,7 +57,7 @@ func CalcDifficulty(time, parentTime uint64, parentNumber, parentDiff *big.Int) 
 	}
 
 	periodCount := new(big.Int).Add(parentNumber, common.Big1)
-	periodCount.Div(periodCount, expDiffPeriod)
+	periodCount.Div(periodCount, ExpDiffPeriod)
 	if periodCount.Cmp(common.Big1) > 0 {
 		// diff = diff + 2^(periodCount - 2)
 		expDiff := periodCount.Sub(periodCount, common.Big2)

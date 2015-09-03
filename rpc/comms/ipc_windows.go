@@ -32,6 +32,7 @@ import (
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/rpc/codec"
 	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/rpc/useragent"
 )
 
 var (
@@ -656,18 +657,38 @@ func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 		return nil, err
 	}
 
-	return &ipcClient{cfg.Endpoint, c, codec, codec.New(c)}, nil
+	coder := codec.New(c)
+	msg := shared.Request{
+		Id:      0,
+		Method:  useragent.EnableUserAgentMethod,
+		Jsonrpc: shared.JsonRpcVersion,
+		Params:  []byte("[]"),
+	}
+
+	coder.WriteResponse(msg)
+	coder.Recv()
+
+	return &ipcClient{cfg.Endpoint, c, codec, coder}, nil
 }
 
 func (self *ipcClient) reconnect() error {
 	c, err := Dial(self.endpoint)
 	if err == nil {
 		self.coder = self.codec.New(c)
+
+		req := shared.Request{
+			Id:      0,
+			Method:  useragent.EnableUserAgentMethod,
+			Jsonrpc: shared.JsonRpcVersion,
+			Params:  []byte("[]"),
+		}
+		self.coder.WriteResponse(req)
+		self.coder.Recv()
 	}
 	return err
 }
 
-func startIpc(cfg IpcConfig, codec codec.Codec, api shared.ExpanseApi) error {
+func startIpc(cfg IpcConfig, codec codec.Codec, initializer func(conn net.Conn) (shared.ExpanseApi, error)) error {
 	os.Remove(cfg.Endpoint) // in case it still exists from a previous run
 
 	l, err := Listen(cfg.Endpoint)
@@ -686,6 +707,13 @@ func startIpc(cfg IpcConfig, codec codec.Codec, api shared.ExpanseApi) error {
 
 			id := newIpcConnId()
 			glog.V(logger.Debug).Infof("New IPC connection with id %06d started\n", id)
+
+			api, err := initializer(conn)
+			if err != nil {
+				glog.V(logger.Error).Infof("Unable to initialize IPC connection - %v\n", err)
+				conn.Close()
+				continue
+			}
 
 			go handle(id, conn, api, codec)
 		}

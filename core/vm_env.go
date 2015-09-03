@@ -49,7 +49,7 @@ func NewEnv(state *state.StateDB, chain *ChainManager, msg Message, header *type
 func (self *VMEnv) Origin() common.Address   { f, _ := self.msg.From(); return f }
 func (self *VMEnv) BlockNumber() *big.Int    { return self.header.Number }
 func (self *VMEnv) Coinbase() common.Address { return self.header.Coinbase }
-func (self *VMEnv) Time() uint64             { return self.header.Time }
+func (self *VMEnv) Time() *big.Int           { return self.header.Time }
 func (self *VMEnv) Difficulty() *big.Int     { return self.header.Difficulty }
 func (self *VMEnv) GasLimit() *big.Int       { return self.header.GasLimit }
 func (self *VMEnv) Value() *big.Int          { return self.msg.Value() }
@@ -69,6 +69,10 @@ func (self *VMEnv) GetHash(n uint64) common.Hash {
 func (self *VMEnv) AddLog(log *state.Log) {
 	self.state.AddLog(log)
 }
+func (self *VMEnv) CanTransfer(from vm.Account, balance *big.Int) bool {
+	return from.Balance().Cmp(balance) >= 0
+}
+
 func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
 	return vm.Transfer(from, to, amount)
 }

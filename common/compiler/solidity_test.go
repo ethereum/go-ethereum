@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/expanse-project/go-expanse/common"
@@ -94,7 +95,7 @@ func TestSaveInfo(t *testing.T) {
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	filename := "/tmp/solctest.info.json"
+	filename := path.Join(os.TempDir(), "solctest.info.json")
 	os.Remove(filename)
 	cinfohash, err := SaveInfo(&cinfo, filename)
 	if err != nil {

@@ -29,7 +29,6 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/expanse-project/go-expanse/fdtrack"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/rpc/codec"
@@ -178,7 +177,6 @@ func listenHTTP(addr string, h http.Handler) (*stopServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	l = fdtrack.WrapListener("rpc", l)
 	s := &stopServer{l: l, idle: make(map[net.Conn]struct{})}
 	s.Server = &http.Server{
 		Addr:         addr,

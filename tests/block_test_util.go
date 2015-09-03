@@ -150,7 +150,7 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 
 		// test the block
 		if err := runBlockTest(test); err != nil {
-			return err
+			return fmt.Errorf("%s: %v", name, err)
 		}
 		glog.Infoln("Block test passed: ", name)
 
@@ -204,7 +204,7 @@ func (test *BlockTest) makeEthConfig() *exp.Config {
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
 func (t *BlockTest) InsertPreState(expanse *exp.Expanse) (*state.StateDB, error) {
-	db := expanse.StateDb()
+	db := expanse.ChainDb()
 	statedb := state.New(common.Hash{}, db)
 	for addrString, acct := range t.preAccounts {
 		addr, err := hex.DecodeString(addrString)
@@ -365,8 +365,8 @@ func (s *BlockTest) validateBlockHeader(h *btHeader, h2 *types.Header) error {
 		return fmt.Errorf("GasUsed: expected: %v, decoded: %v", expectedGasUsed, h2.GasUsed)
 	}
 
-	expectedTimestamp := mustConvertUint(h.Timestamp, 16)
-	if expectedTimestamp != h2.Time {
+	expectedTimestamp := mustConvertBigInt(h.Timestamp, 16)
+	if expectedTimestamp.Cmp(h2.Time) != 0 {
 		return fmt.Errorf("Timestamp: expected: %v, decoded: %v", expectedTimestamp, h2.Time)
 	}
 
@@ -461,7 +461,7 @@ func mustConvertHeader(in btHeader) *types.Header {
 		GasUsed:     mustConvertBigInt(in.GasUsed, 16),
 		GasLimit:    mustConvertBigInt(in.GasLimit, 16),
 		Difficulty:  mustConvertBigInt(in.Difficulty, 16),
-		Time:        mustConvertUint(in.Timestamp, 16),
+		Time:        mustConvertBigInt(in.Timestamp, 16),
 		Nonce:       types.EncodeNonce(mustConvertUint(in.Nonce, 16)),
 	}
 	return header

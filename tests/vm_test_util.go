@@ -22,6 +22,7 @@ import (
 	"io"
 	"math/big"
 	"strconv"
+	"testing"
 
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core/state"
@@ -48,8 +49,79 @@ func RunVmTestWithReader(r io.Reader, skipTests []string) error {
 	return nil
 }
 
-func RunVmTest(p string, skipTests []string) error {
+type bconf struct {
+	name    string
+	precomp bool
+	jit     bool
+}
 
+func BenchVmTest(p string, conf bconf, b *testing.B) error {
+	tests := make(map[string]VmTest)
+	err := readJsonFile(p, &tests)
+	if err != nil {
+		return err
+	}
+
+	test, ok := tests[conf.name]
+	if !ok {
+		return fmt.Errorf("test not found: %s", conf.name)
+	}
+
+	pJit := vm.EnableJit
+	vm.EnableJit = conf.jit
+	pForceJit := vm.ForceJit
+	vm.ForceJit = conf.precomp
+
+	env := make(map[string]string)
+	env["currentCoinbase"] = test.Env.CurrentCoinbase
+	env["currentDifficulty"] = test.Env.CurrentDifficulty
+	env["currentGasLimit"] = test.Env.CurrentGasLimit
+	env["currentNumber"] = test.Env.CurrentNumber
+	env["previousHash"] = test.Env.PreviousHash
+	if n, ok := test.Env.CurrentTimestamp.(float64); ok {
+		env["currentTimestamp"] = strconv.Itoa(int(n))
+	} else {
+		env["currentTimestamp"] = test.Env.CurrentTimestamp.(string)
+	}
+
+	/*
+		if conf.precomp {
+			program := vm.NewProgram(test.code)
+			err := vm.AttachProgram(program)
+			if err != nil {
+				return err
+			}
+		}
+	*/
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchVmTest(test, env, b)
+	}
+
+	vm.EnableJit = pJit
+	vm.ForceJit = pForceJit
+
+	return nil
+}
+
+func benchVmTest(test VmTest, env map[string]string, b *testing.B) {
+	b.StopTimer()
+	db, _ := ethdb.NewMemDatabase()
+	statedb := state.New(common.Hash{}, db)
+	for addr, account := range test.Pre {
+		obj := StateObjectFromAccount(db, addr, account)
+		statedb.SetStateObject(obj)
+		for a, v := range account.Storage {
+			obj.SetState(common.HexToHash(a), common.HexToHash(v))
+		}
+	}
+	b.StartTimer()
+
+	RunVm(statedb, env, test.Exec)
+}
+
+func RunVmTest(p string, skipTests []string) error {
 	tests := make(map[string]VmTest)
 	err := readJsonFile(p, &tests)
 	if err != nil {

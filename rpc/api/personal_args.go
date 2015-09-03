@@ -86,10 +86,10 @@ func (args *UnlockAccountArgs) UnmarshalJSON(b []byte) (err error) {
 		return shared.NewDecodeParamError(err.Error())
 	}
 
-	args.Duration = -1
+	args.Duration = 0
 
-	if len(obj) < 2 {
-		return shared.NewInsufficientParamsError(len(obj), 2)
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
 	}
 
 	if addrstr, ok := obj[0].(string); ok {
@@ -98,10 +98,18 @@ func (args *UnlockAccountArgs) UnmarshalJSON(b []byte) (err error) {
 		return shared.NewInvalidTypeError("address", "not a string")
 	}
 
-	if passphrasestr, ok := obj[1].(string); ok {
-		args.Passphrase = passphrasestr
-	} else {
-		return shared.NewInvalidTypeError("passphrase", "not a string")
+	if len(obj) >= 2 && obj[1] != nil {
+		if passphrasestr, ok := obj[1].(string); ok {
+			args.Passphrase = passphrasestr
+		} else {
+			return shared.NewInvalidTypeError("passphrase", "not a string")
+		}
+	}
+
+	if len(obj) >= 3 && obj[2] != nil {
+		if duration, ok := obj[2].(float64); ok {
+			args.Duration = int(duration)
+		}
 	}
 
 	return nil

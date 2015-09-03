@@ -17,12 +17,9 @@
 package api
 
 import (
-	"fmt"
-
 	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/exp"
-	"github.com/expanse-project/go-expanse/params"
 	"github.com/expanse-project/go-expanse/rpc/codec"
 	"github.com/expanse-project/go-expanse/rpc/shared"
 )
@@ -126,11 +123,10 @@ func (self *minerApi) SetExtra(req *shared.Request) (interface{}, error) {
 		return nil, err
 	}
 
-	if uint64(len(args.Data)) > params.MaximumExtraDataSize.Uint64()*2 {
-		return false, fmt.Errorf("extra datasize can be no longer than %v bytes", params.MaximumExtraDataSize)
+	if err := self.expanse.Miner().SetExtra([]byte(args.Data)); err != nil {
+		return false, err
 	}
 
-	self.expanse.Miner().SetExtra([]byte(args.Data))
 	return true, nil
 }
 

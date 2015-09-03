@@ -22,6 +22,8 @@ import (
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
 )
 
 type AccountChange struct {
@@ -111,7 +113,7 @@ done:
 			// Get the logs of the block
 			unfiltered, err := self.exp.BlockProcessor().GetLogs(block)
 			if err != nil {
-				chainlogger.Warnln("err: filter get logs ", err)
+				glog.V(logger.Warn).Infoln("err: filter get logs ", err)
 
 				break
 			}
