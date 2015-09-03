@@ -739,9 +739,11 @@ func (d *Downloader) fetchBlocks61(from uint64) error {
 				break
 			}
 			// Send a download request to all idle peers, until throttled
+			throttled := false
 			for _, peer := range d.peers.IdlePeers() {
 				// Short circuit if throttling activated
 				if d.queue.Throttle() {
+					throttled = true
 					break
 				}
 				// Reserve a chunk of hashes for a peer. A nil can mean either that
@@ -762,7 +764,7 @@ func (d *Downloader) fetchBlocks61(from uint64) error {
 			}
 			// Make sure that we have peers available for fetching. If all peers have been tried
 			// and all failed throw an error
-			if !d.queue.Throttle() && d.queue.InFlight() == 0 {
+			if !throttled && d.queue.InFlight() == 0 {
 				return errPeersUnavailable
 			}
 		}
