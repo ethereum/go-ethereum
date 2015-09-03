@@ -1,5 +1,5 @@
 FROM ubuntu:utopic
-MAINTAINER caktux
+MAINTAINER chrisfranko
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -12,11 +12,12 @@ RUN apt-get dist-upgrade -q -y
 RUN apt-get install -q -y unattended-upgrades
 
 # Install Expanse
-RUN apt-get install -q -y software-properties-common
-RUN add-apt-repository ppa:expanse/expanse
-RUN add-apt-repository ppa:expanse/expanse-dev
-RUN apt-get update
-RUN apt-get install -q -y gexp
+RUN apt-get install git binutils bison gcc make libgmp3-dev
+RUN bash < <(curl -s -S -L https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer)
+RUN go install go1.4
+RUN gvm use go1.4 --default
+RUN git clone http://www.github.com/expanse-project/go-expanse.git && cd go-expanse
+RUN make gexp
 
 # Install supervisor
 RUN apt-get install -q -y supervisor

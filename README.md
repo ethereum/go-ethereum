@@ -16,7 +16,7 @@ master    | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=L
 
 The following builds are build automatically by our build servers after each push to the [develop](https://github.com/expanse-project/go-expanse/tree/develop) branch.
 
-* [Docker](https://registry.hub.docker.com/u/expanse/client-go/)
+* [Docker](https://registry.hub.docker.com/u/expanse/go-expanse/)
 * [OS X](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/Mist-OSX-latest.dmg)
 * Ubuntu
   [trusty](https://build.ethdev.com/builds/Linux%20Go%20develop%20deb%20i386-trusty/latest/) |
