@@ -12,7 +12,7 @@ RUN apt-get dist-upgrade -q -y
 RUN apt-get install -q -y unattended-upgrades
 
 # Install Expanse
-RUN apt-get install -q -s curl git mercurial binutils bison gcc make libgmp3-dev build-essential
+RUN apt-get install -q -y curl git mercurial binutils bison gcc make libgmp3-dev build-essential
 RUN curl -s -S -L https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer | bash
 RUN go install go1.4
 RUN gvm use go1.4 --default
