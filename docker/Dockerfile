@@ -34,7 +34,7 @@ RUN apt-get install -q -y supervisor
 ADD supervisord.conf supervisord.conf
 
 EXPOSE 9656
-EXPOSE 60606
+EXPOSE 42786
 
 CMD ["-n", "-c", "/supervisord.conf"]
 ENTRYPOINT ["/usr/bin/supervisord"]
