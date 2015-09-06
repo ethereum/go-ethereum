@@ -73,6 +73,8 @@ var (
 )
 
 type Config struct {
+	DevMode bool
+
 	Name         string
 	NetworkId    int
 	GenesisNonce int
@@ -303,16 +305,17 @@ func New(config *Config) (*Ethereum, error) {
 		glog.V(logger.Info).Infof("Successfully wrote genesis block. New genesis hash = %x\n", block.Hash())
 	}
 
-	if config.Olympic {
+	// different modes
+	switch {
+	case config.Olympic:
+		glog.V(logger.Error).Infoln("Starting Olympic network")
+		fallthrough
+	case config.DevMode:
 		_, err := core.WriteTestNetGenesisBlock(chainDb, 42)
 		if err != nil {
 			return nil, err
 		}
-		glog.V(logger.Error).Infoln("Starting Olympic network")
-	}
-
-	// This is for testing only.
-	if config.GenesisBlock != nil {
+	case config.GenesisBlock != nil: // This is for testing only.
 		core.WriteBlock(chainDb, config.GenesisBlock)
 		core.WriteHead(chainDb, config.GenesisBlock)
 	}
