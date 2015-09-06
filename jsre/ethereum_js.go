@@ -2424,11 +2424,11 @@ module.exports={
  */
 
 var version = require('./version.json');
-var net = require('./web3/net');
-var exp = require('./web3/exp');
-var db = require('./web3/db');
-var shh = require('./web3/shh');
-var watches = require('./web3/watches');
+var net = require('./web3/methods/net');
+var eth = require('./web3/methods/eth');
+var db = require('./web3/methods/db');
+var shh = require('./web3/methods/shh');
+var watches = require('./web3/methods/watches');
 var Filter = require('./web3/filter');
 var utils = require('./utils/utils');
 var formatters = require('./web3/formatters');
