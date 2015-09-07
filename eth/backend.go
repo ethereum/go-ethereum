@@ -316,9 +316,13 @@ func New(config *Config) (*Ethereum, error) {
 		if err != nil {
 			return nil, err
 		}
-	case config.GenesisBlock != nil: // This is for testing only.
+	}
+	// This is for testing only.
+	if config.GenesisBlock != nil {
+		core.WriteTd(chainDb, config.GenesisBlock.Hash(), config.GenesisBlock.Difficulty())
 		core.WriteBlock(chainDb, config.GenesisBlock)
-		core.WriteHead(chainDb, config.GenesisBlock)
+		core.WriteCanonicalHash(chainDb, config.GenesisBlock.Hash(), config.GenesisBlock.NumberU64())
+		core.WriteHeadBlockHash(chainDb, config.GenesisBlock.Hash())
 	}
 
 	if !config.SkipBcVersionCheck {
@@ -752,7 +756,10 @@ func upgradeChainDatabase(db common.Database) error {
 			// Load the block, split and serialize (order!)
 			block := core.GetBlockByHashOld(db, common.BytesToHash(bytes.TrimPrefix(it.Key(), blockPrefix)))
 
-			if err := core.WriteBody(db, block); err != nil {
+			if err := core.WriteTd(db, block.Hash(), block.DeprecatedTd()); err != nil {
+				return err
+			}
+			if err := core.WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
 				return err
 			}
 			if err := core.WriteHeader(db, block.Header()); err != nil {
@@ -765,7 +772,10 @@ func upgradeChainDatabase(db common.Database) error {
 		// Lastly, upgrade the head block, disabling the upgrade mechanism
 		current := core.GetBlockByHashOld(db, head)
 
-		if err := core.WriteBody(db, current); err != nil {
+		if err := core.WriteTd(db, current.Hash(), current.DeprecatedTd()); err != nil {
+			return err
+		}
+		if err := core.WriteBody(db, current.Hash(), &types.Body{current.Transactions(), current.Uncles()}); err != nil {
 			return err
 		}
 		if err := core.WriteHeader(db, current.Header()); err != nil {

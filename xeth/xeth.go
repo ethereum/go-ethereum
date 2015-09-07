@@ -355,6 +355,10 @@ func (self *XEth) EthBlockByNumber(num int64) *types.Block {
 	return self.getBlockByHeight(num)
 }
 
+func (self *XEth) Td(hash common.Hash) *big.Int {
+	return self.backend.ChainManager().GetTd(hash)
+}
+
 func (self *XEth) CurrentBlock() *types.Block {
 	return self.backend.ChainManager().CurrentBlock()
 }

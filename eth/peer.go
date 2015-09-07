@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -186,8 +187,8 @@ func (p *peer) SendBlockBodies(bodies []*blockBody) error {
 
 // SendBlockBodiesRLP sends a batch of block contents to the remote peer from
 // an already RLP encoded format.
-func (p *peer) SendBlockBodiesRLP(bodies []*blockBodyRLP) error {
-	return p2p.Send(p.rw, BlockBodiesMsg, blockBodiesRLPData(bodies))
+func (p *peer) SendBlockBodiesRLP(bodies []rlp.RawValue) error {
+	return p2p.Send(p.rw, BlockBodiesMsg, bodies)
 }
 
 // SendNodeData sends a batch of arbitrary internal data, corresponding to the

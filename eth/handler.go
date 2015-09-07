@@ -36,8 +36,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// This is the target maximum size of returned blocks, headers or node data.
-const softResponseLimit = 2 * 1024 * 1024
+const (
+	softResponseLimit = 2 * 1024 * 1024 // Target maximum size of returned blocks, headers or node data.
+	estHeaderRlpSize  = 500             // Approximate size of an RLP encoded block header
+)
 
 func errResp(code errCode, format string, v ...interface{}) error {
 	return fmt.Errorf("%v - %v", code, fmt.Sprintf(format, v...))
@@ -113,7 +115,7 @@ func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow po
 		}
 	}
 	// Construct the different synchronisation mechanisms
-	manager.downloader = downloader.New(manager.eventMux, manager.chainman.HasBlock, manager.chainman.GetBlock, manager.chainman.CurrentBlock, manager.chainman.InsertChain, manager.removePeer)
+	manager.downloader = downloader.New(manager.eventMux, manager.chainman.HasBlock, manager.chainman.GetBlock, manager.chainman.CurrentBlock, manager.chainman.GetTd, manager.chainman.InsertChain, manager.removePeer)
 
 	validator := func(block *types.Block, parent *types.Block) error {
 		return core.ValidateHeader(pow, block.Header(), parent, true, false)
@@ -363,7 +365,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				break
 			}
 			headers = append(headers, origin)
-			bytes += 500 // Approximate, should be good enough estimate
+			bytes += estHeaderRlpSize
 
 			// Advance to the next header of the query
 			switch {
@@ -453,7 +455,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		var (
 			hash   common.Hash
 			bytes  int
-			bodies []*blockBodyRLP
+			bodies []rlp.RawValue
 		)
 		for bytes < softResponseLimit && len(bodies) < downloader.MaxBlockFetch {
 			// Retrieve the hash of the next block
@@ -464,9 +466,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			// Retrieve the requested block body, stopping if enough was found
 			if data := pm.chainman.GetBodyRLP(hash); len(data) != 0 {
-				body := blockBodyRLP(data)
-				bodies = append(bodies, &body)
-				bytes += len(body)
+				bodies = append(bodies, data)
+				bytes += len(data)
 			}
 		}
 		return p.SendBlockBodiesRLP(bodies)
@@ -644,7 +645,7 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
 		var td *big.Int
 		if parent := pm.chainman.GetBlock(block.ParentHash()); parent != nil {
-			td = new(big.Int).Add(parent.Td, block.Difficulty())
+			td = new(big.Int).Add(block.Difficulty(), pm.chainman.GetTd(block.ParentHash()))
 		} else {
 			glog.V(logger.Error).Infof("propagating dangling block #%d [%x]", block.NumberU64(), hash[:4])
 			return

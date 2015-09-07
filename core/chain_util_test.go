@@ -23,6 +23,10 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type diffTest struct {
@@ -73,5 +77,244 @@ func TestDifficulty(t *testing.T) {
 		if diff.Cmp(test.CurrentDifficulty) != 0 {
 			t.Error(name, "failed. Expected", test.CurrentDifficulty, "and calculated", diff)
 		}
+	}
+}
+
+// Tests block header storage and retrieval operations.
+func TestHeaderStorage(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+
+	// Create a test header to move around the database and make sure it's really new
+	header := &types.Header{Extra: []byte("test header")}
+	if entry := GetHeader(db, header.Hash()); entry != nil {
+		t.Fatalf("Non existent header returned: %v", entry)
+	}
+	// Write and verify the header in the database
+	if err := WriteHeader(db, header); err != nil {
+		t.Fatalf("Failed to write header into database: %v", err)
+	}
+	if entry := GetHeader(db, header.Hash()); entry == nil {
+		t.Fatalf("Stored header not found")
+	} else if entry.Hash() != header.Hash() {
+		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, header)
+	}
+	if entry := GetHeaderRLP(db, header.Hash()); entry == nil {
+		t.Fatalf("Stored header RLP not found")
+	} else {
+		hasher := sha3.NewKeccak256()
+		hasher.Write(entry)
+
+		if hash := common.BytesToHash(hasher.Sum(nil)); hash != header.Hash() {
+			t.Fatalf("Retrieved RLP header mismatch: have %v, want %v", entry, header)
+		}
+	}
+	// Delete the header and verify the execution
+	DeleteHeader(db, header.Hash())
+	if entry := GetHeader(db, header.Hash()); entry != nil {
+		t.Fatalf("Deleted header returned: %v", entry)
+	}
+}
+
+// Tests block body storage and retrieval operations.
+func TestBodyStorage(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+
+	// Create a test body to move around the database and make sure it's really new
+	body := &types.Body{Uncles: []*types.Header{{Extra: []byte("test header")}}}
+
+	hasher := sha3.NewKeccak256()
+	rlp.Encode(hasher, body)
+	hash := common.BytesToHash(hasher.Sum(nil))
+
+	if entry := GetBody(db, hash); entry != nil {
+		t.Fatalf("Non existent body returned: %v", entry)
+	}
+	// Write and verify the body in the database
+	if err := WriteBody(db, hash, body); err != nil {
+		t.Fatalf("Failed to write body into database: %v", err)
+	}
+	if entry := GetBody(db, hash); entry == nil {
+		t.Fatalf("Stored body not found")
+	} else if types.DeriveSha(types.Transactions(entry.Transactions)) != types.DeriveSha(types.Transactions(body.Transactions)) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(body.Uncles) {
+		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, body)
+	}
+	if entry := GetBodyRLP(db, hash); entry == nil {
+		t.Fatalf("Stored body RLP not found")
+	} else {
+		hasher := sha3.NewKeccak256()
+		hasher.Write(entry)
+
+		if calc := common.BytesToHash(hasher.Sum(nil)); calc != hash {
+			t.Fatalf("Retrieved RLP body mismatch: have %v, want %v", entry, body)
+		}
+	}
+	// Delete the body and verify the execution
+	DeleteBody(db, hash)
+	if entry := GetBody(db, hash); entry != nil {
+		t.Fatalf("Deleted body returned: %v", entry)
+	}
+}
+
+// Tests block storage and retrieval operations.
+func TestBlockStorage(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+
+	// Create a test block to move around the database and make sure it's really new
+	block := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block")})
+	if entry := GetBlock(db, block.Hash()); entry != nil {
+		t.Fatalf("Non existent block returned: %v", entry)
+	}
+	if entry := GetHeader(db, block.Hash()); entry != nil {
+		t.Fatalf("Non existent header returned: %v", entry)
+	}
+	if entry := GetBody(db, block.Hash()); entry != nil {
+		t.Fatalf("Non existent body returned: %v", entry)
+	}
+	// Write and verify the block in the database
+	if err := WriteBlock(db, block); err != nil {
+		t.Fatalf("Failed to write block into database: %v", err)
+	}
+	if entry := GetBlock(db, block.Hash()); entry == nil {
+		t.Fatalf("Stored block not found")
+	} else if entry.Hash() != block.Hash() {
+		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)
+	}
+	if entry := GetHeader(db, block.Hash()); entry == nil {
+		t.Fatalf("Stored header not found")
+	} else if entry.Hash() != block.Header().Hash() {
+		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, block.Header())
+	}
+	if entry := GetBody(db, block.Hash()); entry == nil {
+		t.Fatalf("Stored body not found")
+	} else if types.DeriveSha(types.Transactions(entry.Transactions)) != types.DeriveSha(block.Transactions()) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(block.Uncles()) {
+		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, &types.Body{block.Transactions(), block.Uncles()})
+	}
+	// Delete the block and verify the execution
+	DeleteBlock(db, block.Hash())
+	if entry := GetBlock(db, block.Hash()); entry != nil {
+		t.Fatalf("Deleted block returned: %v", entry)
+	}
+	if entry := GetHeader(db, block.Hash()); entry != nil {
+		t.Fatalf("Deleted header returned: %v", entry)
+	}
+	if entry := GetBody(db, block.Hash()); entry != nil {
+		t.Fatalf("Deleted body returned: %v", entry)
+	}
+}
+
+// Tests that partial block contents don't get reassembled into full blocks.
+func TestPartialBlockStorage(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	block := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block")})
+
+	// Store a header and check that it's not recognized as a block
+	if err := WriteHeader(db, block.Header()); err != nil {
+		t.Fatalf("Failed to write header into database: %v", err)
+	}
+	if entry := GetBlock(db, block.Hash()); entry != nil {
+		t.Fatalf("Non existent block returned: %v", entry)
+	}
+	DeleteHeader(db, block.Hash())
+
+	// Store a body and check that it's not recognized as a block
+	if err := WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+		t.Fatalf("Failed to write body into database: %v", err)
+	}
+	if entry := GetBlock(db, block.Hash()); entry != nil {
+		t.Fatalf("Non existent block returned: %v", entry)
+	}
+	DeleteBody(db, block.Hash())
+
+	// Store a header and a body separately and check reassembly
+	if err := WriteHeader(db, block.Header()); err != nil {
+		t.Fatalf("Failed to write header into database: %v", err)
+	}
+	if err := WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+		t.Fatalf("Failed to write body into database: %v", err)
+	}
+	if entry := GetBlock(db, block.Hash()); entry == nil {
+		t.Fatalf("Stored block not found")
+	} else if entry.Hash() != block.Hash() {
+		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)
+	}
+}
+
+// Tests block total difficulty storage and retrieval operations.
+func TestTdStorage(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+
+	// Create a test TD to move around the database and make sure it's really new
+	hash, td := common.Hash{}, big.NewInt(314)
+	if entry := GetTd(db, hash); entry != nil {
+		t.Fatalf("Non existent TD returned: %v", entry)
+	}
+	// Write and verify the TD in the database
+	if err := WriteTd(db, hash, td); err != nil {
+		t.Fatalf("Failed to write TD into database: %v", err)
+	}
+	if entry := GetTd(db, hash); entry == nil {
+		t.Fatalf("Stored TD not found")
+	} else if entry.Cmp(td) != 0 {
+		t.Fatalf("Retrieved TD mismatch: have %v, want %v", entry, td)
+	}
+	// Delete the TD and verify the execution
+	DeleteTd(db, hash)
+	if entry := GetTd(db, hash); entry != nil {
+		t.Fatalf("Deleted TD returned: %v", entry)
+	}
+}
+
+// Tests that canonical numbers can be mapped to hashes and retrieved.
+func TestCanonicalMappingStorage(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+
+	// Create a test canonical number and assinged hash to move around
+	hash, number := common.Hash{0: 0xff}, uint64(314)
+	if entry := GetCanonicalHash(db, number); entry != (common.Hash{}) {
+		t.Fatalf("Non existent canonical mapping returned: %v", entry)
+	}
+	// Write and verify the TD in the database
+	if err := WriteCanonicalHash(db, hash, number); err != nil {
+		t.Fatalf("Failed to write canonical mapping into database: %v", err)
+	}
+	if entry := GetCanonicalHash(db, number); entry == (common.Hash{}) {
+		t.Fatalf("Stored canonical mapping not found")
+	} else if entry != hash {
+		t.Fatalf("Retrieved canonical mapping mismatch: have %v, want %v", entry, hash)
+	}
+	// Delete the TD and verify the execution
+	DeleteCanonicalHash(db, number)
+	if entry := GetCanonicalHash(db, number); entry != (common.Hash{}) {
+		t.Fatalf("Deleted canonical mapping returned: %v", entry)
+	}
+}
+
+// Tests that head headers and head blocks can be assigned, individually.
+func TestHeadStorage(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+
+	blockHead := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block header")})
+	blockFull := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block full")})
+
+	// Check that no head entries are in a pristine database
+	if entry := GetHeadHeaderHash(db); entry != (common.Hash{}) {
+		t.Fatalf("Non head header entry returned: %v", entry)
+	}
+	if entry := GetHeadBlockHash(db); entry != (common.Hash{}) {
+		t.Fatalf("Non head block entry returned: %v", entry)
+	}
+	// Assign separate entries for the head header and block
+	if err := WriteHeadHeaderHash(db, blockHead.Hash()); err != nil {
+		t.Fatalf("Failed to write head header hash: %v", err)
+	}
+	if err := WriteHeadBlockHash(db, blockFull.Hash()); err != nil {
+		t.Fatalf("Failed to write head block hash: %v", err)
+	}
+	// Check that both heads are present, and different (i.e. two heads maintained)
+	if entry := GetHeadHeaderHash(db); entry != blockHead.Hash() {
+		t.Fatalf("Head header hash mismatch: have %v, want %v", entry, blockHead.Hash())
+	}
+	if entry := GetHeadBlockHash(db); entry != blockFull.Hash() {
+		t.Fatalf("Head block hash mismatch: have %v, want %v", entry, blockFull.Hash())
 	}
 }

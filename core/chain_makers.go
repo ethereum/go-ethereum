@@ -158,7 +158,6 @@ func GenerateChain(parent *types.Block, db common.Database, n int, gen func(int,
 	for i := 0; i < n; i++ {
 		header := makeHeader(parent, statedb)
 		block := genblock(i, header)
-		block.Td = CalcTD(block, parent)
 		blocks[i] = block
 		parent = block
 	}

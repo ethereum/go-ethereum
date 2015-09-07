@@ -87,6 +87,9 @@ type blockRetrievalFn func(common.Hash) *types.Block
 // headRetrievalFn is a callback type for retrieving the head block from the local chain.
 type headRetrievalFn func() *types.Block
 
+// tdRetrievalFn is a callback type for retrieving the total difficulty of a local block.
+type tdRetrievalFn func(common.Hash) *big.Int
+
 // chainInsertFn is a callback type to insert a batch of blocks into the local chain.
 type chainInsertFn func(types.Blocks) (int, error)
 
@@ -136,6 +139,7 @@ type Downloader struct {
 	hasBlock    hashCheckFn      // Checks if a block is present in the chain
 	getBlock    blockRetrievalFn // Retrieves a block from the chain
 	headBlock   headRetrievalFn  // Retrieves the head block from the chain
+	getTd       tdRetrievalFn    // Retrieves the TD of a block from the chain
 	insertChain chainInsertFn    // Injects a batch of blocks into the chain
 	dropPeer    peerDropFn       // Drops a peer for misbehaving
 
@@ -168,7 +172,7 @@ type Block struct {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(mux *event.TypeMux, hasBlock hashCheckFn, getBlock blockRetrievalFn, headBlock headRetrievalFn, insertChain chainInsertFn, dropPeer peerDropFn) *Downloader {
+func New(mux *event.TypeMux, hasBlock hashCheckFn, getBlock blockRetrievalFn, headBlock headRetrievalFn, getTd tdRetrievalFn, insertChain chainInsertFn, dropPeer peerDropFn) *Downloader {
 	return &Downloader{
 		mux:         mux,
 		queue:       newQueue(),
@@ -176,6 +180,7 @@ func New(mux *event.TypeMux, hasBlock hashCheckFn, getBlock blockRetrievalFn, he
 		hasBlock:    hasBlock,
 		getBlock:    getBlock,
 		headBlock:   headBlock,
+		getTd:       getTd,
 		insertChain: insertChain,
 		dropPeer:    dropPeer,
 		newPeerCh:   make(chan *peer, 1),
@@ -582,7 +587,7 @@ func (d *Downloader) fetchHashes61(p *peer, td *big.Int, from uint64) error {
 				// L: Sync begins, and finds common ancestor at 11
 				// L: Request new hashes up from 11 (R's TD was higher, it must have something)
 				// R: Nothing to give
-				if !gotHashes && td.Cmp(d.headBlock().Td) > 0 {
+				if !gotHashes && td.Cmp(d.getTd(d.headBlock().Hash())) > 0 {
 					return errStallingPeer
 				}
 				return nil
@@ -958,7 +963,7 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 				// L: Sync begins, and finds common ancestor at 11
 				// L: Request new headers up from 11 (R's TD was higher, it must have something)
 				// R: Nothing to give
-				if !gotHeaders && td.Cmp(d.headBlock().Td) > 0 {
+				if !gotHeaders && td.Cmp(d.getTd(d.headBlock().Hash())) > 0 {
 					return errStallingPeer
 				}
 				return nil

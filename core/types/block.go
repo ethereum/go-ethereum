@@ -117,6 +117,13 @@ func rlpHash(x interface{}) (h common.Hash) {
 	return h
 }
 
+// Body is a simple (mutable, non-safe) data container for storing and moving
+// a block's data contents (transactions and uncles) together.
+type Body struct {
+	Transactions []*Transaction
+	Uncles       []*Header
+}
+
 type Block struct {
 	header       *Header
 	uncles       []*Header
@@ -129,10 +136,17 @@ type Block struct {
 
 	// Td is used by package core to store the total difficulty
 	// of the chain up to and including the block.
-	Td *big.Int
+	td *big.Int
 
 	// ReceivedAt is used by package eth to track block propagation time.
 	ReceivedAt time.Time
+}
+
+// DeprecatedTd is an old relic for extracting the TD of a block. It is in the
+// code solely to facilitate upgrading the database from the old format to the
+// new, after which it should be deleted. Do not use!
+func (b *Block) DeprecatedTd() *big.Int {
+	return b.td
 }
 
 // [deprecated by eth/63]
@@ -170,7 +184,7 @@ var (
 // are ignored and set to values derived from the given txs, uncles
 // and receipts.
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt) *Block {
-	b := &Block{header: copyHeader(header), Td: new(big.Int)}
+	b := &Block{header: copyHeader(header), td: new(big.Int)}
 
 	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
@@ -276,18 +290,8 @@ func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&sb); err != nil {
 		return err
 	}
-	b.header, b.uncles, b.transactions, b.Td = sb.Header, sb.Uncles, sb.Txs, sb.TD
+	b.header, b.uncles, b.transactions, b.td = sb.Header, sb.Uncles, sb.Txs, sb.TD
 	return nil
-}
-
-// [deprecated by eth/63]
-func (b *StorageBlock) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, storageblock{
-		Header: b.header,
-		Txs:    b.transactions,
-		Uncles: b.uncles,
-		TD:     b.Td,
-	})
 }
 
 // TODO: copies
@@ -360,7 +364,6 @@ func (b *Block) WithMiningResult(nonce uint64, mixDigest common.Hash) *Block {
 		transactions: b.transactions,
 		receipts:     b.receipts,
 		uncles:       b.uncles,
-		Td:           b.Td,
 	}
 }
 
@@ -390,7 +393,7 @@ func (b *Block) Hash() common.Hash {
 }
 
 func (b *Block) String() string {
-	str := fmt.Sprintf(`Block(#%v): Size: %v TD: %v {
+	str := fmt.Sprintf(`Block(#%v): Size: %v {
 MinerHash: %x
 %v
 Transactions:
@@ -398,7 +401,7 @@ Transactions:
 Uncles:
 %v
 }
-`, b.Number(), b.Size(), b.Td, b.header.HashNoNonce(), b.header, b.transactions, b.uncles)
+`, b.Number(), b.Size(), b.header.HashNoNonce(), b.header, b.transactions, b.uncles)
 	return str
 }
 

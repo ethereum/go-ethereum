@@ -528,17 +528,16 @@ func blockRecovery(ctx *cli.Context) {
 
 	var block *types.Block
 	if arg[0] == '#' {
-		block = core.GetBlockByNumber(blockDb, common.String2Big(arg[1:]).Uint64())
+		block = core.GetBlock(blockDb, core.GetCanonicalHash(blockDb, common.String2Big(arg[1:]).Uint64()))
 	} else {
-		block = core.GetBlockByHash(blockDb, common.HexToHash(arg))
+		block = core.GetBlock(blockDb, common.HexToHash(arg))
 	}
 
 	if block == nil {
 		glog.Fatalln("block not found. Recovery failed")
 	}
 
-	err = core.WriteHead(blockDb, block)
-	if err != nil {
+	if err = core.WriteHeadBlockHash(blockDb, block.Hash()); err != nil {
 		glog.Fatalln("block write err", err)
 	}
 	glog.Infof("Recovery succesful. New HEAD %x\n", block.Hash())

@@ -213,22 +213,6 @@ type blockBody struct {
 // blockBodiesData is the network packet for block content distribution.
 type blockBodiesData []*blockBody
 
-// blockBodyRLP represents the RLP encoded data content of a single block.
-type blockBodyRLP []byte
-
-// EncodeRLP is a specialized encoder for a block body to pass the already
-// encoded body RLPs from the database on, without double encoding.
-func (b *blockBodyRLP) EncodeRLP(w io.Writer) error {
-	if _, err := w.Write([]byte(*b)); err != nil {
-		return err
-	}
-	return nil
-}
-
-// blockBodiesRLPData is the network packet for block content distribution
-// based on original RLP formatting (i.e. skip the db-decode/proto-encode).
-type blockBodiesRLPData []*blockBodyRLP
-
 // nodeDataData is the network response packet for a node data retrieval.
 type nodeDataData []struct {
 	Value []byte

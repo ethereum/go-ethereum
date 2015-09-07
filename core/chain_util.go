@@ -29,14 +29,18 @@ import (
 )
 
 var (
-	headKey = []byte("LastBlock")
+	headHeaderKey = []byte("LastHeader")
+	headBlockKey  = []byte("LastBlock")
 
-	headerHashPre = []byte("header-hash-")
-	bodyHashPre   = []byte("body-hash-")
-	blockNumPre   = []byte("block-num-")
+	blockPrefix    = []byte("block-")
+	blockNumPrefix = []byte("block-num-")
+
+	headerSuffix = []byte("-header")
+	bodySuffix   = []byte("-body")
+	tdSuffix     = []byte("-td")
+
 	ExpDiffPeriod = big.NewInt(100000)
-
-	blockHashPre = []byte("block-hash-") // [deprecated by eth/63]
+	blockHashPre  = []byte("block-hash-") // [deprecated by eth/63]
 )
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
@@ -73,16 +77,6 @@ func CalcDifficulty(time, parentTime uint64, parentNumber, parentDiff *big.Int) 
 	return diff
 }
 
-// CalcTD computes the total difficulty of block.
-func CalcTD(block, parent *types.Block) *big.Int {
-	if parent == nil {
-		return block.Difficulty()
-	}
-	d := block.Difficulty()
-	d.Add(d, parent.Td)
-	return d
-}
-
 // CalcGasLimit computes the gas limit of the next block after parent.
 // The result may be modified by the caller.
 // This is miner strategy, not consensus protocol.
@@ -116,41 +110,48 @@ func CalcGasLimit(parent *types.Block) *big.Int {
 	return gl
 }
 
-// storageBody is the block body encoding used for the database.
-type storageBody struct {
-	Transactions []*types.Transaction
-	Uncles       []*types.Header
-}
-
-// GetHashByNumber retrieves a hash assigned to a canonical block number.
-func GetHashByNumber(db common.Database, number uint64) common.Hash {
-	data, _ := db.Get(append(blockNumPre, big.NewInt(int64(number)).Bytes()...))
+// GetCanonicalHash retrieves a hash assigned to a canonical block number.
+func GetCanonicalHash(db common.Database, number uint64) common.Hash {
+	data, _ := db.Get(append(blockNumPrefix, big.NewInt(int64(number)).Bytes()...))
 	if len(data) == 0 {
 		return common.Hash{}
 	}
 	return common.BytesToHash(data)
 }
 
-// GetHeadHash retrieves the hash of the current canonical head block.
-func GetHeadHash(db common.Database) common.Hash {
-	data, _ := db.Get(headKey)
+// GetHeadHeaderHash retrieves the hash of the current canonical head block's
+// header. The difference between this and GetHeadBlockHash is that whereas the
+// last block hash is only updated upon a full block import, the last header
+// hash is updated already at header import, allowing head tracking for the
+// fast synchronization mechanism.
+func GetHeadHeaderHash(db common.Database) common.Hash {
+	data, _ := db.Get(headHeaderKey)
 	if len(data) == 0 {
 		return common.Hash{}
 	}
 	return common.BytesToHash(data)
 }
 
-// GetHeaderRLPByHash retrieves a block header in its raw RLP database encoding,
-// or nil if the header's not found.
-func GetHeaderRLPByHash(db common.Database, hash common.Hash) []byte {
-	data, _ := db.Get(append(headerHashPre, hash[:]...))
+// GetHeadBlockHash retrieves the hash of the current canonical head block.
+func GetHeadBlockHash(db common.Database) common.Hash {
+	data, _ := db.Get(headBlockKey)
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
+}
+
+// GetHeaderRLP retrieves a block header in its raw RLP database encoding, or nil
+// if the header's not found.
+func GetHeaderRLP(db common.Database, hash common.Hash) rlp.RawValue {
+	data, _ := db.Get(append(append(blockPrefix, hash[:]...), headerSuffix...))
 	return data
 }
 
-// GetHeaderByHash retrieves the block header corresponding to the hash, nil if
-// none found.
-func GetHeaderByHash(db common.Database, hash common.Hash) *types.Header {
-	data := GetHeaderRLPByHash(db, hash)
+// GetHeader retrieves the block header corresponding to the hash, nil if none
+// found.
+func GetHeader(db common.Database, hash common.Hash) *types.Header {
+	data := GetHeaderRLP(db, hash)
 	if len(data) == 0 {
 		return nil
 	}
@@ -162,69 +163,61 @@ func GetHeaderByHash(db common.Database, hash common.Hash) *types.Header {
 	return header
 }
 
-// GetBodyRLPByHash retrieves the block body (transactions and uncles) in RLP
-// encoding, and the associated total difficulty.
-func GetBodyRLPByHash(db common.Database, hash common.Hash) ([]byte, *big.Int) {
-	combo, _ := db.Get(append(bodyHashPre, hash[:]...))
-	if len(combo) == 0 {
-		return nil, nil
-	}
-	buffer := bytes.NewBuffer(combo)
-
-	td := new(big.Int)
-	if err := rlp.Decode(buffer, td); err != nil {
-		glog.V(logger.Error).Infof("invalid block td RLP for hash %x: %v", hash, err)
-		return nil, nil
-	}
-	return buffer.Bytes(), td
+// GetBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
+func GetBodyRLP(db common.Database, hash common.Hash) rlp.RawValue {
+	data, _ := db.Get(append(append(blockPrefix, hash[:]...), bodySuffix...))
+	return data
 }
 
-// GetBodyByHash retrieves the block body (transactons, uncles, total difficulty)
-// corresponding to the hash, nils if none found.
-func GetBodyByHash(db common.Database, hash common.Hash) ([]*types.Transaction, []*types.Header, *big.Int) {
-	data, td := GetBodyRLPByHash(db, hash)
-	if len(data) == 0 || td == nil {
-		return nil, nil, nil
+// GetBody retrieves the block body (transactons, uncles) corresponding to the
+// hash, nil if none found.
+func GetBody(db common.Database, hash common.Hash) *types.Body {
+	data := GetBodyRLP(db, hash)
+	if len(data) == 0 {
+		return nil
 	}
-	body := new(storageBody)
+	body := new(types.Body)
 	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
 		glog.V(logger.Error).Infof("invalid block body RLP for hash %x: %v", hash, err)
-		return nil, nil, nil
+		return nil
 	}
-	return body.Transactions, body.Uncles, td
+	return body
 }
 
-// GetBlockByHash retrieves an entire block corresponding to the hash, assembling
-// it back from the stored header and body.
-func GetBlockByHash(db common.Database, hash common.Hash) *types.Block {
+// GetTd retrieves a block's total difficulty corresponding to the hash, nil if
+// none found.
+func GetTd(db common.Database, hash common.Hash) *big.Int {
+	data, _ := db.Get(append(append(blockPrefix, hash.Bytes()...), tdSuffix...))
+	if len(data) == 0 {
+		return nil
+	}
+	td := new(big.Int)
+	if err := rlp.Decode(bytes.NewReader(data), td); err != nil {
+		glog.V(logger.Error).Infof("invalid block total difficulty RLP for hash %x: %v", hash, err)
+		return nil
+	}
+	return td
+}
+
+// GetBlock retrieves an entire block corresponding to the hash, assembling it
+// back from the stored header and body.
+func GetBlock(db common.Database, hash common.Hash) *types.Block {
 	// Retrieve the block header and body contents
-	header := GetHeaderByHash(db, hash)
+	header := GetHeader(db, hash)
 	if header == nil {
 		return nil
 	}
-	transactions, uncles, td := GetBodyByHash(db, hash)
-	if td == nil {
+	body := GetBody(db, hash)
+	if body == nil {
 		return nil
 	}
 	// Reassemble the block and return
-	block := types.NewBlockWithHeader(header).WithBody(transactions, uncles)
-	block.Td = td
-
-	return block
+	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles)
 }
 
-// GetBlockByNumber returns the canonical block by number or nil if not found.
-func GetBlockByNumber(db common.Database, number uint64) *types.Block {
-	key, _ := db.Get(append(blockNumPre, big.NewInt(int64(number)).Bytes()...))
-	if len(key) == 0 {
-		return nil
-	}
-	return GetBlockByHash(db, common.BytesToHash(key))
-}
-
-// WriteCanonNumber stores the canonical hash for the given block number.
-func WriteCanonNumber(db common.Database, hash common.Hash, number uint64) error {
-	key := append(blockNumPre, big.NewInt(int64(number)).Bytes()...)
+// WriteCanonicalHash stores the canonical hash for the given block number.
+func WriteCanonicalHash(db common.Database, hash common.Hash, number uint64) error {
+	key := append(blockNumPrefix, big.NewInt(int64(number)).Bytes()...)
 	if err := db.Put(key, hash.Bytes()); err != nil {
 		glog.Fatalf("failed to store number to hash mapping into database: %v", err)
 		return err
@@ -232,14 +225,19 @@ func WriteCanonNumber(db common.Database, hash common.Hash, number uint64) error
 	return nil
 }
 
-// WriteHead updates the head block of the chain database.
-func WriteHead(db common.Database, block *types.Block) error {
-	if err := WriteCanonNumber(db, block.Hash(), block.NumberU64()); err != nil {
-		glog.Fatalf("failed to store canonical number into database: %v", err)
+// WriteHeadHeaderHash stores the head header's hash.
+func WriteHeadHeaderHash(db common.Database, hash common.Hash) error {
+	if err := db.Put(headHeaderKey, hash.Bytes()); err != nil {
+		glog.Fatalf("failed to store last header's hash into database: %v", err)
 		return err
 	}
-	if err := db.Put(headKey, block.Hash().Bytes()); err != nil {
-		glog.Fatalf("failed to store last block into database: %v", err)
+	return nil
+}
+
+// WriteHeadBlockHash stores the head block's hash.
+func WriteHeadBlockHash(db common.Database, hash common.Hash) error {
+	if err := db.Put(headBlockKey, hash.Bytes()); err != nil {
+		glog.Fatalf("failed to store last block's hash into database: %v", err)
 		return err
 	}
 	return nil
@@ -251,7 +249,7 @@ func WriteHeader(db common.Database, header *types.Header) error {
 	if err != nil {
 		return err
 	}
-	key := append(headerHashPre, header.Hash().Bytes()...)
+	key := append(append(blockPrefix, header.Hash().Bytes()...), headerSuffix...)
 	if err := db.Put(key, data); err != nil {
 		glog.Fatalf("failed to store header into database: %v", err)
 		return err
@@ -261,28 +259,39 @@ func WriteHeader(db common.Database, header *types.Header) error {
 }
 
 // WriteBody serializes the body of a block into the database.
-func WriteBody(db common.Database, block *types.Block) error {
-	body, err := rlp.EncodeToBytes(&storageBody{block.Transactions(), block.Uncles()})
+func WriteBody(db common.Database, hash common.Hash, body *types.Body) error {
+	data, err := rlp.EncodeToBytes(body)
 	if err != nil {
 		return err
 	}
-	td, err := rlp.EncodeToBytes(block.Td)
-	if err != nil {
-		return err
-	}
-	key := append(bodyHashPre, block.Hash().Bytes()...)
-	if err := db.Put(key, append(td, body...)); err != nil {
+	key := append(append(blockPrefix, hash.Bytes()...), bodySuffix...)
+	if err := db.Put(key, data); err != nil {
 		glog.Fatalf("failed to store block body into database: %v", err)
 		return err
 	}
-	glog.V(logger.Debug).Infof("stored block body #%v [%x…]", block.Number, block.Hash().Bytes()[:4])
+	glog.V(logger.Debug).Infof("stored block body [%x…]", hash.Bytes()[:4])
+	return nil
+}
+
+// WriteTd serializes the total difficulty of a block into the database.
+func WriteTd(db common.Database, hash common.Hash, td *big.Int) error {
+	data, err := rlp.EncodeToBytes(td)
+	if err != nil {
+		return err
+	}
+	key := append(append(blockPrefix, hash.Bytes()...), tdSuffix...)
+	if err := db.Put(key, data); err != nil {
+		glog.Fatalf("failed to store block total difficulty into database: %v", err)
+		return err
+	}
+	glog.V(logger.Debug).Infof("stored block total difficulty [%x…]: %v", hash.Bytes()[:4], td)
 	return nil
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
 func WriteBlock(db common.Database, block *types.Block) error {
 	// Store the body first to retain database consistency
-	if err := WriteBody(db, block); err != nil {
+	if err := WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
 		return err
 	}
 	// Store the header too, signaling full block ownership
@@ -292,20 +301,31 @@ func WriteBlock(db common.Database, block *types.Block) error {
 	return nil
 }
 
+// DeleteCanonicalHash removes the number to hash canonical mapping.
+func DeleteCanonicalHash(db common.Database, number uint64) {
+	db.Delete(append(blockNumPrefix, big.NewInt(int64(number)).Bytes()...))
+}
+
 // DeleteHeader removes all block header data associated with a hash.
 func DeleteHeader(db common.Database, hash common.Hash) {
-	db.Delete(append(headerHashPre, hash.Bytes()...))
+	db.Delete(append(append(blockPrefix, hash.Bytes()...), headerSuffix...))
 }
 
 // DeleteBody removes all block body data associated with a hash.
 func DeleteBody(db common.Database, hash common.Hash) {
-	db.Delete(append(bodyHashPre, hash.Bytes()...))
+	db.Delete(append(append(blockPrefix, hash.Bytes()...), bodySuffix...))
+}
+
+// DeleteTd removes all block total difficulty data associated with a hash.
+func DeleteTd(db common.Database, hash common.Hash) {
+	db.Delete(append(append(blockPrefix, hash.Bytes()...), tdSuffix...))
 }
 
 // DeleteBlock removes all block data associated with a hash.
 func DeleteBlock(db common.Database, hash common.Hash) {
 	DeleteHeader(db, hash)
 	DeleteBody(db, hash)
+	DeleteTd(db, hash)
 }
 
 // [deprecated by eth/63]

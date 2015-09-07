@@ -440,9 +440,8 @@ func convertBlockTest(in *btJSON) (out *BlockTest, err error) {
 func mustConvertGenesis(testGenesis btHeader) *types.Block {
 	hdr := mustConvertHeader(testGenesis)
 	hdr.Number = big.NewInt(0)
-	b := types.NewBlockWithHeader(hdr)
-	b.Td = new(big.Int)
-	return b
+
+	return types.NewBlockWithHeader(hdr)
 }
 
 func mustConvertHeader(in btHeader) *types.Header {
