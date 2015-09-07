@@ -58,7 +58,11 @@ func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common
 		}
 		// If the block number is a multiple of 5, add a bonus uncle to the block
 		if i%5 == 0 {
-			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
+			uncle := &types.RawHeader{
+				ParentHash: block.PrevBlock(i - 1).Hash(),
+				Number:     big.NewInt(int64(i - 1)),
+			}
+			block.AddUncle(types.NewHeader(uncle))
 		}
 	})
 	hashes := make([]common.Hash, n+1)
@@ -696,7 +700,7 @@ func testBlockBodyAttackerDropping(t *testing.T, protocol int) {
 		// Assemble a good or bad block, depending of the test
 		raw := core.GenerateChain(genesis, testdb, 1, nil)[0]
 		if tt.failure {
-			parent := types.NewBlock(&types.Header{}, nil, nil, nil)
+			parent := types.NewBlock(new(types.RawHeader), nil, nil, nil)
 			raw = core.GenerateChain(parent, testdb, 1, nil)[0]
 		}
 		block := &Block{OriginPeer: id, RawBlock: raw}

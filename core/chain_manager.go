@@ -207,7 +207,7 @@ func (bc *ChainManager) recover() bool {
 	if len(data) != 0 {
 		block := bc.GetBlock(common.BytesToHash(data))
 		if block != nil {
-			if err := WriteHead(bc.chainDb, block); err != nil {
+			if err := WriteHeadBlockMeta(bc.chainDb, block); err != nil {
 				glog.Fatalf("failed to write database head: %v", err)
 			}
 			bc.currentBlock = block
@@ -219,7 +219,7 @@ func (bc *ChainManager) recover() bool {
 }
 
 func (bc *ChainManager) setLastState() error {
-	head := GetHeadHash(bc.chainDb)
+	head := GetHeadBlockHash(bc.chainDb)
 	if head != (common.Hash{}) {
 		block := bc.GetBlock(head)
 		if block != nil {
@@ -315,7 +315,7 @@ func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error 
 // insert injects a block into the current chain block chain. Note, this function
 // assumes that the `mu` mutex is held!
 func (bc *ChainManager) insert(block *types.Block) {
-	err := WriteHead(bc.chainDb, block)
+	err := WriteHeadBlockMeta(bc.chainDb, block)
 	if err != nil {
 		glog.Fatal("db write fail:", err)
 	}
@@ -451,11 +451,11 @@ func (self *ChainManager) GetBlockHashesFromHash(hash common.Hash, max uint64) [
 	// Iterate the headers until enough is collected or the genesis reached
 	chain := make([]common.Hash, 0, max)
 	for i := uint64(0); i < max; i++ {
-		if header = self.GetHeader(header.ParentHash); header == nil {
+		if header = self.GetHeader(header.ParentHash()); header == nil {
 			break
 		}
 		chain = append(chain, header.Hash())
-		if header.Number.Cmp(common.Big0) <= 0 {
+		if header.Number().Cmp(common.Big0) <= 0 {
 			break
 		}
 	}
@@ -530,6 +530,22 @@ const (
 	SplitStatTy
 	SideStatTy
 )
+
+/*
+// WriteHeader inserts a potentially new header into the database, updating the
+// head-header-hash index too if greater than the previous.
+func (self *ChainManager) WriteHeader(db common.Database, header *types.Header) error {
+	self.wg.Add(1)
+	defer self.wg.Done()
+
+	// Store the header into the database
+	if err := WriteHeader(self.chainDb, header); err != nil {
+		glog.Fatalf("failed to write header: %v", err)
+		return err
+	}
+	// If the header's higher than our previous head, update
+	if header.
+}*/
 
 // WriteBlock writes the block to the chain (or pending queue)
 func (self *ChainManager) WriteBlock(block *types.Block, queued bool) (status writeStatus, err error) {

@@ -536,7 +536,7 @@ func blockRecovery(ctx *cli.Context) {
 		glog.Fatalln("block not found. Recovery failed")
 	}
 
-	err = core.WriteHead(blockDb, block)
+	err = core.WriteHeadBlockMeta(blockDb, block)
 	if err != nil {
 		glog.Fatalln("block write err", err)
 	}

@@ -315,7 +315,7 @@ func New(config *Config) (*Ethereum, error) {
 	// This is for testing only.
 	if config.GenesisBlock != nil {
 		core.WriteBlock(chainDb, config.GenesisBlock)
-		core.WriteHead(chainDb, config.GenesisBlock)
+		core.WriteHeadBlockMeta(chainDb, config.GenesisBlock)
 	}
 
 	if !config.SkipBcVersionCheck {

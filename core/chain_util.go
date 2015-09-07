@@ -29,7 +29,8 @@ import (
 )
 
 var (
-	headKey = []byte("LastBlock")
+	headHeaderKey = []byte("LastHeader")
+	headBlockKey  = []byte("LastBlock")
 
 	headerHashPre = []byte("header-hash-")
 	bodyHashPre   = []byte("body-hash-")
@@ -131,9 +132,22 @@ func GetHashByNumber(db common.Database, number uint64) common.Hash {
 	return common.BytesToHash(data)
 }
 
-// GetHeadHash retrieves the hash of the current canonical head block.
-func GetHeadHash(db common.Database) common.Hash {
-	data, _ := db.Get(headKey)
+// GetHeadHeaderHash retrieves the hash of the current canonical head block's
+// header. The different between this and GetHeadBlockHash is that whereas the
+// last block hash is only updated upon a full block import, the last header
+// hash is updated already at header import, allowing head tracking for the
+// fast synchronization mechanism.
+func GetHeadHeaderHash(db common.Database) common.Hash {
+	data, _ := db.Get(headHeaderKey)
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
+}
+
+// GetHeadBlockHash retrieves the hash of the current canonical head block.
+func GetHeadBlockHash(db common.Database) common.Hash {
+	data, _ := db.Get(headBlockKey)
 	if len(data) == 0 {
 		return common.Hash{}
 	}
@@ -232,14 +246,23 @@ func WriteCanonNumber(db common.Database, hash common.Hash, number uint64) error
 	return nil
 }
 
-// WriteHead updates the head block of the chain database.
-func WriteHead(db common.Database, block *types.Block) error {
-	if err := WriteCanonNumber(db, block.Hash(), block.NumberU64()); err != nil {
-		glog.Fatalf("failed to store canonical number into database: %v", err)
+// WriteHeadBlockMeta stores the head header's hash.
+func WriteHeadHeaderHash(db common.Database, header *types.Header) error {
+	if err := db.Put(headHeaderKey, header.Hash().Bytes()); err != nil {
+		glog.Fatalf("failed to store last header's hash into database: %v", err)
 		return err
 	}
-	if err := db.Put(headKey, block.Hash().Bytes()); err != nil {
-		glog.Fatalf("failed to store last block into database: %v", err)
+	return nil
+}
+
+// WriteHeadBlockMeta stores the head block's metadata (number and hash).
+func WriteHeadBlockMeta(db common.Database, block *types.Block) error {
+	if err := WriteCanonNumber(db, block.Hash(), block.NumberU64()); err != nil {
+		glog.Fatalf("failed to store last block's canonical number into database: %v", err)
+		return err
+	}
+	if err := db.Put(headBlockKey, block.Hash().Bytes()); err != nil {
+		glog.Fatalf("failed to store last block's hash into database: %v", err)
 		return err
 	}
 	return nil

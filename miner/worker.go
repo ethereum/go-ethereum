@@ -75,7 +75,7 @@ type Work struct {
 
 	Block *types.Block // the new block
 
-	header   *types.Header
+	header   *types.RawHeader
 	txs      []*types.Transaction
 	receipts []*types.Receipt
 
@@ -346,7 +346,7 @@ func (self *worker) push(work *Work) {
 }
 
 // makeCurrent creates a new environment for the current cycle.
-func (self *worker) makeCurrent(parent *types.Block, header *types.Header) {
+func (self *worker) makeCurrent(parent *types.Block, header *types.RawHeader) {
 	state := state.New(parent.Root(), self.eth.ChainDb())
 	work := &Work{
 		state:     state,
@@ -443,9 +443,9 @@ func (self *worker) commitNewWork() {
 		glog.V(logger.Info).Infoln("We are too far in the future. Waiting for", wait)
 		time.Sleep(wait)
 	}
-
 	num := parent.Number()
-	header := &types.Header{
+
+	header := &types.RawHeader{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
 		Difficulty: core.CalcDifficulty(uint64(tstamp), parent.Time().Uint64(), parent.Number(), parent.Difficulty()),
@@ -455,7 +455,6 @@ func (self *worker) commitNewWork() {
 		Extra:      self.extra,
 		Time:       big.NewInt(tstamp),
 	}
-
 	previous := self.current
 	self.makeCurrent(parent, header)
 	work := self.current
@@ -526,7 +525,7 @@ func (self *worker) commitNewWork() {
 
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// commit state root after all state transitions.
-		core.AccumulateRewards(work.state, header, uncles)
+		core.AccumulateRewards(work.state, types.NewHeader(header), uncles)
 		work.state.SyncObjects()
 		header.Root = work.state.Root()
 	}
@@ -549,8 +548,8 @@ func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
 	if work.uncles.Has(hash) {
 		return core.UncleError("Uncle not unique")
 	}
-	if !work.ancestors.Has(uncle.ParentHash) {
-		return core.UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
+	if parent := uncle.ParentHash(); !work.ancestors.Has(parent) {
+		return core.UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", parent[:4]))
 	}
 	if work.family.Has(hash) {
 		return core.UncleError(fmt.Sprintf("Uncle already in family (%x)", hash))
@@ -619,7 +618,7 @@ func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *b
 
 func (env *Work) commitTransaction(tx *types.Transaction, proc *core.BlockProcessor) error {
 	snap := env.state.Copy()
-	receipt, _, err := proc.ApplyTransaction(env.coinbase, env.state, env.header, tx, env.header.GasUsed, true)
+	receipt, _, err := proc.ApplyTransaction(env.coinbase, env.state, types.NewHeader(env.header), tx, env.header.GasUsed, true)
 	if err != nil {
 		env.state.Set(snap)
 		return err

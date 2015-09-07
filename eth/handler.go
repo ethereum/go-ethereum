@@ -371,7 +371,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				// Hash based traversal towards the genesis block
 				for i := 0; i < int(query.Skip)+1; i++ {
 					if header := pm.chainman.GetHeader(query.Origin.Hash); header != nil {
-						query.Origin.Hash = header.ParentHash
+						query.Origin.Hash = header.ParentHash()
 					} else {
 						unknown = true
 						break
@@ -379,7 +379,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				}
 			case query.Origin.Hash != (common.Hash{}) && !query.Reverse:
 				// Hash based traversal towards the leaf block
-				if header := pm.chainman.GetHeaderByNumber(origin.Number.Uint64() + query.Skip + 1); header != nil {
+				if header := pm.chainman.GetHeaderByNumber(origin.Number().Uint64() + query.Skip + 1); header != nil {
 					if pm.chainman.GetBlockHashesFromHash(header.Hash(), query.Skip+1)[query.Skip] == query.Origin.Hash {
 						query.Origin.Hash = header.Hash()
 					} else {
