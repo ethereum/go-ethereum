@@ -170,7 +170,7 @@ func TestSnapshot2(t *testing.T) {
 	so0Restored := state.GetStateObject(stateobjaddr0)
 	so1Restored := state.GetStateObject(stateobjaddr1)
 	// non-deleted is equal (restored)
-	compareStateObjects(so0, so0Restored, t)
+	compareStateObjects(so0Restored, so0, t)
 	// deleted should be nil, both before and after restore of state copy
 	if so1Restored != nil {
 		t.Fatalf("deleted object not nil after restoring snapshot")
@@ -179,45 +179,45 @@ func TestSnapshot2(t *testing.T) {
 
 func compareStateObjects(so0, so1 *StateObject, t *testing.T) {
 	if so0.address != so1.address {
-		t.Fatalf("\nexpected %v\ngot %v", so0.address, so1.address)
+		t.Fatalf("Address mismatch: have %v, want %v", so0.address, so1.address)
 	}
 	if so0.balance.Cmp(so1.balance) != 0 {
-		t.Fatalf("\nexpected %v\ngot %v", so0.balance, so1.balance)
+		t.Fatalf("Balance mismatch: have %v, want %v", so0.balance, so1.balance)
 	}
 	if so0.nonce != so1.nonce {
-		t.Fatalf("\nexpected %v\ngot %v", so0.nonce, so1.nonce)
+		t.Fatalf("Nonce mismatch: have %v, want %v", so0.nonce, so1.nonce)
 	}
 	if !bytes.Equal(so0.codeHash, so1.codeHash) {
-		t.Fatalf("\nexpected %v\ngot %v", so0.codeHash, so1.codeHash)
+		t.Fatalf("CodeHash mismatch: have %v, want %v", so0.codeHash, so1.codeHash)
 	}
 	if !bytes.Equal(so0.code, so1.code) {
-		t.Fatalf("\nexpected %v\ngot %v", so0.code, so1.code)
+		t.Fatalf("Code mismatch: have %v, want %v", so0.code, so1.code)
 	}
 	if !bytes.Equal(so0.initCode, so1.initCode) {
-		t.Fatalf("\nexpected %v\ngot %v", so0.initCode, so1.initCode)
+		t.Fatalf("InitCode mismatch: have %v, want %v", so0.initCode, so1.initCode)
 	}
 
-	for k, v := range so0.storage {
-		if so1.storage[k] != v {
-			t.Fatalf("\nstorage key %s:\nexpected %v\ngot %v", k, v, so1.storage[k])
-		}
-	}
 	for k, v := range so1.storage {
 		if so0.storage[k] != v {
-			t.Fatalf("\nunexpected k,v : %v, %v", k, v)
+			t.Fatalf("Storage key %s mismatch: have %v, want %v", k, so0.storage[k], v)
+		}
+	}
+	for k, v := range so0.storage {
+		if so1.storage[k] != v {
+			t.Fatalf("Storage key %s mismatch: have %v, want none.", k, v)
 		}
 	}
 
 	if so0.gasPool.Cmp(so1.gasPool) != 0 {
-		t.Fatalf("\nexpected %v\ngot %v", so0.gasPool, so1.gasPool)
+		t.Fatalf("GasPool mismatch: have %v, want %v", so0.gasPool, so1.gasPool)
 	}
 	if so0.remove != so1.remove {
-		t.Fatalf("\nexpected %v\ngot %v", so0.remove, so1.remove)
+		t.Fatalf("Remove mismatch: have %v, want %v", so0.remove, so1.remove)
 	}
 	if so0.deleted != so1.deleted {
-		t.Fatalf("\nexpected %v\ngot %v", so0.deleted, so1.deleted)
+		t.Fatalf("Deleted mismatch: have %v, want %v", so0.deleted, so1.deleted)
 	}
 	if so0.dirty != so1.dirty {
-		t.Fatalf("\nexpected %v\ngot %v", so0.dirty, so1.dirty)
+		t.Fatalf("Dirty mismatch: have %v, want %v", so0.dirty, so1.dirty)
 	}
 }
