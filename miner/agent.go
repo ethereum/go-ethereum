@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/pow"
+	"sync/atomic"
 )
 
 type CpuAgent struct {
@@ -35,6 +36,8 @@ type CpuAgent struct {
 
 	index int
 	pow   pow.PoW
+
+	isMining int32 // isMining indicates whether the agent is currently mining
 }
 
 func NewCpuAgent(index int, pow pow.PoW) *CpuAgent {
@@ -58,8 +61,12 @@ func (self *CpuAgent) Stop() {
 }
 
 func (self *CpuAgent) Start() {
-	self.mu.Lock()
 	defer self.mu.Unlock()
+	self.mu.Lock()
+
+	if atomic.LoadInt32(&self.isMining) == 1 {
+		return // agent already started
+	}
 
 	self.quit = make(chan struct{})
 	// creating current op ch makes sure we're not closing a nil ch
@@ -67,6 +74,8 @@ func (self *CpuAgent) Start() {
 	self.workCh = make(chan *Work, 1)
 
 	go self.update()
+
+	atomic.StoreInt32(&self.isMining, 1)
 }
 
 func (self *CpuAgent) update() {
@@ -99,10 +108,11 @@ done:
 		case <-self.workCh:
 		default:
 			close(self.workCh)
-
 			break done
 		}
 	}
+
+	atomic.StoreInt32(&self.isMining, 0)
 }
 
 func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
