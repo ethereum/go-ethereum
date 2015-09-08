@@ -18,9 +18,12 @@ package trie
 
 import "github.com/ethereum/go-ethereum/common"
 
+// ShortNode holds the nibble key for a ValueNode, HashNode, or FullNode.
+// Note a ShortNode should never hold another ShortNode, as they can just
+// be combined into one ShortNode
 type ShortNode struct {
 	trie  *Trie
-	key   []byte
+	key   []byte // hex-prefixed bytes
 	value Node
 	dirty bool
 }
@@ -30,7 +33,6 @@ func NewShortNode(t *Trie, key []byte, value Node) *ShortNode {
 }
 func (self *ShortNode) Value() Node {
 	self.value = self.trie.trans(self.value)
-
 	return self.value
 }
 func (self *ShortNode) Dirty() bool { return self.dirty }
@@ -48,6 +50,7 @@ func (self *ShortNode) Hash() interface{} {
 	return self.trie.store(self)
 }
 
+// returns nibbles
 func (self *ShortNode) Key() []byte {
 	return CompactDecode(self.key)
 }

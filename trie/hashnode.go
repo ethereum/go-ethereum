@@ -18,6 +18,10 @@ package trie
 
 import "github.com/ethereum/go-ethereum/common"
 
+// HashNode represents a node that is too big to be a ShortNode.
+// The actual node of interest (probably a FullNode) is rlp encoded and hashed,
+// yielding the key of the HashNode. The key can be used to fetch the actual
+// node from the database
 type HashNode struct {
 	key   []byte
 	trie  *Trie

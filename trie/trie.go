@@ -239,7 +239,7 @@ func (self *Trie) get(node Node, key []byte) Node {
 		k := node.Key()
 		cnode := node.Value()
 
-		if len(key) >= len(k) && bytes.Equal(k, key[:len(k)]) {
+		if len(key) >= len(k) && bytes.HasPrefix(key, k) {
 			return self.get(cnode, key[len(k):])
 		}
 
@@ -358,6 +358,7 @@ func (self *Trie) mknode(value *common.Value) Node {
 	return NewValueNode(self, value.Bytes())
 }
 
+// resolve HashNodes by fetching from the db
 func (self *Trie) trans(node Node) Node {
 	switch node := node.(type) {
 	case *HashNode:
@@ -372,7 +373,7 @@ func (self *Trie) store(node Node) interface{} {
 	data := common.Encode(node)
 	if len(data) >= 32 {
 		key := crypto.Sha3(data)
-		if node.Dirty() {
+		if node.Dirty() && self.cache != nil {
 			//fmt.Println("save", node)
 			//fmt.Println()
 			self.cache.Put(key, data)

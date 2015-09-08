@@ -16,13 +16,20 @@
 
 package trie
 
+// This file implements a codec to convert between byte arrays
+// and nibble (half-byte) arrays, where the latter are used for traversing the trie.
+// Hence the "compact" encoded form for a key is as the byte array, which
+// is (roughly) half the length of the decoded nibble array.
+// Nibble arrays for keys that represent leaf nodes have a terminator flag (numerical 16) appended to the end.
+// The compact encoded form uses Hex Prefix (HP) encoding, to encode the terminator status
+// and whether the key length is even or odd in the first two bytes (note the original description uses only
+// one byte, but that's inconvenient)
+
+// Encode a slice of nibbles into a HP byte array
 func CompactEncode(hexSlice []byte) []byte {
 	terminator := 0
 	if hexSlice[len(hexSlice)-1] == 16 {
 		terminator = 1
-	}
-
-	if terminator == 1 {
 		hexSlice = hexSlice[:len(hexSlice)-1]
 	}
 
@@ -42,12 +49,16 @@ func CompactEncode(hexSlice []byte) []byte {
 	return buf
 }
 
-func CompactDecode(str []byte) []byte {
-	base := CompactHexDecode(str)
-	base = base[:len(base)-1]
-	if base[0] >= 2 {
-		base = append(base, 16)
+// Decode a HP encoded byte array into a nibble array
+// with terminator flag if applicable
+func CompactDecode(key []byte) []byte {
+	base := CompactHexDecode(key) // appends the terminator flag by default
+	if base[0] < 2 {
+		// remove the terminator flag if its not in the HP
+		base = base[:len(base)-1]
 	}
+
+	// HP tells us if key length is even or odd
 	if base[0]%2 == 1 {
 		base = base[1:]
 	} else {
@@ -57,10 +68,13 @@ func CompactDecode(str []byte) []byte {
 	return base
 }
 
-func CompactHexDecode(str []byte) []byte {
-	l := len(str)*2 + 1
+// Decode a byte array into a nibble array.
+// Assumes the key coressponds to a terminator node (ie appends 16)
+// CompactHexDecode is called immediately by the Get/Update/Remove functions.
+func CompactHexDecode(key []byte) []byte {
+	l := len(key)*2 + 1
 	var nibbles = make([]byte, l)
-	for i, b := range str {
+	for i, b := range key {
 		nibbles[i*2] = b / 16
 		nibbles[i*2+1] = b % 16
 	}
@@ -68,12 +82,13 @@ func CompactHexDecode(str []byte) []byte {
 	return nibbles
 }
 
-func DecodeCompact(key []byte) []byte {
-	l := len(key) / 2
+// This is really a compact encoding of nibbles
+// without hex-prefix
+func DecodeCompact(nibbles []byte) []byte {
+	l := len(nibbles) / 2
 	var res = make([]byte, l)
 	for i := 0; i < l; i++ {
-		v1, v0 := key[2*i], key[2*i+1]
-		res[i] = v1*16 + v0
+		res[i] = 16*nibbles[2*i] + nibbles[2*i+1]
 	}
 	return res
 }
