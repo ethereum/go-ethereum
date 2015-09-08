@@ -61,10 +61,10 @@ func (self *CpuAgent) Stop() {
 }
 
 func (self *CpuAgent) Start() {
-	defer self.mu.Unlock()
 	self.mu.Lock()
-
-	if atomic.LoadInt32(&self.isMining) == 1 {
+	defer self.mu.Unlock()
+	
+	if !atomic.CompareAndSwapInt32(&self.isMining, 0, 1) {
 		return // agent already started
 	}
 
@@ -74,8 +74,6 @@ func (self *CpuAgent) Start() {
 	self.workCh = make(chan *Work, 1)
 
 	go self.update()
-
-	atomic.StoreInt32(&self.isMining, 1)
 }
 
 func (self *CpuAgent) update() {
