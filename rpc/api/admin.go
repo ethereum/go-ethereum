@@ -55,7 +55,6 @@ var (
 		"admin_exportChain":        (*adminApi).ExportChain,
 		"admin_importChain":        (*adminApi).ImportChain,
 		"admin_verbosity":          (*adminApi).Verbosity,
-		"admin_chainSyncStatus":    (*adminApi).ChainSyncStatus,
 		"admin_setSolc":            (*adminApi).SetSolc,
 		"admin_datadir":            (*adminApi).DataDir,
 		"admin_startRPC":           (*adminApi).StartRPC,
@@ -230,17 +229,6 @@ func (self *adminApi) Verbosity(req *shared.Request) (interface{}, error) {
 
 	glog.SetV(args.Level)
 	return true, nil
-}
-
-func (self *adminApi) ChainSyncStatus(req *shared.Request) (interface{}, error) {
-	pending, cached, importing, estimate := self.ethereum.Downloader().Stats()
-
-	return map[string]interface{}{
-		"blocksAvailable":        pending,
-		"blocksWaitingForImport": cached,
-		"importing":              importing,
-		"estimate":               estimate.String(),
-	}, nil
 }
 
 func (self *adminApi) SetSolc(req *shared.Request) (interface{}, error) {

@@ -32,7 +32,6 @@ var (
 	AutoCompletion = map[string][]string{
 		"admin": []string{
 			"addPeer",
-			"chainSyncStatus",
 			"datadir",
 			"exportChain",
 			"getContractInfo",
@@ -99,6 +98,7 @@ var (
 			"sendRawTransaction",
 			"sendTransaction",
 			"sign",
+			"syncing",
 		},
 		"miner": []string{
 			"hashrate",
