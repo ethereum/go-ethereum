@@ -135,6 +135,7 @@ type Block struct {
 	ReceivedAt time.Time
 }
 
+// [deprecated by eth/63]
 // StorageBlock defines the RLP encoding of a Block stored in the
 // state database. The StorageBlock encoding contains fields that
 // would otherwise need to be recomputed.
@@ -147,6 +148,7 @@ type extblock struct {
 	Uncles []*Header
 }
 
+// [deprecated by eth/63]
 // "storage" block encoding. used for database.
 type storageblock struct {
 	Header *Header
@@ -268,6 +270,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 	})
 }
 
+// [deprecated by eth/63]
 func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
 	var sb storageblock
 	if err := s.Decode(&sb); err != nil {
@@ -277,6 +280,7 @@ func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// [deprecated by eth/63]
 func (b *StorageBlock) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, storageblock{
 		Header: b.header,

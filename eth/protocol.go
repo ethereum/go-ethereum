@@ -26,6 +26,15 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// Mode represents the mode of operation of the eth client.
+type Mode int
+
+const (
+	ArchiveMode Mode = iota // Maintain the entire blockchain history
+	FullMode                // Maintain only a recent view of the blockchain
+	LightMode               // Don't maintain any history, rather fetch on demand
+)
+
 // Constants to match up protocol versions and messages
 const (
 	eth61 = 61
@@ -33,6 +42,14 @@ const (
 	eth63 = 63
 	eth64 = 64
 )
+
+// minimumProtocolVersion is the minimum version of the protocol eth must run to
+// support the desired mode of operation.
+var minimumProtocolVersion = map[Mode]uint{
+	ArchiveMode: eth61,
+	FullMode:    eth63,
+	LightMode:   eth64,
+}
 
 // Supported versions of the eth protocol (first is primary).
 var ProtocolVersions = []uint{eth64, eth63, eth62, eth61}
@@ -212,6 +229,22 @@ type blockBody struct {
 
 // blockBodiesData is the network packet for block content distribution.
 type blockBodiesData []*blockBody
+
+// blockBodyRLP represents the RLP encoded data content of a single block.
+type blockBodyRLP []byte
+
+// EncodeRLP is a specialized encoder for a block body to pass the already
+// encoded body RLPs from the database on, without double encoding.
+func (b *blockBodyRLP) EncodeRLP(w io.Writer) error {
+	if _, err := w.Write([]byte(*b)); err != nil {
+		return err
+	}
+	return nil
+}
+
+// blockBodiesRLPData is the network packet for block content distribution
+// based on original RLP formatting (i.e. skip the db-decode/proto-encode).
+type blockBodiesRLPData []*blockBodyRLP
 
 // nodeDataData is the network response packet for a node data retrieval.
 type nodeDataData []struct {

@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -36,8 +37,12 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// This is the target maximum size of returned blocks, headers or node data.
+// softResponseLimit is the target maximum size of returned blocks, headers or node data.
 const softResponseLimit = 2 * 1024 * 1024
+
+// errIncompatibleConfig is returned if the requested protocols and configs are
+// not compatible (low protocol version restrictions and high requirements).
+var errIncompatibleConfig = errors.New("incompatible configuration")
 
 func errResp(code errCode, format string, v ...interface{}) error {
 	return fmt.Errorf("%v - %v", code, fmt.Sprintf(format, v...))
@@ -46,17 +51,8 @@ func errResp(code errCode, format string, v ...interface{}) error {
 type hashFetcherFn func(common.Hash) error
 type blockFetcherFn func([]common.Hash) error
 
-// extProt is an interface which is passed around so we can expose GetHashes and GetBlock without exposing it to the rest of the protocol
-// extProt is passed around to peers which require to GetHashes and GetBlocks
-type extProt struct {
-	getHashes hashFetcherFn
-	getBlocks blockFetcherFn
-}
-
-func (ep extProt) GetHashes(hash common.Hash) error    { return ep.getHashes(hash) }
-func (ep extProt) GetBlock(hashes []common.Hash) error { return ep.getBlocks(hashes) }
-
 type ProtocolManager struct {
+	mode     Mode
 	txpool   txPool
 	chainman *core.ChainManager
 	chaindb  common.Database
@@ -84,9 +80,10 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager, chaindb common.Database) *ProtocolManager {
+func NewProtocolManager(mode Mode, networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager, chaindb common.Database) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
+		mode:      mode,
 		eventMux:  mux,
 		txpool:    txpool,
 		chainman:  chainman,
@@ -97,11 +94,14 @@ func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow po
 		quitSync:  make(chan struct{}),
 	}
 	// Initiate a sub-protocol for every implemented version we can handle
-	manager.SubProtocols = make([]p2p.Protocol, len(ProtocolVersions))
-	for i := 0; i < len(manager.SubProtocols); i++ {
-		version := ProtocolVersions[i]
-
-		manager.SubProtocols[i] = p2p.Protocol{
+	manager.SubProtocols = make([]p2p.Protocol, 0, len(ProtocolVersions))
+	for i, version := range ProtocolVersions {
+		// Skip protocol version if incompatible with the mode of operation
+		if minimumProtocolVersion[mode] > version {
+			continue
+		}
+		// Compatible, initialize the sub-protocol
+		manager.SubProtocols = append(manager.SubProtocols, p2p.Protocol{
 			Name:    "eth",
 			Version: version,
 			Length:  ProtocolLengths[i],
@@ -110,7 +110,10 @@ func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow po
 				manager.newPeerCh <- peer
 				return manager.handle(peer)
 			},
-		}
+		})
+	}
+	if len(manager.SubProtocols) == 0 {
+		return nil, errIncompatibleConfig
 	}
 	// Construct the different synchronisation mechanisms
 	manager.downloader = downloader.New(manager.eventMux, manager.chainman.HasBlock, manager.chainman.GetBlock, manager.chainman.CurrentBlock, manager.chainman.InsertChain, manager.removePeer)
@@ -123,7 +126,7 @@ func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow po
 	}
 	manager.fetcher = fetcher.New(manager.chainman.GetBlock, validator, manager.BroadcastBlock, heighter, manager.chainman.InsertChain, manager.removePeer)
 
-	return manager
+	return manager, nil
 }
 
 func (pm *ProtocolManager) removePeer(id string) {
@@ -345,33 +348,33 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&query); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-		// Gather blocks until the fetch or network limits is reached
+		// Gather headers until the fetch or network limits is reached
 		var (
 			bytes   common.StorageSize
 			headers []*types.Header
 			unknown bool
 		)
 		for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit && len(headers) < downloader.MaxHeaderFetch {
-			// Retrieve the next block satisfying the query
-			var origin *types.Block
+			// Retrieve the next header satisfying the query
+			var origin *types.Header
 			if query.Origin.Hash != (common.Hash{}) {
-				origin = pm.chainman.GetBlock(query.Origin.Hash)
+				origin = pm.chainman.GetHeader(query.Origin.Hash)
 			} else {
-				origin = pm.chainman.GetBlockByNumber(query.Origin.Number)
+				origin = pm.chainman.GetHeaderByNumber(query.Origin.Number)
 			}
 			if origin == nil {
 				break
 			}
-			headers = append(headers, origin.Header())
-			bytes += origin.Size()
+			headers = append(headers, origin)
+			bytes += 500 // Approximate, should be good enough estimate
 
-			// Advance to the next block of the query
+			// Advance to the next header of the query
 			switch {
 			case query.Origin.Hash != (common.Hash{}) && query.Reverse:
 				// Hash based traversal towards the genesis block
 				for i := 0; i < int(query.Skip)+1; i++ {
-					if block := pm.chainman.GetBlock(query.Origin.Hash); block != nil {
-						query.Origin.Hash = block.ParentHash()
+					if header := pm.chainman.GetHeader(query.Origin.Hash); header != nil {
+						query.Origin.Hash = header.ParentHash
 					} else {
 						unknown = true
 						break
@@ -379,9 +382,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				}
 			case query.Origin.Hash != (common.Hash{}) && !query.Reverse:
 				// Hash based traversal towards the leaf block
-				if block := pm.chainman.GetBlockByNumber(origin.NumberU64() + query.Skip + 1); block != nil {
-					if pm.chainman.GetBlockHashesFromHash(block.Hash(), query.Skip+1)[query.Skip] == query.Origin.Hash {
-						query.Origin.Hash = block.Hash()
+				if header := pm.chainman.GetHeaderByNumber(origin.Number.Uint64() + query.Skip + 1); header != nil {
+					if pm.chainman.GetBlockHashesFromHash(header.Hash(), query.Skip+1)[query.Skip] == query.Origin.Hash {
+						query.Origin.Hash = header.Hash()
 					} else {
 						unknown = true
 					}
@@ -452,23 +455,24 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Gather blocks until the fetch or network limits is reached
 		var (
 			hash   common.Hash
-			bytes  common.StorageSize
-			bodies []*blockBody
+			bytes  int
+			bodies []*blockBodyRLP
 		)
 		for bytes < softResponseLimit && len(bodies) < downloader.MaxBlockFetch {
-			//Retrieve the hash of the next block
+			// Retrieve the hash of the next block
 			if err := msgStream.Decode(&hash); err == rlp.EOL {
 				break
 			} else if err != nil {
 				return errResp(ErrDecode, "msg %v: %v", msg, err)
 			}
-			// Retrieve the requested block, stopping if enough was found
-			if block := pm.chainman.GetBlock(hash); block != nil {
-				bodies = append(bodies, &blockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
-				bytes += block.Size()
+			// Retrieve the requested block body, stopping if enough was found
+			if data := pm.chainman.GetBodyRLP(hash); len(data) != 0 {
+				body := blockBodyRLP(data)
+				bodies = append(bodies, &body)
+				bytes += len(body)
 			}
 		}
-		return p.SendBlockBodies(bodies)
+		return p.SendBlockBodiesRLP(bodies)
 
 	case p.version >= eth63 && msg.Code == GetNodeDataMsg:
 		// Decode the retrieval message
