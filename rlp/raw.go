@@ -16,7 +16,17 @@
 
 package rlp
 
-import "io"
+import (
+	"io"
+	"reflect"
+)
+
+// RawValue represents an encoded RLP value and can be used to delay
+// RLP decoding or precompute an encoding. Note that the decoder does
+// not verify whether the content of RawValues is valid RLP.
+type RawValue []byte
+
+var rawValueType = reflect.TypeOf(RawValue{})
 
 // Split returns the content of first RLP value and any
 // bytes after the value as subslices of b.

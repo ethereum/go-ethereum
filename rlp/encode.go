@@ -354,6 +354,8 @@ var (
 func makeWriter(typ reflect.Type) (writer, error) {
 	kind := typ.Kind()
 	switch {
+	case typ == rawValueType:
+		return writeRawValue, nil
 	case typ.Implements(encoderInterface):
 		return writeEncoder, nil
 	case kind != reflect.Ptr && reflect.PtrTo(typ).Implements(encoderInterface):
@@ -387,6 +389,11 @@ func makeWriter(typ reflect.Type) (writer, error) {
 
 func isByte(typ reflect.Type) bool {
 	return typ.Kind() == reflect.Uint8 && !typ.Implements(encoderInterface)
+}
+
+func writeRawValue(val reflect.Value, w *encbuf) error {
+	w.str = append(w.str, val.Bytes()...)
+	return nil
 }
 
 func writeUint(val reflect.Value, w *encbuf) error {
