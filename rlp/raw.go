@@ -28,6 +28,12 @@ type RawValue []byte
 
 var rawValueType = reflect.TypeOf(RawValue{})
 
+// ListSize returns the encoded size of an RLP list with the given
+// content size.
+func ListSize(contentSize uint64) uint64 {
+	return uint64(headsize(contentSize)) + contentSize
+}
+
 // Split returns the content of first RLP value and any
 // bytes after the value as subslices of b.
 func Split(b []byte) (k Kind, content, rest []byte, err error) {
