@@ -180,14 +180,6 @@ func (self *StateObject) Update() {
 	}
 }
 
-func (c *StateObject) GetInstr(pc *big.Int) *common.Value {
-	if int64(len(c.code)-1) < pc.Int64() {
-		return common.NewValue(0)
-	}
-
-	return common.NewValueFromBytes([]byte{c.code[pc.Int64()]})
-}
-
 func (c *StateObject) AddBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Add(c.balance, amount))
 
@@ -262,10 +254,6 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.deleted = self.deleted
 
 	return stateObject
-}
-
-func (self *StateObject) Set(stateObject *StateObject) {
-	*self = *stateObject
 }
 
 //
