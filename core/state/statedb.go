@@ -18,7 +18,6 @@
 package state
 
 import (
-	"bytes"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -276,10 +275,6 @@ func (self *StateDB) CreateAccount(addr common.Address) *StateObject {
 // Setting, copying of the state methods
 //
 
-func (s *StateDB) Cmp(other *StateDB) bool {
-	return bytes.Equal(s.trie.Root(), other.trie.Root())
-}
-
 func (self *StateDB) Copy() *StateDB {
 	state := New(common.Hash{}, self.db)
 	state.trie = self.trie
@@ -309,10 +304,6 @@ func (self *StateDB) Set(state *StateDB) {
 
 func (s *StateDB) Root() common.Hash {
 	return common.BytesToHash(s.trie.Root())
-}
-
-func (s *StateDB) Trie() *trie.SecureTrie {
-	return s.trie
 }
 
 // Syncs the trie and all siblings

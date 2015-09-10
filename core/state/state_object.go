@@ -264,18 +264,9 @@ func (self *StateObject) Balance() *big.Int {
 	return self.balance
 }
 
-func (c *StateObject) N() *big.Int {
-	return big.NewInt(int64(c.nonce))
-}
-
 // Returns the address of the contract/account
 func (c *StateObject) Address() common.Address {
 	return c.address
-}
-
-// Returns the initialization Code
-func (c *StateObject) Init() Code {
-	return c.initCode
 }
 
 func (self *StateObject) Trie() *trie.SecureTrie {
@@ -292,11 +283,6 @@ func (self *StateObject) Code() []byte {
 
 func (self *StateObject) SetCode(code []byte) {
 	self.code = code
-	self.dirty = true
-}
-
-func (self *StateObject) SetInitCode(code []byte) {
-	self.initCode = code
 	self.dirty = true
 }
 
@@ -336,19 +322,6 @@ func (c *StateObject) RlpEncode() []byte {
 
 func (c *StateObject) CodeHash() common.Bytes {
 	return crypto.Sha3(c.code)
-}
-
-func (c *StateObject) RlpDecode(data []byte) {
-	decoder := common.NewValueFromBytes(data)
-	c.nonce = decoder.Get(0).Uint()
-	c.balance = decoder.Get(1).BigInt()
-	c.trie = trie.NewSecure(decoder.Get(2).Bytes(), c.db)
-	c.storage = make(map[string]common.Hash)
-	c.gasPool = new(big.Int)
-
-	c.codeHash = decoder.Get(3).Bytes()
-
-	c.code, _ = c.db.Get(c.codeHash)
 }
 
 // Storage change object. Used by the manifest for notifying changes to
