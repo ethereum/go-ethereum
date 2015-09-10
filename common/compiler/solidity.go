@@ -34,15 +34,10 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-const (
-	// flair           = "Christian <c@ethdev.com> and Lefteris <lefteris@ethdev.com> (c) 2014-2015"
-	flair           = ""
-	languageVersion = "0"
-)
-
 var (
-	versionRegExp = regexp.MustCompile("[0-9]+.[0-9]+.[0-9]+")
-	params        = []string{
+	versionRegExp = regexp.MustCompile("[0-9]+\\.[0-9]+\\.[0-9]+")
+	newAPIRegexp  = regexp.MustCompile("0\\.1\\.[2-9][0-9]*")
+	paramsLegacy  = []string{
 		"--binary",       // Request to output the contract in binary (hexadecimal).
 		"file",           //
 		"--json-abi",     // Request to output the contract's JSON ABI interface.
@@ -53,6 +48,15 @@ var (
 		"file",
 		"--add-std",
 		"1",
+	}
+	paramsNew = []string{
+		"--bin",        // Request to output the contract in binary (hexadecimal).
+		"--abi",        // Request to output the contract's JSON ABI interface.
+		"--userdoc",    // Request to output the contract's Natspec user documentation.
+		"--devdoc",     // Request to output the contract's Natspec developer documentation.
+		"--add-std",    // include standard lib contracts
+		"--optimize=1", // code optimizer switched on
+		"-o",           // output directory
 	}
 )
 
@@ -66,14 +70,17 @@ type ContractInfo struct {
 	Language        string      `json:"language"`
 	LanguageVersion string      `json:"languageVersion"`
 	CompilerVersion string      `json:"compilerVersion"`
+	CompilerOptions string      `json:"compilerOptions"`
 	AbiDefinition   interface{} `json:"abiDefinition"`
 	UserDoc         interface{} `json:"userDoc"`
 	DeveloperDoc    interface{} `json:"developerDoc"`
 }
 
 type Solidity struct {
-	solcPath string
-	version  string
+	solcPath    string
+	version     string
+	fullVersion string
+	legacy      bool
 }
 
 func New(solcPath string) (sol *Solidity, err error) {
@@ -94,17 +101,22 @@ func New(solcPath string) (sol *Solidity, err error) {
 		return
 	}
 
-	version := versionRegExp.FindString(out.String())
+	fullVersion := out.String()
+	version := versionRegExp.FindString(fullVersion)
+	legacy := !newAPIRegexp.MatchString(version)
+
 	sol = &Solidity{
-		solcPath: solcPath,
-		version:  version,
+		solcPath:    solcPath,
+		version:     version,
+		fullVersion: fullVersion,
+		legacy:      legacy,
 	}
 	glog.V(logger.Info).Infoln(sol.Info())
 	return
 }
 
 func (sol *Solidity) Info() string {
-	return fmt.Sprintf("solc v%s\nSolidity Compiler: %s\n%s", sol.version, sol.solcPath, flair)
+	return fmt.Sprintf("%s\npath: %s", sol.fullVersion, sol.solcPath)
 }
 
 func (sol *Solidity) Version() string {
@@ -127,6 +139,15 @@ func (sol *Solidity) Compile(source string) (map[string]*Contract, error) {
 	// Assemble the compiler command, change to the temp folder and capture any errors
 	stderr := new(bytes.Buffer)
 
+	var params []string
+	if sol.legacy {
+		params = paramsLegacy
+	} else {
+		params = paramsNew
+		params = append(params, wd)
+	}
+	compilerOptions := strings.Join(params, " ")
+
 	cmd := exec.Command(sol.solcPath, params...)
 	cmd.Dir = wd
 	cmd.Stdin = strings.NewReader(source)
@@ -136,7 +157,7 @@ func (sol *Solidity) Compile(source string) (map[string]*Contract, error) {
 		return nil, fmt.Errorf("solc: %v\n%s", err, string(stderr.Bytes()))
 	}
 	// Sanity check that something was actually built
-	matches, _ := filepath.Glob(wd + "/*.binary")
+	matches, _ := filepath.Glob(wd + "/*\\.bin*")
 	if len(matches) < 1 {
 		return nil, fmt.Errorf("solc: no build results found")
 	}
@@ -148,7 +169,11 @@ func (sol *Solidity) Compile(source string) (map[string]*Contract, error) {
 
 		// Parse the individual compilation results (code binary, ABI definitions, user and dev docs)
 		var binary []byte
-		if binary, err = ioutil.ReadFile(filepath.Join(wd, base+".binary")); err != nil {
+		binext := ".bin"
+		if sol.legacy {
+			binext = ".binary"
+		}
+		if binary, err = ioutil.ReadFile(filepath.Join(wd, base+binext)); err != nil {
 			return nil, fmt.Errorf("solc: error reading compiler output for code: %v", err)
 		}
 
@@ -178,8 +203,9 @@ func (sol *Solidity) Compile(source string) (map[string]*Contract, error) {
 			Info: ContractInfo{
 				Source:          source,
 				Language:        "Solidity",
-				LanguageVersion: languageVersion,
+				LanguageVersion: sol.version,
 				CompilerVersion: sol.version,
+				CompilerOptions: compilerOptions,
 				AbiDefinition:   abi,
 				UserDoc:         userdoc,
 				DeveloperDoc:    devdoc,
