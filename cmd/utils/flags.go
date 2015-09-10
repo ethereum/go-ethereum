@@ -121,6 +121,10 @@ var (
 		Name:  "genesis",
 		Usage: "Inserts/Overwrites the genesis block (json format)",
 	}
+	DevModeFlag = cli.BoolFlag{
+		Name:  "dev",
+		Usage: "Developer mode. This mode creates a private network and sets several debugging flags",
+	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
 		Usage: "Custom node name",
@@ -410,7 +414,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
 	}
 
-	return &eth.Config{
+	cfg := &eth.Config{
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 ctx.GlobalString(DataDirFlag.Name),
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
@@ -447,6 +451,33 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		SolcPath:                ctx.GlobalString(SolcPathFlag.Name),
 		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
 	}
+
+	if ctx.GlobalBool(DevModeFlag.Name) {
+		if !ctx.GlobalIsSet(VMDebugFlag.Name) {
+			cfg.VmDebug = true
+		}
+		if !ctx.GlobalIsSet(MaxPeersFlag.Name) {
+			cfg.MaxPeers = 0
+		}
+		if !ctx.GlobalIsSet(GasPriceFlag.Name) {
+			cfg.GasPrice = new(big.Int)
+		}
+		if !ctx.GlobalIsSet(ListenPortFlag.Name) {
+			cfg.Port = "0" // auto port
+		}
+		if !ctx.GlobalIsSet(WhisperEnabledFlag.Name) {
+			cfg.Shh = true
+		}
+		if !ctx.GlobalIsSet(DataDirFlag.Name) {
+			cfg.DataDir = os.TempDir() + "/ethereum_dev_mode"
+		}
+		cfg.PowTest = true
+		cfg.DevMode = true
+
+		glog.V(logger.Info).Infoln("dev mode enabled")
+	}
+
+	return cfg
 }
 
 // SetupLogger configures glog from the logging-related command line flags.
