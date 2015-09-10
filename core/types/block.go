@@ -18,9 +18,6 @@
 package types
 
 import (
-	"bytes"
-	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
@@ -29,94 +26,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// A BlockNonce is a 64-bit hash which proves (combined with the
-// mix-hash) that a suffcient amount of computation has been carried
-// out on a block.
-type BlockNonce [8]byte
-
-func EncodeNonce(i uint64) BlockNonce {
-	var n BlockNonce
-	binary.BigEndian.PutUint64(n[:], i)
-	return n
-}
-
-func (n BlockNonce) Uint64() uint64 {
-	return binary.BigEndian.Uint64(n[:])
-}
-
-type Header struct {
-	ParentHash  common.Hash    // Hash to the previous block
-	UncleHash   common.Hash    // Uncles of this block
-	Coinbase    common.Address // The coin base address
-	Root        common.Hash    // Block Trie state
-	TxHash      common.Hash    // Tx sha
-	ReceiptHash common.Hash    // Receipt sha
-	Bloom       Bloom          // Bloom
-	Difficulty  *big.Int       // Difficulty for the current block
-	Number      *big.Int       // The block number
-	GasLimit    *big.Int       // Gas limit
-	GasUsed     *big.Int       // Gas used
-	Time        *big.Int       // Creation time
-	Extra       []byte         // Extra data
-	MixDigest   common.Hash    // for quick difficulty verification
-	Nonce       BlockNonce
-}
-
-func (h *Header) Hash() common.Hash {
-	return rlpHash(h)
-}
-
-func (h *Header) HashNoNonce() common.Hash {
-	return rlpHash([]interface{}{
-		h.ParentHash,
-		h.UncleHash,
-		h.Coinbase,
-		h.Root,
-		h.TxHash,
-		h.ReceiptHash,
-		h.Bloom,
-		h.Difficulty,
-		h.Number,
-		h.GasLimit,
-		h.GasUsed,
-		h.Time,
-		h.Extra,
-	})
-}
-
-func (h *Header) UnmarshalJSON(data []byte) error {
-	var ext struct {
-		ParentHash string
-		Coinbase   string
-		Difficulty string
-		GasLimit   string
-		Time       *big.Int
-		Extra      string
-	}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	if err := dec.Decode(&ext); err != nil {
-		return err
-	}
-
-	h.ParentHash = common.HexToHash(ext.ParentHash)
-	h.Coinbase = common.HexToAddress(ext.Coinbase)
-	h.Difficulty = common.String2Big(ext.Difficulty)
-	h.Time = ext.Time
-	h.Extra = []byte(ext.Extra)
-	return nil
-}
-
-func rlpHash(x interface{}) (h common.Hash) {
-	hw := sha3.NewKeccak256()
-	rlp.Encode(hw, x)
-	hw.Sum(h[:0])
-	return h
-}
-
+// Header is the main Ethereum block, containing all of the block data belonging
+// to the consensus protocol, as well as a few added fields for the implementation.
 type Block struct {
 	header       *Header
 	uncles       []*Header
@@ -124,7 +38,6 @@ type Block struct {
 	receipts     Receipts
 
 	// caches
-	hash atomic.Value
 	size atomic.Value
 
 	// Td is used by package core to store the total difficulty
@@ -135,6 +48,7 @@ type Block struct {
 	ReceivedAt time.Time
 }
 
+// [deprecated by eth/63]
 // StorageBlock defines the RLP encoding of a Block stored in the
 // state database. The StorageBlock encoding contains fields that
 // would otherwise need to be recomputed.
@@ -147,6 +61,7 @@ type extblock struct {
 	Uncles []*Header
 }
 
+// [deprecated by eth/63]
 // "storage" block encoding. used for database.
 type storageblock struct {
 	Header *Header
@@ -167,69 +82,56 @@ var (
 // The values of TxHash, UncleHash, ReceiptHash and Bloom in header
 // are ignored and set to values derived from the given txs, uncles
 // and receipts.
-func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt) *Block {
-	b := &Block{header: copyHeader(header), Td: new(big.Int)}
+func NewBlock(header *RawHeader, txs []*Transaction, uncles []*Header, receipts []*Receipt) *Block {
+	head := header.Copy()
 
 	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
-		b.header.TxHash = emptyRootHash
+		head.TxHash = emptyRootHash
 	} else {
-		b.header.TxHash = DeriveSha(Transactions(txs))
-		b.transactions = make(Transactions, len(txs))
-		copy(b.transactions, txs)
+		head.TxHash = DeriveSha(Transactions(txs))
 	}
+	txsCopy := make(Transactions, len(txs))
+	copy(txsCopy, txs)
 
 	if len(receipts) == 0 {
-		b.header.ReceiptHash = emptyRootHash
+		head.ReceiptHash = emptyRootHash
 	} else {
-		b.header.ReceiptHash = DeriveSha(Receipts(receipts))
-		b.header.Bloom = CreateBloom(receipts)
-		b.receipts = make([]*Receipt, len(receipts))
-		copy(b.receipts, receipts)
+		head.ReceiptHash = DeriveSha(Receipts(receipts))
+		head.Bloom = CreateBloom(receipts)
 	}
+	receiptsCopy := make([]*Receipt, len(receipts))
+	copy(receiptsCopy, receipts)
 
 	if len(uncles) == 0 {
-		b.header.UncleHash = emptyUncleHash
+		head.UncleHash = emptyUncleHash
 	} else {
-		b.header.UncleHash = CalcUncleHash(uncles)
-		b.uncles = make([]*Header, len(uncles))
-		for i := range uncles {
-			b.uncles[i] = copyHeader(uncles[i])
-		}
+		head.UncleHash = CalcUncleHash(uncles)
 	}
-
-	return b
+	unclesCopy := make([]*Header, len(uncles))
+	for i := range uncles {
+		unclesCopy[i] = uncles[i].Copy()
+	}
+	// Assemble and return an immutable block
+	return &Block{
+		header:       &Header{rawHeader: *head},
+		transactions: txsCopy,
+		receipts:     receiptsCopy,
+		uncles:       unclesCopy,
+		Td:           new(big.Int),
+	}
 }
 
-// NewBlockWithHeader creates a block with the given header data. The
-// header data is copied, changes to header and to the field values
-// will not affect the block.
+// NewBlockWithRawHeader creates a block with the given header data. The header
+// data is copied, changes to header and to the field values will not affect
+// the block.
+func NewBlockWithRawHeader(raw *RawHeader) *Block {
+	return &Block{header: NewHeader(raw)}
+}
+
+// NewBlockWithHeader creates a block with the given immutable header.
 func NewBlockWithHeader(header *Header) *Block {
-	return &Block{header: copyHeader(header)}
-}
-
-func copyHeader(h *Header) *Header {
-	cpy := *h
-	if cpy.Time = new(big.Int); h.Time != nil {
-		cpy.Time.Set(h.Time)
-	}
-	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
-		cpy.Difficulty.Set(h.Difficulty)
-	}
-	if cpy.Number = new(big.Int); h.Number != nil {
-		cpy.Number.Set(h.Number)
-	}
-	if cpy.GasLimit = new(big.Int); h.GasLimit != nil {
-		cpy.GasLimit.Set(h.GasLimit)
-	}
-	if cpy.GasUsed = new(big.Int); h.GasUsed != nil {
-		cpy.GasUsed.Set(h.GasUsed)
-	}
-	if len(h.Extra) > 0 {
-		cpy.Extra = make([]byte, len(h.Extra))
-		copy(cpy.Extra, h.Extra)
-	}
-	return &cpy
+	return &Block{header: header}
 }
 
 func (b *Block) ValidateFields() error {
@@ -268,6 +170,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 	})
 }
 
+// [deprecated by eth/63]
 func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
 	var sb storageblock
 	if err := s.Decode(&sb); err != nil {
@@ -277,6 +180,7 @@ func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// [deprecated by eth/63]
 func (b *StorageBlock) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, storageblock{
 		Header: b.header,
@@ -300,29 +204,28 @@ func (b *Block) Transaction(hash common.Hash) *Transaction {
 	return nil
 }
 
-func (b *Block) Number() *big.Int     { return new(big.Int).Set(b.header.Number) }
-func (b *Block) GasLimit() *big.Int   { return new(big.Int).Set(b.header.GasLimit) }
-func (b *Block) GasUsed() *big.Int    { return new(big.Int).Set(b.header.GasUsed) }
-func (b *Block) Difficulty() *big.Int { return new(big.Int).Set(b.header.Difficulty) }
-func (b *Block) Time() *big.Int       { return new(big.Int).Set(b.header.Time) }
+func (b *Block) Number() *big.Int     { return b.header.Number() }
+func (b *Block) GasLimit() *big.Int   { return b.header.GasLimit() }
+func (b *Block) GasUsed() *big.Int    { return b.header.GasUsed() }
+func (b *Block) Difficulty() *big.Int { return b.header.Difficulty() }
+func (b *Block) Time() *big.Int       { return b.header.Time() }
 
-func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
-func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
-func (b *Block) Nonce() uint64            { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
-func (b *Block) Bloom() Bloom             { return b.header.Bloom }
-func (b *Block) Coinbase() common.Address { return b.header.Coinbase }
-func (b *Block) Root() common.Hash        { return b.header.Root }
-func (b *Block) ParentHash() common.Hash  { return b.header.ParentHash }
-func (b *Block) TxHash() common.Hash      { return b.header.TxHash }
-func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash }
-func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
-func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
+func (b *Block) NumberU64() uint64        { return b.header.Number().Uint64() }
+func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest() }
+func (b *Block) Nonce() uint64            { return b.header.Nonce().Uint64() }
+func (b *Block) Bloom() Bloom             { return b.header.Bloom() }
+func (b *Block) Coinbase() common.Address { return b.header.Coinbase() }
+func (b *Block) Root() common.Hash        { return b.header.Root() }
+func (b *Block) ParentHash() common.Hash  { return b.header.ParentHash() }
+func (b *Block) TxHash() common.Hash      { return b.header.TxHash() }
+func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash() }
+func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash() }
+func (b *Block) Extra() []byte            { return b.header.Extra() }
 
-func (b *Block) Header() *Header { return copyHeader(b.header) }
+func (b *Block) Header() *Header { return b.header }
 
-func (b *Block) HashNoNonce() common.Hash {
-	return b.header.HashNoNonce()
-}
+func (b *Block) HashNoNonce() common.Hash { return b.header.HashNoNonce() }
+func (b *Block) Hash() common.Hash        { return b.header.Hash() }
 
 func (b *Block) Size() common.StorageSize {
 	if size := b.size.Load(); size != nil {
@@ -348,11 +251,11 @@ func CalcUncleHash(uncles []*Header) common.Hash {
 // WithMiningResult returns a new block with the data from b
 // where nonce and mix digest are set to the provided values.
 func (b *Block) WithMiningResult(nonce uint64, mixDigest common.Hash) *Block {
-	cpy := *b.header
-	binary.BigEndian.PutUint64(cpy.Nonce[:], nonce)
-	cpy.MixDigest = mixDigest
+	header := b.header.Raw()
+	header.Nonce = EncodeNonce(nonce)
+	header.MixDigest = mixDigest
 	return &Block{
-		header:       &cpy,
+		header:       &Header{rawHeader: *header},
 		transactions: b.transactions,
 		receipts:     b.receipts,
 		uncles:       b.uncles,
@@ -363,27 +266,18 @@ func (b *Block) WithMiningResult(nonce uint64, mixDigest common.Hash) *Block {
 // WithBody returns a new block with the given transaction and uncle contents.
 func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 	block := &Block{
-		header:       copyHeader(b.header),
+		header:       b.header.Copy(),
 		transactions: make([]*Transaction, len(transactions)),
 		uncles:       make([]*Header, len(uncles)),
 	}
 	copy(block.transactions, transactions)
 	for i := range uncles {
-		block.uncles[i] = copyHeader(uncles[i])
+		block.uncles[i] = uncles[i].Copy()
 	}
 	return block
 }
 
 // Implement pow.Block
-
-func (b *Block) Hash() common.Hash {
-	if hash := b.hash.Load(); hash != nil {
-		return hash.(common.Hash)
-	}
-	v := rlpHash(b.header)
-	b.hash.Store(v)
-	return v
-}
 
 func (b *Block) String() string {
 	str := fmt.Sprintf(`Block(#%v): Size: %v TD: %v {
@@ -396,27 +290,6 @@ Uncles:
 }
 `, b.Number(), b.Size(), b.Td, b.header.HashNoNonce(), b.header, b.transactions, b.uncles)
 	return str
-}
-
-func (h *Header) String() string {
-	return fmt.Sprintf(`Header(%x):
-[
-	ParentHash:	    %x
-	UncleHash:	    %x
-	Coinbase:	    %x
-	Root:		    %x
-	TxSha		    %x
-	ReceiptSha:	    %x
-	Bloom:		    %x
-	Difficulty:	    %v
-	Number:		    %v
-	GasLimit:	    %v
-	GasUsed:	    %v
-	Time:		    %v
-	Extra:		    %s
-	MixDigest:      %x
-	Nonce:		    %x
-]`, h.Hash(), h.ParentHash, h.UncleHash, h.Coinbase, h.Root, h.TxHash, h.ReceiptHash, h.Bloom, h.Difficulty, h.Number, h.GasLimit, h.GasUsed, h.Time, h.Extra, h.MixDigest, h.Nonce)
 }
 
 type Blocks []*Block
@@ -442,4 +315,4 @@ func (self blockSorter) Swap(i, j int) {
 }
 func (self blockSorter) Less(i, j int) bool { return self.by(self.blocks[i], self.blocks[j]) }
 
-func Number(b1, b2 *Block) bool { return b1.header.Number.Cmp(b2.header.Number) < 0 }
+func Number(b1, b2 *Block) bool { return b1.header.Number().Cmp(b2.header.Number()) < 0 }

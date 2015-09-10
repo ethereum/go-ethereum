@@ -27,7 +27,7 @@ import (
 
 type VMEnv struct {
 	state  *state.StateDB
-	header *types.Header
+	header *types.RawHeader
 	msg    Message
 	depth  int
 	chain  *ChainManager
@@ -40,7 +40,7 @@ func NewEnv(state *state.StateDB, chain *ChainManager, msg Message, header *type
 	return &VMEnv{
 		chain:  chain,
 		state:  state,
-		header: header,
+		header: header.Raw(),
 		msg:    msg,
 		typ:    vm.StdVmTy,
 	}

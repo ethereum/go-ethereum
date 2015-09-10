@@ -230,7 +230,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
 	rbloom := types.CreateBloom(receipts)
-	if rbloom != header.Bloom {
+	if rbloom != header.Bloom() {
 		err = fmt.Errorf("unable to replicate block's bloom=%x", rbloom)
 		return
 	}
@@ -238,21 +238,21 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	// The transactions Trie's root (R = (Tr [[i, RLP(T1)], [i, RLP(T2)], ... [n, RLP(Tn)]]))
 	// can be used by light clients to make sure they've received the correct Txs
 	txSha := types.DeriveSha(txs)
-	if txSha != header.TxHash {
+	if txSha != header.TxHash() {
 		err = fmt.Errorf("invalid transaction root hash. received=%x calculated=%x", header.TxHash, txSha)
 		return
 	}
 
 	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, R1]]))
 	receiptSha := types.DeriveSha(receipts)
-	if receiptSha != header.ReceiptHash {
+	if receiptSha != header.ReceiptHash() {
 		err = fmt.Errorf("invalid receipt root hash. received=%x calculated=%x", header.ReceiptHash, receiptSha)
 		return
 	}
 
 	// Verify UncleHash before running other uncle validations
 	unclesSha := types.CalcUncleHash(uncles)
-	if unclesSha != header.UncleHash {
+	if unclesSha != header.UncleHash() {
 		err = fmt.Errorf("invalid uncles root hash. received=%x calculated=%x", header.UncleHash, unclesSha)
 		return
 	}
@@ -267,7 +267,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	// Commit state objects/accounts to a temporary trie (does not save)
 	// used to calculate the state root.
 	state.SyncObjects()
-	if header.Root != state.Root() {
+	if header.Root() != state.Root() {
 		err = fmt.Errorf("invalid merkle root. received=%x got=%x", header.Root, state.Root())
 		return
 	}
@@ -291,16 +291,16 @@ func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*t
 	reward := new(big.Int).Set(BlockReward)
 	r := new(big.Int)
 	for _, uncle := range uncles {
-		r.Add(uncle.Number, big8)
-		r.Sub(r, header.Number)
+		r.Add(uncle.Number(), big8)
+		r.Sub(r, header.Number())
 		r.Mul(r, BlockReward)
 		r.Div(r, big8)
-		statedb.AddBalance(uncle.Coinbase, r)
+		statedb.AddBalance(uncle.Coinbase(), r)
 
 		r.Div(BlockReward, big32)
 		reward.Add(reward, r)
 	}
-	statedb.AddBalance(header.Coinbase, reward)
+	statedb.AddBalance(header.Coinbase(), reward)
 }
 
 func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *types.Block) error {
@@ -333,11 +333,11 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 			return UncleError("uncle[%d](%x) is ancestor", i, hash[:4])
 		}
 
-		if ancestors[uncle.ParentHash] == nil || uncle.ParentHash == parent.Hash() {
-			return UncleError("uncle[%d](%x)'s parent is not ancestor (%x)", i, hash[:4], uncle.ParentHash[0:4])
+		if uncleParent := uncle.ParentHash(); ancestors[uncleParent] == nil || uncleParent == parent.Hash() {
+			return UncleError("uncle[%d](%x)'s parent is not ancestor (%x)", i, hash[:4], uncleParent[:4])
 		}
 
-		if err := ValidateHeader(sm.Pow, uncle, ancestors[uncle.ParentHash], true, true); err != nil {
+		if err := ValidateHeader(sm.Pow, uncle, ancestors[uncle.ParentHash()], true, true); err != nil {
 			return ValidationError(fmt.Sprintf("uncle[%d](%x) header invalid: %v", i, hash[:4], err))
 		}
 	}
@@ -368,49 +368,49 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 
 // See YP section 4.3.4. "Block Header Validity"
 // Validates a block. Returns an error if the block is invalid.
-func ValidateHeader(pow pow.PoW, block *types.Header, parent *types.Block, checkPow, uncle bool) error {
-	if big.NewInt(int64(len(block.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
-		return fmt.Errorf("Block extra data too long (%d)", len(block.Extra))
+func ValidateHeader(pow pow.PoW, header *types.Header, parent *types.Block, checkPow, uncle bool) error {
+	if big.NewInt(int64(len(header.Extra()))).Cmp(params.MaximumExtraDataSize) == 1 {
+		return fmt.Errorf("Header extra data too long (%d)", len(header.Extra()))
 	}
 
 	if uncle {
-		if block.Time.Cmp(common.MaxBig) == 1 {
+		if header.Time().Cmp(common.MaxBig) == 1 {
 			return BlockTSTooBigErr
 		}
 	} else {
-		if block.Time.Cmp(big.NewInt(time.Now().Unix())) == 1 {
+		if header.Time().Cmp(big.NewInt(time.Now().Unix())) == 1 {
 			return BlockFutureErr
 		}
 	}
-	if block.Time.Cmp(parent.Time()) != 1 {
+	if header.Time().Cmp(parent.Time()) != 1 {
 		return BlockEqualTSErr
 	}
 
-	expd := CalcDifficulty(block.Time.Uint64(), parent.Time().Uint64(), parent.Number(), parent.Difficulty())
-	if expd.Cmp(block.Difficulty) != 0 {
-		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
+	expd := CalcDifficulty(header.Time().Uint64(), parent.Time().Uint64(), parent.Number(), parent.Difficulty())
+	if expd.Cmp(header.Difficulty()) != 0 {
+		return fmt.Errorf("Difficulty check failed for header %v, %v", header.Difficulty(), expd)
 	}
 
 	var a, b *big.Int
 	a = parent.GasLimit()
-	a = a.Sub(a, block.GasLimit)
+	a = a.Sub(a, header.GasLimit())
 	a.Abs(a)
 	b = parent.GasLimit()
 	b = b.Div(b, params.GasLimitBoundDivisor)
-	if !(a.Cmp(b) < 0) || (block.GasLimit.Cmp(params.MinGasLimit) == -1) {
-		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
+	if !(a.Cmp(b) < 0) || (header.GasLimit().Cmp(params.MinGasLimit) == -1) {
+		return fmt.Errorf("GasLimit check failed for header %v (%v > %v)", header.GasLimit(), a, b)
 	}
 
 	num := parent.Number()
-	num.Sub(block.Number, num)
+	num.Sub(header.Number(), num)
 	if num.Cmp(big.NewInt(1)) != 0 {
 		return BlockNumberErr
 	}
 
 	if checkPow {
-		// Verify the nonce of the block. Return an error if it's not valid
-		if !pow.Verify(types.NewBlockWithHeader(block)) {
-			return ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
+		// Verify the nonce of the header. Return an error if it's not valid
+		if !pow.Verify(types.NewBlockWithHeader(header)) {
+			return ValidationError("Block's nonce is invalid (= %x)", header.Nonce())
 		}
 	}
 

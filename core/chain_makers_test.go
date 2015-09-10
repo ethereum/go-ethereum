@@ -66,12 +66,12 @@ func ExampleGenerateChain() {
 			gen.SetExtra([]byte("yeehaw"))
 		case 3:
 			// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
-			b2 := gen.PrevBlock(1).Header()
+			b2 := gen.PrevBlock(1).Header().Raw()
 			b2.Extra = []byte("foo")
-			gen.AddUncle(b2)
-			b3 := gen.PrevBlock(2).Header()
+			gen.AddUncle(types.NewHeader(b2))
+			b3 := gen.PrevBlock(2).Header().Raw()
 			b3.Extra = []byte("foo")
-			gen.AddUncle(b3)
+			gen.AddUncle(types.NewHeader(b3))
 		}
 	})
 

@@ -71,7 +71,8 @@ func WriteGenesisBlock(chainDb common.Database, reader io.Reader) (*types.Block,
 	statedb.SyncObjects()
 
 	difficulty := common.String2Big(genesis.Difficulty)
-	block := types.NewBlock(&types.Header{
+
+	header := &types.RawHeader{
 		Nonce:      types.EncodeNonce(common.String2Big(genesis.Nonce).Uint64()),
 		Time:       common.String2Big(genesis.Timestamp),
 		ParentHash: common.HexToHash(genesis.ParentHash),
@@ -81,12 +82,13 @@ func WriteGenesisBlock(chainDb common.Database, reader io.Reader) (*types.Block,
 		MixDigest:  common.HexToHash(genesis.Mixhash),
 		Coinbase:   common.HexToAddress(genesis.Coinbase),
 		Root:       statedb.Root(),
-	}, nil, nil, nil)
+	}
+	block := types.NewBlock(header, nil, nil, nil)
 	block.Td = difficulty
 
 	if block := GetBlockByHash(chainDb, block.Hash()); block != nil {
 		glog.V(logger.Info).Infoln("Genesis block already in chain. Writing canonical number")
-		err := WriteCanonNumber(chainDb, block)
+		err := WriteCanonNumber(chainDb, block.Hash(), block.NumberU64())
 		if err != nil {
 			return nil, err
 		}
@@ -99,7 +101,7 @@ func WriteGenesisBlock(chainDb common.Database, reader io.Reader) (*types.Block,
 	if err != nil {
 		return nil, err
 	}
-	err = WriteHead(chainDb, block)
+	err = WriteHeadBlockMeta(chainDb, block)
 	if err != nil {
 		return nil, err
 	}
@@ -115,11 +117,13 @@ func GenesisBlockForTesting(db common.Database, addr common.Address, balance *bi
 	obj.SetBalance(balance)
 	statedb.SyncObjects()
 	statedb.Sync()
-	block := types.NewBlock(&types.Header{
+
+	header := &types.RawHeader{
 		Difficulty: params.GenesisDifficulty,
 		GasLimit:   params.GenesisGasLimit,
 		Root:       statedb.Root(),
-	}, nil, nil, nil)
+	}
+	block := types.NewBlock(header, nil, nil, nil)
 	block.Td = params.GenesisDifficulty
 	return block
 }

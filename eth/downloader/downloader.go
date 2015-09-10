@@ -812,7 +812,7 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 			finished = true
 			for i := len(headers) - 1; i >= 0; i-- {
 				if d.hasBlock(headers[i].Hash()) {
-					number, hash = headers[i].Number.Uint64(), headers[i].Hash()
+					number, hash = headers[i].Number().Uint64(), headers[i].Hash()
 					break
 				}
 			}

@@ -49,7 +49,7 @@ type BlockGen struct {
 	i       int
 	parent  *types.Block
 	chain   []*types.Block
-	header  *types.Header
+	header  *types.RawHeader
 	statedb *state.StateDB
 
 	coinbase *state.StateObject
@@ -89,12 +89,12 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	if b.coinbase == nil {
 		b.SetCoinbase(common.Address{})
 	}
-	_, gas, err := ApplyMessage(NewEnv(b.statedb, nil, tx, b.header), tx, b.coinbase)
+	_, gas, err := ApplyMessage(NewEnv(b.statedb, nil, tx, types.NewHeader(b.header)), tx, b.coinbase)
 	if err != nil {
 		panic(err)
 	}
 	b.statedb.SyncIntermediate()
-	b.header.GasUsed.Add(b.header.GasUsed, gas)
+	b.header.GasUsed = new(big.Int).Add(b.header.GasUsed, gas)
 	receipt := types.NewReceipt(b.statedb.Root().Bytes(), b.header.GasUsed)
 	logs := b.statedb.GetLogs(tx.Hash())
 	receipt.SetLogs(logs)
@@ -145,12 +145,12 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 func GenerateChain(parent *types.Block, db common.Database, n int, gen func(int, *BlockGen)) []*types.Block {
 	statedb := state.New(parent.Root(), db)
 	blocks := make(types.Blocks, n)
-	genblock := func(i int, h *types.Header) *types.Block {
+	genblock := func(i int, h *types.RawHeader) *types.Block {
 		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb}
 		if gen != nil {
 			gen(i, b)
 		}
-		AccumulateRewards(statedb, h, b.uncles)
+		AccumulateRewards(statedb, types.NewHeader(h), b.uncles)
 		statedb.SyncIntermediate()
 		h.Root = statedb.Root()
 		return types.NewBlock(h, b.txs, b.uncles, b.receipts)
@@ -165,14 +165,14 @@ func GenerateChain(parent *types.Block, db common.Database, n int, gen func(int,
 	return blocks
 }
 
-func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
+func makeHeader(parent *types.Block, state *state.StateDB) *types.RawHeader {
 	var time *big.Int
 	if parent.Time() == nil {
 		time = big.NewInt(10)
 	} else {
 		time = new(big.Int).Add(parent.Time(), big.NewInt(10)) // block time is fixed at 10 seconds
 	}
-	return &types.Header{
+	return &types.RawHeader{
 		Root:       state.Root(),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),

@@ -27,8 +27,11 @@ import (
 func newChain(size int) (chain []*types.Block) {
 	var parentHash common.Hash
 	for i := 0; i < size; i++ {
-		head := &types.Header{ParentHash: parentHash, Number: big.NewInt(int64(i))}
-		block := types.NewBlock(head, nil, nil, nil)
+		header := &types.RawHeader{
+			ParentHash: parentHash,
+			Number:     big.NewInt(int64(i)),
+		}
+		block := types.NewBlock(header, nil, nil, nil)
 		chain = append(chain, block)
 		parentHash = block.Hash()
 	}

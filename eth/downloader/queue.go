@@ -202,7 +202,7 @@ func (q *queue) Insert(headers []*types.Header) []*types.Header {
 		// Queue the header for body retrieval
 		inserts = append(inserts, header)
 		q.headerPool[hash] = header
-		q.headerQueue.Push(header, -float32(header.Number.Uint64()))
+		q.headerQueue.Push(header, -float32(header.Number().Uint64()))
 	}
 	return inserts
 }
@@ -340,7 +340,7 @@ func (q *queue) Reserve(p *peer, count int) (*fetchRequest, bool, error) {
 		header := q.headerQueue.PopItem().(*types.Header)
 
 		// If the header defines an empty block, deliver straight
-		if header.TxHash == types.DeriveSha(types.Transactions{}) && header.UncleHash == types.CalcUncleHash([]*types.Header{}) {
+		if header.TxHash() == types.DeriveSha(types.Transactions{}) && header.UncleHash() == types.CalcUncleHash([]*types.Header{}) {
 			if err := q.enqueue("", types.NewBlockWithHeader(header)); err != nil {
 				return nil, false, errInvalidChain
 			}
@@ -357,7 +357,7 @@ func (q *queue) Reserve(p *peer, count int) (*fetchRequest, bool, error) {
 	}
 	// Merge all the skipped headers back
 	for _, header := range skip {
-		q.headerQueue.Push(header, -float32(header.Number.Uint64()))
+		q.headerQueue.Push(header, -float32(header.Number().Uint64()))
 	}
 	// Assemble and return the block download request
 	if len(send) == 0 {
@@ -382,7 +382,7 @@ func (q *queue) Cancel(request *fetchRequest) {
 		q.hashQueue.Push(hash, float32(index))
 	}
 	for _, header := range request.Headers {
-		q.headerQueue.Push(header, -float32(header.Number.Uint64()))
+		q.headerQueue.Push(header, -float32(header.Number().Uint64()))
 	}
 	delete(q.pendPool, request.Peer.id)
 }
@@ -408,7 +408,7 @@ func (q *queue) Expire(timeout time.Duration) []string {
 				q.hashQueue.Push(hash, float32(index))
 			}
 			for _, header := range request.Headers {
-				q.headerQueue.Push(header, -float32(header.Number.Uint64()))
+				q.headerQueue.Push(header, -float32(header.Number().Uint64()))
 			}
 			peers = append(peers, id)
 		}
@@ -496,7 +496,7 @@ func (q *queue) Deliver(id string, txLists [][]*types.Transaction, uncleLists []
 			break
 		}
 		// Reconstruct the next block if contents match up
-		if types.DeriveSha(types.Transactions(txLists[i])) != header.TxHash || types.CalcUncleHash(uncleLists[i]) != header.UncleHash {
+		if types.DeriveSha(types.Transactions(txLists[i])) != header.TxHash() || types.CalcUncleHash(uncleLists[i]) != header.UncleHash() {
 			errs = []error{errInvalidBody}
 			break
 		}
@@ -513,7 +513,7 @@ func (q *queue) Deliver(id string, txLists [][]*types.Transaction, uncleLists []
 	// Return all failed or missing fetches to the queue
 	for _, header := range request.Headers {
 		if header != nil {
-			q.headerQueue.Push(header, -float32(header.Number.Uint64()))
+			q.headerQueue.Push(header, -float32(header.Number().Uint64()))
 		}
 	}
 	// If none of the blocks were good, it's a stale delivery

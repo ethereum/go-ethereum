@@ -369,7 +369,7 @@ func (bproc) Process(*types.Block) (state.Logs, types.Receipts, error) { return 
 func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block {
 	var chain []*types.Block
 	for i, difficulty := range d {
-		header := &types.Header{
+		header := &types.RawHeader{
 			Coinbase:   common.Address{seed},
 			Number:     big.NewInt(int64(i + 1)),
 			Difficulty: big.NewInt(int64(difficulty)),
@@ -379,7 +379,7 @@ func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block 
 		} else {
 			header.ParentHash = chain[i-1].Hash()
 		}
-		block := types.NewBlockWithHeader(header)
+		block := types.NewBlockWithRawHeader(header)
 		chain = append(chain, block)
 	}
 	return chain
@@ -388,7 +388,10 @@ func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block 
 func chm(genesis *types.Block, db common.Database) *ChainManager {
 	var eventMux event.TypeMux
 	bc := &ChainManager{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
-	bc.cache, _ = lru.New(100)
+	bc.headerCache, _ = lru.New(100)
+	bc.bodyCache, _ = lru.New(100)
+	bc.bodyRLPCache, _ = lru.New(100)
+	bc.blockCache, _ = lru.New(100)
 	bc.futureBlocks, _ = lru.New(100)
 	bc.processor = bproc{}
 	bc.ResetWithGenesisBlock(genesis)
