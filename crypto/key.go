@@ -23,8 +23,8 @@ import (
 	"encoding/json"
 	"io"
 
-	"code.google.com/p/go-uuid/uuid"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/pborman/uuid"
 )
 
 const (

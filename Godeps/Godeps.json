@@ -6,11 +6,6 @@
 	],
 	"Deps": [
 		{
-			"ImportPath": "code.google.com/p/go-uuid/uuid",
-			"Comment": "null-12",
-			"Rev": "7dda39b2e7d5e265014674c5af696ba4186679e9"
-		},
-		{
 			"ImportPath": "github.com/codegangsta/cli",
 			"Comment": "1.2.0-95-g9b2bd2b",
 			"Rev": "9b2bd2b3489748d4d0a204fa4eb2ee9e89e0ebc6"
@@ -60,6 +55,10 @@
 		{
 			"ImportPath": "github.com/nsf/termbox-go",
 			"Rev": "675ffd907b7401b8a709a5ef2249978af5616bb2"
+		},
+		{
+			"ImportPath": "github.com/pborman/uuid",
+			"Rev": "cccd189d45f7ac3368a0d127efb7f4d08ae0b655"
 		},
 		{
 			"ImportPath": "github.com/peterh/liner",
