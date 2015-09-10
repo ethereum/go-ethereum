@@ -87,10 +87,6 @@ type StateObject struct {
 	dirty   bool
 }
 
-func (self *StateObject) Reset() {
-	self.storage = make(Storage)
-}
-
 func NewStateObject(address common.Address, db common.Database) *StateObject {
 	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
 	object.trie = trie.NewSecure((common.Hash{}).Bytes(), db)

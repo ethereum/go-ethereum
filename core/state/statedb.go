@@ -315,18 +315,6 @@ func (s *StateDB) Trie() *trie.SecureTrie {
 	return s.trie
 }
 
-// Resets the trie and all siblings
-func (s *StateDB) Reset() {
-	s.trie.Reset()
-
-	// Reset all nested states
-	for _, stateObject := range s.stateObjects {
-		stateObject.Reset()
-	}
-
-	s.Empty()
-}
-
 // Syncs the trie and all siblings
 func (s *StateDB) Sync() {
 	// Sync all nested states
