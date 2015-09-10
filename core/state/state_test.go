@@ -17,6 +17,7 @@
 package state
 
 import (
+	"bytes"
 	"math/big"
 	"testing"
 
@@ -116,4 +117,107 @@ func (s *StateSuite) TestSnapshot(c *checker.C) {
 	res := s.state.GetState(stateobjaddr, storageaddr)
 
 	c.Assert(data1, checker.DeepEquals, res)
+}
+
+// use testing instead of checker because checker does not support
+// printing/logging in tests (-check.vv does not work)
+func TestSnapshot2(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	state := New(common.Hash{}, db)
+
+	stateobjaddr0 := toAddr([]byte("so0"))
+	stateobjaddr1 := toAddr([]byte("so1"))
+	var storageaddr common.Hash
+
+	data0 := common.BytesToHash([]byte{17})
+	data1 := common.BytesToHash([]byte{18})
+
+	state.SetState(stateobjaddr0, storageaddr, data0)
+	state.SetState(stateobjaddr1, storageaddr, data1)
+
+	// db, trie are already non-empty values
+	so0 := state.GetStateObject(stateobjaddr0)
+	so0.balance = big.NewInt(42)
+	so0.nonce = 43
+	so0.gasPool = big.NewInt(44)
+	so0.code = []byte{'c', 'a', 'f', 'e'}
+	so0.codeHash = so0.CodeHash()
+	so0.remove = true
+	so0.deleted = false
+	so0.dirty = false
+	state.SetStateObject(so0)
+
+	// and one with deleted == true
+	so1 := state.GetStateObject(stateobjaddr1)
+	so1.balance = big.NewInt(52)
+	so1.nonce = 53
+	so1.gasPool = big.NewInt(54)
+	so1.code = []byte{'c', 'a', 'f', 'e', '2'}
+	so1.codeHash = so1.CodeHash()
+	so1.remove = true
+	so1.deleted = true
+	so1.dirty = true
+	state.SetStateObject(so1)
+
+	so1 = state.GetStateObject(stateobjaddr1)
+	if so1 != nil {
+		t.Fatalf("deleted object not nil when getting")
+	}
+
+	snapshot := state.Copy()
+	state.Set(snapshot)
+
+	so0Restored := state.GetStateObject(stateobjaddr0)
+	so1Restored := state.GetStateObject(stateobjaddr1)
+	// non-deleted is equal (restored)
+	compareStateObjects(so0Restored, so0, t)
+	// deleted should be nil, both before and after restore of state copy
+	if so1Restored != nil {
+		t.Fatalf("deleted object not nil after restoring snapshot")
+	}
+}
+
+func compareStateObjects(so0, so1 *StateObject, t *testing.T) {
+	if so0.address != so1.address {
+		t.Fatalf("Address mismatch: have %v, want %v", so0.address, so1.address)
+	}
+	if so0.balance.Cmp(so1.balance) != 0 {
+		t.Fatalf("Balance mismatch: have %v, want %v", so0.balance, so1.balance)
+	}
+	if so0.nonce != so1.nonce {
+		t.Fatalf("Nonce mismatch: have %v, want %v", so0.nonce, so1.nonce)
+	}
+	if !bytes.Equal(so0.codeHash, so1.codeHash) {
+		t.Fatalf("CodeHash mismatch: have %v, want %v", so0.codeHash, so1.codeHash)
+	}
+	if !bytes.Equal(so0.code, so1.code) {
+		t.Fatalf("Code mismatch: have %v, want %v", so0.code, so1.code)
+	}
+	if !bytes.Equal(so0.initCode, so1.initCode) {
+		t.Fatalf("InitCode mismatch: have %v, want %v", so0.initCode, so1.initCode)
+	}
+
+	for k, v := range so1.storage {
+		if so0.storage[k] != v {
+			t.Fatalf("Storage key %s mismatch: have %v, want %v", k, so0.storage[k], v)
+		}
+	}
+	for k, v := range so0.storage {
+		if so1.storage[k] != v {
+			t.Fatalf("Storage key %s mismatch: have %v, want none.", k, v)
+		}
+	}
+
+	if so0.gasPool.Cmp(so1.gasPool) != 0 {
+		t.Fatalf("GasPool mismatch: have %v, want %v", so0.gasPool, so1.gasPool)
+	}
+	if so0.remove != so1.remove {
+		t.Fatalf("Remove mismatch: have %v, want %v", so0.remove, so1.remove)
+	}
+	if so0.deleted != so1.deleted {
+		t.Fatalf("Deleted mismatch: have %v, want %v", so0.deleted, so1.deleted)
+	}
+	if so0.dirty != so1.dirty {
+		t.Fatalf("Dirty mismatch: have %v, want %v", so0.dirty, so1.dirty)
+	}
 }
