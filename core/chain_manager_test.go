@@ -77,6 +77,7 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 	bi1 := bman.bc.GetBlockByNumber(uint64(i)).Hash()
 	bi2 := bman2.bc.GetBlockByNumber(uint64(i)).Hash()
 	if bi1 != bi2 {
+		fmt.Printf("%+v\n%+v\n\n", bi1, bi2)
 		t.Fatal("chains do not have the same hash at height", i)
 	}
 	bman2.bc.SetProcessor(bman2)
@@ -110,7 +111,6 @@ func printChain(bc *ChainManager) {
 
 // process blocks against a chain
 func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
-	td := new(big.Int)
 	for _, block := range chainB {
 		_, _, err := bman.bc.processor.Process(block)
 		if err != nil {
@@ -119,17 +119,12 @@ func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 			}
 			return nil, err
 		}
-		parent := bman.bc.GetBlock(block.ParentHash())
-		block.Td = CalcTD(block, parent)
-		td = block.Td
-
 		bman.bc.mu.Lock()
-		{
-			WriteBlock(bman.bc.chainDb, block)
-		}
+		WriteTd(bman.bc.chainDb, block.Hash(), new(big.Int).Add(block.Difficulty(), bman.bc.GetTd(block.ParentHash())))
+		WriteBlock(bman.bc.chainDb, block)
 		bman.bc.mu.Unlock()
 	}
-	return td, nil
+	return bman.bc.GetTd(chainB[len(chainB)-1].Hash()), nil
 }
 
 func loadChain(fn string, t *testing.T) (types.Blocks, error) {
@@ -388,7 +383,11 @@ func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block 
 func chm(genesis *types.Block, db common.Database) *ChainManager {
 	var eventMux event.TypeMux
 	bc := &ChainManager{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
-	bc.cache, _ = lru.New(100)
+	bc.headerCache, _ = lru.New(100)
+	bc.bodyCache, _ = lru.New(100)
+	bc.bodyRLPCache, _ = lru.New(100)
+	bc.tdCache, _ = lru.New(100)
+	bc.blockCache, _ = lru.New(100)
 	bc.futureBlocks, _ = lru.New(100)
 	bc.processor = bproc{}
 	bc.ResetWithGenesisBlock(genesis)

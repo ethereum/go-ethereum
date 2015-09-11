@@ -93,21 +93,25 @@ func makeChainFork(n, f int, parent *types.Block) (h1, h2 []common.Hash, b1, b2 
 type downloadTester struct {
 	downloader *Downloader
 
-	ownHashes  []common.Hash                           // Hash chain belonging to the tester
-	ownBlocks  map[common.Hash]*types.Block            // Blocks belonging to the tester
-	peerHashes map[string][]common.Hash                // Hash chain belonging to different test peers
-	peerBlocks map[string]map[common.Hash]*types.Block // Blocks belonging to different test peers
+	ownHashes    []common.Hash                           // Hash chain belonging to the tester
+	ownBlocks    map[common.Hash]*types.Block            // Blocks belonging to the tester
+	ownChainTd   map[common.Hash]*big.Int                // Total difficulties of the blocks in the local chain
+	peerHashes   map[string][]common.Hash                // Hash chain belonging to different test peers
+	peerBlocks   map[string]map[common.Hash]*types.Block // Blocks belonging to different test peers
+	peerChainTds map[string]map[common.Hash]*big.Int     // Total difficulties of the blocks in the peer chains
 }
 
 // newTester creates a new downloader test mocker.
 func newTester() *downloadTester {
 	tester := &downloadTester{
-		ownHashes:  []common.Hash{genesis.Hash()},
-		ownBlocks:  map[common.Hash]*types.Block{genesis.Hash(): genesis},
-		peerHashes: make(map[string][]common.Hash),
-		peerBlocks: make(map[string]map[common.Hash]*types.Block),
+		ownHashes:    []common.Hash{genesis.Hash()},
+		ownBlocks:    map[common.Hash]*types.Block{genesis.Hash(): genesis},
+		ownChainTd:   map[common.Hash]*big.Int{genesis.Hash(): genesis.Difficulty()},
+		peerHashes:   make(map[string][]common.Hash),
+		peerBlocks:   make(map[string]map[common.Hash]*types.Block),
+		peerChainTds: make(map[string]map[common.Hash]*big.Int),
 	}
-	tester.downloader = New(new(event.TypeMux), tester.hasBlock, tester.getBlock, tester.headBlock, tester.insertChain, tester.dropPeer)
+	tester.downloader = New(new(event.TypeMux), tester.hasBlock, tester.getBlock, tester.headBlock, tester.getTd, tester.insertChain, tester.dropPeer)
 
 	return tester
 }
@@ -119,8 +123,8 @@ func (dl *downloadTester) sync(id string, td *big.Int) error {
 	// If no particular TD was requested, load from the peer's blockchain
 	if td == nil {
 		td = big.NewInt(1)
-		if block, ok := dl.peerBlocks[id][hash]; ok {
-			td = block.Td
+		if diff, ok := dl.peerChainTds[id][hash]; ok {
+			td = diff
 		}
 	}
 	err := dl.downloader.synchronise(id, hash, td)
@@ -152,6 +156,11 @@ func (dl *downloadTester) headBlock() *types.Block {
 	return dl.getBlock(dl.ownHashes[len(dl.ownHashes)-1])
 }
 
+// getTd retrieves the block's total difficulty from the canonical chain.
+func (dl *downloadTester) getTd(hash common.Hash) *big.Int {
+	return dl.ownChainTd[hash]
+}
+
 // insertChain injects a new batch of blocks into the simulated chain.
 func (dl *downloadTester) insertChain(blocks types.Blocks) (int, error) {
 	for i, block := range blocks {
@@ -160,6 +169,7 @@ func (dl *downloadTester) insertChain(blocks types.Blocks) (int, error) {
 		}
 		dl.ownHashes = append(dl.ownHashes, block.Hash())
 		dl.ownBlocks[block.Hash()] = block
+		dl.ownChainTd[block.Hash()] = dl.ownChainTd[block.ParentHash()]
 	}
 	return len(blocks), nil
 }
@@ -180,9 +190,16 @@ func (dl *downloadTester) newSlowPeer(id string, version int, hashes []common.Ha
 		// Assign the owned hashes and blocks to the peer (deep copy)
 		dl.peerHashes[id] = make([]common.Hash, len(hashes))
 		copy(dl.peerHashes[id], hashes)
+
 		dl.peerBlocks[id] = make(map[common.Hash]*types.Block)
-		for hash, block := range blocks {
-			dl.peerBlocks[id][hash] = block
+		dl.peerChainTds[id] = make(map[common.Hash]*big.Int)
+		for _, hash := range hashes {
+			if block, ok := blocks[hash]; ok {
+				dl.peerBlocks[id][hash] = block
+				if parent, ok := dl.peerBlocks[id][block.ParentHash()]; ok {
+					dl.peerChainTds[id][hash] = new(big.Int).Add(block.Difficulty(), dl.peerChainTds[id][parent.Hash()])
+				}
+			}
 		}
 	}
 	return err
@@ -192,6 +209,7 @@ func (dl *downloadTester) newSlowPeer(id string, version int, hashes []common.Ha
 func (dl *downloadTester) dropPeer(id string) {
 	delete(dl.peerHashes, id)
 	delete(dl.peerBlocks, id)
+	delete(dl.peerChainTds, id)
 
 	dl.downloader.UnregisterPeer(id)
 }

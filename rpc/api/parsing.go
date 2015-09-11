@@ -281,7 +281,7 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 	}
 }
 
-func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
+func NewBlockRes(block *types.Block, td *big.Int, fullTx bool) *BlockRes {
 	if block == nil {
 		return nil
 	}
@@ -299,7 +299,7 @@ func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
 	res.ReceiptRoot = newHexData(block.ReceiptHash())
 	res.Miner = newHexData(block.Coinbase())
 	res.Difficulty = newHexNum(block.Difficulty())
-	res.TotalDifficulty = newHexNum(block.Td)
+	res.TotalDifficulty = newHexNum(td)
 	res.Size = newHexNum(block.Size().Int64())
 	res.ExtraData = newHexData(block.Extra())
 	res.GasLimit = newHexNum(block.GasLimit())

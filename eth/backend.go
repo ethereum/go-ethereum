@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
@@ -269,11 +270,7 @@ func New(config *Config) (*Ethereum, error) {
 		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path, config.DatabaseCache) }
 	}
 
-	// attempt to merge database together, upgrading from an old version
-	if err := mergeDatabases(config.DataDir, newdb); err != nil {
-		return nil, err
-	}
-
+	// Open the chain database and perform any upgrades needed
 	chainDb, err := newdb(filepath.Join(config.DataDir, "chaindata"))
 	if err != nil {
 		return nil, fmt.Errorf("blockchain db err: %v", err)
@@ -281,6 +278,10 @@ func New(config *Config) (*Ethereum, error) {
 	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
 		db.Meter("eth/db/chaindata/")
 	}
+	if err := upgradeChainDatabase(chainDb); err != nil {
+		return nil, err
+	}
+
 	dappDb, err := newdb(filepath.Join(config.DataDir, "dapp"))
 	if err != nil {
 		return nil, fmt.Errorf("dapp db err: %v", err)
@@ -315,9 +316,13 @@ func New(config *Config) (*Ethereum, error) {
 		if err != nil {
 			return nil, err
 		}
-	case config.GenesisBlock != nil: // This is for testing only.
+	}
+	// This is for testing only.
+	if config.GenesisBlock != nil {
+		core.WriteTd(chainDb, config.GenesisBlock.Hash(), config.GenesisBlock.Difficulty())
 		core.WriteBlock(chainDb, config.GenesisBlock)
-		core.WriteHead(chainDb, config.GenesisBlock)
+		core.WriteCanonicalHash(chainDb, config.GenesisBlock.Hash(), config.GenesisBlock.NumberU64())
+		core.WriteHeadBlockHash(chainDb, config.GenesisBlock.Hash())
 	}
 
 	if !config.SkipBcVersionCheck {
@@ -721,74 +726,61 @@ func saveBlockchainVersion(db common.Database, bcVersion int) {
 	}
 }
 
-// mergeDatabases when required merge old database layout to one single database
-func mergeDatabases(datadir string, newdb func(path string) (common.Database, error)) error {
-	// Check if already upgraded
-	data := filepath.Join(datadir, "chaindata")
-	if _, err := os.Stat(data); !os.IsNotExist(err) {
+// upgradeChainDatabase ensures that the chain database stores block split into
+// separate header and body entries.
+func upgradeChainDatabase(db common.Database) error {
+	// Short circuit if the head block is stored already as separate header and body
+	data, err := db.Get([]byte("LastBlock"))
+	if err != nil {
 		return nil
 	}
-	// make sure it's not just a clean path
-	chainPath := filepath.Join(datadir, "blockchain")
-	if _, err := os.Stat(chainPath); os.IsNotExist(err) {
+	head := common.BytesToHash(data)
+
+	if block := core.GetBlockByHashOld(db, head); block == nil {
 		return nil
 	}
-	glog.Infoln("Database upgrade required. Upgrading...")
+	// At least some of the database is still the old format, upgrade (skip the head block!)
+	glog.V(logger.Info).Info("Old database detected, upgrading...")
 
-	database, err := newdb(data)
-	if err != nil {
-		return fmt.Errorf("creating data db err: %v", err)
-	}
-	defer database.Close()
+	if db, ok := db.(*ethdb.LDBDatabase); ok {
+		blockPrefix := []byte("block-hash-")
+		for it := db.NewIterator(); it.Next(); {
+			// Skip anything other than a combined block
+			if !bytes.HasPrefix(it.Key(), blockPrefix) {
+				continue
+			}
+			// Skip the head block (merge last to signal upgrade completion)
+			if bytes.HasSuffix(it.Key(), head.Bytes()) {
+				continue
+			}
+			// Load the block, split and serialize (order!)
+			block := core.GetBlockByHashOld(db, common.BytesToHash(bytes.TrimPrefix(it.Key(), blockPrefix)))
 
-	// Migrate blocks
-	chainDb, err := newdb(chainPath)
-	if err != nil {
-		return fmt.Errorf("state db err: %v", err)
-	}
-	defer chainDb.Close()
-
-	if chain, ok := chainDb.(*ethdb.LDBDatabase); ok {
-		glog.Infoln("Merging blockchain database...")
-		it := chain.NewIterator()
-		for it.Next() {
-			database.Put(it.Key(), it.Value())
+			if err := core.WriteTd(db, block.Hash(), block.DeprecatedTd()); err != nil {
+				return err
+			}
+			if err := core.WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+				return err
+			}
+			if err := core.WriteHeader(db, block.Header()); err != nil {
+				return err
+			}
+			if err := db.Delete(it.Key()); err != nil {
+				return err
+			}
 		}
-		it.Release()
-	}
+		// Lastly, upgrade the head block, disabling the upgrade mechanism
+		current := core.GetBlockByHashOld(db, head)
 
-	// Migrate state
-	stateDb, err := newdb(filepath.Join(datadir, "state"))
-	if err != nil {
-		return fmt.Errorf("state db err: %v", err)
-	}
-	defer stateDb.Close()
-
-	if state, ok := stateDb.(*ethdb.LDBDatabase); ok {
-		glog.Infoln("Merging state database...")
-		it := state.NewIterator()
-		for it.Next() {
-			database.Put(it.Key(), it.Value())
+		if err := core.WriteTd(db, current.Hash(), current.DeprecatedTd()); err != nil {
+			return err
 		}
-		it.Release()
-	}
-
-	// Migrate transaction / receipts
-	extraDb, err := newdb(filepath.Join(datadir, "extra"))
-	if err != nil {
-		return fmt.Errorf("state db err: %v", err)
-	}
-	defer extraDb.Close()
-
-	if extra, ok := extraDb.(*ethdb.LDBDatabase); ok {
-		glog.Infoln("Merging transaction database...")
-
-		it := extra.NewIterator()
-		for it.Next() {
-			database.Put(it.Key(), it.Value())
+		if err := core.WriteBody(db, current.Hash(), &types.Body{current.Transactions(), current.Uncles()}); err != nil {
+			return err
 		}
-		it.Release()
+		if err := core.WriteHeader(db, current.Header()); err != nil {
+			return err
+		}
 	}
-
 	return nil
 }
