@@ -41,8 +41,8 @@
 #define ethash_swap_u64(input_) swap64(input_)
 #else // posix
 #include <byteswap.h>
-#define ethash_swap_u32(input_) __bswap_32(input_)
-#define ethash_swap_u64(input_) __bswap_64(input_)
+#define ethash_swap_u32(input_) bswap_32(input_)
+#define ethash_swap_u64(input_) bswap_64(input_)
 #endif
 
 
