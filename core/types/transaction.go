@@ -33,10 +33,6 @@ import (
 
 var ErrInvalidSig = errors.New("invalid v, r, s values")
 
-func IsContractAddr(addr []byte) bool {
-	return len(addr) == 0
-}
-
 type Transaction struct {
 	data txdata
 	// caches
