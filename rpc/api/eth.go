@@ -173,9 +173,9 @@ func (self *ethApi) IsSyncing(req *shared.Request) (interface{}, error) {
 
 	if current < height {
 		return map[string]interface{}{
-			"startingBlock": origin,
-			"currentBlock":  current,
-			"highestBlock":  height,
+			"startingBlock": newHexNum(big.NewInt(int64(origin)).Bytes()),
+			"currentBlock":  newHexNum(big.NewInt(int64(current)).Bytes()),
+			"highestBlock":  newHexNum(big.NewInt(int64(height)).Bytes()),
 		}, nil
 	}
 	return false, nil
