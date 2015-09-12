@@ -2424,11 +2424,11 @@ module.exports={
  */
 
 var version = require('./version.json');
-var net = require('./web3/net');
-var exp = require('./web3/exp');
-var db = require('./web3/db');
-var shh = require('./web3/shh');
-var watches = require('./web3/watches');
+var net = require('./web3/methods/net');
+var exp = require('./web3/methods/exp');
+var db = require('./web3/methods/db');
+var shh = require('./web3/methods/shh');
+var watches = require('./web3/methods/watches');
 var Filter = require('./web3/filter');
 var utils = require('./utils/utils');
 var formatters = require('./web3/formatters');
@@ -2573,7 +2573,7 @@ setupMethods(web3.shh, shh.methods);
 module.exports = web3;
 
 
-},{"./utils/config":18,"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/filter":28,"./web3/formatters":29,"./web3/method":35,"./web3/methods/db":36,"./web3/methods/eth":37,"./web3/methods/net":38,"./web3/methods/shh":39,"./web3/methods/watches":40,"./web3/property":42,"./web3/requestmanager":43}],23:[function(require,module,exports){
+},{"./utils/config":18,"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/filter":28,"./web3/formatters":29,"./web3/method":35,"./web3/methods/db":36,"./web3/methods/exp":37,"./web3/methods/net":38,"./web3/methods/shh":39,"./web3/methods/watches":40,"./web3/property":42,"./web3/requestmanager":43}],23:[function(require,module,exports){
 /*
     This file is part of expanse.js.
 
@@ -3237,7 +3237,7 @@ SolidityEvent.prototype.execute = function (indexed, options, callback) {
     
     var o = this.encode(indexed, options);
     var formatter = this.decode.bind(this);
-    return new Filter(o, watches.eth(), formatter, callback);
+    return new Filter(o, watches.exp(), formatter, callback);
 };
 
 /**
@@ -4270,7 +4270,7 @@ Iban.fromBban = function (bban) {
  * @return {Iban} the IBAN object
  */
 Iban.createIndirect = function (options) {
-    return Iban.fromBban('ETH' + options.institution + options.identifier);
+    return Iban.fromBban('EXP' + options.institution + options.identifier);
 };
 
 /**
@@ -4292,7 +4292,7 @@ Iban.isValid = function (iban) {
  * @returns {Boolean} true if it is, otherwise false
  */
 Iban.prototype.isValid = function () {
-    return /^XE[0-9]{2}(ETH[0-9A-Z]{13}|[0-9A-Z]{30})$/.test(this._iban) &&
+    return /^XE[0-9]{2}(EXP[0-9A-Z]{13}|[0-9A-Z]{30})$/.test(this._iban) &&
         mod9710(iso13616Prepare(this._iban)) === 1;
 };
 
@@ -4963,7 +4963,7 @@ module.exports = {
  *         ]
  *       },
  *
- * @class [web3] eth
+ * @class [web3] exp
  * @constructor
  */
 
@@ -4994,7 +4994,7 @@ var uncleCountCall = function (args) {
     return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getUncleCountByBlockHash' : 'eth_getUncleCountByBlockNumber';
 };
 
-/// @returns an array of objects describing web3.eth api methods
+/// @returns an array of objects describing web3.exp api methods
 
 var getBalance = new Method({
     name: 'getBalance',
@@ -5170,7 +5170,7 @@ var methods = [
     getWork
 ];
 
-/// @returns an array of objects describing web3.eth api properties
+/// @returns an array of objects describing web3.exp api properties
 
 
 
@@ -5236,11 +5236,11 @@ module.exports = {
 var utils = require('../../utils/utils');
 var Property = require('../property');
 
-/// @returns an array of objects describing web3.eth api methods
+/// @returns an array of objects describing web3.exp api methods
 var methods = [
 ];
 
-/// @returns an array of objects describing web3.eth api properties
+/// @returns an array of objects describing web3.exp api properties
 var properties = [
     new Property({
         name: 'listening',
@@ -5356,7 +5356,7 @@ module.exports = {
 var Method = require('../method');
 
 /// @returns an array of objects describing web3.exp.filter api methods
-var eth = function () {
+var exp = function () {
     var newFilterCall = function (args) {
         var type = args[0];
 
@@ -5441,7 +5441,7 @@ var shh = function () {
 };
 
 module.exports = {
-    eth: eth,
+    exp: exp,
     shh: shh
 };
 

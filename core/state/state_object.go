@@ -263,6 +263,7 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.gasPool.Set(self.gasPool)
 	stateObject.remove = self.remove
 	stateObject.dirty = self.dirty
+	stateObject.deleted = self.deleted
 
 	return stateObject
 }
