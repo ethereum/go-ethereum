@@ -61,10 +61,10 @@ var (
 
 	defaultBootNodes = []*discover.Node{
 		// EXP/DEV Go Bootnodes
-		discover.MustParseNode("enode://4055ec69e53df4bfecb95e3b65c28e4f2a1145a3bdc4d85d077b552248cf159951afd649f044783bebf48b902fbc0e96978c76236fd4ab3d5ef7d95d72b84ee5@[::]:42786"),
-		discover.MustParseNode("enode://de471bccee3d042261d52e9bff31458daecc406142b401d4cd848f677479f73104b9fdeb090af9583d3391b7f10cb2ba9e26865dd5fca4fcdc0fb1e3b723c786@54.94.239.50:42786"),
-		// EXP/DEV cpp-expanse (poc-9.ethdev.com)
-		discover.MustParseNode("enode://487611428e6c99a11a9795a6abe7b529e81315ca6aad66e2a2fc76e3adf263faba0d35466c2f8f68d561dbefa8878d4df5f1f2ddb1fbeab7f42ffb8cd328bd4a@5.1.83.226:42786"),
+		discover.MustParseNode("enode://f944c6702a78a0cbcd6505b76daff069dad2e45ff88896c475da2bef47091c88e5b4042211233e397ad958be998003a2674151e60719c5fdeeff5f8cc2c231a1@74.196.59.103:42786"),
+		discover.MustParseNode("enode://4055ec69e53df4bfecb95e3b65c28e4f2a1145a3bdc4d85d077b552248cf159951afd649f044783bebf48b902fbc0e96978c76236fd4ab3d5ef7d95d72b84ee5@45.55.217.136:42786"),
+		discover.MustParseNode("enode://68c545b62f060dc78d4bbb9fe65cfd5979dede3c2f73fcbba9bac7fb9d1cff70e77b39cce4fa5dfdeb0d064c82db1ad8acee3915fb41f45d0a42000f92c1fd73@192.3.54.134:42786"),
+        discover.MustParseNode("enode://753d7d97ffc944edf42b676731b28e059d669484eb16e4526778f83e72d35922dee01b2967722e640a4a210e923aecdb4e4962b2d70fd2ca5dc2d911590e0737@192.3.149.110:42786"),
 	}
 
 	staticNodes  = "static-nodes.json"  // Path within <datadir> to search for the static node list
