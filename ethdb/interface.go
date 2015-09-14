@@ -21,7 +21,6 @@ type Database interface {
 	Get(key []byte) ([]byte, error)
 	Delete(key []byte) error
 	Close()
-	Flush() error
 	NewBatch() Batch
 }
 

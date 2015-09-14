@@ -213,9 +213,6 @@ type Ethereum struct {
 	chainDb ethdb.Database // Block chain database
 	dappDb  ethdb.Database // Dapp database
 
-	// Closed when databases are flushed and closed
-	databasesClosed chan bool
-
 	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
 	blockProcessor  *core.BlockProcessor
@@ -337,7 +334,6 @@ func New(config *Config) (*Ethereum, error) {
 
 	eth := &Ethereum{
 		shutdownChan:            make(chan bool),
-		databasesClosed:         make(chan bool),
 		chainDb:                 chainDb,
 		dappDb:                  dappDb,
 		eventMux:                &event.TypeMux{},
@@ -549,8 +545,6 @@ func (s *Ethereum) Start() error {
 	if err != nil {
 		return err
 	}
-	// periodically flush databases
-	go s.syncDatabases()
 
 	if s.AutoDAG {
 		s.StartAutoDAG()
@@ -564,32 +558,6 @@ func (s *Ethereum) Start() error {
 
 	glog.V(logger.Info).Infoln("Server started")
 	return nil
-}
-
-// sync databases every minute. If flushing fails we exit immediatly. The system
-// may not continue under any circumstances.
-func (s *Ethereum) syncDatabases() {
-	ticker := time.NewTicker(1 * time.Minute)
-done:
-	for {
-		select {
-		case <-ticker.C:
-			// don't change the order of database flushes
-			if err := s.dappDb.Flush(); err != nil {
-				glog.Fatalf("fatal error: flush dappDb: %v (Restart your node. We are aware of this issue)\n", err)
-			}
-			if err := s.chainDb.Flush(); err != nil {
-				glog.Fatalf("fatal error: flush chainDb: %v (Restart your node. We are aware of this issue)\n", err)
-			}
-		case <-s.shutdownChan:
-			break done
-		}
-	}
-
-	s.chainDb.Close()
-	s.dappDb.Close()
-
-	close(s.databasesClosed)
 }
 
 func (s *Ethereum) StartForTest() {
@@ -622,12 +590,13 @@ func (s *Ethereum) Stop() {
 	}
 	s.StopAutoDAG()
 
+	s.chainDb.Close()
+	s.dappDb.Close()
 	close(s.shutdownChan)
 }
 
 // This function will wait for a shutdown and resumes main thread execution
 func (s *Ethereum) WaitForShutdown() {
-	<-s.databasesClosed
 	<-s.shutdownChan
 }
 
