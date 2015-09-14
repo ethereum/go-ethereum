@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-const solcVersion = "0.9.23"
+const solcVersion = "0.1.1"
 
 var (
 	source = `
@@ -37,16 +37,16 @@ contract test {
    }
 }
 `
-	code = "0x605880600c6000396000f3006000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa114602e57005b603d6004803590602001506047565b8060005260206000f35b60006007820290506053565b91905056"
-	info = `{"source":"\ncontract test {\n   /// @notice Will multiply ` + "`a`" + ` by 7.\n   function multiply(uint a) returns(uint d) {\n       return a * 7;\n   }\n}\n","language":"Solidity","languageVersion":"0","compilerVersion":"0.9.23","abiDefinition":[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}],"userDoc":{"methods":{"multiply(uint256)":{"notice":"Will multiply ` + "`a`" + ` by 7."}}},"developerDoc":{"methods":{}}}`
+	code = "0x6060604052606d8060116000396000f30060606040526000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa1146037576035565b005b6046600480359060200150605c565b6040518082815260200191505060405180910390f35b60006007820290506068565b91905056"
+	info = `{"source":"\ncontract test {\n   /// @notice Will multiply ` + "`a`" + ` by 7.\n   function multiply(uint a) returns(uint d) {\n       return a * 7;\n   }\n}\n","language":"Solidity","languageVersion":"0.1.1","compilerVersion":"0.1.1","compilerOptions":"--binary file --json-abi file --natspec-user file --natspec-dev file --add-std 1","abiDefinition":[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}],"userDoc":{"methods":{"multiply(uint256)":{"notice":"Will multiply ` + "`a`" + ` by 7."}}},"developerDoc":{"methods":{}}}`
 
-	infohash = common.HexToHash("0xea782f674eb898e477c20e8a7cf11c2c28b09fa68b5278732104f7a101aed255")
+	infohash = common.HexToHash("0x9f3803735e7f16120c5a140ab3f02121fd3533a9655c69b33a10e78752cc49b0")
 )
 
 func TestCompiler(t *testing.T) {
 	sol, err := New("")
 	if err != nil {
-		t.Skip("solc not found: skip")
+		t.Skip("solc not found: skip: %v", err)
 	} else if sol.Version() != solcVersion {
 		t.Skip("WARNING: skipping due to a newer version of solc found (%v, expect %v)", sol.Version(), solcVersion)
 	}
