@@ -45,9 +45,10 @@ type Account struct {
 }
 
 type Manager struct {
-	keyStore crypto.KeyStore
-	unlocked map[common.Address]*unlocked
-	mutex    sync.RWMutex
+	keyStore   crypto.KeyStore
+	unlocked   map[common.Address]*unlocked
+	mutex      sync.RWMutex
+	dangerZone bool
 }
 
 type unlocked struct {
@@ -60,6 +61,17 @@ func NewManager(keyStore crypto.KeyStore) *Manager {
 		keyStore: keyStore,
 		unlocked: make(map[common.Address]*unlocked),
 	}
+}
+
+func (am *Manager) SetDangerZone(toggle bool) {
+	if toggle {
+		fmt.Println("WARNING: Accounts unlocking enabled even if RPC running!")
+	}
+	am.dangerZone = toggle
+}
+
+func (am *Manager) DangerZone() bool {
+	return am.dangerZone
 }
 
 func (am *Manager) HasAccount(addr common.Address) bool {

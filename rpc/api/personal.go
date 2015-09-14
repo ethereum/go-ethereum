@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -105,6 +106,9 @@ func (self *personalApi) NewAccount(req *shared.Request) (interface{}, error) {
 }
 
 func (self *personalApi) UnlockAccount(req *shared.Request) (interface{}, error) {
+	if comms.IsRPCRunning() && !self.ethereum.AccountManager().DangerZone() {
+		return false, fmt.Errorf("Cannot unlock accounts while RPC is running. Run with --dangerzone to enable.")
+	}
 	args := new(UnlockAccountArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())

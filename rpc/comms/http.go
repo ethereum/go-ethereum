@@ -100,6 +100,12 @@ func StartHttp(cfg HttpConfig, codec codec.Codec, api shared.EthereumApi) error 
 	return nil
 }
 
+func IsRPCRunning() bool {
+	httpServerMu.Lock()
+	defer httpServerMu.Unlock()
+	return httpServer != nil
+}
+
 func (h *handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
