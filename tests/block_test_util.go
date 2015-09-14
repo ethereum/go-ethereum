@@ -44,8 +44,9 @@ import (
 type BlockTest struct {
 	Genesis *types.Block
 
-	Json        *btJSON
-	preAccounts map[string]btAccount
+	Json         *btJSON
+	preAccounts  map[string]btAccount
+	postAccounts map[string]btAccount
 }
 
 type btJSON struct {
@@ -147,7 +148,6 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 			glog.Infoln("Skipping block test", name)
 			continue
 		}
-
 		// test the block
 		if err := runBlockTest(test); err != nil {
 			return fmt.Errorf("%s: %v", name, err)
@@ -173,7 +173,7 @@ func runBlockTest(test *BlockTest) error {
 	}
 
 	// import pre accounts
-	statedb, err := test.InsertPreState(ethereum)
+	_, err = test.InsertPreState(ethereum)
 	if err != nil {
 		return fmt.Errorf("InsertPreState: %v", err)
 	}
@@ -183,7 +183,8 @@ func runBlockTest(test *BlockTest) error {
 		return err
 	}
 
-	if err = test.ValidatePostState(statedb); err != nil {
+	newDB := ethereum.ChainManager().State()
+	if err = test.ValidatePostState(newDB); err != nil {
 		return fmt.Errorf("post state validation failed: %v", err)
 	}
 	return nil
@@ -265,6 +266,7 @@ func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, erro
    post state.
 */
 func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
+	blockNums := make(map[string]bool)
 	// insert the test blocks, which will execute all transactions
 	for _, b := range t.Json.Blocks {
 		cb, err := mustConvertBlock(b)
@@ -287,9 +289,35 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
 		if b.BlockHeader == nil {
 			return fmt.Errorf("Block insertion should have failed")
 		}
-		err = t.validateBlockHeader(b.BlockHeader, cb.Header())
-		if err != nil {
-			return fmt.Errorf("Block header validation failed: %v", err)
+
+		// validate RLP decoding by checking all values against test file JSON
+		if err = t.validateBlockHeader(b.BlockHeader, cb.Header()); err != nil {
+			return fmt.Errorf("Deserialised block header validation failed: %v", err)
+		}
+
+		// validate the imported header against test file JSON
+
+		/*
+			TODO: currently test files do not contain information on what
+			reorg is expected other than possibly the post state (which may
+			or may not depend on a specific chain).
+
+			discussed with winswega and it was agreed to add this information
+			to the test files explicitly.
+
+			meanwhile we skip header validation on blocks with the same block
+			number as a prior block, since this test code cannot know what
+			blocks are in the longest chain without making use of the very
+			protocol rules the tests verify or rely on the correctness of the
+			code that is being tested.
+
+		*/
+		if !blockNums[b.BlockHeader.Number] {
+			importedBlock := chainManager.CurrentBlock()
+			if err = t.validateBlockHeader(b.BlockHeader, importedBlock.Header()); err != nil {
+				return fmt.Errorf("Imported block header validation failed: %v", err)
+			}
+			blockNums[b.BlockHeader.Number] = true
 		}
 	}
 	return nil
@@ -298,83 +326,84 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
 func (s *BlockTest) validateBlockHeader(h *btHeader, h2 *types.Header) error {
 	expectedBloom := mustConvertBytes(h.Bloom)
 	if !bytes.Equal(expectedBloom, h2.Bloom.Bytes()) {
-		return fmt.Errorf("Bloom: expected: %v, decoded: %v", expectedBloom, h2.Bloom.Bytes())
+		return fmt.Errorf("Bloom: want: %x have: %x", expectedBloom, h2.Bloom.Bytes())
 	}
 
 	expectedCoinbase := mustConvertBytes(h.Coinbase)
 	if !bytes.Equal(expectedCoinbase, h2.Coinbase.Bytes()) {
-		return fmt.Errorf("Coinbase: expected: %v, decoded: %v", expectedCoinbase, h2.Coinbase.Bytes())
+		return fmt.Errorf("Coinbase: want: %x have: %x", expectedCoinbase, h2.Coinbase.Bytes())
 	}
 
 	expectedMixHashBytes := mustConvertBytes(h.MixHash)
 	if !bytes.Equal(expectedMixHashBytes, h2.MixDigest.Bytes()) {
-		return fmt.Errorf("MixHash: expected: %v, decoded: %v", expectedMixHashBytes, h2.MixDigest.Bytes())
+		return fmt.Errorf("MixHash: want: %x have: %x", expectedMixHashBytes, h2.MixDigest.Bytes())
 	}
 
 	expectedNonce := mustConvertBytes(h.Nonce)
 	if !bytes.Equal(expectedNonce, h2.Nonce[:]) {
-		return fmt.Errorf("Nonce: expected: %v, decoded: %v", expectedNonce, h2.Nonce)
+		return fmt.Errorf("Nonce: want: %x have: %x", expectedNonce, h2.Nonce)
 	}
 
 	expectedNumber := mustConvertBigInt(h.Number, 16)
 	if expectedNumber.Cmp(h2.Number) != 0 {
-		return fmt.Errorf("Number: expected: %v, decoded: %v", expectedNumber, h2.Number)
+		return fmt.Errorf("Number: want: %v have: %v", expectedNumber, h2.Number)
 	}
 
 	expectedParentHash := mustConvertBytes(h.ParentHash)
 	if !bytes.Equal(expectedParentHash, h2.ParentHash.Bytes()) {
-		return fmt.Errorf("Parent hash: expected: %v, decoded: %v", expectedParentHash, h2.ParentHash.Bytes())
+		return fmt.Errorf("Parent hash: want: %x have: %x", expectedParentHash, h2.ParentHash.Bytes())
 	}
 
 	expectedReceiptHash := mustConvertBytes(h.ReceiptTrie)
 	if !bytes.Equal(expectedReceiptHash, h2.ReceiptHash.Bytes()) {
-		return fmt.Errorf("Receipt hash: expected: %v, decoded: %v", expectedReceiptHash, h2.ReceiptHash.Bytes())
+		return fmt.Errorf("Receipt hash: want: %x have: %x", expectedReceiptHash, h2.ReceiptHash.Bytes())
 	}
 
 	expectedTxHash := mustConvertBytes(h.TransactionsTrie)
 	if !bytes.Equal(expectedTxHash, h2.TxHash.Bytes()) {
-		return fmt.Errorf("Tx hash: expected: %v, decoded: %v", expectedTxHash, h2.TxHash.Bytes())
+		return fmt.Errorf("Tx hash: want: %x have: %x", expectedTxHash, h2.TxHash.Bytes())
 	}
 
 	expectedStateHash := mustConvertBytes(h.StateRoot)
 	if !bytes.Equal(expectedStateHash, h2.Root.Bytes()) {
-		return fmt.Errorf("State hash: expected: %v, decoded: %v", expectedStateHash, h2.Root.Bytes())
+		return fmt.Errorf("State hash: want: %x have: %x", expectedStateHash, h2.Root.Bytes())
 	}
 
 	expectedUncleHash := mustConvertBytes(h.UncleHash)
 	if !bytes.Equal(expectedUncleHash, h2.UncleHash.Bytes()) {
-		return fmt.Errorf("Uncle hash: expected: %v, decoded: %v", expectedUncleHash, h2.UncleHash.Bytes())
+		return fmt.Errorf("Uncle hash: want: %x have: %x", expectedUncleHash, h2.UncleHash.Bytes())
 	}
 
 	expectedExtraData := mustConvertBytes(h.ExtraData)
 	if !bytes.Equal(expectedExtraData, h2.Extra) {
-		return fmt.Errorf("Extra data: expected: %v, decoded: %v", expectedExtraData, h2.Extra)
+		return fmt.Errorf("Extra data: want: %x have: %x", expectedExtraData, h2.Extra)
 	}
 
 	expectedDifficulty := mustConvertBigInt(h.Difficulty, 16)
 	if expectedDifficulty.Cmp(h2.Difficulty) != 0 {
-		return fmt.Errorf("Difficulty: expected: %v, decoded: %v", expectedDifficulty, h2.Difficulty)
+		return fmt.Errorf("Difficulty: want: %v have: %v", expectedDifficulty, h2.Difficulty)
 	}
 
 	expectedGasLimit := mustConvertBigInt(h.GasLimit, 16)
 	if expectedGasLimit.Cmp(h2.GasLimit) != 0 {
-		return fmt.Errorf("GasLimit: expected: %v, decoded: %v", expectedGasLimit, h2.GasLimit)
+		return fmt.Errorf("GasLimit: want: %v have: %v", expectedGasLimit, h2.GasLimit)
 	}
 	expectedGasUsed := mustConvertBigInt(h.GasUsed, 16)
 	if expectedGasUsed.Cmp(h2.GasUsed) != 0 {
-		return fmt.Errorf("GasUsed: expected: %v, decoded: %v", expectedGasUsed, h2.GasUsed)
+		return fmt.Errorf("GasUsed: want: %v have: %v", expectedGasUsed, h2.GasUsed)
 	}
 
 	expectedTimestamp := mustConvertBigInt(h.Timestamp, 16)
 	if expectedTimestamp.Cmp(h2.Time) != 0 {
-		return fmt.Errorf("Timestamp: expected: %v, decoded: %v", expectedTimestamp, h2.Time)
+		return fmt.Errorf("Timestamp: want: %v have: %v", expectedTimestamp, h2.Time)
 	}
 
 	return nil
 }
 
 func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
-	for addrString, acct := range t.preAccounts {
+	// validate post state accounts in test file against what we have in state db
+	for addrString, acct := range t.postAccounts {
 		// XXX: is is worth it checking for errors here?
 		addr, err := hex.DecodeString(addrString)
 		if err != nil {
@@ -398,13 +427,13 @@ func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 		balance2 := statedb.GetBalance(common.BytesToAddress(addr))
 		nonce2 := statedb.GetNonce(common.BytesToAddress(addr))
 		if !bytes.Equal(code2, code) {
-			return fmt.Errorf("account code mismatch, addr, found, expected: ", addrString, hex.EncodeToString(code2), hex.EncodeToString(code))
+			return fmt.Errorf("account code mismatch for addr: %s want: %s have: %s", addrString, hex.EncodeToString(code), hex.EncodeToString(code2))
 		}
 		if balance2.Cmp(balance) != 0 {
-			return fmt.Errorf("account balance mismatch, addr, found, expected: ", addrString, balance2, balance)
+			return fmt.Errorf("account balance mismatch for addr: %s, want: %d, have: %d", addrString, balance, balance2)
 		}
 		if nonce2 != nonce {
-			return fmt.Errorf("account nonce mismatch, addr, found, expected: ", addrString, nonce2, nonce)
+			return fmt.Errorf("account nonce mismatch for addr: %s want: %d have: %d", addrString, nonce, nonce2)
 		}
 	}
 	return nil
@@ -432,7 +461,7 @@ func convertBlockTest(in *btJSON) (out *BlockTest, err error) {
 			err = fmt.Errorf("%v\n%s", recovered, buf)
 		}
 	}()
-	out = &BlockTest{preAccounts: in.Pre, Json: in}
+	out = &BlockTest{preAccounts: in.Pre, postAccounts: in.PostState, Json: in}
 	out.Genesis = mustConvertGenesis(in.GenesisBlockHeader)
 	return out, err
 }
