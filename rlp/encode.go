@@ -300,7 +300,6 @@ func (r *encReader) Read(b []byte) (n int, err error) {
 		}
 		r.piece = nil
 	}
-	panic("not reached")
 }
 
 // next returns the next piece of data to be read.
@@ -649,5 +648,4 @@ func intsize(i uint64) (size int) {
 			return size
 		}
 	}
-	panic("not reached")
 }

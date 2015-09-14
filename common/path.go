@@ -36,7 +36,7 @@ func MakeName(name, version string) string {
 
 func ExpandHomePath(p string) (path string) {
 	path = p
-	sep := fmt.Sprintf("%s", os.PathSeparator)
+	sep := fmt.Sprintf("%v", os.PathSeparator)
 
 	// Check in case of paths like "/something/~/something/"
 	if len(p) > 1 && p[:1+len(sep)] == "~"+sep {

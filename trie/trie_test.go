@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type Db map[string][]byte
@@ -42,7 +43,8 @@ func NewEmptySecure() *SecureTrie {
 func TestEmptyTrie(t *testing.T) {
 	trie := NewEmpty()
 	res := trie.Hash()
-	exp := crypto.Sha3(common.Encode(""))
+	e, _ := rlp.EncodeToBytes("")
+	exp := crypto.Sha3(e)
 	if !bytes.Equal(res, exp) {
 		t.Errorf("expected %x got %x", exp, res)
 	}

@@ -146,8 +146,6 @@ func (val *Value) BigInt() *big.Int {
 	} else {
 		return big.NewInt(int64(val.Uint()))
 	}
-
-	return big.NewInt(0)
 }
 
 func (val *Value) Str() string {
@@ -174,8 +172,6 @@ func (val *Value) Bytes() []byte {
 	} else {
 		return big.NewInt(val.Int()).Bytes()
 	}
-
-	return []byte{}
 }
 
 func (val *Value) Err() error {
@@ -267,8 +263,6 @@ func (self *Value) Copy() *Value {
 	default:
 		return NewValue(self.Val)
 	}
-
-	return nil
 }
 
 func (val *Value) Cmp(o *Value) bool {
