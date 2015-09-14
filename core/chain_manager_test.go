@@ -75,7 +75,7 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 	if err != nil {
 		t.Fatal("could not make new canonical in testFork", err)
 	}
-	// asert the bmans have the same block at i
+	// assert the bmans have the same block at i
 	bi1 := bman.bc.GetBlockByNumber(uint64(i)).Hash()
 	bi2 := bman2.bc.GetBlockByNumber(uint64(i)).Hash()
 	if bi1 != bi2 {
@@ -418,6 +418,59 @@ func TestReorgLongest(t *testing.T) {
 		if prev.ParentHash() != block.Hash() {
 			t.Errorf("parent hash mismatch %x - %x", prev.ParentHash(), block.Hash())
 		}
+	}
+}
+
+func TestBadHashes(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	genesis, err := WriteTestNetGenesisBlock(db, 0)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	bc := chm(genesis, db)
+
+	chain := makeChainWithDiff(genesis, []int{1, 2, 4}, 10)
+	BadHashes[chain[2].Header().Hash()] = true
+
+	_, err = bc.InsertChain(chain)
+	if !IsBadHashError(err) {
+		t.Errorf("error mismatch: want: BadHashError, have: %v", err)
+	}
+}
+
+func TestReorgBadHashes(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	genesis, err := WriteTestNetGenesisBlock(db, 0)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	bc := chm(genesis, db)
+
+	chain := makeChainWithDiff(genesis, []int{1, 2, 3, 4}, 11)
+	bc.InsertChain(chain)
+
+	if chain[3].Header().Hash() != bc.LastBlockHash() {
+		t.Errorf("last block hash mismatch: want: %x, have: %x", chain[3].Header().Hash(), bc.LastBlockHash())
+	}
+
+	// NewChainManager should check BadHashes when loading it db
+	BadHashes[chain[3].Header().Hash()] = true
+
+	var eventMux event.TypeMux
+	ncm, err := NewChainManager(db, FakePow{}, &eventMux)
+	if err != nil {
+		t.Errorf("NewChainManager err: %s", err)
+	}
+
+	// check it set head to (valid) parent of bad hash block
+	if chain[2].Header().Hash() != ncm.LastBlockHash() {
+		t.Errorf("last block hash mismatch: want: %x, have: %x", chain[2].Header().Hash(), ncm.LastBlockHash())
+	}
+
+	if chain[2].Header().GasLimit.Cmp(ncm.GasLimit()) != 0 {
+		t.Errorf("current block gasLimit mismatch: want: %x, have: %x", chain[2].Header().GasLimit, ncm.GasLimit())
 	}
 }
 

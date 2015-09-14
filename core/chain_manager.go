@@ -642,7 +642,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		}
 
 		if BadHashes[block.Hash()] {
-			err := fmt.Errorf("Found known bad hash in chain %x", block.Hash())
+			err := BadHashError(block.Hash())
 			blockErr(block, err)
 			return i, err
 		}
