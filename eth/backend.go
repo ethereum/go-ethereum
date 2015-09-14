@@ -128,7 +128,7 @@ type Config struct {
 
 	// NewDB is used to create databases.
 	// If nil, the default is to create leveldb databases on disk.
-	NewDB func(path string) (common.Database, error)
+	NewDB func(path string) (ethdb.Database, error)
 }
 
 func (cfg *Config) parseBootNodes() []*discover.Node {
@@ -210,8 +210,8 @@ type Ethereum struct {
 	shutdownChan chan bool
 
 	// DB interfaces
-	chainDb common.Database // Block chain databe
-	dappDb  common.Database // Dapp database
+	chainDb ethdb.Database // Block chain database
+	dappDb  ethdb.Database // Dapp database
 
 	// Closed when databases are flushed and closed
 	databasesClosed chan bool
@@ -267,7 +267,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	newdb := config.NewDB
 	if newdb == nil {
-		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path, config.DatabaseCache) }
+		newdb = func(path string) (ethdb.Database, error) { return ethdb.NewLDBDatabase(path, config.DatabaseCache) }
 	}
 
 	// Open the chain database and perform any upgrades needed
@@ -527,8 +527,8 @@ func (s *Ethereum) BlockProcessor() *core.BlockProcessor { return s.blockProcess
 func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
-func (s *Ethereum) ChainDb() common.Database             { return s.chainDb }
-func (s *Ethereum) DappDb() common.Database              { return s.dappDb }
+func (s *Ethereum) ChainDb() ethdb.Database              { return s.chainDb }
+func (s *Ethereum) DappDb() ethdb.Database               { return s.dappDb }
 func (s *Ethereum) IsListening() bool                    { return true } // Always listening
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
@@ -717,7 +717,7 @@ func dagFiles(epoch uint64) (string, string) {
 	return dag, "full-R" + dag
 }
 
-func saveBlockchainVersion(db common.Database, bcVersion int) {
+func saveBlockchainVersion(db ethdb.Database, bcVersion int) {
 	d, _ := db.Get([]byte("BlockchainVersion"))
 	blockchainVersion := common.NewValue(d).Uint()
 
@@ -728,7 +728,7 @@ func saveBlockchainVersion(db common.Database, bcVersion int) {
 
 // upgradeChainDatabase ensures that the chain database stores block split into
 // separate header and body entries.
-func upgradeChainDatabase(db common.Database) error {
+func upgradeChainDatabase(db ethdb.Database) error {
 	// Short circuit if the head block is stored already as separate header and body
 	data, err := db.Get([]byte("LastBlock"))
 	if err != nil {

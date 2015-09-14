@@ -46,7 +46,7 @@ func thePow() pow.PoW {
 	return pow
 }
 
-func theChainManager(db common.Database, t *testing.T) *ChainManager {
+func theChainManager(db ethdb.Database, t *testing.T) *ChainManager {
 	var eventMux event.TypeMux
 	WriteTestNetGenesisBlock(db, 0)
 	chainMan, err := NewChainManager(db, thePow(), &eventMux)
@@ -380,7 +380,7 @@ func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block 
 	return chain
 }
 
-func chm(genesis *types.Block, db common.Database) *ChainManager {
+func chm(genesis *types.Block, db ethdb.Database) *ChainManager {
 	var eventMux event.TypeMux
 	bc := &ChainManager{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
 	bc.headerCache, _ = lru.New(100)

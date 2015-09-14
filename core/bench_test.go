@@ -144,7 +144,7 @@ func genUncles(i int, gen *BlockGen) {
 
 func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Create the database in memory or in a temporary directory.
-	var db common.Database
+	var db ethdb.Database
 	if !disk {
 		db, _ = ethdb.NewMemDatabase()
 	} else {

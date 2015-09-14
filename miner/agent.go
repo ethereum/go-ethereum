@@ -19,11 +19,12 @@ package miner
 import (
 	"sync"
 
+	"sync/atomic"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/pow"
-	"sync/atomic"
 )
 
 type CpuAgent struct {
@@ -63,7 +64,7 @@ func (self *CpuAgent) Stop() {
 func (self *CpuAgent) Start() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-	
+
 	if !atomic.CompareAndSwapInt32(&self.isMining, 0, 1) {
 		return // agent already started
 	}

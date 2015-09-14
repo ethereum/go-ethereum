@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -60,7 +61,7 @@ const (
 
 type ChainManager struct {
 	//eth          EthManager
-	chainDb      common.Database
+	chainDb      ethdb.Database
 	processor    types.BlockProcessor
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
@@ -90,7 +91,7 @@ type ChainManager struct {
 	pow pow.PoW
 }
 
-func NewChainManager(chainDb common.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
+func NewChainManager(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)

@@ -197,7 +197,7 @@ func (test *BlockTest) makeEthConfig() *eth.Config {
 		Verbosity:      5,
 		Etherbase:      common.Address{},
 		AccountManager: accounts.NewManager(ks),
-		NewDB:          func(path string) (common.Database, error) { return ethdb.NewMemDatabase() },
+		NewDB:          func(path string) (ethdb.Database, error) { return ethdb.NewMemDatabase() },
 	}
 }
 

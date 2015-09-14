@@ -508,7 +508,7 @@ func SetupEth(ctx *cli.Context) {
 }
 
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb common.Database) {
+func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb ethdb.Database) {
 	datadir := ctx.GlobalString(DataDirFlag.Name)
 	cache := ctx.GlobalInt(CacheFlag.Name)
 
