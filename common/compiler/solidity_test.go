@@ -46,9 +46,9 @@ contract test {
 func TestCompiler(t *testing.T) {
 	sol, err := New("")
 	if err != nil {
-		t.Skip("solc not found: skip: %v", err)
+		t.Skipf("solc not found: %v", err)
 	} else if sol.Version() != solcVersion {
-		t.Skip("WARNING: skipping due to a newer version of solc found (%v, expect %v)", sol.Version(), solcVersion)
+		t.Skipf("WARNING: a newer version of solc found (%v, expect %v)", sol.Version(), solcVersion)
 	}
 	contracts, err := sol.Compile(source)
 	if err != nil {
@@ -83,7 +83,7 @@ func TestCompileError(t *testing.T) {
 func TestNoCompiler(t *testing.T) {
 	_, err := New("/path/to/solc")
 	if err != nil {
-		t.Log("solidity quits with error: %v", err)
+		t.Logf("solidity quits with error: %v", err)
 	} else {
 		t.Errorf("no solc installed, but got no error")
 	}

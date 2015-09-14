@@ -35,8 +35,8 @@ import (
 )
 
 var (
-	versionRegExp = regexp.MustCompile("[0-9]+\\.[0-9]+\\.[0-9]+")
-	newAPIRegexp  = regexp.MustCompile("0\\.1\\.[2-9][0-9]*")
+	versionRegexp = regexp.MustCompile("[0-9]+\\.[0-9]+\\.[0-9]+")
+	legacyRegexp  = regexp.MustCompile("0\\.(9\\..*|1\\.[01])")
 	paramsLegacy  = []string{
 		"--binary",       // Request to output the contract in binary (hexadecimal).
 		"file",           //
@@ -50,13 +50,13 @@ var (
 		"1",
 	}
 	paramsNew = []string{
-		"--bin",        // Request to output the contract in binary (hexadecimal).
-		"--abi",        // Request to output the contract's JSON ABI interface.
-		"--userdoc",    // Request to output the contract's Natspec user documentation.
-		"--devdoc",     // Request to output the contract's Natspec developer documentation.
-		"--add-std",    // include standard lib contracts
-		"--optimize=1", // code optimizer switched on
-		"-o",           // output directory
+		"--bin",      // Request to output the contract in binary (hexadecimal).
+		"--abi",      // Request to output the contract's JSON ABI interface.
+		"--userdoc",  // Request to output the contract's Natspec user documentation.
+		"--devdoc",   // Request to output the contract's Natspec developer documentation.
+		"--add-std",  // include standard lib contracts
+		"--optimize", // code optimizer switched on
+		"-o",         // output directory
 	}
 )
 
@@ -102,8 +102,8 @@ func New(solcPath string) (sol *Solidity, err error) {
 	}
 
 	fullVersion := out.String()
-	version := versionRegExp.FindString(fullVersion)
-	legacy := !newAPIRegexp.MatchString(version)
+	version := versionRegexp.FindString(fullVersion)
+	legacy := legacyRegexp.MatchString(version)
 
 	sol = &Solidity{
 		solcPath:    solcPath,
