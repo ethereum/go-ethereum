@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func ParanoiaCheck(t1 *Trie, backend Backend) (bool, *Trie) {
@@ -88,10 +89,16 @@ func (self *Trie) Hash() []byte {
 		if byts, ok := t.([]byte); ok && len(byts) > 0 {
 			hash = byts
 		} else {
-			hash = crypto.Sha3(common.Encode(self.root.RlpData()))
+			e, err := rlp.EncodeToBytes(self.root.RlpData())
+			if err != nil {
+				return nil
+			}
+			hash = crypto.Sha3(e)
 		}
 	} else {
-		hash = crypto.Sha3(common.Encode(""))
+		e, _ := rlp.EncodeToBytes("")
+		hash = crypto.Sha3(e)
+
 	}
 
 	if !bytes.Equal(hash, self.roothash) {
@@ -369,7 +376,10 @@ func (self *Trie) trans(node Node) Node {
 }
 
 func (self *Trie) store(node Node) interface{} {
-	data := common.Encode(node)
+	data, err := rlp.EncodeToBytes(node)
+	if err != nil {
+		return nil
+	}
 	if len(data) >= 32 {
 		key := crypto.Sha3(data)
 		if node.Dirty() {
