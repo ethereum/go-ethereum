@@ -2257,6 +2257,17 @@ var isAddress = function (address) {
 };
 
 /**
+ * Checks if the given string is an address
+ *
+ * @method isChecksumAddress
+ * @param {String} address the given HEX adress
+ * @return {Boolean}
+*/
+var isChecksumAddress = function (address) {
+    return /^(0x)?[0-9a-f]{48}$/.test(address);
+};
+
+/**
  * Transforms given string to valid 20 bytes-length addres with 0x prefix
  *
  * @method toAddress
@@ -2378,6 +2389,7 @@ module.exports = {
     isBigNumber: isBigNumber,
     isStrictAddress: isStrictAddress,
     isAddress: isAddress,
+    isChecksumAddress: isChecksumAddress,
     isFunction: isFunction,
     isString: isString,
     isObject: isObject,
@@ -2513,6 +2525,7 @@ web3.toBigNumber = utils.toBigNumber;
 web3.toWei = utils.toWei;
 web3.fromWei = utils.fromWei;
 web3.isAddress = utils.isAddress;
+web3.isChecksumAddress = utils.isChecksumAddress;
 web3.isIBAN = utils.isIBAN;
 web3.sha3 = sha3;
 web3.createBatch = function () {
@@ -3735,8 +3748,10 @@ var inputAddressFormatter = function (address) {
         return address;
     } else if (utils.isAddress(address)) {
         return '0x' + address;
+    } else if (utils.isChecksumAddress(address)) {
+	    return address;
     }
-    throw 'invalid address';
+    throw 'invalid address'
 };
 
 module.exports = {
