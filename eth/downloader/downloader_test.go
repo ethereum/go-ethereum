@@ -139,10 +139,6 @@ func (dl *downloadTester) sync(id string, td *big.Int) error {
 		if hashes+blocks == 0 && atomic.LoadInt32(&dl.downloader.processing) == 0 {
 			break
 		}
-		// If there are queued blocks, but the head is missing, it's a stale leftover
-		if hashes+blocks > 0 && atomic.LoadInt32(&dl.downloader.processing) == 0 && dl.downloader.queue.GetHeadBlock() == nil {
-			break
-		}
 		// Otherwise sleep a bit and retry
 		time.Sleep(time.Millisecond)
 	}
@@ -657,6 +653,67 @@ func testEmptyBlockShortCircuit(t *testing.T, protocol int) {
 	}
 	if int(requested) != needed {
 		t.Fatalf("block body retrieval count mismatch: have %v, want %v", requested, needed)
+	}
+}
+
+// Tests that headers are enqueued continuously, preventing malicious nodes from
+// stalling the downloader by feeding gapped header chains.
+func TestMissingHeaderAttack62(t *testing.T) { testMissingHeaderAttack(t, 62) }
+func TestMissingHeaderAttack63(t *testing.T) { testMissingHeaderAttack(t, 63) }
+func TestMissingHeaderAttack64(t *testing.T) { testMissingHeaderAttack(t, 64) }
+
+func testMissingHeaderAttack(t *testing.T, protocol int) {
+	// Create a small enough block chain to download
+	targetBlocks := blockCacheLimit - 15
+	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+
+	tester := newTester()
+
+	// Attempt a full sync with an attacker feeding gapped headers
+	tester.newPeer("attack", protocol, hashes, blocks)
+	missing := targetBlocks / 2
+	delete(tester.peerBlocks["attack"], hashes[missing])
+
+	if err := tester.sync("attack", nil); err == nil {
+		t.Fatalf("succeeded attacker synchronisation")
+	}
+	// Synchronise with the valid peer and make sure sync succeeds
+	tester.newPeer("valid", protocol, hashes, blocks)
+	if err := tester.sync("valid", nil); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	if imported := len(tester.ownBlocks); imported != len(hashes) {
+		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, len(hashes))
+	}
+}
+
+// Tests that if requested headers are shifted (i.e. first is missing), the queue
+// detects the invalid numbering.
+func TestShiftedHeaderAttack62(t *testing.T) { testShiftedHeaderAttack(t, 62) }
+func TestShiftedHeaderAttack63(t *testing.T) { testShiftedHeaderAttack(t, 63) }
+func TestShiftedHeaderAttack64(t *testing.T) { testShiftedHeaderAttack(t, 64) }
+
+func testShiftedHeaderAttack(t *testing.T, protocol int) {
+	// Create a small enough block chain to download
+	targetBlocks := blockCacheLimit - 15
+	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+
+	tester := newTester()
+
+	// Attempt a full sync with an attacker feeding shifted headers
+	tester.newPeer("attack", protocol, hashes, blocks)
+	delete(tester.peerBlocks["attack"], hashes[len(hashes)-2])
+
+	if err := tester.sync("attack", nil); err == nil {
+		t.Fatalf("succeeded attacker synchronisation")
+	}
+	// Synchronise with the valid peer and make sure sync succeeds
+	tester.newPeer("valid", protocol, hashes, blocks)
+	if err := tester.sync("valid", nil); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	if imported := len(tester.ownBlocks); imported != len(hashes) {
+		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, len(hashes))
 	}
 }
 

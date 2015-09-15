@@ -1078,7 +1078,7 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 			// Otherwise insert all the new headers, aborting in case of junk
 			glog.V(logger.Detail).Infof("%v: inserting %d headers from #%d", p, len(headerPack.headers), from)
 
-			inserts := d.queue.Insert(headerPack.headers)
+			inserts := d.queue.Insert(headerPack.headers, from)
 			if len(inserts) != len(headerPack.headers) {
 				glog.V(logger.Debug).Infof("%v: stale headers", p)
 				return errBadPeer
