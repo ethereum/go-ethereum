@@ -58,6 +58,11 @@ var (
 	gitCommit       string // set via linker flagg
 	nodeNameVersion string
 	app             *cli.App
+
+	ExtraDataFlag = cli.StringFlag{
+		Name:  "extradata",
+		Usage: "Extra data for the miner",
+	}
 )
 
 func init() {
@@ -331,6 +336,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.GpobaseStepDownFlag,
 		utils.GpobaseStepUpFlag,
 		utils.GpobaseCorrectionFactorFlag,
+		ExtraDataFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		utils.SetupLogger(ctx)
@@ -352,6 +358,14 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// MakeExtra resolves extradata for the miner from a flag or returns a default.
+func makeExtra(ctx *cli.Context) []byte {
+	if ctx.GlobalIsSet(ExtraDataFlag.Name) {
+		return []byte(ctx.GlobalString(ExtraDataFlag.Name))
+	}
+	return makeDefaultExtra()
 }
 
 func makeDefaultExtra() []byte {
@@ -382,7 +396,7 @@ func run(ctx *cli.Context) {
 	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	cfg.ExtraData = makeDefaultExtra()
+	cfg.ExtraData = makeExtra(ctx)
 
 	ethereum, err := eth.New(cfg)
 	if err != nil {
