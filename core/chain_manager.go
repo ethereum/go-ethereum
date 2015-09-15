@@ -226,20 +226,16 @@ func (bc *ChainManager) recover() bool {
 
 func (bc *ChainManager) setLastState() error {
 	head := GetHeadBlockHash(bc.chainDb)
-	if head != (common.Hash{}) {
-		block := bc.GetBlock(head)
-		if block != nil {
-			bc.currentBlock = block
-		} else {
-			glog.Infof("LastBlock (%x) not found. Recovering...\n", head)
-			if bc.recover() {
-				glog.Infof("Recover successful")
-			} else {
-				glog.Fatalf("Recover failed. Please report")
-			}
-		}
+	block := bc.GetBlock(head)
+	if block != nil {
+		bc.currentBlock = block
 	} else {
-		bc.Reset()
+		glog.Infof("LastBlock (%x) not found. Recovering...\n", head)
+		if bc.recover() {
+			glog.Infof("Recover successful")
+		} else {
+			glog.Fatalf("Recover failed. Please report")
+		}
 	}
 	bc.td = bc.GetTd(bc.currentBlock.Hash())
 	bc.currentGasLimit = CalcGasLimit(bc.currentBlock)
@@ -249,11 +245,6 @@ func (bc *ChainManager) setLastState() error {
 	}
 
 	return nil
-}
-
-// Reset purges the entire blockchain, restoring it to its genesis state.
-func (bc *ChainManager) Reset() {
-	bc.ResetWithGenesisBlock(bc.genesisBlock)
 }
 
 // ResetWithGenesisBlock purges the entire blockchain, restoring it to the
