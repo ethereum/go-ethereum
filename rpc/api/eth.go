@@ -55,6 +55,7 @@ var (
 		"eth_protocolVersion":                     (*ethApi).ProtocolVersion,
 		"eth_coinbase":                            (*ethApi).Coinbase,
 		"eth_mining":                              (*ethApi).IsMining,
+		"eth_syncing":                             (*ethApi).IsSyncing,
 		"eth_gasPrice":                            (*ethApi).GasPrice,
 		"eth_getStorage":                          (*ethApi).GetStorage,
 		"eth_storageAt":                           (*ethApi).GetStorage,
@@ -164,6 +165,20 @@ func (self *ethApi) Coinbase(req *shared.Request) (interface{}, error) {
 
 func (self *ethApi) IsMining(req *shared.Request) (interface{}, error) {
 	return self.xeth.IsMining(), nil
+}
+
+func (self *ethApi) IsSyncing(req *shared.Request) (interface{}, error) {
+	current := self.ethereum.ChainManager().CurrentBlock().NumberU64()
+	origin, height := self.ethereum.Downloader().Boundaries()
+
+	if current < height {
+		return map[string]interface{}{
+			"startingBlock": newHexNum(big.NewInt(int64(origin)).Bytes()),
+			"currentBlock":  newHexNum(big.NewInt(int64(current)).Bytes()),
+			"highestBlock":  newHexNum(big.NewInt(int64(height)).Bytes()),
+		}, nil
+	}
+	return false, nil
 }
 
 func (self *ethApi) GasPrice(req *shared.Request) (interface{}, error) {

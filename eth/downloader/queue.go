@@ -57,6 +57,7 @@ type queue struct {
 
 	headerPool  map[common.Hash]*types.Header // [eth/62] Pending headers, mapping from their hashes
 	headerQueue *prque.Prque                  // [eth/62] Priority queue of the headers to fetch the bodies for
+	headerHead  common.Hash                   // [eth/62] Hash of the last queued header to verify order
 
 	pendPool map[string]*fetchRequest // Currently pending block retrieval operations
 
@@ -91,6 +92,7 @@ func (q *queue) Reset() {
 
 	q.headerPool = make(map[common.Hash]*types.Header)
 	q.headerQueue.Reset()
+	q.headerHead = common.Hash{}
 
 	q.pendPool = make(map[string]*fetchRequest)
 
@@ -186,7 +188,7 @@ func (q *queue) Insert61(hashes []common.Hash, fifo bool) []common.Hash {
 
 // Insert adds a set of headers for the download queue for scheduling, returning
 // the new headers encountered.
-func (q *queue) Insert(headers []*types.Header) []*types.Header {
+func (q *queue) Insert(headers []*types.Header, from uint64) []*types.Header {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -196,13 +198,24 @@ func (q *queue) Insert(headers []*types.Header) []*types.Header {
 		// Make sure no duplicate requests are executed
 		hash := header.Hash()
 		if _, ok := q.headerPool[hash]; ok {
-			glog.V(logger.Warn).Infof("Header %x already scheduled", hash)
+			glog.V(logger.Warn).Infof("Header #%d [%x] already scheduled", header.Number.Uint64(), hash[:4])
 			continue
+		}
+		// Make sure chain order is honored and preserved throughout
+		if header.Number == nil || header.Number.Uint64() != from {
+			glog.V(logger.Warn).Infof("Header #%v [%x] broke chain ordering, expected %d", header.Number, hash[:4], from)
+			break
+		}
+		if q.headerHead != (common.Hash{}) && q.headerHead != header.ParentHash {
+			glog.V(logger.Warn).Infof("Header #%v [%x] broke chain ancestry", header.Number, hash[:4])
+			break
 		}
 		// Queue the header for body retrieval
 		inserts = append(inserts, header)
 		q.headerPool[hash] = header
 		q.headerQueue.Push(header, -float32(header.Number.Uint64()))
+		q.headerHead = hash
+		from++
 	}
 	return inserts
 }
