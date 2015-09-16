@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -61,7 +62,7 @@ func (ep extProt) GetBlock(hashes []common.Hash) error { return ep.getBlocks(has
 type ProtocolManager struct {
 	txpool   txPool
 	chainman *core.ChainManager
-	chaindb  common.Database
+	chaindb  ethdb.Database
 
 	downloader *downloader.Downloader
 	fetcher    *fetcher.Fetcher
@@ -86,7 +87,7 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager, chaindb common.Database) *ProtocolManager {
+func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager, chaindb ethdb.Database) *ProtocolManager {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		eventMux:  mux,

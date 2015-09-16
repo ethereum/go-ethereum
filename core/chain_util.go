@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
@@ -111,7 +112,7 @@ func CalcGasLimit(parent *types.Block) *big.Int {
 }
 
 // GetCanonicalHash retrieves a hash assigned to a canonical block number.
-func GetCanonicalHash(db common.Database, number uint64) common.Hash {
+func GetCanonicalHash(db ethdb.Database, number uint64) common.Hash {
 	data, _ := db.Get(append(blockNumPrefix, big.NewInt(int64(number)).Bytes()...))
 	if len(data) == 0 {
 		return common.Hash{}
@@ -124,7 +125,7 @@ func GetCanonicalHash(db common.Database, number uint64) common.Hash {
 // last block hash is only updated upon a full block import, the last header
 // hash is updated already at header import, allowing head tracking for the
 // fast synchronization mechanism.
-func GetHeadHeaderHash(db common.Database) common.Hash {
+func GetHeadHeaderHash(db ethdb.Database) common.Hash {
 	data, _ := db.Get(headHeaderKey)
 	if len(data) == 0 {
 		return common.Hash{}
@@ -133,7 +134,7 @@ func GetHeadHeaderHash(db common.Database) common.Hash {
 }
 
 // GetHeadBlockHash retrieves the hash of the current canonical head block.
-func GetHeadBlockHash(db common.Database) common.Hash {
+func GetHeadBlockHash(db ethdb.Database) common.Hash {
 	data, _ := db.Get(headBlockKey)
 	if len(data) == 0 {
 		return common.Hash{}
@@ -143,14 +144,14 @@ func GetHeadBlockHash(db common.Database) common.Hash {
 
 // GetHeaderRLP retrieves a block header in its raw RLP database encoding, or nil
 // if the header's not found.
-func GetHeaderRLP(db common.Database, hash common.Hash) rlp.RawValue {
+func GetHeaderRLP(db ethdb.Database, hash common.Hash) rlp.RawValue {
 	data, _ := db.Get(append(append(blockPrefix, hash[:]...), headerSuffix...))
 	return data
 }
 
 // GetHeader retrieves the block header corresponding to the hash, nil if none
 // found.
-func GetHeader(db common.Database, hash common.Hash) *types.Header {
+func GetHeader(db ethdb.Database, hash common.Hash) *types.Header {
 	data := GetHeaderRLP(db, hash)
 	if len(data) == 0 {
 		return nil
@@ -164,14 +165,14 @@ func GetHeader(db common.Database, hash common.Hash) *types.Header {
 }
 
 // GetBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
-func GetBodyRLP(db common.Database, hash common.Hash) rlp.RawValue {
+func GetBodyRLP(db ethdb.Database, hash common.Hash) rlp.RawValue {
 	data, _ := db.Get(append(append(blockPrefix, hash[:]...), bodySuffix...))
 	return data
 }
 
 // GetBody retrieves the block body (transactons, uncles) corresponding to the
 // hash, nil if none found.
-func GetBody(db common.Database, hash common.Hash) *types.Body {
+func GetBody(db ethdb.Database, hash common.Hash) *types.Body {
 	data := GetBodyRLP(db, hash)
 	if len(data) == 0 {
 		return nil
@@ -186,7 +187,7 @@ func GetBody(db common.Database, hash common.Hash) *types.Body {
 
 // GetTd retrieves a block's total difficulty corresponding to the hash, nil if
 // none found.
-func GetTd(db common.Database, hash common.Hash) *big.Int {
+func GetTd(db ethdb.Database, hash common.Hash) *big.Int {
 	data, _ := db.Get(append(append(blockPrefix, hash.Bytes()...), tdSuffix...))
 	if len(data) == 0 {
 		return nil
@@ -201,7 +202,7 @@ func GetTd(db common.Database, hash common.Hash) *big.Int {
 
 // GetBlock retrieves an entire block corresponding to the hash, assembling it
 // back from the stored header and body.
-func GetBlock(db common.Database, hash common.Hash) *types.Block {
+func GetBlock(db ethdb.Database, hash common.Hash) *types.Block {
 	// Retrieve the block header and body contents
 	header := GetHeader(db, hash)
 	if header == nil {
@@ -216,7 +217,7 @@ func GetBlock(db common.Database, hash common.Hash) *types.Block {
 }
 
 // WriteCanonicalHash stores the canonical hash for the given block number.
-func WriteCanonicalHash(db common.Database, hash common.Hash, number uint64) error {
+func WriteCanonicalHash(db ethdb.Database, hash common.Hash, number uint64) error {
 	key := append(blockNumPrefix, big.NewInt(int64(number)).Bytes()...)
 	if err := db.Put(key, hash.Bytes()); err != nil {
 		glog.Fatalf("failed to store number to hash mapping into database: %v", err)
@@ -226,7 +227,7 @@ func WriteCanonicalHash(db common.Database, hash common.Hash, number uint64) err
 }
 
 // WriteHeadHeaderHash stores the head header's hash.
-func WriteHeadHeaderHash(db common.Database, hash common.Hash) error {
+func WriteHeadHeaderHash(db ethdb.Database, hash common.Hash) error {
 	if err := db.Put(headHeaderKey, hash.Bytes()); err != nil {
 		glog.Fatalf("failed to store last header's hash into database: %v", err)
 		return err
@@ -235,7 +236,7 @@ func WriteHeadHeaderHash(db common.Database, hash common.Hash) error {
 }
 
 // WriteHeadBlockHash stores the head block's hash.
-func WriteHeadBlockHash(db common.Database, hash common.Hash) error {
+func WriteHeadBlockHash(db ethdb.Database, hash common.Hash) error {
 	if err := db.Put(headBlockKey, hash.Bytes()); err != nil {
 		glog.Fatalf("failed to store last block's hash into database: %v", err)
 		return err
@@ -244,7 +245,7 @@ func WriteHeadBlockHash(db common.Database, hash common.Hash) error {
 }
 
 // WriteHeader serializes a block header into the database.
-func WriteHeader(db common.Database, header *types.Header) error {
+func WriteHeader(db ethdb.Database, header *types.Header) error {
 	data, err := rlp.EncodeToBytes(header)
 	if err != nil {
 		return err
@@ -259,7 +260,7 @@ func WriteHeader(db common.Database, header *types.Header) error {
 }
 
 // WriteBody serializes the body of a block into the database.
-func WriteBody(db common.Database, hash common.Hash, body *types.Body) error {
+func WriteBody(db ethdb.Database, hash common.Hash, body *types.Body) error {
 	data, err := rlp.EncodeToBytes(body)
 	if err != nil {
 		return err
@@ -274,7 +275,7 @@ func WriteBody(db common.Database, hash common.Hash, body *types.Body) error {
 }
 
 // WriteTd serializes the total difficulty of a block into the database.
-func WriteTd(db common.Database, hash common.Hash, td *big.Int) error {
+func WriteTd(db ethdb.Database, hash common.Hash, td *big.Int) error {
 	data, err := rlp.EncodeToBytes(td)
 	if err != nil {
 		return err
@@ -289,7 +290,7 @@ func WriteTd(db common.Database, hash common.Hash, td *big.Int) error {
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
-func WriteBlock(db common.Database, block *types.Block) error {
+func WriteBlock(db ethdb.Database, block *types.Block) error {
 	// Store the body first to retain database consistency
 	if err := WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
 		return err
@@ -302,27 +303,27 @@ func WriteBlock(db common.Database, block *types.Block) error {
 }
 
 // DeleteCanonicalHash removes the number to hash canonical mapping.
-func DeleteCanonicalHash(db common.Database, number uint64) {
+func DeleteCanonicalHash(db ethdb.Database, number uint64) {
 	db.Delete(append(blockNumPrefix, big.NewInt(int64(number)).Bytes()...))
 }
 
 // DeleteHeader removes all block header data associated with a hash.
-func DeleteHeader(db common.Database, hash common.Hash) {
+func DeleteHeader(db ethdb.Database, hash common.Hash) {
 	db.Delete(append(append(blockPrefix, hash.Bytes()...), headerSuffix...))
 }
 
 // DeleteBody removes all block body data associated with a hash.
-func DeleteBody(db common.Database, hash common.Hash) {
+func DeleteBody(db ethdb.Database, hash common.Hash) {
 	db.Delete(append(append(blockPrefix, hash.Bytes()...), bodySuffix...))
 }
 
 // DeleteTd removes all block total difficulty data associated with a hash.
-func DeleteTd(db common.Database, hash common.Hash) {
+func DeleteTd(db ethdb.Database, hash common.Hash) {
 	db.Delete(append(append(blockPrefix, hash.Bytes()...), tdSuffix...))
 }
 
 // DeleteBlock removes all block data associated with a hash.
-func DeleteBlock(db common.Database, hash common.Hash) {
+func DeleteBlock(db ethdb.Database, hash common.Hash) {
 	DeleteHeader(db, hash)
 	DeleteBody(db, hash)
 	DeleteTd(db, hash)
@@ -333,7 +334,7 @@ func DeleteBlock(db common.Database, hash common.Hash) {
 // or nil if not found. This method is only used by the upgrade mechanism to
 // access the old combined block representation. It will be dropped after the
 // network transitions to eth/63.
-func GetBlockByHashOld(db common.Database, hash common.Hash) *types.Block {
+func GetBlockByHashOld(db ethdb.Database, hash common.Hash) *types.Block {
 	data, _ := db.Get(append(blockHashPre, hash[:]...))
 	if len(data) == 0 {
 		return nil

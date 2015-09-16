@@ -143,7 +143,7 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 		MaxPeers:       0,
 		PowTest:        true,
 		Etherbase:      common.HexToAddress(testAddress),
-		NewDB:          func(path string) (common.Database, error) { return db, nil },
+		NewDB:          func(path string) (ethdb.Database, error) { return db, nil },
 	})
 
 	if err != nil {

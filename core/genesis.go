@@ -27,13 +27,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 // WriteGenesisBlock writes the genesis block to the database as block number 0
-func WriteGenesisBlock(chainDb common.Database, reader io.Reader) (*types.Block, error) {
+func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, error) {
 	contents, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err
@@ -110,7 +111,7 @@ func WriteGenesisBlock(chainDb common.Database, reader io.Reader) (*types.Block,
 
 // GenesisBlockForTesting creates a block in which addr has the given wei balance.
 // The state trie of the block is written to db.
-func GenesisBlockForTesting(db common.Database, addr common.Address, balance *big.Int) *types.Block {
+func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
 	statedb := state.New(common.Hash{}, db)
 	obj := statedb.GetOrNewStateObject(addr)
 	obj.SetBalance(balance)
@@ -124,7 +125,7 @@ func GenesisBlockForTesting(db common.Database, addr common.Address, balance *bi
 	return block
 }
 
-func WriteGenesisBlockForTesting(db common.Database, addr common.Address, balance *big.Int) *types.Block {
+func WriteGenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
 	testGenesis := fmt.Sprintf(`{
 	"nonce":"0x%x",
 	"gasLimit":"0x%x",
@@ -137,7 +138,7 @@ func WriteGenesisBlockForTesting(db common.Database, addr common.Address, balanc
 	return block
 }
 
-func WriteTestNetGenesisBlock(chainDb common.Database, nonce uint64) (*types.Block, error) {
+func WriteTestNetGenesisBlock(chainDb ethdb.Database, nonce uint64) (*types.Block, error) {
 	testGenesis := fmt.Sprintf(`{
 	"nonce":"0x%x",
 	"gasLimit":"0x%x",

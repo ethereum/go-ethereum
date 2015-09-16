@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow"
 )
@@ -142,7 +143,7 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 // Blocks created by GenerateChain do not contain valid proof of work
 // values. Inserting them into ChainManager requires use of FakePow or
 // a similar non-validating proof of work implementation.
-func GenerateChain(parent *types.Block, db common.Database, n int, gen func(int, *BlockGen)) []*types.Block {
+func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) []*types.Block {
 	statedb := state.New(parent.Root(), db)
 	blocks := make(types.Blocks, n)
 	genblock := func(i int, h *types.Header) *types.Block {
@@ -185,7 +186,7 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 
 // newCanonical creates a new deterministic canonical chain by running
 // InsertChain on the result of makeChain.
-func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
+func newCanonical(n int, db ethdb.Database) (*BlockProcessor, error) {
 	evmux := &event.TypeMux{}
 
 	WriteTestNetGenesisBlock(db, 0)
@@ -201,7 +202,7 @@ func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
 	return bman, err
 }
 
-func makeChain(parent *types.Block, n int, db common.Database, seed int) []*types.Block {
+func makeChain(parent *types.Block, n int, db ethdb.Database, seed int) []*types.Block {
 	return GenerateChain(parent, db, n, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})

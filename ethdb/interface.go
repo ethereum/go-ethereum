@@ -14,13 +14,17 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package common
+package ethdb
 
-// Database interface
 type Database interface {
 	Put(key []byte, value []byte) error
 	Get(key []byte) ([]byte, error)
 	Delete(key []byte) error
 	Close()
-	Flush() error
+	NewBatch() Batch
+}
+
+type Batch interface {
+	Put(key, value []byte) error
+	Write() error
 }

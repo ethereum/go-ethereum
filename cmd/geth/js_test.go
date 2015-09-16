@@ -103,7 +103,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth
 		Name:           "test",
 		SolcPath:       testSolcPath,
 		PowTest:        true,
-		NewDB:          func(path string) (common.Database, error) { return db, nil },
+		NewDB:          func(path string) (ethdb.Database, error) { return db, nil },
 	}
 	if config != nil {
 		config(conf)

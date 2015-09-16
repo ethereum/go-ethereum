@@ -61,9 +61,7 @@ type LDBDatabase struct {
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 }
 
-// NewLDBDatabase returns a LevelDB wrapped object. LDBDatabase does not persist data by
-// it self but requires a background poller which syncs every X. `Flush` should be called
-// when data needs to be stored and written to disk.
+// NewLDBDatabase returns a LevelDB wrapped object.
 func NewLDBDatabase(file string, cache int) (*LDBDatabase, error) {
 	// Calculate the cache allowance for this particular database
 	cache = int(float64(cache) * cacheRatio[filepath.Base(file)])
@@ -142,11 +140,6 @@ func (self *LDBDatabase) NewIterator() iterator.Iterator {
 	return self.db.NewIterator(nil, nil)
 }
 
-// Flush flushes out the queue to leveldb
-func (self *LDBDatabase) Flush() error {
-	return nil
-}
-
 func (self *LDBDatabase) Close() {
 	// Stop the metrics collection to avoid internal database races
 	self.quitLock.Lock()
@@ -159,12 +152,14 @@ func (self *LDBDatabase) Close() {
 			glog.V(logger.Error).Infof("metrics failure in '%s': %v\n", self.fn, err)
 		}
 	}
-	// Flush and close the database
-	if err := self.Flush(); err != nil {
-		glog.V(logger.Error).Infof("flushing '%s' failed: %v\n", self.fn, err)
+	err := self.db.Close()
+	if glog.V(logger.Error) {
+		if err == nil {
+			glog.Infoln("closed db:", self.fn)
+		} else {
+			glog.Errorf("error closing db %s: %v", self.fn, err)
+		}
 	}
-	self.db.Close()
-	glog.V(logger.Error).Infoln("flushed and closed db:", self.fn)
 }
 
 func (self *LDBDatabase) LDB() *leveldb.DB {
@@ -267,4 +262,24 @@ func (self *LDBDatabase) meter(refresh time.Duration) {
 			// Timeout, gather a new set of stats
 		}
 	}
+}
+
+// TODO: remove this stuff and expose leveldb directly
+
+func (db *LDBDatabase) NewBatch() Batch {
+	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
+}
+
+type ldbBatch struct {
+	db *leveldb.DB
+	b  *leveldb.Batch
+}
+
+func (b *ldbBatch) Put(key, value []byte) error {
+	b.b.Put(key, value)
+	return nil
+}
+
+func (b *ldbBatch) Write() error {
+	return b.db.Write(b.b, nil)
 }

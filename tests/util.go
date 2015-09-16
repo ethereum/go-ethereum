@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 func checkLogs(tlog []Log, logs state.Logs) error {
@@ -87,7 +88,7 @@ func (self Log) Topics() [][]byte {
 	return t
 }
 
-func StateObjectFromAccount(db common.Database, addr string, account Account) *state.StateObject {
+func StateObjectFromAccount(db ethdb.Database, addr string, account Account) *state.StateObject {
 	obj := state.NewStateObject(common.HexToAddress(addr), db)
 	obj.SetBalance(common.Big(account.Balance))
 

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -100,7 +101,7 @@ type worker struct {
 	eth     core.Backend
 	chain   *core.ChainManager
 	proc    *core.BlockProcessor
-	chainDb common.Database
+	chainDb ethdb.Database
 
 	coinbase common.Address
 	gasPrice *big.Int

@@ -36,8 +36,7 @@ func NewMemDatabase() (*MemDatabase, error) {
 }
 
 func (db *MemDatabase) Put(key []byte, value []byte) error {
-	db.db[string(key)] = value
-
+	db.db[string(key)] = common.CopyBytes(value)
 	return nil
 }
 
@@ -92,6 +91,25 @@ func (db *MemDatabase) LastKnownTD() []byte {
 	return data
 }
 
-func (db *MemDatabase) Flush() error {
+func (db *MemDatabase) NewBatch() Batch {
+	return &memBatch{db: db}
+}
+
+type kv struct{ k, v []byte }
+
+type memBatch struct {
+	db     *MemDatabase
+	writes []kv
+}
+
+func (w *memBatch) Put(key, value []byte) error {
+	w.writes = append(w.writes, kv{key, common.CopyBytes(value)})
+	return nil
+}
+
+func (w *memBatch) Write() error {
+	for _, kv := range w.writes {
+		w.db.db[string(kv.k)] = kv.v
+	}
 	return nil
 }
