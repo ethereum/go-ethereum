@@ -131,6 +131,17 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 	return b.chain[index]
 }
 
+// OffsetTime modifies the time instance of a block, implicitly changing its
+// associated difficulty. It's useful to test scenarios where forking is not
+// tied to chain length directly.
+func (b *BlockGen) OffsetTime(seconds int64) {
+	b.header.Time.Add(b.header.Time, new(big.Int).SetInt64(seconds))
+	if b.header.Time.Cmp(b.parent.Header().Time) <= 0 {
+		panic("block time out of range")
+	}
+	b.header.Difficulty = CalcDifficulty(b.header.Time.Uint64(), b.parent.Time().Uint64(), b.parent.Number(), b.parent.Difficulty())
+}
+
 // GenerateChain creates a chain of n blocks. The first block's
 // parent will be the provided parent. db is used to store
 // intermediate states and should contain the parent's state trie.
