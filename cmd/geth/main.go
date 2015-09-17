@@ -360,7 +360,7 @@ func main() {
 	}
 }
 
-// MakeExtra resolves extradata for the miner from a flag or returns a default.
+// makeExtra resolves extradata for the miner from a flag or returns a default.
 func makeExtra(ctx *cli.Context) []byte {
 	if ctx.GlobalIsSet(ExtraDataFlag.Name) {
 		return []byte(ctx.GlobalString(ExtraDataFlag.Name))
@@ -444,6 +444,8 @@ func console(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	cfg.ExtraData = makeExtra(ctx)
+
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
