@@ -1,49 +1,50 @@
-# ethutil
+# common
 
 [![Build
 Status](https://travis-ci.org/ethereum/go-ethereum.png?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
 
-The ethutil package contains the ethereum utility library.
+The common package contains the ethereum utility library.
 
 # Installation
 
-`go get github.com/ethereum/ethutil-go`
+As a subdirectory the main go-ethereum repository, you get it with
+`go get github.com/ethereum/go-ethereum`.
 
 # Usage
 
 ## RLP (Recursive Linear Prefix) Encoding
 
-RLP Encoding is an encoding scheme utilized by the Ethereum project. It
-encodes any native value or list to string.
+RLP Encoding is an encoding scheme used by the Ethereum project. It
+encodes any native value or list to a string.
 
-More in depth information about the Encoding scheme see the [Wiki](http://wiki.ethereum.org/index.php/RLP)
-article.
+More in depth information about the encoding scheme see the
+[Wiki](http://wiki.ethereum.org/index.php/RLP) article.
 
 ```go
-rlp := ethutil.Encode("doge")
+rlp := common.Encode("doge")
 fmt.Printf("%q\n", rlp) // => "\0x83dog"
 
-rlp = ethutil.Encode([]interface{}{"dog", "cat"})
+rlp = common.Encode([]interface{}{"dog", "cat"})
 fmt.Printf("%q\n", rlp) // => "\0xc8\0x83dog\0x83cat"
-decoded := ethutil.Decode(rlp)
+decoded := common.Decode(rlp)
 fmt.Println(decoded) // => ["dog" "cat"]
 ```
 
 ## Patricia Trie
 
-Patricie Tree is a merkle trie utilized by the Ethereum project.
+Patricie Tree is a merkle trie used by the Ethereum project.
 
 More in depth information about the (modified) Patricia Trie can be
 found on the [Wiki](http://wiki.ethereum.org/index.php/Patricia_Tree).
 
 The patricia trie uses a db as backend and could be anything as long as
-it satisfies the Database interface found in `ethutil/db.go`.
+it satisfies the Database interface found in `common/db.go`.
 
 ```go
 db := NewDatabase()
 
 // db, root
-trie := ethutil.NewTrie(db, "")
+trie := common.NewTrie(db, "")
 
 trie.Put("puppy", "dog")
 trie.Put("horse", "stallion")
@@ -65,7 +66,7 @@ all (key, value) bindings.
 // ... Create db/trie
 
 // Note that RLP uses interface slices as list
-value := ethutil.Encode([]interface{}{"one", 2, "three", []interface{}{42}})
+value := common.Encode([]interface{}{"one", 2, "three", []interface{}{42}})
 // Store the RLP encoded value of the list
 trie.Put("mykey", value)
 ```
@@ -89,7 +90,7 @@ type (e.g. `Slice()` returns []interface{}, `Uint()` return 0, etc).
 `Append(v)` appends the value (v) to the current value/list.
 
 ```go
-val := ethutil.NewEmptyValue().Append(1).Append("2")
+val := common.NewEmptyValue().Append(1).Append("2")
 val.AppendList().Append(3)
 ```
 
@@ -110,7 +111,7 @@ val.AppendList().Append(3)
 `Byte()` returns the value as a single byte.
 
 ```go
-val := ethutil.NewValue([]interface{}{1,"2",[]interface{}{3}})
+val := common.NewValue([]interface{}{1,"2",[]interface{}{3}})
 val.Get(0).Uint() // => 1
 val.Get(1).Str()  // => "2"
 s := val.Get(2)   // => Value([]interface{}{3})
@@ -122,7 +123,7 @@ s.Get(0).Uint()   // => 3
 Decoding streams of RLP data is simplified
 
 ```go
-val := ethutil.NewValueFromBytes(rlpData)
+val := common.NewValueFromBytes(rlpData)
 val.Get(0).Uint()
 ```
 
@@ -132,7 +133,7 @@ Encoding from Value to RLP is done with the `Encode` method. The
 underlying value can be anything RLP can encode (int, str, lists, bytes)
 
 ```go
-val := ethutil.NewValue([]interface{}{1,"2",[]interface{}{3}})
+val := common.NewValue([]interface{}{1,"2",[]interface{}{3}})
 rlp := val.Encode()
 // Store the rlp data
 Store(rlp)
