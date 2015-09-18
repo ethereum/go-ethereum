@@ -44,9 +44,10 @@ import (
 type BlockTest struct {
 	Genesis *types.Block
 
-	Json         *btJSON
-	preAccounts  map[string]btAccount
-	postAccounts map[string]btAccount
+	Json          *btJSON
+	preAccounts   map[string]btAccount
+	postAccounts  map[string]btAccount
+	lastblockhash string
 }
 
 type btJSON struct {
@@ -54,6 +55,7 @@ type btJSON struct {
 	GenesisBlockHeader btHeader
 	Pre                map[string]btAccount
 	PostState          map[string]btAccount
+	Lastblockhash      string
 }
 
 type btBlock struct {
@@ -77,6 +79,7 @@ type btHeader struct {
 	MixHash          string
 	Nonce            string
 	Number           string
+	Hash             string
 	ParentHash       string
 	ReceiptTrie      string
 	SeedHash         string
@@ -178,16 +181,24 @@ func runBlockTest(test *BlockTest) error {
 		return fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	err = test.TryBlocksInsert(ethereum.ChainManager())
+	cm := ethereum.ChainManager()
+	validBlocks, err := test.TryBlocksInsert(cm)
 	if err != nil {
 		return err
 	}
 
-	newDB := ethereum.ChainManager().State()
+	lastblockhash := common.HexToHash(test.lastblockhash)
+	cmlast := cm.LastBlockHash()
+	if lastblockhash != cmlast {
+		return fmt.Errorf("lastblockhash validation mismatch: want: %x, have: %x", lastblockhash, cmlast)
+	}
+
+	newDB := cm.State()
 	if err = test.ValidatePostState(newDB); err != nil {
 		return fmt.Errorf("post state validation failed: %v", err)
 	}
-	return nil
+
+	return test.ValidateImportedHeaders(cm, validBlocks)
 }
 
 func (test *BlockTest) makeEthConfig() *eth.Config {
@@ -265,8 +276,8 @@ func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, erro
    expected we are expected to ignore it and continue processing and then validate the
    post state.
 */
-func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
-	blockNums := make(map[string]bool)
+func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) ([]btBlock, error) {
+	validBlocks := make([]btBlock, 0)
 	// insert the test blocks, which will execute all transactions
 	for _, b := range t.Json.Blocks {
 		cb, err := mustConvertBlock(b)
@@ -274,7 +285,7 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
-				return fmt.Errorf("Block RLP decoding failed when expected to succeed: %v", err)
+				return nil, fmt.Errorf("Block RLP decoding failed when expected to succeed: %v", err)
 			}
 		}
 		// RLP decoding worked, try to insert into chain:
@@ -283,47 +294,23 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
-				return fmt.Errorf("Block insertion into chain failed: %v", err)
+				return nil, fmt.Errorf("Block insertion into chain failed: %v", err)
 			}
 		}
 		if b.BlockHeader == nil {
-			return fmt.Errorf("Block insertion should have failed")
+			return nil, fmt.Errorf("Block insertion should have failed")
 		}
 
 		// validate RLP decoding by checking all values against test file JSON
-		if err = t.validateBlockHeader(b.BlockHeader, cb.Header()); err != nil {
-			return fmt.Errorf("Deserialised block header validation failed: %v", err)
+		if err = validateHeader(b.BlockHeader, cb.Header()); err != nil {
+			return nil, fmt.Errorf("Deserialised block header validation failed: %v", err)
 		}
-
-		// validate the imported header against test file JSON
-
-		/*
-			TODO: currently test files do not contain information on what
-			reorg is expected other than possibly the post state (which may
-			or may not depend on a specific chain).
-
-			discussed with winswega and it was agreed to add this information
-			to the test files explicitly.
-
-			meanwhile we skip header validation on blocks with the same block
-			number as a prior block, since this test code cannot know what
-			blocks are in the longest chain without making use of the very
-			protocol rules the tests verify or rely on the correctness of the
-			code that is being tested.
-
-		*/
-		if !blockNums[b.BlockHeader.Number] {
-			importedBlock := chainManager.CurrentBlock()
-			if err = t.validateBlockHeader(b.BlockHeader, importedBlock.Header()); err != nil {
-				return fmt.Errorf("Imported block header validation failed: %v", err)
-			}
-			blockNums[b.BlockHeader.Number] = true
-		}
+		validBlocks = append(validBlocks, b)
 	}
-	return nil
+	return validBlocks, nil
 }
 
-func (s *BlockTest) validateBlockHeader(h *btHeader, h2 *types.Header) error {
+func validateHeader(h *btHeader, h2 *types.Header) error {
 	expectedBloom := mustConvertBytes(h.Bloom)
 	if !bytes.Equal(expectedBloom, h2.Bloom.Bytes()) {
 		return fmt.Errorf("Bloom: want: %x have: %x", expectedBloom, h2.Bloom.Bytes())
@@ -439,6 +426,27 @@ func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 	return nil
 }
 
+func (test *BlockTest) ValidateImportedHeaders(cm *core.ChainManager, validBlocks []btBlock) error {
+	// to get constant lookup when verifying block headers by hash (some tests have many blocks)
+	bmap := make(map[string]btBlock, len(test.Json.Blocks))
+	for _, b := range validBlocks {
+		bmap[b.BlockHeader.Hash] = b
+	}
+
+	// iterate over blocks backwards from HEAD and validate imported
+	// headers vs test file. some tests have reorgs, and we import
+	// block-by-block, so we can only validate imported headers after
+	// all blocks have been processed by ChainManager, as they may not
+	// be part of the longest chain until last block is imported.
+	for b := cm.CurrentBlock(); b != nil && b.NumberU64() != 0; b = cm.GetBlock(b.Header().ParentHash) {
+		bHash := common.Bytes2Hex(b.Hash().Bytes()) // hex without 0x prefix
+		if err := validateHeader(bmap[bHash].BlockHeader, b.Header()); err != nil {
+			return fmt.Errorf("Imported block header validation failed: %v", err)
+		}
+	}
+	return nil
+}
+
 func convertBlockTests(in map[string]*btJSON) (map[string]*BlockTest, error) {
 	out := make(map[string]*BlockTest)
 	for name, test := range in {
@@ -461,7 +469,7 @@ func convertBlockTest(in *btJSON) (out *BlockTest, err error) {
 			err = fmt.Errorf("%v\n%s", recovered, buf)
 		}
 	}()
-	out = &BlockTest{preAccounts: in.Pre, postAccounts: in.PostState, Json: in}
+	out = &BlockTest{preAccounts: in.Pre, postAccounts: in.PostState, Json: in, lastblockhash: in.Lastblockhash}
 	out.Genesis = mustConvertGenesis(in.GenesisBlockHeader)
 	return out, err
 }
