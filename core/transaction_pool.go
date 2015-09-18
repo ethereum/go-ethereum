@@ -121,8 +121,8 @@ func (pool *TxPool) resetState() {
 		if addr, err := tx.From(); err == nil {
 			// Set the nonce. Transaction nonce can never be lower
 			// than the state nonce; validatePool took care of that.
-			if pool.pendingState.GetNonce(addr) < tx.Nonce() {
-				pool.pendingState.SetNonce(addr, tx.Nonce())
+			if pool.pendingState.GetNonce(addr) <= tx.Nonce() {
+				pool.pendingState.SetNonce(addr, tx.Nonce()+1)
 			}
 		}
 	}

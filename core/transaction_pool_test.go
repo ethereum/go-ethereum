@@ -219,3 +219,22 @@ func TestMissingNonce(t *testing.T) {
 		t.Error("expected 1 queued transaction, got", len(pool.queue[addr]))
 	}
 }
+
+func TestNonceRecovery(t *testing.T) {
+	const n = 10
+	pool, key := setupTxPool()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	pool.currentState().SetNonce(addr, n)
+	pool.currentState().AddBalance(addr, big.NewInt(100000000000000))
+	pool.resetState()
+	tx := transaction(n, big.NewInt(100000), key)
+	if err := pool.Add(tx); err != nil {
+		t.Error(err)
+	}
+	// simulate some weird re-order of transactions and missing nonce(s)
+	pool.currentState().SetNonce(addr, n-1)
+	pool.resetState()
+	if fn := pool.pendingState.GetNonce(addr); fn != n+1 {
+		t.Errorf("expected nonce to be %d, got %d", n+1, fn)
+	}
+}
