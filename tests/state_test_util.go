@@ -181,9 +181,6 @@ func runStateTest(test VmTest) error {
 	// check post state
 	for addr, account := range test.Post {
 		obj := statedb.GetStateObject(common.HexToAddress(addr))
-		if obj == nil {
-			continue
-		}
 
 		if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
 			return fmt.Errorf("(%x) balance failed. Expected %v, got %v => %v\n", obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))

@@ -111,25 +111,27 @@ func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, er
 	if err != nil {
 		return nil, err
 	}
-	// if err := ethereum.Start(); err != nil {
-	// 	return nil, err
-	// }
 
 	// import the genesis block
 	ethereum.ResetWithGenesisBlock(test.Genesis)
 
 	// import pre accounts
-	statedb, err := test.InsertPreState(ethereum)
+	_, err = test.InsertPreState(ethereum)
 	if err != nil {
 		return ethereum, fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	if err := test.TryBlocksInsert(ethereum.ChainManager()); err != nil {
+	cm := ethereum.ChainManager()
+
+	validBlocks, err := test.TryBlocksInsert(cm)
+	if err != nil {
 		return ethereum, fmt.Errorf("Block Test load error: %v", err)
 	}
 
-	if err := test.ValidatePostState(statedb); err != nil {
+	newDB := cm.State()
+	if err := test.ValidatePostState(newDB); err != nil {
 		return ethereum, fmt.Errorf("post state validation failed: %v", err)
 	}
-	return ethereum, nil
+
+	return ethereum, test.ValidateImportedHeaders(cm, validBlocks)
 }
