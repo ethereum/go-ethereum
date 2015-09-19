@@ -28,6 +28,9 @@ import (
 
 func init() {
 	spew.Config.Indent = "\t"
+	spew.Config.DisableMethods = true
+	// glog.SetV(8)
+	// glog.SetToStderr(true)
 }
 
 type dialtest struct {
@@ -49,7 +52,7 @@ func runDialTest(t *testing.T, test dialtest) {
 	pm := func(ps []*Peer) map[discover.NodeID]*Peer {
 		m := make(map[discover.NodeID]*Peer)
 		for _, p := range ps {
-			m[p.rw.id] = p
+			m[p.conn.id] = p
 		}
 		return m
 	}
@@ -94,18 +97,18 @@ func TestDialStateDynDial(t *testing.T) {
 			// A discovery query is launched.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: staticDialedConn, id: uintID(0)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(0)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
 				new: []task{&discoverTask{bootstrap: true}},
 			},
 			// Dynamic dials are launched when it completes.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: staticDialedConn, id: uintID(0)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(0)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
 				done: []task{
 					&discoverTask{bootstrap: true, results: []*discover.Node{
@@ -127,11 +130,11 @@ func TestDialStateDynDial(t *testing.T) {
 			// the sum of active dial count and dynamic peer count is == maxDynDials.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: staticDialedConn, id: uintID(0)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(3)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(4)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(0)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(3)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(4)}},
 				},
 				done: []task{
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(3)}},
@@ -142,12 +145,12 @@ func TestDialStateDynDial(t *testing.T) {
 			// maxDynDials has been reached.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: staticDialedConn, id: uintID(0)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(3)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(4)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(5)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(0)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(3)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(4)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(5)}},
 				},
 				done: []task{
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(5)}},
@@ -160,11 +163,11 @@ func TestDialStateDynDial(t *testing.T) {
 			// results from last discovery lookup are reused.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: staticDialedConn, id: uintID(0)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(3)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(4)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(5)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(0)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(3)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(4)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(5)}},
 				},
 				new: []task{
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(6)}},
@@ -175,9 +178,9 @@ func TestDialStateDynDial(t *testing.T) {
 			// and a new one is spawned because more candidates are needed.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: staticDialedConn, id: uintID(0)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(5)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(0)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(5)}},
 				},
 				done: []task{
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(6)}},
@@ -192,10 +195,10 @@ func TestDialStateDynDial(t *testing.T) {
 			// no new is started.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: staticDialedConn, id: uintID(0)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(5)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(7)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(0)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(5)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(7)}},
 				},
 				done: []task{
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(7)}},
@@ -205,10 +208,10 @@ func TestDialStateDynDial(t *testing.T) {
 			// should be immediately requested.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: staticDialedConn, id: uintID(0)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(5)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(7)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(0)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(5)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(7)}},
 				},
 				done: []task{
 					&discoverTask{},
@@ -259,8 +262,8 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 			// Dialing nodes 1,2 succeeds. Dials from the lookup are launched.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
 				done: []task{
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(1)}},
@@ -281,11 +284,11 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 			// Dialing nodes 3,4,5 fails. The dials from the lookup succeed.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(10)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(11)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(12)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(10)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(11)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(12)}},
 				},
 				done: []task{
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(3)}},
@@ -300,11 +303,11 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 			// discovery query is still running.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(10)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(11)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(12)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(10)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(11)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(12)}},
 				},
 			},
 			// Nodes 3,4 are not tried again because only the first two
@@ -312,11 +315,11 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 			// already connected.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(10)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(11)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(12)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(10)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(11)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(12)}},
 				},
 			},
 		},
@@ -340,8 +343,8 @@ func TestDialStateStaticDial(t *testing.T) {
 			// aren't yet connected.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
 				new: []task{
 					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}},
@@ -353,9 +356,9 @@ func TestDialStateStaticDial(t *testing.T) {
 			// nodes are either connected or still being dialed.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
-					{rw: &conn{flags: staticDialedConn, id: uintID(3)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(3)}},
 				},
 				done: []task{
 					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}},
@@ -365,11 +368,11 @@ func TestDialStateStaticDial(t *testing.T) {
 			// nodes are now connected.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
-					{rw: &conn{flags: staticDialedConn, id: uintID(3)}},
-					{rw: &conn{flags: staticDialedConn, id: uintID(4)}},
-					{rw: &conn{flags: staticDialedConn, id: uintID(5)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(3)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(4)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(5)}},
 				},
 				done: []task{
 					&dialTask{staticDialedConn, &discover.Node{ID: uintID(4)}},
@@ -382,20 +385,20 @@ func TestDialStateStaticDial(t *testing.T) {
 			// Wait a round for dial history to expire, no new tasks should spawn.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
-					{rw: &conn{flags: staticDialedConn, id: uintID(3)}},
-					{rw: &conn{flags: staticDialedConn, id: uintID(4)}},
-					{rw: &conn{flags: staticDialedConn, id: uintID(5)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(3)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(4)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(5)}},
 				},
 			},
 			// If a static node is dropped, it should be immediately redialed,
 			// irrespective whether it was originally static or dynamic.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: staticDialedConn, id: uintID(3)}},
-					{rw: &conn{flags: staticDialedConn, id: uintID(5)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(3)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(5)}},
 				},
 				new: []task{
 					&dialTask{staticDialedConn, &discover.Node{ID: uintID(2)}},
@@ -431,8 +434,8 @@ func TestDialStateCache(t *testing.T) {
 			// nodes are either connected or still being dialed.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: staticDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: staticDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: staticDialedConn, id: uintID(2)}},
 				},
 				done: []task{
 					&dialTask{staticDialedConn, &discover.Node{ID: uintID(1)}},
@@ -443,8 +446,8 @@ func TestDialStateCache(t *testing.T) {
 			// entry to expire.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
 				done: []task{
 					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}},
@@ -456,15 +459,15 @@ func TestDialStateCache(t *testing.T) {
 			// Still waiting for node 3's entry to expire in the cache.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
 			},
 			// The cache entry for node 3 has expired and is retried.
 			{
 				peers: []*Peer{
-					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
-					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(1)}},
+					{conn: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
 				new: []task{
 					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}},
