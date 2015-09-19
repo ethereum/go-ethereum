@@ -456,7 +456,7 @@ func TestInsertNonceError(t *testing.T) {
 
 		fail := rand.Int() % len(blocks)
 		failblock := blocks[fail]
-		bc.pow = failpow{failblock.NumberU64()}
+		bc.pow = failPow{failblock.NumberU64()}
 		n, err := bc.InsertChain(blocks)
 
 		// Check that the returned error indicates the nonce failure.
@@ -499,18 +499,3 @@ func TestGenesisMismatch(t *testing.T) {
 	}
 }
 */
-
-// failpow returns false from Verify for a certain block number.
-type failpow struct{ num uint64 }
-
-func (pow failpow) Search(pow.Block, <-chan struct{}) (nonce uint64, mixHash []byte) {
-	return 0, nil
-}
-func (pow failpow) Verify(b pow.Block) bool {
-	return b.NumberU64() != pow.num
-}
-func (pow failpow) GetHashrate() int64 {
-	return 0
-}
-func (pow failpow) Turbo(bool) {
-}

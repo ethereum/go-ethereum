@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -616,14 +615,12 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		stats      struct{ queued, processed, ignored int }
 		tstart     = time.Now()
 
-		nonceDone    = make(chan nonceResult, len(chain))
-		nonceQuit    = make(chan struct{})
 		nonceChecked = make([]bool, len(chain))
 	)
 
 	// Start the parallel nonce verifier.
-	go verifyNonces(self.pow, chain, nonceQuit, nonceDone)
-	defer close(nonceQuit)
+	nonceAbort, nonceResults := verifyNoncesFromBlocks(self.pow, chain)
+	defer close(nonceAbort)
 
 	txcount := 0
 	for i, block := range chain {
@@ -636,11 +633,11 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		// Wait for block i's nonce to be verified before processing
 		// its state transition.
 		for !nonceChecked[i] {
-			r := <-nonceDone
-			nonceChecked[r.i] = true
+			r := <-nonceResults
+			nonceChecked[r.index] = true
 			if !r.valid {
-				block := chain[r.i]
-				return r.i, &BlockNonceErr{Hash: block.Hash(), Number: block.Number(), Nonce: block.Nonce()}
+				block := chain[r.index]
+				return r.index, &BlockNonceErr{Hash: block.Hash(), Number: block.Number(), Nonce: block.Nonce()}
 			}
 		}
 
@@ -842,41 +839,4 @@ func blockErr(block *types.Block, err error) {
 	glog.V(logger.Error).Infof("Bad block #%v (%x)\n", h.Number, h.Hash().Bytes())
 	glog.V(logger.Error).Infoln(err)
 	glog.V(logger.Debug).Infoln(verifyNonces)
-}
-
-type nonceResult struct {
-	i     int
-	valid bool
-}
-
-// block verifies nonces of the given blocks in parallel and returns
-// an error if one of the blocks nonce verifications failed.
-func verifyNonces(pow pow.PoW, blocks []*types.Block, quit <-chan struct{}, done chan<- nonceResult) {
-	// Spawn a few workers. They listen for blocks on the in channel
-	// and send results on done. The workers will exit in the
-	// background when in is closed.
-	var (
-		in       = make(chan int)
-		nworkers = runtime.GOMAXPROCS(0)
-	)
-	defer close(in)
-	if len(blocks) < nworkers {
-		nworkers = len(blocks)
-	}
-	for i := 0; i < nworkers; i++ {
-		go func() {
-			for i := range in {
-				done <- nonceResult{i: i, valid: pow.Verify(blocks[i])}
-			}
-		}()
-	}
-	// Feed block indices to the workers.
-	for i := range blocks {
-		select {
-		case in <- i:
-			continue
-		case <-quit:
-			return
-		}
-	}
 }
