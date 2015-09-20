@@ -17,7 +17,9 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"math/big"
 	"math/rand"
 	"os"
@@ -499,6 +501,74 @@ func TestGenesisMismatch(t *testing.T) {
 	}
 }
 */
+
+func TestExport(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	genesis, err := WriteTestNetGenesisBlock(db, 0)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	bc := chm(genesis, db)
+
+	chain := makeChainWithDiff(genesis, []int{1, 2, 31}, 10)
+	bc.InsertChain(chain)
+
+	buf := new(bytes.Buffer)
+	bc.Export(buf)
+
+	stream := rlp.NewStream(buf, 0)
+
+	decode := func(decoded *types.Block) {
+		if err := stream.Decode(decoded); err != nil && err != io.EOF {
+			t.Errorf("RLP decoding failed: %s", err)
+		}
+	}
+
+	res := &types.Block{}
+	decode(res) // genesis
+
+	for _, block := range chain {
+		res = &types.Block{}
+		decode(res)
+		if block.Header().Hash() != res.Header().Hash() {
+			t.Errorf("block hash mismatch: want: %x, have: %x", block.Header().Hash(), res.Header().Hash())
+		}
+	}
+
+	// export errors
+	buf = new(bytes.Buffer)
+	err = bc.ExportN(buf, 1, 0)
+	if err == nil {
+		t.Error("expected export error")
+	}
+	if buf.Len() != 0 {
+		t.Error("expected no writing to export writer")
+	}
+
+	// failure while exporting blocks
+	DeleteCanonicalHash(db, chain[1].NumberU64())
+	buf = new(bytes.Buffer)
+	err = bc.ExportN(buf, 0, 3)
+	if err == nil {
+		t.Error("expected export error")
+	}
+
+	stream = rlp.NewStream(buf, 0)
+	res = &types.Block{}
+	decode(res)
+	if res.NumberU64() != 0 {
+		t.Errorf("block number mismatch: want: 0, have: %d", res.NumberU64())
+	}
+
+	res = &types.Block{}
+	decode(res)
+
+	err = stream.Decode(res)
+	if err != io.EOF {
+		t.Errorf("expected no more blocks, have block number: %d", res.NumberU64())
+	}
+}
 
 // failpow returns false from Verify for a certain block number.
 type failpow struct{ num uint64 }
