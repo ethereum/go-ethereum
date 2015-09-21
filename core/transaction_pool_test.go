@@ -238,3 +238,15 @@ func TestNonceRecovery(t *testing.T) {
 		t.Errorf("expected nonce to be %d, got %d", n+1, fn)
 	}
 }
+
+func TestRemovedTxEvent(t *testing.T) {
+	pool, key := setupTxPool()
+	tx := transaction(0, big.NewInt(1000000), key)
+	from, _ := tx.From()
+	pool.currentState().AddBalance(from, big.NewInt(1000000000000))
+	pool.eventMux.Post(RemovedTransactionEvent{types.Transactions{tx}})
+	pool.eventMux.Post(ChainHeadEvent{nil})
+	if len(pool.pending) != 1 {
+		t.Error("expected 1 pending tx, got", len(pool.pending))
+	}
+}

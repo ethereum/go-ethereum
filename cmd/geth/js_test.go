@@ -92,7 +92,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth
 
 	db, _ := ethdb.NewMemDatabase()
 
-	core.WriteGenesisBlockForTesting(db, common.HexToAddress(testAddress), common.String2Big(testBalance))
+	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{common.HexToAddress(testAddress), common.String2Big(testBalance)})
 	ks := crypto.NewKeyStorePlain(filepath.Join(tmp, "keystore"))
 	am := accounts.NewManager(ks)
 	conf := &eth.Config{

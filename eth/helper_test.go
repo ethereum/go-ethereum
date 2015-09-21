@@ -33,7 +33,7 @@ func newTestProtocolManager(blocks int, generator func(int, *core.BlockGen), new
 		evmux       = new(event.TypeMux)
 		pow         = new(core.FakePow)
 		db, _       = ethdb.NewMemDatabase()
-		genesis     = core.WriteGenesisBlockForTesting(db, testBankAddress, testBankFunds)
+		genesis     = core.WriteGenesisBlockForTesting(db, core.GenesisAccount{testBankAddress, testBankFunds})
 		chainman, _ = core.NewChainManager(db, pow, evmux)
 		blockproc   = core.NewBlockProcessor(db, pow, chainman, evmux)
 	)

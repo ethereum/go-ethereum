@@ -272,12 +272,34 @@ func (tx *Transaction) String() string {
 // Transaction slice type for basic sorting.
 type Transactions []*Transaction
 
-func (s Transactions) Len() int      { return len(s) }
+// Len returns the length of s
+func (s Transactions) Len() int { return len(s) }
+
+// Swap swaps the i'th and the j'th element in s
 func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
+// GetRlp implements Rlpable and returns the i'th element of s in rlp
 func (s Transactions) GetRlp(i int) []byte {
 	enc, _ := rlp.EncodeToBytes(s[i])
 	return enc
+}
+
+// Returns a new set t which is the difference between a to b
+func TxDifference(a, b Transactions) (keep Transactions) {
+	keep = make(Transactions, 0, len(a))
+
+	remove := make(map[common.Hash]struct{})
+	for _, tx := range b {
+		remove[tx.Hash()] = struct{}{}
+	}
+
+	for _, tx := range a {
+		if _, ok := remove[tx.Hash()]; !ok {
+			keep = append(keep, tx)
+		}
+	}
+
+	return keep
 }
 
 type TxByNonce struct{ Transactions }

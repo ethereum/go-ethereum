@@ -569,18 +569,17 @@ func (self *ChainManager) WriteBlock(block *types.Block) (status writeStatus, er
 		// chain fork
 		if block.ParentHash() != cblock.Hash() {
 			// during split we merge two different chains and create the new canonical chain
-			err := self.merge(cblock, block)
+			err := self.reorg(cblock, block)
 			if err != nil {
 				return NonStatTy, err
 			}
-			status = SplitStatTy
 		}
+		status = CanonStatTy
+
 		self.mu.Lock()
 		self.setTotalDifficulty(td)
 		self.insert(block)
 		self.mu.Unlock()
-
-		status = CanonStatTy
 	} else {
 		status = SideStatTy
 	}
@@ -681,9 +680,11 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 
 			return i, err
 		}
+		if err := PutBlockReceipts(self.chainDb, block, receipts); err != nil {
+			glog.V(logger.Warn).Infoln("error writing block receipts:", err)
+		}
 
 		txcount += len(block.Transactions())
-
 		// write the block to the chain and get the status
 		status, err := self.WriteBlock(block)
 		if err != nil {
@@ -711,10 +712,6 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			queue[i] = ChainSplitEvent{block, logs}
 			queueEvent.splitCount++
 		}
-		if err := PutBlockReceipts(self.chainDb, block, receipts); err != nil {
-			glog.V(logger.Warn).Infoln("error writing block receipts:", err)
-		}
-
 		stats.processed++
 	}
 
@@ -729,20 +726,26 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	return 0, nil
 }
 
-// diff takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them
-// to be part of the new canonical chain.
-func (self *ChainManager) diff(oldBlock, newBlock *types.Block) (types.Blocks, error) {
+// reorgs takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them
+// to be part of the new canonical chain and accumulates potential missing transactions and post an
+// event about them
+func (self *ChainManager) reorg(oldBlock, newBlock *types.Block) error {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	var (
 		newChain    types.Blocks
 		commonBlock *types.Block
 		oldStart    = oldBlock
 		newStart    = newBlock
+		deletedTxs  types.Transactions
 	)
 
 	// first reduce whoever is higher bound
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
 		// reduce old chain
 		for oldBlock = oldBlock; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = self.GetBlock(oldBlock.ParentHash()) {
+			deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
 		}
 	} else {
 		// reduce new chain and append new chain blocks for inserting later on
@@ -751,10 +754,10 @@ func (self *ChainManager) diff(oldBlock, newBlock *types.Block) (types.Blocks, e
 		}
 	}
 	if oldBlock == nil {
-		return nil, fmt.Errorf("Invalid old chain")
+		return fmt.Errorf("Invalid old chain")
 	}
 	if newBlock == nil {
-		return nil, fmt.Errorf("Invalid new chain")
+		return fmt.Errorf("Invalid new chain")
 	}
 
 	numSplit := newBlock.Number()
@@ -764,13 +767,14 @@ func (self *ChainManager) diff(oldBlock, newBlock *types.Block) (types.Blocks, e
 			break
 		}
 		newChain = append(newChain, newBlock)
+		deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
 
 		oldBlock, newBlock = self.GetBlock(oldBlock.ParentHash()), self.GetBlock(newBlock.ParentHash())
 		if oldBlock == nil {
-			return nil, fmt.Errorf("Invalid old chain")
+			return fmt.Errorf("Invalid old chain")
 		}
 		if newBlock == nil {
-			return nil, fmt.Errorf("Invalid new chain")
+			return fmt.Errorf("Invalid new chain")
 		}
 	}
 
@@ -779,18 +783,8 @@ func (self *ChainManager) diff(oldBlock, newBlock *types.Block) (types.Blocks, e
 		glog.Infof("Chain split detected @ %x. Reorganising chain from #%v %x to %x", commonHash[:4], numSplit, oldStart.Hash().Bytes()[:4], newStart.Hash().Bytes()[:4])
 	}
 
-	return newChain, nil
-}
-
-// merge merges two different chain to the new canonical chain
-func (self *ChainManager) merge(oldBlock, newBlock *types.Block) error {
-	newChain, err := self.diff(oldBlock, newBlock)
-	if err != nil {
-		return fmt.Errorf("chain reorg failed: %v", err)
-	}
-
+	var addedTxs types.Transactions
 	// insert blocks. Order does not matter. Last block will be written in ImportChain itself which creates the new head properly
-	self.mu.Lock()
 	for _, block := range newChain {
 		// insert the block in the canonical way, re-writing history
 		self.insert(block)
@@ -798,8 +792,18 @@ func (self *ChainManager) merge(oldBlock, newBlock *types.Block) error {
 		PutTransactions(self.chainDb, block, block.Transactions())
 		PutReceipts(self.chainDb, GetBlockReceipts(self.chainDb, block.Hash()))
 
+		addedTxs = append(addedTxs, block.Transactions()...)
 	}
-	self.mu.Unlock()
+
+	// calculate the difference between deleted and added transactions
+	diff := types.TxDifference(deletedTxs, addedTxs)
+	// When transactions get deleted from the database that means the
+	// receipts that were created in the fork must also be deleted
+	for _, tx := range diff {
+		DeleteReceipt(self.chainDb, tx.Hash())
+		DeleteTransaction(self.chainDb, tx.Hash())
+	}
+	self.eventMux.Post(RemovedTransactionEvent{diff})
 
 	return nil
 }
