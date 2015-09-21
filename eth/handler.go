@@ -589,15 +589,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		request.Block.ReceivedAt = msg.ReceivedAt
 
-		// Mark the block's arrival for whatever reason
-		_, chainHead, _ := pm.blockchain.Status()
-		jsonlogger.LogJson(&logger.EthChainReceivedNewBlock{
-			BlockHash:     request.Block.Hash().Hex(),
-			BlockNumber:   request.Block.Number(),
-			ChainHeadHash: chainHead.Hex(),
-			BlockPrevHash: request.Block.ParentHash().Hex(),
-			RemoteId:      p.ID().String(),
-		})
 		// Mark the peer as owning the block and schedule it for import
 		p.MarkBlock(request.Block.Hash())
 		p.SetHead(request.Block.Hash())
@@ -607,7 +598,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Update the peers total difficulty if needed, schedule a download if gapped
 		if request.TD.Cmp(p.Td()) > 0 {
 			p.SetTd(request.TD)
-			if request.TD.Cmp(new(big.Int).Add(pm.blockchain.Td(), request.Block.Difficulty())) > 0 {
+			td := pm.blockchain.GetTd(pm.blockchain.CurrentBlock().Hash())
+			if request.TD.Cmp(new(big.Int).Add(td, request.Block.Difficulty())) > 0 {
 				go pm.synchronise(p)
 			}
 		}
@@ -624,12 +616,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				return errResp(ErrDecode, "transaction %d is nil", i)
 			}
 			p.MarkTransaction(tx.Hash())
-
-			// Log it's arrival for later analysis
-			jsonlogger.LogJson(&logger.EthTxReceived{
-				TxHash:   tx.Hash().Hex(),
-				RemoteId: p.ID().String(),
-			})
 		}
 		pm.txpool.AddTransactions(txs)
 

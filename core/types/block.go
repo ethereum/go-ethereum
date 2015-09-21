@@ -184,7 +184,7 @@ var (
 // are ignored and set to values derived from the given txs, uncles
 // and receipts.
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt) *Block {
-	b := &Block{header: copyHeader(header), td: new(big.Int)}
+	b := &Block{header: CopyHeader(header), td: new(big.Int)}
 
 	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
@@ -210,7 +210,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 		b.header.UncleHash = CalcUncleHash(uncles)
 		b.uncles = make([]*Header, len(uncles))
 		for i := range uncles {
-			b.uncles[i] = copyHeader(uncles[i])
+			b.uncles[i] = CopyHeader(uncles[i])
 		}
 	}
 
@@ -221,10 +221,12 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 // header data is copied, changes to header and to the field values
 // will not affect the block.
 func NewBlockWithHeader(header *Header) *Block {
-	return &Block{header: copyHeader(header)}
+	return &Block{header: CopyHeader(header)}
 }
 
-func copyHeader(h *Header) *Header {
+// CopyHeader creates a deep copy of a block header to prevent side effects from
+// modifying a header variable.
+func CopyHeader(h *Header) *Header {
 	cpy := *h
 	if cpy.Time = new(big.Int); h.Time != nil {
 		cpy.Time.Set(h.Time)
@@ -326,7 +328,7 @@ func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash }
 func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
 func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
 
-func (b *Block) Header() *Header { return copyHeader(b.header) }
+func (b *Block) Header() *Header { return CopyHeader(b.header) }
 
 func (b *Block) HashNoNonce() common.Hash {
 	return b.header.HashNoNonce()
@@ -370,13 +372,13 @@ func (b *Block) WithMiningResult(nonce uint64, mixDigest common.Hash) *Block {
 // WithBody returns a new block with the given transaction and uncle contents.
 func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 	block := &Block{
-		header:       copyHeader(b.header),
+		header:       CopyHeader(b.header),
 		transactions: make([]*Transaction, len(transactions)),
 		uncles:       make([]*Header, len(uncles)),
 	}
 	copy(block.transactions, transactions)
 	for i := range uncles {
-		block.uncles[i] = copyHeader(uncles[i])
+		block.uncles[i] = CopyHeader(uncles[i])
 	}
 	return block
 }
