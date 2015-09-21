@@ -369,13 +369,26 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs vm.Logs, err error) 
 	return logs, nil
 }
 
+// ValidateHeader verifies the validity of a header, relying on the database and
+// POW behind the block processor.
+func (sm *BlockProcessor) ValidateHeader(header *types.Header, checkPow, uncle bool) error {
+	// Short circuit if the header's already known or its parent missing
+	if sm.bc.HasHeader(header.Hash()) {
+		return nil
+	}
+	if parent := sm.bc.GetHeader(header.ParentHash); parent == nil {
+		return ParentError(header.ParentHash)
+	} else {
+		return ValidateHeader(sm.Pow, header, parent, checkPow, uncle)
+	}
+}
+
 // See YP section 4.3.4. "Block Header Validity"
 // Validates a header. Returns an error if the header is invalid.
 func ValidateHeader(pow pow.PoW, header *types.Header, parent *types.Header, checkPow, uncle bool) error {
 	if big.NewInt(int64(len(header.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
 		return fmt.Errorf("Header extra data too long (%d)", len(header.Extra))
 	}
-
 	if uncle {
 		if header.Time.Cmp(common.MaxBig) == 1 {
 			return BlockTSTooBigErr

@@ -464,7 +464,7 @@ func (s *Ethereum) NodeInfo() *NodeInfo {
 		DiscPort:   int(node.UDP),
 		TCPPort:    int(node.TCP),
 		ListenAddr: s.net.ListenAddr,
-		Td:         s.BlockChain().Td().String(),
+		Td:         s.BlockChain().GetTd(s.BlockChain().CurrentBlock().Hash()).String(),
 	}
 }
 
