@@ -158,11 +158,11 @@ func (self *Jeth) askPassword(id interface{}, jsonrpc string, args []interface{}
 	if len(args) >= 1 {
 		if account, ok := args[0].(string); ok {
 			fmt.Printf("Unlock account %s\n", account)
-			passwd, err = utils.PromptPassword("Passphrase: ", true)
 		} else {
 			return false
 		}
 	}
+	passwd, err = utils.PromptPassword("Passphrase: ", true)
 
 	if err = self.client.Send(shared.NewRpcResponse(id, jsonrpc, passwd, err)); err != nil {
 		glog.V(logger.Info).Infof("Unable to send user agent ask password response - %v\n", err)

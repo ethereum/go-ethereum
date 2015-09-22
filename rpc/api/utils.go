@@ -33,14 +33,21 @@ var (
 		"admin": []string{
 			"addPeer",
 			"datadir",
+			"enableUserAgent",
 			"exportChain",
 			"getContractInfo",
+			"httpGet",
 			"importChain",
 			"nodeInfo",
 			"peers",
 			"register",
 			"registerUrl",
+			"saveInfo",
+			"setGlobalRegistrar",
+			"setHashReg",
+			"setUrlHint",
 			"setSolc",
+			"sleep",
 			"sleepBlocks",
 			"startNatSpec",
 			"startRPC",
@@ -146,7 +153,7 @@ var (
 )
 
 // Parse a comma separated API string to individual api's
-func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.Ethereum) ([]shared.EthereumApi, error) {
+func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.Ethereum, docRoot string) ([]shared.EthereumApi, error) {
 	if len(strings.TrimSpace(apistr)) == 0 {
 		return nil, fmt.Errorf("Empty apistr provided")
 	}
@@ -157,7 +164,7 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 	for i, name := range names {
 		switch strings.ToLower(strings.TrimSpace(name)) {
 		case shared.AdminApiName:
-			apis[i] = NewAdminApi(xeth, eth, codec)
+			apis[i] = NewAdminApi(xeth, eth, codec, docRoot)
 		case shared.DebugApiName:
 			apis[i] = NewDebugApi(xeth, eth, codec)
 		case shared.DbApiName:

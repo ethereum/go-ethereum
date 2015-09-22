@@ -26,7 +26,9 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ethereum/ethash"
@@ -61,6 +63,9 @@ const (
 
 var (
 	jsonlogger = logger.NewJsonLogger()
+
+	datadirInUseErrNos = []uint{11, 32, 35}
+	portInUseErrRE     = regexp.MustCompile("address already in use")
 
 	defaultBootNodes = []*discover.Node{
 		// ETH/DEV Go Bootnodes
@@ -282,6 +287,17 @@ func New(config *Config) (*Ethereum, error) {
 	// Open the chain database and perform any upgrades needed
 	chainDb, err := newdb(filepath.Join(config.DataDir, "chaindata"))
 	if err != nil {
+		var ok bool
+		errno := uint(err.(syscall.Errno))
+		for _, no := range datadirInUseErrNos {
+			if errno == no {
+				ok = true
+				break
+			}
+		}
+		if ok {
+			err = fmt.Errorf("%v (check if another instance of geth is already running with the same data directory '%s')", err, config.DataDir)
+		}
 		return nil, fmt.Errorf("blockchain db err: %v", err)
 	}
 	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
@@ -296,6 +312,16 @@ func New(config *Config) (*Ethereum, error) {
 
 	dappDb, err := newdb(filepath.Join(config.DataDir, "dapp"))
 	if err != nil {
+		var ok bool
+		for _, no := range datadirInUseErrNos {
+			if uint(err.(syscall.Errno)) == no {
+				ok = true
+				break
+			}
+		}
+		if ok {
+			err = fmt.Errorf("%v (check if another instance of geth is already running with the same data directory '%s')", err, config.DataDir)
+		}
 		return nil, fmt.Errorf("dapp db err: %v", err)
 	}
 	if db, ok := dappDb.(*ethdb.LDBDatabase); ok {
@@ -553,6 +579,9 @@ func (s *Ethereum) Start() error {
 	})
 	err := s.net.Start()
 	if err != nil {
+		if portInUseErrRE.MatchString(err.Error()) {
+			err = fmt.Errorf("%v (possibly another instance of geth is using the same port)", err)
+		}
 		return err
 	}
 

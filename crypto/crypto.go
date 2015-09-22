@@ -261,6 +261,9 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	passBytes := []byte(password)
 	derivedKey := pbkdf2.Key(passBytes, passBytes, 2000, 16, sha256.New)
 	plainText, err := aesCBCDecrypt(derivedKey, cipherText, iv)
+	if err != nil {
+		return nil, err
+	}
 	ethPriv := Sha3(plainText)
 	ecKey := ToECDSA(ethPriv)
 	key = &Key{
@@ -271,7 +274,7 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	derivedAddr := hex.EncodeToString(key.Address.Bytes()) // needed because .Hex() gives leading "0x"
 	expectedAddr := preSaleKeyStruct.EthAddr
 	if derivedAddr != expectedAddr {
-		err = errors.New(fmt.Sprintf("decrypted addr not equal to expected addr ", derivedAddr, expectedAddr))
+		err = fmt.Errorf("decrypted addr '%s' not equal to expected addr '%s'", derivedAddr, expectedAddr)
 	}
 	return key, err
 }

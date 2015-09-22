@@ -19,6 +19,9 @@ package xeth
 // Frontend should be implemented by users of XEth. Its methods are
 // called whenever XEth makes a decision that requires user input.
 type Frontend interface {
+	// AskPassword is called when a new account is created or updated
+	AskPassword() (string, bool)
+
 	// UnlockAccount is called when a transaction needs to be signed
 	// but the key corresponding to the transaction's sender is
 	// locked.
@@ -40,5 +43,6 @@ type Frontend interface {
 // transactions but cannot not unlock any keys.
 type dummyFrontend struct{}
 
+func (dummyFrontend) AskPassword() (string, bool)    { return "", false }
 func (dummyFrontend) UnlockAccount([]byte) bool      { return false }
 func (dummyFrontend) ConfirmTransaction(string) bool { return true }

@@ -40,7 +40,9 @@ const (
 	importBatchSize = 2500
 )
 
-var interruptCallbacks = []func(os.Signal){}
+var (
+	interruptCallbacks = []func(os.Signal){}
+)
 
 func openLogFile(Datadir string, filename string) *os.File {
 	path := common.AbsolutePath(Datadir, filename)
