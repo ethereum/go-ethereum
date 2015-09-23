@@ -210,7 +210,7 @@ func (self *ethApi) GetTransactionCount(req *shared.Request) (interface{}, error
 	}
 
 	count := self.xeth.AtStateNum(args.BlockNumber).TxCountAt(args.Address)
-	return newHexNum(big.NewInt(int64(count)).Bytes()), nil
+	return fmt.Sprintf("%#x", count), nil
 }
 
 func (self *ethApi) GetBlockTransactionCountByHash(req *shared.Request) (interface{}, error) {
@@ -218,14 +218,11 @@ func (self *ethApi) GetBlockTransactionCountByHash(req *shared.Request) (interfa
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
-
-	raw := self.xeth.EthBlockByHash(args.Hash)
-	block := NewBlockRes(raw, self.xeth.Td(raw.Hash()), false)
+	block := self.xeth.EthBlockByHash(args.Hash)
 	if block == nil {
 		return nil, nil
-	} else {
-		return newHexNum(big.NewInt(int64(len(block.Transactions))).Bytes()), nil
 	}
+	return fmt.Sprintf("%#x", len(block.Transactions())), nil
 }
 
 func (self *ethApi) GetBlockTransactionCountByNumber(req *shared.Request) (interface{}, error) {
@@ -234,13 +231,11 @@ func (self *ethApi) GetBlockTransactionCountByNumber(req *shared.Request) (inter
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	raw := self.xeth.EthBlockByNumber(args.BlockNumber)
-	block := NewBlockRes(raw, self.xeth.Td(raw.Hash()), false)
+	block := self.xeth.EthBlockByNumber(args.BlockNumber)
 	if block == nil {
 		return nil, nil
-	} else {
-		return newHexNum(big.NewInt(int64(len(block.Transactions))).Bytes()), nil
 	}
+	return fmt.Sprintf("%#x", len(block.Transactions())), nil
 }
 
 func (self *ethApi) GetUncleCountByBlockHash(req *shared.Request) (interface{}, error) {
@@ -249,12 +244,11 @@ func (self *ethApi) GetUncleCountByBlockHash(req *shared.Request) (interface{}, 
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	raw := self.xeth.EthBlockByHash(args.Hash)
-	block := NewBlockRes(raw, self.xeth.Td(raw.Hash()), false)
+	block := self.xeth.EthBlockByHash(args.Hash)
 	if block == nil {
 		return nil, nil
 	}
-	return newHexNum(big.NewInt(int64(len(block.Uncles))).Bytes()), nil
+	return fmt.Sprintf("%#x", len(block.Uncles())), nil
 }
 
 func (self *ethApi) GetUncleCountByBlockNumber(req *shared.Request) (interface{}, error) {
@@ -263,12 +257,11 @@ func (self *ethApi) GetUncleCountByBlockNumber(req *shared.Request) (interface{}
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	raw := self.xeth.EthBlockByNumber(args.BlockNumber)
-	block := NewBlockRes(raw, self.xeth.Td(raw.Hash()), false)
+	block := self.xeth.EthBlockByNumber(args.BlockNumber)
 	if block == nil {
 		return nil, nil
 	}
-	return newHexNum(big.NewInt(int64(len(block.Uncles))).Bytes()), nil
+	return fmt.Sprintf("%#x", len(block.Uncles())), nil
 }
 
 func (self *ethApi) GetData(req *shared.Request) (interface{}, error) {
@@ -377,8 +370,10 @@ func (self *ethApi) GetBlockByHash(req *shared.Request) (interface{}, error) {
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
-
 	block := self.xeth.EthBlockByHash(args.BlockHash)
+	if block == nil {
+		return nil, nil
+	}
 	return NewBlockRes(block, self.xeth.Td(block.Hash()), args.IncludeTxs), nil
 }
 
@@ -389,6 +384,9 @@ func (self *ethApi) GetBlockByNumber(req *shared.Request) (interface{}, error) {
 	}
 
 	block := self.xeth.EthBlockByNumber(args.BlockNumber)
+	if block == nil {
+		return nil, nil
+	}
 	return NewBlockRes(block, self.xeth.Td(block.Hash()), args.IncludeTxs), nil
 }
 
@@ -419,10 +417,10 @@ func (self *ethApi) GetTransactionByBlockHashAndIndex(req *shared.Request) (inte
 	}
 
 	raw := self.xeth.EthBlockByHash(args.Hash)
-	block := NewBlockRes(raw, self.xeth.Td(raw.Hash()), true)
-	if block == nil {
+	if raw == nil {
 		return nil, nil
 	}
+	block := NewBlockRes(raw, self.xeth.Td(raw.Hash()), true)
 	if args.Index >= int64(len(block.Transactions)) || args.Index < 0 {
 		return nil, nil
 	} else {
@@ -437,10 +435,10 @@ func (self *ethApi) GetTransactionByBlockNumberAndIndex(req *shared.Request) (in
 	}
 
 	raw := self.xeth.EthBlockByNumber(args.BlockNumber)
-	block := NewBlockRes(raw, self.xeth.Td(raw.Hash()), true)
-	if block == nil {
+	if raw == nil {
 		return nil, nil
 	}
+	block := NewBlockRes(raw, self.xeth.Td(raw.Hash()), true)
 	if args.Index >= int64(len(block.Transactions)) || args.Index < 0 {
 		// return NewValidationError("Index", "does not exist")
 		return nil, nil
@@ -455,10 +453,10 @@ func (self *ethApi) GetUncleByBlockHashAndIndex(req *shared.Request) (interface{
 	}
 
 	raw := self.xeth.EthBlockByHash(args.Hash)
-	block := NewBlockRes(raw, self.xeth.Td(raw.Hash()), false)
-	if block == nil {
+	if raw == nil {
 		return nil, nil
 	}
+	block := NewBlockRes(raw, self.xeth.Td(raw.Hash()), false)
 	if args.Index >= int64(len(block.Uncles)) || args.Index < 0 {
 		// return NewValidationError("Index", "does not exist")
 		return nil, nil
@@ -473,10 +471,10 @@ func (self *ethApi) GetUncleByBlockNumberAndIndex(req *shared.Request) (interfac
 	}
 
 	raw := self.xeth.EthBlockByNumber(args.BlockNumber)
-	block := NewBlockRes(raw, self.xeth.Td(raw.Hash()), true)
-	if block == nil {
+	if raw == nil {
 		return nil, nil
 	}
+	block := NewBlockRes(raw, self.xeth.Td(raw.Hash()), true)
 	if args.Index >= int64(len(block.Uncles)) || args.Index < 0 {
 		return nil, nil
 	} else {

@@ -279,6 +279,7 @@ func (bc *ChainManager) ResetWithGenesisBlock(genesis *types.Block) {
 	if err := WriteBlock(bc.chainDb, genesis); err != nil {
 		glog.Fatalf("failed to write genesis block: %v", err)
 	}
+	bc.genesisBlock = genesis
 	bc.insert(bc.genesisBlock)
 	bc.currentBlock = bc.genesisBlock
 	bc.setTotalDifficulty(genesis.Difficulty())

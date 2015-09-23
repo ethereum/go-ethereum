@@ -91,7 +91,6 @@ func runBlockTest(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
-	defer ethereum.Stop()
 	if rpc {
 		fmt.Println("Block Test post state validated, starting RPC interface.")
 		startEth(ctx, ethereum)
@@ -106,7 +105,6 @@ func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, er
 	cfg.MaxPeers = 0 // disable network
 	cfg.Shh = false  // disable whisper
 	cfg.NAT = nil    // disable port mapping
-
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		return nil, err
@@ -114,7 +112,6 @@ func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, er
 
 	// import the genesis block
 	ethereum.ResetWithGenesisBlock(test.Genesis)
-
 	// import pre accounts
 	_, err = test.InsertPreState(ethereum)
 	if err != nil {
@@ -122,16 +119,13 @@ func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, er
 	}
 
 	cm := ethereum.ChainManager()
-
 	validBlocks, err := test.TryBlocksInsert(cm)
 	if err != nil {
 		return ethereum, fmt.Errorf("Block Test load error: %v", err)
 	}
-
 	newDB := cm.State()
 	if err := test.ValidatePostState(newDB); err != nil {
 		return ethereum, fmt.Errorf("post state validation failed: %v", err)
 	}
-
 	return ethereum, test.ValidateImportedHeaders(cm, validBlocks)
 }
