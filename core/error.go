@@ -177,3 +177,14 @@ func IsValueTransferErr(e error) bool {
 	_, ok := e.(*ValueTransferError)
 	return ok
 }
+
+type BadHashError common.Hash
+
+func (h BadHashError) Error() string {
+	return fmt.Sprintf("Found known bad hash in chain %x", h)
+}
+
+func IsBadHashError(err error) bool {
+	_, ok := err.(BadHashError)
+	return ok
+}
