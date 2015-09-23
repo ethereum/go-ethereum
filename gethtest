@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+/Users/aeufemio/projects/digixglobal/ethereum/go-ethereum/build/bin/geth --genesis "mygenesis.json" --datadir "/Users/aeufemio/tmp/.testethereum" --rpc --rpcaddr "localhost" --ipcpath="/Users/aeufemio/tmp/.testethereum/geth.ipc" --rpcport "8080" --maxpeers "0" --networkid "47" --unlock "0" --etherbase "0" --cache "1024" --mine --minerthreads "1" --password "/Users/aeufemio/tmp/.testethereumpass" --verbosity "0" --vmdebug $*

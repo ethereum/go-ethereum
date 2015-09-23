@@ -1,0 +1,108 @@
+[
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "_name",
+        "type": "bytes32"
+      }
+    ],
+    "name": "owner",
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "_name",
+        "type": "bytes32"
+      },
+      {
+        "name": "_refund",
+        "type": "address"
+      }
+    ],
+    "name": "disown",
+    "outputs": [],
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "_name",
+        "type": "bytes32"
+      }
+    ],
+    "name": "addr",
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "_name",
+        "type": "bytes32"
+      }
+    ],
+    "name": "reserve",
+    "outputs": [],
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "_name",
+        "type": "bytes32"
+      },
+      {
+        "name": "_newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "transfer",
+    "outputs": [],
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "_name",
+        "type": "bytes32"
+      },
+      {
+        "name": "_a",
+        "type": "address"
+      }
+    ],
+    "name": "setAddr",
+    "outputs": [],
+    "type": "function"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "name",
+        "type": "bytes32"
+      }
+    ],
+    "name": "Changed",
+    "type": "event"
+  }
+]

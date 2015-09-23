@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+  <meta charset='utf-8' />
+  <meta name="Author" content="M Mclaughlin">
+  <title>Testing BigNumber</title>
+  <style>
+	body {margin: 0; padding: 0; font-family: Calibri, Arial, Sans-Serif;}
+	div {margin: 1em 0;}
+	h1, #counter {text-align: center; background-color: rgb(225, 225, 225);
+		margin-top: 1em; padding: 0.2em; font-size: 1.2em;}
+	a {color:  rgb(0, 153, 255); margin: 0 0.6em;}
+	.links {position: fixed; bottom: 1em; right: 2em; font-size: 0.8em;}
+	.form, #time {width: 36em; margin: 0 auto;}
+	.form {text-align: left; margin-top: 1.4em;}
+	.random input {margin-left: 1em;}
+	.small {font-size: 0.9em;}
+	.methods {margin: 1em auto; width: 18em;}
+	.iterations input, .left {margin-left: 1.6em;}
+	.info span {margin-left: 1.6em; font-size: 0.9em;}
+	.info {margin-top: 1.6em;}
+	.random input, .iterations input {margin-right: 0.3em;}
+	.random label, .iterations label, .bigd label {font-size: 0.9em;
+        margin-left: 0.1em;}
+	.methods label {width: 5em; margin-left: 0.2em; display: inline-block;}
+	.methods label.right {width: 2em;}
+	.red {color: red; font-size: 1.1em; font-weight: bold;}
+	button {width: 10em; height: 2em;}
+	#dp, #r, #digits, #reps {margin-left: 0.8em;}
+	#bigint {font-style: italic; display: none;}
+	#gwt, #icu4j, #bd, #bigint {margin-left: 1.5em;}
+	#division {display: none;}
+	#counter {font-size: 2em; background-color: rgb(235, 235, 235);}
+    #time {text-align: center;}
+	#results {margin: 0 1.4em;}
+  </style>
+  <script src='../bignumber.js'></script>
+  <script src='./lib/bigdecimal_GWT/bigdecimal.js'></script>
+</head>
+<body>
+  <h1>Testing BigNumber against BigDecimal</h1>
+
+  <div class='form'>
+
+	<div class='methods'>
+	  <input type='radio' id=0 name=1/><label for=0>plus</label>
+	  <input type='radio' id=3 name=1/><label for=3>div</label>
+	  <input type='radio' id=6 name=1/><label for=6 class='right'>abs</label>
+	  <br>
+	  <input type='radio' id=1 name=1/><label for=1>minus</label>
+	  <input type='radio' id=4 name=1/><label for=4>mod</label>
+	  <input type='radio' id=7 name=1/><label for=7 class='right'>neg</label>
+	  <br>
+	  <input type='radio' id=2 name=1/><label for=2>times</label>
+	  <input type='radio' id=5 name=1/><label for=5>cmp</label>
+	  <input type='radio' id=8 name=1/><label for=8 class='right'>pow</label>
+	</div>
+
+	<div class='bigd'>
+	  <span>BigDecimal:</span>
+	  <input type='radio' name=2 id='gwt' /><label for='gwt'>GWT</label>
+	  <input type='radio' name=2 id='icu4j' /><label for='icu4j'>ICU4J</label>
+	  <span id='bigint'>BigInteger</span>
+	  <span id='bd'>add</span>
+	</div>
+
+	<div class='random'>
+	  Random number digits:<input type='text' id='digits' size=12 />
+	  <input type='radio' name=3 id='fix' /><label for='fix'>Fixed</label>
+	  <input type='radio' name=3 id='max' /><label for='max'>Max</label>
+	  <input type='checkbox' id='int' /><label for='int'>Integers only</label>
+	</div>
+
+	<div id='division'>
+	  <span>Decimal places:<input type='text' id='dp' size=9 /></span>
+	  <span class='left'>Rounding:<select id='r'>
+		  <option>UP</option>
+		  <option>DOWN</option>
+		  <option>CEIL</option>
+		  <option>FLOOR</option>
+		  <option>HALF_UP</option>
+		  <option>HALF_DOWN</option>
+		  <option>HALF_EVEN</option>
+		</select></span>
+	</div>
+
+	<div class='iterations'>
+	  Iterations:<input type='text' id='reps' size=11 />
+	  <input type='checkbox' id='show'/><label for='show'>Show all (no timing)</label>
+	</div>
+
+	<div class='info'>
+	  <button id='start'>Start</button>
+	  <span>Click a method to stop</span>
+	  <span>Press space bar to pause/unpause</span>
+	</div>
+
+  </div>
+
+  <div id='counter'>0</div>
+  <div id='time'></div>
+  <div id='results'></div>
+
+  <div class='links'>
+	<a href='https://github.com/MikeMcl/bignumber.js' target='_blank'>BigNumber</a>
+	<a href='https://github.com/iriscouch/bigdecimal.js' target='_blank'>GWT</a>
+	<a href='https://github.com/dtrebbien/BigDecimal.js/tree/' target='_blank'>ICU4J</a>
+  </div>
+
+  <script>
+
+var i, completedReps, targetReps, cycleReps, cycleTime, prevCycleReps, cycleLimit,
+	maxDigits, isFixed, isIntOnly, decimalPlaces, rounding, calcTimeout,
+	counterTimeout, script, isGWT, BigDecimal_GWT, BigDecimal_ICU4J,
+	bdM, bdTotal, bnM, bnTotal,
+	bdMs = ['add', 'subtract', 'multiply', 'divide', 'remainder', 'compareTo',
+		'abs', 'negate', 'pow'],
+	bnMs = ['plus', 'minus', 'times', 'div', 'mod', 'cmp', 'abs', 'neg', 'pow'],
+	lastRounding = 4,
+	pause = false,
+	up = true,
+	timingVisible = false,
+	showAll = false,
+
+	// EDIT DEFAULTS HERE
+
+	DEFAULT_REPS = 10000,
+	DEFAULT_DIGITS = 20,
+	DEFAULT_DECIMAL_PLACES = 20,
+	DEFAULT_ROUNDING = 4,
+	MAX_POWER = 20,
+	CHANCE_NEGATIVE = 0.5,	 // 0 (never) to 1 (always)
+	CHANCE_INTEGER = 0.2,	 // 0 (never) to 1 (always)
+    MAX_RANDOM_EXPONENT = 100,
+	SPACE_BAR = 32,
+	ICU4J_URL = './lib/bigdecimal_ICU4J/BigDecimal-all-last.js',
+
+	//
+
+	$ = function (id) {return document.getElementById(id)},
+	$INPUTS = document.getElementsByTagName('input'),
+	$BD = $('bd'),
+	$BIGINT = $('bigint'),
+	$DIGITS = $('digits'),
+	$GWT = $('gwt'),
+	$ICU4J = $('icu4j'),
+	$FIX = $('fix'),
+	$MAX = $('max'),
+	$INT = $('int'),
+	$DIV = $('division'),
+	$DP = $('dp'),
+	$R = $('r'),
+	$REPS = $('reps'),
+	$SHOW = $('show'),
+	$START = $('start'),
+	$COUNTER = $('counter'),
+	$TIME = $('time'),
+	$RESULTS = $('results'),
+
+    // Get random number in normal notation.
+	getRandom = function () {
+		var z,
+            i = 0,
+            // n is the number of digits - 1
+			n = isFixed ? maxDigits - 1 : Math.random() * (maxDigits || 1) | 0,
+            r = ( Math.random() * 10 | 0 ) + '';
+
+		if (n) {
+            if (r == '0')
+     		    r = isIntOnly ? ( ( Math.random() * 9 | 0 ) + 1 ) + '' : (z = r + '.');
+
+			for ( ; i++ < n; r += Math.random() * 10 | 0 ){}
+
+			if (!z && !isIntOnly && Math.random() > CHANCE_INTEGER) {
+				r = r.slice( 0, i = (Math.random() * n | 0) + 1 ) +
+					'.' + r.slice(i);
+			}
+        }
+
+        // Avoid division by zero error with division and modulo
+		if ((bdM == 'divide' || bdM == 'remainder') && parseFloat(r) === 0)
+			r = ( ( Math.random() * 9 | 0 ) + 1 ) + '';
+
+		return Math.random() > CHANCE_NEGATIVE ? r : '-' + r;
+	},
+
+    // Get random number in exponential notation (if isIntOnly is false).
+    // GWT BigDecimal BigInteger does not accept exponential notation.
+    //getRandom = function () {
+    //    var i = 0,
+    //        // n is the number of significant digits - 1
+    //        n = isFixed ? maxDigits - 1 : Math.random() * (maxDigits || 1) | 0,
+    //        r = ( ( Math.random() * 9 | 0 ) + 1 ) + '';
+    //
+    //    for (; i++ < n; r += Math.random() * 10 | 0 ){}
+    //
+    //    if ( !isIntOnly ) {
+    //
+    //        // Add exponent.
+    //        r += 'e' + ( Math.random() > 0.5 ? '+' : '-' ) +
+    //          ( Math.random() * MAX_RANDOM_EXPONENT | 0 );
+    //    }
+    //
+    //    return Math.random() > CHANCE_NEGATIVE ? r : '-' + r
+    //},
+
+	showTimings = function () {
+		var i, bdS, bnS,
+            sp = '',
+            r = bnTotal < bdTotal
+			  ? (bnTotal ? bdTotal / bnTotal : bdTotal)
+			  : (bdTotal ? bnTotal / bdTotal : bnTotal);
+
+        bdS = 'BigDecimal: ' + (bdTotal || '<1');
+        bnS = 'BigNumber: ' + (bnTotal || '<1');
+
+        for ( i = bdS.length - bnS.length; i-- > 0; sp += '&nbsp;'){}
+        bnS = 'BigNumber: ' + sp + (bnTotal || '<1');
+
+		$TIME.innerHTML =
+            'No mismatches<div>' + bdS + ' ms<br>' + bnS + ' ms</div>' +
+	    		((r = parseFloat(r.toFixed(1))) > 1
+		    		? 'Big' + (bnTotal < bdTotal ? 'Number' : 'Decimal')
+			    		+ ' was ' + r + ' times faster'
+				    : 'Times approximately equal');
+	},
+
+	clear = function () {
+		clearTimeout(calcTimeout);
+		clearTimeout(counterTimeout);
+
+		$COUNTER.style.textDecoration = 'none';
+		$COUNTER.innerHTML = '0';
+		$TIME.innerHTML = $RESULTS.innerHTML = '';
+		$START.innerHTML = 'Start';
+	},
+
+	begin = function () {
+        var i;
+		clear();
+
+		targetReps = +$REPS.value;
+		if (!(targetReps > 0)) return;
+
+		$START.innerHTML = 'Restart';
+
+        i = +$DIGITS.value;
+		$DIGITS.value = maxDigits = i && isFinite(i) ? i : DEFAULT_DIGITS;
+
+		for (i = 0; i < 9; i++) {
+			if ($INPUTS[i].checked) {
+				bnM = bnMs[$INPUTS[i].id];
+				bdM = bdMs[$INPUTS[i].id];
+				break;
+			}
+		}
+
+		if (bdM == 'divide') {
+            i = +$DP.value;
+            $DP.value = decimalPlaces = isFinite(i) ? i : DEFAULT_DECIMAL_PLACES;
+			rounding = $R.selectedIndex;
+			BigNumber.config(decimalPlaces, rounding);
+		}
+
+		isFixed = $FIX.checked;
+		isIntOnly = $INT.checked;
+		showAll = $SHOW.checked;
+
+		BigDecimal = (isGWT = $GWT.checked)
+			? (isIntOnly ? BigInteger : BigDecimal_GWT)
+			: BigDecimal_ICU4J;
+
+		prevCycleReps = cycleLimit = completedReps = bdTotal = bnTotal = 0;
+		pause = false;
+
+		cycleReps = showAll ? 1 : 0.5;
+		cycleTime = +new Date();
+
+		setTimeout(updateCounter, 0);
+	},
+
+	updateCounter = function () {
+
+		if (pause) {
+			if (!timingVisible && !showAll) {
+				showTimings();
+				timingVisible = true;
+			}
+			counterTimeout = setTimeout(updateCounter, 50);
+			return
+		}
+
+		$COUNTER.innerHTML = completedReps;
+
+		if (completedReps < targetReps) {
+			if (timingVisible) {
+				$TIME.innerHTML = '';
+				timingVisible = false;
+			}
+
+			if (!showAll) {
+
+				// Adjust cycleReps so counter is updated every second-ish
+				if (prevCycleReps != cycleReps) {
+
+					// cycleReps too low
+					if (+new Date() - cycleTime < 1e3) {
+						prevCycleReps = cycleReps;
+
+						if (cycleLimit) {
+							cycleReps += ((cycleLimit - cycleReps) / 2);
+						} else {
+							cycleReps *= 2;
+						}
+
+					// cycleReps too high
+					} else {
+						cycleLimit = cycleReps;
+						cycleReps -= ((cycleReps - prevCycleReps) / 2);
+					}
+
+					cycleReps = Math.floor(cycleReps) || 1;
+					cycleTime = +new Date();
+				}
+
+				if (completedReps + cycleReps > targetReps) {
+					cycleReps = targetReps - completedReps;
+				}
+			}
+
+			completedReps += cycleReps;
+			calcTimeout = setTimeout(calc, 0);
+
+		// Finished - show timings summary
+		} else {
+			$START.innerHTML = 'Start';
+			$COUNTER.style.textDecoration = 'underline';
+			if (!showAll) {
+				showTimings();
+			}
+		}
+	},
+
+	calc = function () {
+
+		var start, bdT, bnT, bdR, bnR,
+			xs = [cycleReps],
+			ys = [cycleReps],
+			bdRs = [cycleReps],
+			bnRs = [cycleReps];
+
+
+		// GENERATE RANDOM OPERANDS
+
+		for (i = 0; i < cycleReps; i++) {
+			xs[i] = getRandom();
+		}
+
+		if (bdM == 'pow') {
+
+			// GWT pow argument must be Number type and integer
+			if (isGWT) {
+				for (i = 0; i < cycleReps; i++) {
+					ys[i] = Math.floor(Math.random() * (MAX_POWER + 1));
+				}
+
+			// ICU4J pow argument must be BigDecimal
+			} else {
+				for (i = 0; i < cycleReps; i++) {
+					ys[i] = Math.floor(Math.random() * (MAX_POWER + 1)) + '';
+				}
+			}
+
+		// No second operand needed for abs and negate
+		} else if (bdM != 'abs' && bdM != 'negate') {
+			for (i = 0; i < cycleReps; i++) {
+				ys[i] = getRandom();
+			}
+		}
+
+
+		//********************************************************************//
+		//************************** START TIMING ****************************//
+		//********************************************************************//
+
+
+		// BIGDECIMAL
+
+		if (bdM == 'divide') {
+
+			start = +new Date();
+			for (i = 0; i < cycleReps; i++) {
+				bdRs[i] = new BigDecimal(xs[i])[bdM](new BigDecimal(ys[i]),
+					decimalPlaces, rounding);
+			}
+			bdT = +new Date() - start;
+
+		// GWT pow argument must be Number type and integer
+		} else if (bdM == 'pow' && isGWT) {
+
+			start = +new Date();
+			for (i = 0; i < cycleReps; i++) {
+				bdRs[i] = new BigDecimal(xs[i])[bdM](ys[i]);
+			}
+			bdT = +new Date() - start;
+
+		} else if (bdM == 'abs' || bdM == 'negate') {
+
+			start = +new Date();
+			for (i = 0; i < cycleReps; i++) {
+				bdRs[i] = new BigDecimal(xs[i])[bdM]();
+			}
+			bdT = +new Date() - start;
+
+		} else {
+
+			start = +new Date();
+			for (i = 0; i < cycleReps; i++) {
+				bdRs[i] = new BigDecimal(xs[i])[bdM](new BigDecimal(ys[i]));
+			}
+			bdT = +new Date() - start;
+
+		}
+
+
+		// BIGNUM
+
+		if (bdM == 'pow') {
+
+			start = +new Date();
+			for (i = 0; i < cycleReps; i++) {
+				bnRs[i] = new BigNumber(xs[i])[bnM](ys[i]);
+			}
+			bnT = +new Date() - start;
+
+		} else if (bdM == 'abs' || bdM == 'negate') {
+
+			start = +new Date();
+			for (i = 0; i < cycleReps; i++) {
+				bnRs[i] = new BigNumber(xs[i])[bnM]();
+			}
+			bnT = +new Date() - start;
+
+		} else {
+
+			start = +new Date();
+			for (i = 0; i < cycleReps; i++) {
+				bnRs[i] = new BigNumber(xs[i])[bnM](new BigNumber(ys[i]));
+			}
+			bnT = +new Date() - start;
+
+		}
+
+
+		//********************************************************************//
+		//**************************** END TIMING ****************************//
+		//********************************************************************//
+
+
+		// CHECK FOR MISMATCHES
+
+		for (i = 0; i < cycleReps; i++) {
+			bnR = bnRs[i].toString();
+
+			// Remove any trailing zeros from BigDecimal result
+			if (isGWT) {
+				bdR = bdM == 'compareTo' || isIntOnly
+					? bdRs[i].toString()
+					: bdRs[i].stripTrailingZeros().toPlainString();
+			} else {
+
+				// No toPlainString() or stripTrailingZeros() in ICU4J
+				bdR = bdRs[i].toString();
+
+				if (bdR.indexOf('.') != -1) {
+					bdR = bdR.replace(/\.?0+$/, '');
+				}
+			}
+
+			if (bdR !== bnR) {
+
+				$RESULTS.innerHTML =
+					'<span class="red">Breaking on first mismatch:</span>' +
+					'<br><br>' +xs[i] + '<br>' + bnM + '<br>' + ys[i] +
+					'<br><br>BigDecimal<br>' + bdR + '<br>' + bnR + '<br>BigNumber';
+
+				if (bdM == 'divide') {
+					$RESULTS.innerHTML += '<br><br>Decimal places: ' +
+						decimalPlaces + '<br>Rounding mode: ' + rounding;
+				}
+				return;
+			} else if (showAll) {
+				$RESULTS.innerHTML = xs[i] + '<br>' + bnM + '<br>' + ys[i] +
+				'<br><br>BigDecimal<br>' + bdR + '<br>' + bnR + '<br>BigNumber';
+			}
+		}
+
+		bdTotal += bdT;
+		bnTotal += bnT;
+
+		updateCounter();
+	};
+
+
+// EVENT HANDLERS
+
+document.onkeyup = function (evt) {
+	evt = evt || window.event;
+	if ((evt.keyCode || evt.which) == SPACE_BAR) {
+		up = true;
+	}
+};
+document.onkeydown = function (evt) {
+	evt = evt || window.event;
+	if (up && (evt.keyCode || evt.which) == SPACE_BAR) {
+		pause = !pause;
+		up = false;
+	}
+};
+
+// BigNumber methods' radio buttons' event handlers
+for (i = 0; i < 9; i++) {
+	$INPUTS[i].checked = false;
+	$INPUTS[i].disabled = false;
+	$INPUTS[i].onclick = function () {
+		clear();
+		lastRounding = $R.options.selectedIndex;
+		$DIV.style.display = 'none';
+		bnM = bnMs[this.id];
+		$BD.innerHTML = bdM = bdMs[this.id];
+	};
+}
+$INPUTS[1].onclick = function () {
+	clear();
+	$R.options.selectedIndex = lastRounding;
+	$DIV.style.display = 'block';
+	bnM = bnMs[this.id];
+	$BD.innerHTML = bdM = bdMs[this.id];
+};
+
+// Show/hide BigInteger and disable/un-disable division accordingly as BigInteger
+// throws an exception if division gives "no exact representable decimal result"
+$INT.onclick = function () {
+	if (this.checked && $GWT.checked) {
+		if ($INPUTS[1].checked) {
+			$INPUTS[1].checked = false;
+			$INPUTS[0].checked = true;
+			$BD.innerHTML = bdMs[$INPUTS[0].id];
+			$DIV.style.display = 'none';
+		}
+		$INPUTS[1].disabled = true;
+		$BIGINT.style.display = 'inline';
+	} else {
+		$INPUTS[1].disabled = false;
+		$BIGINT.style.display = 'none';
+	}
+};
+$ICU4J.onclick = function () {
+	$INPUTS[1].disabled = false;
+	$BIGINT.style.display = 'none';
+};
+$GWT.onclick = function () {
+	if ($INT.checked) {
+		if ($INPUTS[1].checked) {
+			$INPUTS[1].checked = false;
+			$INPUTS[0].checked = true;
+			$BD.innerHTML = bdMs[$INPUTS[0].id];
+			$DIV.style.display = 'none';
+		}
+		$INPUTS[1].disabled = true;
+		$BIGINT.style.display = 'inline';
+	}
+};
+
+BigNumber.config({
+	DECIMAL_PLACES : 20,
+	ROUNDING_MODE : 4,
+    EXPONENTIAL_AT: 1E9,
+    RANGE: 1E9,
+    ERRORS: false,
+    MODULO_MODE: 1,
+    POW_PRECISION: 10000
+});
+
+// Set defaults
+$MAX.checked = $INPUTS[0].checked = $GWT.checked = true;
+$SHOW.checked = $INT.checked = false;
+$REPS.value = DEFAULT_REPS;
+$DIGITS.value = DEFAULT_DIGITS;
+$DP.value = DEFAULT_DECIMAL_PLACES;
+$R.option = DEFAULT_ROUNDING;
+
+BigDecimal_GWT = BigDecimal;
+BigDecimal = undefined;
+
+// Load ICU4J BigDecimal
+script = document.createElement("script");
+script.src = ICU4J_URL;
+script.onload = script.onreadystatechange = function () {
+	if (!script.readyState || /loaded|complete/.test(script.readyState)) {
+		script = null;
+		BigDecimal_ICU4J = BigDecimal;
+		$START.onmousedown = begin;
+	}
+};
+document.getElementsByTagName("head")[0].appendChild(script);
+
+
+
+/*
+
+NOTES:
+
+
+ICU4J
+=====
+IBM java package: com.ibm.icu.math
+pow's argument must be a BigDecimal.
+Among other differences, doesn't have .toPlainString() or .stripTrailingZeros().
+Exports BigDecimal only.
+Much faster than gwt on Firefox, on Chrome it varies with the method.
+
+
+GWT
+===
+Java standard class library: java.math.BigDecimal
+
+Exports:
+  RoundingMode
+  MathContext
+  BigDecimal
+  BigInteger
+
+BigDecimal properties:
+  ROUND_CEILING
+  ROUND_DOWN
+  ROUND_FLOOR
+  ROUND_HALF_DOWN
+  ROUND_HALF_EVEN
+  ROUND_HALF_UP
+  ROUND_UNNECESSARY
+  ROUND_UP
+  __init__
+  valueOf
+  log
+  logObj
+  ONE
+  TEN
+  ZERO
+
+BigDecimal instance properties/methods:
+( for (var i in new BigDecimal('1').__gwt_instance.__gwtex_wrap) {...} )
+
+  byteValueExact
+  compareTo
+  doubleValue
+  equals
+  floatValue
+  hashCode
+  intValue
+  intValueExact
+  max
+  min
+  movePointLeft
+  movePointRight
+  precision
+  round
+  scale
+  scaleByPowerOfTen
+  shortValueExact
+  signum
+  stripTrailingZeros
+  toBigInteger
+  toBigIntegerExact
+  toEngineeringString
+  toPlainString
+  toString
+  ulp
+  unscaledValue
+  longValue
+  longValueExact
+  abs
+  add
+  divide
+  divideToIntegralValue
+  multiply
+  negate
+  plus
+  pow
+  remainder
+  setScale
+  subtract
+  divideAndRemainder
+
+*/
+
+  </script>
+</body>
+</html>
+
+

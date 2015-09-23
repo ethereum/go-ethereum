@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-
 	"github.com/kardianos/osext"
 )
 

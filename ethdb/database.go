@@ -17,11 +17,12 @@
 package ethdb
 
 import (
+        "strconv"
+        "strings"
+        "time"
+        "github.com/ethereum/go-ethereum/common"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -34,7 +35,8 @@ import (
 	gometrics "github.com/rcrowley/go-metrics"
 )
 
-var OpenFileLimit = 64
+
+var OpenFileLimit = common.MaxOpenFileLimit()
 
 // cacheRatio specifies how the total alloted cache is distributed between the
 // various system databases.
