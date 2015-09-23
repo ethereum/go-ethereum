@@ -64,44 +64,58 @@ func theChainManager(db ethdb.Database, t *testing.T) *ChainManager {
 }
 
 // Test fork of length N starting from block i
-func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big.Int)) {
-	// switch databases to process the new chain
-	db, err := ethdb.NewMemDatabase()
-	if err != nil {
-		t.Fatal("Failed to create db:", err)
-	}
-	// copy old chain up to i into new db with deterministic canonical
-	bman2, err := newCanonical(i, db)
+func testFork(t *testing.T, processor *BlockProcessor, i, n int, full bool, comparator func(td1, td2 *big.Int)) {
+	// Copy old chain up to #i into a new db
+	db, processor2, err := newCanonical(i, full)
 	if err != nil {
 		t.Fatal("could not make new canonical in testFork", err)
 	}
-	// asert the bmans have the same block at i
-	bi1 := bman.bc.GetBlockByNumber(uint64(i)).Hash()
-	bi2 := bman2.bc.GetBlockByNumber(uint64(i)).Hash()
-	if bi1 != bi2 {
-		fmt.Printf("%+v\n%+v\n\n", bi1, bi2)
-		t.Fatal("chains do not have the same hash at height", i)
+	// Assert the chains have the same header/block at #i
+	var hash1, hash2 common.Hash
+	if full {
+		hash1 = processor.bc.GetBlockByNumber(uint64(i)).Hash()
+		hash2 = processor2.bc.GetBlockByNumber(uint64(i)).Hash()
+	} else {
+		hash1 = processor.bc.GetHeaderByNumber(uint64(i)).Hash()
+		hash2 = processor2.bc.GetHeaderByNumber(uint64(i)).Hash()
 	}
-	bman2.bc.SetProcessor(bman2)
-
-	// extend the fork
-	parent := bman2.bc.CurrentBlock()
-	chainB := makeChain(parent, N, db, forkSeed)
-	_, err = bman2.bc.InsertChain(chainB)
-	if err != nil {
-		t.Fatal("Insert chain error for fork:", err)
+	if hash1 != hash2 {
+		t.Errorf("chain content mismatch at %d: have hash %v, want hash %v", i, hash2, hash1)
 	}
-
-	tdpre := bman.bc.Td()
-	// Test the fork's blocks on the original chain
-	td, err := testChain(chainB, bman)
-	if err != nil {
-		t.Fatal("expected chainB not to give errors:", err)
+	// Extend the newly created chain
+	var (
+		blockChainB  []*types.Block
+		headerChainB []*types.Header
+	)
+	if full {
+		blockChainB = makeBlockChain(processor2.bc.CurrentBlock(), n, db, forkSeed)
+		if _, err := processor2.bc.InsertChain(blockChainB); err != nil {
+			t.Fatalf("failed to insert forking chain: %v", err)
+		}
+	} else {
+		headerChainB = makeHeaderChain(processor2.bc.CurrentHeader(), n, db, forkSeed)
+		if _, err := processor2.bc.InsertHeaderChain(headerChainB, true); err != nil {
+			t.Fatalf("failed to insert forking chain: %v", err)
+		}
 	}
-	// Compare difficulties
-	f(tdpre, td)
+	// Sanity check that the forked chain can be imported into the original
+	var tdPre, tdPost *big.Int
 
-	// Loop over parents making sure reconstruction is done properly
+	if full {
+		tdPre = processor.bc.GetTd(processor.bc.CurrentBlock().Hash())
+		if err := testBlockChainImport(blockChainB, processor); err != nil {
+			t.Fatalf("failed to import forked block chain: %v", err)
+		}
+		tdPost = processor.bc.GetTd(blockChainB[len(blockChainB)-1].Hash())
+	} else {
+		tdPre = processor.bc.GetTd(processor.bc.CurrentHeader().Hash())
+		if err := testHeaderChainImport(headerChainB, processor); err != nil {
+			t.Fatalf("failed to import forked header chain: %v", err)
+		}
+		tdPost = processor.bc.GetTd(headerChainB[len(headerChainB)-1].Hash())
+	}
+	// Compare the total difficulties of the chains
+	comparator(tdPre, tdPost)
 }
 
 func printChain(bc *ChainManager) {
@@ -111,22 +125,41 @@ func printChain(bc *ChainManager) {
 	}
 }
 
-// process blocks against a chain
-func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
-	for _, block := range chainB {
-		_, _, err := bman.bc.processor.Process(block)
-		if err != nil {
+// testBlockChainImport tries to process a chain of blocks, writing them into
+// the database if successful.
+func testBlockChainImport(chain []*types.Block, processor *BlockProcessor) error {
+	for _, block := range chain {
+		// Try and process the block
+		if _, _, err := processor.Process(block); err != nil {
 			if IsKnownBlockErr(err) {
 				continue
 			}
-			return nil, err
+			return err
 		}
-		bman.bc.mu.Lock()
-		WriteTd(bman.bc.chainDb, block.Hash(), new(big.Int).Add(block.Difficulty(), bman.bc.GetTd(block.ParentHash())))
-		WriteBlock(bman.bc.chainDb, block)
-		bman.bc.mu.Unlock()
+		// Manually insert the block into the database, but don't reorganize (allows subsequent testing)
+		processor.bc.mu.Lock()
+		WriteTd(processor.chainDb, block.Hash(), new(big.Int).Add(block.Difficulty(), processor.bc.GetTd(block.ParentHash())))
+		WriteBlock(processor.chainDb, block)
+		processor.bc.mu.Unlock()
 	}
-	return bman.bc.GetTd(chainB[len(chainB)-1].Hash()), nil
+	return nil
+}
+
+// testHeaderChainImport tries to process a chain of header, writing them into
+// the database if successful.
+func testHeaderChainImport(chain []*types.Header, processor *BlockProcessor) error {
+	for _, header := range chain {
+		// Try and validate the header
+		if err := processor.ValidateHeader(header, false, false); err != nil {
+			return err
+		}
+		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
+		processor.bc.mu.Lock()
+		WriteTd(processor.chainDb, header.Hash(), new(big.Int).Add(header.Difficulty, processor.bc.GetTd(header.ParentHash)))
+		WriteHeader(processor.chainDb, header)
+		processor.bc.mu.Unlock()
+	}
+	return nil
 }
 
 func loadChain(fn string, t *testing.T) (types.Blocks, error) {
@@ -153,127 +186,137 @@ func insertChain(done chan bool, chainMan *ChainManager, chain types.Blocks, t *
 	done <- true
 }
 
-func TestExtendCanonical(t *testing.T) {
-	CanonicalLength := 5
-	db, err := ethdb.NewMemDatabase()
+// Tests that given a starting canonical chain of a given size, it can be extended
+// with various length chains.
+func TestExtendCanonicalHeaders(t *testing.T) { testExtendCanonical(t, false) }
+func TestExtendCanonicalBlocks(t *testing.T)  { testExtendCanonical(t, true) }
+
+func testExtendCanonical(t *testing.T, full bool) {
+	length := 5
+
+	// Make first chain starting from genesis
+	_, processor, err := newCanonical(length, full)
 	if err != nil {
-		t.Fatal("Failed to create db:", err)
+		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
-	// make first chain starting from genesis
-	bman, err := newCanonical(CanonicalLength, db)
-	if err != nil {
-		t.Fatal("Could not make new canonical chain:", err)
-	}
-	f := func(td1, td2 *big.Int) {
+	// Define the difficulty comparator
+	better := func(td1, td2 *big.Int) {
 		if td2.Cmp(td1) <= 0 {
-			t.Error("expected chainB to have higher difficulty. Got", td2, "expected more than", td1)
+			t.Errorf("total difficulty mismatch: have %v, expected more than %v", td2, td1)
 		}
 	}
-	// Start fork from current height (CanonicalLength)
-	testFork(t, bman, CanonicalLength, 1, f)
-	testFork(t, bman, CanonicalLength, 2, f)
-	testFork(t, bman, CanonicalLength, 5, f)
-	testFork(t, bman, CanonicalLength, 10, f)
+	// Start fork from current height
+	testFork(t, processor, length, 1, full, better)
+	testFork(t, processor, length, 2, full, better)
+	testFork(t, processor, length, 5, full, better)
+	testFork(t, processor, length, 10, full, better)
 }
 
-func TestShorterFork(t *testing.T) {
-	db, err := ethdb.NewMemDatabase()
+// Tests that given a starting canonical chain of a given size, creating shorter
+// forks do not take canonical ownership.
+func TestShorterForkHeaders(t *testing.T) { testShorterFork(t, false) }
+func TestShorterForkBlocks(t *testing.T)  { testShorterFork(t, true) }
+
+func testShorterFork(t *testing.T, full bool) {
+	length := 10
+
+	// Make first chain starting from genesis
+	_, processor, err := newCanonical(length, full)
 	if err != nil {
-		t.Fatal("Failed to create db:", err)
+		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
-	// make first chain starting from genesis
-	bman, err := newCanonical(10, db)
-	if err != nil {
-		t.Fatal("Could not make new canonical chain:", err)
-	}
-	f := func(td1, td2 *big.Int) {
+	// Define the difficulty comparator
+	worse := func(td1, td2 *big.Int) {
 		if td2.Cmp(td1) >= 0 {
-			t.Error("expected chainB to have lower difficulty. Got", td2, "expected less than", td1)
+			t.Errorf("total difficulty mismatch: have %v, expected less than %v", td2, td1)
 		}
 	}
-	// Sum of numbers must be less than 10
-	// for this to be a shorter fork
-	testFork(t, bman, 0, 3, f)
-	testFork(t, bman, 0, 7, f)
-	testFork(t, bman, 1, 1, f)
-	testFork(t, bman, 1, 7, f)
-	testFork(t, bman, 5, 3, f)
-	testFork(t, bman, 5, 4, f)
+	// Sum of numbers must be less than `length` for this to be a shorter fork
+	testFork(t, processor, 0, 3, full, worse)
+	testFork(t, processor, 0, 7, full, worse)
+	testFork(t, processor, 1, 1, full, worse)
+	testFork(t, processor, 1, 7, full, worse)
+	testFork(t, processor, 5, 3, full, worse)
+	testFork(t, processor, 5, 4, full, worse)
 }
 
-func TestLongerFork(t *testing.T) {
-	db, err := ethdb.NewMemDatabase()
+// Tests that given a starting canonical chain of a given size, creating longer
+// forks do take canonical ownership.
+func TestLongerForkHeaders(t *testing.T) { testLongerFork(t, false) }
+func TestLongerForkBlocks(t *testing.T)  { testLongerFork(t, true) }
+
+func testLongerFork(t *testing.T, full bool) {
+	length := 10
+
+	// Make first chain starting from genesis
+	_, processor, err := newCanonical(length, full)
 	if err != nil {
-		t.Fatal("Failed to create db:", err)
+		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
-	// make first chain starting from genesis
-	bman, err := newCanonical(10, db)
-	if err != nil {
-		t.Fatal("Could not make new canonical chain:", err)
-	}
-	f := func(td1, td2 *big.Int) {
+	// Define the difficulty comparator
+	better := func(td1, td2 *big.Int) {
 		if td2.Cmp(td1) <= 0 {
-			t.Error("expected chainB to have higher difficulty. Got", td2, "expected more than", td1)
+			t.Errorf("total difficulty mismatch: have %v, expected more than %v", td2, td1)
 		}
 	}
-	// Sum of numbers must be greater than 10
-	// for this to be a longer fork
-	testFork(t, bman, 0, 11, f)
-	testFork(t, bman, 0, 15, f)
-	testFork(t, bman, 1, 10, f)
-	testFork(t, bman, 1, 12, f)
-	testFork(t, bman, 5, 6, f)
-	testFork(t, bman, 5, 8, f)
+	// Sum of numbers must be greater than `length` for this to be a longer fork
+	testFork(t, processor, 0, 11, full, better)
+	testFork(t, processor, 0, 15, full, better)
+	testFork(t, processor, 1, 10, full, better)
+	testFork(t, processor, 1, 12, full, better)
+	testFork(t, processor, 5, 6, full, better)
+	testFork(t, processor, 5, 8, full, better)
 }
 
-func TestEqualFork(t *testing.T) {
-	db, err := ethdb.NewMemDatabase()
+// Tests that given a starting canonical chain of a given size, creating equal
+// forks do take canonical ownership.
+func TestEqualForkHeaders(t *testing.T) { testEqualFork(t, false) }
+func TestEqualForkBlocks(t *testing.T)  { testEqualFork(t, true) }
+
+func testEqualFork(t *testing.T, full bool) {
+	length := 10
+
+	// Make first chain starting from genesis
+	_, processor, err := newCanonical(length, full)
 	if err != nil {
-		t.Fatal("Failed to create db:", err)
+		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
-	bman, err := newCanonical(10, db)
-	if err != nil {
-		t.Fatal("Could not make new canonical chain:", err)
-	}
-	f := func(td1, td2 *big.Int) {
+	// Define the difficulty comparator
+	equal := func(td1, td2 *big.Int) {
 		if td2.Cmp(td1) != 0 {
-			t.Error("expected chainB to have equal difficulty. Got", td2, "expected ", td1)
+			t.Errorf("total difficulty mismatch: have %v, want %v", td2, td1)
 		}
 	}
-	// Sum of numbers must be equal to 10
-	// for this to be an equal fork
-	testFork(t, bman, 0, 10, f)
-	testFork(t, bman, 1, 9, f)
-	testFork(t, bman, 2, 8, f)
-	testFork(t, bman, 5, 5, f)
-	testFork(t, bman, 6, 4, f)
-	testFork(t, bman, 9, 1, f)
+	// Sum of numbers must be equal to `length` for this to be an equal fork
+	testFork(t, processor, 0, 10, full, equal)
+	testFork(t, processor, 1, 9, full, equal)
+	testFork(t, processor, 2, 8, full, equal)
+	testFork(t, processor, 5, 5, full, equal)
+	testFork(t, processor, 6, 4, full, equal)
+	testFork(t, processor, 9, 1, full, equal)
 }
 
-func TestBrokenChain(t *testing.T) {
-	db, err := ethdb.NewMemDatabase()
+// Tests that chains missing links do not get accepted by the processor.
+func TestBrokenHeaderChain(t *testing.T) { testBrokenChain(t, false) }
+func TestBrokenBlockChain(t *testing.T)  { testBrokenChain(t, true) }
+
+func testBrokenChain(t *testing.T, full bool) {
+	// Make chain starting from genesis
+	db, processor, err := newCanonical(10, full)
 	if err != nil {
-		t.Fatal("Failed to create db:", err)
+		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
-	bman, err := newCanonical(10, db)
-	if err != nil {
-		t.Fatal("Could not make new canonical chain:", err)
-	}
-	db2, err := ethdb.NewMemDatabase()
-	if err != nil {
-		t.Fatal("Failed to create db:", err)
-	}
-	bman2, err := newCanonical(10, db2)
-	if err != nil {
-		t.Fatal("Could not make new canonical chain:", err)
-	}
-	bman2.bc.SetProcessor(bman2)
-	parent := bman2.bc.CurrentBlock()
-	chainB := makeChain(parent, 5, db2, forkSeed)
-	chainB = chainB[1:]
-	_, err = testChain(chainB, bman)
-	if err == nil {
-		t.Error("expected broken chain to return error")
+	// Create a forked chain, and try to insert with a missing link
+	if full {
+		chain := makeBlockChain(processor.bc.CurrentBlock(), 5, db, forkSeed)[1:]
+		if err := testBlockChainImport(chain, processor); err == nil {
+			t.Errorf("broken block chain not reported")
+		}
+	} else {
+		chain := makeHeaderChain(processor.bc.CurrentHeader(), 5, db, forkSeed)[1:]
+		if err := testHeaderChainImport(chain, processor); err == nil {
+			t.Errorf("broken header chain not reported")
+		}
 	}
 }
 
@@ -363,7 +406,16 @@ type bproc struct{}
 
 func (bproc) Process(*types.Block) (state.Logs, types.Receipts, error) { return nil, nil, nil }
 
-func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block {
+func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Header {
+	blocks := makeBlockChainWithDiff(genesis, d, seed)
+	headers := make([]*types.Header, len(blocks))
+	for i, block := range blocks {
+		headers[i] = block.Header()
+	}
+	return headers
+}
+
+func makeBlockChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block {
 	var chain []*types.Block
 	for i, difficulty := range d {
 		header := &types.Header{
@@ -397,89 +449,130 @@ func chm(genesis *types.Block, db ethdb.Database) *ChainManager {
 	return bc
 }
 
-func TestReorgLongest(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+// Tests that reorganizing a long difficult chain after a short easy one
+// overwrites the canonical numbers and links in the database.
+func TestReorgLongHeaders(t *testing.T) { testReorgLong(t, false) }
+func TestReorgLongBlocks(t *testing.T)  { testReorgLong(t, true) }
 
-	genesis, err := WriteTestNetGenesisBlock(db, 0)
-	if err != nil {
-		t.Error(err)
-		t.FailNow()
-	}
+func testReorgLong(t *testing.T, full bool) {
+	testReorg(t, []int{1, 2, 4}, []int{1, 2, 3, 4}, 10, full)
+}
+
+// Tests that reorganizing a short difficult chain after a long easy one
+// overwrites the canonical numbers and links in the database.
+func TestReorgShortHeaders(t *testing.T) { testReorgShort(t, false) }
+func TestReorgShortBlocks(t *testing.T)  { testReorgShort(t, true) }
+
+func testReorgShort(t *testing.T, full bool) {
+	testReorg(t, []int{1, 2, 3, 4}, []int{1, 10}, 11, full)
+}
+
+func testReorg(t *testing.T, first, second []int, td int64, full bool) {
+	// Create a pristine block chain
+	db, _ := ethdb.NewMemDatabase()
+	genesis, _ := WriteTestNetGenesisBlock(db, 0)
 	bc := chm(genesis, db)
 
-	chain1 := makeChainWithDiff(genesis, []int{1, 2, 4}, 10)
-	chain2 := makeChainWithDiff(genesis, []int{1, 2, 3, 4}, 11)
-
-	bc.InsertChain(chain1)
-	bc.InsertChain(chain2)
-
-	prev := bc.CurrentBlock()
-	for block := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 1); block.NumberU64() != 0; prev, block = block, bc.GetBlockByNumber(block.NumberU64()-1) {
-		if prev.ParentHash() != block.Hash() {
-			t.Errorf("parent hash mismatch %x - %x", prev.ParentHash(), block.Hash())
+	// Insert an easy and a difficult chain afterwards
+	if full {
+		bc.InsertChain(makeBlockChainWithDiff(genesis, first, 11))
+		bc.InsertChain(makeBlockChainWithDiff(genesis, second, 22))
+	} else {
+		bc.InsertHeaderChain(makeHeaderChainWithDiff(genesis, first, 11), false)
+		bc.InsertHeaderChain(makeHeaderChainWithDiff(genesis, second, 22), false)
+	}
+	// Check that the chain is valid number and link wise
+	if full {
+		prev := bc.CurrentBlock()
+		for block := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 1); block.NumberU64() != 0; prev, block = block, bc.GetBlockByNumber(block.NumberU64()-1) {
+			if prev.ParentHash() != block.Hash() {
+				t.Errorf("parent block hash mismatch: have %x, want %x", prev.ParentHash(), block.Hash())
+			}
+		}
+	} else {
+		prev := bc.CurrentHeader()
+		for header := bc.GetHeaderByNumber(bc.CurrentHeader().Number.Uint64() - 1); header.Number.Uint64() != 0; prev, header = header, bc.GetHeaderByNumber(header.Number.Uint64()-1) {
+			if prev.ParentHash != header.Hash() {
+				t.Errorf("parent header hash mismatch: have %x, want %x", prev.ParentHash, header.Hash())
+			}
+		}
+	}
+	// Make sure the chain total difficulty is the correct one
+	want := new(big.Int).Add(genesis.Difficulty(), big.NewInt(td))
+	if full {
+		if have := bc.GetTd(bc.CurrentBlock().Hash()); have.Cmp(want) != 0 {
+			t.Errorf("total difficulty mismatch: have %v, want %v", have, want)
+		}
+	} else {
+		if have := bc.GetTd(bc.CurrentHeader().Hash()); have.Cmp(want) != 0 {
+			t.Errorf("total difficulty mismatch: have %v, want %v", have, want)
 		}
 	}
 }
 
-func TestReorgShortest(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
-	genesis, err := WriteTestNetGenesisBlock(db, 0)
-	if err != nil {
-		t.Error(err)
-		t.FailNow()
-	}
-	bc := chm(genesis, db)
+// Tests chain insertions in the face of one entity containing an invalid nonce.
+func TestHeadersInsertNonceError(t *testing.T) { testInsertNonceError(t, false) }
+func TestBlocksInsertNonceError(t *testing.T)  { testInsertNonceError(t, true) }
 
-	chain1 := makeChainWithDiff(genesis, []int{1, 2, 3, 4}, 10)
-	chain2 := makeChainWithDiff(genesis, []int{1, 10}, 11)
-
-	bc.InsertChain(chain1)
-	bc.InsertChain(chain2)
-
-	prev := bc.CurrentBlock()
-	for block := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 1); block.NumberU64() != 0; prev, block = block, bc.GetBlockByNumber(block.NumberU64()-1) {
-		if prev.ParentHash() != block.Hash() {
-			t.Errorf("parent hash mismatch %x - %x", prev.ParentHash(), block.Hash())
-		}
-	}
-}
-
-func TestInsertNonceError(t *testing.T) {
+func testInsertNonceError(t *testing.T, full bool) {
 	for i := 1; i < 25 && !t.Failed(); i++ {
-		db, _ := ethdb.NewMemDatabase()
-		genesis, err := WriteTestNetGenesisBlock(db, 0)
+		// Create a pristine chain and database
+		db, processor, err := newCanonical(0, full)
 		if err != nil {
-			t.Error(err)
-			t.FailNow()
+			t.Fatalf("failed to create pristine chain: %v", err)
 		}
-		bc := chm(genesis, db)
-		bc.processor = NewBlockProcessor(db, bc.pow, bc, bc.eventMux)
-		blocks := makeChain(bc.currentBlock, i, db, 0)
+		bc := processor.bc
 
-		fail := rand.Int() % len(blocks)
-		failblock := blocks[fail]
-		bc.pow = failPow{failblock.NumberU64()}
-		n, err := bc.InsertChain(blocks)
+		// Create and insert a chain with a failing nonce
+		var (
+			failAt   int
+			failRes  int
+			failNum  uint64
+			failHash common.Hash
+		)
+		if full {
+			blocks := makeBlockChain(processor.bc.CurrentBlock(), i, db, 0)
 
+			failAt = rand.Int() % len(blocks)
+			failNum = blocks[failAt].NumberU64()
+			failHash = blocks[failAt].Hash()
+
+			processor.bc.pow = failPow{failNum}
+			failRes, err = processor.bc.InsertChain(blocks)
+		} else {
+			headers := makeHeaderChain(processor.bc.CurrentHeader(), i, db, 0)
+
+			failAt = rand.Int() % len(headers)
+			failNum = headers[failAt].Number.Uint64()
+			failHash = headers[failAt].Hash()
+
+			processor.bc.pow = failPow{failNum}
+			failRes, err = processor.bc.InsertHeaderChain(headers, true)
+		}
 		// Check that the returned error indicates the nonce failure.
-		if n != fail {
-			t.Errorf("(i=%d) wrong failed block index: got %d, want %d", i, n, fail)
+		if failRes != failAt {
+			t.Errorf("test %d: failure index mismatch: have %d, want %d", i, failRes, failAt)
 		}
 		if !IsBlockNonceErr(err) {
-			t.Fatalf("(i=%d) got %q, want a nonce error", i, err)
+			t.Fatalf("test %d: error mismatch: have %v, want nonce error", i, err)
 		}
 		nerr := err.(*BlockNonceErr)
-		if nerr.Number.Cmp(failblock.Number()) != 0 {
-			t.Errorf("(i=%d) wrong block number in error, got %v, want %v", i, nerr.Number, failblock.Number())
+		if nerr.Number.Uint64() != failNum {
+			t.Errorf("test %d: number mismatch: have %v, want %v", i, nerr.Number, failNum)
 		}
-		if nerr.Hash != failblock.Hash() {
-			t.Errorf("(i=%d) wrong block hash in error, got %v, want %v", i, nerr.Hash, failblock.Hash())
+		if nerr.Hash != failHash {
+			t.Errorf("test %d: hash mismatch: have %x, want %x", i, nerr.Hash[:4], failHash[:4])
 		}
-
 		// Check that all no blocks after the failing block have been inserted.
-		for _, block := range blocks[fail:] {
-			if bc.HasBlock(block.Hash()) {
-				t.Errorf("(i=%d) invalid block %d present in chain", i, block.NumberU64())
+		for j := 0; j < i-failAt; j++ {
+			if full {
+				if block := bc.GetBlockByNumber(failNum + uint64(j)); block != nil {
+					t.Errorf("test %d: invalid block in chain: %v", i, block)
+				}
+			} else {
+				if header := bc.GetHeaderByNumber(failNum + uint64(j)); header != nil {
+					t.Errorf("test %d: invalid header in chain: %v", i, header)
+				}
 			}
 		}
 	}
