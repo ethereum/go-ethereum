@@ -115,6 +115,13 @@ func TestCallCreateCallCode(t *testing.T) {
 	}
 }
 
+func TestCallCodes(t *testing.T) {
+	fn := filepath.Join(stateTestDir, "stCallCodes.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestMemory(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stMemoryTest.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {

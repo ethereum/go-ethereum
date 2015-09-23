@@ -128,6 +128,7 @@ func runStateTests(tests map[string]VmTest, skipTests []string) error {
 			return nil
 		}
 
+		//fmt.Println("StateTest name:", name)
 		if err := runStateTest(test); err != nil {
 			return fmt.Errorf("%s: %s\n", name, err.Error())
 		}
@@ -172,7 +173,7 @@ func runStateTest(test VmTest) error {
 
 	ret, logs, _, _ = RunState(statedb, env, test.Transaction)
 
-	// // Compare expected  and actual return
+	// Compare expected and actual return
 	rexp := common.FromHex(test.Out)
 	if bytes.Compare(rexp, ret) != 0 {
 		return fmt.Errorf("return failed. Expected %x, got %x\n", rexp, ret)
