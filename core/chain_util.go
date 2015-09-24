@@ -40,7 +40,14 @@ var (
 // given the parent block's time and difficulty.
 func CalcDifficulty(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
 	diff := new(big.Int)
-	adjust := new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
+    adjust := new(big.Int)
+
+	if parentNumber.Cmp(params.HardFork1) < 0 {
+	    adjust = new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
+	} else {
+	    adjust = new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor2)
+	}
+
 	bigTime := new(big.Int)
 	bigParentTime := new(big.Int)
 

@@ -30,6 +30,8 @@ var (
 	TxGas                  = big.NewInt(21000)  // Per transaction. NOTE: Not payable on data of calls between transactions.
 	TxDataZeroGas          = big.NewInt(4)      // Per byte of data attached to a transaction that equals zero. NOTE: Not payable on data of calls between transactions.
 	DifficultyBoundDivisor = big.NewInt(2048)   // The bound divisor of the difficulty, used in the update calculations.
+	DifficultyBoundDivisor2 = big.NewInt(512)   // Difficulty should adjust faster.
+	HardFork1               = big.NewInt(23000) // fork at this block number
 	QuadCoeffDiv           = big.NewInt(512)    // Divisor for the quadratic particle of the memory cost equation.
 	GenesisDifficulty      = big.NewInt(131072) // Difficulty of the Genesis block.
 	DurationLimit          = big.NewInt(60)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
