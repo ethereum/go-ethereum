@@ -41,7 +41,7 @@ var (
 func CalcDifficulty(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
 	diff := new(big.Int)
 
-	if parentNumber <= params.HardFork1 {
+	if parentNumber.Cmp(params.HardFork1) < 0 {
 	    adjust := new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
 	} else {
 	    adjust := new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor2)
