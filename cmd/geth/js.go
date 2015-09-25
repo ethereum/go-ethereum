@@ -145,7 +145,7 @@ func apiWordCompleter(line string, pos int) (head string, completions []string, 
 	return begin, completionWords, end
 }
 
-func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive bool) *jsre {
+func newLightweightJSRE(libPath string, client comms.EthereumClient, datadir string, interactive bool) *jsre {
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
 	js.client = client
@@ -161,14 +161,14 @@ func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
 	} else {
 		lr := liner.NewLiner()
-		js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
+		js.withHistory(datadir, func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
 		js.loadAutoCompletion()
 		lr.SetWordCompleter(apiWordCompleter)
 		lr.SetTabCompletionStyle(liner.TabPrints)
 		js.prompter = lr
 		js.atexit = func() {
-			js.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
+			js.withHistory(datadir, func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
 			lr.Close()
 			close(js.wait)
 		}
@@ -203,14 +203,14 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, client comms.Et
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
 	} else {
 		lr := liner.NewLiner()
-		js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
+		js.withHistory(ethereum.DataDir, func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
 		js.loadAutoCompletion()
 		lr.SetWordCompleter(apiWordCompleter)
 		lr.SetTabCompletionStyle(liner.TabPrints)
 		js.prompter = lr
 		js.atexit = func() {
-			js.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
+			js.withHistory(ethereum.DataDir, func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
 			lr.Close()
 			close(js.wait)
 		}
@@ -433,12 +433,7 @@ func hidepassword(input string) string {
 	}
 }
 
-func (self *jsre) withHistory(op func(*os.File)) {
-	datadir := common.DefaultDataDir()
-	if self.ethereum != nil {
-		datadir = self.ethereum.DataDir
-	}
-
+func (self *jsre) withHistory(datadir string, op func(*os.File)) {
 	hist, err := os.OpenFile(filepath.Join(datadir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		fmt.Printf("unable to open history file: %v\n", err)
