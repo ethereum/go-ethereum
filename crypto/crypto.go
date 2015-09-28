@@ -198,7 +198,9 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
 	}
 
-	sig, err = secp256k1.Sign(hash, common.LeftPadBytes(prv.D.Bytes(), prv.Params().BitSize/8))
+	seckey := common.LeftPadBytes(prv.D.Bytes(), prv.Params().BitSize/8)
+	defer zeroBytes(seckey)
+	sig, err = secp256k1.Sign(hash, seckey)
 	return
 }
 
@@ -336,4 +338,10 @@ func PKCS7Unpad(in []byte) []byte {
 func PubkeyToAddress(p ecdsa.PublicKey) common.Address {
 	pubBytes := FromECDSAPub(&p)
 	return common.BytesToAddress(Sha3(pubBytes[1:])[12:])
+}
+
+func zeroBytes(bytes []byte) {
+	for i := range bytes {
+		bytes[i] = 0
+	}
 }
