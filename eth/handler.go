@@ -120,15 +120,25 @@ func NewProtocolManager(mode Mode, networkId int, mux *event.TypeMux, txpool txP
 		return nil, errIncompatibleConfig
 	}
 	// Construct the different synchronisation mechanisms
-	manager.downloader = downloader.New(manager.eventMux, manager.chainman.HasBlock, manager.chainman.GetBlock, manager.chainman.CurrentBlock, manager.chainman.GetTd, manager.chainman.InsertChain, manager.removePeer)
+	var syncMode downloader.SyncMode
+	switch mode {
+	case ArchiveMode:
+		syncMode = downloader.FullSync
+	case FullMode:
+		syncMode = downloader.FastSync
+	case LightMode:
+		syncMode = downloader.LightSync
+	}
+	manager.downloader = downloader.New(syncMode, manager.eventMux, chainman.HasHeader, chainman.HasBlock, chainman.GetHeader, chainman.GetBlock,
+		chainman.CurrentHeader, chainman.CurrentBlock, chainman.GetTd, chainman.InsertHeaderChain, chainman.InsertChain, nil, manager.removePeer)
 
 	validator := func(block *types.Block, parent *types.Block) error {
 		return core.ValidateHeader(pow, block.Header(), parent.Header(), true, false)
 	}
 	heighter := func() uint64 {
-		return manager.chainman.CurrentBlock().NumberU64()
+		return chainman.CurrentBlock().NumberU64()
 	}
-	manager.fetcher = fetcher.New(manager.chainman.GetBlock, validator, manager.BroadcastBlock, heighter, manager.chainman.InsertChain, manager.removePeer)
+	manager.fetcher = fetcher.New(chainman.GetBlock, validator, manager.BroadcastBlock, heighter, chainman.InsertChain, manager.removePeer)
 
 	return manager, nil
 }
@@ -210,7 +220,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
 	if err := pm.downloader.RegisterPeer(p.id, p.version, p.Head(),
 		p.RequestHashes, p.RequestHashesFromNumber, p.RequestBlocks,
-		p.RequestHeadersByHash, p.RequestHeadersByNumber, p.RequestBodies); err != nil {
+		p.RequestHeadersByHash, p.RequestHeadersByNumber, p.RequestBodies, p.RequestReceipts); err != nil {
 		return err
 	}
 	// Propagate existing transactions. new transactions appearing
@@ -514,22 +524,31 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		var (
 			hash     common.Hash
 			bytes    int
-			receipts []*types.Receipt
+			receipts []rlp.RawValue
 		)
-		for bytes < softResponseLimit && len(receipts) < downloader.MaxReceiptsFetch {
-			// Retrieve the hash of the next transaction receipt
+		for bytes < softResponseLimit && len(receipts) < downloader.MaxReceiptFetch {
+			// Retrieve the hash of the next block
 			if err := msgStream.Decode(&hash); err == rlp.EOL {
 				break
 			} else if err != nil {
 				return errResp(ErrDecode, "msg %v: %v", msg, err)
 			}
-			// Retrieve the requested receipt, stopping if enough was found
-			if receipt := core.GetReceipt(pm.chaindb, hash); receipt != nil {
-				receipts = append(receipts, receipt)
-				bytes += len(receipt.RlpEncode())
+			// Retrieve the requested block's receipts, skipping if unknown to us
+			results := core.GetBlockReceipts(pm.chaindb, hash)
+			if results == nil {
+				if header := pm.chainman.GetHeader(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
+					continue
+				}
+			}
+			// If known, encode and queue for response packet
+			if encoded, err := rlp.EncodeToBytes(results); err != nil {
+				glog.V(logger.Error).Infof("failed to encode receipt: %v", err)
+			} else {
+				receipts = append(receipts, encoded)
+				bytes += len(encoded)
 			}
 		}
-		return p.SendReceipts(receipts)
+		return p.SendReceiptsRLP(receipts)
 
 	case msg.Code == NewBlockHashesMsg:
 		// Retrieve and deseralize the remote new block hashes notification
