@@ -140,13 +140,12 @@ func GetBlockReceipts(db ethdb.Database, hash common.Hash) types.Receipts {
 	if len(data) == 0 {
 		return nil
 	}
-
-	var receipts types.Receipts
-	err := rlp.DecodeBytes(data, &receipts)
-	if err != nil {
-		glog.V(logger.Core).Infoln("GetReceiptse err", err)
+	receipts := new(types.Receipts)
+	if err := rlp.DecodeBytes(data, receipts); err != nil {
+		glog.V(logger.Error).Infof("invalid receipt array RLP for hash %x: %v", hash, err)
+		return nil
 	}
-	return receipts
+	return *receipts
 }
 
 // PutBlockReceipts stores the block's transactions associated receipts

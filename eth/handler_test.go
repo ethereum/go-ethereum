@@ -535,15 +535,12 @@ func testGetReceipt(t *testing.T, protocol int) {
 	defer peer.close()
 
 	// Collect the hashes to request, and the response to expect
-	hashes := []common.Hash{}
+	hashes, receipts := []common.Hash{}, []types.Receipts{}
 	for i := uint64(0); i <= pm.blockchain.CurrentBlock().NumberU64(); i++ {
-		for _, tx := range pm.blockchain.GetBlockByNumber(i).Transactions() {
-			hashes = append(hashes, tx.Hash())
-		}
-	}
-	receipts := make([]*types.Receipt, len(hashes))
-	for i, hash := range hashes {
-		receipts[i] = core.GetReceipt(pm.chaindb, hash)
+		block := pm.blockchain.GetBlockByNumber(i)
+
+		hashes = append(hashes, block.Hash())
+		receipts = append(receipts, core.GetBlockReceipts(pm.chaindb, block.Hash()))
 	}
 	// Send the hash request and verify the response
 	p2p.Send(peer.app, 0x0f, hashes)

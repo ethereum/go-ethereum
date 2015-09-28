@@ -172,8 +172,8 @@ type storageblock struct {
 }
 
 var (
-	emptyRootHash  = DeriveSha(Transactions{})
-	emptyUncleHash = CalcUncleHash(nil)
+	EmptyRootHash  = DeriveSha(Transactions{})
+	EmptyUncleHash = CalcUncleHash(nil)
 )
 
 // NewBlock creates a new block. The input data is copied,
@@ -188,7 +188,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 
 	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
-		b.header.TxHash = emptyRootHash
+		b.header.TxHash = EmptyRootHash
 	} else {
 		b.header.TxHash = DeriveSha(Transactions(txs))
 		b.transactions = make(Transactions, len(txs))
@@ -196,7 +196,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 	}
 
 	if len(receipts) == 0 {
-		b.header.ReceiptHash = emptyRootHash
+		b.header.ReceiptHash = EmptyRootHash
 	} else {
 		b.header.ReceiptHash = DeriveSha(Receipts(receipts))
 		b.header.Bloom = CreateBloom(receipts)
@@ -205,7 +205,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 	}
 
 	if len(uncles) == 0 {
-		b.header.UncleHash = emptyUncleHash
+		b.header.UncleHash = EmptyUncleHash
 	} else {
 		b.header.UncleHash = CalcUncleHash(uncles)
 		b.uncles = make([]*Header, len(uncles))
