@@ -96,7 +96,7 @@ func GenerateKeyPair() ([]byte, []byte) {
 
 	var output_len C.size_t
 
-	C.secp256k1_ec_pubkey_serialize( // always returns 1
+	_ = C.secp256k1_ec_pubkey_serialize( // always returns 1
 		context,
 		pubkey65_ptr,
 		&output_len,
@@ -163,7 +163,7 @@ func Sign(msg []byte, seckey []byte) ([]byte, error) {
 	sig_serialized_ptr := (*C.uchar)(unsafe.Pointer(&sig_serialized[0]))
 	var recid C.int
 
-	C.secp256k1_ecdsa_recoverable_signature_serialize_compact(
+	_ = C.secp256k1_ecdsa_recoverable_signature_serialize_compact(
 		context,
 		sig_serialized_ptr, // 64 byte compact signature
 		&recid,
