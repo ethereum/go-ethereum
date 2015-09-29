@@ -277,7 +277,7 @@ func newInitiatorHandshake(remoteID discover.NodeID) (*encHandshake, error) {
 		return nil, err
 	}
 	// generate random keypair to use for signing
-	randpriv, err := ecies.GenerateKey(rand.Reader, crypto.S256(), nil)
+	randpriv, err := ecies.GenerateKey(rand.Reader, secp256k1.S256(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +376,7 @@ func decodeAuthMsg(prv *ecdsa.PrivateKey, token []byte, auth []byte) (*encHandsh
 	var err error
 	h := new(encHandshake)
 	// generate random keypair for session
-	h.randomPrivKey, err = ecies.GenerateKey(rand.Reader, crypto.S256(), nil)
+	h.randomPrivKey, err = ecies.GenerateKey(rand.Reader, secp256k1.S256(), nil)
 	if err != nil {
 		return nil, err
 	}
