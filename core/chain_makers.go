@@ -99,7 +99,7 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	b.header.GasUsed.Add(b.header.GasUsed, gas)
 	receipt := types.NewReceipt(root.Bytes(), b.header.GasUsed)
 	logs := b.statedb.GetLogs(tx.Hash())
-	receipt.SetLogs(logs)
+	receipt.Logs = logs
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
