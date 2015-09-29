@@ -150,11 +150,14 @@ func GetBlockReceipts(db ethdb.Database, hash common.Hash) types.Receipts {
 	if len(data) == 0 {
 		return nil
 	}
-
-	var receipts types.Receipts
-	err := rlp.DecodeBytes(data, &receipts)
-	if err != nil {
-		glog.V(logger.Core).Infoln("GetReceiptse err", err)
+	rs := []*types.ReceiptForStorage{}
+	if err := rlp.DecodeBytes(data, &rs); err != nil {
+		glog.V(logger.Error).Infof("invalid receipt array RLP for hash %x: %v", hash, err)
+		return nil
+	}
+	receipts := make(types.Receipts, len(rs))
+	for i, receipt := range rs {
+		receipts[i] = (*types.Receipt)(receipt)
 	}
 	return receipts
 }
