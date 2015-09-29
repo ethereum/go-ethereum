@@ -17,7 +17,6 @@
 package types
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"math/big"
@@ -27,89 +26,116 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// Receipt represents the results of a transaction.
 type Receipt struct {
+	// Consensus fields
 	PostState         []byte
 	CumulativeGasUsed *big.Int
 	Bloom             Bloom
-	TxHash            common.Hash
-	ContractAddress   common.Address
-	logs              vm.Logs
-	GasUsed           *big.Int
+	Logs              vm.Logs
+
+	// Implementation fields
+	TxHash          common.Hash
+	ContractAddress common.Address
+	GasUsed         *big.Int
 }
 
+// NewReceipt creates a barebone transaction receipt, copying the init fields.
 func NewReceipt(root []byte, cumalativeGasUsed *big.Int) *Receipt {
 	return &Receipt{PostState: common.CopyBytes(root), CumulativeGasUsed: new(big.Int).Set(cumalativeGasUsed)}
 }
 
-func (self *Receipt) SetLogs(logs vm.Logs) {
-	self.logs = logs
+// EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a receipt
+// into an RLP stream.
+func (r *Receipt) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, []interface{}{r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs})
 }
 
-func (self *Receipt) Logs() vm.Logs {
-	return self.logs
+// DecodeRLP implements rlp.Decoder, and loads the consensus fields of a receipt
+// from an RLP stream.
+func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
+	var receipt struct {
+		PostState         []byte
+		CumulativeGasUsed *big.Int
+		Bloom             Bloom
+		Logs              vm.Logs
+	}
+	if err := s.Decode(&receipt); err != nil {
+		return err
+	}
+	r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs = receipt.PostState, receipt.CumulativeGasUsed, receipt.Bloom, receipt.Logs
+	return nil
 }
 
-func (self *Receipt) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, self.logs})
+// RlpEncode implements common.RlpEncode required for SHA derivation.
+func (r *Receipt) RlpEncode() []byte {
+	bytes, err := rlp.EncodeToBytes(r)
+	if err != nil {
+		panic(err)
+	}
+	return bytes
 }
 
-func (self *Receipt) DecodeRLP(s *rlp.Stream) error {
-	var r struct {
+// String implements the Stringer interface.
+func (r *Receipt) String() string {
+	return fmt.Sprintf("receipt{med=%x cgas=%v bloom=%x logs=%v}", r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs)
+}
+
+// ReceiptForStorage is a wrapper around a Receipt that flattens and parses the
+// entire content of a receipt, opposed to only the consensus fields originally.
+type ReceiptForStorage Receipt
+
+// EncodeRLP implements rlp.Encoder, and flattens all content fields of a receipt
+// into an RLP stream.
+func (r *ReceiptForStorage) EncodeRLP(w io.Writer) error {
+	logs := make([]*vm.LogForStorage, len(r.Logs))
+	for i, log := range r.Logs {
+		logs[i] = (*vm.LogForStorage)(log)
+	}
+	return rlp.Encode(w, []interface{}{r.PostState, r.CumulativeGasUsed, r.Bloom, r.TxHash, r.ContractAddress, logs, r.GasUsed})
+}
+
+// DecodeRLP implements rlp.Decoder, and loads the consensus fields of a receipt
+// from an RLP stream.
+func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
+	var receipt struct {
 		PostState         []byte
 		CumulativeGasUsed *big.Int
 		Bloom             Bloom
 		TxHash            common.Hash
 		ContractAddress   common.Address
-		Logs              vm.Logs
+		Logs              []*vm.LogForStorage
 		GasUsed           *big.Int
 	}
-	if err := s.Decode(&r); err != nil {
+	if err := s.Decode(&receipt); err != nil {
 		return err
 	}
-	self.PostState, self.CumulativeGasUsed, self.Bloom, self.TxHash, self.ContractAddress, self.logs, self.GasUsed = r.PostState, r.CumulativeGasUsed, r.Bloom, r.TxHash, r.ContractAddress, r.Logs, r.GasUsed
+	// Assign the consensus fields
+	r.PostState, r.CumulativeGasUsed, r.Bloom = receipt.PostState, receipt.CumulativeGasUsed, receipt.Bloom
+	r.Logs = make(vm.Logs, len(receipt.Logs))
+	for i, log := range receipt.Logs {
+		r.Logs[i] = (*vm.Log)(log)
+	}
+	// Assign the implementation fields
+	r.TxHash, r.ContractAddress, r.GasUsed = receipt.TxHash, receipt.ContractAddress, receipt.GasUsed
 
 	return nil
 }
 
-type ReceiptForStorage Receipt
-
-func (self *ReceiptForStorage) EncodeRLP(w io.Writer) error {
-	storageLogs := make([]*vm.LogForStorage, len(self.logs))
-	for i, log := range self.logs {
-		storageLogs[i] = (*vm.LogForStorage)(log)
-	}
-	return rlp.Encode(w, []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, self.TxHash, self.ContractAddress, storageLogs, self.GasUsed})
-}
-
-func (self *Receipt) RlpEncode() []byte {
-	bytes, err := rlp.EncodeToBytes(self)
-	if err != nil {
-		fmt.Println("TMP -- RECEIPT ENCODE ERROR", err)
-	}
-	return bytes
-}
-
-func (self *Receipt) Cmp(other *Receipt) bool {
-	if bytes.Compare(self.PostState, other.PostState) != 0 {
-		return false
-	}
-
-	return true
-}
-
-func (self *Receipt) String() string {
-	return fmt.Sprintf("receipt{med=%x cgas=%v bloom=%x logs=%v}", self.PostState, self.CumulativeGasUsed, self.Bloom, self.logs)
-}
-
+// Receipts is a wrapper around a Receipt array to implement types.DerivableList.
 type Receipts []*Receipt
 
-func (self Receipts) RlpEncode() []byte {
-	bytes, err := rlp.EncodeToBytes(self)
+// RlpEncode implements common.RlpEncode required for SHA derivation.
+func (r Receipts) RlpEncode() []byte {
+	bytes, err := rlp.EncodeToBytes(r)
 	if err != nil {
-		fmt.Println("TMP -- RECEIPTS ENCODE ERROR", err)
+		panic(err)
 	}
 	return bytes
 }
 
-func (self Receipts) Len() int            { return len(self) }
-func (self Receipts) GetRlp(i int) []byte { return common.Rlp(self[i]) }
+// Len returns the number of receipts in this list.
+func (r Receipts) Len() int { return len(r) }
+
+// GetRlp returns the RLP encoding of one receipt from the list.
+func (r Receipts) GetRlp(i int) []byte { return common.Rlp(r[i]) }
