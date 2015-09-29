@@ -601,7 +601,7 @@ func (self *BlockChain) writeHeader(header *types.Header) error {
 }
 
 // InsertHeaderChain will attempt to insert the given header chain in to the
-// local chain, possibly creating a dork. If an error is returned,  it will
+// local chain, possibly creating a fork. If an error is returned,  it will
 // return the index number of the failing header as well an error describing
 // what went wrong.
 //
@@ -686,37 +686,31 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status writeStatus, err 
 	}
 	td := new(big.Int).Add(block.Difficulty(), ptd)
 
-	self.mu.RLock()
-	cblock := self.currentBlock
-	self.mu.RUnlock()
+	// Make sure no inconsistent state is leaked during insertion
+	self.mu.Lock()
+	defer self.mu.Unlock()
 
-	// Compare the TD of the last known block in the canonical chain to make sure it's greater.
-	// At this point it's possible that a different chain (fork) becomes the new canonical chain.
+	// If the total difficulty is higher than our known, add it to the canonical chain
 	if td.Cmp(self.GetTd(self.currentBlock.Hash())) > 0 {
-		// chain fork
-		if block.ParentHash() != cblock.Hash() {
-			// during split we merge two different chains and create the new canonical chain
-			err := self.reorg(cblock, block)
-			if err != nil {
+		// Reorganize the chain if the parent is not the head block
+		if block.ParentHash() != self.currentBlock.Hash() {
+			if err := self.reorg(self.currentBlock, block); err != nil {
 				return NonStatTy, err
 			}
 		}
-		status = CanonStatTy
-
-		self.mu.Lock()
+		// Insert the block as the new head of the chain
 		self.insert(block)
-		self.mu.Unlock()
+		status = CanonStatTy
 	} else {
 		status = SideStatTy
 	}
-
+	// Irrelevant of the canonical status, write the block itself to the database
 	if err := WriteTd(self.chainDb, block.Hash(), td); err != nil {
 		glog.Fatalf("failed to write block total difficulty: %v", err)
 	}
 	if err := WriteBlock(self.chainDb, block); err != nil {
 		glog.Fatalf("filed to write block contents: %v", err)
 	}
-	// Delete from future blocks
 	self.futureBlocks.Remove(block.Hash())
 
 	return
@@ -860,9 +854,6 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // to be part of the new canonical chain and accumulates potential missing transactions and post an
 // event about them
 func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
 	var (
 		newChain    types.Blocks
 		commonBlock *types.Block
