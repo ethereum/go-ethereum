@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 )
 
-const TestCount = 10000
+const TestCount = 1000
 
 func TestPrivkeyGenerate(t *testing.T) {
 	_, seckey := GenerateKeyPair()

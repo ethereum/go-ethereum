@@ -41,6 +41,8 @@ import (
 	"fmt"
 	"hash"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
 var (
@@ -81,6 +83,7 @@ func doScheme(base, v []int) asn1.ObjectIdentifier {
 type secgNamedCurve asn1.ObjectIdentifier
 
 var (
+	secgNamedCurveS256 = secgNamedCurve{1, 3, 132, 0, 10}
 	secgNamedCurveP256 = secgNamedCurve{1, 2, 840, 10045, 3, 1, 7}
 	secgNamedCurveP384 = secgNamedCurve{1, 3, 132, 0, 34}
 	secgNamedCurveP521 = secgNamedCurve{1, 3, 132, 0, 35}
@@ -116,6 +119,8 @@ func (curve secgNamedCurve) Equal(curve2 secgNamedCurve) bool {
 
 func namedCurveFromOID(curve secgNamedCurve) elliptic.Curve {
 	switch {
+	case curve.Equal(secgNamedCurveS256):
+		return secp256k1.S256()
 	case curve.Equal(secgNamedCurveP256):
 		return elliptic.P256()
 	case curve.Equal(secgNamedCurveP384):
@@ -134,6 +139,8 @@ func oidFromNamedCurve(curve elliptic.Curve) (secgNamedCurve, bool) {
 		return secgNamedCurveP384, true
 	case elliptic.P521():
 		return secgNamedCurveP521, true
+	case secp256k1.S256():
+		return secgNamedCurveS256, true
 	}
 
 	return nil, false

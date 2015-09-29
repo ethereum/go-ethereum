@@ -43,14 +43,6 @@ import (
 	"golang.org/x/crypto/ripemd160"
 )
 
-var secp256k1n *big.Int
-
-func init() {
-	// specify the params for the s256 curve
-	ecies.AddParamsForCurve(S256(), ecies.ECIES_AES128_SHA256)
-	secp256k1n = common.String2Big("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
-}
-
 func Sha3(data ...[]byte) []byte {
 	d := sha3.NewKeccak256()
 	for _, b := range data {
@@ -99,9 +91,9 @@ func ToECDSA(prv []byte) *ecdsa.PrivateKey {
 	}
 
 	priv := new(ecdsa.PrivateKey)
-	priv.PublicKey.Curve = S256()
+	priv.PublicKey.Curve = secp256k1.S256()
 	priv.D = common.BigD(prv)
-	priv.PublicKey.X, priv.PublicKey.Y = S256().ScalarBaseMult(prv)
+	priv.PublicKey.X, priv.PublicKey.Y = secp256k1.S256().ScalarBaseMult(prv)
 	return priv
 }
 
@@ -116,15 +108,15 @@ func ToECDSAPub(pub []byte) *ecdsa.PublicKey {
 	if len(pub) == 0 {
 		return nil
 	}
-	x, y := elliptic.Unmarshal(S256(), pub)
-	return &ecdsa.PublicKey{S256(), x, y}
+	x, y := elliptic.Unmarshal(secp256k1.S256(), pub)
+	return &ecdsa.PublicKey{secp256k1.S256(), x, y}
 }
 
 func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
 	if pub == nil || pub.X == nil || pub.Y == nil {
 		return nil
 	}
-	return elliptic.Marshal(S256(), pub.X, pub.Y)
+	return elliptic.Marshal(secp256k1.S256(), pub.X, pub.Y)
 }
 
 // HexToECDSA parses a secp256k1 private key.
@@ -168,7 +160,7 @@ func SaveECDSA(file string, key *ecdsa.PrivateKey) error {
 }
 
 func GenerateKey() (*ecdsa.PrivateKey, error) {
-	return ecdsa.GenerateKey(S256(), rand.Reader)
+	return ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
 }
 
 func ValidateSignatureValues(v byte, r, s *big.Int) bool {
@@ -176,7 +168,7 @@ func ValidateSignatureValues(v byte, r, s *big.Int) bool {
 		return false
 	}
 	vint := uint32(v)
-	if r.Cmp(secp256k1n) < 0 && s.Cmp(secp256k1n) < 0 && (vint == 27 || vint == 28) {
+	if r.Cmp(secp256k1.N) < 0 && s.Cmp(secp256k1.N) < 0 && (vint == 27 || vint == 28) {
 		return true
 	} else {
 		return false
@@ -189,8 +181,8 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 		return nil, err
 	}
 
-	x, y := elliptic.Unmarshal(S256(), s)
-	return &ecdsa.PublicKey{S256(), x, y}, nil
+	x, y := elliptic.Unmarshal(secp256k1.S256(), s)
+	return &ecdsa.PublicKey{secp256k1.S256(), x, y}, nil
 }
 
 func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
