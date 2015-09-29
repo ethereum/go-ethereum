@@ -100,14 +100,24 @@ func DefaultAssetPath() string {
 }
 
 func DefaultDataDir() string {
-	usr, _ := user.Current()
-	if runtime.GOOS == "darwin" {
-		return filepath.Join(usr.HomeDir, "Library", "Ethereum")
-	} else if runtime.GOOS == "windows" {
-		return filepath.Join(usr.HomeDir, "AppData", "Roaming", "Ethereum")
+	// Try to place the data folder in the user's home dir
+	var home string
+	if usr, err := user.Current(); err == nil {
+		home = usr.HomeDir
 	} else {
-		return filepath.Join(usr.HomeDir, ".ethereum")
+		home = os.Getenv("HOME")
 	}
+	if home != "" {
+		if runtime.GOOS == "darwin" {
+			return filepath.Join(home, "Library", "Ethereum")
+		} else if runtime.GOOS == "windows" {
+			return filepath.Join(home, "AppData", "Roaming", "Ethereum")
+		} else {
+			return filepath.Join(home, ".ethereum")
+		}
+	}
+	// As we cannot guess a stable location, return empty and handle later
+	return ""
 }
 
 func DefaultIpcPath() string {

@@ -416,7 +416,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 
 	cfg := &eth.Config{
 		Name:                    common.MakeName(clientID, version),
-		DataDir:                 ctx.GlobalString(DataDirFlag.Name),
+		DataDir:                 MustDataDir(ctx),
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
 		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
@@ -509,7 +509,7 @@ func SetupEth(ctx *cli.Context) {
 
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb ethdb.Database) {
-	datadir := ctx.GlobalString(DataDirFlag.Name)
+	datadir := MustDataDir(ctx)
 	cache := ctx.GlobalInt(CacheFlag.Name)
 
 	var err error
@@ -539,9 +539,19 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb ethdb.Databa
 
 // MakeChain creates an account manager from set command line flags.
 func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
-	dataDir := ctx.GlobalString(DataDirFlag.Name)
+	dataDir := MustDataDir(ctx)
 	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keystore"))
 	return accounts.NewManager(ks)
+}
+
+// MustDataDir retrieves the currently requested data directory, terminating if
+// none (or the empty string) is specified.
+func MustDataDir(ctx *cli.Context) string {
+	if path := ctx.GlobalString(DataDirFlag.Name); path != "" {
+		return path
+	}
+	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
+	return ""
 }
 
 func IpcSocketPath(ctx *cli.Context) (ipcpath string) {

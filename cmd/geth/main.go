@@ -390,7 +390,7 @@ func makeDefaultExtra() []byte {
 }
 
 func run(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 	if ctx.GlobalBool(utils.OlympicFlag.Name) {
 		utils.InitOlympic()
 	}
@@ -409,7 +409,7 @@ func run(ctx *cli.Context) {
 }
 
 func attach(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	var client comms.EthereumClient
 	var err error
@@ -441,7 +441,7 @@ func attach(ctx *cli.Context) {
 }
 
 func console(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	cfg.ExtraData = makeExtra(ctx)
@@ -475,7 +475,7 @@ func console(ctx *cli.Context) {
 }
 
 func execJSFiles(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
@@ -502,7 +502,7 @@ func execJSFiles(ctx *cli.Context) {
 }
 
 func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (addrHex, auth string) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	var err error
 	addrHex, err = utils.ParamToAddress(addr, am)
@@ -527,7 +527,7 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (
 }
 
 func blockRecovery(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	arg := ctx.Args().First()
 	if len(ctx.Args()) < 1 && len(arg) > 0 {
@@ -593,7 +593,7 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 }
 
 func accountList(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	am := utils.MakeAccountManager(ctx)
 	accts, err := am.Accounts()
@@ -643,7 +643,7 @@ func getPassPhrase(ctx *cli.Context, desc string, confirmation bool, i int) (pas
 }
 
 func accountCreate(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	am := utils.MakeAccountManager(ctx)
 	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0)
@@ -655,7 +655,7 @@ func accountCreate(ctx *cli.Context) {
 }
 
 func accountUpdate(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	am := utils.MakeAccountManager(ctx)
 	arg := ctx.Args().First()
@@ -672,7 +672,7 @@ func accountUpdate(ctx *cli.Context) {
 }
 
 func importWallet(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
@@ -694,7 +694,7 @@ func importWallet(ctx *cli.Context) {
 }
 
 func accountImport(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
@@ -710,7 +710,7 @@ func accountImport(ctx *cli.Context) {
 }
 
 func makedag(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	args := ctx.Args()
 	wrongArgs := func() {
