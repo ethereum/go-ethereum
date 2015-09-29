@@ -181,7 +181,7 @@ func IsValueTransferErr(e error) bool {
 type BadHashError common.Hash
 
 func (h BadHashError) Error() string {
-	return fmt.Sprintf("Found known bad hash in chain %x", h)
+	return fmt.Sprintf("Found known bad hash in chain %x", h[:])
 }
 
 func IsBadHashError(err error) bool {
