@@ -138,7 +138,7 @@ func (self *Filter) getLogs(start, end uint64) (logs vm.Logs) {
 				unfiltered vm.Logs
 			)
 			for _, receipt := range receipts {
-				unfiltered = append(unfiltered, receipt.Logs()...)
+				unfiltered = append(unfiltered, receipt.Logs...)
 			}
 			logs = append(logs, self.FilterLogs(unfiltered)...)
 		}

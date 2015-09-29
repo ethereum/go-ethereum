@@ -111,7 +111,7 @@ func (self *BlockProcessor) ApplyTransaction(gp GasPool, statedb *state.StateDB,
 	}
 
 	logs := statedb.GetLogs(tx.Hash())
-	receipt.SetLogs(logs)
+	receipt.Logs = logs
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	glog.V(logger.Debug).Infoln(receipt)
@@ -364,7 +364,7 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs vm.Logs, err error) 
 	receipts := GetBlockReceipts(sm.chainDb, block.Hash())
 	// coalesce logs
 	for _, receipt := range receipts {
-		logs = append(logs, receipt.Logs()...)
+		logs = append(logs, receipt.Logs...)
 	}
 	return logs, nil
 }
