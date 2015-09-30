@@ -52,8 +52,6 @@ const (
 	respTimeout = 500 * time.Millisecond
 	sendTimeout = 500 * time.Millisecond
 	expiration  = 20 * time.Second
-
-	refreshInterval = 1 * time.Hour
 )
 
 // RPC packet types
@@ -312,10 +310,8 @@ func (t *udp) loop() {
 		plist       = list.New()
 		timeout     = time.NewTimer(0)
 		nextTimeout *pending // head of plist when timeout was last reset
-		refresh     = time.NewTicker(refreshInterval)
 	)
 	<-timeout.C // ignore first timeout
-	defer refresh.Stop()
 	defer timeout.Stop()
 
 	resetTimeout := func() {
@@ -344,9 +340,6 @@ func (t *udp) loop() {
 		resetTimeout()
 
 		select {
-		case <-refresh.C:
-			go t.refresh()
-
 		case <-t.closing:
 			for el := plist.Front(); el != nil; el = el.Next() {
 				el.Value.(*pending).errc <- errClosed
