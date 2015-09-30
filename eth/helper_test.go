@@ -38,7 +38,8 @@ func newTestProtocolManager(mode Mode, blocks int, generator func(int, *core.Blo
 		blockproc   = core.NewBlockProcessor(db, pow, chainman, evmux)
 	)
 	chainman.SetProcessor(blockproc)
-	if _, err := chainman.InsertChain(core.GenerateChain(genesis, db, blocks, generator)); err != nil {
+	chain, _ := core.GenerateChain(genesis, db, blocks, generator)
+	if _, err := chainman.InsertChain(chain); err != nil {
 		panic(err)
 	}
 	pm, err := NewProtocolManager(mode, NetworkId, evmux, &testTxPool{added: newtx}, pow, chainman, db)
