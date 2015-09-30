@@ -163,7 +163,12 @@ func TestBlockStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	// Create a test block to move around the database and make sure it's really new
-	block := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block")})
+	block := types.NewBlockWithHeader(&types.Header{
+		Extra:       []byte("test block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+	})
 	if entry := GetBlock(db, block.Hash()); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
 	}
@@ -208,8 +213,12 @@ func TestBlockStorage(t *testing.T) {
 // Tests that partial block contents don't get reassembled into full blocks.
 func TestPartialBlockStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	block := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block")})
-
+	block := types.NewBlockWithHeader(&types.Header{
+		Extra:       []byte("test block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+	})
 	// Store a header and check that it's not recognized as a block
 	if err := WriteHeader(db, block.Header()); err != nil {
 		t.Fatalf("Failed to write header into database: %v", err)
@@ -298,6 +307,7 @@ func TestHeadStorage(t *testing.T) {
 
 	blockHead := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block header")})
 	blockFull := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block full")})
+	blockFast := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block fast")})
 
 	// Check that no head entries are in a pristine database
 	if entry := GetHeadHeaderHash(db); entry != (common.Hash{}) {
@@ -306,6 +316,9 @@ func TestHeadStorage(t *testing.T) {
 	if entry := GetHeadBlockHash(db); entry != (common.Hash{}) {
 		t.Fatalf("Non head block entry returned: %v", entry)
 	}
+	if entry := GetHeadFastBlockHash(db); entry != (common.Hash{}) {
+		t.Fatalf("Non fast head block entry returned: %v", entry)
+	}
 	// Assign separate entries for the head header and block
 	if err := WriteHeadHeaderHash(db, blockHead.Hash()); err != nil {
 		t.Fatalf("Failed to write head header hash: %v", err)
@@ -313,12 +326,18 @@ func TestHeadStorage(t *testing.T) {
 	if err := WriteHeadBlockHash(db, blockFull.Hash()); err != nil {
 		t.Fatalf("Failed to write head block hash: %v", err)
 	}
+	if err := WriteHeadFastBlockHash(db, blockFast.Hash()); err != nil {
+		t.Fatalf("Failed to write fast head block hash: %v", err)
+	}
 	// Check that both heads are present, and different (i.e. two heads maintained)
 	if entry := GetHeadHeaderHash(db); entry != blockHead.Hash() {
 		t.Fatalf("Head header hash mismatch: have %v, want %v", entry, blockHead.Hash())
 	}
 	if entry := GetHeadBlockHash(db); entry != blockFull.Hash() {
 		t.Fatalf("Head block hash mismatch: have %v, want %v", entry, blockFull.Hash())
+	}
+	if entry := GetHeadFastBlockHash(db); entry != blockFast.Hash() {
+		t.Fatalf("Fast head block hash mismatch: have %v, want %v", entry, blockFast.Hash())
 	}
 }
 

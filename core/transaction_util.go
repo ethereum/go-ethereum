@@ -155,7 +155,7 @@ func GetBlockReceipts(db ethdb.Database, hash common.Hash) types.Receipts {
 // PutBlockReceipts stores the block's transactions associated receipts
 // and stores them by block hash in a single slice. This is required for
 // forks and chain reorgs
-func PutBlockReceipts(db ethdb.Database, block *types.Block, receipts types.Receipts) error {
+func PutBlockReceipts(db ethdb.Database, hash common.Hash, receipts types.Receipts) error {
 	rs := make([]*types.ReceiptForStorage, len(receipts))
 	for i, receipt := range receipts {
 		rs[i] = (*types.ReceiptForStorage)(receipt)
@@ -164,12 +164,9 @@ func PutBlockReceipts(db ethdb.Database, block *types.Block, receipts types.Rece
 	if err != nil {
 		return err
 	}
-
-	hash := block.Hash()
 	err = db.Put(append(blockReceiptsPre, hash[:]...), bytes)
 	if err != nil {
 		return err
 	}
-
 	return nil
 }

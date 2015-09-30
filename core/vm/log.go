@@ -25,19 +25,21 @@ import (
 )
 
 type Log struct {
+	// Consensus fields
 	Address common.Address
 	Topics  []common.Hash
 	Data    []byte
-	Number  uint64
 
-	TxHash    common.Hash
-	TxIndex   uint
-	BlockHash common.Hash
-	Index     uint
+	// Derived fields (don't reorder!)
+	BlockNumber uint64
+	TxHash      common.Hash
+	TxIndex     uint
+	BlockHash   common.Hash
+	Index       uint
 }
 
 func NewLog(address common.Address, topics []common.Hash, data []byte, number uint64) *Log {
-	return &Log{Address: address, Topics: topics, Data: data, Number: number}
+	return &Log{Address: address, Topics: topics, Data: data, BlockNumber: number}
 }
 
 func (l *Log) EncodeRLP(w io.Writer) error {

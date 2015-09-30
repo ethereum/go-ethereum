@@ -838,7 +838,7 @@ func NewLogRes(log *vm.Log) LogRes {
 	}
 	l.Address = newHexData(log.Address)
 	l.Data = newHexData(log.Data)
-	l.BlockNumber = newHexNum(log.Number)
+	l.BlockNumber = newHexNum(log.BlockNumber)
 	l.LogIndex = newHexNum(log.Index)
 	l.TransactionHash = newHexData(log.TxHash)
 	l.TransactionIndex = newHexNum(log.TxIndex)

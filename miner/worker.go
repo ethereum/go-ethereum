@@ -313,7 +313,7 @@ func (self *worker) wait() {
 						self.mux.Post(core.ChainHeadEvent{block})
 						self.mux.Post(logs)
 					}
-					if err := core.PutBlockReceipts(self.chainDb, block, receipts); err != nil {
+					if err := core.PutBlockReceipts(self.chainDb, block.Hash(), receipts); err != nil {
 						glog.V(logger.Warn).Infoln("error writing block receipts:", err)
 					}
 				}(block, work.state.Logs(), work.receipts)

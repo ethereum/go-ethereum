@@ -164,13 +164,13 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // Blocks created by GenerateChain do not contain valid proof of work
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
-func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) []*types.Block {
+func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
 	statedb, err := state.New(parent.Root(), db)
 	if err != nil {
 		panic(err)
 	}
-	blocks := make(types.Blocks, n)
-	genblock := func(i int, h *types.Header) *types.Block {
+	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
+	genblock := func(i int, h *types.Header) (*types.Block, types.Receipts) {
 		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb}
 		if gen != nil {
 			gen(i, b)
@@ -181,15 +181,16 @@ func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, 
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
 		h.Root = root
-		return types.NewBlock(h, b.txs, b.uncles, b.receipts)
+		return types.NewBlock(h, b.txs, b.uncles, b.receipts), b.receipts
 	}
 	for i := 0; i < n; i++ {
 		header := makeHeader(parent, statedb)
-		block := genblock(i, header)
+		block, receipt := genblock(i, header)
 		blocks[i] = block
+		receipts[i] = receipt
 		parent = block
 	}
-	return blocks
+	return blocks, receipts
 }
 
 func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
@@ -254,7 +255,8 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 
 // makeBlockChain creates a deterministic chain of blocks rooted at parent.
 func makeBlockChain(parent *types.Block, n int, db ethdb.Database, seed int) []*types.Block {
-	return GenerateChain(parent, db, n, func(i int, b *BlockGen) {
+	blocks, _ := GenerateChain(parent, db, n, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
+	return blocks
 }
