@@ -39,7 +39,6 @@ var (
 	errPacketTooSmall   = errors.New("too small")
 	errBadHash          = errors.New("bad hash")
 	errExpired          = errors.New("expired")
-	errBadVersion       = errors.New("version mismatch")
 	errUnsolicitedReply = errors.New("unsolicited reply")
 	errUnknownNode      = errors.New("unknown node")
 	errTimeout          = errors.New("RPC timeout")
@@ -521,9 +520,6 @@ func decodePacket(buf []byte) (packet, NodeID, []byte, error) {
 func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
 	if expired(req.Expiration) {
 		return errExpired
-	}
-	if req.Version != Version {
-		return errBadVersion
 	}
 	t.send(from, pongPacket, pong{
 		To:         makeEndpoint(from, req.From.TCP),
