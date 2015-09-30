@@ -71,14 +71,14 @@ func TestPutReceipt(t *testing.T) {
 
 	receipt := new(types.Receipt)
 	receipt.Logs = vm.Logs{&vm.Log{
-		Address:   addr,
-		Topics:    []common.Hash{hash},
-		Data:      []byte("hi"),
-		Number:    42,
-		TxHash:    hash,
-		TxIndex:   0,
-		BlockHash: hash,
-		Index:     0,
+		Address:     addr,
+		Topics:      []common.Hash{hash},
+		Data:        []byte("hi"),
+		BlockNumber: 42,
+		TxHash:      hash,
+		TxIndex:     0,
+		BlockHash:   hash,
+		Index:       0,
 	}}
 
 	PutReceipts(db, types.Receipts{receipt})

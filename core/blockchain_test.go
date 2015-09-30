@@ -430,9 +430,12 @@ func makeBlockChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.B
 	var chain []*types.Block
 	for i, difficulty := range d {
 		header := &types.Header{
-			Coinbase:   common.Address{seed},
-			Number:     big.NewInt(int64(i + 1)),
-			Difficulty: big.NewInt(int64(difficulty)),
+			Coinbase:    common.Address{seed},
+			Number:      big.NewInt(int64(i + 1)),
+			Difficulty:  big.NewInt(int64(difficulty)),
+			UncleHash:   types.EmptyUncleHash,
+			TxHash:      types.EmptyRootHash,
+			ReceiptHash: types.EmptyRootHash,
 		}
 		if i == 0 {
 			header.ParentHash = genesis.Hash()
@@ -668,6 +671,155 @@ func testInsertNonceError(t *testing.T, full bool) {
 	}
 }
 
+// Tests that fast importing a block chain produces the same chain data as the
+// classical full block processing.
+func TestFastVsFullChains(t *testing.T) {
+	// Configure and generate a sample block chain
+	var (
+		gendb, _ = ethdb.NewMemDatabase()
+		key, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address  = crypto.PubkeyToAddress(key.PublicKey)
+		funds    = big.NewInt(1000000000)
+		genesis  = GenesisBlockForTesting(gendb, address, funds)
+	)
+	blocks, receipts := GenerateChain(genesis, gendb, 1024, func(i int, block *BlockGen) {
+		block.SetCoinbase(common.Address{0x00})
+
+		// If the block number is multiple of 3, send a few bonus transactions to the miner
+		if i%3 == 2 {
+			for j := 0; j < i%4+1; j++ {
+				tx, err := types.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key)
+				if err != nil {
+					panic(err)
+				}
+				block.AddTx(tx)
+			}
+		}
+		// If the block number is a multiple of 5, add a few bonus uncles to the block
+		if i%5 == 5 {
+			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
+		}
+	})
+	// Import the chain as an archive node for the comparison baseline
+	archiveDb, _ := ethdb.NewMemDatabase()
+	WriteGenesisBlockForTesting(archiveDb, GenesisAccount{address, funds})
+
+	archive, _ := NewBlockChain(archiveDb, FakePow{}, new(event.TypeMux))
+	archive.SetProcessor(NewBlockProcessor(archiveDb, FakePow{}, archive, new(event.TypeMux)))
+
+	if n, err := archive.InsertChain(blocks); err != nil {
+		t.Fatalf("failed to process block %d: %v", n, err)
+	}
+	// Fast import the chain as a non-archive node to test
+	fastDb, _ := ethdb.NewMemDatabase()
+	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
+	fast, _ := NewBlockChain(fastDb, FakePow{}, new(event.TypeMux))
+
+	headers := make([]*types.Header, len(blocks))
+	for i, block := range blocks {
+		headers[i] = block.Header()
+	}
+	if n, err := fast.InsertHeaderChain(headers, true); err != nil {
+		t.Fatalf("failed to insert header %d: %v", n, err)
+	}
+	if n, err := fast.InsertReceiptChain(blocks, receipts); err != nil {
+		t.Fatalf("failed to insert receipt %d: %v", n, err)
+	}
+	// Iterate over all chain data components, and cross reference
+	for i := 0; i < len(blocks); i++ {
+		num, hash := blocks[i].NumberU64(), blocks[i].Hash()
+
+		if ftd, atd := fast.GetTd(hash), archive.GetTd(hash); ftd.Cmp(atd) != 0 {
+			t.Errorf("block #%d [%x]: td mismatch: have %v, want %v", num, hash, ftd, atd)
+		}
+		if fheader, aheader := fast.GetHeader(hash), archive.GetHeader(hash); fheader.Hash() != aheader.Hash() {
+			t.Errorf("block #%d [%x]: header mismatch: have %v, want %v", num, hash, fheader, aheader)
+		}
+		if fblock, ablock := fast.GetBlock(hash), archive.GetBlock(hash); fblock.Hash() != ablock.Hash() {
+			t.Errorf("block #%d [%x]: block mismatch: have %v, want %v", num, hash, fblock, ablock)
+		} else if types.DeriveSha(fblock.Transactions()) != types.DeriveSha(ablock.Transactions()) {
+			t.Errorf("block #%d [%x]: transactions mismatch: have %v, want %v", num, hash, fblock.Transactions(), ablock.Transactions())
+		} else if types.CalcUncleHash(fblock.Uncles()) != types.CalcUncleHash(ablock.Uncles()) {
+			t.Errorf("block #%d [%x]: uncles mismatch: have %v, want %v", num, hash, fblock.Uncles(), ablock.Uncles())
+		}
+		if freceipts, areceipts := GetBlockReceipts(fastDb, hash), GetBlockReceipts(archiveDb, hash); types.DeriveSha(freceipts) != types.DeriveSha(areceipts) {
+			t.Errorf("block #%d [%x]: receipts mismatch: have %v, want %v", num, hash, freceipts, areceipts)
+		}
+	}
+	// Check that the canonical chains are the same between the databases
+	for i := 0; i < len(blocks)+1; i++ {
+		if fhash, ahash := GetCanonicalHash(fastDb, uint64(i)), GetCanonicalHash(archiveDb, uint64(i)); fhash != ahash {
+			t.Errorf("block #%d: canonical hash mismatch: have %v, want %v", i, fhash, ahash)
+		}
+	}
+}
+
+// Tests that various import methods move the chain head pointers to the correct
+// positions.
+func TestLightVsFastVsFullChainHeads(t *testing.T) {
+	// Configure and generate a sample block chain
+	var (
+		gendb, _ = ethdb.NewMemDatabase()
+		key, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address  = crypto.PubkeyToAddress(key.PublicKey)
+		funds    = big.NewInt(1000000000)
+		genesis  = GenesisBlockForTesting(gendb, address, funds)
+	)
+	height := uint64(1024)
+	blocks, receipts := GenerateChain(genesis, gendb, int(height), nil)
+
+	// Create a small assertion method to check the three heads
+	assert := func(t *testing.T, kind string, chain *BlockChain, header uint64, fast uint64, block uint64) {
+		if num := chain.CurrentBlock().NumberU64(); num != block {
+			t.Errorf("%s head block mismatch: have #%v, want #%v", kind, num, block)
+		}
+		if num := chain.CurrentFastBlock().NumberU64(); num != fast {
+			t.Errorf("%s head fast-block mismatch: have #%v, want #%v", kind, num, fast)
+		}
+		if num := chain.CurrentHeader().Number.Uint64(); num != header {
+			t.Errorf("%s head header mismatch: have #%v, want #%v", kind, num, header)
+		}
+	}
+	// Import the chain as an archive node and ensure all pointers are updated
+	archiveDb, _ := ethdb.NewMemDatabase()
+	WriteGenesisBlockForTesting(archiveDb, GenesisAccount{address, funds})
+
+	archive, _ := NewBlockChain(archiveDb, FakePow{}, new(event.TypeMux))
+	archive.SetProcessor(NewBlockProcessor(archiveDb, FakePow{}, archive, new(event.TypeMux)))
+
+	if n, err := archive.InsertChain(blocks); err != nil {
+		t.Fatalf("failed to process block %d: %v", n, err)
+	}
+	assert(t, "archive", archive, height, height, height)
+
+	// Import the chain as a non-archive node and ensure all pointers are updated
+	fastDb, _ := ethdb.NewMemDatabase()
+	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
+	fast, _ := NewBlockChain(fastDb, FakePow{}, new(event.TypeMux))
+
+	headers := make([]*types.Header, len(blocks))
+	for i, block := range blocks {
+		headers[i] = block.Header()
+	}
+	if n, err := fast.InsertHeaderChain(headers, true); err != nil {
+		t.Fatalf("failed to insert header %d: %v", n, err)
+	}
+	if n, err := fast.InsertReceiptChain(blocks, receipts); err != nil {
+		t.Fatalf("failed to insert receipt %d: %v", n, err)
+	}
+	assert(t, "fast", fast, height, height, 0)
+
+	// Import the chain as a light node and ensure all pointers are updated
+	lightDb, _ := ethdb.NewMemDatabase()
+	WriteGenesisBlockForTesting(lightDb, GenesisAccount{address, funds})
+	light, _ := NewBlockChain(lightDb, FakePow{}, new(event.TypeMux))
+
+	if n, err := light.InsertHeaderChain(headers, true); err != nil {
+		t.Fatalf("failed to insert header %d: %v", n, err)
+	}
+	assert(t, "light", light, height, 0, 0)
+}
+
 // Tests that chain reorganizations handle transaction removals and reinsertions.
 func TestChainTxReorgs(t *testing.T) {
 	params.MinGasLimit = big.NewInt(125000)      // Minimum the gas limit may ever be.
@@ -704,7 +856,7 @@ func TestChainTxReorgs(t *testing.T) {
 	//  - futureAdd: transaction added after the reorg has already finished
 	var pastAdd, freshAdd, futureAdd *types.Transaction
 
-	chain := GenerateChain(genesis, db, 3, func(i int, gen *BlockGen) {
+	chain, _ := GenerateChain(genesis, db, 3, func(i int, gen *BlockGen) {
 		switch i {
 		case 0:
 			pastDrop, _ = types.NewTransaction(gen.TxNonce(addr2), addr2, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key2)
@@ -730,7 +882,7 @@ func TestChainTxReorgs(t *testing.T) {
 	}
 
 	// overwrite the old chain
-	chain = GenerateChain(genesis, db, 5, func(i int, gen *BlockGen) {
+	chain, _ = GenerateChain(genesis, db, 5, func(i int, gen *BlockGen) {
 		switch i {
 		case 0:
 			pastAdd, _ = types.NewTransaction(gen.TxNonce(addr3), addr3, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key3)

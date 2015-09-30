@@ -128,7 +128,6 @@ type Block struct {
 	header       *Header
 	uncles       []*Header
 	transactions Transactions
-	receipts     Receipts
 
 	// caches
 	hash atomic.Value
@@ -200,8 +199,6 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 	} else {
 		b.header.ReceiptHash = DeriveSha(Receipts(receipts))
 		b.header.Bloom = CreateBloom(receipts)
-		b.receipts = make([]*Receipt, len(receipts))
-		copy(b.receipts, receipts)
 	}
 
 	if len(uncles) == 0 {
@@ -299,7 +296,6 @@ func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
 // TODO: copies
 func (b *Block) Uncles() []*Header          { return b.uncles }
 func (b *Block) Transactions() Transactions { return b.transactions }
-func (b *Block) Receipts() Receipts         { return b.receipts }
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range b.transactions {
@@ -364,7 +360,6 @@ func (b *Block) WithMiningResult(nonce uint64, mixDigest common.Hash) *Block {
 	return &Block{
 		header:       &cpy,
 		transactions: b.transactions,
-		receipts:     b.receipts,
 		uncles:       b.uncles,
 	}
 }

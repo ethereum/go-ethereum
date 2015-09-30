@@ -55,7 +55,7 @@ var minimumProtocolVersion = map[Mode]uint{
 var ProtocolVersions = []uint{eth64, eth63, eth62, eth61}
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{15, 12, 8, 9}
+var ProtocolLengths = []uint64{19, 17, 8, 9}
 
 const (
 	NetworkId          = 1

@@ -129,8 +129,9 @@ func NewProtocolManager(mode Mode, networkId int, mux *event.TypeMux, txpool txP
 	case LightMode:
 		syncMode = downloader.LightSync
 	}
-	manager.downloader = downloader.New(syncMode, manager.eventMux, blockchain.HasHeader, blockchain.HasBlock, blockchain.GetHeader, blockchain.GetBlock,
-		blockchain.CurrentHeader, blockchain.CurrentBlock, blockchain.GetTd, blockchain.InsertHeaderChain, blockchain.InsertChain, nil, manager.removePeer)
+	manager.downloader = downloader.New(syncMode, manager.eventMux, blockchain.HasHeader, blockchain.HasBlock, blockchain.GetHeader,
+		blockchain.GetBlock, blockchain.CurrentHeader, blockchain.CurrentBlock, blockchain.CurrentFastBlock, blockchain.GetTd,
+		blockchain.InsertHeaderChain, blockchain.InsertChain, blockchain.InsertReceiptChain, manager.removePeer)
 
 	validator := func(block *types.Block, parent *types.Block) error {
 		return core.ValidateHeader(pow, block.Header(), parent.Header(), true, false)
@@ -438,28 +439,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 		}
 
-	case p.version >= eth62 && msg.Code == BlockBodiesMsg:
-		// A batch of block bodies arrived to one of our previous requests
-		var request blockBodiesData
-		if err := msg.Decode(&request); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
-		}
-		// Deliver them all to the downloader for queuing
-		trasactions := make([][]*types.Transaction, len(request))
-		uncles := make([][]*types.Header, len(request))
-
-		for i, body := range request {
-			trasactions[i] = body.Transactions
-			uncles[i] = body.Uncles
-		}
-		// Filter out any explicitly requested bodies, deliver the rest to the downloader
-		if trasactions, uncles := pm.fetcher.FilterBodies(trasactions, uncles, time.Now()); len(trasactions) > 0 || len(uncles) > 0 {
-			err := pm.downloader.DeliverBodies(p.id, trasactions, uncles)
-			if err != nil {
-				glog.V(logger.Debug).Infoln(err)
-			}
-		}
-
 	case p.version >= eth62 && msg.Code == GetBlockBodiesMsg:
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
@@ -486,6 +465,28 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 		}
 		return p.SendBlockBodiesRLP(bodies)
+
+	case p.version >= eth62 && msg.Code == BlockBodiesMsg:
+		// A batch of block bodies arrived to one of our previous requests
+		var request blockBodiesData
+		if err := msg.Decode(&request); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		// Deliver them all to the downloader for queuing
+		trasactions := make([][]*types.Transaction, len(request))
+		uncles := make([][]*types.Header, len(request))
+
+		for i, body := range request {
+			trasactions[i] = body.Transactions
+			uncles[i] = body.Uncles
+		}
+		// Filter out any explicitly requested bodies, deliver the rest to the downloader
+		if trasactions, uncles := pm.fetcher.FilterBodies(trasactions, uncles, time.Now()); len(trasactions) > 0 || len(uncles) > 0 {
+			err := pm.downloader.DeliverBodies(p.id, trasactions, uncles)
+			if err != nil {
+				glog.V(logger.Debug).Infoln(err)
+			}
+		}
 
 	case p.version >= eth63 && msg.Code == GetNodeDataMsg:
 		// Decode the retrieval message
@@ -549,6 +550,17 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 		}
 		return p.SendReceiptsRLP(receipts)
+
+	case p.version >= eth63 && msg.Code == ReceiptsMsg:
+		// A batch of receipts arrived to one of our previous requests
+		var receipts [][]*types.Receipt
+		if err := msg.Decode(&receipts); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		// Deliver all to the downloader
+		if err := pm.downloader.DeliverReceipts(p.id, receipts); err != nil {
+			glog.V(logger.Debug).Infof("failed to deliver receipts: %v", err)
+		}
 
 	case msg.Code == NewBlockHashesMsg:
 		// Retrieve and deseralize the remote new block hashes notification
