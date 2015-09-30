@@ -88,10 +88,7 @@ type transport interface {
 
 // bucket contains nodes, ordered by their last activity. the entry
 // that was most recently active is the first element in entries.
-type bucket struct {
-	lastLookup time.Time
-	entries    []*Node
-}
+type bucket struct{ entries []*Node }
 
 func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, nodeDBPath string) *Table {
 	// If no node database was given, use an in-memory one
@@ -218,8 +215,6 @@ func (tab *Table) Lookup(targetID NodeID) []*Node {
 	asked[tab.self.ID] = true
 
 	tab.mutex.Lock()
-	// update last lookup stamp (for refresh logic)
-	tab.buckets[logdist(tab.self.sha, target)].lastLookup = time.Now()
 	// generate initial result set
 	result := tab.closest(target, bucketSize)
 	tab.mutex.Unlock()
