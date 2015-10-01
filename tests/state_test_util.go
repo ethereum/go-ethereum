@@ -201,9 +201,9 @@ func runStateTest(test VmTest) error {
 		}
 	}
 
-	statedb.Sync()
-	if common.HexToHash(test.PostStateRoot) != statedb.Root() {
-		return fmt.Errorf("Post state root error. Expected %s, got %x", test.PostStateRoot, statedb.Root())
+	root, _ := statedb.Commit()
+	if common.HexToHash(test.PostStateRoot) != root {
+		return fmt.Errorf("Post state root error. Expected %s, got %x", test.PostStateRoot, root)
 	}
 
 	// check logs
@@ -247,7 +247,7 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || state.IsGasLimitErr(err) {
 		statedb.Set(snapshot)
 	}
-	statedb.SyncObjects()
+	statedb.Commit()
 
 	return ret, vmenv.state.Logs(), vmenv.Gas, err
 }
