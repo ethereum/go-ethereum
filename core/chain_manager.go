@@ -804,7 +804,9 @@ func (self *ChainManager) reorg(oldBlock, newBlock *types.Block) error {
 		DeleteReceipt(self.chainDb, tx.Hash())
 		DeleteTransaction(self.chainDb, tx.Hash())
 	}
-	self.eventMux.Post(RemovedTransactionEvent{diff})
+	// Must be posted in a goroutine because of the transaction pool trying
+	// to acquire the chain manager lock
+	go self.eventMux.Post(RemovedTransactionEvent{diff})
 
 	return nil
 }
