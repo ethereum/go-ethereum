@@ -816,7 +816,7 @@ func (d *Downloader) fetchBlocks61(from uint64) error {
 			}
 			// Send a download request to all idle peers, until throttled
 			throttled := false
-			for _, peer := range d.peers.IdlePeers() {
+			for _, peer := range d.peers.IdlePeers(eth61) {
 				// Short circuit if throttling activated
 				if d.queue.Throttle() {
 					throttled = true
@@ -1255,7 +1255,7 @@ func (d *Downloader) fetchBodies(from uint64) error {
 			}
 			// Send a download request to all idle peers, until throttled
 			queuedEmptyBlocks, throttled := false, false
-			for _, peer := range d.peers.IdlePeers() {
+			for _, peer := range d.peers.IdlePeers(eth62) {
 				// Short circuit if throttling activated
 				if d.queue.Throttle() {
 					throttled = true
