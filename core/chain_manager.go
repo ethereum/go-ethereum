@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -69,10 +70,10 @@ type ChainManager struct {
 	chainmu sync.RWMutex
 	tsmu    sync.RWMutex
 
-	checkpoint      int // checkpoint counts towards the new checkpoint
-	td              *big.Int
-	currentBlock    *types.Block
-	currentGasLimit *big.Int
+	checkpoint       int           // checkpoint counts towards the new checkpoint
+	currentHeader    *types.Header // Current head of the header chain (may be above the block chain!)
+	currentBlock     *types.Block  // Current head of the block chain
+	currentFastBlock *types.Block  // Current head of the fast-sync chain (may be above the block chain!)
 
 	headerCache  *lru.Cache // Cache for the most recent block headers
 	bodyCache    *lru.Cache // Cache for the most recent block bodies
@@ -123,20 +124,15 @@ func NewChainManager(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*
 		}
 		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
 	}
-	if err := bc.setLastState(); err != nil {
+	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash, _ := range BadHashes {
-		if block := bc.GetBlock(hash); block != nil {
-			glog.V(logger.Error).Infof("Found bad hash. Reorganising chain to state %x\n", block.ParentHash().Bytes()[:4])
-			block = bc.GetBlock(block.ParentHash())
-			if block == nil {
-				glog.Fatal("Unable to complete. Parent block not found. Corrupted DB?")
-			}
-			bc.SetHead(block)
-
-			glog.V(logger.Error).Infoln("Chain reorg was successfull. Resuming normal operation")
+		if header := bc.GetHeader(hash); header != nil {
+			glog.V(logger.Error).Infof("Found bad hash, rewinding chain to block #%d [%x…]", header.Number, header.ParentHash[:4])
+			bc.SetHead(header.Number.Uint64() - 1)
+			glog.V(logger.Error).Infoln("Chain rewind was successful, resuming normal operation")
 		}
 	}
 	// Take ownership of this particular state
@@ -144,30 +140,117 @@ func NewChainManager(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*
 	return bc, nil
 }
 
-func (bc *ChainManager) SetHead(head *types.Block) {
+// loadLastState loads the last known chain state from the database. This method
+// assumes that the chain manager mutex is held.
+func (self *ChainManager) loadLastState() error {
+	// Restore the last known head block
+	head := GetHeadBlockHash(self.chainDb)
+	if head == (common.Hash{}) {
+		// Corrupt or empty database, init from scratch
+		self.Reset()
+	} else {
+		if block := self.GetBlock(head); block != nil {
+			// Block found, set as the current head
+			self.currentBlock = block
+		} else {
+			// Database corrupted, try to restore it
+			glog.Infof("last block (%x…) not found, recovering...", head[:4])
+			if self.recover() {
+				glog.Infof("recover successful")
+			} else {
+				glog.Fatalf("recover failed, please report")
+			}
+		}
+	}
+	// Restore the last known head header
+	self.currentHeader = self.currentBlock.Header()
+	if head := GetHeadHeaderHash(self.chainDb); head != (common.Hash{}) {
+		if header := self.GetHeader(head); header != nil {
+			self.currentHeader = header
+		}
+	}
+	// Restore the last known head fast block
+	self.currentFastBlock = self.currentBlock
+	if head := GetHeadFastBlockHash(self.chainDb); head != (common.Hash{}) {
+		if block := self.GetBlock(head); block != nil {
+			self.currentFastBlock = block
+		}
+	}
+	// Issue a status log and return
+	headerTd := self.GetTd(self.currentHeader.Hash())
+	blockTd := self.GetTd(self.currentBlock.Hash())
+	fastTd := self.GetTd(self.currentFastBlock.Hash())
+
+	glog.V(logger.Info).Infof("Last header: #%d [%x…] TD=%v", self.currentHeader.Number, self.currentHeader.Hash().Bytes()[:4], headerTd)
+	glog.V(logger.Info).Infof("Fast block: #%d [%x…] TD=%v", self.currentFastBlock.Number(), self.currentFastBlock.Hash().Bytes()[:4], fastTd)
+	glog.V(logger.Info).Infof("Last block: #%d [%x…] TD=%v", self.currentBlock.Number(), self.currentBlock.Hash().Bytes()[:4], blockTd)
+
+	return nil
+}
+
+// SetHead rewind the local chain to a new head entity. In the case of headers,
+// everything above the new head will be deleted and the new one set. In the case
+// of blocks though, the head may be further rewound if block bodies are missing
+// (non-archive nodes after a fast sync).
+func (bc *ChainManager) SetHead(head uint64) {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	for block := bc.currentBlock; block != nil && block.Hash() != head.Hash(); block = bc.GetBlock(block.ParentHash()) {
-		DeleteBlock(bc.chainDb, block.Hash())
+	// Figure out the highest known canonical assignment
+	height := uint64(0)
+	if bc.currentHeader != nil {
+		if hh := bc.currentHeader.Number.Uint64(); hh > height {
+			height = hh
+		}
 	}
+	if bc.currentBlock != nil {
+		if bh := bc.currentBlock.NumberU64(); bh > height {
+			height = bh
+		}
+	}
+	if bc.currentFastBlock != nil {
+		if fbh := bc.currentFastBlock.NumberU64(); fbh > height {
+			height = fbh
+		}
+	}
+	// Gather all the hashes that need deletion
+	drop := make(map[common.Hash]struct{})
+
+	for bc.currentHeader != nil && bc.currentHeader.Number.Uint64() > head {
+		drop[bc.currentHeader.Hash()] = struct{}{}
+		bc.currentHeader = bc.GetHeader(bc.currentHeader.ParentHash)
+	}
+	for bc.currentBlock != nil && bc.currentBlock.NumberU64() > head {
+		drop[bc.currentBlock.Hash()] = struct{}{}
+		bc.currentBlock = bc.GetBlock(bc.currentBlock.ParentHash())
+	}
+	for bc.currentFastBlock != nil && bc.currentFastBlock.NumberU64() > head {
+		drop[bc.currentFastBlock.Hash()] = struct{}{}
+		bc.currentFastBlock = bc.GetBlock(bc.currentFastBlock.ParentHash())
+	}
+	// Roll back the canonical chain numbering
+	for i := height; i > head; i-- {
+		DeleteCanonicalHash(bc.chainDb, i)
+	}
+	// Delete everything found by the above rewind
+	for hash, _ := range drop {
+		DeleteHeader(bc.chainDb, hash)
+		DeleteBody(bc.chainDb, hash)
+		DeleteTd(bc.chainDb, hash)
+	}
+	// Clear out any stale content from the caches
 	bc.headerCache.Purge()
 	bc.bodyCache.Purge()
 	bc.bodyRLPCache.Purge()
 	bc.blockCache.Purge()
 	bc.futureBlocks.Purge()
 
-	bc.currentBlock = head
-	bc.setTotalDifficulty(bc.GetTd(head.Hash()))
-	bc.insert(head)
-	bc.setLastState()
-}
-
-func (self *ChainManager) Td() *big.Int {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
-	return new(big.Int).Set(self.td)
+	// Update all computed fields to the new head
+	if bc.currentBlock == nil {
+		bc.currentBlock = bc.genesisBlock
+	}
+	bc.insert(bc.currentBlock)
+	bc.loadLastState()
 }
 
 func (self *ChainManager) GasLimit() *big.Int {
@@ -184,6 +267,17 @@ func (self *ChainManager) LastBlockHash() common.Hash {
 	return self.currentBlock.Hash()
 }
 
+// CurrentHeader retrieves the current head header of the canonical chain. The
+// header is retrieved from the chain manager's internal cache.
+func (self *ChainManager) CurrentHeader() *types.Header {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	return self.currentHeader
+}
+
+// CurrentBlock retrieves the current head block of the canonical chain. The
+// block is retrieved from the chain manager's internal cache.
 func (self *ChainManager) CurrentBlock() *types.Block {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
@@ -191,11 +285,20 @@ func (self *ChainManager) CurrentBlock() *types.Block {
 	return self.currentBlock
 }
 
+// CurrentFastBlock retrieves the current fast-sync head block of the canonical
+// chain. The block is retrieved from the chain manager's internal cache.
+func (self *ChainManager) CurrentFastBlock() *types.Block {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	return self.currentFastBlock
+}
+
 func (self *ChainManager) Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash) {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	return new(big.Int).Set(self.td), self.currentBlock.Hash(), self.genesisBlock.Hash()
+	return self.GetTd(self.currentBlock.Hash()), self.currentBlock.Hash(), self.genesisBlock.Hash()
 }
 
 func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
@@ -206,6 +309,8 @@ func (self *ChainManager) State() *state.StateDB {
 	return state.New(self.CurrentBlock().Root(), self.chainDb)
 }
 
+// recover tries to retrieve a secondary last known good state from the database
+// na drestore that as the chain head.
 func (bc *ChainManager) recover() bool {
 	data, _ := bc.chainDb.Get([]byte("checkpoint"))
 	if len(data) != 0 {
@@ -215,40 +320,21 @@ func (bc *ChainManager) recover() bool {
 				glog.Fatalf("failed to write database head number: %v", err)
 			}
 			if err := WriteHeadBlockHash(bc.chainDb, block.Hash()); err != nil {
-				glog.Fatalf("failed to write database head hash: %v", err)
+				glog.Fatalf("failed to write database head block hash: %v", err)
+			}
+			if err := WriteHeadHeaderHash(bc.chainDb, block.Hash()); err != nil {
+				glog.Fatalf("failed to write database head header hash: %v", err)
+			}
+			if err := WriteHeadFastBlockHash(bc.chainDb, block.Hash()); err != nil {
+				glog.Fatalf("failed to write database head fast block hash: %v", err)
 			}
 			bc.currentBlock = block
+			bc.currentHeader = block.Header()
+			bc.currentFastBlock = block
 			return true
 		}
 	}
 	return false
-}
-
-func (bc *ChainManager) setLastState() error {
-	head := GetHeadBlockHash(bc.chainDb)
-	if head != (common.Hash{}) {
-		block := bc.GetBlock(head)
-		if block != nil {
-			bc.currentBlock = block
-		} else {
-			glog.Infof("LastBlock (%x) not found. Recovering...\n", head)
-			if bc.recover() {
-				glog.Infof("Recover successful")
-			} else {
-				glog.Fatalf("Recover failed. Please report")
-			}
-		}
-	} else {
-		bc.Reset()
-	}
-	bc.td = bc.GetTd(bc.currentBlock.Hash())
-	bc.currentGasLimit = CalcGasLimit(bc.currentBlock)
-
-	if glog.V(logger.Info) {
-		glog.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
-	}
-
-	return nil
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
@@ -259,18 +345,11 @@ func (bc *ChainManager) Reset() {
 // ResetWithGenesisBlock purges the entire blockchain, restoring it to the
 // specified genesis state.
 func (bc *ChainManager) ResetWithGenesisBlock(genesis *types.Block) {
+	// Dump the entire block chain and purge the caches
+	bc.SetHead(0)
+
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
-
-	// Dump the entire block chain and purge the caches
-	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.ParentHash()) {
-		DeleteBlock(bc.chainDb, block.Hash())
-	}
-	bc.headerCache.Purge()
-	bc.bodyCache.Purge()
-	bc.bodyRLPCache.Purge()
-	bc.blockCache.Purge()
-	bc.futureBlocks.Purge()
 
 	// Prepare the genesis block and reinitialize the chain
 	if err := WriteTd(bc.chainDb, genesis.Hash(), genesis.Difficulty()); err != nil {
@@ -282,7 +361,8 @@ func (bc *ChainManager) ResetWithGenesisBlock(genesis *types.Block) {
 	bc.genesisBlock = genesis
 	bc.insert(bc.genesisBlock)
 	bc.currentBlock = bc.genesisBlock
-	bc.setTotalDifficulty(genesis.Difficulty())
+	bc.currentHeader = bc.genesisBlock.Header()
+	bc.currentFastBlock = bc.genesisBlock
 }
 
 // Export writes the active chain to the given writer.
@@ -318,15 +398,25 @@ func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error 
 	return nil
 }
 
-// insert injects a block into the current chain block chain. Note, this function
-// assumes that the `mu` mutex is held!
+// insert injects a new head block into the current block chain. This method
+// assumes that the block is indeed a true head. It will also reset the head
+// header and the head fast sync block to this very same block to prevent them
+// from diverging on a different header chain.
+//
+// Note, this function assumes that the `mu` mutex is held!
 func (bc *ChainManager) insert(block *types.Block) {
 	// Add the block to the canonical chain number scheme and mark as the head
 	if err := WriteCanonicalHash(bc.chainDb, block.Hash(), block.NumberU64()); err != nil {
 		glog.Fatalf("failed to insert block number: %v", err)
 	}
 	if err := WriteHeadBlockHash(bc.chainDb, block.Hash()); err != nil {
-		glog.Fatalf("failed to insert block number: %v", err)
+		glog.Fatalf("failed to insert head block hash: %v", err)
+	}
+	if err := WriteHeadHeaderHash(bc.chainDb, block.Hash()); err != nil {
+		glog.Fatalf("failed to insert head header hash: %v", err)
+	}
+	if err := WriteHeadFastBlockHash(bc.chainDb, block.Hash()); err != nil {
+		glog.Fatalf("failed to insert head fast block hash: %v", err)
 	}
 	// Add a new restore point if we reached some limit
 	bc.checkpoint++
@@ -336,8 +426,10 @@ func (bc *ChainManager) insert(block *types.Block) {
 		}
 		bc.checkpoint = 0
 	}
-	// Update the internal internal state with the head block
+	// Update the internal state with the head block
 	bc.currentBlock = block
+	bc.currentHeader = block.Header()
+	bc.currentFastBlock = block
 }
 
 // Accessors
@@ -493,19 +585,15 @@ func (self *ChainManager) GetBlocksFromHash(hash common.Hash, n int) (blocks []*
 	return
 }
 
-func (self *ChainManager) GetUnclesInChain(block *types.Block, length int) (uncles []*types.Header) {
+// GetUnclesInChain retrieves all the uncles from a given block backwards until
+// a specific distance is reached.
+func (self *ChainManager) GetUnclesInChain(block *types.Block, length int) []*types.Header {
+	uncles := []*types.Header{}
 	for i := 0; block != nil && i < length; i++ {
 		uncles = append(uncles, block.Uncles()...)
 		block = self.GetBlock(block.ParentHash())
 	}
-
-	return
-}
-
-// setTotalDifficulty updates the TD of the chain manager. Note, this function
-// assumes that the `mu` mutex is held!
-func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
-	bc.td = new(big.Int).Set(td)
+	return uncles
 }
 
 func (bc *ChainManager) Stop() {
@@ -548,6 +636,224 @@ const (
 	SideStatTy
 )
 
+// writeHeader writes a header into the local chain, given that its parent is
+// already known. If the total difficulty of the newly inserted header becomes
+// greater than the old known TD, the canonical chain is re-routed.
+//
+// Note: This method is not concurrent-safe with inserting blocks simultaneously
+// into the chain, as side effects caused by reorganizations cannot be emulated
+// without the real blocks. Hence, writing headers directly should only be done
+// in two scenarios: pure-header mode of operation (light clients), or properly
+// separated header/block phases (non-archive clients).
+func (self *ChainManager) writeHeader(header *types.Header) error {
+	self.wg.Add(1)
+	defer self.wg.Done()
+
+	// Calculate the total difficulty of the header
+	ptd := self.GetTd(header.ParentHash)
+	if ptd == nil {
+		return ParentError(header.ParentHash)
+	}
+	td := new(big.Int).Add(header.Difficulty, ptd)
+
+	// Make sure no inconsistent state is leaked during insertion
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
+	// If the total difficulty is higher than our known, add it to the canonical chain
+	if td.Cmp(self.GetTd(self.currentHeader.Hash())) > 0 {
+		// Delete any canonical number assignments above the new head
+		for i := header.Number.Uint64() + 1; GetCanonicalHash(self.chainDb, i) != (common.Hash{}); i++ {
+			DeleteCanonicalHash(self.chainDb, i)
+		}
+		// Overwrite any stale canonical number assignments
+		head := self.GetHeader(header.ParentHash)
+		for GetCanonicalHash(self.chainDb, head.Number.Uint64()) != head.Hash() {
+			WriteCanonicalHash(self.chainDb, head.Hash(), head.Number.Uint64())
+			head = self.GetHeader(head.ParentHash)
+		}
+		// Extend the canonical chain with the new header
+		if err := WriteCanonicalHash(self.chainDb, header.Hash(), header.Number.Uint64()); err != nil {
+			glog.Fatalf("failed to insert header number: %v", err)
+		}
+		if err := WriteHeadHeaderHash(self.chainDb, header.Hash()); err != nil {
+			glog.Fatalf("failed to insert head header hash: %v", err)
+		}
+		self.currentHeader = types.CopyHeader(header)
+	}
+	// Irrelevant of the canonical status, write the header itself to the database
+	if err := WriteTd(self.chainDb, header.Hash(), td); err != nil {
+		glog.Fatalf("failed to write header total difficulty: %v", err)
+	}
+	if err := WriteHeader(self.chainDb, header); err != nil {
+		glog.Fatalf("filed to write header contents: %v", err)
+	}
+	return nil
+}
+
+// InsertHeaderChain will attempt to insert the given header chain in to the
+// local chain, possibly creating a fork. If an error is returned,  it will
+// return the index number of the failing header as well an error describing
+// what went wrong.
+//
+// The verify parameter can be used to fine tune whether nonce verification
+// should be done or not. The reason behind the optional check is because some
+// of the header retrieval mechanisms already need to verfy nonces, as well as
+// because nonces can be verified sparsely, not needing to check each.
+func (self *ChainManager) InsertHeaderChain(chain []*types.Header, verify bool) (int, error) {
+	self.wg.Add(1)
+	defer self.wg.Done()
+
+	// Make sure only one thread manipulates the chain at once
+	self.chainmu.Lock()
+	defer self.chainmu.Unlock()
+
+	// Collect some import statistics to report on
+	stats := struct{ processed, ignored int }{}
+	start := time.Now()
+
+	// Start the parallel nonce verifier, with a fake nonce if not requested
+	verifier := self.pow
+	if !verify {
+		verifier = FakePow{}
+	}
+	nonceAbort, nonceResults := verifyNoncesFromHeaders(verifier, chain)
+	defer close(nonceAbort)
+
+	// Iterate over the headers, inserting any new ones
+	complete := make([]bool, len(chain))
+	for i, header := range chain {
+		// Short circuit insertion if shutting down
+		if atomic.LoadInt32(&self.procInterrupt) == 1 {
+			glog.V(logger.Debug).Infoln("premature abort during header chain processing")
+			break
+		}
+		hash := header.Hash()
+
+		// Accumulate verification results until the next header is verified
+		for !complete[i] {
+			if res := <-nonceResults; res.valid {
+				complete[res.index] = true
+			} else {
+				header := chain[res.index]
+				return res.index, &BlockNonceErr{
+					Hash:   header.Hash(),
+					Number: new(big.Int).Set(header.Number),
+					Nonce:  header.Nonce.Uint64(),
+				}
+			}
+		}
+		if BadHashes[hash] {
+			glog.V(logger.Error).Infof("bad header %d [%x…], known bad hash", header.Number, hash)
+			return i, BadHashError(hash)
+		}
+		// Write the header to the chain and get the status
+		if self.HasHeader(hash) {
+			stats.ignored++
+			continue
+		}
+		if err := self.writeHeader(header); err != nil {
+			return i, err
+		}
+		stats.processed++
+	}
+	// Report some public statistics so the user has a clue what's going on
+	first, last := chain[0], chain[len(chain)-1]
+	glog.V(logger.Info).Infof("imported %d header(s) (%d ignored) in %v. #%v [%x… / %x…]", stats.processed, stats.ignored,
+		time.Since(start), last.Number, first.Hash().Bytes()[:4], last.Hash().Bytes()[:4])
+
+	return 0, nil
+}
+
+// InsertReceiptChain attempts to complete an already existing header chain with
+// transaction and receipt data.
+func (self *ChainManager) InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
+	self.wg.Add(1)
+	defer self.wg.Done()
+
+	// Make sure only one thread manipulates the chain at once
+	self.chainmu.Lock()
+	defer self.chainmu.Unlock()
+
+	// Collect some import statistics to report on
+	stats := struct{ processed, ignored int }{}
+	start := time.Now()
+
+	// Iterate over the blocks and receipts, inserting any new ones
+	for i := 0; i < len(blockChain) && i < len(receiptChain); i++ {
+		block, receipts := blockChain[i], receiptChain[i]
+
+		// Short circuit insertion if shutting down
+		if atomic.LoadInt32(&self.procInterrupt) == 1 {
+			glog.V(logger.Debug).Infoln("premature abort during receipt chain processing")
+			break
+		}
+		// Short circuit if the owner header is unknown
+		if !self.HasHeader(block.Hash()) {
+			glog.V(logger.Debug).Infof("containing header #%d [%x…] unknown", block.Number(), block.Hash().Bytes()[:4])
+			return i, fmt.Errorf("containing header #%d [%x…] unknown", block.Number(), block.Hash().Bytes()[:4])
+		}
+		// Skip if the entire data is already known
+		if self.HasBlock(block.Hash()) {
+			stats.ignored++
+			continue
+		}
+		// Compute all the non-consensus fields of the receipts
+		transactions, logIndex := block.Transactions(), uint(0)
+		for j := 0; j < len(receipts); j++ {
+			// The transaction hash can be retrieved from the transaction itself
+			receipts[j].TxHash = transactions[j].Hash()
+
+			// The contract address can be derived from the transaction itself
+			if MessageCreatesContract(transactions[j]) {
+				from, _ := transactions[j].From()
+				receipts[j].ContractAddress = crypto.CreateAddress(from, transactions[j].Nonce())
+			}
+			// The used gas can be calculated based on previous receipts
+			if j == 0 {
+				receipts[j].GasUsed = new(big.Int).Set(receipts[j].CumulativeGasUsed)
+			} else {
+				receipts[j].GasUsed = new(big.Int).Sub(receipts[j].CumulativeGasUsed, receipts[j-1].CumulativeGasUsed)
+			}
+			// The derived log fields can simply be set from the block and transaction
+			for k := 0; k < len(receipts[j].Logs); k++ {
+				receipts[j].Logs[k].BlockNumber = block.NumberU64()
+				receipts[j].Logs[k].BlockHash = block.Hash()
+				receipts[j].Logs[k].TxHash = receipts[j].TxHash
+				receipts[j].Logs[k].TxIndex = uint(j)
+				receipts[j].Logs[k].Index = logIndex
+				logIndex++
+			}
+		}
+		// Write all the data out into the database
+		if err := WriteBody(self.chainDb, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+			glog.Fatalf("failed to write block body: %v", err)
+			return i, err
+		}
+		if err := PutBlockReceipts(self.chainDb, block.Hash(), receipts); err != nil {
+			glog.Fatalf("failed to write block receipts: %v", err)
+			return i, err
+		}
+		// Update the head fast sync block if better
+		self.mu.Lock()
+		if self.GetTd(self.currentFastBlock.Hash()).Cmp(self.GetTd(block.Hash())) < 0 {
+			if err := WriteHeadFastBlockHash(self.chainDb, block.Hash()); err != nil {
+				glog.Fatalf("failed to update head fast block hash: %v", err)
+			}
+			self.currentFastBlock = block
+		}
+		self.mu.Unlock()
+
+		stats.processed++
+	}
+	// Report some public statistics so the user has a clue what's going on
+	first, last := blockChain[0], blockChain[len(blockChain)-1]
+	glog.V(logger.Info).Infof("imported %d receipt(s) (%d ignored) in %v. #%d [%x… / %x…]", stats.processed, stats.ignored,
+		time.Since(start), last.Number(), first.Hash().Bytes()[:4], last.Hash().Bytes()[:4])
+
+	return 0, nil
+}
+
 // WriteBlock writes the block to the chain.
 func (self *ChainManager) WriteBlock(block *types.Block) (status writeStatus, err error) {
 	self.wg.Add(1)
@@ -560,38 +866,31 @@ func (self *ChainManager) WriteBlock(block *types.Block) (status writeStatus, er
 	}
 	td := new(big.Int).Add(block.Difficulty(), ptd)
 
-	self.mu.RLock()
-	cblock := self.currentBlock
-	self.mu.RUnlock()
+	// Make sure no inconsistent state is leaked during insertion
+	self.mu.Lock()
+	defer self.mu.Unlock()
 
-	// Compare the TD of the last known block in the canonical chain to make sure it's greater.
-	// At this point it's possible that a different chain (fork) becomes the new canonical chain.
-	if td.Cmp(self.Td()) > 0 {
-		// chain fork
-		if block.ParentHash() != cblock.Hash() {
-			// during split we merge two different chains and create the new canonical chain
-			err := self.reorg(cblock, block)
-			if err != nil {
+	// If the total difficulty is higher than our known, add it to the canonical chain
+	if td.Cmp(self.GetTd(self.currentBlock.Hash())) > 0 {
+		// Reorganize the chain if the parent is not the head block
+		if block.ParentHash() != self.currentBlock.Hash() {
+			if err := self.reorg(self.currentBlock, block); err != nil {
 				return NonStatTy, err
 			}
 		}
-		status = CanonStatTy
-
-		self.mu.Lock()
-		self.setTotalDifficulty(td)
+		// Insert the block as the new head of the chain
 		self.insert(block)
-		self.mu.Unlock()
+		status = CanonStatTy
 	} else {
 		status = SideStatTy
 	}
-
+	// Irrelevant of the canonical status, write the block itself to the database
 	if err := WriteTd(self.chainDb, block.Hash(), td); err != nil {
 		glog.Fatalf("failed to write block total difficulty: %v", err)
 	}
 	if err := WriteBlock(self.chainDb, block); err != nil {
 		glog.Fatalf("filed to write block contents: %v", err)
 	}
-	// Delete from future blocks
 	self.futureBlocks.Remove(block.Hash())
 
 	return
@@ -625,7 +924,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 	txcount := 0
 	for i, block := range chain {
 		if atomic.LoadInt32(&self.procInterrupt) == 1 {
-			glog.V(logger.Debug).Infoln("Premature abort during chain processing")
+			glog.V(logger.Debug).Infoln("Premature abort during block chain processing")
 			break
 		}
 
@@ -681,7 +980,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 
 			return i, err
 		}
-		if err := PutBlockReceipts(self.chainDb, block, receipts); err != nil {
+		if err := PutBlockReceipts(self.chainDb, block.Hash(), receipts); err != nil {
 			glog.V(logger.Warn).Infoln("error writing block receipts:", err)
 		}
 
@@ -731,9 +1030,6 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 // to be part of the new canonical chain and accumulates potential missing transactions and post an
 // event about them
 func (self *ChainManager) reorg(oldBlock, newBlock *types.Block) error {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
 	var (
 		newChain    types.Blocks
 		commonBlock *types.Block
@@ -826,7 +1122,6 @@ out:
 						// We need some control over the mining operation. Acquiring locks and waiting for the miner to create new block takes too long
 						// and in most cases isn't even necessary.
 						if self.currentBlock.Hash() == event.Hash {
-							self.currentGasLimit = CalcGasLimit(event.Block)
 							self.eventMux.Post(ChainHeadEvent{event.Block})
 						}
 					}

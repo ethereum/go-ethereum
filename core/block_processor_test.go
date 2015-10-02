@@ -69,16 +69,16 @@ func TestPutReceipt(t *testing.T) {
 	hash[0] = 2
 
 	receipt := new(types.Receipt)
-	receipt.SetLogs(state.Logs{&state.Log{
-		Address:   addr,
-		Topics:    []common.Hash{hash},
-		Data:      []byte("hi"),
-		Number:    42,
-		TxHash:    hash,
-		TxIndex:   0,
-		BlockHash: hash,
-		Index:     0,
-	}})
+	receipt.Logs = state.Logs{&state.Log{
+		Address:     addr,
+		Topics:      []common.Hash{hash},
+		Data:        []byte("hi"),
+		BlockNumber: 42,
+		TxHash:      hash,
+		TxIndex:     0,
+		BlockHash:   hash,
+		Index:       0,
+	}}
 
 	PutReceipts(db, types.Receipts{receipt})
 	receipt = GetReceipt(db, common.Hash{})

@@ -160,7 +160,8 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		return
 	}
 	// Make sure the peer's TD is higher than our own. If not drop.
-	if peer.Td().Cmp(pm.chainman.Td()) <= 0 {
+	td := pm.chainman.GetTd(pm.chainman.CurrentBlock().Hash())
+	if peer.Td().Cmp(td) <= 0 {
 		return
 	}
 	// Otherwise try to sync with the downloader

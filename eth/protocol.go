@@ -26,6 +26,15 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// Mode represents the mode of operation of the eth client.
+type Mode int
+
+const (
+	ArchiveMode Mode = iota // Maintain the entire blockchain history
+	FullMode                // Maintain only a recent view of the blockchain
+	LightMode               // Don't maintain any history, rather fetch on demand
+)
+
 // Constants to match up protocol versions and messages
 const (
 	eth61 = 61
@@ -34,11 +43,19 @@ const (
 	eth64 = 64
 )
 
+// minimumProtocolVersion is the minimum version of the protocol eth must run to
+// support the desired mode of operation.
+var minimumProtocolVersion = map[Mode]uint{
+	ArchiveMode: eth61,
+	FullMode:    eth63,
+	LightMode:   eth64,
+}
+
 // Supported versions of the eth protocol (first is primary).
 var ProtocolVersions = []uint{eth64, eth63, eth62, eth61}
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{15, 12, 8, 9}
+var ProtocolLengths = []uint64{19, 17, 8, 9}
 
 const (
 	NetworkId          = 1
