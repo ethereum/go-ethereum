@@ -205,9 +205,17 @@ func (dl *downloadTester) newSlowPeer(id string, version int, hashes []common.Ha
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
-	err := dl.downloader.RegisterPeer(id, version, hashes[0],
-		dl.peerGetRelHashesFn(id, delay), dl.peerGetAbsHashesFn(id, delay), dl.peerGetBlocksFn(id, delay),
-		dl.peerGetRelHeadersFn(id, delay), dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay))
+	var err error
+	switch version {
+	case 61:
+		err = dl.downloader.RegisterPeer(id, version, hashes[0], dl.peerGetRelHashesFn(id, delay), dl.peerGetAbsHashesFn(id, delay), dl.peerGetBlocksFn(id, delay), nil, nil, nil)
+	case 62:
+		err = dl.downloader.RegisterPeer(id, version, hashes[0], nil, nil, nil, dl.peerGetRelHeadersFn(id, delay), dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay))
+	case 63:
+		err = dl.downloader.RegisterPeer(id, version, hashes[0], nil, nil, nil, dl.peerGetRelHeadersFn(id, delay), dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay))
+	case 64:
+		err = dl.downloader.RegisterPeer(id, version, hashes[0], nil, nil, nil, dl.peerGetRelHeadersFn(id, delay), dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay))
+	}
 	if err == nil {
 		// Assign the owned hashes and blocks to the peer (deep copy)
 		dl.peerHashes[id] = make([]common.Hash, len(hashes))
@@ -615,6 +623,41 @@ func testMultiSynchronisation(t *testing.T, protocol int) {
 	}
 	if imported := len(tester.ownBlocks); imported != targetBlocks+1 {
 		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, targetBlocks+1)
+	}
+}
+
+// Tests that synchronisations behave well in multi-version protocol environments
+// and not wreak havok on other nodes in the network.
+func TestMultiProtocolSynchronisation61(t *testing.T) { testMultiProtocolSynchronisation(t, 61) }
+func TestMultiProtocolSynchronisation62(t *testing.T) { testMultiProtocolSynchronisation(t, 62) }
+func TestMultiProtocolSynchronisation63(t *testing.T) { testMultiProtocolSynchronisation(t, 63) }
+func TestMultiProtocolSynchronisation64(t *testing.T) { testMultiProtocolSynchronisation(t, 64) }
+
+func testMultiProtocolSynchronisation(t *testing.T, protocol int) {
+	// Create a small enough block chain to download
+	targetBlocks := blockCacheLimit - 15
+	hashes, blocks := makeChain(targetBlocks, 0, genesis)
+
+	// Create peers of every type
+	tester := newTester()
+	tester.newPeer("peer 61", 61, hashes, blocks)
+	tester.newPeer("peer 62", 62, hashes, blocks)
+	tester.newPeer("peer 63", 63, hashes, blocks)
+	tester.newPeer("peer 64", 64, hashes, blocks)
+
+	// Synchronise with the requestd peer and make sure all blocks were retrieved
+	if err := tester.sync(fmt.Sprintf("peer %d", protocol), nil); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	if imported := len(tester.ownBlocks); imported != targetBlocks+1 {
+		t.Fatalf("synchronised block mismatch: have %v, want %v", imported, targetBlocks+1)
+	}
+	// Check that no peers have been dropped off
+	for _, version := range []int{61, 62, 63, 64} {
+		peer := fmt.Sprintf("peer %d", version)
+		if _, ok := tester.peerHashes[peer]; !ok {
+			t.Errorf("%s dropped", peer)
+		}
 	}
 }
 

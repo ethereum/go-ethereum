@@ -312,14 +312,16 @@ func (ps *peerSet) AllPeers() []*peer {
 
 // IdlePeers retrieves a flat list of all the currently idle peers within the
 // active peer set, ordered by their reputation.
-func (ps *peerSet) IdlePeers() []*peer {
+func (ps *peerSet) IdlePeers(version int) []*peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
 	list := make([]*peer, 0, len(ps.peers))
 	for _, p := range ps.peers {
-		if atomic.LoadInt32(&p.idle) == 0 {
-			list = append(list, p)
+		if (version == eth61 && p.version == eth61) || (version >= eth62 && p.version >= eth62) {
+			if atomic.LoadInt32(&p.idle) == 0 {
+				list = append(list, p)
+			}
 		}
 	}
 	for i := 0; i < len(list); i++ {
