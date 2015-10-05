@@ -84,15 +84,13 @@ func BenchVmTest(p string, conf bconf, b *testing.B) error {
 		env["currentTimestamp"] = test.Env.CurrentTimestamp.(string)
 	}
 
-	/*
-		if conf.precomp {
-			program := vm.NewProgram(test.code)
-			err := vm.AttachProgram(program)
-			if err != nil {
-				return err
-			}
+	if conf.precomp {
+		program := vm.NewProgram(common.Hex2Bytes(test.Pre["0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"].Code))
+		err := vm.CompileProgram(program)
+		if err != nil {
+			return err
 		}
-	*/
+	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

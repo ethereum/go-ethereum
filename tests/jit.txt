@@ -1,0 +1,3 @@
+PASS
+BenchmarkVmFibonacci16Tests	      30	  40426131 ns/op
+ok  	github.com/ethereum/go-ethereum/tests	1.325s

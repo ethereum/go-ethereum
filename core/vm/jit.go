@@ -77,7 +77,7 @@ type Program struct {
 	context *Context
 
 	instructions []instruction       // instruction set
-	mapping      map[uint64]int      // real PC mapping to array indices
+	mapping      map[uint64]uint64   // real PC mapping to array indices
 	destinations map[uint64]struct{} // cached jump destinations
 
 	code []byte
@@ -87,7 +87,7 @@ type Program struct {
 func NewProgram(code []byte) *Program {
 	program := &Program{
 		Id:           crypto.Sha3Hash(code),
-		mapping:      make(map[uint64]int),
+		mapping:      make(map[uint64]uint64),
 		destinations: make(map[uint64]struct{}),
 		code:         code,
 	}
@@ -108,10 +108,10 @@ func (p *Program) addInstr(op OpCode, pc uint64, fn instrFn, data *big.Int) {
 		baseOp = DUP1
 	}
 	base := _baseCheck[baseOp]
-	instr := instruction{op, pc, fn, nil, data, base.gas, base.stackPop, base.stackPush}
+	instr := instruction{op, pc, fn, nil, data, base.gas, base.stackPop, base.stackPush, nil}
 
 	p.instructions = append(p.instructions, instr)
-	p.mapping[pc] = len(p.instructions) - 1
+	p.mapping[pc] = uint64(len(p.instructions) - 1)
 }
 
 // CompileProgram compiles the given program and return an error when it fails
@@ -271,7 +271,82 @@ func CompileProgram(program *Program) (err error) {
 		}
 	}
 
+	staticAnalysis(program)
+
 	return nil
+}
+
+func staticAnalysis(program *Program) {
+	var (
+		sreq       int
+		seg        *segment
+		stack      *stack
+		instrStart int
+	)
+	for i, instr := range program.instructions {
+		if isStatic(instr) {
+			if seg == nil {
+				seg = &segment{gas: new(big.Int)}
+				instrStart = i
+				stack = newstack()
+			}
+		}
+
+		if seg != nil {
+			if isStatic(instr) {
+				stack.push(instr.data)
+				seg.gas.Add(seg.gas, instr.gas)
+			} else if isMod(instr) {
+				if stack.len() >= 2 {
+					instr.fn(instr, nil, nil, nil, stack)
+					seg.gas.Add(seg.gas, instr.gas)
+				} else {
+					seg = nil
+				}
+			} else if isStaticPush(instr) {
+				seg.jump = true
+				to := stack.pop()
+				seg.items = stack.data
+				program.instructions[instrStart].seg = seg
+				if validDest(program.destinations, to) {
+					seg.valid = true
+					seg.pc = program.mapping[to.Uint64()]
+				}
+				seg.gas.Add(seg.gas, instr.gas)
+
+				seg = nil
+			} else {
+				if i-instrStart > 1 {
+					seg.items = stack.data
+					seg.pc = uint64(i)
+					seg.sreq = sreq
+					program.instructions[instrStart].seg = seg
+				}
+				seg = nil
+			}
+		}
+	}
+}
+
+func isStaticPush(instr instruction) bool {
+	return false
+	return instr.op == JUMP
+}
+
+func isMod(instr instruction) bool {
+	switch instr.op {
+	case MUL, DIV, ADD, SUB, EXP, MOD:
+		return true
+	}
+	return false
+}
+
+func isStatic(instr instruction) bool {
+	switch instr.op {
+	case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
+		return true
+	}
+	return false
 }
 
 // RunProgram runs the program given the enviroment and context and returns an
@@ -280,13 +355,13 @@ func RunProgram(program *Program, env Environment, context *Context, input []byt
 	return runProgram(program, 0, NewMemory(), newstack(), env, context, input)
 }
 
-func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env Environment, context *Context, input []byte) ([]byte, error) {
+func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env Environment, context *Context, input []byte) (ret []byte, err error) {
 	context.Input = input
 
 	var (
-		caller      = context.caller
-		statedb     = env.State()
-		pc      int = program.mapping[pcstart]
+		caller         = context.caller
+		statedb        = env.State()
+		pc      uint64 = program.mapping[pcstart]
 
 		jump = func(to *big.Int) error {
 			if !validDest(program.destinations, to) {
@@ -300,8 +375,34 @@ func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env
 		}
 	)
 
-	for pc < len(program.instructions) {
+	for pc < uint64(len(program.instructions)) {
 		instr := program.instructions[pc]
+		//fmt.Println(instr.op)
+		if instr.seg != nil {
+			segment := instr.seg
+
+			// check for jump and make sure it's valid
+			if segment.jump && !segment.valid {
+				return nil, fmt.Errorf("invalid jump destination")
+			}
+
+			// make sure we can pay for the full segment in advance
+			if !context.UseGas(segment.gas) {
+				return nil, OutOfGasError
+			}
+
+			// copy items over to a new slice to prevent modifications
+			// off segment items.
+			items := make([]*big.Int, len(segment.items))
+			for i, item := range segment.items {
+				items[i] = new(big.Int).Set(item)
+			}
+			stack.data = append(stack.data, items...)
+
+			// set the new pc and continue
+			pc = segment.pc
+			continue
+		}
 
 		// calculate the new memory size and gas price for the current executing opcode
 		newMemSize, cost, err := jitCalculateGasAndSize(env, context, caller, instr, statedb, mem, stack)
@@ -352,8 +453,8 @@ func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env
 
 			instr.fn(instr, env, context, mem, stack)
 		}
-
 		pc++
+
 	}
 
 	context.Input = nil
