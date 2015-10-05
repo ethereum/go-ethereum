@@ -45,7 +45,7 @@ func TestStatusMsgErrors64(t *testing.T) { testStatusMsgErrors(t, 64) }
 
 func testStatusMsgErrors(t *testing.T, protocol int) {
 	pm := newTestProtocolManager(0, nil, nil)
-	td, currentBlock, genesis := pm.chainman.Status()
+	td, currentBlock, genesis := pm.blockchain.Status()
 	defer pm.Stop()
 
 	tests := []struct {

@@ -28,8 +28,8 @@ import (
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -48,19 +48,19 @@ func thePow() pow.PoW {
 	return pow
 }
 
-func theChainManager(db ethdb.Database, t *testing.T) *ChainManager {
+func theBlockChain(db ethdb.Database, t *testing.T) *BlockChain {
 	var eventMux event.TypeMux
 	WriteTestNetGenesisBlock(db, 0)
-	chainMan, err := NewChainManager(db, thePow(), &eventMux)
+	blockchain, err := NewBlockChain(db, thePow(), &eventMux)
 	if err != nil {
 		t.Error("failed creating chainmanager:", err)
 		t.FailNow()
 		return nil
 	}
-	blockMan := NewBlockProcessor(db, nil, chainMan, &eventMux)
-	chainMan.SetProcessor(blockMan)
+	blockMan := NewBlockProcessor(db, nil, blockchain, &eventMux)
+	blockchain.SetProcessor(blockMan)
 
-	return chainMan
+	return blockchain
 }
 
 // Test fork of length N starting from block i
@@ -104,7 +104,7 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 	// Loop over parents making sure reconstruction is done properly
 }
 
-func printChain(bc *ChainManager) {
+func printChain(bc *BlockChain) {
 	for i := bc.CurrentBlock().Number().Uint64(); i > 0; i-- {
 		b := bc.GetBlockByNumber(uint64(i))
 		fmt.Printf("\t%x %v\n", b.Hash(), b.Difficulty())
@@ -144,8 +144,8 @@ func loadChain(fn string, t *testing.T) (types.Blocks, error) {
 	return chain, nil
 }
 
-func insertChain(done chan bool, chainMan *ChainManager, chain types.Blocks, t *testing.T) {
-	_, err := chainMan.InsertChain(chain)
+func insertChain(done chan bool, blockchain *BlockChain, chain types.Blocks, t *testing.T) {
+	_, err := blockchain.InsertChain(chain)
 	if err != nil {
 		fmt.Println(err)
 		t.FailNow()
@@ -294,23 +294,23 @@ func TestChainInsertions(t *testing.T) {
 		t.FailNow()
 	}
 
-	chainMan := theChainManager(db, t)
+	blockchain := theBlockChain(db, t)
 
 	const max = 2
 	done := make(chan bool, max)
 
-	go insertChain(done, chainMan, chain1, t)
-	go insertChain(done, chainMan, chain2, t)
+	go insertChain(done, blockchain, chain1, t)
+	go insertChain(done, blockchain, chain2, t)
 
 	for i := 0; i < max; i++ {
 		<-done
 	}
 
-	if chain2[len(chain2)-1].Hash() != chainMan.CurrentBlock().Hash() {
+	if chain2[len(chain2)-1].Hash() != blockchain.CurrentBlock().Hash() {
 		t.Error("chain2 is canonical and shouldn't be")
 	}
 
-	if chain1[len(chain1)-1].Hash() != chainMan.CurrentBlock().Hash() {
+	if chain1[len(chain1)-1].Hash() != blockchain.CurrentBlock().Hash() {
 		t.Error("chain1 isn't canonical and should be")
 	}
 }
@@ -337,7 +337,7 @@ func TestChainMultipleInsertions(t *testing.T) {
 		}
 	}
 
-	chainMan := theChainManager(db, t)
+	blockchain := theBlockChain(db, t)
 
 	done := make(chan bool, max)
 	for i, chain := range chains {
@@ -345,7 +345,7 @@ func TestChainMultipleInsertions(t *testing.T) {
 		i := i
 		chain := chain
 		go func() {
-			insertChain(done, chainMan, chain, t)
+			insertChain(done, blockchain, chain, t)
 			fmt.Println(i, "done")
 		}()
 	}
@@ -354,14 +354,14 @@ func TestChainMultipleInsertions(t *testing.T) {
 		<-done
 	}
 
-	if chains[longest][len(chains[longest])-1].Hash() != chainMan.CurrentBlock().Hash() {
+	if chains[longest][len(chains[longest])-1].Hash() != blockchain.CurrentBlock().Hash() {
 		t.Error("Invalid canonical chain")
 	}
 }
 
 type bproc struct{}
 
-func (bproc) Process(*types.Block) (state.Logs, types.Receipts, error) { return nil, nil, nil }
+func (bproc) Process(*types.Block) (vm.Logs, types.Receipts, error) { return nil, nil, nil }
 
 func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block {
 	var chain []*types.Block
@@ -382,9 +382,9 @@ func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block 
 	return chain
 }
 
-func chm(genesis *types.Block, db ethdb.Database) *ChainManager {
+func chm(genesis *types.Block, db ethdb.Database) *BlockChain {
 	var eventMux event.TypeMux
-	bc := &ChainManager{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
+	bc := &BlockChain{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
 	bc.headerCache, _ = lru.New(100)
 	bc.bodyCache, _ = lru.New(100)
 	bc.bodyRLPCache, _ = lru.New(100)
@@ -459,7 +459,7 @@ func TestReorgBadHashes(t *testing.T) {
 	BadHashes[chain[3].Header().Hash()] = true
 
 	var eventMux event.TypeMux
-	ncm, err := NewChainManager(db, FakePow{}, &eventMux)
+	ncm, err := NewBlockChain(db, FakePow{}, &eventMux)
 	if err != nil {
 		t.Errorf("NewChainManager err: %s", err)
 	}
@@ -593,7 +593,7 @@ func TestChainTxReorgs(t *testing.T) {
 	})
 	// Import the chain. This runs all block validation rules.
 	evmux := &event.TypeMux{}
-	chainman, _ := NewChainManager(db, FakePow{}, evmux)
+	chainman, _ := NewBlockChain(db, FakePow{}, evmux)
 	chainman.SetProcessor(NewBlockProcessor(db, FakePow{}, chainman, evmux))
 	if i, err := chainman.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert original chain[%d]: %v", i, err)

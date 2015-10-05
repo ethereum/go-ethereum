@@ -19,14 +19,14 @@ package types
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-
 	"fmt"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 type BlockProcessor interface {
-	Process(*Block) (state.Logs, Receipts, error)
+	Process(*Block) (vm.Logs, Receipts, error)
 }
 
 const bloomLength = 256

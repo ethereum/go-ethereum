@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package filters
 
 import (
 	"math"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 type AccountChange struct {
@@ -32,7 +32,7 @@ type AccountChange struct {
 
 // Filtering interface
 type Filter struct {
-	eth      Backend
+	db       ethdb.Database
 	earliest int64
 	latest   int64
 	skip     int
@@ -40,15 +40,15 @@ type Filter struct {
 	max      int
 	topics   [][]common.Hash
 
-	BlockCallback       func(*types.Block, state.Logs)
+	BlockCallback       func(*types.Block, vm.Logs)
 	TransactionCallback func(*types.Transaction)
-	LogsCallback        func(state.Logs)
+	LogsCallback        func(vm.Logs)
 }
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
 // is interesting or not.
-func NewFilter(eth Backend) *Filter {
-	return &Filter{eth: eth}
+func New(db ethdb.Database) *Filter {
+	return &Filter{db: db}
 }
 
 // Set the earliest and latest block for filtering.
@@ -79,8 +79,8 @@ func (self *Filter) SetSkip(skip int) {
 }
 
 // Run filters logs with the current parameters set
-func (self *Filter) Find() state.Logs {
-	earliestBlock := self.eth.ChainManager().CurrentBlock()
+func (self *Filter) Find() vm.Logs {
+	earliestBlock := core.GetBlock(self.db, core.GetHeadBlockHash(self.db))
 	var earliestBlockNo uint64 = uint64(self.earliest)
 	if self.earliest == -1 {
 		earliestBlockNo = earliestBlock.NumberU64()
@@ -91,9 +91,13 @@ func (self *Filter) Find() state.Logs {
 	}
 
 	var (
-		logs  state.Logs
-		block = self.eth.ChainManager().GetBlockByNumber(latestBlockNo)
+		logs  vm.Logs
+		block *types.Block
 	)
+	hash := core.GetCanonicalHash(self.db, latestBlockNo)
+	if hash != (common.Hash{}) {
+		block = core.GetBlock(self.db, hash)
+	}
 
 done:
 	for i := 0; block != nil; i++ {
@@ -111,17 +115,17 @@ done:
 		// current parameters
 		if self.bloomFilter(block) {
 			// Get the logs of the block
-			unfiltered, err := self.eth.BlockProcessor().GetLogs(block)
-			if err != nil {
-				glog.V(logger.Warn).Infoln("err: filter get logs ", err)
-
-				break
+			var (
+				receipts   = core.GetBlockReceipts(self.db, block.Hash())
+				unfiltered vm.Logs
+			)
+			for _, receipt := range receipts {
+				unfiltered = append(unfiltered, receipt.Logs()...)
 			}
-
 			logs = append(logs, self.FilterLogs(unfiltered)...)
 		}
 
-		block = self.eth.ChainManager().GetBlock(block.ParentHash())
+		block = core.GetBlock(self.db, block.ParentHash())
 	}
 
 	skip := int(math.Min(float64(len(logs)), float64(self.skip)))
@@ -139,8 +143,8 @@ func includes(addresses []common.Address, a common.Address) bool {
 	return false
 }
 
-func (self *Filter) FilterLogs(logs state.Logs) state.Logs {
-	var ret state.Logs
+func (self *Filter) FilterLogs(logs vm.Logs) vm.Logs {
+	var ret vm.Logs
 
 	// Filter the logs for interesting stuff
 Logs:

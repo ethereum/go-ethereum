@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -46,7 +47,7 @@ type BlockProcessor struct {
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 	// Canonical block chain
-	bc *ChainManager
+	bc *BlockChain
 	// non-persistent key/value memory storage
 	mem map[string]*big.Int
 	// Proof of work used for validating
@@ -69,12 +70,12 @@ type GasPool interface {
 	SubGas(gas, price *big.Int) error
 }
 
-func NewBlockProcessor(db ethdb.Database, pow pow.PoW, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+func NewBlockProcessor(db ethdb.Database, pow pow.PoW, blockchain *BlockChain, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
 		chainDb:  db,
 		mem:      make(map[string]*big.Int),
 		Pow:      pow,
-		bc:       chainManager,
+		bc:       blockchain,
 		eventMux: eventMux,
 	}
 	return sm
@@ -123,7 +124,7 @@ func (self *BlockProcessor) ApplyTransaction(gp GasPool, statedb *state.StateDB,
 
 	return receipt, gas, err
 }
-func (self *BlockProcessor) ChainManager() *ChainManager {
+func (self *BlockProcessor) BlockChain() *BlockChain {
 	return self.bc
 }
 
@@ -163,7 +164,7 @@ func (self *BlockProcessor) ApplyTransactions(gp GasPool, statedb *state.StateDB
 	return receipts, err
 }
 
-func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs state.Logs, err error) {
+func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs vm.Logs, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -188,7 +189,7 @@ func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs state.Logs, err
 // Process block will attempt to process the given block's transactions and applies them
 // on top of the block's parent state (given it exists) and will return wether it was
 // successful or not.
-func (sm *BlockProcessor) Process(block *types.Block) (logs state.Logs, receipts types.Receipts, err error) {
+func (sm *BlockProcessor) Process(block *types.Block) (logs vm.Logs, receipts types.Receipts, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -204,7 +205,7 @@ func (sm *BlockProcessor) Process(block *types.Block) (logs state.Logs, receipts
 	return sm.processWithParent(block, parent)
 }
 
-func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs state.Logs, receipts types.Receipts, err error) {
+func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs vm.Logs, receipts types.Receipts, err error) {
 	// Create a new state based on the parent's root (e.g., create copy)
 	state := state.New(parent.Root(), sm.chainDb)
 	header := block.Header()
@@ -346,7 +347,7 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 
 // GetBlockReceipts returns the receipts beloniging to the block hash
 func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
-	if block := sm.ChainManager().GetBlock(bhash); block != nil {
+	if block := sm.BlockChain().GetBlock(bhash); block != nil {
 		return GetBlockReceipts(sm.chainDb, block.Hash())
 	}
 
@@ -356,7 +357,7 @@ func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
 // GetLogs returns the logs of the given block. This method is using a two step approach
 // where it tries to get it from the (updated) method which gets them from the receipts or
 // the depricated way by re-processing the block.
-func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err error) {
+func (sm *BlockProcessor) GetLogs(block *types.Block) (logs vm.Logs, err error) {
 	receipts := GetBlockReceipts(sm.chainDb, block.Hash())
 	// coalesce logs
 	for _, receipt := range receipts {

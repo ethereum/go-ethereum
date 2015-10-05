@@ -169,7 +169,7 @@ func FormatTransactionData(data string) []byte {
 	return d
 }
 
-func ImportChain(chain *core.ChainManager, fn string) error {
+func ImportChain(chain *core.BlockChain, fn string) error {
 	// Watch for Ctrl-C while the import is running.
 	// If a signal is received, the import will stop at the next batch.
 	interrupt := make(chan os.Signal, 1)
@@ -244,7 +244,7 @@ func ImportChain(chain *core.ChainManager, fn string) error {
 	return nil
 }
 
-func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
+func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
 	for _, b := range bs {
 		if !chain.HasBlock(b.Hash()) {
 			return false
@@ -253,21 +253,21 @@ func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
 	return true
 }
 
-func ExportChain(chainmgr *core.ChainManager, fn string) error {
+func ExportChain(blockchain *core.BlockChain, fn string) error {
 	glog.Infoln("Exporting blockchain to", fn)
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return err
 	}
 	defer fh.Close()
-	if err := chainmgr.Export(fh); err != nil {
+	if err := blockchain.Export(fh); err != nil {
 		return err
 	}
 	glog.Infoln("Exported blockchain to", fn)
 	return nil
 }
 
-func ExportAppendChain(chainmgr *core.ChainManager, fn string, first uint64, last uint64) error {
+func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, last uint64) error {
 	glog.Infoln("Exporting blockchain to", fn)
 	// TODO verify mode perms
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
@@ -275,7 +275,7 @@ func ExportAppendChain(chainmgr *core.ChainManager, fn string, first uint64, las
 		return err
 	}
 	defer fh.Close()
-	if err := chainmgr.ExportN(fh, first, last); err != nil {
+	if err := blockchain.ExportN(fh, first, last); err != nil {
 		return err
 	}
 	glog.Infoln("Exported blockchain to", fn)

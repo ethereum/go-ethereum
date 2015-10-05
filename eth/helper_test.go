@@ -30,18 +30,18 @@ var (
 // channels for different events.
 func newTestProtocolManager(blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) *ProtocolManager {
 	var (
-		evmux       = new(event.TypeMux)
-		pow         = new(core.FakePow)
-		db, _       = ethdb.NewMemDatabase()
-		genesis     = core.WriteGenesisBlockForTesting(db, core.GenesisAccount{testBankAddress, testBankFunds})
-		chainman, _ = core.NewChainManager(db, pow, evmux)
-		blockproc   = core.NewBlockProcessor(db, pow, chainman, evmux)
+		evmux         = new(event.TypeMux)
+		pow           = new(core.FakePow)
+		db, _         = ethdb.NewMemDatabase()
+		genesis       = core.WriteGenesisBlockForTesting(db, core.GenesisAccount{testBankAddress, testBankFunds})
+		blockchain, _ = core.NewBlockChain(db, pow, evmux)
+		blockproc     = core.NewBlockProcessor(db, pow, blockchain, evmux)
 	)
-	chainman.SetProcessor(blockproc)
-	if _, err := chainman.InsertChain(core.GenerateChain(genesis, db, blocks, generator)); err != nil {
+	blockchain.SetProcessor(blockproc)
+	if _, err := blockchain.InsertChain(core.GenerateChain(genesis, db, blocks, generator)); err != nil {
 		panic(err)
 	}
-	pm := NewProtocolManager(NetworkId, evmux, &testTxPool{added: newtx}, pow, chainman, db)
+	pm := NewProtocolManager(NetworkId, evmux, &testTxPool{added: newtx}, pow, blockchain, db)
 	pm.Start()
 	return pm
 }
@@ -116,7 +116,7 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 	}
 	// Execute any implicitly requested handshakes and return
 	if shake {
-		td, head, genesis := pm.chainman.Status()
+		td, head, genesis := pm.blockchain.Status()
 		tp.handshake(nil, td, head, genesis)
 	}
 	return tp, errc

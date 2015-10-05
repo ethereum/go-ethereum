@@ -22,15 +22,18 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type ContextRef interface {
+// ContractRef is a reference to the contract's backing object
+type ContractRef interface {
 	ReturnGas(*big.Int, *big.Int)
 	Address() common.Address
 	SetCode([]byte)
 }
 
-type Context struct {
-	caller ContextRef
-	self   ContextRef
+// Contract represents an ethereum contract in the state database. It contains
+// the the contract code, calling arguments. Contract implements ContractReg
+type Contract struct {
+	caller ContractRef
+	self   ContractRef
 
 	jumpdests destinations // result of JUMPDEST analysis.
 
@@ -44,10 +47,10 @@ type Context struct {
 }
 
 // Create a new context for the given data items.
-func NewContext(caller ContextRef, object ContextRef, value, gas, price *big.Int) *Context {
-	c := &Context{caller: caller, self: object, Args: nil}
+func NewContract(caller ContractRef, object ContractRef, value, gas, price *big.Int) *Contract {
+	c := &Contract{caller: caller, self: object, Args: nil}
 
-	if parent, ok := caller.(*Context); ok {
+	if parent, ok := caller.(*Contract); ok {
 		// Reuse JUMPDEST analysis from parent context if available.
 		c.jumpdests = parent.jumpdests
 	} else {
@@ -66,11 +69,13 @@ func NewContext(caller ContextRef, object ContextRef, value, gas, price *big.Int
 	return c
 }
 
-func (c *Context) GetOp(n uint64) OpCode {
+// GetOp returns the n'th element in the contract's byte array
+func (c *Contract) GetOp(n uint64) OpCode {
 	return OpCode(c.GetByte(n))
 }
 
-func (c *Context) GetByte(n uint64) byte {
+// GetByte returns the n'th byte in the contract's byte array
+func (c *Contract) GetByte(n uint64) byte {
 	if n < uint64(len(c.Code)) {
 		return c.Code[n]
 	}
@@ -78,43 +83,44 @@ func (c *Context) GetByte(n uint64) byte {
 	return 0
 }
 
-func (c *Context) Return(ret []byte) []byte {
+// Return returns the given ret argument and returns any remaining gas to the
+// caller
+func (c *Contract) Return(ret []byte) []byte {
 	// Return the remaining gas to the caller
 	c.caller.ReturnGas(c.Gas, c.Price)
 
 	return ret
 }
 
-/*
- * Gas functions
- */
-func (c *Context) UseGas(gas *big.Int) (ok bool) {
-	ok = UseGas(c.Gas, gas)
+// UseGas attempts the use gas and subtracts it and returns true on success
+func (c *Contract) UseGas(gas *big.Int) (ok bool) {
+	ok = useGas(c.Gas, gas)
 	if ok {
 		c.UsedGas.Add(c.UsedGas, gas)
 	}
 	return
 }
 
-// Implement the caller interface
-func (c *Context) ReturnGas(gas, price *big.Int) {
+// ReturnGas adds the given gas back to itself.
+func (c *Contract) ReturnGas(gas, price *big.Int) {
 	// Return the gas to the context
 	c.Gas.Add(c.Gas, gas)
 	c.UsedGas.Sub(c.UsedGas, gas)
 }
 
-/*
- * Set / Get
- */
-func (c *Context) Address() common.Address {
+// Address returns the contracts address
+func (c *Contract) Address() common.Address {
 	return c.self.Address()
 }
 
-func (self *Context) SetCode(code []byte) {
+// SetCode sets the code to the contract
+func (self *Contract) SetCode(code []byte) {
 	self.Code = code
 }
 
-func (self *Context) SetCallCode(addr *common.Address, code []byte) {
+// SetCallCode sets the code of the contract and address of the backing data
+// object
+func (self *Contract) SetCallCode(addr *common.Address, code []byte) {
 	self.Code = code
 	self.CodeAddr = addr
 }

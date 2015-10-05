@@ -24,21 +24,22 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow/ezp"
 )
 
-func proc() (*BlockProcessor, *ChainManager) {
+func proc() (*BlockProcessor, *BlockChain) {
 	db, _ := ethdb.NewMemDatabase()
 	var mux event.TypeMux
 
 	WriteTestNetGenesisBlock(db, 0)
-	chainMan, err := NewChainManager(db, thePow(), &mux)
+	blockchain, err := NewBlockChain(db, thePow(), &mux)
 	if err != nil {
 		fmt.Println(err)
 	}
-	return NewBlockProcessor(db, ezp.New(), chainMan, &mux), chainMan
+	return NewBlockProcessor(db, ezp.New(), blockchain, &mux), blockchain
 }
 
 func TestNumber(t *testing.T) {
@@ -69,7 +70,7 @@ func TestPutReceipt(t *testing.T) {
 	hash[0] = 2
 
 	receipt := new(types.Receipt)
-	receipt.SetLogs(state.Logs{&state.Log{
+	receipt.SetLogs(vm.Logs{&vm.Log{
 		Address:   addr,
 		Topics:    []common.Hash{hash},
 		Data:      []byte("hi"),

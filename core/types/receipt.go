@@ -23,7 +23,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -33,7 +33,7 @@ type Receipt struct {
 	Bloom             Bloom
 	TxHash            common.Hash
 	ContractAddress   common.Address
-	logs              state.Logs
+	logs              vm.Logs
 	GasUsed           *big.Int
 }
 
@@ -41,11 +41,11 @@ func NewReceipt(root []byte, cumalativeGasUsed *big.Int) *Receipt {
 	return &Receipt{PostState: common.CopyBytes(root), CumulativeGasUsed: new(big.Int).Set(cumalativeGasUsed)}
 }
 
-func (self *Receipt) SetLogs(logs state.Logs) {
+func (self *Receipt) SetLogs(logs vm.Logs) {
 	self.logs = logs
 }
 
-func (self *Receipt) Logs() state.Logs {
+func (self *Receipt) Logs() vm.Logs {
 	return self.logs
 }
 
@@ -60,7 +60,7 @@ func (self *Receipt) DecodeRLP(s *rlp.Stream) error {
 		Bloom             Bloom
 		TxHash            common.Hash
 		ContractAddress   common.Address
-		Logs              state.Logs
+		Logs              vm.Logs
 		GasUsed           *big.Int
 	}
 	if err := s.Decode(&r); err != nil {
@@ -74,9 +74,9 @@ func (self *Receipt) DecodeRLP(s *rlp.Stream) error {
 type ReceiptForStorage Receipt
 
 func (self *ReceiptForStorage) EncodeRLP(w io.Writer) error {
-	storageLogs := make([]*state.LogForStorage, len(self.logs))
+	storageLogs := make([]*vm.LogForStorage, len(self.logs))
 	for i, log := range self.logs {
-		storageLogs[i] = (*state.LogForStorage)(log)
+		storageLogs[i] = (*vm.LogForStorage)(log)
 	}
 	return rlp.Encode(w, []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, self.TxHash, self.ContractAddress, storageLogs, self.GasUsed})
 }
