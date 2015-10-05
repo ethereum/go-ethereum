@@ -47,4 +47,9 @@ var (
 	receiptReqTimer     = metrics.NewTimer("eth/downloader/receipts/req")
 	receiptDropMeter    = metrics.NewMeter("eth/downloader/receipts/drop")
 	receiptTimeoutMeter = metrics.NewMeter("eth/downloader/receipts/timeout")
+
+	stateInMeter      = metrics.NewMeter("eth/downloader/states/in")
+	stateReqTimer     = metrics.NewTimer("eth/downloader/states/req")
+	stateDropMeter    = metrics.NewMeter("eth/downloader/states/drop")
+	stateTimeoutMeter = metrics.NewMeter("eth/downloader/states/timeout")
 )
