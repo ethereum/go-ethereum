@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/hashicorp/golang-lru"
 )
 
@@ -251,6 +252,26 @@ func (bc *ChainManager) SetHead(head uint64) {
 	}
 	bc.insert(bc.currentBlock)
 	bc.loadLastState()
+}
+
+// FastSyncCommitHead sets the current head block to the one defined by the hash
+// irrelevant what the chain contents were prior.
+func (self *ChainManager) FastSyncCommitHead(hash common.Hash) error {
+	// Make sure that both the block as well at it's state trie exists
+	block := self.GetBlock(hash)
+	if block == nil {
+		return fmt.Errorf("non existent block [%x…]", hash[:4])
+	}
+	if _, err := trie.NewSecure(block.Root(), self.chainDb); err != nil {
+		return err
+	}
+	// If all checks out, manually set the head block
+	self.mu.Lock()
+	self.currentBlock = block
+	self.mu.Unlock()
+
+	glog.V(logger.Info).Infof("committed block #%d [%x…] as new head", block.Number(), hash[:4])
+	return nil
 }
 
 func (self *ChainManager) GasLimit() *big.Int {
@@ -770,10 +791,6 @@ func (self *ChainManager) InsertHeaderChain(chain []*types.Header, verify bool) 
 func (self *ChainManager) InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
 	self.wg.Add(1)
 	defer self.wg.Done()
-
-	// Make sure only one thread manipulates the chain at once
-	self.chainmu.Lock()
-	defer self.chainmu.Unlock()
 
 	// Collect some import statistics to report on
 	stats := struct{ processed, ignored int }{}
