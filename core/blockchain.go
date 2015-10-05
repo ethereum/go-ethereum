@@ -297,6 +297,9 @@ func (bc *BlockChain) insert(block *types.Block) {
 	if err := WriteCanonicalHash(bc.chainDb, block.Hash(), block.NumberU64()); err != nil {
 		glog.Fatalf("failed to insert block number: %v", err)
 	}
+	if err := WriteHeadBlockHash(bc.chainDb, block.Hash()); err != nil {
+		glog.Fatalf("failed to insert block number: %v", err)
+	}
 	bc.currentBlock = block
 }
 

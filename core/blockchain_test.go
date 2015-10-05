@@ -153,6 +153,19 @@ func insertChain(done chan bool, blockchain *BlockChain, chain types.Blocks, t *
 	done <- true
 }
 
+func TestLastBlock(t *testing.T) {
+	db, err := ethdb.NewMemDatabase()
+	if err != nil {
+		t.Fatal("Failed to create db:", err)
+	}
+	bchain := theBlockChain(db, t)
+	block := makeChain(bchain.CurrentBlock(), 1, db, 0)[0]
+	bchain.insert(block)
+	if block.Hash() != GetHeadBlockHash(db) {
+		t.Errorf("Write/Get HeadBlockHash failed")
+	}
+}
+
 func TestExtendCanonical(t *testing.T) {
 	CanonicalLength := 5
 	db, err := ethdb.NewMemDatabase()
