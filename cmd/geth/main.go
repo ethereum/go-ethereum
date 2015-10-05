@@ -48,9 +48,9 @@ import (
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "1.2.0-dev"
+	Version          = "1.3.0-dev"
 	VersionMajor     = 1
-	VersionMinor     = 2
+	VersionMinor     = 3
 	VersionPatch     = 0
 )
 
