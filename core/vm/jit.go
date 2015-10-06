@@ -290,6 +290,8 @@ func CompileProgram(program *Program) (err error) {
 		}
 	}
 
+	optimiseProgram(program)
+
 	return nil
 }
 

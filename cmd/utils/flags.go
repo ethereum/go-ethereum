@@ -475,6 +475,9 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		cfg.TestNet = true
 	}
 
+	if ctx.GlobalBool(VMEnableJitFlag.Name) {
+		cfg.Name += "/JIT"
+	}
 	if ctx.GlobalBool(DevModeFlag.Name) {
 		if !ctx.GlobalIsSet(VMDebugFlag.Name) {
 			cfg.VmDebug = true

@@ -73,7 +73,7 @@ func (instr instruction) do(program *Program, pc *uint64, env Environment, contr
 	// Resize the memory calculated previously
 	memory.Resize(newMemSize.Uint64())
 
-	// These opcodes return an argument and are thefor handled
+	// These opcodes return an argument and are therefor handled
 	// differently from the rest of the opcodes
 	switch instr.op {
 	case JUMP:
