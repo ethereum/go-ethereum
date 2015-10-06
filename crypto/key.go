@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pborman/uuid"
@@ -142,4 +143,25 @@ func NewKey(rand io.Reader) *Key {
 	}
 
 	return NewKeyFromECDSA(privateKeyECDSA)
+}
+
+// generate key whose address fits into < 155 bits so it can fit into
+// the Direct ICAP spec. for simplicity and easier compatibility with
+// other libs, we retry until the first byte is 0.
+func NewKeyForDirectICAP(rand io.Reader) *Key {
+	randBytes := make([]byte, 64)
+	_, err := rand.Read(randBytes)
+	if err != nil {
+		panic("key generation: could not read from random source: " + err.Error())
+	}
+	reader := bytes.NewReader(randBytes)
+	privateKeyECDSA, err := ecdsa.GenerateKey(S256(), reader)
+	if err != nil {
+		panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
+	}
+	key := NewKeyFromECDSA(privateKeyECDSA)
+	if !strings.HasPrefix(key.Address.Hex(), "0x00") {
+		return NewKeyForDirectICAP(rand)
+	}
+	return key
 }
