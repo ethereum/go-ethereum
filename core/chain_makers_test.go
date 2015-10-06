@@ -84,7 +84,7 @@ func ExampleGenerateChain() {
 		return
 	}
 
-	state := chainman.State()
+	state, _ := chainman.State()
 	fmt.Printf("last block: #%d\n", chainman.CurrentBlock().Number())
 	fmt.Println("balance of addr1:", state.GetBalance(addr1))
 	fmt.Println("balance of addr2:", state.GetBalance(addr2))

@@ -52,12 +52,11 @@ type StateDB struct {
 }
 
 // Create a new state from a given trie
-func New(root common.Hash, db ethdb.Database) *StateDB {
+func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 	tr, err := trie.NewSecure(root, db)
 	if err != nil {
-		// TODO: bubble this up
-		tr, _ = trie.NewSecure(common.Hash{}, db)
 		glog.Errorf("can't create state trie with root %x: %v", root[:], err)
+		return nil, err
 	}
 	return &StateDB{
 		db:           db,
@@ -65,7 +64,7 @@ func New(root common.Hash, db ethdb.Database) *StateDB {
 		stateObjects: make(map[string]*StateObject),
 		refund:       new(big.Int),
 		logs:         make(map[common.Hash]vm.Logs),
-	}
+	}, nil
 }
 
 func (self *StateDB) StartRecord(thash, bhash common.Hash, ti int) {
@@ -297,7 +296,8 @@ func (self *StateDB) CreateAccount(addr common.Address) vm.Account {
 //
 
 func (self *StateDB) Copy() *StateDB {
-	state := New(common.Hash{}, self.db)
+	// ignore error - we assume state-to-be-copied always exists
+	state, _ := New(common.Hash{}, self.db)
 	state.trie = self.trie
 	for k, stateObject := range self.stateObjects {
 		state.stateObjects[k] = stateObject.Copy()

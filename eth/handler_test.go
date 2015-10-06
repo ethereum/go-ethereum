@@ -443,10 +443,11 @@ func testGetNodeData(t *testing.T, protocol int) {
 	}
 	accounts := []common.Address{testBankAddress, acc1Addr, acc2Addr}
 	for i := uint64(0); i <= pm.blockchain.CurrentBlock().NumberU64(); i++ {
-		trie := state.New(pm.blockchain.GetBlockByNumber(i).Root(), statedb)
+		trie, _ := state.New(pm.blockchain.GetBlockByNumber(i).Root(), statedb)
 
 		for j, acc := range accounts {
-			bw := pm.blockchain.State().GetBalance(acc)
+			state, _ := pm.blockchain.State()
+			bw := state.GetBalance(acc)
 			bh := trie.GetBalance(acc)
 
 			if (bw != nil && bh == nil) || (bw == nil && bh != nil) {

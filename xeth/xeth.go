@@ -126,7 +126,11 @@ func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}
-	xeth.state = NewState(xeth, xeth.backend.BlockChain().State())
+	state, err := xeth.backend.BlockChain().State()
+	if err != nil {
+		return nil
+	}
+	xeth.state = NewState(xeth, state)
 
 	go xeth.start()
 
@@ -207,14 +211,21 @@ func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }
 
 func (self *XEth) AtStateNum(num int64) *XEth {
 	var st *state.StateDB
+	var err error
 	switch num {
 	case -2:
 		st = self.backend.Miner().PendingState().Copy()
 	default:
 		if block := self.getBlockByHeight(num); block != nil {
-			st = state.New(block.Root(), self.backend.ChainDb())
+			st, err = state.New(block.Root(), self.backend.ChainDb())
+			if err != nil {
+				return nil
+			}
 		} else {
-			st = state.New(self.backend.BlockChain().GetBlockByNumber(0).Root(), self.backend.ChainDb())
+			st, err = state.New(self.backend.BlockChain().GetBlockByNumber(0).Root(), self.backend.ChainDb())
+			if err != nil {
+				return nil
+			}
 		}
 	}
 
@@ -266,7 +277,11 @@ func (self *XEth) UpdateState() (wait chan *big.Int) {
 						wait <- n
 						n = nil
 					}
-					statedb := state.New(event.Block.Root(), self.backend.ChainDb())
+					statedb, err := state.New(event.Block.Root(), self.backend.ChainDb())
+					if err != nil {
+						glog.V(logger.Error).Infoln("Could not create new state: %v", err)
+						return
+					}
 					self.state = NewState(self, statedb)
 				}
 			case n, ok = <-wait:

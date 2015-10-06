@@ -113,7 +113,7 @@ func run(ctx *cli.Context) {
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
 	db, _ := ethdb.NewMemDatabase()
-	statedb := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, db)
 	sender := statedb.CreateAccount(common.StringToAddress("sender"))
 	receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
 	receiver.SetCode(common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name)))

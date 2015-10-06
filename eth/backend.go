@@ -389,7 +389,8 @@ func New(config *Config) (*Ethereum, error) {
 
 		return nil, err
 	}
-	eth.txPool = core.NewTxPool(eth.EventMux(), eth.blockchain.State, eth.blockchain.GasLimit)
+	newPool := core.NewTxPool(eth.EventMux(), eth.blockchain.State, eth.blockchain.GasLimit)
+	eth.txPool = newPool
 
 	eth.blockProcessor = core.NewBlockProcessor(chainDb, eth.pow, eth.blockchain, eth.EventMux())
 	eth.blockchain.SetProcessor(eth.blockProcessor)

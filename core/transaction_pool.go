@@ -48,7 +48,7 @@ const (
 	maxQueued = 64 // max limit of queued txs per address
 )
 
-type stateFn func() *state.StateDB
+type stateFn func() (*state.StateDB, error)
 
 // TxPool contains all currently known transactions. Transactions
 // enter the pool when they are received from the network or submitted
@@ -80,7 +80,7 @@ func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func(
 		currentState: currentStateFn,
 		gasLimit:     gasLimitFn,
 		minGasPrice:  new(big.Int),
-		pendingState: state.ManageState(currentStateFn()),
+		pendingState: nil,
 		events:       eventMux.Subscribe(ChainHeadEvent{}, GasPriceChanged{}, RemovedTransactionEvent{}),
 	}
 	go pool.eventLoop()
@@ -109,7 +109,17 @@ func (pool *TxPool) eventLoop() {
 }
 
 func (pool *TxPool) resetState() {
-	pool.pendingState = state.ManageState(pool.currentState())
+	currentState, err := pool.currentState()
+	if err != nil {
+		glog.V(logger.Info).Infoln("failed to get current state: %v", err)
+		return
+	}
+	managedState := state.ManageState(currentState)
+	if err != nil {
+		glog.V(logger.Info).Infoln("failed to get managed state: %v", err)
+		return
+	}
+	pool.pendingState = managedState
 
 	// validate the pool of pending transactions, this will remove
 	// any transactions that have been included in the block or
@@ -180,12 +190,16 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 
 	// Make sure the account exist. Non existent accounts
 	// haven't got funds and well therefor never pass.
-	if !pool.currentState().HasAccount(from) {
+	currentState, err := pool.currentState()
+	if err != nil {
+		return err
+	}
+	if !currentState.HasAccount(from) {
 		return ErrNonExistentAccount
 	}
 
 	// Last but not least check for nonce errors
-	if pool.currentState().GetNonce(from) > tx.Nonce() {
+	if currentState.GetNonce(from) > tx.Nonce() {
 		return ErrNonce
 	}
 
@@ -204,7 +218,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	if pool.currentState().GetBalance(from).Cmp(tx.Cost()) < 0 {
+	if currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 		return ErrInsufficientFunds
 	}
 
@@ -257,6 +271,11 @@ func (self *TxPool) queueTx(hash common.Hash, tx *types.Transaction) {
 
 // addTx will add a transaction to the pending (processable queue) list of transactions
 func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *types.Transaction) {
+	// init delayed since tx pool could have been started before any state sync
+	if pool.pendingState == nil {
+		pool.resetState()
+	}
+
 	if _, ok := pool.pending[hash]; !ok {
 		pool.pending[hash] = tx
 
@@ -382,14 +401,22 @@ func (pool *TxPool) RemoveTx(hash common.Hash) {
 
 // checkQueue moves transactions that have become processable to main pool.
 func (pool *TxPool) checkQueue() {
-	state := pool.pendingState
+	// init delayed since tx pool could have been started before any state sync
+	if pool.pendingState == nil {
+		pool.resetState()
+	}
 
 	var addq txQueue
 	for address, txs := range pool.queue {
 		// guessed nonce is the nonce currently kept by the tx pool (pending state)
-		guessedNonce := state.GetNonce(address)
+		guessedNonce := pool.pendingState.GetNonce(address)
 		// true nonce is the nonce known by the last state
-		trueNonce := pool.currentState().GetNonce(address)
+		currentState, err := pool.currentState()
+		if err != nil {
+			glog.Errorf("could not get current state: %v", err)
+			return
+		}
+		trueNonce := currentState.GetNonce(address)
 		addq := addq[:0]
 		for hash, tx := range txs {
 			if tx.Nonce() < trueNonce {
@@ -434,7 +461,11 @@ func (pool *TxPool) checkQueue() {
 
 // validatePool removes invalid and processed transactions from the main pool.
 func (pool *TxPool) validatePool() {
-	state := pool.currentState()
+	state, err := pool.currentState()
+	if err != nil {
+		glog.V(logger.Info).Infoln("failed to get current state: %v", err)
+		return
+	}
 	for hash, tx := range pool.pending {
 		from, _ := tx.From() // err already checked
 		// perform light nonce validation

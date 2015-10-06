@@ -103,7 +103,7 @@ func BenchStateTest(p string, conf bconf, b *testing.B) error {
 func benchStateTest(test VmTest, env map[string]string, b *testing.B) {
 	b.StopTimer()
 	db, _ := ethdb.NewMemDatabase()
-	statedb := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)
@@ -142,7 +142,7 @@ func runStateTests(tests map[string]VmTest, skipTests []string) error {
 
 func runStateTest(test VmTest) error {
 	db, _ := ethdb.NewMemDatabase()
-	statedb := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)

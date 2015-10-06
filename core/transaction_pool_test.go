@@ -36,11 +36,13 @@ func transaction(nonce uint64, gaslimit *big.Int, key *ecdsa.PrivateKey) *types.
 
 func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
 	db, _ := ethdb.NewMemDatabase()
-	statedb := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, db)
 
 	var m event.TypeMux
 	key, _ := crypto.GenerateKey()
-	return NewTxPool(&m, func() *state.StateDB { return statedb }, func() *big.Int { return big.NewInt(1000000) }), key
+	newPool := NewTxPool(&m, func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
+	newPool.resetState()
+	return newPool, key
 }
 
 func TestInvalidTransactions(t *testing.T) {
@@ -52,19 +54,20 @@ func TestInvalidTransactions(t *testing.T) {
 	}
 
 	from, _ := tx.From()
-	pool.currentState().AddBalance(from, big.NewInt(1))
+	currentState, _ := pool.currentState()
+	currentState.AddBalance(from, big.NewInt(1))
 	if err := pool.Add(tx); err != ErrInsufficientFunds {
 		t.Error("expected", ErrInsufficientFunds)
 	}
 
 	balance := new(big.Int).Add(tx.Value(), new(big.Int).Mul(tx.Gas(), tx.GasPrice()))
-	pool.currentState().AddBalance(from, balance)
+	currentState.AddBalance(from, balance)
 	if err := pool.Add(tx); err != ErrIntrinsicGas {
 		t.Error("expected", ErrIntrinsicGas, "got", err)
 	}
 
-	pool.currentState().SetNonce(from, 1)
-	pool.currentState().AddBalance(from, big.NewInt(0xffffffffffffff))
+	currentState.SetNonce(from, 1)
+	currentState.AddBalance(from, big.NewInt(0xffffffffffffff))
 	tx = transaction(0, big.NewInt(100000), key)
 	if err := pool.Add(tx); err != ErrNonce {
 		t.Error("expected", ErrNonce)
@@ -75,7 +78,8 @@ func TestTransactionQueue(t *testing.T) {
 	pool, key := setupTxPool()
 	tx := transaction(0, big.NewInt(100), key)
 	from, _ := tx.From()
-	pool.currentState().AddBalance(from, big.NewInt(1))
+	currentState, _ := pool.currentState()
+	currentState.AddBalance(from, big.NewInt(1))
 	pool.queueTx(tx.Hash(), tx)
 
 	pool.checkQueue()
@@ -85,7 +89,7 @@ func TestTransactionQueue(t *testing.T) {
 
 	tx = transaction(1, big.NewInt(100), key)
 	from, _ = tx.From()
-	pool.currentState().SetNonce(from, 2)
+	currentState.SetNonce(from, 2)
 	pool.queueTx(tx.Hash(), tx)
 	pool.checkQueue()
 	if _, ok := pool.pending[tx.Hash()]; ok {
@@ -119,7 +123,8 @@ func TestRemoveTx(t *testing.T) {
 	pool, key := setupTxPool()
 	tx := transaction(0, big.NewInt(100), key)
 	from, _ := tx.From()
-	pool.currentState().AddBalance(from, big.NewInt(1))
+	currentState, _ := pool.currentState()
+	currentState.AddBalance(from, big.NewInt(1))
 	pool.queueTx(tx.Hash(), tx)
 	pool.addTx(tx.Hash(), from, tx)
 	if len(pool.queue) != 1 {
@@ -146,7 +151,8 @@ func TestNegativeValue(t *testing.T) {
 
 	tx, _ := types.NewTransaction(0, common.Address{}, big.NewInt(-1), big.NewInt(100), big.NewInt(1), nil).SignECDSA(key)
 	from, _ := tx.From()
-	pool.currentState().AddBalance(from, big.NewInt(1))
+	currentState, _ := pool.currentState()
+	currentState.AddBalance(from, big.NewInt(1))
 	if err := pool.Add(tx); err != ErrNegativeValue {
 		t.Error("expected", ErrNegativeValue, "got", err)
 	}
@@ -157,9 +163,10 @@ func TestTransactionChainFork(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	resetState := func() {
 		db, _ := ethdb.NewMemDatabase()
-		statedb := state.New(common.Hash{}, db)
-		pool.currentState = func() *state.StateDB { return statedb }
-		pool.currentState().AddBalance(addr, big.NewInt(100000000000000))
+		statedb, _ := state.New(common.Hash{}, db)
+		pool.currentState = func() (*state.StateDB, error) { return statedb, nil }
+		currentState, _ := pool.currentState()
+		currentState.AddBalance(addr, big.NewInt(100000000000000))
 		pool.resetState()
 	}
 	resetState()
@@ -182,9 +189,10 @@ func TestTransactionDoubleNonce(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	resetState := func() {
 		db, _ := ethdb.NewMemDatabase()
-		statedb := state.New(common.Hash{}, db)
-		pool.currentState = func() *state.StateDB { return statedb }
-		pool.currentState().AddBalance(addr, big.NewInt(100000000000000))
+		statedb, _ := state.New(common.Hash{}, db)
+		pool.currentState = func() (*state.StateDB, error) { return statedb, nil }
+		currentState, _ := pool.currentState()
+		currentState.AddBalance(addr, big.NewInt(100000000000000))
 		pool.resetState()
 	}
 	resetState()
@@ -207,7 +215,8 @@ func TestTransactionDoubleNonce(t *testing.T) {
 func TestMissingNonce(t *testing.T) {
 	pool, key := setupTxPool()
 	addr := crypto.PubkeyToAddress(key.PublicKey)
-	pool.currentState().AddBalance(addr, big.NewInt(100000000000000))
+	currentState, _ := pool.currentState()
+	currentState.AddBalance(addr, big.NewInt(100000000000000))
 	tx := transaction(1, big.NewInt(100000), key)
 	if err := pool.add(tx); err != nil {
 		t.Error("didn't expect error", err)
@@ -224,15 +233,16 @@ func TestNonceRecovery(t *testing.T) {
 	const n = 10
 	pool, key := setupTxPool()
 	addr := crypto.PubkeyToAddress(key.PublicKey)
-	pool.currentState().SetNonce(addr, n)
-	pool.currentState().AddBalance(addr, big.NewInt(100000000000000))
+	currentState, _ := pool.currentState()
+	currentState.SetNonce(addr, n)
+	currentState.AddBalance(addr, big.NewInt(100000000000000))
 	pool.resetState()
 	tx := transaction(n, big.NewInt(100000), key)
 	if err := pool.Add(tx); err != nil {
 		t.Error(err)
 	}
 	// simulate some weird re-order of transactions and missing nonce(s)
-	pool.currentState().SetNonce(addr, n-1)
+	currentState.SetNonce(addr, n-1)
 	pool.resetState()
 	if fn := pool.pendingState.GetNonce(addr); fn != n+1 {
 		t.Errorf("expected nonce to be %d, got %d", n+1, fn)
@@ -243,7 +253,8 @@ func TestRemovedTxEvent(t *testing.T) {
 	pool, key := setupTxPool()
 	tx := transaction(0, big.NewInt(1000000), key)
 	from, _ := tx.From()
-	pool.currentState().AddBalance(from, big.NewInt(1000000000000))
+	currentState, _ := pool.currentState()
+	currentState.AddBalance(from, big.NewInt(1000000000000))
 	pool.eventMux.Post(RemovedTransactionEvent{types.Transactions{tx}})
 	pool.eventMux.Post(ChainHeadEvent{nil})
 	if len(pool.pending) != 1 {
