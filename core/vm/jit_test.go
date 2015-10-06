@@ -152,9 +152,7 @@ func (self *Env) SetDepth(i int) { self.depth = i }
 func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
 	return true
 }
-func (self *Env) Transfer(from, to Account, amount *big.Int) error {
-	return nil
-}
+func (self *Env) Transfer(from, to Account, amount *big.Int) {}
 func (self *Env) Call(caller ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
 	return nil, nil
 }
