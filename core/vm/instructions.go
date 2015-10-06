@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -25,15 +26,15 @@ import (
 )
 
 type programInstruction interface {
-	Do(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack)
+	// executes the program instruction and allows the instruction to modify the state of the program
+	do(program *Program, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) ([]byte, error)
+	// returns whether the program instruction halts the execution of the JIT
+	halts() bool
+	// Returns the current op code (debugging purposes)
+	Op() OpCode
 }
 
 type instrFn func(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack)
-
-// Do executes the function. This implements programInstruction
-func (fn instrFn) Do(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
-	fn(instr, pc, env, contract, memory, stack)
-}
 
 type instruction struct {
 	op   OpCode
@@ -44,6 +45,73 @@ type instruction struct {
 	gas   *big.Int
 	spop  int
 	spush int
+
+	returns bool
+}
+
+func jump(mapping map[uint64]uint64, destinations map[uint64]struct{}, contract *Contract, to *big.Int) (uint64, error) {
+	if !validDest(destinations, to) {
+		nop := contract.GetOp(to.Uint64())
+		return 0, fmt.Errorf("invalid jump destination (%v) %v", nop, to)
+	}
+
+	return mapping[to.Uint64()], nil
+}
+
+func (instr instruction) do(program *Program, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) ([]byte, error) {
+	// calculate the new memory size and gas price for the current executing opcode
+	newMemSize, cost, err := jitCalculateGasAndSize(env, contract, instr, env.Db(), memory, stack)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use the calculated gas. When insufficient gas is present, use all gas and return an
+	// Out Of Gas error
+	if !contract.UseGas(cost) {
+		return nil, OutOfGasError
+	}
+	// Resize the memory calculated previously
+	memory.Resize(newMemSize.Uint64())
+
+	// These opcodes return an argument and are thefor handled
+	// differently from the rest of the opcodes
+	switch instr.op {
+	case JUMP:
+		if pos, err := jump(program.mapping, program.destinations, contract, stack.pop()); err != nil {
+			return nil, err
+		} else {
+			*pc = pos
+			return nil, nil
+		}
+	case JUMPI:
+		pos, cond := stack.pop(), stack.pop()
+		if cond.Cmp(common.BigTrue) >= 0 {
+			if pos, err := jump(program.mapping, program.destinations, contract, pos); err != nil {
+				return nil, err
+			} else {
+				*pc = pos
+				return nil, nil
+			}
+		}
+	case RETURN:
+		offset, size := stack.pop(), stack.pop()
+		return memory.GetPtr(offset.Int64(), size.Int64()), nil
+	default:
+		if instr.fn == nil {
+			return nil, fmt.Errorf("Invalid opcode 0x%x", instr.op)
+		}
+		instr.fn(instr, pc, env, contract, memory, stack)
+	}
+	*pc++
+	return nil, nil
+}
+
+func (instr instruction) halts() bool {
+	return instr.returns
+}
+
+func (instr instruction) Op() OpCode {
+	return instr.op
 }
 
 func opStaticJump(instr instruction, pc *uint64, ret *big.Int, env Environment, contract *Contract, memory *Memory, stack *stack) {
@@ -536,8 +604,6 @@ func opStop(instr instruction, pc *uint64, env Environment, contract *Contract, 
 }
 
 func opSuicide(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
-	//receiver := env.Db().GetOrNewStateObject(common.BigToAddress(stack.pop()))
-	//receiver.AddBalance(balance)
 	balance := env.Db().GetBalance(contract.Address())
 	env.Db().AddBalance(common.BigToAddress(stack.pop()), balance)
 

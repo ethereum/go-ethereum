@@ -86,9 +86,9 @@ type Program struct {
 
 	contract *Contract
 
-	instructions []instruction       // instruction set
-	mapping      map[uint64]int      // real PC mapping to array indices
-	destinations map[uint64]struct{} // cached jump destinations
+	instructions []programInstruction // instruction set
+	mapping      map[uint64]uint64    // real PC mapping to array indices
+	destinations map[uint64]struct{}  // cached jump destinations
 
 	code []byte
 }
@@ -97,7 +97,7 @@ type Program struct {
 func NewProgram(code []byte) *Program {
 	program := &Program{
 		Id:           crypto.Sha3Hash(code),
-		mapping:      make(map[uint64]int),
+		mapping:      make(map[uint64]uint64),
 		destinations: make(map[uint64]struct{}),
 		code:         code,
 	}
@@ -118,10 +118,12 @@ func (p *Program) addInstr(op OpCode, pc uint64, fn instrFn, data *big.Int) {
 		baseOp = DUP1
 	}
 	base := _baseCheck[baseOp]
-	instr := instruction{op, pc, fn, data, base.gas, base.stackPop, base.stackPush}
+
+	returns := op == RETURN || op == SUICIDE || op == STOP
+	instr := instruction{op, pc, fn, data, base.gas, base.stackPop, base.stackPush, returns}
 
 	p.instructions = append(p.instructions, instr)
-	p.mapping[pc] = len(p.instructions) - 1
+	p.mapping[pc] = uint64(len(p.instructions) - 1)
 }
 
 // CompileProgram compiles the given program and return an error when it fails
@@ -301,21 +303,8 @@ func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env
 	contract.Input = input
 
 	var (
-		caller         = contract.caller
-		statedb        = env.Db()
-		pc         int = program.mapping[pcstart]
-		instrCount     = 0
-
-		jump = func(to *big.Int) error {
-			if !validDest(program.destinations, to) {
-				nop := contract.GetOp(to.Uint64())
-				return fmt.Errorf("invalid jump destination (%v) %v", nop, to)
-			}
-
-			pc = program.mapping[to.Uint64()]
-
-			return nil
-		}
+		pc         uint64 = program.mapping[pcstart]
+		instrCount        = 0
 	)
 
 	if glog.V(logger.Debug) {
@@ -326,62 +315,19 @@ func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env
 		}()
 	}
 
-	for pc < len(program.instructions) {
+	for pc < uint64(len(program.instructions)) {
 		instrCount++
 
 		instr := program.instructions[pc]
 
-		// calculate the new memory size and gas price for the current executing opcode
-		newMemSize, cost, err := jitCalculateGasAndSize(env, contract, caller, instr, statedb, mem, stack)
+		ret, err := instr.do(program, &pc, env, contract, mem, stack)
 		if err != nil {
 			return nil, err
 		}
 
-		// Use the calculated gas. When insufficient gas is present, use all gas and return an
-		// Out Of Gas error
-		if !contract.UseGas(cost) {
-			return nil, OutOfGasError
-		}
-		// Resize the memory calculated previously
-		mem.Resize(newMemSize.Uint64())
-
-		// These opcodes return an argument and are thefor handled
-		// differently from the rest of the opcodes
-		switch instr.op {
-		case JUMP:
-			if err := jump(stack.pop()); err != nil {
-				return nil, err
-			}
-			continue
-		case JUMPI:
-			pos, cond := stack.pop(), stack.pop()
-
-			if cond.Cmp(common.BigTrue) >= 0 {
-				if err := jump(pos); err != nil {
-					return nil, err
-				}
-				continue
-			}
-		case RETURN:
-			offset, size := stack.pop(), stack.pop()
-			ret := mem.GetPtr(offset.Int64(), size.Int64())
-
+		if instr.halts() {
 			return contract.Return(ret), nil
-		case SUICIDE:
-			instr.fn(instr, nil, env, contract, mem, stack)
-
-			return contract.Return(nil), nil
-		case STOP:
-			return contract.Return(nil), nil
-		default:
-			if instr.fn == nil {
-				return nil, fmt.Errorf("Invalid opcode %x", instr.op)
-			}
-
-			instr.fn(instr, nil, env, contract, mem, stack)
 		}
-
-		pc++
 	}
 
 	contract.Input = nil
@@ -403,7 +349,7 @@ func validDest(dests map[uint64]struct{}, dest *big.Int) bool {
 
 // jitCalculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
 // the operation. This does not reduce gas or resizes the memory.
-func jitCalculateGasAndSize(env Environment, contract *Contract, caller ContractRef, instr instruction, statedb Database, mem *Memory, stack *stack) (*big.Int, *big.Int, error) {
+func jitCalculateGasAndSize(env Environment, contract *Contract, instr instruction, statedb Database, mem *Memory, stack *stack) (*big.Int, *big.Int, error) {
 	var (
 		gas                 = new(big.Int)
 		newMemSize *big.Int = new(big.Int)
