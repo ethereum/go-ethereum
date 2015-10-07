@@ -268,7 +268,7 @@ func (dl *downloadTester) getTd(hash common.Hash) *big.Int {
 }
 
 // insertHeaders injects a new batch of headers into the simulated chain.
-func (dl *downloadTester) insertHeaders(headers []*types.Header, verify bool) (int, error) {
+func (dl *downloadTester) insertHeaders(headers []*types.Header, checkFreq int) (int, error) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
@@ -1262,7 +1262,7 @@ func testForkedSyncBoundaries(t *testing.T, protocol int, mode SyncMode) {
 	pending.Wait()
 
 	// Simulate a successful sync above the fork
-	tester.downloader.syncStatsOrigin = tester.downloader.syncStatsHeight
+	tester.downloader.syncStatsChainOrigin = tester.downloader.syncStatsChainHeight
 
 	// Synchronise with the second fork and check boundary resets
 	tester.newPeer("fork B", protocol, hashesB, headersB, blocksB, receiptsB)

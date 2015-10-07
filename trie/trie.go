@@ -24,6 +24,7 @@ import (
 	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -35,8 +36,12 @@ const defaultCacheCapacity = 800
 var (
 	// The global cache stores decoded trie nodes by hash as they get loaded.
 	globalCache = newARC(defaultCacheCapacity)
+
 	// This is the known root hash of an empty trie.
 	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+
+	// This is the known hash of an empty state trie entry.
+	emptyState = crypto.Sha3Hash(nil)
 )
 
 var ErrMissingRoot = errors.New("missing root node")
