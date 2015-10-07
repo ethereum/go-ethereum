@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -93,8 +94,10 @@ type queue struct {
 	stateTaskQueue *prque.Prque             // [eth/63] Priority queue of the hashes to fetch the node data for
 	statePendPool  map[string]*fetchRequest // [eth/63] Currently pending node data retrieval operations
 
-	stateDatabase  ethdb.Database   // [eth/63] Trie database to populate during state reassembly
-	stateScheduler *state.StateSync // [eth/63] State trie synchronisation scheduler and integrator
+	stateDatabase   ethdb.Database   // [eth/63] Trie database to populate during state reassembly
+	stateScheduler  *state.StateSync // [eth/63] State trie synchronisation scheduler and integrator
+	stateProcessors int32            // [eth/63] Number of currently running state processors
+	stateSchedLock  sync.RWMutex     // [eth/63] Lock serializing access to the state scheduler
 
 	resultCache  []*fetchResult // Downloaded but not yet delivered fetch results
 	resultOffset uint64         // Offset of the first cached fetch result in the block-chain
@@ -175,18 +178,40 @@ func (q *queue) PendingReceipts() int {
 
 // PendingNodeData retrieves the number of node data entries pending for retrieval.
 func (q *queue) PendingNodeData() int {
-	q.lock.RLock()
-	defer q.lock.RUnlock()
+	q.stateSchedLock.RLock()
+	defer q.stateSchedLock.RUnlock()
 
-	return q.stateTaskQueue.Size()
+	if q.stateScheduler != nil {
+		return q.stateScheduler.Pending()
+	}
+	return 0
 }
 
-// InFlight retrieves the number of fetch requests currently in flight.
-func (q *queue) InFlight() int {
+// InFlightBlocks retrieves whether there are block fetch requests currently in
+// flight.
+func (q *queue) InFlightBlocks() bool {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
-	return len(q.blockPendPool) + len(q.receiptPendPool) + len(q.statePendPool)
+	return len(q.blockPendPool) > 0
+}
+
+// InFlightReceipts retrieves whether there are receipt fetch requests currently
+// in flight.
+func (q *queue) InFlightReceipts() bool {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	return len(q.receiptPendPool) > 0
+}
+
+// InFlightNodeData retrieves whether there are node data entry fetch requests
+// currently in flight.
+func (q *queue) InFlightNodeData() bool {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	return len(q.statePendPool)+int(atomic.LoadInt32(&q.stateProcessors)) > 0
 }
 
 // Idle returns if the queue is fully idle or has some data still inside. This
@@ -198,6 +223,12 @@ func (q *queue) Idle() bool {
 	queued := q.hashQueue.Size() + q.blockTaskQueue.Size() + q.receiptTaskQueue.Size() + q.stateTaskQueue.Size()
 	pending := len(q.blockPendPool) + len(q.receiptPendPool) + len(q.statePendPool)
 	cached := len(q.blockDonePool) + len(q.receiptDonePool)
+
+	q.stateSchedLock.RLock()
+	if q.stateScheduler != nil {
+		queued += q.stateScheduler.Pending()
+	}
+	q.stateSchedLock.RUnlock()
 
 	return (queued + pending + cached) == 0
 }
@@ -299,12 +330,9 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 		}
 		if q.mode == FastSync && header.Number.Uint64() == q.fastSyncPivot {
 			// Pivoting point of the fast sync, retrieve the state tries
+			q.stateSchedLock.Lock()
 			q.stateScheduler = state.NewStateSync(header.Root, q.stateDatabase)
-			for _, hash := range q.stateScheduler.Missing(0) {
-				q.stateTaskPool[hash] = q.stateTaskIndex
-				q.stateTaskQueue.Push(hash, -float32(q.stateTaskIndex))
-				q.stateTaskIndex++
-			}
+			q.stateSchedLock.Unlock()
 		}
 		inserts = append(inserts, header)
 		q.headerHead = hash
@@ -325,8 +353,13 @@ func (q *queue) GetHeadResult() *fetchResult {
 	if q.resultCache[0].Pending > 0 {
 		return nil
 	}
-	if q.mode == FastSync && q.resultCache[0].Header.Number.Uint64() == q.fastSyncPivot && len(q.stateTaskPool) > 0 {
-		return nil
+	if q.mode == FastSync && q.resultCache[0].Header.Number.Uint64() == q.fastSyncPivot {
+		if len(q.stateTaskPool) > 0 {
+			return nil
+		}
+		if q.PendingNodeData() > 0 {
+			return nil
+		}
 	}
 	return q.resultCache[0]
 }
@@ -345,8 +378,13 @@ func (q *queue) TakeResults() []*fetchResult {
 			break
 		}
 		// The fast sync pivot block may only be processed after state fetch completes
-		if q.mode == FastSync && result.Header.Number.Uint64() == q.fastSyncPivot && len(q.stateTaskPool) > 0 {
-			break
+		if q.mode == FastSync && result.Header.Number.Uint64() == q.fastSyncPivot {
+			if len(q.stateTaskPool) > 0 {
+				break
+			}
+			if q.PendingNodeData() > 0 {
+				break
+			}
 		}
 		// If we've just inserted the fast sync pivot, stop as the following batch needs different insertion
 		if q.mode == FastSync && result.Header.Number.Uint64() == q.fastSyncPivot+1 && len(results) > 0 {
@@ -373,26 +411,34 @@ func (q *queue) TakeResults() []*fetchResult {
 // ReserveBlocks reserves a set of block hashes for the given peer, skipping any
 // previously failed download.
 func (q *queue) ReserveBlocks(p *peer, count int) *fetchRequest {
-	return q.reserveHashes(p, count, q.hashQueue, q.blockPendPool, len(q.resultCache)-len(q.blockDonePool))
+	return q.reserveHashes(p, count, q.hashQueue, nil, q.blockPendPool, len(q.resultCache)-len(q.blockDonePool))
 }
 
 // ReserveNodeData reserves a set of node data hashes for the given peer, skipping
 // any previously failed download.
 func (q *queue) ReserveNodeData(p *peer, count int) *fetchRequest {
-	return q.reserveHashes(p, count, q.stateTaskQueue, q.statePendPool, 0)
+	// Create a task generator to fetch status-fetch tasks if all schedules ones are done
+	generator := func(max int) {
+		q.stateSchedLock.Lock()
+		defer q.stateSchedLock.Unlock()
+
+		for _, hash := range q.stateScheduler.Missing(max) {
+			q.stateTaskPool[hash] = q.stateTaskIndex
+			q.stateTaskQueue.Push(hash, -float32(q.stateTaskIndex))
+			q.stateTaskIndex++
+		}
+	}
+	return q.reserveHashes(p, count, q.stateTaskQueue, generator, q.statePendPool, count)
 }
 
 // reserveHashes reserves a set of hashes for the given peer, skipping previously
 // failed ones.
-func (q *queue) reserveHashes(p *peer, count int, taskQueue *prque.Prque, pendPool map[string]*fetchRequest, maxPending int) *fetchRequest {
+func (q *queue) reserveHashes(p *peer, count int, taskQueue *prque.Prque, taskGen func(int), pendPool map[string]*fetchRequest, maxPending int) *fetchRequest {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	// Short circuit if the pool has been depleted, or if the peer's already
-	// downloading something (sanity check not to corrupt state)
-	if taskQueue.Empty() {
-		return nil
-	}
+	// Short circuit if the peer's already downloading something (sanity check not
+	// to corrupt state)
 	if _, ok := pendPool[p.id]; ok {
 		return nil
 	}
@@ -402,6 +448,13 @@ func (q *queue) reserveHashes(p *peer, count int, taskQueue *prque.Prque, pendPo
 		for _, request := range pendPool {
 			allowance -= len(request.Hashes)
 		}
+	}
+	// If there's a task generator, ask it to fill our task queue
+	if taskGen != nil && taskQueue.Size() < allowance {
+		taskGen(allowance - taskQueue.Size())
+	}
+	if taskQueue.Empty() {
+		return nil
 	}
 	// Retrieve a batch of hashes, skipping previously failed ones
 	send := make(map[common.Hash]int)
@@ -809,14 +862,14 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQ
 }
 
 // DeliverNodeData injects a node state data retrieval response into the queue.
-func (q *queue) DeliverNodeData(id string, data [][]byte) (int, int, error) {
+func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(error, int)) error {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	// Short circuit if the data was never requested
 	request := q.statePendPool[id]
 	if request == nil {
-		return 0, 0, errNoFetchesPending
+		return errNoFetchesPending
 	}
 	stateReqTimer.UpdateSince(request.Time)
 	delete(q.statePendPool, id)
@@ -829,7 +882,7 @@ func (q *queue) DeliverNodeData(id string, data [][]byte) (int, int, error) {
 	}
 	// Iterate over the downloaded data and verify each of them
 	errs := make([]error, 0)
-	processed := 0
+	process := []trie.SyncResult{}
 	for _, blob := range data {
 		// Skip any blocks that were not requested
 		hash := common.BytesToHash(crypto.Sha3(blob))
@@ -837,41 +890,58 @@ func (q *queue) DeliverNodeData(id string, data [][]byte) (int, int, error) {
 			errs = append(errs, fmt.Errorf("non-requested state data %x", hash))
 			continue
 		}
-		// Inject the next state trie item into the database
-		if err := q.stateScheduler.Process([]trie.SyncResult{{hash, blob}}); err != nil {
-			errs = []error{err}
-			break
-		}
-		processed++
+		// Inject the next state trie item into the processing queue
+		process = append(process, trie.SyncResult{hash, blob})
 
 		delete(request.Hashes, hash)
 		delete(q.stateTaskPool, hash)
 	}
+	// Start the asynchronous node state data injection
+	atomic.AddInt32(&q.stateProcessors, 1)
+	go func() {
+		defer atomic.AddInt32(&q.stateProcessors, -1)
+		q.deliverNodeData(process, callback)
+	}()
 	// Return all failed or missing fetches to the queue
 	for hash, index := range request.Hashes {
 		q.stateTaskQueue.Push(hash, float32(index))
 	}
-	// Also enqueue any newly required state trie nodes
-	discovered := 0
-	if len(q.stateTaskPool) < maxQueuedStates {
-		for _, hash := range q.stateScheduler.Missing(4 * MaxStateFetch) {
-			q.stateTaskPool[hash] = q.stateTaskIndex
-			q.stateTaskQueue.Push(hash, -float32(q.stateTaskIndex))
-			q.stateTaskIndex++
-			discovered++
-		}
-	}
 	// If none of the data items were good, it's a stale delivery
 	switch {
 	case len(errs) == 0:
-		return processed, discovered, nil
+		return nil
 
 	case len(errs) == len(request.Hashes):
-		return processed, discovered, errStaleDelivery
+		return errStaleDelivery
 
 	default:
-		return processed, discovered, fmt.Errorf("multiple failures: %v", errs)
+		return fmt.Errorf("multiple failures: %v", errs)
 	}
+}
+
+// deliverNodeData is the asynchronous node data processor that injects a batch
+// of sync results into the state scheduler.
+func (q *queue) deliverNodeData(results []trie.SyncResult, callback func(error, int)) {
+	// Process results one by one to permit task fetches in between
+	for i, result := range results {
+		q.stateSchedLock.Lock()
+
+		if q.stateScheduler == nil {
+			// Syncing aborted since this async delivery started, bail out
+			q.stateSchedLock.Unlock()
+			callback(errNoFetchesPending, i)
+			return
+		}
+		if _, err := q.stateScheduler.Process([]trie.SyncResult{result}); err != nil {
+			// Processing a state result failed, bail out
+			q.stateSchedLock.Unlock()
+			callback(err, i)
+			return
+		}
+		// Item processing succeeded, release the lock (temporarily)
+		q.stateSchedLock.Unlock()
+	}
+	callback(nil, len(results))
 }
 
 // Prepare configures the result cache to allow accepting and caching inbound
