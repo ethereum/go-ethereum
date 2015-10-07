@@ -20,4 +20,6 @@ import "github.com/ethereum/go-ethereum/core/vm"
 
 type BlockProcessor interface {
 	Process(*Block) (vm.Logs, Receipts, error)
+	ValidateHeader(*Header, bool, bool) error
+	ValidateHeaderWithParent(*Header, *Header, bool, bool) error
 }

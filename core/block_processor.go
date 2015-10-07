@@ -383,6 +383,15 @@ func (sm *BlockProcessor) ValidateHeader(header *types.Header, checkPow, uncle b
 	}
 }
 
+// ValidateHeaderWithParent verifies the validity of a header, relying on the database and
+// POW behind the block processor.
+func (sm *BlockProcessor) ValidateHeaderWithParent(header, parent *types.Header, checkPow, uncle bool) error {
+	if sm.bc.HasHeader(header.Hash()) {
+		return nil
+	}
+	return ValidateHeader(sm.Pow, header, parent, checkPow, uncle)
+}
+
 // See YP section 4.3.4. "Block Header Validity"
 // Validates a header. Returns an error if the header is invalid.
 func ValidateHeader(pow pow.PoW, header *types.Header, parent *types.Header, checkPow, uncle bool) error {
@@ -425,7 +434,7 @@ func ValidateHeader(pow pow.PoW, header *types.Header, parent *types.Header, che
 	if checkPow {
 		// Verify the nonce of the header. Return an error if it's not valid
 		if !pow.Verify(types.NewBlockWithHeader(header)) {
-			return ValidationError("Header's nonce is invalid (= %x)", header.Nonce)
+			return &BlockNonceErr{Hash: header.Hash(), Number: header.Number, Nonce: header.Nonce.Uint64()}
 		}
 	}
 	return nil

@@ -830,7 +830,7 @@ func (d *Downloader) fetchBlocks61(from uint64) error {
 			}
 			// If there's nothing more to fetch, wait or terminate
 			if d.queue.PendingBlocks() == 0 {
-				if d.queue.InFlight() == 0 && finished {
+				if !d.queue.InFlightBlocks() && finished {
 					glog.V(logger.Debug).Infof("Block fetching completed")
 					return nil
 				}
@@ -864,7 +864,7 @@ func (d *Downloader) fetchBlocks61(from uint64) error {
 			}
 			// Make sure that we have peers available for fetching. If all peers have been tried
 			// and all failed throw an error
-			if !throttled && d.queue.InFlight() == 0 && len(idles) == total {
+			if !throttled && !d.queue.InFlightBlocks() && len(idles) == total {
 				return errPeersUnavailable
 			}
 		}
@@ -1124,7 +1124,7 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 			glog.V(logger.Detail).Infof("%v: schedule %d headers from #%d", p, len(headers), from)
 
 			if d.mode == FastSync || d.mode == LightSync {
-				if n, err := d.insertHeaders(headers, false); err != nil {
+				if n, err := d.insertHeaders(headers, headerCheckFrequency); err != nil {
 					glog.V(logger.Debug).Infof("%v: invalid header #%d [%x…]: %v", p, headers[n].Number, headers[n].Hash().Bytes()[:4], err)
 					return errInvalidChain
 				}
@@ -1194,8 +1194,8 @@ func (d *Downloader) fetchBodies(from uint64) error {
 		setIdle  = func(p *peer) { p.SetBlocksIdle() }
 	)
 	err := d.fetchParts(errCancelBodyFetch, d.bodyCh, deliver, d.bodyWakeCh, expire,
-		d.queue.PendingBlocks, d.queue.ThrottleBlocks, d.queue.ReserveBodies, d.bodyFetchHook,
-		fetch, d.queue.CancelBodies, capacity, getIdles, setIdle, "Body")
+		d.queue.PendingBlocks, d.queue.InFlightBlocks, d.queue.ThrottleBlocks, d.queue.ReserveBodies,
+		d.bodyFetchHook, fetch, d.queue.CancelBodies, capacity, getIdles, setIdle, "Body")
 
 	glog.V(logger.Debug).Infof("Block body download terminated: %v", err)
 	return err
@@ -1218,8 +1218,8 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 		setIdle  = func(p *peer) { p.SetReceiptsIdle() }
 	)
 	err := d.fetchParts(errCancelReceiptFetch, d.receiptCh, deliver, d.receiptWakeCh, expire,
-		d.queue.PendingReceipts, d.queue.ThrottleReceipts, d.queue.ReserveReceipts, d.receiptFetchHook,
-		fetch, d.queue.CancelReceipts, capacity, d.peers.ReceiptIdlePeers, setIdle, "Receipt")
+		d.queue.PendingReceipts, d.queue.InFlightReceipts, d.queue.ThrottleReceipts, d.queue.ReserveReceipts,
+		d.receiptFetchHook, fetch, d.queue.CancelReceipts, capacity, d.peers.ReceiptIdlePeers, setIdle, "Receipt")
 
 	glog.V(logger.Debug).Infof("Receipt download terminated: %v", err)
 	return err
@@ -1234,15 +1234,29 @@ func (d *Downloader) fetchNodeData() error {
 	var (
 		deliver = func(packet dataPack) error {
 			start := time.Now()
-			done, found, err := d.queue.DeliverNodeData(packet.PeerId(), packet.(*statePack).states)
+			return d.queue.DeliverNodeData(packet.PeerId(), packet.(*statePack).states, func(err error, delivered int) {
+				if err != nil {
+					// If the node data processing failed, the root hash is very wrong, abort
+					glog.V(logger.Error).Infof("peer %d: state processing failed: %v", packet.PeerId(), err)
+					d.cancel()
+					return
+				}
+				// Processing succeeded, notify state fetcher and processor of continuation
+				if d.queue.PendingNodeData() == 0 {
+					go d.process()
+				} else {
+					select {
+					case d.stateWakeCh <- true:
+					default:
+					}
+				}
+				// Log a message to the user and return
+				d.syncStatsLock.Lock()
+				defer d.syncStatsLock.Unlock()
 
-			d.syncStatsLock.Lock()
-			totalDone, totalKnown := d.syncStatsStateDone+uint64(done), d.syncStatsStateTotal+uint64(found)
-			d.syncStatsStateDone, d.syncStatsStateTotal = totalDone, totalKnown
-			d.syncStatsLock.Unlock()
-
-			glog.V(logger.Info).Infof("imported %d [%d / %d] state entries in %v.", done, totalDone, totalKnown, time.Since(start))
-			return err
+				d.syncStatsStateDone += uint64(delivered)
+				glog.V(logger.Info).Infof("imported %d state entries in %v: processed %d in total", delivered, time.Since(start), d.syncStatsStateDone)
+			})
 		}
 		expire   = func() []string { return d.queue.ExpireNodeData(stateHardTTL) }
 		throttle = func() bool { return false }
@@ -1254,8 +1268,8 @@ func (d *Downloader) fetchNodeData() error {
 		setIdle  = func(p *peer) { p.SetNodeDataIdle() }
 	)
 	err := d.fetchParts(errCancelReceiptFetch, d.stateCh, deliver, d.stateWakeCh, expire,
-		d.queue.PendingNodeData, throttle, reserve, nil, fetch, d.queue.CancelNodeData,
-		capacity, d.peers.ReceiptIdlePeers, setIdle, "State")
+		d.queue.PendingNodeData, d.queue.InFlightNodeData, throttle, reserve, nil, fetch,
+		d.queue.CancelNodeData, capacity, d.peers.ReceiptIdlePeers, setIdle, "State")
 
 	glog.V(logger.Debug).Infof("Node state data download terminated: %v", err)
 	return err
@@ -1265,8 +1279,9 @@ func (d *Downloader) fetchNodeData() error {
 // peers, reserving a chunk of fetch requests for each, waiting for delivery and
 // also periodically checking for timeouts.
 func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliver func(packet dataPack) error, wakeCh chan bool,
-	expire func() []string, pending func() int, throttle func() bool, reserve func(*peer, int) (*fetchRequest, bool, error), fetchHook func([]*types.Header),
-	fetch func(*peer, *fetchRequest) error, cancel func(*fetchRequest), capacity func(*peer) int, idle func() ([]*peer, int), setIdle func(*peer), kind string) error {
+	expire func() []string, pending func() int, inFlight func() bool, throttle func() bool, reserve func(*peer, int) (*fetchRequest, bool, error),
+	fetchHook func([]*types.Header), fetch func(*peer, *fetchRequest) error, cancel func(*fetchRequest), capacity func(*peer) int,
+	idle func() ([]*peer, int), setIdle func(*peer), kind string) error {
 
 	// Create a ticker to detect expired retreival tasks
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -1378,14 +1393,14 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 			}
 			// If there's nothing more to fetch, wait or terminate
 			if pending() == 0 {
-				if d.queue.InFlight() == 0 && finished {
+				if !inFlight() && finished {
 					glog.V(logger.Debug).Infof("%s fetching completed", kind)
 					return nil
 				}
 				break
 			}
 			// Send a download request to all idle peers, until throttled
-			progressed, throttled := false, false
+			progressed, throttled, running := false, false, inFlight()
 			idles, total := idle()
 
 			for _, peer := range idles {
@@ -1423,10 +1438,11 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 					glog.V(logger.Error).Infof("%v: %s fetch failed, rescheduling", peer, strings.ToLower(kind))
 					cancel(request)
 				}
+				running = true
 			}
 			// Make sure that we have peers available for fetching. If all peers have been tried
 			// and all failed throw an error
-			if !progressed && !throttled && d.queue.InFlight() == 0 && len(idles) == total {
+			if !progressed && !throttled && !running && len(idles) == total && pending() > 0 {
 				return errPeersUnavailable
 			}
 		}
@@ -1514,12 +1530,12 @@ func (d *Downloader) process() {
 			)
 			switch {
 			case len(headers) > 0:
-				index, err = d.insertHeaders(headers, true)
+				index, err = d.insertHeaders(headers, headerCheckFrequency)
 
 			case len(receipts) > 0:
 				index, err = d.insertReceipts(blocks, receipts)
 				if err == nil && blocks[len(blocks)-1].NumberU64() == d.queue.fastSyncPivot {
-					err = d.commitHeadBlock(blocks[len(blocks)-1].Hash())
+					index, err = len(blocks)-1, d.commitHeadBlock(blocks[len(blocks)-1].Hash())
 				}
 			default:
 				index, err = d.insertBlocks(blocks)
