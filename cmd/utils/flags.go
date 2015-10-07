@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"log"
+	"math"
 	"math/big"
 	"net"
 	"net/http"
@@ -43,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
@@ -506,6 +508,20 @@ func SetupLogger(ctx *cli.Context) {
 	glog.SetLogDir(ctx.GlobalString(LogFileFlag.Name))
 }
 
+// SetupNetwork configures the system for either the main net or some test network.
+func SetupNetwork(ctx *cli.Context) {
+	switch {
+	case ctx.GlobalBool(OlympicFlag.Name):
+		params.DurationLimit = big.NewInt(8)
+		params.GenesisGasLimit = big.NewInt(3141592)
+		params.MinGasLimit = big.NewInt(125000)
+		params.MaximumExtraDataSize = big.NewInt(1024)
+		NetworkIdFlag.Value = 0
+		core.BlockReward = big.NewInt(1.5e+18)
+		core.ExpDiffPeriod = big.NewInt(math.MaxInt64)
+	}
+}
+
 // SetupVM configured the VM package's global settings
 func SetupVM(ctx *cli.Context) {
 	vm.EnableJit = ctx.GlobalBool(VMEnableJitFlag.Name)
@@ -535,7 +551,6 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb ethdb.Databa
 		Fatalf("Could not open database: %v", err)
 	}
 	if ctx.GlobalBool(OlympicFlag.Name) {
-		InitOlympic()
 		_, err := core.WriteTestNetGenesisBlock(chainDb, 42)
 		if err != nil {
 			glog.Fatalln(err)
