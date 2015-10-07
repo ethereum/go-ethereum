@@ -429,6 +429,7 @@ func attach(ctx *cli.Context) {
 	repl := newLightweightJSRE(
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		client,
+		ctx.GlobalString(utils.DataDirFlag.Name),
 		true,
 	)
 
