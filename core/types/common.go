@@ -27,6 +27,8 @@ import (
 
 type BlockProcessor interface {
 	Process(*Block) (state.Logs, Receipts, error)
+	ValidateHeader(*Header, bool, bool) error
+	ValidateHeaderWithParent(*Header, *Header, bool, bool) error
 }
 
 const bloomLength = 256

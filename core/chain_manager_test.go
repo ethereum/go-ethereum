@@ -94,7 +94,7 @@ func testFork(t *testing.T, processor *BlockProcessor, i, n int, full bool, comp
 		}
 	} else {
 		headerChainB = makeHeaderChain(processor2.bc.CurrentHeader(), n, db, forkSeed)
-		if _, err := processor2.bc.InsertHeaderChain(headerChainB, true); err != nil {
+		if _, err := processor2.bc.InsertHeaderChain(headerChainB, 1); err != nil {
 			t.Fatalf("failed to insert forking chain: %v", err)
 		}
 	}
@@ -404,7 +404,9 @@ func TestChainMultipleInsertions(t *testing.T) {
 
 type bproc struct{}
 
-func (bproc) Process(*types.Block) (state.Logs, types.Receipts, error) { return nil, nil, nil }
+func (bproc) Process(*types.Block) (state.Logs, types.Receipts, error)                { return nil, nil, nil }
+func (bproc) ValidateHeader(*types.Header, bool, bool) error                          { return nil }
+func (bproc) ValidateHeaderWithParent(*types.Header, *types.Header, bool, bool) error { return nil }
 
 func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Header {
 	blocks := makeBlockChainWithDiff(genesis, d, seed)
@@ -481,8 +483,8 @@ func testReorg(t *testing.T, first, second []int, td int64, full bool) {
 		bc.InsertChain(makeBlockChainWithDiff(genesis, first, 11))
 		bc.InsertChain(makeBlockChainWithDiff(genesis, second, 22))
 	} else {
-		bc.InsertHeaderChain(makeHeaderChainWithDiff(genesis, first, 11), false)
-		bc.InsertHeaderChain(makeHeaderChainWithDiff(genesis, second, 22), false)
+		bc.InsertHeaderChain(makeHeaderChainWithDiff(genesis, first, 11), 1)
+		bc.InsertHeaderChain(makeHeaderChainWithDiff(genesis, second, 22), 1)
 	}
 	// Check that the chain is valid number and link wise
 	if full {
@@ -532,7 +534,7 @@ func testBadHashes(t *testing.T, full bool) {
 	} else {
 		headers := makeHeaderChainWithDiff(genesis, []int{1, 2, 4}, 10)
 		BadHashes[headers[2].Hash()] = true
-		_, err = bc.InsertHeaderChain(headers, true)
+		_, err = bc.InsertHeaderChain(headers, 1)
 	}
 	if !IsBadHashError(err) {
 		t.Errorf("error mismatch: want: BadHashError, have: %v", err)
@@ -564,7 +566,7 @@ func testReorgBadHashes(t *testing.T, full bool) {
 		BadHashes[blocks[3].Header().Hash()] = true
 		defer func() { delete(BadHashes, blocks[3].Header().Hash()) }()
 	} else {
-		if _, err := bc.InsertHeaderChain(headers, true); err != nil {
+		if _, err := bc.InsertHeaderChain(headers, 1); err != nil {
 			t.Fatalf("failed to import headers: %v", err)
 		}
 		if bc.CurrentHeader().Hash() != headers[3].Hash() {
@@ -620,6 +622,8 @@ func testInsertNonceError(t *testing.T, full bool) {
 			failHash = blocks[failAt].Hash()
 
 			processor.bc.pow = failPow{failNum}
+			processor.Pow = failPow{failNum}
+
 			failRes, err = processor.bc.InsertChain(blocks)
 		} else {
 			headers := makeHeaderChain(processor.bc.CurrentHeader(), i, db, 0)
@@ -629,7 +633,9 @@ func testInsertNonceError(t *testing.T, full bool) {
 			failHash = headers[failAt].Hash()
 
 			processor.bc.pow = failPow{failNum}
-			failRes, err = processor.bc.InsertHeaderChain(headers, true)
+			processor.Pow = failPow{failNum}
+
+			failRes, err = processor.bc.InsertHeaderChain(headers, 1)
 		}
 		// Check that the returned error indicates the nonce failure.
 		if failRes != failAt {
@@ -703,12 +709,13 @@ func TestFastVsFullChains(t *testing.T) {
 	fastDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
 	fast, _ := NewChainManager(fastDb, FakePow{}, new(event.TypeMux))
+	fast.SetProcessor(NewBlockProcessor(fastDb, FakePow{}, fast, new(event.TypeMux)))
 
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
-	if n, err := fast.InsertHeaderChain(headers, true); err != nil {
+	if n, err := fast.InsertHeaderChain(headers, 1); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
 	if n, err := fast.InsertReceiptChain(blocks, receipts); err != nil {
@@ -785,12 +792,13 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	fastDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
 	fast, _ := NewChainManager(fastDb, FakePow{}, new(event.TypeMux))
+	fast.SetProcessor(NewBlockProcessor(fastDb, FakePow{}, fast, new(event.TypeMux)))
 
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
-	if n, err := fast.InsertHeaderChain(headers, true); err != nil {
+	if n, err := fast.InsertHeaderChain(headers, 1); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
 	if n, err := fast.InsertReceiptChain(blocks, receipts); err != nil {
@@ -802,8 +810,9 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	lightDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(lightDb, GenesisAccount{address, funds})
 	light, _ := NewChainManager(lightDb, FakePow{}, new(event.TypeMux))
+	light.SetProcessor(NewBlockProcessor(lightDb, FakePow{}, light, new(event.TypeMux)))
 
-	if n, err := light.InsertHeaderChain(headers, true); err != nil {
+	if n, err := light.InsertHeaderChain(headers, 1); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
 	assert(t, "light", light, height, 0, 0)

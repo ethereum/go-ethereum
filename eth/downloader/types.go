@@ -52,7 +52,7 @@ type headBlockCommitterFn func(common.Hash) error
 type tdRetrievalFn func(common.Hash) *big.Int
 
 // headerChainInsertFn is a callback type to insert a batch of headers into the local chain.
-type headerChainInsertFn func([]*types.Header, bool) (int, error)
+type headerChainInsertFn func([]*types.Header, int) (int, error)
 
 // blockChainInsertFn is a callback type to insert a batch of blocks into the local chain.
 type blockChainInsertFn func(types.Blocks) (int, error)

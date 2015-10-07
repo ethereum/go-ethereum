@@ -227,7 +227,7 @@ func newCanonical(n int, full bool) (ethdb.Database, *BlockProcessor, error) {
 	}
 	// Header-only chain requested
 	headers := makeHeaderChain(genesis.Header(), n, db, canonicalSeed)
-	_, err := chainman.InsertHeaderChain(headers, true)
+	_, err := chainman.InsertHeaderChain(headers, 1)
 	return db, processor, err
 }
 
