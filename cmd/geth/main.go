@@ -340,6 +340,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 	}
 	app.Before = func(ctx *cli.Context) error {
 		utils.SetupLogger(ctx)
+		utils.SetupNetwork(ctx)
 		utils.SetupVM(ctx)
 		utils.SetupEth(ctx)
 		if ctx.GlobalBool(utils.PProfEanbledFlag.Name) {
@@ -391,9 +392,6 @@ func makeDefaultExtra() []byte {
 
 func run(ctx *cli.Context) {
 	utils.CheckLegalese(utils.MustDataDir(ctx))
-	if ctx.GlobalBool(utils.OlympicFlag.Name) {
-		utils.InitOlympic()
-	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	cfg.ExtraData = makeExtra(ctx)
