@@ -51,7 +51,7 @@ type Environment interface {
 	// Determines whether it's possible to transact
 	CanTransfer(from common.Address, balance *big.Int) bool
 	// Transfers amount from one account to the other
-	Transfer(from, to Account, amount *big.Int) error
+	Transfer(from, to Account, amount *big.Int)
 	// Adds a LOG to the state
 	AddLog(*Log)
 	// Adds a structured log to the env
