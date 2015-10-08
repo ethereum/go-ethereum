@@ -172,10 +172,10 @@ func GenerateKey() (*ecdsa.PrivateKey, error) {
 }
 
 func ValidateSignatureValues(v byte, r, s *big.Int) bool {
-	vint := uint32(v)
-	if r.Cmp(common.Big0) == 0 || s.Cmp(common.Big0) == 0 {
+	if r.Cmp(common.Big1) < 0 || s.Cmp(common.Big1) < 0 {
 		return false
 	}
+	vint := uint32(v)
 	if r.Cmp(secp256k1n) < 0 && s.Cmp(secp256k1n) < 0 && (vint == 27 || vint == 28) {
 		return true
 	} else {
@@ -302,17 +302,6 @@ func aesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
 }
 
 // From https://leanpub.com/gocrypto/read#leanpub-auto-block-cipher-modes
-func PKCS7Pad(in []byte) []byte {
-	padding := 16 - (len(in) % 16)
-	if padding == 0 {
-		padding = 16
-	}
-	for i := 0; i < padding; i++ {
-		in = append(in, byte(padding))
-	}
-	return in
-}
-
 func PKCS7Unpad(in []byte) []byte {
 	if len(in) == 0 {
 		return nil
