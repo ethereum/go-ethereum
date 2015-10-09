@@ -55,7 +55,7 @@ type hashFetcherFn func(common.Hash) error
 type blockFetcherFn func([]common.Hash) error
 
 type ProtocolManager struct {
-	mode       Mode
+	fastSync   bool
 	txpool     txPool
 	blockchain *core.BlockChain
 	chaindb    ethdb.Database
@@ -83,10 +83,10 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(mode Mode, networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
+func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		mode:       mode,
+		fastSync:   fastSync,
 		eventMux:   mux,
 		txpool:     txpool,
 		blockchain: blockchain,
@@ -100,7 +100,7 @@ func NewProtocolManager(mode Mode, networkId int, mux *event.TypeMux, txpool txP
 	manager.SubProtocols = make([]p2p.Protocol, 0, len(ProtocolVersions))
 	for i, version := range ProtocolVersions {
 		// Skip protocol version if incompatible with the mode of operation
-		if minimumProtocolVersion[mode] > version {
+		if fastSync && version < eth63 {
 			continue
 		}
 		// Compatible, initialize the sub-protocol
@@ -120,14 +120,9 @@ func NewProtocolManager(mode Mode, networkId int, mux *event.TypeMux, txpool txP
 		return nil, errIncompatibleConfig
 	}
 	// Construct the different synchronisation mechanisms
-	var syncMode downloader.SyncMode
-	switch mode {
-	case ArchiveMode:
-		syncMode = downloader.FullSync
-	case FullMode:
+	syncMode := downloader.FullSync
+	if fastSync {
 		syncMode = downloader.FastSync
-	case LightMode:
-		syncMode = downloader.LightSync
 	}
 	manager.downloader = downloader.New(syncMode, chaindb, manager.eventMux, blockchain.HasHeader, blockchain.HasBlock, blockchain.GetHeader,
 		blockchain.GetBlock, blockchain.CurrentHeader, blockchain.CurrentBlock, blockchain.CurrentFastBlock, blockchain.FastSyncCommitHead,

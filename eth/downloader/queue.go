@@ -422,10 +422,12 @@ func (q *queue) ReserveNodeData(p *peer, count int) *fetchRequest {
 		q.stateSchedLock.Lock()
 		defer q.stateSchedLock.Unlock()
 
-		for _, hash := range q.stateScheduler.Missing(max) {
-			q.stateTaskPool[hash] = q.stateTaskIndex
-			q.stateTaskQueue.Push(hash, -float32(q.stateTaskIndex))
-			q.stateTaskIndex++
+		if q.stateScheduler != nil {
+			for _, hash := range q.stateScheduler.Missing(max) {
+				q.stateTaskPool[hash] = q.stateTaskIndex
+				q.stateTaskQueue.Push(hash, -float32(q.stateTaskIndex))
+				q.stateTaskIndex++
+			}
 		}
 	}
 	return q.reserveHashes(p, count, q.stateTaskQueue, generator, q.statePendPool, count)
