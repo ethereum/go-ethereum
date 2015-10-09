@@ -41,10 +41,9 @@ var testAccount = crypto.NewKey(rand.Reader)
 func TestStatusMsgErrors61(t *testing.T) { testStatusMsgErrors(t, 61) }
 func TestStatusMsgErrors62(t *testing.T) { testStatusMsgErrors(t, 62) }
 func TestStatusMsgErrors63(t *testing.T) { testStatusMsgErrors(t, 63) }
-func TestStatusMsgErrors64(t *testing.T) { testStatusMsgErrors(t, 64) }
 
 func testStatusMsgErrors(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, ArchiveMode, 0, nil, nil)
+	pm := newTestProtocolManagerMust(t, false, 0, nil, nil)
 	td, currentBlock, genesis := pm.blockchain.Status()
 	defer pm.Stop()
 
@@ -95,11 +94,10 @@ func testStatusMsgErrors(t *testing.T, protocol int) {
 func TestRecvTransactions61(t *testing.T) { testRecvTransactions(t, 61) }
 func TestRecvTransactions62(t *testing.T) { testRecvTransactions(t, 62) }
 func TestRecvTransactions63(t *testing.T) { testRecvTransactions(t, 63) }
-func TestRecvTransactions64(t *testing.T) { testRecvTransactions(t, 64) }
 
 func testRecvTransactions(t *testing.T, protocol int) {
 	txAdded := make(chan []*types.Transaction)
-	pm := newTestProtocolManagerMust(t, ArchiveMode, 0, nil, txAdded)
+	pm := newTestProtocolManagerMust(t, false, 0, nil, txAdded)
 	p, _ := newTestPeer("peer", protocol, pm, true)
 	defer pm.Stop()
 	defer p.close()
@@ -124,10 +122,9 @@ func testRecvTransactions(t *testing.T, protocol int) {
 func TestSendTransactions61(t *testing.T) { testSendTransactions(t, 61) }
 func TestSendTransactions62(t *testing.T) { testSendTransactions(t, 62) }
 func TestSendTransactions63(t *testing.T) { testSendTransactions(t, 63) }
-func TestSendTransactions64(t *testing.T) { testSendTransactions(t, 64) }
 
 func testSendTransactions(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, ArchiveMode, 0, nil, nil)
+	pm := newTestProtocolManagerMust(t, false, 0, nil, nil)
 	defer pm.Stop()
 
 	// Fill the pool with big transactions.
