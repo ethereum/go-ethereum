@@ -60,6 +60,9 @@ type blockChainInsertFn func(types.Blocks) (int, error)
 // receiptChainInsertFn is a callback type to insert a batch of receipts into the local chain.
 type receiptChainInsertFn func(types.Blocks, []types.Receipts) (int, error)
 
+// chainRollbackFn is a callback type to remove a few recently added elements from the local chain.
+type chainRollbackFn func([]common.Hash)
+
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)
 
