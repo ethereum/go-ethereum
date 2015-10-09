@@ -127,6 +127,10 @@ var (
 		Name:  "dev",
 		Usage: "Developer mode. This mode creates a private network and sets several debugging flags",
 	}
+	TestNetFlag = cli.BoolFlag{
+		Name:  "testnet",
+		Usage: "Testnet mode. This enables your node to operate on the testnet",
+	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
 		Usage: "Custom node name",
@@ -454,6 +458,17 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
 	}
 
+	if ctx.GlobalBool(DevModeFlag.Name) && ctx.GlobalBool(TestNetFlag.Name) {
+		glog.Fatalf("%s and %s are mutually exclusive\n", DevModeFlag.Name, TestNetFlag.Name)
+	}
+
+	if ctx.GlobalBool(TestNetFlag.Name) {
+		// testnet is always stored in the testnet folder
+		cfg.DataDir += "/testnet"
+		cfg.NetworkId = 2
+		cfg.TestNet = true
+	}
+
 	if ctx.GlobalBool(DevModeFlag.Name) {
 		if !ctx.GlobalIsSet(VMDebugFlag.Name) {
 			cfg.VmDebug = true
@@ -555,6 +570,9 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 // MakeChain creates an account manager from set command line flags.
 func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 	dataDir := MustDataDir(ctx)
+	if ctx.GlobalBool(TestNetFlag.Name) {
+		dataDir += "/testnet"
+	}
 	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keystore"))
 	return accounts.NewManager(ks)
 }

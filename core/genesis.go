@@ -159,6 +159,27 @@ func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) 
 
 func WriteTestNetGenesisBlock(chainDb ethdb.Database, nonce uint64) (*types.Block, error) {
 	testGenesis := fmt.Sprintf(`{
+        "nonce": "0x%x",
+        "difficulty": "0x20000",
+        "mixhash": "0x00000000000000000000000000000000000000647572616c65787365646c6578",
+        "coinbase": "0x0000000000000000000000000000000000000000",
+        "timestamp": "0x00",
+        "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "extraData": "0x",
+        "gasLimit": "0x2FEFD8",
+        "alloc": {
+                "0000000000000000000000000000000000000001": { "balance": "1" },
+                "0000000000000000000000000000000000000002": { "balance": "1" },
+                "0000000000000000000000000000000000000003": { "balance": "1" },
+                "0000000000000000000000000000000000000004": { "balance": "1" },
+		"102e61f5d8f9bc71d0ad4a084df4e65e05ce0e1c": { "balance": "1606938044258990275541962092341162602522202993782792835301376" }
+        }
+}`, types.EncodeNonce(nonce))
+	return WriteGenesisBlock(chainDb, strings.NewReader(testGenesis))
+}
+
+func WriteOlympicGenesisBlock(chainDb ethdb.Database, nonce uint64) (*types.Block, error) {
+	testGenesis := fmt.Sprintf(`{
 	"nonce":"0x%x",
 	"gasLimit":"0x%x",
 	"difficulty":"0x%x",

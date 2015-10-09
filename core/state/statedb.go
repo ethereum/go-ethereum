@@ -28,6 +28,10 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+// The starting nonce determines the default nonce when new accounts are being
+// created.
+var StartingNonce uint64
+
 // StateDBs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
@@ -263,6 +267,7 @@ func (self *StateDB) newStateObject(addr common.Address) *StateObject {
 	}
 
 	stateObject := NewStateObject(addr, self.db)
+	stateObject.SetNonce(StartingNonce)
 	self.stateObjects[addr.Str()] = stateObject
 
 	return stateObject

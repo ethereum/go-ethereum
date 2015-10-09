@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -69,12 +70,17 @@ var (
 		discover.MustParseNode("enode://979b7fa28feeb35a4741660a16076f1943202cb72b6af70d327f053e248bab9ba81760f39d0701ef1d8f89cc1fbd2cacba0710a12cd5314d5e0c9021aa3637f9@5.1.83.226:30303"),
 	}
 
+	defaultTestNetBootNodes = []*discover.Node{
+		discover.MustParseNode("enode://5374c1bff8df923d3706357eeb4983cd29a63be40a269aaa2296ee5f3b2119a8978c0ed68b8f6fc84aad0df18790417daadf91a4bfbb786a16c9b0a199fa254a@92.51.165.126:30303"),
+	}
+
 	staticNodes  = "static-nodes.json"  // Path within <datadir> to search for the static node list
 	trustedNodes = "trusted-nodes.json" // Path within <datadir> to search for the trusted node list
 )
 
 type Config struct {
 	DevMode bool
+	TestNet bool
 
 	Name         string
 	NetworkId    int
@@ -133,6 +139,10 @@ type Config struct {
 
 func (cfg *Config) parseBootNodes() []*discover.Node {
 	if cfg.BootNodes == "" {
+		if cfg.TestNet {
+			return defaultTestNetBootNodes
+		}
+
 		return defaultBootNodes
 	}
 	var ns []*discover.Node
@@ -309,7 +319,13 @@ func New(config *Config) (*Ethereum, error) {
 		glog.V(logger.Error).Infoln("Starting Olympic network")
 		fallthrough
 	case config.DevMode:
-		_, err := core.WriteTestNetGenesisBlock(chainDb, 42)
+		_, err := core.WriteOlympicGenesisBlock(chainDb, 42)
+		if err != nil {
+			return nil, err
+		}
+	case config.TestNet:
+		state.StartingNonce = 1048576 // (2**20)
+		_, err := core.WriteTestNetGenesisBlock(chainDb, 0x6d6f7264656e)
 		if err != nil {
 			return nil, err
 		}
