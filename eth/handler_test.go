@@ -22,12 +22,11 @@ func TestProtocolCompatibility(t *testing.T) {
 	// Define the compatibility chart
 	tests := []struct {
 		version    uint
-		mode       Mode
+		fastSync   bool
 		compatible bool
 	}{
-		{61, ArchiveMode, true}, {62, ArchiveMode, true}, {63, ArchiveMode, true}, {64, ArchiveMode, true},
-		{61, FullMode, false}, {62, FullMode, false}, {63, FullMode, true}, {64, FullMode, true},
-		{61, LightMode, false}, {62, LightMode, false}, {63, LightMode, false}, {64, LightMode, true},
+		{61, false, true}, {62, false, true}, {63, false, true},
+		{61, true, false}, {62, true, false}, {63, true, true},
 	}
 	// Make sure anything we screw up is restored
 	backup := ProtocolVersions
@@ -37,7 +36,7 @@ func TestProtocolCompatibility(t *testing.T) {
 	for i, tt := range tests {
 		ProtocolVersions = []uint{tt.version}
 
-		pm, err := newTestProtocolManager(tt.mode, 0, nil, nil)
+		pm, err := newTestProtocolManager(tt.fastSync, 0, nil, nil)
 		if pm != nil {
 			defer pm.Stop()
 		}
@@ -52,7 +51,7 @@ func TestProtocolCompatibility(t *testing.T) {
 func TestGetBlockHashes61(t *testing.T) { testGetBlockHashes(t, 61) }
 
 func testGetBlockHashes(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, ArchiveMode, downloader.MaxHashFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -95,7 +94,7 @@ func testGetBlockHashes(t *testing.T, protocol int) {
 func TestGetBlockHashesFromNumber61(t *testing.T) { testGetBlockHashesFromNumber(t, 61) }
 
 func testGetBlockHashesFromNumber(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, ArchiveMode, downloader.MaxHashFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -135,7 +134,7 @@ func testGetBlockHashesFromNumber(t *testing.T, protocol int) {
 func TestGetBlocks61(t *testing.T) { testGetBlocks(t, 61) }
 
 func testGetBlocks(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, ArchiveMode, downloader.MaxHashFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -204,10 +203,9 @@ func testGetBlocks(t *testing.T, protocol int) {
 // Tests that block headers can be retrieved from a remote chain based on user queries.
 func TestGetBlockHeaders62(t *testing.T) { testGetBlockHeaders(t, 62) }
 func TestGetBlockHeaders63(t *testing.T) { testGetBlockHeaders(t, 63) }
-func TestGetBlockHeaders64(t *testing.T) { testGetBlockHeaders(t, 64) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, ArchiveMode, downloader.MaxHashFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -330,10 +328,9 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 // Tests that block contents can be retrieved from a remote chain based on their hashes.
 func TestGetBlockBodies62(t *testing.T) { testGetBlockBodies(t, 62) }
 func TestGetBlockBodies63(t *testing.T) { testGetBlockBodies(t, 63) }
-func TestGetBlockBodies64(t *testing.T) { testGetBlockBodies(t, 64) }
 
 func testGetBlockBodies(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, ArchiveMode, downloader.MaxBlockFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxBlockFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -402,7 +399,6 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 
 // Tests that the node state database can be retrieved based on hashes.
 func TestGetNodeData63(t *testing.T) { testGetNodeData(t, 63) }
-func TestGetNodeData64(t *testing.T) { testGetNodeData(t, 64) }
 
 func testGetNodeData(t *testing.T, protocol int) {
 	// Define three accounts to simulate transactions with
@@ -440,7 +436,7 @@ func testGetNodeData(t *testing.T, protocol int) {
 		}
 	}
 	// Assemble the test environment
-	pm := newTestProtocolManagerMust(t, ArchiveMode, 4, generator, nil)
+	pm := newTestProtocolManagerMust(t, false, 4, generator, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -492,7 +488,6 @@ func testGetNodeData(t *testing.T, protocol int) {
 
 // Tests that the transaction receipts can be retrieved based on hashes.
 func TestGetReceipt63(t *testing.T) { testGetReceipt(t, 63) }
-func TestGetReceipt64(t *testing.T) { testGetReceipt(t, 64) }
 
 func testGetReceipt(t *testing.T, protocol int) {
 	// Define three accounts to simulate transactions with
@@ -530,7 +525,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 		}
 	}
 	// Assemble the test environment
-	pm := newTestProtocolManagerMust(t, ArchiveMode, 4, generator, nil)
+	pm := newTestProtocolManagerMust(t, false, 4, generator, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 

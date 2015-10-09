@@ -88,8 +88,8 @@ type Config struct {
 	GenesisNonce int
 	GenesisFile  string
 	GenesisBlock *types.Block // used by block tests
+	FastSync     bool
 	Olympic      bool
-	Mode         Mode
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
@@ -399,7 +399,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	eth.blockProcessor = core.NewBlockProcessor(chainDb, eth.pow, eth.blockchain, eth.EventMux())
 	eth.blockchain.SetProcessor(eth.blockProcessor)
-	if eth.protocolManager, err = NewProtocolManager(config.Mode, config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb); err != nil {
+	if eth.protocolManager, err = NewProtocolManager(config.FastSync, config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
