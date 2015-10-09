@@ -152,7 +152,7 @@ func newTester(mode SyncMode) *downloadTester {
 	tester.stateDb, _ = ethdb.NewMemDatabase()
 	tester.downloader = New(mode, tester.stateDb, new(event.TypeMux), tester.hasHeader, tester.hasBlock, tester.getHeader,
 		tester.getBlock, tester.headHeader, tester.headBlock, tester.headFastBlock, tester.commitHeadBlock, tester.getTd,
-		tester.insertHeaders, tester.insertBlocks, tester.insertReceipts, tester.dropPeer)
+		tester.insertHeaders, tester.insertBlocks, tester.insertReceipts, tester.rollback, tester.dropPeer)
 
 	return tester
 }
@@ -272,6 +272,16 @@ func (dl *downloadTester) insertHeaders(headers []*types.Header, checkFreq int) 
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
+	// Do a quick check, as the blockchain.InsertHeaderChain doesn't insert anthing in case of errors
+	if _, ok := dl.ownHeaders[headers[0].ParentHash]; !ok {
+		return 0, errors.New("unknown parent")
+	}
+	for i := 1; i < len(headers); i++ {
+		if headers[i].ParentHash != headers[i-1].Hash() {
+			return i, errors.New("unknown parent")
+		}
+	}
+	// Do a full insert if pre-checks passed
 	for i, header := range headers {
 		if _, ok := dl.ownHeaders[header.Hash()]; ok {
 			continue
@@ -320,6 +330,22 @@ func (dl *downloadTester) insertReceipts(blocks types.Blocks, receipts []types.R
 		dl.ownReceipts[blocks[i].Hash()] = receipts[i]
 	}
 	return len(blocks), nil
+}
+
+// rollback removes some recently added elements from the chain.
+func (dl *downloadTester) rollback(hashes []common.Hash) {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	for i := len(hashes) - 1; i >= 0; i-- {
+		if dl.ownHashes[len(dl.ownHashes)-1] == hashes[i] {
+			dl.ownHashes = dl.ownHashes[:len(dl.ownHashes)-1]
+		}
+		delete(dl.ownChainTd, hashes[i])
+		delete(dl.ownHeaders, hashes[i])
+		delete(dl.ownReceipts, hashes[i])
+		delete(dl.ownBlocks, hashes[i])
+	}
 }
 
 // newPeer registers a new block download source into the downloader.
@@ -1022,6 +1048,56 @@ func testShiftedHeaderAttack(t *testing.T, protocol int, mode SyncMode) {
 
 	if err := tester.sync("attack", nil); err == nil {
 		t.Fatalf("succeeded attacker synchronisation")
+	}
+	// Synchronise with the valid peer and make sure sync succeeds
+	tester.newPeer("valid", protocol, hashes, headers, blocks, receipts)
+	if err := tester.sync("valid", nil); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	assertOwnChain(t, tester, targetBlocks+1)
+}
+
+// Tests that upon detecting an invalid header, the recent ones are rolled back
+func TestInvalidHeaderRollback63Fast(t *testing.T)  { testInvalidHeaderRollback(t, 63, FastSync) }
+func TestInvalidHeaderRollback64Fast(t *testing.T)  { testInvalidHeaderRollback(t, 64, FastSync) }
+func TestInvalidHeaderRollback64Light(t *testing.T) { testInvalidHeaderRollback(t, 64, LightSync) }
+
+func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
+	// Create a small enough block chain to download
+	targetBlocks := 3*minCheckedHeaders + minFullBlocks
+	hashes, headers, blocks, receipts := makeChain(targetBlocks, 0, genesis, nil)
+
+	tester := newTester(mode)
+
+	// Attempt to sync with an attacker that feeds junk during the fast sync phase
+	tester.newPeer("fast-attack", protocol, hashes, headers, blocks, receipts)
+	missing := minCheckedHeaders + MaxHeaderFetch + 1
+	delete(tester.peerHeaders["fast-attack"], hashes[len(hashes)-missing])
+
+	if err := tester.sync("fast-attack", nil); err == nil {
+		t.Fatalf("succeeded fast attacker synchronisation")
+	}
+	if head := tester.headHeader().Number.Int64(); int(head) > MaxHeaderFetch {
+		t.Fatalf("rollback head mismatch: have %v, want at most %v", head, MaxHeaderFetch)
+	}
+	// Attempt to sync with an attacker that feeds junk during the block import phase
+	tester.newPeer("block-attack", protocol, hashes, headers, blocks, receipts)
+	missing = 3*minCheckedHeaders + MaxHeaderFetch + 1
+	delete(tester.peerHeaders["block-attack"], hashes[len(hashes)-missing])
+
+	if err := tester.sync("block-attack", nil); err == nil {
+		t.Fatalf("succeeded block attacker synchronisation")
+	}
+	if mode == FastSync {
+		// Fast sync should not discard anything below the verified pivot point
+		if head := tester.headHeader().Number.Int64(); int(head) < 3*minCheckedHeaders {
+			t.Fatalf("rollback head mismatch: have %v, want at least %v", head, 3*minCheckedHeaders)
+		}
+	} else if mode == LightSync {
+		// Light sync should still discard data as before
+		if head := tester.headHeader().Number.Int64(); int(head) > 3*minCheckedHeaders {
+			t.Fatalf("rollback head mismatch: have %v, want at most %v", head, 3*minCheckedHeaders)
+		}
 	}
 	// Synchronise with the valid peer and make sure sync succeeds
 	tester.newPeer("valid", protocol, hashes, headers, blocks, receipts)

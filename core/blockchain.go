@@ -245,7 +245,21 @@ func (bc *BlockChain) SetHead(head uint64) {
 	if bc.currentBlock == nil {
 		bc.currentBlock = bc.genesisBlock
 	}
-	bc.insert(bc.currentBlock)
+	if bc.currentHeader == nil {
+		bc.currentHeader = bc.genesisBlock.Header()
+	}
+	if bc.currentFastBlock == nil {
+		bc.currentFastBlock = bc.genesisBlock
+	}
+	if err := WriteHeadBlockHash(bc.chainDb, bc.currentBlock.Hash()); err != nil {
+		glog.Fatalf("failed to reset head block hash: %v", err)
+	}
+	if err := WriteHeadHeaderHash(bc.chainDb, bc.currentHeader.Hash()); err != nil {
+		glog.Fatalf("failed to reset head header hash: %v", err)
+	}
+	if err := WriteHeadFastBlockHash(bc.chainDb, bc.currentFastBlock.Hash()); err != nil {
+		glog.Fatalf("failed to reset head fast block hash: %v", err)
+	}
 	bc.loadLastState()
 }
 
@@ -788,6 +802,27 @@ func (self *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		time.Since(start), last.Number, first.Hash().Bytes()[:4], last.Hash().Bytes()[:4])
 
 	return 0, nil
+}
+
+// Rollback is designed to remove a chain of links from the database that aren't
+// certain enough to be valid.
+func (self *BlockChain) Rollback(chain []common.Hash) {
+	for i := len(chain) - 1; i >= 0; i-- {
+		hash := chain[i]
+
+		if self.currentHeader.Hash() == hash {
+			self.currentHeader = self.GetHeader(self.currentHeader.ParentHash)
+			WriteHeadHeaderHash(self.chainDb, self.currentHeader.Hash())
+		}
+		if self.currentFastBlock.Hash() == hash {
+			self.currentFastBlock = self.GetBlock(self.currentFastBlock.ParentHash())
+			WriteHeadFastBlockHash(self.chainDb, self.currentFastBlock.Hash())
+		}
+		if self.currentBlock.Hash() == hash {
+			self.currentBlock = self.GetBlock(self.currentBlock.ParentHash())
+			WriteHeadBlockHash(self.chainDb, self.currentBlock.Hash())
+		}
+	}
 }
 
 // InsertReceiptChain attempts to complete an already existing header chain with

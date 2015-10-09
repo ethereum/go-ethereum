@@ -599,8 +599,8 @@ func testReorgBadHashes(t *testing.T, full bool) {
 			t.Errorf("last  block gasLimit mismatch: have: %x, want %x", ncm.GasLimit(), blocks[2].Header().GasLimit)
 		}
 	} else {
-		if ncm.CurrentHeader().Hash() != genesis.Hash() {
-			t.Errorf("last header hash mismatch: have: %x, want %x", ncm.CurrentHeader().Hash(), genesis.Hash())
+		if ncm.CurrentHeader().Hash() != headers[2].Hash() {
+			t.Errorf("last header hash mismatch: have: %x, want %x", ncm.CurrentHeader().Hash(), headers[2].Hash())
 		}
 	}
 }
@@ -775,6 +775,11 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	height := uint64(1024)
 	blocks, receipts := GenerateChain(genesis, gendb, int(height), nil)
 
+	// Configure a subchain to roll back
+	remove := []common.Hash{}
+	for _, block := range blocks[height/2:] {
+		remove = append(remove, block.Hash())
+	}
 	// Create a small assertion method to check the three heads
 	assert := func(t *testing.T, kind string, chain *BlockChain, header uint64, fast uint64, block uint64) {
 		if num := chain.CurrentBlock().NumberU64(); num != block {
@@ -798,6 +803,8 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 		t.Fatalf("failed to process block %d: %v", n, err)
 	}
 	assert(t, "archive", archive, height, height, height)
+	archive.Rollback(remove)
+	assert(t, "archive", archive, height/2, height/2, height/2)
 
 	// Import the chain as a non-archive node and ensure all pointers are updated
 	fastDb, _ := ethdb.NewMemDatabase()
@@ -816,6 +823,8 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
 	assert(t, "fast", fast, height, height, 0)
+	fast.Rollback(remove)
+	assert(t, "fast", fast, height/2, height/2, 0)
 
 	// Import the chain as a light node and ensure all pointers are updated
 	lightDb, _ := ethdb.NewMemDatabase()
@@ -827,6 +836,8 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
 	assert(t, "light", light, height, 0, 0)
+	light.Rollback(remove)
+	assert(t, "light", light, height/2, 0, 0)
 }
 
 // Tests that chain reorganizations handle transaction removals and reinsertions.
