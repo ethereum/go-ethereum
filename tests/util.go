@@ -209,11 +209,11 @@ func (self *Env) SetSnapshot(copy vm.Database) {
 	self.state.Set(copy.(*state.StateDB))
 }
 
-func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
+func (self *Env) Transfer(from, to vm.Account, amount *big.Int) {
 	if self.skipTransfer {
-		return nil
+		return
 	}
-	return core.Transfer(from, to, amount)
+	core.Transfer(from, to, amount)
 }
 
 func (self *Env) Call(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {

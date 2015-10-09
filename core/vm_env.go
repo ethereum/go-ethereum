@@ -81,8 +81,8 @@ func (self *VMEnv) SetSnapshot(copy vm.Database) {
 	self.state.Set(copy.(*state.StateDB))
 }
 
-func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
-	return Transfer(from, to, amount)
+func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) {
+	Transfer(from, to, amount)
 }
 
 func (self *VMEnv) Call(me vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
