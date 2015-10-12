@@ -93,7 +93,7 @@ func (pool *TxPool) eventLoop() {
 	// we need to know the new state. The new state will help us determine
 	// the nonces in the managed state
 	for ev := range pool.events.Chan() {
-		switch ev := ev.(type) {
+		switch ev := ev.Data.(type) {
 		case ChainHeadEvent:
 			pool.mu.Lock()
 			pool.resetState()

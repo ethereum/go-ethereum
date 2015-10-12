@@ -22,14 +22,21 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"time"
 )
+
+// Event is a time-tagged notification pushed to subscribers.
+type Event struct {
+	Time time.Time
+	Data interface{}
+}
 
 // Subscription is implemented by event subscriptions.
 type Subscription interface {
 	// Chan returns a channel that carries events.
 	// Implementations should return the same channel
 	// for any subsequent calls to Chan.
-	Chan() <-chan interface{}
+	Chan() <-chan *Event
 
 	// Unsubscribe stops delivery of events to a subscription.
 	// The event channel is closed.
@@ -82,6 +89,10 @@ func (mux *TypeMux) Subscribe(types ...interface{}) Subscription {
 // Post sends an event to all receivers registered for the given type.
 // It returns ErrMuxClosed if the mux has been stopped.
 func (mux *TypeMux) Post(ev interface{}) error {
+	event := &Event{
+		Time: time.Now(),
+		Data: ev,
+	}
 	rtyp := reflect.TypeOf(ev)
 	mux.mutex.RLock()
 	if mux.stopped {
@@ -91,7 +102,7 @@ func (mux *TypeMux) Post(ev interface{}) error {
 	subs := mux.subm[rtyp]
 	mux.mutex.RUnlock()
 	for _, sub := range subs {
-		sub.deliver(ev)
+		sub.deliver(event)
 	}
 	return nil
 }
@@ -143,6 +154,7 @@ func posdelete(slice []*muxsub, pos int) []*muxsub {
 
 type muxsub struct {
 	mux     *TypeMux
+	created time.Time
 	closeMu sync.Mutex
 	closing chan struct{}
 	closed  bool
@@ -151,21 +163,22 @@ type muxsub struct {
 	// postC can be set to nil without affecting the return value of
 	// Chan.
 	postMu sync.RWMutex
-	readC  <-chan interface{}
-	postC  chan<- interface{}
+	readC  <-chan *Event
+	postC  chan<- *Event
 }
 
 func newsub(mux *TypeMux) *muxsub {
-	c := make(chan interface{})
+	c := make(chan *Event)
 	return &muxsub{
 		mux:     mux,
+		created: time.Now(),
 		readC:   c,
 		postC:   c,
 		closing: make(chan struct{}),
 	}
 }
 
-func (s *muxsub) Chan() <-chan interface{} {
+func (s *muxsub) Chan() <-chan *Event {
 	return s.readC
 }
 
@@ -189,11 +202,17 @@ func (s *muxsub) closewait() {
 	s.postMu.Unlock()
 }
 
-func (s *muxsub) deliver(ev interface{}) {
+func (s *muxsub) deliver(event *Event) {
+	// Short circuit delivery if stale event
+	if s.created.After(event.Time) {
+		return
+	}
+	// Otherwise deliver the event
 	s.postMu.RLock()
+	defer s.postMu.RUnlock()
+
 	select {
-	case s.postC <- ev:
+	case s.postC <- event:
 	case <-s.closing:
 	}
-	s.postMu.RUnlock()
 }

@@ -30,7 +30,7 @@ func ExampleTypeMux() {
 	sub := mux.Subscribe(someEvent{}, otherEvent{})
 	go func() {
 		for event := range sub.Chan() {
-			fmt.Printf("Received: %#v\n", event)
+			fmt.Printf("Received: %#v\n", event.Data)
 		}
 		fmt.Println("done")
 		close(done)

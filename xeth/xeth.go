@@ -244,30 +244,37 @@ func (self *XEth) State() *State { return self.state }
 func (self *XEth) UpdateState() (wait chan *big.Int) {
 	wait = make(chan *big.Int)
 	go func() {
-		sub := self.backend.EventMux().Subscribe(core.ChainHeadEvent{})
+		eventSub := self.backend.EventMux().Subscribe(core.ChainHeadEvent{})
+		defer eventSub.Unsubscribe()
+
 		var m, n *big.Int
 		var ok bool
-	out:
+
+		eventCh := eventSub.Chan()
 		for {
 			select {
-			case event := <-sub.Chan():
-				ev, ok := event.(core.ChainHeadEvent)
-				if ok {
-					m = ev.Block.Number()
+			case event, ok := <-eventCh:
+				if !ok {
+					// Event subscription closed, set the channel to nil to stop spinning
+					eventCh = nil
+					continue
+				}
+				// A real event arrived, process if new head block assignment
+				if event, ok := event.Data.(core.ChainHeadEvent); ok {
+					m = event.Block.Number()
 					if n != nil && n.Cmp(m) < 0 {
 						wait <- n
 						n = nil
 					}
-					statedb := state.New(ev.Block.Root(), self.backend.ChainDb())
+					statedb := state.New(event.Block.Root(), self.backend.ChainDb())
 					self.state = NewState(self, statedb)
 				}
 			case n, ok = <-wait:
 				if !ok {
-					break out
+					return
 				}
 			}
 		}
-		sub.Unsubscribe()
 	}()
 	return
 }

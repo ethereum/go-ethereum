@@ -84,19 +84,16 @@ func (self *GasPriceOracle) processPastBlocks() {
 }
 
 func (self *GasPriceOracle) listenLoop() {
-	for {
-		ev, isopen := <-self.events.Chan()
-		if !isopen {
-			break
-		}
-		switch ev := ev.(type) {
+	defer self.events.Unsubscribe()
+
+	for event := range self.events.Chan() {
+		switch event := event.Data.(type) {
 		case core.ChainEvent:
-			self.processBlock(ev.Block)
+			self.processBlock(event.Block)
 		case core.ChainSplitEvent:
-			self.processBlock(ev.Block)
+			self.processBlock(event.Block)
 		}
 	}
-	self.events.Unsubscribe()
 }
 
 func (self *GasPriceOracle) processBlock(block *types.Block) {

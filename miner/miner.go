@@ -66,7 +66,7 @@ func (self *Miner) update() {
 	events := self.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
 out:
 	for ev := range events.Chan() {
-		switch ev.(type) {
+		switch ev.Data.(type) {
 		case downloader.StartEvent:
 			atomic.StoreInt32(&self.canStart, 0)
 			if self.Mining() {

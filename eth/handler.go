@@ -687,7 +687,7 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 func (self *ProtocolManager) minedBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.minedBlockSub.Chan() {
-		switch ev := obj.(type) {
+		switch ev := obj.Data.(type) {
 		case core.NewMinedBlockEvent:
 			self.BroadcastBlock(ev.Block, true)  // First propagate block to peers
 			self.BroadcastBlock(ev.Block, false) // Only then announce to the rest
@@ -698,7 +698,7 @@ func (self *ProtocolManager) minedBroadcastLoop() {
 func (self *ProtocolManager) txBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.txSub.Chan() {
-		event := obj.(core.TxPreEvent)
+		event := obj.Data.(core.TxPreEvent)
 		self.BroadcastTx(event.Tx.Hash(), event.Tx)
 	}
 }
