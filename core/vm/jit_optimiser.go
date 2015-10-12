@@ -26,6 +26,23 @@ func optimiseProgram(program *Program) {
 		}()
 	}
 
+	/*
+		code := Parse(program.code)
+		for _, test := range [][]OpCode{
+			[]OpCode{PUSH, PUSH, ADD},
+			[]OpCode{PUSH, PUSH, SUB},
+			[]OpCode{PUSH, PUSH, MUL},
+			[]OpCode{PUSH, PUSH, DIV},
+		} {
+			matchCount := 0
+			MatchFn(code, test, func(i int) bool {
+				matchCount++
+				return true
+			})
+			fmt.Printf("found %d match count on: %v\n", matchCount, test)
+		}
+	*/
+
 	for i := 0; i < len(program.instructions); i++ {
 		instr := program.instructions[i].(instruction)
 

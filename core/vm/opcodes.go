@@ -187,6 +187,13 @@ const (
 	LOG4
 )
 
+// unofficial opcodes used for parsing
+const (
+	PUSH OpCode = 0xb0 + iota
+	DUP
+	SWAP
+)
+
 const (
 	// 0xf0 range - closures
 	CREATE OpCode = 0xf0 + iota
@@ -194,7 +201,6 @@ const (
 	CALLCODE
 	RETURN
 
-	// 0x70 range - other
 	SUICIDE = 0xff
 )
 
@@ -347,9 +353,11 @@ var opCodeToString = map[OpCode]string{
 	CALL:     "CALL",
 	RETURN:   "RETURN",
 	CALLCODE: "CALLCODE",
+	SUICIDE:  "SUICIDE",
 
-	// 0x70 range - other
-	SUICIDE: "SUICIDE",
+	PUSH: "PUSH",
+	DUP:  "DUP",
+	SWAP: "SWAP",
 }
 
 func (o OpCode) String() string {
