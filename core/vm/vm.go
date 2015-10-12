@@ -370,9 +370,11 @@ func (self *Vm) log(pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, st
 	if Debug {
 		mem := make([]byte, len(memory.Data()))
 		copy(mem, memory.Data())
-		stck := make([]*big.Int, len(stack.Data()))
-		copy(stck, stack.Data())
 
+		stck := make([]*big.Int, len(stack.Data()))
+		for i, item := range stack.Data() {
+			stck[i] = new(big.Int).Set(item)
+		}
 		storage := make(map[common.Hash][]byte)
 		/*
 			object := contract.self.(*state.StateObject)
@@ -380,7 +382,6 @@ func (self *Vm) log(pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, st
 				storage[common.BytesToHash(k)] = v
 			})
 		*/
-
 		self.env.AddStructLog(StructLog{pc, op, new(big.Int).Set(gas), cost, mem, stck, storage, err})
 	}
 }
