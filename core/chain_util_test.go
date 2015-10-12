@@ -18,12 +18,15 @@ package core
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"math/big"
 	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -316,5 +319,114 @@ func TestHeadStorage(t *testing.T) {
 	}
 	if entry := GetHeadBlockHash(db); entry != blockFull.Hash() {
 		t.Fatalf("Head block hash mismatch: have %v, want %v", entry, blockFull.Hash())
+	}
+}
+
+func TestMipmapBloom(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+
+	receipt1 := new(types.Receipt)
+	receipt1.SetLogs(vm.Logs{
+		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
+		&vm.Log{Address: common.BytesToAddress([]byte("address"))},
+	})
+	receipt2 := new(types.Receipt)
+	receipt2.SetLogs(vm.Logs{
+		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
+		&vm.Log{Address: common.BytesToAddress([]byte("address1"))},
+	})
+
+	WriteMipmapBloom(db, 1, types.Receipts{receipt1})
+	WriteMipmapBloom(db, 2, types.Receipts{receipt2})
+
+	for _, level := range MIPMapLevels {
+		bloom := GetMipmapBloom(db, 2, level)
+		if !bloom.Test(new(big.Int).SetBytes([]byte("address1"))) {
+			t.Error("expected test to be included on level:", level)
+		}
+	}
+
+	// reset
+	db, _ = ethdb.NewMemDatabase()
+	receipt := new(types.Receipt)
+	receipt.SetLogs(vm.Logs{
+		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
+	})
+	WriteMipmapBloom(db, 999, types.Receipts{receipt1})
+
+	receipt = new(types.Receipt)
+	receipt.SetLogs(vm.Logs{
+		&vm.Log{Address: common.BytesToAddress([]byte("test 1"))},
+	})
+	WriteMipmapBloom(db, 1000, types.Receipts{receipt})
+
+	bloom := GetMipmapBloom(db, 1000, 1000)
+	if bloom.TestBytes([]byte("test")) {
+		t.Error("test should not have been included")
+	}
+}
+
+func TestMipmapChain(t *testing.T) {
+	dir, err := ioutil.TempDir("", "mipmap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	var (
+		db, _   = ethdb.NewLDBDatabase(dir, 16)
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr    = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = common.BytesToAddress([]byte("jeff"))
+
+		hash1 = common.BytesToHash([]byte("topic1"))
+	)
+	defer db.Close()
+
+	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{addr, big.NewInt(1000000)})
+	chain := GenerateChain(genesis, db, 1010, func(i int, gen *BlockGen) {
+		var receipts types.Receipts
+		switch i {
+		case 1:
+			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt.SetLogs(vm.Logs{
+				&vm.Log{
+					Address: addr,
+					Topics:  []common.Hash{hash1},
+				},
+			})
+			gen.AddUncheckedReceipt(receipt)
+			receipts = types.Receipts{receipt}
+		case 1000:
+			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt.SetLogs(vm.Logs{&vm.Log{Address: addr2}})
+			gen.AddUncheckedReceipt(receipt)
+			receipts = types.Receipts{receipt}
+
+		}
+
+		// store the receipts
+		err := PutReceipts(db, receipts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		WriteMipmapBloom(db, uint64(i+1), receipts)
+	})
+	for _, block := range chain {
+		WriteBlock(db, block)
+		if err := WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
+			t.Fatalf("failed to insert block number: %v", err)
+		}
+		if err := WriteHeadBlockHash(db, block.Hash()); err != nil {
+			t.Fatalf("failed to insert block number: %v", err)
+		}
+		if err := PutBlockReceipts(db, block, block.Receipts()); err != nil {
+			t.Fatal("error writing block receipts:", err)
+		}
+	}
+
+	bloom := GetMipmapBloom(db, 0, 1000)
+	if bloom.TestBytes(addr2[:]) {
+		t.Error("address was included in bloom and should not have")
 	}
 }

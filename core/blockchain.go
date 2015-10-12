@@ -654,10 +654,17 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			events = append(events, ChainEvent{block, block.Hash(), logs})
 
 			// This puts transactions in a extra db for rpc
-			PutTransactions(self.chainDb, block, block.Transactions())
+			if err := PutTransactions(self.chainDb, block, block.Transactions()); err != nil {
+				return i, err
+			}
 			// store the receipts
-			PutReceipts(self.chainDb, receipts)
-
+			if err := PutReceipts(self.chainDb, receipts); err != nil {
+				return i, err
+			}
+			// Write map map bloom filters
+			if err := WriteMipmapBloom(self.chainDb, block.NumberU64(), receipts); err != nil {
+				return i, err
+			}
 		case SideStatTy:
 			if glog.V(logger.Detail) {
 				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...). Took %v\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
@@ -743,8 +750,18 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// insert the block in the canonical way, re-writing history
 		self.insert(block)
 		// write canonical receipts and transactions
-		PutTransactions(self.chainDb, block, block.Transactions())
-		PutReceipts(self.chainDb, GetBlockReceipts(self.chainDb, block.Hash()))
+		if err := PutTransactions(self.chainDb, block, block.Transactions()); err != nil {
+			return err
+		}
+		receipts := GetBlockReceipts(self.chainDb, block.Hash())
+		// write receipts
+		if err := PutReceipts(self.chainDb, receipts); err != nil {
+			return err
+		}
+		// Write map map bloom filters
+		if err := WriteMipmapBloom(self.chainDb, block.NumberU64(), receipts); err != nil {
+			return err
+		}
 
 		addedTxs = append(addedTxs, block.Transactions()...)
 	}

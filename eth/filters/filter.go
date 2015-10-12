@@ -17,6 +17,8 @@
 package filters
 
 import (
+	"math"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -30,13 +32,10 @@ type AccountChange struct {
 
 // Filtering interface
 type Filter struct {
-	db       ethdb.Database
-	earliest int64
-	latest   int64
-	skip     int
-	address  []common.Address
-	max      int
-	topics   [][]common.Hash
+	db         ethdb.Database
+	begin, end int64
+	addresses  []common.Address
+	topics     [][]common.Hash
 
 	BlockCallback       func(*types.Block, vm.Logs)
 	TransactionCallback func(*types.Transaction)
@@ -52,59 +51,82 @@ func New(db ethdb.Database) *Filter {
 // Set the earliest and latest block for filtering.
 // -1 = latest block (i.e., the current block)
 // hash = particular hash from-to
-func (self *Filter) SetEarliestBlock(earliest int64) {
-	self.earliest = earliest
+func (self *Filter) SetBeginBlock(begin int64) {
+	self.begin = begin
 }
 
-func (self *Filter) SetLatestBlock(latest int64) {
-	self.latest = latest
+func (self *Filter) SetEndBlock(end int64) {
+	self.end = end
 }
 
-func (self *Filter) SetAddress(addr []common.Address) {
-	self.address = addr
+func (self *Filter) SetAddresses(addr []common.Address) {
+	self.addresses = addr
 }
 
 func (self *Filter) SetTopics(topics [][]common.Hash) {
 	self.topics = topics
 }
 
-func (self *Filter) SetMax(max int) {
-	self.max = max
-}
-
-func (self *Filter) SetSkip(skip int) {
-	self.skip = skip
-}
-
 // Run filters logs with the current parameters set
 func (self *Filter) Find() vm.Logs {
-	earliestBlock := core.GetBlock(self.db, core.GetHeadBlockHash(self.db))
-	var earliestBlockNo uint64 = uint64(self.earliest)
-	if self.earliest == -1 {
-		earliestBlockNo = earliestBlock.NumberU64()
+	latestBlock := core.GetBlock(self.db, core.GetHeadBlockHash(self.db))
+	var beginBlockNo uint64 = uint64(self.begin)
+	if self.begin == -1 {
+		beginBlockNo = latestBlock.NumberU64()
 	}
-	var latestBlockNo uint64 = uint64(self.latest)
-	if self.latest == -1 {
-		latestBlockNo = earliestBlock.NumberU64()
-	}
-
-	var (
-		logs  vm.Logs
-		block *types.Block
-	)
-	hash := core.GetCanonicalHash(self.db, latestBlockNo)
-	if hash != (common.Hash{}) {
-		block = core.GetBlock(self.db, hash)
+	var endBlockNo uint64 = uint64(self.end)
+	if self.end == -1 {
+		endBlockNo = latestBlock.NumberU64()
 	}
 
-done:
-	for i := 0; block != nil; i++ {
-		// Quit on latest
-		switch {
-		case block.NumberU64() == 0:
-			break done
-		case block.NumberU64() < earliestBlockNo:
-			break done
+	// if no addresses are present we can't make use of fast search which
+	// uses the mipmap bloom filters to check for fast inclusion and uses
+	// higher range probability in order to ensure at least a false positive
+	if len(self.addresses) == 0 {
+		return self.getLogs(beginBlockNo, endBlockNo)
+	}
+	return self.mipFind(beginBlockNo, endBlockNo, 0)
+}
+
+func (self *Filter) mipFind(start, end uint64, depth int) (logs vm.Logs) {
+	level := core.MIPMapLevels[depth]
+	// normalise numerator so we can work in level specific batches and
+	// work with the proper range checks
+	for num := start / level * level; num <= end; num += level {
+		// find addresses in bloom filters
+		bloom := core.GetMipmapBloom(self.db, num, level)
+		for _, addr := range self.addresses {
+			if bloom.TestBytes(addr[:]) {
+				// range check normalised values and make sure that
+				// we're resolving the correct range instead of the
+				// normalised values.
+				start := uint64(math.Max(float64(num), float64(start)))
+				end := uint64(math.Min(float64(num+level-1), float64(end)))
+				if depth+1 == len(core.MIPMapLevels) {
+					logs = append(logs, self.getLogs(start, end)...)
+				} else {
+					logs = append(logs, self.mipFind(start, end, depth+1)...)
+				}
+				// break so we don't check the same range for each
+				// possible address. Checks on multiple addresses
+				// are handled further down the stack.
+				break
+			}
+		}
+	}
+
+	return logs
+}
+
+func (self *Filter) getLogs(start, end uint64) (logs vm.Logs) {
+	var block *types.Block
+
+	for i := start; i <= end; i++ {
+		hash := core.GetCanonicalHash(self.db, i)
+		if hash != (common.Hash{}) {
+			block = core.GetBlock(self.db, hash)
+		} else { // block not found
+			return logs
 		}
 
 		// Use bloom filtering to see if this block is interesting given the
@@ -120,8 +142,6 @@ done:
 			}
 			logs = append(logs, self.FilterLogs(unfiltered)...)
 		}
-
-		block = core.GetBlock(self.db, block.ParentHash())
 	}
 
 	return logs
@@ -143,7 +163,7 @@ func (self *Filter) FilterLogs(logs vm.Logs) vm.Logs {
 	// Filter the logs for interesting stuff
 Logs:
 	for _, log := range logs {
-		if len(self.address) > 0 && !includes(self.address, log.Address) {
+		if len(self.addresses) > 0 && !includes(self.addresses, log.Address) {
 			continue
 		}
 
@@ -179,9 +199,9 @@ Logs:
 }
 
 func (self *Filter) bloomFilter(block *types.Block) bool {
-	if len(self.address) > 0 {
+	if len(self.addresses) > 0 {
 		var included bool
-		for _, addr := range self.address {
+		for _, addr := range self.addresses {
 			if types.BloomLookup(block.Bloom(), addr) {
 				included = true
 				break
