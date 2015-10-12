@@ -17,8 +17,6 @@
 package filters
 
 import (
-	"math"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -107,8 +105,6 @@ done:
 			break done
 		case block.NumberU64() < earliestBlockNo:
 			break done
-		case self.max <= len(logs):
-			break done
 		}
 
 		// Use bloom filtering to see if this block is interesting given the
@@ -128,9 +124,7 @@ done:
 		block = core.GetBlock(self.db, block.ParentHash())
 	}
 
-	skip := int(math.Min(float64(len(logs)), float64(self.skip)))
-
-	return logs[skip:]
+	return logs
 }
 
 func includes(addresses []common.Address, a common.Address) bool {

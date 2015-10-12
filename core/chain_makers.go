@@ -105,6 +105,10 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	b.receipts = append(b.receipts, receipt)
 }
 
+func (b *BlockGen) AddReceipt(receipt *types.Receipt) {
+	b.receipts = append(b.receipts, receipt)
+}
+
 // TxNonce returns the next valid transaction nonce for the
 // account at addr. It panics if the account does not exist.
 func (b *BlockGen) TxNonce(addr common.Address) uint64 {
