@@ -19,6 +19,7 @@ package downloader
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"strings"
@@ -85,6 +86,7 @@ var (
 	errCancelHeaderFetch  = errors.New("block header download canceled (requested)")
 	errCancelBodyFetch    = errors.New("block body download canceled (requested)")
 	errCancelReceiptFetch = errors.New("receipt download canceled (requested)")
+	errCancelStateFetch   = errors.New("state data download canceled (requested)")
 	errNoSyncActive       = errors.New("no sync active")
 )
 
@@ -844,7 +846,7 @@ func (d *Downloader) fetchBlocks61(from uint64) error {
 
 			for _, peer := range idles {
 				// Short circuit if throttling activated
-				if d.queue.ThrottleBlocks() {
+				if d.queue.ShouldThrottleBlocks() {
 					throttled = true
 					break
 				}
@@ -860,8 +862,13 @@ func (d *Downloader) fetchBlocks61(from uint64) error {
 				}
 				// Fetch the chunk and make sure any errors return the hashes to the queue
 				if err := peer.Fetch61(request); err != nil {
-					glog.V(logger.Error).Infof("%v: fetch failed, rescheduling", peer)
-					d.queue.CancelBlocks(request)
+					// Although we could try and make an attempt to fix this, this error really
+					// means that we've double allocated a fetch task to a peer. If that is the
+					// case, the internal state of the downloader and the queue is very wrong so
+					// better hard crash and note the error instead of silently accumulating into
+					// a much bigger issue.
+					panic(fmt.Sprintf("%v: fetch assignment failed, hard panic", peer))
+					d.queue.CancelBlocks(request) // noop for now
 				}
 			}
 			// Make sure that we have peers available for fetching. If all peers have been tried
@@ -1230,12 +1237,11 @@ func (d *Downloader) fetchBodies(from uint64) error {
 		expire   = func() []string { return d.queue.ExpireBodies(bodyHardTTL) }
 		fetch    = func(p *peer, req *fetchRequest) error { return p.FetchBodies(req) }
 		capacity = func(p *peer) int { return p.BlockCapacity() }
-		getIdles = func() ([]*peer, int) { return d.peers.BodyIdlePeers() }
-		setIdle  = func(p *peer) { p.SetBlocksIdle() }
+		setIdle  = func(p *peer) { p.SetBodiesIdle() }
 	)
 	err := d.fetchParts(errCancelBodyFetch, d.bodyCh, deliver, d.bodyWakeCh, expire,
-		d.queue.PendingBlocks, d.queue.InFlightBlocks, d.queue.ThrottleBlocks, d.queue.ReserveBodies,
-		d.bodyFetchHook, fetch, d.queue.CancelBodies, capacity, getIdles, setIdle, "Body")
+		d.queue.PendingBlocks, d.queue.InFlightBlocks, d.queue.ShouldThrottleBlocks, d.queue.ReserveBodies,
+		d.bodyFetchHook, fetch, d.queue.CancelBodies, capacity, d.peers.BodyIdlePeers, setIdle, "Body")
 
 	glog.V(logger.Debug).Infof("Block body download terminated: %v", err)
 	return err
@@ -1252,13 +1258,13 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 			pack := packet.(*receiptPack)
 			return d.queue.DeliverReceipts(pack.peerId, pack.receipts)
 		}
-		expire   = func() []string { return d.queue.ExpireReceipts(bodyHardTTL) }
+		expire   = func() []string { return d.queue.ExpireReceipts(receiptHardTTL) }
 		fetch    = func(p *peer, req *fetchRequest) error { return p.FetchReceipts(req) }
 		capacity = func(p *peer) int { return p.ReceiptCapacity() }
 		setIdle  = func(p *peer) { p.SetReceiptsIdle() }
 	)
 	err := d.fetchParts(errCancelReceiptFetch, d.receiptCh, deliver, d.receiptWakeCh, expire,
-		d.queue.PendingReceipts, d.queue.InFlightReceipts, d.queue.ThrottleReceipts, d.queue.ReserveReceipts,
+		d.queue.PendingReceipts, d.queue.InFlightReceipts, d.queue.ShouldThrottleReceipts, d.queue.ReserveReceipts,
 		d.receiptFetchHook, fetch, d.queue.CancelReceipts, capacity, d.peers.ReceiptIdlePeers, setIdle, "Receipt")
 
 	glog.V(logger.Debug).Infof("Receipt download terminated: %v", err)
@@ -1307,9 +1313,9 @@ func (d *Downloader) fetchNodeData() error {
 		capacity = func(p *peer) int { return p.NodeDataCapacity() }
 		setIdle  = func(p *peer) { p.SetNodeDataIdle() }
 	)
-	err := d.fetchParts(errCancelReceiptFetch, d.stateCh, deliver, d.stateWakeCh, expire,
+	err := d.fetchParts(errCancelStateFetch, d.stateCh, deliver, d.stateWakeCh, expire,
 		d.queue.PendingNodeData, d.queue.InFlightNodeData, throttle, reserve, nil, fetch,
-		d.queue.CancelNodeData, capacity, d.peers.ReceiptIdlePeers, setIdle, "State")
+		d.queue.CancelNodeData, capacity, d.peers.NodeDataIdlePeers, setIdle, "State")
 
 	glog.V(logger.Debug).Infof("Node state data download terminated: %v", err)
 	return err
@@ -1475,8 +1481,13 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 					fetchHook(request.Headers)
 				}
 				if err := fetch(peer, request); err != nil {
-					glog.V(logger.Error).Infof("%v: %s fetch failed, rescheduling", peer, strings.ToLower(kind))
-					cancel(request)
+					// Although we could try and make an attempt to fix this, this error really
+					// means that we've double allocated a fetch task to a peer. If that is the
+					// case, the internal state of the downloader and the queue is very wrong so
+					// better hard crash and note the error instead of silently accumulating into
+					// a much bigger issue.
+					panic(fmt.Sprintf("%v: %s fetch assignment failed, hard panic", peer, strings.ToLower(kind)))
+					cancel(request) // noop for now
 				}
 				running = true
 			}
@@ -1556,7 +1567,7 @@ func (d *Downloader) process() {
 					blocks = append(blocks, types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles))
 				case d.mode == FastSync:
 					blocks = append(blocks, types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles))
-					if result.Header.Number.Uint64() <= d.queue.fastSyncPivot {
+					if result.Header.Number.Uint64() <= d.queue.FastSyncPivot() {
 						receipts = append(receipts, result.Receipts)
 					}
 				case d.mode == LightSync:
@@ -1574,7 +1585,7 @@ func (d *Downloader) process() {
 
 			case len(receipts) > 0:
 				index, err = d.insertReceipts(blocks, receipts)
-				if err == nil && blocks[len(blocks)-1].NumberU64() == d.queue.fastSyncPivot {
+				if err == nil && blocks[len(blocks)-1].NumberU64() == d.queue.FastSyncPivot() {
 					index, err = len(blocks)-1, d.commitHeadBlock(blocks[len(blocks)-1].Hash())
 				}
 			default:

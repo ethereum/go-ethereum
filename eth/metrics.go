@@ -101,7 +101,7 @@ func (rw *meteredMsgReadWriter) ReadMsg() (p2p.Msg, error) {
 		packets, traffic = reqBlockInPacketsMeter, reqBlockInTrafficMeter
 
 	case rw.version >= eth62 && msg.Code == BlockHeadersMsg:
-		packets, traffic = reqBlockInPacketsMeter, reqBlockInTrafficMeter
+		packets, traffic = reqHeaderInPacketsMeter, reqHeaderInTrafficMeter
 	case rw.version >= eth62 && msg.Code == BlockBodiesMsg:
 		packets, traffic = reqBodyInPacketsMeter, reqBodyInTrafficMeter
 

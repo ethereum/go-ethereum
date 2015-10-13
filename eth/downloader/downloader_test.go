@@ -43,6 +43,18 @@ var (
 	genesis     = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000))
 )
 
+// This is a very ugly hack, but needed to catch a Heisenbug :P. The windows CI
+// servers extremely rarely lock up in this test suite, and adding any logging
+// or measurements simply hides the error completely. This snippet will ensure
+// that in the case of a lockup, we'll at least have a cash dump of the goroutines
+// to at least get a glimpse into what state the tests were in.
+func init() {
+	go func() {
+		time.Sleep(8 * time.Minute)
+		panic("Test probably deadlocked")
+	}()
+}
+
 // makeChain creates a chain of n blocks starting at and including parent.
 // the returned hash chain is ordered head->parent. In addition, every 3rd block
 // contains a transaction and every 5th an uncle to allow testing correct block
@@ -730,6 +742,7 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 		for start := time.Now(); time.Since(start) < time.Second; {
 			time.Sleep(25 * time.Millisecond)
 
+			tester.lock.RLock()
 			tester.downloader.queue.lock.RLock()
 			cached = len(tester.downloader.queue.blockDonePool)
 			if mode == FastSync {
@@ -739,16 +752,22 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 					}
 				}
 			}
+			retrieved = len(tester.ownBlocks)
 			tester.downloader.queue.lock.RUnlock()
+			tester.lock.RUnlock()
 
-			if cached == blockCacheLimit || len(tester.ownBlocks)+cached+int(atomic.LoadUint32(&blocked)) == targetBlocks+1 {
+			if cached == blockCacheLimit || retrieved+cached+int(atomic.LoadUint32(&blocked)) == targetBlocks+1 {
 				break
 			}
 		}
 		// Make sure we filled up the cache, then exhaust it
 		time.Sleep(25 * time.Millisecond) // give it a chance to screw up
-		if cached != blockCacheLimit && len(tester.ownBlocks)+cached+int(atomic.LoadUint32(&blocked)) != targetBlocks+1 {
-			t.Fatalf("block count mismatch: have %v, want %v (owned %v, target %v)", cached, blockCacheLimit, len(tester.ownBlocks), targetBlocks+1)
+
+		tester.lock.RLock()
+		retrieved = len(tester.ownBlocks)
+		tester.lock.RUnlock()
+		if cached != blockCacheLimit && retrieved+cached+int(atomic.LoadUint32(&blocked)) != targetBlocks+1 {
+			t.Fatalf("block count mismatch: have %v, want %v (owned %v, blocked %v, target %v)", cached, blockCacheLimit, retrieved, atomic.LoadUint32(&blocked), targetBlocks+1)
 		}
 		// Permit the blocked blocks to import
 		if atomic.LoadUint32(&blocked) > 0 {
@@ -921,12 +940,12 @@ func testMultiProtoSync(t *testing.T, protocol int, mode SyncMode) {
 
 	// Create peers of every type
 	tester := newTester(mode)
-	tester.newPeer("peer 61", 61, hashes, headers, blocks, receipts)
-	tester.newPeer("peer 62", 62, hashes, headers, blocks, receipts)
+	tester.newPeer("peer 61", 61, hashes, nil, blocks, nil)
+	tester.newPeer("peer 62", 62, hashes, headers, blocks, nil)
 	tester.newPeer("peer 63", 63, hashes, headers, blocks, receipts)
 	tester.newPeer("peer 64", 64, hashes, headers, blocks, receipts)
 
-	// Synchronise with the requestd peer and make sure all blocks were retrieved
+	// Synchronise with the requested peer and make sure all blocks were retrieved
 	if err := tester.sync(fmt.Sprintf("peer %d", protocol), nil); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}

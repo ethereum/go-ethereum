@@ -103,7 +103,7 @@ func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool
 		if fastSync && version < eth63 {
 			continue
 		}
-		// Compatible, initialize the sub-protocol
+		// Compatible; initialise the sub-protocol
 		version := version // Closure for the run
 		manager.SubProtocols = append(manager.SubProtocols, p2p.Protocol{
 			Name:    "eth",
