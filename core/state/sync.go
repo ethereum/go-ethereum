@@ -26,14 +26,13 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// StateSync is the main state  synchronisation scheduler, which provides yet the
+// StateSync is the main state synchronisation scheduler, which provides yet the
 // unknown state hashes to retrieve, accepts node data associated with said hashes
 // and reconstructs the state database step by step until all is done.
 type StateSync trie.TrieSync
 
 // NewStateSync create a new state trie download scheduler.
 func NewStateSync(root common.Hash, database ethdb.Database) *StateSync {
-	// Pre-declare the result syncer t
 	var syncer *trie.TrieSync
 
 	callback := func(leaf []byte, parent common.Hash) error {

@@ -66,6 +66,6 @@ func (l *Log) String() string {
 type Logs []*Log
 
 // LogForStorage is a wrapper around a Log that flattens and parses the entire
-// content of a log, opposed to only the consensus fields originally (by hiding
+// content of a log, as opposed to only the consensus fields originally (by hiding
 // the rlp interface methods).
 type LogForStorage Log

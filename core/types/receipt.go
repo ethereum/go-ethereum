@@ -67,7 +67,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// RlpEncode implements common.RlpEncode required for SHA derivation.
+// RlpEncode implements common.RlpEncode required for SHA3 derivation.
 func (r *Receipt) RlpEncode() []byte {
 	bytes, err := rlp.EncodeToBytes(r)
 	if err != nil {
@@ -82,7 +82,7 @@ func (r *Receipt) String() string {
 }
 
 // ReceiptForStorage is a wrapper around a Receipt that flattens and parses the
-// entire content of a receipt, opposed to only the consensus fields originally.
+// entire content of a receipt, as opposed to only the consensus fields originally.
 type ReceiptForStorage Receipt
 
 // EncodeRLP implements rlp.Encoder, and flattens all content fields of a receipt
@@ -95,8 +95,8 @@ func (r *ReceiptForStorage) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, []interface{}{r.PostState, r.CumulativeGasUsed, r.Bloom, r.TxHash, r.ContractAddress, logs, r.GasUsed})
 }
 
-// DecodeRLP implements rlp.Decoder, and loads the consensus fields of a receipt
-// from an RLP stream.
+// DecodeRLP implements rlp.Decoder, and loads both consensus and implementation
+// fields of a receipt from an RLP stream.
 func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	var receipt struct {
 		PostState         []byte
@@ -125,7 +125,7 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 // Receipts is a wrapper around a Receipt array to implement types.DerivableList.
 type Receipts []*Receipt
 
-// RlpEncode implements common.RlpEncode required for SHA derivation.
+// RlpEncode implements common.RlpEncode required for SHA3 derivation.
 func (r Receipts) RlpEncode() []byte {
 	bytes, err := rlp.EncodeToBytes(r)
 	if err != nil {
