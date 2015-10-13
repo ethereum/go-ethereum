@@ -43,13 +43,6 @@ var (
 	genesis     = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000))
 )
 
-func init() {
-	go func() {
-		time.Sleep(5 * time.Minute)
-		panic("wtf2")
-	}()
-}
-
 // makeChain creates a chain of n blocks starting at and including parent.
 // the returned hash chain is ordered head->parent. In addition, every 3rd block
 // contains a transaction and every 5th an uncle to allow testing correct block
@@ -750,7 +743,7 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 			retrieved = len(tester.ownBlocks)
 			tester.downloader.queue.lock.RUnlock()
 			tester.lock.RUnlock()
-			
+
 			if cached == blockCacheLimit || retrieved+cached+int(atomic.LoadUint32(&blocked)) == targetBlocks+1 {
 				break
 			}
