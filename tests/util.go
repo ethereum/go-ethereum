@@ -21,12 +21,14 @@ import (
 	"fmt"
 	"math/big"
 
+
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/core/vm"
 	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/ethdb"
 )
 
 func checkLogs(tlog []Log, logs state.Logs) error {
@@ -87,7 +89,7 @@ func (self Log) Topics() [][]byte {
 	return t
 }
 
-func StateObjectFromAccount(db common.Database, addr string, account Account) *state.StateObject {
+func StateObjectFromAccount(db ethdb.Database, addr string, account Account) *state.StateObject {
 	obj := state.NewStateObject(common.HexToAddress(addr), db)
 	obj.SetBalance(common.Big(account.Balance))
 

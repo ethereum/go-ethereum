@@ -33,12 +33,12 @@ import (
 	"encoding/json"
 	"errors"
 
-	"code.google.com/p/go-uuid/uuid"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/crypto/ecies"
 	"github.com/expanse-project/go-expanse/crypto/secp256k1"
 	"github.com/expanse-project/go-expanse/crypto/sha3"
 	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/pborman/uuid"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/ripemd160"
 )

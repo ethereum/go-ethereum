@@ -18,13 +18,14 @@
 package state
 
 import (
-	"bytes"
 	"math/big"
 
 	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/trie"
+
 )
 
 // StateDBs within the expanse protocol are used to store anything
@@ -33,7 +34,7 @@ import (
 // * Contracts
 // * Accounts
 type StateDB struct {
-	db   common.Database
+	db   ethdb.Database
 	trie *trie.SecureTrie
 	root common.Hash
 
@@ -48,7 +49,7 @@ type StateDB struct {
 }
 
 // Create a new state from a given trie
-func New(root common.Hash, db common.Database) *StateDB {
+func New(root common.Hash, db ethdb.Database) *StateDB {
 	trie := trie.NewSecure(root[:], db)
 	return &StateDB{root: root, db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: new(big.Int), logs: make(map[common.Hash]Logs)}
 }
@@ -276,10 +277,6 @@ func (self *StateDB) CreateAccount(addr common.Address) *StateObject {
 // Setting, copying of the state methods
 //
 
-func (s *StateDB) Cmp(other *StateDB) bool {
-	return bytes.Equal(s.trie.Root(), other.trie.Root())
-}
-
 func (self *StateDB) Copy() *StateDB {
 	state := New(common.Hash{}, self.db)
 	state.trie = self.trie
@@ -309,22 +306,6 @@ func (self *StateDB) Set(state *StateDB) {
 
 func (s *StateDB) Root() common.Hash {
 	return common.BytesToHash(s.trie.Root())
-}
-
-func (s *StateDB) Trie() *trie.SecureTrie {
-	return s.trie
-}
-
-// Resets the trie and all siblings
-func (s *StateDB) Reset() {
-	s.trie.Reset()
-
-	// Reset all nested states
-	for _, stateObject := range s.stateObjects {
-		stateObject.Reset()
-	}
-
-	s.Empty()
 }
 
 // Syncs the trie and all siblings

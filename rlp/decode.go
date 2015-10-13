@@ -173,6 +173,8 @@ var (
 func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 	kind := typ.Kind()
 	switch {
+	case typ == rawValueType:
+		return decodeRawValue, nil
 	case typ.Implements(decoderInterface):
 		return decodeDecoder, nil
 	case kind != reflect.Ptr && reflect.PtrTo(typ).Implements(decoderInterface):
@@ -201,6 +203,15 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 	default:
 		return nil, fmt.Errorf("rlp: type %v is not RLP-serializable", typ)
 	}
+}
+
+func decodeRawValue(s *Stream, val reflect.Value) error {
+	r, err := s.Raw()
+	if err != nil {
+		return err
+	}
+	val.SetBytes(r)
+	return nil
 }
 
 func decodeUint(s *Stream, val reflect.Value) error {

@@ -6,11 +6,6 @@
 	],
 	"Deps": [
 		{
-			"ImportPath": "code.google.com/p/go-uuid/uuid",
-			"Comment": "null-12",
-			"Rev": "7dda39b2e7d5e265014674c5af696ba4186679e9"
-		},
-		{
 			"ImportPath": "github.com/codegangsta/cli",
 			"Comment": "1.2.0-95-g9b2bd2b",
 			"Rev": "9b2bd2b3489748d4d0a204fa4eb2ee9e89e0ebc6"
@@ -21,7 +16,7 @@
 		},
 		{
 			"ImportPath": "github.com/expanse-project/ethash",
-			"Comment": "v23.1-227-g8f6ccaa",
+			"Comment": "v23.1-234-g062e40a",
 			"Rev": "8f6ccaaef9b418553807a73a95cb5f49cd3ea39f"
 		},
 		{
@@ -51,7 +46,7 @@
 		},
 		{
 			"ImportPath": "github.com/mattn/go-isatty",
-			"Rev": "fdbe02a1b44e75977b2690062b83cf507d70c013"
+			"Rev": "7fcbc72f853b92b5720db4a6b8482be612daef24"
 		},
 		{
 			"ImportPath": "github.com/mattn/go-runewidth",
@@ -61,6 +56,10 @@
 		{
 			"ImportPath": "github.com/nsf/termbox-go",
 			"Rev": "675ffd907b7401b8a709a5ef2249978af5616bb2"
+		},
+		{
+			"ImportPath": "github.com/pborman/uuid",
+			"Rev": "cccd189d45f7ac3368a0d127efb7f4d08ae0b655"
 		},
 		{
 			"ImportPath": "github.com/peterh/liner",

@@ -289,7 +289,7 @@ func updateChart(metric string, data []float64, base *int, chart *termui.LineCha
 		}
 	}
 	unit, scale := 0, 1.0
-	for high >= 1000 {
+	for high >= 1000 && unit+1 < len(dataUnits) {
 		high, unit, scale = high/1000, unit+1, scale*1000
 	}
 	// If the unit changes, re-create the chart (hack to set max height...)

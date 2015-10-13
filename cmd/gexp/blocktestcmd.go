@@ -22,8 +22,7 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/expanse-project/go-expanse/cmd/utils"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/eth"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/tests"
 )
@@ -92,7 +91,7 @@ func runBlockTest(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
-	defer expanse.Stop()
+
 	if rpc {
 		fmt.Println("Block Test post state validated, starting RPC interface.")
 		startEth(ctx, expanse)
@@ -103,7 +102,7 @@ func runBlockTest(ctx *cli.Context) {
 
 func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*exp.Expanse, error) {
 	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
-	cfg.NewDB = func(path string) (common.Database, error) { return ethdb.NewMemDatabase() }
+	cfg.NewDB = func(path string) (ethdb.Database, error) { return ethdb.NewMemDatabase() }
 	cfg.MaxPeers = 0 // disable network
 	cfg.Shh = false  // disable whisper
 	cfg.NAT = nil    // disable port mapping
@@ -112,25 +111,25 @@ func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*exp.Expanse, err
 	if err != nil {
 		return nil, err
 	}
-	// if err := expanse.Start(); err != nil {
-	// 	return nil, err
-	// }
 
 	// import the genesis block
 	expanse.ResetWithGenesisBlock(test.Genesis)
-
 	// import pre accounts
-	statedb, err := test.InsertPreState(expanse)
+	_, err = test.InsertPreState(expanse)
+
 	if err != nil {
 		return expanse, fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	if err := test.TryBlocksInsert(expanse.ChainManager()); err != nil {
+	cm := expanse.ChainManager()
+	validBlocks, err := test.TryBlocksInsert(cm)
+	if err != nil {
 		return expanse, fmt.Errorf("Block Test load error: %v", err)
 	}
-
-	if err := test.ValidatePostState(statedb); err != nil {
+	newDB := cm.State()
+	if err := test.ValidatePostState(newDB); err != nil {
 		return expanse, fmt.Errorf("post state validation failed: %v", err)
 	}
-	return expanse, nil
+	return expanse, test.ValidateImportedHeaders(cm, validBlocks)
+
 }

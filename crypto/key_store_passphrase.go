@@ -36,9 +36,9 @@ import (
 	"io"
 	"reflect"
 
-	"code.google.com/p/go-uuid/uuid"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/crypto/randentropy"
+	"github.com/pborman/uuid"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"
 )

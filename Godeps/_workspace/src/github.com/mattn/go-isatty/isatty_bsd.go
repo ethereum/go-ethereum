@@ -1,4 +1,4 @@
-// +build darwin freebsd
+// +build darwin freebsd openbsd netbsd
 
 package isatty
 

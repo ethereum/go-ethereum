@@ -22,10 +22,12 @@ import (
 	"sync"
 	"time"
 
+
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
@@ -41,7 +43,7 @@ const (
 )
 
 type BlockProcessor struct {
-	chainDb common.Database
+	chainDb ethdb.Database
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 	// Canonical block chain
@@ -68,7 +70,8 @@ type GasPool interface {
 	SubGas(gas, price *big.Int) error
 }
 
-func NewBlockProcessor(db common.Database, pow pow.PoW, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+
+func NewBlockProcessor(db ethdb.Database, pow pow.PoW, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
 		chainDb:  db,
 		mem:      make(map[string]*big.Int),
@@ -213,7 +216,8 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs st
 	txs := block.Transactions()
 
 	// Block validation
-	if err = ValidateHeader(sm.Pow, header, parent, false, false); err != nil {
+
+	if err = ValidateHeader(sm.Pow, header, parent.Header(), false, false); err != nil {
 		return
 	}
 
@@ -337,7 +341,8 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 			return UncleError("uncle[%d](%x)'s parent is not ancestor (%x)", i, hash[:4], uncle.ParentHash[0:4])
 		}
 
-		if err := ValidateHeader(sm.Pow, uncle, ancestors[uncle.ParentHash], true, true); err != nil {
+
+		if err := ValidateHeader(sm.Pow, uncle, ancestors[uncle.ParentHash].Header(), true, true); err != nil {
 			return ValidationError(fmt.Sprintf("uncle[%d](%x) header invalid: %v", i, hash[:4], err))
 		}
 	}
@@ -367,52 +372,50 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 }
 
 // See YP section 4.3.4. "Block Header Validity"
-// Validates a block. Returns an error if the block is invalid.
-func ValidateHeader(pow pow.PoW, block *types.Header, parent *types.Block, checkPow, uncle bool) error {
-	if big.NewInt(int64(len(block.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
-		return fmt.Errorf("Block extra data too long (%d)", len(block.Extra))
+// Validates a header. Returns an error if the header is invalid.
+func ValidateHeader(pow pow.PoW, header *types.Header, parent *types.Header, checkPow, uncle bool) error {
+	if big.NewInt(int64(len(header.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
+		return fmt.Errorf("Header extra data too long (%d)", len(header.Extra))
 	}
 
 	if uncle {
-		if block.Time.Cmp(common.MaxBig) == 1 {
+		if header.Time.Cmp(common.MaxBig) == 1 {
 			return BlockTSTooBigErr
 		}
 	} else {
-		if block.Time.Cmp(big.NewInt(time.Now().Unix())) == 1 {
+		if header.Time.Cmp(big.NewInt(time.Now().Unix())) == 1 {
 			return BlockFutureErr
 		}
 	}
-	if block.Time.Cmp(parent.Time()) != 1 {
+	if header.Time.Cmp(parent.Time) != 1 {
 		return BlockEqualTSErr
 	}
 
-	expd := CalcDifficulty(block.Time.Uint64(), parent.Time().Uint64(), parent.Number(), parent.Difficulty())
-	if expd.Cmp(block.Difficulty) != 0 {
-		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
+	expd := CalcDifficulty(header.Time.Uint64(), parent.Time.Uint64(), parent.Number, parent.Difficulty)
+	if expd.Cmp(header.Difficulty) != 0 {
+		return fmt.Errorf("Difficulty check failed for header %v, %v", header.Difficulty, expd)
 	}
 
-	var a, b *big.Int
-	a = parent.GasLimit()
-	a = a.Sub(a, block.GasLimit)
+	a := new(big.Int).Set(parent.GasLimit)
+	a = a.Sub(a, header.GasLimit)
 	a.Abs(a)
-	b = parent.GasLimit()
+	b := new(big.Int).Set(parent.GasLimit)
 	b = b.Div(b, params.GasLimitBoundDivisor)
-	if !(a.Cmp(b) < 0) || (block.GasLimit.Cmp(params.MinGasLimit) == -1) {
-		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
+	if !(a.Cmp(b) < 0) || (header.GasLimit.Cmp(params.MinGasLimit) == -1) {
+		return fmt.Errorf("GasLimit check failed for header %v (%v > %v)", header.GasLimit, a, b)
 	}
 
-	num := parent.Number()
-	num.Sub(block.Number, num)
+	num := new(big.Int).Set(parent.Number)
+	num.Sub(header.Number, num)
 	if num.Cmp(big.NewInt(1)) != 0 {
 		return BlockNumberErr
 	}
 
 	if checkPow {
-		// Verify the nonce of the block. Return an error if it's not valid
-		if !pow.Verify(types.NewBlockWithHeader(block)) {
-			return ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
+		// Verify the nonce of the header. Return an error if it's not valid
+		if !pow.Verify(types.NewBlockWithHeader(header)) {
+			return ValidationError("Header's nonce is invalid (= %x)", header.Nonce)
 		}
 	}
-
 	return nil
 }

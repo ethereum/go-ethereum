@@ -134,7 +134,7 @@ func testEth(t *testing.T) (expanse *exp.Expanse, err error) {
 
 	db, _ := ethdb.NewMemDatabase()
 	// set up mock genesis with balance on the testAddress
-	core.WriteGenesisBlockForTesting(db, common.HexToAddress(testAddress), common.String2Big(testBalance))
+	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{common.HexToAddress(testAddress), common.String2Big(testBalance)})
 
 	// only use minimalistic stack with no networking
 	expanse, err = exp.New(&exp.Config{
@@ -143,7 +143,7 @@ func testEth(t *testing.T) (expanse *exp.Expanse, err error) {
 		MaxPeers:       0,
 		PowTest:        true,
 		Etherbase:      common.HexToAddress(testAddress),
-		NewDB:          func(path string) (common.Database, error) { return db, nil },
+		NewDB:          func(path string) (ethdb.Database, error) { return db, nil },
 	})
 
 	if err != nil {

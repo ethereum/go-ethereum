@@ -121,7 +121,7 @@ func keywordCompleter(line string) []string {
 }
 
 func apiWordCompleter(line string, pos int) (head string, completions []string, tail string) {
-	if len(line) == 0 {
+	if len(line) == 0 || pos == 0 {
 		return "", nil, ""
 	}
 

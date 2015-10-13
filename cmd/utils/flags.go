@@ -122,6 +122,10 @@ var (
 		Name:  "genesis",
 		Usage: "Inserts/Overwrites the genesis block (json format)",
 	}
+	DevModeFlag = cli.BoolFlag{
+		Name:  "dev",
+		Usage: "Developer mode. This mode creates a private network and sets several debugging flags",
+	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
 		Usage: "Custom node name",
@@ -138,6 +142,11 @@ var (
 	OlympicFlag = cli.BoolFlag{
 		Name:  "olympic",
 		Usage: "Use olympic style protocol",
+	}
+	EthVersionFlag = cli.IntFlag{
+		Name:  "eth",
+		Value: 62,
+		Usage: "Highest eth protocol to advertise (temporary, dev option)",
 	}
 
 	// miner settings
@@ -406,7 +415,8 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *exp.Config {
 		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
 	}
 
-	return &exp.Config{
+
+	cfg := &exp.Config{
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 ctx.GlobalString(DataDirFlag.Name),
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
@@ -443,6 +453,33 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *exp.Config {
 		SolcPath:                ctx.GlobalString(SolcPathFlag.Name),
 		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
 	}
+
+	if ctx.GlobalBool(DevModeFlag.Name) {
+		if !ctx.GlobalIsSet(VMDebugFlag.Name) {
+			cfg.VmDebug = true
+		}
+		if !ctx.GlobalIsSet(MaxPeersFlag.Name) {
+			cfg.MaxPeers = 0
+		}
+		if !ctx.GlobalIsSet(GasPriceFlag.Name) {
+			cfg.GasPrice = new(big.Int)
+		}
+		if !ctx.GlobalIsSet(ListenPortFlag.Name) {
+			cfg.Port = "0" // auto port
+		}
+		if !ctx.GlobalIsSet(WhisperEnabledFlag.Name) {
+			cfg.Shh = true
+		}
+		if !ctx.GlobalIsSet(DataDirFlag.Name) {
+			cfg.DataDir = os.TempDir() + "/ethereum_dev_mode"
+		}
+		cfg.PowTest = true
+		cfg.DevMode = true
+
+		glog.V(logger.Info).Infoln("dev mode enabled")
+	}
+
+	return cfg
 }
 
 // SetupLogger configures glog from the logging-related command line flags.
@@ -460,8 +497,20 @@ func SetupVM(ctx *cli.Context) {
 	vm.SetJITCacheSize(ctx.GlobalInt(VMJitCacheFlag.Name))
 }
 
+// SetupEth configures the eth packages global settings
+func SetupEth(ctx *cli.Context) {
+	version := ctx.GlobalInt(EthVersionFlag.Name)
+	for len(exp.ProtocolVersions) > 0 && exp.ProtocolVersions[0] > uint(version) {
+		exp.ProtocolVersions = exp.ProtocolVersions[1:]
+		exp.ProtocolLengths = exp.ProtocolLengths[1:]
+	}
+	if len(exp.ProtocolVersions) == 0 {
+		Fatalf("No valid eth protocols remaining")
+	}
+}
+
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb common.Database) {
+func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb ethdb.Database) {
 	datadir := ctx.GlobalString(DataDirFlag.Name)
 	cache := ctx.GlobalInt(CacheFlag.Name)
 
