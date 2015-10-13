@@ -216,8 +216,8 @@ func (self *ethApi) IsMining(req *shared.Request) (interface{}, error) {
 }
 
 func (self *ethApi) IsSyncing(req *shared.Request) (interface{}, error) {
-	current := self.ethereum.ChainManager().CurrentBlock().NumberU64()
-	origin, height := self.ethereum.Downloader().Boundaries()
+	current := self.expanse.ChainManager().CurrentBlock().NumberU64()
+	origin, height := self.expanse.Downloader().Boundaries()
 
 	if current < height {
 		return map[string]interface{}{

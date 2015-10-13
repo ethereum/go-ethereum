@@ -6081,7 +6081,7 @@ module.exports = IsSyncing;
 
 },{"../utils/utils":20,"./formatters":29,"./method":35,"./requestmanager":43}],45:[function(require,module,exports){
 /*
-    This file is part of ethereum.js.
+    This file is part of expanse.js.
 
     ethereum.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by

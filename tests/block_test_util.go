@@ -183,7 +183,7 @@ func runBlockTest(test *BlockTest) error {
 	}
 
 
-	cm := ethereum.ChainManager()
+	cm := expanse.ChainManager()
 	validBlocks, err := test.TryBlocksInsert(cm)
 	if err != nil {
 		return err
