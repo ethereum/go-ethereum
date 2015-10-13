@@ -40,7 +40,7 @@ type Jeth struct {
 }
 
 
-func NewJeth(ethApi shared.EthereumApi, re *jsre.JSRE, client comms.EthereumClient, fe xeth.Frontend) *Jeth {
+func NewJeth(ethApi shared.ExpanseApi, re *jsre.JSRE, client comms.ExpanseClient, fe xeth.Frontend) *Jeth {
 	return &Jeth{ethApi, re, client, fe}
 }
 

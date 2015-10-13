@@ -177,13 +177,13 @@ func runBlockTest(test *BlockTest) error {
 
 	// import pre accounts
 
-	_, err = test.InsertPreState(ethereum)
+	_, err = test.InsertPreState(expanse)
 	if err != nil {
 		return fmt.Errorf("InsertPreState: %v", err)
 	}
 
 
-	cm := ethereum.ChainManager()
+	cm := expanse.ChainManager()
 	validBlocks, err := test.TryBlocksInsert(cm)
 	if err != nil {
 		return err
