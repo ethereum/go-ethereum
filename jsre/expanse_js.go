@@ -1874,7 +1874,7 @@ module.exports = function (str, isNew) {
     if (str.substr(0, 2) === '0x' && !isNew) {
         console.warn('requirement of using web3.fromAscii before sha3 is deprecated');
         console.warn('new usage: \'web3.sha3("hello")\'');
-        console.warn('see https://github.com/expanse-project/web3.js/pull/205');
+        console.warn('see https://github.com/expanse-org/web3.js/pull/205');
         console.warn('if you need to hash hex value, you can do \'sha3("0xfff", true)\'');
         str = utils.toUtf8(str);
     }
