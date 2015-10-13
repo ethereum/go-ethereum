@@ -11,7 +11,7 @@ import (
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/eth/downloader"
+	"github.com/expanse-project/go-expanse/exp/downloader"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/p2p"
 	"github.com/expanse-project/go-expanse/params"
