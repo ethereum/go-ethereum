@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -165,5 +166,20 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		return
 	}
 	// Otherwise try to sync with the downloader
-	pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td())
+	mode := downloader.FullSync
+	if pm.fastSync {
+		mode = downloader.FastSync
+	}
+	pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), mode)
+
+	// If fast sync was enabled, and we synced up, disable it
+	if pm.fastSync {
+		for pm.downloader.Synchronising() {
+			time.Sleep(100 * time.Millisecond)
+		}
+		if pm.blockchain.CurrentBlock().NumberU64() > 0 {
+			glog.V(logger.Info).Infof("fast sync complete, auto disabling")
+			pm.fastSync = false
+		}
+	}
 }

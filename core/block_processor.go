@@ -195,14 +195,16 @@ func (sm *BlockProcessor) Process(block *types.Block) (logs vm.Logs, receipts ty
 	defer sm.mutex.Unlock()
 
 	if sm.bc.HasBlock(block.Hash()) {
-		return nil, nil, &KnownBlockError{block.Number(), block.Hash()}
+		if _, err := state.New(block.Root(), sm.chainDb); err == nil {
+			return nil, nil, &KnownBlockError{block.Number(), block.Hash()}
+		}
 	}
-
-	if !sm.bc.HasBlock(block.ParentHash()) {
-		return nil, nil, ParentError(block.ParentHash())
+	if parent := sm.bc.GetBlock(block.ParentHash()); parent != nil {
+		if _, err := state.New(parent.Root(), sm.chainDb); err == nil {
+			return sm.processWithParent(block, parent)
+		}
 	}
-	parent := sm.bc.GetBlock(block.ParentHash())
-	return sm.processWithParent(block, parent)
+	return nil, nil, ParentError(block.ParentHash())
 }
 
 func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs vm.Logs, receipts types.Receipts, err error) {

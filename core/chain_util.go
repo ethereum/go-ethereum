@@ -394,7 +394,7 @@ func WriteMipmapBloom(db ethdb.Database, number uint64, receipts types.Receipts)
 		bloomDat, _ := db.Get(key)
 		bloom := types.BytesToBloom(bloomDat)
 		for _, receipt := range receipts {
-			for _, log := range receipt.Logs() {
+			for _, log := range receipt.Logs {
 				bloom.Add(log.Address.Big())
 			}
 		}

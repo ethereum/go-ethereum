@@ -345,15 +345,15 @@ func TestMipmapBloom(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	receipt1 := new(types.Receipt)
-	receipt1.SetLogs(vm.Logs{
+	receipt1.Logs = vm.Logs{
 		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
 		&vm.Log{Address: common.BytesToAddress([]byte("address"))},
-	})
+	}
 	receipt2 := new(types.Receipt)
-	receipt2.SetLogs(vm.Logs{
+	receipt2.Logs = vm.Logs{
 		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
 		&vm.Log{Address: common.BytesToAddress([]byte("address1"))},
-	})
+	}
 
 	WriteMipmapBloom(db, 1, types.Receipts{receipt1})
 	WriteMipmapBloom(db, 2, types.Receipts{receipt2})
@@ -368,15 +368,15 @@ func TestMipmapBloom(t *testing.T) {
 	// reset
 	db, _ = ethdb.NewMemDatabase()
 	receipt := new(types.Receipt)
-	receipt.SetLogs(vm.Logs{
+	receipt.Logs = vm.Logs{
 		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
-	})
+	}
 	WriteMipmapBloom(db, 999, types.Receipts{receipt1})
 
 	receipt = new(types.Receipt)
-	receipt.SetLogs(vm.Logs{
+	receipt.Logs = vm.Logs{
 		&vm.Log{Address: common.BytesToAddress([]byte("test 1"))},
-	})
+	}
 	WriteMipmapBloom(db, 1000, types.Receipts{receipt})
 
 	bloom := GetMipmapBloom(db, 1000, 1000)
@@ -403,22 +403,22 @@ func TestMipmapChain(t *testing.T) {
 	defer db.Close()
 
 	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{addr, big.NewInt(1000000)})
-	chain := GenerateChain(genesis, db, 1010, func(i int, gen *BlockGen) {
+	chain, receipts := GenerateChain(genesis, db, 1010, func(i int, gen *BlockGen) {
 		var receipts types.Receipts
 		switch i {
 		case 1:
 			receipt := types.NewReceipt(nil, new(big.Int))
-			receipt.SetLogs(vm.Logs{
+			receipt.Logs = vm.Logs{
 				&vm.Log{
 					Address: addr,
 					Topics:  []common.Hash{hash1},
 				},
-			})
+			}
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
 		case 1000:
 			receipt := types.NewReceipt(nil, new(big.Int))
-			receipt.SetLogs(vm.Logs{&vm.Log{Address: addr2}})
+			receipt.Logs = vm.Logs{&vm.Log{Address: addr2}}
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
 
@@ -431,7 +431,7 @@ func TestMipmapChain(t *testing.T) {
 		}
 		WriteMipmapBloom(db, uint64(i+1), receipts)
 	})
-	for _, block := range chain {
+	for i, block := range chain {
 		WriteBlock(db, block)
 		if err := WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
 			t.Fatalf("failed to insert block number: %v", err)
@@ -439,7 +439,7 @@ func TestMipmapChain(t *testing.T) {
 		if err := WriteHeadBlockHash(db, block.Hash()); err != nil {
 			t.Fatalf("failed to insert block number: %v", err)
 		}
-		if err := PutBlockReceipts(db, block, block.Receipts()); err != nil {
+		if err := PutBlockReceipts(db, block.Hash(), receipts[i]); err != nil {
 			t.Fatal("error writing block receipts:", err)
 		}
 	}

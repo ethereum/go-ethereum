@@ -84,6 +84,11 @@ type ProtocolManager struct {
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
 func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
+	// Figure out whether to allow fast sync or not
+	if fastSync && blockchain.CurrentBlock().NumberU64() > 0 {
+		glog.V(logger.Info).Infof("blockchain not empty, fast sync disabled")
+		fastSync = false
+	}
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		fastSync:   fastSync,
@@ -103,7 +108,7 @@ func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool
 		if fastSync && version < eth63 {
 			continue
 		}
-		// Compatible, initialize the sub-protocol
+		// Compatible; initialise the sub-protocol
 		version := version // Closure for the run
 		manager.SubProtocols = append(manager.SubProtocols, p2p.Protocol{
 			Name:    "eth",
@@ -120,13 +125,9 @@ func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool
 		return nil, errIncompatibleConfig
 	}
 	// Construct the different synchronisation mechanisms
-	syncMode := downloader.FullSync
-	if fastSync {
-		syncMode = downloader.FastSync
-	}
-	manager.downloader = downloader.New(syncMode, chaindb, manager.eventMux, blockchain.HasHeader, blockchain.HasBlock, blockchain.GetHeader,
-		blockchain.GetBlock, blockchain.CurrentHeader, blockchain.CurrentBlock, blockchain.CurrentFastBlock, blockchain.FastSyncCommitHead,
-		blockchain.GetTd, blockchain.InsertHeaderChain, blockchain.InsertChain, blockchain.InsertReceiptChain, blockchain.Rollback, manager.removePeer)
+	manager.downloader = downloader.New(chaindb, manager.eventMux, blockchain.HasHeader, blockchain.HasBlock, blockchain.GetHeader, blockchain.GetBlock,
+		blockchain.CurrentHeader, blockchain.CurrentBlock, blockchain.CurrentFastBlock, blockchain.FastSyncCommitHead, blockchain.GetTd,
+		blockchain.InsertHeaderChain, blockchain.InsertChain, blockchain.InsertReceiptChain, blockchain.Rollback, manager.removePeer)
 
 	validator := func(block *types.Block, parent *types.Block) error {
 		return core.ValidateHeader(pow, block.Header(), parent.Header(), true, false)

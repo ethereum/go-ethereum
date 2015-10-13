@@ -38,7 +38,7 @@ type testAccount struct {
 func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 	// Create an empty state
 	db, _ := ethdb.NewMemDatabase()
-	state := New(common.Hash{}, db)
+	state, _ := New(common.Hash{}, db)
 
 	// Fill it with some arbitrary data
 	accounts := []*testAccount{}
@@ -68,7 +68,7 @@ func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 // checkStateAccounts cross references a reconstructed state with an expected
 // account array.
 func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accounts []*testAccount) {
-	state := New(root, db)
+	state, _ := New(root, db)
 	for i, acc := range accounts {
 
 		if balance := state.GetBalance(acc.address); balance.Cmp(acc.balance) != 0 {

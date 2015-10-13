@@ -452,7 +452,7 @@ func makeBlockChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.B
 
 func chm(genesis *types.Block, db ethdb.Database) *BlockChain {
 	var eventMux event.TypeMux
-	bc := &BlockChain{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
+	bc := &BlockChain{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}, rand: rand.New(rand.NewSource(0))}
 	bc.headerCache, _ = lru.New(100)
 	bc.bodyCache, _ = lru.New(100)
 	bc.bodyRLPCache, _ = lru.New(100)

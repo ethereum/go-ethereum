@@ -17,6 +17,7 @@
 package ethdb
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -56,7 +57,10 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	return db.db[string(key)], nil
+	if entry, ok := db.db[string(key)]; ok {
+		return entry, nil
+	}
+	return nil, errors.New("not found")
 }
 
 func (db *MemDatabase) Keys() [][]byte {
@@ -132,8 +136,8 @@ func (b *memBatch) Write() error {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	b.db.lock.RLock()
-	defer b.db.lock.RUnlock()
+	b.db.lock.Lock()
+	defer b.db.lock.Unlock()
 
 	for _, kv := range b.writes {
 		b.db.db[string(kv.k)] = kv.v

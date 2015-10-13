@@ -31,7 +31,7 @@ type request struct {
 	object *node       // Target node to populate with retrieved data (hashnode originally)
 
 	parents []*request // Parent state nodes referencing this entry (notify all upon completion)
-	depth   int        // Depth level within the trie the node is located to prioritize DFS
+	depth   int        // Depth level within the trie the node is located to prioritise DFS
 	deps    int        // Number of dependencies before allowed to commit this node
 
 	callback TrieSyncLeafCallback // Callback to invoke if a leaf node it reached on this branch

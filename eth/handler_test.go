@@ -443,7 +443,9 @@ func testGetNodeData(t *testing.T, protocol int) {
 	// Fetch for now the entire chain db
 	hashes := []common.Hash{}
 	for _, key := range pm.chaindb.(*ethdb.MemDatabase).Keys() {
-		hashes = append(hashes, common.BytesToHash(key))
+		if len(key) == len(common.Hash{}) {
+			hashes = append(hashes, common.BytesToHash(key))
+		}
 	}
 	p2p.Send(peer.app, 0x0d, hashes)
 	msg, err := peer.app.ReadMsg()
