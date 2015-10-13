@@ -40,6 +40,7 @@ import (
 func init() {
 	glog.SetV(6)
 	glog.SetToStderr(true)
+	// Retest #1
 }
 
 var (
