@@ -196,35 +196,35 @@ func (p *peer) FetchNodeData(request *fetchRequest) error {
 
 // SetBlocksIdle sets the peer to idle, allowing it to execute new retrieval requests.
 // Its block retrieval allowance will also be updated either up- or downwards,
-// depending on whether the previous fetch completed in time or not.
+// depending on whether the previous fetch completed in time.
 func (p *peer) SetBlocksIdle() {
 	p.setIdle(p.blockStarted, blockSoftTTL, blockHardTTL, MaxBlockFetch, &p.blockCapacity, &p.blockIdle)
 }
 
 // SetBodiesIdle sets the peer to idle, allowing it to execute new retrieval requests.
 // Its block body retrieval allowance will also be updated either up- or downwards,
-// depending on whether the previous fetch completed in time or not.
+// depending on whether the previous fetch completed in time.
 func (p *peer) SetBodiesIdle() {
 	p.setIdle(p.blockStarted, bodySoftTTL, bodyHardTTL, MaxBlockFetch, &p.blockCapacity, &p.blockIdle)
 }
 
 // SetReceiptsIdle sets the peer to idle, allowing it to execute new retrieval requests.
 // Its receipt retrieval allowance will also be updated either up- or downwards,
-// depending on whether the previous fetch completed in time or not.
+// depending on whether the previous fetch completed in time.
 func (p *peer) SetReceiptsIdle() {
 	p.setIdle(p.receiptStarted, receiptSoftTTL, receiptHardTTL, MaxReceiptFetch, &p.receiptCapacity, &p.receiptIdle)
 }
 
 // SetNodeDataIdle sets the peer to idle, allowing it to execute new retrieval
 // requests. Its node data retrieval allowance will also be updated either up- or
-// downwards, depending on whether the previous fetch completed in time or not.
+// downwards, depending on whether the previous fetch completed in time.
 func (p *peer) SetNodeDataIdle() {
 	p.setIdle(p.stateStarted, stateSoftTTL, stateSoftTTL, MaxStateFetch, &p.stateCapacity, &p.stateIdle)
 }
 
 // setIdle sets the peer to idle, allowing it to execute new retrieval requests.
 // Its data retrieval allowance will also be updated either up- or downwards,
-// depending on whether the previous fetch completed in time or not.
+// depending on whether the previous fetch completed in time.
 func (p *peer) setIdle(started time.Time, softTTL, hardTTL time.Duration, maxFetch int, capacity, idle *int32) {
 	// Update the peer's download allowance based on previous performance
 	scale := 2.0

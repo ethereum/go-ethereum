@@ -844,7 +844,7 @@ func (d *Downloader) fetchBlocks61(from uint64) error {
 
 			for _, peer := range idles {
 				// Short circuit if throttling activated
-				if d.queue.ThrottleBlocks() {
+				if d.queue.ShouldThrottleBlocks() {
 					throttled = true
 					break
 				}
@@ -1234,7 +1234,7 @@ func (d *Downloader) fetchBodies(from uint64) error {
 		setIdle  = func(p *peer) { p.SetBlocksIdle() }
 	)
 	err := d.fetchParts(errCancelBodyFetch, d.bodyCh, deliver, d.bodyWakeCh, expire,
-		d.queue.PendingBlocks, d.queue.InFlightBlocks, d.queue.ThrottleBlocks, d.queue.ReserveBodies,
+		d.queue.PendingBlocks, d.queue.InFlightBlocks, d.queue.ShouldThrottleBlocks, d.queue.ReserveBodies,
 		d.bodyFetchHook, fetch, d.queue.CancelBodies, capacity, getIdles, setIdle, "Body")
 
 	glog.V(logger.Debug).Infof("Block body download terminated: %v", err)
@@ -1258,7 +1258,7 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 		setIdle  = func(p *peer) { p.SetReceiptsIdle() }
 	)
 	err := d.fetchParts(errCancelReceiptFetch, d.receiptCh, deliver, d.receiptWakeCh, expire,
-		d.queue.PendingReceipts, d.queue.InFlightReceipts, d.queue.ThrottleReceipts, d.queue.ReserveReceipts,
+		d.queue.PendingReceipts, d.queue.InFlightReceipts, d.queue.ShouldThrottleReceipts, d.queue.ReserveReceipts,
 		d.receiptFetchHook, fetch, d.queue.CancelReceipts, capacity, d.peers.ReceiptIdlePeers, setIdle, "Receipt")
 
 	glog.V(logger.Debug).Infof("Receipt download terminated: %v", err)
