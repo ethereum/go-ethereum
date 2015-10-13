@@ -99,9 +99,9 @@ func (n *Node) String() string {
 //
 // In the following example, the node URL describes
 // a node with IP address 10.3.58.6, TCP listening port 42786
-// and UDP discovery port 30301.
+// and UDP discovery port 42787.
 //
-//    enode://<hex node id>@10.3.58.6:42786?discport=30301
+//    enode://<hex node id>@10.3.58.6:42786?discport=42787
 func ParseNode(rawurl string) (*Node, error) {
 	var (
 		id               NodeID

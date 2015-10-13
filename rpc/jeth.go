@@ -39,16 +39,18 @@ type Jeth struct {
 	fe     xeth.Frontend
 }
 
+
 func NewJeth(ethApi shared.ExpanseApi, re *jsre.JSRE, client comms.ExpanseClient, fe xeth.Frontend) *Jeth {
 	return &Jeth{ethApi, re, client, fe}
 }
 
 func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id interface{}) (response otto.Value) {
-	errObj := fmt.Sprintf("{\"message\": \"%s\", \"code\": %d}", msg, code)
-	retResponse := fmt.Sprintf("ret_response = JSON.parse('{\"jsonrpc\": \"%s\", \"id\": %v, \"error\": %s}');", shared.JsonRpcVersion, id, errObj)
+	m := shared.NewRpcErrorResponse(id, shared.JsonRpcVersion, code, fmt.Errorf(msg))
+	errObj, _ := json.Marshal(m.Error)
+	errRes, _ := json.Marshal(m)
 
-	call.Otto.Run("ret_error = " + errObj)
-	res, _ := call.Otto.Run(retResponse)
+	call.Otto.Run("ret_error = " + string(errObj))
+	res, _ := call.Otto.Run("ret_response = " + string(errRes))
 
 	return res
 }

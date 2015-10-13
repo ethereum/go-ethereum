@@ -26,12 +26,15 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/expanse-project/ethash"
+
+	"github.com/ethereum/ethash"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/crypto"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-project/go-expanse/params"
 	"github.com/expanse-project/go-expanse/pow"
 	"github.com/expanse-project/go-expanse/rlp"
 	"github.com/hashicorp/golang-lru"
@@ -46,7 +49,7 @@ func thePow() pow.PoW {
 	return pow
 }
 
-func theChainManager(db common.Database, t *testing.T) *ChainManager {
+func theChainManager(db ethdb.Database, t *testing.T) *ChainManager {
 	var eventMux event.TypeMux
 	WriteTestNetGenesisBlock(db, 0)
 	chainMan, err := NewChainManager(db, thePow(), &eventMux)
@@ -73,10 +76,11 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 	if err != nil {
 		t.Fatal("could not make new canonical in testFork", err)
 	}
-	// asert the bmans have the same block at i
+	// assert the bmans have the same block at i
 	bi1 := bman.bc.GetBlockByNumber(uint64(i)).Hash()
 	bi2 := bman2.bc.GetBlockByNumber(uint64(i)).Hash()
 	if bi1 != bi2 {
+		fmt.Printf("%+v\n%+v\n\n", bi1, bi2)
 		t.Fatal("chains do not have the same hash at height", i)
 	}
 	bman2.bc.SetProcessor(bman2)
@@ -110,7 +114,6 @@ func printChain(bc *ChainManager) {
 
 // process blocks against a chain
 func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
-	td := new(big.Int)
 	for _, block := range chainB {
 		_, _, err := bman.bc.processor.Process(block)
 		if err != nil {
@@ -119,17 +122,12 @@ func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 			}
 			return nil, err
 		}
-		parent := bman.bc.GetBlock(block.ParentHash())
-		block.Td = CalcTD(block, parent)
-		td = block.Td
-
 		bman.bc.mu.Lock()
-		{
-			WriteBlock(bman.bc.chainDb, block)
-		}
+		WriteTd(bman.bc.chainDb, block.Hash(), new(big.Int).Add(block.Difficulty(), bman.bc.GetTd(block.ParentHash())))
+		WriteBlock(bman.bc.chainDb, block)
 		bman.bc.mu.Unlock()
 	}
-	return td, nil
+	return bman.bc.GetTd(chainB[len(chainB)-1].Hash()), nil
 }
 
 func loadChain(fn string, t *testing.T) (types.Blocks, error) {
@@ -385,10 +383,14 @@ func makeChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block 
 	return chain
 }
 
-func chm(genesis *types.Block, db common.Database) *ChainManager {
+func chm(genesis *types.Block, db ethdb.Database) *ChainManager {
 	var eventMux event.TypeMux
 	bc := &ChainManager{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
-	bc.cache, _ = lru.New(100)
+	bc.headerCache, _ = lru.New(100)
+	bc.bodyCache, _ = lru.New(100)
+	bc.bodyRLPCache, _ = lru.New(100)
+	bc.tdCache, _ = lru.New(100)
+	bc.blockCache, _ = lru.New(100)
 	bc.futureBlocks, _ = lru.New(100)
 	bc.processor = bproc{}
 	bc.ResetWithGenesisBlock(genesis)
@@ -417,6 +419,59 @@ func TestReorgLongest(t *testing.T) {
 		if prev.ParentHash() != block.Hash() {
 			t.Errorf("parent hash mismatch %x - %x", prev.ParentHash(), block.Hash())
 		}
+	}
+}
+
+func TestBadHashes(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	genesis, err := WriteTestNetGenesisBlock(db, 0)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	bc := chm(genesis, db)
+
+	chain := makeChainWithDiff(genesis, []int{1, 2, 4}, 10)
+	BadHashes[chain[2].Header().Hash()] = true
+
+	_, err = bc.InsertChain(chain)
+	if !IsBadHashError(err) {
+		t.Errorf("error mismatch: want: BadHashError, have: %v", err)
+	}
+}
+
+func TestReorgBadHashes(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	genesis, err := WriteTestNetGenesisBlock(db, 0)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	bc := chm(genesis, db)
+
+	chain := makeChainWithDiff(genesis, []int{1, 2, 3, 4}, 11)
+	bc.InsertChain(chain)
+
+	if chain[3].Header().Hash() != bc.LastBlockHash() {
+		t.Errorf("last block hash mismatch: want: %x, have: %x", chain[3].Header().Hash(), bc.LastBlockHash())
+	}
+
+	// NewChainManager should check BadHashes when loading it db
+	BadHashes[chain[3].Header().Hash()] = true
+
+	var eventMux event.TypeMux
+	ncm, err := NewChainManager(db, FakePow{}, &eventMux)
+	if err != nil {
+		t.Errorf("NewChainManager err: %s", err)
+	}
+
+	// check it set head to (valid) parent of bad hash block
+	if chain[2].Header().Hash() != ncm.LastBlockHash() {
+		t.Errorf("last block hash mismatch: want: %x, have: %x", chain[2].Header().Hash(), ncm.LastBlockHash())
+	}
+
+	if chain[2].Header().GasLimit.Cmp(ncm.GasLimit()) != 0 {
+		t.Errorf("current block gasLimit mismatch: want: %x, have: %x", chain[2].Header().GasLimit, ncm.GasLimit())
 	}
 }
 
@@ -457,7 +512,7 @@ func TestInsertNonceError(t *testing.T) {
 
 		fail := rand.Int() % len(blocks)
 		failblock := blocks[fail]
-		bc.pow = failpow{failblock.NumberU64()}
+		bc.pow = failPow{failblock.NumberU64()}
 		n, err := bc.InsertChain(blocks)
 
 		// Check that the returned error indicates the nonce failure.
@@ -484,34 +539,115 @@ func TestInsertNonceError(t *testing.T) {
 	}
 }
 
-/*
-func TestGenesisMismatch(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
-	var mux event.TypeMux
-	genesis := GenesisBlock(0, db)
-	_, err := NewChainManager(genesis, db, db, db, thePow(), &mux)
-	if err != nil {
-		t.Error(err)
-	}
-	genesis = GenesisBlock(1, db)
-	_, err = NewChainManager(genesis, db, db, db, thePow(), &mux)
-	if err == nil {
-		t.Error("expected genesis mismatch error")
-	}
-}
-*/
+// Tests that chain reorganizations handle transaction removals and reinsertions.
+func TestChainTxReorgs(t *testing.T) {
+	params.MinGasLimit = big.NewInt(125000)      // Minimum the gas limit may ever be.
+	params.GenesisGasLimit = big.NewInt(3141592) // Gas limit of the Genesis block.
 
-// failpow returns false from Verify for a certain block number.
-type failpow struct{ num uint64 }
+	var (
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		key3, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+		addr3   = crypto.PubkeyToAddress(key3.PublicKey)
+		db, _   = ethdb.NewMemDatabase()
+	)
+	genesis := WriteGenesisBlockForTesting(db,
+		GenesisAccount{addr1, big.NewInt(1000000)},
+		GenesisAccount{addr2, big.NewInt(1000000)},
+		GenesisAccount{addr3, big.NewInt(1000000)},
+	)
+	// Create two transactions shared between the chains:
+	//  - postponed: transaction included at a later block in the forked chain
+	//  - swapped: transaction included at the same block number in the forked chain
+	postponed, _ := types.NewTransaction(0, addr1, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key1)
+	swapped, _ := types.NewTransaction(1, addr1, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key1)
 
-func (pow failpow) Search(pow.Block, <-chan struct{}) (nonce uint64, mixHash []byte) {
-	return 0, nil
-}
-func (pow failpow) Verify(b pow.Block) bool {
-	return b.NumberU64() != pow.num
-}
-func (pow failpow) GetHashrate() int64 {
-	return 0
-}
-func (pow failpow) Turbo(bool) {
+	// Create two transactions that will be dropped by the forked chain:
+	//  - pastDrop: transaction dropped retroactively from a past block
+	//  - freshDrop: transaction dropped exactly at the block where the reorg is detected
+	var pastDrop, freshDrop *types.Transaction
+
+	// Create three transactions that will be added in the forked chain:
+	//  - pastAdd:   transaction added before the reorganiztion is detected
+	//  - freshAdd:  transaction added at the exact block the reorg is detected
+	//  - futureAdd: transaction added after the reorg has already finished
+	var pastAdd, freshAdd, futureAdd *types.Transaction
+
+	chain := GenerateChain(genesis, db, 3, func(i int, gen *BlockGen) {
+		switch i {
+		case 0:
+			pastDrop, _ = types.NewTransaction(gen.TxNonce(addr2), addr2, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key2)
+
+			gen.AddTx(pastDrop)  // This transaction will be dropped in the fork from below the split point
+			gen.AddTx(postponed) // This transaction will be postponed till block #3 in the fork
+
+		case 2:
+			freshDrop, _ = types.NewTransaction(gen.TxNonce(addr2), addr2, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key2)
+
+			gen.AddTx(freshDrop) // This transaction will be dropped in the fork from exactly at the split point
+			gen.AddTx(swapped)   // This transaction will be swapped out at the exact height
+
+			gen.OffsetTime(9) // Lower the block difficulty to simulate a weaker chain
+		}
+	})
+	// Import the chain. This runs all block validation rules.
+	evmux := &event.TypeMux{}
+	chainman, _ := NewChainManager(db, FakePow{}, evmux)
+	chainman.SetProcessor(NewBlockProcessor(db, FakePow{}, chainman, evmux))
+	if i, err := chainman.InsertChain(chain); err != nil {
+		t.Fatalf("failed to insert original chain[%d]: %v", i, err)
+	}
+
+	// overwrite the old chain
+	chain = GenerateChain(genesis, db, 5, func(i int, gen *BlockGen) {
+		switch i {
+		case 0:
+			pastAdd, _ = types.NewTransaction(gen.TxNonce(addr3), addr3, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key3)
+			gen.AddTx(pastAdd) // This transaction needs to be injected during reorg
+
+		case 2:
+			gen.AddTx(postponed) // This transaction was postponed from block #1 in the original chain
+			gen.AddTx(swapped)   // This transaction was swapped from the exact current spot in the original chain
+
+			freshAdd, _ = types.NewTransaction(gen.TxNonce(addr3), addr3, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key3)
+			gen.AddTx(freshAdd) // This transaction will be added exactly at reorg time
+
+		case 3:
+			futureAdd, _ = types.NewTransaction(gen.TxNonce(addr3), addr3, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key3)
+			gen.AddTx(futureAdd) // This transaction will be added after a full reorg
+		}
+	})
+	if _, err := chainman.InsertChain(chain); err != nil {
+		t.Fatalf("failed to insert forked chain: %v", err)
+	}
+
+	// removed tx
+	for i, tx := range (types.Transactions{pastDrop, freshDrop}) {
+		if GetTransaction(db, tx.Hash()) != nil {
+			t.Errorf("drop %d: tx found while shouldn't have been", i)
+		}
+		if GetReceipt(db, tx.Hash()) != nil {
+			t.Errorf("drop %d: receipt found while shouldn't have been", i)
+		}
+	}
+	// added tx
+	for i, tx := range (types.Transactions{pastAdd, freshAdd, futureAdd}) {
+		if GetTransaction(db, tx.Hash()) == nil {
+			t.Errorf("add %d: expected tx to be found", i)
+		}
+		if GetReceipt(db, tx.Hash()) == nil {
+			t.Errorf("add %d: expected receipt to be found", i)
+		}
+	}
+	// shared tx
+	for i, tx := range (types.Transactions{postponed, swapped}) {
+		if GetTransaction(db, tx.Hash()) == nil {
+			t.Errorf("share %d: expected tx to be found", i)
+		}
+		if GetReceipt(db, tx.Hash()) == nil {
+			t.Errorf("share %d: expected receipt to be found", i)
+		}
+	}
 }

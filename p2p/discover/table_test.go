@@ -514,9 +514,6 @@ func (tn *preminedTestnet) findnode(toid NodeID, toaddr *net.UDPAddr, target Nod
 	if toaddr.Port == 0 {
 		panic("query to node at distance 0")
 	}
-	if target != tn.target {
-		panic("findnode with wrong target")
-	}
 	next := uint16(toaddr.Port) - 1
 	var result []*Node
 	for i, id := range tn.dists[toaddr.Port] {

@@ -24,11 +24,13 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
+
 	"github.com/expanse-project/go-expanse/cmd/utils"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/logger/glog"
 )
 
@@ -191,7 +193,7 @@ func hashish(x string) bool {
 	return err != nil
 }
 
-func closeAll(dbs ...common.Database) {
+func closeAll(dbs ...ethdb.Database) {
 	for _, db := range dbs {
 		db.Close()
 	}

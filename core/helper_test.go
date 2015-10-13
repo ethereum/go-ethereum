@@ -22,7 +22,7 @@ import (
 
 	"github.com/expanse-project/go-expanse/core/types"
 	// "github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/common"
+
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/event"
 )
@@ -32,7 +32,7 @@ type TestManager struct {
 	// stateManager *StateManager
 	eventMux *event.TypeMux
 
-	db         common.Database
+	db         ethdb.Database
 	txPool     *TxPool
 	blockChain *ChainManager
 	Blocks     []*types.Block
@@ -74,7 +74,7 @@ func (tm *TestManager) EventMux() *event.TypeMux {
 // 	return nil
 // }
 
-func (tm *TestManager) Db() common.Database {
+func (tm *TestManager) Db() ethdb.Database {
 	return tm.db
 }
 

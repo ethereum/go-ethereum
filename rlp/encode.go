@@ -45,12 +45,6 @@ type Encoder interface {
 	EncodeRLP(io.Writer) error
 }
 
-// ListSize returns the encoded size of an RLP list with the given
-// content size.
-func ListSize(contentSize uint64) uint64 {
-	return uint64(headsize(contentSize)) + contentSize
-}
-
 // Encode writes the RLP encoding of val to w. Note that Encode may
 // perform many small writes in some cases. Consider making w
 // buffered.
@@ -90,8 +84,8 @@ func Encode(w io.Writer, val interface{}) error {
 		return outer.encode(val)
 	}
 	eb := encbufPool.Get().(*encbuf)
-	eb.reset()
 	defer encbufPool.Put(eb)
+	eb.reset()
 	if err := eb.encode(val); err != nil {
 		return err
 	}
@@ -102,8 +96,8 @@ func Encode(w io.Writer, val interface{}) error {
 // Please see the documentation of Encode for the encoding rules.
 func EncodeToBytes(val interface{}) ([]byte, error) {
 	eb := encbufPool.Get().(*encbuf)
-	eb.reset()
 	defer encbufPool.Put(eb)
+	eb.reset()
 	if err := eb.encode(val); err != nil {
 		return nil, err
 	}
@@ -288,8 +282,13 @@ type encReader struct {
 func (r *encReader) Read(b []byte) (n int, err error) {
 	for {
 		if r.piece = r.next(); r.piece == nil {
-			encbufPool.Put(r.buf)
-			r.buf = nil
+			// Put the encode buffer back into the pool at EOF when it
+			// is first encountered. Subsequent calls still return EOF
+			// as the error but the buffer is no longer valid.
+			if r.buf != nil {
+				encbufPool.Put(r.buf)
+				r.buf = nil
+			}
 			return n, io.EOF
 		}
 		nn := copy(b[n:], r.piece)
@@ -349,6 +348,8 @@ var (
 func makeWriter(typ reflect.Type) (writer, error) {
 	kind := typ.Kind()
 	switch {
+	case typ == rawValueType:
+		return writeRawValue, nil
 	case typ.Implements(encoderInterface):
 		return writeEncoder, nil
 	case kind != reflect.Ptr && reflect.PtrTo(typ).Implements(encoderInterface):
@@ -382,6 +383,11 @@ func makeWriter(typ reflect.Type) (writer, error) {
 
 func isByte(typ reflect.Type) bool {
 	return typ.Kind() == reflect.Uint8 && !typ.Implements(encoderInterface)
+}
+
+func writeRawValue(val reflect.Value, w *encbuf) error {
+	w.str = append(w.str, val.Bytes()...)
+	return nil
 }
 
 func writeUint(val reflect.Value, w *encbuf) error {

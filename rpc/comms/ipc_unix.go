@@ -21,6 +21,8 @@ package comms
 import (
 	"net"
 	"os"
+	"path/filepath"
+
 
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
@@ -68,8 +70,13 @@ func (self *ipcClient) reconnect() error {
 	return err
 }
 
+
 func startIpc(cfg IpcConfig, codec codec.Codec, initializer func(conn net.Conn) (shared.ExpanseApi, error)) error {
-	os.Remove(cfg.Endpoint) // in case it still exists from a previous run
+	// Ensure the IPC path exists and remove any previous leftover
+	if err := os.MkdirAll(filepath.Dir(cfg.Endpoint), 0751); err != nil {
+		return err
+	}
+	os.Remove(cfg.Endpoint)
 
 	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: cfg.Endpoint, Net: "unix"})
 	if err != nil {

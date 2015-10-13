@@ -144,7 +144,7 @@ func genUncles(i int, gen *BlockGen) {
 
 func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Create the database in memory or in a temporary directory.
-	var db common.Database
+	var db ethdb.Database
 	if !disk {
 		db, _ = ethdb.NewMemDatabase()
 	} else {
@@ -162,7 +162,7 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 
 	// Generate a chain of b.N blocks using the supplied block
 	// generator function.
-	genesis := WriteGenesisBlockForTesting(db, benchRootAddr, benchRootFunds)
+	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{benchRootAddr, benchRootFunds})
 	chain := GenerateChain(genesis, db, b.N, gen)
 
 	// Time the insertion of the new chain.

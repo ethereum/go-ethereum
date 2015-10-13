@@ -31,8 +31,8 @@ import (
 // MetricsEnabledFlag is the CLI flag name to use to enable metrics collections.
 var MetricsEnabledFlag = "metrics"
 
-// enabled is the flag specifying if metrics are enable or not.
-var enabled = false
+// Enabled is the flag specifying if metrics are enable or not.
+var Enabled = false
 
 // Init enables or disables the metrics system. Since we need this to run before
 // any other code gets to create meters and timers, we'll actually do an ugly hack
@@ -41,7 +41,7 @@ func init() {
 	for _, arg := range os.Args {
 		if strings.TrimLeft(arg, "-") == MetricsEnabledFlag {
 			glog.V(logger.Info).Infof("Enabling metrics collection")
-			enabled = true
+			Enabled = true
 		}
 	}
 }
@@ -49,7 +49,7 @@ func init() {
 // NewMeter create a new metrics Meter, either a real one of a NOP stub depending
 // on the metrics flag.
 func NewMeter(name string) metrics.Meter {
-	if !enabled {
+	if !Enabled {
 		return new(metrics.NilMeter)
 	}
 	return metrics.GetOrRegisterMeter(name, metrics.DefaultRegistry)
@@ -58,7 +58,7 @@ func NewMeter(name string) metrics.Meter {
 // NewTimer create a new metrics Timer, either a real one of a NOP stub depending
 // on the metrics flag.
 func NewTimer(name string) metrics.Timer {
-	if !enabled {
+	if !Enabled {
 		return new(metrics.NilTimer)
 	}
 	return metrics.GetOrRegisterTimer(name, metrics.DefaultRegistry)
@@ -68,7 +68,7 @@ func NewTimer(name string) metrics.Timer {
 // process.
 func CollectProcessMetrics(refresh time.Duration) {
 	// Short circuit if the metrics system is disabled
-	if !enabled {
+	if !Enabled {
 		return
 	}
 	// Create the various data collectors

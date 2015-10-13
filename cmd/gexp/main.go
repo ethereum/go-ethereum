@@ -47,17 +47,23 @@ import (
 )
 
 const (
+
 	ClientIdentifier = "Gexp"
-	Version          = "1.1.4"
+	Version          = "1.2.2"
 	VersionMajor     = 1
-	VersionMinor     = 1
-	VersionPatch     = 4
+	VersionMinor     = 2
+	VersionPatch     = 2
 )
 
 var (
 	gitCommit       string // set via linker flagg
 	nodeNameVersion string
 	app             *cli.App
+
+	ExtraDataFlag = cli.StringFlag{
+		Name:  "extradata",
+		Usage: "Extra data for the miner",
+	}
 )
 
 func init() {
@@ -283,6 +289,7 @@ JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt
 		utils.DataDirFlag,
 		utils.BlockchainVersionFlag,
 		utils.OlympicFlag,
+		utils.EthVersionFlag,
 		utils.CacheFlag,
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
@@ -307,6 +314,7 @@ JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt
 		utils.IPCPathFlag,
 		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
+		utils.DevModeFlag,
 		utils.VMDebugFlag,
 		utils.VMForceJitFlag,
 		utils.VMJitCacheFlag,
@@ -329,10 +337,12 @@ JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt
 		utils.GpobaseStepDownFlag,
 		utils.GpobaseStepUpFlag,
 		utils.GpobaseCorrectionFactorFlag,
+		ExtraDataFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		utils.SetupLogger(ctx)
 		utils.SetupVM(ctx)
+		utils.SetupEth(ctx)
 		if ctx.GlobalBool(utils.PProfEanbledFlag.Name) {
 			utils.StartPProf(ctx)
 		}
@@ -349,6 +359,14 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// makeExtra resolves extradata for the miner from a flag or returns a default.
+func makeExtra(ctx *cli.Context) []byte {
+	if ctx.GlobalIsSet(ExtraDataFlag.Name) {
+		return []byte(ctx.GlobalString(ExtraDataFlag.Name))
+	}
+	return makeDefaultExtra()
 }
 
 func makeDefaultExtra() []byte {
@@ -379,7 +397,7 @@ func run(ctx *cli.Context) {
 	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	cfg.ExtraData = makeDefaultExtra()
+	cfg.ExtraData = makeExtra(ctx)
 
 	expanse, err := exp.New(cfg)
 	if err != nil {
@@ -400,7 +418,7 @@ func attach(ctx *cli.Context) {
 		client, err = comms.ClientFromEndpoint(ctx.Args().First(), codec.JSON)
 	} else {
 		cfg := comms.IpcConfig{
-			Endpoint: ctx.GlobalString(utils.IPCPathFlag.Name),
+			Endpoint: utils.IpcSocketPath(ctx),
 		}
 		client, err = comms.NewIpcClient(cfg, codec.JSON)
 	}
@@ -427,6 +445,9 @@ func console(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+
+	cfg.ExtraData = makeExtra(ctx)
+
 	expanse, err := exp.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -525,17 +546,16 @@ func blockRecovery(ctx *cli.Context) {
 
 	var block *types.Block
 	if arg[0] == '#' {
-		block = core.GetBlockByNumber(blockDb, common.String2Big(arg[1:]).Uint64())
+		block = core.GetBlock(blockDb, core.GetCanonicalHash(blockDb, common.String2Big(arg[1:]).Uint64()))
 	} else {
-		block = core.GetBlockByHash(blockDb, common.HexToHash(arg))
+		block = core.GetBlock(blockDb, common.HexToHash(arg))
 	}
 
 	if block == nil {
 		glog.Fatalln("block not found. Recovery failed")
 	}
 
-	err = core.WriteHead(blockDb, block)
-	if err != nil {
+	if err = core.WriteHeadBlockHash(blockDb, block.Hash()); err != nil {
 		glog.Fatalln("block write err", err)
 	}
 	glog.Infof("Recovery succesful. New HEAD %x\n", block.Hash())

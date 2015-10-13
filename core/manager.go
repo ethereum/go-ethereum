@@ -17,8 +17,9 @@
 package core
 
 import (
+
 	"github.com/expanse-project/go-expanse/accounts"
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/event"
 )
 
@@ -28,7 +29,7 @@ type Backend interface {
 	BlockProcessor() *BlockProcessor
 	ChainManager() *ChainManager
 	TxPool() *TxPool
-	ChainDb() common.Database
-	DappDb() common.Database
+	ChainDb() ethdb.Database
+	DappDb() ethdb.Database
 	EventMux() *event.TypeMux
 }
