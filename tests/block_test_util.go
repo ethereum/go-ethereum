@@ -177,7 +177,7 @@ func runBlockTest(test *BlockTest) error {
 
 	// import pre accounts
 
-	_, err = test.InsertPreState(ethereum)
+	_, err = test.InsertPreState(expanse)
 	if err != nil {
 		return fmt.Errorf("InsertPreState: %v", err)
 	}
