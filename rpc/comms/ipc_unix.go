@@ -71,7 +71,7 @@ func (self *ipcClient) reconnect() error {
 }
 
 
-func startIpc(cfg IpcConfig, codec codec.Codec, initializer func(conn net.Conn) (shared.EthereumApi, error)) error {
+func startIpc(cfg IpcConfig, codec codec.Codec, initializer func(conn net.Conn) (shared.ExpanseApi, error)) error {
 	// Ensure the IPC path exists and remove any previous leftover
 	if err := os.MkdirAll(filepath.Dir(cfg.Endpoint), 0751); err != nil {
 		return err
