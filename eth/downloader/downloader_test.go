@@ -32,16 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
-
-func init() {
-	glog.SetV(6)
-	glog.SetToStderr(true)
-	// Retest #1
-}
 
 var (
 	testdb, _   = ethdb.NewMemDatabase()
@@ -49,6 +42,13 @@ var (
 	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
 	genesis     = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000))
 )
+
+func init() {
+	go func() {
+		time.Sleep(3 * time.Minute)
+		panic("wtf")
+	}()
+}
 
 // makeChain creates a chain of n blocks starting at and including parent.
 // the returned hash chain is ordered head->parent. In addition, every 3rd block
