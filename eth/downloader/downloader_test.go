@@ -45,7 +45,7 @@ var (
 
 func init() {
 	go func() {
-		time.Sleep(3 * time.Minute)
+		time.Sleep(5 * time.Minute)
 		panic("wtf")
 	}()
 }
