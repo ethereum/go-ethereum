@@ -1556,7 +1556,7 @@ func (d *Downloader) process() {
 					blocks = append(blocks, types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles))
 				case d.mode == FastSync:
 					blocks = append(blocks, types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles))
-					if result.Header.Number.Uint64() <= d.queue.fastSyncPivot {
+					if result.Header.Number.Uint64() <= d.queue.FastSyncPivot() {
 						receipts = append(receipts, result.Receipts)
 					}
 				case d.mode == LightSync:
@@ -1574,7 +1574,7 @@ func (d *Downloader) process() {
 
 			case len(receipts) > 0:
 				index, err = d.insertReceipts(blocks, receipts)
-				if err == nil && blocks[len(blocks)-1].NumberU64() == d.queue.fastSyncPivot {
+				if err == nil && blocks[len(blocks)-1].NumberU64() == d.queue.FastSyncPivot() {
 					index, err = len(blocks)-1, d.commitHeadBlock(blocks[len(blocks)-1].Hash())
 				}
 			default:

@@ -232,6 +232,14 @@ func (q *queue) Idle() bool {
 	return (queued + pending + cached) == 0
 }
 
+// FastSyncPivot retrieves the currently used fast sync pivot point.
+func (q *queue) FastSyncPivot() uint64 {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	return q.fastSyncPivot
+}
+
 // ShouldThrottleBlocks checks if the download should be throttled (active block (body)
 // fetches exceed block cache).
 func (q *queue) ShouldThrottleBlocks() bool {
@@ -410,6 +418,9 @@ func (q *queue) TakeResults() []*fetchResult {
 // ReserveBlocks reserves a set of block hashes for the given peer, skipping any
 // previously failed download.
 func (q *queue) ReserveBlocks(p *peer, count int) *fetchRequest {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
 	return q.reserveHashes(p, count, q.hashQueue, nil, q.blockPendPool, len(q.resultCache)-len(q.blockDonePool))
 }
 
@@ -429,15 +440,19 @@ func (q *queue) ReserveNodeData(p *peer, count int) *fetchRequest {
 			}
 		}
 	}
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
 	return q.reserveHashes(p, count, q.stateTaskQueue, generator, q.statePendPool, count)
 }
 
 // reserveHashes reserves a set of hashes for the given peer, skipping previously
 // failed ones.
+//
+// Note, this method expects the queue lock to be already held for writing. The
+// reason the lock is not obtained in here is because the parameters already need
+// to access the queue, so they already need a lock anyway.
 func (q *queue) reserveHashes(p *peer, count int, taskQueue *prque.Prque, taskGen func(int), pendPool map[string]*fetchRequest, maxPending int) *fetchRequest {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
 	// Short circuit if the peer's already downloading something (sanity check to
 	// not corrupt state)
 	if _, ok := pendPool[p.id]; ok {
@@ -494,6 +509,9 @@ func (q *queue) ReserveBodies(p *peer, count int) (*fetchRequest, bool, error) {
 	isNoop := func(header *types.Header) bool {
 		return header.TxHash == types.EmptyRootHash && header.UncleHash == types.EmptyUncleHash
 	}
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
 	return q.reserveHeaders(p, count, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool, q.blockDonePool, isNoop)
 }
 
@@ -504,17 +522,21 @@ func (q *queue) ReserveReceipts(p *peer, count int) (*fetchRequest, bool, error)
 	isNoop := func(header *types.Header) bool {
 		return header.ReceiptHash == types.EmptyRootHash
 	}
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
 	return q.reserveHeaders(p, count, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool, q.receiptDonePool, isNoop)
 }
 
 // reserveHeaders reserves a set of data download operations for a given peer,
 // skipping any previously failed ones. This method is a generic version used
 // by the individual special reservation functions.
+//
+// Note, this method expects the queue lock to be already held for writing. The
+// reason the lock is not obtained in here is because the parameters already need
+// to access the queue, so they already need a lock anyway.
 func (q *queue) reserveHeaders(p *peer, count int, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque,
 	pendPool map[string]*fetchRequest, donePool map[common.Hash]struct{}, isNoop func(*types.Header) bool) (*fetchRequest, bool, error) {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
 	// Short circuit if the pool has been depleted, or if the peer's already
 	// downloading something (sanity check not to corrupt state)
 	if taskQueue.Empty() {
@@ -656,33 +678,46 @@ func (q *queue) Revoke(peerId string) {
 // ExpireBlocks checks for in flight requests that exceeded a timeout allowance,
 // canceling them and returning the responsible peers for penalisation.
 func (q *queue) ExpireBlocks(timeout time.Duration) []string {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
 	return q.expire(timeout, q.blockPendPool, q.hashQueue, blockTimeoutMeter)
 }
 
 // ExpireBodies checks for in flight block body requests that exceeded a timeout
 // allowance, canceling them and returning the responsible peers for penalisation.
 func (q *queue) ExpireBodies(timeout time.Duration) []string {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
 	return q.expire(timeout, q.blockPendPool, q.blockTaskQueue, bodyTimeoutMeter)
 }
 
 // ExpireReceipts checks for in flight receipt requests that exceeded a timeout
 // allowance, canceling them and returning the responsible peers for penalisation.
 func (q *queue) ExpireReceipts(timeout time.Duration) []string {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
 	return q.expire(timeout, q.receiptPendPool, q.receiptTaskQueue, receiptTimeoutMeter)
 }
 
 // ExpireNodeData checks for in flight node data requests that exceeded a timeout
 // allowance, canceling them and returning the responsible peers for penalisation.
 func (q *queue) ExpireNodeData(timeout time.Duration) []string {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
 	return q.expire(timeout, q.statePendPool, q.stateTaskQueue, stateTimeoutMeter)
 }
 
 // expire is the generic check that move expired tasks from a pending pool back
 // into a task pool, returning all entities caught with expired tasks.
+//
+// Note, this method expects the queue lock to be already held for writing. The
+// reason the lock is not obtained in here is because the parameters already need
+// to access the queue, so they already need a lock anyway.
 func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest, taskQueue *prque.Prque, timeoutMeter metrics.Meter) []string {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
 	// Iterate over the expired requests and return each to the queue
 	peers := []string{}
 	for id, request := range pendPool {
@@ -773,6 +808,9 @@ func (q *queue) DeliverBlocks(id string, blocks []*types.Block) error {
 
 // DeliverBodies injects a block body retrieval response into the results queue.
 func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLists [][]*types.Header) error {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
 	reconstruct := func(header *types.Header, index int, result *fetchResult) error {
 		if types.DeriveSha(types.Transactions(txLists[index])) != header.TxHash || types.CalcUncleHash(uncleLists[index]) != header.UncleHash {
 			return errInvalidBody
@@ -786,6 +824,9 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLi
 
 // DeliverReceipts injects a receipt retrieval response into the results queue.
 func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt) error {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
 	reconstruct := func(header *types.Header, index int, result *fetchResult) error {
 		if types.DeriveSha(types.Receipts(receiptList[index])) != header.ReceiptHash {
 			return errInvalidReceipt
@@ -797,11 +838,12 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt) error
 }
 
 // deliver injects a data retrieval response into the results queue.
+//
+// Note, this method expects the queue lock to be already held for writing. The
+// reason the lock is not obtained in here is because the parameters already need
+// to access the queue, so they already need a lock anyway.
 func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque, pendPool map[string]*fetchRequest,
 	donePool map[common.Hash]struct{}, reqTimer metrics.Timer, results int, reconstruct func(header *types.Header, index int, result *fetchResult) error) error {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
 	// Short circuit if the data was never requested
 	request := pendPool[id]
 	if request == nil {

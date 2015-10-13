@@ -737,6 +737,7 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 		for start := time.Now(); time.Since(start) < time.Second; {
 			time.Sleep(25 * time.Millisecond)
 
+			tester.lock.RLock()
 			tester.downloader.queue.lock.RLock()
 			cached = len(tester.downloader.queue.blockDonePool)
 			if mode == FastSync {
@@ -746,16 +747,22 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 					}
 				}
 			}
+			retrieved = len(tester.ownBlocks)
 			tester.downloader.queue.lock.RUnlock()
-
-			if cached == blockCacheLimit || len(tester.ownBlocks)+cached+int(atomic.LoadUint32(&blocked)) == targetBlocks+1 {
+			tester.lock.RUnlock()
+			
+			if cached == blockCacheLimit || retrieved+cached+int(atomic.LoadUint32(&blocked)) == targetBlocks+1 {
 				break
 			}
 		}
 		// Make sure we filled up the cache, then exhaust it
 		time.Sleep(25 * time.Millisecond) // give it a chance to screw up
-		if cached != blockCacheLimit && len(tester.ownBlocks)+cached+int(atomic.LoadUint32(&blocked)) != targetBlocks+1 {
-			t.Fatalf("block count mismatch: have %v, want %v (owned %v, target %v)", cached, blockCacheLimit, len(tester.ownBlocks), targetBlocks+1)
+
+		tester.lock.RLock()
+		retrieved = len(tester.ownBlocks)
+		tester.lock.RUnlock()
+		if cached != blockCacheLimit && retrieved+cached+int(atomic.LoadUint32(&blocked)) != targetBlocks+1 {
+			t.Fatalf("block count mismatch: have %v, want %v (owned %v, blocked %v, target %v)", cached, blockCacheLimit, retrieved, atomic.LoadUint32(&blocked), targetBlocks+1)
 		}
 		// Permit the blocked blocks to import
 		if atomic.LoadUint32(&blocked) > 0 {
