@@ -57,6 +57,8 @@ func init() {
 	glog.SetV(6)
 	glog.SetToStderr(true)
 
+	fmt.Println("2")
+
 	go func() {
 		time.Sleep(8 * time.Minute)
 		panic(string(buf.Bytes()))
