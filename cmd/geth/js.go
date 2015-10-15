@@ -246,10 +246,10 @@ func (self *jsre) welcome() {
 	self.re.Run(`
     (function () {
       console.log('instance: ' + web3.version.node);
-      console.log(' datadir: ' + admin.datadir);
       console.log("coinbase: " + eth.coinbase);
       var ts = 1000 * eth.getBlock(eth.blockNumber).timestamp;
       console.log("at block: " + eth.blockNumber + " (" + new Date(ts) + ")");
+      console.log(' datadir: ' + admin.datadir);
     })();
   `)
 	if modules, err := self.supportedApis(); err == nil {
@@ -258,7 +258,7 @@ func (self *jsre) welcome() {
 			loadedModules = append(loadedModules, fmt.Sprintf("%s:%s", api, version))
 		}
 		sort.Strings(loadedModules)
-		fmt.Println("modules:", strings.Join(loadedModules, " "))
+
 	}
 }
 
@@ -325,12 +325,28 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 	}
 
 	_, err = js.re.Run(shortcuts)
-
 	if err != nil {
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
 
 	js.re.Run(`var GlobalRegistrar = eth.contract(` + registrar.GlobalRegistrarAbi + `);   registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
+
+	// overrule some of the methods that require password as input and ask for it interactively
+	p, err := js.re.Get("personal")
+	if err != nil {
+		fmt.Println("Unable to overrule sensitive methods in personal module")
+		return nil
+	}
+
+	// Override the unlockAccount and newAccount methods on the personal object since these require user interaction.
+	// Assign the jeth.unlockAccount and jeth.newAccount in the jsre the original web3 callbacks. These will be called
+	// by the jeth.* methods after they got the password from the user and send the original web3 request to the backend.
+	persObj := p.Object()
+	js.re.Run(`jeth.unlockAccount = personal.unlockAccount;`)
+	persObj.Set("unlockAccount", jeth.UnlockAccount)
+	js.re.Run(`jeth.newAccount = personal.newAccount;`)
+	persObj.Set("newAccount", jeth.NewAccount)
+
 	return nil
 }
 

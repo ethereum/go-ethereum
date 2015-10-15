@@ -28,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
+
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -96,6 +98,18 @@ func New() *Whisper {
 	}
 
 	return whisper
+}
+
+// Apis returns the RPC descriptors the Whisper implementation offers
+func (s *Whisper) Apis() []rpc.API {
+	return []rpc.API{
+		rpc.API{
+			Namespace: "shh",
+			Version:   "1.0",
+			Service:   NewPublicWhisperApi(s),
+			Public:    true,
+		},
+	}
 }
 
 // Protocols returns the whisper sub-protocols ran by this particular client.

@@ -168,7 +168,7 @@ func TestAccounts(t *testing.T) {
 
 	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`"]`)
 	checkEvalJSON(t, repl, `eth.coinbase`, `"`+testAddress+`"`)
-	val, err := repl.re.Run(`personal.newAccount("password")`)
+	val, err := repl.re.Run(`jeth.newAccount("password")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}

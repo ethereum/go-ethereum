@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -43,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 )
 
 const (
@@ -237,6 +239,64 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.miner.SetExtra(config.ExtraData)
 
 	return eth, nil
+}
+
+// Apis returns the collection of RPC services the ethereum package offers.
+// NOTE, some of these services probably need to be moved to somewhere else.
+func (s *Ethereum) Apis() []rpc.API {
+	return []rpc.API{
+		rpc.API{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   NewPublicEthereumApi(s),
+			Public:    true,
+		}, rpc.API{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   NewPublicAccountApi(s.AccountManager()),
+			Public:    true,
+		}, rpc.API{
+			Namespace: "personal",
+			Version:   "1.0",
+			Service:   NewPrivateAccountApi(s.AccountManager()),
+			Public:    false,
+		}, rpc.API{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   core.NewPublicBlockChainApi(s.BlockChain(), s.AccountManager()),
+			Public:    true,
+		}, rpc.API{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   core.NewPublicTransactionPoolApi(s.TxPool(), s.ChainDb(), s.BlockChain(), s.AccountManager()),
+			Public:    true,
+		}, rpc.API{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   miner.NewPublicMinerApi(s.Miner()),
+			Public:    true,
+		}, rpc.API{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   downloader.NewPublicDownloaderApi(s.Downloader()),
+			Public:    true,
+		}, rpc.API{
+			Namespace: "miner",
+			Version:   "1.0",
+			Service:   NewPrivateMinerApi(s),
+			Public:    false,
+		}, rpc.API{
+			Namespace: "txpool",
+			Version:   "1.0",
+			Service:   NewPublicTxPoolApi(s),
+			Public:    true,
+		}, rpc.API{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   filters.NewPublicFilterApi(s.ChainDb(), s.EventMux()),
+			Public:    true,
+		},
+	}
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
