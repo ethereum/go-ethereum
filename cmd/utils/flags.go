@@ -54,6 +54,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/rpc/useragent"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 	"github.com/ethereum/go-ethereum/whisper"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -299,6 +300,10 @@ var (
 		Name:  "ipcpath",
 		Usage: "Filename for IPC socket/pipe",
 		Value: DirectoryString{common.DefaultIpcPath()},
+	}
+	IPCExperimental = cli.BoolFlag{
+		Name:  "ipcexp",
+		Usage: "Enable the new RPC implementation",
 	}
 	ExecFlag = cli.StringFlag{
 		Name:  "exec",
@@ -690,6 +695,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 			Fatalf("Failed to register the Whisper service: %v", err)
 		}
 	}
+
 	return stack
 }
 
@@ -773,17 +779,53 @@ func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
 	return
 }
 
-// StartIPC starts a IPC JSON-RPC API server.
 func StartIPC(stack *node.Node, ctx *cli.Context) error {
 	config := comms.IpcConfig{
 		Endpoint: IpcSocketPath(ctx),
 	}
 
-	initializer := func(conn net.Conn) (comms.Stopper, shared.EthereumApi, error) {
-		var ethereum *eth.Ethereum
-		if err := stack.Service(&ethereum); err != nil {
-			return nil, nil, err
+	var ethereum *eth.Ethereum
+	if err := stack.Service(&ethereum); err != nil {
+		return err
+	}
+
+	if ctx.GlobalIsSet(IPCExperimental.Name) {
+		listener, err := comms.CreateListener(config)
+		if err != nil {
+			return err
 		}
+
+		server := rpc.NewServer()
+
+		// register package API's this node provides
+		offered := stack.RPCAPIs()
+		for _, api := range offered {
+			server.RegisterName(api.Namespace, api.Service)
+			glog.V(logger.Debug).Infof("Register %T under namespace '%s' for IPC service\n", api.Service, api.Namespace)
+		}
+
+		web3 := NewPublicWeb3API(stack)
+		server.RegisterName("web3", web3)
+		net := NewPublicNetAPI(stack.Server(), ethereum.NetVersion())
+		server.RegisterName("net", net)
+
+		go func() {
+			glog.V(logger.Info).Infof("Start IPC server on %s\n", config.Endpoint)
+			for {
+				conn, err := listener.Accept()
+				if err != nil {
+					glog.V(logger.Error).Infof("Unable to accept connection - %v\n", err)
+				}
+
+				codec := rpc.NewJSONCodec(conn)
+				go server.ServeCodec(codec)
+			}
+		}()
+
+		return nil
+	}
+
+	initializer := func(conn net.Conn) (comms.Stopper, shared.EthereumApi, error) {
 		fe := useragent.NewRemoteFrontend(conn, ethereum.AccountManager())
 		xeth := xeth.New(stack, fe)
 		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec.JSON, xeth, stack)

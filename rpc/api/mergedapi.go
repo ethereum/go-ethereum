@@ -39,9 +39,11 @@ func newMergedApi(apis ...shared.EthereumApi) *MergedApi {
 	mergedApi.methods = make(map[string]shared.EthereumApi)
 
 	for _, api := range apis {
-		mergedApi.apis[api.Name()] = api.ApiVersion()
-		for _, method := range api.Methods() {
-			mergedApi.methods[method] = api
+		if api != nil {
+			mergedApi.apis[api.Name()] = api.ApiVersion()
+			for _, method := range api.Methods() {
+				mergedApi.methods[method] = api
+			}
 		}
 	}
 	return mergedApi

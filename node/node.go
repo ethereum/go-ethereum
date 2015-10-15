@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 )
 
 var (
@@ -263,4 +264,13 @@ func (n *Node) DataDir() string {
 // the current protocol stack.
 func (n *Node) EventMux() *event.TypeMux {
 	return n.eventmux
+}
+
+// RPCAPIs returns the collection of RPC descriptor this node offers
+func (n *Node) RPCAPIs() []rpc.API {
+	var apis []rpc.API
+	for _, api := range n.services {
+		apis = append(apis, api.APIs()...)
+	}
+	return apis
 }
