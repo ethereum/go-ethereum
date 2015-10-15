@@ -215,13 +215,20 @@ func (self *worker) register(agent Agent) {
 }
 
 func (self *worker) update() {
-	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
+	eventSub := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
+	defer eventSub.Unsubscribe()
 
-out:
+	eventCh := eventSub.Chan()
 	for {
 		select {
-		case event := <-events.Chan():
-			switch ev := event.(type) {
+		case event, ok := <-eventCh:
+			if !ok {
+				// Event subscription closed, set the channel to nil to stop spinning
+				eventCh = nil
+				continue
+			}
+			// A real event arrived, process interesting content
+			switch ev := event.Data.(type) {
 			case core.ChainHeadEvent:
 				self.commitNewWork()
 			case core.ChainSideEvent:
@@ -237,11 +244,9 @@ out:
 				}
 			}
 		case <-self.quit:
-			break out
+			return
 		}
 	}
-
-	events.Unsubscribe()
 }
 
 func newLocalMinedBlock(blockNumber uint64, prevMinedBlocks *uint64RingBuffer) (minedBlocks *uint64RingBuffer) {
