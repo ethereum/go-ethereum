@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -222,4 +223,11 @@ func loadKeyStoreTestV1(file string, t *testing.T) map[string]KeyStoreTestV1 {
 		t.Fatal(err)
 	}
 	return tests
+}
+
+func TestKeyForDirectICAP(t *testing.T) {
+	key := NewKeyForDirectICAP(randentropy.Reader)
+	if !strings.HasPrefix(key.Address.Hex(), "0x00") {
+		t.Errorf("Expected first address byte to be zero, have: %s", key.Address.Hex())
+	}
 }

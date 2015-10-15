@@ -27,6 +27,9 @@ var (
 	BigTrue  = Big1
 	BigFalse = Big0
 	Big32    = big.NewInt(32)
+	Big36    = big.NewInt(36)
+	Big97    = big.NewInt(97)
+	Big98    = big.NewInt(98)
 	Big256   = big.NewInt(0xff)
 	Big257   = big.NewInt(257)
 	MaxBig   = String2Big("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
