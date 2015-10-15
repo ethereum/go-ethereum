@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
+	"encoding/json"
 )
 
 const (
@@ -49,6 +50,11 @@ func (h Hash) Str() string   { return string(h[:]) }
 func (h Hash) Bytes() []byte { return h[:] }
 func (h Hash) Big() *big.Int { return Bytes2Big(h[:]) }
 func (h Hash) Hex() string   { return "0x" + Bytes2Hex(h[:]) }
+
+// Serialize given hash to JSON
+func (h Hash) MarshalJSON() ([]byte, error) {
+	return json.Marshal(h.Hex())
+}
 
 // Sets the hash to the value of b. If b is larger than len(h) it will panic
 func (h *Hash) SetBytes(b []byte) {
@@ -115,6 +121,11 @@ func (a *Address) Set(other Address) {
 	for i, v := range other {
 		a[i] = v
 	}
+}
+
+// Serialize given address to JSON
+func (a Address) MarshalJSON() ([]byte, error) {
+	return json.Marshal(a.Hex())
 }
 
 // PP Pretty Prints a byte slice in the following format:
