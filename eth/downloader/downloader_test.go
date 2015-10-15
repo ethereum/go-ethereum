@@ -57,7 +57,7 @@ func init() {
 	glog.SetV(6)
 	glog.SetToStderr(true)
 
-	fmt.Println("2")
+	fmt.Println("3")
 
 	go func() {
 		time.Sleep(8 * time.Minute)
