@@ -266,10 +266,9 @@ func (s *Ethereum) Apis() []rpc.API {
 			Service:   core.NewPublicBlockChainApi(s.BlockChain(), s.AccountManager()),
 			Public:    true,
 		}, rpc.API{
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   core.NewPublicTransactionPoolApi(s.TxPool(), s.ChainDb(), s.BlockChain(), s.AccountManager()),
-			Public:    true,
+			Version: "1.0",
+			Service: core.NewPublicTransactionPoolApi(s.TxPool(), s.ChainDb(), s.BlockChain(), s.AccountManager()),
+			Public:  true,
 		}, rpc.API{
 			Namespace: "eth",
 			Version:   "1.0",
