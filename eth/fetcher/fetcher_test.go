@@ -45,7 +45,7 @@ var (
 // contains a transaction and every 5th an uncle to allow testing correct block
 // reassembly.
 func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common.Hash]*types.Block) {
-	blocks := core.GenerateChain(parent, testdb, n, func(i int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(parent, testdb, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 
 		// If the block number is multiple of 3, send a bonus transaction to the miner
@@ -404,7 +404,7 @@ func testOverlappingAnnouncements(t *testing.T, protocol int) {
 		}
 		select {
 		case <-imported:
-		case <-time.After(time.Second):
+		case <-time.After(3 * time.Second):
 			t.Fatalf("block %d: import timeout", len(hashes)-i)
 		}
 	}

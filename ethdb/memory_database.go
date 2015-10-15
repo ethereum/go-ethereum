@@ -18,6 +18,7 @@ package ethdb
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -26,29 +27,42 @@ import (
  * This is a test memory database. Do not use for any production it does not get persisted
  */
 type MemDatabase struct {
-	db map[string][]byte
+	db   map[string][]byte
+	lock sync.RWMutex
 }
 
 func NewMemDatabase() (*MemDatabase, error) {
-	db := &MemDatabase{db: make(map[string][]byte)}
-
-	return db, nil
+	return &MemDatabase{
+		db: make(map[string][]byte),
+	}, nil
 }
 
 func (db *MemDatabase) Put(key []byte, value []byte) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
 	db.db[string(key)] = common.CopyBytes(value)
 	return nil
 }
 
 func (db *MemDatabase) Set(key []byte, value []byte) {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
 	db.Put(key, value)
 }
 
 func (db *MemDatabase) Get(key []byte) ([]byte, error) {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
 	return db.db[string(key)], nil
 }
 
 func (db *MemDatabase) Keys() [][]byte {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
 	keys := [][]byte{}
 	for key, _ := range db.db {
 		keys = append(keys, []byte(key))
@@ -65,12 +79,17 @@ func (db *MemDatabase) GetKeys() []*common.Key {
 */
 
 func (db *MemDatabase) Delete(key []byte) error {
-	delete(db.db, string(key))
+	db.lock.Lock()
+	defer db.lock.Unlock()
 
+	delete(db.db, string(key))
 	return nil
 }
 
 func (db *MemDatabase) Print() {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
 	for key, val := range db.db {
 		fmt.Printf("%x(%d): ", key, len(key))
 		node := common.NewValueFromBytes(val)
@@ -83,11 +102,9 @@ func (db *MemDatabase) Close() {
 
 func (db *MemDatabase) LastKnownTD() []byte {
 	data, _ := db.Get([]byte("LastKnownTotalDifficulty"))
-
 	if len(data) == 0 || data == nil {
 		data = []byte{0x0}
 	}
-
 	return data
 }
 
@@ -100,16 +117,26 @@ type kv struct{ k, v []byte }
 type memBatch struct {
 	db     *MemDatabase
 	writes []kv
+	lock   sync.RWMutex
 }
 
-func (w *memBatch) Put(key, value []byte) error {
-	w.writes = append(w.writes, kv{key, common.CopyBytes(value)})
+func (b *memBatch) Put(key, value []byte) error {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.writes = append(b.writes, kv{key, common.CopyBytes(value)})
 	return nil
 }
 
-func (w *memBatch) Write() error {
-	for _, kv := range w.writes {
-		w.db.db[string(kv.k)] = kv.v
+func (b *memBatch) Write() error {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	b.db.lock.RLock()
+	defer b.db.lock.RUnlock()
+
+	for _, kv := range b.writes {
+		b.db.db[string(kv.k)] = kv.v
 	}
 	return nil
 }

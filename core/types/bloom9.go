@@ -31,7 +31,7 @@ type bytesBacked interface {
 func CreateBloom(receipts Receipts) Bloom {
 	bin := new(big.Int)
 	for _, receipt := range receipts {
-		bin.Or(bin, LogsBloom(receipt.logs))
+		bin.Or(bin, LogsBloom(receipt.Logs))
 	}
 
 	return BytesToBloom(bin.Bytes())

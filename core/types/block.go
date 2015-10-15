@@ -128,7 +128,6 @@ type Block struct {
 	header       *Header
 	uncles       []*Header
 	transactions Transactions
-	receipts     Receipts
 
 	// caches
 	hash atomic.Value
@@ -172,8 +171,8 @@ type storageblock struct {
 }
 
 var (
-	emptyRootHash  = DeriveSha(Transactions{})
-	emptyUncleHash = CalcUncleHash(nil)
+	EmptyRootHash  = DeriveSha(Transactions{})
+	EmptyUncleHash = CalcUncleHash(nil)
 )
 
 // NewBlock creates a new block. The input data is copied,
@@ -184,11 +183,11 @@ var (
 // are ignored and set to values derived from the given txs, uncles
 // and receipts.
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt) *Block {
-	b := &Block{header: copyHeader(header), td: new(big.Int)}
+	b := &Block{header: CopyHeader(header), td: new(big.Int)}
 
 	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
-		b.header.TxHash = emptyRootHash
+		b.header.TxHash = EmptyRootHash
 	} else {
 		b.header.TxHash = DeriveSha(Transactions(txs))
 		b.transactions = make(Transactions, len(txs))
@@ -196,21 +195,19 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 	}
 
 	if len(receipts) == 0 {
-		b.header.ReceiptHash = emptyRootHash
+		b.header.ReceiptHash = EmptyRootHash
 	} else {
 		b.header.ReceiptHash = DeriveSha(Receipts(receipts))
 		b.header.Bloom = CreateBloom(receipts)
-		b.receipts = make([]*Receipt, len(receipts))
-		copy(b.receipts, receipts)
 	}
 
 	if len(uncles) == 0 {
-		b.header.UncleHash = emptyUncleHash
+		b.header.UncleHash = EmptyUncleHash
 	} else {
 		b.header.UncleHash = CalcUncleHash(uncles)
 		b.uncles = make([]*Header, len(uncles))
 		for i := range uncles {
-			b.uncles[i] = copyHeader(uncles[i])
+			b.uncles[i] = CopyHeader(uncles[i])
 		}
 	}
 
@@ -221,10 +218,12 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 // header data is copied, changes to header and to the field values
 // will not affect the block.
 func NewBlockWithHeader(header *Header) *Block {
-	return &Block{header: copyHeader(header)}
+	return &Block{header: CopyHeader(header)}
 }
 
-func copyHeader(h *Header) *Header {
+// CopyHeader creates a deep copy of a block header to prevent side effects from
+// modifying a header variable.
+func CopyHeader(h *Header) *Header {
 	cpy := *h
 	if cpy.Time = new(big.Int); h.Time != nil {
 		cpy.Time.Set(h.Time)
@@ -297,7 +296,6 @@ func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
 // TODO: copies
 func (b *Block) Uncles() []*Header          { return b.uncles }
 func (b *Block) Transactions() Transactions { return b.transactions }
-func (b *Block) Receipts() Receipts         { return b.receipts }
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range b.transactions {
@@ -326,7 +324,7 @@ func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash }
 func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
 func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
 
-func (b *Block) Header() *Header { return copyHeader(b.header) }
+func (b *Block) Header() *Header { return CopyHeader(b.header) }
 
 func (b *Block) HashNoNonce() common.Hash {
 	return b.header.HashNoNonce()
@@ -362,7 +360,6 @@ func (b *Block) WithMiningResult(nonce uint64, mixDigest common.Hash) *Block {
 	return &Block{
 		header:       &cpy,
 		transactions: b.transactions,
-		receipts:     b.receipts,
 		uncles:       b.uncles,
 	}
 }
@@ -370,13 +367,13 @@ func (b *Block) WithMiningResult(nonce uint64, mixDigest common.Hash) *Block {
 // WithBody returns a new block with the given transaction and uncle contents.
 func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 	block := &Block{
-		header:       copyHeader(b.header),
+		header:       CopyHeader(b.header),
 		transactions: make([]*Transaction, len(transactions)),
 		uncles:       make([]*Header, len(uncles)),
 	}
 	copy(block.transactions, transactions)
 	for i := range uncles {
-		block.uncles[i] = copyHeader(uncles[i])
+		block.uncles[i] = CopyHeader(uncles[i])
 	}
 	return block
 }
