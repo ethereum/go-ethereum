@@ -404,7 +404,7 @@ func testOverlappingAnnouncements(t *testing.T, protocol int) {
 		}
 		select {
 		case <-imported:
-		case <-time.After(time.Second):
+		case <-time.After(3 * time.Second):
 			t.Fatalf("block %d: import timeout", len(hashes)-i)
 		}
 	}
