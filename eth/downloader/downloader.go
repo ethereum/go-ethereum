@@ -234,21 +234,21 @@ func (d *Downloader) UnregisterPeer(id string) error {
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
 func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int) {
-	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, head [%x…], TD %v", id, head[:4], td)
+	glog.V(logger.Info).Infof("Attempting synchronisation: %v, head [%x…], TD %v", id, head[:4], td)
 
 	switch err := d.synchronise(id, head, td); err {
 	case nil:
-		glog.V(logger.Detail).Infof("Synchronisation completed")
+		glog.V(logger.Info).Infof("Synchronisation completed")
 
 	case errBusy:
-		glog.V(logger.Detail).Infof("Synchronisation already in progress")
+		glog.V(logger.Info).Infof("Synchronisation already in progress")
 
 	case errTimeout, errBadPeer, errStallingPeer, errEmptyHashSet, errEmptyHeaderSet, errPeersUnavailable, errInvalidChain:
-		glog.V(logger.Debug).Infof("Removing peer %v: %v", id, err)
+		glog.V(logger.Info).Infof("Removing peer %v: %v", id, err)
 		d.dropPeer(id)
 
 	case errPendingQueue:
-		glog.V(logger.Debug).Infoln("Synchronisation aborted:", err)
+		glog.V(logger.Info).Infoln("Synchronisation aborted:", err)
 
 	default:
 		glog.V(logger.Warn).Infof("Synchronisation failed: %v", err)
@@ -327,9 +327,9 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 		}
 	}()
 
-	glog.V(logger.Debug).Infof("Synchronising with the network using: %s [eth/%d]", p.id, p.version)
+	glog.V(logger.Info).Infof("Synchronising with the network using: %s [eth/%d]", p.id, p.version)
 	defer func(start time.Time) {
-		glog.V(logger.Debug).Infof("Synchronisation terminated after %v", time.Since(start))
+		glog.V(logger.Info).Infof("Synchronisation terminated after %v", time.Since(start))
 	}(time.Now())
 
 	switch {

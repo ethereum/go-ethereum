@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -54,7 +55,7 @@ func init() {
 	go io.Copy(buf, r)
 	os.Stderr = w
 
-	glog.SetV(6)
+	glog.SetV(logger.InfoLevel)
 	glog.SetToStderr(true)
 
 	fmt.Println("3")
