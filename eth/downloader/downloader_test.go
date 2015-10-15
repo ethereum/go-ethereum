@@ -17,9 +17,12 @@
 package downloader
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -32,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -42,6 +46,22 @@ var (
 	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
 	genesis     = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000))
 )
+
+func init() {
+	r, w, _ := os.Pipe()
+
+	buf := bytes.NewBuffer([]byte{})
+	go io.Copy(buf, r)
+	os.Stderr = w
+
+	glog.SetV(6)
+	glog.SetToStderr(true)
+
+	go func() {
+		time.Sleep(8 * time.Minute)
+		panic(string(buf.Bytes()))
+	}()
+}
 
 // makeChain creates a chain of n blocks starting at and including parent.
 // the returned hash chain is ordered head->parent. In addition, every 3rd block
@@ -743,7 +763,7 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 			retrieved = len(tester.ownBlocks)
 			tester.downloader.queue.lock.RUnlock()
 			tester.lock.RUnlock()
-			
+
 			if cached == blockCacheLimit || retrieved+cached+int(atomic.LoadUint32(&blocked)) == targetBlocks+1 {
 				break
 			}
