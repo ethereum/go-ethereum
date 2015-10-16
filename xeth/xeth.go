@@ -474,7 +474,7 @@ func (self *XEth) ClientVersion() string {
 func (self *XEth) SetMining(shouldmine bool, threads int) bool {
 	ismining := self.backend.IsMining()
 	if shouldmine && !ismining {
-		err := self.backend.StartMining(threads)
+		err := self.backend.StartMining(threads, "")
 		return err == nil
 	}
 	if ismining && !shouldmine {

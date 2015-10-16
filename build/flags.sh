@@ -16,3 +16,7 @@ sep=$(go version | awk '{ if ($3 >= "go1.5" || index($3, "devel")) print "="; el
 if [ -f ".git/HEAD" ]; then
     echo "-ldflags '-X main.gitCommit$sep$(git rev-parse HEAD)'"
 fi
+
+if [ ! -z "$GO_OPENCL" ]; then
+   echo "-tags opencl"
+fi

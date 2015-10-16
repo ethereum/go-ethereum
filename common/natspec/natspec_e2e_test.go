@@ -306,7 +306,7 @@ func processTxs(repl *testFrontend, t *testing.T, expTxc int) bool {
 		return false
 	}
 
-	err = repl.ethereum.StartMining(runtime.NumCPU())
+	err = repl.ethereum.StartMining(runtime.NumCPU(), "")
 	if err != nil {
 		t.Errorf("unexpected error mining: %v", err)
 		return false
