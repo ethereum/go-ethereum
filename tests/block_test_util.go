@@ -162,8 +162,24 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 
 }
 func runBlockTest(test *BlockTest) error {
-	cfg := test.makeEthConfig()
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"))
+	am := accounts.NewManager(ks)
+	db, _ := ethdb.NewMemDatabase()
+	cfg := &eth.Config{
+		DataDir:        common.DefaultDataDir(),
+		Verbosity:      5,
+		Etherbase:      common.Address{},
+		AccountManager: am,
+		NewDB:          func(path string) (ethdb.Database, error) { return db, nil },
+	}
+
 	cfg.GenesisBlock = test.Genesis
+
+	// import pre accounts & construct test genesis block & state root
+	_, err := test.InsertPreState(db, am)
+	if err != nil {
+		return fmt.Errorf("InsertPreState: %v", err)
+	}
 
 	ethereum, err := eth.New(cfg)
 	if err != nil {
@@ -173,12 +189,6 @@ func runBlockTest(test *BlockTest) error {
 	err = ethereum.Start()
 	if err != nil {
 		return err
-	}
-
-	// import pre accounts
-	_, err = test.InsertPreState(ethereum)
-	if err != nil {
-		return fmt.Errorf("InsertPreState: %v", err)
 	}
 
 	cm := ethereum.BlockChain()
@@ -193,7 +203,10 @@ func runBlockTest(test *BlockTest) error {
 		return fmt.Errorf("lastblockhash validation mismatch: want: %x, have: %x", lastblockhash, cmlast)
 	}
 
-	newDB := cm.State()
+	newDB, err := cm.State()
+	if err != nil {
+		return err
+	}
 	if err = test.ValidatePostState(newDB); err != nil {
 		return fmt.Errorf("post state validation failed: %v", err)
 	}
@@ -201,23 +214,13 @@ func runBlockTest(test *BlockTest) error {
 	return test.ValidateImportedHeaders(cm, validBlocks)
 }
 
-func (test *BlockTest) makeEthConfig() *eth.Config {
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"))
-
-	return &eth.Config{
-		DataDir:        common.DefaultDataDir(),
-		Verbosity:      5,
-		Etherbase:      common.Address{},
-		AccountManager: accounts.NewManager(ks),
-		NewDB:          func(path string) (ethdb.Database, error) { return ethdb.NewMemDatabase() },
-	}
-}
-
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
-func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, error) {
-	db := ethereum.ChainDb()
-	statedb := state.New(common.Hash{}, db)
+func (t *BlockTest) InsertPreState(db ethdb.Database, am *accounts.Manager) (*state.StateDB, error) {
+	statedb, err := state.New(common.Hash{}, db)
+	if err != nil {
+		return nil, err
+	}
 	for addrString, acct := range t.preAccounts {
 		addr, err := hex.DecodeString(addrString)
 		if err != nil {
@@ -239,7 +242,7 @@ func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, erro
 		if acct.PrivateKey != "" {
 			privkey, err := hex.DecodeString(strings.TrimPrefix(acct.PrivateKey, "0x"))
 			err = crypto.ImportBlockTestKey(privkey)
-			err = ethereum.AccountManager().TimedUnlock(common.BytesToAddress(addr), "", 999999*time.Second)
+			err = am.TimedUnlock(common.BytesToAddress(addr), "", 999999*time.Second)
 			if err != nil {
 				return nil, err
 			}

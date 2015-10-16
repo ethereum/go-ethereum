@@ -207,7 +207,10 @@ func (sm *BlockProcessor) Process(block *types.Block) (logs vm.Logs, receipts ty
 
 func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs vm.Logs, receipts types.Receipts, err error) {
 	// Create a new state based on the parent's root (e.g., create copy)
-	state := state.New(parent.Root(), sm.chainDb)
+	state, err := state.New(parent.Root(), sm.chainDb)
+	if err != nil {
+		return nil, nil, err
+	}
 	header := block.Header()
 	uncles := block.Uncles()
 	txs := block.Transactions()

@@ -46,7 +46,7 @@ func TestNumber(t *testing.T) {
 	pow := ezp.New()
 	_, chain := proc()
 
-	statedb := state.New(chain.Genesis().Root(), chain.chainDb)
+	statedb, _ := state.New(chain.Genesis().Root(), chain.chainDb)
 	header := makeHeader(chain.Genesis(), statedb)
 	header.Number = big.NewInt(3)
 	err := ValidateHeader(pow, header, chain.Genesis().Header(), false, false)

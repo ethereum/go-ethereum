@@ -119,9 +119,9 @@ func (self *debugApi) DumpBlock(req *shared.Request) (interface{}, error) {
 		return nil, fmt.Errorf("block #%d not found", args.BlockNumber)
 	}
 
-	stateDb := state.New(block.Root(), self.ethereum.ChainDb())
-	if stateDb == nil {
-		return nil, nil
+	stateDb, err := state.New(block.Root(), self.ethereum.ChainDb())
+	if err != nil {
+		return nil, err
 	}
 
 	return stateDb.RawDump(), nil

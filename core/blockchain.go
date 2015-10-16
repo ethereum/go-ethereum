@@ -199,7 +199,7 @@ func (self *BlockChain) SetProcessor(proc types.BlockProcessor) {
 	self.processor = proc
 }
 
-func (self *BlockChain) State() *state.StateDB {
+func (self *BlockChain) State() (*state.StateDB, error) {
 	return state.New(self.CurrentBlock().Root(), self.chainDb)
 }
 

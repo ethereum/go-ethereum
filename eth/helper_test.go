@@ -38,7 +38,8 @@ func newTestProtocolManager(blocks int, generator func(int, *core.BlockGen), new
 		blockproc     = core.NewBlockProcessor(db, pow, blockchain, evmux)
 	)
 	blockchain.SetProcessor(blockproc)
-	if _, err := blockchain.InsertChain(core.GenerateChain(genesis, db, blocks, generator)); err != nil {
+	chain := core.GenerateChain(genesis, db, blocks, generator)
+	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
 	}
 	pm := NewProtocolManager(NetworkId, evmux, &testTxPool{added: newtx}, pow, blockchain, db)

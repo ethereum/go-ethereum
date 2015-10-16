@@ -353,8 +353,11 @@ func (self *worker) push(work *Work) {
 }
 
 // makeCurrent creates a new environment for the current cycle.
-func (self *worker) makeCurrent(parent *types.Block, header *types.Header) {
-	state := state.New(parent.Root(), self.eth.ChainDb())
+func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error {
+	state, err := state.New(parent.Root(), self.eth.ChainDb())
+	if err != nil {
+		return err
+	}
 	work := &Work{
 		state:     state,
 		ancestors: set.New(),
@@ -385,6 +388,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) {
 		work.localMinedBlocks = self.current.localMinedBlocks
 	}
 	self.current = work
+	return nil
 }
 
 func (w *worker) setGasPrice(p *big.Int) {
@@ -464,7 +468,12 @@ func (self *worker) commitNewWork() {
 	}
 
 	previous := self.current
-	self.makeCurrent(parent, header)
+	// Could potentially happen if starting to mine in an odd state.
+	err := self.makeCurrent(parent, header)
+	if err != nil {
+		glog.V(logger.Info).Infoln("Could not create new env for mining, retrying on next block.")
+		return
+	}
 	work := self.current
 
 	/* //approach 1

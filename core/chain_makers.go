@@ -156,7 +156,10 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
 func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) []*types.Block {
-	statedb := state.New(parent.Root(), db)
+	statedb, err := state.New(parent.Root(), db)
+	if err != nil {
+		panic(err)
+	}
 	blocks := make(types.Blocks, n)
 	genblock := func(i int, h *types.Header) *types.Block {
 		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb}
