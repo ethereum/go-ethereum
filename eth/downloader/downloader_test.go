@@ -49,7 +49,7 @@ var (
 // that in the case of a lockup, we'll at least have a cash dump of the goroutines
 // to at least get a glimpse into what state the tests were in.
 func init() {
-	fmt.Println("Hi, I'm debugging the windows CI server. Nice to meet you. Hmmm, wonder why the build didn't start? Pinging CI's... ping. Another commit, another chance. Fail soon, fail hard. Seems to work... bet this will hang.")
+	fmt.Println("Hi, I'm debugging the windows CI server. Nice to meet you. Hmmm, wonder why the build didn't start? Pinging CI's... ping. Another commit, another chance. Fail soon, fail hard. Seems to work... bet this will hang. Lame.")
 	go func() {
 		time.Sleep(8 * time.Minute)
 		panic("Test probably deadlocked")
