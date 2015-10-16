@@ -32,6 +32,7 @@ import (
 var (
 	headHeaderKey = []byte("LastHeader")
 	headBlockKey  = []byte("LastBlock")
+	headFastKey   = []byte("LastFast")
 
 	blockPrefix    = []byte("block-")
 	blockNumPrefix = []byte("block-num-")
@@ -124,7 +125,7 @@ func GetCanonicalHash(db ethdb.Database, number uint64) common.Hash {
 // header. The difference between this and GetHeadBlockHash is that whereas the
 // last block hash is only updated upon a full block import, the last header
 // hash is updated already at header import, allowing head tracking for the
-// fast synchronization mechanism.
+// light synchronization mechanism.
 func GetHeadHeaderHash(db ethdb.Database) common.Hash {
 	data, _ := db.Get(headHeaderKey)
 	if len(data) == 0 {
@@ -136,6 +137,18 @@ func GetHeadHeaderHash(db ethdb.Database) common.Hash {
 // GetHeadBlockHash retrieves the hash of the current canonical head block.
 func GetHeadBlockHash(db ethdb.Database) common.Hash {
 	data, _ := db.Get(headBlockKey)
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
+}
+
+// GetHeadFastBlockHash retrieves the hash of the current canonical head block during
+// fast synchronization. The difference between this and GetHeadBlockHash is that
+// whereas the last block hash is only updated upon a full block import, the last
+// fast hash is updated when importing pre-processed blocks.
+func GetHeadFastBlockHash(db ethdb.Database) common.Hash {
+	data, _ := db.Get(headFastKey)
 	if len(data) == 0 {
 		return common.Hash{}
 	}
@@ -239,6 +252,15 @@ func WriteHeadHeaderHash(db ethdb.Database, hash common.Hash) error {
 func WriteHeadBlockHash(db ethdb.Database, hash common.Hash) error {
 	if err := db.Put(headBlockKey, hash.Bytes()); err != nil {
 		glog.Fatalf("failed to store last block's hash into database: %v", err)
+		return err
+	}
+	return nil
+}
+
+// WriteHeadFastBlockHash stores the fast head block's hash.
+func WriteHeadFastBlockHash(db ethdb.Database, hash common.Hash) error {
+	if err := db.Put(headFastKey, hash.Bytes()); err != nil {
+		glog.Fatalf("failed to store last fast block's hash into database: %v", err)
 		return err
 	}
 	return nil
