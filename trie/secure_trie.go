@@ -62,7 +62,7 @@ func NewSecure(root common.Hash, db Database) (*SecureTrie, error) {
 
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
-func (t *SecureTrie) Get(key []byte) []byte {
+func (t *SecureTrie) Get(key []byte) ([]byte, error) {
 	return t.Trie.Get(t.hashKey(key))
 }
 

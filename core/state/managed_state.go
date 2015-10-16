@@ -91,7 +91,8 @@ func (ms *ManagedState) GetNonce(addr common.Address) uint64 {
 		account := ms.getAccount(addr)
 		return uint64(len(account.nonces)) + account.nstart
 	} else {
-		return ms.StateDB.GetNonce(addr)
+		nonce, _ := ms.StateDB.GetNonce(addr)
+		return nonce
 	}
 }
 
@@ -100,7 +101,7 @@ func (ms *ManagedState) SetNonce(addr common.Address, nonce uint64) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
-	so := ms.GetOrNewStateObject(addr)
+	so, _ := ms.GetOrNewStateObject(addr)
 	so.SetNonce(nonce)
 
 	ms.accounts[addr.Str()] = newAccount(so)
@@ -122,12 +123,12 @@ func (ms *ManagedState) hasAccount(addr common.Address) bool {
 func (ms *ManagedState) getAccount(addr common.Address) *account {
 	straddr := addr.Str()
 	if account, ok := ms.accounts[straddr]; !ok {
-		so := ms.GetOrNewStateObject(addr)
+		so, _ := ms.GetOrNewStateObject(addr)
 		ms.accounts[straddr] = newAccount(so)
 	} else {
 		// Always make sure the state account nonce isn't actually higher
 		// than the tracked one.
-		so := ms.StateDB.GetStateObject(addr)
+		so, _ := ms.StateDB.GetStateObject(addr)
 		if so != nil && uint64(len(account.nonces))+account.nstart < so.nonce {
 			ms.accounts[straddr] = newAccount(so)
 		}

@@ -25,8 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -40,6 +38,8 @@ var (
 )
 
 var ErrMissingRoot = errors.New("missing root node")
+var ErrMissingNode = errors.New("missing trie node")
+var ErrInvalidNode = errors.New("invalid trie node")
 
 // Database must be implemented by backing stores for the trie.
 type Database interface {
@@ -94,29 +94,30 @@ func (t *Trie) Iterator() *Iterator {
 
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
-func (t *Trie) Get(key []byte) []byte {
+func (t *Trie) Get(key []byte) ([]byte, error) {
 	key = compactHexDecode(key)
 	tn := t.root
 	for len(key) > 0 {
 		switch n := tn.(type) {
 		case shortNode:
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
-				return nil
+				return nil, ErrInvalidNode
 			}
 			tn = n.Val
 			key = key[len(n.Key):]
 		case fullNode:
 			tn = n[key[0]]
 			key = key[1:]
-		case nil:
-			return nil
 		case hashNode:
 			tn = t.resolveHash(n)
+			if tn == nil {
+				return nil, ErrMissingNode
+			}
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
-	return tn.(valueNode)
+	return tn.(valueNode), nil
 }
 
 // Update associates key with value in the trie. Subsequent calls to
@@ -295,14 +296,6 @@ func (t *Trie) resolveHash(n hashNode) node {
 	}
 	enc, err := t.db.Get(n)
 	if err != nil || enc == nil {
-		// TODO: This needs to be improved to properly distinguish errors.
-		// Disk I/O errors shouldn't produce nil (and cause a
-		// consensus failure or weird crash), but it is unclear how
-		// they could be handled because the entire stack above the trie isn't
-		// prepared to cope with missing state nodes.
-		if glog.V(logger.Error) {
-			glog.Errorf("Dangling hash node ref %x: %v", n, err)
-		}
 		return nil
 	}
 	dec := mustDecodeNode(n, enc)

@@ -96,7 +96,7 @@ func NewStateObject(address common.Address, db ethdb.Database) *StateObject {
 	return object
 }
 
-func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Database) *StateObject {
+func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Database) (*StateObject, error) {
 	var extobject struct {
 		Nonce    uint64
 		Balance  *big.Int
@@ -106,13 +106,13 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Datab
 	err := rlp.Decode(bytes.NewReader(data), &extobject)
 	if err != nil {
 		glog.Errorf("can't decode state object %x: %v", address, err)
-		return nil
+		return nil, err
 	}
 	trie, err := trie.NewSecure(extobject.Root, db)
 	if err != nil {
 		// TODO: bubble this up or panic
 		glog.Errorf("can't create account trie with root %x: %v", extobject.Root[:], err)
-		return nil
+		return nil, err
 	}
 
 	object := &StateObject{address: address, db: db}
@@ -122,8 +122,12 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Datab
 	object.trie = trie
 	object.storage = make(map[string]common.Hash)
 	object.gasPool = new(big.Int)
-	object.code, _ = db.Get(extobject.CodeHash)
-	return object
+	object.code, err = db.Get(extobject.CodeHash)
+	if err != nil {
+		glog.Errorf("can't retrieve contract code %x: %v", extobject.CodeHash, err)
+		return nil, err
+	}
+	return object, nil
 }
 
 func (self *StateObject) MarkForDeletion() {
@@ -135,10 +139,14 @@ func (self *StateObject) MarkForDeletion() {
 	}
 }
 
-func (c *StateObject) getAddr(addr common.Hash) common.Hash {
+func (c *StateObject) getAddr(addr common.Hash) (common.Hash, error) {
 	var ret []byte
-	rlp.DecodeBytes(c.trie.Get(addr[:]), &ret)
-	return common.BytesToHash(ret)
+	value, err := c.trie.Get(addr[:])
+	if err != nil {
+		return common.Hash{}, err
+	}
+	rlp.DecodeBytes(value, &ret)
+	return common.BytesToHash(ret), nil
 }
 
 func (c *StateObject) setAddr(addr []byte, value common.Hash) {
@@ -154,17 +162,21 @@ func (self *StateObject) Storage() Storage {
 	return self.storage
 }
 
-func (self *StateObject) GetState(key common.Hash) common.Hash {
+func (self *StateObject) GetState(key common.Hash) (common.Hash, error) {
 	strkey := key.Str()
 	value, exists := self.storage[strkey]
 	if !exists {
-		value = self.getAddr(key)
+		var err error
+		value, err = self.getAddr(key)
+		if err != nil {
+			return common.Hash{}, err
+		}
 		if (value != common.Hash{}) {
 			self.storage[strkey] = value
 		}
 	}
 
-	return value
+	return value, nil
 }
 
 func (self *StateObject) SetState(k, value common.Hash) {
