@@ -180,12 +180,20 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 
 	// Make sure the account exist. Non existent accounts
 	// haven't got funds and well therefor never pass.
-	if !pool.currentState().HasAccount(from) {
+	ha, err := pool.currentState().HasAccount(from)
+	if err != nil {
+		return err
+	}
+	if !ha {
 		return ErrNonExistentAccount
 	}
 
 	// Last but not least check for nonce errors
-	if pool.currentState().GetNonce(from) > tx.Nonce() {
+	nonce, err := pool.currentState().GetNonce(from)
+	if err != nil {
+		return err
+	}
+	if  nonce > tx.Nonce() {
 		return ErrNonce
 	}
 
@@ -204,7 +212,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	if pool.currentState().GetBalance(from).Cmp(tx.Cost()) < 0 {
+	balance, err := pool.currentState().GetBalance(from)
+	if err != nil {
+		return err
+	}
+	if balance.Cmp(tx.Cost()) < 0 {
 		return ErrInsufficientFunds
 	}
 
@@ -389,7 +401,7 @@ func (pool *TxPool) checkQueue() {
 		// guessed nonce is the nonce currently kept by the tx pool (pending state)
 		guessedNonce := state.GetNonce(address)
 		// true nonce is the nonce known by the last state
-		trueNonce := pool.currentState().GetNonce(address)
+		trueNonce, _ := pool.currentState().GetNonce(address)
 		addq := addq[:0]
 		for hash, tx := range txs {
 			if tx.Nonce() < trueNonce {
@@ -438,7 +450,8 @@ func (pool *TxPool) validatePool() {
 	for hash, tx := range pool.pending {
 		from, _ := tx.From() // err already checked
 		// perform light nonce validation
-		if state.GetNonce(from) > tx.Nonce() {
+		nonce, _ := state.GetNonce(from)
+		if nonce > tx.Nonce() {
 			if glog.V(logger.Core) {
 				glog.Infof("removed tx (%x) from pool: low tx nonce\n", hash[:4])
 			}

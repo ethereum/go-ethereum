@@ -35,16 +35,20 @@ var (
 // dies a horrible death.
 func Canary(statedb *state.StateDB) bool {
 	var r int
-	if (statedb.GetState(jeff, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
+	state, err := statedb.GetState(jeff, common.Hash{})
+	if err == nil && (state.Big().Cmp(big.NewInt(0)) > 0) {
 		r++
 	}
-	if (statedb.GetState(gav, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
+	state, err = statedb.GetState(gav, common.Hash{})
+	if err == nil && (state.Big().Cmp(big.NewInt(0)) > 0) {
 		r++
 	}
-	if (statedb.GetState(christoph, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
+	state, err = statedb.GetState(christoph, common.Hash{})
+	if err == nil && (state.Big().Cmp(big.NewInt(0)) > 0) {
 		r++
 	}
-	if (statedb.GetState(vitalik, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
+	state, err = statedb.GetState(vitalik, common.Hash{})
+	if err == nil && (state.Big().Cmp(big.NewInt(0)) > 0) {
 		r++
 	}
 	return r > 1

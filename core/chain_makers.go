@@ -70,7 +70,7 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 		panic("coinbase can only be set once")
 	}
 	b.header.Coinbase = addr
-	b.coinbase = b.statedb.GetOrNewStateObject(addr)
+	b.coinbase, _ = b.statedb.GetOrNewStateObject(addr)
 	b.coinbase.SetGasLimit(b.header.GasLimit)
 }
 
@@ -108,10 +108,12 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 // TxNonce returns the next valid transaction nonce for the
 // account at addr. It panics if the account does not exist.
 func (b *BlockGen) TxNonce(addr common.Address) uint64 {
-	if !b.statedb.HasAccount(addr) {
+	ha, _ := b.statedb.HasAccount(addr)
+	if !ha {
 		panic("account does not exist")
 	}
-	return b.statedb.GetNonce(addr)
+	nonce, _ := b.statedb.GetNonce(addr)
+	return nonce
 }
 
 // AddUncle adds an uncle header to the generated block.
