@@ -118,7 +118,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 // The state trie of the block is written to db.
 func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
 	statedb := state.New(common.Hash{}, db)
-	obj := statedb.GetOrNewStateObject(addr)
+	obj, _ := statedb.GetOrNewStateObject(addr)
 	obj.SetBalance(balance)
 	root, err := statedb.Commit()
 	if err != nil {

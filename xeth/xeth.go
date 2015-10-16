@@ -490,8 +490,12 @@ func (self *XEth) StorageAt(addr, storageAddr string) string {
 	return self.State().state.GetState(common.HexToAddress(addr), common.HexToHash(storageAddr)).Hex()
 }
 
-func (self *XEth) BalanceAt(addr string) string {
-	return common.ToHex(self.State().state.GetBalance(common.HexToAddress(addr)).Bytes())
+func (self *XEth) BalanceAt(addr string) (string, error) {
+	val, err := self.State().state.GetBalance(common.HexToAddress(addr))
+	if err != nil {
+		return nil, err
+	}
+	return common.ToHex(val.Bytes())
 }
 
 func (self *XEth) TxCountAt(address string) int {

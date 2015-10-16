@@ -82,7 +82,7 @@ func NewBlockProcessor(db ethdb.Database, pow pow.PoW, blockchain *BlockChain, e
 }
 
 func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block *types.Block, transientProcess bool) (receipts types.Receipts, err error) {
-	gp := statedb.GetOrNewStateObject(block.Coinbase())
+	gp, _ := statedb.GetOrNewStateObject(block.Coinbase())
 	gp.SetGasLimit(block.GasLimit())
 
 	// Process the transactions on to parent state
