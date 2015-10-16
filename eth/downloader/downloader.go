@@ -1372,11 +1372,6 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 					// The hash chain is invalid (blocks are not ordered properly), abort
 					return err
 
-				case errInvalidBody, errInvalidReceipt:
-					// The peer delivered something very bad, drop immediately
-					glog.V(logger.Error).Infof("%s: delivered invalid %s, dropping", peer, strings.ToLower(kind))
-					d.dropPeer(peer.id)
-
 				case errNoFetchesPending:
 					// Peer probably timed out with its delivery but came through
 					// in the end, demote, but allow to to pull from this peer.

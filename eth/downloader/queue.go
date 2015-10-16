@@ -859,7 +859,10 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQ
 		}
 	}
 	// Assemble each of the results with their headers and retrieved data parts
-	errs := make([]error, 0)
+	var (
+		failure error
+		useful  bool
+	)
 	for i, header := range request.Headers {
 		// Short circuit assembly if no more fetch results are found
 		if i >= results {
@@ -868,15 +871,16 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQ
 		// Reconstruct the next result if contents match up
 		index := int(header.Number.Int64() - int64(q.resultOffset))
 		if index >= len(q.resultCache) || index < 0 || q.resultCache[index] == nil {
-			errs = []error{errInvalidChain}
+			failure = errInvalidChain
 			break
 		}
 		if err := reconstruct(header, i, q.resultCache[index]); err != nil {
-			errs = []error{err}
+			failure = err
 			break
 		}
 		donePool[header.Hash()] = struct{}{}
 		q.resultCache[index].Pending--
+		useful = true
 
 		// Clean up a successful fetch
 		request.Headers[i] = nil
@@ -888,19 +892,16 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQ
 			taskQueue.Push(header, -float32(header.Number.Uint64()))
 		}
 	}
-	// If none of the blocks were good, it's a stale delivery
+	// If none of the data was good, it's a stale delivery
 	switch {
-	case len(errs) == 0:
-		return nil
+	case failure == nil || failure == errInvalidChain:
+		return failure
 
-	case len(errs) == 1 && (errs[0] == errInvalidChain || errs[0] == errInvalidBody || errs[0] == errInvalidReceipt):
-		return errs[0]
-
-	case len(errs) == results:
-		return errStaleDelivery
+	case useful:
+		return fmt.Errorf("partial failure: %v", failure)
 
 	default:
-		return fmt.Errorf("multiple failures: %v", errs)
+		return errStaleDelivery
 	}
 }
 

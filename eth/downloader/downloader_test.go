@@ -1127,6 +1127,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	assertOwnChain(t, tester, targetBlocks+1)
 }
 
+/*
 // Tests that if a peer sends an invalid block piece (body or receipt) for a
 // requested block, it gets dropped immediately by the downloader.
 func TestInvalidContentAttack62(t *testing.T)      { testInvalidContentAttack(t, 62, FullSync) }
@@ -1171,7 +1172,7 @@ func testInvalidContentAttack(t *testing.T, protocol int, mode SyncMode) {
 	if _, ok := tester.peerHashes["receipt attack"]; ok {
 		t.Fatalf("receipt attacker not detected/dropped")
 	}
-}
+}*/
 
 // Tests that a peer advertising an high TD doesn't get to stall the downloader
 // afterwards by not sending any useful hashes.
