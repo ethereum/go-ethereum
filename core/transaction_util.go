@@ -17,6 +17,8 @@
 package core
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -32,22 +34,16 @@ var (
 )
 
 // PutTransactions stores the transactions in the given database
-func PutTransactions(db ethdb.Database, block *types.Block, txs types.Transactions) {
-	batch := new(leveldb.Batch)
-	_, batchWrite := db.(*ethdb.LDBDatabase)
+func PutTransactions(db ethdb.Database, block *types.Block, txs types.Transactions) error {
+	batch := db.NewBatch()
 
 	for i, tx := range block.Transactions() {
 		rlpEnc, err := rlp.EncodeToBytes(tx)
 		if err != nil {
-			glog.V(logger.Debug).Infoln("Failed encoding tx", err)
-			return
+			return fmt.Errorf("failed encoding tx: %v", err)
 		}
 
-		if batchWrite {
-			batch.Put(tx.Hash().Bytes(), rlpEnc)
-		} else {
-			db.Put(tx.Hash().Bytes(), rlpEnc)
-		}
+		batch.Put(tx.Hash().Bytes(), rlpEnc)
 
 		var txExtra struct {
 			BlockHash  common.Hash
@@ -59,22 +55,16 @@ func PutTransactions(db ethdb.Database, block *types.Block, txs types.Transactio
 		txExtra.Index = uint64(i)
 		rlpMeta, err := rlp.EncodeToBytes(txExtra)
 		if err != nil {
-			glog.V(logger.Debug).Infoln("Failed encoding tx meta data", err)
-			return
+			return fmt.Errorf("failed encoding tx meta data: %v", err)
 		}
 
-		if batchWrite {
-			batch.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)
-		} else {
-			db.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)
-		}
+		batch.Put(append(tx.Hash().Bytes(), 0x0001), rlpMeta)
 	}
 
-	if db, ok := db.(*ethdb.LDBDatabase); ok {
-		if err := db.LDB().Write(batch, nil); err != nil {
-			glog.V(logger.Error).Infoln("db write err:", err)
-		}
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("failed writing tx to db: %v", err)
 	}
+	return nil
 }
 
 func DeleteTransaction(db ethdb.Database, txHash common.Hash) {

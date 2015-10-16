@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -286,6 +287,9 @@ func New(config *Config) (*Ethereum, error) {
 		db.Meter("eth/db/chaindata/")
 	}
 	if err := upgradeChainDatabase(chainDb); err != nil {
+		return nil, err
+	}
+	if err := addMipmapBloomBins(chainDb); err != nil {
 		return nil, err
 	}
 
@@ -756,5 +760,47 @@ func upgradeChainDatabase(db ethdb.Database) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func addMipmapBloomBins(db ethdb.Database) (err error) {
+	const mipmapVersion uint = 2
+
+	// check if the version is set. We ignore data for now since there's
+	// only one version so we can easily ignore it for now
+	var data []byte
+	data, _ = db.Get([]byte("setting-mipmap-version"))
+	if len(data) > 0 {
+		var version uint
+		if err := rlp.DecodeBytes(data, &version); err == nil && version == mipmapVersion {
+			return nil
+		}
+	}
+
+	defer func() {
+		if err == nil {
+			var val []byte
+			val, err = rlp.EncodeToBytes(mipmapVersion)
+			if err == nil {
+				err = db.Put([]byte("setting-mipmap-version"), val)
+			}
+			return
+		}
+	}()
+	latestBlock := core.GetBlock(db, core.GetHeadBlockHash(db))
+	if latestBlock == nil { // clean database
+		return
+	}
+
+	tstart := time.Now()
+	glog.V(logger.Info).Infoln("upgrading db log bloom bins")
+	for i := uint64(0); i <= latestBlock.NumberU64(); i++ {
+		hash := core.GetCanonicalHash(db, i)
+		if (hash == common.Hash{}) {
+			return fmt.Errorf("chain db corrupted. Could not find block %d.", i)
+		}
+		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(db, hash))
+	}
+	glog.V(logger.Info).Infoln("upgrade completed in", time.Since(tstart))
 	return nil
 }

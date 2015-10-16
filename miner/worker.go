@@ -301,6 +301,8 @@ func (self *worker) wait() {
 					core.PutTransactions(self.chainDb, block, block.Transactions())
 					// store the receipts
 					core.PutReceipts(self.chainDb, work.receipts)
+					// Write map map bloom filters
+					core.WriteMipmapBloom(self.chainDb, block.NumberU64(), work.receipts)
 				}
 
 				// broadcast before waiting for validation

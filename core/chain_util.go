@@ -18,6 +18,8 @@ package core
 
 import (
 	"bytes"
+	"encoding/binary"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -42,6 +44,9 @@ var (
 
 	ExpDiffPeriod = big.NewInt(100000)
 	blockHashPre  = []byte("block-hash-") // [deprecated by eth/63]
+
+	mipmapPre    = []byte("mipmap-log-bloom-")
+	MIPMapLevels = []uint64{1000000, 500000, 100000, 50000, 1000}
 )
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
@@ -345,4 +350,43 @@ func GetBlockByHashOld(db ethdb.Database, hash common.Hash) *types.Block {
 		return nil
 	}
 	return (*types.Block)(&block)
+}
+
+// returns a formatted MIP mapped key by adding prefix, canonical number and level
+//
+// ex. fn(98, 1000) = (prefix || 1000 || 0)
+func mipmapKey(num, level uint64) []byte {
+	lkey := make([]byte, 8)
+	binary.BigEndian.PutUint64(lkey, level)
+	key := new(big.Int).SetUint64(num / level * level)
+
+	return append(mipmapPre, append(lkey, key.Bytes()...)...)
+}
+
+// WriteMapmapBloom writes each address included in the receipts' logs to the
+// MIP bloom bin.
+func WriteMipmapBloom(db ethdb.Database, number uint64, receipts types.Receipts) error {
+	batch := db.NewBatch()
+	for _, level := range MIPMapLevels {
+		key := mipmapKey(number, level)
+		bloomDat, _ := db.Get(key)
+		bloom := types.BytesToBloom(bloomDat)
+		for _, receipt := range receipts {
+			for _, log := range receipt.Logs() {
+				bloom.Add(log.Address.Big())
+			}
+		}
+		batch.Put(key, bloom.Bytes())
+	}
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("mipmap write fail for: %d: %v", number, err)
+	}
+	return nil
+}
+
+// GetMipmapBloom returns a bloom filter using the number and level as input
+// parameters. For available levels see MIPMapLevels.
+func GetMipmapBloom(db ethdb.Database, number, level uint64) types.Bloom {
+	bloomDat, _ := db.Get(mipmapKey(number, level))
+	return types.BytesToBloom(bloomDat)
 }

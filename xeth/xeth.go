@@ -558,11 +558,9 @@ func (self *XEth) NewLogFilter(earliest, latest int64, skip, max int, address []
 	id := self.filterManager.Add(filter)
 	self.logQueue[id] = &logQueue{timeout: time.Now()}
 
-	filter.SetEarliestBlock(earliest)
-	filter.SetLatestBlock(latest)
-	filter.SetSkip(skip)
-	filter.SetMax(max)
-	filter.SetAddress(cAddress(address))
+	filter.SetBeginBlock(earliest)
+	filter.SetEndBlock(latest)
+	filter.SetAddresses(cAddress(address))
 	filter.SetTopics(cTopics(topics))
 	filter.LogsCallback = func(logs vm.Logs) {
 		self.logMu.Lock()
@@ -667,11 +665,9 @@ func (self *XEth) Logs(id int) vm.Logs {
 
 func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []string, topics [][]string) vm.Logs {
 	filter := filters.New(self.backend.ChainDb())
-	filter.SetEarliestBlock(earliest)
-	filter.SetLatestBlock(latest)
-	filter.SetSkip(skip)
-	filter.SetMax(max)
-	filter.SetAddress(cAddress(address))
+	filter.SetBeginBlock(earliest)
+	filter.SetEndBlock(latest)
+	filter.SetAddresses(cAddress(address))
 	filter.SetTopics(cTopics(topics))
 
 	return filter.Find()
