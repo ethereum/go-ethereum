@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -16,19 +16,31 @@
 
 package core
 
-import (
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-)
+import "math/big"
 
-// TODO move this to types?
-type Backend interface {
-	AccountManager() *accounts.Manager
-	BlockProcessor() *BlockProcessor
-	BlockChain() *BlockChain
-	TxPool() *TxPool
-	ChainDb() ethdb.Database
-	DappDb() ethdb.Database
-	EventMux() *event.TypeMux
+// GasPool tracks the amount of gas available during
+// execution of the transactions in a block.
+// The zero value is a pool with zero gas available.
+type GasPool big.Int
+
+// AddGas makes gas available for execution.
+func (gp *GasPool) AddGas(amount *big.Int) *GasPool {
+	i := (*big.Int)(gp)
+	i.Add(i, amount)
+	return gp
+}
+
+// SubGas deducts the given amount from the pool if enough gas is
+// available and returns an error otherwise.
+func (gp *GasPool) SubGas(amount *big.Int) error {
+	i := (*big.Int)(gp)
+	if i.Cmp(amount) < 0 {
+		return &GasLimitErr{Have: new(big.Int).Set(i), Want: amount}
+	}
+	i.Sub(i, amount)
+	return nil
+}
+
+func (gp *GasPool) String() string {
+	return (*big.Int)(gp).String()
 }

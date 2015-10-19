@@ -77,15 +77,14 @@ func ExampleGenerateChain() {
 
 	// Import the chain. This runs all block validation rules.
 	evmux := &event.TypeMux{}
-	chainman, _ := NewBlockChain(db, FakePow{}, evmux)
-	chainman.SetProcessor(NewBlockProcessor(db, FakePow{}, chainman, evmux))
-	if i, err := chainman.InsertChain(chain); err != nil {
+	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
+	if i, err := blockchain.InsertChain(chain); err != nil {
 		fmt.Printf("insert error (block %d): %v\n", i, err)
 		return
 	}
 
-	state, _ := chainman.State()
-	fmt.Printf("last block: #%d\n", chainman.CurrentBlock().Number())
+	state, _ := blockchain.State()
+	fmt.Printf("last block: #%d\n", blockchain.CurrentBlock().Number())
 	fmt.Println("balance of addr1:", state.GetBalance(addr1))
 	fmt.Println("balance of addr2:", state.GetBalance(addr2))
 	fmt.Println("balance of addr3:", state.GetBalance(addr3))

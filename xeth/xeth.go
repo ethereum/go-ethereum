@@ -379,7 +379,7 @@ func (self *XEth) CurrentBlock() *types.Block {
 }
 
 func (self *XEth) GetBlockReceipts(bhash common.Hash) types.Receipts {
-	return self.backend.BlockProcessor().GetBlockReceipts(bhash)
+	return core.GetBlockReceipts(self.backend.ChainDb(), bhash)
 }
 
 func (self *XEth) GetTxReceipt(txhash common.Hash) *types.Receipt {

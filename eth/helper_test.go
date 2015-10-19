@@ -35,9 +35,7 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 		db, _         = ethdb.NewMemDatabase()
 		genesis       = core.WriteGenesisBlockForTesting(db, core.GenesisAccount{testBankAddress, testBankFunds})
 		blockchain, _ = core.NewBlockChain(db, pow, evmux)
-		blockproc     = core.NewBlockProcessor(db, pow, blockchain, evmux)
 	)
-	blockchain.SetProcessor(blockproc)
 	chain, _ := core.GenerateChain(genesis, db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)

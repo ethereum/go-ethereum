@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/pow/ezp"
 )
 
-func proc() (*BlockProcessor, *BlockChain) {
+func proc() (Validator, *BlockChain) {
 	db, _ := ethdb.NewMemDatabase()
 	var mux event.TypeMux
 
@@ -39,7 +39,7 @@ func proc() (*BlockProcessor, *BlockChain) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	return NewBlockProcessor(db, ezp.New(), blockchain, &mux), blockchain
+	return blockchain.validator, blockchain
 }
 
 func TestNumber(t *testing.T) {

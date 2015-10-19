@@ -214,7 +214,7 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 // newCanonical creates a chain database, and injects a deterministic canonical
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
-func newCanonical(n int, full bool) (ethdb.Database, *BlockProcessor, error) {
+func newCanonical(n int, full bool) (ethdb.Database, *BlockChain, error) {
 	// Create te new chain database
 	db, _ := ethdb.NewMemDatabase()
 	evmux := &event.TypeMux{}
@@ -223,23 +223,20 @@ func newCanonical(n int, full bool) (ethdb.Database, *BlockProcessor, error) {
 	genesis, _ := WriteTestNetGenesisBlock(db, 0)
 
 	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
-	processor := NewBlockProcessor(db, FakePow{}, blockchain, evmux)
-	processor.bc.SetProcessor(processor)
-
 	// Create and inject the requested chain
 	if n == 0 {
-		return db, processor, nil
+		return db, blockchain, nil
 	}
 	if full {
 		// Full block-chain requested
 		blocks := makeBlockChain(genesis, n, db, canonicalSeed)
 		_, err := blockchain.InsertChain(blocks)
-		return db, processor, err
+		return db, blockchain, err
 	}
 	// Header-only chain requested
 	headers := makeHeaderChain(genesis.Header(), n, db, canonicalSeed)
 	_, err := blockchain.InsertHeaderChain(headers, 1)
-	return db, processor, err
+	return db, blockchain, err
 }
 
 // makeHeaderChain creates a deterministic chain of headers rooted at parent.
