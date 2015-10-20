@@ -188,3 +188,16 @@ func IsBadHashError(err error) bool {
 	_, ok := err.(BadHashError)
 	return ok
 }
+
+type GasLimitErr struct {
+	Have, Want *big.Int
+}
+
+func IsGasLimitErr(err error) bool {
+	_, ok := err.(*GasLimitErr)
+	return ok
+}
+
+func (err *GasLimitErr) Error() string {
+	return fmt.Sprintf("GasLimit reached. Have %d gas, transaction requires %d", err.Have, err.Want)
+}

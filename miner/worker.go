@@ -62,13 +62,12 @@ type uint64RingBuffer struct {
 // environment is the workers current environment and holds
 // all of the current state information
 type Work struct {
-	state              *state.StateDB     // apply state changes here
-	coinbase           *state.StateObject // the miner's account
-	ancestors          *set.Set           // ancestor set (used for checking uncle parent validity)
-	family             *set.Set           // family set (used for checking uncle invalidity)
-	uncles             *set.Set           // uncle set
-	remove             *set.Set           // tx which will be removed
-	tcount             int                // tx count in cycle
+	state              *state.StateDB // apply state changes here
+	ancestors          *set.Set       // ancestor set (used for checking uncle parent validity)
+	family             *set.Set       // family set (used for checking uncle invalidity)
+	uncles             *set.Set       // uncle set
+	remove             *set.Set       // tx which will be removed
+	tcount             int            // tx count in cycle
 	ignoredTransactors *set.Set
 	lowGasTransactors  *set.Set
 	ownedAccounts      *set.Set
@@ -366,7 +365,6 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		family:    set.New(),
 		uncles:    set.New(),
 		header:    header,
-		coinbase:  state.GetOrNewStateObject(self.coinbase),
 		createdAt: time.Now(),
 	}
 
@@ -514,7 +512,6 @@ func (self *worker) commitNewWork() {
 	transactions := append(singleTxOwner, multiTxOwner...)
 	*/
 
-	work.coinbase.SetGasLimit(header.GasLimit)
 	work.commitTransactions(transactions, self.gasPrice, self.proc)
 	self.eth.TxPool().RemoveTransactions(work.lowGasTxs)
 
@@ -575,6 +572,8 @@ func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
 }
 
 func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *big.Int, proc *core.BlockProcessor) {
+	gp := new(core.GasPool).AddGas(env.header.GasLimit)
+
 	for _, tx := range transactions {
 		// We can skip err. It has already been validated in the tx pool
 		from, _ := tx.From()
@@ -612,9 +611,9 @@ func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *b
 
 		env.state.StartRecord(tx.Hash(), common.Hash{}, 0)
 
-		err := env.commitTransaction(tx, proc)
+		err := env.commitTransaction(tx, proc, gp)
 		switch {
-		case state.IsGasLimitErr(err):
+		case core.IsGasLimitErr(err):
 			// ignore the transactor so no nonce errors will be thrown for this account
 			// next time the worker is run, they'll be picked up again.
 			env.ignoredTransactors.Add(from)
@@ -632,9 +631,9 @@ func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *b
 	}
 }
 
-func (env *Work) commitTransaction(tx *types.Transaction, proc *core.BlockProcessor) error {
+func (env *Work) commitTransaction(tx *types.Transaction, proc *core.BlockProcessor, gp *core.GasPool) error {
 	snap := env.state.Copy()
-	receipt, _, err := proc.ApplyTransaction(env.coinbase, env.state, env.header, tx, env.header.GasUsed, true)
+	receipt, _, err := proc.ApplyTransaction(gp, env.state, env.header, tx, env.header.GasUsed, true)
 	if err != nil {
 		env.state.Set(snap)
 		return err
