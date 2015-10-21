@@ -163,7 +163,12 @@ func TestBlockStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	// Create a test block to move around the database and make sure it's really new
-	block := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block")})
+	block := types.NewBlockWithHeader(&types.Header{
+		Extra:       []byte("test block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+	})
 	if entry := GetBlock(db, block.Hash()); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
 	}
@@ -208,8 +213,12 @@ func TestBlockStorage(t *testing.T) {
 // Tests that partial block contents don't get reassembled into full blocks.
 func TestPartialBlockStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	block := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block")})
-
+	block := types.NewBlockWithHeader(&types.Header{
+		Extra:       []byte("test block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+	})
 	// Store a header and check that it's not recognized as a block
 	if err := WriteHeader(db, block.Header()); err != nil {
 		t.Fatalf("Failed to write header into database: %v", err)
@@ -298,6 +307,7 @@ func TestHeadStorage(t *testing.T) {
 
 	blockHead := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block header")})
 	blockFull := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block full")})
+	blockFast := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block fast")})
 
 	// Check that no head entries are in a pristine database
 	if entry := GetHeadHeaderHash(db); entry != (common.Hash{}) {
@@ -306,12 +316,18 @@ func TestHeadStorage(t *testing.T) {
 	if entry := GetHeadBlockHash(db); entry != (common.Hash{}) {
 		t.Fatalf("Non head block entry returned: %v", entry)
 	}
+	if entry := GetHeadFastBlockHash(db); entry != (common.Hash{}) {
+		t.Fatalf("Non fast head block entry returned: %v", entry)
+	}
 	// Assign separate entries for the head header and block
 	if err := WriteHeadHeaderHash(db, blockHead.Hash()); err != nil {
 		t.Fatalf("Failed to write head header hash: %v", err)
 	}
 	if err := WriteHeadBlockHash(db, blockFull.Hash()); err != nil {
 		t.Fatalf("Failed to write head block hash: %v", err)
+	}
+	if err := WriteHeadFastBlockHash(db, blockFast.Hash()); err != nil {
+		t.Fatalf("Failed to write fast head block hash: %v", err)
 	}
 	// Check that both heads are present, and different (i.e. two heads maintained)
 	if entry := GetHeadHeaderHash(db); entry != blockHead.Hash() {
@@ -320,21 +336,24 @@ func TestHeadStorage(t *testing.T) {
 	if entry := GetHeadBlockHash(db); entry != blockFull.Hash() {
 		t.Fatalf("Head block hash mismatch: have %v, want %v", entry, blockFull.Hash())
 	}
+	if entry := GetHeadFastBlockHash(db); entry != blockFast.Hash() {
+		t.Fatalf("Fast head block hash mismatch: have %v, want %v", entry, blockFast.Hash())
+	}
 }
 
 func TestMipmapBloom(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	receipt1 := new(types.Receipt)
-	receipt1.SetLogs(vm.Logs{
+	receipt1.Logs = vm.Logs{
 		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
 		&vm.Log{Address: common.BytesToAddress([]byte("address"))},
-	})
+	}
 	receipt2 := new(types.Receipt)
-	receipt2.SetLogs(vm.Logs{
+	receipt2.Logs = vm.Logs{
 		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
 		&vm.Log{Address: common.BytesToAddress([]byte("address1"))},
-	})
+	}
 
 	WriteMipmapBloom(db, 1, types.Receipts{receipt1})
 	WriteMipmapBloom(db, 2, types.Receipts{receipt2})
@@ -349,15 +368,15 @@ func TestMipmapBloom(t *testing.T) {
 	// reset
 	db, _ = ethdb.NewMemDatabase()
 	receipt := new(types.Receipt)
-	receipt.SetLogs(vm.Logs{
+	receipt.Logs = vm.Logs{
 		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
-	})
+	}
 	WriteMipmapBloom(db, 999, types.Receipts{receipt1})
 
 	receipt = new(types.Receipt)
-	receipt.SetLogs(vm.Logs{
+	receipt.Logs = vm.Logs{
 		&vm.Log{Address: common.BytesToAddress([]byte("test 1"))},
-	})
+	}
 	WriteMipmapBloom(db, 1000, types.Receipts{receipt})
 
 	bloom := GetMipmapBloom(db, 1000, 1000)
@@ -384,22 +403,22 @@ func TestMipmapChain(t *testing.T) {
 	defer db.Close()
 
 	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{addr, big.NewInt(1000000)})
-	chain := GenerateChain(genesis, db, 1010, func(i int, gen *BlockGen) {
+	chain, receipts := GenerateChain(genesis, db, 1010, func(i int, gen *BlockGen) {
 		var receipts types.Receipts
 		switch i {
 		case 1:
 			receipt := types.NewReceipt(nil, new(big.Int))
-			receipt.SetLogs(vm.Logs{
+			receipt.Logs = vm.Logs{
 				&vm.Log{
 					Address: addr,
 					Topics:  []common.Hash{hash1},
 				},
-			})
+			}
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
 		case 1000:
 			receipt := types.NewReceipt(nil, new(big.Int))
-			receipt.SetLogs(vm.Logs{&vm.Log{Address: addr2}})
+			receipt.Logs = vm.Logs{&vm.Log{Address: addr2}}
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
 
@@ -412,7 +431,7 @@ func TestMipmapChain(t *testing.T) {
 		}
 		WriteMipmapBloom(db, uint64(i+1), receipts)
 	})
-	for _, block := range chain {
+	for i, block := range chain {
 		WriteBlock(db, block)
 		if err := WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
 			t.Fatalf("failed to insert block number: %v", err)
@@ -420,7 +439,7 @@ func TestMipmapChain(t *testing.T) {
 		if err := WriteHeadBlockHash(db, block.Hash()); err != nil {
 			t.Fatalf("failed to insert block number: %v", err)
 		}
-		if err := PutBlockReceipts(db, block, block.Receipts()); err != nil {
+		if err := PutBlockReceipts(db, block.Hash(), receipts[i]); err != nil {
 			t.Fatal("error writing block receipts:", err)
 		}
 	}

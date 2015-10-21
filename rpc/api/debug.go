@@ -146,13 +146,7 @@ func (self *debugApi) SetHead(req *shared.Request) (interface{}, error) {
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
-
-	block := self.xeth.EthBlockByNumber(args.BlockNumber)
-	if block == nil {
-		return nil, fmt.Errorf("block #%d not found", args.BlockNumber)
-	}
-
-	self.ethereum.BlockChain().SetHead(block)
+	self.ethereum.BlockChain().SetHead(uint64(args.BlockNumber))
 
 	return nil, nil
 }

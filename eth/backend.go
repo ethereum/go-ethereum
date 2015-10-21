@@ -88,6 +88,7 @@ type Config struct {
 	GenesisNonce int
 	GenesisFile  string
 	GenesisBlock *types.Block // used by block tests
+	FastSync     bool
 	Olympic      bool
 
 	BlockChainVersion  int
@@ -390,7 +391,6 @@ func New(config *Config) (*Ethereum, error) {
 		if err == core.ErrNoGenesis {
 			return nil, fmt.Errorf(`Genesis block not found. Please supply a genesis block with the "--genesis /path/to/file" argument`)
 		}
-
 		return nil, err
 	}
 	newPool := core.NewTxPool(eth.EventMux(), eth.blockchain.State, eth.blockchain.GasLimit)
@@ -398,8 +398,9 @@ func New(config *Config) (*Ethereum, error) {
 
 	eth.blockProcessor = core.NewBlockProcessor(chainDb, eth.pow, eth.blockchain, eth.EventMux())
 	eth.blockchain.SetProcessor(eth.blockProcessor)
-	eth.protocolManager = NewProtocolManager(config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb)
-
+	if eth.protocolManager, err = NewProtocolManager(config.FastSync, config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb); err != nil {
+		return nil, err
+	}
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
 	eth.miner.SetExtra(config.ExtraData)
@@ -462,7 +463,7 @@ func (s *Ethereum) NodeInfo() *NodeInfo {
 		DiscPort:   int(node.UDP),
 		TCPPort:    int(node.TCP),
 		ListenAddr: s.net.ListenAddr,
-		Td:         s.BlockChain().Td().String(),
+		Td:         s.BlockChain().GetTd(s.BlockChain().CurrentBlock().Hash()).String(),
 	}
 }
 

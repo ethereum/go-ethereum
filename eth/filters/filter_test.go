@@ -16,9 +16,9 @@ import (
 
 func makeReceipt(addr common.Address) *types.Receipt {
 	receipt := types.NewReceipt(nil, new(big.Int))
-	receipt.SetLogs(vm.Logs{
+	receipt.Logs = vm.Logs{
 		&vm.Log{Address: addr},
-	})
+	}
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	return receipt
 }
@@ -41,7 +41,7 @@ func BenchmarkMipmaps(b *testing.B) {
 	defer db.Close()
 
 	genesis := core.WriteGenesisBlockForTesting(db, core.GenesisAccount{addr1, big.NewInt(1000000)})
-	chain := core.GenerateChain(genesis, db, 100010, func(i int, gen *core.BlockGen) {
+	chain, receipts := core.GenerateChain(genesis, db, 100010, func(i int, gen *core.BlockGen) {
 		var receipts types.Receipts
 		switch i {
 		case 2403:
@@ -70,7 +70,7 @@ func BenchmarkMipmaps(b *testing.B) {
 		}
 		core.WriteMipmapBloom(db, uint64(i+1), receipts)
 	})
-	for _, block := range chain {
+	for i, block := range chain {
 		core.WriteBlock(db, block)
 		if err := core.WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
 			b.Fatalf("failed to insert block number: %v", err)
@@ -78,11 +78,10 @@ func BenchmarkMipmaps(b *testing.B) {
 		if err := core.WriteHeadBlockHash(db, block.Hash()); err != nil {
 			b.Fatalf("failed to insert block number: %v", err)
 		}
-		if err := core.PutBlockReceipts(db, block, block.Receipts()); err != nil {
+		if err := core.PutBlockReceipts(db, block.Hash(), receipts[i]); err != nil {
 			b.Fatal("error writing block receipts:", err)
 		}
 	}
-
 	b.ResetTimer()
 
 	filter := New(db)
@@ -118,47 +117,47 @@ func TestFilters(t *testing.T) {
 	defer db.Close()
 
 	genesis := core.WriteGenesisBlockForTesting(db, core.GenesisAccount{addr, big.NewInt(1000000)})
-	chain := core.GenerateChain(genesis, db, 1000, func(i int, gen *core.BlockGen) {
+	chain, receipts := core.GenerateChain(genesis, db, 1000, func(i int, gen *core.BlockGen) {
 		var receipts types.Receipts
 		switch i {
 		case 1:
 			receipt := types.NewReceipt(nil, new(big.Int))
-			receipt.SetLogs(vm.Logs{
+			receipt.Logs = vm.Logs{
 				&vm.Log{
 					Address: addr,
 					Topics:  []common.Hash{hash1},
 				},
-			})
+			}
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
 		case 2:
 			receipt := types.NewReceipt(nil, new(big.Int))
-			receipt.SetLogs(vm.Logs{
+			receipt.Logs = vm.Logs{
 				&vm.Log{
 					Address: addr,
 					Topics:  []common.Hash{hash2},
 				},
-			})
+			}
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
 		case 998:
 			receipt := types.NewReceipt(nil, new(big.Int))
-			receipt.SetLogs(vm.Logs{
+			receipt.Logs = vm.Logs{
 				&vm.Log{
 					Address: addr,
 					Topics:  []common.Hash{hash3},
 				},
-			})
+			}
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
 		case 999:
 			receipt := types.NewReceipt(nil, new(big.Int))
-			receipt.SetLogs(vm.Logs{
+			receipt.Logs = vm.Logs{
 				&vm.Log{
 					Address: addr,
 					Topics:  []common.Hash{hash4},
 				},
-			})
+			}
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
 		}
@@ -173,7 +172,7 @@ func TestFilters(t *testing.T) {
 		// by one
 		core.WriteMipmapBloom(db, uint64(i+1), receipts)
 	})
-	for _, block := range chain {
+	for i, block := range chain {
 		core.WriteBlock(db, block)
 		if err := core.WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
 			t.Fatalf("failed to insert block number: %v", err)
@@ -181,7 +180,7 @@ func TestFilters(t *testing.T) {
 		if err := core.WriteHeadBlockHash(db, block.Hash()); err != nil {
 			t.Fatalf("failed to insert block number: %v", err)
 		}
-		if err := core.PutBlockReceipts(db, block, block.Receipts()); err != nil {
+		if err := core.PutBlockReceipts(db, block.Hash(), receipts[i]); err != nil {
 			t.Fatal("error writing block receipts:", err)
 		}
 	}

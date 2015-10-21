@@ -128,7 +128,7 @@ func (self *BlockProcessor) ApplyTransaction(gp *GasPool, statedb *state.StateDB
 	}
 
 	logs := statedb.GetLogs(tx.Hash())
-	receipt.SetLogs(logs)
+	receipt.Logs = logs
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	glog.V(logger.Debug).Infoln(receipt)
@@ -212,14 +212,16 @@ func (sm *BlockProcessor) Process(block *types.Block) (logs vm.Logs, receipts ty
 	defer sm.mutex.Unlock()
 
 	if sm.bc.HasBlock(block.Hash()) {
-		return nil, nil, &KnownBlockError{block.Number(), block.Hash()}
+		if _, err := state.New(block.Root(), sm.chainDb); err == nil {
+			return nil, nil, &KnownBlockError{block.Number(), block.Hash()}
+		}
 	}
-
-	if !sm.bc.HasBlock(block.ParentHash()) {
-		return nil, nil, ParentError(block.ParentHash())
+	if parent := sm.bc.GetBlock(block.ParentHash()); parent != nil {
+		if _, err := state.New(parent.Root(), sm.chainDb); err == nil {
+			return sm.processWithParent(block, parent)
+		}
 	}
-	parent := sm.bc.GetBlock(block.ParentHash())
-	return sm.processWithParent(block, parent)
+	return nil, nil, ParentError(block.ParentHash())
 }
 
 func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs vm.Logs, receipts types.Receipts, err error) {
@@ -381,9 +383,32 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs vm.Logs, err error) 
 	receipts := GetBlockReceipts(sm.chainDb, block.Hash())
 	// coalesce logs
 	for _, receipt := range receipts {
-		logs = append(logs, receipt.Logs()...)
+		logs = append(logs, receipt.Logs...)
 	}
 	return logs, nil
+}
+
+// ValidateHeader verifies the validity of a header, relying on the database and
+// POW behind the block processor.
+func (sm *BlockProcessor) ValidateHeader(header *types.Header, checkPow, uncle bool) error {
+	// Short circuit if the header's already known or its parent missing
+	if sm.bc.HasHeader(header.Hash()) {
+		return nil
+	}
+	if parent := sm.bc.GetHeader(header.ParentHash); parent == nil {
+		return ParentError(header.ParentHash)
+	} else {
+		return ValidateHeader(sm.Pow, header, parent, checkPow, uncle)
+	}
+}
+
+// ValidateHeaderWithParent verifies the validity of a header, relying on the database and
+// POW behind the block processor.
+func (sm *BlockProcessor) ValidateHeaderWithParent(header, parent *types.Header, checkPow, uncle bool) error {
+	if sm.bc.HasHeader(header.Hash()) {
+		return nil
+	}
+	return ValidateHeader(sm.Pow, header, parent, checkPow, uncle)
 }
 
 // See YP section 4.3.4. "Block Header Validity"
@@ -392,7 +417,6 @@ func ValidateHeader(pow pow.PoW, header *types.Header, parent *types.Header, che
 	if big.NewInt(int64(len(header.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
 		return fmt.Errorf("Header extra data too long (%d)", len(header.Extra))
 	}
-
 	if uncle {
 		if header.Time.Cmp(common.MaxBig) == 1 {
 			return BlockTSTooBigErr
@@ -429,7 +453,7 @@ func ValidateHeader(pow pow.PoW, header *types.Header, parent *types.Header, che
 	if checkPow {
 		// Verify the nonce of the header. Return an error if it's not valid
 		if !pow.Verify(types.NewBlockWithHeader(header)) {
-			return ValidationError("Header's nonce is invalid (= %x)", header.Nonce)
+			return &BlockNonceErr{Hash: header.Hash(), Number: header.Number, Nonce: header.Nonce.Uint64()}
 		}
 	}
 	return nil

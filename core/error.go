@@ -111,7 +111,7 @@ type BlockNonceErr struct {
 }
 
 func (err *BlockNonceErr) Error() string {
-	return fmt.Sprintf("block %d (%v) nonce is invalid (got %d)", err.Number, err.Hash, err.Nonce)
+	return fmt.Sprintf("nonce for #%d [%x…] is invalid (got %d)", err.Number, err.Hash, err.Nonce)
 }
 
 // IsBlockNonceErr returns true for invalid block nonce errors.

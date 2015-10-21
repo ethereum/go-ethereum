@@ -148,10 +148,9 @@ var (
 		Name:  "olympic",
 		Usage: "Use olympic style protocol",
 	}
-	EthVersionFlag = cli.IntFlag{
-		Name:  "eth",
-		Value: 62,
-		Usage: "Highest eth protocol to advertise (temporary, dev option)",
+	FastSyncFlag = cli.BoolFlag{
+		Name:  "fast",
+		Usage: "Enables fast syncing through state downloads",
 	}
 
 	// miner settings
@@ -425,12 +424,13 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	if err != nil {
 		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
 	}
-
+	// Assemble the entire eth configuration and return
 	cfg := &eth.Config{
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 MustDataDir(ctx),
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
 		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
+		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
 		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
 		SkipBcVersionCheck:      false,
@@ -499,7 +499,6 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 
 		glog.V(logger.Info).Infoln("dev mode enabled")
 	}
-
 	return cfg
 }
 
@@ -530,18 +529,6 @@ func SetupVM(ctx *cli.Context) {
 	vm.EnableJit = ctx.GlobalBool(VMEnableJitFlag.Name)
 	vm.ForceJit = ctx.GlobalBool(VMForceJitFlag.Name)
 	vm.SetJITCacheSize(ctx.GlobalInt(VMJitCacheFlag.Name))
-}
-
-// SetupEth configures the eth packages global settings
-func SetupEth(ctx *cli.Context) {
-	version := ctx.GlobalInt(EthVersionFlag.Name)
-	for len(eth.ProtocolVersions) > 0 && eth.ProtocolVersions[0] > uint(version) {
-		eth.ProtocolVersions = eth.ProtocolVersions[1:]
-		eth.ProtocolLengths = eth.ProtocolLengths[1:]
-	}
-	if len(eth.ProtocolVersions) == 0 {
-		Fatalf("No valid eth protocols remaining")
-	}
 }
 
 // MakeChain creates a chain manager from set command line flags.

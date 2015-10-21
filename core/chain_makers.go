@@ -98,7 +98,7 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	b.header.GasUsed.Add(b.header.GasUsed, gas)
 	receipt := types.NewReceipt(root.Bytes(), b.header.GasUsed)
 	logs := b.statedb.GetLogs(tx.Hash())
-	receipt.SetLogs(logs)
+	receipt.Logs = logs
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
@@ -163,13 +163,13 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // Blocks created by GenerateChain do not contain valid proof of work
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
-func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) []*types.Block {
+func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
 	statedb, err := state.New(parent.Root(), db)
 	if err != nil {
 		panic(err)
 	}
-	blocks := make(types.Blocks, n)
-	genblock := func(i int, h *types.Header) *types.Block {
+	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
+	genblock := func(i int, h *types.Header) (*types.Block, types.Receipts) {
 		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb}
 		if gen != nil {
 			gen(i, b)
@@ -180,15 +180,16 @@ func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, 
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
 		h.Root = root
-		return types.NewBlock(h, b.txs, b.uncles, b.receipts)
+		return types.NewBlock(h, b.txs, b.uncles, b.receipts), b.receipts
 	}
 	for i := 0; i < n; i++ {
 		header := makeHeader(parent, statedb)
-		block := genblock(i, header)
+		block, receipt := genblock(i, header)
 		blocks[i] = block
+		receipts[i] = receipt
 		parent = block
 	}
-	return blocks
+	return blocks, receipts
 }
 
 func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
@@ -210,26 +211,51 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 	}
 }
 
-// newCanonical creates a new deterministic canonical chain by running
-// InsertChain on the result of makeChain.
-func newCanonical(n int, db ethdb.Database) (*BlockProcessor, error) {
+// newCanonical creates a chain database, and injects a deterministic canonical
+// chain. Depending on the full flag, if creates either a full block chain or a
+// header only chain.
+func newCanonical(n int, full bool) (ethdb.Database, *BlockProcessor, error) {
+	// Create te new chain database
+	db, _ := ethdb.NewMemDatabase()
 	evmux := &event.TypeMux{}
 
-	WriteTestNetGenesisBlock(db, 0)
-	chainman, _ := NewBlockChain(db, FakePow{}, evmux)
-	bman := NewBlockProcessor(db, FakePow{}, chainman, evmux)
-	bman.bc.SetProcessor(bman)
-	parent := bman.bc.CurrentBlock()
+	// Initialize a fresh chain with only a genesis block
+	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+
+	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
+	processor := NewBlockProcessor(db, FakePow{}, blockchain, evmux)
+	processor.bc.SetProcessor(processor)
+
+	// Create and inject the requested chain
 	if n == 0 {
-		return bman, nil
+		return db, processor, nil
 	}
-	lchain := makeChain(parent, n, db, canonicalSeed)
-	_, err := bman.bc.InsertChain(lchain)
-	return bman, err
+	if full {
+		// Full block-chain requested
+		blocks := makeBlockChain(genesis, n, db, canonicalSeed)
+		_, err := blockchain.InsertChain(blocks)
+		return db, processor, err
+	}
+	// Header-only chain requested
+	headers := makeHeaderChain(genesis.Header(), n, db, canonicalSeed)
+	_, err := blockchain.InsertHeaderChain(headers, 1)
+	return db, processor, err
 }
 
-func makeChain(parent *types.Block, n int, db ethdb.Database, seed int) []*types.Block {
-	return GenerateChain(parent, db, n, func(i int, b *BlockGen) {
+// makeHeaderChain creates a deterministic chain of headers rooted at parent.
+func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) []*types.Header {
+	blocks := makeBlockChain(types.NewBlockWithHeader(parent), n, db, seed)
+	headers := make([]*types.Header, len(blocks))
+	for i, block := range blocks {
+		headers[i] = block.Header()
+	}
+	return headers
+}
+
+// makeBlockChain creates a deterministic chain of blocks rooted at parent.
+func makeBlockChain(parent *types.Block, n int, db ethdb.Database, seed int) []*types.Block {
+	blocks, _ := GenerateChain(parent, db, n, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
+	return blocks
 }

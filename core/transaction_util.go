@@ -140,11 +140,14 @@ func GetBlockReceipts(db ethdb.Database, hash common.Hash) types.Receipts {
 	if len(data) == 0 {
 		return nil
 	}
-
-	var receipts types.Receipts
-	err := rlp.DecodeBytes(data, &receipts)
-	if err != nil {
-		glog.V(logger.Core).Infoln("GetReceiptse err", err)
+	rs := []*types.ReceiptForStorage{}
+	if err := rlp.DecodeBytes(data, &rs); err != nil {
+		glog.V(logger.Error).Infof("invalid receipt array RLP for hash %x: %v", hash, err)
+		return nil
+	}
+	receipts := make(types.Receipts, len(rs))
+	for i, receipt := range rs {
+		receipts[i] = (*types.Receipt)(receipt)
 	}
 	return receipts
 }
@@ -152,7 +155,7 @@ func GetBlockReceipts(db ethdb.Database, hash common.Hash) types.Receipts {
 // PutBlockReceipts stores the block's transactions associated receipts
 // and stores them by block hash in a single slice. This is required for
 // forks and chain reorgs
-func PutBlockReceipts(db ethdb.Database, block *types.Block, receipts types.Receipts) error {
+func PutBlockReceipts(db ethdb.Database, hash common.Hash, receipts types.Receipts) error {
 	rs := make([]*types.ReceiptForStorage, len(receipts))
 	for i, receipt := range receipts {
 		rs[i] = (*types.ReceiptForStorage)(receipt)
@@ -161,12 +164,9 @@ func PutBlockReceipts(db ethdb.Database, block *types.Block, receipts types.Rece
 	if err != nil {
 		return err
 	}
-
-	hash := block.Hash()
 	err = db.Put(append(blockReceiptsPre, hash[:]...), bytes)
 	if err != nil {
 		return err
 	}
-
 	return nil
 }

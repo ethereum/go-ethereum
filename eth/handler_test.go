@@ -17,12 +17,41 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// Tests that protocol versions and modes of operations are matched up properly.
+func TestProtocolCompatibility(t *testing.T) {
+	// Define the compatibility chart
+	tests := []struct {
+		version    uint
+		fastSync   bool
+		compatible bool
+	}{
+		{61, false, true}, {62, false, true}, {63, false, true},
+		{61, true, false}, {62, true, false}, {63, true, true},
+	}
+	// Make sure anything we screw up is restored
+	backup := ProtocolVersions
+	defer func() { ProtocolVersions = backup }()
+
+	// Try all available compatibility configs and check for errors
+	for i, tt := range tests {
+		ProtocolVersions = []uint{tt.version}
+
+		pm, err := newTestProtocolManager(tt.fastSync, 0, nil, nil)
+		if pm != nil {
+			defer pm.Stop()
+		}
+		if (err == nil && !tt.compatible) || (err != nil && tt.compatible) {
+			t.Errorf("test %d: compatibility mismatch: have error %v, want compatibility %v", i, err, tt.compatible)
+		}
+	}
+}
+
 // Tests that hashes can be retrieved from a remote chain by hashes in reverse
 // order.
 func TestGetBlockHashes61(t *testing.T) { testGetBlockHashes(t, 61) }
 
 func testGetBlockHashes(t *testing.T, protocol int) {
-	pm := newTestProtocolManager(downloader.MaxHashFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -65,7 +94,7 @@ func testGetBlockHashes(t *testing.T, protocol int) {
 func TestGetBlockHashesFromNumber61(t *testing.T) { testGetBlockHashesFromNumber(t, 61) }
 
 func testGetBlockHashesFromNumber(t *testing.T, protocol int) {
-	pm := newTestProtocolManager(downloader.MaxHashFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -105,7 +134,7 @@ func testGetBlockHashesFromNumber(t *testing.T, protocol int) {
 func TestGetBlocks61(t *testing.T) { testGetBlocks(t, 61) }
 
 func testGetBlocks(t *testing.T, protocol int) {
-	pm := newTestProtocolManager(downloader.MaxHashFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -174,10 +203,9 @@ func testGetBlocks(t *testing.T, protocol int) {
 // Tests that block headers can be retrieved from a remote chain based on user queries.
 func TestGetBlockHeaders62(t *testing.T) { testGetBlockHeaders(t, 62) }
 func TestGetBlockHeaders63(t *testing.T) { testGetBlockHeaders(t, 63) }
-func TestGetBlockHeaders64(t *testing.T) { testGetBlockHeaders(t, 64) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
-	pm := newTestProtocolManager(downloader.MaxHashFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -300,10 +328,9 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 // Tests that block contents can be retrieved from a remote chain based on their hashes.
 func TestGetBlockBodies62(t *testing.T) { testGetBlockBodies(t, 62) }
 func TestGetBlockBodies63(t *testing.T) { testGetBlockBodies(t, 63) }
-func TestGetBlockBodies64(t *testing.T) { testGetBlockBodies(t, 64) }
 
 func testGetBlockBodies(t *testing.T, protocol int) {
-	pm := newTestProtocolManager(downloader.MaxBlockFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxBlockFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -372,7 +399,6 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 
 // Tests that the node state database can be retrieved based on hashes.
 func TestGetNodeData63(t *testing.T) { testGetNodeData(t, 63) }
-func TestGetNodeData64(t *testing.T) { testGetNodeData(t, 64) }
 
 func testGetNodeData(t *testing.T, protocol int) {
 	// Define three accounts to simulate transactions with
@@ -410,14 +436,16 @@ func testGetNodeData(t *testing.T, protocol int) {
 		}
 	}
 	// Assemble the test environment
-	pm := newTestProtocolManager(4, generator, nil)
+	pm := newTestProtocolManagerMust(t, false, 4, generator, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
 	// Fetch for now the entire chain db
 	hashes := []common.Hash{}
 	for _, key := range pm.chaindb.(*ethdb.MemDatabase).Keys() {
-		hashes = append(hashes, common.BytesToHash(key))
+		if len(key) == len(common.Hash{}) {
+			hashes = append(hashes, common.BytesToHash(key))
+		}
 	}
 	p2p.Send(peer.app, 0x0d, hashes)
 	msg, err := peer.app.ReadMsg()
@@ -462,7 +490,6 @@ func testGetNodeData(t *testing.T, protocol int) {
 
 // Tests that the transaction receipts can be retrieved based on hashes.
 func TestGetReceipt63(t *testing.T) { testGetReceipt(t, 63) }
-func TestGetReceipt64(t *testing.T) { testGetReceipt(t, 64) }
 
 func testGetReceipt(t *testing.T, protocol int) {
 	// Define three accounts to simulate transactions with
@@ -500,20 +527,17 @@ func testGetReceipt(t *testing.T, protocol int) {
 		}
 	}
 	// Assemble the test environment
-	pm := newTestProtocolManager(4, generator, nil)
+	pm := newTestProtocolManagerMust(t, false, 4, generator, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
 	// Collect the hashes to request, and the response to expect
-	hashes := []common.Hash{}
+	hashes, receipts := []common.Hash{}, []types.Receipts{}
 	for i := uint64(0); i <= pm.blockchain.CurrentBlock().NumberU64(); i++ {
-		for _, tx := range pm.blockchain.GetBlockByNumber(i).Transactions() {
-			hashes = append(hashes, tx.Hash())
-		}
-	}
-	receipts := make([]*types.Receipt, len(hashes))
-	for i, hash := range hashes {
-		receipts[i] = core.GetReceipt(pm.chaindb, hash)
+		block := pm.blockchain.GetBlockByNumber(i)
+
+		hashes = append(hashes, block.Hash())
+		receipts = append(receipts, core.GetBlockReceipts(pm.chaindb, block.Hash()))
 	}
 	// Send the hash request and verify the response
 	p2p.Send(peer.app, 0x0f, hashes)
