@@ -39,7 +39,7 @@ type Environment interface {
 	// The block number this VM is invoken on
 	BlockNumber() *big.Int
 	// The n'th hash ago from this block number
-	GetHash(n uint64) common.Hash
+	GetHash(uint64) common.Hash
 	// The handler's address
 	Coinbase() common.Address
 	// The current time (block time)
