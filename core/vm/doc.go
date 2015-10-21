@@ -24,9 +24,12 @@ invokes the JIT VM in a seperate goroutine and compiles the byte code in JIT
 instructions.
 
 The JIT VM, when invoked, loops around a set of pre-defined instructions until
-it either runs of gas, causes an internal error, returns or stops. At a later
-stage the JIT VM will see some additional features that will cause sets of
-instructions to be compiled down to segments. Segments are sets of instructions
-that can be run in one go saving precious time during execution.
+it either runs of gas, causes an internal error, returns or stops.
+
+The JIT optimiser attempts to pre-compile instructions in to chunks or segments
+such as multiple PUSH operations and static JUMPs. It does this by analysing the
+opcodes and attempts to match certain regions to known sets. Whenever the
+optimiser finds said segments it creates a new instruction and replaces the
+first occurrence in the sequence.
 */
 package vm

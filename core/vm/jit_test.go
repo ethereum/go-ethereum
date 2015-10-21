@@ -26,6 +26,49 @@ import (
 
 const maxRun = 1000
 
+func TestSegmenting(t *testing.T) {
+	prog := NewProgram([]byte{byte(PUSH1), 0x1, byte(PUSH1), 0x1, 0x0})
+	err := CompileProgram(prog)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if instr, ok := prog.instructions[0].(pushSeg); ok {
+		if len(instr.data) != 2 {
+			t.Error("expected 2 element width pushSegment, got", len(instr.data))
+		}
+	} else {
+		t.Errorf("expected instr[0] to be a pushSeg, got %T", prog.instructions[0])
+	}
+
+	prog = NewProgram([]byte{byte(PUSH1), 0x1, byte(PUSH1), 0x1, byte(JUMP)})
+	err = CompileProgram(prog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := prog.instructions[1].(jumpSeg); ok {
+	} else {
+		t.Errorf("expected instr[1] to be jumpSeg, got %T", prog.instructions[1])
+	}
+
+	prog = NewProgram([]byte{byte(PUSH1), 0x1, byte(PUSH1), 0x1, byte(PUSH1), 0x1, byte(JUMP)})
+	err = CompileProgram(prog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if instr, ok := prog.instructions[0].(pushSeg); ok {
+		if len(instr.data) != 2 {
+			t.Error("expected 2 element width pushSegment, got", len(instr.data))
+		}
+	} else {
+		t.Errorf("expected instr[0] to be a pushSeg, got %T", prog.instructions[0])
+	}
+	if _, ok := prog.instructions[2].(jumpSeg); ok {
+	} else {
+		t.Errorf("expected instr[1] to be jumpSeg, got %T", prog.instructions[1])
+	}
+}
+
 func TestCompiling(t *testing.T) {
 	prog := NewProgram([]byte{0x60, 0x10})
 	err := CompileProgram(prog)
