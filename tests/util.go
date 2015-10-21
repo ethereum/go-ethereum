@@ -131,8 +131,8 @@ type Env struct {
 	initial      bool
 	Gas          *big.Int
 
-	origin common.Address
-	//parent   common.Hash
+	origin   common.Address
+	parent   common.Hash
 	coinbase common.Address
 
 	number     *big.Int
@@ -163,7 +163,7 @@ func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues 
 	env := NewEnv(state)
 
 	env.origin = common.HexToAddress(exeValues["caller"])
-	//env.parent = common.Hex2Bytes(envValues["previousHash"])
+	env.parent = common.HexToHash(envValues["previousHash"])
 	env.coinbase = common.HexToAddress(envValues["currentCoinbase"])
 	env.number = common.Big(envValues["currentNumber"])
 	env.time = common.Big(envValues["currentTimestamp"])
@@ -174,10 +174,8 @@ func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues 
 	return env
 }
 
-func (self *Env) Origin() common.Address { return self.origin }
-func (self *Env) BlockNumber() *big.Int  { return self.number }
-
-//func (self *Env) PrevHash() []byte      { return self.parent }
+func (self *Env) Origin() common.Address   { return self.origin }
+func (self *Env) BlockNumber() *big.Int    { return self.number }
 func (self *Env) Coinbase() common.Address { return self.coinbase }
 func (self *Env) Time() *big.Int           { return self.time }
 func (self *Env) Difficulty() *big.Int     { return self.difficulty }
