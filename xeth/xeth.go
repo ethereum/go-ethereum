@@ -322,44 +322,11 @@ func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 	return block
 }
 
-func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blhash common.Hash, blnum *big.Int, txi uint64) {
-	// Due to increasing return params and need to determine if this is from transaction pool or
-	// some chain, this probably needs to be refactored for more expressiveness
-	data, _ := self.backend.ChainDb().Get(common.FromHex(hash))
-	if len(data) != 0 {
-		dtx := new(types.Transaction)
-		if err := rlp.DecodeBytes(data, dtx); err != nil {
-			glog.V(logger.Error).Infoln(err)
-			return
-		}
-		tx = dtx
-	} else { // check pending transactions
-		tx = self.backend.TxPool().GetTransaction(common.HexToHash(hash))
+func (self *XEth) EthTransactionByHash(hash string) (*types.Transaction, common.Hash, uint64, uint64) {
+	if tx, hash, number, index := core.GetTransaction(self.backend.ChainDb(), common.HexToHash(hash)); tx != nil {
+		return tx, hash, number, index
 	}
-
-	// meta
-	var txExtra struct {
-		BlockHash  common.Hash
-		BlockIndex uint64
-		Index      uint64
-	}
-
-	v, dberr := self.backend.ChainDb().Get(append(common.FromHex(hash), 0x0001))
-	// TODO check specifically for ErrNotFound
-	if dberr != nil {
-		return
-	}
-	r := bytes.NewReader(v)
-	err := rlp.Decode(r, &txExtra)
-	if err == nil {
-		blhash = txExtra.BlockHash
-		blnum = big.NewInt(int64(txExtra.BlockIndex))
-		txi = txExtra.Index
-	} else {
-		glog.V(logger.Error).Infoln(err)
-	}
-
-	return
+	return self.backend.TxPool().GetTransaction(common.HexToHash(hash)), common.Hash{}, 0, 0
 }
 
 func (self *XEth) BlockByNumber(num int64) *Block {

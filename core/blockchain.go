@@ -972,7 +972,7 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 				glog.Fatal(errs[index])
 				return
 			}
-			if err := PutBlockReceipts(self.chainDb, block.Hash(), receipts); err != nil {
+			if err := WriteBlockReceipts(self.chainDb, block.Hash(), receipts); err != nil {
 				errs[index] = fmt.Errorf("failed to write block receipts: %v", err)
 				atomic.AddInt32(&failed, 1)
 				glog.Fatal(errs[index])
@@ -1182,7 +1182,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		// coalesce logs for later processing
 		coalescedLogs = append(coalescedLogs, logs...)
 
-		if err := PutBlockReceipts(self.chainDb, block.Hash(), receipts); err != nil {
+		if err := WriteBlockReceipts(self.chainDb, block.Hash(), receipts); err != nil {
 			return i, err
 		}
 
@@ -1201,11 +1201,11 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			events = append(events, ChainEvent{block, block.Hash(), logs})
 
 			// This puts transactions in a extra db for rpc
-			if err := PutTransactions(self.chainDb, block, block.Transactions()); err != nil {
+			if err := WriteTransactions(self.chainDb, block); err != nil {
 				return i, err
 			}
 			// store the receipts
-			if err := PutReceipts(self.chainDb, receipts); err != nil {
+			if err := WriteReceipts(self.chainDb, receipts); err != nil {
 				return i, err
 			}
 			// Write map map bloom filters
@@ -1294,12 +1294,12 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// insert the block in the canonical way, re-writing history
 		self.insert(block)
 		// write canonical receipts and transactions
-		if err := PutTransactions(self.chainDb, block, block.Transactions()); err != nil {
+		if err := WriteTransactions(self.chainDb, block); err != nil {
 			return err
 		}
 		receipts := GetBlockReceipts(self.chainDb, block.Hash())
 		// write receipts
-		if err := PutReceipts(self.chainDb, receipts); err != nil {
+		if err := WriteReceipts(self.chainDb, receipts); err != nil {
 			return err
 		}
 		// Write map map bloom filters

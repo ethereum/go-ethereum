@@ -64,7 +64,7 @@ func BenchmarkMipmaps(b *testing.B) {
 		}
 
 		// store the receipts
-		err := core.PutReceipts(db, receipts)
+		err := core.WriteReceipts(db, receipts)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -78,7 +78,7 @@ func BenchmarkMipmaps(b *testing.B) {
 		if err := core.WriteHeadBlockHash(db, block.Hash()); err != nil {
 			b.Fatalf("failed to insert block number: %v", err)
 		}
-		if err := core.PutBlockReceipts(db, block.Hash(), receipts[i]); err != nil {
+		if err := core.WriteBlockReceipts(db, block.Hash(), receipts[i]); err != nil {
 			b.Fatal("error writing block receipts:", err)
 		}
 	}
@@ -163,7 +163,7 @@ func TestFilters(t *testing.T) {
 		}
 
 		// store the receipts
-		err := core.PutReceipts(db, receipts)
+		err := core.WriteReceipts(db, receipts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -180,7 +180,7 @@ func TestFilters(t *testing.T) {
 		if err := core.WriteHeadBlockHash(db, block.Hash()); err != nil {
 			t.Fatalf("failed to insert block number: %v", err)
 		}
-		if err := core.PutBlockReceipts(db, block.Hash(), receipts[i]); err != nil {
+		if err := core.WriteBlockReceipts(db, block.Hash(), receipts[i]); err != nil {
 			t.Fatal("error writing block receipts:", err)
 		}
 	}

@@ -305,9 +305,9 @@ func (self *worker) wait() {
 				// check if canon block and write transactions
 				if stat == core.CanonStatTy {
 					// This puts transactions in a extra db for rpc
-					core.PutTransactions(self.chainDb, block, block.Transactions())
+					core.WriteTransactions(self.chainDb, block)
 					// store the receipts
-					core.PutReceipts(self.chainDb, work.receipts)
+					core.WriteReceipts(self.chainDb, work.receipts)
 					// Write map map bloom filters
 					core.WriteMipmapBloom(self.chainDb, block.NumberU64(), work.receipts)
 				}
@@ -320,7 +320,7 @@ func (self *worker) wait() {
 						self.mux.Post(core.ChainHeadEvent{block})
 						self.mux.Post(logs)
 					}
-					if err := core.PutBlockReceipts(self.chainDb, block.Hash(), receipts); err != nil {
+					if err := core.WriteBlockReceipts(self.chainDb, block.Hash(), receipts); err != nil {
 						glog.V(logger.Warn).Infoln("error writing block receipts:", err)
 					}
 				}(block, work.state.Logs(), work.receipts)
