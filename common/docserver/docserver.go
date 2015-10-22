@@ -95,12 +95,18 @@ func (self *DocServer) Get(uri, path string) (content []byte, err error) {
 			resp.Body.Close()
 		}
 	}()
+
 	if err != nil {
 		return
 	}
+
 	content, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return
+	}
+
+	if resp.StatusCode/100 != 2 {
+		return content, fmt.Errorf("HTTP error: %s", resp.Status)
 	}
 
 	if path != "" {

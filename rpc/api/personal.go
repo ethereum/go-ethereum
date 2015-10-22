@@ -98,9 +98,22 @@ func (self *personalApi) NewAccount(req *shared.Request) (interface{}, error) {
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
-
+	var passwd string
+	if args.Passphrase == nil {
+		fe := self.xeth.Frontend()
+		if fe == nil {
+			return false, fmt.Errorf("unable to create account: unable to interact with user")
+		}
+		var ok bool
+		passwd, ok = fe.AskPassword()
+		if !ok {
+			return false, fmt.Errorf("unable to create account: no password given")
+		}
+	} else {
+		passwd = *args.Passphrase
+	}
 	am := self.ethereum.AccountManager()
-	acc, err := am.NewAccount(args.Passphrase)
+	acc, err := am.NewAccount(passwd)
 	return acc.Address.Hex(), err
 }
 

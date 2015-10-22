@@ -84,17 +84,19 @@ type adminApi struct {
 	ethereum *eth.Ethereum
 	codec    codec.Codec
 	coder    codec.ApiCoder
+	docRoot  string
 	ds       *docserver.DocServer
 }
 
 // create a new admin api instance
-func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec) *adminApi {
+func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec, docRoot string) *adminApi {
 	return &adminApi{
 		xeth:     xeth,
 		ethereum: ethereum,
 		codec:    codec,
 		coder:    codec.New(nil),
-		ds:       docserver.New("/"),
+		docRoot:  docRoot,
+		ds:       docserver.New(docRoot),
 	}
 }
 
@@ -256,7 +258,7 @@ func (self *adminApi) StartRPC(req *shared.Request) (interface{}, error) {
 		CorsDomain:    args.CorsDomain,
 	}
 
-	apis, err := ParseApiString(args.Apis, self.codec, self.xeth, self.ethereum)
+	apis, err := ParseApiString(args.Apis, self.codec, self.xeth, self.ethereum, self.docRoot)
 	if err != nil {
 		return false, err
 	}

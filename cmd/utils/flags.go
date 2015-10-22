@@ -183,6 +183,10 @@ var (
 		Usage: "Sets the minimal gasprice when mining transactions",
 		Value: new(big.Int).Mul(big.NewInt(50), common.Shannon).String(),
 	}
+	ExtraDataFlag = cli.StringFlag{
+		Name:  "extradata",
+		Usage: "Extra data for the miner",
+	}
 
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
@@ -345,7 +349,7 @@ var (
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
-		Usage: "JS library path to be used with console and js subcommands",
+		Usage: "JS root path for loadScript and document root for admin.httpGet",
 		Value: ".",
 	}
 	SolcPathFlag = cli.StringFlag{
@@ -612,7 +616,7 @@ func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
 		xeth := xeth.New(eth, fe)
 		codec := codec.JSON
 
-		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, eth)
+		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, eth, ctx.GlobalString(JSpathFlag.Name))
 		if err != nil {
 			return nil, err
 		}
@@ -633,7 +637,7 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
 	xeth := xeth.New(eth, nil)
 	codec := codec.JSON
 
-	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth)
+	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth, ctx.GlobalString(JSpathFlag.Name))
 	if err != nil {
 		return err
 	}
