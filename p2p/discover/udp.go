@@ -120,7 +120,7 @@ func nodeFromRPC(rn rpcNode) (n *Node, valid bool) {
 	if rn.IP.IsMulticast() || rn.IP.IsUnspecified() || rn.UDP == 0 {
 		return nil, false
 	}
-	return newNode(rn.ID, rn.IP, rn.UDP, rn.TCP), true
+	return NewNode(rn.ID, rn.IP, rn.UDP, rn.TCP), true
 }
 
 func nodeToRPC(n *Node) rpcNode {

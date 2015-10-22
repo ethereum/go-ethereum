@@ -17,10 +17,12 @@
 package discover
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"net"
 	"reflect"
+	"strings"
 	"testing"
 	"testing/quick"
 	"time"
@@ -28,6 +30,27 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
+
+func ExampleNewNode() {
+	id := MustHexID("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
+
+	// Complete nodes contain UDP and TCP endpoints:
+	n1 := NewNode(id, net.ParseIP("2001:db8:3c4d:15::abcd:ef12"), 52150, 30303)
+	fmt.Println("n1:", n1)
+	fmt.Println("n1.Incomplete() ->", n1.Incomplete())
+
+	// An incomplete node can be created by passing zero values
+	// for all parameters except id.
+	n2 := NewNode(id, nil, 0, 0)
+	fmt.Println("n2:", n2)
+	fmt.Println("n2.Incomplete() ->", n2.Incomplete())
+
+	// Output:
+	// n1: enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@[2001:db8:3c4d:15::abcd:ef12]:30303?discport=52150
+	// n1.Incomplete() -> false
+	// n2: enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439
+	// n2.Incomplete() -> true
+}
 
 var parseNodeTests = []struct {
 	rawurl     string
@@ -39,13 +62,10 @@ var parseNodeTests = []struct {
 		wantError: `invalid URL scheme, want "enode"`,
 	},
 	{
-		rawurl:    "enode://foobar",
-		wantError: `does not contain node ID`,
-	},
-	{
 		rawurl:    "enode://01010101@123.124.125.126:3",
-		wantError: `invalid node ID (wrong length, need 64 hex bytes)`,
+		wantError: `invalid node ID (wrong length, want 128 hex chars)`,
 	},
+	// Complete nodes with IP address.
 	{
 		rawurl:    "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@hostname:3",
 		wantError: `invalid IP address`,
@@ -60,7 +80,7 @@ var parseNodeTests = []struct {
 	},
 	{
 		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:52150",
-		wantResult: newNode(
+		wantResult: NewNode(
 			MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.IP{0x7f, 0x0, 0x0, 0x1},
 			52150,
@@ -69,7 +89,7 @@ var parseNodeTests = []struct {
 	},
 	{
 		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@[::]:52150",
-		wantResult: newNode(
+		wantResult: NewNode(
 			MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.ParseIP("::"),
 			52150,
@@ -78,7 +98,7 @@ var parseNodeTests = []struct {
 	},
 	{
 		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@[2001:db8:3c4d:15::abcd:ef12]:52150",
-		wantResult: newNode(
+		wantResult: NewNode(
 			MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.ParseIP("2001:db8:3c4d:15::abcd:ef12"),
 			52150,
@@ -87,33 +107,62 @@ var parseNodeTests = []struct {
 	},
 	{
 		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:52150?discport=22334",
-		wantResult: newNode(
+		wantResult: NewNode(
 			MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.IP{0x7f, 0x0, 0x0, 0x1},
 			22334,
 			52150,
 		),
 	},
+	// Incomplete nodes with no address.
+	{
+		rawurl: "1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439",
+		wantResult: NewNode(
+			MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			nil, 0, 0,
+		),
+	},
+	{
+		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439",
+		wantResult: NewNode(
+			MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			nil, 0, 0,
+		),
+	},
+	// Invalid URLs
+	{
+		rawurl:    "01010101",
+		wantError: `invalid node ID (wrong length, want 128 hex chars)`,
+	},
+	{
+		rawurl:    "enode://01010101",
+		wantError: `invalid node ID (wrong length, want 128 hex chars)`,
+	},
+	{
+		// This test checks that errors from url.Parse are handled.
+		rawurl:    "://foo",
+		wantError: `parse ://foo: missing protocol scheme`,
+	},
 }
 
 func TestParseNode(t *testing.T) {
-	for i, test := range parseNodeTests {
+	for _, test := range parseNodeTests {
 		n, err := ParseNode(test.rawurl)
 		if test.wantError != "" {
 			if err == nil {
-				t.Errorf("test %d: got nil error, expected %#q", i, test.wantError)
+				t.Errorf("test %q:\n  got nil error, expected %#q", test.rawurl, test.wantError)
 				continue
 			} else if err.Error() != test.wantError {
-				t.Errorf("test %d: got error %#q, expected %#q", i, err.Error(), test.wantError)
+				t.Errorf("test %q:\n  got error %#q, expected %#q", test.rawurl, err.Error(), test.wantError)
 				continue
 			}
 		} else {
 			if err != nil {
-				t.Errorf("test %d: unexpected error: %v", i, err)
+				t.Errorf("test %q:\n  unexpected error: %v", test.rawurl, err)
 				continue
 			}
 			if !reflect.DeepEqual(n, test.wantResult) {
-				t.Errorf("test %d: result mismatch:\ngot:  %#v, want: %#v", i, n, test.wantResult)
+				t.Errorf("test %q:\n  result mismatch:\ngot:  %#v, want: %#v", test.rawurl, n, test.wantResult)
 			}
 		}
 	}
@@ -121,12 +170,11 @@ func TestParseNode(t *testing.T) {
 
 func TestNodeString(t *testing.T) {
 	for i, test := range parseNodeTests {
-		if test.wantError != "" {
-			continue
-		}
-		str := test.wantResult.String()
-		if str != test.rawurl {
-			t.Errorf("test %d: Node.String() mismatch:\ngot:  %s\nwant: %s", i, str, test.rawurl)
+		if test.wantError == "" && strings.HasPrefix(test.rawurl, "enode://") {
+			str := test.wantResult.String()
+			if str != test.rawurl {
+				t.Errorf("test %d: Node.String() mismatch:\ngot:  %s\nwant: %s", i, str, test.rawurl)
+			}
 		}
 	}
 }

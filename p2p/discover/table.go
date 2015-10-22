@@ -99,7 +99,7 @@ func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, nodeDBPath string
 	tab := &Table{
 		net:        t,
 		db:         db,
-		self:       newNode(ourID, ourAddr.IP, uint16(ourAddr.Port), uint16(ourAddr.Port)),
+		self:       NewNode(ourID, ourAddr.IP, uint16(ourAddr.Port), uint16(ourAddr.Port)),
 		bonding:    make(map[NodeID]*bondproc),
 		bondslots:  make(chan struct{}, maxBondingPingPongs),
 		refreshReq: make(chan struct{}),
@@ -194,6 +194,28 @@ func (tab *Table) Bootstrap(nodes []*Node) {
 	}
 	tab.mutex.Unlock()
 	tab.requestRefresh()
+}
+
+// Resolve searches for a specific node with the given ID.
+// It returns nil if the node could not be found.
+func (tab *Table) Resolve(targetID NodeID) *Node {
+	// If the node is present in the local table, no
+	// network interaction is required.
+	hash := crypto.Sha3Hash(targetID[:])
+	tab.mutex.Lock()
+	cl := tab.closest(hash, 1)
+	tab.mutex.Unlock()
+	if len(cl.entries) > 0 && cl.entries[0].ID == targetID {
+		return cl.entries[0]
+	}
+	// Otherwise, do a network lookup.
+	result := tab.Lookup(targetID)
+	for _, n := range result {
+		if n.ID == targetID {
+			return n
+		}
+	}
+	return nil
 }
 
 // Lookup performs a network search for nodes close
@@ -466,7 +488,7 @@ func (tab *Table) pingpong(w *bondproc, pinged bool, id NodeID, addr *net.UDPAdd
 		tab.net.waitping(id)
 	}
 	// Bonding succeeded, update the node database.
-	w.n = newNode(id, addr.IP, uint16(addr.Port), tcpPort)
+	w.n = NewNode(id, addr.IP, uint16(addr.Port), tcpPort)
 	tab.db.updateNode(w.n)
 	close(w.done)
 }

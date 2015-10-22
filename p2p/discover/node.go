@@ -26,6 +26,7 @@ import (
 	"math/rand"
 	"net"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -37,6 +38,7 @@ import (
 const nodeIDBits = 512
 
 // Node represents a host on the network.
+// The fields of Node may not be modified.
 type Node struct {
 	IP       net.IP // len 4 for IPv4 or 16 for IPv6
 	UDP, TCP uint16 // port numbers
@@ -54,7 +56,9 @@ type Node struct {
 	contested bool
 }
 
-func newNode(id NodeID, ip net.IP, udpPort, tcpPort uint16) *Node {
+// NewNode creates a new node. It is mostly meant to be used for
+// testing purposes.
+func NewNode(id NodeID, ip net.IP, udpPort, tcpPort uint16) *Node {
 	if ipv4 := ip.To4(); ipv4 != nil {
 		ip = ipv4
 	}
@@ -71,31 +75,47 @@ func (n *Node) addr() *net.UDPAddr {
 	return &net.UDPAddr{IP: n.IP, Port: int(n.UDP)}
 }
 
+// Incomplete returns true for nodes with no IP address.
+func (n *Node) Incomplete() bool {
+	return n.IP == nil
+}
+
 // The string representation of a Node is a URL.
 // Please see ParseNode for a description of the format.
 func (n *Node) String() string {
-	addr := net.TCPAddr{IP: n.IP, Port: int(n.TCP)}
-	u := url.URL{
-		Scheme: "enode",
-		User:   url.User(fmt.Sprintf("%x", n.ID[:])),
-		Host:   addr.String(),
-	}
-	if n.UDP != n.TCP {
-		u.RawQuery = "discport=" + strconv.Itoa(int(n.UDP))
+	u := url.URL{Scheme: "enode"}
+	if n.Incomplete() {
+		u.Host = fmt.Sprintf("%x", n.ID[:])
+	} else {
+		addr := net.TCPAddr{IP: n.IP, Port: int(n.TCP)}
+		u.User = url.User(fmt.Sprintf("%x", n.ID[:]))
+		u.Host = addr.String()
+		if n.UDP != n.TCP {
+			u.RawQuery = "discport=" + strconv.Itoa(int(n.UDP))
+		}
 	}
 	return u.String()
 }
 
-// ParseNode parses a node URL.
+var incompleteNodeURL = regexp.MustCompile("(?i)^(?:enode://)?([0-9a-f]+)$")
+
+// ParseNode parses a node designator.
 //
-// A node URL has scheme "enode".
+// There are two basic forms of node designators
+//   - incomplete nodes, which only have the public key (node ID)
+//   - complete nodes, which contain the public key and IP/Port information
 //
-// The hexadecimal node ID is encoded in the username portion of the
-// URL, separated from the host by an @ sign. The hostname can only be
-// given as an IP address, DNS domain names are not allowed. The port
-// in the host name section is the TCP listening port. If the TCP and
-// UDP (discovery) ports differ, the UDP port is specified as query
-// parameter "discport".
+// For incomplete nodes, the designator must look like one of these
+//
+//    enode://<hex node id>
+//    <hex node id>
+//
+// For complete nodes, the node ID is encoded in the username portion
+// of the URL, separated from the host by an @ sign. The hostname can
+// only be given as an IP address, DNS domain names are not allowed.
+// The port in the host name section is the TCP listening port. If the
+// TCP and UDP (discovery) ports differ, the UDP port is specified as
+// query parameter "discport".
 //
 // In the following example, the node URL describes
 // a node with IP address 10.3.58.6, TCP listening port 30303
@@ -103,12 +123,26 @@ func (n *Node) String() string {
 //
 //    enode://<hex node id>@10.3.58.6:30303?discport=30301
 func ParseNode(rawurl string) (*Node, error) {
+	if m := incompleteNodeURL.FindStringSubmatch(rawurl); m != nil {
+		id, err := HexID(m[1])
+		if err != nil {
+			return nil, fmt.Errorf("invalid node ID (%v)", err)
+		}
+		return NewNode(id, nil, 0, 0), nil
+	}
+	return parseComplete(rawurl)
+}
+
+func parseComplete(rawurl string) (*Node, error) {
 	var (
 		id               NodeID
 		ip               net.IP
 		tcpPort, udpPort uint64
 	)
 	u, err := url.Parse(rawurl)
+	if err != nil {
+		return nil, err
+	}
 	if u.Scheme != "enode" {
 		return nil, errors.New("invalid URL scheme, want \"enode\"")
 	}
@@ -143,7 +177,7 @@ func ParseNode(rawurl string) (*Node, error) {
 			return nil, errors.New("invalid discport in query")
 		}
 	}
-	return newNode(id, ip, uint16(udpPort), uint16(tcpPort)), nil
+	return NewNode(id, ip, uint16(udpPort), uint16(tcpPort)), nil
 }
 
 // MustParseNode parses a node URL. It panics if the URL is not valid.
@@ -180,7 +214,7 @@ func HexID(in string) (NodeID, error) {
 	if err != nil {
 		return id, err
 	} else if len(b) != len(id) {
-		return id, fmt.Errorf("wrong length, need %d hex bytes", len(id))
+		return id, fmt.Errorf("wrong length, want %d hex chars", len(id)*2)
 	}
 	copy(id[:], b)
 	return id, nil

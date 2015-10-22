@@ -102,7 +102,7 @@ func TestNodeDBInt64(t *testing.T) {
 }
 
 func TestNodeDBFetchStore(t *testing.T) {
-	node := newNode(
+	node := NewNode(
 		MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 		net.IP{192, 168, 0, 1},
 		30303,
@@ -165,7 +165,7 @@ var nodeDBSeedQueryNodes = []struct {
 	// This one should not be in the result set because its last
 	// pong time is too far in the past.
 	{
-		node: newNode(
+		node: NewNode(
 			MustHexID("0x84d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.IP{127, 0, 0, 3},
 			30303,
@@ -176,7 +176,7 @@ var nodeDBSeedQueryNodes = []struct {
 	// This one shouldn't be in in the result set because its
 	// nodeID is the local node's ID.
 	{
-		node: newNode(
+		node: NewNode(
 			MustHexID("0x57d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.IP{127, 0, 0, 3},
 			30303,
@@ -187,7 +187,7 @@ var nodeDBSeedQueryNodes = []struct {
 
 	// These should be in the result set.
 	{
-		node: newNode(
+		node: NewNode(
 			MustHexID("0x22d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.IP{127, 0, 0, 1},
 			30303,
@@ -196,7 +196,7 @@ var nodeDBSeedQueryNodes = []struct {
 		pong: time.Now().Add(-2 * time.Second),
 	},
 	{
-		node: newNode(
+		node: NewNode(
 			MustHexID("0x44d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.IP{127, 0, 0, 2},
 			30303,
@@ -205,7 +205,7 @@ var nodeDBSeedQueryNodes = []struct {
 		pong: time.Now().Add(-3 * time.Second),
 	},
 	{
-		node: newNode(
+		node: NewNode(
 			MustHexID("0xe2d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.IP{127, 0, 0, 3},
 			30303,
@@ -303,7 +303,7 @@ var nodeDBExpirationNodes = []struct {
 	exp  bool
 }{
 	{
-		node: newNode(
+		node: NewNode(
 			MustHexID("0x01d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.IP{127, 0, 0, 1},
 			30303,
@@ -312,7 +312,7 @@ var nodeDBExpirationNodes = []struct {
 		pong: time.Now().Add(-nodeDBNodeExpiration + time.Minute),
 		exp:  false,
 	}, {
-		node: newNode(
+		node: NewNode(
 			MustHexID("0x02d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.IP{127, 0, 0, 2},
 			30303,
