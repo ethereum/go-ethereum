@@ -439,7 +439,7 @@ func (self *jsre) interactive() {
 func mustLogInHistory(input string) bool {
 	return len(input) == 0 ||
 		passwordRegexp.MatchString(input) ||
-		leadingSpace.MatchString(input)
+		!leadingSpace.MatchString(input)
 }
 
 func (self *jsre) withHistory(datadir string, op func(*os.File)) {
