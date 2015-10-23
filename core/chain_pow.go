@@ -19,7 +19,7 @@ package core
 import (
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
@@ -32,10 +32,10 @@ type nonceCheckResult struct {
 // verifyNoncesFromHeaders starts a concurrent header nonce verification,
 // returning a quit channel to abort the operations and a results channel
 // to retrieve the async verifications.
-func verifyNoncesFromHeaders(checker pow.PoW, headers []*types.Header) (chan<- struct{}, <-chan nonceCheckResult) {
+func verifyNoncesFromHeaders(checker pow.PoW, headers []*data.Header) (chan<- struct{}, <-chan nonceCheckResult) {
 	items := make([]pow.Block, len(headers))
 	for i, header := range headers {
-		items[i] = types.NewBlockWithHeader(header)
+		items[i] = data.NewBlockWithHeader(header)
 	}
 	return verifyNonces(checker, items)
 }
@@ -43,7 +43,7 @@ func verifyNoncesFromHeaders(checker pow.PoW, headers []*types.Header) (chan<- s
 // verifyNoncesFromBlocks starts a concurrent block nonce verification,
 // returning a quit channel to abort the operations and a results channel
 // to retrieve the async verifications.
-func verifyNoncesFromBlocks(checker pow.PoW, blocks []*types.Block) (chan<- struct{}, <-chan nonceCheckResult) {
+func verifyNoncesFromBlocks(checker pow.PoW, blocks []*data.Block) (chan<- struct{}, <-chan nonceCheckResult) {
 	items := make([]pow.Block, len(blocks))
 	for i, block := range blocks {
 		items[i] = block

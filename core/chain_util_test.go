@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -88,7 +88,7 @@ func TestHeaderStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	// Create a test header to move around the database and make sure it's really new
-	header := &types.Header{Extra: []byte("test header")}
+	header := &data.Header{Extra: []byte("test header")}
 	if entry := GetHeader(db, header.Hash()); entry != nil {
 		t.Fatalf("Non existent header returned: %v", entry)
 	}
@@ -123,7 +123,7 @@ func TestBodyStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	// Create a test body to move around the database and make sure it's really new
-	body := &types.Body{Uncles: []*types.Header{{Extra: []byte("test header")}}}
+	body := &data.Body{Uncles: []*data.Header{{Extra: []byte("test header")}}}
 
 	hasher := sha3.NewKeccak256()
 	rlp.Encode(hasher, body)
@@ -138,7 +138,7 @@ func TestBodyStorage(t *testing.T) {
 	}
 	if entry := GetBody(db, hash); entry == nil {
 		t.Fatalf("Stored body not found")
-	} else if types.DeriveSha(types.Transactions(entry.Transactions)) != types.DeriveSha(types.Transactions(body.Transactions)) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(body.Uncles) {
+	} else if data.DeriveSha(data.Transactions(entry.Transactions)) != data.DeriveSha(data.Transactions(body.Transactions)) || data.CalcUncleHash(entry.Uncles) != data.CalcUncleHash(body.Uncles) {
 		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, body)
 	}
 	if entry := GetBodyRLP(db, hash); entry == nil {
@@ -163,11 +163,11 @@ func TestBlockStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	// Create a test block to move around the database and make sure it's really new
-	block := types.NewBlockWithHeader(&types.Header{
+	block := data.NewBlockWithHeader(&data.Header{
 		Extra:       []byte("test block"),
-		UncleHash:   types.EmptyUncleHash,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
+		UncleHash:   data.EmptyUncleHash,
+		TxHash:      data.EmptyRootHash,
+		ReceiptHash: data.EmptyRootHash,
 	})
 	if entry := GetBlock(db, block.Hash()); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
@@ -194,8 +194,8 @@ func TestBlockStorage(t *testing.T) {
 	}
 	if entry := GetBody(db, block.Hash()); entry == nil {
 		t.Fatalf("Stored body not found")
-	} else if types.DeriveSha(types.Transactions(entry.Transactions)) != types.DeriveSha(block.Transactions()) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(block.Uncles()) {
-		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, &types.Body{block.Transactions(), block.Uncles()})
+	} else if data.DeriveSha(data.Transactions(entry.Transactions)) != data.DeriveSha(block.Transactions()) || data.CalcUncleHash(entry.Uncles) != data.CalcUncleHash(block.Uncles()) {
+		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, &data.Body{block.Transactions(), block.Uncles()})
 	}
 	// Delete the block and verify the execution
 	DeleteBlock(db, block.Hash())
@@ -213,11 +213,11 @@ func TestBlockStorage(t *testing.T) {
 // Tests that partial block contents don't get reassembled into full blocks.
 func TestPartialBlockStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	block := types.NewBlockWithHeader(&types.Header{
+	block := data.NewBlockWithHeader(&data.Header{
 		Extra:       []byte("test block"),
-		UncleHash:   types.EmptyUncleHash,
-		TxHash:      types.EmptyRootHash,
-		ReceiptHash: types.EmptyRootHash,
+		UncleHash:   data.EmptyUncleHash,
+		TxHash:      data.EmptyRootHash,
+		ReceiptHash: data.EmptyRootHash,
 	})
 	// Store a header and check that it's not recognized as a block
 	if err := WriteHeader(db, block.Header()); err != nil {
@@ -229,7 +229,7 @@ func TestPartialBlockStorage(t *testing.T) {
 	DeleteHeader(db, block.Hash())
 
 	// Store a body and check that it's not recognized as a block
-	if err := WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+	if err := WriteBody(db, block.Hash(), &data.Body{block.Transactions(), block.Uncles()}); err != nil {
 		t.Fatalf("Failed to write body into database: %v", err)
 	}
 	if entry := GetBlock(db, block.Hash()); entry != nil {
@@ -241,7 +241,7 @@ func TestPartialBlockStorage(t *testing.T) {
 	if err := WriteHeader(db, block.Header()); err != nil {
 		t.Fatalf("Failed to write header into database: %v", err)
 	}
-	if err := WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+	if err := WriteBody(db, block.Hash(), &data.Body{block.Transactions(), block.Uncles()}); err != nil {
 		t.Fatalf("Failed to write body into database: %v", err)
 	}
 	if entry := GetBlock(db, block.Hash()); entry == nil {
@@ -305,9 +305,9 @@ func TestCanonicalMappingStorage(t *testing.T) {
 func TestHeadStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
-	blockHead := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block header")})
-	blockFull := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block full")})
-	blockFast := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block fast")})
+	blockHead := data.NewBlockWithHeader(&data.Header{Extra: []byte("test block header")})
+	blockFull := data.NewBlockWithHeader(&data.Header{Extra: []byte("test block full")})
+	blockFast := data.NewBlockWithHeader(&data.Header{Extra: []byte("test block fast")})
 
 	// Check that no head entries are in a pristine database
 	if entry := GetHeadHeaderHash(db); entry != (common.Hash{}) {
@@ -344,19 +344,19 @@ func TestHeadStorage(t *testing.T) {
 func TestMipmapBloom(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
-	receipt1 := new(types.Receipt)
+	receipt1 := new(data.Receipt)
 	receipt1.Logs = vm.Logs{
 		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
 		&vm.Log{Address: common.BytesToAddress([]byte("address"))},
 	}
-	receipt2 := new(types.Receipt)
+	receipt2 := new(data.Receipt)
 	receipt2.Logs = vm.Logs{
 		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
 		&vm.Log{Address: common.BytesToAddress([]byte("address1"))},
 	}
 
-	WriteMipmapBloom(db, 1, types.Receipts{receipt1})
-	WriteMipmapBloom(db, 2, types.Receipts{receipt2})
+	WriteMipmapBloom(db, 1, data.Receipts{receipt1})
+	WriteMipmapBloom(db, 2, data.Receipts{receipt2})
 
 	for _, level := range MIPMapLevels {
 		bloom := GetMipmapBloom(db, 2, level)
@@ -367,17 +367,17 @@ func TestMipmapBloom(t *testing.T) {
 
 	// reset
 	db, _ = ethdb.NewMemDatabase()
-	receipt := new(types.Receipt)
+	receipt := new(data.Receipt)
 	receipt.Logs = vm.Logs{
 		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
 	}
-	WriteMipmapBloom(db, 999, types.Receipts{receipt1})
+	WriteMipmapBloom(db, 999, data.Receipts{receipt1})
 
-	receipt = new(types.Receipt)
+	receipt = new(data.Receipt)
 	receipt.Logs = vm.Logs{
 		&vm.Log{Address: common.BytesToAddress([]byte("test 1"))},
 	}
-	WriteMipmapBloom(db, 1000, types.Receipts{receipt})
+	WriteMipmapBloom(db, 1000, data.Receipts{receipt})
 
 	bloom := GetMipmapBloom(db, 1000, 1000)
 	if bloom.TestBytes([]byte("test")) {
@@ -404,10 +404,10 @@ func TestMipmapChain(t *testing.T) {
 
 	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{addr, big.NewInt(1000000)})
 	chain, receipts := GenerateChain(genesis, db, 1010, func(i int, gen *BlockGen) {
-		var receipts types.Receipts
+		var receipts data.Receipts
 		switch i {
 		case 1:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := data.NewReceipt(nil, new(big.Int))
 			receipt.Logs = vm.Logs{
 				&vm.Log{
 					Address: addr,
@@ -415,12 +415,12 @@ func TestMipmapChain(t *testing.T) {
 				},
 			}
 			gen.AddUncheckedReceipt(receipt)
-			receipts = types.Receipts{receipt}
+			receipts = data.Receipts{receipt}
 		case 1000:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := data.NewReceipt(nil, new(big.Int))
 			receipt.Logs = vm.Logs{&vm.Log{Address: addr2}}
 			gen.AddUncheckedReceipt(receipt)
-			receipts = types.Receipts{receipt}
+			receipts = data.Receipts{receipt}
 
 		}
 

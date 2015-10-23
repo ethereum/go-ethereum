@@ -11,7 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -28,7 +28,7 @@ var (
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, and potential notification
 // channels for different events.
-func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) (*ProtocolManager, error) {
+func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*data.Transaction) (*ProtocolManager, error) {
 	var (
 		evmux         = new(event.TypeMux)
 		pow           = new(core.FakePow)
@@ -54,7 +54,7 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 // with the given number of blocks already known, and potential notification
 // channels for different events. In case of an error, the constructor force-
 // fails the test.
-func newTestProtocolManagerMust(t *testing.T, fastSync bool, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) *ProtocolManager {
+func newTestProtocolManagerMust(t *testing.T, fastSync bool, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*data.Transaction) *ProtocolManager {
 	pm, err := newTestProtocolManager(fastSync, blocks, generator, newtx)
 	if err != nil {
 		t.Fatalf("Failed to create protocol manager: %v", err)
@@ -64,15 +64,15 @@ func newTestProtocolManagerMust(t *testing.T, fastSync bool, blocks int, generat
 
 // testTxPool is a fake, helper transaction pool for testing purposes
 type testTxPool struct {
-	pool  []*types.Transaction        // Collection of all transactions
-	added chan<- []*types.Transaction // Notification channel for new transactions
+	pool  []*data.Transaction        // Collection of all transactions
+	added chan<- []*data.Transaction // Notification channel for new transactions
 
 	lock sync.RWMutex // Protects the transaction pool
 }
 
 // AddTransactions appends a batch of transactions to the pool, and notifies any
 // listeners if the addition channel is non nil
-func (p *testTxPool) AddTransactions(txs []*types.Transaction) {
+func (p *testTxPool) AddTransactions(txs []*data.Transaction) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -83,19 +83,19 @@ func (p *testTxPool) AddTransactions(txs []*types.Transaction) {
 }
 
 // GetTransactions returns all the transactions known to the pool
-func (p *testTxPool) GetTransactions() types.Transactions {
+func (p *testTxPool) GetTransactions() data.Transactions {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	txs := make([]*types.Transaction, len(p.pool))
+	txs := make([]*data.Transaction, len(p.pool))
 	copy(txs, p.pool)
 
 	return txs
 }
 
 // newTestTransaction create a new dummy transaction.
-func newTestTransaction(from *crypto.Key, nonce uint64, datasize int) *types.Transaction {
-	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), make([]byte, datasize))
+func newTestTransaction(from *crypto.Key, nonce uint64, datasize int) *data.Transaction {
+	tx := data.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), make([]byte, datasize))
 	tx, _ = tx.SignECDSA(from.PrivateKey)
 
 	return tx

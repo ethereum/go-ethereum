@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -81,9 +81,9 @@ var (
 func genValueTx(nbytes int) func(int, *BlockGen) {
 	return func(i int, gen *BlockGen) {
 		toaddr := common.Address{}
-		data := make([]byte, nbytes)
-		gas := IntrinsicGas(data)
-		tx, _ := types.NewTransaction(gen.TxNonce(benchRootAddr), toaddr, big.NewInt(1), gas, nil, data).SignECDSA(benchRootKey)
+		extraData := make([]byte, nbytes)
+		gas := IntrinsicGas(extraData)
+		tx, _ := data.NewTransaction(gen.TxNonce(benchRootAddr), toaddr, big.NewInt(1), gas, nil, extraData).SignECDSA(benchRootKey)
 		gen.AddTx(tx)
 	}
 }
@@ -115,7 +115,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 				break
 			}
 			to := (from + 1) % naccounts
-			tx := types.NewTransaction(
+			tx := data.NewTransaction(
 				gen.TxNonce(ringAddrs[from]),
 				ringAddrs[to],
 				benchRootFunds,

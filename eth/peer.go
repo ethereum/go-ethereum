@@ -23,7 +23,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -129,7 +129,7 @@ func (p *peer) MarkTransaction(hash common.Hash) {
 
 // SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
-func (p *peer) SendTransactions(txs types.Transactions) error {
+func (p *peer) SendTransactions(txs data.Transactions) error {
 	for _, tx := range txs {
 		p.knownTxs.Add(tx.Hash())
 	}
@@ -142,7 +142,7 @@ func (p *peer) SendBlockHashes(hashes []common.Hash) error {
 }
 
 // SendBlocks sends a batch of blocks to the remote peer.
-func (p *peer) SendBlocks(blocks []*types.Block) error {
+func (p *peer) SendBlocks(blocks []*data.Block) error {
 	return p2p.Send(p.rw, BlocksMsg, blocks)
 }
 
@@ -170,13 +170,13 @@ func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 }
 
 // SendNewBlock propagates an entire block to a remote peer.
-func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
+func (p *peer) SendNewBlock(block *data.Block, td *big.Int) error {
 	p.knownBlocks.Add(block.Hash())
 	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
 }
 
 // SendBlockHeaders sends a batch of block headers to the remote peer.
-func (p *peer) SendBlockHeaders(headers []*types.Header) error {
+func (p *peer) SendBlockHeaders(headers []*data.Header) error {
 	return p2p.Send(p.rw, BlockHeadersMsg, headers)
 }
 

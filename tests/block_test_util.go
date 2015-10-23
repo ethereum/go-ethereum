@@ -31,8 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -42,7 +42,7 @@ import (
 
 // Block Test JSON Format
 type BlockTest struct {
-	Genesis *types.Block
+	Genesis *data.Block
 
 	Json          *btJSON
 	preAccounts   map[string]btAccount
@@ -292,7 +292,7 @@ func (t *BlockTest) TryBlocksInsert(blockchain *core.BlockChain) ([]btBlock, err
 			}
 		}
 		// RLP decoding worked, try to insert into chain:
-		_, err = blockchain.InsertChain(types.Blocks{cb})
+		_, err = blockchain.InsertChain(data.Blocks{cb})
 		if err != nil {
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
@@ -313,7 +313,7 @@ func (t *BlockTest) TryBlocksInsert(blockchain *core.BlockChain) ([]btBlock, err
 	return validBlocks, nil
 }
 
-func validateHeader(h *btHeader, h2 *types.Header) error {
+func validateHeader(h *btHeader, h2 *data.Header) error {
 	expectedBloom := mustConvertBytes(h.Bloom)
 	if !bytes.Equal(expectedBloom, h2.Bloom.Bytes()) {
 		return fmt.Errorf("Bloom: want: %x have: %x", expectedBloom, h2.Bloom.Bytes())
@@ -477,16 +477,16 @@ func convertBlockTest(in *btJSON) (out *BlockTest, err error) {
 	return out, err
 }
 
-func mustConvertGenesis(testGenesis btHeader) *types.Block {
+func mustConvertGenesis(testGenesis btHeader) *data.Block {
 	hdr := mustConvertHeader(testGenesis)
 	hdr.Number = big.NewInt(0)
 
-	return types.NewBlockWithHeader(hdr)
+	return data.NewBlockWithHeader(hdr)
 }
 
-func mustConvertHeader(in btHeader) *types.Header {
+func mustConvertHeader(in btHeader) *data.Header {
 	// hex decode these fields
-	header := &types.Header{
+	header := &data.Header{
 		//SeedHash:    mustConvertBytes(in.SeedHash),
 		MixDigest:   mustConvertHash(in.MixHash),
 		Bloom:       mustConvertBloom(in.Bloom),
@@ -501,13 +501,13 @@ func mustConvertHeader(in btHeader) *types.Header {
 		GasLimit:    mustConvertBigInt(in.GasLimit, 16),
 		Difficulty:  mustConvertBigInt(in.Difficulty, 16),
 		Time:        mustConvertBigInt(in.Timestamp, 16),
-		Nonce:       types.EncodeNonce(mustConvertUint(in.Nonce, 16)),
+		Nonce:       data.EncodeNonce(mustConvertUint(in.Nonce, 16)),
 	}
 	return header
 }
 
-func mustConvertBlock(testBlock btBlock) (*types.Block, error) {
-	var b types.Block
+func mustConvertBlock(testBlock btBlock) (*data.Block, error) {
+	var b data.Block
 	r := bytes.NewReader(mustConvertBytes(testBlock.Rlp))
 	err := rlp.Decode(r, &b)
 	return &b, err
@@ -541,12 +541,12 @@ func mustConvertAddress(in string) common.Address {
 	return common.BytesToAddress(out)
 }
 
-func mustConvertBloom(in string) types.Bloom {
+func mustConvertBloom(in string) data.Bloom {
 	out, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
 	if err != nil {
 		panic(fmt.Errorf("invalid hex: %q", in))
 	}
-	return types.BytesToBloom(out)
+	return data.BytesToBloom(out)
 }
 
 func mustConvertBigInt(in string, base int) *big.Int {

@@ -8,18 +8,18 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-func makeReceipt(addr common.Address) *types.Receipt {
-	receipt := types.NewReceipt(nil, new(big.Int))
+func makeReceipt(addr common.Address) *data.Receipt {
+	receipt := data.NewReceipt(nil, new(big.Int))
 	receipt.Logs = vm.Logs{
 		&vm.Log{Address: addr},
 	}
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.Bloom = data.CreateBloom(data.Receipts{receipt})
 	return receipt
 }
 
@@ -42,23 +42,23 @@ func BenchmarkMipmaps(b *testing.B) {
 
 	genesis := core.WriteGenesisBlockForTesting(db, core.GenesisAccount{addr1, big.NewInt(1000000)})
 	chain, receipts := core.GenerateChain(genesis, db, 100010, func(i int, gen *core.BlockGen) {
-		var receipts types.Receipts
+		var receipts data.Receipts
 		switch i {
 		case 2403:
 			receipt := makeReceipt(addr1)
-			receipts = types.Receipts{receipt}
+			receipts = data.Receipts{receipt}
 			gen.AddUncheckedReceipt(receipt)
 		case 1034:
 			receipt := makeReceipt(addr2)
-			receipts = types.Receipts{receipt}
+			receipts = data.Receipts{receipt}
 			gen.AddUncheckedReceipt(receipt)
 		case 34:
 			receipt := makeReceipt(addr3)
-			receipts = types.Receipts{receipt}
+			receipts = data.Receipts{receipt}
 			gen.AddUncheckedReceipt(receipt)
 		case 99999:
 			receipt := makeReceipt(addr4)
-			receipts = types.Receipts{receipt}
+			receipts = data.Receipts{receipt}
 			gen.AddUncheckedReceipt(receipt)
 
 		}
@@ -118,10 +118,10 @@ func TestFilters(t *testing.T) {
 
 	genesis := core.WriteGenesisBlockForTesting(db, core.GenesisAccount{addr, big.NewInt(1000000)})
 	chain, receipts := core.GenerateChain(genesis, db, 1000, func(i int, gen *core.BlockGen) {
-		var receipts types.Receipts
+		var receipts data.Receipts
 		switch i {
 		case 1:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := data.NewReceipt(nil, new(big.Int))
 			receipt.Logs = vm.Logs{
 				&vm.Log{
 					Address: addr,
@@ -129,9 +129,9 @@ func TestFilters(t *testing.T) {
 				},
 			}
 			gen.AddUncheckedReceipt(receipt)
-			receipts = types.Receipts{receipt}
+			receipts = data.Receipts{receipt}
 		case 2:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := data.NewReceipt(nil, new(big.Int))
 			receipt.Logs = vm.Logs{
 				&vm.Log{
 					Address: addr,
@@ -139,9 +139,9 @@ func TestFilters(t *testing.T) {
 				},
 			}
 			gen.AddUncheckedReceipt(receipt)
-			receipts = types.Receipts{receipt}
+			receipts = data.Receipts{receipt}
 		case 998:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := data.NewReceipt(nil, new(big.Int))
 			receipt.Logs = vm.Logs{
 				&vm.Log{
 					Address: addr,
@@ -149,9 +149,9 @@ func TestFilters(t *testing.T) {
 				},
 			}
 			gen.AddUncheckedReceipt(receipt)
-			receipts = types.Receipts{receipt}
+			receipts = data.Receipts{receipt}
 		case 999:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := data.NewReceipt(nil, new(big.Int))
 			receipt.Logs = vm.Logs{
 				&vm.Log{
 					Address: addr,
@@ -159,7 +159,7 @@ func TestFilters(t *testing.T) {
 				},
 			}
 			gen.AddUncheckedReceipt(receipt)
-			receipts = types.Receipts{receipt}
+			receipts = data.Receipts{receipt}
 		}
 
 		// store the receipts

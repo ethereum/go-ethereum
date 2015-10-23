@@ -20,7 +20,7 @@ import (
 	"container/list"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	// "github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -35,7 +35,7 @@ type TestManager struct {
 	db         ethdb.Database
 	txPool     *TxPool
 	blockChain *BlockChain
-	Blocks     []*types.Block
+	Blocks     []*data.Block
 }
 
 func (s *TestManager) IsListening() bool {

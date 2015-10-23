@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -149,10 +149,10 @@ type Downloader struct {
 	cancelLock sync.RWMutex  // Lock to protect the cancel channel in delivers
 
 	// Testing hooks
-	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run
-	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
-	receiptFetchHook func([]*types.Header) // Method to call upon starting a receipt fetch
-	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
+	syncInitHook     func(uint64, uint64) // Method to call upon initiating a new sync run
+	bodyFetchHook    func([]*data.Header) // Method to call upon starting a block body fetch
+	receiptFetchHook func([]*data.Header) // Method to call upon starting a receipt fetch
+	chainInsertHook  func([]*fetchResult) // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
@@ -1097,7 +1097,7 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 	pivot := d.queue.FastSyncPivot()
 
 	// Keep a count of uncertain headers to roll back
-	rollback := []*types.Header{}
+	rollback := []*data.Header{}
 	defer func() {
 		if len(rollback) > 0 {
 			// Flatten the headers and roll them back
@@ -1202,7 +1202,7 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 
 			if d.mode == FastSync || d.mode == LightSync {
 				// Collect the yet unknown headers to mark them as uncertain
-				unknown := make([]*types.Header, 0, len(headers))
+				unknown := make([]*data.Header, 0, len(headers))
 				for _, header := range headers {
 					if !d.hasHeader(header.Hash()) {
 						unknown = append(unknown, header)
@@ -1373,7 +1373,7 @@ func (d *Downloader) fetchNodeData() error {
 // also periodically checking for timeouts.
 func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliver func(packet dataPack) error, wakeCh chan bool,
 	expire func() []string, pending func() int, inFlight func() bool, throttle func() bool, reserve func(*peer, int) (*fetchRequest, bool, error),
-	fetchHook func([]*types.Header), fetch func(*peer, *fetchRequest) error, cancel func(*fetchRequest), capacity func(*peer) int,
+	fetchHook func([]*data.Header), fetch func(*peer, *fetchRequest) error, cancel func(*fetchRequest), capacity func(*peer) int,
 	idle func() ([]*peer, int), setIdle func(*peer), kind string) error {
 
 	// Create a ticker to detect expired retrieval tasks
@@ -1599,16 +1599,16 @@ func (d *Downloader) process() {
 			}
 			// Retrieve the a batch of results to import
 			var (
-				blocks   = make([]*types.Block, 0, maxResultsProcess)
-				receipts = make([]types.Receipts, 0, maxResultsProcess)
+				blocks   = make([]*data.Block, 0, maxResultsProcess)
+				receipts = make([]data.Receipts, 0, maxResultsProcess)
 			)
 			items := int(math.Min(float64(len(results)), float64(maxResultsProcess)))
 			for _, result := range results[:items] {
 				switch {
 				case d.mode == FullSync:
-					blocks = append(blocks, types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles))
+					blocks = append(blocks, data.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles))
 				case d.mode == FastSync:
-					blocks = append(blocks, types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles))
+					blocks = append(blocks, data.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles))
 					if result.Header.Number.Uint64() <= pivot {
 						receipts = append(receipts, result.Receipts)
 					}
@@ -1649,23 +1649,23 @@ func (d *Downloader) DeliverHashes(id string, hashes []common.Hash) (err error) 
 
 // DeliverBlocks injects a new batch of blocks received from a remote node.
 // This is usually invoked through the BlocksMsg by the protocol handler.
-func (d *Downloader) DeliverBlocks(id string, blocks []*types.Block) (err error) {
+func (d *Downloader) DeliverBlocks(id string, blocks []*data.Block) (err error) {
 	return d.deliver(id, d.blockCh, &blockPack{id, blocks}, blockInMeter, blockDropMeter)
 }
 
 // DeliverHeaders injects a new batch of blck headers received from a remote
 // node into the download schedule.
-func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) (err error) {
+func (d *Downloader) DeliverHeaders(id string, headers []*data.Header) (err error) {
 	return d.deliver(id, d.headerCh, &headerPack{id, headers}, headerInMeter, headerDropMeter)
 }
 
 // DeliverBodies injects a new batch of block bodies received from a remote node.
-func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header) (err error) {
+func (d *Downloader) DeliverBodies(id string, transactions [][]*data.Transaction, uncles [][]*data.Header) (err error) {
 	return d.deliver(id, d.bodyCh, &bodyPack{id, transactions, uncles}, bodyInMeter, bodyDropMeter)
 }
 
 // DeliverReceipts injects a new batch of receipts received from a remote node.
-func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) (err error) {
+func (d *Downloader) DeliverReceipts(id string, receipts [][]*data.Receipt) (err error) {
 	return d.deliver(id, d.receiptCh, &receiptPack{id, receipts}, receiptInMeter, receiptDropMeter)
 }
 

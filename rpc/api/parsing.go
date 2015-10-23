@@ -25,7 +25,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
@@ -71,9 +71,9 @@ func newHexData(input interface{}) *hexdata {
 		} else {
 			d.data = input.Bytes()
 		}
-	case types.Bloom:
+	case data.Bloom:
 		d.data = input.Bytes()
-	case *types.Bloom:
+	case *data.Bloom:
 		if input == nil {
 			d.isNil = true
 		} else {
@@ -281,7 +281,7 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 	}
 }
 
-func NewBlockRes(block *types.Block, td *big.Int, fullTx bool) *BlockRes {
+func NewBlockRes(block *data.Block, td *big.Int, fullTx bool) *BlockRes {
 	if block == nil {
 		return nil
 	}
@@ -338,7 +338,7 @@ type TransactionRes struct {
 	Input       *hexdata `json:"input"`
 }
 
-func NewTransactionRes(tx *types.Transaction) *TransactionRes {
+func NewTransactionRes(tx *data.Transaction) *TransactionRes {
 	if tx == nil {
 		return nil
 	}
@@ -377,7 +377,7 @@ type UncleRes struct {
 	UnixTimestamp   *hexnum  `json:"timestamp"`
 }
 
-func NewUncleRes(h *types.Header) *UncleRes {
+func NewUncleRes(h *data.Header) *UncleRes {
 	if h == nil {
 		return nil
 	}
@@ -436,7 +436,7 @@ type ReceiptRes struct {
 	Logs              *[]interface{} `json:"logs"`
 }
 
-func NewReceiptRes(rec *types.Receipt) *ReceiptRes {
+func NewReceiptRes(rec *data.Receipt) *ReceiptRes {
 	if rec == nil {
 		return nil
 	}

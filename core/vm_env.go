@@ -20,14 +20,14 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 type VMEnv struct {
 	state  *state.StateDB
-	header *types.Header
+	header *data.Header
 	msg    Message
 	depth  int
 	chain  *BlockChain
@@ -36,7 +36,7 @@ type VMEnv struct {
 	logs []vm.StructLog
 }
 
-func NewEnv(state *state.StateDB, chain *BlockChain, msg Message, header *types.Header) *VMEnv {
+func NewEnv(state *state.StateDB, chain *BlockChain, msg Message, header *data.Header) *VMEnv {
 	return &VMEnv{
 		chain:  chain,
 		state:  state,

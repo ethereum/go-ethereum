@@ -31,8 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -296,7 +296,7 @@ func (self *XEth) UpdateState() (wait chan *big.Int) {
 
 func (self *XEth) Whisper() *Whisper { return self.whisper }
 
-func (self *XEth) getBlockByHeight(height int64) *types.Block {
+func (self *XEth) getBlockByHeight(height int64) *data.Block {
 	var num uint64
 
 	switch height {
@@ -322,20 +322,20 @@ func (self *XEth) BlockByHash(strHash string) *Block {
 	return NewBlock(block)
 }
 
-func (self *XEth) EthBlockByHash(strHash string) *types.Block {
+func (self *XEth) EthBlockByHash(strHash string) *data.Block {
 	hash := common.HexToHash(strHash)
 	block := self.backend.BlockChain().GetBlock(hash)
 
 	return block
 }
 
-func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blhash common.Hash, blnum *big.Int, txi uint64) {
+func (self *XEth) EthTransactionByHash(hash string) (tx *data.Transaction, blhash common.Hash, blnum *big.Int, txi uint64) {
 	// Due to increasing return params and need to determine if this is from transaction pool or
 	// some chain, this probably needs to be refactored for more expressiveness
-	data, _ := self.backend.ChainDb().Get(common.FromHex(hash))
-	if len(data) != 0 {
-		dtx := new(types.Transaction)
-		if err := rlp.DecodeBytes(data, dtx); err != nil {
+	raw, _ := self.backend.ChainDb().Get(common.FromHex(hash))
+	if len(raw) != 0 {
+		dtx := new(data.Transaction)
+		if err := rlp.DecodeBytes(raw, dtx); err != nil {
 			glog.V(logger.Error).Infoln(err)
 			return
 		}
@@ -373,7 +373,7 @@ func (self *XEth) BlockByNumber(num int64) *Block {
 	return NewBlock(self.getBlockByHeight(num))
 }
 
-func (self *XEth) EthBlockByNumber(num int64) *types.Block {
+func (self *XEth) EthBlockByNumber(num int64) *data.Block {
 	return self.getBlockByHeight(num)
 }
 
@@ -381,15 +381,15 @@ func (self *XEth) Td(hash common.Hash) *big.Int {
 	return self.backend.BlockChain().GetTd(hash)
 }
 
-func (self *XEth) CurrentBlock() *types.Block {
+func (self *XEth) CurrentBlock() *data.Block {
 	return self.backend.BlockChain().CurrentBlock()
 }
 
-func (self *XEth) GetBlockReceipts(bhash common.Hash) types.Receipts {
+func (self *XEth) GetBlockReceipts(bhash common.Hash) data.Receipts {
 	return self.backend.BlockProcessor().GetBlockReceipts(bhash)
 }
 
-func (self *XEth) GetTxReceipt(txhash common.Hash) *types.Receipt {
+func (self *XEth) GetTxReceipt(txhash common.Hash) *data.Receipt {
 	return core.GetReceipt(self.backend.ChainDb(), txhash)
 }
 
@@ -582,7 +582,7 @@ func (self *XEth) NewTransactionFilter() int {
 	id := self.filterManager.Add(filter)
 	self.transactionQueue[id] = &hashQueue{timeout: time.Now()}
 
-	filter.TransactionCallback = func(tx *types.Transaction) {
+	filter.TransactionCallback = func(tx *data.Transaction) {
 		self.transactionMu.Lock()
 		defer self.transactionMu.Unlock()
 
@@ -601,7 +601,7 @@ func (self *XEth) NewBlockFilter() int {
 	id := self.filterManager.Add(filter)
 	self.blockQueue[id] = &hashQueue{timeout: time.Now()}
 
-	filter.BlockCallback = func(block *types.Block, logs vm.Logs) {
+	filter.BlockCallback = func(block *data.Block, logs vm.Logs) {
 		self.blockMu.Lock()
 		defer self.blockMu.Unlock()
 
@@ -808,7 +808,7 @@ func (self *XEth) FromNumber(str string) string {
 }
 
 func (self *XEth) PushTx(encodedTx string) (string, error) {
-	tx := new(types.Transaction)
+	tx := new(data.Transaction)
 	err := rlp.DecodeBytes(common.FromHex(encodedTx), tx)
 	if err != nil {
 		glog.V(logger.Error).Infoln(err)
@@ -938,7 +938,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 		value            = common.Big(valueStr)
 		gas              *big.Int
 		price            *big.Int
-		data             []byte
+		extraData        []byte
 		contractCreation bool
 	)
 
@@ -954,7 +954,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 		price = common.Big(gasPriceStr)
 	}
 
-	data = common.FromHex(codeStr)
+	extraData = common.FromHex(codeStr)
 	if len(toStr) == 0 {
 		contractCreation = true
 	}
@@ -992,11 +992,11 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 		state := self.backend.TxPool().State()
 		nonce = state.GetNonce(from)
 	}
-	var tx *types.Transaction
+	var tx *data.Transaction
 	if contractCreation {
-		tx = types.NewContractCreation(nonce, value, gas, price, data)
+		tx = data.NewContractCreation(nonce, value, gas, price, extraData)
 	} else {
-		tx = types.NewTransaction(nonce, to, value, gas, price, data)
+		tx = data.NewTransaction(nonce, to, value, gas, price, extraData)
 	}
 
 	signed, err := self.sign(tx, from, false)
@@ -1017,7 +1017,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	return signed.Hash().Hex(), nil
 }
 
-func (self *XEth) sign(tx *types.Transaction, from common.Address, didUnlock bool) (*types.Transaction, error) {
+func (self *XEth) sign(tx *data.Transaction, from common.Address, didUnlock bool) (*data.Transaction, error) {
 	hash := tx.SigHash()
 	sig, err := self.doSign(from, hash, didUnlock)
 	if err != nil {

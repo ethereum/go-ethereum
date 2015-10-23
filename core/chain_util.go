@@ -23,7 +23,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -87,7 +87,7 @@ func CalcDifficulty(time, parentTime uint64, parentNumber, parentDiff *big.Int) 
 // CalcGasLimit computes the gas limit of the next block after parent.
 // The result may be modified by the caller.
 // This is miner strategy, not consensus protocol.
-func CalcGasLimit(parent *types.Block) *big.Int {
+func CalcGasLimit(parent *data.Block) *big.Int {
 	// contrib = (parentGasUsed * 3 / 2) / 1024
 	contrib := new(big.Int).Mul(parent.GasUsed(), big.NewInt(3))
 	contrib = contrib.Div(contrib, big.NewInt(2))
@@ -169,13 +169,13 @@ func GetHeaderRLP(db ethdb.Database, hash common.Hash) rlp.RawValue {
 
 // GetHeader retrieves the block header corresponding to the hash, nil if none
 // found.
-func GetHeader(db ethdb.Database, hash common.Hash) *types.Header {
-	data := GetHeaderRLP(db, hash)
-	if len(data) == 0 {
+func GetHeader(db ethdb.Database, hash common.Hash) *data.Header {
+	raw := GetHeaderRLP(db, hash)
+	if len(raw) == 0 {
 		return nil
 	}
-	header := new(types.Header)
-	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
+	header := new(data.Header)
+	if err := rlp.Decode(bytes.NewReader(raw), header); err != nil {
 		glog.V(logger.Error).Infof("invalid block header RLP for hash %x: %v", hash, err)
 		return nil
 	}
@@ -190,13 +190,13 @@ func GetBodyRLP(db ethdb.Database, hash common.Hash) rlp.RawValue {
 
 // GetBody retrieves the block body (transactons, uncles) corresponding to the
 // hash, nil if none found.
-func GetBody(db ethdb.Database, hash common.Hash) *types.Body {
-	data := GetBodyRLP(db, hash)
-	if len(data) == 0 {
+func GetBody(db ethdb.Database, hash common.Hash) *data.Body {
+	raw := GetBodyRLP(db, hash)
+	if len(raw) == 0 {
 		return nil
 	}
-	body := new(types.Body)
-	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
+	body := new(data.Body)
+	if err := rlp.Decode(bytes.NewReader(raw), body); err != nil {
 		glog.V(logger.Error).Infof("invalid block body RLP for hash %x: %v", hash, err)
 		return nil
 	}
@@ -220,7 +220,7 @@ func GetTd(db ethdb.Database, hash common.Hash) *big.Int {
 
 // GetBlock retrieves an entire block corresponding to the hash, assembling it
 // back from the stored header and body.
-func GetBlock(db ethdb.Database, hash common.Hash) *types.Block {
+func GetBlock(db ethdb.Database, hash common.Hash) *data.Block {
 	// Retrieve the block header and body contents
 	header := GetHeader(db, hash)
 	if header == nil {
@@ -231,7 +231,7 @@ func GetBlock(db ethdb.Database, hash common.Hash) *types.Block {
 		return nil
 	}
 	// Reassemble the block and return
-	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles)
+	return data.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles)
 }
 
 // WriteCanonicalHash stores the canonical hash for the given block number.
@@ -272,7 +272,7 @@ func WriteHeadFastBlockHash(db ethdb.Database, hash common.Hash) error {
 }
 
 // WriteHeader serializes a block header into the database.
-func WriteHeader(db ethdb.Database, header *types.Header) error {
+func WriteHeader(db ethdb.Database, header *data.Header) error {
 	data, err := rlp.EncodeToBytes(header)
 	if err != nil {
 		return err
@@ -287,7 +287,7 @@ func WriteHeader(db ethdb.Database, header *types.Header) error {
 }
 
 // WriteBody serializes the body of a block into the database.
-func WriteBody(db ethdb.Database, hash common.Hash, body *types.Body) error {
+func WriteBody(db ethdb.Database, hash common.Hash, body *data.Body) error {
 	data, err := rlp.EncodeToBytes(body)
 	if err != nil {
 		return err
@@ -317,9 +317,9 @@ func WriteTd(db ethdb.Database, hash common.Hash, td *big.Int) error {
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
-func WriteBlock(db ethdb.Database, block *types.Block) error {
+func WriteBlock(db ethdb.Database, block *data.Block) error {
 	// Store the body first to retain database consistency
-	if err := WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+	if err := WriteBody(db, block.Hash(), &data.Body{block.Transactions(), block.Uncles()}); err != nil {
 		return err
 	}
 	// Store the header too, signaling full block ownership
@@ -361,17 +361,17 @@ func DeleteBlock(db ethdb.Database, hash common.Hash) {
 // or nil if not found. This method is only used by the upgrade mechanism to
 // access the old combined block representation. It will be dropped after the
 // network transitions to eth/63.
-func GetBlockByHashOld(db ethdb.Database, hash common.Hash) *types.Block {
-	data, _ := db.Get(append(blockHashPre, hash[:]...))
-	if len(data) == 0 {
+func GetBlockByHashOld(db ethdb.Database, hash common.Hash) *data.Block {
+	raw, _ := db.Get(append(blockHashPre, hash[:]...))
+	if len(raw) == 0 {
 		return nil
 	}
-	var block types.StorageBlock
-	if err := rlp.Decode(bytes.NewReader(data), &block); err != nil {
+	var block data.StorageBlock
+	if err := rlp.Decode(bytes.NewReader(raw), &block); err != nil {
 		glog.V(logger.Error).Infof("invalid block RLP for hash %x: %v", hash, err)
 		return nil
 	}
-	return (*types.Block)(&block)
+	return (*data.Block)(&block)
 }
 
 // returns a formatted MIP mapped key by adding prefix, canonical number and level
@@ -387,12 +387,12 @@ func mipmapKey(num, level uint64) []byte {
 
 // WriteMapmapBloom writes each address included in the receipts' logs to the
 // MIP bloom bin.
-func WriteMipmapBloom(db ethdb.Database, number uint64, receipts types.Receipts) error {
+func WriteMipmapBloom(db ethdb.Database, number uint64, receipts data.Receipts) error {
 	batch := db.NewBatch()
 	for _, level := range MIPMapLevels {
 		key := mipmapKey(number, level)
 		bloomDat, _ := db.Get(key)
-		bloom := types.BytesToBloom(bloomDat)
+		bloom := data.BytesToBloom(bloomDat)
 		for _, receipt := range receipts {
 			for _, log := range receipt.Logs {
 				bloom.Add(log.Address.Big())
@@ -408,7 +408,7 @@ func WriteMipmapBloom(db ethdb.Database, number uint64, receipts types.Receipts)
 
 // GetMipmapBloom returns a bloom filter using the number and level as input
 // parameters. For available levels see MIPMapLevels.
-func GetMipmapBloom(db ethdb.Database, number, level uint64) types.Bloom {
+func GetMipmapBloom(db ethdb.Database, number, level uint64) data.Bloom {
 	bloomDat, _ := db.Get(mipmapKey(number, level))
-	return types.BytesToBloom(bloomDat)
+	return data.BytesToBloom(bloomDat)
 }

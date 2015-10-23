@@ -24,7 +24,7 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -111,7 +111,7 @@ func runTransactionTests(tests map[string]TransactionTest, skipTests []string) e
 }
 
 func runTransactionTest(txTest TransactionTest) (err error) {
-	tx := new(types.Transaction)
+	tx := new(data.Transaction)
 	err = rlp.DecodeBytes(mustConvertBytes(txTest.Rlp), tx)
 
 	if err != nil {
@@ -148,7 +148,7 @@ func runTransactionTest(txTest TransactionTest) (err error) {
 	return errors.New("Should not happen: verify RLP decoding and field validation")
 }
 
-func verifyTxFields(txTest TransactionTest, decodedTx *types.Transaction) (err error) {
+func verifyTxFields(txTest TransactionTest, decodedTx *data.Transaction) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			buf := make([]byte, 64<<10)

@@ -23,7 +23,7 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -34,7 +34,7 @@ var DisableBadBlockReporting = true
 
 // ReportBlock reports the block to the block reporting tool found at
 // badblocks.ethdev.com
-func ReportBlock(block *types.Block, err error) {
+func ReportBlock(block *data.Block, err error) {
 	if DisableBadBlockReporting {
 		return
 	}

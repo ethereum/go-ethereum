@@ -23,8 +23,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -96,7 +96,7 @@ func NewBlockProcessor(db ethdb.Database, pow pow.PoW, blockchain *BlockChain, e
 	return sm
 }
 
-func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block *types.Block, transientProcess bool) (receipts types.Receipts, err error) {
+func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block *data.Block, transientProcess bool) (receipts data.Receipts, err error) {
 	gp := new(GasPool).AddGas(block.GasLimit())
 	if glog.V(logger.Core) {
 		glog.Infof("%x: gas (+ %v)", block.Coinbase(), gp)
@@ -111,7 +111,7 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 	return receipts, nil
 }
 
-func (self *BlockProcessor) ApplyTransaction(gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
+func (self *BlockProcessor) ApplyTransaction(gp *GasPool, statedb *state.StateDB, header *data.Header, tx *data.Transaction, usedGas *big.Int, transientProcess bool) (*data.Receipt, *big.Int, error) {
 	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, header), tx, gp)
 	if err != nil {
 		return nil, nil, err
@@ -119,7 +119,7 @@ func (self *BlockProcessor) ApplyTransaction(gp *GasPool, statedb *state.StateDB
 
 	// Update the state with pending changes
 	usedGas.Add(usedGas, gas)
-	receipt := types.NewReceipt(statedb.IntermediateRoot().Bytes(), usedGas)
+	receipt := data.NewReceipt(statedb.IntermediateRoot().Bytes(), usedGas)
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = new(big.Int).Set(gas)
 	if MessageCreatesContract(tx) {
@@ -129,7 +129,7 @@ func (self *BlockProcessor) ApplyTransaction(gp *GasPool, statedb *state.StateDB
 
 	logs := statedb.GetLogs(tx.Hash())
 	receipt.Logs = logs
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.Bloom = data.CreateBloom(data.Receipts{receipt})
 
 	glog.V(logger.Debug).Infoln(receipt)
 
@@ -145,9 +145,9 @@ func (self *BlockProcessor) BlockChain() *BlockChain {
 	return self.bc
 }
 
-func (self *BlockProcessor) ApplyTransactions(gp *GasPool, statedb *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, error) {
+func (self *BlockProcessor) ApplyTransactions(gp *GasPool, statedb *state.StateDB, block *data.Block, txs data.Transactions, transientProcess bool) (data.Receipts, error) {
 	var (
-		receipts      types.Receipts
+		receipts      data.Receipts
 		totalUsedGas  = big.NewInt(0)
 		err           error
 		cumulativeSum = new(big.Int)
@@ -181,7 +181,7 @@ func (self *BlockProcessor) ApplyTransactions(gp *GasPool, statedb *state.StateD
 	return receipts, err
 }
 
-func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs vm.Logs, err error) {
+func (sm *BlockProcessor) RetryProcess(block *data.Block) (logs vm.Logs, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -206,7 +206,7 @@ func (sm *BlockProcessor) RetryProcess(block *types.Block) (logs vm.Logs, err er
 // Process block will attempt to process the given block's transactions and applies them
 // on top of the block's parent state (given it exists) and will return wether it was
 // successful or not.
-func (sm *BlockProcessor) Process(block *types.Block) (logs vm.Logs, receipts types.Receipts, err error) {
+func (sm *BlockProcessor) Process(block *data.Block) (logs vm.Logs, receipts data.Receipts, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -224,7 +224,7 @@ func (sm *BlockProcessor) Process(block *types.Block) (logs vm.Logs, receipts ty
 	return nil, nil, ParentError(block.ParentHash())
 }
 
-func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs vm.Logs, receipts types.Receipts, err error) {
+func (sm *BlockProcessor) processWithParent(block, parent *data.Block) (logs vm.Logs, receipts data.Receipts, err error) {
 	// Create a new state based on the parent's root (e.g., create copy)
 	state, err := state.New(parent.Root(), sm.chainDb)
 	if err != nil {
@@ -251,7 +251,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs vm
 
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
-	rbloom := types.CreateBloom(receipts)
+	rbloom := data.CreateBloom(receipts)
 	if rbloom != header.Bloom {
 		err = fmt.Errorf("unable to replicate block's bloom=%x", rbloom)
 		return
@@ -259,21 +259,21 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (logs vm
 
 	// The transactions Trie's root (R = (Tr [[i, RLP(T1)], [i, RLP(T2)], ... [n, RLP(Tn)]]))
 	// can be used by light clients to make sure they've received the correct Txs
-	txSha := types.DeriveSha(txs)
+	txSha := data.DeriveSha(txs)
 	if txSha != header.TxHash {
 		err = fmt.Errorf("invalid transaction root hash. received=%x calculated=%x", header.TxHash, txSha)
 		return
 	}
 
 	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, R1]]))
-	receiptSha := types.DeriveSha(receipts)
+	receiptSha := data.DeriveSha(receipts)
 	if receiptSha != header.ReceiptHash {
 		err = fmt.Errorf("invalid receipt root hash. received=%x calculated=%x", header.ReceiptHash, receiptSha)
 		return
 	}
 
 	// Verify UncleHash before running other uncle validations
-	unclesSha := types.CalcUncleHash(uncles)
+	unclesSha := data.CalcUncleHash(uncles)
 	if unclesSha != header.UncleHash {
 		err = fmt.Errorf("invalid uncles root hash. received=%x calculated=%x", header.UncleHash, unclesSha)
 		return
@@ -309,7 +309,7 @@ var (
 // mining reward. The total reward consists of the static block reward
 // and rewards for included uncles. The coinbase of each uncle block is
 // also rewarded.
-func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*types.Header) {
+func AccumulateRewards(statedb *state.StateDB, header *data.Header, uncles []*data.Header) {
 	reward := new(big.Int).Set(BlockReward)
 	r := new(big.Int)
 	for _, uncle := range uncles {
@@ -325,9 +325,9 @@ func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*t
 	statedb.AddBalance(header.Coinbase, reward)
 }
 
-func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *types.Block) error {
+func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *data.Block) error {
 	uncles := set.New()
-	ancestors := make(map[common.Hash]*types.Block)
+	ancestors := make(map[common.Hash]*data.Block)
 	for _, ancestor := range sm.bc.GetBlocksFromHash(block.ParentHash(), 7) {
 		ancestors[ancestor.Hash()] = ancestor
 		// Include ancestors uncles in the uncle set. Uncles must be unique.
@@ -368,7 +368,7 @@ func (sm *BlockProcessor) VerifyUncles(statedb *state.StateDB, block, parent *ty
 }
 
 // GetBlockReceipts returns the receipts beloniging to the block hash
-func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
+func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) data.Receipts {
 	if block := sm.BlockChain().GetBlock(bhash); block != nil {
 		return GetBlockReceipts(sm.chainDb, block.Hash())
 	}
@@ -379,7 +379,7 @@ func (sm *BlockProcessor) GetBlockReceipts(bhash common.Hash) types.Receipts {
 // GetLogs returns the logs of the given block. This method is using a two step approach
 // where it tries to get it from the (updated) method which gets them from the receipts or
 // the depricated way by re-processing the block.
-func (sm *BlockProcessor) GetLogs(block *types.Block) (logs vm.Logs, err error) {
+func (sm *BlockProcessor) GetLogs(block *data.Block) (logs vm.Logs, err error) {
 	receipts := GetBlockReceipts(sm.chainDb, block.Hash())
 	// coalesce logs
 	for _, receipt := range receipts {
@@ -390,7 +390,7 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs vm.Logs, err error) 
 
 // ValidateHeader verifies the validity of a header, relying on the database and
 // POW behind the block processor.
-func (sm *BlockProcessor) ValidateHeader(header *types.Header, checkPow, uncle bool) error {
+func (sm *BlockProcessor) ValidateHeader(header *data.Header, checkPow, uncle bool) error {
 	// Short circuit if the header's already known or its parent missing
 	if sm.bc.HasHeader(header.Hash()) {
 		return nil
@@ -404,7 +404,7 @@ func (sm *BlockProcessor) ValidateHeader(header *types.Header, checkPow, uncle b
 
 // ValidateHeaderWithParent verifies the validity of a header, relying on the database and
 // POW behind the block processor.
-func (sm *BlockProcessor) ValidateHeaderWithParent(header, parent *types.Header, checkPow, uncle bool) error {
+func (sm *BlockProcessor) ValidateHeaderWithParent(header, parent *data.Header, checkPow, uncle bool) error {
 	if sm.bc.HasHeader(header.Hash()) {
 		return nil
 	}
@@ -413,7 +413,7 @@ func (sm *BlockProcessor) ValidateHeaderWithParent(header, parent *types.Header,
 
 // See YP section 4.3.4. "Block Header Validity"
 // Validates a header. Returns an error if the header is invalid.
-func ValidateHeader(pow pow.PoW, header *types.Header, parent *types.Header, checkPow, uncle bool) error {
+func ValidateHeader(pow pow.PoW, header *data.Header, parent *data.Header, checkPow, uncle bool) error {
 	if big.NewInt(int64(len(header.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
 		return fmt.Errorf("Header extra data too long (%d)", len(header.Extra))
 	}
@@ -452,7 +452,7 @@ func ValidateHeader(pow pow.PoW, header *types.Header, parent *types.Header, che
 
 	if checkPow {
 		// Verify the nonce of the header. Return an error if it's not valid
-		if !pow.Verify(types.NewBlockWithHeader(header)) {
+		if !pow.Verify(data.NewBlockWithHeader(header)) {
 			return &BlockNonceErr{Hash: header.Hash(), Number: header.Number, Nonce: header.Nonce.Uint64()}
 		}
 	}

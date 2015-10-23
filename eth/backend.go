@@ -36,8 +36,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -92,7 +92,7 @@ type Config struct {
 	NetworkId    int
 	GenesisNonce int
 	GenesisFile  string
-	GenesisBlock *types.Block // used by block tests
+	GenesisBlock *data.Block // used by block tests
 	FastSync     bool
 	Olympic      bool
 
@@ -525,7 +525,7 @@ func (s *Ethereum) PeersInfo() (peersinfo []*PeerInfo) {
 	return
 }
 
-func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
+func (s *Ethereum) ResetWithGenesisBlock(gb *data.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
@@ -738,11 +738,11 @@ func saveBlockchainVersion(db ethdb.Database, bcVersion int) {
 // separate header and body entries.
 func upgradeChainDatabase(db ethdb.Database) error {
 	// Short circuit if the head block is stored already as separate header and body
-	data, err := db.Get([]byte("LastBlock"))
+	headb, err := db.Get([]byte("LastBlock"))
 	if err != nil {
 		return nil
 	}
-	head := common.BytesToHash(data)
+	head := common.BytesToHash(headb)
 
 	if block := core.GetBlockByHashOld(db, head); block == nil {
 		return nil
@@ -767,7 +767,7 @@ func upgradeChainDatabase(db ethdb.Database) error {
 			if err := core.WriteTd(db, block.Hash(), block.DeprecatedTd()); err != nil {
 				return err
 			}
-			if err := core.WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+			if err := core.WriteBody(db, block.Hash(), &data.Body{block.Transactions(), block.Uncles()}); err != nil {
 				return err
 			}
 			if err := core.WriteHeader(db, block.Header()); err != nil {
@@ -783,7 +783,7 @@ func upgradeChainDatabase(db ethdb.Database) error {
 		if err := core.WriteTd(db, current.Hash(), current.DeprecatedTd()); err != nil {
 			return err
 		}
-		if err := core.WriteBody(db, current.Hash(), &types.Body{current.Transactions(), current.Uncles()}); err != nil {
+		if err := core.WriteBody(db, current.Hash(), &data.Body{current.Transactions(), current.Uncles()}); err != nil {
 			return err
 		}
 		if err := core.WriteHeader(db, current.Header()); err != nil {

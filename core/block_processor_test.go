@@ -22,8 +22,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -69,7 +69,7 @@ func TestPutReceipt(t *testing.T) {
 	var hash common.Hash
 	hash[0] = 2
 
-	receipt := new(types.Receipt)
+	receipt := new(data.Receipt)
 	receipt.Logs = vm.Logs{&vm.Log{
 		Address:     addr,
 		Topics:      []common.Hash{hash},
@@ -81,7 +81,7 @@ func TestPutReceipt(t *testing.T) {
 		Index:       0,
 	}}
 
-	PutReceipts(db, types.Receipts{receipt})
+	PutReceipts(db, data.Receipts{receipt})
 	receipt = GetReceipt(db, common.Hash{})
 	if receipt == nil {
 		t.Error("expected to get 1 receipt, got none.")

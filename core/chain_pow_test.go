@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/pow"
 )
@@ -62,7 +62,7 @@ func TestPowVerification(t *testing.T) {
 		genesis   = GenesisBlockForTesting(testdb, common.Address{}, new(big.Int))
 		blocks, _ = GenerateChain(genesis, testdb, 8, nil)
 	)
-	headers := make([]*types.Header, len(blocks))
+	headers := make([]*data.Header, len(blocks))
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
@@ -74,13 +74,13 @@ func TestPowVerification(t *testing.T) {
 
 				switch {
 				case full && valid:
-					_, results = verifyNoncesFromBlocks(FakePow{}, []*types.Block{blocks[i]})
+					_, results = verifyNoncesFromBlocks(FakePow{}, []*data.Block{blocks[i]})
 				case full && !valid:
-					_, results = verifyNoncesFromBlocks(failPow{blocks[i].NumberU64()}, []*types.Block{blocks[i]})
+					_, results = verifyNoncesFromBlocks(failPow{blocks[i].NumberU64()}, []*data.Block{blocks[i]})
 				case !full && valid:
-					_, results = verifyNoncesFromHeaders(FakePow{}, []*types.Header{headers[i]})
+					_, results = verifyNoncesFromHeaders(FakePow{}, []*data.Header{headers[i]})
 				case !full && !valid:
-					_, results = verifyNoncesFromHeaders(failPow{headers[i].Number.Uint64()}, []*types.Header{headers[i]})
+					_, results = verifyNoncesFromHeaders(failPow{headers[i].Number.Uint64()}, []*data.Header{headers[i]})
 				}
 				// Wait for the verification result
 				select {
@@ -117,7 +117,7 @@ func testPowConcurrentVerification(t *testing.T, threads int) {
 		genesis   = GenesisBlockForTesting(testdb, common.Address{}, new(big.Int))
 		blocks, _ = GenerateChain(genesis, testdb, 8, nil)
 	)
-	headers := make([]*types.Header, len(blocks))
+	headers := make([]*data.Header, len(blocks))
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
@@ -188,7 +188,7 @@ func testPowConcurrentAbortion(t *testing.T, threads int) {
 		genesis   = GenesisBlockForTesting(testdb, common.Address{}, new(big.Int))
 		blocks, _ = GenerateChain(genesis, testdb, 1024, nil)
 	)
-	headers := make([]*types.Header, len(blocks))
+	headers := make([]*data.Header, len(blocks))
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}

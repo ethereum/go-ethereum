@@ -26,7 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -129,7 +129,7 @@ func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool
 		blockchain.CurrentHeader, blockchain.CurrentBlock, blockchain.CurrentFastBlock, blockchain.FastSyncCommitHead, blockchain.GetTd,
 		blockchain.InsertHeaderChain, blockchain.InsertChain, blockchain.InsertReceiptChain, blockchain.Rollback, manager.removePeer)
 
-	validator := func(block *types.Block, parent *types.Block) error {
+	validator := func(block *data.Block, parent *data.Block) error {
 		return core.ValidateHeader(pow, block.Header(), parent.Header(), true, false)
 	}
 	heighter := func() uint64 {
@@ -318,7 +318,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		var (
 			hash   common.Hash
 			bytes  common.StorageSize
-			blocks []*types.Block
+			blocks []*data.Block
 		)
 		for len(blocks) < downloader.MaxBlockFetch && bytes < softResponseLimit {
 			//Retrieve the hash of the next block
@@ -338,7 +338,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	case p.version < eth62 && msg.Code == BlocksMsg:
 		// Decode the arrived block message
-		var blocks []*types.Block
+		var blocks []*data.Block
 		if err := msg.Decode(&blocks); err != nil {
 			glog.V(logger.Detail).Infoln("Decode error", err)
 			blocks = nil
@@ -362,12 +362,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Gather headers until the fetch or network limits is reached
 		var (
 			bytes   common.StorageSize
-			headers []*types.Header
+			headers []*data.Header
 			unknown bool
 		)
 		for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit && len(headers) < downloader.MaxHeaderFetch {
 			// Retrieve the next header satisfying the query
-			var origin *types.Header
+			var origin *data.Header
 			if query.Origin.Hash != (common.Hash{}) {
 				origin = pm.blockchain.GetHeader(query.Origin.Hash)
 			} else {
@@ -419,7 +419,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	case p.version >= eth62 && msg.Code == BlockHeadersMsg:
 		// A batch of headers arrived to one of our previous requests
-		var headers []*types.Header
+		var headers []*data.Header
 		if err := msg.Decode(&headers); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
@@ -469,8 +469,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		// Deliver them all to the downloader for queuing
-		trasactions := make([][]*types.Transaction, len(request))
-		uncles := make([][]*types.Header, len(request))
+		trasactions := make([][]*data.Transaction, len(request))
+		uncles := make([][]*data.Header, len(request))
 
 		for i, body := range request {
 			trasactions[i] = body.Transactions
@@ -544,7 +544,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			// Retrieve the requested block's receipts, skipping if unknown to us
 			results := core.GetBlockReceipts(pm.chaindb, hash)
 			if results == nil {
-				if header := pm.blockchain.GetHeader(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
+				if header := pm.blockchain.GetHeader(hash); header == nil || header.ReceiptHash != data.EmptyRootHash {
 					continue
 				}
 			}
@@ -560,7 +560,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	case p.version >= eth63 && msg.Code == ReceiptsMsg:
 		// A batch of receipts arrived to one of our previous requests
-		var receipts [][]*types.Receipt
+		var receipts [][]*data.Receipt
 		if err := msg.Decode(&receipts); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
@@ -644,7 +644,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	case msg.Code == TxMsg:
 		// Transactions arrived, parse all of them and deliver to the pool
-		var txs []*types.Transaction
+		var txs []*data.Transaction
 		if err := msg.Decode(&txs); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
@@ -665,7 +665,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 // BroadcastBlock will either propagate a block to a subset of it's peers, or
 // will only announce it's availability (depending what's requested).
-func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
+func (pm *ProtocolManager) BroadcastBlock(block *data.Block, propagate bool) {
 	hash := block.Hash()
 	peers := pm.peers.PeersWithoutBlock(hash)
 
@@ -701,12 +701,12 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 
 // BroadcastTx will propagate a transaction to all peers which are not known to
 // already have the given transaction.
-func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) {
+func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *data.Transaction) {
 	// Broadcast transaction to a batch of peers not knowing about it
 	peers := pm.peers.PeersWithoutTx(hash)
 	//FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
 	for _, peer := range peers {
-		peer.SendTransactions(types.Transactions{tx})
+		peer.SendTransactions(data.Transactions{tx})
 	}
 	glog.V(logger.Detail).Infoln("broadcast tx to", len(peers), "peers")
 }

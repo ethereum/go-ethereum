@@ -21,7 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 )
 
 // headerCheckFn is a callback type for verifying a header's presence in the local chain.
@@ -31,19 +31,19 @@ type headerCheckFn func(common.Hash) bool
 type blockCheckFn func(common.Hash) bool
 
 // headerRetrievalFn is a callback type for retrieving a header from the local chain.
-type headerRetrievalFn func(common.Hash) *types.Header
+type headerRetrievalFn func(common.Hash) *data.Header
 
 // blockRetrievalFn is a callback type for retrieving a block from the local chain.
-type blockRetrievalFn func(common.Hash) *types.Block
+type blockRetrievalFn func(common.Hash) *data.Block
 
 // headHeaderRetrievalFn is a callback type for retrieving the head header from the local chain.
-type headHeaderRetrievalFn func() *types.Header
+type headHeaderRetrievalFn func() *data.Header
 
 // headBlockRetrievalFn is a callback type for retrieving the head block from the local chain.
-type headBlockRetrievalFn func() *types.Block
+type headBlockRetrievalFn func() *data.Block
 
 // headFastBlockRetrievalFn is a callback type for retrieving the head fast block from the local chain.
-type headFastBlockRetrievalFn func() *types.Block
+type headFastBlockRetrievalFn func() *data.Block
 
 // headBlockCommitterFn is a callback for directly committing the head block to a certain entity.
 type headBlockCommitterFn func(common.Hash) error
@@ -52,13 +52,13 @@ type headBlockCommitterFn func(common.Hash) error
 type tdRetrievalFn func(common.Hash) *big.Int
 
 // headerChainInsertFn is a callback type to insert a batch of headers into the local chain.
-type headerChainInsertFn func([]*types.Header, int) (int, error)
+type headerChainInsertFn func([]*data.Header, int) (int, error)
 
 // blockChainInsertFn is a callback type to insert a batch of blocks into the local chain.
-type blockChainInsertFn func(types.Blocks) (int, error)
+type blockChainInsertFn func(data.Blocks) (int, error)
 
 // receiptChainInsertFn is a callback type to insert a batch of receipts into the local chain.
-type receiptChainInsertFn func(types.Blocks, []types.Receipts) (int, error)
+type receiptChainInsertFn func(data.Blocks, []data.Receipts) (int, error)
 
 // chainRollbackFn is a callback type to remove a few recently added elements from the local chain.
 type chainRollbackFn func([]common.Hash)
@@ -86,7 +86,7 @@ func (p *hashPack) Stats() string  { return fmt.Sprintf("%d", len(p.hashes)) }
 // blockPack is a batch of blocks returned by a peer (eth/61).
 type blockPack struct {
 	peerId string
-	blocks []*types.Block
+	blocks []*data.Block
 }
 
 func (p *blockPack) PeerId() string { return p.peerId }
@@ -96,7 +96,7 @@ func (p *blockPack) Stats() string  { return fmt.Sprintf("%d", len(p.blocks)) }
 // headerPack is a batch of block headers returned by a peer.
 type headerPack struct {
 	peerId  string
-	headers []*types.Header
+	headers []*data.Header
 }
 
 func (p *headerPack) PeerId() string { return p.peerId }
@@ -106,8 +106,8 @@ func (p *headerPack) Stats() string  { return fmt.Sprintf("%d", len(p.headers)) 
 // bodyPack is a batch of block bodies returned by a peer.
 type bodyPack struct {
 	peerId       string
-	transactions [][]*types.Transaction
-	uncles       [][]*types.Header
+	transactions [][]*data.Transaction
+	uncles       [][]*data.Header
 }
 
 func (p *bodyPack) PeerId() string { return p.peerId }
@@ -122,7 +122,7 @@ func (p *bodyPack) Stats() string { return fmt.Sprintf("%d:%d", len(p.transactio
 // receiptPack is a batch of receipts returned by a peer.
 type receiptPack struct {
 	peerId   string
-	receipts [][]*types.Receipt
+	receipts [][]*data.Receipt
 }
 
 func (p *receiptPack) PeerId() string { return p.peerId }

@@ -21,8 +21,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow"
@@ -49,15 +49,15 @@ var (
 // See GenerateChain for a detailed explanation.
 type BlockGen struct {
 	i       int
-	parent  *types.Block
-	chain   []*types.Block
-	header  *types.Header
+	parent  *data.Block
+	chain   []*data.Block
+	header  *data.Header
 	statedb *state.StateDB
 
 	gasPool  *GasPool
-	txs      []*types.Transaction
-	receipts []*types.Receipt
-	uncles   []*types.Header
+	txs      []*data.Transaction
+	receipts []*data.Receipt
+	uncles   []*data.Header
 }
 
 // SetCoinbase sets the coinbase of the generated block.
@@ -86,7 +86,7 @@ func (b *BlockGen) SetExtra(data []byte) {
 // further limitations on the content of transactions that can be
 // added. Notably, contract code relying on the BLOCKHASH instruction
 // will panic during execution.
-func (b *BlockGen) AddTx(tx *types.Transaction) {
+func (b *BlockGen) AddTx(tx *data.Transaction) {
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
@@ -96,10 +96,10 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	}
 	root := b.statedb.IntermediateRoot()
 	b.header.GasUsed.Add(b.header.GasUsed, gas)
-	receipt := types.NewReceipt(root.Bytes(), b.header.GasUsed)
+	receipt := data.NewReceipt(root.Bytes(), b.header.GasUsed)
 	logs := b.statedb.GetLogs(tx.Hash())
 	receipt.Logs = logs
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.Bloom = data.CreateBloom(data.Receipts{receipt})
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
 }
@@ -109,7 +109,7 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 //
 // AddUncheckedReceipts will cause consensus failures when used during real
 // chain processing. This is best used in conjuction with raw block insertion.
-func (b *BlockGen) AddUncheckedReceipt(receipt *types.Receipt) {
+func (b *BlockGen) AddUncheckedReceipt(receipt *data.Receipt) {
 	b.receipts = append(b.receipts, receipt)
 }
 
@@ -123,14 +123,14 @@ func (b *BlockGen) TxNonce(addr common.Address) uint64 {
 }
 
 // AddUncle adds an uncle header to the generated block.
-func (b *BlockGen) AddUncle(h *types.Header) {
+func (b *BlockGen) AddUncle(h *data.Header) {
 	b.uncles = append(b.uncles, h)
 }
 
 // PrevBlock returns a previously generated block by number. It panics if
 // num is greater or equal to the number of the block being generated.
 // For index -1, PrevBlock returns the parent block given to GenerateChain.
-func (b *BlockGen) PrevBlock(index int) *types.Block {
+func (b *BlockGen) PrevBlock(index int) *data.Block {
 	if index >= b.i {
 		panic("block index out of range")
 	}
@@ -163,13 +163,13 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // Blocks created by GenerateChain do not contain valid proof of work
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
-func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+func GenerateChain(parent *data.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*data.Block, []data.Receipts) {
 	statedb, err := state.New(parent.Root(), db)
 	if err != nil {
 		panic(err)
 	}
-	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	genblock := func(i int, h *types.Header) (*types.Block, types.Receipts) {
+	blocks, receipts := make(data.Blocks, n), make([]data.Receipts, n)
+	genblock := func(i int, h *data.Header) (*data.Block, data.Receipts) {
 		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb}
 		if gen != nil {
 			gen(i, b)
@@ -180,7 +180,7 @@ func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, 
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
 		h.Root = root
-		return types.NewBlock(h, b.txs, b.uncles, b.receipts), b.receipts
+		return data.NewBlock(h, b.txs, b.uncles, b.receipts), b.receipts
 	}
 	for i := 0; i < n; i++ {
 		header := makeHeader(parent, statedb)
@@ -192,14 +192,14 @@ func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, 
 	return blocks, receipts
 }
 
-func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
+func makeHeader(parent *data.Block, state *state.StateDB) *data.Header {
 	var time *big.Int
 	if parent.Time() == nil {
 		time = big.NewInt(10)
 	} else {
 		time = new(big.Int).Add(parent.Time(), big.NewInt(10)) // block time is fixed at 10 seconds
 	}
-	return &types.Header{
+	return &data.Header{
 		Root:       state.IntermediateRoot(),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
@@ -243,9 +243,9 @@ func newCanonical(n int, full bool) (ethdb.Database, *BlockProcessor, error) {
 }
 
 // makeHeaderChain creates a deterministic chain of headers rooted at parent.
-func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) []*types.Header {
-	blocks := makeBlockChain(types.NewBlockWithHeader(parent), n, db, seed)
-	headers := make([]*types.Header, len(blocks))
+func makeHeaderChain(parent *data.Header, n int, db ethdb.Database, seed int) []*data.Header {
+	blocks := makeBlockChain(data.NewBlockWithHeader(parent), n, db, seed)
+	headers := make([]*data.Header, len(blocks))
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
@@ -253,7 +253,7 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 }
 
 // makeBlockChain creates a deterministic chain of blocks rooted at parent.
-func makeBlockChain(parent *types.Block, n int, db ethdb.Database, seed int) []*types.Block {
+func makeBlockChain(parent *data.Block, n int, db ethdb.Database, seed int) []*data.Block {
 	blocks, _ := GenerateChain(parent, db, n, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
