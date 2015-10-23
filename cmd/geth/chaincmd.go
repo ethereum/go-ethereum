@@ -27,8 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
@@ -168,7 +168,7 @@ func upgradeDB(ctx *cli.Context) {
 func dump(ctx *cli.Context) {
 	chain, chainDb := utils.MakeChain(ctx)
 	for _, arg := range ctx.Args() {
-		var block *types.Block
+		var block *data.Block
 		if hashish(arg) {
 			block = chain.GetBlock(common.HexToHash(arg))
 		} else {

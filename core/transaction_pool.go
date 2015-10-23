@@ -24,8 +24,8 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -67,14 +67,14 @@ type TxPool struct {
 	events       event.Subscription
 
 	mu      sync.RWMutex
-	pending map[common.Hash]*types.Transaction // processable transactions
-	queue   map[common.Address]map[common.Hash]*types.Transaction
+	pending map[common.Hash]*data.Transaction // processable transactions
+	queue   map[common.Address]map[common.Hash]*data.Transaction
 }
 
 func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
 	pool := &TxPool{
-		pending:      make(map[common.Hash]*types.Transaction),
-		queue:        make(map[common.Address]map[common.Hash]*types.Transaction),
+		pending:      make(map[common.Hash]*data.Transaction),
+		queue:        make(map[common.Address]map[common.Hash]*data.Transaction),
 		quit:         make(chan bool),
 		eventMux:     eventMux,
 		currentState: currentStateFn,
@@ -170,7 +170,7 @@ func (pool *TxPool) Stats() (pending int, queued int) {
 
 // validateTx checks whether a transaction is valid according
 // to the consensus rules.
-func (pool *TxPool) validateTx(tx *types.Transaction) error {
+func (pool *TxPool) validateTx(tx *data.Transaction) error {
 	// Validate sender
 	var (
 		from common.Address
@@ -231,7 +231,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 }
 
 // validate and queue transactions.
-func (self *TxPool) add(tx *types.Transaction) error {
+func (self *TxPool) add(tx *data.Transaction) error {
 	hash := tx.Hash()
 
 	if self.pending[hash] != nil {
@@ -261,16 +261,16 @@ func (self *TxPool) add(tx *types.Transaction) error {
 }
 
 // queueTx will queue an unknown transaction
-func (self *TxPool) queueTx(hash common.Hash, tx *types.Transaction) {
+func (self *TxPool) queueTx(hash common.Hash, tx *data.Transaction) {
 	from, _ := tx.From() // already validated
 	if self.queue[from] == nil {
-		self.queue[from] = make(map[common.Hash]*types.Transaction)
+		self.queue[from] = make(map[common.Hash]*data.Transaction)
 	}
 	self.queue[from][hash] = tx
 }
 
 // addTx will add a transaction to the pending (processable queue) list of transactions
-func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *types.Transaction) {
+func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *data.Transaction) {
 	// init delayed since tx pool could have been started before any state sync
 	if pool.pendingState == nil {
 		pool.resetState()
@@ -290,7 +290,7 @@ func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *types.Trans
 }
 
 // Add queues a single transaction in the pool if it is valid.
-func (self *TxPool) Add(tx *types.Transaction) (err error) {
+func (self *TxPool) Add(tx *data.Transaction) (err error) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
@@ -304,7 +304,7 @@ func (self *TxPool) Add(tx *types.Transaction) (err error) {
 }
 
 // AddTransactions attempts to queue all valid transactions in txs.
-func (self *TxPool) AddTransactions(txs []*types.Transaction) {
+func (self *TxPool) AddTransactions(txs []*data.Transaction) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
@@ -323,7 +323,7 @@ func (self *TxPool) AddTransactions(txs []*types.Transaction) {
 
 // GetTransaction returns a transaction if it is contained in the pool
 // and nil otherwise.
-func (tp *TxPool) GetTransaction(hash common.Hash) *types.Transaction {
+func (tp *TxPool) GetTransaction(hash common.Hash) *data.Transaction {
 	// check the txs first
 	if tx, ok := tp.pending[hash]; ok {
 		return tx
@@ -339,7 +339,7 @@ func (tp *TxPool) GetTransaction(hash common.Hash) *types.Transaction {
 
 // GetTransactions returns all currently processable transactions.
 // The returned slice may be modified by the caller.
-func (self *TxPool) GetTransactions() (txs types.Transactions) {
+func (self *TxPool) GetTransactions() (txs data.Transactions) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
@@ -348,7 +348,7 @@ func (self *TxPool) GetTransactions() (txs types.Transactions) {
 	// invalidate any txs
 	self.validatePool()
 
-	txs = make(types.Transactions, len(self.pending))
+	txs = make(data.Transactions, len(self.pending))
 	i := 0
 	for _, tx := range self.pending {
 		txs[i] = tx
@@ -358,22 +358,22 @@ func (self *TxPool) GetTransactions() (txs types.Transactions) {
 }
 
 // GetQueuedTransactions returns all non-processable transactions.
-func (self *TxPool) GetQueuedTransactions() types.Transactions {
+func (self *TxPool) GetQueuedTransactions() data.Transactions {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	var ret types.Transactions
+	var ret data.Transactions
 	for _, txs := range self.queue {
 		for _, tx := range txs {
 			ret = append(ret, tx)
 		}
 	}
-	sort.Sort(types.TxByNonce{ret})
+	sort.Sort(data.TxByNonce{ret})
 	return ret
 }
 
 // RemoveTransactions removes all given transactions from the pool.
-func (self *TxPool) RemoveTransactions(txs types.Transactions) {
+func (self *TxPool) RemoveTransactions(txs data.Transactions) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	for _, tx := range txs {
@@ -483,7 +483,7 @@ type txQueue []txQueueEntry
 type txQueueEntry struct {
 	hash common.Hash
 	addr common.Address
-	*types.Transaction
+	*data.Transaction
 }
 
 func (q txQueue) Len() int           { return len(q) }

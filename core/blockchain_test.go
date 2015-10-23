@@ -28,7 +28,7 @@ import (
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -84,8 +84,8 @@ func testFork(t *testing.T, processor *BlockProcessor, i, n int, full bool, comp
 	}
 	// Extend the newly created chain
 	var (
-		blockChainB  []*types.Block
-		headerChainB []*types.Header
+		blockChainB  []*data.Block
+		headerChainB []*data.Header
 	)
 	if full {
 		blockChainB = makeBlockChain(processor2.bc.CurrentBlock(), n, db, forkSeed)
@@ -127,7 +127,7 @@ func printChain(bc *BlockChain) {
 
 // testBlockChainImport tries to process a chain of blocks, writing them into
 // the database if successful.
-func testBlockChainImport(chain []*types.Block, processor *BlockProcessor) error {
+func testBlockChainImport(chain []*data.Block, processor *BlockProcessor) error {
 	for _, block := range chain {
 		// Try and process the block
 		if _, _, err := processor.Process(block); err != nil {
@@ -147,7 +147,7 @@ func testBlockChainImport(chain []*types.Block, processor *BlockProcessor) error
 
 // testHeaderChainImport tries to process a chain of header, writing them into
 // the database if successful.
-func testHeaderChainImport(chain []*types.Header, processor *BlockProcessor) error {
+func testHeaderChainImport(chain []*data.Header, processor *BlockProcessor) error {
 	for _, header := range chain {
 		// Try and validate the header
 		if err := processor.ValidateHeader(header, false, false); err != nil {
@@ -162,14 +162,14 @@ func testHeaderChainImport(chain []*types.Header, processor *BlockProcessor) err
 	return nil
 }
 
-func loadChain(fn string, t *testing.T) (types.Blocks, error) {
+func loadChain(fn string, t *testing.T) (data.Blocks, error) {
 	fh, err := os.OpenFile(filepath.Join("..", "_data", fn), os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return nil, err
 	}
 	defer fh.Close()
 
-	var chain types.Blocks
+	var chain data.Blocks
 	if err := rlp.Decode(fh, &chain); err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ func loadChain(fn string, t *testing.T) (types.Blocks, error) {
 	return chain, nil
 }
 
-func insertChain(done chan bool, blockchain *BlockChain, chain types.Blocks, t *testing.T) {
+func insertChain(done chan bool, blockchain *BlockChain, chain data.Blocks, t *testing.T) {
 	_, err := blockchain.InsertChain(chain)
 	if err != nil {
 		fmt.Println(err)
@@ -375,7 +375,7 @@ func TestChainMultipleInsertions(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	const max = 4
-	chains := make([]types.Blocks, max)
+	chains := make([]data.Blocks, max)
 	var longest int
 	for i := 0; i < max; i++ {
 		var err error
@@ -415,42 +415,42 @@ func TestChainMultipleInsertions(t *testing.T) {
 
 type bproc struct{}
 
-func (bproc) Process(*types.Block) (vm.Logs, types.Receipts, error)                   { return nil, nil, nil }
-func (bproc) ValidateHeader(*types.Header, bool, bool) error                          { return nil }
-func (bproc) ValidateHeaderWithParent(*types.Header, *types.Header, bool, bool) error { return nil }
+func (bproc) Process(*data.Block) (vm.Logs, data.Receipts, error)                   { return nil, nil, nil }
+func (bproc) ValidateHeader(*data.Header, bool, bool) error                         { return nil }
+func (bproc) ValidateHeaderWithParent(*data.Header, *data.Header, bool, bool) error { return nil }
 
-func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Header {
+func makeHeaderChainWithDiff(genesis *data.Block, d []int, seed byte) []*data.Header {
 	blocks := makeBlockChainWithDiff(genesis, d, seed)
-	headers := make([]*types.Header, len(blocks))
+	headers := make([]*data.Header, len(blocks))
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
 	return headers
 }
 
-func makeBlockChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block {
-	var chain []*types.Block
+func makeBlockChainWithDiff(genesis *data.Block, d []int, seed byte) []*data.Block {
+	var chain []*data.Block
 	for i, difficulty := range d {
-		header := &types.Header{
+		header := &data.Header{
 			Coinbase:    common.Address{seed},
 			Number:      big.NewInt(int64(i + 1)),
 			Difficulty:  big.NewInt(int64(difficulty)),
-			UncleHash:   types.EmptyUncleHash,
-			TxHash:      types.EmptyRootHash,
-			ReceiptHash: types.EmptyRootHash,
+			UncleHash:   data.EmptyUncleHash,
+			TxHash:      data.EmptyRootHash,
+			ReceiptHash: data.EmptyRootHash,
 		}
 		if i == 0 {
 			header.ParentHash = genesis.Hash()
 		} else {
 			header.ParentHash = chain[i-1].Hash()
 		}
-		block := types.NewBlockWithHeader(header)
+		block := data.NewBlockWithHeader(header)
 		chain = append(chain, block)
 	}
 	return chain
 }
 
-func chm(genesis *types.Block, db ethdb.Database) *BlockChain {
+func chm(genesis *data.Block, db ethdb.Database) *BlockChain {
 	var eventMux event.TypeMux
 	bc := &BlockChain{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}, rand: rand.New(rand.NewSource(0))}
 	bc.headerCache, _ = lru.New(100)
@@ -694,7 +694,7 @@ func TestFastVsFullChains(t *testing.T) {
 		// If the block number is multiple of 3, send a few bonus transactions to the miner
 		if i%3 == 2 {
 			for j := 0; j < i%4+1; j++ {
-				tx, err := types.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key)
+				tx, err := data.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key)
 				if err != nil {
 					panic(err)
 				}
@@ -703,7 +703,7 @@ func TestFastVsFullChains(t *testing.T) {
 		}
 		// If the block number is a multiple of 5, add a few bonus uncles to the block
 		if i%5 == 5 {
-			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
+			block.AddUncle(&data.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
 		}
 	})
 	// Import the chain as an archive node for the comparison baseline
@@ -722,7 +722,7 @@ func TestFastVsFullChains(t *testing.T) {
 	fast, _ := NewBlockChain(fastDb, FakePow{}, new(event.TypeMux))
 	fast.SetProcessor(NewBlockProcessor(fastDb, FakePow{}, fast, new(event.TypeMux)))
 
-	headers := make([]*types.Header, len(blocks))
+	headers := make([]*data.Header, len(blocks))
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
@@ -744,12 +744,12 @@ func TestFastVsFullChains(t *testing.T) {
 		}
 		if fblock, ablock := fast.GetBlock(hash), archive.GetBlock(hash); fblock.Hash() != ablock.Hash() {
 			t.Errorf("block #%d [%x]: block mismatch: have %v, want %v", num, hash, fblock, ablock)
-		} else if types.DeriveSha(fblock.Transactions()) != types.DeriveSha(ablock.Transactions()) {
+		} else if data.DeriveSha(fblock.Transactions()) != data.DeriveSha(ablock.Transactions()) {
 			t.Errorf("block #%d [%x]: transactions mismatch: have %v, want %v", num, hash, fblock.Transactions(), ablock.Transactions())
-		} else if types.CalcUncleHash(fblock.Uncles()) != types.CalcUncleHash(ablock.Uncles()) {
+		} else if data.CalcUncleHash(fblock.Uncles()) != data.CalcUncleHash(ablock.Uncles()) {
 			t.Errorf("block #%d [%x]: uncles mismatch: have %v, want %v", num, hash, fblock.Uncles(), ablock.Uncles())
 		}
-		if freceipts, areceipts := GetBlockReceipts(fastDb, hash), GetBlockReceipts(archiveDb, hash); types.DeriveSha(freceipts) != types.DeriveSha(areceipts) {
+		if freceipts, areceipts := GetBlockReceipts(fastDb, hash), GetBlockReceipts(archiveDb, hash); data.DeriveSha(freceipts) != data.DeriveSha(areceipts) {
 			t.Errorf("block #%d [%x]: receipts mismatch: have %v, want %v", num, hash, freceipts, areceipts)
 		}
 	}
@@ -812,7 +812,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	fast, _ := NewBlockChain(fastDb, FakePow{}, new(event.TypeMux))
 	fast.SetProcessor(NewBlockProcessor(fastDb, FakePow{}, fast, new(event.TypeMux)))
 
-	headers := make([]*types.Header, len(blocks))
+	headers := make([]*data.Header, len(blocks))
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
@@ -862,30 +862,30 @@ func TestChainTxReorgs(t *testing.T) {
 	// Create two transactions shared between the chains:
 	//  - postponed: transaction included at a later block in the forked chain
 	//  - swapped: transaction included at the same block number in the forked chain
-	postponed, _ := types.NewTransaction(0, addr1, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key1)
-	swapped, _ := types.NewTransaction(1, addr1, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key1)
+	postponed, _ := data.NewTransaction(0, addr1, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key1)
+	swapped, _ := data.NewTransaction(1, addr1, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key1)
 
 	// Create two transactions that will be dropped by the forked chain:
 	//  - pastDrop: transaction dropped retroactively from a past block
 	//  - freshDrop: transaction dropped exactly at the block where the reorg is detected
-	var pastDrop, freshDrop *types.Transaction
+	var pastDrop, freshDrop *data.Transaction
 
 	// Create three transactions that will be added in the forked chain:
 	//  - pastAdd:   transaction added before the reorganiztion is detected
 	//  - freshAdd:  transaction added at the exact block the reorg is detected
 	//  - futureAdd: transaction added after the reorg has already finished
-	var pastAdd, freshAdd, futureAdd *types.Transaction
+	var pastAdd, freshAdd, futureAdd *data.Transaction
 
 	chain, _ := GenerateChain(genesis, db, 3, func(i int, gen *BlockGen) {
 		switch i {
 		case 0:
-			pastDrop, _ = types.NewTransaction(gen.TxNonce(addr2), addr2, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key2)
+			pastDrop, _ = data.NewTransaction(gen.TxNonce(addr2), addr2, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key2)
 
 			gen.AddTx(pastDrop)  // This transaction will be dropped in the fork from below the split point
 			gen.AddTx(postponed) // This transaction will be postponed till block #3 in the fork
 
 		case 2:
-			freshDrop, _ = types.NewTransaction(gen.TxNonce(addr2), addr2, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key2)
+			freshDrop, _ = data.NewTransaction(gen.TxNonce(addr2), addr2, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key2)
 
 			gen.AddTx(freshDrop) // This transaction will be dropped in the fork from exactly at the split point
 			gen.AddTx(swapped)   // This transaction will be swapped out at the exact height
@@ -905,18 +905,18 @@ func TestChainTxReorgs(t *testing.T) {
 	chain, _ = GenerateChain(genesis, db, 5, func(i int, gen *BlockGen) {
 		switch i {
 		case 0:
-			pastAdd, _ = types.NewTransaction(gen.TxNonce(addr3), addr3, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key3)
+			pastAdd, _ = data.NewTransaction(gen.TxNonce(addr3), addr3, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key3)
 			gen.AddTx(pastAdd) // This transaction needs to be injected during reorg
 
 		case 2:
 			gen.AddTx(postponed) // This transaction was postponed from block #1 in the original chain
 			gen.AddTx(swapped)   // This transaction was swapped from the exact current spot in the original chain
 
-			freshAdd, _ = types.NewTransaction(gen.TxNonce(addr3), addr3, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key3)
+			freshAdd, _ = data.NewTransaction(gen.TxNonce(addr3), addr3, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key3)
 			gen.AddTx(freshAdd) // This transaction will be added exactly at reorg time
 
 		case 3:
-			futureAdd, _ = types.NewTransaction(gen.TxNonce(addr3), addr3, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key3)
+			futureAdd, _ = data.NewTransaction(gen.TxNonce(addr3), addr3, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key3)
 			gen.AddTx(futureAdd) // This transaction will be added after a full reorg
 		}
 	})
@@ -925,7 +925,7 @@ func TestChainTxReorgs(t *testing.T) {
 	}
 
 	// removed tx
-	for i, tx := range (types.Transactions{pastDrop, freshDrop}) {
+	for i, tx := range (data.Transactions{pastDrop, freshDrop}) {
 		if GetTransaction(db, tx.Hash()) != nil {
 			t.Errorf("drop %d: tx found while shouldn't have been", i)
 		}
@@ -934,7 +934,7 @@ func TestChainTxReorgs(t *testing.T) {
 		}
 	}
 	// added tx
-	for i, tx := range (types.Transactions{pastAdd, freshAdd, futureAdd}) {
+	for i, tx := range (data.Transactions{pastAdd, freshAdd, futureAdd}) {
 		if GetTransaction(db, tx.Hash()) == nil {
 			t.Errorf("add %d: expected tx to be found", i)
 		}
@@ -943,7 +943,7 @@ func TestChainTxReorgs(t *testing.T) {
 		}
 	}
 	// shared tx
-	for i, tx := range (types.Transactions{postponed, swapped}) {
+	for i, tx := range (data.Transactions{postponed, swapped}) {
 		if GetTransaction(db, tx.Hash()) == nil {
 			t.Errorf("share %d: expected tx to be found", i)
 		}

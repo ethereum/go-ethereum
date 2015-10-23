@@ -22,7 +22,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -107,16 +107,16 @@ var errorToString = map[int]string{
 
 type txPool interface {
 	// AddTransactions should add the given transactions to the pool.
-	AddTransactions([]*types.Transaction)
+	AddTransactions([]*data.Transaction)
 
 	// GetTransactions should return pending transactions.
 	// The slice should be modifiable by the caller.
-	GetTransactions() types.Transactions
+	GetTransactions() data.Transactions
 }
 
 type chainManager interface {
 	GetBlockHashesFromHash(hash common.Hash, amount uint64) (hashes []common.Hash)
-	GetBlock(hash common.Hash) (block *types.Block)
+	GetBlock(hash common.Hash) (block *data.Block)
 	Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash)
 }
 
@@ -194,14 +194,14 @@ func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
 
 // newBlockData is the network packet for the block propagation message.
 type newBlockData struct {
-	Block *types.Block
+	Block *data.Block
 	TD    *big.Int
 }
 
 // blockBody represents the data content of a single block.
 type blockBody struct {
-	Transactions []*types.Transaction // Transactions contained within a block
-	Uncles       []*types.Header      // Uncles contained within a block
+	Transactions []*data.Transaction // Transactions contained within a block
+	Uncles       []*data.Header      // Uncles contained within a block
 }
 
 // blockBodiesData is the network packet for block content distribution.

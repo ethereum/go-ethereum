@@ -20,52 +20,52 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // TxPreEvent is posted when a transaction enters the transaction pool.
-type TxPreEvent struct{ Tx *types.Transaction }
+type TxPreEvent struct{ Tx *data.Transaction }
 
 // TxPostEvent is posted when a transaction has been processed.
-type TxPostEvent struct{ Tx *types.Transaction }
+type TxPostEvent struct{ Tx *data.Transaction }
 
 // NewBlockEvent is posted when a block has been imported.
-type NewBlockEvent struct{ Block *types.Block }
+type NewBlockEvent struct{ Block *data.Block }
 
 // NewMinedBlockEvent is posted when a block has been imported.
-type NewMinedBlockEvent struct{ Block *types.Block }
+type NewMinedBlockEvent struct{ Block *data.Block }
 
 // RemovedTransactionEvent is posted when a reorg happens
-type RemovedTransactionEvent struct{ Txs types.Transactions }
+type RemovedTransactionEvent struct{ Txs data.Transactions }
 
 // ChainSplit is posted when a new head is detected
 type ChainSplitEvent struct {
-	Block *types.Block
+	Block *data.Block
 	Logs  vm.Logs
 }
 
 type ChainEvent struct {
-	Block *types.Block
+	Block *data.Block
 	Hash  common.Hash
 	Logs  vm.Logs
 }
 
 type ChainSideEvent struct {
-	Block *types.Block
+	Block *data.Block
 	Logs  vm.Logs
 }
 
 type PendingBlockEvent struct {
-	Block *types.Block
+	Block *data.Block
 	Logs  vm.Logs
 }
 
 type ChainUncleEvent struct {
-	Block *types.Block
+	Block *data.Block
 }
 
-type ChainHeadEvent struct{ Block *types.Block }
+type ChainHeadEvent struct{ Block *data.Block }
 
 type GasPriceChanged struct{ Price *big.Int }
 

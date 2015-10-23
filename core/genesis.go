@@ -25,8 +25,8 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -34,7 +34,7 @@ import (
 )
 
 // WriteGenesisBlock writes the genesis block to the database as block number 0
-func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, error) {
+func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*data.Block, error) {
 	contents, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err
@@ -73,8 +73,8 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	root, stateBatch := statedb.CommitBatch()
 
 	difficulty := common.String2Big(genesis.Difficulty)
-	block := types.NewBlock(&types.Header{
-		Nonce:      types.EncodeNonce(common.String2Big(genesis.Nonce).Uint64()),
+	block := data.NewBlock(&data.Header{
+		Nonce:      data.EncodeNonce(common.String2Big(genesis.Nonce).Uint64()),
 		Time:       common.String2Big(genesis.Timestamp),
 		ParentHash: common.HexToHash(genesis.ParentHash),
 		Extra:      common.FromHex(genesis.ExtraData),
@@ -117,7 +117,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 
 // GenesisBlockForTesting creates a block in which addr has the given wei balance.
 // The state trie of the block is written to db. the passed db needs to contain a state root
-func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
+func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *data.Block {
 	statedb, _ := state.New(common.Hash{}, db)
 	obj := statedb.GetOrNewStateObject(addr)
 	obj.SetBalance(balance)
@@ -125,7 +125,7 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 	if err != nil {
 		panic(fmt.Sprintf("cannot write state: %v", err))
 	}
-	block := types.NewBlock(&types.Header{
+	block := data.NewBlock(&data.Header{
 		Difficulty: params.GenesisDifficulty,
 		GasLimit:   params.GenesisGasLimit,
 		Root:       root,
@@ -138,7 +138,7 @@ type GenesisAccount struct {
 	Balance *big.Int
 }
 
-func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) *types.Block {
+func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) *data.Block {
 	accountJson := "{"
 	for i, account := range accounts {
 		if i != 0 {
@@ -153,12 +153,12 @@ func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) 
 	"gasLimit":"0x%x",
 	"difficulty":"0x%x",
 	"alloc": %s
-}`, types.EncodeNonce(0), params.GenesisGasLimit.Bytes(), params.GenesisDifficulty.Bytes(), accountJson)
+}`, data.EncodeNonce(0), params.GenesisGasLimit.Bytes(), params.GenesisDifficulty.Bytes(), accountJson)
 	block, _ := WriteGenesisBlock(db, strings.NewReader(testGenesis))
 	return block
 }
 
-func WriteTestNetGenesisBlock(chainDb ethdb.Database, nonce uint64) (*types.Block, error) {
+func WriteTestNetGenesisBlock(chainDb ethdb.Database, nonce uint64) (*data.Block, error) {
 	testGenesis := fmt.Sprintf(`{
         "nonce": "0x%x",
         "difficulty": "0x20000",
@@ -175,11 +175,11 @@ func WriteTestNetGenesisBlock(chainDb ethdb.Database, nonce uint64) (*types.Bloc
                 "0000000000000000000000000000000000000004": { "balance": "1" },
 		"102e61f5d8f9bc71d0ad4a084df4e65e05ce0e1c": { "balance": "1606938044258990275541962092341162602522202993782792835301376" }
         }
-}`, types.EncodeNonce(nonce))
+}`, data.EncodeNonce(nonce))
 	return WriteGenesisBlock(chainDb, strings.NewReader(testGenesis))
 }
 
-func WriteOlympicGenesisBlock(chainDb ethdb.Database, nonce uint64) (*types.Block, error) {
+func WriteOlympicGenesisBlock(chainDb ethdb.Database, nonce uint64) (*data.Block, error) {
 	testGenesis := fmt.Sprintf(`{
 	"nonce":"0x%x",
 	"gasLimit":"0x%x",
@@ -198,6 +198,6 @@ func WriteOlympicGenesisBlock(chainDb ethdb.Database, nonce uint64) (*types.Bloc
 		"e6716f9544a56c530d868e4bfbacb172315bdead": {"balance": "1606938044258990275541962092341162602522202993782792835301376"},
 		"1a26338f0d905e295fccb71fa9ea849ffa12aaf4": {"balance": "1606938044258990275541962092341162602522202993782792835301376"}
 	}
-}`, types.EncodeNonce(nonce), params.GenesisGasLimit.Bytes(), params.GenesisDifficulty.Bytes())
+}`, data.EncodeNonce(nonce), params.GenesisGasLimit.Bytes(), params.GenesisDifficulty.Bytes())
 	return WriteGenesisBlock(chainDb, strings.NewReader(testGenesis))
 }

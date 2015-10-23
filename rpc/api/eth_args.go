@@ -24,7 +24,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
@@ -906,7 +906,7 @@ func (args *SubmitWorkArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type tx struct {
-	tx *types.Transaction
+	tx *data.Transaction
 
 	To       string `json:"to"`
 	From     string `json:"from"`
@@ -918,7 +918,7 @@ type tx struct {
 	Hash     string `json:"hash"`
 }
 
-func newTx(t *types.Transaction) *tx {
+func newTx(t *data.Transaction) *tx {
 	from, _ := t.From()
 	var to string
 	if t := t.To(); t != nil {
@@ -956,7 +956,7 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 		amount           = new(big.Int).Set(common.Big0)
 		gasLimit         = new(big.Int).Set(common.Big0)
 		gasPrice         = new(big.Int).Set(common.Big0)
-		data             []byte
+		extraData        []byte
 		contractCreation = true
 	)
 
@@ -1005,9 +1005,9 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 		if strVal, ok := val.(string); ok {
 			tx.Data = strVal
 			if strings.HasPrefix(strVal, "0x") {
-				data = common.Hex2Bytes(strVal[2:])
+				extraData = common.Hex2Bytes(strVal[2:])
 			} else {
-				data = common.Hex2Bytes(strVal)
+				extraData = common.Hex2Bytes(strVal)
 			}
 		}
 	}
@@ -1031,9 +1031,9 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	if contractCreation {
-		tx.tx = types.NewContractCreation(nonce, amount, gasLimit, gasPrice, data)
+		tx.tx = data.NewContractCreation(nonce, amount, gasLimit, gasPrice, extraData)
 	} else {
-		tx.tx = types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
+		tx.tx = data.NewTransaction(nonce, to, amount, gasLimit, gasPrice, extraData)
 	}
 
 	return nil

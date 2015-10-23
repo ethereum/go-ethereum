@@ -22,7 +22,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -96,7 +96,7 @@ func (self *GasPriceOracle) listenLoop() {
 	}
 }
 
-func (self *GasPriceOracle) processBlock(block *types.Block) {
+func (self *GasPriceOracle) processBlock(block *data.Block) {
 	i := block.NumberU64()
 	if i > self.lastProcessed {
 		self.lastProcessed = i
@@ -145,7 +145,7 @@ func (self *GasPriceOracle) processBlock(block *types.Block) {
 }
 
 // returns the lowers possible price with which a tx was or could have been included
-func (self *GasPriceOracle) lowestPrice(block *types.Block) *big.Int {
+func (self *GasPriceOracle) lowestPrice(block *data.Block) *big.Int {
 	gasUsed := big.NewInt(0)
 
 	receipts := self.eth.BlockProcessor().GetBlockReceipts(block.Hash())

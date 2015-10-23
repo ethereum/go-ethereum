@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -39,7 +39,7 @@ const (
 
 type txsync struct {
 	p   *peer
-	txs []*types.Transaction
+	txs []*data.Transaction
 }
 
 // syncTransactions starts sending all currently pending transactions to the given peer.

@@ -28,7 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -190,7 +190,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	stream := rlp.NewStream(fh, 0)
 
 	// Run actual the import.
-	blocks := make(types.Blocks, importBatchSize)
+	blocks := make(data.Blocks, importBatchSize)
 	n := 0
 	for batch := 0; ; batch++ {
 		// Load a batch of RLP blocks.
@@ -199,7 +199,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		}
 		i := 0
 		for ; i < importBatchSize; i++ {
-			var b types.Block
+			var b data.Block
 			if err := stream.Decode(&b); err == io.EOF {
 				break
 			} else if err != nil {
@@ -233,7 +233,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	return nil
 }
 
-func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
+func hasAllBlocks(chain *core.BlockChain, bs []*data.Block) bool {
 	for _, b := range bs {
 		if !chain.HasBlock(b.Hash()) {
 			return false

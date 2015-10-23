@@ -22,15 +22,15 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 )
 
-func transaction(nonce uint64, gaslimit *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
-	tx, _ := types.NewTransaction(nonce, common.Address{}, big.NewInt(100), gaslimit, big.NewInt(1), nil).SignECDSA(key)
+func transaction(nonce uint64, gaslimit *big.Int, key *ecdsa.PrivateKey) *data.Transaction {
+	tx, _ := data.NewTransaction(nonce, common.Address{}, big.NewInt(100), gaslimit, big.NewInt(1), nil).SignECDSA(key)
 	return tx
 }
 
@@ -149,7 +149,7 @@ func TestRemoveTx(t *testing.T) {
 func TestNegativeValue(t *testing.T) {
 	pool, key := setupTxPool()
 
-	tx, _ := types.NewTransaction(0, common.Address{}, big.NewInt(-1), big.NewInt(100), big.NewInt(1), nil).SignECDSA(key)
+	tx, _ := data.NewTransaction(0, common.Address{}, big.NewInt(-1), big.NewInt(100), big.NewInt(1), nil).SignECDSA(key)
 	from, _ := tx.From()
 	currentState, _ := pool.currentState()
 	currentState.AddBalance(from, big.NewInt(1))
@@ -175,7 +175,7 @@ func TestTransactionChainFork(t *testing.T) {
 	if err := pool.add(tx); err != nil {
 		t.Error("didn't expect error", err)
 	}
-	pool.RemoveTransactions([]*types.Transaction{tx})
+	pool.RemoveTransactions([]*data.Transaction{tx})
 
 	// reset the pool's internal state
 	resetState()
@@ -255,7 +255,7 @@ func TestRemovedTxEvent(t *testing.T) {
 	from, _ := tx.From()
 	currentState, _ := pool.currentState()
 	currentState.AddBalance(from, big.NewInt(1000000000000))
-	pool.eventMux.Post(RemovedTransactionEvent{types.Transactions{tx}})
+	pool.eventMux.Post(RemovedTransactionEvent{data.Transactions{tx}})
 	pool.eventMux.Post(ChainHeadEvent{nil})
 	if len(pool.pending) != 1 {
 		t.Error("expected 1 pending tx, got", len(pool.pending))

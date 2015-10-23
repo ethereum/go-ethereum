@@ -6,7 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
@@ -17,18 +17,18 @@ func TestMipmapUpgrade(t *testing.T) {
 	genesis := core.WriteGenesisBlockForTesting(db)
 
 	chain, receipts := core.GenerateChain(genesis, db, 10, func(i int, gen *core.BlockGen) {
-		var receipts types.Receipts
+		var receipts data.Receipts
 		switch i {
 		case 1:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := data.NewReceipt(nil, new(big.Int))
 			receipt.Logs = vm.Logs{&vm.Log{Address: addr}}
 			gen.AddUncheckedReceipt(receipt)
-			receipts = types.Receipts{receipt}
+			receipts = data.Receipts{receipt}
 		case 2:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := data.NewReceipt(nil, new(big.Int))
 			receipt.Logs = vm.Logs{&vm.Log{Address: addr}}
 			gen.AddUncheckedReceipt(receipt)
-			receipts = types.Receipts{receipt}
+			receipts = data.Receipts{receipt}
 		}
 
 		// store the receipts
@@ -56,7 +56,7 @@ func TestMipmapUpgrade(t *testing.T) {
 	}
 
 	bloom := core.GetMipmapBloom(db, 1, core.MIPMapLevels[0])
-	if (bloom == types.Bloom{}) {
+	if (bloom == data.Bloom{}) {
 		t.Error("got empty bloom filter")
 	}
 

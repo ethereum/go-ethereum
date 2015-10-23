@@ -20,7 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 )
 
 type Block interface {
@@ -32,6 +32,6 @@ type Block interface {
 }
 
 type ChainManager interface {
-	GetBlockByNumber(uint64) *types.Block
-	CurrentBlock() *types.Block
+	GetBlockByNumber(uint64) *data.Block
+	CurrentBlock() *data.Block
 }

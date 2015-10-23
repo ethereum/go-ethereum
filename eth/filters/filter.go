@@ -21,7 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
@@ -37,8 +37,8 @@ type Filter struct {
 	addresses  []common.Address
 	topics     [][]common.Hash
 
-	BlockCallback       func(*types.Block, vm.Logs)
-	TransactionCallback func(*types.Transaction)
+	BlockCallback       func(*data.Block, vm.Logs)
+	TransactionCallback func(*data.Transaction)
 	LogsCallback        func(vm.Logs)
 }
 
@@ -119,7 +119,7 @@ func (self *Filter) mipFind(start, end uint64, depth int) (logs vm.Logs) {
 }
 
 func (self *Filter) getLogs(start, end uint64) (logs vm.Logs) {
-	var block *types.Block
+	var block *data.Block
 
 	for i := start; i <= end; i++ {
 		hash := core.GetCanonicalHash(self.db, i)
@@ -198,11 +198,11 @@ Logs:
 	return ret
 }
 
-func (self *Filter) bloomFilter(block *types.Block) bool {
+func (self *Filter) bloomFilter(block *data.Block) bool {
 	if len(self.addresses) > 0 {
 		var included bool
 		for _, addr := range self.addresses {
-			if types.BloomLookup(block.Bloom(), addr) {
+			if data.BloomLookup(block.Bloom(), addr) {
 				included = true
 				break
 			}
@@ -216,7 +216,7 @@ func (self *Filter) bloomFilter(block *types.Block) bool {
 	for _, sub := range self.topics {
 		var included bool
 		for _, topic := range sub {
-			if (topic == common.Hash{}) || types.BloomLookup(block.Bloom(), topic) {
+			if (topic == common.Hash{}) || data.BloomLookup(block.Bloom(), topic) {
 				included = true
 				break
 			}

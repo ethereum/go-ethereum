@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -96,7 +96,7 @@ func TestRecvTransactions62(t *testing.T) { testRecvTransactions(t, 62) }
 func TestRecvTransactions63(t *testing.T) { testRecvTransactions(t, 63) }
 
 func testRecvTransactions(t *testing.T, protocol int) {
-	txAdded := make(chan []*types.Transaction)
+	txAdded := make(chan []*data.Transaction)
 	pm := newTestProtocolManagerMust(t, false, 0, nil, txAdded)
 	p, _ := newTestPeer("peer", protocol, pm, true)
 	defer pm.Stop()
@@ -129,7 +129,7 @@ func testSendTransactions(t *testing.T, protocol int) {
 
 	// Fill the pool with big transactions.
 	const txsize = txsyncPackSize / 10
-	alltxs := make([]*types.Transaction, 100)
+	alltxs := make([]*data.Transaction, 100)
 	for nonce := range alltxs {
 		alltxs[nonce] = newTestTransaction(testAccount, uint64(nonce), txsize)
 	}
@@ -145,7 +145,7 @@ func testSendTransactions(t *testing.T, protocol int) {
 			seen[tx.Hash()] = false
 		}
 		for n := 0; n < len(alltxs) && !t.Failed(); {
-			var txs []*types.Transaction
+			var txs []*data.Transaction
 			msg, err := p.app.ReadMsg()
 			if err != nil {
 				t.Errorf("%v: read error: %v", p.Peer, err)

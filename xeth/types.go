@@ -24,8 +24,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -71,7 +71,7 @@ func (self *Object) Storage() (storage map[string]string) {
 // Block interface exposed to QML
 type Block struct {
 	//Transactions string `json:"transactions"`
-	ref          *types.Block
+	ref          *data.Block
 	Size         string       `json:"size"`
 	Number       int          `json:"number"`
 	Hash         string       `json:"hash"`
@@ -88,7 +88,7 @@ type Block struct {
 }
 
 // Creates a new QML Block from a chain block
-func NewBlock(block *types.Block) *Block {
+func NewBlock(block *data.Block) *Block {
 	if block == nil {
 		return &Block{}
 	}
@@ -140,7 +140,7 @@ func (self *Block) GetTransaction(hash string) *Transaction {
 }
 
 type Transaction struct {
-	ref *types.Transaction
+	ref *data.Transaction
 
 	Value           string `json:"value"`
 	Gas             string `json:"gas"`
@@ -155,7 +155,7 @@ type Transaction struct {
 	Confirmations   int    `json:"confirmations"`
 }
 
-func NewTx(tx *types.Transaction) *Transaction {
+func NewTx(tx *data.Transaction) *Transaction {
 	sender, err := tx.From()
 	if err != nil {
 		return nil

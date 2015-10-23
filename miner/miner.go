@@ -24,8 +24,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/data"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -165,7 +165,7 @@ func (self *Miner) PendingState() *state.StateDB {
 	return self.worker.pendingState()
 }
 
-func (self *Miner) PendingBlock() *types.Block {
+func (self *Miner) PendingBlock() *data.Block {
 	return self.worker.pendingBlock()
 }
 
