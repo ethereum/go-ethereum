@@ -162,7 +162,7 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 
 }
 func runBlockTest(test *BlockTest) error {
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"))
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"), crypto.StandardScryptN, crypto.StandardScryptP)
 	am := accounts.NewManager(ks)
 	db, _ := ethdb.NewMemDatabase()
 	cfg := &eth.Config{

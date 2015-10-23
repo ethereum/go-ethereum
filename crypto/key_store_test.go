@@ -56,7 +56,7 @@ func TestKeyStorePlain(t *testing.T) {
 }
 
 func TestKeyStorePassphrase(t *testing.T) {
-	ks := NewKeyStorePassphrase(common.DefaultDataDir())
+	ks := NewKeyStorePassphrase(common.DefaultDataDir(), LightScryptN, LightScryptP)
 	pass := "foo"
 	k1, err := ks.GenerateNewKey(randentropy.Reader, pass)
 	if err != nil {
@@ -82,7 +82,7 @@ func TestKeyStorePassphrase(t *testing.T) {
 }
 
 func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
-	ks := NewKeyStorePassphrase(common.DefaultDataDir())
+	ks := NewKeyStorePassphrase(common.DefaultDataDir(), LightScryptN, LightScryptP)
 	pass := "foo"
 	k1, err := ks.GenerateNewKey(randentropy.Reader, pass)
 	if err != nil {
@@ -110,7 +110,7 @@ func TestImportPreSaleKey(t *testing.T) {
 	// python pyethsaletool.py genwallet
 	// with password "foo"
 	fileContent := "{\"encseed\": \"26d87f5f2bf9835f9a47eefae571bc09f9107bb13d54ff12a4ec095d01f83897494cf34f7bed2ed34126ecba9db7b62de56c9d7cd136520a0427bfb11b8954ba7ac39b90d4650d3448e31185affcd74226a68f1e94b1108e6e0a4a91cdd83eba\", \"ethaddr\": \"d4584b5f6229b7be90727b0fc8c6b91bb427821f\", \"email\": \"gustav.simonsson@gmail.com\", \"btcaddr\": \"1EVknXyFC68kKNLkh6YnKzW41svSRoaAcx\"}"
-	ks := NewKeyStorePassphrase(common.DefaultDataDir())
+	ks := NewKeyStorePassphrase(common.DefaultDataDir(), LightScryptN, LightScryptP)
 	pass := "foo"
 	_, err := ImportPreSaleKey(ks, []byte(fileContent), pass)
 	if err != nil {
@@ -168,7 +168,7 @@ func TestV1_1(t *testing.T) {
 }
 
 func TestV1_2(t *testing.T) {
-	ks := NewKeyStorePassphrase("tests/v1")
+	ks := NewKeyStorePassphrase("tests/v1", LightScryptN, LightScryptP)
 	addr := common.HexToAddress("cb61d5a9c4896fb9658090b597ef0e7be6f7b67e")
 	k, err := ks.GetKey(addr, "g")
 	if err != nil {
