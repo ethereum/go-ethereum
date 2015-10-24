@@ -274,9 +274,6 @@ func (bc *BlockChain) SetHead(head uint64) {
 		if bc.currentBlock == nil {
 			bc.currentBlock = bc.genesisBlock
 		}
-		bc.insert(bc.currentBlock)
-	} else {
-		bc.writeHeader(bc.currentHeader)
 	}
 	if bc.currentHeader == nil {
 		bc.currentHeader = bc.genesisBlock.Header()

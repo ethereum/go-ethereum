@@ -241,14 +241,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	defer msg.Discard()
 
 	// Handle the message depending on its contents
-	switch {
-	case msg.Code == StatusMsg:
+	switch msg.Code {
+	case StatusMsg:
 		glog.V(access.LogLevel).Infof("LES: received StatusMsg from peer %v", p.id)
 		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
 
 	// Block header query, collect the requested headers and reply
-	case msg.Code == GetBlockHeadersMsg:
+	case GetBlockHeadersMsg:
 		glog.V(access.LogLevel).Infof("LES: received GetBlockHeadersMsg from peer %v", p.id)
 		// Decode the complex header query
 		var query getBlockHeadersData
@@ -313,7 +313,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendBlockHeaders(headers)
 
-	case msg.Code == BlockHeadersMsg:
+	case BlockHeadersMsg:
 		glog.V(access.LogLevel).Infof("LES: received BlockHeadersMsg from peer %v", p.id)
 		// A batch of headers arrived to one of our previous requests
 		var headers []*types.Header
@@ -332,7 +332,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		//}
 
-	case msg.Code == GetBlockBodiesMsg:
+	case GetBlockBodiesMsg:
 		glog.V(access.LogLevel).Infof("LES: received GetBlockBodiesMsg from peer %v", p.id)
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
@@ -360,7 +360,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendBlockBodiesRLP(bodies)
 
-	case msg.Code == BlockBodiesMsg:
+	case BlockBodiesMsg:
 		glog.V(access.LogLevel).Infof("LES: received BlockBodiesMsg from peer %v", p.id)
 		// A batch of block bodies arrived to one of our previous requests
 		var data []*types.Body
@@ -372,7 +372,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			Obj:     data,
 		})
 
-	case msg.Code == GetNodeDataMsg:
+	case GetNodeDataMsg:
 		glog.V(access.LogLevel).Infof("LES: received GetNodeDataMsg from peer %v", p.id)
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
@@ -400,7 +400,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendNodeData(data)
 
-	case msg.Code == NodeDataMsg:
+	case NodeDataMsg:
 		glog.V(access.LogLevel).Infof("LES: received NodeDataMsg from peer %v", p.id)
 		// A batch of node state data arrived to one of our previous requests
 		var data [][]byte
@@ -412,7 +412,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			Obj:     data,
 		})
 
-	case msg.Code == GetReceiptsMsg:
+	case GetReceiptsMsg:
 		glog.V(access.LogLevel).Infof("LES: received GetReceiptsMsg from peer %v", p.id)
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
@@ -449,19 +449,19 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendReceiptsRLP(receipts)
 
-	case msg.Code == ReceiptsMsg:
+	case ReceiptsMsg:
 		glog.V(access.LogLevel).Infof("LES: received ReceiptsMsg from peer %v", p.id)
 		// A batch of receipts arrived to one of our previous requests
-		var receipts [][]*types.Receipt
+		var receipts []types.Receipts
 		if err := msg.Decode(&receipts); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		pm.chainAccess.Deliver(p.id, &access.Msg{
 			MsgType: access.MsgReceipts,
-			Obj:     receipts[0],
+			Obj:     receipts,
 		})
 
-	case msg.Code == GetProofsMsg:
+	case GetProofsMsg:
 		glog.V(access.LogLevel).Infof("LES: received GetProofsMsg from peer %v", p.id)
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
@@ -490,7 +490,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendProofs(proofs)
 
-	case msg.Code == ProofsMsg:
+	case ProofsMsg:
 		glog.V(access.LogLevel).Infof("LES: received ProofsMsg from peer %v", p.id)
 		// A batch of merkle proofs arrived to one of our previous requests
 		var data []trie.MerkleProof
@@ -502,7 +502,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			Obj:     data,
 		})
 
-	case msg.Code == NewBlockHashesMsg:
+	case NewBlockHashesMsg:
 		glog.V(access.LogLevel).Infof("LES: received NewBlockHashesMsg from peer %v", p.id)
 		// Retrieve and deseralize the remote new block hashes notification
 		type announce struct {

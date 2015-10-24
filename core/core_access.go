@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -110,18 +109,13 @@ func (self *ReceiptsAccess) Valid(msg *access.Msg) bool {
 		glog.V(access.LogLevel).Infof("ODR: invalid number of entries: %d", len(receipts))
 		return false
 	}
-	data, err := rlp.EncodeToBytes(receipts[0])
-	if err != nil {
-		glog.V(access.LogLevel).Infof("ODR: RLP encode error: %v", err)
-		return false
-	}
-	hash := crypto.Sha3Hash(data)
+	hash := types.DeriveSha(receipts[0])
 	header := GetHeader(self.db, self.blockHash)
 	if header == nil {
 		glog.V(access.LogLevel).Infof("ODR: header not found for block %08x", self.blockHash[:4])
 		return false
 	}
-	if bytes.Compare(header.ReceiptHash[:], hash[:]) != 0 {
+	if !bytes.Equal(header.ReceiptHash[:], hash[:]) {
 		glog.V(access.LogLevel).Infof("ODR: header receipts hash %08x does not match calculated RLP hash %08x", header.ReceiptHash[:4], hash[:4])
 		return false
 	}

@@ -24,19 +24,19 @@ import (
 )
 
 type OdrContext struct {
-	cancel, cancelOrTimeout	chan struct{}
-	id *OdrChannelID
-	cancelled int32
+	cancel, cancelOrTimeout chan struct{}
+	id                      *OdrChannelID
+	cancelled               int32
 }
 
-var NullCtx = (*OdrContext)(nil)   // used when creating states
-var NoOdr = (*OdrContext)(nil)		 // used for individual requests
+var NullCtx = (*OdrContext)(nil) // used when creating states
+var NoOdr = (*OdrContext)(nil)   // used for individual requests
 
 func NewContext(id *OdrChannelID) *OdrContext {
 	ctx := &OdrContext{
-		cancel: make(chan struct{}),
+		cancel:          make(chan struct{}),
 		cancelOrTimeout: make(chan struct{}),
-		id: id,
+		id:              id,
 	}
 	go func() {
 		select {

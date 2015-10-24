@@ -800,7 +800,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	// Import the chain as an archive node and ensure all pointers are updated
 	archiveDb, _ := ethdb.NewMemDatabase()
 	archiveCa := access.NewDbChainAccess(archiveDb)
-
+	WriteGenesisBlockForTesting(archiveDb, GenesisAccount{address, funds})
 	archive, _ := NewBlockChain(archiveCa, FakePow{}, new(event.TypeMux))
 	archive.SetProcessor(NewBlockProcessor(archiveCa, FakePow{}, archive, new(event.TypeMux)))
 

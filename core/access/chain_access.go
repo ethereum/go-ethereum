@@ -30,27 +30,35 @@ import (
 )
 
 var (
-	ErrCancel = errors.New("ODR cancelled")
-	errNotInDb    = errors.New("object not found in database")
+	ErrCancel  = errors.New("ODR cancelled")
+	errNotInDb = errors.New("object not found in database")
 )
 
-const LogLevel = logger.Info
+const LogLevel = logger.Debug
 
 var (
 	requestTimeout = time.Millisecond * 300
-	retryPeers = time.Second * 1
+	retryPeers     = time.Second * 1
 )
 
 type ChainAccess struct {
-	db          ethdb.Database
-	odr         bool // light client mode, odr enabled
-	lock        sync.Mutex
-	valFunc     validatorFunc
-	deliverChan chan *Msg
-	peers       *peerSet
+	db         ethdb.Database
+	odr        bool // light client mode, odr enabled
+	lock       sync.Mutex
+	sentReqs   map[uint64]*sentReq
+	sentReqCnt uint64
+	peers      *peerSet
 
 	// p2p access objects
 	// parameters (light/full/archive)
+}
+
+type requestFunc func(*Peer) error
+type validatorFunc func(*Msg) bool
+
+type sentReq struct {
+	valFunc     validatorFunc
+	deliverChan chan *Msg
 }
 
 func NewDbChainAccess(db ethdb.Database) *ChainAccess {
@@ -58,7 +66,12 @@ func NewDbChainAccess(db ethdb.Database) *ChainAccess {
 }
 
 func NewChainAccess(db ethdb.Database, odr bool) *ChainAccess {
-	return &ChainAccess{db: db, peers: newPeerSet(), odr: odr}
+	return &ChainAccess{
+		db:       db,
+		peers:    newPeerSet(),
+		sentReqs: make(map[uint64]*sentReq),
+		odr:      odr,
+	}
 }
 
 func (self *ChainAccess) Db() ethdb.Database {
@@ -103,62 +116,62 @@ type ObjectAccess interface {
 	Valid(*Msg) bool // if true, keeps the retrieved object
 }
 
-type requestFunc func(*Peer) error
-type validatorFunc func(*Msg) bool
-
 func (self *ChainAccess) Deliver(id string, msg *Msg) (processed bool) {
 	self.lock.Lock()
-	valFunc := self.valFunc
-	chn := self.deliverChan
-	self.lock.Unlock()
-	if (valFunc != nil) && (chn != nil) && valFunc(msg) {
-		chn <- msg
-		return true
+	defer self.lock.Unlock()
+
+	for i, req := range self.sentReqs {
+		if req.valFunc(msg) {
+			req.deliverChan <- msg
+			delete(self.sentReqs, i)
+			return true
+		}
 	}
 	return false
 }
 
 func (self *ChainAccess) networkRequest(rqFunc requestFunc, valFunc validatorFunc, ctx *OdrContext) (*Msg, error) {
-
+	req := &sentReq{
+		deliverChan: make(chan *Msg),
+		valFunc:     valFunc,
+	}
 	self.lock.Lock()
-	self.deliverChan = make(chan *Msg)
-	self.valFunc = valFunc
+	reqCnt := self.sentReqCnt
+	self.sentReqCnt++
+	self.sentReqs[reqCnt] = req
 	self.lock.Unlock()
 
 	defer func() {
 		self.lock.Lock()
-		self.deliverChan = nil
-		self.valFunc = nil
+		delete(self.sentReqs, reqCnt)
 		self.lock.Unlock()
 	}()
-
-	//fmt.Println("networkRequest")
 
 	var msg *Msg
 
 	for {
-	peers := self.peers.BestPeers()
-	if len(peers) == 0 {
-		select {
-		case <-ctx.cancelOrTimeout:
-			return nil, ErrCancel
-		case <-time.After(retryPeers):
+		peers := self.peers.BestPeers()
+		if len(peers) == 0 {
+			select {
+			case <-ctx.cancelOrTimeout:
+				return nil, ErrCancel
+			case <-time.After(retryPeers):
+			}
 		}
-	}
-	for _, peer := range peers {
-		rqFunc(peer)
-		select {
-		case <-ctx.cancelOrTimeout:
-			return nil, ErrCancel
-		case msg = <-self.deliverChan:
-			peer.Promote()
-			glog.V(LogLevel).Infof("networkRequest success")
-			return msg, nil
-		case <-time.After(requestTimeout):
-			peer.Demote()
-			glog.V(LogLevel).Infof("networkRequest timeout")
+		for _, peer := range peers {
+			rqFunc(peer)
+			select {
+			case <-ctx.cancelOrTimeout:
+				return nil, ErrCancel
+			case msg = <-req.deliverChan:
+				peer.Promote()
+				glog.V(LogLevel).Infof("networkRequest success")
+				return msg, nil
+			case <-time.After(requestTimeout):
+				peer.Demote()
+				glog.V(LogLevel).Infof("networkRequest timeout")
+			}
 		}
-	}
 	}
 }
 

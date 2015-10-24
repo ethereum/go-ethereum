@@ -66,16 +66,16 @@ const (
 	// Protocol messages belonging to LPV1
 	StatusMsg          = 0x00
 	NewBlockHashesMsg  = 0x01
-	GetBlockHeadersMsg = 0x03
-	BlockHeadersMsg    = 0x04
-	GetBlockBodiesMsg  = 0x05
-	BlockBodiesMsg     = 0x06
-	GetNodeDataMsg     = 0x0d
-	NodeDataMsg        = 0x0e
-	GetReceiptsMsg     = 0x0f
-	ReceiptsMsg        = 0x10
-	GetProofsMsg       = 0x11
-	ProofsMsg          = 0x12
+	GetBlockHeadersMsg = 0x02
+	BlockHeadersMsg    = 0x03
+	GetBlockBodiesMsg  = 0x04
+	BlockBodiesMsg     = 0x05
+	GetNodeDataMsg     = 0x06
+	NodeDataMsg        = 0x07
+	GetReceiptsMsg     = 0x08
+	ReceiptsMsg        = 0x09
+	GetProofsMsg       = 0x0a
+	ProofsMsg          = 0x0b
 )
 
 type errCode int
