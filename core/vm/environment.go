@@ -31,7 +31,9 @@ type Environment interface {
 
 	Origin() common.Address
 	BlockNumber() *big.Int
-	GetHash(n uint64) common.Hash
+	// The n'th hash ago from this block number
+	GetHash(uint64) common.Hash
+	// The handler's address
 	Coinbase() common.Address
 	Time() *big.Int
 	Difficulty() *big.Int

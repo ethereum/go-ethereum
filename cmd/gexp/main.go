@@ -49,10 +49,10 @@ import (
 const (
 
 	ClientIdentifier = "Gexp"
-	Version          = "1.2.2"
+	Version          = "1.2.3"
 	VersionMajor     = 1
 	VersionMinor     = 2
-	VersionPatch     = 2
+	VersionPatch     = 3
 )
 
 var (
