@@ -59,24 +59,8 @@ const (
 	LogFilterTy
 )
 
-func DefaultGas() *big.Int { return new(big.Int).Set(defaultGas) }
-
-func (self *XEth) DefaultGasPrice() *big.Int {
-	if self.gpo == nil {
-		self.gpo = eth.NewGasPriceOracle(self.backend)
-	}
-	return self.gpo.SuggestPrice()
-}
-
 type XEth struct {
-	backend  *eth.Ethereum
-	frontend Frontend
-
-	state   *State
-	whisper *Whisper
-
-	quit          chan struct{}
-	filterManager *filters.FilterSystem
+	quit chan struct{}
 
 	logMu    sync.RWMutex
 	logQueue map[int]*logQueue
@@ -92,16 +76,18 @@ type XEth struct {
 
 	transactMu sync.Mutex
 
-	agent *miner.RemoteAgent
-
-	gpo *eth.GasPriceOracle
+	// read-only fields
+	backend       *eth.Ethereum
+	frontend      Frontend
+	agent         *miner.RemoteAgent
+	gpo           *eth.GasPriceOracle
+	state         *State
+	whisper       *Whisper
+	filterManager *filters.FilterSystem
 }
 
 func NewTest(eth *eth.Ethereum, frontend Frontend) *XEth {
-	return &XEth{
-		backend:  eth,
-		frontend: frontend,
-	}
+	return &XEth{backend: eth, frontend: frontend}
 }
 
 // New creates an XEth that uses the given frontend.
@@ -118,6 +104,7 @@ func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 		transactionQueue: make(map[int]*hashQueue),
 		messages:         make(map[int]*whisperFilter),
 		agent:            miner.NewRemoteAgent(),
+		gpo:              eth.NewGasPriceOracle(ethereum),
 	}
 	if ethereum.Whisper() != nil {
 		xeth.whisper = NewWhisper(ethereum.Whisper())
@@ -205,6 +192,12 @@ func cTopics(t [][]string) [][]common.Hash {
 		}
 	}
 	return topics
+}
+
+func DefaultGas() *big.Int { return new(big.Int).Set(defaultGas) }
+
+func (self *XEth) DefaultGasPrice() *big.Int {
+	return self.gpo.SuggestPrice()
 }
 
 func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }
