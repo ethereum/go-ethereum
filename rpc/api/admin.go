@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/core"
@@ -84,19 +83,15 @@ type adminApi struct {
 	ethereum *eth.Ethereum
 	codec    codec.Codec
 	coder    codec.ApiCoder
-	docRoot  string
-	ds       *docserver.DocServer
 }
 
 // create a new admin api instance
-func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec, docRoot string) *adminApi {
+func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec) *adminApi {
 	return &adminApi{
 		xeth:     xeth,
 		ethereum: ethereum,
 		codec:    codec,
 		coder:    codec.New(nil),
-		docRoot:  docRoot,
-		ds:       docserver.New(docRoot),
 	}
 }
 
@@ -258,7 +253,7 @@ func (self *adminApi) StartRPC(req *shared.Request) (interface{}, error) {
 		CorsDomain:    args.CorsDomain,
 	}
 
-	apis, err := ParseApiString(args.Apis, self.codec, self.xeth, self.ethereum, self.docRoot)
+	apis, err := ParseApiString(args.Apis, self.codec, self.xeth, self.ethereum)
 	if err != nil {
 		return false, err
 	}
@@ -439,7 +434,7 @@ func (self *adminApi) GetContractInfo(req *shared.Request) (interface{}, error) 
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	infoDoc, err := natspec.FetchDocsForContract(args.Contract, self.xeth, self.ds)
+	infoDoc, err := natspec.FetchDocsForContract(args.Contract, self.xeth, self.ethereum.HTTPClient())
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +454,7 @@ func (self *adminApi) HttpGet(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	resp, err := self.ds.Get(args.Uri, args.Path)
+	resp, err := self.ethereum.HTTPClient().Get(args.Uri, args.Path)
 	if err != nil {
 		return nil, err
 	}

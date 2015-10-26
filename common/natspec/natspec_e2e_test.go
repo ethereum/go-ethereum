@@ -28,7 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/docserver"
+	"github.com/ethereum/go-ethereum/common/httpclient"
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -113,8 +113,8 @@ func (self *testFrontend) UnlockAccount(acc []byte) bool {
 
 func (self *testFrontend) ConfirmTransaction(tx string) bool {
 	if self.wantNatSpec {
-		ds := docserver.New("/tmp/")
-		self.lastConfirm = GetNotice(self.xeth, tx, ds)
+		client := httpclient.New("/tmp/")
+		self.lastConfirm = GetNotice(self.xeth, tx, client)
 	}
 	return true
 }

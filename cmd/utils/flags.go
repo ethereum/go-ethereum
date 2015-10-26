@@ -139,6 +139,11 @@ var (
 		Name:  "natspec",
 		Usage: "Enable NatSpec confirmation notice",
 	}
+	DocRootFlag = DirectoryFlag{
+		Name:  "docroot",
+		Usage: "Document Root for HTTPClient file scheme",
+		Value: DirectoryString{common.HomeDir()},
+	}
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
 		Usage: "Megabytes of memory allocated to internal caching",
@@ -452,6 +457,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		Olympic:                 ctx.GlobalBool(OlympicFlag.Name),
 		NAT:                     MakeNAT(ctx),
 		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
+		DocRoot:                 ctx.GlobalString(DocRootFlag.Name),
 		Discovery:               !ctx.GlobalBool(NoDiscoverFlag.Name),
 		NodeKey:                 MakeNodeKey(ctx),
 		Shh:                     ctx.GlobalBool(WhisperEnabledFlag.Name),
@@ -616,7 +622,7 @@ func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
 		xeth := xeth.New(eth, fe)
 		codec := codec.JSON
 
-		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, eth, ctx.GlobalString(JSpathFlag.Name))
+		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, eth)
 		if err != nil {
 			return nil, err
 		}
@@ -637,7 +643,7 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
 	xeth := xeth.New(eth, nil)
 	codec := codec.JSON
 
-	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth, ctx.GlobalString(JSpathFlag.Name))
+	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth)
 	if err != nil {
 		return err
 	}

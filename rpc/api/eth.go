@@ -24,6 +24,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
@@ -67,6 +68,7 @@ var (
 		"eth_getUncleCountByBlockNumber":          (*ethApi).GetUncleCountByBlockNumber,
 		"eth_getData":                             (*ethApi).GetData,
 		"eth_getCode":                             (*ethApi).GetData,
+		"eth_getNatSpec":                          (*ethApi).GetNatSpec,
 		"eth_sign":                                (*ethApi).Sign,
 		"eth_sendRawTransaction":                  (*ethApi).SendRawTransaction,
 		"eth_sendTransaction":                     (*ethApi).SendTransaction,
@@ -320,6 +322,18 @@ func (self *ethApi) SendTransaction(req *shared.Request) (interface{}, error) {
 		return nil, err
 	}
 	return v, nil
+}
+
+func (self *ethApi) GetNatSpec(req *shared.Request) (interface{}, error) {
+	args := new(NewTxArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	var jsontx = fmt.Sprintf(`{"params":[{"to":"%s","data": "%s"}]}`, args.To, args.Data)
+	notice := natspec.GetNotice(self.xeth, jsontx, self.ethereum.HTTPClient())
+
+	return notice, nil
 }
 
 func (self *ethApi) EstimateGas(req *shared.Request) (interface{}, error) {

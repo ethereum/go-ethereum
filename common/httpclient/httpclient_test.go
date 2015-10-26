@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package docserver
+package httpclient
 
 import (
 	"io/ioutil"
@@ -28,19 +28,19 @@ import (
 )
 
 func TestGetAuthContent(t *testing.T) {
-	dir, err := ioutil.TempDir("", "docserver-test")
+	dir, err := ioutil.TempDir("", "httpclient-test")
 	if err != nil {
 		t.Fatal("cannot create temporary directory:", err)
 	}
 	defer os.RemoveAll(dir)
-	ds := New(dir)
+	client := New(dir)
 
 	text := "test"
 	hash := crypto.Sha3Hash([]byte(text))
 	if err := ioutil.WriteFile(path.Join(dir, "test.content"), []byte(text), os.ModePerm); err != nil {
 		t.Fatal("could not write test file", err)
 	}
-	content, err := ds.GetAuthContent("file:///test.content", hash)
+	content, err := client.GetAuthContent("file:///test.content", hash)
 	if err != nil {
 		t.Errorf("no error expected, got %v", err)
 	}
@@ -49,7 +49,7 @@ func TestGetAuthContent(t *testing.T) {
 	}
 
 	hash = common.Hash{}
-	content, err = ds.GetAuthContent("file:///test.content", hash)
+	content, err = client.GetAuthContent("file:///test.content", hash)
 	expected := "content hash mismatch 0000000000000000000000000000000000000000000000000000000000000000 != 9c22ff5f21f0b81b113e63f7db6da94fedef11b2119b4088b89664fb9a3cb658 (exp)"
 	if err == nil {
 		t.Errorf("expected error, got nothing")
@@ -66,12 +66,12 @@ type rt struct{}
 func (rt) RoundTrip(req *http.Request) (resp *http.Response, err error) { return }
 
 func TestRegisterScheme(t *testing.T) {
-	ds := New("/tmp/")
-	if ds.HasScheme("scheme") {
+	client := New("/tmp/")
+	if client.HasScheme("scheme") {
 		t.Errorf("expected scheme not to be registered")
 	}
-	ds.RegisterScheme("scheme", rt{})
-	if !ds.HasScheme("scheme") {
+	client.RegisterScheme("scheme", rt{})
+	if !client.HasScheme("scheme") {
 		t.Errorf("expected scheme to be registered")
 	}
 }

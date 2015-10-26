@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
+	"github.com/ethereum/go-ethereum/common/httpclient"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -106,6 +107,7 @@ type Config struct {
 	LogJSON   string
 	VmDebug   bool
 	NatSpec   bool
+	DocRoot   string
 	AutoDAG   bool
 	PowTest   bool
 	ExtraData []byte
@@ -248,6 +250,8 @@ type Ethereum struct {
 	GpobaseStepDown         int
 	GpobaseStepUp           int
 	GpobaseCorrectionFactor int
+
+	httpclient *httpclient.HTTPClient
 
 	net      *p2p.Server
 	eventMux *event.TypeMux
@@ -400,6 +404,7 @@ func New(config *Config) (*Ethereum, error) {
 		GpobaseStepDown:         config.GpobaseStepDown,
 		GpobaseStepUp:           config.GpobaseStepUp,
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
+		httpclient:              httpclient.New(config.DocRoot),
 	}
 
 	if config.PowTest {
@@ -700,6 +705,12 @@ func (self *Ethereum) StopAutoDAG() {
 		self.autodagquit = nil
 	}
 	glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
+}
+
+// HTTPClient returns the light http client used for fetching offchain docs
+// (natspec, source for verification)
+func (self *Ethereum) HTTPClient() *httpclient.HTTPClient {
+	return self.httpclient
 }
 
 func (self *Ethereum) Solc() (*compiler.Solidity, error) {
