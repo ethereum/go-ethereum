@@ -16,7 +16,11 @@
 
 package p2p
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/p2p/discover"
+)
 
 // Protocol represents a P2P subprotocol implementation.
 type Protocol struct {
@@ -39,6 +43,15 @@ type Protocol struct {
 	// any protocol-level error (such as an I/O error) that is
 	// encountered.
 	Run func(peer *Peer, rw MsgReadWriter) error
+
+	// NodeInfo is an optional helper method to retrieve protocol specific metadata
+	// about the host node.
+	NodeInfo func() interface{}
+
+	// PeerInfo is an optional helper method to retrieve protocol specific metadata
+	// about a certain peer in the network. If an info retrieval function is set,
+	// but returns nil, it is assumed that the protocol handshake is still running.
+	PeerInfo func(id discover.NodeID) interface{}
 }
 
 func (p Protocol) cap() Cap {

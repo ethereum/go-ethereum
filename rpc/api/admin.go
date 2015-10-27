@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
@@ -80,15 +81,17 @@ type adminhandler func(*adminApi, *shared.Request) (interface{}, error)
 // admin api provider
 type adminApi struct {
 	xeth     *xeth.XEth
+	network  *p2p.Server
 	ethereum *eth.Ethereum
 	codec    codec.Codec
 	coder    codec.ApiCoder
 }
 
 // create a new admin api instance
-func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec) *adminApi {
+func NewAdminApi(xeth *xeth.XEth, network *p2p.Server, ethereum *eth.Ethereum, codec codec.Codec) *adminApi {
 	return &adminApi{
 		xeth:     xeth,
+		network:  network,
 		ethereum: ethereum,
 		codec:    codec,
 		coder:    codec.New(nil),
@@ -137,11 +140,11 @@ func (self *adminApi) AddPeer(req *shared.Request) (interface{}, error) {
 }
 
 func (self *adminApi) Peers(req *shared.Request) (interface{}, error) {
-	return self.ethereum.PeersInfo(), nil
+	return self.network.PeersInfo(), nil
 }
 
 func (self *adminApi) NodeInfo(req *shared.Request) (interface{}, error) {
-	return self.ethereum.NodeInfo(), nil
+	return self.network.NodeInfo(), nil
 }
 
 func (self *adminApi) DataDir(req *shared.Request) (interface{}, error) {
