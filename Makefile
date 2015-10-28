@@ -15,29 +15,30 @@ geth-cross: geth-linux geth-darwin geth-windows geth-android
 	@ls -l $(GOBIN)/geth-*
 
 geth-linux: xgo
-	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=linux/* -v ./cmd/geth
+	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=linux/* -v $(shell build/flags.sh) ./cmd/geth
 	@echo "Linux cross compilation done:"
 	@ls -l $(GOBIN)/geth-linux-*
 
 geth-darwin: xgo
-	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=darwin/* -v ./cmd/geth
+	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=darwin/* -v $(shell build/flags.sh) ./cmd/geth
 	@echo "Darwin cross compilation done:"
 	@ls -l $(GOBIN)/geth-darwin-*
 
 geth-windows: xgo
-	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=windows/* -v ./cmd/geth
+	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=windows/* -v $(shell build/flags.sh) ./cmd/geth
 	@echo "Windows cross compilation done:"
 	@ls -l $(GOBIN)/geth-windows-*
 
 geth-android: xgo
-	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=android-16/*,android-21/* -v ./cmd/geth
+	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=android-16/*,android-21/* -v $(shell build/flags.sh) ./cmd/geth
 	@echo "Android cross compilation done:"
 	@ls -l $(GOBIN)/geth-android-*
 
 evm:
-	build/env.sh $(GOROOT)/bin/go install -v $(shell build/ldflags.sh) ./cmd/evm
+	build/env.sh $(GOROOT)/bin/go install -v $(shell build/flags.sh) ./cmd/evm
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/evm to start the evm."
+
 mist:
 	build/env.sh go install -v $(shell build/flags.sh) ./cmd/mist
 	@echo "Done building."
