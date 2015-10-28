@@ -2,7 +2,7 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth evm mist all test travis-test-with-coverage clean
+.PHONY: geth geth-cross geth-linux geth-darwin geth-windows geth-android evm all test travis-test-with-coverage xgo clean
 GOBIN = build/bin
 
 geth:
@@ -38,11 +38,6 @@ evm:
 	build/env.sh $(GOROOT)/bin/go install -v $(shell build/flags.sh) ./cmd/evm
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/evm to start the evm."
-
-mist:
-	build/env.sh go install -v $(shell build/flags.sh) ./cmd/mist
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/mist --asset_path=cmd/mist/assets\" to launch mist."
 
 all:
 	build/env.sh go install -v $(shell build/flags.sh) ./...
