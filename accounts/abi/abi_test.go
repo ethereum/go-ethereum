@@ -18,35 +18,38 @@ package abi
 
 import (
 	"bytes"
+	"fmt"
+	"log"
 	"math/big"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const jsondata = `
 [
 	{ "name" : "balance", "const" : true },
-	{ "name" : "send", "const" : false, "input" : [ { "name" : "amount", "type" : "uint256" } ] }
+	{ "name" : "send", "const" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] }
 ]`
 
 const jsondata2 = `
 [
 	{ "name" : "balance", "const" : true },
-	{ "name" : "send", "const" : false, "input" : [ { "name" : "amount", "type" : "uint256" } ] },
-	{ "name" : "test", "const" : false, "input" : [ { "name" : "number", "type" : "uint32" } ] },
-	{ "name" : "string", "const" : false, "input" : [ { "name" : "input", "type" : "string" } ] },
-	{ "name" : "bool", "const" : false, "input" : [ { "name" : "input", "type" : "bool" } ] },
-	{ "name" : "address", "const" : false, "input" : [ { "name" : "input", "type" : "address" } ] },
-	{ "name" : "string32", "const" : false, "input" : [ { "name" : "input", "type" : "string32" } ] },
-	{ "name" : "uint64[2]", "const" : false, "input" : [ { "name" : "input", "type" : "uint64[2]" } ] },
-	{ "name" : "uint64[]", "const" : false, "input" : [ { "name" : "input", "type" : "uint64[]" } ] },
-	{ "name" : "foo", "const" : false, "input" : [ { "name" : "input", "type" : "uint32" } ] },
-	{ "name" : "bar", "const" : false, "input" : [ { "name" : "input", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
-	{ "name" : "slice", "const" : false, "input" : [ { "name" : "input", "type" : "uint32[2]" } ] },
-	{ "name" : "slice256", "const" : false, "input" : [ { "name" : "input", "type" : "uint256[2]" } ] }
+	{ "name" : "send", "const" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
+	{ "name" : "test", "const" : false, "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
+	{ "name" : "string", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
+	{ "name" : "bool", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
+	{ "name" : "address", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "address" } ] },
+	{ "name" : "string32", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "string32" } ] },
+	{ "name" : "uint64[2]", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
+	{ "name" : "uint64[]", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
+	{ "name" : "foo", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
+	{ "name" : "bar", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
+	{ "name" : "slice", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
+	{ "name" : "slice256", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] }
 ]`
 
 func TestType(t *testing.T) {
@@ -342,5 +345,51 @@ func TestPackSliceBig(t *testing.T) {
 
 	if !bytes.Equal(packed, sig) {
 		t.Errorf("expected %x got %x", sig, packed)
+	}
+}
+
+func ExampleJSON() {
+	const definition = `[{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"isBar","outputs":[{"name":"","type":"bool"}],"type":"function"}]`
+
+	abi, err := JSON(strings.NewReader(definition))
+	if err != nil {
+		log.Fatalln(err)
+	}
+	out, err := abi.Pack("isBar", common.HexToAddress("01"))
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	fmt.Printf("%x\n", out)
+	// Output:
+	// 1f2c40920000000000000000000000000000000000000000000000000000000000000001
+}
+
+func TestBytes(t *testing.T) {
+	const definition = `[
+	{ "name" : "balance", "const" : true, "inputs" : [ { "name" : "address", "type" : "bytes20" } ] },
+	{ "name" : "send", "const" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] }
+]`
+
+	abi, err := JSON(strings.NewReader(definition))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok := make([]byte, 20)
+	_, err = abi.Pack("balance", ok)
+	if err != nil {
+		t.Error(err)
+	}
+
+	toosmall := make([]byte, 19)
+	_, err = abi.Pack("balance", toosmall)
+	if err != nil {
+		t.Error(err)
+	}
+
+	toobig := make([]byte, 21)
+	_, err = abi.Pack("balance", toobig)
+	if err == nil {
+		t.Error("expected error")
 	}
 }
