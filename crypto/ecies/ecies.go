@@ -152,7 +152,7 @@ var (
 func ConcatKDF(hash hash.Hash, z, s1 []byte, kdlen int) ([]byte, error) {
 	hashlen := hash.Size()
 	reps := (kdlen + hashlen - 1) / hashlen
-	if reps > math.MaxUint32 {
+	if uint64(reps) > math.MaxUint32 {
 		return nil, ErrKeyDataTooLong // prevent counter overflow
 	}
 	counter := []byte{0, 0, 0, 0}
