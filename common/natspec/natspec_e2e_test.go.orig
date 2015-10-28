@@ -106,7 +106,7 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
   }
 
   // create a testAddress
-  ks := crypto.NewKeyStorePassphrase("/tmp/eth-natspec/keystore")
+  ks := crypto.NewKeyStorePassphrase("/tmp/eth-natspec/keystore", crypto.LightScryptN, crypto.LightScryptP)
   am := accounts.NewManager(ks)
   testAccount, err := am.NewAccount("password")
   if err != nil {

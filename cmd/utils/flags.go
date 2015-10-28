@@ -157,6 +157,10 @@ var (
 		Name:  "fast",
 		Usage: "Enables fast syncing through state downloads",
 	}
+	LightKDFFlag = cli.BoolFlag{
+		Name:  "lightkdf",
+		Usage: "Reduce KDF memory & CPU usage at some expense of KDF strength",
+	}
 
 	// miner settings
 	// TODO: refactor CPU vs GPU mining flags
@@ -579,7 +583,13 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 	if ctx.GlobalBool(TestNetFlag.Name) {
 		dataDir += "/testnet"
 	}
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keystore"))
+	scryptN := crypto.StandardScryptN
+	scryptP := crypto.StandardScryptP
+	if ctx.GlobalBool(LightKDFFlag.Name) {
+		scryptN = crypto.LightScryptN
+		scryptP = crypto.LightScryptP
+	}
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keystore"), scryptN, scryptP)
 	return accounts.NewManager(ks)
 }
 
