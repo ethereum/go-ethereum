@@ -248,10 +248,11 @@ func (d *Downloader) UnregisterPeer(id string) error {
 
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
-func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode SyncMode) {
+func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode SyncMode) error {
 	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, head [%x…], TD %v", id, head[:4], td)
 
-	switch err := d.synchronise(id, head, td, mode); err {
+	err := d.synchronise(id, head, td, mode)
+	switch err {
 	case nil:
 		glog.V(logger.Detail).Infof("Synchronisation completed")
 
@@ -268,6 +269,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 	default:
 		glog.V(logger.Warn).Infof("Synchronisation failed: %v", err)
 	}
+	return err
 }
 
 // synchronise will select the peer and use it for synchronising. If an empty string is given
