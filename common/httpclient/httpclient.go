@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package docserver
+package httpclient
 
 import (
 	"fmt"
@@ -26,14 +26,14 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-type DocServer struct {
+type HTTPClient struct {
 	*http.Transport
 	DocRoot string
 	schemes []string
 }
 
-func New(docRoot string) (self *DocServer) {
-	self = &DocServer{
+func New(docRoot string) (self *HTTPClient) {
+	self = &HTTPClient{
 		Transport: &http.Transport{},
 		DocRoot:   docRoot,
 		schemes:   []string{"file"},
@@ -46,18 +46,18 @@ func New(docRoot string) (self *DocServer) {
 
 // A Client is higher-level than a RoundTripper (such as Transport) and additionally handles HTTP details such as cookies and redirects.
 
-func (self *DocServer) Client() *http.Client {
+func (self *HTTPClient) Client() *http.Client {
 	return &http.Client{
 		Transport: self,
 	}
 }
 
-func (self *DocServer) RegisterScheme(scheme string, rt http.RoundTripper) {
+func (self *HTTPClient) RegisterScheme(scheme string, rt http.RoundTripper) {
 	self.schemes = append(self.schemes, scheme)
 	self.RegisterProtocol(scheme, rt)
 }
 
-func (self *DocServer) HasScheme(scheme string) bool {
+func (self *HTTPClient) HasScheme(scheme string) bool {
 	for _, s := range self.schemes {
 		if s == scheme {
 			return true
@@ -66,43 +66,41 @@ func (self *DocServer) HasScheme(scheme string) bool {
 	return false
 }
 
-func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []byte, err error) {
+func (self *HTTPClient) GetAuthContent(uri string, hash common.Hash) ([]byte, error) {
 	// retrieve content
-	content, err = self.Get(uri, "")
+	content, err := self.Get(uri, "")
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	// check hash to authenticate content
 	chash := crypto.Sha3Hash(content)
 	if chash != hash {
-		content = nil
-		err = fmt.Errorf("content hash mismatch %x != %x (exp)", hash[:], chash[:])
+		return nil, fmt.Errorf("content hash mismatch %x != %x (exp)", hash[:], chash[:])
 	}
 
-	return
+	return content, nil
 
 }
 
 // Get(uri, path) downloads the document at uri, if path is non-empty it
 // is interpreted as a filepath to which the contents are saved
-func (self *DocServer) Get(uri, path string) (content []byte, err error) {
+func (self *HTTPClient) Get(uri, path string) ([]byte, error) {
 	// retrieve content
 	resp, err := self.Client().Get(uri)
-
+	if err != nil {
+		return nil, err
+	}
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
 		}
 	}()
 
-	if err != nil {
-		return
-	}
-
+	var content []byte
 	content, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	if resp.StatusCode/100 != 2 {
@@ -112,9 +110,15 @@ func (self *DocServer) Get(uri, path string) (content []byte, err error) {
 	if path != "" {
 		var abspath string
 		abspath, err = filepath.Abs(path)
-		ioutil.WriteFile(abspath, content, 0700)
+		if err != nil {
+			return nil, err
+		}
+		err = ioutil.WriteFile(abspath, content, 0600)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return
+	return content, nil
 
 }
