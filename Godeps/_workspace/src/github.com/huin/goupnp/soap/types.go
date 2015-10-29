@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -505,4 +506,14 @@ func MarshalBinHex(v []byte) (string, error) {
 // UnmarshalBinHex unmarshals []byte from the SOAP "bin.hex" type.
 func UnmarshalBinHex(s string) ([]byte, error) {
 	return hex.DecodeString(s)
+}
+
+// MarshalURI marshals *url.URL to SOAP "uri" type.
+func MarshalURI(v *url.URL) (string, error) {
+	return v.String(), nil
+}
+
+// UnmarshalURI unmarshals *url.URL from the SOAP "uri" type.
+func UnmarshalURI(s string) (*url.URL, error) {
+	return url.Parse(s)
 }

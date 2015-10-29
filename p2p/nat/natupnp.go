@@ -148,7 +148,12 @@ func discover(out chan<- *upnp, target string, matcher func(*goupnp.RootDevice, 
 				return
 			}
 			// check for a matching IGD service
-			sc := goupnp.ServiceClient{service.NewSOAPClient(), devs[i].Root, service}
+			sc := goupnp.ServiceClient{
+				SOAPClient: service.NewSOAPClient(),
+				RootDevice: devs[i].Root,
+				Location:   devs[i].Location,
+				Service:    service,
+			}
 			sc.SOAPClient.HTTPClient.Timeout = soapRequestTimeout
 			upnp := matcher(devs[i].Root, sc)
 			if upnp == nil {
