@@ -411,11 +411,14 @@ func (self *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 
 // insert injects a new head block into the current block chain. This method
 // assumes that the block is indeed a true head. It will also reset the head
-// header and the head fast sync block to this very same block to prevent them
-// from pointing to a possibly old canonical chain (i.e. side chain by now).
+// header and the head fast sync block to this very same block if they are older
+// or if they are on a different side chain.
 //
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) insert(block *types.Block) {
+	// If the block is on a side chain or an unknown one, force other heads onto it too
+	updateHeads := GetCanonicalHash(bc.chainDb, block.NumberU64()) != block.Hash()
+
 	// Add the block to the canonical chain number scheme and mark as the head
 	if err := WriteCanonicalHash(bc.chainDb, block.Hash(), block.NumberU64()); err != nil {
 		glog.Fatalf("failed to insert block number: %v", err)
@@ -423,16 +426,20 @@ func (bc *BlockChain) insert(block *types.Block) {
 	if err := WriteHeadBlockHash(bc.chainDb, block.Hash()); err != nil {
 		glog.Fatalf("failed to insert head block hash: %v", err)
 	}
-	if err := WriteHeadHeaderHash(bc.chainDb, block.Hash()); err != nil {
-		glog.Fatalf("failed to insert head header hash: %v", err)
-	}
-	if err := WriteHeadFastBlockHash(bc.chainDb, block.Hash()); err != nil {
-		glog.Fatalf("failed to insert head fast block hash: %v", err)
-	}
-	// Update the internal state with the head block
 	bc.currentBlock = block
-	bc.currentHeader = block.Header()
-	bc.currentFastBlock = block
+
+	// If the block is better than out head or is on a different chain, force update heads
+	if updateHeads {
+		if err := WriteHeadHeaderHash(bc.chainDb, block.Hash()); err != nil {
+			glog.Fatalf("failed to insert head header hash: %v", err)
+		}
+		bc.currentHeader = block.Header()
+
+		if err := WriteHeadFastBlockHash(bc.chainDb, block.Hash()); err != nil {
+			glog.Fatalf("failed to insert head fast block hash: %v", err)
+		}
+		bc.currentFastBlock = block
+	}
 }
 
 // Accessors
