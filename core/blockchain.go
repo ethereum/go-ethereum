@@ -374,6 +374,7 @@ func (self *BlockChain) CurrentBlock() *types.Block {
 	return self.CurrentBlockOdr(access.NoOdr)	
 }
 
+// CurrentBlockOdr retrieves the current head block, using ODR in light mode
 func (self *BlockChain) CurrentBlockOdr(ctx *access.OdrContext) *types.Block {
 	self.mu.RLock()
 	defer self.mu.RUnlock()

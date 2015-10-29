@@ -56,15 +56,18 @@ type ChainAccess struct {
 type requestFunc func(*Peer) error
 type validatorFunc func(*Msg) bool
 
+// Request waiting for an answer that satisfies its valFunc
 type sentReq struct {
 	valFunc     validatorFunc
 	deliverChan chan *Msg
 }
 
+// Create a ChainAccess with ODR disabled
 func NewDbChainAccess(db ethdb.Database) *ChainAccess {
 	return NewChainAccess(db, false)
 }
 
+// Create a ChainAccess
 func NewChainAccess(db ethdb.Database, odr bool) *ChainAccess {
 	return &ChainAccess{
 		db:       db,
@@ -107,6 +110,11 @@ type Msg struct {
 	Obj     interface{}
 }
 
+// ODR request interface (passed to Retrieve, functions called by Retrieve and Deliver)
+//	DbGet() tries to retrieve the object from the local database (object is stored by the request struct in memory if retrieved)
+//	DbPut() stores it in the local database
+//	Request(*Peer) requests it from a LES peer
+//	Valid(*Msg) checks if a message is a valid answer to this request and stores the retrieved object in memory
 type ObjectAccess interface {
 	// database storage
 	DbGet() bool
@@ -116,6 +124,7 @@ type ObjectAccess interface {
 	Valid(*Msg) bool // if true, keeps the retrieved object
 }
 
+// Deliver is called by the LES protocol manager to deliver ODR reply messages to waiting requests
 func (self *ChainAccess) Deliver(id string, msg *Msg) (processed bool) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -130,6 +139,7 @@ func (self *ChainAccess) Deliver(id string, msg *Msg) (processed bool) {
 	return false
 }
 
+// Send a request to known peers until an answer is received or the context is cancelled
 func (self *ChainAccess) networkRequest(rqFunc requestFunc, valFunc validatorFunc, ctx *OdrContext) (*Msg, error) {
 	req := &sentReq{
 		deliverChan: make(chan *Msg),
@@ -175,6 +185,8 @@ func (self *ChainAccess) networkRequest(rqFunc requestFunc, valFunc validatorFun
 	}
 }
 
+// Retrieve tries to fetch an object from the local db, then from the LES network.
+// If the network retrieval was successful, it stores the object in local db.
 func (self *ChainAccess) Retrieve(obj ObjectAccess, ctx *OdrContext) (err error) {
 	// look in db
 	if obj.DbGet() {

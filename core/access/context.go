@@ -23,6 +23,7 @@ import (
 	"time"
 )
 
+// Context for ODR requests, can be timed out or cancelled manually
 type OdrContext struct {
 	cancel, cancelOrTimeout chan struct{}
 	id                      *OdrChannelID
@@ -64,6 +65,10 @@ func (self *OdrContext) IsCancelled() bool {
 	return atomic.LoadInt32(&self.cancelled) == 1
 }
 
+// While contexts are created for each request, channel ID is a permanent
+//  identifier of a source from where requests can come (like an RPC channel).
+//  (needed for future functions like "list of my waiting requests" and
+//  "cancel all requests from this channel")
 type OdrChannelID struct {
 	timeout time.Duration
 }

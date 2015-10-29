@@ -40,6 +40,8 @@ type EthereumApi interface {
 }
 
 // RPC request
+// (ODR context is propagated inside the request struct because every
+//  request has its own context. It does not influence JSON encoding.)
 type Request struct {
 	Id      interface{}     `json:"id"`
 	Jsonrpc string          `json:"jsonrpc"`

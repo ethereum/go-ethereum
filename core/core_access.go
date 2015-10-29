@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// ODR request type for block bodies, see access.ObjectAccess interface
 type BlockAccess struct {
 	db        ethdb.Database
 	blockHash common.Hash
@@ -87,6 +88,7 @@ func (self *BlockAccess) DbPut() {
 	glog.V(access.LogLevel).Infof("ODR: put body %08x  len = %d", self.blockHash[:4], len(self.rlp))
 }
 
+// ODR request type for block receipts by block hash, see access.ObjectAccess interface
 type ReceiptsAccess struct {
 	db        ethdb.Database
 	blockHash common.Hash

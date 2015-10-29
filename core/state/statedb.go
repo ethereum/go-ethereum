@@ -54,6 +54,7 @@ type StateDB struct {
 }
 
 // Create a new state from a given trie
+//  When ODR is used, context is specified when creating/copying a state.
 func New(root common.Hash, ca *access.ChainAccess, ctx *access.OdrContext) (*StateDB, error) {
 	tr, err := trie.NewSecure(root, ca.Db(), NewTrieAccess(ca, root, ca.Db()))
 	if err != nil {
@@ -297,10 +298,12 @@ func (self *StateDB) CreateAccount(addr common.Address) vm.Account {
 // Setting, copying of the state methods
 //
 
+// Copy state, keep the original ODR context
 func (self *StateDB) CopyWithCtx() *StateDB {
 	return self.Copy(self.ctx)
 }
 
+// Copy with a new context
 func (self *StateDB) Copy(ctx *access.OdrContext) *StateDB {
 	// ignore error - we assume state-to-be-copied always exists
 	state, _ := New(common.Hash{}, self.ca, ctx)

@@ -53,6 +53,7 @@ func (self *TrieAccess) OdrEnabled() bool {
 	return self.ca.OdrEnabled()
 }
 
+// ODR request type for state/storage trie entries, see access.ObjectAccess interface
 type TrieEntryAccess struct {
 	root       common.Hash
 	trieDb     trie.Database
@@ -101,6 +102,7 @@ func (self *TrieEntryAccess) DbPut() {
 	trie.StoreProof(self.trieDb, self.proof)
 }
 
+// ODR request type for node data (used for retrieving contract code), see access.ObjectAccess interface
 type NodeDataAccess struct {
 	db   ethdb.Database
 	hash common.Hash

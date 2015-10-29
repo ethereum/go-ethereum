@@ -42,6 +42,7 @@ type getNodeDataFn func([]common.Hash) error
 type getReceiptsFn func([]common.Hash) error
 type getProofsFn func([]*ProofReq) error
 
+// access.Peer stores ODR-specific information about LES peers that are able to serve requests
 type Peer struct {
 	id   string      // Unique identifier of the peer
 	head common.Hash // Hash of the peers latest known block
