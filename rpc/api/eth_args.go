@@ -626,7 +626,12 @@ func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 
 	args.IncludeTxs = obj[1].(bool)
 
-	return nil
+	if inclTx, ok := obj[1].(bool); ok {
+		args.IncludeTxs = inclTx
+		return nil
+	}
+
+	return shared.NewInvalidTypeError("includeTxs", "not a bool")
 }
 
 type GetBlockByNumberArgs struct {
@@ -648,9 +653,12 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 		return err
 	}
 
-	args.IncludeTxs = obj[1].(bool)
+	if inclTx, ok := obj[1].(bool); ok {
+		args.IncludeTxs = inclTx
+		return nil
+	}
 
-	return nil
+	return shared.NewInvalidTypeError("includeTxs", "not a bool")
 }
 
 type BlockFilterArgs struct {
