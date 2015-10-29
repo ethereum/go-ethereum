@@ -28,8 +28,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/rpc/useragent"
@@ -688,40 +686,12 @@ func (self *ipcClient) reconnect() error {
 	return err
 }
 
-func startIpc(cfg IpcConfig, codec codec.Codec, initializer func(conn net.Conn) (shared.EthereumApi, error)) error {
+func ipcListen(cfg IpcConfig) (net.Listener, error) {
 	os.Remove(cfg.Endpoint) // in case it still exists from a previous run
-
 	l, err := Listen(cfg.Endpoint)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	os.Chmod(cfg.Endpoint, 0600)
-
-	go func() {
-		for {
-			conn, err := l.Accept()
-			if err != nil {
-				glog.V(logger.Error).Infof("Error accepting ipc connection - %v\n", err)
-				continue
-			}
-
-			id := newIpcConnId()
-			glog.V(logger.Debug).Infof("New IPC connection with id %06d started\n", id)
-
-			api, err := initializer(conn)
-			if err != nil {
-				glog.V(logger.Error).Infof("Unable to initialize IPC connection - %v\n", err)
-				conn.Close()
-				continue
-			}
-
-			go handle(id, conn, api, codec)
-		}
-
-		os.Remove(cfg.Endpoint)
-	}()
-
-	glog.V(logger.Info).Infof("IPC service started (%s)\n", cfg.Endpoint)
-
-	return nil
+	return l, nil
 }

@@ -113,19 +113,15 @@ func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}
-	state, err := xeth.backend.BlockChain().State()
-	if err != nil {
-		return nil
-	}
+	state, _ := xeth.backend.BlockChain().State()
 	xeth.state = NewState(xeth, state)
-
 	go xeth.start()
-
 	return xeth
 }
 
 func (self *XEth) start() {
 	timer := time.NewTicker(2 * time.Second)
+	defer timer.Stop()
 done:
 	for {
 		select {
@@ -171,8 +167,12 @@ done:
 	}
 }
 
-func (self *XEth) stop() {
+// Stop releases any resources associated with self.
+// It may not be called more than once.
+func (self *XEth) Stop() {
 	close(self.quit)
+	self.filterManager.Stop()
+	self.backend.Miner().Unregister(self.agent)
 }
 
 func cAddress(a []string) []common.Address {

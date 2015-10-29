@@ -92,7 +92,7 @@ type Result struct {
 type worker struct {
 	mu sync.Mutex
 
-	agents []Agent
+	agents map[Agent]struct{}
 	recv   chan *Result
 	mux    *event.TypeMux
 	quit   chan struct{}
@@ -136,6 +136,7 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 		coinbase:       coinbase,
 		txQueue:        make(map[common.Hash]*types.Transaction),
 		quit:           make(chan struct{}),
+		agents:         make(map[Agent]struct{}),
 		fullValidation: false,
 	}
 	go worker.update()
@@ -180,7 +181,7 @@ func (self *worker) start() {
 	atomic.StoreInt32(&self.mining, 1)
 
 	// spin up agents
-	for _, agent := range self.agents {
+	for agent := range self.agents {
 		agent.Start()
 	}
 }
@@ -190,16 +191,14 @@ func (self *worker) stop() {
 	defer self.mu.Unlock()
 
 	if atomic.LoadInt32(&self.mining) == 1 {
-		var keep []Agent
-		// stop all agents
-		for _, agent := range self.agents {
+		// Stop all agents.
+		for agent := range self.agents {
 			agent.Stop()
-			// keep all that's not a cpu agent
-			if _, ok := agent.(*CpuAgent); !ok {
-				keep = append(keep, agent)
+			// Remove CPU agents.
+			if _, ok := agent.(*CpuAgent); ok {
+				delete(self.agents, agent)
 			}
 		}
-		self.agents = keep
 	}
 
 	atomic.StoreInt32(&self.mining, 0)
@@ -209,8 +208,15 @@ func (self *worker) stop() {
 func (self *worker) register(agent Agent) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-	self.agents = append(self.agents, agent)
+	self.agents[agent] = struct{}{}
 	agent.SetReturnCh(self.recv)
+}
+
+func (self *worker) unregister(agent Agent) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	delete(self.agents, agent)
+	agent.Stop()
 }
 
 func (self *worker) update() {
@@ -341,11 +347,9 @@ func (self *worker) push(work *Work) {
 			glog.Infoln("You turn back and abort mining")
 			return
 		}
-
 		// push new work to agents
-		for _, agent := range self.agents {
+		for agent := range self.agents {
 			atomic.AddInt32(&self.atWork, 1)
-
 			if agent.Work() != nil {
 				agent.Work() <- work
 			}
