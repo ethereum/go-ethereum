@@ -48,9 +48,10 @@ type RemoteAgent struct {
 }
 
 func NewRemoteAgent() *RemoteAgent {
-	agent := &RemoteAgent{work: make(map[common.Hash]*Work), hashrate: make(map[common.Hash]hashrate)}
-
-	return agent
+	return &RemoteAgent{
+		work:     make(map[common.Hash]*Work),
+		hashrate: make(map[common.Hash]hashrate),
+	}
 }
 
 func (a *RemoteAgent) SubmitHashrate(id common.Hash, rate uint64) {
@@ -75,8 +76,12 @@ func (a *RemoteAgent) Start() {
 }
 
 func (a *RemoteAgent) Stop() {
-	close(a.quit)
-	close(a.workCh)
+	if a.quit != nil {
+		close(a.quit)
+	}
+	if a.workCh != nil {
+		close(a.workCh)
+	}
 }
 
 // GetHashRate returns the accumulated hashrate of all identifier combined
