@@ -714,6 +714,13 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 			return err
 		}
 	}
+
+	if num == -2 {
+		return fmt.Errorf("\"pending\" is unsupported")
+	} else if num < -2 {
+		return fmt.Errorf("Invalid to block number")
+	}
+
 	args.Latest = num
 
 	if obj[0].Limit == nil {
