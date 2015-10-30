@@ -48,10 +48,10 @@ import (
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "1.3.0-dev"
+	Version          = "1.3.1"
 	VersionMajor     = 1
 	VersionMinor     = 3
-	VersionPatch     = 0
+	VersionPatch     = 1
 )
 
 var (
