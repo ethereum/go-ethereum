@@ -74,7 +74,7 @@ func init() {
 		{
 			Action: blockRecovery,
 			Name:   "recover",
-			Usage:  "attempts to recover a corrupted database by setting a new block by number or hash. See help recover.",
+			Usage:  "Attempts to recover a corrupted database by setting a new block by number or hash",
 			Description: `
 The recover commands will attempt to read out the last
 block based on that.
@@ -339,10 +339,8 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.RPCCORSDomainFlag,
 		utils.VerbosityFlag,
 		utils.BacktraceAtFlag,
-		utils.LogToStdErrFlag,
 		utils.LogVModuleFlag,
 		utils.LogFileFlag,
-		utils.LogJSONFlag,
 		utils.PProfEanbledFlag,
 		utils.PProfPortFlag,
 		utils.MetricsEnabledFlag,
@@ -402,7 +400,6 @@ func makeDefaultExtra() []byte {
 		glog.V(logger.Debug).Infof("extra: %x\n", extra)
 		return nil
 	}
-
 	return extra
 }
 

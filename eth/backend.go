@@ -91,7 +91,6 @@ type Config struct {
 
 	Name         string
 	NetworkId    int
-	GenesisNonce int
 	GenesisFile  string
 	GenesisBlock *types.Block // used by block tests
 	FastSync     bool
@@ -104,7 +103,6 @@ type Config struct {
 	DataDir   string
 	LogFile   string
 	Verbosity int
-	LogJSON   string
 	VmDebug   bool
 	NatSpec   bool
 	DocRoot   string
@@ -273,11 +271,7 @@ type Ethereum struct {
 }
 
 func New(config *Config) (*Ethereum, error) {
-	// Bootstrap database
 	logger.New(config.DataDir, config.LogFile, config.Verbosity)
-	if len(config.LogJSON) > 0 {
-		logger.NewJSONsystem(config.DataDir, config.LogJSON)
-	}
 
 	// Let the database take 3/4 of the max open files (TODO figure out a way to get the actual limit of the open files)
 	const dbCount = 3
