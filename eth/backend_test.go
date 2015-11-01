@@ -1,7 +1,10 @@
 package eth
 
 import (
+	"log"
 	"math/big"
+	"os"
+	"os/signal"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -64,4 +67,21 @@ func TestMipmapUpgrade(t *testing.T) {
 	if len(data) == 0 {
 		t.Error("setting-mipmap-version not written to database")
 	}
+}
+
+func ExampleNew() {
+	// Setup ethereum stack; initialising the blockchain, transaction pool
+	// and network stack.
+	ethereum, err := New(&Config{Name: "Ghost"})
+	if err != nil {
+		log.Fatalln(err)
+	}
+	// start all services
+	ethereum.Start()
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, os.Kill)
+	<-c
+	// stop all services
+	ethereum.Stop()
 }

@@ -450,7 +450,6 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		Discovery:               !ctx.GlobalBool(NoDiscoverFlag.Name),
 		NodeKey:                 MakeNodeKey(ctx),
 		Shh:                     ctx.GlobalBool(WhisperEnabledFlag.Name),
-		Dial:                    true,
 		BootNodes:               ctx.GlobalString(BootnodesFlag.Name),
 		GasPrice:                common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
 		GpoMinGasPrice:          common.String2Big(ctx.GlobalString(GpoMinGasPriceFlag.Name)),

@@ -19,10 +19,7 @@ package eth
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -40,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -49,7 +45,6 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/whisper"
 )
@@ -85,143 +80,6 @@ var (
 	staticNodes  = "static-nodes.json"  // Path within <datadir> to search for the static node list
 	trustedNodes = "trusted-nodes.json" // Path within <datadir> to search for the trusted node list
 )
-
-type Config struct {
-	DevMode bool
-	TestNet bool
-
-	Name         string
-	NetworkId    int
-	GenesisFile  string
-	GenesisBlock *types.Block // used by block tests
-	FastSync     bool
-	Olympic      bool
-
-	BlockChainVersion  int
-	SkipBcVersionCheck bool // e.g. blockchain export
-	DatabaseCache      int
-
-	DataDir   string
-	LogFile   string
-	Verbosity int
-	VmDebug   bool
-	NatSpec   bool
-	DocRoot   string
-	AutoDAG   bool
-	PowTest   bool
-	ExtraData []byte
-
-	MaxPeers        int
-	MaxPendingPeers int
-	Discovery       bool
-	Port            string
-
-	// Space-separated list of discovery node URLs
-	BootNodes string
-
-	// This key is used to identify the node on the network.
-	// If nil, an ephemeral key is used.
-	NodeKey *ecdsa.PrivateKey
-
-	NAT  nat.Interface
-	Shh  bool
-	Dial bool
-
-	Etherbase      common.Address
-	GasPrice       *big.Int
-	MinerThreads   int
-	AccountManager *accounts.Manager
-	SolcPath       string
-
-	GpoMinGasPrice          *big.Int
-	GpoMaxGasPrice          *big.Int
-	GpoFullBlockRatio       int
-	GpobaseStepDown         int
-	GpobaseStepUp           int
-	GpobaseCorrectionFactor int
-
-	// NewDB is used to create databases.
-	// If nil, the default is to create leveldb databases on disk.
-	NewDB func(path string) (ethdb.Database, error)
-}
-
-func (cfg *Config) parseBootNodes() []*discover.Node {
-	if cfg.BootNodes == "" {
-		if cfg.TestNet {
-			return defaultTestNetBootNodes
-		}
-
-		return defaultBootNodes
-	}
-	var ns []*discover.Node
-	for _, url := range strings.Split(cfg.BootNodes, " ") {
-		if url == "" {
-			continue
-		}
-		n, err := discover.ParseNode(url)
-		if err != nil {
-			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
-			continue
-		}
-		ns = append(ns, n)
-	}
-	return ns
-}
-
-// parseNodes parses a list of discovery node URLs loaded from a .json file.
-func (cfg *Config) parseNodes(file string) []*discover.Node {
-	// Short circuit if no node config is present
-	path := filepath.Join(cfg.DataDir, file)
-	if _, err := os.Stat(path); err != nil {
-		return nil
-	}
-	// Load the nodes from the config file
-	blob, err := ioutil.ReadFile(path)
-	if err != nil {
-		glog.V(logger.Error).Infof("Failed to access nodes: %v", err)
-		return nil
-	}
-	nodelist := []string{}
-	if err := json.Unmarshal(blob, &nodelist); err != nil {
-		glog.V(logger.Error).Infof("Failed to load nodes: %v", err)
-		return nil
-	}
-	// Interpret the list as a discovery node array
-	var nodes []*discover.Node
-	for _, url := range nodelist {
-		if url == "" {
-			continue
-		}
-		node, err := discover.ParseNode(url)
-		if err != nil {
-			glog.V(logger.Error).Infof("Node URL %s: %v\n", url, err)
-			continue
-		}
-		nodes = append(nodes, node)
-	}
-	return nodes
-}
-
-func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
-	// use explicit key from command line args if set
-	if cfg.NodeKey != nil {
-		return cfg.NodeKey, nil
-	}
-	// use persistent key if present
-	keyfile := filepath.Join(cfg.DataDir, "nodekey")
-	key, err := crypto.LoadECDSA(keyfile)
-	if err == nil {
-		return key, nil
-	}
-	// no persistent key, generate and store a new one
-	if key, err = crypto.GenerateKey(); err != nil {
-		return nil, fmt.Errorf("could not generate server key: %v", err)
-	}
-	if err := crypto.SaveECDSA(keyfile, key); err != nil {
-		glog.V(logger.Error).Infoln("could not persist nodekey: ", err)
-	}
-	return key, nil
-}
 
 type Ethereum struct {
 	// Channel for shutting down the ethereum
@@ -272,6 +130,11 @@ type Ethereum struct {
 }
 
 func New(config *Config) (*Ethereum, error) {
+	if config == nil {
+		config = new(Config)
+	}
+	MakeConfig(config)
+
 	logger.New(config.DataDir, config.LogFile, config.Verbosity)
 
 	// Let the database take 3/4 of the max open files (TODO figure out a way to get the actual limit of the open files)
@@ -452,7 +315,7 @@ func New(config *Config) (*Ethereum, error) {
 		Discovery:       config.Discovery,
 		Protocols:       protocols,
 		NAT:             config.NAT,
-		NoDial:          !config.Dial,
+		NoDial:          config.NoDial,
 		BootstrapNodes:  config.parseBootNodes(),
 		StaticNodes:     config.parseNodes(staticNodes),
 		TrustedNodes:    config.parseNodes(trustedNodes),
