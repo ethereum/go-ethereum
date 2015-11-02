@@ -45,7 +45,7 @@ func NewTrieAccess(ca *access.ChainAccess, root common.Hash, trieDb trie.Databas
 
 func (self *TrieAccess) RetrieveKey(key []byte, ctx *access.OdrContext) bool {
 	//fmt.Println("request trie %v key %v", self.root, key)
-	r := &TrieEntryAccess{root: self.root, trieDb: self.trieDb, key: key}
+	r := NewTrieEntryAccess(self.root, self.trieDb, key)
 	return self.ca.Retrieve(r, ctx) == nil
 }
 
@@ -60,6 +60,10 @@ type TrieEntryAccess struct {
 	key, value []byte
 	proof      trie.MerkleProof
 	skipLevels int // set by DbGet() if unsuccessful
+}
+
+func NewTrieEntryAccess(root common.Hash, trieDb trie.Database, key []byte) *TrieEntryAccess {
+	return &TrieEntryAccess{root: root, trieDb: trieDb, key: key}
 }
 
 func (self *TrieEntryAccess) Request(peer *access.Peer) error {
@@ -109,6 +113,10 @@ type NodeDataAccess struct {
 	data []byte
 }
 
+func NewNodeDataAccess(db ethdb.Database, hash common.Hash) *NodeDataAccess {
+	return &NodeDataAccess{db: db, hash: hash}
+}
+
 func (self *NodeDataAccess) Request(peer *access.Peer) error {
 	glog.V(access.LogLevel).Infof("ODR: requesting node data for hash %08x from peer %v", self.hash[:4], peer.Id())
 	return peer.GetNodeData([]common.Hash{self.hash})
@@ -156,7 +164,7 @@ func RetrieveNodeData(ca *access.ChainAccess, hash common.Hash, ctx *access.OdrC
 	if bytes.Compare(hash[:], sha3_nil) == 0 {
 		return nil
 	}
-	r := &NodeDataAccess{db: ca.Db(), hash: hash}
+	r := NewNodeDataAccess(ca.Db(), hash)
 	ca.Retrieve(r, ctx)
 	return r.data
 }

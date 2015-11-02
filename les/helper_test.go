@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -24,7 +25,52 @@ var (
 	testBankKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
 	testBankFunds   = big.NewInt(1000000)
+
+	acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+	acc2Key, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
+	acc1Addr   = crypto.PubkeyToAddress(acc1Key.PublicKey)
+	acc2Addr   = crypto.PubkeyToAddress(acc2Key.PublicKey)
 )
+
+func testChainGen(i int, block *core.BlockGen) {
+	switch i {
+	case 0:
+		// In block 1, the test bank sends account #1 some ether.
+		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(testBankKey)
+		block.AddTx(tx)
+	case 1:
+		// In block 2, the test bank sends some more ether to account #1.
+		// acc1Addr passes it on to account #2.
+		// acc1Addr creates a test contract.
+		tx1, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(testBankKey)
+		nonce := block.TxNonce(acc1Addr)
+		tx2, _ := types.NewTransaction(nonce, acc2Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(acc1Key)
+		nonce++
+		tx3, _ := types.NewContractCreation(nonce, big.NewInt(0), big.NewInt(100000), big.NewInt(0), testContractCode).SignECDSA(acc1Key)
+		testContractAddr = crypto.CreateAddress(acc1Addr, nonce)
+		block.AddTx(tx1)
+		block.AddTx(tx2)
+		block.AddTx(tx3)
+	case 2:
+		// Block 3 is empty but was mined by account #2.
+		block.SetCoinbase(acc2Addr)
+		block.SetExtra([]byte("yeehaw"))
+		data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001")
+		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), testContractAddr, big.NewInt(0), big.NewInt(100000), nil, data).SignECDSA(testBankKey)
+		block.AddTx(tx)
+	case 3:
+		// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
+		b2 := block.PrevBlock(1).Header()
+		b2.Extra = []byte("foo")
+		block.AddUncle(b2)
+		b3 := block.PrevBlock(2).Header()
+		b3.Extra = []byte("foo")
+		block.AddUncle(b3)
+		data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002")
+		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), testContractAddr, big.NewInt(0), big.NewInt(100000), nil, data).SignECDSA(testBankKey)
+		block.AddTx(tx)
+	}
+}
 
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, and potential notification

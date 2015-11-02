@@ -35,6 +35,10 @@ type BlockAccess struct {
 	rlp       []byte
 }
 
+func NewBlockAccess(db ethdb.Database, blockHash common.Hash) *BlockAccess {
+	return &BlockAccess{db: db, blockHash: blockHash}
+}
+
 func (self *BlockAccess) Request(peer *access.Peer) error {
 	glog.V(access.LogLevel).Infof("ODR: requesting body of block %08x from peer %v", self.blockHash[:4], peer.Id())
 	return peer.GetBlockBodies([]common.Hash{self.blockHash})
@@ -93,6 +97,10 @@ type ReceiptsAccess struct {
 	db        ethdb.Database
 	blockHash common.Hash
 	receipts  types.Receipts
+}
+
+func NewReceiptsAccess(db ethdb.Database, blockHash common.Hash) *ReceiptsAccess {
+	return &ReceiptsAccess{db: db, blockHash: blockHash}
 }
 
 func (self *ReceiptsAccess) Request(peer *access.Peer) error {
