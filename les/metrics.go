@@ -94,29 +94,6 @@ func (rw *meteredMsgReadWriter) ReadMsg() (p2p.Msg, error) {
 	}
 	// Account for the data traffic
 	packets, traffic := miscInPacketsMeter, miscInTrafficMeter
-	/*	switch {
-		case rw.version < eth62 && msg.Code == BlockHashesMsg:
-			packets, traffic = reqHashInPacketsMeter, reqHashInTrafficMeter
-		case rw.version < eth62 && msg.Code == BlocksMsg:
-			packets, traffic = reqBlockInPacketsMeter, reqBlockInTrafficMeter
-
-		case rw.version >= eth62 && msg.Code == BlockHeadersMsg:
-			packets, traffic = reqBlockInPacketsMeter, reqBlockInTrafficMeter
-		case rw.version >= eth62 && msg.Code == BlockBodiesMsg:
-			packets, traffic = reqBodyInPacketsMeter, reqBodyInTrafficMeter
-
-		case rw.version >= eth63 && msg.Code == NodeDataMsg:
-			packets, traffic = reqStateInPacketsMeter, reqStateInTrafficMeter
-		case rw.version >= eth63 && msg.Code == ReceiptsMsg:
-			packets, traffic = reqReceiptInPacketsMeter, reqReceiptInTrafficMeter
-
-		case msg.Code == NewBlockHashesMsg:
-			packets, traffic = propHashInPacketsMeter, propHashInTrafficMeter
-		case msg.Code == NewBlockMsg:
-			packets, traffic = propBlockInPacketsMeter, propBlockInTrafficMeter
-		case msg.Code == TxMsg:
-			packets, traffic = propTxnInPacketsMeter, propTxnInTrafficMeter
-		}*/
 	packets.Mark(1)
 	traffic.Mark(int64(msg.Size))
 
@@ -126,29 +103,6 @@ func (rw *meteredMsgReadWriter) ReadMsg() (p2p.Msg, error) {
 func (rw *meteredMsgReadWriter) WriteMsg(msg p2p.Msg) error {
 	// Account for the data traffic
 	packets, traffic := miscOutPacketsMeter, miscOutTrafficMeter
-	/*	switch {
-		case rw.version < eth62 && msg.Code == BlockHashesMsg:
-			packets, traffic = reqHashOutPacketsMeter, reqHashOutTrafficMeter
-		case rw.version < eth62 && msg.Code == BlocksMsg:
-			packets, traffic = reqBlockOutPacketsMeter, reqBlockOutTrafficMeter
-
-		case rw.version >= eth62 && msg.Code == BlockHeadersMsg:
-			packets, traffic = reqHeaderOutPacketsMeter, reqHeaderOutTrafficMeter
-		case rw.version >= eth62 && msg.Code == BlockBodiesMsg:
-			packets, traffic = reqBodyOutPacketsMeter, reqBodyOutTrafficMeter
-
-		case rw.version >= eth63 && msg.Code == NodeDataMsg:
-			packets, traffic = reqStateOutPacketsMeter, reqStateOutTrafficMeter
-		case rw.version >= eth63 && msg.Code == ReceiptsMsg:
-			packets, traffic = reqReceiptOutPacketsMeter, reqReceiptOutTrafficMeter
-
-		case msg.Code == NewBlockHashesMsg:
-			packets, traffic = propHashOutPacketsMeter, propHashOutTrafficMeter
-		case msg.Code == NewBlockMsg:
-			packets, traffic = propBlockOutPacketsMeter, propBlockOutTrafficMeter
-		case msg.Code == TxMsg:
-			packets, traffic = propTxnOutPacketsMeter, propTxnOutTrafficMeter
-		}*/
 	packets.Mark(1)
 	traffic.Mark(int64(msg.Size))
 

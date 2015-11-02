@@ -11,7 +11,14 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
-var testBankSecureTrieKey = sha3.NewKeccak256().Sum(testBankAddress[:])
+var testBankSecureTrieKey = secAddr(testBankAddress)
+
+func secAddr(addr common.Address) []byte {
+	sha := sha3.NewKeccak256()
+	sha.Write(addr[:])
+	return sha.Sum(nil)
+}
+
 
 type accessTestFn func(ca *access.ChainAccess, bc *core.BlockChain, bhash common.Hash) access.ObjectAccess
 

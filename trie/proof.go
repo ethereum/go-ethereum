@@ -109,7 +109,8 @@ func StoreProof(db Database, proof MerkleProof) {
 	sha := sha3.NewKeccak256()
 	for _, buf := range proof {
 		sha.Reset()
-		hash := sha.Sum(buf)
+		sha.Write(buf)
+		hash := sha.Sum(nil)
 		val, _ := db.Get(hash)
 		if val == nil {
 			db.Put(hash, buf)
