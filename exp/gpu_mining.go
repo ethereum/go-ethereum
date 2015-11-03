@@ -16,7 +16,7 @@
 
 // +build opencl
 
-package eth
+package exp
 
 import (
 	"fmt"
