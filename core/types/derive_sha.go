@@ -17,8 +17,10 @@
 package types
 
 import (
+
+	"bytes"
+
 	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/rlp"
 	"github.com/expanse-project/go-expanse/trie"
 )
@@ -29,12 +31,12 @@ type DerivableList interface {
 }
 
 func DeriveSha(list DerivableList) common.Hash {
-	db, _ := ethdb.NewMemDatabase()
-	trie := trie.New(nil, db)
+	keybuf := new(bytes.Buffer)
+	trie := new(trie.Trie)
 	for i := 0; i < list.Len(); i++ {
-		key, _ := rlp.EncodeToBytes(uint(i))
-		trie.Update(key, list.GetRlp(i))
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(i))
+		trie.Update(keybuf.Bytes(), list.GetRlp(i))
 	}
-
-	return common.BytesToHash(trie.Root())
+	return trie.Hash()
 }

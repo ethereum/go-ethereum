@@ -27,7 +27,7 @@ var addr = common.BytesToAddress([]byte("test"))
 
 func create() (*ManagedState, *account) {
 	db, _ := ethdb.NewMemDatabase()
-	statedb := New(common.Hash{}, db)
+	statedb, _ := New(common.Hash{}, db)
 	ms := ManageState(statedb)
 	so := &StateObject{address: addr, nonce: 100}
 	ms.StateDB.stateObjects[addr.Str()] = so

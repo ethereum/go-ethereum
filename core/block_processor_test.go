@@ -24,28 +24,29 @@ import (
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/core/vm"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/pow/ezp"
 )
 
-func proc() (*BlockProcessor, *ChainManager) {
+func proc() (*BlockProcessor, *BlockChain) {
 	db, _ := ethdb.NewMemDatabase()
 	var mux event.TypeMux
 
 	WriteTestNetGenesisBlock(db, 0)
-	chainMan, err := NewChainManager(db, thePow(), &mux)
+	blockchain, err := NewBlockChain(db, thePow(), &mux)
 	if err != nil {
 		fmt.Println(err)
 	}
-	return NewBlockProcessor(db, ezp.New(), chainMan, &mux), chainMan
+	return NewBlockProcessor(db, ezp.New(), blockchain, &mux), blockchain
 }
 
 func TestNumber(t *testing.T) {
 	pow := ezp.New()
 	_, chain := proc()
 
-	statedb := state.New(chain.Genesis().Root(), chain.chainDb)
+	statedb, _ := state.New(chain.Genesis().Root(), chain.chainDb)
 	header := makeHeader(chain.Genesis(), statedb)
 	header.Number = big.NewInt(3)
 	err := ValidateHeader(pow, header, chain.Genesis().Header(), false, false)
@@ -70,16 +71,16 @@ func TestPutReceipt(t *testing.T) {
 	hash[0] = 2
 
 	receipt := new(types.Receipt)
-	receipt.SetLogs(state.Logs{&state.Log{
-		Address:   addr,
-		Topics:    []common.Hash{hash},
-		Data:      []byte("hi"),
-		Number:    42,
-		TxHash:    hash,
-		TxIndex:   0,
-		BlockHash: hash,
-		Index:     0,
-	}})
+	receipt.Logs = vm.Logs{&vm.Log{
+		Address:     addr,
+		Topics:      []common.Hash{hash},
+		Data:        []byte("hi"),
+		BlockNumber: 42,
+		TxHash:      hash,
+		TxIndex:     0,
+		BlockHash:   hash,
+		Index:       0,
+	}}
 
 	PutReceipts(db, types.Receipts{receipt})
 	receipt = GetReceipt(db, common.Hash{})

@@ -49,6 +49,31 @@ func (fe *RemoteFrontend) Enable() {
 	fe.enabled = true
 }
 
+func (fe *RemoteFrontend) AskPassword() (string, bool) {
+	if !fe.enabled {
+		return "", false
+	}
+
+	err := fe.send(AskPasswordMethod)
+	if err != nil {
+		glog.V(logger.Error).Infof("Unable to send password request to agent - %v\n", err)
+		return "", false
+	}
+
+	passwdRes, err := fe.recv()
+	if err != nil {
+		glog.V(logger.Error).Infof("Unable to recv password response from agent - %v\n", err)
+		return "", false
+	}
+
+	if passwd, ok := passwdRes.Result.(string); ok {
+		return passwd, true
+	}
+
+	return "", false
+
+}
+
 // UnlockAccount asks the user agent for the user password and tries to unlock the account.
 // It will try 3 attempts before giving up.
 func (fe *RemoteFrontend) UnlockAccount(address []byte) bool {

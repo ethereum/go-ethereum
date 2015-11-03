@@ -25,13 +25,12 @@ import (
 
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/common/compiler"
-	"github.com/expanse-project/go-expanse/common/docserver"
 	"github.com/expanse-project/go-expanse/common/natspec"
 	"github.com/expanse-project/go-expanse/common/registrar"
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/eth"
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/rlp"
 	"github.com/expanse-project/go-expanse/rpc/codec"
@@ -84,7 +83,6 @@ type adminApi struct {
 	expanse *exp.Expanse
 	codec    codec.Codec
 	coder    codec.ApiCoder
-	ds       *docserver.DocServer
 }
 
 // create a new admin api instance
@@ -94,7 +92,6 @@ func NewAdminApi(xeth *xeth.XEth, expanse *exp.Expanse, codec codec.Codec) *admi
 		expanse: expanse,
 		codec:    codec,
 		coder:    codec.New(nil),
-		ds:       docserver.New("/"),
 	}
 }
 
@@ -151,7 +148,7 @@ func (self *adminApi) DataDir(req *shared.Request) (interface{}, error) {
 	return self.expanse.DataDir, nil
 }
 
-func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
+func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
 	for _, b := range bs {
 		if !chain.HasBlock(b.Hash()) {
 			return false
@@ -193,10 +190,10 @@ func (self *adminApi) ImportChain(req *shared.Request) (interface{}, error) {
 			break
 		}
 		// Import the batch.
-		if hasAllBlocks(self.expanse.ChainManager(), blocks[:i]) {
+		if hasAllBlocks(self.expanse.BlockChain(), blocks[:i]) {
 			continue
 		}
-		if _, err := self.expanse.ChainManager().InsertChain(blocks[:i]); err != nil {
+		if _, err := self.expanse.BlockChain().InsertChain(blocks[:i]); err != nil {
 			return false, fmt.Errorf("invalid block %d: %v", n, err)
 		}
 	}
@@ -214,7 +211,7 @@ func (self *adminApi) ExportChain(req *shared.Request) (interface{}, error) {
 		return false, err
 	}
 	defer fh.Close()
-	if err := self.expanse.ChainManager().Export(fh); err != nil {
+	if err := self.expanse.BlockChain().Export(fh); err != nil {
 		return false, err
 	}
 
@@ -437,7 +434,7 @@ func (self *adminApi) GetContractInfo(req *shared.Request) (interface{}, error) 
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	infoDoc, err := natspec.FetchDocsForContract(args.Contract, self.xeth, self.ds)
+	infoDoc, err := natspec.FetchDocsForContract(args.Contract, self.xeth, self.expanse.HTTPClient())
 	if err != nil {
 		return nil, err
 	}
@@ -457,7 +454,7 @@ func (self *adminApi) HttpGet(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	resp, err := self.ds.Get(args.Uri, args.Path)
+	resp, err := self.expanse.HTTPClient().Get(args.Uri, args.Path)
 	if err != nil {
 		return nil, err
 	}

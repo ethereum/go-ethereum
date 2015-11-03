@@ -37,7 +37,7 @@ func TestSub(t *testing.T) {
 	}()
 	ev := <-sub.Chan()
 
-	if ev.(testEvent) != testEvent(5) {
+	if ev.Data.(testEvent) != testEvent(5) {
 		t.Errorf("Got %v (%T), expected event %v (%T)",
 			ev, ev, testEvent(5), testEvent(5))
 	}

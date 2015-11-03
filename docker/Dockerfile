@@ -1,6 +1,7 @@
 FROM ubuntu:utopic
 MAINTAINER chrisfranko
 
+
 ENV DEBIAN_FRONTEND noninteractive
 
 # Usual update / upgrade
@@ -36,5 +37,4 @@ ADD supervisord.conf supervisord.conf
 EXPOSE 9656
 EXPOSE 42786
 
-CMD ["-n", "-c", "/supervisord.conf"]
-ENTRYPOINT ["/usr/bin/supervisord"]
+ENTRYPOINT ["/usr/bin/geth"]

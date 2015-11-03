@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/expanse-project/ethash"
+	"github.com/expanse-org/ethash"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/vm"
 	"github.com/expanse-project/go-expanse/exp"
@@ -119,9 +119,9 @@ func (self *debugApi) DumpBlock(req *shared.Request) (interface{}, error) {
 		return nil, fmt.Errorf("block #%d not found", args.BlockNumber)
 	}
 
-	stateDb := state.New(block.Root(), self.expanse.ChainDb())
-	if stateDb == nil {
-		return nil, nil
+	stateDb, err := state.New(block.Root(), self.expanse.ChainDb())
+	if err != nil {
+		return nil, err
 	}
 
 	return stateDb.RawDump(), nil
@@ -146,13 +146,7 @@ func (self *debugApi) SetHead(req *shared.Request) (interface{}, error) {
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
-
-	block := self.xeth.EthBlockByNumber(args.BlockNumber)
-	if block == nil {
-		return nil, fmt.Errorf("block #%d not found", args.BlockNumber)
-	}
-
-	self.expanse.ChainManager().SetHead(block)
+	self.expanse.BlockChain().SetHead(uint64(args.BlockNumber))
 
 	return nil, nil
 }

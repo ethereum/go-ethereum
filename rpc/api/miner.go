@@ -17,7 +17,7 @@
 package api
 
 import (
-	"github.com/expanse-project/ethash"
+	"github.com/expanse-org/ethash"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/exp"
 	"github.com/expanse-project/go-expanse/rpc/codec"
@@ -100,7 +100,7 @@ func (self *minerApi) StartMiner(req *shared.Request) (interface{}, error) {
 	}
 
 	self.expanse.StartAutoDAG()
-	err := self.expanse.StartMining(args.Threads)
+	err := self.expanse.StartMining(args.Threads, "")
 	if err == nil {
 		return true, nil
 	}

@@ -31,7 +31,7 @@ import (
 	"github.com/expanse-project/go-expanse/accounts"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/common/compiler"
-	"github.com/expanse-project/go-expanse/common/docserver"
+	"github.com/expanse-project/go-expanse/common/httpclient"
 	"github.com/expanse-project/go-expanse/common/natspec"
 	"github.com/expanse-project/go-expanse/common/registrar"
 	"github.com/expanse-project/go-expanse/core"
@@ -40,6 +40,7 @@ import (
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/rpc/codec"
 	"github.com/expanse-project/go-expanse/rpc/comms"
+
 )
 
 const (
@@ -62,7 +63,7 @@ var (
 type testjethre struct {
 	*jsre
 	lastConfirm string
-	ds          *docserver.DocServer
+	client      *httpclient.HTTPClient
 }
 
 func (self *testjethre) UnlockAccount(acc []byte) bool {
@@ -75,7 +76,7 @@ func (self *testjethre) UnlockAccount(acc []byte) bool {
 
 func (self *testjethre) ConfirmTransaction(tx string) bool {
 	if self.expanse.NatSpec {
-		self.lastConfirm = natspec.GetNotice(self.xeth, tx, self.ds)
+		self.lastConfirm = natspec.GetNotice(self.xeth, tx, self.client)
 	}
 	return true
 }
@@ -101,6 +102,7 @@ func testREPL(t *testing.T, config func(*exp.Config)) (string, *testjethre, *exp
 		AccountManager: am,
 		MaxPeers:       0,
 		Name:           "test",
+		DocRoot:        "/",
 		SolcPath:       testSolcPath,
 		PowTest:        true,
 		NewDB:          func(path string) (ethdb.Database, error) { return db, nil },
@@ -130,8 +132,8 @@ func testREPL(t *testing.T, config func(*exp.Config)) (string, *testjethre, *exp
 
 	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "expanse", "go-expanse", "cmd", "mist", "assets", "ext")
 	client := comms.NewInProcClient(codec.JSON)
-	ds := docserver.New("/")
-	tf := &testjethre{ds: ds}
+
+	tf := &testjethre{client: expanse.HTTPClient()}
 	repl := newJSRE(expanse, assetPath, "", client, false, tf)
 	tf.jsre = repl
 	return tmp, tf, expanse
@@ -196,7 +198,7 @@ func TestBlockChain(t *testing.T) {
 	tmpfile := filepath.Join(extmp, "export.chain")
 	tmpfileq := strconv.Quote(tmpfile)
 
-	expanse.ChainManager().Reset()
+	expanse.BlockChain().Reset()
 
 	checkEvalJSON(t, repl, `admin.exportChain(`+tmpfileq+`)`, `true`)
 	if _, err := os.Stat(tmpfile); err != nil {
@@ -469,7 +471,7 @@ func processTxs(repl *testjethre, t *testing.T, expTxc int) bool {
 		return false
 	}
 
-	err = repl.expanse.StartMining(runtime.NumCPU())
+	err = repl.expanse.StartMining(runtime.NumCPU(), "")
 	if err != nil {
 		t.Errorf("unexpected error mining: %v", err)
 		return false

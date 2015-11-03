@@ -20,52 +20,69 @@ import (
 	"math/big"
 	"math/rand"
 	"sync"
-
+	
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
 )
 
-const gpoProcessPastBlocks = 100
+const (
+	gpoProcessPastBlocks = 100
+
+	// for testing
+	gpoDefaultBaseCorrectionFactor = 110
+	gpoDefaultMinGasPrice          = 10000000000000
+)
 
 type blockPriceInfo struct {
 	baseGasPrice *big.Int
 }
 
+// GasPriceOracle recommends gas prices based on the content of recent
+// blocks.
 type GasPriceOracle struct {
-	exp                           *Expanse
-	chain                         *core.ChainManager
-	events                        event.Subscription
+	exp           *Expanse
+	initOnce      sync.Once
+	minPrice      *big.Int
+	lastBaseMutex sync.Mutex
+	lastBase      *big.Int
+
+	// state of listenLoop
 	blocks                        map[uint64]*blockPriceInfo
 	firstProcessed, lastProcessed uint64
-	lastBaseMutex                 sync.Mutex
-	lastBase, minBase             *big.Int
+	minBase                       *big.Int
 }
 
-func NewGasPriceOracle(exp *Expanse) (self *GasPriceOracle) {
-	self = &GasPriceOracle{}
-	self.blocks = make(map[uint64]*blockPriceInfo)
-	self.exp = exp
-	self.chain = exp.chainManager
-	self.events = exp.EventMux().Subscribe(
-		core.ChainEvent{},
-		core.ChainSplitEvent{},
-	)
-
-	minbase := new(big.Int).Mul(self.exp.GpoMinGasPrice, big.NewInt(100))
-	minbase = minbase.Div(minbase, big.NewInt(int64(self.exp.GpobaseCorrectionFactor)))
-	self.minBase = minbase
-
-	self.processPastBlocks()
-	go self.listenLoop()
-	return
+// NewGasPriceOracle returns a new oracle.
+func NewGasPriceOracle(eth *Ethereum) *GasPriceOracle {
+	minprice := exp.GpoMinGasPrice
+	if minprice == nil {
+		minprice = big.NewInt(gpoDefaultMinGasPrice)
+	}
+	minbase := new(big.Int).Mul(minprice, big.NewInt(100))
+	if exp.GpobaseCorrectionFactor > 0 {
+		minbase = minbase.Div(minbase, big.NewInt(int64(exp.GpobaseCorrectionFactor)))
+	}
+	return &GasPriceOracle{
+		eth:      exp,
+		blocks:   make(map[uint64]*blockPriceInfo),
+		minBase:  minbase,
+		minPrice: minprice,
+		lastBase: minprice,
+	}
 }
 
-func (self *GasPriceOracle) processPastBlocks() {
+func (gpo *GasPriceOracle) init() {
+	gpo.initOnce.Do(func() {
+		gpo.processPastBlocks(gpo.exp.BlockChain())
+		go gpo.listenLoop()
+	})
+}
+
+func (self *GasPriceOracle) processPastBlocks(chain *core.BlockChain) {
 	last := int64(-1)
-	cblock := self.chain.CurrentBlock()
+	cblock := chain.CurrentBlock()
 	if cblock != nil {
 		last = int64(cblock.NumberU64())
 	}
@@ -75,7 +92,7 @@ func (self *GasPriceOracle) processPastBlocks() {
 	}
 	self.firstProcessed = uint64(first)
 	for i := first; i <= last; i++ {
-		block := self.chain.GetBlockByNumber(uint64(i))
+		block := chain.GetBlockByNumber(uint64(i))
 		if block != nil {
 			self.processBlock(block)
 		}
@@ -84,19 +101,17 @@ func (self *GasPriceOracle) processPastBlocks() {
 }
 
 func (self *GasPriceOracle) listenLoop() {
-	for {
-		ev, isopen := <-self.events.Chan()
-		if !isopen {
-			break
-		}
-		switch ev := ev.(type) {
+	events := self.exp.EventMux().Subscribe(core.ChainEvent{}, core.ChainSplitEvent{})
+	defer events.Unsubscribe()
+
+	for event := range events.Chan() {
+		switch event := event.Data.(type) {
 		case core.ChainEvent:
-			self.processBlock(ev.Block)
+			self.processBlock(event.Block)
 		case core.ChainSplitEvent:
-			self.processBlock(ev.Block)
+			self.processBlock(event.Block)
 		}
 	}
-	self.events.Unsubscribe()
 }
 
 func (self *GasPriceOracle) processBlock(block *types.Block) {
@@ -105,7 +120,7 @@ func (self *GasPriceOracle) processBlock(block *types.Block) {
 		self.lastProcessed = i
 	}
 
-	lastBase := self.exp.GpoMinGasPrice
+	lastBase := self.minPrice
 	bpl := self.blocks[i-1]
 	if bpl != nil {
 		lastBase = bpl.baseGasPrice
@@ -179,28 +194,19 @@ func (self *GasPriceOracle) lowestPrice(block *types.Block) *big.Int {
 	return minPrice
 }
 
+// SuggestPrice returns the recommended gas price.
 func (self *GasPriceOracle) SuggestPrice() *big.Int {
+	self.init()
 	self.lastBaseMutex.Lock()
-	base := self.lastBase
+	price := new(big.Int).Set(self.lastBase)
 	self.lastBaseMutex.Unlock()
 
-	if base == nil {
-		base = self.exp.GpoMinGasPrice
+	price.Mul(price, big.NewInt(int64(self.exp.GpobaseCorrectionFactor)))
+	price.Div(price, big.NewInt(100))
+	if price.Cmp(self.minPrice) < 0 {
+		price.Set(self.minPrice)
+	} else if self.exp.GpoMaxGasPrice != nil && price.Cmp(self.exp.GpoMaxGasPrice) > 0 {
+		price.Set(self.exp.GpoMaxGasPrice)
 	}
-	if base == nil {
-		return big.NewInt(10000000000000) // apparently MinGasPrice is not initialized during some tests
-	}
-
-	baseCorr := new(big.Int).Mul(base, big.NewInt(int64(self.exp.GpobaseCorrectionFactor)))
-	baseCorr.Div(baseCorr, big.NewInt(100))
-
-	if baseCorr.Cmp(self.exp.GpoMinGasPrice) < 0 {
-		return self.exp.GpoMinGasPrice
-	}
-
-	if baseCorr.Cmp(self.exp.GpoMaxGasPrice) > 0 {
-		return self.exp.GpoMaxGasPrice
-	}
-
-	return baseCorr
+	return price
 }

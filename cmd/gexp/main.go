@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
-	"github.com/expanse-project/ethash"
+	"github.com/expanse-org/ethash"
 	"github.com/expanse-project/go-expanse/accounts"
 	"github.com/expanse-project/go-expanse/cmd/utils"
 	"github.com/expanse-project/go-expanse/common"
@@ -47,23 +47,17 @@ import (
 )
 
 const (
-
 	ClientIdentifier = "Gexp"
-	Version          = "1.2.3"
+	Version          = "1.3.1"
 	VersionMajor     = 1
-	VersionMinor     = 2
-	VersionPatch     = 3
+	VersionMinor     = 3
+	VersionPatch     = 1
 )
 
 var (
 	gitCommit       string // set via linker flagg
 	nodeNameVersion string
 	app             *cli.App
-
-	ExtraDataFlag = cli.StringFlag{
-		Name:  "extradata",
-		Usage: "Extra data for the miner",
-	}
 )
 
 func init() {
@@ -80,7 +74,7 @@ func init() {
 		{
 			Action: blockRecovery,
 			Name:   "recover",
-			Usage:  "attempts to recover a corrupted database by setting a new block by number or hash. See help recover.",
+			Usage:  "Attempts to recover a corrupted database by setting a new block by number or hash",
 			Description: `
 The recover commands will attempt to read out the last
 block based on that.
@@ -105,6 +99,22 @@ The makedag command generates an ethash DAG in /tmp/dag.
 
 This command exists to support the system testing project.
 Regular users do not need to execute it.
+`,
+		},
+		{
+			Action: gpuinfo,
+			Name:   "gpuinfo",
+			Usage:  "gpuinfo",
+			Description: `
+Prints OpenCL device info for all found GPUs.
+`,
+		},
+		{
+			Action: gpubench,
+			Name:   "gpubench",
+			Usage:  "benchmark GPU",
+			Description: `
+Runs quick benchmark on first GPU found.
 `,
 		},
 		{
@@ -161,8 +171,12 @@ It is safe to transfer the entire directory or the individual keys therein
 between expanse nodes by simply copying.
 Make sure you backup your keys regularly.
 
-In order to use your account to send transactions, you need to unlock them using the
-'--unlock' option. The argument is a comma
+In order to use your account to send transactions, you need to unlock them using
+the '--unlock' option. The argument is a space separated list of addresses or
+indexes. If used non-interactively with a passwordfile, the file should contain
+the respective passwords one per line. If you unlock n accounts and the password
+file contains less than n entries, then the last password is meant to apply to
+all remaining accounts.
 
 And finally. DO NOT FORGET YOUR PASSWORD.
 `,
@@ -212,7 +226,7 @@ format to the newest format or change the password for an account.
 
 For non-interactive use the passphrase can be specified with the --password flag:
 
-    expanse --password <passwordfile> account new
+    expanse --password <passwordfile> account update <address>
 
 Since only one password can be given, only format update can be performed,
 changing your password is only possible interactively.
@@ -289,7 +303,7 @@ JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt
 		utils.DataDirFlag,
 		utils.BlockchainVersionFlag,
 		utils.OlympicFlag,
-		utils.EthVersionFlag,
+		utils.FastSyncFlag,
 		utils.CacheFlag,
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
@@ -299,6 +313,7 @@ JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt
 		utils.GasPriceFlag,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
+		utils.MiningGPUFlag,
 		utils.AutoDAGFlag,
 		utils.NATFlag,
 		utils.NatspecEnabledFlag,
@@ -315,6 +330,7 @@ JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt
 		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
 		utils.DevModeFlag,
+		utils.TestNetFlag,
 		utils.VMDebugFlag,
 		utils.VMForceJitFlag,
 		utils.VMJitCacheFlag,
@@ -323,10 +339,8 @@ JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt
 		utils.RPCCORSDomainFlag,
 		utils.VerbosityFlag,
 		utils.BacktraceAtFlag,
-		utils.LogToStdErrFlag,
 		utils.LogVModuleFlag,
 		utils.LogFileFlag,
-		utils.LogJSONFlag,
 		utils.PProfEanbledFlag,
 		utils.PProfPortFlag,
 		utils.MetricsEnabledFlag,
@@ -337,12 +351,12 @@ JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt
 		utils.GpobaseStepDownFlag,
 		utils.GpobaseStepUpFlag,
 		utils.GpobaseCorrectionFactorFlag,
-		ExtraDataFlag,
+		utils.ExtraDataFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		utils.SetupLogger(ctx)
+		utils.SetupNetwork(ctx)
 		utils.SetupVM(ctx)
-		utils.SetupEth(ctx)
 		if ctx.GlobalBool(utils.PProfEanbledFlag.Name) {
 			utils.StartPProf(ctx)
 		}
@@ -363,8 +377,8 @@ func main() {
 
 // makeExtra resolves extradata for the miner from a flag or returns a default.
 func makeExtra(ctx *cli.Context) []byte {
-	if ctx.GlobalIsSet(ExtraDataFlag.Name) {
-		return []byte(ctx.GlobalString(ExtraDataFlag.Name))
+	if ctx.GlobalIsSet(utils.ExtraDataFlag.Name) {
+		return []byte(ctx.GlobalString(utils.ExtraDataFlag.Name))
 	}
 	return makeDefaultExtra()
 }
@@ -386,15 +400,11 @@ func makeDefaultExtra() []byte {
 		glog.V(logger.Debug).Infof("extra: %x\n", extra)
 		return nil
 	}
-
 	return extra
 }
 
 func run(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
-	if ctx.GlobalBool(utils.OlympicFlag.Name) {
-		utils.InitOlympic()
-	}
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	cfg.ExtraData = makeExtra(ctx)
@@ -410,7 +420,7 @@ func run(ctx *cli.Context) {
 }
 
 func attach(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	var client comms.ExpanseClient
 	var err error
@@ -430,6 +440,7 @@ func attach(ctx *cli.Context) {
 	repl := newLightweightJSRE(
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		client,
+		ctx.GlobalString(utils.DataDirFlag.Name),
 		true,
 	)
 
@@ -442,7 +453,7 @@ func attach(ctx *cli.Context) {
 }
 
 func console(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 
@@ -477,7 +488,7 @@ func console(ctx *cli.Context) {
 }
 
 func execJSFiles(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	expanse, err := exp.New(cfg)
@@ -503,33 +514,34 @@ func execJSFiles(ctx *cli.Context) {
 	expanse.WaitForShutdown()
 }
 
-func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (addrHex, auth string) {
+func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int, inputpassphrases []string) (addrHex, auth string, passphrases []string) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
 
 	var err error
+	passphrases = inputpassphrases
 	addrHex, err = utils.ParamToAddress(addr, am)
 	if err == nil {
 		// Attempt to unlock the account 3 times
 		attempts := 3
 		for tries := 0; tries < attempts; tries++ {
 			msg := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", addr, tries+1, attempts)
-			auth = getPassPhrase(ctx, msg, false, i)
+			auth, passphrases = getPassPhrase(ctx, msg, false, i, passphrases)
 			err = am.Unlock(common.HexToAddress(addrHex), auth)
-			if err == nil {
+			if err == nil || passphrases != nil {
 				break
 			}
 		}
 	}
 
 	if err != nil {
-		utils.Fatalf("Unlock account failed '%v'", err)
+		utils.Fatalf("Unlock account '%s' (%v) failed: %v", addr, addrHex, err)
 	}
-	fmt.Printf("Account '%s' unlocked.\n", addr)
+	fmt.Printf("Account '%s' (%v) unlocked.\n", addr, addrHex)
 	return
 }
 
 func blockRecovery(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	arg := ctx.Args().First()
 	if len(ctx.Args()) < 1 && len(arg) > 0 {
@@ -568,12 +580,13 @@ func startEth(ctx *cli.Context, exp *exp.Expanse) {
 	am := exp.AccountManager()
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	accounts := strings.Split(account, " ")
+	var passphrases []string
 	for i, account := range accounts {
 		if len(account) > 0 {
 			if account == "primary" {
 				utils.Fatalf("the 'primary' keyword is deprecated. You can use integer indexes, but the indexes are not permanent, they can change if you add external keys, export your keys or copy your keystore to another node.")
 			}
-			unlockAccount(ctx, am, account, i)
+			_, _, passphrases = unlockAccount(ctx, am, account, i, passphrases)
 		}
 	}
 	// Start auxiliary services if enabled.
@@ -588,14 +601,18 @@ func startEth(ctx *cli.Context, exp *exp.Expanse) {
 		}
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		if err := exp.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
+
+		err := exp.StartMining(
+			ctx.GlobalInt(utils.MinerThreadsFlag.Name),
+			ctx.GlobalString(utils.MiningGPUFlag.Name))
+		if err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}
 }
 
 func accountList(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	am := utils.MakeAccountManager(ctx)
 	accts, err := am.Accounts()
@@ -607,7 +624,7 @@ func accountList(ctx *cli.Context) {
 	}
 }
 
-func getPassPhrase(ctx *cli.Context, desc string, confirmation bool, i int) (passphrase string) {
+func getPassPhrase(ctx *cli.Context, desc string, confirmation bool, i int, inputpassphrases []string) (passphrase string, passphrases []string) {
 	passfile := ctx.GlobalString(utils.PasswordFileFlag.Name)
 	if len(passfile) == 0 {
 		fmt.Println(desc)
@@ -627,14 +644,17 @@ func getPassPhrase(ctx *cli.Context, desc string, confirmation bool, i int) (pas
 		passphrase = auth
 
 	} else {
-		passbytes, err := ioutil.ReadFile(passfile)
-		if err != nil {
-			utils.Fatalf("Unable to read password file '%s': %v", passfile, err)
+		passphrases = inputpassphrases
+		if passphrases == nil {
+			passbytes, err := ioutil.ReadFile(passfile)
+			if err != nil {
+				utils.Fatalf("Unable to read password file '%s': %v", passfile, err)
+			}
+			// this is backwards compatible if the same password unlocks several accounts
+			// it also has the consequence that trailing newlines will not count as part
+			// of the password, so --password <(echo -n 'pass') will now work without -n
+			passphrases = strings.Split(string(passbytes), "\n")
 		}
-		// this is backwards compatible if the same password unlocks several accounts
-		// it also has the consequence that trailing newlines will not count as part
-		// of the password, so --password <(echo -n 'pass') will now work without -n
-		passphrases := strings.Split(string(passbytes), "\n")
 		if i >= len(passphrases) {
 			passphrase = passphrases[len(passphrases)-1]
 		} else {
@@ -645,10 +665,10 @@ func getPassPhrase(ctx *cli.Context, desc string, confirmation bool, i int) (pas
 }
 
 func accountCreate(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	am := utils.MakeAccountManager(ctx)
-	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0)
+	passphrase, _ := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, nil)
 	acct, err := am.NewAccount(passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
@@ -657,7 +677,7 @@ func accountCreate(ctx *cli.Context) {
 }
 
 func accountUpdate(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	am := utils.MakeAccountManager(ctx)
 	arg := ctx.Args().First()
@@ -665,8 +685,8 @@ func accountUpdate(ctx *cli.Context) {
 		utils.Fatalf("account address or index must be given as argument")
 	}
 
-	addr, authFrom := unlockAccount(ctx, am, arg, 0)
-	authTo := getPassPhrase(ctx, "Please give a new password. Do not forget this password.", true, 0)
+	addr, authFrom, passphrases := unlockAccount(ctx, am, arg, 0, nil)
+	authTo, _ := getPassPhrase(ctx, "Please give a new password. Do not forget this password.", true, 0, passphrases)
 	err := am.Update(common.HexToAddress(addr), authFrom, authTo)
 	if err != nil {
 		utils.Fatalf("Could not update the account: %v", err)
@@ -674,7 +694,7 @@ func accountUpdate(ctx *cli.Context) {
 }
 
 func importWallet(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
@@ -686,7 +706,7 @@ func importWallet(ctx *cli.Context) {
 	}
 
 	am := utils.MakeAccountManager(ctx)
-	passphrase := getPassPhrase(ctx, "", false, 0)
+	passphrase, _ := getPassPhrase(ctx, "", false, 0, nil)
 
 	acct, err := am.ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
@@ -696,14 +716,14 @@ func importWallet(ctx *cli.Context) {
 }
 
 func accountImport(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
 	}
 	am := utils.MakeAccountManager(ctx)
-	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0)
+	passphrase, _ := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, nil)
 	acct, err := am.Import(keyfile, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
@@ -712,7 +732,7 @@ func accountImport(ctx *cli.Context) {
 }
 
 func makedag(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	args := ctx.Args()
 	wrongArgs := func() {
@@ -737,6 +757,29 @@ func makedag(ctx *cli.Context) {
 			fmt.Println("making DAG, this could take awhile...")
 			ethash.MakeDAG(blockNum, dir)
 		}
+	default:
+		wrongArgs()
+	}
+}
+
+func gpuinfo(ctx *cli.Context) {
+	exp.PrintOpenCLDevices()
+}
+
+func gpubench(ctx *cli.Context) {
+	args := ctx.Args()
+	wrongArgs := func() {
+		utils.Fatalf(`Usage: geth gpubench <gpu number>`)
+	}
+	switch {
+	case len(args) == 1:
+		n, err := strconv.ParseUint(args[0], 0, 64)
+		if err != nil {
+			wrongArgs()
+		}
+		exp.GPUBench(n)
+	case len(args) == 0:
+		exp.GPUBench(0)
 	default:
 		wrongArgs()
 	}

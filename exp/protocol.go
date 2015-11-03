@@ -31,14 +31,13 @@ const (
 	eth61 = 61
 	eth62 = 62
 	eth63 = 63
-	eth64 = 64
 )
 
 // Supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{eth64, eth63, eth62, eth61}
+var ProtocolVersions = []uint{eth63, eth62, eth61}
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{15, 12, 8, 9}
+var ProtocolLengths = []uint64{17, 8, 9}
 
 const (
 	NetworkId          = 1
@@ -73,11 +72,6 @@ const (
 	NodeDataMsg    = 0x0e
 	GetReceiptsMsg = 0x0f
 	ReceiptsMsg    = 0x10
-
-	// Protocol messages belonging to eth/64
-	GetAcctProofMsg     = 0x11
-	GetStorageDataProof = 0x12
-	Proof               = 0x13
 )
 
 type errCode int

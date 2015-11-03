@@ -24,7 +24,8 @@ import (
 	"fmt"
 
 	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/common/natspec"
+	"github.com/expanse-project/go-expanse/eth"
 	"github.com/expanse-project/go-expanse/rpc/codec"
 	"github.com/expanse-project/go-expanse/rpc/shared"
 	"github.com/expanse-project/go-expanse/xeth"
@@ -67,6 +68,7 @@ var (
 		"eth_getUncleCountByBlockNumber":          (*ethApi).GetUncleCountByBlockNumber,
 		"eth_getData":                             (*ethApi).GetData,
 		"eth_getCode":                             (*ethApi).GetData,
+		"eth_getNatSpec":                          (*ethApi).GetNatSpec,
 		"eth_sign":                                (*ethApi).Sign,
 		"eth_sendRawTransaction":                  (*ethApi).SendRawTransaction,
 		"eth_sendTransaction":                     (*ethApi).SendTransaction,
@@ -216,9 +218,7 @@ func (self *ethApi) IsMining(req *shared.Request) (interface{}, error) {
 }
 
 func (self *ethApi) IsSyncing(req *shared.Request) (interface{}, error) {
-	current := self.expanse.ChainManager().CurrentBlock().NumberU64()
-	origin, height := self.expanse.Downloader().Boundaries()
-
+	origin, current, height := self.expanse.Downloader().Progress()
 	if current < height {
 		return map[string]interface{}{
 			"startingBlock": newHexNum(big.NewInt(int64(origin)).Bytes()),
@@ -370,6 +370,18 @@ func (self *ethApi) SendTransaction(req *shared.Request) (interface{}, error) {
 		return nil, err
 	}
 	return v, nil
+}
+
+func (self *ethApi) GetNatSpec(req *shared.Request) (interface{}, error) {
+	args := new(NewTxArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	var jsontx = fmt.Sprintf(`{"params":[{"to":"%s","data": "%s"}]}`, args.To, args.Data)
+	notice := natspec.GetNotice(self.xeth, jsontx, self.expanse.HTTPClient())
+
+	return notice, nil
 }
 
 func (self *ethApi) EstimateGas(req *shared.Request) (interface{}, error) {

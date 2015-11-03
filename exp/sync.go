@@ -22,6 +22,7 @@ import (
 
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/eth/downloader"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/p2p/discover"
@@ -160,9 +161,28 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		return
 	}
 	// Make sure the peer's TD is higher than our own. If not drop.
-	if peer.Td().Cmp(pm.chainman.Td()) <= 0 {
+	td := pm.blockchain.GetTd(pm.blockchain.CurrentBlock().Hash())
+	if peer.Td().Cmp(td) <= 0 {
 		return
 	}
 	// Otherwise try to sync with the downloader
-	pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td())
+	mode := downloader.FullSync
+	if pm.fastSync {
+		mode = downloader.FastSync
+	}
+	if err := pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), mode); err != nil {
+		return
+	}
+	// If fast sync was enabled, and we synced up, disable it
+	if pm.fastSync {
+		// Wait until all pending imports finish processing
+		for pm.downloader.Synchronising() {
+			time.Sleep(100 * time.Millisecond)
+		}
+		// Disable fast sync if we indeed have something in our chain
+		if pm.blockchain.CurrentBlock().NumberU64() > 0 {
+			glog.V(logger.Info).Infof("fast sync complete, auto disabling")
+			pm.fastSync = false
+		}
+	}
 }

@@ -1,5 +1,7 @@
 #! /bin/bash
 
+: ${PROG:=$(basename ${BASH_SOURCE})}
+
 _cli_bash_autocomplete() {
      local cur prev opts base
      COMPREPLY=()

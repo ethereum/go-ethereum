@@ -21,14 +21,14 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
-
+	
 	"github.com/expanse-project/go-expanse/accounts"
 	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/common/docserver"
+	"github.com/expanse-project/go-expanse/common/httpclient"
 	"github.com/expanse-project/go-expanse/common/registrar"
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/crypto"
@@ -38,7 +38,9 @@ import (
 )
 
 const (
+	testAddress = "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	testBalance = "10000000000000000000"
+	testKey     = "e6fab74a43941f82d89cb7faa408e227cdad3153c4720e540e855c19b15e6674"
 
 	testFileName = "long_file_name_for_testing_registration_of_URLs_longer_than_32_bytes.content"
 
@@ -48,7 +50,7 @@ const (
 
 	testExpNotice2 = `About to submit transaction (NatSpec notice error: abi key does not match any method): {"params":[{"to":"%s","data": "0x31e12c20"}]}`
 
-	testExpNotice3 = `About to submit transaction (no NatSpec info found for contract: content hash not found for '0x1392c62d05b2d149e22a339c531157ae06b44d39a674cce500064b12b9aeb019'): {"params":[{"to":"%s","data": "0x300a3bbfb3a2dea218de5d8bbe6c4645aadbf67b5ab00ecb1a9ec95dbdad6a0eed3e41a7000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066696c653a2f2f2f746573742e636f6e74656e74"}]}`
+	testExpNotice3 = `About to submit transaction (no NatSpec info found for contract: HashToHash: content hash not found for '0x1392c62d05b2d149e22a339c531157ae06b44d39a674cce500064b12b9aeb019'): {"params":[{"to":"%s","data": "0x300a3bbfb3a2dea218de5d8bbe6c4645aadbf67b5ab00ecb1a9ec95dbdad6a0eed3e41a7000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066696c653a2f2f2f746573742e636f6e74656e74"}]}`
 )
 
 const (
@@ -100,6 +102,10 @@ type testFrontend struct {
 	wantNatSpec bool
 }
 
+func (self *testFrontend) AskPassword() (string, bool) {
+	return "", true
+}
+
 func (self *testFrontend) UnlockAccount(acc []byte) bool {
 	self.expanse.AccountManager().Unlock(common.BytesToAddress(acc), "password")
 	return true
@@ -107,50 +113,51 @@ func (self *testFrontend) UnlockAccount(acc []byte) bool {
 
 func (self *testFrontend) ConfirmTransaction(tx string) bool {
 	if self.wantNatSpec {
-		ds := docserver.New("/tmp/")
-		self.lastConfirm = GetNotice(self.xeth, tx, ds)
+		client := httpclient.New("/tmp/")
+		self.lastConfirm = GetNotice(self.xeth, tx, client)
 	}
 	return true
 }
 
 func testEth(t *testing.T) (expanse *exp.Expanse, err error) {
 
-	os.RemoveAll("/tmp/exp-natspec/")
-
-	err = os.MkdirAll("/tmp/exp-natspec/keystore", os.ModePerm)
+	tmp, err := ioutil.TempDir("", "natspec-test")
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
-
-	// create a testAddress
-	ks := crypto.NewKeyStorePassphrase("/tmp/exp-natspec/keystore")
-	am := accounts.NewManager(ks)
-	testAccount, err := am.NewAccount("password")
-	if err != nil {
-		panic(err)
-	}
-
-	testAddress := strings.TrimPrefix(testAccount.Address.Hex(), "0x")
 
 	db, _ := ethdb.NewMemDatabase()
-	// set up mock genesis with balance on the testAddress
-	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{common.HexToAddress(testAddress), common.String2Big(testBalance)})
-
-	// only use minimalistic stack with no networking
-	expanse, err = exp.New(&exp.Config{
-		DataDir:        "/tmp/exp-natspec",
-		AccountManager: am,
-		MaxPeers:       0,
-		PowTest:        true,
-		Etherbase:      common.HexToAddress(testAddress),
-		NewDB:          func(path string) (ethdb.Database, error) { return db, nil },
-	})
-
+	addr := common.HexToAddress(testAddress)
+	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{addr, common.String2Big(testBalance)})
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(tmp, "keystore"), crypto.LightScryptN, crypto.LightScryptP)
+	am := accounts.NewManager(ks)
+	keyb, err := crypto.HexToECDSA(testKey)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
+	}
+	key := crypto.NewKeyFromECDSA(keyb)
+	err = ks.StoreKey(key, "")
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	return
+	err = am.Unlock(key.Address, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// only use minimalistic stack with no networking
+	return exp.New(&exp.Config{
+		DataDir:                 tmp,
+		AccountManager:          am,
+		Etherbase:               common.HexToAddress(testAddress),
+		MaxPeers:                0,
+		PowTest:                 true,
+		NewDB:                   func(path string) (ethdb.Database, error) { return db, nil },
+		GpoMinGasPrice:          common.Big1,
+		GpobaseCorrectionFactor: 1,
+		GpoMaxGasPrice:          common.Big1,
+	})
 }
 
 func testInit(t *testing.T) (self *testFrontend) {
@@ -169,41 +176,54 @@ func testInit(t *testing.T) (self *testFrontend) {
 	// mock frontend
 	self = &testFrontend{t: t, expanse: expanse}
 	self.xeth = xe.New(expanse, self)
-	self.wait = self.xeth.UpdateState()
+	self.wait = self.xexp.UpdateState()
 	addr, _ := self.expanse.Etherbase()
 
 	// initialise the registry contracts
 	reg := registrar.New(self.xeth)
-	var registrarTxhash, hashRegTxhash, urlHintTxhash string
-	registrarTxhash, err = reg.SetGlobalRegistrar("", addr)
-	if err != nil {
-		t.Errorf("error creating GlobalRegistrar: %v", err)
-	}
+	registrar.GlobalRegistrarAddr = "0x0"
 
-	hashRegTxhash, err = reg.SetHashReg("", addr)
+	var txG, txH, txU string
+	txG, err = reg.SetGlobalRegistrar("", addr)
+	if err != nil {
+		t.Fatalf("error creating GlobalRegistrar: %v", err)
+	}
+	if !processTxs(self, t, 1) {
+		t.Fatalf("error mining txs")
+	}
+	recG := self.xexp.GetTxReceipt(common.HexToHash(txG))
+	if recG == nil {
+		t.Fatalf("blockchain error creating GlobalRegistrar")
+	}
+	registrar.GlobalRegistrarAddr = recG.ContractAddress.Hex()
+
+	txH, err = reg.SetHashReg("", addr)
 	if err != nil {
 		t.Errorf("error creating HashReg: %v", err)
 	}
-	urlHintTxhash, err = reg.SetUrlHint("", addr)
+	if !processTxs(self, t, 1) {
+		t.Errorf("error mining txs")
+	}
+	recH := self.xexp.GetTxReceipt(common.HexToHash(txH))
+	if recH == nil {
+		t.Fatalf("blockchain error creating HashReg")
+	}
+	registrar.HashRegAddr = recH.ContractAddress.Hex()
+
+	txU, err = reg.SetUrlHint("", addr)
 	if err != nil {
 		t.Errorf("error creating UrlHint: %v", err)
 	}
-	if !processTxs(self, t, 3) {
+	if !processTxs(self, t, 1) {
 		t.Errorf("error mining txs")
 	}
-	_ = registrarTxhash
-	_ = hashRegTxhash
-	_ = urlHintTxhash
-
-	/* TODO:
-	* lookup receipt and contract addresses by tx hash
-	* name registration for HashReg and UrlHint addresses
-	* mine those transactions
-	* then set once more SetHashReg SetUrlHint
-	 */
+	recU := self.xexp.GetTxReceipt(common.HexToHash(txU))
+	if recU == nil {
+		t.Fatalf("blockchain error creating UrlHint")
+	}
+	registrar.UrlHintAddr = recU.ContractAddress.Hex()
 
 	return
-
 }
 
 // end to end test
@@ -215,18 +235,14 @@ func TestNatspecE2E(t *testing.T) {
 	addr, _ := tf.expanse.Etherbase()
 
 	// create a contractInfo file (mock cloud-deployed contract metadocs)
-	// incidentally this is the info for the registry contract itself
+	// incidentally this is the info for the HashReg contract itself
 	ioutil.WriteFile("/tmp/"+testFileName, []byte(testContractInfo), os.ModePerm)
 	dochash := crypto.Sha3Hash([]byte(testContractInfo))
 
 	// take the codehash for the contract we wanna test
-	codeb := tf.xeth.CodeAtBytes(registrar.HashRegAddr)
+	codeb := tf.xexp.CodeAtBytes(registrar.HashRegAddr)
 	codehash := crypto.Sha3Hash(codeb)
 
-	// use resolver to register codehash->dochash->url
-	// test if globalregistry works
-	// registrar.HashRefAddr = "0x0"
-	// registrar.UrlHintAddr = "0x0"
 	reg := registrar.New(tf.xeth)
 	_, err := reg.SetHashToHash(addr, codehash, dochash)
 	if err != nil {
@@ -306,7 +322,8 @@ func processTxs(repl *testFrontend, t *testing.T, expTxc int) bool {
 		return false
 	}
 
-	err = repl.expanse.StartMining(runtime.NumCPU())
+
+	err = repl.expanse.StartMining(runtime.NumCPU(), "")
 	if err != nil {
 		t.Errorf("unexpected error mining: %v", err)
 		return false
@@ -314,7 +331,7 @@ func processTxs(repl *testFrontend, t *testing.T, expTxc int) bool {
 	defer repl.expanse.StopMining()
 
 	timer := time.NewTimer(100 * time.Second)
-	height := new(big.Int).Add(repl.xeth.CurrentBlock().Number(), big.NewInt(1))
+	height := new(big.Int).Add(repl.xexp.CurrentBlock().Number(), big.NewInt(1))
 	repl.wait <- height
 	select {
 	case <-timer.C:

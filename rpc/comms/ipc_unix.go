@@ -23,9 +23,6 @@ import (
 	"os"
 	"path/filepath"
 
-
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/rpc/codec"
 	"github.com/expanse-project/go-expanse/rpc/shared"
 	"github.com/expanse-project/go-expanse/rpc/useragent"
@@ -70,45 +67,16 @@ func (self *ipcClient) reconnect() error {
 	return err
 }
 
-
-func startIpc(cfg IpcConfig, codec codec.Codec, initializer func(conn net.Conn) (shared.ExpanseApi, error)) error {
+func ipcListen(cfg IpcConfig) (net.Listener, error) {
 	// Ensure the IPC path exists and remove any previous leftover
 	if err := os.MkdirAll(filepath.Dir(cfg.Endpoint), 0751); err != nil {
-		return err
+		return nil, err
 	}
 	os.Remove(cfg.Endpoint)
-
-	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: cfg.Endpoint, Net: "unix"})
+	l, err := net.Listen("unix", cfg.Endpoint)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	os.Chmod(cfg.Endpoint, 0600)
-
-	go func() {
-		for {
-			conn, err := l.AcceptUnix()
-			if err != nil {
-				glog.V(logger.Error).Infof("Error accepting ipc connection - %v\n", err)
-				continue
-			}
-
-			id := newIpcConnId()
-			glog.V(logger.Debug).Infof("New IPC connection with id %06d started\n", id)
-
-			api, err := initializer(conn)
-			if err != nil {
-				glog.V(logger.Error).Infof("Unable to initialize IPC connection - %v\n", err)
-				conn.Close()
-				continue
-			}
-
-			go handle(id, conn, api, codec)
-		}
-
-		os.Remove(cfg.Endpoint)
-	}()
-
-	glog.V(logger.Info).Infof("IPC service started (%s)\n", cfg.Endpoint)
-
-	return nil
+	return l, nil
 }
