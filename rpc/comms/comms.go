@@ -62,13 +62,18 @@ type EthereumClient interface {
 func handle(id int, conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 	codec := c.New(conn)
 
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Errorf("panic: %v\n", r)
+		}
+		codec.Close()
+	}()
+
 	for {
 		requests, isBatch, err := codec.ReadRequest()
 		if err == io.EOF {
-			codec.Close()
 			return
 		} else if err != nil {
-			codec.Close()
 			glog.V(logger.Debug).Infof("Closed IPC Conn %06d recv err - %v\n", id, err)
 			return
 		}
@@ -87,7 +92,6 @@ func handle(id int, conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 
 			err = codec.WriteResponse(responses[:responseCount])
 			if err != nil {
-				codec.Close()
 				glog.V(logger.Debug).Infof("Closed IPC Conn %06d send err - %v\n", id, err)
 				return
 			}
@@ -98,7 +102,6 @@ func handle(id int, conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 			rpcResponse = shared.NewRpcResponse(requests[0].Id, requests[0].Jsonrpc, res, err)
 			err = codec.WriteResponse(rpcResponse)
 			if err != nil {
-				codec.Close()
 				glog.V(logger.Debug).Infof("Closed IPC Conn %06d send err - %v\n", id, err)
 				return
 			}

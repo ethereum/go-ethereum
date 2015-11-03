@@ -7,8 +7,8 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-95-g9b2bd2b",
-			"Rev": "9b2bd2b3489748d4d0a204fa4eb2ee9e89e0ebc6"
+			"Comment": "1.2.0-161-gf445c89",
+			"Rev": "f445c894402839580d30de47551cedc152dad814"
 		},
 		{
 			"ImportPath": "github.com/davecgh/go-spew/spew",
@@ -16,8 +16,8 @@
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",
-			"Comment": "v23.1-234-g062e40a",
-			"Rev": "062e40a1a1671f5a5102862b56e4c56f68a732f5"
+			"Comment": "v23.1-238-g9401881",
+			"Rev": "9401881ab040d1a3b0ae9e4780a115bc284a8a1a"
 		},
 		{
 			"ImportPath": "github.com/fatih/color",
@@ -34,7 +34,7 @@
 		},
 		{
 			"ImportPath": "github.com/huin/goupnp",
-			"Rev": "5cff77a69fb22f5f1774c4451ea2aab63d4d2f20"
+			"Rev": "90f71cb5dd6d4606388666d2cda4ce2f563d2185"
 		},
 		{
 			"ImportPath": "github.com/jackpal/go-nat-pmp",

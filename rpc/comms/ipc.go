@@ -20,12 +20,21 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
 
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
+
+type Stopper interface {
+	Stop()
+}
+
+type InitFunc func(conn net.Conn) (Stopper, shared.EthereumApi, error)
 
 type IpcConfig struct {
 	Endpoint string
@@ -90,8 +99,38 @@ func NewIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 }
 
 // Start IPC server
-func StartIpc(cfg IpcConfig, codec codec.Codec, initializer func(conn net.Conn) (shared.EthereumApi, error)) error {
-	return startIpc(cfg, codec, initializer)
+func StartIpc(cfg IpcConfig, codec codec.Codec, initializer InitFunc) error {
+	l, err := ipcListen(cfg)
+	if err != nil {
+		return err
+	}
+	go ipcLoop(cfg, codec, initializer, l)
+	return nil
+}
+
+func ipcLoop(cfg IpcConfig, codec codec.Codec, initializer InitFunc, l net.Listener) {
+	glog.V(logger.Info).Infof("IPC service started (%s)\n", cfg.Endpoint)
+	defer os.Remove(cfg.Endpoint)
+	defer l.Close()
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			glog.V(logger.Debug).Infof("accept: %v", err)
+			return
+		}
+		id := newIpcConnId()
+		go func() {
+			defer conn.Close()
+			glog.V(logger.Debug).Infof("new connection with id %06d started", id)
+			stopper, api, err := initializer(conn)
+			if err != nil {
+				glog.V(logger.Error).Infof("Unable to initialize IPC connection: %v", err)
+				return
+			}
+			defer stopper.Stop()
+			handle(id, conn, api, codec)
+		}()
+	}
 }
 
 func newIpcConnId() int {

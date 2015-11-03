@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/core"
@@ -84,7 +83,6 @@ type adminApi struct {
 	ethereum *eth.Ethereum
 	codec    codec.Codec
 	coder    codec.ApiCoder
-	ds       *docserver.DocServer
 }
 
 // create a new admin api instance
@@ -94,7 +92,6 @@ func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec) *ad
 		ethereum: ethereum,
 		codec:    codec,
 		coder:    codec.New(nil),
-		ds:       docserver.New("/"),
 	}
 }
 
@@ -151,7 +148,7 @@ func (self *adminApi) DataDir(req *shared.Request) (interface{}, error) {
 	return self.ethereum.DataDir, nil
 }
 
-func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
+func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
 	for _, b := range bs {
 		if !chain.HasBlock(b.Hash()) {
 			return false
@@ -193,10 +190,10 @@ func (self *adminApi) ImportChain(req *shared.Request) (interface{}, error) {
 			break
 		}
 		// Import the batch.
-		if hasAllBlocks(self.ethereum.ChainManager(), blocks[:i]) {
+		if hasAllBlocks(self.ethereum.BlockChain(), blocks[:i]) {
 			continue
 		}
-		if _, err := self.ethereum.ChainManager().InsertChain(blocks[:i]); err != nil {
+		if _, err := self.ethereum.BlockChain().InsertChain(blocks[:i]); err != nil {
 			return false, fmt.Errorf("invalid block %d: %v", n, err)
 		}
 	}
@@ -214,7 +211,7 @@ func (self *adminApi) ExportChain(req *shared.Request) (interface{}, error) {
 		return false, err
 	}
 	defer fh.Close()
-	if err := self.ethereum.ChainManager().Export(fh); err != nil {
+	if err := self.ethereum.BlockChain().Export(fh); err != nil {
 		return false, err
 	}
 
@@ -437,7 +434,7 @@ func (self *adminApi) GetContractInfo(req *shared.Request) (interface{}, error) 
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	infoDoc, err := natspec.FetchDocsForContract(args.Contract, self.xeth, self.ds)
+	infoDoc, err := natspec.FetchDocsForContract(args.Contract, self.xeth, self.ethereum.HTTPClient())
 	if err != nil {
 		return nil, err
 	}
@@ -457,7 +454,7 @@ func (self *adminApi) HttpGet(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	resp, err := self.ds.Get(args.Uri, args.Path)
+	resp, err := self.ethereum.HTTPClient().Get(args.Uri, args.Path)
 	if err != nil {
 		return nil, err
 	}

@@ -1,3 +1,20 @@
+// Copyright 2015 The go-ethereum Authors
+// Copyright 2015 Lefteris Karapetsas <lefteris@refu.co>
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package ethash
 
 import (
@@ -92,7 +109,7 @@ func TestEthashConcurrentVerify(t *testing.T) {
 	defer os.RemoveAll(eth.Full.Dir)
 
 	block := &testBlock{difficulty: big.NewInt(10)}
-	nonce, md := eth.Search(block, nil)
+	nonce, md := eth.Search(block, nil, 0)
 	block.nonce = nonce
 	block.mixDigest = common.BytesToHash(md)
 
@@ -135,7 +152,7 @@ func TestEthashConcurrentSearch(t *testing.T) {
 	// launch n searches concurrently.
 	for i := 0; i < nsearch; i++ {
 		go func() {
-			nonce, md := eth.Search(block, stop)
+			nonce, md := eth.Search(block, stop, 0)
 			select {
 			case found <- searchRes{n: nonce, md: md}:
 			case <-stop:
@@ -167,7 +184,7 @@ func TestEthashSearchAcrossEpoch(t *testing.T) {
 	for i := epochLength - 40; i < epochLength+40; i++ {
 		block := &testBlock{number: i, difficulty: big.NewInt(90)}
 		rand.Read(block.hashNoNonce[:])
-		nonce, md := eth.Search(block, nil)
+		nonce, md := eth.Search(block, nil, 0)
 		block.nonce = nonce
 		block.mixDigest = common.BytesToHash(md)
 		if !eth.Verify(block) {

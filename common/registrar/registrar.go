@@ -48,17 +48,16 @@ The Registrar uses 3 contracts on the blockchain:
 These contracts are (currently) not included in the genesis block.
 Each Set<X> needs to be called once on each blockchain/network once.
 
-Contract addresses need to be set (HashReg and UrlHint retrieved from the global
-registrar the first time any Registrar method is called in a client session
-
-So the caller needs to make sure the relevant environment initialised the desired
-contracts
+Contract addresses need to be set the first time any Registrar method is called
+in a client session.
+This is done for frontier by default, otherwise the caller needs to make sure
+the relevant environment initialised the desired contracts
 */
 var (
-	UrlHintAddr         = "0x0"
-	HashRegAddr         = "0x0"
-	GlobalRegistrarAddr = "0x0"
-	// GlobalRegistrarAddr = "0xc6d9d2cd449a754c494264e1809c50e34d64562b"
+	// GlobalRegistrarAddr = "0xc6d9d2cd449a754c494264e1809c50e34d64562b" // olympic
+	GlobalRegistrarAddr = "0x33990122638b9132ca29c723bdf037f1a891a70c" // frontier
+	HashRegAddr         = "0x23bf622b5a65f6060d855fca401133ded3520620" // frontier
+	UrlHintAddr         = "0x73ed5ef6c010727dfd2671dbb70faac19ec18626" // frontier
 
 	zero = regexp.MustCompile("^(0x)?0*$")
 )
@@ -113,7 +112,7 @@ func (self *Registrar) SetGlobalRegistrar(namereg string, addr common.Address) (
 		GlobalRegistrarAddr = namereg
 		return
 	}
-	if GlobalRegistrarAddr == "0x0" || GlobalRegistrarAddr == "0x" {
+	if zero.MatchString(GlobalRegistrarAddr) {
 		if (addr == common.Address{}) {
 			err = fmt.Errorf("GlobalRegistrar address not found and sender for creation not given")
 			return
@@ -200,6 +199,9 @@ func (self *Registrar) SetUrlHint(urlhint string, addr common.Address) (txhash s
 // ReserveName(from, name) reserves name for the sender address in the globalRegistrar
 // the tx needs to be mined to take effect
 func (self *Registrar) ReserveName(address common.Address, name string) (txh string, err error) {
+	if zero.MatchString(GlobalRegistrarAddr) {
+		return "", fmt.Errorf("GlobalRegistrar address is not set")
+	}
 	nameHex, extra := encodeName(name, 2)
 	abi := reserveAbi + nameHex + extra
 	glog.V(logger.Detail).Infof("Reserve data: %s", abi)
@@ -215,6 +217,10 @@ func (self *Registrar) ReserveName(address common.Address, name string) (txh str
 // in the globalRegistrar using from as the sender of the transaction
 // the tx needs to be mined to take effect
 func (self *Registrar) SetAddressToName(from common.Address, name string, address common.Address) (txh string, err error) {
+	if zero.MatchString(GlobalRegistrarAddr) {
+		return "", fmt.Errorf("GlobalRegistrar address is not set")
+	}
+
 	nameHex, extra := encodeName(name, 6)
 	addrHex := encodeAddress(address)
 
@@ -231,6 +237,10 @@ func (self *Registrar) SetAddressToName(from common.Address, name string, addres
 
 // NameToAddr(from, name) queries the registrar for the address on name
 func (self *Registrar) NameToAddr(from common.Address, name string) (address common.Address, err error) {
+	if zero.MatchString(GlobalRegistrarAddr) {
+		return address, fmt.Errorf("GlobalRegistrar address is not set")
+	}
+
 	nameHex, extra := encodeName(name, 2)
 	abi := resolveAbi + nameHex + extra
 	glog.V(logger.Detail).Infof("NameToAddr data: %s", abi)
@@ -249,6 +259,9 @@ func (self *Registrar) NameToAddr(from common.Address, name string) (address com
 
 // called as first step in the registration process on HashReg
 func (self *Registrar) SetOwner(address common.Address) (txh string, err error) {
+	if zero.MatchString(HashRegAddr) {
+		return "", fmt.Errorf("HashReg address is not set")
+	}
 	return self.backend.Transact(
 		address.Hex(),
 		HashRegAddr,
@@ -261,6 +274,10 @@ func (self *Registrar) SetOwner(address common.Address) (txh string, err error) 
 // e.g., the contract Info combined Json Doc's ContentHash
 // to CodeHash of a contract or hash of a domain
 func (self *Registrar) SetHashToHash(address common.Address, codehash, dochash common.Hash) (txh string, err error) {
+	if zero.MatchString(HashRegAddr) {
+		return "", fmt.Errorf("HashReg address is not set")
+	}
+
 	_, err = self.SetOwner(address)
 	if err != nil {
 		return
@@ -284,6 +301,10 @@ func (self *Registrar) SetHashToHash(address common.Address, codehash, dochash c
 // FIXME: silently doing nothing if sender is not the owner
 // note that with content addressed storage, this step is no longer necessary
 func (self *Registrar) SetUrlToHash(address common.Address, hash common.Hash, url string) (txh string, err error) {
+	if zero.MatchString(UrlHintAddr) {
+		return "", fmt.Errorf("UrlHint address is not set")
+	}
+
 	hashHex := common.Bytes2Hex(hash[:])
 	var urlHex string
 	urlb := []byte(url)
@@ -321,13 +342,17 @@ func (self *Registrar) SetUrlToHash(address common.Address, hash common.Hash, ur
 // resolution is costless non-transactional
 // implemented as direct retrieval from  db
 func (self *Registrar) HashToHash(khash common.Hash) (chash common.Hash, err error) {
+	if zero.MatchString(HashRegAddr) {
+		return common.Hash{}, fmt.Errorf("HashReg address is not set")
+	}
+
 	// look up in hashReg
 	at := HashRegAddr[2:]
 	key := storageAddress(storageMapping(storageIdx2Addr(1), khash[:]))
 	hash := self.backend.StorageAt(at, key)
 
 	if hash == "0x0" || len(hash) < 3 || (hash == common.Hash{}.Hex()) {
-		err = fmt.Errorf("content hash not found for '%v'", khash.Hex())
+		err = fmt.Errorf("HashToHash: content hash not found for '%v'", khash.Hex())
 		return
 	}
 	copy(chash[:], common.Hex2BytesFixed(hash[2:], 32))
@@ -339,6 +364,9 @@ func (self *Registrar) HashToHash(khash common.Hash) (chash common.Hash, err err
 // implemented as direct retrieval from  db
 // if we use content addressed storage, this step is no longer necessary
 func (self *Registrar) HashToUrl(chash common.Hash) (uri string, err error) {
+	if zero.MatchString(UrlHintAddr) {
+		return "", fmt.Errorf("UrlHint address is not set")
+	}
 	// look up in URL reg
 	var str string = " "
 	var idx uint32
@@ -358,7 +386,7 @@ func (self *Registrar) HashToUrl(chash common.Hash) (uri string, err error) {
 	}
 
 	if len(uri) == 0 {
-		err = fmt.Errorf("GetURLhint: URL hint not found for '%v'", chash.Hex())
+		err = fmt.Errorf("HashToUrl: URL hint not found for '%v'", chash.Hex())
 	}
 	return
 }

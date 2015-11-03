@@ -21,6 +21,40 @@ var (
 	maxAgeRx = regexp.MustCompile("max-age=([0-9]+)")
 )
 
+const (
+	EventAlive = EventType(iota)
+	EventUpdate
+	EventByeBye
+)
+
+type EventType int8
+
+func (et EventType) String() string {
+	switch et {
+	case EventAlive:
+		return "EventAlive"
+	case EventUpdate:
+		return "EventUpdate"
+	case EventByeBye:
+		return "EventByeBye"
+	default:
+		return fmt.Sprintf("EventUnknown(%d)", int8(et))
+	}
+}
+
+type Update struct {
+	// The USN of the service.
+	USN string
+	// What happened.
+	EventType EventType
+	// The entry, which is nil if the service was not known and
+	// EventType==EventByeBye. The contents of this must not be modified as it is
+	// shared with the registry and other listeners. Once created, the Registry
+	// does not modify the Entry value - any updates are replaced with a new
+	// Entry value.
+	Entry *Entry
+}
+
 type Entry struct {
 	// The address that the entry data was actually received from.
 	RemoteAddr string
@@ -32,7 +66,7 @@ type Entry struct {
 	Server string
 	Host   string
 	// Location of the UPnP root device description.
-	Location *url.URL
+	Location url.URL
 
 	// Despite BOOTID,CONFIGID being required fields, apparently they are not
 	// always set by devices. Set to -1 if not present.
@@ -83,7 +117,7 @@ func newEntryFromRequest(r *http.Request) (*Entry, error) {
 		NT:          r.Header.Get("NT"),
 		Server:      r.Header.Get("SERVER"),
 		Host:        r.Header.Get("HOST"),
-		Location:    loc,
+		Location:    *loc,
 		BootID:      bootID,
 		ConfigID:    configID,
 		SearchPort:  uint16(searchPort),
@@ -125,15 +159,71 @@ func parseUpnpIntHeader(headers http.Header, headerName string, def int32) (int3
 var _ httpu.Handler = new(Registry)
 
 // Registry maintains knowledge of discovered devices and services.
+//
+// NOTE: the interface for this is experimental and may change, or go away
+// entirely.
 type Registry struct {
 	lock  sync.Mutex
 	byUSN map[string]*Entry
+
+	listenersLock sync.RWMutex
+	listeners     map[chan<- Update]struct{}
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
-		byUSN: make(map[string]*Entry),
+		byUSN:     make(map[string]*Entry),
+		listeners: make(map[chan<- Update]struct{}),
 	}
+}
+
+// NewServerAndRegistry is a convenience function to create a registry, and an
+// httpu server to pass it messages. Call ListenAndServe on the server for
+// messages to be processed.
+func NewServerAndRegistry() (*httpu.Server, *Registry) {
+	reg := NewRegistry()
+	srv := &httpu.Server{
+		Addr:      ssdpUDP4Addr,
+		Multicast: true,
+		Handler:   reg,
+	}
+	return srv, reg
+}
+
+func (reg *Registry) AddListener(c chan<- Update) {
+	reg.listenersLock.Lock()
+	defer reg.listenersLock.Unlock()
+	reg.listeners[c] = struct{}{}
+}
+
+func (reg *Registry) RemoveListener(c chan<- Update) {
+	reg.listenersLock.Lock()
+	defer reg.listenersLock.Unlock()
+	delete(reg.listeners, c)
+}
+
+func (reg *Registry) sendUpdate(u Update) {
+	reg.listenersLock.RLock()
+	defer reg.listenersLock.RUnlock()
+	for c := range reg.listeners {
+		c <- u
+	}
+}
+
+// GetService returns known service (or device) entries for the given service
+// URN.
+func (reg *Registry) GetService(serviceURN string) []*Entry {
+	// Currently assumes that the map is small, so we do a linear search rather
+	// than indexed to avoid maintaining two maps.
+	var results []*Entry
+	reg.lock.Lock()
+	defer reg.lock.Unlock()
+	for _, entry := range reg.byUSN {
+		if entry.NT == serviceURN {
+			results = append(results, entry)
+		}
+	}
+	return results
 }
 
 // ServeMessage implements httpu.Handler, and uses SSDP NOTIFY requests to
@@ -156,7 +246,9 @@ func (reg *Registry) ServeMessage(r *http.Request) {
 	default:
 		err = fmt.Errorf("unknown NTS value: %q", nts)
 	}
-	log.Printf("In %s request from %s: %v", nts, r.RemoteAddr, err)
+	if err != nil {
+		log.Printf("goupnp/ssdp: failed to handle %s message from %s: %v", nts, r.RemoteAddr, err)
+	}
 }
 
 func (reg *Registry) handleNTSAlive(r *http.Request) error {
@@ -166,9 +258,14 @@ func (reg *Registry) handleNTSAlive(r *http.Request) error {
 	}
 
 	reg.lock.Lock()
-	defer reg.lock.Unlock()
-
 	reg.byUSN[entry.USN] = entry
+	reg.lock.Unlock()
+
+	reg.sendUpdate(Update{
+		USN:       entry.USN,
+		EventType: EventAlive,
+		Entry:     entry,
+	})
 
 	return nil
 }
@@ -185,18 +282,31 @@ func (reg *Registry) handleNTSUpdate(r *http.Request) error {
 	entry.BootID = nextBootID
 
 	reg.lock.Lock()
-	defer reg.lock.Unlock()
-
 	reg.byUSN[entry.USN] = entry
+	reg.lock.Unlock()
+
+	reg.sendUpdate(Update{
+		USN:       entry.USN,
+		EventType: EventUpdate,
+		Entry:     entry,
+	})
 
 	return nil
 }
 
 func (reg *Registry) handleNTSByebye(r *http.Request) error {
-	reg.lock.Lock()
-	defer reg.lock.Unlock()
+	usn := r.Header.Get("USN")
 
-	delete(reg.byUSN, r.Header.Get("USN"))
+	reg.lock.Lock()
+	entry := reg.byUSN[usn]
+	delete(reg.byUSN, usn)
+	reg.lock.Unlock()
+
+	reg.sendUpdate(Update{
+		USN:       usn,
+		EventType: EventByeBye,
+		Entry:     entry,
+	})
 
 	return nil
 }

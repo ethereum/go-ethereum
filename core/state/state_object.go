@@ -75,11 +75,6 @@ type StateObject struct {
 	// Cached storage (flushed when updated)
 	storage Storage
 
-	// Total gas pool is the total amount of gas currently
-	// left if this object is the coinbase. Gas is directly
-	// purchased of the coinbase.
-	gasPool *big.Int
-
 	// Mark for deletion
 	// When an object is marked for deletion it will be delete from the trie
 	// during the "update" phase of the state transition
@@ -89,16 +84,13 @@ type StateObject struct {
 }
 
 func NewStateObject(address common.Address, db ethdb.Database) *StateObject {
-	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
-	object.trie = trie.NewSecure((common.Hash{}).Bytes(), db)
+	object := &StateObject{db: db, address: address, balance: new(big.Int), dirty: true}
+	object.trie, _ = trie.NewSecure(common.Hash{}, db)
 	object.storage = make(Storage)
-	object.gasPool = new(big.Int)
-
 	return object
 }
 
 func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Database) *StateObject {
-	// TODO clean me up
 	var extobject struct {
 		Nonce    uint64
 		Balance  *big.Int
@@ -107,7 +99,13 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Datab
 	}
 	err := rlp.Decode(bytes.NewReader(data), &extobject)
 	if err != nil {
-		fmt.Println(err)
+		glog.Errorf("can't decode state object %x: %v", address, err)
+		return nil
+	}
+	trie, err := trie.NewSecure(extobject.Root, db)
+	if err != nil {
+		// TODO: bubble this up or panic
+		glog.Errorf("can't create account trie with root %x: %v", extobject.Root[:], err)
 		return nil
 	}
 
@@ -115,11 +113,9 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Datab
 	object.nonce = extobject.Nonce
 	object.balance = extobject.Balance
 	object.codeHash = extobject.CodeHash
-	object.trie = trie.NewSecure(extobject.Root[:], db)
+	object.trie = trie
 	object.storage = make(map[string]common.Hash)
-	object.gasPool = new(big.Int)
 	object.code, _ = db.Get(extobject.CodeHash)
-
 	return object
 }
 
@@ -206,39 +202,8 @@ func (c *StateObject) St() Storage {
 	return c.storage
 }
 
-//
-// Gas setters and getters
-//
-
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (c *StateObject) ReturnGas(gas, price *big.Int) {}
-
-func (self *StateObject) SetGasLimit(gasLimit *big.Int) {
-	self.gasPool = new(big.Int).Set(gasLimit)
-
-	if glog.V(logger.Core) {
-		glog.Infof("%x: gas (+ %v)", self.Address(), self.gasPool)
-	}
-}
-
-func (self *StateObject) SubGas(gas, price *big.Int) error {
-	if self.gasPool.Cmp(gas) < 0 {
-		return GasLimitError(self.gasPool, gas)
-	}
-
-	self.gasPool.Sub(self.gasPool, gas)
-
-	rGas := new(big.Int).Set(gas)
-	rGas.Mul(rGas, price)
-
-	self.dirty = true
-
-	return nil
-}
-
-func (self *StateObject) AddGas(gas, price *big.Int) {
-	self.gasPool.Add(self.gasPool, gas)
-}
 
 func (self *StateObject) Copy() *StateObject {
 	stateObject := NewStateObject(self.Address(), self.db)
@@ -249,7 +214,6 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.code = common.CopyBytes(self.code)
 	stateObject.initCode = common.CopyBytes(self.initCode)
 	stateObject.storage = self.storage.Copy()
-	stateObject.gasPool.Set(self.gasPool)
 	stateObject.remove = self.remove
 	stateObject.dirty = self.dirty
 	stateObject.deleted = self.deleted

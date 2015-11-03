@@ -18,12 +18,15 @@ package core
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"math/big"
 	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -160,7 +163,12 @@ func TestBlockStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	// Create a test block to move around the database and make sure it's really new
-	block := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block")})
+	block := types.NewBlockWithHeader(&types.Header{
+		Extra:       []byte("test block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+	})
 	if entry := GetBlock(db, block.Hash()); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
 	}
@@ -205,8 +213,12 @@ func TestBlockStorage(t *testing.T) {
 // Tests that partial block contents don't get reassembled into full blocks.
 func TestPartialBlockStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	block := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block")})
-
+	block := types.NewBlockWithHeader(&types.Header{
+		Extra:       []byte("test block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+	})
 	// Store a header and check that it's not recognized as a block
 	if err := WriteHeader(db, block.Header()); err != nil {
 		t.Fatalf("Failed to write header into database: %v", err)
@@ -295,6 +307,7 @@ func TestHeadStorage(t *testing.T) {
 
 	blockHead := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block header")})
 	blockFull := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block full")})
+	blockFast := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block fast")})
 
 	// Check that no head entries are in a pristine database
 	if entry := GetHeadHeaderHash(db); entry != (common.Hash{}) {
@@ -303,6 +316,9 @@ func TestHeadStorage(t *testing.T) {
 	if entry := GetHeadBlockHash(db); entry != (common.Hash{}) {
 		t.Fatalf("Non head block entry returned: %v", entry)
 	}
+	if entry := GetHeadFastBlockHash(db); entry != (common.Hash{}) {
+		t.Fatalf("Non fast head block entry returned: %v", entry)
+	}
 	// Assign separate entries for the head header and block
 	if err := WriteHeadHeaderHash(db, blockHead.Hash()); err != nil {
 		t.Fatalf("Failed to write head header hash: %v", err)
@@ -310,11 +326,126 @@ func TestHeadStorage(t *testing.T) {
 	if err := WriteHeadBlockHash(db, blockFull.Hash()); err != nil {
 		t.Fatalf("Failed to write head block hash: %v", err)
 	}
+	if err := WriteHeadFastBlockHash(db, blockFast.Hash()); err != nil {
+		t.Fatalf("Failed to write fast head block hash: %v", err)
+	}
 	// Check that both heads are present, and different (i.e. two heads maintained)
 	if entry := GetHeadHeaderHash(db); entry != blockHead.Hash() {
 		t.Fatalf("Head header hash mismatch: have %v, want %v", entry, blockHead.Hash())
 	}
 	if entry := GetHeadBlockHash(db); entry != blockFull.Hash() {
 		t.Fatalf("Head block hash mismatch: have %v, want %v", entry, blockFull.Hash())
+	}
+	if entry := GetHeadFastBlockHash(db); entry != blockFast.Hash() {
+		t.Fatalf("Fast head block hash mismatch: have %v, want %v", entry, blockFast.Hash())
+	}
+}
+
+func TestMipmapBloom(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+
+	receipt1 := new(types.Receipt)
+	receipt1.Logs = vm.Logs{
+		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
+		&vm.Log{Address: common.BytesToAddress([]byte("address"))},
+	}
+	receipt2 := new(types.Receipt)
+	receipt2.Logs = vm.Logs{
+		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
+		&vm.Log{Address: common.BytesToAddress([]byte("address1"))},
+	}
+
+	WriteMipmapBloom(db, 1, types.Receipts{receipt1})
+	WriteMipmapBloom(db, 2, types.Receipts{receipt2})
+
+	for _, level := range MIPMapLevels {
+		bloom := GetMipmapBloom(db, 2, level)
+		if !bloom.Test(new(big.Int).SetBytes([]byte("address1"))) {
+			t.Error("expected test to be included on level:", level)
+		}
+	}
+
+	// reset
+	db, _ = ethdb.NewMemDatabase()
+	receipt := new(types.Receipt)
+	receipt.Logs = vm.Logs{
+		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
+	}
+	WriteMipmapBloom(db, 999, types.Receipts{receipt1})
+
+	receipt = new(types.Receipt)
+	receipt.Logs = vm.Logs{
+		&vm.Log{Address: common.BytesToAddress([]byte("test 1"))},
+	}
+	WriteMipmapBloom(db, 1000, types.Receipts{receipt})
+
+	bloom := GetMipmapBloom(db, 1000, 1000)
+	if bloom.TestBytes([]byte("test")) {
+		t.Error("test should not have been included")
+	}
+}
+
+func TestMipmapChain(t *testing.T) {
+	dir, err := ioutil.TempDir("", "mipmap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	var (
+		db, _   = ethdb.NewLDBDatabase(dir, 16)
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr    = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = common.BytesToAddress([]byte("jeff"))
+
+		hash1 = common.BytesToHash([]byte("topic1"))
+	)
+	defer db.Close()
+
+	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{addr, big.NewInt(1000000)})
+	chain, receipts := GenerateChain(genesis, db, 1010, func(i int, gen *BlockGen) {
+		var receipts types.Receipts
+		switch i {
+		case 1:
+			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt.Logs = vm.Logs{
+				&vm.Log{
+					Address: addr,
+					Topics:  []common.Hash{hash1},
+				},
+			}
+			gen.AddUncheckedReceipt(receipt)
+			receipts = types.Receipts{receipt}
+		case 1000:
+			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt.Logs = vm.Logs{&vm.Log{Address: addr2}}
+			gen.AddUncheckedReceipt(receipt)
+			receipts = types.Receipts{receipt}
+
+		}
+
+		// store the receipts
+		err := PutReceipts(db, receipts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		WriteMipmapBloom(db, uint64(i+1), receipts)
+	})
+	for i, block := range chain {
+		WriteBlock(db, block)
+		if err := WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
+			t.Fatalf("failed to insert block number: %v", err)
+		}
+		if err := WriteHeadBlockHash(db, block.Hash()); err != nil {
+			t.Fatalf("failed to insert block number: %v", err)
+		}
+		if err := PutBlockReceipts(db, block.Hash(), receipts[i]); err != nil {
+			t.Fatal("error writing block receipts:", err)
+		}
+	}
+
+	bloom := GetMipmapBloom(db, 0, 1000)
+	if bloom.TestBytes(addr2[:]) {
+		t.Error("address was included in bloom and should not have")
 	}
 }

@@ -108,7 +108,7 @@ func BenchVmTest(p string, conf bconf, b *testing.B) error {
 func benchVmTest(test VmTest, env map[string]string, b *testing.B) {
 	b.StopTimer()
 	db, _ := ethdb.NewMemDatabase()
-	statedb := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)
@@ -159,7 +159,7 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 
 func runVmTest(test VmTest) error {
 	db, _ := ethdb.NewMemDatabase()
-	statedb := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)
@@ -185,7 +185,7 @@ func runVmTest(test VmTest) error {
 		ret  []byte
 		gas  *big.Int
 		err  error
-		logs state.Logs
+		logs vm.Logs
 	)
 
 	ret, logs, gas, err = RunVm(statedb, env, test.Exec)
@@ -234,7 +234,7 @@ func runVmTest(test VmTest) error {
 	return nil
 }
 
-func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Logs, *big.Int, error) {
+func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs, *big.Int, error) {
 	var (
 		to    = common.HexToAddress(exec["address"])
 		from  = common.HexToAddress(exec["caller"])

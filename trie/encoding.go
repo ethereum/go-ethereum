@@ -16,34 +16,36 @@
 
 package trie
 
-func CompactEncode(hexSlice []byte) []byte {
-	terminator := 0
+func compactEncode(hexSlice []byte) []byte {
+	terminator := byte(0)
 	if hexSlice[len(hexSlice)-1] == 16 {
 		terminator = 1
-	}
-
-	if terminator == 1 {
 		hexSlice = hexSlice[:len(hexSlice)-1]
 	}
-
-	oddlen := len(hexSlice) % 2
-	flags := byte(2*terminator + oddlen)
-	if oddlen != 0 {
-		hexSlice = append([]byte{flags}, hexSlice...)
-	} else {
-		hexSlice = append([]byte{flags, 0}, hexSlice...)
+	var (
+		odd    = byte(len(hexSlice) % 2)
+		buflen = len(hexSlice)/2 + 1
+		bi, hi = 0, 0    // indices
+		hs     = byte(0) // shift: flips between 0 and 4
+	)
+	if odd == 0 {
+		bi = 1
+		hs = 4
 	}
-
-	l := len(hexSlice) / 2
-	var buf = make([]byte, l)
-	for i := 0; i < l; i++ {
-		buf[i] = 16*hexSlice[2*i] + hexSlice[2*i+1]
+	buf := make([]byte, buflen)
+	buf[0] = terminator<<5 | byte(odd)<<4
+	for bi < len(buf) && hi < len(hexSlice) {
+		buf[bi] |= hexSlice[hi] << hs
+		if hs == 0 {
+			bi++
+		}
+		hi, hs = hi+1, hs^(1<<2)
 	}
 	return buf
 }
 
-func CompactDecode(str []byte) []byte {
-	base := CompactHexDecode(str)
+func compactDecode(str []byte) []byte {
+	base := compactHexDecode(str)
 	base = base[:len(base)-1]
 	if base[0] >= 2 {
 		base = append(base, 16)
@@ -53,11 +55,10 @@ func CompactDecode(str []byte) []byte {
 	} else {
 		base = base[2:]
 	}
-
 	return base
 }
 
-func CompactHexDecode(str []byte) []byte {
+func compactHexDecode(str []byte) []byte {
 	l := len(str)*2 + 1
 	var nibbles = make([]byte, l)
 	for i, b := range str {
@@ -68,7 +69,7 @@ func CompactHexDecode(str []byte) []byte {
 	return nibbles
 }
 
-func DecodeCompact(key []byte) []byte {
+func decodeCompact(key []byte) []byte {
 	l := len(key) / 2
 	var res = make([]byte, l)
 	for i := 0; i < l; i++ {
@@ -76,4 +77,31 @@ func DecodeCompact(key []byte) []byte {
 		res[i] = v1*16 + v0
 	}
 	return res
+}
+
+// prefixLen returns the length of the common prefix of a and b.
+func prefixLen(a, b []byte) int {
+	var i, length = 0, len(a)
+	if len(b) < length {
+		length = len(b)
+	}
+	for ; i < length; i++ {
+		if a[i] != b[i] {
+			break
+		}
+	}
+	return i
+}
+
+func hasTerm(s []byte) bool {
+	return s[len(s)-1] == 16
+}
+
+func remTerm(s []byte) []byte {
+	if hasTerm(s) {
+		b := make([]byte, len(s)-1)
+		copy(b, s)
+		return b
+	}
+	return s
 }

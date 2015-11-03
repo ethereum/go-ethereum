@@ -30,7 +30,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/eth"
@@ -45,9 +44,12 @@ import (
 	"github.com/robertkrimen/otto"
 )
 
-var passwordRegexp = regexp.MustCompile("personal.[nu]")
-
-const passwordRepl = ""
+var (
+	passwordRegexp = regexp.MustCompile("personal.[nu]")
+	leadingSpace   = regexp.MustCompile("^ ")
+	onlyws         = regexp.MustCompile("^\\s*$")
+	exit           = regexp.MustCompile("^\\s*exit\\s*;*\\s*$")
+)
 
 type prompter interface {
 	AppendHistory(string)
@@ -74,7 +76,6 @@ func (r dumbterm) PasswordPrompt(p string) (string, error) {
 func (r dumbterm) AppendHistory(string) {}
 
 type jsre struct {
-	ds         *docserver.DocServer
 	re         *re.JSRE
 	ethereum   *eth.Ethereum
 	xeth       *xeth.XEth
@@ -145,14 +146,13 @@ func apiWordCompleter(line string, pos int) (head string, completions []string, 
 	return begin, completionWords, end
 }
 
-func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive bool) *jsre {
+func newLightweightJSRE(docRoot string, client comms.EthereumClient, datadir string, interactive bool) *jsre {
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
 	js.client = client
-	js.ds = docserver.New("/")
 
 	// update state in separare forever blocks
-	js.re = re.New(libPath)
+	js.re = re.New(docRoot)
 	if err := js.apiBindings(js); err != nil {
 		utils.Fatalf("Unable to initialize console - %v", err)
 	}
@@ -161,14 +161,14 @@ func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
 	} else {
 		lr := liner.NewLiner()
-		js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
+		js.withHistory(datadir, func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
 		js.loadAutoCompletion()
 		lr.SetWordCompleter(apiWordCompleter)
 		lr.SetTabCompletionStyle(liner.TabPrints)
 		js.prompter = lr
 		js.atexit = func() {
-			js.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
+			js.withHistory(datadir, func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
 			lr.Close()
 			close(js.wait)
 		}
@@ -176,14 +176,13 @@ func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive
 	return js
 }
 
-func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
+func newJSRE(ethereum *eth.Ethereum, docRoot, corsDomain string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
 	js := &jsre{ethereum: ethereum, ps1: "> "}
 	// set default cors domain used by startRpc from CLI flag
 	js.corsDomain = corsDomain
 	if f == nil {
 		f = js
 	}
-	js.ds = docserver.New("/")
 	js.xeth = xeth.New(ethereum, f)
 	js.wait = js.xeth.UpdateState()
 	js.client = client
@@ -194,7 +193,7 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, client comms.Et
 	}
 
 	// update state in separare forever blocks
-	js.re = re.New(libPath)
+	js.re = re.New(docRoot)
 	if err := js.apiBindings(f); err != nil {
 		utils.Fatalf("Unable to connect - %v", err)
 	}
@@ -203,14 +202,14 @@ func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, client comms.Et
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
 	} else {
 		lr := liner.NewLiner()
-		js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
+		js.withHistory(ethereum.DataDir, func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
 		js.loadAutoCompletion()
 		lr.SetWordCompleter(apiWordCompleter)
 		lr.SetTabCompletionStyle(liner.TabPrints)
 		js.prompter = lr
 		js.atexit = func() {
-			js.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
+			js.withHistory(ethereum.DataDir, func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
 			lr.Close()
 			close(js.wait)
 		}
@@ -244,14 +243,14 @@ func (self *jsre) batch(statement string) {
 // show summary of current geth instance
 func (self *jsre) welcome() {
 	self.re.Run(`
-		(function () {
-			console.log('instance: ' + web3.version.client);
-			console.log(' datadir: ' + admin.datadir);
-			console.log("coinbase: " + eth.coinbase);
-			var ts = 1000 * eth.getBlock(eth.blockNumber).timestamp;
-			console.log("at block: " + eth.blockNumber + " (" + new Date(ts) + ")");
-		})();
-	`)
+    (function () {
+      console.log('instance: ' + web3.version.client);
+      console.log(' datadir: ' + admin.datadir);
+      console.log("coinbase: " + eth.coinbase);
+      var ts = 1000 * eth.getBlock(eth.blockNumber).timestamp;
+      console.log("at block: " + eth.blockNumber + " (" + new Date(ts) + ")");
+    })();
+  `)
 	if modules, err := self.supportedApis(); err == nil {
 		loadedModules := make([]string, 0)
 		for api, version := range modules {
@@ -330,13 +329,21 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
 
-	js.re.Run(`var GlobalRegistrar = eth.contract(` + registrar.GlobalRegistrarAbi + `);	 registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
+	js.re.Run(`var GlobalRegistrar = eth.contract(` + registrar.GlobalRegistrarAbi + `);   registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
 	return nil
+}
+
+func (self *jsre) AskPassword() (string, bool) {
+	pass, err := self.PasswordPrompt("Passphrase: ")
+	if err != nil {
+		return "", false
+	}
+	return pass, true
 }
 
 func (self *jsre) ConfirmTransaction(tx string) bool {
 	if self.ethereum.NatSpec {
-		notice := natspec.GetNotice(self.xeth, tx, self.ds)
+		notice := natspec.GetNotice(self.xeth, tx, self.ethereum.HTTPClient())
 		fmt.Println(notice)
 		answer, _ := self.Prompt("Confirm Transaction [y/n]")
 		return strings.HasPrefix(strings.Trim(answer, " "), "y")
@@ -405,18 +412,17 @@ func (self *jsre) interactive() {
 			fmt.Println("caught interrupt, exiting")
 			return
 		case input, ok := <-inputln:
-			if !ok || indentCount <= 0 && input == "exit" {
+			if !ok || indentCount <= 0 && exit.MatchString(input) {
 				return
 			}
-			if input == "" {
+			if onlyws.MatchString(input) {
 				continue
 			}
 			str += input + "\n"
 			self.setIndent()
 			if indentCount <= 0 {
-				hist := hidepassword(str[:len(str)-1])
-				if len(hist) > 0 {
-					self.AppendHistory(hist)
+				if mustLogInHistory(str) {
+					self.AppendHistory(str[:len(str)-1])
 				}
 				self.parseInput(str)
 				str = ""
@@ -425,20 +431,13 @@ func (self *jsre) interactive() {
 	}
 }
 
-func hidepassword(input string) string {
-	if passwordRegexp.MatchString(input) {
-		return passwordRepl
-	} else {
-		return input
-	}
+func mustLogInHistory(input string) bool {
+	return len(input) == 0 ||
+		passwordRegexp.MatchString(input) ||
+		!leadingSpace.MatchString(input)
 }
 
-func (self *jsre) withHistory(op func(*os.File)) {
-	datadir := common.DefaultDataDir()
-	if self.ethereum != nil {
-		datadir = self.ethereum.DataDir
-	}
-
+func (self *jsre) withHistory(datadir string, op func(*os.File)) {
 	hist, err := os.OpenFile(filepath.Join(datadir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		fmt.Printf("unable to open history file: %v\n", err)

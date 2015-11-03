@@ -23,7 +23,7 @@ import (
 )
 
 type NewAccountArgs struct {
-	Passphrase string
+	Passphrase *string
 }
 
 func (args *NewAccountArgs) UnmarshalJSON(b []byte) (err error) {
@@ -32,16 +32,15 @@ func (args *NewAccountArgs) UnmarshalJSON(b []byte) (err error) {
 		return shared.NewDecodeParamError(err.Error())
 	}
 
-	if len(obj) < 1 {
-		return shared.NewInsufficientParamsError(len(obj), 1)
+	if len(obj) >= 1 && obj[0] != nil {
+		if passphrasestr, ok := obj[0].(string); ok {
+			args.Passphrase = &passphrasestr
+		} else {
+			return shared.NewInvalidTypeError("passphrase", "not a string")
+		}
 	}
 
-	if passhrase, ok := obj[0].(string); ok {
-		args.Passphrase = passhrase
-		return nil
-	}
-
-	return shared.NewInvalidTypeError("passhrase", "not a string")
+	return nil
 }
 
 type UnlockAccountArgs struct {

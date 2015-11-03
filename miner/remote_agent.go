@@ -20,6 +20,7 @@ import (
 	"errors"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/ethash"
@@ -45,12 +46,15 @@ type RemoteAgent struct {
 
 	hashrateMu sync.RWMutex
 	hashrate   map[common.Hash]hashrate
+
+	running int32 // running indicates whether the agent is active. Call atomically
 }
 
 func NewRemoteAgent() *RemoteAgent {
-	agent := &RemoteAgent{work: make(map[common.Hash]*Work), hashrate: make(map[common.Hash]hashrate)}
-
-	return agent
+	return &RemoteAgent{
+		work:     make(map[common.Hash]*Work),
+		hashrate: make(map[common.Hash]hashrate),
+	}
 }
 
 func (a *RemoteAgent) SubmitHashrate(id common.Hash, rate uint64) {
@@ -69,12 +73,20 @@ func (a *RemoteAgent) SetReturnCh(returnCh chan<- *Result) {
 }
 
 func (a *RemoteAgent) Start() {
+	if !atomic.CompareAndSwapInt32(&a.running, 0, 1) {
+		return
+	}
+
 	a.quit = make(chan struct{})
 	a.workCh = make(chan *Work, 1)
 	go a.maintainLoop()
 }
 
 func (a *RemoteAgent) Stop() {
+	if !atomic.CompareAndSwapInt32(&a.running, 1, 0) {
+		return
+	}
+
 	close(a.quit)
 	close(a.workCh)
 }

@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
 	"golang.org/x/net/html/charset"
 
 	"github.com/huin/goupnp/httpu"
@@ -38,8 +39,16 @@ func (err ContextError) Error() string {
 
 // MaybeRootDevice contains either a RootDevice or an error.
 type MaybeRootDevice struct {
+	// Set iff Err == nil.
 	Root *RootDevice
-	Err  error
+
+	// The location the device was discovered at. This can be used with
+	// DeviceByURL, assuming the device is still present. A location represents
+	// the discovery of a device, regardless of if there was an error probing it.
+	Location *url.URL
+
+	// Any error encountered probing a discovered device.
+	Err error
 }
 
 // DiscoverDevices attempts to find targets of the given type. This is
@@ -67,28 +76,35 @@ func DiscoverDevices(searchTarget string) ([]MaybeRootDevice, error) {
 			maybe.Err = ContextError{"unexpected bad location from search", err}
 			continue
 		}
-		locStr := loc.String()
-		root := new(RootDevice)
-		if err := requestXml(locStr, DeviceXMLNamespace, root); err != nil {
-			maybe.Err = ContextError{fmt.Sprintf("error requesting root device details from %q", locStr), err}
-			continue
-		}
-		var urlBaseStr string
-		if root.URLBaseStr != "" {
-			urlBaseStr = root.URLBaseStr
+		maybe.Location = loc
+		if root, err := DeviceByURL(loc); err != nil {
+			maybe.Err = err
 		} else {
-			urlBaseStr = locStr
+			maybe.Root = root
 		}
-		urlBase, err := url.Parse(urlBaseStr)
-		if err != nil {
-			maybe.Err = ContextError{fmt.Sprintf("error parsing location URL %q", locStr), err}
-			continue
-		}
-		root.SetURLBase(urlBase)
-		maybe.Root = root
 	}
 
 	return results, nil
+}
+
+func DeviceByURL(loc *url.URL) (*RootDevice, error) {
+	locStr := loc.String()
+	root := new(RootDevice)
+	if err := requestXml(locStr, DeviceXMLNamespace, root); err != nil {
+		return nil, ContextError{fmt.Sprintf("error requesting root device details from %q", locStr), err}
+	}
+	var urlBaseStr string
+	if root.URLBaseStr != "" {
+		urlBaseStr = root.URLBaseStr
+	} else {
+		urlBaseStr = locStr
+	}
+	urlBase, err := url.Parse(urlBaseStr)
+	if err != nil {
+		return nil, ContextError{fmt.Sprintf("error parsing location URL %q", locStr), err}
+	}
+	root.SetURLBase(urlBase)
+	return root, nil
 }
 
 func requestXml(url string, defaultSpace string, doc interface{}) error {

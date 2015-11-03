@@ -111,7 +111,7 @@ type BlockNonceErr struct {
 }
 
 func (err *BlockNonceErr) Error() string {
-	return fmt.Sprintf("block %d (%v) nonce is invalid (got %d)", err.Number, err.Hash, err.Nonce)
+	return fmt.Sprintf("nonce for #%d [%x…] is invalid (got %d)", err.Number, err.Hash, err.Nonce)
 }
 
 // IsBlockNonceErr returns true for invalid block nonce errors.
@@ -187,4 +187,17 @@ func (h BadHashError) Error() string {
 func IsBadHashError(err error) bool {
 	_, ok := err.(BadHashError)
 	return ok
+}
+
+type GasLimitErr struct {
+	Have, Want *big.Int
+}
+
+func IsGasLimitErr(err error) bool {
+	_, ok := err.(*GasLimitErr)
+	return ok
+}
+
+func (err *GasLimitErr) Error() string {
+	return fmt.Sprintf("GasLimit reached. Have %d gas, transaction requires %d", err.Have, err.Want)
 }

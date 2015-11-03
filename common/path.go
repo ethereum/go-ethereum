@@ -23,8 +23,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-
-	"github.com/kardianos/osext"
 )
 
 // MakeName creates a node name that follows the ethereum convention
@@ -65,49 +63,29 @@ func AbsolutePath(Datadir string, filename string) string {
 	return filepath.Join(Datadir, filename)
 }
 
-func DefaultAssetPath() string {
-	var assetPath string
-	pwd, _ := os.Getwd()
-	srcdir := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist")
-
-	// If the current working directory is the go-ethereum dir
-	// assume a debug build and use the source directory as
-	// asset directory.
-	if pwd == srcdir {
-		assetPath = filepath.Join(pwd, "assets")
+func HomeDir() (home string) {
+	if usr, err := user.Current(); err == nil {
+		home = usr.HomeDir
 	} else {
-		switch runtime.GOOS {
-		case "darwin":
-			// Get Binary Directory
-			exedir, _ := osext.ExecutableFolder()
-			assetPath = filepath.Join(exedir, "..", "Resources")
-		case "linux":
-			assetPath = filepath.Join("usr", "share", "mist")
-		case "windows":
-			assetPath = filepath.Join(".", "assets")
-		default:
-			assetPath = "."
-		}
+		home = os.Getenv("HOME")
 	}
-
-	// Check if the assetPath exists. If not, try the source directory
-	// This happens when binary is run from outside cmd/mist directory
-	if _, err := os.Stat(assetPath); os.IsNotExist(err) {
-		assetPath = filepath.Join(srcdir, "assets")
-	}
-
-	return assetPath
+	return
 }
 
 func DefaultDataDir() string {
-	usr, _ := user.Current()
-	if runtime.GOOS == "darwin" {
-		return filepath.Join(usr.HomeDir, "Library", "Ethereum")
-	} else if runtime.GOOS == "windows" {
-		return filepath.Join(usr.HomeDir, "AppData", "Roaming", "Ethereum")
-	} else {
-		return filepath.Join(usr.HomeDir, ".ethereum")
+	// Try to place the data folder in the user's home dir
+	home := HomeDir()
+	if home != "" {
+		if runtime.GOOS == "darwin" {
+			return filepath.Join(home, "Library", "Ethereum")
+		} else if runtime.GOOS == "windows" {
+			return filepath.Join(home, "AppData", "Roaming", "Ethereum")
+		} else {
+			return filepath.Join(home, ".ethereum")
+		}
 	}
+	// As we cannot guess a stable location, return empty and handle later
+	return ""
 }
 
 func DefaultIpcPath() string {

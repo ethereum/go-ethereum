@@ -103,7 +103,7 @@ func BenchStateTest(p string, conf bconf, b *testing.B) error {
 func benchStateTest(test VmTest, env map[string]string, b *testing.B) {
 	b.StopTimer()
 	db, _ := ethdb.NewMemDatabase()
-	statedb := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)
@@ -142,7 +142,7 @@ func runStateTests(tests map[string]VmTest, skipTests []string) error {
 
 func runStateTest(test VmTest) error {
 	db, _ := ethdb.NewMemDatabase()
-	statedb := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)
@@ -168,7 +168,7 @@ func runStateTest(test VmTest) error {
 		ret []byte
 		// gas  *big.Int
 		// err  error
-		logs state.Logs
+		logs vm.Logs
 	)
 
 	ret, logs, _, _ = RunState(statedb, env, test.Transaction)
@@ -201,9 +201,9 @@ func runStateTest(test VmTest) error {
 		}
 	}
 
-	statedb.Sync()
-	if common.HexToHash(test.PostStateRoot) != statedb.Root() {
-		return fmt.Errorf("Post state root error. Expected %s, got %x", test.PostStateRoot, statedb.Root())
+	root, _ := statedb.Commit()
+	if common.HexToHash(test.PostStateRoot) != root {
+		return fmt.Errorf("Post state root error. Expected %s, got %x", test.PostStateRoot, root)
 	}
 
 	// check logs
@@ -216,14 +216,13 @@ func runStateTest(test VmTest) error {
 	return nil
 }
 
-func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.Logs, *big.Int, error) {
+func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Logs, *big.Int, error) {
 	var (
 		data  = common.FromHex(tx["data"])
 		gas   = common.Big(tx["gasLimit"])
 		price = common.Big(tx["gasPrice"])
 		value = common.Big(tx["value"])
 		nonce = common.Big(tx["nonce"]).Uint64()
-		caddr = common.HexToAddress(env["currentCoinbase"])
 	)
 
 	var to *common.Address
@@ -235,19 +234,18 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 	vm.Precompiled = vm.PrecompiledContracts()
 
 	snapshot := statedb.Copy()
-	coinbase := statedb.GetOrNewStateObject(caddr)
-	coinbase.SetGasLimit(common.Big(env["currentGasLimit"]))
+	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 
 	key, _ := hex.DecodeString(tx["secretKey"])
 	addr := crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
 	message := NewMessage(addr, to, data, value, gas, price, nonce)
 	vmenv := NewEnvFromMap(statedb, env, tx)
 	vmenv.origin = addr
-	ret, _, err := core.ApplyMessage(vmenv, message, coinbase)
-	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || state.IsGasLimitErr(err) {
+	ret, _, err := core.ApplyMessage(vmenv, message, gaspool)
+	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || core.IsGasLimitErr(err) {
 		statedb.Set(snapshot)
 	}
-	statedb.SyncObjects()
+	statedb.Commit()
 
 	return ret, vmenv.state.Logs(), vmenv.Gas, err
 }

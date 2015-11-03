@@ -26,22 +26,22 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-type Address interface {
-	Call(in []byte) []byte
-}
-
+// PrecompiledAccount represents a native ethereum contract
 type PrecompiledAccount struct {
 	Gas func(l int) *big.Int
 	fn  func(in []byte) []byte
 }
 
+// Call calls the native function
 func (self PrecompiledAccount) Call(in []byte) []byte {
 	return self.fn(in)
 }
 
+// Precompiled contains the default set of ethereum contracts
 var Precompiled = PrecompiledContracts()
 
-// XXX Could set directly. Testing requires resetting and setting of pre compiled contracts.
+// PrecompiledContracts returns the default set of precompiled ethereum
+// contracts defined by the ethereum yellow paper.
 func PrecompiledContracts() map[string]*PrecompiledAccount {
 	return map[string]*PrecompiledAccount{
 		// ECRECOVER

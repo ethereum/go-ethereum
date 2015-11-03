@@ -18,6 +18,8 @@ package core
 
 import (
 	"bytes"
+	"encoding/binary"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,6 +34,7 @@ import (
 var (
 	headHeaderKey = []byte("LastHeader")
 	headBlockKey  = []byte("LastBlock")
+	headFastKey   = []byte("LastFast")
 
 	blockPrefix    = []byte("block-")
 	blockNumPrefix = []byte("block-num-")
@@ -42,6 +45,9 @@ var (
 
 	ExpDiffPeriod = big.NewInt(100000)
 	blockHashPre  = []byte("block-hash-") // [deprecated by eth/63]
+
+	mipmapPre    = []byte("mipmap-log-bloom-")
+	MIPMapLevels = []uint64{1000000, 500000, 100000, 50000, 1000}
 )
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
@@ -124,7 +130,7 @@ func GetCanonicalHash(db ethdb.Database, number uint64) common.Hash {
 // header. The difference between this and GetHeadBlockHash is that whereas the
 // last block hash is only updated upon a full block import, the last header
 // hash is updated already at header import, allowing head tracking for the
-// fast synchronization mechanism.
+// light synchronization mechanism.
 func GetHeadHeaderHash(db ethdb.Database) common.Hash {
 	data, _ := db.Get(headHeaderKey)
 	if len(data) == 0 {
@@ -136,6 +142,18 @@ func GetHeadHeaderHash(db ethdb.Database) common.Hash {
 // GetHeadBlockHash retrieves the hash of the current canonical head block.
 func GetHeadBlockHash(db ethdb.Database) common.Hash {
 	data, _ := db.Get(headBlockKey)
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
+}
+
+// GetHeadFastBlockHash retrieves the hash of the current canonical head block during
+// fast synchronization. The difference between this and GetHeadBlockHash is that
+// whereas the last block hash is only updated upon a full block import, the last
+// fast hash is updated when importing pre-processed blocks.
+func GetHeadFastBlockHash(db ethdb.Database) common.Hash {
+	data, _ := db.Get(headFastKey)
 	if len(data) == 0 {
 		return common.Hash{}
 	}
@@ -244,6 +262,15 @@ func WriteHeadBlockHash(db ethdb.Database, hash common.Hash) error {
 	return nil
 }
 
+// WriteHeadFastBlockHash stores the fast head block's hash.
+func WriteHeadFastBlockHash(db ethdb.Database, hash common.Hash) error {
+	if err := db.Put(headFastKey, hash.Bytes()); err != nil {
+		glog.Fatalf("failed to store last fast block's hash into database: %v", err)
+		return err
+	}
+	return nil
+}
+
 // WriteHeader serializes a block header into the database.
 func WriteHeader(db ethdb.Database, header *types.Header) error {
 	data, err := rlp.EncodeToBytes(header)
@@ -345,4 +372,43 @@ func GetBlockByHashOld(db ethdb.Database, hash common.Hash) *types.Block {
 		return nil
 	}
 	return (*types.Block)(&block)
+}
+
+// returns a formatted MIP mapped key by adding prefix, canonical number and level
+//
+// ex. fn(98, 1000) = (prefix || 1000 || 0)
+func mipmapKey(num, level uint64) []byte {
+	lkey := make([]byte, 8)
+	binary.BigEndian.PutUint64(lkey, level)
+	key := new(big.Int).SetUint64(num / level * level)
+
+	return append(mipmapPre, append(lkey, key.Bytes()...)...)
+}
+
+// WriteMapmapBloom writes each address included in the receipts' logs to the
+// MIP bloom bin.
+func WriteMipmapBloom(db ethdb.Database, number uint64, receipts types.Receipts) error {
+	batch := db.NewBatch()
+	for _, level := range MIPMapLevels {
+		key := mipmapKey(number, level)
+		bloomDat, _ := db.Get(key)
+		bloom := types.BytesToBloom(bloomDat)
+		for _, receipt := range receipts {
+			for _, log := range receipt.Logs {
+				bloom.Add(log.Address.Big())
+			}
+		}
+		batch.Put(key, bloom.Bytes())
+	}
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("mipmap write fail for: %d: %v", number, err)
+	}
+	return nil
+}
+
+// GetMipmapBloom returns a bloom filter using the number and level as input
+// parameters. For available levels see MIPMapLevels.
+func GetMipmapBloom(db ethdb.Database, number, level uint64) types.Bloom {
+	bloomDat, _ := db.Get(mipmapKey(number, level))
+	return types.BytesToBloom(bloomDat)
 }
