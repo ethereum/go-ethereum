@@ -55,7 +55,7 @@ type GasPriceOracle struct {
 }
 
 // NewGasPriceOracle returns a new oracle.
-func NewGasPriceOracle(eth *Ethereum) *GasPriceOracle {
+func NewGasPriceOracle(exp *Expanse) *GasPriceOracle {
 	minprice := exp.GpoMinGasPrice
 	if minprice == nil {
 		minprice = big.NewInt(gpoDefaultMinGasPrice)

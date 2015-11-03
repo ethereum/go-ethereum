@@ -35,8 +35,8 @@ import (
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/core/vm"
 	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/eth"
-	"github.com/expanse-project/go-expanse/eth/filters"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/exp/filters"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/miner"
@@ -86,7 +86,7 @@ type XEth struct {
 	filterManager *filters.FilterSystem
 }
 
-func NewTest(eth *exp.Expanse, frontend Frontend) *XEth {
+func NewTest(exp *exp.Expanse, frontend Frontend) *XEth {
 	return &XEth{backend: exp, frontend: frontend}
 }
 

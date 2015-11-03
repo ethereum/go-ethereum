@@ -33,7 +33,7 @@ import (
 	"github.com/expanse-project/go-expanse/miner"
 )
 
-func (s *Ethereum) StartMining(threads int, gpus string) error {
+func (s *Expanse) StartMining(threads int, gpus string) error {
 	eb, err := s.Etherbase()
 	if err != nil {
 		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
