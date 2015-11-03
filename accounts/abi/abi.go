@@ -36,7 +36,7 @@ import (
 type Method struct {
 	Name   string
 	Const  bool
-	Input  []Argument
+	Inputs []Argument
 	Return Type // not yet implemented
 }
 
@@ -49,9 +49,9 @@ type Method struct {
 // Please note that "int" is substitute for its canonical representation "int256"
 func (m Method) String() (out string) {
 	out += m.Name
-	types := make([]string, len(m.Input))
+	types := make([]string, len(m.Inputs))
 	i := 0
-	for _, input := range m.Input {
+	for _, input := range m.Inputs {
 		types[i] = input.Type.String()
 		i++
 	}
@@ -104,7 +104,7 @@ func (abi ABI) pack(name string, args ...interface{}) ([]byte, error) {
 
 	var ret []byte
 	for i, a := range args {
-		input := method.Input[i]
+		input := method.Inputs[i]
 
 		packed, err := input.Type.pack(a)
 		if err != nil {
@@ -129,8 +129,8 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 	}
 
 	// start with argument count match
-	if len(args) != len(method.Input) {
-		return nil, fmt.Errorf("argument count mismatch: %d for %d", len(args), len(method.Input))
+	if len(args) != len(method.Inputs) {
+		return nil, fmt.Errorf("argument count mismatch: %d for %d", len(args), len(method.Inputs))
 	}
 
 	arguments, err := abi.pack(name, args...)
