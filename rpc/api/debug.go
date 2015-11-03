@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/expanse-org/ethash"
+	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/vm"
 	"github.com/expanse-project/go-expanse/exp"

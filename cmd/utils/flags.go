@@ -32,7 +32,7 @@ import (
 	"github.com/expanse-project/go-expanse/metrics"
 
 	"github.com/codegangsta/cli"
-	"github.com/expanse-org/ethash"
+	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/accounts"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core"

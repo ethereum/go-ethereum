@@ -23,7 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/expanse-org/ethash"
+	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"

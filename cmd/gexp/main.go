@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
-	"github.com/expanse-org/ethash"
+	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/accounts"
 	"github.com/expanse-project/go-expanse/cmd/utils"
 	"github.com/expanse-project/go-expanse/common"

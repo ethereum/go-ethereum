@@ -31,7 +31,7 @@ import (
 	"syscall"
 	"time"
 	
-	"github.com/expanse-org/ethash"
+	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/accounts"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/common/compiler"
@@ -41,7 +41,7 @@ import (
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/core/vm"
 	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/eth/downloader"
+	"github.com/expanse-project/go-expanse/exp/downloader"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/logger"
