@@ -132,7 +132,7 @@ func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*Bl
 		if err != nil {
 			return nil, err
 		}
-		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
+		glog.V(logger.Info).Infoln("WARNING: Wrote default expanse genesis block")
 	}
 	if err := bc.loadLastState(); err != nil {
 		return nil, err

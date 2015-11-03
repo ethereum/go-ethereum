@@ -497,7 +497,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *exp.Config {
 			cfg.Shh = true
 		}
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {
-			cfg.DataDir = os.TempDir() + "/ethereum_dev_mode"
+			cfg.DataDir = os.TempDir() + "/expanse_dev_mode"
 		}
 		cfg.PowTest = true
 		cfg.DevMode = true

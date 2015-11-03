@@ -104,7 +104,7 @@ func New(expanse *exp.Expanse, frontend Frontend) *XEth {
 		transactionQueue: make(map[int]*hashQueue),
 		messages:         make(map[int]*whisperFilter),
 		agent:            miner.NewRemoteAgent(),
-		gpo:              exp.NewGasPriceOracle(ethereum),
+		gpo:              exp.NewGasPriceOracle(expanse),
 	}
 	if expanse.Whisper() != nil {
 		xeth.whisper = NewWhisper(expanse.Whisper())
