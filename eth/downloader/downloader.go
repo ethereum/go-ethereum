@@ -1163,10 +1163,10 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 			for i, header := range rollback {
 				hashes[i] = header.Hash()
 			}
-			lh, lfb, lb := d.headHeader().Number, d.headFastBlock().Number(), d.headBlock().Number()
+			lh, lfb, lb := d.headHeader().Number, d.headFastBlock().SafeNumber(), d.headBlock().SafeNumber()
 			d.rollback(hashes)
 			glog.V(logger.Warn).Infof("Rolled back %d headers (LH: %d->%d, FB: %d->%d, LB: %d->%d)",
-				len(hashes), lh, d.headHeader().Number, lfb, d.headFastBlock().Number(), lb, d.headBlock().Number())
+				len(hashes), lh, d.headHeader().Number, lfb, d.headFastBlock().SafeNumber(), lb, d.headBlock().SafeNumber())
 
 			// If we're already past the pivot point, this could be an attack, disable fast sync
 			if rollback[len(rollback)-1].Number.Uint64() > pivot {

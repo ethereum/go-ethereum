@@ -162,6 +162,7 @@ func newDummyWorker(coinbase common.Address, eth core.Backend) *worker {
 		coinbase:       coinbase,
 		txQueue:        make(map[common.Hash]*types.Transaction),
 		quit:           make(chan struct{}),
+		agents:         make(map[Agent]struct{}),
 		fullValidation: false,
 	}
 

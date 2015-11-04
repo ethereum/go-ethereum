@@ -502,39 +502,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			Obj:     data,
 		})
 
-	case NewBlockHashesMsg:
-		glog.V(access.LogLevel).Infof("LES: received NewBlockHashesMsg from peer %v", p.id)
-		// Retrieve and deseralize the remote new block hashes notification
-		type announce struct {
-			Hash   common.Hash
-			Number uint64
-		}
-		var announces = []announce{}
-
-		// We're running the old protocol, make block number unknown (0)
-		var hashes []common.Hash
-		if err := msg.Decode(&hashes); err != nil {
-			return errResp(ErrDecode, "%v: %v", msg, err)
-		}
-		for _, hash := range hashes {
-			announces = append(announces, announce{hash, 0})
-		}
-		// Mark the hashes as present at the remote node
-		for _, block := range announces {
-			p.MarkBlock(block.Hash)
-			p.SetHead(block.Hash)
-		}
-		// Schedule all the unknown hashes for retrieval
-		unknown := make([]announce, 0, len(announces))
-		for _, block := range announces {
-			if !pm.blockchain.HasBlock(block.Hash) {
-				unknown = append(unknown, block)
-			}
-		}
-		/*for _, block := range unknown {
-			pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), nil, p.RequestOneHeader, p.RequestBodies)
-		}*/
-
 	default:
 		glog.V(access.LogLevel).Infof("LES: received unknown message with code %d from peer %v", msg.Code, p.id)
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)

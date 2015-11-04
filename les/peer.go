@@ -81,14 +81,6 @@ func (p *peer) Head() (hash common.Hash) {
 	return hash
 }
 
-// SetHead updates the head (most recent) hash of the peer.
-func (p *peer) SetHead(hash common.Hash) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	copy(p.head[:], hash[:])
-}
-
 // Td retrieves the current total difficulty of a peer.
 func (p *peer) Td() *big.Int {
 	p.lock.RLock()
@@ -97,46 +89,9 @@ func (p *peer) Td() *big.Int {
 	return new(big.Int).Set(p.td)
 }
 
-// SetTd updates the current total difficulty of a peer.
-func (p *peer) SetTd(td *big.Int) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	p.td.Set(td)
-}
-
-// MarkBlock marks a block as known for the peer, ensuring that the block will
-// never be propagated to this particular peer.
-func (p *peer) MarkBlock(hash common.Hash) {
-	// If we reached the memory allowance, drop a previously known block hash
-	for p.knownBlocks.Size() >= maxKnownBlocks {
-		p.knownBlocks.Pop()
-	}
-	p.knownBlocks.Add(hash)
-}
-
-// SendNewBlockHashes announces the availability of a number of blocks through
-// a hash notification.
-func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
-	for _, hash := range hashes {
-		p.knownBlocks.Add(hash)
-	}
-	request := make(newBlockHashesData, len(hashes))
-	for i := 0; i < len(hashes); i++ {
-		request[i].Hash = hashes[i]
-		request[i].Number = numbers[i]
-	}
-	return p2p.Send(p.rw, NewBlockHashesMsg, request)
-}
-
 // SendBlockHeaders sends a batch of block headers to the remote peer.
 func (p *peer) SendBlockHeaders(headers []*types.Header) error {
 	return p2p.Send(p.rw, BlockHeadersMsg, headers)
-}
-
-// SendBlockBodies sends a batch of block contents to the remote peer.
-func (p *peer) SendBlockBodies(bodies []*types.Body) error {
-	return p2p.Send(p.rw, BlockBodiesMsg, blockBodiesData(bodies))
 }
 
 // SendBlockBodiesRLP sends a batch of block contents to the remote peer from
@@ -160,13 +115,6 @@ func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 // SendProofs sends a batch of merkle proofs, corresponding to the ones requested.
 func (p *peer) SendProofs(proofs proofsData) error {
 	return p2p.Send(p.rw, ProofsMsg, proofs)
-}
-
-// RequestHeaders is a wrapper around the header query functions to fetch a
-// single header. It is used solely by the fetcher.
-func (p *peer) RequestOneHeader(hash common.Hash) error {
-	glog.V(logger.Debug).Infof("%v fetching a single header: %x", p, hash)
-	return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}, Amount: uint64(1), Skip: uint64(0), Reverse: false})
 }
 
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
@@ -314,21 +262,6 @@ func (ps *peerSet) Len() int {
 	defer ps.lock.RUnlock()
 
 	return len(ps.peers)
-}
-
-// PeersWithoutBlock retrieves a list of peers that do not have a given block in
-// their set of known hashes.
-func (ps *peerSet) PeersWithoutBlock(hash common.Hash) []*peer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	list := make([]*peer, 0, len(ps.peers))
-	for _, p := range ps.peers {
-		if !p.knownBlocks.Has(hash) {
-			list = append(list, p)
-		}
-	}
-	return list
 }
 
 // BestPeer retrieves the known peer with the currently highest total difficulty.
