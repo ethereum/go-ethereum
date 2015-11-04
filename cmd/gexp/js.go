@@ -179,7 +179,7 @@ func newLightweightJSRE(docRoot string, client comms.ExpanseClient, datadir stri
 }
 
 
-func newJSRE(expanse *exp.Expanse, libPath, corsDomain string, client comms.ExpanseClient, interactive bool, f xeth.Frontend) *jsre {
+func newJSRE(expanse *exp.Expanse, docRoot, corsDomain string, client comms.ExpanseClient, interactive bool, f xeth.Frontend) *jsre {
 	js := &jsre{expanse: expanse, ps1: "> "}
 
 	// set default cors domain used by startRpc from CLI flag

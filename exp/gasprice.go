@@ -65,7 +65,7 @@ func NewGasPriceOracle(exp *Expanse) *GasPriceOracle {
 		minbase = minbase.Div(minbase, big.NewInt(int64(exp.GpobaseCorrectionFactor)))
 	}
 	return &GasPriceOracle{
-		eth:      exp,
+		exp:      exp,
 		blocks:   make(map[uint64]*blockPriceInfo),
 		minBase:  minbase,
 		minPrice: minprice,

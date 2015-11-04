@@ -29,8 +29,6 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/expanse-project/go-expanse/metrics"
-
 	"github.com/codegangsta/cli"
 	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/accounts"
@@ -619,8 +617,8 @@ func StartIPC(exp *exp.Expanse, ctx *cli.Context) error {
 
 	initializer := func(conn net.Conn) (comms.Stopper, shared.ExpanseApi, error) {
 		fe := useragent.NewRemoteFrontend(conn, exp.AccountManager())
-		xeth := xexp.New(exp, fe)
-		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec.JSON, xeth, eth)
+		xeth := xeth.New(exp, fe)
+		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec.JSON, xeth, exp)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -637,7 +635,7 @@ func StartRPC(exp *exp.Expanse, ctx *cli.Context) error {
 		CorsDomain:    ctx.GlobalString(RPCCORSDomainFlag.Name),
 	}
 
-	xeth := xexp.New(exp, nil)
+	xeth := xeth.New(exp, nil)
 	codec := codec.JSON
 
 	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, exp)
