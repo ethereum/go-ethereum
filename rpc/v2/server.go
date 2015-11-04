@@ -23,11 +23,32 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"runtime"
 )
 
 // NewServer will create a new server instance with no registered handlers.
 func NewServer() *Server {
-	return &Server{services: make(serviceRegistry), subscriptions: make(subscriptionRegistry)}
+	server := &Server{services: make(serviceRegistry), subscriptions: make(subscriptionRegistry)}
+
+	rpcService := &RPCService{server}
+	server.RegisterName("rpc", rpcService)
+
+	return server
+}
+
+// RPCService gives meta information about the server.
+// e.g. gives information about the loaded modules.
+type RPCService struct {
+	server *Server
+}
+
+// Modules returns the list of RPC services with their version number
+func (s *RPCService) Modules() map[string]string {
+	modules := make(map[string]string)
+	for name, _ := range s.server.services {
+		modules[name] = "1.0"
+	}
+	return modules
 }
 
 // Register publishes suitable methods of rcvr. Methods will be published
@@ -54,9 +75,9 @@ func (s *Server) register(rcvr interface{}, name string, useName bool) error {
 
 	svc := new(service)
 	svc.typ = reflect.TypeOf(rcvr)
-	svc.rcvr = reflect.ValueOf(rcvr)
+	rcvrVal := reflect.ValueOf(rcvr)
 
-	sname := reflect.Indirect(svc.rcvr).Type().Name()
+	sname := reflect.Indirect(rcvrVal).Type().Name()
 	if useName {
 		sname = name
 	}
@@ -67,12 +88,25 @@ func (s *Server) register(rcvr interface{}, name string, useName bool) error {
 		return fmt.Errorf("%s is not exported", sname)
 	}
 
-	if _, present := s.services[sname]; present {
-		return fmt.Errorf("%s already registered", sname)
+	// already a previous service register under given sname, merge methods/subscriptions
+	if regsvc, present := s.services[sname]; present {
+		methods, subscriptions := suitableCallbacks(rcvrVal, svc.typ)
+		if len(methods) == 0 && len(subscriptions) == 0 {
+			return fmt.Errorf("Service doesn't have any suitable methods/subscriptions to expose")
+		}
+
+		for _, m := range methods {
+			regsvc.callbacks[formatName(m.method.Name)] = m
+		}
+		for _, s := range subscriptions {
+			regsvc.subscriptions[formatName(s.method.Name)] = s
+		}
+
+		return nil
 	}
 
 	svc.name = sname
-	svc.callbacks, svc.subscriptions = suitableCallbacks(svc.typ)
+	svc.callbacks, svc.subscriptions = suitableCallbacks(rcvrVal, svc.typ)
 
 	if len(svc.callbacks) == 0 && len(svc.subscriptions) == 0 {
 		return fmt.Errorf("Service doesn't have any suitable methods/subscriptions to expose")
@@ -91,7 +125,15 @@ func (s *Server) register(rcvr interface{}, name string, useName bool) error {
 // 2. supports notifications (pub/sub)
 // 3. supports request batches
 func (s *Server) ServeCodec(codec ServerCodec) {
-	defer codec.Close()
+	defer func() {
+		if err := recover(); err != nil {
+			const size = 64 << 10
+			buf := make([]byte, size)
+			buf = buf[:runtime.Stack(buf, false)]
+			glog.Errorln(buf)
+		}
+		codec.Close()
+	}()
 
 	for {
 		reqs, batch, err := s.readRequest(codec)
@@ -113,28 +155,7 @@ func (s *Server) ServeCodec(codec ServerCodec) {
 // It will then send the notification to the client, when it fails the codec is closed. When the event has multiple
 // fields an array of values is returned.
 func sendNotification(codec ServerCodec, subid string, event interface{}) {
-	typ := reflect.TypeOf(event)
-	val := reflect.ValueOf(event)
-	for typ.Kind() == reflect.Ptr {
-		typ = typ.Elem()
-		val = val.Elem()
-	}
-
-	fields := make(map[string]interface{})
-	var notification interface{}
-
-	if typ.Kind() == reflect.Struct {
-		if typ.NumField() == 1 {
-			notification = codec.CreateNotification(subid, val.Field(0).Interface())
-		} else {
-			for i := 0; i < typ.NumField(); i++ {
-				fields[typ.Field(i).Name] = val.Field(i).Interface()
-			}
-			notification = codec.CreateNotification(subid, fields)
-		}
-	} else {
-		notification = codec.CreateNotification(subid, val.Interface())
-	}
+	notification := codec.CreateNotification(subid, event)
 
 	if err := codec.Write(notification); err != nil {
 		codec.Close()
@@ -146,7 +167,7 @@ func sendNotification(codec ServerCodec, subid string, event interface{}) {
 // 2. create a notification of the event and send it the client when it matches the criteria
 // It will unsubscribe the subscription when the socket is closed or the subscription is unsubscribed by the user.
 func (s *Server) createSubscription(c ServerCodec, req *serverRequest) (string, error) {
-	args := []reflect.Value{req.rcvr}
+	args := []reflect.Value{req.callb.rcvr}
 	if len(req.args) > 0 {
 		args = append(args, req.args...)
 	}
@@ -176,7 +197,7 @@ func (s *Server) createSubscription(c ServerCodec, req *serverRequest) (string, 
 						if recvOk { // send notification
 							if event, ok := notification.Interface().(*event.Event); ok {
 								if subscription.match == nil || subscription.match(event.Data) {
-									sendNotification(c, subid, event.Data)
+									sendNotification(c, subid, subscription.format(event.Data))
 								}
 							}
 						} else { // user send an eth_unsubscribe request
@@ -274,7 +295,7 @@ func (s *Server) exec(codec ServerCodec, req *serverRequest) {
 		return
 	}
 
-	arguments := []reflect.Value{req.rcvr}
+	arguments := []reflect.Value{req.callb.rcvr}
 	if len(req.args) > 0 {
 		arguments = append(arguments, req.args...)
 	}
@@ -353,7 +374,7 @@ func (s *Server) execBatch(codec ServerCodec, requests []*serverRequest) {
 			continue
 		}
 
-		arguments := []reflect.Value{req.rcvr}
+		arguments := []reflect.Value{req.callb.rcvr}
 		if len(req.args) > 0 {
 			arguments = append(arguments, req.args...)
 		}
@@ -417,7 +438,7 @@ func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, RPCErro
 		}
 
 		if callb, ok := svc.subscriptions[r.method]; ok {
-			requests[i] = &serverRequest{id: r.id, svcname: svc.name, rcvr: svc.rcvr, callb: callb}
+			requests[i] = &serverRequest{id: r.id, svcname: svc.name, callb: callb}
 			if r.params != nil && len(callb.argTypes) > 0 {
 				argTypes := []reflect.Type{reflect.TypeOf("")}
 				argTypes = append(argTypes, callb.argTypes...)
@@ -431,7 +452,7 @@ func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, RPCErro
 		}
 
 		if callb, ok := svc.callbacks[r.method]; ok {
-			requests[i] = &serverRequest{id: r.id, svcname: svc.name, rcvr: svc.rcvr, callb: callb}
+			requests[i] = &serverRequest{id: r.id, svcname: svc.name, callb: callb}
 			if r.params != nil && len(callb.argTypes) > 0 {
 				if args, err := codec.ParseRequestArguments(callb.argTypes, r.params); err == nil {
 					requests[i].args = args
