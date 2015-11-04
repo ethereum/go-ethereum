@@ -38,10 +38,6 @@ func TestServerRegister(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
-	if err := server.RegisterName("calc", service); err == nil {
-		t.Fatal("Second time registering the same service should raise an error")
-	}
-
 	if len(server.services) != 1 {
 		t.Fatalf("Expected 1 service entry but got %d", len(server.services))
 	}

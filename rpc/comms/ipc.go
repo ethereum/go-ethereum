@@ -69,9 +69,25 @@ func (self *ipcClient) SupportedModules() (map[string]string, error) {
 	req := shared.Request{
 		Id:      1,
 		Jsonrpc: "2.0",
-		Method:  "modules",
+		Method:  "rpc_modules",
 	}
 
+	if err := self.coder.WriteResponse(req); err != nil {
+		return nil, err
+	}
+
+	res, _ := self.coder.ReadResponse()
+	if sucRes, ok := res.(*shared.SuccessResponse); ok {
+		data, _ := json.Marshal(sucRes.Result)
+		modules := make(map[string]string)
+		if err := json.Unmarshal(data, &modules); err == nil {
+			return modules, nil
+		}
+	}
+
+
+	// old version uses modules instead of rpc_modules, this can be removed after full migration
+	req.Method = "modules"
 	if err := self.coder.WriteResponse(req); err != nil {
 		return nil, err
 	}

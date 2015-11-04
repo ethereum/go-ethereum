@@ -17,11 +17,12 @@
 package common
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"math/rand"
 	"reflect"
-	"encoding/json"
 )
 
 const (
@@ -50,6 +51,16 @@ func (h Hash) Str() string   { return string(h[:]) }
 func (h Hash) Bytes() []byte { return h[:] }
 func (h Hash) Big() *big.Int { return Bytes2Big(h[:]) }
 func (h Hash) Hex() string   { return "0x" + Bytes2Hex(h[:]) }
+
+// UnmarshalJSON parses a hash in its hex from to a hash.
+func (h *Hash) UnmarshalJSON(input []byte) error {
+	length := len(input)
+	if length >= 2 && input[0] == '"' && input[length - 1] == '"' {
+		input = input[1:length - 1]
+	}
+	h.SetBytes(FromHex(string(input)))
+	return nil
+}
 
 // Serialize given hash to JSON
 func (h Hash) MarshalJSON() ([]byte, error) {
@@ -126,6 +137,33 @@ func (a *Address) Set(other Address) {
 // Serialize given address to JSON
 func (a Address) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a.Hex())
+}
+
+// Parse address from raw json data
+func (a *Address) UnmarshalJSON(data []byte) error {
+	if len(data) > 2 && data[0] == '"' && data[len(data) - 1] == '"' {
+		data = data[:len(data) - 1][1:]
+	}
+
+	if len(data) > 2 && data[0] == '0' && data[1] == 'x' {
+		data = data[2:]
+	}
+
+	if len(data) != 2 * addressLength {
+		return fmt.Errorf("Invalid address length, expected %d got %d bytes", 2 * addressLength, len(data))
+	}
+
+	n, err := hex.Decode(a[:], data)
+	if err != nil {
+		return err
+	}
+
+	if n != addressLength {
+		return fmt.Errorf("Invalid address")
+	}
+
+	a.Set(HexToAddress(string(data)))
+	return nil
 }
 
 // PP Pretty Prints a byte slice in the following format:
