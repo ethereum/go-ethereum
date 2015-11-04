@@ -17,7 +17,11 @@
 package v2
 
 import (
+	"fmt"
+	"math"
+	"math/big"
 	"reflect"
+	"strings"
 
 	"sync"
 
@@ -26,6 +30,7 @@ import (
 
 // callback is a method callback which was registered in the server
 type callback struct {
+	rcvr        reflect.Value  // receiver of method
 	method      reflect.Method // callback
 	argTypes    []reflect.Type // input argument types
 	errPos      int            // err return idx, of -1 when method cannot return error
@@ -108,21 +113,35 @@ type ServerCodec interface {
 // SubscriptionMatcher returns true if the given value matches the criteria specified by the user
 type SubscriptionMatcher func(interface{}) bool
 
+// SubscriptionOutputFormat accepts event data and has the ability to format the data before it is send to the client
+type SubscriptionOutputFormat func(interface{}) interface{}
+
+// defaultSubscriptionOutputFormatter returns data and is used as default output format for notifications
+func defaultSubscriptionOutputFormatter(data interface{}) interface{} {
+	return data
+}
+
 // Subscription is used by the server to send notifications to the client
 type Subscription struct {
-	sub   event.Subscription
-	match SubscriptionMatcher
+	sub    event.Subscription
+	match  SubscriptionMatcher
+	format SubscriptionOutputFormat
 }
 
 // NewSubscription create a new RPC subscription
 func NewSubscription(sub event.Subscription) Subscription {
-	return Subscription{sub, nil}
+	return Subscription{sub, nil, defaultSubscriptionOutputFormatter}
+}
+
+// NewSubscriptionWithOutputFormat create a new RPC subscription which a custom notification output format
+func NewSubscriptionWithOutputFormat(sub event.Subscription, formatter SubscriptionOutputFormat) Subscription {
+	return Subscription{sub, nil, formatter}
 }
 
 // NewSubscriptionFiltered will create a new subscription. For each raised event the given matcher is
 // called. If it returns true the event is send as notification to the client, otherwise it is ignored.
 func NewSubscriptionFiltered(sub event.Subscription, match SubscriptionMatcher) Subscription {
-	return Subscription{sub, match}
+	return Subscription{sub, match, defaultSubscriptionOutputFormatter}
 }
 
 // Chan returns the channel where new events will be published. It's up the user to call the matcher to
@@ -134,4 +153,187 @@ func (s *Subscription) Chan() <-chan *event.Event {
 // Unsubscribe will end the subscription and closes the event channel
 func (s *Subscription) Unsubscribe() {
 	s.sub.Unsubscribe()
+}
+
+// HexNumber serializes a number to hex format using the "%#x" format
+type HexNumber big.Int
+
+// NewHexNumber creates a new hex number instance which will serialize the given val with `%#x` on marshal.
+func NewHexNumber(val interface{}) *HexNumber {
+	if val == nil {
+		return nil
+	}
+
+	if v, ok := val.(*big.Int); ok && v != nil {
+		hn := new(big.Int).Set(v)
+		return (*HexNumber)(hn)
+	}
+
+	rval := reflect.ValueOf(val)
+
+	var unsigned uint64
+	utype := reflect.TypeOf(unsigned)
+	if t := rval.Type(); t.ConvertibleTo(utype) {
+		hn := new(big.Int).SetUint64(rval.Convert(utype).Uint())
+		return (*HexNumber)(hn)
+	}
+
+	var signed int64
+	stype := reflect.TypeOf(signed)
+	if t := rval.Type(); t.ConvertibleTo(stype) {
+		hn := new(big.Int).SetInt64(rval.Convert(stype).Int())
+		return (*HexNumber)(hn)
+	}
+
+	return nil
+}
+
+func (h *HexNumber) UnmarshalJSON(input []byte) error {
+	length := len(input)
+	if length >= 2 && input[0] == '"' && input[length - 1] == '"' {
+		input = input[1 : length - 1]
+	}
+
+	hn := (*big.Int)(h)
+	if _, ok := hn.SetString(string(input), 0); ok {
+		return nil
+	}
+
+	return fmt.Errorf("Unable to parse number")
+}
+
+// MarshalJSON serialize the hex number instance to a hex representation.
+func (h *HexNumber) MarshalJSON() ([]byte, error) {
+	if h != nil {
+		hn := (*big.Int)(h)
+		if hn.BitLen() == 0 {
+			return []byte(`"0x0"`), nil
+		}
+		return []byte(fmt.Sprintf(`"0x%x"`, hn)), nil
+	}
+	return nil, nil
+}
+
+func (h *HexNumber) Int() int {
+	hn := (*big.Int)(h)
+	return int(hn.Int64())
+}
+
+func (h *HexNumber) Int64() int64 {
+	hn := (*big.Int)(h)
+	return hn.Int64()
+}
+
+func (h *HexNumber) Uint() uint {
+	hn := (*big.Int)(h)
+	return uint(hn.Uint64())
+}
+
+func (h *HexNumber) Uint64() uint64 {
+	hn := (*big.Int)(h)
+	return hn.Uint64()
+}
+
+func (h *HexNumber) BigInt() *big.Int {
+	return (*big.Int)(h)
+}
+
+type Number int64
+func (n *Number) UnmarshalJSON(data []byte) error {
+	input := strings.TrimSpace(string(data))
+
+	if len(input) >= 2 && input[0] == '"' && input[len(input) - 1] == '"' {
+		input = input[1 : len(input) - 1]
+	}
+
+	if len(input) == 0 {
+		*n = Number(latestBlockNumber.Int64())
+		return nil
+	}
+
+	in := new(big.Int)
+	_, ok := in.SetString(input, 0)
+
+	if !ok { // test if user supplied string tag
+		return fmt.Errorf(`invalid number %s`, data)
+	}
+
+	if in.Cmp(earliestBlockNumber) >= 0 && in.Cmp(maxBlockNumber) <= 0 {
+		*n = Number(in.Int64())
+		return nil
+	}
+
+	return fmt.Errorf("blocknumber not in range [%d, %d]", earliestBlockNumber, maxBlockNumber)
+}
+
+func (n *Number) Int64() int64 {
+	return *(*int64)(n)
+}
+
+var (
+	pendingBlockNumber = big.NewInt(-2)
+	latestBlockNumber = big.NewInt(-1)
+	earliestBlockNumber = big.NewInt(0)
+	maxBlockNumber = big.NewInt(math.MaxInt64)
+)
+
+type BlockNumber int64
+
+const (
+	PendingBlockNumber = BlockNumber(-2)
+	LatestBlockNumber = BlockNumber(-1)
+)
+
+// UnmarshalJSON parses the given JSON fragement into a BlockNumber. It supports:
+// - "latest" or "earliest" as string arguments
+// - the block number
+// Returned errors:
+// - an unsupported error when "pending" is specified (not yet implemented)
+// - an invalid block number error when the given argument isn't a known strings
+// - an out of range error when the given block number is either too little or too large
+func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
+	input := strings.TrimSpace(string(data))
+
+	if len(input) >= 2 && input[0] == '"' && input[len(input) - 1] == '"' {
+		input = input[1 : len(input) - 1]
+	}
+
+	if len(input) == 0 {
+		*bn = BlockNumber(latestBlockNumber.Int64())
+		return nil
+	}
+
+	in := new(big.Int)
+	_, ok := in.SetString(input, 0)
+
+	if !ok { // test if user supplied string tag
+		strBlockNumber := input
+		if strBlockNumber == "latest" {
+			*bn = BlockNumber(latestBlockNumber.Int64())
+			return nil
+		}
+
+		if strBlockNumber == "earliest" {
+			*bn = BlockNumber(earliestBlockNumber.Int64())
+			return nil
+		}
+
+		if strBlockNumber == "pending" {
+			*bn = BlockNumber(pendingBlockNumber.Int64())
+			return nil
+		}
+
+		return fmt.Errorf(`invalid blocknumber %s`, data)
+	}
+
+	if in.Cmp(earliestBlockNumber) >= 0 && in.Cmp(maxBlockNumber) <= 0 {
+		*bn = BlockNumber(in.Int64())
+		return nil
+	}
+
+	return fmt.Errorf("blocknumber not in range [%d, %d]", earliestBlockNumber, maxBlockNumber)
+}
+
+func (bn *BlockNumber) Int64() int64 {
+	return (int64)(*bn)
 }

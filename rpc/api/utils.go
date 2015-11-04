@@ -191,6 +191,8 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, stack *no
 			apis[i] = NewPersonalApi(xeth, eth, codec)
 		case shared.Web3ApiName:
 			apis[i] = NewWeb3Api(xeth, codec)
+		case "rpc": // gives information about the RPC interface
+			continue
 		default:
 			return nil, fmt.Errorf("Unknown API '%s'", name)
 		}

@@ -28,4 +28,3 @@ type Batch interface {
 	Put(key, value []byte) error
 	Write() error
 }
-

@@ -40,12 +40,16 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
@@ -54,6 +58,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/rpc/useragent"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 	"github.com/ethereum/go-ethereum/whisper"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -775,15 +780,48 @@ func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
 
 // StartIPC starts a IPC JSON-RPC API server.
 func StartIPC(stack *node.Node, ctx *cli.Context) error {
+	var ethereum *eth.Ethereum
+	if err := stack.Service(&ethereum); err != nil {
+		return err
+	}
+	server := rpc.NewServer()
+
+	server.RegisterName("eth", accounts.NewAccountService(ethereum.AccountManager()))
+	server.RegisterName("eth", core.NewBlockChainService(ethereum.BlockChain(), ethereum.AccountManager()))
+	server.RegisterName("eth", core.NewTransactionPoolService(ethereum.TxPool(), ethereum.ChainDb(), ethereum.BlockChain(), ethereum.AccountManager()))
+	server.RegisterName("eth", miner.NewMinerService(ethereum.Miner()))
+	server.RegisterName("eth", eth.NewEthService(ethereum))
+	server.RegisterName("eth", downloader.NewDownloaderService(ethereum.Downloader()))
+	server.RegisterName("eth", filters.NewFilterService(ethereum.ChainDb(), ethereum.EventMux()))
+	server.RegisterName("net", p2p.NewNetService(stack.Server(), ethereum.NetVersion()))
+	server.RegisterName("web3", eth.NewWeb3Service(stack))
+	server.RegisterName("personal", accounts.NewPersonalService(ethereum.AccountManager()))
+
+	ipcDir := filepath.Join(stack.DataDir(), "shared")
+	os.MkdirAll(ipcDir, 0700)
+	ipcEndpoint := filepath.Join(ipcDir, "ethereum.sock")
+	os.RemoveAll(ipcEndpoint)
+	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: ipcEndpoint, Net: "unix"})
+	if err != nil {
+		panic(err)
+	}
+	go func() {
+		glog.Infof("Unix socket for IPC service opened on %s\n", ipcEndpoint)
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				panic(err)
+			}
+			codec := rpc.NewJSONCodec(conn)
+			go server.ServeCodec(codec)
+		}
+	}()
+
 	config := comms.IpcConfig{
 		Endpoint: IpcSocketPath(ctx),
 	}
 
 	initializer := func(conn net.Conn) (comms.Stopper, shared.EthereumApi, error) {
-		var ethereum *eth.Ethereum
-		if err := stack.Service(&ethereum); err != nil {
-			return nil, nil, err
-		}
 		fe := useragent.NewRemoteFrontend(conn, ethereum.AccountManager())
 		xeth := xeth.New(stack, fe)
 		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec.JSON, xeth, stack)

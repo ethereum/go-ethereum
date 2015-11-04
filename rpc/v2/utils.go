@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"math/big"
 	"reflect"
 	"unicode"
 	"unicode/utf8"
@@ -70,10 +71,48 @@ func isPubSub(methodType reflect.Type) bool {
 	return isSubscriptionType(methodType.Out(0)) && isErrorType(methodType.Out(1))
 }
 
+// formatName will convert to first character to lower case
+func formatName(name string) string {
+	ret := []rune(name)
+	if len(ret) > 0 {
+		ret[0] = unicode.ToLower(ret[0])
+	}
+	return string(ret)
+}
+
+var bigIntType = reflect.TypeOf((*big.Int)(nil)).Elem()
+
+// Indication if this type should be serialized in hex
+func isHexNum(t reflect.Type) bool {
+	if t == nil {
+		return false
+	}
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	return t == bigIntType
+}
+
+var blockNumberType = reflect.TypeOf((*BlockNumber)(nil)).Elem()
+
+// Indication if the given block is a BlockNumber
+func isBlockNumber(t reflect.Type) bool {
+	if t == nil {
+		return false
+	}
+
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	return t == blockNumberType
+}
+
 // suitableCallbacks iterates over the methods of the given type. It will determine if a method satisfies the criteria
 // for a RPC callback or a subscription callback and adds it to the collection of callbacks or subscriptions. See server
 // documentation for a summary of these criteria.
-func suitableCallbacks(typ reflect.Type) (callbacks, subscriptions) {
+func suitableCallbacks(rcvr reflect.Value, typ reflect.Type) (callbacks, subscriptions) {
 	callbacks := make(callbacks)
 	subscriptions := make(subscriptions)
 
@@ -81,13 +120,14 @@ METHODS:
 	for m := 0; m < typ.NumMethod(); m++ {
 		method := typ.Method(m)
 		mtype := method.Type
-		mname := method.Name
+		mname := formatName(method.Name)
 		if method.PkgPath != "" { // method must be exported
 			continue
 		}
 
 		if isPubSub(mtype) {
 			var h callback
+			h.rcvr = rcvr
 			h.method = method
 			h.errPos = -1
 			h.isSubscribe = true
@@ -107,6 +147,7 @@ METHODS:
 		}
 
 		var h callback
+		h.rcvr = rcvr
 		h.method = method
 		numIn := mtype.NumIn()
 
