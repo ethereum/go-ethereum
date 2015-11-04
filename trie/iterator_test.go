@@ -19,7 +19,7 @@ package trie
 import (
 	"testing"
 	
-	"github.com/ethereum/go-ethereum/core/access"
+	"github.com/ethereum/go-ethereum/les/access"
 )
 
 func TestIterator(t *testing.T) {

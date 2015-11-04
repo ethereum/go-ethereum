@@ -19,7 +19,7 @@ package trie
 import (
 	"bytes"
 
-	"github.com/ethereum/go-ethereum/core/access"
+	"github.com/ethereum/go-ethereum/les/access"
 )
 
 type Iterator struct {

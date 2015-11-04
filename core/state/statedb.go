@@ -22,7 +22,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/core/access"
+	"github.com/ethereum/go-ethereum/les/access"
+	"github.com/ethereum/go-ethereum/les/requests"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -56,7 +57,7 @@ type StateDB struct {
 // Create a new state from a given trie
 //  When ODR is used, context is specified when creating/copying a state.
 func New(root common.Hash, ca *access.ChainAccess, ctx *access.OdrContext) (*StateDB, error) {
-	tr, err := trie.NewSecure(root, ca.Db(), NewTrieAccess(ca, root, ca.Db()))
+	tr, err := trie.NewSecure(root, ca.Db(), requests.NewTrieAccess(ca, root, ca.Db()))
 	if err != nil {
 		glog.Errorf("can't create state trie with root %x: %v", root[:], err)
 		return nil, err

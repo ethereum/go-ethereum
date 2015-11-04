@@ -6,9 +6,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/access"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/les/access"
+	"github.com/ethereum/go-ethereum/les/requests"
 )
 
 var testBankSecureTrieKey = secAddr(testBankAddress)
@@ -19,31 +19,30 @@ func secAddr(addr common.Address) []byte {
 	return sha.Sum(nil)
 }
 
-
 type accessTestFn func(ca *access.ChainAccess, bc *core.BlockChain, bhash common.Hash) access.ObjectAccess
 
 func TestBlockAccessLes1(t *testing.T) { testAccess(t, 1, true, tfBlockAccess) }
 
 func tfBlockAccess(ca *access.ChainAccess, bc *core.BlockChain, bhash common.Hash) access.ObjectAccess {
-	return core.NewBlockAccess(ca.Db(), bhash)
+	return requests.NewBlockAccess(ca.Db(), bhash, core.GetHeader)
 }
 
 func TestReceiptsAccessLes1(t *testing.T) { testAccess(t, 1, true, tfReceiptsAccess) }
 
 func tfReceiptsAccess(ca *access.ChainAccess, bc *core.BlockChain, bhash common.Hash) access.ObjectAccess {
-	return core.NewReceiptsAccess(ca.Db(), bhash)
+	return requests.NewReceiptsAccess(ca.Db(), bhash, core.GetHeader, core.PutReceipts, core.PutBlockReceipts)
 }
 
 func TestTrieEntryAccessLes1(t *testing.T) { testAccess(t, 1, false, tfTrieEntryAccess) }
 
 func tfTrieEntryAccess(ca *access.ChainAccess, bc *core.BlockChain, bhash common.Hash) access.ObjectAccess {
-	return state.NewTrieEntryAccess(bc.GetHeader(bhash).Root, ca.Db(), testBankSecureTrieKey)
+	return requests.NewTrieEntryAccess(bc.GetHeader(bhash).Root, ca.Db(), testBankSecureTrieKey)
 }
 
 func TestNodeDataAccessLes1(t *testing.T) { testAccess(t, 1, true, tfNodeDataAccess) }
 
 func tfNodeDataAccess(ca *access.ChainAccess, bc *core.BlockChain, bhash common.Hash) access.ObjectAccess {
-	return state.NewNodeDataAccess(ca.Db(), bc.GetHeader(bhash).Root)
+	return requests.NewNodeDataAccess(ca.Db(), bc.GetHeader(bhash).Root)
 }
 
 func testAccess(t *testing.T, protocol int, shouldCache bool, fn accessTestFn) {
@@ -85,7 +84,7 @@ func testAccess(t *testing.T, protocol int, shouldCache bool, fn accessTestFn) {
 	test(5)
 	lca.UnregisterPeer(lpeer.id)
 	if shouldCache {
-	// still expect all retrievals to pass, now data should be cached locally
+		// still expect all retrievals to pass, now data should be cached locally
 		test(5)
 	}
 }

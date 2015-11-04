@@ -23,7 +23,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
+	"github.com/ethereum/go-ethereum/les/access"
+	"github.com/ethereum/go-ethereum/les/requests"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
@@ -186,9 +187,9 @@ func GetHeader(db ethdb.Database, hash common.Hash) *types.Header {
 // GetBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
 func GetBodyRLP(ca *access.ChainAccess, hash common.Hash, ctx *access.OdrContext) rlp.RawValue {
 	//fmt.Println("request block %v", hash)
-	r := NewBlockAccess(ca.Db(), hash)
+	r := requests.NewBlockAccess(ca.Db(), hash, GetHeader)
 	ca.Retrieve(r, ctx)
-	return r.rlp
+	return r.GetRlp()
 }
 
 // GetBody retrieves the block body (transactons, uncles) corresponding to the

@@ -14,18 +14,24 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package requests
 
 import (
 	"bytes"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
+)
+
+var (
+	blockReceiptsPre = []byte("receipts-block-")
+	blockPrefix      = []byte("block-")
+	bodySuffix       = []byte("-body")
 )
 
 // ODR request type for block bodies, see access.ObjectAccess interface
@@ -33,10 +39,17 @@ type BlockAccess struct {
 	db        ethdb.Database
 	blockHash common.Hash
 	rlp       []byte
+	getHeader getHeaderFn
 }
 
-func NewBlockAccess(db ethdb.Database, blockHash common.Hash) *BlockAccess {
-	return &BlockAccess{db: db, blockHash: blockHash}
+type getHeaderFn func(db ethdb.Database, hash common.Hash) *types.Header
+
+func NewBlockAccess(db ethdb.Database, blockHash common.Hash, getHeader getHeaderFn) *BlockAccess {
+	return &BlockAccess{db: db, blockHash: blockHash, getHeader: getHeader}
+}
+
+func (self *BlockAccess) GetRlp() []byte {
+	return self.rlp
 }
 
 func (self *BlockAccess) Request(peer *access.Peer) error {
@@ -56,7 +69,7 @@ func (self *BlockAccess) Valid(msg *access.Msg) bool {
 		return false
 	}
 	body := bodies[0]
-	header := GetHeader(self.db, self.blockHash)
+	header := self.getHeader(self.db, self.blockHash)
 	if header == nil {
 		glog.V(access.LogLevel).Infof("ODR: header not found for block %08x", self.blockHash[:4])
 		return false
@@ -94,13 +107,23 @@ func (self *BlockAccess) DbPut() {
 
 // ODR request type for block receipts by block hash, see access.ObjectAccess interface
 type ReceiptsAccess struct {
-	db        ethdb.Database
-	blockHash common.Hash
-	receipts  types.Receipts
+	db               ethdb.Database
+	blockHash        common.Hash
+	receipts         types.Receipts
+	getHeader        getHeaderFn
+	putReceipts      putReceiptsFn
+	putBlockReceipts putBlockReceiptsFn
 }
 
-func NewReceiptsAccess(db ethdb.Database, blockHash common.Hash) *ReceiptsAccess {
-	return &ReceiptsAccess{db: db, blockHash: blockHash}
+type putReceiptsFn func(db ethdb.Database, receipts types.Receipts) error
+type putBlockReceiptsFn func(db ethdb.Database, hash common.Hash, receipts types.Receipts) error
+
+func NewReceiptsAccess(db ethdb.Database, blockHash common.Hash, getHeader getHeaderFn, putReceipts putReceiptsFn, putBlockReceipts putBlockReceiptsFn) *ReceiptsAccess {
+	return &ReceiptsAccess{db: db, blockHash: blockHash, getHeader: getHeader, putReceipts: putReceipts, putBlockReceipts: putBlockReceipts}
+}
+
+func (self *ReceiptsAccess) GetReceipts() types.Receipts {
+	return self.receipts
 }
 
 func (self *ReceiptsAccess) Request(peer *access.Peer) error {
@@ -120,7 +143,7 @@ func (self *ReceiptsAccess) Valid(msg *access.Msg) bool {
 		return false
 	}
 	hash := types.DeriveSha(receipts[0])
-	header := GetHeader(self.db, self.blockHash)
+	header := self.getHeader(self.db, self.blockHash)
 	if header == nil {
 		glog.V(access.LogLevel).Infof("ODR: header not found for block %08x", self.blockHash[:4])
 		return false
@@ -152,6 +175,6 @@ func (self *ReceiptsAccess) DbGet() bool {
 }
 
 func (self *ReceiptsAccess) DbPut() {
-	PutBlockReceipts(self.db, self.blockHash, self.receipts)
-	PutReceipts(self.db, self.receipts)
+	self.putBlockReceipts(self.db, self.blockHash, self.receipts)
+	self.putReceipts(self.db, self.receipts)
 }

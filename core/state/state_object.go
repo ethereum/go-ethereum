@@ -22,7 +22,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
+	"github.com/ethereum/go-ethereum/les/access"
+	"github.com/ethereum/go-ethereum/les/requests"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -102,7 +103,7 @@ func NewStateObjectFromBytes(address common.Address, data []byte, ca *access.Cha
 		glog.Errorf("can't decode state object %x: %v", address, err)
 		return nil
 	}
-	trie, err := trie.NewSecure(extobject.Root, ca.Db(), NewTrieAccess(ca, extobject.Root, ca.Db()))
+	trie, err := trie.NewSecure(extobject.Root, ca.Db(), requests.NewTrieAccess(ca, extobject.Root, ca.Db()))
 	if err != nil {
 		// TODO: bubble this up or panic
 		glog.Errorf("can't create account trie with root %x: %v", extobject.Root[:], err)
@@ -115,7 +116,7 @@ func NewStateObjectFromBytes(address common.Address, data []byte, ca *access.Cha
 	object.codeHash = extobject.CodeHash
 	object.trie = trie
 	object.storage = make(map[string]common.Hash)
-	object.code = RetrieveNodeData(ca, common.BytesToHash(extobject.CodeHash), ctx)
+	object.code = requests.RetrieveNodeData(ca, common.BytesToHash(extobject.CodeHash), ctx)
 	return object
 }
 
