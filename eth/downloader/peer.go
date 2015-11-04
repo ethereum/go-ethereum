@@ -28,8 +28,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"gopkg.in/fatih/set.v0"
 )
+
+// Maximum number of entries allowed on the list or lacking items.
+const maxLackingHashes = 4096
 
 // Hash and block fetchers belonging to eth/61 and below
 type relativeHashFetcherFn func(common.Hash) error
@@ -67,7 +69,8 @@ type peer struct {
 	receiptStarted time.Time // Time instance when the last receipt fetch was started
 	stateStarted   time.Time // Time instance when the last node data fetch was started
 
-	ignored *set.Set // Set of hashes not to request (didn't have previously)
+	lacking     map[common.Hash]struct{} // Set of hashes not to request (didn't have previously)
+	lackingLock sync.RWMutex             // Lock protecting the lacking hashes list
 
 	getRelHashes relativeHashFetcherFn // [eth/61] Method to retrieve a batch of hashes from an origin hash
 	getAbsHashes absoluteHashFetcherFn // [eth/61] Method to retrieve a batch of hashes from an absolute position
@@ -95,7 +98,7 @@ func newPeer(id string, version int, head common.Hash,
 		blockCapacity:   1,
 		receiptCapacity: 1,
 		stateCapacity:   1,
-		ignored:         set.New(),
+		lacking:         make(map[common.Hash]struct{}),
 
 		getRelHashes: getRelHashes,
 		getAbsHashes: getAbsHashes,
@@ -119,7 +122,10 @@ func (p *peer) Reset() {
 	atomic.StoreInt32(&p.blockCapacity, 1)
 	atomic.StoreInt32(&p.receiptCapacity, 1)
 	atomic.StoreInt32(&p.stateCapacity, 1)
-	p.ignored.Clear()
+
+	p.lackingLock.Lock()
+	p.lacking = make(map[common.Hash]struct{})
+	p.lackingLock.Unlock()
 }
 
 // Fetch61 sends a block retrieval request to the remote peer.
@@ -305,13 +311,42 @@ func (p *peer) Demote() {
 	}
 }
 
+// MarkLacking appends a new entity to the set of items (blocks, receipts, states)
+// that a peer is known not to have (i.e. have been requested before). If the
+// set reaches its maximum allowed capacity, items are randomly dropped off.
+func (p *peer) MarkLacking(hash common.Hash) {
+	p.lackingLock.Lock()
+	defer p.lackingLock.Unlock()
+
+	for len(p.lacking) >= maxLackingHashes {
+		for drop, _ := range p.lacking {
+			delete(p.lacking, drop)
+			break
+		}
+	}
+	p.lacking[hash] = struct{}{}
+}
+
+// Lacks retrieves whether the hash of a blockchain item is on the peers lacking
+// list (i.e. whether we know that the peer does not have it).
+func (p *peer) Lacks(hash common.Hash) bool {
+	p.lackingLock.RLock()
+	defer p.lackingLock.RUnlock()
+
+	_, ok := p.lacking[hash]
+	return ok
+}
+
 // String implements fmt.Stringer.
 func (p *peer) String() string {
+	p.lackingLock.RLock()
+	defer p.lackingLock.RUnlock()
+
 	return fmt.Sprintf("Peer %s [%s]", p.id,
 		fmt.Sprintf("reputation %3d, ", atomic.LoadInt32(&p.rep))+
 			fmt.Sprintf("block cap %3d, ", atomic.LoadInt32(&p.blockCapacity))+
 			fmt.Sprintf("receipt cap %3d, ", atomic.LoadInt32(&p.receiptCapacity))+
-			fmt.Sprintf("ignored %4d", p.ignored.Size()),
+			fmt.Sprintf("lacking %4d", len(p.lacking)),
 	)
 }
 

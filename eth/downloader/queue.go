@@ -501,7 +501,7 @@ func (q *queue) reserveHashes(p *peer, count int, taskQueue *prque.Prque, taskGe
 
 	for proc := 0; (allowance == 0 || proc < allowance) && len(send) < count && !taskQueue.Empty(); proc++ {
 		hash, priority := taskQueue.Pop()
-		if p.ignored.Has(hash) {
+		if p.Lacks(hash.(common.Hash)) {
 			skip[hash.(common.Hash)] = int(priority)
 		} else {
 			send[hash.(common.Hash)] = int(priority)
@@ -607,7 +607,7 @@ func (q *queue) reserveHeaders(p *peer, count int, taskPool map[common.Hash]*typ
 			continue
 		}
 		// Otherwise unless the peer is known not to have the data, add to the retrieve list
-		if p.ignored.Has(header.Hash()) {
+		if p.Lacks(header.Hash()) {
 			skip = append(skip, header)
 		} else {
 			send = append(send, header)
@@ -781,7 +781,7 @@ func (q *queue) DeliverBlocks(id string, blocks []*types.Block) error {
 	// If no blocks were retrieved, mark them as unavailable for the origin peer
 	if len(blocks) == 0 {
 		for hash, _ := range request.Hashes {
-			request.Peer.ignored.Add(hash)
+			request.Peer.MarkLacking(hash)
 		}
 	}
 	// Iterate over the downloaded blocks and add each of them
@@ -877,8 +877,8 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQ
 
 	// If no data items were retrieved, mark them as unavailable for the origin peer
 	if results == 0 {
-		for hash, _ := range request.Headers {
-			request.Peer.ignored.Add(hash)
+		for _, header := range request.Headers {
+			request.Peer.MarkLacking(header.Hash())
 		}
 	}
 	// Assemble each of the results with their headers and retrieved data parts
@@ -944,7 +944,7 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(error, i
 	// If no data was retrieved, mark their hashes as unavailable for the origin peer
 	if len(data) == 0 {
 		for hash, _ := range request.Hashes {
-			request.Peer.ignored.Add(hash)
+			request.Peer.MarkLacking(hash)
 		}
 	}
 	// Iterate over the downloaded data and verify each of them
