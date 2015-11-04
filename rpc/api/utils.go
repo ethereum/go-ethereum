@@ -165,7 +165,7 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 	for i, name := range names {
 		switch strings.ToLower(strings.TrimSpace(name)) {
 		case shared.AdminApiName:
-			apis[i] = NewAdminApi(xeth, eth, codec)
+			apis[i] = NewAdminApi(xeth, eth.Network(), eth, codec)
 		case shared.DebugApiName:
 			apis[i] = NewDebugApi(xeth, eth, codec)
 		case shared.DbApiName:
