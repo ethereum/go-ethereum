@@ -542,10 +542,10 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int, i
 func blockRecovery(ctx *cli.Context) {
 	utils.CheckLegalese(utils.MustDataDir(ctx))
 
-	arg := ctx.Args().First()
-	if len(ctx.Args()) < 1 && len(arg) > 0 {
+	if len(ctx.Args()) < 1 {
 		glog.Fatal("recover requires block number or hash")
 	}
+	arg := ctx.Args().First()
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	utils.CheckLegalese(cfg.DataDir)
