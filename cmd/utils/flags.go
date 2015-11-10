@@ -150,11 +150,11 @@ var (
 	}
 	FastSyncFlag = cli.BoolFlag{
 		Name:  "fast",
-		Usage: "Enables fast syncing through state downloads",
+		Usage: "Enable fast syncing through state downloads",
 	}
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
-		Usage: "Reduce KDF memory & CPU usage at some expense of KDF strength",
+		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
 	// Miner settings
 	// TODO: refactor CPU vs GPU mining flags
