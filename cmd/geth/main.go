@@ -305,6 +305,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.OlympicFlag,
 		utils.FastSyncFlag,
 		utils.CacheFlag,
+		utils.LightKDFFlag,
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
