@@ -169,17 +169,7 @@ func (dl *downloadTester) sync(id string, td *big.Int, mode SyncMode) error {
 		}
 	}
 	dl.lock.RUnlock()
-
-	err := dl.downloader.synchronise(id, hash, td, mode)
-	for {
-		// If the queue is empty and processing stopped, break
-		if dl.downloader.queue.Idle() && atomic.LoadInt32(&dl.downloader.processing) == 0 {
-			break
-		}
-		// Otherwise sleep a bit and retry
-		time.Sleep(time.Millisecond)
-	}
-	return err
+	return dl.downloader.synchronise(id, hash, td, mode)
 }
 
 // hasHeader checks if a header is present in the testers canonical chain.
@@ -757,8 +747,8 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 		for start := time.Now(); time.Since(start) < time.Second; {
 			time.Sleep(25 * time.Millisecond)
 
-			tester.lock.RLock()
-			tester.downloader.queue.lock.RLock()
+			tester.lock.Lock()
+			tester.downloader.queue.lock.Lock()
 			cached = len(tester.downloader.queue.blockDonePool)
 			if mode == FastSync {
 				if receipts := len(tester.downloader.queue.receiptDonePool); receipts < cached {
@@ -769,8 +759,8 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 			}
 			frozen = int(atomic.LoadUint32(&blocked))
 			retrieved = len(tester.ownBlocks)
-			tester.downloader.queue.lock.RUnlock()
-			tester.lock.RUnlock()
+			tester.downloader.queue.lock.Unlock()
+			tester.lock.Unlock()
 
 			if cached == blockCacheLimit || retrieved+cached+frozen == targetBlocks+1 {
 				break
@@ -1209,25 +1199,26 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
 		result error
 		drop   bool
 	}{
-		{nil, false},                  // Sync succeeded, all is well
-		{errBusy, false},              // Sync is already in progress, no problem
-		{errUnknownPeer, false},       // Peer is unknown, was already dropped, don't double drop
-		{errBadPeer, true},            // Peer was deemed bad for some reason, drop it
-		{errStallingPeer, true},       // Peer was detected to be stalling, drop it
-		{errNoPeers, false},           // No peers to download from, soft race, no issue
-		{errPendingQueue, false},      // There are blocks still cached, wait to exhaust, no issue
-		{errTimeout, true},            // No hashes received in due time, drop the peer
-		{errEmptyHashSet, true},       // No hashes were returned as a response, drop as it's a dead end
-		{errEmptyHeaderSet, true},     // No headers were returned as a response, drop as it's a dead end
-		{errPeersUnavailable, true},   // Nobody had the advertised blocks, drop the advertiser
-		{errInvalidChain, true},       // Hash chain was detected as invalid, definitely drop
-		{errInvalidBlock, false},      // A bad peer was detected, but not the sync origin
-		{errInvalidBody, false},       // A bad peer was detected, but not the sync origin
-		{errInvalidReceipt, false},    // A bad peer was detected, but not the sync origin
-		{errCancelHashFetch, false},   // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelBlockFetch, false},  // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelHeaderFetch, false}, // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelBodyFetch, false},   // Synchronisation was canceled, origin may be innocent, don't drop
+		{nil, false},                   // Sync succeeded, all is well
+		{errBusy, false},               // Sync is already in progress, no problem
+		{errUnknownPeer, false},        // Peer is unknown, was already dropped, don't double drop
+		{errBadPeer, true},             // Peer was deemed bad for some reason, drop it
+		{errStallingPeer, true},        // Peer was detected to be stalling, drop it
+		{errNoPeers, false},            // No peers to download from, soft race, no issue
+		{errTimeout, true},             // No hashes received in due time, drop the peer
+		{errEmptyHashSet, true},        // No hashes were returned as a response, drop as it's a dead end
+		{errEmptyHeaderSet, true},      // No headers were returned as a response, drop as it's a dead end
+		{errPeersUnavailable, true},    // Nobody had the advertised blocks, drop the advertiser
+		{errInvalidChain, true},        // Hash chain was detected as invalid, definitely drop
+		{errInvalidBlock, false},       // A bad peer was detected, but not the sync origin
+		{errInvalidBody, false},        // A bad peer was detected, but not the sync origin
+		{errInvalidReceipt, false},     // A bad peer was detected, but not the sync origin
+		{errCancelHashFetch, false},    // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelBlockFetch, false},   // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelHeaderFetch, false},  // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelBodyFetch, false},    // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelReceiptFetch, false}, // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelProcessing, false},   // Synchronisation was canceled, origin may be innocent, don't drop
 	}
 	// Run the tests and check disconnection status
 	tester := newTester()
@@ -1539,5 +1530,52 @@ func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	// Check final progress after successful sync
 	if origin, current, latest := tester.downloader.Progress(); origin > uint64(targetBlocks) || current != uint64(targetBlocks) || latest != uint64(targetBlocks) {
 		t.Fatalf("Final progress mismatch: have %v/%v/%v, want 0-%v/%v/%v", origin, current, latest, targetBlocks, targetBlocks, targetBlocks)
+	}
+}
+
+// This test reproduces an issue where unexpected deliveries would
+// block indefinitely if they arrived at the right time.
+func TestDeliverHeadersHang62(t *testing.T)      { testDeliverHeadersHang(t, 62, FullSync) }
+func TestDeliverHeadersHang63Full(t *testing.T)  { testDeliverHeadersHang(t, 63, FullSync) }
+func TestDeliverHeadersHang63Fast(t *testing.T)  { testDeliverHeadersHang(t, 63, FastSync) }
+func TestDeliverHeadersHang64Full(t *testing.T)  { testDeliverHeadersHang(t, 64, FullSync) }
+func TestDeliverHeadersHang64Fast(t *testing.T)  { testDeliverHeadersHang(t, 64, FastSync) }
+func TestDeliverHeadersHang64Light(t *testing.T) { testDeliverHeadersHang(t, 64, LightSync) }
+
+func testDeliverHeadersHang(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+	hashes, headers, blocks, receipts := makeChain(5, 0, genesis, nil)
+	fakeHeads := []*types.Header{{}, {}, {}, {}}
+	for i := 0; i < 200; i++ {
+		tester := newTester()
+		tester.newPeer("peer", protocol, hashes, headers, blocks, receipts)
+		// Whenever the downloader requests headers, flood it with
+		// a lot of unrequested header deliveries.
+		tester.downloader.peers.peers["peer"].getAbsHeaders = func(from uint64, count, skip int, reverse bool) error {
+			deliveriesDone := make(chan struct{}, 500)
+			for i := 0; i < cap(deliveriesDone); i++ {
+				peer := fmt.Sprintf("fake-peer%d", i)
+				go func() {
+					tester.downloader.DeliverHeaders(peer, fakeHeads)
+					deliveriesDone <- struct{}{}
+				}()
+			}
+			// Deliver the actual requested headers.
+			impl := tester.peerGetAbsHeadersFn("peer", 0)
+			go impl(from, count, skip, reverse)
+			// None of the extra deliveries should block.
+			timeout := time.After(5 * time.Second)
+			for i := 0; i < cap(deliveriesDone); i++ {
+				select {
+				case <-deliveriesDone:
+				case <-timeout:
+					panic("blocked")
+				}
+			}
+			return nil
+		}
+		if err := tester.sync("peer", nil, mode); err != nil {
+			t.Errorf("sync failed: %v", err)
+		}
 	}
 }
