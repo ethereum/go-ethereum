@@ -39,7 +39,6 @@ package secp256k1
 import "C"
 
 import (
-	"bytes"
 	"errors"
 	"unsafe"
 
@@ -63,6 +62,12 @@ func init() {
 	// around 20 ms on a modern CPU.
 	context = C.secp256k1_context_create(3) // SECP256K1_START_SIGN | SECP256K1_START_VERIFY
 }
+
+var (
+	ErrInvalidMsgLen       = errors.New("invalid message length for signature recovery")
+	ErrInvalidSignatureLen = errors.New("invalid signature length")
+	ErrInvalidRecoveryID   = errors.New("invalid signature recovery id")
+)
 
 func GenerateKeyPair() ([]byte, []byte) {
 	var seckey []byte = randentropy.GetEntropyCSPRNG(32)
@@ -177,69 +182,20 @@ func VerifySeckeyValidity(seckey []byte) error {
 	return nil
 }
 
-func VerifySignatureValidity(sig []byte) bool {
-	//64+1
-	if len(sig) != 65 {
-		return false
-	}
-	//malleability check, highest bit must be 1
-	if (sig[32] & 0x80) == 0x80 {
-		return false
-	}
-	//recovery id check
-	if sig[64] >= 4 {
-		return false
-	}
-
-	return true
-}
-
-//for compressed signatures, does not need pubkey
-func VerifySignature(msg []byte, sig []byte, pubkey1 []byte) error {
-	if msg == nil || sig == nil || pubkey1 == nil {
-		return errors.New("inputs must be non-nil")
-	}
-	if len(sig) != 65 {
-		return errors.New("invalid signature length")
-	}
-	if len(pubkey1) != 65 {
-		return errors.New("Invalid public key length")
-	}
-
-	//to enforce malleability, highest bit of S must be 0
-	//S starts at 32nd byte
-	if (sig[32] & 0x80) == 0x80 { //highest bit must be 1
-		return errors.New("Signature not malleable")
-	}
-
-	if sig[64] >= 4 {
-		return errors.New("Recover byte invalid")
-	}
-
-	// if pubkey recovered, signature valid
-	pubkey2, err := RecoverPubkey(msg, sig)
-	if err != nil {
-		return err
-	}
-	if len(pubkey2) != 65 {
-		return errors.New("Invalid recovered public key length")
-	}
-	if !bytes.Equal(pubkey1, pubkey2) {
-		return errors.New("Public key does not match recovered public key")
-	}
-
-	return nil
-}
-
-// recovers a public key from the signature
+// RecoverPubkey returns the the public key of the signer.
+// msg must be the 32-byte hash of the message to be signed.
+// sig must be a 65-byte compact ECDSA signature containing the
+// recovery id as the last element.
 func RecoverPubkey(msg []byte, sig []byte) ([]byte, error) {
-	if len(sig) != 65 {
-		return nil, errors.New("Invalid signature length")
+	if len(msg) != 32 {
+		return nil, ErrInvalidMsgLen
+	}
+	if err := checkSignature(sig); err != nil {
+		return nil, err
 	}
 
 	msg_ptr := (*C.uchar)(unsafe.Pointer(&msg[0]))
 	sig_ptr := (*C.uchar)(unsafe.Pointer(&sig[0]))
-
 	pubkey := make([]byte, 64)
 	/*
 		this slice is used for both the recoverable signature and the
@@ -248,17 +204,15 @@ func RecoverPubkey(msg []byte, sig []byte) ([]byte, error) {
 		pubkey recovery is one bottleneck during load in Ethereum
 	*/
 	bytes65 := make([]byte, 65)
-
 	pubkey_ptr := (*C.secp256k1_pubkey)(unsafe.Pointer(&pubkey[0]))
 	recoverable_sig_ptr := (*C.secp256k1_ecdsa_recoverable_signature)(unsafe.Pointer(&bytes65[0]))
-
 	recid := C.int(sig[64])
+
 	ret := C.secp256k1_ecdsa_recoverable_signature_parse_compact(
 		context,
 		recoverable_sig_ptr,
 		sig_ptr,
 		recid)
-
 	if ret == C.int(0) {
 		return nil, errors.New("Failed to parse signature")
 	}
@@ -269,20 +223,28 @@ func RecoverPubkey(msg []byte, sig []byte) ([]byte, error) {
 		recoverable_sig_ptr,
 		msg_ptr,
 	)
-
 	if ret == C.int(0) {
 		return nil, errors.New("Failed to recover public key")
-	} else {
-		serialized_pubkey_ptr := (*C.uchar)(unsafe.Pointer(&bytes65[0]))
-
-		var output_len C.size_t
-		C.secp256k1_ec_pubkey_serialize( // always returns 1
-			context,
-			serialized_pubkey_ptr,
-			&output_len,
-			pubkey_ptr,
-			0, // SECP256K1_EC_COMPRESSED
-		)
-		return bytes65, nil
 	}
+
+	serialized_pubkey_ptr := (*C.uchar)(unsafe.Pointer(&bytes65[0]))
+	var output_len C.size_t
+	C.secp256k1_ec_pubkey_serialize( // always returns 1
+		context,
+		serialized_pubkey_ptr,
+		&output_len,
+		pubkey_ptr,
+		0, // SECP256K1_EC_COMPRESSED
+	)
+	return bytes65, nil
+}
+
+func checkSignature(sig []byte) error {
+	if len(sig) != 65 {
+		return ErrInvalidSignatureLen
+	}
+	if sig[64] >= 4 {
+		return ErrInvalidRecoveryID
+	}
+	return nil
 }

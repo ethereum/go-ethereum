@@ -56,6 +56,17 @@ func TestSignatureValidity(t *testing.T) {
 	}
 }
 
+func TestInvalidRecoveryID(t *testing.T) {
+	_, seckey := GenerateKeyPair()
+	msg := randentropy.GetEntropyCSPRNG(32)
+	sig, _ := Sign(msg, seckey)
+	sig[64] = 99
+	_, err := RecoverPubkey(msg, sig)
+	if err != ErrInvalidRecoveryID {
+		t.Fatalf("got %q, want %q", err, ErrInvalidRecoveryID)
+	}
+}
+
 func TestSignAndRecover(t *testing.T) {
 	pubkey1, seckey := GenerateKeyPair()
 	msg := randentropy.GetEntropyCSPRNG(32)
@@ -69,10 +80,6 @@ func TestSignAndRecover(t *testing.T) {
 	}
 	if !bytes.Equal(pubkey1, pubkey2) {
 		t.Errorf("pubkey mismatch: want: %x have: %x", pubkey1, pubkey2)
-	}
-	err = VerifySignature(msg, sig, pubkey1)
-	if err != nil {
-		t.Errorf("signature verification error: %s", err)
 	}
 }
 
