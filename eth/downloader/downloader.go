@@ -492,15 +492,6 @@ func (d *Downloader) fetchHeight61(p *peer) (uint64, error) {
 		case <-d.cancelCh:
 			return 0, errCancelBlockFetch
 
-		case <-d.headerCh:
-			// Out of bounds eth/62 block headers received, ignore them
-
-		case <-d.bodyCh:
-			// Out of bounds eth/62 block bodies received, ignore them
-
-		case <-d.hashCh:
-			// Out of bounds hashes received, ignore them
-
 		case packet := <-d.blockCh:
 			// Discard anything not from the origin peer
 			if packet.PeerId() != p.id {
@@ -518,6 +509,16 @@ func (d *Downloader) fetchHeight61(p *peer) (uint64, error) {
 		case <-timeout:
 			glog.V(logger.Debug).Infof("%v: head block timeout", p)
 			return 0, errTimeout
+
+		case <-d.hashCh:
+			// Out of bounds hashes received, ignore them
+
+		case <-d.headerCh:
+		case <-d.bodyCh:
+		case <-d.stateCh:
+		case <-d.receiptCh:
+			// Ignore eth/{62,63} packets because this is eth/61.
+			// These can arrive as a late delivery from a previous sync.
 		}
 	}
 }
@@ -568,18 +569,19 @@ func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
 				}
 			}
 
+		case <-timeout:
+			glog.V(logger.Debug).Infof("%v: head hash timeout", p)
+			return 0, errTimeout
+
 		case <-d.blockCh:
 			// Out of bounds blocks received, ignore them
 
 		case <-d.headerCh:
-			// Out of bounds eth/62 block headers received, ignore them
-
 		case <-d.bodyCh:
-			// Out of bounds eth/62 block bodies received, ignore them
-
-		case <-timeout:
-			glog.V(logger.Debug).Infof("%v: head hash timeout", p)
-			return 0, errTimeout
+		case <-d.stateCh:
+		case <-d.receiptCh:
+			// Ignore eth/{62,63} packets because this is eth/61.
+			// These can arrive as a late delivery from a previous sync.
 		}
 	}
 	// If the head fetch already found an ancestor, return
@@ -628,18 +630,19 @@ func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
 				}
 				start = check
 
+			case <-timeout:
+				glog.V(logger.Debug).Infof("%v: search hash timeout", p)
+				return 0, errTimeout
+
 			case <-d.blockCh:
 				// Out of bounds blocks received, ignore them
 
 			case <-d.headerCh:
-				// Out of bounds eth/62 block headers received, ignore them
-
 			case <-d.bodyCh:
-				// Out of bounds eth/62 block bodies received, ignore them
-
-			case <-timeout:
-				glog.V(logger.Debug).Infof("%v: search hash timeout", p)
-				return 0, errTimeout
+			case <-d.stateCh:
+			case <-d.receiptCh:
+				// Ignore eth/{62,63} packets because this is eth/61.
+				// These can arrive as a late delivery from a previous sync.
 			}
 		}
 	}
@@ -672,12 +675,6 @@ func (d *Downloader) fetchHashes61(p *peer, td *big.Int, from uint64) error {
 		select {
 		case <-d.cancelCh:
 			return errCancelHashFetch
-
-		case <-d.headerCh:
-			// Out of bounds eth/62 block headers received, ignore them
-
-		case <-d.bodyCh:
-			// Out of bounds eth/62 block bodies received, ignore them
 
 		case packet := <-d.hashCh:
 			// Make sure the active peer is giving us the hashes
@@ -747,6 +744,13 @@ func (d *Downloader) fetchHashes61(p *peer, td *big.Int, from uint64) error {
 			glog.V(logger.Debug).Infof("%v: hash request timed out", p)
 			hashTimeoutMeter.Mark(1)
 			return errTimeout
+
+		case <-d.headerCh:
+		case <-d.bodyCh:
+		case <-d.stateCh:
+		case <-d.receiptCh:
+			// Ignore eth/{62,63} packets because this is eth/61.
+			// These can arrive as a late delivery from a previous sync.
 		}
 	}
 }
@@ -770,12 +774,6 @@ func (d *Downloader) fetchBlocks61(from uint64) error {
 		select {
 		case <-d.cancelCh:
 			return errCancelBlockFetch
-
-		case <-d.headerCh:
-			// Out of bounds eth/62 block headers received, ignore them
-
-		case <-d.bodyCh:
-			// Out of bounds eth/62 block bodies received, ignore them
 
 		case packet := <-d.blockCh:
 			// If the peer was previously banned and failed to deliver it's pack
@@ -904,6 +902,13 @@ func (d *Downloader) fetchBlocks61(from uint64) error {
 			if !throttled && !d.queue.InFlightBlocks() && len(idles) == total {
 				return errPeersUnavailable
 			}
+
+		case <-d.headerCh:
+		case <-d.bodyCh:
+		case <-d.stateCh:
+		case <-d.receiptCh:
+			// Ignore eth/{62,63} packets because this is eth/61.
+			// These can arrive as a late delivery from a previous sync.
 		}
 	}
 }
@@ -936,18 +941,19 @@ func (d *Downloader) fetchHeight(p *peer) (uint64, error) {
 			}
 			return headers[0].Number.Uint64(), nil
 
-		case <-d.bodyCh:
-			// Out of bounds block bodies received, ignore them
-
-		case <-d.hashCh:
-			// Out of bounds eth/61 hashes received, ignore them
-
-		case <-d.blockCh:
-			// Out of bounds eth/61 blocks received, ignore them
-
 		case <-timeout:
 			glog.V(logger.Debug).Infof("%v: head header timeout", p)
 			return 0, errTimeout
+
+		case <-d.bodyCh:
+		case <-d.stateCh:
+		case <-d.receiptCh:
+			// Out of bounds delivery, ignore
+
+		case <-d.hashCh:
+		case <-d.blockCh:
+			// Ignore eth/61 packets because this is eth/62+.
+			// These can arrive as a late delivery from a previous sync.
 		}
 	}
 }
@@ -1003,18 +1009,19 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 				}
 			}
 
-		case <-d.bodyCh:
-			// Out of bounds block bodies received, ignore them
-
-		case <-d.hashCh:
-			// Out of bounds eth/61 hashes received, ignore them
-
-		case <-d.blockCh:
-			// Out of bounds eth/61 blocks received, ignore them
-
 		case <-timeout:
 			glog.V(logger.Debug).Infof("%v: head header timeout", p)
 			return 0, errTimeout
+
+		case <-d.bodyCh:
+		case <-d.stateCh:
+		case <-d.receiptCh:
+			// Out of bounds delivery, ignore
+
+		case <-d.hashCh:
+		case <-d.blockCh:
+			// Ignore eth/61 packets because this is eth/62+.
+			// These can arrive as a late delivery from a previous sync.
 		}
 	}
 	// If the head fetch already found an ancestor, return
@@ -1063,18 +1070,19 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 				}
 				start = check
 
-			case <-d.bodyCh:
-				// Out of bounds block bodies received, ignore them
-
-			case <-d.hashCh:
-				// Out of bounds eth/61 hashes received, ignore them
-
-			case <-d.blockCh:
-				// Out of bounds eth/61 blocks received, ignore them
-
 			case <-timeout:
 				glog.V(logger.Debug).Infof("%v: search header timeout", p)
 				return 0, errTimeout
+
+			case <-d.bodyCh:
+			case <-d.stateCh:
+			case <-d.receiptCh:
+				// Out of bounds delivery, ignore
+
+			case <-d.hashCh:
+			case <-d.blockCh:
+				// Ignore eth/61 packets because this is eth/62+.
+				// These can arrive as a late delivery from a previous sync.
 			}
 		}
 	}
@@ -1135,12 +1143,6 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 		select {
 		case <-d.cancelCh:
 			return errCancelHeaderFetch
-
-		case <-d.hashCh:
-			// Out of bounds eth/61 hashes received, ignore them
-
-		case <-d.blockCh:
-			// Out of bounds eth/61 blocks received, ignore them
 
 		case packet := <-d.headerCh:
 			// Make sure the active peer is giving us the headers
@@ -1263,6 +1265,11 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 				}
 			}
 			return nil
+
+		case <-d.hashCh:
+		case <-d.blockCh:
+			// Ignore eth/61 packets because this is eth/62+.
+			// These can arrive as a late delivery from a previous sync.
 		}
 	}
 }
@@ -1382,12 +1389,6 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 		select {
 		case <-d.cancelCh:
 			return errCancel
-
-		case <-d.hashCh:
-			// Out of bounds eth/61 hashes received, ignore them
-
-		case <-d.blockCh:
-			// Out of bounds eth/61 blocks received, ignore them
 
 		case packet := <-deliveryCh:
 			// If the peer was previously banned and failed to deliver it's pack
@@ -1529,6 +1530,11 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 			if !progressed && !throttled && !running && len(idles) == total && pending() > 0 {
 				return errPeersUnavailable
 			}
+
+		case <-d.hashCh:
+		case <-d.blockCh:
+			// Ignore eth/61 packets because this is eth/62+.
+			// These can arrive as a late delivery from a previous sync.
 		}
 	}
 }
