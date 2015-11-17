@@ -21,6 +21,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"syscall"
 
@@ -40,14 +41,17 @@ var (
 
 // Node represents a P2P node into which arbitrary services might be registered.
 type Node struct {
-	datadir string                        // Path to the currently used data directory
-	config  *p2p.Server                   // Configuration of the underlying P2P networking layer
-	stack   map[string]ServiceConstructor // Protocol stack registered into this node
-	emux    *event.TypeMux                // Event multiplexer used between the services of a stack
+	datadir  string         // Path to the currently used data directory
+	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
 
-	running  *p2p.Server        // Currently running P2P networking layer
-	services map[string]Service // Currently running services
+	serverConfig *p2p.Server // Configuration of the underlying P2P networking layer
+	server       *p2p.Server // Currently running P2P networking layer
 
+	serviceIndex map[string]ServiceConstructor // Set of services currently registered in the node
+	serviceOrder []string                      // Service construction order to handle dependencies
+	services     map[string]Service            // Currently running services
+
+	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
 }
 
@@ -66,7 +70,7 @@ func New(conf *Config) (*Node, error) {
 	}
 	return &Node{
 		datadir: conf.DataDir,
-		config: &p2p.Server{
+		serverConfig: &p2p.Server{
 			PrivateKey:      conf.NodeKey(),
 			Name:            conf.Name,
 			Discovery:       !conf.NoDiscovery,
@@ -81,8 +85,9 @@ func New(conf *Config) (*Node, error) {
 			MaxPeers:        conf.MaxPeers,
 			MaxPendingPeers: conf.MaxPendingPeers,
 		},
-		stack: make(map[string]ServiceConstructor),
-		emux:  new(event.TypeMux),
+		serviceIndex: make(map[string]ServiceConstructor),
+		serviceOrder: []string{},
+		eventmux:     new(event.TypeMux),
 	}, nil
 }
 
@@ -92,14 +97,15 @@ func (n *Node) Register(id string, constructor ServiceConstructor) error {
 	defer n.lock.Unlock()
 
 	// Short circuit if the node is running or if the id is taken
-	if n.running != nil {
+	if n.server != nil {
 		return ErrNodeRunning
 	}
-	if _, ok := n.stack[id]; ok {
+	if _, ok := n.serviceIndex[id]; ok {
 		return ErrServiceRegistered
 	}
 	// Otherwise register the service and return
-	n.stack[id] = constructor
+	n.serviceOrder = append(n.serviceOrder, id)
+	n.serviceIndex[id] = constructor
 
 	return nil
 }
@@ -111,14 +117,20 @@ func (n *Node) Unregister(id string) error {
 	defer n.lock.Unlock()
 
 	// Short circuit if the node is running, or if the service is unknown
-	if n.running != nil {
+	if n.server != nil {
 		return ErrNodeRunning
 	}
-	if _, ok := n.stack[id]; !ok {
+	if _, ok := n.serviceIndex[id]; !ok {
 		return ErrServiceUnknown
 	}
 	// Otherwise drop the service and return
-	delete(n.stack, id)
+	delete(n.serviceIndex, id)
+	for i, service := range n.serviceOrder {
+		if service == id {
+			n.serviceOrder = append(n.serviceOrder[:i], n.serviceOrder[i+1:]...)
+			break
+		}
+	}
 	return nil
 }
 
@@ -128,19 +140,27 @@ func (n *Node) Start() error {
 	defer n.lock.Unlock()
 
 	// Short circuit if the node's already running
-	if n.running != nil {
+	if n.server != nil {
 		return ErrNodeRunning
 	}
 	// Otherwise copy and specialize the P2P configuration
 	running := new(p2p.Server)
-	*running = *n.config
+	*running = *n.serverConfig
 
-	ctx := &ServiceContext{
-		dataDir:  n.datadir,
-		EventMux: n.emux,
-	}
 	services := make(map[string]Service)
-	for id, constructor := range n.stack {
+	for _, id := range n.serviceOrder {
+		constructor := n.serviceIndex[id]
+
+		// Create a new context for the particular service
+		ctx := &ServiceContext{
+			datadir:  n.datadir,
+			services: make(map[string]Service),
+			EventMux: n.eventmux,
+		}
+		for id, s := range services { // copy needed for threaded access
+			ctx.services[id] = s
+		}
+		// Construct and save the service
 		service, err := constructor(ctx)
 		if err != nil {
 			return err
@@ -161,10 +181,12 @@ func (n *Node) Start() error {
 	started := []string{}
 	for id, service := range services {
 		// Start the next service, stopping all previous upon failure
-		if err := service.Start(); err != nil {
+		if err := service.Start(running); err != nil {
 			for _, id := range started {
 				services[id].Stop()
 			}
+			running.Stop()
+
 			return err
 		}
 		// Mark the service started for potential cleanup
@@ -172,7 +194,8 @@ func (n *Node) Start() error {
 	}
 	// Finish initializing the startup
 	n.services = services
-	n.running = running
+	n.server = running
+	n.stop = make(chan struct{})
 
 	return nil
 }
@@ -184,7 +207,7 @@ func (n *Node) Stop() error {
 	defer n.lock.Unlock()
 
 	// Short circuit if the node's not running
-	if n.running == nil {
+	if n.server == nil {
 		return ErrNodeStopped
 	}
 	// Otherwise terminate all the services and the P2P server too
@@ -196,15 +219,29 @@ func (n *Node) Stop() error {
 			failure.Services[id] = err
 		}
 	}
-	n.running.Stop()
+	n.server.Stop()
 
 	n.services = nil
-	n.running = nil
+	n.server = nil
+	close(n.stop)
 
 	if len(failure.Services) > 0 {
 		return failure
 	}
 	return nil
+}
+
+// Wait blocks the thread until the node is stopped. If the node is not running
+// at the time of invocation, the method immediately returns.
+func (n *Node) Wait() {
+	n.lock.RLock()
+	if n.server == nil {
+		return
+	}
+	stop := n.stop
+	n.lock.RUnlock()
+
+	<-stop
 }
 
 // Restart terminates a running node and boots up a new one in its place. If the
@@ -226,18 +263,43 @@ func (n *Node) Server() *p2p.Server {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 
-	return n.running
+	return n.server
 }
 
-// Service retrieves a currently running services registered under a given id.
+// Service retrieves a currently running service registered under a given id.
 func (n *Node) Service(id string) Service {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 
-	if n.services == nil {
+	// Short circuit if the node's not running
+	if n.server == nil {
 		return nil
 	}
 	return n.services[id]
+}
+
+// SingletonService retrieves a currently running service using a specific type
+// implementing the Service interface. This is a utility function for scenarios
+// where it is known that only one instance of a given service type is running,
+// allowing to access services without needing to know their specific id with
+// which they were registered. Note, this method uses reflection, so do not run
+// in a tight loop.
+func (n *Node) SingletonService(service interface{}) (string, error) {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
+	// Short circuit if the node's not running
+	if n.server == nil {
+		return "", ErrServiceUnknown
+	}
+	// Otherwise try to find the service to return
+	for id, running := range n.services {
+		if reflect.TypeOf(running) == reflect.ValueOf(service).Elem().Type() {
+			reflect.ValueOf(service).Elem().Set(reflect.ValueOf(running))
+			return id, nil
+		}
+	}
+	return "", ErrServiceUnknown
 }
 
 // DataDir retrieves the current datadir used by the protocol stack.
@@ -248,5 +310,5 @@ func (n *Node) DataDir() string {
 // EventMux retrieves the event multiplexer used by all the network services in
 // the current protocol stack.
 func (n *Node) EventMux() *event.TypeMux {
-	return n.emux
+	return n.eventmux
 }

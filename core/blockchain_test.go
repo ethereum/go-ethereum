@@ -51,7 +51,7 @@ func thePow() pow.PoW {
 
 func theBlockChain(db ethdb.Database, t *testing.T) *BlockChain {
 	var eventMux event.TypeMux
-	WriteTestNetGenesisBlock(db, 0)
+	WriteTestNetGenesisBlock(db)
 	blockchain, err := NewBlockChain(db, thePow(), &eventMux)
 	if err != nil {
 		t.Error("failed creating blockchain:", err)
@@ -506,7 +506,7 @@ func testReorgShort(t *testing.T, full bool) {
 func testReorg(t *testing.T, first, second []int, td int64, full bool) {
 	// Create a pristine block chain
 	db, _ := ethdb.NewMemDatabase()
-	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+	genesis, _ := WriteTestNetGenesisBlock(db)
 	bc := chm(genesis, db)
 
 	// Insert an easy and a difficult chain afterwards
@@ -553,7 +553,7 @@ func TestBadBlockHashes(t *testing.T)  { testBadHashes(t, true) }
 func testBadHashes(t *testing.T, full bool) {
 	// Create a pristine block chain
 	db, _ := ethdb.NewMemDatabase()
-	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+	genesis, _ := WriteTestNetGenesisBlock(db)
 	bc := chm(genesis, db)
 
 	// Create a chain, ban a hash and try to import
@@ -580,7 +580,7 @@ func TestReorgBadBlockHashes(t *testing.T)  { testReorgBadHashes(t, true) }
 func testReorgBadHashes(t *testing.T, full bool) {
 	// Create a pristine block chain
 	db, _ := ethdb.NewMemDatabase()
-	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+	genesis, _ := WriteTestNetGenesisBlock(db)
 	bc := chm(genesis, db)
 
 	// Create a chain, import and ban aferwards

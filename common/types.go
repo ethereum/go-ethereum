@@ -24,13 +24,13 @@ import (
 )
 
 const (
-	hashLength    = 32
-	addressLength = 20
+	HashLength    = 32
+	AddressLength = 20
 )
 
 type (
-	Hash    [hashLength]byte
-	Address [addressLength]byte
+	Hash    [HashLength]byte
+	Address [AddressLength]byte
 )
 
 func BytesToHash(b []byte) Hash {
@@ -53,10 +53,10 @@ func (h Hash) Hex() string   { return "0x" + Bytes2Hex(h[:]) }
 // Sets the hash to the value of b. If b is larger than len(h) it will panic
 func (h *Hash) SetBytes(b []byte) {
 	if len(b) > len(h) {
-		b = b[len(b)-hashLength:]
+		b = b[len(b)-HashLength:]
 	}
 
-	copy(h[hashLength-len(b):], b)
+	copy(h[HashLength-len(b):], b)
 }
 
 // Set string `s` to h. If s is larger than len(h) it will panic
@@ -92,6 +92,18 @@ func StringToAddress(s string) Address { return BytesToAddress([]byte(s)) }
 func BigToAddress(b *big.Int) Address  { return BytesToAddress(b.Bytes()) }
 func HexToAddress(s string) Address    { return BytesToAddress(FromHex(s)) }
 
+// IsHexAddress verifies whether a string can represent a valid hex-encoded
+// Ethereum address or not.
+func IsHexAddress(s string) bool {
+	if len(s) == 2+2*AddressLength && IsHex(s[2:]) {
+		return true
+	}
+	if len(s) == 2*AddressLength && IsHex(s) {
+		return true
+	}
+	return false
+}
+
 // Get the string representation of the underlying address
 func (a Address) Str() string   { return string(a[:]) }
 func (a Address) Bytes() []byte { return a[:] }
@@ -102,9 +114,9 @@ func (a Address) Hex() string   { return "0x" + Bytes2Hex(a[:]) }
 // Sets the address to the value of b. If b is larger than len(a) it will panic
 func (a *Address) SetBytes(b []byte) {
 	if len(b) > len(a) {
-		b = b[len(b)-addressLength:]
+		b = b[len(b)-AddressLength:]
 	}
-	copy(a[addressLength-len(b):], b)
+	copy(a[AddressLength-len(b):], b)
 }
 
 // Set string `s` to a. If s is larger than len(a) it will panic

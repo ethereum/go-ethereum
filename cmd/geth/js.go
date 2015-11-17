@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
@@ -77,7 +78,7 @@ func (r dumbterm) AppendHistory(string) {}
 
 type jsre struct {
 	re         *re.JSRE
-	ethereum   *eth.Ethereum
+	stack      *node.Node
 	xeth       *xeth.XEth
 	wait       chan *big.Int
 	ps1        string
@@ -176,18 +177,18 @@ func newLightweightJSRE(docRoot string, client comms.EthereumClient, datadir str
 	return js
 }
 
-func newJSRE(ethereum *eth.Ethereum, docRoot, corsDomain string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
-	js := &jsre{ethereum: ethereum, ps1: "> "}
+func newJSRE(stack *node.Node, docRoot, corsDomain string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
+	js := &jsre{stack: stack, ps1: "> "}
 	// set default cors domain used by startRpc from CLI flag
 	js.corsDomain = corsDomain
 	if f == nil {
 		f = js
 	}
-	js.xeth = xeth.New(ethereum, f)
+	js.xeth = xeth.New(stack, f)
 	js.wait = js.xeth.UpdateState()
 	js.client = client
 	if clt, ok := js.client.(*comms.InProcClient); ok {
-		if offeredApis, err := api.ParseApiString(shared.AllApis, codec.JSON, js.xeth, ethereum); err == nil {
+		if offeredApis, err := api.ParseApiString(shared.AllApis, codec.JSON, js.xeth, stack); err == nil {
 			clt.Initialize(api.Merge(offeredApis...))
 		}
 	}
@@ -202,14 +203,14 @@ func newJSRE(ethereum *eth.Ethereum, docRoot, corsDomain string, client comms.Et
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
 	} else {
 		lr := liner.NewLiner()
-		js.withHistory(ethereum.DataDir, func(hist *os.File) { lr.ReadHistory(hist) })
+		js.withHistory(stack.DataDir(), func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
 		js.loadAutoCompletion()
 		lr.SetWordCompleter(apiWordCompleter)
 		lr.SetTabCompletionStyle(liner.TabPrints)
 		js.prompter = lr
 		js.atexit = func() {
-			js.withHistory(ethereum.DataDir, func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
+			js.withHistory(stack.DataDir(), func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
 			lr.Close()
 			close(js.wait)
 		}
@@ -276,7 +277,7 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		apiNames = append(apiNames, a)
 	}
 
-	apiImpl, err := api.ParseApiString(strings.Join(apiNames, ","), codec.JSON, js.xeth, js.ethereum)
+	apiImpl, err := api.ParseApiString(strings.Join(apiNames, ","), codec.JSON, js.xeth, js.stack)
 	if err != nil {
 		utils.Fatalf("Unable to determine supported api's: %v", err)
 	}
@@ -342,8 +343,14 @@ func (self *jsre) AskPassword() (string, bool) {
 }
 
 func (self *jsre) ConfirmTransaction(tx string) bool {
-	if self.ethereum.NatSpec {
-		notice := natspec.GetNotice(self.xeth, tx, self.ethereum.HTTPClient())
+	// Retrieve the Ethereum instance from the node
+	var ethereum *eth.Ethereum
+	if _, err := self.stack.SingletonService(&ethereum); err != nil {
+		return false
+	}
+	// If natspec is enabled, ask for permission
+	if ethereum.NatSpec {
+		notice := natspec.GetNotice(self.xeth, tx, ethereum.HTTPClient())
 		fmt.Println(notice)
 		answer, _ := self.Prompt("Confirm Transaction [y/n]")
 		return strings.HasPrefix(strings.Trim(answer, " "), "y")
@@ -359,7 +366,11 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 		return false
 	}
 	// TODO: allow retry
-	if err := self.ethereum.AccountManager().Unlock(common.BytesToAddress(addr), pass); err != nil {
+	var ethereum *eth.Ethereum
+	if _, err := self.stack.SingletonService(&ethereum); err != nil {
+		return false
+	}
+	if err := ethereum.AccountManager().Unlock(common.BytesToAddress(addr), pass); err != nil {
 		return false
 	} else {
 		fmt.Println("Account is now unlocked for this session.")

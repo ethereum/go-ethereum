@@ -37,7 +37,7 @@ func startTestPeer() *testPeer {
 
 	// Create a whisper client and connect with it to the tester peer
 	client := New()
-	client.Start()
+	client.Start(nil)
 
 	termed := make(chan struct{})
 	go func() {

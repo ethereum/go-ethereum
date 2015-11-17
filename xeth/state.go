@@ -19,6 +19,7 @@ package xeth
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/eth"
 )
 
 type State struct {
@@ -45,8 +46,7 @@ func (self *State) SafeGet(addr string) *Object {
 func (self *State) safeGet(addr string) *state.StateObject {
 	object := self.state.GetStateObject(common.HexToAddress(addr))
 	if object == nil {
-		object = state.NewStateObject(common.HexToAddress(addr), self.xeth.backend.ChainDb())
+		object = state.NewStateObject(common.HexToAddress(addr), self.xeth.backend.Service("eth").(*eth.Ethereum).ChainDb())
 	}
-
 	return object
 }

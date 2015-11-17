@@ -32,6 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
@@ -80,19 +82,24 @@ type adminhandler func(*adminApi, *shared.Request) (interface{}, error)
 // admin api provider
 type adminApi struct {
 	xeth     *xeth.XEth
+	stack    *node.Node
 	ethereum *eth.Ethereum
 	codec    codec.Codec
 	coder    codec.ApiCoder
 }
 
 // create a new admin api instance
-func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec) *adminApi {
-	return &adminApi{
-		xeth:     xeth,
-		ethereum: ethereum,
-		codec:    codec,
-		coder:    codec.New(nil),
+func NewAdminApi(xeth *xeth.XEth, stack *node.Node, codec codec.Codec) *adminApi {
+	api := &adminApi{
+		xeth:  xeth,
+		stack: stack,
+		codec: codec,
+		coder: codec.New(nil),
 	}
+	if stack != nil {
+		stack.SingletonService(&api.ethereum)
+	}
+	return api
 }
 
 // collection with supported methods
@@ -128,24 +135,24 @@ func (self *adminApi) AddPeer(req *shared.Request) (interface{}, error) {
 	if err := self.coder.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
-
-	err := self.ethereum.AddPeer(args.Url)
-	if err == nil {
-		return true, nil
+	node, err := discover.ParseNode(args.Url)
+	if err != nil {
+		return nil, fmt.Errorf("invalid node URL: %v", err)
 	}
-	return false, err
+	self.stack.Server().AddPeer(node)
+	return true, nil
 }
 
 func (self *adminApi) Peers(req *shared.Request) (interface{}, error) {
-	return self.ethereum.Network().PeersInfo(), nil
+	return self.stack.Server().PeersInfo(), nil
 }
 
 func (self *adminApi) NodeInfo(req *shared.Request) (interface{}, error) {
-	return self.ethereum.Network().NodeInfo(), nil
+	return self.stack.Server().NodeInfo(), nil
 }
 
 func (self *adminApi) DataDir(req *shared.Request) (interface{}, error) {
-	return self.ethereum.DataDir, nil
+	return self.stack.DataDir(), nil
 }
 
 func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
@@ -253,7 +260,7 @@ func (self *adminApi) StartRPC(req *shared.Request) (interface{}, error) {
 		CorsDomain:    args.CorsDomain,
 	}
 
-	apis, err := ParseApiString(args.Apis, self.codec, self.xeth, self.ethereum)
+	apis, err := ParseApiString(args.Apis, self.codec, self.xeth, self.stack)
 	if err != nil {
 		return false, err
 	}
