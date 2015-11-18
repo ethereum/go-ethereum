@@ -691,6 +691,8 @@ func TestCanonicalSynchronisation64Fast(t *testing.T)  { testCanonicalSynchronis
 func TestCanonicalSynchronisation64Light(t *testing.T) { testCanonicalSynchronisation(t, 64, LightSync) }
 
 func testCanonicalSynchronisation(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	// Create a small enough block chain to download
 	targetBlocks := blockCacheLimit - 15
 	hashes, headers, blocks, receipts := makeChain(targetBlocks, 0, genesis, nil)
@@ -715,6 +717,8 @@ func TestThrottling64Full(t *testing.T) { testThrottling(t, 64, FullSync) }
 func TestThrottling64Fast(t *testing.T) { testThrottling(t, 64, FastSync) }
 
 func testThrottling(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	// Create a long block chain to download and the tester
 	targetBlocks := 8 * blockCacheLimit
 	hashes, headers, blocks, receipts := makeChain(targetBlocks, 0, genesis, nil)
@@ -800,6 +804,8 @@ func TestForkedSynchronisation64Fast(t *testing.T)  { testForkedSynchronisation(
 func TestForkedSynchronisation64Light(t *testing.T) { testForkedSynchronisation(t, 64, LightSync) }
 
 func testForkedSynchronisation(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	// Create a long enough forked chain
 	common, fork := MaxHashFetch, 2*MaxHashFetch
 	hashesA, hashesB, headersA, headersB, blocksA, blocksB, receiptsA, receiptsB := makeChainFork(common+fork, fork, genesis, nil)
@@ -823,6 +829,7 @@ func testForkedSynchronisation(t *testing.T, protocol int, mode SyncMode) {
 
 // Tests that an inactive downloader will not accept incoming hashes and blocks.
 func TestInactiveDownloader61(t *testing.T) {
+	t.Parallel()
 	tester := newTester()
 
 	// Check that neither hashes nor blocks are accepted
@@ -837,6 +844,7 @@ func TestInactiveDownloader61(t *testing.T) {
 // Tests that an inactive downloader will not accept incoming block headers and
 // bodies.
 func TestInactiveDownloader62(t *testing.T) {
+	t.Parallel()
 	tester := newTester()
 
 	// Check that neither block headers nor bodies are accepted
@@ -851,6 +859,7 @@ func TestInactiveDownloader62(t *testing.T) {
 // Tests that an inactive downloader will not accept incoming block headers,
 // bodies and receipts.
 func TestInactiveDownloader63(t *testing.T) {
+	t.Parallel()
 	tester := newTester()
 
 	// Check that neither block headers nor bodies are accepted
@@ -875,6 +884,8 @@ func TestCancel64Fast(t *testing.T)  { testCancel(t, 64, FastSync) }
 func TestCancel64Light(t *testing.T) { testCancel(t, 64, LightSync) }
 
 func testCancel(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	// Create a small enough block chain to download and the tester
 	targetBlocks := blockCacheLimit - 15
 	if targetBlocks >= MaxHashFetch {
@@ -913,6 +924,8 @@ func TestMultiSynchronisation64Fast(t *testing.T)  { testMultiSynchronisation(t,
 func TestMultiSynchronisation64Light(t *testing.T) { testMultiSynchronisation(t, 64, LightSync) }
 
 func testMultiSynchronisation(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	// Create various peers with various parts of the chain
 	targetPeers := 8
 	targetBlocks := targetPeers*blockCacheLimit - 15
@@ -940,6 +953,8 @@ func TestMultiProtoSynchronisation64Fast(t *testing.T)  { testMultiProtoSync(t, 
 func TestMultiProtoSynchronisation64Light(t *testing.T) { testMultiProtoSync(t, 64, LightSync) }
 
 func testMultiProtoSync(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	// Create a small enough block chain to download
 	targetBlocks := blockCacheLimit - 15
 	hashes, headers, blocks, receipts := makeChain(targetBlocks, 0, genesis, nil)
@@ -976,6 +991,8 @@ func TestEmptyShortCircuit64Fast(t *testing.T)  { testEmptyShortCircuit(t, 64, F
 func TestEmptyShortCircuit64Light(t *testing.T) { testEmptyShortCircuit(t, 64, LightSync) }
 
 func testEmptyShortCircuit(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	// Create a block chain to download
 	targetBlocks := 2*blockCacheLimit - 15
 	hashes, headers, blocks, receipts := makeChain(targetBlocks, 0, genesis, nil)
@@ -1027,6 +1044,8 @@ func TestMissingHeaderAttack64Fast(t *testing.T)  { testMissingHeaderAttack(t, 6
 func TestMissingHeaderAttack64Light(t *testing.T) { testMissingHeaderAttack(t, 64, LightSync) }
 
 func testMissingHeaderAttack(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	// Create a small enough block chain to download
 	targetBlocks := blockCacheLimit - 15
 	hashes, headers, blocks, receipts := makeChain(targetBlocks, 0, genesis, nil)
@@ -1178,6 +1197,8 @@ func TestHighTDStarvationAttack64Fast(t *testing.T)  { testHighTDStarvationAttac
 func TestHighTDStarvationAttack64Light(t *testing.T) { testHighTDStarvationAttack(t, 64, LightSync) }
 
 func testHighTDStarvationAttack(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	tester := newTester()
 	hashes, headers, blocks, receipts := makeChain(0, 0, genesis, nil)
 
@@ -1252,6 +1273,8 @@ func TestSyncProgress64Fast(t *testing.T)  { testSyncProgress(t, 64, FastSync) }
 func TestSyncProgress64Light(t *testing.T) { testSyncProgress(t, 64, LightSync) }
 
 func testSyncProgress(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	// Create a small enough block chain to download
 	targetBlocks := blockCacheLimit - 15
 	hashes, headers, blocks, receipts := makeChain(targetBlocks, 0, genesis, nil)
@@ -1322,6 +1345,8 @@ func TestForkedSyncProgress64Fast(t *testing.T)  { testForkedSyncProgress(t, 64,
 func TestForkedSyncProgress64Light(t *testing.T) { testForkedSyncProgress(t, 64, LightSync) }
 
 func testForkedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	// Create a forked chain to simulate origin revertal
 	common, fork := MaxHashFetch, 2*MaxHashFetch
 	hashesA, hashesB, headersA, headersB, blocksA, blocksB, receiptsA, receiptsB := makeChainFork(common+fork, fork, genesis, nil)
@@ -1395,6 +1420,8 @@ func TestFailedSyncProgress64Fast(t *testing.T)  { testFailedSyncProgress(t, 64,
 func TestFailedSyncProgress64Light(t *testing.T) { testFailedSyncProgress(t, 64, LightSync) }
 
 func testFailedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	// Create a small enough block chain to download
 	targetBlocks := blockCacheLimit - 15
 	hashes, headers, blocks, receipts := makeChain(targetBlocks, 0, genesis, nil)
@@ -1469,6 +1496,8 @@ func TestFakedSyncProgress64Fast(t *testing.T)  { testFakedSyncProgress(t, 64, F
 func TestFakedSyncProgress64Light(t *testing.T) { testFakedSyncProgress(t, 64, LightSync) }
 
 func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	// Create a small block chain
 	targetBlocks := blockCacheLimit - 15
 	hashes, headers, blocks, receipts := makeChain(targetBlocks+3, 0, genesis, nil)
