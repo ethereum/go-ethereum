@@ -30,6 +30,7 @@ void  evmjit_destroy(void* _jit);
 */
 import "C"
 
+/*
 import (
 	"bytes"
 	"errors"
@@ -385,4 +386,4 @@ func env_extcode(_vm unsafe.Pointer, _addr unsafe.Pointer, o_size *uint64) *byte
 	code := vm.Env().State().GetCode(addr)
 	*o_size = uint64(len(code))
 	return getDataPtr(code)
-}
+}*/

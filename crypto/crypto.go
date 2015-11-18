@@ -172,10 +172,10 @@ func GenerateKey() (*ecdsa.PrivateKey, error) {
 }
 
 func ValidateSignatureValues(v byte, r, s *big.Int) bool {
-	vint := uint32(v)
-	if r.Cmp(common.Big0) == 0 || s.Cmp(common.Big0) == 0 {
+	if r.Cmp(common.Big1) < 0 || s.Cmp(common.Big1) < 0 {
 		return false
 	}
+	vint := uint32(v)
 	if r.Cmp(secp256k1n) < 0 && s.Cmp(secp256k1n) < 0 && (vint == 27 || vint == 28) {
 		return true
 	} else {
@@ -198,7 +198,9 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
 	}
 
-	sig, err = secp256k1.Sign(hash, common.LeftPadBytes(prv.D.Bytes(), prv.Params().BitSize/8))
+	seckey := common.LeftPadBytes(prv.D.Bytes(), prv.Params().BitSize/8)
+	defer zeroBytes(seckey)
+	sig, err = secp256k1.Sign(hash, seckey)
 	return
 }
 
@@ -213,7 +215,7 @@ func Decrypt(prv *ecdsa.PrivateKey, ct []byte) ([]byte, error) {
 
 // Used only by block tests.
 func ImportBlockTestKey(privKeyBytes []byte) error {
-	ks := NewKeyStorePassphrase(common.DefaultDataDir() + "/keystore")
+	ks := NewKeyStorePassphrase(common.DefaultDataDir()+"/keystore", LightScryptN, LightScryptP)
 	ecKey := ToECDSA(privKeyBytes)
 	key := &Key{
 		Id:         uuid.NewRandom(),
@@ -259,6 +261,9 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	passBytes := []byte(password)
 	derivedKey := pbkdf2.Key(passBytes, passBytes, 2000, 16, sha256.New)
 	plainText, err := aesCBCDecrypt(derivedKey, cipherText, iv)
+	if err != nil {
+		return nil, err
+	}
 	ethPriv := Sha3(plainText)
 	ecKey := ToECDSA(ethPriv)
 	key = &Key{
@@ -269,7 +274,7 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	derivedAddr := hex.EncodeToString(key.Address.Bytes()) // needed because .Hex() gives leading "0x"
 	expectedAddr := preSaleKeyStruct.EthAddr
 	if derivedAddr != expectedAddr {
-		err = errors.New(fmt.Sprintf("decrypted addr not equal to expected addr ", derivedAddr, expectedAddr))
+		err = fmt.Errorf("decrypted addr '%s' not equal to expected addr '%s'", derivedAddr, expectedAddr)
 	}
 	return key, err
 }
@@ -302,17 +307,6 @@ func aesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
 }
 
 // From https://leanpub.com/gocrypto/read#leanpub-auto-block-cipher-modes
-func PKCS7Pad(in []byte) []byte {
-	padding := 16 - (len(in) % 16)
-	if padding == 0 {
-		padding = 16
-	}
-	for i := 0; i < padding; i++ {
-		in = append(in, byte(padding))
-	}
-	return in
-}
-
 func PKCS7Unpad(in []byte) []byte {
 	if len(in) == 0 {
 		return nil
@@ -336,4 +330,10 @@ func PKCS7Unpad(in []byte) []byte {
 func PubkeyToAddress(p ecdsa.PublicKey) common.Address {
 	pubBytes := FromECDSAPub(&p)
 	return common.BytesToAddress(Sha3(pubBytes[1:])[12:])
+}
+
+func zeroBytes(bytes []byte) {
+	for i := range bytes {
+		bytes[i] = 0
+	}
 }

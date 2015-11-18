@@ -2,49 +2,46 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: gexp evm mist all test travis-test-with-coverage clean
+
+.PHONY: gexp gexp-cross gexp-linux gexp-darwin gexp-windows gexp-android evm all test travis-test-with-coverage xgo clean
 GOBIN = build/bin
 
 gexp:
-	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/gexp
+	build/env.sh go install -v $(shell build/flags.sh) ./cmd/gexp
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/gexp\" to launch gexp."
 
-geth-cross: geth-linux geth-darwin geth-windows geth-android
+gexp-cross: gexp-linux gexp-darwin gexp-windows gexp-android
 	@echo "Full cross compilation done:"
-	@ls -l $(GOBIN)/geth-*
+	@ls -l $(GOBIN)/gexp-*
 
-geth-linux: xgo
-	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=linux/* -v ./cmd/geth
+gexp-linux: xgo
+	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=linux/* -v $(shell build/flags.sh) ./cmd/gexp
 	@echo "Linux cross compilation done:"
-	@ls -l $(GOBIN)/geth-linux-*
+	@ls -l $(GOBIN)/gexp-linux-*
 
-geth-darwin: xgo
-	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=darwin/* -v ./cmd/geth
+gexp-darwin: xgo
+	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=darwin/* -v $(shell build/flags.sh) ./cmd/gexp
 	@echo "Darwin cross compilation done:"
-	@ls -l $(GOBIN)/geth-darwin-*
+	@ls -l $(GOBIN)/gexp-darwin-*
 
-geth-windows: xgo
-	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=windows/* -v ./cmd/geth
+gexp-windows: xgo
+	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=windows/* -v $(shell build/flags.sh) ./cmd/gexp
 	@echo "Windows cross compilation done:"
-	@ls -l $(GOBIN)/geth-windows-*
+	@ls -l $(GOBIN)/gexp-windows-*
 
-geth-android: xgo
-	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=android-16/*,android-21/* -v ./cmd/geth
+gexp-android: xgo
+	build/env.sh $(GOBIN)/xgo --dest=$(GOBIN) --deps=https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2 --targets=android-16/*,android-21/* -v $(shell build/flags.sh) ./cmd/gexp
 	@echo "Android cross compilation done:"
-	@ls -l $(GOBIN)/geth-android-*
+	@ls -l $(GOBIN)/gexp-android-*
 
 evm:
-	build/env.sh $(GOROOT)/bin/go install -v $(shell build/ldflags.sh) ./cmd/evm
+	build/env.sh $(GOROOT)/bin/go install -v $(shell build/flags.sh) ./cmd/evm
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/evm to start the evm."
-mist:
-	build/env.sh go install -v $(shell build/ldflags.sh) ./cmd/mist
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/mist --asset_path=cmd/mist/assets\" to launch mist."
 
 all:
-	build/env.sh go install -v $(shell build/ldflags.sh) ./...
+	build/env.sh go install -v $(shell build/flags.sh) ./...
 
 test: all
 	build/env.sh go test ./...

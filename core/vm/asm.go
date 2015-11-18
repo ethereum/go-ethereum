@@ -23,6 +23,8 @@ import (
 	"github.com/expanse-project/go-expanse/common"
 )
 
+// Dissassemble dissassembles the byte code and returns the string
+// representation (human readable opcodes).
 func Disassemble(script []byte) (asm []string) {
 	pc := new(big.Int)
 	for {

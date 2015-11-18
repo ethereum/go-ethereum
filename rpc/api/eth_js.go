@@ -35,6 +35,12 @@ web3._extend({
 			call: 'eth_resend',
 			params: 3,
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, web3._extend.utils.fromDecimal, web3._extend.utils.fromDecimal]
+		}),
+    new web3._extend.Method({
+	    name: 'getNatSpec',
+	    call: 'eth_getNatSpec',
+	    params: 1,
+	    inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
 		})
 	],
 	properties:

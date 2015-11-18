@@ -453,8 +453,8 @@ func NewReceiptRes(rec *types.Receipt) *ReceiptRes {
 		v.ContractAddress = newHexData(rec.ContractAddress)
 	}
 
-	logs := make([]interface{}, len(rec.Logs()))
-	for i, log := range rec.Logs() {
+	logs := make([]interface{}, len(rec.Logs))
+	for i, log := range rec.Logs {
 		logs[i] = NewLogRes(log)
 	}
 	v.Logs = &logs

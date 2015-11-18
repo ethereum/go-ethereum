@@ -162,8 +162,25 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 
 }
 func runBlockTest(test *BlockTest) error {
-	cfg := test.makeEthConfig()
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"), crypto.StandardScryptN, crypto.StandardScryptP)
+	am := accounts.NewManager(ks)
+	db, _ := ethdb.NewMemDatabase()
+	cfg := &exp.Config{
+		DataDir:        common.DefaultDataDir(),
+		Verbosity:      5,
+		Etherbase:      common.Address{},
+		AccountManager: am,
+		NewDB:          func(path string) (ethdb.Database, error) { return db, nil },
+	}
+
 	cfg.GenesisBlock = test.Genesis
+
+	// import pre accounts & construct test genesis block & state root
+	_, err := test.InsertPreState(db, am)
+	if err != nil {
+		return fmt.Errorf("InsertPreState: %v", err)
+	}
+
 
 	expanse, err := exp.New(cfg)
 	if err != nil {
@@ -175,15 +192,7 @@ func runBlockTest(test *BlockTest) error {
 		return err
 	}
 
-	// import pre accounts
-
-	_, err = test.InsertPreState(expanse)
-	if err != nil {
-		return fmt.Errorf("InsertPreState: %v", err)
-	}
-
-
-	cm := expanse.ChainManager()
+	cm := expanse.BlockChain()
 	validBlocks, err := test.TryBlocksInsert(cm)
 	if err != nil {
 		return err
@@ -195,7 +204,10 @@ func runBlockTest(test *BlockTest) error {
 		return fmt.Errorf("lastblockhash validation mismatch: want: %x, have: %x", lastblockhash, cmlast)
 	}
 
-	newDB := cm.State()
+	newDB, err := cm.State()
+	if err != nil {
+		return err
+	}
 	if err = test.ValidatePostState(newDB); err != nil {
 		return fmt.Errorf("post state validation failed: %v", err)
 	}
@@ -203,23 +215,14 @@ func runBlockTest(test *BlockTest) error {
 	return test.ValidateImportedHeaders(cm, validBlocks)
 }
 
-func (test *BlockTest) makeEthConfig() *exp.Config {
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"))
-
-	return &exp.Config{
-		DataDir:        common.DefaultDataDir(),
-		Verbosity:      5,
-		Etherbase:      common.Address{},
-		AccountManager: accounts.NewManager(ks),
-		NewDB:          func(path string) (ethdb.Database, error) { return ethdb.NewMemDatabase() },
-	}
-}
-
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
-func (t *BlockTest) InsertPreState(expanse *exp.Expanse) (*state.StateDB, error) {
-	db := expanse.ChainDb()
-	statedb := state.New(common.Hash{}, db)
+func (t *BlockTest) InsertPreState(db ethdb.Database, am *accounts.Manager) (*state.StateDB, error) {
+	statedb, err := state.New(common.Hash{}, db)
+	if err != nil {
+		return nil, err
+	}
+
 	for addrString, acct := range t.preAccounts {
 		addr, err := hex.DecodeString(addrString)
 		if err != nil {
@@ -241,7 +244,7 @@ func (t *BlockTest) InsertPreState(expanse *exp.Expanse) (*state.StateDB, error)
 		if acct.PrivateKey != "" {
 			privkey, err := hex.DecodeString(strings.TrimPrefix(acct.PrivateKey, "0x"))
 			err = crypto.ImportBlockTestKey(privkey)
-			err = expanse.AccountManager().TimedUnlock(common.BytesToAddress(addr), "", 999999*time.Second)
+			err = am.TimedUnlock(common.BytesToAddress(addr), "", 999999*time.Second)
 			if err != nil {
 				return nil, err
 			}
@@ -255,13 +258,13 @@ func (t *BlockTest) InsertPreState(expanse *exp.Expanse) (*state.StateDB, error)
 			statedb.SetState(common.HexToAddress(addrString), common.HexToHash(k), common.HexToHash(v))
 		}
 	}
-	// sync objects to trie
-	statedb.SyncObjects()
-	// sync trie to disk
-	statedb.Sync()
 
-	if !bytes.Equal(t.Genesis.Root().Bytes(), statedb.Root().Bytes()) {
-		return nil, fmt.Errorf("computed state root does not match genesis block %x %x", t.Genesis.Root().Bytes()[:4], statedb.Root().Bytes()[:4])
+	root, err := statedb.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("error writing state: %v", err)
+	}
+	if t.Genesis.Root() != root {
+		return nil, fmt.Errorf("computed state root does not match genesis block: genesis=%x computed=%x", t.Genesis.Root().Bytes()[:4], root.Bytes()[:4])
 	}
 	return statedb, nil
 }
@@ -278,7 +281,7 @@ func (t *BlockTest) InsertPreState(expanse *exp.Expanse) (*state.StateDB, error)
    expected we are expected to ignore it and continue processing and then validate the
    post state.
 */
-func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) ([]btBlock, error) {
+func (t *BlockTest) TryBlocksInsert(blockchain *core.BlockChain) ([]btBlock, error) {
 	validBlocks := make([]btBlock, 0)
 	// insert the test blocks, which will execute all transactions
 	for _, b := range t.Json.Blocks {
@@ -291,7 +294,7 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) ([]btBlock,
 			}
 		}
 		// RLP decoding worked, try to insert into chain:
-		_, err = chainManager.InsertChain(types.Blocks{cb})
+		_, err = blockchain.InsertChain(types.Blocks{cb})
 		if err != nil {
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
@@ -429,7 +432,7 @@ func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
 	return nil
 }
 
-func (test *BlockTest) ValidateImportedHeaders(cm *core.ChainManager, validBlocks []btBlock) error {
+func (test *BlockTest) ValidateImportedHeaders(cm *core.BlockChain, validBlocks []btBlock) error {
 	// to get constant lookup when verifying block headers by hash (some tests have many blocks)
 	bmap := make(map[string]btBlock, len(test.Json.Blocks))
 	for _, b := range validBlocks {

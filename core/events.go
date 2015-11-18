@@ -20,8 +20,9 @@ import (
 	"math/big"
 
 	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/core/vm"
+
 )
 
 // TxPreEvent is posted when a transaction enters the transaction pool.
@@ -42,23 +43,23 @@ type RemovedTransactionEvent struct{ Txs types.Transactions }
 // ChainSplit is posted when a new head is detected
 type ChainSplitEvent struct {
 	Block *types.Block
-	Logs  state.Logs
+	Logs  vm.Logs
 }
 
 type ChainEvent struct {
 	Block *types.Block
 	Hash  common.Hash
-	Logs  state.Logs
+	Logs  vm.Logs
 }
 
 type ChainSideEvent struct {
 	Block *types.Block
-	Logs  state.Logs
+	Logs  vm.Logs
 }
 
 type PendingBlockEvent struct {
 	Block *types.Block
-	Logs  state.Logs
+	Logs  vm.Logs
 }
 
 type ChainUncleEvent struct {

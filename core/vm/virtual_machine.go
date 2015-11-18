@@ -16,7 +16,8 @@
 
 package vm
 
+// VirtualMachine is an EVM interface
 type VirtualMachine interface {
 	Env() Environment
-	Run(context *Context, data []byte) ([]byte, error)
+	Run(*Contract, []byte) ([]byte, error)
 }

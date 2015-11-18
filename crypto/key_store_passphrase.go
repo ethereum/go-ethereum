@@ -45,19 +45,29 @@ import (
 
 const (
 	keyHeaderKDF = "scrypt"
-	// 2^18 / 8 / 1 uses 256MB memory and approx 1s CPU time on a modern CPU.
-	scryptN     = 1 << 18
-	scryptr     = 8
-	scryptp     = 1
-	scryptdkLen = 32
+
+	// n,r,p = 2^18, 8, 1 uses 256MB memory and approx 1s CPU time on a modern CPU.
+	StandardScryptN = 1 << 18
+	StandardScryptP = 1
+
+	// n,r,p = 2^12, 8, 6 uses 4MB memory and approx 100ms CPU time on a modern CPU.
+	LightScryptN = 1 << 12
+	LightScryptP = 6
+
+	scryptR     = 8
+	scryptDKLen = 32
 )
 
 type keyStorePassphrase struct {
 	keysDirPath string
+	scryptN     int
+	scryptP     int
+	scryptR     int
+	scryptDKLen int
 }
 
-func NewKeyStorePassphrase(path string) KeyStore {
-	return &keyStorePassphrase{path}
+func NewKeyStorePassphrase(path string, scryptN int, scryptP int) KeyStore {
+	return &keyStorePassphrase{path, scryptN, scryptP, scryptR, scryptDKLen}
 }
 
 func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *Key, err error) {
@@ -87,11 +97,10 @@ func (ks keyStorePassphrase) GetKeyAddresses() (addresses []common.Address, err 
 func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	authArray := []byte(auth)
 	salt := randentropy.GetEntropyCSPRNG(32)
-	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptr, scryptp, scryptdkLen)
+	derivedKey, err := scrypt.Key(authArray, salt, ks.scryptN, ks.scryptR, ks.scryptP, ks.scryptDKLen)
 	if err != nil {
 		return err
 	}
-
 	encryptKey := derivedKey[:16]
 	keyBytes := FromECDSA(key.PrivateKey)
 
@@ -104,10 +113,10 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	mac := Sha3(derivedKey[16:32], cipherText)
 
 	scryptParamsJSON := make(map[string]interface{}, 5)
-	scryptParamsJSON["n"] = scryptN
-	scryptParamsJSON["r"] = scryptr
-	scryptParamsJSON["p"] = scryptp
-	scryptParamsJSON["dklen"] = scryptdkLen
+	scryptParamsJSON["n"] = ks.scryptN
+	scryptParamsJSON["r"] = ks.scryptR
+	scryptParamsJSON["p"] = ks.scryptP
+	scryptParamsJSON["dklen"] = ks.scryptDKLen
 	scryptParamsJSON["salt"] = hex.EncodeToString(salt)
 
 	cipherParamsJSON := cipherparamsJSON{

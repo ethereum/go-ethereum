@@ -100,7 +100,7 @@ func (self *minerApi) StartMiner(req *shared.Request) (interface{}, error) {
 	}
 
 	self.expanse.StartAutoDAG()
-	err := self.expanse.StartMining(args.Threads)
+	err := self.expanse.StartMining(args.Threads, "")
 	if err == nil {
 		return true, nil
 	}

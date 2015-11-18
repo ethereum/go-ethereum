@@ -102,7 +102,8 @@ func runBlockTest(ctx *cli.Context) {
 
 func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*exp.Expanse, error) {
 	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
-	cfg.NewDB = func(path string) (ethdb.Database, error) { return ethdb.NewMemDatabase() }
+	db, _ := ethdb.NewMemDatabase()
+	cfg.NewDB = func(path string) (ethdb.Database, error) { return db, nil }
 	cfg.MaxPeers = 0 // disable network
 	cfg.Shh = false  // disable whisper
 	cfg.NAT = nil    // disable port mapping
@@ -115,18 +116,21 @@ func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*exp.Expanse, err
 	// import the genesis block
 	expanse.ResetWithGenesisBlock(test.Genesis)
 	// import pre accounts
-	_, err = test.InsertPreState(expanse)
+	_, err = test.InsertPreState(db, cfg.AccountManager)
 
 	if err != nil {
 		return expanse, fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	cm := expanse.ChainManager()
+	cm := expanse.BlockChain()
 	validBlocks, err := test.TryBlocksInsert(cm)
 	if err != nil {
 		return expanse, fmt.Errorf("Block Test load error: %v", err)
 	}
-	newDB := cm.State()
+	newDB, err := cm.State()
+	if err != nil {
+		return expanse, fmt.Errorf("Block Test get state error: %v", err)
+	}
 	if err := test.ValidatePostState(newDB); err != nil {
 		return expanse, fmt.Errorf("post state validation failed: %v", err)
 	}
