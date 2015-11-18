@@ -46,6 +46,10 @@ var (
 	emptyState = crypto.Sha3Hash(nil)
 )
 
+func ClearGlobalCache() {
+	globalCache.Clear()
+}
+
 var ErrMissingRoot = errors.New("missing root node")
 
 // OdrAccess is an interface to on-demand network access layer
