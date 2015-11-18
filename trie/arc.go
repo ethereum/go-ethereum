@@ -62,6 +62,17 @@ func newARC(c int) *arc {
 	}
 }
 
+func (a *arc) Clear() {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	a.p = 0
+	a.t1 = list.New()
+	a.b1 = list.New()
+	a.t2 = list.New()
+	a.b2 = list.New()
+	a.cache = make(map[string]*entry, a.c)
+}
+
 // Put inserts a new key-value pair into the cache.
 // This optimizes future access to this entry (side effect).
 func (a *arc) Put(key hashNode, value node) bool {

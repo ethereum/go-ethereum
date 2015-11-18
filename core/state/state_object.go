@@ -22,12 +22,14 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
+	"github.com/ethereum/go-ethereum/core/requests"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"golang.org/x/net/context"
 )
 
 type Code []byte
@@ -57,7 +59,8 @@ func (self Storage) Copy() Storage {
 
 type StateObject struct {
 	// State database for storing state changes
-	db   ethdb.Database
+	ca   *access.ChainAccess
+	ctx context.Context
 	trie *trie.SecureTrie
 
 	// Address belonging to this account
@@ -83,14 +86,14 @@ type StateObject struct {
 	dirty   bool
 }
 
-func NewStateObject(address common.Address, db ethdb.Database) *StateObject {
-	object := &StateObject{db: db, address: address, balance: new(big.Int), dirty: true}
-	object.trie, _ = trie.NewSecure(common.Hash{}, db)
+func NewStateObject(ctx context.Context, address common.Address, ca *access.ChainAccess) *StateObject {
+	object := &StateObject{ca: ca, ctx: ctx, address: address, balance: new(big.Int), dirty: true}
+	object.trie, _ = trie.NewSecure(common.Hash{}, ca.Db())
 	object.storage = make(Storage)
 	return object
 }
 
-func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Database) *StateObject {
+func NewStateObjectFromBytes(ctx context.Context, address common.Address, data []byte, ca *access.ChainAccess) *StateObject {
 	var extobject struct {
 		Nonce    uint64
 		Balance  *big.Int
@@ -102,20 +105,20 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Datab
 		glog.Errorf("can't decode state object %x: %v", address, err)
 		return nil
 	}
-	trie, err := trie.NewSecure(extobject.Root, db)
+	trie, err := trie.NewSecureOdr(ctx, extobject.Root, ca.Db(), requests.NewTrieAccess(ca, extobject.Root, ca.Db()))
 	if err != nil {
 		// TODO: bubble this up or panic
 		glog.Errorf("can't create account trie with root %x: %v", extobject.Root[:], err)
 		return nil
 	}
 
-	object := &StateObject{address: address, db: db}
+	object := &StateObject{address: address, ca: ca, ctx: ctx}
 	object.nonce = extobject.Nonce
 	object.balance = extobject.Balance
 	object.codeHash = extobject.CodeHash
 	object.trie = trie
 	object.storage = make(map[string]common.Hash)
-	object.code, _ = db.Get(extobject.CodeHash)
+	object.code = requests.RetrieveNodeData(ctx, ca, common.BytesToHash(extobject.CodeHash))
 	return object
 }
 
@@ -130,7 +133,8 @@ func (self *StateObject) MarkForDeletion() {
 
 func (c *StateObject) getAddr(addr common.Hash) common.Hash {
 	var ret []byte
-	rlp.DecodeBytes(c.trie.Get(addr[:]), &ret)
+	value := c.trie.Get(addr[:])
+	rlp.DecodeBytes(value, &ret)
 	return common.BytesToHash(ret)
 }
 
@@ -205,12 +209,22 @@ func (c *StateObject) St() Storage {
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (c *StateObject) ReturnGas(gas, price *big.Int) {}
 
+// Copy creates a copy of the state object
 func (self *StateObject) Copy() *StateObject {
-	stateObject := NewStateObject(self.Address(), self.db)
+	return self.CopyOdr(access.NoOdr)
+}
+
+// CopyOdr creates a copy of the state object with ODR option
+func (self *StateObject) CopyOdr(ctx context.Context) *StateObject {
+	stateObject := NewStateObject(ctx, self.Address(), self.ca)
 	stateObject.balance.Set(self.balance)
 	stateObject.codeHash = common.CopyBytes(self.codeHash)
 	stateObject.nonce = self.nonce
-	stateObject.trie = self.trie
+	if access.IsOdrContext(ctx) {
+		stateObject.trie = self.trie.CopySecureWithOdr(ctx, requests.NewTrieAccess(self.ca, common.BytesToHash(self.trie.Root()), self.ca.Db()))
+	} else {
+		stateObject.trie = self.trie
+	}
 	stateObject.code = common.CopyBytes(self.code)
 	stateObject.initCode = common.CopyBytes(self.initCode)
 	stateObject.storage = self.storage.Copy()

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -29,6 +30,33 @@ func TestProof(t *testing.T) {
 		}
 		if !bytes.Equal(val, kv.v) {
 			t.Fatalf("VerifyProof returned wrong value for key %x: got %x, want %x", kv.k, val, kv.v)
+		}
+	}
+}
+
+func TestStoreProof(t *testing.T) {
+	trie, vals := randomTrie(500)
+	root := trie.Hash()
+	mdb, _ := ethdb.NewMemDatabase()	
+	for _, kv := range vals {
+		proof := trie.Prove(kv.k)
+		if proof == nil {
+			t.Fatalf("missing key %x while constructing proof", kv.k)
+		}
+		val, err := VerifyProof(root, kv.k, proof)
+		if err != nil {
+			t.Fatalf("VerifyProof error for key %x: %v\nraw proof: %x", kv.k, err, proof)
+		}
+		if !bytes.Equal(val, kv.v) {
+			t.Fatalf("VerifyProof returned wrong value for key %x: got %x, want %x", kv.k, val, kv.v)
+		}
+		StoreProof(mdb, proof)
+	}
+	ClearGlobalCache()
+	mtrie, _ := New(root, mdb)
+	for _, kv := range vals {
+		if !bytes.Equal(mtrie.Get(kv.k), kv.v) {
+			t.Fatalf("Can't retrieve stored proof")
 		}
 	}
 }

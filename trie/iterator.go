@@ -100,7 +100,7 @@ func (self *Iterator) next(node interface{}, key []byte, isIterStart bool) []byt
 		}
 
 	case hashNode:
-		return self.next(self.trie.resolveHash(node), key, isIterStart)
+		return self.next(self.trie.resolveHash(node, nil, nil), key, isIterStart)
 	}
 	return nil
 }
@@ -127,7 +127,7 @@ func (self *Iterator) key(node interface{}) []byte {
 			}
 		}
 	case hashNode:
-		return self.key(self.trie.resolveHash(node))
+		return self.key(self.trie.resolveHash(node, nil, nil))
 	}
 
 	return nil

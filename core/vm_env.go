@@ -76,7 +76,7 @@ func (self *VMEnv) CanTransfer(from common.Address, balance *big.Int) bool {
 }
 
 func (self *VMEnv) MakeSnapshot() vm.Database {
-	return self.state.Copy()
+	return self.state.CopyWithCtx()
 }
 
 func (self *VMEnv) SetSnapshot(copy vm.Database) {

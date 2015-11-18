@@ -20,7 +20,9 @@ import (
 	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"golang.org/x/net/context"
 )
 
 var secureKeyPrefix = []byte("secure-key-")
@@ -50,14 +52,30 @@ type SecureTrie struct {
 // and returns ErrMissingRoot if the root node cannpt be found.
 // Accessing the trie loads nodes from db on demand.
 func NewSecure(root common.Hash, db Database) (*SecureTrie, error) {
+	return NewSecureOdr(access.NoOdr, root, db, nil)
+}
+
+// NewSecureOdr creates a trie with optional ODR. If ODR is enabled, an existing
+// root node in db is not required.
+func NewSecureOdr(ctx context.Context, root common.Hash, db Database, access OdrAccess) (*SecureTrie, error) {
 	if db == nil {
 		panic("NewSecure called with nil database")
 	}
-	trie, err := New(root, db)
+	trie, err := NewOdr(ctx, root, db, access)
 	if err != nil {
 		return nil, err
 	}
 	return &SecureTrie{Trie: trie}, nil
+}
+
+// CopySecureWithOdr creates a copy of a trie with additional ODR capability
+func (t *SecureTrie) CopySecureWithOdr(ctx context.Context, access OdrAccess) *SecureTrie {
+	return &SecureTrie{
+		Trie: t.Trie.CopyWithOdr(ctx, access),
+		hash: t.hash,
+		secKeyBuf: t.secKeyBuf,
+		hashKeyBuf: t.hashKeyBuf,
+	}
 }
 
 // Get returns the value for key stored in the trie.

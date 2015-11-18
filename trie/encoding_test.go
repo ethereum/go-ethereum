@@ -57,6 +57,12 @@ func (s *TrieEncodingSuite) TestCompactHexDecode(c *checker.C) {
 	c.Assert(res, checker.DeepEquals, exp)
 }
 
+func (s *TrieEncodingSuite) TestCompactHexEncode(c *checker.C) {
+	exp := []byte("verb")
+	res := compactHexEncode([]byte{7, 6, 6, 5, 7, 2, 6, 2, 16})
+	c.Assert(res, checker.DeepEquals, exp)
+}
+
 func (s *TrieEncodingSuite) TestCompactDecode(c *checker.C) {
 	// odd compact decode
 	exp := []byte{1, 2, 3, 4, 5}

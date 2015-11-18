@@ -26,10 +26,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -58,10 +58,10 @@ type blockFetcherFn func([]common.Hash) error
 type ProtocolManager struct {
 	networkId int
 
-	fastSync   bool
-	txpool     txPool
-	blockchain *core.BlockChain
-	chaindb    ethdb.Database
+	fastSync    bool
+	txpool      txPool
+	blockchain  *core.BlockChain
+	chainAccess *access.ChainAccess
 
 	downloader *downloader.Downloader
 	fetcher    *fetcher.Fetcher
@@ -86,7 +86,7 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
+func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, blockchain *core.BlockChain, ca *access.ChainAccess) (*ProtocolManager, error) {
 	// Figure out whether to allow fast sync or not
 	if fastSync && blockchain.CurrentBlock().NumberU64() > 0 {
 		glog.V(logger.Info).Infof("blockchain not empty, fast sync disabled")
@@ -94,22 +94,22 @@ func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool
 	}
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		networkId:  networkId,
-		fastSync:   fastSync,
-		eventMux:   mux,
-		txpool:     txpool,
-		blockchain: blockchain,
-		chaindb:    chaindb,
-		peers:      newPeerSet(),
-		newPeerCh:  make(chan *peer, 1),
-		txsyncCh:   make(chan *txsync),
-		quitSync:   make(chan struct{}),
+		networkId:   networkId,
+		fastSync:    fastSync,
+		eventMux:    mux,
+		txpool:      txpool,
+		blockchain:  blockchain,
+		chainAccess: ca,
+		peers:       newPeerSet(),
+		newPeerCh:   make(chan *peer, 1),
+		txsyncCh:    make(chan *txsync),
+		quitSync:    make(chan struct{}),
 	}
 	// Initiate a sub-protocol for every implemented version we can handle
 	manager.SubProtocols = make([]p2p.Protocol, 0, len(ProtocolVersions))
 	for i, version := range ProtocolVersions {
 		// Skip protocol version if incompatible with the mode of operation
-		if fastSync && version < eth63 {
+		if manager.fastSync && version < eth63 {
 			continue
 		}
 		// Compatible; initialise the sub-protocol
@@ -137,9 +137,8 @@ func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool
 	if len(manager.SubProtocols) == 0 {
 		return nil, errIncompatibleConfig
 	}
-	// Construct the different synchronisation mechanisms
-	manager.downloader = downloader.New(chaindb, manager.eventMux, blockchain.HasHeader, blockchain.HasBlock, blockchain.GetHeader, blockchain.GetBlock,
-		blockchain.CurrentHeader, blockchain.CurrentBlock, blockchain.CurrentFastBlock, blockchain.FastSyncCommitHead, blockchain.GetTd,
+	manager.downloader = downloader.New(ca.Db(), manager.eventMux, blockchain.HasHeader, blockchain.HasBlock, blockchain.GetHeader,
+		blockchain.GetBlock, blockchain.CurrentHeader, blockchain.CurrentBlock, blockchain.CurrentFastBlock, blockchain.FastSyncCommitHead, blockchain.GetTd,
 		blockchain.InsertHeaderChain, blockchain.InsertChain, blockchain.InsertReceiptChain, blockchain.Rollback, manager.removePeer)
 
 	validator := func(block *types.Block, parent *types.Block) error {
@@ -233,6 +232,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		p.RequestHeadersByNumber, p.RequestBodies, p.RequestReceipts, p.RequestNodeData); err != nil {
 		return err
 	}
+
 	// Propagate existing transactions. new transactions appearing
 	// after this will be sent via broadcasts.
 	pm.syncTransactions(p)
@@ -292,7 +292,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			request.Amount = uint64(downloader.MaxHashFetch)
 		}
 		// Calculate the last block that should be retrieved, and short circuit if unavailable
-		last := pm.blockchain.GetBlockByNumber(request.Number + request.Amount - 1)
+		last := pm.blockchain.GetBlockByNumber(request.Number+request.Amount-1)
 		if last == nil {
 			last = pm.blockchain.CurrentBlock()
 			request.Amount = last.NumberU64() - request.Number + 1
@@ -517,7 +517,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				return errResp(ErrDecode, "msg %v: %v", msg, err)
 			}
 			// Retrieve the requested state entry, stopping if enough was found
-			if entry, err := pm.chaindb.Get(hash.Bytes()); err == nil {
+			if entry, err := pm.chainAccess.Db().Get(hash.Bytes()); err == nil {
 				data = append(data, entry)
 				bytes += len(entry)
 			}
@@ -555,7 +555,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				return errResp(ErrDecode, "msg %v: %v", msg, err)
 			}
 			// Retrieve the requested block's receipts, skipping if unknown to us
-			results := core.GetBlockReceipts(pm.chaindb, hash)
+			results := core.GetBlockReceipts(pm.chainAccess, hash)
 			if results == nil {
 				if header := pm.blockchain.GetHeader(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
 					continue

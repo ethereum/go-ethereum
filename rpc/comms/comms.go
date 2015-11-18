@@ -19,12 +19,12 @@ package comms
 import (
 	"io"
 	"net"
-
 	"fmt"
 	"strings"
-
 	"strconv"
+	"time"
 
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/codec"
@@ -69,6 +69,8 @@ func handle(id int, conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 		codec.Close()
 	}()
 
+	channelID := access.NewChannelID(time.Second)
+
 	for {
 		requests, isBatch, err := codec.ReadRequest()
 		if err == io.EOF {
@@ -78,11 +80,21 @@ func handle(id int, conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 			return
 		}
 
+		ctx, _ := access.NewContext(channelID)
+
 		if isBatch {
 			responses := make([]*interface{}, len(requests))
 			responseCount := 0
+			var res interface{}
+			var err error
 			for _, req := range requests {
-				res, err := api.Execute(req)
+				if access.Terminated(ctx) {
+					res = nil
+					err = ctx.Err()
+				} else {
+					req.SetCtx(ctx)
+					res, err = api.Execute(req)
+				}
 				if req.Id != nil {
 					rpcResponse := shared.NewRpcResponse(req.Id, req.Jsonrpc, res, err)
 					responses[responseCount] = rpcResponse
@@ -97,7 +109,12 @@ func handle(id int, conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 			}
 		} else {
 			var rpcResponse interface{}
+			requests[0].SetCtx(ctx)
 			res, err := api.Execute(requests[0])
+			if access.Terminated(ctx) {
+				res = nil
+				err = ctx.Err()
+			}
 
 			rpcResponse = shared.NewRpcResponse(requests[0].Id, requests[0].Jsonrpc, res, err)
 			err = codec.WriteResponse(rpcResponse)

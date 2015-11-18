@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -179,7 +180,7 @@ func dump(ctx *cli.Context) {
 			fmt.Println("{}")
 			utils.Fatalf("block not found")
 		} else {
-			state, err := state.New(block.Root(), chainDb)
+			state, err := state.New(block.Root(), access.NewDbChainAccess(chainDb))
 			if err != nil {
 				utils.Fatalf("could not create new state: %v", err)
 				return

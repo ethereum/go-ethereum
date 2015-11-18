@@ -23,12 +23,15 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
+	"github.com/ethereum/go-ethereum/core/requests"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -182,16 +185,31 @@ func GetHeader(db ethdb.Database, hash common.Hash) *types.Header {
 	return header
 }
 
-// GetBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
-func GetBodyRLP(db ethdb.Database, hash common.Hash) rlp.RawValue {
-	data, _ := db.Get(append(append(blockPrefix, hash[:]...), bodySuffix...))
-	return data
+// GetBodyRLP retrieves the block body (transactions and uncles) from the
+// database in RLP encoding.
+func GetBodyRLP(ca *access.ChainAccess, hash common.Hash) rlp.RawValue {
+	return GetBodyRLPOdr(access.NoOdr, ca, hash)
+}
+
+// GetBodyRLPOdr retrieves the block body (transactions and uncles) from the
+// database or network in RLP encoding.
+func GetBodyRLPOdr(ctx context.Context, ca *access.ChainAccess, hash common.Hash) rlp.RawValue {
+	//fmt.Println("request block %v", hash)
+	r := requests.NewBlockAccess(ca.Db(), hash, GetHeader)
+	ca.Retrieve(ctx, r)
+	return r.GetRlp()
 }
 
 // GetBody retrieves the block body (transactons, uncles) corresponding to the
-// hash, nil if none found.
-func GetBody(db ethdb.Database, hash common.Hash) *types.Body {
-	data := GetBodyRLP(db, hash)
+// hash from the database, nil if none found.
+func GetBody(ca *access.ChainAccess, hash common.Hash) *types.Body {
+	return GetBodyOdr(access.NoOdr, ca, hash)
+}
+
+// GetBodyOdr retrieves the block body (transactons, uncles) corresponding to the
+// hash from the database or network, nil if none found.
+func GetBodyOdr(ctx context.Context, ca *access.ChainAccess, hash common.Hash) *types.Body {
+	data := GetBodyRLPOdr(ctx, ca, hash)
 	if len(data) == 0 {
 		return nil
 	}
@@ -218,15 +236,21 @@ func GetTd(db ethdb.Database, hash common.Hash) *big.Int {
 	return td
 }
 
-// GetBlock retrieves an entire block corresponding to the hash, assembling it
-// back from the stored header and body.
-func GetBlock(db ethdb.Database, hash common.Hash) *types.Block {
+// GetBlock retrieves an entire block from the database corresponding to the
+// hash, assembling it back from the stored header and body.
+func GetBlock(ca *access.ChainAccess, hash common.Hash) *types.Block {
+	return GetBlockOdr(access.NoOdr, ca, hash)
+}
+
+// GetBlockOdr retrieves an entire block from database or network corresponding
+// to the hash, assembling it back from the stored header and body.
+func GetBlockOdr(ctx context.Context, ca *access.ChainAccess, hash common.Hash) *types.Block {
 	// Retrieve the block header and body contents
-	header := GetHeader(db, hash)
+	header := GetHeader(ca.Db(), hash)
 	if header == nil {
 		return nil
 	}
-	body := GetBody(db, hash)
+	body := GetBodyOdr(ctx, ca, hash)
 	if body == nil {
 		return nil
 	}

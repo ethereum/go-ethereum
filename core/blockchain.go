@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -43,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/hashicorp/golang-lru"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -64,6 +66,7 @@ const (
 )
 
 type BlockChain struct {
+	chainAccess  *access.ChainAccess
 	chainDb      ethdb.Database
 	processor    types.BlockProcessor
 	eventMux     *event.TypeMux
@@ -95,7 +98,7 @@ type BlockChain struct {
 	rand *mrand.Rand
 }
 
-func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*BlockChain, error) {
+func NewBlockChain(chainAccess *access.ChainAccess, pow pow.PoW, mux *event.TypeMux) (*BlockChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
@@ -104,7 +107,8 @@ func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*Bl
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 
 	bc := &BlockChain{
-		chainDb:      chainDb,
+		chainDb:      chainAccess.Db(),
+		chainAccess:  chainAccess,
 		eventMux:     mux,
 		quit:         make(chan struct{}),
 		headerCache:  headerCache,
@@ -128,7 +132,7 @@ func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*Bl
 		if err != nil {
 			return nil, err
 		}
-		bc.genesisBlock, err = WriteGenesisBlock(chainDb, reader)
+		bc.genesisBlock, err = WriteGenesisBlock(bc.chainDb, reader)
 		if err != nil {
 			return nil, err
 		}
@@ -344,8 +348,14 @@ func (self *BlockChain) SetProcessor(proc types.BlockProcessor) {
 	self.processor = proc
 }
 
+// State returns a new StateDB for the current block
 func (self *BlockChain) State() (*state.StateDB, error) {
-	return state.New(self.CurrentBlock().Root(), self.chainDb)
+	return state.New(self.CurrentBlock().Root(), self.chainAccess)
+}
+
+// StateOdr returns a new StateDB for the current block with ODR enabled
+func (self *BlockChain) StateOdr(ctx context.Context) (*state.StateDB, error) {
+	return state.NewOdr(ctx, self.CurrentBlock().Root(), self.chainAccess)
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
@@ -482,12 +492,18 @@ func (self *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
 // GetBody retrieves a block body (transactions and uncles) from the database by
 // hash, caching it if found.
 func (self *BlockChain) GetBody(hash common.Hash) *types.Body {
+	return self.GetBodyOdr(access.NoOdr, hash)
+}
+
+// GetBodyOdr retrieves a block body (transactions and uncles) from the database
+// or network by hash, caching it if found.
+func (self *BlockChain) GetBodyOdr(ctx context.Context, hash common.Hash) *types.Body {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := self.bodyCache.Get(hash); ok {
 		body := cached.(*types.Body)
 		return body
 	}
-	body := GetBody(self.chainDb, hash)
+	body := GetBodyOdr(ctx, self.chainAccess, hash)
 	if body == nil {
 		return nil
 	}
@@ -499,11 +515,17 @@ func (self *BlockChain) GetBody(hash common.Hash) *types.Body {
 // GetBodyRLP retrieves a block body in RLP encoding from the database by hash,
 // caching it if found.
 func (self *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
+	return self.GetBodyRLPOdr(access.NoOdr, hash)
+}
+
+// GetBodyRLPOdr retrieves a block body in RLP encoding from the database or
+// network by hash, caching it if found.
+func (self *BlockChain) GetBodyRLPOdr(ctx context.Context, hash common.Hash) rlp.RawValue {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := self.bodyRLPCache.Get(hash); ok {
 		return cached.(rlp.RawValue)
 	}
-	body := GetBodyRLP(self.chainDb, hash)
+	body := GetBodyRLPOdr(ctx, self.chainAccess, hash)
 	if len(body) == 0 {
 		return nil
 	}
@@ -536,11 +558,16 @@ func (bc *BlockChain) HasBlock(hash common.Hash) bool {
 
 // GetBlock retrieves a block from the database by hash, caching it if found.
 func (self *BlockChain) GetBlock(hash common.Hash) *types.Block {
+	return self.GetBlockOdr(access.NoOdr, hash)
+}
+
+// GetBlockOdr retrieves a block from the database or network by hash, caching it if found.
+func (self *BlockChain) GetBlockOdr(ctx context.Context, hash common.Hash) *types.Block {
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := self.blockCache.Get(hash); ok {
 		return block.(*types.Block)
 	}
-	block := GetBlock(self.chainDb, hash)
+	block := GetBlockOdr(ctx, self.chainAccess, hash)
 	if block == nil {
 		return nil
 	}
@@ -552,11 +579,17 @@ func (self *BlockChain) GetBlock(hash common.Hash) *types.Block {
 // GetBlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
 func (self *BlockChain) GetBlockByNumber(number uint64) *types.Block {
+	return self.GetBlockByNumberOdr(access.NoOdr, number)
+}
+
+// GetBlockByNumberOdr retrieves a block from the database or network by number,
+// caching it (associated with its hash) if found.
+func (self *BlockChain) GetBlockByNumberOdr(ctx context.Context, number uint64) *types.Block {
 	hash := GetCanonicalHash(self.chainDb, number)
 	if hash == (common.Hash{}) {
 		return nil
 	}
-	return self.GetBlock(hash)
+	return self.GetBlockOdr(ctx, hash)
 }
 
 // GetBlockHashesFromHash retrieves a number of block hashes starting at a given
@@ -1209,7 +1242,7 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		if err := PutTransactions(self.chainDb, block, block.Transactions()); err != nil {
 			return err
 		}
-		receipts := GetBlockReceipts(self.chainDb, block.Hash())
+		receipts := GetBlockReceipts(self.chainAccess, block.Hash())
 		// write receipts
 		if err := PutReceipts(self.chainDb, receipts); err != nil {
 			return err

@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -35,7 +36,6 @@ func TestProtocolCompatibility(t *testing.T) {
 	// Try all available compatibility configs and check for errors
 	for i, tt := range tests {
 		ProtocolVersions = []uint{tt.version}
-
 		pm, err := newTestProtocolManager(tt.fastSync, 0, nil, nil)
 		if pm != nil {
 			defer pm.Stop()
@@ -62,14 +62,14 @@ func testGetBlockHashes(t *testing.T, protocol int) {
 		number int
 		result int
 	}{
-		{common.Hash{}, 1, 0},                                   // Make sure non existent hashes don't return results
-		{pm.blockchain.Genesis().Hash(), 1, 0},                  // There are no hashes to retrieve up from the genesis
-		{pm.blockchain.GetBlockByNumber(5).Hash(), 5, 5},        // All the hashes including the genesis requested
-		{pm.blockchain.GetBlockByNumber(5).Hash(), 10, 5},       // More hashes than available till the genesis requested
-		{pm.blockchain.GetBlockByNumber(100).Hash(), 10, 10},    // All hashes available from the middle of the chain
-		{pm.blockchain.CurrentBlock().Hash(), 10, 10},           // All hashes available from the head of the chain
-		{pm.blockchain.CurrentBlock().Hash(), limit, limit},     // Request the maximum allowed hash count
-		{pm.blockchain.CurrentBlock().Hash(), limit + 1, limit}, // Request more than the maximum allowed hash count
+		{common.Hash{}, 1, 0},                                              // Make sure non existent hashes don't return results
+		{pm.blockchain.Genesis().Hash(), 1, 0},                             // There are no hashes to retrieve up from the genesis
+		{pm.blockchain.GetBlockByNumber(5).Hash(), 5, 5},     // All the hashes including the genesis requested
+		{pm.blockchain.GetBlockByNumber(5).Hash(), 10, 5},    // More hashes than available till the genesis requested
+		{pm.blockchain.GetBlockByNumber(100).Hash(), 10, 10}, // All hashes available from the middle of the chain
+		{pm.blockchain.CurrentBlock().Hash(), 10, 10},                      // All hashes available from the head of the chain
+		{pm.blockchain.CurrentBlock().Hash(), limit, limit},                // Request the maximum allowed hash count
+		{pm.blockchain.CurrentBlock().Hash(), limit + 1, limit},            // Request more than the maximum allowed hash count
 	}
 	// Run each of the tests and verify the results against the chain
 	for i, tt := range tests {
@@ -78,7 +78,7 @@ func testGetBlockHashes(t *testing.T, protocol int) {
 		if len(resp) > 0 {
 			from := pm.blockchain.GetBlock(tt.origin).NumberU64() - 1
 			for j := 0; j < len(resp); j++ {
-				resp[j] = pm.blockchain.GetBlockByNumber(uint64(int(from) - j)).Hash()
+				resp[j] = pm.blockchain.GetBlockByNumber(uint64(int(from)-j)).Hash()
 			}
 		}
 		// Send the hash request and verify the response
@@ -120,7 +120,7 @@ func testGetBlockHashesFromNumber(t *testing.T, protocol int) {
 		// Assemble the hash response we would like to receive
 		resp := make([]common.Hash, tt.result)
 		for j := 0; j < len(resp); j++ {
-			resp[j] = pm.blockchain.GetBlockByNumber(tt.origin + uint64(j)).Hash()
+			resp[j] = pm.blockchain.GetBlockByNumber(tt.origin+uint64(j)).Hash()
 		}
 		// Send the hash request and verify the response
 		p2p.Send(peer.app, 0x08, getBlockHashesFromNumberData{tt.origin, uint64(tt.number)})
@@ -222,42 +222,42 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 	}{
 		// A single random block should be retrievable by hash and number too
 		{
-			&getBlockHeadersData{Origin: hashOrNumber{Hash: pm.blockchain.GetBlockByNumber(limit / 2).Hash()}, Amount: 1},
-			[]common.Hash{pm.blockchain.GetBlockByNumber(limit / 2).Hash()},
+			&getBlockHeadersData{Origin: hashOrNumber{Hash: pm.blockchain.GetBlockByNumber(limit/2).Hash()}, Amount: 1},
+			[]common.Hash{pm.blockchain.GetBlockByNumber(limit/2).Hash()},
 		}, {
 			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 1},
-			[]common.Hash{pm.blockchain.GetBlockByNumber(limit / 2).Hash()},
+			[]common.Hash{pm.blockchain.GetBlockByNumber(limit/2).Hash()},
 		},
 		// Multiple headers should be retrievable in both directions
 		{
 			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 3},
 			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(limit / 2).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 + 1).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 + 2).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2+1).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2+2).Hash(),
 			},
 		}, {
 			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 3, Reverse: true},
 			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(limit / 2).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 - 1).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 - 2).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2-1).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2-2).Hash(),
 			},
 		},
 		// Multiple headers with skip lists should be retrievable
 		{
 			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3},
 			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(limit / 2).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 + 4).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 + 8).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2+4).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2+8).Hash(),
 			},
 		}, {
 			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Skip: 3, Amount: 3, Reverse: true},
 			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(limit / 2).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 - 4).Hash(),
-				pm.blockchain.GetBlockByNumber(limit/2 - 8).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2-4).Hash(),
+				pm.blockchain.GetBlockByNumber(limit/2-8).Hash(),
 			},
 		},
 		// The chain endpoints should be retrievable
@@ -277,7 +277,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		{
 			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.blockchain.CurrentBlock().NumberU64() - 4}, Skip: 3, Amount: 3},
 			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64() - 4).Hash(),
+				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64()-4).Hash(),
 				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64()).Hash(),
 			},
 		}, {
@@ -291,8 +291,8 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		{
 			&getBlockHeadersData{Origin: hashOrNumber{Number: pm.blockchain.CurrentBlock().NumberU64() - 4}, Skip: 2, Amount: 3},
 			[]common.Hash{
-				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64() - 4).Hash(),
-				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64() - 1).Hash(),
+				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64()-4).Hash(),
+				pm.blockchain.GetBlockByNumber(pm.blockchain.CurrentBlock().NumberU64()-1).Hash(),
 			},
 		}, {
 			&getBlockHeadersData{Origin: hashOrNumber{Number: 4}, Skip: 2, Amount: 3, Reverse: true},
@@ -365,7 +365,7 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 	for i, tt := range tests {
 		// Collect the hashes to request, and the response to expect
 		hashes, seen := []common.Hash{}, make(map[int64]bool)
-		bodies := []*blockBody{}
+		bodies := []*types.Body{}
 
 		for j := 0; j < tt.random; j++ {
 			for {
@@ -376,7 +376,7 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 					block := pm.blockchain.GetBlockByNumber(uint64(num))
 					hashes = append(hashes, block.Hash())
 					if len(bodies) < tt.expected {
-						bodies = append(bodies, &blockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
+						bodies = append(bodies, &types.Body{Transactions: block.Transactions(), Uncles: block.Uncles()})
 					}
 					break
 				}
@@ -386,7 +386,7 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 			hashes = append(hashes, hash)
 			if tt.available[j] && len(bodies) < tt.expected {
 				block := pm.blockchain.GetBlock(hash)
-				bodies = append(bodies, &blockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
+				bodies = append(bodies, &types.Body{Transactions: block.Transactions(), Uncles: block.Uncles()})
 			}
 		}
 		// Send the hash request and verify the response
@@ -442,7 +442,7 @@ func testGetNodeData(t *testing.T, protocol int) {
 
 	// Fetch for now the entire chain db
 	hashes := []common.Hash{}
-	for _, key := range pm.chaindb.(*ethdb.MemDatabase).Keys() {
+	for _, key := range pm.chainAccess.Db().(*ethdb.MemDatabase).Keys() {
 		if len(key) == len(common.Hash{}) {
 			hashes = append(hashes, common.BytesToHash(key))
 		}
@@ -471,7 +471,7 @@ func testGetNodeData(t *testing.T, protocol int) {
 	}
 	accounts := []common.Address{testBankAddress, acc1Addr, acc2Addr}
 	for i := uint64(0); i <= pm.blockchain.CurrentBlock().NumberU64(); i++ {
-		trie, _ := state.New(pm.blockchain.GetBlockByNumber(i).Root(), statedb)
+		trie, _ := state.New(pm.blockchain.GetBlockByNumber(i).Root(), access.NewDbChainAccess(statedb))
 
 		for j, acc := range accounts {
 			state, _ := pm.blockchain.State()
@@ -537,7 +537,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 		block := pm.blockchain.GetBlockByNumber(i)
 
 		hashes = append(hashes, block.Hash())
-		receipts = append(receipts, core.GetBlockReceipts(pm.chaindb, block.Hash()))
+		receipts = append(receipts, core.GetBlockReceipts(pm.chainAccess, block.Hash()))
 	}
 	// Send the hash request and verify the response
 	p2p.Send(peer.app, 0x0f, hashes)

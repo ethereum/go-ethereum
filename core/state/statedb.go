@@ -22,10 +22,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/access"
+	"github.com/ethereum/go-ethereum/core/requests"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/trie"
+	"golang.org/x/net/context"
 )
 
 // The starting nonce determines the default nonce when new accounts are being
@@ -38,8 +41,9 @@ var StartingNonce uint64
 // * Contracts
 // * Accounts
 type StateDB struct {
-	db   ethdb.Database
+	ca   *access.ChainAccess
 	trie *trie.SecureTrie
+	ctx context.Context
 
 	stateObjects map[string]*StateObject
 
@@ -51,20 +55,31 @@ type StateDB struct {
 	logSize      uint
 }
 
-// Create a new state from a given trie
-func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
-	tr, err := trie.NewSecure(root, db)
+// New creates a new state from a given trie
+func New(root common.Hash, ca *access.ChainAccess) (*StateDB, error) {
+	return NewOdr(access.NoOdr, root, ca)
+}
+
+// NewOdr creates a new state from a given trie with ODR option
+func NewOdr(ctx context.Context, root common.Hash, ca *access.ChainAccess) (*StateDB, error) {
+	tr, err := trie.NewSecureOdr(ctx, root, ca.Db(), requests.NewTrieAccess(ca, root, ca.Db()))
 	if err != nil {
 		glog.Errorf("can't create state trie with root %x: %v", root[:], err)
 		return nil, err
 	}
 	return &StateDB{
-		db:           db,
+		ca:           ca,
 		trie:         tr,
+		ctx:		  ctx,
 		stateObjects: make(map[string]*StateObject),
 		refund:       new(big.Int),
 		logs:         make(map[common.Hash]vm.Logs),
 	}, nil
+}
+
+// Ctx returns the ODR context of the state
+func (self *StateDB) Ctx() context.Context {
+	return self.ctx
 }
 
 func (self *StateDB) StartRecord(thash, bhash common.Hash, ti int) {
@@ -208,7 +223,7 @@ func (self *StateDB) UpdateStateObject(stateObject *StateObject) {
 	//addr := stateObject.Address()
 
 	if len(stateObject.CodeHash()) > 0 {
-		self.db.Put(stateObject.CodeHash(), stateObject.code)
+		self.ca.Db().Put(stateObject.CodeHash(), stateObject.code)
 	}
 	addr := stateObject.Address()
 	self.trie.Update(addr[:], stateObject.RlpEncode())
@@ -220,7 +235,6 @@ func (self *StateDB) DeleteStateObject(stateObject *StateObject) {
 
 	addr := stateObject.Address()
 	self.trie.Delete(addr[:])
-	//delete(self.stateObjects, addr.Str())
 }
 
 // Retrieve a state object given my the address. Nil if not found
@@ -239,7 +253,7 @@ func (self *StateDB) GetStateObject(addr common.Address) (stateObject *StateObje
 		return nil
 	}
 
-	stateObject = NewStateObjectFromBytes(addr, []byte(data), self.db)
+	stateObject = NewStateObjectFromBytes(self.ctx, addr, []byte(data), self.ca)
 	self.SetStateObject(stateObject)
 
 	return stateObject
@@ -265,7 +279,7 @@ func (self *StateDB) newStateObject(addr common.Address) *StateObject {
 		glog.Infof("(+) %x\n", addr)
 	}
 
-	stateObject := NewStateObject(addr, self.db)
+	stateObject := NewStateObject(self.ctx, addr, self.ca)
 	stateObject.SetNonce(StartingNonce)
 	self.stateObjects[addr.Str()] = stateObject
 
@@ -295,12 +309,27 @@ func (self *StateDB) CreateAccount(addr common.Address) vm.Account {
 // Setting, copying of the state methods
 //
 
+// CopyWithCtx creates a copy of the state, keeping the original ODR context
+func (self *StateDB) CopyWithCtx() *StateDB {
+	return self.CopyOdr(self.ctx)
+}
+
+// Copy creates a copy of the state with no ODR option
 func (self *StateDB) Copy() *StateDB {
+	return self.CopyOdr(access.NoOdr)
+}
+
+// CopyOdr creates a copy of the state with a new ODR context
+func (self *StateDB) CopyOdr(ctx context.Context) *StateDB {
 	// ignore error - we assume state-to-be-copied always exists
-	state, _ := New(common.Hash{}, self.db)
-	state.trie = self.trie
+	state, _ := NewOdr(ctx, common.Hash{}, self.ca)
+	if access.IsOdrContext(ctx) {
+		state.trie = self.trie.CopySecureWithOdr(ctx, requests.NewTrieAccess(self.ca, common.BytesToHash(self.trie.Root()), self.ca.Db()))
+	} else {
+		state.trie = self.trie
+	}
 	for k, stateObject := range self.stateObjects {
-		state.stateObjects[k] = stateObject.Copy()
+		state.stateObjects[k] = stateObject.CopyOdr(ctx)
 	}
 
 	state.refund.Set(self.refund)
@@ -348,14 +377,14 @@ func (s *StateDB) IntermediateRoot() common.Hash {
 
 // Commit commits all state changes to the database.
 func (s *StateDB) Commit() (root common.Hash, err error) {
-	return s.commit(s.db)
+	return s.commit(s.ca.Db())
 }
 
 // CommitBatch commits all state changes to a write batch but does not
 // execute the batch. It is used to validate state changes against
 // the root hash stored in a block.
 func (s *StateDB) CommitBatch() (root common.Hash, batch ethdb.Batch) {
-	batch = s.db.NewBatch()
+	batch = s.ca.Db().NewBatch()
 	root, _ = s.commit(batch)
 	return root, batch
 }
