@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -96,7 +97,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 
 	var (
 		db, _      = ethdb.NewMemDatabase()
-		statedb, _ = state.New(common.Hash{}, db)
+		statedb, _ = state.New(common.Hash{}, access.NewDbChainAccess(db))
 		vmenv      = NewEnv(cfg, statedb)
 		sender     = statedb.CreateAccount(cfg.Origin)
 		receiver   = statedb.CreateAccount(common.StringToAddress("contract"))
