@@ -130,7 +130,7 @@ var (
 		},
 		"shh": []string{
 			"post",
-			"newIdentify",
+			"newIdentity",
 			"hasIdentity",
 			"newGroup",
 			"addToGroup",
