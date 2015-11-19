@@ -95,16 +95,6 @@ func PromptPassword(prompt string, warnTerm bool) (string, error) {
 	return input, err
 }
 
-func CheckLegalese(datadir string) {
-	// check "first run"
-	if !common.FileExist(datadir) {
-		r, _ := PromptConfirm(legalese)
-		if !r {
-			Fatalf("Must accept to continue. Shutting down...\n")
-		}
-	}
-}
-
 // Fatalf formats a message to standard error and exits the program.
 // The message is also printed to standard output if standard error
 // is redirected to a different file.
