@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/ethash"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth"
@@ -166,11 +167,30 @@ func (self *debugApi) ProcessBlock(req *shared.Request) (interface{}, error) {
 	defer func() { vm.Debug = old }()
 	vm.Debug = true
 
-	_, err := self.ethereum.BlockProcessor().RetryProcess(block)
-	if err == nil {
-		return true, nil
+	var (
+		blockchain = self.ethereum.BlockChain()
+		validator  = blockchain.Validator()
+		processor  = blockchain.Processor()
+	)
+
+	err := core.ValidateHeader(blockchain.AuxValidator(), block.Header(), blockchain.GetHeader(block.ParentHash()), true, false)
+	if err != nil {
+		return false, err
 	}
-	return false, err
+	statedb, err := state.New(blockchain.GetBlock(block.ParentHash()).Root(), self.ethereum.ChainDb())
+	if err != nil {
+		return false, err
+	}
+	receipts, _, usedGas, err := processor.Process(block, statedb)
+	if err != nil {
+		return false, err
+	}
+	err = validator.ValidateState(block, blockchain.GetBlock(block.ParentHash()), statedb, receipts, usedGas)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func (self *debugApi) SeedHash(req *shared.Request) (interface{}, error) {

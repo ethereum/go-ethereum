@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -53,31 +54,29 @@ func theBlockChain(db ethdb.Database, t *testing.T) *BlockChain {
 	WriteTestNetGenesisBlock(db, 0)
 	blockchain, err := NewBlockChain(db, thePow(), &eventMux)
 	if err != nil {
-		t.Error("failed creating chainmanager:", err)
+		t.Error("failed creating blockchain:", err)
 		t.FailNow()
 		return nil
 	}
-	blockMan := NewBlockProcessor(db, nil, blockchain, &eventMux)
-	blockchain.SetProcessor(blockMan)
 
 	return blockchain
 }
 
 // Test fork of length N starting from block i
-func testFork(t *testing.T, processor *BlockProcessor, i, n int, full bool, comparator func(td1, td2 *big.Int)) {
+func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, comparator func(td1, td2 *big.Int)) {
 	// Copy old chain up to #i into a new db
-	db, processor2, err := newCanonical(i, full)
+	db, blockchain2, err := newCanonical(i, full)
 	if err != nil {
 		t.Fatal("could not make new canonical in testFork", err)
 	}
 	// Assert the chains have the same header/block at #i
 	var hash1, hash2 common.Hash
 	if full {
-		hash1 = processor.bc.GetBlockByNumber(uint64(i)).Hash()
-		hash2 = processor2.bc.GetBlockByNumber(uint64(i)).Hash()
+		hash1 = blockchain.GetBlockByNumber(uint64(i)).Hash()
+		hash2 = blockchain2.GetBlockByNumber(uint64(i)).Hash()
 	} else {
-		hash1 = processor.bc.GetHeaderByNumber(uint64(i)).Hash()
-		hash2 = processor2.bc.GetHeaderByNumber(uint64(i)).Hash()
+		hash1 = blockchain.GetHeaderByNumber(uint64(i)).Hash()
+		hash2 = blockchain2.GetHeaderByNumber(uint64(i)).Hash()
 	}
 	if hash1 != hash2 {
 		t.Errorf("chain content mismatch at %d: have hash %v, want hash %v", i, hash2, hash1)
@@ -88,13 +87,13 @@ func testFork(t *testing.T, processor *BlockProcessor, i, n int, full bool, comp
 		headerChainB []*types.Header
 	)
 	if full {
-		blockChainB = makeBlockChain(processor2.bc.CurrentBlock(), n, db, forkSeed)
-		if _, err := processor2.bc.InsertChain(blockChainB); err != nil {
+		blockChainB = makeBlockChain(blockchain2.CurrentBlock(), n, db, forkSeed)
+		if _, err := blockchain2.InsertChain(blockChainB); err != nil {
 			t.Fatalf("failed to insert forking chain: %v", err)
 		}
 	} else {
-		headerChainB = makeHeaderChain(processor2.bc.CurrentHeader(), n, db, forkSeed)
-		if _, err := processor2.bc.InsertHeaderChain(headerChainB, 1); err != nil {
+		headerChainB = makeHeaderChain(blockchain2.CurrentHeader(), n, db, forkSeed)
+		if _, err := blockchain2.InsertHeaderChain(headerChainB, 1); err != nil {
 			t.Fatalf("failed to insert forking chain: %v", err)
 		}
 	}
@@ -102,17 +101,17 @@ func testFork(t *testing.T, processor *BlockProcessor, i, n int, full bool, comp
 	var tdPre, tdPost *big.Int
 
 	if full {
-		tdPre = processor.bc.GetTd(processor.bc.CurrentBlock().Hash())
-		if err := testBlockChainImport(blockChainB, processor); err != nil {
+		tdPre = blockchain.GetTd(blockchain.CurrentBlock().Hash())
+		if err := testBlockChainImport(blockChainB, blockchain); err != nil {
 			t.Fatalf("failed to import forked block chain: %v", err)
 		}
-		tdPost = processor.bc.GetTd(blockChainB[len(blockChainB)-1].Hash())
+		tdPost = blockchain.GetTd(blockChainB[len(blockChainB)-1].Hash())
 	} else {
-		tdPre = processor.bc.GetTd(processor.bc.CurrentHeader().Hash())
-		if err := testHeaderChainImport(headerChainB, processor); err != nil {
+		tdPre = blockchain.GetTd(blockchain.CurrentHeader().Hash())
+		if err := testHeaderChainImport(headerChainB, blockchain); err != nil {
 			t.Fatalf("failed to import forked header chain: %v", err)
 		}
-		tdPost = processor.bc.GetTd(headerChainB[len(headerChainB)-1].Hash())
+		tdPost = blockchain.GetTd(headerChainB[len(headerChainB)-1].Hash())
 	}
 	// Compare the total difficulties of the chains
 	comparator(tdPre, tdPost)
@@ -127,37 +126,52 @@ func printChain(bc *BlockChain) {
 
 // testBlockChainImport tries to process a chain of blocks, writing them into
 // the database if successful.
-func testBlockChainImport(chain []*types.Block, processor *BlockProcessor) error {
+func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 	for _, block := range chain {
 		// Try and process the block
-		if _, _, err := processor.Process(block); err != nil {
+		err := blockchain.Validator().ValidateBlock(block)
+		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
 			}
 			return err
 		}
-		// Manually insert the block into the database, but don't reorganize (allows subsequent testing)
-		processor.bc.mu.Lock()
-		WriteTd(processor.chainDb, block.Hash(), new(big.Int).Add(block.Difficulty(), processor.bc.GetTd(block.ParentHash())))
-		WriteBlock(processor.chainDb, block)
-		processor.bc.mu.Unlock()
+		statedb, err := state.New(blockchain.GetBlock(block.ParentHash()).Root(), blockchain.chainDb)
+		if err != nil {
+			return err
+		}
+		receipts, _, usedGas, err := blockchain.Processor().Process(block, statedb)
+		if err != nil {
+			reportBlock(block, err)
+			return err
+		}
+		err = blockchain.Validator().ValidateState(block, blockchain.GetBlock(block.ParentHash()), statedb, receipts, usedGas)
+		if err != nil {
+			reportBlock(block, err)
+			return err
+		}
+		blockchain.mu.Lock()
+		WriteTd(blockchain.chainDb, block.Hash(), new(big.Int).Add(block.Difficulty(), blockchain.GetTd(block.ParentHash())))
+		WriteBlock(blockchain.chainDb, block)
+		statedb.Commit()
+		blockchain.mu.Unlock()
 	}
 	return nil
 }
 
 // testHeaderChainImport tries to process a chain of header, writing them into
 // the database if successful.
-func testHeaderChainImport(chain []*types.Header, processor *BlockProcessor) error {
+func testHeaderChainImport(chain []*types.Header, blockchain *BlockChain) error {
 	for _, header := range chain {
 		// Try and validate the header
-		if err := processor.ValidateHeader(header, false, false); err != nil {
+		if err := blockchain.Validator().ValidateHeader(header, blockchain.GetHeader(header.ParentHash), false); err != nil {
 			return err
 		}
 		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
-		processor.bc.mu.Lock()
-		WriteTd(processor.chainDb, header.Hash(), new(big.Int).Add(header.Difficulty, processor.bc.GetTd(header.ParentHash)))
-		WriteHeader(processor.chainDb, header)
-		processor.bc.mu.Unlock()
+		blockchain.mu.Lock()
+		WriteTd(blockchain.chainDb, header.Hash(), new(big.Int).Add(header.Difficulty, blockchain.GetTd(header.ParentHash)))
+		WriteHeader(blockchain.chainDb, header)
+		blockchain.mu.Unlock()
 	}
 	return nil
 }
@@ -313,19 +327,19 @@ func TestBrokenBlockChain(t *testing.T)  { testBrokenChain(t, true) }
 
 func testBrokenChain(t *testing.T, full bool) {
 	// Make chain starting from genesis
-	db, processor, err := newCanonical(10, full)
+	db, blockchain, err := newCanonical(10, full)
 	if err != nil {
 		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
 	// Create a forked chain, and try to insert with a missing link
 	if full {
-		chain := makeBlockChain(processor.bc.CurrentBlock(), 5, db, forkSeed)[1:]
-		if err := testBlockChainImport(chain, processor); err == nil {
+		chain := makeBlockChain(blockchain.CurrentBlock(), 5, db, forkSeed)[1:]
+		if err := testBlockChainImport(chain, blockchain); err == nil {
 			t.Errorf("broken block chain not reported")
 		}
 	} else {
-		chain := makeHeaderChain(processor.bc.CurrentHeader(), 5, db, forkSeed)[1:]
-		if err := testHeaderChainImport(chain, processor); err == nil {
+		chain := makeHeaderChain(blockchain.CurrentHeader(), 5, db, forkSeed)[1:]
+		if err := testHeaderChainImport(chain, blockchain); err == nil {
 			t.Errorf("broken header chain not reported")
 		}
 	}
@@ -415,9 +429,14 @@ func TestChainMultipleInsertions(t *testing.T) {
 
 type bproc struct{}
 
-func (bproc) Process(*types.Block) (vm.Logs, types.Receipts, error)                   { return nil, nil, nil }
-func (bproc) ValidateHeader(*types.Header, bool, bool) error                          { return nil }
-func (bproc) ValidateHeaderWithParent(*types.Header, *types.Header, bool, bool) error { return nil }
+func (bproc) ValidateBlock(*types.Block) error                        { return nil }
+func (bproc) ValidateHeader(*types.Header, *types.Header, bool) error { return nil }
+func (bproc) ValidateState(block, parent *types.Block, state *state.StateDB, receipts types.Receipts, usedGas *big.Int) error {
+	return nil
+}
+func (bproc) Process(block *types.Block, statedb *state.StateDB) (types.Receipts, vm.Logs, *big.Int, error) {
+	return nil, nil, nil, nil
+}
 
 func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Header {
 	blocks := makeBlockChainWithDiff(genesis, d, seed)
@@ -459,7 +478,8 @@ func chm(genesis *types.Block, db ethdb.Database) *BlockChain {
 	bc.tdCache, _ = lru.New(100)
 	bc.blockCache, _ = lru.New(100)
 	bc.futureBlocks, _ = lru.New(100)
-	bc.processor = bproc{}
+	bc.SetValidator(bproc{})
+	bc.SetProcessor(bproc{})
 	bc.ResetWithGenesisBlock(genesis)
 
 	return bc
@@ -612,12 +632,10 @@ func TestBlocksInsertNonceError(t *testing.T)  { testInsertNonceError(t, true) }
 func testInsertNonceError(t *testing.T, full bool) {
 	for i := 1; i < 25 && !t.Failed(); i++ {
 		// Create a pristine chain and database
-		db, processor, err := newCanonical(0, full)
+		db, blockchain, err := newCanonical(0, full)
 		if err != nil {
 			t.Fatalf("failed to create pristine chain: %v", err)
 		}
-		bc := processor.bc
-
 		// Create and insert a chain with a failing nonce
 		var (
 			failAt   int
@@ -626,34 +644,33 @@ func testInsertNonceError(t *testing.T, full bool) {
 			failHash common.Hash
 		)
 		if full {
-			blocks := makeBlockChain(processor.bc.CurrentBlock(), i, db, 0)
+			blocks := makeBlockChain(blockchain.CurrentBlock(), i, db, 0)
 
 			failAt = rand.Int() % len(blocks)
 			failNum = blocks[failAt].NumberU64()
 			failHash = blocks[failAt].Hash()
 
-			processor.bc.pow = failPow{failNum}
-			processor.Pow = failPow{failNum}
+			blockchain.pow = failPow{failNum}
 
-			failRes, err = processor.bc.InsertChain(blocks)
+			failRes, err = blockchain.InsertChain(blocks)
 		} else {
-			headers := makeHeaderChain(processor.bc.CurrentHeader(), i, db, 0)
+			headers := makeHeaderChain(blockchain.CurrentHeader(), i, db, 0)
 
 			failAt = rand.Int() % len(headers)
 			failNum = headers[failAt].Number.Uint64()
 			failHash = headers[failAt].Hash()
 
-			processor.bc.pow = failPow{failNum}
-			processor.Pow = failPow{failNum}
+			blockchain.pow = failPow{failNum}
+			blockchain.validator = NewBlockValidator(blockchain, failPow{failNum})
 
-			failRes, err = processor.bc.InsertHeaderChain(headers, 1)
+			failRes, err = blockchain.InsertHeaderChain(headers, 1)
 		}
 		// Check that the returned error indicates the nonce failure.
 		if failRes != failAt {
 			t.Errorf("test %d: failure index mismatch: have %d, want %d", i, failRes, failAt)
 		}
 		if !IsBlockNonceErr(err) {
-			t.Fatalf("test %d: error mismatch: have %v, want nonce error", i, err)
+			t.Fatalf("test %d: error mismatch: have %v, want nonce error %T", i, err, err)
 		}
 		nerr := err.(*BlockNonceErr)
 		if nerr.Number.Uint64() != failNum {
@@ -665,11 +682,11 @@ func testInsertNonceError(t *testing.T, full bool) {
 		// Check that all no blocks after the failing block have been inserted.
 		for j := 0; j < i-failAt; j++ {
 			if full {
-				if block := bc.GetBlockByNumber(failNum + uint64(j)); block != nil {
+				if block := blockchain.GetBlockByNumber(failNum + uint64(j)); block != nil {
 					t.Errorf("test %d: invalid block in chain: %v", i, block)
 				}
 			} else {
-				if header := bc.GetHeaderByNumber(failNum + uint64(j)); header != nil {
+				if header := blockchain.GetHeaderByNumber(failNum + uint64(j)); header != nil {
 					t.Errorf("test %d: invalid header in chain: %v", i, header)
 				}
 			}
@@ -711,7 +728,6 @@ func TestFastVsFullChains(t *testing.T) {
 	WriteGenesisBlockForTesting(archiveDb, GenesisAccount{address, funds})
 
 	archive, _ := NewBlockChain(archiveDb, FakePow{}, new(event.TypeMux))
-	archive.SetProcessor(NewBlockProcessor(archiveDb, FakePow{}, archive, new(event.TypeMux)))
 
 	if n, err := archive.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to process block %d: %v", n, err)
@@ -720,7 +736,6 @@ func TestFastVsFullChains(t *testing.T) {
 	fastDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
 	fast, _ := NewBlockChain(fastDb, FakePow{}, new(event.TypeMux))
-	fast.SetProcessor(NewBlockProcessor(fastDb, FakePow{}, fast, new(event.TypeMux)))
 
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -797,7 +812,6 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	WriteGenesisBlockForTesting(archiveDb, GenesisAccount{address, funds})
 
 	archive, _ := NewBlockChain(archiveDb, FakePow{}, new(event.TypeMux))
-	archive.SetProcessor(NewBlockProcessor(archiveDb, FakePow{}, archive, new(event.TypeMux)))
 
 	if n, err := archive.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to process block %d: %v", n, err)
@@ -810,7 +824,6 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	fastDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
 	fast, _ := NewBlockChain(fastDb, FakePow{}, new(event.TypeMux))
-	fast.SetProcessor(NewBlockProcessor(fastDb, FakePow{}, fast, new(event.TypeMux)))
 
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -830,7 +843,6 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	lightDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(lightDb, GenesisAccount{address, funds})
 	light, _ := NewBlockChain(lightDb, FakePow{}, new(event.TypeMux))
-	light.SetProcessor(NewBlockProcessor(lightDb, FakePow{}, light, new(event.TypeMux)))
 
 	if n, err := light.InsertHeaderChain(headers, 1); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
@@ -895,9 +907,8 @@ func TestChainTxReorgs(t *testing.T) {
 	})
 	// Import the chain. This runs all block validation rules.
 	evmux := &event.TypeMux{}
-	chainman, _ := NewBlockChain(db, FakePow{}, evmux)
-	chainman.SetProcessor(NewBlockProcessor(db, FakePow{}, chainman, evmux))
-	if i, err := chainman.InsertChain(chain); err != nil {
+	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
+	if i, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert original chain[%d]: %v", i, err)
 	}
 
@@ -920,7 +931,7 @@ func TestChainTxReorgs(t *testing.T) {
 			gen.AddTx(futureAdd) // This transaction will be added after a full reorg
 		}
 	})
-	if _, err := chainman.InsertChain(chain); err != nil {
+	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert forked chain: %v", err)
 	}
 

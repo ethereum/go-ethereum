@@ -557,8 +557,6 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 		Fatalf("Could not start chainmanager: %v", err)
 	}
 
-	proc := core.NewBlockProcessor(chainDb, pow, chain, eventMux)
-	chain.SetProcessor(proc)
 	return chain, chainDb
 }
 
