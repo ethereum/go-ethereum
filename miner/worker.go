@@ -302,6 +302,17 @@ func (self *worker) wait() {
 					glog.V(logger.Error).Infoln("error writing block to chain", err)
 					continue
 				}
+
+				// update block hash since it is now available and not when the receipt/log of individual transactions were created
+				for _, r := range work.receipts {
+					for _, l := range r.Logs {
+						l.BlockHash = block.Hash()
+					}
+				}
+				for _, log := range work.state.Logs() {
+					log.BlockHash = block.Hash()
+				}
+
 				// check if canon block and write transactions
 				if stat == core.CanonStatTy {
 					// This puts transactions in a extra db for rpc
