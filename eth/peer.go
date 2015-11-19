@@ -196,7 +196,7 @@ func (p *peer) SendBlockHeaders(headers []*types.Header) error {
 }
 
 // SendBlockBodies sends a batch of block contents to the remote peer.
-func (p *peer) SendBlockBodies(bodies []*blockBody) error {
+func (p *peer) SendBlockBodies(bodies []*types.Body) error {
 	return p2p.Send(p.rw, BlockBodiesMsg, blockBodiesData(bodies))
 }
 

@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -39,20 +40,20 @@ func NewObject(state *state.StateObject) *Object {
 	return &Object{state}
 }
 
-func (self *Object) StorageString(str string) []byte {
+func (self *Object) StorageString(str string, ctx *access.OdrContext) []byte {
 	if common.IsHex(str) {
-		return self.storage(common.Hex2Bytes(str[2:]))
+		return self.storage(common.Hex2Bytes(str[2:]), ctx)
 	} else {
-		return self.storage(common.RightPadBytes([]byte(str), 32))
+		return self.storage(common.RightPadBytes([]byte(str), 32), ctx)
 	}
 }
 
-func (self *Object) StorageValue(addr *common.Value) []byte {
-	return self.storage(addr.Bytes())
+func (self *Object) StorageValue(addr *common.Value, ctx *access.OdrContext) []byte {
+	return self.storage(addr.Bytes(), ctx)
 }
 
-func (self *Object) storage(addr []byte) []byte {
-	return self.StateObject.GetState(common.BytesToHash(addr)).Bytes()
+func (self *Object) storage(addr []byte, ctx *access.OdrContext) []byte {
+	return self.StateObject.GetState(common.BytesToHash(addr), ctx).Bytes()
 }
 
 func (self *Object) Storage() (storage map[string]string) {

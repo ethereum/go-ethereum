@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -103,7 +104,7 @@ func BenchStateTest(p string, conf bconf, b *testing.B) error {
 func benchStateTest(test VmTest, env map[string]string, b *testing.B) {
 	b.StopTimer()
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, access.NewDbChainAccess(db), access.NullCtx)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)
@@ -142,7 +143,7 @@ func runStateTests(tests map[string]VmTest, skipTests []string) error {
 
 func runStateTest(test VmTest) error {
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, access.NewDbChainAccess(db), access.NullCtx)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)
@@ -192,7 +193,7 @@ func runStateTest(test VmTest) error {
 		}
 
 		for addr, value := range account.Storage {
-			v := obj.GetState(common.HexToHash(addr))
+			v := obj.GetState(common.HexToHash(addr), access.NullCtx)
 			vexp := common.HexToHash(value)
 
 			if v != vexp {
@@ -233,7 +234,7 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Log
 	// Set pre compiled contracts
 	vm.Precompiled = vm.PrecompiledContracts()
 
-	snapshot := statedb.Copy()
+	snapshot := statedb.Copy(access.NullCtx)
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 
 	key, _ := hex.DecodeString(tx["secretKey"])

@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -50,7 +51,7 @@ func TestMipmapUpgrade(t *testing.T) {
 		}
 	}
 
-	err := addMipmapBloomBins(db)
+	err := addMipmapBloomBins(access.NewDbChainAccess(db))
 	if err != nil {
 		t.Fatal(err)
 	}

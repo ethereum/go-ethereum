@@ -19,6 +19,7 @@ package shared
 import (
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
@@ -39,11 +40,14 @@ type EthereumApi interface {
 }
 
 // RPC request
+// (ODR context is propagated inside the request struct because every
+//  request has its own context. It does not influence JSON encoding.)
 type Request struct {
 	Id      interface{}     `json:"id"`
 	Jsonrpc string          `json:"jsonrpc"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params"`
+	ctx 	*access.OdrContext
 }
 
 // RPC response
@@ -71,6 +75,14 @@ type ErrorObject struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	// Data    interface{} `json:"data"`
+}
+
+func (req *Request) GetCtx() *access.OdrContext {
+	return req.ctx
+}
+
+func (req *Request) SetCtx(ctx *access.OdrContext) {
+	req.ctx = ctx
 }
 
 // Create RPC error response, this allows for custom error codes

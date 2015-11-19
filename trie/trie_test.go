@@ -26,6 +26,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -37,7 +38,7 @@ func init() {
 // Used for testing
 func newEmpty() *Trie {
 	db, _ := ethdb.NewMemDatabase()
-	trie, _ := New(common.Hash{}, db)
+	trie, _ := New(common.Hash{}, db, nil)
 	return trie
 }
 
@@ -54,13 +55,13 @@ func TestNull(t *testing.T) {
 	var trie Trie
 	key := make([]byte, 32)
 	value := common.FromHex("0x823140710bf13990e4500136726d8b55")
-	trie.Update(key, value)
-	value = trie.Get(key)
+	trie.Update(key, value, access.NoOdr)
+	value = trie.Get(key, access.NoOdr)
 }
 
 func TestMissingRoot(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), db)
+	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), db, nil)
 	if trie != nil {
 		t.Error("New returned non-nil trie for invalid root")
 	}
@@ -190,7 +191,7 @@ func TestReplication(t *testing.T) {
 	}
 
 	// create a new trie on top of the database and check that lookups work.
-	trie2, err := New(exp, trie.db)
+	trie2, err := New(exp, trie.db, nil)
 	if err != nil {
 		t.Fatalf("can't recreate trie at %x: %v", exp, err)
 	}
@@ -231,7 +232,7 @@ func paranoiaCheck(t1 *Trie) (bool, *Trie) {
 	t2 := new(Trie)
 	it := NewIterator(t1)
 	for it.Next() {
-		t2.Update(it.Key, it.Value)
+		t2.Update(it.Key, it.Value, access.NoOdr)
 	}
 	return t2.Hash() == t1.Hash(), t2
 }
@@ -276,15 +277,15 @@ func TestOutput(t *testing.T) {
 
 	trie.Commit()
 	fmt.Println("############################## SMALL ################################")
-	trie2, _ := New(trie.Hash(), trie.db)
+	trie2, _ := New(trie.Hash(), trie.db, nil)
 	getString(trie2, base+"20")
 	fmt.Println(trie2.root)
 }
 
 func TestLargeValue(t *testing.T) {
 	trie := newEmpty()
-	trie.Update([]byte("key1"), []byte{99, 99, 99, 99})
-	trie.Update([]byte("key2"), bytes.Repeat([]byte{1}, 32))
+	trie.Update([]byte("key1"), []byte{99, 99, 99, 99}, access.NoOdr)
+	trie.Update([]byte("key2"), bytes.Repeat([]byte{1}, 32), access.NoOdr)
 	trie.Hash()
 
 }
@@ -301,8 +302,8 @@ func TestLargeData(t *testing.T) {
 	for i := byte(0); i < 255; i++ {
 		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
 		value2 := &kv{common.LeftPadBytes([]byte{10, i}, 32), []byte{i}, false}
-		trie.Update(value.k, value.v)
-		trie.Update(value2.k, value2.v)
+		trie.Update(value.k, value.v, access.NoOdr)
+		trie.Update(value2.k, value2.v, access.NoOdr)
 		vals[string(value.k)] = value
 		vals[string(value2.k)] = value2
 	}
@@ -341,12 +342,12 @@ func benchGet(b *testing.B, commit bool) {
 	if commit {
 		dir, tmpdb := tempDB()
 		defer os.RemoveAll(dir)
-		trie, _ = New(common.Hash{}, tmpdb)
+		trie, _ = New(common.Hash{}, tmpdb, nil)
 	}
 	k := make([]byte, 32)
 	for i := 0; i < benchElemCount; i++ {
 		binary.LittleEndian.PutUint64(k, uint64(i))
-		trie.Update(k, k)
+		trie.Update(k, k, access.NoOdr)
 	}
 	binary.LittleEndian.PutUint64(k, benchElemCount/2)
 	if commit {
@@ -355,7 +356,7 @@ func benchGet(b *testing.B, commit bool) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		trie.Get(k)
+		trie.Get(k, access.NoOdr)
 	}
 }
 
@@ -364,7 +365,7 @@ func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	k := make([]byte, 32)
 	for i := 0; i < b.N; i++ {
 		e.PutUint64(k, uint64(i))
-		trie.Update(k, k)
+		trie.Update(k, k, access.NoOdr)
 	}
 	return trie
 }
@@ -374,7 +375,7 @@ func benchHash(b *testing.B, e binary.ByteOrder) {
 	k := make([]byte, 32)
 	for i := 0; i < benchElemCount; i++ {
 		e.PutUint64(k, uint64(i))
-		trie.Update(k, k)
+		trie.Update(k, k, access.NoOdr)
 	}
 
 	b.ResetTimer()
@@ -396,13 +397,13 @@ func tempDB() (string, Database) {
 }
 
 func getString(trie *Trie, k string) []byte {
-	return trie.Get([]byte(k))
+	return trie.Get([]byte(k), access.NoOdr)
 }
 
 func updateString(trie *Trie, k, v string) {
-	trie.Update([]byte(k), []byte(v))
+	trie.Update([]byte(k), []byte(v), access.NoOdr)
 }
 
 func deleteString(trie *Trie, k string) {
-	trie.Delete([]byte(k))
+	trie.Delete([]byte(k), access.NoOdr)
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -113,7 +114,7 @@ func run(ctx *cli.Context) {
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, access.NewDbChainAccess(db), access.NullCtx)
 	sender := statedb.CreateAccount(common.StringToAddress("sender"))
 	receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
 	receiver.SetCode(common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name)))
@@ -186,7 +187,7 @@ func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int) *VM
 }
 
 func (self *VMEnv) Db() vm.Database            { return self.state }
-func (self *VMEnv) MakeSnapshot() vm.Database  { return self.state.Copy() }
+func (self *VMEnv) MakeSnapshot() vm.Database  { return self.state.Copy(access.NullCtx) }
 func (self *VMEnv) SetSnapshot(db vm.Database) { self.state.Set(db.(*state.StateDB)) }
 func (self *VMEnv) Origin() common.Address     { return *self.transactor }
 func (self *VMEnv) BlockNumber() *big.Int      { return common.Big0 }

@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/les/access"
 )
 
 type account struct {
@@ -39,7 +40,7 @@ type ManagedState struct {
 // ManagedState returns a new managed state with the statedb as it's backing layer
 func ManageState(statedb *StateDB) *ManagedState {
 	return &ManagedState{
-		StateDB:  statedb.Copy(),
+		StateDB:  statedb.Copy(access.NullCtx),
 		accounts: make(map[string]*account),
 	}
 }

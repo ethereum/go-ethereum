@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -121,6 +122,7 @@ func TestHeaderStorage(t *testing.T) {
 // Tests block body storage and retrieval operations.
 func TestBodyStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
+	ca := access.NewDbChainAccess(db)
 
 	// Create a test body to move around the database and make sure it's really new
 	body := &types.Body{Uncles: []*types.Header{{Extra: []byte("test header")}}}
@@ -129,19 +131,19 @@ func TestBodyStorage(t *testing.T) {
 	rlp.Encode(hasher, body)
 	hash := common.BytesToHash(hasher.Sum(nil))
 
-	if entry := GetBody(db, hash); entry != nil {
+	if entry := GetBody(ca, hash, access.NoOdr); entry != nil {
 		t.Fatalf("Non existent body returned: %v", entry)
 	}
 	// Write and verify the body in the database
 	if err := WriteBody(db, hash, body); err != nil {
 		t.Fatalf("Failed to write body into database: %v", err)
 	}
-	if entry := GetBody(db, hash); entry == nil {
+	if entry := GetBody(ca, hash, access.NoOdr); entry == nil {
 		t.Fatalf("Stored body not found")
 	} else if types.DeriveSha(types.Transactions(entry.Transactions)) != types.DeriveSha(types.Transactions(body.Transactions)) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(body.Uncles) {
 		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, body)
 	}
-	if entry := GetBodyRLP(db, hash); entry == nil {
+	if entry := GetBodyRLP(ca, hash, access.NoOdr); entry == nil {
 		t.Fatalf("Stored body RLP not found")
 	} else {
 		hasher := sha3.NewKeccak256()
@@ -153,7 +155,7 @@ func TestBodyStorage(t *testing.T) {
 	}
 	// Delete the body and verify the execution
 	DeleteBody(db, hash)
-	if entry := GetBody(db, hash); entry != nil {
+	if entry := GetBody(ca, hash, access.NoOdr); entry != nil {
 		t.Fatalf("Deleted body returned: %v", entry)
 	}
 }
@@ -161,6 +163,7 @@ func TestBodyStorage(t *testing.T) {
 // Tests block storage and retrieval operations.
 func TestBlockStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
+	ca := access.NewDbChainAccess(db)
 
 	// Create a test block to move around the database and make sure it's really new
 	block := types.NewBlockWithHeader(&types.Header{
@@ -169,20 +172,20 @@ func TestBlockStorage(t *testing.T) {
 		TxHash:      types.EmptyRootHash,
 		ReceiptHash: types.EmptyRootHash,
 	})
-	if entry := GetBlock(db, block.Hash()); entry != nil {
+	if entry := GetBlock(ca, block.Hash(), access.NoOdr); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
 	}
 	if entry := GetHeader(db, block.Hash()); entry != nil {
 		t.Fatalf("Non existent header returned: %v", entry)
 	}
-	if entry := GetBody(db, block.Hash()); entry != nil {
+	if entry := GetBody(ca, block.Hash(), access.NoOdr); entry != nil {
 		t.Fatalf("Non existent body returned: %v", entry)
 	}
 	// Write and verify the block in the database
 	if err := WriteBlock(db, block); err != nil {
 		t.Fatalf("Failed to write block into database: %v", err)
 	}
-	if entry := GetBlock(db, block.Hash()); entry == nil {
+	if entry := GetBlock(ca, block.Hash(), access.NoOdr); entry == nil {
 		t.Fatalf("Stored block not found")
 	} else if entry.Hash() != block.Hash() {
 		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)
@@ -192,20 +195,20 @@ func TestBlockStorage(t *testing.T) {
 	} else if entry.Hash() != block.Header().Hash() {
 		t.Fatalf("Retrieved header mismatch: have %v, want %v", entry, block.Header())
 	}
-	if entry := GetBody(db, block.Hash()); entry == nil {
+	if entry := GetBody(ca, block.Hash(), access.NoOdr); entry == nil {
 		t.Fatalf("Stored body not found")
 	} else if types.DeriveSha(types.Transactions(entry.Transactions)) != types.DeriveSha(block.Transactions()) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(block.Uncles()) {
 		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, &types.Body{block.Transactions(), block.Uncles()})
 	}
 	// Delete the block and verify the execution
 	DeleteBlock(db, block.Hash())
-	if entry := GetBlock(db, block.Hash()); entry != nil {
+	if entry := GetBlock(ca, block.Hash(), access.NoOdr); entry != nil {
 		t.Fatalf("Deleted block returned: %v", entry)
 	}
 	if entry := GetHeader(db, block.Hash()); entry != nil {
 		t.Fatalf("Deleted header returned: %v", entry)
 	}
-	if entry := GetBody(db, block.Hash()); entry != nil {
+	if entry := GetBody(ca, block.Hash(), access.NoOdr); entry != nil {
 		t.Fatalf("Deleted body returned: %v", entry)
 	}
 }
@@ -213,6 +216,7 @@ func TestBlockStorage(t *testing.T) {
 // Tests that partial block contents don't get reassembled into full blocks.
 func TestPartialBlockStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
+	ca := access.NewDbChainAccess(db)
 	block := types.NewBlockWithHeader(&types.Header{
 		Extra:       []byte("test block"),
 		UncleHash:   types.EmptyUncleHash,
@@ -223,7 +227,7 @@ func TestPartialBlockStorage(t *testing.T) {
 	if err := WriteHeader(db, block.Header()); err != nil {
 		t.Fatalf("Failed to write header into database: %v", err)
 	}
-	if entry := GetBlock(db, block.Hash()); entry != nil {
+	if entry := GetBlock(ca, block.Hash(), access.NoOdr); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
 	}
 	DeleteHeader(db, block.Hash())
@@ -232,7 +236,7 @@ func TestPartialBlockStorage(t *testing.T) {
 	if err := WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
 		t.Fatalf("Failed to write body into database: %v", err)
 	}
-	if entry := GetBlock(db, block.Hash()); entry != nil {
+	if entry := GetBlock(ca, block.Hash(), access.NoOdr); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
 	}
 	DeleteBody(db, block.Hash())
@@ -244,7 +248,7 @@ func TestPartialBlockStorage(t *testing.T) {
 	if err := WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
 		t.Fatalf("Failed to write body into database: %v", err)
 	}
-	if entry := GetBlock(db, block.Hash()); entry == nil {
+	if entry := GetBlock(ca, block.Hash(), access.NoOdr); entry == nil {
 		t.Fatalf("Stored block not found")
 	} else if entry.Hash() != block.Hash() {
 		t.Fatalf("Retrieved block mismatch: have %v, want %v", entry, block)

@@ -26,6 +26,15 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// Mode represents the mode of operation of the eth client.
+type Mode int
+
+const (
+	ArchiveMode Mode = iota // Maintain the entire blockchain history
+	FullMode                // Maintain only a recent view of the blockchain
+	LightMode               // Don't maintain any history, rather fetch on demand
+)
+
 // Constants to match up protocol versions and messages
 const (
 	eth61 = 61
@@ -201,14 +210,8 @@ type newBlockData struct {
 	TD    *big.Int
 }
 
-// blockBody represents the data content of a single block.
-type blockBody struct {
-	Transactions []*types.Transaction // Transactions contained within a block
-	Uncles       []*types.Header      // Uncles contained within a block
-}
-
 // blockBodiesData is the network packet for block content distribution.
-type blockBodiesData []*blockBody
+type blockBodiesData []*types.Body
 
 // nodeDataData is the network response packet for a node data retrieval.
 type nodeDataData []struct {

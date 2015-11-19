@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -28,18 +29,18 @@ import (
 func makeTestTrie() (ethdb.Database, *Trie, map[string][]byte) {
 	// Create an empty trie
 	db, _ := ethdb.NewMemDatabase()
-	trie, _ := New(common.Hash{}, db)
+	trie, _ := New(common.Hash{}, db, nil)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
 	for i := byte(0); i < 255; i++ {
 		key, val := common.LeftPadBytes([]byte{1, i}, 32), []byte{i}
 		content[string(key)] = val
-		trie.Update(key, val)
+		trie.Update(key, val, access.NoOdr)
 
 		key, val = common.LeftPadBytes([]byte{2, i}, 32), []byte{i}
 		content[string(key)] = val
-		trie.Update(key, val)
+		trie.Update(key, val, access.NoOdr)
 	}
 	trie.Commit()
 
@@ -50,12 +51,12 @@ func makeTestTrie() (ethdb.Database, *Trie, map[string][]byte) {
 // checkTrieContents cross references a reconstructed trie with an expected data
 // content map.
 func checkTrieContents(t *testing.T, db Database, root []byte, content map[string][]byte) {
-	trie, err := New(common.BytesToHash(root), db)
+	trie, err := New(common.BytesToHash(root), db, nil)
 	if err != nil {
 		t.Fatalf("failed to create trie at %x: %v", root, err)
 	}
 	for key, val := range content {
-		if have := trie.Get([]byte(key)); bytes.Compare(have, val) != 0 {
+		if have := trie.Get([]byte(key), access.NoOdr); bytes.Compare(have, val) != 0 {
 			t.Errorf("entry %x: content mismatch: have %x, want %x", key, have, val)
 		}
 	}
@@ -63,8 +64,8 @@ func checkTrieContents(t *testing.T, db Database, root []byte, content map[strin
 
 // Tests that an empty trie is not scheduled for syncing.
 func TestEmptyTrieSync(t *testing.T) {
-	emptyA, _ := New(common.Hash{}, nil)
-	emptyB, _ := New(emptyRoot, nil)
+	emptyA, _ := New(common.Hash{}, nil, nil)
+	emptyB, _ := New(emptyRoot, nil, nil)
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
 		db, _ := ethdb.NewMemDatabase()

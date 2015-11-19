@@ -44,6 +44,7 @@ var (
 	MaxBodyFetch    = 128 // Amount of block bodies to be fetched per retrieval request
 	MaxReceiptFetch = 256 // Amount of transaction receipts to allow fetching per request
 	MaxStateFetch   = 384 // Amount of node state values to allow fetching per request
+	MaxProofsFetch  = 64  // Amount of merkle proofs to allow fetching per request
 
 	hashTTL        = 5 * time.Second    // [eth/61] Time it takes for a hash request to time out
 	blockSoftTTL   = 3 * time.Second    // [eth/61] Request completion threshold for increasing or decreasing a peer's bandwidth
@@ -156,13 +157,13 @@ type Downloader struct {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, mux *event.TypeMux, hasHeader headerCheckFn, hasBlock blockCheckFn, getHeader headerRetrievalFn,
+func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, hasHeader headerCheckFn, hasBlock blockCheckFn, getHeader headerRetrievalFn,
 	getBlock blockRetrievalFn, headHeader headHeaderRetrievalFn, headBlock headBlockRetrievalFn, headFastBlock headFastBlockRetrievalFn,
 	commitHeadBlock headBlockCommitterFn, getTd tdRetrievalFn, insertHeaders headerChainInsertFn, insertBlocks blockChainInsertFn,
 	insertReceipts receiptChainInsertFn, rollback chainRollbackFn, dropPeer peerDropFn) *Downloader {
 
 	return &Downloader{
-		mode:            FullSync,
+		mode:            mode,
 		mux:             mux,
 		queue:           newQueue(stateDb),
 		peers:           newPeerSet(),
@@ -225,6 +226,10 @@ func (d *Downloader) RegisterPeer(id string, version int, head common.Hash,
 	getRelHeaders relativeHeaderFetcherFn, getAbsHeaders absoluteHeaderFetcherFn, getBlockBodies blockBodyFetcherFn,
 	getReceipts receiptFetcherFn, getNodeData stateFetcherFn) error {
 
+	if d.mode == NoSync {
+		return nil
+	}
+
 	glog.V(logger.Detail).Infoln("Registering peer", id)
 	if err := d.peers.Register(newPeer(id, version, head, getRelHashes, getAbsHashes, getBlocks, getRelHeaders, getAbsHeaders, getBlockBodies, getReceipts, getNodeData)); err != nil {
 		glog.V(logger.Error).Infoln("Register failed:", err)
@@ -237,6 +242,10 @@ func (d *Downloader) RegisterPeer(id string, version int, head common.Hash,
 // the specified peer. An effort is also made to return any pending fetches into
 // the queue.
 func (d *Downloader) UnregisterPeer(id string) error {
+	if d.mode == NoSync {
+		return nil
+	}
+
 	glog.V(logger.Detail).Infoln("Unregistering peer", id)
 	if err := d.peers.Unregister(id); err != nil {
 		glog.V(logger.Error).Infoln("Unregister failed:", err)
@@ -249,6 +258,10 @@ func (d *Downloader) UnregisterPeer(id string) error {
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
 func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode SyncMode) error {
+	if d.mode == NoSync {
+		return nil
+	}
+
 	glog.V(logger.Detail).Infof("Attempting synchronisation: %v, head [%x…], TD %v", id, head[:4], td)
 
 	err := d.synchronise(id, head, td, mode)
@@ -276,6 +289,10 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 // it will use the best peer possible and synchronize if it's TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
 func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode SyncMode) error {
+	if d.mode == NoSync {
+		return nil
+	}
+
 	// Mock out the synchonisation if testing
 	if d.synchroniseMock != nil {
 		return d.synchroniseMock(id, hash)
@@ -331,6 +348,10 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
 func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err error) {
+	if d.mode == NoSync {
+		return nil
+	}
+
 	d.mux.Post(StartEvent{})
 	defer func() {
 		// reset on error
@@ -459,6 +480,10 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 // cancel cancels all of the operations and resets the queue. It returns true
 // if the cancel operation was completed.
 func (d *Downloader) cancel() {
+	if d.mode == NoSync {
+		return
+	}
+
 	// Close the current cancel channel
 	d.cancelLock.Lock()
 	if d.cancelCh != nil {
@@ -484,6 +509,10 @@ func (d *Downloader) Terminate() {
 // fetchHeight61 retrieves the head block of the remote peer to aid in estimating
 // the total time a pending synchronisation would take.
 func (d *Downloader) fetchHeight61(p *peer) (uint64, error) {
+	if d.mode == NoSync {
+		return 0, nil
+	}
+
 	glog.V(logger.Debug).Infof("%v: retrieving remote chain height", p)
 
 	// Request the advertised remote head block and wait for the response
@@ -531,6 +560,10 @@ func (d *Downloader) fetchHeight61(p *peer) (uint64, error) {
 // In the rare scenario when we ended up on a long reorganization (i.e. none of
 // the head blocks match), we do a binary search to find the common ancestor.
 func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
+	if d.mode == NoSync {
+		return 0, nil
+	}
+
 	glog.V(logger.Debug).Infof("%v: looking for common ancestor", p)
 
 	// Request out head blocks to short circuit ancestor location
@@ -652,6 +685,10 @@ func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
 // fetchHashes61 keeps retrieving hashes from the requested number, until no more
 // are returned, potentially throttling on the way.
 func (d *Downloader) fetchHashes61(p *peer, td *big.Int, from uint64) error {
+	if d.mode == NoSync {
+		return nil
+	}
+
 	glog.V(logger.Debug).Infof("%v: downloading hashes from #%d", p, from)
 
 	// Create a timeout timer, and the associated hash fetcher
@@ -758,6 +795,10 @@ func (d *Downloader) fetchHashes61(p *peer, td *big.Int, from uint64) error {
 // peers, reserving a chunk of blocks for each, waiting for delivery and also
 // periodically checking for timeouts.
 func (d *Downloader) fetchBlocks61(from uint64) error {
+	if d.mode == NoSync {
+		return nil
+	}
+
 	glog.V(logger.Debug).Infof("Downloading blocks from #%d", from)
 	defer glog.V(logger.Debug).Infof("Block download terminated")
 
@@ -916,6 +957,10 @@ func (d *Downloader) fetchBlocks61(from uint64) error {
 // fetchHeight retrieves the head header of the remote peer to aid in estimating
 // the total time a pending synchronisation would take.
 func (d *Downloader) fetchHeight(p *peer) (uint64, error) {
+	if d.mode == NoSync {
+		return 0, nil
+	}
+
 	glog.V(logger.Debug).Infof("%v: retrieving remote chain height", p)
 
 	// Request the advertised remote head block and wait for the response
@@ -963,10 +1008,17 @@ func (d *Downloader) fetchHeight(p *peer) (uint64, error) {
 // In the rare scenario when we ended up on a long reorganization (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
 func (d *Downloader) findAncestor(p *peer) (uint64, error) {
+	if d.mode == NoSync {
+		return 0, nil
+	}
+
 	glog.V(logger.Debug).Infof("%v: looking for common ancestor", p)
 
 	// Request our head headers to short circuit ancestor location
-	head := d.headHeader().Number.Uint64()
+	var head uint64
+	if header := d.headHeader(); header != nil {
+		head = header.Number.Uint64()
+	}
 	if d.mode == FullSync {
 		head = d.headBlock().NumberU64()
 	} else if d.mode == FastSync {
@@ -1092,6 +1144,10 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 // The queue parameter can be used to switch between queuing headers for block
 // body download too, or directly import as pure header chains.
 func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
+	if d.mode == NoSync {
+		return nil
+	}
+
 	glog.V(logger.Debug).Infof("%v: downloading headers from #%d", p, from)
 	defer glog.V(logger.Debug).Infof("%v: header download terminated", p)
 
@@ -1107,10 +1163,10 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 			for i, header := range rollback {
 				hashes[i] = header.Hash()
 			}
-			lh, lfb, lb := d.headHeader().Number, d.headFastBlock().Number(), d.headBlock().Number()
+			lh, lfb, lb := d.headHeader().Number, d.headFastBlock().SafeNumber(), d.headBlock().SafeNumber()
 			d.rollback(hashes)
 			glog.V(logger.Warn).Infof("Rolled back %d headers (LH: %d->%d, FB: %d->%d, LB: %d->%d)",
-				len(hashes), lh, d.headHeader().Number, lfb, d.headFastBlock().Number(), lb, d.headBlock().Number())
+				len(hashes), lh, d.headHeader().Number, lfb, d.headFastBlock().SafeNumber(), lb, d.headBlock().SafeNumber())
 
 			// If we're already past the pivot point, this could be an attack, disable fast sync
 			if rollback[len(rollback)-1].Number.Uint64() > pivot {
@@ -1276,6 +1332,10 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 // available peers, reserving a chunk of blocks for each, waiting for delivery
 // and also periodically checking for timeouts.
 func (d *Downloader) fetchBodies(from uint64) error {
+	if d.mode == NoSync {
+		return nil
+	}
+
 	glog.V(logger.Debug).Infof("Downloading block bodies from #%d", from)
 
 	var (
@@ -1324,6 +1384,10 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 // available peers, reserving a chunk of nodes for each, waiting for delivery and
 // also periodically checking for timeouts.
 func (d *Downloader) fetchNodeData() error {
+	if d.mode == NoSync {
+		return nil
+	}
+
 	glog.V(logger.Debug).Infof("Downloading node state data")
 
 	var (
@@ -1378,7 +1442,11 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 	fetchHook func([]*types.Header), fetch func(*peer, *fetchRequest) error, cancel func(*fetchRequest), capacity func(*peer) int,
 	idle func() ([]*peer, int), setIdle func(*peer), kind string) error {
 
-	// Create a ticker to detect expired retrieval tasks
+	if d.mode == NoSync {
+		return nil
+	}
+
+	// Create a ticker to detect expired retreival tasks
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -1678,6 +1746,9 @@ func (d *Downloader) DeliverNodeData(id string, data [][]byte) (err error) {
 
 // deliver injects a new batch of data received from a remote node.
 func (d *Downloader) deliver(id string, destCh chan dataPack, packet dataPack, inMeter, dropMeter metrics.Meter) (err error) {
+	if d.mode == NoSync {
+		return nil
+	}
 	// Update the delivery metrics for both good and failed deliveries
 	inMeter.Mark(int64(packet.Items()))
 	defer func() {

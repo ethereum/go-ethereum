@@ -20,6 +20,7 @@ import (
 	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
@@ -49,11 +50,11 @@ type SecureTrie struct {
 // trie is initially empty. Otherwise, New will panics if db is nil
 // and returns ErrMissingRoot if the root node cannpt be found.
 // Accessing the trie loads nodes from db on demand.
-func NewSecure(root common.Hash, db Database) (*SecureTrie, error) {
+func NewSecure(root common.Hash, db Database, access OdrAccess) (*SecureTrie, error) {
 	if db == nil {
 		panic("NewSecure called with nil database")
 	}
-	trie, err := New(root, db)
+	trie, err := New(root, db, access)
 	if err != nil {
 		return nil, err
 	}
@@ -62,8 +63,8 @@ func NewSecure(root common.Hash, db Database) (*SecureTrie, error) {
 
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
-func (t *SecureTrie) Get(key []byte) []byte {
-	return t.Trie.Get(t.hashKey(key))
+func (t *SecureTrie) Get(key []byte, ctx *access.OdrContext) []byte {
+	return t.Trie.Get(t.hashKey(key), ctx)
 }
 
 // Update associates key with value in the trie. Subsequent calls to
@@ -72,15 +73,15 @@ func (t *SecureTrie) Get(key []byte) []byte {
 //
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
-func (t *SecureTrie) Update(key, value []byte) {
+func (t *SecureTrie) Update(key, value []byte, ctx *access.OdrContext) {
 	hk := t.hashKey(key)
-	t.Trie.Update(hk, value)
+	t.Trie.Update(hk, value, ctx)
 	t.Trie.db.Put(t.secKey(hk), key)
 }
 
 // Delete removes any existing value for key from the trie.
-func (t *SecureTrie) Delete(key []byte) {
-	t.Trie.Delete(t.hashKey(key))
+func (t *SecureTrie) Delete(key []byte, ctx *access.OdrContext) {
+	t.Trie.Delete(t.hashKey(key), ctx)
 }
 
 // GetKey returns the sha3 preimage of a hashed key that was

@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/les/access"
 )
 
 type Account struct {
@@ -45,7 +46,7 @@ func (self *StateDB) RawDump() World {
 	it := self.trie.Iterator()
 	for it.Next() {
 		addr := self.trie.GetKey(it.Key)
-		stateObject := NewStateObjectFromBytes(common.BytesToAddress(addr), it.Value, self.db)
+		stateObject := NewStateObjectFromBytes(common.BytesToAddress(addr), it.Value, self.ca, access.NullCtx)
 
 		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.nonce, Root: common.Bytes2Hex(stateObject.Root()), CodeHash: common.Bytes2Hex(stateObject.codeHash)}
 		account.Storage = make(map[string]string)

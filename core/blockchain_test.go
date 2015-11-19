@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -51,13 +52,14 @@ func thePow() pow.PoW {
 func theBlockChain(db ethdb.Database, t *testing.T) *BlockChain {
 	var eventMux event.TypeMux
 	WriteTestNetGenesisBlock(db, 0)
-	blockchain, err := NewBlockChain(db, thePow(), &eventMux)
+	ca := access.NewDbChainAccess(db)
+	blockchain, err := NewBlockChain(ca, thePow(), &eventMux)
 	if err != nil {
 		t.Error("failed creating chainmanager:", err)
 		t.FailNow()
 		return nil
 	}
-	blockMan := NewBlockProcessor(db, nil, blockchain, &eventMux)
+	blockMan := NewBlockProcessor(ca, nil, blockchain, &eventMux)
 	blockchain.SetProcessor(blockMan)
 
 	return blockchain
@@ -73,8 +75,8 @@ func testFork(t *testing.T, processor *BlockProcessor, i, n int, full bool, comp
 	// Assert the chains have the same header/block at #i
 	var hash1, hash2 common.Hash
 	if full {
-		hash1 = processor.bc.GetBlockByNumber(uint64(i)).Hash()
-		hash2 = processor2.bc.GetBlockByNumber(uint64(i)).Hash()
+		hash1 = processor.bc.GetBlockByNumber(uint64(i), access.NoOdr).Hash()
+		hash2 = processor2.bc.GetBlockByNumber(uint64(i), access.NoOdr).Hash()
 	} else {
 		hash1 = processor.bc.GetHeaderByNumber(uint64(i)).Hash()
 		hash2 = processor2.bc.GetHeaderByNumber(uint64(i)).Hash()
@@ -120,7 +122,7 @@ func testFork(t *testing.T, processor *BlockProcessor, i, n int, full bool, comp
 
 func printChain(bc *BlockChain) {
 	for i := bc.CurrentBlock().Number().Uint64(); i > 0; i-- {
-		b := bc.GetBlockByNumber(uint64(i))
+		b := bc.GetBlockByNumber(uint64(i), access.NoOdr)
 		fmt.Printf("\t%x %v\n", b.Hash(), b.Difficulty())
 	}
 }
@@ -138,8 +140,8 @@ func testBlockChainImport(chain []*types.Block, processor *BlockProcessor) error
 		}
 		// Manually insert the block into the database, but don't reorganize (allows subsequent testing)
 		processor.bc.mu.Lock()
-		WriteTd(processor.chainDb, block.Hash(), new(big.Int).Add(block.Difficulty(), processor.bc.GetTd(block.ParentHash())))
-		WriteBlock(processor.chainDb, block)
+		WriteTd(processor.chainAccess.Db(), block.Hash(), new(big.Int).Add(block.Difficulty(), processor.bc.GetTd(block.ParentHash())))
+		WriteBlock(processor.chainAccess.Db(), block)
 		processor.bc.mu.Unlock()
 	}
 	return nil
@@ -155,8 +157,8 @@ func testHeaderChainImport(chain []*types.Header, processor *BlockProcessor) err
 		}
 		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
 		processor.bc.mu.Lock()
-		WriteTd(processor.chainDb, header.Hash(), new(big.Int).Add(header.Difficulty, processor.bc.GetTd(header.ParentHash)))
-		WriteHeader(processor.chainDb, header)
+		WriteTd(processor.chainAccess.Db(), header.Hash(), new(big.Int).Add(header.Difficulty, processor.bc.GetTd(header.ParentHash)))
+		WriteHeader(processor.chainAccess.Db(), header)
 		processor.bc.mu.Unlock()
 	}
 	return nil
@@ -452,7 +454,8 @@ func makeBlockChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.B
 
 func chm(genesis *types.Block, db ethdb.Database) *BlockChain {
 	var eventMux event.TypeMux
-	bc := &BlockChain{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}, rand: rand.New(rand.NewSource(0))}
+	ca := access.NewDbChainAccess(db)
+	bc := &BlockChain{chainAccess: ca, chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}, rand: rand.New(rand.NewSource(0))}
 	bc.headerCache, _ = lru.New(100)
 	bc.bodyCache, _ = lru.New(100)
 	bc.bodyRLPCache, _ = lru.New(100)
@@ -500,7 +503,7 @@ func testReorg(t *testing.T, first, second []int, td int64, full bool) {
 	// Check that the chain is valid number and link wise
 	if full {
 		prev := bc.CurrentBlock()
-		for block := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 1); block.NumberU64() != 0; prev, block = block, bc.GetBlockByNumber(block.NumberU64()-1) {
+		for block := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64()-1, access.NoOdr); block.NumberU64() != 0; prev, block = block, bc.GetBlockByNumber(block.NumberU64()-1, access.NoOdr) {
 			if prev.ParentHash() != block.Hash() {
 				t.Errorf("parent block hash mismatch: have %x, want %x", prev.ParentHash(), block.Hash())
 			}
@@ -587,7 +590,7 @@ func testReorgBadHashes(t *testing.T, full bool) {
 		defer func() { delete(BadHashes, headers[3].Hash()) }()
 	}
 	// Create a new chain manager and check it rolled back the state
-	ncm, err := NewBlockChain(db, FakePow{}, new(event.TypeMux))
+	ncm, err := NewBlockChain(access.NewDbChainAccess(db), FakePow{}, new(event.TypeMux))
 	if err != nil {
 		t.Fatalf("failed to create new chain manager: %v", err)
 	}
@@ -665,7 +668,7 @@ func testInsertNonceError(t *testing.T, full bool) {
 		// Check that all no blocks after the failing block have been inserted.
 		for j := 0; j < i-failAt; j++ {
 			if full {
-				if block := bc.GetBlockByNumber(failNum + uint64(j)); block != nil {
+				if block := bc.GetBlockByNumber(failNum+uint64(j), access.NoOdr); block != nil {
 					t.Errorf("test %d: invalid block in chain: %v", i, block)
 				}
 			} else {
@@ -708,19 +711,21 @@ func TestFastVsFullChains(t *testing.T) {
 	})
 	// Import the chain as an archive node for the comparison baseline
 	archiveDb, _ := ethdb.NewMemDatabase()
+	archiveCa := access.NewDbChainAccess(archiveDb)
 	WriteGenesisBlockForTesting(archiveDb, GenesisAccount{address, funds})
 
-	archive, _ := NewBlockChain(archiveDb, FakePow{}, new(event.TypeMux))
-	archive.SetProcessor(NewBlockProcessor(archiveDb, FakePow{}, archive, new(event.TypeMux)))
+	archive, _ := NewBlockChain(archiveCa, FakePow{}, new(event.TypeMux))
+	archive.SetProcessor(NewBlockProcessor(archiveCa, FakePow{}, archive, new(event.TypeMux)))
 
 	if n, err := archive.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to process block %d: %v", n, err)
 	}
 	// Fast import the chain as a non-archive node to test
 	fastDb, _ := ethdb.NewMemDatabase()
+	fastCa := access.NewDbChainAccess(fastDb)
 	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
-	fast, _ := NewBlockChain(fastDb, FakePow{}, new(event.TypeMux))
-	fast.SetProcessor(NewBlockProcessor(fastDb, FakePow{}, fast, new(event.TypeMux)))
+	fast, _ := NewBlockChain(fastCa, FakePow{}, new(event.TypeMux))
+	fast.SetProcessor(NewBlockProcessor(fastCa, FakePow{}, fast, new(event.TypeMux)))
 
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -742,14 +747,14 @@ func TestFastVsFullChains(t *testing.T) {
 		if fheader, aheader := fast.GetHeader(hash), archive.GetHeader(hash); fheader.Hash() != aheader.Hash() {
 			t.Errorf("block #%d [%x]: header mismatch: have %v, want %v", num, hash, fheader, aheader)
 		}
-		if fblock, ablock := fast.GetBlock(hash), archive.GetBlock(hash); fblock.Hash() != ablock.Hash() {
+		if fblock, ablock := fast.GetBlock(hash, access.NoOdr), archive.GetBlock(hash, access.NoOdr); fblock.Hash() != ablock.Hash() {
 			t.Errorf("block #%d [%x]: block mismatch: have %v, want %v", num, hash, fblock, ablock)
 		} else if types.DeriveSha(fblock.Transactions()) != types.DeriveSha(ablock.Transactions()) {
 			t.Errorf("block #%d [%x]: transactions mismatch: have %v, want %v", num, hash, fblock.Transactions(), ablock.Transactions())
 		} else if types.CalcUncleHash(fblock.Uncles()) != types.CalcUncleHash(ablock.Uncles()) {
 			t.Errorf("block #%d [%x]: uncles mismatch: have %v, want %v", num, hash, fblock.Uncles(), ablock.Uncles())
 		}
-		if freceipts, areceipts := GetBlockReceipts(fastDb, hash), GetBlockReceipts(archiveDb, hash); types.DeriveSha(freceipts) != types.DeriveSha(areceipts) {
+		if freceipts, areceipts := GetBlockReceipts(fastCa, hash, access.NoOdr), GetBlockReceipts(archiveCa, hash, access.NoOdr); types.DeriveSha(freceipts) != types.DeriveSha(areceipts) {
 			t.Errorf("block #%d [%x]: receipts mismatch: have %v, want %v", num, hash, freceipts, areceipts)
 		}
 	}
@@ -794,10 +799,10 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	}
 	// Import the chain as an archive node and ensure all pointers are updated
 	archiveDb, _ := ethdb.NewMemDatabase()
+	archiveCa := access.NewDbChainAccess(archiveDb)
 	WriteGenesisBlockForTesting(archiveDb, GenesisAccount{address, funds})
-
-	archive, _ := NewBlockChain(archiveDb, FakePow{}, new(event.TypeMux))
-	archive.SetProcessor(NewBlockProcessor(archiveDb, FakePow{}, archive, new(event.TypeMux)))
+	archive, _ := NewBlockChain(archiveCa, FakePow{}, new(event.TypeMux))
+	archive.SetProcessor(NewBlockProcessor(archiveCa, FakePow{}, archive, new(event.TypeMux)))
 
 	if n, err := archive.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to process block %d: %v", n, err)
@@ -808,9 +813,10 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 
 	// Import the chain as a non-archive node and ensure all pointers are updated
 	fastDb, _ := ethdb.NewMemDatabase()
+	fastCa := access.NewDbChainAccess(fastDb)
 	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
-	fast, _ := NewBlockChain(fastDb, FakePow{}, new(event.TypeMux))
-	fast.SetProcessor(NewBlockProcessor(fastDb, FakePow{}, fast, new(event.TypeMux)))
+	fast, _ := NewBlockChain(fastCa, FakePow{}, new(event.TypeMux))
+	fast.SetProcessor(NewBlockProcessor(fastCa, FakePow{}, fast, new(event.TypeMux)))
 
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -828,9 +834,10 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 
 	// Import the chain as a light node and ensure all pointers are updated
 	lightDb, _ := ethdb.NewMemDatabase()
+	lightCa := access.NewDbChainAccess(lightDb)
 	WriteGenesisBlockForTesting(lightDb, GenesisAccount{address, funds})
-	light, _ := NewBlockChain(lightDb, FakePow{}, new(event.TypeMux))
-	light.SetProcessor(NewBlockProcessor(lightDb, FakePow{}, light, new(event.TypeMux)))
+	light, _ := NewBlockChain(lightCa, FakePow{}, new(event.TypeMux))
+	light.SetProcessor(NewBlockProcessor(lightCa, FakePow{}, light, new(event.TypeMux)))
 
 	if n, err := light.InsertHeaderChain(headers, 1); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
@@ -895,8 +902,9 @@ func TestChainTxReorgs(t *testing.T) {
 	})
 	// Import the chain. This runs all block validation rules.
 	evmux := &event.TypeMux{}
-	chainman, _ := NewBlockChain(db, FakePow{}, evmux)
-	chainman.SetProcessor(NewBlockProcessor(db, FakePow{}, chainman, evmux))
+	ca := access.NewDbChainAccess(db)
+	chainman, _ := NewBlockChain(ca, FakePow{}, evmux)
+	chainman.SetProcessor(NewBlockProcessor(ca, FakePow{}, chainman, evmux))
 	if i, err := chainman.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert original chain[%d]: %v", i, err)
 	}
@@ -929,7 +937,7 @@ func TestChainTxReorgs(t *testing.T) {
 		if GetTransaction(db, tx.Hash()) != nil {
 			t.Errorf("drop %d: tx found while shouldn't have been", i)
 		}
-		if GetReceipt(db, tx.Hash()) != nil {
+		if GetReceipt(ca, tx.Hash(), access.NoOdr) != nil {
 			t.Errorf("drop %d: receipt found while shouldn't have been", i)
 		}
 	}
@@ -938,7 +946,7 @@ func TestChainTxReorgs(t *testing.T) {
 		if GetTransaction(db, tx.Hash()) == nil {
 			t.Errorf("add %d: expected tx to be found", i)
 		}
-		if GetReceipt(db, tx.Hash()) == nil {
+		if GetReceipt(ca, tx.Hash(), access.NoOdr) == nil {
 			t.Errorf("add %d: expected receipt to be found", i)
 		}
 	}
@@ -947,7 +955,7 @@ func TestChainTxReorgs(t *testing.T) {
 		if GetTransaction(db, tx.Hash()) == nil {
 			t.Errorf("share %d: expected tx to be found", i)
 		}
-		if GetReceipt(db, tx.Hash()) == nil {
+		if GetReceipt(ca, tx.Hash(), access.NoOdr) == nil {
 			t.Errorf("share %d: expected receipt to be found", i)
 		}
 	}

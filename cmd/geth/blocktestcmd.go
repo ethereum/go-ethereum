@@ -22,6 +22,7 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/tests"
@@ -124,7 +125,7 @@ func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, er
 	if err != nil {
 		return ethereum, fmt.Errorf("Block Test load error: %v", err)
 	}
-	newDB, err := cm.State()
+	newDB, err := cm.State(access.NullCtx)
 	if err != nil {
 		return ethereum, fmt.Errorf("Block Test get state error: %v", err)
 	}

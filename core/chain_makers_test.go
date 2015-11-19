@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -77,14 +78,15 @@ func ExampleGenerateChain() {
 
 	// Import the chain. This runs all block validation rules.
 	evmux := &event.TypeMux{}
-	chainman, _ := NewBlockChain(db, FakePow{}, evmux)
-	chainman.SetProcessor(NewBlockProcessor(db, FakePow{}, chainman, evmux))
+	ca := access.NewDbChainAccess(db)
+	chainman, _ := NewBlockChain(ca, FakePow{}, evmux)
+	chainman.SetProcessor(NewBlockProcessor(ca, FakePow{}, chainman, evmux))
 	if i, err := chainman.InsertChain(chain); err != nil {
 		fmt.Printf("insert error (block %d): %v\n", i, err)
 		return
 	}
 
-	state, _ := chainman.State()
+	state, _ := chainman.State(access.NullCtx)
 	fmt.Printf("last block: #%d\n", chainman.CurrentBlock().Number())
 	fmt.Println("balance of addr1:", state.GetBalance(addr1))
 	fmt.Println("balance of addr2:", state.GetBalance(addr2))

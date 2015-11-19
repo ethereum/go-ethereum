@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -143,6 +144,27 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 	go worker.wait()
 
 	worker.commitNewWork()
+
+	return worker
+}
+
+// dummy worker for light client mode
+func newDummyWorker(coinbase common.Address, eth core.Backend) *worker {
+	worker := &worker{
+		eth:            eth,
+		mux:            eth.EventMux(),
+		chainDb:        eth.ChainDb(),
+		recv:           make(chan *Result, resultQueueSize),
+		gasPrice:       new(big.Int),
+		chain:          eth.BlockChain(),
+		proc:           eth.BlockProcessor(),
+		possibleUncles: make(map[common.Hash]*types.Block),
+		coinbase:       coinbase,
+		txQueue:        make(map[common.Hash]*types.Transaction),
+		quit:           make(chan struct{}),
+		agents:         make(map[Agent]struct{}),
+		fullValidation: false,
+	}
 
 	return worker
 }
@@ -285,7 +307,7 @@ func (self *worker) wait() {
 				go self.mux.Post(core.NewMinedBlockEvent{block})
 			} else {
 				work.state.Commit()
-				parent := self.chain.GetBlock(block.ParentHash())
+				parent := self.chain.GetBlock(block.ParentHash(), access.NoOdr)
 				if parent == nil {
 					glog.V(logger.Error).Infoln("Invalid block found during mining")
 					continue
@@ -326,7 +348,7 @@ func (self *worker) wait() {
 
 			// check staleness and display confirmation
 			var stale, confirm string
-			canonBlock := self.chain.GetBlockByNumber(block.NumberU64())
+			canonBlock := self.chain.GetBlockByNumber(block.NumberU64(), access.NoOdr)
 			if canonBlock != nil && canonBlock.Hash() != block.Hash() {
 				stale = "stale "
 			} else {
@@ -359,7 +381,7 @@ func (self *worker) push(work *Work) {
 
 // makeCurrent creates a new environment for the current cycle.
 func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error {
-	state, err := state.New(parent.Root(), self.eth.ChainDb())
+	state, err := state.New(parent.Root(), self.eth.ChainAccess(), access.NullCtx)
 	if err != nil {
 		return err
 	}
@@ -422,7 +444,7 @@ func (self *worker) isBlockLocallyMined(current *Work, deepBlockNum uint64) bool
 	}
 
 	//Does the block at {deepBlockNum} send earnings to my coinbase?
-	var block = self.chain.GetBlockByNumber(deepBlockNum)
+	var block = self.chain.GetBlockByNumber(deepBlockNum, access.NoOdr)
 	return block != nil && block.Coinbase() == self.coinbase
 }
 
@@ -636,7 +658,7 @@ func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *b
 }
 
 func (env *Work) commitTransaction(tx *types.Transaction, proc *core.BlockProcessor, gp *core.GasPool) error {
-	snap := env.state.Copy()
+	snap := env.state.Copy(access.NullCtx)
 	receipt, _, err := proc.ApplyTransaction(gp, env.state, env.header, tx, env.header.GasUsed, true)
 	if err != nil {
 		env.state.Set(snap)

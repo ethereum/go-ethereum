@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -27,7 +28,7 @@ var addr = common.BytesToAddress([]byte("test"))
 
 func create() (*ManagedState, *account) {
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := New(common.Hash{}, db)
+	statedb, _ := New(common.Hash{}, access.NewDbChainAccess(db), access.NullCtx)
 	ms := ManageState(statedb)
 	so := &StateObject{address: addr, nonce: 100}
 	ms.StateDB.stateObjects[addr.Str()] = so

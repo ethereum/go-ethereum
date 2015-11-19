@@ -326,6 +326,13 @@ func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Ext
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 
+func (b *Block) SafeNumber() *big.Int {
+	if b == nil {
+		return big.NewInt(0)
+	}
+	return b.Number()
+}
+
 func (b *Block) HashNoNonce() common.Hash {
 	return b.header.HashNoNonce()
 }

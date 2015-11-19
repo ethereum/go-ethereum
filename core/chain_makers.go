@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -164,7 +165,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
 func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
-	statedb, err := state.New(parent.Root(), db)
+	statedb, err := state.New(parent.Root(), access.NewDbChainAccess(db), access.NullCtx)
 	if err != nil {
 		panic(err)
 	}
@@ -222,8 +223,9 @@ func newCanonical(n int, full bool) (ethdb.Database, *BlockProcessor, error) {
 	// Initialize a fresh chain with only a genesis block
 	genesis, _ := WriteTestNetGenesisBlock(db, 0)
 
-	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
-	processor := NewBlockProcessor(db, FakePow{}, blockchain, evmux)
+	ca := access.NewDbChainAccess(db)
+	blockchain, _ := NewBlockChain(ca, FakePow{}, evmux)
+	processor := NewBlockProcessor(ca, FakePow{}, blockchain, evmux)
 	processor.bc.SetProcessor(processor)
 
 	// Create and inject the requested chain

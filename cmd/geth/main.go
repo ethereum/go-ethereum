@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/les/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -304,6 +305,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.BlockchainVersionFlag,
 		utils.OlympicFlag,
 		utils.FastSyncFlag,
+		utils.EthModeFlag,
 		utils.CacheFlag,
 		utils.LightKDFFlag,
 		utils.JSpathFlag,
@@ -555,12 +557,13 @@ func blockRecovery(ctx *cli.Context) {
 	if err != nil {
 		glog.Fatalln("could not open db:", err)
 	}
+	ca := access.NewDbChainAccess(blockDb)
 
 	var block *types.Block
 	if arg[0] == '#' {
-		block = core.GetBlock(blockDb, core.GetCanonicalHash(blockDb, common.String2Big(arg[1:]).Uint64()))
+		block = core.GetBlock(ca, core.GetCanonicalHash(blockDb, common.String2Big(arg[1:]).Uint64()), access.NoOdr)
 	} else {
-		block = core.GetBlock(blockDb, common.HexToHash(arg))
+		block = core.GetBlock(ca, common.HexToHash(arg), access.NoOdr)
 	}
 
 	if block == nil {
