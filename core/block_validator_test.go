@@ -81,7 +81,7 @@ func TestPutReceipt(t *testing.T) {
 		Index:       0,
 	}}
 
-	PutReceipts(db, types.Receipts{receipt})
+	WriteReceipts(db, types.Receipts{receipt})
 	receipt = GetReceipt(db, common.Hash{})
 	if receipt == nil {
 		t.Error("expected to get 1 receipt, got none.")

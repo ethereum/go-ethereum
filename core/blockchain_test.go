@@ -937,8 +937,8 @@ func TestChainTxReorgs(t *testing.T) {
 
 	// removed tx
 	for i, tx := range (types.Transactions{pastDrop, freshDrop}) {
-		if GetTransaction(db, tx.Hash()) != nil {
-			t.Errorf("drop %d: tx found while shouldn't have been", i)
+		if txn, _, _, _ := GetTransaction(db, tx.Hash()); txn != nil {
+			t.Errorf("drop %d: tx %v found while shouldn't have been", i, txn)
 		}
 		if GetReceipt(db, tx.Hash()) != nil {
 			t.Errorf("drop %d: receipt found while shouldn't have been", i)
@@ -946,7 +946,7 @@ func TestChainTxReorgs(t *testing.T) {
 	}
 	// added tx
 	for i, tx := range (types.Transactions{pastAdd, freshAdd, futureAdd}) {
-		if GetTransaction(db, tx.Hash()) == nil {
+		if txn, _, _, _ := GetTransaction(db, tx.Hash()); txn == nil {
 			t.Errorf("add %d: expected tx to be found", i)
 		}
 		if GetReceipt(db, tx.Hash()) == nil {
@@ -955,7 +955,7 @@ func TestChainTxReorgs(t *testing.T) {
 	}
 	// shared tx
 	for i, tx := range (types.Transactions{postponed, swapped}) {
-		if GetTransaction(db, tx.Hash()) == nil {
+		if txn, _, _, _ := GetTransaction(db, tx.Hash()); txn == nil {
 			t.Errorf("share %d: expected tx to be found", i)
 		}
 		if GetReceipt(db, tx.Hash()) == nil {
