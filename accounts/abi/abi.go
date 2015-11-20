@@ -20,81 +20,35 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
+	"math"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-// Callable method given a `Name` and whether the method is a constant.
-// If the method is `Const` no transaction needs to be created for this
-// particular Method call. It can easily be simulated using a local VM.
-// For example a `Balance()` method only needs to retrieve something
-// from the storage and therefor requires no Tx to be send to the
-// network. A method such as `Transact` does require a Tx and thus will
-// be flagged `true`.
-// Input specifies the required input parameters for this gives method.
-type Method struct {
-	Name   string
-	Const  bool
-	Inputs []Argument
-	Return Type // not yet implemented
-}
-
-// Returns the methods string signature according to the ABI spec.
-//
-// Example
-//
-//     function foo(uint32 a, int b)    =    "foo(uint32,int256)"
-//
-// Please note that "int" is substitute for its canonical representation "int256"
-func (m Method) String() (out string) {
-	out += m.Name
-	types := make([]string, len(m.Inputs))
-	i := 0
-	for _, input := range m.Inputs {
-		types[i] = input.Type.String()
-		i++
-	}
-	out += "(" + strings.Join(types, ",") + ")"
-
-	return
-}
-
-func (m Method) Id() []byte {
-	return crypto.Sha3([]byte(m.String()))[:4]
-}
-
-// Argument holds the name of the argument and the corresponding type.
-// Types are used when packing and testing arguments.
-type Argument struct {
-	Name string
-	Type Type
-}
-
-func (a *Argument) UnmarshalJSON(data []byte) error {
-	var extarg struct {
-		Name string
-		Type string
-	}
-	err := json.Unmarshal(data, &extarg)
-	if err != nil {
-		return fmt.Errorf("argument json err: %v", err)
-	}
-
-	a.Type, err = NewType(extarg.Type)
-	if err != nil {
-		return err
-	}
-	a.Name = extarg.Name
-
-	return nil
-}
+// Executer is an executer method for performing state executions. It takes one
+// argument which is the input data and expects output data to be returned as
+// multiple 32 byte word length concatenated slice
+type Executer func(datain []byte) []byte
 
 // The ABI holds information about a contract's context and available
 // invokable methods. It will allow you to type check function calls and
 // packs data accordingly.
 type ABI struct {
 	Methods map[string]Method
+}
+
+// JSON returns a parsed ABI interface and error if it failed.
+func JSON(reader io.Reader) (ABI, error) {
+	dec := json.NewDecoder(reader)
+
+	var abi ABI
+	if err := dec.Decode(&abi); err != nil {
+		return ABI{}, err
+	}
+
+	return abi, nil
 }
 
 // tests, tests whether the given input would result in a successful
@@ -145,6 +99,55 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 	return packed, nil
 }
 
+// toGoType parses the input and casts it to the proper type defined by the ABI
+// argument in t.
+func toGoType(t Argument, input []byte) interface{} {
+	switch t.Type.T {
+	case IntTy:
+		return common.BytesToBig(input)
+	case UintTy:
+		return common.BytesToBig(input)
+	case BoolTy:
+		return common.BytesToBig(input).Uint64() > 0
+	case AddressTy:
+		return common.BytesToAddress(input)
+	case HashTy:
+		return common.BytesToHash(input)
+	}
+	return nil
+}
+
+// Call executes a call and attemps to parse the return values and returns it as
+// an interface. It uses the executer method to perform the actual call since
+// the abi knows nothing of the lower level calling mechanism.
+//
+// Call supports all abi types and includes multiple return values. When only
+// one item is returned a single interface{} will be returned, if a contract
+// method returns multiple values an []interface{} slice is returned.
+func (abi ABI) Call(executer Executer, name string, args ...interface{}) interface{} {
+	callData, err := abi.Pack(name, args...)
+	if err != nil {
+		glog.V(logger.Debug).Infoln("pack error:", err)
+		return nil
+	}
+
+	output := executer(callData)
+
+	method := abi.Methods[name]
+	ret := make([]interface{}, int(math.Max(float64(len(method.Outputs)), float64(len(output)/32))))
+	for i := 0; i < len(ret); i += 32 {
+		index := i / 32
+		ret[index] = toGoType(method.Outputs[index], output[i:i+32])
+	}
+
+	// return single interface
+	if len(ret) == 1 {
+		return ret[0]
+	}
+
+	return ret
+}
+
 func (abi *ABI) UnmarshalJSON(data []byte) error {
 	var methods []Method
 	if err := json.Unmarshal(data, &methods); err != nil {
@@ -157,15 +160,4 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
-}
-
-func JSON(reader io.Reader) (ABI, error) {
-	dec := json.NewDecoder(reader)
-
-	var abi ABI
-	if err := dec.Decode(&abi); err != nil {
-		return ABI{}, err
-	}
-
-	return abi, nil
 }
