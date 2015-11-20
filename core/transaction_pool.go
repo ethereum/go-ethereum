@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -65,10 +66,10 @@ type TxPool struct {
 	minGasPrice  *big.Int
 	eventMux     *event.TypeMux
 	events       event.Subscription
-
-	mu      sync.RWMutex
-	pending map[common.Hash]*types.Transaction // processable transactions
-	queue   map[common.Address]map[common.Hash]*types.Transaction
+	localTx      *txSet
+	mu           sync.RWMutex
+	pending      map[common.Hash]*types.Transaction // processable transactions
+	queue        map[common.Address]map[common.Hash]*types.Transaction
 }
 
 func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
@@ -81,6 +82,7 @@ func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func(
 		gasLimit:     gasLimitFn,
 		minGasPrice:  new(big.Int),
 		pendingState: nil,
+		localTx:      newTxSet(),
 		events:       eventMux.Subscribe(ChainHeadEvent{}, GasPriceChanged{}, RemovedTransactionEvent{}),
 	}
 	go pool.eventLoop()
@@ -168,6 +170,14 @@ func (pool *TxPool) Stats() (pending int, queued int) {
 	return
 }
 
+// SetLocal marks a transaction as local, skipping gas price
+//  check against local miner minimum in the future
+func (pool *TxPool) SetLocal(tx *types.Transaction) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	pool.localTx.add(tx.Hash())
+}
+
 // validateTx checks whether a transaction is valid according
 // to the consensus rules.
 func (pool *TxPool) validateTx(tx *types.Transaction) error {
@@ -177,8 +187,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		err  error
 	)
 
+	local := pool.localTx.contains(tx.Hash())
 	// Drop transactions under our own minimal accepted gas price
-	if pool.minGasPrice.Cmp(tx.GasPrice()) > 0 {
+	if !local && pool.minGasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrCheap
 	}
 
@@ -489,3 +500,49 @@ type txQueueEntry struct {
 func (q txQueue) Len() int           { return len(q) }
 func (q txQueue) Swap(i, j int)      { q[i], q[j] = q[j], q[i] }
 func (q txQueue) Less(i, j int) bool { return q[i].Nonce() < q[j].Nonce() }
+
+// txSet represents a set of transaction hashes in which entries
+//  are automatically dropped after txSetDuration time
+type txSet struct {
+	txMap          map[common.Hash]struct{}
+	txOrd          map[uint64]txOrdType
+	addPtr, delPtr uint64
+}
+
+const txSetDuration = time.Hour * 2
+
+// txOrdType represents an entry in the time-ordered list of transaction hashes
+type txOrdType struct {
+	hash common.Hash
+	time time.Time
+}
+
+// newTxSet creates a new transaction set
+func newTxSet() *txSet {
+	return &txSet{
+		txMap: make(map[common.Hash]struct{}),
+		txOrd: make(map[uint64]txOrdType),
+	}
+}
+
+// contains returns true if the set contains the given transaction hash
+// (not thread safe, should be called from a locked environment)
+func (self *txSet) contains(hash common.Hash) bool {
+	_, ok := self.txMap[hash]
+	return ok
+}
+
+// add adds a transaction hash to the set, then removes entries older than txSetDuration
+// (not thread safe, should be called from a locked environment)
+func (self *txSet) add(hash common.Hash) {
+	self.txMap[hash] = struct{}{}
+	now := time.Now()
+	self.txOrd[self.addPtr] = txOrdType{hash: hash, time: now}
+	self.addPtr++
+	delBefore := now.Add(-txSetDuration)
+	for self.delPtr < self.addPtr && self.txOrd[self.delPtr].time.Before(delBefore) {
+		delete(self.txMap, self.txOrd[self.delPtr].hash)
+		delete(self.txOrd, self.delPtr)
+		self.delPtr++
+	}
+}

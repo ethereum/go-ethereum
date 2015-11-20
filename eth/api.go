@@ -926,6 +926,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(args SendTxArgs) (common.Hash
 		return common.Hash{}, err
 	}
 
+	s.txPool.SetLocal(signedTx)
 	if err := s.txPool.Add(signedTx); err != nil {
 		return common.Hash{}, nil
 	}
@@ -948,6 +949,7 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(encodedTx string) (string,
 		return "", err
 	}
 
+	s.txPool.SetLocal(tx)
 	if err := s.txPool.Add(tx); err != nil {
 		return "", err
 	}
