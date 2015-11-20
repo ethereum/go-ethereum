@@ -879,6 +879,60 @@ func (self *XEth) Frontend() Frontend {
 	return self.frontend
 }
 
+func (self *XEth) SignTransaction(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (*types.Transaction, error) {
+	if len(toStr) > 0 && toStr != "0x" && !isAddress(toStr) {
+		return nil, errors.New("Invalid address")
+	}
+
+	var (
+		from             = common.HexToAddress(fromStr)
+		to               = common.HexToAddress(toStr)
+		value            = common.Big(valueStr)
+		gas              *big.Int
+		price            *big.Int
+		data             []byte
+		contractCreation bool
+	)
+
+	if len(gasStr) == 0 {
+		gas = DefaultGas()
+	} else {
+		gas = common.Big(gasStr)
+	}
+
+	if len(gasPriceStr) == 0 {
+		price = self.DefaultGasPrice()
+	} else {
+		price = common.Big(gasPriceStr)
+	}
+
+	data = common.FromHex(codeStr)
+	if len(toStr) == 0 {
+		contractCreation = true
+	}
+
+	var nonce uint64
+	if len(nonceStr) != 0 {
+		nonce = common.Big(nonceStr).Uint64()
+	} else {
+		state := self.backend.TxPool().State()
+		nonce = state.GetNonce(from)
+	}
+	var tx *types.Transaction
+	if contractCreation {
+		tx = types.NewContractCreation(nonce, value, gas, price, data)
+	} else {
+		tx = types.NewTransaction(nonce, to, value, gas, price, data)
+	}
+
+	signed, err := self.sign(tx, from, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return signed, nil
+}
+
 func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 
 	// this minimalistic recoding is enough (works for natspec.js)
