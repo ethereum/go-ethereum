@@ -239,14 +239,17 @@ func TestPeerMessageExpiration(t *testing.T) {
 	}
 	payload := []interface{}{envelope}
 	if err := p2p.ExpectMsg(tester.stream, messagesCode, payload); err != nil {
-		t.Fatalf("message mismatch: %v", err)
+		// A premature empty message may have been broadcast, check the next too
+		if err := p2p.ExpectMsg(tester.stream, messagesCode, payload); err != nil {
+			t.Fatalf("message mismatch: %v", err)
+		}
 	}
 	// Check that the message is inside the cache
 	if !peer.known.Has(envelope.Hash()) {
 		t.Fatalf("message not found in cache")
 	}
 	// Discard messages until expiration and check cache again
-	exp := time.Now().Add(time.Second + expirationCycle)
+	exp := time.Now().Add(time.Second + 2*expirationCycle + 100*time.Millisecond)
 	for time.Now().Before(exp) {
 		if err := p2p.ExpectMsg(tester.stream, messagesCode, []interface{}{}); err != nil {
 			t.Fatalf("message mismatch: %v", err)

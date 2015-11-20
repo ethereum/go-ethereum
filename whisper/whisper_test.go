@@ -207,4 +207,13 @@ func TestMessageExpiration(t *testing.T) {
 	if found {
 		t.Fatalf("message not expired from cache")
 	}
+
+	node.add(envelope)
+	node.poolMu.RLock()
+	_, found = node.messages[envelope.Hash()]
+	node.poolMu.RUnlock()
+	if found {
+		t.Fatalf("message was added to cache")
+	}
+
 }
