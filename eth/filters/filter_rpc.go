@@ -357,7 +357,7 @@ func (s *FilterService) GetLogs(args NewFilterArgs) (vm.Logs) {
 	filter.SetAddresses(args.Addresses)
 	filter.SetTopics(args.Topics)
 
-	return filter.Find()
+	return returnLogs(filter.Find())
 }
 
 func (s *FilterService) UninstallFilter(filterId string) bool {
@@ -413,7 +413,7 @@ func (s *FilterService) blockFilterChanged(id int) []common.Hash {
 	if s.blockQueue[id] != nil {
 		return s.blockQueue[id].get()
 	}
-	return []common.Hash{}
+	return nil
 }
 
 func (s *FilterService) transactionFilterChanged(id int) []common.Hash {
@@ -423,7 +423,7 @@ func (s *FilterService) transactionFilterChanged(id int) []common.Hash {
 	if s.transactionQueue[id] != nil {
 		return s.transactionQueue[id].get()
 	}
-	return []common.Hash{}
+	return nil
 }
 
 func (s *FilterService) logFilterChanged(id int) vm.Logs {
@@ -433,20 +433,20 @@ func (s *FilterService) logFilterChanged(id int) vm.Logs {
 	if s.logQueue[id] != nil {
 		return s.logQueue[id].get()
 	}
-	return vm.Logs{}
+	return nil
 }
 
 func (s *FilterService) GetFilterLogs(filterId string) vm.Logs {
 	id, ok := s.filterMapping[filterId]
 	if !ok {
-		return vm.Logs{}
+		return returnLogs(nil)
 	}
 
 	if filter := s.filterManager.Get(id); filter != nil {
-		return filter.Find()
+		return returnLogs(filter.Find())
 	}
 
-	return vm.Logs{}
+	return returnLogs(nil)
 }
 
 func (s *FilterService) GetFilterChanges(filterId string) interface{} {
@@ -455,19 +455,19 @@ func (s *FilterService) GetFilterChanges(filterId string) interface{} {
 	s.filterMapMu.Unlock()
 
 	if !ok { // filter not found
-		return nil
+		return []interface{}{}
 	}
 
 	switch s.getFilterType(id) {
 	case blockFilterTy:
-		return s.blockFilterChanged(id)
+		return returnHashes(s.blockFilterChanged(id))
 	case transactionFilterTy:
-		return s.transactionFilterChanged(id)
+		return returnHashes(s.transactionFilterChanged(id))
 	case logFilterTy:
-		return s.logFilterChanged(id)
+		return returnLogs(s.logFilterChanged(id))
 	}
 
-	return nil
+	return []interface{}{}
 }
 
 type logQueue struct {
@@ -527,4 +527,22 @@ func newFilterId() (string, error) {
 		return "", errors.New("Unable to generate filter id")
 	}
 	return "0x" + hex.EncodeToString(subid[:]), nil
+}
+
+// returnLogs is a helper that will return an empty logs array case the given logs is nil, otherwise is will return the
+// given logs. The RPC interfaces defines that always an array is returned.
+func returnLogs(logs vm.Logs) vm.Logs {
+	if logs == nil {
+		return vm.Logs{}
+	}
+	return logs
+}
+
+// returnHashes is a helper that will return an empty hash array case the given hash array is nil, otherwise is will
+// return the given hashes. The RPC interfaces defines that always an array is returned.
+func returnHashes(hashes []common.Hash) []common.Hash {
+	if hashes == nil {
+		return []common.Hash{}
+	}
+	return hashes
 }
