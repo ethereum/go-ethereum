@@ -125,13 +125,13 @@ METHODS:
 			continue
 		}
 
-		if isPubSub(mtype) {
-			var h callback
-			h.rcvr = rcvr
-			h.method = method
-			h.errPos = -1
-			h.isSubscribe = true
+		var h callback
+		h.isSubscribe = isPubSub(mtype)
+		h.rcvr = rcvr
+		h.method = method
+		h.errPos = -1
 
+		if h.isSubscribe {
 			h.argTypes = make([]reflect.Type, mtype.NumIn()-1) // skip rcvr type
 			for i := 1; i < mtype.NumIn(); i++ {
 				argType := mtype.In(i)
@@ -146,9 +146,6 @@ METHODS:
 			continue METHODS
 		}
 
-		var h callback
-		h.rcvr = rcvr
-		h.method = method
 		numIn := mtype.NumIn()
 
 		// determine method arguments, ignore first arg since it's the receiver type
