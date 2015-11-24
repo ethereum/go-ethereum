@@ -19,7 +19,7 @@ type Progress struct {
 }
 
 type SyncingResult struct {
-	Syncing bool `json:"syncing"`
+	Syncing bool     `json:"syncing"`
 	Status  Progress `json:"status"`
 }
 

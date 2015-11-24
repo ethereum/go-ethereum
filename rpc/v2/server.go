@@ -130,7 +130,7 @@ func (s *Server) ServeCodec(codec ServerCodec) {
 			const size = 64 << 10
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
-			glog.Errorln(buf)
+			glog.Errorln(string(buf))
 		}
 		codec.Close()
 	}()
@@ -437,16 +437,20 @@ func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, RPCErro
 			continue
 		}
 
-		if callb, ok := svc.subscriptions[r.method]; ok {
-			requests[i] = &serverRequest{id: r.id, svcname: svc.name, callb: callb}
-			if r.params != nil && len(callb.argTypes) > 0 {
-				argTypes := []reflect.Type{reflect.TypeOf("")}
-				argTypes = append(argTypes, callb.argTypes...)
-				if args, err := codec.ParseRequestArguments(argTypes, r.params); err == nil {
-					requests[i].args = args[1:] // first one is service.method name which isn't an actual argument
-				} else {
-					requests[i].err = &invalidParamsError{err.Error()}
+		if r.isPubSub { // eth_subscribe
+			if callb, ok := svc.subscriptions[r.method]; ok {
+				requests[i] = &serverRequest{id: r.id, svcname: svc.name, callb: callb}
+				if r.params != nil && len(callb.argTypes) > 0 {
+					argTypes := []reflect.Type{reflect.TypeOf("")}
+					argTypes = append(argTypes, callb.argTypes...)
+					if args, err := codec.ParseRequestArguments(argTypes, r.params); err == nil {
+						requests[i].args = args[1:] // first one is service.method name which isn't an actual argument
+					} else {
+						requests[i].err = &invalidParamsError{err.Error()}
+					}
 				}
+			} else {
+				requests[i].err = &methodNotFoundError{subscribeMethod, r.method}
 			}
 			continue
 		}
