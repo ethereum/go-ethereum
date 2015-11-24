@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/versions"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -773,6 +774,12 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		}
 	}
 
+	err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return versions.NewVersionCheck(ctx)
+	})
+	if err != nil {
+		Fatalf("Failed to register the Version Check service: %v", err)
+	}
 	return stack
 }
 

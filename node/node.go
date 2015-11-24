@@ -530,6 +530,7 @@ func (n *Node) Server() *p2p.Server {
 }
 
 // Service retrieves a currently running service registered of a specific type.
+// NOTE: must be called with double pointer to service
 func (n *Node) Service(service interface{}) error {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
