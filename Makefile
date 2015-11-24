@@ -7,10 +7,11 @@
 .PHONY: geth-darwin geth-darwin-386 geth-darwin-amd64
 .PHONY: geth-windows geth-windows-386 geth-windows-amd64
 .PHONY: geth-android geth-android-16 geth-android-21
+.PHONY: geth-ios geth-ios-5.0 geth-ios-8.1
 
 GOBIN = build/bin
 
-CROSSDEPS = https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2
+CROSSDEPS = https://gmplib.org/download/gmp/gmp-6.1.0.tar.bz2
 GO ?= latest
 
 geth:
@@ -82,6 +83,20 @@ geth-android-21: xgo
 	build/env.sh $(GOBIN)/xgo --go=$(GO) --dest=$(GOBIN) --deps=$(CROSSDEPS) --targets=android-21/* -v $(shell build/flags.sh) ./cmd/geth
 	@echo "Android 21 cross compilation done:"
 	@ls -l $(GOBIN)/geth-android-21-*
+
+geth-ios: xgo geth-ios-5.0 geth-ios-8.1
+	@echo "iOS cross compilation done:"
+	@ls -l $(GOBIN)/geth-ios-*
+
+geth-ios-5.0:
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --dest=$(GOBIN) --deps=$(CROSSDEPS) --depsargs=--disable-assembly --targets=ios-5.0/* -v $(shell build/flags.sh) ./cmd/geth
+	@echo "iOS 5.0 cross compilation done:"
+	@ls -l $(GOBIN)/geth-ios-5.0-*
+
+geth-ios-8.1:
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --dest=$(GOBIN) --deps=$(CROSSDEPS) --depsargs=--disable-assembly --targets=ios-8.1/* -v $(shell build/flags.sh) ./cmd/geth
+	@echo "iOS 8.1 cross compilation done:"
+	@ls -l $(GOBIN)/geth-ios-8.1-*
 
 evm:
 	build/env.sh $(GOROOT)/bin/go install -v $(shell build/flags.sh) ./cmd/evm
