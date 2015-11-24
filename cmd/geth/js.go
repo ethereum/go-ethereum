@@ -299,12 +299,12 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		utils.Fatalf("Error loading web3.js: %v", err)
 	}
 
-	_, err = js.re.Run("var web3 = require('web3');")
+	_, err = js.re.Run("var Web3 = require('web3');")
 	if err != nil {
 		utils.Fatalf("Error requiring web3: %v", err)
 	}
 
-	_, err = js.re.Run("web3.setProvider(jeth)")
+	_, err = js.re.Run("var web3 = new Web3(jeth);")
 	if err != nil {
 		utils.Fatalf("Error setting web3 provider: %v", err)
 	}
