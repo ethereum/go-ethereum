@@ -55,6 +55,7 @@ import (
 	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/whisper"
 )
 
 func init() {
@@ -623,7 +624,7 @@ func StartIPC(ethereum *eth.Ethereum, ctx *cli.Context) error {
 	server.RegisterName("net", p2p.NewNetService(ethereum.Network(), ethereum.NetVersion()))
 	server.RegisterName("web3", eth.NewWeb3Service(ethereum))
 	server.RegisterName("personal", accounts.NewPersonalService(ethereum.AccountManager()))
-
+	server.RegisterName("shh", whisper.NewWhisperService(ethereum.Whisper()))
 
 	ipcDir := filepath.Join(ethereum.DataDir, "shared")
 	os.MkdirAll(ipcDir, 0700)
