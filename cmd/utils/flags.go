@@ -784,6 +784,10 @@ func StartIPC(stack *node.Node, ctx *cli.Context) error {
 	if err := stack.Service(&ethereum); err != nil {
 		return err
 	}
+	var shh *whisper.Whisper
+	if err := stack.Service(&shh); err != nil {
+		return err
+	}
 	server := rpc.NewServer()
 
 	server.RegisterName("eth", accounts.NewAccountService(ethereum.AccountManager()))
@@ -796,6 +800,7 @@ func StartIPC(stack *node.Node, ctx *cli.Context) error {
 	server.RegisterName("net", p2p.NewNetService(stack.Server(), ethereum.NetVersion()))
 	server.RegisterName("web3", eth.NewWeb3Service(stack))
 	server.RegisterName("personal", accounts.NewPersonalService(ethereum.AccountManager()))
+	server.RegisterName("shh", whisper.NewWhisperService(shh))
 
 	ipcDir := filepath.Join(stack.DataDir(), "shared")
 	os.MkdirAll(ipcDir, 0700)
