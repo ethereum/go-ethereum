@@ -36,11 +36,23 @@ web3._extend({
 			params: 3,
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, web3._extend.utils.fromDecimal, web3._extend.utils.fromDecimal]
 		}),
-    new web3._extend.Method({
-	    name: 'getNatSpec',
-	    call: 'eth_getNatSpec',
-	    params: 1,
-	    inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
+		new web3._extend.Method({
+			name: 'getNatSpec',
+			call: 'eth_getNatSpec',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'signTransaction',
+			call: 'eth_signTransaction',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'submitTransaction',
+			call: 'eth_submitTransaction',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
 		})
 	],
 	properties:

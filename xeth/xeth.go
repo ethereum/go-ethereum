@@ -322,44 +322,11 @@ func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 	return block
 }
 
-func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blhash common.Hash, blnum *big.Int, txi uint64) {
-	// Due to increasing return params and need to determine if this is from transaction pool or
-	// some chain, this probably needs to be refactored for more expressiveness
-	data, _ := self.backend.ChainDb().Get(common.FromHex(hash))
-	if len(data) != 0 {
-		dtx := new(types.Transaction)
-		if err := rlp.DecodeBytes(data, dtx); err != nil {
-			glog.V(logger.Error).Infoln(err)
-			return
-		}
-		tx = dtx
-	} else { // check pending transactions
-		tx = self.backend.TxPool().GetTransaction(common.HexToHash(hash))
+func (self *XEth) EthTransactionByHash(hash string) (*types.Transaction, common.Hash, uint64, uint64) {
+	if tx, hash, number, index := core.GetTransaction(self.backend.ChainDb(), common.HexToHash(hash)); tx != nil {
+		return tx, hash, number, index
 	}
-
-	// meta
-	var txExtra struct {
-		BlockHash  common.Hash
-		BlockIndex uint64
-		Index      uint64
-	}
-
-	v, dberr := self.backend.ChainDb().Get(append(common.FromHex(hash), 0x0001))
-	// TODO check specifically for ErrNotFound
-	if dberr != nil {
-		return
-	}
-	r := bytes.NewReader(v)
-	err := rlp.Decode(r, &txExtra)
-	if err == nil {
-		blhash = txExtra.BlockHash
-		blnum = big.NewInt(int64(txExtra.BlockIndex))
-		txi = txExtra.Index
-	} else {
-		glog.V(logger.Error).Infoln(err)
-	}
-
-	return
+	return self.backend.TxPool().GetTransaction(common.HexToHash(hash)), common.Hash{}, 0, 0
 }
 
 func (self *XEth) BlockByNumber(num int64) *Block {
@@ -379,7 +346,7 @@ func (self *XEth) CurrentBlock() *types.Block {
 }
 
 func (self *XEth) GetBlockReceipts(bhash common.Hash) types.Receipts {
-	return self.backend.BlockProcessor().GetBlockReceipts(bhash)
+	return core.GetBlockReceipts(self.backend.ChainDb(), bhash)
 }
 
 func (self *XEth) GetTxReceipt(txhash common.Hash) *types.Receipt {
@@ -910,6 +877,60 @@ func isAddress(addr string) bool {
 
 func (self *XEth) Frontend() Frontend {
 	return self.frontend
+}
+
+func (self *XEth) SignTransaction(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (*types.Transaction, error) {
+	if len(toStr) > 0 && toStr != "0x" && !isAddress(toStr) {
+		return nil, errors.New("Invalid address")
+	}
+
+	var (
+		from             = common.HexToAddress(fromStr)
+		to               = common.HexToAddress(toStr)
+		value            = common.Big(valueStr)
+		gas              *big.Int
+		price            *big.Int
+		data             []byte
+		contractCreation bool
+	)
+
+	if len(gasStr) == 0 {
+		gas = DefaultGas()
+	} else {
+		gas = common.Big(gasStr)
+	}
+
+	if len(gasPriceStr) == 0 {
+		price = self.DefaultGasPrice()
+	} else {
+		price = common.Big(gasPriceStr)
+	}
+
+	data = common.FromHex(codeStr)
+	if len(toStr) == 0 {
+		contractCreation = true
+	}
+
+	var nonce uint64
+	if len(nonceStr) != 0 {
+		nonce = common.Big(nonceStr).Uint64()
+	} else {
+		state := self.backend.TxPool().State()
+		nonce = state.GetNonce(from)
+	}
+	var tx *types.Transaction
+	if contractCreation {
+		tx = types.NewContractCreation(nonce, value, gas, price, data)
+	} else {
+		tx = types.NewTransaction(nonce, to, value, gas, price, data)
+	}
+
+	signed, err := self.sign(tx, from, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return signed, nil
 }
 
 func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {

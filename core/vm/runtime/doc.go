@@ -14,12 +14,5 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package types
-
-import "github.com/ethereum/go-ethereum/core/vm"
-
-type BlockProcessor interface {
-	Process(*Block) (vm.Logs, Receipts, error)
-	ValidateHeader(*Header, bool, bool) error
-	ValidateHeaderWithParent(*Header, *Header, bool, bool) error
-}
+// Package runtime provides a basic execution model for executing EVM code.
+package runtime
