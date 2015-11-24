@@ -55,7 +55,7 @@
 		},
 		{
 			"ImportPath": "github.com/nsf/termbox-go",
-			"Rev": "c4d5eeeb18b378c361f9f2a731680e8b835969ed"
+			"Rev": "ca2931516914070bb7f934c83e408689cea8dfb7"
 		},
 		{
 			"ImportPath": "github.com/pborman/uuid",
