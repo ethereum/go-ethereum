@@ -234,6 +234,11 @@ func (self *Whisper) add(envelope *Envelope) error {
 	self.poolMu.Lock()
 	defer self.poolMu.Unlock()
 
+	// short circuit when a received envelope has already expired
+	if envelope.Expiry <= uint32(time.Now().Unix()) {
+		return nil
+	}
+
 	// Insert the message into the tracked pool
 	hash := envelope.Hash()
 	if _, ok := self.messages[hash]; ok {
