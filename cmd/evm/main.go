@@ -25,14 +25,13 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
@@ -113,7 +112,7 @@ func run(ctx *cli.Context) {
 	glog.SetToStderr(true)
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	statedb, _ := state.New(common.Hash{}, access.NewDbChainAccess(db))
 	sender := statedb.CreateAccount(common.StringToAddress("sender"))
 	receiver := statedb.CreateAccount(common.StringToAddress("receiver"))

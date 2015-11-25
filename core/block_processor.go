@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -88,10 +88,10 @@ func (gp *GasPool) String() string {
 func NewBlockProcessor(ca *access.ChainAccess, pow pow.PoW, blockchain *BlockChain, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
 		chainAccess: ca,
-		mem:      make(map[string]*big.Int),
-		Pow:      pow,
-		bc:       blockchain,
-		eventMux: eventMux,
+		mem:         make(map[string]*big.Int),
+		Pow:         pow,
+		bc:          blockchain,
+		eventMux:    eventMux,
 	}
 	return sm
 }

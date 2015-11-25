@@ -22,9 +22,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
@@ -58,7 +58,7 @@ func (pow delayedPow) Turbo(bool)                  {}
 func TestPowVerification(t *testing.T) {
 	// Create a simple chain to verify
 	var (
-		testdb, _ = ethdb.NewMemDatabase()
+		testdb, _ = access.NewMemDatabase()
 		genesis   = GenesisBlockForTesting(testdb, common.Address{}, new(big.Int))
 		blocks, _ = GenerateChain(genesis, testdb, 8, nil)
 	)
@@ -113,7 +113,7 @@ func TestPowConcurrentVerification32(t *testing.T) { testPowConcurrentVerificati
 func testPowConcurrentVerification(t *testing.T, threads int) {
 	// Create a simple chain to verify
 	var (
-		testdb, _ = ethdb.NewMemDatabase()
+		testdb, _ = access.NewMemDatabase()
 		genesis   = GenesisBlockForTesting(testdb, common.Address{}, new(big.Int))
 		blocks, _ = GenerateChain(genesis, testdb, 8, nil)
 	)
@@ -184,7 +184,7 @@ func TestPowConcurrentAbortion32(t *testing.T) { testPowConcurrentAbortion(t, 32
 func testPowConcurrentAbortion(t *testing.T, threads int) {
 	// Create a simple chain to verify
 	var (
-		testdb, _ = ethdb.NewMemDatabase()
+		testdb, _ = access.NewMemDatabase()
 		genesis   = GenesisBlockForTesting(testdb, common.Address{}, new(big.Int))
 		blocks, _ = GenerateChain(genesis, testdb, 1024, nil)
 	)

@@ -21,9 +21,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -36,9 +35,9 @@ type testAccount struct {
 }
 
 // makeTestState create a sample test state to test node-wise reconstruction.
-func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
+func makeTestState() (access.Database, common.Hash, []*testAccount) {
 	// Create an empty state
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	state, _ := New(common.Hash{}, access.NewDbChainAccess(db))
 
 	// Fill it with some arbitrary data
@@ -68,7 +67,7 @@ func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 
 // checkStateAccounts cross references a reconstructed state with an expected
 // account array.
-func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accounts []*testAccount) {
+func checkStateAccounts(t *testing.T, db access.Database, root common.Hash, accounts []*testAccount) {
 	state, _ := New(root, access.NewDbChainAccess(db))
 	for i, acc := range accounts {
 
@@ -87,7 +86,7 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accou
 // Tests that an empty state is not scheduled for syncing.
 func TestEmptyStateSync(t *testing.T) {
 	empty := common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	if req := NewStateSync(empty, db).Missing(1); len(req) != 0 {
 		t.Errorf("content requested for empty state: %v", req)
 	}
@@ -103,7 +102,7 @@ func testIterativeStateSync(t *testing.T, batch int) {
 	srcDb, srcRoot, srcAccounts := makeTestState()
 
 	// Create a destination state and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb, _ := access.NewMemDatabase()
 	sched := NewStateSync(srcRoot, dstDb)
 
 	queue := append([]common.Hash{}, sched.Missing(batch)...)
@@ -132,7 +131,7 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 	srcDb, srcRoot, srcAccounts := makeTestState()
 
 	// Create a destination state and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb, _ := access.NewMemDatabase()
 	sched := NewStateSync(srcRoot, dstDb)
 
 	queue := append([]common.Hash{}, sched.Missing(0)...)
@@ -166,7 +165,7 @@ func testIterativeRandomStateSync(t *testing.T, batch int) {
 	srcDb, srcRoot, srcAccounts := makeTestState()
 
 	// Create a destination state and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb, _ := access.NewMemDatabase()
 	sched := NewStateSync(srcRoot, dstDb)
 
 	queue := make(map[common.Hash]struct{})
@@ -203,7 +202,7 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 	srcDb, srcRoot, srcAccounts := makeTestState()
 
 	// Create a destination state and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb, _ := access.NewMemDatabase()
 	sched := NewStateSync(srcRoot, dstDb)
 
 	queue := make(map[common.Hash]struct{})

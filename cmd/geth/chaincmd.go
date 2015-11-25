@@ -24,13 +24,12 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
@@ -197,7 +196,7 @@ func hashish(x string) bool {
 	return err != nil
 }
 
-func closeAll(dbs ...ethdb.Database) {
+func closeAll(dbs ...access.Database) {
 	for _, db := range dbs {
 		db.Close()
 	}

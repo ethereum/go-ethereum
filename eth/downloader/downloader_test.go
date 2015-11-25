@@ -25,20 +25,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
-	testdb, _   = ethdb.NewMemDatabase()
+	testdb, _   = access.NewMemDatabase()
 	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
 	genesis     = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000))
@@ -118,7 +117,7 @@ func makeChainFork(n, f int, parent *types.Block, parentReceipts types.Receipts)
 
 // downloadTester is a test simulator for mocking out local block chain.
 type downloadTester struct {
-	stateDb    ethdb.Database
+	stateDb    access.Database
 	downloader *Downloader
 
 	ownHashes   []common.Hash                  // Hash chain belonging to the tester
@@ -150,7 +149,7 @@ func newTester() *downloadTester {
 		peerReceipts: make(map[string]map[common.Hash]types.Receipts),
 		peerChainTds: make(map[string]map[common.Hash]*big.Int),
 	}
-	tester.stateDb, _ = ethdb.NewMemDatabase()
+	tester.stateDb, _ = access.NewMemDatabase()
 	tester.downloader = New(tester.stateDb, new(event.TypeMux), tester.hasHeader, tester.hasBlock, tester.getHeader,
 		tester.getBlock, tester.headHeader, tester.headBlock, tester.headFastBlock, tester.commitHeadBlock, tester.getTd,
 		tester.insertHeaders, tester.insertBlocks, tester.insertReceipts, tester.rollback, tester.dropPeer)

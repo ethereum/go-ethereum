@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -32,7 +32,7 @@ import (
 type StateSync trie.TrieSync
 
 // NewStateSync create a new state trie download scheduler.
-func NewStateSync(root common.Hash, database ethdb.Database) *StateSync {
+func NewStateSync(root common.Hash, database access.Database) *StateSync {
 	var syncer *trie.TrieSync
 
 	callback := func(leaf []byte, parent common.Hash) error {

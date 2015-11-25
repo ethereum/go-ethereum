@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -37,7 +37,7 @@ func TestProof(t *testing.T) {
 func TestStoreProof(t *testing.T) {
 	trie, vals := randomTrie(500)
 	root := trie.Hash()
-	mdb, _ := ethdb.NewMemDatabase()	
+	mdb, _ := access.NewMemDatabase()
 	for _, kv := range vals {
 		proof := trie.Prove(kv.k)
 		if proof == nil {

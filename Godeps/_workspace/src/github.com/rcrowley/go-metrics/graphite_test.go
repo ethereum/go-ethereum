@@ -17,6 +17,6 @@ func ExampleGraphiteWithConfig() {
 		Registry:      DefaultRegistry,
 		FlushInterval: 1 * time.Second,
 		DurationUnit:  time.Millisecond,
-		Percentiles: []float64{ 0.5, 0.75, 0.99, 0.999 },
+		Percentiles:   []float64{0.5, 0.75, 0.99, 0.999},
 	})
 }

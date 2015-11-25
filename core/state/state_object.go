@@ -21,9 +21,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
-	"github.com/ethereum/go-ethereum/core/requests"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -60,7 +59,7 @@ func (self Storage) Copy() Storage {
 type StateObject struct {
 	// State database for storing state changes
 	ca   *access.ChainAccess
-	ctx context.Context
+	ctx  context.Context
 	trie *trie.SecureTrie
 
 	// Address belonging to this account
@@ -105,7 +104,7 @@ func NewStateObjectFromBytes(ctx context.Context, address common.Address, data [
 		glog.Errorf("can't decode state object %x: %v", address, err)
 		return nil
 	}
-	trie, err := trie.NewSecureOdr(ctx, extobject.Root, ca.Db(), requests.NewTrieAccess(ca, extobject.Root, ca.Db()))
+	trie, err := trie.NewSecureOdr(ctx, extobject.Root, ca.Db(), NewTrieAccess(ca, extobject.Root, ca.Db()))
 	if err != nil {
 		// TODO: bubble this up or panic
 		glog.Errorf("can't create account trie with root %x: %v", extobject.Root[:], err)
@@ -118,7 +117,7 @@ func NewStateObjectFromBytes(ctx context.Context, address common.Address, data [
 	object.codeHash = extobject.CodeHash
 	object.trie = trie
 	object.storage = make(map[string]common.Hash)
-	object.code = requests.RetrieveNodeData(ctx, ca, common.BytesToHash(extobject.CodeHash))
+	object.code = RetrieveNodeData(ctx, ca, common.BytesToHash(extobject.CodeHash))
 	return object
 }
 
@@ -221,7 +220,7 @@ func (self *StateObject) CopyOdr(ctx context.Context) *StateObject {
 	stateObject.codeHash = common.CopyBytes(self.codeHash)
 	stateObject.nonce = self.nonce
 	if access.IsOdrContext(ctx) {
-		stateObject.trie = self.trie.CopySecureWithOdr(ctx, requests.NewTrieAccess(self.ca, common.BytesToHash(self.trie.Root()), self.ca.Db()))
+		stateObject.trie = self.trie.CopySecureWithOdr(ctx, NewTrieAccess(self.ca, common.BytesToHash(self.trie.Root()), self.ca.Db()))
 	} else {
 		stateObject.trie = self.trie
 	}

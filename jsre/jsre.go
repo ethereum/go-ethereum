@@ -154,7 +154,7 @@ loop:
 			if err != nil {
 				fmt.Println("js error:", err, arguments)
 			}
-		
+
 			_, inreg := registry[timer] // when clearInterval is called from within the callback don't reset it
 			if timer.interval && inreg {
 				timer.timer.Reset(timer.duration)

@@ -21,12 +21,11 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -36,7 +35,7 @@ func transaction(nonce uint64, gaslimit *big.Int, key *ecdsa.PrivateKey) *types.
 }
 
 func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	statedb, _ := state.New(common.Hash{}, access.NewDbChainAccess(db))
 
 	var m event.TypeMux
@@ -163,7 +162,7 @@ func TestTransactionChainFork(t *testing.T) {
 	pool, key := setupTxPool()
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	resetState := func() {
-		db, _ := ethdb.NewMemDatabase()
+		db, _ := access.NewMemDatabase()
 		statedb, _ := state.New(common.Hash{}, access.NewDbChainAccess(db))
 		pool.currentState = func() (*state.StateDB, error) { return statedb, nil }
 		currentState, _ := pool.currentState()
@@ -189,7 +188,7 @@ func TestTransactionDoubleNonce(t *testing.T) {
 	pool, key := setupTxPool()
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	resetState := func() {
-		db, _ := ethdb.NewMemDatabase()
+		db, _ := access.NewMemDatabase()
 		statedb, _ := state.New(common.Hash{}, access.NewDbChainAccess(db))
 		pool.currentState = func() (*state.StateDB, error) { return statedb, nil }
 		currentState, _ := pool.currentState()

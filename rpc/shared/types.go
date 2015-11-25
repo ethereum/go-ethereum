@@ -47,7 +47,7 @@ type Request struct {
 	Jsonrpc string          `json:"jsonrpc"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params"`
-	ctx 	context.Context
+	ctx     context.Context
 }
 
 // RPC response

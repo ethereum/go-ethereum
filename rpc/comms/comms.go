@@ -17,14 +17,14 @@
 package comms
 
 import (
+	"fmt"
 	"io"
 	"net"
-	"fmt"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/access"
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/codec"

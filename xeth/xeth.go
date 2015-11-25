@@ -85,7 +85,7 @@ type XEth struct {
 	state         *State
 	whisper       *Whisper
 	filterManager *filters.FilterSystem
-	ctx context.Context
+	ctx           context.Context
 }
 
 func NewTest(eth *eth.Ethereum, frontend Frontend) *XEth {

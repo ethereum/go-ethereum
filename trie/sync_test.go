@@ -20,14 +20,14 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // makeTestTrie create a sample test trie to test node-wise reconstruction.
-func makeTestTrie() (ethdb.Database, *Trie, map[string][]byte) {
+func makeTestTrie() (access.Database, *Trie, map[string][]byte) {
 	// Create an empty trie
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	trie, _ := New(common.Hash{}, db)
 
 	// Fill it with some arbitrary data
@@ -67,7 +67,7 @@ func TestEmptyTrieSync(t *testing.T) {
 	emptyB, _ := New(emptyRoot, nil)
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
-		db, _ := ethdb.NewMemDatabase()
+		db, _ := access.NewMemDatabase()
 		if req := NewTrieSync(common.BytesToHash(trie.Root()), db, nil).Missing(1); len(req) != 0 {
 			t.Errorf("test %d: content requested for empty trie: %v", i, req)
 		}
@@ -84,7 +84,7 @@ func testIterativeTrieSync(t *testing.T, batch int) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb, _ := access.NewMemDatabase()
 	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
 
 	queue := append([]common.Hash{}, sched.Missing(batch)...)
@@ -113,7 +113,7 @@ func TestIterativeDelayedTrieSync(t *testing.T) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb, _ := access.NewMemDatabase()
 	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
 
 	queue := append([]common.Hash{}, sched.Missing(10000)...)
@@ -147,7 +147,7 @@ func testIterativeRandomTrieSync(t *testing.T, batch int) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb, _ := access.NewMemDatabase()
 	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
 
 	queue := make(map[common.Hash]struct{})
@@ -184,7 +184,7 @@ func TestIterativeRandomDelayedTrieSync(t *testing.T) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb, _ := access.NewMemDatabase()
 	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
 
 	queue := make(map[common.Hash]struct{})
@@ -227,7 +227,7 @@ func TestDuplicateAvoidanceTrieSync(t *testing.T) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb, _ := access.NewMemDatabase()
 	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
 
 	queue := append([]common.Hash{}, sched.Missing(0)...)

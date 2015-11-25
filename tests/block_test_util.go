@@ -28,15 +28,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -165,13 +164,13 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 func runBlockTest(test *BlockTest) error {
 	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"), crypto.StandardScryptN, crypto.StandardScryptP)
 	am := accounts.NewManager(ks)
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	cfg := &eth.Config{
 		DataDir:        common.DefaultDataDir(),
 		Verbosity:      5,
 		Etherbase:      common.Address{},
 		AccountManager: am,
-		NewDB:          func(path string) (ethdb.Database, error) { return db, nil },
+		NewDB:          func(path string) (access.Database, error) { return db, nil },
 	}
 
 	cfg.GenesisBlock = test.Genesis
@@ -217,7 +216,7 @@ func runBlockTest(test *BlockTest) error {
 
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
-func (t *BlockTest) InsertPreState(db ethdb.Database, am *accounts.Manager) (*state.StateDB, error) {
+func (t *BlockTest) InsertPreState(db access.Database, am *accounts.Manager) (*state.StateDB, error) {
 	statedb, err := state.New(common.Hash{}, access.NewDbChainAccess(db))
 	if err != nil {
 		return nil, err

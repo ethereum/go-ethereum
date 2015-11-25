@@ -30,14 +30,13 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -552,7 +551,7 @@ func blockRecovery(ctx *cli.Context) {
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	utils.CheckLegalese(cfg.DataDir)
 
-	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"), cfg.DatabaseCache)
+	blockDb, err := access.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"), cfg.DatabaseCache)
 	if err != nil {
 		glog.Fatalln("could not open db:", err)
 	}

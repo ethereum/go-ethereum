@@ -24,18 +24,17 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 // WriteGenesisBlock writes the genesis block to the database as block number 0
-func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, error) {
+func WriteGenesisBlock(chainDb access.Database, reader io.Reader) (*types.Block, error) {
 	contents, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err
@@ -119,7 +118,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 
 // GenesisBlockForTesting creates a block in which addr has the given wei balance.
 // The state trie of the block is written to db. the passed db needs to contain a state root
-func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
+func GenesisBlockForTesting(db access.Database, addr common.Address, balance *big.Int) *types.Block {
 	statedb, _ := state.New(common.Hash{}, access.NewDbChainAccess(db))
 	obj := statedb.GetOrNewStateObject(addr)
 	obj.SetBalance(balance)
@@ -140,7 +139,7 @@ type GenesisAccount struct {
 	Balance *big.Int
 }
 
-func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) *types.Block {
+func WriteGenesisBlockForTesting(db access.Database, accounts ...GenesisAccount) *types.Block {
 	accountJson := "{"
 	for i, account := range accounts {
 		if i != 0 {
@@ -160,7 +159,7 @@ func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) 
 	return block
 }
 
-func WriteTestNetGenesisBlock(chainDb ethdb.Database, nonce uint64) (*types.Block, error) {
+func WriteTestNetGenesisBlock(chainDb access.Database, nonce uint64) (*types.Block, error) {
 	testGenesis := fmt.Sprintf(`{
         "nonce": "0x%x",
         "difficulty": "0x20000",
@@ -181,7 +180,7 @@ func WriteTestNetGenesisBlock(chainDb ethdb.Database, nonce uint64) (*types.Bloc
 	return WriteGenesisBlock(chainDb, strings.NewReader(testGenesis))
 }
 
-func WriteOlympicGenesisBlock(chainDb ethdb.Database, nonce uint64) (*types.Block, error) {
+func WriteOlympicGenesisBlock(chainDb access.Database, nonce uint64) (*types.Block, error) {
 	testGenesis := fmt.Sprintf(`{
 	"nonce":"0x%x",
 	"gasLimit":"0x%x",

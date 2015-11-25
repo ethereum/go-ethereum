@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
@@ -37,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
 )
@@ -90,7 +90,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth
 		t.Fatal(err)
 	}
 
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 
 	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{common.HexToAddress(testAddress), common.String2Big(testBalance)})
 	ks := crypto.NewKeyStorePlain(filepath.Join(tmp, "keystore"))
@@ -104,7 +104,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth
 		DocRoot:        "/",
 		SolcPath:       testSolcPath,
 		PowTest:        true,
-		NewDB:          func(path string) (ethdb.Database, error) { return db, nil },
+		NewDB:          func(path string) (access.Database, error) { return db, nil },
 	}
 	if config != nil {
 		config(conf)

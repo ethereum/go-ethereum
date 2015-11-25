@@ -29,7 +29,7 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/ethereum/go-ethereum/core/access"
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/codec"
@@ -66,16 +66,16 @@ type stopServer struct {
 }
 
 type handler struct {
-	codec codec.Codec
-	api   shared.EthereumApi
-	channelID	*access.OdrChannelID
+	codec     codec.Codec
+	api       shared.EthereumApi
+	channelID *access.OdrChannelID
 }
 
 // StartHTTP starts listening for RPC requests sent via HTTP.
 func StartHttp(cfg HttpConfig, codec codec.Codec, api shared.EthereumApi) error {
 	httpServerMu.Lock()
 	defer httpServerMu.Unlock()
-	
+
 	addr := fmt.Sprintf("%s:%d", cfg.ListenAddress, cfg.ListenPort)
 	if httpServer != nil {
 		if addr != httpServer.Addr {

@@ -27,12 +27,11 @@ import (
 	"testing"
 
 	"github.com/ethereum/ethash"
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
@@ -49,7 +48,7 @@ func thePow() pow.PoW {
 	return pow
 }
 
-func theBlockChain(db ethdb.Database, t *testing.T) *BlockChain {
+func theBlockChain(db access.Database, t *testing.T) *BlockChain {
 	var eventMux event.TypeMux
 	WriteTestNetGenesisBlock(db, 0)
 	ca := access.NewDbChainAccess(db)
@@ -189,7 +188,7 @@ func insertChain(done chan bool, blockchain *BlockChain, chain types.Blocks, t *
 }
 
 func TestLastBlock(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 
 	bchain := theBlockChain(db, t)
 	block := makeBlockChain(bchain.CurrentBlock(), 1, db, 0)[0]
@@ -336,7 +335,7 @@ func testBrokenChain(t *testing.T, full bool) {
 func TestChainInsertions(t *testing.T) {
 	t.Skip("Skipped: outdated test files")
 
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 
 	chain1, err := loadChain("valid1", t)
 	if err != nil {
@@ -374,7 +373,7 @@ func TestChainInsertions(t *testing.T) {
 func TestChainMultipleInsertions(t *testing.T) {
 	t.Skip("Skipped: outdated test files")
 
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 
 	const max = 4
 	chains := make([]types.Blocks, max)
@@ -452,7 +451,7 @@ func makeBlockChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.B
 	return chain
 }
 
-func chm(genesis *types.Block, db ethdb.Database) *BlockChain {
+func chm(genesis *types.Block, db access.Database) *BlockChain {
 	var eventMux event.TypeMux
 	ca := access.NewDbChainAccess(db)
 	bc := &BlockChain{chainAccess: ca, chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}, rand: rand.New(rand.NewSource(0))}
@@ -488,7 +487,7 @@ func testReorgShort(t *testing.T, full bool) {
 
 func testReorg(t *testing.T, first, second []int, td int64, full bool) {
 	// Create a pristine block chain
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	genesis, _ := WriteTestNetGenesisBlock(db, 0)
 	bc := chm(genesis, db)
 
@@ -503,7 +502,7 @@ func testReorg(t *testing.T, first, second []int, td int64, full bool) {
 	// Check that the chain is valid number and link wise
 	if full {
 		prev := bc.CurrentBlock()
-		for block := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64()-1); block.NumberU64() != 0; prev, block = block, bc.GetBlockByNumber(block.NumberU64()-1) {
+		for block := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - 1); block.NumberU64() != 0; prev, block = block, bc.GetBlockByNumber(block.NumberU64()-1) {
 			if prev.ParentHash() != block.Hash() {
 				t.Errorf("parent block hash mismatch: have %x, want %x", prev.ParentHash(), block.Hash())
 			}
@@ -535,7 +534,7 @@ func TestBadBlockHashes(t *testing.T)  { testBadHashes(t, true) }
 
 func testBadHashes(t *testing.T, full bool) {
 	// Create a pristine block chain
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	genesis, _ := WriteTestNetGenesisBlock(db, 0)
 	bc := chm(genesis, db)
 
@@ -562,7 +561,7 @@ func TestReorgBadBlockHashes(t *testing.T)  { testReorgBadHashes(t, true) }
 
 func testReorgBadHashes(t *testing.T, full bool) {
 	// Create a pristine block chain
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	genesis, _ := WriteTestNetGenesisBlock(db, 0)
 	bc := chm(genesis, db)
 
@@ -668,7 +667,7 @@ func testInsertNonceError(t *testing.T, full bool) {
 		// Check that all no blocks after the failing block have been inserted.
 		for j := 0; j < i-failAt; j++ {
 			if full {
-				if block := bc.GetBlockByNumber(failNum+uint64(j)); block != nil {
+				if block := bc.GetBlockByNumber(failNum + uint64(j)); block != nil {
 					t.Errorf("test %d: invalid block in chain: %v", i, block)
 				}
 			} else {
@@ -685,7 +684,7 @@ func testInsertNonceError(t *testing.T, full bool) {
 func TestFastVsFullChains(t *testing.T) {
 	// Configure and generate a sample block chain
 	var (
-		gendb, _ = ethdb.NewMemDatabase()
+		gendb, _ = access.NewMemDatabase()
 		key, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		address  = crypto.PubkeyToAddress(key.PublicKey)
 		funds    = big.NewInt(1000000000)
@@ -710,7 +709,7 @@ func TestFastVsFullChains(t *testing.T) {
 		}
 	})
 	// Import the chain as an archive node for the comparison baseline
-	archiveDb, _ := ethdb.NewMemDatabase()
+	archiveDb, _ := access.NewMemDatabase()
 	archiveCa := access.NewDbChainAccess(archiveDb)
 	WriteGenesisBlockForTesting(archiveDb, GenesisAccount{address, funds})
 
@@ -721,7 +720,7 @@ func TestFastVsFullChains(t *testing.T) {
 		t.Fatalf("failed to process block %d: %v", n, err)
 	}
 	// Fast import the chain as a non-archive node to test
-	fastDb, _ := ethdb.NewMemDatabase()
+	fastDb, _ := access.NewMemDatabase()
 	fastCa := access.NewDbChainAccess(fastDb)
 	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
 	fast, _ := NewBlockChain(fastCa, FakePow{}, new(event.TypeMux))
@@ -771,7 +770,7 @@ func TestFastVsFullChains(t *testing.T) {
 func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	// Configure and generate a sample block chain
 	var (
-		gendb, _ = ethdb.NewMemDatabase()
+		gendb, _ = access.NewMemDatabase()
 		key, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		address  = crypto.PubkeyToAddress(key.PublicKey)
 		funds    = big.NewInt(1000000000)
@@ -798,7 +797,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 		}
 	}
 	// Import the chain as an archive node and ensure all pointers are updated
-	archiveDb, _ := ethdb.NewMemDatabase()
+	archiveDb, _ := access.NewMemDatabase()
 	archiveCa := access.NewDbChainAccess(archiveDb)
 	WriteGenesisBlockForTesting(archiveDb, GenesisAccount{address, funds})
 	archive, _ := NewBlockChain(archiveCa, FakePow{}, new(event.TypeMux))
@@ -812,7 +811,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	assert(t, "archive", archive, height/2, height/2, height/2)
 
 	// Import the chain as a non-archive node and ensure all pointers are updated
-	fastDb, _ := ethdb.NewMemDatabase()
+	fastDb, _ := access.NewMemDatabase()
 	fastCa := access.NewDbChainAccess(fastDb)
 	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
 	fast, _ := NewBlockChain(fastCa, FakePow{}, new(event.TypeMux))
@@ -833,7 +832,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	assert(t, "fast", fast, height/2, height/2, 0)
 
 	// Import the chain as a light node and ensure all pointers are updated
-	lightDb, _ := ethdb.NewMemDatabase()
+	lightDb, _ := access.NewMemDatabase()
 	lightCa := access.NewDbChainAccess(lightDb)
 	WriteGenesisBlockForTesting(lightDb, GenesisAccount{address, funds})
 	light, _ := NewBlockChain(lightCa, FakePow{}, new(event.TypeMux))
@@ -859,7 +858,7 @@ func TestChainTxReorgs(t *testing.T) {
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
 		addr3   = crypto.PubkeyToAddress(key3.PublicKey)
-		db, _   = ethdb.NewMemDatabase()
+		db, _   = access.NewMemDatabase()
 	)
 	genesis := WriteGenesisBlockForTesting(db,
 		GenesisAccount{addr1, big.NewInt(1000000)},

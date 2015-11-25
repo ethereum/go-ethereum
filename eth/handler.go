@@ -24,9 +24,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
@@ -292,7 +292,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			request.Amount = uint64(downloader.MaxHashFetch)
 		}
 		// Calculate the last block that should be retrieved, and short circuit if unavailable
-		last := pm.blockchain.GetBlockByNumber(request.Number+request.Amount-1)
+		last := pm.blockchain.GetBlockByNumber(request.Number + request.Amount - 1)
 		if last == nil {
 			last = pm.blockchain.CurrentBlock()
 			request.Amount = last.NumberU64() - request.Number + 1

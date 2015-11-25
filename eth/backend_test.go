@@ -4,16 +4,15 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 func TestMipmapUpgrade(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	addr := common.BytesToAddress([]byte("jeff"))
 	genesis := core.WriteGenesisBlockForTesting(db)
 

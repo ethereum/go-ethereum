@@ -19,8 +19,8 @@ package trie
 import (
 	"hash"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"golang.org/x/net/context"
 )
@@ -71,9 +71,9 @@ func NewSecureOdr(ctx context.Context, root common.Hash, db Database, access Odr
 // CopySecureWithOdr creates a copy of a trie with additional ODR capability
 func (t *SecureTrie) CopySecureWithOdr(ctx context.Context, access OdrAccess) *SecureTrie {
 	return &SecureTrie{
-		Trie: t.Trie.CopyWithOdr(ctx, access),
-		hash: t.hash,
-		secKeyBuf: t.secKeyBuf,
+		Trie:       t.Trie.CopyWithOdr(ctx, access),
+		hash:       t.hash,
+		secKeyBuf:  t.secKeyBuf,
 		hashKeyBuf: t.hashKeyBuf,
 	}
 }

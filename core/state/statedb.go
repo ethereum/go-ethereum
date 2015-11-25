@@ -20,11 +20,9 @@ package state
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/core/access"
-	"github.com/ethereum/go-ethereum/core/requests"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/trie"
@@ -43,7 +41,7 @@ var StartingNonce uint64
 type StateDB struct {
 	ca   *access.ChainAccess
 	trie *trie.SecureTrie
-	ctx context.Context
+	ctx  context.Context
 
 	stateObjects map[string]*StateObject
 
@@ -62,7 +60,7 @@ func New(root common.Hash, ca *access.ChainAccess) (*StateDB, error) {
 
 // NewOdr creates a new state from a given trie with ODR option
 func NewOdr(ctx context.Context, root common.Hash, ca *access.ChainAccess) (*StateDB, error) {
-	tr, err := trie.NewSecureOdr(ctx, root, ca.Db(), requests.NewTrieAccess(ca, root, ca.Db()))
+	tr, err := trie.NewSecureOdr(ctx, root, ca.Db(), NewTrieAccess(ca, root, ca.Db()))
 	if err != nil {
 		glog.Errorf("can't create state trie with root %x: %v", root[:], err)
 		return nil, err
@@ -70,7 +68,7 @@ func NewOdr(ctx context.Context, root common.Hash, ca *access.ChainAccess) (*Sta
 	return &StateDB{
 		ca:           ca,
 		trie:         tr,
-		ctx:		  ctx,
+		ctx:          ctx,
 		stateObjects: make(map[string]*StateObject),
 		refund:       new(big.Int),
 		logs:         make(map[common.Hash]vm.Logs),
@@ -324,7 +322,7 @@ func (self *StateDB) CopyOdr(ctx context.Context) *StateDB {
 	// ignore error - we assume state-to-be-copied always exists
 	state, _ := NewOdr(ctx, common.Hash{}, self.ca)
 	if access.IsOdrContext(ctx) {
-		state.trie = self.trie.CopySecureWithOdr(ctx, requests.NewTrieAccess(self.ca, common.BytesToHash(self.trie.Root()), self.ca.Db()))
+		state.trie = self.trie.CopySecureWithOdr(ctx, NewTrieAccess(self.ca, common.BytesToHash(self.trie.Root()), self.ca.Db()))
 	} else {
 		state.trie = self.trie
 	}
@@ -383,7 +381,7 @@ func (s *StateDB) Commit() (root common.Hash, err error) {
 // CommitBatch commits all state changes to a write batch but does not
 // execute the batch. It is used to validate state changes against
 // the root hash stored in a block.
-func (s *StateDB) CommitBatch() (root common.Hash, batch ethdb.Batch) {
+func (s *StateDB) CommitBatch() (root common.Hash, batch access.Batch) {
 	batch = s.ca.Db().NewBatch()
 	root, _ = s.commit(batch)
 	return root, batch

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/access"
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
@@ -32,13 +32,13 @@ type InProcClient struct {
 	lastJsonrpc string
 	lastErr     error
 	lastRes     interface{}
-	channelID	*access.OdrChannelID
+	channelID   *access.OdrChannelID
 }
 
 // Create a new in process client
 func NewInProcClient(codec codec.Codec) *InProcClient {
 	return &InProcClient{
-		codec: codec,
+		codec:     codec,
 		channelID: access.NewChannelID(time.Second),
 	}
 }

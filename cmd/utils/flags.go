@@ -31,14 +31,13 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -535,12 +534,12 @@ func SetupVM(ctx *cli.Context) {
 }
 
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database) {
+func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb access.Database) {
 	datadir := MustDataDir(ctx)
 	cache := ctx.GlobalInt(CacheFlag.Name)
 
 	var err error
-	if chainDb, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "chaindata"), cache); err != nil {
+	if chainDb, err = access.NewLDBDatabase(filepath.Join(datadir, "chaindata"), cache); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
 	if ctx.GlobalBool(OlympicFlag.Name) {

@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	// "github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -32,7 +32,7 @@ type TestManager struct {
 	// stateManager *StateManager
 	eventMux *event.TypeMux
 
-	db         ethdb.Database
+	db         access.Database
 	txPool     *TxPool
 	blockChain *BlockChain
 	Blocks     []*types.Block
@@ -74,12 +74,12 @@ func (tm *TestManager) EventMux() *event.TypeMux {
 // 	return nil
 // }
 
-func (tm *TestManager) Db() ethdb.Database {
+func (tm *TestManager) Db() access.Database {
 	return tm.db
 }
 
 func NewTestManager() *TestManager {
-	db, err := ethdb.NewMemDatabase()
+	db, err := access.NewMemDatabase()
 	if err != nil {
 		fmt.Println("Could not create mem-db, failing")
 		return nil

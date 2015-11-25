@@ -19,12 +19,11 @@ package filters
 import (
 	"math"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 type AccountChange struct {
@@ -34,7 +33,7 @@ type AccountChange struct {
 // Filtering interface
 type Filter struct {
 	ca         *access.ChainAccess
-	db         ethdb.Database
+	db         access.Database
 	begin, end int64
 	addresses  []common.Address
 	topics     [][]common.Hash
@@ -51,7 +50,7 @@ func New(ca *access.ChainAccess) *Filter {
 }
 
 // NewWithDb creates a filter with no ODR option
-func NewWithDb(db ethdb.Database) *Filter {
+func NewWithDb(db access.Database) *Filter {
 	return &Filter{ca: access.NewDbChainAccess(db), db: db}
 }
 

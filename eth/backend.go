@@ -32,18 +32,17 @@ import (
 	"time"
 
 	"github.com/ethereum/ethash"
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/common/httpclient"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -143,7 +142,7 @@ type Config struct {
 
 	// NewDB is used to create databases.
 	// If nil, the default is to create leveldb databases on disk.
-	NewDB func(path string) (ethdb.Database, error)
+	NewDB func(path string) (access.Database, error)
 }
 
 func (cfg *Config) parseBootNodes() []*discover.Node {
@@ -229,8 +228,8 @@ type Ethereum struct {
 	shutdownChan chan bool
 
 	// DB interfaces
-	chainDb ethdb.Database // Block chain database
-	dappDb  ethdb.Database // Dapp database
+	chainDb access.Database // Block chain database
+	dappDb  access.Database // Dapp database
 
 	chainAccess *access.ChainAccess // blockchain access layer
 
@@ -279,11 +278,11 @@ func New(config *Config) (*Ethereum, error) {
 
 	// Let the database take 3/4 of the max open files (TODO figure out a way to get the actual limit of the open files)
 	const dbCount = 3
-	ethdb.OpenFileLimit = 128 / (dbCount + 1)
+	access.OpenFileLimit = 128 / (dbCount + 1)
 
 	newdb := config.NewDB
 	if newdb == nil {
-		newdb = func(path string) (ethdb.Database, error) { return ethdb.NewLDBDatabase(path, config.DatabaseCache) }
+		newdb = func(path string) (access.Database, error) { return access.NewLDBDatabase(path, config.DatabaseCache) }
 	}
 
 	// Open the chain database and perform any upgrades needed
@@ -294,13 +293,13 @@ func New(config *Config) (*Ethereum, error) {
 		}
 		return nil, fmt.Errorf("blockchain db err: %v", err)
 	}
-	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
+	if db, ok := chainDb.(*access.LDBDatabase); ok {
 		db.Meter("eth/db/chaindata/")
 	}
 	if err := upgradeChainDatabase(chainDb); err != nil {
 		return nil, err
 	}
-	chainAccess := access.NewChainAccess(chainDb, false)
+	chainAccess := access.NewChainAccess(chainDb, nil)
 	if err := addMipmapBloomBins(chainAccess); err != nil {
 		return nil, err
 	}
@@ -311,7 +310,7 @@ func New(config *Config) (*Ethereum, error) {
 		}
 		return nil, fmt.Errorf("dapp db err: %v", err)
 	}
-	if db, ok := dappDb.(*ethdb.LDBDatabase); ok {
+	if db, ok := dappDb.(*access.LDBDatabase); ok {
 		db.Meter("eth/db/dapp/")
 	}
 
@@ -498,9 +497,9 @@ func (s *Ethereum) BlockProcessor() *core.BlockProcessor { return s.blockProcess
 func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
-func (s *Ethereum) ChainDb() ethdb.Database              { return s.chainDb }
+func (s *Ethereum) ChainDb() access.Database             { return s.chainDb }
 func (s *Ethereum) ChainAccess() *access.ChainAccess     { return s.chainAccess }
-func (s *Ethereum) DappDb() ethdb.Database               { return s.dappDb }
+func (s *Ethereum) DappDb() access.Database              { return s.dappDb }
 func (s *Ethereum) IsListening() bool                    { return true } // Always listening
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
@@ -671,7 +670,7 @@ func dagFiles(epoch uint64) (string, string) {
 	return dag, "full-R" + dag
 }
 
-func saveBlockchainVersion(db ethdb.Database, bcVersion int) {
+func saveBlockchainVersion(db access.Database, bcVersion int) {
 	d, _ := db.Get([]byte("BlockchainVersion"))
 	blockchainVersion := common.NewValue(d).Uint()
 
@@ -682,7 +681,7 @@ func saveBlockchainVersion(db ethdb.Database, bcVersion int) {
 
 // upgradeChainDatabase ensures that the chain database stores block split into
 // separate header and body entries.
-func upgradeChainDatabase(db ethdb.Database) error {
+func upgradeChainDatabase(db access.Database) error {
 	// Short circuit if the head block is stored already as separate header and body
 	data, err := db.Get([]byte("LastBlock"))
 	if err != nil {
@@ -696,7 +695,7 @@ func upgradeChainDatabase(db ethdb.Database) error {
 	// At least some of the database is still the old format, upgrade (skip the head block!)
 	glog.V(logger.Info).Info("Old database detected, upgrading...")
 
-	if db, ok := db.(*ethdb.LDBDatabase); ok {
+	if db, ok := db.(*access.LDBDatabase); ok {
 		blockPrefix := []byte("block-hash-")
 		for it := db.NewIterator(); it.Next(); {
 			// Skip anything other than a combined block

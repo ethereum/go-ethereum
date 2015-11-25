@@ -26,11 +26,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/trie"
@@ -93,7 +93,7 @@ type queue struct {
 	stateTaskQueue *prque.Prque             // [eth/63] Priority queue of the hashes to fetch the node data for
 	statePendPool  map[string]*fetchRequest // [eth/63] Currently pending node data retrieval operations
 
-	stateDatabase   ethdb.Database   // [eth/63] Trie database to populate during state reassembly
+	stateDatabase   access.Database  // [eth/63] Trie database to populate during state reassembly
 	stateScheduler  *state.StateSync // [eth/63] State trie synchronisation scheduler and integrator
 	stateProcessors int32            // [eth/63] Number of currently running state processors
 	stateSchedLock  sync.RWMutex     // [eth/63] Lock serialising access to the state scheduler
@@ -105,7 +105,7 @@ type queue struct {
 }
 
 // newQueue creates a new download queue for scheduling block retrieval.
-func newQueue(stateDb ethdb.Database) *queue {
+func newQueue(stateDb access.Database) *queue {
 	return &queue{
 		hashPool:         make(map[common.Hash]int),
 		hashQueue:        prque.New(),

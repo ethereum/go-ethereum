@@ -24,13 +24,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -101,7 +101,7 @@ type worker struct {
 	eth     core.Backend
 	chain   *core.BlockChain
 	proc    *core.BlockProcessor
-	chainDb ethdb.Database
+	chainDb access.Database
 
 	coinbase common.Address
 	gasPrice *big.Int

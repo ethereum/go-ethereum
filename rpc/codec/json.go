@@ -20,8 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"time"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )

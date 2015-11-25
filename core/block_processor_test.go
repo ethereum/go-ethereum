@@ -21,18 +21,17 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow/ezp"
 )
 
 func proc() (*BlockProcessor, *BlockChain) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	ca := access.NewDbChainAccess(db)
 	var mux event.TypeMux
 
@@ -64,7 +63,7 @@ func TestNumber(t *testing.T) {
 }
 
 func TestPutReceipt(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 
 	var addr common.Address
 	addr[0] = 1

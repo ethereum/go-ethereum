@@ -17,9 +17,8 @@
 package core
 
 import (
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/core/access"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -29,8 +28,8 @@ type Backend interface {
 	BlockProcessor() *BlockProcessor
 	BlockChain() *BlockChain
 	TxPool() *TxPool
-	ChainDb() ethdb.Database
+	ChainDb() access.Database
 	ChainAccess() *access.ChainAccess
-	DappDb() ethdb.Database
+	DappDb() access.Database
 	EventMux() *event.TypeMux
 }

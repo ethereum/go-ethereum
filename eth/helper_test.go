@@ -9,12 +9,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -33,7 +32,7 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 	var (
 		evmux         = new(event.TypeMux)
 		pow           = new(core.FakePow)
-		db, _         = ethdb.NewMemDatabase()
+		db, _         = access.NewMemDatabase()
 		ca            = access.NewDbChainAccess(db)
 		genesis       = core.WriteGenesisBlockForTesting(db, core.GenesisAccount{testBankAddress, testBankFunds})
 		blockchain, _ = core.NewBlockChain(ca, pow, evmux)

@@ -23,13 +23,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -86,7 +85,7 @@ func TestDifficulty(t *testing.T) {
 
 // Tests block header storage and retrieval operations.
 func TestHeaderStorage(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 
 	// Create a test header to move around the database and make sure it's really new
 	header := &types.Header{Extra: []byte("test header")}
@@ -121,7 +120,7 @@ func TestHeaderStorage(t *testing.T) {
 
 // Tests block body storage and retrieval operations.
 func TestBodyStorage(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	ca := access.NewDbChainAccess(db)
 
 	// Create a test body to move around the database and make sure it's really new
@@ -162,7 +161,7 @@ func TestBodyStorage(t *testing.T) {
 
 // Tests block storage and retrieval operations.
 func TestBlockStorage(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	ca := access.NewDbChainAccess(db)
 
 	// Create a test block to move around the database and make sure it's really new
@@ -215,7 +214,7 @@ func TestBlockStorage(t *testing.T) {
 
 // Tests that partial block contents don't get reassembled into full blocks.
 func TestPartialBlockStorage(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	ca := access.NewDbChainAccess(db)
 	block := types.NewBlockWithHeader(&types.Header{
 		Extra:       []byte("test block"),
@@ -257,7 +256,7 @@ func TestPartialBlockStorage(t *testing.T) {
 
 // Tests block total difficulty storage and retrieval operations.
 func TestTdStorage(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 
 	// Create a test TD to move around the database and make sure it's really new
 	hash, td := common.Hash{}, big.NewInt(314)
@@ -282,7 +281,7 @@ func TestTdStorage(t *testing.T) {
 
 // Tests that canonical numbers can be mapped to hashes and retrieved.
 func TestCanonicalMappingStorage(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 
 	// Create a test canonical number and assinged hash to move around
 	hash, number := common.Hash{0: 0xff}, uint64(314)
@@ -307,7 +306,7 @@ func TestCanonicalMappingStorage(t *testing.T) {
 
 // Tests that head headers and head blocks can be assigned, individually.
 func TestHeadStorage(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 
 	blockHead := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block header")})
 	blockFull := types.NewBlockWithHeader(&types.Header{Extra: []byte("test block full")})
@@ -346,7 +345,7 @@ func TestHeadStorage(t *testing.T) {
 }
 
 func TestMipmapBloom(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 
 	receipt1 := new(types.Receipt)
 	receipt1.Logs = vm.Logs{
@@ -370,7 +369,7 @@ func TestMipmapBloom(t *testing.T) {
 	}
 
 	// reset
-	db, _ = ethdb.NewMemDatabase()
+	db, _ = access.NewMemDatabase()
 	receipt := new(types.Receipt)
 	receipt.Logs = vm.Logs{
 		&vm.Log{Address: common.BytesToAddress([]byte("test"))},
@@ -397,7 +396,7 @@ func TestMipmapChain(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	var (
-		db, _   = ethdb.NewLDBDatabase(dir, 16)
+		db, _   = access.NewLDBDatabase(dir, 16)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = common.BytesToAddress([]byte("jeff"))

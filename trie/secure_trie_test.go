@@ -20,13 +20,13 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 func newEmptySecure() *SecureTrie {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	trie, _ := NewSecure(common.Hash{}, db)
 	return trie
 }

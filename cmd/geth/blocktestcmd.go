@@ -21,9 +21,9 @@ import (
 	"os"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/tests"
 )
 
@@ -101,8 +101,8 @@ func runBlockTest(ctx *cli.Context) {
 
 func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, error) {
 	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
-	db, _ := ethdb.NewMemDatabase()
-	cfg.NewDB = func(path string) (ethdb.Database, error) { return db, nil }
+	db, _ := access.NewMemDatabase()
+	cfg.NewDB = func(path string) (access.Database, error) { return db, nil }
 	cfg.MaxPeers = 0 // disable network
 	cfg.Shh = false  // disable whisper
 	cfg.NAT = nil    // disable port mapping

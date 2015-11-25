@@ -25,8 +25,8 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 func init() {
@@ -36,7 +36,7 @@ func init() {
 
 // Used for testing
 func newEmpty() *Trie {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	trie, _ := New(common.Hash{}, db)
 	return trie
 }
@@ -59,7 +59,7 @@ func TestNull(t *testing.T) {
 }
 
 func TestMissingRoot(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), db)
 	if trie != nil {
 		t.Error("New returned non-nil trie for invalid root")
@@ -388,7 +388,7 @@ func tempDB() (string, Database) {
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary directory: %v", err))
 	}
-	db, err := ethdb.NewLDBDatabase(dir, 300*1024)
+	db, err := access.NewLDBDatabase(dir, 300*1024)
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary database: %v", err))
 	}

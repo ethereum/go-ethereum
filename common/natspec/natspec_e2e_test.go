@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/httpclient"
@@ -33,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
 	xe "github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -125,7 +125,7 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := access.NewMemDatabase()
 	addr := common.HexToAddress(testAddress)
 	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{addr, common.String2Big(testBalance)})
 	ks := crypto.NewKeyStorePassphrase(filepath.Join(tmp, "keystore"), crypto.LightScryptN, crypto.LightScryptP)
@@ -152,7 +152,7 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 		Etherbase:               common.HexToAddress(testAddress),
 		MaxPeers:                0,
 		PowTest:                 true,
-		NewDB:                   func(path string) (ethdb.Database, error) { return db, nil },
+		NewDB:                   func(path string) (access.Database, error) { return db, nil },
 		GpoMinGasPrice:          common.Big1,
 		GpobaseCorrectionFactor: 1,
 		GpoMaxGasPrice:          common.Big1,

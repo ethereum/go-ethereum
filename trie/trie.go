@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"hash"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/logger"
@@ -54,7 +54,7 @@ var ErrMissingRoot = errors.New("missing root node")
 
 // OdrAccess is an interface to on-demand network access layer
 type OdrAccess interface {
-	OdrEnabled() bool		// is network access actually enabled
+	OdrEnabled() bool                                 // is network access actually enabled
 	RetrieveKey(ctx context.Context, key []byte) bool // retrieve key from network and store it in local db
 }
 
@@ -82,7 +82,7 @@ type Trie struct {
 	root   node
 	db     Database
 	access OdrAccess
-	ctx context.Context
+	ctx    context.Context
 	*hasher
 }
 
@@ -388,8 +388,8 @@ func (t *Trie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
 	if access.Terminated(t.ctx) {
 		// we should never commit potentially corrupt trie nodes to the db
 		return common.Hash{}, t.ctx.Err()
-	}	
-	
+	}
+
 	n, err := t.hashRoot(db)
 	if err != nil {
 		return (common.Hash{}), err

@@ -20,12 +20,11 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/access"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/access"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // Config is a basic type specifing certain configuration flags for running
@@ -96,7 +95,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	vm.Debug = cfg.Debug
 
 	var (
-		db, _      = ethdb.NewMemDatabase()
+		db, _      = access.NewMemDatabase()
 		statedb, _ = state.New(common.Hash{}, access.NewDbChainAccess(db))
 		vmenv      = NewEnv(cfg, statedb)
 		sender     = statedb.CreateAccount(cfg.Origin)
