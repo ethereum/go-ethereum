@@ -129,7 +129,7 @@ func create_console_screen_buffer() (h syscall.Handle, err error) {
 			err = syscall.EINVAL
 		}
 	}
-	return syscall.Handle(r0), nil
+	return syscall.Handle(r0), err
 }
 
 func get_console_screen_buffer_info(h syscall.Handle, info *console_screen_buffer_info) (err error) {
@@ -305,7 +305,7 @@ func create_event() (out syscall.Handle, err error) {
 			err = syscall.EINVAL
 		}
 	}
-	return syscall.Handle(r0), nil
+	return syscall.Handle(r0), err
 }
 
 func wait_for_multiple_objects(objects []syscall.Handle) (err error) {
