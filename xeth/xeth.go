@@ -100,8 +100,8 @@ func New(stack *node.Node, frontend Frontend) *XEth {
 		ethereum *eth.Ethereum
 		whisper  *whisper.Whisper
 	)
-	stack.SingletonService(&ethereum)
-	stack.SingletonService(&whisper)
+	stack.Service(&ethereum)
+	stack.Service(&whisper)
 
 	xeth := &XEth{
 		backend:          stack,
@@ -130,7 +130,7 @@ func New(stack *node.Node, frontend Frontend) *XEth {
 
 func (self *XEth) EthereumService() *eth.Ethereum {
 	var ethereum *eth.Ethereum
-	if _, err := self.backend.SingletonService(&ethereum); err != nil {
+	if err := self.backend.Service(&ethereum); err != nil {
 		return nil
 	}
 	return ethereum
@@ -138,7 +138,7 @@ func (self *XEth) EthereumService() *eth.Ethereum {
 
 func (self *XEth) WhisperService() *whisper.Whisper {
 	var whisper *whisper.Whisper
-	if _, err := self.backend.SingletonService(&whisper); err != nil {
+	if err := self.backend.Service(&whisper); err != nil {
 		return nil
 	}
 	return whisper

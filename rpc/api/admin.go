@@ -97,7 +97,7 @@ func NewAdminApi(xeth *xeth.XEth, stack *node.Node, codec codec.Codec) *adminApi
 		coder: codec.New(nil),
 	}
 	if stack != nil {
-		stack.SingletonService(&api.ethereum)
+		stack.Service(&api.ethereum)
 	}
 	return api
 }

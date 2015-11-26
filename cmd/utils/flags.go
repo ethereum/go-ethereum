@@ -686,13 +686,13 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 	if err != nil {
 		Fatalf("Failed to create the protocol stack: %v", err)
 	}
-	if err := stack.Register("eth", func(ctx *node.ServiceContext) (node.Service, error) {
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		return eth.New(ctx, ethConf)
 	}); err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
 	if shhEnable {
-		if err := stack.Register("shh", func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
+		if err := stack.Register(func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
 			Fatalf("Failed to register the Whisper service: %v", err)
 		}
 	}
@@ -786,7 +786,11 @@ func StartIPC(stack *node.Node, ctx *cli.Context) error {
 	}
 
 	initializer := func(conn net.Conn) (comms.Stopper, shared.EthereumApi, error) {
-		fe := useragent.NewRemoteFrontend(conn, stack.Service("eth").(*eth.Ethereum).AccountManager())
+		var ethereum *eth.Ethereum
+		if err := stack.Service(&ethereum); err != nil {
+			return nil, nil, err
+		}
+		fe := useragent.NewRemoteFrontend(conn, ethereum.AccountManager())
 		xeth := xeth.New(stack, fe)
 		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec.JSON, xeth, stack)
 		if err != nil {

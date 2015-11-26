@@ -345,7 +345,7 @@ func (self *jsre) AskPassword() (string, bool) {
 func (self *jsre) ConfirmTransaction(tx string) bool {
 	// Retrieve the Ethereum instance from the node
 	var ethereum *eth.Ethereum
-	if _, err := self.stack.SingletonService(&ethereum); err != nil {
+	if err := self.stack.Service(&ethereum); err != nil {
 		return false
 	}
 	// If natspec is enabled, ask for permission
@@ -367,7 +367,7 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 	}
 	// TODO: allow retry
 	var ethereum *eth.Ethereum
-	if _, err := self.stack.SingletonService(&ethereum); err != nil {
+	if err := self.stack.Service(&ethereum); err != nil {
 		return false
 	}
 	if err := ethereum.AccountManager().Unlock(common.BytesToAddress(addr), pass); err != nil {

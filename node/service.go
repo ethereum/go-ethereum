@@ -29,39 +29,29 @@ import (
 // the protocol stack, that is passed to all constructors to be optionally used;
 // as well as utility methods to operate on the service environment.
 type ServiceContext struct {
-	datadir  string             // Data directory for protocol persistence
-	services map[string]Service // Index of the already constructed services
-	EventMux *event.TypeMux     // Event multiplexer used for decoupled notifications
+	datadir  string                   // Data directory for protocol persistence
+	services map[reflect.Type]Service // Index of the already constructed services
+	EventMux *event.TypeMux           // Event multiplexer used for decoupled notifications
 }
 
-// Database opens an existing database with the given name (or creates one if no
-// previous can be found) from within the node's data directory. If the node is
-// an ephemeral one, a memory database is returned.
-func (ctx *ServiceContext) Database(name string, cache int) (ethdb.Database, error) {
+// OpenDatabase opens an existing database with the given name (or creates one
+// if no previous can be found) from within the node's data directory. If the
+// node is an ephemeral one, a memory database is returned.
+func (ctx *ServiceContext) OpenDatabase(name string, cache int) (ethdb.Database, error) {
 	if ctx.datadir == "" {
 		return ethdb.NewMemDatabase()
 	}
 	return ethdb.NewLDBDatabase(filepath.Join(ctx.datadir, name), cache)
 }
 
-// Service retrieves an already constructed service registered under a given id.
-func (ctx *ServiceContext) Service(id string) Service {
-	return ctx.services[id]
-}
-
-// SingletonService retrieves an already constructed service using a specific type
-// implementing the Service interface. This is a utility function for scenarios
-// where it is known that only one instance of a given service type is running,
-// allowing to access services without needing to know their specific id with
-// which they were registered.
-func (ctx *ServiceContext) SingletonService(service interface{}) (string, error) {
-	for id, running := range ctx.services {
-		if reflect.TypeOf(running) == reflect.ValueOf(service).Elem().Type() {
-			reflect.ValueOf(service).Elem().Set(reflect.ValueOf(running))
-			return id, nil
-		}
+// Service retrieves a currently running service registered of a specific type.
+func (ctx *ServiceContext) Service(service interface{}) error {
+	element := reflect.ValueOf(service).Elem()
+	if running, ok := ctx.services[element.Type()]; ok {
+		element.Set(reflect.ValueOf(running))
+		return nil
 	}
-	return "", ErrServiceUnknown
+	return ErrServiceUnknown
 }
 
 // ServiceConstructor is the function signature of the constructors needed to be

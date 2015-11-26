@@ -16,13 +16,27 @@
 
 package node
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
-// StopError is returned if a node fails to stop either any of its registered
+// DuplicateServiceError is returned during Node startup if a registered service
+// constructor returns a service of the same type that was already started.
+type DuplicateServiceError struct {
+	Kind reflect.Type
+}
+
+// Error generates a textual representation of the duplicate service error.
+func (e *DuplicateServiceError) Error() string {
+	return fmt.Sprintf("duplicate service: %v", e.Kind)
+}
+
+// StopError is returned if a Node fails to stop either any of its registered
 // services or itself.
 type StopError struct {
 	Server   error
-	Services map[string]error
+	Services map[reflect.Type]error
 }
 
 // Error generates a textual representation of the stop error.

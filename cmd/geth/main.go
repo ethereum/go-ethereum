@@ -489,7 +489,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 
 	// Unlock any account specifically requested
 	var ethereum *eth.Ethereum
-	if _, err := stack.SingletonService(&ethereum); err != nil {
+	if err := stack.Service(&ethereum); err != nil {
 		utils.Fatalf("ethereum service not running: %v", err)
 	}
 	accman := ethereum.AccountManager()

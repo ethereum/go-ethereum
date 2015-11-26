@@ -165,7 +165,7 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, stack *no
 
 	var eth *eth.Ethereum
 	if stack != nil {
-		if _, err := stack.SingletonService(&eth); err != nil {
+		if err := stack.Service(&eth); err != nil {
 			return nil, err
 		}
 	}

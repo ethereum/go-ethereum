@@ -126,11 +126,11 @@ func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node
 		TestGenesisBlock: test.Genesis,
 		AccountManager:   accman,
 	}
-	if err := stack.Register("ethereum", func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
 		return nil, err
 	}
 	// Initialize and register the Whisper protocol
-	if err := stack.Register("whisper", func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
+	if err := stack.Register(func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
 		return nil, err
 	}
 	return stack, nil
@@ -140,7 +140,7 @@ func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node
 // stack to ensure basic checks pass before running RPC tests.
 func RunTest(stack *node.Node, test *tests.BlockTest) error {
 	var ethereum *eth.Ethereum
-	stack.SingletonService(&ethereum)
+	stack.Service(&ethereum)
 	blockchain := ethereum.BlockChain()
 
 	// Process the blocks and verify the imported headers

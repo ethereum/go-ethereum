@@ -135,7 +135,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	ethdb.OpenFileLimit = 128 / (dbCount + 1)
 
 	// Open the chain database and perform any upgrades needed
-	chainDb, err := ctx.Database("chaindata", config.DatabaseCache)
+	chainDb, err := ctx.OpenDatabase("chaindata", config.DatabaseCache)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	dappDb, err := ctx.Database("dapp", config.DatabaseCache)
+	dappDb, err := ctx.OpenDatabase("dapp", config.DatabaseCache)
 	if err != nil {
 		return nil, err
 	}

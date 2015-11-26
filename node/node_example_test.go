@@ -66,7 +66,7 @@ func ExampleUsage() {
 	constructor := func(context *node.ServiceContext) (node.Service, error) {
 		return new(SampleService), nil
 	}
-	if err := stack.Register("my sample service", constructor); err != nil {
+	if err := stack.Register(constructor); err != nil {
 		log.Fatalf("Failed to register service: %v", err)
 	}
 	// Boot up the entire protocol stack, do a restart and terminate
