@@ -20,16 +20,19 @@ import (
 	"fmt"
 	"reflect"
 
+	"runtime"
+
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"runtime"
 )
 
 // NewServer will create a new server instance with no registered handlers.
 func NewServer() *Server {
 	server := &Server{services: make(serviceRegistry), subscriptions: make(subscriptionRegistry)}
 
+	// register a default service which will provide meta information about the RPC service such as the services and
+	// methods it offers.
 	rpcService := &RPCService{server}
 	server.RegisterName("rpc", rpcService)
 
@@ -86,6 +89,9 @@ func (s *Server) register(rcvr interface{}, name string, useName bool) error {
 	}
 	if !isExported(sname) && !useName {
 		return fmt.Errorf("%s is not exported", sname)
+	}
+	if !useName {
+		sname = formatName(sname)
 	}
 
 	// already a previous service register under given sname, merge methods/subscriptions

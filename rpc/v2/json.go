@@ -23,8 +23,9 @@ import (
 	"reflect"
 	"strings"
 	"sync/atomic"
-	"github.com/ethereum/go-ethereum/logger/glog"
+
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 const (
