@@ -644,7 +644,9 @@ func (p *XEth) NewWhisperFilter(to, from string, topics [][]string) int {
 	callback := func(msg WhisperMessage) {
 		p.messagesMu.RLock() // Only read lock to the filter pool
 		defer p.messagesMu.RUnlock()
-		p.messages[id].insert(msg)
+		if p.messages[id] != nil {
+			p.messages[id].insert(msg)
+		}
 	}
 	// Initialize the core whisper filter and wrap into xeth
 	id = p.Whisper().Watch(to, from, topics, callback)
