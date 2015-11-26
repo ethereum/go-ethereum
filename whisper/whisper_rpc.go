@@ -102,7 +102,9 @@ func (s *WhisperService) GetFilterChanges(filterId rpc.HexNumber) []WhisperMessa
 	defer s.messagesMu.RUnlock()
 
 	if s.messages[filterId.Int()] != nil {
-		return s.messages[filterId.Int()].retrieve()
+		if changes := s.messages[filterId.Int()].retrieve(); changes != nil {
+			return changes
+		}
 	}
 	return returnWhisperMessages(nil)
 }
