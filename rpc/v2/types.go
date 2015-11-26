@@ -190,8 +190,8 @@ func NewHexNumber(val interface{}) *HexNumber {
 
 func (h *HexNumber) UnmarshalJSON(input []byte) error {
 	length := len(input)
-	if length >= 2 && input[0] == '"' && input[length - 1] == '"' {
-		input = input[1 : length - 1]
+	if length >= 2 && input[0] == '"' && input[length-1] == '"' {
+		input = input[1 : length-1]
 	}
 
 	hn := (*big.Int)(h)
@@ -239,11 +239,12 @@ func (h *HexNumber) BigInt() *big.Int {
 }
 
 type Number int64
+
 func (n *Number) UnmarshalJSON(data []byte) error {
 	input := strings.TrimSpace(string(data))
 
-	if len(input) >= 2 && input[0] == '"' && input[len(input) - 1] == '"' {
-		input = input[1 : len(input) - 1]
+	if len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"' {
+		input = input[1 : len(input)-1]
 	}
 
 	if len(input) == 0 {
@@ -271,17 +272,17 @@ func (n *Number) Int64() int64 {
 }
 
 var (
-	pendingBlockNumber = big.NewInt(-2)
-	latestBlockNumber = big.NewInt(-1)
+	pendingBlockNumber  = big.NewInt(-2)
+	latestBlockNumber   = big.NewInt(-1)
 	earliestBlockNumber = big.NewInt(0)
-	maxBlockNumber = big.NewInt(math.MaxInt64)
+	maxBlockNumber      = big.NewInt(math.MaxInt64)
 )
 
 type BlockNumber int64
 
 const (
 	PendingBlockNumber = BlockNumber(-2)
-	LatestBlockNumber = BlockNumber(-1)
+	LatestBlockNumber  = BlockNumber(-1)
 )
 
 // UnmarshalJSON parses the given JSON fragement into a BlockNumber. It supports:
@@ -294,8 +295,8 @@ const (
 func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	input := strings.TrimSpace(string(data))
 
-	if len(input) >= 2 && input[0] == '"' && input[len(input) - 1] == '"' {
-		input = input[1 : len(input) - 1]
+	if len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"' {
+		input = input[1 : len(input)-1]
 	}
 
 	if len(input) == 0 {
