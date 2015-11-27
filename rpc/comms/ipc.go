@@ -124,6 +124,11 @@ func StartIpc(cfg IpcConfig, codec codec.Codec, initializer InitFunc) error {
 	return nil
 }
 
+// CreateListener creates an listener, on Unix platforms this is a unix socket, on Windows this is a named pipe
+func CreateListener(cfg IpcConfig) (net.Listener, error) {
+	return ipcListen(cfg)
+}
+
 func ipcLoop(cfg IpcConfig, codec codec.Codec, initializer InitFunc, l net.Listener) {
 	glog.V(logger.Info).Infof("IPC service started (%s)\n", cfg.Endpoint)
 	defer os.Remove(cfg.Endpoint)
