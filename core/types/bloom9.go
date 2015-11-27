@@ -69,6 +69,10 @@ func (b Bloom) TestBytes(test []byte) bool {
 	return b.Test(common.BytesToBig(test))
 }
 
+func (b Bloom) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%#x"`, b.Bytes())), nil
+}
+
 func CreateBloom(receipts Receipts) Bloom {
 	bin := new(big.Int)
 	for _, receipt := range receipts {

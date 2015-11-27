@@ -104,7 +104,7 @@ func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, er
 	db, _ := ethdb.NewMemDatabase()
 	cfg.NewDB = func(path string) (ethdb.Database, error) { return db, nil }
 	cfg.MaxPeers = 0 // disable network
-	cfg.Shh = false  // disable whisper
+	cfg.Shh = ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name)
 	cfg.NAT = nil    // disable port mapping
 	ethereum, err := eth.New(cfg)
 	if err != nil {

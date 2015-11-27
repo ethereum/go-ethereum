@@ -17,11 +17,13 @@
 package vm
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 )
 
 type Log struct {
@@ -61,6 +63,21 @@ func (l *Log) DecodeRLP(s *rlp.Stream) error {
 
 func (l *Log) String() string {
 	return fmt.Sprintf(`log: %x %x %x %x %d %x %d`, l.Address, l.Topics, l.Data, l.TxHash, l.TxIndex, l.BlockHash, l.Index)
+}
+
+func (r *Log) MarshalJSON() ([]byte, error) {
+	fields := map[string]interface{}{
+		"address":          r.Address,
+		"data":             fmt.Sprintf("%#x", r.Data),
+		"blockNumber":      rpc.NewHexNumber(r.BlockNumber),
+		"logIndex":         rpc.NewHexNumber(r.Index),
+		"blockHash":        r.BlockHash,
+		"transactionHash":  r.TxHash,
+		"transactionIndex": rpc.NewHexNumber(r.TxIndex),
+		"topics":           r.Topics,
+	}
+
+	return json.Marshal(fields)
 }
 
 type Logs []*Log
