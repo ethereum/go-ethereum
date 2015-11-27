@@ -616,7 +616,17 @@ func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
 }
 
 func StartIPC(ethereum *eth.Ethereum, ctx *cli.Context) error {
+	config := comms.IpcConfig{
+		Endpoint: IpcSocketPath(ctx),
+	}
+
 	if ctx.GlobalIsSet(IPCExperimental.Name) {
+
+		listener, err := comms.CreateListener(config)
+		if err != nil {
+			return err
+		}
+
 		server := rpc.NewServer()
 
 		server.RegisterName("eth", accounts.NewAccountService(ethereum.AccountManager()))
@@ -631,18 +641,13 @@ func StartIPC(ethereum *eth.Ethereum, ctx *cli.Context) error {
 		server.RegisterName("personal", accounts.NewPersonalService(ethereum.AccountManager()))
 		server.RegisterName("shh", whisper.NewWhisperService(ethereum.Whisper()))
 
-		ipcEndpoint := IpcSocketPath(ctx)
-		os.RemoveAll(ipcEndpoint)
-		l, err := net.ListenUnix("unix", &net.UnixAddr{Name: ipcEndpoint, Net: "unix"})
-		if err != nil {
-			return err
-		}
 		go func() {
-			glog.Infof("IPC endpoint(%s)\n", ipcEndpoint)
+			glog.Infof("IPC Service endpoint(%s)\n", config.Endpoint)
 			for {
-				conn, err := l.Accept()
+				conn, err := listener.Accept()
 				if err != nil {
-					panic(err)
+					glog.Errorf("%v\n", err)
+					continue
 				}
 				codec := rpc.NewJSONCodec(conn)
 				go server.ServeCodec(codec)
@@ -650,11 +655,6 @@ func StartIPC(ethereum *eth.Ethereum, ctx *cli.Context) error {
 		}()
 
 		return nil
-	}
-
-
-	config := comms.IpcConfig{
-		Endpoint: IpcSocketPath(ctx),
 	}
 
 	initializer := func(conn net.Conn) (comms.Stopper, shared.EthereumApi, error) {
