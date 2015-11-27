@@ -21,10 +21,15 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
+)
+
+var (
+	Big0 = big.NewInt(0)
 )
 
 /*
@@ -59,6 +64,7 @@ type StateTransition struct {
 // Message represents a message sent to a contract.
 type Message interface {
 	From() (common.Address, error)
+	FromFrontier() (common.Address, error)
 	To() *common.Address
 
 	GasPrice() *big.Int
@@ -75,8 +81,13 @@ func MessageCreatesContract(msg Message) bool {
 
 // IntrinsicGas computes the 'intrisic gas' for a message
 // with the given data.
-func IntrinsicGas(data []byte) *big.Int {
-	igas := new(big.Int).Set(params.TxGas)
+func IntrinsicGas(data []byte, contractCreation, homestead bool) *big.Int {
+	igas := new(big.Int)
+	if contractCreation && homestead {
+		igas.Set(params.TxGasContractCreation)
+	} else {
+		igas.Set(params.TxGas)
+	}
 	if len(data) > 0 {
 		var nz int64
 		for _, byt := range data {
@@ -110,7 +121,15 @@ func ApplyMessage(env vm.Environment, msg Message, gp *GasPool) ([]byte, *big.In
 }
 
 func (self *StateTransition) from() (vm.Account, error) {
-	f, err := self.msg.From()
+	var (
+		f   common.Address
+		err error
+	)
+	if params.IsHomestead(self.env.BlockNumber()) {
+		f, err = self.msg.From()
+	} else {
+		f, err = self.msg.FromFrontier()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -195,18 +214,20 @@ func (self *StateTransition) transitionDb() (ret []byte, usedGas *big.Int, err e
 	if err = self.preCheck(); err != nil {
 		return
 	}
-
 	msg := self.msg
 	sender, _ := self.from() // err checked in preCheck
 
+	homestead := params.IsHomestead(self.env.BlockNumber())
+	contractCreation := MessageCreatesContract(msg)
 	// Pay intrinsic gas
-	if err = self.useGas(IntrinsicGas(self.data)); err != nil {
+	if err = self.useGas(IntrinsicGas(self.data, contractCreation, homestead)); err != nil {
 		return nil, nil, InvalidTxError(err)
 	}
 
 	vmenv := self.env
+	snapshot := vmenv.MakeSnapshot()
 	var addr common.Address
-	if MessageCreatesContract(msg) {
+	if contractCreation {
 		ret, addr, err = vmenv.Create(sender, self.data, self.gas, self.gasPrice, self.value)
 		if err == nil {
 			dataGas := big.NewInt(int64(len(ret)))
@@ -214,6 +235,18 @@ func (self *StateTransition) transitionDb() (ret []byte, usedGas *big.Int, err e
 			if err := self.useGas(dataGas); err == nil {
 				self.state.SetCode(addr, ret)
 			} else {
+				if homestead {
+					// rollback all contract creation changes except for
+					// sender's incremented account nonce and gas usage
+					// TODO: fucking gas hack... verify potential DoS vuln
+					accNonce := vmenv.Db().GetNonce(sender.Address())
+					logs := vmenv.Db().(*state.StateDB).GetAllLogs()
+					vmenv.SetSnapshot(snapshot)
+					vmenv.Db().SetNonce(sender.Address(), accNonce)
+					vmenv.Db().(*state.StateDB).SetAllLogs(logs)
+					self.gas = Big0
+
+				}
 				ret = nil // does not affect consensus but useful for StateTests validations
 				glog.V(logger.Core).Infoln("Insufficient gas for creating code. Require", dataGas, "and have", self.gas)
 			}

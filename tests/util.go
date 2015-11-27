@@ -235,6 +235,15 @@ func (self *Env) CallCode(caller vm.ContractRef, addr common.Address, data []byt
 	return core.CallCode(self, caller, addr, data, gas, price, value)
 }
 
+func (self *Env) DelegateCall(caller vm.ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error) {
+	if self.vmTest && self.depth > 0 {
+		caller.ReturnGas(gas, price)
+
+		return nil, nil
+	}
+	return core.DelegateCall(self, caller, addr, data, gas, price)
+}
+
 func (self *Env) Create(caller vm.ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
 	if self.vmTest {
 		caller.ReturnGas(gas, price)
@@ -260,11 +269,12 @@ func NewMessage(from common.Address, to *common.Address, data []byte, value, gas
 	return Message{from, to, value, gas, price, data, nonce}
 }
 
-func (self Message) Hash() []byte                  { return nil }
-func (self Message) From() (common.Address, error) { return self.from, nil }
-func (self Message) To() *common.Address           { return self.to }
-func (self Message) GasPrice() *big.Int            { return self.price }
-func (self Message) Gas() *big.Int                 { return self.gas }
-func (self Message) Value() *big.Int               { return self.value }
-func (self Message) Nonce() uint64                 { return self.nonce }
-func (self Message) Data() []byte                  { return self.data }
+func (self Message) Hash() []byte                          { return nil }
+func (self Message) From() (common.Address, error)         { return self.from, nil }
+func (self Message) FromFrontier() (common.Address, error) { return self.from, nil }
+func (self Message) To() *common.Address                   { return self.to }
+func (self Message) GasPrice() *big.Int                    { return self.price }
+func (self Message) Gas() *big.Int                         { return self.gas }
+func (self Message) Value() *big.Int                       { return self.value }
+func (self Message) Nonce() uint64                         { return self.nonce }
+func (self Message) Data() []byte                          { return self.data }

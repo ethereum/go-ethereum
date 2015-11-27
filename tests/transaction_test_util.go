@@ -120,7 +120,7 @@ func runTransactionTest(txTest TransactionTest) (err error) {
 			return nil
 		} else {
 			// RLP decoding failed but is expected to succeed (test FAIL)
-			return fmt.Errorf("RLP decoding failed when expected to succeed: ", err)
+			return fmt.Errorf("RLP decoding failed when expected to succeed: %s", err)
 		}
 	}
 
@@ -142,7 +142,7 @@ func runTransactionTest(txTest TransactionTest) (err error) {
 			return nil
 		} else {
 			// RLP decoding works and validations pass (test FAIL)
-			return fmt.Errorf("Field validations failed after RLP decoding: ", validationError)
+			return fmt.Errorf("Field validations failed after RLP decoding: %s", validationError)
 		}
 	}
 	return errors.New("Should not happen: verify RLP decoding and field validation")
