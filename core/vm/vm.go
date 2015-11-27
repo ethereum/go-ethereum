@@ -160,7 +160,6 @@ func (self *Vm) Run(contract *Contract, input []byte) (ret []byte, err error) {
 
 		// Get the memory location of pc
 		op = contract.GetOp(pc)
-
 		// calculate the new memory size and gas price for the current executing opcode
 		newMemSize, cost, err = calculateGasAndSize(self.env, contract, caller, op, statedb, mem, stack)
 		if err != nil {
@@ -177,7 +176,6 @@ func (self *Vm) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		mem.Resize(newMemSize.Uint64())
 		// Add a log message
 		self.log(pc, op, contract.Gas, cost, mem, stack, contract, nil)
-
 		if opPtr := jumpTable[op]; opPtr.valid {
 			if opPtr.fn != nil {
 				opPtr.fn(instruction{}, &pc, self.env, contract, mem, stack)
@@ -201,6 +199,35 @@ func (self *Vm) Run(contract *Contract, input []byte) (ret []byte, err error) {
 
 						continue
 					}
+				case CREATE:
+					var (
+						value        = stack.pop()
+						offset, size = stack.pop(), stack.pop()
+						input        = mem.Get(offset.Int64(), size.Int64())
+						gas          = new(big.Int).Set(contract.Gas)
+						addr         common.Address
+						ret          []byte
+						suberr       error
+					)
+					contract.UseGas(contract.Gas)
+					ret, addr, suberr = self.env.Create(contract, input, gas, contract.Price, value)
+					if suberr != nil {
+						stack.push(new(big.Int))
+					} else {
+						// gas < len(ret) * Createinstr.dataGas == NO_CODE
+						dataGas := big.NewInt(int64(len(ret)))
+						dataGas.Mul(dataGas, params.CreateDataGas)
+						if contract.UseGas(dataGas) {
+							self.env.Db().SetCode(addr, ret)
+						} else {
+							if params.IsHomestead(self.env.BlockNumber()) {
+								stack.push(new(big.Int))
+								return nil, CodeStoreOutOfGasError
+							}
+						}
+						stack.push(addr.Big())
+					}
+
 				case RETURN:
 					offset, size := stack.pop(), stack.pop()
 					ret := mem.GetPtr(offset.Int64(), size.Int64())
@@ -344,6 +371,13 @@ func calculateGasAndSize(env Environment, contract *Contract, caller ContractRef
 
 		x := calcMemSize(stack.data[stack.len()-6], stack.data[stack.len()-7])
 		y := calcMemSize(stack.data[stack.len()-4], stack.data[stack.len()-5])
+
+		newMemSize = common.BigMax(x, y)
+	case DELEGATECALL:
+		gas.Add(gas, stack.data[stack.len()-1])
+
+		x := calcMemSize(stack.data[stack.len()-5], stack.data[stack.len()-6])
+		y := calcMemSize(stack.data[stack.len()-3], stack.data[stack.len()-4])
 
 		newMemSize = common.BigMax(x, y)
 	}

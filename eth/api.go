@@ -610,13 +610,14 @@ type callmsg struct {
 }
 
 // accessor boilerplate to implement core.Message
-func (m callmsg) From() (common.Address, error) { return m.from.Address(), nil }
-func (m callmsg) Nonce() uint64                 { return m.from.Nonce() }
-func (m callmsg) To() *common.Address           { return m.to }
-func (m callmsg) GasPrice() *big.Int            { return m.gasPrice }
-func (m callmsg) Gas() *big.Int                 { return m.gas }
-func (m callmsg) Value() *big.Int               { return m.value }
-func (m callmsg) Data() []byte                  { return m.data }
+func (m callmsg) From() (common.Address, error)         { return m.from.Address(), nil }
+func (m callmsg) FromFrontier() (common.Address, error) { return m.from.Address(), nil }
+func (m callmsg) Nonce() uint64                         { return m.from.Nonce() }
+func (m callmsg) To() *common.Address                   { return m.to }
+func (m callmsg) GasPrice() *big.Int                    { return m.gasPrice }
+func (m callmsg) Gas() *big.Int                         { return m.gas }
+func (m callmsg) Value() *big.Int                       { return m.value }
+func (m callmsg) Data() []byte                          { return m.data }
 
 type CallArgs struct {
 	From     common.Address `json:"from"`

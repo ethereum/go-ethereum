@@ -87,12 +87,29 @@ func (self *StateDB) GetLogs(hash common.Hash) vm.Logs {
 	return self.logs[hash]
 }
 
+func (self *StateDB) GetAllLogs() *map[common.Hash]vm.Logs {
+	copy := make(map[common.Hash]vm.Logs, len(self.logs))
+	for k, v := range self.logs {
+		copy[k] = v
+	}
+	return &copy
+}
+
+func (self *StateDB) SetAllLogs(logs *map[common.Hash]vm.Logs) {
+	self.logs = *logs
+}
+
 func (self *StateDB) Logs() vm.Logs {
 	var logs vm.Logs
 	for _, lgs := range self.logs {
 		logs = append(logs, lgs...)
 	}
 	return logs
+}
+
+// TODO: this may not be the most proper thing
+func (self *StateDB) GetDB() ethdb.Database {
+	return self.db
 }
 
 func (self *StateDB) AddRefund(gas *big.Int) {

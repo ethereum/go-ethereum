@@ -43,7 +43,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB) (ty
 
 	for i, tx := range block.Transactions() {
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
-
 		receipt, logs, _, err := ApplyTransaction(p.bc, gp, statedb, header, tx, totalUsedGas)
 		if err != nil {
 			return nil, nil, totalUsedGas, err

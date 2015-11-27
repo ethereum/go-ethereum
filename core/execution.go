@@ -33,8 +33,18 @@ func Call(env vm.Environment, caller vm.ContractRef, addr common.Address, input 
 
 // CallCode executes the given address' code as the given contract address
 func CallCode(env vm.Environment, caller vm.ContractRef, addr common.Address, input []byte, gas, gasPrice, value *big.Int) (ret []byte, err error) {
-	prev := caller.Address()
-	ret, _, err = exec(env, caller, &prev, &addr, input, env.Db().GetCode(addr), gas, gasPrice, value)
+	callerAddr := caller.Address()
+	ret, _, err = exec(env, caller, &callerAddr, &addr, input, env.Db().GetCode(addr), gas, gasPrice, value)
+	return ret, err
+}
+
+// DelegateCall is equivalent to CallCode except that sender and value propagates from parent scope to child scope
+func DelegateCall(env vm.Environment, caller vm.ContractRef, addr common.Address, input []byte, gas, gasPrice *big.Int) (ret []byte, err error) {
+	callerAddr := caller.Address()
+	originAddr := env.Origin()
+	callerValue := caller.Value()
+	ret, _, err = execDelegateCall(env, caller, &originAddr, &callerAddr, &addr, input, env.Db().GetCode(addr), gas, gasPrice, callerValue)
+	caller.SetAddress(callerAddr)
 	return ret, err
 }
 
@@ -52,7 +62,6 @@ func Create(env vm.Environment, caller vm.ContractRef, code []byte, gas, gasPric
 
 func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.Address, input, code []byte, gas, gasPrice, value *big.Int) (ret []byte, addr common.Address, err error) {
 	evm := vm.NewVm(env)
-
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if env.Depth() > int(params.CallCreateDepth.Int64()) {
@@ -72,13 +81,11 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 		// Generate a new address
 		nonce := env.Db().GetNonce(caller.Address())
 		env.Db().SetNonce(caller.Address(), nonce+1)
-
 		addr = crypto.CreateAddress(caller.Address(), nonce)
-
 		address = &addr
 		createAccount = true
 	}
-	snapshot := env.MakeSnapshot()
+	snapshotPreTransfer := env.MakeSnapshot()
 
 	var (
 		from = env.Db().GetAccount(caller.Address())
@@ -94,15 +101,62 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 		}
 	}
 	env.Transfer(from, to, value)
+	snapshotPostTransfer := env.MakeSnapshot()
 
 	contract := vm.NewContract(caller, to, value, gas, gasPrice)
 	contract.SetCallCode(codeAddr, code)
 
 	ret, err = evm.Run(contract, input)
+
+	if err != nil {
+		if err == vm.CodeStoreOutOfGasError {
+			// TODO: this is rather hacky, restore all state changes
+			// except sender's account nonce increment
+			toNonce := env.Db().GetNonce(to.Address())
+			env.SetSnapshot(snapshotPostTransfer)
+			env.Db().SetNonce(to.Address(), toNonce)
+		} else {
+			env.SetSnapshot(snapshotPreTransfer) //env.Db().Set(snapshot)
+		}
+	}
+	return ret, addr, err
+}
+
+func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toAddr, codeAddr *common.Address, input, code []byte, gas, gasPrice, value *big.Int) (ret []byte, addr common.Address, err error) {
+	evm := vm.NewVm(env)
+	// Depth check execution. Fail if we're trying to execute above the
+	// limit.
+	if env.Depth() > int(params.CallCreateDepth.Int64()) {
+		caller.ReturnGas(gas, gasPrice)
+		return nil, common.Address{}, vm.DepthError
+	}
+
+	if !env.CanTransfer(*originAddr, value) {
+		caller.ReturnGas(gas, gasPrice)
+		return nil, common.Address{}, ValueTransferErr("insufficient funds to transfer value. Req %v, has %v", value, env.Db().GetBalance(caller.Address()))
+	}
+
+	snapshot := env.MakeSnapshot()
+
+	var (
+		//from = env.Db().GetAccount(*originAddr)
+		to vm.Account
+	)
+	if !env.Db().Exist(*toAddr) {
+		to = env.Db().CreateAccount(*toAddr)
+	} else {
+		to = env.Db().GetAccount(*toAddr)
+	}
+
+	contract := vm.NewContract(caller, to, value, gas, gasPrice)
+	contract.SetCallCode(codeAddr, code)
+	contract.DelegateCall = true
+
+	ret, err = evm.Run(contract, input)
+
 	if err != nil {
 		env.SetSnapshot(snapshot) //env.Db().Set(snapshot)
 	}
-
 	return ret, addr, err
 }
 

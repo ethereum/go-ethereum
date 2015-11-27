@@ -337,7 +337,13 @@ func opOrigin(instr instruction, pc *uint64, env Environment, contract *Contract
 }
 
 func opCaller(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
-	stack.push(common.Bytes2Big(contract.caller.Address().Bytes()))
+	var bigAddr *big.Int
+	if contract.DelegateCall {
+		bigAddr = env.Origin().Big()
+	} else {
+		bigAddr = contract.caller.Address().Big()
+	}
+	stack.push(bigAddr)
 }
 
 func opCallValue(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
@@ -485,7 +491,6 @@ func opSload(instr instruction, pc *uint64, env Environment, contract *Contract,
 func opSstore(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
 	loc := common.BigToHash(stack.pop())
 	val := stack.pop()
-
 	env.Db().SetState(contract.Address(), loc, common.BigToHash(val))
 }
 
@@ -509,31 +514,6 @@ func opGas(instr instruction, pc *uint64, env Environment, contract *Contract, m
 }
 
 func opCreate(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
-	var (
-		value        = stack.pop()
-		offset, size = stack.pop(), stack.pop()
-		input        = memory.Get(offset.Int64(), size.Int64())
-		gas          = new(big.Int).Set(contract.Gas)
-		addr         common.Address
-		ret          []byte
-		suberr       error
-	)
-
-	contract.UseGas(contract.Gas)
-	ret, addr, suberr = env.Create(contract, input, gas, contract.Price, value)
-	if suberr != nil {
-		stack.push(new(big.Int))
-	} else {
-		// gas < len(ret) * Createinstr.dataGas == NO_CODE
-		dataGas := big.NewInt(int64(len(ret)))
-		dataGas.Mul(dataGas, params.CreateDataGas)
-		if contract.UseGas(dataGas) {
-			env.Db().SetCode(addr, ret)
-		}
-
-		stack.push(addr.Big())
-
-	}
 }
 
 func opCall(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
@@ -595,6 +575,21 @@ func opCallCode(instr instruction, pc *uint64, env Environment, contract *Contra
 		stack.push(big.NewInt(1))
 
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+	}
+}
+
+func opDelegateCall(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
+	gas, to, inOffset, inSize, outOffset, outSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+
+	toAddr := common.BigToAddress(to)
+	args := memory.Get(inOffset.Int64(), inSize.Int64())
+	ret, err := env.DelegateCall(contract, toAddr, args, gas, contract.Price)
+
+	if err != nil {
+		stack.push(new(big.Int))
+	} else {
+		stack.push(big.NewInt(1))
+		memory.Set(outOffset.Uint64(), outSize.Uint64(), ret)
 	}
 }
 

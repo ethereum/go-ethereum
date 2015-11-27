@@ -70,6 +70,8 @@ type Environment interface {
 	Call(me ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
 	// Take another's contract code and execute within our own context
 	CallCode(me ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
+	// Same as CallCode except sender and value is propagated from parent to child scope
+	DelegateCall(me ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error)
 	// Create a new contract
 	Create(me ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error)
 }
@@ -119,7 +121,9 @@ type Account interface {
 	SetNonce(uint64)
 	Balance() *big.Int
 	Address() common.Address
+	SetAddress(common.Address)
 	ReturnGas(*big.Int, *big.Int)
 	SetCode([]byte)
 	EachStorage(cb func(key, value []byte))
+	Value() *big.Int
 }

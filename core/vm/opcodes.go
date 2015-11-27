@@ -200,6 +200,7 @@ const (
 	CALL
 	CALLCODE
 	RETURN
+	DELEGATECALL
 
 	SUICIDE = 0xff
 )
@@ -349,11 +350,12 @@ var opCodeToString = map[OpCode]string{
 	LOG4:   "LOG4",
 
 	// 0xf0 range
-	CREATE:   "CREATE",
-	CALL:     "CALL",
-	RETURN:   "RETURN",
-	CALLCODE: "CALLCODE",
-	SUICIDE:  "SUICIDE",
+	CREATE:       "CREATE",
+	CALL:         "CALL",
+	RETURN:       "RETURN",
+	CALLCODE:     "CALLCODE",
+	DELEGATECALL: "DELEGATECALL",
+	SUICIDE:      "SUICIDE",
 
 	PUSH: "PUSH",
 	DUP:  "DUP",

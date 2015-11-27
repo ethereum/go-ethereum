@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -222,18 +223,26 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		return ErrCheap
 	}
 
+	currentState, err := pool.currentState()
+	if err != nil {
+		return err
+	}
+
+	homestead := params.IsHomestead(GetHeadBlockNum(currentState.GetDB()))
+
 	// Validate the transaction sender and it's sig. Throw
 	// if the from fields is invalid.
-	if from, err = tx.From(); err != nil {
+	if homestead {
+		from, err = tx.From()
+	} else {
+		from, err = tx.FromFrontier()
+	}
+	if err != nil {
 		return ErrInvalidSender
 	}
 
 	// Make sure the account exist. Non existent accounts
 	// haven't got funds and well therefor never pass.
-	currentState, err := pool.currentState()
-	if err != nil {
-		return err
-	}
 	if !currentState.HasAccount(from) {
 		return ErrNonExistentAccount
 	}
@@ -263,7 +272,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	}
 
 	// Should supply enough intrinsic gas
-	if tx.Gas().Cmp(IntrinsicGas(tx.Data())) < 0 {
+	intrGas := IntrinsicGas(tx.Data(), MessageCreatesContract(tx), homestead)
+	if tx.Gas().Cmp(intrGas) < 0 {
 		return ErrIntrinsicGas
 	}
 
