@@ -305,6 +305,10 @@ var (
 		Usage: "Filename for IPC socket/pipe",
 		Value: DirectoryString{common.DefaultIpcPath()},
 	}
+	IPCExperimental = cli.BoolFlag{
+		Name:  "ipcexp",
+		Usage: "Enable the new RPC implementation",
+	}
 	ExecFlag = cli.StringFlag{
 		Name:  "exec",
 		Usage: "Execute JavaScript statement (only in combination with console/attach)",
@@ -778,7 +782,6 @@ func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
 	return
 }
 
-// StartIPC starts a IPC JSON-RPC API server.
 func StartIPC(stack *node.Node, ctx *cli.Context) error {
 	var ethereum *eth.Ethereum
 	if err := stack.Service(&ethereum); err != nil {
@@ -788,39 +791,42 @@ func StartIPC(stack *node.Node, ctx *cli.Context) error {
 	if err := stack.Service(&shh); err != nil {
 		return err
 	}
-	server := rpc.NewServer()
 
-	server.RegisterName("eth", accounts.NewAccountService(ethereum.AccountManager()))
-	server.RegisterName("eth", core.NewBlockChainService(ethereum.BlockChain(), ethereum.AccountManager()))
-	server.RegisterName("eth", core.NewTransactionPoolService(ethereum.TxPool(), ethereum.ChainDb(), ethereum.BlockChain(), ethereum.AccountManager()))
-	server.RegisterName("eth", miner.NewMinerService(ethereum.Miner()))
-	server.RegisterName("eth", eth.NewEthService(ethereum))
-	server.RegisterName("eth", downloader.NewDownloaderService(ethereum.Downloader()))
-	server.RegisterName("eth", filters.NewFilterService(ethereum.ChainDb(), ethereum.EventMux()))
-	server.RegisterName("net", p2p.NewNetService(stack.Server(), ethereum.NetVersion()))
-	server.RegisterName("web3", eth.NewWeb3Service(stack))
-	server.RegisterName("personal", accounts.NewPersonalService(ethereum.AccountManager()))
-	server.RegisterName("shh", whisper.NewWhisperService(shh))
+	if ctx.GlobalIsSet(IPCExperimental.Name) {
+		server := rpc.NewServer()
 
-	ipcDir := filepath.Join(stack.DataDir(), "shared")
-	os.MkdirAll(ipcDir, 0700)
-	ipcEndpoint := filepath.Join(ipcDir, "ethereum.sock")
-	os.RemoveAll(ipcEndpoint)
-	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: ipcEndpoint, Net: "unix"})
-	if err != nil {
-		panic(err)
-	}
-	go func() {
-		glog.Infof("Unix socket for IPC service opened on %s\n", ipcEndpoint)
-		for {
-			conn, err := l.Accept()
-			if err != nil {
-				panic(err)
-			}
-			codec := rpc.NewJSONCodec(conn)
-			go server.ServeCodec(codec)
+		server.RegisterName("eth", accounts.NewAccountService(ethereum.AccountManager()))
+		server.RegisterName("eth", core.NewBlockChainService(ethereum.BlockChain(), ethereum.AccountManager()))
+		server.RegisterName("eth", core.NewTransactionPoolService(ethereum.TxPool(), ethereum.ChainDb(), ethereum.BlockChain(), ethereum.AccountManager()))
+		server.RegisterName("eth", miner.NewMinerService(ethereum.Miner()))
+		server.RegisterName("eth", eth.NewEthService(ethereum))
+		server.RegisterName("eth", downloader.NewDownloaderService(ethereum.Downloader()))
+		server.RegisterName("eth", filters.NewFilterService(ethereum.ChainDb(), ethereum.EventMux()))
+		server.RegisterName("net", p2p.NewNetService(stack.Server(), ethereum.NetVersion()))
+		server.RegisterName("web3", eth.NewWeb3Service(stack))
+		server.RegisterName("personal", accounts.NewPersonalService(ethereum.AccountManager()))
+		server.RegisterName("shh", whisper.NewWhisperService(shh))
+
+		ipcEndpoint := IpcSocketPath(ctx)
+		os.RemoveAll(ipcEndpoint)
+		l, err := net.ListenUnix("unix", &net.UnixAddr{Name: ipcEndpoint, Net: "unix"})
+		if err != nil {
+			return err
 		}
-	}()
+		go func() {
+			glog.Infof("IPC endpoint(%s)\n", ipcEndpoint)
+			for {
+				conn, err := l.Accept()
+				if err != nil {
+					panic(err)
+				}
+				codec := rpc.NewJSONCodec(conn)
+				go server.ServeCodec(codec)
+			}
+		}()
+
+		return nil
+	}
 
 	config := comms.IpcConfig{
 		Endpoint: IpcSocketPath(ctx),
