@@ -122,6 +122,27 @@ func TestCallCodes(t *testing.T) {
 	}
 }
 
+func TestDelegateCall(t *testing.T) {
+	fn := filepath.Join(stateTestDir, "stDelegatecallTest.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestDelegateCallCodes1(t *testing.T) {
+	fn := filepath.Join(stateTestDir, "stCallDelegateCodes.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestDelegateCallCodes2(t *testing.T) {
+	fn := filepath.Join(stateTestDir, "stCallDelegateCodesCallCode.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestMemory(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stMemoryTest.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {

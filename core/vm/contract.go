@@ -26,11 +26,13 @@ import (
 type ContractRef interface {
 	ReturnGas(*big.Int, *big.Int)
 	Address() common.Address
+	SetAddress(common.Address)
+	Value() *big.Int
 	SetCode([]byte)
 }
 
 // Contract represents an ethereum contract in the state database. It contains
-// the the contract code, calling arguments. Contract implements ContractReg
+// the the contract code, calling arguments. Contract implements ContractRef
 type Contract struct {
 	caller ContractRef
 	self   ContractRef
@@ -44,6 +46,8 @@ type Contract struct {
 	value, Gas, UsedGas, Price *big.Int
 
 	Args []byte
+
+	DelegateCall bool
 }
 
 // Create a new context for the given data items.
@@ -111,6 +115,16 @@ func (c *Contract) ReturnGas(gas, price *big.Int) {
 // Address returns the contracts address
 func (c *Contract) Address() common.Address {
 	return c.self.Address()
+}
+
+// SetAddress sets the contracts address
+func (c *Contract) SetAddress(addr common.Address) {
+	c.self.SetAddress(addr)
+}
+
+// Value returns the contracts value (sent to it from it's caller)
+func (c *Contract) Value() *big.Int {
+	return c.value
 }
 
 // SetCode sets the code to the contract

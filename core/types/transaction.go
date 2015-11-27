@@ -157,11 +157,26 @@ func (tx *Transaction) Size() common.StorageSize {
 	return common.StorageSize(c)
 }
 
+// From() caches the address, allowing it to be used regardless of
+// Frontier / Homestead. however, the first time called it runs
+// signature validations, so we need two versions. This makes it
+// easier to ensure backwards compatibility of things like package rpc
+// where eth_getblockbynumber uses tx.From() and needs to work for
+// both txs before and after the first homestead block. Signatures
+// valid in homestead are a subset of valid ones in Frontier)
 func (tx *Transaction) From() (common.Address, error) {
+	return doFrom(tx, true)
+}
+
+func (tx *Transaction) FromFrontier() (common.Address, error) {
+	return doFrom(tx, false)
+}
+
+func doFrom(tx *Transaction, homestead bool) (common.Address, error) {
 	if from := tx.from.Load(); from != nil {
 		return from.(common.Address), nil
 	}
-	pubkey, err := tx.publicKey()
+	pubkey, err := tx.publicKey(homestead)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -182,8 +197,8 @@ func (tx *Transaction) SignatureValues() (v byte, r *big.Int, s *big.Int) {
 	return tx.data.V, new(big.Int).Set(tx.data.R), new(big.Int).Set(tx.data.S)
 }
 
-func (tx *Transaction) publicKey() ([]byte, error) {
-	if !crypto.ValidateSignatureValues(tx.data.V, tx.data.R, tx.data.S) {
+func (tx *Transaction) publicKey(homestead bool) ([]byte, error) {
+	if !crypto.ValidateSignatureValues(tx.data.V, tx.data.R, tx.data.S, homestead) {
 		return nil, ErrInvalidSig
 	}
 

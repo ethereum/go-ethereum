@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -50,76 +49,8 @@ var (
 	mipmapPre    = []byte("mipmap-log-bloom-")
 	MIPMapLevels = []uint64{1000000, 500000, 100000, 50000, 1000}
 
-	ExpDiffPeriod   = big.NewInt(100000)
 	blockHashPrefix = []byte("block-hash-") // [deprecated by the header/block split, remove eventually]
 )
-
-// CalcDifficulty is the difficulty adjustment algorithm. It returns
-// the difficulty that a new block b should have when created at time
-// given the parent block's time and difficulty.
-func CalcDifficulty(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
-	diff := new(big.Int)
-	adjust := new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
-	bigTime := new(big.Int)
-	bigParentTime := new(big.Int)
-
-	bigTime.SetUint64(time)
-	bigParentTime.SetUint64(parentTime)
-
-	if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
-		diff.Add(parentDiff, adjust)
-	} else {
-		diff.Sub(parentDiff, adjust)
-	}
-	if diff.Cmp(params.MinimumDifficulty) < 0 {
-		diff = params.MinimumDifficulty
-	}
-
-	periodCount := new(big.Int).Add(parentNumber, common.Big1)
-	periodCount.Div(periodCount, ExpDiffPeriod)
-	if periodCount.Cmp(common.Big1) > 0 {
-		// diff = diff + 2^(periodCount - 2)
-		expDiff := periodCount.Sub(periodCount, common.Big2)
-		expDiff.Exp(common.Big2, expDiff, nil)
-		diff.Add(diff, expDiff)
-		diff = common.BigMax(diff, params.MinimumDifficulty)
-	}
-
-	return diff
-}
-
-// CalcGasLimit computes the gas limit of the next block after parent.
-// The result may be modified by the caller.
-// This is miner strategy, not consensus protocol.
-func CalcGasLimit(parent *types.Block) *big.Int {
-	// contrib = (parentGasUsed * 3 / 2) / 1024
-	contrib := new(big.Int).Mul(parent.GasUsed(), big.NewInt(3))
-	contrib = contrib.Div(contrib, big.NewInt(2))
-	contrib = contrib.Div(contrib, params.GasLimitBoundDivisor)
-
-	// decay = parentGasLimit / 1024 -1
-	decay := new(big.Int).Div(parent.GasLimit(), params.GasLimitBoundDivisor)
-	decay.Sub(decay, big.NewInt(1))
-
-	/*
-		strategy: gasLimit of block-to-mine is set based on parent's
-		gasUsed value.  if parentGasUsed > parentGasLimit * (2/3) then we
-		increase it, otherwise lower it (or leave it unchanged if it's right
-		at that usage) the amount increased/decreased depends on how far away
-		from parentGasLimit * (2/3) parentGasUsed is.
-	*/
-	gl := new(big.Int).Sub(parent.GasLimit(), decay)
-	gl = gl.Add(gl, contrib)
-	gl.Set(common.BigMax(gl, params.MinGasLimit))
-
-	// however, if we're now below the target (GenesisGasLimit) we increase the
-	// limit as much as we can (parentGasLimit / 1024 -1)
-	if gl.Cmp(params.GenesisGasLimit) < 0 {
-		gl.Add(parent.GasLimit(), decay)
-		gl.Set(common.BigMin(gl, params.GenesisGasLimit))
-	}
-	return gl
-}
 
 // GetCanonicalHash retrieves a hash assigned to a canonical block number.
 func GetCanonicalHash(db ethdb.Database, number uint64) common.Hash {
@@ -162,6 +93,20 @@ func GetHeadFastBlockHash(db ethdb.Database) common.Hash {
 		return common.Hash{}
 	}
 	return common.BytesToHash(data)
+}
+
+// GetHeadBlockNum retrieves the block number of the current canonical head block.
+func GetHeadBlockNum(db ethdb.Database) *big.Int {
+	data, _ := db.Get(headBlockKey)
+	if len(data) == 0 {
+		return nil
+	}
+	header := new(types.Header)
+	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
+		glog.V(logger.Error).Infof("invalid block header RLP for head block: %v", err)
+		return nil
+	}
+	return header.Number
 }
 
 // GetHeaderRLP retrieves a block header in its raw RLP database encoding, or nil

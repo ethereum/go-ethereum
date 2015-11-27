@@ -146,12 +146,12 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 	}
 
 	for name, test := range bt {
-		// if the test should be skipped, return
-		if skipTest[name] {
+		if skipTest[name] || name != "wallet2outOf3txsRevoke" {
 			glog.Infoln("Skipping block test", name)
 			continue
 		}
 		// test the block
+		//fmt.Println("BlockTest name:", name)
 		if err := runBlockTest(test); err != nil {
 			return fmt.Errorf("%s: %v", name, err)
 		}
@@ -192,6 +192,7 @@ func runBlockTest(test *BlockTest) error {
 	}
 
 	cm := ethereum.BlockChain()
+	//vm.Debug = true
 	validBlocks, err := test.TryBlocksInsert(cm)
 	if err != nil {
 		return err
