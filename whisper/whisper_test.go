@@ -33,7 +33,7 @@ func startTestCluster(n int) []*Whisper {
 	whispers := make([]*Whisper, n)
 	for i := 0; i < n; i++ {
 		whispers[i] = New()
-		whispers[i].Start()
+		whispers[i].Start(nil)
 	}
 	// Wire all the peers to the root one
 	for i := 1; i < n; i++ {

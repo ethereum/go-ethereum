@@ -14,38 +14,32 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package xeth
+package node
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
+	"fmt"
+	"reflect"
 )
 
-type State struct {
-	xeth  *XEth
-	state *state.StateDB
+// DuplicateServiceError is returned during Node startup if a registered service
+// constructor returns a service of the same type that was already started.
+type DuplicateServiceError struct {
+	Kind reflect.Type
 }
 
-func NewState(xeth *XEth, statedb *state.StateDB) *State {
-	return &State{xeth, statedb}
+// Error generates a textual representation of the duplicate service error.
+func (e *DuplicateServiceError) Error() string {
+	return fmt.Sprintf("duplicate service: %v", e.Kind)
 }
 
-func (self *State) State() *state.StateDB {
-	return self.state
+// StopError is returned if a Node fails to stop either any of its registered
+// services or itself.
+type StopError struct {
+	Server   error
+	Services map[reflect.Type]error
 }
 
-func (self *State) Get(addr string) *Object {
-	return &Object{self.state.GetStateObject(common.HexToAddress(addr))}
-}
-
-func (self *State) SafeGet(addr string) *Object {
-	return &Object{self.safeGet(addr)}
-}
-
-func (self *State) safeGet(addr string) *state.StateObject {
-	object := self.state.GetStateObject(common.HexToAddress(addr))
-	if object == nil {
-		object = state.NewStateObject(common.HexToAddress(addr), self.xeth.EthereumService().ChainDb())
-	}
-	return object
+// Error generates a textual representation of the stop error.
+func (e *StopError) Error() string {
+	return fmt.Sprintf("server: %v, services: %v", e.Server, e.Services)
 }

@@ -36,7 +36,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -165,15 +167,6 @@ func runBlockTest(test *BlockTest) error {
 	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"), crypto.StandardScryptN, crypto.StandardScryptP)
 	am := accounts.NewManager(ks)
 	db, _ := ethdb.NewMemDatabase()
-	cfg := &eth.Config{
-		DataDir:        common.DefaultDataDir(),
-		Verbosity:      5,
-		Etherbase:      common.Address{},
-		AccountManager: am,
-		NewDB:          func(path string) (ethdb.Database, error) { return db, nil },
-	}
-
-	cfg.GenesisBlock = test.Genesis
 
 	// import pre accounts & construct test genesis block & state root
 	_, err := test.InsertPreState(db, am)
@@ -181,16 +174,16 @@ func runBlockTest(test *BlockTest) error {
 		return fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	ethereum, err := eth.New(cfg)
+	cfg := &eth.Config{
+		TestGenesisState: db,
+		TestGenesisBlock: test.Genesis,
+		Etherbase:        common.Address{},
+		AccountManager:   am,
+	}
+	ethereum, err := eth.New(&node.ServiceContext{EventMux: new(event.TypeMux)}, cfg)
 	if err != nil {
 		return err
 	}
-
-	err = ethereum.Start()
-	if err != nil {
-		return err
-	}
-
 	cm := ethereum.BlockChain()
 	validBlocks, err := test.TryBlocksInsert(cm)
 	if err != nil {

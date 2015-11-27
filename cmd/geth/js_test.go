@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
 )
@@ -66,7 +67,10 @@ type testjethre struct {
 }
 
 func (self *testjethre) UnlockAccount(acc []byte) bool {
-	err := self.ethereum.AccountManager().Unlock(common.BytesToAddress(acc), "")
+	var ethereum *eth.Ethereum
+	self.stack.Service(&ethereum)
+
+	err := ethereum.AccountManager().Unlock(common.BytesToAddress(acc), "")
 	if err != nil {
 		panic("unable to unlock")
 	}
@@ -74,67 +78,74 @@ func (self *testjethre) UnlockAccount(acc []byte) bool {
 }
 
 func (self *testjethre) ConfirmTransaction(tx string) bool {
-	if self.ethereum.NatSpec {
+	var ethereum *eth.Ethereum
+	self.stack.Service(&ethereum)
+
+	if ethereum.NatSpec {
 		self.lastConfirm = natspec.GetNotice(self.xeth, tx, self.client)
 	}
 	return true
 }
 
-func testJEthRE(t *testing.T) (string, *testjethre, *eth.Ethereum) {
+func testJEthRE(t *testing.T) (string, *testjethre, *node.Node) {
 	return testREPL(t, nil)
 }
 
-func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth.Ethereum) {
+func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *node.Node) {
 	tmp, err := ioutil.TempDir("", "geth-test")
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Create a networkless protocol stack
+	stack, err := node.New(&node.Config{PrivateKey: testNodeKey, Name: "test", NoDiscovery: true})
+	if err != nil {
+		t.Fatalf("failed to create node: %v", err)
+	}
+	// Initialize and register the Ethereum protocol
+	keystore := crypto.NewKeyStorePlain(filepath.Join(tmp, "keystore"))
+	accman := accounts.NewManager(keystore)
 
 	db, _ := ethdb.NewMemDatabase()
-
 	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{common.HexToAddress(testAddress), common.String2Big(testBalance)})
-	ks := crypto.NewKeyStorePlain(filepath.Join(tmp, "keystore"))
-	am := accounts.NewManager(ks)
-	conf := &eth.Config{
-		NodeKey:        testNodeKey,
-		DataDir:        tmp,
-		AccountManager: am,
-		MaxPeers:       0,
-		Name:           "test",
-		DocRoot:        "/",
-		SolcPath:       testSolcPath,
-		PowTest:        true,
-		NewDB:          func(path string) (ethdb.Database, error) { return db, nil },
+
+	ethConf := &eth.Config{
+		TestGenesisState: db,
+		AccountManager:   accman,
+		DocRoot:          "/",
+		SolcPath:         testSolcPath,
+		PowTest:          true,
 	}
 	if config != nil {
-		config(conf)
+		config(ethConf)
 	}
-	ethereum, err := eth.New(conf)
-	if err != nil {
-		t.Fatal("%v", err)
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
+		t.Fatalf("failed to register ethereum protocol: %v", err)
 	}
-
+	// Initialize all the keys for testing
 	keyb, err := crypto.HexToECDSA(testKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	key := crypto.NewKeyFromECDSA(keyb)
-	err = ks.StoreKey(key, "")
-	if err != nil {
+	if err := keystore.StoreKey(key, ""); err != nil {
 		t.Fatal(err)
 	}
-
-	err = am.Unlock(key.Address, "")
-	if err != nil {
+	if err := accman.Unlock(key.Address, ""); err != nil {
 		t.Fatal(err)
 	}
+	// Start the node and assemble the REPL tester
+	if err := stack.Start(); err != nil {
+		t.Fatalf("failed to start test stack: %v", err)
+	}
+	var ethereum *eth.Ethereum
+	stack.Service(&ethereum)
 
 	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
 	client := comms.NewInProcClient(codec.JSON)
 	tf := &testjethre{client: ethereum.HTTPClient()}
-	repl := newJSRE(ethereum, assetPath, "", client, false, tf)
+	repl := newJSRE(stack, assetPath, "", client, false, tf)
 	tf.jsre = repl
-	return tmp, tf, ethereum
+	return tmp, tf, stack
 }
 
 func TestNodeInfo(t *testing.T) {
@@ -151,11 +162,8 @@ func TestNodeInfo(t *testing.T) {
 }
 
 func TestAccounts(t *testing.T) {
-	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Fatalf("error starting ethereum: %v", err)
-	}
-	defer ethereum.Stop()
+	tmp, repl, node := testJEthRE(t)
+	defer node.Stop()
 	defer os.RemoveAll(tmp)
 
 	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`"]`)
@@ -174,11 +182,8 @@ func TestAccounts(t *testing.T) {
 }
 
 func TestBlockChain(t *testing.T) {
-	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Fatalf("error starting ethereum: %v", err)
-	}
-	defer ethereum.Stop()
+	tmp, repl, node := testJEthRE(t)
+	defer node.Stop()
 	defer os.RemoveAll(tmp)
 	// get current block dump before export/import.
 	val, err := repl.re.Run("JSON.stringify(debug.dumpBlock(eth.blockNumber))")
@@ -196,6 +201,8 @@ func TestBlockChain(t *testing.T) {
 	tmpfile := filepath.Join(extmp, "export.chain")
 	tmpfileq := strconv.Quote(tmpfile)
 
+	var ethereum *eth.Ethereum
+	node.Service(&ethereum)
 	ethereum.BlockChain().Reset()
 
 	checkEvalJSON(t, repl, `admin.exportChain(`+tmpfileq+`)`, `true`)
@@ -209,22 +216,15 @@ func TestBlockChain(t *testing.T) {
 }
 
 func TestMining(t *testing.T) {
-	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Fatalf("error starting ethereum: %v", err)
-	}
-	defer ethereum.Stop()
+	tmp, repl, node := testJEthRE(t)
+	defer node.Stop()
 	defer os.RemoveAll(tmp)
 	checkEvalJSON(t, repl, `eth.mining`, `false`)
 }
 
 func TestRPC(t *testing.T) {
-	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Errorf("error starting ethereum: %v", err)
-		return
-	}
-	defer ethereum.Stop()
+	tmp, repl, node := testJEthRE(t)
+	defer node.Stop()
 	defer os.RemoveAll(tmp)
 
 	checkEvalJSON(t, repl, `admin.startRPC("127.0.0.1", 5004, "*", "web3,eth,net")`, `true`)
@@ -234,12 +234,8 @@ func TestCheckTestAccountBalance(t *testing.T) {
 	t.Skip() // i don't think it tests the correct behaviour here. it's actually testing
 	// internals which shouldn't be tested. This now fails because of a change in the core
 	// and i have no means to fix this, sorry - @obscuren
-	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Errorf("error starting ethereum: %v", err)
-		return
-	}
-	defer ethereum.Stop()
+	tmp, repl, node := testJEthRE(t)
+	defer node.Stop()
 	defer os.RemoveAll(tmp)
 
 	repl.re.Run(`primary = "` + testAddress + `"`)
@@ -247,12 +243,8 @@ func TestCheckTestAccountBalance(t *testing.T) {
 }
 
 func TestSignature(t *testing.T) {
-	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Errorf("error starting ethereum: %v", err)
-		return
-	}
-	defer ethereum.Stop()
+	tmp, repl, node := testJEthRE(t)
+	defer node.Stop()
 	defer os.RemoveAll(tmp)
 
 	val, err := repl.re.Run(`eth.sign("` + testAddress + `", "` + testHash + `")`)
@@ -443,7 +435,10 @@ multiply7 = Multiply7.at(contractaddress);
 }
 
 func pendingTransactions(repl *testjethre, t *testing.T) (txc int64, err error) {
-	txs := repl.ethereum.TxPool().GetTransactions()
+	var ethereum *eth.Ethereum
+	repl.stack.Service(&ethereum)
+
+	txs := ethereum.TxPool().GetTransactions()
 	return int64(len(txs)), nil
 }
 
@@ -468,12 +463,15 @@ func processTxs(repl *testjethre, t *testing.T, expTxc int) bool {
 		t.Errorf("incorrect number of pending transactions, expected %v, got %v", expTxc, txc)
 		return false
 	}
-	err = repl.ethereum.StartMining(runtime.NumCPU(), "")
+	var ethereum *eth.Ethereum
+	repl.stack.Service(&ethereum)
+
+	err = ethereum.StartMining(runtime.NumCPU(), "")
 	if err != nil {
 		t.Errorf("unexpected error mining: %v", err)
 		return false
 	}
-	defer repl.ethereum.StopMining()
+	defer ethereum.StopMining()
 
 	timer := time.NewTimer(100 * time.Second)
 	height := new(big.Int).Add(repl.xeth.CurrentBlock().Number(), big.NewInt(1))

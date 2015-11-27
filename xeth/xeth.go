@@ -40,7 +40,9 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/whisper"
 )
 
 var (
@@ -77,7 +79,7 @@ type XEth struct {
 	transactMu sync.Mutex
 
 	// read-only fields
-	backend       *eth.Ethereum
+	backend       *node.Node
 	frontend      Frontend
 	agent         *miner.RemoteAgent
 	gpo           *eth.GasPriceOracle
@@ -86,19 +88,26 @@ type XEth struct {
 	filterManager *filters.FilterSystem
 }
 
-func NewTest(eth *eth.Ethereum, frontend Frontend) *XEth {
-	return &XEth{backend: eth, frontend: frontend}
+func NewTest(stack *node.Node, frontend Frontend) *XEth {
+	return &XEth{backend: stack, frontend: frontend}
 }
 
 // New creates an XEth that uses the given frontend.
 // If a nil Frontend is provided, a default frontend which
 // confirms all transactions will be used.
-func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
+func New(stack *node.Node, frontend Frontend) *XEth {
+	var (
+		ethereum *eth.Ethereum
+		whisper  *whisper.Whisper
+	)
+	stack.Service(&ethereum)
+	stack.Service(&whisper)
+
 	xeth := &XEth{
-		backend:          ethereum,
+		backend:          stack,
 		frontend:         frontend,
 		quit:             make(chan struct{}),
-		filterManager:    filters.NewFilterSystem(ethereum.EventMux()),
+		filterManager:    filters.NewFilterSystem(stack.EventMux()),
 		logQueue:         make(map[int]*logQueue),
 		blockQueue:       make(map[int]*hashQueue),
 		transactionQueue: make(map[int]*hashQueue),
@@ -106,17 +115,33 @@ func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 		agent:            miner.NewRemoteAgent(),
 		gpo:              eth.NewGasPriceOracle(ethereum),
 	}
-	if ethereum.Whisper() != nil {
-		xeth.whisper = NewWhisper(ethereum.Whisper())
+	if whisper != nil {
+		xeth.whisper = NewWhisper(whisper)
 	}
 	ethereum.Miner().Register(xeth.agent)
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}
-	state, _ := xeth.backend.BlockChain().State()
+	state, _ := ethereum.BlockChain().State()
 	xeth.state = NewState(xeth, state)
 	go xeth.start()
 	return xeth
+}
+
+func (self *XEth) EthereumService() *eth.Ethereum {
+	var ethereum *eth.Ethereum
+	if err := self.backend.Service(&ethereum); err != nil {
+		return nil
+	}
+	return ethereum
+}
+
+func (self *XEth) WhisperService() *whisper.Whisper {
+	var whisper *whisper.Whisper
+	if err := self.backend.Service(&whisper); err != nil {
+		return nil
+	}
+	return whisper
 }
 
 func (self *XEth) start() {
@@ -172,7 +197,7 @@ done:
 func (self *XEth) Stop() {
 	close(self.quit)
 	self.filterManager.Stop()
-	self.backend.Miner().Unregister(self.agent)
+	self.EthereumService().Miner().Unregister(self.agent)
 }
 
 func cAddress(a []string) []common.Address {
@@ -207,21 +232,20 @@ func (self *XEth) AtStateNum(num int64) *XEth {
 	var err error
 	switch num {
 	case -2:
-		st = self.backend.Miner().PendingState().Copy()
+		st = self.EthereumService().Miner().PendingState().Copy()
 	default:
 		if block := self.getBlockByHeight(num); block != nil {
-			st, err = state.New(block.Root(), self.backend.ChainDb())
+			st, err = state.New(block.Root(), self.EthereumService().ChainDb())
 			if err != nil {
 				return nil
 			}
 		} else {
-			st, err = state.New(self.backend.BlockChain().GetBlockByNumber(0).Root(), self.backend.ChainDb())
+			st, err = state.New(self.EthereumService().BlockChain().GetBlockByNumber(0).Root(), self.EthereumService().ChainDb())
 			if err != nil {
 				return nil
 			}
 		}
 	}
-
 	return self.WithState(st)
 }
 
@@ -270,7 +294,7 @@ func (self *XEth) UpdateState() (wait chan *big.Int) {
 						wait <- n
 						n = nil
 					}
-					statedb, err := state.New(event.Block.Root(), self.backend.ChainDb())
+					statedb, err := state.New(event.Block.Root(), self.EthereumService().ChainDb())
 					if err != nil {
 						glog.V(logger.Error).Infoln("Could not create new state: %v", err)
 						return
@@ -294,7 +318,7 @@ func (self *XEth) getBlockByHeight(height int64) *types.Block {
 
 	switch height {
 	case -2:
-		return self.backend.Miner().PendingBlock()
+		return self.EthereumService().Miner().PendingBlock()
 	case -1:
 		return self.CurrentBlock()
 	default:
@@ -305,28 +329,29 @@ func (self *XEth) getBlockByHeight(height int64) *types.Block {
 		num = uint64(height)
 	}
 
-	return self.backend.BlockChain().GetBlockByNumber(num)
+	return self.EthereumService().BlockChain().GetBlockByNumber(num)
 }
 
 func (self *XEth) BlockByHash(strHash string) *Block {
 	hash := common.HexToHash(strHash)
-	block := self.backend.BlockChain().GetBlock(hash)
+	block := self.EthereumService().BlockChain().GetBlock(hash)
 
 	return NewBlock(block)
 }
 
 func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 	hash := common.HexToHash(strHash)
-	block := self.backend.BlockChain().GetBlock(hash)
+	block := self.EthereumService().BlockChain().GetBlock(hash)
 
 	return block
 }
 
 func (self *XEth) EthTransactionByHash(hash string) (*types.Transaction, common.Hash, uint64, uint64) {
-	if tx, hash, number, index := core.GetTransaction(self.backend.ChainDb(), common.HexToHash(hash)); tx != nil {
+	ethereum := self.EthereumService()
+	if tx, hash, number, index := core.GetTransaction(ethereum.ChainDb(), common.HexToHash(hash)); tx != nil {
 		return tx, hash, number, index
 	}
-	return self.backend.TxPool().GetTransaction(common.HexToHash(hash)), common.Hash{}, 0, 0
+	return ethereum.TxPool().GetTransaction(common.HexToHash(hash)), common.Hash{}, 0, 0
 }
 
 func (self *XEth) BlockByNumber(num int64) *Block {
@@ -338,23 +363,23 @@ func (self *XEth) EthBlockByNumber(num int64) *types.Block {
 }
 
 func (self *XEth) Td(hash common.Hash) *big.Int {
-	return self.backend.BlockChain().GetTd(hash)
+	return self.EthereumService().BlockChain().GetTd(hash)
 }
 
 func (self *XEth) CurrentBlock() *types.Block {
-	return self.backend.BlockChain().CurrentBlock()
+	return self.EthereumService().BlockChain().CurrentBlock()
 }
 
 func (self *XEth) GetBlockReceipts(bhash common.Hash) types.Receipts {
-	return core.GetBlockReceipts(self.backend.ChainDb(), bhash)
+	return core.GetBlockReceipts(self.EthereumService().ChainDb(), bhash)
 }
 
 func (self *XEth) GetTxReceipt(txhash common.Hash) *types.Receipt {
-	return core.GetReceipt(self.backend.ChainDb(), txhash)
+	return core.GetReceipt(self.EthereumService().ChainDb(), txhash)
 }
 
 func (self *XEth) GasLimit() *big.Int {
-	return self.backend.BlockChain().GasLimit()
+	return self.EthereumService().BlockChain().GasLimit()
 }
 
 func (self *XEth) Block(v interface{}) *Block {
@@ -371,7 +396,7 @@ func (self *XEth) Block(v interface{}) *Block {
 
 func (self *XEth) Accounts() []string {
 	// TODO: check err?
-	accounts, _ := self.backend.AccountManager().Accounts()
+	accounts, _ := self.EthereumService().AccountManager().Accounts()
 	accountAddresses := make([]string, len(accounts))
 	for i, ac := range accounts {
 		accountAddresses[i] = ac.Address.Hex()
@@ -382,73 +407,73 @@ func (self *XEth) Accounts() []string {
 // accessor for solidity compiler.
 // memoized if available, retried on-demand if not
 func (self *XEth) Solc() (*compiler.Solidity, error) {
-	return self.backend.Solc()
+	return self.EthereumService().Solc()
 }
 
 // set in js console via admin interface or wrapper from cli flags
 func (self *XEth) SetSolc(solcPath string) (*compiler.Solidity, error) {
-	self.backend.SetSolc(solcPath)
+	self.EthereumService().SetSolc(solcPath)
 	return self.Solc()
 }
 
 // store DApp value in extra database
 func (self *XEth) DbPut(key, val []byte) bool {
-	self.backend.DappDb().Put(append(dappStorePre, key...), val)
+	self.EthereumService().DappDb().Put(append(dappStorePre, key...), val)
 	return true
 }
 
 // retrieve DApp value from extra database
 func (self *XEth) DbGet(key []byte) ([]byte, error) {
-	val, err := self.backend.DappDb().Get(append(dappStorePre, key...))
+	val, err := self.EthereumService().DappDb().Get(append(dappStorePre, key...))
 	return val, err
 }
 
 func (self *XEth) PeerCount() int {
-	return self.backend.PeerCount()
+	return self.backend.Server().PeerCount()
 }
 
 func (self *XEth) IsMining() bool {
-	return self.backend.IsMining()
+	return self.EthereumService().IsMining()
 }
 
 func (self *XEth) HashRate() int64 {
-	return self.backend.Miner().HashRate()
+	return self.EthereumService().Miner().HashRate()
 }
 
 func (self *XEth) EthVersion() string {
-	return fmt.Sprintf("%d", self.backend.EthVersion())
+	return fmt.Sprintf("%d", self.EthereumService().EthVersion())
 }
 
 func (self *XEth) NetworkVersion() string {
-	return fmt.Sprintf("%d", self.backend.NetVersion())
+	return fmt.Sprintf("%d", self.EthereumService().NetVersion())
 }
 
 func (self *XEth) WhisperVersion() string {
-	return fmt.Sprintf("%d", self.backend.ShhVersion())
+	return fmt.Sprintf("%d", self.WhisperService().Version())
 }
 
 func (self *XEth) ClientVersion() string {
-	return self.backend.ClientVersion()
+	return self.backend.Server().Name
 }
 
 func (self *XEth) SetMining(shouldmine bool, threads int) bool {
-	ismining := self.backend.IsMining()
+	ismining := self.EthereumService().IsMining()
 	if shouldmine && !ismining {
-		err := self.backend.StartMining(threads, "")
+		err := self.EthereumService().StartMining(threads, "")
 		return err == nil
 	}
 	if ismining && !shouldmine {
-		self.backend.StopMining()
+		self.EthereumService().StopMining()
 	}
-	return self.backend.IsMining()
+	return self.EthereumService().IsMining()
 }
 
 func (self *XEth) IsListening() bool {
-	return self.backend.IsListening()
+	return true
 }
 
 func (self *XEth) Coinbase() string {
-	eb, err := self.backend.Etherbase()
+	eb, err := self.EthereumService().Etherbase()
 	if err != nil {
 		return "0x0"
 	}
@@ -514,7 +539,7 @@ func (self *XEth) NewLogFilter(earliest, latest int64, skip, max int, address []
 	self.logMu.Lock()
 	defer self.logMu.Unlock()
 
-	filter := filters.New(self.backend.ChainDb())
+	filter := filters.New(self.EthereumService().ChainDb())
 	id := self.filterManager.Add(filter)
 	self.logQueue[id] = &logQueue{timeout: time.Now()}
 
@@ -538,7 +563,7 @@ func (self *XEth) NewTransactionFilter() int {
 	self.transactionMu.Lock()
 	defer self.transactionMu.Unlock()
 
-	filter := filters.New(self.backend.ChainDb())
+	filter := filters.New(self.EthereumService().ChainDb())
 	id := self.filterManager.Add(filter)
 	self.transactionQueue[id] = &hashQueue{timeout: time.Now()}
 
@@ -557,7 +582,7 @@ func (self *XEth) NewBlockFilter() int {
 	self.blockMu.Lock()
 	defer self.blockMu.Unlock()
 
-	filter := filters.New(self.backend.ChainDb())
+	filter := filters.New(self.EthereumService().ChainDb())
 	id := self.filterManager.Add(filter)
 	self.blockQueue[id] = &hashQueue{timeout: time.Now()}
 
@@ -624,7 +649,7 @@ func (self *XEth) Logs(id int) vm.Logs {
 }
 
 func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []string, topics [][]string) vm.Logs {
-	filter := filters.New(self.backend.ChainDb())
+	filter := filters.New(self.EthereumService().ChainDb())
 	filter.SetBeginBlock(earliest)
 	filter.SetEndBlock(latest)
 	filter.SetAddresses(cAddress(address))
@@ -777,7 +802,7 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 		return "", err
 	}
 
-	err = self.backend.TxPool().Add(tx)
+	err = self.EthereumService().TxPool().Add(tx)
 	if err != nil {
 		return "", err
 	}
@@ -801,7 +826,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	statedb := self.State().State().Copy()
 	var from *state.StateObject
 	if len(fromStr) == 0 {
-		accounts, err := self.backend.AccountManager().Accounts()
+		accounts, err := self.EthereumService().AccountManager().Accounts()
 		if err != nil || len(accounts) == 0 {
 			from = statedb.GetOrNewStateObject(common.Address{})
 		} else {
@@ -834,7 +859,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	}
 
 	header := self.CurrentBlock().Header()
-	vmenv := core.NewEnv(statedb, self.backend.BlockChain(), msg, header)
+	vmenv := core.NewEnv(statedb, self.EthereumService().BlockChain(), msg, header)
 	gp := new(core.GasPool).AddGas(common.MaxBig)
 	res, gas, err := core.ApplyMessage(vmenv, msg, gp)
 	return common.ToHex(res), gas.String(), err
@@ -845,7 +870,7 @@ func (self *XEth) ConfirmTransaction(tx string) bool {
 }
 
 func (self *XEth) doSign(from common.Address, hash common.Hash, didUnlock bool) ([]byte, error) {
-	sig, err := self.backend.AccountManager().Sign(accounts.Account{Address: from}, hash.Bytes())
+	sig, err := self.EthereumService().AccountManager().Sign(accounts.Account{Address: from}, hash.Bytes())
 	if err == accounts.ErrLocked {
 		if didUnlock {
 			return nil, fmt.Errorf("signer account still locked after successful unlock")
@@ -917,7 +942,7 @@ func (self *XEth) SignTransaction(fromStr, toStr, nonceStr, valueStr, gasStr, ga
 	if len(nonceStr) != 0 {
 		nonce = common.Big(nonceStr).Uint64()
 	} else {
-		state := self.backend.TxPool().State()
+		state := self.EthereumService().TxPool().State()
 		nonce = state.GetNonce(from)
 	}
 	var tx *types.Transaction
@@ -1005,7 +1030,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	if len(nonceStr) != 0 {
 		nonce = common.Big(nonceStr).Uint64()
 	} else {
-		state := self.backend.TxPool().State()
+		state := self.EthereumService().TxPool().State()
 		nonce = state.GetNonce(from)
 	}
 	var tx *types.Transaction
@@ -1019,7 +1044,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	if err != nil {
 		return "", err
 	}
-	if err = self.backend.TxPool().Add(signed); err != nil {
+	if err = self.EthereumService().TxPool().Add(signed); err != nil {
 		return "", err
 	}
 
