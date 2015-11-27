@@ -456,7 +456,7 @@ func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, RPCErro
 					}
 				}
 			} else {
-				requests[i].err = &methodNotFoundError{subscribeMethod, r.method}
+				requests[i] = &serverRequest{id: r.id, err: &methodNotFoundError{subscribeMethod, r.method}}
 			}
 			continue
 		}
