@@ -25,7 +25,7 @@ import (
 
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/common/natspec"
-	"github.com/expanse-project/go-expanse/eth"
+	"github.com/expanse-project/go-expanse/exp"
 	"github.com/expanse-project/go-expanse/rlp"
 	"github.com/expanse-project/go-expanse/rpc/codec"
 	"github.com/expanse-project/go-expanse/rpc/shared"

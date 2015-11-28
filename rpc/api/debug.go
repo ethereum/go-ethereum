@@ -25,7 +25,7 @@ import (
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/eth"
+	"github.com/expanse-project/go-expanse/exp"
 	"github.com/expanse-project/go-expanse/rlp"
 	"github.com/expanse-project/go-expanse/rpc/codec"
 	"github.com/expanse-project/go-expanse/rpc/shared"
