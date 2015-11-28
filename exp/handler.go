@@ -27,13 +27,14 @@ import (
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/exp/downloader"
-	"github.com/expanse-project/go-expanse/exp/fetcher"
+	"github.com/expanse-project/go-expanse/eth/downloader"
+	"github.com/expanse-project/go-expanse/eth/fetcher"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/p2p"
+	"github.com/expanse-project/go-expanse/p2p/discover"
 	"github.com/expanse-project/go-expanse/pow"
 	"github.com/expanse-project/go-expanse/rlp"
 )
@@ -55,6 +56,8 @@ type hashFetcherFn func(common.Hash) error
 type blockFetcherFn func([]common.Hash) error
 
 type ProtocolManager struct {
+	networkId int
+
 	fastSync   bool
 	txpool     txPool
 	blockchain *core.BlockChain
@@ -91,6 +94,7 @@ func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool
 	}
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
+		networkId:  networkId,
 		fastSync:   fastSync,
 		eventMux:   mux,
 		txpool:     txpool,
@@ -112,13 +116,23 @@ func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool
 		// Compatible; initialise the sub-protocol
 		version := version // Closure for the run
 		manager.SubProtocols = append(manager.SubProtocols, p2p.Protocol{
-			Name:    "exp",
+
+			Name:    ProtocolName,
 			Version: version,
 			Length:  ProtocolLengths[i],
 			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-				peer := manager.newPeer(int(version), networkId, p, rw)
+				peer := manager.newPeer(int(version), p, rw)
 				manager.newPeerCh <- peer
 				return manager.handle(peer)
+			},
+			NodeInfo: func() interface{} {
+				return manager.NodeInfo()
+			},
+			PeerInfo: func(id discover.NodeID) interface{} {
+				if p := manager.peers.Peer(fmt.Sprintf("%x", id[:8])); p != nil {
+					return p.Info()
+				}
+				return nil
 			},
 		})
 	}
@@ -189,8 +203,8 @@ func (pm *ProtocolManager) Stop() {
 	glog.V(logger.Info).Infoln("Expanse protocol handler stopped")
 }
 
-func (pm *ProtocolManager) newPeer(pv, nv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
-	return newPeer(pv, nv, p, newMeteredMsgWriter(rw))
+func (pm *ProtocolManager) newPeer(pv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
+	return newPeer(pv, p, newMeteredMsgWriter(rw))
 }
 
 // handle is the callback invoked to manage the life cycle of an exp peer. When
@@ -200,7 +214,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 
 	// Execute the Expanse handshake
 	td, head, genesis := pm.blockchain.Status()
-	if err := p.Handshake(td, head, genesis); err != nil {
+	if err := p.Handshake(pm.networkId, td, head, genesis); err != nil {
 		glog.V(logger.Debug).Infof("%v: handshake failed: %v", p, err)
 		return err
 	}
@@ -729,5 +743,24 @@ func (self *ProtocolManager) txBroadcastLoop() {
 	for obj := range self.txSub.Chan() {
 		event := obj.Data.(core.TxPreEvent)
 		self.BroadcastTx(event.Tx.Hash(), event.Tx)
+	}
+}
+
+// EthNodeInfo represents a short summary of the Ethereum sub-protocol metadata known
+// about the host peer.
+type EthNodeInfo struct {
+	Network    int      `json:"network"`    // Ethereum network ID (0=Olympic, 1=Frontier, 2=Morden)
+	Difficulty *big.Int `json:"difficulty"` // Total difficulty of the host's blockchain
+	Genesis    string   `json:"genesis"`    // SHA3 hash of the host's genesis block
+	Head       string   `json:"head"`       // SHA3 hash of the host's best owned block
+}
+
+// NodeInfo retrieves some protocol metadata about the running host node.
+func (self *ProtocolManager) NodeInfo() *EthNodeInfo {
+	return &EthNodeInfo{
+		Network:    self.networkId,
+		Difficulty: self.blockchain.GetTd(self.blockchain.CurrentBlock().Hash()),
+		Genesis:    fmt.Sprintf("%x", self.blockchain.Genesis().Hash()),
+		Head:       fmt.Sprintf("%x", self.blockchain.CurrentBlock().Hash()),
 	}
 }

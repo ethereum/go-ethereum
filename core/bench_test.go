@@ -169,7 +169,6 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// State and blocks are stored in the same DB.
 	evmux := new(event.TypeMux)
 	chainman, _ := NewBlockChain(db, FakePow{}, evmux)
-	chainman.SetProcessor(NewBlockProcessor(db, FakePow{}, chainman, evmux))
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()

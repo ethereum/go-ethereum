@@ -1394,13 +1394,10 @@ func TestBlockFilterArgsDefaults(t *testing.T) {
 }
 
 func TestBlockFilterArgsWords(t *testing.T) {
-	input := `[{
-  "fromBlock": "latest",
-  "toBlock": "pending"
-  }]`
+	input := `[{"fromBlock": "latest", "toBlock": "latest"}]`
 	expected := new(BlockFilterArgs)
 	expected.Earliest = -1
-	expected.Latest = -2
+	expected.Latest = -1
 
 	args := new(BlockFilterArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -1411,8 +1408,9 @@ func TestBlockFilterArgsWords(t *testing.T) {
 		t.Errorf("Earliest shoud be %#v but is %#v", expected.Earliest, args.Earliest)
 	}
 
-	if expected.Latest != args.Latest {
-		t.Errorf("Latest shoud be %#v but is %#v", expected.Latest, args.Latest)
+	input = `[{"toBlock": "pending"}]`
+	if err := json.Unmarshal([]byte(input), &args); err == nil {
+		t.Errorf("Pending isn't currently supported and should raise an unsupported error")
 	}
 }
 

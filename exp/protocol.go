@@ -33,6 +33,9 @@ const (
 	eth63 = 63
 )
 
+// Official short name of the protocol used during capability negotiation.
+var ProtocolName = "eth"
+
 // Supported versions of the eth protocol (first is primary).
 var ProtocolVersions = []uint{eth63, eth62, eth61}
 
