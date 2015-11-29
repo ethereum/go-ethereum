@@ -121,7 +121,7 @@ var (
 		"exp_getData":                             (*ethApi).GetData,
 		"exp_getCode":                             (*ethApi).GetData,
 		"exp_sign":                                (*ethApi).Sign,
-		"exp_sendRawTransaction":                  (*ethApi).SendRawTransaction,
+		"exp_sendRawTransaction":                  (*ethApi).SendTransaction,
 		"exp_sendTransaction":                     (*ethApi).SendTransaction,
 		"exp_transact":                            (*ethApi).SendTransaction,
 		"exp_estimateGas":                         (*ethApi).EstimateGas,
