@@ -20,7 +20,7 @@ geth:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
-geth-cross: geth-linux geth-darwin geth-windows geth-android
+geth-cross: geth-linux geth-darwin geth-windows geth-android geth-ios
 	@echo "Full cross compilation done:"
 	@ls -l $(GOBIN)/geth-*
 
