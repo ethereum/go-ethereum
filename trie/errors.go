@@ -27,13 +27,23 @@ import (
 // information necessary for retrieving the missing node through an ODR service.
 //
 // NodeHash is the hash of the missing node
+//
 // RootHash is the original root of the trie that contains the node
-// KeyPrefix is the prefix that leads from the root to the missing node (hex encoded)
-// KeySuffix (optional) contains the rest of the key we were looking for, gives a
-//  hint on which further nodes should also be retrieved (hex encoded)
+//
+// Key is a binary-encoded key that contains the prefix that leads to the first
+// missing node and optionally a suffix that hints on which further nodes should
+// also be retrieved
+//
+// PrefixLen is the nibble length of the key prefix that leads from the root to
+// the missing node
+//
+// SuffixLen is the nibble length of the remaining part of the key that hints on
+// which further nodes should also be retrieved (can be zero when there are no
+// such hints in the error message)
 type MissingNodeError struct {
 	RootHash, NodeHash   common.Hash
-	KeyPrefix, KeySuffix []byte
+	Key                  []byte
+	PrefixLen, SuffixLen int
 }
 
 func (err *MissingNodeError) Error() string {
