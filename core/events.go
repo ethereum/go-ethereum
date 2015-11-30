@@ -39,6 +39,9 @@ type NewMinedBlockEvent struct{ Block *types.Block }
 // RemovedTransactionEvent is posted when a reorg happens
 type RemovedTransactionEvent struct{ Txs types.Transactions }
 
+// RemovedLogEvent is posted when a reorg happens
+type RemovedLogEvent struct{ Logs vm.Logs }
+
 // ChainSplit is posted when a new head is detected
 type ChainSplitEvent struct {
 	Block *types.Block
