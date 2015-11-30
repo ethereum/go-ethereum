@@ -245,7 +245,7 @@ func (self *jsre) batch(statement string) {
 func (self *jsre) welcome() {
 	self.re.Run(`
     (function () {
-      console.log('instance: ' + web3.version.client);
+      console.log('instance: ' + web3.version.node);
       console.log(' datadir: ' + admin.datadir);
       console.log("coinbase: " + eth.coinbase);
       var ts = 1000 * eth.getBlock(eth.blockNumber).timestamp;
