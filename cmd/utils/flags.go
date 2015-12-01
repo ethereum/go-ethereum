@@ -518,47 +518,41 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 
 // MakeAddress converts an account specified directly as a hex encoded string or
 // a key index in the key store to an internal account representation.
-func MakeAddress(accman *accounts.Manager, account string) common.Address {
+func MakeAddress(accman *accounts.Manager, account string) (a common.Address, err error) {
 	// If the specified account is a valid address, return it
 	if common.IsHexAddress(account) {
-		return common.HexToAddress(account)
+		return common.HexToAddress(account), nil
 	}
 	// Otherwise try to interpret the account as a keystore index
 	index, err := strconv.Atoi(account)
 	if err != nil {
-		Fatalf("Invalid account address or index: '%s'", account)
+		return a, fmt.Errorf("invalid account address or index %q", account)
 	}
 	hex, err := accman.AddressByIndex(index)
 	if err != nil {
-		Fatalf("Failed to retrieve requested account #%d: %v", index, err)
+		return a, fmt.Errorf("can't get account #%d (%v)", index, err)
 	}
-	return common.HexToAddress(hex)
+	return common.HexToAddress(hex), nil
 }
 
 // MakeEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
 func MakeEtherbase(accman *accounts.Manager, ctx *cli.Context) common.Address {
-	// If the specified etherbase is a valid address, return it
-	etherbase := ctx.GlobalString(EtherbaseFlag.Name)
-	if common.IsHexAddress(etherbase) {
-		return common.HexToAddress(etherbase)
-	}
-	// If no etherbase was specified and no accounts are known, bail out
 	accounts, _ := accman.Accounts()
-	if etherbase == "" && len(accounts) == 0 {
+	if !ctx.GlobalIsSet(EtherbaseFlag.Name) && len(accounts) == 0 {
 		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
 		return common.Address{}
 	}
-	// Otherwise try to interpret the parameter as a keystore index
-	index, err := strconv.Atoi(etherbase)
-	if err != nil {
-		Fatalf("Invalid account address or index: '%s'", etherbase)
+	etherbase := ctx.GlobalString(EtherbaseFlag.Name)
+	if etherbase == "" {
+		return common.Address{}
 	}
-	hex, err := accman.AddressByIndex(index)
+	// If the specified etherbase is a valid address, return it
+	addr, err := MakeAddress(accman, etherbase)
 	if err != nil {
-		Fatalf("Failed to set requested account #%d as etherbase: %v", index, err)
+		Fatalf("Option %q: %v", EtherbaseFlag.Name, err)
 	}
-	return common.HexToAddress(hex)
+	return addr
 }
 
 // MakeMinerExtra resolves extradata for the miner from the set command line flags
