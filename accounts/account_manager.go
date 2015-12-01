@@ -78,8 +78,8 @@ func (am *Manager) DeleteAccount(address common.Address, auth string) error {
 
 func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) {
 	am.mutex.RLock()
-	defer am.mutex.RUnlock()
 	unlockedKey, found := am.unlocked[a.Address]
+	am.mutex.RUnlock()
 	if !found {
 		return nil, ErrLocked
 	}
