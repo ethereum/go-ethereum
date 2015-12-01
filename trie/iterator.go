@@ -16,7 +16,12 @@
 
 package trie
 
-import "bytes"
+import (
+	"bytes"
+
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
+)
 
 type Iterator struct {
 	trie *Trie
@@ -100,7 +105,11 @@ func (self *Iterator) next(node interface{}, key []byte, isIterStart bool) []byt
 		}
 
 	case hashNode:
-		return self.next(self.trie.resolveHash(node), key, isIterStart)
+		rn, err := self.trie.resolveHash(node, nil, nil)
+		if err != nil && glog.V(logger.Error) {
+			glog.Errorf("Unhandled trie error: %v", err)
+		}
+		return self.next(rn, key, isIterStart)
 	}
 	return nil
 }
@@ -127,7 +136,11 @@ func (self *Iterator) key(node interface{}) []byte {
 			}
 		}
 	case hashNode:
-		return self.key(self.trie.resolveHash(node))
+		rn, err := self.trie.resolveHash(node, nil, nil)
+		if err != nil && glog.V(logger.Error) {
+			glog.Errorf("Unhandled trie error: %v", err)
+		}
+		return self.key(rn)
 	}
 
 	return nil
