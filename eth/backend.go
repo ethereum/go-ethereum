@@ -191,7 +191,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		shutdownChan:            make(chan bool),
 		chainDb:                 chainDb,
 		dappDb:                  dappDb,
-		eventMux:                &event.TypeMux{},
+		eventMux:                ctx.EventMux,
 		accountManager:          config.AccountManager,
 		etherbase:               config.Etherbase,
 		netVersionId:            config.NetworkId,
