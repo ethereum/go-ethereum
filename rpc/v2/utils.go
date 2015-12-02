@@ -190,7 +190,6 @@ METHODS:
 		default:
 			continue METHODS
 		}
-
 		callbacks[mname] = &h
 	}
 

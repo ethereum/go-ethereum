@@ -23,7 +23,6 @@ import (
 	"log"
 	"math"
 	"math/big"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -40,25 +39,18 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/rpc/useragent"
-	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 	"github.com/ethereum/go-ethereum/whisper"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -302,8 +294,8 @@ var (
 	}
 	IPCPathFlag = DirectoryFlag{
 		Name:  "ipcpath",
-		Usage: "Filename for IPC socket/pipe",
-		Value: DirectoryString{common.DefaultIpcPath()},
+		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
+		Value: DirectoryString{"geth.ipc"},
 	}
 	IPCExperimental = cli.BoolFlag{
 		Name:  "ipcexp",
@@ -412,6 +404,15 @@ func MustMakeDataDir(ctx *cli.Context) string {
 	}
 	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
 	return ""
+}
+
+// MakeIpcPath creates an IPC path configuration from the set command line flags,
+// returning an empty string if IPC was explicitly disabled, or the set path.
+func MakeIpcPath(ctx *cli.Context) string {
+	if ctx.GlobalBool(IPCDisabledFlag.Name) {
+		return ""
+	}
+	return ctx.GlobalString(IPCPathFlag.Name)
 }
 
 // MakeNodeKey creates a node key from set command line flags, either loading it
@@ -602,6 +603,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 	// Configure the node's service container
 	stackConf := &node.Config{
 		DataDir:         MustMakeDataDir(ctx),
+		IpcPath:         MakeIpcPath(ctx),
 		PrivateKey:      MakeNodeKey(ctx),
 		Name:            MakeNodeName(name, version, ctx),
 		NoDiscovery:     ctx.GlobalBool(NoDiscoverFlag.Name),
@@ -761,84 +763,6 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 	}
 
 	return chain, chainDb
-}
-
-func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
-	if runtime.GOOS == "windows" {
-		ipcpath = common.DefaultIpcPath()
-		if ctx.GlobalIsSet(IPCPathFlag.Name) {
-			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
-		}
-	} else {
-		ipcpath = common.DefaultIpcPath()
-		if ctx.GlobalIsSet(DataDirFlag.Name) {
-			ipcpath = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "geth.ipc")
-		}
-		if ctx.GlobalIsSet(IPCPathFlag.Name) {
-			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
-		}
-	}
-
-	return
-}
-
-func StartIPC(stack *node.Node, ctx *cli.Context) error {
-	var ethereum *eth.Ethereum
-	if err := stack.Service(&ethereum); err != nil {
-		return err
-	}
-	var shh *whisper.Whisper
-	if err := stack.Service(&shh); err != nil {
-		return err
-	}
-	config := comms.IpcConfig{
-		Endpoint: IpcSocketPath(ctx),
-	}
-	if ctx.GlobalIsSet(IPCExperimental.Name) {
-		listener, err := comms.CreateListener(config)
-		if err != nil {
-			return err
-		}
-		server := rpc.NewServer()
-
-		server.RegisterName("eth", accounts.NewAccountService(ethereum.AccountManager()))
-		server.RegisterName("eth", core.NewBlockChainService(ethereum.BlockChain(), ethereum.AccountManager()))
-		server.RegisterName("eth", core.NewTransactionPoolService(ethereum.TxPool(), ethereum.ChainDb(), ethereum.BlockChain(), ethereum.AccountManager()))
-		server.RegisterName("eth", miner.NewMinerService(ethereum.Miner()))
-		server.RegisterName("eth", eth.NewEthService(ethereum))
-		server.RegisterName("eth", downloader.NewDownloaderService(ethereum.Downloader()))
-		server.RegisterName("eth", filters.NewFilterService(ethereum.ChainDb(), ethereum.EventMux()))
-		server.RegisterName("net", p2p.NewNetService(stack.Server(), ethereum.NetVersion()))
-		server.RegisterName("web3", eth.NewWeb3Service(stack))
-		server.RegisterName("personal", accounts.NewPersonalService(ethereum.AccountManager()))
-		server.RegisterName("shh", whisper.NewWhisperService(shh))
-
-		go func() {
-			glog.Infof("IPC Service endpoint(%s)\n", config.Endpoint)
-			for {
-				conn, err := listener.Accept()
-				if err != nil {
-					glog.Errorf("%v\n", err)
-					continue
-				}
-				codec := rpc.NewJSONCodec(conn)
-				go server.ServeCodec(codec)
-			}
-		}()
-
-		return nil
-	}
-
-	initializer := func(conn net.Conn) (comms.Stopper, shared.EthereumApi, error) {
-		fe := useragent.NewRemoteFrontend(conn, ethereum.AccountManager())
-		xeth := xeth.New(stack, fe)
-		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec.JSON, xeth, stack)
-		if err != nil {
-			return nil, nil, err
-		}
-		return xeth, api.Merge(apis...), nil
-	}
-	return comms.StartIpc(config, codec.JSON, initializer)
 }
 
 // StartRPC starts a HTTP JSON-RPC API server.

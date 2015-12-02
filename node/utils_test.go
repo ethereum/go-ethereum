@@ -23,12 +23,14 @@ import (
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 )
 
 // NoopService is a trivial implementation of the Service interface.
 type NoopService struct{}
 
 func (s *NoopService) Protocols() []p2p.Protocol { return nil }
+func (s *NoopService) Apis() (string, []rpc.Api) { return "", nil }
 func (s *NoopService) Start(*p2p.Server) error   { return nil }
 func (s *NoopService) Stop() error               { return nil }
 
@@ -49,11 +51,14 @@ func NewNoopServiceD(*ServiceContext) (Service, error) { return new(NoopServiceD
 // InstrumentedService is an implementation of Service for which all interface
 // methods can be instrumented both return value as well as event hook wise.
 type InstrumentedService struct {
-	protocols []p2p.Protocol
-	start     error
-	stop      error
+	protocols    []p2p.Protocol
+	apiNamespace string
+	apiHandlers  []rpc.Api
+	start        error
+	stop         error
 
 	protocolsHook func()
+	apisHook      func()
 	startHook     func(*p2p.Server)
 	stopHook      func()
 }
@@ -65,6 +70,13 @@ func (s *InstrumentedService) Protocols() []p2p.Protocol {
 		s.protocolsHook()
 	}
 	return s.protocols
+}
+
+func (s *InstrumentedService) Apis() (string, []rpc.Api) {
+	if s.apisHook != nil {
+		s.apisHook()
+	}
+	return s.apiNamespace, s.apiHandlers
 }
 
 func (s *InstrumentedService) Start(server *p2p.Server) error {
@@ -114,4 +126,15 @@ func InstrumentedServiceMakerB(base ServiceConstructor) ServiceConstructor {
 
 func InstrumentedServiceMakerC(base ServiceConstructor) ServiceConstructor {
 	return InstrumentingWrapperMaker(base, reflect.TypeOf(InstrumentedServiceC{}))
+}
+
+// OneMethodApi is a single-method API handler to be returned by test services.
+type OneMethodApi struct {
+	fun func()
+}
+
+func (api *OneMethodApi) TheOneMethod() {
+	if api.fun != nil {
+		api.fun()
+	}
 }

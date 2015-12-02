@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 )
 
 const (
@@ -280,6 +281,12 @@ func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManage
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
 	return s.protocolManager.SubProtocols
+}
+
+// Apis implements node.Servie, returning all the API handlers the service wants
+// to expose.
+func (s *Ethereum) Apis() (string, []rpc.Api) {
+	return "ethereum", []rpc.Api{}
 }
 
 // Start implements node.Service, starting all internal goroutines needed by the
