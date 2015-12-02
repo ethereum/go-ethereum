@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 )
 
-const TestCount = 10000
+const TestCount = 1000
 
 func TestPrivkeyGenerate(t *testing.T) {
 	_, seckey := GenerateKeyPair()
@@ -86,10 +86,7 @@ func TestSignAndRecover(t *testing.T) {
 func TestRandomMessagesWithSameKey(t *testing.T) {
 	pubkey, seckey := GenerateKeyPair()
 	keys := func() ([]byte, []byte) {
-		// Sign function zeroes the privkey so we need a new one in each call
-		newkey := make([]byte, len(seckey))
-		copy(newkey, seckey)
-		return pubkey, newkey
+		return pubkey, seckey
 	}
 	signAndRecoverWithRandomMessages(t, keys)
 }
@@ -209,30 +206,32 @@ func compactSigCheck(t *testing.T, sig []byte) {
 	}
 }
 
-// godep go test -v -run=XXX -bench=BenchmarkSignRandomInputEachRound
+// godep go test -v -run=XXX -bench=BenchmarkSign
 // add -benchtime=10s to benchmark longer for more accurate average
-func BenchmarkSignRandomInputEachRound(b *testing.B) {
+
+// to avoid compiler optimizing the benchmarked function call
+var err error
+
+func BenchmarkSign(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
 		_, seckey := GenerateKeyPair()
 		msg := randentropy.GetEntropyCSPRNG(32)
 		b.StartTimer()
-		if _, err := Sign(msg, seckey); err != nil {
-			b.Fatal(err)
-		}
+		_, e := Sign(msg, seckey)
+		err = e
+		b.StopTimer()
 	}
 }
 
-//godep go test -v -run=XXX -bench=BenchmarkRecoverRandomInputEachRound
-func BenchmarkRecoverRandomInputEachRound(b *testing.B) {
+//godep go test -v -run=XXX -bench=BenchmarkECRec
+func BenchmarkRecover(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
 		_, seckey := GenerateKeyPair()
 		msg := randentropy.GetEntropyCSPRNG(32)
 		sig, _ := Sign(msg, seckey)
 		b.StartTimer()
-		if _, err := RecoverPubkey(msg, sig); err != nil {
-			b.Fatal(err)
-		}
+		_, e := RecoverPubkey(msg, sig)
+		err = e
+		b.StopTimer()
 	}
 }

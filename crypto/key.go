@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/pborman/uuid"
 )
 
@@ -137,7 +138,7 @@ func NewKey(rand io.Reader) *Key {
 		panic("key generation: could not read from random source: " + err.Error())
 	}
 	reader := bytes.NewReader(randBytes)
-	privateKeyECDSA, err := ecdsa.GenerateKey(S256(), reader)
+	privateKeyECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), reader)
 	if err != nil {
 		panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
 	}
@@ -155,7 +156,7 @@ func NewKeyForDirectICAP(rand io.Reader) *Key {
 		panic("key generation: could not read from random source: " + err.Error())
 	}
 	reader := bytes.NewReader(randBytes)
-	privateKeyECDSA, err := ecdsa.GenerateKey(S256(), reader)
+	privateKeyECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), reader)
 	if err != nil {
 		panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
 	}

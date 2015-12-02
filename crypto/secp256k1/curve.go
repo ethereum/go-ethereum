@@ -29,14 +29,21 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-package crypto
+package secp256k1
 
 import (
 	"crypto/elliptic"
 	"io"
 	"math/big"
 	"sync"
+	"unsafe"
 )
+
+/*
+#include "libsecp256k1/include/secp256k1.h"
+extern int secp256k1_pubkey_scalar_mul(const secp256k1_context* ctx, const unsigned char *point, const unsigned char *scalar);
+*/
+import "C"
 
 // This code is from https://github.com/ThePiachu/GoBit and implements
 // several Koblitz elliptic curves over prime fields.
@@ -211,44 +218,37 @@ func (BitCurve *BitCurve) doubleJacobian(x, y, z *big.Int) (*big.Int, *big.Int, 
 	return x3, y3, z3
 }
 
-//TODO: double check if it is okay
-// ScalarMult returns k*(Bx,By) where k is a number in big-endian form.
-func (BitCurve *BitCurve) ScalarMult(Bx, By *big.Int, k []byte) (*big.Int, *big.Int) {
-	// We have a slight problem in that the identity of the group (the
-	// point at infinity) cannot be represented in (x, y) form on a finite
-	// machine. Thus the standard add/double algorithm has to be tweaked
-	// slightly: our initial state is not the identity, but x, and we
-	// ignore the first true bit in |k|.  If we don't find any true bits in
-	// |k|, then we return nil, nil, because we cannot return the identity
-	// element.
-
-	Bz := new(big.Int).SetInt64(1)
-	x := Bx
-	y := By
-	z := Bz
-
-	seenFirstTrue := false
-	for _, byte := range k {
-		for bitNum := 0; bitNum < 8; bitNum++ {
-			if seenFirstTrue {
-				x, y, z = BitCurve.doubleJacobian(x, y, z)
-			}
-			if byte&0x80 == 0x80 {
-				if !seenFirstTrue {
-					seenFirstTrue = true
-				} else {
-					x, y, z = BitCurve.addJacobian(Bx, By, Bz, x, y, z)
-				}
-			}
-			byte <<= 1
-		}
+func (BitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, *big.Int) {
+	// Ensure scalar is exactly 32 bytes. We pad always, even if
+	// scalar is 32 bytes long, to avoid a timing side channel.
+	if len(scalar) > 32 {
+		panic("can't handle scalars > 256 bits")
 	}
+	padded := make([]byte, 32)
+	copy(padded[32-len(scalar):], scalar)
+	scalar = padded
 
-	if !seenFirstTrue {
+	// Do the multiplication in C, updating point.
+	point := make([]byte, 64)
+	readBits(point[:32], Bx)
+	readBits(point[32:], By)
+	pointPtr := (*C.uchar)(unsafe.Pointer(&point[0]))
+	scalarPtr := (*C.uchar)(unsafe.Pointer(&scalar[0]))
+	res := C.secp256k1_pubkey_scalar_mul(context, pointPtr, scalarPtr)
+
+	// Unpack the result and clear temporaries.
+	x := new(big.Int).SetBytes(point[:32])
+	y := new(big.Int).SetBytes(point[32:])
+	for i := range point {
+		point[i] = 0
+	}
+	for i := range padded {
+		scalar[i] = 0
+	}
+	if res != 1 {
 		return nil, nil
 	}
-
-	return BitCurve.affineFromJacobian(x, y, z)
+	return x, y
 }
 
 // ScalarBaseMult returns k*G, where G is the base point of the group and k is
@@ -312,86 +312,24 @@ func (BitCurve *BitCurve) Unmarshal(data []byte) (x, y *big.Int) {
 	return
 }
 
-//curve parameters taken from:
-//http://www.secg.org/collateral/sec2_final.pdf
-
-var initonce sync.Once
-var ecp160k1 *BitCurve
-var ecp192k1 *BitCurve
-var ecp224k1 *BitCurve
-var ecp256k1 *BitCurve
-
-func initAll() {
-	initS160()
-	initS192()
-	initS224()
-	initS256()
-}
-
-func initS160() {
-	// See SEC 2 section 2.4.1
-	ecp160k1 = new(BitCurve)
-	ecp160k1.P, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFAC73", 16)
-	ecp160k1.N, _ = new(big.Int).SetString("0100000000000000000001B8FA16DFAB9ACA16B6B3", 16)
-	ecp160k1.B, _ = new(big.Int).SetString("0000000000000000000000000000000000000007", 16)
-	ecp160k1.Gx, _ = new(big.Int).SetString("3B4C382CE37AA192A4019E763036F4F5DD4D7EBB", 16)
-	ecp160k1.Gy, _ = new(big.Int).SetString("938CF935318FDCED6BC28286531733C3F03C4FEE", 16)
-	ecp160k1.BitSize = 160
-}
-
-func initS192() {
-	// See SEC 2 section 2.5.1
-	ecp192k1 = new(BitCurve)
-	ecp192k1.P, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFEE37", 16)
-	ecp192k1.N, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFE26F2FC170F69466A74DEFD8D", 16)
-	ecp192k1.B, _ = new(big.Int).SetString("000000000000000000000000000000000000000000000003", 16)
-	ecp192k1.Gx, _ = new(big.Int).SetString("DB4FF10EC057E9AE26B07D0280B7F4341DA5D1B1EAE06C7D", 16)
-	ecp192k1.Gy, _ = new(big.Int).SetString("9B2F2F6D9C5628A7844163D015BE86344082AA88D95E2F9D", 16)
-	ecp192k1.BitSize = 192
-}
-
-func initS224() {
-	// See SEC 2 section 2.6.1
-	ecp224k1 = new(BitCurve)
-	ecp224k1.P, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFE56D", 16)
-	ecp224k1.N, _ = new(big.Int).SetString("010000000000000000000000000001DCE8D2EC6184CAF0A971769FB1F7", 16)
-	ecp224k1.B, _ = new(big.Int).SetString("00000000000000000000000000000000000000000000000000000005", 16)
-	ecp224k1.Gx, _ = new(big.Int).SetString("A1455B334DF099DF30FC28A169A467E9E47075A90F7E650EB6B7A45C", 16)
-	ecp224k1.Gy, _ = new(big.Int).SetString("7E089FED7FBA344282CAFBD6F7E319F7C0B0BD59E2CA4BDB556D61A5", 16)
-	ecp224k1.BitSize = 224
-}
-
-func initS256() {
-	// See SEC 2 section 2.7.1
-	ecp256k1 = new(BitCurve)
-	ecp256k1.P, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F", 16)
-	ecp256k1.N, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16)
-	ecp256k1.B, _ = new(big.Int).SetString("0000000000000000000000000000000000000000000000000000000000000007", 16)
-	ecp256k1.Gx, _ = new(big.Int).SetString("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798", 16)
-	ecp256k1.Gy, _ = new(big.Int).SetString("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8", 16)
-	ecp256k1.BitSize = 256
-}
-
-// S160 returns a BitCurve which implements secp160k1 (see SEC 2 section 2.4.1)
-func S160() *BitCurve {
-	initonce.Do(initAll)
-	return ecp160k1
-}
-
-// S192 returns a BitCurve which implements secp192k1 (see SEC 2 section 2.5.1)
-func S192() *BitCurve {
-	initonce.Do(initAll)
-	return ecp192k1
-}
-
-// S224 returns a BitCurve which implements secp224k1 (see SEC 2 section 2.6.1)
-func S224() *BitCurve {
-	initonce.Do(initAll)
-	return ecp224k1
-}
+var (
+	initonce sync.Once
+	theCurve *BitCurve
+)
 
 // S256 returns a BitCurve which implements secp256k1 (see SEC 2 section 2.7.1)
 func S256() *BitCurve {
-	initonce.Do(initAll)
-	return ecp256k1
+	initonce.Do(func() {
+		// See SEC 2 section 2.7.1
+		// curve parameters taken from:
+		// http://www.secg.org/collateral/sec2_final.pdf
+		theCurve = new(BitCurve)
+		theCurve.P, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F", 16)
+		theCurve.N, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16)
+		theCurve.B, _ = new(big.Int).SetString("0000000000000000000000000000000000000000000000000000000000000007", 16)
+		theCurve.Gx, _ = new(big.Int).SetString("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798", 16)
+		theCurve.Gy, _ = new(big.Int).SetString("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8", 16)
+		theCurve.BitSize = 256
+	})
+	return theCurve
 }
