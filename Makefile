@@ -3,7 +3,8 @@
 # don't need to bother with make.
 
 .PHONY: geth geth-cross evm all test travis-test-with-coverage xgo clean
-.PHONY: geth-linux geth-linux-arm geth-linux-arm-5 geth-linux-arm-6 geth-linux-arm-7 geth-linux-386 geth-linux-amd64
+.PHONY: geth-linux geth-linux-386 geth-linux-amd64
+.PHONY: geth-linux-arm geth-linux-arm-5 geth-linux-arm-6 geth-linux-arm-7 geth-linux-arm64
 .PHONY: geth-darwin geth-darwin-386 geth-darwin-amd64
 .PHONY: geth-windows geth-windows-386 geth-windows-amd64
 .PHONY: geth-android geth-ios
@@ -37,7 +38,7 @@ geth-linux-amd64: xgo
 	@echo "Linux amd64 cross compilation done:"
 	@ls -l $(GOBIN)/geth-linux-* | grep amd64
 
-geth-linux-arm: geth-linux-arm-5 geth-linux-arm-6 geth-linux-arm-7
+geth-linux-arm: geth-linux-arm-5 geth-linux-arm-6 geth-linux-arm-7 geth-linux-arm64
 	@echo "Linux ARM cross compilation done:"
 	@ls -l $(GOBIN)/geth-linux-* | grep arm
 
@@ -55,6 +56,11 @@ geth-linux-arm-7: xgo
 	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --deps=$(CROSSDEPS) --targets=linux/arm-7 -v $(shell build/flags.sh) ./cmd/geth
 	@echo "Linux ARMv7 cross compilation done:"
 	@ls -l $(GOBIN)/geth-linux-* | grep arm-7
+
+geth-linux-arm64: xgo
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --deps=$(CROSSDEPS) --targets=linux/arm64 -v $(shell build/flags.sh) ./cmd/geth
+	@echo "Linux ARM64 cross compilation done:"
+	@ls -l $(GOBIN)/geth-linux-* | grep arm64
 
 geth-darwin: geth-darwin-386 geth-darwin-amd64
 	@echo "Darwin cross compilation done:"
