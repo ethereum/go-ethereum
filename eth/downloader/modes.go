@@ -23,4 +23,26 @@ const (
 	FullSync  SyncMode = iota // Synchronise the entire blockchain history from full blocks
 	FastSync                  // Quickly download the headers, full sync only at the chain head
 	LightSync                 // Download only the headers and terminate afterwards
+	AdminApiName    = "admin"
+	BzzApiName      = "bzz"
+	EthApiName      = "eth"
+	DbApiName       = "db"
+	DebugApiName    = "debug"
+	MergedApiName   = "merged"
+	MinerApiName    = "miner"
+	NetApiName      = "net"
+	ShhApiName      = "shh"
+	TxPoolApiName   = "txpool"
+	PersonalApiName = "personal"
+	Web3ApiName     = "web3"
+
+	JsonRpcVersion = "2.0"
+)
+
+var (
+	// All API's
+	AllApis = strings.Join([]string{
+		AdminApiName, BzzApiName, DbApiName, EthApiName, DebugApiName, MinerApiName, NetApiName,
+		ShhApiName, TxPoolApiName, PersonalApiName, Web3ApiName,
+	}, ",")
 )

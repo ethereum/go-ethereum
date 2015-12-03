@@ -161,6 +161,16 @@ func (am *Manager) SignWithPassphrase(addr common.Address, passphrase string, ha
 	return crypto.Sign(hash, key.PrivateKey)
 }
 
+func (am *Manager) GetUnlocked(addr common.Address) (prvkey *ecdsa.PrivateKey, err error) {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+	unlockedKey, found := am.unlocked[addr]
+	if !found {
+		return nil, ErrLocked
+	}
+	return unlockedKey.PrivateKey, nil
+}
+
 // Unlock unlocks the given account indefinitely.
 func (am *Manager) Unlock(a Account, passphrase string) error {
 	return am.TimedUnlock(a, passphrase, 0)

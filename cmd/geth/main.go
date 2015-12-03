@@ -4,7 +4,7 @@
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// (at your option) any later	 version.
 //
 // go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -190,6 +190,9 @@ participating.
 		utils.ExecFlag,
 		utils.PreloadJSFlag,
 		utils.WhisperEnabledFlag,
+		utils.SwarmConfigPathFlag,
+		utils.SwarmAccountAddrFlag,
+		utils.ChequebookAddrFlag,
 		utils.DevModeFlag,
 		utils.TestNetFlag,
 		utils.VMForceJitFlag,
@@ -306,8 +309,9 @@ func initGenesis(ctx *cli.Context) error {
 	return nil
 }
 
-// startNode boots up the system node and all registered protocols, after which
-// it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
+// startNode unlocks any requested accounts the boots up the system node
+// starts all registered protocols and
+// starts the RPC/IPC interfaces and the
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node) {
 	// Start up the node itself
