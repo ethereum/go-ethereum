@@ -963,3 +963,46 @@ func TestChainTxReorgs(t *testing.T) {
 		}
 	}
 }
+
+func TestLogReorgs(t *testing.T) {
+	params.MinGasLimit = big.NewInt(125000)      // Minimum the gas limit may ever be.
+	params.GenesisGasLimit = big.NewInt(3141592) // Gas limit of the Genesis block.
+
+	var (
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		db, _   = ethdb.NewMemDatabase()
+		// this code generates a log
+		code = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
+	)
+	genesis := WriteGenesisBlockForTesting(db,
+		GenesisAccount{addr1, big.NewInt(10000000000000)},
+	)
+
+	evmux := &event.TypeMux{}
+	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
+
+	subs := evmux.Subscribe(RemovedLogEvent{})
+	chain, _ := GenerateChain(genesis, db, 2, func(i int, gen *BlockGen) {
+		if i == 1 {
+			tx, err := types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), big.NewInt(1000000), new(big.Int), code).SignECDSA(key1)
+			if err != nil {
+				t.Fatalf("failed to create tx: %v", err)
+			}
+			gen.AddTx(tx)
+		}
+	})
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+
+	chain, _ = GenerateChain(genesis, db, 3, func(i int, gen *BlockGen) {})
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatalf("failed to insert forked chain: %v", err)
+	}
+
+	ev := <-subs.Chan()
+	if len(ev.Data.(RemovedLogEvent).Logs) == 0 {
+		t.Error("expected logs")
+	}
+}

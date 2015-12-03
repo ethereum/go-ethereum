@@ -90,6 +90,7 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
+	b.statedb.StartRecord(tx.Hash(), common.Hash{}, len(b.txs))
 	_, gas, err := ApplyMessage(NewEnv(b.statedb, nil, tx, b.header), tx, b.gasPool)
 	if err != nil {
 		panic(err)
@@ -97,8 +98,7 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	root := b.statedb.IntermediateRoot()
 	b.header.GasUsed.Add(b.header.GasUsed, gas)
 	receipt := types.NewReceipt(root.Bytes(), b.header.GasUsed)
-	logs := b.statedb.GetLogs(tx.Hash())
-	receipt.Logs = logs
+	receipt.Logs = b.statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
