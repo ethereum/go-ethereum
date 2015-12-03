@@ -68,7 +68,7 @@ func TestTimedUnlock(t *testing.T) {
 	}
 
 	// Signing fails again after automatic locking
-	time.Sleep(150 * time.Millisecond)
+	time.Sleep(350 * time.Millisecond)
 	_, err = am.Sign(a1, testSigData)
 	if err != ErrLocked {
 		t.Fatal("Signing should've failed with ErrLocked timeout expired, got ", err)

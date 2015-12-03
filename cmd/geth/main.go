@@ -464,9 +464,12 @@ func execScripts(ctx *cli.Context) {
 	node.Stop()
 }
 
+// tries unlocking the specified account a few times.
 func unlockAccount(ctx *cli.Context, accman *accounts.Manager, address string, i int, passwords []string) (common.Address, string) {
-	// Try to unlock the specified account a few times
-	account := utils.MakeAddress(accman, address)
+	account, err := utils.MakeAddress(accman, address)
+	if err != nil {
+		utils.Fatalf("Unlock error: %v", err)
+	}
 
 	for trials := 0; trials < 3; trials++ {
 		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)

@@ -64,8 +64,81 @@ func TestMissingRoot(t *testing.T) {
 	if trie != nil {
 		t.Error("New returned non-nil trie for invalid root")
 	}
-	if err != ErrMissingRoot {
+	if _, ok := err.(*MissingNodeError); !ok {
 		t.Error("New returned wrong error: %v", err)
+	}
+}
+
+func TestMissingNode(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	trie, _ := New(common.Hash{}, db)
+	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
+	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
+	root, _ := trie.Commit()
+
+	ClearGlobalCache()
+
+	trie, _ = New(root, db)
+	_, err := trie.TryGet([]byte("120000"))
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	trie, _ = New(root, db)
+	_, err = trie.TryGet([]byte("120099"))
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	trie, _ = New(root, db)
+	_, err = trie.TryGet([]byte("123456"))
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	trie, _ = New(root, db)
+	err = trie.TryUpdate([]byte("120099"), []byte("zxcvzxcvzxcvzxcvzxcvzxcvzxcvzxcv"))
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	trie, _ = New(root, db)
+	err = trie.TryDelete([]byte("123456"))
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	db.Delete(common.FromHex("e1d943cc8f061a0c0b98162830b970395ac9315654824bf21b73b891365262f9"))
+	ClearGlobalCache()
+
+	trie, _ = New(root, db)
+	_, err = trie.TryGet([]byte("120000"))
+	if _, ok := err.(*MissingNodeError); !ok {
+		t.Errorf("Wrong error: %v", err)
+	}
+
+	trie, _ = New(root, db)
+	_, err = trie.TryGet([]byte("120099"))
+	if _, ok := err.(*MissingNodeError); !ok {
+		t.Errorf("Wrong error: %v", err)
+	}
+
+	trie, _ = New(root, db)
+	_, err = trie.TryGet([]byte("123456"))
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	trie, _ = New(root, db)
+	err = trie.TryUpdate([]byte("120099"), []byte("zxcv"))
+	if _, ok := err.(*MissingNodeError); !ok {
+		t.Errorf("Wrong error: %v", err)
+	}
+
+	trie, _ = New(root, db)
+	err = trie.TryDelete([]byte("123456"))
+	if _, ok := err.(*MissingNodeError); !ok {
+		t.Errorf("Wrong error: %v", err)
 	}
 }
 
