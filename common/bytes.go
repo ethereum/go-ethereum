@@ -23,12 +23,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"regexp"
 	"strings"
-)
-
-var (
-	hexRe = regexp.MustCompile("^(0x)?([a-fA-f0-9]{2})+$")
 )
 
 func ToHex(b []byte) string {
@@ -144,14 +139,8 @@ func HasHexPrefix(str string) bool {
 }
 
 func IsHex(str string) bool {
-	return hexRe.MatchString(str)
-}
-
-func NormaliseHex(str string) (string, bool) {
-	if HasHexPrefix(str) {
-		str = str[2:]
-	}
-	return str, IsHex(str)
+	l := len(str)
+	return l >= 4 && l%2 == 0 && str[0:2] == "0x"
 }
 
 func Bytes2Hex(d []byte) string {
@@ -213,8 +202,8 @@ func ParseData(data ...interface{}) (ret []byte) {
 		switch t := item.(type) {
 		case string:
 			var str []byte
-			if n, ok := NormaliseHex(t); ok {
-				str = Hex2Bytes(n)
+			if IsHex(t) {
+				str = Hex2Bytes(t[2:])
 			} else {
 				str = []byte(t)
 			}

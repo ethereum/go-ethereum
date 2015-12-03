@@ -91,7 +91,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *node.Node) {
 	return testREPL(t, nil)
 }
 
-func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *node.Node) {
+func testREPL(t *testing.T, config func(*node.Node)) (string, *testjethre, *node.Node) {
 	tmp, err := ioutil.TempDir("", "geth-test")
 	if err != nil {
 		t.Fatal(err)
@@ -107,16 +107,15 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 
 	db, _ := ethdb.NewMemDatabase()
 	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{common.HexToAddress(testAddress), common.String2Big(testBalance)})
+	coinbase := common.HexToAddress(testAddress)
 
 	ethConf := &eth.Config{
 		TestGenesisState: db,
 		AccountManager:   accman,
 		DocRoot:          "/",
 		SolcPath:         testSolcPath,
+		Etherbase:        coinbase,
 		PowTest:          true,
-	}
-	if config != nil {
-		config(ethConf)
 	}
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
 		t.Fatalf("failed to register ethereum protocol: %v", err)
@@ -133,6 +132,12 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 	if err := accman.Unlock(key.Address, ""); err != nil {
 		t.Fatal(err)
 	}
+
+	// tests can register services here
+	if config != nil {
+		config(stack)
+	}
+
 	// Start the node and assemble the REPL tester
 	if err := stack.Start(); err != nil {
 		t.Fatalf("failed to start test stack: %v", err)
@@ -267,10 +272,7 @@ func TestSignature(t *testing.T) {
 func TestContract(t *testing.T) {
 	t.Skip("contract testing is implemented with mining in ethash test mode. This takes about 7seconds to run. Unskip and run on demand")
 	coinbase := common.HexToAddress(testAddress)
-	tmp, repl, ethereum := testREPL(t, func(conf *eth.Config) {
-		conf.Etherbase = coinbase
-		conf.PowTest = true
-	})
+	tmp, repl, ethereum := testREPL(t, nil)
 	if err := ethereum.Start(); err != nil {
 		t.Errorf("error starting ethereum: %v", err)
 		return

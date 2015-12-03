@@ -54,7 +54,27 @@ var (
 			"startRPC",
 			"stopNatSpec",
 			"stopRPC",
+			"setGlobalRegistrar",
+			"setHashReg",
+			"setUrlHint",
+			"saveInfo",
+			"getContractInfo",
+			"sleep",
+			"httpGet",
 			"verbosity",
+		},
+		"bzz": []string{
+			"info",
+			"issue",
+			"cash",
+			"deposit",
+			"register",
+			"resolve",
+			"download",
+			"upload",
+			"get",
+			"put",
+			"modify",
 		},
 		"db": []string{
 			"getString",
@@ -102,7 +122,7 @@ var (
 			"hashrate",
 			"mining",
 			"namereg",
-			"pendingTransactions",
+			"getPendingTransactions",
 			"resend",
 			"sendRawTransaction",
 			"sendTransaction",
@@ -116,6 +136,7 @@ var (
 			"setExtra",
 			"setGasPrice",
 			"startAutoDAG",
+			"setEtherbase",
 			"start",
 			"stopAutoDAG",
 			"stop",
@@ -173,6 +194,8 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, stack *no
 		switch strings.ToLower(strings.TrimSpace(name)) {
 		case shared.AdminApiName:
 			apis[i] = NewAdminApi(xeth, stack, codec)
+		case shared.BzzApiName:
+			apis[i] = NewBzzApi(stack, codec)
 		case shared.DebugApiName:
 			apis[i] = NewDebugApi(xeth, eth, codec)
 		case shared.DbApiName:
@@ -202,6 +225,8 @@ func Javascript(name string) string {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case shared.AdminApiName:
 		return Admin_JS
+	case shared.BzzApiName:
+		return Bzz_JS
 	case shared.DebugApiName:
 		return Debug_JS
 	case shared.DbApiName:
