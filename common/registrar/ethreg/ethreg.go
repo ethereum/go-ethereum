@@ -20,18 +20,22 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/registrar"
-	"github.com/ethereum/go-ethereum/xeth"
 )
+
+type Backend interface {
+	registrar.Backend
+	AtStateNum(int64) registrar.Backend
+}
 
 // implements a versioned Registrar on an archiving full node
 type EthReg struct {
-	backend  *xeth.XEth
+	backend  Backend
 	registry *registrar.Registrar
 }
 
-func New(xe *xeth.XEth) (self *EthReg) {
-	self = &EthReg{backend: xe}
-	self.registry = registrar.New(xe)
+func New(backend Backend) (self *EthReg) {
+	self = &EthReg{backend: backend}
+	self.registry = registrar.New(backend)
 	return
 }
 
@@ -40,9 +44,11 @@ func (self *EthReg) Registry() *registrar.Registrar {
 }
 
 func (self *EthReg) Resolver(n *big.Int) *registrar.Registrar {
-	xe := self.backend
+	var s registrar.Backend
 	if n != nil {
-		xe = self.backend.AtStateNum(n.Int64())
+		s = self.backend.AtStateNum(n.Int64())
+	} else {
+		s = registrar.Backend(self.backend)
 	}
-	return registrar.New(xe)
+	return registrar.New(s)
 }
