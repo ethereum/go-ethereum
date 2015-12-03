@@ -24,9 +24,8 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
-	"strings"
-
 	"sort"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -190,6 +189,8 @@ func newJSRE(stack *node.Node, docRoot, corsDomain string, client comms.Ethereum
 	if clt, ok := js.client.(*comms.InProcClient); ok {
 		if offeredApis, err := api.ParseApiString(shared.AllApis, codec.JSON, js.xeth, stack); err == nil {
 			clt.Initialize(api.Merge(offeredApis...))
+		} else {
+			utils.Fatalf("Unable to offer apis: %v", err)
 		}
 	}
 
