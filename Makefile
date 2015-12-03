@@ -7,7 +7,8 @@
 .PHONY: geth-linux-arm geth-linux-arm-5 geth-linux-arm-6 geth-linux-arm-7 geth-linux-arm64
 .PHONY: geth-darwin geth-darwin-386 geth-darwin-amd64
 .PHONY: geth-windows geth-windows-386 geth-windows-amd64
-.PHONY: geth-android geth-ios
+.PHONY: geth-android
+.PHONY: geth-ios geth-ios-arm-7 geth-ios-arm64
 
 GOBIN = build/bin
 
@@ -95,10 +96,19 @@ geth-android: xgo
 	@echo "Android cross compilation done:"
 	@ls -l $(GOBIN)/geth-android-*
 
-geth-ios: xgo
-	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --deps=$(CROSSDEPS) --depsargs=--disable-assembly --targets=ios/* -v $(shell build/flags.sh) ./cmd/geth
+geth-ios: geth-ios-arm-7 geth-ios-arm64
 	@echo "iOS cross compilation done:"
 	@ls -l $(GOBIN)/geth-ios-*
+
+geth-ios-arm-7: xgo
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --deps=$(CROSSDEPS) --depsargs=--disable-assembly --targets=ios/arm-7 -v $(shell build/flags.sh) ./cmd/geth
+	@echo "iOS ARMv7 cross compilation done:"
+	@ls -l $(GOBIN)/geth-ios-* | grep arm-7
+
+geth-ios-arm64: xgo
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --deps=$(CROSSDEPS) --depsargs=--disable-assembly --targets=ios-7.0/arm64 -v $(shell build/flags.sh) ./cmd/geth
+	@echo "iOS ARM64 cross compilation done:"
+	@ls -l $(GOBIN)/geth-ios-* | grep arm64
 
 evm:
 	build/env.sh $(GOROOT)/bin/go install -v $(shell build/flags.sh) ./cmd/evm
