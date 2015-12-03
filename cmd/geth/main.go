@@ -4,7 +4,7 @@
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// (at your option) any later	 version.
 //
 // go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -30,9 +30,7 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -316,6 +314,9 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IPCExperimental,
 		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
+		utils.SwarmConfigPathFlag,
+		utils.SwarmAccountAddrFlag,
+		utils.ChequebookAddrFlag,
 		utils.DevModeFlag,
 		utils.TestNetFlag,
 		utils.VMDebugFlag,
@@ -427,6 +428,7 @@ func attach(ctx *cli.Context) {
 func console(ctx *cli.Context) {
 	// Create and start the node based on the CLI flags
 	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
+
 	startNode(ctx, node)
 
 	// Attach to the newly started node, and either execute script or become interactive
@@ -465,46 +467,14 @@ func execScripts(ctx *cli.Context) {
 	node.Stop()
 }
 
-// tries unlocking the specified account a few times.
-func unlockAccount(ctx *cli.Context, accman *accounts.Manager, address string, i int, passwords []string) (common.Address, string) {
-	account, err := utils.MakeAddress(accman, address)
-	if err != nil {
-		utils.Fatalf("Unlock error: %v", err)
-	}
-
-	for trials := 0; trials < 3; trials++ {
-		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)
-		password := getPassPhrase(prompt, false, i, passwords)
-		if err := accman.Unlock(account, password); err == nil {
-			return account, password
-		}
-	}
-	// All trials expended to unlock account, bail out
-	utils.Fatalf("Failed to unlock account: %s", address)
-	return common.Address{}, ""
-}
-
-// startNode boots up the system node and all registered protocols, after which
-// it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
+// startNode unlocks any requested accounts the boots up the system node
+// starts all registered protocols and
+// starts the RPC/IPC interfaces and the
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node) {
 	// Start up the node itself
 	utils.StartNode(stack)
 
-	// Unlock any account specifically requested
-	var ethereum *eth.Ethereum
-	if err := stack.Service(&ethereum); err != nil {
-		utils.Fatalf("ethereum service not running: %v", err)
-	}
-	accman := ethereum.AccountManager()
-	passwords := utils.MakePasswordList(ctx)
-
-	accounts := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
-	for i, account := range accounts {
-		if trimmed := strings.TrimSpace(account); trimmed != "" {
-			unlockAccount(ctx, accman, trimmed, i, passwords)
-		}
-	}
 	// Start auxiliary services if enabled.
 	if !ctx.GlobalBool(utils.IPCDisabledFlag.Name) {
 		if err := utils.StartIPC(stack, ctx); err != nil {
@@ -515,6 +485,10 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if err := utils.StartRPC(stack, ctx); err != nil {
 			utils.Fatalf("Failed to start RPC: %v", err)
 		}
+	}
+	var ethereum *eth.Ethereum
+	if err := stack.Service(&ethereum); err != nil {
+		utils.Fatalf("ethereum service not running: %v", err)
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
 		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name), ctx.GlobalString(utils.MiningGPUFlag.Name)); err != nil {
@@ -534,38 +508,10 @@ func accountList(ctx *cli.Context) {
 	}
 }
 
-// getPassPhrase retrieves the passwor associated with an account, either fetched
-// from a list of preloaded passphrases, or requested interactively from the user.
-func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) string {
-	// If a list of passwords was supplied, retrieve from them
-	if len(passwords) > 0 {
-		if i < len(passwords) {
-			return passwords[i]
-		}
-		return passwords[len(passwords)-1]
-	}
-	// Otherwise prompt the user for the password
-	fmt.Println(prompt)
-	password, err := utils.PromptPassword("Passphrase: ", true)
-	if err != nil {
-		utils.Fatalf("Failed to read passphrase: %v", err)
-	}
-	if confirmation {
-		confirm, err := utils.PromptPassword("Repeat passphrase: ", false)
-		if err != nil {
-			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
-		}
-		if password != confirm {
-			utils.Fatalf("Passphrases do not match")
-		}
-	}
-	return password
-}
-
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) {
 	accman := utils.MakeAccountManager(ctx)
-	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
+	password := utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
 	account, err := accman.NewAccount(password)
 	if err != nil {
@@ -582,8 +528,8 @@ func accountUpdate(ctx *cli.Context) {
 	}
 	accman := utils.MakeAccountManager(ctx)
 
-	account, oldPassword := unlockAccount(ctx, accman, ctx.Args().First(), 0, nil)
-	newPassword := getPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
+	account, oldPassword := utils.UnlockAccount(ctx, accman, ctx.Args().First(), 0, nil)
+	newPassword := utils.GetPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
 	if err := accman.Update(account, oldPassword, newPassword); err != nil {
 		utils.Fatalf("Could not update the account: %v", err)
 	}
@@ -600,7 +546,7 @@ func importWallet(ctx *cli.Context) {
 	}
 
 	accman := utils.MakeAccountManager(ctx)
-	passphrase := getPassPhrase("", false, 0, utils.MakePasswordList(ctx))
+	passphrase := utils.GetPassPhrase("", false, 0, utils.MakePasswordList(ctx))
 
 	acct, err := accman.ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
@@ -615,7 +561,7 @@ func accountImport(ctx *cli.Context) {
 		utils.Fatalf("keyfile must be given as argument")
 	}
 	accman := utils.MakeAccountManager(ctx)
-	passphrase := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
+	passphrase := utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 	acct, err := accman.Import(keyfile, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)

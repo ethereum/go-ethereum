@@ -187,3 +187,16 @@ func PP(value []byte) string {
 
 	return fmt.Sprintf("%x...%x", value[:4], value[len(value)-4])
 }
+
+func (a *Address) MarshalJSON() (out []byte, err error) {
+	return []byte(quote(a.Hex())), nil
+}
+
+func (m *Address) UnmarshalJSON(value []byte) error {
+	m.Set(HexToAddress(string(value[1 : len(value)-1])))
+	return nil
+}
+
+func quote(s string) string {
+	return `"` + s + `"`
+}
