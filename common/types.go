@@ -187,3 +187,7 @@ func PP(value []byte) string {
 
 	return fmt.Sprintf("%x...%x", value[:4], value[len(value)-4])
 }
+
+func quote(s string) string {
+	return `"` + s + `"`
+}
