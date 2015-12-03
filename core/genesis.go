@@ -35,6 +35,11 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+const (
+	TestAccount = "e273f01c99144c438695e10f24926dc1f9fbf62d"
+	TestBalance = "1000000000000"
+)
+
 // WriteGenesisBlock writes the genesis block to the database as block number 0
 func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, error) {
 	contents, err := ioutil.ReadAll(reader)

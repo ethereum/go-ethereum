@@ -147,6 +147,16 @@ func (am *Manager) Sign(addr common.Address, hash []byte) (signature []byte, err
 	return crypto.Sign(hash, unlockedKey.PrivateKey)
 }
 
+func (am *Manager) GetUnlocked(addr common.Address) (prvkey *ecdsa.PrivateKey, err error) {
+	am.mutex.RLock()
+	defer am.mutex.RUnlock()
+	unlockedKey, found := am.unlocked[addr]
+	if !found {
+		return nil, ErrLocked
+	}
+	return unlockedKey.PrivateKey, nil
+}
+
 // Unlock unlocks the given account indefinitely.
 func (am *Manager) Unlock(a Account, keyAuth string) error {
 	return am.TimedUnlock(a, keyAuth, 0)
