@@ -21,7 +21,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"os"
 	"sync"
 	"time"
 
@@ -46,7 +48,7 @@ import (
 
 const (
 	defaultGasPrice = uint64(10000000000000)
-	defaultGas = uint64(90000)
+	defaultGas      = uint64(90000)
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -471,12 +473,12 @@ type callmsg struct {
 
 // accessor boilerplate to implement core.Message
 func (m callmsg) From() (common.Address, error) { return m.from.Address(), nil }
-func (m callmsg) Nonce() uint64 { return m.from.Nonce() }
-func (m callmsg) To() *common.Address { return m.to }
-func (m callmsg) GasPrice() *big.Int { return m.gasPrice }
-func (m callmsg) Gas() *big.Int { return m.gas }
-func (m callmsg) Value() *big.Int { return m.value }
-func (m callmsg) Data() []byte { return m.data }
+func (m callmsg) Nonce() uint64                 { return m.from.Nonce() }
+func (m callmsg) To() *common.Address           { return m.to }
+func (m callmsg) GasPrice() *big.Int            { return m.gasPrice }
+func (m callmsg) Gas() *big.Int                 { return m.gas }
+func (m callmsg) Value() *big.Int               { return m.value }
+func (m callmsg) Data() []byte                  { return m.data }
 
 type CallArgs struct {
 	From     common.Address `json:"from"`
@@ -972,20 +974,20 @@ func (s *PublicTransactionPoolAPI) Sign(address common.Address, data string) (st
 }
 
 type SignTransactionArgs struct {
-	From        common.Address
-	To          common.Address
-	Nonce       *rpc.HexNumber
-	Value       *rpc.HexNumber
-	Gas         *rpc.HexNumber
-	GasPrice    *rpc.HexNumber
-	Data        string
+	From     common.Address
+	To       common.Address
+	Nonce    *rpc.HexNumber
+	Value    *rpc.HexNumber
+	Gas      *rpc.HexNumber
+	GasPrice *rpc.HexNumber
+	Data     string
 
 	BlockNumber int64
 }
 
 // Tx is a helper object for argument and return values
 type Tx struct {
-	tx       *types.Transaction
+	tx *types.Transaction
 
 	To       *common.Address `json:"to"`
 	From     common.Address  `json:"from"`
@@ -1213,4 +1215,189 @@ func (s *PublicTransactionPoolAPI) Resend(tx *Tx, gasPrice, gasLimit *rpc.HexNum
 	}
 
 	return common.Hash{}, fmt.Errorf("Transaction %#x not found", tx.Hash)
+}
+
+// PrivateAdminAPI is the collection of Etheruem APIs exposed over the private
+// admin endpoint.
+type PrivateAdminAPI struct {
+	eth *Ethereum
+}
+
+// NewPrivateAdminAPI creates a new API definition for the private admin methods
+// of the Ethereum service.
+func NewPrivateAdminAPI(eth *Ethereum) *PrivateAdminAPI {
+	return &PrivateAdminAPI{eth: eth}
+}
+
+// SetSolc sets the Solidity compiler path to be used by the node.
+func (api *PrivateAdminAPI) SetSolc(path string) (string, error) {
+	solc, err := api.eth.SetSolc(path)
+	if err != nil {
+		return "", err
+	}
+	return solc.Info(), nil
+}
+
+// ExportChain exports the current blockchain into a local file.
+func (api *PrivateAdminAPI) ExportChain(file string) (bool, error) {
+	// Make sure we can create the file to export into
+	out, err := os.OpenFile(file, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return false, err
+	}
+	defer out.Close()
+
+	// Export the blockchain
+	if err := api.eth.BlockChain().Export(out); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ImportChain imports a blockchain from a local file.
+func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
+	// Make sure the can access the file to import
+	in, err := os.Open(file)
+	if err != nil {
+		return false, err
+	}
+	defer in.Close()
+
+	// Run actual the import in pre-configured batches
+	stream := rlp.NewStream(in, 0)
+
+	blocks, index := make([]*types.Block, 0, 2500), 0
+	for batch := 0; ; batch++ {
+		// Load a batch of blocks from the input file
+		for len(blocks) < cap(blocks) {
+			block := new(types.Block)
+			if err := stream.Decode(block); err == io.EOF {
+				break
+			} else if err != nil {
+				return false, fmt.Errorf("block %d: failed to parse: %v", index, err)
+			}
+			blocks = append(blocks, block)
+			index++
+		}
+		if len(blocks) == 0 {
+			break
+		}
+		// Import the batch and reset the buffer
+		if _, err := api.eth.BlockChain().InsertChain(blocks); err != nil {
+			return false, fmt.Errorf("batch %d: failed to insert: %v", batch, err)
+		}
+		blocks = blocks[:0]
+	}
+	return true, nil
+}
+
+// PublicDebugAPI is the collection of Etheruem APIs exposed over the public
+// debugging endpoint.
+type PublicDebugAPI struct {
+	eth *Ethereum
+}
+
+// NewPublicDebugAPI creates a new API definition for the public debug methods
+// of the Ethereum service.
+func NewPublicDebugAPI(eth *Ethereum) *PublicDebugAPI {
+	return &PublicDebugAPI{eth: eth}
+}
+
+// DumpBlock retrieves the entire state of the database at a given block.
+func (api *PublicDebugAPI) DumpBlock(number uint64) (state.World, error) {
+	block := api.eth.BlockChain().GetBlockByNumber(number)
+	if block == nil {
+		return state.World{}, fmt.Errorf("block #%d not found", number)
+	}
+	stateDb, err := state.New(block.Root(), api.eth.ChainDb())
+	if err != nil {
+		return state.World{}, err
+	}
+	return stateDb.RawDump(), nil
+}
+
+// GetBlockRlp retrieves the RLP encoded for of a single block.
+func (api *PublicDebugAPI) GetBlockRlp(number uint64) (string, error) {
+	block := api.eth.BlockChain().GetBlockByNumber(number)
+	if block == nil {
+		return "", fmt.Errorf("block #%d not found", number)
+	}
+	encoded, err := rlp.EncodeToBytes(block)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", encoded), nil
+}
+
+// PrintBlock retrieves a block and returns its pretty printed form.
+func (api *PublicDebugAPI) PrintBlock(number uint64) (string, error) {
+	block := api.eth.BlockChain().GetBlockByNumber(number)
+	if block == nil {
+		return "", fmt.Errorf("block #%d not found", number)
+	}
+	return fmt.Sprintf("%s", block), nil
+}
+
+// SeedHash retrieves the seed hash of a block.
+func (api *PublicDebugAPI) SeedHash(number uint64) (string, error) {
+	block := api.eth.BlockChain().GetBlockByNumber(number)
+	if block == nil {
+		return "", fmt.Errorf("block #%d not found", number)
+	}
+	hash, err := ethash.GetSeedHash(number)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("0x%x", hash), nil
+}
+
+// PrivateDebugAPI is the collection of Etheruem APIs exposed over the private
+// debugging endpoint.
+type PrivateDebugAPI struct {
+	eth *Ethereum
+}
+
+// NewPrivateDebugAPI creates a new API definition for the private debug methods
+// of the Ethereum service.
+func NewPrivateDebugAPI(eth *Ethereum) *PrivateDebugAPI {
+	return &PrivateDebugAPI{eth: eth}
+}
+
+// ProcessBlock reprocesses an already owned block.
+func (api *PrivateDebugAPI) ProcessBlock(number uint64) (bool, error) {
+	// Fetch the block that we aim to reprocess
+	block := api.eth.BlockChain().GetBlockByNumber(number)
+	if block == nil {
+		return false, fmt.Errorf("block #%d not found", number)
+	}
+	// Temporarily enable debugging
+	defer func(old bool) { vm.Debug = old }(vm.Debug)
+	vm.Debug = true
+
+	// Validate and reprocess the block
+	var (
+		blockchain = api.eth.BlockChain()
+		validator  = blockchain.Validator()
+		processor  = blockchain.Processor()
+	)
+	if err := core.ValidateHeader(blockchain.AuxValidator(), block.Header(), blockchain.GetHeader(block.ParentHash()), true, false); err != nil {
+		return false, err
+	}
+	statedb, err := state.New(blockchain.GetBlock(block.ParentHash()).Root(), api.eth.ChainDb())
+	if err != nil {
+		return false, err
+	}
+	receipts, _, usedGas, err := processor.Process(block, statedb)
+	if err != nil {
+		return false, err
+	}
+	if err := validator.ValidateState(block, blockchain.GetBlock(block.ParentHash()), statedb, receipts, usedGas); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// SetHead rewinds the head of the blockchain to a previous block.
+func (api *PrivateDebugAPI) SetHead(number uint64) {
+	api.eth.BlockChain().SetHead(number)
 }

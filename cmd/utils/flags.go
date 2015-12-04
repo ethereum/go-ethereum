@@ -798,7 +798,7 @@ func StartIPC(stack *node.Node, ctx *cli.Context) error {
 		server := rpc.NewServer()
 
 		// register package API's this node provides
-		offered := stack.RPCAPIs()
+		offered := stack.APIs()
 		for _, api := range offered {
 			server.RegisterName(api.Namespace, api.Service)
 			glog.V(logger.Debug).Infof("Register %T under namespace '%s' for IPC service\n", api.Service, api.Namespace)
