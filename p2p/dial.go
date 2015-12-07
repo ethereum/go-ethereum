@@ -46,7 +46,6 @@ type dialstate struct {
 	ntab        discoverTable
 
 	lookupRunning bool
-	bootstrapped  bool
 
 	dialing     map[discover.NodeID]connFlag
 	lookupBuf   []*discover.Node // current discovery lookup results
@@ -58,7 +57,6 @@ type dialstate struct {
 type discoverTable interface {
 	Self() *discover.Node
 	Close()
-	Bootstrap([]*discover.Node)
 	Lookup(target discover.NodeID) []*discover.Node
 	ReadRandomNodes([]*discover.Node) int
 }
@@ -84,13 +82,9 @@ type dialTask struct {
 
 // discoverTask runs discovery table operations.
 // Only one discoverTask is active at any time.
-//
-// If bootstrap is true, the task runs Table.Bootstrap,
-// otherwise it performs a random lookup and leaves the
-// results in the task.
+// discoverTask.Do performs a random lookup.
 type discoverTask struct {
-	bootstrap bool
-	results   []*discover.Node
+	results []*discover.Node
 }
 
 // A waitExpireTask is generated if there are no other tasks
@@ -154,7 +148,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[discover.NodeID]*Peer, now 
 	// Use random nodes from the table for half of the necessary
 	// dynamic dials.
 	randomCandidates := needDynDials / 2
-	if randomCandidates > 0 && s.bootstrapped {
+	if randomCandidates > 0 {
 		n := s.ntab.ReadRandomNodes(s.randomNodes)
 		for i := 0; i < randomCandidates && i < n; i++ {
 			if addDial(dynDialedConn, s.randomNodes[i]) {
@@ -171,12 +165,10 @@ func (s *dialstate) newTasks(nRunning int, peers map[discover.NodeID]*Peer, now 
 		}
 	}
 	s.lookupBuf = s.lookupBuf[:copy(s.lookupBuf, s.lookupBuf[i:])]
-	// Launch a discovery lookup if more candidates are needed. The
-	// first discoverTask bootstraps the table and won't return any
-	// results.
+	// Launch a discovery lookup if more candidates are needed.
 	if len(s.lookupBuf) < needDynDials && !s.lookupRunning {
 		s.lookupRunning = true
-		newtasks = append(newtasks, &discoverTask{bootstrap: !s.bootstrapped})
+		newtasks = append(newtasks, &discoverTask{})
 	}
 
 	// Launch a timer to wait for the next node to expire if all
@@ -196,9 +188,6 @@ func (s *dialstate) taskDone(t task, now time.Time) {
 		s.hist.add(t.dest.ID, now.Add(dialHistoryExpiration))
 		delete(s.dialing, t.dest.ID)
 	case *discoverTask:
-		if t.bootstrap {
-			s.bootstrapped = true
-		}
 		s.lookupRunning = false
 		s.lookupBuf = append(s.lookupBuf, t.results...)
 	}
@@ -221,10 +210,6 @@ func (t *dialTask) String() string {
 }
 
 func (t *discoverTask) Do(srv *Server) {
-	if t.bootstrap {
-		srv.ntab.Bootstrap(srv.BootstrapNodes)
-		return
-	}
 	// newTasks generates a lookup task whenever dynamic dials are
 	// necessary. Lookups need to take some time, otherwise the
 	// event loop spins too fast.
@@ -238,12 +223,8 @@ func (t *discoverTask) Do(srv *Server) {
 	t.results = srv.ntab.Lookup(target)
 }
 
-func (t *discoverTask) String() (s string) {
-	if t.bootstrap {
-		s = "discovery bootstrap"
-	} else {
-		s = "discovery lookup"
-	}
+func (t *discoverTask) String() string {
+	s := "discovery lookup"
 	if len(t.results) > 0 {
 		s += fmt.Sprintf(" (%d results)", len(t.results))
 	}

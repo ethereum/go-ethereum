@@ -76,15 +76,10 @@ func runDialTest(t *testing.T, test dialtest) {
 
 type fakeTable []*discover.Node
 
-func (t fakeTable) Self() *discover.Node       { return new(discover.Node) }
-func (t fakeTable) Close()                     {}
-func (t fakeTable) Bootstrap([]*discover.Node) {}
-func (t fakeTable) Lookup(target discover.NodeID) []*discover.Node {
-	return nil
-}
-func (t fakeTable) ReadRandomNodes(buf []*discover.Node) int {
-	return copy(buf, t)
-}
+func (t fakeTable) Self() *discover.Node                     { return new(discover.Node) }
+func (t fakeTable) Close()                                   {}
+func (t fakeTable) Lookup(discover.NodeID) []*discover.Node  { return nil }
+func (t fakeTable) ReadRandomNodes(buf []*discover.Node) int { return copy(buf, t) }
 
 // This test checks that dynamic dials are launched from discovery results.
 func TestDialStateDynDial(t *testing.T) {
@@ -98,7 +93,7 @@ func TestDialStateDynDial(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
 					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
-				new: []task{&discoverTask{bootstrap: true}},
+				new: []task{&discoverTask{}},
 			},
 			// Dynamic dials are launched when it completes.
 			{
@@ -108,7 +103,7 @@ func TestDialStateDynDial(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
 				done: []task{
-					&discoverTask{bootstrap: true, results: []*discover.Node{
+					&discoverTask{results: []*discover.Node{
 						{ID: uintID(2)}, // this one is already connected and not dialed.
 						{ID: uintID(3)},
 						{ID: uintID(4)},
@@ -238,22 +233,15 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 	runDialTest(t, dialtest{
 		init: newDialState(nil, table, 10),
 		rounds: []round{
-			// Discovery bootstrap is launched.
-			{
-				new: []task{&discoverTask{bootstrap: true}},
-			},
 			// 5 out of 8 of the nodes returned by ReadRandomNodes are dialed.
 			{
-				done: []task{
-					&discoverTask{bootstrap: true},
-				},
 				new: []task{
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(1)}},
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(2)}},
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(3)}},
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(4)}},
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(5)}},
-					&discoverTask{bootstrap: false},
+					&discoverTask{},
 				},
 			},
 			// Dialing nodes 1,2 succeeds. Dials from the lookup are launched.
@@ -275,7 +263,7 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(10)}},
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(11)}},
 					&dialTask{dynDialedConn, &discover.Node{ID: uintID(12)}},
-					&discoverTask{bootstrap: false},
+					&discoverTask{},
 				},
 			},
 			// Dialing nodes 3,4,5 fails. The dials from the lookup succeed.

@@ -80,6 +80,24 @@ func (n *Node) Incomplete() bool {
 	return n.IP == nil
 }
 
+// checks whether n is a valid complete node.
+func (n *Node) validateComplete() error {
+	if n.Incomplete() {
+		return errors.New("incomplete node")
+	}
+	if n.UDP == 0 {
+		return errors.New("missing UDP port")
+	}
+	if n.TCP == 0 {
+		return errors.New("missing TCP port")
+	}
+	if n.IP.IsMulticast() || n.IP.IsUnspecified() {
+		return errors.New("invalid IP (multicast/unspecified)")
+	}
+	_, err := n.ID.Pubkey() // validate the key (on curve, etc.)
+	return err
+}
+
 // The string representation of a Node is a URL.
 // Please see ParseNode for a description of the format.
 func (n *Node) String() string {
@@ -249,7 +267,7 @@ func (id NodeID) Pubkey() (*ecdsa.PublicKey, error) {
 	p.X.SetBytes(id[:half])
 	p.Y.SetBytes(id[half:])
 	if !p.Curve.IsOnCurve(p.X, p.Y) {
-		return nil, errors.New("not a point on the S256 curve")
+		return nil, errors.New("id is invalid secp256k1 curve point")
 	}
 	return p, nil
 }
