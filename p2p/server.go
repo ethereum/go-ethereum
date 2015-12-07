@@ -337,7 +337,7 @@ func (srv *Server) Start() (err error) {
 		srv.ntab = ntab
 	}
 
-	dynPeers := srv.MaxPeers / 2
+	dynPeers := (srv.MaxPeers + 1) / 2
 	if !srv.Discovery {
 		dynPeers = 0
 	}
