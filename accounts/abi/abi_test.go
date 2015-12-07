@@ -92,12 +92,12 @@ func TestReader(t *testing.T) {
 	exp := ABI{
 		Methods: map[string]Method{
 			"balance": Method{
-				"balance", true, nil, Type{},
+				"balance", true, nil, nil,
 			},
 			"send": Method{
 				"send", false, []Argument{
 					Argument{"amount", Uint256},
-				}, Type{},
+				}, nil,
 			},
 		},
 	}
@@ -238,10 +238,10 @@ func TestTestAddress(t *testing.T) {
 func TestMethodSignature(t *testing.T) {
 	String, _ := NewType("string")
 	String32, _ := NewType("string32")
-	m := Method{"foo", false, []Argument{Argument{"bar", String32}, Argument{"baz", String}}, Type{}}
+	m := Method{"foo", false, []Argument{Argument{"bar", String32}, Argument{"baz", String}}, nil}
 	exp := "foo(string32,string)"
-	if m.String() != exp {
-		t.Error("signature mismatch", exp, "!=", m.String())
+	if m.Sig() != exp {
+		t.Error("signature mismatch", exp, "!=", m.Sig())
 	}
 
 	idexp := crypto.Sha3([]byte(exp))[:4]
@@ -250,10 +250,10 @@ func TestMethodSignature(t *testing.T) {
 	}
 
 	uintt, _ := NewType("uint")
-	m = Method{"foo", false, []Argument{Argument{"bar", uintt}}, Type{}}
+	m = Method{"foo", false, []Argument{Argument{"bar", uintt}}, nil}
 	exp = "foo(uint256)"
-	if m.String() != exp {
-		t.Error("signature mismatch", exp, "!=", m.String())
+	if m.Sig() != exp {
+		t.Error("signature mismatch", exp, "!=", m.Sig())
 	}
 }
 
@@ -391,5 +391,36 @@ func TestBytes(t *testing.T) {
 	_, err = abi.Pack("balance", toobig)
 	if err == nil {
 		t.Error("expected error")
+	}
+}
+
+func TestReturn(t *testing.T) {
+	const definition = `[
+	{ "name" : "balance", "const" : true, "inputs" : [], "outputs" : [ { "name": "", "type": "hash" } ] },
+	{ "name" : "name", "const" : true, "inputs" : [], "outputs" : [ { "name": "", "type": "address" } ] }
+
+]`
+
+	abi, err := JSON(strings.NewReader(definition))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := abi.Call(func([]byte) []byte {
+		t := make([]byte, 32)
+		t[0] = 1
+		return t
+	}, "balance")
+	if _, ok := r.(common.Hash); !ok {
+		t.Errorf("expected type common.Hash, got %T", r)
+	}
+
+	r = abi.Call(func([]byte) []byte {
+		t := make([]byte, 32)
+		t[0] = 1
+		return t
+	}, "name")
+	if _, ok := r.(common.Address); !ok {
+		t.Errorf("expected type common.Address, got %T", r)
 	}
 }
