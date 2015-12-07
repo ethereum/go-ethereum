@@ -980,6 +980,18 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 				glog.Fatal(errs[index])
 				return
 			}
+			if err := WriteTransactions(self.chainDb, block); err != nil {
+				errs[index] = fmt.Errorf("failed to write individual transactions: %v", err)
+				atomic.AddInt32(&failed, 1)
+				glog.Fatal(errs[index])
+				return
+			}
+			if err := WriteReceipts(self.chainDb, receipts); err != nil {
+				errs[index] = fmt.Errorf("failed to write individual receipts: %v", err)
+				atomic.AddInt32(&failed, 1)
+				glog.Fatal(errs[index])
+				return
+			}
 			atomic.AddInt32(&stats.processed, 1)
 		}
 	}
