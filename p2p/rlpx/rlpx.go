@@ -332,7 +332,7 @@ func (p *Protocol) ReadPacket() (totalSize uint32, r io.Reader, err error) {
 	for len(p.newPackets) == 0 && p.readErr == nil {
 		p.readCond.Wait()
 	}
-	if p.readErr != nil {
+	if len(p.newPackets) == 0 && p.readErr != nil {
 		return 0, nil, p.readErr
 	}
 	pr := p.newPackets[0]
