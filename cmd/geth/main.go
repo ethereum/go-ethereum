@@ -340,6 +340,8 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.ExtraDataFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
+		runtime.GOMAXPROCS(runtime.NumCPU())
+
 		utils.SetupLogger(ctx)
 		utils.SetupNetwork(ctx)
 		utils.SetupVM(ctx)
@@ -353,7 +355,6 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 }
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
 	defer logger.Flush()
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
