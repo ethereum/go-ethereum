@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"golang.org/x/net/context"
 )
 
 type Service struct{}
@@ -24,6 +26,10 @@ type Result struct {
 }
 
 func (s *Service) Echo(str string, i int, args *Args) Result {
+	return Result{str, i, args}
+}
+
+func (s *Service) EchoWithCtx(ctx context.Context, str string, i int, args *Args) Result {
 	return Result{str, i, args}
 }
 
@@ -64,8 +70,8 @@ func TestServerRegisterName(t *testing.T) {
 		t.Fatalf("Expected service calc to be registered")
 	}
 
-	if len(svc.callbacks) != 3 {
-		t.Errorf("Expected 3 callbacks for service 'calc', got %d", len(svc.callbacks))
+	if len(svc.callbacks) != 4 {
+		t.Errorf("Expected 4 callbacks for service 'calc', got %d", len(svc.callbacks))
 	}
 
 	if len(svc.subscriptions) != 1 {
@@ -199,6 +205,36 @@ func TestServerMethodExecution(t *testing.T) {
 	id := int64(12345)
 	req := jsonRequest{
 		Method:  "echo",
+		Version: "2.0",
+		Id:      &id,
+	}
+	args := []interface{}{"string arg", 1122, &Args{"qwerty"}}
+	req.Payload, _ = json.Marshal(&args)
+
+	input, _ := json.Marshal(&req)
+	codec := &ServerTestCodec{input: input, closer: make(chan interface{})}
+	go server.ServeCodec(codec)
+
+	<-codec.closer
+
+	expected := `{"jsonrpc":"2.0","id":12345,"result":{"String":"string arg","Int":1122,"Args":{"S":"qwerty"}}}`
+
+	if expected != codec.output {
+		t.Fatalf("expected %s, got %s\n", expected, codec.output)
+	}
+}
+
+func TestServerMethodWithCtx(t *testing.T) {
+	server := NewServer()
+	service := new(Service)
+
+	if err := server.RegisterName("test", service); err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	id := int64(12345)
+	req := jsonRequest{
+		Method:  "echoWithCtx",
 		Version: "2.0",
 		Id:      &id,
 	}
