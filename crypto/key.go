@@ -50,17 +50,17 @@ type plainKeyJSON struct {
 }
 
 type encryptedKeyJSONV3 struct {
-	Address string `json:"address"`
-	Crypto  cryptoJSON
-	Id      string `json:"id"`
-	Version int    `json:"version"`
+	Address string     `json:"address"`
+	Crypto  cryptoJSON `json:"crypto"`
+	Id      string     `json:"id"`
+	Version int        `json:"version"`
 }
 
 type encryptedKeyJSONV1 struct {
-	Address string `json:"address"`
-	Crypto  cryptoJSON
-	Id      string `json:"id"`
-	Version string `json:"version"`
+	Address string     `json:"address"`
+	Crypto  cryptoJSON `json:"crypto"`
+	Id      string     `json:"id"`
+	Version string     `json:"version"`
 }
 
 type cryptoJSON struct {
