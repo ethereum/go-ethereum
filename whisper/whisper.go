@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -101,6 +102,12 @@ func New() *Whisper {
 // Protocols returns the whisper sub-protocols ran by this particular client.
 func (self *Whisper) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{self.protocol}
+}
+
+// Apis implements node.Servie, returning all the API handlers the service wants
+// to expose.
+func (self *Whisper) Apis() (string, []rpc.Api) {
+	return "whisper", []rpc.Api{}
 }
 
 // Version returns the whisper sub-protocols version number.

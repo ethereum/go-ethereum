@@ -23,7 +23,6 @@ import (
 	"log"
 	"math"
 	"math/big"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -52,8 +51,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/rpc/useragent"
 	"github.com/ethereum/go-ethereum/whisper"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -297,8 +294,12 @@ var (
 	}
 	IPCPathFlag = DirectoryFlag{
 		Name:  "ipcpath",
-		Usage: "Filename for IPC socket/pipe",
-		Value: DirectoryString{common.DefaultIpcPath()},
+		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
+		Value: DirectoryString{"geth.ipc"},
+	}
+	IPCExperimental = cli.BoolFlag{
+		Name:  "ipcexp",
+		Usage: "Enable the new RPC implementation",
 	}
 	ExecFlag = cli.StringFlag{
 		Name:  "exec",
@@ -403,6 +404,15 @@ func MustMakeDataDir(ctx *cli.Context) string {
 	}
 	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
 	return ""
+}
+
+// MakeIpcPath creates an IPC path configuration from the set command line flags,
+// returning an empty string if IPC was explicitly disabled, or the set path.
+func MakeIpcPath(ctx *cli.Context) string {
+	if ctx.GlobalBool(IPCDisabledFlag.Name) {
+		return ""
+	}
+	return ctx.GlobalString(IPCPathFlag.Name)
 }
 
 // MakeNodeKey creates a node key from set command line flags, either loading it
@@ -593,6 +603,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 	// Configure the node's service container
 	stackConf := &node.Config{
 		DataDir:         MustMakeDataDir(ctx),
+		IpcPath:         MakeIpcPath(ctx),
 		PrivateKey:      MakeNodeKey(ctx),
 		Name:            MakeNodeName(name, version, ctx),
 		NoDiscovery:     ctx.GlobalBool(NoDiscoverFlag.Name),
@@ -752,47 +763,6 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 	}
 
 	return chain, chainDb
-}
-
-func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
-	if runtime.GOOS == "windows" {
-		ipcpath = common.DefaultIpcPath()
-		if ctx.GlobalIsSet(IPCPathFlag.Name) {
-			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
-		}
-	} else {
-		ipcpath = common.DefaultIpcPath()
-		if ctx.GlobalIsSet(DataDirFlag.Name) {
-			ipcpath = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "geth.ipc")
-		}
-		if ctx.GlobalIsSet(IPCPathFlag.Name) {
-			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
-		}
-	}
-
-	return
-}
-
-// StartIPC starts a IPC JSON-RPC API server.
-func StartIPC(stack *node.Node, ctx *cli.Context) error {
-	config := comms.IpcConfig{
-		Endpoint: IpcSocketPath(ctx),
-	}
-
-	initializer := func(conn net.Conn) (comms.Stopper, shared.EthereumApi, error) {
-		var ethereum *eth.Ethereum
-		if err := stack.Service(&ethereum); err != nil {
-			return nil, nil, err
-		}
-		fe := useragent.NewRemoteFrontend(conn, ethereum.AccountManager())
-		xeth := xeth.New(stack, fe)
-		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec.JSON, xeth, stack)
-		if err != nil {
-			return nil, nil, err
-		}
-		return xeth, api.Merge(apis...), nil
-	}
-	return comms.StartIpc(config, codec.JSON, initializer)
 }
 
 // StartRPC starts a HTTP JSON-RPC API server.

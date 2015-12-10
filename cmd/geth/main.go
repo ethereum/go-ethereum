@@ -313,6 +313,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IPCDisabledFlag,
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
+		utils.IPCExperimental,
 		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
 		utils.DevModeFlag,
@@ -398,7 +399,7 @@ func attach(ctx *cli.Context) {
 		client, err = comms.ClientFromEndpoint(ctx.Args().First(), codec.JSON)
 	} else {
 		cfg := comms.IpcConfig{
-			Endpoint: utils.IpcSocketPath(ctx),
+			Endpoint: (&node.Config{DataDir: ctx.GlobalString(utils.DataDirFlag.Name), IpcPath: ctx.GlobalString(utils.IPCPathFlag.Name)}).IpcEndpoint(),
 		}
 		client, err = comms.NewIpcClient(cfg, codec.JSON)
 	}
@@ -506,11 +507,6 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 	}
 	// Start auxiliary services if enabled.
-	if !ctx.GlobalBool(utils.IPCDisabledFlag.Name) {
-		if err := utils.StartIPC(stack, ctx); err != nil {
-			utils.Fatalf("Failed to start IPC: %v", err)
-		}
-	}
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
 		if err := utils.StartRPC(stack, ctx); err != nil {
 			utils.Fatalf("Failed to start RPC: %v", err)
@@ -534,7 +530,7 @@ func accountList(ctx *cli.Context) {
 	}
 }
 
-// getPassPhrase retrieves the passwor associated with an account, either fetched
+// getPassPhrase retrieves the password associated with an account, either fetched
 // from a list of preloaded passphrases, or requested interactively from the user.
 func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) string {
 	// If a list of passwords was supplied, retrieve from them

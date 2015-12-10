@@ -19,6 +19,8 @@ package node
 
 import (
 	"errors"
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -26,7 +28,11 @@ import (
 	"syscall"
 
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rpc/comms"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 )
 
 var (
@@ -49,6 +55,9 @@ type Node struct {
 
 	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
 	services     map[reflect.Type]Service // Currently running services
+
+	ipcEndpoint string       // IPC endpoint to listen at (empty = IPC disabled)
+	ipcListener net.Listener // IPC RPC listener socket to serve API requests
 
 	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
@@ -85,6 +94,7 @@ func New(conf *Config) (*Node, error) {
 			MaxPendingPeers: conf.MaxPendingPeers,
 		},
 		serviceFuncs: []ServiceConstructor{},
+		ipcEndpoint:  conf.IpcEndpoint(),
 		eventmux:     new(event.TypeMux),
 	}, nil
 }
@@ -162,10 +172,90 @@ func (n *Node) Start() error {
 		// Mark the service started for potential cleanup
 		started = append(started, kind)
 	}
+	// Lastly start the configured RPC interfaces
+	if err := n.startRpc(services); err != nil {
+		for _, service := range services {
+			service.Stop()
+		}
+		running.Stop()
+		return err
+	}
 	// Finish initializing the startup
 	n.services = services
 	n.server = running
 	n.stop = make(chan struct{})
+
+	return nil
+}
+
+// startRpc initializes and starts the IPC and HTTP RPC endpoints.
+func (n *Node) startRpc(services map[reflect.Type]Service) error {
+	// Gather and register all the APIs exposed by the services
+	ipcHandler := rpc.NewServer()
+	httpHandler := rpc.NewServer()
+
+	taken := make(map[string]struct{})
+	for _, service := range services {
+		name, apis := service.Apis()
+		for _, api := range apis {
+			// Ensure each API and version is unique
+			namespace := fmt.Sprintf("%s.v%d", name, api.Version)
+			if _, ok := taken[namespace]; ok {
+				return &DuplicateApiError{Namespace: namespace}
+			}
+			taken[namespace] = struct{}{}
+
+			// Namespace was free, register all the method handlers
+			for _, handler := range api.Handlers {
+				// Resolve the registration path
+				path := namespace
+				if handler.Path != "" {
+					path += "." + handler.Path
+				}
+				// Inject the methods into all API servers
+				if err := ipcHandler.RegisterName(path, handler.Handler); err != nil {
+					return err
+				}
+				if err := httpHandler.RegisterName(path, handler.Handler); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	// All APIs registered, start the IPC and HTTP listeners
+	var (
+		ipcListener net.Listener
+		err         error
+	)
+	if n.ipcEndpoint != "" {
+		if ipcListener, err = comms.CreateListener(comms.IpcConfig{Endpoint: n.ipcEndpoint}); err != nil {
+			return err
+		}
+		go func() {
+			glog.V(logger.Info).Infof("IPC endpoint opened: %s", n.ipcEndpoint)
+			defer glog.V(logger.Info).Infof("IPC endpoint closed: %s", n.ipcEndpoint)
+
+			for {
+				conn, err := ipcListener.Accept()
+				if err != nil {
+					// Terminate if the listener was closed
+					n.lock.RLock()
+					closed := n.ipcListener == nil
+					n.lock.RUnlock()
+					if closed {
+						return
+					}
+					// Not closed, just some error; report and continue
+					glog.V(logger.Error).Infof("IPC accept failed: %v", err)
+					continue
+				}
+				codec := rpc.NewJSONCodec(conn)
+				go ipcHandler.ServeCodec(codec)
+			}
+		}()
+	}
+	// All listeners booted successfully
+	n.ipcListener = ipcListener
 
 	return nil
 }
@@ -180,7 +270,11 @@ func (n *Node) Stop() error {
 	if n.server == nil {
 		return ErrNodeStopped
 	}
-	// Otherwise terminate all the services and the P2P server too
+	// Otherwise terminate the API, all services and the P2P server too
+	if n.ipcListener != nil {
+		n.ipcListener.Close()
+		n.ipcListener = nil
+	}
 	failure := &StopError{
 		Services: make(map[reflect.Type]error),
 	}

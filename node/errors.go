@@ -32,6 +32,17 @@ func (e *DuplicateServiceError) Error() string {
 	return fmt.Sprintf("duplicate service: %v", e.Kind)
 }
 
+// DuplicateApiError is returned during Node startup if a registered service
+// requests the registration of an already taken API endpoint.
+type DuplicateApiError struct {
+	Namespace string
+}
+
+// Error generates a textual representation of the duplicate API error.
+func (e *DuplicateApiError) Error() string {
+	return fmt.Sprintf("duplicate api endpoint: %s", e.Namespace)
+}
+
 // StopError is returned if a Node fails to stop either any of its registered
 // services or itself.
 type StopError struct {

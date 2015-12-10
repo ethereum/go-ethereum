@@ -18,19 +18,27 @@ package node
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/rpc/shared"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 )
 
 var (
 	testNodeKey, _ = crypto.GenerateKey()
 
 	testNodeConfig = &Config{
+		IpcPath:    fmt.Sprintf("test-%d.ipc", rand.Int63()),
 		PrivateKey: testNodeKey,
 		Name:       "test node",
 	}
@@ -491,6 +499,84 @@ func TestProtocolGather(t *testing.T) {
 			if !launched {
 				t.Errorf("configured protocol not launched: %s v%d", id, ver)
 			}
+		}
+	}
+}
+
+// Tests that all APIs defined by individual services get exposed.
+func TestApiGather(t *testing.T) {
+	stack, err := New(testNodeConfig)
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
+	// Register a batch of services with some configured APIs
+	calls := make(chan string, 1)
+
+	services := map[string]struct {
+		Namespace string
+		Apis      []rpc.Api
+		Maker     InstrumentingWrapper
+	}{
+		"Zero APIs": {"", []rpc.Api{}, InstrumentedServiceMakerA},
+		"Single API": {"single", []rpc.Api{
+			{1, []rpc.ApiHandler{{Handler: &OneMethodApi{fun: func() { calls <- "single.v1" }}}}},
+		}, InstrumentedServiceMakerB},
+		"Many APIs": {"multi", []rpc.Api{
+			{1, []rpc.ApiHandler{{Handler: &OneMethodApi{fun: func() { calls <- "multi.v1" }}}}},
+			{2, []rpc.ApiHandler{
+				{Handler: &OneMethodApi{fun: func() { calls <- "multi.v2" }}},
+				{Path: "nested", Handler: &OneMethodApi{fun: func() { calls <- "multi.v2.nested" }}},
+			}},
+		}, InstrumentedServiceMakerC},
+	}
+	for id, config := range services {
+		config := config
+		constructor := func(*ServiceContext) (Service, error) {
+			return &InstrumentedService{
+				apiNamespace: config.Namespace,
+				apiHandlers:  config.Apis,
+			}, nil
+		}
+		if err := stack.Register(config.Maker(constructor)); err != nil {
+			t.Fatalf("service %s: registration failed: %v", id, err)
+		}
+	}
+	// Start the services and ensure all API start successfully
+	if err := stack.Start(); err != nil {
+		t.Fatalf("failed to start protocol stack: %v", err)
+	}
+	defer stack.Stop()
+
+	// Connect to the RPC server and verify the various registered endpoints
+	ipcClient, err := comms.NewIpcClient(comms.IpcConfig{Endpoint: testNodeConfig.IpcEndpoint()}, codec.JSON)
+	if err != nil {
+		t.Fatalf("failed to connect to the IPC API server: %v", err)
+	}
+
+	tests := []struct {
+		Method string
+		Result string
+	}{
+		{"single.v1.theOneMethod", "single.v1"},
+		{"multi.v1.theOneMethod", "multi.v1"},
+		{"multi.v2.theOneMethod", "multi.v2"},
+		{"multi.v2.nested.theOneMethod", "multi.v2.nested"},
+	}
+	for i, test := range tests {
+		if err := ipcClient.Send(shared.Request{Id: i, Jsonrpc: "2.0", Method: test.Method}); err != nil {
+			t.Fatalf("test %d: failed to send API request: %v", i, err)
+		}
+		_, err := ipcClient.Recv()
+		if err != nil {
+			t.Fatalf("test %d: failed to read API reply: %v", i, err)
+		}
+		select {
+		case result := <-calls:
+			if result != test.Result {
+				t.Errorf("test %d: result mismatch: have %s, want %s", i, result, test.Result)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("test %d: rpc execution timeout", i)
 		}
 	}
 }
