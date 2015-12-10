@@ -72,10 +72,6 @@ type Cap struct {
 	Version uint
 }
 
-func (cap Cap) RlpData() interface{} {
-	return []interface{}{cap.Name, cap.Version}
-}
-
 func (cap Cap) String() string {
 	return fmt.Sprintf("%s/%d", cap.Name, cap.Version)
 }
