@@ -378,15 +378,6 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 	}
 }
 
-func (self *jsre) exec(filename string) error {
-	if err := self.re.Exec(filename); err != nil {
-		self.re.Stop(false)
-		return fmt.Errorf("Javascript Error: %v", err)
-	}
-	self.re.Stop(true)
-	return nil
-}
-
 func (self *jsre) interactive() {
 	// Read input lines.
 	prompt := make(chan string)
