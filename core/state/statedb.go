@@ -18,6 +18,7 @@
 package state
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -25,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -205,13 +207,15 @@ func (self *StateDB) Delete(addr common.Address) bool {
 
 // Update the given state object and apply it to state trie
 func (self *StateDB) UpdateStateObject(stateObject *StateObject) {
-	//addr := stateObject.Address()
-
-	if len(stateObject.CodeHash()) > 0 {
-		self.db.Put(stateObject.CodeHash(), stateObject.code)
+	if len(stateObject.code) > 0 {
+		self.db.Put(stateObject.codeHash, stateObject.code)
 	}
 	addr := stateObject.Address()
-	self.trie.Update(addr[:], stateObject.RlpEncode())
+	data, err := rlp.EncodeToBytes(stateObject)
+	if err != nil {
+		panic(fmt.Errorf("can't encode object at %x: %v", addr[:], err))
+	}
+	self.trie.Update(addr[:], data)
 }
 
 // Delete the given state object and delete it from the state trie
@@ -238,10 +242,12 @@ func (self *StateDB) GetStateObject(addr common.Address) (stateObject *StateObje
 	if len(data) == 0 {
 		return nil
 	}
-
-	stateObject = NewStateObjectFromBytes(addr, []byte(data), self.db)
+	stateObject, err := DecodeObject(addr, self.db, data)
+	if err != nil {
+		glog.Errorf("can't decode object at %x: %v", addr[:], err)
+		return nil
+	}
 	self.SetStateObject(stateObject)
-
 	return stateObject
 }
 

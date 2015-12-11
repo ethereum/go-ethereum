@@ -138,8 +138,7 @@ func TestSnapshot2(t *testing.T) {
 	so0 := state.GetStateObject(stateobjaddr0)
 	so0.balance = big.NewInt(42)
 	so0.nonce = 43
-	so0.code = []byte{'c', 'a', 'f', 'e'}
-	so0.codeHash = so0.CodeHash()
+	so0.SetCode([]byte{'c', 'a', 'f', 'e'})
 	so0.remove = true
 	so0.deleted = false
 	so0.dirty = false
@@ -149,8 +148,7 @@ func TestSnapshot2(t *testing.T) {
 	so1 := state.GetStateObject(stateobjaddr1)
 	so1.balance = big.NewInt(52)
 	so1.nonce = 53
-	so1.code = []byte{'c', 'a', 'f', 'e', '2'}
-	so1.codeHash = so1.CodeHash()
+	so1.SetCode([]byte{'c', 'a', 'f', 'e', '2'})
 	so1.remove = true
 	so1.deleted = true
 	so1.dirty = true
