@@ -180,12 +180,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 
 	if !config.SkipBcVersionCheck {
-		b, _ := chainDb.Get([]byte("BlockchainVersion"))
-		bcVersion := int(common.NewValue(b).Uint())
+		bcVersion := core.GetBlockChainVersion(chainDb)
 		if bcVersion != config.BlockChainVersion && bcVersion != 0 {
 			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run geth upgradedb.\n", bcVersion, config.BlockChainVersion)
 		}
-		saveBlockchainVersion(chainDb, config.BlockChainVersion)
+		core.WriteBlockChainVersion(chainDb, config.BlockChainVersion)
 	}
 	glog.V(logger.Info).Infof("Blockchain DB Version: %d", config.BlockChainVersion)
 
@@ -477,15 +476,6 @@ func dagFiles(epoch uint64) (string, string) {
 	seedHash, _ := ethash.GetSeedHash(epoch * epochLength)
 	dag := fmt.Sprintf("full-R%d-%x", ethashRevision, seedHash[:8])
 	return dag, "full-R" + dag
-}
-
-func saveBlockchainVersion(db ethdb.Database, bcVersion int) {
-	d, _ := db.Get([]byte("BlockchainVersion"))
-	blockchainVersion := common.NewValue(d).Uint()
-
-	if blockchainVersion == 0 {
-		db.Put([]byte("BlockchainVersion"), common.NewValue(bcVersion).Bytes())
-	}
 }
 
 // upgradeChainDatabase ensures that the chain database stores block split into
