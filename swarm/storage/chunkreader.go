@@ -8,17 +8,18 @@ import (
 
 type Bounded interface {
 	Size() int64
+	io.Reader
 }
 
 type Sliced interface {
 	Slice(int64, int64) (b []byte, err error)
+	io.Reader
 }
 
 // Size, Seek, Read, ReadAt
 type SectionReader interface {
 	Bounded
 	io.Seeker
-	io.Reader
 	io.ReaderAt
 }
 

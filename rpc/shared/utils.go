@@ -20,7 +20,6 @@ import "strings"
 
 const (
 	AdminApiName    = "admin"
-	BzzApiName      = "bzz"
 	EthApiName      = "eth"
 	DbApiName       = "db"
 	DebugApiName    = "debug"
@@ -38,7 +37,7 @@ const (
 var (
 	// All API's
 	AllApis = strings.Join([]string{
-		AdminApiName, BzzApiName, DbApiName, EthApiName, DebugApiName, MinerApiName, NetApiName,
+		AdminApiName, DbApiName, EthApiName, DebugApiName, MinerApiName, NetApiName,
 		ShhApiName, TxPoolApiName, PersonalApiName, Web3ApiName,
 	}, ",")
 )

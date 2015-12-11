@@ -15,15 +15,23 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+)
+
+const (
+	Namespace = "bzz"
+	Version   = "0.1" // versioning reflect POC and release versions
 )
 
 // the swarm stack
 type Swarm struct {
 	config   *api.Config            // swarm configuration
 	api      *api.Api               // high level api layer (fs/manifest)
+	dns      api.Resolver           // DNS registrar
 	dbAccess *network.DbAccess      // access to local chunk db iterator and storage counter
 	storage  storage.ChunkStore     // internal access to storage, common interface to cloud storage backends
 	dpa      *storage.DPA           // distributed preimage archive, the local API to the storage with document level storage/retrieval support
@@ -78,9 +86,9 @@ func NewSwarm(stack *node.ServiceContext, config *api.Config, swapEnabled bool) 
 	// setup cloud storage internal access layer
 
 	self.storage = storage.NewNetStore(hash, lstore, cloud, config.StoreParams)
-	glog.V(logger.Debug).Infof("[BZZ] -> Level 0: swarm net store shared access layer to Swarm Chunk Store")
+	glog.V(logger.Debug).Infof("[BZZ] -> swarm net store shared access layer to Swarm Chunk Store")
 
-	// set up Depo (storage handler = remote cloud storage access layer)
+	// set up Depo (storage handler = cloud storage access layer for incoming remote requests)
 	self.depo = network.NewDepo(hash, lstore, self.storage)
 	glog.V(logger.Debug).Infof("[BZZ] -> REmote Access to CHunks")
 
@@ -89,14 +97,17 @@ func NewSwarm(stack *node.ServiceContext, config *api.Config, swapEnabled bool) 
 	glog.V(logger.Debug).Infof("[BZZ] -> Local Access to Swarm")
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
-	glog.V(logger.Debug).Infof("[BZZ] -> Level 1: Document/File API")
+	glog.V(logger.Debug).Infof("[BZZ] -> Content Store API")
 
 	// set up high level api
 	backend := api.NewEthApi(ethereum)
 	backend.UpdateState()
-	self.api = api.NewApi(self.dpa, ethreg.New(backend), self.config)
+	self.dns = api.NewDNS(ethreg.New(backend))
+	glog.V(logger.Debug).Infof("[BZZ] -> Swarm Domain Registrar")
+
+	self.api = api.NewApi(self.dpa, self.dns)
 	// Manifests for Smart Hosting
-	glog.V(logger.Debug).Infof("[BZZ] -> Level 2: Collection/Directory API")
+	glog.V(logger.Debug).Infof("[BZZ] -> Web3 virtual server API")
 
 	// set chequebook
 	if swapEnabled {
@@ -143,7 +154,7 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	// start swarm http proxy server
 	if self.config.Port != "" {
-		go api.StartHttpServer(self.api, self.config.Port)
+		go httpapi.StartHttpServer(self.api, self.config.Port)
 	}
 	glog.V(logger.Debug).Infof("[BZZ] Swarm http proxy started on port: %v", self.config.Port)
 
@@ -154,7 +165,7 @@ func (self *Swarm) Start(net *p2p.Server) error {
 		"bzz": self.config.Port,
 	}
 	for scheme, port := range schemes {
-		self.client.RegisterScheme(scheme, &api.RoundTripper{Port: port})
+		self.client.RegisterScheme(scheme, &httpapi.RoundTripper{Port: port})
 	}
 	glog.V(logger.Debug).Infof("[BZZ] Swarm protocol handlers registered for url schemes: %v", schemes)
 
@@ -182,8 +193,21 @@ func (self *Swarm) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{proto}
 }
 
-func (self *Swarm) Api() *api.Api {
-	return self.api
+// implements node.Service
+// Apis returns the RPC Api descriptors the Swarm implementation offers
+func (self *Swarm) Apis() []rpc.API {
+	return []rpc.API{
+		// public APIs.
+		rpc.API{Namespace, Version, api.NewStorage(self.api), true},
+		rpc.API{Namespace, Version, self.dns, true},
+		rpc.API{Namespace, Version, &Info{self.config, chequebook.ContractParams}, true},
+		// admin APIs
+		rpc.API{Namespace, Version, api.NewFileSystem(self.api), false},
+		// rpc.API{Namespace, Version, test.New(self), false},
+		// rpc.API{Namespace, Version, api.NewAdmin(self), false},
+		// TODO: external apis exposed
+		rpc.API{"chequebook", chequebook.Version, chequebook.NewApi(self.config.Swap.Chequebook()), true},
+	}
 }
 
 // Backend interface implemented by eth or JSON-IPC client
@@ -223,9 +247,19 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 	}
 
 	self = &Swarm{
-		api:    api.NewApi(dpa, nil, config),
+		api:    api.NewApi(dpa, nil),
 		config: config,
 	}
 
 	return
+}
+
+// serialisable info about swarm
+type Info struct {
+	*api.Config
+	*chequebook.Params
+}
+
+func (self *Info) Info() *Info {
+	return self
 }

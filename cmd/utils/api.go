@@ -68,7 +68,6 @@ func (s *PublicNetApi) PeerCount() *rpc.HexNumber {
 	return rpc.NewHexNumber(s.net.PeerCount())
 }
 
-// ProtocolVersion returns the current ethereum protocol version.
 func (s *PublicNetApi) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
 }
