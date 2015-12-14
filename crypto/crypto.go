@@ -196,9 +196,15 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 	if len(hash) != 32 {
 		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
 	}
+	if prv.D == nil {
+		panic("prv.D is nil")
+	}
+	if prv.Params() == nil {
+		panic("prv.Params() is nil")
+	}
 
 	seckey := common.LeftPadBytes(prv.D.Bytes(), prv.Params().BitSize/8)
-	defer zeroBytes(seckey)
+	// defer zeroBytes(seckey)
 	sig, err = secp256k1.Sign(hash, seckey)
 	return
 }

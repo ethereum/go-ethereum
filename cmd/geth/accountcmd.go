@@ -21,11 +21,8 @@ import (
 	"io/ioutil"
 
 	"github.com/codegangsta/cli"
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 var (
@@ -173,94 +170,10 @@ func accountList(ctx *cli.Context) {
 	}
 }
 
-// tries unlocking the specified account a few times.
-func unlockAccount(ctx *cli.Context, accman *accounts.Manager, address string, i int, passwords []string) (accounts.Account, string) {
-	account, err := utils.MakeAddress(accman, address)
-	if err != nil {
-		utils.Fatalf("Could not list accounts: %v", err)
-	}
-	for trials := 0; trials < 3; trials++ {
-		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)
-		password := getPassPhrase(prompt, false, i, passwords)
-		err = accman.Unlock(account, password)
-		if err == nil {
-			glog.V(logger.Info).Infof("Unlocked account %x", account.Address)
-			return account, password
-		}
-		if err, ok := err.(*accounts.AmbiguousAddrError); ok {
-			glog.V(logger.Info).Infof("Unlocked account %x", account.Address)
-			return ambiguousAddrRecovery(accman, err, password), password
-		}
-		if err != accounts.ErrDecrypt {
-			// No need to prompt again if the error is not decryption-related.
-			break
-		}
-	}
-	// All trials expended to unlock account, bail out
-	utils.Fatalf("Failed to unlock account %s (%v)", address, err)
-	return accounts.Account{}, ""
-}
-
-// getPassPhrase retrieves the passwor associated with an account, either fetched
-// from a list of preloaded passphrases, or requested interactively from the user.
-func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) string {
-	// If a list of passwords was supplied, retrieve from them
-	if len(passwords) > 0 {
-		if i < len(passwords) {
-			return passwords[i]
-		}
-		return passwords[len(passwords)-1]
-	}
-	// Otherwise prompt the user for the password
-	if prompt != "" {
-		fmt.Println(prompt)
-	}
-	password, err := utils.Stdin.PasswordPrompt("Passphrase: ")
-	if err != nil {
-		utils.Fatalf("Failed to read passphrase: %v", err)
-	}
-	if confirmation {
-		confirm, err := utils.Stdin.PasswordPrompt("Repeat passphrase: ")
-		if err != nil {
-			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
-		}
-		if password != confirm {
-			utils.Fatalf("Passphrases do not match")
-		}
-	}
-	return password
-}
-
-func ambiguousAddrRecovery(am *accounts.Manager, err *accounts.AmbiguousAddrError, auth string) accounts.Account {
-	fmt.Printf("Multiple key files exist for address %x:\n", err.Addr)
-	for _, a := range err.Matches {
-		fmt.Println("  ", a.File)
-	}
-	fmt.Println("Testing your passphrase against all of them...")
-	var match *accounts.Account
-	for _, a := range err.Matches {
-		if err := am.Unlock(a, auth); err == nil {
-			match = &a
-			break
-		}
-	}
-	if match == nil {
-		utils.Fatalf("None of the listed files could be unlocked.")
-	}
-	fmt.Printf("Your passphrase unlocked %s\n", match.File)
-	fmt.Println("In order to avoid this warning, you need to remove the following duplicate key files:")
-	for _, a := range err.Matches {
-		if a != *match {
-			fmt.Println("  ", a.File)
-		}
-	}
-	return *match
-}
-
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) {
 	accman := utils.MakeAccountManager(ctx)
-	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
+	password := utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
 	account, err := accman.NewAccount(password)
 	if err != nil {
@@ -277,8 +190,8 @@ func accountUpdate(ctx *cli.Context) {
 	}
 	accman := utils.MakeAccountManager(ctx)
 
-	account, oldPassword := unlockAccount(ctx, accman, ctx.Args().First(), 0, nil)
-	newPassword := getPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
+	account, oldPassword := utils.UnlockAccount(accman, ctx.Args().First(), 0, nil)
+	newPassword := utils.GetPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
 	if err := accman.Update(account, oldPassword, newPassword); err != nil {
 		utils.Fatalf("Could not update the account: %v", err)
 	}
@@ -295,7 +208,7 @@ func importWallet(ctx *cli.Context) {
 	}
 
 	accman := utils.MakeAccountManager(ctx)
-	passphrase := getPassPhrase("", false, 0, utils.MakePasswordList(ctx))
+	passphrase := utils.GetPassPhrase("", false, 0, utils.MakePasswordList(ctx))
 
 	acct, err := accman.ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
@@ -314,7 +227,7 @@ func accountImport(ctx *cli.Context) {
 		utils.Fatalf("keyfile must be given as argument")
 	}
 	accman := utils.MakeAccountManager(ctx)
-	passphrase := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
+	passphrase := utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 	acct, err := accman.ImportECDSA(key, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)

@@ -4,9 +4,9 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const requesterCount = 3
@@ -18,7 +18,6 @@ via the native bzz protocol
 which uses an MSB logarithmic distance-based semi-permanent Kademlia table for
 * recursive forwarding style routing for retrieval
 * smart syncronisation
-* TODO: beeline delivery, IPFS, IPΞS
 */
 
 type forwarder struct {
@@ -42,26 +41,30 @@ var searchTimeout = 3 * time.Second
 func (self *forwarder) Retrieve(chunk *storage.Chunk) {
 	peers := self.hive.getPeers(chunk.Key, 0)
 	glog.V(logger.Detail).Infof("[BZZ] forwarder.Retrieve: %v - received %d peers from KΛÐΞMLIΛ...", chunk.Key.Log(), len(peers))
+OUT:
 	for _, p := range peers {
 		glog.V(logger.Detail).Infof("[BZZ] forwarder.Retrieve: sending retrieveRequest %v to peer [%v]", chunk.Key.Log(), p)
-		var req *retrieveRequestMsgData
-	OUT:
 		for _, recipients := range chunk.Req.Requesters {
 			for _, recipient := range recipients {
 				req := recipient.(*retrieveRequestMsgData)
 				if req.from.Addr() == p.Addr() {
-					break OUT
+					continue OUT
 				}
 			}
 		}
-		if req != nil {
-			if err := p.swap.Add(-1); err == nil {
-				p.retrieve(req)
-				break
-			} else {
-				glog.V(logger.Warn).Infof("[BZZ] forwarder.Retrieve: unable to send retrieveRequest to peer [%v]: %v", chunk.Key.Log(), err)
-			}
+		req := &retrieveRequestMsgData{
+			Key: chunk.Key,
+			Id:  generateId(),
 		}
+		var err error
+		if p.swap != nil {
+			err = p.swap.Add(-1)
+		}
+		if err == nil {
+			p.retrieve(req)
+			break OUT
+		}
+		glog.V(logger.Warn).Infof("[BZZ] forwarder.Retrieve: unable to send retrieveRequest to peer [%v]: %v", chunk.Key.Log(), err)
 	}
 }
 
@@ -79,14 +82,14 @@ func (self *forwarder) Store(chunk *storage.Chunk) {
 		source = chunk.Source.(*peer)
 	}
 	for _, p := range self.hive.getPeers(chunk.Key, 0) {
-		glog.V(logger.Detail).Infof("[BZZ] %v %v", p, chunk)
+		glog.V(logger.Detail).Infof("[BZZ] forwarder.Store: %v %v", p, chunk)
 
-		if source == nil || p.Addr() != source.Addr() {
+		if p.syncer != nil && (source == nil || p.Addr() != source.Addr()) {
 			n++
 			Deliver(p, msg, PropagateReq)
 		}
 	}
-	glog.V(logger.Detail).Infof("[BZZ] forwarder.Store: sent to %v ps (chunk = %v)", n, chunk)
+	glog.V(logger.Detail).Infof("[BZZ] forwarder.Store: sent to %v peers (chunk = %v)", n, chunk)
 }
 
 // once a chunk is found deliver it to its requesters unless timed out
@@ -104,7 +107,7 @@ func (self *forwarder) Deliver(chunk *storage.Chunk) {
 		for id, r := range requesters {
 			req = r.(*retrieveRequestMsgData)
 			if req.timeout == nil || req.timeout.After(time.Now()) {
-				glog.V(logger.Ridiculousness).Infof("[BZZ] forwarder.Deliver: %v -> %v", req.Id, req.from)
+				glog.V(logger.Detail).Infof("[BZZ] forwarder.Deliver: %v -> %v", req.Id, req.from)
 				msg.Id = uint64(id)
 				Deliver(req.from, msg, DeliverReq)
 				n++
@@ -114,7 +117,7 @@ func (self *forwarder) Deliver(chunk *storage.Chunk) {
 				}
 			}
 		}
-		glog.V(logger.Detail).Infof("[BZZ] NetStore.Deliver: submit chunk %v (request id %v) for delivery to %v peers", chunk.Key.Log(), id, n)
+		glog.V(logger.Detail).Infof("[BZZ] forwarder.Deliver: submit chunk %v (request id %v) for delivery to %v peers", chunk.Key.Log(), id, n)
 	}
 }
 

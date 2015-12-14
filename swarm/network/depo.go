@@ -5,9 +5,9 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // Handler for storage/retrieval related protocol requests
@@ -51,6 +51,7 @@ func (self *Depo) HandleUnsyncedKeysMsg(req *unsyncedKeysMsgData, p *peer) error
 	if err != nil {
 		return err
 	}
+	// set peers state to persist
 	p.syncState = req.State
 	return nil
 }
@@ -124,7 +125,11 @@ func (self *Depo) HandleRetrieveRequestMsg(req *retrieveRequestMsgData, p *peer)
 	req.from = p
 	// swap - record credit for 1 request
 	// note that only charge actual reqsearches
-	if err := p.swap.Add(1); err != nil {
+	var err error
+	if p.swap != nil {
+		err = p.swap.Add(1)
+	}
+	if err != nil {
 		glog.V(logger.Warn).Infof("[BZZ] Depo.HandleRetrieveRequest: %v - cannot process request: %v", req.Key.Log(), err)
 		return
 	}

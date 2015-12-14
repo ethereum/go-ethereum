@@ -6,7 +6,6 @@ package storage
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -81,16 +80,4 @@ func (self *LDBDatabase) Write(batch *leveldb.Batch) error {
 func (self *LDBDatabase) Close() {
 	// Close the leveldb database
 	self.db.Close()
-}
-
-func (self *LDBDatabase) Print() {
-	iter := self.db.NewIterator(nil, nil)
-	for iter.Next() {
-		key := iter.Key()
-		value := iter.Value()
-
-		fmt.Printf("%x(%d): ", key, len(key))
-		node := common.NewValueFromBytes(value)
-		fmt.Printf("%v\n", node)
-	}
 }
