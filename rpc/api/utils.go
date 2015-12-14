@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -53,6 +54,13 @@ var (
 			"startRPC",
 			"stopNatSpec",
 			"stopRPC",
+			"setGlobalRegistrar",
+			"setHashReg",
+			"setUrlHint",
+			"saveInfo",
+			"getContractInfo",
+			"sleep",
+			"httpGet",
 			"verbosity",
 		},
 		"db": []string{
@@ -101,7 +109,7 @@ var (
 			"hashrate",
 			"mining",
 			"namereg",
-			"pendingTransactions",
+			"getPendingTransactions",
 			"resend",
 			"sendRawTransaction",
 			"sendTransaction",
@@ -115,6 +123,7 @@ var (
 			"setExtra",
 			"setGasPrice",
 			"startAutoDAG",
+			"setEtherbase",
 			"start",
 			"stopAutoDAG",
 			"stop",
@@ -154,7 +163,7 @@ var (
 )
 
 // Parse a comma separated API string to individual api's
-func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.Ethereum) ([]shared.EthereumApi, error) {
+func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, stack *node.Node) ([]shared.EthereumApi, error) {
 	if len(strings.TrimSpace(apistr)) == 0 {
 		return nil, fmt.Errorf("Empty apistr provided")
 	}
@@ -162,10 +171,16 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 	names := strings.Split(apistr, ",")
 	apis := make([]shared.EthereumApi, len(names))
 
+	var eth *eth.Ethereum
+	if stack != nil {
+		if err := stack.Service(&eth); err != nil {
+			return nil, err
+		}
+	}
 	for i, name := range names {
 		switch strings.ToLower(strings.TrimSpace(name)) {
 		case shared.AdminApiName:
-			apis[i] = NewAdminApi(xeth, eth, codec)
+			apis[i] = NewAdminApi(xeth, stack, codec)
 		case shared.DebugApiName:
 			apis[i] = NewDebugApi(xeth, eth, codec)
 		case shared.DbApiName:
@@ -184,11 +199,12 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 			apis[i] = NewPersonalApi(xeth, eth, codec)
 		case shared.Web3ApiName:
 			apis[i] = NewWeb3Api(xeth, codec)
+		case "rpc": // gives information about the RPC interface
+			continue
 		default:
 			return nil, fmt.Errorf("Unknown API '%s'", name)
 		}
 	}
-
 	return apis, nil
 }
 

@@ -34,7 +34,7 @@ import (
 func TestTable_pingReplace(t *testing.T) {
 	doit := func(newNodeIsResponding, lastInBucketIsResponding bool) {
 		transport := newPingRecorder()
-		tab := newTable(transport, NodeID{}, &net.UDPAddr{}, "")
+		tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{}, "")
 		defer tab.Close()
 		pingSender := newNode(MustHexID("a502af0f59b2aab7746995408c79e9ca312d2793cc997e44fc55eda62f0150bbb8c59a6f9269ba3a081518b62699ee807c7c19c20125ddfccca872608af9e370"), net.IP{}, 99, 99)
 
@@ -177,7 +177,7 @@ func TestTable_closest(t *testing.T) {
 
 	test := func(test *closeTest) bool {
 		// for any node table, Target and N
-		tab := newTable(nil, test.Self, &net.UDPAddr{}, "")
+		tab, _ := newTable(nil, test.Self, &net.UDPAddr{}, "")
 		defer tab.Close()
 		tab.stuff(test.All)
 
@@ -236,7 +236,7 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 		},
 	}
 	test := func(buf []*Node) bool {
-		tab := newTable(nil, NodeID{}, &net.UDPAddr{}, "")
+		tab, _ := newTable(nil, NodeID{}, &net.UDPAddr{}, "")
 		defer tab.Close()
 		for i := 0; i < len(buf); i++ {
 			ld := cfg.Rand.Intn(len(tab.buckets))
@@ -279,7 +279,7 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 
 func TestTable_Lookup(t *testing.T) {
 	self := nodeAtDistance(common.Hash{}, 0)
-	tab := newTable(lookupTestnet, self.ID, &net.UDPAddr{}, "")
+	tab, _ := newTable(lookupTestnet, self.ID, &net.UDPAddr{}, "")
 	defer tab.Close()
 
 	// lookup on empty table returns no nodes

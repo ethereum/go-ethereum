@@ -149,11 +149,7 @@ func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*Bl
 
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
-		reader, err := NewDefaultGenesisReader()
-		if err != nil {
-			return nil, err
-		}
-		bc.genesisBlock, err = WriteGenesisBlock(chainDb, reader)
+		bc.genesisBlock, err = WriteDefaultGenesisBlock(chainDb)
 		if err != nil {
 			return nil, err
 		}

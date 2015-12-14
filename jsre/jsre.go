@@ -85,7 +85,6 @@ func (self *JSRE) runEventLoop() {
 	ready := make(chan *jsTimer)
 
 	newTimer := func(call otto.FunctionCall, interval bool) (*jsTimer, otto.Value) {
-
 		delay, _ := call.Argument(1).ToInteger()
 		if 0 >= delay {
 			delay = 1
@@ -105,7 +104,6 @@ func (self *JSRE) runEventLoop() {
 		if err != nil {
 			panic(err)
 		}
-
 		return timer, value
 	}
 
@@ -127,8 +125,20 @@ func (self *JSRE) runEventLoop() {
 		}
 		return otto.UndefinedValue()
 	}
-	vm.Set("setTimeout", setTimeout)
-	vm.Set("setInterval", setInterval)
+	vm.Set("_setTimeout", setTimeout)
+	vm.Set("_setInterval", setInterval)
+	vm.Run(`var setTimeout = function(args) {
+		if (arguments.length < 1) {
+			throw TypeError("Failed to execute 'setTimeout': 1 argument required, but only 0 present.");
+		}
+		return _setTimeout.apply(this, arguments);
+	}`)
+	vm.Run(`var setInterval = function(args) {
+		if (arguments.length < 1) {
+			throw TypeError("Failed to execute 'setInterval': 1 argument required, but only 0 present.");
+		}
+		return _setInterval.apply(this, arguments);
+	}`)
 	vm.Set("clearTimeout", clearTimeout)
 	vm.Set("clearInterval", clearTimeout)
 
@@ -154,7 +164,7 @@ loop:
 			if err != nil {
 				fmt.Println("js error:", err, arguments)
 			}
-		
+
 			_, inreg := registry[timer] // when clearInterval is called from within the callback don't reset it
 			if timer.interval && inreg {
 				timer.timer.Reset(timer.duration)

@@ -220,7 +220,7 @@ func newCanonical(n int, full bool) (ethdb.Database, *BlockChain, error) {
 	evmux := &event.TypeMux{}
 
 	// Initialize a fresh chain with only a genesis block
-	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+	genesis, _ := WriteTestNetGenesisBlock(db)
 
 	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
 	// Create and inject the requested chain

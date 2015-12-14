@@ -4,7 +4,7 @@
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// (at your option) any later	 version.
 //
 // go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -30,16 +30,12 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc/codec"
@@ -68,22 +64,9 @@ func init() {
 	}
 
 	app = utils.NewApp(Version, "the go-ethereum command line interface")
-	app.Action = run
+	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
-		{
-			Action: blockRecovery,
-			Name:   "recover",
-			Usage:  "Attempts to recover a corrupted database by setting a new block by number or hash",
-			Description: `
-The recover commands will attempt to read out the last
-block based on that.
-
-recover #number recovers by number
-recover <hex> recovers by hash
-`,
-		},
-		blocktestCommand,
 		importCommand,
 		exportCommand,
 		upgradedbCommand,
@@ -285,7 +268,7 @@ This command allows to open a console on a running geth node.
 `,
 		},
 		{
-			Action: execJSFiles,
+			Action: execScripts,
 			Name:   "js",
 			Usage:  `executes the given JavaScript files in the Geth JavaScript VM`,
 			Description: `
@@ -328,8 +311,12 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IPCDisabledFlag,
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
+		utils.IPCExperimental,
 		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
+		utils.SwarmConfigPathFlag,
+		utils.SwarmAccountAddrFlag,
+		utils.ChequebookAddrFlag,
 		utils.DevModeFlag,
 		utils.TestNetFlag,
 		utils.VMDebugFlag,
@@ -376,14 +363,6 @@ func main() {
 	}
 }
 
-// makeExtra resolves extradata for the miner from a flag or returns a default.
-func makeExtra(ctx *cli.Context) []byte {
-	if ctx.GlobalIsSet(utils.ExtraDataFlag.Name) {
-		return []byte(ctx.GlobalString(utils.ExtraDataFlag.Name))
-	}
-	return makeDefaultExtra()
-}
-
 func makeDefaultExtra() []byte {
 	var clientInfo = struct {
 		Version   uint
@@ -404,18 +383,13 @@ func makeDefaultExtra() []byte {
 	return extra
 }
 
-func run(ctx *cli.Context) {
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	cfg.ExtraData = makeExtra(ctx)
-
-	ethereum, err := eth.New(cfg)
-	if err != nil {
-		utils.Fatalf("%v", err)
-	}
-
-	startEth(ctx, ethereum)
-	// this blocks the thread
-	ethereum.WaitForShutdown()
+// geth is the main entry point into the system if no special subcommand is ran.
+// It creates a default node based on the command line arguments and runs it in
+// blocking mode, waiting for it to be shut down.
+func geth(ctx *cli.Context) {
+	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
+	startNode(ctx, node)
+	node.Wait()
 }
 
 func attach(ctx *cli.Context) {
@@ -449,156 +423,83 @@ func attach(ctx *cli.Context) {
 	}
 }
 
+// console starts a new geth node, attaching a JavaScript console to it at the
+// same time.
 func console(ctx *cli.Context) {
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	cfg.ExtraData = makeExtra(ctx)
+	// Create and start the node based on the CLI flags
+	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
 
-	ethereum, err := eth.New(cfg)
-	if err != nil {
-		utils.Fatalf("%v", err)
-	}
+	startNode(ctx, node)
 
+	// Attach to the newly started node, and either execute script or become interactive
 	client := comms.NewInProcClient(codec.JSON)
-
-	startEth(ctx, ethereum)
-	repl := newJSRE(
-		ethereum,
+	repl := newJSRE(node,
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		client,
-		true,
-		nil,
-	)
+		client, true, nil)
 
-	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
-		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))
+	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
+		repl.batch(script)
 	} else {
 		repl.welcome()
 		repl.interactive()
 	}
-
-	ethereum.Stop()
-	ethereum.WaitForShutdown()
+	node.Stop()
 }
 
-func execJSFiles(ctx *cli.Context) {
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	ethereum, err := eth.New(cfg)
-	if err != nil {
-		utils.Fatalf("%v", err)
-	}
+// execScripts starts a new geth node based on the CLI flags, and executes each
+// of the JavaScript files specified as command arguments.
+func execScripts(ctx *cli.Context) {
+	// Create and start the node based on the CLI flags
+	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
+	startNode(ctx, node)
 
+	// Attach to the newly started node and execute the given scripts
 	client := comms.NewInProcClient(codec.JSON)
-	startEth(ctx, ethereum)
-	repl := newJSRE(
-		ethereum,
+	repl := newJSRE(node,
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		client,
-		false,
-		nil,
-	)
+		client, false, nil)
+
 	for _, file := range ctx.Args() {
 		repl.exec(file)
 	}
-
-	ethereum.Stop()
-	ethereum.WaitForShutdown()
+	node.Stop()
 }
 
-func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int, inputpassphrases []string) (addrHex, auth string, passphrases []string) {
-	var err error
-	passphrases = inputpassphrases
-	addrHex, err = utils.ParamToAddress(addr, am)
-	if err == nil {
-		// Attempt to unlock the account 3 times
-		attempts := 3
-		for tries := 0; tries < attempts; tries++ {
-			msg := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", addr, tries+1, attempts)
-			auth, passphrases = getPassPhrase(ctx, msg, false, i, passphrases)
-			err = am.Unlock(common.HexToAddress(addrHex), auth)
-			if err == nil || passphrases != nil {
-				break
-			}
-		}
-	}
+// startNode unlocks any requested accounts the boots up the system node
+// starts all registered protocols and
+// starts the RPC/IPC interfaces and the
+// miner.
+func startNode(ctx *cli.Context, stack *node.Node) {
+	// Start up the node itself
+	utils.StartNode(stack)
 
-	if err != nil {
-		utils.Fatalf("Unlock account '%s' (%v) failed: %v", addr, addrHex, err)
-	}
-	fmt.Printf("Account '%s' (%v) unlocked.\n", addr, addrHex)
-	return
-}
-
-func blockRecovery(ctx *cli.Context) {
-	if len(ctx.Args()) < 1 {
-		glog.Fatal("recover requires block number or hash")
-	}
-	arg := ctx.Args().First()
-
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"), cfg.DatabaseCache)
-	if err != nil {
-		glog.Fatalln("could not open db:", err)
-	}
-
-	var block *types.Block
-	if arg[0] == '#' {
-		block = core.GetBlock(blockDb, core.GetCanonicalHash(blockDb, common.String2Big(arg[1:]).Uint64()))
-	} else {
-		block = core.GetBlock(blockDb, common.HexToHash(arg))
-	}
-
-	if block == nil {
-		glog.Fatalln("block not found. Recovery failed")
-	}
-
-	if err = core.WriteHeadBlockHash(blockDb, block.Hash()); err != nil {
-		glog.Fatalln("block write err", err)
-	}
-	glog.Infof("Recovery succesful. New HEAD %x\n", block.Hash())
-}
-
-func startEth(ctx *cli.Context, eth *eth.Ethereum) {
-	// Start Ethereum itself
-	utils.StartEthereum(eth)
-
-	am := eth.AccountManager()
-	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
-	accounts := strings.Split(account, " ")
-	var passphrases []string
-	for i, account := range accounts {
-		if len(account) > 0 {
-			if account == "primary" {
-				utils.Fatalf("the 'primary' keyword is deprecated. You can use integer indexes, but the indexes are not permanent, they can change if you add external keys, export your keys or copy your keystore to another node.")
-			}
-			_, _, passphrases = unlockAccount(ctx, am, account, i, passphrases)
-		}
-	}
 	// Start auxiliary services if enabled.
 	if !ctx.GlobalBool(utils.IPCDisabledFlag.Name) {
-		if err := utils.StartIPC(eth, ctx); err != nil {
-			utils.Fatalf("Error string IPC: %v", err)
+		if err := utils.StartIPC(stack, ctx); err != nil {
+			utils.Fatalf("Failed to start IPC: %v", err)
 		}
 	}
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
-		if err := utils.StartRPC(eth, ctx); err != nil {
-			utils.Fatalf("Error starting RPC: %v", err)
+		if err := utils.StartRPC(stack, ctx); err != nil {
+			utils.Fatalf("Failed to start RPC: %v", err)
 		}
 	}
+	var ethereum *eth.Ethereum
+	if err := stack.Service(&ethereum); err != nil {
+		utils.Fatalf("ethereum service not running: %v", err)
+	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		err := eth.StartMining(
-			ctx.GlobalInt(utils.MinerThreadsFlag.Name),
-			ctx.GlobalString(utils.MiningGPUFlag.Name))
-		if err != nil {
-			utils.Fatalf("%v", err)
+		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name), ctx.GlobalString(utils.MiningGPUFlag.Name)); err != nil {
+			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}
 }
 
 func accountList(ctx *cli.Context) {
-	am := utils.MakeAccountManager(ctx)
-	accts, err := am.Accounts()
+	accman := utils.MakeAccountManager(ctx)
+	accts, err := accman.Accounts()
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
 	}
@@ -607,67 +508,29 @@ func accountList(ctx *cli.Context) {
 	}
 }
 
-func getPassPhrase(ctx *cli.Context, desc string, confirmation bool, i int, inputpassphrases []string) (passphrase string, passphrases []string) {
-	passfile := ctx.GlobalString(utils.PasswordFileFlag.Name)
-	if len(passfile) == 0 {
-		fmt.Println(desc)
-		auth, err := utils.PromptPassword("Passphrase: ", true)
-		if err != nil {
-			utils.Fatalf("%v", err)
-		}
-		if confirmation {
-			confirm, err := utils.PromptPassword("Repeat Passphrase: ", false)
-			if err != nil {
-				utils.Fatalf("%v", err)
-			}
-			if auth != confirm {
-				utils.Fatalf("Passphrases did not match.")
-			}
-		}
-		passphrase = auth
-
-	} else {
-		passphrases = inputpassphrases
-		if passphrases == nil {
-			passbytes, err := ioutil.ReadFile(passfile)
-			if err != nil {
-				utils.Fatalf("Unable to read password file '%s': %v", passfile, err)
-			}
-			// this is backwards compatible if the same password unlocks several accounts
-			// it also has the consequence that trailing newlines will not count as part
-			// of the password, so --password <(echo -n 'pass') will now work without -n
-			passphrases = strings.Split(string(passbytes), "\n")
-		}
-		if i >= len(passphrases) {
-			passphrase = passphrases[len(passphrases)-1]
-		} else {
-			passphrase = passphrases[i]
-		}
-	}
-	return
-}
-
+// accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) {
-	am := utils.MakeAccountManager(ctx)
-	passphrase, _ := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, nil)
-	acct, err := am.NewAccount(passphrase)
+	accman := utils.MakeAccountManager(ctx)
+	password := utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
+
+	account, err := accman.NewAccount(password)
 	if err != nil {
-		utils.Fatalf("Could not create the account: %v", err)
+		utils.Fatalf("Failed to create account: %v", err)
 	}
-	fmt.Printf("Address: %x\n", acct)
+	fmt.Printf("Address: %x\n", account)
 }
 
+// accountUpdate transitions an account from a previous format to the current
+// one, also providing the possibility to change the pass-phrase.
 func accountUpdate(ctx *cli.Context) {
-	am := utils.MakeAccountManager(ctx)
-	arg := ctx.Args().First()
-	if len(arg) == 0 {
-		utils.Fatalf("account address or index must be given as argument")
+	if len(ctx.Args()) == 0 {
+		utils.Fatalf("No accounts specified to update")
 	}
+	accman := utils.MakeAccountManager(ctx)
 
-	addr, authFrom, passphrases := unlockAccount(ctx, am, arg, 0, nil)
-	authTo, _ := getPassPhrase(ctx, "Please give a new password. Do not forget this password.", true, 0, passphrases)
-	err := am.Update(common.HexToAddress(addr), authFrom, authTo)
-	if err != nil {
+	account, oldPassword := utils.UnlockAccount(ctx, accman, ctx.Args().First(), 0, nil)
+	newPassword := utils.GetPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
+	if err := accman.Update(account, oldPassword, newPassword); err != nil {
 		utils.Fatalf("Could not update the account: %v", err)
 	}
 }
@@ -682,10 +545,10 @@ func importWallet(ctx *cli.Context) {
 		utils.Fatalf("Could not read wallet file: %v", err)
 	}
 
-	am := utils.MakeAccountManager(ctx)
-	passphrase, _ := getPassPhrase(ctx, "", false, 0, nil)
+	accman := utils.MakeAccountManager(ctx)
+	passphrase := utils.GetPassPhrase("", false, 0, utils.MakePasswordList(ctx))
 
-	acct, err := am.ImportPreSaleKey(keyJson, passphrase)
+	acct, err := accman.ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
@@ -697,9 +560,9 @@ func accountImport(ctx *cli.Context) {
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
 	}
-	am := utils.MakeAccountManager(ctx)
-	passphrase, _ := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, nil)
-	acct, err := am.Import(keyfile, passphrase)
+	accman := utils.MakeAccountManager(ctx)
+	passphrase := utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
+	acct, err := accman.Import(keyfile, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}

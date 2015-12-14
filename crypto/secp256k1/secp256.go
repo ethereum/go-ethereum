@@ -20,6 +20,7 @@ package secp256k1
 
 /*
 #cgo CFLAGS: -I./libsecp256k1
+#cgo CFLAGS: -I./libsecp256k1/src/
 #cgo darwin CFLAGS: -I/usr/local/include
 #cgo freebsd CFLAGS: -I/usr/local/include
 #cgo linux,arm CFLAGS: -I/usr/local/arm/include
@@ -35,6 +36,7 @@ package secp256k1
 #define NDEBUG
 #include "./libsecp256k1/src/secp256k1.c"
 #include "./libsecp256k1/src/modules/recovery/main_impl.h"
+#include "pubkey_scalar_mul.h"
 
 typedef void (*callbackFunc) (const char* msg, void* data);
 extern void secp256k1GoPanicIllegal(const char* msg, void* data);
@@ -44,6 +46,7 @@ import "C"
 
 import (
 	"errors"
+	"math/big"
 	"unsafe"
 
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
@@ -56,13 +59,16 @@ import (
    > store private keys in buffer and shuffle (deters persistance on swap disc)
    > byte permutation (changing)
    > xor with chaning random block (to deter scanning memory for 0x63) (stream cipher?)
-   > on disk: store keys in wallets
 */
 
 // holds ptr to secp256k1_context_struct (see secp256k1/include/secp256k1.h)
-var context *C.secp256k1_context
+var (
+	context *C.secp256k1_context
+	N       *big.Int
+)
 
 func init() {
+	N, _ = new(big.Int).SetString("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
 	// around 20 ms on a modern CPU.
 	context = C.secp256k1_context_create(3) // SECP256K1_START_SIGN | SECP256K1_START_VERIFY
 	C.secp256k1_context_set_illegal_callback(context, C.callbackFunc(C.secp256k1GoPanicIllegal), nil)
@@ -78,7 +84,6 @@ var (
 func GenerateKeyPair() ([]byte, []byte) {
 	var seckey []byte = randentropy.GetEntropyCSPRNG(32)
 	var seckey_ptr *C.uchar = (*C.uchar)(unsafe.Pointer(&seckey[0]))
-
 	var pubkey64 []byte = make([]byte, 64) // secp256k1_pubkey
 	var pubkey65 []byte = make([]byte, 65) // 65 byte uncompressed pubkey
 	pubkey64_ptr := (*C.secp256k1_pubkey)(unsafe.Pointer(&pubkey64[0]))
@@ -253,4 +258,17 @@ func checkSignature(sig []byte) error {
 		return ErrInvalidRecoveryID
 	}
 	return nil
+}
+
+// reads num into buf as big-endian bytes.
+func readBits(buf []byte, num *big.Int) {
+	const wordLen = int(unsafe.Sizeof(big.Word(0)))
+	i := len(buf)
+	for _, d := range num.Bits() {
+		for j := 0; j < wordLen && i > 0; j++ {
+			i--
+			buf[i] = byte(d)
+			d >>= 8
+		}
+	}
 }
