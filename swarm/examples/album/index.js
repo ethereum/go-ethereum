@@ -2,7 +2,8 @@
 // Copyright(c) 2003-2014 by wave++ "Yuri D'Elia" <wavexx@thregr.org>
 // Distributed under GPL2 (see COPYING) WITHOUT ANY WARRANTY.
 var datafile = 'data.json';
-var padding = 22;
+var padding = 100;
+var marginTop = 50;
 var duration = 500;
 var thrdelay = 1500;
 var hidedelay = 3000;
@@ -41,6 +42,7 @@ var eback;	// background
 var enoise;	// additive noise
 var eflash;	// flashing object
 var ehdr;	// header
+var progress;	// progress
 var elist;	// thumbnail list
 var fscr;	// thumbnail list scroll fx
 var econt;	// picture container
@@ -231,7 +233,7 @@ function resizeMainImg(img)
   img.setStyles(
   {
     'position': 'absolute',
-    'top': contSize.y / 2 - img.height / 2,
+    'top': (contSize.y / 2 - img.height / 2) + marginTop,
     'left': contSize.x / 2 - img.width / 2
   });
 }
@@ -264,15 +266,6 @@ function centerThumb(duration)
   fscr = new Fx.Scroll(elist, { duration: duration }).start(x, y);
 }
 
-function sendImgs(xhr, uri) {
-  // set up request
-  xhr.open("PUT", uri + "data.json", true);
-  xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
-
-  // send the collected data as JSON
-  xhr.send(JSON.stringify(imgs));
-}
-
 function imageToUrl(img, w, h) {
   var can = document.createElement('canvas');
   can.width = w;
@@ -280,70 +273,6 @@ function imageToUrl(img, w, h) {
   var cntxt = can.getContext("2d");
   cntxt.drawImage(img, 0, 0, w, h);
   return can.toDataURL();
-}
-
-function uploadFile(files, nr, uri) {
-  if(files.length <= nr) {
-    if(uri != "") {
-      var xhr = new XMLHttpRequest();
-      xhr.onreadystatechange = function() { if (xhr.readyState === 4) {
-        var i = xhr.responseText;
-        window.location.replace("/" + i + "/");
-      }};
-      sendImgs(xhr, uri);
-    }
-    return;
-  }
-  var imageType = /^image\//;
-  var file = files[nr];
-  if(!imageType.test(file.type)) {
-    uploadFile(files, nr + 1, uri);
-    return;
-  }
-
-  var xhr = new XMLHttpRequest();
-  xhr.onreadystatechange = function() { if (xhr.readyState === 4) {
-    var i = xhr.responseText;
-
-    // insert image into index
-    var img = new Image();
-    img.onload = function() {
-      var blur = imageToUrl(img, 5, 5);
-      var thumbData = [];
-      var thumbSize = 200;
-      if(img.naturalWidth > img.naturalHeight) {
-        // landscape thumbnail
-        var h = img.naturalHeight * thumbSize / img.naturalWidth;
-        thumbData[0] = imageToUrl(img, thumbSize, h);
-        thumbData[1] = [thumbSize, h];
-      } else {
-        // portrait thumbnail
-        var w = img.naturalWidth * thumbSize / img.naturalHeight;
-        thumbData[0] = imageToUrl(img, w, thumbsize);
-        thumbData[1] = [w, thumbSize];
-      }
-      // update index
-      var imgData = [];
-      imgData[0] = "imgs/" + file.name;
-      imgData[1] = [img.naturalWidth, img.naturalHeight];
-      imgs.data.splice(eidx, 0, {img: imgData, thumb: thumbData, blur: blur});
-      uploadFile(files, nr + 1, "/" + i + "/");
-    }
-    img.src = "/" + i + "/imgs/" + file.name;
-    return;
-  }};
-  xhr.open("PUT", uri + "imgs/" + file.name, true);
-  xhr.setRequestHeader('Content-Type', file.type);
-
-  var reader = new FileReader();
-  reader.onload = function(evt) {
-    xhr.send(evt.target.result);
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function handleFiles(files) {
-  uploadFile(files, 0, "");
 }
 
 function deleteImg()
@@ -361,13 +290,13 @@ function deleteImg()
     var xhrd = new XMLHttpRequest();
     xhrd.onreadystatechange = function () {  if (xhrd.readyState === 4) {
       var j = xhrd.responseText;
-      window.location.replace("/" + j + "/");
+      window.location.replace("/bzz:/" + j + "/");
     }};
-    xhrd.open("DELETE", "/" + i + "/" + fname, true);
+    xhrd.open("DELETE", "/bzz%3A/" + i + "/" + fname, true);
     xhrd.send();
   }};
 
-  sendImgs(xhr, "");
+  sendImages(xhr, "");
 }
 
 function moveUpDown(off)
@@ -378,9 +307,9 @@ function moveUpDown(off)
   var xhr = new XMLHttpRequest();
   xhr.onreadystatechange = function () {  if (xhr.readyState === 4) {
     var i = xhr.responseText;
-    window.location.replace("/" + i + "/#" + (eidx + off));
+    window.location.replace("/bzz:/" + i + "/#" + (eidx + off));
   }};
-  sendImgs(xhr, "");
+  sendImages(xhr, "");
 }
 
 function moveUp()
@@ -435,15 +364,8 @@ function onMainReady()
   ehdr.set('html', dsc.join(' '));
   ehdr.setStyle('display', (dsc.length? 'block': 'none'));
 
-  // setup upload file selector
-  var fileSelect = document.getElementById("fileSelect"),
-      fileElem = document.getElementById("fileElem");
-  fileSelect.addEventListener("click", function (e) {
-    if (fileElem) {
-      fileElem.click();
-    }
-    e.preventDefault(); // prevent navigation to "#"
-  }, false);
+  progress.set('html', '<img id="currentPreview">');
+  progress.set('style', 'text-align: center; padding-top: 20px');
 
   // complete thumbnails
   var d = duration;
@@ -494,6 +416,8 @@ function onMainReady()
     var data = imgs.data[eidx + 1];
     Asset.images([data.img[0], data.blur]);
   }
+
+  jqueryInit();
 }
 
 function showThrobber()
@@ -676,6 +600,9 @@ function initGallery(data)
 
   ehdr = new Element('div', { id: 'header' });
   ehdr.inject(econt);
+
+  progress = new Element('div', { id: 'progress' });
+  progress.inject(econt);
 
   elist = new Element('div', { id: 'list' });
   elist.inject(emain);

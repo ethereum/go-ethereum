@@ -97,7 +97,7 @@ func (self *TreeChunker) KeySize() int64 {
 
 // String() for pretty printing
 func (self *Chunk) String() string {
-	return fmt.Sprintf("Key: %v TreeSize: %v Chunksize: %v\n", self.Key.Log(), self.Size, len(self.SData))
+	return fmt.Sprintf("Key: %v TreeSize: %v Chunksize: %v", self.Key.Log(), self.Size, len(self.SData))
 }
 
 // The treeChunkers own Hash hashes together

@@ -49,12 +49,6 @@ import (
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/release"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/rpc/api"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/rpc/useragent"
-	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 	"github.com/ethereum/go-ethereum/swarm"
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/whisper"
@@ -357,22 +351,6 @@ var (
 		Name:  "shh",
 		Usage: "Enable Whisper",
 	}
-	ChequebookAddrFlag = cli.StringFlag{
-		Name:  "chequebook",
-		Usage: "chequebook contract address",
-	}
-	SwarmAccountAddrFlag = cli.StringFlag{
-		Name:  "bzzaccount",
-		Usage: "Swarm account address (swarm disabled if empty)",
-	}
-	SwarmConfigPathFlag = cli.StringFlag{
-		Name:  "bzzconfig",
-		Usage: "Swarm config file path (datadir/bzz)",
-	}
-	SwarmSwapDisabled = cli.BoolFlag{
-		Name:  "bzznoswap",
-		Usage: "Swarm SWAP disabled (false)",
-	}
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
@@ -415,6 +393,32 @@ var (
 		Name:  "gpobasecf",
 		Usage: "Suggested gas price base correction factor (%)",
 		Value: 110,
+	}
+
+	// on top of develop
+	ChequebookAddrFlag = cli.StringFlag{
+		Name:  "chequebook",
+		Usage: "chequebook contract address",
+	}
+	SwarmAccountAddrFlag = cli.StringFlag{
+		Name:  "bzzaccount",
+		Usage: "Swarm account address (swarm disabled if empty)",
+	}
+	SwarmPortFlag = cli.StringFlag{
+		Name:  "bzzport",
+		Usage: "Swarm local http api port",
+	}
+	SwarmConfigPathFlag = cli.StringFlag{
+		Name:  "bzzconfig",
+		Usage: "Swarm config file path (datadir/bzz)",
+	}
+	SwarmSwapDisabled = cli.BoolFlag{
+		Name:  "bzznoswap",
+		Usage: "Swarm SWAP disabled (false)",
+	}
+	SwarmSyncDisabled = cli.BoolFlag{
+		Name:  "bzznosync",
+		Usage: "Swarm Syncing disabled (false)",
 	}
 )
 
@@ -664,53 +668,6 @@ func MakePasswordList(ctx *cli.Context) []string {
 	return lines
 }
 
-func UnlockAccount(ctx *cli.Context, accman *accounts.Manager, address string, i int, passwords []string) (common.Address, string) {
-	// Try to unlock the specified account a few times
-	account, err := MakeAddress(accman, address)
-	if err != nil {
-		Fatalf("unable to unlock account %v: %v", address, err)
-	}
-
-	for trials := 0; trials < 3; trials++ {
-		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)
-		password := GetPassPhrase(prompt, false, i, passwords)
-		if err := accman.Unlock(account, password); err == nil {
-			return account, password
-		}
-	}
-	// All trials expended to unlock account, bail out
-	Fatalf("Failed to unlock account: %s", address)
-	return common.Address{}, ""
-}
-
-// getPassPhrase retrieves the passwor associated with an account, either fetched
-// from a list of preloaded passphrases, or requested interactively from the user.
-func GetPassPhrase(prompt string, confirmation bool, i int, passwords []string) string {
-	// If a list of passwords was supplied, retrieve from them
-	if len(passwords) > 0 {
-		if i < len(passwords) {
-			return passwords[i]
-		}
-		return passwords[len(passwords)-1]
-	}
-	// Otherwise prompt the user for the password
-	fmt.Println(prompt)
-	password, err := PromptPassword("Passphrase: ", true)
-	if err != nil {
-		Fatalf("Failed to read passphrase: %v", err)
-	}
-	if confirmation {
-		confirm, err := PromptPassword("Repeat passphrase: ", false)
-		if err != nil {
-			Fatalf("Failed to read passphrase confirmation: %v", err)
-		}
-		if password != confirm {
-			Fatalf("Passphrases do not match")
-		}
-	}
-	return password
-}
-
 // MakeSystemNode sets up a local node, configures the services to launch and
 // assembles the P2P protocol stack.
 func MakeSystemNode(name, version string, relconf release.Config, extra []byte, ctx *cli.Context) *node.Node {
@@ -724,6 +681,7 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 	if networks > 1 {
 		Fatalf("The %v flags are mutually exclusive", netFlags)
 	}
+	// Configure the node's service container
 	datadir := MustMakeDataDir(ctx)
 	netprv := MakeNodeKey(ctx)
 	// Configure the node's service container
@@ -754,7 +712,7 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 	accounts := strings.Split(ctx.GlobalString(UnlockedAccountFlag.Name), ",")
 	for i, account := range accounts {
 		if trimmed := strings.TrimSpace(account); trimmed != "" {
-			UnlockAccount(ctx, accman, trimmed, i, passwords)
+			UnlockAccount(accman, trimmed, i, passwords)
 		}
 	}
 
@@ -850,13 +808,12 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 	}); err != nil {
 		Fatalf("Failed to register the account manager service: %v", err)
 	}
+
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		return eth.New(ctx, ethConf)
 	}); err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
-
-	// Whisper
 	if shhEnable {
 		if err := stack.Register(func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
 			Fatalf("Failed to register the Whisper service: %v", err)
@@ -866,13 +823,14 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		return release.NewReleaseService(ctx, relconf)
 	}); err != nil {
 		Fatalf("Failed to register the Geth release oracle service: %v", err)
+	}
 
 	// bzz.	Swarm
 	var bzzconfig *bzzapi.Config
 	hexaddr := ctx.GlobalString(SwarmAccountAddrFlag.Name)
 	if hexaddr != "" {
 		swarmaccount := common.HexToAddress(hexaddr)
-		if !accman.HasAccount(swarmaccount) {
+		if !accman.HasAddress(swarmaccount) {
 			Fatalf("swarm account '%v' does not exist: %v", hexaddr, err)
 		}
 		prvkey, err := accman.GetUnlocked(swarmaccount)
@@ -888,13 +846,19 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		if err != nil {
 			Fatalf("unable to configure swarm: %v", err)
 		}
-		swap := ctx.GlobalBool(SwarmSwapDisabled.Name)
+		bzzport := ctx.GlobalString(SwarmPortFlag.Name)
+		if len(bzzport) > 0 {
+			bzzconfig.Port = bzzport
+		}
+		swapEnabled := !ctx.GlobalBool(SwarmSwapDisabled.Name)
+		syncEnabled := !ctx.GlobalBool(SwarmSyncDisabled.Name)
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return swarm.NewSwarm(ctx, bzzconfig, swap)
+			return swarm.NewSwarm(ctx, bzzconfig, swapEnabled, syncEnabled)
 		}); err != nil {
 			Fatalf("Failed to register the Swarm service: %v", err)
 		}
 	}
+
 	return stack
 }
 

@@ -18,16 +18,208 @@
 package web3ext
 
 var Modules = map[string]string{
-	"admin":    Admin_JS,
-	"debug":    Debug_JS,
-	"eth":      Eth_JS,
-	"miner":    Miner_JS,
-	"net":      Net_JS,
-	"personal": Personal_JS,
-	"rpc":      RPC_JS,
-	"shh":      Shh_JS,
-	"txpool":   TxPool_JS,
+	"admin":      Admin_JS,
+	"debug":      Debug_JS,
+	"eth":        Eth_JS,
+	"miner":      Miner_JS,
+	"net":        Net_JS,
+	"personal":   Personal_JS,
+	"rpc":        RPC_JS,
+	"shh":        Shh_JS,
+	"txpool":     TxPool_JS,
+	"net":        Net_JS,
+	"bzz":        Bzz_JS,
+	"ens":        ENS_JS,
+	"chequebook": Chequebook_JS,
 }
+
+const Bzz_JS = `
+web3._extend({
+	property: 'bzz',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'blockNetworkRead',
+			call: 'bzz_blockNetworkRead',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'syncEnabled',
+			call: 'bzz_syncEnabled',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'swapEnabled',
+			call: 'bzz_swapEnabled',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'download',
+			call: 'bzz_download',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'upload',
+			call: 'bzz_upload',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'retrieve',
+			call: 'bzz_retrieve',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'store',
+			call: 'bzz_store',
+			params: 2,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'get',
+			call: 'bzz_get',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'put',
+			call: 'bzz_put',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'modify',
+			call: 'bzz_modify',
+			params: 4,
+			inputFormatter: [null, null, null, null]
+		})
+	],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'hive',
+			getter: 'bzz_hive'
+		}),
+		new web3._extend.Property({
+			name: 'info',
+			getter: 'bzz_info',
+		}),
+	]
+});
+`
+
+const ENS_JS = `
+web3._extend({
+  property: 'ens',
+  methods:
+  [		new web3._extend.Method({
+			name: 'register',
+			call: 'ens_register',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method(
+{
+			name: 'resolve',
+			call: 'ens_resolve',
+			params: 1,
+			inputFormatter: [null]
+		}),
+	]
+})
+`
+
+const Chequebook_JS = `
+web3._extend({
+  property: 'chequebook',
+  methods:
+  [
+    new web3._extend.Method(
+{
+      name: 'deposit',
+      call: 'chequebook_deposit',
+	}
+	out, err := b.txapi.GetTransactionCount(ctx, account, rpc.PendingBlockNumber)
+	return out.Uint64(), err
+}
+
+// SuggestGasPrice implements bind.ContractTransactor retrieving the currently
+// suggested gas price to allow a timely execution of a transaction.
+func (b *ContractBackend
+      params: 1,
+      inputFormatter: [null]
+    }),
+    new web3._extend.Propert
+y({
+			name: 'balance',
+			getter: 'chequebook_balance',
+				outputFormatter: web3._extend.utils.toDecimal
+		}),
+    new web3._extend.Method({
+      name: 'cash',
+      call: 'chequebook_cash',
+      params: 1,
+      inputFormatter: [null]
+    }),
+    new web3._extend.Method({
+      name: 'issue',
+
+      call: 'chequebook_issue',
+      params: 2,
+      inputFormatter: [null, null]
+    }),
+  ]
+});
+`
+
+const Personal_JS = `
+
+web3._extend({
+	property: 'personal',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'importRawKey',
+			call: 'personal_importRawKey',
+			params: 2
+		})
+
+	]
+});
+`
+
+const TxPool_JS = `web3._extend({
+	property: 'txpool',
+	methods:
+	[
+	],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'content',
+			getter: 'txpool_content'
+		}),
+		new web3._extend.Property({
+			name: 'inspect',
+			getter: 'txpool_inspect'
+		}),
+		new web3._extend.Property({
+			name: 'status',
+			getter: 'txpool_status',
+			outputFormatter: function(status) {
+				status.pending = web3._extend.utils.toDecimal(status.pending);
+				status.queued = web3._extend.utils.toDecimal(status.queued);
+				return status;
+			}
+		})
+	]
+});
+`s
 
 const Admin_JS = `
 web3._extend({
@@ -134,6 +326,19 @@ web3._extend({
 });
 `
 
+const Net_JS = `
+web3._extend({
+	property: 'net',
+	methods: [],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'version',
+			getter: 'net_version'
+		})
+	]
+});
+`
 const Debug_JS = `
 web3._extend({
 	property: 'debug',
