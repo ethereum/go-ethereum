@@ -35,6 +35,7 @@ const (
 	TxPoolApiName   = "txpool"
 	PersonalApiName = "personal"
 	Web3ApiName     = "web3"
+	ChequebookApiName = "chequebook"
 
 	JsonRpcVersion = "2.0"
 )
@@ -42,7 +43,7 @@ const (
 var (
 	// All API's
 	AllApis = strings.Join([]string{
-		AdminApiName, BzzApiName, DbApiName, EthApiName, DebugApiName, MinerApiName, NetApiName,
+		AdminApiName, BzzApiName, ChequebookApiName, DbApiName, EthApiName, DebugApiName, MinerApiName, NetApiName,
 		ShhApiName, TxPoolApiName, PersonalApiName, Web3ApiName,
 	}, ",")
 )

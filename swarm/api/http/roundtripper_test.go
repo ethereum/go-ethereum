@@ -1,4 +1,4 @@
-package api
+package http
 
 import (
 	"io/ioutil"
@@ -22,7 +22,7 @@ func TestRoundTripper(t *testing.T) {
 	})
 	go http.ListenAndServe(":8600", serveMux)
 
-	rt := &RoundTripper{"8600"}
+	rt := &RoundTripper{Port: "8600"}
 	client := httpclient.New("/")
 	client.RegisterProtocol("bzz", rt)
 

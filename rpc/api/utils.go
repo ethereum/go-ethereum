@@ -64,10 +64,8 @@ var (
 			"verbosity",
 		},
 		"bzz": []string{
+			"version",
 			"info",
-			"issue",
-			"cash",
-			"deposit",
 			"register",
 			"resolve",
 			"download",
@@ -75,6 +73,13 @@ var (
 			"get",
 			"put",
 			"modify",
+		},
+		"chequebook": []string{
+			"version",
+			"info",
+			"issue",
+			"cash",
+			"deposit",
 		},
 		"db": []string{
 			"getString",
@@ -129,7 +134,7 @@ var (
 			"sign",
 			"syncing",
 		},
-		"miner": []string{
+		"miner	": []string{
 			"hashrate",
 			"makeDAG",
 			"setEtherbase",
@@ -195,7 +200,7 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, stack *no
 		case shared.AdminApiName:
 			apis[i] = NewAdminApi(xeth, stack, codec)
 		case shared.BzzApiName:
-			apis[i] = NewBzzApi(stack, codec)
+		case shared.ChequebookApiName:
 		case shared.DebugApiName:
 			apis[i] = NewDebugApi(xeth, eth, codec)
 		case shared.DbApiName:
@@ -229,6 +234,8 @@ func Javascript(name string) string {
 		return Admin_JS
 	case shared.BzzApiName:
 		return Bzz_JS
+	case shared.ChequebookApiName:
+		return Chequebook_JS
 	case shared.DebugApiName:
 		return Debug_JS
 	case shared.DbApiName:
