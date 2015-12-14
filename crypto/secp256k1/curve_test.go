@@ -21,8 +21,6 @@ import (
 	"encoding/hex"
 	"math/big"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/common/registrar"
 )
 
 func TestReadBits(t *testing.T) {
@@ -38,35 +36,4 @@ func TestReadBits(t *testing.T) {
 	check("000000000000000000000000000000000000000000000000000000FEFCF3F8F0")
 	check("0000000000012345000000000000000000000000000000000000FEFCF3F8F0")
 	check("18F8F8F1000111000110011100222004330052300000000000000000FEFCF3F8F0")
-}
-
-type Backend interface {
-	registrar.Backend
-	AtStateNum(int64) registrar.Backend
-}
-
-// implements a versioned Registrar on an archiving full node
-type EthReg struct {
-	backend  Backend
-	registry *registrar.Registrar
-}
-
-func New(backend Backend) (self *EthReg) {
-	self = &EthReg{backend: backend}
-	self.registry = registrar.New(backend)
-	return
-}
-
-func (self *EthReg) Registry() *registrar.Registrar {
-	return self.registry
-}
-
-func (self *EthReg) Resolver(n *big.Int) *registrar.Registrar {
-	var s registrar.Backend
-	if n != nil {
-		s = self.backend.AtStateNum(n.Int64())
-	} else {
-		s = registrar.Backend(self.backend)
-	}
-	return registrar.New(s)
 }

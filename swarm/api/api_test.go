@@ -1,205 +1,86 @@
 package api
 
 import (
-	"bytes"
+	// "bytes"
 	"io/ioutil"
 	"os"
-	"path"
-	"runtime"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-//TODO: add tests for resolver/registrar
-// will most likely be its own package under service?
-
-var (
-	testDir string
-)
-
-func init() {
-	_, filename, _, _ := runtime.Caller(1)
-	testDir = path.Join(path.Dir(filename), "../test")
-}
-
-func testApi() (api *Api, err error) {
+func testApi(t *testing.T, f func(*Api)) {
 	datadir, err := ioutil.TempDir("", "bzz-test")
 	if err != nil {
-		return nil, err
+		t.Fatalf("unable to create temp dir: %v", err)
 	}
 	os.RemoveAll(datadir)
+	defer os.RemoveAll(datadir)
 	dpa, err := storage.NewLocalDPA(datadir)
 	if err != nil {
 		return
 	}
-	prvkey, _ := crypto.GenerateKey()
+	api := NewApi(dpa, nil)
+	dpa.Start()
+	f(api)
+	dpa.Stop()
+}
 
-	config, err := NewConfig(datadir, common.Address{}, prvkey)
-	if err != nil {
-		return
+type testResponse struct {
+	reader storage.SectionReader
+	*Response
+}
+
+func checkResponse(t *testing.T, resp *testResponse, exp *Response) {
+
+	if resp.MimeType != exp.MimeType {
+		t.Errorf("incorrect mimeType. expected '%s', got '%s'", exp.MimeType, resp.MimeType)
 	}
-	api = NewApi(dpa, nil, config)
-	api.dpa.Start()
+	if resp.Status != exp.Status {
+		t.Errorf("incorrect status. expected '%d', got '%d'", exp.Status, resp.Status)
+	}
+	if resp.Size != exp.Size {
+		t.Errorf("incorrect size. expected '%d', got '%d'", exp.Size, resp.Size)
+	}
+	if resp.reader != nil {
+		content := make([]byte, resp.Size)
+		read, _ := resp.reader.Read(content)
+		if int64(read) != exp.Size {
+			t.Errorf("incorrect content length. expected '%s...', got '%s...'", read, exp.Size)
+		}
+		resp.Content = string(content)
+	}
+	if resp.Content != exp.Content {
+		// if !bytes.Equal(resp.Content, exp.Content) {
+		t.Errorf("incorrect content. expected '%s...', got '%s...'", string(exp.Content), string(resp.Content))
+	}
+}
 
-	return
+// func expResponse(content []byte, mimeType string, status int) *Response {
+func expResponse(content string, mimeType string, status int) *Response {
+	return &Response{mimeType, status, int64(len(content)), content}
+}
+
+// func testGet(t *testing.T, api *Api, bzzhash string) *testResponse {
+func testGet(t *testing.T, api *Api, bzzhash string) *testResponse {
+	reader, mimeType, status, err := api.Get(bzzhash, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	return &testResponse{reader, &Response{mimeType, status, reader.Size(), ""}}
+	// return &testResponse{reader, &Response{mimeType, status, reader.Size(), nil}}
 }
 
 func TestApiPut(t *testing.T) {
-	api, err := testApi()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	defer api.dpa.Stop()
-	expContent := "hello"
-	expMimeType := "text/plain"
-	expStatus := 0
-	expSize := len(expContent)
-	bzzhash, err := api.Put(expContent, expMimeType)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	testGet(t, api, bzzhash, []byte(expContent), expMimeType, expStatus, expSize)
-}
-
-func testGet(t *testing.T, api *Api, bzzhash string, expContent []byte, expMimeType string, expStatus int, expSize int) {
-	content, mimeType, status, size, err := api.Get(bzzhash)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	if !bytes.Equal(content, expContent) {
-		t.Errorf("incorrect content. expected '%s...', got '%s...'", string(expContent), string(content))
-	}
-	if mimeType != expMimeType {
-		t.Errorf("incorrect mimeType. expected '%s', got '%s'", expMimeType, mimeType)
-	}
-	if status != expStatus {
-		t.Errorf("incorrect status. expected '%d', got '%d'", expStatus, status)
-	}
-	if size != expSize {
-		t.Errorf("incorrect size. expected '%d', got '%d'", expSize, size)
-	}
-}
-
-func TestApiDirUpload(t *testing.T) {
-	t.Skip("FIXME")
-	api, err := testApi()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	bzzhash, err := api.Upload(path.Join(testDir, "test0"), "")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
-	content, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
-	testGet(t, api, path.Join(bzzhash, "index.html"), content, "text/html; charset=utf-8", 0, 202)
-
-	content, err = ioutil.ReadFile(path.Join(testDir, "test0", "index.css"))
-	testGet(t, api, path.Join(bzzhash, "index.css"), content, "text/css", 0, 132)
-
-	content, err = ioutil.ReadFile(path.Join(testDir, "test0", "img", "logo.png"))
-	testGet(t, api, path.Join(bzzhash, "img", "logo.png"), content, "image/png", 0, 18136)
-
-	_, _, _, _, err = api.Get(bzzhash)
-	if err == nil {
-		t.Errorf("expected error: %v", err)
-	}
-}
-
-func TestApiDirUploadModify(t *testing.T) {
-	t.Skip("FIXME")
-	api, err := testApi()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	bzzhash, err := api.Upload(path.Join(testDir, "test0"), "")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
-	bzzhash, err = api.Modify(bzzhash, "index.html", "", "")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	bzzhash, err = api.Modify(bzzhash, "index2.html", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	bzzhash, err = api.Modify(bzzhash, "img/logo.png", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
-	content, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
-	testGet(t, api, path.Join(bzzhash, "index2.html"), content, "text/html; charset=utf-8", 0, 202)
-	testGet(t, api, path.Join(bzzhash, "img", "logo.png"), content, "text/html; charset=utf-8", 0, 202)
-
-	content, err = ioutil.ReadFile(path.Join(testDir, "test0", "index.css"))
-	testGet(t, api, path.Join(bzzhash, "index.css"), content, "text/css", 0, 132)
-
-	_, _, _, _, err = api.Get(bzzhash)
-	if err == nil {
-		t.Errorf("expected error: %v", err)
-	}
-}
-
-func TestApiDirUploadWithRootFile(t *testing.T) {
-	api, err := testApi()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	bzzhash, err := api.Upload(path.Join(testDir, "test0"), "index.html")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
-	content, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
-	testGet(t, api, bzzhash, content, "text/html; charset=utf-8", 0, 202)
-}
-
-func TestApiFileUpload(t *testing.T) {
-	api, err := testApi()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	bzzhash, err := api.Upload(path.Join(testDir, "test0", "index.html"), "")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
-	content, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
-	testGet(t, api, path.Join(bzzhash, "index.html"), content, "text/html; charset=utf-8", 0, 202)
-}
-
-func TestApiFileUploadWithRootFile(t *testing.T) {
-	api, err := testApi()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	bzzhash, err := api.Upload(path.Join(testDir, "test0", "index.html"), "index.html")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
-	content, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
-	testGet(t, api, bzzhash, content, "text/html; charset=utf-8", 0, 202)
+	testApi(t, func(api *Api) {
+		content := "hello"
+		exp := expResponse(content, "text/plain", 0)
+		// exp := expResponse([]byte(content), "text/plain", 0)
+		bzzhash, err := api.Put(content, exp.MimeType)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		resp := testGet(t, api, bzzhash)
+		checkResponse(t, resp, exp)
+	})
 }

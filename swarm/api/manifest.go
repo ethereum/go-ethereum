@@ -145,7 +145,10 @@ func (self *manifestTrie) deleteEntry(path string) {
 
 	b := byte(path[0])
 	entry := self.entries[b]
-	if (entry != nil) && (entry.Path == path) {
+	if entry == nil {
+		return
+	}
+	if entry.Path == path {
 		self.entries[b] = nil
 		return
 	}
@@ -290,7 +293,7 @@ func (self *manifestTrie) findPrefixOf(path string) (entry *manifestTrieEntry, p
 
 // file system manifest always contains regularized paths
 // no leading or trailing slashes, only single slashes inside
-func regularSlashes(path string) (res string) {
+func RegularSlashes(path string) (res string) {
 	for i := 0; i < len(path); i++ {
 		if (path[i] != '/') || ((i > 0) && (path[i-1] != '/')) {
 			res = res + path[i:i+1]
@@ -303,7 +306,7 @@ func regularSlashes(path string) (res string) {
 }
 
 func (self *manifestTrie) getEntry(spath string) (entry *manifestTrieEntry, fullpath string) {
-	path := regularSlashes(spath)
+	path := RegularSlashes(spath)
 	var pos int
 	entry, pos = self.findPrefixOf(path)
 	return entry, path[:pos]

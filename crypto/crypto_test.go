@@ -89,6 +89,7 @@ func TestSign(t *testing.T) {
 	if err != nil {
 		t.Errorf("Sign error: %s", err)
 	}
+
 	recoveredPub, err := Ecrecover(msg, sig)
 	if err != nil {
 		t.Errorf("ECRecover error: %s", err)

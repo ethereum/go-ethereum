@@ -6,10 +6,21 @@
     navigator.registerProtocolHandler("bzz",
                                   "http://localhost:8500/%s",
                                   "Swarm handler");
+    navigator.registerProtocolHandler("bzzi",
+                                  "http://localhost:8500/%s",
+                                  "Swarm immutable handler");
+    navigator.registerProtocolHandler("bzzr",
+                                  "http://localhost:8500/%s",
+                                  "Swarm raw handler");
   </script>
 </head>
 <body>
   <h1>Register Swarm protocol handler</h1>
-  <p>This web page will install a web protocol handler for the <code>bzz:</code> protocol.</p>
+  <p>This web page will install a web protocol handler for
+    <code>bzz:</code>,
+    <code>bzzi:</code> and
+    <code>bzzr:</code>
+    protocols.
+  </p>
 </body>
 </html>

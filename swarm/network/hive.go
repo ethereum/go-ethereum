@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/kademlia"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -32,13 +32,19 @@ type Hive struct {
 	path         string
 	toggle       chan bool
 	more         chan bool
+
+	// for testing only
+	swapEnabled bool
+	syncEnabled bool
+	blockRead   bool
+	blockWrite  bool
 }
 
 const (
-	callInterval = 10000000000
-	bucketSize   = 3
-	maxProx      = 10
-	proxBinSize  = 8
+	callInterval = 3000000000
+	// bucketSize   = 3
+	// maxProx      = 8
+	// proxBinSize  = 4
 )
 
 type HiveParams struct {
@@ -49,9 +55,9 @@ type HiveParams struct {
 
 func NewHiveParams(path string) *HiveParams {
 	kad := kademlia.NewKadParams()
-	kad.BucketSize = bucketSize
-	kad.MaxProx = maxProx
-	kad.ProxBinSize = proxBinSize
+	// kad.BucketSize = bucketSize
+	// kad.MaxProx = maxProx
+	// kad.ProxBinSize = proxBinSize
 
 	return &HiveParams{
 		CallInterval: callInterval,
@@ -60,14 +66,32 @@ func NewHiveParams(path string) *HiveParams {
 	}
 }
 
-func NewHive(addr common.Hash, params *HiveParams) *Hive {
+func NewHive(addr common.Hash, params *HiveParams, swapEnabled, syncEnabled bool) *Hive {
 	kad := kademlia.New(kademlia.Address(addr), params.KadParams)
 	return &Hive{
 		callInterval: params.CallInterval,
 		kad:          kad,
 		addr:         kad.Addr(),
 		path:         params.KadDbPath,
+		swapEnabled:  swapEnabled,
+		syncEnabled:  syncEnabled,
 	}
+}
+
+func (self *Hive) SyncEnabled(on bool) {
+	self.syncEnabled = on
+}
+
+func (self *Hive) SwapEnabled(on bool) {
+	self.swapEnabled = on
+}
+
+func (self *Hive) BlockNetworkRead(on bool) {
+	self.blockRead = on
+}
+
+func (self *Hive) BlockNetworkWrite(on bool) {
+	self.blockWrite = on
 }
 
 // public accessor to the hive base address
@@ -122,7 +146,7 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 			} else {
 				self.toggle <- false
 			}
-			glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %v, population: %d (%d)\n%v", self.addr, self.kad.Count(), self.kad.DBCount(), self.kad)
+			glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %v, population: %d (%d)", self.addr, self.kad.Count(), self.kad.DBCount())
 		}
 	}()
 	return
@@ -134,7 +158,7 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 // wake state is toggled by writing to self.toggle
 // it restarts if the table becomes non-full again due to disconnections
 func (self *Hive) keepAlive() {
-	var alarm <-chan time.Time
+	alarm := time.NewTicker(time.Duration(self.callInterval)).C
 	for {
 		select {
 		case <-alarm:
@@ -185,14 +209,14 @@ func (self *Hive) addPeer(p *peer) {
 
 // called after peer disconnected
 func (self *Hive) removePeer(p *peer) {
-	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: bee %v gone offline", p)
+	glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: bee %v removed", p)
 	self.kad.Off(p, saveSync)
 	select {
 	case self.more <- true:
 	default:
 	}
 	if self.kad.Count() == 0 {
-		glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: empty, all bees gone", p)
+		glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: empty, all bees gone")
 	}
 }
 
@@ -208,7 +232,7 @@ func (self *Hive) getPeers(target storage.Key, max int) (peers []*peer) {
 
 // disconnects all the peers
 func (self *Hive) DropAll() {
-	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: dropping all bees")
+	glog.V(logger.Info).Infof("[BZZ] KΛÐΞMLIΛ hive: dropping all bees")
 	for _, node := range self.kad.FindClosest(kademlia.Address{}, 0) {
 		node.Drop()
 	}
@@ -260,17 +284,22 @@ func (self *peer) LastActive() time.Time {
 // reads the serialised form of sync state persisted as the 'Meta' attribute
 // and sets the decoded syncState on the online node
 func loadSync(record *kademlia.NodeRecord, node kademlia.Node) error {
-	if p, ok := node.(*peer); ok {
-		if record.Meta == nil {
-			glog.V(logger.Debug).Infof("no sync state for node record %v", record)
-			return nil
-		}
-		state, err := decodeSync(record.Meta)
-		glog.V(logger.Debug).Infof("sync state for node record %v: %s -> %v", record, string(*(record.Meta)), state)
-		p.syncState = state
-		return err
+	p, ok := node.(*peer)
+	if !ok {
+		return fmt.Errorf("invalid type")
 	}
-	return fmt.Errorf("invalid type")
+	if record.Meta == nil {
+		glog.V(logger.Debug).Infof("no sync state for node record %v setting default", record)
+		p.syncState = &syncState{DbSyncState: &storage.DbSyncState{}}
+		return nil
+	}
+	state, err := decodeSync(record.Meta)
+	if err != nil {
+		return fmt.Errorf("error decoding kddb record meta info into a sync state: %v", err)
+	}
+	glog.V(logger.Detail).Infof("sync state for node record %v read from Meta: %s", record, string(*(record.Meta)))
+	p.syncState = state
+	return err
 }
 
 // callback when saving a sync state
@@ -281,8 +310,7 @@ func saveSync(record *kademlia.NodeRecord, node kademlia.Node) {
 			glog.V(logger.Warn).Infof("error saving sync state for %v: %v", node, err)
 			return
 		}
-		glog.V(logger.Warn).Infof("saving sync state for %v: %s", node, string(*meta))
-
+		glog.V(logger.Detail).Infof("saved sync state for %v: %s", node, string(*meta))
 		record.Meta = meta
 	}
 }
@@ -319,4 +347,8 @@ func (self *Hive) peers(req *retrieveRequestMsgData) {
 			req.from.peers(peersData)
 		}
 	}
+}
+
+func (self *Hive) String() string {
+	return self.kad.String()
 }

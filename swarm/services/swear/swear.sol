@@ -17,7 +17,7 @@ contract Swarm
   }
 
   mapping (address => Bee) swarm;
-  
+
   // block number of transactions presenting chunks
   mapping (bytes32 => uint) presentedChunks;
 
@@ -111,7 +111,7 @@ contract Swarm
       b.reporter = msg.sender;
       Report(signer);
   }
-  
+
   /// @notice Present a chunk in order to avoid losing deposit.
   ///
   /// @param chunk chunk data
