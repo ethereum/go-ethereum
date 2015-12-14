@@ -64,7 +64,7 @@ func newSyncDb(db *storage.LDBDatabase, key storage.Key, priority uint, bufferSi
 		batch:       make(chan chan int),
 		dbBatchSize: dbBatchSize,
 	}
-	glog.V(logger.Debug).Infof("[BZZ] syncDb[peer: %v, priority: %v] - initialised", key.Log(), priority)
+	glog.V(logger.Detail).Infof("[BZZ] syncDb[peer: %v, priority: %v] - initialised", key.Log(), priority)
 
 	// starts the main forever loop reading from buffer
 	go syncdb.bufferRead(deliver)
@@ -159,14 +159,13 @@ LOOP:
 			}
 			self.dbTotal++
 			self.total++
-			// otherwise break after select
-
+			// otherwise break after selec
 		case dbSize = <-self.batch:
 			// explicit request for batch
 			if inBatch == 0 && quit != nil {
 				// there was no writes since the last batch so db depleted
 				// switch to buffer mode
-				glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] empty db: switching to buffer", self.priority)
+				glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] empty db: switching to buffer", self.priority)
 				db = nil
 				buffer = self.buffer
 				dbSize <- 0 // indicates to 'caller' that batch has been written
@@ -175,9 +174,9 @@ LOOP:
 			}
 			binary.BigEndian.PutUint64(counterValue, counter)
 			batch.Put(self.counterKey, counterValue)
-			glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] write batch %v/%v - %x - %x", self.priority, inBatch, counter, self.counterKey, counterValue)
+			glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] write batch %v/%v - %x - %x", self.priority, inBatch, counter, self.counterKey, counterValue)
 			batch = self.writeSyncBatch(batch)
-			dbSize <- inBatch
+			dbSize <- inBatch // indicates to 'caller' that batch has been written
 			inBatch = 0
 			continue LOOP
 
@@ -222,7 +221,7 @@ LOOP:
 func (self *syncDb) writeSyncBatch(batch *leveldb.Batch) *leveldb.Batch {
 	err := self.db.Write(batch)
 	if err != nil {
-		glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] saving batch to db failed: %v", self.priority, err)
+		glog.V(logger.Warn).Infof("[BZZ] syncDb[%v] saving batch to db failed: %v", self.priority, err)
 		return batch
 	}
 	return new(leveldb.Batch)
@@ -275,7 +274,11 @@ func (self *syncDb) dbRead(useBatches bool, counter uint64, fun func(interface{}
 			// this could be called before all cnt items sent out
 			// so that loop is not blocking while delivering
 			// only relevant if cnt is large
-			self.batch <- batchSizes
+			select {
+			case self.batch <- batchSizes:
+			case <-self.quit:
+				return
+			}
 			// wait for the write to finish and get the item count in the next batch
 			cnt = <-batchSizes
 			batches++
@@ -318,7 +321,7 @@ func (self *syncDb) dbRead(useBatches bool, counter uint64, fun func(interface{}
 			n++
 			total++
 		}
-		glog.V(logger.Detail).Infof("[BZZ] syncDb[%v/%v] - db session closed, batches: %v, total: %v, session total from db: %v/%v", self.key.Log(), self.priority, batches, total, self.dbTotal, self.total)
+		glog.V(logger.Debug).Infof("[BZZ] syncDb[%v/%v] - db session closed, batches: %v, total: %v, session total from db: %v/%v", self.key.Log(), self.priority, batches, total, self.dbTotal, self.total)
 		self.db.Write(del) // this could be async called only when db is idle
 		it.Release()
 	}

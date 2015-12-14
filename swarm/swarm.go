@@ -2,12 +2,14 @@ package swarm
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"fmt"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/chequebook"
 	"github.com/ethereum/go-ethereum/common/httpclient"
-	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
@@ -15,27 +17,62 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/services/chequebook"
+	"github.com/ethereum/go-ethereum/swarm/services/ens"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
+const (
+	Namespace = "bzz"
+	Version   = "0.1" // versioning reflect POC and release versions
+)
+
+var ENSContractAddr = common.HexToAddress("0x504cdf3992d8f81a4182bd7b24e270d3a28711e3")
+
 // the swarm stack
 type Swarm struct {
-	config   *api.Config            // swarm configuration
-	api      *api.Api               // high level api layer (fs/manifest)
-	dbAccess *network.DbAccess      // access to local chunk db iterator and storage counter
-	storage  storage.ChunkStore     // internal access to storage, common interface to cloud storage backends
-	dpa      *storage.DPA           // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	depo     network.StorageHandler // remote request handler, interface between bzz protocol and the storage
-	cloud    storage.CloudStore     // procurement, cloud storage backend (can multi-cloud)
-	hive     *network.Hive          // the logistic manager
-	client   *httpclient.HTTPClient // bzz capable light http client
+	ethereum    *eth.Ethereum
+	config      *api.Config            // swarm configuration
+	api         *api.Api               // high level api layer (fs/manifest)
+	dns         api.Resolver           // DNS registrar
+	dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
+	storage     storage.ChunkStore     // internal access to storage, common interface to cloud storage backends
+	dpa         *storage.DPA           // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
+	cloud       storage.CloudStore     // procurement, cloud storage backend (can multi-cloud)
+	hive        *network.Hive          // the logistic manager
+	client      *httpclient.HTTPClient // bzz capable light http client
+	backend     bind.Backend           // simple blockchain Backend
+	privateKey  *ecdsa.PrivateKey
+	swapEnabled bool
+}
+
+type SwarmAPI struct {
+	Api     *api.Api
+	Backend bind.Backend
+	PrvKey  *ecdsa.PrivateKey
+}
+
+func (self *Swarm) API() *SwarmAPI {
+	return &SwarmAPI{
+		Api:     self.api,
+		Backend: self.backend,
+		PrvKey:  self.privateKey,
+	}
+}
+
+type Backend interface {
+	GetTxReceipt(txhash common.Hash) *types.Receipt
+	BalanceAt(address common.Address) *big.Int
 }
 
 // creates a new swarm service instance
 // implements node.Service
-func NewSwarm(stack *node.ServiceContext, config *api.Config, swapEnabled bool) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, config *api.Config, swapEnabled, syncEnabled bool) (self *Swarm, err error) {
 
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
@@ -45,21 +82,25 @@ func NewSwarm(stack *node.ServiceContext, config *api.Config, swapEnabled bool) 
 	}
 
 	var ethereum *eth.Ethereum
-	if err := stack.Service(&ethereum); err != nil {
+	if err := ctx.Service(&ethereum); err != nil {
 		return nil, fmt.Errorf("unable to find Ethereum service: %v", err)
 	}
 	self = &Swarm{
-		config: config,
-		client: ethereum.HTTPClient(),
+		config:      config,
+		ethereum:    ethereum,
+		swapEnabled: swapEnabled,
+		client:      ethereum.HTTPClient(),
+		privateKey:  config.Swap.PrivateKey(),
 	}
 	glog.V(logger.Debug).Infof("[BZZ] Setting up Swarm service components")
 
-	// setup local store
 	hash := storage.MakeHashFunc(config.ChunkerParams.Hash)
 	lstore, err := storage.NewLocalStore(hash, config.StoreParams)
 	if err != nil {
 		return
 	}
+
+	// setup local store
 	glog.V(logger.Debug).Infof("[BZZ] Set up local storage")
 
 	self.dbAccess = network.NewDbAccess(lstore)
@@ -69,6 +110,8 @@ func NewSwarm(stack *node.ServiceContext, config *api.Config, swapEnabled bool) 
 	self.hive = network.NewHive(
 		common.HexToHash(self.config.BzzKey), // key to hive (kademlia base address)
 		config.HiveParams,                    // configuration parameters
+		swapEnabled,                          // SWAP enabled
+		syncEnabled,                          // syncronisation enabled
 	)
 	glog.V(logger.Debug).Infof("[BZZ] Set up swarm network with Kademlia hive")
 
@@ -78,9 +121,9 @@ func NewSwarm(stack *node.ServiceContext, config *api.Config, swapEnabled bool) 
 	// setup cloud storage internal access layer
 
 	self.storage = storage.NewNetStore(hash, lstore, cloud, config.StoreParams)
-	glog.V(logger.Debug).Infof("[BZZ] -> Level 0: swarm net store shared access layer to Swarm Chunk Store")
+	glog.V(logger.Debug).Infof("[BZZ] -> swarm net store shared access layer to Swarm Chunk Store")
 
-	// set up Depo (storage handler = remote cloud storage access layer)
+	// set up Depo (storage handler = cloud storage access layer for incoming remote requests)
 	self.depo = network.NewDepo(hash, lstore, self.storage)
 	glog.V(logger.Debug).Infof("[BZZ] -> REmote Access to CHunks")
 
@@ -89,23 +132,22 @@ func NewSwarm(stack *node.ServiceContext, config *api.Config, swapEnabled bool) 
 	glog.V(logger.Debug).Infof("[BZZ] -> Local Access to Swarm")
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
-	glog.V(logger.Debug).Infof("[BZZ] -> Level 1: Document/File API")
+	glog.V(logger.Debug).Infof("[BZZ] -> Content Store API")
+
+	// set up blockchain and contract interface bindings
+	glog.V(logger.Debug).Infof("[BZZ] -> native backend for abigen contract bindings")
+	self.backend = eth.NewContractBackend(ethereum)
 
 	// set up high level api
-	backend := api.NewEthApi(ethereum)
-	backend.UpdateState()
-	self.api = api.NewApi(self.dpa, ethreg.New(backend), self.config)
-	// Manifests for Smart Hosting
-	glog.V(logger.Debug).Infof("[BZZ] -> Level 2: Collection/Directory API")
+	transactOpts := bind.NewKeyedTransactor(self.privateKey)
+	// backend := ethereum.ContractBackend()
+	self.dns = ens.NewENS(transactOpts, ENSContractAddr, self.backend)
+	glog.V(logger.Debug).Infof("[BZZ] -> Swarm Domain Name Registrar")
 
-	// set chequebook
-	if swapEnabled {
-		err = self.SetChequebook(backend)
-		if err != nil {
-			return nil, fmt.Errorf("Unable to set chequebook for SWAP: %v", err)
-		}
-		glog.V(logger.Debug).Infof("[BZZ] -> cheque book for SWAP")
-	}
+	self.api = api.NewApi(self.dpa, self.dns)
+	// Manifests for Smart Hosting
+	glog.V(logger.Debug).Infof("[BZZ] -> Web3 virtual server API")
+
 	return self, nil
 }
 
@@ -129,6 +171,16 @@ func (self *Swarm) Start(net *p2p.Server) error {
 		net.AddPeer(node)
 		return nil
 	}
+	// set chequebook
+	if self.swapEnabled {
+		err := self.SetChequebook()
+		if err != nil {
+			return fmt.Errorf("Unable to set chequebook for SWAP: %v", err)
+		}
+		glog.V(logger.Debug).Infof("[BZZ] -> cheque book for SWAP: %v", self.config.Swap.Chequebook())
+	} else {
+		glog.V(logger.Debug).Infof("[BZZ] SWAP disabled: no cheque book set")
+	}
 
 	glog.V(logger.Warn).Infof("[BZZ] Starting Swarm service")
 	self.hive.Start(
@@ -143,7 +195,7 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	// start swarm http proxy server
 	if self.config.Port != "" {
-		go api.StartHttpServer(self.api, self.config.Port)
+		go httpapi.StartHttpServer(self.api, self.config.Port)
 	}
 	glog.V(logger.Debug).Infof("[BZZ] Swarm http proxy started on port: %v", self.config.Port)
 
@@ -154,7 +206,7 @@ func (self *Swarm) Start(net *p2p.Server) error {
 		"bzz": self.config.Port,
 	}
 	for scheme, port := range schemes {
-		self.client.RegisterScheme(scheme, &api.RoundTripper{Port: port})
+		self.client.RegisterScheme(scheme, &httpapi.RoundTripper{Port: port})
 	}
 	glog.V(logger.Debug).Infof("[BZZ] Swarm protocol handlers registered for url schemes: %v", schemes)
 
@@ -175,27 +227,44 @@ func (self *Swarm) Stop() error {
 
 // implements the node.Service interface
 func (self *Swarm) Protocols() []p2p.Protocol {
-	proto, err := network.Bzz(self.depo, self.hive, self.dbAccess, self.config.Swap, self.config.SyncParams)
+	proto, err := network.Bzz(self.depo, self.backend, self.hive, self.dbAccess, self.config.Swap, self.config.SyncParams)
 	if err != nil {
 		return nil
 	}
 	return []p2p.Protocol{proto}
 }
 
+// implements node.Service
+// Apis returns the RPC Api descriptors the Swarm implementation offers
+func (self *Swarm) APIs() []rpc.API {
+	return []rpc.API{
+		// public APIs.
+		rpc.API{Namespace, Version, api.NewStorage(self.api), true},
+		rpc.API{"ens", Version, self.dns, true},
+		rpc.API{Namespace, Version, &Info{self.config, chequebook.ContractParams}, true},
+		// admin APIs
+		rpc.API{Namespace, Version, api.NewFileSystem(self.api), false},
+		rpc.API{Namespace, Version, api.NewControl(self.api, self.hive), false},
+		// rpc.API{Namespace, Version, api.NewAdmin(self), false},
+		// TODO: external apis exposed
+		rpc.API{"chequebook", chequebook.Version, chequebook.NewApi(self.config.Swap.Chequebook), true},
+	}
+}
+
 func (self *Swarm) Api() *api.Api {
 	return self.api
 }
 
-// Backend interface implemented by eth or JSON-IPC client
-func (self *Swarm) SetChequebook(backend chequebook.Backend) (err error) {
-	done, err := self.config.Swap.SetChequebook(self.config.Path, backend)
+//
+func (self *Swarm) SetChequebook() (err error) {
+	done, err := self.config.Swap.SetChequebook(self.config.Path, self.backend)
 	if err != nil {
 		return err
 	}
 	go func() {
 		ok := <-done
 		if ok {
-			glog.V(logger.Info).Infof("[BZZ] Swarm: new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract)
+			glog.V(logger.Info).Infof("[BZZ] Swarm: new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract.Hex())
 			self.config.Save()
 			self.hive.DropAll()
 		}
@@ -223,9 +292,19 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 	}
 
 	self = &Swarm{
-		api:    api.NewApi(dpa, nil, config),
+		api:    api.NewApi(dpa, nil),
 		config: config,
 	}
 
 	return
+}
+
+// serialisable info about swarm
+type Info struct {
+	*api.Config
+	*chequebook.Params
+}
+
+func (self *Info) Info() *Info {
+	return self
 }

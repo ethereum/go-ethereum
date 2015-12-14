@@ -21,6 +21,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -37,6 +39,7 @@ type ContractBackend struct {
 	eapi  *PublicEthereumAPI        // Wrapper around the Ethereum object to access metadata
 	bcapi *PublicBlockChainAPI      // Wrapper around the blockchain to access chain data
 	txapi *PublicTransactionPoolAPI // Wrapper around the transaction pool to access transaction data
+	eth   *Ethereum
 }
 
 // NewContractBackend creates a new native contract backend using an existing
@@ -46,6 +49,7 @@ func NewContractBackend(eth *Ethereum) *ContractBackend {
 		eapi:  NewPublicEthereumAPI(eth),
 		bcapi: NewPublicBlockChainAPI(eth.chainConfig, eth.blockchain, eth.miner, eth.chainDb, eth.gpo, eth.eventMux, eth.accountManager),
 		txapi: NewPublicTransactionPoolAPI(eth),
+		eth:   eth,
 	}
 }
 
@@ -107,4 +111,21 @@ func (b *ContractBackend) SendTransaction(tx *types.Transaction) error {
 	raw, _ := rlp.EncodeToBytes(tx)
 	_, err := b.txapi.SendRawTransaction(common.ToHex(raw))
 	return err
+}
+
+func (b *ContractBackend) GetTxReceipt(txhash common.Hash) *types.Receipt {
+	return core.GetReceipt(b.eth.ChainDb(), txhash)
+}
+
+func (b *ContractBackend) BalanceAt(address common.Address) *big.Int {
+	currentState, err := state.New(b.eth.BlockChain().CurrentBlock().Root(), b.eth.ChainDb())
+	if err != nil {
+		return new(big.Int)
+	}
+	return currentState.GetBalance(address)
+}
+
+func (b *ContractBackend) CodeAt(address common.Address) string {
+	currentState, _ := state.New(b.eth.BlockChain().CurrentBlock().Root(), b.eth.ChainDb())
+	return common.ToHex(currentState.GetCode(address))
 }

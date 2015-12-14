@@ -289,3 +289,7 @@ img
 {
   background: url(cut-mov.png) top left repeat-y, url(cut-mov.png) top right repeat-y;
 }
+
+#currentPreview {
+    max-height: 120px;
+}
