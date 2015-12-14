@@ -33,6 +33,11 @@ web3._extend({
 			call: 'personal_unlockAccount',
 			params: 3,
 			inputFormatter: [null, null, null]
+		}),
+		new web3._extend.Method({
+			name: 'lockAccount',
+			call: 'personal_lockAccount',
+			params: 1
 		})
 	],
 	properties:

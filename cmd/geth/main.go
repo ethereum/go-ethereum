@@ -313,6 +313,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IPCDisabledFlag,
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
+		utils.IPCExperimental,
 		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
 		utils.DevModeFlag,

@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 )
 
 // SampleService is a trivial network service that can be attached to a node for
@@ -35,6 +36,7 @@ import (
 type SampleService struct{}
 
 func (s *SampleService) Protocols() []p2p.Protocol { return nil }
+func (s *SampleService) APIs() []rpc.API           { return nil }
 func (s *SampleService) Start(*p2p.Server) error   { fmt.Println("Service starting..."); return nil }
 func (s *SampleService) Stop() error               { fmt.Println("Service stopping..."); return nil }
 

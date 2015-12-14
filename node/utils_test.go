@@ -23,12 +23,14 @@ import (
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 )
 
 // NoopService is a trivial implementation of the Service interface.
 type NoopService struct{}
 
 func (s *NoopService) Protocols() []p2p.Protocol { return nil }
+func (s *NoopService) APIs() []rpc.API           { return nil }
 func (s *NoopService) Start(*p2p.Server) error   { return nil }
 func (s *NoopService) Stop() error               { return nil }
 
@@ -65,6 +67,10 @@ func (s *InstrumentedService) Protocols() []p2p.Protocol {
 		s.protocolsHook()
 	}
 	return s.protocols
+}
+
+func (s *InstrumentedService) APIs() []rpc.API {
+	return nil
 }
 
 func (s *InstrumentedService) Start(server *p2p.Server) error {

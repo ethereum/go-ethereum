@@ -48,6 +48,10 @@ func (n BlockNonce) Uint64() uint64 {
 	return binary.BigEndian.Uint64(n[:])
 }
 
+func (n BlockNonce) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"0x%x"`, n)), nil
+}
+
 type Header struct {
 	ParentHash  common.Hash    // Hash to the previous block
 	UncleHash   common.Hash    // Uncles of this block
