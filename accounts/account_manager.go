@@ -148,8 +148,8 @@ func (am *Manager) Sign(addr common.Address, hash []byte) (signature []byte, err
 }
 
 func (am *Manager) GetUnlocked(addr common.Address) (prvkey *ecdsa.PrivateKey, err error) {
-	am.mutex.RLock()
-	defer am.mutex.RUnlock()
+	am.mu.RLock()
+	defer am.mu.RUnlock()
 	unlockedKey, found := am.unlocked[addr]
 	if !found {
 		return nil, ErrLocked

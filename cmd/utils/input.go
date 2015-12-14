@@ -96,3 +96,33 @@ func (r *userInputReader) ConfirmPrompt(prompt string) (bool, error) {
 	}
 	return false, err
 }
+
+// getPassPhrase retrieves the password associated with an account, either fetched
+// from a list of preloaded passphrases, or requested interactively from the user.
+func GetPassPhrase(prompt string, confirmation bool, i int, passwords []string) string {
+	// If a list of passwords was supplied, retrieve from them
+	if len(passwords) > 0 {
+		if i < len(passwords) {
+			return passwords[i]
+		}
+		return passwords[len(passwords)-1]
+	}
+	// Otherwise prompt the user for the password
+	if prompt != "" {
+		fmt.Println(prompt)
+	}
+	password, err := Stdin.PasswordPrompt("Passphrase: ")
+	if err != nil {
+		Fatalf("Failed to read passphrase: %v", err)
+	}
+	if confirmation {
+		confirm, err := Stdin.PasswordPrompt("Repeat passphrase: ")
+		if err != nil {
+			Fatalf("Failed to read passphrase confirmation: %v", err)
+		}
+		if password != confirm {
+			Fatalf("Passphrases do not match")
+		}
+	}
+	return password
+}

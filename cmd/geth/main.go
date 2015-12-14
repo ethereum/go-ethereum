@@ -4,7 +4,7 @@
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later	 version.
+// (at your option) any later version.
 //
 // go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -216,9 +216,6 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.ExecFlag,
 		utils.PreLoadJSFlag,
 		utils.WhisperEnabledFlag,
-		utils.SwarmConfigPathFlag,
-		utils.SwarmAccountAddrFlag,
-		utils.ChequebookAddrFlag,
 		utils.DevModeFlag,
 		utils.TestNetFlag,
 		utils.VMForceJitFlag,
@@ -236,6 +233,13 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.GpobaseStepUpFlag,
 		utils.GpobaseCorrectionFactorFlag,
 		utils.ExtraDataFlag,
+		// on top of develop
+		utils.SwarmConfigPathFlag,
+		utils.SwarmSwapDisabled,
+		utils.SwarmSyncDisabled,
+		utils.SwarmPortFlag,
+		utils.SwarmAccountAddrFlag,
+		utils.ChequebookAddrFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
 
@@ -440,93 +444,11 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	if err := stack.Service(&ethereum); err != nil {
 		utils.Fatalf("ethereum service not running: %v", err)
 	}
-	accman := ethereum.AccountManager()
-	passwords := utils.MakePasswordList(ctx)
-
-	accounts := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
-	for i, account := range accounts {
-		if trimmed := strings.TrimSpace(account); trimmed != "" {
-			unlockAccount(ctx, accman, trimmed, i, passwords)
-		}
-	}
-	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
 		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name), ctx.GlobalString(utils.MiningGPUFlag.Name)); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}
-}
-
-func accountList(ctx *cli.Context) {
-	accman := utils.MakeAccountManager(ctx)
-	accts, err := accman.Accounts()
-	if err != nil {
-		utils.Fatalf("Could not list accounts: %v", err)
-	}
-	for i, acct := range accts {
-		fmt.Printf("Account #%d: %x\n", i, acct)
-	}
-}
-
-// accountCreate creates a new account into the keystore defined by the CLI flags.
-func accountCreate(ctx *cli.Context) {
-	accman := utils.MakeAccountManager(ctx)
-	password := utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
-
-	account, err := accman.NewAccount(password)
-	if err != nil {
-		utils.Fatalf("Failed to create account: %v", err)
-	}
-	fmt.Printf("Address: %x\n", account)
-}
-
-// accountUpdate transitions an account from a previous format to the current
-// one, also providing the possibility to change the pass-phrase.
-func accountUpdate(ctx *cli.Context) {
-	if len(ctx.Args()) == 0 {
-		utils.Fatalf("No accounts specified to update")
-	}
-	accman := utils.MakeAccountManager(ctx)
-
-	account, oldPassword := utils.UnlockAccount(ctx, accman, ctx.Args().First(), 0, nil)
-	newPassword := utils.GetPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
-	if err := accman.Update(account, oldPassword, newPassword); err != nil {
-		utils.Fatalf("Could not update the account: %v", err)
-	}
-}
-
-func importWallet(ctx *cli.Context) {
-	keyfile := ctx.Args().First()
-	if len(keyfile) == 0 {
-		utils.Fatalf("keyfile must be given as argument")
-	}
-	keyJson, err := ioutil.ReadFile(keyfile)
-	if err != nil {
-		utils.Fatalf("Could not read wallet file: %v", err)
-	}
-
-	accman := utils.MakeAccountManager(ctx)
-	passphrase := utils.GetPassPhrase("", false, 0, utils.MakePasswordList(ctx))
-
-	acct, err := accman.ImportPreSaleKey(keyJson, passphrase)
-	if err != nil {
-		utils.Fatalf("Could not create the account: %v", err)
-	}
-	fmt.Printf("Address: %x\n", acct)
-}
-
-func accountImport(ctx *cli.Context) {
-	keyfile := ctx.Args().First()
-	if len(keyfile) == 0 {
-		utils.Fatalf("keyfile must be given as argument")
-	}
-	accman := utils.MakeAccountManager(ctx)
-	passphrase := utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
-	acct, err := accman.Import(keyfile, passphrase)
-	if err != nil {
-		utils.Fatalf("Could not create the account: %v", err)
-	}
-	fmt.Printf("Address: %x\n", acct)
 }
 
 func makedag(ctx *cli.Context) {

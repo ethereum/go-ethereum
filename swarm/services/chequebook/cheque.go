@@ -1,3 +1,4 @@
+//go:generate abigen --sol contract/chequebook.sol --pkg contract --out contract/jaak.go
 package chequebook
 
 import (
@@ -11,13 +12,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/swap"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/swarm/services/chequebook/contract"
+	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 )
+
+// func init() {
+// 	glog.SetToStderr(true)
+// 	glog.SetV(6)
+// }
 
 /*
 Chequebook package is a go API to the 'chequebook' ethereum smart contract
@@ -38,23 +45,10 @@ Some functionality require interacting with the blockchain:
 Backend is the interface for that
 */
 
-const (
-	gasToCash     = "2000000"   // gas cost of a cash transaction using chequebook
-	getSentAbiPre = "d75d691d"  // sent amount accessor in the chequebook contract
-	cashAbiPre    = "fbf788d6"  // abi preamble signature for cash method of the chequebook
-	queryInterval = 15000000000 // 15 seconds
-	deployGas     = "3000000"
-	// confirmationInterval = 3 * 10 * *11 // 5 minutes
+var (
+	gasToCash = big.NewInt(2000000) // gas cost of a cash transaction using chequebook
+	// gasToDeploy = big.NewInt(3000000)
 )
-
-// Backend is the interface to interact with the Ethereum blockchain
-// implemented by xeth.XEth
-type Backend interface {
-	Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error)
-	Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, string, error)
-	GetTxReceipt(txhash common.Hash) *types.Receipt
-	CodeAt(address string) string
-}
 
 // rlp serialised cheque model for use with the chequebook
 type Cheque struct {
@@ -65,15 +59,15 @@ type Cheque struct {
 	Sig         []byte         // signature Sign(Sha3(contract, beneficiary, amount), prvKey)
 }
 
-type Params struct {
-	ContractCode, ContractAbi, ContractSource string
-}
-
-var ContractParams = &Params{ContractCode, ContractAbi, ContractSource}
-
 func (self *Cheque) String() string {
 	return fmt.Sprintf("contract: %s, beneficiary: %s, amount: %v, signature: %x", self.Contract.Hex(), self.Beneficiary.Hex(), self.Amount, self.Sig)
 }
+
+type Params struct {
+	ContractCode, ContractAbi string
+}
+
+var ContractParams = &Params{contract.ChequebookBin, contract.ChequebookABI}
 
 // chequebook to create, sign cheques from single contract to multiple beneficiarys
 // outgoing payment handler for peer to peer micropayments
@@ -81,97 +75,68 @@ type Chequebook struct {
 	path    string            // path to chequebook file
 	prvKey  *ecdsa.PrivateKey // private key to sign cheque with
 	lock    sync.Mutex        //
-	backend Backend           // blockchain API
-	quit    chan bool         // when closed causes autodeposit to stop
-	owner   common.Address    // owner address (derived from pubkey)
+	backend bind.Backend      // blockchain API
+	// abigen  bind.ContractBackend // blockchain contract backend for abigen
+	quit     chan bool                   // when closed causes autodeposit to stop
+	owner    common.Address              // owner address (derived from pubkey)
+	contract *contract.Chequebook        // abigen binding
+	session  *contract.ChequebookSession // abigen binding with Tx Opts
 
 	// persisted fields
-	balance  *big.Int                    // not synced with blockchain
-	contract common.Address              // contract address
-	sent     map[common.Address]*big.Int //tallies for beneficiarys
+	balance      *big.Int                    // not synced with blockchain
+	contractAddr common.Address              // contract address
+	sent         map[common.Address]*big.Int //tallies for beneficiarys
 
 	txhash    string   // tx hash of last deposit tx
 	threshold *big.Int // threshold that triggers autodeposit if not nil
 	buffer    *big.Int // buffer to keep on top of balance for fork protection
 }
 
-func Deploy(owner common.Address, backend Backend, amount *big.Int, confirmationInterval, timeout time.Duration) (contract common.Address, err error) {
-	if (owner == common.Address{}) {
-		return contract, fmt.Errorf("invalid owner %v. Owner needed to deploy chequebook contract: %v", owner.Hex(), err)
-	}
-
-	txhash, err := backend.Transact(owner.Hex(), "", "", amount.String(), deployGas, "", ContractCode)
-	if err != nil {
-		return contract, fmt.Errorf("unable to send chequebook creation transaction: %v", err)
-	}
-
-	timer := time.NewTimer(timeout).C
-	ticker := time.NewTicker(queryInterval).C
-OUT:
-	for {
-		select {
-
-		case <-timer:
-			if ticker == nil {
-				// ticker is nil, receipt was found and confirmation interval passed
-				err = Validate(contract, backend)
-				if err != nil {
-					return contract, fmt.Errorf("invalid contract at %v after %v: %v", contract.Hex(), confirmationInterval, err)
-				}
-				break OUT
-			}
-			// ticker is non-nil meaning receipt not found yet
-			return contract, fmt.Errorf("chequebook deployment timed out in %v", timeout)
-
-		case <-ticker:
-			receipt := backend.GetTxReceipt(common.HexToHash(txhash))
-			if receipt != nil {
-				contract = receipt.ContractAddress
-				glog.V(logger.Detail).Infof("[CHEQUEBOOK] chequebook deployed at %v (owner: %v)", contract.Hex(), owner.Hex())
-				timer = time.NewTimer(confirmationInterval).C
-				ticker = nil
-			} else {
-				glog.V(logger.Detail).Infof("[CHEQUEBOOK] check if chequebook deployed (txhash: %v)", txhash)
-			}
-
-		}
-	}
-	return contract, nil
+func (self *Chequebook) String() string {
+	return fmt.Sprintf("contract: %s, owner: %s, balance: %v, signer: %x", self.contractAddr.Hex(), self.owner.Hex(), self.balance, self.prvKey.PublicKey)
 }
 
-func Validate(contract common.Address, backend Backend) (err error) {
-	if (contract == common.Address{}) {
-		return fmt.Errorf("zero address")
-	}
-	code := backend.CodeAt(contract.Hex())
-	if code != ContractDeployedCode {
-		return fmt.Errorf("incorrect code %v:\n%v\n%v", contract.Hex(), code, ContractDeployedCode)
-	}
-	return nil
-}
-
-// NewChequebook(path, contract, balance, prvKey) creates a new Chequebook
-func NewChequebook(path string, contract common.Address, prvKey *ecdsa.PrivateKey, backend Backend) (self *Chequebook, err error) {
+// NewChequebook(path, contract, prvKey, abibbackend, backend) creates a new Chequebook
+func NewChequebook(path string, contractAddr common.Address, prvKey *ecdsa.PrivateKey, backend bind.Backend) (self *Chequebook, err error) {
 	balance := new(big.Int)
 	sent := make(map[common.Address]*big.Int)
-	owner := crypto.PubkeyToAddress(prvKey.PublicKey)
-	self = &Chequebook{
-		balance:  balance,
-		contract: contract,
-		sent:     sent,
-		path:     path,
-		prvKey:   prvKey,
-		backend:  backend,
-		owner:    owner,
+
+	chbook, err := contract.NewChequebook(contractAddr, backend)
+	if err != nil {
+		return nil, err
 	}
-	if (contract != common.Address{}) {
-		glog.V(logger.Detail).Infof("[CHEQUEBOOK] new chequebook initialised from %v (owner: %v)", contract.Hex(), owner.Hex())
+	transactOpts := bind.NewKeyedTransactor(prvKey)
+	session := &contract.ChequebookSession{
+		Contract:     chbook,
+		TransactOpts: *transactOpts,
+	}
+
+	self = &Chequebook{
+		prvKey:       prvKey,
+		balance:      balance,
+		contractAddr: contractAddr,
+		sent:         sent,
+		path:         path,
+		backend:      backend,
+		owner:        transactOpts.From,
+		contract:     chbook,
+		session:      session,
+	}
+
+	if (contractAddr != common.Address{}) {
+		self.setBalanceFromBlockChain()
+		glog.V(logger.Detail).Infof("[CHEQUEBOOK] new chequebook initialised from %v (owner: %v, balance: %s)", contractAddr, self.owner.Hex(), self.balance.String())
 	}
 	return
 }
 
+func (self *Chequebook) setBalanceFromBlockChain() {
+	balance := self.backend.BalanceAt(self.contractAddr)
+	self.balance.Set(balance)
+}
+
 // LoadChequebook(path, prvKey, backend) loads a chequebook from disk (file path)
-func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend) (self *Chequebook, err error) {
+func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend bind.Backend, checkBalance bool) (self *Chequebook, err error) {
 	var data []byte
 	data, err = ioutil.ReadFile(path)
 	if err != nil {
@@ -184,7 +149,11 @@ func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend) (sel
 	if err != nil {
 		return nil, err
 	}
-	glog.V(logger.Detail).Infof("[CHEQUEBOOK] loaded chequebook (%s, owner: %v) initialised from %v", self.contract.Hex(), self.owner.Hex(), path)
+	if checkBalance {
+		self.setBalanceFromBlockChain()
+	}
+
+	glog.V(logger.Detail).Infof("[CHEQUEBOOK] loaded chequebook (%s, owner: %v, balance: %v) initialised from %v", self.contractAddr.Hex(), self.owner.Hex(), self.balance, path)
 
 	return
 }
@@ -207,7 +176,7 @@ func (self *Chequebook) UnmarshalJSON(data []byte) error {
 	if !ok {
 		return fmt.Errorf("cumulative amount sent: unable to convert string to big integer: %v", file.Balance)
 	}
-	self.contract = common.HexToAddress(file.Contract)
+	self.contractAddr = common.HexToAddress(file.Contract)
 	for addr, sent := range file.Sent {
 		self.sent[common.HexToAddress(addr)], ok = new(big.Int).SetString(sent, 10)
 		if !ok {
@@ -220,7 +189,7 @@ func (self *Chequebook) UnmarshalJSON(data []byte) error {
 func (self *Chequebook) MarshalJSON() ([]byte, error) {
 	var file = &chequebookFile{
 		Balance:  self.balance.String(),
-		Contract: self.contract.Hex(),
+		Contract: self.contractAddr.Hex(),
 		Owner:    self.owner.Hex(),
 		Sent:     make(map[string]string),
 	}
@@ -238,7 +207,7 @@ func (self *Chequebook) Save() (err error) {
 	if err != nil {
 		return err
 	}
-	glog.V(logger.Detail).Infof("[CHEQUEBOOK] saving chequebook (%s) to %v", self.contract.Hex(), self.path)
+	glog.V(logger.Detail).Infof("[CHEQUEBOOK] saving chequebook (%s) to %v", self.contractAddr.Hex(), self.path)
 
 	return ioutil.WriteFile(self.path, data, os.ModePerm)
 }
@@ -259,6 +228,7 @@ func (self *Chequebook) Stop() {
 func (self *Chequebook) Issue(beneficiary common.Address, amount *big.Int) (ch *Cheque, err error) {
 	defer self.lock.Unlock()
 	self.lock.Lock()
+	glog.V(logger.Detail).Infof("[CHEQUEBOOK] prvKey: %v", self.prvKey)
 	if amount.Cmp(common.Big0) <= 0 {
 		return nil, fmt.Errorf("amount must be greater than zero (%v)", amount)
 	}
@@ -273,10 +243,11 @@ func (self *Chequebook) Issue(beneficiary common.Address, amount *big.Int) (ch *
 		}
 		sum := new(big.Int).Set(sent)
 		sum.Add(sum, amount)
-		sig, err = crypto.Sign(sigHash(self.contract, beneficiary, sum), self.prvKey)
+
+		sig, err = crypto.Sign(sigHash(self.contractAddr, beneficiary, sum), self.prvKey)
 		if err == nil {
 			ch = &Cheque{
-				Contract:    self.contract,
+				Contract:    self.contractAddr,
 				Beneficiary: beneficiary,
 				Amount:      sum,
 				Sig:         sig,
@@ -301,7 +272,7 @@ func (self *Chequebook) Issue(beneficiary common.Address, amount *big.Int) (ch *
 
 // convenience method to cash any cheque
 func (self *Chequebook) Cash(ch *Cheque) (txhash string, err error) {
-	return ch.Cash(self.owner, self.backend)
+	return ch.Cash(self.session)
 }
 
 // data to sign: contract address, beneficiary, cumulative amount of funds ever sent
@@ -330,13 +301,13 @@ func (self *Chequebook) Owner() common.Address {
 }
 
 // Backend() public accessor for backend
-func (self *Chequebook) Backend() Backend {
+func (self *Chequebook) Backend() bind.Backend {
 	return self.backend
 }
 
 // Address() public accessor for contract
 func (self *Chequebook) Address() common.Address {
-	return self.contract
+	return self.contractAddr
 }
 
 // Deposit(amount) deposits amount to the chequebook account
@@ -349,15 +320,19 @@ func (self *Chequebook) Deposit(amount *big.Int) (string, error) {
 // deposit(amount) deposits amount to the chequebook account
 // caller holds the lock
 func (self *Chequebook) deposit(amount *big.Int) (string, error) {
-	txhash, err := self.backend.Transact(self.owner.Hex(), self.contract.Hex(), "", amount.String(), "", "", "")
+	// since the amount is variable here, we do not use sessions
+	depositTransactor := bind.NewKeyedTransactor(self.prvKey)
+	depositTransactor.Value = amount
+	chbookRaw := &contract.ChequebookRaw{self.contract}
+	tx, err := chbookRaw.Transfer(depositTransactor)
 	// assume that transaction is actually successful, we add the amount to balance right away
 	if err != nil {
-		glog.V(logger.Warn).Infof("[CHEQUEBOOK] error depositing %d wei to chequebook (%s, balance: %v, target: %v): %v", amount, self.contract.Hex(), self.balance, self.buffer, err)
+		glog.V(logger.Warn).Infof("[CHEQUEBOOK] error depositing %d wei to chequebook (%s, balance: %v, target: %v): %v", amount, self.contractAddr.Hex(), self.balance, self.buffer, err)
 	} else {
 		self.balance.Add(self.balance, amount)
-		glog.V(logger.Detail).Infof("[CHEQUEBOOK] deposited %d wei to chequebook (%s, balance: %v, target: %v)", amount, self.contract.Hex(), self.balance, self.buffer)
+		glog.V(logger.Detail).Infof("[CHEQUEBOOK] deposited %d wei to chequebook (%s, balance: %v, target: %v)", amount, self.contractAddr.Hex(), self.balance, self.buffer)
 	}
-	return txhash, err
+	return tx.Hash().Hex(), err
 }
 
 // AutoDeposit(interval, threshold, buffer) (re)sets interval time and amount
@@ -435,43 +410,50 @@ func (self *Outbox) String() string {
 	return fmt.Sprintf("chequebook: %v, beneficiary: %s, balance: %v", self.chequeBook.Address().Hex(), self.beneficiary.Hex(), self.chequeBook.Balance())
 }
 
-// type ChequeQueue struct {
-//   beneficiary common.Address
-//   last      map[string]*Inbox
-// }
-
 // inbox to deposit, verify and cash cheques
 // from a single contract to single beneficiary
 // incoming payment handler for peer to peer micropayments
 type Inbox struct {
 	lock        sync.Mutex
-	contract    common.Address   // peer's chequebook contract
-	beneficiary common.Address   // local peer's receiving address
-	sender      common.Address   // local peer's address to send cashing tx from
-	signer      *ecdsa.PublicKey // peer's public key
-	txhash      string           // tx hash of last cashing tx
-	backend     Backend          // blockchain API
-	quit        chan bool        // when closed causes autocash to stop
-	maxUncashed *big.Int         // threshold that triggers autocashing
-	cashed      *big.Int         // cumulative amount cashed
-	cheque      *Cheque          // last cheque, nil if none yet received
+	contract    common.Address              // peer's chequebook contract
+	beneficiary common.Address              // local peer's receiving address
+	sender      common.Address              // local peer's address to send cashing tx from
+	signer      *ecdsa.PublicKey            // peer's public key
+	txhash      string                      // tx hash of last cashing tx
+	abigen      bind.ContractBackend        // blockchain API
+	session     *contract.ChequebookSession // abi contract backend with tx opts
+	quit        chan bool                   // when closed causes autocash to stop
+	maxUncashed *big.Int                    // threshold that triggers autocashing
+	cashed      *big.Int                    // cumulative amount cashed
+	cheque      *Cheque                     // last cheque, nil if none yet received
 }
 
 // NewInbox(contract, beneficiary, signer, backend) constructor for Inbox
 // not persisted, cumulative sum updated from blockchain when first cheque received
 // backend used to sync amount (Call) as well as cash the cheques (Transact)
-func NewInbox(contract, sender, beneficiary common.Address, signer *ecdsa.PublicKey, backend Backend) (self *Inbox, err error) {
+func NewInbox(prvKey *ecdsa.PrivateKey, contractAddr, beneficiary common.Address, signer *ecdsa.PublicKey, abigen bind.ContractBackend) (self *Inbox, err error) {
 
 	if signer == nil {
 		return nil, fmt.Errorf("signer is null")
 	}
+	chbook, err := contract.NewChequebook(contractAddr, abigen)
+	if err != nil {
+		return nil, err
+	}
+	transactOpts := bind.NewKeyedTransactor(prvKey)
+	transactOpts.GasLimit = gasToCash
+	session := &contract.ChequebookSession{
+		Contract:     chbook,
+		TransactOpts: *transactOpts,
+	}
+	sender := transactOpts.From
 
 	self = &Inbox{
-		contract:    contract,
+		contract:    contractAddr,
 		beneficiary: beneficiary,
 		sender:      sender,
 		signer:      signer,
-		backend:     backend,
+		session:     session,
 		cashed:      new(big.Int).Set(common.Big0),
 	}
 	glog.V(logger.Detail).Infof("[CHEQUEBOOK] initialised inbox (%s -> %s) expected signer: %x", self.contract.Hex(), self.beneficiary.Hex(), crypto.FromECDSAPub(signer))
@@ -494,7 +476,7 @@ func (self *Inbox) Stop() {
 
 func (self *Inbox) Cash() (txhash string, err error) {
 	if self.cheque != nil {
-		txhash, err = self.cheque.Cash(self.sender, self.backend)
+		txhash, err = self.cheque.Cash(self.session)
 		glog.V(logger.Detail).Infof("[CHEQUEBOOK] cashing cheque (total: %v) on chequebook (%s) sending to %v", self.cheque.Amount, self.contract.Hex(), self.beneficiary.Hex())
 		self.cashed = self.cheque.Amount
 	}
@@ -548,7 +530,7 @@ func (self *Inbox) autoCash(cashInterval time.Duration) {
 	return
 }
 
-// Reveive(cheque) called to deposit latest cheque to incoming Inbox
+// Receive(cheque) called to deposit latest cheque to incoming Inbox
 func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 	ch := promise.(*Cheque)
 
@@ -557,18 +539,12 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 	var sum *big.Int
 	if self.cheque == nil {
 		// the sum is checked against the blockchain once a check is received
-		tallyhex, _, err := self.backend.Call(self.beneficiary.Hex(), self.contract.Hex(), "", "", "", getSentAbiEncode(ch.Contract))
+		//
+		tally, err := self.session.Sent(self.beneficiary)
 		if err != nil {
-			return nil, fmt.Errorf("inbox: error calling backend to set amount: %v", err)
+			return nil, fmt.Errorf("inbox: error 	calling backend to set amount: %v", err)
 		}
-
-		tally := common.FromHex(tallyhex)
-		// var ok bool
-		// sum, ok = new(big.Int).SetString(tally, 10)
-		// if !ok {
-		// 	return nil, fmt.Errorf("inbox: cannot convert amount '%s' (%v) to integer", tallyhex, tally)
-		// }
-		sum = new(big.Int).SetBytes(tally)
+		sum = tally
 	} else {
 		sum = self.cheque.Amount
 	}
@@ -588,37 +564,6 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 	}
 
 	return amount, err
-}
-
-// RSV representation of signature
-func sig2rsv(sig []byte) (v byte, r, s []byte) {
-	v = sig[64] + 27
-	r = sig[:32]
-	s = sig[32:64]
-	return
-}
-
-func getSentAbiEncode(beneficiary common.Address) string {
-	var beneficiary32 [32]byte
-	copy(beneficiary32[12:], beneficiary.Bytes())
-	return getSentAbiPre + common.Bytes2Hex(beneficiary32[:])
-}
-
-// abi encoding of a cheque to send as eth tx data
-func (self *Cheque) cashAbiEncode() string {
-	v, r, s := sig2rsv(self.Sig)
-	// cashAbiPre, beneficiary, amount, v, r, s
-	bigamount := self.Amount.Bytes()
-	if len(bigamount) > 32 {
-		glog.V(logger.Detail).Infof("[CHEQUEBOOK] number too big: %v (>32 bytes)", self.Amount)
-		return ""
-	}
-	var beneficiary32, amount32, vabi [32]byte
-	copy(beneficiary32[12:], self.Beneficiary.Bytes())
-	copy(amount32[32-len(bigamount):32], bigamount)
-	vabi[31] = v
-	return cashAbiPre + common.Bytes2Hex(beneficiary32[:]) + common.Bytes2Hex(amount32[:]) +
-		common.Bytes2Hex(vabi[:]) + common.Bytes2Hex(r) + common.Bytes2Hex(s)
 }
 
 // Verify(cheque) verifies cheque for signer, contract, beneficiary, amount, valid signature
@@ -653,8 +598,21 @@ func (self *Cheque) Verify(signerKey *ecdsa.PublicKey, contract, beneficiary com
 	return amount, nil
 }
 
-// Cash(backend) will cash the check using xeth backend to send a transaction
+// v/r/s representation of signature
+func sig2vrs(sig []byte) (v *big.Int, r, s [32]byte) {
+	v = big.NewInt(int64(sig[64] + 27))
+	copy(r[:], sig[:32])
+	copy(s[:], sig[32:64])
+	return
+}
+
+// Cash(backend) will cash the check using abi contract backend to send a transaction
 // Beneficiary address should be unlocked
-func (self *Cheque) Cash(sender common.Address, backend Backend) (string, error) {
-	return backend.Transact(sender.Hex(), self.Contract.Hex(), "", "", "", gasToCash, self.cashAbiEncode())
+func (self *Cheque) Cash(session *contract.ChequebookSession) (string, error) {
+	v, r, s := sig2vrs(self.Sig)
+	tx, err := session.Cash(self.Beneficiary, self.Amount, v, r, s)
+	if err != nil {
+		return "", err
+	}
+	return tx.Hash().Hex(), nil
 }

@@ -1,4 +1,4 @@
-package api
+package http
 
 import (
 	"io/ioutil"
@@ -22,7 +22,7 @@ func TestRoundTripper(t *testing.T) {
 	})
 	go http.ListenAndServe(":8600", serveMux)
 
-	rt := &RoundTripper{"8600"}
+	rt := &RoundTripper{Port: "8600"}
 	client := httpclient.New("/")
 	client.RegisterProtocol("bzz", rt)
 
@@ -43,8 +43,8 @@ func TestRoundTripper(t *testing.T) {
 		t.Errorf("expected no error, got %v", err)
 		return
 	}
-	if string(content) != "/test.com/path" {
-		t.Errorf("incorrect response from http server: expected '%v', got '%v'", "/test.com/path", string(content))
+	if string(content) != "/HTTP/1.1:/test.com/path" {
+		t.Errorf("incorrect response from http server: expected '%v', got '%v'", "/HTTP/1.1:/test.com/path", string(content))
 	}
 
 }

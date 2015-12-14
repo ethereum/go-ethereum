@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	bucketSize   = 20
-	maxProx      = 255
+	bucketSize   = 3
+	proxBinSize  = 4
+	maxProx      = 8
 	connRetryExp = 2
 )
 
@@ -35,7 +36,7 @@ type KadParams struct {
 func NewKadParams() *KadParams {
 	return &KadParams{
 		MaxProx:              maxProx,
-		ProxBinSize:          bucketSize,
+		ProxBinSize:          proxBinSize,
 		BucketSize:           bucketSize,
 		PurgeInterval:        purgeInterval,
 		InitialRetryInterval: initialRetryInterval,
@@ -72,6 +73,8 @@ func New(addr Address, params *KadParams) *Kademlia {
 	}
 	glog.V(logger.Info).Infof("[KΛÐ] base address %v", addr)
 
+	// ! temporary hack fixme:
+	params.ProxBinSize = 4
 	return &Kademlia{
 		addr:      addr,
 		KadParams: params,
@@ -100,6 +103,9 @@ func (self *Kademlia) DBCount() int {
 // On is the entry point called when a new nodes is added
 // unsafe in that node is not checked to be already active node (to be called once)
 func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error) {
+	defer self.lock.Unlock()
+	self.lock.Lock()
+
 	index := self.proximityBin(node.Addr())
 	record := self.db.findOrCreate(index, node.Addr(), node.Url())
 	// callback on add node
@@ -116,25 +122,20 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 	}
 	record.connected = true
 
-	defer self.lock.Unlock()
-	self.lock.Lock()
-
 	// insert in kademlia table of active nodes
 	bucket := self.buckets[index]
 	// if bucket is full insertion replaces the worst node
 	// TODO: give priority to peers with active traffic
 	if worst, pos := bucket.insert(node); worst != nil {
-		glog.V(logger.Info).Infof("[KΛÐ]: replace node %v (%d) with node %v", worst, pos, node)
+		glog.V(logger.Info).Infof("[KΛÐ]: replace node %v (%d) with node %v\n%v", worst, pos, node, self)
+		return
 		// no prox adjustment needed
 		// do not change count
-	} else {
-		glog.V(logger.Info).Infof("[KΛÐ]: add node %v to table", node)
-		self.count++
-		self.adjustProxMore(index)
 	}
-
+	glog.V(logger.Info).Infof("[KΛÐ]: add node %v to table", node)
+	self.count++
+	self.setProxLimit(index, false)
 	return
-
 }
 
 //  is the entrypoint called when a node is taken offline
@@ -161,7 +162,8 @@ func (self *Kademlia) Off(node Node, cb func(*NodeRecord, Node)) (err error) {
 	if len(bucket.nodes) < bucket.size {
 		err = fmt.Errorf("insufficient nodes (%v) in bucket %v", len(bucket.nodes), index)
 	}
-	self.adjustProxLess(index)
+
+	self.setProxLimit(index, true)
 
 	r := self.db.index[node.Addr()]
 	// callback on remove
@@ -174,49 +176,40 @@ func (self *Kademlia) Off(node Node, cb func(*NodeRecord, Node)) (err error) {
 	return
 }
 
-// proxLimit is dynamically adjusted so that 1) there is no
-// empty buckets in bin < proxLimit and 2) the sum of all items sare the maximum
-// possible but lower than ProxBinSize
-// adjust Prox (proxLimit and proxSize after an insertion of add nodes into bucket r)
-func (self *Kademlia) adjustProxMore(r int) {
-	if r >= self.proxLimit {
-		exLimit := self.proxLimit
-		exSize := self.proxSize
-		self.proxSize++
-
-		var i int
-		for i = self.proxLimit; i < self.MaxProx && len(self.buckets[i].nodes) > 0 && self.proxSize-len(self.buckets[i].nodes) > self.ProxBinSize; i++ {
-			self.proxSize -= len(self.buckets[i].nodes)
-		}
-		self.proxLimit = i
-
-		glog.V(logger.Detail).Infof("[KΛÐ]: Max Prox Bin: Lower Limit: %v (was %v): Bin Size: %v (was %v)", self.proxLimit, exLimit, self.proxSize, exSize)
+// proxLimit is dynamically adjusted so that
+// 1) there is no empty buckets in bin < proxLimit and
+// 2) the sum of all items sare the maximpossible but lower than ProxBinSize
+// adjust Prox (proxLimit and proxSize after an insertion/removal of nodes)
+// caller holds the lock
+func (self *Kademlia) setProxLimit(r int, off bool) {
+	// glog.V(logger.Info).Infof("[KΛÐ]: adjust proxbin for (bin: %v, off: %v)", r, off)
+	if r < self.proxLimit && len(self.buckets[r].nodes) > 0 {
+		return
 	}
-}
-
-func (self *Kademlia) adjustProxLess(r int) {
-	exLimit := self.proxLimit
-	exSize := self.proxSize
-	if r >= self.proxLimit {
+	glog.V(logger.Detail).Infof("[KΛÐ]: set proxbin (size: %v, limit: %v, bin: %v, off: %v)", self.proxSize, self.proxLimit, r, off)
+	if off {
 		self.proxSize--
-	}
-
-	if r < self.proxLimit && len(self.buckets[r].nodes) == 0 {
-		for i := self.proxLimit - 1; i > r; i-- {
-			self.proxSize += len(self.buckets[i].nodes)
+		for (self.proxSize < self.ProxBinSize || r < self.proxLimit) &&
+			self.proxLimit > 0 {
+			//
+			self.proxLimit--
+			self.proxSize += len(self.buckets[self.proxLimit].nodes)
+			glog.V(logger.Detail).Infof("[KΛÐ]: proxbin expansion (size: %v, limit: %v, bin: %v, off: %v)", self.proxSize, self.proxLimit, r, off)
 		}
-		self.proxLimit = r
-	} else if self.proxLimit > 0 && r >= self.proxLimit-1 {
-		var i int
-		for i = self.proxLimit - 1; i > 0 && len(self.buckets[i].nodes)+self.proxSize <= self.ProxBinSize; i-- {
-			self.proxSize += len(self.buckets[i].nodes)
-		}
-		self.proxLimit = i
+		glog.V(logger.Detail).Infof("%v", self)
+		return
 	}
+	self.proxSize++
+	for self.proxLimit < self.MaxProx &&
+		len(self.buckets[self.proxLimit].nodes) > 0 &&
+		self.proxSize-len(self.buckets[self.proxLimit].nodes) >= self.ProxBinSize {
+		//
+		self.proxSize -= len(self.buckets[self.proxLimit].nodes)
+		self.proxLimit++
+		glog.V(logger.Detail).Infof("[KΛÐ]: proxbin contraction (size: %v, limit: %v, bin: %v, off: %v)", self.proxSize, self.proxLimit, r, off)
+	}
+	glog.V(logger.Detail).Infof("%v", self)
 
-	if exLimit != self.proxLimit || exSize != self.proxSize {
-		glog.V(logger.Detail).Infof("[KΛÐ]: Max Prox Bin: Lower Limit: %v (was %v): Bin Size: %v (was %v)", self.proxLimit, exLimit, self.proxSize, exSize)
-	}
 }
 
 /*
@@ -251,8 +244,7 @@ func (self *Kademlia) FindClosest(target Address, max int) []Node {
 			r.push(bucket[i], limit)
 			n++
 		}
-		if max == 0 && start <= index && (n > 0 || start == 0) ||
-			max > 0 && down && start <= index && (n >= limit || n == self.count || start == 0) {
+		if max == 0 && start <= index && (n > 0 || start == 0) || max > 0 && down && start <= index && (n >= limit || n == self.count || start == 0) {
 			break
 		}
 		if down {
@@ -415,6 +407,7 @@ func (self *Kademlia) Load(path string, cb func(*NodeRecord, Node) error) (err e
 }
 
 // kademlia table + kaddb table displayed with ascii
+// callerholds the lock
 func (self *Kademlia) String() string {
 
 	var rows []string

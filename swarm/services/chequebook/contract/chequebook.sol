@@ -4,18 +4,10 @@ import "mortal";
 /// @author Daniel A. Nagy <daniel@ethdev.com>
 contract chequebook is mortal {
     // Cumulative paid amount in wei to each beneficiary
-    mapping (address => uint256) sent;
+    mapping (address => uint256) public sent;
 
     /// @notice Overdraft event
     event Overdraft(address deadbeat);
-
-    /// @notice Accessor for sent map
-    ///
-    /// @param beneficiary beneficiary address
-    /// @return cumulative amount in wei sent to beneficiary
-    function getSent(address beneficiary) constant returns (uint256) {
-	    return sent[beneficiary];
-    }
 
     /// @notice Cash cheque
     ///

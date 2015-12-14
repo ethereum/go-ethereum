@@ -152,13 +152,13 @@ func (self *Swap) Add(n int) error {
 	self.lock.Lock()
 	self.balance += n
 	if !self.Sells && self.balance > 0 {
-		glog.V(logger.Detail).Infof("[SWAP] <%v> remote peer cannot have debt (unable to buy)", self.proto, self.balance)
+		glog.V(logger.Detail).Infof("[SWAP] <%v> remote peer cannot have debt (balance: %v)", self.proto, self.balance)
 		self.proto.Drop()
-		return fmt.Errorf("[SWAP] <%v> remote peer cannot have debt (unable to buy)", self.proto, self.balance)
+		return fmt.Errorf("[SWAP] <%v> remote peer cannot have debt (balance: %v)", self.proto, self.balance)
 	}
 	if !self.Buys && self.balance < 0 {
-		glog.V(logger.Detail).Infof("[SWAP] <%v> we cannot have debt (unable to buy)", self.proto, self.balance)
-		return fmt.Errorf("[SWAP] <%v> we cannot have debt (unable to buy)", self.proto, self.balance)
+		glog.V(logger.Detail).Infof("[SWAP] <%v> we cannot have debt (balance: %v)", self.proto, self.balance)
+		return fmt.Errorf("[SWAP] <%v> we cannot have debt (balance: %v)", self.proto, self.balance)
 	}
 	if self.balance >= int(self.local.DropAt) {
 		glog.V(logger.Detail).Infof("[SWAP] <%v> remote peer has too much debt (balance: %v, disconnect threshold: %v)", self.proto, self.balance, self.local.DropAt)

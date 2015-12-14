@@ -91,6 +91,7 @@ func TestConfigWriteRead(t *testing.T) {
 		t.Fatalf("default config file cannot be read: %v", err)
 	}
 	exp := strings.Replace(defaultConfig, "TMPDIR", tmp, -1)
+	exp = strings.Replace(exp, "\\", "\\\\", -1)
 
 	if string(data) != exp {
 		t.Fatalf("default config mismatch:\nexpected:\n'%v'\ngot:\n'%v'", exp, string(data))

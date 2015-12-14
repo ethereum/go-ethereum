@@ -1,33 +1,34 @@
 package network
 
 /*
-BZZ implements the bzz wire protocol of swarm
+bzz implements the swarm wire protocol [bzz] (sister of eth and shh)
 the protocol instance is launched on each peer by the network layer if the
-BZZ protocol handler is registered on the p2p server.
+bzz protocol handler is registered on the p2p server.
 
-The protocol takes care of actually communicating the bzz protocol
-* encoding and decoding requests for storage and retrieval
-* handling the s§protocol handshake
-* dispaching to netstore for handling the DHT logic
-* registering peers in the KΛÐΞMLIΛ table via the hive logistic manager
-* handling sync protocol messages via the syncer
-* talks the SWAP payent protocol (swap accounting is done within NetStore)
+The bzz protocol component speaks the bzz protocol
+* handle the protocol handshake
+* register peers in the KΛÐΞMLIΛ table via the hive logistic manager
+* dispatch to hive for handling the DHT logic
+* encode and decode requests for storage and retrieval
+* handle sync protocol messages via the syncer
+* talks the SWAP payment protocol (swap accounting is done within NetStore)
 */
 
 import (
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 
-	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
-	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/common/chequebook"
-	"github.com/ethereum/go-ethereum/common/swap"
 	"github.com/ethereum/go-ethereum/errs"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/swarm/services/chequebook"
+	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
+	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
@@ -67,7 +68,7 @@ type bzz struct {
 	selfID     discover.NodeID      // peer's node id used in peer advertising in handshake
 	key        storage.Key          // baseaddress as storage.Key
 	storage    StorageHandler       // handler storage/retrieval related requests coming via the bzz wire protocol
-	hive       *Hive                // the logistic manager, peerPool, routing servicec and peer handler
+	hive       *Hive                // the logistic manager, peerPool, routing service and peer handler
 	dbAccess   *DbAccess            // access to db storage counter and iterator for syncing
 	requestDb  *storage.LDBDatabase // db to persist backlog of deliveries to aid syncing
 	remoteAddr *peerAddr            // remote peers address
@@ -77,11 +78,11 @@ type bzz struct {
 
 	swap        *swap.Swap          // swap instance for the peer connection
 	swapParams  *bzzswap.SwapParams // swap settings both local and remote
-	swapEnabled bool                // flag to switch off SWAP (will be via Caps in handshake)
+	swapEnabled bool                // flag to enable SWAP (will be set via Caps in handshake)
+	syncEnabled bool                // flag to enable SYNC (will be set via Caps in handshake)
 	syncer      *syncer             // syncer instance for the peer connection
 	syncParams  *SyncParams         // syncer params
 	syncState   *syncState          // outgoing syncronisation state (contains reference to remote peers db counter)
-	syncEnabled bool                // flag to enable syncing
 }
 
 // interface type for handler of storage/retrieval related requests coming
@@ -151,7 +152,7 @@ func run(requestDb *storage.LDBDatabase, depo StorageHandler, hive *Hive, dbacce
 		},
 		swapParams:  sp,
 		syncParams:  sy,
-		swapEnabled: true,
+		swapEnabled: hive.swapEnabled,
 		syncEnabled: true,
 	}
 
@@ -174,6 +175,10 @@ func run(requestDb *storage.LDBDatabase, depo StorageHandler, hive *Hive, dbacce
 
 	// the main forever loop that handles incoming requests
 	for {
+		if self.hive.blockRead {
+			time.Sleep(1 * time.Second)
+			continue
+		}
 		err = self.handle()
 		if err != nil {
 			return
@@ -268,8 +273,6 @@ func (self *bzz) handle() error {
 		if err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		// set peers state to persist
-		self.syncState = req.State
 
 	case deliveryRequestMsg:
 		// response to syncKeysMsg hashes filtered not existing in db
@@ -286,12 +289,14 @@ func (self *bzz) handle() error {
 
 	case paymentMsg:
 		// swap protocol message for payment, Units paid for, Cheque paid with
-		var req paymentMsgData
-		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+		if self.swapEnabled {
+			var req paymentMsgData
+			if err := msg.Decode(&req); err != nil {
+				return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+			}
+			glog.V(logger.Debug).Infof("[BZZ] incoming payment: %s", req.String())
+			self.swap.Receive(int(req.Units), req.Promise)
 		}
-		glog.V(logger.Debug).Infof("[BZZ] incoming payment: %s", req.String())
-		self.swap.Receive(int(req.Units), req.Promise)
 
 	default:
 		// no other message is allowed
@@ -361,10 +366,9 @@ func (self *bzz) handleStatus() (err error) {
 	self.hive.addPeer(&peer{bzz: self})
 
 	// hive sets syncstate so sync should start after node added
-	if self.syncEnabled {
-		glog.V(logger.Info).Infof("[BZZ] syncronisation request sent with %v", self.syncState)
-		self.syncRequest()
-	}
+	glog.V(logger.Info).Infof("[BZZ] syncronisation request sent with %v", self.syncState)
+	self.syncRequest()
+
 	return nil
 }
 
@@ -377,9 +381,12 @@ func (self *bzz) sync(state *syncState) error {
 	cnt := self.dbAccess.counter()
 	remoteaddr := self.remoteAddr.Addr
 	start, stop := self.hive.kad.KeyRange(remoteaddr)
+
+	// an explicitly received nil syncstate disables syncronisation
 	if state == nil {
-		state = newSyncState(start, stop, cnt)
-		glog.V(logger.Warn).Infof("[BZZ] peer %08x provided no sync state, setting up full sync: %v\n", remoteaddr[:4], state)
+		self.syncEnabled = false
+		glog.V(logger.Info).Infof("[BZZ] syncronisation disabled for peer %v", self)
+		state = &syncState{DbSyncState: &storage.DbSyncState{}, Synced: true}
 	} else {
 		state.synced = make(chan bool)
 		state.SessionAt = cnt
@@ -387,6 +394,7 @@ func (self *bzz) sync(state *syncState) error {
 			state.Start = storage.Key(start[:])
 			state.Stop = storage.Key(stop[:])
 		}
+		glog.V(logger.Detail).Infof("[BZZ] syncronisation requested by peer %v at state %v", self, state)
 	}
 	var err error
 	self.syncer, err = newSyncer(
@@ -394,11 +402,12 @@ func (self *bzz) sync(state *syncState) error {
 		storage.Key(remoteaddr[:]),
 		self.dbAccess,
 		self.unsyncedKeys, self.store,
-		self.syncParams, state,
+		self.syncParams, state, func() bool { return self.syncEnabled },
 	)
 	if err != nil {
 		return self.protoError(ErrSync, "%v", err)
 	}
+	glog.V(logger.Detail).Infof("[BZZ] syncer set for peer %v", self)
 	return nil
 }
 
@@ -443,8 +452,13 @@ func (self *bzz) store(req *storeRequestMsgData) error {
 }
 
 func (self *bzz) syncRequest() error {
-	req := &syncRequestMsgData{
-		SyncState: self.syncState,
+	req := &syncRequestMsgData{}
+	if self.hive.syncEnabled {
+		glog.V(logger.Detail).Infof("[BZZ] syncronisation request to peer %v at state %v", self, self.syncState)
+		req.SyncState = self.syncState
+	}
+	if self.syncState == nil {
+		glog.V(logger.Detail).Infof("[BZZ] syncronisation disabled for peer %v at state %v", self, self.syncState)
 	}
 	return self.send(syncRequestMsg, req)
 }
@@ -496,6 +510,9 @@ func (self *bzz) protoErrorDisconnect(err *errs.Error) {
 }
 
 func (self *bzz) send(msg uint64, data interface{}) error {
+	if self.hive.blockWrite {
+		return fmt.Errorf("network write blocked")
+	}
 	glog.V(logger.Debug).Infof("[BZZ] -> %v: %v (%T) to %v", msg, data, data, self)
 	err := p2p.Send(self.rw, msg, data)
 	if err != nil {

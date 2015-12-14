@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/internal/web3ext"
 	re "github.com/ethereum/go-ethereum/jsre"
@@ -216,8 +215,6 @@ func (js *jsre) apiBindings() error {
 	if err != nil {
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
-
-	js.re.Run(`var GlobalRegistrar = eth.contract(` + registrar.GlobalRegistrarAbi + `);   registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
 
 	// overrule some of the methods that require password as input and ask for it interactively
 	p, err := js.re.Get("personal")
