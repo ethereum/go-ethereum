@@ -25,37 +25,37 @@ web3._extend({
 			name: 'printBlock',
 			call: 'debug_printBlock',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'getBlockRlp',
 			call: 'debug_getBlockRlp',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'setHead',
 			call: 'debug_setHead',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'processBlock',
 			call: 'debug_processBlock',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'seedHash',
 			call: 'debug_seedHash',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'dumpBlock',
 			call: 'debug_dumpBlock',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'metrics',
