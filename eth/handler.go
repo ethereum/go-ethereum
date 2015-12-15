@@ -372,6 +372,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&query); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
+		hashMode := query.Origin.Hash != (common.Hash{})
+
 		// Gather headers until the fetch or network limits is reached
 		var (
 			bytes   common.StorageSize
@@ -381,7 +383,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit && len(headers) < downloader.MaxHeaderFetch {
 			// Retrieve the next header satisfying the query
 			var origin *types.Header
-			if query.Origin.Hash != (common.Hash{}) {
+			if hashMode {
 				origin = pm.blockchain.GetHeader(query.Origin.Hash)
 			} else {
 				origin = pm.blockchain.GetHeaderByNumber(query.Origin.Number)
