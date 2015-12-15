@@ -461,7 +461,10 @@ func execScripts(ctx *cli.Context) {
 		client, false, nil)
 
 	for _, file := range ctx.Args() {
-		repl.exec(file)
+		if err := repl.re.Exec(file); err != nil {
+			fmt.Errorf("Javascript Error: %v", err)
+			break
+		}
 	}
 	node.Stop()
 }
