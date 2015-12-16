@@ -38,12 +38,20 @@ import (
 // ValidateHeader validates the given header and parent and returns an error
 // if it failed to do so.
 //
-// ValidateStack validates the given statedb and optionally the receipts and
+// ValidateState validates the given statedb and optionally the receipts and
 // gas used. The implementor should decide what to do with the given input.
 type Validator interface {
+	HeaderValidator
 	ValidateBlock(block *types.Block) error
-	ValidateHeader(header, parent *types.Header, checkPow bool) error
 	ValidateState(block, parent *types.Block, state *state.StateDB, receipts types.Receipts, usedGas *big.Int) error
+}
+
+// HeaderValidator is an interface for validating headers only
+//
+// ValidateHeader validates the given header and parent and returns an error
+// if it failed to do so.
+type HeaderValidator interface {
+	ValidateHeader(header, parent *types.Header, checkPow bool) error
 }
 
 // Processor is an interface for processing blocks using a given initial state.
