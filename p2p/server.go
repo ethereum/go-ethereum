@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"crypto/ecdsa"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"net"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/internal"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 )
 
@@ -147,21 +149,12 @@ type Server struct {
 
 type peerOpFunc func(map[discover.NodeID]*Peer)
 
-type connFlag int
-
-const (
-	dynDialedConn connFlag = 1 << iota
-	staticDialedConn
-	inboundConn
-	trustedConn
-)
-
 // conn wraps a network connection with information gathered
 // during the two handshakes.
 type conn struct {
 	fd net.Conn
 	transport
-	flags connFlag
+	flags p2pint.Flag
 	cont  chan error      // The run loop uses cont to signal errors to setupConn.
 	id    discover.NodeID // valid after the encryption handshake
 	caps  []Cap           // valid after the protocol handshake
@@ -428,92 +421,36 @@ func (srv *Server) run(dialstate dialer) {
 			for _, t := range pt[:start] {
 				t := t
 				glog.V(logger.Detail).Infoln("new task:", t)
-				go func() { t.Do(srv); taskdone <- t }()
-			}
-			copy(pt, pt[start:])
-			pendingTasks = pt[:len(pt)-start]
+				go func() { srv.runDialTask(t); taskdone <- t }()
+	case *p2pint.DialTask:
+		addr := &net.TCPAddr{IP: t.dest.IP, Port: int(t.dest.TCP)}
+		glog.V(logger.Debug).Infof("dialing %v\n", t.dest)
+		fd, err := srv.Dialer.Dial("tcp", addr.String())
+		if err != nil {
+			glog.V(logger.Detail).Infof("dial error: %v", err)
+			return
 		}
-	}
+		mfd := newMeteredConn(fd, false)
+		srv.setupConn(mfd, t.flags, t.dest)
 
-running:
-	for {
-		// Query the dialer for new tasks and launch them.
-		now := time.Now()
-		nt := dialstate.newTasks(len(pendingTasks)+len(tasks), peers, now)
-		scheduleTasks(nt)
-
-		select {
-		case <-srv.quit:
-			// The server was stopped. Run the cleanup logic.
-			glog.V(logger.Detail).Infoln("<-quit: spinning down")
-			break running
-		case n := <-srv.addstatic:
-			// This channel is used by AddPeer to add to the
-			// ephemeral static peer list. Add it to the dialer,
-			// it will keep the node connected.
-			glog.V(logger.Detail).Infoln("<-addstatic:", n)
-			dialstate.addStatic(n)
-		case op := <-srv.peerOp:
-			// This channel is used by Peers and PeerCount.
-			op(peers)
-			srv.peerOpDone <- struct{}{}
-		case t := <-taskdone:
-			// A task got done. Tell dialstate about it so it
-			// can update its state and remove it from the active
-			// tasks list.
-			glog.V(logger.Detail).Infoln("<-taskdone:", t)
-			dialstate.taskDone(t, now)
-			delTask(t)
-		case c := <-srv.posthandshake:
-			// A connection has passed the encryption handshake so
-			// the remote identity is known (but hasn't been verified yet).
-			if trusted[c.id] {
-				// Ensure that the trusted flag is set before checking against MaxPeers.
-				c.flags |= trustedConn
-			}
-			glog.V(logger.Detail).Infoln("<-posthandshake:", c)
-			// TODO: track in-progress inbound node IDs (pre-Peer) to avoid dialing them.
-			c.cont <- srv.encHandshakeChecks(peers, c)
-		case c := <-srv.addpeer:
-			// At this point the connection is past the protocol handshake.
-			// Its capabilities are known and the remote identity is verified.
-			glog.V(logger.Detail).Infoln("<-addpeer:", c)
-			err := srv.protoHandshakeChecks(peers, c)
-			if err != nil {
-				glog.V(logger.Detail).Infof("Not adding %v as peer: %v", c, err)
-			} else {
-				// The handshakes are done and it passed all checks.
-				p := newPeer(c, srv.Protocols)
-				peers[c.id] = p
-				go srv.runPeer(p)
-			}
-			// The dialer logic relies on the assumption that
-			// dial tasks complete after the peer has been added or
-			// discarded. Unblock the task last.
-			c.cont <- err
-		case p := <-srv.delpeer:
-			// A peer disconnected.
-			glog.V(logger.Detail).Infoln("<-delpeer:", p)
-			delete(peers, p.ID())
+	case *p2pint.DiscoverTask:
+		// newTasks generates a lookup task whenever dynamic dials are
+		// necessary. Lookups need to take some time, otherwise the
+		// event loop spins too fast.
+		next := srv.lastLookup.Add(lookupInterval)
+		if now := time.Now(); now.Before(next) {
+			time.Sleep(next.Sub(now))
 		}
-	}
+		srv.lastLookup = time.Now()
+		var target discover.NodeID
+		rand.Read(target[:])
+		t.results = srv.ntab.Lookup(target)
 
-	// Terminate discovery. If there is a running lookup it will terminate soon.
-	if srv.ntab != nil {
-		srv.ntab.Close()
-	}
-	// Disconnect all peers.
-	for _, p := range peers {
-		p.Disconnect(DiscQuitting)
-	}
-	// Wait for peers to shut down. Pending connections and tasks are
-	// not handled here and will terminate soon-ish because srv.quit
-	// is closed.
-	glog.V(logger.Detail).Infof("ignoring %d pending tasks at spindown", len(tasks))
-	for len(peers) > 0 {
-		p := <-srv.delpeer
-		glog.V(logger.Detail).Infoln("<-delpeer (spindown):", p)
-		delete(peers, p.ID())
+	case *p2pint.WaitExpireTask:
+		time.Sleep(t.Duration)
+
+	default:
+		panic("unknown task type")
 	}
 }
 
