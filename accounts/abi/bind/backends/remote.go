@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"golang.org/x/net/context"
 )
 
 // This nil assignment ensures compile time that rpcBackend implements bind.ContractBackend.
@@ -80,18 +81,23 @@ type failure struct {
 //
 // This is currently painfully non-concurrent, but it will have to do until we
 // find the time for niceties like this :P
-func (b *rpcBackend) request(method string, params []interface{}) (json.RawMessage, error) {
+func (b *rpcBackend) request(ctx context.Context, method string, params []interface{}) (json.RawMessage, error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	// Ugly hack to serialize an empty list properly
 	if params == nil {
 		params = []interface{}{}
 	}
 	// Assemble the request object
+	reqID := int(atomic.AddUint32(&b.autoid, 1))
 	req := &request{
 		JSONRPC: "2.0",
-		ID:      int(atomic.AddUint32(&b.autoid, 1)),
+		ID:      reqID,
 		Method:  method,
 		Params:  params,
 	}
@@ -99,8 +105,17 @@ func (b *rpcBackend) request(method string, params []interface{}) (json.RawMessa
 		return nil, err
 	}
 	res := new(response)
-	if err := b.client.Recv(res); err != nil {
-		return nil, err
+	errc := make(chan error, 1)
+	go func() {
+		errc <- b.client.Recv(res)
+	}()
+	select {
+	case err := <-errc:
+		if err != nil {
+			return nil, err
+		}
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 	if res.Error != nil {
 		if res.Error.Message == bind.ErrNoCode.Error() {
@@ -113,13 +128,13 @@ func (b *rpcBackend) request(method string, params []interface{}) (json.RawMessa
 
 // HasCode implements ContractVerifier.HasCode by retrieving any code associated
 // with the contract from the remote node, and checking its size.
-func (b *rpcBackend) HasCode(contract common.Address, pending bool) (bool, error) {
+func (b *rpcBackend) HasCode(ctx context.Context, contract common.Address, pending bool) (bool, error) {
 	// Execute the RPC code retrieval
 	block := "latest"
 	if pending {
 		block = "pending"
 	}
-	res, err := b.request("eth_getCode", []interface{}{contract.Hex(), block})
+	res, err := b.request(ctx, "eth_getCode", []interface{}{contract.Hex(), block})
 	if err != nil {
 		return false, err
 	}
@@ -133,7 +148,7 @@ func (b *rpcBackend) HasCode(contract common.Address, pending bool) (bool, error
 
 // ContractCall implements ContractCaller.ContractCall, delegating the execution of
 // a contract call to the remote node, returning the reply to for local processing.
-func (b *rpcBackend) ContractCall(contract common.Address, data []byte, pending bool) ([]byte, error) {
+func (b *rpcBackend) ContractCall(ctx context.Context, contract common.Address, data []byte, pending bool) ([]byte, error) {
 	// Pack up the request into an RPC argument
 	args := struct {
 		To   common.Address `json:"to"`
@@ -147,7 +162,7 @@ func (b *rpcBackend) ContractCall(contract common.Address, data []byte, pending 
 	if pending {
 		block = "pending"
 	}
-	res, err := b.request("eth_call", []interface{}{args, block})
+	res, err := b.request(ctx, "eth_call", []interface{}{args, block})
 	if err != nil {
 		return nil, err
 	}
@@ -161,8 +176,8 @@ func (b *rpcBackend) ContractCall(contract common.Address, data []byte, pending 
 
 // PendingAccountNonce implements ContractTransactor.PendingAccountNonce, delegating
 // the current account nonce retrieval to the remote node.
-func (b *rpcBackend) PendingAccountNonce(account common.Address) (uint64, error) {
-	res, err := b.request("eth_getTransactionCount", []interface{}{account.Hex(), "pending"})
+func (b *rpcBackend) PendingAccountNonce(ctx context.Context, account common.Address) (uint64, error) {
+	res, err := b.request(ctx, "eth_getTransactionCount", []interface{}{account.Hex(), "pending"})
 	if err != nil {
 		return 0, err
 	}
@@ -179,8 +194,8 @@ func (b *rpcBackend) PendingAccountNonce(account common.Address) (uint64, error)
 
 // SuggestGasPrice implements ContractTransactor.SuggestGasPrice, delegating the
 // gas price oracle request to the remote node.
-func (b *rpcBackend) SuggestGasPrice() (*big.Int, error) {
-	res, err := b.request("eth_gasPrice", nil)
+func (b *rpcBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
+	res, err := b.request(ctx, "eth_gasPrice", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +212,7 @@ func (b *rpcBackend) SuggestGasPrice() (*big.Int, error) {
 
 // EstimateGasLimit implements ContractTransactor.EstimateGasLimit, delegating
 // the gas estimation to the remote node.
-func (b *rpcBackend) EstimateGasLimit(sender common.Address, contract *common.Address, value *big.Int, data []byte) (*big.Int, error) {
+func (b *rpcBackend) EstimateGasLimit(ctx context.Context, sender common.Address, contract *common.Address, value *big.Int, data []byte) (*big.Int, error) {
 	// Pack up the request into an RPC argument
 	args := struct {
 		From  common.Address  `json:"from"`
@@ -211,7 +226,7 @@ func (b *rpcBackend) EstimateGasLimit(sender common.Address, contract *common.Ad
 		Value: rpc.NewHexNumber(value),
 	}
 	// Execute the RPC call and retrieve the response
-	res, err := b.request("eth_estimateGas", []interface{}{args})
+	res, err := b.request(ctx, "eth_estimateGas", []interface{}{args})
 	if err != nil {
 		return nil, err
 	}
@@ -228,12 +243,12 @@ func (b *rpcBackend) EstimateGasLimit(sender common.Address, contract *common.Ad
 
 // SendTransaction implements ContractTransactor.SendTransaction, delegating the
 // raw transaction injection to the remote node.
-func (b *rpcBackend) SendTransaction(tx *types.Transaction) error {
+func (b *rpcBackend) SendTransaction(ctx context.Context, tx *types.Transaction) error {
 	data, err := rlp.EncodeToBytes(tx)
 	if err != nil {
 		return err
 	}
-	res, err := b.request("eth_sendRawTransaction", []interface{}{common.ToHex(data)})
+	res, err := b.request(ctx, "eth_sendRawTransaction", []interface{}{common.ToHex(data)})
 	if err != nil {
 		return err
 	}

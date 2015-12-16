@@ -34,6 +34,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var (
@@ -339,4 +341,24 @@ func zeroKey(k *ecdsa.PrivateKey) {
 	for i := range b {
 		b[i] = 0
 	}
+}
+
+// APIs implements node.Service
+func (am *Manager) APIs() []rpc.API {
+	return nil
+}
+
+// Protocols implements node.Service
+func (am *Manager) Protocols() []p2p.Protocol {
+	return nil
+}
+
+// Start implements node.Service
+func (am *Manager) Start(srvr *p2p.Server) error {
+	return nil
+}
+
+// Stop implements node.Service
+func (am *Manager) Stop() error {
+	return nil
 }

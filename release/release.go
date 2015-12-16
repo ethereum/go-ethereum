@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
+	"golang.org/x/net/context"
 )
 
 // Interval to check for new releases
@@ -57,7 +58,7 @@ type ReleaseService struct {
 // releases and notify the user of such.
 func NewReleaseService(ctx *node.ServiceContext, config Config) (node.Service, error) {
 	// Retrieve the Ethereum service dependency to access the blockchain
-	var ethereum *eth.Ethereum
+	var ethereum *eth.FullNodeService
 	if err := ctx.Service(&ethereum); err != nil {
 		return nil, err
 	}
@@ -110,7 +111,9 @@ func (r *ReleaseService) checker() {
 			timer.Reset(releaseRecheckInterval)
 
 			// Retrieve the current version, and handle missing contracts gracefully
-			version, err := r.oracle.CurrentVersion(nil)
+			ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+			opts := &bind.CallOpts{Context: ctx}
+			version, err := r.oracle.CurrentVersion(opts)
 			if err != nil {
 				if err == bind.ErrNoCode {
 					glog.V(logger.Debug).Infof("Release oracle not found at %x", r.config.Oracle)

@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"golang.org/x/net/context"
 )
 
 // ErrNoCode is returned by call and transact operations for which the requested
@@ -35,12 +36,12 @@ type ContractCaller interface {
 	// HasCode checks if the contract at the given address has any code associated
 	// with it or not. This is needed to differentiate between contract internal
 	// errors and the local chain being out of sync.
-	HasCode(contract common.Address, pending bool) (bool, error)
+	HasCode(ctx context.Context, contract common.Address, pending bool) (bool, error)
 
 	// ContractCall executes an Ethereum contract call with the specified data as
 	// the input. The pending flag requests execution against the pending block, not
 	// the stable head of the chain.
-	ContractCall(contract common.Address, data []byte, pending bool) ([]byte, error)
+	ContractCall(ctx context.Context, contract common.Address, data []byte, pending bool) ([]byte, error)
 }
 
 // ContractTransactor defines the methods needed to allow operating with contract
@@ -50,26 +51,26 @@ type ContractCaller interface {
 type ContractTransactor interface {
 	// PendingAccountNonce retrieves the current pending nonce associated with an
 	// account.
-	PendingAccountNonce(account common.Address) (uint64, error)
+	PendingAccountNonce(ctx context.Context, account common.Address) (uint64, error)
 
 	// SuggestGasPrice retrieves the currently suggested gas price to allow a timely
 	// execution of a transaction.
-	SuggestGasPrice() (*big.Int, error)
+	SuggestGasPrice(ctx context.Context) (*big.Int, error)
 
 	// HasCode checks if the contract at the given address has any code associated
 	// with it or not. This is needed to differentiate between contract internal
 	// errors and the local chain being out of sync.
-	HasCode(contract common.Address, pending bool) (bool, error)
+	HasCode(ctx context.Context, contract common.Address, pending bool) (bool, error)
 
 	// EstimateGasLimit tries to estimate the gas needed to execute a specific
 	// transaction based on the current pending state of the backend blockchain.
 	// There is no guarantee that this is the true gas limit requirement as other
 	// transactions may be added or removed by miners, but it should provide a basis
 	// for setting a reasonable default.
-	EstimateGasLimit(sender common.Address, contract *common.Address, value *big.Int, data []byte) (*big.Int, error)
+	EstimateGasLimit(ctx context.Context, sender common.Address, contract *common.Address, value *big.Int, data []byte) (*big.Int, error)
 
 	// SendTransaction injects the transaction into the pending pool for execution.
-	SendTransaction(tx *types.Transaction) error
+	SendTransaction(ctx context.Context, tx *types.Transaction) error
 }
 
 // ContractBackend defines the methods needed to allow operating with contract
@@ -84,28 +85,28 @@ type ContractBackend interface {
 	// HasCode checks if the contract at the given address has any code associated
 	// with it or not. This is needed to differentiate between contract internal
 	// errors and the local chain being out of sync.
-	HasCode(contract common.Address, pending bool) (bool, error)
+	HasCode(ctx context.Context, contract common.Address, pending bool) (bool, error)
 
 	// ContractCall executes an Ethereum contract call with the specified data as
 	// the input. The pending flag requests execution against the pending block, not
 	// the stable head of the chain.
-	ContractCall(contract common.Address, data []byte, pending bool) ([]byte, error)
+	ContractCall(ctx context.Context, contract common.Address, data []byte, pending bool) ([]byte, error)
 
 	// PendingAccountNonce retrieves the current pending nonce associated with an
 	// account.
-	PendingAccountNonce(account common.Address) (uint64, error)
+	PendingAccountNonce(ctx context.Context, account common.Address) (uint64, error)
 
 	// SuggestGasPrice retrieves the currently suggested gas price to allow a timely
 	// execution of a transaction.
-	SuggestGasPrice() (*big.Int, error)
+	SuggestGasPrice(ctx context.Context) (*big.Int, error)
 
 	// EstimateGasLimit tries to estimate the gas needed to execute a specific
 	// transaction based on the current pending state of the backend blockchain.
 	// There is no guarantee that this is the true gas limit requirement as other
 	// transactions may be added or removed by miners, but it should provide a basis
 	// for setting a reasonable default.
-	EstimateGasLimit(sender common.Address, contract *common.Address, value *big.Int, data []byte) (*big.Int, error)
+	EstimateGasLimit(ctx context.Context, sender common.Address, contract *common.Address, value *big.Int, data []byte) (*big.Int, error)
 
 	// SendTransaction injects the transaction into the pending pool for execution.
-	SendTransaction(tx *types.Transaction) error
+	SendTransaction(ctx context.Context, tx *types.Transaction) error
 }

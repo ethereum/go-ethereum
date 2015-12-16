@@ -28,7 +28,7 @@ import (
 
 const disabledInfo = "Set GO_OPENCL and re-build to enable."
 
-func (s *Ethereum) StartMining(threads int, gpus string) error {
+func (s *FullNodeService) StartMining(threads int, gpus string) error {
 	eb, err := s.Etherbase()
 	if err != nil {
 		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)

@@ -763,6 +763,13 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 	if err != nil {
 		Fatalf("Failed to create the protocol stack: %v", err)
 	}
+
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return accman, nil
+	}); err != nil {
+		Fatalf("Failed to register the account manager service: %v", err)
+	}
+
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		return eth.New(ctx, ethConf)
 	}); err != nil {
