@@ -175,10 +175,6 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	}
 	// If fast sync was enabled, and we synced up, disable it
 	if pm.fastSync {
-		// Wait until all pending imports finish processing
-		for pm.downloader.Synchronising() {
-			time.Sleep(100 * time.Millisecond)
-		}
 		// Disable fast sync if we indeed have something in our chain
 		if pm.blockchain.CurrentBlock().NumberU64() > 0 {
 			glog.V(logger.Info).Infof("fast sync complete, auto disabling")

@@ -55,9 +55,9 @@ the relevant environment initialised the desired contracts
 */
 var (
 	//these arnt the right ones for gexp
-	GlobalRegistrarAddr = "0x33990122638b9132ca29c723bdf037f1a891a70c" // frontier
-	HashRegAddr         = "0x23bf622b5a65f6060d855fca401133ded3520620" // frontier
-	UrlHintAddr         = "0x73ed5ef6c010727dfd2671dbb70faac19ec18626" // frontier
+	GlobalRegistrarAddr = "0x6c221ca53705f3497ec90ca7b84c59ae7382fc21" // frontier
+	HashRegAddr         = "0x10774b55f37302de0075fdc131f63d303ae5dd9e" // frontier
+	UrlHintAddr         = "0x8dad0847dedb1253b6dfe616c6d2841da291dc1f" // frontier
 
 	zero = regexp.MustCompile("^(0x)?0*$")
 )

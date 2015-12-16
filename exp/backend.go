@@ -65,15 +65,18 @@ const (
 var (
 	jsonlogger = logger.NewJsonLogger()
 
-	datadirInUseErrNos = []uint{11, 32, 35}
+	datadirInUseErrnos = map[uint]bool{11: true, 32: true, 35: true}
 	portInUseErrRE     = regexp.MustCompile("address already in use")
 
 	defaultBootNodes = []*discover.Node{
 		// EXP/DEV Go Bootnodes
-		discover.MustParseNode("enode://f944c6702a78a0cbcd6505b76daff069dad2e45ff88896c475da2bef47091c88e5b4042211233e397ad958be998003a2674151e60719c5fdeeff5f8cc2c231a1@74.196.59.103:42786"),
-		discover.MustParseNode("enode://4055ec69e53df4bfecb95e3b65c28e4f2a1145a3bdc4d85d077b552248cf159951afd649f044783bebf48b902fbc0e96978c76236fd4ab3d5ef7d95d72b84ee5@45.55.217.136:42786"),
-		discover.MustParseNode("enode://68c545b62f060dc78d4bbb9fe65cfd5979dede3c2f73fcbba9bac7fb9d1cff70e77b39cce4fa5dfdeb0d064c82db1ad8acee3915fb41f45d0a42000f92c1fd73@192.3.54.134:42786"),
-        discover.MustParseNode("enode://753d7d97ffc944edf42b676731b28e059d669484eb16e4526778f83e72d35922dee01b2967722e640a4a210e923aecdb4e4962b2d70fd2ca5dc2d911590e0737@192.3.149.110:42786"),
+		discover.MustParseNode("enode://7f335a047654f3e70d6f91312a7cf89c39704011f1a584e2698250db3d63817e74b88e26b7854111e16b2c9d0c7173c05419aeee2d0321850227b126d8b1be3f@46.101.156.249:42786"),
+		discover.MustParseNode("enode://df872f81e25f72356152b44cab662caf1f2e57c3a156ecd20e9ac9246272af68a2031b4239a0bc831f2c6ab34733a041464d46b3ea36dce88d6c11714446e06b@178.62.208.109:42786"),
+		discover.MustParseNode("enode://96d3919b903e7f5ad59ac2f73c43be9172d9d27e2771355db03fd194732b795829a31fe2ea6de109d0804786c39a807e155f065b4b94c6fce167becd0ac02383@45.55.22.34:42786"),
+		discover.MustParseNode("enode://5f6c625bf287e3c08aad568de42d868781e961cbda805c8397cfb7be97e229419bef9a5a25a75f97632787106bba8a7caf9060fab3887ad2cfbeb182ab0f433f@46.101.182.53:42786"),
+		discover.MustParseNode("enode://d33a8d4c2c38a08971ed975b750f21d54c927c0bf7415931e214465a8d01651ecffe4401e1db913f398383381413c78105656d665d83f385244ab302d6138414@128.199.183.48:42786"),
+		discover.MustParseNode("enode://df872f81e25f72356152b44cab662caf1f2e57c3a156ecd20e9ac9246272af68a2031b4239a0bc831f2c6ab34733a041464d46b3ea36dce88d6c11714446e06b@178.62.208.109:42786"),
+		discover.MustParseNode("enode://f6f0d6b9b7d02ec9e8e4a16e38675f3621ea5e69860c739a65c1597ca28aefb3cec7a6d84e471ac927d42a1b64c1cbdefad75e7ce8872d57548ddcece20afdd1@159.203.64.95:42786"),
 	}
 
 	defaultTestNetBootNodes = []*discover.Node{
@@ -230,9 +233,7 @@ type Expanse struct {
 	chainDb ethdb.Database // Block chain database
 	dappDb  ethdb.Database // Dapp database
 
-	//*** SERVICES ***
-	// State manager for processing new blocks and managing the over all states
-	blockProcessor  *core.BlockProcessor
+	// Handlers
 	txPool          *core.TxPool
 	blockchain      *core.BlockChain
 	accountManager  *accounts.Manager
@@ -285,15 +286,7 @@ func New(config *Config) (*Expanse, error) {
 	// Open the chain database and perform any upgrades needed
 	chainDb, err := newdb(filepath.Join(config.DataDir, "chaindata"))
 	if err != nil {
-		var ok bool
-		errno := uint(err.(syscall.Errno))
-		for _, no := range datadirInUseErrNos {
-			if errno == no {
-				ok = true
-				break
-			}
-		}
-		if ok {
+		if errno, ok := err.(syscall.Errno); ok && datadirInUseErrnos[uint(errno)] {
 			err = fmt.Errorf("%v (check if another instance of geth is already running with the same data directory '%s')", err, config.DataDir)
 		}
 		return nil, fmt.Errorf("blockchain db err: %v", err)
@@ -310,14 +303,7 @@ func New(config *Config) (*Expanse, error) {
 
 	dappDb, err := newdb(filepath.Join(config.DataDir, "dapp"))
 	if err != nil {
-		var ok bool
-		for _, no := range datadirInUseErrNos {
-			if uint(err.(syscall.Errno)) == no {
-				ok = true
-				break
-			}
-		}
-		if ok {
+		if errno, ok := err.(syscall.Errno); ok && datadirInUseErrnos[uint(errno)] {
 			err = fmt.Errorf("%v (check if another instance of geth is already running with the same data directory '%s')", err, config.DataDir)
 		}
 		return nil, fmt.Errorf("dapp db err: %v", err)
@@ -421,8 +407,6 @@ func New(config *Config) (*Expanse, error) {
 	newPool := core.NewTxPool(exp.EventMux(), exp.blockchain.State, exp.blockchain.GasLimit)
 	exp.txPool = newPool
 
-	exp.blockProcessor = core.NewBlockProcessor(chainDb, exp.pow, exp.blockchain, exp.EventMux())
-	exp.blockchain.SetProcessor(exp.blockProcessor)
 	if exp.protocolManager, err = NewProtocolManager(config.FastSync, config.NetworkId, exp.eventMux, exp.txPool, exp.pow, exp.blockchain, chainDb); err != nil {
 		return nil, err
 	}
@@ -466,62 +450,10 @@ func New(config *Config) (*Expanse, error) {
 	return exp, nil
 }
 
-type NodeInfo struct {
-	Name       string
-	NodeUrl    string
-	NodeID     string
-	IP         string
-	DiscPort   int // UDP listening port for discovery protocol
-	TCPPort    int // TCP listening port for RLPx
-	Td         string
-	ListenAddr string
-}
-
-func (s *Expanse) NodeInfo() *NodeInfo {
-	node := s.net.Self()
-
-	return &NodeInfo{
-		Name:       s.Name(),
-		NodeUrl:    node.String(),
-		NodeID:     node.ID.String(),
-		IP:         node.IP.String(),
-		DiscPort:   int(node.UDP),
-		TCPPort:    int(node.TCP),
-		ListenAddr: s.net.ListenAddr,
-		Td:         s.BlockChain().GetTd(s.BlockChain().CurrentBlock().Hash()).String(),
-	}
-}
-
-type PeerInfo struct {
-	ID            string
-	Name          string
-	Caps          string
-	RemoteAddress string
-	LocalAddress  string
-}
-
-func newPeerInfo(peer *p2p.Peer) *PeerInfo {
-	var caps []string
-	for _, cap := range peer.Caps() {
-		caps = append(caps, cap.String())
-	}
-	return &PeerInfo{
-		ID:            peer.ID().String(),
-		Name:          peer.Name(),
-		Caps:          strings.Join(caps, ", "),
-		RemoteAddress: peer.RemoteAddr().String(),
-		LocalAddress:  peer.LocalAddr().String(),
-	}
-}
-
-// PeersInfo returns an array of PeerInfo objects describing connected peers
-func (s *Expanse) PeersInfo() (peersinfo []*PeerInfo) {
-	for _, peer := range s.net.Peers() {
-		if peer != nil {
-			peersinfo = append(peersinfo, newPeerInfo(peer))
-		}
-	}
-	return
+// Network retrieves the underlying P2P network server. This should eventually
+// be moved out into a protocol independent package, but for now use an accessor.
+func (s *Expanse) Network() *p2p.Server {
+	return s.net
 }
 
 func (s *Expanse) ResetWithGenesisBlock(gb *types.Block) {
@@ -546,29 +478,29 @@ func (self *Expanse) SetEtherbase(etherbase common.Address) {
 	self.miner.SetEtherbase(etherbase)
 }
 
+
 func (s *Expanse) StopMining()         { s.miner.Stop() }
 func (s *Expanse) IsMining() bool      { return s.miner.Mining() }
 func (s *Expanse) Miner() *miner.Miner { return s.miner }
 
 // func (s *Expanse) Logger() logger.LogSystem             { return s.logger }
-func (s *Expanse) Name() string                         { return s.net.Name }
-func (s *Expanse) AccountManager() *accounts.Manager    { return s.accountManager }
-func (s *Expanse) BlockChain() *core.BlockChain         { return s.blockchain }
-func (s *Expanse) BlockProcessor() *core.BlockProcessor { return s.blockProcessor }
-func (s *Expanse) TxPool() *core.TxPool                 { return s.txPool }
-func (s *Expanse) Whisper() *whisper.Whisper            { return s.whisper }
-func (s *Expanse) EventMux() *event.TypeMux             { return s.eventMux }
-func (s *Expanse) ChainDb() ethdb.Database              { return s.chainDb }
-func (s *Expanse) DappDb() ethdb.Database               { return s.dappDb }
-func (s *Expanse) IsListening() bool                    { return true } // Always listening
-func (s *Expanse) PeerCount() int                       { return s.net.PeerCount() }
-func (s *Expanse) Peers() []*p2p.Peer                   { return s.net.Peers() }
-func (s *Expanse) MaxPeers() int                        { return s.net.MaxPeers }
-func (s *Expanse) ClientVersion() string                { return s.clientVersion }
-func (s *Expanse) EthVersion() int                      { return int(s.protocolManager.SubProtocols[0].Version) }
-func (s *Expanse) NetVersion() int                      { return s.netVersionId }
-func (s *Expanse) ShhVersion() int                      { return s.shhVersionId }
-func (s *Expanse) Downloader() *downloader.Downloader   { return s.protocolManager.downloader }
+func (s *Expanse) Name() string                       { return s.net.Name }
+func (s *Expanse) AccountManager() *accounts.Manager  { return s.accountManager }
+func (s *Expanse) BlockChain() *core.BlockChain       { return s.blockchain }
+func (s *Expanse) TxPool() *core.TxPool               { return s.txPool }
+func (s *Expanse) Whisper() *whisper.Whisper          { return s.whisper }
+func (s *Expanse) EventMux() *event.TypeMux           { return s.eventMux }
+func (s *Expanse) ChainDb() ethdb.Database            { return s.chainDb }
+func (s *Expanse) DappDb() ethdb.Database             { return s.dappDb }
+func (s *Expanse) IsListening() bool                  { return true } // Always listening
+func (s *Expanse) PeerCount() int                     { return s.net.PeerCount() }
+func (s *Expanse) Peers() []*p2p.Peer                 { return s.net.Peers() }
+func (s *Expanse) MaxPeers() int                      { return s.net.MaxPeers }
+func (s *Expanse) ClientVersion() string              { return s.clientVersion }
+func (s *Expanse) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
+func (s *Expanse) NetVersion() int                    { return s.netVersionId }
+func (s *Expanse) ShhVersion() int                    { return s.shhVersionId }
+func (s *Expanse) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
 
 // Start the ethereum
 func (s *Expanse) Start() error {

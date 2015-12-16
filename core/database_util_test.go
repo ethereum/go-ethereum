@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"math/big"
@@ -341,6 +342,163 @@ func TestHeadStorage(t *testing.T) {
 	}
 }
 
+// Tests that transactions and associated metadata can be stored and retrieved.
+func TestTransactionStorage(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+
+	tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), big.NewInt(1111), big.NewInt(11111), []byte{0x11, 0x11, 0x11})
+	tx2 := types.NewTransaction(2, common.BytesToAddress([]byte{0x22}), big.NewInt(222), big.NewInt(2222), big.NewInt(22222), []byte{0x22, 0x22, 0x22})
+	tx3 := types.NewTransaction(3, common.BytesToAddress([]byte{0x33}), big.NewInt(333), big.NewInt(3333), big.NewInt(33333), []byte{0x33, 0x33, 0x33})
+	txs := []*types.Transaction{tx1, tx2, tx3}
+
+	block := types.NewBlock(&types.Header{Number: big.NewInt(314)}, txs, nil, nil)
+
+	// Check that no transactions entries are in a pristine database
+	for i, tx := range txs {
+		if txn, _, _, _ := GetTransaction(db, tx.Hash()); txn != nil {
+			t.Fatalf("tx #%d [%x]: non existent transaction returned: %v", i, tx.Hash(), txn)
+		}
+	}
+	// Insert all the transactions into the database, and verify contents
+	if err := WriteTransactions(db, block); err != nil {
+		t.Fatalf("failed to write transactions: %v", err)
+	}
+	for i, tx := range txs {
+		if txn, hash, number, index := GetTransaction(db, tx.Hash()); txn == nil {
+			t.Fatalf("tx #%d [%x]: transaction not found", i, tx.Hash())
+		} else {
+			if hash != block.Hash() || number != block.NumberU64() || index != uint64(i) {
+				t.Fatalf("tx #%d [%x]: positional metadata mismatch: have %x/%d/%d, want %x/%v/%v", i, tx.Hash(), hash, number, index, block.Hash(), block.NumberU64(), i)
+			}
+			if tx.String() != txn.String() {
+				t.Fatalf("tx #%d [%x]: transaction mismatch: have %v, want %v", i, tx.Hash(), txn, tx)
+			}
+		}
+	}
+	// Delete the transactions and check purge
+	for i, tx := range txs {
+		DeleteTransaction(db, tx.Hash())
+		if txn, _, _, _ := GetTransaction(db, tx.Hash()); txn != nil {
+			t.Fatalf("tx #%d [%x]: deleted transaction returned: %v", i, tx.Hash(), txn)
+		}
+	}
+}
+
+// Tests that receipts can be stored and retrieved.
+func TestReceiptStorage(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+
+	receipt1 := &types.Receipt{
+		PostState:         []byte{0x01},
+		CumulativeGasUsed: big.NewInt(1),
+		Logs: vm.Logs{
+			&vm.Log{Address: common.BytesToAddress([]byte{0x11})},
+			&vm.Log{Address: common.BytesToAddress([]byte{0x01, 0x11})},
+		},
+		TxHash:          common.BytesToHash([]byte{0x11, 0x11}),
+		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
+		GasUsed:         big.NewInt(111111),
+	}
+	receipt2 := &types.Receipt{
+		PostState:         []byte{0x02},
+		CumulativeGasUsed: big.NewInt(2),
+		Logs: vm.Logs{
+			&vm.Log{Address: common.BytesToAddress([]byte{0x22})},
+			&vm.Log{Address: common.BytesToAddress([]byte{0x02, 0x22})},
+		},
+		TxHash:          common.BytesToHash([]byte{0x22, 0x22}),
+		ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
+		GasUsed:         big.NewInt(222222),
+	}
+	receipts := []*types.Receipt{receipt1, receipt2}
+
+	// Check that no receipt entries are in a pristine database
+	for i, receipt := range receipts {
+		if r := GetReceipt(db, receipt.TxHash); r != nil {
+			t.Fatalf("receipt #%d [%x]: non existent receipt returned: %v", i, receipt.TxHash, r)
+		}
+	}
+	// Insert all the receipts into the database, and verify contents
+	if err := WriteReceipts(db, receipts); err != nil {
+		t.Fatalf("failed to write receipts: %v", err)
+	}
+	for i, receipt := range receipts {
+		if r := GetReceipt(db, receipt.TxHash); r == nil {
+			t.Fatalf("receipt #%d [%x]: receipt not found", i, receipt.TxHash)
+		} else {
+			rlpHave, _ := rlp.EncodeToBytes(r)
+			rlpWant, _ := rlp.EncodeToBytes(receipt)
+
+			if bytes.Compare(rlpHave, rlpWant) != 0 {
+				t.Fatalf("receipt #%d [%x]: receipt mismatch: have %v, want %v", i, receipt.TxHash, r, receipt)
+			}
+		}
+	}
+	// Delete the receipts and check purge
+	for i, receipt := range receipts {
+		DeleteReceipt(db, receipt.TxHash)
+		if r := GetReceipt(db, receipt.TxHash); r != nil {
+			t.Fatalf("receipt #%d [%x]: deleted receipt returned: %v", i, receipt.TxHash, r)
+		}
+	}
+}
+
+// Tests that receipts associated with a single block can be stored and retrieved.
+func TestBlockReceiptStorage(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+
+	receipt1 := &types.Receipt{
+		PostState:         []byte{0x01},
+		CumulativeGasUsed: big.NewInt(1),
+		Logs: vm.Logs{
+			&vm.Log{Address: common.BytesToAddress([]byte{0x11})},
+			&vm.Log{Address: common.BytesToAddress([]byte{0x01, 0x11})},
+		},
+		TxHash:          common.BytesToHash([]byte{0x11, 0x11}),
+		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
+		GasUsed:         big.NewInt(111111),
+	}
+	receipt2 := &types.Receipt{
+		PostState:         []byte{0x02},
+		CumulativeGasUsed: big.NewInt(2),
+		Logs: vm.Logs{
+			&vm.Log{Address: common.BytesToAddress([]byte{0x22})},
+			&vm.Log{Address: common.BytesToAddress([]byte{0x02, 0x22})},
+		},
+		TxHash:          common.BytesToHash([]byte{0x22, 0x22}),
+		ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
+		GasUsed:         big.NewInt(222222),
+	}
+	receipts := []*types.Receipt{receipt1, receipt2}
+
+	// Check that no receipt entries are in a pristine database
+	hash := common.BytesToHash([]byte{0x03, 0x14})
+	if rs := GetBlockReceipts(db, hash); len(rs) != 0 {
+		t.Fatalf("non existent receipts returned: %v", rs)
+	}
+	// Insert the receipt slice into the database and check presence
+	if err := WriteBlockReceipts(db, hash, receipts); err != nil {
+		t.Fatalf("failed to write block receipts: %v", err)
+	}
+	if rs := GetBlockReceipts(db, hash); len(rs) == 0 {
+		t.Fatalf("no receipts returned")
+	} else {
+		for i := 0; i < len(receipts); i++ {
+			rlpHave, _ := rlp.EncodeToBytes(rs[i])
+			rlpWant, _ := rlp.EncodeToBytes(receipts[i])
+
+			if bytes.Compare(rlpHave, rlpWant) != 0 {
+				t.Fatalf("receipt #%d: receipt mismatch: have %v, want %v", i, rs[i], receipts[i])
+			}
+		}
+	}
+	// Delete the receipt slice and check purge
+	DeleteBlockReceipts(db, hash)
+	if rs := GetBlockReceipts(db, hash); len(rs) != 0 {
+		t.Fatalf("deleted receipts returned: %v", rs)
+	}
+}
+
 func TestMipmapBloom(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
@@ -425,7 +583,7 @@ func TestMipmapChain(t *testing.T) {
 		}
 
 		// store the receipts
-		err := PutReceipts(db, receipts)
+		err := WriteReceipts(db, receipts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -439,7 +597,7 @@ func TestMipmapChain(t *testing.T) {
 		if err := WriteHeadBlockHash(db, block.Hash()); err != nil {
 			t.Fatalf("failed to insert block number: %v", err)
 		}
-		if err := PutBlockReceipts(db, block.Hash(), receipts[i]); err != nil {
+		if err := WriteBlockReceipts(db, block.Hash(), receipts[i]); err != nil {
 			t.Fatal("error writing block receipts:", err)
 		}
 	}

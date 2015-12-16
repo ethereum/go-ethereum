@@ -103,7 +103,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	if err := WriteBlock(chainDb, block); err != nil {
 		return nil, err
 	}
-	if err := PutBlockReceipts(chainDb, block.Hash(), nil); err != nil {
+	if err := WriteBlockReceipts(chainDb, block.Hash(), nil); err != nil {
 		return nil, err
 	}
 	if err := WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64()); err != nil {

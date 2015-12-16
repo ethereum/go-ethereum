@@ -35,9 +35,7 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 		db, _         = ethdb.NewMemDatabase()
 		genesis       = core.WriteGenesisBlockForTesting(db, core.GenesisAccount{testBankAddress, testBankFunds})
 		blockchain, _ = core.NewBlockChain(db, pow, evmux)
-		blockproc     = core.NewBlockProcessor(db, pow, blockchain, evmux)
 	)
-	blockchain.SetProcessor(blockproc)
 	chain, _ := core.GenerateChain(genesis, db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
@@ -117,7 +115,7 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 	var id discover.NodeID
 	rand.Read(id[:])
 
-	peer := pm.newPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
+	peer := pm.newPeer(version, p2p.NewPeer(id, name, nil), net)
 
 	// Start the peer on a new thread
 	errc := make(chan error, 1)
