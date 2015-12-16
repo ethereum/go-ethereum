@@ -24,23 +24,16 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
-	"strings"
-
 	"sort"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/rpc/api"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
 )
@@ -79,82 +72,90 @@ func (r dumbterm) AppendHistory(string) {}
 type jsre struct {
 	re         *re.JSRE
 	stack      *node.Node
-	xeth       *xeth.XEth
 	wait       chan *big.Int
 	ps1        string
 	atexit     func()
 	corsDomain string
-	client     comms.EthereumClient
+	client     rpc.Client
 	prompter
 }
 
 var (
-	loadedModulesMethods map[string][]string
+	loadedModulesMethods  map[string][]string
+	autoCompleteStatement = "function _autocomplete(obj) {var results = []; for (var e in obj) { results.push(e); }; return results; }; _autocomplete(%s)"
 )
 
-func keywordCompleter(line string) []string {
-	results := make([]string, 0)
+func keywordCompleter(jsre *jsre, line string) []string {
+	var results []string
+	parts := strings.Split(line, ".")
+	objRef := "this"
+	prefix := line
+	if len(parts) > 1 {
+		objRef = strings.Join(parts[0:len(parts) - 1], ".")
+		prefix = parts[len(parts) - 1]
+	}
 
-	if strings.Contains(line, ".") {
-		elements := strings.Split(line, ".")
-		if len(elements) == 2 {
-			module := elements[0]
-			partialMethod := elements[1]
-			if methods, found := loadedModulesMethods[module]; found {
-				for _, method := range methods {
-					if strings.HasPrefix(method, partialMethod) { // e.g. debug.se
-						results = append(results, module+"."+method)
-					}
+	result, _ := jsre.re.Run(fmt.Sprintf(autoCompleteStatement, objRef))
+	raw, _ := result.Export()
+	if keys, ok := raw.([]interface{}); ok {
+		for _, k := range keys {
+			if strings.HasPrefix(fmt.Sprintf("%s", k), prefix) {
+				if objRef == "this" {
+					results = append(results, fmt.Sprintf("%s", k))
+				} else {
+					results = append(results, fmt.Sprintf("%s.%s", strings.Join(parts[:len(parts) - 1], "."), k))
 				}
-			}
-		}
-	} else {
-		for module, methods := range loadedModulesMethods {
-			if line == module { // user typed in full module name, show all methods
-				for _, method := range methods {
-					results = append(results, module+"."+method)
-				}
-			} else if strings.HasPrefix(module, line) { // partial method name, e.g. admi
-				results = append(results, module)
 			}
 		}
 	}
+
+	// e.g. web3<tab><tab> append dot since its an object
+	isObj, _ := jsre.re.Run(fmt.Sprintf("typeof(%s) === 'object'", line))
+	if isObject, _ := isObj.ToBoolean(); isObject {
+		results = append(results, line + ".")
+	}
+
+	sort.Strings(results)
 	return results
 }
 
-func apiWordCompleter(line string, pos int) (head string, completions []string, tail string) {
-	if len(line) == 0 || pos == 0 {
-		return "", nil, ""
+func apiWordCompleterWithContext(jsre *jsre) liner.WordCompleter {
+	completer := func(line string, pos int) (head string, completions []string, tail string) {
+		if len(line) == 0 || pos == 0 {
+			return "", nil, ""
+		}
+
+		// chuck data to relevant part for autocompletion, e.g. in case of nested lines eth.getBalance(eth.coinb<tab><tab>
+		i := 0
+		for i = pos - 1; i > 0; i-- {
+			if line[i] == '.' || (line[i] >= 'a' && line[i] <= 'z') || (line[i] >= 'A' && line[i] <= 'Z') {
+				continue
+			}
+			if i >= 3 && line[i] == '3' && line[i - 3] == 'w' && line[i - 2] == 'e' && line[i - 1] == 'b' {
+				continue
+			}
+			i += 1
+			break
+		}
+
+		begin := line[:i]
+		keyword := line[i:pos]
+		end := line[pos:]
+
+		completionWords := keywordCompleter(jsre, keyword)
+		return begin, completionWords, end
 	}
 
-	i := 0
-	for i = pos - 1; i > 0; i-- {
-		if line[i] == '.' || (line[i] >= 'a' && line[i] <= 'z') || (line[i] >= 'A' && line[i] <= 'Z') {
-			continue
-		}
-		if i >= 3 && line[i] == '3' && line[i-3] == 'w' && line[i-2] == 'e' && line[i-1] == 'b' {
-			continue
-		}
-		i += 1
-		break
-	}
-
-	begin := line[:i]
-	keyword := line[i:pos]
-	end := line[pos:]
-
-	completionWords := keywordCompleter(keyword)
-	return begin, completionWords, end
+	return completer
 }
 
-func newLightweightJSRE(docRoot string, client comms.EthereumClient, datadir string, interactive bool) *jsre {
+func newLightweightJSRE(docRoot string, client rpc.Client, datadir string, interactive bool) *jsre {
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
 	js.client = client
 
-	// update state in separare forever blocks
 	js.re = re.New(docRoot)
-	if err := js.apiBindings(js); err != nil {
+	if err := js.apiBindings(); err != nil {
 		utils.Fatalf("Unable to initialize console - %v", err)
 	}
 
@@ -165,7 +166,7 @@ func newLightweightJSRE(docRoot string, client comms.EthereumClient, datadir str
 		js.withHistory(datadir, func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
 		js.loadAutoCompletion()
-		lr.SetWordCompleter(apiWordCompleter)
+		lr.SetWordCompleter(apiWordCompleterWithContext(js))
 		lr.SetTabCompletionStyle(liner.TabPrints)
 		js.prompter = lr
 		js.atexit = func() {
@@ -177,25 +178,15 @@ func newLightweightJSRE(docRoot string, client comms.EthereumClient, datadir str
 	return js
 }
 
-func newJSRE(stack *node.Node, docRoot, corsDomain string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
+func newJSRE(stack *node.Node, docRoot, corsDomain string, client rpc.Client, interactive bool) *jsre {
 	js := &jsre{stack: stack, ps1: "> "}
 	// set default cors domain used by startRpc from CLI flag
 	js.corsDomain = corsDomain
-	if f == nil {
-		f = js
-	}
-	js.xeth = xeth.New(stack, f)
-	js.wait = js.xeth.UpdateState()
+	js.wait = make(chan *big.Int)
 	js.client = client
-	if clt, ok := js.client.(*comms.InProcClient); ok {
-		if offeredApis, err := api.ParseApiString(shared.AllApis, codec.JSON, js.xeth, stack); err == nil {
-			clt.Initialize(api.Merge(offeredApis...))
-		}
-	}
 
-	// update state in separare forever blocks
 	js.re = re.New(docRoot)
-	if err := js.apiBindings(f); err != nil {
+	if err := js.apiBindings(); err != nil {
 		utils.Fatalf("Unable to connect - %v", err)
 	}
 
@@ -206,7 +197,7 @@ func newJSRE(stack *node.Node, docRoot, corsDomain string, client comms.Ethereum
 		js.withHistory(stack.DataDir(), func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
 		js.loadAutoCompletion()
-		lr.SetWordCompleter(apiWordCompleter)
+		lr.SetWordCompleter(apiWordCompleterWithContext(js))
 		lr.SetTabCompletionStyle(liner.TabPrints)
 		js.prompter = lr
 		js.atexit = func() {
@@ -222,7 +213,7 @@ func (self *jsre) loadAutoCompletion() {
 	if modules, err := self.supportedApis(); err == nil {
 		loadedModulesMethods = make(map[string][]string)
 		for module, _ := range modules {
-			loadedModulesMethods[module] = api.AutoCompletion[module]
+			loadedModulesMethods[module] = rpc.AutoCompletion[module]
 		}
 	}
 }
@@ -258,7 +249,6 @@ func (self *jsre) welcome() {
 			loadedModules = append(loadedModules, fmt.Sprintf("%s:%s", api, version))
 		}
 		sort.Strings(loadedModules)
-
 	}
 }
 
@@ -266,7 +256,7 @@ func (self *jsre) supportedApis() (map[string]string, error) {
 	return self.client.SupportedModules()
 }
 
-func (js *jsre) apiBindings(f xeth.Frontend) error {
+func (js *jsre) apiBindings() error {
 	apis, err := js.supportedApis()
 	if err != nil {
 		return err
@@ -277,12 +267,7 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		apiNames = append(apiNames, a)
 	}
 
-	apiImpl, err := api.ParseApiString(strings.Join(apiNames, ","), codec.JSON, js.xeth, js.stack)
-	if err != nil {
-		utils.Fatalf("Unable to determine supported api's: %v", err)
-	}
-
-	jeth := rpc.NewJeth(api.Merge(apiImpl...), js.re, js.client, f)
+	jeth := utils.NewJeth(js.re, js.client)
 	js.re.Set("jeth", struct{}{})
 	t, _ := js.re.Get("jeth")
 	jethObj := t.Object()
@@ -313,14 +298,16 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 	// load only supported API's in javascript runtime
 	shortcuts := "var eth = web3.eth; "
 	for _, apiName := range apiNames {
-		if apiName == shared.Web3ApiName {
-			continue // manually mapped
+		if apiName == "web3" || apiName == "rpc" {
+			continue // manually mapped or ignore
 		}
 
-		if err = js.re.Compile(fmt.Sprintf("%s.js", apiName), api.Javascript(apiName)); err == nil {
-			shortcuts += fmt.Sprintf("var %s = web3.%s; ", apiName, apiName)
-		} else {
-			utils.Fatalf("Error loading %s.js: %v", apiName, err)
+		if jsFile, ok := rpc.WEB3Extensions[apiName]; ok {
+			if err = js.re.Compile(fmt.Sprintf("%s.js", apiName), jsFile); err == nil {
+				shortcuts += fmt.Sprintf("var %s = web3.%s; ", apiName, apiName)
+			} else {
+				utils.Fatalf("Error loading %s.js: %v", apiName, err)
+			}
 		}
 	}
 
@@ -375,14 +362,13 @@ func (self *jsre) ConfirmTransaction(tx string) bool {
 		return false
 	}
 	// If natspec is enabled, ask for permission
-	if ethereum.NatSpec {
-		notice := natspec.GetNotice(self.xeth, tx, ethereum.HTTPClient())
-		fmt.Println(notice)
-		answer, _ := self.Prompt("Confirm Transaction [y/n]")
-		return strings.HasPrefix(strings.Trim(answer, " "), "y")
-	} else {
-		return true
+	if ethereum.NatSpec && false /* disabled for now */ {
+		//		notice := natspec.GetNotice(self.xeth, tx, ethereum.HTTPClient())
+		//		fmt.Println(notice)
+		//		answer, _ := self.Prompt("Confirm Transaction [y/n]")
+		//		return strings.HasPrefix(strings.Trim(answer, " "), "y")
 	}
+	return true
 }
 
 func (self *jsre) UnlockAccount(addr []byte) bool {

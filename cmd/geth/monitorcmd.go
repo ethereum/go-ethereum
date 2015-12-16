@@ -21,16 +21,15 @@ import (
 	"math"
 	"reflect"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
+
+	"sort"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/gizak/termui"
 )
 
@@ -70,20 +69,18 @@ to display multiple metrics simultaneously.
 // monitor starts a terminal UI based monitoring tool for the requested metrics.
 func monitor(ctx *cli.Context) {
 	var (
-		client comms.EthereumClient
+		client rpc.Client
 		err    error
 	)
 	// Attach to an Ethereum node over IPC or RPC
 	endpoint := ctx.String(monitorCommandAttachFlag.Name)
-	if client, err = comms.ClientFromEndpoint(endpoint, codec.JSON); err != nil {
+	if client, err = utils.NewRemoteRPCClientFromString(endpoint); err != nil {
 		utils.Fatalf("Unable to attach to geth node: %v", err)
 	}
 	defer client.Close()
 
-	xeth := rpc.NewXeth(client)
-
 	// Retrieve all the available metrics and resolve the user pattens
-	metrics, err := retrieveMetrics(xeth)
+	metrics, err := retrieveMetrics(client)
 	if err != nil {
 		utils.Fatalf("Failed to retrieve system metrics: %v", err)
 	}
@@ -133,7 +130,7 @@ func monitor(ctx *cli.Context) {
 	}
 	termui.Body.AddRows(termui.NewRow(termui.NewCol(12, 0, footer)))
 
-	refreshCharts(xeth, monitored, data, units, charts, ctx, footer)
+	refreshCharts(client, monitored, data, units, charts, ctx, footer)
 	termui.Body.Align()
 	termui.Render(termui.Body)
 
@@ -154,7 +151,7 @@ func monitor(ctx *cli.Context) {
 				termui.Render(termui.Body)
 			}
 		case <-refresh:
-			if refreshCharts(xeth, monitored, data, units, charts, ctx, footer) {
+			if refreshCharts(client, monitored, data, units, charts, ctx, footer) {
 				termui.Body.Align()
 			}
 			termui.Render(termui.Body)
@@ -164,8 +161,30 @@ func monitor(ctx *cli.Context) {
 
 // retrieveMetrics contacts the attached geth node and retrieves the entire set
 // of collected system metrics.
-func retrieveMetrics(xeth *rpc.Xeth) (map[string]interface{}, error) {
-	return xeth.Call("debug_metrics", []interface{}{true})
+func retrieveMetrics(client rpc.Client) (map[string]interface{}, error) {
+	req := map[string]interface{}{
+		"id":      new(int64),
+		"method":  "debug_metrics",
+		"jsonrpc": "2.0",
+		"params":  []interface{}{true},
+	}
+
+	if err := client.Send(req); err != nil {
+		return nil, err
+	}
+
+	var res rpc.JSONSuccessResponse
+	if err := client.Recv(&res); err != nil {
+		return nil, err
+	}
+
+	if res.Result != nil {
+		if mets, ok := res.Result.(map[string]interface{}); ok {
+			return mets, nil
+		}
+	}
+
+	return nil, fmt.Errorf("unable to retrieve metrics")
 }
 
 // resolveMetrics takes a list of input metric patterns, and resolves each to one
@@ -253,8 +272,8 @@ func fetchMetric(metrics map[string]interface{}, metric string) float64 {
 
 // refreshCharts retrieves a next batch of metrics, and inserts all the new
 // values into the active datasets and charts
-func refreshCharts(xeth *rpc.Xeth, metrics []string, data [][]float64, units []int, charts []*termui.LineChart, ctx *cli.Context, footer *termui.Par) (realign bool) {
-	values, err := retrieveMetrics(xeth)
+func refreshCharts(client rpc.Client, metrics []string, data [][]float64, units []int, charts []*termui.LineChart, ctx *cli.Context, footer *termui.Par) (realign bool) {
+	values, err := retrieveMetrics(client)
 	for i, metric := range metrics {
 		if len(data) < 512 {
 			data[i] = append([]float64{fetchMetric(values, metric)}, data[i]...)

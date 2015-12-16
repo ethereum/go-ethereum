@@ -32,30 +32,27 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/common/httpclient"
-	"github.com/ethereum/go-ethereum/common/natspec"
-	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 )
 
 const (
 	testSolcPath = ""
-	solcVersion  = "0.9.23"
+	solcVersion = "0.9.23"
 
-	testKey     = "e6fab74a43941f82d89cb7faa408e227cdad3153c4720e540e855c19b15e6674"
+	testKey = "e6fab74a43941f82d89cb7faa408e227cdad3153c4720e540e855c19b15e6674"
 	testAddress = "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	testBalance = "10000000000000000000"
-	// of empty string
+// of empty string
 	testHash = "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
 )
 
 var (
-	versionRE   = regexp.MustCompile(strconv.Quote(`"compilerVersion":"` + solcVersion + `"`))
+	versionRE = regexp.MustCompile(strconv.Quote(`"compilerVersion":"` + solcVersion + `"`))
 	testNodeKey = crypto.ToECDSA(common.Hex2Bytes("4b50fa71f5c3eeb8fdc452224b2395af2fcc3d125e06c32c82e048c0559db03f"))
 	testGenesis = `{"` + testAddress[2:] + `": {"balance": "` + testBalance + `"}}`
 )
@@ -77,15 +74,16 @@ func (self *testjethre) UnlockAccount(acc []byte) bool {
 	return true
 }
 
-func (self *testjethre) ConfirmTransaction(tx string) bool {
-	var ethereum *eth.Ethereum
-	self.stack.Service(&ethereum)
-
-	if ethereum.NatSpec {
-		self.lastConfirm = natspec.GetNotice(self.xeth, tx, self.client)
-	}
-	return true
-}
+// Temporary disabled while natspec hasn't been migrated
+//func (self *testjethre) ConfirmTransaction(tx string) bool {
+//	var ethereum *eth.Ethereum
+//	self.stack.Service(&ethereum)
+//
+//	if ethereum.NatSpec {
+//		self.lastConfirm = natspec.GetNotice(self.xeth, tx, self.client)
+//	}
+//	return true
+//}
 
 func testJEthRE(t *testing.T) (string, *testjethre, *node.Node) {
 	return testREPL(t, nil)
@@ -118,7 +116,9 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 	if config != nil {
 		config(ethConf)
 	}
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return eth.New(ctx, ethConf)
+	}); err != nil {
 		t.Fatalf("failed to register ethereum protocol: %v", err)
 	}
 	// Initialize all the keys for testing
@@ -141,9 +141,10 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 	stack.Service(&ethereum)
 
 	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
-	client := comms.NewInProcClient(codec.JSON)
+	//client := comms.NewInProcClient(codec.JSON)
+	client := utils.NewInProcRPCClient(stack)
 	tf := &testjethre{client: ethereum.HTTPClient()}
-	repl := newJSRE(stack, assetPath, "", client, false, tf)
+	repl := newJSRE(stack, assetPath, "", client, false)
 	tf.jsre = repl
 	return tmp, tf, stack
 }
@@ -166,8 +167,8 @@ func TestAccounts(t *testing.T) {
 	defer node.Stop()
 	defer os.RemoveAll(tmp)
 
-	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`"]`)
-	checkEvalJSON(t, repl, `eth.coinbase`, `"`+testAddress+`"`)
+	checkEvalJSON(t, repl, `eth.accounts`, `["` + testAddress + `"]`)
+	checkEvalJSON(t, repl, `eth.coinbase`, `"` + testAddress + `"`)
 	val, err := repl.re.Run(`jeth.newAccount("password")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -177,7 +178,7 @@ func TestAccounts(t *testing.T) {
 		t.Errorf("address not hex: %q", addr)
 	}
 
-	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`","`+addr+`"]`)
+	checkEvalJSON(t, repl, `eth.accounts`, `["` + testAddress + `","` + addr + `"]`)
 
 }
 
@@ -205,13 +206,13 @@ func TestBlockChain(t *testing.T) {
 	node.Service(&ethereum)
 	ethereum.BlockChain().Reset()
 
-	checkEvalJSON(t, repl, `admin.exportChain(`+tmpfileq+`)`, `true`)
+	checkEvalJSON(t, repl, `admin.exportChain(` + tmpfileq + `)`, `true`)
 	if _, err := os.Stat(tmpfile); err != nil {
 		t.Fatal(err)
 	}
 
 	// check import, verify that dumpBlock gives the same result.
-	checkEvalJSON(t, repl, `admin.importChain(`+tmpfileq+`)`, `true`)
+	checkEvalJSON(t, repl, `admin.importChain(` + tmpfileq + `)`, `true`)
 	checkEvalJSON(t, repl, `debug.dumpBlock(eth.blockNumber)`, beforeExport)
 }
 
@@ -239,7 +240,7 @@ func TestCheckTestAccountBalance(t *testing.T) {
 	defer os.RemoveAll(tmp)
 
 	repl.re.Run(`primary = "` + testAddress + `"`)
-	checkEvalJSON(t, repl, `eth.getBalance(primary)`, `"`+testBalance+`"`)
+	checkEvalJSON(t, repl, `eth.getBalance(primary)`, `"` + testBalance + `"`)
 }
 
 func TestSignature(t *testing.T) {
@@ -278,19 +279,20 @@ func TestContract(t *testing.T) {
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
 
-	reg := registrar.New(repl.xeth)
-	_, err := reg.SetGlobalRegistrar("", coinbase)
-	if err != nil {
-		t.Errorf("error setting HashReg: %v", err)
-	}
-	_, err = reg.SetHashReg("", coinbase)
-	if err != nil {
-		t.Errorf("error setting HashReg: %v", err)
-	}
-	_, err = reg.SetUrlHint("", coinbase)
-	if err != nil {
-		t.Errorf("error setting HashReg: %v", err)
-	}
+	// Temporary disabled while registrar isn't migrated
+	//reg := registrar.New(repl.xeth)
+	//_, err := reg.SetGlobalRegistrar("", coinbase)
+	//if err != nil {
+	//	t.Errorf("error setting HashReg: %v", err)
+	//}
+	//_, err = reg.SetHashReg("", coinbase)
+	//if err != nil {
+	//	t.Errorf("error setting HashReg: %v", err)
+	//}
+	//_, err = reg.SetUrlHint("", coinbase)
+	//if err != nil {
+	//	t.Errorf("error setting HashReg: %v", err)
+	//}
 	/* TODO:
 	* lookup receipt and contract addresses by tx hash
 	* name registration for HashReg and UrlHint addresses
@@ -299,11 +301,11 @@ func TestContract(t *testing.T) {
 	 */
 
 	source := `contract test {\n` +
-		"   /// @notice Will multiply `a` by 7." + `\n` +
-		`   function multiply(uint a) returns(uint d) {\n` +
-		`       return a * 7;\n` +
-		`   }\n` +
-		`}\n`
+	"   /// @notice Will multiply `a` by 7." + `\n` +
+	`   function multiply(uint a) returns(uint d) {\n` +
+	`       return a * 7;\n` +
+	`   }\n` +
+	`}\n`
 
 	if checkEvalJSON(t, repl, `admin.stopNatSpec()`, `true`) != nil {
 		return
@@ -313,10 +315,10 @@ func TestContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if checkEvalJSON(t, repl, `primary = eth.accounts[0]`, `"`+testAddress+`"`) != nil {
+	if checkEvalJSON(t, repl, `primary = eth.accounts[0]`, `"` + testAddress + `"`) != nil {
 		return
 	}
-	if checkEvalJSON(t, repl, `source = "`+source+`"`, `"`+source+`"`) != nil {
+	if checkEvalJSON(t, repl, `source = "` + source + `"`, `"` + source + `"`) != nil {
 		return
 	}
 
@@ -394,7 +396,7 @@ multiply7 = Multiply7.at(contractaddress);
 
 	var contentHash = `"0x86d2b7cf1e72e9a7a3f8d96601f0151742a2f780f1526414304fbe413dc7f9bd"`
 	if sol != nil && solcVersion != sol.Version() {
-		modContractInfo := versionRE.ReplaceAll(contractInfo, []byte(`"compilerVersion":"`+sol.Version()+`"`))
+		modContractInfo := versionRE.ReplaceAll(contractInfo, []byte(`"compilerVersion":"` + sol.Version() + `"`))
 		fmt.Printf("modified contractinfo:\n%s\n", modContractInfo)
 		contentHash = `"` + common.ToHex(crypto.Sha3([]byte(modContractInfo))) + `"`
 	}
@@ -474,11 +476,12 @@ func processTxs(repl *testjethre, t *testing.T, expTxc int) bool {
 	defer ethereum.StopMining()
 
 	timer := time.NewTimer(100 * time.Second)
-	height := new(big.Int).Add(repl.xeth.CurrentBlock().Number(), big.NewInt(1))
+	blockNr := ethereum.BlockChain().CurrentBlock().Number()
+	height := new(big.Int).Add(blockNr, big.NewInt(1))
 	repl.wait <- height
 	select {
 	case <-timer.C:
-		// if times out make sure the xeth loop does not block
+	// if times out make sure the xeth loop does not block
 		go func() {
 			select {
 			case repl.wait <- nil:

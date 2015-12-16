@@ -100,7 +100,7 @@ func (am *Manager) Lock(addr common.Address) error {
 	am.mutex.Lock()
 	if unl, found := am.unlocked[addr]; found {
 		am.mutex.Unlock()
-		am.expire(addr, unl, time.Duration(0) * time.Nanosecond)
+		am.expire(addr, unl, time.Duration(0)*time.Nanosecond)
 	} else {
 		am.mutex.Unlock()
 	}
