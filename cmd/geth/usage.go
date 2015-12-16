@@ -87,7 +87,12 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.RPCEnabledFlag,
 			utils.RPCListenAddrFlag,
 			utils.RPCPortFlag,
-			utils.RpcApiFlag,
+			utils.RPCApiFlag,
+			utils.WSEnabledFlag,
+			utils.WSListenAddrFlag,
+			utils.WSPortFlag,
+			utils.WSApiFlag,
+			utils.WSAllowedDomainsFlag,
 			utils.IPCDisabledFlag,
 			utils.IPCApiFlag,
 			utils.IPCPathFlag,
@@ -158,7 +163,6 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.WhisperEnabledFlag,
 			utils.NatspecEnabledFlag,
-			utils.IPCExperimental,
 		},
 	},
 	{
