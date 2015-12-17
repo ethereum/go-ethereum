@@ -1044,6 +1044,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	if err != nil {
 		return "", err
 	}
+	self.EthereumService().TxPool().SetLocal(signed)
 	if err = self.EthereumService().TxPool().Add(signed); err != nil {
 		return "", err
 	}

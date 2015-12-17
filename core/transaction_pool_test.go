@@ -72,6 +72,17 @@ func TestInvalidTransactions(t *testing.T) {
 	if err := pool.Add(tx); err != ErrNonce {
 		t.Error("expected", ErrNonce)
 	}
+
+	tx = transaction(1, big.NewInt(100000), key)
+	pool.minGasPrice = big.NewInt(1000)
+	if err := pool.Add(tx); err != ErrCheap {
+		t.Error("expected", ErrCheap, "got", err)
+	}
+
+	pool.SetLocal(tx)
+	if err := pool.Add(tx); err != nil {
+		t.Error("expected", nil, "got", err)
+	}
 }
 
 func TestTransactionQueue(t *testing.T) {
