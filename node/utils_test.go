@@ -20,6 +20,7 @@
 package node
 
 import (
+	"errors"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/p2p"
@@ -31,6 +32,7 @@ type NoopService struct{}
 
 func (s *NoopService) Protocols() []p2p.Protocol { return nil }
 func (s *NoopService) APIs() []rpc.API           { return nil }
+func (s *NoopService) URLSchemes() []URLScheme   { return nil }
 func (s *NoopService) Start(*p2p.Server) error   { return nil }
 func (s *NoopService) Stop() error               { return nil }
 
@@ -47,6 +49,26 @@ func NewNoopServiceA(*ServiceContext) (Service, error) { return new(NoopServiceA
 func NewNoopServiceB(*ServiceContext) (Service, error) { return new(NoopServiceB), nil }
 func NewNoopServiceC(*ServiceContext) (Service, error) { return new(NoopServiceC), nil }
 func NewNoopServiceD(*ServiceContext) (Service, error) { return new(NoopServiceD), nil }
+
+// Scheme Service is a service that registers a url scheme on the node
+type SchemeService struct{ NoopService }
+
+func NewSchemeService(*ServiceContext) (Service, error) { return new(SchemeService), nil }
+
+// func (s *NoopService) Protocols() []p2p.Protocol { return nil }
+// func (s *NoopService) APIs() []rpc.API           { return nil }
+// func (s *NoopService) URLSchemes() []URLScheme   { return nil }
+// func (s *NoopService) Start(*p2p.Server) error   { return nil }
+// func (s *NoopService) Stop() error               { return nil }
+
+func (*SchemeService) URLSchemes() []URLScheme {
+	return []URLScheme{{"rt", &rt{rterr(errors.New("rt"))}}}
+}
+
+// Scheme User Service is a service that expects a http client on the service context
+type SchemeUserService struct {
+	NoopService
+}
 
 // InstrumentedService is an implementation of Service for which all interface
 // methods can be instrumented both return value as well as event hook wise.
@@ -70,6 +92,10 @@ func (s *InstrumentedService) Protocols() []p2p.Protocol {
 }
 
 func (s *InstrumentedService) APIs() []rpc.API {
+	return nil
+}
+
+func (s *InstrumentedService) URLSchemes() []URLScheme {
 	return nil
 }
 

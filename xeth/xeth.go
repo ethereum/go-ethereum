@@ -29,13 +29,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/compiler"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -865,7 +865,8 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	return common.ToHex(res), gas.String(), err
 }
 
-func (self *XEth) ConfirmTransaction(tx string) bool {
+func (self *XEth) ConfirmTransaction(to, data string) bool {
+	tx := fmt.Sprintf(`{"params":[{"to":"%s","data": "%s"}]}`, to, data)
 	return self.frontend.ConfirmTransaction(tx)
 }
 
@@ -962,9 +963,7 @@ func (self *XEth) SignTransaction(fromStr, toStr, nonceStr, valueStr, gasStr, ga
 
 func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 
-	// this minimalistic recoding is enough (works for natspec.js)
-	var jsontx = fmt.Sprintf(`{"params":[{"to":"%s","data": "%s"}]}`, toStr, codeStr)
-	if !self.ConfirmTransaction(jsontx) {
+	if !self.ConfirmTransaction(toStr, codeStr) {
 		err := fmt.Errorf("Transaction not confirmed")
 		return "", err
 	}

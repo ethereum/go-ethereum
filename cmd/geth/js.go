@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
@@ -30,9 +31,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/natspec"
-	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/natspec"
+	"github.com/ethereum/go-ethereum/eth/registrar"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -358,15 +359,23 @@ func (self *jsre) AskPassword() (string, bool) {
 	return pass, true
 }
 
-func (self *jsre) ConfirmTransaction(tx string) bool {
+func (self *jsre) ConfirmTransaction(txs string) bool {
 	// Retrieve the Ethereum instance from the node
 	var ethereum *eth.Ethereum
 	if err := self.stack.Service(&ethereum); err != nil {
 		return false
 	}
 	// If natspec is enabled, ask for permission
-	if ethereum.NatSpec {
-		notice := natspec.GetNotice(self.xeth, tx, ethereum.HTTPClient())
+	if ethereum.NatSpecEnabled {
+		var tx natspec.SendTxArgs
+		err := json.Unmarshal([]byte(txs), &tx)
+		if err != nil {
+			return false
+		}
+		notice, err := ethereum.NatSpec().GetNatSpec(&tx)
+		if err != nil {
+			return false
+		}
 		fmt.Println(notice)
 		answer, _ := self.Prompt("Confirm Transaction [y/n]")
 		return strings.HasPrefix(strings.Trim(answer, " "), "y")

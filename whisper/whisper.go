@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 
@@ -111,6 +112,8 @@ func (s *Whisper) APIs() []rpc.API {
 		},
 	}
 }
+
+func (self *Whisper) URLSchemes() []node.URLScheme { return nil }
 
 // Protocols returns the whisper sub-protocols ran by this particular client.
 func (self *Whisper) Protocols() []p2p.Protocol {

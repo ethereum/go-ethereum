@@ -32,12 +32,13 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/compiler"
+	"github.com/ethereum/go-ethereum/eth/natspec"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -882,19 +883,9 @@ func (s *PublicTransactionPoolAPI) sign(address common.Address, tx *types.Transa
 	return tx.WithSignature(signature)
 }
 
-type SendTxArgs struct {
-	From     common.Address `json:"from"`
-	To       common.Address `json:"to"`
-	Gas      *rpc.HexNumber `json:"gas"`
-	GasPrice *rpc.HexNumber `json:"gasPrice"`
-	Value    *rpc.HexNumber `json:"value"`
-	Data     string         `json:"data"`
-	Nonce    *rpc.HexNumber `json:"nonce"`
-}
-
 // SendTransaction will create a transaction for the given transaction argument, sign it and submit it to the
 // transaction pool.
-func (s *PublicTransactionPoolAPI) SendTransaction(args SendTxArgs) (common.Hash, error) {
+func (s *PublicTransactionPoolAPI) SendTransaction(args *natspec.SendTxArgs) (common.Hash, error) {
 	if args.Gas == nil {
 		args.Gas = rpc.NewHexNumber(defaultGas)
 	}

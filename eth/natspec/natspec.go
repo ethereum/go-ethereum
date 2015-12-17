@@ -23,58 +23,70 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/httpclient"
-	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/ethereum/go-ethereum/eth/registrar"
+	"github.com/ethereum/go-ethereum/node"
+	rpc "github.com/ethereum/go-ethereum/rpc/v2"
 	"github.com/robertkrimen/otto"
 )
 
 type abi2method map[[8]byte]*method
 
 type NatSpec struct {
-	jsvm       *otto.Otto
-	abiDocJson []byte
-	userDoc    userDoc
-	tx, data   string
+	backend Backend
+	http    *node.HTTPClient
+	reg     *registrar.Registrar
 }
 
-// main entry point for to get natspec notice for a transaction
-// the implementation is frontend friendly in that it always gives back
-// a notice that is safe to display
-// :FIXME: the second return value is an error, which can be used to fine-tune bahaviour
-func GetNotice(xeth *xeth.XEth, tx string, http *httpclient.HTTPClient) (notice string) {
-	ns, err := New(xeth, tx, http)
-	if err != nil {
-		if ns == nil {
-			return getFallbackNotice(fmt.Sprintf("no NatSpec info found for contract: %v", err), tx)
-		} else {
-			return getFallbackNotice(fmt.Sprintf("invalid NatSpec info: %v", err), tx)
-		}
-	}
-
-	notice, err = ns.Notice()
-	if err != nil {
-		return getFallbackNotice(fmt.Sprintf("NatSpec notice error: %v", err), tx)
-	}
-
-	return
+type Backend interface {
+	GetCode(address common.Address, blockNr rpc.BlockNumber) (string, error)
 }
 
-func getFallbackNotice(comment, tx string) string {
-	return fmt.Sprintf("About to submit transaction (%s): %s", comment, tx)
-}
-
-type transaction struct {
-	To   string `json:"to"`
-	Data string `json:"data"`
-}
-
-type jsonTx struct {
-	Params []transaction `json:"params"`
+func New(backend Backend, http *node.HTTPClient, reg *registrar.Registrar) *NatSpec {
+	return &NatSpec{backend, http, reg}
 }
 
 type contractInfo struct {
+	jsvm       *otto.Otto
+	abiDocJson []byte
+	userDoc    userDoc
+	tx         *SendTxArgs
+}
+
+type SendTxArgs struct {
+	From     common.Address `json:"from"`
+	To       common.Address `json:"to"`
+	Gas      *rpc.HexNumber `json:"gas"`
+	GasPrice *rpc.HexNumber `json:"gasPrice"`
+	Value    *rpc.HexNumber `json:"value"`
+	Data     string         `json:"data"`
+	Nonce    *rpc.HexNumber `json:"nonce"`
+}
+
+func (self *NatSpec) GetNatSpec(tx *SendTxArgs) (string, error) {
+	to := tx.To
+	// in principle this could be cached, but practically swarm takes care of that
+	info, err := self.GetContractInfo(to)
+	if err != nil {
+		if info == nil {
+			return "", fmt.Errorf("no contract info found for %v: %v", to, err)
+		} else {
+			return "", fmt.Errorf("invalid contract info for %v: %v", to, err)
+		}
+	}
+	ns, err := newContractInfo(info, tx)
+	if err != nil {
+		return "", fmt.Errorf("invalid contract info for %v: %v", to, err)
+	}
+	notice, err := ns.notice()
+	if err != nil {
+		return "", fmt.Errorf("NatSpec notice error for contract %v: %v", to, err)
+	}
+
+	return notice, nil
+}
+
+type ContractInfo struct {
 	Source        string          `json:"source"`
 	Language      string          `json:"language"`
 	Version       string          `json:"compilerVersion"`
@@ -83,81 +95,56 @@ type contractInfo struct {
 	DeveloperDoc  json.RawMessage `json:"developerDoc"`
 }
 
-func New(xeth *xeth.XEth, jsontx string, http *httpclient.HTTPClient) (self *NatSpec, err error) {
-
-	// extract contract address from tx
-	var tx jsonTx
-	err = json.Unmarshal([]byte(jsontx), &tx)
-	if err != nil {
-		return
-	}
-	t := tx.Params[0]
-	contractAddress := t.To
-
-	content, err := FetchDocsForContract(contractAddress, xeth, http)
-	if err != nil {
-		return
-	}
-
-	self, err = NewWithDocs(content, jsontx, t.Data)
-	return
-}
-
-// also called by admin.contractInfo.get
-func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, client *httpclient.HTTPClient) (content []byte, err error) {
+func (self *NatSpec) GetContractInfo(to common.Address) (*ContractInfo, error) {
 	// retrieve contract hash from state
-	codehex := xeth.CodeAt(contractAddress)
-	codeb := xeth.CodeAtBytes(contractAddress)
-
-	if codehex == "0x" {
-		err = fmt.Errorf("contract (%v) not found", contractAddress)
-		return
+	codehex, err := self.backend.GetCode(to, -1)
+	if err != nil || len(codehex) <= 3 {
+		return nil, fmt.Errorf("contract (%v) not found", to)
 	}
-	codehash := common.BytesToHash(crypto.Sha3(codeb))
-	// set up nameresolver with natspecreg + urlhint contract addresses
-	reg := registrar.New(xeth)
+	codehash := common.BytesToHash(crypto.Sha3(common.FromHex(codehex)))
 
 	// resolve host via HashReg/UrlHint Resolver
-	hash, err := reg.HashToHash(codehash)
+	hash, err := self.reg.HashToHash(codehash)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("no content hash registered for contract %v: %v", to, err)
 	}
-	if client.HasScheme("bzz") {
-		content, err = client.Get("bzz://"+hash.Hex()[2:], "")
-		if err == nil { // non-fatal
-			return
+	var data []byte
+	if self.http.HasScheme("bzz") {
+		data, err = self.http.GetBody("bzz://" + hash.Hex()[2:])
+		if err != nil { // non-fatal
+			data = nil
 		}
-		err = nil
-		//falling back to urlhint
 	}
 
-	uri, err := reg.HashToUrl(hash)
-	if err != nil {
-		return
+	//falling back to urlhint
+	if data == nil {
+		uri, err := self.reg.HashToUrl(hash)
+		if err != nil {
+			return nil, err
+		}
+
+		// get content via http client and authenticate content using hash
+		data, err = self.http.GetAuthBody(uri, hash)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// get content via http client and authenticate content using hash
-	content, err = client.GetAuthContent(uri, hash)
+	var info ContractInfo
+	err = json.Unmarshal(data, &info)
 	if err != nil {
-		return
+		return nil, err
 	}
-	return
+	return &info, nil
 }
 
-func NewWithDocs(infoDoc []byte, tx string, data string) (self *NatSpec, err error) {
+func newContractInfo(info *ContractInfo, tx *SendTxArgs) (self *contractInfo, err error) {
 
-	var contract contractInfo
-	err = json.Unmarshal(infoDoc, &contract)
-	if err != nil {
-		return
-	}
-
-	self = &NatSpec{
+	self = &contractInfo{
 		jsvm:       otto.New(),
-		abiDocJson: []byte(contract.AbiDefinition),
-		userDoc:    contract.UserDoc,
+		abiDocJson: []byte(info.AbiDefinition),
+		userDoc:    info.UserDoc,
 		tx:         tx,
-		data:       data,
 	}
 
 	// load and require natspec js (but it is meant to be protected environment)
@@ -192,7 +179,7 @@ type userDoc struct {
 	Methods map[string]*method `json:methods`
 }
 
-func (self *NatSpec) makeAbi2method(abiKey [8]byte) (meth *method) {
+func (self *contractInfo) makeAbi2method(abiKey [8]byte) (meth *method) {
 	for signature, m := range self.userDoc.Methods {
 		name := strings.Split(signature, "(")[0]
 		hash := []byte(common.Bytes2Hex(crypto.Sha3([]byte(signature))))
@@ -207,26 +194,30 @@ func (self *NatSpec) makeAbi2method(abiKey [8]byte) (meth *method) {
 	return
 }
 
-func (self *NatSpec) Notice() (notice string, err error) {
+func (self *contractInfo) notice() (notice string, err error) {
 	var abiKey [8]byte
-	if len(self.data) < 10 {
+	if len(self.tx.Data) < 10 {
 		err = fmt.Errorf("Invalid transaction data")
 		return
 	}
-	copy(abiKey[:], self.data[2:10])
+	copy(abiKey[:], self.tx.Data[2:10])
 	meth := self.makeAbi2method(abiKey)
 
 	if meth == nil {
 		err = fmt.Errorf("abi key does not match any method")
 		return
 	}
-	notice, err = self.noticeForMethod(self.tx, meth.name, meth.Notice)
+	notice, err = self.noticeForMethod(meth.name, meth.Notice)
 	return
 }
 
-func (self *NatSpec) noticeForMethod(tx string, name, expression string) (notice string, err error) {
+func (self *contractInfo) noticeForMethod(name, expression string) (notice string, err error) {
+	tx, err := json.Marshal(self.tx)
+	if err != nil {
+		return "", nil
+	}
 
-	if _, err = self.jsvm.Run("var transaction = " + tx + ";"); err != nil {
+	if _, err = self.jsvm.Run("var transaction = " + string(tx) + ";"); err != nil {
 		return "", fmt.Errorf("natspec.js error setting transaction: %v", err)
 	}
 
@@ -247,12 +238,13 @@ func (self *NatSpec) noticeForMethod(tx string, name, expression string) (notice
 	if err != nil {
 		return "", fmt.Errorf("natspec.js error evaluating expression: %v", err)
 	}
+
 	evalError := "Natspec evaluation failed, wrong input params"
 	if value.String() == evalError {
 		return "", fmt.Errorf("natspec.js error evaluating expression: wrong input params in expression '%s'", expression)
 	}
 	if len(value.String()) == 0 {
-		return "", fmt.Errorf("natspec.js error evaluating expression")
+		return "", fmt.Errorf("natspec.js error evaluating expression: empty notice")
 	}
 
 	return value.String(), nil

@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package httpclient
+package node
 
 import (
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -27,20 +28,20 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-func TestGetAuthContent(t *testing.T) {
+func TestGetAuthBody(t *testing.T) {
 	dir, err := ioutil.TempDir("", "httpclient-test")
 	if err != nil {
 		t.Fatal("cannot create temporary directory:", err)
 	}
 	defer os.RemoveAll(dir)
-	client := New(dir)
+	client := newHTTP(dir)
 
 	text := "test"
 	hash := crypto.Sha3Hash([]byte(text))
 	if err := ioutil.WriteFile(path.Join(dir, "test.content"), []byte(text), os.ModePerm); err != nil {
 		t.Fatal("could not write test file", err)
 	}
-	content, err := client.GetAuthContent("file:///test.content", hash)
+	content, err := client.GetAuthBody("file:///test.content", hash)
 	if err != nil {
 		t.Errorf("no error expected, got %v", err)
 	}
@@ -49,8 +50,8 @@ func TestGetAuthContent(t *testing.T) {
 	}
 
 	hash = common.Hash{}
-	content, err = client.GetAuthContent("file:///test.content", hash)
-	expected := "content hash mismatch 0000000000000000000000000000000000000000000000000000000000000000 != 9c22ff5f21f0b81b113e63f7db6da94fedef11b2119b4088b89664fb9a3cb658 (exp)"
+	content, err = client.GetAuthBody("file:///test.content", hash)
+	expected := "body hash mismatch 0000000000000000000000000000000000000000000000000000000000000000 != 9c22ff5f21f0b81b113e63f7db6da94fedef11b2119b4088b89664fb9a3cb658 (exp)"
 	if err == nil {
 		t.Errorf("expected error, got nothing")
 	} else {
@@ -61,17 +62,26 @@ func TestGetAuthContent(t *testing.T) {
 
 }
 
-type rt struct{}
+type rterr error
+type rt struct{ error }
 
-func (rt) RoundTrip(req *http.Request) (resp *http.Response, err error) { return }
+// roundtripper with an error. this can prove the roundtrip for testing
+// without having the need to write a Response
+func (e rt) RoundTrip(req *http.Request) (resp *http.Response, err error) {
+	return &http.Response{}, e.error
+}
 
-func TestRegisterScheme(t *testing.T) {
-	client := New("/tmp/")
+func TestHasScheme(t *testing.T) {
+	client := newHTTP("")
 	if client.HasScheme("scheme") {
 		t.Errorf("expected scheme not to be registered")
 	}
-	client.RegisterScheme("scheme", rt{})
+	client.registerSchemes([]URLScheme{{"scheme", &rt{rterr(errors.New("rt"))}}})
 	if !client.HasScheme("scheme") {
 		t.Errorf("expected scheme to be registered")
+	}
+	body, err := client.GetBody("scheme://url.com")
+	if _, ok := err.(rterr); !ok {
+		t.Fatalf("failed to use registered scheme. Got error %v and body %v", body, err)
 	}
 }

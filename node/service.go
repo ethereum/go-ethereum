@@ -33,6 +33,7 @@ type ServiceContext struct {
 	datadir  string                   // Data directory for protocol persistence
 	services map[reflect.Type]Service // Index of the already constructed services
 	EventMux *event.TypeMux           // Event multiplexer used for decoupled notifications
+	HTTP     *HTTPClient              // HTTP Client services register their URL schemes with
 }
 
 // OpenDatabase opens an existing database with the given name (or creates one
@@ -73,6 +74,9 @@ type Service interface {
 
 	// APIs retrieves the list of RPC descriptors the service provides
 	APIs() []rpc.API
+
+	// Url Schemes to register on the node http client
+	URLSchemes() []URLScheme
 
 	// Start is called after all services have been constructed and the networking
 	// layer was also initialized to spawn any goroutines required by the service.
