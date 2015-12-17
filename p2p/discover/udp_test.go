@@ -167,16 +167,17 @@ func TestUDP_responseTimeouts(t *testing.T) {
 		binary.BigEndian.PutUint64(p.from[:], uint64(i))
 		if p.ptype <= 128 {
 			p.errc = timeoutErr
+			test.udp.addpending <- p
 			nTimeouts++
 		} else {
 			p.errc = nilErr
+			test.udp.addpending <- p
 			time.AfterFunc(randomDuration(60*time.Millisecond), func() {
 				if !test.udp.handleReply(p.from, p.ptype, nil) {
 					t.Logf("not matched: %v", p)
 				}
 			})
 		}
-		test.udp.addpending <- p
 		time.Sleep(randomDuration(30 * time.Millisecond))
 	}
 
