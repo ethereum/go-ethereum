@@ -104,6 +104,11 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	b.receipts = append(b.receipts, receipt)
 }
 
+// Number returns the block number of the block being generated.
+func (b *BlockGen) Number() *big.Int {
+	return new(big.Int).Set(b.header.Number)
+}
+
 // AddUncheckedReceipts forcefully adds a receipts to the block without a
 // backing transaction.
 //
