@@ -35,22 +35,30 @@ type Protocol struct {
 	// by the protocol.
 	Length uint64
 
-	// Run is called in a new groutine when the protocol has been
+	// Run is called in a new goroutine when the protocol has been
 	// negotiated with a peer. It should read and write messages from
 	// rw. The Payload for each message must be fully consumed.
 	//
-	// The peer connection is closed when Start returns. It should return
+	// The peer connection is closed when Run returns. It should return
 	// any protocol-level error (such as an I/O error) that is
 	// encountered.
 	Run func(peer *Peer, rw MsgReadWriter) error
 
-	// NodeInfo is an optional helper method to retrieve protocol specific metadata
-	// about the host node.
+	// Prefer, if non-nil, should receive nodes that the protocol
+	// implementation wants to be connected to. If a preferred node is
+	// not connected yet, package p2p will attempt to establish a
+	// connection. A successful send on this channel does not
+	// guarantee that a connection will actually be established.
+	Prefer <-chan *discover.Node
+
+	// NodeInfo is an optional helper method to retrieve protocol
+	// specific metadata about the host node.
 	NodeInfo func() interface{}
 
-	// PeerInfo is an optional helper method to retrieve protocol specific metadata
-	// about a certain peer in the network. If an info retrieval function is set,
-	// but returns nil, it is assumed that the protocol handshake is still running.
+	// PeerInfo is an optional helper method to retrieve protocol
+	// specific metadata about a certain peer in the network. If an
+	// info retrieval function is set, but returns nil, it is assumed
+	// that the protocol handshake is still running.
 	PeerInfo func(id discover.NodeID) interface{}
 }
 
@@ -62,10 +70,6 @@ func (p Protocol) cap() Cap {
 type Cap struct {
 	Name    string
 	Version uint
-}
-
-func (cap Cap) RlpData() interface{} {
-	return []interface{}{cap.Name, cap.Version}
 }
 
 func (cap Cap) String() string {
