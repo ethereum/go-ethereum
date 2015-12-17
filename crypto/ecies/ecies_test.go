@@ -53,20 +53,63 @@ func init() {
 	dumpEnc = *flDump
 }
 
-// Ensure the KDF generates appropriately sized keys.
-func TestKDF(t *testing.T) {
-	msg := []byte("Hello, world")
-	h := sha256.New()
+type kdftest struct {
+	key, s1 string
+	kdlen   int
+	output  string
+}
 
-	k, err := concatKDF(h, msg, nil, 64)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-	if len(k) != 64 {
-		fmt.Printf("KDF: generated key is the wrong size (%d instead of 64\n",
-			len(k))
-		t.FailNow()
+var kdftests = []kdftest{
+	{
+		key:    "38f9a331c022f51d66658f301837108c9710d5ee0697bfac97bb6b0ea8d4f273",
+		s1:     "",
+		kdlen:  0,
+		output: "",
+	},
+	{
+		key:    "38f9a331c022f51d66658f301837108c9710d5ee0697bfac97bb6b0ea8d4f273",
+		s1:     "",
+		kdlen:  32,
+		output: "bbfb3912ffc0d1789be7c3c2773fb6abd8df69578df2ca16beee3d0f7a9692d1",
+	},
+	{
+		key:    "38f9a331c022f51d66658f301837108c9710d5ee0697bfac97bb6b0ea8d4f273",
+		s1:     "",
+		kdlen:  64,
+		output: "bbfb3912ffc0d1789be7c3c2773fb6abd8df69578df2ca16beee3d0f7a9692d1eae543288220e41452942fe268297fff38423b65b19cf7c6263aa611a4190741",
+	},
+	{
+		key:    "38f9a331c022f51d66658f301837108c9710d5ee0697bfac97bb6b0ea8d4f273",
+		s1:     "",
+		kdlen:  242,
+		output: "bbfb3912ffc0d1789be7c3c2773fb6abd8df69578df2ca16beee3d0f7a9692d1eae543288220e41452942fe268297fff38423b65b19cf7c6263aa611a41907410a49acd5adbfbe93e902349105d7bd7ef5b106d9357b20bb4a7977d548bc2bf1a0b275a9f1de19ff8f963ec58171aa31da964edb0131436d88a7714e2429d85693409f718c8fea7ecaa076dce68f282aba4010a42feedcb1affc350497fa1078ad89e23e8a04ba2ef179c3c625b054817d792076b5882e80925d45a2874285d45a7767fa6a3853bd8417930923a554743f6eb4691e4790a97c467337a307c64a8bed5b5c1829d0a690a554d3e5334ee4980a",
+	},
+	{
+		key:    "38f9a331c022f51d66658f301837108c9710d5ee0697bfac97bb6b0ea8d4f273",
+		s1:     "343434",
+		kdlen:  242,
+		output: "71e6fe05a6a57e2312a996eb3b91fc613fb57196ea09880b7b0ed880afa399f942ad56c1a484f4ccd329f9c21911ae09b497e991d8f47060114c8f137ab65df10c3f1d2478a7af913aa406817f34ef55d7852f3390f8201056451b0c29fb73a5c9e5a5093e6d93fefa15846b81bc02e1a7033948d67fc70c1dbbbf11d97f34b15d9967709c666eff05d895cc2f415064b382a98e68c178f9e7e2d9b6169ef4cdd5bb855b21d0ff71339e7e5b3afcb2393a8c6f4c7a4e618094222be87cbfdd2417ebdced5870bfbe8761d2e646c5a62dd31852dba399507adb84334a81b4ce54714f1828a0cdf3067908815d516368c2dd58",
+	},
+}
+
+func TestKDF(t *testing.T) {
+	for _, test := range kdftests {
+		z, _ := hex.DecodeString(test.key)
+		s1, _ := hex.DecodeString(test.s1)
+		h := sha256.New()
+		k, err := ConcatKDF(h, z, s1, test.kdlen)
+		if err != nil {
+			t.Error(err)
+		}
+		if len(k) != test.kdlen {
+			t.Errorf("output length mismatch: got %d, want %d", len(k), test.kdlen)
+		}
+		if hexk := hex.EncodeToString(k); hexk != test.output {
+			t.Errorf("output mismatch:\ngot  %s\nwant %s", hexk, test.output)
+		}
+		if t.Failed() {
+			t.Fatalf("failed test: %#v", test)
+		}
 	}
 }
 

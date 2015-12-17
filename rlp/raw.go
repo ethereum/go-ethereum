@@ -34,6 +34,13 @@ func ListSize(contentSize uint64) uint64 {
 	return uint64(headsize(contentSize)) + contentSize
 }
 
+func IntSize(i uint64) uint64 {
+	if i < 128 {
+		return 1
+	}
+	return 1 + uint64(intsize(i))
+}
+
 // Split returns the content of first RLP value and any
 // bytes after the value as subslices of b.
 func Split(b []byte) (k Kind, content, rest []byte, err error) {

@@ -35,9 +35,11 @@ import (
 	"crypto/elliptic"
 	"crypto/hmac"
 	"crypto/subtle"
+	"encoding/binary"
 	"fmt"
 	"hash"
 	"io"
+	"math"
 	"math/big"
 )
 
@@ -143,50 +145,27 @@ var (
 	ErrInvalidMessage = fmt.Errorf("ecies: invalid message")
 )
 
-var (
-	big2To32   = new(big.Int).Exp(big.NewInt(2), big.NewInt(32), nil)
-	big2To32M1 = new(big.Int).Sub(big2To32, big.NewInt(1))
-)
-
-func incCounter(ctr []byte) {
-	if ctr[3]++; ctr[3] != 0 {
-		return
-	} else if ctr[2]++; ctr[2] != 0 {
-		return
-	} else if ctr[1]++; ctr[1] != 0 {
-		return
-	} else if ctr[0]++; ctr[0] != 0 {
-		return
+// ConcatKDF implements the Concatenation Key Derivation Function
+// specified in NIST SP 800-56 (section 5.8.1).
+// It returns kdlen bytes of key material derived from z and s1 using hash.
+// kdlen is expected to be reasonably small.
+func ConcatKDF(hash hash.Hash, z, s1 []byte, kdlen int) ([]byte, error) {
+	hashlen := hash.Size()
+	reps := (kdlen + hashlen - 1) / hashlen
+	if uint64(reps) > math.MaxUint32 {
+		return nil, ErrKeyDataTooLong // prevent counter overflow
 	}
-	return
-}
-
-// NIST SP 800-56 Concatenation Key Derivation Function (see section 5.8.1).
-func concatKDF(hash hash.Hash, z, s1 []byte, kdLen int) (k []byte, err error) {
-	if s1 == nil {
-		s1 = make([]byte, 0)
-	}
-
-	reps := ((kdLen + 7) * 8) / (hash.BlockSize() * 8)
-	if big.NewInt(int64(reps)).Cmp(big2To32M1) > 0 {
-		fmt.Println(big2To32M1)
-		return nil, ErrKeyDataTooLong
-	}
-
-	counter := []byte{0, 0, 0, 1}
-	k = make([]byte, 0)
-
-	for i := 0; i <= reps; i++ {
+	counter := []byte{0, 0, 0, 0}
+	k := make([]byte, 0, reps*hashlen)
+	for i := uint32(1); i <= uint32(reps); i++ {
+		binary.BigEndian.PutUint32(counter, i)
 		hash.Write(counter)
 		hash.Write(z)
 		hash.Write(s1)
-		k = append(k, hash.Sum(nil)...)
+		k = hash.Sum(k)
 		hash.Reset()
-		incCounter(counter)
 	}
-
-	k = k[:kdLen]
-	return
+	return k[:kdlen], nil
 }
 
 // messageTag computes the MAC of a message (called the tag) as per
@@ -264,7 +243,7 @@ func Encrypt(rand io.Reader, pub *PublicKey, m, s1, s2 []byte) (ct []byte, err e
 	if err != nil {
 		return
 	}
-	K, err := concatKDF(hash, z, s1, params.KeyLen+params.KeyLen)
+	K, err := ConcatKDF(hash, z, s1, params.KeyLen+params.KeyLen)
 	if err != nil {
 		return
 	}
@@ -343,7 +322,7 @@ func (prv *PrivateKey) Decrypt(rand io.Reader, c, s1, s2 []byte) (m []byte, err 
 		return
 	}
 
-	K, err := concatKDF(hash, z, s1, params.KeyLen+params.KeyLen)
+	K, err := ConcatKDF(hash, z, s1, params.KeyLen+params.KeyLen)
 	if err != nil {
 		return
 	}

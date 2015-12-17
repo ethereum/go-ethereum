@@ -180,7 +180,7 @@ func (db *nodeDB) storeInt64(key []byte, n int64) error {
 func (db *nodeDB) node(id NodeID) *Node {
 	blob, err := db.lvl.Get(makeKey(id, nodeDBDiscoverRoot), nil)
 	if err != nil {
-		glog.V(logger.Detail).Infof("failed to retrieve node %v: %v", id, err)
+		glog.V(logger.Detail).Infof("node %x: %v", id[:8], err)
 		return nil
 	}
 	node := new(Node)
