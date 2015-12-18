@@ -361,6 +361,10 @@ var (
 		Name:  "bzzaccount",
 		Usage: "Swarm account address (swarm disabled if empty)",
 	}
+	SwarmPortFlag = cli.StringFlag{
+		Name:  "bzzport",
+		Usage: "Swarm local http api port",
+	}
 	SwarmConfigPathFlag = cli.StringFlag{
 		Name:  "bzzconfig",
 		Usage: "Swarm config file path (datadir/bzz)",
@@ -795,6 +799,10 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		bzzconfig, err = bzzapi.NewConfig(bzzdir, chbookaddr, prvkey)
 		if err != nil {
 			Fatalf("unable to configure swarm: %v", err)
+		}
+		bzzport := ctx.GlobalString(SwarmPortFlag.Name)
+		if len(bzzport) > 0 {
+			bzzconfig.Port = bzzport
 		}
 		swap := ctx.GlobalBool(SwarmSwapDisabled.Name)
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
