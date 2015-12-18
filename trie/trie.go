@@ -394,8 +394,9 @@ func (t *Trie) resolveHash(n hashNode, prefix, suffix []byte) (node, error) {
 		return nil, &MissingNodeError{
 			RootHash:  t.originalRoot,
 			NodeHash:  common.BytesToHash(n),
-			KeyPrefix: prefix,
-			KeySuffix: suffix,
+			Key:       compactHexEncode(append(prefix, suffix...)),
+			PrefixLen: len(prefix),
+			SuffixLen: len(suffix),
 		}
 	}
 	dec := mustDecodeNode(n, enc)

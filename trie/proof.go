@@ -17,29 +17,30 @@ import (
 // also included in the last node and can be retrieved by verifying
 // the proof.
 //
-// The returned proof is nil if the trie does not contain a value for key.
-// For existing keys, the proof will have at least one element.
+// If the trie does not contain a value for key, the returned proof
+// contains all nodes of the longest existing prefix of the key
+// (at least the root node), ending with the node that proves the
+// absence of the key.
 func (t *Trie) Prove(key []byte) []rlp.RawValue {
 	// Collect all nodes on the path to key.
 	key = compactHexDecode(key)
 	nodes := []node{}
 	tn := t.root
-	for len(key) > 0 {
+	for len(key) > 0 && tn != nil {
 		switch n := tn.(type) {
 		case shortNode:
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
 				// The trie doesn't contain the key.
-				return nil
+				tn = nil
+			} else {
+				tn = n.Val
+				key = key[len(n.Key):]
 			}
-			tn = n.Val
-			key = key[len(n.Key):]
 			nodes = append(nodes, n)
 		case fullNode:
 			tn = n[key[0]]
 			key = key[1:]
 			nodes = append(nodes, n)
-		case nil:
-			return nil
 		case hashNode:
 			var err error
 			tn, err = t.resolveHash(n, nil, nil)
@@ -93,7 +94,12 @@ func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value 
 		keyrest, cld := get(n, key)
 		switch cld := cld.(type) {
 		case nil:
-			return nil, fmt.Errorf("key mismatch at proof node %d", i)
+			if i != len(proof)-1 {
+				return nil, fmt.Errorf("key mismatch at proof node %d", i)
+			} else {
+				// The trie doesn't contain the key.
+				return nil, nil
+			}
 		case hashNode:
 			key = keyrest
 			wantHash = cld
