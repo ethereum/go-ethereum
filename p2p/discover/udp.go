@@ -114,13 +114,11 @@ func makeEndpoint(addr *net.UDPAddr, tcpPort uint16) rpcEndpoint {
 	return rpcEndpoint{IP: ip, UDP: uint16(addr.Port), TCP: tcpPort}
 }
 
-func nodeFromRPC(rn rpcNode) (n *Node, valid bool) {
+func nodeFromRPC(rn rpcNode) (*Node, error) {
 	// TODO: don't accept localhost, LAN addresses from internet hosts
-	// TODO: check public key is on secp256k1 curve
-	if rn.IP.IsMulticast() || rn.IP.IsUnspecified() || rn.UDP == 0 {
-		return nil, false
-	}
-	return newNode(rn.ID, rn.IP, rn.UDP, rn.TCP), true
+	n := NewNode(rn.ID, rn.IP, rn.UDP, rn.TCP)
+	err := n.validateComplete()
+	return n, err
 }
 
 func nodeToRPC(n *Node) rpcNode {
@@ -271,7 +269,7 @@ func (t *udp) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node
 		reply := r.(*neighbors)
 		for _, rn := range reply.Nodes {
 			nreceived++
-			if n, valid := nodeFromRPC(rn); valid {
+			if n, err := nodeFromRPC(rn); err == nil {
 				nodes = append(nodes, n)
 			}
 		}

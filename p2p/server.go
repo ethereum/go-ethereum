@@ -334,6 +334,9 @@ func (srv *Server) Start() (err error) {
 		if err != nil {
 			return err
 		}
+		if err := ntab.SetFallbackNodes(srv.BootstrapNodes); err != nil {
+			return err
+		}
 		srv.ntab = ntab
 	}
 
