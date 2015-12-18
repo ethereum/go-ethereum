@@ -341,11 +341,12 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 	// Override the unlockAccount and newAccount methods on the personal object since these require user interaction.
 	// Assign the jeth.unlockAccount and jeth.newAccount in the jsre the original web3 callbacks. These will be called
 	// by the jeth.* methods after they got the password from the user and send the original web3 request to the backend.
-	persObj := p.Object()
-	js.re.Run(`jeth.unlockAccount = personal.unlockAccount;`)
-	persObj.Set("unlockAccount", jeth.UnlockAccount)
-	js.re.Run(`jeth.newAccount = personal.newAccount;`)
-	persObj.Set("newAccount", jeth.NewAccount)
+	if persObj := p.Object(); persObj != nil { // make sure the personal api is enabled over the interface
+		js.re.Run(`jeth.unlockAccount = personal.unlockAccount;`)
+		persObj.Set("unlockAccount", jeth.UnlockAccount)
+		js.re.Run(`jeth.newAccount = personal.newAccount;`)
+		persObj.Set("newAccount", jeth.NewAccount)
+	}
 
 	return nil
 }
