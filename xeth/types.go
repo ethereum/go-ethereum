@@ -47,10 +47,6 @@ func (self *Object) StorageString(str string) []byte {
 	}
 }
 
-func (self *Object) StorageValue(addr *common.Value) []byte {
-	return self.storage(addr.Bytes())
-}
-
 func (self *Object) storage(addr []byte) []byte {
 	return self.StateObject.GetState(common.BytesToHash(addr)).Bytes()
 }
