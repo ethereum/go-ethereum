@@ -4,9 +4,9 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const requesterCount = 3
@@ -81,12 +81,12 @@ func (self *forwarder) Store(chunk *storage.Chunk) {
 	for _, p := range self.hive.getPeers(chunk.Key, 0) {
 		glog.V(logger.Detail).Infof("[BZZ] %v %v", p, chunk)
 
-		if source == nil || p.Addr() != source.Addr() {
+		if p.syncer != nil && (source == nil || p.Addr() != source.Addr()) {
 			n++
 			Deliver(p, msg, PropagateReq)
 		}
 	}
-	glog.V(logger.Detail).Infof("[BZZ] forwarder.Store: sent to %v ps (chunk = %v)", n, chunk)
+	glog.V(logger.Detail).Infof("[BZZ] forwarder.Store: sent to %v peers (chunk = %v)", n, chunk)
 }
 
 // once a chunk is found deliver it to its requesters unless timed out

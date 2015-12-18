@@ -18,9 +18,8 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 
-	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/common/chequebook"
 	"github.com/ethereum/go-ethereum/common/swap"
 	"github.com/ethereum/go-ethereum/errs"
@@ -28,6 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
@@ -174,6 +175,10 @@ func run(requestDb *storage.LDBDatabase, depo StorageHandler, hive *Hive, dbacce
 
 	// the main forever loop that handles incoming requests
 	for {
+		if self.hive.blockRead {
+			time.Sleep(1 * time.Second)
+			continue
+		}
 		err = self.handle()
 		if err != nil {
 			return
@@ -496,6 +501,9 @@ func (self *bzz) protoErrorDisconnect(err *errs.Error) {
 }
 
 func (self *bzz) send(msg uint64, data interface{}) error {
+	if self.hive.blockWrite {
+		return fmt.Errorf("network write blocked")
+	}
 	glog.V(logger.Debug).Infof("[BZZ] -> %v: %v (%T) to %v", msg, data, data, self)
 	err := p2p.Send(self.rw, msg, data)
 	if err != nil {

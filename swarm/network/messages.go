@@ -5,10 +5,11 @@ import (
 	"net"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/services/swap"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/common/chequebook"
 	"github.com/ethereum/go-ethereum/common/kademlia"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/swarm/services/swap"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 /*
@@ -160,7 +161,9 @@ type peerAddr struct {
 
 // peerAddr pretty prints as enode
 func (self peerAddr) String() string {
-	return fmt.Sprintf("enode://%x@%v:%d", self.ID, self.IP, self.Port)
+	var nodeid discover.NodeID
+	copy(nodeid[:], self.ID)
+	return discover.NewNode(nodeid, self.IP, 0, self.Port).String()
 }
 
 /*

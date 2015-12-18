@@ -32,6 +32,8 @@ type Hive struct {
 	path         string
 	toggle       chan bool
 	more         chan bool
+	blockRead    bool
+	blockWrite   bool
 }
 
 const (
@@ -68,6 +70,14 @@ func NewHive(addr common.Hash, params *HiveParams) *Hive {
 		addr:         kad.Addr(),
 		path:         params.KadDbPath,
 	}
+}
+
+func (self *Hive) BlockNetworkRead(on bool) {
+	self.blockRead = on
+}
+
+func (self *Hive) BlockNetworkWrite(on bool) {
+	self.blockWrite = on
 }
 
 // public accessor to the hive base address
@@ -134,7 +144,7 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 // wake state is toggled by writing to self.toggle
 // it restarts if the table becomes non-full again due to disconnections
 func (self *Hive) keepAlive() {
-	var alarm <-chan time.Time
+	alarm := time.NewTicker(time.Duration(self.callInterval)).C
 	for {
 		select {
 		case <-alarm:

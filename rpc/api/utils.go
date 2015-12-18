@@ -73,6 +73,7 @@ var (
 			"get",
 			"put",
 			"modify",
+			"blockNetworkRead",
 		},
 		"chequebook": []string{
 			"version",

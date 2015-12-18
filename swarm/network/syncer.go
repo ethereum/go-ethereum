@@ -478,6 +478,7 @@ LOOP:
 				glog.V(logger.Warn).Infof("[BZZ] syncer[%v]: unable to send unsynced keys: %v", err)
 			}
 			unsynced = nil
+			keys = nil
 		}
 
 		// process item and add it to the batch
@@ -503,11 +504,11 @@ LOOP:
 			deliveryRequest = nil
 
 		case <-newUnsyncedKeys:
-			glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: new unsynked keys available", self.key.Log())
+			glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: new unsynced keys available", self.key.Log())
 			// this 1 cap channel can wake up the loop
 			// signals that data is available to send if peer is ready to receive
 			newUnsyncedKeys = nil
-			// this can only happen if keys is
+			keys = self.keys[High]
 
 		case state, more = <-syncStates:
 			// this resets the state
@@ -620,7 +621,8 @@ func (self *syncer) syncDeliveries() {
  If sync mode is off then, requests are directly sent to deliveries
 */
 func (self *syncer) addRequest(req interface{}, ty int) {
-	// retrieve priority for request type
+	// retrieve priority for request type name int8
+
 	priority := self.SyncPriorities[ty]
 	// sync mode for this type ON
 	if self.SyncModes[ty] {
