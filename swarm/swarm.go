@@ -203,7 +203,7 @@ func (self *Swarm) APIs() []rpc.API {
 		rpc.API{Namespace, Version, &Info{self.config, chequebook.ContractParams}, true},
 		// admin APIs
 		rpc.API{Namespace, Version, api.NewFileSystem(self.api), false},
-		// rpc.API{Namespace, Version, test.New(self), false},
+		rpc.API{Namespace, Version, api.NewControl(self.api, self.hive), false},
 		// rpc.API{Namespace, Version, api.NewAdmin(self), false},
 		// TODO: external apis exposed
 		rpc.API{"chequebook", chequebook.Version, chequebook.NewApi(self.config.Swap.Chequebook()), true},
