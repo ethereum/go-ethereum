@@ -17,7 +17,9 @@
 package rlp
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -33,7 +35,13 @@ type typeinfo struct {
 
 // represents struct tags
 type tags struct {
+	// rlp:"nil" controls whether empty input results in a nil pointer.
 	nilOK bool
+
+	// rlp:".." controls whether this field swallows additional list
+	// elements. It can only be set for the last field, which must be
+	// a slice type.
+	dotdot bool
 }
 
 type typekey struct {
@@ -90,6 +98,14 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 	for i := 0; i < typ.NumField(); i++ {
 		if f := typ.Field(i); f.PkgPath == "" { // exported
 			tags := parseStructTag(f.Tag.Get("rlp"))
+			if tags.dotdot {
+				if i != typ.NumField()-1 {
+					return nil, fmt.Errorf(`rlp: invalid struct tag ".." for %v.%s (must be on last field)`, typ, f.Name)
+				}
+				if f.Type.Kind() != reflect.Slice {
+					return nil, fmt.Errorf(`rlp: invalid struct tag ".." for %v.%s (field type is not slice)`, typ, f.Name)
+				}
+			}
 			info, err := cachedTypeInfo1(f.Type, tags)
 			if err != nil {
 				return nil, err
@@ -101,7 +117,10 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 }
 
 func parseStructTag(tag string) tags {
-	return tags{nilOK: tag == "nil"}
+	return tags{
+		nilOK:  strings.Contains(tag, "nil"),
+		dotdot: strings.Contains(tag, ".."),
+	}
 }
 
 func genTypeInfo(typ reflect.Type, tags tags) (info *typeinfo, err error) {
@@ -109,7 +128,7 @@ func genTypeInfo(typ reflect.Type, tags tags) (info *typeinfo, err error) {
 	if info.decoder, err = makeDecoder(typ, tags); err != nil {
 		return nil, err
 	}
-	if info.writer, err = makeWriter(typ); err != nil {
+	if info.writer, err = makeWriter(typ, tags); err != nil {
 		return nil, err
 	}
 	return info, nil

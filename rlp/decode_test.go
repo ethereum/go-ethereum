@@ -312,6 +312,21 @@ type recstruct struct {
 	Child *recstruct `rlp:"nil"`
 }
 
+type invalidDotDot1 struct {
+	A uint `rlp:".."`
+	B string
+}
+
+type invalidDotDot2 struct {
+	A uint
+	B string `rlp:".."`
+}
+
+type dotdotRaw struct {
+	A      uint
+	DotDot []RawValue `rlp:".."`
+}
+
 var (
 	veryBigInt = big.NewInt(0).Add(
 		big.NewInt(0).Lsh(big.NewInt(0xFFFFFFFFFFFFFF), 16),
@@ -436,6 +451,23 @@ var decodeTests = []decodeTest{
 		input: "C501C3C00000",
 		ptr:   new(recstruct),
 		error: "rlp: expected input string or byte for uint, decoding into (rlp.recstruct).Child.I",
+	},
+	{
+		input: "C0",
+		ptr:   new(invalidDotDot1),
+		error: "rlp: invalid struct tag \"..\" for rlp.invalidDotDot1.A (must be on last field)",
+	},
+	{
+		input: "C0",
+		ptr:   new(invalidDotDot2),
+		error: "rlp: invalid struct tag \"..\" for rlp.invalidDotDot2.B (field type is not slice)",
+	},
+
+	// struct tag ".."
+	{
+		input: "C3010203",
+		ptr:   new(dotdotRaw),
+		value: dotdotRaw{A: 1, DotDot: []RawValue{unhex("02"), unhex("03")}},
 	},
 
 	// RawValue

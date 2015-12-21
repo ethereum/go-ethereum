@@ -214,6 +214,7 @@ var encTests = []encTest{
 	{val: simplestruct{A: 3, B: "foo"}, output: "C50383666F6F"},
 	{val: &recstruct{5, nil}, output: "C205C0"},
 	{val: &recstruct{5, &recstruct{4, &recstruct{3, nil}}}, output: "C605C404C203C0"},
+	{val: &dotdotRaw{A: 1, DotDot: []RawValue{unhex("02"), unhex("03")}}, output: "C3010203"},
 
 	// nil
 	{val: (*uint)(nil), output: "80"},
