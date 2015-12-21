@@ -345,7 +345,7 @@ var (
 )
 
 // makeWriter creates a writer function for the given type.
-func makeWriter(typ reflect.Type) (writer, error) {
+func makeWriter(typ reflect.Type, ts tags) (writer, error) {
 	kind := typ.Kind()
 	switch {
 	case typ == rawValueType:
@@ -371,7 +371,7 @@ func makeWriter(typ reflect.Type) (writer, error) {
 	case kind == reflect.Array && isByte(typ.Elem()):
 		return writeByteArray, nil
 	case kind == reflect.Slice || kind == reflect.Array:
-		return makeSliceWriter(typ)
+		return makeSliceWriter(typ, ts)
 	case kind == reflect.Struct:
 		return makeStructWriter(typ)
 	case kind == reflect.Ptr:
@@ -507,20 +507,21 @@ func writeInterface(val reflect.Value, w *encbuf) error {
 	return ti.writer(eval, w)
 }
 
-func makeSliceWriter(typ reflect.Type) (writer, error) {
+func makeSliceWriter(typ reflect.Type, ts tags) (writer, error) {
 	etypeinfo, err := cachedTypeInfo1(typ.Elem(), tags{})
 	if err != nil {
 		return nil, err
 	}
 	writer := func(val reflect.Value, w *encbuf) error {
-		lh := w.list()
+		if !ts.tail {
+			defer w.listEnd(w.list())
+		}
 		vlen := val.Len()
 		for i := 0; i < vlen; i++ {
 			if err := etypeinfo.writer(val.Index(i), w); err != nil {
 				return err
 			}
 		}
-		w.listEnd(lh)
 		return nil
 	}
 	return writer, nil
