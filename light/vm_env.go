@@ -33,6 +33,8 @@ import (
 type VMEnv struct {
 	vm.Environment
 	ctx    context.Context
+	chainConfig *core.ChainConfig
+	evm    *vm.EVM
 	state  *VMState
 	header *types.Header
 	msg    core.Message
@@ -45,17 +47,27 @@ type VMEnv struct {
 }
 
 // NewEnv creates a new execution environment based on an ODR capable light state
-func NewEnv(ctx context.Context, state *LightState, chain *LightChain, msg core.Message, header *types.Header) *VMEnv {
+func NewEnv(ctx context.Context, state *LightState, chainConfig *core.ChainConfig, chain *LightChain, msg core.Message, header *types.Header, cfg vm.Config) *VMEnv {
 	env := &VMEnv{
+		chainConfig: chainConfig,
 		chain:  chain,
 		header: header,
 		msg:    msg,
 		typ:    vm.StdVmTy,
 	}
 	env.state = &VMState{ctx: ctx, state: state, env: env}
+
+	// if no log collector is present set self as the collector
+	if cfg.Logger.Collector == nil {
+		cfg.Logger.Collector = env
+	}
+
+	env.evm = vm.New(env, cfg)
 	return env
 }
 
+func (self *VMEnv) RuleSet() vm.RuleSet      { return self.chainConfig }
+func (self *VMEnv) Vm() vm.Vm                { return self.evm }
 func (self *VMEnv) Origin() common.Address   { f, _ := self.msg.From(); return f }
 func (self *VMEnv) BlockNumber() *big.Int    { return self.header.Number }
 func (self *VMEnv) Coinbase() common.Address { return self.header.Coinbase }
@@ -69,7 +81,7 @@ func (self *VMEnv) SetDepth(i int)           { self.depth = i }
 func (self *VMEnv) VmType() vm.Type          { return self.typ }
 func (self *VMEnv) SetVmType(t vm.Type)      { self.typ = t }
 func (self *VMEnv) GetHash(n uint64) common.Hash {
-	for header := self.chain.GetHeader(self.header.ParentHash); header != nil; header = self.chain.GetHeader(header.ParentHash) {
+	for header := self.chain.GetHeader(self.header.ParentHash, self.header.Number.Uint64()-1); header != nil; header = self.chain.GetHeader(header.ParentHash, header.Number.Uint64()-1) {
 		if header.GetNumberU64() == n {
 			return header.Hash()
 		}
@@ -142,6 +154,10 @@ func (s *VMState) errHandler(err error) {
 func (s *VMState) GetAccount(addr common.Address) vm.Account {
 	so, err := s.state.GetStateObject(s.ctx, addr)
 	s.errHandler(err)
+	if err != nil {
+		// return a dummy state object to avoid panics
+		so = s.state.newStateObject(addr)
+	}
 	return so
 }
 
@@ -149,6 +165,10 @@ func (s *VMState) GetAccount(addr common.Address) vm.Account {
 func (s *VMState) CreateAccount(addr common.Address) vm.Account {
 	so, err := s.state.CreateStateObject(s.ctx, addr)
 	s.errHandler(err)
+	if err != nil {
+		// return a dummy state object to avoid panics
+		so = s.state.newStateObject(addr)
+	}
 	return so
 }
 

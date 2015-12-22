@@ -51,6 +51,10 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 	return headers
 }
 
+func testChainConfig() *core.ChainConfig {
+	return &core.ChainConfig{HomesteadBlock: big.NewInt(0)}
+}
+
 // newCanonical creates a chain database, and injects a deterministic canonical
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
@@ -62,7 +66,7 @@ func newCanonical(n int) (ethdb.Database, *LightChain, error) {
 	// Initialize a fresh chain with only a genesis block
 	genesis, _ := core.WriteTestNetGenesisBlock(db)
 
-	blockchain, _ := NewLightChain(&dummyOdr{db: db}, core.FakePow{}, evmux)
+	blockchain, _ := NewLightChain(&dummyOdr{db: db}, testChainConfig(), core.FakePow{}, evmux)
 	// Create and inject the requested chain
 	if n == 0 {
 		return db, blockchain, nil
@@ -85,7 +89,7 @@ func thePow() pow.PoW {
 func theLightChain(db ethdb.Database, t *testing.T) *LightChain {
 	var eventMux event.TypeMux
 	core.WriteTestNetGenesisBlock(db)
-	LightChain, err := NewLightChain(&dummyOdr{db: db}, thePow(), &eventMux)
+	LightChain, err := NewLightChain(&dummyOdr{db: db}, testChainConfig(), thePow(), &eventMux)
 	if err != nil {
 		t.Error("failed creating LightChain:", err)
 		t.FailNow()
@@ -120,11 +124,11 @@ func testFork(t *testing.T, LightChain *LightChain, i, n int, comparator func(td
 	// Sanity check that the forked chain can be imported into the original
 	var tdPre, tdPost *big.Int
 
-	tdPre = LightChain.GetTd(LightChain.CurrentHeader().Hash())
+	tdPre = LightChain.GetTdByHash(LightChain.CurrentHeader().Hash())
 	if err := testHeaderChainImport(headerChainB, LightChain); err != nil {
 		t.Fatalf("failed to import forked header chain: %v", err)
 	}
-	tdPost = LightChain.GetTd(headerChainB[len(headerChainB)-1].Hash())
+	tdPost = LightChain.GetTdByHash(headerChainB[len(headerChainB)-1].Hash())
 	// Compare the total difficulties of the chains
 	comparator(tdPre, tdPost)
 }
@@ -141,12 +145,12 @@ func printChain(bc *LightChain) {
 func testHeaderChainImport(chain []*types.Header, LightChain *LightChain) error {
 	for _, header := range chain {
 		// Try and validate the header
-		if err := LightChain.Validator().ValidateHeader(header, LightChain.GetHeader(header.ParentHash), false); err != nil {
+		if err := LightChain.Validator().ValidateHeader(header, LightChain.GetHeaderByHash(header.ParentHash), false); err != nil {
 			return err
 		}
 		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
 		LightChain.mu.Lock()
-		core.WriteTd(LightChain.chainDb, header.Hash(), new(big.Int).Add(header.Difficulty, LightChain.GetTd(header.ParentHash)))
+		core.WriteTd(LightChain.chainDb, header.Hash(), header.Number.Uint64(), new(big.Int).Add(header.Difficulty, LightChain.GetTdByHash(header.ParentHash)))
 		core.WriteHeader(LightChain.chainDb, header)
 		LightChain.mu.Unlock()
 	}
@@ -307,7 +311,7 @@ func chm(genesis *types.Block, db ethdb.Database) *LightChain {
 	odr := &dummyOdr{db: db}
 	var eventMux event.TypeMux
 	bc := &LightChain{odr: odr, chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: core.FakePow{}}
-	bc.hc, _ = core.NewHeaderChain(db, bc.Validator, bc.getProcInterrupt)
+	bc.hc, _ = core.NewHeaderChain(db, testChainConfig(), bc.Validator, bc.getProcInterrupt)
 	bc.bodyCache, _ = lru.New(100)
 	bc.bodyRLPCache, _ = lru.New(100)
 	bc.blockCache, _ = lru.New(100)
@@ -347,7 +351,7 @@ func testReorg(t *testing.T, first, second []int, td int64) {
 	}
 	// Make sure the chain total difficulty is the correct one
 	want := new(big.Int).Add(genesis.Difficulty(), big.NewInt(td))
-	if have := bc.GetTd(bc.CurrentHeader().Hash()); have.Cmp(want) != 0 {
+	if have := bc.GetTdByHash(bc.CurrentHeader().Hash()); have.Cmp(want) != 0 {
 		t.Errorf("total difficulty mismatch: have %v, want %v", have, want)
 	}
 }
@@ -389,7 +393,7 @@ func TestReorgBadHeaderHashes(t *testing.T) {
 	core.BadHashes[headers[3].Hash()] = true
 	defer func() { delete(core.BadHashes, headers[3].Hash()) }()
 	// Create a new chain manager and check it rolled back the state
-	ncm, err := NewLightChain(&dummyOdr{db: db}, core.FakePow{}, new(event.TypeMux))
+	ncm, err := NewLightChain(&dummyOdr{db: db}, testChainConfig(), core.FakePow{}, new(event.TypeMux))
 	if err != nil {
 		t.Fatalf("failed to create new chain manager: %v", err)
 	}

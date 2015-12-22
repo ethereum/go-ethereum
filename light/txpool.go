@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/net/context"
 )
@@ -43,6 +42,7 @@ var txPermanent = uint64(500)
 // always receive all locally signed transactions in the same order as they are
 // created.
 type TxPool struct {
+	config *core.ChainConfig
 	quit     chan bool
 	eventMux *event.TypeMux
 	events   event.Subscription
@@ -76,8 +76,9 @@ type TxRelayBackend interface {
 }
 
 // NewTxPool creates a new light transaction pool
-func NewTxPool(eventMux *event.TypeMux, chain *LightChain, relay TxRelayBackend) *TxPool {
+func NewTxPool(config *core.ChainConfig, eventMux *event.TypeMux, chain *LightChain, relay TxRelayBackend) *TxPool {
 	pool := &TxPool{
+		config:		config,
 		nonce:    make(map[common.Address]uint64),
 		pending:  make(map[common.Hash]*types.Transaction),
 		mined:    make(map[common.Hash][]*types.Transaction),
@@ -170,7 +171,7 @@ func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, idx uin
 		return nil
 	}
 
-	receipts, err := GetBlockReceipts(ctx, pool.odr, hash)
+	receipts, err := GetBlockReceipts(ctx, pool.odr, hash, idx)
 	if err != nil {
 		return err
 	}
@@ -213,18 +214,18 @@ func (pool *TxPool) rollbackTxs(hash common.Hash, txc txStateChanges) {
 // possible to continue checking the missing blocks at the next chain head event
 func (pool *TxPool) setNewHead(ctx context.Context, newHeader *types.Header) (txStateChanges, error) {
 	txc := make(txStateChanges)
-	oldh := pool.chain.GetHeader(pool.head)
+	oldh := pool.chain.GetHeaderByHash(pool.head)
 	newh := newHeader
 	// find common ancestor, create list of rolled back and new block hashes
 	var oldHashes, newHashes []common.Hash
 	for oldh.Hash() != newh.Hash() {
 		if oldh.GetNumberU64() >= newh.GetNumberU64() {
 			oldHashes = append(oldHashes, oldh.Hash())
-			oldh = pool.chain.GetHeader(oldh.ParentHash)
+			oldh = pool.chain.GetHeader(oldh.ParentHash, oldh.Number.Uint64()-1)
 		}
 		if oldh.GetNumberU64() < newh.GetNumberU64() {
 			newHashes = append(newHashes, newh.Hash())
-			newh = pool.chain.GetHeader(newh.ParentHash)
+			newh = pool.chain.GetHeader(newh.ParentHash, newh.Number.Uint64()-1)
 		}
 	}
 	if oldh.GetNumberU64() < pool.clearIdx {
@@ -280,7 +281,7 @@ func (pool *TxPool) eventLoop() {
 			txc, _ := pool.setNewHead(ctx, head)
 			m, r := txc.getLists()
 			pool.relay.NewHead(pool.head, m, r)
-			pool.homestead = params.IsHomestead(head.Number)
+			pool.homestead = pool.config.IsHomestead(head.Number)
 			pool.mu.Unlock()
 		}
 	}
@@ -338,7 +339,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 
 	// Check the transaction doesn't exceed the current
 	// block limit gas.
-	header := pool.chain.GetHeader(pool.head)
+	header := pool.chain.GetHeaderByHash(pool.head)
 	if header.GasLimit.Cmp(tx.Gas()) < 0 {
 		return core.ErrGasLimit
 	}

@@ -40,7 +40,7 @@ func (self Code) String() string {
 }
 
 // Storage is a memory map cache of a contract storage
-type Storage map[string]common.Hash
+type Storage map[common.Hash]common.Hash
 
 // String returns a string representation of the storage cache
 func (self Storage) String() (str string) {
@@ -135,8 +135,7 @@ func (self *StateObject) Storage() Storage {
 // GetState returns the storage value at the given address from either the cache
 // or the trie
 func (self *StateObject) GetState(ctx context.Context, key common.Hash) (common.Hash, error) {
-	strkey := key.Str()
-	value, exists := self.storage[strkey]
+	value, exists := self.storage[key]
 	if !exists {
 		var err error
 		value, err = self.getAddr(ctx, key)
@@ -144,7 +143,7 @@ func (self *StateObject) GetState(ctx context.Context, key common.Hash) (common.
 			return common.Hash{}, err
 		}
 		if (value != common.Hash{}) {
-			self.storage[strkey] = value
+			self.storage[key] = value
 		}
 	}
 
@@ -153,7 +152,7 @@ func (self *StateObject) GetState(ctx context.Context, key common.Hash) (common.
 
 // SetState sets the storage value at the given address
 func (self *StateObject) SetState(k, value common.Hash) {
-	self.storage[k.Str()] = value
+	self.storage[k] = value
 	self.dirty = true
 }
 
@@ -238,13 +237,13 @@ func (self *StateObject) Nonce() uint64 {
 	return self.nonce
 }
 
-// EachStorage calls a callback function for every key/value pair found
+// ForEachStorage calls a callback function for every key/value pair found
 // in the local storage cache. Note that unlike core/state.StateObject,
 // light.StateObject only returns cached values and doesn't download the
 // entire storage tree.
-func (self *StateObject) EachStorage(cb func(key, value []byte)) {
+func (self *StateObject) ForEachStorage(cb func(key, value common.Hash) bool) {
 	for h, v := range self.storage {
-		cb([]byte(h), v.Bytes())
+		cb(h, v)
 	}
 }
 

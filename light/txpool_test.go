@@ -86,7 +86,7 @@ func TestTxPool(t *testing.T) {
 	)
 	core.WriteGenesisBlockForTesting(ldb, core.GenesisAccount{testBankAddress, testBankFunds})
 	// Assemble the test environment
-	blockchain, _ := core.NewBlockChain(sdb, pow, evmux)
+	blockchain, _ := core.NewBlockChain(sdb, testChainConfig(), pow, evmux)
 	gchain, _ := core.GenerateChain(genesis, sdb, poolTestBlocks, txPoolTestChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		panic(err)
@@ -94,10 +94,10 @@ func TestTxPool(t *testing.T) {
 
 	odr := &testOdr{sdb: sdb, ldb: ldb}
 	relay := &testTxRelay{}
-	lightchain, _ := NewLightChain(odr, pow, evmux)
+	lightchain, _ := NewLightChain(odr, testChainConfig(), pow, evmux)
 	lightchain.SetValidator(bproc{})
 	txPermanent = 50
-	pool := NewTxPool(evmux, lightchain, relay)
+	pool := NewTxPool(testChainConfig(), evmux, lightchain, relay)
 
 	for ii, block := range gchain {
 		i := ii + 1
@@ -120,7 +120,7 @@ func TestTxPool(t *testing.T) {
 		if _, err := lightchain.InsertHeaderChain([]*types.Header{block.Header()}, 1); err != nil {
 			panic(err)
 		}
-		time.Sleep(time.Millisecond * 10)
+		time.Sleep(time.Millisecond * 30)
 
 		got := relay.nhMined
 		exp := minedTx(i) - minedTx(i-1)

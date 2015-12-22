@@ -343,11 +343,11 @@ func WriteBody(db ethdb.Database, hash common.Hash, number uint64, body *types.B
 	if err != nil {
 		return err
 	}
-	return WriteBodyRLP(db, hash, data)
+	return WriteBodyRLP(db, hash, number, data)
 }
 
 // WriteBodyRLP writes a serialized body of a block into the database.
-func WriteBodyRLP(db ethdb.Database, hash common.Hash, rlp rlp.RawValue) error {
+func WriteBodyRLP(db ethdb.Database, hash common.Hash, number uint64, rlp rlp.RawValue) error {
 	key := append(append(bodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 	if err := db.Put(key, rlp); err != nil {
 		glog.Fatalf("failed to store block body into database: %v", err)

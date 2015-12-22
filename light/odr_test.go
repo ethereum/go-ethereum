@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -52,11 +53,11 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 	}
 	switch req := req.(type) {
 	case *BlockRequest:
-		req.Rlp = core.GetBodyRLP(odr.sdb, req.Hash)
+		req.Rlp = core.GetBodyRLP(odr.sdb, req.Hash, core.GetBlockNumber(odr.sdb, req.Hash))
 	case *ReceiptsRequest:
-		req.Receipts = core.GetBlockReceipts(odr.sdb, req.Hash)
+		req.Receipts = core.GetBlockReceipts(odr.sdb, req.Hash, core.GetBlockNumber(odr.sdb, req.Hash))
 	case *TrieRequest:
-		t, _ := trie.New(req.Id.root, odr.sdb)
+		t, _ := trie.New(req.Id.Root, odr.sdb)
 		req.Proof = t.Prove(req.Key)
 		trie.ClearGlobalCache()
 	case *CodeRequest:
@@ -73,9 +74,9 @@ func TestOdrGetBlockLes1(t *testing.T) { testChainOdr(t, 1, 1, odrGetBlock) }
 func odrGetBlock(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) []byte {
 	var block *types.Block
 	if bc != nil {
-		block = bc.GetBlock(bhash)
+		block = bc.GetBlockByHash(bhash)
 	} else {
-		block, _ = lc.GetBlock(ctx, bhash)
+		block, _ = lc.GetBlockByHash(ctx, bhash)
 	}
 	if block == nil {
 		return nil
@@ -89,9 +90,9 @@ func TestOdrGetReceiptsLes1(t *testing.T) { testChainOdr(t, 1, 1, odrGetReceipts
 func odrGetReceipts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) []byte {
 	var receipts types.Receipts
 	if bc != nil {
-		receipts = core.GetBlockReceipts(db, bhash)
+		receipts = core.GetBlockReceipts(db, bhash, core.GetBlockNumber(db, bhash))
 	} else {
-		receipts, _ = GetBlockReceipts(ctx, lc.Odr(), bhash)
+		receipts, _ = GetBlockReceipts(ctx, lc.Odr(), bhash, core.GetBlockNumber(db, bhash))
 	}
 	if receipts == nil {
 		return nil
@@ -111,7 +112,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc
 	var res []byte
 	for _, addr := range acc {
 		if bc != nil {
-			header := bc.GetHeader(bhash)
+			header := bc.GetHeaderByHash(bhash)
 			st, err := state.New(header.Root, db)
 			if err == nil {
 				bal := st.GetBalance(addr)
@@ -119,7 +120,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc
 				res = append(res, rlp...)
 			}
 		} else {
-			header := lc.GetHeader(bhash)
+			header := lc.GetHeaderByHash(bhash)
 			st := NewLightState(StateTrieID(header), lc.Odr())
 			bal, err := st.GetBalance(ctx, addr)
 			if err == nil {
@@ -179,7 +180,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 	for i := 0; i < 3; i++ {
 		data[35] = byte(i)
 		if bc != nil {
-			header := bc.GetHeader(bhash)
+			header := bc.GetHeaderByHash(bhash)
 			statedb, err := state.New(header.Root, db)
 			if err == nil {
 				from := statedb.GetOrNewStateObject(testBankAddress)
@@ -194,13 +195,13 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 					to:       &testContractAddr,
 				}
 
-				vmenv := core.NewEnv(statedb, bc, msg, header)
+				vmenv := core.NewEnv(statedb, testChainConfig(), bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
 				res = append(res, ret...)
 			}
 		} else {
-			header := lc.GetHeader(bhash)
+			header := lc.GetHeaderByHash(bhash)
 			state := NewLightState(StateTrieID(header), lc.Odr())
 			from, err := state.GetOrNewStateObject(ctx, testBankAddress)
 			if err == nil {
@@ -215,7 +216,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 					to:       &testContractAddr,
 				}
 
-				vmenv := NewEnv(ctx, state, lc, msg, header)
+				vmenv := NewEnv(ctx, state, testChainConfig(), lc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
 				if vmenv.Error() == nil {
@@ -241,7 +242,7 @@ func testChainGen(i int, block *core.BlockGen) {
 		nonce := block.TxNonce(acc1Addr)
 		tx2, _ := types.NewTransaction(nonce, acc2Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(acc1Key)
 		nonce++
-		tx3, _ := types.NewContractCreation(nonce, big.NewInt(0), big.NewInt(100000), big.NewInt(0), testContractCode).SignECDSA(acc1Key)
+		tx3, _ := types.NewContractCreation(nonce, big.NewInt(0), big.NewInt(1000000), big.NewInt(0), testContractCode).SignECDSA(acc1Key)
 		testContractAddr = crypto.CreateAddress(acc1Addr, nonce)
 		block.AddTx(tx1)
 		block.AddTx(tx2)
@@ -277,14 +278,14 @@ func testChainOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	)
 	core.WriteGenesisBlockForTesting(ldb, core.GenesisAccount{testBankAddress, testBankFunds})
 	// Assemble the test environment
-	blockchain, _ := core.NewBlockChain(sdb, pow, evmux)
+	blockchain, _ := core.NewBlockChain(sdb, testChainConfig(), pow, evmux)
 	gchain, _ := core.GenerateChain(genesis, sdb, 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		panic(err)
 	}
 
 	odr := &testOdr{sdb: sdb, ldb: ldb}
-	lightchain, _ := NewLightChain(odr, pow, evmux)
+	lightchain, _ := NewLightChain(odr, testChainConfig(), pow, evmux)
 	lightchain.SetValidator(bproc{})
 	headers := make([]*types.Header, len(gchain))
 	for i, block := range gchain {
