@@ -162,6 +162,7 @@ func TestProtocolHandshake(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
+		defer fd1.Close()
 		rlpx := newRLPX(fd0)
 		remid, err := rlpx.doEncHandshake(prv0, node1)
 		if err != nil {
@@ -178,6 +179,7 @@ func TestProtocolHandshake(t *testing.T) {
 			t.Errorf("dial side proto handshake error: %v", err)
 			return
 		}
+		phs.Rest = nil
 		if !reflect.DeepEqual(phs, hs1) {
 			t.Errorf("dial side proto handshake mismatch:\ngot: %s\nwant: %s\n", spew.Sdump(phs), spew.Sdump(hs1))
 			return
@@ -186,6 +188,7 @@ func TestProtocolHandshake(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
+		defer fd1.Close()
 		rlpx := newRLPX(fd1)
 		remid, err := rlpx.doEncHandshake(prv1, nil)
 		if err != nil {
@@ -202,6 +205,7 @@ func TestProtocolHandshake(t *testing.T) {
 			t.Errorf("listen side proto handshake error: %v", err)
 			return
 		}
+		phs.Rest = nil
 		if !reflect.DeepEqual(phs, hs0) {
 			t.Errorf("listen side proto handshake mismatch:\ngot: %s\nwant: %s\n", spew.Sdump(phs), spew.Sdump(hs0))
 			return
@@ -216,7 +220,6 @@ func TestProtocolHandshake(t *testing.T) {
 
 func TestProtocolHandshakeErrors(t *testing.T) {
 	our := &protoHandshake{Version: 3, Caps: []Cap{{"foo", 2}, {"bar", 3}}, Name: "quux"}
-	id := randomID()
 	tests := []struct {
 		code uint64
 		msg  interface{}
@@ -241,11 +244,6 @@ func TestProtocolHandshakeErrors(t *testing.T) {
 			code: handshakeMsg,
 			msg:  []byte{1, 2, 3},
 			err:  newPeerError(errInvalidMsg, "(code 0) (size 4) rlp: expected input list for p2p.protoHandshake"),
-		},
-		{
-			code: handshakeMsg,
-			msg:  &protoHandshake{Version: 9944, ID: id},
-			err:  DiscIncompatibleVersion,
 		},
 		{
 			code: handshakeMsg,

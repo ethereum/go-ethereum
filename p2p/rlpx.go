@@ -151,10 +151,6 @@ func readProtocolHandshake(rw MsgReader, our *protoHandshake) (*protoHandshake, 
 	if err := msg.Decode(&hs); err != nil {
 		return nil, err
 	}
-	// validate handshake info
-	if hs.Version != our.Version {
-		return nil, DiscIncompatibleVersion
-	}
 	if (hs.ID == discover.NodeID{}) {
 		return nil, DiscInvalidIdentity
 	}
