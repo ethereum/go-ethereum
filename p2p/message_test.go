@@ -143,7 +143,8 @@ func TestEOFSignal(t *testing.T) {
 }
 
 func unhex(str string) []byte {
-	b, err := hex.DecodeString(strings.Replace(str, "\n", "", -1))
+	r := strings.NewReplacer("\t", "", " ", "", "\n", "")
+	b, err := hex.DecodeString(r.Replace(str))
 	if err != nil {
 		panic(fmt.Sprintf("invalid hex string: %q", str))
 	}
