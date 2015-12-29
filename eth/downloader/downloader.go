@@ -112,20 +112,20 @@ type Downloader struct {
 	syncStatsLock        sync.RWMutex // Lock protecting the sync stats fields
 
 	// Callbacks
-	hasHeader       headerCheckFn            // Checks if a header is present in the chain
-	hasBlock        blockCheckFn             // Checks if a block is present in the chain
-	getHeader       headerRetrievalFn        // Retrieves a header from the chain
-	getBlock        blockRetrievalFn         // Retrieves a block from the chain
-	headHeader      headHeaderRetrievalFn    // Retrieves the head header from the chain
-	headBlock       headBlockRetrievalFn     // Retrieves the head block from the chain
-	headFastBlock   headFastBlockRetrievalFn // Retrieves the head fast-sync block from the chain
-	commitHeadBlock headBlockCommitterFn     // Commits a manually assembled block as the chain head
-	getTd           tdRetrievalFn            // Retrieves the TD of a block from the chain
-	insertHeaders   headerChainInsertFn      // Injects a batch of headers into the chain
-	insertBlocks    blockChainInsertFn       // Injects a batch of blocks into the chain
-	insertReceipts  receiptChainInsertFn     // Injects a batch of blocks and their receipts into the chain
-	rollback        chainRollbackFn          // Removes a batch of recently added chain links
-	dropPeer        peerDropFn               // Drops a peer for misbehaving
+	hasHeader        headerCheckFn            // Checks if a header is present in the chain
+	hasBlockAndState blockAndStateCheckFn     // Checks if a block and associated state is present in the chain
+	getHeader        headerRetrievalFn        // Retrieves a header from the chain
+	getBlock         blockRetrievalFn         // Retrieves a block from the chain
+	headHeader       headHeaderRetrievalFn    // Retrieves the head header from the chain
+	headBlock        headBlockRetrievalFn     // Retrieves the head block from the chain
+	headFastBlock    headFastBlockRetrievalFn // Retrieves the head fast-sync block from the chain
+	commitHeadBlock  headBlockCommitterFn     // Commits a manually assembled block as the chain head
+	getTd            tdRetrievalFn            // Retrieves the TD of a block from the chain
+	insertHeaders    headerChainInsertFn      // Injects a batch of headers into the chain
+	insertBlocks     blockChainInsertFn       // Injects a batch of blocks into the chain
+	insertReceipts   receiptChainInsertFn     // Injects a batch of blocks and their receipts into the chain
+	rollback         chainRollbackFn          // Removes a batch of recently added chain links
+	dropPeer         peerDropFn               // Drops a peer for misbehaving
 
 	// Status
 	synchroniseMock func(id string, hash common.Hash) error // Replacement for synchronise during testing
@@ -156,41 +156,41 @@ type Downloader struct {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, mux *event.TypeMux, hasHeader headerCheckFn, hasBlock blockCheckFn, getHeader headerRetrievalFn,
-	getBlock blockRetrievalFn, headHeader headHeaderRetrievalFn, headBlock headBlockRetrievalFn, headFastBlock headFastBlockRetrievalFn,
-	commitHeadBlock headBlockCommitterFn, getTd tdRetrievalFn, insertHeaders headerChainInsertFn, insertBlocks blockChainInsertFn,
-	insertReceipts receiptChainInsertFn, rollback chainRollbackFn, dropPeer peerDropFn) *Downloader {
+func New(stateDb ethdb.Database, mux *event.TypeMux, hasHeader headerCheckFn, hasBlockAndState blockAndStateCheckFn,
+	getHeader headerRetrievalFn, getBlock blockRetrievalFn, headHeader headHeaderRetrievalFn, headBlock headBlockRetrievalFn,
+	headFastBlock headFastBlockRetrievalFn, commitHeadBlock headBlockCommitterFn, getTd tdRetrievalFn, insertHeaders headerChainInsertFn,
+	insertBlocks blockChainInsertFn, insertReceipts receiptChainInsertFn, rollback chainRollbackFn, dropPeer peerDropFn) *Downloader {
 
 	return &Downloader{
-		mode:            FullSync,
-		mux:             mux,
-		queue:           newQueue(stateDb),
-		peers:           newPeerSet(),
-		hasHeader:       hasHeader,
-		hasBlock:        hasBlock,
-		getHeader:       getHeader,
-		getBlock:        getBlock,
-		headHeader:      headHeader,
-		headBlock:       headBlock,
-		headFastBlock:   headFastBlock,
-		commitHeadBlock: commitHeadBlock,
-		getTd:           getTd,
-		insertHeaders:   insertHeaders,
-		insertBlocks:    insertBlocks,
-		insertReceipts:  insertReceipts,
-		rollback:        rollback,
-		dropPeer:        dropPeer,
-		newPeerCh:       make(chan *peer, 1),
-		hashCh:          make(chan dataPack, 1),
-		blockCh:         make(chan dataPack, 1),
-		headerCh:        make(chan dataPack, 1),
-		bodyCh:          make(chan dataPack, 1),
-		receiptCh:       make(chan dataPack, 1),
-		stateCh:         make(chan dataPack, 1),
-		blockWakeCh:     make(chan bool, 1),
-		bodyWakeCh:      make(chan bool, 1),
-		receiptWakeCh:   make(chan bool, 1),
-		stateWakeCh:     make(chan bool, 1),
+		mode:             FullSync,
+		mux:              mux,
+		queue:            newQueue(stateDb),
+		peers:            newPeerSet(),
+		hasHeader:        hasHeader,
+		hasBlockAndState: hasBlockAndState,
+		getHeader:        getHeader,
+		getBlock:         getBlock,
+		headHeader:       headHeader,
+		headBlock:        headBlock,
+		headFastBlock:    headFastBlock,
+		commitHeadBlock:  commitHeadBlock,
+		getTd:            getTd,
+		insertHeaders:    insertHeaders,
+		insertBlocks:     insertBlocks,
+		insertReceipts:   insertReceipts,
+		rollback:         rollback,
+		dropPeer:         dropPeer,
+		newPeerCh:        make(chan *peer, 1),
+		hashCh:           make(chan dataPack, 1),
+		blockCh:          make(chan dataPack, 1),
+		headerCh:         make(chan dataPack, 1),
+		bodyCh:           make(chan dataPack, 1),
+		receiptCh:        make(chan dataPack, 1),
+		stateCh:          make(chan dataPack, 1),
+		blockWakeCh:      make(chan bool, 1),
+		bodyWakeCh:       make(chan bool, 1),
+		receiptWakeCh:    make(chan bool, 1),
+		stateWakeCh:      make(chan bool, 1),
 	}
 }
 
@@ -564,7 +564,7 @@ func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
 			// Check if a common ancestor was found
 			finished = true
 			for i := len(hashes) - 1; i >= 0; i-- {
-				if d.hasBlock(hashes[i]) {
+				if d.hasBlockAndState(hashes[i]) {
 					number, hash = uint64(from)+uint64(i), hashes[i]
 					break
 				}
@@ -620,11 +620,11 @@ func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
 				arrived = true
 
 				// Modify the search interval based on the response
-				block := d.getBlock(hashes[0])
-				if block == nil {
+				if !d.hasBlockAndState(hashes[0]) {
 					end = check
 					break
 				}
+				block := d.getBlock(hashes[0]) // this doesn't check state, hence the above explicit check
 				if block.NumberU64() != check {
 					glog.V(logger.Debug).Infof("%v: non requested hash #%d [%x…], instead of #%d", p, block.NumberU64(), block.Hash().Bytes()[:4], check)
 					return 0, errBadPeer
@@ -989,7 +989,7 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 			// Check if a common ancestor was found
 			finished = true
 			for i := len(headers) - 1; i >= 0; i-- {
-				if (d.mode != LightSync && d.hasBlock(headers[i].Hash())) || (d.mode == LightSync && d.hasHeader(headers[i].Hash())) {
+				if (d.mode != LightSync && d.hasBlockAndState(headers[i].Hash())) || (d.mode == LightSync && d.hasHeader(headers[i].Hash())) {
 					number, hash = headers[i].Number.Uint64(), headers[i].Hash()
 					break
 				}
@@ -1045,7 +1045,7 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 				arrived = true
 
 				// Modify the search interval based on the response
-				if (d.mode == FullSync && !d.hasBlock(headers[0].Hash())) || (d.mode != FullSync && !d.hasHeader(headers[0].Hash())) {
+				if (d.mode == FullSync && !d.hasBlockAndState(headers[0].Hash())) || (d.mode != FullSync && !d.hasHeader(headers[0].Hash())) {
 					end = check
 					break
 				}
