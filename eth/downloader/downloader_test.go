@@ -720,8 +720,6 @@ func TestThrottling64Full(t *testing.T) { testThrottling(t, 64, FullSync) }
 func TestThrottling64Fast(t *testing.T) { testThrottling(t, 64, FastSync) }
 
 func testThrottling(t *testing.T, protocol int, mode SyncMode) {
-	t.Parallel()
-
 	// Create a long block chain to download and the tester
 	targetBlocks := 8 * blockCacheLimit
 	hashes, headers, blocks, receipts := makeChain(targetBlocks, 0, genesis, nil)
@@ -751,7 +749,7 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 		}
 		// Wait a bit for sync to throttle itself
 		var cached, frozen int
-		for start := time.Now(); time.Since(start) < time.Second; {
+		for start := time.Now(); time.Since(start) < 3*time.Second; {
 			time.Sleep(25 * time.Millisecond)
 
 			tester.lock.Lock()
