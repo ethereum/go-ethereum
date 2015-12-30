@@ -90,7 +90,7 @@ func TestTransactionQueue(t *testing.T) {
 	tx := transaction(0, big.NewInt(100), key)
 	from, _ := tx.From()
 	currentState, _ := pool.currentState()
-	currentState.AddBalance(from, big.NewInt(1))
+	currentState.AddBalance(from, big.NewInt(1000))
 	pool.queueTx(tx.Hash(), tx)
 
 	pool.checkQueue()
@@ -115,15 +115,17 @@ func TestTransactionQueue(t *testing.T) {
 	tx1 := transaction(0, big.NewInt(100), key)
 	tx2 := transaction(10, big.NewInt(100), key)
 	tx3 := transaction(11, big.NewInt(100), key)
+	from, _ = tx1.From()
+	currentState, _ = pool.currentState()
+	currentState.AddBalance(from, big.NewInt(1000))
 	pool.queueTx(tx1.Hash(), tx1)
 	pool.queueTx(tx2.Hash(), tx2)
 	pool.queueTx(tx3.Hash(), tx3)
-	from, _ = tx1.From()
 
 	pool.checkQueue()
 
 	if len(pool.pending) != 1 {
-		t.Error("expected tx pool to be 1 =")
+		t.Error("expected tx pool to be 1, got", len(pool.pending))
 	}
 	if len(pool.queue[from]) != 2 {
 		t.Error("expected len(queue) == 2, got", len(pool.queue[from]))
@@ -270,5 +272,266 @@ func TestRemovedTxEvent(t *testing.T) {
 	pool.eventMux.Post(ChainHeadEvent{nil})
 	if len(pool.pending) != 1 {
 		t.Error("expected 1 pending tx, got", len(pool.pending))
+	}
+}
+
+// Tests that if an account runs out of funds, any pending and queued transactions
+// are dropped.
+func TestTransactionDropping(t *testing.T) {
+	// Create a test account and fund it
+	pool, key := setupTxPool()
+	account, _ := transaction(0, big.NewInt(0), key).From()
+
+	state, _ := pool.currentState()
+	state.AddBalance(account, big.NewInt(1000))
+
+	// Add some pending and some queued transactions
+	var (
+		tx0  = transaction(0, big.NewInt(100), key)
+		tx1  = transaction(1, big.NewInt(200), key)
+		tx10 = transaction(10, big.NewInt(100), key)
+		tx11 = transaction(11, big.NewInt(200), key)
+	)
+	pool.addTx(tx0.Hash(), account, tx0)
+	pool.addTx(tx1.Hash(), account, tx1)
+	pool.queueTx(tx10.Hash(), tx10)
+	pool.queueTx(tx11.Hash(), tx11)
+
+	// Check that pre and post validations leave the pool as is
+	if len(pool.pending) != 2 {
+		t.Errorf("pending transaction mismatch: have %d, want %d", len(pool.pending), 2)
+	}
+	if len(pool.queue[account]) != 2 {
+		t.Errorf("queued transaction mismatch: have %d, want %d", len(pool.queue), 2)
+	}
+	pool.resetState()
+	if len(pool.pending) != 2 {
+		t.Errorf("pending transaction mismatch: have %d, want %d", len(pool.pending), 2)
+	}
+	if len(pool.queue[account]) != 2 {
+		t.Errorf("queued transaction mismatch: have %d, want %d", len(pool.queue), 2)
+	}
+	// Reduce the balance of the account, and check that invalidated transactions are dropped
+	state.AddBalance(account, big.NewInt(-750))
+	pool.resetState()
+
+	if _, ok := pool.pending[tx0.Hash()]; !ok {
+		t.Errorf("funded pending transaction missing: %v", tx0)
+	}
+	if _, ok := pool.pending[tx1.Hash()]; ok {
+		t.Errorf("out-of-fund pending transaction present: %v", tx1)
+	}
+	if _, ok := pool.queue[account][tx10.Hash()]; !ok {
+		t.Errorf("funded queued transaction missing: %v", tx10)
+	}
+	if _, ok := pool.queue[account][tx11.Hash()]; ok {
+		t.Errorf("out-of-fund queued transaction present: %v", tx11)
+	}
+}
+
+// Tests that if a transaction is dropped from the current pending pool (e.g. out
+// of fund), all consecutive (still valid, but not executable) transactions are
+// postponed back into the future queue to prevent broadcating them.
+func TestTransactionPostponing(t *testing.T) {
+	// Create a test account and fund it
+	pool, key := setupTxPool()
+	account, _ := transaction(0, big.NewInt(0), key).From()
+
+	state, _ := pool.currentState()
+	state.AddBalance(account, big.NewInt(1000))
+
+	// Add a batch consecutive pending transactions for validation
+	txns := []*types.Transaction{}
+	for i := 0; i < 100; i++ {
+		var tx *types.Transaction
+		if i%2 == 0 {
+			tx = transaction(uint64(i), big.NewInt(100), key)
+		} else {
+			tx = transaction(uint64(i), big.NewInt(500), key)
+		}
+		pool.addTx(tx.Hash(), account, tx)
+		txns = append(txns, tx)
+	}
+	// Check that pre and post validations leave the pool as is
+	if len(pool.pending) != len(txns) {
+		t.Errorf("pending transaction mismatch: have %d, want %d", len(pool.pending), len(txns))
+	}
+	if len(pool.queue[account]) != 0 {
+		t.Errorf("queued transaction mismatch: have %d, want %d", len(pool.queue), 0)
+	}
+	pool.resetState()
+	if len(pool.pending) != len(txns) {
+		t.Errorf("pending transaction mismatch: have %d, want %d", len(pool.pending), len(txns))
+	}
+	if len(pool.queue[account]) != 0 {
+		t.Errorf("queued transaction mismatch: have %d, want %d", len(pool.queue), 0)
+	}
+	// Reduce the balance of the account, and check that transactions are reorganized
+	state.AddBalance(account, big.NewInt(-750))
+	pool.resetState()
+
+	if _, ok := pool.pending[txns[0].Hash()]; !ok {
+		t.Errorf("tx %d: valid and funded transaction missing from pending pool: %v", 0, txns[0])
+	}
+	if _, ok := pool.queue[account][txns[0].Hash()]; ok {
+		t.Errorf("tx %d: valid and funded transaction present in future queue: %v", 0, txns[0])
+	}
+	for i, tx := range txns[1:] {
+		if i%2 == 1 {
+			if _, ok := pool.pending[tx.Hash()]; ok {
+				t.Errorf("tx %d: valid but future transaction present in pending pool: %v", i+1, tx)
+			}
+			if _, ok := pool.queue[account][tx.Hash()]; !ok {
+				t.Errorf("tx %d: valid but future transaction missing from future queue: %v", i+1, tx)
+			}
+		} else {
+			if _, ok := pool.pending[tx.Hash()]; ok {
+				t.Errorf("tx %d: out-of-fund transaction present in pending pool: %v", i+1, tx)
+			}
+			if _, ok := pool.queue[account][tx.Hash()]; ok {
+				t.Errorf("tx %d: out-of-fund transaction present in future queue: %v", i+1, tx)
+			}
+		}
+	}
+}
+
+// Tests that if the transaction count belonging to a single account goes above
+// some threshold, the higher transactions are dropped to prevent DOS attacks.
+func TestTransactionQueueLimiting(t *testing.T) {
+	// Create a test account and fund it
+	pool, key := setupTxPool()
+	account, _ := transaction(0, big.NewInt(0), key).From()
+
+	state, _ := pool.currentState()
+	state.AddBalance(account, big.NewInt(1000000))
+
+	// Keep queuing up transactions and make sure all above a limit are dropped
+	for i := uint64(1); i <= maxQueued+5; i++ {
+		if err := pool.Add(transaction(i, big.NewInt(100000), key)); err != nil {
+			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
+		}
+		if len(pool.pending) != 0 {
+			t.Errorf("tx %d: pending pool size mismatch: have %d, want %d", i, len(pool.pending), 0)
+		}
+		if i <= maxQueued {
+			if len(pool.queue[account]) != int(i) {
+				t.Errorf("tx %d: queue size mismatch: have %d, want %d", i, len(pool.queue[account]), i)
+			}
+		} else {
+			if len(pool.queue[account]) != maxQueued {
+				t.Errorf("tx %d: queue limit mismatch: have %d, want %d", i, len(pool.queue[account]), maxQueued)
+			}
+		}
+	}
+}
+
+// Tests that even if the transaction count belonging to a single account goes
+// above some threshold, as long as the transactions are executable, they are
+// accepted.
+func TestTransactionPendingLimiting(t *testing.T) {
+	// Create a test account and fund it
+	pool, key := setupTxPool()
+	account, _ := transaction(0, big.NewInt(0), key).From()
+
+	state, _ := pool.currentState()
+	state.AddBalance(account, big.NewInt(1000000))
+
+	// Keep queuing up transactions and make sure all above a limit are dropped
+	for i := uint64(0); i < maxQueued+5; i++ {
+		if err := pool.Add(transaction(i, big.NewInt(100000), key)); err != nil {
+			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
+		}
+		if len(pool.pending) != int(i)+1 {
+			t.Errorf("tx %d: pending pool size mismatch: have %d, want %d", i, len(pool.pending), i+1)
+		}
+		if len(pool.queue[account]) != 0 {
+			t.Errorf("tx %d: queue size mismatch: have %d, want %d", i, len(pool.queue[account]), 0)
+		}
+	}
+}
+
+// Tests that the transaction limits are enforced the same way irrelevant whether
+// the transactions are added one by one or in batches.
+func TestTransactionQueueLimitingEquivalency(t *testing.T)   { testTransactionLimitingEquivalency(t, 1) }
+func TestTransactionPendingLimitingEquivalency(t *testing.T) { testTransactionLimitingEquivalency(t, 0) }
+
+func testTransactionLimitingEquivalency(t *testing.T, origin uint64) {
+	// Add a batch of transactions to a pool one by one
+	pool1, key1 := setupTxPool()
+	account1, _ := transaction(0, big.NewInt(0), key1).From()
+	state1, _ := pool1.currentState()
+	state1.AddBalance(account1, big.NewInt(1000000))
+
+	for i := uint64(0); i < maxQueued+5; i++ {
+		if err := pool1.Add(transaction(origin+i, big.NewInt(100000), key1)); err != nil {
+			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
+		}
+	}
+	// Add a batch of transactions to a pool in one bit batch
+	pool2, key2 := setupTxPool()
+	account2, _ := transaction(0, big.NewInt(0), key2).From()
+	state2, _ := pool2.currentState()
+	state2.AddBalance(account2, big.NewInt(1000000))
+
+	txns := []*types.Transaction{}
+	for i := uint64(0); i < maxQueued+5; i++ {
+		txns = append(txns, transaction(origin+i, big.NewInt(100000), key2))
+	}
+	pool2.AddTransactions(txns)
+
+	// Ensure the batch optimization honors the same pool mechanics
+	if len(pool1.pending) != len(pool2.pending) {
+		t.Errorf("pending transaction count mismatch: one-by-one algo: %d, batch algo: %d", len(pool1.pending), len(pool2.pending))
+	}
+	if len(pool1.queue[account1]) != len(pool2.queue[account2]) {
+		t.Errorf("queued transaction count mismatch: one-by-one algo: %d, batch algo: %d", len(pool1.queue[account1]), len(pool2.queue[account2]))
+	}
+}
+
+// Benchmarks the speed of validating the contents of the pending queue of the
+// transaction pool.
+func BenchmarkValidatePool100(b *testing.B)   { benchmarkValidatePool(b, 100) }
+func BenchmarkValidatePool1000(b *testing.B)  { benchmarkValidatePool(b, 1000) }
+func BenchmarkValidatePool10000(b *testing.B) { benchmarkValidatePool(b, 10000) }
+
+func benchmarkValidatePool(b *testing.B, size int) {
+	// Add a batch of transactions to a pool one by one
+	pool, key := setupTxPool()
+	account, _ := transaction(0, big.NewInt(0), key).From()
+	state, _ := pool.currentState()
+	state.AddBalance(account, big.NewInt(1000000))
+
+	for i := 0; i < size; i++ {
+		tx := transaction(uint64(i), big.NewInt(100000), key)
+		pool.addTx(tx.Hash(), account, tx)
+	}
+	// Benchmark the speed of pool validation
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pool.validatePool()
+	}
+}
+
+// Benchmarks the speed of scheduling the contents of the future queue of the
+// transaction pool.
+func BenchmarkCheckQueue100(b *testing.B)   { benchmarkCheckQueue(b, 100) }
+func BenchmarkCheckQueue1000(b *testing.B)  { benchmarkCheckQueue(b, 1000) }
+func BenchmarkCheckQueue10000(b *testing.B) { benchmarkCheckQueue(b, 10000) }
+
+func benchmarkCheckQueue(b *testing.B, size int) {
+	// Add a batch of transactions to a pool one by one
+	pool, key := setupTxPool()
+	account, _ := transaction(0, big.NewInt(0), key).From()
+	state, _ := pool.currentState()
+	state.AddBalance(account, big.NewInt(1000000))
+
+	for i := 0; i < size; i++ {
+		tx := transaction(uint64(1+i), big.NewInt(100000), key)
+		pool.queueTx(tx.Hash(), tx)
+	}
+	// Benchmark the speed of pool validation
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pool.checkQueue()
 	}
 }
