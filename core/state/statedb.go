@@ -57,7 +57,6 @@ type StateDB struct {
 func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 	tr, err := trie.NewSecure(root, db)
 	if err != nil {
-		glog.Errorf("can't create state trie with root %x: %v", root[:], err)
 		return nil, err
 	}
 	return &StateDB{

@@ -27,8 +27,8 @@ import (
 // headerCheckFn is a callback type for verifying a header's presence in the local chain.
 type headerCheckFn func(common.Hash) bool
 
-// blockCheckFn is a callback type for verifying a block's presence in the local chain.
-type blockCheckFn func(common.Hash) bool
+// blockAndStateCheckFn is a callback type for verifying block and associated states' presence in the local chain.
+type blockAndStateCheckFn func(common.Hash) bool
 
 // headerRetrievalFn is a callback type for retrieving a header from the local chain.
 type headerRetrievalFn func(common.Hash) *types.Header

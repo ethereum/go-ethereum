@@ -153,6 +153,8 @@ func newTester() *downloadTester {
 		peerChainTds: make(map[string]map[common.Hash]*big.Int),
 	}
 	tester.stateDb, _ = ethdb.NewMemDatabase()
+	tester.stateDb.Put(genesis.Root().Bytes(), []byte{0x00})
+
 	tester.downloader = New(tester.stateDb, new(event.TypeMux), tester.hasHeader, tester.hasBlock, tester.getHeader,
 		tester.getBlock, tester.headHeader, tester.headBlock, tester.headFastBlock, tester.commitHeadBlock, tester.getTd,
 		tester.insertHeaders, tester.insertBlocks, tester.insertReceipts, tester.rollback, tester.dropPeer)
@@ -180,9 +182,14 @@ func (dl *downloadTester) hasHeader(hash common.Hash) bool {
 	return dl.getHeader(hash) != nil
 }
 
-// hasBlock checks if a block is present in the testers canonical chain.
+// hasBlock checks if a block and associated state is present in the testers canonical chain.
 func (dl *downloadTester) hasBlock(hash common.Hash) bool {
-	return dl.getBlock(hash) != nil
+	block := dl.getBlock(hash)
+	if block == nil {
+		return false
+	}
+	_, err := dl.stateDb.Get(block.Root().Bytes())
+	return err == nil
 }
 
 // getHeader retrieves a header from the testers canonical chain.
@@ -295,8 +302,10 @@ func (dl *downloadTester) insertBlocks(blocks types.Blocks) (int, error) {
 	defer dl.lock.Unlock()
 
 	for i, block := range blocks {
-		if _, ok := dl.ownBlocks[block.ParentHash()]; !ok {
+		if parent, ok := dl.ownBlocks[block.ParentHash()]; !ok {
 			return i, errors.New("unknown parent")
+		} else if _, err := dl.stateDb.Get(parent.Root().Bytes()); err != nil {
+			return i, fmt.Errorf("unknown parent state %x: %v", parent.Root(), err)
 		}
 		if _, ok := dl.ownHeaders[block.Hash()]; !ok {
 			dl.ownHashes = append(dl.ownHashes, block.Hash())
@@ -1103,6 +1112,8 @@ func testShiftedHeaderAttack(t *testing.T, protocol int, mode SyncMode) {
 }
 
 // Tests that upon detecting an invalid header, the recent ones are rolled back
+// for various failure scenarios. Afterwards a full sync is attempted to make
+// sure no state was corrupted.
 func TestInvalidHeaderRollback63Fast(t *testing.T)  { testInvalidHeaderRollback(t, 63, FastSync) }
 func TestInvalidHeaderRollback64Fast(t *testing.T)  { testInvalidHeaderRollback(t, 64, FastSync) }
 func TestInvalidHeaderRollback64Light(t *testing.T) { testInvalidHeaderRollback(t, 64, LightSync) }
