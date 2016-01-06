@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
@@ -152,8 +153,9 @@ func (self *Iterator) key(node interface{}) []byte {
 // nodeIteratorState represents the iteration state at one particular node of the
 // trie, which can be resumed at a later invocation.
 type nodeIteratorState struct {
-	node  node // Trie node being iterated
-	child int  // Child to be processed next
+	hash  common.Hash // Hash of the node being iterated (nil if not standalone)
+	node  node        // Trie node being iterated
+	child int         // Child to be processed next
 }
 
 // NodeIterator is an iterator to traverse the trie post-order.
@@ -161,9 +163,10 @@ type NodeIterator struct {
 	trie  *Trie                // Trie being iterated
 	stack []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
 
-	Node     node   // Current node being iterated (internal representation)
-	Leaf     bool   // Flag whether the current node is a value (data) node
-	LeafBlob []byte // Data blob contained within a leaf (otherwise nil)
+	Hash     common.Hash // Hash of the current node being iterated (nil if not standalone)
+	Node     node        // Current node being iterated (internal representation)
+	Leaf     bool        // Flag whether the current node is a value (data) node
+	LeafBlob []byte      // Data blob contained within a leaf (otherwise nil)
 }
 
 // NewNodeIterator creates an post-order trie iterator.
@@ -221,18 +224,18 @@ func (it *NodeIterator) step() {
 			}
 			parent.child++
 			it.stack = append(it.stack, &nodeIteratorState{node: node.Val, child: -1})
-		} else if node, ok := parent.node.(hashNode); ok {
+		} else if hash, ok := parent.node.(hashNode); ok {
 			// Hash node, resolve the hash child from the database, then the node itself
 			if parent.child >= 0 {
 				break
 			}
 			parent.child++
 
-			node, err := it.trie.resolveHash(node, nil, nil)
+			node, err := it.trie.resolveHash(hash, nil, nil)
 			if err != nil {
 				panic(err)
 			}
-			it.stack = append(it.stack, &nodeIteratorState{node: node, child: -1})
+			it.stack = append(it.stack, &nodeIteratorState{hash: common.BytesToHash(hash), node: node, child: -1})
 		} else {
 			break
 		}
@@ -246,14 +249,16 @@ func (it *NodeIterator) step() {
 // The method returns whether there are any more data left for inspection.
 func (it *NodeIterator) retrieve() bool {
 	// Clear out any previously set values
-	it.Node, it.Leaf, it.LeafBlob = nil, false, nil
+	it.Hash, it.Node, it.Leaf, it.LeafBlob = common.Hash{}, nil, false, nil
 
 	// If the iteration's done, return no available data
 	if it.trie == nil {
 		return false
 	}
 	// Otherwise retrieve the current node and resolve leaf accessors
-	it.Node = it.stack[len(it.stack)-1].node
+	state := it.stack[len(it.stack)-1]
+
+	it.Hash, it.Node = state.hash, state.node
 	if value, ok := it.Node.(valueNode); ok {
 		it.Leaf, it.LeafBlob = true, []byte(value)
 	}

@@ -96,8 +96,7 @@ func checkTrieConsistency(db Database, root common.Hash) (failure error) {
 	if err != nil {
 		return
 	}
-	it := NewNodeIterator(trie)
-	for it.Next() {
+	for it := NewNodeIterator(trie); it.Next(); {
 	}
 	return nil
 }
