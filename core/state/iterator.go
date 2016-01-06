@@ -33,8 +33,11 @@ type NodeIterator struct {
 
 	stateIt *trie.NodeIterator // Primary iterator for the global state trie
 	dataIt  *trie.NodeIterator // Secondary iterator for the data trie of a contract
-	code    []byte             // Source code associated with a contract
 
+	codeHash common.Hash // Hash of the contract source code
+	code     []byte      // Source code associated with a contract
+
+	Hash  common.Hash // Hash of the current entry being iterated (nil if not standalone)
 	Entry interface{} // Current state entry being iterated (internal representation)
 }
 
@@ -103,6 +106,7 @@ func (it *NodeIterator) step() {
 		it.dataIt = nil
 	}
 	if bytes.Compare(account.CodeHash, emptyCodeHash) != 0 {
+		it.codeHash = common.BytesToHash(account.CodeHash)
 		it.code, err = it.state.db.Get(account.CodeHash)
 		if err != nil {
 			panic(fmt.Sprintf("code %x: %v", account.CodeHash, err))
@@ -114,7 +118,7 @@ func (it *NodeIterator) step() {
 // The method returns whether there are any more data left for inspection.
 func (it *NodeIterator) retrieve() bool {
 	// Clear out any previously set values
-	it.Entry = nil
+	it.Hash, it.Entry = common.Hash{}, nil
 
 	// If the iteration's done, return no available data
 	if it.state == nil {
@@ -123,11 +127,11 @@ func (it *NodeIterator) retrieve() bool {
 	// Otherwise retrieve the current entry
 	switch {
 	case it.dataIt != nil:
-		it.Entry = it.dataIt.Node
+		it.Hash, it.Entry = it.dataIt.Hash, it.dataIt.Node
 	case it.code != nil:
-		it.Entry = it.code
+		it.Hash, it.Entry = it.codeHash, it.code
 	case it.stateIt != nil:
-		it.Entry = it.stateIt.Node
+		it.Hash, it.Entry = it.stateIt.Hash, it.stateIt.Node
 	}
 	return true
 }
