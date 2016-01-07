@@ -90,6 +90,7 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
+	b.statedb.StartRecord(tx.Hash(), common.Hash{}, len(b.txs))
 	_, gas, err := ApplyMessage(NewEnv(b.statedb, nil, tx, b.header), tx, b.gasPool)
 	if err != nil {
 		panic(err)
@@ -97,11 +98,15 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	root := b.statedb.IntermediateRoot()
 	b.header.GasUsed.Add(b.header.GasUsed, gas)
 	receipt := types.NewReceipt(root.Bytes(), b.header.GasUsed)
-	logs := b.statedb.GetLogs(tx.Hash())
-	receipt.Logs = logs
+	receipt.Logs = b.statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
+}
+
+// Number returns the block number of the block being generated.
+func (b *BlockGen) Number() *big.Int {
+	return new(big.Int).Set(b.header.Number)
 }
 
 // AddUncheckedReceipts forcefully adds a receipts to the block without a
@@ -220,7 +225,7 @@ func newCanonical(n int, full bool) (ethdb.Database, *BlockChain, error) {
 	evmux := &event.TypeMux{}
 
 	// Initialize a fresh chain with only a genesis block
-	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+	genesis, _ := WriteTestNetGenesisBlock(db)
 
 	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
 	// Create and inject the requested chain

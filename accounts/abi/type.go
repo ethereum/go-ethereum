@@ -31,6 +31,7 @@ const (
 	BoolTy
 	SliceTy
 	AddressTy
+	HashTy
 	RealTy
 )
 
@@ -121,7 +122,7 @@ func NewType(t string) (typ Type, err error) {
 			typ.Kind = reflect.Invalid
 		case "address":
 			typ.Kind = reflect.Slice
-			typ.Type = byte_ts
+			typ.Type = address_t
 			typ.Size = 20
 			typ.T = AddressTy
 		case "string":
@@ -130,6 +131,11 @@ func NewType(t string) (typ Type, err error) {
 			if vsize > 0 {
 				typ.Size = 32
 			}
+		case "hash":
+			typ.Kind = reflect.Slice
+			typ.Size = 32
+			typ.Type = hash_t
+			typ.T = HashTy
 		case "bytes":
 			typ.Kind = reflect.Slice
 			typ.Type = byte_ts
@@ -206,9 +212,9 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 		}
 	case reflect.Array:
 		if v, ok := value.Interface().(common.Address); ok {
-			return t.pack(v[:])
+			return common.LeftPadBytes(v[:], 32), nil
 		} else if v, ok := value.Interface().(common.Hash); ok {
-			return t.pack(v[:])
+			return v[:], nil
 		}
 	}
 

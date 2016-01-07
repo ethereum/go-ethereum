@@ -80,6 +80,10 @@ func Close() {
 	// stop event producer
 	cancel_comm <- true
 	set_event(interrupt)
+	select {
+		case <-input_comm:
+		default:
+	}
 	<-cancel_done_comm
 
 	set_console_cursor_info(out, &orig_cursor_info)

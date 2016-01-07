@@ -158,6 +158,7 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.WhisperEnabledFlag,
 			utils.NatspecEnabledFlag,
+			utils.IPCExperimental,
 		},
 	},
 	{

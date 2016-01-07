@@ -327,6 +327,7 @@ func (self *worker) wait() {
 				go func(block *types.Block, logs vm.Logs, receipts []*types.Receipt) {
 					self.mux.Post(core.NewMinedBlockEvent{block})
 					self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
+
 					if stat == core.CanonStatTy {
 						self.mux.Post(core.ChainHeadEvent{block})
 						self.mux.Post(logs)

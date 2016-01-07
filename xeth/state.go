@@ -45,8 +45,7 @@ func (self *State) SafeGet(addr string) *Object {
 func (self *State) safeGet(addr string) *state.StateObject {
 	object := self.state.GetStateObject(common.HexToAddress(addr))
 	if object == nil {
-		object = state.NewStateObject(common.HexToAddress(addr), self.xeth.backend.ChainDb())
+		object = state.NewStateObject(common.HexToAddress(addr), self.xeth.EthereumService().ChainDb())
 	}
-
 	return object
 }

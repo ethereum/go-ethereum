@@ -582,3 +582,17 @@ func GetMipmapBloom(db ethdb.Database, number, level uint64) types.Bloom {
 	bloomDat, _ := db.Get(mipmapKey(number, level))
 	return types.BytesToBloom(bloomDat)
 }
+
+// GetBlockChainVersion reads the version number from db.
+func GetBlockChainVersion(db ethdb.Database) int {
+	var vsn uint
+	enc, _ := db.Get([]byte("BlockchainVersion"))
+	rlp.DecodeBytes(enc, &vsn)
+	return int(vsn)
+}
+
+// WriteBlockChainVersion writes vsn as the version number to db.
+func WriteBlockChainVersion(db ethdb.Database, vsn int) {
+	enc, _ := rlp.EncodeToBytes(uint(vsn))
+	db.Put([]byte("BlockchainVersion"), enc)
+}

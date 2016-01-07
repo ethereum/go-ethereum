@@ -149,11 +149,7 @@ func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*Bl
 
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
-		reader, err := NewDefaultGenesisReader()
-		if err != nil {
-			return nil, err
-		}
-		bc.genesisBlock, err = WriteGenesisBlock(chainDb, reader)
+		bc.genesisBlock, err = WriteDefaultGenesisBlock(chainDb)
 		if err != nil {
 			return nil, err
 		}
@@ -997,6 +993,18 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 				glog.Fatal(errs[index])
 				return
 			}
+			if err := WriteTransactions(self.chainDb, block); err != nil {
+				errs[index] = fmt.Errorf("failed to write individual transactions: %v", err)
+				atomic.AddInt32(&failed, 1)
+				glog.Fatal(errs[index])
+				return
+			}
+			if err := WriteReceipts(self.chainDb, receipts); err != nil {
+				errs[index] = fmt.Errorf("failed to write individual receipts: %v", err)
+				atomic.AddInt32(&failed, 1)
+				glog.Fatal(errs[index])
+				return
+			}
 			atomic.AddInt32(&stats.processed, 1)
 		}
 	}
@@ -1257,6 +1265,17 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		oldStart    = oldBlock
 		newStart    = newBlock
 		deletedTxs  types.Transactions
+		deletedLogs vm.Logs
+		// collectLogs collects the logs that were generated during the
+		// processing of the block that corresponds with the given hash.
+		// These logs are later announced as deleted.
+		collectLogs = func(h common.Hash) {
+			// Coalesce logs
+			receipts := GetBlockReceipts(self.chainDb, h)
+			for _, receipt := range receipts {
+				deletedLogs = append(deletedLogs, receipt.Logs...)
+			}
+		}
 	)
 
 	// first reduce whoever is higher bound
@@ -1264,6 +1283,8 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// reduce old chain
 		for oldBlock = oldBlock; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = self.GetBlock(oldBlock.ParentHash()) {
 			deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
+
+			collectLogs(oldBlock.Hash())
 		}
 	} else {
 		// reduce new chain and append new chain blocks for inserting later on
@@ -1286,6 +1307,7 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 		newChain = append(newChain, newBlock)
 		deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
+		collectLogs(oldBlock.Hash())
 
 		oldBlock, newBlock = self.GetBlock(oldBlock.ParentHash()), self.GetBlock(newBlock.ParentHash())
 		if oldBlock == nil {
@@ -1319,7 +1341,6 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		if err := WriteMipmapBloom(self.chainDb, block.NumberU64(), receipts); err != nil {
 			return err
 		}
-
 		addedTxs = append(addedTxs, block.Transactions()...)
 	}
 
@@ -1333,7 +1354,12 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 	// Must be posted in a goroutine because of the transaction pool trying
 	// to acquire the chain manager lock
-	go self.eventMux.Post(RemovedTransactionEvent{diff})
+	if len(diff) > 0 {
+		go self.eventMux.Post(RemovedTransactionEvent{diff})
+	}
+	if len(deletedLogs) > 0 {
+		go self.eventMux.Post(RemovedLogEvent{deletedLogs})
+	}
 
 	return nil
 }

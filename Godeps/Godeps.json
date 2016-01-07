@@ -55,7 +55,7 @@
 		},
 		{
 			"ImportPath": "github.com/nsf/termbox-go",
-			"Rev": "675ffd907b7401b8a709a5ef2249978af5616bb2"
+			"Rev": "ca2931516914070bb7f934c83e408689cea8dfb7"
 		},
 		{
 			"ImportPath": "github.com/pborman/uuid",
@@ -100,6 +100,10 @@
 		{
 			"ImportPath": "golang.org/x/crypto/scrypt",
 			"Rev": "4ed45ec682102c643324fae5dff8dab085b6c300"
+		},
+		{
+			"ImportPath": "golang.org/x/net/context",
+			"Rev": "e0403b4e005737430c05a57aac078479844f919c"
 		},
 		{
 			"ImportPath": "golang.org/x/net/html",

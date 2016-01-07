@@ -72,6 +72,12 @@ var (
 	input_comm     = make(chan input_event)
 	interrupt_comm = make(chan struct{})
 	intbuf         = make([]byte, 0, 16)
+
+	// grayscale indexes
+	grayscale = []Attribute{
+		0, 17, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244,
+		245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 232,
+	}
 )
 
 func write_cursor(x, y int) {
@@ -171,17 +177,17 @@ func send_attr(fg, bg Attribute) {
 	case OutputGrayscale:
 		fgcol = fg & 0x1F
 		bgcol = bg & 0x1F
-		if fgcol > 24 {
+		if fgcol > 26 {
 			fgcol = ColorDefault
 		}
-		if bgcol > 24 {
+		if bgcol > 26 {
 			bgcol = ColorDefault
 		}
 		if fgcol != ColorDefault {
-			fgcol += 0xe8
+			fgcol = grayscale[fgcol]
 		}
 		if bgcol != ColorDefault {
-			bgcol += 0xe8
+			bgcol = grayscale[bgcol]
 		}
 	default:
 		fgcol = fg & 0x0F

@@ -44,6 +44,10 @@ type Account struct {
 	Address common.Address
 }
 
+func (acc *Account) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + acc.Address.Hex() + `"`), nil
+}
+
 type Manager struct {
 	keyStore crypto.KeyStore
 	unlocked map[common.Address]*unlocked
@@ -87,9 +91,30 @@ func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) 
 	return signature, err
 }
 
+func (am *Manager) GetUnlocked(addr common.Address) (prvkey *ecdsa.PrivateKey, err error) {
+	am.mutex.RLock()
+	defer am.mutex.RUnlock()
+	unlockedKey, found := am.unlocked[addr]
+	if !found {
+		return nil, ErrLocked
+	}
+	return unlockedKey.PrivateKey, nil
+}
+
 // Unlock unlocks the given account indefinitely.
 func (am *Manager) Unlock(addr common.Address, keyAuth string) error {
 	return am.TimedUnlock(addr, keyAuth, 0)
+}
+
+func (am *Manager) Lock(addr common.Address) error {
+	am.mutex.Lock()
+	if unl, found := am.unlocked[addr]; found {
+		am.mutex.Unlock()
+		am.expire(addr, unl, time.Duration(0) * time.Nanosecond)
+	} else {
+		am.mutex.Unlock()
+	}
+	return nil
 }
 
 // TimedUnlock unlocks the account with the given address. The account

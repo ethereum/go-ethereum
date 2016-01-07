@@ -51,7 +51,7 @@ func thePow() pow.PoW {
 
 func theBlockChain(db ethdb.Database, t *testing.T) *BlockChain {
 	var eventMux event.TypeMux
-	WriteTestNetGenesisBlock(db, 0)
+	WriteTestNetGenesisBlock(db)
 	blockchain, err := NewBlockChain(db, thePow(), &eventMux)
 	if err != nil {
 		t.Error("failed creating blockchain:", err)
@@ -506,7 +506,7 @@ func testReorgShort(t *testing.T, full bool) {
 func testReorg(t *testing.T, first, second []int, td int64, full bool) {
 	// Create a pristine block chain
 	db, _ := ethdb.NewMemDatabase()
-	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+	genesis, _ := WriteTestNetGenesisBlock(db)
 	bc := chm(genesis, db)
 
 	// Insert an easy and a difficult chain afterwards
@@ -553,7 +553,7 @@ func TestBadBlockHashes(t *testing.T)  { testBadHashes(t, true) }
 func testBadHashes(t *testing.T, full bool) {
 	// Create a pristine block chain
 	db, _ := ethdb.NewMemDatabase()
-	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+	genesis, _ := WriteTestNetGenesisBlock(db)
 	bc := chm(genesis, db)
 
 	// Create a chain, ban a hash and try to import
@@ -580,7 +580,7 @@ func TestReorgBadBlockHashes(t *testing.T)  { testReorgBadHashes(t, true) }
 func testReorgBadHashes(t *testing.T, full bool) {
 	// Create a pristine block chain
 	db, _ := ethdb.NewMemDatabase()
-	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+	genesis, _ := WriteTestNetGenesisBlock(db)
 	bc := chm(genesis, db)
 
 	// Create a chain, import and ban aferwards
@@ -961,5 +961,48 @@ func TestChainTxReorgs(t *testing.T) {
 		if GetReceipt(db, tx.Hash()) == nil {
 			t.Errorf("share %d: expected receipt to be found", i)
 		}
+	}
+}
+
+func TestLogReorgs(t *testing.T) {
+	params.MinGasLimit = big.NewInt(125000)      // Minimum the gas limit may ever be.
+	params.GenesisGasLimit = big.NewInt(3141592) // Gas limit of the Genesis block.
+
+	var (
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		db, _   = ethdb.NewMemDatabase()
+		// this code generates a log
+		code = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
+	)
+	genesis := WriteGenesisBlockForTesting(db,
+		GenesisAccount{addr1, big.NewInt(10000000000000)},
+	)
+
+	evmux := &event.TypeMux{}
+	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
+
+	subs := evmux.Subscribe(RemovedLogEvent{})
+	chain, _ := GenerateChain(genesis, db, 2, func(i int, gen *BlockGen) {
+		if i == 1 {
+			tx, err := types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), big.NewInt(1000000), new(big.Int), code).SignECDSA(key1)
+			if err != nil {
+				t.Fatalf("failed to create tx: %v", err)
+			}
+			gen.AddTx(tx)
+		}
+	})
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+
+	chain, _ = GenerateChain(genesis, db, 3, func(i int, gen *BlockGen) {})
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatalf("failed to insert forked chain: %v", err)
+	}
+
+	ev := <-subs.Chan()
+	if len(ev.Data.(RemovedLogEvent).Logs) == 0 {
+		t.Error("expected logs")
 	}
 }

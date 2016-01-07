@@ -351,7 +351,7 @@ func PollEvent() Event {
 // terminal's window size in characters). But it doesn't always match the size
 // of the terminal window, after the terminal size has changed, the internal
 // back buffer will get in sync only after Clear or Flush function calls.
-func Size() (int, int) {
+func Size() (width int, height int) {
 	return termw, termh
 }
 
@@ -380,6 +380,12 @@ func SetInputMode(mode InputMode) InputMode {
 	if mode == InputCurrent {
 		return input_mode
 	}
+	if mode&(InputEsc|InputAlt) == 0 {
+		mode |= InputEsc
+	}
+	if mode&(InputEsc|InputAlt) == InputEsc|InputAlt {
+		mode &^= InputAlt
+	}
 	if mode&InputMouse != 0 {
 		out.WriteString(funcs[t_enter_mouse])
 	} else {
@@ -391,6 +397,7 @@ func SetInputMode(mode InputMode) InputMode {
 }
 
 // Sets the termbox output mode. Termbox has four output options:
+//
 // 1. OutputNormal => [1..8]
 //    This mode provides 8 different colors:
 //        black, red, green, yellow, blue, magenta, cyan, white
@@ -402,10 +409,10 @@ func SetInputMode(mode InputMode) InputMode {
 //
 // 2. Output256 => [1..256]
 //    In this mode you can leverage the 256 terminal mode:
-//    0x00 - 0x07: the 8 colors as in OutputNormal
-//    0x08 - 0x0f: Color* | AttrBold
-//    0x10 - 0xe7: 216 different colors
-//    0xe8 - 0xff: 24 different shades of grey
+//    0x01 - 0x08: the 8 colors as in OutputNormal
+//    0x09 - 0x10: Color* | AttrBold
+//    0x11 - 0xe8: 216 different colors
+//    0xe9 - 0x1ff: 24 different shades of grey
 //
 //    Example usage:
 //        SetCell(x, y, '@', 184, 240);
@@ -415,11 +422,12 @@ func SetInputMode(mode InputMode) InputMode {
 //    This mode supports the 3rd range of the 256 mode only.
 //    But you dont need to provide an offset.
 //
-// 4. OutputGrayscale => [1..24]
-//    This mode supports the 4th range of the 256 mode only.
+// 4. OutputGrayscale => [1..26]
+//    This mode supports the 4th range of the 256 mode
+//    and black and white colors from 3th range of the 256 mode
 //    But you dont need to provide an offset.
 //
-// In all modes, 0 represents the default color.
+// In all modes, 0x00 represents the default color.
 //
 // `go run _demos/output.go` to see its impact on your terminal.
 //

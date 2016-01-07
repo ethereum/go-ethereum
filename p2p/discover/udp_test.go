@@ -69,7 +69,7 @@ func newUDPTest(t *testing.T) *udpTest {
 		remotekey:  newkey(),
 		remoteaddr: &net.UDPAddr{IP: net.IP{1, 2, 3, 4}, Port: 30303},
 	}
-	test.table, test.udp = newUDP(test.localkey, test.pipe, nil, "")
+	test.table, test.udp, _ = newUDP(test.localkey, test.pipe, nil, "")
 	return test
 }
 
@@ -167,16 +167,17 @@ func TestUDP_responseTimeouts(t *testing.T) {
 		binary.BigEndian.PutUint64(p.from[:], uint64(i))
 		if p.ptype <= 128 {
 			p.errc = timeoutErr
+			test.udp.addpending <- p
 			nTimeouts++
 		} else {
 			p.errc = nilErr
+			test.udp.addpending <- p
 			time.AfterFunc(randomDuration(60*time.Millisecond), func() {
 				if !test.udp.handleReply(p.from, p.ptype, nil) {
 					t.Logf("not matched: %v", p)
 				}
 			})
 		}
-		test.udp.addpending <- p
 		time.Sleep(randomDuration(30 * time.Millisecond))
 	}
 
@@ -243,7 +244,7 @@ func TestUDP_findnode(t *testing.T) {
 
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
-	test.table.db.updateNode(newNode(
+	test.table.db.updateNode(NewNode(
 		PubkeyID(&test.remotekey.PublicKey),
 		test.remoteaddr.IP,
 		uint16(test.remoteaddr.Port),

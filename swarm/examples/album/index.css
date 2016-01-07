@@ -1,0 +1,291 @@
+/* General reset */
+html, body
+{
+  overflow: hidden; /* IE<9 */
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+img
+{
+  border: none;
+}
+
+/* Main gallery elements */
+#gallery h2
+{
+  margin: 1em;
+  font-family: monospace;
+}
+
+#gallery
+{
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #111;
+}
+
+#gallery.no-cursor *
+{
+  cursor: none !important;
+}
+
+#gallery a, #gallery a:active, #gallery a:focus
+{
+  outline: none;
+}
+
+#gallery #background
+{
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#gallery #noise
+{
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url(noise.png);
+  background-repeat: repeat;
+}
+
+#gallery #content
+{
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+#gallery #flash
+{
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+}
+
+/* Main image */
+#gallery #content img.current
+{
+  box-shadow: 0 0 2.5em rgba(0, 0, 0, 0.5);
+  -moz-box-shadow: 0 0 2.5em rgba(0, 0, 0, 0.5);
+  -webkit-box-shadow: 0 0 2.5em rgba(0, 0, 0, 0.5);
+}
+
+/* Header */
+#gallery #content #header
+{
+  -webkit-user-select: text;
+  -khtml-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: #fff;
+  background: #111; /* IE<9 */
+  background: rgba(0, 0, 0, 0.7);
+  font-family: sans-serif;
+  padding: 0.5em;
+}
+
+#gallery #content #header img
+{
+  vertical-align: middle;
+  height: 1em;
+}
+
+#gallery #content #header #throbber
+{
+  height: 100%;
+}
+
+#gallery #content #header a
+{
+  text-decoration: none;
+  color: #fff;
+}
+
+#gallery #content #header a:hover
+{
+  text-decoration: underline;
+}
+
+/* Navigation arrows */
+#gallery #content #left,
+#gallery #content #right
+{
+  position: absolute;
+  width: 5%;
+  min-width: 2.5em;
+  top: 0;
+  bottom: 0;
+}
+
+#gallery #content #left
+{
+  left: 0;
+}
+
+#gallery #content #right
+{
+  right: 0;
+}
+
+#gallery #content #left div,
+#gallery #content #right div
+{
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  opacity: 0.3;
+  filter: alpha(opacity=30);
+}
+
+#gallery #content #left div:hover,
+#gallery #content #right div:hover
+{
+  opacity: 0.6;
+  filter: alpha(opacity=60);
+}
+
+#gallery #content #left img,
+#gallery #content #right img
+{
+  position: absolute;
+  display: block;
+  margin: auto;
+  top: 0;
+  bottom: 0;
+}
+
+#gallery #content #left img
+{
+  left: 25%;
+}
+
+#gallery #content #right img
+{
+  right: 25%;
+}
+
+/* Thumbnail list */
+#gallery #list
+{
+  position: absolute;
+  background: rgba(255, 255, 255, 0.1);
+  padding-top: 0.5em;
+  padding-left: 0.5em;
+
+  box-shadow: 0 0 1em rgba(0, 0, 0, 0.5);
+  -moz-box-shadow: 0 0 1em rgba(0, 0, 0, 0.5);
+  -webkit-box-shadow: 0 0 1em rgba(0, 0, 0, 0.5);
+}
+
+#gallery #list:focus
+{
+  outline: none;
+}
+
+/* Invidivual thumbnails */
+#gallery #list .thumb
+{
+  display: inline-block;
+  margin-bottom: 0.5em;
+  margin-right: 0.5em;
+
+  box-shadow: 0.25em 0.25em 0.25em rgba(0, 0, 0, 0.5);
+  -moz-box-shadow: 0.25em 0.25em 0.25em rgba(0, 0, 0, 0.5);
+  -webkit-box-shadow: 0.25em 0.25em 0.25em rgba(0, 0, 0, 0.5);
+}
+
+#gallery #list .thumb a
+{
+  display: block;
+  position: relative;
+  border: 2px solid #111
+}
+
+#gallery #list .thumb.current a
+{
+  border: 2px solid #f00;
+}
+
+#gallery #list .thumb a:hover,
+#gallery #list .thumb a:focus
+{
+  border: 2px solid #fff;
+}
+
+#gallery #list .thumb.current a:hover,
+#gallery #list .thumb.current a:focus
+{
+  border: 2px solid #f00;
+}
+
+/* Thumbnail styles */
+#gallery #list .thumb .ovr
+{
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#gallery #list .thumb.cut-left .ovr
+{
+  background: url(cut-left.png) top left repeat-y;
+}
+
+#gallery #list .thumb.cut-right .ovr
+{
+  background: url(cut-right.png) repeat-y top right;
+}
+
+#gallery #list .thumb.cut-left.cut-right .ovr
+{
+  background: url(cut-left.png) top left repeat-y, url(cut-right.png) repeat-y top right;
+}
+
+#gallery #list .thumb.cut-top .ovr
+{
+  background: url(cut-top.png) top left repeat-x;
+}
+
+#gallery #list .thumb.cut-bottom .ovr
+{
+  background: url(cut-right.png) repeat-x bottom left;
+}
+
+#gallery #list .thumb.cut-top.cut-bottom .ovr
+{
+  background: url(cut-left.png) top left repeat-x, url(cut-right.png) repeat-x bottom left;
+}
+
+#gallery #list .thumb.movie .ovr
+{
+  background: url(cut-mov.png) top left repeat-y, url(cut-mov.png) top right repeat-y;
+}
