@@ -34,11 +34,13 @@ type NodeIterator struct {
 	stateIt *trie.NodeIterator // Primary iterator for the global state trie
 	dataIt  *trie.NodeIterator // Secondary iterator for the data trie of a contract
 
-	codeHash common.Hash // Hash of the contract source code
-	code     []byte      // Source code associated with a contract
+	accountHash common.Hash // Hash of the node containing the account
+	codeHash    common.Hash // Hash of the contract source code
+	code        []byte      // Source code associated with a contract
 
-	Hash  common.Hash // Hash of the current entry being iterated (nil if not standalone)
-	Entry interface{} // Current state entry being iterated (internal representation)
+	Hash   common.Hash // Hash of the current entry being iterated (nil if not standalone)
+	Entry  interface{} // Current state entry being iterated (internal representation)
+	Parent common.Hash // Hash of the first full ancestor node (nil if current is the root)
 }
 
 // NewNodeIterator creates an post-order state node iterator.
@@ -112,6 +114,7 @@ func (it *NodeIterator) step() {
 			panic(fmt.Sprintf("code %x: %v", account.CodeHash, err))
 		}
 	}
+	it.accountHash = it.stateIt.Parent
 }
 
 // retrieve pulls and caches the current state entry the iterator is traversing.
@@ -127,11 +130,14 @@ func (it *NodeIterator) retrieve() bool {
 	// Otherwise retrieve the current entry
 	switch {
 	case it.dataIt != nil:
-		it.Hash, it.Entry = it.dataIt.Hash, it.dataIt.Node
+		it.Hash, it.Entry, it.Parent = it.dataIt.Hash, it.dataIt.Node, it.dataIt.Parent
+		if it.Parent == (common.Hash{}) {
+			it.Parent = it.accountHash
+		}
 	case it.code != nil:
-		it.Hash, it.Entry = it.codeHash, it.code
+		it.Hash, it.Entry, it.Parent = it.codeHash, it.code, it.accountHash
 	case it.stateIt != nil:
-		it.Hash, it.Entry = it.stateIt.Hash, it.stateIt.Node
+		it.Hash, it.Entry, it.Parent = it.stateIt.Hash, it.stateIt.Node, it.stateIt.Parent
 	}
 	return true
 }
