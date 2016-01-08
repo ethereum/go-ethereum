@@ -38,8 +38,21 @@ type (
 		Val node
 	}
 	hashNode  []byte
-	valueNode []byte
+	valueNode struct {
+		Value []byte
+		refs  [][]byte
+	}
 )
+
+func (n valueNode) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, n.Value)
+}
+
+func (n valueNode) DecodeRLP(s *rlp.Stream) (err error) {
+	fmt.Println("Decoding value node")
+	n.Value, err = s.Bytes()
+	return
+}
 
 // Pretty printing.
 func (n fullNode) String() string  { return n.fstring("") }
@@ -65,7 +78,7 @@ func (n hashNode) fstring(ind string) string {
 	return fmt.Sprintf("<%x> ", []byte(n))
 }
 func (n valueNode) fstring(ind string) string {
-	return fmt.Sprintf("%x ", []byte(n))
+	return fmt.Sprintf("%x ", []byte(n.Value))
 }
 
 func mustDecodeNode(dbkey, buf []byte) node {
@@ -109,7 +122,7 @@ func decodeShort(buf []byte) (node, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid value node: %v", err)
 		}
-		return shortNode{key, valueNode(val)}, nil
+		return shortNode{key, valueNode{Value: val}}, nil
 	}
 	r, _, err := decodeRef(rest)
 	if err != nil {
@@ -132,7 +145,7 @@ func decodeFull(buf []byte) (fullNode, error) {
 		return n, err
 	}
 	if len(val) > 0 {
-		n[16] = valueNode(val)
+		n[16] = valueNode{Value: val}
 	}
 	return n, nil
 }

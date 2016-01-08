@@ -86,11 +86,11 @@ func (self *Iterator) next(node interface{}, key []byte, isIterStart bool) []byt
 			switch bytes.Compare([]byte(k), key) {
 			case 0:
 				if isIterStart {
-					self.Value = vnode
+					self.Value = vnode.Value
 					return k
 				}
 			case 1:
-				self.Value = vnode
+				self.Value = vnode.Value
 				return k
 			}
 		} else {
@@ -125,13 +125,13 @@ func (self *Iterator) key(node interface{}) []byte {
 		// Leaf node
 		k := remTerm(node.Key)
 		if vnode, ok := node.Val.(valueNode); ok {
-			self.Value = vnode
+			self.Value = vnode.Value
 			return k
 		}
 		return append(k, self.key(node.Val)...)
 	case fullNode:
 		if node[16] != nil {
-			self.Value = node[16].(valueNode)
+			self.Value = node[16].(valueNode).Value
 			return []byte{16}
 		}
 		for i := 0; i < 16; i++ {
@@ -265,8 +265,8 @@ func (it *NodeIterator) retrieve() bool {
 	state := it.stack[len(it.stack)-1]
 
 	it.Hash, it.Node, it.Parent = state.hash, state.node, state.parent
-	if value, ok := it.Node.(valueNode); ok {
-		it.Leaf, it.LeafBlob = true, []byte(value)
+	if node, ok := it.Node.(valueNode); ok {
+		it.Leaf, it.LeafBlob = true, []byte(node.Value)
 	}
 	return true
 }

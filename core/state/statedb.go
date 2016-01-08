@@ -206,15 +206,17 @@ func (self *StateDB) Delete(addr common.Address) bool {
 
 // Update the given state object and apply it to state trie
 func (self *StateDB) UpdateStateObject(stateObject *StateObject) {
+	refs := [][]byte{stateObject.Root()}
 	if len(stateObject.code) > 0 {
 		self.db.Put(stateObject.codeHash, stateObject.code)
+		refs = append(refs, stateObject.codeHash)
 	}
 	addr := stateObject.Address()
 	data, err := rlp.EncodeToBytes(stateObject)
 	if err != nil {
 		panic(fmt.Errorf("can't encode object at %x: %v", addr[:], err))
 	}
-	self.trie.Update(addr[:], data)
+	self.trie.UpdateIndexed(addr[:], data, refs)
 }
 
 // Delete the given state object and delete it from the state trie
