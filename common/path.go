@@ -63,13 +63,14 @@ func AbsolutePath(Datadir string, filename string) string {
 	return filepath.Join(Datadir, filename)
 }
 
-func HomeDir() (home string) {
-	if usr, err := user.Current(); err == nil {
-		home = usr.HomeDir
-	} else {
-		home = os.Getenv("HOME")
+func HomeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
 	}
-	return
+	if usr, err := user.Current(); err == nil {
+		return usr.HomeDir
+	}
+	return ""
 }
 
 func DefaultDataDir() string {
