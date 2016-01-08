@@ -109,6 +109,34 @@ func (t *SecureTrie) TryUpdate(key, value []byte) error {
 	return nil
 }
 
+// UpdateIndexed is an extended version of Update, where state trie index entries
+// are also generated for all entities referencing the current node.
+//
+// The value bytes must not be modified by the caller while they are
+// stored in the trie.
+func (t *SecureTrie) UpdateIndexed(key, value []byte, refs [][]byte) {
+	if err := t.TryUpdateIndexed(key, value, refs); err != nil && glog.V(logger.Error) {
+		glog.Errorf("Unhandled trie error: %v", err)
+	}
+}
+
+// TryUpdateIndexed is an extended version of Update, where state trie index
+// entries are also generated for all entities referencing the current node.
+//
+// The value bytes must not be modified by the caller while they are
+// stored in the trie.
+//
+// If a node was not found in the database, a MissingNodeError is returned.
+func (t *SecureTrie) TryUpdateIndexed(key, value []byte, refs [][]byte) error {
+	hk := t.hashKey(key)
+	err := t.Trie.TryUpdateIndexed(hk, value, refs)
+	if err != nil {
+		return err
+	}
+	t.Trie.db.Put(t.secKey(hk), key)
+	return nil
+}
+
 // Delete removes any existing value for key from the trie.
 func (t *SecureTrie) Delete(key []byte) {
 	if err := t.TryDelete(key); err != nil && glog.V(logger.Error) {

@@ -72,8 +72,10 @@ func TestNodeIteratorCoverage(t *testing.T) {
 		}
 	}
 	for _, key := range db.(*ethdb.MemDatabase).Keys() {
-		if _, ok := hashes[common.BytesToHash(key)]; !ok {
-			t.Errorf("state entry not reported %x", key)
+		if len(key) == common.HashLength {
+			if _, ok := hashes[common.BytesToHash(key)]; !ok {
+				t.Errorf("state entry not reported %x", key)
+			}
 		}
 	}
 }

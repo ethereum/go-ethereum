@@ -25,8 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// Tests that the node iterator indeed walks over the entire database contents.
-func TestNodeIteratorCoverage(t *testing.T) {
+// Tests that all index entries are stored in the database after a state commit.
+func TestStateIndex(t *testing.T) {
 	// Create some arbitrary test state to iterate
 	db, root, _ := makeTestState()
 
@@ -34,28 +34,24 @@ func TestNodeIteratorCoverage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create state trie at %x: %v", root, err)
 	}
-	// Gather all the node hashes found by the iterator
-	hashes := make(map[common.Hash]struct{})
+	// Gather all the indexes that should be present in the database
+	indexes := make(map[string]struct{})
 	for it := NewNodeIterator(state); it.Next(); {
-		if it.Hash != (common.Hash{}) {
-			hashes[it.Hash] = struct{}{}
+		if (it.Hash != common.Hash{}) && (it.Parent != common.Hash{}) {
+			indexes[string(trie.ParentReferenceIndexKey(it.Parent.Bytes(), it.Hash.Bytes()))] = struct{}{}
 		}
 	}
-	// Cross check the hashes and the database itself
-	for hash, _ := range hashes {
-		if _, err := db.Get(hash.Bytes()); err != nil {
-			t.Errorf("failed to retrieve reported node %x: %v", hash, err)
+	// Cross check the indexes and the database itself
+	for index, _ := range indexes {
+		if _, err := db.Get([]byte(index)); err != nil {
+			t.Errorf("failed to retrieve reported index %x: %v", index, err)
 		}
 	}
 	for _, key := range db.(*ethdb.MemDatabase).Keys() {
-		if bytes.HasPrefix(key, []byte("secure-key-")) {
-			continue
-		}
 		if bytes.HasPrefix(key, trie.ParentReferenceIndexPrefix) {
-			continue
-		}
-		if _, ok := hashes[common.BytesToHash(key)]; !ok {
-			t.Errorf("state entry not reported %x", key)
+			if _, ok := indexes[string(key)]; !ok {
+				t.Errorf("index entry not reported %x", key)
+			}
 		}
 	}
 }

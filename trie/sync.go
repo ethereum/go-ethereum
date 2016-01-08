@@ -34,6 +34,8 @@ type request struct {
 	depth   int        // Depth level within the trie the node is located to prioritise DFS
 	deps    int        // Number of dependencies before allowed to commit this node
 
+	externals []common.Hash // External children of this node to index in addition to internal ones
+
 	callback TrieSyncLeafCallback // Callback to invoke if a leaf node it reached on this branch
 }
 
@@ -94,6 +96,7 @@ func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, c
 			panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
 		}
 		ancestor.deps++
+		ancestor.externals = append(ancestor.externals, root)
 		req.parents = append(req.parents, ancestor)
 	}
 	s.schedule(req)
@@ -123,6 +126,7 @@ func (s *TrieSync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) 
 			panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
 		}
 		ancestor.deps++
+		ancestor.externals = append(ancestor.externals, hash)
 		req.parents = append(req.parents, ancestor)
 	}
 	s.schedule(req)
@@ -229,7 +233,7 @@ func (s *TrieSync) children(req *request) ([]*request, error) {
 		// Notify any external watcher of a new key/value node
 		if req.callback != nil {
 			if node, ok := (*child.node).(valueNode); ok {
-				if err := req.callback(node, req.hash); err != nil {
+				if err := req.callback(node.Value, req.hash); err != nil {
 					return nil, err
 				}
 			}
@@ -266,7 +270,17 @@ func (s *TrieSync) commit(req *request, batch ethdb.Batch) (err error) {
 			err = batch.Write()
 		}()
 	}
-	// Write the node content to disk
+	// Write the node content and indices to disk
+	if req.object != nil {
+		if err := storeParentReferences(req.hash[:], *req.object, batch); err != nil {
+			return err
+		}
+	}
+	for _, ext := range req.externals {
+		if err := storeParentReferenceEntry(req.hash[:], ext[:], batch); err != nil {
+			return err
+		}
+	}
 	if err := batch.Put(req.hash[:], req.data); err != nil {
 		return err
 	}
