@@ -153,9 +153,10 @@ func (self *Iterator) key(node interface{}) []byte {
 // nodeIteratorState represents the iteration state at one particular node of the
 // trie, which can be resumed at a later invocation.
 type nodeIteratorState struct {
-	hash  common.Hash // Hash of the node being iterated (nil if not standalone)
-	node  node        // Trie node being iterated
-	child int         // Child to be processed next
+	hash   common.Hash // Hash of the node being iterated (nil if not standalone)
+	node   node        // Trie node being iterated
+	parent common.Hash // Hash of the first full ancestor node (nil if current is the root)
+	child  int         // Child to be processed next
 }
 
 // NodeIterator is an iterator to traverse the trie post-order.
@@ -165,6 +166,7 @@ type NodeIterator struct {
 
 	Hash     common.Hash // Hash of the current node being iterated (nil if not standalone)
 	Node     node        // Current node being iterated (internal representation)
+	Parent   common.Hash // Hash of the first full ancestor node (nil if current is the root)
 	Leaf     bool        // Flag whether the current node is a value (data) node
 	LeafBlob []byte      // Data blob contained within a leaf (otherwise nil)
 }
@@ -206,6 +208,10 @@ func (it *NodeIterator) step() {
 	// Continue iteration to the next child
 	for {
 		parent := it.stack[len(it.stack)-1]
+		ancestor := parent.hash
+		if (ancestor == common.Hash{}) {
+			ancestor = parent.parent
+		}
 		if node, ok := parent.node.(fullNode); ok {
 			// Full node, traverse all children, then the node itself
 			if parent.child >= len(node) {
@@ -213,7 +219,7 @@ func (it *NodeIterator) step() {
 			}
 			for parent.child++; parent.child < len(node); parent.child++ {
 				if current := node[parent.child]; current != nil {
-					it.stack = append(it.stack, &nodeIteratorState{node: current, child: -1})
+					it.stack = append(it.stack, &nodeIteratorState{node: current, parent: ancestor, child: -1})
 					break
 				}
 			}
@@ -223,7 +229,7 @@ func (it *NodeIterator) step() {
 				break
 			}
 			parent.child++
-			it.stack = append(it.stack, &nodeIteratorState{node: node.Val, child: -1})
+			it.stack = append(it.stack, &nodeIteratorState{node: node.Val, parent: ancestor, child: -1})
 		} else if hash, ok := parent.node.(hashNode); ok {
 			// Hash node, resolve the hash child from the database, then the node itself
 			if parent.child >= 0 {
@@ -235,7 +241,7 @@ func (it *NodeIterator) step() {
 			if err != nil {
 				panic(err)
 			}
-			it.stack = append(it.stack, &nodeIteratorState{hash: common.BytesToHash(hash), node: node, child: -1})
+			it.stack = append(it.stack, &nodeIteratorState{hash: common.BytesToHash(hash), node: node, parent: ancestor, child: -1})
 		} else {
 			break
 		}
@@ -249,7 +255,7 @@ func (it *NodeIterator) step() {
 // The method returns whether there are any more data left for inspection.
 func (it *NodeIterator) retrieve() bool {
 	// Clear out any previously set values
-	it.Hash, it.Node, it.Leaf, it.LeafBlob = common.Hash{}, nil, false, nil
+	it.Hash, it.Node, it.Parent, it.Leaf, it.LeafBlob = common.Hash{}, nil, common.Hash{}, false, nil
 
 	// If the iteration's done, return no available data
 	if it.trie == nil {
@@ -258,7 +264,7 @@ func (it *NodeIterator) retrieve() bool {
 	// Otherwise retrieve the current node and resolve leaf accessors
 	state := it.stack[len(it.stack)-1]
 
-	it.Hash, it.Node = state.hash, state.node
+	it.Hash, it.Node, it.Parent = state.hash, state.node, state.parent
 	if value, ok := it.Node.(valueNode); ok {
 		it.Leaf, it.LeafBlob = true, []byte(value)
 	}
