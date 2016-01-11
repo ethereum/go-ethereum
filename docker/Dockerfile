@@ -1,4 +1,4 @@
-FROM ubuntu:utopic
+FROM ubuntu:wily
 MAINTAINER chrisfranko
 
 
@@ -37,4 +37,4 @@ ADD supervisord.conf supervisord.conf
 EXPOSE 9656
 EXPOSE 42786
 
-ENTRYPOINT ["/usr/bin/geth"]
+ENTRYPOINT ["/usr/bin/gexp"]
