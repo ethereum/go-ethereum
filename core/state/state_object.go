@@ -118,7 +118,7 @@ func (c *StateObject) setAddr(addr []byte, value common.Hash) {
 		// if RLPing failed we better panic and not fail silently. This would be considered a consensus issue
 		panic(err)
 	}
-	c.trie.Update(addr, v)
+	c.trie.UpdateIndexed(addr, v, nil)
 }
 
 func (self *StateObject) Storage() Storage {

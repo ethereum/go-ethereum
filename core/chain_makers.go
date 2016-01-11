@@ -185,11 +185,15 @@ func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, 
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
 		h.Root = root
+		for _, receipt := range b.receipts {
+			fmt.Printf("%+v\n", receipt)
+		}
 		return types.NewBlock(h, b.txs, b.uncles, b.receipts), b.receipts
 	}
 	for i := 0; i < n; i++ {
 		header := makeHeader(parent, statedb)
 		block, receipt := genblock(i, header)
+		fmt.Printf("%x\n\n", block.Header().ReceiptHash)
 		blocks[i] = block
 		receipts[i] = receipt
 		parent = block

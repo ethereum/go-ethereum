@@ -146,30 +146,6 @@ func (t *Trie) TryGet(key []byte) ([]byte, error) {
 	return tn.(valueNode).Value, nil
 }
 
-// Update associates key with value in the trie. Subsequent calls to
-// Get will return value. If value has length zero, any existing value
-// is deleted from the trie and calls to Get will return nil.
-//
-// The value bytes must not be modified by the caller while they are
-// stored in the trie.
-func (t *Trie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
-	}
-}
-
-// TryUpdate associates key with value in the trie. Subsequent calls to
-// Get will return value. If value has length zero, any existing value
-// is deleted from the trie and calls to Get will return nil.
-//
-// The value bytes must not be modified by the caller while they are
-// stored in the trie.
-//
-// If a node was not found in the database, a MissingNodeError is returned.
-func (t *Trie) TryUpdate(key, value []byte) error {
-	return t.tryUpdateIndexed(key, value, nil)
-}
-
 // UpdateIndexed is an extended version of Update, where state trie index entries
 // are also generated for all entities referencing the current node.
 //

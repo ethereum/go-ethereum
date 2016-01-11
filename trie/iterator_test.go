@@ -37,7 +37,7 @@ func TestIterator(t *testing.T) {
 	v := make(map[string]bool)
 	for _, val := range vals {
 		v[val.k] = false
-		trie.Update([]byte(val.k), []byte(val.v))
+		trie.UpdateIndexed([]byte(val.k), []byte(val.v), nil)
 	}
 	trie.Commit()
 

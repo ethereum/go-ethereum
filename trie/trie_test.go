@@ -54,7 +54,7 @@ func TestNull(t *testing.T) {
 	var trie Trie
 	key := make([]byte, 32)
 	value := common.FromHex("0x823140710bf13990e4500136726d8b55")
-	trie.Update(key, value)
+	trie.UpdateIndexed(key, value, nil)
 	value = trie.Get(key)
 }
 
@@ -97,7 +97,7 @@ func TestMissingNode(t *testing.T) {
 	}
 
 	trie, _ = New(root, db)
-	err = trie.TryUpdate([]byte("120099"), []byte("zxcvzxcvzxcvzxcvzxcvzxcvzxcvzxcv"))
+	err = trie.TryUpdateIndexed([]byte("120099"), []byte("zxcvzxcvzxcvzxcvzxcvzxcvzxcvzxcv"), nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestMissingNode(t *testing.T) {
 	}
 
 	trie, _ = New(root, db)
-	err = trie.TryUpdate([]byte("120099"), []byte("zxcv"))
+	err = trie.TryUpdateIndexed([]byte("120099"), []byte("zxcv"), nil)
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
@@ -304,7 +304,7 @@ func paranoiaCheck(t1 *Trie) (bool, *Trie) {
 	t2 := new(Trie)
 	it := NewIterator(t1)
 	for it.Next() {
-		t2.Update(it.Key, it.Value)
+		t2.UpdateIndexed(it.Key, it.Value, nil)
 	}
 	return t2.Hash() == t1.Hash(), t2
 }
@@ -356,8 +356,8 @@ func TestOutput(t *testing.T) {
 
 func TestLargeValue(t *testing.T) {
 	trie := newEmpty()
-	trie.Update([]byte("key1"), []byte{99, 99, 99, 99})
-	trie.Update([]byte("key2"), bytes.Repeat([]byte{1}, 32))
+	trie.UpdateIndexed([]byte("key1"), []byte{99, 99, 99, 99}, nil)
+	trie.UpdateIndexed([]byte("key2"), bytes.Repeat([]byte{1}, 32), nil)
 	trie.Hash()
 
 }
@@ -374,8 +374,8 @@ func TestLargeData(t *testing.T) {
 	for i := byte(0); i < 255; i++ {
 		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
 		value2 := &kv{common.LeftPadBytes([]byte{10, i}, 32), []byte{i}, false}
-		trie.Update(value.k, value.v)
-		trie.Update(value2.k, value2.v)
+		trie.UpdateIndexed(value.k, value.v, nil)
+		trie.UpdateIndexed(value2.k, value2.v, nil)
 		vals[string(value.k)] = value
 		vals[string(value2.k)] = value2
 	}
@@ -419,7 +419,7 @@ func benchGet(b *testing.B, commit bool) {
 	k := make([]byte, 32)
 	for i := 0; i < benchElemCount; i++ {
 		binary.LittleEndian.PutUint64(k, uint64(i))
-		trie.Update(k, k)
+		trie.UpdateIndexed(k, k, nil)
 	}
 	binary.LittleEndian.PutUint64(k, benchElemCount/2)
 	if commit {
@@ -437,7 +437,7 @@ func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	k := make([]byte, 32)
 	for i := 0; i < b.N; i++ {
 		e.PutUint64(k, uint64(i))
-		trie.Update(k, k)
+		trie.UpdateIndexed(k, k, nil)
 	}
 	return trie
 }
@@ -447,7 +447,7 @@ func benchHash(b *testing.B, e binary.ByteOrder) {
 	k := make([]byte, 32)
 	for i := 0; i < benchElemCount; i++ {
 		e.PutUint64(k, uint64(i))
-		trie.Update(k, k)
+		trie.UpdateIndexed(k, k, nil)
 	}
 
 	b.ResetTimer()
@@ -473,7 +473,7 @@ func getString(trie *Trie, k string) []byte {
 }
 
 func updateString(trie *Trie, k, v string) {
-	trie.Update([]byte(k), []byte(v))
+	trie.UpdateIndexed([]byte(k), []byte(v), nil)
 }
 
 func deleteString(trie *Trie, k string) {
