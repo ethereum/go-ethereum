@@ -18,22 +18,27 @@ package trie
 
 import (
 	"bytes"
+	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
+// Iterator is a key-value trie iterator to traverse the data contents.
 type Iterator struct {
 	trie *Trie
 
-	Key   []byte
-	Value []byte
+	Key   []byte // Current data key on which the iterator is positioned on
+	Value []byte // Current data value on which the iterator is positioned on
 }
 
+// NewIterator creates a new key-value iterator.
 func NewIterator(trie *Trie) *Iterator {
 	return &Iterator{trie: trie, Key: nil}
 }
 
+// Next moves the iterator forward with one key-value entry.
 func (self *Iterator) Next() bool {
 	isIterStart := false
 	if self.Key == nil {
@@ -81,11 +86,11 @@ func (self *Iterator) next(node interface{}, key []byte, isIterStart bool) []byt
 			switch bytes.Compare([]byte(k), key) {
 			case 0:
 				if isIterStart {
-					self.Value = vnode
+					self.Value = vnode.Value
 					return k
 				}
 			case 1:
-				self.Value = vnode
+				self.Value = vnode.Value
 				return k
 			}
 		} else {
@@ -120,13 +125,13 @@ func (self *Iterator) key(node interface{}) []byte {
 		// Leaf node
 		k := remTerm(node.Key)
 		if vnode, ok := node.Val.(valueNode); ok {
-			self.Value = vnode
+			self.Value = vnode.Value
 			return k
 		}
 		return append(k, self.key(node.Val)...)
 	case fullNode:
 		if node[16] != nil {
-			self.Value = node[16].(valueNode)
+			self.Value = node[16].(valueNode).Value
 			return []byte{16}
 		}
 		for i := 0; i < 16; i++ {
@@ -142,6 +147,126 @@ func (self *Iterator) key(node interface{}) []byte {
 		}
 		return self.key(rn)
 	}
-
 	return nil
+}
+
+// nodeIteratorState represents the iteration state at one particular node of the
+// trie, which can be resumed at a later invocation.
+type nodeIteratorState struct {
+	hash   common.Hash // Hash of the node being iterated (nil if not standalone)
+	node   node        // Trie node being iterated
+	parent common.Hash // Hash of the first full ancestor node (nil if current is the root)
+	child  int         // Child to be processed next
+}
+
+// NodeIterator is an iterator to traverse the trie post-order.
+type NodeIterator struct {
+	trie  *Trie                // Trie being iterated
+	stack []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
+
+	Hash     common.Hash // Hash of the current node being iterated (nil if not standalone)
+	Node     node        // Current node being iterated (internal representation)
+	Parent   common.Hash // Hash of the first full ancestor node (nil if current is the root)
+	Leaf     bool        // Flag whether the current node is a value (data) node
+	LeafBlob []byte      // Data blob contained within a leaf (otherwise nil)
+}
+
+// NewNodeIterator creates an post-order trie iterator.
+func NewNodeIterator(trie *Trie) *NodeIterator {
+	if bytes.Compare(trie.Root(), emptyRoot.Bytes()) == 0 {
+		return new(NodeIterator)
+	}
+	return &NodeIterator{trie: trie}
+}
+
+// Next moves the iterator to the next node, returning whether there are any
+// further nodes.
+func (it *NodeIterator) Next() bool {
+	it.step()
+	return it.retrieve()
+}
+
+// step moves the iterator to the next node of the trie.
+func (it *NodeIterator) step() {
+	// Abort if we reached the end of the iteration
+	if it.trie == nil {
+		return
+	}
+	// Initialize the iterator if we've just started, or pop off the old node otherwise
+	if len(it.stack) == 0 {
+		it.stack = append(it.stack, &nodeIteratorState{node: it.trie.root, child: -1})
+		if it.stack[0].node == nil {
+			panic(fmt.Sprintf("root node missing: %x", it.trie.Root()))
+		}
+	} else {
+		it.stack = it.stack[:len(it.stack)-1]
+		if len(it.stack) == 0 {
+			it.trie = nil
+			return
+		}
+	}
+	// Continue iteration to the next child
+	for {
+		parent := it.stack[len(it.stack)-1]
+		ancestor := parent.hash
+		if (ancestor == common.Hash{}) {
+			ancestor = parent.parent
+		}
+		if node, ok := parent.node.(fullNode); ok {
+			// Full node, traverse all children, then the node itself
+			if parent.child >= len(node) {
+				break
+			}
+			for parent.child++; parent.child < len(node); parent.child++ {
+				if current := node[parent.child]; current != nil {
+					it.stack = append(it.stack, &nodeIteratorState{node: current, parent: ancestor, child: -1})
+					break
+				}
+			}
+		} else if node, ok := parent.node.(shortNode); ok {
+			// Short node, traverse the pointer singleton child, then the node itself
+			if parent.child >= 0 {
+				break
+			}
+			parent.child++
+			it.stack = append(it.stack, &nodeIteratorState{node: node.Val, parent: ancestor, child: -1})
+		} else if hash, ok := parent.node.(hashNode); ok {
+			// Hash node, resolve the hash child from the database, then the node itself
+			if parent.child >= 0 {
+				break
+			}
+			parent.child++
+
+			node, err := it.trie.resolveHash(hash, nil, nil)
+			if err != nil {
+				panic(err)
+			}
+			it.stack = append(it.stack, &nodeIteratorState{hash: common.BytesToHash(hash), node: node, parent: ancestor, child: -1})
+		} else {
+			break
+		}
+	}
+}
+
+// retrieve pulls and caches the current trie node the iterator is traversing.
+// In case of a value node, the additional leaf blob is also populated with the
+// data contents for external interpretation.
+//
+// The method returns whether there are any more data left for inspection.
+func (it *NodeIterator) retrieve() bool {
+	// Clear out any previously set values
+	it.Hash, it.Node, it.Parent, it.Leaf, it.LeafBlob = common.Hash{}, nil, common.Hash{}, false, nil
+
+	// If the iteration's done, return no available data
+	if it.trie == nil {
+		return false
+	}
+	// Otherwise retrieve the current node and resolve leaf accessors
+	state := it.stack[len(it.stack)-1]
+
+	it.Hash, it.Node, it.Parent = state.hash, state.node, state.parent
+	if node, ok := it.Node.(valueNode); ok {
+		it.Leaf, it.LeafBlob = true, []byte(node.Value)
+	}
+	return true
 }

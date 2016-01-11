@@ -143,33 +143,35 @@ func (t *Trie) TryGet(key []byte) ([]byte, error) {
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
-	return tn.(valueNode), nil
+	return tn.(valueNode).Value, nil
 }
 
-// Update associates key with value in the trie. Subsequent calls to
-// Get will return value. If value has length zero, any existing value
-// is deleted from the trie and calls to Get will return nil.
+// UpdateIndexed is an extended version of Update, where state trie index entries
+// are also generated for all entities referencing the current node.
 //
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
-func (t *Trie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil && glog.V(logger.Error) {
+func (t *Trie) UpdateIndexed(key, value []byte, refs [][]byte) {
+	if err := t.TryUpdateIndexed(key, value, refs); err != nil && glog.V(logger.Error) {
 		glog.Errorf("Unhandled trie error: %v", err)
 	}
 }
 
-// TryUpdate associates key with value in the trie. Subsequent calls to
-// Get will return value. If value has length zero, any existing value
-// is deleted from the trie and calls to Get will return nil.
+// TryUpdateIndexed is an extended version of Update, where state trie index
+// entries are also generated for all entities referencing the current node.
 //
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 //
 // If a node was not found in the database, a MissingNodeError is returned.
-func (t *Trie) TryUpdate(key, value []byte) error {
+func (t *Trie) TryUpdateIndexed(key, value []byte, refs [][]byte) error {
+	return t.tryUpdateIndexed(key, value, refs)
+}
+
+func (t *Trie) tryUpdateIndexed(key, value []byte, refs [][]byte) error {
 	k := compactHexDecode(key)
 	if len(value) != 0 {
-		n, err := t.insert(t.root, nil, k, valueNode(value))
+		n, err := t.insert(t.root, nil, k, valueNode{Value: value, refs: refs})
 		if err != nil {
 			return err
 		}
@@ -489,7 +491,7 @@ func (h *hasher) replaceChildren(n node, db DatabaseWriter) (node, error) {
 		}
 		if n.Val == nil {
 			// Ensure that nil children are encoded as empty strings.
-			n.Val = valueNode(nil)
+			n.Val = valueNode{Value: nil}
 		}
 		return n, nil
 	case fullNode:
@@ -500,11 +502,11 @@ func (h *hasher) replaceChildren(n node, db DatabaseWriter) (node, error) {
 				}
 			} else {
 				// Ensure that nil children are encoded as empty strings.
-				n[i] = valueNode(nil)
+				n[i] = valueNode{Value: nil}
 			}
 		}
 		if n[16] == nil {
-			n[16] = valueNode(nil)
+			n[16] = valueNode{Value: nil}
 		}
 		return n, nil
 	default:
@@ -530,8 +532,13 @@ func (h *hasher) store(n node, db DatabaseWriter, force bool) (node, error) {
 	h.sha.Write(h.tmp.Bytes())
 	key := hashNode(h.sha.Sum(nil))
 	if db != nil {
-		err := db.Put(key, h.tmp.Bytes())
-		return key, err
+		if err := storeParentReferences(key, n, db); err != nil {
+			return key, err
+		}
+		if err := db.Put(key, h.tmp.Bytes()); err != nil {
+			return key, err
+		}
+		return key, nil
 	}
 	return key, nil
 }

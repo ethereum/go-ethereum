@@ -79,29 +79,27 @@ func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
 	return t.Trie.TryGet(t.hashKey(key))
 }
 
-// Update associates key with value in the trie. Subsequent calls to
-// Get will return value. If value has length zero, any existing value
-// is deleted from the trie and calls to Get will return nil.
+// UpdateIndexed is an extended version of Update, where state trie index entries
+// are also generated for all entities referencing the current node.
 //
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
-func (t *SecureTrie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil && glog.V(logger.Error) {
+func (t *SecureTrie) UpdateIndexed(key, value []byte, refs [][]byte) {
+	if err := t.TryUpdateIndexed(key, value, refs); err != nil && glog.V(logger.Error) {
 		glog.Errorf("Unhandled trie error: %v", err)
 	}
 }
 
-// TryUpdate associates key with value in the trie. Subsequent calls to
-// Get will return value. If value has length zero, any existing value
-// is deleted from the trie and calls to Get will return nil.
+// TryUpdateIndexed is an extended version of Update, where state trie index
+// entries are also generated for all entities referencing the current node.
 //
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 //
 // If a node was not found in the database, a MissingNodeError is returned.
-func (t *SecureTrie) TryUpdate(key, value []byte) error {
+func (t *SecureTrie) TryUpdateIndexed(key, value []byte, refs [][]byte) error {
 	hk := t.hashKey(key)
-	err := t.Trie.TryUpdate(hk, value)
+	err := t.Trie.TryUpdateIndexed(hk, value, refs)
 	if err != nil {
 		return err
 	}

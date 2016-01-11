@@ -107,7 +107,7 @@ func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value 
 			if i != len(proof)-1 {
 				return nil, errors.New("additional nodes at end of proof")
 			}
-			return cld, nil
+			return cld.Value, nil
 		}
 	}
 	return nil, errors.New("unexpected end of proof")
