@@ -125,14 +125,15 @@ type vmBench struct {
 
 type account struct{}
 
-func (account) SubBalance(amount *big.Int)   {}
-func (account) AddBalance(amount *big.Int)   {}
-func (account) SetBalance(*big.Int)          {}
-func (account) SetNonce(uint64)              {}
-func (account) Balance() *big.Int            { return nil }
-func (account) Address() common.Address      { return common.Address{} }
-func (account) ReturnGas(*big.Int, *big.Int) {}
-func (account) SetCode([]byte)               {}
+func (account) SubBalance(amount *big.Int)             {}
+func (account) AddBalance(amount *big.Int)             {}
+func (account) SetBalance(*big.Int)                    {}
+func (account) SetNonce(uint64)                        {}
+func (account) Balance() *big.Int                      { return nil }
+func (account) Address() common.Address                { return common.Address{} }
+func (account) ReturnGas(*big.Int, *big.Int)           {}
+func (account) SetCode([]byte)                         {}
+func (account) EachStorage(cb func(key, value []byte)) {}
 
 func runVmBench(test vmBench, b *testing.B) {
 	var sender account
