@@ -225,8 +225,13 @@ func (self *VMEnv) Call(caller vm.ContractRef, addr common.Address, data []byte,
 	self.Gas = gas
 	return core.Call(self, caller, addr, data, gas, price, value)
 }
+
 func (self *VMEnv) CallCode(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
 	return core.CallCode(self, caller, addr, data, gas, price, value)
+}
+
+func (self *VMEnv) DelegateCall(caller vm.ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error) {
+	return core.DelegateCall(self, caller, addr, data, gas, price)
 }
 
 func (self *VMEnv) Create(caller vm.ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {

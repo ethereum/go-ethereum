@@ -136,6 +136,7 @@ var _baseCheck = map[OpCode]req{
 	CREATE:       {3, params.CreateGas, 1},
 	CALL:         {7, params.CallGas, 1},
 	CALLCODE:     {7, params.CallGas, 1},
+	DELEGATECALL: {6, params.CallGas, 1},
 	JUMPDEST:     {0, params.JumpdestGas, 0},
 	SUICIDE:      {1, Zero, 0},
 	RETURN:       {2, Zero, 0},

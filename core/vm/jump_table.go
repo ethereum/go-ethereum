@@ -62,9 +62,10 @@ func init() {
 	jumpTable[PC] = jumpPtr{nil, true}
 	jumpTable[MSIZE] = jumpPtr{opMsize, true}
 	jumpTable[GAS] = jumpPtr{opGas, true}
-	jumpTable[CREATE] = jumpPtr{opCreate, true}
+	jumpTable[CREATE] = jumpPtr{nil, true}
 	jumpTable[CALL] = jumpPtr{opCall, true}
 	jumpTable[CALLCODE] = jumpPtr{opCallCode, true}
+	jumpTable[DELEGATECALL] = jumpPtr{opDelegateCall, true}
 	jumpTable[LOG0] = jumpPtr{makeLog(0), true}
 	jumpTable[LOG1] = jumpPtr{makeLog(1), true}
 	jumpTable[LOG2] = jumpPtr{makeLog(2), true}

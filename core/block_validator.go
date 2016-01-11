@@ -30,6 +30,12 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
+var (
+	ExpDiffPeriod = big.NewInt(100000)
+	big10         = big.NewInt(10)
+	bigMinus99    = big.NewInt(-99)
+)
+
 // BlockValidator is responsible for validating block headers, uncles and
 // processed state.
 //
@@ -111,6 +117,7 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 	// For valid blocks this should always validate to true.
 	rbloom := types.CreateBloom(receipts)
 	if rbloom != header.Bloom {
+		//fmt.Printf("FUNKY: ValidateState: block number: %v\n", block.Number())
 		return fmt.Errorf("unable to replicate block's bloom=%x", rbloom)
 	}
 	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, R1]]))
@@ -240,4 +247,128 @@ func ValidateHeader(pow pow.PoW, header *types.Header, parent *types.Header, che
 		}
 	}
 	return nil
+}
+
+// CalcDifficulty is the difficulty adjustment algorithm. It returns
+// the difficulty that a new block should have when created at time
+// given the parent block's time and difficulty.
+func CalcDifficulty(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
+	if params.IsHomestead(new(big.Int).Add(parentNumber, common.Big1)) {
+		return calcDifficultyHomestead(time, parentTime, parentNumber, parentDiff)
+	} else {
+		return calcDifficultyFrontier(time, parentTime, parentNumber, parentDiff)
+	}
+}
+
+func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
+	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2.mediawiki
+	// algorithm:
+	// diff = (parent_diff +
+	//         (parent_diff / 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
+	//        ) + 2^(periodCount - 2)
+
+	bigTime := new(big.Int).SetUint64(time)
+	bigParentTime := new(big.Int).SetUint64(parentTime)
+
+	// for the exponential factor
+	periodCount := new(big.Int).Add(parentNumber, common.Big1)
+	periodCount.Div(periodCount, ExpDiffPeriod)
+
+	// holds intermediate values to make the algo easier to read & audit
+	x := new(big.Int)
+	y := new(big.Int)
+
+	// 1 - (block_timestamp -parent_timestamp) // 10
+	x.Sub(bigTime, bigParentTime)
+	x.Div(x, big10)
+	x.Sub(common.Big1, x)
+
+	// max(1 - (block_timestamp - parent_timestamp) // 10, -99)))
+	if x.Cmp(bigMinus99) < 0 {
+		x.Set(bigMinus99)
+	}
+
+	// (parent_diff + parent_diff // 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
+	y.Div(parentDiff, params.DifficultyBoundDivisor)
+	x.Mul(y, x)
+	x.Add(parentDiff, x)
+
+	// minimum difficulty can ever be (before exponential factor)
+	if x.Cmp(params.MinimumDifficulty) < 0 {
+		x = params.MinimumDifficulty
+	}
+
+	// the exponential factor, commonly refered to as "the bomb"
+	// diff = diff + 2^(periodCount - 2)
+	if periodCount.Cmp(common.Big1) > 0 {
+		y.Sub(periodCount, common.Big2)
+		y.Exp(common.Big2, y, nil)
+		x.Add(x, y)
+	}
+
+	return x
+}
+
+func calcDifficultyFrontier(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
+	diff := new(big.Int)
+	adjust := new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
+	bigTime := new(big.Int)
+	bigParentTime := new(big.Int)
+
+	bigTime.SetUint64(time)
+	bigParentTime.SetUint64(parentTime)
+
+	if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
+		diff.Add(parentDiff, adjust)
+	} else {
+		diff.Sub(parentDiff, adjust)
+	}
+	if diff.Cmp(params.MinimumDifficulty) < 0 {
+		diff = params.MinimumDifficulty
+	}
+
+	periodCount := new(big.Int).Add(parentNumber, common.Big1)
+	periodCount.Div(periodCount, ExpDiffPeriod)
+	if periodCount.Cmp(common.Big1) > 0 {
+		// diff = diff + 2^(periodCount - 2)
+		expDiff := periodCount.Sub(periodCount, common.Big2)
+		expDiff.Exp(common.Big2, expDiff, nil)
+		diff.Add(diff, expDiff)
+		diff = common.BigMax(diff, params.MinimumDifficulty)
+	}
+
+	return diff
+}
+
+// CalcGasLimit computes the gas limit of the next block after parent.
+// The result may be modified by the caller.
+// This is miner strategy, not consensus protocol.
+func CalcGasLimit(parent *types.Block) *big.Int {
+	// contrib = (parentGasUsed * 3 / 2) / 1024
+	contrib := new(big.Int).Mul(parent.GasUsed(), big.NewInt(3))
+	contrib = contrib.Div(contrib, big.NewInt(2))
+	contrib = contrib.Div(contrib, params.GasLimitBoundDivisor)
+
+	// decay = parentGasLimit / 1024 -1
+	decay := new(big.Int).Div(parent.GasLimit(), params.GasLimitBoundDivisor)
+	decay.Sub(decay, big.NewInt(1))
+
+	/*
+		strategy: gasLimit of block-to-mine is set based on parent's
+		gasUsed value.  if parentGasUsed > parentGasLimit * (2/3) then we
+		increase it, otherwise lower it (or leave it unchanged if it's right
+		at that usage) the amount increased/decreased depends on how far away
+		from parentGasLimit * (2/3) parentGasUsed is.
+	*/
+	gl := new(big.Int).Sub(parent.GasLimit(), decay)
+	gl = gl.Add(gl, contrib)
+	gl.Set(common.BigMax(gl, params.MinGasLimit))
+
+	// however, if we're now below the target (GenesisGasLimit) we increase the
+	// limit as much as we can (parentGasLimit / 1024 -1)
+	if gl.Cmp(params.GenesisGasLimit) < 0 {
+		gl.Add(parent.GasLimit(), decay)
+		gl.Set(common.BigMin(gl, params.GenesisGasLimit))
+	}
+	return gl
 }

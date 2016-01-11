@@ -25,9 +25,10 @@ var (
 	MaximumExtraDataSize   = big.NewInt(32)     // Maximum size extra data may be after Genesis.
 	ExpByteGas             = big.NewInt(10)     // Times ceil(log256(exponent)) for the EXP instruction.
 	SloadGas               = big.NewInt(50)     // Multiplied by the number of 32-byte words that are copied (round up) for any *COPY operation and added.
-	CallValueTransferGas   = big.NewInt(9000)   // Paid for CALL when the value transfor is non-zero.
+	CallValueTransferGas   = big.NewInt(9000)   // Paid for CALL when the value transfer is non-zero.
 	CallNewAccountGas      = big.NewInt(25000)  // Paid for CALL when the destination address didn't exist prior.
-	TxGas                  = big.NewInt(21000)  // Per transaction. NOTE: Not payable on data of calls between transactions.
+	TxGas                  = big.NewInt(21000)  // Per transaction not creating a contract. NOTE: Not payable on data of calls between transactions.
+	TxGasContractCreation  = big.NewInt(53000)  // Per transaction that creates a contract. NOTE: Not payable on data of calls between transactions.
 	TxDataZeroGas          = big.NewInt(4)      // Per byte of data attached to a transaction that equals zero. NOTE: Not payable on data of calls between transactions.
 	DifficultyBoundDivisor = big.NewInt(2048)   // The bound divisor of the difficulty, used in the update calculations.
 	QuadCoeffDiv           = big.NewInt(512)    // Divisor for the quadratic particle of the memory cost equation.

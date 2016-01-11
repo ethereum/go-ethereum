@@ -211,6 +211,11 @@ func (c *StateObject) Address() common.Address {
 	return c.address
 }
 
+// Sets the address of the contract/account
+func (c *StateObject) SetAddress(addr common.Address) {
+	c.address = addr
+}
+
 func (self *StateObject) Trie() *trie.SecureTrie {
 	return self.trie
 }
@@ -236,6 +241,13 @@ func (self *StateObject) SetNonce(nonce uint64) {
 
 func (self *StateObject) Nonce() uint64 {
 	return self.nonce
+}
+
+// Never called, but must be present to allow StateObject to be used
+// as a vm.Account interface that also satisfies the vm.ContractRef
+// interface. Interfaces are awesome.
+func (self *StateObject) Value() *big.Int {
+	return nil
 }
 
 func (self *StateObject) EachStorage(cb func(key, value []byte)) {
