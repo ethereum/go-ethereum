@@ -26,9 +26,16 @@ import (
 )
 
 // Tests that all index entries are stored in the database after a state commit.
-func TestStateIndex(t *testing.T) {
+func TestStateIndexDangling(t *testing.T) {
+	testStateIndex(t, nil)
+}
+func TestStateIndexRooted(t *testing.T) {
+	testStateIndex(t, []common.Hash{common.BytesToHash([]byte{0x01}), common.BytesToHash([]byte{0x02, 0x03})})
+}
+
+func testStateIndex(t *testing.T, referrers []common.Hash) {
 	// Create some arbitrary test state to iterate
-	db, root, _ := makeTestState()
+	db, root, _ := makeTestState(referrers)
 
 	state, err := New(root, db)
 	if err != nil {
@@ -40,6 +47,9 @@ func TestStateIndex(t *testing.T) {
 		if (it.Hash != common.Hash{}) && (it.Parent != common.Hash{}) {
 			indexes[string(trie.ParentReferenceIndexKey(it.Parent.Bytes(), it.Hash.Bytes()))] = struct{}{}
 		}
+	}
+	for _, referrer := range referrers {
+		indexes[string(trie.ParentReferenceIndexKey(referrer.Bytes(), root.Bytes()))] = struct{}{}
 	}
 	// Cross check the indexes and the database itself
 	for index, _ := range indexes {

@@ -37,9 +37,9 @@ func TestIterator(t *testing.T) {
 	v := make(map[string]bool)
 	for _, val := range vals {
 		v[val.k] = false
-		trie.Update([]byte(val.k), []byte(val.v))
+		trie.UpdateIndexed([]byte(val.k), []byte(val.v), nil)
 	}
-	trie.Commit()
+	trie.CommitIndexed(nil)
 
 	it := NewIterator(trie)
 	for it.Next() {
@@ -56,7 +56,7 @@ func TestIterator(t *testing.T) {
 // Tests that the node iterator indeed walks over the entire database contents.
 func TestNodeIteratorCoverage(t *testing.T) {
 	// Create some arbitrary test trie to iterate
-	db, trie, _ := makeTestTrie()
+	db, trie, _ := makeTestTrie(nil)
 
 	// Gather all the node hashes found by the iterator
 	hashes := make(map[common.Hash]struct{})

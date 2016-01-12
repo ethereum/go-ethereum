@@ -34,7 +34,7 @@ type request struct {
 	depth   int        // Depth level within the trie the node is located to prioritise DFS
 	deps    int        // Number of dependencies before allowed to commit this node
 
-	externals []common.Hash // External children of this node to index in addition to internal ones
+	referrers []common.Hash // External parents of this node to index in addition to internal ones
 
 	callback TrieSyncLeafCallback // Callback to invoke if a leaf node it reached on this branch
 }
@@ -61,13 +61,13 @@ type TrieSync struct {
 }
 
 // NewTrieSync creates a new trie data download scheduler.
-func NewTrieSync(root common.Hash, database ethdb.Database, callback TrieSyncLeafCallback) *TrieSync {
+func NewTrieSync(root common.Hash, database ethdb.Database, parent common.Hash, callback TrieSyncLeafCallback) *TrieSync {
 	ts := &TrieSync{
 		database: database,
 		requests: make(map[common.Hash]*request),
 		queue:    prque.New(),
 	}
-	ts.AddSubTrie(root, 0, common.Hash{}, callback)
+	ts.AddSubTrie(root, 0, parent, callback)
 	return ts
 }
 
@@ -91,13 +91,15 @@ func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, c
 	}
 	// If this sub-trie has a designated parent, link them together
 	if parent != (common.Hash{}) {
-		ancestor := s.requests[parent]
-		if ancestor == nil {
-			panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
+		if depth > 0 {
+			ancestor := s.requests[parent]
+			if ancestor == nil {
+				panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
+			}
+			ancestor.deps++
+			req.parents = append(req.parents, ancestor)
 		}
-		ancestor.deps++
-		ancestor.externals = append(ancestor.externals, root)
-		req.parents = append(req.parents, ancestor)
+		req.referrers = append(req.referrers, parent)
 	}
 	s.schedule(req)
 }
@@ -121,13 +123,15 @@ func (s *TrieSync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) 
 	}
 	// If this sub-trie has a designated parent, link them together
 	if parent != (common.Hash{}) {
-		ancestor := s.requests[parent]
-		if ancestor == nil {
-			panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
+		if depth > 0 {
+			ancestor := s.requests[parent]
+			if ancestor == nil {
+				panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
+			}
+			ancestor.deps++
+			req.parents = append(req.parents, ancestor)
 		}
-		ancestor.deps++
-		ancestor.externals = append(ancestor.externals, hash)
-		req.parents = append(req.parents, ancestor)
+		req.referrers = append(req.referrers, parent)
 	}
 	s.schedule(req)
 }
@@ -276,8 +280,8 @@ func (s *TrieSync) commit(req *request, batch ethdb.Batch) (err error) {
 			return err
 		}
 	}
-	for _, ext := range req.externals {
-		if err := storeParentReferenceEntry(req.hash[:], ext[:], batch); err != nil {
+	for _, referrer := range req.referrers {
+		if err := storeParentReferenceEntry(referrer[:], req.hash[:], batch); err != nil {
 			return err
 		}
 	}

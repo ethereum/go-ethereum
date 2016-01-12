@@ -28,7 +28,7 @@ import (
 // Tests that the node iterator indeed walks over the entire database contents.
 func TestNodeIteratorCoverage(t *testing.T) {
 	// Create some arbitrary test state to iterate
-	db, root, _ := makeTestState()
+	db, root, _ := makeTestState(nil)
 
 	state, err := New(root, db)
 	if err != nil {

@@ -146,50 +146,30 @@ func (t *Trie) TryGet(key []byte) ([]byte, error) {
 	return tn.(valueNode).Value, nil
 }
 
-// Update associates key with value in the trie. Subsequent calls to
-// Get will return value. If value has length zero, any existing value
-// is deleted from the trie and calls to Get will return nil.
+// UpdateIndexed associates key with value in the trie. Subsequent calls to Get
+// will return value. If value has length zero, any existing value is deleted
+// from the trie and calls to Get will return nil. In addition, state trie index
+// entries are also generated for all entities referencing the current node.
 //
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
-func (t *Trie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil && glog.V(logger.Error) {
+func (t *Trie) UpdateIndexed(key, value []byte, references [][]byte) {
+	if err := t.TryUpdateIndexed(key, value, references); err != nil && glog.V(logger.Error) {
 		glog.Errorf("Unhandled trie error: %v", err)
 	}
 }
 
-// TryUpdate associates key with value in the trie. Subsequent calls to
-// Get will return value. If value has length zero, any existing value
-// is deleted from the trie and calls to Get will return nil.
-//
-// The value bytes must not be modified by the caller while they are
-// stored in the trie.
-//
-// If a node was not found in the database, a MissingNodeError is returned.
-func (t *Trie) TryUpdate(key, value []byte) error {
-	return t.tryUpdateIndexed(key, value, nil)
-}
-
-// UpdateIndexed is an extended version of Update, where state trie index entries
-// are also generated for all entities referencing the current node.
-//
-// The value bytes must not be modified by the caller while they are
-// stored in the trie.
-func (t *Trie) UpdateIndexed(key, value []byte, refs [][]byte) {
-	if err := t.TryUpdateIndexed(key, value, refs); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
-	}
-}
-
-// TryUpdateIndexed is an extended version of Update, where state trie index
+// TryUpdateIndexed associates key with value in the trie. Subsequent calls to
+// Get will return value. If value has length zero, any existing value is deleted
+// from the trie and calls to Get will return nil. In addition, state trie index
 // entries are also generated for all entities referencing the current node.
 //
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 //
 // If a node was not found in the database, a MissingNodeError is returned.
-func (t *Trie) TryUpdateIndexed(key, value []byte, refs [][]byte) error {
-	return t.tryUpdateIndexed(key, value, refs)
+func (t *Trie) TryUpdateIndexed(key, value []byte, references [][]byte) error {
+	return t.tryUpdateIndexed(key, value, references)
 }
 
 func (t *Trie) tryUpdateIndexed(key, value []byte, refs [][]byte) error {
@@ -439,31 +419,32 @@ func (t *Trie) Root() []byte { return t.Hash().Bytes() }
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() common.Hash {
-	root, _ := t.hashRoot(nil)
+	root, _ := t.hashRoot(nil, nil)
 	return common.BytesToHash(root.(hashNode))
 }
 
-// Commit writes all nodes to the trie's database.
-// Nodes are stored with their sha3 hash as the key.
+// CommitIndexed writes all nodes to the trie's database, and if any references
+// were specified, adds those to the trie index as well. Nodes are stored with
+// their sha3 hash as the key.
 //
-// Committing flushes nodes from memory.
-// Subsequent Get calls will load nodes from the database.
-func (t *Trie) Commit() (root common.Hash, err error) {
+// Committing flushes nodes from memory. Subsequent Get calls will load nodes
+// from the database.
+func (t *Trie) CommitIndexed(referrers [][]byte) (root common.Hash, err error) {
 	if t.db == nil {
 		panic("Commit called on trie with nil database")
 	}
-	return t.CommitTo(t.db)
+	return t.CommitToIndexed(t.db, referrers)
 }
 
-// CommitTo writes all nodes to the given database.
-// Nodes are stored with their sha3 hash as the key.
+// CommitToIndexed writes all nodes to the given database, and if any references
+// were specified, adds those to the trie index as well. Nodes are stored with
+// their sha3 hash as the key.
 //
-// Committing flushes nodes from memory. Subsequent Get calls will
-// load nodes from the trie's database. Calling code must ensure that
-// the changes made to db are written back to the trie's attached
-// database before using the trie.
-func (t *Trie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
-	n, err := t.hashRoot(db)
+// Committing flushes nodes from memory. Subsequent Get calls will load nodes
+// from the trie's database. Calling code must ensure that the changes made to
+// db are written back to the trie's attached database before using the trie.
+func (t *Trie) CommitToIndexed(db DatabaseWriter, referrers [][]byte) (root common.Hash, err error) {
+	n, err := t.hashRoot(db, referrers)
 	if err != nil {
 		return (common.Hash{}), err
 	}
@@ -471,14 +452,14 @@ func (t *Trie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
 	return common.BytesToHash(n.(hashNode)), nil
 }
 
-func (t *Trie) hashRoot(db DatabaseWriter) (node, error) {
+func (t *Trie) hashRoot(db DatabaseWriter, referrers [][]byte) (node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil
 	}
 	if t.hasher == nil {
 		t.hasher = newHasher()
 	}
-	return t.hasher.hash(t.root, db, true)
+	return t.hasher.hash(t.root, db, true, referrers)
 }
 
 type hasher struct {
@@ -490,12 +471,12 @@ func newHasher() *hasher {
 	return &hasher{tmp: new(bytes.Buffer), sha: sha3.NewKeccak256()}
 }
 
-func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, error) {
+func (h *hasher) hash(n node, db DatabaseWriter, force bool, referrers [][]byte) (node, error) {
 	hashed, err := h.replaceChildren(n, db)
 	if err != nil {
 		return hashNode{}, err
 	}
-	if n, err = h.store(hashed, db, force); err != nil {
+	if n, err = h.store(hashed, db, force, referrers); err != nil {
 		return hashNode{}, err
 	}
 	return n, nil
@@ -509,7 +490,7 @@ func (h *hasher) replaceChildren(n node, db DatabaseWriter) (node, error) {
 	case shortNode:
 		n.Key = compactEncode(n.Key)
 		if _, ok := n.Val.(valueNode); !ok {
-			if n.Val, err = h.hash(n.Val, db, false); err != nil {
+			if n.Val, err = h.hash(n.Val, db, false, nil); err != nil {
 				return n, err
 			}
 		}
@@ -521,7 +502,7 @@ func (h *hasher) replaceChildren(n node, db DatabaseWriter) (node, error) {
 	case fullNode:
 		for i := 0; i < 16; i++ {
 			if n[i] != nil {
-				if n[i], err = h.hash(n[i], db, false); err != nil {
+				if n[i], err = h.hash(n[i], db, false, nil); err != nil {
 					return n, err
 				}
 			} else {
@@ -538,7 +519,7 @@ func (h *hasher) replaceChildren(n node, db DatabaseWriter) (node, error) {
 	}
 }
 
-func (h *hasher) store(n node, db DatabaseWriter, force bool) (node, error) {
+func (h *hasher) store(n node, db DatabaseWriter, force bool, referrers [][]byte) (node, error) {
 	// Don't store hashes or empty nodes.
 	if _, isHash := n.(hashNode); n == nil || isHash {
 		return n, nil
@@ -558,6 +539,11 @@ func (h *hasher) store(n node, db DatabaseWriter, force bool) (node, error) {
 	if db != nil {
 		if err := storeParentReferences(key, n, db); err != nil {
 			return key, err
+		}
+		for _, referrer := range referrers {
+			if err := storeParentReferenceEntry(referrer, key, db); err != nil {
+				return key, err
+			}
 		}
 		if err := db.Put(key, h.tmp.Bytes()); err != nil {
 			return key, err

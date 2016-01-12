@@ -25,9 +25,12 @@ import (
 )
 
 // Tests that all index entries are stored in the database after a trie commit.
-func TestTrieIndex(t *testing.T) {
+func TestTrieIndexDangling(t *testing.T) { testTrieIndex(t, nil) }
+func TestTrieIndexRooted(t *testing.T)   { testTrieIndex(t, [][]byte{[]byte{0x00}, []byte{0x00, 0x01}}) }
+
+func testTrieIndex(t *testing.T, referrers [][]byte) {
 	// Create some arbitrary test trie to iterate
-	db, trie, _ := makeTestTrie()
+	db, trie, _ := makeTestTrie(referrers)
 
 	// Gather all the indexes that should be present in the database
 	indexes := make(map[string]struct{})
@@ -35,6 +38,9 @@ func TestTrieIndex(t *testing.T) {
 		if (it.Hash != common.Hash{}) && (it.Parent != common.Hash{}) {
 			indexes[string(ParentReferenceIndexKey(it.Parent.Bytes(), it.Hash.Bytes()))] = struct{}{}
 		}
+	}
+	for _, referrer := range referrers {
+		indexes[string(ParentReferenceIndexKey(referrer, trie.Hash().Bytes()))] = struct{}{}
 	}
 	// Cross check the indexes and the database itself
 	for index, _ := range indexes {
