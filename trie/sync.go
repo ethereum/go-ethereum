@@ -34,9 +34,17 @@ type request struct {
 	depth   int        // Depth level within the trie the node is located to prioritise DFS
 	deps    int        // Number of dependencies before allowed to commit this node
 
-	referrers []common.Hash // External parents of this node to index in addition to internal ones
+	referrers map[common.Hash]struct{} // External parents of this node to index in addition to internal ones
 
 	callback TrieSyncLeafCallback // Callback to invoke if a leaf node it reached on this branch
+}
+
+// referrer adds a new referring parent to a sync node request.
+func (r *request) referrer(hash common.Hash) {
+	if r.referrers == nil {
+		r.referrers = make(map[common.Hash]struct{})
+	}
+	r.referrers[hash] = struct{}{}
 }
 
 // SyncResult is a simple list to return missing nodes along with their request
@@ -72,14 +80,14 @@ func NewTrieSync(root common.Hash, database ethdb.Database, parent common.Hash, 
 }
 
 // AddSubTrie registers a new trie to the sync code, rooted at the designated parent.
-func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callback TrieSyncLeafCallback) {
+func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callback TrieSyncLeafCallback) error {
 	// Short circuit if the trie is empty or already known
 	if root == emptyRoot {
-		return
+		return nil
 	}
 	blob, _ := s.database.Get(root.Bytes())
 	if local, err := decodeNode(blob); local != nil && err == nil {
-		return
+		return storeParentReferenceEntry(parent.Bytes(), root.Bytes(), s.database)
 	}
 	// Assemble the new sub-trie sync request
 	node := node(hashNode(root.Bytes()))
@@ -99,22 +107,23 @@ func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, c
 			ancestor.deps++
 			req.parents = append(req.parents, ancestor)
 		}
-		req.referrers = append(req.referrers, parent)
+		req.referrer(parent)
 	}
 	s.schedule(req)
+	return nil
 }
 
 // AddRawEntry schedules the direct retrieval of a state entry that should not be
 // interpreted as a trie node, but rather accepted and stored into the database
 // as is. This method's goal is to support misc state metadata retrievals (e.g.
 // contract code).
-func (s *TrieSync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) {
+func (s *TrieSync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) error {
 	// Short circuit if the entry is empty or already known
 	if hash == emptyState {
-		return
+		return nil
 	}
 	if blob, _ := s.database.Get(hash.Bytes()); blob != nil {
-		return
+		return storeParentReferenceEntry(parent.Bytes(), hash.Bytes(), s.database)
 	}
 	// Assemble the new sub-trie sync request
 	req := &request{
@@ -131,9 +140,10 @@ func (s *TrieSync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) 
 			ancestor.deps++
 			req.parents = append(req.parents, ancestor)
 		}
-		req.referrers = append(req.referrers, parent)
+		req.referrer(parent)
 	}
 	s.schedule(req)
+	return nil
 }
 
 // Missing retrieves the known missing nodes from the trie for retrieval.
@@ -196,6 +206,13 @@ func (s *TrieSync) schedule(req *request) {
 	// If we're already requesting this node, add a new reference and stop
 	if old, ok := s.requests[req.hash]; ok {
 		old.parents = append(old.parents, req.parents...)
+
+		for hash, _ := range req.referrers {
+			old.referrer(hash)
+		}
+		for _, parent := range req.parents {
+			old.referrer(parent.hash)
+		}
 		return
 	}
 	// Schedule the request for future retrieval
@@ -280,7 +297,7 @@ func (s *TrieSync) commit(req *request, batch ethdb.Batch) (err error) {
 			return err
 		}
 	}
-	for _, referrer := range req.referrers {
+	for referrer, _ := range req.referrers {
 		if err := storeParentReferenceEntry(referrer[:], req.hash[:], batch); err != nil {
 			return err
 		}

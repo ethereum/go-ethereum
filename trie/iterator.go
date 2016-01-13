@@ -159,10 +159,23 @@ type nodeIteratorState struct {
 	child  int         // Child to be processed next
 }
 
+// NodeIteratorSubtreeCallback is a callback that is invoked by the trie node
+// iterator whenever it descends into a new subtree, giving the possibility of
+// skipping the branch if it would be non-useful (e.g. already processed before).
+type NodeIteratorSubtreeCallback func(hash, parent common.Hash) bool
+
 // NodeIterator is an iterator to traverse the trie post-order.
 type NodeIterator struct {
 	trie  *Trie                // Trie being iterated
 	stack []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
+
+	// Callback method enabling the user to control subtree descent.
+	//
+	// Note: This hook is invoked pre-order to allow the user to cancel the traversal
+	// of a subtree, but the iterator itself is post-order. This means that the hook
+	// may be invoked multiple times during a single iteration step (when descending)
+	// or never in multiple iteration steps (when ascending).
+	PreOrderHook NodeIteratorSubtreeCallback
 
 	Hash     common.Hash // Hash of the current node being iterated (nil if not standalone)
 	Node     node        // Current node being iterated (internal representation)
@@ -241,7 +254,9 @@ func (it *NodeIterator) step() {
 			if err != nil {
 				panic(err)
 			}
-			it.stack = append(it.stack, &nodeIteratorState{hash: common.BytesToHash(hash), node: node, parent: ancestor, child: -1})
+			if hash := common.BytesToHash(hash); it.PreOrderHook == nil || it.PreOrderHook(hash, ancestor) {
+				it.stack = append(it.stack, &nodeIteratorState{hash: hash, node: node, parent: ancestor, child: -1})
+			}
 		} else {
 			break
 		}

@@ -26,6 +26,11 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+// NodeIteratorSubtreeCallback is a callback that is invoked by the trie node
+// iterator whenever it descends into a new subtree, giving the possibility of
+// skipping the branch if it would be non-useful (e.g. already processed before).
+type NodeIteratorSubtreeCallback func(hash, parent common.Hash) bool
+
 // NodeIterator is an iterator to traverse the entire state trie post-order,
 // including all of the contract code and contract state tries.
 type NodeIterator struct {
@@ -37,6 +42,14 @@ type NodeIterator struct {
 	accountHash common.Hash // Hash of the node containing the account
 	codeHash    common.Hash // Hash of the contract source code
 	code        []byte      // Source code associated with a contract
+
+	// Callback method enabling the user to control subtree descent.
+	//
+	// Note: This hook is invoked pre-order to allow the user to cancel the traversal
+	// of a subtree, but the iterator itself is post-order. This means that the hook
+	// may be invoked multiple times during a single iteration step (when descending)
+	// or never in multiple iteration steps (when ascending).
+	PreOrderHook NodeIteratorSubtreeCallback
 
 	Hash   common.Hash // Hash of the current entry being iterated (nil if not standalone)
 	Entry  interface{} // Current state entry being iterated (internal representation)
@@ -66,6 +79,7 @@ func (it *NodeIterator) step() {
 	// Initialize the iterator if we've just started
 	if it.stateIt == nil {
 		it.stateIt = trie.NewNodeIterator(it.state.trie.Trie)
+		it.stateIt.PreOrderHook = trie.NodeIteratorSubtreeCallback(it.PreOrderHook)
 	}
 	// If we had data nodes previously, we surely have at least state nodes
 	if it.dataIt != nil {
@@ -99,22 +113,25 @@ func (it *NodeIterator) step() {
 	if err != nil {
 		panic(err)
 	}
+	it.accountHash = it.stateIt.Parent
+
+	if bytes.Compare(account.CodeHash, emptyCodeHash) != 0 {
+		if hash := common.BytesToHash(account.CodeHash); it.PreOrderHook == nil || it.PreOrderHook(hash, it.accountHash) {
+			it.codeHash = hash
+			if it.code, err = it.state.db.Get(account.CodeHash); err != nil {
+				panic(fmt.Sprintf("code %x: %v", account.CodeHash, err))
+			}
+		}
+	}
 	dataTrie, err := trie.New(account.Root, it.state.db)
 	if err != nil {
 		panic(err)
 	}
 	it.dataIt = trie.NewNodeIterator(dataTrie)
+	it.dataIt.PreOrderHook = trie.NodeIteratorSubtreeCallback(it.PreOrderHook)
 	if !it.dataIt.Next() {
 		it.dataIt = nil
 	}
-	if bytes.Compare(account.CodeHash, emptyCodeHash) != 0 {
-		it.codeHash = common.BytesToHash(account.CodeHash)
-		it.code, err = it.state.db.Get(account.CodeHash)
-		if err != nil {
-			panic(fmt.Sprintf("code %x: %v", account.CodeHash, err))
-		}
-	}
-	it.accountHash = it.stateIt.Parent
 }
 
 // retrieve pulls and caches the current state entry the iterator is traversing.

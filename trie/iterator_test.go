@@ -79,3 +79,55 @@ func TestNodeIteratorCoverage(t *testing.T) {
 		}
 	}
 }
+
+// Tests that the node iterator hook is invoked for all the nodes of the trie,
+// also testing that the iterator indeed avoids visiting aborted branches.
+func TestNodeIteratorHookCoverageFull(t *testing.T)  { testNodeIteratorHookCoverage(t, false) }
+func TestNodeIteratorHookCoverageDedup(t *testing.T) { testNodeIteratorHookCoverage(t, true) }
+
+func testNodeIteratorHookCoverage(t *testing.T, dedup bool) {
+	// Create some arbitrary test trie to iterate
+	db, trie, _ := makeTestTrie(nil)
+
+	// Gather all the node hashes found by the iterator
+	hashes := make(map[common.Hash]int)
+
+	it := NewNodeIterator(trie)
+	it.PreOrderHook = func(hash, parent common.Hash) bool {
+		if !dedup {
+			return true
+		}
+		return hashes[hash] == 0
+	}
+	for it.Next() {
+		if it.Hash != (common.Hash{}) {
+			hashes[it.Hash]++
+		}
+	}
+	// Cross check the hashes and the database itself
+	for hash, _ := range hashes {
+		if _, err := db.Get(hash.Bytes()); err != nil {
+			t.Errorf("failed to retrieve reported node %x: %v", hash, err)
+		}
+	}
+	for _, key := range db.(*ethdb.MemDatabase).Keys() {
+		if len(key) == common.HashLength {
+			if _, ok := hashes[common.BytesToHash(key)]; !ok {
+				t.Errorf("state entry not reported %x", key)
+			}
+		}
+	}
+	// Check whether duplicates were avoided or not
+	duplicates := 0
+	for hash, count := range hashes {
+		if count > 1 {
+			duplicates++
+			if dedup {
+				t.Errorf("duplicate (%d) iteration: %x", count, hash)
+			}
+		}
+	}
+	if !dedup && duplicates == 0 {
+		t.Errorf("iterator didn't traverse common subtrees")
+	}
+}

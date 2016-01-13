@@ -44,22 +44,24 @@ func makeTestState(referrers []common.Hash) (ethdb.Database, common.Hash, []*tes
 
 	// Fill it with some arbitrary data
 	accounts := []*testAccount{}
-	for i := byte(0); i < 96; i++ {
-		obj := state.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
-		acc := &testAccount{address: common.BytesToAddress([]byte{i})}
+	for i := byte(0); i < 1; i++ {
+		for j := byte(0); j < 2; j++ {
+			obj := state.GetOrNewStateObject(common.BytesToAddress([]byte{i, j}))
+			acc := &testAccount{address: common.BytesToAddress([]byte{i, j})}
 
-		obj.AddBalance(big.NewInt(int64(11 * i)))
-		acc.balance = big.NewInt(int64(11 * i))
+			obj.AddBalance(big.NewInt(int64(11 * i)))
+			acc.balance = big.NewInt(int64(11 * i))
 
-		obj.SetNonce(uint64(42 * i))
-		acc.nonce = uint64(42 * i)
+			obj.SetNonce(uint64(42 * i))
+			acc.nonce = uint64(42 * i)
 
-		if i%3 == 0 {
-			obj.SetCode([]byte{i, i, i, i, i})
-			acc.code = []byte{i, i, i, i, i}
+			if i%3 == 0 {
+				obj.SetCode([]byte{i, i, i, i, i})
+				acc.code = []byte{i, i, i, i, i}
+			}
+			state.UpdateStateObject(obj)
+			accounts = append(accounts, acc)
 		}
-		state.UpdateStateObject(obj)
-		accounts = append(accounts, acc)
 	}
 	root, _ := state.CommitIndexed(referrers)
 
