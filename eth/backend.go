@@ -66,9 +66,14 @@ var (
 type Config struct {
 	ChainConfig *core.ChainConfig // chain configuration
 
-	NetworkId int    // Network ID to use for selecting peers to connect to
-	Genesis   string // Genesis JSON to seed the chain database with
-	FastSync  bool   // Enables the state download based fast synchronisation algorithm
+	NetworkId  int    // Network ID to use for selecting peers to connect to
+	Genesis    string // Genesis JSON to seed the chain database with
+	FastSync   bool   // Enables the state download based fast synchronisation algorithm
+	LightMode  bool   // Running in light client mode
+	NoDefSrv   bool   // No default LES server
+	LightServ  int    // Maximum percentage of time allowed for serving LES requests
+	LightPeers int    // Maximum number of LES client peers
+	MaxPeers   int    // Maximum number of global peers
 
 	SkipBcVersionCheck bool // e.g. blockchain export
 	DatabaseCache      int
@@ -100,6 +105,12 @@ type Config struct {
 	TestGenesisState ethdb.Database // Genesis state to seed the database with (testing only!)
 }
 
+type LesServer interface {
+	Start()
+	Stop()
+	Protocols() []p2p.Protocol
+}
+
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
 	chainConfig *core.ChainConfig
@@ -111,6 +122,7 @@ type Ethereum struct {
 	txMu            sync.Mutex
 	blockchain      *core.BlockChain
 	protocolManager *ProtocolManager
+	lesServer       LesServer
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
 
@@ -119,7 +131,7 @@ type Ethereum struct {
 	httpclient     *httpclient.HTTPClient
 	accountManager *accounts.Manager
 
-	apiBackend *EthApiBackend
+	ApiBackend *EthApiBackend
 
 	miner        *miner.Miner
 	Mining       bool
@@ -135,10 +147,14 @@ type Ethereum struct {
 	netRPCService *ethapi.PublicNetAPI
 }
 
+func (s *Ethereum) AddLesServer(ls LesServer) {
+	s.lesServer = ls
+}
+
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
-	chainDb, err := createDB(ctx, config)
+	chainDb, err := CreateDB(ctx, config, "chaindata")
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +233,18 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	newPool := core.NewTxPool(eth.chainConfig, eth.EventMux(), eth.blockchain.State, eth.blockchain.GasLimit)
 	eth.txPool = newPool
 
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.FastSync, config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb); err != nil {
+	maxPeers := config.MaxPeers
+	if config.LightServ > 0 {
+		// if we are running a light server, limit the number of ETH peers so that we reserve some space for incoming LES connections
+		// temporary solution until the new peer connectivity API is finished
+		halfPeers := maxPeers / 2
+		maxPeers -= config.LightPeers
+		if maxPeers < halfPeers {
+			maxPeers = halfPeers
+		}
+	}
+
+	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.FastSync, config.NetworkId, maxPeers, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
 	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.pow)
@@ -233,14 +260,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
 	}
 	gpo := gasprice.NewGasPriceOracle(eth.blockchain, chainDb, eth.eventMux, gpoParams)
-	eth.apiBackend = &EthApiBackend{eth, gpo}
+	eth.ApiBackend = &EthApiBackend{eth, gpo}
 
 	return eth, nil
 }
 
-// createDB creates the chain database.
-func createDB(ctx *node.ServiceContext, config *Config) (ethdb.Database, error) {
-	db, err := ctx.OpenDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles)
+// CreateDB creates the chain database.
+func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Database, error) {
+	db, err := ctx.OpenDatabase(name, config.DatabaseCache, config.DatabaseHandles)
 	if db, ok := db.(*ethdb.LDBDatabase); ok {
 		db.Meter("eth/db/chaindata/")
 	}
@@ -288,7 +315,7 @@ func CreatePoW(config *Config) (*ethash.Ethash, error) {
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
-	return append(ethapi.GetAPIs(s.apiBackend, s.solcPath), []rpc.API{
+	return append(ethapi.GetAPIs(s.ApiBackend, s.solcPath), []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
@@ -391,7 +418,11 @@ func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManage
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
-	return s.protocolManager.SubProtocols
+	if s.lesServer == nil {
+		return s.protocolManager.SubProtocols
+	} else {
+		return append(s.protocolManager.SubProtocols, s.lesServer.Protocols()...)
+	}
 }
 
 // Start implements node.Service, starting all internal goroutines needed by the
@@ -402,6 +433,9 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 		s.StartAutoDAG()
 	}
 	s.protocolManager.Start()
+	if s.lesServer != nil {
+		s.lesServer.Start()
+	}
 	return nil
 }
 
@@ -413,6 +447,9 @@ func (s *Ethereum) Stop() error {
 	}
 	s.blockchain.Stop()
 	s.protocolManager.Stop()
+	if s.lesServer != nil {
+		s.lesServer.Stop()
+	}
 	s.txPool.Stop()
 	s.miner.Stop()
 	s.eventMux.Stop()

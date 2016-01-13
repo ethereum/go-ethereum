@@ -180,7 +180,7 @@ func exportChain(ctx *cli.Context) error {
 
 func removeDB(ctx *cli.Context) error {
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
-	dbdir := stack.ResolvePath("chaindata")
+	dbdir := stack.ResolvePath(utils.ChainDbName(ctx))
 	if !common.FileExist(dbdir) {
 		fmt.Println(dbdir, "does not exist")
 		return nil

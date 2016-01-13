@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -37,6 +39,37 @@ var (
 	backend = &testBackend{mux, db}
 	api     = NewPublicFilterAPI(backend, false)
 )
+
+type testBackend struct {
+	mux *event.TypeMux
+	db  ethdb.Database
+}
+
+func (b *testBackend) ChainDb() ethdb.Database {
+	return b.db
+}
+
+func (b *testBackend) EventMux() *event.TypeMux {
+	return b.mux
+}
+
+func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
+	var hash common.Hash
+	var num uint64
+	if blockNr == rpc.LatestBlockNumber {
+		hash = core.GetHeadBlockHash(b.db)
+		num = core.GetBlockNumber(b.db, hash)
+	} else {
+		num = uint64(blockNr)
+		hash = core.GetCanonicalHash(b.db, num)
+	}
+	return core.GetHeader(b.db, hash, num), nil
+}
+
+func (b *testBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
+	num := core.GetBlockNumber(b.db, blockHash)
+	return core.GetBlockReceipts(b.db, blockHash, num), nil
+}
 
 // TestBlockSubscription tests if a block subscription returns block hashes for posted chain events.
 // It creates multiple subscriptions:
