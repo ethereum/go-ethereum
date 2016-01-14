@@ -353,7 +353,8 @@ func (s *StateDB) IntermediateRoot() common.Hash {
 
 // Commit commits all state changes to the database.
 func (s *StateDB) Commit() (root common.Hash, err error) {
-	return s.commit(s.db)
+	root, batch := s.CommitBatch()
+	return root, batch.Write()
 }
 
 // CommitBatch commits all state changes to a write batch but does not
