@@ -163,6 +163,11 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
+	StateRetentionFlag = cli.IntFlag{
+		Name:  "retain",
+		Usage: "Number of recent state tries to retain (0 = keep all history)",
+		Value: 5000,
+	}
 	// Miner settings
 	// TODO: refactor CPU vs GPU mining flags
 	MiningEnabledFlag = cli.BoolFlag{
@@ -613,6 +618,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 	ethConf := &eth.Config{
 		Genesis:                 MakeGenesisBlock(ctx),
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
+		StateRetention:          ctx.GlobalInt(StateRetentionFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
 		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),

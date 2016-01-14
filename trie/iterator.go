@@ -243,18 +243,18 @@ func (it *NodeIterator) step() {
 			}
 			parent.child++
 			it.stack = append(it.stack, &nodeIteratorState{node: node.Val, parent: ancestor, child: -1})
-		} else if hash, ok := parent.node.(hashNode); ok {
+		} else if hashNode, ok := parent.node.(hashNode); ok {
 			// Hash node, resolve the hash child from the database, then the node itself
 			if parent.child >= 0 {
 				break
 			}
 			parent.child++
 
-			node, err := it.trie.resolveHash(hash, nil, nil)
-			if err != nil {
-				panic(err)
-			}
-			if hash := common.BytesToHash(hash); it.PreOrderHook == nil || it.PreOrderHook(hash, ancestor) {
+			if hash := common.BytesToHash(hashNode); it.PreOrderHook == nil || it.PreOrderHook(hash, ancestor) {
+				node, err := it.trie.resolveHash(hashNode, nil, nil)
+				if err != nil {
+					panic(err)
+				}
 				it.stack = append(it.stack, &nodeIteratorState{hash: hash, node: node, parent: ancestor, child: -1})
 			}
 		} else {

@@ -67,6 +67,8 @@ var (
 	fsHeaderForceVerify    = 24   // Number of headers to verify before and after the pivot to accept it
 	fsPivotInterval        = 512  // Number of headers out of which to randomize the pivot point
 	fsMinFullBlocks        = 1024 // Number of blocks to retrieve fully even in fast sync
+
+	FsStateRetention = fsMinFullBlocks + fsPivotInterval + 1 // Number of state tries needed to reliably fast sync
 )
 
 var (
