@@ -15,6 +15,10 @@ RUN add-apt-repository ppa:ethereum/ethereum-dev
 RUN apt-get update
 RUN apt-get install -q -y geth
 
+# Install Solidity compiler
+RUN apt-get install solc -y
+
+
 EXPOSE 8545
 EXPOSE 30303
 
