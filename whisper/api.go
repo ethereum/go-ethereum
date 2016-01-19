@@ -24,7 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	rpc "github.com/ethereum/go-ethereum/rpc/v2"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // PublicWhisperAPI provides the whisper RPC service.

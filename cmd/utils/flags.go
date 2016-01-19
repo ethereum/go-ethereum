@@ -23,13 +23,14 @@ import (
 	"log"
 	"math"
 	"math/big"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"errors"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
@@ -49,14 +50,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc/api"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/rpc/useragent"
-	rpc "github.com/ethereum/go-ethereum/rpc/v2"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/whisper"
-	"github.com/ethereum/go-ethereum/xeth"
 )
 
 func init() {
@@ -282,10 +277,10 @@ var (
 		Usage: "Domains from which to accept cross origin requests (browser enforced)",
 		Value: "",
 	}
-	RpcApiFlag = cli.StringFlag{
+	RPCApiFlag = cli.StringFlag{
 		Name:  "rpcapi",
 		Usage: "API's offered over the HTTP-RPC interface",
-		Value: comms.DefaultHttpRpcApis,
+		Value: rpc.DefaultHttpRpcApis,
 	}
 	IPCDisabledFlag = cli.BoolFlag{
 		Name:  "ipcdisable",
@@ -294,16 +289,36 @@ var (
 	IPCApiFlag = cli.StringFlag{
 		Name:  "ipcapi",
 		Usage: "API's offered over the IPC-RPC interface",
-		Value: comms.DefaultIpcApis,
+		Value: rpc.DefaultIpcApis,
 	}
 	IPCPathFlag = DirectoryFlag{
 		Name:  "ipcpath",
 		Usage: "Filename for IPC socket/pipe",
 		Value: DirectoryString{common.DefaultIpcPath()},
 	}
-	IPCExperimental = cli.BoolFlag{
-		Name:  "ipcexp",
-		Usage: "Enable the new RPC implementation",
+	WSEnabledFlag = cli.BoolFlag{
+		Name: "ws",
+		Usage: "Enable the WS-RPC server",
+	}
+	WSListenAddrFlag = cli.StringFlag{
+		Name:  "wsaddr",
+		Usage: "WS-RPC server listening interface",
+		Value: "127.0.0.1",
+	}
+	WSPortFlag = cli.IntFlag{
+		Name:  "wsport",
+		Usage: "WS-RPC server listening port",
+		Value: 8546,
+	}
+	WSApiFlag = cli.StringFlag{
+		Name:  "wsapi",
+		Usage: "API's offered over the WS-RPC interface",
+		Value: rpc.DefaultHttpRpcApis,
+	}
+	WSAllowedDomainsFlag = cli.StringFlag{
+		Name:  "wsdomains",
+		Usage: "Domains from which to accept websockets requests",
+		Value: "",
 	}
 	ExecFlag = cli.StringFlag{
 		Name:  "exec",
@@ -760,7 +775,7 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 	return chain, chainDb
 }
 
-func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
+func IPCSocketPath(ctx *cli.Context) (ipcpath string) {
 	if runtime.GOOS == "windows" {
 		ipcpath = common.DefaultIpcPath()
 		if ctx.GlobalIsSet(IPCPathFlag.Name) {
@@ -780,79 +795,83 @@ func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
 }
 
 func StartIPC(stack *node.Node, ctx *cli.Context) error {
-	config := comms.IpcConfig{
-		Endpoint: IpcSocketPath(ctx),
-	}
-
 	var ethereum *eth.Ethereum
 	if err := stack.Service(&ethereum); err != nil {
 		return err
 	}
 
-	if ctx.GlobalIsSet(IPCExperimental.Name) {
-		listener, err := comms.CreateListener(config)
-		if err != nil {
-			return err
-		}
+	endpoint := IPCSocketPath(ctx)
+	listener, err := rpc.CreateIPCListener(endpoint)
+	if err != nil {
+		return err
+	}
 
-		server := rpc.NewServer()
+	server := rpc.NewServer()
 
-		// register package API's this node provides
-		offered := stack.APIs()
-		for _, api := range offered {
-			server.RegisterName(api.Namespace, api.Service)
-			glog.V(logger.Debug).Infof("Register %T under namespace '%s' for IPC service\n", api.Service, api.Namespace)
-		}
+	// register package API's this node provides
+	offered := stack.APIs()
+	for _, api := range offered {
+		server.RegisterName(api.Namespace, api.Service)
+		glog.V(logger.Debug).Infof("Register %T under namespace '%s' for IPC service\n", api.Service, api.Namespace)
+	}
 
-		web3 := NewPublicWeb3API(stack)
-		server.RegisterName("web3", web3)
-		net := NewPublicNetAPI(stack.Server(), ethereum.NetVersion())
-		server.RegisterName("net", net)
-
-		go func() {
-			glog.V(logger.Info).Infof("Start IPC server on %s\n", config.Endpoint)
-			for {
-				conn, err := listener.Accept()
-				if err != nil {
-					glog.V(logger.Error).Infof("Unable to accept connection - %v\n", err)
-				}
-
-				codec := rpc.NewJSONCodec(conn)
-				go server.ServeCodec(codec)
+	go func() {
+		glog.V(logger.Info).Infof("Start IPC server on %s\n", endpoint)
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				glog.V(logger.Error).Infof("Unable to accept connection - %v\n", err)
 			}
-		}()
 
-		return nil
-	}
-
-	initializer := func(conn net.Conn) (comms.Stopper, shared.EthereumApi, error) {
-		fe := useragent.NewRemoteFrontend(conn, ethereum.AccountManager())
-		xeth := xeth.New(stack, fe)
-		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec.JSON, xeth, stack)
-		if err != nil {
-			return nil, nil, err
+			codec := rpc.NewJSONCodec(conn)
+			go server.ServeCodec(codec)
 		}
-		return xeth, api.Merge(apis...), nil
-	}
-	return comms.StartIpc(config, codec.JSON, initializer)
+	}()
+
+	return nil
+
 }
 
 // StartRPC starts a HTTP JSON-RPC API server.
 func StartRPC(stack *node.Node, ctx *cli.Context) error {
-	config := comms.HttpConfig{
-		ListenAddress: ctx.GlobalString(RPCListenAddrFlag.Name),
-		ListenPort:    uint(ctx.GlobalInt(RPCPortFlag.Name)),
-		CorsDomain:    ctx.GlobalString(RPCCORSDomainFlag.Name),
+	for _, api := range stack.APIs() {
+		if adminApi, ok := api.Service.(*node.PrivateAdminAPI); ok {
+			address := ctx.GlobalString(RPCListenAddrFlag.Name)
+			port := ctx.GlobalInt(RPCPortFlag.Name)
+			cors := ctx.GlobalString(RPCCORSDomainFlag.Name)
+			apiStr := ""
+			if ctx.GlobalIsSet(RPCApiFlag.Name) {
+				apiStr = ctx.GlobalString(RPCApiFlag.Name)
+			}
+
+			_, err := adminApi.StartRPC(address, port, cors, apiStr)
+			return err
+		}
 	}
 
-	xeth := xeth.New(stack, nil)
-	codec := codec.JSON
+	glog.V(logger.Error).Infof("Unable to start RPC-HTTP interface, could not find admin API")
+	return errors.New("Unable to start RPC-HTTP interface")
+}
 
-	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, stack)
-	if err != nil {
-		return err
+// StartWS starts a websocket JSON-RPC API server.
+func StartWS(stack *node.Node, ctx *cli.Context) error {
+	for _, api := range stack.APIs() {
+		if adminApi, ok := api.Service.(*node.PrivateAdminAPI); ok {
+			address := ctx.GlobalString(WSListenAddrFlag.Name)
+			port := ctx.GlobalInt(WSAllowedDomainsFlag.Name)
+			allowedDomains := ctx.GlobalString(WSAllowedDomainsFlag.Name)
+			apiStr := ""
+			if ctx.GlobalIsSet(WSApiFlag.Name) {
+				apiStr = ctx.GlobalString(WSApiFlag.Name)
+			}
+
+			_, err := adminApi.StartWS(address, port, allowedDomains, apiStr)
+			return err
+		}
 	}
-	return comms.StartHttp(config, codec, api.Merge(apis...))
+
+	glog.V(logger.Error).Infof("Unable to start RPC-WS interface, could not find admin API")
+	return errors.New("Unable to start RPC-WS interface")
 }
 
 func StartPProf(ctx *cli.Context) {

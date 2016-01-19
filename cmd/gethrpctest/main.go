@@ -26,8 +26,9 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"errors"
+
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -35,13 +36,9 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc/api"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/comms"
-	rpc "github.com/ethereum/go-ethereum/rpc/v2"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/ethereum/go-ethereum/whisper"
-	"github.com/ethereum/go-ethereum/xeth"
 )
 
 const defaultTestKey = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
@@ -176,21 +173,25 @@ func RunTest(stack *node.Node, test *tests.BlockTest) error {
 
 // StartRPC initializes an RPC interface to the given protocol stack.
 func StartRPC(stack *node.Node) error {
-	config := comms.HttpConfig{
-		ListenAddress: "127.0.0.1",
-		ListenPort:    8545,
-	}
-	xeth := xeth.New(stack, nil)
-	codec := codec.JSON
+	/*
+		web3 := NewPublicWeb3API(stack)
+		server.RegisterName("web3", web3)
+		net := NewPublicNetAPI(stack.Server(), ethereum.NetVersion())
+		server.RegisterName("net", net)
+	*/
 
-	apis, err := api.ParseApiString(comms.DefaultHttpRpcApis, codec, xeth, stack)
-	if err != nil {
-		return err
+	for _, api := range stack.APIs() {
+		if adminApi, ok := api.Service.(*node.PrivateAdminAPI); ok {
+			_, err := adminApi.StartRPC("127.0.0.1", 8545, "", "admin,db,eth,debug,miner,net,shh,txpool,personal,web3")
+			return err
+		}
 	}
-	return comms.StartHttp(config, codec, api.Merge(apis...))
+
+	glog.V(logger.Error).Infof("Unable to start RPC-HTTP interface, could not find admin API")
+	return errors.New("Unable to start RPC-HTTP interface")
 }
 
-// StartRPC initializes an IPC interface to the given protocol stack.
+// StartIPC initializes an IPC interface to the given protocol stack.
 func StartIPC(stack *node.Node) error {
 	var ethereum *eth.Ethereum
 	if err := stack.Service(&ethereum); err != nil {
@@ -202,11 +203,7 @@ func StartIPC(stack *node.Node) error {
 		endpoint = filepath.Join(common.DefaultDataDir(), "geth.ipc")
 	}
 
-	config := comms.IpcConfig{
-		Endpoint: endpoint,
-	}
-
-	listener, err := comms.CreateListener(config)
+	listener, err := rpc.CreateIPCListener(endpoint)
 	if err != nil {
 		return err
 	}
@@ -217,16 +214,16 @@ func StartIPC(stack *node.Node) error {
 	offered := stack.APIs()
 	for _, api := range offered {
 		server.RegisterName(api.Namespace, api.Service)
-		glog.V(logger.Debug).Infof("Register %T@%s for IPC service\n", api.Service, api.Namespace)
+		glog.V(logger.Debug).Infof("Register %T under namespace '%s' for IPC service\n", api.Service, api.Namespace)
 	}
 
-	web3 := utils.NewPublicWeb3API(stack)
-	server.RegisterName("web3", web3)
-	net := utils.NewPublicNetAPI(stack.Server(), ethereum.NetVersion())
-	server.RegisterName("net", net)
+	//var ethereum *eth.Ethereum
+	//if err := stack.Service(&ethereum); err != nil {
+	//	return err
+	//}
 
 	go func() {
-		glog.V(logger.Info).Infof("Start IPC server on %s\n", config.Endpoint)
+		glog.V(logger.Info).Infof("Start IPC server on %s\n", endpoint)
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
