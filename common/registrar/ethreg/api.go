@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
+	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -30,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/common/registrar"
 )
 
 // registryAPIBackend is a backend for an Ethereum Registry.
@@ -110,6 +110,9 @@ type callmsg struct {
 
 // accessor boilerplate to implement core.Message
 func (m callmsg) From() (common.Address, error) {
+	return m.from.Address(), nil
+}
+func (m callmsg) FromFrontier() (common.Address, error) {
 	return m.from.Address(), nil
 }
 func (m callmsg) Nonce() uint64 {

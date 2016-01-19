@@ -35,6 +35,9 @@ type Vm struct {
 
 // New returns a new Vm
 func New(env Environment) *Vm {
+	// init the jump table. Also prepares the homestead changes
+	jumpTable.init(env.BlockNumber())
+
 	return &Vm{env: env}
 }
 
@@ -42,16 +45,6 @@ func New(env Environment) *Vm {
 func (self *Vm) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
 	defer self.env.SetDepth(self.env.Depth() - 1)
-
-	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
-	defer func() {
-		if err != nil {
-			// In case of a VM exception (known exceptions) all gas consumed (panics NOT included).
-			contract.UseGas(contract.Gas)
-
-			ret = contract.Return(nil)
-		}
-	}()
 
 	if contract.CodeAddr != nil {
 		if p := Precompiled[contract.CodeAddr.Str()]; p != nil {
@@ -61,7 +54,7 @@ func (self *Vm) Run(contract *Contract, input []byte) (ret []byte, err error) {
 
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
-		return contract.Return(nil), nil
+		return nil, nil
 	}
 
 	var (
@@ -199,46 +192,17 @@ func (self *Vm) Run(contract *Contract, input []byte) (ret []byte, err error) {
 
 						continue
 					}
-				case CREATE:
-					var (
-						value        = stack.pop()
-						offset, size = stack.pop(), stack.pop()
-						input        = mem.Get(offset.Int64(), size.Int64())
-						gas          = new(big.Int).Set(contract.Gas)
-						addr         common.Address
-						ret          []byte
-						suberr       error
-					)
-					contract.UseGas(contract.Gas)
-					ret, addr, suberr = self.env.Create(contract, input, gas, contract.Price, value)
-					if suberr != nil {
-						stack.push(new(big.Int))
-					} else {
-						// gas < len(ret) * Createinstr.dataGas == NO_CODE
-						dataGas := big.NewInt(int64(len(ret)))
-						dataGas.Mul(dataGas, params.CreateDataGas)
-						if contract.UseGas(dataGas) {
-							self.env.Db().SetCode(addr, ret)
-						} else {
-							if params.IsHomestead(self.env.BlockNumber()) {
-								stack.push(new(big.Int))
-								return nil, CodeStoreOutOfGasError
-							}
-						}
-						stack.push(addr.Big())
-					}
-
 				case RETURN:
 					offset, size := stack.pop(), stack.pop()
 					ret := mem.GetPtr(offset.Int64(), size.Int64())
 
-					return contract.Return(ret), nil
+					return ret, nil
 				case SUICIDE:
 					opSuicide(instruction{}, nil, self.env, contract, mem, stack)
 
 					fallthrough
 				case STOP: // Stop the contract
-					return contract.Return(nil), nil
+					return nil, nil
 				}
 			}
 		} else {
@@ -359,7 +323,6 @@ func calculateGasAndSize(env Environment, contract *Contract, caller ContractRef
 		gas.Add(gas, stack.data[stack.len()-1])
 
 		if op == CALL {
-			//if env.Db().GetStateObject(common.BigToAddress(stack.data[stack.len()-2])) == nil {
 			if !env.Db().Exist(common.BigToAddress(stack.data[stack.len()-2])) {
 				gas.Add(gas, params.CallNewAccountGas)
 			}
@@ -392,7 +355,7 @@ func (self *Vm) RunPrecompiled(p *PrecompiledAccount, input []byte, contract *Co
 	if contract.UseGas(gas) {
 		ret = p.Call(input)
 
-		return contract.Return(ret), nil
+		return ret, nil
 	} else {
 		return nil, OutOfGasError
 	}

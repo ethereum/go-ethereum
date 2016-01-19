@@ -44,7 +44,6 @@ func DelegateCall(env vm.Environment, caller vm.ContractRef, addr common.Address
 	originAddr := env.Origin()
 	callerValue := caller.Value()
 	ret, _, err = execDelegateCall(env, caller, &originAddr, &callerAddr, &addr, input, env.Db().GetCode(addr), gas, gasPrice, callerValue)
-	caller.SetAddress(callerAddr)
 	return ret, err
 }
 
@@ -78,15 +77,15 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 
 	var createAccount bool
 	if address == nil {
-		// Generate a new address
+		// Create a new account on the state
 		nonce := env.Db().GetNonce(caller.Address())
 		env.Db().SetNonce(caller.Address(), nonce+1)
 		addr = crypto.CreateAddress(caller.Address(), nonce)
 		address = &addr
 		createAccount = true
 	}
-	snapshotPreTransfer := env.MakeSnapshot()
 
+	snapshotPreTransfer := env.MakeSnapshot()
 	var (
 		from = env.Db().GetAccount(caller.Address())
 		to   vm.Account
@@ -101,24 +100,38 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 		}
 	}
 	env.Transfer(from, to, value)
-	snapshotPostTransfer := env.MakeSnapshot()
 
+	// initialise a new contract and set the code that is to be used by the
+	// EVM. The contract is a scoped environment for this execution context
+	// only.
 	contract := vm.NewContract(caller, to, value, gas, gasPrice)
 	contract.SetCallCode(codeAddr, code)
+	defer contract.Finalise()
 
 	ret, err = evm.Run(contract, input)
-
-	if err != nil {
-		if err == vm.CodeStoreOutOfGasError {
-			// TODO: this is rather hacky, restore all state changes
-			// except sender's account nonce increment
-			toNonce := env.Db().GetNonce(to.Address())
-			env.SetSnapshot(snapshotPostTransfer)
-			env.Db().SetNonce(to.Address(), toNonce)
+	// if the contract creation ran successfully and no errors were returned
+	// calculate the gas required to store the code. If the code could not
+	// be stored due to not enough gas set an error and let it be handled
+	// by the error checking condition below.
+	if err == nil && createAccount {
+		dataGas := big.NewInt(int64(len(ret)))
+		dataGas.Mul(dataGas, params.CreateDataGas)
+		if contract.UseGas(dataGas) {
+			env.Db().SetCode(*address, ret)
 		} else {
-			env.SetSnapshot(snapshotPreTransfer) //env.Db().Set(snapshot)
+			err = vm.CodeStoreOutOfGasError
 		}
 	}
+
+	// When an error was returned by the EVM or when setting the creation code
+	// above we revert to the snapshot and consume any gas remaining. Additionally
+	// when we're in homestead this also counts for code storage gas errors.
+	if err != nil && (params.IsHomestead(env.BlockNumber()) || err != vm.CodeStoreOutOfGasError) {
+		contract.UseGas(contract.Gas)
+
+		env.SetSnapshot(snapshotPreTransfer)
+	}
+
 	return ret, addr, err
 }
 
@@ -131,32 +144,27 @@ func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toA
 		return nil, common.Address{}, vm.DepthError
 	}
 
-	if !env.CanTransfer(*originAddr, value) {
-		caller.ReturnGas(gas, gasPrice)
-		return nil, common.Address{}, ValueTransferErr("insufficient funds to transfer value. Req %v, has %v", value, env.Db().GetBalance(caller.Address()))
-	}
-
 	snapshot := env.MakeSnapshot()
 
-	var (
-		//from = env.Db().GetAccount(*originAddr)
-		to vm.Account
-	)
+	var to vm.Account
 	if !env.Db().Exist(*toAddr) {
 		to = env.Db().CreateAccount(*toAddr)
 	} else {
 		to = env.Db().GetAccount(*toAddr)
 	}
 
-	contract := vm.NewContract(caller, to, value, gas, gasPrice)
+	// Iinitialise a new contract and make initialise the delegate values
+	contract := vm.NewContract(caller, to, value, gas, gasPrice).AsDelegate()
 	contract.SetCallCode(codeAddr, code)
-	contract.DelegateCall = true
+	defer contract.Finalise()
 
 	ret, err = evm.Run(contract, input)
-
 	if err != nil {
-		env.SetSnapshot(snapshot) //env.Db().Set(snapshot)
+		contract.UseGas(contract.Gas)
+
+		env.SetSnapshot(snapshot)
 	}
+
 	return ret, addr, err
 }
 

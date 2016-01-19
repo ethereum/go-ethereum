@@ -28,6 +28,7 @@ type Account struct {
 	Nonce    uint64            `json:"nonce"`
 	Root     string            `json:"root"`
 	CodeHash string            `json:"codeHash"`
+	Code     string            `json:"code"`
 	Storage  map[string]string `json:"storage"`
 }
 
@@ -47,7 +48,7 @@ func (self *StateDB) RawDump() World {
 		addr := self.trie.GetKey(it.Key)
 		stateObject, _ := DecodeObject(common.BytesToAddress(addr), self.db, it.Value)
 
-		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.nonce, Root: common.Bytes2Hex(stateObject.Root()), CodeHash: common.Bytes2Hex(stateObject.codeHash)}
+		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.nonce, Root: common.Bytes2Hex(stateObject.Root()), CodeHash: common.Bytes2Hex(stateObject.codeHash), Code: common.Bytes2Hex(stateObject.Code())}
 		account.Storage = make(map[string]string)
 
 		storageIt := stateObject.trie.Iterator()
