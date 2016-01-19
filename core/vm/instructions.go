@@ -337,13 +337,7 @@ func opOrigin(instr instruction, pc *uint64, env Environment, contract *Contract
 }
 
 func opCaller(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
-	var bigAddr *big.Int
-	if contract.DelegateCall {
-		bigAddr = env.Origin().Big()
-	} else {
-		bigAddr = contract.caller.Address().Big()
-	}
-	stack.push(bigAddr)
+	stack.push(contract.Caller().Big())
 }
 
 func opCallValue(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
@@ -514,6 +508,25 @@ func opGas(instr instruction, pc *uint64, env Environment, contract *Contract, m
 }
 
 func opCreate(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
+	var (
+		value        = stack.pop()
+		offset, size = stack.pop(), stack.pop()
+		input        = memory.Get(offset.Int64(), size.Int64())
+		gas          = new(big.Int).Set(contract.Gas)
+	)
+	contract.UseGas(contract.Gas)
+	_, addr, suberr := env.Create(contract, input, gas, contract.Price, value)
+	// Push item on the stack based on the returned error. If the ruleset is
+	// homestead we must check for CodeStoreOutOfGasError (homestead only
+	// rule) and treat as an error, if the ruleset is frontier we must
+	// ignore this error and pretend the operation was successful.
+	if params.IsHomestead(env.BlockNumber()) && suberr == CodeStoreOutOfGasError {
+		stack.push(new(big.Int))
+	} else if suberr != nil && suberr != CodeStoreOutOfGasError {
+		stack.push(new(big.Int))
+	} else {
+		stack.push(addr.Big())
+	}
 }
 
 func opCall(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {

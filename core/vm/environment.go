@@ -121,7 +121,6 @@ type Account interface {
 	SetNonce(uint64)
 	Balance() *big.Int
 	Address() common.Address
-	SetAddress(common.Address)
 	ReturnGas(*big.Int, *big.Int)
 	SetCode([]byte)
 	EachStorage(cb func(key, value []byte))

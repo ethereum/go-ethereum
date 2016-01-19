@@ -66,10 +66,11 @@ type TxPool struct {
 	minGasPrice  *big.Int
 	eventMux     *event.TypeMux
 	events       event.Subscription
+	mu           sync.RWMutex
+	pending      map[common.Hash]*types.Transaction // processable transactions
+	queue        map[common.Address]map[common.Hash]*types.Transaction
 
-	mu      sync.RWMutex
-	pending map[common.Hash]*types.Transaction // processable transactions
-	queue   map[common.Address]map[common.Hash]*types.Transaction
+	homestead bool
 }
 
 func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
@@ -84,6 +85,7 @@ func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func(
 		pendingState: nil,
 		events:       eventMux.Subscribe(ChainHeadEvent{}, GasPriceChanged{}, RemovedTransactionEvent{}),
 	}
+
 	go pool.eventLoop()
 
 	return pool
@@ -97,6 +99,10 @@ func (pool *TxPool) eventLoop() {
 		switch ev := ev.Data.(type) {
 		case ChainHeadEvent:
 			pool.mu.Lock()
+			if ev.Block != nil && params.IsHomestead(ev.Block.Number()) {
+				pool.homestead = true
+			}
+
 			pool.resetState()
 			pool.mu.Unlock()
 		case GasPriceChanged:
@@ -171,12 +177,6 @@ func (pool *TxPool) Stats() (pending int, queued int) {
 // validateTx checks whether a transaction is valid according
 // to the consensus rules.
 func (pool *TxPool) validateTx(tx *types.Transaction) error {
-	// Validate sender
-	var (
-		from common.Address
-		err  error
-	)
-
 	// Drop transactions under our own minimal accepted gas price
 	if pool.minGasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrCheap
@@ -187,15 +187,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		return err
 	}
 
-	homestead := params.IsHomestead(GetHeadBlockNum(currentState.GetDB()))
-
-	// Validate the transaction sender and it's sig. Throw
-	// if the from fields is invalid.
-	if homestead {
-		from, err = tx.From()
-	} else {
-		from, err = tx.FromFrontier()
-	}
+	from, err := tx.From()
 	if err != nil {
 		return ErrInvalidSender
 	}
@@ -230,8 +222,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		return ErrInsufficientFunds
 	}
 
-	// Should supply enough intrinsic gas
-	intrGas := IntrinsicGas(tx.Data(), MessageCreatesContract(tx), homestead)
+	intrGas := IntrinsicGas(tx.Data(), MessageCreatesContract(tx), pool.homestead)
 	if tx.Gas().Cmp(intrGas) < 0 {
 		return ErrIntrinsicGas
 	}

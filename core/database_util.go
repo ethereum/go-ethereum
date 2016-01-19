@@ -95,20 +95,6 @@ func GetHeadFastBlockHash(db ethdb.Database) common.Hash {
 	return common.BytesToHash(data)
 }
 
-// GetHeadBlockNum retrieves the block number of the current canonical head block.
-func GetHeadBlockNum(db ethdb.Database) *big.Int {
-	data, _ := db.Get(headBlockKey)
-	if len(data) == 0 {
-		return nil
-	}
-	header := new(types.Header)
-	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
-		glog.V(logger.Error).Infof("invalid block header RLP for head block: %v", err)
-		return nil
-	}
-	return header.Number
-}
-
 // GetHeaderRLP retrieves a block header in its raw RLP database encoding, or nil
 // if the header's not found.
 func GetHeaderRLP(db ethdb.Database, hash common.Hash) rlp.RawValue {

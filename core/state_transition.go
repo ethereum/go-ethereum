@@ -21,7 +21,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -225,38 +224,24 @@ func (self *StateTransition) transitionDb() (ret []byte, usedGas *big.Int, err e
 	}
 
 	vmenv := self.env
-	snapshot := vmenv.MakeSnapshot()
-	var addr common.Address
+	//var addr common.Address
 	if contractCreation {
-		ret, addr, err = vmenv.Create(sender, self.data, self.gas, self.gasPrice, self.value)
-		if err == nil {
-			dataGas := big.NewInt(int64(len(ret)))
-			dataGas.Mul(dataGas, params.CreateDataGas)
-			if err := self.useGas(dataGas); err == nil {
-				self.state.SetCode(addr, ret)
-			} else {
-				if homestead {
-					// rollback all contract creation changes except for
-					// sender's incremented account nonce and gas usage
-					// TODO: fucking gas hack... verify potential DoS vuln
-					accNonce := vmenv.Db().GetNonce(sender.Address())
-					logs := vmenv.Db().(*state.StateDB).GetAllLogs()
-					vmenv.SetSnapshot(snapshot)
-					vmenv.Db().SetNonce(sender.Address(), accNonce)
-					vmenv.Db().(*state.StateDB).SetAllLogs(logs)
-					self.gas = Big0
-
-				}
-				ret = nil // does not affect consensus but useful for StateTests validations
-				glog.V(logger.Core).Infoln("Insufficient gas for creating code. Require", dataGas, "and have", self.gas)
-			}
+		ret, _, err = vmenv.Create(sender, self.data, self.gas, self.gasPrice, self.value)
+		if homestead && err == vm.CodeStoreOutOfGasError {
+			self.gas = Big0
 		}
-		glog.V(logger.Core).Infoln("VM create err:", err)
+
+		if err != nil {
+			ret = nil
+			glog.V(logger.Core).Infoln("VM create err:", err)
+		}
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), self.state.GetNonce(sender.Address())+1)
 		ret, err = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.gasPrice, self.value)
-		glog.V(logger.Core).Infoln("VM call err:", err)
+		if err != nil {
+			glog.V(logger.Core).Infoln("VM call err:", err)
+		}
 	}
 
 	if err != nil && IsValueTransferErr(err) {

@@ -130,6 +130,15 @@ func TestStateTransaction(t *testing.T) {
 	}
 }
 
+func TestStateTransition(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
+	fn := filepath.Join(stateTestDir, "stTransitionTest.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestCallCreateCallCode(t *testing.T) {
 	params.HomesteadBlock = big.NewInt(1000000)
 

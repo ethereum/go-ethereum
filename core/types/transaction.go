@@ -157,7 +157,14 @@ func (tx *Transaction) Size() common.StorageSize {
 	return common.StorageSize(c)
 }
 
-// From() caches the address, allowing it to be used regardless of
+// From returns the address derived from the signature (V, R, S) using secp256k1
+// eliptic curve and an error if it failed deriving or upon an incorrect
+// signature.
+//
+// From Uses the homestead consensus rules to determine whether the signature is
+// valid.
+//
+// From caches the address, allowing it to be used regardless of
 // Frontier / Homestead. however, the first time called it runs
 // signature validations, so we need two versions. This makes it
 // easier to ensure backwards compatibility of things like package rpc
@@ -168,6 +175,20 @@ func (tx *Transaction) From() (common.Address, error) {
 	return doFrom(tx, true)
 }
 
+// FromFrontier returns the address derived from the signature (V, R, S) using
+// secp256k1 eliptic curve and an error if it failed deriving or upon an
+// incorrect signature.
+//
+// FromFrantier uses the frontier consensus rules to determine whether the
+// signature is valid.
+//
+// FromFrontier caches the address, allowing it to be used regardless of
+// Frontier / Homestead. however, the first time called it runs
+// signature validations, so we need two versions. This makes it
+// easier to ensure backwards compatibility of things like package rpc
+// where eth_getblockbynumber uses tx.From() and needs to work for
+// both txs before and after the first homestead block. Signatures
+// valid in homestead are a subset of valid ones in Frontier)
 func (tx *Transaction) FromFrontier() (common.Address, error) {
 	return doFrom(tx, false)
 }

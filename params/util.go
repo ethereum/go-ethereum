@@ -18,8 +18,7 @@ package params
 
 import "math/big"
 
-// TODO: set exact block number after community consensus is reached.
-var HomesteadBlock *big.Int = big.NewInt(0)
+var HomesteadBlock *big.Int = big.NewInt(2000000)
 
 func IsHomestead(blockNumber *big.Int) bool {
 	// for unit tests TODO: flip to true after homestead is live
