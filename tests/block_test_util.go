@@ -148,12 +148,11 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 	}
 
 	for name, test := range bt {
-		if skipTest[name] || name != "wallet2outOf3txsRevoke" {
+		if skipTest[name] {
 			glog.Infoln("Skipping block test", name)
 			continue
 		}
 		// test the block
-		//fmt.Println("BlockTest name:", name)
 		if err := runBlockTest(test); err != nil {
 			return fmt.Errorf("%s: %v", name, err)
 		}
@@ -286,12 +285,13 @@ func (t *BlockTest) TryBlocksInsert(blockchain *core.BlockChain) ([]btBlock, err
 			}
 		}
 		// RLP decoding worked, try to insert into chain:
-		_, err = blockchain.InsertChain(types.Blocks{cb})
+		blocks := types.Blocks{cb}
+		i, err := blockchain.InsertChain(blocks)
 		if err != nil {
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
-				return nil, fmt.Errorf("Block insertion into chain failed: %v", err)
+				return nil, fmt.Errorf("Block #%v insertion into chain failed: %v", blocks[i].Number(), err)
 			}
 		}
 		if b.BlockHeader == nil {
