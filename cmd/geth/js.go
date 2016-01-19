@@ -348,6 +348,15 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		persObj.Set("newAccount", jeth.NewAccount)
 	}
 
+	// The admin.sleep and admin.sleepBlocks are offered by the console and not by the RPC layer.
+	// Bind these if the admin module is available.
+	if a, err := js.re.Get("admin"); err == nil {
+		if adminObj := a.Object(); adminObj != nil {
+			adminObj.Set("sleepBlocks", jeth.SleepBlocks)
+			adminObj.Set("sleep", jeth.Sleep)
+		}
+	}
+
 	return nil
 }
 

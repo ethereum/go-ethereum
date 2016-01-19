@@ -19,6 +19,7 @@ package rpc
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/jsre"
@@ -246,4 +247,78 @@ func (self *Jeth) askPassword(id interface{}, jsonrpc string, args []interface{}
 func (self *Jeth) confirmTransaction(id interface{}, jsonrpc string, args []interface{}) bool {
 	// Accept all tx which are send from this console
 	return self.client.Send(shared.NewRpcResponse(id, jsonrpc, true, nil)) == nil
+}
+
+// throwJSExeception panics on an otto value, the Otto VM will then throw msg as a javascript error.
+func throwJSExeception(msg interface{}) otto.Value {
+	p, _ := otto.ToValue(msg)
+	panic(p)
+	return p
+}
+
+// Sleep will halt the console for arg[0] seconds.
+func (self *Jeth) Sleep(call otto.FunctionCall) (response otto.Value) {
+	if len(call.ArgumentList) >= 1 {
+		if call.Argument(0).IsNumber() {
+			sleep, _ := call.Argument(0).ToInteger()
+			time.Sleep(time.Duration(sleep) * time.Second)
+			return otto.TrueValue()
+		}
+	}
+	return throwJSExeception("usage: sleep(<sleep in seconds>)")
+}
+
+// SleepBlocks will wait for a specified number of new blocks or max for a
+// given of seconds. sleepBlocks(nBlocks[, maxSleep]).
+func (self *Jeth) SleepBlocks(call otto.FunctionCall) (response otto.Value) {
+	nBlocks := int64(0)
+	maxSleep := int64(9999999999999999) // indefinitely
+
+	nArgs := len(call.ArgumentList)
+
+	if nArgs == 0 {
+		throwJSExeception("usage: sleepBlocks(<n blocks>[, max sleep in seconds])")
+	}
+
+	if nArgs >= 1 {
+		if call.Argument(0).IsNumber() {
+			nBlocks, _ = call.Argument(0).ToInteger()
+		} else {
+			throwJSExeception("expected number as first argument")
+		}
+	}
+
+	if nArgs >= 2 {
+		if call.Argument(1).IsNumber() {
+			maxSleep, _ = call.Argument(1).ToInteger()
+		} else {
+			throwJSExeception("expected number as second argument")
+		}
+	}
+
+	// go through the console, this will allow web3 to call the appropriate
+	// callbacks if a delayed response or notification is received.
+	currentBlockNr := func() int64 {
+		result, err := call.Otto.Run("eth.blockNumber")
+		if err != nil {
+			throwJSExeception(err.Error())
+		}
+		blockNr, err := result.ToInteger()
+		if err != nil {
+			throwJSExeception(err.Error())
+		}
+		return blockNr
+	}
+
+	targetBlockNr := currentBlockNr() + nBlocks
+	deadline := time.Now().Add(time.Duration(maxSleep) * time.Second)
+
+	for time.Now().Before(deadline) {
+		if currentBlockNr() >= targetBlockNr {
+			return otto.TrueValue()
+		}
+		time.Sleep(time.Second)
+	}
+
+	return otto.FalseValue()
 }
