@@ -17,11 +17,13 @@
 package tests
 
 import (
+	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func init() {
@@ -39,6 +41,8 @@ func BenchmarkStateCall1024(b *testing.B) {
 }
 
 func TestStateSystemOperations(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stSystemOperationsTest.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -46,6 +50,8 @@ func TestStateSystemOperations(t *testing.T) {
 }
 
 func TestStateExample(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stExample.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -53,6 +59,8 @@ func TestStateExample(t *testing.T) {
 }
 
 func TestStatePreCompiledContracts(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stPreCompiledContracts.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -60,6 +68,8 @@ func TestStatePreCompiledContracts(t *testing.T) {
 }
 
 func TestStateRecursiveCreate(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stRecursiveCreate.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -67,6 +77,8 @@ func TestStateRecursiveCreate(t *testing.T) {
 }
 
 func TestStateSpecial(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stSpecialTest.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -74,6 +86,8 @@ func TestStateSpecial(t *testing.T) {
 }
 
 func TestStateRefund(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stRefundTest.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -81,6 +95,8 @@ func TestStateRefund(t *testing.T) {
 }
 
 func TestStateBlockHash(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stBlockHashTest.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -88,6 +104,8 @@ func TestStateBlockHash(t *testing.T) {
 }
 
 func TestStateInitCode(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stInitCodeTest.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -95,6 +113,8 @@ func TestStateInitCode(t *testing.T) {
 }
 
 func TestStateLog(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stLogTests.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -102,6 +122,8 @@ func TestStateLog(t *testing.T) {
 }
 
 func TestStateTransaction(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stTransactionTest.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -109,6 +131,8 @@ func TestStateTransaction(t *testing.T) {
 }
 
 func TestCallCreateCallCode(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stCallCreateCallCodeTest.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -116,6 +140,8 @@ func TestCallCreateCallCode(t *testing.T) {
 }
 
 func TestCallCodes(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stCallCodes.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -123,27 +149,17 @@ func TestCallCodes(t *testing.T) {
 }
 
 func TestDelegateCall(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stDelegatecallTest.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
 	}
 }
 
-func TestDelegateCallCodes1(t *testing.T) {
-	fn := filepath.Join(stateTestDir, "stCallDelegateCodes.json")
-	if err := RunStateTest(fn, StateSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestDelegateCallCodes2(t *testing.T) {
-	fn := filepath.Join(stateTestDir, "stCallDelegateCodesCallCode.json")
-	if err := RunStateTest(fn, StateSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
 func TestMemory(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stMemoryTest.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -151,6 +167,8 @@ func TestMemory(t *testing.T) {
 }
 
 func TestMemoryStress(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	if os.Getenv("TEST_VM_COMPLEX") == "" {
 		t.Skip()
 	}
@@ -161,6 +179,8 @@ func TestMemoryStress(t *testing.T) {
 }
 
 func TestQuadraticComplexity(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	if os.Getenv("TEST_VM_COMPLEX") == "" {
 		t.Skip()
 	}
@@ -171,6 +191,8 @@ func TestQuadraticComplexity(t *testing.T) {
 }
 
 func TestSolidity(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stSolidityTest.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -178,6 +200,8 @@ func TestSolidity(t *testing.T) {
 }
 
 func TestWallet(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fn := filepath.Join(stateTestDir, "stWalletTest.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
@@ -185,10 +209,163 @@ func TestWallet(t *testing.T) {
 }
 
 func TestStateTestsRandom(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(1000000)
+
 	fns, _ := filepath.Glob("./files/StateTests/RandomTests/*")
 	for _, fn := range fns {
 		if err := RunStateTest(fn, StateSkipTests); err != nil {
 			t.Error(err)
 		}
+	}
+}
+
+// homestead tests
+func TestHomesteadStateSystemOperations(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stSystemOperationsTest.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadStatePreCompiledContracts(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stPreCompiledContracts.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadStateRecursiveCreate(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stRecursiveCreate.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadStateSpecial(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stSpecialTest.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadStateRefund(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stRefundTest.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadStateInitCode(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stInitCodeTest.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadStateLog(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stLogTests.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadStateTransaction(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stTransactionTest.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadCallCreateCallCode(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stCallCreateCallCodeTest.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadCallCodes(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stCallCodes.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadMemory(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stMemoryTest.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadMemoryStress(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	if os.Getenv("TEST_VM_COMPLEX") == "" {
+		t.Skip()
+	}
+	fn := filepath.Join(stateTestDir, "Homestead", "stMemoryStressTest.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadQuadraticComplexity(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	if os.Getenv("TEST_VM_COMPLEX") == "" {
+		t.Skip()
+	}
+	fn := filepath.Join(stateTestDir, "Homestead", "stQuadraticComplexityTest.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadWallet(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stWalletTest.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadDelegateCodes(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stCallDelegateCodes.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadDelegateCodesCallCode(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stCallDelegateCodesCallCode.json")
+	if err := RunStateTest(fn, StateSkipTests); err != nil {
+		t.Error(err)
 	}
 }

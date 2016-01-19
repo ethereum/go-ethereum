@@ -240,7 +240,7 @@
         "out" : "0x600060006000600060003060405a03f1",
         "post" : {
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "0xe6e8",
+                "balance" : "0x69e8",
                 "code" : "0x",
                 "nonce" : "0x00",
                 "storage" : {
@@ -254,14 +254,14 @@
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "0x05f4fa0e",
+                "balance" : "0x05f5770e",
                 "code" : "0x",
                 "nonce" : "0x01",
                 "storage" : {
                 }
             }
         },
-        "postStateRoot" : "68f497ee77ebf9247fe0c5df49aae2b78bc0010983cec0f79b1cb440652bfd06",
+        "postStateRoot" : "00056a5cf74634e496d1eba26e3a027b0d2c679333b923053fad7918e882c9aa",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "0x05f5e100",

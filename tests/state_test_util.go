@@ -123,17 +123,17 @@ func runStateTests(tests map[string]VmTest, skipTests []string) error {
 	}
 
 	for name, test := range tests {
-		if skipTest[name] {
+		if skipTest[name] /*|| name != "callcodecallcode_11" */ {
 			glog.Infoln("Skipping state test", name)
 			continue
 		}
 
-		fmt.Println("StateTest:", name)
+		//fmt.Println("StateTest:", name)
 		if err := runStateTest(test); err != nil {
 			return fmt.Errorf("%s: %s\n", name, err.Error())
 		}
 
-		glog.Infoln("State test passed: ", name)
+		//glog.Infoln("State test passed: ", name)
 		//fmt.Println(string(statedb.Dump()))
 	}
 	return nil
