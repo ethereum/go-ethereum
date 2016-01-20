@@ -109,7 +109,7 @@ func (t *SecureTrie) TryUpdate(key, value []byte) error {
 	if err != nil {
 		return err
 	}
-	t.secKeyCache[string(hk)] = key
+	t.secKeyCache[string(hk)] = common.CopyBytes(key)
 	return nil
 }
 
@@ -123,7 +123,9 @@ func (t *SecureTrie) Delete(key []byte) {
 // TryDelete removes any existing value for key from the trie.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *SecureTrie) TryDelete(key []byte) error {
-	return t.Trie.TryDelete(t.hashKey(key))
+	hk := t.hashKey(key)
+	delete(t.secKeyCache, string(hk))
+	return t.Trie.TryDelete(hk)
 }
 
 // GetKey returns the sha3 preimage of a hashed key that was

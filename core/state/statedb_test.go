@@ -50,3 +50,71 @@ func TestUpdateLeaks(t *testing.T) {
 		t.Errorf("State leaked into database: %x -> %x", key, value)
 	}
 }
+
+// Tests that no intermediate state of an object is stored into the database,
+// only the one right before the commit.
+func TestIntermediateLeaks(t *testing.T) {
+	// Create two state databases, one transitioning to the final state, the other final from the beginning
+	transDb, _ := ethdb.NewMemDatabase()
+	finalDb, _ := ethdb.NewMemDatabase()
+	transState, _ := New(common.Hash{}, transDb)
+	finalState, _ := New(common.Hash{}, finalDb)
+
+	// Update the states with some objects
+	for i := byte(0); i < 255; i++ {
+		// Create a new state object with some data into the transition database
+		obj := transState.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		obj.SetBalance(big.NewInt(int64(11 * i)))
+		obj.SetNonce(uint64(42 * i))
+		if i%2 == 0 {
+			obj.SetState(common.BytesToHash([]byte{i, i, i, 0}), common.BytesToHash([]byte{i, i, i, i, 0}))
+		}
+		if i%3 == 0 {
+			obj.SetCode([]byte{i, i, i, i, i, 0})
+		}
+		transState.UpdateStateObject(obj)
+
+		// Overwrite all the data with new values in the transition database
+		obj.SetBalance(big.NewInt(int64(11*i + 1)))
+		obj.SetNonce(uint64(42*i + 1))
+		if i%2 == 0 {
+			obj.SetState(common.BytesToHash([]byte{i, i, i, 0}), common.Hash{})
+			obj.SetState(common.BytesToHash([]byte{i, i, i, 1}), common.BytesToHash([]byte{i, i, i, i, 1}))
+		}
+		if i%3 == 0 {
+			obj.SetCode([]byte{i, i, i, i, i, 1})
+		}
+		transState.UpdateStateObject(obj)
+
+		// Create the final state object directly in the final database
+		obj = finalState.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		obj.SetBalance(big.NewInt(int64(11*i + 1)))
+		obj.SetNonce(uint64(42*i + 1))
+		if i%2 == 0 {
+			obj.SetState(common.BytesToHash([]byte{i, i, i, 1}), common.BytesToHash([]byte{i, i, i, i, 1}))
+		}
+		if i%3 == 0 {
+			obj.SetCode([]byte{i, i, i, i, i, 1})
+		}
+		finalState.UpdateStateObject(obj)
+	}
+	if _, err := transState.Commit(); err != nil {
+		t.Fatalf("failed to commit transition state: %v", err)
+	}
+	if _, err := finalState.Commit(); err != nil {
+		t.Fatalf("failed to commit final state: %v", err)
+	}
+	// Cross check the databases to ensure they are the same
+	for _, key := range finalDb.Keys() {
+		if _, err := transDb.Get(key); err != nil {
+			val, _ := finalDb.Get(key)
+			t.Errorf("entry missing from the transition database: %x -> %x", key, val)
+		}
+	}
+	for _, key := range transDb.Keys() {
+		if _, err := finalDb.Get(key); err != nil {
+			val, _ := transDb.Get(key)
+			t.Errorf("extra entry in the transition database: %x -> %x", key, val)
+		}
+	}
+}
