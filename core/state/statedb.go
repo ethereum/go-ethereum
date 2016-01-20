@@ -206,9 +206,6 @@ func (self *StateDB) Delete(addr common.Address) bool {
 
 // Update the given state object and apply it to state trie
 func (self *StateDB) UpdateStateObject(stateObject *StateObject) {
-	if len(stateObject.code) > 0 {
-		self.db.Put(stateObject.codeHash, stateObject.code)
-	}
 	addr := stateObject.Address()
 	data, err := rlp.EncodeToBytes(stateObject)
 	if err != nil {
@@ -375,8 +372,15 @@ func (s *StateDB) commit(db trie.DatabaseWriter) (common.Hash, error) {
 			// and just mark it for deletion in the trie.
 			s.DeleteStateObject(stateObject)
 		} else {
+			// Write any contract code associated with the state object
+			if len(stateObject.code) > 0 {
+				if err := db.Put(stateObject.codeHash, stateObject.code); err != nil {
+					return common.Hash{}, err
+				}
+			}
 			// Write any storage changes in the state object to its trie.
 			stateObject.Update()
+
 			// Commit the trie of the object to the batch.
 			// This updates the trie root internally, so
 			// getting the root hash of the storage trie

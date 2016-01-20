@@ -40,9 +40,10 @@ var secureKeyPrefix = []byte("secure-key-")
 type SecureTrie struct {
 	*Trie
 
-	hash       hash.Hash
-	secKeyBuf  []byte
-	hashKeyBuf []byte
+	hash        hash.Hash
+	hashKeyBuf  []byte
+	secKeyBuf   []byte
+	secKeyCache map[string][]byte
 }
 
 // NewSecure creates a trie with an existing root node from db.
@@ -59,7 +60,10 @@ func NewSecure(root common.Hash, db Database) (*SecureTrie, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &SecureTrie{Trie: trie}, nil
+	return &SecureTrie{
+		Trie:        trie,
+		secKeyCache: make(map[string][]byte),
+	}, nil
 }
 
 // Get returns the value for key stored in the trie.
@@ -105,7 +109,7 @@ func (t *SecureTrie) TryUpdate(key, value []byte) error {
 	if err != nil {
 		return err
 	}
-	t.Trie.db.Put(t.secKey(hk), key)
+	t.secKeyCache[string(hk)] = key
 	return nil
 }
 
@@ -125,8 +129,43 @@ func (t *SecureTrie) TryDelete(key []byte) error {
 // GetKey returns the sha3 preimage of a hashed key that was
 // previously used to store a value.
 func (t *SecureTrie) GetKey(shaKey []byte) []byte {
+	if key, ok := t.secKeyCache[string(shaKey)]; ok {
+		return key
+	}
 	key, _ := t.Trie.db.Get(t.secKey(shaKey))
 	return key
+}
+
+// Commit writes all nodes and the secure hash pre-images to the trie's database.
+// Nodes are stored with their sha3 hash as the key.
+//
+// Committing flushes nodes from memory. Subsequent Get calls will load nodes
+// from the database.
+func (t *SecureTrie) Commit() (root common.Hash, err error) {
+	return t.CommitTo(t.db)
+}
+
+// CommitTo writes all nodes and the secure hash pre-images to the given database.
+// Nodes are stored with their sha3 hash as the key.
+//
+// Committing flushes nodes from memory. Subsequent Get calls will load nodes from
+// the trie's database. Calling code must ensure that the changes made to db are
+// written back to the trie's attached database before using the trie.
+func (t *SecureTrie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
+	if len(t.secKeyCache) > 0 {
+		for hk, key := range t.secKeyCache {
+			if err := db.Put(t.secKey([]byte(hk)), key); err != nil {
+				return common.Hash{}, err
+			}
+		}
+		t.secKeyCache = make(map[string][]byte)
+	}
+	n, err := t.hashRoot(db)
+	if err != nil {
+		return (common.Hash{}), err
+	}
+	t.root = n
+	return common.BytesToHash(n.(hashNode)), nil
 }
 
 func (t *SecureTrie) secKey(key []byte) []byte {
