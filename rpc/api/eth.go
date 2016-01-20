@@ -78,6 +78,7 @@ var (
 		"eth_transact":                            (*ethApi).SendTransaction,
 		"eth_estimateGas":                         (*ethApi).EstimateGas,
 		"eth_call":                                (*ethApi).Call,
+		"eth_debugTransaction":                    (*ethApi).DebugTransaction,
 		"eth_flush":                               (*ethApi).Flush,
 		"eth_getBlockByHash":                      (*ethApi).GetBlockByHash,
 		"eth_getBlockByNumber":                    (*ethApi).GetBlockByNumber,
@@ -404,6 +405,69 @@ func (self *ethApi) Call(req *shared.Request) (interface{}, error) {
 	} else {
 		return newHexData(common.FromHex(v)), nil
 	}
+}
+
+func (self *ethApi) DebugTransaction(req *shared.Request) (interface{}, error) {
+
+	args := new(DebugTransactionArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	vmtrace, ret, gas, err := self.xeth.DebugTransaction(args.TxHash)
+
+	if err != nil {
+		return nil, err
+	}
+
+	res := TransactionExecutionRes{
+		Gas:         gas,
+		ReturnValue: fmt.Sprintf("%x", ret),
+		StructLogs:  make([]StructLogRes, len(vmtrace)),
+	}
+
+	for index, trace := range vmtrace {
+
+		stackLength := len(trace.Stack)
+
+		// Return full stack by default
+		if args.StackDepth != -1 && args.StackDepth < stackLength {
+			stackLength = args.StackDepth
+		}
+
+		res.StructLogs[index] = StructLogRes{
+			Pc:      trace.Pc,
+			Op:      trace.Op.String(),
+			Gas:     trace.Gas,
+			GasCost: trace.GasCost,
+			Error:   trace.Err,
+			Stack:   make([]string, stackLength),
+			Memory:  make(map[string]string),
+			Storage: make(map[string]string),
+		}
+
+		for i := 0; i < stackLength; i++ {
+			res.StructLogs[index].Stack[i] = fmt.Sprintf("%x", common.LeftPadBytes(trace.Stack[i].Bytes(), 32))
+		}
+
+		addr := 0
+		memorySize := args.MemorySize
+
+		// Return full memory by default
+		if memorySize == -1 {
+			memorySize = len(trace.Memory)
+		}
+
+		for i := 0; i+16 <= len(trace.Memory) && addr < memorySize; i += 16 {
+			res.StructLogs[index].Memory[fmt.Sprintf("%04d", addr*16)] = fmt.Sprintf("%x", trace.Memory[i:i+16])
+			addr++
+		}
+
+		for storageIndex, storageValue := range trace.Storage {
+			res.StructLogs[index].Storage[fmt.Sprintf("%x", storageIndex)] = fmt.Sprintf("%x", storageValue)
+		}
+	}
+	return res, nil
 }
 
 func (self *ethApi) Flush(req *shared.Request) (interface{}, error) {

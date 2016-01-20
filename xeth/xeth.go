@@ -822,6 +822,61 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 	return tx.Hash().Hex(), nil
 }
 
+func (self *XEth) DebugTransaction(hash string) ([]vm.StructLog, []byte, *big.Int, error) {
+
+	// Make sure the transaction exists and has been included into a block
+	tx, _, number, _ := core.GetTransaction(self.EthereumService().ChainDb(), common.HexToHash(hash))
+
+	if tx == nil {
+		return nil, nil, nil, fmt.Errorf("Transaction not found or not yet mined")
+	}
+
+	// Retrieve the block prior to the block which containts the transaction
+	block := self.EthereumService().BlockChain().GetBlockByNumber(number - 1)
+
+	if block == nil {
+		return nil, nil, nil, fmt.Errorf("Unable to retrieve prior block")
+	}
+
+	statedb, err := state.New(block.Root(), self.EthereumService().ChainDb())
+
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("Unable to create transient state database")
+	}
+
+	txFrom, err := tx.From()
+
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("Unable to create transaction sender")
+	}
+
+	from := statedb.GetOrNewStateObject(txFrom)
+
+	msg := callmsg{
+		from:     from,
+		to:       tx.To(),
+		gas:      tx.Gas(),
+		gasPrice: tx.GasPrice(),
+		value:    tx.Value(),
+		data:     tx.Data(),
+	}
+
+	vmenv := core.NewEnv(statedb, self.EthereumService().BlockChain(), msg, block.Header())
+
+	gp := new(core.GasPool).AddGas(block.GasLimit())
+
+	// vmDebugValue := vm.Debug
+	vm.GenerateStructLogs = true
+	ret, gas, err := core.ApplyMessage(vmenv, msg, gp)
+	vm.GenerateStructLogs = false
+
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("Error executing transaction %v", err)
+	}
+
+	return vmenv.StructLogs(), ret, gas, nil
+}
+
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, string, error) {
 	statedb := self.State().State().Copy()
 	var from *state.StateObject

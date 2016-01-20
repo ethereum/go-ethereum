@@ -367,7 +367,7 @@ func (self *Vm) RunPrecompiled(p *PrecompiledAccount, input []byte, contract *Co
 // log emits a log event to the environment for each opcode encountered. This is not to be confused with the
 // LOG* opcode.
 func (self *Vm) log(pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *stack, contract *Contract, err error) {
-	if Debug {
+	if Debug || GenerateStructLogs {
 		mem := make([]byte, len(memory.Data()))
 		copy(mem, memory.Data())
 

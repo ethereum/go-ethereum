@@ -28,6 +28,9 @@ import (
 // Global Debug flag indicating Debug VM (full logging)
 var Debug bool
 
+// Global Debug flag indicating to generate structured logs of the evm execution (full logging)
+var GenerateStructLogs bool = false
+
 // Type is the VM type accepted by **NewVm**
 type Type byte
 

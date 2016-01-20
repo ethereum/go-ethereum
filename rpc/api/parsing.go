@@ -462,6 +462,23 @@ func NewReceiptRes(rec *types.Receipt) *ReceiptRes {
 	return v
 }
 
+type StructLogRes struct {
+	Pc      uint64            `json:"Pc"`
+	Op      string            `json:"Op"`
+	Gas     *big.Int          `json:Gas`
+	GasCost *big.Int          `json:GasCost`
+	Error   error             `json:Error`
+	Stack   []string          `json:"Stack"`
+	Memory  map[string]string `json:Memory`
+	Storage map[string]string `json:Storage`
+}
+
+type TransactionExecutionRes struct {
+	Gas         *big.Int       `json:Gas`
+	ReturnValue string         `json:ReturnValue`
+	StructLogs  []StructLogRes `json:StructLogs`
+}
+
 func numString(raw interface{}) (*big.Int, error) {
 	var number *big.Int
 	// Parse as integer

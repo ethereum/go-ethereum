@@ -53,6 +53,11 @@ web3._extend({
 			call: 'eth_submitTransaction',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'debugTransaction',
+			call: 'eth_debugTransaction',
+			params: 3
 		})
 	],
 	properties:

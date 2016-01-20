@@ -1102,3 +1102,50 @@ func (args *ResendArgs) UnmarshalJSON(b []byte) (err error) {
 
 	return nil
 }
+
+type DebugTransactionArgs struct {
+	TxHash     string
+	StackDepth int
+	MemorySize int
+}
+
+func (args *DebugTransactionArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	argstr, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("txHash", "not a string")
+	}
+	args.TxHash = argstr
+
+	if len(obj) > 1 && obj[1] != nil {
+		if stackDepthVal, ok := obj[1].(float64); ok {
+			args.StackDepth = int(stackDepthVal)
+		} else {
+			return shared.NewInvalidTypeError("stackDepth", "invalid number")
+		}
+	} else {
+		args.StackDepth = -1
+	}
+
+	if len(obj) > 2 && obj[2] != nil {
+
+		if memorySizeVal, ok := obj[2].(float64); ok {
+			args.MemorySize = int(memorySizeVal)
+		} else {
+			return shared.NewInvalidTypeError("memorySize", "invalid number")
+		}
+	} else {
+		args.MemorySize = -1
+	}
+
+	return nil
+}
