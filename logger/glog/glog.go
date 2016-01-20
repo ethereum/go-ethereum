@@ -63,11 +63,17 @@
 //		Enable V-leveled logging at the specified level.
 //	-vmodule=""
 //		The syntax of the argument is a comma-separated list of pattern=N,
-//		where pattern is a literal file name (minus the ".go" suffix) or
-//		"glob" pattern and N is a V level. For instance,
-//			-vmodule=gopher*=3
-//		sets the V level to 3 in all Go files whose names begin "gopher".
+//		where pattern is a literal file name or "glob" pattern matching
+//		and N is a V level. For instance,
 //
+//			-vmodule=gopher.go=3
+//		sets the V level to 3 in all Go files named "gopher.go".
+//
+//			-vmodule=foo=3
+//		sets V to 3 in all files of any packages whose import path ends in "foo".
+//
+//			-vmodule=foo/*=3
+//		sets V to 3 in all files of any packages whose import path contains "foo".
 package glog
 
 import (
@@ -78,7 +84,7 @@ import (
 	"io"
 	stdLog "log"
 	"os"
-	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -111,6 +117,20 @@ var severityName = []string{
 	warningLog: "WARNING",
 	errorLog:   "ERROR",
 	fatalLog:   "FATAL",
+}
+
+// these path prefixes are trimmed for display, but not when
+// matching vmodule filters.
+var trimPrefixes = []string{
+	"/github.com/ethereum/go-ethereum",
+	"/github.com/ethereum/ethash",
+}
+
+func trimToImportPath(file string) string {
+	if root := strings.LastIndex(file, "src/"); root != 0 {
+		file = file[root+3:]
+	}
+	return file
 }
 
 // SetV sets the global verbosity level
@@ -261,19 +281,8 @@ type moduleSpec struct {
 // modulePat contains a filter for the -vmodule flag.
 // It holds a verbosity level and a file pattern to match.
 type modulePat struct {
-	pattern string
-	literal bool // The pattern is a literal string
+	pattern *regexp.Regexp
 	level   Level
-}
-
-// match reports whether the file matches the pattern. It uses a string
-// comparison if the pattern contains no metacharacters.
-func (m *modulePat) match(file string) bool {
-	if m.literal {
-		return file == m.pattern
-	}
-	match, _ := filepath.Match(m.pattern, file)
-	return match
 }
 
 func (m *moduleSpec) String() string {
@@ -322,7 +331,8 @@ func (m *moduleSpec) Set(value string) error {
 			continue // Ignore. It's harmless but no point in paying the overhead.
 		}
 		// TODO: check syntax of filter?
-		filter = append(filter, modulePat{pattern, isLiteral(pattern), Level(v)})
+		re, _ := compileModulePattern(pattern)
+		filter = append(filter, modulePat{re, Level(v)})
 	}
 	logging.mu.Lock()
 	defer logging.mu.Unlock()
@@ -330,10 +340,21 @@ func (m *moduleSpec) Set(value string) error {
 	return nil
 }
 
-// isLiteral reports whether the pattern is a literal string, that is, has no metacharacters
-// that require filepath.Match to be called to match the pattern.
-func isLiteral(pattern string) bool {
-	return !strings.ContainsAny(pattern, `\*?[]`)
+// compiles a vmodule pattern to a regular expression.
+func compileModulePattern(pat string) (*regexp.Regexp, error) {
+	re := ".*"
+	for _, comp := range strings.Split(pat, "/") {
+		if comp == "*" {
+			re += "(/.*)?"
+		} else if comp != "" {
+			// TODO: maybe return error if comp contains *
+			re += "/" + regexp.QuoteMeta(comp)
+		}
+	}
+	if !strings.HasSuffix(pat, ".go") {
+		re += "/[^/]+\\.go"
+	}
+	return regexp.Compile(re + "$")
 }
 
 // traceLocation represents the setting of the -log_backtrace_at flag.
@@ -556,10 +577,14 @@ func (l *loggingT) header(s severity, depth int) (*buffer, string, int) {
 		file = "???"
 		line = 1
 	} else {
-		slash := strings.LastIndex(file, "/")
-		if slash >= 0 {
-			file = file[slash+1:]
+		file = trimToImportPath(file)
+		for _, p := range trimPrefixes {
+			if strings.HasPrefix(file, p) {
+				file = file[len(p):]
+				break
+			}
 		}
+		file = file[1:] // drop '/'
 	}
 	return l.formatHeader(s, file, line), file, line
 }
@@ -592,9 +617,7 @@ func (l *loggingT) formatHeader(s severity, file string, line int) *buffer {
 	buf.tmp[14] = '.'
 	buf.nDigits(6, 15, now.Nanosecond()/1000, '0')
 	buf.tmp[21] = ' '
-	buf.nDigits(7, 22, pid, ' ') // TODO: should be TID
-	buf.tmp[29] = ' '
-	buf.Write(buf.tmp[:30])
+	buf.Write(buf.tmp[:22])
 	buf.WriteString(file)
 	buf.tmp[0] = ':'
 	n := buf.someDigits(1, line)
@@ -976,15 +999,9 @@ func (lb logBridge) Write(b []byte) (n int, err error) {
 func (l *loggingT) setV(pc uintptr) Level {
 	fn := runtime.FuncForPC(pc)
 	file, _ := fn.FileLine(pc)
-	// The file is something like /a/b/c/d.go. We want just the d.
-	if strings.HasSuffix(file, ".go") {
-		file = file[:len(file)-3]
-	}
-	if slash := strings.LastIndex(file, "/"); slash >= 0 {
-		file = file[slash+1:]
-	}
+	file = trimToImportPath(file)
 	for _, filter := range l.vmodule.filter {
-		if filter.match(file) {
+		if filter.pattern.MatchString(file) {
 			l.vmap[pc] = filter.level
 			return filter.level
 		}
