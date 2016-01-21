@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -174,17 +175,23 @@ type VMEnv struct {
 	Gas   *big.Int
 	time  *big.Int
 	logs  []vm.StructLog
+
+	evm *vm.Vm
 }
 
 func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int) *VMEnv {
-	return &VMEnv{
+	params.HomesteadBlock = new(big.Int)
+	env := &VMEnv{
 		state:      state,
 		transactor: &transactor,
 		value:      value,
 		time:       big.NewInt(time.Now().Unix()),
 	}
+	env.evm = vm.EVM(env)
+	return env
 }
 
+func (self *VMEnv) Vm() *vm.Vm                 { return self.evm }
 func (self *VMEnv) Db() vm.Database            { return self.state }
 func (self *VMEnv) MakeSnapshot() vm.Database  { return self.state.Copy() }
 func (self *VMEnv) SetSnapshot(db vm.Database) { self.state.Set(db.(*state.StateDB)) }

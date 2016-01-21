@@ -143,12 +143,15 @@ type Env struct {
 	logs []vm.StructLog
 
 	vmTest bool
+
+	evm *vm.Vm
 }
 
 func NewEnv(state *state.StateDB) *Env {
-	return &Env{
+	env := &Env{
 		state: state,
 	}
+	return env
 }
 
 func (self *Env) StructLogs() []vm.StructLog {
@@ -171,9 +174,12 @@ func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues 
 	env.gasLimit = common.Big(envValues["currentGasLimit"])
 	env.Gas = new(big.Int)
 
+	env.evm = vm.EVM(env)
+
 	return env
 }
 
+func (self *Env) Vm() *vm.Vm               { return self.evm }
 func (self *Env) Origin() common.Address   { return self.origin }
 func (self *Env) BlockNumber() *big.Int    { return self.number }
 func (self *Env) Coinbase() common.Address { return self.coinbase }

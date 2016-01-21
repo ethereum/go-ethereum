@@ -58,10 +58,8 @@ type Environment interface {
 	AddStructLog(StructLog)
 	// Returns all coalesced structured logs
 	StructLogs() []StructLog
-
 	// Type of the VM
-	VmType() Type
-
+	Vm() *Vm
 	// Current calling depth
 	Depth() int
 	SetDepth(i int)

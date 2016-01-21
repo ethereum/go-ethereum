@@ -154,7 +154,7 @@ func runVmBench(test vmBench, b *testing.B) {
 		context := NewContract(sender, sender, big.NewInt(100), big.NewInt(10000), big.NewInt(0))
 		context.Code = test.code
 		context.CodeAddr = &common.Address{}
-		_, err := New(env).Run(context, test.input)
+		_, err := env.Vm().Run(context, test.input)
 		if err != nil {
 			b.Error(err)
 			b.FailNow()
@@ -165,12 +165,16 @@ func runVmBench(test vmBench, b *testing.B) {
 type Env struct {
 	gasLimit *big.Int
 	depth    int
+	evm      *Vm
 }
 
 func NewEnv() *Env {
-	return &Env{big.NewInt(10000), 0}
+	env := &Env{gasLimit: big.NewInt(10000), depth: 0}
+	env.evm = EVM(env)
+	return env
 }
 
+func (self *Env) Vm() *Vm                { return self.evm }
 func (self *Env) Origin() common.Address { return common.Address{} }
 func (self *Env) BlockNumber() *big.Int  { return big.NewInt(0) }
 func (self *Env) AddStructLog(log StructLog) {

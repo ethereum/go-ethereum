@@ -13,19 +13,15 @@ type jumpPtr struct {
 
 type vmJumpTable [256]jumpPtr
 
-func (jt vmJumpTable) init(blockNumber *big.Int) {
+func newJumpTable(blockNumber *big.Int) vmJumpTable {
+	var jumpTable vmJumpTable
+
 	// when initialising a new VM execution we must first check the homestead
 	// changes.
 	if params.IsHomestead(blockNumber) {
 		jumpTable[DELEGATECALL] = jumpPtr{opDelegateCall, true}
-	} else {
-		jumpTable[DELEGATECALL] = jumpPtr{nil, false}
 	}
-}
 
-var jumpTable vmJumpTable
-
-func init() {
 	jumpTable[ADD] = jumpPtr{opAdd, true}
 	jumpTable[SUB] = jumpPtr{opSub, true}
 	jumpTable[MUL] = jumpPtr{opMul, true}
@@ -156,4 +152,6 @@ func init() {
 	jumpTable[JUMP] = jumpPtr{nil, true}
 	jumpTable[JUMPI] = jumpPtr{nil, true}
 	jumpTable[STOP] = jumpPtr{nil, true}
+
+	return jumpTable
 }
