@@ -62,7 +62,19 @@ web3._extend({
 			call: 'debug_metrics',
 			params: 1,
 			inputFormatter: [null]
-		})
+		}),
+		new web3._extend.Method({
+			name: 'verbosity',
+			call: 'debug_verbosity',
+			params: 1,
+			inputFormatter: [web3._extend.utils.fromDecimal]
+		}),
+		new web3._extend.Method({
+			name: 'vmodule',
+			call: 'debug_vmodule',
+			params: 1,
+			inputFormatter: [null]
+		}),
 	],
 	properties:
 	[

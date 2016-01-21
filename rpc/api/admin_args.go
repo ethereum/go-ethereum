@@ -69,28 +69,6 @@ func (args *ImportExportChainArgs) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
-type VerbosityArgs struct {
-	Level int
-}
-
-func (args *VerbosityArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []interface{}
-	if err := json.Unmarshal(b, &obj); err != nil {
-		return shared.NewDecodeParamError(err.Error())
-	}
-
-	if len(obj) != 1 {
-		return shared.NewDecodeParamError("Expected enode as argument")
-	}
-
-	level, err := numString(obj[0])
-	if err == nil {
-		args.Level = int(level.Int64())
-	}
-
-	return nil
-}
-
 type SetSolcArgs struct {
 	Path string
 }

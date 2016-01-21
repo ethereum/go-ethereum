@@ -138,6 +138,11 @@ func (api *PrivateDebugAPI) Verbosity(level int) {
 	glog.SetV(level)
 }
 
+// Vmodule updates the node's logging verbosity pattern.
+func (api *PrivateDebugAPI) Vmodule(pattern string) error {
+	return glog.SetVmodule(pattern)
+}
+
 // PublicDebugAPI is the collection of debugging related API methods exposed over
 // both secure and unsecure RPC channels.
 type PublicDebugAPI struct {

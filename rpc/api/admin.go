@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -55,7 +54,6 @@ var (
 		"admin_nodeInfo":           (*adminApi).NodeInfo,
 		"admin_exportChain":        (*adminApi).ExportChain,
 		"admin_importChain":        (*adminApi).ImportChain,
-		"admin_verbosity":          (*adminApi).Verbosity,
 		"admin_setSolc":            (*adminApi).SetSolc,
 		"admin_datadir":            (*adminApi).DataDir,
 		"admin_startRPC":           (*adminApi).StartRPC,
@@ -222,16 +220,6 @@ func (self *adminApi) ExportChain(req *shared.Request) (interface{}, error) {
 		return false, err
 	}
 
-	return true, nil
-}
-
-func (self *adminApi) Verbosity(req *shared.Request) (interface{}, error) {
-	args := new(VerbosityArgs)
-	if err := self.coder.Decode(req.Params, &args); err != nil {
-		return nil, shared.NewDecodeParamError(err.Error())
-	}
-
-	glog.SetV(args.Level)
 	return true, nil
 }
 
