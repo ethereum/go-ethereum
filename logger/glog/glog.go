@@ -138,6 +138,11 @@ func SetV(v int) {
 	logging.verbosity.set(Level(v))
 }
 
+// SetVmodule sets the global verbosity patterns.
+func SetVmodule(pat string) error {
+	return logging.vmodule.Set(pat)
+}
+
 // SetToStderr sets the global output style
 func SetToStderr(toStderr bool) {
 	logging.toStderr = toStderr
