@@ -376,7 +376,7 @@ func (self *TxPool) GetQueuedTransactions() types.Transactions {
 			ret = append(ret, tx)
 		}
 	}
-	sort.Sort(types.TxByNonce{ret})
+	sort.Sort(types.TxByNonce(ret))
 	return ret
 }
 
