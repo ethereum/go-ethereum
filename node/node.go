@@ -44,6 +44,7 @@ var (
 type Node struct {
 	datadir  string         // Path to the currently used data directory
 	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
+	http     *HTTPClient    // HTTP Client that services can register their URL schemes
 
 	serverConfig *p2p.Server // Configuration of the underlying P2P networking layer
 	server       *p2p.Server // Currently running P2P networking layer
@@ -68,6 +69,7 @@ func New(conf *Config) (*Node, error) {
 	if conf.DataDir != "" {
 		nodeDbPath = filepath.Join(conf.DataDir, datadirNodeDatabase)
 	}
+	httpClient := newHTTP(conf.DocRoot)
 	return &Node{
 		datadir: conf.DataDir,
 		serverConfig: &p2p.Server{
@@ -87,6 +89,7 @@ func New(conf *Config) (*Node, error) {
 		},
 		serviceFuncs: []ServiceConstructor{},
 		eventmux:     new(event.TypeMux),
+		http:         httpClient,
 	}, nil
 }
 
@@ -123,6 +126,7 @@ func (n *Node) Start() error {
 			datadir:  n.datadir,
 			services: make(map[reflect.Type]Service),
 			EventMux: n.eventmux,
+			HTTP:     n.http,
 		}
 		for kind, s := range services { // copy needed for threaded access
 			ctx.services[kind] = s
@@ -132,6 +136,7 @@ func (n *Node) Start() error {
 		if err != nil {
 			return err
 		}
+		n.http.registerSchemes(service.URLSchemes())
 		kind := reflect.TypeOf(service)
 		if _, exists := services[kind]; exists {
 			return &DuplicateServiceError{Kind: kind}
@@ -163,6 +168,7 @@ func (n *Node) Start() error {
 		// Mark the service started for potential cleanup
 		started = append(started, kind)
 	}
+
 	// Finish initializing the startup
 	n.services = services
 	n.server = running
@@ -290,6 +296,10 @@ func (n *Node) APIs() []rpc.API {
 			Version:   "1.0",
 			Service:   NewPublicDebugAPI(n),
 			Public:    true,
+		}, {
+			Namespace: "http",
+			Version:   "1.0",
+			Service:   n.http,
 		},
 	}
 	// Inject all the APIs owned by various services

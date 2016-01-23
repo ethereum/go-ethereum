@@ -18,6 +18,7 @@ package node
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -129,6 +130,36 @@ func TestServiceRegistry(t *testing.T) {
 			t.Fatalf("duplicate error mismatch: have %v, want %v", err, DuplicateServiceError{})
 		}
 	}
+}
+
+// Tests whether services can be registered and duplicates caught.
+func TestServiceURLSchemes(t *testing.T) {
+	stack, err := New(testNodeConfig)
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
+	var h *HTTPClient
+	newSchemeUserService := func(ctx *ServiceContext) (Service, error) {
+		h = ctx.HTTP
+		return new(SchemeUserService), nil
+	}
+	// Register a batch of unique services and ensure they start successfully
+	services := []ServiceConstructor{NewSchemeService, newSchemeUserService}
+	for i, constructor := range services {
+		if err := stack.Register(constructor); err != nil {
+			t.Fatalf("service #%d: registration failed: %v", i, err)
+		}
+	}
+	if err := stack.Start(); err != nil {
+		t.Fatalf("failed to start original service stack: %v", err)
+	}
+	defer stack.Stop()
+
+	body, err := h.GetBody("rt://url.com")
+	if _, ok := err.(rterr); !ok {
+		t.Fatalf("failed to use registered scheme. Got error %v and body %v", body, err)
+	}
+
 }
 
 // Tests that registered services get started and stopped correctly.

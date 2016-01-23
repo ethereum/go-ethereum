@@ -49,6 +49,10 @@ type Config struct {
 	// in memory.
 	DataDir string
 
+	// Document Root, durectory path for serving files from local file system
+	// used as root for Node#HTTP.Get("file://") requestss
+	DocRoot string
+
 	// This field should be a valid secp256k1 private key that will be used for both
 	// remote peer identification as well as network traffic encryption. If no key
 	// is configured, the preset one is loaded from the data dir, generating it if

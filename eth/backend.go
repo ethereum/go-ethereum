@@ -30,12 +30,12 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/common/httpclient"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/compiler"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/eth/natspec"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -70,7 +70,6 @@ type Config struct {
 	DatabaseCache      int
 
 	NatSpec   bool
-	DocRoot   string
 	AutoDAG   bool
 	PowTest   bool
 	ExtraData []byte
@@ -80,6 +79,7 @@ type Config struct {
 	GasPrice       *big.Int
 	MinerThreads   int
 	SolcPath       string
+	NatSpecEnabled bool
 
 	GpoMinGasPrice          *big.Int
 	GpoMaxGasPrice          *big.Int
@@ -108,6 +108,8 @@ type Ethereum struct {
 	protocolManager *ProtocolManager
 	SolcPath        string
 	solc            *compiler.Solidity
+	natSpec         *natspec.NatSpec
+	NatSpecEnabled  bool
 
 	GpoMinGasPrice          *big.Int
 	GpoMaxGasPrice          *big.Int
@@ -116,14 +118,12 @@ type Ethereum struct {
 	GpobaseStepUp           int
 	GpobaseCorrectionFactor int
 
-	httpclient *httpclient.HTTPClient
-
 	eventMux *event.TypeMux
+	http     *node.HTTPClient
 	miner    *miner.Miner
 
 	Mining       bool
 	MinerThreads int
-	NatSpec      bool
 	AutoDAG      bool
 	PowTest      bool
 	autodagquit  chan bool
@@ -196,9 +196,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		accountManager:          config.AccountManager,
 		etherbase:               config.Etherbase,
 		netVersionId:            config.NetworkId,
-		NatSpec:                 config.NatSpec,
 		MinerThreads:            config.MinerThreads,
 		SolcPath:                config.SolcPath,
+		NatSpecEnabled:          config.NatSpecEnabled,
 		AutoDAG:                 config.AutoDAG,
 		PowTest:                 config.PowTest,
 		GpoMinGasPrice:          config.GpoMinGasPrice,
@@ -207,8 +207,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		GpobaseStepDown:         config.GpobaseStepDown,
 		GpobaseStepUp:           config.GpobaseStepUp,
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
-		httpclient:              httpclient.New(config.DocRoot),
 	}
+
+	backend := NewPublicBlockChainAPI(eth.BlockChain(), eth.ChainDb(), eth.EventMux(), eth.AccountManager())
+	// eth.natSpec = natspec.New(backend, ctx.HTTP, registrar.New(backend))
+	eth.natSpec = natspec.New(backend, ctx.HTTP, nil)
 
 	if config.PowTest {
 		glog.V(logger.Info).Infof("ethash used in test mode")
@@ -307,6 +310,10 @@ func (s *Ethereum) APIs() []rpc.API {
 			Namespace: "debug",
 			Version:   "1.0",
 			Service:   NewPrivateDebugAPI(s),
+		}, {
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   s.natSpec,
 		},
 	}
 }
@@ -327,6 +334,8 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	return
 }
 
+func (self *Ethereum) URLSchemes() []node.URLScheme { return nil }
+
 // set in js console via admin interface or wrapper from cli flags
 func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 	self.etherbase = etherbase
@@ -341,6 +350,7 @@ func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
 func (s *Ethereum) TxPool() *core.TxPool               { return s.txPool }
 func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
+func (s *Ethereum) NatSpec() *natspec.NatSpec          { return s.natSpec }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
 func (s *Ethereum) DappDb() ethdb.Database             { return s.dappDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
@@ -449,10 +459,10 @@ func (self *Ethereum) StopAutoDAG() {
 	glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
 }
 
-// HTTPClient returns the light http client used for fetching offchain docs
+// HTTP returns the light http client used for fetching offchain docs
 // (natspec, source for verification)
-func (self *Ethereum) HTTPClient() *httpclient.HTTPClient {
-	return self.httpclient
+func (self *Ethereum) HTTP() *node.HTTPClient {
+	return self.http
 }
 
 func (self *Ethereum) Solc() (*compiler.Solidity, error) {

@@ -24,8 +24,8 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/natspec"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
@@ -372,10 +372,11 @@ func (self *ethApi) GetNatSpec(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	var jsontx = fmt.Sprintf(`{"params":[{"to":"%s","data": "%s"}]}`, args.To, args.Data)
-	notice := natspec.GetNotice(self.xeth, jsontx, self.ethereum.HTTPClient())
-
-	return notice, nil
+	tx := &natspec.SendTxArgs{
+		To:   common.HexToAddress(args.To),
+		Data: args.Data,
+	}
+	return self.ethereum.NatSpec().GetNatSpec(tx)
 }
 
 func (self *ethApi) EstimateGas(req *shared.Request) (interface{}, error) {

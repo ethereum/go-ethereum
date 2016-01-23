@@ -19,7 +19,7 @@ package api
 import (
 	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/common/compiler"
+	"github.com/ethereum/go-ethereum/eth/compiler"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 

@@ -604,6 +604,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		BootstrapNodes:  MakeBootstrapNodes(ctx),
 		ListenAddr:      MakeListenAddress(ctx),
 		NAT:             MakeNAT(ctx),
+		DocRoot:         ctx.GlobalString(DocRootFlag.Name),
 		MaxPeers:        ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers: ctx.GlobalInt(MaxPendingPeersFlag.Name),
 	}
@@ -620,8 +621,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		Etherbase:               MakeEtherbase(accman, ctx),
 		MinerThreads:            ctx.GlobalInt(MinerThreadsFlag.Name),
 		ExtraData:               MakeMinerExtra(extra, ctx),
-		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
-		DocRoot:                 ctx.GlobalString(DocRootFlag.Name),
+		NatSpecEnabled:          ctx.GlobalBool(NatspecEnabledFlag.Name),
 		GasPrice:                common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
 		GpoMinGasPrice:          common.String2Big(ctx.GlobalString(GpoMinGasPriceFlag.Name)),
 		GpoMaxGasPrice:          common.String2Big(ctx.GlobalString(GpoMaxGasPriceFlag.Name)),

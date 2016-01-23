@@ -24,13 +24,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/common/natspec"
-	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/compiler"
+	// "github.com/ethereum/go-ethereum/eth/natspec"
+	"github.com/ethereum/go-ethereum/eth/registrar"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -426,12 +426,12 @@ func (self *adminApi) RegisterUrl(req *shared.Request) (interface{}, error) {
 }
 
 func (self *adminApi) StartNatSpec(req *shared.Request) (interface{}, error) {
-	self.ethereum.NatSpec = true
+	self.ethereum.NatSpecEnabled = true
 	return true, nil
 }
 
 func (self *adminApi) StopNatSpec(req *shared.Request) (interface{}, error) {
-	self.ethereum.NatSpec = false
+	self.ethereum.NatSpecEnabled = false
 	return true, nil
 }
 
@@ -441,13 +441,7 @@ func (self *adminApi) GetContractInfo(req *shared.Request) (interface{}, error) 
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	infoDoc, err := natspec.FetchDocsForContract(args.Contract, self.xeth, self.ethereum.HTTPClient())
-	if err != nil {
-		return nil, err
-	}
-
-	var info interface{}
-	err = self.coder.Decode(infoDoc, &info)
+	info, err := self.ethereum.NatSpec().GetContractInfo(common.HexToAddress(args.Contract))
 	if err != nil {
 		return nil, err
 	}
@@ -461,12 +455,12 @@ func (self *adminApi) HttpGet(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	resp, err := self.ethereum.HTTPClient().Get(args.Uri, args.Path)
+	body, err := self.ethereum.HTTP().GetBody(args.Uri)
 	if err != nil {
 		return nil, err
 	}
 
-	return string(resp), nil
+	return string(body), nil
 }
 
 func (self *adminApi) EnableUserAgent(req *shared.Request) (interface{}, error) {
