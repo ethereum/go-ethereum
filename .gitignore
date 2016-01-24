@@ -35,3 +35,5 @@ cmd/mist/assets/ext/ethereum.js/
 profile.tmp
 profile.cov
 
+# vagrant
+.vagrant
