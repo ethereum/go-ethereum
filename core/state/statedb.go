@@ -206,15 +206,17 @@ func (self *StateDB) Delete(addr common.Address) bool {
 
 // Update the given state object and apply it to state trie
 func (self *StateDB) UpdateStateObject(stateObject *StateObject) {
+	refs := [][]byte{stateObject.Root()}
 	if len(stateObject.code) > 0 {
 		self.db.Put(stateObject.codeHash, stateObject.code)
+		refs = append(refs, stateObject.codeHash)
 	}
 	addr := stateObject.Address()
 	data, err := rlp.EncodeToBytes(stateObject)
 	if err != nil {
 		panic(fmt.Errorf("can't encode object at %x: %v", addr[:], err))
 	}
-	self.trie.Update(addr[:], data)
+	self.trie.UpdateIndexed(addr[:], data, refs)
 }
 
 // Delete the given state object and delete it from the state trie
@@ -351,22 +353,22 @@ func (s *StateDB) IntermediateRoot() common.Hash {
 	return s.trie.Hash()
 }
 
-// Commit commits all state changes to the database.
-func (s *StateDB) Commit() (root common.Hash, err error) {
-	root, batch := s.CommitBatch()
+// CommitIndexed commits all state changes to the database.
+func (s *StateDB) CommitIndexed(refs []common.Hash) (root common.Hash, err error) {
+	root, batch := s.CommitBatchIndexed(refs)
 	return root, batch.Write()
 }
 
-// CommitBatch commits all state changes to a write batch but does not
+// CommitBatchIndexed commits all state changes to a write batch but does not
 // execute the batch. It is used to validate state changes against
 // the root hash stored in a block.
-func (s *StateDB) CommitBatch() (root common.Hash, batch ethdb.Batch) {
+func (s *StateDB) CommitBatchIndexed(refs []common.Hash) (root common.Hash, batch ethdb.Batch) {
 	batch = s.db.NewBatch()
-	root, _ = s.commit(batch)
+	root, _ = s.commit(batch, refs)
 	return root, batch
 }
 
-func (s *StateDB) commit(db trie.DatabaseWriter) (common.Hash, error) {
+func (s *StateDB) commit(db trie.DatabaseWriter, refs []common.Hash) (common.Hash, error) {
 	s.refund = new(big.Int)
 
 	for _, stateObject := range s.stateObjects {
@@ -381,7 +383,7 @@ func (s *StateDB) commit(db trie.DatabaseWriter) (common.Hash, error) {
 			// This updates the trie root internally, so
 			// getting the root hash of the storage trie
 			// through UpdateStateObject is fast.
-			if _, err := stateObject.trie.CommitTo(db); err != nil {
+			if _, err := stateObject.trie.CommitToIndexed(db, nil); err != nil {
 				return common.Hash{}, err
 			}
 			// Update the object in the account trie.
@@ -389,7 +391,11 @@ func (s *StateDB) commit(db trie.DatabaseWriter) (common.Hash, error) {
 		}
 		stateObject.dirty = false
 	}
-	return s.trie.CommitTo(db)
+	referrers := make([][]byte, len(refs))
+	for i, ref := range refs {
+		referrers[i] = ref.Bytes()
+	}
+	return s.trie.CommitToIndexed(db, referrers)
 }
 
 func (self *StateDB) Refunds() *big.Int {

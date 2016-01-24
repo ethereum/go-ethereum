@@ -62,7 +62,7 @@ func (t *Trie) Prove(key []byte) []rlp.RawValue {
 		// Don't bother checking for errors here since hasher panics
 		// if encoding doesn't work and we're not writing to any database.
 		n, _ = t.hasher.replaceChildren(n, nil)
-		hn, _ := t.hasher.store(n, nil, false)
+		hn, _ := t.hasher.store(n, nil, false, nil)
 		if _, ok := hn.(hashNode); ok || i == 0 {
 			// If the node's database encoding is a hash (or is the
 			// root node), it becomes a proof element.
@@ -107,7 +107,7 @@ func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value 
 			if i != len(proof)-1 {
 				return nil, errors.New("additional nodes at end of proof")
 			}
-			return cld, nil
+			return cld.Value, nil
 		}
 	}
 	return nil, errors.New("unexpected end of proof")

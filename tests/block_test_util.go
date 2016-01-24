@@ -250,7 +250,7 @@ func (t *BlockTest) InsertPreState(db ethdb.Database, am *accounts.Manager) (*st
 		}
 	}
 
-	root, err := statedb.Commit()
+	root, err := statedb.CommitIndexed(nil)
 	if err != nil {
 		return nil, fmt.Errorf("error writing state: %v", err)
 	}

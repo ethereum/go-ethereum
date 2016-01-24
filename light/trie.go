@@ -89,19 +89,20 @@ func (t *LightTrie) Get(ctx context.Context, key []byte) (res []byte, err error)
 	return
 }
 
-// Update associates key with value in the trie. Subsequent calls to
-// Get will return value. If value has length zero, any existing value
-// is deleted from the trie and calls to Get will return nil.
+// UpdateIndexed associates key with value in the trie. Subsequent calls to Get
+// will return value. If value has length zero, any existing value is deleted
+// from the trie and calls to Get will return nil. In addition, state trie index
+// entries are also generated for all entities referencing the current node.
 //
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
-func (t *LightTrie) Update(ctx context.Context, key, value []byte) (err error) {
+func (t *LightTrie) UpdateIndexed(ctx context.Context, key, value []byte, references [][]byte) (err error) {
 	err = t.do(ctx, key, func() (err error) {
 		if t.trie == nil {
 			t.trie, err = trie.NewSecure(t.originalRoot, t.db)
 		}
 		if err == nil {
-			err = t.trie.TryUpdate(key, value)
+			err = t.trie.TryUpdateIndexed(key, value, references)
 		}
 		return
 	})

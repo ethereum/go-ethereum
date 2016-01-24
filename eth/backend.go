@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/common/httpclient"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -45,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	rpc "github.com/ethereum/go-ethereum/rpc/v2"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 const (
@@ -61,9 +63,10 @@ var (
 )
 
 type Config struct {
-	NetworkId int    // Network ID to use for selecting peers to connect to
-	Genesis   string // Genesis JSON to seed the chain database with
-	FastSync  bool   // Enables the state download based fast synchronisation algorithm
+	NetworkId      int    // Network ID to use for selecting peers to connect to
+	Genesis        string // Genesis JSON to seed the chain database with
+	FastSync       bool   // Enables the state download based fast synchronisation algorithm
+	StateRetention int    // Number of recent state tries to retain pruning
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
@@ -136,6 +139,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	const dbCount = 3
 	ethdb.OpenFileLimit = 128 / (dbCount + 1)
 
+	// Sanity check that the user doesn't throw away more data than what would hurt the network
+	if config.StateRetention != 0 && config.StateRetention < downloader.FsStateRetention {
+		return nil, fmt.Errorf("configured state retention (%d) too low (< %d) for network security", config.StateRetention, downloader.FsStateRetention)
+	}
 	// Open the chain database and perform any upgrades needed
 	chainDb, err := ctx.OpenDatabase("chaindata", config.DatabaseCache)
 	if err != nil {
@@ -150,7 +157,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if err := addMipmapBloomBins(chainDb); err != nil {
 		return nil, err
 	}
-
+	if err := indexStateDatabase(chainDb, uint64(config.StateRetention)); err != nil {
+		return nil, err
+	}
 	dappDb, err := ctx.OpenDatabase("dapp", config.DatabaseCache)
 	if err != nil {
 		return nil, err
@@ -576,5 +585,65 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(db, hash))
 	}
 	glog.V(logger.Info).Infoln("upgrade completed in", time.Since(tstart))
+	return nil
+}
+
+// indexStateDatabase iterates over the state tries of the topmost blocks in the
+// chain and inserts all child-parent references into the trie index to facilitate
+// state trie pruning afterwards.
+func indexStateDatabase(db ethdb.Database, retain uint64) error {
+	// Short circuit if the head block is already indexed
+	head := core.GetBlock(db, core.GetHeadBlockHash(db))
+	if head == nil {
+		return nil // Empty database, don't die on it
+	}
+	if _, err := db.Get(trie.ParentReferenceIndexKey(head.Hash().Bytes(), head.Root().Bytes())); err == nil {
+		return nil // Head already indexed, assume up to date database
+	}
+	// Iterate over the top blocks that are being retained and index all the state tries
+	glog.V(logger.Info).Infoln("Indexing database for state pruning (first block takes a few minutes, please be patient)...")
+
+	from, till := uint64(0), head.NumberU64()
+	if from+retain < till {
+		from = till - retain
+	}
+	for num := from; num <= till; num++ {
+		glog.V(logger.Info).Infof("%.2f%%: Indexing state of block #%d...", 100*float64(num-from)/float64(till-from+1), num)
+
+		// Load the block and ensure any database corruption is signaled
+		header := core.GetHeader(db, core.GetCanonicalHash(db, num))
+		if header == nil {
+			return fmt.Errorf("block #%d missing", num)
+		}
+		// Short circuit if the block has already been indexed previously
+		if _, err := db.Get(trie.ParentReferenceIndexKey(header.Hash().Bytes(), header.Root.Bytes())); err == nil {
+			continue
+		}
+		// Otherwise iterate the entire state trie and insert the indices
+		stateDb, err := state.New(header.Root, db)
+		if err != nil {
+			return err
+		}
+		it := state.NewNodeIterator(stateDb)
+		it.PreOrderHook = func(hash, parent common.Hash) bool {
+			// If we've already indexed this branch, skip
+			_, err := db.Get(trie.ParentReferenceIndexKey(parent.Bytes(), hash.Bytes()))
+			if err == nil {
+				return false
+			}
+			return true
+		}
+		for it.Next() {
+			if it.Hash != (common.Hash{}) && it.Parent != (common.Hash{}) {
+				if err := db.Put(trie.ParentReferenceIndexKey(it.Parent.Bytes(), it.Hash.Bytes()), nil); err != nil {
+					return err
+				}
+			}
+		}
+		if err := db.Put(trie.ParentReferenceIndexKey(header.Hash().Bytes(), header.Root.Bytes()), nil); err != nil {
+			return err
+		}
+	}
+	glog.V(logger.Info).Infof("Database successfully indexed")
 	return nil
 }

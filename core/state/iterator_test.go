@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,53 +14,29 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package trie
+package state
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/trie"
 )
-
-func TestIterator(t *testing.T) {
-	trie := newEmpty()
-	vals := []struct{ k, v string }{
-		{"do", "verb"},
-		{"ether", "wookiedoo"},
-		{"horse", "stallion"},
-		{"shaman", "horse"},
-		{"doge", "coin"},
-		{"dog", "puppy"},
-		{"somethingveryoddindeedthis is", "myothernodedata"},
-	}
-	v := make(map[string]bool)
-	for _, val := range vals {
-		v[val.k] = false
-		trie.UpdateIndexed([]byte(val.k), []byte(val.v), nil)
-	}
-	trie.CommitIndexed(nil)
-
-	it := NewIterator(trie)
-	for it.Next() {
-		v[string(it.Key)] = true
-	}
-
-	for k, found := range v {
-		if !found {
-			t.Error("iterator didn't find", k)
-		}
-	}
-}
 
 // Tests that the node iterator indeed walks over the entire database contents.
 func TestNodeIteratorCoverage(t *testing.T) {
-	// Create some arbitrary test trie to iterate
-	db, trie, _ := makeTestTrie(nil)
+	// Create some arbitrary test state to iterate
+	db, root, _ := makeTestState(nil)
 
+	state, err := New(root, db)
+	if err != nil {
+		t.Fatalf("failed to create state trie at %x: %v", root, err)
+	}
 	// Gather all the node hashes found by the iterator
 	hashes := make(map[common.Hash]struct{})
-	for it := NewNodeIterator(trie); it.Next(); {
+	for it := NewNodeIterator(state); it.Next(); {
 		if it.Hash != (common.Hash{}) {
 			hashes[it.Hash] = struct{}{}
 		}
@@ -72,27 +48,35 @@ func TestNodeIteratorCoverage(t *testing.T) {
 		}
 	}
 	for _, key := range db.(*ethdb.MemDatabase).Keys() {
-		if len(key) == common.HashLength {
-			if _, ok := hashes[common.BytesToHash(key)]; !ok {
-				t.Errorf("state entry not reported %x", key)
-			}
+		if bytes.HasPrefix(key, []byte("secure-key-")) {
+			continue
+		}
+		if bytes.HasPrefix(key, trie.ParentReferenceIndexPrefix) {
+			continue
+		}
+		if _, ok := hashes[common.BytesToHash(key)]; !ok {
+			t.Errorf("state entry not reported %x", key)
 		}
 	}
 }
 
-// Tests that the node iterator hook is invoked for all the nodes of the trie,
+// Tests that the node iterator hook is invoked for all the nodes of the state,
 // also testing that the iterator indeed avoids visiting aborted branches.
 func TestNodeIteratorHookCoverageFull(t *testing.T)  { testNodeIteratorHookCoverage(t, false) }
 func TestNodeIteratorHookCoverageDedup(t *testing.T) { testNodeIteratorHookCoverage(t, true) }
 
 func testNodeIteratorHookCoverage(t *testing.T, dedup bool) {
-	// Create some arbitrary test trie to iterate
-	db, trie, _ := makeTestTrie(nil)
+	// Create some arbitrary test state to iterate
+	db, root, _ := makeTestState(nil)
 
+	state, err := New(root, db)
+	if err != nil {
+		t.Fatalf("failed to create state trie at %x: %v", root, err)
+	}
 	// Gather all the node hashes found by the iterator
 	hashes := make(map[common.Hash]int)
 
-	it := NewNodeIterator(trie)
+	it := NewNodeIterator(state)
 	it.PreOrderHook = func(hash, parent common.Hash) bool {
 		if !dedup {
 			return true
@@ -111,10 +95,14 @@ func testNodeIteratorHookCoverage(t *testing.T, dedup bool) {
 		}
 	}
 	for _, key := range db.(*ethdb.MemDatabase).Keys() {
-		if len(key) == common.HashLength {
-			if _, ok := hashes[common.BytesToHash(key)]; !ok {
-				t.Errorf("state entry not reported %x", key)
-			}
+		if bytes.HasPrefix(key, []byte("secure-key-")) {
+			continue
+		}
+		if bytes.HasPrefix(key, trie.ParentReferenceIndexPrefix) {
+			continue
+		}
+		if _, ok := hashes[common.BytesToHash(key)]; !ok {
+			t.Errorf("state entry not reported %x", key)
 		}
 	}
 	// Check whether duplicates were avoided or not

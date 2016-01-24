@@ -32,7 +32,7 @@ import (
 type StateSync trie.TrieSync
 
 // NewStateSync create a new state trie download scheduler.
-func NewStateSync(root common.Hash, database ethdb.Database) *StateSync {
+func NewStateSync(root common.Hash, database ethdb.Database, parent common.Hash) *StateSync {
 	var syncer *trie.TrieSync
 
 	callback := func(leaf []byte, parent common.Hash) error {
@@ -50,7 +50,7 @@ func NewStateSync(root common.Hash, database ethdb.Database) *StateSync {
 
 		return nil
 	}
-	syncer = trie.NewTrieSync(root, database, callback)
+	syncer = trie.NewTrieSync(root, database, parent, callback)
 	return (*StateSync)(syncer)
 }
 

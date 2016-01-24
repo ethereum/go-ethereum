@@ -356,7 +356,7 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 		if q.mode == FastSync && header.Number.Uint64() == q.fastSyncPivot {
 			// Pivoting point of the fast sync, retrieve the state tries
 			q.stateSchedLock.Lock()
-			q.stateScheduler = state.NewStateSync(header.Root, q.stateDatabase)
+			q.stateScheduler = state.NewStateSync(header.Root, q.stateDatabase, header.Hash())
 			q.stateSchedLock.Unlock()
 		}
 		inserts = append(inserts, header)

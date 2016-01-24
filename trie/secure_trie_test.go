@@ -45,7 +45,7 @@ func TestSecureDelete(t *testing.T) {
 	}
 	for _, val := range vals {
 		if val.v != "" {
-			trie.Update([]byte(val.k), []byte(val.v))
+			trie.UpdateIndexed([]byte(val.k), []byte(val.v), nil)
 		} else {
 			trie.Delete([]byte(val.k))
 		}
@@ -59,7 +59,7 @@ func TestSecureDelete(t *testing.T) {
 
 func TestSecureGetKey(t *testing.T) {
 	trie := newEmptySecure()
-	trie.Update([]byte("foo"), []byte("bar"))
+	trie.UpdateIndexed([]byte("foo"), []byte("bar"), nil)
 
 	key := []byte("foo")
 	value := []byte("bar")
