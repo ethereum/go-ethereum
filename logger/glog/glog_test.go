@@ -180,7 +180,7 @@ func TestHeader(t *testing.T) {
 	pid = 1234
 	Info("test")
 	var line int
-	format := "I0102 15:04:05.067890    1234 glog_test.go:%d] test\n"
+	format := "I0102 15:04:05.067890 logger/glog/glog_test.go:%d] test\n"
 	n, err := fmt.Sscanf(contents(infoLog), format, &line)
 	if n != 1 || err != nil {
 		t.Errorf("log format error: %d elements, error %s:\n%s", n, err, contents(infoLog))
@@ -253,7 +253,7 @@ func TestV(t *testing.T) {
 func TestVmoduleOn(t *testing.T) {
 	setFlags()
 	defer logging.swap(logging.newBuffers())
-	logging.vmodule.Set("glog_test=2")
+	logging.vmodule.Set("glog_test.go=2")
 	defer logging.vmodule.Set("")
 	if !V(1) {
 		t.Error("V not enabled for 1")
@@ -290,22 +290,43 @@ func TestVmoduleOff(t *testing.T) {
 	}
 }
 
+var patternTests = []struct{ input, want string }{
+	{"foo/bar/x.go", ".*/foo/bar/x\\.go$"},
+	{"foo/*/x.go", ".*/foo(/.*)?/x\\.go$"},
+	{"foo/*", ".*/foo(/.*)?/[^/]+\\.go$"},
+}
+
+func TestCompileModulePattern(t *testing.T) {
+	for _, test := range patternTests {
+		re, err := compileModulePattern(test.input)
+		if err != nil {
+			t.Fatalf("%s: %v", err)
+		}
+		if re.String() != test.want {
+			t.Errorf("mismatch for %q: got %q, want %q", test.input, re.String(), test.want)
+		}
+	}
+}
+
 // vGlobs are patterns that match/don't match this file at V=2.
 var vGlobs = map[string]bool{
 	// Easy to test the numeric match here.
-	"glog_test=1": false, // If -vmodule sets V to 1, V(2) will fail.
-	"glog_test=2": true,
-	"glog_test=3": true, // If -vmodule sets V to 1, V(3) will succeed.
-	// These all use 2 and check the patterns. All are true.
-	"*=2":           true,
-	"?l*=2":         true,
-	"????_*=2":      true,
-	"??[mno]?_*t=2": true,
-	// These all use 2 and check the patterns. All are false.
-	"*x=2":         false,
-	"m*=2":         false,
-	"??_*=2":       false,
-	"?[abc]?_*t=2": false,
+	"glog_test.go=1": false, // If -vmodule sets V to 1, V(2) will fail.
+	"glog_test.go=2": true,
+	"glog_test.go=3": true, // If -vmodule sets V to 1, V(3) will succeed.
+
+	// Import path prefix matching
+	"logger/glog=1": false,
+	"logger/glog=2": true,
+	"logger/glog=3": true,
+
+	// Import path glob matching
+	"logger/*=1": false,
+	"logger/*=2": true,
+	"logger/*=3": true,
+
+	// These all use 2 and check the patterns.
+	"*=2": true,
 }
 
 // Test that vmodule globbing works as advertised.

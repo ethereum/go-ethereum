@@ -46,12 +46,6 @@ web3._extend({
 			inputFormatter: [null, null]
 		}),
 		new web3._extend.Method({
-			name: 'verbosity',
-			call: 'admin_verbosity',
-			params: 1,
-			inputFormatter: [web3._extend.utils.fromDecimal]
-		}),
-		new web3._extend.Method({
 			name: 'setSolc',
 			call: 'admin_setSolc',
 			params: 1,
