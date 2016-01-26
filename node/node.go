@@ -26,6 +26,7 @@ import (
 	"syscall"
 
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -284,7 +285,7 @@ func (n *Node) APIs() []rpc.API {
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   NewPrivateDebugAPI(n),
+			Service:   debug.Handler,
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",

@@ -18,19 +18,16 @@ package utils
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math"
 	"math/big"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-
-	"errors"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
@@ -223,35 +220,6 @@ var (
 	}
 
 	// logging and debug settings
-	VerbosityFlag = cli.IntFlag{
-		Name:  "verbosity",
-		Usage: "Logging verbosity: 0-6 (0=silent, 1=error, 2=warn, 3=info, 4=core, 5=debug, 6=debug detail)",
-		Value: int(logger.InfoLevel),
-	}
-	LogFileFlag = cli.StringFlag{
-		Name:  "logfile",
-		Usage: "Log output file within the data dir (default = no log file generated)",
-		Value: "",
-	}
-	LogVModuleFlag = cli.GenericFlag{
-		Name:  "vmodule",
-		Usage: "Per-module verbosity: comma-separated list of <module>=<level>, where <module> is file literal or a glog pattern",
-		Value: glog.GetVModule(),
-	}
-	BacktraceAtFlag = cli.GenericFlag{
-		Name:  "backtrace",
-		Usage: "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
-		Value: glog.GetTraceLocation(),
-	}
-	PProfEanbledFlag = cli.BoolFlag{
-		Name:  "pprof",
-		Usage: "Enable the profiling server on localhost",
-	}
-	PProfPortFlag = cli.IntFlag{
-		Name:  "pprofport",
-		Usage: "Profile server listening port",
-		Value: 6060,
-	}
 	MetricsEnabledFlag = cli.BoolFlag{
 		Name:  metrics.MetricsEnabledFlag,
 		Usage: "Enable metrics collection and reporting",
@@ -297,7 +265,7 @@ var (
 		Value: DirectoryString{common.DefaultIpcPath()},
 	}
 	WSEnabledFlag = cli.BoolFlag{
-		Name: "ws",
+		Name:  "ws",
 		Usage: "Enable the WS-RPC server",
 	}
 	WSListenAddrFlag = cli.StringFlag{
@@ -324,6 +292,7 @@ var (
 		Name:  "exec",
 		Usage: "Execute JavaScript statement (only in combination with console/attach)",
 	}
+
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
@@ -714,19 +683,6 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 	return stack
 }
 
-// SetupLogger configures glog from the logging-related command line flags.
-func SetupLogger(ctx *cli.Context) {
-	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
-	glog.CopyStandardLogTo("INFO")
-	glog.SetToStderr(true)
-	if ctx.GlobalIsSet(LogFileFlag.Name) {
-		logger.New("", ctx.GlobalString(LogFileFlag.Name), ctx.GlobalInt(VerbosityFlag.Name))
-	}
-	if ctx.GlobalIsSet(VMDebugFlag.Name) {
-		vm.Debug = ctx.GlobalBool(VMDebugFlag.Name)
-	}
-}
-
 // SetupNetwork configures the system for either the main net or some test network.
 func SetupNetwork(ctx *cli.Context) {
 	switch {
@@ -746,6 +702,9 @@ func SetupVM(ctx *cli.Context) {
 	vm.EnableJit = ctx.GlobalBool(VMEnableJitFlag.Name)
 	vm.ForceJit = ctx.GlobalBool(VMForceJitFlag.Name)
 	vm.SetJITCacheSize(ctx.GlobalInt(VMJitCacheFlag.Name))
+	if ctx.GlobalIsSet(VMDebugFlag.Name) {
+		vm.Debug = ctx.GlobalBool(VMDebugFlag.Name)
+	}
 }
 
 // MakeChain creates a chain manager from set command line flags.
@@ -872,11 +831,4 @@ func StartWS(stack *node.Node, ctx *cli.Context) error {
 
 	glog.V(logger.Error).Infof("Unable to start RPC-WS interface, could not find admin API")
 	return errors.New("Unable to start RPC-WS interface")
-}
-
-func StartPProf(ctx *cli.Context) {
-	address := fmt.Sprintf("localhost:%d", ctx.GlobalInt(PProfPortFlag.Name))
-	go func() {
-		log.Println(http.ListenAndServe(address, nil))
-	}()
 }
