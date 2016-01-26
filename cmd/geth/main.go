@@ -40,8 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/comms"
 )
 
 const (
@@ -263,11 +261,11 @@ See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
 			Name:   "attach",
 			Usage:  `Geth Console: interactive JavaScript environment (connect to node)`,
 			Description: `
-The Geth console is an interactive shell for the JavaScript runtime environment
-which exposes a node admin interface as well as the Ðapp JavaScript API.
-See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console.
-This command allows to open a console on a running geth node.
-`,
+		The Geth console is an interactive shell for the JavaScript runtime environment
+		which exposes a node admin interface as well as the Ðapp JavaScript API.
+		See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console.
+		This command allows to open a console on a running geth node.
+		`,
 		},
 		{
 			Action: execScripts,
@@ -309,11 +307,15 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
-		utils.RpcApiFlag,
+		utils.RPCApiFlag,
+		utils.WSEnabledFlag,
+		utils.WSListenAddrFlag,
+		utils.WSPortFlag,
+		utils.WSApiFlag,
+		utils.WSAllowedDomainsFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
-		utils.IPCExperimental,
 		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
 		utils.DevModeFlag,
@@ -392,20 +394,12 @@ func geth(ctx *cli.Context) {
 	node.Wait()
 }
 
+// attach will connect to a running geth instance attaching a JavaScript console and to it.
 func attach(ctx *cli.Context) {
-	var client comms.EthereumClient
-	var err error
-	if ctx.Args().Present() {
-		client, err = comms.ClientFromEndpoint(ctx.Args().First(), codec.JSON)
-	} else {
-		cfg := comms.IpcConfig{
-			Endpoint: utils.IpcSocketPath(ctx),
-		}
-		client, err = comms.NewIpcClient(cfg, codec.JSON)
-	}
-
+	// attach to a running geth instance
+	client, err := utils.NewRemoteRPCClient(ctx)
 	if err != nil {
-		utils.Fatalf("Unable to attach to geth node - %v", err)
+		utils.Fatalf("Unable to attach to geth - %v", err)
 	}
 
 	repl := newLightweightJSRE(
@@ -431,11 +425,12 @@ func console(ctx *cli.Context) {
 	startNode(ctx, node)
 
 	// Attach to the newly started node, and either execute script or become interactive
-	client := comms.NewInProcClient(codec.JSON)
+	client := utils.NewInProcRPCClient(node)
+
 	repl := newJSRE(node,
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		client, true, nil)
+		client, true)
 
 	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
 		repl.batch(script)
@@ -454,11 +449,12 @@ func execScripts(ctx *cli.Context) {
 	startNode(ctx, node)
 
 	// Attach to the newly started node and execute the given scripts
-	client := comms.NewInProcClient(codec.JSON)
+	client := utils.NewInProcRPCClient(node)
+
 	repl := newJSRE(node,
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		client, false, nil)
+		client, false)
 
 	for _, file := range ctx.Args() {
 		repl.exec(file)
@@ -515,6 +511,11 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
 		if err := utils.StartRPC(stack, ctx); err != nil {
 			utils.Fatalf("Failed to start RPC: %v", err)
+		}
+	}
+	if ctx.GlobalBool(utils.WSEnabledFlag.Name) {
+		if err := utils.StartWS(stack, ctx); err != nil {
+			utils.Fatalf("Failed to start WS: %v", err)
 		}
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {

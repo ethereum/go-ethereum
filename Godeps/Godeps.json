@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/ethereum/go-ethereum",
-	"GoVersion": "go1.4",
+	"GoVersion": "go1.5.2",
 	"Packages": [
 		"./..."
 	],
@@ -41,10 +41,6 @@
 			"Rev": "a45aa3d54aef73b504e15eb71bea0e5565b5e6e1"
 		},
 		{
-			"ImportPath": "github.com/kardianos/osext",
-			"Rev": "ccfcd0245381f0c94c68f50626665eed3c6b726a"
-		},
-		{
 			"ImportPath": "github.com/mattn/go-isatty",
 			"Rev": "7fcbc72f853b92b5720db4a6b8482be612daef24"
 		},
@@ -72,10 +68,6 @@
 		{
 			"ImportPath": "github.com/robertkrimen/otto",
 			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
-		},
-		{
-			"ImportPath": "github.com/rs/cors",
-			"Rev": "6e0c3cb65fc0fdb064c743d176a620e3ca446dfb"
 		},
 		{
 			"ImportPath": "github.com/shiena/ansicolor",
@@ -107,6 +99,10 @@
 		},
 		{
 			"ImportPath": "golang.org/x/net/html",
+			"Rev": "e0403b4e005737430c05a57aac078479844f919c"
+		},
+		{
+			"ImportPath": "golang.org/x/net/websocket",
 			"Rev": "e0403b4e005737430c05a57aac078479844f919c"
 		},
 		{

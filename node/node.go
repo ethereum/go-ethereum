@@ -27,7 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
-	rpc "github.com/ethereum/go-ethereum/rpc/v2"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var (
@@ -289,6 +289,11 @@ func (n *Node) APIs() []rpc.API {
 			Namespace: "debug",
 			Version:   "1.0",
 			Service:   NewPublicDebugAPI(n),
+			Public:    true,
+		}, {
+			Namespace: "web3",
+			Version:   "1.0",
+			Service:   NewPublicWeb3API(n),
 			Public:    true,
 		},
 	}

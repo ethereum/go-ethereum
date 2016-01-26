@@ -5740,7 +5740,9 @@ Property.prototype.extractCallback = function (args) {
  */
 Property.prototype.attachToObject = function (obj) {
     var proto = {
-        get: this.buildGet() 
+        //get: this.buildGet()
+        get: this.buildGet(),
+        enumerable: true
     };
 
     var names = this.name.split('.');

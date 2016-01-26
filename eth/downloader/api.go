@@ -17,7 +17,7 @@
 package downloader
 
 import (
-	rpc "github.com/ethereum/go-ethereum/rpc/v2"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // PublicDownloaderAPI provides an API which gives informatoin about the current synchronisation status.

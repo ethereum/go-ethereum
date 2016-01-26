@@ -21,11 +21,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rcrowley/go-metrics"
+
+	"gopkg.in/fatih/set.v0"
 )
 
 // PrivateAdminAPI is the collection of administrative API methods exposed only
@@ -59,27 +63,83 @@ func (api *PrivateAdminAPI) AddPeer(url string) (bool, error) {
 
 // StartRPC starts the HTTP RPC API server.
 func (api *PrivateAdminAPI) StartRPC(address string, port int, cors string, apis string) (bool, error) {
-	/*// Parse the list of API modules to make available
-	apis, err := api.ParseApiString(apis, codec.JSON, xeth.New(api.node, nil), api.node)
-	if err != nil {
-		return false, err
+	var offeredAPIs []rpc.API
+	if len(apis) > 0 {
+		namespaces := set.New()
+		for _, a := range strings.Split(apis, ",") {
+			namespaces.Add(strings.TrimSpace(a))
+		}
+		for _, api := range api.node.APIs() {
+			if namespaces.Has(api.Namespace) {
+				offeredAPIs = append(offeredAPIs, api)
+			}
+		}
+	} else { // use by default all public API's
+		for _, api := range api.node.APIs() {
+			if api.Public {
+				offeredAPIs = append(offeredAPIs, api)
+			}
+		}
 	}
-	// Configure and start the HTTP RPC server
-	config := comms.HttpConfig{
-		ListenAddress: address,
-		ListenPort:    port,
-		CorsDomain:    cors,
+
+	if address == "" {
+		address = "127.0.0.1"
 	}
-	if err := comms.StartHttp(config, self.codec, api.Merge(apis...)); err != nil {
-		return false, err
+	if port == 0 {
+		port = 8545
 	}
-	return true, nil*/
-	return false, fmt.Errorf("needs new RPC implementation to resolve circular dependency")
+
+	corsDomains := strings.Split(cors, " ")
+	err := rpc.StartHTTP(address, port, corsDomains, offeredAPIs)
+	return err == nil, err
 }
 
 // StopRPC terminates an already running HTTP RPC API endpoint.
-func (api *PrivateAdminAPI) StopRPC() {
-	comms.StopHttp()
+func (api *PrivateAdminAPI) StopRPC() (bool, error) {
+	err := rpc.StopHTTP()
+	return err == nil, err
+}
+
+
+// StartWS starts the websocket RPC API server.
+func (api *PrivateAdminAPI) StartWS(address string, port int, cors string, apis string) (bool, error) {
+	var offeredAPIs []rpc.API
+	if len(apis) > 0 {
+		namespaces := set.New()
+		for _, a := range strings.Split(apis, ",") {
+			namespaces.Add(strings.TrimSpace(a))
+		}
+		for _, api := range api.node.APIs() {
+			if namespaces.Has(api.Namespace) {
+				offeredAPIs = append(offeredAPIs, api)
+			}
+		}
+	} else {
+		// use by default all public API's
+		for _, api := range api.node.APIs() {
+			if api.Public {
+				offeredAPIs = append(offeredAPIs, api)
+			}
+		}
+	}
+
+	if address == "" {
+		address = "127.0.0.1"
+	}
+	if port == 0 {
+		port = 8546
+	}
+
+	corsDomains := strings.Split(cors, " ")
+	
+	err := rpc.StartWS(address, port, corsDomains, offeredAPIs)
+	return err == nil, err
+}
+
+// StopRPC terminates an already running websocket RPC API endpoint.
+func (api *PrivateAdminAPI) StopWS() (bool, error) {
+	err := rpc.StopWS()
+	return err == nil, err
 }
 
 // PublicAdminAPI is the collection of administrative API methods exposed over
@@ -246,4 +306,25 @@ func (api *PublicDebugAPI) Metrics(raw bool) (map[string]interface{}, error) {
 		}
 	})
 	return counters, nil
+}
+
+// PublicWeb3API offers helper utils
+type PublicWeb3API struct {
+	stack *Node
+}
+
+// NewPublicWeb3API creates a new Web3Service instance
+func NewPublicWeb3API(stack *Node) *PublicWeb3API {
+	return &PublicWeb3API{stack}
+}
+
+// ClientVersion returns the node name
+func (s *PublicWeb3API) ClientVersion() string {
+	return s.stack.Server().Name
+}
+
+// Sha3 applies the ethereum sha3 implementation on the input.
+// It assumes the input is hex encoded.
+func (s *PublicWeb3API) Sha3(input string) string {
+	return common.ToHex(crypto.Sha3(common.FromHex(input)))
 }
