@@ -138,23 +138,26 @@ func SetV(v int) {
 	logging.verbosity.set(Level(v))
 }
 
-// SetVmodule sets the global verbosity patterns.
-func SetVmodule(pat string) error {
-	return logging.vmodule.Set(pat)
-}
-
 // SetToStderr sets the global output style
 func SetToStderr(toStderr bool) {
+	logging.mu.Lock()
 	logging.toStderr = toStderr
+	logging.mu.Unlock()
 }
 
-// GetTraceLocation returns the global TraceLocation object
+// GetTraceLocation returns the global TraceLocation flag.
 func GetTraceLocation() *TraceLocation {
 	return &logging.traceLocation
 }
 
+// GetVModule returns the global verbosity pattern flag.
 func GetVModule() *moduleSpec {
 	return &logging.vmodule
+}
+
+// GetVerbosity returns the global verbosity level flag.
+func GetVerbosity() *Level {
+	return &logging.verbosity
 }
 
 // get returns the value of the severity.
@@ -453,8 +456,7 @@ func init() {
 
 	// Default stderrThreshold is ERROR.
 	logging.stderrThreshold = errorLog
-
-	logging.setVState(0, nil, false)
+	logging.setVState(3, nil, false)
 	go logging.flushDaemon()
 }
 
