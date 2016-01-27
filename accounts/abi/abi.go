@@ -37,6 +37,7 @@ type Executer func(datain []byte) []byte
 // packs data accordingly.
 type ABI struct {
 	Methods map[string]Method
+	Events  map[string]Event
 }
 
 // JSON returns a parsed ABI interface and error if it failed.
@@ -149,14 +150,37 @@ func (abi ABI) Call(executer Executer, name string, args ...interface{}) interfa
 }
 
 func (abi *ABI) UnmarshalJSON(data []byte) error {
-	var methods []Method
-	if err := json.Unmarshal(data, &methods); err != nil {
+	var fields []struct {
+		Type    string
+		Name    string
+		Const   bool
+		Indexed bool
+		Inputs  []Argument
+		Outputs []Argument
+	}
+
+	if err := json.Unmarshal(data, &fields); err != nil {
 		return err
 	}
 
 	abi.Methods = make(map[string]Method)
-	for _, method := range methods {
-		abi.Methods[method.Name] = method
+	abi.Events = make(map[string]Event)
+	for _, field := range fields {
+		switch field.Type {
+		// empty defaults to function according to the abi spec
+		case "function", "":
+			abi.Methods[field.Name] = Method{
+				Name:    field.Name,
+				Const:   field.Const,
+				Inputs:  field.Inputs,
+				Outputs: field.Outputs,
+			}
+		case "event":
+			abi.Events[field.Name] = Event{
+				Name:   field.Name,
+				Inputs: field.Inputs,
+			}
+		}
 	}
 
 	return nil

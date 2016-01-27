@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,33 +17,28 @@
 package abi
 
 import (
-	"encoding/json"
 	"fmt"
+	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// Argument holds the name of the argument and the corresponding type.
-// Types are used when packing and testing arguments.
-type Argument struct {
-	Name    string
-	Type    Type
-	Indexed bool // indexed is only used by events
+// Event is an event potentially triggered by the EVM's LOG mechanism. The Event
+// holds type information (inputs) about the yielded output
+type Event struct {
+	Name   string
+	Inputs []Argument
 }
 
-func (a *Argument) UnmarshalJSON(data []byte) error {
-	var extarg struct {
-		Name string
-		Type string
+// Id returns the canonical representation of the event's signature used by the
+// abi definition to identify event names and types.
+func (e Event) Id() common.Hash {
+	types := make([]string, len(e.Inputs))
+	i := 0
+	for _, input := range e.Inputs {
+		types[i] = input.Type.String()
+		i++
 	}
-	err := json.Unmarshal(data, &extarg)
-	if err != nil {
-		return fmt.Errorf("argument json err: %v", err)
-	}
-
-	a.Type, err = NewType(extarg.Type)
-	if err != nil {
-		return err
-	}
-	a.Name = extarg.Name
-
-	return nil
+	return common.BytesToHash(crypto.Sha3([]byte(fmt.Sprintf("%v(%v)", e.Name, strings.Join(types, ",")))))
 }
