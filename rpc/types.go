@@ -174,12 +174,14 @@ type HexNumber big.Int
 // NewHexNumber creates a new hex number instance which will serialize the given val with `%#x` on marshal.
 func NewHexNumber(val interface{}) *HexNumber {
 	if val == nil {
-		return nil
+		return nil // note, this doesn't catch nil pointers, only passing nil directly!
 	}
 
-	if v, ok := val.(*big.Int); ok && v != nil {
-		hn := new(big.Int).Set(v)
-		return (*HexNumber)(hn)
+	if v, ok := val.(*big.Int); ok {
+		if v != nil {
+			return (*HexNumber)(new(big.Int).Set(v))
+		}
+		return nil
 	}
 
 	rval := reflect.ValueOf(val)
@@ -303,10 +305,9 @@ const (
 )
 
 // UnmarshalJSON parses the given JSON fragement into a BlockNumber. It supports:
-// - "latest" or "earliest" as string arguments
+// - "latest", "earliest" or "pending" as string arguments
 // - the block number
 // Returned errors:
-// - an unsupported error when "pending" is specified (not yet implemented)
 // - an invalid block number error when the given argument isn't a known strings
 // - an out of range error when the given block number is either too little or too large
 func (bn *BlockNumber) UnmarshalJSON(data []byte) error {

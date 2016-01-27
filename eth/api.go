@@ -53,17 +53,38 @@ const (
 	defaultGas      = uint64(90000)
 )
 
-// blockByNumber is a commonly used helper function which retrieves and returns the block for the given block number. It
-// returns nil when no block could be found.
+// blockByNumber is a commonly used helper function which retrieves and returns
+// the block for the given block number, capable of handling two special blocks:
+// rpc.LatestBlockNumber adn rpc.PendingBlockNumber. It returns nil when no block
+// could be found.
 func blockByNumber(m *miner.Miner, bc *core.BlockChain, blockNr rpc.BlockNumber) *types.Block {
+	// Pending block is only known by the miner
 	if blockNr == rpc.PendingBlockNumber {
 		return m.PendingBlock()
 	}
+	// Otherwise resolve and return the block
 	if blockNr == rpc.LatestBlockNumber {
 		return bc.CurrentBlock()
 	}
-
 	return bc.GetBlockByNumber(uint64(blockNr))
+}
+
+// stateAndBlockByNumber is a commonly used helper function which retrieves and
+// returns the state and containing block for the given block number, capable of
+// handling two special states: rpc.LatestBlockNumber adn rpc.PendingBlockNumber.
+// It returns nil when no block or state could be found.
+func stateAndBlockByNumber(m *miner.Miner, bc *core.BlockChain, blockNr rpc.BlockNumber, chainDb ethdb.Database) (*state.StateDB, *types.Block, error) {
+	// Pending state is only known by the miner
+	if blockNr == rpc.PendingBlockNumber {
+		return m.PendingState(), m.PendingBlock(), nil
+	}
+	// Otherwise resolve the block number and return its state
+	block := blockByNumber(m, bc, blockNr)
+	if block == nil {
+		return nil, nil, nil
+	}
+	stateDb, err := state.New(block.Root(), chainDb)
+	return stateDb, block, err
 }
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -395,16 +416,12 @@ func (s *PublicBlockChainAPI) BlockNumber() *big.Int {
 	return s.bc.CurrentHeader().Number
 }
 
-// GetBalance returns the amount of wei for the given address in the state of the given block number.
-// When block number equals rpc.LatestBlockNumber the current block is used.
+// GetBalance returns the amount of wei for the given address in the state of the
+// given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
+// block numbers are also allowed.
 func (s *PublicBlockChainAPI) GetBalance(address common.Address, blockNr rpc.BlockNumber) (*big.Int, error) {
-	block := blockByNumber(s.miner, s.bc, blockNr)
-	if block == nil {
-		return nil, nil
-	}
-
-	state, err := state.New(block.Root(), s.chainDb)
-	if err != nil {
+	state, _, err := stateAndBlockByNumber(s.miner, s.bc, blockNr, s.chainDb)
+	if state == nil || err != nil {
 		return nil, err
 	}
 	return state.GetBalance(address), nil
@@ -414,7 +431,14 @@ func (s *PublicBlockChainAPI) GetBalance(address common.Address, blockNr rpc.Blo
 // transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByNumber(blockNr rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	if block := blockByNumber(s.miner, s.bc, blockNr); block != nil {
-		return s.rpcOutputBlock(block, true, fullTx)
+		response, err := s.rpcOutputBlock(block, true, fullTx)
+		if err == nil && blockNr == rpc.PendingBlockNumber {
+			// Pending blocks need to nil out a few fields
+			for _, field := range []string{"hash", "nonce", "logsBloom", "miner"} {
+				response[field] = nil
+			}
+		}
+		return response, err
 	}
 	return nil, nil
 }
@@ -431,10 +455,6 @@ func (s *PublicBlockChainAPI) GetBlockByHash(blockHash common.Hash, fullTx bool)
 // GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index. When fullTx is true
 // all transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(blockNr rpc.BlockNumber, index rpc.HexNumber) (map[string]interface{}, error) {
-	if blockNr == rpc.PendingBlockNumber {
-		return nil, nil
-	}
-
 	if block := blockByNumber(s.miner, s.bc, blockNr); block != nil {
 		uncles := block.Uncles()
 		if index.Int() < 0 || index.Int() >= len(uncles) {
@@ -464,10 +484,6 @@ func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(blockHash common.Hash,
 
 // GetUncleCountByBlockNumber returns number of uncles in the block for the given block number
 func (s *PublicBlockChainAPI) GetUncleCountByBlockNumber(blockNr rpc.BlockNumber) *rpc.HexNumber {
-	if blockNr == rpc.PendingBlockNumber {
-		return rpc.NewHexNumber(0)
-	}
-
 	if block := blockByNumber(s.miner, s.bc, blockNr); block != nil {
 		return rpc.NewHexNumber(len(block.Uncles()))
 	}
@@ -508,38 +524,26 @@ func (s *PublicBlockChainAPI) NewBlocks(args NewBlocksArgs) (rpc.Subscription, e
 
 // GetCode returns the code stored at the given address in the state for the given block number.
 func (s *PublicBlockChainAPI) GetCode(address common.Address, blockNr rpc.BlockNumber) (string, error) {
-	return s.GetData(address, blockNr)
-}
-
-// GetData returns the data stored at the given address in the state for the given block number.
-func (s *PublicBlockChainAPI) GetData(address common.Address, blockNr rpc.BlockNumber) (string, error) {
-	if block := blockByNumber(s.miner, s.bc, blockNr); block != nil {
-		state, err := state.New(block.Root(), s.chainDb)
-		if err != nil {
-			return "", err
-		}
-		res := state.GetCode(address)
-		if len(res) == 0 { // backwards compatibility
-			return "0x", nil
-		}
-		return common.ToHex(res), nil
+	state, _, err := stateAndBlockByNumber(s.miner, s.bc, blockNr, s.chainDb)
+	if state == nil || err != nil {
+		return "", err
 	}
-
-	return "0x", nil
+	res := state.GetCode(address)
+	if len(res) == 0 { // backwards compatibility
+		return "0x", nil
+	}
+	return common.ToHex(res), nil
 }
 
-// GetStorageAt returns the storage from the state at the given address, key and block number.
+// GetStorageAt returns the storage from the state at the given address, key and
+// block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
+// numbers are also allowed.
 func (s *PublicBlockChainAPI) GetStorageAt(address common.Address, key string, blockNr rpc.BlockNumber) (string, error) {
-	if block := blockByNumber(s.miner, s.bc, blockNr); block != nil {
-		state, err := state.New(block.Root(), s.chainDb)
-		if err != nil {
-			return "", err
-		}
-
-		return state.GetState(address, common.HexToHash(key)).Hex(), nil
+	state, _, err := stateAndBlockByNumber(s.miner, s.bc, blockNr, s.chainDb)
+	if state == nil || err != nil {
+		return "0x", err
 	}
-
-	return "0x", nil
+	return state.GetState(address, common.HexToHash(key)).Hex(), nil
 }
 
 // callmsg is the message type used for call transations.
@@ -570,55 +574,51 @@ type CallArgs struct {
 }
 
 func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (string, *big.Int, error) {
-	if block := blockByNumber(s.miner, s.bc, blockNr); block != nil {
-		stateDb, err := state.New(block.Root(), s.chainDb)
-		if err != nil {
-			return "0x", nil, err
-		}
-
-		stateDb = stateDb.Copy()
-		var from *state.StateObject
-		if args.From == (common.Address{}) {
-			accounts, err := s.am.Accounts()
-			if err != nil || len(accounts) == 0 {
-				from = stateDb.GetOrNewStateObject(common.Address{})
-			} else {
-				from = stateDb.GetOrNewStateObject(accounts[0].Address)
-			}
-		} else {
-			from = stateDb.GetOrNewStateObject(args.From)
-		}
-
-		from.SetBalance(common.MaxBig)
-
-		msg := callmsg{
-			from:     from,
-			to:       &args.To,
-			gas:      args.Gas.BigInt(),
-			gasPrice: args.GasPrice.BigInt(),
-			value:    args.Value.BigInt(),
-			data:     common.FromHex(args.Data),
-		}
-
-		if msg.gas.Cmp(common.Big0) == 0 {
-			msg.gas = big.NewInt(50000000)
-		}
-
-		if msg.gasPrice.Cmp(common.Big0) == 0 {
-			msg.gasPrice = new(big.Int).Mul(big.NewInt(50), common.Shannon)
-		}
-
-		header := s.bc.CurrentBlock().Header()
-		vmenv := core.NewEnv(stateDb, s.bc, msg, header)
-		gp := new(core.GasPool).AddGas(common.MaxBig)
-		res, gas, err := core.ApplyMessage(vmenv, msg, gp)
-		if len(res) == 0 { // backwards compatability
-			return "0x", gas, err
-		}
-		return common.ToHex(res), gas, err
+	// Fetch the state associated with the block number
+	stateDb, block, err := stateAndBlockByNumber(s.miner, s.bc, blockNr, s.chainDb)
+	if stateDb == nil || err != nil {
+		return "0x", nil, err
 	}
+	stateDb = stateDb.Copy()
 
-	return "0x", common.Big0, nil
+	// Retrieve the account state object to interact with
+	var from *state.StateObject
+	if args.From == (common.Address{}) {
+		accounts, err := s.am.Accounts()
+		if err != nil || len(accounts) == 0 {
+			from = stateDb.GetOrNewStateObject(common.Address{})
+		} else {
+			from = stateDb.GetOrNewStateObject(accounts[0].Address)
+		}
+	} else {
+		from = stateDb.GetOrNewStateObject(args.From)
+	}
+	from.SetBalance(common.MaxBig)
+
+	// Assemble the CALL invocation
+	msg := callmsg{
+		from:     from,
+		to:       &args.To,
+		gas:      args.Gas.BigInt(),
+		gasPrice: args.GasPrice.BigInt(),
+		value:    args.Value.BigInt(),
+		data:     common.FromHex(args.Data),
+	}
+	if msg.gas.Cmp(common.Big0) == 0 {
+		msg.gas = big.NewInt(50000000)
+	}
+	if msg.gasPrice.Cmp(common.Big0) == 0 {
+		msg.gasPrice = new(big.Int).Mul(big.NewInt(50), common.Shannon)
+	}
+	// Execute the call and return
+	vmenv := core.NewEnv(stateDb, s.bc, msg, block.Header())
+	gp := new(core.GasPool).AddGas(common.MaxBig)
+
+	res, gas, err := core.ApplyMessage(vmenv, msg, gp)
+	if len(res) == 0 { // backwards compatibility
+		return "0x", gas, err
+	}
+	return common.ToHex(res), gas, err
 }
 
 // Call executes the given transaction on the state for the given block number.
@@ -802,14 +802,9 @@ func getTransaction(chainDb ethdb.Database, txPool *core.TxPool, txHash common.H
 
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
 func (s *PublicTransactionPoolAPI) GetBlockTransactionCountByNumber(blockNr rpc.BlockNumber) *rpc.HexNumber {
-	if blockNr == rpc.PendingBlockNumber {
-		return rpc.NewHexNumber(0)
-	}
-
 	if block := blockByNumber(s.miner, s.bc, blockNr); block != nil {
 		return rpc.NewHexNumber(len(block.Transactions()))
 	}
-
 	return nil
 }
 
@@ -839,13 +834,8 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlockHashAndIndex(blockHash c
 
 // GetTransactionCount returns the number of transactions the given address has sent for the given block number
 func (s *PublicTransactionPoolAPI) GetTransactionCount(address common.Address, blockNr rpc.BlockNumber) (*rpc.HexNumber, error) {
-	block := blockByNumber(s.miner, s.bc, blockNr)
-	if block == nil {
-		return nil, nil
-	}
-
-	state, err := state.New(block.Root(), s.chainDb)
-	if err != nil {
+	state, _, err := stateAndBlockByNumber(s.miner, s.bc, blockNr, s.chainDb)
+	if state == nil || err != nil {
 		return nil, err
 	}
 	return rpc.NewHexNumber(state.GetNonce(address)), nil

@@ -332,7 +332,6 @@ func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverReque
 			return res
 		}
 	}
-
 	return codec.CreateResponse(req.id, reply[0].Interface())
 }
 
@@ -344,7 +343,6 @@ func (s *Server) exec(ctx context.Context, codec ServerCodec, req *serverRequest
 	} else {
 		response = s.handle(ctx, codec, req)
 	}
-
 	if err := codec.Write(response); err != nil {
 		glog.V(logger.Error).Infof("%v\n", err)
 		codec.Close()

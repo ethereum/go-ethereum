@@ -52,6 +52,10 @@ var (
 func main() {
 	flag.Parse()
 
+	// Enable logging errors, we really do want to see those
+	glog.SetV(2)
+	glog.SetToStderr(true)
+
 	// Load the test suite to run the RPC against
 	tests, err := tests.LoadBlockTests(*testFile)
 	if err != nil {
