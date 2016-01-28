@@ -1427,6 +1427,145 @@ func (api *PrivateDebugAPI) SetHead(number uint64) {
 	api.eth.BlockChain().SetHead(number)
 }
 
+// StructLogRes stores a structured log emitted by the evm while replaying a
+// transaction in debug mode
+type structLogRes struct {
+	Pc      uint64            `json:"pc"`
+	Op      string            `json:"op"`
+	Gas     *big.Int          `json:"gas"`
+	GasCost *big.Int          `json:"gasCost"`
+	Error   error             `json:"error"`
+	Stack   []string          `json:"stack"`
+	Memory  map[string]string `json:"memory"`
+	Storage map[string]string `json:"storage"`
+}
+
+// TransactionExecutionRes groups all structured logs emitted by the evm
+// while replaying a transaction in debug mode as well as the amount of
+// gas used and the return value
+type TransactionExecutionResult struct {
+	Gas         *big.Int       `json:"gas"`
+	ReturnValue string         `json:"returnValue"`
+	StructLogs  []structLogRes `json:"structLogs"`
+}
+
+func (s *PrivateDebugAPI) doReplayTransaction(txHash common.Hash) ([]vm.StructLog, []byte, *big.Int, error) {
+	// Retrieve the tx from the chain
+	tx, _, blockIndex, _ := core.GetTransaction(s.eth.ChainDb(), txHash)
+
+	if tx == nil {
+		return nil, nil, nil, fmt.Errorf("Transaction not found")
+	}
+
+	block := s.eth.BlockChain().GetBlockByNumber(blockIndex - 1)
+	if block == nil {
+		return nil, nil, nil, fmt.Errorf("Unable to retrieve prior block")
+	}
+
+	// Create the state database
+	stateDb, err := state.New(block.Root(), s.eth.ChainDb())
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	txFrom, err := tx.From()
+
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("Unable to create transaction sender")
+	}
+	from := stateDb.GetOrNewStateObject(txFrom)
+	msg := callmsg{
+		from:     from,
+		to:       tx.To(),
+		gas:      tx.Gas(),
+		gasPrice: tx.GasPrice(),
+		value:    tx.Value(),
+		data:     tx.Data(),
+	}
+
+	vmenv := core.NewEnv(stateDb, s.eth.BlockChain(), msg, block.Header())
+	gp := new(core.GasPool).AddGas(block.GasLimit())
+	vm.GenerateStructLogs = true
+	defer func() { vm.GenerateStructLogs = false }()
+
+	ret, gas, err := core.ApplyMessage(vmenv, msg, gp)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("Error executing transaction %v", err)
+	}
+
+	return vmenv.StructLogs(), ret, gas, nil
+}
+
+// Executes a transaction and returns the structured logs of the evm
+// gathered during the execution
+func (s *PrivateDebugAPI) ReplayTransaction(txHash common.Hash, stackDepth int, memorySize int, storageSize int) (*TransactionExecutionResult, error) {
+
+	structLogs, ret, gas, err := s.doReplayTransaction(txHash)
+
+	if err != nil {
+		return nil, err
+	}
+
+	res := TransactionExecutionResult{
+		Gas:         gas,
+		ReturnValue: fmt.Sprintf("%x", ret),
+		StructLogs:  make([]structLogRes, len(structLogs)),
+	}
+
+	for index, trace := range structLogs {
+
+		stackLength := len(trace.Stack)
+
+		// Return full stack by default
+		if stackDepth != -1 && stackDepth < stackLength {
+			stackLength = stackDepth
+		}
+
+		res.StructLogs[index] = structLogRes{
+			Pc:      trace.Pc,
+			Op:      trace.Op.String(),
+			Gas:     trace.Gas,
+			GasCost: trace.GasCost,
+			Error:   trace.Err,
+			Stack:   make([]string, stackLength),
+			Memory:  make(map[string]string),
+			Storage: make(map[string]string),
+		}
+
+		for i := 0; i < stackLength; i++ {
+			res.StructLogs[index].Stack[i] = fmt.Sprintf("%x", common.LeftPadBytes(trace.Stack[i].Bytes(), 32))
+		}
+
+		addr := 0
+		memorySizeLocal := memorySize
+
+		// Return full memory by default
+		if memorySize == -1 {
+			memorySizeLocal = len(trace.Memory)
+		}
+
+		for i := 0; i+16 <= len(trace.Memory) && addr < memorySizeLocal; i += 16 {
+			res.StructLogs[index].Memory[fmt.Sprintf("%04d", addr*16)] = fmt.Sprintf("%x", trace.Memory[i:i+16])
+			addr++
+		}
+
+		storageLength := len(trace.Stack)
+		if storageSize != -1 && storageSize < storageLength {
+			storageLength = storageSize
+		}
+
+		i := 0
+		for storageIndex, storageValue := range trace.Storage {
+			if i >= storageLength {
+				break
+			}
+			res.StructLogs[index].Storage[fmt.Sprintf("%x", storageIndex)] = fmt.Sprintf("%x", storageValue)
+			i++
+		}
+	}
+	return &res, nil
+}
+
 // PublicNetAPI offers network related RPC methods
 type PublicNetAPI struct {
 	net            *p2p.Server
