@@ -117,3 +117,60 @@ func TestRecipientNormal(t *testing.T) {
 		t.Error("derived address doesn't match")
 	}
 }
+
+// Tests that transactions can be correctly sorted according to their price in
+// decreasing order, but at the same time with increasing nonces when issued by
+// the same account.
+func TestTransactionPriceNonceSort(t *testing.T) {
+	// Generate a batch of accounts to start with
+	keys := make([]*ecdsa.PrivateKey, 25)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+	}
+	// Generate a batch of transactions with overlapping values, but shifted nonces
+	txs := []*Transaction{}
+	for start, key := range keys {
+		for i := 0; i < 25; i++ {
+			tx, _ := NewTransaction(uint64(start+i), common.Address{}, big.NewInt(100), big.NewInt(100), big.NewInt(int64(start+i)), nil).SignECDSA(key)
+			txs = append(txs, tx)
+		}
+	}
+	// Sort the transactions and cross check the nonce ordering
+	SortByPriceAndNonce(txs)
+	for i, txi := range txs {
+		fromi, _ := txi.From()
+
+		// Make sure the nonce order is valid
+		for j, txj := range txs[i+1:] {
+			fromj, _ := txj.From()
+
+			if fromi == fromj && txi.Nonce() > txj.Nonce() {
+				t.Errorf("invalid nonce ordering: tx #%d (A=%x N=%v) < tx #%d (A=%x N=%v)", i, fromi[:4], txi.Nonce(), i+j, fromj[:4], txj.Nonce())
+			}
+		}
+		// Find the previous and next nonce of this account
+		prev, next := i-1, i+1
+		for j := i - 1; j >= 0; j-- {
+			if fromj, _ := txs[j].From(); fromi == fromj {
+				prev = j
+				break
+			}
+		}
+		for j := i + 1; j < len(txs); j++ {
+			if fromj, _ := txs[j].From(); fromi == fromj {
+				next = j
+				break
+			}
+		}
+		// Make sure that in between the neighbor nonces, the transaction is correctly positioned price wise
+		for j := prev + 1; j < next; j++ {
+			fromj, _ := txs[j].From()
+			if j < i && txs[j].GasPrice().Cmp(txi.GasPrice()) < 0 {
+				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", j, fromj[:4], txs[j].GasPrice(), i, fromi[:4], txi.GasPrice())
+			}
+			if j > i && txs[j].GasPrice().Cmp(txi.GasPrice()) > 0 {
+				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) > tx #%d (A=%x P=%v)", j, fromj[:4], txs[j].GasPrice(), i, fromi[:4], txi.GasPrice())
+			}
+		}
+	}
+}
