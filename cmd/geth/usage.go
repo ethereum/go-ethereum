@@ -23,6 +23,7 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/internal/debug"
 )
 
 // AppHelpTemplate is the test template for the default, global app help topic.
@@ -147,16 +148,8 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
-		Name: "LOGGING AND DEBUGGING",
-		Flags: []cli.Flag{
-			utils.VerbosityFlag,
-			utils.LogVModuleFlag,
-			utils.BacktraceAtFlag,
-			utils.LogFileFlag,
-			utils.PProfEanbledFlag,
-			utils.PProfPortFlag,
-			utils.MetricsEnabledFlag,
-		},
+		Name:  "LOGGING AND DEBUGGING",
+		Flags: append([]cli.Flag{utils.MetricsEnabledFlag}, debug.Flags...),
 	},
 	{
 		Name: "EXPERIMENTAL",

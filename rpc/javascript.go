@@ -327,7 +327,78 @@ web3._extend({
 			name: 'metrics',
 			call: 'debug_metrics',
 			params: 1
-		})
+		}),
+		new web3._extend.Method({
+			name: 'verbosity',
+			call: 'debug_verbosity',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'vmodule',
+			call: 'debug_vmodule',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'backtraceAt',
+			call: 'debug_backtraceAt',
+			params: 1,
+		}),
+		new web3._extend.Method({
+			name: 'stacks',
+			call: 'debug_stacks',
+			params: 0,
+			outputFormatter: console.log
+		}),
+		new web3._extend.Method({
+			name: 'cpuProfile',
+			call: 'debug_cpuProfile',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'startCPUProfile',
+			call: 'debug_startCPUProfile',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'stopCPUProfile',
+			call: 'debug_stopCPUProfile',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'trace',
+			call: 'debug_trace',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'startTrace',
+			call: 'debug_startTrace',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'stopTrace',
+			call: 'debug_stopTrace',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'blockProfile',
+			call: 'debug_blockProfile',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'setBlockProfileRate',
+			call: 'debug_setBlockProfileRate',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'writeBlockProfile',
+			call: 'debug_writeBlockProfile',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'writeMemProfile',
+			call: 'debug_writeMemProfile',
+			params: 1
+		}),
 	],
 	properties:
 	[

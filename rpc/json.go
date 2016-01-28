@@ -48,7 +48,7 @@ type JSONRequest struct {
 type JSONSuccessResponse struct {
 	Version string      `json:"jsonrpc"`
 	Id      int64       `json:"id"`
-	Result  interface{} `json:"result,omitempty"`
+	Result  interface{} `json:"result"`
 }
 
 // JSON-RPC error object

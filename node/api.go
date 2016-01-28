@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -100,7 +99,6 @@ func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 	return err == nil, err
 }
 
-
 // StartWS starts the websocket RPC API server.
 func (api *PrivateAdminAPI) StartWS(address string, port int, cors string, apis string) (bool, error) {
 	var offeredAPIs []rpc.API
@@ -131,7 +129,7 @@ func (api *PrivateAdminAPI) StartWS(address string, port int, cors string, apis 
 	}
 
 	corsDomains := strings.Split(cors, " ")
-	
+
 	err := rpc.StartWS(address, port, corsDomains, offeredAPIs)
 	return err == nil, err
 }
@@ -177,30 +175,6 @@ func (api *PublicAdminAPI) NodeInfo() (*p2p.NodeInfo, error) {
 // Datadir retrieves the current data directory the node is using.
 func (api *PublicAdminAPI) Datadir() string {
 	return api.node.DataDir()
-}
-
-// PrivateDebugAPI is the collection of debugging related API methods exposed
-// only over a secure RPC channel.
-type PrivateDebugAPI struct {
-	node *Node // Node interfaced by this API
-}
-
-// NewPrivateDebugAPI creates a new API definition for the private debug methods
-// of the node itself.
-func NewPrivateDebugAPI(node *Node) *PrivateDebugAPI {
-	return &PrivateDebugAPI{node: node}
-}
-
-// Verbosity updates the node's logging verbosity. Note, due to the lack of fine
-// grained contextual loggers, this will update the verbosity level for the entire
-// process, not just this node instance.
-func (api *PrivateDebugAPI) Verbosity(level int) {
-	glog.SetV(level)
-}
-
-// Vmodule updates the node's logging verbosity pattern.
-func (api *PrivateDebugAPI) Vmodule(pattern string) error {
-	return glog.SetVmodule(pattern)
 }
 
 // PublicDebugAPI is the collection of debugging related API methods exposed over
