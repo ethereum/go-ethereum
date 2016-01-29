@@ -178,25 +178,23 @@ func (n *Node) Stop() error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	// Short circuit if the node's not running
 	if n.server == nil {
 		return ErrNodeStopped
 	}
-	// Otherwise terminate all the services and the P2P server too
-	failure := &StopError{
-		Services: make(map[reflect.Type]error),
-	}
+
+	// Stop the server first. This will block until all connections
+	// are done interacting.
+	n.server.Stop()
+	// Stop all services.
+	failure := &StopError{Services: make(map[reflect.Type]error)}
 	for kind, service := range n.services {
 		if err := service.Stop(); err != nil {
 			failure.Services[kind] = err
 		}
 	}
-	n.server.Stop()
-
 	n.services = nil
 	n.server = nil
 	close(n.stop)
-
 	if len(failure.Services) > 0 {
 		return failure
 	}
