@@ -527,11 +527,24 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 func accountList(ctx *cli.Context) {
 	accman := utils.MakeAccountManager(ctx)
 	accts, err := accman.Accounts()
+	arg := ctx.Args().First()
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
 	}
-	for i, acct := range accts {
-		fmt.Printf("Account #%d: %x\n", i, acct)
+	if arg != "" {
+		// arg is an integer for the key we want to print
+		i, err := strconv.Atoi(arg)
+		if err != nil {
+			utils.Fatalf("Must specify a valid integer argument: %v", err)
+		}
+		if i+1 > len(accts) {
+			utils.Fatalf("Cannot get key %d; there are only %d keys, and counting starts at 0", i, len(accts))
+		}
+		fmt.Printf("%x\n", accts[i].Address)
+	} else {
+		for i, acct := range accts {
+			fmt.Printf("Account #%d: %x\n", i, acct)
+		}
 	}
 }
 
