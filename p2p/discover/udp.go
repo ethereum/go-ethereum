@@ -453,8 +453,11 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, 
 	return packet, nil
 }
 
-type tempError interface {
-	Temporary() bool
+func isTemporaryError(err error) bool {
+	tempErr, ok := err.(interface {
+		Temporary() bool
+	})
+	return ok && tempErr.Temporary() || isPacketTooBig(err)
 }
 
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
@@ -466,7 +469,7 @@ func (t *udp) readLoop() {
 	buf := make([]byte, 1280)
 	for {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
-		if tempErr, ok := err.(tempError); ok && tempErr.Temporary() {
+		if isTemporaryError(err) {
 			// Ignore temporary read errors.
 			glog.V(logger.Debug).Infof("Temporary read error: %v", err)
 			continue
