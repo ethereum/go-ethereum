@@ -490,6 +490,11 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			utils.Fatalf("Failed to start WS: %v", err)
 		}
 	}
+	// Unlock any account specifically requested
+	var ethereum *eth.Ethereum
+	if err := stack.Service(&ethereum); err != nil {
+		utils.Fatalf("ethereum service not running: %v", err)
+	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
 		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name), ctx.GlobalString(utils.MiningGPUFlag.Name)); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)

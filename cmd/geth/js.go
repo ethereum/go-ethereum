@@ -184,13 +184,6 @@ func newJSRE(stack *node.Node, docRoot, corsDomain string, client rpc.Client, in
 	js.corsDomain = corsDomain
 	js.wait = make(chan *big.Int)
 	js.client = client
-	if clt, ok := js.client.(*comms.InProcClient); ok {
-		if offeredApis, err := api.ParseApiString(shared.AllApis, codec.JSON, js.xeth, stack); err == nil {
-			clt.Initialize(api.Merge(offeredApis...))
-		} else {
-			utils.Fatalf("Unable to offer apis: %v", err)
-		}
-	}
 
 	js.re = re.New(docRoot)
 	if err := js.apiBindings(); err != nil {

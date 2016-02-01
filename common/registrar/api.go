@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ethreg
+package registrar
 
 import (
 	"errors"
@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/common/registrar"
+	// "github.com/ethereum/go-ethereum/common/registrar"
 )
 
 // registryAPIBackend is a backend for an Ethereum Registry.
@@ -41,14 +41,14 @@ type registryAPIBackend struct {
 	am      *accounts.Manager
 }
 
-// PrivateRegistarAPI offers various functions to access the Ethereum registry.
-type PrivateRegistarAPI struct {
+// PublicRegistarAPI offers various functions to access the Ethereum registry.
+type PublicRegistarAPI struct {
 	be *registryAPIBackend
 }
 
-// NewPrivateRegistarAPI creates a new PrivateRegistarAPI instance.
-func NewPrivateRegistarAPI(bc *core.BlockChain, chainDb ethdb.Database, txPool *core.TxPool, am *accounts.Manager) *PrivateRegistarAPI {
-	return &PrivateRegistarAPI{&registryAPIBackend{bc, chainDb, txPool, am}}
+// NewPublicRegistarAPI creates a new PublicRegistarAPI instance.
+func NewPublicRegistarAPI(bc *core.BlockChain, chainDb ethdb.Database, txPool *core.TxPool, am *accounts.Manager) *PublicRegistarAPI {
+	return &PublicRegistarAPI{&registryAPIBackend{bc, chainDb, txPool, am}}
 }
 
 // SetGlobalRegistrar allows clients to set the global registry for the node.
@@ -58,27 +58,27 @@ func NewPrivateRegistarAPI(bc *core.BlockChain, chainDb ethdb.Database, txPool *
 // will deploy a new registry on execution. The TX hash is returned. When called
 // with namereg '' and the current address is not zero the current global is
 // address is returned..
-func (api *PrivateRegistarAPI) SetGlobalRegistrar(namereg string, from common.Address) (string, error) {
-	return registrar.New(api.be).SetGlobalRegistrar(namereg, from)
+func (api *PublicRegistarAPI) SetGlobalRegistrar(namereg string, from common.Address) (string, error) {
+	return New(api.be).SetGlobalRegistrar(namereg, from)
 }
 
 // SetHashReg queries the registry for a hash.
-func (api *PrivateRegistarAPI) SetHashReg(hashreg string, from common.Address) (string, error) {
-	return registrar.New(api.be).SetHashReg(hashreg, from)
+func (api *PublicRegistarAPI) SetHashReg(hashreg string, from common.Address) (string, error) {
+	return New(api.be).SetHashReg(hashreg, from)
 }
 
 // SetUrlHint queries the registry for an url.
-func (api *PrivateRegistarAPI) SetUrlHint(hashreg string, from common.Address) (string, error) {
-	return registrar.New(api.be).SetUrlHint(hashreg, from)
+func (api *PublicRegistarAPI) SetUrlHint(hashreg string, from common.Address) (string, error) {
+	return New(api.be).SetUrlHint(hashreg, from)
 }
 
 // SaveInfo stores contract information on the local file system.
-func (api *PrivateRegistarAPI) SaveInfo(info *compiler.ContractInfo, filename string) (contenthash common.Hash, err error) {
+func (api *PublicRegistarAPI) SaveInfo(info *compiler.ContractInfo, filename string) (contenthash common.Hash, err error) {
 	return compiler.SaveInfo(info, filename)
 }
 
 // Register registers a new content hash in the registry.
-func (api *PrivateRegistarAPI) Register(sender common.Address, addr common.Address, contentHashHex string) (bool, error) {
+func (api *PublicRegistarAPI) Register(sender common.Address, addr common.Address, contentHashHex string) (bool, error) {
 	block := api.be.bc.CurrentBlock()
 	state, err := state.New(block.Root(), api.be.chainDb)
 	if err != nil {
@@ -89,13 +89,13 @@ func (api *PrivateRegistarAPI) Register(sender common.Address, addr common.Addre
 	codeHash := common.BytesToHash(crypto.Sha3(codeb))
 	contentHash := common.HexToHash(contentHashHex)
 
-	_, err = registrar.New(api.be).SetHashToHash(sender, codeHash, contentHash)
+	_, err = New(api.be).SetHashToHash(sender, codeHash, contentHash)
 	return err == nil, err
 }
 
 // RegisterUrl registers a new url in the registry.
-func (api *PrivateRegistarAPI) RegisterUrl(sender common.Address, contentHashHex string, url string) (bool, error) {
-	_, err := registrar.New(api.be).SetUrlToHash(sender, common.HexToHash(contentHashHex), url)
+func (api *PublicRegistarAPI) RegisterUrl(sender common.Address, contentHashHex string, url string) (bool, error) {
+	_, err := New(api.be).SetUrlToHash(sender, common.HexToHash(contentHashHex), url)
 	return err == nil, err
 }
 
@@ -132,7 +132,7 @@ func (m callmsg) Data() []byte {
 }
 
 // Call forms a transaction from the given arguments and tries to execute it on
-// a private VM with a copy of the state. Any changes are therefore only temporary
+// a Public VM with a copy of the state. Any changes are therefore only temporary
 // and not part of the actual state. This allows for local execution/queries.
 func (be *registryAPIBackend) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, string, error) {
 	block := be.bc.CurrentBlock()
@@ -194,7 +194,7 @@ func (be *registryAPIBackend) StorageAt(addr string, storageAddr string) string 
 }
 
 // Transact forms a transaction from the given arguments and submits it to the
-// transactio pool for execution.
+// transaction pool for execution.
 func (be *registryAPIBackend) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 	if len(toStr) > 0 && toStr != "0x" && !common.IsHexAddress(toStr) {
 		return "", errors.New("invalid address")

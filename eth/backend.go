@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/common/httpclient"
-	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
+	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -317,7 +317,11 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "admin",
 			Version:   "1.0",
-			Service:   ethreg.NewPrivateRegistarAPI(s.BlockChain(), s.ChainDb(), s.TxPool(), s.AccountManager()),
+			Service:   registrar.NewPublicRegistarAPI(s.BlockChain(), s.ChainDb(), s.TxPool(), s.AccountManager()),
+		}, {
+			Namespace: "registrar",
+			Version:   "1.0",
+			Service:   registrar.NewPublicRegistarAPI(s.BlockChain(), s.ChainDb(), s.TxPool(), s.AccountManager()),
 		},
 	}
 }
