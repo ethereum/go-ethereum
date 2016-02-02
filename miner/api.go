@@ -33,7 +33,10 @@ type PublicMinerAPI struct {
 
 // NewPublicMinerAPI create a new PublicMinerAPI instance.
 func NewPublicMinerAPI(miner *Miner) *PublicMinerAPI {
-	return &PublicMinerAPI{miner, NewRemoteAgent()}
+	agent := NewRemoteAgent()
+	miner.Register(agent)
+
+	return &PublicMinerAPI{miner, agent}
 }
 
 // Mining returns an indication if this node is currently mining.
