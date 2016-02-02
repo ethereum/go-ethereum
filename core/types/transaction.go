@@ -33,7 +33,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var ErrInvalidSig = errors.New("invalid v, r, s values")
+var (
+	ErrInvalidSig    = errors.New("invalid v, r, s values")
+	ErrInvalidPubKey = errors.New("invalid public key")
+)
 
 type Transaction struct {
 	data txdata
@@ -202,7 +205,7 @@ func (tx *Transaction) publicKey() ([]byte, error) {
 		return nil, err
 	}
 	if len(pub) == 0 || pub[0] != 4 {
-		return nil, errors.New("invalid public key")
+		return nil, ErrInvalidPubKey
 	}
 	return pub, nil
 }
