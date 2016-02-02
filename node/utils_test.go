@@ -52,6 +52,7 @@ func NewNoopServiceD(*ServiceContext) (Service, error) { return new(NoopServiceD
 // methods can be instrumented both return value as well as event hook wise.
 type InstrumentedService struct {
 	protocols []p2p.Protocol
+	apis      []rpc.API
 	start     error
 	stop      error
 
@@ -70,7 +71,7 @@ func (s *InstrumentedService) Protocols() []p2p.Protocol {
 }
 
 func (s *InstrumentedService) APIs() []rpc.API {
-	return nil
+	return s.apis
 }
 
 func (s *InstrumentedService) Start(server *p2p.Server) error {
@@ -120,4 +121,15 @@ func InstrumentedServiceMakerB(base ServiceConstructor) ServiceConstructor {
 
 func InstrumentedServiceMakerC(base ServiceConstructor) ServiceConstructor {
 	return InstrumentingWrapperMaker(base, reflect.TypeOf(InstrumentedServiceC{}))
+}
+
+// OneMethodApi is a single-method API handler to be returned by test services.
+type OneMethodApi struct {
+	fun func()
+}
+
+func (api *OneMethodApi) TheOneMethod() {
+	if api.fun != nil {
+		api.fun()
+	}
 }

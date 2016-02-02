@@ -63,7 +63,7 @@ func TestContextDatabases(t *testing.T) {
 
 // Tests that already constructed services can be retrieves by later ones.
 func TestContextServices(t *testing.T) {
-	stack, err := New(testNodeConfig)
+	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}

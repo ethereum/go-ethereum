@@ -18,25 +18,20 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"runtime"
-
-	"errors"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/ethereum/go-ethereum/whisper"
 )
@@ -89,11 +84,6 @@ func main() {
 	}
 	log.Println("Initial test suite passed...")
 
-	if err := StartIPC(stack); err != nil {
-		log.Fatalf("Failed to start IPC interface: %v\n", err)
-	}
-	log.Println("IPC Interface started, accepting requests...")
-
 	// Start the RPC interface and wait until terminated
 	if err := StartRPC(stack); err != nil {
 		log.Fatalf("Failed to start RPC interface: %v", err)
@@ -109,7 +99,7 @@ func main() {
 // keystore path and initial pre-state.
 func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node.Node, error) {
 	// Create a networkless protocol stack
-	stack, err := node.New(&node.Config{NoDiscovery: true})
+	stack, err := node.New(&node.Config{IpcPath: node.DefaultIpcEndpoint(), NoDiscovery: true})
 	if err != nil {
 		return nil, err
 	}
@@ -193,51 +183,4 @@ func StartRPC(stack *node.Node) error {
 
 	glog.V(logger.Error).Infof("Unable to start RPC-HTTP interface, could not find admin API")
 	return errors.New("Unable to start RPC-HTTP interface")
-}
-
-// StartIPC initializes an IPC interface to the given protocol stack.
-func StartIPC(stack *node.Node) error {
-	var ethereum *eth.Ethereum
-	if err := stack.Service(&ethereum); err != nil {
-		return err
-	}
-
-	endpoint := `\\.\pipe\geth.ipc`
-	if runtime.GOOS != "windows" {
-		endpoint = filepath.Join(common.DefaultDataDir(), "geth.ipc")
-	}
-
-	listener, err := rpc.CreateIPCListener(endpoint)
-	if err != nil {
-		return err
-	}
-
-	server := rpc.NewServer()
-
-	// register package API's this node provides
-	offered := stack.APIs()
-	for _, api := range offered {
-		server.RegisterName(api.Namespace, api.Service)
-		glog.V(logger.Debug).Infof("Register %T under namespace '%s' for IPC service\n", api.Service, api.Namespace)
-	}
-
-	//var ethereum *eth.Ethereum
-	//if err := stack.Service(&ethereum); err != nil {
-	//	return err
-	//}
-
-	go func() {
-		glog.V(logger.Info).Infof("Start IPC server on %s\n", endpoint)
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				glog.V(logger.Error).Infof("Unable to accept connection - %v\n", err)
-			}
-
-			codec := rpc.NewJSONCodec(conn)
-			go server.ServeCodec(codec)
-		}
-	}()
-
-	return nil
 }

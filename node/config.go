@@ -23,7 +23,10 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -48,6 +51,12 @@ type Config struct {
 	// databases or flat files. This enables ephemeral nodes which can fully reside
 	// in memory.
 	DataDir string
+
+	// IpcPath is the requested location to place the IPC endpoint. If the path is
+	// a simple file name, it is placed inside the data directory (or on the root
+	// pipe path on Windows), whereas if it's a resolvable path name (absolute or
+	// relative), then that specific path is enforced. An empty path disables IPC.
+	IpcPath string
 
 	// This field should be a valid secp256k1 private key that will be used for both
 	// remote peer identification as well as network traffic encryption. If no key
@@ -88,6 +97,37 @@ type Config struct {
 	// handshake phase, counted separately for inbound and outbound connections.
 	// Zero defaults to preset values.
 	MaxPendingPeers int
+}
+
+// IpcEndpoint resolves an IPC endpoint based on a configured value, taking into
+// account the set data folders as well as the designated platform we're currently
+// running on.
+func (c *Config) IpcEndpoint() string {
+	// Short circuit if IPC has not been enabled
+	if c.IpcPath == "" {
+		return ""
+	}
+	// On windows we can only use plain top-level pipes
+	if runtime.GOOS == "windows" {
+		if strings.HasPrefix(c.IpcPath, `\\.\pipe\`) {
+			return c.IpcPath
+		}
+		return `\\.\pipe\` + c.IpcPath
+	}
+	// Resolve names into the data directory full paths otherwise
+	if filepath.Base(c.IpcPath) == c.IpcPath {
+		if c.DataDir == "" {
+			return filepath.Join(os.TempDir(), c.IpcPath)
+		}
+		return filepath.Join(c.DataDir, c.IpcPath)
+	}
+	return c.IpcPath
+}
+
+// DefaultIpcEndpoint returns the IPC path used by default.
+func DefaultIpcEndpoint() string {
+	config := &Config{DataDir: common.DefaultDataDir(), IpcPath: common.DefaultIpcSocket()}
+	return config.IpcEndpoint()
 }
 
 // NodeKey retrieves the currently configured private key of the node, checking

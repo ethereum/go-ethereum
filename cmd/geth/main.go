@@ -502,12 +502,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			unlockAccount(ctx, accman, trimmed, i, passwords)
 		}
 	}
-	// Start auxiliary services if enabled.
-	if !ctx.GlobalBool(utils.IPCDisabledFlag.Name) {
-		if err := utils.StartIPC(stack, ctx); err != nil {
-			utils.Fatalf("Failed to start IPC: %v", err)
-		}
-	}
+	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
 		if err := utils.StartRPC(stack, ctx); err != nil {
 			utils.Fatalf("Failed to start RPC: %v", err)

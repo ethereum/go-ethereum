@@ -150,10 +150,8 @@ func NewRemoteRPCClient(ctx *cli.Context) (rpc.Client, error) {
 		endpoint := ctx.Args().First()
 		return NewRemoteRPCClientFromString(endpoint)
 	}
-
 	// use IPC by default
-	endpoint := IPCSocketPath(ctx)
-	return rpc.NewIPCClient(endpoint)
+	return rpc.NewIPCClient(node.DefaultIpcEndpoint())
 }
 
 // NewRemoteRPCClientFromString returns a RPC client which connects to the given

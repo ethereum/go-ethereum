@@ -18,27 +18,34 @@ package node
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var (
 	testNodeKey, _ = crypto.GenerateKey()
+)
 
-	testNodeConfig = &Config{
+func testNodeConfig() *Config {
+	return &Config{
+		IpcPath:    fmt.Sprintf("test-%d.ipc", rand.Int63()),
 		PrivateKey: testNodeKey,
 		Name:       "test node",
 	}
-)
+}
 
 // Tests that an empty protocol stack can be started, restarted and stopped.
 func TestNodeLifeCycle(t *testing.T) {
-	stack, err := New(testNodeConfig)
+	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -101,7 +108,7 @@ func TestNodeUsedDataDir(t *testing.T) {
 
 // Tests whether services can be registered and duplicates caught.
 func TestServiceRegistry(t *testing.T) {
-	stack, err := New(testNodeConfig)
+	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -133,7 +140,7 @@ func TestServiceRegistry(t *testing.T) {
 
 // Tests that registered services get started and stopped correctly.
 func TestServiceLifeCycle(t *testing.T) {
-	stack, err := New(testNodeConfig)
+	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -183,7 +190,7 @@ func TestServiceLifeCycle(t *testing.T) {
 
 // Tests that services are restarted cleanly as new instances.
 func TestServiceRestarts(t *testing.T) {
-	stack, err := New(testNodeConfig)
+	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -231,7 +238,7 @@ func TestServiceRestarts(t *testing.T) {
 // Tests that if a service fails to initialize itself, none of the other services
 // will be allowed to even start.
 func TestServiceConstructionAbortion(t *testing.T) {
-	stack, err := New(testNodeConfig)
+	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -278,7 +285,7 @@ func TestServiceConstructionAbortion(t *testing.T) {
 // Tests that if a service fails to start, all others started before it will be
 // shut down.
 func TestServiceStartupAbortion(t *testing.T) {
-	stack, err := New(testNodeConfig)
+	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -331,7 +338,7 @@ func TestServiceStartupAbortion(t *testing.T) {
 // Tests that even if a registered service fails to shut down cleanly, it does
 // not influece the rest of the shutdown invocations.
 func TestServiceTerminationGuarantee(t *testing.T) {
-	stack, err := New(testNodeConfig)
+	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -406,7 +413,7 @@ func TestServiceTerminationGuarantee(t *testing.T) {
 // TestServiceRetrieval tests that individual services can be retrieved.
 func TestServiceRetrieval(t *testing.T) {
 	// Create a simple stack and register two service types
-	stack, err := New(testNodeConfig)
+	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -441,7 +448,7 @@ func TestServiceRetrieval(t *testing.T) {
 
 // Tests that all protocols defined by individual services get launched.
 func TestProtocolGather(t *testing.T) {
-	stack, err := New(testNodeConfig)
+	stack, err := New(testNodeConfig())
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -491,6 +498,78 @@ func TestProtocolGather(t *testing.T) {
 			if !launched {
 				t.Errorf("configured protocol not launched: %s v%d", id, ver)
 			}
+		}
+	}
+}
+
+// Tests that all APIs defined by individual services get exposed.
+func TestAPIGather(t *testing.T) {
+	stack, err := New(testNodeConfig())
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
+	// Register a batch of services with some configured APIs
+	calls := make(chan string, 1)
+
+	services := map[string]struct {
+		APIs  []rpc.API
+		Maker InstrumentingWrapper
+	}{
+		"Zero APIs": {[]rpc.API{}, InstrumentedServiceMakerA},
+		"Single API": {[]rpc.API{
+			{"single", "1", &OneMethodApi{fun: func() { calls <- "single.v1" }}, true},
+		}, InstrumentedServiceMakerB},
+		"Many APIs": {[]rpc.API{
+			{"multi", "1", &OneMethodApi{fun: func() { calls <- "multi.v1" }}, true},
+			{"multi.v2", "2", &OneMethodApi{fun: func() { calls <- "multi.v2" }}, true},
+			{"multi.v2.nested", "2", &OneMethodApi{fun: func() { calls <- "multi.v2.nested" }}, true},
+		}, InstrumentedServiceMakerC},
+	}
+	for id, config := range services {
+		config := config
+		constructor := func(*ServiceContext) (Service, error) {
+			return &InstrumentedService{apis: config.APIs}, nil
+		}
+		if err := stack.Register(config.Maker(constructor)); err != nil {
+			t.Fatalf("service %s: registration failed: %v", id, err)
+		}
+	}
+	// Start the services and ensure all API start successfully
+	if err := stack.Start(); err != nil {
+		t.Fatalf("failed to start protocol stack: %v", err)
+	}
+	defer stack.Stop()
+
+	// Connect to the RPC server and verify the various registered endpoints
+	ipcClient, err := rpc.NewIPCClient(stack.IpcEndpoint())
+	if err != nil {
+		t.Fatalf("failed to connect to the IPC API server: %v", err)
+	}
+
+	tests := []struct {
+		Method string
+		Result string
+	}{
+		{"single_theOneMethod", "single.v1"},
+		{"multi_theOneMethod", "multi.v1"},
+		{"multi.v2_theOneMethod", "multi.v2"},
+		{"multi.v2.nested_theOneMethod", "multi.v2.nested"},
+	}
+	for i, test := range tests {
+		if err := ipcClient.Send(rpc.JSONRequest{Id: new(int64), Version: "2.0", Method: test.Method}); err != nil {
+			t.Fatalf("test %d: failed to send API request: %v", i, err)
+		}
+		reply := new(rpc.JSONSuccessResponse)
+		if err := ipcClient.Recv(reply); err != nil {
+			t.Fatalf("test %d: failed to read API reply: %v", i, err)
+		}
+		select {
+		case result := <-calls:
+			if result != test.Result {
+				t.Errorf("test %d: result mismatch: have %s, want %s", i, result, test.Result)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("test %d: rpc execution timeout", i)
 		}
 	}
 }

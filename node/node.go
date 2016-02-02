@@ -19,6 +19,7 @@ package node
 
 import (
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -27,6 +28,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/debug"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -51,6 +54,10 @@ type Node struct {
 
 	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
 	services     map[reflect.Type]Service // Currently running services
+
+	ipcEndpoint string       // IPC endpoint to listen at (empty = IPC disabled)
+	ipcListener net.Listener // IPC RPC listener socket to serve API requests
+	ipcHandler  *rpc.Server  // IPC RPC request handler to process the API requests
 
 	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
@@ -87,6 +94,7 @@ func New(conf *Config) (*Node, error) {
 			MaxPendingPeers: conf.MaxPendingPeers,
 		},
 		serviceFuncs: []ServiceConstructor{},
+		ipcEndpoint:  conf.IpcEndpoint(),
 		eventmux:     new(event.TypeMux),
 	}, nil
 }
@@ -164,10 +172,70 @@ func (n *Node) Start() error {
 		// Mark the service started for potential cleanup
 		started = append(started, kind)
 	}
+	// Lastly start the configured RPC interfaces
+	if err := n.startRPC(services); err != nil {
+		for _, service := range services {
+			service.Stop()
+		}
+		running.Stop()
+		return err
+	}
 	// Finish initializing the startup
 	n.services = services
 	n.server = running
 	n.stop = make(chan struct{})
+
+	return nil
+}
+
+// startRPC initializes and starts the IPC RPC endpoints.
+func (n *Node) startRPC(services map[reflect.Type]Service) error {
+	// Gather and register all the APIs exposed by the services
+	apis := n.apis()
+	for _, service := range services {
+		apis = append(apis, service.APIs()...)
+	}
+	ipcHandler := rpc.NewServer()
+	for _, api := range apis {
+		if err := ipcHandler.RegisterName(api.Namespace, api.Service); err != nil {
+			return err
+		}
+		glog.V(logger.Debug).Infof("Register %T under namespace '%s'", api.Service, api.Namespace)
+	}
+	// All APIs registered, start the IPC and HTTP listeners
+	var (
+		ipcListener net.Listener
+		err         error
+	)
+	if n.ipcEndpoint != "" {
+		if ipcListener, err = rpc.CreateIPCListener(n.ipcEndpoint); err != nil {
+			return err
+		}
+		go func() {
+			glog.V(logger.Info).Infof("IPC endpoint opened: %s", n.ipcEndpoint)
+			defer glog.V(logger.Info).Infof("IPC endpoint closed: %s", n.ipcEndpoint)
+
+			for {
+				conn, err := ipcListener.Accept()
+				if err != nil {
+					// Terminate if the listener was closed
+					n.lock.RLock()
+					closed := n.ipcListener == nil
+					n.lock.RUnlock()
+					if closed {
+						return
+					}
+					// Not closed, just some error; report and continue
+					glog.V(logger.Error).Infof("IPC accept failed: %v", err)
+					continue
+				}
+				go ipcHandler.ServeCodec(rpc.NewJSONCodec(conn))
+			}
+		}()
+	}
+	// All listeners booted successfully
+	n.ipcListener = ipcListener
+	n.ipcHandler = ipcHandler
 
 	return nil
 }
@@ -182,7 +250,15 @@ func (n *Node) Stop() error {
 	if n.server == nil {
 		return ErrNodeStopped
 	}
-	// Otherwise terminate all the services and the P2P server too
+	// Otherwise terminate the API, all services and the P2P server too
+	if n.ipcListener != nil {
+		n.ipcListener.Close()
+		n.ipcListener = nil
+	}
+	if n.ipcHandler != nil {
+		n.ipcHandler.Stop()
+		n.ipcHandler = nil
+	}
 	failure := &StopError{
 		Services: make(map[reflect.Type]error),
 	}
@@ -261,18 +337,20 @@ func (n *Node) DataDir() string {
 	return n.datadir
 }
 
+// IpcEndpoint retrieves the current IPC endpoint used by the protocol stack.
+func (n *Node) IpcEndpoint() string {
+	return n.ipcEndpoint
+}
+
 // EventMux retrieves the event multiplexer used by all the network services in
 // the current protocol stack.
 func (n *Node) EventMux() *event.TypeMux {
 	return n.eventmux
 }
 
-// APIs returns the collection of RPC descriptor this node offers. This method
-// is just a quick placeholder passthrough for the RPC update, which in the next
-// step will be fully integrated into the node itself.
-func (n *Node) APIs() []rpc.API {
-	// Define all the APIs owned by the node itself
-	apis := []rpc.API{
+// apis returns the collection of RPC descriptors this node offers.
+func (n *Node) apis() []rpc.API {
+	return []rpc.API{
 		{
 			Namespace: "admin",
 			Version:   "1.0",
@@ -298,7 +376,13 @@ func (n *Node) APIs() []rpc.API {
 			Public:    true,
 		},
 	}
-	// Inject all the APIs owned by various services
+}
+
+// APIs returns the collection of RPC descriptor this node offers. This method
+// is just a quick placeholder passthrough for the RPC update, which in the next
+// step will be fully integrated into the node itself.
+func (n *Node) APIs() []rpc.API {
+	apis := n.apis()
 	for _, api := range n.services {
 		apis = append(apis, api.APIs()...)
 	}
