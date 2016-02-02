@@ -71,8 +71,16 @@ web3._extend({
 	properties:
 	[
 		new web3._extend.Property({
+			name: 'content',
+			getter: 'txpool_content'
+		}),
+		new web3._extend.Property({
+			name: 'inspect',
+			getter: 'txpool_inspect'
+		}),
+		new web3._extend.Property({
 			name: 'status',
-			getter: 'txpool_status'
+			getter: 'txpool_status',
 			outputFormatter: function(status) {
 				status.pending = web3._extend.utils.toDecimal(status.pending);
 				status.queued = web3._extend.utils.toDecimal(status.queued);

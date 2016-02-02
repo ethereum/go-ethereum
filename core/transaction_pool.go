@@ -169,6 +169,36 @@ func (pool *TxPool) Stats() (pending int, queued int) {
 	return
 }
 
+// Content retrieves the data content of the transaction pool, returning all the
+// pending as well as queued transactions, grouped by account and nonce.
+func (pool *TxPool) Content() (map[common.Address]map[uint64][]*types.Transaction, map[common.Address]map[uint64][]*types.Transaction) {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+
+	// Retrieve all the pending transactions and sort by account and by nonce
+	pending := make(map[common.Address]map[uint64][]*types.Transaction)
+	for _, tx := range pool.pending {
+		account, _ := tx.From()
+
+		owned, ok := pending[account]
+		if !ok {
+			owned = make(map[uint64][]*types.Transaction)
+			pending[account] = owned
+		}
+		owned[tx.Nonce()] = append(owned[tx.Nonce()], tx)
+	}
+	// Retrieve all the queued transactions and sort by account and by nonce
+	queued := make(map[common.Address]map[uint64][]*types.Transaction)
+	for account, txs := range pool.queue {
+		owned := make(map[uint64][]*types.Transaction)
+		for _, tx := range txs {
+			owned[tx.Nonce()] = append(owned[tx.Nonce()], tx)
+		}
+		queued[account] = owned
+	}
+	return pending, queued
+}
+
 // SetLocal marks a transaction as local, skipping gas price
 //  check against local miner minimum in the future
 func (pool *TxPool) SetLocal(tx *types.Transaction) {
