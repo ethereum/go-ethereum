@@ -107,7 +107,7 @@ func (b *memBatch) Put(key, value []byte) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	b.writes = append(b.writes, kv{key, common.CopyBytes(value)})
+	b.writes = append(b.writes, kv{common.CopyBytes(key), common.CopyBytes(value)})
 	return nil
 }
 
