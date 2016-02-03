@@ -125,17 +125,17 @@ type vmBench struct {
 
 type account struct{}
 
-func (account) SubBalance(amount *big.Int)             {}
-func (account) AddBalance(amount *big.Int)             {}
-func (account) SetAddress(common.Address)              {}
-func (account) Value() *big.Int                        { return nil }
-func (account) SetBalance(*big.Int)                    {}
-func (account) SetNonce(uint64)                        {}
-func (account) Balance() *big.Int                      { return nil }
-func (account) Address() common.Address                { return common.Address{} }
-func (account) ReturnGas(*big.Int, *big.Int)           {}
-func (account) SetCode([]byte)                         {}
-func (account) EachStorage(cb func(key, value []byte)) {}
+func (account) SubBalance(amount *big.Int)                          {}
+func (account) AddBalance(amount *big.Int)                          {}
+func (account) SetAddress(common.Address)                           {}
+func (account) Value() *big.Int                                     { return nil }
+func (account) SetBalance(*big.Int)                                 {}
+func (account) SetNonce(uint64)                                     {}
+func (account) Balance() *big.Int                                   { return nil }
+func (account) Address() common.Address                             { return common.Address{} }
+func (account) ReturnGas(*big.Int, *big.Int)                        {}
+func (account) SetCode([]byte)                                      {}
+func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
 
 func runVmBench(test vmBench, b *testing.B) {
 	var sender account
@@ -165,16 +165,16 @@ func runVmBench(test vmBench, b *testing.B) {
 type Env struct {
 	gasLimit *big.Int
 	depth    int
-	evm      *Vm
+	evm      *EVM
 }
 
 func NewEnv() *Env {
 	env := &Env{gasLimit: big.NewInt(10000), depth: 0}
-	env.evm = EVM(env)
+	env.evm = New(env, nil)
 	return env
 }
 
-func (self *Env) Vm() *Vm                { return self.evm }
+func (self *Env) Vm() Vm                 { return self.evm }
 func (self *Env) Origin() common.Address { return common.Address{} }
 func (self *Env) BlockNumber() *big.Int  { return big.NewInt(0) }
 func (self *Env) AddStructLog(log StructLog) {

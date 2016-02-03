@@ -235,7 +235,6 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Log
 	}
 	// Set pre compiled contracts
 	vm.Precompiled = vm.PrecompiledContracts()
-	vm.Debug = false
 	snapshot := statedb.Copy()
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 

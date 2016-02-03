@@ -137,6 +137,7 @@ func (self *StateTransition) from() (vm.Account, error) {
 	}
 	return self.state.GetAccount(f), nil
 }
+
 func (self *StateTransition) to() vm.Account {
 	if self.msg == nil {
 		return nil
@@ -193,7 +194,6 @@ func (self *StateTransition) preCheck() (err error) {
 	}
 
 	// Make sure this transaction's nonce is correct
-	//if sender.Nonce() != msg.Nonce() {
 	if n := self.state.GetNonce(sender.Address()); n != msg.Nonce() {
 		return NonceError(msg.Nonce(), n)
 	}
@@ -251,10 +251,6 @@ func (self *StateTransition) transitionDb() (ret []byte, usedGas *big.Int, err e
 	// We aren't interested in errors here. Errors returned by the VM are non-consensus errors and therefor shouldn't bubble up
 	if err != nil {
 		err = nil
-	}
-
-	if vm.Debug {
-		vm.StdErrFormat(vmenv.StructLogs())
 	}
 
 	self.refundGas()

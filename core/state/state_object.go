@@ -38,7 +38,7 @@ func (self Code) String() string {
 	return string(self) //strings.Join(Disassemble(self), " ")
 }
 
-type Storage map[string]common.Hash
+type Storage map[common.Hash]common.Hash
 
 func (self Storage) String() (str string) {
 	for key, value := range self {
@@ -112,13 +112,13 @@ func (c *StateObject) getAddr(addr common.Hash) common.Hash {
 	return common.BytesToHash(ret)
 }
 
-func (c *StateObject) setAddr(addr []byte, value common.Hash) {
+func (c *StateObject) setAddr(addr, value common.Hash) {
 	v, err := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
 	if err != nil {
 		// if RLPing failed we better panic and not fail silently. This would be considered a consensus issue
 		panic(err)
 	}
-	c.trie.Update(addr, v)
+	c.trie.Update(addr[:], v)
 }
 
 func (self *StateObject) Storage() Storage {
@@ -126,20 +126,19 @@ func (self *StateObject) Storage() Storage {
 }
 
 func (self *StateObject) GetState(key common.Hash) common.Hash {
-	strkey := key.Str()
-	value, exists := self.storage[strkey]
+	value, exists := self.storage[key]
 	if !exists {
 		value = self.getAddr(key)
 		if (value != common.Hash{}) {
-			self.storage[strkey] = value
+			self.storage[key] = value
 		}
 	}
 
 	return value
 }
 
-func (self *StateObject) SetState(k, value common.Hash) {
-	self.storage[k.Str()] = value
+func (self *StateObject) SetState(key, value common.Hash) {
+	self.storage[key] = value
 	self.dirty = true
 }
 
@@ -147,10 +146,10 @@ func (self *StateObject) SetState(k, value common.Hash) {
 func (self *StateObject) Update() {
 	for key, value := range self.storage {
 		if (value == common.Hash{}) {
-			self.trie.Delete([]byte(key))
+			self.trie.Delete(key[:])
 			continue
 		}
-		self.setAddr([]byte(key), value)
+		self.setAddr(key, value)
 	}
 }
 
@@ -245,23 +244,21 @@ func (self *StateObject) Value() *big.Int {
 	panic("Value on StateObject should never be called")
 }
 
-func (self *StateObject) EachStorage(cb func(key, value []byte)) {
+func (self *StateObject) ForEachStorage(cb func(key, value common.Hash) bool) {
 	// When iterating over the storage check the cache first
-	for h, v := range self.storage {
-		cb([]byte(h), v.Bytes())
+	for h, value := range self.storage {
+		cb(h, value)
 	}
 
 	it := self.trie.Iterator()
 	for it.Next() {
 		// ignore cached values
-		key := self.trie.GetKey(it.Key)
-		if _, ok := self.storage[string(key)]; !ok {
-			cb(key, it.Value)
+		key := common.BytesToHash(self.trie.GetKey(it.Key))
+		if _, ok := self.storage[key]; !ok {
+			cb(key, common.BytesToHash(it.Value))
 		}
 	}
 }
-
-// Encoding
 
 type extStateObject struct {
 	Nonce    uint64

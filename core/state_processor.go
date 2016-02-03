@@ -31,7 +31,7 @@ func NewStateProcessor(bc *BlockChain) *StateProcessor {
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB) (types.Receipts, vm.Logs, *big.Int, error) {
+func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg *vm.Config) (types.Receipts, vm.Logs, *big.Int, error) {
 	var (
 		receipts     types.Receipts
 		totalUsedGas = big.NewInt(0)
@@ -43,7 +43,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB) (ty
 
 	for i, tx := range block.Transactions() {
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
-		receipt, logs, _, err := ApplyTransaction(p.bc, gp, statedb, header, tx, totalUsedGas)
+		receipt, logs, _, err := ApplyTransaction(p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
 		if err != nil {
 			return nil, nil, totalUsedGas, err
 		}
@@ -60,8 +60,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB) (ty
 //
 // ApplyTransactions returns the generated receipts and vm logs during the
 // execution of the state transition phase.
-func ApplyTransaction(bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int) (*types.Receipt, vm.Logs, *big.Int, error) {
-	_, gas, err := ApplyMessage(NewEnv(statedb, bc, tx, header), tx, gp)
+func ApplyTransaction(bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, cfg *vm.Config) (*types.Receipt, vm.Logs, *big.Int, error) {
+	_, gas, err := ApplyMessage(NewEnv(statedb, bc, tx, header, cfg), tx, gp)
 	if err != nil {
 		return nil, nil, nil, err
 	}

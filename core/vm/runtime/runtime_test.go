@@ -117,21 +117,6 @@ func TestCall(t *testing.T) {
 	}
 }
 
-func TestRestoreDefaults(t *testing.T) {
-	Execute(nil, nil, &Config{Debug: true})
-	if vm.ForceJit {
-		t.Error("expected force jit to be disabled")
-	}
-
-	if vm.Debug {
-		t.Error("expected debug to be disabled")
-	}
-
-	if vm.EnableJit {
-		t.Error("expected jit to be disabled")
-	}
-}
-
 func BenchmarkCall(b *testing.B) {
 	var definition = `[{"constant":true,"inputs":[],"name":"seller","outputs":[{"name":"","type":"address"}],"type":"function"},{"constant":false,"inputs":[],"name":"abort","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"value","outputs":[{"name":"","type":"uint256"}],"type":"function"},{"constant":false,"inputs":[],"name":"refund","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"buyer","outputs":[{"name":"","type":"address"}],"type":"function"},{"constant":false,"inputs":[],"name":"confirmReceived","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"state","outputs":[{"name":"","type":"uint8"}],"type":"function"},{"constant":false,"inputs":[],"name":"confirmPurchase","outputs":[],"type":"function"},{"inputs":[],"type":"constructor"},{"anonymous":false,"inputs":[],"name":"Aborted","type":"event"},{"anonymous":false,"inputs":[],"name":"PurchaseConfirmed","type":"event"},{"anonymous":false,"inputs":[],"name":"ItemReceived","type":"event"},{"anonymous":false,"inputs":[],"name":"Refunded","type":"event"}]`
 

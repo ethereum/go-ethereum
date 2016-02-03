@@ -667,7 +667,7 @@ func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (st
 	}
 
 	// Execute the call and return
-	vmenv := core.NewEnv(stateDb, s.bc, msg, block.Header())
+	vmenv := core.NewEnv(stateDb, s.bc, msg, block.Header(), nil)
 	gp := new(core.GasPool).AddGas(common.MaxBig)
 
 	res, gas, err := core.ApplyMessage(vmenv, msg, gp)
@@ -1513,9 +1513,6 @@ func (api *PrivateDebugAPI) ProcessBlock(number uint64) (bool, error) {
 	if block == nil {
 		return false, fmt.Errorf("block #%d not found", number)
 	}
-	// Temporarily enable debugging
-	defer func(old bool) { vm.Debug = old }(vm.Debug)
-	vm.Debug = true
 
 	// Validate and reprocess the block
 	var (
@@ -1530,7 +1527,7 @@ func (api *PrivateDebugAPI) ProcessBlock(number uint64) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	receipts, _, usedGas, err := processor.Process(block, statedb)
+	receipts, _, usedGas, err := processor.Process(block, statedb, nil)
 	if err != nil {
 		return false, err
 	}
@@ -1601,10 +1598,8 @@ func (s *PrivateDebugAPI) doReplayTransaction(txHash common.Hash) ([]vm.StructLo
 		data:     tx.Data(),
 	}
 
-	vmenv := core.NewEnv(stateDb, s.eth.BlockChain(), msg, block.Header())
+	vmenv := core.NewEnv(stateDb, s.eth.BlockChain(), msg, block.Header(), nil)
 	gp := new(core.GasPool).AddGas(block.GasLimit())
-	vm.GenerateStructLogs = true
-	defer func() { vm.GenerateStructLogs = false }()
 
 	ret, gas, err := core.ApplyMessage(vmenv, msg, gp)
 	if err != nil {
