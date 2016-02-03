@@ -239,13 +239,13 @@ func (args *NewFilterArgs) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	if raw.From == nil {
+	if raw.From == nil || raw.From.Int64() < 0 {
 		args.FromBlock = rpc.LatestBlockNumber
 	} else {
 		args.FromBlock = *raw.From
 	}
 
-	if raw.ToBlock == nil {
+	if raw.ToBlock == nil || raw.ToBlock.Int64() < 0 {
 		args.ToBlock = rpc.LatestBlockNumber
 	} else {
 		args.ToBlock = *raw.ToBlock
