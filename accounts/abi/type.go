@@ -218,5 +218,5 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("ABI: bad input given %T", value.Kind())
+	return nil, fmt.Errorf("ABI: bad input given %v", value.Kind())
 }

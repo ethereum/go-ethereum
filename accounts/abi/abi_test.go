@@ -31,25 +31,25 @@ import (
 
 const jsondata = `
 [
-	{ "name" : "balance", "const" : true },
-	{ "name" : "send", "const" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] }
+	{ "type" : "function", "name" : "balance", "const" : true },
+	{ "type" : "function", "name" : "send", "const" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] }
 ]`
 
 const jsondata2 = `
 [
-	{ "name" : "balance", "const" : true },
-	{ "name" : "send", "const" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
-	{ "name" : "test", "const" : false, "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
-	{ "name" : "string", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
-	{ "name" : "bool", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
-	{ "name" : "address", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "address" } ] },
-	{ "name" : "string32", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "string32" } ] },
-	{ "name" : "uint64[2]", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
-	{ "name" : "uint64[]", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
-	{ "name" : "foo", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
-	{ "name" : "bar", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
-	{ "name" : "slice", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
-	{ "name" : "slice256", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] }
+	{ "type" : "function", "name" : "balance", "const" : true },
+	{ "type" : "function", "name" : "send", "const" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
+	{ "type" : "function", "name" : "test", "const" : false, "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
+	{ "type" : "function", "name" : "string", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
+	{ "type" : "function", "name" : "bool", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
+	{ "type" : "function", "name" : "address", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "address" } ] },
+	{ "type" : "function", "name" : "string32", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "string32" } ] },
+	{ "type" : "function", "name" : "uint64[2]", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
+	{ "type" : "function", "name" : "uint64[]", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
+	{ "type" : "function", "name" : "foo", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
+	{ "type" : "function", "name" : "bar", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
+	{ "type" : "function", "name" : "slice", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
+	{ "type" : "function", "name" : "slice256", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] }
 ]`
 
 func TestType(t *testing.T) {
@@ -96,7 +96,7 @@ func TestReader(t *testing.T) {
 			},
 			"send": Method{
 				"send", false, []Argument{
-					Argument{"amount", Uint256},
+					Argument{"amount", Uint256, false},
 				}, nil,
 			},
 		},
@@ -238,7 +238,7 @@ func TestTestAddress(t *testing.T) {
 func TestMethodSignature(t *testing.T) {
 	String, _ := NewType("string")
 	String32, _ := NewType("string32")
-	m := Method{"foo", false, []Argument{Argument{"bar", String32}, Argument{"baz", String}}, nil}
+	m := Method{"foo", false, []Argument{Argument{"bar", String32, false}, Argument{"baz", String, false}}, nil}
 	exp := "foo(string32,string)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -250,7 +250,7 @@ func TestMethodSignature(t *testing.T) {
 	}
 
 	uintt, _ := NewType("uint")
-	m = Method{"foo", false, []Argument{Argument{"bar", uintt}}, nil}
+	m = Method{"foo", false, []Argument{Argument{"bar", uintt, false}}, nil}
 	exp = "foo(uint256)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -367,8 +367,8 @@ func ExampleJSON() {
 
 func TestBytes(t *testing.T) {
 	const definition = `[
-	{ "name" : "balance", "const" : true, "inputs" : [ { "name" : "address", "type" : "bytes20" } ] },
-	{ "name" : "send", "const" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] }
+	{ "type" : "function", "name" : "balance", "const" : true, "inputs" : [ { "name" : "address", "type" : "bytes20" } ] },
+	{ "type" : "function", "name" : "send", "const" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] }
 ]`
 
 	abi, err := JSON(strings.NewReader(definition))
@@ -396,10 +396,8 @@ func TestBytes(t *testing.T) {
 
 func TestReturn(t *testing.T) {
 	const definition = `[
-	{ "name" : "balance", "const" : true, "inputs" : [], "outputs" : [ { "name": "", "type": "hash" } ] },
-	{ "name" : "name", "const" : true, "inputs" : [], "outputs" : [ { "name": "", "type": "address" } ] }
-
-]`
+	{ "type" : "function", "name" : "balance", "const" : true, "inputs" : [], "outputs" : [ { "name": "", "type": "hash" } ] },
+	{ "type" : "function", "name" : "name", "const" : true, "inputs" : [], "outputs" : [ { "name": "", "type": "address" } ] }]`
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
@@ -422,5 +420,41 @@ func TestReturn(t *testing.T) {
 	}, "name")
 	if _, ok := r.(common.Address); !ok {
 		t.Errorf("expected type common.Address, got %T", r)
+	}
+}
+
+func TestDefaultFunctionParsing(t *testing.T) {
+	const definition = `[{ "name" : "balance" }]`
+
+	abi, err := JSON(strings.NewReader(definition))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := abi.Methods["balance"]; !ok {
+		t.Error("expected 'balance' to be present")
+	}
+}
+
+func TestBareEvents(t *testing.T) {
+	const definition = `[
+	{ "type" : "event", "name" : "balance" },
+	{ "type" : "event", "name" : "name" }]`
+
+	abi, err := JSON(strings.NewReader(definition))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(abi.Events) != 2 {
+		t.Error("expected 2 events")
+	}
+
+	if _, ok := abi.Events["balance"]; !ok {
+		t.Error("expected 'balance' event to be present")
+	}
+
+	if _, ok := abi.Events["name"]; !ok {
+		t.Error("expected 'name' event to be present")
 	}
 }
