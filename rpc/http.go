@@ -18,21 +18,19 @@ package rpc
 
 import (
 	"bufio"
-	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"strconv"
-	"strings"
-	"time"
-
-	"errors"
-	"sync"
-
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"io/ioutil"
+	"net"
+	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -44,8 +42,8 @@ const (
 )
 
 var (
-	httpServerMu sync.Mutex   // prevent concurrent access to the httpListener and httpServer
-	httpListener net.Listener // listener for the http server
+	httpServerMu  sync.Mutex   // prevent concurrent access to the httpListener and httpServer
+	httpListener  net.Listener // listener for the http server
 	httpRPCServer *Server      // the node can only start 1 HTTP RPC server instance
 )
 
@@ -57,8 +55,7 @@ var (
 type httpMessageStream struct {
 	conn             net.Conn          // TCP connection
 	rw               *bufio.ReadWriter // buffered where HTTP requests/responses are read/written from/to
-	currentReq       *http.Request     // pending request, codec can pass in a too small buffer for a single read
-					   // we need to keep track of the current requests if it was not read at once
+	currentReq       *http.Request     // pending request, codec can pass in a too small buffer for a single read we need to keep track of the current requests if it was not read at once
 	payloadBytesRead int64             // number of bytes which are read from the current request
 	allowedOrigins   *set.Set          // allowed CORS domains
 	origin           string            // origin of this connection/request
@@ -147,7 +144,7 @@ func (h *httpMessageStream) Read(buf []byte) (n int, err error) {
 			continue
 		}
 
-		if strings.EqualFold(h.currentReq.Method, "POST") {
+		if strings.EqualFold(h.currentReq.Method, "GET") || strings.EqualFold(h.currentReq.Method, "POST") {
 			n, err := h.currentReq.Body.Read(buf)
 			h.payloadBytesRead += int64(n)
 
@@ -164,12 +161,9 @@ func (h *httpMessageStream) Read(buf []byte) (n int, err error) {
 				h.currentReq = nil
 				h.payloadBytesRead = 0
 			}
-
 			// partial read of body
 			return n, err
 		}
-
-		h.currentReq = nil
 		return 0, fmt.Errorf("unsupported HTTP method '%s'", h.currentReq.Method)
 	}
 }
@@ -212,17 +206,17 @@ func httpTimestamp(t time.Time) []byte {
 	t = t.UTC()
 	yy, mm, dd := t.Date()
 	hh, mn, ss := t.Clock()
-	day := days[3 * t.Weekday():]
-	mon := months[3 * (mm - 1):]
+	day := days[3*t.Weekday():]
+	mon := months[3*(mm-1):]
 
 	return append(b,
 		day[0], day[1], day[2], ',', ' ',
-		byte('0' + dd / 10), byte('0' + dd % 10), ' ',
+		byte('0'+dd/10), byte('0'+dd%10), ' ',
 		mon[0], mon[1], mon[2], ' ',
-		byte('0' + yy / 1000), byte('0' + (yy / 100) % 10), byte('0' + (yy / 10) % 10), byte('0' + yy % 10), ' ',
-		byte('0' + hh / 10), byte('0' + hh % 10), ':',
-		byte('0' + mn / 10), byte('0' + mn % 10), ':',
-		byte('0' + ss / 10), byte('0' + ss % 10), ' ',
+		byte('0'+yy/1000), byte('0'+(yy/100)%10), byte('0'+(yy/10)%10), byte('0'+yy%10), ' ',
+		byte('0'+hh/10), byte('0'+hh%10), ':',
+		byte('0'+mn/10), byte('0'+mn%10), ':',
+		byte('0'+ss/10), byte('0'+ss%10), ' ',
 		'G', 'M', 'T')
 }
 
