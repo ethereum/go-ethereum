@@ -407,6 +407,11 @@ web3._extend({
 			call: 'debug_writeMemProfile',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'replayTransaction',
+			call: 'debug_replayTransaction',
+			params: 4
+		})
 	],
 	properties:
 	[
