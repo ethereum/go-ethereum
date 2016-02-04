@@ -22,8 +22,8 @@ const (
 )
 
 var (
-	bzzPrefix       = regexp.MustCompile("^/+bzz:/+")
-	rawUrl          = regexp.MustCompile("^/+raw/*")
+	// accepted protocols: bzz (traditional), bzzi (immutable) and bzzr (raw)
+	bzzPrefix       = regexp.MustCompile("^/+bzz[ir]?:/+")
 	trailingSlashes = regexp.MustCompile("/+$")
 	// forever         = func() time.Time { return time.Unix(0, 0) }
 	forever = time.Now
@@ -64,18 +64,36 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 	//	}
 	glog.V(logger.Debug).Infof("[BZZ] Swarm: HTTP request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
 	uri := requestURL.Path
+	// TODO: var raw, nameresolver bool
 	var raw bool
+	var proto string
 
 	// HTTP-based URL protocol handler
-	uri = bzzPrefix.ReplaceAllString(uri, "")
 	glog.V(logger.Debug).Infof("[BZZ] Swarm: BZZ request URI: '%s'", uri)
 
-	path := rawUrl.ReplaceAllStringFunc(uri, func(string) string {
-		raw = true
+	path := bzzPrefix.ReplaceAllStringFunc(uri, func(p string) string {
+		proto = p
 		return ""
 	})
 
-	glog.V(logger.Debug).Infof("[BZZ] Swarm: %s request '%s' received.", r.Method, uri)
+	// protocol identification (ugly)
+	if proto == "" {
+		if glog.V(logger.Error) {
+			glog.Errorf(
+				"[BZZ] Swarm: Protocol error in request `%s`.",
+				uri,
+			)
+			http.Error(w, "BZZ protocol error", http.StatusBadRequest)
+			return
+		}
+	}
+	raw = proto[1:5] == "bzzr"
+	// TODO: nameresolver = proto[1:5] != "bzzi"
+
+	glog.V(logger.Debug).Infof(
+		"[BZZ] Swarm: %s request over protocol %s '%s' received.",
+		r.Method, proto, path,
+	)
 
 	switch {
 	case r.Method == "POST" || r.Method == "PUT":
