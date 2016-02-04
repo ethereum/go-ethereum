@@ -20,8 +20,8 @@ import (
 client := httpclient.New()
 // for (private) swarm proxy running locally
 client.RegisterScheme("bzz", &http.RoundTripper{Port: port})
-// for public swarm gateway
-client.RegisterScheme(scheme, &http.RoundTripper{Host: host, Port: port})
+client.RegisterScheme("bzzi", &http.RoundTripper{Port: port})
+client.RegisterScheme("bzzr", &http.RoundTripper{Port: port})
 
 The port you give the Roundtripper is the port the swarm proxy is listening on.
 If Host is left empty, localhost is assumed.
@@ -43,7 +43,7 @@ func (self *RoundTripper) RoundTrip(req *http.Request) (resp *http.Response, err
 	if len(host) == 0 {
 		host = "localhost"
 	}
-	url := fmt.Sprintf("http://%s:%s/%s/%s", host, self.Port, req.URL.Host, req.URL.Path)
+	url := fmt.Sprintf("http://%s:%s/%s:/%s/%s", host, self.Port, req.Proto, req.URL.Host, req.URL.Path)
 	glog.V(logger.Info).Infof("[BZZ] roundtripper: proxying request '%s' to '%s'", req.RequestURI, url)
 	return http.Get(url)
 }
