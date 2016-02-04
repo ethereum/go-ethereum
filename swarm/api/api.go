@@ -52,10 +52,14 @@ func (self *Api) Store(data storage.SectionReader, wg *sync.WaitGroup) (key stor
 }
 
 // DNS Resolver
-func (self *Api) Resolve(hostPort string) (contentHash storage.Key, err error) {
+func (self *Api) Resolve(hostPort string, nameresolver bool) (contentHash storage.Key, err error) {
 	if hashMatcher.MatchString(hostPort) || self.dns == nil {
 		glog.V(logger.Debug).Infof("[BZZ] host is a contentHash: '%v'", contentHash)
 		return storage.Key(common.Hex2Bytes(hostPort)), nil
+	}
+	if !nameresolver {
+		err = fmt.Errorf("'%s' is not a content hash value.", hostPort)
+		return
 	}
 	contentHash, err = self.dns.Resolve(hostPort)
 	if err != nil {
@@ -91,10 +95,10 @@ func parse(uri string) (hostPort, path string) {
 	return
 }
 
-func (self *Api) parseAndResolve(uri string) (contentHash storage.Key, hostPort, path string, err error) {
+func (self *Api) parseAndResolve(uri string, nameresolver bool) (contentHash storage.Key, hostPort, path string, err error) {
 	hostPort, path = parse(uri)
 	//resolving host and port
-	contentHash, err = self.Resolve(hostPort)
+	contentHash, err = self.Resolve(hostPort, nameresolver)
 	return
 }
 
@@ -119,9 +123,9 @@ func (self *Api) Put(content, contentType string) (string, error) {
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve path to content using dpa retrieve
 // it returns a section reader, mimeType, status and an error
-func (self *Api) Get(uri string) (reader storage.SectionReader, mimeType string, status int, err error) {
+func (self *Api) Get(uri string, nameresolver bool) (reader storage.SectionReader, mimeType string, status int, err error) {
 
-	key, _, path, err := self.parseAndResolve(uri)
+	key, _, path, err := self.parseAndResolve(uri, nameresolver)
 
 	trie, err := loadManifest(self.dpa, key)
 	if err != nil {
@@ -144,8 +148,8 @@ func (self *Api) Get(uri string) (reader storage.SectionReader, mimeType string,
 	return
 }
 
-func (self *Api) Modify(rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
-	root := common.Hex2Bytes(rootHash)
+func (self *Api) Modify(uri, contentHash, contentType string, nameresolver bool) (newRootHash string, err error) {
+	root, _, path, err := self.parseAndResolve(uri, nameresolver)
 	trie, err := loadManifest(self.dpa, root)
 	if err != nil {
 		return

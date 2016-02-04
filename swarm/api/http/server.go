@@ -64,8 +64,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 	//	}
 	glog.V(logger.Debug).Infof("[BZZ] Swarm: HTTP request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
 	uri := requestURL.Path
-	// TODO: var raw, nameresolver bool
-	var raw bool
+	var raw, nameresolver bool
 	var proto string
 
 	// HTTP-based URL protocol handler
@@ -88,7 +87,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 		}
 	}
 	raw = proto[1:5] == "bzzr"
-	// TODO: nameresolver = proto[1:5] != "bzzi"
+	nameresolver = proto[1:5] != "bzzi"
 
 	glog.V(logger.Debug).Infof(
 		"[BZZ] Swarm: %s request over protocol %s '%s' received.",
@@ -125,7 +124,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 				mime := r.Header.Get("Content-Type")
 				// TODO proper root hash separation
 				glog.V(logger.Debug).Infof("[BZZ] Modify '%s' to store %v as '%s'.", path, key.Log(), mime)
-				newKey, err := a.Modify(path[:64], path[65:], common.Bytes2Hex(key), mime)
+				newKey, err := a.Modify(path, common.Bytes2Hex(key), mime, nameresolver)
 				if err == nil {
 					glog.V(logger.Debug).Infof("[BZZ] Swarm replaced manifest by '%s'", newKey)
 					w.Header().Set("Content-Type", "text/plain")
@@ -143,7 +142,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 		} else {
 			path = api.RegularSlashes(path)
 			glog.V(logger.Debug).Infof("[BZZ] Delete '%s'.", path)
-			newKey, err := a.Modify(path[:64], path[65:], "", "")
+			newKey, err := a.Modify(path, "", "", nameresolver)
 			if err == nil {
 				glog.V(logger.Debug).Infof("[BZZ] Swarm replaced manifest by '%s'", newKey)
 				w.Header().Set("Content-Type", "text/plain")
@@ -157,7 +156,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 		path = trailingSlashes.ReplaceAllString(path, "")
 		if raw {
 			// resolving host
-			key, err := a.Resolve(path)
+			key, err := a.Resolve(path, nameresolver)
 			if err != nil {
 				glog.V(logger.Error).Infof("[BZZ] Swarm: %v", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -184,7 +183,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 
 			glog.V(logger.Debug).Infof("[BZZ] Swarm: Structured GET request '%s' received.", uri)
 
-			reader, mimeType, status, err := a.Get(path)
+			reader, mimeType, status, err := a.Get(path, nameresolver)
 			if err != nil {
 				if _, ok := err.(api.ErrResolve); ok {
 					glog.V(logger.Debug).Infof("[BZZ] Swarm: %v", err)

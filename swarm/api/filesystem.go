@@ -167,7 +167,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	}
 
 	//resolving host and port
-	key, _, path, err := self.api.parseAndResolve(bzzpath)
+	key, _, path, err := self.api.parseAndResolve(bzzpath, true)
 	if err != nil {
 		return err
 	}
