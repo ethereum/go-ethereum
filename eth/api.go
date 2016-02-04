@@ -27,8 +27,6 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/fatih/set.v0"
-
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -46,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"gopkg.in/fatih/set.v0"
 )
 
 const (

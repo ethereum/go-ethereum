@@ -218,29 +218,27 @@ func newSubscriptionId() (string, error) {
 // SupportedModules returns the collection of API's that the RPC server offers
 // on which the given client connects.
 func SupportedModules(client Client) (map[string]string, error) {
-	req := map[string]interface{}{
-		"id":     1,
-		"method": "rpc_modules",
+	req := JSONRequest{
+		Id:      new(int64),
+		Version: "2.0",
+		Method:  "rpc_modules",
 	}
-
 	if err := client.Send(req); err != nil {
 		return nil, err
 	}
 
-	var response map[string]interface{}
+	var response JSONSuccessResponse
 	if err := client.Recv(&response); err != nil {
 		return nil, err
 	}
-
-	if payload, ok := response["result"]; ok {
+	if response.Result != nil {
 		mods := make(map[string]string)
-		if modules, ok := payload.(map[string]interface{}); ok {
+		if modules, ok := response.Result.(map[string]interface{}); ok {
 			for m, v := range modules {
 				mods[m] = fmt.Sprintf("%s", v)
 			}
 			return mods, nil
 		}
 	}
-
 	return nil, fmt.Errorf("unable to retrieve modules")
 }
