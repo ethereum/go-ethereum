@@ -37,7 +37,7 @@ func (self *Storage) Put(content, contentType string) (string, error) {
 // the actual size of which is given in len(resp.Content), while the expected
 // size is resp.Size
 func (self *Storage) Get(bzzpath string) (*Response, error) {
-	reader, mimeType, status, err := self.api.Get(bzzpath)
+	reader, mimeType, status, err := self.api.Get(bzzpath, true)
 	if err != nil {
 		return nil, err
 	}
@@ -52,5 +52,5 @@ func (self *Storage) Get(bzzpath string) (*Response, error) {
 }
 
 func (self *Storage) Modify(rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
-	return self.api.Modify(rootHash, path, contentHash, contentType)
+	return self.api.Modify(rootHash+"/"+path, contentHash, contentType, true)
 }

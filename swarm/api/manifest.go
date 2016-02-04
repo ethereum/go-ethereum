@@ -145,7 +145,10 @@ func (self *manifestTrie) deleteEntry(path string) {
 
 	b := byte(path[0])
 	entry := self.entries[b]
-	if (entry != nil) && (entry.Path == path) {
+	if entry == nil {
+		return
+	}
+	if entry.Path == path {
 		self.entries[b] = nil
 		return
 	}
