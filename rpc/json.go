@@ -41,7 +41,7 @@ type JSONRequest struct {
 	Method  string          `json:"method"`
 	Version string          `json:"jsonrpc"`
 	Id      *int64          `json:"id,omitempty"`
-	Payload json.RawMessage `json:"params"`
+	Payload json.RawMessage `json:"params,omitempty"`
 }
 
 // JSON-RPC response

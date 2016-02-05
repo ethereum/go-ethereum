@@ -31,6 +31,7 @@ import (
 //
 // The following methods are needed to implement a node.Service:
 //  - Protocols() []p2p.Protocol - devp2p protocols the service can communicate on
+//  - APIs() []rpc.API           - api methods the service wants to expose on rpc channels
 //  - Start() error              - method invoked when the node is ready to start the service
 //  - Stop() error               - method invoked when the node terminates the service
 type SampleService struct{}

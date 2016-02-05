@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -57,6 +58,37 @@ func TestDatadirCreation(t *testing.T) {
 	dir = filepath.Join(file.Name(), "invalid/path")
 	if _, err := New(&Config{DataDir: dir}); err == nil {
 		t.Fatalf("protocol stack created with an invalid datadir")
+	}
+}
+
+// Tests that IPC paths are correctly resolved to valid endpoints of different
+// platforms.
+func TestIpcPathResolution(t *testing.T) {
+	var tests = []struct {
+		DataDir  string
+		IpcPath  string
+		Windows  bool
+		Endpoint string
+	}{
+		{"", "", false, ""},
+		{"data", "", false, ""},
+		{"", "geth.ipc", false, filepath.Join(os.TempDir(), "geth.ipc")},
+		{"data", "geth.ipc", false, "data/geth.ipc"},
+		{"data", "./geth.ipc", false, "./geth.ipc"},
+		{"data", "/geth.ipc", false, "/geth.ipc"},
+		{"", "", true, ``},
+		{"data", "", true, ``},
+		{"", "geth.ipc", true, `\\.\pipe\geth.ipc`},
+		{"data", "geth.ipc", true, `\\.\pipe\geth.ipc`},
+		{"data", `\\.\pipe\geth.ipc`, true, `\\.\pipe\geth.ipc`},
+	}
+	for i, test := range tests {
+		// Only run when platform/test match
+		if (runtime.GOOS == "windows") == test.Windows {
+			if endpoint := (&Config{DataDir: test.DataDir, IpcPath: test.IpcPath}).IpcEndpoint(); endpoint != test.Endpoint {
+				t.Errorf("test %d: IPC endpoint mismatch: have %s, want %s", i, endpoint, test.Endpoint)
+			}
+		}
 	}
 }
 

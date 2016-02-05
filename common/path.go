@@ -89,9 +89,8 @@ func DefaultDataDir() string {
 	return ""
 }
 
-func DefaultIpcPath() string {
-	if runtime.GOOS == "windows" {
-		return `\\.\pipe\geth.ipc`
-	}
-	return filepath.Join(DefaultDataDir(), "geth.ipc")
+// DefaultIpcSocket returns the relative name of the default IPC socket. The path
+// resolution is done by a node with other contextual infos.
+func DefaultIpcSocket() string {
+	return "geth.ipc"
 }

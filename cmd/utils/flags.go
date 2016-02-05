@@ -261,8 +261,8 @@ var (
 	}
 	IPCPathFlag = DirectoryFlag{
 		Name:  "ipcpath",
-		Usage: "Filename for IPC socket/pipe",
-		Value: DirectoryString{common.DefaultIpcPath()},
+		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
+		Value: DirectoryString{common.DefaultIpcSocket()},
 	}
 	WSEnabledFlag = cli.BoolFlag{
 		Name:  "ws",
@@ -392,6 +392,15 @@ func MustMakeDataDir(ctx *cli.Context) string {
 	}
 	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
 	return ""
+}
+
+// MakeIpcPath creates an IPC path configuration from the set command line flags,
+// returning an empty string if IPC was explicitly disabled, or the set path.
+func MakeIpcPath(ctx *cli.Context) string {
+	if ctx.GlobalBool(IPCDisabledFlag.Name) {
+		return ""
+	}
+	return ctx.GlobalString(IPCPathFlag.Name)
 }
 
 // MakeNodeKey creates a node key from set command line flags, either loading it
@@ -582,6 +591,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 	// Configure the node's service container
 	stackConf := &node.Config{
 		DataDir:         MustMakeDataDir(ctx),
+		IpcPath:         MakeIpcPath(ctx),
 		PrivateKey:      MakeNodeKey(ctx),
 		Name:            MakeNodeName(name, version, ctx),
 		NoDiscovery:     ctx.GlobalBool(NoDiscoverFlag.Name),
@@ -732,63 +742,6 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 	}
 
 	return chain, chainDb
-}
-
-func IPCSocketPath(ctx *cli.Context) (ipcpath string) {
-	if runtime.GOOS == "windows" {
-		ipcpath = common.DefaultIpcPath()
-		if ctx.GlobalIsSet(IPCPathFlag.Name) {
-			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
-		}
-	} else {
-		ipcpath = common.DefaultIpcPath()
-		if ctx.GlobalIsSet(DataDirFlag.Name) {
-			ipcpath = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "geth.ipc")
-		}
-		if ctx.GlobalIsSet(IPCPathFlag.Name) {
-			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
-		}
-	}
-
-	return
-}
-
-func StartIPC(stack *node.Node, ctx *cli.Context) error {
-	var ethereum *eth.Ethereum
-	if err := stack.Service(&ethereum); err != nil {
-		return err
-	}
-
-	endpoint := IPCSocketPath(ctx)
-	listener, err := rpc.CreateIPCListener(endpoint)
-	if err != nil {
-		return err
-	}
-
-	server := rpc.NewServer()
-
-	// register package API's this node provides
-	offered := stack.APIs()
-	for _, api := range offered {
-		server.RegisterName(api.Namespace, api.Service)
-		glog.V(logger.Debug).Infof("Register %T under namespace '%s' for IPC service\n", api.Service, api.Namespace)
-	}
-
-	go func() {
-		glog.V(logger.Info).Infof("Start IPC server on %s\n", endpoint)
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				glog.V(logger.Error).Infof("Unable to accept connection - %v\n", err)
-			}
-
-			codec := rpc.NewJSONCodec(conn)
-			go server.ServeCodec(codec)
-		}
-	}()
-
-	return nil
-
 }
 
 // StartRPC starts a HTTP JSON-RPC API server.
