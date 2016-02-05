@@ -117,6 +117,25 @@ type Config struct {
 	// If the module list is empty, all RPC API endpoints designated public will be
 	// exposed.
 	HttpModules []string
+
+	// WsHost is the host interface on which to start the websocket RPC server. If
+	// this field is empty, no websocket API endpoint will be started.
+	WsHost string
+
+	// WsPort is the TCP port number on which to start the websocket RPC server. The
+	// default zero value is/ valid and will pick a port number randomly (useful for
+	// ephemeral nodes).
+	WsPort int
+
+	// WsCors is the Cross-Origin Resource Sharing header to send to requesting clients.
+	// Please be aware that CORS is a browser enforced security, it's fully useless
+	// for custom websocket clients.
+	WsCors string
+
+	// WsModules is a list of API modules to expose via the websocket RPC interface.
+	// If the module list is empty, all RPC API endpoints designated public will be
+	// exposed.
+	WsModules []string
 }
 
 // IpcEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -163,6 +182,21 @@ func (c *Config) HttpEndpoint() string {
 func DefaultHttpEndpoint() string {
 	config := &Config{HttpHost: common.DefaultHttpHost, HttpPort: common.DefaultHttpPort}
 	return config.HttpEndpoint()
+}
+
+// WsEndpoint resolves an websocket endpoint based on the configured host interface
+// and port parameters.
+func (c *Config) WsEndpoint() string {
+	if c.WsHost == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", c.WsHost, c.WsPort)
+}
+
+// DefaultWsEndpoint returns the websocket endpoint used by default.
+func DefaultWsEndpoint() string {
+	config := &Config{WsHost: common.DefaultWsHost, WsPort: common.DefaultWsPort}
+	return config.WsEndpoint()
 }
 
 // NodeKey retrieves the currently configured private key of the node, checking

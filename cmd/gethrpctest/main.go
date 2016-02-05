@@ -97,6 +97,9 @@ func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node
 		HttpHost:    common.DefaultHttpHost,
 		HttpPort:    common.DefaultHttpPort,
 		HttpModules: []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
+		WsHost:      common.DefaultWsHost,
+		WsPort:      common.DefaultWsPort,
+		WsModules:   []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
 		NoDiscovery: true,
 	})
 	if err != nil {

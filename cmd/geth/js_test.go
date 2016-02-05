@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,6 +30,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/common/httpclient"
@@ -37,22 +39,21 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/cmd/utils"
 )
 
 const (
 	testSolcPath = ""
-	solcVersion = "0.9.23"
+	solcVersion  = "0.9.23"
 
-	testKey = "e6fab74a43941f82d89cb7faa408e227cdad3153c4720e540e855c19b15e6674"
+	testKey     = "e6fab74a43941f82d89cb7faa408e227cdad3153c4720e540e855c19b15e6674"
 	testAddress = "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	testBalance = "10000000000000000000"
-// of empty string
+	// of empty string
 	testHash = "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
 )
 
 var (
-	versionRE = regexp.MustCompile(strconv.Quote(`"compilerVersion":"` + solcVersion + `"`))
+	versionRE   = regexp.MustCompile(strconv.Quote(`"compilerVersion":"` + solcVersion + `"`))
 	testNodeKey = crypto.ToECDSA(common.Hex2Bytes("4b50fa71f5c3eeb8fdc452224b2395af2fcc3d125e06c32c82e048c0559db03f"))
 	testGenesis = `{"` + testAddress[2:] + `": {"balance": "` + testBalance + `"}}`
 )
@@ -95,7 +96,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 		t.Fatal(err)
 	}
 	// Create a networkless protocol stack
-	stack, err := node.New(&node.Config{PrivateKey: testNodeKey, Name: "test", NoDiscovery: true})
+	stack, err := node.New(&node.Config{PrivateKey: testNodeKey, Name: "test", NoDiscovery: true, IpcPath: fmt.Sprintf("geth-test-%d.ipc", rand.Int63())})
 	if err != nil {
 		t.Fatalf("failed to create node: %v", err)
 	}
@@ -141,8 +142,10 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 	stack.Service(&ethereum)
 
 	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
-	//client := comms.NewInProcClient(codec.JSON)
-	client := utils.NewInProcRPCClient(stack)
+	client, err := utils.NewRemoteRPCClientFromString("ipc:" + stack.IpcEndpoint())
+	if err != nil {
+		t.Fatalf("failed to attach to node: %v", err)
+	}
 	tf := &testjethre{client: ethereum.HTTPClient()}
 	repl := newJSRE(stack, assetPath, "", client, false)
 	tf.jsre = repl
@@ -152,9 +155,6 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 func TestNodeInfo(t *testing.T) {
 	t.Skip("broken after p2p update")
 	tmp, repl, ethereum := testJEthRE(t)
-	if err := ethereum.Start(); err != nil {
-		t.Fatalf("error starting ethereum: %v", err)
-	}
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
 
@@ -167,8 +167,8 @@ func TestAccounts(t *testing.T) {
 	defer node.Stop()
 	defer os.RemoveAll(tmp)
 
-	checkEvalJSON(t, repl, `eth.accounts`, `["` + testAddress + `"]`)
-	checkEvalJSON(t, repl, `eth.coinbase`, `"` + testAddress + `"`)
+	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`"]`)
+	checkEvalJSON(t, repl, `eth.coinbase`, `"`+testAddress+`"`)
 	val, err := repl.re.Run(`jeth.newAccount("password")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -178,7 +178,7 @@ func TestAccounts(t *testing.T) {
 		t.Errorf("address not hex: %q", addr)
 	}
 
-	checkEvalJSON(t, repl, `eth.accounts`, `["` + testAddress + `","` + addr + `"]`)
+	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`","`+addr+`"]`)
 
 }
 
@@ -206,13 +206,13 @@ func TestBlockChain(t *testing.T) {
 	node.Service(&ethereum)
 	ethereum.BlockChain().Reset()
 
-	checkEvalJSON(t, repl, `admin.exportChain(` + tmpfileq + `)`, `true`)
+	checkEvalJSON(t, repl, `admin.exportChain(`+tmpfileq+`)`, `true`)
 	if _, err := os.Stat(tmpfile); err != nil {
 		t.Fatal(err)
 	}
 
 	// check import, verify that dumpBlock gives the same result.
-	checkEvalJSON(t, repl, `admin.importChain(` + tmpfileq + `)`, `true`)
+	checkEvalJSON(t, repl, `admin.importChain(`+tmpfileq+`)`, `true`)
 	checkEvalJSON(t, repl, `debug.dumpBlock(eth.blockNumber)`, beforeExport)
 }
 
@@ -240,7 +240,7 @@ func TestCheckTestAccountBalance(t *testing.T) {
 	defer os.RemoveAll(tmp)
 
 	repl.re.Run(`primary = "` + testAddress + `"`)
-	checkEvalJSON(t, repl, `eth.getBalance(primary)`, `"` + testBalance + `"`)
+	checkEvalJSON(t, repl, `eth.getBalance(primary)`, `"`+testBalance+`"`)
 }
 
 func TestSignature(t *testing.T) {
@@ -301,11 +301,11 @@ func TestContract(t *testing.T) {
 	 */
 
 	source := `contract test {\n` +
-	"   /// @notice Will multiply `a` by 7." + `\n` +
-	`   function multiply(uint a) returns(uint d) {\n` +
-	`       return a * 7;\n` +
-	`   }\n` +
-	`}\n`
+		"   /// @notice Will multiply `a` by 7." + `\n` +
+		`   function multiply(uint a) returns(uint d) {\n` +
+		`       return a * 7;\n` +
+		`   }\n` +
+		`}\n`
 
 	if checkEvalJSON(t, repl, `admin.stopNatSpec()`, `true`) != nil {
 		return
@@ -315,10 +315,10 @@ func TestContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if checkEvalJSON(t, repl, `primary = eth.accounts[0]`, `"` + testAddress + `"`) != nil {
+	if checkEvalJSON(t, repl, `primary = eth.accounts[0]`, `"`+testAddress+`"`) != nil {
 		return
 	}
-	if checkEvalJSON(t, repl, `source = "` + source + `"`, `"` + source + `"`) != nil {
+	if checkEvalJSON(t, repl, `source = "`+source+`"`, `"`+source+`"`) != nil {
 		return
 	}
 
@@ -396,7 +396,7 @@ multiply7 = Multiply7.at(contractaddress);
 
 	var contentHash = `"0x86d2b7cf1e72e9a7a3f8d96601f0151742a2f780f1526414304fbe413dc7f9bd"`
 	if sol != nil && solcVersion != sol.Version() {
-		modContractInfo := versionRE.ReplaceAll(contractInfo, []byte(`"compilerVersion":"` + sol.Version() + `"`))
+		modContractInfo := versionRE.ReplaceAll(contractInfo, []byte(`"compilerVersion":"`+sol.Version()+`"`))
 		fmt.Printf("modified contractinfo:\n%s\n", modContractInfo)
 		contentHash = `"` + common.ToHex(crypto.Sha3([]byte(modContractInfo))) + `"`
 	}
@@ -481,7 +481,7 @@ func processTxs(repl *testjethre, t *testing.T, expTxc int) bool {
 	repl.wait <- height
 	select {
 	case <-timer.C:
-	// if times out make sure the xeth loop does not block
+		// if times out make sure the xeth loop does not block
 		go func() {
 			select {
 			case repl.wait <- nil:

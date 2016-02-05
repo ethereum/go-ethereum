@@ -17,24 +17,16 @@
 package rpc
 
 import (
-	"errors"
 	"fmt"
-	"net"
 	"net/http"
-	"sync"
-
 	"os"
+	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"golang.org/x/net/websocket"
 	"gopkg.in/fatih/set.v0"
-)
-
-var (
-	wsServerMu  sync.Mutex
-	wsRPCServer *Server
-	wsListener  net.Listener
 )
 
 // wsReaderWriterCloser reads and write payloads from and to a websocket  connection.
@@ -55,14 +47,6 @@ func (rw *wsReaderWriterCloser) Write(p []byte) (int, error) {
 // Close closes the websocket connection.
 func (rw *wsReaderWriterCloser) Close() error {
 	return rw.c.Close()
-}
-
-// wsHandler accepts a websocket connection and handles incoming RPC requests.
-// Will return when the websocket connection is closed, either by the client or
-// server.
-func wsHandler(conn *websocket.Conn) {
-	rwc := &wsReaderWriterCloser{conn}
-	wsRPCServer.ServeCodec(NewJSONCodec(rwc))
 }
 
 // wsHandshakeValidator returns a handler that verifies the origin during the
@@ -103,54 +87,16 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 	return f
 }
 
-// StartWS will start a websocket RPC server on the given address and port.
-func StartWS(address string, port int, corsdomains []string, apis []API) error {
-	wsServerMu.Lock()
-	defer wsServerMu.Unlock()
-
-	if wsRPCServer != nil {
-		return fmt.Errorf("WS RPC interface already started on %s", wsListener.Addr())
+// NewWSServer creates a new websocket RPC server around an API provider.
+func NewWSServer(cors string, handler *Server) *http.Server {
+	return &http.Server{
+		Handler: websocket.Server{
+			Handshake: wsHandshakeValidator(strings.Split(cors, ",")),
+			Handler: func(conn *websocket.Conn) {
+				handler.ServeCodec(NewJSONCodec(&wsReaderWriterCloser{conn}))
+			},
+		},
 	}
-
-	rpcServer := NewServer()
-	for _, api := range apis {
-		if err := rpcServer.RegisterName(api.Namespace, api.Service); err != nil {
-			return err
-		}
-	}
-
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", address, port))
-	if err != nil {
-		return err
-	}
-
-	wsServer := websocket.Server{Handshake: wsHandshakeValidator(corsdomains), Handler: wsHandler}
-	wsHTTPServer := http.Server{Handler: wsServer}
-
-	go wsHTTPServer.Serve(listener)
-
-	wsListener = listener
-	wsRPCServer = rpcServer
-
-	return nil
-}
-
-// StopWS stops the running websocket RPC server.
-func StopWS() error {
-	wsServerMu.Lock()
-	defer wsServerMu.Unlock()
-
-	if wsRPCServer == nil {
-		return errors.New("HTTP RPC interface not started")
-	}
-
-	wsListener.Close()
-	wsRPCServer.Stop()
-
-	wsRPCServer = nil
-	wsListener = nil
-
-	return nil
 }
 
 // wsClient represents a RPC client that communicates over websockets with a

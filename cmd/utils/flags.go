@@ -18,7 +18,6 @@ package utils
 
 import (
 	"crypto/ecdsa"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -283,8 +282,8 @@ var (
 		Usage: "API's offered over the WS-RPC interface",
 		Value: rpc.DefaultHttpRpcApis,
 	}
-	WSAllowedDomainsFlag = cli.StringFlag{
-		Name:  "wscors",
+	WSCORSDomainFlag = cli.StringFlag{
+		Name:  "wscorsdomain",
 		Usage: "Domains from which to accept websockets requests",
 		Value: "",
 	}
@@ -491,6 +490,15 @@ func MakeHttpRpcHost(ctx *cli.Context) string {
 	return ctx.GlobalString(RPCListenAddrFlag.Name)
 }
 
+// MakeWsRpcHost creates the WebSocket RPC listener interface string from the set
+// command line flags, returning empty if the HTTP endpoint is disabled.
+func MakeWsRpcHost(ctx *cli.Context) string {
+	if !ctx.GlobalBool(WSEnabledFlag.Name) {
+		return ""
+	}
+	return ctx.GlobalString(WSListenAddrFlag.Name)
+}
+
 // MakeGenesisBlock loads up a genesis block from an input file specified in the
 // command line, or returns the empty string if none set.
 func MakeGenesisBlock(ctx *cli.Context) string {
@@ -613,6 +621,10 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		HttpPort:        ctx.GlobalInt(RPCPortFlag.Name),
 		HttpCors:        ctx.GlobalString(RPCCORSDomainFlag.Name),
 		HttpModules:     strings.Split(ctx.GlobalString(RPCApiFlag.Name), ","),
+		WsHost:          MakeWsRpcHost(ctx),
+		WsPort:          ctx.GlobalInt(WSPortFlag.Name),
+		WsCors:          ctx.GlobalString(WSCORSDomainFlag.Name),
+		WsModules:       strings.Split(ctx.GlobalString(WSApiFlag.Name), ","),
 	}
 	// Configure the Ethereum service
 	accman := MakeAccountManager(ctx)
@@ -753,27 +765,5 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}
-
 	return chain, chainDb
-}
-
-// StartWS starts a websocket JSON-RPC API server.
-func StartWS(stack *node.Node, ctx *cli.Context) error {
-	for _, api := range stack.APIs() {
-		if adminApi, ok := api.Service.(*node.PrivateAdminAPI); ok {
-			address := ctx.GlobalString(WSListenAddrFlag.Name)
-			port := ctx.GlobalInt(WSAllowedDomainsFlag.Name)
-			allowedDomains := ctx.GlobalString(WSAllowedDomainsFlag.Name)
-			apiStr := ""
-			if ctx.GlobalIsSet(WSApiFlag.Name) {
-				apiStr = ctx.GlobalString(WSApiFlag.Name)
-			}
-
-			_, err := adminApi.StartWS(address, port, allowedDomains, apiStr)
-			return err
-		}
-	}
-
-	glog.V(logger.Error).Infof("Unable to start RPC-WS interface, could not find admin API")
-	return errors.New("Unable to start RPC-WS interface")
 }

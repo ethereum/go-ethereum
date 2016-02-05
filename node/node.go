@@ -66,6 +66,12 @@ type Node struct {
 	httpListener  net.Listener // HTTP RPC listener socket to server API requests
 	httpHandler   *rpc.Server  // HTTP RPC request handler to process the API requests
 
+	wsEndpoint  string       // Websocket endpoint (interface + port) to listen at (empty = websocket disabled)
+	wsWhitelist []string     // Websocket RPC modules to allow through this endpoint
+	wsCors      string       // Websocket RPC Cross-Origin Resource Sharing header
+	wsListener  net.Listener // Websocket RPC listener socket to server API requests
+	wsHandler   *rpc.Server  // Websocket RPC request handler to process the API requests
+
 	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
 }
@@ -105,6 +111,9 @@ func New(conf *Config) (*Node, error) {
 		httpEndpoint:  conf.HttpEndpoint(),
 		httpWhitelist: conf.HttpModules,
 		httpCors:      conf.HttpCors,
+		wsEndpoint:    conf.WsEndpoint(),
+		wsWhitelist:   conf.WsModules,
+		wsCors:        conf.WsCors,
 		eventmux:      new(event.TypeMux),
 	}, nil
 }
@@ -215,6 +224,11 @@ func (n *Node) startRPC(services map[reflect.Type]Service) error {
 		n.stopIPC()
 		return err
 	}
+	if err := n.startWS(n.wsEndpoint, apis, n.wsWhitelist, n.wsCors); err != nil {
+		n.stopHTTP()
+		n.stopIPC()
+		return err
+	}
 	// All API endpoints started successfully
 	n.rpcAPIs = apis
 	return nil
@@ -285,7 +299,7 @@ func (n *Node) stopIPC() {
 
 // startHTTP initializes and starts the HTTP RPC endpoint.
 func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors string) error {
-	// Short circuit if the IPC endpoint isn't being exposed
+	// Short circuit if the HTTP endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
 	}
@@ -338,6 +352,61 @@ func (n *Node) stopHTTP() {
 	}
 }
 
+// startWS initializes and starts the websocket RPC endpoint.
+func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, cors string) error {
+	// Short circuit if the WS endpoint isn't being exposed
+	if endpoint == "" {
+		return nil
+	}
+	// Generate the whitelist based on the allowed modules
+	whitelist := make(map[string]bool)
+	for _, module := range modules {
+		whitelist[module] = true
+	}
+	// Register all the APIs exposed by the services
+	handler := rpc.NewServer()
+	for _, api := range apis {
+		if whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
+			if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
+				return err
+			}
+			glog.V(logger.Debug).Infof("WebSocket registered %T under '%s'", api.Service, api.Namespace)
+		}
+	}
+	// All APIs registered, start the HTTP listener
+	var (
+		listener net.Listener
+		err      error
+	)
+	if listener, err = net.Listen("tcp", endpoint); err != nil {
+		return err
+	}
+	go rpc.NewWSServer(cors, handler).Serve(listener)
+	glog.V(logger.Info).Infof("WebSocket endpoint opened: ws://%s", endpoint)
+
+	// All listeners booted successfully
+	n.wsEndpoint = endpoint
+	n.wsListener = listener
+	n.wsHandler = handler
+	n.wsCors = cors
+
+	return nil
+}
+
+// stopWS terminates the websocket RPC endpoint.
+func (n *Node) stopWS() {
+	if n.wsListener != nil {
+		n.wsListener.Close()
+		n.wsListener = nil
+
+		glog.V(logger.Info).Infof("WebSocket endpoint closed: ws://%s", n.wsEndpoint)
+	}
+	if n.wsHandler != nil {
+		n.wsHandler.Stop()
+		n.wsHandler = nil
+	}
+}
+
 // Stop terminates a running node along with all it's services. In the node was
 // not started, an error is returned.
 func (n *Node) Stop() error {
@@ -349,8 +418,9 @@ func (n *Node) Stop() error {
 		return ErrNodeStopped
 	}
 	// Otherwise terminate the API, all services and the P2P server too
-	n.stopIPC()
+	n.stopWS()
 	n.stopHTTP()
+	n.stopIPC()
 	n.rpcAPIs = nil
 
 	failure := &StopError{
@@ -470,15 +540,4 @@ func (n *Node) apis() []rpc.API {
 			Public:    true,
 		},
 	}
-}
-
-// APIs returns the collection of RPC descriptor this node offers. This method
-// is just a quick placeholder passthrough for the RPC update, which in the next
-// step will be fully integrated into the node itself.
-func (n *Node) APIs() []rpc.API {
-	apis := n.apis()
-	for _, api := range n.services {
-		apis = append(apis, api.APIs()...)
-	}
-	return apis
 }
