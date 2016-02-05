@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rcrowley/go-metrics"
-
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -61,42 +60,29 @@ func (api *PrivateAdminAPI) AddPeer(url string) (bool, error) {
 }
 
 // StartRPC starts the HTTP RPC API server.
-func (api *PrivateAdminAPI) StartRPC(address string, port int, cors string, apis string) (bool, error) {
-	var offeredAPIs []rpc.API
-	if len(apis) > 0 {
-		namespaces := set.New()
-		for _, a := range strings.Split(apis, ",") {
-			namespaces.Add(strings.TrimSpace(a))
-		}
-		for _, api := range api.node.APIs() {
-			if namespaces.Has(api.Namespace) {
-				offeredAPIs = append(offeredAPIs, api)
-			}
-		}
-	} else { // use by default all public API's
-		for _, api := range api.node.APIs() {
-			if api.Public {
-				offeredAPIs = append(offeredAPIs, api)
-			}
-		}
-	}
+func (api *PrivateAdminAPI) StartRPC(host string, port int, cors string, apis string) (bool, error) {
+	api.node.lock.Lock()
+	defer api.node.lock.Unlock()
 
-	if address == "" {
-		address = "127.0.0.1"
+	if api.node.httpHandler != nil {
+		return false, fmt.Errorf("HTTP RPC already running on %s", api.node.httpEndpoint)
 	}
-	if port == 0 {
-		port = 8545
+	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", host, port), api.node.rpcAPIs, strings.Split(apis, ","), cors); err != nil {
+		return false, err
 	}
-
-	corsDomains := strings.Split(cors, " ")
-	err := rpc.StartHTTP(address, port, corsDomains, offeredAPIs)
-	return err == nil, err
+	return true, nil
 }
 
 // StopRPC terminates an already running HTTP RPC API endpoint.
 func (api *PrivateAdminAPI) StopRPC() (bool, error) {
-	err := rpc.StopHTTP()
-	return err == nil, err
+	api.node.lock.Lock()
+	defer api.node.lock.Unlock()
+
+	if api.node.httpHandler == nil {
+		return false, fmt.Errorf("HTTP RPC not running")
+	}
+	api.node.stopHTTP()
+	return true, nil
 }
 
 // StartWS starts the websocket RPC API server.

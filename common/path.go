@@ -72,25 +72,3 @@ func HomeDir() string {
 	}
 	return ""
 }
-
-func DefaultDataDir() string {
-	// Try to place the data folder in the user's home dir
-	home := HomeDir()
-	if home != "" {
-		if runtime.GOOS == "darwin" {
-			return filepath.Join(home, "Library", "Ethereum")
-		} else if runtime.GOOS == "windows" {
-			return filepath.Join(home, "AppData", "Roaming", "Ethereum")
-		} else {
-			return filepath.Join(home, ".ethereum")
-		}
-	}
-	// As we cannot guess a stable location, return empty and handle later
-	return ""
-}
-
-// DefaultIpcSocket returns the relative name of the default IPC socket. The path
-// resolution is done by a node with other contextual infos.
-func DefaultIpcSocket() string {
-	return "geth.ipc"
-}

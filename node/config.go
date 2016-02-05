@@ -19,6 +19,7 @@ package node
 import (
 	"crypto/ecdsa"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -97,6 +98,25 @@ type Config struct {
 	// handshake phase, counted separately for inbound and outbound connections.
 	// Zero defaults to preset values.
 	MaxPendingPeers int
+
+	// HttpHost is the host interface on which to start the HTTP RPC server. If this
+	// field is empty, no HTTP API endpoint will be started.
+	HttpHost string
+
+	// HttpPort is the TCP port number on which to start the HTTP RPC server. The
+	// default zero value is/ valid and will pick a port number randomly (useful
+	// for ephemeral nodes).
+	HttpPort int
+
+	// HttpCors is the Cross-Origin Resource Sharing header to send to requesting
+	// clients. Please be aware that CORS is a browser enforced security, it's fully
+	// useless for custom HTTP clients.
+	HttpCors string
+
+	// HttpModules is a list of API modules to expose via the HTTP RPC interface.
+	// If the module list is empty, all RPC API endpoints designated public will be
+	// exposed.
+	HttpModules []string
 }
 
 // IpcEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -126,8 +146,23 @@ func (c *Config) IpcEndpoint() string {
 
 // DefaultIpcEndpoint returns the IPC path used by default.
 func DefaultIpcEndpoint() string {
-	config := &Config{DataDir: common.DefaultDataDir(), IpcPath: common.DefaultIpcSocket()}
+	config := &Config{DataDir: common.DefaultDataDir(), IpcPath: common.DefaultIpcSocket}
 	return config.IpcEndpoint()
+}
+
+// HttpEndpoint resolves an HTTP endpoint based on the configured host interface
+// and port parameters.
+func (c *Config) HttpEndpoint() string {
+	if c.HttpHost == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", c.HttpHost, c.HttpPort)
+}
+
+// DefaultHttpEndpoint returns the HTTP endpoint used by default.
+func DefaultHttpEndpoint() string {
+	config := &Config{HttpHost: common.DefaultHttpHost, HttpPort: common.DefaultHttpPort}
+	return config.HttpEndpoint()
 }
 
 // NodeKey retrieves the currently configured private key of the node, checking

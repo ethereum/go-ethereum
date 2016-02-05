@@ -233,12 +233,12 @@ var (
 	RPCListenAddrFlag = cli.StringFlag{
 		Name:  "rpcaddr",
 		Usage: "HTTP-RPC server listening interface",
-		Value: "127.0.0.1",
+		Value: common.DefaultHttpHost,
 	}
 	RPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
 		Usage: "HTTP-RPC server listening port",
-		Value: 8545,
+		Value: common.DefaultHttpPort,
 	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
@@ -262,7 +262,7 @@ var (
 	IPCPathFlag = DirectoryFlag{
 		Name:  "ipcpath",
 		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
-		Value: DirectoryString{common.DefaultIpcSocket()},
+		Value: DirectoryString{common.DefaultIpcSocket},
 	}
 	WSEnabledFlag = cli.BoolFlag{
 		Name:  "ws",
@@ -271,12 +271,12 @@ var (
 	WSListenAddrFlag = cli.StringFlag{
 		Name:  "wsaddr",
 		Usage: "WS-RPC server listening interface",
-		Value: "127.0.0.1",
+		Value: common.DefaultWsHost,
 	}
 	WSPortFlag = cli.IntFlag{
 		Name:  "wsport",
 		Usage: "WS-RPC server listening port",
-		Value: 8546,
+		Value: common.DefaultWsPort,
 	}
 	WSApiFlag = cli.StringFlag{
 		Name:  "wsapi",
@@ -284,7 +284,7 @@ var (
 		Value: rpc.DefaultHttpRpcApis,
 	}
 	WSAllowedDomainsFlag = cli.StringFlag{
-		Name:  "wsdomains",
+		Name:  "wscors",
 		Usage: "Domains from which to accept websockets requests",
 		Value: "",
 	}
@@ -482,6 +482,15 @@ func MakeNAT(ctx *cli.Context) nat.Interface {
 	return natif
 }
 
+// MakeHttpRpcHost creates the HTTP RPC listener interface string from the set
+// command line flags, returning empty if the HTTP endpoint is disabled.
+func MakeHttpRpcHost(ctx *cli.Context) string {
+	if !ctx.GlobalBool(RPCEnabledFlag.Name) {
+		return ""
+	}
+	return ctx.GlobalString(RPCListenAddrFlag.Name)
+}
+
 // MakeGenesisBlock loads up a genesis block from an input file specified in the
 // command line, or returns the empty string if none set.
 func MakeGenesisBlock(ctx *cli.Context) string {
@@ -591,7 +600,6 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 	// Configure the node's service container
 	stackConf := &node.Config{
 		DataDir:         MustMakeDataDir(ctx),
-		IpcPath:         MakeIpcPath(ctx),
 		PrivateKey:      MakeNodeKey(ctx),
 		Name:            MakeNodeName(name, version, ctx),
 		NoDiscovery:     ctx.GlobalBool(NoDiscoverFlag.Name),
@@ -600,6 +608,11 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		NAT:             MakeNAT(ctx),
 		MaxPeers:        ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers: ctx.GlobalInt(MaxPendingPeersFlag.Name),
+		IpcPath:         MakeIpcPath(ctx),
+		HttpHost:        MakeHttpRpcHost(ctx),
+		HttpPort:        ctx.GlobalInt(RPCPortFlag.Name),
+		HttpCors:        ctx.GlobalString(RPCCORSDomainFlag.Name),
+		HttpModules:     strings.Split(ctx.GlobalString(RPCApiFlag.Name), ","),
 	}
 	// Configure the Ethereum service
 	accman := MakeAccountManager(ctx)
@@ -742,27 +755,6 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 	}
 
 	return chain, chainDb
-}
-
-// StartRPC starts a HTTP JSON-RPC API server.
-func StartRPC(stack *node.Node, ctx *cli.Context) error {
-	for _, api := range stack.APIs() {
-		if adminApi, ok := api.Service.(*node.PrivateAdminAPI); ok {
-			address := ctx.GlobalString(RPCListenAddrFlag.Name)
-			port := ctx.GlobalInt(RPCPortFlag.Name)
-			cors := ctx.GlobalString(RPCCORSDomainFlag.Name)
-			apiStr := ""
-			if ctx.GlobalIsSet(RPCApiFlag.Name) {
-				apiStr = ctx.GlobalString(RPCApiFlag.Name)
-			}
-
-			_, err := adminApi.StartRPC(address, port, cors, apiStr)
-			return err
-		}
-	}
-
-	glog.V(logger.Error).Infof("Unable to start RPC-HTTP interface, could not find admin API")
-	return errors.New("Unable to start RPC-HTTP interface")
 }
 
 // StartWS starts a websocket JSON-RPC API server.

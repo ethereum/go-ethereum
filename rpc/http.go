@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -29,7 +28,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
@@ -39,12 +37,6 @@ import (
 
 const (
 	httpReadDeadLine = 60 * time.Second // wait max httpReadDeadeline for next request
-)
-
-var (
-	httpServerMu  sync.Mutex   // prevent concurrent access to the httpListener and httpServer
-	httpListener  net.Listener // listener for the http server
-	httpRPCServer *Server      // the node can only start 1 HTTP RPC server instance
 )
 
 // httpMessageStream is the glue between a HTTP connection which is message based
@@ -249,53 +241,14 @@ func (h *httpConnHijacker) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	go h.rpcServer.ServeCodec(codec)
 }
 
-// StartHTTP will start the JSONRPC HTTP RPC interface when its not yet running.
-func StartHTTP(address string, port int, corsdomains []string, apis []API) error {
-	httpServerMu.Lock()
-	defer httpServerMu.Unlock()
-
-	if httpRPCServer != nil {
-		return fmt.Errorf("HTTP RPC interface already started on %s", httpListener.Addr())
+// NewHTTPServer creates a new HTTP RPC server around an API provider.
+func NewHTTPServer(cors string, handler *Server) *http.Server {
+	return &http.Server{
+		Handler: &httpConnHijacker{
+			corsdomains: strings.Split(cors, ","),
+			rpcServer:   handler,
+		},
 	}
-
-	rpcServer := NewServer()
-
-	for _, api := range apis {
-		if err := rpcServer.RegisterName(api.Namespace, api.Service); err != nil {
-			return err
-		}
-	}
-
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", address, port))
-	if err != nil {
-		return err
-	}
-
-	httpServer := http.Server{Handler: &httpConnHijacker{corsdomains, rpcServer}}
-	go httpServer.Serve(listener)
-
-	httpListener = listener
-	httpRPCServer = rpcServer
-
-	return nil
-}
-
-// StopHTTP will stop the running HTTP interface. If it is not running an error will be returned.
-func StopHTTP() error {
-	httpServerMu.Lock()
-	defer httpServerMu.Unlock()
-
-	if httpRPCServer == nil {
-		return errors.New("HTTP RPC interface not started")
-	}
-
-	httpListener.Close()
-	httpRPCServer.Stop()
-
-	httpRPCServer = nil
-	httpListener = nil
-
-	return nil
 }
 
 // httpClient connects to a geth RPC server over HTTP.

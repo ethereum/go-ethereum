@@ -503,11 +503,6 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 	}
 	// Start auxiliary services if enabled
-	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
-		if err := utils.StartRPC(stack, ctx); err != nil {
-			utils.Fatalf("Failed to start RPC: %v", err)
-		}
-	}
 	if ctx.GlobalBool(utils.WSEnabledFlag.Name) {
 		if err := utils.StartWS(stack, ctx); err != nil {
 			utils.Fatalf("Failed to start WS: %v", err)
