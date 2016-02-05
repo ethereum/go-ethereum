@@ -45,6 +45,10 @@ func (b *testBackend) CodeAt(address string) string {
 	return ""
 }
 
+func (b *testBackend) BalanceAt(address common.Address) string {
+	return "0"
+}
+
 func genAddr() common.Address {
 	prvKey, _ := crypto.GenerateKey()
 	return crypto.PubkeyToAddress(prvKey.PublicKey)
@@ -54,21 +58,21 @@ func TestIssueAndReceive(t *testing.T) {
 	prvKey, _ := crypto.GenerateKey()
 	sender := genAddr()
 	path := "/tmp/checkbook.json"
-	chbook, err := NewChequebook(path, sender, prvKey, nil)
+	chbook, err := NewChequebook(path, sender, prvKey, newTestBackend())
 	if err != nil {
-		t.Errorf("expected no error, got %v", err)
+		t.Fatalf("expected no error, got %v", err)
 	}
 	recipient := genAddr()
 	chbook.sent[recipient] = new(big.Int).SetUint64(42)
 	amount := common.Big1
 	ch, err := chbook.Issue(recipient, amount)
 	if err == nil {
-		t.Errorf("expected insufficient funds error, got none")
+		t.Fatalf("expected insufficient funds error, got none")
 	}
 
 	chbook.balance = new(big.Int).Set(common.Big1)
 	if chbook.Balance().Cmp(common.Big1) != 0 {
-		t.Errorf("expected: %v, got %v", "0", chbook.Balance())
+		t.Fatalf("expected: %v, got %v", "0", chbook.Balance())
 	}
 
 	ch, err = chbook.Issue(recipient, amount)
@@ -102,9 +106,9 @@ func TestCheckbookFile(t *testing.T) {
 	prvKey, _ := crypto.GenerateKey()
 	sender := genAddr()
 	path := "/tmp/checkbook.json"
-	chbook, err := NewChequebook(path, sender, prvKey, nil)
+	chbook, err := NewChequebook(path, sender, prvKey, newTestBackend())
 	if err != nil {
-		t.Errorf("expected no error, got %v", err)
+		t.Fatalf("expected no error, got %v", err)
 	}
 	recipient := genAddr()
 	chbook.sent[recipient] = new(big.Int).SetUint64(42)
@@ -112,7 +116,7 @@ func TestCheckbookFile(t *testing.T) {
 
 	chbook.Save()
 
-	chbook, err = LoadChequebook(path, prvKey, nil)
+	chbook, err = LoadChequebook(path, prvKey, newTestBackend(), false)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -139,12 +143,12 @@ func TestVerifyErrors(t *testing.T) {
 	sender0 := genAddr()
 	sender1 := genAddr()
 	path0 := "/tmp/checkbook0.json"
-	chbook0, err := NewChequebook(path0, sender0, prvKey, nil)
+	chbook0, err := NewChequebook(path0, sender0, prvKey, newTestBackend())
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
 	path1 := "/tmp/checkbook1.json"
-	chbook1, err := NewChequebook(path1, sender1, prvKey, nil)
+	chbook1, err := NewChequebook(path1, sender1, prvKey, newTestBackend())
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -179,7 +183,7 @@ func TestVerifyErrors(t *testing.T) {
 	}
 
 	received, err = chbox.Receive(ch1)
-	t.Log(err)
+	t.Logf("correct error: %v", err)
 	if err == nil {
 		t.Fatalf("expected receiver error, got none")
 	}
@@ -189,19 +193,19 @@ func TestVerifyErrors(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	received, err = chbox.Receive(ch2)
-	t.Log(err)
+	t.Logf("correct error: %v", err)
 	if err == nil {
 		t.Fatalf("expected sender error, got none")
 	}
 
 	_, err = chbook1.Issue(recipient0, new(big.Int).SetInt64(-1))
-	t.Log(err)
+	t.Logf("correct error: %v", err)
 	if err == nil {
 		t.Fatalf("expected incorrect amount error, got none")
 	}
 
 	received, err = chbox.Receive(ch0)
-	t.Log(err)
+	t.Logf("correct error: %v", err)
 	if err == nil {
 		t.Fatalf("expected incorrect amount error, got none")
 	}
@@ -365,7 +369,7 @@ func TestCash(t *testing.T) {
 	prvKey, _ := crypto.GenerateKey()
 	sender := genAddr()
 	path := "/tmp/checkbook.json"
-	chbook, err := NewChequebook(path, sender, prvKey, nil)
+	chbook, err := NewChequebook(path, sender, prvKey, newTestBackend())
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}

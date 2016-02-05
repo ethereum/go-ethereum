@@ -54,6 +54,7 @@ type Backend interface {
 	Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, string, error)
 	GetTxReceipt(txhash common.Hash) *types.Receipt
 	CodeAt(address string) string
+	BalanceAt(address common.Address) string
 }
 
 // rlp serialised cheque model for use with the chequebook
@@ -165,13 +166,25 @@ func NewChequebook(path string, contract common.Address, prvKey *ecdsa.PrivateKe
 		owner:    owner,
 	}
 	if (contract != common.Address{}) {
-		glog.V(logger.Detail).Infof("[CHEQUEBOOK] new chequebook initialised from %v (owner: %v)", contract.Hex(), owner.Hex())
+		err = self.setBalanceFromBlockChain()
+		if err != nil {
+			return nil, err
+		}
+		glog.V(logger.Detail).Infof("[CHEQUEBOOK] new chequebook initialised from %v (owner: %v, balance: %s)", contract.Hex(), owner.Hex(), self.balance.String())
 	}
 	return
 }
 
+func (self *Chequebook) setBalanceFromBlockChain() error {
+	balanceString := self.backend.BalanceAt(self.contract)
+	if _, ok := self.balance.SetString(balanceString, 10); !ok {
+		return fmt.Errorf("Incorrect balance: %s", balanceString)
+	}
+	return nil
+}
+
 // LoadChequebook(path, prvKey, backend) loads a chequebook from disk (file path)
-func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend) (self *Chequebook, err error) {
+func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend, checkBalance bool) (self *Chequebook, err error) {
 	var data []byte
 	data, err = ioutil.ReadFile(path)
 	if err != nil {
@@ -184,7 +197,14 @@ func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend) (sel
 	if err != nil {
 		return nil, err
 	}
-	glog.V(logger.Detail).Infof("[CHEQUEBOOK] loaded chequebook (%s, owner: %v) initialised from %v", self.contract.Hex(), self.owner.Hex(), path)
+	if checkBalance {
+		err = self.setBalanceFromBlockChain()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	glog.V(logger.Detail).Infof("[CHEQUEBOOK] loaded chequebook (%s, owner: %v, balance: %v) initialised from %v", self.contract.Hex(), self.owner.Hex(), self.balance, path)
 
 	return
 }

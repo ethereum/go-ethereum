@@ -78,11 +78,11 @@ type bzz struct {
 
 	swap        *swap.Swap          // swap instance for the peer connection
 	swapParams  *bzzswap.SwapParams // swap settings both local and remote
-	swapEnabled bool                // flag to switch off SWAP (will be via Caps in handshake)
+	swapEnabled bool                // flag to enable SWAP (will be set via Caps in handshake)
+	syncEnabled bool                // flag to enable SYNC (will be set via Caps in handshake)
 	syncer      *syncer             // syncer instance for the peer connection
 	syncParams  *SyncParams         // syncer params
 	syncState   *syncState          // outgoing syncronisation state (contains reference to remote peers db counter)
-	syncEnabled bool                // flag to enable syncing
 }
 
 // interface type for handler of storage/retrieval related requests coming
@@ -152,7 +152,7 @@ func run(requestDb *storage.LDBDatabase, depo StorageHandler, hive *Hive, dbacce
 		},
 		swapParams:  sp,
 		syncParams:  sy,
-		swapEnabled: true,
+		swapEnabled: hive.swapEnabled,
 		syncEnabled: true,
 	}
 
@@ -273,8 +273,6 @@ func (self *bzz) handle() error {
 		if err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		// set peers state to persist
-		self.syncState = req.State
 
 	case deliveryRequestMsg:
 		// response to syncKeysMsg hashes filtered not existing in db
@@ -291,12 +289,14 @@ func (self *bzz) handle() error {
 
 	case paymentMsg:
 		// swap protocol message for payment, Units paid for, Cheque paid with
-		var req paymentMsgData
-		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+		if self.swapEnabled {
+			var req paymentMsgData
+			if err := msg.Decode(&req); err != nil {
+				return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+			}
+			glog.V(logger.Debug).Infof("[BZZ] incoming payment: %s", req.String())
+			self.swap.Receive(int(req.Units), req.Promise)
 		}
-		glog.V(logger.Debug).Infof("[BZZ] incoming payment: %s", req.String())
-		self.swap.Receive(int(req.Units), req.Promise)
 
 	default:
 		// no other message is allowed
@@ -366,10 +366,9 @@ func (self *bzz) handleStatus() (err error) {
 	self.hive.addPeer(&peer{bzz: self})
 
 	// hive sets syncstate so sync should start after node added
-	if self.syncEnabled {
-		glog.V(logger.Info).Infof("[BZZ] syncronisation request sent with %v", self.syncState)
-		self.syncRequest()
-	}
+	glog.V(logger.Info).Infof("[BZZ] syncronisation request sent with %v", self.syncState)
+	self.syncRequest()
+
 	return nil
 }
 
@@ -382,9 +381,10 @@ func (self *bzz) sync(state *syncState) error {
 	cnt := self.dbAccess.counter()
 	remoteaddr := self.remoteAddr.Addr
 	start, stop := self.hive.kad.KeyRange(remoteaddr)
+
+	// an explicitly received nil syncstate disables syncronisation
 	if state == nil {
-		state = newSyncState(start, stop, cnt)
-		glog.V(logger.Warn).Infof("[BZZ] peer %08x provided no sync state, setting up full sync: %v\n", remoteaddr[:4], state)
+		self.syncEnabled = false
 	} else {
 		state.synced = make(chan bool)
 		state.SessionAt = cnt
@@ -399,7 +399,7 @@ func (self *bzz) sync(state *syncState) error {
 		storage.Key(remoteaddr[:]),
 		self.dbAccess,
 		self.unsyncedKeys, self.store,
-		self.syncParams, state,
+		self.syncParams, state, func() bool { return self.syncEnabled },
 	)
 	if err != nil {
 		return self.protoError(ErrSync, "%v", err)
@@ -448,8 +448,9 @@ func (self *bzz) store(req *storeRequestMsgData) error {
 }
 
 func (self *bzz) syncRequest() error {
-	req := &syncRequestMsgData{
-		SyncState: self.syncState,
+	req := &syncRequestMsgData{}
+	if self.hive.syncEnabled {
+		req.SyncState = self.syncState
 	}
 	return self.send(syncRequestMsg, req)
 }

@@ -5,13 +5,11 @@ TEST_NAME=`basename $0 .sh`
 
 export SWARM_BIN=$TEST_DIR/../../cmd/swarm
 export GETH=$SWARM_BIN/../../../geth
-export NETWORKID=622$TEST_NAME
-export TMPDIR=/tmp/swarm-test
+export NETWORKID=322$TEST_NAME
+export TMPDIR=~/BZZ/swarm-test
 export DATA_ROOT=$TMPDIR/$NETWORKID
 # alias swarm='bash $SWARM_BIN/swarm.sh $DATA_ROOT $NETWORKID'
 EXTRA_ARGS=$*
-
-rm -rf $DATA_ROOT
 
 wait=1
 

@@ -37,31 +37,8 @@ shift
 # ip_addr=`curl ipecho.net/plain 2>/dev/null;echo `
 
 # echo "external IP: $ip_addr"
-swarmoptions='--vmdebug=false --maxpeers=20 --dev --shh=false --nodiscover --ipcexp'
-
-
-function needs {
-  id=$1
-  keyfile=$2
-  target=$3
-  dir=`dirname $3`
-  dest=$dir/down
-  mkdir -p $dest
-  file=$dest/`basename $target`
-  rm -f $file
-  echo -n "download to '$file'...waiting for root hash in '$keyfile'..."
-  while true; do
-   if [ -f $keyfile ] && [ ! -z $keyfile ]; then
-    break
-   fi
-   sleep 1
-   echo -n "."
-  done
-  key=`cat $keyfile`
-  echo " => $key"
-  download $id $key $dest && cmp --silent $file $target && echo "PASS" || echo "FAIL"
-  # && ls -l $keyfile $file $target
-}
+swarmoptions='--vmdebug=false --maxpeers=20 --dev --shh=false --nodiscover'
+tmpdir=/tmp
 
 function attach {
   id=$1
@@ -145,7 +122,6 @@ function init {
   reset all
   cluster $*
   stop all
-  sleep 5
   cluster $*
 }
 
@@ -163,7 +139,7 @@ function reset {
 function cluster {
   N=$1
   shift
-# --vmodule=netstore=6,depo=6,forwarding=6,hive=5,dpa=6,dpa=6,http=6,syncb=6,syncer=6,protocol=6,swap=6,chequebook=6
+  vmodule='--vmodule=network/*=6,syncb=6,syncer=6,protocol=6,swap=6,chequebook=6'
   echo "launching cluster of $N instances"
   # cmd="bash $srcdir/gethcluster.sh $root $network_id $N '' $swarmoptions $*"
   # echo $cmd
@@ -192,22 +168,46 @@ function cluster {
     id=`printf "%02d" $i`
     mkdir -p $dir/data/$id
     echo "launching node $i/$N ---> tail-f $dir/log/$id.log"
-    start $id $*
+    start $id $vmodule $*
   done
+}
+
+
+function needs {
+  id=$1
+  keyfile=$2
+  target=$3
+  dir=`dirname $3`
+  dest=$tmpdir/down
+  mkdir -p $dest
+  file=$dest/`basename $target`
+  rm -f $file
+  echo -n "waiting for root hash in '$keyfile'..."
+  while true; do
+   if [ -f $keyfile ] && [ ! -z $keyfile ]; then
+    break
+   fi
+   sleep 1
+   echo -n "."
+  done
+  key=`cat $keyfile|tr -d \"`
+  echo " => $key"
+  download $id $key $dest && cmp --silent $file $target && echo "PASS" || echo "FAIL"
+  # && ls -l $keyfile $file $target
 }
 
 
 function up { #port, file
   echo "Upload file '$2' to node $1... " 1>&2
   file=`basename $2`
-  key=`attach $1 "--exec 'bzz.upload(\"$2\", \"$file\")'"|tail -n1`
+  attach $1 "--exec 'bzz.upload(\"$2\", \"$file\")'"|tail -n1> /tmp/key
   # key=`bash swarm/cmd/bzzup.sh $2 86$1`
-  echo "-> $key"
-  echo -n `eval echo $key`
+  cat /tmp/key
 }
 
 function download {
   echo "download to '$3'"
+  echo attach $1 "--exec 'bzz.download(\"$2\", \"$3\")'"
   attach $1 "--exec 'bzz.download(\"$2\", \"$3\")'" > /dev/null
 }
 
@@ -234,14 +234,22 @@ function clean { #index
 }
 
 function info {
+  echo "swarm node information"
   echo "ROOTDIR: $root"
-  echo "DATADIR: $root/data/$1"
-  echo "LOGFILE: $root/log/$1.log"
+  echo "DATADIR: $root/$network_id/data/$1"
+  echo "LOGFILE: $root/$network_id/log/$1.log"
+  echo "HTTPAPI: http://localhost:32$1"
+  echo "ETHPORT: 302$1"
+  echo "RPCPORT: 322$1"
+  echo "ACCOUNT:" 0x`ls -1 $root/$network_id/data/$1/bzz`
+  echo "CHEQUEB:" `cat $root/$network_id/data/$1/bzz/*/config.json|grep Contract|awk -F\" '{print $4}'`
 }
 
 case $cmd in
   "info" )
     info $*;;
+  "clean" )
+    clean $*;;
   "needs" )
     needs $*;;
   "up" )
@@ -264,4 +272,6 @@ case $cmd in
     attach $*;;
   "log" )
     log $*;;
+  "less" )
+    less $*;;
 esac

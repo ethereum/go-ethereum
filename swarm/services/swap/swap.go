@@ -254,7 +254,7 @@ func (self *SwapParams) newChequebookFromContract(path string, backend chequeboo
 	}
 
 	chbookpath := filepath.Join(path, "chequebooks", hexkey+".json")
-	self.chbook, err = chequebook.LoadChequebook(chbookpath, self.privateKey, backend)
+	self.chbook, err = chequebook.LoadChequebook(chbookpath, self.privateKey, backend, true)
 
 	if err != nil {
 		self.chbook, err = chequebook.NewChequebook(chbookpath, self.Contract, self.privateKey, backend)

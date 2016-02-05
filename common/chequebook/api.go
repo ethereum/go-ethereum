@@ -1,6 +1,7 @@
 package chequebook
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -8,22 +9,44 @@ import (
 
 const Version = "1.0"
 
+var errNoChequebook = errors.New("no chequebook")
+
 type Api struct {
-	ch *Chequebook
+	chequebookf func() *Chequebook
 }
 
-func NewApi(ch *Chequebook) *Api {
+func NewApi(ch func() *Chequebook) *Api {
 	return &Api{ch}
 }
 
+func (self *Api) Balance() (string, error) {
+	ch := self.chequebookf()
+	if ch == nil {
+		return "", errNoChequebook
+	}
+	return ch.Balance().String(), nil
+}
+
 func (self *Api) Issue(beneficiary common.Address, amount *big.Int) (cheque *Cheque, err error) {
-	return self.ch.Issue(beneficiary, amount)
+	ch := self.chequebookf()
+	if ch == nil {
+		return nil, errNoChequebook
+	}
+	return ch.Issue(beneficiary, amount)
 }
 
 func (self *Api) Cash(cheque *Cheque) (txhash string, err error) {
-	return self.ch.Cash(cheque)
+	ch := self.chequebookf()
+	if ch == nil {
+		return "", errNoChequebook
+	}
+	return ch.Cash(cheque)
 }
 
 func (self *Api) Deposit(amount *big.Int) (txhash string, err error) {
-	return self.ch.Deposit(amount)
+	ch := self.chequebookf()
+	if ch == nil {
+		return "", errNoChequebook
+	}
+	return ch.Deposit(amount)
 }

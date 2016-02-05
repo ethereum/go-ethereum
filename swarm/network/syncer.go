@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/common/kademlia"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -133,6 +132,7 @@ func NewSyncParams(bzzdir string) *SyncParams {
 // syncer is the agent that manages content distribution/storage replication/chunk storeRequest forwarding
 type syncer struct {
 	*SyncParams                     // sync parameters
+	syncF           func() bool     // if syncing is needed
 	key             storage.Key     // remote peers address key
 	state           *syncState      // sync state for our dbStore
 	syncStates      chan *syncState // different stages of sync
@@ -165,6 +165,7 @@ func newSyncer(
 	store func(*storeRequestMsgData) error,
 	params *SyncParams,
 	state *syncState,
+	syncF func() bool,
 ) (*syncer, error) {
 
 	syncBufferSize := params.SyncBufferSize
@@ -172,6 +173,7 @@ func newSyncer(
 	dbBatchSize := params.RequestDbBatchSize
 
 	self := &syncer{
+		syncF:           syncF,
 		key:             remotekey,
 		dbAccess:        dbAccess,
 		syncStates:      make(chan *syncState, 20),
@@ -191,33 +193,17 @@ func newSyncer(
 		// initialise a syncdb instance for each priority queue
 		self.queues[i] = newSyncDb(db, remotekey, uint(i), syncBufferSize, dbBatchSize, self.deliver(uint(i)))
 	}
-	self.state = state
 	glog.V(logger.Info).Infof("[BZZ] syncer started: %v", state)
 	// launch chunk delivery service
 	go self.syncDeliveries()
 	// launch sync task manager
-	go self.sync()
+	if self.syncF() {
+		go self.sync()
+	}
 	// process unsynced keys to broadcast
 	go self.syncUnsyncedKeys()
 
 	return self, nil
-}
-
-// newSyncState returns a default sync state given local and remote
-// addresses and db count
-func newSyncState(start, stop kademlia.Address, count uint64) *syncState {
-	// -> (] keyrange for db iterator -- interval open from the left
-	// storage count range --- interval open from the right
-	return &syncState{
-		DbSyncState: &storage.DbSyncState{
-			Start: storage.Key(start[:]),
-			Stop:  storage.Key(stop[:]),
-			First: 0,
-			Last:  count,
-		},
-		SessionAt: count,
-		synced:    make(chan bool),
-	}
 }
 
 // metadata serialisation
@@ -238,7 +224,7 @@ func decodeSync(meta *json.RawMessage) (*syncState, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("unable to deserialise sync state from <nil>")
 	}
-	state := newSyncState(kademlia.Address{}, kademlia.Address{}, 0)
+	state := &syncState{}
 	err := json.Unmarshal(data, state)
 	return state, err
 }
@@ -625,10 +611,12 @@ func (self *syncer) addRequest(req interface{}, ty int) {
 
 	priority := self.SyncPriorities[ty]
 	// sync mode for this type ON
-	if self.SyncModes[ty] {
-		self.addKey(req, priority, self.quit)
-	} else {
-		self.addDelivery(req, priority, self.quit)
+	if self.syncF() || ty == DeliverReq {
+		if self.SyncModes[ty] {
+			self.addKey(req, priority, self.quit)
+		} else {
+			self.addDelivery(req, priority, self.quit)
+		}
 	}
 }
 
