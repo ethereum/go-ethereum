@@ -206,12 +206,12 @@ func (s *PublicFilterAPI) newLogFilter(earliest, latest int64, addresses []commo
 	filter.SetEndBlock(latest)
 	filter.SetAddresses(addresses)
 	filter.SetTopics(topics)
-	filter.LogsCallback = func(logs vm.Logs) {
+	filter.LogCallback = func(log *vm.Log, removed bool) {
 		s.logMu.Lock()
 		defer s.logMu.Unlock()
 
 		if queue := s.logQueue[id]; queue != nil {
-			queue.add(logs...)
+			queue.add(vmlog{log, removed})
 		}
 	}
 
@@ -365,14 +365,14 @@ func (s *PublicFilterAPI) NewFilter(args NewFilterArgs) (string, error) {
 }
 
 // GetLogs returns the logs matching the given argument.
-func (s *PublicFilterAPI) GetLogs(args NewFilterArgs) vm.Logs {
+func (s *PublicFilterAPI) GetLogs(args NewFilterArgs) []vmlog {
 	filter := New(s.chainDb)
 	filter.SetBeginBlock(args.FromBlock.Int64())
 	filter.SetEndBlock(args.ToBlock.Int64())
 	filter.SetAddresses(args.Addresses)
 	filter.SetTopics(args.Topics)
 
-	return returnLogs(filter.Find())
+	return toRPCLogs(filter.Find(), false)
 }
 
 // UninstallFilter removes the filter with the given filter id.
@@ -447,7 +447,7 @@ func (s *PublicFilterAPI) transactionFilterChanged(id int) []common.Hash {
 }
 
 // logFilterChanged returns a collection of logs for the log filter with the given id.
-func (s *PublicFilterAPI) logFilterChanged(id int) vm.Logs {
+func (s *PublicFilterAPI) logFilterChanged(id int) []vmlog {
 	s.logMu.Lock()
 	defer s.logMu.Unlock()
 
@@ -458,17 +458,17 @@ func (s *PublicFilterAPI) logFilterChanged(id int) vm.Logs {
 }
 
 // GetFilterLogs returns the logs for the filter with the given id.
-func (s *PublicFilterAPI) GetFilterLogs(filterId string) vm.Logs {
+func (s *PublicFilterAPI) GetFilterLogs(filterId string) []vmlog {
 	id, ok := s.filterMapping[filterId]
 	if !ok {
-		return returnLogs(nil)
+		return toRPCLogs(nil, false)
 	}
 
 	if filter := s.filterManager.Get(id); filter != nil {
-		return returnLogs(filter.Find())
+		return toRPCLogs(filter.Find(), false)
 	}
 
-	return returnLogs(nil)
+	return toRPCLogs(nil, false)
 }
 
 // GetFilterChanges returns the logs for the filter with the given id since last time is was called.
@@ -488,28 +488,33 @@ func (s *PublicFilterAPI) GetFilterChanges(filterId string) interface{} {
 	case transactionFilterTy:
 		return returnHashes(s.transactionFilterChanged(id))
 	case logFilterTy:
-		return returnLogs(s.logFilterChanged(id))
+		return s.logFilterChanged(id)
 	}
 
 	return []interface{}{}
 }
 
+type vmlog struct {
+	*vm.Log
+	Removed bool `json:"removed"`
+}
+
 type logQueue struct {
 	mu sync.Mutex
 
-	logs    vm.Logs
+	logs    []vmlog
 	timeout time.Time
 	id      int
 }
 
-func (l *logQueue) add(logs ...*vm.Log) {
+func (l *logQueue) add(logs ...vmlog) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	l.logs = append(l.logs, logs...)
 }
 
-func (l *logQueue) get() vm.Logs {
+func (l *logQueue) get() []vmlog {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -556,13 +561,16 @@ func newFilterId() (string, error) {
 	return "0x" + hex.EncodeToString(subid[:]), nil
 }
 
-// returnLogs is a helper that will return an empty logs array case the given logs is nil, otherwise is will return the
-// given logs. The RPC interfaces defines that always an array is returned.
-func returnLogs(logs vm.Logs) vm.Logs {
-	if logs == nil {
-		return vm.Logs{}
+// toRPCLogs is a helper that will convert a vm.Logs array to an structure which
+// can hold additional information about the logs such as whether it was deleted.
+// Additionally when nil is given it will by default instead create an empty slice
+// instead. This is required by the RPC specification.
+func toRPCLogs(logs vm.Logs, removed bool) []vmlog {
+	convertedLogs := make([]vmlog, len(logs))
+	for i, log := range logs {
+		convertedLogs[i] = vmlog{Log: log, Removed: removed}
 	}
-	return logs
+	return convertedLogs
 }
 
 // returnHashes is a helper that will return an empty hash array case the given hash array is nil, otherwise is will
