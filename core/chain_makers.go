@@ -90,18 +90,18 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
-	_, gas, err := ApplyMessage(NewEnv(b.statedb, nil, tx, b.header), tx, b.gasPool)
+	b.statedb.StartRecord(tx.Hash(), common.Hash{}, len(b.txs))
+	receipt, _, _, err := ApplyTransaction(nil, b.gasPool, b.statedb, b.header, tx, b.header.GasUsed)
 	if err != nil {
 		panic(err)
 	}
-	root := b.statedb.IntermediateRoot()
-	b.header.GasUsed.Add(b.header.GasUsed, gas)
-	receipt := types.NewReceipt(root.Bytes(), b.header.GasUsed)
-	logs := b.statedb.GetLogs(tx.Hash())
-	receipt.Logs = logs
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
+}
+
+// Number returns the block number of the block being generated.
+func (b *BlockGen) Number() *big.Int {
+	return new(big.Int).Set(b.header.Number)
 }
 
 // AddUncheckedReceipts forcefully adds a receipts to the block without a
@@ -164,12 +164,8 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
 func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
-	statedb, err := state.New(parent.Root(), db)
-	if err != nil {
-		panic(err)
-	}
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	genblock := func(i int, h *types.Header) (*types.Block, types.Receipts) {
+	genblock := func(i int, h *types.Header, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb}
 		if gen != nil {
 			gen(i, b)
@@ -183,8 +179,12 @@ func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, 
 		return types.NewBlock(h, b.txs, b.uncles, b.receipts), b.receipts
 	}
 	for i := 0; i < n; i++ {
+		statedb, err := state.New(parent.Root(), db)
+		if err != nil {
+			panic(err)
+		}
 		header := makeHeader(parent, statedb)
-		block, receipt := genblock(i, header)
+		block, receipt := genblock(i, header, statedb)
 		blocks[i] = block
 		receipts[i] = receipt
 		parent = block
@@ -220,7 +220,7 @@ func newCanonical(n int, full bool) (ethdb.Database, *BlockChain, error) {
 	evmux := &event.TypeMux{}
 
 	// Initialize a fresh chain with only a genesis block
-	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+	genesis, _ := WriteTestNetGenesisBlock(db)
 
 	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
 	// Create and inject the requested chain

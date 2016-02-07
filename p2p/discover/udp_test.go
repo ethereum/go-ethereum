@@ -23,10 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	logpkg "log"
 	"math/rand"
 	"net"
-	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -34,12 +32,62 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
 )
 
 func init() {
-	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, logpkg.LstdFlags, logger.ErrorLevel))
+	spew.Config.DisableMethods = true
+}
+
+// This test checks that isPacketTooBig correctly identifies
+// errors that result from receiving a UDP packet larger
+// than the supplied receive buffer.
+func TestIsPacketTooBig(t *testing.T) {
+	listener, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	sender, err := net.Dial("udp", listener.LocalAddr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sender.Close()
+
+	sendN := 1800
+	recvN := 300
+	for i := 0; i < 20; i++ {
+		go func() {
+			buf := make([]byte, sendN)
+			for i := range buf {
+				buf[i] = byte(i)
+			}
+			sender.Write(buf)
+		}()
+
+		buf := make([]byte, recvN)
+		listener.SetDeadline(time.Now().Add(1 * time.Second))
+		n, _, err := listener.ReadFrom(buf)
+		if err != nil {
+			if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+				continue
+			}
+			if !isPacketTooBig(err) {
+				t.Fatal("unexpected read error:", spew.Sdump(err))
+			}
+			continue
+		}
+		if n != recvN {
+			t.Fatalf("short read: %d, want %d", n, recvN)
+		}
+		for i := range buf {
+			if buf[i] != byte(i) {
+				t.Fatalf("error in pattern")
+				break
+			}
+		}
+	}
 }
 
 // shared test variables
@@ -69,7 +117,7 @@ func newUDPTest(t *testing.T) *udpTest {
 		remotekey:  newkey(),
 		remoteaddr: &net.UDPAddr{IP: net.IP{1, 2, 3, 4}, Port: 30303},
 	}
-	test.table, test.udp = newUDP(test.localkey, test.pipe, nil, "")
+	test.table, test.udp, _ = newUDP(test.localkey, test.pipe, nil, "")
 	return test
 }
 
@@ -167,16 +215,17 @@ func TestUDP_responseTimeouts(t *testing.T) {
 		binary.BigEndian.PutUint64(p.from[:], uint64(i))
 		if p.ptype <= 128 {
 			p.errc = timeoutErr
+			test.udp.addpending <- p
 			nTimeouts++
 		} else {
 			p.errc = nilErr
+			test.udp.addpending <- p
 			time.AfterFunc(randomDuration(60*time.Millisecond), func() {
 				if !test.udp.handleReply(p.from, p.ptype, nil) {
 					t.Logf("not matched: %v", p)
 				}
 			})
 		}
-		test.udp.addpending <- p
 		time.Sleep(randomDuration(30 * time.Millisecond))
 	}
 
@@ -243,7 +292,7 @@ func TestUDP_findnode(t *testing.T) {
 
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
-	test.table.db.updateNode(newNode(
+	test.table.db.updateNode(NewNode(
 		PubkeyID(&test.remotekey.PublicKey),
 		test.remoteaddr.IP,
 		uint16(test.remoteaddr.Port),

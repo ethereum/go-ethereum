@@ -34,7 +34,7 @@ func proc() (Validator, *BlockChain) {
 	db, _ := ethdb.NewMemDatabase()
 	var mux event.TypeMux
 
-	WriteTestNetGenesisBlock(db, 0)
+	WriteTestNetGenesisBlock(db)
 	blockchain, err := NewBlockChain(db, thePow(), &mux)
 	if err != nil {
 		fmt.Println(err)

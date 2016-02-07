@@ -18,7 +18,6 @@ package ethdb
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -90,27 +89,7 @@ func (db *MemDatabase) Delete(key []byte) error {
 	return nil
 }
 
-func (db *MemDatabase) Print() {
-	db.lock.RLock()
-	defer db.lock.RUnlock()
-
-	for key, val := range db.db {
-		fmt.Printf("%x(%d): ", key, len(key))
-		node := common.NewValueFromBytes(val)
-		fmt.Printf("%q\n", node.Val)
-	}
-}
-
-func (db *MemDatabase) Close() {
-}
-
-func (db *MemDatabase) LastKnownTD() []byte {
-	data, _ := db.Get([]byte("LastKnownTotalDifficulty"))
-	if len(data) == 0 || data == nil {
-		data = []byte{0x0}
-	}
-	return data
-}
+func (db *MemDatabase) Close() {}
 
 func (db *MemDatabase) NewBatch() Batch {
 	return &memBatch{db: db}
@@ -128,7 +107,7 @@ func (b *memBatch) Put(key, value []byte) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	b.writes = append(b.writes, kv{key, common.CopyBytes(value)})
+	b.writes = append(b.writes, kv{common.CopyBytes(key), common.CopyBytes(value)})
 	return nil
 }
 

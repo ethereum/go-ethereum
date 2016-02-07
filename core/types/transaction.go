@@ -17,11 +17,13 @@
 package types
 
 import (
+	"container/heap"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"io"
 	"math/big"
+	"sort"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -302,27 +304,78 @@ func TxDifference(a, b Transactions) (keep Transactions) {
 	return keep
 }
 
-type TxByNonce struct{ Transactions }
+// TxByNonce implements the sort interface to allow sorting a list of transactions
+// by their nonces. This is usually only useful for sorting transactions from a
+// single account, otherwise a nonce comparison doesn't make much sense.
+type TxByNonce Transactions
 
-func (s TxByNonce) Less(i, j int) bool {
-	return s.Transactions[i].data.AccountNonce < s.Transactions[j].data.AccountNonce
+func (s TxByNonce) Len() int           { return len(s) }
+func (s TxByNonce) Less(i, j int) bool { return s[i].data.AccountNonce < s[j].data.AccountNonce }
+func (s TxByNonce) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
+// TxByPrice implements both the sort and the heap interface, making it useful
+// for all at once sorting as well as individually adding and removing elements.
+type TxByPrice Transactions
+
+func (s TxByPrice) Len() int           { return len(s) }
+func (s TxByPrice) Less(i, j int) bool { return s[i].data.Price.Cmp(s[j].data.Price) > 0 }
+func (s TxByPrice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
+func (s *TxByPrice) Push(x interface{}) {
+	*s = append(*s, x.(*Transaction))
 }
 
-type TxByPrice struct{ Transactions }
-
-func (s TxByPrice) Less(i, j int) bool {
-	return s.Transactions[i].data.Price.Cmp(s.Transactions[j].data.Price) > 0
+func (s *TxByPrice) Pop() interface{} {
+	old := *s
+	n := len(old)
+	x := old[n-1]
+	*s = old[0 : n-1]
+	return x
 }
 
-type TxByPriceAndNonce struct{ Transactions }
-
-func (s TxByPriceAndNonce) Less(i, j int) bool {
-	// we can ignore the error here. Sorting shouldn't care about validness
-	ifrom, _ := s.Transactions[i].From()
-	jfrom, _ := s.Transactions[j].From()
-	// favour nonce if they are from the same recipient
-	if ifrom == jfrom {
-		return s.Transactions[i].data.AccountNonce < s.Transactions[j].data.AccountNonce
+// SortByPriceAndNonce sorts the transactions by price in such a way that the
+// nonce orderings within a single account are maintained.
+//
+// Note, this is not as trivial as it seems from the first look as there are three
+// different criteria that need to be taken into account (price, nonce, account
+// match), which cannot be done with any plain sorting method, as certain items
+// cannot be compared without context.
+//
+// This method first sorts the separates the list of transactions into individual
+// sender accounts and sorts them by nonce. After the account nonce ordering is
+// satisfied, the results are merged back together by price, always comparing only
+// the head transaction from each account. This is done via a heap to keep it fast.
+func SortByPriceAndNonce(txs []*Transaction) {
+	// Separate the transactions by account and sort by nonce
+	byNonce := make(map[common.Address][]*Transaction)
+	for _, tx := range txs {
+		acc, _ := tx.From() // we only sort valid txs so this cannot fail
+		byNonce[acc] = append(byNonce[acc], tx)
 	}
-	return s.Transactions[i].data.Price.Cmp(s.Transactions[j].data.Price) > 0
+	for _, accTxs := range byNonce {
+		sort.Sort(TxByNonce(accTxs))
+	}
+	// Initialize a price based heap with the head transactions
+	byPrice := make(TxByPrice, 0, len(byNonce))
+	for acc, accTxs := range byNonce {
+		byPrice = append(byPrice, accTxs[0])
+		byNonce[acc] = accTxs[1:]
+	}
+	heap.Init(&byPrice)
+
+	// Merge by replacing the best with the next from the same account
+	txs = txs[:0]
+	for len(byPrice) > 0 {
+		// Retrieve the next best transaction by price
+		best := heap.Pop(&byPrice).(*Transaction)
+
+		// Push in its place the next transaction from the same account
+		acc, _ := best.From() // we only sort valid txs so this cannot fail
+		if accTxs, ok := byNonce[acc]; ok && len(accTxs) > 0 {
+			heap.Push(&byPrice, accTxs[0])
+			byNonce[acc] = accTxs[1:]
+		}
+		// Accumulate the best priced transaction
+		txs = append(txs, best)
+	}
 }

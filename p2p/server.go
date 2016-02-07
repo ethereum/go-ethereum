@@ -334,10 +334,13 @@ func (srv *Server) Start() (err error) {
 		if err != nil {
 			return err
 		}
+		if err := ntab.SetFallbackNodes(srv.BootstrapNodes); err != nil {
+			return err
+		}
 		srv.ntab = ntab
 	}
 
-	dynPeers := srv.MaxPeers / 2
+	dynPeers := (srv.MaxPeers + 1) / 2
 	if !srv.Discovery {
 		dynPeers = 0
 	}

@@ -28,6 +28,8 @@ import (
 // Global Debug flag indicating Debug VM (full logging)
 var Debug bool
 
+var GenerateStructLogs bool = false
+
 // Type is the VM type accepted by **NewVm**
 type Type byte
 

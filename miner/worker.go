@@ -19,7 +19,6 @@ package miner
 import (
 	"fmt"
 	"math/big"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -327,6 +326,7 @@ func (self *worker) wait() {
 				go func(block *types.Block, logs vm.Logs, receipts []*types.Receipt) {
 					self.mux.Post(core.NewMinedBlockEvent{block})
 					self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
+
 					if stat == core.CanonStatTy {
 						self.mux.Post(core.ChainHeadEvent{block})
 						self.mux.Post(logs)
@@ -495,12 +495,12 @@ func (self *worker) commitNewWork() {
 
 	/* //approach 1
 	transactions := self.eth.TxPool().GetTransactions()
-	sort.Sort(types.TxByNonce{transactions})
+	sort.Sort(types.TxByNonce(transactions))
 	*/
 
 	//approach 2
 	transactions := self.eth.TxPool().GetTransactions()
-	sort.Sort(types.TxByPriceAndNonce{transactions})
+	types.SortByPriceAndNonce(transactions)
 
 	/* // approach 3
 	// commit transactions for this run.
@@ -524,8 +524,8 @@ func (self *worker) commitNewWork() {
 			multiTxOwner = append(multiTxOwner, txs...)
 		}
 	}
-	sort.Sort(types.TxByPrice{singleTxOwner})
-	sort.Sort(types.TxByNonce{multiTxOwner})
+	sort.Sort(types.TxByPrice(singleTxOwner))
+	sort.Sort(types.TxByNonce(multiTxOwner))
 	transactions := append(singleTxOwner, multiTxOwner...)
 	*/
 

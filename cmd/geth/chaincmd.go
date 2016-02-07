@@ -137,8 +137,7 @@ func upgradeDB(ctx *cli.Context) {
 	glog.Infoln("Upgrading blockchain database")
 
 	chain, chainDb := utils.MakeChain(ctx)
-	v, _ := chainDb.Get([]byte("BlockchainVersion"))
-	bcVersion := int(common.NewValue(v).Uint())
+	bcVersion := core.GetBlockChainVersion(chainDb)
 	if bcVersion == 0 {
 		bcVersion = core.BlockChainVersion
 	}
@@ -154,7 +153,7 @@ func upgradeDB(ctx *cli.Context) {
 
 	// Import the chain file.
 	chain, chainDb = utils.MakeChain(ctx)
-	chainDb.Put([]byte("BlockchainVersion"), common.NewValue(core.BlockChainVersion).Bytes())
+	core.WriteBlockChainVersion(chainDb, core.BlockChainVersion)
 	err := utils.ImportChain(chain, exportFile)
 	chainDb.Close()
 	if err != nil {

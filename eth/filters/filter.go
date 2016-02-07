@@ -39,7 +39,7 @@ type Filter struct {
 
 	BlockCallback       func(*types.Block, vm.Logs)
 	TransactionCallback func(*types.Transaction)
-	LogsCallback        func(vm.Logs)
+	LogCallback         func(*vm.Log, bool)
 }
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block

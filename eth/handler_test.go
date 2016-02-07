@@ -301,6 +301,15 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 				pm.blockchain.GetBlockByNumber(1).Hash(),
 			},
 		},
+		// Check a corner case where requesting more can iterate past the endpoints
+		{
+			&getBlockHeadersData{Origin: hashOrNumber{Number: 2}, Amount: 5, Reverse: true},
+			[]common.Hash{
+				pm.blockchain.GetBlockByNumber(2).Hash(),
+				pm.blockchain.GetBlockByNumber(1).Hash(),
+				pm.blockchain.GetBlockByNumber(0).Hash(),
+			},
+		},
 		// Check that non existing headers aren't returned
 		{
 			&getBlockHeadersData{Origin: hashOrNumber{Hash: unknown}, Amount: 1},
@@ -321,6 +330,17 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		p2p.Send(peer.app, 0x03, tt.query)
 		if err := p2p.ExpectMsg(peer.app, 0x04, headers); err != nil {
 			t.Errorf("test %d: headers mismatch: %v", i, err)
+		}
+		// If the test used number origins, repeat with hashes as the too
+		if tt.query.Origin.Hash == (common.Hash{}) {
+			if origin := pm.blockchain.GetBlockByNumber(tt.query.Origin.Number); origin != nil {
+				tt.query.Origin.Hash, tt.query.Origin.Number = origin.Hash(), 0
+
+				p2p.Send(peer.app, 0x03, tt.query)
+				if err := p2p.ExpectMsg(peer.app, 0x04, headers); err != nil {
+					t.Errorf("test %d: headers mismatch: %v", i, err)
+				}
+			}
 		}
 	}
 }

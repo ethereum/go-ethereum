@@ -37,6 +37,8 @@ var int8_t = reflect.TypeOf(int8(0))
 var int16_t = reflect.TypeOf(int16(0))
 var int32_t = reflect.TypeOf(int32(0))
 var int64_t = reflect.TypeOf(int64(0))
+var hash_t = reflect.TypeOf(common.Hash{})
+var address_t = reflect.TypeOf(common.Address{})
 
 var uint_ts = reflect.TypeOf([]uint(nil))
 var uint8_ts = reflect.TypeOf([]uint8(nil))

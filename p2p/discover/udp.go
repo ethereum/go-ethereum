@@ -114,13 +114,11 @@ func makeEndpoint(addr *net.UDPAddr, tcpPort uint16) rpcEndpoint {
 	return rpcEndpoint{IP: ip, UDP: uint16(addr.Port), TCP: tcpPort}
 }
 
-func nodeFromRPC(rn rpcNode) (n *Node, valid bool) {
+func nodeFromRPC(rn rpcNode) (*Node, error) {
 	// TODO: don't accept localhost, LAN addresses from internet hosts
-	// TODO: check public key is on secp256k1 curve
-	if rn.IP.IsMulticast() || rn.IP.IsUnspecified() || rn.UDP == 0 {
-		return nil, false
-	}
-	return newNode(rn.ID, rn.IP, rn.UDP, rn.TCP), true
+	n := NewNode(rn.ID, rn.IP, rn.UDP, rn.TCP)
+	err := n.validateComplete()
+	return n, err
 }
 
 func nodeToRPC(n *Node) rpcNode {
@@ -200,12 +198,15 @@ func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, nodeDBP
 	if err != nil {
 		return nil, err
 	}
-	tab, _ := newUDP(priv, conn, natm, nodeDBPath)
+	tab, _, err := newUDP(priv, conn, natm, nodeDBPath)
+	if err != nil {
+		return nil, err
+	}
 	glog.V(logger.Info).Infoln("Listening,", tab.self)
 	return tab, nil
 }
 
-func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, nodeDBPath string) (*Table, *udp) {
+func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, nodeDBPath string) (*Table, *udp, error) {
 	udp := &udp{
 		conn:       c,
 		priv:       priv,
@@ -225,10 +226,15 @@ func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, nodeDBPath strin
 	}
 	// TODO: separate TCP port
 	udp.ourEndpoint = makeEndpoint(realaddr, uint16(realaddr.Port))
-	udp.Table = newTable(udp, PubkeyID(&priv.PublicKey), realaddr, nodeDBPath)
+	tab, err := newTable(udp, PubkeyID(&priv.PublicKey), realaddr, nodeDBPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	udp.Table = tab
+
 	go udp.loop()
 	go udp.readLoop()
-	return udp.Table, udp
+	return udp.Table, udp, nil
 }
 
 func (t *udp) close() {
@@ -263,7 +269,7 @@ func (t *udp) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node
 		reply := r.(*neighbors)
 		for _, rn := range reply.Nodes {
 			nreceived++
-			if n, valid := nodeFromRPC(rn); valid {
+			if n, err := nodeFromRPC(rn); err == nil {
 				nodes = append(nodes, n)
 			}
 		}
@@ -447,8 +453,11 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, 
 	return packet, nil
 }
 
-type tempError interface {
-	Temporary() bool
+func isTemporaryError(err error) bool {
+	tempErr, ok := err.(interface {
+		Temporary() bool
+	})
+	return ok && tempErr.Temporary() || isPacketTooBig(err)
 }
 
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
@@ -460,7 +469,7 @@ func (t *udp) readLoop() {
 	buf := make([]byte, 1280)
 	for {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
-		if tempErr, ok := err.(tempError); ok && tempErr.Temporary() {
+		if isTemporaryError(err) {
 			// Ignore temporary read errors.
 			glog.V(logger.Debug).Infof("Temporary read error: %v", err)
 			continue

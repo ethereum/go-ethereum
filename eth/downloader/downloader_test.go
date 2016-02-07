@@ -61,8 +61,11 @@ func makeChain(n int, seed byte, parent *types.Block, parentReceipts types.Recei
 			block.AddTx(tx)
 		}
 		// If the block number is a multiple of 5, add a bonus uncle to the block
-		if i%5 == 0 {
-			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
+		if i > 0 && i%5 == 0 {
+			block.AddUncle(&types.Header{
+				ParentHash: block.PrevBlock(i - 1).Hash(),
+				Number:     big.NewInt(block.Number().Int64() - 1),
+			})
 		}
 	})
 	// Convert the block-chain into a hash-chain and header/block maps
@@ -726,8 +729,6 @@ func TestThrottling64Full(t *testing.T) { testThrottling(t, 64, FullSync) }
 func TestThrottling64Fast(t *testing.T) { testThrottling(t, 64, FastSync) }
 
 func testThrottling(t *testing.T, protocol int, mode SyncMode) {
-	t.Parallel()
-
 	// Create a long block chain to download and the tester
 	targetBlocks := 8 * blockCacheLimit
 	hashes, headers, blocks, receipts := makeChain(targetBlocks, 0, genesis, nil)
@@ -757,7 +758,7 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 		}
 		// Wait a bit for sync to throttle itself
 		var cached, frozen int
-		for start := time.Now(); time.Since(start) < time.Second; {
+		for start := time.Now(); time.Since(start) < 3*time.Second; {
 			time.Sleep(25 * time.Millisecond)
 
 			tester.lock.Lock()

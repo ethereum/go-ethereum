@@ -19,16 +19,18 @@ package state
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
+
+var emptyCodeHash = crypto.Sha3(nil)
 
 type Code []byte
 
@@ -56,8 +58,7 @@ func (self Storage) Copy() Storage {
 }
 
 type StateObject struct {
-	// State database for storing state changes
-	db   ethdb.Database
+	db   trie.Database // State database for storing state changes
 	trie *trie.SecureTrie
 
 	// Address belonging to this account
@@ -83,39 +84,16 @@ type StateObject struct {
 	dirty   bool
 }
 
-func NewStateObject(address common.Address, db ethdb.Database) *StateObject {
-	object := &StateObject{db: db, address: address, balance: new(big.Int), dirty: true}
+func NewStateObject(address common.Address, db trie.Database) *StateObject {
+	object := &StateObject{
+		db:       db,
+		address:  address,
+		balance:  new(big.Int),
+		dirty:    true,
+		codeHash: emptyCodeHash,
+		storage:  make(Storage),
+	}
 	object.trie, _ = trie.NewSecure(common.Hash{}, db)
-	object.storage = make(Storage)
-	return object
-}
-
-func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Database) *StateObject {
-	var extobject struct {
-		Nonce    uint64
-		Balance  *big.Int
-		Root     common.Hash
-		CodeHash []byte
-	}
-	err := rlp.Decode(bytes.NewReader(data), &extobject)
-	if err != nil {
-		glog.Errorf("can't decode state object %x: %v", address, err)
-		return nil
-	}
-	trie, err := trie.NewSecure(extobject.Root, db)
-	if err != nil {
-		// TODO: bubble this up or panic
-		glog.Errorf("can't create account trie with root %x: %v", extobject.Root[:], err)
-		return nil
-	}
-
-	object := &StateObject{address: address, db: db}
-	object.nonce = extobject.Nonce
-	object.balance = extobject.Balance
-	object.codeHash = extobject.CodeHash
-	object.trie = trie
-	object.storage = make(map[string]common.Hash)
-	object.code, _ = db.Get(extobject.CodeHash)
 	return object
 }
 
@@ -172,7 +150,6 @@ func (self *StateObject) Update() {
 			self.trie.Delete([]byte(key))
 			continue
 		}
-
 		self.setAddr([]byte(key), value)
 	}
 }
@@ -248,6 +225,7 @@ func (self *StateObject) Code() []byte {
 
 func (self *StateObject) SetCode(code []byte) {
 	self.code = code
+	self.codeHash = crypto.Sha3(code)
 	self.dirty = true
 }
 
@@ -276,23 +254,40 @@ func (self *StateObject) EachStorage(cb func(key, value []byte)) {
 	}
 }
 
-//
 // Encoding
-//
 
-// State object encoding methods
-func (c *StateObject) RlpEncode() []byte {
-	return common.Encode([]interface{}{c.nonce, c.balance, c.Root(), c.CodeHash()})
+type extStateObject struct {
+	Nonce    uint64
+	Balance  *big.Int
+	Root     common.Hash
+	CodeHash []byte
 }
 
-func (c *StateObject) CodeHash() common.Bytes {
-	return crypto.Sha3(c.code)
+// EncodeRLP implements rlp.Encoder.
+func (c *StateObject) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, []interface{}{c.nonce, c.balance, c.Root(), c.codeHash})
 }
 
-// Storage change object. Used by the manifest for notifying changes to
-// the sub channels.
-type StorageState struct {
-	StateAddress []byte
-	Address      []byte
-	Value        *big.Int
+// DecodeObject decodes an RLP-encoded state object.
+func DecodeObject(address common.Address, db trie.Database, data []byte) (*StateObject, error) {
+	var (
+		obj = &StateObject{address: address, db: db, storage: make(Storage)}
+		ext extStateObject
+		err error
+	)
+	if err = rlp.DecodeBytes(data, &ext); err != nil {
+		return nil, err
+	}
+	if obj.trie, err = trie.NewSecure(ext.Root, db); err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(ext.CodeHash, emptyCodeHash) {
+		if obj.code, err = db.Get(ext.CodeHash); err != nil {
+			return nil, fmt.Errorf("can't find code for hash %x: %v", ext.CodeHash, err)
+		}
+	}
+	obj.nonce = ext.Nonce
+	obj.balance = ext.Balance
+	obj.codeHash = ext.CodeHash
+	return obj, nil
 }
