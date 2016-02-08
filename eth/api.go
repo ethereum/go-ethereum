@@ -999,7 +999,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(args SendTxArgs) (common.Hash
 
 	s.txPool.SetLocal(signedTx)
 	if err := s.txPool.Add(signedTx); err != nil {
-		return common.Hash{}, nil
+		return common.Hash{}, err
 	}
 
 	if contractCreation {
