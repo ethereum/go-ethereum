@@ -59,7 +59,6 @@ var (
 
 	maxQueuedHashes   = 256 * 1024 // [eth/61] Maximum number of hashes to queue for import (DOS protection)
 	maxQueuedHeaders  = 256 * 1024 // [eth/62] Maximum number of headers to queue for import (DOS protection)
-	maxQueuedStates   = 256 * 1024 // [eth/63] Maximum number of state requests to queue (DOS protection)
 	maxResultsProcess = 256        // Number of download results to import at once into the chain
 
 	fsHeaderCheckFrequency = 100  // Verification frequency of the downloaded headers during fast sync

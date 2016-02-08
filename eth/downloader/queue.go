@@ -39,7 +39,8 @@ import (
 )
 
 var (
-	blockCacheLimit = 1024 // Maximum number of blocks to cache before throttling the download
+	blockCacheLimit   = 1024 // Maximum number of blocks to cache before throttling the download
+	maxInFlightStates = 4096 // Maximum number of state downloads to allow concurrently
 )
 
 var (
@@ -464,7 +465,7 @@ func (q *queue) ReserveNodeData(p *peer, count int) *fetchRequest {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	return q.reserveHashes(p, count, q.stateTaskQueue, generator, q.statePendPool, count)
+	return q.reserveHashes(p, count, q.stateTaskQueue, generator, q.statePendPool, maxInFlightStates)
 }
 
 // reserveHashes reserves a set of hashes for the given peer, skipping previously
