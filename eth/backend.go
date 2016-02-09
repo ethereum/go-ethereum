@@ -274,7 +274,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   miner.NewPublicMinerAPI(s.Miner()),
+			Service:   NewPublicMinerAPI(s),
 			Public:    true,
 		}, {
 			Namespace: "eth",
