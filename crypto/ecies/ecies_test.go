@@ -408,6 +408,36 @@ func TestEncryptDecrypt(t *testing.T) {
 	}
 }
 
+func TestDecryptShared2(t *testing.T) {
+	prv, err := GenerateKey(rand.Reader, DefaultCurve, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := []byte("Hello, world.")
+	shared2 := []byte("shared data 2")
+	ct, err := Encrypt(rand.Reader, &prv.PublicKey, message, nil, shared2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check that decrypting with correct shared data works.
+	pt, err := prv.Decrypt(rand.Reader, ct, nil, shared2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(pt, message) {
+		t.Fatal("ecies: plaintext doesn't match message")
+	}
+
+	// Decrypting without shared data or incorrect shared data fails.
+	if _, err = prv.Decrypt(rand.Reader, ct, nil, nil); err == nil {
+		t.Fatal("ecies: decrypting without shared data didn't fail")
+	}
+	if _, err = prv.Decrypt(rand.Reader, ct, nil, []byte("garbage")); err == nil {
+		t.Fatal("ecies: decrypting with incorrect shared data didn't fail")
+	}
+}
+
 // TestMarshalEncryption validates the encode/decode produces a valid
 // ECIES encryption key.
 func TestMarshalEncryption(t *testing.T) {
