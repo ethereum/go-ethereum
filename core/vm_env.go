@@ -25,6 +25,21 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
+// GetHashFn returns a function for which the VM env can query block hashes thru
+// up to the limit defined by the Yellow Paper and uses the given block chain
+// to query for information.
+func GetHashFn(ref common.Hash, chain *BlockChain) func(n uint64) common.Hash {
+	return func(n uint64) common.Hash {
+		for block := chain.GetBlock(ref); block != nil; block = chain.GetBlock(block.ParentHash()) {
+			if block.NumberU64() == n {
+				return block.Hash()
+			}
+		}
+
+		return common.Hash{}
+	}
+}
+
 type VMEnv struct {
 	state  *state.StateDB
 	header *types.Header
@@ -32,17 +47,20 @@ type VMEnv struct {
 	depth  int
 	chain  *BlockChain
 	typ    vm.Type
+
+	getHashFn func(uint64) common.Hash
 	// structured logging
 	logs []vm.StructLog
 }
 
 func NewEnv(state *state.StateDB, chain *BlockChain, msg Message, header *types.Header) *VMEnv {
 	return &VMEnv{
-		chain:  chain,
-		state:  state,
-		header: header,
-		msg:    msg,
-		typ:    vm.StdVmTy,
+		chain:     chain,
+		state:     state,
+		header:    header,
+		msg:       msg,
+		typ:       vm.StdVmTy,
+		getHashFn: GetHashFn(header.ParentHash, chain),
 	}
 }
 
@@ -59,13 +77,7 @@ func (self *VMEnv) SetDepth(i int)           { self.depth = i }
 func (self *VMEnv) VmType() vm.Type          { return self.typ }
 func (self *VMEnv) SetVmType(t vm.Type)      { self.typ = t }
 func (self *VMEnv) GetHash(n uint64) common.Hash {
-	for block := self.chain.GetBlock(self.header.ParentHash); block != nil; block = self.chain.GetBlock(block.ParentHash()) {
-		if block.NumberU64() == n {
-			return block.Hash()
-		}
-	}
-
-	return common.Hash{}
+	return self.getHashFn(n)
 }
 
 func (self *VMEnv) AddLog(log *vm.Log) {
