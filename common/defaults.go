@@ -22,11 +22,11 @@ import (
 )
 
 const (
-	DefaultIpcSocket = "geth.ipc"  // Default (relative) name of the IPC RPC socket
-	DefaultHttpHost  = "localhost" // Default host interface for the HTTP RPC server
-	DefaultHttpPort  = 8545        // Default TCP port for the HTTP RPC server
-	DefaultWsHost    = "localhost" // Default host interface for the websocket RPC server
-	DefaultWsPort    = 8546        // Default TCP port for the websocket RPC server
+	DefaultIPCSocket = "geth.ipc"  // Default (relative) name of the IPC RPC socket
+	DefaultHTTPHost  = "localhost" // Default host interface for the HTTP RPC server
+	DefaultHTTPPort  = 8545        // Default TCP port for the HTTP RPC server
+	DefaultWSHost    = "localhost" // Default host interface for the websocket RPC server
+	DefaultWSPort    = 8546        // Default TCP port for the websocket RPC server
 )
 
 // DefaultDataDir is the default data directory to use for the databases and other

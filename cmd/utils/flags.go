@@ -232,12 +232,12 @@ var (
 	RPCListenAddrFlag = cli.StringFlag{
 		Name:  "rpcaddr",
 		Usage: "HTTP-RPC server listening interface",
-		Value: common.DefaultHttpHost,
+		Value: common.DefaultHTTPHost,
 	}
 	RPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
 		Usage: "HTTP-RPC server listening port",
-		Value: common.DefaultHttpPort,
+		Value: common.DefaultHTTPPort,
 	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
@@ -247,7 +247,7 @@ var (
 	RPCApiFlag = cli.StringFlag{
 		Name:  "rpcapi",
 		Usage: "API's offered over the HTTP-RPC interface",
-		Value: rpc.DefaultHttpRpcApis,
+		Value: rpc.DefaultHTTPApis,
 	}
 	IPCDisabledFlag = cli.BoolFlag{
 		Name:  "ipcdisable",
@@ -256,12 +256,12 @@ var (
 	IPCApiFlag = cli.StringFlag{
 		Name:  "ipcapi",
 		Usage: "API's offered over the IPC-RPC interface",
-		Value: rpc.DefaultIpcApis,
+		Value: rpc.DefaultIPCApis,
 	}
 	IPCPathFlag = DirectoryFlag{
 		Name:  "ipcpath",
 		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
-		Value: DirectoryString{common.DefaultIpcSocket},
+		Value: DirectoryString{common.DefaultIPCSocket},
 	}
 	WSEnabledFlag = cli.BoolFlag{
 		Name:  "ws",
@@ -270,21 +270,21 @@ var (
 	WSListenAddrFlag = cli.StringFlag{
 		Name:  "wsaddr",
 		Usage: "WS-RPC server listening interface",
-		Value: common.DefaultWsHost,
+		Value: common.DefaultWSHost,
 	}
 	WSPortFlag = cli.IntFlag{
 		Name:  "wsport",
 		Usage: "WS-RPC server listening port",
-		Value: common.DefaultWsPort,
+		Value: common.DefaultWSPort,
 	}
 	WSApiFlag = cli.StringFlag{
 		Name:  "wsapi",
 		Usage: "API's offered over the WS-RPC interface",
-		Value: rpc.DefaultHttpRpcApis,
+		Value: rpc.DefaultHTTPApis,
 	}
-	WSCORSDomainFlag = cli.StringFlag{
-		Name:  "wscorsdomain",
-		Usage: "Domains from which to accept websockets requests",
+	WSAllowedDomainsFlag = cli.StringFlag{
+		Name:  "wsdomains",
+		Usage: "Domains from which to accept websockets requests (can be spoofed)",
 		Value: "",
 	}
 	ExecFlag = cli.StringFlag{
@@ -393,9 +393,9 @@ func MustMakeDataDir(ctx *cli.Context) string {
 	return ""
 }
 
-// MakeIpcPath creates an IPC path configuration from the set command line flags,
+// MakeIPCPath creates an IPC path configuration from the set command line flags,
 // returning an empty string if IPC was explicitly disabled, or the set path.
-func MakeIpcPath(ctx *cli.Context) string {
+func MakeIPCPath(ctx *cli.Context) string {
 	if ctx.GlobalBool(IPCDisabledFlag.Name) {
 		return ""
 	}
@@ -481,18 +481,18 @@ func MakeNAT(ctx *cli.Context) nat.Interface {
 	return natif
 }
 
-// MakeHttpRpcHost creates the HTTP RPC listener interface string from the set
+// MakeHTTPRpcHost creates the HTTP RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
-func MakeHttpRpcHost(ctx *cli.Context) string {
+func MakeHTTPRpcHost(ctx *cli.Context) string {
 	if !ctx.GlobalBool(RPCEnabledFlag.Name) {
 		return ""
 	}
 	return ctx.GlobalString(RPCListenAddrFlag.Name)
 }
 
-// MakeWsRpcHost creates the WebSocket RPC listener interface string from the set
+// MakeWSRpcHost creates the WebSocket RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
-func MakeWsRpcHost(ctx *cli.Context) string {
+func MakeWSRpcHost(ctx *cli.Context) string {
 	if !ctx.GlobalBool(WSEnabledFlag.Name) {
 		return ""
 	}
@@ -616,15 +616,15 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		NAT:             MakeNAT(ctx),
 		MaxPeers:        ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers: ctx.GlobalInt(MaxPendingPeersFlag.Name),
-		IpcPath:         MakeIpcPath(ctx),
-		HttpHost:        MakeHttpRpcHost(ctx),
-		HttpPort:        ctx.GlobalInt(RPCPortFlag.Name),
-		HttpCors:        ctx.GlobalString(RPCCORSDomainFlag.Name),
-		HttpModules:     strings.Split(ctx.GlobalString(RPCApiFlag.Name), ","),
-		WsHost:          MakeWsRpcHost(ctx),
-		WsPort:          ctx.GlobalInt(WSPortFlag.Name),
-		WsCors:          ctx.GlobalString(WSCORSDomainFlag.Name),
-		WsModules:       strings.Split(ctx.GlobalString(WSApiFlag.Name), ","),
+		IPCPath:         MakeIPCPath(ctx),
+		HTTPHost:        MakeHTTPRpcHost(ctx),
+		HTTPPort:        ctx.GlobalInt(RPCPortFlag.Name),
+		HTTPCors:        ctx.GlobalString(RPCCORSDomainFlag.Name),
+		HTTPModules:     strings.Split(ctx.GlobalString(RPCApiFlag.Name), ","),
+		WSHost:          MakeWSRpcHost(ctx),
+		WSPort:          ctx.GlobalInt(WSPortFlag.Name),
+		WSDomains:       ctx.GlobalString(WSAllowedDomainsFlag.Name),
+		WSModules:       strings.Split(ctx.GlobalString(WSApiFlag.Name), ","),
 	}
 	// Configure the Ethereum service
 	accman := MakeAccountManager(ctx)

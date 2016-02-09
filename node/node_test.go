@@ -37,7 +37,7 @@ var (
 
 func testNodeConfig() *Config {
 	return &Config{
-		IpcPath:    fmt.Sprintf("test-%d.ipc", rand.Int63()),
+		IPCPath:    fmt.Sprintf("test-%d.ipc", rand.Int63()),
 		PrivateKey: testNodeKey,
 		Name:       "test node",
 	}
@@ -541,7 +541,7 @@ func TestAPIGather(t *testing.T) {
 	defer stack.Stop()
 
 	// Connect to the RPC server and verify the various registered endpoints
-	ipcClient, err := rpc.NewIPCClient(stack.IpcEndpoint())
+	ipcClient, err := rpc.NewIPCClient(stack.IPCEndpoint())
 	if err != nil {
 		t.Fatalf("failed to connect to the IPC API server: %v", err)
 	}

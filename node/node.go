@@ -68,7 +68,7 @@ type Node struct {
 
 	wsEndpoint  string       // Websocket endpoint (interface + port) to listen at (empty = websocket disabled)
 	wsWhitelist []string     // Websocket RPC modules to allow through this endpoint
-	wsCors      string       // Websocket RPC Cross-Origin Resource Sharing header
+	wsDomains   string       // Websocket RPC allowed origin domains
 	wsListener  net.Listener // Websocket RPC listener socket to server API requests
 	wsHandler   *rpc.Server  // Websocket RPC request handler to process the API requests
 
@@ -107,13 +107,13 @@ func New(conf *Config) (*Node, error) {
 			MaxPendingPeers: conf.MaxPendingPeers,
 		},
 		serviceFuncs:  []ServiceConstructor{},
-		ipcEndpoint:   conf.IpcEndpoint(),
-		httpEndpoint:  conf.HttpEndpoint(),
-		httpWhitelist: conf.HttpModules,
-		httpCors:      conf.HttpCors,
-		wsEndpoint:    conf.WsEndpoint(),
-		wsWhitelist:   conf.WsModules,
-		wsCors:        conf.WsCors,
+		ipcEndpoint:   conf.IPCEndpoint(),
+		httpEndpoint:  conf.HTTPEndpoint(),
+		httpWhitelist: conf.HTTPModules,
+		httpCors:      conf.HTTPCors,
+		wsEndpoint:    conf.WSEndpoint(),
+		wsWhitelist:   conf.WSModules,
+		wsDomains:     conf.WSDomains,
 		eventmux:      new(event.TypeMux),
 	}, nil
 }
@@ -224,7 +224,7 @@ func (n *Node) startRPC(services map[reflect.Type]Service) error {
 		n.stopIPC()
 		return err
 	}
-	if err := n.startWS(n.wsEndpoint, apis, n.wsWhitelist, n.wsCors); err != nil {
+	if err := n.startWS(n.wsEndpoint, apis, n.wsWhitelist, n.wsDomains); err != nil {
 		n.stopHTTP()
 		n.stopIPC()
 		return err
@@ -388,7 +388,7 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, cors s
 	n.wsEndpoint = endpoint
 	n.wsListener = listener
 	n.wsHandler = handler
-	n.wsCors = cors
+	n.wsDomains = cors
 
 	return nil
 }
@@ -501,8 +501,8 @@ func (n *Node) DataDir() string {
 	return n.datadir
 }
 
-// IpcEndpoint retrieves the current IPC endpoint used by the protocol stack.
-func (n *Node) IpcEndpoint() string {
+// IPCEndpoint retrieves the current IPC endpoint used by the protocol stack.
+func (n *Node) IPCEndpoint() string {
 	return n.ipcEndpoint
 }
 

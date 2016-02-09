@@ -312,7 +312,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.WSListenAddrFlag,
 		utils.WSPortFlag,
 		utils.WSApiFlag,
-		utils.WSCORSDomainFlag,
+		utils.WSAllowedDomainsFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
@@ -425,7 +425,7 @@ func console(ctx *cli.Context) {
 	startNode(ctx, node)
 
 	// Attach to the newly started node, and either execute script or become interactive
-	client, err := utils.NewRemoteRPCClientFromString("ipc:" + node.IpcEndpoint())
+	client, err := utils.NewRemoteRPCClientFromString("ipc:" + node.IPCEndpoint())
 	if err != nil {
 		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
 	}
@@ -451,7 +451,7 @@ func execScripts(ctx *cli.Context) {
 	startNode(ctx, node)
 
 	// Attach to the newly started node and execute the given scripts
-	client, err := utils.NewRemoteRPCClientFromString("ipc:" + node.IpcEndpoint())
+	client, err := utils.NewRemoteRPCClientFromString("ipc:" + node.IPCEndpoint())
 	if err != nil {
 		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
 	}

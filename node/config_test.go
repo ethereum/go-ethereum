@@ -63,10 +63,10 @@ func TestDatadirCreation(t *testing.T) {
 
 // Tests that IPC paths are correctly resolved to valid endpoints of different
 // platforms.
-func TestIpcPathResolution(t *testing.T) {
+func TestIPCPathResolution(t *testing.T) {
 	var tests = []struct {
 		DataDir  string
-		IpcPath  string
+		IPCPath  string
 		Windows  bool
 		Endpoint string
 	}{
@@ -85,7 +85,7 @@ func TestIpcPathResolution(t *testing.T) {
 	for i, test := range tests {
 		// Only run when platform/test match
 		if (runtime.GOOS == "windows") == test.Windows {
-			if endpoint := (&Config{DataDir: test.DataDir, IpcPath: test.IpcPath}).IpcEndpoint(); endpoint != test.Endpoint {
+			if endpoint := (&Config{DataDir: test.DataDir, IPCPath: test.IPCPath}).IPCEndpoint(); endpoint != test.Endpoint {
 				t.Errorf("test %d: IPC endpoint mismatch: have %s, want %s", i, endpoint, test.Endpoint)
 			}
 		}

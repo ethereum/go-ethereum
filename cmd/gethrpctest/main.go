@@ -93,13 +93,13 @@ func main() {
 func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node.Node, error) {
 	// Create a networkless protocol stack
 	stack, err := node.New(&node.Config{
-		IpcPath:     node.DefaultIpcEndpoint(),
-		HttpHost:    common.DefaultHttpHost,
-		HttpPort:    common.DefaultHttpPort,
-		HttpModules: []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
-		WsHost:      common.DefaultWsHost,
-		WsPort:      common.DefaultWsPort,
-		WsModules:   []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
+		IPCPath:     node.DefaultIPCEndpoint(),
+		HTTPHost:    common.DefaultHTTPHost,
+		HTTPPort:    common.DefaultHTTPPort,
+		HTTPModules: []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
+		WSHost:      common.DefaultWSHost,
+		WSPort:      common.DefaultWSPort,
+		WSModules:   []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
 		NoDiscovery: true,
 	})
 	if err != nil {
