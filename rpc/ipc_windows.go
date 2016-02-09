@@ -239,9 +239,6 @@ func Dial(address string) (*PipeConn, error) {
 	for {
 		conn, err := dial(address, nmpwait_wait_forever)
 		if err == nil {
-			// Ugly hack working around some async connectivity issues
-			time.Sleep(100 * time.Millisecond)
-
 			return conn, nil
 		}
 		if isPipeNotReady(err) {
@@ -363,9 +360,6 @@ func Listen(address string) (*PipeListener, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Ugly hack working around some async connectivity issues
-	time.Sleep(100 * time.Millisecond)
-
 	return &PipeListener{
 		addr:   PipeAddr(address),
 		handle: handle,

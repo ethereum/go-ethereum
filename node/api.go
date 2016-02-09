@@ -89,7 +89,7 @@ func (api *PrivateAdminAPI) StartWS(host string, port int, cors string, apis str
 	defer api.node.lock.Unlock()
 
 	if api.node.wsHandler != nil {
-		return false, fmt.Errorf("WebSocker RPC already running on %s", api.node.wsEndpoint)
+		return false, fmt.Errorf("WebSocket RPC already running on %s", api.node.wsEndpoint)
 	}
 	if err := api.node.startWS(fmt.Sprintf("%s:%d", host, port), api.node.rpcAPIs, strings.Split(apis, ","), cors); err != nil {
 		return false, err

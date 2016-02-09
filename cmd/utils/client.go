@@ -51,6 +51,5 @@ func NewRemoteRPCClientFromString(endpoint string) (rpc.Client, error) {
 	if strings.HasPrefix(endpoint, "ws:") {
 		return rpc.NewWSClient(endpoint)
 	}
-
 	return nil, fmt.Errorf("invalid endpoint")
 }

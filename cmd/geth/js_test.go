@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -30,7 +29,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/common/httpclient"
@@ -96,7 +94,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 		t.Fatal(err)
 	}
 	// Create a networkless protocol stack
-	stack, err := node.New(&node.Config{PrivateKey: testNodeKey, Name: "test", NoDiscovery: true, IPCPath: fmt.Sprintf("geth-test-%d.ipc", rand.Int63())})
+	stack, err := node.New(&node.Config{PrivateKey: testNodeKey, Name: "test", NoDiscovery: true})
 	if err != nil {
 		t.Fatalf("failed to create node: %v", err)
 	}
@@ -142,7 +140,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 	stack.Service(&ethereum)
 
 	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
-	client, err := utils.NewRemoteRPCClientFromString("ipc:" + stack.IPCEndpoint())
+	client, err := stack.Attach()
 	if err != nil {
 		t.Fatalf("failed to attach to node: %v", err)
 	}

@@ -109,7 +109,7 @@ type wsClient struct {
 
 // NewWSClientj creates a new RPC client that communicates with a RPC server
 // that is listening on the given endpoint using JSON encoding.
-func NewWSClient(endpoint string) (*wsClient, error) {
+func NewWSClient(endpoint string) (Client, error) {
 	return &wsClient{endpoint: endpoint}, nil
 }
 

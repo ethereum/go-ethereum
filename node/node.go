@@ -55,7 +55,9 @@ type Node struct {
 	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
 	services     map[reflect.Type]Service // Currently running services
 
-	rpcAPIs     []rpc.API    // List of APIs currently provided by the node
+	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
+	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
+
 	ipcEndpoint string       // IPC endpoint to listen at (empty = IPC disabled)
 	ipcListener net.Listener // IPC RPC listener socket to serve API requests
 	ipcHandler  *rpc.Server  // IPC RPC request handler to process the API requests
@@ -217,21 +219,49 @@ func (n *Node) startRPC(services map[reflect.Type]Service) error {
 		apis = append(apis, service.APIs()...)
 	}
 	// Start the various API endpoints, terminating all in case of errors
+	if err := n.startInProc(apis); err != nil {
+		return err
+	}
 	if err := n.startIPC(apis); err != nil {
+		n.stopInProc()
 		return err
 	}
 	if err := n.startHTTP(n.httpEndpoint, apis, n.httpWhitelist, n.httpCors); err != nil {
 		n.stopIPC()
+		n.stopInProc()
 		return err
 	}
 	if err := n.startWS(n.wsEndpoint, apis, n.wsWhitelist, n.wsDomains); err != nil {
 		n.stopHTTP()
 		n.stopIPC()
+		n.stopInProc()
 		return err
 	}
 	// All API endpoints started successfully
 	n.rpcAPIs = apis
 	return nil
+}
+
+// startInProc initializes an in-process RPC endpoint.
+func (n *Node) startInProc(apis []rpc.API) error {
+	// Register all the APIs exposed by the services
+	handler := rpc.NewServer()
+	for _, api := range apis {
+		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
+			return err
+		}
+		glog.V(logger.Debug).Infof("InProc registered %T under '%s'", api.Service, api.Namespace)
+	}
+	n.inprocHandler = handler
+	return nil
+}
+
+// stopInProc terminates the in-process RPC endpoint.
+func (n *Node) stopInProc() {
+	if n.inprocHandler != nil {
+		n.inprocHandler.Stop()
+		n.inprocHandler = nil
+	}
 }
 
 // startIPC initializes and starts the IPC RPC endpoint.
@@ -468,6 +498,19 @@ func (n *Node) Restart() error {
 	return nil
 }
 
+// Attach creates an RPC client attached to an in-process API handler.
+func (n *Node) Attach() (rpc.Client, error) {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
+	// Short circuit if the node's not running
+	if n.server == nil {
+		return nil, ErrNodeStopped
+	}
+	// Otherwise attach to the API and return
+	return rpc.NewInProcRPCClient(n.inprocHandler), nil
+}
+
 // Server retrieves the currently running P2P network layer. This method is meant
 // only to inspect fields of the currently running server, life cycle management
 // should be left to this Node entity.
@@ -504,6 +547,16 @@ func (n *Node) DataDir() string {
 // IPCEndpoint retrieves the current IPC endpoint used by the protocol stack.
 func (n *Node) IPCEndpoint() string {
 	return n.ipcEndpoint
+}
+
+// HTTPEndpoint retrieves the current HTTP endpoint used by the protocol stack.
+func (n *Node) HTTPEndpoint() string {
+	return n.httpEndpoint
+}
+
+// WSEndpoint retrieves the current WS endpoint used by the protocol stack.
+func (n *Node) WSEndpoint() string {
+	return n.wsEndpoint
 }
 
 // EventMux retrieves the event multiplexer used by all the network services in

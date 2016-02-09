@@ -259,7 +259,7 @@ type httpClient struct {
 
 // NewHTTPClient create a new RPC clients that connection to a geth RPC server
 // over HTTP.
-func NewHTTPClient(endpoint string) (*httpClient, error) {
+func NewHTTPClient(endpoint string) (Client, error) {
 	url, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
