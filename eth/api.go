@@ -169,6 +169,58 @@ func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
 	return false, nil
 }
 
+// PublicMinerAPI provides an API to control the miner.
+// It offers only methods that operate on data that pose no security risk when it is publicly accessible.
+type PublicMinerAPI struct {
+	e     *Ethereum
+	agent *miner.RemoteAgent
+}
+
+// NewPublicMinerAPI create a new PublicMinerAPI instance.
+func NewPublicMinerAPI(e *Ethereum) *PublicMinerAPI {
+	agent := miner.NewRemoteAgent()
+	e.Miner().Register(agent)
+
+	return &PublicMinerAPI{e, agent}
+}
+
+// Mining returns an indication if this node is currently mining.
+func (s *PublicMinerAPI) Mining() bool {
+	return s.e.IsMining()
+}
+
+// SubmitWork can be used by external miner to submit their POW solution. It returns an indication if the work was
+// accepted. Note, this is not an indication if the provided work was valid!
+func (s *PublicMinerAPI) SubmitWork(nonce rpc.HexNumber, solution, digest common.Hash) bool {
+	return s.agent.SubmitWork(nonce.Uint64(), digest, solution)
+}
+
+// GetWork returns a work package for external miner. The work package consists of 3 strings
+// result[0], 32 bytes hex encoded current block header pow-hash
+// result[1], 32 bytes hex encoded seed hash used for DAG
+// result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
+func (s *PublicMinerAPI) GetWork() ([]string, error) {
+	if !s.e.IsMining() {
+		if err := s.e.StartMining(0, ""); err != nil {
+			return nil, err
+		}
+	}
+	if work, err := s.agent.GetWork(); err == nil {
+		return work[:], nil
+	} else {
+		glog.Infof("%v\n", err)
+	}
+	return nil, fmt.Errorf("mining not ready")
+}
+
+// SubmitHashrate can be used for remote miners to submit their hash rate. This enables the node to report the combined
+// hash rate of all miners which submit work through this node. It accepts the miner hash rate and an identifier which
+// must be unique between nodes.
+func (s *PublicMinerAPI) SubmitHashrate(hashrate rpc.HexNumber, id common.Hash) bool {
+	s.agent.SubmitHashrate(id, hashrate.Uint64())
+	return true
+}
+
 // PrivateMinerAPI provides private RPC methods to control the miner.
 // These methods can be abused by external users and must be considered insecure for use by untrusted users.
 type PrivateMinerAPI struct {
