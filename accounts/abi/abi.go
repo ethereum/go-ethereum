@@ -20,11 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
+	"reflect"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 // Executer is an executer method for performing state executions. It takes one
@@ -101,52 +100,143 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 }
 
 // toGoType parses the input and casts it to the proper type defined by the ABI
-// argument in t.
-func toGoType(t Argument, input []byte) interface{} {
+// argument in T.
+func toGoType(i int, t Argument, output []byte) (interface{}, error) {
+	index := i * 32
+
+	if index+32 > len(output) {
+		return nil, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), index+32)
+	}
+
+	// Parse the given index output and check whether we need to read
+	// a different offset and length based on the type (i.e. string, bytes)
+	var returnOutput []byte
+	switch t.Type.T {
+	case StringTy, BytesTy: // variable arrays are written at the end of the return bytes
+		// parse offset from which we should start reading
+		offset := int(common.BytesToBig(output[index : index+32]).Uint64())
+		if offset+32 > len(output) {
+			return nil, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), offset+32)
+		}
+		// parse the size up until we should be reading
+		size := int(common.BytesToBig(output[offset : offset+32]).Uint64())
+		if offset+32+size > len(output) {
+			return nil, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), offset+32+size)
+		}
+
+		// get the bytes for this return value
+		returnOutput = output[offset+32 : offset+32+size]
+	default:
+		returnOutput = output[index : index+32]
+	}
+
+	// cast bytes to abi return type
 	switch t.Type.T {
 	case IntTy:
-		return common.BytesToBig(input)
+		return common.BytesToBig(returnOutput), nil
 	case UintTy:
-		return common.BytesToBig(input)
+		return common.BytesToBig(returnOutput), nil
 	case BoolTy:
-		return common.BytesToBig(input).Uint64() > 0
+		return common.BytesToBig(returnOutput).Uint64() > 0, nil
 	case AddressTy:
-		return common.BytesToAddress(input)
+		return common.BytesToAddress(returnOutput), nil
 	case HashTy:
-		return common.BytesToHash(input)
+		return common.BytesToHash(returnOutput), nil
+	case BytesTy, FixedBytesTy:
+		return returnOutput, nil
+	case StringTy:
+		return string(returnOutput), nil
 	}
-	return nil
+	return nil, fmt.Errorf("abi: unknown type %v", t.Type.T)
 }
 
-// Call executes a call and attemps to parse the return values and returns it as
-// an interface. It uses the executer method to perform the actual call since
-// the abi knows nothing of the lower level calling mechanism.
+// Call will unmarshal the output of the call in v. It will return an error if
+// invalid type is given or if the output is too short to conform to the ABI
+// spec.
 //
-// Call supports all abi types and includes multiple return values. When only
-// one item is returned a single interface{} will be returned, if a contract
-// method returns multiple values an []interface{} slice is returned.
-func (abi ABI) Call(executer Executer, name string, args ...interface{}) interface{} {
+// Call supports all of the available types and accepts a struct or an interface
+// slice if the return is a tuple.
+func (abi ABI) Call(executer Executer, v interface{}, name string, args ...interface{}) error {
 	callData, err := abi.Pack(name, args...)
 	if err != nil {
-		glog.V(logger.Debug).Infoln("pack error:", err)
-		return nil
+		return err
 	}
 
-	output := executer(callData)
+	return abi.unmarshal(v, name, executer(callData))
+}
 
-	method := abi.Methods[name]
-	ret := make([]interface{}, int(math.Max(float64(len(method.Outputs)), float64(len(output)/32))))
-	for i := 0; i < len(ret); i += 32 {
-		index := i / 32
-		ret[index] = toGoType(method.Outputs[index], output[i:i+32])
+var interSlice = reflect.TypeOf([]interface{}{})
+
+// unmarshal output in v according to the abi specification
+func (abi ABI) unmarshal(v interface{}, name string, output []byte) error {
+	var method = abi.Methods[name]
+
+	if len(output) == 0 {
+		return fmt.Errorf("abi: unmarshalling empty output")
 	}
 
-	// return single interface
-	if len(ret) == 1 {
-		return ret[0]
+	value := reflect.ValueOf(v).Elem()
+	typ := value.Type()
+
+	if len(method.Outputs) > 1 {
+		switch value.Kind() {
+		// struct will match named return values to the struct's field
+		// names
+		case reflect.Struct:
+			for i := 0; i < len(method.Outputs); i++ {
+				marshalledValue, err := toGoType(i, method.Outputs[i], output)
+				if err != nil {
+					return err
+				}
+				reflectValue := reflect.ValueOf(marshalledValue)
+
+				for j := 0; j < typ.NumField(); j++ {
+					field := typ.Field(j)
+					// TODO read tags: `abi:"fieldName"`
+					if field.Name == strings.ToUpper(method.Outputs[i].Name[:1])+method.Outputs[i].Name[1:] {
+						if field.Type.AssignableTo(reflectValue.Type()) {
+							value.Field(j).Set(reflectValue)
+							break
+						} else {
+							return fmt.Errorf("abi: cannot unmarshal %v in to %v", field.Type, reflectValue.Type())
+						}
+					}
+				}
+			}
+		case reflect.Slice:
+			if !value.Type().AssignableTo(interSlice) {
+				return fmt.Errorf("abi: cannot marshal tuple in to slice %T (only []interface{} is supported)", v)
+			}
+
+			// create a new slice and start appending the unmarshalled
+			// values to the new interface slice.
+			z := reflect.MakeSlice(typ, 0, len(method.Outputs))
+			for i := 0; i < len(method.Outputs); i++ {
+				marshalledValue, err := toGoType(i, method.Outputs[i], output)
+				if err != nil {
+					return err
+				}
+				z = reflect.Append(z, reflect.ValueOf(marshalledValue))
+			}
+			value.Set(z)
+		default:
+			return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
+		}
+
+	} else {
+		marshalledValue, err := toGoType(0, method.Outputs[0], output)
+		if err != nil {
+			return err
+		}
+		reflectValue := reflect.ValueOf(marshalledValue)
+		if typ.AssignableTo(reflectValue.Type()) {
+			value.Set(reflectValue)
+		} else {
+			return fmt.Errorf("abi: cannot unmarshal %v in to %v", reflectValue.Type(), value.Type())
+		}
 	}
 
-	return ret
+	return nil
 }
 
 func (abi *ABI) UnmarshalJSON(data []byte) error {

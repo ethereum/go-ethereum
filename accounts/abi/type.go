@@ -29,8 +29,11 @@ const (
 	IntTy byte = iota
 	UintTy
 	BoolTy
+	StringTy
 	SliceTy
 	AddressTy
+	FixedBytesTy
+	BytesTy
 	HashTy
 	RealTy
 )
@@ -118,6 +121,7 @@ func NewType(t string) (typ Type, err error) {
 			typ.T = UintTy
 		case "bool":
 			typ.Kind = reflect.Bool
+			typ.T = BoolTy
 		case "real": // TODO
 			typ.Kind = reflect.Invalid
 		case "address":
@@ -128,6 +132,7 @@ func NewType(t string) (typ Type, err error) {
 		case "string":
 			typ.Kind = reflect.String
 			typ.Size = -1
+			typ.T = StringTy
 			if vsize > 0 {
 				typ.Size = 32
 			}
@@ -140,6 +145,11 @@ func NewType(t string) (typ Type, err error) {
 			typ.Kind = reflect.Slice
 			typ.Type = byte_ts
 			typ.Size = vsize
+			if vsize == 0 {
+				typ.T = BytesTy
+			} else {
+				typ.T = FixedBytesTy
+			}
 		default:
 			return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 		}
