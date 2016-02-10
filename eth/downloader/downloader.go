@@ -196,7 +196,15 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, hasHeader headerCheckFn, ha
 // Progress retrieves the synchronisation boundaries, specifically the origin
 // block where synchronisation started at (may have failed/suspended); the block
 // or header sync is currently at; and the latest known block which the sync targets.
-func (d *Downloader) Progress() (uint64, uint64, uint64) {
+//
+// In addition, during the state download phase of fast synchonisation the number
+// of processed and the total number of known states are also returned. Otherwise
+// these are zero.
+func (d *Downloader) Progress() (uint64, uint64, uint64, uint64, uint64) {
+	// Fetch the pending state count outside of the lock to prevent unforeseen deadlocks
+	pendingStates := uint64(d.queue.PendingNodeData())
+
+	// Lock the current stats and return the progress
 	d.syncStatsLock.RLock()
 	defer d.syncStatsLock.RUnlock()
 
@@ -209,7 +217,7 @@ func (d *Downloader) Progress() (uint64, uint64, uint64) {
 	case LightSync:
 		current = d.headHeader().Number.Uint64()
 	}
-	return d.syncStatsChainOrigin, current, d.syncStatsChainHeight
+	return d.syncStatsChainOrigin, current, d.syncStatsChainHeight, d.syncStatsStateDone, d.syncStatsStateDone + pendingStates
 }
 
 // Synchronising returns whether the downloader is currently retrieving blocks.
@@ -296,7 +304,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 		default:
 		}
 	}
-	// Reset and ephemeral sync statistics
+	// Reset any ephemeral sync statistics
 	d.syncStatsLock.Lock()
 	d.syncStatsStateTotal = 0
 	d.syncStatsStateDone = 0

@@ -36,6 +36,8 @@ type Progress struct {
 	Origin  uint64 `json:"startingBlock"`
 	Current uint64 `json:"currentBlock"`
 	Height  uint64 `json:"highestBlock"`
+	Pulled  uint64 `json:"pulledStates"`
+	Known   uint64 `json:"knownStates"`
 }
 
 // SyncingResult provides information about the current synchronisation status for this node.
@@ -44,7 +46,7 @@ type SyncingResult struct {
 	Status  Progress `json:"status"`
 }
 
-// Syncing provides information when this nodes starts synchronising with the Ethereumn network and when it's finished.
+// Syncing provides information when this nodes starts synchronising with the Ethereum network and when it's finished.
 func (s *PublicDownloaderAPI) Syncing() (rpc.Subscription, error) {
 	sub := s.d.mux.Subscribe(StartEvent{}, DoneEvent{}, FailedEvent{})
 
@@ -52,13 +54,12 @@ func (s *PublicDownloaderAPI) Syncing() (rpc.Subscription, error) {
 		switch event.(type) {
 		case StartEvent:
 			result := &SyncingResult{Syncing: true}
-			result.Status.Origin, result.Status.Current, result.Status.Height = s.d.Progress()
+			result.Status.Origin, result.Status.Current, result.Status.Height, result.Status.Pulled, result.Status.Known = s.d.Progress()
 			return result
 		case DoneEvent, FailedEvent:
 			return false
 		}
 		return nil
 	}
-
 	return rpc.NewSubscriptionWithOutputFormat(sub, output), nil
 }
