@@ -152,21 +152,27 @@ func (s *PublicEthereumAPI) Hashrate() *rpc.HexNumber {
 }
 
 // Syncing returns false in case the node is currently not synching with the network. It can be up to date or has not
-// yet received the latest block headers from its pears. In case it is synchronizing an object with 3 properties is
-// returned:
+// yet received the latest block headers from its pears. In case it is synchronizing:
 // - startingBlock: block number this node started to synchronise from
-// - currentBlock: block number this node is currently importing
-// - highestBlock: block number of the highest block header this node has received from peers
+// - currentBlock:  block number this node is currently importing
+// - highestBlock:  block number of the highest block header this node has received from peers
+// - pulledStates:  number of state entries processed until now
+// - knownStates:   number of known state entries that still need to be pulled
 func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
-	origin, current, height := s.e.Downloader().Progress()
-	if current < height {
-		return map[string]interface{}{
-			"startingBlock": rpc.NewHexNumber(origin),
-			"currentBlock":  rpc.NewHexNumber(current),
-			"highestBlock":  rpc.NewHexNumber(height),
-		}, nil
+	origin, current, height, pulled, known := s.e.Downloader().Progress()
+
+	// Return not syncing if the synchronisation already completed
+	if current >= height {
+		return false, nil
 	}
-	return false, nil
+	// Otherwise gather the block sync stats
+	return map[string]interface{}{
+		"startingBlock": rpc.NewHexNumber(origin),
+		"currentBlock":  rpc.NewHexNumber(current),
+		"highestBlock":  rpc.NewHexNumber(height),
+		"pulledStates":  rpc.NewHexNumber(pulled),
+		"knownStates":   rpc.NewHexNumber(known),
+	}, nil
 }
 
 // PublicMinerAPI provides an API to control the miner.
