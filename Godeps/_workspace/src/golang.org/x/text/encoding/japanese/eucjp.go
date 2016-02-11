@@ -159,7 +159,8 @@ func (eucJPEncoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err 
 					goto write2or3
 				}
 			}
-			r = encoding.ASCIISub
+			err = internal.ErrASCIIReplacement
+			break
 		}
 
 		if nDst >= len(dst) {

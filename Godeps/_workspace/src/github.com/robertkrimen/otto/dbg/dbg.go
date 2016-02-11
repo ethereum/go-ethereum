@@ -282,7 +282,7 @@ func (self *Dbgr) getEmit() _emit {
 // SetOutput will accept the following as a destination for output:
 //
 //      *log.Logger         Print*/Panic*/Fatal* of the logger
-//      io.Writer           - 
+//      io.Writer           -
 //      nil                 Reset to the default output (os.Stderr)
 //      "log"               Print*/Panic*/Fatal* via the "log" package
 //

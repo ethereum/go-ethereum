@@ -8,10 +8,11 @@
 package opt
 
 import (
+	"math"
+
 	"github.com/syndtr/goleveldb/leveldb/cache"
 	"github.com/syndtr/goleveldb/leveldb/comparer"
 	"github.com/syndtr/goleveldb/leveldb/filter"
-	"math"
 )
 
 const (
@@ -35,8 +36,6 @@ var (
 	DefaultCompactionTotalSizeMultiplier = 10.0
 	DefaultCompressionType               = SnappyCompression
 	DefaultIteratorSamplingRate          = 1 * MiB
-	DefaultMaxMemCompationLevel          = 2
-	DefaultNumLevel                      = 7
 	DefaultOpenFilesCacher               = LRUCacher
 	DefaultOpenFilesCacheCapacity        = 500
 	DefaultWriteBuffer                   = 4 * MiB
@@ -250,6 +249,11 @@ type Options struct {
 	// The default value (DefaultCompression) uses snappy compression.
 	Compression Compression
 
+	// DisableBufferPool allows disable use of util.BufferPool functionality.
+	//
+	// The default value is false.
+	DisableBufferPool bool
+
 	// DisableBlockCache allows disable use of cache.Cache functionality on
 	// 'sorted table' block.
 	//
@@ -260,6 +264,13 @@ type Options struct {
 	//
 	// The default value is false.
 	DisableCompactionBackoff bool
+
+	// DisableLargeBatchTransaction allows disabling switch-to-transaction mode
+	// on large batch write. If enable batch writes large than WriteBuffer will
+	// use transaction.
+	//
+	// The default is false.
+	DisableLargeBatchTransaction bool
 
 	// ErrorIfExist defines whether an error should returned if the DB already
 	// exist.
@@ -296,18 +307,10 @@ type Options struct {
 	// The default is 1MiB.
 	IteratorSamplingRate int
 
-	// MaxMemCompationLevel defines maximum level a newly compacted 'memdb'
-	// will be pushed into if doesn't creates overlap. This should less than
-	// NumLevel. Use -1 for level-0.
+	// NoSync allows completely disable fsync.
 	//
-	// The default is 2.
-	MaxMemCompationLevel int
-
-	// NumLevel defines number of database level. The level shouldn't changed
-	// between opens, or the database will panic.
-	//
-	// The default is 7.
-	NumLevel int
+	// The default is false.
+	NoSync bool
 
 	// OpenFilesCacher provides cache algorithm for open files caching.
 	// Specify NoCacher to disable caching algorithm.
@@ -320,6 +323,11 @@ type Options struct {
 	//
 	// The default value is 500.
 	OpenFilesCacheCapacity int
+
+	// If true then opens DB in read-only mode.
+	//
+	// The default value is false.
+	ReadOnly bool
 
 	// Strict defines the DB strict level.
 	Strict Strict
@@ -425,7 +433,7 @@ func (o *Options) GetCompactionTableSize(level int) int {
 		if o.CompactionTableSize > 0 {
 			base = o.CompactionTableSize
 		}
-		if len(o.CompactionTableSizeMultiplierPerLevel) > level && o.CompactionTableSizeMultiplierPerLevel[level] > 0 {
+		if level < len(o.CompactionTableSizeMultiplierPerLevel) && o.CompactionTableSizeMultiplierPerLevel[level] > 0 {
 			mult = o.CompactionTableSizeMultiplierPerLevel[level]
 		} else if o.CompactionTableSizeMultiplier > 0 {
 			mult = math.Pow(o.CompactionTableSizeMultiplier, float64(level))
@@ -446,7 +454,7 @@ func (o *Options) GetCompactionTotalSize(level int) int64 {
 		if o.CompactionTotalSize > 0 {
 			base = o.CompactionTotalSize
 		}
-		if len(o.CompactionTotalSizeMultiplierPerLevel) > level && o.CompactionTotalSizeMultiplierPerLevel[level] > 0 {
+		if level < len(o.CompactionTotalSizeMultiplierPerLevel) && o.CompactionTotalSizeMultiplierPerLevel[level] > 0 {
 			mult = o.CompactionTotalSizeMultiplierPerLevel[level]
 		} else if o.CompactionTotalSizeMultiplier > 0 {
 			mult = math.Pow(o.CompactionTotalSizeMultiplier, float64(level))
@@ -472,11 +480,32 @@ func (o *Options) GetCompression() Compression {
 	return o.Compression
 }
 
+func (o *Options) GetDisableBufferPool() bool {
+	if o == nil {
+		return false
+	}
+	return o.DisableBufferPool
+}
+
+func (o *Options) GetDisableBlockCache() bool {
+	if o == nil {
+		return false
+	}
+	return o.DisableBlockCache
+}
+
 func (o *Options) GetDisableCompactionBackoff() bool {
 	if o == nil {
 		return false
 	}
 	return o.DisableCompactionBackoff
+}
+
+func (o *Options) GetDisableLargeBatchTransaction() bool {
+	if o == nil {
+		return false
+	}
+	return o.DisableLargeBatchTransaction
 }
 
 func (o *Options) GetErrorIfExist() bool {
@@ -507,26 +536,11 @@ func (o *Options) GetIteratorSamplingRate() int {
 	return o.IteratorSamplingRate
 }
 
-func (o *Options) GetMaxMemCompationLevel() int {
-	level := DefaultMaxMemCompationLevel
-	if o != nil {
-		if o.MaxMemCompationLevel > 0 {
-			level = o.MaxMemCompationLevel
-		} else if o.MaxMemCompationLevel < 0 {
-			level = 0
-		}
+func (o *Options) GetNoSync() bool {
+	if o == nil {
+		return false
 	}
-	if level >= o.GetNumLevel() {
-		return o.GetNumLevel() - 1
-	}
-	return level
-}
-
-func (o *Options) GetNumLevel() int {
-	if o == nil || o.NumLevel <= 0 {
-		return DefaultNumLevel
-	}
-	return o.NumLevel
+	return o.NoSync
 }
 
 func (o *Options) GetOpenFilesCacher() Cacher {
@@ -546,6 +560,13 @@ func (o *Options) GetOpenFilesCacheCapacity() int {
 		return 0
 	}
 	return o.OpenFilesCacheCapacity
+}
+
+func (o *Options) GetReadOnly() bool {
+	if o == nil {
+		return false
+	}
+	return o.ReadOnly
 }
 
 func (o *Options) GetStrict(strict Strict) bool {

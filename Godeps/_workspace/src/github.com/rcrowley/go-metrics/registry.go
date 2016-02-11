@@ -145,6 +145,65 @@ func (r *StandardRegistry) registered() map[string]interface{} {
 	return metrics
 }
 
+type PrefixedRegistry struct {
+	underlying Registry
+	prefix     string
+}
+
+func NewPrefixedRegistry(prefix string) Registry {
+	return &PrefixedRegistry{
+		underlying: NewRegistry(),
+		prefix:     prefix,
+	}
+}
+
+func NewPrefixedChildRegistry(parent Registry, prefix string) Registry {
+	return &PrefixedRegistry{
+		underlying: parent,
+		prefix:     prefix,
+	}
+}
+
+// Call the given function for each registered metric.
+func (r *PrefixedRegistry) Each(fn func(string, interface{})) {
+	r.underlying.Each(fn)
+}
+
+// Get the metric by the given name or nil if none is registered.
+func (r *PrefixedRegistry) Get(name string) interface{} {
+	return r.underlying.Get(name)
+}
+
+// Gets an existing metric or registers the given one.
+// The interface can be the metric to register if not found in registry,
+// or a function returning the metric for lazy instantiation.
+func (r *PrefixedRegistry) GetOrRegister(name string, metric interface{}) interface{} {
+	realName := r.prefix + name
+	return r.underlying.GetOrRegister(realName, metric)
+}
+
+// Register the given metric under the given name. The name will be prefixed.
+func (r *PrefixedRegistry) Register(name string, metric interface{}) error {
+	realName := r.prefix + name
+	return r.underlying.Register(realName, metric)
+}
+
+// Run all registered healthchecks.
+func (r *PrefixedRegistry) RunHealthchecks() {
+	r.underlying.RunHealthchecks()
+}
+
+// Unregister the metric with the given name. The name will be prefixed.
+func (r *PrefixedRegistry) Unregister(name string) {
+	realName := r.prefix + name
+	r.underlying.Unregister(realName)
+}
+
+// Unregister all metrics.  (Mostly for testing.)
+func (r *PrefixedRegistry) UnregisterAll() {
+	r.underlying.UnregisterAll()
+}
+
 var DefaultRegistry Registry = NewRegistry()
 
 // Call the given function for each registered metric.
@@ -167,6 +226,14 @@ func GetOrRegister(name string, i interface{}) interface{} {
 // if a metric by the given name is already registered.
 func Register(name string, i interface{}) error {
 	return DefaultRegistry.Register(name, i)
+}
+
+// Register the given metric under the given name.  Panics if a metric by the
+// given name is already registered.
+func MustRegister(name string, i interface{}) {
+	if err := Register(name, i); err != nil {
+		panic(err)
+	}
 }
 
 // Run all registered healthchecks.

@@ -9,32 +9,33 @@ var (
 	memStats       runtime.MemStats
 	runtimeMetrics struct {
 		MemStats struct {
-			Alloc        Gauge
-			BuckHashSys  Gauge
-			DebugGC      Gauge
-			EnableGC     Gauge
-			Frees        Gauge
-			HeapAlloc    Gauge
-			HeapIdle     Gauge
-			HeapInuse    Gauge
-			HeapObjects  Gauge
-			HeapReleased Gauge
-			HeapSys      Gauge
-			LastGC       Gauge
-			Lookups      Gauge
-			Mallocs      Gauge
-			MCacheInuse  Gauge
-			MCacheSys    Gauge
-			MSpanInuse   Gauge
-			MSpanSys     Gauge
-			NextGC       Gauge
-			NumGC        Gauge
-			PauseNs      Histogram
-			PauseTotalNs Gauge
-			StackInuse   Gauge
-			StackSys     Gauge
-			Sys          Gauge
-			TotalAlloc   Gauge
+			Alloc         Gauge
+			BuckHashSys   Gauge
+			DebugGC       Gauge
+			EnableGC      Gauge
+			Frees         Gauge
+			HeapAlloc     Gauge
+			HeapIdle      Gauge
+			HeapInuse     Gauge
+			HeapObjects   Gauge
+			HeapReleased  Gauge
+			HeapSys       Gauge
+			LastGC        Gauge
+			Lookups       Gauge
+			Mallocs       Gauge
+			MCacheInuse   Gauge
+			MCacheSys     Gauge
+			MSpanInuse    Gauge
+			MSpanSys      Gauge
+			NextGC        Gauge
+			NumGC         Gauge
+			GCCPUFraction GaugeFloat64
+			PauseNs       Histogram
+			PauseTotalNs  Gauge
+			StackInuse    Gauge
+			StackSys      Gauge
+			Sys           Gauge
+			TotalAlloc    Gauge
 		}
 		NumCgoCall   Gauge
 		NumGoroutine Gauge
@@ -97,6 +98,7 @@ func CaptureRuntimeMemStatsOnce(r Registry) {
 	runtimeMetrics.MemStats.MSpanSys.Update(int64(memStats.MSpanSys))
 	runtimeMetrics.MemStats.NextGC.Update(int64(memStats.NextGC))
 	runtimeMetrics.MemStats.NumGC.Update(int64(memStats.NumGC - numGC))
+	runtimeMetrics.MemStats.GCCPUFraction.Update(gcCPUFraction(&memStats))
 
 	// <https://code.google.com/p/go/source/browse/src/pkg/runtime/mgc0.c>
 	i := numGC % uint32(len(memStats.PauseNs))
@@ -158,6 +160,7 @@ func RegisterRuntimeMemStats(r Registry) {
 	runtimeMetrics.MemStats.MSpanSys = NewGauge()
 	runtimeMetrics.MemStats.NextGC = NewGauge()
 	runtimeMetrics.MemStats.NumGC = NewGauge()
+	runtimeMetrics.MemStats.GCCPUFraction = NewGaugeFloat64()
 	runtimeMetrics.MemStats.PauseNs = NewHistogram(NewExpDecaySample(1028, 0.015))
 	runtimeMetrics.MemStats.PauseTotalNs = NewGauge()
 	runtimeMetrics.MemStats.StackInuse = NewGauge()
@@ -188,6 +191,7 @@ func RegisterRuntimeMemStats(r Registry) {
 	r.Register("runtime.MemStats.MSpanSys", runtimeMetrics.MemStats.MSpanSys)
 	r.Register("runtime.MemStats.NextGC", runtimeMetrics.MemStats.NextGC)
 	r.Register("runtime.MemStats.NumGC", runtimeMetrics.MemStats.NumGC)
+	r.Register("runtime.MemStats.GCCPUFraction", runtimeMetrics.MemStats.GCCPUFraction)
 	r.Register("runtime.MemStats.PauseNs", runtimeMetrics.MemStats.PauseNs)
 	r.Register("runtime.MemStats.PauseTotalNs", runtimeMetrics.MemStats.PauseTotalNs)
 	r.Register("runtime.MemStats.StackInuse", runtimeMetrics.MemStats.StackInuse)

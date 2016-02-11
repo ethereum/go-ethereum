@@ -60,7 +60,7 @@ func goMapEnumerate(self *_object, all bool, each func(string) bool) {
 	object := self.value.(*_goMapObject)
 	keys := object.value.MapKeys()
 	for _, key := range keys {
-		if !each(key.String()) {
+		if !each(toValue(key).String()) {
 			return
 		}
 	}

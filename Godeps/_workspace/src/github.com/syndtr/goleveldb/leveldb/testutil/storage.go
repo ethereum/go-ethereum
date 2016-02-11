@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -24,8 +25,8 @@ import (
 
 var (
 	storageMu     sync.Mutex
-	storageUseFS  bool = true
-	storageKeepFS bool = false
+	storageUseFS  = true
+	storageKeepFS = false
 	storageNum    int
 )
 
@@ -35,6 +36,7 @@ const (
 	ModeOpen StorageMode = 1 << iota
 	ModeCreate
 	ModeRemove
+	ModeRename
 	ModeRead
 	ModeWrite
 	ModeSync
@@ -45,6 +47,7 @@ const (
 	modeOpen = iota
 	modeCreate
 	modeRemove
+	modeRename
 	modeRead
 	modeWrite
 	modeSync
@@ -73,6 +76,8 @@ func flattenType(m StorageMode, t storage.FileType) int {
 		x = modeCreate
 	case ModeRemove:
 		x = modeRemove
+	case ModeRename:
+		x = modeRename
 	case ModeRead:
 		x = modeRead
 	case ModeWrite:
@@ -121,6 +126,8 @@ func listFlattenType(m StorageMode, t storage.FileType) []int {
 		add(modeCreate)
 	case m&ModeRemove != 0:
 		add(modeRemove)
+	case m&ModeRename != 0:
+		add(modeRename)
 	case m&ModeRead != 0:
 		add(modeRead)
 	case m&ModeWrite != 0:
@@ -133,15 +140,15 @@ func listFlattenType(m StorageMode, t storage.FileType) []int {
 	return ret
 }
 
-func packFile(num uint64, t storage.FileType) uint64 {
-	if num>>(64-typeCount) != 0 {
+func packFile(fd storage.FileDesc) uint64 {
+	if fd.Num>>(63-typeCount) != 0 {
 		panic("overflow")
 	}
-	return num<<typeCount | uint64(t)
+	return uint64(fd.Num<<typeCount) | uint64(fd.Type)
 }
 
-func unpackFile(x uint64) (uint64, storage.FileType) {
-	return x >> typeCount, storage.FileType(x) & storage.TypeAll
+func unpackFile(x uint64) storage.FileDesc {
+	return storage.FileDesc{storage.FileType(x) & storage.TypeAll, int64(x >> typeCount)}
 }
 
 type emulatedError struct {
@@ -163,189 +170,98 @@ func (l storageLock) Release() {
 }
 
 type reader struct {
-	f *file
+	s  *Storage
+	fd storage.FileDesc
 	storage.Reader
 }
 
 func (r *reader) Read(p []byte) (n int, err error) {
-	err = r.f.s.emulateError(ModeRead, r.f.Type())
+	err = r.s.emulateError(ModeRead, r.fd.Type)
 	if err == nil {
-		r.f.s.stall(ModeRead, r.f.Type())
+		r.s.stall(ModeRead, r.fd.Type)
 		n, err = r.Reader.Read(p)
 	}
-	r.f.s.count(ModeRead, r.f.Type(), n)
+	r.s.count(ModeRead, r.fd.Type, n)
 	if err != nil && err != io.EOF {
-		r.f.s.logI("read error, num=%d type=%v n=%d err=%v", r.f.Num(), r.f.Type(), n, err)
+		r.s.logI("read error, fd=%s n=%d err=%v", r.fd, n, err)
 	}
 	return
 }
 
 func (r *reader) ReadAt(p []byte, off int64) (n int, err error) {
-	err = r.f.s.emulateError(ModeRead, r.f.Type())
+	err = r.s.emulateError(ModeRead, r.fd.Type)
 	if err == nil {
-		r.f.s.stall(ModeRead, r.f.Type())
+		r.s.stall(ModeRead, r.fd.Type)
 		n, err = r.Reader.ReadAt(p, off)
 	}
-	r.f.s.count(ModeRead, r.f.Type(), n)
+	r.s.count(ModeRead, r.fd.Type, n)
 	if err != nil && err != io.EOF {
-		r.f.s.logI("readAt error, num=%d type=%v offset=%d n=%d err=%v", r.f.Num(), r.f.Type(), off, n, err)
+		r.s.logI("readAt error, fd=%s offset=%d n=%d err=%v", r.fd, off, n, err)
 	}
 	return
 }
 
 func (r *reader) Close() (err error) {
-	return r.f.doClose(r.Reader)
+	return r.s.fileClose(r.fd, r.Reader)
 }
 
 type writer struct {
-	f *file
+	s  *Storage
+	fd storage.FileDesc
 	storage.Writer
 }
 
 func (w *writer) Write(p []byte) (n int, err error) {
-	err = w.f.s.emulateError(ModeWrite, w.f.Type())
+	err = w.s.emulateError(ModeWrite, w.fd.Type)
 	if err == nil {
-		w.f.s.stall(ModeWrite, w.f.Type())
+		w.s.stall(ModeWrite, w.fd.Type)
 		n, err = w.Writer.Write(p)
 	}
-	w.f.s.count(ModeWrite, w.f.Type(), n)
+	w.s.count(ModeWrite, w.fd.Type, n)
 	if err != nil && err != io.EOF {
-		w.f.s.logI("write error, num=%d type=%v n=%d err=%v", w.f.Num(), w.f.Type(), n, err)
+		w.s.logI("write error, fd=%s n=%d err=%v", w.fd, n, err)
 	}
 	return
 }
 
 func (w *writer) Sync() (err error) {
-	err = w.f.s.emulateError(ModeSync, w.f.Type())
+	err = w.s.emulateError(ModeSync, w.fd.Type)
 	if err == nil {
-		w.f.s.stall(ModeSync, w.f.Type())
+		w.s.stall(ModeSync, w.fd.Type)
 		err = w.Writer.Sync()
 	}
-	w.f.s.count(ModeSync, w.f.Type(), 0)
+	w.s.count(ModeSync, w.fd.Type, 0)
 	if err != nil {
-		w.f.s.logI("sync error, num=%d type=%v err=%v", w.f.Num(), w.f.Type(), err)
+		w.s.logI("sync error, fd=%s err=%v", w.fd, err)
 	}
 	return
 }
 
 func (w *writer) Close() (err error) {
-	return w.f.doClose(w.Writer)
-}
-
-type file struct {
-	s *Storage
-	storage.File
-}
-
-func (f *file) pack() uint64 {
-	return packFile(f.Num(), f.Type())
-}
-
-func (f *file) assertOpen() {
-	ExpectWithOffset(2, f.s.opens).NotTo(HaveKey(f.pack()), "File open, num=%d type=%v writer=%v", f.Num(), f.Type(), f.s.opens[f.pack()])
-}
-
-func (f *file) doClose(closer io.Closer) (err error) {
-	err = f.s.emulateError(ModeClose, f.Type())
-	if err == nil {
-		f.s.stall(ModeClose, f.Type())
-	}
-	f.s.mu.Lock()
-	defer f.s.mu.Unlock()
-	if err == nil {
-		ExpectWithOffset(2, f.s.opens).To(HaveKey(f.pack()), "File closed, num=%d type=%v", f.Num(), f.Type())
-		err = closer.Close()
-	}
-	f.s.countNB(ModeClose, f.Type(), 0)
-	writer := f.s.opens[f.pack()]
-	if err != nil {
-		f.s.logISkip(1, "file close failed, num=%d type=%v writer=%v err=%v", f.Num(), f.Type(), writer, err)
-	} else {
-		f.s.logISkip(1, "file closed, num=%d type=%v writer=%v", f.Num(), f.Type(), writer)
-		delete(f.s.opens, f.pack())
-	}
-	return
-}
-
-func (f *file) Open() (r storage.Reader, err error) {
-	err = f.s.emulateError(ModeOpen, f.Type())
-	if err == nil {
-		f.s.stall(ModeOpen, f.Type())
-	}
-	f.s.mu.Lock()
-	defer f.s.mu.Unlock()
-	if err == nil {
-		f.assertOpen()
-		f.s.countNB(ModeOpen, f.Type(), 0)
-		r, err = f.File.Open()
-	}
-	if err != nil {
-		f.s.logI("file open failed, num=%d type=%v err=%v", f.Num(), f.Type(), err)
-	} else {
-		f.s.logI("file opened, num=%d type=%v", f.Num(), f.Type())
-		f.s.opens[f.pack()] = false
-		r = &reader{f, r}
-	}
-	return
-}
-
-func (f *file) Create() (w storage.Writer, err error) {
-	err = f.s.emulateError(ModeCreate, f.Type())
-	if err == nil {
-		f.s.stall(ModeCreate, f.Type())
-	}
-	f.s.mu.Lock()
-	defer f.s.mu.Unlock()
-	if err == nil {
-		f.assertOpen()
-		f.s.countNB(ModeCreate, f.Type(), 0)
-		w, err = f.File.Create()
-	}
-	if err != nil {
-		f.s.logI("file create failed, num=%d type=%v err=%v", f.Num(), f.Type(), err)
-	} else {
-		f.s.logI("file created, num=%d type=%v", f.Num(), f.Type())
-		f.s.opens[f.pack()] = true
-		w = &writer{f, w}
-	}
-	return
-}
-
-func (f *file) Remove() (err error) {
-	err = f.s.emulateError(ModeRemove, f.Type())
-	if err == nil {
-		f.s.stall(ModeRemove, f.Type())
-	}
-	f.s.mu.Lock()
-	defer f.s.mu.Unlock()
-	if err == nil {
-		f.assertOpen()
-		f.s.countNB(ModeRemove, f.Type(), 0)
-		err = f.File.Remove()
-	}
-	if err != nil {
-		f.s.logI("file remove failed, num=%d type=%v err=%v", f.Num(), f.Type(), err)
-	} else {
-		f.s.logI("file removed, num=%d type=%v", f.Num(), f.Type())
-	}
-	return
+	return w.s.fileClose(w.fd, w.Writer)
 }
 
 type Storage struct {
 	storage.Storage
-	closeFn func() error
+	path    string
+	onClose func() (preserve bool, err error)
+	onLog   func(str string)
 
 	lmu sync.Mutex
 	lb  bytes.Buffer
 
-	mu sync.Mutex
+	mu   sync.Mutex
+	rand *rand.Rand
 	// Open files, true=writer, false=reader
-	opens         map[uint64]bool
-	counters      [flattenCount]int
-	bytesCounter  [flattenCount]int64
-	emulatedError [flattenCount]error
-	stallCond     sync.Cond
-	stalled       [flattenCount]bool
+	opens                   map[uint64]bool
+	counters                [flattenCount]int
+	bytesCounter            [flattenCount]int64
+	emulatedError           [flattenCount]error
+	emulatedErrorOnce       [flattenCount]bool
+	emulatedRandomError     [flattenCount]error
+	emulatedRandomErrorProb [flattenCount]float64
+	stallCond               sync.Cond
+	stalled                 [flattenCount]bool
 }
 
 func (s *Storage) log(skip int, str string) {
@@ -374,7 +290,12 @@ func (s *Storage) log(skip int, str string) {
 		}
 		s.lb.WriteString(line)
 	}
-	s.lb.WriteByte('\n')
+	if s.onLog != nil {
+		s.onLog(s.lb.String())
+		s.lb.Reset()
+	} else {
+		s.lb.WriteByte('\n')
+	}
 }
 
 func (s *Storage) logISkip(skip int, format string, args ...interface{}) {
@@ -395,72 +316,218 @@ func (s *Storage) logI(format string, args ...interface{}) {
 	s.logISkip(1, format, args...)
 }
 
+func (s *Storage) OnLog(onLog func(log string)) {
+	s.lmu.Lock()
+	s.onLog = onLog
+	if s.lb.Len() != 0 {
+		log := s.lb.String()
+		s.onLog(log[:len(log)-1])
+		s.lb.Reset()
+	}
+	s.lmu.Unlock()
+}
+
 func (s *Storage) Log(str string) {
 	s.log(1, "Log: "+str)
 	s.Storage.Log(str)
 }
 
-func (s *Storage) Lock() (r util.Releaser, err error) {
-	r, err = s.Storage.Lock()
+func (s *Storage) Lock() (l storage.Lock, err error) {
+	l, err = s.Storage.Lock()
 	if err != nil {
 		s.logI("storage locking failed, err=%v", err)
 	} else {
 		s.logI("storage locked")
-		r = storageLock{s, r}
+		l = storageLock{s, l}
 	}
 	return
 }
 
-func (s *Storage) GetFile(num uint64, t storage.FileType) storage.File {
-	return &file{s, s.Storage.GetFile(num, t)}
-}
-
-func (s *Storage) GetFiles(t storage.FileType) (files []storage.File, err error) {
-	rfiles, err := s.Storage.GetFiles(t)
+func (s *Storage) List(t storage.FileType) (fds []storage.FileDesc, err error) {
+	fds, err = s.Storage.List(t)
 	if err != nil {
-		s.logI("get files failed, err=%v", err)
+		s.logI("list failed, err=%v", err)
 		return
 	}
-	files = make([]storage.File, len(rfiles))
-	for i, f := range rfiles {
-		files[i] = &file{s, f}
-	}
-	s.logI("get files, type=0x%x count=%d", int(t), len(files))
+	s.logI("list, type=0x%x count=%d", int(t), len(fds))
 	return
 }
 
-func (s *Storage) GetManifest() (f storage.File, err error) {
-	manifest, err := s.Storage.GetManifest()
+func (s *Storage) GetMeta() (fd storage.FileDesc, err error) {
+	fd, err = s.Storage.GetMeta()
 	if err != nil {
 		if !os.IsNotExist(err) {
-			s.logI("get manifest failed, err=%v", err)
+			s.logI("get meta failed, err=%v", err)
 		}
 		return
 	}
-	s.logI("get manifest, num=%d", manifest.Num())
-	return &file{s, manifest}, nil
+	s.logI("get meta, fd=%s", fd)
+	return
 }
 
-func (s *Storage) SetManifest(f storage.File) error {
-	f_, ok := f.(*file)
-	ExpectWithOffset(1, ok).To(BeTrue())
-	ExpectWithOffset(1, f_.Type()).To(Equal(storage.TypeManifest))
-	err := s.Storage.SetManifest(f_.File)
+func (s *Storage) SetMeta(fd storage.FileDesc) error {
+	ExpectWithOffset(1, fd.Type).To(Equal(storage.TypeManifest))
+	err := s.Storage.SetMeta(fd)
 	if err != nil {
-		s.logI("set manifest failed, err=%v", err)
+		s.logI("set meta failed, fd=%s err=%v", fd, err)
 	} else {
-		s.logI("set manifest, num=%d", f_.Num())
+		s.logI("set meta, fd=%s", fd)
 	}
 	return err
+}
+
+func (s *Storage) fileClose(fd storage.FileDesc, closer io.Closer) (err error) {
+	err = s.emulateError(ModeClose, fd.Type)
+	if err == nil {
+		s.stall(ModeClose, fd.Type)
+	}
+	x := packFile(fd)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err == nil {
+		ExpectWithOffset(2, s.opens).To(HaveKey(x), "File closed, fd=%s", fd)
+		err = closer.Close()
+	}
+	s.countNB(ModeClose, fd.Type, 0)
+	writer := s.opens[x]
+	if err != nil {
+		s.logISkip(1, "file close failed, fd=%s writer=%v err=%v", fd, writer, err)
+	} else {
+		s.logISkip(1, "file closed, fd=%s writer=%v", fd, writer)
+		delete(s.opens, x)
+	}
+	return
+}
+
+func (s *Storage) assertOpen(fd storage.FileDesc) {
+	x := packFile(fd)
+	ExpectWithOffset(2, s.opens).NotTo(HaveKey(x), "File open, fd=%s writer=%v", fd, s.opens[x])
+}
+
+func (s *Storage) Open(fd storage.FileDesc) (r storage.Reader, err error) {
+	err = s.emulateError(ModeOpen, fd.Type)
+	if err == nil {
+		s.stall(ModeOpen, fd.Type)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err == nil {
+		s.assertOpen(fd)
+		s.countNB(ModeOpen, fd.Type, 0)
+		r, err = s.Storage.Open(fd)
+	}
+	if err != nil {
+		s.logI("file open failed, fd=%s err=%v", fd, err)
+	} else {
+		s.logI("file opened, fd=%s", fd)
+		s.opens[packFile(fd)] = false
+		r = &reader{s, fd, r}
+	}
+	return
+}
+
+func (s *Storage) Create(fd storage.FileDesc) (w storage.Writer, err error) {
+	err = s.emulateError(ModeCreate, fd.Type)
+	if err == nil {
+		s.stall(ModeCreate, fd.Type)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err == nil {
+		s.assertOpen(fd)
+		s.countNB(ModeCreate, fd.Type, 0)
+		w, err = s.Storage.Create(fd)
+	}
+	if err != nil {
+		s.logI("file create failed, fd=%s err=%v", fd, err)
+	} else {
+		s.logI("file created, fd=%s", fd)
+		s.opens[packFile(fd)] = true
+		w = &writer{s, fd, w}
+	}
+	return
+}
+
+func (s *Storage) Remove(fd storage.FileDesc) (err error) {
+	err = s.emulateError(ModeRemove, fd.Type)
+	if err == nil {
+		s.stall(ModeRemove, fd.Type)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err == nil {
+		s.assertOpen(fd)
+		s.countNB(ModeRemove, fd.Type, 0)
+		err = s.Storage.Remove(fd)
+	}
+	if err != nil {
+		s.logI("file remove failed, fd=%s err=%v", fd, err)
+	} else {
+		s.logI("file removed, fd=%s", fd)
+	}
+	return
+}
+
+func (s *Storage) ForceRemove(fd storage.FileDesc) (err error) {
+	s.countNB(ModeRemove, fd.Type, 0)
+	if err = s.Storage.Remove(fd); err != nil {
+		s.logI("file remove failed (forced), fd=%s err=%v", fd, err)
+	} else {
+		s.logI("file removed (forced), fd=%s", fd)
+	}
+	return
+}
+
+func (s *Storage) Rename(oldfd, newfd storage.FileDesc) (err error) {
+	err = s.emulateError(ModeRename, oldfd.Type)
+	if err == nil {
+		s.stall(ModeRename, oldfd.Type)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err == nil {
+		s.assertOpen(oldfd)
+		s.assertOpen(newfd)
+		s.countNB(ModeRename, oldfd.Type, 0)
+		err = s.Storage.Rename(oldfd, newfd)
+	}
+	if err != nil {
+		s.logI("file rename failed, oldfd=%s newfd=%s err=%v", oldfd, newfd, err)
+	} else {
+		s.logI("file renamed, oldfd=%s newfd=%s", oldfd, newfd)
+	}
+	return
+}
+
+func (s *Storage) ForceRename(oldfd, newfd storage.FileDesc) (err error) {
+	s.countNB(ModeRename, oldfd.Type, 0)
+	if err = s.Storage.Rename(oldfd, newfd); err != nil {
+		s.logI("file rename failed (forced), oldfd=%s newfd=%s err=%v", oldfd, newfd, err)
+	} else {
+		s.logI("file renamed (forced), oldfd=%s newfd=%s", oldfd, newfd)
+	}
+	return
 }
 
 func (s *Storage) openFiles() string {
 	out := "Open files:"
 	for x, writer := range s.opens {
-		num, t := unpackFile(x)
-		out += fmt.Sprintf("\n · num=%d type=%v writer=%v", num, t, writer)
+		fd := unpackFile(x)
+		out += fmt.Sprintf("\n · fd=%s writer=%v", fd, writer)
 	}
 	return out
+}
+
+func (s *Storage) CloseCheck() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ExpectWithOffset(1, s.opens).To(BeEmpty(), s.openFiles())
+}
+
+func (s *Storage) OnClose(onClose func() (preserve bool, err error)) {
+	s.mu.Lock()
+	s.onClose = onClose
+	s.mu.Unlock()
 }
 
 func (s *Storage) Close() error {
@@ -473,9 +540,22 @@ func (s *Storage) Close() error {
 	} else {
 		s.logI("storage closed")
 	}
-	if s.closeFn != nil {
-		if err1 := s.closeFn(); err1 != nil {
-			s.logI("close func error, err=%v", err1)
+	var preserve bool
+	if s.onClose != nil {
+		var err0 error
+		if preserve, err0 = s.onClose(); err0 != nil {
+			s.logI("onClose error, err=%v", err0)
+		}
+	}
+	if s.path != "" {
+		if storageKeepFS || preserve {
+			s.logI("storage is preserved, path=%v", s.path)
+		} else {
+			if err1 := os.RemoveAll(s.path); err1 != nil {
+				s.logI("cannot remove storage, err=%v", err1)
+			} else {
+				s.logI("storage has been removed")
+			}
 		}
 	}
 	return err
@@ -510,8 +590,14 @@ func (s *Storage) Counter(m StorageMode, t storage.FileType) (count int, bytes i
 func (s *Storage) emulateError(m StorageMode, t storage.FileType) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	err := s.emulatedError[flattenType(m, t)]
-	if err != nil {
+	x := flattenType(m, t)
+	if err := s.emulatedError[x]; err != nil {
+		if s.emulatedErrorOnce[x] {
+			s.emulatedError[x] = nil
+		}
+		return emulatedError{err}
+	}
+	if err := s.emulatedRandomError[x]; err != nil && s.rand.Float64() < s.emulatedRandomErrorProb[x] {
 		return emulatedError{err}
 	}
 	return nil
@@ -522,6 +608,25 @@ func (s *Storage) EmulateError(m StorageMode, t storage.FileType, err error) {
 	defer s.mu.Unlock()
 	for _, x := range listFlattenType(m, t) {
 		s.emulatedError[x] = err
+		s.emulatedErrorOnce[x] = false
+	}
+}
+
+func (s *Storage) EmulateErrorOnce(m StorageMode, t storage.FileType, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, x := range listFlattenType(m, t) {
+		s.emulatedError[x] = err
+		s.emulatedErrorOnce[x] = true
+	}
+}
+
+func (s *Storage) EmulateRandomError(m StorageMode, t storage.FileType, prob float64, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, x := range listFlattenType(m, t) {
+		s.emulatedRandomError[x] = err
+		s.emulatedRandomErrorProb[x] = prob
 	}
 }
 
@@ -552,24 +657,20 @@ func (s *Storage) Release(m StorageMode, t storage.FileType) {
 }
 
 func NewStorage() *Storage {
-	var stor storage.Storage
-	var closeFn func() error
+	var (
+		stor storage.Storage
+		path string
+	)
 	if storageUseFS {
 		for {
 			storageMu.Lock()
 			num := storageNum
 			storageNum++
 			storageMu.Unlock()
-			path := filepath.Join(os.TempDir(), fmt.Sprintf("goleveldb-test%d0%d0%d", os.Getuid(), os.Getpid(), num))
+			path = filepath.Join(os.TempDir(), fmt.Sprintf("goleveldb-test%d0%d0%d", os.Getuid(), os.Getpid(), num))
 			if _, err := os.Stat(path); os.IsNotExist(err) {
-				stor, err = storage.OpenFile(path)
+				stor, err = storage.OpenFile(path, false)
 				ExpectWithOffset(1, err).NotTo(HaveOccurred(), "creating storage at %s", path)
-				closeFn = func() error {
-					if storageKeepFS {
-						return nil
-					}
-					return os.RemoveAll(path)
-				}
 				break
 			}
 		}
@@ -578,9 +679,16 @@ func NewStorage() *Storage {
 	}
 	s := &Storage{
 		Storage: stor,
-		closeFn: closeFn,
+		path:    path,
+		rand:    NewRand(),
 		opens:   make(map[uint64]bool),
 	}
 	s.stallCond.L = &s.mu
+	if s.path != "" {
+		s.logI("using FS storage")
+		s.logI("storage path: %s", s.path)
+	} else {
+		s.logI("using MEM storage")
+	}
 	return s
 }

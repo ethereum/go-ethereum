@@ -147,10 +147,13 @@ func (self *_object) call(this Value, argumentList []Value, eval bool, frame _fr
 	case _nodeFunctionObject:
 		rt := self.runtime
 		stash := rt.enterFunctionScope(fn.stash, this)
+		rt.scope.frame = _frame{
+			callee: fn.node.name,
+			file: fn.node.file,
+		}
 		defer func() {
 			rt.leaveScope()
 		}()
-		rt.scope.frame = frame
 		callValue := rt.cmpl_call_nodeFunction(self, stash, fn.node, this, argumentList)
 		if value, valid := callValue.value.(_result); valid {
 			return value.value
@@ -259,4 +262,10 @@ func (self *FunctionCall) thisClassObject(class string) *_object {
 
 func (self FunctionCall) toObject(value Value) *_object {
 	return self.runtime.toObject(value)
+}
+
+// CallerLocation will return file location information (file:line:pos) where this function is being called.
+func (self FunctionCall) CallerLocation() string {
+	// see error.go for location()
+	return self.runtime.scope.frame.location()
 }

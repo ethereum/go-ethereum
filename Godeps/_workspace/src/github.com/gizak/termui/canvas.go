@@ -1,4 +1,4 @@
-// Copyright 2015 Zack Guo <gizak@icloud.com>. All rights reserved.
+// Copyright 2016 Zack Guo <gizak@icloud.com>. All rights reserved.
 // Use of this source code is governed by a MIT license that can
 // be found in the LICENSE file.
 
@@ -63,12 +63,10 @@ func (c Canvas) Unset(x, y int) {
 }
 
 // Buffer returns un-styled points
-func (c Canvas) Buffer() []Point {
-	ps := make([]Point, len(c))
-	i := 0
+func (c Canvas) Buffer() Buffer {
+	buf := NewBuffer()
 	for k, v := range c {
-		ps[i] = newPoint(v+brailleBase, k[0], k[1])
-		i++
+		buf.Set(k[0], k[1], Cell{Ch: v + brailleBase})
 	}
-	return ps
+	return buf
 }

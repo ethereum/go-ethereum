@@ -2,6 +2,8 @@ package otto
 
 import (
 	"errors"
+	"fmt"
+	"math"
 	"reflect"
 	"sync"
 
@@ -52,6 +54,7 @@ type _runtime struct {
 	scope        *_scope
 	otto         *Otto
 	eval         *_object // The builtin eval, for determine indirect versus direct invocation
+	debugger     func(*Otto)
 
 	labels []string // FIXME
 	lck    sync.Mutex
@@ -191,6 +194,148 @@ func (self *_runtime) safeToValue(value interface{}) (Value, error) {
 	return result, err
 }
 
+// convertNumeric converts numeric parameter val from js to that of type t if it is safe to do so, otherwise it panics.
+// This allows literals (int64), bitwise values (int32) and the general form (float64) of javascript numerics to be passed as parameters to go functions easily.
+func convertNumeric(val reflect.Value, t reflect.Type) reflect.Value {
+	if val.Kind() == t.Kind() {
+		return val
+	}
+
+	if val.Kind() == reflect.Interface {
+		val = reflect.ValueOf(val.Interface())
+	}
+
+	switch val.Kind() {
+	case reflect.Float32, reflect.Float64:
+		f64 := val.Float()
+		switch t.Kind() {
+		case reflect.Float64:
+			return reflect.ValueOf(f64)
+		case reflect.Float32:
+			if reflect.Zero(t).OverflowFloat(f64) {
+				panic("converting float64 to float32 would overflow")
+			}
+
+			return val.Convert(t)
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			i64 := int64(f64)
+			if float64(i64) != f64 {
+				panic(fmt.Sprintf("converting %v to %v would cause loss of precision", val.Type(), t))
+			}
+
+			// The float represents an integer
+			val = reflect.ValueOf(i64)
+		default:
+			panic(fmt.Sprintf("cannot convert %v to %v", val.Type(), t))
+		}
+	}
+
+	switch val.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		i64 := val.Int()
+		switch t.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			if reflect.Zero(t).OverflowInt(i64) {
+				panic(fmt.Sprintf("converting %v to %v would overflow", val.Type(), t))
+			}
+			return val.Convert(t)
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			if i64 < 0 {
+				panic(fmt.Sprintf("converting %v to %v would underflow", val.Type(), t))
+			}
+			if reflect.Zero(t).OverflowUint(uint64(i64)) {
+				panic(fmt.Sprintf("converting %v to %v would overflow", val.Type(), t))
+			}
+			return val.Convert(t)
+		}
+
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		u64 := val.Uint()
+		switch t.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			if u64 > math.MaxInt64 || reflect.Zero(t).OverflowInt(int64(u64)) {
+				panic(fmt.Sprintf("converting %v to %v would overflow", val.Type(), t))
+			}
+			return val.Convert(t)
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			if reflect.Zero(t).OverflowUint(u64) {
+				panic(fmt.Sprintf("converting %v to %v would overflow", val.Type(), t))
+			}
+			return val.Convert(t)
+		}
+	}
+
+	panic(fmt.Sprintf("unsupported type %v for numeric conversion", val.Type()))
+}
+
+// callParamConvert converts request val to type t if possible.
+// If the conversion fails due to overflow or type miss-match then it panics.
+// If no conversion is known then the original value is returned.
+func callParamConvert(val reflect.Value, t reflect.Type) reflect.Value {
+	if val.Kind() == reflect.Interface {
+		val = reflect.ValueOf(val.Interface())
+	}
+
+	switch t.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
+		if val.Kind() == t.Kind() {
+			// Types already match
+			return val
+		}
+		return convertNumeric(val, t)
+	case reflect.Slice:
+		if val.Kind() != reflect.Slice {
+			// Conversion from none slice type to slice not possible
+			panic(fmt.Sprintf("cannot use %v as type %v", val, t))
+		}
+	default:
+		// No supported conversion
+		return val
+	}
+
+	elemType := t.Elem()
+	switch elemType.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64, reflect.Slice:
+		// Attempt to convert to slice of the type t
+		s := reflect.MakeSlice(reflect.SliceOf(elemType), val.Len(), val.Len())
+		for i := 0; i < val.Len(); i++ {
+			s.Index(i).Set(callParamConvert(val.Index(i), elemType))
+		}
+
+		return s
+	}
+
+	// Not a slice type we can convert
+	return val
+}
+
+// callSliceRequired returns true if CallSlice is required instead of Call.
+func callSliceRequired(param reflect.Type, val reflect.Value) bool {
+	vt := val.Type()
+	for param.Kind() == reflect.Slice {
+		if val.Kind() == reflect.Interface {
+			val = reflect.ValueOf(val.Interface())
+			vt = val.Type()
+		}
+
+		if vt.Kind() != reflect.Slice {
+			return false
+		}
+
+		vt = vt.Elem()
+		if val.Kind() != reflect.Invalid {
+			if val.Len() > 0 {
+				val = val.Index(0)
+			} else {
+				val = reflect.Value{}
+			}
+		}
+		param = param.Elem()
+	}
+
+	return true
+}
+
 func (self *_runtime) toValue(value interface{}) Value {
 	switch value := value.(type) {
 	case Value:
@@ -217,19 +362,61 @@ func (self *_runtime) toValue(value interface{}) Value {
 			case reflect.Func:
 				// TODO Maybe cache this?
 				return toValue_object(self.newNativeFunction("", func(call FunctionCall) Value {
-					in := make([]reflect.Value, len(call.ArgumentList))
+					argsCount := len(call.ArgumentList)
+					in := make([]reflect.Value, argsCount)
+					t := value.Type()
+					callSlice := false
+					paramsCount := t.NumIn()
+					lastParam := paramsCount - 1
+					lastArg := argsCount - 1
+					isVariadic := t.IsVariadic()
 					for i, value := range call.ArgumentList {
-						in[i] = reflect.ValueOf(value.export())
+						var paramType reflect.Type
+						if isVariadic && i == lastArg && argsCount == paramsCount {
+							// Variadic functions last parameter and parameter numbers match incoming args
+							paramType = t.In(lastArg)
+							val := reflect.ValueOf(value.export())
+							callSlice = callSliceRequired(paramType, val)
+							if callSlice {
+								in[i] = callParamConvert(reflect.ValueOf(value.export()), paramType)
+								continue
+							}
+						}
+
+						if i >= lastParam {
+							if isVariadic {
+								paramType = t.In(lastParam).Elem()
+							} else {
+								paramType = t.In(lastParam)
+							}
+						} else {
+							paramType = t.In(i)
+						}
+						in[i] = callParamConvert(reflect.ValueOf(value.export()), paramType)
 					}
 
-					out := value.Call(in)
-					if len(out) == 1 {
-						return self.toValue(out[0].Interface())
-					} else if len(out) == 0 {
+					var out []reflect.Value
+					if callSlice {
+						out = value.CallSlice(in)
+					} else {
+						out = value.Call(in)
+					}
+
+					l := len(out)
+					switch l {
+					case 0:
 						return Value{}
+					case 1:
+						return self.toValue(out[0].Interface())
 					}
 
-					panic(call.runtime.panicTypeError())
+					// Return an array of the values to emulate multi value return.
+					// In the future this can be used along side destructuring assignment.
+					s := make([]interface{}, l)
+					for i, v := range out {
+						s[i] = self.toValue(v.Interface())
+					}
+					return self.toValue(s)
 				}))
 			case reflect.Struct:
 				return toValue_object(self.newGoStructObject(value))
@@ -280,7 +467,7 @@ func (self *_runtime) parseSource(src interface{}) (*_nodeProgram, *ast.Program,
 	return nil, program, err
 }
 
-func (self *_runtime) cmpl_run(src interface{}) (Value, error) {
+func (self *_runtime) cmpl_runOrEval(src interface{}, eval bool) (Value, error) {
 	result := Value{}
 	cmpl_program, program, err := self.parseSource(src)
 	if err != nil {
@@ -290,7 +477,7 @@ func (self *_runtime) cmpl_run(src interface{}) (Value, error) {
 		cmpl_program = cmpl_parse(program)
 	}
 	err = catchPanic(func() {
-		result = self.cmpl_evaluate_nodeProgram(cmpl_program, false)
+		result = self.cmpl_evaluate_nodeProgram(cmpl_program, eval)
 	})
 	switch result.kind {
 	case valueEmpty:
@@ -299,6 +486,14 @@ func (self *_runtime) cmpl_run(src interface{}) (Value, error) {
 		result = result.resolve()
 	}
 	return result, err
+}
+
+func (self *_runtime) cmpl_run(src interface{}) (Value, error) {
+	return self.cmpl_runOrEval(src, false)
+}
+
+func (self *_runtime) cmpl_eval(src interface{}) (Value, error) {
+	return self.cmpl_runOrEval(src, true)
 }
 
 func (self *_runtime) parseThrow(err error) {

@@ -11,7 +11,10 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/internal"
 	"golang.org/x/text/encoding/internal/identifier"
+	"golang.org/x/text/internal/utf8internal"
+	"golang.org/x/text/runes"
 	"golang.org/x/text/transform"
 )
 
@@ -23,8 +26,104 @@ import (
 // point.
 
 // TODO:
-// - Define UTF-8 (mostly for BOM handling.)
 // - Define UTF-32?
+
+// UTF8 is the UTF-8 encoding.
+var UTF8 encoding.Encoding = utf8enc
+
+var utf8enc = &internal.Encoding{
+	&internal.SimpleEncoding{utf8Decoder{}, runes.ReplaceIllFormed()},
+	"UTF-8",
+	identifier.UTF8,
+}
+
+type utf8Decoder struct{ transform.NopResetter }
+
+func (utf8Decoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
+	var pSrc int // point from which to start copy in src
+	var accept utf8internal.AcceptRange
+
+	// The decoder can only make the input larger, not smaller.
+	n := len(src)
+	if len(dst) < n {
+		err = transform.ErrShortDst
+		n = len(dst)
+		atEOF = false
+	}
+	for nSrc < n {
+		c := src[nSrc]
+		if c < utf8.RuneSelf {
+			nSrc++
+			continue
+		}
+		first := utf8internal.First[c]
+		size := int(first & utf8internal.SizeMask)
+		if first == utf8internal.FirstInvalid {
+			goto handleInvalid // invalid starter byte
+		}
+		accept = utf8internal.AcceptRanges[first>>utf8internal.AcceptShift]
+		if nSrc+size > n {
+			if !atEOF {
+				// We may stop earlier than necessary here if the short sequence
+				// has invalid bytes. Not checking for this simplifies the code
+				// and may avoid duplicate computations in certain conditions.
+				if err == nil {
+					err = transform.ErrShortSrc
+				}
+				break
+			}
+			// Determine the maximal subpart of an ill-formed subsequence.
+			switch {
+			case nSrc+1 >= n || src[nSrc+1] < accept.Lo || accept.Hi < src[nSrc+1]:
+				size = 1
+			case nSrc+2 >= n || src[nSrc+2] < utf8internal.LoCB || utf8internal.HiCB < src[nSrc+2]:
+				size = 2
+			default:
+				size = 3 // As we are short, the maximum is 3.
+			}
+			goto handleInvalid
+		}
+		if c = src[nSrc+1]; c < accept.Lo || accept.Hi < c {
+			size = 1
+			goto handleInvalid // invalid continuation byte
+		} else if size == 2 {
+		} else if c = src[nSrc+2]; c < utf8internal.LoCB || utf8internal.HiCB < c {
+			size = 2
+			goto handleInvalid // invalid continuation byte
+		} else if size == 3 {
+		} else if c = src[nSrc+3]; c < utf8internal.LoCB || utf8internal.HiCB < c {
+			size = 3
+			goto handleInvalid // invalid continuation byte
+		}
+		nSrc += size
+		continue
+
+	handleInvalid:
+		// Copy the scanned input so far.
+		nDst += copy(dst[nDst:], src[pSrc:nSrc])
+
+		// Append RuneError to the destination.
+		const runeError = "\ufffd"
+		if nDst+len(runeError) > len(dst) {
+			return nDst, nSrc, transform.ErrShortDst
+		}
+		nDst += copy(dst[nDst:], runeError)
+
+		// Skip the maximal subpart of an ill-formed subsequence according to
+		// the W3C standard way instead of the Go way. This Transform is
+		// probably the only place in the text repo where it is warranted.
+		nSrc += size
+		pSrc = nSrc
+
+		// Recompute the maximum source length.
+		if sz := len(dst) - nDst; sz < len(src)-nSrc {
+			err = transform.ErrShortDst
+			n = nSrc + sz
+			atEOF = false
+		}
+	}
+	return nDst + copy(dst[nDst:], src[pSrc:nSrc]), nSrc, err
+}
 
 // UTF16 returns a UTF-16 Encoding for the given default endianness and byte
 // order mark (BOM) policy.
@@ -77,22 +176,27 @@ var mibValue = map[Endianness][numBOMValues]identifier.MIB{
 
 // All lists a configuration for each IANA-defined UTF-16 variant.
 var All = []encoding.Encoding{
+	UTF8,
 	UTF16(BigEndian, UseBOM),
 	UTF16(BigEndian, IgnoreBOM),
 	UTF16(LittleEndian, IgnoreBOM),
 }
 
-// TODO: also include UTF-8
-
 // BOMPolicy is a UTF-16 encoding's byte order mark policy.
 type BOMPolicy uint8
 
 const (
-	writeBOM     BOMPolicy = 0x01
-	acceptBOM    BOMPolicy = 0x02
-	requireBOM   BOMPolicy = 0x04
-	bomMask      BOMPolicy = 0x07
-	numBOMValues           = 8
+	writeBOM   BOMPolicy = 0x01
+	acceptBOM  BOMPolicy = 0x02
+	requireBOM BOMPolicy = 0x04
+	bomMask    BOMPolicy = 0x07
+
+	// HACK: numBOMValues == 8 triggers a bug in the 1.4 compiler (cannot have a
+	// map of an array of length 8 of a type that is also used as a key or value
+	// in another map). See golang.org/issue/11354.
+	// TODO: consider changing this value back to 8 if the use of 1.4.* has
+	// been minimized.
+	numBOMValues = 8 + 1
 
 	// IgnoreBOM means to ignore any byte order marks.
 	IgnoreBOM BOMPolicy = 0
@@ -141,19 +245,19 @@ type config struct {
 	bomPolicy  BOMPolicy
 }
 
-func (u utf16Encoding) NewDecoder() transform.Transformer {
-	return &utf16Decoder{
+func (u utf16Encoding) NewDecoder() *encoding.Decoder {
+	return &encoding.Decoder{Transformer: &utf16Decoder{
 		initial: u.config,
 		current: u.config,
-	}
+	}}
 }
 
-func (u utf16Encoding) NewEncoder() transform.Transformer {
-	return &utf16Encoder{
+func (u utf16Encoding) NewEncoder() *encoding.Encoder {
+	return &encoding.Encoder{Transformer: &utf16Encoder{
 		endianness:       u.endianness,
 		initialBOMPolicy: u.bomPolicy,
 		currentBOMPolicy: u.bomPolicy,
-	}
+	}}
 }
 
 func (u utf16Encoding) ID() (mib identifier.MIB, other string) {
