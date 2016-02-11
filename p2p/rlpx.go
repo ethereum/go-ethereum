@@ -31,6 +31,7 @@ import (
 	"io"
 	mrand "math/rand"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -271,7 +272,12 @@ func initiatorEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, remoteID d
 	if err != nil {
 		return s, err
 	}
-	authPacket, err := authMsg.sealPlain(h)
+	var authPacket []byte
+	if os.Getenv("RLPX_EIP8") != "" {
+		authPacket, err = sealEIP8(authMsg, h)
+	} else {
+		authPacket, err = authMsg.sealPlain(h)
+	}
 	if err != nil {
 		return s, err
 	}
