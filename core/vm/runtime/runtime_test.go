@@ -17,12 +17,15 @@
 package runtime
 
 import (
+	"math/big"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 func TestDefaults(t *testing.T) {
@@ -69,6 +72,49 @@ func TestEnvironment(t *testing.T) {
 		byte(vm.BLOCKHASH),
 		byte(vm.COINBASE),
 	}, nil, nil)
+}
+
+func TestExecute(t *testing.T) {
+	ret, _, err := Execute([]byte{
+		byte(vm.PUSH1), 10,
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 32,
+		byte(vm.PUSH1), 0,
+		byte(vm.RETURN),
+	}, nil, nil)
+	if err != nil {
+		t.Fatal("didn't expect error", err)
+	}
+
+	num := common.BytesToBig(ret)
+	if num.Cmp(big.NewInt(10)) != 0 {
+		t.Error("Expected 10, got", num)
+	}
+}
+
+func TestCall(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	state, _ := state.New(common.Hash{}, db)
+	address := common.HexToAddress("0x0a")
+	state.SetCode(address, []byte{
+		byte(vm.PUSH1), 10,
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 32,
+		byte(vm.PUSH1), 0,
+		byte(vm.RETURN),
+	})
+
+	ret, err := Call(address, nil, &Config{State: state})
+	if err != nil {
+		t.Fatal("didn't expect error", err)
+	}
+
+	num := common.BytesToBig(ret)
+	if num.Cmp(big.NewInt(10)) != 0 {
+		t.Error("Expected 10, got", num)
+	}
 }
 
 func TestRestoreDefaults(t *testing.T) {

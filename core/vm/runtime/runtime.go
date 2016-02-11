@@ -41,6 +41,7 @@ type Config struct {
 	DisableJit  bool // "disable" so it's enabled by default
 	Debug       bool
 
+	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
 }
 
@@ -94,12 +95,14 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	vm.EnableJit = !cfg.DisableJit
 	vm.Debug = cfg.Debug
 
+	if cfg.State == nil {
+		db, _ := ethdb.NewMemDatabase()
+		cfg.State, _ = state.New(common.Hash{}, db)
+	}
 	var (
-		db, _      = ethdb.NewMemDatabase()
-		statedb, _ = state.New(common.Hash{}, db)
-		vmenv      = NewEnv(cfg, statedb)
-		sender     = statedb.CreateAccount(cfg.Origin)
-		receiver   = statedb.CreateAccount(common.StringToAddress("contract"))
+		vmenv    = NewEnv(cfg, cfg.State)
+		sender   = cfg.State.CreateAccount(cfg.Origin)
+		receiver = cfg.State.CreateAccount(common.StringToAddress("contract"))
 	)
 	// set the receiver's (the executing contract) code for execution.
 	receiver.SetCode(code)
@@ -117,5 +120,43 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	if cfg.Debug {
 		vm.StdErrFormat(vmenv.StructLogs())
 	}
-	return ret, statedb, err
+	return ret, cfg.State, err
+}
+
+// Call executes the code given by the contract's address. It will return the
+// EVM's return value or an error if it failed.
+//
+// Call, unlike Execute, requires a config and also requires the State field to
+// be set.
+func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
+	setDefaults(cfg)
+
+	// defer the call to setting back the original values
+	defer func(debug, forceJit, enableJit bool) {
+		vm.Debug = debug
+		vm.ForceJit = forceJit
+		vm.EnableJit = enableJit
+	}(vm.Debug, vm.ForceJit, vm.EnableJit)
+
+	vm.ForceJit = !cfg.DisableJit
+	vm.EnableJit = !cfg.DisableJit
+	vm.Debug = cfg.Debug
+
+	vmenv := NewEnv(cfg, cfg.State)
+
+	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
+	// Call the code with the given configuration.
+	ret, err := vmenv.Call(
+		sender,
+		address,
+		input,
+		cfg.GasLimit,
+		cfg.GasPrice,
+		cfg.Value,
+	)
+
+	if cfg.Debug {
+		vm.StdErrFormat(vmenv.StructLogs())
+	}
+	return ret, err
 }
