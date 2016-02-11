@@ -132,6 +132,8 @@ const (
 	vk_f10    = 0x79
 	vk_f11    = 0x7a
 	vk_f12    = 0x7b
+	bKey      = 0x42
+	fKey      = 0x46
 	yKey      = 0x59
 )
 
@@ -178,6 +180,12 @@ func (s *State) readNext() (interface{}, error) {
 
 		if ke.VirtualKeyCode == vk_tab && ke.ControlKeyState&modKeys == shiftPressed {
 			s.key = shiftTab
+		} else if ke.VirtualKeyCode == bKey && (ke.ControlKeyState&modKeys == leftAltPressed ||
+			ke.ControlKeyState&modKeys == rightAltPressed) {
+			s.key = altB
+		} else if ke.VirtualKeyCode == fKey && (ke.ControlKeyState&modKeys == leftAltPressed ||
+			ke.ControlKeyState&modKeys == rightAltPressed) {
+			s.key = altF
 		} else if ke.VirtualKeyCode == yKey && (ke.ControlKeyState&modKeys == leftAltPressed ||
 			ke.ControlKeyState&modKeys == rightAltPressed) {
 			s.key = altY

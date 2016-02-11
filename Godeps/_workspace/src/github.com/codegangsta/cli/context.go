@@ -163,7 +163,7 @@ func (c *Context) GlobalIsSet(name string) bool {
 // Returns a slice of flag names used in this context.
 func (c *Context) FlagNames() (names []string) {
 	for _, flag := range c.Command.Flags {
-		name := strings.Split(flag.getName(), ",")[0]
+		name := strings.Split(flag.GetName(), ",")[0]
 		if name == "help" {
 			continue
 		}
@@ -175,7 +175,7 @@ func (c *Context) FlagNames() (names []string) {
 // Returns a slice of global flag names used by the app.
 func (c *Context) GlobalFlagNames() (names []string) {
 	for _, flag := range c.App.Flags {
-		name := strings.Split(flag.getName(), ",")[0]
+		name := strings.Split(flag.GetName(), ",")[0]
 		if name == "help" || name == "version" {
 			continue
 		}
@@ -360,7 +360,7 @@ func normalizeFlags(flags []Flag, set *flag.FlagSet) error {
 		visited[f.Name] = true
 	})
 	for _, f := range flags {
-		parts := strings.Split(f.getName(), ",")
+		parts := strings.Split(f.GetName(), ",")
 		if len(parts) == 1 {
 			continue
 		}

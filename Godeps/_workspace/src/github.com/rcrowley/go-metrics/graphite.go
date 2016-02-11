@@ -38,6 +38,7 @@ func Graphite(r Registry, d time.Duration, prefix string, addr *net.TCPAddr) {
 // GraphiteWithConfig is a blocking exporter function just like Graphite,
 // but it takes a GraphiteConfig instead.
 func GraphiteWithConfig(c GraphiteConfig) {
+	log.Printf("WARNING: This go-metrics client has been DEPRECATED! It has been moved to https://github.com/cyberdelia/go-metrics-graphite and will be removed from rcrowley/go-metrics on August 12th 2015")
 	for _ = range time.Tick(c.FlushInterval) {
 		if err := graphite(&c); nil != err {
 			log.Println(err)
@@ -49,6 +50,7 @@ func GraphiteWithConfig(c GraphiteConfig) {
 // non-nil error on failed connections. This can be used in a loop
 // similar to GraphiteWithConfig for custom error handling.
 func GraphiteOnce(c GraphiteConfig) error {
+	log.Printf("WARNING: This go-metrics client has been DEPRECATED! It has been moved to https://github.com/cyberdelia/go-metrics-graphite and will be removed from rcrowley/go-metrics on August 12th 2015")
 	return graphite(&c)
 }
 

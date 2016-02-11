@@ -296,6 +296,24 @@ func (self Otto) Run(src interface{}) (Value, error) {
 	return value, err
 }
 
+// Eval will do the same thing as Run, except without leaving the current scope.
+//
+// By staying in the same scope, the code evaluated has access to everything
+// already defined in the current stack frame. This is most useful in, for
+// example, a debugger call.
+func (self Otto) Eval(src interface{}) (Value, error) {
+	if self.runtime.scope == nil {
+		self.runtime.enterGlobalScope()
+		defer self.runtime.leaveScope()
+	}
+
+	value, err := self.runtime.cmpl_eval(src)
+	if !value.safe() {
+		value = Value{}
+	}
+	return value, err
+}
+
 // Get the value of the top-level binding of the given name.
 //
 // If there is an error (like the binding does not exist), then the value
@@ -339,6 +357,79 @@ func (self Otto) Set(name string, value interface{}) error {
 
 func (self Otto) setValue(name string, value Value) {
 	self.runtime.globalStash.setValue(name, value, false)
+}
+
+func (self Otto) SetDebuggerHandler(fn func(vm *Otto)) {
+	self.runtime.debugger = fn
+}
+
+// Context is a structure that contains information about the current execution
+// context.
+type Context struct {
+	Filename   string
+	Line       int
+	Column     int
+	Callee     string
+	Symbols    map[string]Value
+	This       Value
+	Stacktrace []string
+}
+
+// Context returns the current execution context of the vm
+func (self Otto) Context() (ctx Context) {
+	// Ensure we are operating in a scope
+	if self.runtime.scope == nil {
+		self.runtime.enterGlobalScope()
+		defer self.runtime.leaveScope()
+	}
+
+	scope := self.runtime.scope
+	frame := scope.frame
+
+	// Get location information
+	ctx.Filename = "<unknown>"
+	ctx.Callee = frame.callee
+	if frame.file != nil {
+		ctx.Filename = frame.file.Name()
+		if ctx.Filename == "" {
+			ctx.Filename = "<anonymous>"
+		}
+		ctx.Line, ctx.Column = _position(frame.file, frame.offset)
+	}
+
+	// Get the current scope this Value
+	ctx.This = toValue_object(scope.this)
+
+	// Build stacktrace (up to 10 levels deep)
+	limit := 10
+	ctx.Symbols = make(map[string]Value)
+	ctx.Stacktrace = append(ctx.Stacktrace, frame.location())
+	for limit > 0 {
+		// Get variables
+		stash := scope.lexical
+		for {
+			for _, name := range getStashProperties(stash) {
+				if _, ok := ctx.Symbols[name]; !ok {
+					ctx.Symbols[name] = stash.getBinding(name, true)
+				}
+			}
+			stash = stash.outer()
+			if stash == nil || stash.outer() == nil {
+				break
+			}
+		}
+
+		scope = scope.outer
+		if scope == nil {
+			break
+		}
+		if scope.frame.offset >= 0 {
+			ctx.Stacktrace = append(ctx.Stacktrace, scope.frame.location())
+		}
+		limit--
+	}
+
+	return
 }
 
 // Call the given JavaScript with a given this and arguments.

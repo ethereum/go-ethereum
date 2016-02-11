@@ -273,3 +273,24 @@ func (in *_fnStash) clone(clone *_clone) _stash {
 	}
 	return out
 }
+
+func getStashProperties(stash _stash) (keys []string) {
+	switch vars := stash.(type) {
+	case *_dclStash:
+		for k := range vars.property {
+			keys = append(keys, k)
+		}
+	case *_fnStash:
+		for k := range vars.property {
+			keys = append(keys, k)
+		}
+	case *_objectStash:
+		for k := range vars.object.property {
+			keys = append(keys, k)
+		}
+	default:
+		panic("unknown stash type")
+	}
+
+	return
+}

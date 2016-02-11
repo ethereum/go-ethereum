@@ -417,7 +417,7 @@ func (self *_parser) parseLeftHandSideExpression() ast.Expression {
 	for {
 		if self.token == token.PERIOD {
 			left = self.parseDotMember(left)
-		} else if self.token == token.LEFT_BRACE {
+		} else if self.token == token.LEFT_BRACKET {
 			left = self.parseBracketMember(left)
 		} else {
 			break

@@ -70,6 +70,9 @@ const (
 	MouseLeft
 	MouseMiddle
 	MouseRight
+	MouseRelease
+	MouseWheelUp
+	MouseWheelDown
 )
 
 const (
@@ -123,7 +126,8 @@ const (
 
 // Alt modifier constant, see Event.Mod field and SetInputMode function.
 const (
-	ModAlt Modifier = 0x01
+	ModAlt Modifier = 1 << iota
+	ModMotion
 )
 
 // Cell colors, you can combine a color with multiple attributes using bitwise

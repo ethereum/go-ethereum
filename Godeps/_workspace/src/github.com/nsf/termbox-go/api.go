@@ -372,7 +372,7 @@ func Clear(fg, bg Attribute) error {
 // any known sequence. ESC enables ModAlt modifier for the next keyboard event.
 //
 // Both input modes can be OR'ed with Mouse mode. Setting Mouse mode bit up will
-// enable mouse button click events.
+// enable mouse button press/release and drag events.
 //
 // If 'mode' is InputCurrent, returns the current input mode. See also Input*
 // constants.

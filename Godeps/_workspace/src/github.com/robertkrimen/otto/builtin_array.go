@@ -420,7 +420,7 @@ func arraySortQuickPartition(thisObject *_object, left, right, pivot uint, compa
 	arraySortSwap(thisObject, pivot, right) // Right is now the pivot value
 	cursor := left
 	for index := left; index < right; index++ {
-		if sortCompare(thisObject, index, right, compare) == -1 { // Compare to the pivot value
+		if sortCompare(thisObject, index, right, compare) < 0 { // Compare to the pivot value
 			arraySortSwap(thisObject, index, cursor)
 			cursor += 1
 		}

@@ -1,4 +1,4 @@
-// Copyright 2015 Zack Guo <gizak@icloud.com>. All rights reserved.
+// Copyright 2016 Zack Guo <gizak@icloud.com>. All rights reserved.
 // Use of this source code is governed by a MIT license that can
 // be found in the LICENSE file.
 
@@ -41,64 +41,49 @@ type List struct {
 func NewList() *List {
 	l := &List{Block: *NewBlock()}
 	l.Overflow = "hidden"
-	l.ItemFgColor = theme.ListItemFg
-	l.ItemBgColor = theme.ListItemBg
+	l.ItemFgColor = ThemeAttr("list.item.fg")
+	l.ItemBgColor = ThemeAttr("list.item.bg")
 	return l
 }
 
 // Buffer implements Bufferer interface.
-func (l *List) Buffer() []Point {
-	ps := l.Block.Buffer()
+func (l *List) Buffer() Buffer {
+	buf := l.Block.Buffer()
+
 	switch l.Overflow {
 	case "wrap":
-		rs := str2runes(strings.Join(l.Items, "\n"))
+		cs := DefaultTxBuilder.Build(strings.Join(l.Items, "\n"), l.ItemFgColor, l.ItemBgColor)
 		i, j, k := 0, 0, 0
-		for i < l.innerHeight && k < len(rs) {
-			w := charWidth(rs[k])
-			if rs[k] == '\n' || j+w > l.innerWidth {
+		for i < l.innerArea.Dy() && k < len(cs) {
+			w := cs[k].Width()
+			if cs[k].Ch == '\n' || j+w > l.innerArea.Dx() {
 				i++
 				j = 0
-				if rs[k] == '\n' {
+				if cs[k].Ch == '\n' {
 					k++
 				}
 				continue
 			}
-			pi := Point{}
-			pi.X = l.innerX + j
-			pi.Y = l.innerY + i
+			buf.Set(l.innerArea.Min.X+j, l.innerArea.Min.Y+i, cs[k])
 
-			pi.Ch = rs[k]
-			pi.Bg = l.ItemBgColor
-			pi.Fg = l.ItemFgColor
-
-			ps = append(ps, pi)
 			k++
 			j++
 		}
 
 	case "hidden":
 		trimItems := l.Items
-		if len(trimItems) > l.innerHeight {
-			trimItems = trimItems[:l.innerHeight]
+		if len(trimItems) > l.innerArea.Dy() {
+			trimItems = trimItems[:l.innerArea.Dy()]
 		}
 		for i, v := range trimItems {
-			rs := trimStr2Runes(v, l.innerWidth)
-
+			cs := DTrimTxCls(DefaultTxBuilder.Build(v, l.ItemFgColor, l.ItemBgColor), l.innerArea.Dx())
 			j := 0
-			for _, vv := range rs {
-				w := charWidth(vv)
-				p := Point{}
-				p.X = l.innerX + j
-				p.Y = l.innerY + i
-
-				p.Ch = vv
-				p.Bg = l.ItemBgColor
-				p.Fg = l.ItemFgColor
-
-				ps = append(ps, p)
+			for _, vv := range cs {
+				w := vv.Width()
+				buf.Set(l.innerArea.Min.X+j, l.innerArea.Min.Y+i, vv)
 				j += w
 			}
 		}
 	}
-	return l.Block.chopOverflow(ps)
+	return buf
 }

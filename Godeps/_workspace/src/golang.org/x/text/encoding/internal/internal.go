@@ -36,12 +36,12 @@ type SimpleEncoding struct {
 	Encoder transform.Transformer
 }
 
-func (e *SimpleEncoding) NewDecoder() transform.Transformer {
-	return e.Decoder
+func (e *SimpleEncoding) NewDecoder() *encoding.Decoder {
+	return &encoding.Decoder{Transformer: e.Decoder}
 }
 
-func (e *SimpleEncoding) NewEncoder() transform.Transformer {
-	return e.Encoder
+func (e *SimpleEncoding) NewEncoder() *encoding.Encoder {
+	return &encoding.Encoder{Transformer: e.Encoder}
 }
 
 // FuncEncoding is an Encoding that combines two functions returning a new
@@ -51,10 +51,25 @@ type FuncEncoding struct {
 	Encoder func() transform.Transformer
 }
 
-func (e FuncEncoding) NewDecoder() transform.Transformer {
-	return e.Decoder()
+func (e FuncEncoding) NewDecoder() *encoding.Decoder {
+	return &encoding.Decoder{Transformer: e.Decoder()}
 }
 
-func (e FuncEncoding) NewEncoder() transform.Transformer {
-	return e.Encoder()
+func (e FuncEncoding) NewEncoder() *encoding.Encoder {
+	return &encoding.Encoder{Transformer: e.Encoder()}
 }
+
+// A RepertoireError indicates a rune is not in the repertoire of a destination
+// encoding. It is associated with an encoding-specific suggested replacement
+// byte.
+type RepertoireError byte
+
+// Error implements the error interrface.
+func (r RepertoireError) Error() string {
+	return "encoding: rune not supported by encoding."
+}
+
+// Replacement returns the replacement string associated with this error.
+func (r RepertoireError) Replacement() byte { return byte(r) }
+
+var ErrASCIIReplacement = RepertoireError(encoding.ASCIISub)

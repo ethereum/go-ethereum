@@ -12,6 +12,7 @@ import (
 
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/memdb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
 type ErrBatchCorrupted struct {
@@ -23,7 +24,7 @@ func (e *ErrBatchCorrupted) Error() string {
 }
 
 func newErrBatchCorrupted(reason string) error {
-	return errors.NewErrCorrupted(nil, &ErrBatchCorrupted{reason})
+	return errors.NewErrCorrupted(storage.FileDesc{}, &ErrBatchCorrupted{reason})
 }
 
 const (
@@ -121,13 +122,14 @@ func (b *Batch) Load(data []byte) error {
 
 // Replay replays batch contents.
 func (b *Batch) Replay(r BatchReplay) error {
-	return b.decodeRec(func(i int, kt kType, key, value []byte) {
+	return b.decodeRec(func(i int, kt kType, key, value []byte) error {
 		switch kt {
 		case ktVal:
 			r.Put(key, value)
 		case ktDel:
 			r.Delete(key)
 		}
+		return nil
 	})
 }
 
@@ -193,7 +195,7 @@ func (b *Batch) decode(prevSeq uint64, data []byte) error {
 	return nil
 }
 
-func (b *Batch) decodeRec(f func(i int, kt kType, key, value []byte)) (err error) {
+func (b *Batch) decodeRec(f func(i int, kt kType, key, value []byte) error) error {
 	off := batchHdrLen
 	for i := 0; i < b.rLen; i++ {
 		if off >= len(b.data) {
@@ -224,16 +226,19 @@ func (b *Batch) decodeRec(f func(i int, kt kType, key, value []byte)) (err error
 			off += int(x)
 		}
 
-		f(i, kt, key, value)
+		if err := f(i, kt, key, value); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 func (b *Batch) memReplay(to *memdb.DB) error {
-	return b.decodeRec(func(i int, kt kType, key, value []byte) {
-		ikey := newIkey(key, b.seq+uint64(i), kt)
-		to.Put(ikey, value)
+	var ikScratch []byte
+	return b.decodeRec(func(i int, kt kType, key, value []byte) error {
+		ikScratch = makeIkey(ikScratch, key, b.seq+uint64(i), kt)
+		return to.Put(ikScratch, value)
 	})
 }
 
@@ -245,8 +250,9 @@ func (b *Batch) memDecodeAndReplay(prevSeq uint64, data []byte, to *memdb.DB) er
 }
 
 func (b *Batch) revertMemReplay(to *memdb.DB) error {
-	return b.decodeRec(func(i int, kt kType, key, value []byte) {
-		ikey := newIkey(key, b.seq+uint64(i), kt)
-		to.Delete(ikey)
+	var ikScratch []byte
+	return b.decodeRec(func(i int, kt kType, key, value []byte) error {
+		ikScratch := makeIkey(ikScratch, key, b.seq+uint64(i), kt)
+		return to.Delete(ikScratch)
 	})
 }

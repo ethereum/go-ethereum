@@ -31,6 +31,18 @@ func (s *State) eraseScreen() {
 	fmt.Print("\x1b[H\x1b[2J")
 }
 
+func (s *State) moveUp(lines int) {
+	fmt.Printf("\x1b[%dA", lines)
+}
+
+func (s *State) moveDown(lines int) {
+	fmt.Printf("\x1b[%dB", lines)
+}
+
+func (s *State) emitNewLine() {
+	fmt.Print("\n")
+}
+
 type winSize struct {
 	row, col       uint16
 	xpixel, ypixel uint16

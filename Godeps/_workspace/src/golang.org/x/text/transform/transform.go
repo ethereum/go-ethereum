@@ -596,11 +596,25 @@ func String(t Transformer, s string) (result string, n int, err error) {
 // Bytes returns a new byte slice with the result of converting b[:n] using t,
 // where n <= len(b). If err == nil, n will be len(b). It calls Reset on t.
 func Bytes(t Transformer, b []byte) (result []byte, n int, err error) {
+	return doAppend(t, 0, make([]byte, len(b)), b)
+}
+
+// Append appends the result of converting src[:n] using t to dst, where
+// n <= len(src), If err == nil, n will be len(src). It calls Reset on t.
+func Append(t Transformer, dst, src []byte) (result []byte, n int, err error) {
+	if len(dst) == cap(dst) {
+		n := len(src) + len(dst) // It is okay for this to be 0.
+		b := make([]byte, n)
+		dst = b[:copy(b, dst)]
+	}
+	return doAppend(t, len(dst), dst[:cap(dst)], src)
+}
+
+func doAppend(t Transformer, pDst int, dst, src []byte) (result []byte, n int, err error) {
 	t.Reset()
-	dst := make([]byte, len(b))
-	pDst, pSrc := 0, 0
+	pSrc := 0
 	for {
-		nDst, nSrc, err := t.Transform(dst[pDst:], b[pSrc:], true)
+		nDst, nSrc, err := t.Transform(dst[pDst:], src[pSrc:], true)
 		pDst += nDst
 		pSrc += nSrc
 		if err != ErrShortDst {
