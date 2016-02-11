@@ -136,9 +136,9 @@ func defaultSubscriptionOutputFormatter(data interface{}) interface{} {
 
 // Subscription is used by the server to send notifications to the client
 type Subscription struct {
-	sub    event.Subscription
-	match  SubscriptionMatcher
-	format SubscriptionOutputFormat
+	sub    event.Subscription       // event generator
+	match  SubscriptionMatcher      // allows for event filtering
+	format SubscriptionOutputFormat // allows for event output formatting (e.g. add custom fields)
 }
 
 // NewSubscription create a new RPC subscription
@@ -146,13 +146,15 @@ func NewSubscription(sub event.Subscription) Subscription {
 	return Subscription{sub, nil, defaultSubscriptionOutputFormatter}
 }
 
-// NewSubscriptionWithOutputFormat create a new RPC subscription which a custom notification output format
+// NewSubscriptionWithOutputFormat creates a new RPC subscription which a custom notification output format.
+// If formatter returns nil the event is discarded.
 func NewSubscriptionWithOutputFormat(sub event.Subscription, formatter SubscriptionOutputFormat) Subscription {
 	return Subscription{sub, nil, formatter}
 }
 
 // NewSubscriptionFiltered will create a new subscription. For each raised event the given matcher is
-// called. If it returns true the event is send as notification to the client, otherwise it is ignored.
+// called. If it returns true the event is send to the client, otherwise it is discarded. This can be
+// used in situations where custom filtering is necessary.
 func NewSubscriptionFiltered(sub event.Subscription, match SubscriptionMatcher) Subscription {
 	return Subscription{sub, match, defaultSubscriptionOutputFormatter}
 }

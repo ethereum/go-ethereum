@@ -193,14 +193,14 @@ func (s *Server) Stop() {
 	}
 }
 
-// sendNotification will create a notification from the given event by serializing member fields of the event.
-// It will then send the notification to the client, when it fails the codec is closed. When the event has multiple
-// fields an array of values is returned.
+// sendNotification will send a notification to the client when the given event
+// is not nil. It will close the codec when the subscription could not be send.
 func sendNotification(codec ServerCodec, subid string, event interface{}) {
-	notification := codec.CreateNotification(subid, event)
-
-	if err := codec.Write(notification); err != nil {
-		codec.Close()
+	if event != nil {
+		notification := codec.CreateNotification(subid, event)
+		if err := codec.Write(notification); err != nil {
+			codec.Close()
+		}
 	}
 }
 
