@@ -47,10 +47,7 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-const (
-	defaultGasPrice = uint64(10000000000000)
-	defaultGas      = uint64(90000)
-)
+const defaultGas = uint64(90000)
 
 // blockByNumber is a commonly used helper function which retrieves and returns
 // the block for the given block number, capable of handling two special blocks:
@@ -820,6 +817,7 @@ func newRPCTransaction(b *types.Block, txHash common.Hash) (*RPCTransaction, err
 type PublicTransactionPoolAPI struct {
 	eventMux *event.TypeMux
 	chainDb  ethdb.Database
+	gpo      *GasPriceOracle
 	bc       *core.BlockChain
 	miner    *miner.Miner
 	am       *accounts.Manager
@@ -828,14 +826,15 @@ type PublicTransactionPoolAPI struct {
 }
 
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
-func NewPublicTransactionPoolAPI(txPool *core.TxPool, m *miner.Miner, chainDb ethdb.Database, eventMux *event.TypeMux, bc *core.BlockChain, am *accounts.Manager) *PublicTransactionPoolAPI {
+func NewPublicTransactionPoolAPI(e *Ethereum) *PublicTransactionPoolAPI {
 	return &PublicTransactionPoolAPI{
-		eventMux: eventMux,
-		chainDb:  chainDb,
-		bc:       bc,
-		am:       am,
-		txPool:   txPool,
-		miner:    m,
+		eventMux: e.EventMux(),
+		gpo:      NewGasPriceOracle(e),
+		chainDb:  e.ChainDb(),
+		bc:       e.BlockChain(),
+		am:       e.AccountManager(),
+		txPool:   e.TxPool(),
+		miner:    e.Miner(),
 	}
 }
 
@@ -1028,7 +1027,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(args SendTxArgs) (common.Hash
 		args.Gas = rpc.NewHexNumber(defaultGas)
 	}
 	if args.GasPrice == nil {
-		args.GasPrice = rpc.NewHexNumber(defaultGasPrice)
+		args.GasPrice = rpc.NewHexNumber(s.gpo.SuggestPrice())
 	}
 	if args.Value == nil {
 		args.Value = rpc.NewHexNumber(0)
@@ -1169,7 +1168,7 @@ func (tx *Tx) UnmarshalJSON(b []byte) (err error) {
 		tx.GasLimit = rpc.NewHexNumber(0)
 	}
 	if tx.GasPrice == nil {
-		tx.GasPrice = rpc.NewHexNumber(defaultGasPrice)
+		tx.GasPrice = rpc.NewHexNumber(int64(50000000000))
 	}
 
 	if contractCreation {
@@ -1212,7 +1211,7 @@ func (s *PublicTransactionPoolAPI) SignTransaction(args *SignTransactionArgs) (*
 		args.Gas = rpc.NewHexNumber(defaultGas)
 	}
 	if args.GasPrice == nil {
-		args.GasPrice = rpc.NewHexNumber(defaultGasPrice)
+		args.GasPrice = rpc.NewHexNumber(s.gpo.SuggestPrice())
 	}
 	if args.Value == nil {
 		args.Value = rpc.NewHexNumber(0)
