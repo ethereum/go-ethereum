@@ -91,8 +91,8 @@ func keywordCompleter(jsre *jsre, line string) []string {
 	objRef := "this"
 	prefix := line
 	if len(parts) > 1 {
-		objRef = strings.Join(parts[0:len(parts) - 1], ".")
-		prefix = parts[len(parts) - 1]
+		objRef = strings.Join(parts[0:len(parts)-1], ".")
+		prefix = parts[len(parts)-1]
 	}
 
 	result, _ := jsre.re.Run(fmt.Sprintf(autoCompleteStatement, objRef))
@@ -103,7 +103,7 @@ func keywordCompleter(jsre *jsre, line string) []string {
 				if objRef == "this" {
 					results = append(results, fmt.Sprintf("%s", k))
 				} else {
-					results = append(results, fmt.Sprintf("%s.%s", strings.Join(parts[:len(parts) - 1], "."), k))
+					results = append(results, fmt.Sprintf("%s.%s", strings.Join(parts[:len(parts)-1], "."), k))
 				}
 			}
 		}
@@ -112,7 +112,7 @@ func keywordCompleter(jsre *jsre, line string) []string {
 	// e.g. web3<tab><tab> append dot since its an object
 	isObj, _ := jsre.re.Run(fmt.Sprintf("typeof(%s) === 'object'", line))
 	if isObject, _ := isObj.ToBoolean(); isObject {
-		results = append(results, line + ".")
+		results = append(results, line+".")
 	}
 
 	sort.Strings(results)
@@ -131,7 +131,7 @@ func apiWordCompleterWithContext(jsre *jsre) liner.WordCompleter {
 			if line[i] == '.' || (line[i] >= 'a' && line[i] <= 'z') || (line[i] >= 'A' && line[i] <= 'Z') {
 				continue
 			}
-			if i >= 3 && line[i] == '3' && line[i - 3] == 'w' && line[i - 2] == 'e' && line[i - 1] == 'b' {
+			if i >= 3 && line[i] == '3' && line[i-3] == 'w' && line[i-2] == 'e' && line[i-1] == 'b' {
 				continue
 			}
 			i += 1
@@ -280,7 +280,7 @@ func (js *jsre) apiBindings() error {
 		utils.Fatalf("Error loading bignumber.js: %v", err)
 	}
 
-	err = js.re.Compile("ethereum.js", re.Web3_JS)
+	err = js.re.Compile("web3.js", re.Web3_JS)
 	if err != nil {
 		utils.Fatalf("Error loading web3.js: %v", err)
 	}
