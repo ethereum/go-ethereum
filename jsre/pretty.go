@@ -202,8 +202,17 @@ func (ctx ppctx) doOwnProperties(v otto.Value, f func(string)) {
 	Object, _ := ctx.vm.Object("Object")
 	rv, _ := Object.Call("getOwnPropertyNames", v)
 	gv, _ := rv.Export()
-	for _, v := range gv.([]interface{}) {
-		f(v.(string))
+	switch gv := gv.(type) {
+	case []interface{}:
+		for _, v := range gv {
+			f(v.(string))
+		}
+	case []string:
+		for _, v := range gv {
+			f(v)
+		}
+	default:
+		panic(fmt.Errorf("Object.getOwnPropertyNames returned unexpected type %T", gv))
 	}
 }
 
