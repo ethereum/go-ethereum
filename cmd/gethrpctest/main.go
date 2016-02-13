@@ -18,7 +18,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"io/ioutil"
 	"log"
@@ -26,10 +25,10 @@ import (
 	"os/signal"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/tests"
@@ -84,12 +83,6 @@ func main() {
 	}
 	log.Println("Initial test suite passed...")
 
-	// Start the RPC interface and wait until terminated
-	if err := StartRPC(stack); err != nil {
-		log.Fatalf("Failed to start RPC interface: %v", err)
-	}
-	log.Println("RPC Interface started, accepting requests...")
-
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
 	<-quit
@@ -99,7 +92,16 @@ func main() {
 // keystore path and initial pre-state.
 func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node.Node, error) {
 	// Create a networkless protocol stack
-	stack, err := node.New(&node.Config{IpcPath: node.DefaultIpcEndpoint(), NoDiscovery: true})
+	stack, err := node.New(&node.Config{
+		IPCPath:     node.DefaultIPCEndpoint(),
+		HTTPHost:    common.DefaultHTTPHost,
+		HTTPPort:    common.DefaultHTTPPort,
+		HTTPModules: []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
+		WSHost:      common.DefaultWSHost,
+		WSPort:      common.DefaultWSPort,
+		WSModules:   []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
+		NoDiscovery: true,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -163,24 +165,4 @@ func RunTest(stack *node.Node, test *tests.BlockTest) error {
 		return err
 	}
 	return nil
-}
-
-// StartRPC initializes an RPC interface to the given protocol stack.
-func StartRPC(stack *node.Node) error {
-	/*
-		web3 := NewPublicWeb3API(stack)
-		server.RegisterName("web3", web3)
-		net := NewPublicNetAPI(stack.Server(), ethereum.NetVersion())
-		server.RegisterName("net", net)
-	*/
-
-	for _, api := range stack.APIs() {
-		if adminApi, ok := api.Service.(*node.PrivateAdminAPI); ok {
-			_, err := adminApi.StartRPC("127.0.0.1", 8545, "", "admin,db,eth,debug,miner,net,shh,txpool,personal,web3")
-			return err
-		}
-	}
-
-	glog.V(logger.Error).Infof("Unable to start RPC-HTTP interface, could not find admin API")
-	return errors.New("Unable to start RPC-HTTP interface")
 }

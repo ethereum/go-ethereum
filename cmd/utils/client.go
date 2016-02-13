@@ -17,131 +17,13 @@
 package utils
 
 import (
-	"encoding/json"
 	"fmt"
-
 	"strings"
 
 	"github.com/codegangsta/cli"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 )
-
-// NewInProcRPCClient will start a new RPC server for the given node and returns a client to interact with it.
-func NewInProcRPCClient(stack *node.Node) *inProcClient {
-	server := rpc.NewServer()
-
-	offered := stack.APIs()
-	for _, api := range offered {
-		server.RegisterName(api.Namespace, api.Service)
-	}
-
-	web3 := node.NewPublicWeb3API(stack)
-	server.RegisterName("web3", web3)
-
-	var ethereum *eth.Ethereum
-	if err := stack.Service(&ethereum); err == nil {
-		net := eth.NewPublicNetAPI(stack.Server(), ethereum.NetVersion())
-		server.RegisterName("net", net)
-	} else {
-		glog.V(logger.Warn).Infof("%v\n", err)
-	}
-
-	buf := &buf{
-		requests:  make(chan []byte),
-		responses: make(chan []byte),
-	}
-	client := &inProcClient{
-		server: server,
-		buf:    buf,
-	}
-
-	go func() {
-		server.ServeCodec(rpc.NewJSONCodec(client.buf))
-	}()
-
-	return client
-}
-
-// buf represents the connection between the RPC server and console
-type buf struct {
-	readBuf   []byte      // store remaining request bytes after a partial read
-	requests  chan []byte // list with raw serialized requests
-	responses chan []byte // list with raw serialized responses
-}
-
-// will read the next request in json format
-func (b *buf) Read(p []byte) (int, error) {
-	// last read didn't read entire request, return remaining bytes
-	if len(b.readBuf) > 0 {
-		n := copy(p, b.readBuf)
-		if n < len(b.readBuf) {
-			b.readBuf = b.readBuf[:n]
-		} else {
-			b.readBuf = b.readBuf[:0]
-		}
-		return n, nil
-	}
-
-	// read next request
-	req := <-b.requests
-	n := copy(p, req)
-	if n < len(req) {
-		// buf too small, store remaining chunk for next read
-		b.readBuf = req[n:]
-	}
-
-	return n, nil
-}
-
-// Write send the given buffer to the backend
-func (b *buf) Write(p []byte) (n int, err error) {
-	b.responses <- p
-	return len(p), nil
-}
-
-// Close cleans up obtained resources.
-func (b *buf) Close() error {
-	close(b.requests)
-	close(b.responses)
-
-	return nil
-}
-
-// inProcClient starts a RPC server and uses buf to communicate with it.
-type inProcClient struct {
-	server *rpc.Server
-	buf    *buf
-}
-
-// Close will stop the RPC server
-func (c *inProcClient) Close() {
-	c.server.Stop()
-}
-
-// Send a msg to the endpoint
-func (c *inProcClient) Send(msg interface{}) error {
-	d, err := json.Marshal(msg)
-	if err != nil {
-		return err
-	}
-	c.buf.requests <- d
-	return nil
-}
-
-// Recv reads a message and tries to parse it into the given msg
-func (c *inProcClient) Recv(msg interface{}) error {
-	data := <-c.buf.responses
-	return json.Unmarshal(data, &msg)
-}
-
-// Returns the collection of modules the RPC server offers.
-func (c *inProcClient) SupportedModules() (map[string]string, error) {
-	return rpc.SupportedModules(c)
-}
 
 // NewRemoteRPCClient returns a RPC client which connects to a running geth instance.
 // Depending on the given context this can either be a IPC or a HTTP client.
@@ -151,7 +33,7 @@ func NewRemoteRPCClient(ctx *cli.Context) (rpc.Client, error) {
 		return NewRemoteRPCClientFromString(endpoint)
 	}
 	// use IPC by default
-	return rpc.NewIPCClient(node.DefaultIpcEndpoint())
+	return rpc.NewIPCClient(node.DefaultIPCEndpoint())
 }
 
 // NewRemoteRPCClientFromString returns a RPC client which connects to the given
@@ -169,6 +51,5 @@ func NewRemoteRPCClientFromString(endpoint string) (rpc.Client, error) {
 	if strings.HasPrefix(endpoint, "ws:") {
 		return rpc.NewWSClient(endpoint)
 	}
-
 	return nil, fmt.Errorf("invalid endpoint")
 }

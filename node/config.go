@@ -19,6 +19,7 @@ package node
 import (
 	"crypto/ecdsa"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -52,11 +53,11 @@ type Config struct {
 	// in memory.
 	DataDir string
 
-	// IpcPath is the requested location to place the IPC endpoint. If the path is
+	// IPCPath is the requested location to place the IPC endpoint. If the path is
 	// a simple file name, it is placed inside the data directory (or on the root
 	// pipe path on Windows), whereas if it's a resolvable path name (absolute or
 	// relative), then that specific path is enforced. An empty path disables IPC.
-	IpcPath string
+	IPCPath string
 
 	// This field should be a valid secp256k1 private key that will be used for both
 	// remote peer identification as well as network traffic encryption. If no key
@@ -97,37 +98,105 @@ type Config struct {
 	// handshake phase, counted separately for inbound and outbound connections.
 	// Zero defaults to preset values.
 	MaxPendingPeers int
+
+	// HTTPHost is the host interface on which to start the HTTP RPC server. If this
+	// field is empty, no HTTP API endpoint will be started.
+	HTTPHost string
+
+	// HTTPPort is the TCP port number on which to start the HTTP RPC server. The
+	// default zero value is/ valid and will pick a port number randomly (useful
+	// for ephemeral nodes).
+	HTTPPort int
+
+	// HTTPCors is the Cross-Origin Resource Sharing header to send to requesting
+	// clients. Please be aware that CORS is a browser enforced security, it's fully
+	// useless for custom HTTP clients.
+	HTTPCors string
+
+	// HTTPModules is a list of API modules to expose via the HTTP RPC interface.
+	// If the module list is empty, all RPC API endpoints designated public will be
+	// exposed.
+	HTTPModules []string
+
+	// WSHost is the host interface on which to start the websocket RPC server. If
+	// this field is empty, no websocket API endpoint will be started.
+	WSHost string
+
+	// WSPort is the TCP port number on which to start the websocket RPC server. The
+	// default zero value is/ valid and will pick a port number randomly (useful for
+	// ephemeral nodes).
+	WSPort int
+
+	// WSDomains is the list of domain to accept websocket requests from. Please be
+	// aware that the server can only act upon the HTTP request the client sends and
+	// cannot verify the validity of the request header.
+	WSDomains string
+
+	// WSModules is a list of API modules to expose via the websocket RPC interface.
+	// If the module list is empty, all RPC API endpoints designated public will be
+	// exposed.
+	WSModules []string
 }
 
-// IpcEndpoint resolves an IPC endpoint based on a configured value, taking into
+// IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
 // account the set data folders as well as the designated platform we're currently
 // running on.
-func (c *Config) IpcEndpoint() string {
+func (c *Config) IPCEndpoint() string {
 	// Short circuit if IPC has not been enabled
-	if c.IpcPath == "" {
+	if c.IPCPath == "" {
 		return ""
 	}
 	// On windows we can only use plain top-level pipes
 	if runtime.GOOS == "windows" {
-		if strings.HasPrefix(c.IpcPath, `\\.\pipe\`) {
-			return c.IpcPath
+		if strings.HasPrefix(c.IPCPath, `\\.\pipe\`) {
+			return c.IPCPath
 		}
-		return `\\.\pipe\` + c.IpcPath
+		return `\\.\pipe\` + c.IPCPath
 	}
 	// Resolve names into the data directory full paths otherwise
-	if filepath.Base(c.IpcPath) == c.IpcPath {
+	if filepath.Base(c.IPCPath) == c.IPCPath {
 		if c.DataDir == "" {
-			return filepath.Join(os.TempDir(), c.IpcPath)
+			return filepath.Join(os.TempDir(), c.IPCPath)
 		}
-		return filepath.Join(c.DataDir, c.IpcPath)
+		return filepath.Join(c.DataDir, c.IPCPath)
 	}
-	return c.IpcPath
+	return c.IPCPath
 }
 
-// DefaultIpcEndpoint returns the IPC path used by default.
-func DefaultIpcEndpoint() string {
-	config := &Config{DataDir: common.DefaultDataDir(), IpcPath: common.DefaultIpcSocket()}
-	return config.IpcEndpoint()
+// DefaultIPCEndpoint returns the IPC path used by default.
+func DefaultIPCEndpoint() string {
+	config := &Config{DataDir: common.DefaultDataDir(), IPCPath: common.DefaultIPCSocket}
+	return config.IPCEndpoint()
+}
+
+// HTTPEndpoint resolves an HTTP endpoint based on the configured host interface
+// and port parameters.
+func (c *Config) HTTPEndpoint() string {
+	if c.HTTPHost == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", c.HTTPHost, c.HTTPPort)
+}
+
+// DefaultHTTPEndpoint returns the HTTP endpoint used by default.
+func DefaultHTTPEndpoint() string {
+	config := &Config{HTTPHost: common.DefaultHTTPHost, HTTPPort: common.DefaultHTTPPort}
+	return config.HTTPEndpoint()
+}
+
+// WSEndpoint resolves an websocket endpoint based on the configured host interface
+// and port parameters.
+func (c *Config) WSEndpoint() string {
+	if c.WSHost == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", c.WSHost, c.WSPort)
+}
+
+// DefaultWSEndpoint returns the websocket endpoint used by default.
+func DefaultWSEndpoint() string {
+	config := &Config{WSHost: common.DefaultWSHost, WSPort: common.DefaultWSPort}
+	return config.WSEndpoint()
 }
 
 // NodeKey retrieves the currently configured private key of the node, checking

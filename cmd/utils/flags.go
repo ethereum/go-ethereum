@@ -18,7 +18,6 @@ package utils
 
 import (
 	"crypto/ecdsa"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -233,12 +232,12 @@ var (
 	RPCListenAddrFlag = cli.StringFlag{
 		Name:  "rpcaddr",
 		Usage: "HTTP-RPC server listening interface",
-		Value: "127.0.0.1",
+		Value: common.DefaultHTTPHost,
 	}
 	RPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
 		Usage: "HTTP-RPC server listening port",
-		Value: 8545,
+		Value: common.DefaultHTTPPort,
 	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
@@ -248,7 +247,7 @@ var (
 	RPCApiFlag = cli.StringFlag{
 		Name:  "rpcapi",
 		Usage: "API's offered over the HTTP-RPC interface",
-		Value: rpc.DefaultHttpRpcApis,
+		Value: rpc.DefaultHTTPApis,
 	}
 	IPCDisabledFlag = cli.BoolFlag{
 		Name:  "ipcdisable",
@@ -257,12 +256,12 @@ var (
 	IPCApiFlag = cli.StringFlag{
 		Name:  "ipcapi",
 		Usage: "API's offered over the IPC-RPC interface",
-		Value: rpc.DefaultIpcApis,
+		Value: rpc.DefaultIPCApis,
 	}
 	IPCPathFlag = DirectoryFlag{
 		Name:  "ipcpath",
 		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
-		Value: DirectoryString{common.DefaultIpcSocket()},
+		Value: DirectoryString{common.DefaultIPCSocket},
 	}
 	WSEnabledFlag = cli.BoolFlag{
 		Name:  "ws",
@@ -271,21 +270,21 @@ var (
 	WSListenAddrFlag = cli.StringFlag{
 		Name:  "wsaddr",
 		Usage: "WS-RPC server listening interface",
-		Value: "127.0.0.1",
+		Value: common.DefaultWSHost,
 	}
 	WSPortFlag = cli.IntFlag{
 		Name:  "wsport",
 		Usage: "WS-RPC server listening port",
-		Value: 8546,
+		Value: common.DefaultWSPort,
 	}
 	WSApiFlag = cli.StringFlag{
 		Name:  "wsapi",
 		Usage: "API's offered over the WS-RPC interface",
-		Value: rpc.DefaultHttpRpcApis,
+		Value: rpc.DefaultHTTPApis,
 	}
 	WSAllowedDomainsFlag = cli.StringFlag{
 		Name:  "wsdomains",
-		Usage: "Domains from which to accept websockets requests",
+		Usage: "Domains from which to accept websockets requests (can be spoofed)",
 		Value: "",
 	}
 	ExecFlag = cli.StringFlag{
@@ -394,9 +393,9 @@ func MustMakeDataDir(ctx *cli.Context) string {
 	return ""
 }
 
-// MakeIpcPath creates an IPC path configuration from the set command line flags,
+// MakeIPCPath creates an IPC path configuration from the set command line flags,
 // returning an empty string if IPC was explicitly disabled, or the set path.
-func MakeIpcPath(ctx *cli.Context) string {
+func MakeIPCPath(ctx *cli.Context) string {
 	if ctx.GlobalBool(IPCDisabledFlag.Name) {
 		return ""
 	}
@@ -480,6 +479,24 @@ func MakeNAT(ctx *cli.Context) nat.Interface {
 		Fatalf("Option %s: %v", NATFlag.Name, err)
 	}
 	return natif
+}
+
+// MakeHTTPRpcHost creates the HTTP RPC listener interface string from the set
+// command line flags, returning empty if the HTTP endpoint is disabled.
+func MakeHTTPRpcHost(ctx *cli.Context) string {
+	if !ctx.GlobalBool(RPCEnabledFlag.Name) {
+		return ""
+	}
+	return ctx.GlobalString(RPCListenAddrFlag.Name)
+}
+
+// MakeWSRpcHost creates the WebSocket RPC listener interface string from the set
+// command line flags, returning empty if the HTTP endpoint is disabled.
+func MakeWSRpcHost(ctx *cli.Context) string {
+	if !ctx.GlobalBool(WSEnabledFlag.Name) {
+		return ""
+	}
+	return ctx.GlobalString(WSListenAddrFlag.Name)
 }
 
 // MakeGenesisBlock loads up a genesis block from an input file specified in the
@@ -591,7 +608,6 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 	// Configure the node's service container
 	stackConf := &node.Config{
 		DataDir:         MustMakeDataDir(ctx),
-		IpcPath:         MakeIpcPath(ctx),
 		PrivateKey:      MakeNodeKey(ctx),
 		Name:            MakeNodeName(name, version, ctx),
 		NoDiscovery:     ctx.GlobalBool(NoDiscoverFlag.Name),
@@ -600,6 +616,15 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		NAT:             MakeNAT(ctx),
 		MaxPeers:        ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers: ctx.GlobalInt(MaxPendingPeersFlag.Name),
+		IPCPath:         MakeIPCPath(ctx),
+		HTTPHost:        MakeHTTPRpcHost(ctx),
+		HTTPPort:        ctx.GlobalInt(RPCPortFlag.Name),
+		HTTPCors:        ctx.GlobalString(RPCCORSDomainFlag.Name),
+		HTTPModules:     strings.Split(ctx.GlobalString(RPCApiFlag.Name), ","),
+		WSHost:          MakeWSRpcHost(ctx),
+		WSPort:          ctx.GlobalInt(WSPortFlag.Name),
+		WSDomains:       ctx.GlobalString(WSAllowedDomainsFlag.Name),
+		WSModules:       strings.Split(ctx.GlobalString(WSApiFlag.Name), ","),
 	}
 	// Configure the Ethereum service
 	accman := MakeAccountManager(ctx)
@@ -740,48 +765,5 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}
-
 	return chain, chainDb
-}
-
-// StartRPC starts a HTTP JSON-RPC API server.
-func StartRPC(stack *node.Node, ctx *cli.Context) error {
-	for _, api := range stack.APIs() {
-		if adminApi, ok := api.Service.(*node.PrivateAdminAPI); ok {
-			address := ctx.GlobalString(RPCListenAddrFlag.Name)
-			port := ctx.GlobalInt(RPCPortFlag.Name)
-			cors := ctx.GlobalString(RPCCORSDomainFlag.Name)
-			apiStr := ""
-			if ctx.GlobalIsSet(RPCApiFlag.Name) {
-				apiStr = ctx.GlobalString(RPCApiFlag.Name)
-			}
-
-			_, err := adminApi.StartRPC(address, port, cors, apiStr)
-			return err
-		}
-	}
-
-	glog.V(logger.Error).Infof("Unable to start RPC-HTTP interface, could not find admin API")
-	return errors.New("Unable to start RPC-HTTP interface")
-}
-
-// StartWS starts a websocket JSON-RPC API server.
-func StartWS(stack *node.Node, ctx *cli.Context) error {
-	for _, api := range stack.APIs() {
-		if adminApi, ok := api.Service.(*node.PrivateAdminAPI); ok {
-			address := ctx.GlobalString(WSListenAddrFlag.Name)
-			port := ctx.GlobalInt(WSAllowedDomainsFlag.Name)
-			allowedDomains := ctx.GlobalString(WSAllowedDomainsFlag.Name)
-			apiStr := ""
-			if ctx.GlobalIsSet(WSApiFlag.Name) {
-				apiStr = ctx.GlobalString(WSApiFlag.Name)
-			}
-
-			_, err := adminApi.StartWS(address, port, allowedDomains, apiStr)
-			return err
-		}
-	}
-
-	glog.V(logger.Error).Infof("Unable to start RPC-WS interface, could not find admin API")
-	return errors.New("Unable to start RPC-WS interface")
 }

@@ -20,12 +20,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 	"unicode"
 	"unicode/utf8"
-
-	"fmt"
 
 	"golang.org/x/net/context"
 )

@@ -33,8 +33,8 @@ import (
 const (
 	stopPendingRequestTimeout = 3 * time.Second // give pending requests stopPendingRequestTimeout the time to finish when the server is stopped
 
-	DefaultIpcApis     = "admin,eth,debug,miner,net,shh,txpool,personal,web3"
-	DefaultHttpRpcApis = "eth,net,web3"
+	DefaultIPCApis  = "admin,eth,debug,miner,net,shh,txpool,personal,web3"
+	DefaultHTTPApis = "eth,net,web3"
 )
 
 // NewServer will create a new server instance with no registered handlers.

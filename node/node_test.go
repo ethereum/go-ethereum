@@ -18,9 +18,7 @@ package node
 
 import (
 	"errors"
-	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"reflect"
 	"testing"
@@ -37,7 +35,6 @@ var (
 
 func testNodeConfig() *Config {
 	return &Config{
-		IpcPath:    fmt.Sprintf("test-%d.ipc", rand.Int63()),
 		PrivateKey: testNodeKey,
 		Name:       "test node",
 	}
@@ -541,10 +538,11 @@ func TestAPIGather(t *testing.T) {
 	defer stack.Stop()
 
 	// Connect to the RPC server and verify the various registered endpoints
-	ipcClient, err := rpc.NewIPCClient(stack.IpcEndpoint())
+	client, err := stack.Attach()
 	if err != nil {
-		t.Fatalf("failed to connect to the IPC API server: %v", err)
+		t.Fatalf("failed to connect to the inproc API server: %v", err)
 	}
+	defer client.Close()
 
 	tests := []struct {
 		Method string
@@ -556,11 +554,11 @@ func TestAPIGather(t *testing.T) {
 		{"multi.v2.nested_theOneMethod", "multi.v2.nested"},
 	}
 	for i, test := range tests {
-		if err := ipcClient.Send(rpc.JSONRequest{Id: new(int64), Version: "2.0", Method: test.Method}); err != nil {
+		if err := client.Send(rpc.JSONRequest{Id: new(int64), Version: "2.0", Method: test.Method}); err != nil {
 			t.Fatalf("test %d: failed to send API request: %v", i, err)
 		}
 		reply := new(rpc.JSONSuccessResponse)
-		if err := ipcClient.Recv(reply); err != nil {
+		if err := client.Recv(reply); err != nil {
 			t.Fatalf("test %d: failed to read API reply: %v", i, err)
 		}
 		select {

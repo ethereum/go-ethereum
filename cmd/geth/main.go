@@ -399,7 +399,7 @@ func attach(ctx *cli.Context) {
 	// attach to a running geth instance
 	client, err := utils.NewRemoteRPCClient(ctx)
 	if err != nil {
-		utils.Fatalf("Unable to attach to geth - %v", err)
+		utils.Fatalf("Unable to attach to geth: %v", err)
 	}
 
 	repl := newLightweightJSRE(
@@ -425,8 +425,10 @@ func console(ctx *cli.Context) {
 	startNode(ctx, node)
 
 	// Attach to the newly started node, and either execute script or become interactive
-	client := utils.NewInProcRPCClient(node)
-
+	client, err := node.Attach()
+	if err != nil {
+		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+	}
 	repl := newJSRE(node,
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
@@ -449,8 +451,10 @@ func execScripts(ctx *cli.Context) {
 	startNode(ctx, node)
 
 	// Attach to the newly started node and execute the given scripts
-	client := utils.NewInProcRPCClient(node)
-
+	client, err := node.Attach()
+	if err != nil {
+		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+	}
 	repl := newJSRE(node,
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
@@ -503,16 +507,6 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 	}
 	// Start auxiliary services if enabled
-	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
-		if err := utils.StartRPC(stack, ctx); err != nil {
-			utils.Fatalf("Failed to start RPC: %v", err)
-		}
-	}
-	if ctx.GlobalBool(utils.WSEnabledFlag.Name) {
-		if err := utils.StartWS(stack, ctx); err != nil {
-			utils.Fatalf("Failed to start WS: %v", err)
-		}
-	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
 		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name), ctx.GlobalString(utils.MiningGPUFlag.Name)); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
