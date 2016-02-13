@@ -394,37 +394,6 @@ func TestBytes(t *testing.T) {
 	}
 }
 
-/*
-func TestReturn(t *testing.T) {
-	const definition = `[
-	{ "type" : "function", "name" : "balance", "const" : true, "inputs" : [], "outputs" : [ { "name": "", "type": "hash" } ] },
-	{ "type" : "function", "name" : "name", "const" : true, "inputs" : [], "outputs" : [ { "name": "", "type": "address" } ] }]`
-
-	abi, err := JSON(strings.NewReader(definition))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	r := abi.Call(func([]byte) []byte {
-		t := make([]byte, 32)
-		t[0] = 1
-		return t
-	}, "balance")
-	if _, ok := r.(common.Hash); !ok {
-		t.Errorf("expected type common.Hash, got %T", r)
-	}
-
-	r = abi.Call(func([]byte) []byte {
-		t := make([]byte, 32)
-		t[0] = 1
-		return t
-	}, "name")
-	if _, ok := r.(common.Address); !ok {
-		t.Errorf("expected type common.Address, got %T", r)
-	}
-}
-*/
-
 func TestDefaultFunctionParsing(t *testing.T) {
 	const definition = `[{ "name" : "balance" }]`
 
@@ -550,11 +519,71 @@ func TestMultiReturnWithSlice(t *testing.T) {
 	}
 }
 
+func TestMarshalArrays(t *testing.T) {
+	const definition = `[
+	{ "name" : "bytes32", "const" : false, "outputs": [ { "type": "bytes32" } ] },
+	{ "name" : "bytes10", "const" : false, "outputs": [ { "type": "bytes10" } ] }
+	]`
+
+	abi, err := JSON(strings.NewReader(definition))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	output := common.LeftPadBytes([]byte{1}, 32)
+
+	var bytes10 [10]byte
+	err = abi.unmarshal(&bytes10, "bytes32", output)
+	if err == nil || err.Error() != "abi: cannot unmarshal src (len=32) in to dst (len=10)" {
+		t.Error("expected error or bytes32 not be assignable to bytes10:", err)
+	}
+
+	var bytes32 [32]byte
+	err = abi.unmarshal(&bytes32, "bytes32", output)
+	if err != nil {
+		t.Error("didn't expect error:", err)
+	}
+	if !bytes.Equal(bytes32[:], output) {
+		t.Error("expected bytes32[31] to be 1 got", bytes32[31])
+	}
+
+	type (
+		B10 [10]byte
+		B32 [32]byte
+	)
+
+	var b10 B10
+	err = abi.unmarshal(&b10, "bytes32", output)
+	if err == nil || err.Error() != "abi: cannot unmarshal src (len=32) in to dst (len=10)" {
+		t.Error("expected error or bytes32 not be assignable to bytes10:", err)
+	}
+
+	var b32 B32
+	err = abi.unmarshal(&b32, "bytes32", output)
+	if err != nil {
+		t.Error("didn't expect error:", err)
+	}
+	if !bytes.Equal(b32[:], output) {
+		t.Error("expected bytes32[31] to be 1 got", bytes32[31])
+	}
+
+	output[10] = 1
+	var shortAssignLong [32]byte
+	err = abi.unmarshal(&shortAssignLong, "bytes10", output)
+	if err != nil {
+		t.Error("didn't expect error:", err)
+	}
+	if !bytes.Equal(output, shortAssignLong[:]) {
+		t.Errorf("expected %x to be %x", shortAssignLong, output)
+	}
+}
+
 func TestUnmarshal(t *testing.T) {
 	const definition = `[
 	{ "name" : "int", "const" : false, "outputs": [ { "type": "uint256" } ] },
 	{ "name" : "bool", "const" : false, "outputs": [ { "type": "bool" } ] },
 	{ "name" : "bytes", "const" : false, "outputs": [ { "type": "bytes" } ] },
+	{ "name" : "fixed", "const" : false, "outputs": [ { "type": "bytes32" } ] },
 	{ "name" : "multi", "const" : false, "outputs": [ { "type": "bytes" }, { "type": "bytes" } ] },
 	{ "name" : "mixedBytes", "const" : true, "outputs": [ { "name": "a", "type": "bytes" }, { "name": "b", "type": "bytes32" } ] }]`
 
@@ -653,6 +682,21 @@ func TestUnmarshal(t *testing.T) {
 
 	if !bytes.Equal(Bytes, []byte("hello")) {
 		t.Errorf("expected %x got %x", bytesOut, Bytes)
+	}
+
+	// marshal dynamic bytes length 5
+	buff.Reset()
+	buff.Write(common.RightPadBytes([]byte("hello"), 32))
+
+	var hash common.Hash
+	err = abi.unmarshal(&hash, "fixed", buff.Bytes())
+	if err != nil {
+		t.Error(err)
+	}
+
+	helloHash := common.BytesToHash(common.RightPadBytes([]byte("hello"), 32))
+	if hash != helloHash {
+		t.Errorf("Expected %x to equal %x", hash, helloHash)
 	}
 
 	// marshal error
