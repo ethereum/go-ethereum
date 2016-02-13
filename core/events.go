@@ -30,6 +30,11 @@ type TxPreEvent struct{ Tx *types.Transaction }
 // TxPostEvent is posted when a transaction has been processed.
 type TxPostEvent struct{ Tx *types.Transaction }
 
+// PendingLogsEvent is posted pre mining and notifies of pending logs.
+type PendingLogsEvent struct {
+	Logs vm.Logs
+}
+
 // NewBlockEvent is posted when a block has been imported.
 type NewBlockEvent struct{ Block *types.Block }
 
@@ -40,7 +45,7 @@ type NewMinedBlockEvent struct{ Block *types.Block }
 type RemovedTransactionEvent struct{ Txs types.Transactions }
 
 // RemovedLogEvent is posted when a reorg happens
-type RemovedLogEvent struct{ Logs vm.Logs }
+type RemovedLogsEvent struct{ Logs vm.Logs }
 
 // ChainSplit is posted when a new head is detected
 type ChainSplitEvent struct {

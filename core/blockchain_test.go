@@ -982,7 +982,7 @@ func TestLogReorgs(t *testing.T) {
 	evmux := &event.TypeMux{}
 	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
 
-	subs := evmux.Subscribe(RemovedLogEvent{})
+	subs := evmux.Subscribe(RemovedLogsEvent{})
 	chain, _ := GenerateChain(genesis, db, 2, func(i int, gen *BlockGen) {
 		if i == 1 {
 			tx, err := types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), big.NewInt(1000000), new(big.Int), code).SignECDSA(key1)
@@ -1002,7 +1002,7 @@ func TestLogReorgs(t *testing.T) {
 	}
 
 	ev := <-subs.Chan()
-	if len(ev.Data.(RemovedLogEvent).Logs) == 0 {
+	if len(ev.Data.(RemovedLogsEvent).Logs) == 0 {
 		t.Error("expected logs")
 	}
 }

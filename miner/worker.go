@@ -243,7 +243,7 @@ func (self *worker) update() {
 				// Apply transaction to the pending state if we're not mining
 				if atomic.LoadInt32(&self.mining) == 0 {
 					self.currentMu.Lock()
-					self.current.commitTransactions(types.Transactions{ev.Tx}, self.gasPrice, self.chain)
+					self.current.commitTransactions(self.mux, types.Transactions{ev.Tx}, self.gasPrice, self.chain)
 					self.currentMu.Unlock()
 				}
 			}
@@ -529,7 +529,7 @@ func (self *worker) commitNewWork() {
 	transactions := append(singleTxOwner, multiTxOwner...)
 	*/
 
-	work.commitTransactions(transactions, self.gasPrice, self.chain)
+	work.commitTransactions(self.mux, transactions, self.gasPrice, self.chain)
 	self.eth.TxPool().RemoveTransactions(work.lowGasTxs)
 
 	// compute uncles for the new block.
@@ -588,8 +588,10 @@ func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
 	return nil
 }
 
-func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *big.Int, bc *core.BlockChain) {
+func (env *Work) commitTransactions(mux *event.TypeMux, transactions types.Transactions, gasPrice *big.Int, bc *core.BlockChain) {
 	gp := new(core.GasPool).AddGas(env.header.GasLimit)
+
+	var coalescedLogs vm.Logs
 	for _, tx := range transactions {
 		// We can skip err. It has already been validated in the tx pool
 		from, _ := tx.From()
@@ -627,7 +629,7 @@ func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *b
 
 		env.state.StartRecord(tx.Hash(), common.Hash{}, 0)
 
-		err := env.commitTransaction(tx, bc, gp)
+		err, logs := env.commitTransaction(tx, bc, gp)
 		switch {
 		case core.IsGasLimitErr(err):
 			// ignore the transactor so no nonce errors will be thrown for this account
@@ -643,20 +645,25 @@ func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *b
 			}
 		default:
 			env.tcount++
+			coalescedLogs = append(coalescedLogs, logs...)
 		}
+	}
+	if len(coalescedLogs) > 0 {
+		go mux.Post(core.PendingLogsEvent{Logs: coalescedLogs})
 	}
 }
 
-func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, gp *core.GasPool) error {
+func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, gp *core.GasPool) (error, vm.Logs) {
 	snap := env.state.Copy()
-	receipt, _, _, err := core.ApplyTransaction(bc, gp, env.state, env.header, tx, env.header.GasUsed)
+	receipt, logs, _, err := core.ApplyTransaction(bc, gp, env.state, env.header, tx, env.header.GasUsed)
 	if err != nil {
 		env.state.Set(snap)
-		return err
+		return err, nil
 	}
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
-	return nil
+
+	return nil, logs
 }
 
 // TODO: remove or use

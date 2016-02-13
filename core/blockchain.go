@@ -1358,7 +1358,7 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		go self.eventMux.Post(RemovedTransactionEvent{diff})
 	}
 	if len(deletedLogs) > 0 {
-		go self.eventMux.Post(RemovedLogEvent{deletedLogs})
+		go self.eventMux.Post(RemovedLogsEvent{deletedLogs})
 	}
 
 	return nil
