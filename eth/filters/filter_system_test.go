@@ -18,6 +18,7 @@ func TestCallbacks(t *testing.T) {
 		txDone         = make(chan struct{})
 		logDone        = make(chan struct{})
 		removedLogDone = make(chan struct{})
+		pendingLogDone = make(chan struct{})
 	)
 
 	blockFilter := &Filter{
@@ -37,7 +38,6 @@ func TestCallbacks(t *testing.T) {
 			}
 		},
 	}
-
 	removedLogFilter := &Filter{
 		LogCallback: func(l *vm.Log, oob bool) {
 			if oob {
@@ -45,16 +45,23 @@ func TestCallbacks(t *testing.T) {
 			}
 		},
 	}
+	pendingLogFilter := &Filter{
+		LogCallback: func(*vm.Log, bool) {
+			close(pendingLogDone)
+		},
+	}
 
-	fs.Add(blockFilter)
-	fs.Add(txFilter)
-	fs.Add(logFilter)
-	fs.Add(removedLogFilter)
+	fs.Add(blockFilter, ChainFilter)
+	fs.Add(txFilter, PendingTxFilter)
+	fs.Add(logFilter, LogFilter)
+	fs.Add(removedLogFilter, LogFilter)
+	fs.Add(pendingLogFilter, PendingLogFilter)
 
 	mux.Post(core.ChainEvent{})
 	mux.Post(core.TxPreEvent{})
-	mux.Post(core.RemovedLogEvent{vm.Logs{&vm.Log{}}})
 	mux.Post(vm.Logs{&vm.Log{}})
+	mux.Post(core.RemovedLogsEvent{vm.Logs{&vm.Log{}}})
+	mux.Post(core.PendingLogsEvent{vm.Logs{&vm.Log{}}})
 
 	const dura = 5 * time.Second
 	failTimer := time.NewTimer(dura)
@@ -83,5 +90,12 @@ func TestCallbacks(t *testing.T) {
 	case <-removedLogDone:
 	case <-failTimer.C:
 		t.Error("removed log filter failed to trigger (timeout)")
+	}
+
+	failTimer.Reset(dura)
+	select {
+	case <-pendingLogDone:
+	case <-failTimer.C:
+		t.Error("pending log filter failed to trigger (timout)")
 	}
 }

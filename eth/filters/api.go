@@ -142,7 +142,11 @@ func (s *PublicFilterAPI) NewBlockFilter() (string, error) {
 
 	s.blockMu.Lock()
 	filter := New(s.chainDb)
-	id := s.filterManager.Add(filter)
+	id, err := s.filterManager.Add(filter, ChainFilter)
+	if err != nil {
+		return "", err
+	}
+
 	s.blockQueue[id] = &hashQueue{timeout: time.Now()}
 
 	filter.BlockCallback = func(block *types.Block, logs vm.Logs) {
@@ -174,7 +178,11 @@ func (s *PublicFilterAPI) NewPendingTransactionFilter() (string, error) {
 	defer s.transactionMu.Unlock()
 
 	filter := New(s.chainDb)
-	id := s.filterManager.Add(filter)
+	id, err := s.filterManager.Add(filter, PendingTxFilter)
+	if err != nil {
+		return "", err
+	}
+
 	s.transactionQueue[id] = &hashQueue{timeout: time.Now()}
 
 	filter.TransactionCallback = func(tx *types.Transaction) {
@@ -194,12 +202,16 @@ func (s *PublicFilterAPI) NewPendingTransactionFilter() (string, error) {
 }
 
 // newLogFilter creates a new log filter.
-func (s *PublicFilterAPI) newLogFilter(earliest, latest int64, addresses []common.Address, topics [][]common.Hash) int {
+func (s *PublicFilterAPI) newLogFilter(earliest, latest int64, addresses []common.Address, topics [][]common.Hash) (int, error) {
 	s.logMu.Lock()
 	defer s.logMu.Unlock()
 
 	filter := New(s.chainDb)
-	id := s.filterManager.Add(filter)
+	id, err := s.filterManager.Add(filter, LogFilter)
+	if err != nil {
+		return 0, err
+	}
+
 	s.logQueue[id] = &logQueue{timeout: time.Now()}
 
 	filter.SetBeginBlock(earliest)
@@ -215,7 +227,7 @@ func (s *PublicFilterAPI) newLogFilter(earliest, latest int64, addresses []commo
 		}
 	}
 
-	return id
+	return id, nil
 }
 
 // NewFilterArgs represents a request to create a new filter.
@@ -352,9 +364,12 @@ func (s *PublicFilterAPI) NewFilter(args NewFilterArgs) (string, error) {
 
 	var id int
 	if len(args.Addresses) > 0 {
-		id = s.newLogFilter(args.FromBlock.Int64(), args.ToBlock.Int64(), args.Addresses, args.Topics)
+		id, err = s.newLogFilter(args.FromBlock.Int64(), args.ToBlock.Int64(), args.Addresses, args.Topics)
 	} else {
-		id = s.newLogFilter(args.FromBlock.Int64(), args.ToBlock.Int64(), nil, args.Topics)
+		id, err = s.newLogFilter(args.FromBlock.Int64(), args.ToBlock.Int64(), nil, args.Topics)
+	}
+	if err != nil {
+		return "", err
 	}
 
 	s.filterMapMu.Lock()
