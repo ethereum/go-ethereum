@@ -165,7 +165,14 @@ func (abi ABI) Call(executer Executer, v interface{}, name string, args ...inter
 	return abi.unmarshal(v, name, executer(callData))
 }
 
-var interSlice = reflect.TypeOf([]interface{}{})
+// these variable are used to determine certain types during type assertion for
+// assignment.
+var (
+	r_interSlice = reflect.TypeOf([]interface{}{})
+	r_hash       = reflect.TypeOf(common.Hash{})
+	r_bytes      = reflect.TypeOf([]byte{})
+	r_byte       = reflect.TypeOf(byte(0))
+)
 
 // unmarshal output in v according to the abi specification
 func (abi ABI) unmarshal(v interface{}, name string, output []byte) error {
@@ -194,17 +201,14 @@ func (abi ABI) unmarshal(v interface{}, name string, output []byte) error {
 					field := typ.Field(j)
 					// TODO read tags: `abi:"fieldName"`
 					if field.Name == strings.ToUpper(method.Outputs[i].Name[:1])+method.Outputs[i].Name[1:] {
-						if field.Type.AssignableTo(reflectValue.Type()) {
-							value.Field(j).Set(reflectValue)
-							break
-						} else {
-							return fmt.Errorf("abi: cannot unmarshal %v in to %v", field.Type, reflectValue.Type())
+						if err := set(value.Field(j), reflectValue, method.Outputs[i]); err != nil {
+							return err
 						}
 					}
 				}
 			}
 		case reflect.Slice:
-			if !value.Type().AssignableTo(interSlice) {
+			if !value.Type().AssignableTo(r_interSlice) {
 				return fmt.Errorf("abi: cannot marshal tuple in to slice %T (only []interface{} is supported)", v)
 			}
 
@@ -228,14 +232,37 @@ func (abi ABI) unmarshal(v interface{}, name string, output []byte) error {
 		if err != nil {
 			return err
 		}
-		reflectValue := reflect.ValueOf(marshalledValue)
-		if typ.AssignableTo(reflectValue.Type()) {
-			value.Set(reflectValue)
-		} else {
-			return fmt.Errorf("abi: cannot unmarshal %v in to %v", reflectValue.Type(), value.Type())
+		if err := set(value, reflect.ValueOf(marshalledValue), method.Outputs[0]); err != nil {
+			return err
 		}
 	}
 
+	return nil
+}
+
+// set attempts to assign src to dst by either setting, copying or otherwise.
+//
+// set is a bit more lenient when it comes to assignment and doesn't force an as
+// strict ruleset as bare `reflect` does.
+func set(dst, src reflect.Value, output Argument) error {
+	dstType := dst.Type()
+	srcType := src.Type()
+
+	switch {
+	case dstType.AssignableTo(src.Type()):
+		dst.Set(src)
+	case dstType.Kind() == reflect.Array && srcType.Kind() == reflect.Slice:
+		if !dstType.Elem().AssignableTo(r_byte) {
+			return fmt.Errorf("abi: cannot unmarshal %v in to array of elem %v", src.Type(), dstType.Elem())
+		}
+
+		if dst.Len() < output.Type.Size {
+			return fmt.Errorf("abi: cannot unmarshal src (len=%d) in to dst (len=%d)", output.Type.Size, dst.Len())
+		}
+		reflect.Copy(dst, src)
+	default:
+		return fmt.Errorf("abi: cannot unmarshal %v in to %v", src.Type(), dst.Type())
+	}
 	return nil
 }
 
