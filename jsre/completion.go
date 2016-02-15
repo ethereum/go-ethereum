@@ -40,11 +40,11 @@ func getCompletions(vm *otto.Otto, line string) (results []string) {
 		prefix = parts[len(parts)-1]
 	}
 
-	res, err := vm.Eval(objRef)
-	if err != nil || !res.IsObject() {
+	obj, _ := vm.Object(objRef)
+	if obj == nil {
 		return nil
 	}
-	for _, k := range res.Object().Keys() {
+	iterOwnAndConstructorKeys(vm, obj, func(k string) {
 		if strings.HasPrefix(k, prefix) {
 			if objRef == "this" {
 				results = append(results, k)
@@ -52,9 +52,9 @@ func getCompletions(vm *otto.Otto, line string) (results []string) {
 				results = append(results, strings.Join(parts[:len(parts)-1], ".")+"."+k)
 			}
 		}
-	}
+	})
 	// e.g. web3<tab><tab> append dot since its an object
-	if lineRes, _ := vm.Eval(line); lineRes.IsObject() {
+	if obj, _ = vm.Object(line); obj != nil {
 		results = append(results, line+".")
 	}
 
