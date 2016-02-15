@@ -51,6 +51,9 @@ const (
 	respTimeout = 500 * time.Millisecond
 	sendTimeout = 500 * time.Millisecond
 	expiration  = 20 * time.Second
+
+	ntpThreshold   = 32               // Continuous timeouts after which to check NTP
+	driftThreshold = 10 * time.Second // Allowed clock drift before warning user
 )
 
 // RPC packet types
@@ -316,13 +319,14 @@ func (t *udp) handleReply(from NodeID, ptype byte, req packet) bool {
 	}
 }
 
-// loop runs in its own goroutin. it keeps track of
+// loop runs in its own goroutine. it keeps track of
 // the refresh timer and the pending reply queue.
 func (t *udp) loop() {
 	var (
-		plist       = list.New()
-		timeout     = time.NewTimer(0)
-		nextTimeout *pending // head of plist when timeout was last reset
+		plist        = list.New()
+		timeout      = time.NewTimer(0)
+		nextTimeout  *pending // head of plist when timeout was last reset
+		contTimeouts = 0      // number of continuous timeouts to do NTP checks
 	)
 	<-timeout.C // ignore first timeout
 	defer timeout.Stop()
@@ -377,19 +381,40 @@ func (t *udp) loop() {
 						p.errc <- nil
 						plist.Remove(el)
 					}
+					// Reset the continuous timeout counter (time drift detection)
+					contTimeouts = 0
 				}
 			}
 			r.matched <- matched
 
 		case now := <-timeout.C:
 			nextTimeout = nil
+
 			// Notify and remove callbacks whose deadline is in the past.
 			for el := plist.Front(); el != nil; el = el.Next() {
 				p := el.Value.(*pending)
 				if now.After(p.deadline) || now.Equal(p.deadline) {
 					p.errc <- errTimeout
 					plist.Remove(el)
+					contTimeouts++
 				}
+			}
+			// If we've accumulated too many timeouts, do an NTP time sync check
+			if contTimeouts > ntpThreshold {
+				go func() {
+					drift, err := sntpDrift(3)
+					switch {
+					case err != nil:
+						glog.V(logger.Warn).Infof("No UDP connectivity, maybe blocked by firewall? (%v)", err)
+
+					case drift < -driftThreshold || drift > driftThreshold:
+						glog.V(logger.Warn).Infof("System clock seems off by %v, which can prevent network connectivity", drift)
+
+					default:
+						glog.V(logger.Debug).Infof("Sanity NTP check reported %v drift, all ok", drift)
+					}
+				}()
+				contTimeouts = 0
 			}
 		}
 	}
