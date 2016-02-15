@@ -80,51 +80,11 @@ type jsre struct {
 	prompter
 }
 
-var (
-	loadedModulesMethods  map[string][]string
-	autoCompleteStatement = "function _autocomplete(obj) {var results = []; for (var e in obj) { results.push(e); }; return results; }; _autocomplete(%s)"
-)
-
-func keywordCompleter(jsre *jsre, line string) []string {
-	var results []string
-	parts := strings.Split(line, ".")
-	objRef := "this"
-	prefix := line
-	if len(parts) > 1 {
-		objRef = strings.Join(parts[0:len(parts)-1], ".")
-		prefix = parts[len(parts)-1]
-	}
-
-	result, _ := jsre.re.Run(fmt.Sprintf(autoCompleteStatement, objRef))
-	raw, _ := result.Export()
-	if keys, ok := raw.([]interface{}); ok {
-		for _, k := range keys {
-			if strings.HasPrefix(fmt.Sprintf("%s", k), prefix) {
-				if objRef == "this" {
-					results = append(results, fmt.Sprintf("%s", k))
-				} else {
-					results = append(results, fmt.Sprintf("%s.%s", strings.Join(parts[:len(parts)-1], "."), k))
-				}
-			}
-		}
-	}
-
-	// e.g. web3<tab><tab> append dot since its an object
-	isObj, _ := jsre.re.Run(fmt.Sprintf("typeof(%s) === 'object'", line))
-	if isObject, _ := isObj.ToBoolean(); isObject {
-		results = append(results, line+".")
-	}
-
-	sort.Strings(results)
-	return results
-}
-
-func apiWordCompleterWithContext(jsre *jsre) liner.WordCompleter {
-	completer := func(line string, pos int) (head string, completions []string, tail string) {
+func makeCompleter(re *jsre) liner.WordCompleter {
+	return func(line string, pos int) (head string, completions []string, tail string) {
 		if len(line) == 0 || pos == 0 {
 			return "", nil, ""
 		}
-
 		// chuck data to relevant part for autocompletion, e.g. in case of nested lines eth.getBalance(eth.coinb<tab><tab>
 		i := 0
 		for i = pos - 1; i > 0; i-- {
@@ -137,16 +97,8 @@ func apiWordCompleterWithContext(jsre *jsre) liner.WordCompleter {
 			i += 1
 			break
 		}
-
-		begin := line[:i]
-		keyword := line[i:pos]
-		end := line[pos:]
-
-		completionWords := keywordCompleter(jsre, keyword)
-		return begin, completionWords, end
+		return line[:i], re.re.CompleteKeywords(line[i:pos]), line[pos:]
 	}
-
-	return completer
 }
 
 func newLightweightJSRE(docRoot string, client rpc.Client, datadir string, interactive bool) *jsre {
@@ -165,8 +117,7 @@ func newLightweightJSRE(docRoot string, client rpc.Client, datadir string, inter
 		lr := liner.NewLiner()
 		js.withHistory(datadir, func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
-		js.loadAutoCompletion()
-		lr.SetWordCompleter(apiWordCompleterWithContext(js))
+		lr.SetWordCompleter(makeCompleter(js))
 		lr.SetTabCompletionStyle(liner.TabPrints)
 		lr.SetMultiLineMode(true)
 		js.prompter = lr
@@ -197,8 +148,7 @@ func newJSRE(stack *node.Node, docRoot, corsDomain string, client rpc.Client, in
 		lr := liner.NewLiner()
 		js.withHistory(stack.DataDir(), func(hist *os.File) { lr.ReadHistory(hist) })
 		lr.SetCtrlCAborts(true)
-		js.loadAutoCompletion()
-		lr.SetWordCompleter(apiWordCompleterWithContext(js))
+		lr.SetWordCompleter(makeCompleter(js))
 		lr.SetTabCompletionStyle(liner.TabPrints)
 		js.prompter = lr
 		js.atexit = func() {
@@ -208,15 +158,6 @@ func newJSRE(stack *node.Node, docRoot, corsDomain string, client rpc.Client, in
 		}
 	}
 	return js
-}
-
-func (self *jsre) loadAutoCompletion() {
-	if modules, err := self.supportedApis(); err == nil {
-		loadedModulesMethods = make(map[string][]string)
-		for module, _ := range modules {
-			loadedModulesMethods[module] = rpc.AutoCompletion[module]
-		}
-	}
 }
 
 func (self *jsre) batch(statement string) {
