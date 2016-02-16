@@ -169,6 +169,8 @@ type NodeIterator struct {
 	Parent   common.Hash // Hash of the first full ancestor node (nil if current is the root)
 	Leaf     bool        // Flag whether the current node is a value (data) node
 	LeafBlob []byte      // Data blob contained within a leaf (otherwise nil)
+
+	Error error // Failure set in case of an internal error in the iterator
 }
 
 // NewNodeIterator creates an post-order trie iterator.
@@ -180,29 +182,38 @@ func NewNodeIterator(trie *Trie) *NodeIterator {
 }
 
 // Next moves the iterator to the next node, returning whether there are any
-// further nodes.
+// further nodes. In case of an internal error this method returns false and
+// sets the Error field to the encountered failure.
 func (it *NodeIterator) Next() bool {
-	it.step()
+	// If the iterator failed previously, don't do anything
+	if it.Error != nil {
+		return false
+	}
+	// Otherwise step forward with the iterator and report any errors
+	if err := it.step(); err != nil {
+		it.Error = err
+		return false
+	}
 	return it.retrieve()
 }
 
 // step moves the iterator to the next node of the trie.
-func (it *NodeIterator) step() {
+func (it *NodeIterator) step() error {
 	// Abort if we reached the end of the iteration
 	if it.trie == nil {
-		return
+		return nil
 	}
 	// Initialize the iterator if we've just started, or pop off the old node otherwise
 	if len(it.stack) == 0 {
 		it.stack = append(it.stack, &nodeIteratorState{node: it.trie.root, child: -1})
 		if it.stack[0].node == nil {
-			panic(fmt.Sprintf("root node missing: %x", it.trie.Root()))
+			return fmt.Errorf("root node missing: %x", it.trie.Root())
 		}
 	} else {
 		it.stack = it.stack[:len(it.stack)-1]
 		if len(it.stack) == 0 {
 			it.trie = nil
-			return
+			return nil
 		}
 	}
 	// Continue iteration to the next child
@@ -239,13 +250,14 @@ func (it *NodeIterator) step() {
 
 			node, err := it.trie.resolveHash(hash, nil, nil)
 			if err != nil {
-				panic(err)
+				return err
 			}
 			it.stack = append(it.stack, &nodeIteratorState{hash: common.BytesToHash(hash), node: node, parent: ancestor, child: -1})
 		} else {
 			break
 		}
 	}
+	return nil
 }
 
 // retrieve pulls and caches the current trie node the iterator is traversing.

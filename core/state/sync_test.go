@@ -18,7 +18,6 @@ package state
 
 import (
 	"bytes"
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -97,28 +96,23 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accou
 	}
 }
 
-// checkStateConsistency checks that all nodes in a state trie and indeed present.
-func checkStateConsistency(db ethdb.Database, root common.Hash) (failure error) {
-	// Capture any panics by the iterator
-	defer func() {
-		if r := recover(); r != nil {
-			failure = fmt.Errorf("%v", r)
-		}
-	}()
+// checkStateConsistency checks that all nodes in a state trie are indeed present.
+func checkStateConsistency(db ethdb.Database, root common.Hash) error {
 	// Remove any potentially cached data from the test state creation or previous checks
 	trie.ClearGlobalCache()
 
 	// Create and iterate a state trie rooted in a sub-node
 	if _, err := db.Get(root.Bytes()); err != nil {
-		return
+		return nil // Consider a non existent state consistent
 	}
 	state, err := New(root, db)
 	if err != nil {
-		return
+		return err
 	}
-	for it := NewNodeIterator(state); it.Next(); {
+	it := NewNodeIterator(state)
+	for it.Next() {
 	}
-	return nil
+	return it.Error
 }
 
 // Tests that an empty state is not scheduled for syncing.

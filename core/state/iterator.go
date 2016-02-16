@@ -41,6 +41,8 @@ type NodeIterator struct {
 	Hash   common.Hash // Hash of the current entry being iterated (nil if not standalone)
 	Entry  interface{} // Current state entry being iterated (internal representation)
 	Parent common.Hash // Hash of the first full ancestor node (nil if current is the root)
+
+	Error error // Failure set in case of an internal error in the iterator
 }
 
 // NewNodeIterator creates an post-order state node iterator.
@@ -51,17 +53,26 @@ func NewNodeIterator(state *StateDB) *NodeIterator {
 }
 
 // Next moves the iterator to the next node, returning whether there are any
-// further nodes.
+// further nodes. In case of an internal error this method returns false and
+// sets the Error field to the encountered failure.
 func (it *NodeIterator) Next() bool {
-	it.step()
+	// If the iterator failed previously, don't do anything
+	if it.Error != nil {
+		return false
+	}
+	// Otherwise step forward with the iterator and report any errors
+	if err := it.step(); err != nil {
+		it.Error = err
+		return false
+	}
 	return it.retrieve()
 }
 
 // step moves the iterator to the next entry of the state trie.
-func (it *NodeIterator) step() {
+func (it *NodeIterator) step() error {
 	// Abort if we reached the end of the iteration
 	if it.state == nil {
-		return
+		return nil
 	}
 	// Initialize the iterator if we've just started
 	if it.stateIt == nil {
@@ -70,23 +81,29 @@ func (it *NodeIterator) step() {
 	// If we had data nodes previously, we surely have at least state nodes
 	if it.dataIt != nil {
 		if cont := it.dataIt.Next(); !cont {
+			if it.dataIt.Error != nil {
+				return it.dataIt.Error
+			}
 			it.dataIt = nil
 		}
-		return
+		return nil
 	}
 	// If we had source code previously, discard that
 	if it.code != nil {
 		it.code = nil
-		return
+		return nil
 	}
 	// Step to the next state trie node, terminating if we're out of nodes
 	if cont := it.stateIt.Next(); !cont {
+		if it.stateIt.Error != nil {
+			return it.stateIt.Error
+		}
 		it.state, it.stateIt = nil, nil
-		return
+		return nil
 	}
 	// If the state trie node is an internal entry, leave as is
 	if !it.stateIt.Leaf {
-		return
+		return nil
 	}
 	// Otherwise we've reached an account node, initiate data iteration
 	var account struct {
@@ -95,13 +112,12 @@ func (it *NodeIterator) step() {
 		Root     common.Hash
 		CodeHash []byte
 	}
-	err := rlp.Decode(bytes.NewReader(it.stateIt.LeafBlob), &account)
-	if err != nil {
-		panic(err)
+	if err := rlp.Decode(bytes.NewReader(it.stateIt.LeafBlob), &account); err != nil {
+		return err
 	}
 	dataTrie, err := trie.New(account.Root, it.state.db)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	it.dataIt = trie.NewNodeIterator(dataTrie)
 	if !it.dataIt.Next() {
@@ -111,10 +127,11 @@ func (it *NodeIterator) step() {
 		it.codeHash = common.BytesToHash(account.CodeHash)
 		it.code, err = it.state.db.Get(account.CodeHash)
 		if err != nil {
-			panic(fmt.Sprintf("code %x: %v", account.CodeHash, err))
+			return fmt.Errorf("code %x: %v", account.CodeHash, err)
 		}
 	}
 	it.accountHash = it.stateIt.Parent
+	return nil
 }
 
 // retrieve pulls and caches the current state entry the iterator is traversing.

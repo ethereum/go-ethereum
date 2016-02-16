@@ -18,7 +18,6 @@ package trie
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -80,25 +79,20 @@ func checkTrieContents(t *testing.T, db Database, root []byte, content map[strin
 	}
 }
 
-// checkTrieConsistency checks that all nodes in a trie and indeed present.
-func checkTrieConsistency(db Database, root common.Hash) (failure error) {
-	// Capture any panics by the iterator
-	defer func() {
-		if r := recover(); r != nil {
-			failure = fmt.Errorf("%v", r)
-		}
-	}()
+// checkTrieConsistency checks that all nodes in a trie are indeed present.
+func checkTrieConsistency(db Database, root common.Hash) error {
 	// Remove any potentially cached data from the test trie creation or previous checks
 	globalCache.Clear()
 
 	// Create and iterate a trie rooted in a subnode
 	trie, err := New(root, db)
 	if err != nil {
-		return
+		return nil // // Consider a non existent state consistent
 	}
-	for it := NewNodeIterator(trie); it.Next(); {
+	it := NewNodeIterator(trie)
+	for it.Next() {
 	}
-	return nil
+	return it.Error
 }
 
 // Tests that an empty trie is not scheduled for syncing.
