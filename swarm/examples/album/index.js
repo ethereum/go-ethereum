@@ -288,7 +288,7 @@ function uploadFile(files, nr, uri) {
       var xhr = new XMLHttpRequest();
       xhr.onreadystatechange = function() { if (xhr.readyState === 4) {
         var i = xhr.responseText;
-        window.location.replace("/" + i + "/");
+        window.location.replace("/bzz://" + i + "/");
       }};
       sendImgs(xhr, uri);
     }
@@ -361,9 +361,9 @@ function deleteImg()
     var xhrd = new XMLHttpRequest();
     xhrd.onreadystatechange = function () {  if (xhrd.readyState === 4) {
       var j = xhrd.responseText;
-      window.location.replace("/" + j + "/");
+      window.location.replace("/bzz://" + j + "/");
     }};
-    xhrd.open("DELETE", "/" + i + "/" + fname, true);
+    xhrd.open("DELETE", "/bzz://" + i + "/" + fname, true);
     xhrd.send();
   }};
 
@@ -378,7 +378,7 @@ function moveUpDown(off)
   var xhr = new XMLHttpRequest();
   xhr.onreadystatechange = function () {  if (xhr.readyState === 4) {
     var i = xhr.responseText;
-    window.location.replace("/" + i + "/#" + (eidx + off));
+    window.location.replace("/bzz://" + i + "/#" + (eidx + off));
   }};
   sendImgs(xhr, "");
 }
