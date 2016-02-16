@@ -62,18 +62,16 @@ func GenerateNewKeyDefault(ks KeyStore, rand io.Reader, auth string) (key *Key, 
 	return key, err
 }
 
-func (ks keyStorePlain) GetKey(keyAddr common.Address, auth string) (key *Key, err error) {
-	key = new(Key)
-	err = getKey(ks.keysDirPath, keyAddr, key)
-	return
-}
-
-func getKey(keysDirPath string, keyAddr common.Address, content interface{}) (err error) {
-	fileContent, err := getKeyFile(keysDirPath, keyAddr)
+func (ks keyStorePlain) GetKey(keyAddr common.Address, auth string) (*Key, error) {
+	keyjson, err := getKeyFile(ks.keysDirPath, keyAddr)
 	if err != nil {
-		return
+		return nil, err
 	}
-	return json.Unmarshal(fileContent, content)
+	key := new(Key)
+	if err := json.Unmarshal(keyjson, key); err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 func (ks keyStorePlain) GetKeyAddresses() (addresses []common.Address, err error) {

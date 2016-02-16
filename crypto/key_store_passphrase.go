@@ -75,15 +75,7 @@ func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *K
 }
 
 func (ks keyStorePassphrase) GetKey(keyAddr common.Address, auth string) (key *Key, err error) {
-	keyBytes, keyId, err := decryptKeyFromFile(ks.keysDirPath, keyAddr, auth)
-	if err == nil {
-		key = &Key{
-			Id:         uuid.UUID(keyId),
-			Address:    keyAddr,
-			PrivateKey: ToECDSA(keyBytes),
-		}
-	}
-	return
+	return decryptKeyFromFile(ks.keysDirPath, keyAddr, auth)
 }
 
 func (ks keyStorePassphrase) Cleanup(keyAddr common.Address) (err error) {
@@ -145,39 +137,58 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	return writeKeyFile(key.Address, ks.keysDirPath, keyJSON)
 }
 
-func (ks keyStorePassphrase) DeleteKey(keyAddr common.Address, auth string) (err error) {
+func (ks keyStorePassphrase) DeleteKey(keyAddr common.Address, auth string) error {
 	// only delete if correct passphrase is given
-	_, _, err = decryptKeyFromFile(ks.keysDirPath, keyAddr, auth)
-	if err != nil {
+	if _, err := decryptKeyFromFile(ks.keysDirPath, keyAddr, auth); err != nil {
 		return err
 	}
-
 	return deleteKey(ks.keysDirPath, keyAddr)
 }
 
-func decryptKeyFromFile(keysDirPath string, keyAddr common.Address, auth string) (keyBytes []byte, keyId []byte, err error) {
+// DecryptKey decrypts a key from a json blob, returning the private key itself.
+func DecryptKey(keyjson []byte, auth string) (*Key, error) {
+	// Parse the json into a simple map to fetch the key version
 	m := make(map[string]interface{})
-	err = getKey(keysDirPath, keyAddr, &m)
-	if err != nil {
-		return
+	if err := json.Unmarshal(keyjson, &m); err != nil {
+		return nil, err
 	}
-
+	// Depending on the version try to parse one way or another
+	var (
+		keyBytes, keyId []byte
+		err             error
+	)
 	v := reflect.ValueOf(m["version"])
 	if v.Kind() == reflect.String && v.String() == "1" {
 		k := new(encryptedKeyJSONV1)
-		err = getKey(keysDirPath, keyAddr, &k)
-		if err != nil {
-			return
+		if err := json.Unmarshal(keyjson, k); err != nil {
+			return nil, err
 		}
-		return decryptKeyV1(k, auth)
+		keyBytes, keyId, err = decryptKeyV1(k, auth)
 	} else {
 		k := new(encryptedKeyJSONV3)
-		err = getKey(keysDirPath, keyAddr, &k)
-		if err != nil {
-			return
+		if err := json.Unmarshal(keyjson, k); err != nil {
+			return nil, err
 		}
-		return decryptKeyV3(k, auth)
+		keyBytes, keyId, err = decryptKeyV3(k, auth)
 	}
+	// Handle any decryption errors and return the key
+	if err != nil {
+		return nil, err
+	}
+	key := ToECDSA(keyBytes)
+	return &Key{
+		Id:         uuid.UUID(keyId),
+		Address:    PubkeyToAddress(key.PublicKey),
+		PrivateKey: key,
+	}, nil
+}
+
+func decryptKeyFromFile(keysDirPath string, keyAddr common.Address, auth string) (key *Key, err error) {
+	keyjson, err := getKeyFile(keysDirPath, keyAddr)
+	if err != nil {
+		return nil, err
+	}
+	return DecryptKey(keyjson, auth)
 }
 
 func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byte, keyId []byte, err error) {
