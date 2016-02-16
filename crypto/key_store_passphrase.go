@@ -61,12 +61,10 @@ type keyStorePassphrase struct {
 	keysDirPath string
 	scryptN     int
 	scryptP     int
-	scryptR     int
-	scryptDKLen int
 }
 
 func NewKeyStorePassphrase(path string, scryptN int, scryptP int) KeyStore {
-	return &keyStorePassphrase{path, scryptN, scryptP, scryptR, scryptDKLen}
+	return &keyStorePassphrase{path, scryptN, scryptP}
 }
 
 func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *Key, err error) {
@@ -85,12 +83,22 @@ func (ks keyStorePassphrase) GetKeyAddresses() (addresses []common.Address, err 
 	return getKeyAddresses(ks.keysDirPath)
 }
 
-func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
-	authArray := []byte(auth)
-	salt := randentropy.GetEntropyCSPRNG(32)
-	derivedKey, err := scrypt.Key(authArray, salt, ks.scryptN, ks.scryptR, ks.scryptP, ks.scryptDKLen)
+func (ks keyStorePassphrase) StoreKey(key *Key, auth string) error {
+	keyjson, err := EncryptKey(key, auth, ks.scryptN, ks.scryptP)
 	if err != nil {
 		return err
+	}
+	return writeKeyFile(key.Address, ks.keysDirPath, keyjson)
+}
+
+// EncryptKey encrypts a key using the specified scrypt parameters into a json
+// blob that can be decrypted later on.
+func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
+	authArray := []byte(auth)
+	salt := randentropy.GetEntropyCSPRNG(32)
+	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptR, scryptP, scryptDKLen)
+	if err != nil {
+		return nil, err
 	}
 	encryptKey := derivedKey[:16]
 	keyBytes := FromECDSA(key.PrivateKey)
@@ -98,16 +106,15 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	iv := randentropy.GetEntropyCSPRNG(aes.BlockSize) // 16
 	cipherText, err := aesCTRXOR(encryptKey, keyBytes, iv)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
 	mac := Keccak256(derivedKey[16:32], cipherText)
 
 	scryptParamsJSON := make(map[string]interface{}, 5)
-	scryptParamsJSON["n"] = ks.scryptN
-	scryptParamsJSON["r"] = ks.scryptR
-	scryptParamsJSON["p"] = ks.scryptP
-	scryptParamsJSON["dklen"] = ks.scryptDKLen
+	scryptParamsJSON["n"] = scryptN
+	scryptParamsJSON["r"] = scryptR
+	scryptParamsJSON["p"] = scryptP
+	scryptParamsJSON["dklen"] = scryptDKLen
 	scryptParamsJSON["salt"] = hex.EncodeToString(salt)
 
 	cipherParamsJSON := cipherparamsJSON{
@@ -128,12 +135,7 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		key.Id.String(),
 		version,
 	}
-	keyJSON, err := json.Marshal(encryptedKeyJSONV3)
-	if err != nil {
-		return err
-	}
-
-	return writeKeyFile(key.Address, ks.keysDirPath, keyJSON)
+	return json.Marshal(encryptedKeyJSONV3)
 }
 
 func (ks keyStorePassphrase) DeleteKey(keyAddr common.Address, auth string) error {
