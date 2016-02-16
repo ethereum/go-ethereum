@@ -34,7 +34,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
@@ -157,8 +156,7 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 		keyBytes, keyId []byte
 		err             error
 	)
-	v := reflect.ValueOf(m["version"])
-	if v.Kind() == reflect.String && v.String() == "1" {
+	if version, ok := m["version"].(string); ok && version == "1" {
 		k := new(encryptedKeyJSONV1)
 		if err := json.Unmarshal(keyjson, k); err != nil {
 			return nil, err
@@ -183,12 +181,21 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	}, nil
 }
 
-func decryptKeyFromFile(keysDirPath string, keyAddr common.Address, auth string) (key *Key, err error) {
+func decryptKeyFromFile(keysDirPath string, keyAddr common.Address, auth string) (*Key, error) {
+	// Load the key from the keystore and decrypt its contents
 	keyjson, err := getKeyFile(keysDirPath, keyAddr)
 	if err != nil {
 		return nil, err
 	}
-	return DecryptKey(keyjson, auth)
+	key, err := DecryptKey(keyjson, auth)
+	if err != nil {
+		return nil, err
+	}
+	// Make sure we're really operating on the requested key (no swap attacks)
+	if keyAddr != key.Address {
+		return nil, fmt.Errorf("key content mismatch: have account %x, want %x", key.Address, keyAddr)
+	}
+	return key, nil
 }
 
 func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byte, keyId []byte, err error) {
