@@ -1,4 +1,4 @@
-// Copyright 2015 Zack Guo <gizak@icloud.com>. All rights reserved.
+// Copyright 2016 Zack Guo <gizak@icloud.com>. All rights reserved.
 // Use of this source code is governed by a MIT license that can
 // be found in the LICENSE file.
 
@@ -160,8 +160,8 @@ func (r *Row) SetWidth(w int) {
 
 // Buffer implements Bufferer interface,
 // recursively merge all widgets buffer
-func (r *Row) Buffer() []Point {
-	merged := []Point{}
+func (r *Row) Buffer() Buffer {
+	merged := NewBuffer()
 
 	if r.isRenderableLeaf() {
 		return r.Widget.Buffer()
@@ -169,13 +169,13 @@ func (r *Row) Buffer() []Point {
 
 	// for those are not leaves but have a renderable widget
 	if r.Widget != nil {
-		merged = append(merged, r.Widget.Buffer()...)
+		merged.Merge(r.Widget.Buffer())
 	}
 
 	// collect buffer from children
 	if !r.isLeaf() {
 		for _, c := range r.Cols {
-			merged = append(merged, c.Buffer()...)
+			merged.Merge(c.Buffer())
 		}
 	}
 
@@ -267,13 +267,13 @@ func (g *Grid) Align() {
 }
 
 // Buffer implments Bufferer interface.
-func (g Grid) Buffer() []Point {
-	ps := []Point{}
+func (g Grid) Buffer() Buffer {
+	buf := NewBuffer()
+
 	for _, r := range g.Rows {
-		ps = append(ps, r.Buffer()...)
+		buf.Merge(r.Buffer())
 	}
-	return ps
+	return buf
 }
 
-// Body corresponds to the entire terminal display region.
 var Body *Grid

@@ -232,7 +232,8 @@ func (e gbkEncoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err 
 					goto write4
 				}
 			}
-			r = encoding.ASCIISub
+			err = internal.ErrASCIIReplacement
+			break
 		}
 
 	write1:

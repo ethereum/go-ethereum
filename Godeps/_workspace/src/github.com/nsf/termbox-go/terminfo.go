@@ -23,6 +23,8 @@ import (
 const (
 	ti_magic         = 0432
 	ti_header_length = 12
+	ti_mouse_enter   = "\x1b[?1000h\x1b[?1002h\x1b[?1015h\x1b[?1006h"
+	ti_mouse_leave   = "\x1b[?1006l\x1b[?1015l\x1b[?1002l\x1b[?1000l"
 )
 
 func load_terminfo() ([]byte, error) {
@@ -172,8 +174,8 @@ func setup_term() (err error) {
 			return
 		}
 	}
-	funcs[t_max_funcs-2] = "\x1b[?1000h"
-	funcs[t_max_funcs-1] = "\x1b[?1000l"
+	funcs[t_max_funcs-2] = ti_mouse_enter
+	funcs[t_max_funcs-1] = ti_mouse_leave
 	return nil
 }
 

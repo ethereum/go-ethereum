@@ -13,10 +13,42 @@ var zeroWidth = []*unicode.RangeTable{
 	unicode.Cf,
 }
 
+var doubleWidth = []*unicode.RangeTable{
+	unicode.Han,
+	unicode.Hangul,
+	unicode.Hiragana,
+	unicode.Katakana,
+}
+
+// countGlyphs considers zero-width characters to be zero glyphs wide,
+// and members of Chinese, Japanese, and Korean scripts to be 2 glyphs wide.
 func countGlyphs(s []rune) int {
 	n := 0
 	for _, r := range s {
-		if !unicode.IsOneOf(zeroWidth, r) {
+		switch {
+		case unicode.IsOneOf(zeroWidth, r):
+		case unicode.IsOneOf(doubleWidth, r):
+			n += 2
+		default:
+			n++
+		}
+	}
+	return n
+}
+
+func countMultiLineGlyphs(s []rune, columns int, start int) int {
+	n := start
+	for _, r := range s {
+		switch {
+		case unicode.IsOneOf(zeroWidth, r):
+		case unicode.IsOneOf(doubleWidth, r):
+			n += 2
+			// no room for a 2-glyphs-wide char in the ending
+			// so skip a column and display it at the beginning
+			if n%columns == 1 {
+				n++
+			}
+		default:
 			n++
 		}
 	}

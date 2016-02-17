@@ -101,6 +101,14 @@ func (eucKREncoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err 
 		if r < utf8.RuneSelf {
 			size = 1
 
+			if nDst >= len(dst) {
+				err = transform.ErrShortDst
+				break
+			}
+			dst[nDst] = uint8(r)
+			nDst++
+			continue
+
 		} else {
 			// Decode a multi-byte rune.
 			r, size = utf8.DecodeRune(src[nSrc:])
@@ -145,16 +153,9 @@ func (eucKREncoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err 
 					goto write2
 				}
 			}
-			r = encoding.ASCIISub
-		}
-
-		if nDst >= len(dst) {
-			err = transform.ErrShortDst
+			err = internal.ErrASCIIReplacement
 			break
 		}
-		dst[nDst] = uint8(r)
-		nDst++
-		continue
 
 	write2:
 		if nDst+2 > len(dst) {

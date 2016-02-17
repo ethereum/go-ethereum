@@ -115,6 +115,13 @@ func (big5Encoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err e
 		// Decode a 1-byte rune.
 		if r < utf8.RuneSelf {
 			size = 1
+			if nDst >= len(dst) {
+				err = transform.ErrShortDst
+				break
+			}
+			dst[nDst] = uint8(r)
+			nDst++
+			continue
 
 		} else {
 			// Decode a multi-byte rune.
@@ -166,16 +173,9 @@ func (big5Encoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err e
 					goto write2
 				}
 			}
-			r = encoding.ASCIISub
-		}
-
-		if nDst >= len(dst) {
-			err = transform.ErrShortDst
+			err = internal.ErrASCIIReplacement
 			break
 		}
-		dst[nDst] = uint8(r)
-		nDst++
-		continue
 
 	write2:
 		if nDst+2 > len(dst) {

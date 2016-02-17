@@ -77,7 +77,7 @@ func (NilEWMA) Update(n int64) {}
 // of uncounted events and processes them on each tick.  It uses the
 // sync/atomic package to manage uncounted events.
 type StandardEWMA struct {
-	uncounted int64		// /!\ this should be the first member to ensure 64-bit alignment
+	uncounted int64 // /!\ this should be the first member to ensure 64-bit alignment
 	alpha     float64
 	rate      float64
 	init      bool

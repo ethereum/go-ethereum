@@ -140,11 +140,23 @@ func (clone *_clone) stash(in _stash) _stash {
 
 func (clone *_clone) property(in _property) _property {
 	out := in
-	if value, valid := in.value.(Value); valid {
+
+	switch value := in.value.(type) {
+	case Value:
 		out.value = clone.value(value)
-	} else {
-		panic(fmt.Errorf("in.value.(Value) != true"))
+	case _propertyGetSet:
+		p := _propertyGetSet{}
+		if value[0] != nil {
+			p[0] = clone.object(value[0])
+		}
+		if value[1] != nil {
+			p[1] = clone.object(value[1])
+		}
+		out.value = p
+	default:
+		panic(fmt.Errorf("in.value.(Value) != true; in.value is %T", in.value))
 	}
+
 	return out
 }
 

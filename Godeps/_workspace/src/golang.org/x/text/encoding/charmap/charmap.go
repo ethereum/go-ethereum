@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:generate go run maketables.go
+
 // Package charmap provides simple character encodings such as IBM Code Page 437
 // and Windows 1252.
 package charmap
@@ -89,12 +91,12 @@ type charmap struct {
 	encode [256]uint32
 }
 
-func (m *charmap) NewDecoder() transform.Transformer {
-	return charmapDecoder{charmap: m}
+func (m *charmap) NewDecoder() *encoding.Decoder {
+	return &encoding.Decoder{Transformer: charmapDecoder{charmap: m}}
 }
 
-func (m *charmap) NewEncoder() transform.Transformer {
-	return charmapEncoder{charmap: m}
+func (m *charmap) NewEncoder() *encoding.Encoder {
+	return &encoding.Encoder{Transformer: charmapEncoder{charmap: m}}
 }
 
 func (m *charmap) String() string {
@@ -148,6 +150,7 @@ type charmapEncoder struct {
 
 func (m charmapEncoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
 	r, size := rune(0), 0
+loop:
 	for nSrc < len(src) {
 		if nDst >= len(dst) {
 			err = transform.ErrShortDst
@@ -157,12 +160,13 @@ func (m charmapEncoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, 
 
 		// Decode a 1-byte rune.
 		if r < utf8.RuneSelf {
-			nSrc++
 			if m.charmap.asciiSuperset {
+				nSrc++
 				dst[nDst] = uint8(r)
 				nDst++
 				continue
 			}
+			size = 1
 
 		} else {
 			// Decode a multi-byte rune.
@@ -173,23 +177,18 @@ func (m charmapEncoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, 
 				// full character yet.
 				if !atEOF && !utf8.FullRune(src[nSrc:]) {
 					err = transform.ErrShortSrc
-					break
+				} else {
+					err = internal.RepertoireError(m.charmap.replacement)
 				}
-			}
-			nSrc += size
-			if r == utf8.RuneError {
-				dst[nDst] = m.charmap.replacement
-				nDst++
-				continue
+				break
 			}
 		}
 
 		// Binary search in [low, high) for that rune in the m.charmap.encode table.
 		for low, high := int(m.charmap.low), 0x100; ; {
 			if low >= high {
-				dst[nDst] = m.charmap.replacement
-				nDst++
-				break
+				err = internal.RepertoireError(m.charmap.replacement)
+				break loop
 			}
 			mid := (low + high) / 2
 			got := m.charmap.encode[mid]
@@ -204,6 +203,7 @@ func (m charmapEncoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, 
 				break
 			}
 		}
+		nSrc += size
 	}
 	return nDst, nSrc, err
 }

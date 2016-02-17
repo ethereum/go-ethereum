@@ -1,16 +1,19 @@
 [![Coverage](http://gocover.io/_badge/github.com/codegangsta/cli?0)](http://gocover.io/github.com/codegangsta/cli)
-[![Build Status](https://travis-ci.org/codegangsta/cli.png?branch=master)](https://travis-ci.org/codegangsta/cli)
+[![Build Status](https://travis-ci.org/codegangsta/cli.svg?branch=master)](https://travis-ci.org/codegangsta/cli)
 [![GoDoc](https://godoc.org/github.com/codegangsta/cli?status.svg)](https://godoc.org/github.com/codegangsta/cli)
 
 # cli.go
+
 `cli.go` is simple, fast, and fun package for building command line apps in Go. The goal is to enable developers to write fast and distributable command line applications in an expressive way.
 
 ## Overview
+
 Command line apps are usually so tiny that there is absolutely no reason why your code should *not* be self-documenting. Things like generating help text and parsing command flags/options should not hinder productivity when writing a command line app.
 
 **This is where `cli.go` comes into play.** `cli.go` makes command line programming fun, organized, and expressive!
 
 ## Installation
+
 Make sure you have a working Go environment (go 1.1+ is *required*). [See the install instructions](http://golang.org/doc/install.html).
 
 To install `cli.go`, simply run:
@@ -24,6 +27,7 @@ export PATH=$PATH:$GOPATH/bin
 ```
 
 ## Getting Started
+
 One of the philosophies behind `cli.go` is that an API should be playful and full of discovery. So a `cli.go` app can be as little as one line of code in `main()`. 
 
 ``` go
@@ -123,6 +127,7 @@ GLOBAL OPTIONS
 ```
 
 ### Arguments
+
 You can lookup arguments by calling the `Args` function on `cli.Context`.
 
 ``` go
@@ -134,7 +139,9 @@ app.Action = func(c *cli.Context) {
 ```
 
 ### Flags
+
 Setting and querying flags is simple.
+
 ``` go
 ...
 app.Flags = []cli.Flag {
@@ -150,6 +157,33 @@ app.Action = func(c *cli.Context) {
     name = c.Args()[0]
   }
   if c.String("lang") == "spanish" {
+    println("Hola", name)
+  } else {
+    println("Hello", name)
+  }
+}
+...
+```
+
+You can also set a destination variable for a flag, to which the content will be scanned.
+
+``` go
+...
+var language string
+app.Flags = []cli.Flag {
+  cli.StringFlag{
+    Name:        "lang",
+    Value:       "english",
+    Usage:       "language for the greeting",
+    Destination: &language,
+  },
+}
+app.Action = func(c *cli.Context) {
+  name := "someone"
+  if len(c.Args()) > 0 {
+    name = c.Args()[0]
+  }
+  if language == "spanish" {
     println("Hola", name)
   } else {
     println("Hello", name)
@@ -207,6 +241,7 @@ app.Flags = []cli.Flag {
 ### Subcommands
 
 Subcommands can be defined for a more git-like command line app.
+
 ```go
 ...
 app.Commands = []cli.Command{
@@ -257,6 +292,7 @@ You can enable completion commands by setting the `EnableBashCompletion`
 flag on the `App` object.  By default, this setting will only auto-complete to
 show an app's subcommands, but you can write your own completion methods for
 the App or its subcommands.
+
 ```go
 ...
 var tasks = []string{"cook", "clean", "laundry", "eat", "sleep", "code"}
@@ -299,8 +335,8 @@ automatically install it there if you are distributing a package). Don't forget
 to source the file to make it active in the current shell.
 
 ```
-   sudo cp src/bash_autocomplete /etc/bash_completion.d/<myprogram>
-   source /etc/bash_completion.d/<myprogram>
+sudo cp src/bash_autocomplete /etc/bash_completion.d/<myprogram>
+source /etc/bash_completion.d/<myprogram>
 ```
 
 Alternatively, you can just document that users should source the generic
@@ -308,6 +344,7 @@ Alternatively, you can just document that users should source the generic
 to the name of their program (as above).
 
 ## Contribution Guidelines
+
 Feel free to put up a pull request to fix a bug or maybe add a feature. I will give it a code review and make sure that it does not break backwards compatibility. If I or any other collaborators agree that it is in line with the vision of the project, we will work with you to get the code into a mergeable state and merge it into the master branch.
 
 If you have contributed something significant to the project, I will most likely add you as a collaborator. As a collaborator you are given the ability to merge others pull requests. It is very important that new code does not break existing code, so be careful about what code you do choose to merge. If you have any questions feel free to link @codegangsta to the issue in question and we can review it together.

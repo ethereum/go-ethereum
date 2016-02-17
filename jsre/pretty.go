@@ -187,23 +187,42 @@ func (ctx ppctx) fields(obj *otto.Object) []string {
 			vals = append(vals, k)
 		}
 	}
-	// add own properties
-	ctx.doOwnProperties(obj.Value(), add)
-	// add properties of the constructor
-	if cp := constructorPrototype(obj); cp != nil {
-		ctx.doOwnProperties(cp.Value(), add)
-	}
+	iterOwnAndConstructorKeys(ctx.vm, obj, add)
 	sort.Strings(vals)
 	sort.Strings(methods)
 	return append(vals, methods...)
 }
 
-func (ctx ppctx) doOwnProperties(v otto.Value, f func(string)) {
-	Object, _ := ctx.vm.Object("Object")
-	rv, _ := Object.Call("getOwnPropertyNames", v)
+func iterOwnAndConstructorKeys(vm *otto.Otto, obj *otto.Object, f func(string)) {
+	seen := make(map[string]bool)
+	iterOwnKeys(vm, obj, func(prop string) {
+		seen[prop] = true
+		f(prop)
+	})
+	if cp := constructorPrototype(obj); cp != nil {
+		iterOwnKeys(vm, cp, func(prop string) {
+			if !seen[prop] {
+				f(prop)
+			}
+		})
+	}
+}
+
+func iterOwnKeys(vm *otto.Otto, obj *otto.Object, f func(string)) {
+	Object, _ := vm.Object("Object")
+	rv, _ := Object.Call("getOwnPropertyNames", obj.Value())
 	gv, _ := rv.Export()
-	for _, v := range gv.([]interface{}) {
-		f(v.(string))
+	switch gv := gv.(type) {
+	case []interface{}:
+		for _, v := range gv {
+			f(v.(string))
+		}
+	case []string:
+		for _, v := range gv {
+			f(v)
+		}
+	default:
+		panic(fmt.Errorf("Object.getOwnPropertyNames returned unexpected type %T", gv))
 	}
 }
 

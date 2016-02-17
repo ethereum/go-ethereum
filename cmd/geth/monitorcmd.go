@@ -105,8 +105,6 @@ func monitor(ctx *cli.Context) {
 	}
 	defer termui.Close()
 
-	termui.UseTheme("helloworld")
-
 	rows := len(monitored)
 	if max := ctx.Int(monitorCommandRowsFlag.Name); rows > max {
 		rows = max
@@ -117,7 +115,7 @@ func monitor(ctx *cli.Context) {
 	}
 	// Create each individual data chart
 	footer := termui.NewPar("")
-	footer.HasBorder = true
+	footer.Block.Border = true
 	footer.Height = 3
 
 	charts := make([]*termui.LineChart, len(monitored))
@@ -135,28 +133,27 @@ func monitor(ctx *cli.Context) {
 	termui.Render(termui.Body)
 
 	// Watch for various system events, and periodically refresh the charts
-	refresh := time.Tick(time.Duration(ctx.Int(monitorCommandRefreshFlag.Name)) * time.Second)
-	for {
-		select {
-		case event := <-termui.EventCh():
-			if event.Type == termui.EventKey && event.Key == termui.KeyCtrlC {
-				return
-			}
-			if event.Type == termui.EventResize {
-				termui.Body.Width = termui.TermWidth()
-				for _, chart := range charts {
-					chart.Height = (termui.TermHeight() - footer.Height) / rows
-				}
-				termui.Body.Align()
-				termui.Render(termui.Body)
-			}
-		case <-refresh:
+	termui.Handle("/sys/kbd/C-c", func(termui.Event) {
+		termui.StopLoop()
+	})
+	termui.Handle("/sys/wnd/resize", func(termui.Event) {
+		termui.Body.Width = termui.TermWidth()
+		for _, chart := range charts {
+			chart.Height = (termui.TermHeight() - footer.Height) / rows
+		}
+		termui.Body.Align()
+		termui.Render(termui.Body)
+	})
+	go func() {
+		tick := time.NewTicker(time.Duration(ctx.Int(monitorCommandRefreshFlag.Name)) * time.Second)
+		for range tick.C {
 			if refreshCharts(client, monitored, data, units, charts, ctx, footer) {
 				termui.Body.Align()
 			}
 			termui.Render(termui.Body)
 		}
-	}
+	}()
+	termui.Loop()
 }
 
 // retrieveMetrics contacts the attached geth node and retrieves the entire set
@@ -328,9 +325,9 @@ func updateChart(metric string, data []float64, base *int, chart *termui.LineCha
 	if strings.Contains(metric, "/Percentiles/") || strings.Contains(metric, "/pauses/") || strings.Contains(metric, "/time/") {
 		units = timeUnits
 	}
-	chart.Border.Label = metric
+	chart.BorderLabel = metric
 	if len(units[unit]) > 0 {
-		chart.Border.Label += " [" + units[unit] + "]"
+		chart.BorderLabel += " [" + units[unit] + "]"
 	}
 	chart.LineColor = colors[unit] | termui.AttrBold
 	if err != nil {
@@ -350,8 +347,8 @@ func createChart(height int) *termui.LineChart {
 	chart.AxesColor = termui.ColorWhite
 	chart.PaddingBottom = -2
 
-	chart.Border.LabelFgColor = chart.Border.FgColor | termui.AttrBold
-	chart.Border.FgColor = chart.Border.BgColor
+	chart.BorderLabelFg = chart.BorderFg | termui.AttrBold
+	chart.BorderFg = chart.BorderBg
 
 	return chart
 }
@@ -361,7 +358,7 @@ func updateFooter(ctx *cli.Context, err error, footer *termui.Par) {
 	// Generate the basic footer
 	refresh := time.Duration(ctx.Int(monitorCommandRefreshFlag.Name)) * time.Second
 	footer.Text = fmt.Sprintf("Press Ctrl+C to quit. Refresh interval: %v.", refresh)
-	footer.TextFgColor = termui.Theme().ParTextFg | termui.AttrBold
+	footer.TextFgColor = termui.ThemeAttr("par.fg") | termui.AttrBold
 
 	// Append any encountered errors
 	if err != nil {

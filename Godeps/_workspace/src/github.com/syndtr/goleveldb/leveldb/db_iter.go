@@ -33,40 +33,50 @@ func (mr *memdbReleaser) Release() {
 	})
 }
 
-func (db *DB) newRawIterator(slice *util.Range, ro *opt.ReadOptions) iterator.Iterator {
+func (db *DB) newRawIterator(auxm *memDB, auxt tFiles, slice *util.Range, ro *opt.ReadOptions) iterator.Iterator {
+	strict := opt.GetStrict(db.s.o.Options, ro, opt.StrictReader)
 	em, fm := db.getMems()
 	v := db.s.version()
 
-	ti := v.getIterators(slice, ro)
-	n := len(ti) + 2
-	i := make([]iterator.Iterator, 0, n)
-	emi := em.mdb.NewIterator(slice)
-	emi.SetReleaser(&memdbReleaser{m: em})
-	i = append(i, emi)
-	if fm != nil {
-		fmi := fm.mdb.NewIterator(slice)
-		fmi.SetReleaser(&memdbReleaser{m: fm})
-		i = append(i, fmi)
+	tableIts := v.getIterators(slice, ro)
+	n := len(tableIts) + len(auxt) + 3
+	its := make([]iterator.Iterator, 0, n)
+
+	if auxm != nil {
+		ami := auxm.NewIterator(slice)
+		ami.SetReleaser(&memdbReleaser{m: auxm})
+		its = append(its, ami)
 	}
-	i = append(i, ti...)
-	strict := opt.GetStrict(db.s.o.Options, ro, opt.StrictReader)
-	mi := iterator.NewMergedIterator(i, db.s.icmp, strict)
+	for _, t := range auxt {
+		its = append(its, v.s.tops.newIterator(t, slice, ro))
+	}
+
+	emi := em.NewIterator(slice)
+	emi.SetReleaser(&memdbReleaser{m: em})
+	its = append(its, emi)
+	if fm != nil {
+		fmi := fm.NewIterator(slice)
+		fmi.SetReleaser(&memdbReleaser{m: fm})
+		its = append(its, fmi)
+	}
+	its = append(its, tableIts...)
+	mi := iterator.NewMergedIterator(its, db.s.icmp, strict)
 	mi.SetReleaser(&versionReleaser{v: v})
 	return mi
 }
 
-func (db *DB) newIterator(seq uint64, slice *util.Range, ro *opt.ReadOptions) *dbIter {
+func (db *DB) newIterator(auxm *memDB, auxt tFiles, seq uint64, slice *util.Range, ro *opt.ReadOptions) *dbIter {
 	var islice *util.Range
 	if slice != nil {
 		islice = &util.Range{}
 		if slice.Start != nil {
-			islice.Start = newIkey(slice.Start, kMaxSeq, ktSeek)
+			islice.Start = makeIkey(nil, slice.Start, kMaxSeq, ktSeek)
 		}
 		if slice.Limit != nil {
-			islice.Limit = newIkey(slice.Limit, kMaxSeq, ktSeek)
+			islice.Limit = makeIkey(nil, slice.Limit, kMaxSeq, ktSeek)
 		}
 	}
-	rawIter := db.newRawIterator(islice, ro)
+	rawIter := db.newRawIterator(auxm, auxt, islice, ro)
 	iter := &dbIter{
 		db:     db,
 		icmp:   db.s.icmp,
@@ -177,7 +187,7 @@ func (i *dbIter) Seek(key []byte) bool {
 		return false
 	}
 
-	ikey := newIkey(key, i.seq, ktSeek)
+	ikey := makeIkey(nil, key, i.seq, ktSeek)
 	if i.iter.Seek(ikey) {
 		i.dir = dirSOI
 		return i.next()
