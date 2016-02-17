@@ -62,7 +62,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 	//			return
 	//		}
 	//	}
-	glog.V(logger.Debug).Infof("[BZZ] Swarm: HTTP request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
+	glog.V(logger.Debug).Infof("[BZZ] Swarm: HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
 	uri := requestURL.Path
 	var raw, nameresolver bool
 	var proto string
