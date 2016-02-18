@@ -256,7 +256,7 @@ func (h *encHandshake) secrets(auth, authResp []byte) (secrets, error) {
 	return s, nil
 }
 
-// ecdhShared returns the static shared secret, the result
+// staticSharedSecret returns the static shared secret, the result
 // of key agreement between the local and remote static node key.
 func (h *encHandshake) staticSharedSecret(prv *ecdsa.PrivateKey) ([]byte, error) {
 	return ecies.ImportECDSA(prv).GenerateShared(h.remotePub, sskLen, sskLen)
@@ -490,7 +490,7 @@ func readHandshakeMsg(msg plainDecoder, plainSize int, prv *ecdsa.PrivateKey, r 
 	prefix := buf[:2]
 	size := binary.BigEndian.Uint16(prefix)
 	if size < uint16(plainSize) {
-		return buf, fmt.Errorf("size underflow, need at least ~d bytes", plainSize)
+		return buf, fmt.Errorf("size underflow, need at least %d bytes", plainSize)
 	}
 	buf = append(buf, make([]byte, size-uint16(plainSize)+2)...)
 	if _, err := io.ReadFull(r, buf[plainSize:]); err != nil {
