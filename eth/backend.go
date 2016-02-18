@@ -61,7 +61,8 @@ var (
 	jsonlogger = logger.NewJsonLogger()
 
 	defaultBootNodes = []*discover.Node{
-        discover.MustParseNode("enode://d732520d51f7d8c945862c8c0126afb0f322b81e27266451c24c4d8c908c5fc6d64a10fd59131d50c36a9ba2f17c15fef77a317af3f41c0e827bbeeea3e90fdf@45.32.236.217:53900"),
+        discover.MustParseNode("enode://d732520d51f7d8c945862c8c0126afb0f322b81e27266451c24c4d8c908c5fc6d64a10fd59131d50c36a9ba2f17c15fef77a317af3f41c0e827bbeeea3e90fdf@45.32.236.217:54500"),
+        discover.MustParseNode("enode://5a8b675ea369df38cb3d20b5d9991c8a3ee2c1db5ace3d656f31979ec90d37fd08ccd16a91da025bd1b8bc5fd90a9d977c873eb34985743c64cd175c29416b2a@45.32.146.169:54500"),
 	}
 
 	staticNodes  = "static-nodes.json"  // Path within <datadir> to search for the static node list
