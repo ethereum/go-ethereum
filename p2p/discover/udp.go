@@ -468,29 +468,6 @@ func isTemporaryError(err error) bool {
 	return ok && tempErr.Temporary() || isPacketTooBig(err)
 }
 
-func encodePacket1(priv *ecdsa.PrivateKey, ptype byte, req interface{}, additional []byte) ([]byte, error) {
-	b := new(bytes.Buffer)
-	b.Write(headSpace)
-	b.WriteByte(ptype)
-	if err := rlp.Encode(b, req); err != nil {
-		glog.V(logger.Error).Infoln("error encoding packet:", err)
-		return nil, err
-	}
-	b.Write(additional)
-	packet := b.Bytes()
-	sig, err := crypto.Sign(crypto.Sha3(packet[headSize:]), priv)
-	if err != nil {
-		glog.V(logger.Error).Infoln("could not sign packet:", err)
-		return nil, err
-	}
-	copy(packet[macSize:], sig)
-	// add the hash to the front. Note: this doesn't protect the
-	// packet in any way. Our public key will be part of this hash in
-	// The future.
-	copy(packet, crypto.Sha3(packet[macSize:]))
-	return packet, nil
-}
-
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
 func (t *udp) readLoop() {
 	defer t.conn.Close()
