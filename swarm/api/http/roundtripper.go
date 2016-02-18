@@ -45,5 +45,6 @@ func (self *RoundTripper) RoundTrip(req *http.Request) (resp *http.Response, err
 	}
 	url := fmt.Sprintf("http://%s:%s/%s:/%s/%s", host, self.Port, req.Proto, req.URL.Host, req.URL.Path)
 	glog.V(logger.Info).Infof("[BZZ] roundtripper: proxying request '%s' to '%s'", req.RequestURI, url)
-	return http.Get(url)
+	reqProxy, _ := http.NewRequest(req.Method, url, req.Body)
+	return http.DefaultClient.Do(reqProxy)
 }
