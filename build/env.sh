@@ -11,7 +11,7 @@ fi
 workspace="$PWD/build/_workspace"
 root="$PWD"
 chydir="$workspace/src/github.com/chattynet"
-if [ ! -L "$chydir/shift" ]; then
+if [ ! -L "$chydir/chatty" ]; then
     mkdir -p "$chydir"
     cd "$chydir"
     ln -s ../../../../../. chatty
