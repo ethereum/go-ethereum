@@ -154,7 +154,7 @@ var (
 		Usage: "Enable automatic DAG pregeneration",
 	}
 	EtherbaseFlag = cli.StringFlag{
-		Name:  "shiftbase",
+		Name:  "chattybase",
 		Usage: "Public address for block mining rewards. By default the address first created is used",
 		Value: "0",
 	}
@@ -250,7 +250,7 @@ var (
 	RPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
 		Usage: "Port on which the JSON-RPC server should listen",
-		Value: 53901,
+		Value: 54501,
 	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
@@ -294,7 +294,7 @@ var (
 	ListenPortFlag = cli.IntFlag{
 		Name:  "port",
 		Usage: "Network listening port",
-		Value: 53900,
+		Value: 54500,
 	}
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
@@ -402,7 +402,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	am := MakeAccountManager(ctx)
 	etherbase, err := ParamToAddress(ctx.GlobalString(EtherbaseFlag.Name), am)
 	if err != nil {
-		glog.V(logger.Error).Infoln("WARNING: No shiftbase(coinbase) set and no accounts found as default")
+		glog.V(logger.Error).Infoln("WARNING: No chattybase(coinbase) set and no accounts found as default")
 	}
 
 	return &eth.Config{

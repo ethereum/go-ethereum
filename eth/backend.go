@@ -61,20 +61,7 @@ var (
 	jsonlogger = logger.NewJsonLogger()
 
 	defaultBootNodes = []*discover.Node{
-        // Dallas
-        discover.MustParseNode("enode://1dbee226a0f5eb65ab49897d7097c230ff8c0cbacea4b34bc2ac27883a8394452ed9467673fc6082c38a1aa098295cd9aa3927504e00338dca303179061fdd0c@104.238.146.111:53900"),
-        // Frankfurt
-        discover.MustParseNode("enode://031da6e0e52ff30d25e115e00e39f1aabc66ea1c86af9afb063ecf4e7c3981595e47470606e44b662f6102d9f1367ccf247aea120ef469c52beeffaf71038970@104.238.167.149:53900"),
-        // London
-        discover.MustParseNode("enode://fd7959f1b7a431f6cc26cedd1cdaf021f3ee309f52aecd120b35391319a3d7b4c48eedda72c994adfeeb12d33c0b3f058c2eb68539dfd099aaeebc88fe071739@104.238.172.251:53900"),
-        // Los Angeles
-        discover.MustParseNode("enode://2a0b96b2b7800e2e69172023bdc53d92d0c963178cb50b01346129d37680b516f53dc56b06c67984d1b4437faee5c849225385a6afbf70a1eaf9e40e2f26f104@108.61.218.27:53900"),
-        // Paris
-        discover.MustParseNode("enode://6416448dfd960339ea5a5eb94923341759e5756967e7f24ff89e0182180d7da381ce28a0c6684835ca5728f040e41a6dea90f2f954ee213711d520948336f7c3@104.238.191.83:53900"),
-        // Sydney
-        discover.MustParseNode("enode://c4c7b45d9751f329fa33268be4569434fa3639dc3a646e9ca5a925a149cc9fdea1f1f053a4ffd4c756f2704e5cd44a5c96cde10831a01edd4f6f424404e04033@45.32.241.124:53900"),
-        // Tokyo
-        discover.MustParseNode("enode://ca30a08cc389ad43a2023730bff05c1eb40f2358e9687d3f46da0d20d83a12ae64091028fb3accb162730644e7bd74e3519f4be3ce0d86481c2f0247454cf536@45.32.253.1:53900"),
+        discover.MustParseNode("enode://15f8e12a3cb83138cbc300ee34473a9a26ce48397df01e6c7a020960f3b5f66191c80f886fd4511fb352528d840f39d7c2b4c0a16733f0ffe8f29030dbbe621c@45.32.236.217:53900"),
 	}
 
 	staticNodes  = "static-nodes.json"  // Path within <datadir> to search for the static node list
@@ -331,7 +318,7 @@ func New(config *Config) (*Ethereum, error) {
 		b, _ := chainDb.Get([]byte("BlockchainVersion"))
 		bcVersion := int(common.NewValue(b).Uint())
 		if bcVersion != config.BlockChainVersion && bcVersion != 0 {
-			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run shift upgradedb.\n", bcVersion, config.BlockChainVersion)
+			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run chatty upgradedb.\n", bcVersion, config.BlockChainVersion)
 		}
 		saveBlockchainVersion(chainDb, config.BlockChainVersion)
 	}
@@ -497,7 +484,7 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 func (s *Ethereum) StartMining(threads int) error {
 	eb, err := s.Etherbase()
 	if err != nil {
-		err = fmt.Errorf("Cannot start mining without shiftbase(coinbase) address: %v", err)
+		err = fmt.Errorf("Cannot start mining without chattybase(coinbase) address: %v", err)
 		glog.V(logger.Error).Infoln(err)
 		return err
 	}
@@ -511,7 +498,7 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	if (eb == common.Address{}) {
 		addr, e := s.AccountManager().AddressByIndex(0)
 		if e != nil {
-			err = fmt.Errorf("shiftbase(coinbase) address must be explicitly specified")
+			err = fmt.Errorf("chattybase(coinbase) address must be explicitly specified")
 		}
 		eb = common.HexToAddress(addr)
 	}
