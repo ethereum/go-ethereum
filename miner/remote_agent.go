@@ -17,16 +17,14 @@
 package miner
 
 import (
-	"errors"
 	"math/big"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/ethash"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
 )
 
 type hashrate struct {
@@ -46,15 +44,12 @@ type RemoteAgent struct {
 
 	hashrateMu sync.RWMutex
 	hashrate   map[common.Hash]hashrate
-
-	running int32 // running indicates whether the agent is active. Call atomically
 }
 
 func NewRemoteAgent() *RemoteAgent {
-	return &RemoteAgent{
-		work:     make(map[common.Hash]*Work),
-		hashrate: make(map[common.Hash]hashrate),
-	}
+	agent := &RemoteAgent{work: make(map[common.Hash]*Work), hashrate: make(map[common.Hash]hashrate)}
+
+	return agent
 }
 
 func (a *RemoteAgent) SubmitHashrate(id common.Hash, rate uint64) {
@@ -73,20 +68,12 @@ func (a *RemoteAgent) SetReturnCh(returnCh chan<- *Result) {
 }
 
 func (a *RemoteAgent) Start() {
-	if !atomic.CompareAndSwapInt32(&a.running, 0, 1) {
-		return
-	}
-
 	a.quit = make(chan struct{})
 	a.workCh = make(chan *Work, 1)
 	go a.maintainLoop()
 }
 
 func (a *RemoteAgent) Stop() {
-	if !atomic.CompareAndSwapInt32(&a.running, 1, 0) {
-		return
-	}
-
 	close(a.quit)
 	close(a.workCh)
 }
@@ -103,7 +90,7 @@ func (a *RemoteAgent) GetHashRate() (tot int64) {
 	return
 }
 
-func (a *RemoteAgent) GetWork() ([3]string, error) {
+func (a *RemoteAgent) GetWork() [3]string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -123,9 +110,9 @@ func (a *RemoteAgent) GetWork() ([3]string, error) {
 		res[2] = common.BytesToHash(n.Bytes()).Hex()
 
 		a.work[block.HashNoNonce()] = a.currentWork
-		return res, nil
 	}
-	return res, errors.New("No work available yet, don't panic.")
+
+	return res
 }
 
 // Returns true or false, but does not indicate if the PoW was correct

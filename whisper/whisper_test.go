@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/chattynet/chatty/p2p"
+	"github.com/chattynet/chatty/p2p/discover"
 )
 
 func startTestCluster(n int) []*Whisper {
@@ -189,22 +189,13 @@ func TestMessageExpiration(t *testing.T) {
 		t.Fatalf("failed to inject message: %v", err)
 	}
 	// Check that the message is inside the cache
-	node.poolMu.RLock()
-	_, found := node.messages[envelope.Hash()]
-	node.poolMu.RUnlock()
-
-	if !found {
+	if _, ok := node.messages[envelope.Hash()]; !ok {
 		t.Fatalf("message not found in cache")
 	}
 	// Wait for expiration and check cache again
 	time.Sleep(time.Second)     // wait for expiration
 	time.Sleep(expirationCycle) // wait for cleanup cycle
-
-	node.poolMu.RLock()
-	_, found = node.messages[envelope.Hash()]
-	node.poolMu.RUnlock()
-
-	if found {
+	if _, ok := node.messages[envelope.Hash()]; ok {
 		t.Fatalf("message not expired from cache")
 	}
 }

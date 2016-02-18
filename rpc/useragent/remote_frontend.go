@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/chattynet/chatty/accounts"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/rpc/shared"
 )
 
 // remoteFrontend implements xeth.Frontend and will communicate with an external
@@ -47,31 +47,6 @@ func NewRemoteFrontend(conn net.Conn, mgr *accounts.Manager) *RemoteFrontend {
 // Enable will enable user interaction
 func (fe *RemoteFrontend) Enable() {
 	fe.enabled = true
-}
-
-func (fe *RemoteFrontend) AskPassword() (string, bool) {
-	if !fe.enabled {
-		return "", false
-	}
-
-	err := fe.send(AskPasswordMethod)
-	if err != nil {
-		glog.V(logger.Error).Infof("Unable to send password request to agent - %v\n", err)
-		return "", false
-	}
-
-	passwdRes, err := fe.recv()
-	if err != nil {
-		glog.V(logger.Error).Infof("Unable to recv password response from agent - %v\n", err)
-		return "", false
-	}
-
-	if passwd, ok := passwdRes.Result.(string); ok {
-		return passwd, true
-	}
-
-	return "", false
-
 }
 
 // UnlockAccount asks the user agent for the user password and tries to unlock the account.

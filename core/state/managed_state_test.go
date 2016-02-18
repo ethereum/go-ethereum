@@ -19,15 +19,15 @@ package state
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/ethdb"
 )
 
 var addr = common.BytesToAddress([]byte("test"))
 
 func create() (*ManagedState, *account) {
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := New(common.Hash{}, db)
+	statedb := New(common.Hash{}, db)
 	ms := ManageState(statedb)
 	so := &StateObject{address: addr, nonce: 100}
 	ms.StateDB.stateObjects[addr.Str()] = so

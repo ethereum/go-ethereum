@@ -17,35 +17,17 @@
 package core
 
 import (
-	"math/big"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/state"
 )
 
 var (
-	jeff      = common.HexToAddress("959c33de5961820567930eccce51ea715c496f85")
-	vitalik   = common.HexToAddress("c8158da0b567a8cc898991c2c2a073af67dc03a9")
-	christoph = common.HexToAddress("7a19a893f91d5b6e2cdf941b6acbba2cbcf431ee")
-	gav       = common.HexToAddress("539dd9aaf45c3feb03f9c004f4098bd3268fef6b")
+	bogus = common.HexToAddress("000c3300000182056790000cce51ea715c496f85")
 )
 
 // Canary will check the 0'd address of the 4 contracts above.
 // If two or more are set to anything other than a 0 the canary
 // dies a horrible death.
 func Canary(statedb *state.StateDB) bool {
-	var r int
-	if (statedb.GetState(jeff, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
-		r++
-	}
-	if (statedb.GetState(gav, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
-		r++
-	}
-	if (statedb.GetState(christoph, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
-		r++
-	}
-	if (statedb.GetState(vitalik, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
-		r++
-	}
-	return r > 1
+	return false
 }

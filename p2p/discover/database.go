@@ -21,16 +21,15 @@ package discover
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/binary"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -47,8 +46,11 @@ var (
 
 // nodeDB stores all nodes we know about.
 type nodeDB struct {
-	lvl    *leveldb.DB   // Interface to the database itself
-	self   NodeID        // Own node id to prevent adding it into the database
+	lvl    *leveldb.DB       // Interface to the database itself
+	seeder iterator.Iterator // Iterator for fetching possible seed nodes
+
+	self NodeID // Own node id to prevent adding it into the database
+
 	runner sync.Once     // Ensures we can start at most one expirer
 	quit   chan struct{} // Channel to signal the expiring thread to stop
 }
@@ -300,70 +302,52 @@ func (db *nodeDB) updateFindFails(id NodeID, fails int) error {
 	return db.storeInt64(makeKey(id, nodeDBDiscoverFindFails), int64(fails))
 }
 
-// querySeeds retrieves random nodes to be used as potential seed nodes
-// for bootstrapping.
-func (db *nodeDB) querySeeds(n int, maxAge time.Duration) []*Node {
-	var (
-		now   = time.Now()
-		nodes = make([]*Node, 0, n)
-		it    = db.lvl.NewIterator(nil, nil)
-		id    NodeID
-	)
-	defer it.Release()
-
-seek:
-	for seeks := 0; len(nodes) < n && seeks < n*5; seeks++ {
-		// Seek to a random entry. The first byte is incremented by a
-		// random amount each time in order to increase the likelihood
-		// of hitting all existing nodes in very small databases.
-		ctr := id[0]
-		rand.Read(id[:])
-		id[0] = ctr + id[0]%16
-		it.Seek(makeKey(id, nodeDBDiscoverRoot))
-
-		n := nextNode(it)
-		if n == nil {
-			id[0] = 0
-			continue seek // iterator exhausted
+// querySeeds retrieves a batch of nodes to be used as potential seed servers
+// during bootstrapping the node into the network.
+//
+// Ideal seeds are the most recently seen nodes (highest probability to be still
+// alive), but yet untried. However, since leveldb only supports dumb iteration
+// we will instead start pulling in potential seeds that haven't been yet pinged
+// since the start of the boot procedure.
+//
+// If the database runs out of potential seeds, we restart the startup counter
+// and start iterating over the peers again.
+func (db *nodeDB) querySeeds(n int) []*Node {
+	// Create a new seed iterator if none exists
+	if db.seeder == nil {
+		db.seeder = db.lvl.NewIterator(nil, nil)
+	}
+	// Iterate over the nodes and find suitable seeds
+	nodes := make([]*Node, 0, n)
+	for len(nodes) < n && db.seeder.Next() {
+		// Iterate until a discovery node is found
+		id, field := splitKey(db.seeder.Key())
+		if field != nodeDBDiscoverRoot {
+			continue
 		}
-		if n.ID == db.self {
-			continue seek
+		// Dump it if its a self reference
+		if bytes.Compare(id[:], db.self[:]) == 0 {
+			db.deleteNode(id)
+			continue
 		}
-		if now.Sub(db.lastPong(n.ID)) > maxAge {
-			continue seek
+		// Load it as a potential seed
+		if node := db.node(id); node != nil {
+			nodes = append(nodes, node)
 		}
-		for i := range nodes {
-			if nodes[i].ID == n.ID {
-				continue seek // duplicate
-			}
-		}
-		nodes = append(nodes, n)
+	}
+	// Release the iterator if we reached the end
+	if len(nodes) == 0 {
+		db.seeder.Release()
+		db.seeder = nil
 	}
 	return nodes
 }
 
-// reads the next node record from the iterator, skipping over other
-// database entries.
-func nextNode(it iterator.Iterator) *Node {
-	for end := false; !end; end = !it.Next() {
-		id, field := splitKey(it.Key())
-		if field != nodeDBDiscoverRoot {
-			continue
-		}
-		var n Node
-		if err := rlp.DecodeBytes(it.Value(), &n); err != nil {
-			if glog.V(logger.Warn) {
-				glog.Errorf("invalid node %x: %v", id, err)
-			}
-			continue
-		}
-		return &n
-	}
-	return nil
-}
-
 // close flushes and closes the database files.
 func (db *nodeDB) close() {
+	if db.seeder != nil {
+		db.seeder.Release()
+	}
 	close(db.quit)
 	db.lvl.Close()
 }

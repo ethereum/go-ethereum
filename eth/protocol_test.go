@@ -18,16 +18,19 @@ package eth
 
 import (
 	"crypto/rand"
-	"fmt"
+	"math/big"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/ethdb"
+	"github.com/chattynet/chatty/event"
+	"github.com/chattynet/chatty/p2p"
+	"github.com/chattynet/chatty/p2p/discover"
 )
 
 func init() {
@@ -37,14 +40,9 @@ func init() {
 
 var testAccount = crypto.NewKey(rand.Reader)
 
-// Tests that handshake failures are detected and reported correctly.
-func TestStatusMsgErrors61(t *testing.T) { testStatusMsgErrors(t, 61) }
-func TestStatusMsgErrors62(t *testing.T) { testStatusMsgErrors(t, 62) }
-func TestStatusMsgErrors63(t *testing.T) { testStatusMsgErrors(t, 63) }
-
-func testStatusMsgErrors(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, false, 0, nil, nil)
-	td, currentBlock, genesis := pm.blockchain.Status()
+func TestStatusMsgErrors(t *testing.T) {
+	pm := newProtocolManagerForTesting(nil)
+	td, currentBlock, genesis := pm.chainman.Status()
 	defer pm.Stop()
 
 	tests := []struct {
@@ -58,23 +56,23 @@ func testStatusMsgErrors(t *testing.T, protocol int) {
 		},
 		{
 			code: StatusMsg, data: statusData{10, NetworkId, td, currentBlock, genesis},
-			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= %d)", protocol),
+			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusData{uint32(protocol), 999, td, currentBlock, genesis},
+			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), 999, td, currentBlock, genesis},
 			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 1)"),
 		},
 		{
-			code: StatusMsg, data: statusData{uint32(protocol), NetworkId, td, currentBlock, common.Hash{3}},
+			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), NetworkId, td, currentBlock, common.Hash{3}},
 			wantError: errResp(ErrGenesisBlockMismatch, "0300000000000000000000000000000000000000000000000000000000000000 (!= %x)", genesis),
 		},
 	}
 
 	for i, test := range tests {
-		p, errc := newTestPeer("peer", protocol, pm, false)
+		p, errc := newTestPeer(pm)
 		// The send call might hang until reset because
 		// the protocol might not read the payload.
-		go p2p.Send(p.app, test.code, test.data)
+		go p2p.Send(p, test.code, test.data)
 
 		select {
 		case err := <-errc:
@@ -91,19 +89,16 @@ func testStatusMsgErrors(t *testing.T, protocol int) {
 }
 
 // This test checks that received transactions are added to the local pool.
-func TestRecvTransactions61(t *testing.T) { testRecvTransactions(t, 61) }
-func TestRecvTransactions62(t *testing.T) { testRecvTransactions(t, 62) }
-func TestRecvTransactions63(t *testing.T) { testRecvTransactions(t, 63) }
-
-func testRecvTransactions(t *testing.T, protocol int) {
+func TestRecvTransactions(t *testing.T) {
 	txAdded := make(chan []*types.Transaction)
-	pm := newTestProtocolManagerMust(t, false, 0, nil, txAdded)
-	p, _ := newTestPeer("peer", protocol, pm, true)
+	pm := newProtocolManagerForTesting(txAdded)
+	p, _ := newTestPeer(pm)
 	defer pm.Stop()
 	defer p.close()
+	p.handshake(t)
 
-	tx := newTestTransaction(testAccount, 0, 0)
-	if err := p2p.Send(p.app, TxMsg, []interface{}{tx}); err != nil {
+	tx := newtx(testAccount, 0, 0)
+	if err := p2p.Send(p, TxMsg, []interface{}{tx}); err != nil {
 		t.Fatalf("send error: %v", err)
 	}
 	select {
@@ -119,19 +114,15 @@ func testRecvTransactions(t *testing.T, protocol int) {
 }
 
 // This test checks that pending transactions are sent.
-func TestSendTransactions61(t *testing.T) { testSendTransactions(t, 61) }
-func TestSendTransactions62(t *testing.T) { testSendTransactions(t, 62) }
-func TestSendTransactions63(t *testing.T) { testSendTransactions(t, 63) }
-
-func testSendTransactions(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, false, 0, nil, nil)
+func TestSendTransactions(t *testing.T) {
+	pm := newProtocolManagerForTesting(nil)
 	defer pm.Stop()
 
 	// Fill the pool with big transactions.
 	const txsize = txsyncPackSize / 10
 	alltxs := make([]*types.Transaction, 100)
 	for nonce := range alltxs {
-		alltxs[nonce] = newTestTransaction(testAccount, uint64(nonce), txsize)
+		alltxs[nonce] = newtx(testAccount, uint64(nonce), txsize)
 	}
 	pm.txpool.AddTransactions(alltxs)
 
@@ -146,7 +137,7 @@ func testSendTransactions(t *testing.T, protocol int) {
 		}
 		for n := 0; n < len(alltxs) && !t.Failed(); {
 			var txs []*types.Transaction
-			msg, err := p.app.ReadMsg()
+			msg, err := p.ReadMsg()
 			if err != nil {
 				t.Errorf("%v: read error: %v", p.Peer, err)
 			} else if msg.Code != TxMsg {
@@ -170,53 +161,97 @@ func testSendTransactions(t *testing.T, protocol int) {
 		}
 	}
 	for i := 0; i < 3; i++ {
-		p, _ := newTestPeer(fmt.Sprintf("peer #%d", i), protocol, pm, true)
+		p, _ := newTestPeer(pm)
+		p.handshake(t)
 		wg.Add(1)
 		go checktxs(p)
 	}
 	wg.Wait()
 }
 
-// Tests that the custom union field encoder and decoder works correctly.
-func TestGetBlockHeadersDataEncodeDecode(t *testing.T) {
-	// Create a "random" hash for testing
-	var hash common.Hash
-	for i, _ := range hash {
-		hash[i] = byte(i)
-	}
-	// Assemble some table driven tests
-	tests := []struct {
-		packet *getBlockHeadersData
-		fail   bool
-	}{
-		// Providing the origin as either a hash or a number should both work
-		{fail: false, packet: &getBlockHeadersData{Origin: hashOrNumber{Number: 314}}},
-		{fail: false, packet: &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}}},
+// testPeer wraps all peer-related data for tests.
+type testPeer struct {
+	p2p.MsgReadWriter                // writing to the test peer feeds the protocol
+	pipe              *p2p.MsgPipeRW // the protocol read/writes on this end
+	pm                *ProtocolManager
+	*peer
+}
 
-		// Providing arbitrary query field should also work
-		{fail: false, packet: &getBlockHeadersData{Origin: hashOrNumber{Number: 314}, Amount: 314, Skip: 1, Reverse: true}},
-		{fail: false, packet: &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}, Amount: 314, Skip: 1, Reverse: true}},
+func newProtocolManagerForTesting(txAdded chan<- []*types.Transaction) *ProtocolManager {
+	db, _ := ethdb.NewMemDatabase()
+	core.WriteTestNetGenesisBlock(db, 0)
+	var (
+		em       = new(event.TypeMux)
+		chain, _ = core.NewChainManager(db, core.FakePow{}, em)
+		txpool   = &fakeTxPool{added: txAdded}
+		pm       = NewProtocolManager(NetworkId, em, txpool, core.FakePow{}, chain)
+	)
+	pm.Start()
+	return pm
+}
 
-		// Providing both the origin hash and origin number must fail
-		{fail: true, packet: &getBlockHeadersData{Origin: hashOrNumber{Hash: hash, Number: 314}}},
+func newTestPeer(pm *ProtocolManager) (*testPeer, <-chan error) {
+	var id discover.NodeID
+	rand.Read(id[:])
+	rw1, rw2 := p2p.MsgPipe()
+	peer := pm.newPeer(pm.protVer, pm.netId, p2p.NewPeer(id, "test peer", nil), rw2)
+	errc := make(chan error, 1)
+	go func() {
+		pm.newPeerCh <- peer
+		errc <- pm.handle(peer)
+	}()
+	return &testPeer{rw1, rw2, pm, peer}, errc
+}
+
+func (p *testPeer) handshake(t *testing.T) {
+	td, currentBlock, genesis := p.pm.chainman.Status()
+	msg := &statusData{
+		ProtocolVersion: uint32(p.pm.protVer),
+		NetworkId:       uint32(p.pm.netId),
+		TD:              td,
+		CurrentBlock:    currentBlock,
+		GenesisBlock:    genesis,
 	}
-	// Iterate over each of the tests and try to encode and then decode
-	for i, tt := range tests {
-		bytes, err := rlp.EncodeToBytes(tt.packet)
-		if err != nil && !tt.fail {
-			t.Fatalf("test %d: failed to encode packet: %v", i, err)
-		} else if err == nil && tt.fail {
-			t.Fatalf("test %d: encode should have failed", i)
-		}
-		if !tt.fail {
-			packet := new(getBlockHeadersData)
-			if err := rlp.DecodeBytes(bytes, packet); err != nil {
-				t.Fatalf("test %d: failed to decode packet: %v", i, err)
-			}
-			if packet.Origin.Hash != tt.packet.Origin.Hash || packet.Origin.Number != tt.packet.Origin.Number || packet.Amount != tt.packet.Amount ||
-				packet.Skip != tt.packet.Skip || packet.Reverse != tt.packet.Reverse {
-				t.Fatalf("test %d: encode decode mismatch: have %+v, want %+v", i, packet, tt.packet)
-			}
-		}
+	if err := p2p.ExpectMsg(p, StatusMsg, msg); err != nil {
+		t.Fatalf("status recv: %v", err)
 	}
+	if err := p2p.Send(p, StatusMsg, msg); err != nil {
+		t.Fatalf("status send: %v", err)
+	}
+}
+
+func (p *testPeer) close() {
+	p.pipe.Close()
+}
+
+type fakeTxPool struct {
+	// all transactions are collected.
+	mu  sync.Mutex
+	all []*types.Transaction
+	// if added is non-nil, it receives added transactions.
+	added chan<- []*types.Transaction
+}
+
+func (pool *fakeTxPool) AddTransactions(txs []*types.Transaction) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	pool.all = append(pool.all, txs...)
+	if pool.added != nil {
+		pool.added <- txs
+	}
+}
+
+func (pool *fakeTxPool) GetTransactions() types.Transactions {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	txs := make([]*types.Transaction, len(pool.all))
+	copy(txs, pool.all)
+	return types.Transactions(txs)
+}
+
+func newtx(from *crypto.Key, nonce uint64, datasize int) *types.Transaction {
+	data := make([]byte, datasize)
+	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), data)
+	tx, _ = tx.SignECDSA(from.PrivateKey)
+	return tx
 }

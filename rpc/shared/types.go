@@ -19,8 +19,8 @@ package shared
 import (
 	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
 )
 
 // Ethereum RPC API interface
@@ -74,9 +74,11 @@ type ErrorObject struct {
 }
 
 // Create RPC error response, this allows for custom error codes
-func NewRpcErrorResponse(id interface{}, jsonrpcver string, errCode int, err error) *ErrorResponse {
+func NewRpcErrorResponse(id interface{}, jsonrpcver string, errCode int, err error) *interface{} {
+	var response interface{}
+
 	jsonerr := &ErrorObject{errCode, err.Error()}
-	response := ErrorResponse{Jsonrpc: jsonrpcver, Id: id, Error: jsonerr}
+	response = ErrorResponse{Jsonrpc: jsonrpcver, Id: id, Error: jsonerr}
 
 	glog.V(logger.Detail).Infof("Generated error response: %s", response)
 	return &response
@@ -91,9 +93,6 @@ func NewRpcResponse(id interface{}, jsonrpcver string, reply interface{}, err er
 		response = &SuccessResponse{Jsonrpc: jsonrpcver, Id: id, Result: reply}
 	case *NotImplementedError:
 		jsonerr := &ErrorObject{-32601, err.Error()}
-		response = &ErrorResponse{Jsonrpc: jsonrpcver, Id: id, Error: jsonerr}
-	case *NotReadyError:
-		jsonerr := &ErrorObject{-32000, err.Error()}
 		response = &ErrorResponse{Jsonrpc: jsonrpcver, Id: id, Error: jsonerr}
 	case *DecodeParamError, *InsufficientParamsError, *ValidationError, *InvalidTypeError:
 		jsonerr := &ErrorObject{-32602, err.Error()}

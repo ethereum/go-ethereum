@@ -23,7 +23,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/chattynet/chatty/rpc/shared"
 )
 
 func TestBlockheightInvalidString(t *testing.T) {
@@ -1394,10 +1394,13 @@ func TestBlockFilterArgsDefaults(t *testing.T) {
 }
 
 func TestBlockFilterArgsWords(t *testing.T) {
-	input := `[{"fromBlock": "latest", "toBlock": "latest"}]`
+	input := `[{
+  "fromBlock": "latest",
+  "toBlock": "pending"
+  }]`
 	expected := new(BlockFilterArgs)
 	expected.Earliest = -1
-	expected.Latest = -1
+	expected.Latest = -2
 
 	args := new(BlockFilterArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -1408,9 +1411,8 @@ func TestBlockFilterArgsWords(t *testing.T) {
 		t.Errorf("Earliest shoud be %#v but is %#v", expected.Earliest, args.Earliest)
 	}
 
-	input = `[{"toBlock": "pending"}]`
-	if err := json.Unmarshal([]byte(input), &args); err == nil {
-		t.Errorf("Pending isn't currently supported and should raise an unsupported error")
+	if expected.Latest != args.Latest {
+		t.Errorf("Latest shoud be %#v but is %#v", expected.Latest, args.Latest)
 	}
 }
 

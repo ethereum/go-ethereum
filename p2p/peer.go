@@ -25,10 +25,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/p2p/discover"
+	"github.com/chattynet/chatty/rlp"
 )
 
 const (
@@ -358,50 +358,4 @@ func (rw *protoRW) ReadMsg() (Msg, error) {
 	case <-rw.closed:
 		return Msg{}, io.EOF
 	}
-}
-
-// PeerInfo represents a short summary of the information known about a connected
-// peer. Sub-protocol independent fields are contained and initialized here, with
-// protocol specifics delegated to all connected sub-protocols.
-type PeerInfo struct {
-	ID      string   `json:"id"`   // Unique node identifier (also the encryption key)
-	Name    string   `json:"name"` // Name of the node, including client type, version, OS, custom data
-	Caps    []string `json:"caps"` // Sum-protocols advertised by this particular peer
-	Network struct {
-		LocalAddress  string `json:"localAddress"`  // Local endpoint of the TCP data connection
-		RemoteAddress string `json:"remoteAddress"` // Remote endpoint of the TCP data connection
-	} `json:"network"`
-	Protocols map[string]interface{} `json:"protocols"` // Sub-protocol specific metadata fields
-}
-
-// Info gathers and returns a collection of metadata known about a peer.
-func (p *Peer) Info() *PeerInfo {
-	// Gather the protocol capabilities
-	var caps []string
-	for _, cap := range p.Caps() {
-		caps = append(caps, cap.String())
-	}
-	// Assemble the generic peer metadata
-	info := &PeerInfo{
-		ID:        p.ID().String(),
-		Name:      p.Name(),
-		Caps:      caps,
-		Protocols: make(map[string]interface{}),
-	}
-	info.Network.LocalAddress = p.LocalAddr().String()
-	info.Network.RemoteAddress = p.RemoteAddr().String()
-
-	// Gather all the running protocol infos
-	for _, proto := range p.running {
-		protoInfo := interface{}("unknown")
-		if query := proto.Protocol.PeerInfo; query != nil {
-			if metadata := query(p.ID()); metadata != nil {
-				protoInfo = metadata
-			} else {
-				protoInfo = "handshake"
-			}
-		}
-		info.Protocols[proto.Name] = protoInfo
-	}
-	return info
 }

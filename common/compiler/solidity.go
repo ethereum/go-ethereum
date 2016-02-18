@@ -19,7 +19,6 @@ package compiler
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -28,16 +27,21 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+)
+
+const (
+	// flair           = "Christian <c@ethdev.com> and Lefteris <lefteris@ethdev.com> (c) 2014-2015"
+	flair           = ""
+	languageVersion = "0"
 )
 
 var (
-	versionRegexp = regexp.MustCompile("[0-9]+\\.[0-9]+\\.[0-9]+")
-	legacyRegexp  = regexp.MustCompile("0\\.(9\\..*|1\\.[01])")
-	paramsLegacy  = []string{
+	versionRegExp = regexp.MustCompile("[0-9]+.[0-9]+.[0-9]+")
+	params        = []string{
 		"--binary",       // Request to output the contract in binary (hexadecimal).
 		"file",           //
 		"--json-abi",     // Request to output the contract's JSON ABI interface.
@@ -48,15 +52,6 @@ var (
 		"file",
 		"--add-std",
 		"1",
-	}
-	paramsNew = []string{
-		"--bin",      // Request to output the contract in binary (hexadecimal).
-		"--abi",      // Request to output the contract's JSON ABI interface.
-		"--userdoc",  // Request to output the contract's Natspec user documentation.
-		"--devdoc",   // Request to output the contract's Natspec developer documentation.
-		"--add-std",  // include standard lib contracts
-		"--optimize", // code optimizer switched on
-		"-o",         // output directory
 	}
 )
 
@@ -70,17 +65,14 @@ type ContractInfo struct {
 	Language        string      `json:"language"`
 	LanguageVersion string      `json:"languageVersion"`
 	CompilerVersion string      `json:"compilerVersion"`
-	CompilerOptions string      `json:"compilerOptions"`
 	AbiDefinition   interface{} `json:"abiDefinition"`
 	UserDoc         interface{} `json:"userDoc"`
 	DeveloperDoc    interface{} `json:"developerDoc"`
 }
 
 type Solidity struct {
-	solcPath    string
-	version     string
-	fullVersion string
-	legacy      bool
+	solcPath string
+	version  string
 }
 
 func New(solcPath string) (sol *Solidity, err error) {
@@ -101,118 +93,112 @@ func New(solcPath string) (sol *Solidity, err error) {
 		return
 	}
 
-	fullVersion := out.String()
-	version := versionRegexp.FindString(fullVersion)
-	legacy := legacyRegexp.MatchString(version)
-
+	version := versionRegExp.FindString(out.String())
 	sol = &Solidity{
-		solcPath:    solcPath,
-		version:     version,
-		fullVersion: fullVersion,
-		legacy:      legacy,
+		solcPath: solcPath,
+		version:  version,
 	}
 	glog.V(logger.Info).Infoln(sol.Info())
 	return
 }
 
 func (sol *Solidity) Info() string {
-	return fmt.Sprintf("%s\npath: %s", sol.fullVersion, sol.solcPath)
+	return fmt.Sprintf("solc v%s\nSolidity Compiler: %s\n%s", sol.version, sol.solcPath, flair)
 }
 
 func (sol *Solidity) Version() string {
 	return sol.version
 }
 
-// Compile builds and returns all the contracts contained within a source string.
-func (sol *Solidity) Compile(source string) (map[string]*Contract, error) {
-	// Short circuit if no source code was specified
+func (sol *Solidity) Compile(source string) (contracts map[string]*Contract, err error) {
+
 	if len(source) == 0 {
-		return nil, errors.New("solc: empty source string")
+		err = fmt.Errorf("empty source")
+		return
 	}
-	// Create a safe place to dump compilation output
+
 	wd, err := ioutil.TempDir("", "solc")
 	if err != nil {
-		return nil, fmt.Errorf("solc: failed to create temporary build folder: %v", err)
+		return
 	}
 	defer os.RemoveAll(wd)
 
-	// Assemble the compiler command, change to the temp folder and capture any errors
-	stderr := new(bytes.Buffer)
-
-	var params []string
-	if sol.legacy {
-		params = paramsLegacy
-	} else {
-		params = paramsNew
-		params = append(params, wd)
-	}
-	compilerOptions := strings.Join(params, " ")
-
+	in := strings.NewReader(source)
+	var out bytes.Buffer
+	// cwd set to temp dir
 	cmd := exec.Command(sol.solcPath, params...)
 	cmd.Dir = wd
-	cmd.Stdin = strings.NewReader(source)
-	cmd.Stderr = stderr
+	cmd.Stdin = in
+	cmd.Stdout = &out
+	err = cmd.Run()
+	if err != nil {
+		err = fmt.Errorf("solc error: %v", err)
+		return
+	}
 
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("solc: %v\n%s", err, string(stderr.Bytes()))
-	}
-	// Sanity check that something was actually built
-	matches, _ := filepath.Glob(wd + "/*\\.bin*")
+	matches, _ := filepath.Glob(wd + "/*.binary")
 	if len(matches) < 1 {
-		return nil, fmt.Errorf("solc: no build results found")
+		err = fmt.Errorf("solc error: missing code output")
+		return
 	}
-	// Compilation succeeded, assemble and return the contracts
-	contracts := make(map[string]*Contract)
+
+	contracts = make(map[string]*Contract)
 	for _, path := range matches {
 		_, file := filepath.Split(path)
 		base := strings.Split(file, ".")[0]
 
-		// Parse the individual compilation results (code binary, ABI definitions, user and dev docs)
-		var binary []byte
-		binext := ".bin"
-		if sol.legacy {
-			binext = ".binary"
-		}
-		if binary, err = ioutil.ReadFile(filepath.Join(wd, base+binext)); err != nil {
-			return nil, fmt.Errorf("solc: error reading compiler output for code: %v", err)
-		}
+		codeFile := filepath.Join(wd, base+".binary")
+		abiDefinitionFile := filepath.Join(wd, base+".abi")
+		userDocFile := filepath.Join(wd, base+".docuser")
+		developerDocFile := filepath.Join(wd, base+".docdev")
 
-		var abi interface{}
-		if blob, err := ioutil.ReadFile(filepath.Join(wd, base+".abi")); err != nil {
-			return nil, fmt.Errorf("solc: error reading abi definition: %v", err)
-		} else if err = json.Unmarshal(blob, &abi); err != nil {
-			return nil, fmt.Errorf("solc: error parsing abi definition: %v", err)
+		var code, abiDefinitionJson, userDocJson, developerDocJson []byte
+		code, err = ioutil.ReadFile(codeFile)
+		if err != nil {
+			err = fmt.Errorf("error reading compiler output for code: %v", err)
+			return
 		}
+		abiDefinitionJson, err = ioutil.ReadFile(abiDefinitionFile)
+		if err != nil {
+			err = fmt.Errorf("error reading compiler output for abiDefinition: %v", err)
+			return
+		}
+		var abiDefinition interface{}
+		err = json.Unmarshal(abiDefinitionJson, &abiDefinition)
 
-		var userdoc interface{}
-		if blob, err := ioutil.ReadFile(filepath.Join(wd, base+".docuser")); err != nil {
-			return nil, fmt.Errorf("solc: error reading user doc: %v", err)
-		} else if err = json.Unmarshal(blob, &userdoc); err != nil {
-			return nil, fmt.Errorf("solc: error parsing user doc: %v", err)
+		userDocJson, err = ioutil.ReadFile(userDocFile)
+		if err != nil {
+			err = fmt.Errorf("error reading compiler output for userDoc: %v", err)
+			return
 		}
+		var userDoc interface{}
+		err = json.Unmarshal(userDocJson, &userDoc)
 
-		var devdoc interface{}
-		if blob, err := ioutil.ReadFile(filepath.Join(wd, base+".docdev")); err != nil {
-			return nil, fmt.Errorf("solc: error reading dev doc: %v", err)
-		} else if err = json.Unmarshal(blob, &devdoc); err != nil {
-			return nil, fmt.Errorf("solc: error parsing dev doc: %v", err)
+		developerDocJson, err = ioutil.ReadFile(developerDocFile)
+		if err != nil {
+			err = fmt.Errorf("error reading compiler output for developerDoc: %v", err)
+			return
 		}
-		// Assemble the final contract
-		contracts[base] = &Contract{
-			Code: "0x" + string(binary),
+		var developerDoc interface{}
+		err = json.Unmarshal(developerDocJson, &developerDoc)
+
+		contract := &Contract{
+			Code: "0x" + string(code),
 			Info: ContractInfo{
 				Source:          source,
 				Language:        "Solidity",
-				LanguageVersion: sol.version,
+				LanguageVersion: languageVersion,
 				CompilerVersion: sol.version,
-				CompilerOptions: compilerOptions,
-				AbiDefinition:   abi,
-				UserDoc:         userdoc,
-				DeveloperDoc:    devdoc,
+				AbiDefinition:   abiDefinition,
+				UserDoc:         userDoc,
+				DeveloperDoc:    developerDoc,
 			},
 		}
+
+		contracts[base] = contract
 	}
-	return contracts, nil
+
+	return
 }
 
 func SaveInfo(info *ContractInfo, filename string) (contenthash common.Hash, err error) {

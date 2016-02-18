@@ -29,9 +29,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/crypto/secp256k1"
 )
 
 const nodeIDBits = 512
@@ -97,11 +97,6 @@ func (n *Node) String() string {
 // UDP (discovery) ports differ, the UDP port is specified as query
 // parameter "discport".
 //
-// In the following example, the node URL describes
-// a node with IP address 10.3.58.6, TCP listening port 30303
-// and UDP discovery port 30301.
-//
-//    enode://<hex node id>@10.3.58.6:30303?discport=30301
 func ParseNode(rawurl string) (*Node, error) {
 	var (
 		id               NodeID

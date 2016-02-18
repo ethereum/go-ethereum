@@ -31,8 +31,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/crypto"
 )
 
 var (
@@ -142,6 +142,13 @@ func (am *Manager) expire(addr common.Address, u *unlocked, timeout time.Duratio
 		}
 		am.mutex.Unlock()
 	}
+}
+
+func (am *Manager) IsLocked(addr common.Address) (locked bool) {
+  var found bool
+	_, found = am.unlocked[addr]
+
+	return !found
 }
 
 func (am *Manager) NewAccount(auth string) (Account, error) {

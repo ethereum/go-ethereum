@@ -20,13 +20,11 @@ import (
 	"fmt"
 	"math/big"
 	"sync/atomic"
-	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/state"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/params"
 	"github.com/hashicorp/golang-lru"
 )
 
@@ -37,14 +35,6 @@ const (
 	progCompile
 	progReady
 	progError
-
-	defaultJitMaxCache int = 64
-)
-
-var (
-	EnableJit   bool // Enables the JIT VM
-	ForceJit    bool // Force the JIT, skip byte VM
-	MaxProgSize int  // Max cache size for JIT Programs
 )
 
 var programs *lru.Cache
@@ -84,11 +74,11 @@ type Program struct {
 	Id     common.Hash // Id of the program
 	status int32       // status should be accessed atomically
 
-	contract *Contract
+	context *Context
 
-	instructions []programInstruction // instruction set
-	mapping      map[uint64]uint64    // real PC mapping to array indices
-	destinations map[uint64]struct{}  // cached jump destinations
+	instructions []instruction       // instruction set
+	mapping      map[uint64]int      // real PC mapping to array indices
+	destinations map[uint64]struct{} // cached jump destinations
 
 	code []byte
 }
@@ -97,7 +87,7 @@ type Program struct {
 func NewProgram(code []byte) *Program {
 	program := &Program{
 		Id:           crypto.Sha3Hash(code),
-		mapping:      make(map[uint64]uint64),
+		mapping:      make(map[uint64]int),
 		destinations: make(map[uint64]struct{}),
 		code:         code,
 	}
@@ -118,12 +108,10 @@ func (p *Program) addInstr(op OpCode, pc uint64, fn instrFn, data *big.Int) {
 		baseOp = DUP1
 	}
 	base := _baseCheck[baseOp]
-
-	returns := op == RETURN || op == SUICIDE || op == STOP
-	instr := instruction{op, pc, fn, data, base.gas, base.stackPop, base.stackPush, returns}
+	instr := instruction{op, pc, fn, nil, data, base.gas, base.stackPop, base.stackPush}
 
 	p.instructions = append(p.instructions, instr)
-	p.mapping[pc] = uint64(len(p.instructions) - 1)
+	p.mapping[pc] = len(p.instructions) - 1
 }
 
 // CompileProgram compiles the given program and return an error when it fails
@@ -139,13 +127,6 @@ func CompileProgram(program *Program) (err error) {
 			atomic.StoreInt32(&program.status, int32(progReady))
 		}
 	}()
-	if glog.V(logger.Debug) {
-		glog.Infof("compiling %x\n", program.Id[:4])
-		tstart := time.Now()
-		defer func() {
-			glog.Infof("compiled  %x instrc: %d time: %v\n", program.Id[:4], len(program.instructions), time.Since(tstart))
-		}()
-	}
 
 	// loop thru the opcodes and "compile" in to instructions
 	for pc := uint64(0); pc < uint64(len(program.code)); pc++ {
@@ -283,58 +264,101 @@ func CompileProgram(program *Program) (err error) {
 			program.addInstr(op, pc, opReturn, nil)
 		case SUICIDE:
 			program.addInstr(op, pc, opSuicide, nil)
-		case STOP: // Stop the contract
+		case STOP: // Stop the context
 			program.addInstr(op, pc, opStop, nil)
 		default:
 			program.addInstr(op, pc, nil, nil)
 		}
 	}
 
-	optimiseProgram(program)
-
 	return nil
 }
 
-// RunProgram runs the program given the enviroment and contract and returns an
+// RunProgram runs the program given the enviroment and context and returns an
 // error if the execution failed (non-consensus)
-func RunProgram(program *Program, env Environment, contract *Contract, input []byte) ([]byte, error) {
-	return runProgram(program, 0, NewMemory(), newstack(), env, contract, input)
+func RunProgram(program *Program, env Environment, context *Context, input []byte) ([]byte, error) {
+	return runProgram(program, 0, NewMemory(), newstack(), env, context, input)
 }
 
-func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env Environment, contract *Contract, input []byte) ([]byte, error) {
-	contract.Input = input
+func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env Environment, context *Context, input []byte) ([]byte, error) {
+	context.Input = input
 
 	var (
-		pc         uint64 = program.mapping[pcstart]
-		instrCount        = 0
+		caller      = context.caller
+		statedb     = env.State()
+		pc      int = program.mapping[pcstart]
+
+		jump = func(to *big.Int) error {
+			if !validDest(program.destinations, to) {
+				nop := context.GetOp(to.Uint64())
+				return fmt.Errorf("invalid jump destination (%v) %v", nop, to)
+			}
+
+			pc = program.mapping[to.Uint64()]
+
+			return nil
+		}
 	)
 
-	if glog.V(logger.Debug) {
-		glog.Infof("running JIT program %x\n", program.Id[:4])
-		tstart := time.Now()
-		defer func() {
-			glog.Infof("JIT program %x done. time: %v instrc: %v\n", program.Id[:4], time.Since(tstart), instrCount)
-		}()
-	}
-
-	for pc < uint64(len(program.instructions)) {
-		instrCount++
-
+	for pc < len(program.instructions) {
 		instr := program.instructions[pc]
 
-		ret, err := instr.do(program, &pc, env, contract, mem, stack)
+		// calculate the new memory size and gas price for the current executing opcode
+		newMemSize, cost, err := jitCalculateGasAndSize(env, context, caller, instr, statedb, mem, stack)
 		if err != nil {
 			return nil, err
 		}
 
-		if instr.halts() {
-			return contract.Return(ret), nil
+		// Use the calculated gas. When insufficient gas is present, use all gas and return an
+		// Out Of Gas error
+		if !context.UseGas(cost) {
+			return nil, OutOfGasError
 		}
+		// Resize the memory calculated previously
+		mem.Resize(newMemSize.Uint64())
+
+		// These opcodes return an argument and are thefor handled
+		// differently from the rest of the opcodes
+		switch instr.op {
+		case JUMP:
+			if err := jump(stack.pop()); err != nil {
+				return nil, err
+			}
+			continue
+		case JUMPI:
+			pos, cond := stack.pop(), stack.pop()
+
+			if cond.Cmp(common.BigTrue) >= 0 {
+				if err := jump(pos); err != nil {
+					return nil, err
+				}
+				continue
+			}
+		case RETURN:
+			offset, size := stack.pop(), stack.pop()
+			ret := mem.GetPtr(offset.Int64(), size.Int64())
+
+			return context.Return(ret), nil
+		case SUICIDE:
+			instr.fn(instr, env, context, mem, stack)
+
+			return context.Return(nil), nil
+		case STOP:
+			return context.Return(nil), nil
+		default:
+			if instr.fn == nil {
+				return nil, fmt.Errorf("Invalid opcode %x", instr.op)
+			}
+
+			instr.fn(instr, env, context, mem, stack)
+		}
+
+		pc++
 	}
 
-	contract.Input = nil
+	context.Input = nil
 
-	return contract.Return(nil), nil
+	return context.Return(nil), nil
 }
 
 // validDest checks if the given distination is a valid one given the
@@ -351,7 +375,7 @@ func validDest(dests map[uint64]struct{}, dest *big.Int) bool {
 
 // jitCalculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
 // the operation. This does not reduce gas or resizes the memory.
-func jitCalculateGasAndSize(env Environment, contract *Contract, instr instruction, statedb Database, mem *Memory, stack *stack) (*big.Int, *big.Int, error) {
+func jitCalculateGasAndSize(env Environment, context *Context, caller ContextRef, instr instruction, statedb *state.StateDB, mem *Memory, stack *stack) (*big.Int, *big.Int, error) {
 	var (
 		gas                 = new(big.Int)
 		newMemSize *big.Int = new(big.Int)
@@ -402,25 +426,27 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 
 		var g *big.Int
 		y, x := stack.data[stack.len()-2], stack.data[stack.len()-1]
-		val := statedb.GetState(contract.Address(), common.BigToHash(x))
+		val := statedb.GetState(context.Address(), common.BigToHash(x))
 
 		// This checks for 3 scenario's and calculates gas accordingly
 		// 1. From a zero-value address to a non-zero value         (NEW VALUE)
 		// 2. From a non-zero value address to a zero-value address (DELETE)
 		// 3. From a nen-zero to a non-zero                         (CHANGE)
 		if common.EmptyHash(val) && !common.EmptyHash(common.BigToHash(y)) {
+			// 0 => non 0
 			g = params.SstoreSetGas
 		} else if !common.EmptyHash(val) && common.EmptyHash(common.BigToHash(y)) {
-			statedb.AddRefund(params.SstoreRefundGas)
+			statedb.Refund(params.SstoreRefundGas)
 
 			g = params.SstoreClearGas
 		} else {
+			// non 0 => non 0 (or 0 => 0)
 			g = params.SstoreClearGas
 		}
 		gas.Set(g)
 	case SUICIDE:
-		if !statedb.IsDeleted(contract.Address()) {
-			statedb.AddRefund(params.SuicideRefundGas)
+		if !statedb.IsDeleted(context.Address()) {
+			statedb.Refund(params.SuicideRefundGas)
 		}
 	case MLOAD:
 		newMemSize = calcMemSize(stack.peek(), u256(32))
@@ -457,8 +483,7 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 		gas.Add(gas, stack.data[stack.len()-1])
 
 		if op == CALL {
-			//if env.Db().GetStateObject(common.BigToAddress(stack.data[stack.len()-2])) == nil {
-			if !env.Db().Exist(common.BigToAddress(stack.data[stack.len()-2])) {
+			if env.State().GetStateObject(common.BigToAddress(stack.data[stack.len()-2])) == nil {
 				gas.Add(gas, params.CallNewAccountGas)
 			}
 		}
@@ -472,7 +497,29 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 
 		newMemSize = common.BigMax(x, y)
 	}
-	quadMemGas(mem, newMemSize, gas)
+
+	if newMemSize.Cmp(common.Big0) > 0 {
+		newMemSizeWords := toWordSize(newMemSize)
+		newMemSize.Mul(newMemSizeWords, u256(32))
+
+		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
+			// be careful reusing variables here when changing.
+			// The order has been optimised to reduce allocation
+			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
+			pow := new(big.Int).Exp(oldSize, common.Big2, Zero)
+			linCoef := oldSize.Mul(oldSize, params.MemoryGas)
+			quadCoef := new(big.Int).Div(pow, params.QuadCoeffDiv)
+			oldTotalFee := new(big.Int).Add(linCoef, quadCoef)
+
+			pow.Exp(newMemSizeWords, common.Big2, Zero)
+			linCoef = linCoef.Mul(newMemSizeWords, params.MemoryGas)
+			quadCoef = quadCoef.Div(pow, params.QuadCoeffDiv)
+			newTotalFee := linCoef.Add(linCoef, quadCoef)
+
+			fee := newTotalFee.Sub(newTotalFee, oldTotalFee)
+			gas.Add(gas, fee)
+		}
+	}
 
 	return newMemSize, gas, nil
 }

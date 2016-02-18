@@ -19,9 +19,9 @@ package core
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/state"
+	"github.com/chattynet/chatty/core/types"
 )
 
 // TxPreEvent is posted when a transaction enters the transaction pool.
@@ -36,29 +36,29 @@ type NewBlockEvent struct{ Block *types.Block }
 // NewMinedBlockEvent is posted when a block has been imported.
 type NewMinedBlockEvent struct{ Block *types.Block }
 
-// RemovedTransactionEvent is posted when a reorg happens
+// RemovedTransactionEvent is posted when a reord happens
 type RemovedTransactionEvent struct{ Txs types.Transactions }
 
 // ChainSplit is posted when a new head is detected
 type ChainSplitEvent struct {
 	Block *types.Block
-	Logs  vm.Logs
+	Logs  state.Logs
 }
 
 type ChainEvent struct {
 	Block *types.Block
 	Hash  common.Hash
-	Logs  vm.Logs
+	Logs  state.Logs
 }
 
 type ChainSideEvent struct {
 	Block *types.Block
-	Logs  vm.Logs
+	Logs  state.Logs
 }
 
 type PendingBlockEvent struct {
 	Block *types.Block
-	Logs  vm.Logs
+	Logs  state.Logs
 }
 
 type ChainUncleEvent struct {

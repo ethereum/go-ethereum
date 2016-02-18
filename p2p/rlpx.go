@@ -32,12 +32,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/crypto/ecies"
+	"github.com/chattynet/chatty/crypto/secp256k1"
+	"github.com/chattynet/chatty/crypto/sha3"
+	"github.com/chattynet/chatty/p2p/discover"
+	"github.com/chattynet/chatty/rlp"
 )
 
 const (

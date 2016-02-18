@@ -25,10 +25,10 @@ import (
 
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/rpc/codec"
+	"github.com/chattynet/chatty/rpc/shared"
 )
 
 const (
@@ -62,18 +62,13 @@ type EthereumClient interface {
 func handle(id int, conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 	codec := c.New(conn)
 
-	defer func() {
-		if r := recover(); r != nil {
-			glog.Errorf("panic: %v\n", r)
-		}
-		codec.Close()
-	}()
-
 	for {
 		requests, isBatch, err := codec.ReadRequest()
 		if err == io.EOF {
+			codec.Close()
 			return
 		} else if err != nil {
+			codec.Close()
 			glog.V(logger.Debug).Infof("Closed IPC Conn %06d recv err - %v\n", id, err)
 			return
 		}
@@ -92,6 +87,7 @@ func handle(id int, conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 
 			err = codec.WriteResponse(responses[:responseCount])
 			if err != nil {
+				codec.Close()
 				glog.V(logger.Debug).Infof("Closed IPC Conn %06d send err - %v\n", id, err)
 				return
 			}
@@ -102,6 +98,7 @@ func handle(id int, conn net.Conn, api shared.EthereumApi, c codec.Codec) {
 			rpcResponse = shared.NewRpcResponse(requests[0].Id, requests[0].Jsonrpc, res, err)
 			err = codec.WriteResponse(rpcResponse)
 			if err != nil {
+				codec.Close()
 				glog.V(logger.Debug).Infof("Closed IPC Conn %06d send err - %v\n", id, err)
 				return
 			}
@@ -124,7 +121,7 @@ func ClientFromEndpoint(endpoint string, c codec.Codec) (EthereumClient, error) 
 	if strings.HasPrefix(endpoint, "rpc:") {
 		parts := strings.Split(endpoint, ":")
 		addr := "http://localhost"
-		port := uint(8545)
+		port := uint(53901)
 		if len(parts) >= 3 {
 			addr = parts[1] + ":" + parts[2]
 		}

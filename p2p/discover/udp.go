@@ -25,11 +25,11 @@ import (
 	"net"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/p2p/nat"
+	"github.com/chattynet/chatty/rlp"
 )
 
 const Version = 4
@@ -39,6 +39,7 @@ var (
 	errPacketTooSmall   = errors.New("too small")
 	errBadHash          = errors.New("bad hash")
 	errExpired          = errors.New("expired")
+	errBadVersion       = errors.New("version mismatch")
 	errUnsolicitedReply = errors.New("unsolicited reply")
 	errUnknownNode      = errors.New("unknown node")
 	errTimeout          = errors.New("RPC timeout")
@@ -51,6 +52,8 @@ const (
 	respTimeout = 500 * time.Millisecond
 	sendTimeout = 500 * time.Millisecond
 	expiration  = 20 * time.Second
+
+	refreshInterval = 1 * time.Hour
 )
 
 // RPC packet types
@@ -216,7 +219,7 @@ func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, nodeDBPath strin
 	realaddr := c.LocalAddr().(*net.UDPAddr)
 	if natm != nil {
 		if !realaddr.IP.IsLoopback() {
-			go nat.Map(natm, udp.closing, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+			go nat.Map(natm, udp.closing, "udp", realaddr.Port, realaddr.Port, "shift discovery")
 		}
 		// TODO: react to external IP changes over time.
 		if ext, err := natm.ExternalIP(); err == nil {
@@ -309,8 +312,10 @@ func (t *udp) loop() {
 		plist       = list.New()
 		timeout     = time.NewTimer(0)
 		nextTimeout *pending // head of plist when timeout was last reset
+		refresh     = time.NewTicker(refreshInterval)
 	)
 	<-timeout.C // ignore first timeout
+	defer refresh.Stop()
 	defer timeout.Stop()
 
 	resetTimeout := func() {
@@ -339,6 +344,9 @@ func (t *udp) loop() {
 		resetTimeout()
 
 		select {
+		case <-refresh.C:
+			go t.refresh()
+
 		case <-t.closing:
 			for el := plist.Front(); el != nil; el = el.Next() {
 				el.Value.(*pending).errc <- errClosed
@@ -520,6 +528,9 @@ func decodePacket(buf []byte) (packet, NodeID, []byte, error) {
 func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
 	if expired(req.Expiration) {
 		return errExpired
+	}
+	if req.Version != Version {
+		return errBadVersion
 	}
 	t.send(from, pongPacket, pong{
 		To:         makeEndpoint(from, req.From.TCP),

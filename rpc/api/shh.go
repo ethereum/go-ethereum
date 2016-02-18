@@ -19,10 +19,10 @@ package api
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/chattynet/chatty/eth"
+	"github.com/chattynet/chatty/rpc/codec"
+	"github.com/chattynet/chatty/rpc/shared"
+	"github.com/chattynet/chatty/xeth"
 )
 
 const (
@@ -38,7 +38,6 @@ var (
 		"shh_newIdentity":      (*shhApi).NewIdentity,
 		"shh_newFilter":        (*shhApi).NewFilter,
 		"shh_uninstallFilter":  (*shhApi).UninstallFilter,
-		"shh_getMessages":      (*shhApi).GetMessages,
 		"shh_getFilterChanges": (*shhApi).GetFilterChanges,
 	}
 )

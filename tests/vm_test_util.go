@@ -24,11 +24,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/state"
+	"github.com/chattynet/chatty/core/vm"
+	"github.com/chattynet/chatty/ethdb"
+	"github.com/chattynet/chatty/logger/glog"
 )
 
 func RunVmTestWithReader(r io.Reader, skipTests []string) error {
@@ -108,7 +108,7 @@ func BenchVmTest(p string, conf bconf, b *testing.B) error {
 func benchVmTest(test VmTest, env map[string]string, b *testing.B) {
 	b.StopTimer()
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)
@@ -159,7 +159,7 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 
 func runVmTest(test VmTest) error {
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)
@@ -185,7 +185,7 @@ func runVmTest(test VmTest) error {
 		ret  []byte
 		gas  *big.Int
 		err  error
-		logs vm.Logs
+		logs state.Logs
 	)
 
 	ret, logs, gas, err = RunVm(statedb, env, test.Exec)
@@ -234,7 +234,7 @@ func runVmTest(test VmTest) error {
 	return nil
 }
 
-func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs, *big.Int, error) {
+func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Logs, *big.Int, error) {
 	var (
 		to    = common.HexToAddress(exec["address"])
 		from  = common.HexToAddress(exec["caller"])

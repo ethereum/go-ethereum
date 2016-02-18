@@ -42,13 +42,6 @@ func TestBcUncleTests(t *testing.T) {
 	}
 }
 
-func TestBcForkUncleTests(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcForkUncle.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestBcInvalidHeaderTests(t *testing.T) {
 	err := RunBlockTest(filepath.Join(blockTestDir, "bcInvalidHeaderTest.json"), BlockSkipTests)
 	if err != nil {
@@ -72,13 +65,6 @@ func TestBcRPCAPITests(t *testing.T) {
 
 func TestBcForkBlockTests(t *testing.T) {
 	err := RunBlockTest(filepath.Join(blockTestDir, "bcForkBlockTest.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestBcForkStress(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcForkStressTest.json"), BlockSkipTests)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,20 +94,6 @@ func TestBcGasPricer(t *testing.T) {
 // TODO: iterate over files once we got more than a few
 func TestBcRandom(t *testing.T) {
 	err := RunBlockTest(filepath.Join(blockTestDir, "RandomTests/bl201507071825GO.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestBcMultiChain(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcMultiChainTest.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestBcState(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcStateTest.json"), BlockSkipTests)
 	if err != nil {
 		t.Fatal(err)
 	}

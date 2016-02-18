@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/eth"
+	"github.com/chattynet/chatty/rpc/codec"
+	"github.com/chattynet/chatty/rpc/shared"
+	"github.com/chattynet/chatty/xeth"
 )
 
 const (
@@ -35,8 +35,11 @@ var (
 	// mapping between methods and handlers
 	personalMapping = map[string]personalhandler{
 		"personal_listAccounts":  (*personalApi).ListAccounts,
+		"personal_listAccountTransactions":  (*personalApi).ListAccountTransactions,
 		"personal_newAccount":    (*personalApi).NewAccount,
+		"personal_deleteAccount": (*personalApi).DeleteAccount,
 		"personal_unlockAccount": (*personalApi).UnlockAccount,
+		"personal_isAccountLocked": (*personalApi).IsAccountLocked,
 	}
 )
 
@@ -93,28 +96,39 @@ func (self *personalApi) ListAccounts(req *shared.Request) (interface{}, error) 
 	return self.xeth.Accounts(), nil
 }
 
+func (self *personalApi) ListAccountTransactions(req *shared.Request) (interface{}, error) {
+	args := new(ListTransactionsArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+	
+	return self.xeth.AccountTransactions(args.Accounts), nil
+}
+
 func (self *personalApi) NewAccount(req *shared.Request) (interface{}, error) {
 	args := new(NewAccountArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
-	var passwd string
-	if args.Passphrase == nil {
-		fe := self.xeth.Frontend()
-		if fe == nil {
-			return false, fmt.Errorf("unable to create account: unable to interact with user")
-		}
-		var ok bool
-		passwd, ok = fe.AskPassword()
-		if !ok {
-			return false, fmt.Errorf("unable to create account: no password given")
-		}
-	} else {
-		passwd = *args.Passphrase
-	}
+
 	am := self.ethereum.AccountManager()
-	acc, err := am.NewAccount(passwd)
+	acc, err := am.NewAccount(args.Passphrase)
 	return acc.Address.Hex(), err
+}
+
+func (self *personalApi) DeleteAccount(req *shared.Request) (interface{}, error) {
+	args := new(DeleteAccountArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	addr := common.HexToAddress(args.Address)
+	am := self.ethereum.AccountManager()
+	if err := am.DeleteAccount(addr, args.Passphrase); err == nil {
+		return true, nil
+	} else {
+		return false, err
+	}
 }
 
 func (self *personalApi) UnlockAccount(req *shared.Request) (interface{}, error) {
@@ -123,7 +137,7 @@ func (self *personalApi) UnlockAccount(req *shared.Request) (interface{}, error)
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	if args.Passphrase == nil {
+	if len(args.Passphrase) == 0 {
 		fe := self.xeth.Frontend()
 		if fe == nil {
 			return false, fmt.Errorf("No password provided")
@@ -134,6 +148,18 @@ func (self *personalApi) UnlockAccount(req *shared.Request) (interface{}, error)
 	am := self.ethereum.AccountManager()
 	addr := common.HexToAddress(args.Address)
 
-	err := am.TimedUnlock(addr, *args.Passphrase, time.Duration(args.Duration)*time.Second)
+	err := am.TimedUnlock(addr, args.Passphrase, time.Duration(args.Duration)*time.Second)
 	return err == nil, err
+}
+
+func (self *personalApi) IsAccountLocked(req *shared.Request) (interface{}, error) {
+	args := new(IsAccountLockedArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	am := self.ethereum.AccountManager()
+	addr := common.HexToAddress(args.Address)
+
+	return am.IsLocked(addr), nil
 }

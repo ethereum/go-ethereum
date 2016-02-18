@@ -26,10 +26,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/p2p/discover"
+	"github.com/chattynet/chatty/p2p/nat"
 )
 
 func main() {

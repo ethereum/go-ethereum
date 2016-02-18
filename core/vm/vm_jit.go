@@ -30,7 +30,6 @@ void  evmjit_destroy(void* _jit);
 */
 import "C"
 
-/*
 import (
 	"bytes"
 	"errors"
@@ -38,9 +37,9 @@ import (
 	"math/big"
 	"unsafe"
 
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/chattynet/chatty/core/state"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/params"
 )
 
 type JitVm struct {
@@ -386,4 +385,4 @@ func env_extcode(_vm unsafe.Pointer, _addr unsafe.Pointer, o_size *uint64) *byte
 	code := vm.Env().State().GetCode(addr)
 	*o_size = uint64(len(code))
 	return getDataPtr(code)
-}*/
+}

@@ -24,14 +24,18 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/rlp"
 )
 
 var ErrInvalidSig = errors.New("invalid v, r, s values")
+
+func IsContractAddr(addr []byte) bool {
+	return len(addr) == 0
+}
 
 type Transaction struct {
 	data txdata
@@ -272,34 +276,26 @@ func (tx *Transaction) String() string {
 // Transaction slice type for basic sorting.
 type Transactions []*Transaction
 
-// Len returns the length of s
-func (s Transactions) Len() int { return len(s) }
-
-// Swap swaps the i'th and the j'th element in s
+func (s Transactions) Len() int      { return len(s) }
 func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
-// GetRlp implements Rlpable and returns the i'th element of s in rlp
 func (s Transactions) GetRlp(i int) []byte {
 	enc, _ := rlp.EncodeToBytes(s[i])
 	return enc
 }
 
-// Returns a new set t which is the difference between a to b
-func TxDifference(a, b Transactions) (keep Transactions) {
-	keep = make(Transactions, 0, len(a))
-
-	remove := make(map[common.Hash]struct{})
+// Difference sets s to the difference of a to b. Expects s to be empty
+func (s Transactions) Difference(a, b Transactions) {
+	m := make(map[common.Hash]*Transaction)
 	for _, tx := range b {
-		remove[tx.Hash()] = struct{}{}
+		m[tx.Hash()] = tx
 	}
 
 	for _, tx := range a {
-		if _, ok := remove[tx.Hash()]; !ok {
-			keep = append(keep, tx)
+		if _, ok := m[tx.Hash()]; !ok {
+			s = append(s, tx)
 		}
 	}
-
-	return keep
 }
 
 type TxByNonce struct{ Transactions }

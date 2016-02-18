@@ -23,21 +23,22 @@ import (
 	"os"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/common/natspec"
-	"github.com/ethereum/go-ethereum/common/registrar"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/rpc/useragent"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/common/compiler"
+	"github.com/chattynet/chatty/common/docserver"
+	"github.com/chattynet/chatty/common/natspec"
+	"github.com/chattynet/chatty/common/registrar"
+	"github.com/chattynet/chatty/core"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/eth"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/rlp"
+	"github.com/chattynet/chatty/rpc/codec"
+	"github.com/chattynet/chatty/rpc/comms"
+	"github.com/chattynet/chatty/rpc/shared"
+	"github.com/chattynet/chatty/rpc/useragent"
+	"github.com/chattynet/chatty/xeth"
 )
 
 const (
@@ -54,6 +55,7 @@ var (
 		"admin_exportChain":        (*adminApi).ExportChain,
 		"admin_importChain":        (*adminApi).ImportChain,
 		"admin_verbosity":          (*adminApi).Verbosity,
+		"admin_chainSyncStatus":    (*adminApi).ChainSyncStatus,
 		"admin_setSolc":            (*adminApi).SetSolc,
 		"admin_datadir":            (*adminApi).DataDir,
 		"admin_startRPC":           (*adminApi).StartRPC,
@@ -83,6 +85,7 @@ type adminApi struct {
 	ethereum *eth.Ethereum
 	codec    codec.Codec
 	coder    codec.ApiCoder
+	ds       *docserver.DocServer
 }
 
 // create a new admin api instance
@@ -92,6 +95,7 @@ func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec) *ad
 		ethereum: ethereum,
 		codec:    codec,
 		coder:    codec.New(nil),
+		ds:       docserver.New("/"),
 	}
 }
 
@@ -137,18 +141,18 @@ func (self *adminApi) AddPeer(req *shared.Request) (interface{}, error) {
 }
 
 func (self *adminApi) Peers(req *shared.Request) (interface{}, error) {
-	return self.ethereum.Network().PeersInfo(), nil
+	return self.ethereum.PeersInfo(), nil
 }
 
 func (self *adminApi) NodeInfo(req *shared.Request) (interface{}, error) {
-	return self.ethereum.Network().NodeInfo(), nil
+	return self.ethereum.NodeInfo(), nil
 }
 
 func (self *adminApi) DataDir(req *shared.Request) (interface{}, error) {
 	return self.ethereum.DataDir, nil
 }
 
-func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
+func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
 	for _, b := range bs {
 		if !chain.HasBlock(b.Hash()) {
 			return false
@@ -190,10 +194,10 @@ func (self *adminApi) ImportChain(req *shared.Request) (interface{}, error) {
 			break
 		}
 		// Import the batch.
-		if hasAllBlocks(self.ethereum.BlockChain(), blocks[:i]) {
+		if hasAllBlocks(self.ethereum.ChainManager(), blocks[:i]) {
 			continue
 		}
-		if _, err := self.ethereum.BlockChain().InsertChain(blocks[:i]); err != nil {
+		if _, err := self.ethereum.ChainManager().InsertChain(blocks[:i]); err != nil {
 			return false, fmt.Errorf("invalid block %d: %v", n, err)
 		}
 	}
@@ -211,7 +215,7 @@ func (self *adminApi) ExportChain(req *shared.Request) (interface{}, error) {
 		return false, err
 	}
 	defer fh.Close()
-	if err := self.ethereum.BlockChain().Export(fh); err != nil {
+	if err := self.ethereum.ChainManager().Export(fh); err != nil {
 		return false, err
 	}
 
@@ -226,6 +230,17 @@ func (self *adminApi) Verbosity(req *shared.Request) (interface{}, error) {
 
 	glog.SetV(args.Level)
 	return true, nil
+}
+
+func (self *adminApi) ChainSyncStatus(req *shared.Request) (interface{}, error) {
+	pending, cached, importing, estimate := self.ethereum.Downloader().Stats()
+
+	return map[string]interface{}{
+		"blocksAvailable":        pending,
+		"blocksWaitingForImport": cached,
+		"importing":              importing,
+		"estimate":               estimate.String(),
+	}, nil
 }
 
 func (self *adminApi) SetSolc(req *shared.Request) (interface{}, error) {
@@ -434,7 +449,7 @@ func (self *adminApi) GetContractInfo(req *shared.Request) (interface{}, error) 
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	infoDoc, err := natspec.FetchDocsForContract(args.Contract, self.xeth, self.ethereum.HTTPClient())
+	infoDoc, err := natspec.FetchDocsForContract(args.Contract, self.xeth, self.ds)
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +469,7 @@ func (self *adminApi) HttpGet(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	resp, err := self.ethereum.HTTPClient().Get(args.Uri, args.Path)
+	resp, err := self.ds.Get(args.Uri, args.Path)
 	if err != nil {
 		return nil, err
 	}

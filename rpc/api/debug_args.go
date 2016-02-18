@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/chattynet/chatty/rpc/shared"
 )
 
 type WaitForBlockArgs struct {

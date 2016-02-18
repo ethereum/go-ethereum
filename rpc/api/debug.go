@@ -22,14 +22,13 @@ import (
 	"time"
 
 	"github.com/ethereum/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/chattynet/chatty/core/state"
+	"github.com/chattynet/chatty/core/vm"
+	"github.com/chattynet/chatty/eth"
+	"github.com/chattynet/chatty/rlp"
+	"github.com/chattynet/chatty/rpc/codec"
+	"github.com/chattynet/chatty/rpc/shared"
+	"github.com/chattynet/chatty/xeth"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -120,9 +119,9 @@ func (self *debugApi) DumpBlock(req *shared.Request) (interface{}, error) {
 		return nil, fmt.Errorf("block #%d not found", args.BlockNumber)
 	}
 
-	stateDb, err := state.New(block.Root(), self.ethereum.ChainDb())
-	if err != nil {
-		return nil, err
+	stateDb := state.New(block.Root(), self.ethereum.ChainDb())
+	if stateDb == nil {
+		return nil, nil
 	}
 
 	return stateDb.RawDump(), nil
@@ -147,7 +146,13 @@ func (self *debugApi) SetHead(req *shared.Request) (interface{}, error) {
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
-	self.ethereum.BlockChain().SetHead(uint64(args.BlockNumber))
+
+	block := self.xeth.EthBlockByNumber(args.BlockNumber)
+	if block == nil {
+		return nil, fmt.Errorf("block #%d not found", args.BlockNumber)
+	}
+
+	self.ethereum.ChainManager().SetHead(block)
 
 	return nil, nil
 }
@@ -167,30 +172,11 @@ func (self *debugApi) ProcessBlock(req *shared.Request) (interface{}, error) {
 	defer func() { vm.Debug = old }()
 	vm.Debug = true
 
-	var (
-		blockchain = self.ethereum.BlockChain()
-		validator  = blockchain.Validator()
-		processor  = blockchain.Processor()
-	)
-
-	err := core.ValidateHeader(blockchain.AuxValidator(), block.Header(), blockchain.GetHeader(block.ParentHash()), true, false)
-	if err != nil {
-		return false, err
+	_, err := self.ethereum.BlockProcessor().RetryProcess(block)
+	if err == nil {
+		return true, nil
 	}
-	statedb, err := state.New(blockchain.GetBlock(block.ParentHash()).Root(), self.ethereum.ChainDb())
-	if err != nil {
-		return false, err
-	}
-	receipts, _, usedGas, err := processor.Process(block, statedb)
-	if err != nil {
-		return false, err
-	}
-	err = validator.ValidateState(block, blockchain.GetBlock(block.ParentHash()), statedb, receipts, usedGas)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
+	return false, err
 }
 
 func (self *debugApi) SeedHash(req *shared.Request) (interface{}, error) {

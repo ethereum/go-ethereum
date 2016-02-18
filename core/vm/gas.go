@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/chattynet/chatty/params"
 )
 
 var (
@@ -37,7 +37,6 @@ var (
 	GasContractByte = big.NewInt(200)
 )
 
-// baseCheck checks for any stack error underflows
 func baseCheck(op OpCode, stack *stack, gas *big.Int) error {
 	// PUSH and DUP are a bit special. They all cost the same but we do want to have checking on stack push limit
 	// PUSH is also allowed to calculate the same price for all PUSHes
@@ -64,7 +63,6 @@ func baseCheck(op OpCode, stack *stack, gas *big.Int) error {
 	return nil
 }
 
-// casts a arbitrary number to the amount of words (sets of 32 bytes)
 func toWordSize(size *big.Int) *big.Int {
 	tmp := new(big.Int)
 	tmp.Add(size, u256(31))

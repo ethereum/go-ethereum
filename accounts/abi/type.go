@@ -22,7 +22,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/chattynet/chatty/common"
 )
 
 const (
@@ -43,7 +43,7 @@ type Type struct {
 	stringKind string // holds the unparsed string for deriving signatures
 }
 
-// NewType returns a fully parsed Type given by the input string or an error if it  can't be parsed.
+// New type returns a fully parsed Type given by the input string or an error if it  can't be parsed.
 //
 // Strings can be in the format of:
 //
@@ -130,10 +130,6 @@ func NewType(t string) (typ Type, err error) {
 			if vsize > 0 {
 				typ.Size = 32
 			}
-		case "bytes":
-			typ.Kind = reflect.Slice
-			typ.Type = byte_ts
-			typ.Size = vsize
 		default:
 			return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 		}
@@ -204,13 +200,7 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 		} else {
 			return common.LeftPadBytes(common.Big0.Bytes(), 32), nil
 		}
-	case reflect.Array:
-		if v, ok := value.Interface().(common.Address); ok {
-			return t.pack(v[:])
-		} else if v, ok := value.Interface().(common.Hash); ok {
-			return t.pack(v[:])
-		}
 	}
 
-	return nil, fmt.Errorf("ABI: bad input given %T", value.Kind())
+	panic("unreached")
 }

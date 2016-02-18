@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/ethdb"
+	"github.com/chattynet/chatty/event"
+	"github.com/chattynet/chatty/params"
 )
 
 func ExampleGenerateChain() {
@@ -42,12 +42,12 @@ func ExampleGenerateChain() {
 	)
 
 	// Ensure that key1 has some funds in the genesis block.
-	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{addr1, big.NewInt(1000000)})
+	genesis := WriteGenesisBlockForTesting(db, addr1, big.NewInt(1000000))
 
 	// This call generates a chain of 5 blocks. The function runs for
 	// each block and adds different features to gen based on the
 	// block index.
-	chain, _ := GenerateChain(genesis, db, 5, func(i int, gen *BlockGen) {
+	chain := GenerateChain(genesis, db, 5, func(i int, gen *BlockGen) {
 		switch i {
 		case 0:
 			// In block 1, addr1 sends addr2 some ether.
@@ -77,14 +77,15 @@ func ExampleGenerateChain() {
 
 	// Import the chain. This runs all block validation rules.
 	evmux := &event.TypeMux{}
-	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
-	if i, err := blockchain.InsertChain(chain); err != nil {
+	chainman, _ := NewChainManager(db, FakePow{}, evmux)
+	chainman.SetProcessor(NewBlockProcessor(db, FakePow{}, chainman, evmux))
+	if i, err := chainman.InsertChain(chain); err != nil {
 		fmt.Printf("insert error (block %d): %v\n", i, err)
 		return
 	}
 
-	state, _ := blockchain.State()
-	fmt.Printf("last block: #%d\n", blockchain.CurrentBlock().Number())
+	state := chainman.State()
+	fmt.Printf("last block: #%d\n", chainman.CurrentBlock().Number())
 	fmt.Println("balance of addr1:", state.GetBalance(addr1))
 	fmt.Println("balance of addr2:", state.GetBalance(addr2))
 	fmt.Println("balance of addr3:", state.GetBalance(addr3))

@@ -22,11 +22,11 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/rlp"
 )
 
 // DisabledBadBlockReporting can be set to prevent blocks being reported.
@@ -50,7 +50,7 @@ func ReportBlock(block *types.Block, err error) {
 			"vmtrace":  "NYI",
 		},
 	}
-	jsonStr, _ := json.Marshal(map[string]interface{}{"method": "eth_badBlock", "params": []interface{}{data}, "id": "1", "jsonrpc": "2.0"})
+	jsonStr, _ := json.Marshal(map[string]interface{}{"method": "chy_badBlock", "params": []interface{}{data}, "id": "1", "jsonrpc": "2.0"})
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
 	req.Header.Set("Content-Type", "application/json")

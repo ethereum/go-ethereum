@@ -28,9 +28,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/crypto/sha3"
+	"github.com/chattynet/chatty/rlp"
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -117,17 +117,11 @@ func rlpHash(x interface{}) (h common.Hash) {
 	return h
 }
 
-// Body is a simple (mutable, non-safe) data container for storing and moving
-// a block's data contents (transactions and uncles) together.
-type Body struct {
-	Transactions []*Transaction
-	Uncles       []*Header
-}
-
 type Block struct {
 	header       *Header
 	uncles       []*Header
 	transactions Transactions
+	receipts     Receipts
 
 	// caches
 	hash atomic.Value
@@ -135,20 +129,19 @@ type Block struct {
 
 	// Td is used by package core to store the total difficulty
 	// of the chain up to and including the block.
-	td *big.Int
+	Td *big.Int
 
 	// ReceivedAt is used by package eth to track block propagation time.
 	ReceivedAt time.Time
 }
 
-// DeprecatedTd is an old relic for extracting the TD of a block. It is in the
-// code solely to facilitate upgrading the database from the old format to the
-// new, after which it should be deleted. Do not use!
-func (b *Block) DeprecatedTd() *big.Int {
-	return b.td
+// A bit of a hack to put it here, but good enough for now
+type SQLDatabase interface {
+	InsertBlock(block *Block)
+	DeleteBlock(block *Block)
 }
 
-// [deprecated by eth/63]
+
 // StorageBlock defines the RLP encoding of a Block stored in the
 // state database. The StorageBlock encoding contains fields that
 // would otherwise need to be recomputed.
@@ -161,7 +154,6 @@ type extblock struct {
 	Uncles []*Header
 }
 
-// [deprecated by eth/63]
 // "storage" block encoding. used for database.
 type storageblock struct {
 	Header *Header
@@ -171,8 +163,8 @@ type storageblock struct {
 }
 
 var (
-	EmptyRootHash  = DeriveSha(Transactions{})
-	EmptyUncleHash = CalcUncleHash(nil)
+	emptyRootHash  = DeriveSha(Transactions{})
+	emptyUncleHash = CalcUncleHash(nil)
 )
 
 // NewBlock creates a new block. The input data is copied,
@@ -183,11 +175,11 @@ var (
 // are ignored and set to values derived from the given txs, uncles
 // and receipts.
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt) *Block {
-	b := &Block{header: CopyHeader(header), td: new(big.Int)}
+	b := &Block{header: copyHeader(header), Td: new(big.Int)}
 
 	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
-		b.header.TxHash = EmptyRootHash
+		b.header.TxHash = emptyRootHash
 	} else {
 		b.header.TxHash = DeriveSha(Transactions(txs))
 		b.transactions = make(Transactions, len(txs))
@@ -195,19 +187,21 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 	}
 
 	if len(receipts) == 0 {
-		b.header.ReceiptHash = EmptyRootHash
+		b.header.ReceiptHash = emptyRootHash
 	} else {
 		b.header.ReceiptHash = DeriveSha(Receipts(receipts))
 		b.header.Bloom = CreateBloom(receipts)
+		b.receipts = make([]*Receipt, len(receipts))
+		copy(b.receipts, receipts)
 	}
 
 	if len(uncles) == 0 {
-		b.header.UncleHash = EmptyUncleHash
+		b.header.UncleHash = emptyUncleHash
 	} else {
 		b.header.UncleHash = CalcUncleHash(uncles)
 		b.uncles = make([]*Header, len(uncles))
 		for i := range uncles {
-			b.uncles[i] = CopyHeader(uncles[i])
+			b.uncles[i] = copyHeader(uncles[i])
 		}
 	}
 
@@ -218,12 +212,10 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 // header data is copied, changes to header and to the field values
 // will not affect the block.
 func NewBlockWithHeader(header *Header) *Block {
-	return &Block{header: CopyHeader(header)}
+	return &Block{header: copyHeader(header)}
 }
 
-// CopyHeader creates a deep copy of a block header to prevent side effects from
-// modifying a header variable.
-func CopyHeader(h *Header) *Header {
+func copyHeader(h *Header) *Header {
 	cpy := *h
 	if cpy.Time = new(big.Int); h.Time != nil {
 		cpy.Time.Set(h.Time)
@@ -283,19 +275,28 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 	})
 }
 
-// [deprecated by eth/63]
 func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
 	var sb storageblock
 	if err := s.Decode(&sb); err != nil {
 		return err
 	}
-	b.header, b.uncles, b.transactions, b.td = sb.Header, sb.Uncles, sb.Txs, sb.TD
+	b.header, b.uncles, b.transactions, b.Td = sb.Header, sb.Uncles, sb.Txs, sb.TD
 	return nil
+}
+
+func (b *StorageBlock) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, storageblock{
+		Header: b.header,
+		Txs:    b.transactions,
+		Uncles: b.uncles,
+		TD:     b.Td,
+	})
 }
 
 // TODO: copies
 func (b *Block) Uncles() []*Header          { return b.uncles }
 func (b *Block) Transactions() Transactions { return b.transactions }
+func (b *Block) Receipts() Receipts         { return b.receipts }
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range b.transactions {
@@ -324,7 +325,7 @@ func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash }
 func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
 func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
 
-func (b *Block) Header() *Header { return CopyHeader(b.header) }
+func (b *Block) Header() *Header { return copyHeader(b.header) }
 
 func (b *Block) HashNoNonce() common.Hash {
 	return b.header.HashNoNonce()
@@ -360,22 +361,10 @@ func (b *Block) WithMiningResult(nonce uint64, mixDigest common.Hash) *Block {
 	return &Block{
 		header:       &cpy,
 		transactions: b.transactions,
+		receipts:     b.receipts,
 		uncles:       b.uncles,
+		Td:           b.Td,
 	}
-}
-
-// WithBody returns a new block with the given transaction and uncle contents.
-func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
-	block := &Block{
-		header:       CopyHeader(b.header),
-		transactions: make([]*Transaction, len(transactions)),
-		uncles:       make([]*Header, len(uncles)),
-	}
-	copy(block.transactions, transactions)
-	for i := range uncles {
-		block.uncles[i] = CopyHeader(uncles[i])
-	}
-	return block
 }
 
 // Implement pow.Block
@@ -390,7 +379,7 @@ func (b *Block) Hash() common.Hash {
 }
 
 func (b *Block) String() string {
-	str := fmt.Sprintf(`Block(#%v): Size: %v {
+	str := fmt.Sprintf(`Block(#%v): Size: %v TD: %v {
 MinerHash: %x
 %v
 Transactions:
@@ -398,7 +387,7 @@ Transactions:
 Uncles:
 %v
 }
-`, b.Number(), b.Size(), b.header.HashNoNonce(), b.header, b.transactions, b.uncles)
+`, b.Number(), b.Size(), b.Td, b.header.HashNoNonce(), b.header, b.transactions, b.uncles)
 	return str
 }
 

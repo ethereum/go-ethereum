@@ -20,11 +20,11 @@ import (
 	"container/list"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	// "github.com/ethereum/go-ethereum/crypto"
-
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/chattynet/chatty/core/types"
+	// "github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/ethdb"
+	"github.com/chattynet/chatty/event"
 )
 
 // Implement our EthTest Manager
@@ -32,9 +32,9 @@ type TestManager struct {
 	// stateManager *StateManager
 	eventMux *event.TypeMux
 
-	db         ethdb.Database
+	db         common.Database
 	txPool     *TxPool
-	blockChain *BlockChain
+	blockChain *ChainManager
 	Blocks     []*types.Block
 }
 
@@ -54,7 +54,7 @@ func (s *TestManager) Peers() *list.List {
 	return list.New()
 }
 
-func (s *TestManager) BlockChain() *BlockChain {
+func (s *TestManager) ChainManager() *ChainManager {
 	return s.blockChain
 }
 
@@ -74,7 +74,7 @@ func (tm *TestManager) EventMux() *event.TypeMux {
 // 	return nil
 // }
 
-func (tm *TestManager) Db() ethdb.Database {
+func (tm *TestManager) Db() common.Database {
 	return tm.db
 }
 
@@ -89,7 +89,7 @@ func NewTestManager() *TestManager {
 	testManager.eventMux = new(event.TypeMux)
 	testManager.db = db
 	// testManager.txPool = NewTxPool(testManager)
-	// testManager.blockChain = NewBlockChain(testManager)
+	// testManager.blockChain = NewChainManager(testManager)
 	// testManager.stateManager = NewStateManager(testManager)
 
 	return testManager

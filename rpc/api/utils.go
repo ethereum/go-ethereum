@@ -21,10 +21,10 @@ import (
 
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/chattynet/chatty/eth"
+	"github.com/chattynet/chatty/rpc/codec"
+	"github.com/chattynet/chatty/rpc/shared"
+	"github.com/chattynet/chatty/xeth"
 )
 
 var (
@@ -32,22 +32,16 @@ var (
 	AutoCompletion = map[string][]string{
 		"admin": []string{
 			"addPeer",
+			"chainSyncStatus",
 			"datadir",
-			"enableUserAgent",
 			"exportChain",
 			"getContractInfo",
-			"httpGet",
 			"importChain",
 			"nodeInfo",
 			"peers",
 			"register",
 			"registerUrl",
-			"saveInfo",
-			"setGlobalRegistrar",
-			"setHashReg",
-			"setUrlHint",
 			"setSolc",
-			"sleep",
 			"sleepBlocks",
 			"startNatSpec",
 			"startRPC",
@@ -70,7 +64,7 @@ var (
 			"seedHash",
 			"setHead",
 		},
-		"eth": []string{
+		"chy": []string{
 			"accounts",
 			"blockNumber",
 			"call",
@@ -89,7 +83,6 @@ var (
 			"getBlockTransactionCount",
 			"getBlockUncleCount",
 			"getCode",
-			"getNatSpec",
 			"getCompilers",
 			"gasPrice",
 			"getStorageAt",
@@ -106,7 +99,6 @@ var (
 			"sendRawTransaction",
 			"sendTransaction",
 			"sign",
-			"syncing",
 		},
 		"miner": []string{
 			"hashrate",
@@ -125,12 +117,15 @@ var (
 		},
 		"personal": []string{
 			"listAccounts",
+			"listAccountTransactions",
 			"newAccount",
+			"deleteAccount",
 			"unlockAccount",
+			"IsAccountLocked",
 		},
 		"shh": []string{
 			"post",
-			"newIdentity",
+			"newIdentify",
 			"hasIdentity",
 			"newGroup",
 			"addToGroup",
@@ -142,8 +137,8 @@ var (
 		"web3": []string{
 			"sha3",
 			"version",
-			"fromWei",
-			"toWei",
+			"fromChy",
+			"toChy",
 			"toHex",
 			"toAscii",
 			"fromAscii",

@@ -22,13 +22,14 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/state"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/event"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
 )
 
 var (
@@ -45,10 +46,21 @@ var (
 )
 
 const (
-	maxQueued = 64 // max limit of queued txs per address
+	maxQueued  = 64               // max limit of queued txs per address
+	resendTime = 60 * time.Second // every ~3 blocks
 )
 
-type stateFn func() (*state.StateDB, error)
+type (
+	stateFn func() *state.StateDB
+	poolTx  struct {
+		*types.Transaction
+
+		owned     bool
+		addedAt   time.Time
+		sentAt    time.Time
+		postTries int // amount of tx posts
+	}
+)
 
 // TxPool contains all currently known transactions. Transactions
 // enter the pool when they are received from the network or submitted
@@ -67,20 +79,20 @@ type TxPool struct {
 	events       event.Subscription
 
 	mu      sync.RWMutex
-	pending map[common.Hash]*types.Transaction // processable transactions
-	queue   map[common.Address]map[common.Hash]*types.Transaction
+	pending map[common.Hash]*poolTx // processable transactions
+	queue   map[common.Address]map[common.Hash]*poolTx
 }
 
 func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
 	pool := &TxPool{
-		pending:      make(map[common.Hash]*types.Transaction),
-		queue:        make(map[common.Address]map[common.Hash]*types.Transaction),
+		pending:      make(map[common.Hash]*poolTx),
+		queue:        make(map[common.Address]map[common.Hash]*poolTx),
 		quit:         make(chan bool),
 		eventMux:     eventMux,
 		currentState: currentStateFn,
 		gasLimit:     gasLimitFn,
 		minGasPrice:  new(big.Int),
-		pendingState: nil,
+		pendingState: state.ManageState(currentStateFn()),
 		events:       eventMux.Subscribe(ChainHeadEvent{}, GasPriceChanged{}, RemovedTransactionEvent{}),
 	}
 	go pool.eventLoop()
@@ -93,33 +105,25 @@ func (pool *TxPool) eventLoop() {
 	// we need to know the new state. The new state will help us determine
 	// the nonces in the managed state
 	for ev := range pool.events.Chan() {
-		switch ev := ev.Data.(type) {
+		pool.mu.Lock()
+
+		switch ev := ev.(type) {
 		case ChainHeadEvent:
-			pool.mu.Lock()
 			pool.resetState()
-			pool.mu.Unlock()
 		case GasPriceChanged:
-			pool.mu.Lock()
 			pool.minGasPrice = ev.Price
-			pool.mu.Unlock()
 		case RemovedTransactionEvent:
+			pool.mu.Unlock()
 			pool.AddTransactions(ev.Txs)
+			pool.mu.Lock()
 		}
+
+		pool.mu.Unlock()
 	}
 }
 
 func (pool *TxPool) resetState() {
-	currentState, err := pool.currentState()
-	if err != nil {
-		glog.V(logger.Info).Infoln("failed to get current state: %v", err)
-		return
-	}
-	managedState := state.ManageState(currentState)
-	if err != nil {
-		glog.V(logger.Info).Infoln("failed to get managed state: %v", err)
-		return
-	}
-	pool.pendingState = managedState
+	pool.pendingState = state.ManageState(pool.currentState())
 
 	// validate the pool of pending transactions, this will remove
 	// any transactions that have been included in the block or
@@ -133,11 +137,28 @@ func (pool *TxPool) resetState() {
 		if addr, err := tx.From(); err == nil {
 			// Set the nonce. Transaction nonce can never be lower
 			// than the state nonce; validatePool took care of that.
-			if pool.pendingState.GetNonce(addr) <= tx.Nonce() {
-				pool.pendingState.SetNonce(addr, tx.Nonce()+1)
+			if pool.pendingState.GetNonce(addr) < tx.Nonce() {
+				pool.pendingState.SetNonce(addr, tx.Nonce())
+			}
+
+			if tx.owned && pool.currentState().GetNonce(addr) == tx.Nonce() { // only resend first to prevent spam
+				if time.Since(tx.sentAt) > resendTime {
+					/*
+						In the future we can do something like the following
+						and let the user take some action if the frontend is
+						capable (e.g. higher gas price).
+						if tx.tries > 10 {
+							post(FailedTx{tx})
+							delete(tx)
+						}
+					*/
+					glog.V(logger.Debug).Infof("resending tx: %x\n", tx.Hash())
+					go pool.postTx(tx)
+				}
 			}
 		}
 	}
+
 	// Check the queue and move transactions over to the pending if possible
 	// or remove those that have become invalid
 	pool.checkQueue()
@@ -189,16 +210,12 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 
 	// Make sure the account exist. Non existent accounts
 	// haven't got funds and well therefor never pass.
-	currentState, err := pool.currentState()
-	if err != nil {
-		return err
-	}
-	if !currentState.HasAccount(from) {
+	if !pool.currentState().HasAccount(from) {
 		return ErrNonExistentAccount
 	}
 
 	// Last but not least check for nonce errors
-	if currentState.GetNonce(from) > tx.Nonce() {
+	if pool.currentState().GetNonce(from) > tx.Nonce() {
 		return ErrNonce
 	}
 
@@ -217,7 +234,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	if currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+	if pool.currentState().GetBalance(from).Cmp(tx.Cost()) < 0 {
 		return ErrInsufficientFunds
 	}
 
@@ -230,7 +247,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 }
 
 // validate and queue transactions.
-func (self *TxPool) add(tx *types.Transaction) error {
+func (self *TxPool) add(tx *types.Transaction, owned bool) error {
 	hash := tx.Hash()
 
 	if self.pending[hash] != nil {
@@ -240,7 +257,8 @@ func (self *TxPool) add(tx *types.Transaction) error {
 	if err != nil {
 		return err
 	}
-	self.queueTx(hash, tx)
+
+	self.queueTx(hash, tx, owned)
 
 	if glog.V(logger.Debug) {
 		var toname string
@@ -260,21 +278,16 @@ func (self *TxPool) add(tx *types.Transaction) error {
 }
 
 // queueTx will queue an unknown transaction
-func (self *TxPool) queueTx(hash common.Hash, tx *types.Transaction) {
+func (self *TxPool) queueTx(hash common.Hash, tx *types.Transaction, owned bool) {
 	from, _ := tx.From() // already validated
 	if self.queue[from] == nil {
-		self.queue[from] = make(map[common.Hash]*types.Transaction)
+		self.queue[from] = make(map[common.Hash]*poolTx)
 	}
-	self.queue[from][hash] = tx
+	self.queue[from][hash] = &poolTx{tx, owned, time.Now(), time.Time{}, 0}
 }
 
 // addTx will add a transaction to the pending (processable queue) list of transactions
-func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *types.Transaction) {
-	// init delayed since tx pool could have been started before any state sync
-	if pool.pendingState == nil {
-		pool.resetState()
-	}
-
+func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *poolTx) {
 	if _, ok := pool.pending[hash]; !ok {
 		pool.pending[hash] = tx
 
@@ -284,19 +297,28 @@ func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *types.Trans
 		// Notify the subscribers. This event is posted in a goroutine
 		// because it's possible that somewhere during the post "Remove transaction"
 		// gets called which will then wait for the global tx pool lock and deadlock.
-		go pool.eventMux.Post(TxPreEvent{tx})
+		go pool.postTx(tx)
 	}
 }
 
+// postTx posts the transaction to the subscribers
+func (pool *TxPool) postTx(tx *poolTx) {
+	pool.eventMux.Post(TxPreEvent{tx.Transaction})
+	tx.sentAt = time.Now()
+	tx.postTries++
+}
+
 // Add queues a single transaction in the pool if it is valid.
-func (self *TxPool) Add(tx *types.Transaction) error {
+func (self *TxPool) Add(tx *types.Transaction, owned bool) error {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	if err := self.add(tx); err != nil {
+	// validate transaction
+	if err := self.add(tx, owned); err != nil {
 		return err
 	}
 	self.checkQueue()
+
 	return nil
 }
 
@@ -306,7 +328,7 @@ func (self *TxPool) AddTransactions(txs []*types.Transaction) {
 	defer self.mu.Unlock()
 
 	for _, tx := range txs {
-		if err := self.add(tx); err != nil {
+		if err := self.add(tx, false); err != nil {
 			glog.V(logger.Debug).Infoln("tx error:", err)
 		} else {
 			h := tx.Hash()
@@ -323,12 +345,14 @@ func (self *TxPool) AddTransactions(txs []*types.Transaction) {
 func (tp *TxPool) GetTransaction(hash common.Hash) *types.Transaction {
 	// check the txs first
 	if tx, ok := tp.pending[hash]; ok {
-		return tx
+        glog.V(logger.Debug).Infoln("debug gettransaction: %v", tx.Transaction)
+		return tx.Transaction
 	}
 	// check queue
 	for _, txs := range tp.queue {
 		if tx, ok := txs[hash]; ok {
-			return tx
+            glog.V(logger.Debug).Infoln("debug tp.queue: %v", tx.Transaction)
+			return tx.Transaction
 		}
 	}
 	return nil
@@ -348,7 +372,7 @@ func (self *TxPool) GetTransactions() (txs types.Transactions) {
 	txs = make(types.Transactions, len(self.pending))
 	i := 0
 	for _, tx := range self.pending {
-		txs[i] = tx
+		txs[i] = tx.Transaction
 		i++
 	}
 	return txs
@@ -362,7 +386,7 @@ func (self *TxPool) GetQueuedTransactions() types.Transactions {
 	var ret types.Transactions
 	for _, txs := range self.queue {
 		for _, tx := range txs {
-			ret = append(ret, tx)
+			ret = append(ret, tx.Transaction)
 		}
 	}
 	sort.Sort(types.TxByNonce{ret})
@@ -398,60 +422,48 @@ func (pool *TxPool) RemoveTx(hash common.Hash) {
 
 // checkQueue moves transactions that have become processable to main pool.
 func (pool *TxPool) checkQueue() {
-	// init delayed since tx pool could have been started before any state sync
-	if pool.pendingState == nil {
-		pool.resetState()
-	}
+	state := pool.pendingState
 
-	var promote txQueue
+	var addq txQueue
 	for address, txs := range pool.queue {
-		currentState, err := pool.currentState()
-		if err != nil {
-			glog.Errorf("could not get current state: %v", err)
-			return
-		}
-		balance := currentState.GetBalance(address)
-
-		var (
-			guessedNonce = pool.pendingState.GetNonce(address) // nonce currently kept by the tx pool (pending state)
-			trueNonce    = currentState.GetNonce(address)      // nonce known by the last state
-		)
-		promote = promote[:0]
+		// guessed nonce is the nonce currently kept by the tx pool (pending state)
+		guessedNonce := state.GetNonce(address)
+		// true nonce is the nonce known by the last state
+		trueNonce := pool.currentState().GetNonce(address)
+		addq := addq[:0]
 		for hash, tx := range txs {
-			// Drop processed or out of fund transactions
-			if tx.Nonce() < trueNonce || balance.Cmp(tx.Cost()) < 0 {
-				if glog.V(logger.Core) {
-					glog.Infof("removed tx (%v) from pool queue: low tx nonce or out of funds\n", tx)
-				}
+			if tx.Nonce() < trueNonce {
+				// Drop queued transactions whose nonce is lower than
+				// the account nonce because they have been processed.
 				delete(txs, hash)
+			} else {
+				// Collect the remaining transactions for the next pass.
+				addq = append(addq, txQueueEntry{hash, address, tx})
+			}
+		}
+		// Find the next consecutive nonce range starting at the
+		// current account nonce.
+		sort.Sort(addq)
+		for i, e := range addq {
+			// start deleting the transactions from the queue if they exceed the limit
+			if i > maxQueued {
+				delete(pool.queue[address], e.hash)
 				continue
 			}
-			// Collect the remaining transactions for the next pass.
-			promote = append(promote, txQueueEntry{hash, address, tx})
-		}
-		// Find the next consecutive nonce range starting at the current account nonce,
-		// pushing the guessed nonce forward if we add consecutive transactions.
-		sort.Sort(promote)
-		for i, entry := range promote {
-			// If we reached a gap in the nonces, enforce transaction limit and stop
-			if entry.Nonce() > guessedNonce {
-				if len(promote)-i > maxQueued {
+
+			if e.Nonce() > guessedNonce {
+				if len(addq)-i > maxQueued {
 					if glog.V(logger.Debug) {
-						glog.Infof("Queued tx limit exceeded for %s. Tx %s removed\n", common.PP(address[:]), common.PP(entry.hash[:]))
+						glog.Infof("Queued tx limit exceeded for %s. Tx %s removed\n", common.PP(address[:]), common.PP(e.hash[:]))
 					}
-					for _, drop := range promote[i+maxQueued:] {
-						delete(txs, drop.hash)
+					for j := i + maxQueued; j < len(addq); j++ {
+						delete(txs, addq[j].hash)
 					}
 				}
 				break
 			}
-			// Otherwise promote the transaction and move the guess nonce if needed
-			pool.addTx(entry.hash, address, entry.Transaction)
-			delete(txs, entry.hash)
-
-			if entry.Nonce() == guessedNonce {
-				guessedNonce++
-			}
+			delete(txs, e.hash)
+			pool.addTx(e.hash, address, e.poolTx)
 		}
 		// Delete the entire queue entry if it became empty.
 		if len(txs) == 0 {
@@ -461,56 +473,16 @@ func (pool *TxPool) checkQueue() {
 }
 
 // validatePool removes invalid and processed transactions from the main pool.
-// If a transaction is removed for being invalid (e.g. out of funds), all sub-
-// sequent (Still valid) transactions are moved back into the future queue. This
-// is important to prevent a drained account from DOSing the network with non
-// executable transactions.
 func (pool *TxPool) validatePool() {
-	state, err := pool.currentState()
-	if err != nil {
-		glog.V(logger.Info).Infoln("failed to get current state: %v", err)
-		return
-	}
-	balanceCache := make(map[common.Address]*big.Int)
-
-	// Clean up the pending pool, accumulating invalid nonces
-	gaps := make(map[common.Address]uint64)
-
+	state := pool.currentState()
 	for hash, tx := range pool.pending {
-		sender, _ := tx.From() // err already checked
-
-		// Perform light nonce and balance validation
-		balance := balanceCache[sender]
-		if balance == nil {
-			balance = state.GetBalance(sender)
-			balanceCache[sender] = balance
-		}
-		if past := state.GetNonce(sender) > tx.Nonce(); past || balance.Cmp(tx.Cost()) < 0 {
-			// Remove an already past it invalidated transaction
+		from, _ := tx.From() // err already checked
+		// perform light nonce validation
+		if state.GetNonce(from) > tx.Nonce() {
 			if glog.V(logger.Core) {
-				glog.Infof("removed tx (%v) from pool: low tx nonce or out of funds\n", tx)
+				glog.Infof("removed tx (%x) from pool: low tx nonce\n", hash[:4])
 			}
 			delete(pool.pending, hash)
-
-			// Track the smallest invalid nonce to postpone subsequent transactions
-			if !past {
-				if prev, ok := gaps[sender]; !ok || tx.Nonce() < prev {
-					gaps[sender] = tx.Nonce()
-				}
-			}
-		}
-	}
-	// Move all transactions after a gap back to the future queue
-	if len(gaps) > 0 {
-		for hash, tx := range pool.pending {
-			sender, _ := tx.From()
-			if gap, ok := gaps[sender]; ok && tx.Nonce() >= gap {
-				if glog.V(logger.Core) {
-					glog.Infof("postponed tx (%v) due to introduced gap\n", tx)
-				}
-				pool.queueTx(hash, tx)
-				delete(pool.pending, hash)
-			}
 		}
 	}
 }
@@ -520,7 +492,7 @@ type txQueue []txQueueEntry
 type txQueueEntry struct {
 	hash common.Hash
 	addr common.Address
-	*types.Transaction
+	*poolTx
 }
 
 func (q txQueue) Len() int           { return len(q) }

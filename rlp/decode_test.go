@@ -24,7 +24,6 @@ import (
 	"io"
 	"math/big"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -438,11 +437,6 @@ var decodeTests = []decodeTest{
 		error: "rlp: expected input string or byte for uint, decoding into (rlp.recstruct).Child.I",
 	},
 
-	// RawValue
-	{input: "01", ptr: new(RawValue), value: RawValue(unhex("01"))},
-	{input: "82FFFF", ptr: new(RawValue), value: RawValue(unhex("82FFFF"))},
-	{input: "C20102", ptr: new([]RawValue), value: []RawValue{unhex("01"), unhex("02")}},
-
 	// pointers
 	{input: "00", ptr: new(*[]byte), value: &[]byte{0}},
 	{input: "80", ptr: new(*uint), value: uintp(0)},
@@ -731,7 +725,7 @@ func encodeTestSlice(n uint) []byte {
 }
 
 func unhex(str string) []byte {
-	b, err := hex.DecodeString(strings.Replace(str, " ", "", -1))
+	b, err := hex.DecodeString(str)
 	if err != nil {
 		panic(fmt.Sprintf("invalid hex string: %q", str))
 	}

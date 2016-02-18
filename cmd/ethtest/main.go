@@ -26,9 +26,9 @@ import (
 	"strings"
 
 	"github.com/codegangsta/cli"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/tests"
+	"github.com/chattynet/chatty/core/vm"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/tests"
 )
 
 var (
@@ -204,8 +204,8 @@ func main() {
 	glog.SetToStderr(true)
 
 	app := cli.NewApp()
-	app.Name = "ethtest"
-	app.Usage = "go-ethereum test interface"
+	app.Name = "chytest"
+	app.Usage = "shift test interface"
 	app.Action = setupApp
 	app.Version = "0.2.0"
 	app.Author = "go-ethereum team"

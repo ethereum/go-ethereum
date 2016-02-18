@@ -19,7 +19,7 @@ package trie
 import "testing"
 
 func TestIterator(t *testing.T) {
-	trie := newEmpty()
+	trie := NewEmpty()
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
 		{"ether", "wookiedoo"},
@@ -32,11 +32,11 @@ func TestIterator(t *testing.T) {
 	v := make(map[string]bool)
 	for _, val := range vals {
 		v[val.k] = false
-		trie.Update([]byte(val.k), []byte(val.v))
+		trie.UpdateString(val.k, val.v)
 	}
 	trie.Commit()
 
-	it := NewIterator(trie)
+	it := trie.Iterator()
 	for it.Next() {
 		v[string(it.Key)] = true
 	}

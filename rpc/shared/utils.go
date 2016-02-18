@@ -20,7 +20,7 @@ import "strings"
 
 const (
 	AdminApiName    = "admin"
-	EthApiName      = "eth"
+	EthApiName      = "chy"
 	DbApiName       = "db"
 	DebugApiName    = "debug"
 	MergedApiName   = "merged"

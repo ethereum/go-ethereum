@@ -21,68 +21,51 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/chattynet/chatty/core"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/event"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
 )
 
-const (
-	gpoProcessPastBlocks = 100
-
-	// for testing
-	gpoDefaultBaseCorrectionFactor = 110
-	gpoDefaultMinGasPrice          = 10000000000000
-)
+const gpoProcessPastBlocks = 100
 
 type blockPriceInfo struct {
 	baseGasPrice *big.Int
 }
 
-// GasPriceOracle recommends gas prices based on the content of recent
-// blocks.
 type GasPriceOracle struct {
-	eth           *Ethereum
-	initOnce      sync.Once
-	minPrice      *big.Int
-	lastBaseMutex sync.Mutex
-	lastBase      *big.Int
-
-	// state of listenLoop
+	eth                           *Ethereum
+	chain                         *core.ChainManager
+	events                        event.Subscription
 	blocks                        map[uint64]*blockPriceInfo
 	firstProcessed, lastProcessed uint64
-	minBase                       *big.Int
+	lastBaseMutex                 sync.Mutex
+	lastBase, minBase             *big.Int
 }
 
-// NewGasPriceOracle returns a new oracle.
-func NewGasPriceOracle(eth *Ethereum) *GasPriceOracle {
-	minprice := eth.GpoMinGasPrice
-	if minprice == nil {
-		minprice = big.NewInt(gpoDefaultMinGasPrice)
-	}
-	minbase := new(big.Int).Mul(minprice, big.NewInt(100))
-	if eth.GpobaseCorrectionFactor > 0 {
-		minbase = minbase.Div(minbase, big.NewInt(int64(eth.GpobaseCorrectionFactor)))
-	}
-	return &GasPriceOracle{
-		eth:      eth,
-		blocks:   make(map[uint64]*blockPriceInfo),
-		minBase:  minbase,
-		minPrice: minprice,
-		lastBase: minprice,
-	}
+func NewGasPriceOracle(eth *Ethereum) (self *GasPriceOracle) {
+	self = &GasPriceOracle{}
+	self.blocks = make(map[uint64]*blockPriceInfo)
+	self.eth = eth
+	self.chain = eth.chainManager
+	self.events = eth.EventMux().Subscribe(
+		core.ChainEvent{},
+		core.ChainSplitEvent{},
+	)
+
+	minbase := new(big.Int).Mul(self.eth.GpoMinGasPrice, big.NewInt(100))
+	minbase = minbase.Div(minbase, big.NewInt(int64(self.eth.GpobaseCorrectionFactor)))
+	self.minBase = minbase
+
+	self.processPastBlocks()
+	go self.listenLoop()
+	return
 }
 
-func (gpo *GasPriceOracle) init() {
-	gpo.initOnce.Do(func() {
-		gpo.processPastBlocks(gpo.eth.BlockChain())
-		go gpo.listenLoop()
-	})
-}
-
-func (self *GasPriceOracle) processPastBlocks(chain *core.BlockChain) {
+func (self *GasPriceOracle) processPastBlocks() {
 	last := int64(-1)
-	cblock := chain.CurrentBlock()
+	cblock := self.chain.CurrentBlock()
 	if cblock != nil {
 		last = int64(cblock.NumberU64())
 	}
@@ -92,7 +75,7 @@ func (self *GasPriceOracle) processPastBlocks(chain *core.BlockChain) {
 	}
 	self.firstProcessed = uint64(first)
 	for i := first; i <= last; i++ {
-		block := chain.GetBlockByNumber(uint64(i))
+		block := self.chain.GetBlockByNumber(uint64(i))
 		if block != nil {
 			self.processBlock(block)
 		}
@@ -101,17 +84,19 @@ func (self *GasPriceOracle) processPastBlocks(chain *core.BlockChain) {
 }
 
 func (self *GasPriceOracle) listenLoop() {
-	events := self.eth.EventMux().Subscribe(core.ChainEvent{}, core.ChainSplitEvent{})
-	defer events.Unsubscribe()
-
-	for event := range events.Chan() {
-		switch event := event.Data.(type) {
+	for {
+		ev, isopen := <-self.events.Chan()
+		if !isopen {
+			break
+		}
+		switch ev := ev.(type) {
 		case core.ChainEvent:
-			self.processBlock(event.Block)
+			self.processBlock(ev.Block)
 		case core.ChainSplitEvent:
-			self.processBlock(event.Block)
+			self.processBlock(ev.Block)
 		}
 	}
+	self.events.Unsubscribe()
 }
 
 func (self *GasPriceOracle) processBlock(block *types.Block) {
@@ -120,7 +105,7 @@ func (self *GasPriceOracle) processBlock(block *types.Block) {
 		self.lastProcessed = i
 	}
 
-	lastBase := self.minPrice
+	lastBase := self.eth.GpoMinGasPrice
 	bpl := self.blocks[i-1]
 	if bpl != nil {
 		lastBase = bpl.baseGasPrice
@@ -166,7 +151,7 @@ func (self *GasPriceOracle) processBlock(block *types.Block) {
 func (self *GasPriceOracle) lowestPrice(block *types.Block) *big.Int {
 	gasUsed := big.NewInt(0)
 
-	receipts := core.GetBlockReceipts(self.eth.ChainDb(), block.Hash())
+	receipts := self.eth.BlockProcessor().GetBlockReceipts(block.Hash())
 	if len(receipts) > 0 {
 		if cgu := receipts[len(receipts)-1].CumulativeGasUsed; cgu != nil {
 			gasUsed = receipts[len(receipts)-1].CumulativeGasUsed
@@ -194,19 +179,28 @@ func (self *GasPriceOracle) lowestPrice(block *types.Block) *big.Int {
 	return minPrice
 }
 
-// SuggestPrice returns the recommended gas price.
 func (self *GasPriceOracle) SuggestPrice() *big.Int {
-	self.init()
 	self.lastBaseMutex.Lock()
-	price := new(big.Int).Set(self.lastBase)
+	base := self.lastBase
 	self.lastBaseMutex.Unlock()
 
-	price.Mul(price, big.NewInt(int64(self.eth.GpobaseCorrectionFactor)))
-	price.Div(price, big.NewInt(100))
-	if price.Cmp(self.minPrice) < 0 {
-		price.Set(self.minPrice)
-	} else if self.eth.GpoMaxGasPrice != nil && price.Cmp(self.eth.GpoMaxGasPrice) > 0 {
-		price.Set(self.eth.GpoMaxGasPrice)
+	if base == nil {
+		base = self.eth.GpoMinGasPrice
 	}
-	return price
+	if base == nil {
+		return big.NewInt(10000000000000) // apparently MinGasPrice is not initialized during some tests
+	}
+
+	baseCorr := new(big.Int).Mul(base, big.NewInt(int64(self.eth.GpobaseCorrectionFactor)))
+	baseCorr.Div(baseCorr, big.NewInt(100))
+
+	if baseCorr.Cmp(self.eth.GpoMinGasPrice) < 0 {
+		return self.eth.GpoMinGasPrice
+	}
+
+	if baseCorr.Cmp(self.eth.GpoMaxGasPrice) > 0 {
+		return self.eth.GpoMaxGasPrice
+	}
+
+	return baseCorr
 }

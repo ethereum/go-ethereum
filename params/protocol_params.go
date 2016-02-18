@@ -38,10 +38,9 @@ var (
 	CallStipend            = big.NewInt(2300)   // Free gas given at beginning of call.
 	EcrecoverGas           = big.NewInt(3000)   //
 	Sha256WordGas          = big.NewInt(12)     //
-
-	MinGasLimit     = big.NewInt(5000)    // Minimum the gas limit may ever be.
-	GenesisGasLimit = big.NewInt(3141592) // Gas limit of the Genesis block.
-
+	MinGasLimit            = big.NewInt(5000)    // Minimum the gas limit may ever be.
+	GenesisGasLimit        = big.NewInt(3141592) // Gas limit of the Genesis block.
+    RewardDivisor          = big.NewInt(3)    // Change static blockreward to 1 SHF without generating a new genesis hash
 	Sha3Gas              = big.NewInt(30)     // Once per SHA3 operation.
 	Sha256Gas            = big.NewInt(60)     //
 	IdentityWordGas      = big.NewInt(3)      //
