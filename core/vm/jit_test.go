@@ -127,6 +127,8 @@ type account struct{}
 
 func (account) SubBalance(amount *big.Int)             {}
 func (account) AddBalance(amount *big.Int)             {}
+func (account) SetAddress(common.Address)              {}
+func (account) Value() *big.Int                        { return nil }
 func (account) SetBalance(*big.Int)                    {}
 func (account) SetNonce(uint64)                        {}
 func (account) Balance() *big.Int                      { return nil }
@@ -205,4 +207,7 @@ func (self *Env) CallCode(caller ContractRef, addr common.Address, data []byte, 
 }
 func (self *Env) Create(caller ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
 	return nil, common.Address{}, nil
+}
+func (self *Env) DelegateCall(me ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error) {
+	return nil, nil
 }

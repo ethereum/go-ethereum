@@ -275,6 +275,11 @@ func CompileProgram(program *Program) (err error) {
 			program.addInstr(op, pc, opGas, nil)
 		case CREATE:
 			program.addInstr(op, pc, opCreate, nil)
+		case DELEGATECALL:
+			// Instruction added regardless of homestead phase.
+			// Homestead (and execution of the opcode) is checked during
+			// runtime.
+			program.addInstr(op, pc, opDelegateCall, nil)
 		case CALL:
 			program.addInstr(op, pc, opCall, nil)
 		case CALLCODE:
@@ -317,10 +322,14 @@ func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env
 		}()
 	}
 
+	homestead := params.IsHomestead(env.BlockNumber())
 	for pc < uint64(len(program.instructions)) {
 		instrCount++
 
 		instr := program.instructions[pc]
+		if instr.Op() == DELEGATECALL && !homestead {
+			return nil, fmt.Errorf("Invalid opcode 0x%x", instr.Op())
+		}
 
 		ret, err := instr.do(program, &pc, env, contract, mem, stack)
 		if err != nil {
@@ -328,13 +337,13 @@ func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env
 		}
 
 		if instr.halts() {
-			return contract.Return(ret), nil
+			return ret, nil
 		}
 	}
 
 	contract.Input = nil
 
-	return contract.Return(nil), nil
+	return nil, nil
 }
 
 // validDest checks if the given distination is a valid one given the
@@ -457,7 +466,6 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 		gas.Add(gas, stack.data[stack.len()-1])
 
 		if op == CALL {
-			//if env.Db().GetStateObject(common.BigToAddress(stack.data[stack.len()-2])) == nil {
 			if !env.Db().Exist(common.BigToAddress(stack.data[stack.len()-2])) {
 				gas.Add(gas, params.CallNewAccountGas)
 			}
@@ -469,6 +477,13 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 
 		x := calcMemSize(stack.data[stack.len()-6], stack.data[stack.len()-7])
 		y := calcMemSize(stack.data[stack.len()-4], stack.data[stack.len()-5])
+
+		newMemSize = common.BigMax(x, y)
+	case DELEGATECALL:
+		gas.Add(gas, stack.data[stack.len()-1])
+
+		x := calcMemSize(stack.data[stack.len()-5], stack.data[stack.len()-6])
+		y := calcMemSize(stack.data[stack.len()-3], stack.data[stack.len()-4])
 
 		newMemSize = common.BigMax(x, y)
 	}

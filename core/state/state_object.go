@@ -238,6 +238,13 @@ func (self *StateObject) Nonce() uint64 {
 	return self.nonce
 }
 
+// Never called, but must be present to allow StateObject to be used
+// as a vm.Account interface that also satisfies the vm.ContractRef
+// interface. Interfaces are awesome.
+func (self *StateObject) Value() *big.Int {
+	panic("Value on StateObject should never be called")
+}
+
 func (self *StateObject) EachStorage(cb func(key, value []byte)) {
 	// When iterating over the storage check the cache first
 	for h, v := range self.storage {

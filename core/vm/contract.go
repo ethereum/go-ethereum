@@ -26,15 +26,20 @@ import (
 type ContractRef interface {
 	ReturnGas(*big.Int, *big.Int)
 	Address() common.Address
+	Value() *big.Int
 	SetCode([]byte)
 	EachStorage(cb func(key, value []byte))
 }
 
 // Contract represents an ethereum contract in the state database. It contains
-// the the contract code, calling arguments. Contract implements ContractReg
+// the the contract code, calling arguments. Contract implements ContractRef
 type Contract struct {
-	caller ContractRef
-	self   ContractRef
+	// CallerAddress is the result of the caller which initialised this
+	// contract. However when the "call method" is delegated this value
+	// needs to be initialised to that of the caller's caller.
+	CallerAddress common.Address
+	caller        ContractRef
+	self          ContractRef
 
 	jumpdests destinations // result of JUMPDEST analysis.
 
@@ -45,11 +50,13 @@ type Contract struct {
 	value, Gas, UsedGas, Price *big.Int
 
 	Args []byte
+
+	DelegateCall bool
 }
 
-// Create a new context for the given data items.
+// NewContract returns a new contract environment for the execution of EVM.
 func NewContract(caller ContractRef, object ContractRef, value, gas, price *big.Int) *Contract {
-	c := &Contract{caller: caller, self: object, Args: nil}
+	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object, Args: nil}
 
 	if parent, ok := caller.(*Contract); ok {
 		// Reuse JUMPDEST analysis from parent context if available.
@@ -70,6 +77,16 @@ func NewContract(caller ContractRef, object ContractRef, value, gas, price *big.
 	return c
 }
 
+// AsDelegate sets the contract to be a delegate call and returns the current
+// contract (for chaining calls)
+func (c *Contract) AsDelegate() *Contract {
+	c.DelegateCall = true
+	// NOTE: caller must, at all times be a contract. It should never happen
+	// that caller is something other than a Contract.
+	c.CallerAddress = c.caller.(*Contract).CallerAddress
+	return c
+}
+
 // GetOp returns the n'th element in the contract's byte array
 func (c *Contract) GetOp(n uint64) OpCode {
 	return OpCode(c.GetByte(n))
@@ -84,13 +101,19 @@ func (c *Contract) GetByte(n uint64) byte {
 	return 0
 }
 
-// Return returns the given ret argument and returns any remaining gas to the
-// caller
-func (c *Contract) Return(ret []byte) []byte {
+// Caller returns the caller of the contract.
+//
+// Caller will recursively call caller when the contract is a delegate
+// call, including that of caller's caller.
+func (c *Contract) Caller() common.Address {
+	return c.CallerAddress
+}
+
+// Finalise finalises the contract and returning any remaining gas to the original
+// caller.
+func (c *Contract) Finalise() {
 	// Return the remaining gas to the caller
 	c.caller.ReturnGas(c.Gas, c.Price)
-
-	return ret
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
@@ -112,6 +135,11 @@ func (c *Contract) ReturnGas(gas, price *big.Int) {
 // Address returns the contracts address
 func (c *Contract) Address() common.Address {
 	return c.self.Address()
+}
+
+// Value returns the contracts value (sent to it from it's caller)
+func (c *Contract) Value() *big.Int {
+	return c.value
 }
 
 // SetCode sets the code to the contract

@@ -725,14 +725,18 @@ func (self *BlockChain) writeHeader(header *types.Header) error {
 	if ptd == nil {
 		return ParentError(header.ParentHash)
 	}
-	td := new(big.Int).Add(header.Difficulty, ptd)
+
+	localTd := self.GetTd(self.currentHeader.Hash())
+	externTd := new(big.Int).Add(header.Difficulty, ptd)
 
 	// Make sure no inconsistent state is leaked during insertion
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
 	// If the total difficulty is higher than our known, add it to the canonical chain
-	if td.Cmp(self.GetTd(self.currentHeader.Hash())) > 0 {
+	// Second clause in the if statement reduces the vulnerability to selfish mining.
+	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
+	if externTd.Cmp(localTd) > 0 || (externTd.Cmp(localTd) == 0 && mrand.Float64() < 0.5) {
 		// Delete any canonical number assignments above the new head
 		for i := header.Number.Uint64() + 1; GetCanonicalHash(self.chainDb, i) != (common.Hash{}); i++ {
 			DeleteCanonicalHash(self.chainDb, i)
@@ -753,7 +757,7 @@ func (self *BlockChain) writeHeader(header *types.Header) error {
 		self.currentHeader = types.CopyHeader(header)
 	}
 	// Irrelevant of the canonical status, write the header itself to the database
-	if err := WriteTd(self.chainDb, header.Hash(), td); err != nil {
+	if err := WriteTd(self.chainDb, header.Hash(), externTd); err != nil {
 		glog.Fatalf("failed to write header total difficulty: %v", err)
 	}
 	if err := WriteHeader(self.chainDb, header); err != nil {
@@ -1060,14 +1064,18 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status writeStatus, err 
 	if ptd == nil {
 		return NonStatTy, ParentError(block.ParentHash())
 	}
-	td := new(big.Int).Add(block.Difficulty(), ptd)
+
+	localTd := self.GetTd(self.currentBlock.Hash())
+	externTd := new(big.Int).Add(block.Difficulty(), ptd)
 
 	// Make sure no inconsistent state is leaked during insertion
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
 	// If the total difficulty is higher than our known, add it to the canonical chain
-	if td.Cmp(self.GetTd(self.currentBlock.Hash())) > 0 {
+	// Second clause in the if statement reduces the vulnerability to selfish mining.
+	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
+	if externTd.Cmp(localTd) > 0 || (externTd.Cmp(localTd) == 0 && mrand.Float64() < 0.5) {
 		// Reorganize the chain if the parent is not the head block
 		if block.ParentHash() != self.currentBlock.Hash() {
 			if err := self.reorg(self.currentBlock, block); err != nil {
@@ -1081,7 +1089,7 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status writeStatus, err 
 		status = SideStatTy
 	}
 	// Irrelevant of the canonical status, write the block itself to the database
-	if err := WriteTd(self.chainDb, block.Hash(), td); err != nil {
+	if err := WriteTd(self.chainDb, block.Hash(), externTd); err != nil {
 		glog.Fatalf("failed to write block total difficulty: %v", err)
 	}
 	if err := WriteBlock(self.chainDb, block); err != nil {
