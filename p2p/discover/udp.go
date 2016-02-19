@@ -52,8 +52,9 @@ const (
 	sendTimeout = 500 * time.Millisecond
 	expiration  = 20 * time.Second
 
-	ntpThreshold   = 32               // Continuous timeouts after which to check NTP
-	driftThreshold = 10 * time.Second // Allowed clock drift before warning user
+	ntpFailureThreshold = 32               // Continuous timeouts after which to check NTP
+	ntpWarningCooldown  = 10 * time.Minute // Minimum amount of time to pass before repeating NTP warning
+	driftThreshold      = 10 * time.Second // Allowed clock drift before warning user
 )
 
 // RPC packet types
@@ -327,6 +328,7 @@ func (t *udp) loop() {
 		timeout      = time.NewTimer(0)
 		nextTimeout  *pending // head of plist when timeout was last reset
 		contTimeouts = 0      // number of continuous timeouts to do NTP checks
+		ntpWarnTime  = time.Unix(0, 0)
 	)
 	<-timeout.C // ignore first timeout
 	defer timeout.Stop()
@@ -400,20 +402,11 @@ func (t *udp) loop() {
 				}
 			}
 			// If we've accumulated too many timeouts, do an NTP time sync check
-			if contTimeouts > ntpThreshold {
-				go func() {
-					drift, err := sntpDrift(3)
-					switch {
-					case err != nil:
-						glog.V(logger.Warn).Infof("No UDP connectivity, maybe blocked by firewall? (%v)", err)
-
-					case drift < -driftThreshold || drift > driftThreshold:
-						glog.V(logger.Warn).Infof("System clock seems off by %v, which can prevent network connectivity", drift)
-
-					default:
-						glog.V(logger.Debug).Infof("Sanity NTP check reported %v drift, all ok", drift)
-					}
-				}()
+			if contTimeouts > ntpFailureThreshold {
+				if time.Since(ntpWarnTime) >= ntpWarningCooldown {
+					ntpWarnTime = time.Now()
+					go checkClockDrift()
+				}
 				contTimeouts = 0
 			}
 		}

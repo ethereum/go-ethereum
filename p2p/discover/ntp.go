@@ -20,13 +20,20 @@
 package discover
 
 import (
+	"fmt"
 	"net"
 	"sort"
+	"strings"
 	"time"
+
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-// ntpPool is the NTP server to query for the current time
-const ntpPool = "pool.ntp.org"
+const (
+	ntpPool   = "pool.ntp.org" // ntpPool is the NTP server to query for the current time
+	ntpChecks = 3              // Number of measurements to do against the NTP server
+)
 
 // durationSlice attaches the methods of sort.Interface to []time.Duration,
 // sorting in increasing order.
@@ -35,6 +42,27 @@ type durationSlice []time.Duration
 func (s durationSlice) Len() int           { return len(s) }
 func (s durationSlice) Less(i, j int) bool { return s[i] < s[j] }
 func (s durationSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
+// checkClockDrift queries an NTP server for clock drifts and warns the user if
+// one large enough is detected.
+func checkClockDrift() {
+	drift, err := sntpDrift(ntpChecks)
+	if err != nil {
+		return
+	}
+	if drift < -driftThreshold || drift > driftThreshold {
+		warning := fmt.Sprintf("System clock seems off by %v, which can prevent network connectivity", drift)
+		howtofix := fmt.Sprintf("Please enable network time synchronisation in system settings")
+		separator := strings.Repeat("-", len(warning))
+
+		glog.V(logger.Warn).Info(separator)
+		glog.V(logger.Warn).Info(warning)
+		glog.V(logger.Warn).Info(howtofix)
+		glog.V(logger.Warn).Info(separator)
+	} else {
+		glog.V(logger.Debug).Infof("Sanity NTP check reported %v drift, all ok", drift)
+	}
+}
 
 // sntpDrift does a naive time resolution against an NTP server and returns the
 // measured drift. This method uses the simple version of NTP. It's not precise
