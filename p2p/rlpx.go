@@ -210,7 +210,7 @@ type authMsgV4 struct {
 	Version         uint
 
 	// Ignore additional fields (forward-compatibility)
-	Rest []rlp.RawValue `rlp:".."`
+	Rest []rlp.RawValue `rlp:"tail"`
 }
 
 // RLPx v4 handshake response (defined in EIP-8).
@@ -220,7 +220,7 @@ type authRespV4 struct {
 	Version      uint
 
 	// Ignore additional fields (forward-compatibility)
-	Rest []rlp.RawValue `rlp:".."`
+	Rest []rlp.RawValue `rlp:"tail"`
 }
 
 // secrets is called after the handshake is completed.

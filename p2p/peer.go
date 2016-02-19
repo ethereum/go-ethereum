@@ -58,7 +58,7 @@ type protoHandshake struct {
 	ID         discover.NodeID
 
 	// Ignore additional fields (for forward compatibility).
-	Rest []rlp.RawValue `rlp:".."`
+	Rest []rlp.RawValue `rlp:"tail"`
 }
 
 // Peer represents a connected remote node.
