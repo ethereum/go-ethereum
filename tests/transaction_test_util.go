@@ -23,10 +23,10 @@ import (
 	"io"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/rlp"
 )
 
 // Transaction Test JSON Format

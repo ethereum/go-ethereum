@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/chattynet/chatty/core/vm"
 )
 
 func init() {
@@ -110,13 +110,6 @@ func TestStateTransaction(t *testing.T) {
 
 func TestCallCreateCallCode(t *testing.T) {
 	fn := filepath.Join(stateTestDir, "stCallCreateCallCodeTest.json")
-	if err := RunStateTest(fn, StateSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestCallCodes(t *testing.T) {
-	fn := filepath.Join(stateTestDir, "stCallCodes.json")
 	if err := RunStateTest(fn, StateSkipTests); err != nil {
 		t.Error(err)
 	}

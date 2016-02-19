@@ -19,29 +19,29 @@ package vm
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/params"
 )
 
-// PrecompiledAccount represents a native ethereum contract
+type Address interface {
+	Call(in []byte) []byte
+}
+
 type PrecompiledAccount struct {
 	Gas func(l int) *big.Int
 	fn  func(in []byte) []byte
 }
 
-// Call calls the native function
 func (self PrecompiledAccount) Call(in []byte) []byte {
 	return self.fn(in)
 }
 
-// Precompiled contains the default set of ethereum contracts
 var Precompiled = PrecompiledContracts()
 
-// PrecompiledContracts returns the default set of precompiled ethereum
-// contracts defined by the ethereum yellow paper.
+// XXX Could set directly. Testing requires resetting and setting of pre compiled contracts.
 func PrecompiledContracts() map[string]*PrecompiledAccount {
 	return map[string]*PrecompiledAccount{
 		// ECRECOVER

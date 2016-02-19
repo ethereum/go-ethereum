@@ -27,8 +27,8 @@ import (
 	"testing/quick"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/crypto"
 )
 
 func TestTable_pingReplace(t *testing.T) {
@@ -513,6 +513,9 @@ func (tn *preminedTestnet) findnode(toid NodeID, toaddr *net.UDPAddr, target Nod
 	// fmt.Println("findnode query at dist", toaddr.Port)
 	if toaddr.Port == 0 {
 		panic("query to node at distance 0")
+	}
+	if target != tn.target {
+		panic("findnode with wrong target")
 	}
 	next := uint16(toaddr.Port) - 1
 	var result []*Node

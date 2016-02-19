@@ -44,7 +44,7 @@ type LogEvent struct {
 
 type LogStarting struct {
 	ClientString    string `json:"client_impl"`
-	ProtocolVersion int    `json:"eth_version"`
+	ProtocolVersion int    `json:"chy_version"`
 	LogEvent
 }
 

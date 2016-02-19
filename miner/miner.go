@@ -22,16 +22,16 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core"
+	"github.com/chattynet/chatty/core/state"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/eth/downloader"
+	"github.com/chattynet/chatty/event"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/params"
+	"github.com/chattynet/chatty/pow"
 )
 
 type Miner struct {
@@ -66,7 +66,7 @@ func (self *Miner) update() {
 	events := self.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
 out:
 	for ev := range events.Chan() {
-		switch ev.Data.(type) {
+		switch ev.(type) {
 		case downloader.StartEvent:
 			atomic.StoreInt32(&self.canStart, 0)
 			if self.Mining() {
@@ -133,11 +133,8 @@ func (self *Miner) Register(agent Agent) {
 	if self.Mining() {
 		agent.Start()
 	}
-	self.worker.register(agent)
-}
 
-func (self *Miner) Unregister(agent Agent) {
-	self.worker.unregister(agent)
+	self.worker.register(agent)
 }
 
 func (self *Miner) Mining() bool {
@@ -149,7 +146,7 @@ func (self *Miner) HashRate() (tot int64) {
 	// do we care this might race? is it worth we're rewriting some
 	// aspects of the worker/locking up agents so we can get an accurate
 	// hashrate?
-	for agent := range self.worker.agents {
+	for _, agent := range self.worker.agents {
 		tot += agent.GetHashRate()
 	}
 	return

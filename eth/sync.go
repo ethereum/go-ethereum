@@ -20,12 +20,11 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/p2p/discover"
 )
 
 const (
@@ -161,24 +160,9 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		return
 	}
 	// Make sure the peer's TD is higher than our own. If not drop.
-	td := pm.blockchain.GetTd(pm.blockchain.CurrentBlock().Hash())
-	if peer.Td().Cmp(td) <= 0 {
+	if peer.Td().Cmp(pm.chainman.Td()) <= 0 {
 		return
 	}
 	// Otherwise try to sync with the downloader
-	mode := downloader.FullSync
-	if pm.fastSync {
-		mode = downloader.FastSync
-	}
-	if err := pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), mode); err != nil {
-		return
-	}
-	// If fast sync was enabled, and we synced up, disable it
-	if pm.fastSync {
-		// Disable fast sync if we indeed have something in our chain
-		if pm.blockchain.CurrentBlock().NumberU64() > 0 {
-			glog.V(logger.Info).Infof("fast sync complete, auto disabling")
-			pm.fastSync = false
-		}
-	}
+	pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td())
 }

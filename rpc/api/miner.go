@@ -18,10 +18,10 @@ package api
 
 import (
 	"github.com/ethereum/ethash"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/eth"
+	"github.com/chattynet/chatty/rpc/codec"
+	"github.com/chattynet/chatty/rpc/shared"
 )
 
 const (
@@ -100,7 +100,7 @@ func (self *minerApi) StartMiner(req *shared.Request) (interface{}, error) {
 	}
 
 	self.ethereum.StartAutoDAG()
-	err := self.ethereum.StartMining(args.Threads, "")
+	err := self.ethereum.StartMining(args.Threads)
 	if err == nil {
 		return true, nil
 	}

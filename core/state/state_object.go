@@ -21,13 +21,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/rlp"
+	"github.com/chattynet/chatty/trie"
 )
 
 type Code []byte
@@ -57,7 +56,7 @@ func (self Storage) Copy() Storage {
 
 type StateObject struct {
 	// State database for storing state changes
-	db   ethdb.Database
+	db   common.Database
 	trie *trie.SecureTrie
 
 	// Address belonging to this account
@@ -75,6 +74,11 @@ type StateObject struct {
 	// Cached storage (flushed when updated)
 	storage Storage
 
+	// Total gas pool is the total amount of gas currently
+	// left if this object is the coinbase. Gas is directly
+	// purchased of the coinbase.
+	gasPool *big.Int
+
 	// Mark for deletion
 	// When an object is marked for deletion it will be delete from the trie
 	// during the "update" phase of the state transition
@@ -83,14 +87,21 @@ type StateObject struct {
 	dirty   bool
 }
 
-func NewStateObject(address common.Address, db ethdb.Database) *StateObject {
-	object := &StateObject{db: db, address: address, balance: new(big.Int), dirty: true}
-	object.trie, _ = trie.NewSecure(common.Hash{}, db)
+func (self *StateObject) Reset() {
+	self.storage = make(Storage)
+}
+
+func NewStateObject(address common.Address, db common.Database) *StateObject {
+	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
+	object.trie = trie.NewSecure((common.Hash{}).Bytes(), db)
 	object.storage = make(Storage)
+	object.gasPool = new(big.Int)
+
 	return object
 }
 
-func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Database) *StateObject {
+func NewStateObjectFromBytes(address common.Address, data []byte, db common.Database) *StateObject {
+	// TODO clean me up
 	var extobject struct {
 		Nonce    uint64
 		Balance  *big.Int
@@ -99,13 +110,7 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Datab
 	}
 	err := rlp.Decode(bytes.NewReader(data), &extobject)
 	if err != nil {
-		glog.Errorf("can't decode state object %x: %v", address, err)
-		return nil
-	}
-	trie, err := trie.NewSecure(extobject.Root, db)
-	if err != nil {
-		// TODO: bubble this up or panic
-		glog.Errorf("can't create account trie with root %x: %v", extobject.Root[:], err)
+		fmt.Println(err)
 		return nil
 	}
 
@@ -113,9 +118,11 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Datab
 	object.nonce = extobject.Nonce
 	object.balance = extobject.Balance
 	object.codeHash = extobject.CodeHash
-	object.trie = trie
+	object.trie = trie.NewSecure(extobject.Root[:], db)
 	object.storage = make(map[string]common.Hash)
+	object.gasPool = new(big.Int)
 	object.code, _ = db.Get(extobject.CodeHash)
+
 	return object
 }
 
@@ -177,6 +184,14 @@ func (self *StateObject) Update() {
 	}
 }
 
+func (c *StateObject) GetInstr(pc *big.Int) *common.Value {
+	if int64(len(c.code)-1) < pc.Int64() {
+		return common.NewValue(0)
+	}
+
+	return common.NewValueFromBytes([]byte{c.code[pc.Int64()]})
+}
+
 func (c *StateObject) AddBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Add(c.balance, amount))
 
@@ -202,8 +217,39 @@ func (c *StateObject) St() Storage {
 	return c.storage
 }
 
+//
+// Gas setters and getters
+//
+
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (c *StateObject) ReturnGas(gas, price *big.Int) {}
+
+func (self *StateObject) SetGasLimit(gasLimit *big.Int) {
+	self.gasPool = new(big.Int).Set(gasLimit)
+
+	if glog.V(logger.Core) {
+		glog.Infof("%x: gas (+ %v)", self.Address(), self.gasPool)
+	}
+}
+
+func (self *StateObject) SubGas(gas, price *big.Int) error {
+	if self.gasPool.Cmp(gas) < 0 {
+		return GasLimitError(self.gasPool, gas)
+	}
+
+	self.gasPool.Sub(self.gasPool, gas)
+
+	rGas := new(big.Int).Set(gas)
+	rGas.Mul(rGas, price)
+
+	self.dirty = true
+
+	return nil
+}
+
+func (self *StateObject) AddGas(gas, price *big.Int) {
+	self.gasPool.Add(self.gasPool, gas)
+}
 
 func (self *StateObject) Copy() *StateObject {
 	stateObject := NewStateObject(self.Address(), self.db)
@@ -214,11 +260,16 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.code = common.CopyBytes(self.code)
 	stateObject.initCode = common.CopyBytes(self.initCode)
 	stateObject.storage = self.storage.Copy()
+	stateObject.gasPool.Set(self.gasPool)
 	stateObject.remove = self.remove
 	stateObject.dirty = self.dirty
 	stateObject.deleted = self.deleted
 
 	return stateObject
+}
+
+func (self *StateObject) Set(stateObject *StateObject) {
+	*self = *stateObject
 }
 
 //
@@ -229,9 +280,18 @@ func (self *StateObject) Balance() *big.Int {
 	return self.balance
 }
 
+func (c *StateObject) N() *big.Int {
+	return big.NewInt(int64(c.nonce))
+}
+
 // Returns the address of the contract/account
 func (c *StateObject) Address() common.Address {
 	return c.address
+}
+
+// Returns the initialization Code
+func (c *StateObject) Init() Code {
+	return c.initCode
 }
 
 func (self *StateObject) Trie() *trie.SecureTrie {
@@ -248,6 +308,11 @@ func (self *StateObject) Code() []byte {
 
 func (self *StateObject) SetCode(code []byte) {
 	self.code = code
+	self.dirty = true
+}
+
+func (self *StateObject) SetInitCode(code []byte) {
+	self.initCode = code
 	self.dirty = true
 }
 
@@ -287,6 +352,19 @@ func (c *StateObject) RlpEncode() []byte {
 
 func (c *StateObject) CodeHash() common.Bytes {
 	return crypto.Sha3(c.code)
+}
+
+func (c *StateObject) RlpDecode(data []byte) {
+	decoder := common.NewValueFromBytes(data)
+	c.nonce = decoder.Get(0).Uint()
+	c.balance = decoder.Get(1).BigInt()
+	c.trie = trie.NewSecure(decoder.Get(2).Bytes(), c.db)
+	c.storage = make(map[string]common.Hash)
+	c.gasPool = new(big.Int)
+
+	c.codeHash = decoder.Get(3).Bytes()
+
+	c.code, _ = c.db.Get(c.codeHash)
 }
 
 // Storage change object. Used by the manifest for notifying changes to

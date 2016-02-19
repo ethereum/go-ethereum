@@ -22,11 +22,11 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/chattynet/chatty/common/compiler"
+	"github.com/chattynet/chatty/eth"
+	"github.com/chattynet/chatty/rpc/codec"
+	"github.com/chattynet/chatty/rpc/shared"
+	"github.com/chattynet/chatty/xeth"
 )
 
 func TestParseApiString(t *testing.T) {
@@ -39,7 +39,7 @@ func TestParseApiString(t *testing.T) {
 		t.Errorf("Expected 0 apis from empty API string")
 	}
 
-	apis, err = ParseApiString("eth", codec.JSON, nil, nil)
+	apis, err = ParseApiString("chy", codec.JSON, nil, nil)
 	if err != nil {
 		t.Errorf("Expected nil err from parsing empty API string but got %v", err)
 	}
@@ -48,7 +48,7 @@ func TestParseApiString(t *testing.T) {
 		t.Errorf("Expected 1 apis but got %d - %v", apis, apis)
 	}
 
-	apis, err = ParseApiString("eth,eth", codec.JSON, nil, nil)
+	apis, err = ParseApiString("chy,chy", codec.JSON, nil, nil)
 	if err != nil {
 		t.Errorf("Expected nil err from parsing empty API string but got \"%v\"", err)
 	}
@@ -81,7 +81,7 @@ func TestCompileSolidity(t *testing.T) {
 		`   }\n` +
 		`}\n`
 
-	jsonstr := `{"jsonrpc":"2.0","method":"eth_compileSolidity","params":["` + source + `"],"id":64}`
+	jsonstr := `{"jsonrpc":"2.0","method":"chy_compileSolidity","params":["` + source + `"],"id":64}`
 
 	expCode := "0x605880600c6000396000f3006000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa114602e57005b603d6004803590602001506047565b8060005260206000f35b60006007820290506053565b91905056"
 	expAbiDefinition := `[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}]`

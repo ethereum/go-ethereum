@@ -46,10 +46,9 @@ var (
 	skipPrefixes = []string{
 		// boring stuff
 		"Godeps/", "tests/files/", "build/",
-		// don't relicense vendored sources
+		// don't relicense vendored packages
 		"crypto/sha3/", "crypto/ecies/", "logger/glog/",
 		"crypto/curve.go",
-		"trie/arc.go",
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.

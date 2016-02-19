@@ -19,12 +19,10 @@ package miner
 import (
 	"sync"
 
-	"sync/atomic"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/pow"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/pow"
 )
 
 type CpuAgent struct {
@@ -37,8 +35,6 @@ type CpuAgent struct {
 
 	index int
 	pow   pow.PoW
-
-	isMining int32 // isMining indicates whether the agent is currently mining
 }
 
 func NewCpuAgent(index int, pow pow.PoW) *CpuAgent {
@@ -64,10 +60,6 @@ func (self *CpuAgent) Stop() {
 func (self *CpuAgent) Start() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-
-	if !atomic.CompareAndSwapInt32(&self.isMining, 0, 1) {
-		return // agent already started
-	}
 
 	self.quit = make(chan struct{})
 	// creating current op ch makes sure we're not closing a nil ch
@@ -107,18 +99,17 @@ done:
 		case <-self.workCh:
 		default:
 			close(self.workCh)
+
 			break done
 		}
 	}
-
-	atomic.StoreInt32(&self.isMining, 0)
 }
 
 func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
 	glog.V(logger.Debug).Infof("(re)started agent[%d]. mining...\n", self.index)
 
 	// Mine
-	nonce, mixDigest := self.pow.Search(work.Block, stop, self.index)
+	nonce, mixDigest := self.pow.Search(work.Block, stop)
 	if nonce != 0 {
 		block := work.Block.WithMiningResult(nonce, common.BytesToHash(mixDigest))
 		self.returnCh <- &Result{work, block}

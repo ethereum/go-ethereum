@@ -1,14 +1,19 @@
 {
-	"ImportPath": "github.com/ethereum/go-ethereum",
+	"ImportPath": "github.com/chattynet/chatty",
 	"GoVersion": "go1.4",
 	"Packages": [
 		"./..."
 	],
 	"Deps": [
 		{
+			"ImportPath": "code.google.com/p/go-uuid/uuid",
+			"Comment": "null-12",
+			"Rev": "7dda39b2e7d5e265014674c5af696ba4186679e9"
+		},
+		{
 			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-161-gf445c89",
-			"Rev": "f445c894402839580d30de47551cedc152dad814"
+			"Comment": "1.2.0-95-g9b2bd2b",
+			"Rev": "9b2bd2b3489748d4d0a204fa4eb2ee9e89e0ebc6"
 		},
 		{
 			"ImportPath": "github.com/davecgh/go-spew/spew",
@@ -16,8 +21,8 @@
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",
-			"Comment": "v23.1-238-g9401881",
-			"Rev": "9401881ab040d1a3b0ae9e4780a115bc284a8a1a"
+			"Comment": "v23.1-227-g8f6ccaa",
+			"Rev": "8f6ccaaef9b418553807a73a95cb5f49cd3ea39f"
 		},
 		{
 			"ImportPath": "github.com/fatih/color",
@@ -34,7 +39,7 @@
 		},
 		{
 			"ImportPath": "github.com/huin/goupnp",
-			"Rev": "90f71cb5dd6d4606388666d2cda4ce2f563d2185"
+			"Rev": "5cff77a69fb22f5f1774c4451ea2aab63d4d2f20"
 		},
 		{
 			"ImportPath": "github.com/jackpal/go-nat-pmp",
@@ -46,7 +51,7 @@
 		},
 		{
 			"ImportPath": "github.com/mattn/go-isatty",
-			"Rev": "7fcbc72f853b92b5720db4a6b8482be612daef24"
+			"Rev": "fdbe02a1b44e75977b2690062b83cf507d70c013"
 		},
 		{
 			"ImportPath": "github.com/mattn/go-runewidth",
@@ -56,10 +61,6 @@
 		{
 			"ImportPath": "github.com/nsf/termbox-go",
 			"Rev": "675ffd907b7401b8a709a5ef2249978af5616bb2"
-		},
-		{
-			"ImportPath": "github.com/pborman/uuid",
-			"Rev": "cccd189d45f7ac3368a0d127efb7f4d08ae0b655"
 		},
 		{
 			"ImportPath": "github.com/peterh/liner",
@@ -104,6 +105,11 @@
 		{
 			"ImportPath": "golang.org/x/net/html",
 			"Rev": "e0403b4e005737430c05a57aac078479844f919c"
+		},
+		{
+			"ImportPath": "github.com/mattn/go-sqlite3",
+			"Comment": "v1.1.0",
+			"Rev": "3b3f1d01b2696af5501697c35629048c227586ab"
 		},
 		{
 			"ImportPath": "golang.org/x/text/encoding",

@@ -17,8 +17,8 @@
 package xeth
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/state"
 )
 
 type State struct {

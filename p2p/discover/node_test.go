@@ -25,8 +25,8 @@ import (
 	"testing/quick"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/crypto"
 )
 
 var parseNodeTests = []struct {

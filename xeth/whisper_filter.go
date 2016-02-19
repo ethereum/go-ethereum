@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/chattynet/chatty/common"
 )
 
 // whisperFilter is the message cache matching a specific filter, accumulating

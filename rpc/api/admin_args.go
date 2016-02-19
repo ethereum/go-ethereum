@@ -19,8 +19,8 @@ package api
 import (
 	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/chattynet/chatty/common/compiler"
+	"github.com/chattynet/chatty/rpc/shared"
 )
 
 type AddPeerArgs struct {
@@ -127,7 +127,7 @@ func (args *StartRPCArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	args.ListenAddress = "127.0.0.1"
-	args.ListenPort = 8545
+	args.ListenPort = 53901
 	args.Apis = "net,eth,web3"
 
 	if len(obj) >= 1 && obj[0] != nil {

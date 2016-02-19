@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/logger"
+	"github.com/chattynet/chatty/logger"
 )
 
 func testErrors() *Errors {

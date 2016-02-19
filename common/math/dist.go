@@ -20,7 +20,7 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/chattynet/chatty/common"
 )
 
 type Summer interface {
@@ -83,7 +83,7 @@ func (v vectorSummer) Sum(i int) *big.Int { return v.by(v.vectors[i]) }
 
 func GasSum(v Vector) *big.Int { return v.Gas }
 
-var etherInWei = new(big.Rat).SetInt(common.String2Big("1000000000000000000"))
+var shiftInEchy = new(big.Rat).SetInt(common.String2Big("1000000000000000000"))
 
 func GasPrice(bp, gl, ep *big.Int) *big.Int {
 	BP := new(big.Rat).SetInt(bp)
@@ -92,5 +92,5 @@ func GasPrice(bp, gl, ep *big.Int) *big.Int {
 	GP := new(big.Rat).Quo(BP, GL)
 	GP = GP.Quo(GP, EP)
 
-	return GP.Mul(GP, etherInWei).Num()
+	return GP.Mul(GP, shiftInEchy).Num()
 }

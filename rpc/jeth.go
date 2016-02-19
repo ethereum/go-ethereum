@@ -20,14 +20,14 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/jsre"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/rpc/useragent"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/chattynet/chatty/cmd/utils"
+	"github.com/chattynet/chatty/jsre"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/rpc/comms"
+	"github.com/chattynet/chatty/rpc/shared"
+	"github.com/chattynet/chatty/rpc/useragent"
+	"github.com/chattynet/chatty/xeth"
 
 	"github.com/robertkrimen/otto"
 )
@@ -44,12 +44,11 @@ func NewJeth(ethApi shared.EthereumApi, re *jsre.JSRE, client comms.EthereumClie
 }
 
 func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id interface{}) (response otto.Value) {
-	m := shared.NewRpcErrorResponse(id, shared.JsonRpcVersion, code, fmt.Errorf(msg))
-	errObj, _ := json.Marshal(m.Error)
-	errRes, _ := json.Marshal(m)
+	errObj := fmt.Sprintf("{\"message\": \"%s\", \"code\": %d}", msg, code)
+	retResponse := fmt.Sprintf("ret_response = JSON.parse('{\"jsonrpc\": \"%s\", \"id\": %v, \"error\": %s}');", shared.JsonRpcVersion, id, errObj)
 
-	call.Otto.Run("ret_error = " + string(errObj))
-	res, _ := call.Otto.Run("ret_response = " + string(errRes))
+	call.Otto.Run("ret_error = " + errObj)
+	res, _ := call.Otto.Run(retResponse)
 
 	return res
 }
@@ -158,11 +157,11 @@ func (self *Jeth) askPassword(id interface{}, jsonrpc string, args []interface{}
 	if len(args) >= 1 {
 		if account, ok := args[0].(string); ok {
 			fmt.Printf("Unlock account %s\n", account)
+			passwd, err = utils.PromptPassword("Passphrase: ", true)
 		} else {
 			return false
 		}
 	}
-	passwd, err = utils.PromptPassword("Passphrase: ", true)
 
 	if err = self.client.Send(shared.NewRpcResponse(id, jsonrpc, passwd, err)); err != nil {
 		glog.V(logger.Info).Infof("Unable to send user agent ask password response - %v\n", err)

@@ -27,25 +27,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/chattynet/chatty/common"
+	"gopkg.in/fatih/set.v0"
 )
 
-const (
-	maxLackingHashes = 4096 // Maximum number of entries allowed on the list or lacking items
-	throughputImpact = 0.1  // The impact a single measurement has on a peer's final throughput value.
-)
-
-// Hash and block fetchers belonging to eth/61 and below
 type relativeHashFetcherFn func(common.Hash) error
 type absoluteHashFetcherFn func(uint64, int) error
 type blockFetcherFn func([]common.Hash) error
-
-// Block header and body fetchers belonging to eth/62 and above
-type relativeHeaderFetcherFn func(common.Hash, int, int, bool) error
-type absoluteHeaderFetcherFn func(uint64, int, int, bool) error
-type blockBodyFetcherFn func([]common.Hash) error
-type receiptFetcherFn func([]common.Hash) error
-type stateFetcherFn func([]common.Hash) error
 
 var (
 	errAlreadyFetching   = errors.New("already fetching blocks from peer")
@@ -58,88 +46,50 @@ type peer struct {
 	id   string      // Unique identifier of the peer
 	head common.Hash // Hash of the peers latest known block
 
-	blockIdle   int32 // Current block activity state of the peer (idle = 0, active = 1)
-	receiptIdle int32 // Current receipt activity state of the peer (idle = 0, active = 1)
-	stateIdle   int32 // Current node data activity state of the peer (idle = 0, active = 1)
+	idle int32 // Current activity state of the peer (idle = 0, active = 1)
+	rep  int32 // Simple peer reputation
 
-	blockThroughput   float64 // Number of blocks (bodies) measured to be retrievable per second
-	receiptThroughput float64 // Number of receipts measured to be retrievable per second
-	stateThroughput   float64 // Number of node data pieces measured to be retrievable per second
+	capacity int32     // Number of blocks allowed to fetch per request
+	started  time.Time // Time instance when the last fetch was started
 
-	blockStarted   time.Time // Time instance when the last block (body)fetch was started
-	receiptStarted time.Time // Time instance when the last receipt fetch was started
-	stateStarted   time.Time // Time instance when the last node data fetch was started
+	ignored *set.Set // Set of hashes not to request (didn't have previously)
 
-	lacking map[common.Hash]struct{} // Set of hashes not to request (didn't have previously)
-
-	getRelHashes relativeHashFetcherFn // [eth/61] Method to retrieve a batch of hashes from an origin hash
-	getAbsHashes absoluteHashFetcherFn // [eth/61] Method to retrieve a batch of hashes from an absolute position
-	getBlocks    blockFetcherFn        // [eth/61] Method to retrieve a batch of blocks
-
-	getRelHeaders  relativeHeaderFetcherFn // [eth/62] Method to retrieve a batch of headers from an origin hash
-	getAbsHeaders  absoluteHeaderFetcherFn // [eth/62] Method to retrieve a batch of headers from an absolute position
-	getBlockBodies blockBodyFetcherFn      // [eth/62] Method to retrieve a batch of block bodies
-
-	getReceipts receiptFetcherFn // [eth/63] Method to retrieve a batch of block transaction receipts
-	getNodeData stateFetcherFn   // [eth/63] Method to retrieve a batch of state trie data
+	getRelHashes relativeHashFetcherFn // Method to retrieve a batch of hashes from an origin hash
+	getAbsHashes absoluteHashFetcherFn // Method to retrieve a batch of hashes from an absolute position
+	getBlocks    blockFetcherFn        // Method to retrieve a batch of blocks
 
 	version int // Eth protocol version number to switch strategies
-	lock    sync.RWMutex
 }
 
 // newPeer create a new downloader peer, with specific hash and block retrieval
 // mechanisms.
-func newPeer(id string, version int, head common.Hash,
-	getRelHashes relativeHashFetcherFn, getAbsHashes absoluteHashFetcherFn, getBlocks blockFetcherFn, // eth/61 callbacks, remove when upgrading
-	getRelHeaders relativeHeaderFetcherFn, getAbsHeaders absoluteHeaderFetcherFn, getBlockBodies blockBodyFetcherFn,
-	getReceipts receiptFetcherFn, getNodeData stateFetcherFn) *peer {
+func newPeer(id string, version int, head common.Hash, getRelHashes relativeHashFetcherFn, getAbsHashes absoluteHashFetcherFn, getBlocks blockFetcherFn) *peer {
 	return &peer{
-		id:      id,
-		head:    head,
-		lacking: make(map[common.Hash]struct{}),
-
+		id:           id,
+		head:         head,
+		capacity:     1,
 		getRelHashes: getRelHashes,
 		getAbsHashes: getAbsHashes,
 		getBlocks:    getBlocks,
-
-		getRelHeaders:  getRelHeaders,
-		getAbsHeaders:  getAbsHeaders,
-		getBlockBodies: getBlockBodies,
-
-		getReceipts: getReceipts,
-		getNodeData: getNodeData,
-
-		version: version,
+		ignored:      set.New(),
+		version:      version,
 	}
 }
 
 // Reset clears the internal state of a peer entity.
 func (p *peer) Reset() {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	atomic.StoreInt32(&p.blockIdle, 0)
-	atomic.StoreInt32(&p.receiptIdle, 0)
-	atomic.StoreInt32(&p.stateIdle, 0)
-
-	p.blockThroughput = 0
-	p.receiptThroughput = 0
-	p.stateThroughput = 0
-
-	p.lacking = make(map[common.Hash]struct{})
+	atomic.StoreInt32(&p.idle, 0)
+	atomic.StoreInt32(&p.capacity, 1)
+	p.ignored.Clear()
 }
 
-// Fetch61 sends a block retrieval request to the remote peer.
-func (p *peer) Fetch61(request *fetchRequest) error {
-	// Sanity check the protocol version
-	if p.version != 61 {
-		panic(fmt.Sprintf("block fetch [eth/61] requested on eth/%d", p.version))
-	}
+// Fetch sends a block retrieval request to the remote peer.
+func (p *peer) Fetch(request *fetchRequest) error {
 	// Short circuit if the peer is already fetching
-	if !atomic.CompareAndSwapInt32(&p.blockIdle, 0, 1) {
+	if !atomic.CompareAndSwapInt32(&p.idle, 0, 1) {
 		return errAlreadyFetching
 	}
-	p.blockStarted = time.Now()
+	p.started = time.Now()
 
 	// Convert the hash set to a retrievable slice
 	hashes := make([]common.Hash, 0, len(request.Hashes))
@@ -151,182 +101,67 @@ func (p *peer) Fetch61(request *fetchRequest) error {
 	return nil
 }
 
-// FetchBodies sends a block body retrieval request to the remote peer.
-func (p *peer) FetchBodies(request *fetchRequest) error {
-	// Sanity check the protocol version
-	if p.version < 62 {
-		panic(fmt.Sprintf("body fetch [eth/62+] requested on eth/%d", p.version))
+// SetIdle sets the peer to idle, allowing it to execute new retrieval requests.
+// Its block retrieval allowance will also be updated either up- or downwards,
+// depending on whether the previous fetch completed in time or not.
+func (p *peer) SetIdle() {
+	// Update the peer's download allowance based on previous performance
+	scale := 2.0
+	if time.Since(p.started) > blockSoftTTL {
+		scale = 0.5
+		if time.Since(p.started) > blockHardTTL {
+			scale = 1 / float64(MaxBlockFetch) // reduces capacity to 1
+		}
 	}
-	// Short circuit if the peer is already fetching
-	if !atomic.CompareAndSwapInt32(&p.blockIdle, 0, 1) {
-		return errAlreadyFetching
-	}
-	p.blockStarted = time.Now()
+	for {
+		// Calculate the new download bandwidth allowance
+		prev := atomic.LoadInt32(&p.capacity)
+		next := int32(math.Max(1, math.Min(float64(MaxBlockFetch), float64(prev)*scale)))
 
-	// Convert the header set to a retrievable slice
-	hashes := make([]common.Hash, 0, len(request.Headers))
-	for _, header := range request.Headers {
-		hashes = append(hashes, header.Hash())
-	}
-	go p.getBlockBodies(hashes)
-
-	return nil
-}
-
-// FetchReceipts sends a receipt retrieval request to the remote peer.
-func (p *peer) FetchReceipts(request *fetchRequest) error {
-	// Sanity check the protocol version
-	if p.version < 63 {
-		panic(fmt.Sprintf("body fetch [eth/63+] requested on eth/%d", p.version))
-	}
-	// Short circuit if the peer is already fetching
-	if !atomic.CompareAndSwapInt32(&p.receiptIdle, 0, 1) {
-		return errAlreadyFetching
-	}
-	p.receiptStarted = time.Now()
-
-	// Convert the header set to a retrievable slice
-	hashes := make([]common.Hash, 0, len(request.Headers))
-	for _, header := range request.Headers {
-		hashes = append(hashes, header.Hash())
-	}
-	go p.getReceipts(hashes)
-
-	return nil
-}
-
-// FetchNodeData sends a node state data retrieval request to the remote peer.
-func (p *peer) FetchNodeData(request *fetchRequest) error {
-	// Sanity check the protocol version
-	if p.version < 63 {
-		panic(fmt.Sprintf("node data fetch [eth/63+] requested on eth/%d", p.version))
-	}
-	// Short circuit if the peer is already fetching
-	if !atomic.CompareAndSwapInt32(&p.stateIdle, 0, 1) {
-		return errAlreadyFetching
-	}
-	p.stateStarted = time.Now()
-
-	// Convert the hash set to a retrievable slice
-	hashes := make([]common.Hash, 0, len(request.Hashes))
-	for hash, _ := range request.Hashes {
-		hashes = append(hashes, hash)
-	}
-	go p.getNodeData(hashes)
-
-	return nil
-}
-
-// SetBlocksIdle sets the peer to idle, allowing it to execute new block retrieval
-// requests. Its estimated block retrieval throughput is updated with that measured
-// just now.
-func (p *peer) SetBlocksIdle(delivered int) {
-	p.setIdle(p.blockStarted, delivered, &p.blockThroughput, &p.blockIdle)
-}
-
-// SetBodiesIdle sets the peer to idle, allowing it to execute block body retrieval
-// requests. Its estimated body retrieval throughput is updated with that measured
-// just now.
-func (p *peer) SetBodiesIdle(delivered int) {
-	p.setIdle(p.blockStarted, delivered, &p.blockThroughput, &p.blockIdle)
-}
-
-// SetReceiptsIdle sets the peer to idle, allowing it to execute new receipt
-// retrieval requests. Its estimated receipt retrieval throughput is updated
-// with that measured just now.
-func (p *peer) SetReceiptsIdle(delivered int) {
-	p.setIdle(p.receiptStarted, delivered, &p.receiptThroughput, &p.receiptIdle)
-}
-
-// SetNodeDataIdle sets the peer to idle, allowing it to execute new state trie
-// data retrieval requests. Its estimated state retrieval throughput is updated
-// with that measured just now.
-func (p *peer) SetNodeDataIdle(delivered int) {
-	p.setIdle(p.stateStarted, delivered, &p.stateThroughput, &p.stateIdle)
-}
-
-// setIdle sets the peer to idle, allowing it to execute new retrieval requests.
-// Its estimated retrieval throughput is updated with that measured just now.
-func (p *peer) setIdle(started time.Time, delivered int, throughput *float64, idle *int32) {
-	// Irrelevant of the scaling, make sure the peer ends up idle
-	defer atomic.StoreInt32(idle, 0)
-
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	// If nothing was delivered (hard timeout / unavailable data), reduce throughput to minimum
-	if delivered == 0 {
-		*throughput = 0
-		return
-	}
-	// Otherwise update the throughput with a new measurement
-	measured := float64(delivered) / (float64(time.Since(started)+1) / float64(time.Second)) // +1 (ns) to ensure non-zero divisor
-	*throughput = (1-throughputImpact)*(*throughput) + throughputImpact*measured
-}
-
-// BlockCapacity retrieves the peers block download allowance based on its
-// previously discovered throughput.
-func (p *peer) BlockCapacity() int {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	return int(math.Max(1, math.Min(p.blockThroughput*float64(blockTargetRTT)/float64(time.Second), float64(MaxBlockFetch))))
-}
-
-// ReceiptCapacity retrieves the peers receipt download allowance based on its
-// previously discovered throughput.
-func (p *peer) ReceiptCapacity() int {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	return int(math.Max(1, math.Min(p.receiptThroughput*float64(receiptTargetRTT)/float64(time.Second), float64(MaxReceiptFetch))))
-}
-
-// NodeDataCapacity retrieves the peers state download allowance based on its
-// previously discovered throughput.
-func (p *peer) NodeDataCapacity() int {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	return int(math.Max(1, math.Min(p.stateThroughput*float64(stateTargetRTT)/float64(time.Second), float64(MaxStateFetch))))
-}
-
-// MarkLacking appends a new entity to the set of items (blocks, receipts, states)
-// that a peer is known not to have (i.e. have been requested before). If the
-// set reaches its maximum allowed capacity, items are randomly dropped off.
-func (p *peer) MarkLacking(hash common.Hash) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	for len(p.lacking) >= maxLackingHashes {
-		for drop, _ := range p.lacking {
-			delete(p.lacking, drop)
+		// Try to update the old value
+		if atomic.CompareAndSwapInt32(&p.capacity, prev, next) {
+			// If we're having problems at 1 capacity, try to find better peers
+			if next == 1 {
+				p.Demote()
+			}
 			break
 		}
 	}
-	p.lacking[hash] = struct{}{}
+	// Set the peer to idle to allow further block requests
+	atomic.StoreInt32(&p.idle, 0)
 }
 
-// Lacks retrieves whether the hash of a blockchain item is on the peers lacking
-// list (i.e. whether we know that the peer does not have it).
-func (p *peer) Lacks(hash common.Hash) bool {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+// Capacity retrieves the peers block download allowance based on its previously
+// discovered bandwidth capacity.
+func (p *peer) Capacity() int {
+	return int(atomic.LoadInt32(&p.capacity))
+}
 
-	_, ok := p.lacking[hash]
-	return ok
+// Promote increases the peer's reputation.
+func (p *peer) Promote() {
+	atomic.AddInt32(&p.rep, 1)
+}
+
+// Demote decreases the peer's reputation or leaves it at 0.
+func (p *peer) Demote() {
+	for {
+		// Calculate the new reputation value
+		prev := atomic.LoadInt32(&p.rep)
+		next := prev / 2
+
+		// Try to update the old value
+		if atomic.CompareAndSwapInt32(&p.rep, prev, next) {
+			return
+		}
+	}
 }
 
 // String implements fmt.Stringer.
 func (p *peer) String() string {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
 	return fmt.Sprintf("Peer %s [%s]", p.id,
-		fmt.Sprintf("blocks %3.2f/s, ", p.blockThroughput)+
-			fmt.Sprintf("receipts %3.2f/s, ", p.receiptThroughput)+
-			fmt.Sprintf("states %3.2f/s, ", p.stateThroughput)+
-			fmt.Sprintf("lacking %4d", len(p.lacking)),
+		fmt.Sprintf("reputation %3d, ", atomic.LoadInt32(&p.rep))+
+			fmt.Sprintf("capacity %3d, ", atomic.LoadInt32(&p.capacity))+
+			fmt.Sprintf("ignored %4d", p.ignored.Size()),
 	)
 }
 
@@ -357,30 +192,12 @@ func (ps *peerSet) Reset() {
 
 // Register injects a new peer into the working set, or returns an error if the
 // peer is already known.
-//
-// The method also sets the starting throughput values of the new peer to the
-// average of all existing peers, to give it a realistic change of being used
-// for data retrievals.
 func (ps *peerSet) Register(p *peer) error {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
 	if _, ok := ps.peers[p.id]; ok {
 		return errAlreadyRegistered
-	}
-	if len(ps.peers) > 0 {
-		p.blockThroughput, p.receiptThroughput, p.stateThroughput = 0, 0, 0
-
-		for _, peer := range ps.peers {
-			peer.lock.RLock()
-			p.blockThroughput += peer.blockThroughput
-			p.receiptThroughput += peer.receiptThroughput
-			p.stateThroughput += peer.stateThroughput
-			peer.lock.RUnlock()
-		}
-		p.blockThroughput /= float64(len(ps.peers))
-		p.receiptThroughput /= float64(len(ps.peers))
-		p.stateThroughput /= float64(len(ps.peers))
 	}
 	ps.peers[p.id] = p
 	return nil
@@ -427,84 +244,24 @@ func (ps *peerSet) AllPeers() []*peer {
 	return list
 }
 
-// BlockIdlePeers retrieves a flat list of all the currently idle peers within the
+// IdlePeers retrieves a flat list of all the currently idle peers within the
 // active peer set, ordered by their reputation.
-func (ps *peerSet) BlockIdlePeers() ([]*peer, int) {
-	idle := func(p *peer) bool {
-		return atomic.LoadInt32(&p.blockIdle) == 0
-	}
-	throughput := func(p *peer) float64 {
-		p.lock.RLock()
-		defer p.lock.RUnlock()
-		return p.blockThroughput
-	}
-	return ps.idlePeers(61, 61, idle, throughput)
-}
-
-// BodyIdlePeers retrieves a flat list of all the currently body-idle peers within
-// the active peer set, ordered by their reputation.
-func (ps *peerSet) BodyIdlePeers() ([]*peer, int) {
-	idle := func(p *peer) bool {
-		return atomic.LoadInt32(&p.blockIdle) == 0
-	}
-	throughput := func(p *peer) float64 {
-		p.lock.RLock()
-		defer p.lock.RUnlock()
-		return p.blockThroughput
-	}
-	return ps.idlePeers(62, 64, idle, throughput)
-}
-
-// ReceiptIdlePeers retrieves a flat list of all the currently receipt-idle peers
-// within the active peer set, ordered by their reputation.
-func (ps *peerSet) ReceiptIdlePeers() ([]*peer, int) {
-	idle := func(p *peer) bool {
-		return atomic.LoadInt32(&p.receiptIdle) == 0
-	}
-	throughput := func(p *peer) float64 {
-		p.lock.RLock()
-		defer p.lock.RUnlock()
-		return p.receiptThroughput
-	}
-	return ps.idlePeers(63, 64, idle, throughput)
-}
-
-// NodeDataIdlePeers retrieves a flat list of all the currently node-data-idle
-// peers within the active peer set, ordered by their reputation.
-func (ps *peerSet) NodeDataIdlePeers() ([]*peer, int) {
-	idle := func(p *peer) bool {
-		return atomic.LoadInt32(&p.stateIdle) == 0
-	}
-	throughput := func(p *peer) float64 {
-		p.lock.RLock()
-		defer p.lock.RUnlock()
-		return p.stateThroughput
-	}
-	return ps.idlePeers(63, 64, idle, throughput)
-}
-
-// idlePeers retrieves a flat list of all currently idle peers satisfying the
-// protocol version constraints, using the provided function to check idleness.
-// The resulting set of peers are sorted by their measure throughput.
-func (ps *peerSet) idlePeers(minProtocol, maxProtocol int, idleCheck func(*peer) bool, throughput func(*peer) float64) ([]*peer, int) {
+func (ps *peerSet) IdlePeers() []*peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	idle, total := make([]*peer, 0, len(ps.peers)), 0
+	list := make([]*peer, 0, len(ps.peers))
 	for _, p := range ps.peers {
-		if p.version >= minProtocol && p.version <= maxProtocol {
-			if idleCheck(p) {
-				idle = append(idle, p)
-			}
-			total++
+		if atomic.LoadInt32(&p.idle) == 0 {
+			list = append(list, p)
 		}
 	}
-	for i := 0; i < len(idle); i++ {
-		for j := i + 1; j < len(idle); j++ {
-			if throughput(idle[i]) < throughput(idle[j]) {
-				idle[i], idle[j] = idle[j], idle[i]
+	for i := 0; i < len(list); i++ {
+		for j := i + 1; j < len(list); j++ {
+			if atomic.LoadInt32(&list[i].rep) < atomic.LoadInt32(&list[j].rep) {
+				list[i], list[j] = list[j], list[i]
 			}
 		}
 	}
-	return idle, total
+	return list
 }

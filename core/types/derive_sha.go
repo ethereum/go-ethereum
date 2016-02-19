@@ -17,11 +17,10 @@
 package types
 
 import (
-	"bytes"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/ethdb"
+	"github.com/chattynet/chatty/rlp"
+	"github.com/chattynet/chatty/trie"
 )
 
 type DerivableList interface {
@@ -30,12 +29,12 @@ type DerivableList interface {
 }
 
 func DeriveSha(list DerivableList) common.Hash {
-	keybuf := new(bytes.Buffer)
-	trie := new(trie.Trie)
+	db, _ := ethdb.NewMemDatabase()
+	trie := trie.New(nil, db)
 	for i := 0; i < list.Len(); i++ {
-		keybuf.Reset()
-		rlp.Encode(keybuf, uint(i))
-		trie.Update(keybuf.Bytes(), list.GetRlp(i))
+		key, _ := rlp.EncodeToBytes(uint(i))
+		trie.Update(key, list.GetRlp(i))
 	}
-	return trie.Hash()
+
+	return common.BytesToHash(trie.Root())
 }

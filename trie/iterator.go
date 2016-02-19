@@ -16,7 +16,9 @@
 
 package trie
 
-import "bytes"
+import (
+	"bytes"
+)
 
 type Iterator struct {
 	trie *Trie
@@ -30,29 +32,32 @@ func NewIterator(trie *Trie) *Iterator {
 }
 
 func (self *Iterator) Next() bool {
+	self.trie.mu.Lock()
+	defer self.trie.mu.Unlock()
+
 	isIterStart := false
 	if self.Key == nil {
 		isIterStart = true
 		self.Key = make([]byte, 32)
 	}
 
-	key := remTerm(compactHexDecode(self.Key))
+	key := RemTerm(CompactHexDecode(self.Key))
 	k := self.next(self.trie.root, key, isIterStart)
 
-	self.Key = []byte(decodeCompact(k))
+	self.Key = []byte(DecodeCompact(k))
 
 	return len(k) > 0
 }
 
-func (self *Iterator) next(node interface{}, key []byte, isIterStart bool) []byte {
+func (self *Iterator) next(node Node, key []byte, isIterStart bool) []byte {
 	if node == nil {
 		return nil
 	}
 
 	switch node := node.(type) {
-	case fullNode:
+	case *FullNode:
 		if len(key) > 0 {
-			k := self.next(node[key[0]], key[1:], isIterStart)
+			k := self.next(node.branch(key[0]), key[1:], isIterStart)
 			if k != nil {
 				return append([]byte{key[0]}, k...)
 			}
@@ -64,31 +69,31 @@ func (self *Iterator) next(node interface{}, key []byte, isIterStart bool) []byt
 		}
 
 		for i := r; i < 16; i++ {
-			k := self.key(node[i])
+			k := self.key(node.branch(byte(i)))
 			if k != nil {
 				return append([]byte{i}, k...)
 			}
 		}
 
-	case shortNode:
-		k := remTerm(node.Key)
-		if vnode, ok := node.Val.(valueNode); ok {
+	case *ShortNode:
+		k := RemTerm(node.Key())
+		if vnode, ok := node.Value().(*ValueNode); ok {
 			switch bytes.Compare([]byte(k), key) {
 			case 0:
 				if isIterStart {
-					self.Value = vnode
+					self.Value = vnode.Val()
 					return k
 				}
 			case 1:
-				self.Value = vnode
+				self.Value = vnode.Val()
 				return k
 			}
 		} else {
-			cnode := node.Val
+			cnode := node.Value()
 
 			var ret []byte
 			skey := key[len(k):]
-			if bytes.HasPrefix(key, k) {
+			if BeginsWith(key, k) {
 				ret = self.next(cnode, skey, isIterStart)
 			} else if bytes.Compare(k, key[:len(k)]) > 0 {
 				return self.key(node)
@@ -98,36 +103,37 @@ func (self *Iterator) next(node interface{}, key []byte, isIterStart bool) []byt
 				return append(k, ret...)
 			}
 		}
-
-	case hashNode:
-		return self.next(self.trie.resolveHash(node), key, isIterStart)
 	}
+
 	return nil
 }
 
-func (self *Iterator) key(node interface{}) []byte {
+func (self *Iterator) key(node Node) []byte {
 	switch node := node.(type) {
-	case shortNode:
+	case *ShortNode:
 		// Leaf node
-		k := remTerm(node.Key)
-		if vnode, ok := node.Val.(valueNode); ok {
-			self.Value = vnode
+		if vnode, ok := node.Value().(*ValueNode); ok {
+			k := RemTerm(node.Key())
+			self.Value = vnode.Val()
+
 			return k
+		} else {
+			k := RemTerm(node.Key())
+			return append(k, self.key(node.Value())...)
 		}
-		return append(k, self.key(node.Val)...)
-	case fullNode:
-		if node[16] != nil {
-			self.Value = node[16].(valueNode)
+	case *FullNode:
+		if node.Value() != nil {
+			self.Value = node.Value().(*ValueNode).Val()
+
 			return []byte{16}
 		}
+
 		for i := 0; i < 16; i++ {
-			k := self.key(node[i])
+			k := self.key(node.branch(byte(i)))
 			if k != nil {
 				return append([]byte{byte(i)}, k...)
 			}
 		}
-	case hashNode:
-		return self.key(self.trie.resolveHash(node))
 	}
 
 	return nil

@@ -29,10 +29,10 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/rpc/codec"
+	"github.com/chattynet/chatty/rpc/shared"
 	"github.com/rs/cors"
 )
 
@@ -277,7 +277,7 @@ func (self *httpClient) Send(req interface{}) error {
 		} else {
 			var rpcErrorResponse shared.ErrorResponse
 			if err = self.codec.Decode(reply, &rpcErrorResponse); err == nil {
-				self.lastRes = &rpcErrorResponse
+				self.lastRes = &rpcSuccessResponse
 				self.lastErr = err
 				return nil
 			} else {

@@ -19,7 +19,7 @@
 
 package whisper
 
-import "github.com/ethereum/go-ethereum/crypto"
+import "github.com/chattynet/chatty/crypto"
 
 // Topic represents a cryptographically secure, probabilistic partial
 // classifications of a message, determined as the first (left) 4 bytes of the

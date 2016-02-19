@@ -24,9 +24,9 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/rpc/shared"
 )
 
 type hexdata struct {
@@ -169,7 +169,6 @@ type BlockRes struct {
 	LogsBloom       *hexdata          `json:"logsBloom"`
 	TransactionRoot *hexdata          `json:"transactionsRoot"`
 	StateRoot       *hexdata          `json:"stateRoot"`
-	ReceiptRoot     *hexdata          `json:"receiptRoot"`
 	Miner           *hexdata          `json:"miner"`
 	Difficulty      *hexnum           `json:"difficulty"`
 	TotalDifficulty *hexnum           `json:"totalDifficulty"`
@@ -193,7 +192,6 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 			LogsBloom       *hexdata          `json:"logsBloom"`
 			TransactionRoot *hexdata          `json:"transactionsRoot"`
 			StateRoot       *hexdata          `json:"stateRoot"`
-			ReceiptRoot     *hexdata          `json:"receiptRoot"`
 			Miner           *hexdata          `json:"miner"`
 			Difficulty      *hexnum           `json:"difficulty"`
 			TotalDifficulty *hexnum           `json:"totalDifficulty"`
@@ -214,7 +212,6 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 		ext.LogsBloom = b.LogsBloom
 		ext.TransactionRoot = b.TransactionRoot
 		ext.StateRoot = b.StateRoot
-		ext.ReceiptRoot = b.ReceiptRoot
 		ext.Miner = b.Miner
 		ext.Difficulty = b.Difficulty
 		ext.TotalDifficulty = b.TotalDifficulty
@@ -239,7 +236,6 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 			LogsBloom       *hexdata   `json:"logsBloom"`
 			TransactionRoot *hexdata   `json:"transactionsRoot"`
 			StateRoot       *hexdata   `json:"stateRoot"`
-			ReceiptRoot     *hexdata   `json:"receiptRoot"`
 			Miner           *hexdata   `json:"miner"`
 			Difficulty      *hexnum    `json:"difficulty"`
 			TotalDifficulty *hexnum    `json:"totalDifficulty"`
@@ -260,7 +256,6 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 		ext.LogsBloom = b.LogsBloom
 		ext.TransactionRoot = b.TransactionRoot
 		ext.StateRoot = b.StateRoot
-		ext.ReceiptRoot = b.ReceiptRoot
 		ext.Miner = b.Miner
 		ext.Difficulty = b.Difficulty
 		ext.TotalDifficulty = b.TotalDifficulty
@@ -281,7 +276,7 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 	}
 }
 
-func NewBlockRes(block *types.Block, td *big.Int, fullTx bool) *BlockRes {
+func NewBlockRes(block *types.Block, fullTx bool) *BlockRes {
 	if block == nil {
 		return nil
 	}
@@ -296,10 +291,9 @@ func NewBlockRes(block *types.Block, td *big.Int, fullTx bool) *BlockRes {
 	res.LogsBloom = newHexData(block.Bloom())
 	res.TransactionRoot = newHexData(block.TxHash())
 	res.StateRoot = newHexData(block.Root())
-	res.ReceiptRoot = newHexData(block.ReceiptHash())
 	res.Miner = newHexData(block.Coinbase())
 	res.Difficulty = newHexNum(block.Difficulty())
-	res.TotalDifficulty = newHexNum(td)
+	res.TotalDifficulty = newHexNum(block.Td)
 	res.Size = newHexNum(block.Size().Int64())
 	res.ExtraData = newHexData(block.Extra())
 	res.GasLimit = newHexNum(block.GasLimit())
@@ -453,8 +447,8 @@ func NewReceiptRes(rec *types.Receipt) *ReceiptRes {
 		v.ContractAddress = newHexData(rec.ContractAddress)
 	}
 
-	logs := make([]interface{}, len(rec.Logs))
-	for i, log := range rec.Logs {
+	logs := make([]interface{}, len(rec.Logs()))
+	for i, log := range rec.Logs() {
 		logs[i] = NewLogRes(log)
 	}
 	v.Logs = &logs

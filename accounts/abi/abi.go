@@ -22,7 +22,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/chattynet/chatty/crypto"
 )
 
 // Callable method given a `Name` and whether the method is a constant.
@@ -36,7 +36,7 @@ import (
 type Method struct {
 	Name   string
 	Const  bool
-	Inputs []Argument
+	Input  []Argument
 	Return Type // not yet implemented
 }
 
@@ -49,9 +49,9 @@ type Method struct {
 // Please note that "int" is substitute for its canonical representation "int256"
 func (m Method) String() (out string) {
 	out += m.Name
-	types := make([]string, len(m.Inputs))
+	types := make([]string, len(m.Input))
 	i := 0
-	for _, input := range m.Inputs {
+	for _, input := range m.Input {
 		types[i] = input.Type.String()
 		i++
 	}
@@ -104,7 +104,7 @@ func (abi ABI) pack(name string, args ...interface{}) ([]byte, error) {
 
 	var ret []byte
 	for i, a := range args {
-		input := method.Inputs[i]
+		input := method.Input[i]
 
 		packed, err := input.Type.pack(a)
 		if err != nil {
@@ -129,8 +129,8 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 	}
 
 	// start with argument count match
-	if len(args) != len(method.Inputs) {
-		return nil, fmt.Errorf("argument count mismatch: %d for %d", len(args), len(method.Inputs))
+	if len(args) != len(method.Input) {
+		return nil, fmt.Errorf("argument count mismatch: %d for %d", len(args), len(method.Input))
 	}
 
 	arguments, err := abi.pack(name, args...)

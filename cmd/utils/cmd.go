@@ -21,18 +21,21 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"math"
+	"math/big"
 	"os"
 	"os/signal"
 	"regexp"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/eth"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/params"
+	"github.com/chattynet/chatty/rlp"
 	"github.com/peterh/liner"
 )
 
@@ -40,9 +43,7 @@ const (
 	importBatchSize = 2500
 )
 
-var (
-	interruptCallbacks = []func(os.Signal){}
-)
+var interruptCallbacks = []func(os.Signal){}
 
 func openLogFile(Datadir string, filename string) *os.File {
 	path := common.AbsolutePath(Datadir, filename)
@@ -95,6 +96,16 @@ func PromptPassword(prompt string, warnTerm bool) (string, error) {
 	return input, err
 }
 
+func CheckLegalese(datadir string) {
+	// check "first run"
+	if !common.FileExist(datadir) {
+		r, _ := PromptConfirm(legalese)
+		if !r {
+			Fatalf("Must accept to continue. Shutting down...\n")
+		}
+	}
+}
+
 // Fatalf formats a message to standard error and exits the program.
 // The message is also printed to standard output if standard error
 // is redirected to a different file.
@@ -113,7 +124,7 @@ func Fatalf(format string, args ...interface{}) {
 func StartEthereum(ethereum *eth.Ethereum) {
 	glog.V(logger.Info).Infoln("Starting", ethereum.Name())
 	if err := ethereum.Start(); err != nil {
-		Fatalf("Error starting Ethereum: %v", err)
+		Fatalf("Error starting Chatty: %v", err)
 	}
 	go func() {
 		sigc := make(chan os.Signal, 1)
@@ -135,6 +146,16 @@ func StartEthereum(ethereum *eth.Ethereum) {
 	}()
 }
 
+func InitOlympic() {
+	params.DurationLimit = big.NewInt(8)
+	params.GenesisGasLimit = big.NewInt(3141592)
+	params.MinGasLimit = big.NewInt(125000)
+	params.MaximumExtraDataSize = big.NewInt(1024)
+	NetworkIdFlag.Value = 0
+	core.BlockReward = big.NewInt(1.5e+18)
+	core.ExpDiffPeriod = big.NewInt(math.MaxInt64)
+}
+
 func FormatTransactionData(data string) []byte {
 	d := common.StringToByteFunc(data, func(s string) (ret []byte) {
 		slice := regexp.MustCompile("\\n|\\s").Split(s, 1000000000)
@@ -148,7 +169,7 @@ func FormatTransactionData(data string) []byte {
 	return d
 }
 
-func ImportChain(chain *core.BlockChain, fn string) error {
+func ImportChain(chain *core.ChainManager, fn string) error {
 	// Watch for Ctrl-C while the import is running.
 	// If a signal is received, the import will stop at the next batch.
 	interrupt := make(chan os.Signal, 1)
@@ -223,7 +244,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	return nil
 }
 
-func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
+func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
 	for _, b := range bs {
 		if !chain.HasBlock(b.Hash()) {
 			return false
@@ -232,21 +253,21 @@ func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
 	return true
 }
 
-func ExportChain(blockchain *core.BlockChain, fn string) error {
+func ExportChain(chainmgr *core.ChainManager, fn string) error {
 	glog.Infoln("Exporting blockchain to", fn)
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return err
 	}
 	defer fh.Close()
-	if err := blockchain.Export(fh); err != nil {
+	if err := chainmgr.Export(fh); err != nil {
 		return err
 	}
 	glog.Infoln("Exported blockchain to", fn)
 	return nil
 }
 
-func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, last uint64) error {
+func ExportAppendChain(chainmgr *core.ChainManager, fn string, first uint64, last uint64) error {
 	glog.Infoln("Exporting blockchain to", fn)
 	// TODO verify mode perms
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
@@ -254,7 +275,7 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 		return err
 	}
 	defer fh.Close()
-	if err := blockchain.ExportN(fh, first, last); err != nil {
+	if err := chainmgr.ExportN(fh, first, last); err != nil {
 		return err
 	}
 	glog.Infoln("Exported blockchain to", fn)

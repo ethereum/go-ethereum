@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/chattynet/chatty/common"
 	"github.com/robertkrimen/otto"
 )
 
@@ -154,9 +154,7 @@ loop:
 			if err != nil {
 				fmt.Println("js error:", err, arguments)
 			}
-		
-			_, inreg := registry[timer] // when clearInterval is called from within the callback don't reset it
-			if timer.interval && inreg {
+			if timer.interval {
 				timer.timer.Reset(timer.duration)
 			} else {
 				delete(registry, timer)

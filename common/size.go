@@ -39,15 +39,15 @@ func (self StorageSize) Int64() int64 {
 
 // The different number of units
 var (
-	Douglas  = BigPow(10, 42)
-	Einstein = BigPow(10, 21)
-	Ether    = BigPow(10, 18)
-	Finney   = BigPow(10, 15)
-	Szabo    = BigPow(10, 12)
-	Shannon  = BigPow(10, 9)
-	Babbage  = BigPow(10, 6)
-	Ada      = BigPow(10, 3)
-	Wei      = big.NewInt(1)
+	Xchy  = BigPow(10, 42)
+	Zchy  = BigPow(10, 21)
+	Echy  = BigPow(10, 18)
+	Pchy  = BigPow(10, 15)
+	Tchy  = BigPow(10, 12)
+	Gchy  = BigPow(10, 9)
+	Mchy  = BigPow(10, 6)
+	Kchy  = BigPow(10, 3)
+	Chy   = big.NewInt(1)
 )
 
 //
@@ -56,28 +56,28 @@ var (
 func CurrencyToString(num *big.Int) string {
 	var (
 		fin   *big.Int = num
-		denom string   = "Wei"
+		denom string   = "Chy"
 	)
 
 	switch {
-	case num.Cmp(Ether) >= 0:
-		fin = new(big.Int).Div(num, Ether)
-		denom = "Ether"
-	case num.Cmp(Finney) >= 0:
-		fin = new(big.Int).Div(num, Finney)
-		denom = "Finney"
-	case num.Cmp(Szabo) >= 0:
-		fin = new(big.Int).Div(num, Szabo)
-		denom = "Szabo"
-	case num.Cmp(Shannon) >= 0:
-		fin = new(big.Int).Div(num, Shannon)
-		denom = "Shannon"
-	case num.Cmp(Babbage) >= 0:
-		fin = new(big.Int).Div(num, Babbage)
-		denom = "Babbage"
-	case num.Cmp(Ada) >= 0:
-		fin = new(big.Int).Div(num, Ada)
-		denom = "Ada"
+	case num.Cmp(Echy) >= 0:
+		fin = new(big.Int).Div(num, Echy)
+		denom = "Echy"
+	case num.Cmp(Pchy) >= 0:
+		fin = new(big.Int).Div(num, Pchy)
+		denom = "Pchy"
+	case num.Cmp(Tchy) >= 0:
+		fin = new(big.Int).Div(num, Tchy)
+		denom = "Tchy"
+	case num.Cmp(Gchy) >= 0:
+		fin = new(big.Int).Div(num, Gchy)
+		denom = "Gchy"
+	case num.Cmp(Mchy) >= 0:
+		fin = new(big.Int).Div(num, Mchy)
+		denom = "Mchy"
+	case num.Cmp(Kchy) >= 0:
+		fin = new(big.Int).Div(num, Kchy)
+		denom = "Kchy"
 	}
 
 	// TODO add comment clarifying expected behavior

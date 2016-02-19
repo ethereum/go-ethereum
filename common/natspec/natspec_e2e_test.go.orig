@@ -7,15 +7,15 @@ import (
   "strings"
   "testing"
 
-  "github.com/ethereum/go-ethereum/accounts"
-  "github.com/ethereum/go-ethereum/common"
-  "github.com/ethereum/go-ethereum/common/docserver"
-  "github.com/ethereum/go-ethereum/common/registrar"
-  "github.com/ethereum/go-ethereum/core"
-  "github.com/ethereum/go-ethereum/core/state"
-  "github.com/ethereum/go-ethereum/crypto"
-  "github.com/ethereum/go-ethereum/eth"
-  xe "github.com/ethereum/go-ethereum/xeth"
+  "github.com/chattynet/chatty/accounts"
+  "github.com/chattynet/chatty/common"
+  "github.com/chattynet/chatty/common/docserver"
+  "github.com/chattynet/chatty/common/registrar"
+  "github.com/chattynet/chatty/core"
+  "github.com/chattynet/chatty/core/state"
+  "github.com/chattynet/chatty/crypto"
+  "github.com/chattynet/chatty/eth"
+  xe "github.com/chattynet/chatty/xeth"
 )
 
 const (
@@ -88,6 +88,11 @@ func (self *testFrontend) UnlockAccount(acc []byte) bool {
   return true
 }
 
+func (self *testFrontend) IsAccountLocked(acc []byte) bool {
+  self.ethereum.AccountManager().IsLocked(common.BytesToAddress(acc))
+  return true
+}
+
 func (self *testFrontend) ConfirmTransaction(tx string) bool {
   if self.wantNatSpec {
     ds := docserver.New("/tmp/")
@@ -106,7 +111,7 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
   }
 
   // create a testAddress
-  ks := crypto.NewKeyStorePassphrase("/tmp/eth-natspec/keystore", crypto.LightScryptN, crypto.LightScryptP)
+  ks := crypto.NewKeyStorePassphrase("/tmp/eth-natspec/keystore")
   am := accounts.NewManager(ks)
   testAccount, err := am.NewAccount("password")
   if err != nil {

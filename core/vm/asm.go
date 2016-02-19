@@ -20,11 +20,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/chattynet/chatty/common"
 )
 
-// Dissassemble dissassembles the byte code and returns the string
-// representation (human readable opcodes).
 func Disassemble(script []byte) (asm []string) {
 	pc := new(big.Int)
 	for {

@@ -23,10 +23,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/state"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/rpc/shared"
 )
 
 const (
@@ -626,12 +626,7 @@ func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 
 	args.IncludeTxs = obj[1].(bool)
 
-	if inclTx, ok := obj[1].(bool); ok {
-		args.IncludeTxs = inclTx
-		return nil
-	}
-
-	return shared.NewInvalidTypeError("includeTxs", "not a bool")
+	return nil
 }
 
 type GetBlockByNumberArgs struct {
@@ -653,12 +648,9 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 		return err
 	}
 
-	if inclTx, ok := obj[1].(bool); ok {
-		args.IncludeTxs = inclTx
-		return nil
-	}
+	args.IncludeTxs = obj[1].(bool)
 
-	return shared.NewInvalidTypeError("includeTxs", "not a bool")
+	return nil
 }
 
 type BlockFilterArgs struct {
@@ -722,13 +714,6 @@ func (args *BlockFilterArgs) UnmarshalJSON(b []byte) (err error) {
 			return err
 		}
 	}
-
-	if num == -2 {
-		return fmt.Errorf("\"pending\" is unsupported")
-	} else if num < -2 {
-		return fmt.Errorf("Invalid to block number")
-	}
-
 	args.Latest = num
 
 	if obj[0].Limit == nil {
@@ -845,7 +830,7 @@ type LogRes struct {
 	TransactionIndex *hexnum    `json:"transactionIndex"`
 }
 
-func NewLogRes(log *vm.Log) LogRes {
+func NewLogRes(log *state.Log) LogRes {
 	var l LogRes
 	l.Topics = make([]*hexdata, len(log.Topics))
 	for j, topic := range log.Topics {
@@ -853,7 +838,7 @@ func NewLogRes(log *vm.Log) LogRes {
 	}
 	l.Address = newHexData(log.Address)
 	l.Data = newHexData(log.Data)
-	l.BlockNumber = newHexNum(log.BlockNumber)
+	l.BlockNumber = newHexNum(log.Number)
 	l.LogIndex = newHexNum(log.Index)
 	l.TransactionHash = newHexData(log.TxHash)
 	l.TransactionIndex = newHexNum(log.TxIndex)
@@ -862,7 +847,7 @@ func NewLogRes(log *vm.Log) LogRes {
 	return l
 }
 
-func NewLogsRes(logs vm.Logs) (ls []LogRes) {
+func NewLogsRes(logs state.Logs) (ls []LogRes) {
 	ls = make([]LogRes, len(logs))
 
 	for i, log := range logs {

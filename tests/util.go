@@ -21,16 +21,15 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core"
+	"github.com/chattynet/chatty/core/state"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/core/vm"
+	"github.com/chattynet/chatty/crypto"
 )
 
-func checkLogs(tlog []Log, logs vm.Logs) error {
+func checkLogs(tlog []Log, logs state.Logs) error {
 
 	if len(tlog) != len(logs) {
 		return fmt.Errorf("log length mismatch. Expected %d, got %d", len(tlog), len(logs))
@@ -53,7 +52,7 @@ func checkLogs(tlog []Log, logs vm.Logs) error {
 					}
 				}
 			}
-			genBloom := common.LeftPadBytes(types.LogsBloom(vm.Logs{logs[i]}).Bytes(), 256)
+			genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
 
 			if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
 				return fmt.Errorf("bloom mismatch")
@@ -88,7 +87,7 @@ func (self Log) Topics() [][]byte {
 	return t
 }
 
-func StateObjectFromAccount(db ethdb.Database, addr string, account Account) *state.StateObject {
+func StateObjectFromAccount(db common.Database, addr string, account Account) *state.StateObject {
 	obj := state.NewStateObject(common.HexToAddress(addr), db)
 	obj.SetBalance(common.Big(account.Balance))
 
@@ -131,8 +130,8 @@ type Env struct {
 	initial      bool
 	Gas          *big.Int
 
-	origin   common.Address
-	parent   common.Hash
+	origin common.Address
+	//parent   common.Hash
 	coinbase common.Address
 
 	number     *big.Int
@@ -163,7 +162,7 @@ func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues 
 	env := NewEnv(state)
 
 	env.origin = common.HexToAddress(exeValues["caller"])
-	env.parent = common.HexToHash(envValues["previousHash"])
+	//env.parent = common.Hex2Bytes(envValues["previousHash"])
 	env.coinbase = common.HexToAddress(envValues["currentCoinbase"])
 	env.number = common.Big(envValues["currentNumber"])
 	env.time = common.Big(envValues["currentTimestamp"])
@@ -174,23 +173,25 @@ func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues 
 	return env
 }
 
-func (self *Env) Origin() common.Address   { return self.origin }
-func (self *Env) BlockNumber() *big.Int    { return self.number }
+func (self *Env) Origin() common.Address { return self.origin }
+func (self *Env) BlockNumber() *big.Int  { return self.number }
+
+//func (self *Env) PrevHash() []byte      { return self.parent }
 func (self *Env) Coinbase() common.Address { return self.coinbase }
 func (self *Env) Time() *big.Int           { return self.time }
 func (self *Env) Difficulty() *big.Int     { return self.difficulty }
-func (self *Env) Db() vm.Database          { return self.state }
+func (self *Env) State() *state.StateDB    { return self.state }
 func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
 func (self *Env) VmType() vm.Type          { return vm.StdVmTy }
 func (self *Env) GetHash(n uint64) common.Hash {
 	return common.BytesToHash(crypto.Sha3([]byte(big.NewInt(int64(n)).String())))
 }
-func (self *Env) AddLog(log *vm.Log) {
+func (self *Env) AddLog(log *state.Log) {
 	self.state.AddLog(log)
 }
 func (self *Env) Depth() int     { return self.depth }
 func (self *Env) SetDepth(i int) { self.depth = i }
-func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
+func (self *Env) CanTransfer(from vm.Account, balance *big.Int) bool {
 	if self.skipTransfer {
 		if self.initial {
 			self.initial = false
@@ -198,53 +199,58 @@ func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
 		}
 	}
 
-	return self.state.GetBalance(from).Cmp(balance) >= 0
-}
-func (self *Env) MakeSnapshot() vm.Database {
-	return self.state.Copy()
-}
-func (self *Env) SetSnapshot(copy vm.Database) {
-	self.state.Set(copy.(*state.StateDB))
+	return from.Balance().Cmp(balance) >= 0
 }
 
-func (self *Env) Transfer(from, to vm.Account, amount *big.Int) {
+func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
 	if self.skipTransfer {
-		return
+		return nil
 	}
-	core.Transfer(from, to, amount)
+	return vm.Transfer(from, to, amount)
 }
 
-func (self *Env) Call(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *Env) vm(addr *common.Address, data []byte, gas, price, value *big.Int) *core.Execution {
+	exec := core.NewExecution(self, addr, data, gas, price, value)
+
+	return exec
+}
+
+func (self *Env) Call(caller vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
 	if self.vmTest && self.depth > 0 {
 		caller.ReturnGas(gas, price)
 
 		return nil, nil
 	}
-	ret, err := core.Call(self, caller, addr, data, gas, price, value)
-	self.Gas = gas
+	exe := self.vm(&addr, data, gas, price, value)
+	ret, err := exe.Call(addr, caller)
+	self.Gas = exe.Gas
 
 	return ret, err
 
 }
-func (self *Env) CallCode(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *Env) CallCode(caller vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
 	if self.vmTest && self.depth > 0 {
 		caller.ReturnGas(gas, price)
 
 		return nil, nil
 	}
-	return core.CallCode(self, caller, addr, data, gas, price, value)
+
+	caddr := caller.Address()
+	exe := self.vm(&caddr, data, gas, price, value)
+	return exe.Call(addr, caller)
 }
 
-func (self *Env) Create(caller vm.ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
+func (self *Env) Create(caller vm.ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
+	exe := self.vm(nil, data, gas, price, value)
 	if self.vmTest {
 		caller.ReturnGas(gas, price)
 
 		nonce := self.state.GetNonce(caller.Address())
 		obj := self.state.GetOrNewStateObject(crypto.CreateAddress(caller.Address(), nonce))
 
-		return nil, obj.Address(), nil
+		return nil, nil, obj
 	} else {
-		return core.Create(self, caller, data, gas, price, value)
+		return exe.Create(caller)
 	}
 }
 

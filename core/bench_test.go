@@ -23,12 +23,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/ethdb"
+	"github.com/chattynet/chatty/event"
+	"github.com/chattynet/chatty/params"
 )
 
 func BenchmarkInsertChain_empty_memdb(b *testing.B) {
@@ -144,7 +144,7 @@ func genUncles(i int, gen *BlockGen) {
 
 func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Create the database in memory or in a temporary directory.
-	var db ethdb.Database
+	var db common.Database
 	if !disk {
 		db, _ = ethdb.NewMemDatabase()
 	} else {
@@ -162,13 +162,14 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 
 	// Generate a chain of b.N blocks using the supplied block
 	// generator function.
-	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{benchRootAddr, benchRootFunds})
-	chain, _ := GenerateChain(genesis, db, b.N, gen)
+	genesis := WriteGenesisBlockForTesting(db, benchRootAddr, benchRootFunds)
+	chain := GenerateChain(genesis, db, b.N, gen)
 
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
 	evmux := new(event.TypeMux)
-	chainman, _ := NewBlockChain(db, FakePow{}, evmux)
+	chainman, _ := NewChainManager(db, FakePow{}, evmux)
+	chainman.SetProcessor(NewBlockProcessor(db, FakePow{}, chainman, evmux))
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()

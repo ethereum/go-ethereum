@@ -21,7 +21,7 @@ package p2p
 import (
 	"net"
 
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/chattynet/chatty/metrics"
 )
 
 var (
@@ -38,14 +38,8 @@ type meteredConn struct {
 }
 
 // newMeteredConn creates a new metered connection, also bumping the ingress or
-// egress connection meter. If the metrics system is disabled, this function
-// returns the original object.
+// egress connection meter.
 func newMeteredConn(conn net.Conn, ingress bool) net.Conn {
-	// Short circuit if metrics are disabled
-	if !metrics.Enabled {
-		return conn
-	}
-	// Otherwise bump the connection counters and wrap the connection
 	if ingress {
 		ingressConnectMeter.Mark(1)
 	} else {

@@ -24,7 +24,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/chattynet/chatty/rlp"
 )
 
 // Value can hold values of certain basic types and provides ways to

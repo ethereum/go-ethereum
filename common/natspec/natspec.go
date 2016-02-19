@@ -22,11 +22,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/httpclient"
-	"github.com/ethereum/go-ethereum/common/registrar"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/common/docserver"
+	"github.com/chattynet/chatty/common/registrar"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/xeth"
 	"github.com/robertkrimen/otto"
 )
 
@@ -43,7 +43,7 @@ type NatSpec struct {
 // the implementation is frontend friendly in that it always gives back
 // a notice that is safe to display
 // :FIXME: the second return value is an error, which can be used to fine-tune bahaviour
-func GetNotice(xeth *xeth.XEth, tx string, http *httpclient.HTTPClient) (notice string) {
+func GetNotice(xeth *xeth.XEth, tx string, http *docserver.DocServer) (notice string) {
 	ns, err := New(xeth, tx, http)
 	if err != nil {
 		if ns == nil {
@@ -83,7 +83,7 @@ type contractInfo struct {
 	DeveloperDoc  json.RawMessage `json:"developerDoc"`
 }
 
-func New(xeth *xeth.XEth, jsontx string, http *httpclient.HTTPClient) (self *NatSpec, err error) {
+func New(xeth *xeth.XEth, jsontx string, http *docserver.DocServer) (self *NatSpec, err error) {
 
 	// extract contract address from tx
 	var tx jsonTx
@@ -104,7 +104,7 @@ func New(xeth *xeth.XEth, jsontx string, http *httpclient.HTTPClient) (self *Nat
 }
 
 // also called by admin.contractInfo.get
-func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, client *httpclient.HTTPClient) (content []byte, err error) {
+func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, ds *docserver.DocServer) (content []byte, err error) {
 	// retrieve contract hash from state
 	codehex := xeth.CodeAt(contractAddress)
 	codeb := xeth.CodeAtBytes(contractAddress)
@@ -122,8 +122,8 @@ func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, client *httpc
 	if err != nil {
 		return
 	}
-	if client.HasScheme("bzz") {
-		content, err = client.Get("bzz://"+hash.Hex()[2:], "")
+	if ds.HasScheme("bzz") {
+		content, err = ds.Get("bzz://"+hash.Hex()[2:], "")
 		if err == nil { // non-fatal
 			return
 		}
@@ -137,7 +137,7 @@ func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, client *httpc
 	}
 
 	// get content via http client and authenticate content using hash
-	content, err = client.GetAuthContent(uri, hash)
+	content, err = ds.GetAuthContent(uri, hash)
 	if err != nil {
 		return
 	}

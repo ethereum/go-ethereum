@@ -22,8 +22,8 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/vm"
 )
 
 func main() {

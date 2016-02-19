@@ -1,21 +1,3 @@
-// Copyright 2015 The go-ethereum Authors
-// Copyright 2015 Lefteris Karapetsas <lefteris@refu.co>
-// Copyright 2015 Matthew Wampler-Doty <matthew.wampler.doty@gmail.com>
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package ethash
 
 /*
@@ -40,16 +22,16 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/pow"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/pow"
 )
 
 var (
-	maxUint256  = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
-	sharedLight = new(Light)
+	minDifficulty = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+	sharedLight   = new(Light)
 )
 
 const (
@@ -158,7 +140,7 @@ func (l *Light) Verify(block pow.Block) bool {
 	// the finalizer before the call completes.
 	_ = cache
 	// The actual check.
-	target := new(big.Int).Div(maxUint256, difficulty)
+	target := new(big.Int).Div(minDifficulty, difficulty)
 	return h256ToHash(ret.result).Big().Cmp(target) <= 0
 }
 
@@ -217,7 +199,7 @@ func (d *dag) generate() {
 		if d.dir == "" {
 			d.dir = DefaultDir
 		}
-		glog.V(logger.Info).Infof("Generating DAG for epoch %d (size %d) (%x)", d.epoch, dagSize, seedHash)
+		glog.V(logger.Info).Infof("Generating DAG for epoch %d (%x)", d.epoch, seedHash)
 		// Generate a temporary cache.
 		// TODO: this could share the cache with Light
 		cache := C.ethash_light_new_internal(cacheSize, (*C.ethash_h256_t)(unsafe.Pointer(&seedHash[0])))
@@ -238,18 +220,14 @@ func (d *dag) generate() {
 	})
 }
 
-func freeDAG(d *dag) {
-	C.ethash_full_delete(d.ptr)
-	d.ptr = nil
-}
-
-func (d *dag) Ptr() unsafe.Pointer {
-	return unsafe.Pointer(d.ptr.data)
+func freeDAG(h *dag) {
+	C.ethash_full_delete(h.ptr)
+	h.ptr = nil
 }
 
 //export ethashGoCallback
 func ethashGoCallback(percent C.unsigned) C.int {
-	glog.V(logger.Info).Infof("Generating DAG: %d%%", percent)
+	glog.V(logger.Info).Infof("Still generating DAG: %d%%", percent)
 	return 0
 }
 
@@ -295,7 +273,7 @@ func (pow *Full) getDAG(blockNum uint64) (d *dag) {
 	return d
 }
 
-func (pow *Full) Search(block pow.Block, stop <-chan struct{}, index int) (nonce uint64, mixDigest []byte) {
+func (pow *Full) Search(block pow.Block, stop <-chan struct{}) (nonce uint64, mixDigest []byte) {
 	dag := pow.getDAG(block.NumberU64())
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -308,7 +286,7 @@ func (pow *Full) Search(block pow.Block, stop <-chan struct{}, index int) (nonce
 
 	nonce = uint64(r.Int63())
 	hash := hashToH256(block.HashNoNonce())
-	target := new(big.Int).Div(maxUint256, diff)
+	target := new(big.Int).Div(minDifficulty, diff)
 	for {
 		select {
 		case <-stop:

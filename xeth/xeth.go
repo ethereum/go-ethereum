@@ -27,26 +27,26 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/chattynet/chatty/accounts"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/common/compiler"
+	"github.com/chattynet/chatty/core"
+	"github.com/chattynet/chatty/core/state"
+	"github.com/chattynet/chatty/core/types"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/eth"
+	"github.com/chattynet/chatty/event/filter"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/logger/glog"
+	"github.com/chattynet/chatty/miner"
+	"github.com/chattynet/chatty/rlp"
+	"github.com/chattynet/chatty/sqldb"
 )
 
 var (
 	filterTickerTime = 5 * time.Minute
-	defaultGasPrice  = big.NewInt(10000000000000) //150000000000
-	defaultGas       = big.NewInt(90000)          //500000
+	defaultGasPrice  = big.NewInt(10000000000000)
+	defaultGas       = big.NewInt(90000)
 	dappStorePre     = []byte("dapp-")
 	addrReg          = regexp.MustCompile(`^(0x)?[a-fA-F0-9]{40}$`)
 )
@@ -59,8 +59,24 @@ const (
 	LogFilterTy
 )
 
+func DefaultGas() *big.Int { return new(big.Int).Set(defaultGas) }
+
+func (self *XEth) DefaultGasPrice() *big.Int {
+	if self.gpo == nil {
+		self.gpo = eth.NewGasPriceOracle(self.backend)
+	}
+	return self.gpo.SuggestPrice()
+}
+
 type XEth struct {
-	quit chan struct{}
+	backend  *eth.Ethereum
+	frontend Frontend
+
+	state   *State
+	whisper *Whisper
+
+	quit          chan struct{}
+	filterManager *filter.FilterManager
 
 	logMu    sync.RWMutex
 	logQueue map[int]*logQueue
@@ -76,18 +92,16 @@ type XEth struct {
 
 	transactMu sync.Mutex
 
-	// read-only fields
-	backend       *eth.Ethereum
-	frontend      Frontend
-	agent         *miner.RemoteAgent
-	gpo           *eth.GasPriceOracle
-	state         *State
-	whisper       *Whisper
-	filterManager *filters.FilterSystem
+	agent *miner.RemoteAgent
+
+	gpo *eth.GasPriceOracle
 }
 
 func NewTest(eth *eth.Ethereum, frontend Frontend) *XEth {
-	return &XEth{backend: eth, frontend: frontend}
+	return &XEth{
+		backend:  eth,
+		frontend: frontend,
+	}
 }
 
 // New creates an XEth that uses the given frontend.
@@ -98,13 +112,12 @@ func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 		backend:          ethereum,
 		frontend:         frontend,
 		quit:             make(chan struct{}),
-		filterManager:    filters.NewFilterSystem(ethereum.EventMux()),
+		filterManager:    filter.NewFilterManager(ethereum.EventMux()),
 		logQueue:         make(map[int]*logQueue),
 		blockQueue:       make(map[int]*hashQueue),
 		transactionQueue: make(map[int]*hashQueue),
 		messages:         make(map[int]*whisperFilter),
 		agent:            miner.NewRemoteAgent(),
-		gpo:              eth.NewGasPriceOracle(ethereum),
 	}
 	if ethereum.Whisper() != nil {
 		xeth.whisper = NewWhisper(ethereum.Whisper())
@@ -113,15 +126,16 @@ func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}
-	state, _ := xeth.backend.BlockChain().State()
-	xeth.state = NewState(xeth, state)
+	xeth.state = NewState(xeth, xeth.backend.ChainManager().State())
+
 	go xeth.start()
+	go xeth.filterManager.Start()
+
 	return xeth
 }
 
 func (self *XEth) start() {
 	timer := time.NewTicker(2 * time.Second)
-	defer timer.Stop()
 done:
 	for {
 		select {
@@ -129,7 +143,7 @@ done:
 			self.logMu.Lock()
 			for id, filter := range self.logQueue {
 				if time.Since(filter.timeout) > filterTickerTime {
-					self.filterManager.Remove(id)
+					self.filterManager.UninstallFilter(id)
 					delete(self.logQueue, id)
 				}
 			}
@@ -138,7 +152,7 @@ done:
 			self.blockMu.Lock()
 			for id, filter := range self.blockQueue {
 				if time.Since(filter.timeout) > filterTickerTime {
-					self.filterManager.Remove(id)
+					self.filterManager.UninstallFilter(id)
 					delete(self.blockQueue, id)
 				}
 			}
@@ -147,7 +161,7 @@ done:
 			self.transactionMu.Lock()
 			for id, filter := range self.transactionQueue {
 				if time.Since(filter.timeout) > filterTickerTime {
-					self.filterManager.Remove(id)
+					self.filterManager.UninstallFilter(id)
 					delete(self.transactionQueue, id)
 				}
 			}
@@ -167,12 +181,8 @@ done:
 	}
 }
 
-// Stop releases any resources associated with self.
-// It may not be called more than once.
-func (self *XEth) Stop() {
+func (self *XEth) stop() {
 	close(self.quit)
-	self.filterManager.Stop()
-	self.backend.Miner().Unregister(self.agent)
 }
 
 func cAddress(a []string) []common.Address {
@@ -194,31 +204,18 @@ func cTopics(t [][]string) [][]common.Hash {
 	return topics
 }
 
-func DefaultGas() *big.Int { return new(big.Int).Set(defaultGas) }
-
-func (self *XEth) DefaultGasPrice() *big.Int {
-	return self.gpo.SuggestPrice()
-}
-
 func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }
 
 func (self *XEth) AtStateNum(num int64) *XEth {
 	var st *state.StateDB
-	var err error
 	switch num {
 	case -2:
 		st = self.backend.Miner().PendingState().Copy()
 	default:
 		if block := self.getBlockByHeight(num); block != nil {
-			st, err = state.New(block.Root(), self.backend.ChainDb())
-			if err != nil {
-				return nil
-			}
+			st = state.New(block.Root(), self.backend.ChainDb())
 		} else {
-			st, err = state.New(self.backend.BlockChain().GetBlockByNumber(0).Root(), self.backend.ChainDb())
-			if err != nil {
-				return nil
-			}
+			st = state.New(self.backend.ChainManager().GetBlockByNumber(0).Root(), self.backend.ChainDb())
 		}
 	}
 
@@ -248,41 +245,30 @@ func (self *XEth) State() *State { return self.state }
 func (self *XEth) UpdateState() (wait chan *big.Int) {
 	wait = make(chan *big.Int)
 	go func() {
-		eventSub := self.backend.EventMux().Subscribe(core.ChainHeadEvent{})
-		defer eventSub.Unsubscribe()
-
+		sub := self.backend.EventMux().Subscribe(core.ChainHeadEvent{})
 		var m, n *big.Int
 		var ok bool
-
-		eventCh := eventSub.Chan()
+	out:
 		for {
 			select {
-			case event, ok := <-eventCh:
-				if !ok {
-					// Event subscription closed, set the channel to nil to stop spinning
-					eventCh = nil
-					continue
-				}
-				// A real event arrived, process if new head block assignment
-				if event, ok := event.Data.(core.ChainHeadEvent); ok {
-					m = event.Block.Number()
+			case event := <-sub.Chan():
+				ev, ok := event.(core.ChainHeadEvent)
+				if ok {
+					m = ev.Block.Number()
 					if n != nil && n.Cmp(m) < 0 {
 						wait <- n
 						n = nil
 					}
-					statedb, err := state.New(event.Block.Root(), self.backend.ChainDb())
-					if err != nil {
-						glog.V(logger.Error).Infoln("Could not create new state: %v", err)
-						return
-					}
+					statedb := state.New(ev.Block.Root(), self.backend.ChainDb())
 					self.state = NewState(self, statedb)
 				}
 			case n, ok = <-wait:
 				if !ok {
-					return
+					break out
 				}
 			}
 		}
+		sub.Unsubscribe()
 	}()
 	return
 }
@@ -305,28 +291,61 @@ func (self *XEth) getBlockByHeight(height int64) *types.Block {
 		num = uint64(height)
 	}
 
-	return self.backend.BlockChain().GetBlockByNumber(num)
+	return self.backend.ChainManager().GetBlockByNumber(num)
 }
 
 func (self *XEth) BlockByHash(strHash string) *Block {
 	hash := common.HexToHash(strHash)
-	block := self.backend.BlockChain().GetBlock(hash)
+	block := self.backend.ChainManager().GetBlock(hash)
 
 	return NewBlock(block)
 }
 
 func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 	hash := common.HexToHash(strHash)
-	block := self.backend.BlockChain().GetBlock(hash)
+	block := self.backend.ChainManager().GetBlock(hash)
 
 	return block
 }
 
-func (self *XEth) EthTransactionByHash(hash string) (*types.Transaction, common.Hash, uint64, uint64) {
-	if tx, hash, number, index := core.GetTransaction(self.backend.ChainDb(), common.HexToHash(hash)); tx != nil {
-		return tx, hash, number, index
+func (self *XEth) EthTransactionByHash(hash string) (tx *types.Transaction, blhash common.Hash, blnum *big.Int, txi uint64) {
+	// Due to increasing return params and need to determine if this is from transaction pool or
+	// some chain, this probably needs to be refactored for more expressiveness
+	data, _ := self.backend.ChainDb().Get(common.FromHex(hash))
+	if len(data) != 0 {
+		dtx := new(types.Transaction)
+		if err := rlp.DecodeBytes(data, dtx); err != nil {
+			glog.V(logger.Error).Infoln(err)
+			return
+		}
+		tx = dtx
+	} else { // check pending transactions
+		tx = self.backend.TxPool().GetTransaction(common.HexToHash(hash))
 	}
-	return self.backend.TxPool().GetTransaction(common.HexToHash(hash)), common.Hash{}, 0, 0
+
+	// meta
+	var txExtra struct {
+		BlockHash  common.Hash
+		BlockIndex uint64
+		Index      uint64
+	}
+
+	v, dberr := self.backend.ChainDb().Get(append(common.FromHex(hash), 0x0001))
+	// TODO check specifically for ErrNotFound
+	if dberr != nil {
+		return
+	}
+	r := bytes.NewReader(v)
+	err := rlp.Decode(r, &txExtra)
+	if err == nil {
+		blhash = txExtra.BlockHash
+		blnum = big.NewInt(int64(txExtra.BlockIndex))
+		txi = txExtra.Index
+	} else {
+		glog.V(logger.Error).Infoln(err)
+	}
+
+	return
 }
 
 func (self *XEth) BlockByNumber(num int64) *Block {
@@ -337,16 +356,12 @@ func (self *XEth) EthBlockByNumber(num int64) *types.Block {
 	return self.getBlockByHeight(num)
 }
 
-func (self *XEth) Td(hash common.Hash) *big.Int {
-	return self.backend.BlockChain().GetTd(hash)
-}
-
 func (self *XEth) CurrentBlock() *types.Block {
-	return self.backend.BlockChain().CurrentBlock()
+	return self.backend.ChainManager().CurrentBlock()
 }
 
 func (self *XEth) GetBlockReceipts(bhash common.Hash) types.Receipts {
-	return core.GetBlockReceipts(self.backend.ChainDb(), bhash)
+	return self.backend.BlockProcessor().GetBlockReceipts(bhash)
 }
 
 func (self *XEth) GetTxReceipt(txhash common.Hash) *types.Receipt {
@@ -354,7 +369,7 @@ func (self *XEth) GetTxReceipt(txhash common.Hash) *types.Receipt {
 }
 
 func (self *XEth) GasLimit() *big.Int {
-	return self.backend.BlockChain().GasLimit()
+	return self.backend.ChainManager().GasLimit()
 }
 
 func (self *XEth) Block(v interface{}) *Block {
@@ -377,6 +392,17 @@ func (self *XEth) Accounts() []string {
 		accountAddresses[i] = ac.Address.Hex()
 	}
 	return accountAddresses
+}
+
+func (self *XEth) AccountTransactions(accts []string) sqldb.SQL_Transactions {
+	transactions, err := self.backend.SQLDB().SelectTransactionsForAccounts(accts)
+
+  // TODO: refactor xeth for proper error handling
+	if err != nil {
+		fmt.Println("Error reading transactions from SQL", err)
+	}
+
+	return transactions
 }
 
 // accessor for solidity compiler.
@@ -434,7 +460,7 @@ func (self *XEth) ClientVersion() string {
 func (self *XEth) SetMining(shouldmine bool, threads int) bool {
 	ismining := self.backend.IsMining()
 	if shouldmine && !ismining {
-		err := self.backend.StartMining(threads, "")
+		err := self.backend.StartMining(threads)
 		return err == nil
 	}
 	if ismining && !shouldmine {
@@ -486,7 +512,7 @@ func (self *XEth) IsContract(address string) bool {
 }
 
 func (self *XEth) UninstallFilter(id int) bool {
-	defer self.filterManager.Remove(id)
+	defer self.filterManager.UninstallFilter(id)
 
 	if _, ok := self.logQueue[id]; ok {
 		self.logMu.Lock()
@@ -514,22 +540,22 @@ func (self *XEth) NewLogFilter(earliest, latest int64, skip, max int, address []
 	self.logMu.Lock()
 	defer self.logMu.Unlock()
 
-	filter := filters.New(self.backend.ChainDb())
-	id := self.filterManager.Add(filter)
-	self.logQueue[id] = &logQueue{timeout: time.Now()}
-
-	filter.SetBeginBlock(earliest)
-	filter.SetEndBlock(latest)
-	filter.SetAddresses(cAddress(address))
+	var id int
+	filter := core.NewFilter(self.backend)
+	filter.SetEarliestBlock(earliest)
+	filter.SetLatestBlock(latest)
+	filter.SetSkip(skip)
+	filter.SetMax(max)
+	filter.SetAddress(cAddress(address))
 	filter.SetTopics(cTopics(topics))
-	filter.LogsCallback = func(logs vm.Logs) {
+	filter.LogsCallback = func(logs state.Logs) {
 		self.logMu.Lock()
 		defer self.logMu.Unlock()
 
-		if queue := self.logQueue[id]; queue != nil {
-			queue.add(logs...)
-		}
+		self.logQueue[id].add(logs...)
 	}
+	id = self.filterManager.InstallFilter(filter)
+	self.logQueue[id] = &logQueue{timeout: time.Now()}
 
 	return id
 }
@@ -538,18 +564,16 @@ func (self *XEth) NewTransactionFilter() int {
 	self.transactionMu.Lock()
 	defer self.transactionMu.Unlock()
 
-	filter := filters.New(self.backend.ChainDb())
-	id := self.filterManager.Add(filter)
-	self.transactionQueue[id] = &hashQueue{timeout: time.Now()}
-
+	var id int
+	filter := core.NewFilter(self.backend)
 	filter.TransactionCallback = func(tx *types.Transaction) {
 		self.transactionMu.Lock()
 		defer self.transactionMu.Unlock()
 
-		if queue := self.transactionQueue[id]; queue != nil {
-			queue.add(tx.Hash())
-		}
+		self.transactionQueue[id].add(tx.Hash())
 	}
+	id = self.filterManager.InstallFilter(filter)
+	self.transactionQueue[id] = &hashQueue{timeout: time.Now()}
 	return id
 }
 
@@ -557,18 +581,16 @@ func (self *XEth) NewBlockFilter() int {
 	self.blockMu.Lock()
 	defer self.blockMu.Unlock()
 
-	filter := filters.New(self.backend.ChainDb())
-	id := self.filterManager.Add(filter)
-	self.blockQueue[id] = &hashQueue{timeout: time.Now()}
-
-	filter.BlockCallback = func(block *types.Block, logs vm.Logs) {
+	var id int
+	filter := core.NewFilter(self.backend)
+	filter.BlockCallback = func(block *types.Block, logs state.Logs) {
 		self.blockMu.Lock()
 		defer self.blockMu.Unlock()
 
-		if queue := self.blockQueue[id]; queue != nil {
-			queue.add(block.Hash())
-		}
+		self.blockQueue[id].add(block.Hash())
 	}
+	id = self.filterManager.InstallFilter(filter)
+	self.blockQueue[id] = &hashQueue{timeout: time.Now()}
 	return id
 }
 
@@ -584,7 +606,7 @@ func (self *XEth) GetFilterType(id int) byte {
 	return UnknownFilterTy
 }
 
-func (self *XEth) LogFilterChanged(id int) vm.Logs {
+func (self *XEth) LogFilterChanged(id int) state.Logs {
 	self.logMu.Lock()
 	defer self.logMu.Unlock()
 
@@ -614,8 +636,8 @@ func (self *XEth) TransactionFilterChanged(id int) []common.Hash {
 	return nil
 }
 
-func (self *XEth) Logs(id int) vm.Logs {
-	filter := self.filterManager.Get(id)
+func (self *XEth) Logs(id int) state.Logs {
+	filter := self.filterManager.GetFilter(id)
 	if filter != nil {
 		return filter.Find()
 	}
@@ -623,11 +645,13 @@ func (self *XEth) Logs(id int) vm.Logs {
 	return nil
 }
 
-func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []string, topics [][]string) vm.Logs {
-	filter := filters.New(self.backend.ChainDb())
-	filter.SetBeginBlock(earliest)
-	filter.SetEndBlock(latest)
-	filter.SetAddresses(cAddress(address))
+func (self *XEth) AllLogs(earliest, latest int64, skip, max int, address []string, topics [][]string) state.Logs {
+	filter := core.NewFilter(self.backend)
+	filter.SetEarliestBlock(earliest)
+	filter.SetLatestBlock(latest)
+	filter.SetSkip(skip)
+	filter.SetMax(max)
+	filter.SetAddress(cAddress(address))
 	filter.SetTopics(cTopics(topics))
 
 	return filter.Find()
@@ -775,7 +799,7 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 		return "", err
 	}
 
-	err = self.backend.TxPool().Add(tx)
+	err = self.backend.TxPool().Add(tx, true)
 	if err != nil {
 		return "", err
 	}
@@ -810,6 +834,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	}
 
 	from.SetBalance(common.MaxBig)
+	from.SetGasLimit(common.MaxBig)
 
 	msg := callmsg{
 		from:     from,
@@ -824,7 +849,7 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	}
 
 	if msg.gas.Cmp(big.NewInt(0)) == 0 {
-		msg.gas = big.NewInt(50000000)
+		msg.gas = DefaultGas()
 	}
 
 	if msg.gasPrice.Cmp(big.NewInt(0)) == 0 {
@@ -832,9 +857,9 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 	}
 
 	header := self.CurrentBlock().Header()
-	vmenv := core.NewEnv(statedb, self.backend.BlockChain(), msg, header)
-	gp := new(core.GasPool).AddGas(common.MaxBig)
-	res, gas, err := core.ApplyMessage(vmenv, msg, gp)
+	vmenv := core.NewEnv(statedb, self.backend.ChainManager(), msg, header)
+
+	res, gas, err := core.ApplyMessage(vmenv, msg, from)
 	return common.ToHex(res), gas.String(), err
 }
 
@@ -879,60 +904,6 @@ func (self *XEth) Frontend() Frontend {
 	return self.frontend
 }
 
-func (self *XEth) SignTransaction(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (*types.Transaction, error) {
-	if len(toStr) > 0 && toStr != "0x" && !isAddress(toStr) {
-		return nil, errors.New("Invalid address")
-	}
-
-	var (
-		from             = common.HexToAddress(fromStr)
-		to               = common.HexToAddress(toStr)
-		value            = common.Big(valueStr)
-		gas              *big.Int
-		price            *big.Int
-		data             []byte
-		contractCreation bool
-	)
-
-	if len(gasStr) == 0 {
-		gas = DefaultGas()
-	} else {
-		gas = common.Big(gasStr)
-	}
-
-	if len(gasPriceStr) == 0 {
-		price = self.DefaultGasPrice()
-	} else {
-		price = common.Big(gasPriceStr)
-	}
-
-	data = common.FromHex(codeStr)
-	if len(toStr) == 0 {
-		contractCreation = true
-	}
-
-	var nonce uint64
-	if len(nonceStr) != 0 {
-		nonce = common.Big(nonceStr).Uint64()
-	} else {
-		state := self.backend.TxPool().State()
-		nonce = state.GetNonce(from)
-	}
-	var tx *types.Transaction
-	if contractCreation {
-		tx = types.NewContractCreation(nonce, value, gas, price, data)
-	} else {
-		tx = types.NewTransaction(nonce, to, value, gas, price, data)
-	}
-
-	signed, err := self.sign(tx, from, false)
-	if err != nil {
-		return nil, err
-	}
-
-	return signed, nil
-}
-
 func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 
 	// this minimalistic recoding is enough (works for natspec.js)
@@ -972,6 +943,11 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	if len(toStr) == 0 {
 		contractCreation = true
 	}
+
+    if gas.Cmp(big.NewInt(90000)) < 0 {
+        glog.Infof("(Gas set to %v for hash: %x. Miners can ignore transactions with a low amount of gas.", gas, toStr)
+    }
+
 
 	// 2015-05-18 Is this still needed?
 	// TODO if no_private_key then
@@ -1017,7 +993,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	if err != nil {
 		return "", err
 	}
-	if err = self.backend.TxPool().Add(signed); err != nil {
+	if err = self.backend.TxPool().Add(signed, true); err != nil {
 		return "", err
 	}
 
@@ -1059,24 +1035,16 @@ func (m callmsg) Value() *big.Int               { return m.value }
 func (m callmsg) Data() []byte                  { return m.data }
 
 type logQueue struct {
-	mu sync.Mutex
-
-	logs    vm.Logs
+	logs    state.Logs
 	timeout time.Time
 	id      int
 }
 
-func (l *logQueue) add(logs ...*vm.Log) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
+func (l *logQueue) add(logs ...*state.Log) {
 	l.logs = append(l.logs, logs...)
 }
 
-func (l *logQueue) get() vm.Logs {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
+func (l *logQueue) get() state.Logs {
 	l.timeout = time.Now()
 	tmp := l.logs
 	l.logs = nil
@@ -1084,24 +1052,16 @@ func (l *logQueue) get() vm.Logs {
 }
 
 type hashQueue struct {
-	mu sync.Mutex
-
 	hashes  []common.Hash
 	timeout time.Time
 	id      int
 }
 
 func (l *hashQueue) add(hashes ...common.Hash) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	l.hashes = append(l.hashes, hashes...)
 }
 
 func (l *hashQueue) get() []common.Hash {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	l.timeout = time.Now()
 	tmp := l.hashes
 	l.hashes = nil

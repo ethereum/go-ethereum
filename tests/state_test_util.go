@@ -25,13 +25,13 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core"
+	"github.com/chattynet/chatty/core/state"
+	"github.com/chattynet/chatty/core/vm"
+	"github.com/chattynet/chatty/crypto"
+	"github.com/chattynet/chatty/ethdb"
+	"github.com/chattynet/chatty/logger/glog"
 )
 
 func RunStateTestWithReader(r io.Reader, skipTests []string) error {
@@ -103,7 +103,7 @@ func BenchStateTest(p string, conf bconf, b *testing.B) error {
 func benchStateTest(test VmTest, env map[string]string, b *testing.B) {
 	b.StopTimer()
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)
@@ -128,7 +128,6 @@ func runStateTests(tests map[string]VmTest, skipTests []string) error {
 			return nil
 		}
 
-		//fmt.Println("StateTest name:", name)
 		if err := runStateTest(test); err != nil {
 			return fmt.Errorf("%s: %s\n", name, err.Error())
 		}
@@ -142,7 +141,7 @@ func runStateTests(tests map[string]VmTest, skipTests []string) error {
 
 func runStateTest(test VmTest) error {
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
 		statedb.SetStateObject(obj)
@@ -168,12 +167,12 @@ func runStateTest(test VmTest) error {
 		ret []byte
 		// gas  *big.Int
 		// err  error
-		logs vm.Logs
+		logs state.Logs
 	)
 
 	ret, logs, _, _ = RunState(statedb, env, test.Transaction)
 
-	// Compare expected and actual return
+	// // Compare expected  and actual return
 	rexp := common.FromHex(test.Out)
 	if bytes.Compare(rexp, ret) != 0 {
 		return fmt.Errorf("return failed. Expected %x, got %x\n", rexp, ret)
@@ -182,6 +181,9 @@ func runStateTest(test VmTest) error {
 	// check post state
 	for addr, account := range test.Post {
 		obj := statedb.GetStateObject(common.HexToAddress(addr))
+		if obj == nil {
+			continue
+		}
 
 		if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
 			return fmt.Errorf("(%x) balance failed. Expected %v, got %v => %v\n", obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
@@ -201,9 +203,9 @@ func runStateTest(test VmTest) error {
 		}
 	}
 
-	root, _ := statedb.Commit()
-	if common.HexToHash(test.PostStateRoot) != root {
-		return fmt.Errorf("Post state root error. Expected %s, got %x", test.PostStateRoot, root)
+	statedb.Sync()
+	if common.HexToHash(test.PostStateRoot) != statedb.Root() {
+		return fmt.Errorf("Post state root error. Expected %s, got %x", test.PostStateRoot, statedb.Root())
 	}
 
 	// check logs
@@ -216,13 +218,14 @@ func runStateTest(test VmTest) error {
 	return nil
 }
 
-func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Logs, *big.Int, error) {
+func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.Logs, *big.Int, error) {
 	var (
 		data  = common.FromHex(tx["data"])
 		gas   = common.Big(tx["gasLimit"])
 		price = common.Big(tx["gasPrice"])
 		value = common.Big(tx["value"])
 		nonce = common.Big(tx["nonce"]).Uint64()
+		caddr = common.HexToAddress(env["currentCoinbase"])
 	)
 
 	var to *common.Address
@@ -234,18 +237,19 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Log
 	vm.Precompiled = vm.PrecompiledContracts()
 
 	snapshot := statedb.Copy()
-	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
+	coinbase := statedb.GetOrNewStateObject(caddr)
+	coinbase.SetGasLimit(common.Big(env["currentGasLimit"]))
 
 	key, _ := hex.DecodeString(tx["secretKey"])
 	addr := crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
 	message := NewMessage(addr, to, data, value, gas, price, nonce)
 	vmenv := NewEnvFromMap(statedb, env, tx)
 	vmenv.origin = addr
-	ret, _, err := core.ApplyMessage(vmenv, message, gaspool)
-	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || core.IsGasLimitErr(err) {
+	ret, _, err := core.ApplyMessage(vmenv, message, coinbase)
+	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || state.IsGasLimitErr(err) {
 		statedb.Set(snapshot)
 	}
-	statedb.Commit()
+	statedb.SyncObjects()
 
 	return ret, vmenv.state.Logs(), vmenv.Gas, err
 }

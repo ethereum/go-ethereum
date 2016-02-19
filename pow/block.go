@@ -19,8 +19,8 @@ package pow
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/core/types"
 )
 
 type Block interface {

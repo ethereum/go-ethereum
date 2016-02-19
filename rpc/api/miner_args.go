@@ -21,8 +21,8 @@ import (
 
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/rpc/shared"
 )
 
 type StartMinerArgs struct {
@@ -110,12 +110,12 @@ func (args *SetEtherbaseArgs) UnmarshalJSON(b []byte) (err error) {
 	if addr, ok := obj[0].(string); ok {
 		args.Etherbase = common.HexToAddress(addr)
 		if (args.Etherbase == common.Address{}) {
-			return shared.NewInvalidTypeError("Etherbase", "not a valid address")
+			return shared.NewInvalidTypeError("Chattybase", "not a valid address")
 		}
 		return nil
 	}
 
-	return shared.NewInvalidTypeError("Etherbase", "not a string")
+	return shared.NewInvalidTypeError("Chattybase", "not a string")
 }
 
 type MakeDAGArgs struct {

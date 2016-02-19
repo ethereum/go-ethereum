@@ -22,10 +22,10 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/pow"
+	"github.com/chattynet/chatty/common"
+	"github.com/chattynet/chatty/crypto/sha3"
+	"github.com/chattynet/chatty/logger"
+	"github.com/chattynet/chatty/pow"
 )
 
 var powlogger = logger.NewLogger("POW")
@@ -48,7 +48,7 @@ func (pow *EasyPow) Turbo(on bool) {
 	pow.turbo = on
 }
 
-func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}, index int) (uint64, []byte) {
+func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	hash := block.HashNoNonce()
 	diff := block.Difficulty()
