@@ -192,11 +192,9 @@ func concatKDF(hash hash.Hash, z, s1 []byte, kdLen int) (k []byte, err error) {
 // messageTag computes the MAC of a message (called the tag) as per
 // SEC 1, 3.5.
 func messageTag(hash func() hash.Hash, km, msg, shared []byte) []byte {
-	if shared == nil {
-		shared = make([]byte, 0)
-	}
 	mac := hmac.New(hash, km)
 	mac.Write(msg)
+	mac.Write(shared)
 	tag := mac.Sum(nil)
 	return tag
 }
@@ -243,9 +241,11 @@ func symDecrypt(rand io.Reader, params *ECIESParams, key, ct []byte) (m []byte, 
 	return
 }
 
-// Encrypt encrypts a message using ECIES as specified in SEC 1, 5.1. If
-// the shared information parameters aren't being used, they should be
-// nil.
+// Encrypt encrypts a message using ECIES as specified in SEC 1, 5.1.
+//
+// s1 and s2 contain shared information that is not part of the resulting
+// ciphertext. s1 is fed into key derivation, s2 is fed into the MAC. If the
+// shared information parameters aren't being used, they should be nil.
 func Encrypt(rand io.Reader, pub *PublicKey, m, s1, s2 []byte) (ct []byte, err error) {
 	params := pub.Params
 	if params == nil {

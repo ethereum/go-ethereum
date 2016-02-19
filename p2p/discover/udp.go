@@ -67,6 +67,8 @@ type (
 		Version    uint
 		From, To   rpcEndpoint
 		Expiration uint64
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	// pong is the reply to ping.
@@ -78,18 +80,24 @@ type (
 
 		ReplyTok   []byte // This contains the hash of the ping packet.
 		Expiration uint64 // Absolute timestamp at which the packet becomes invalid.
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	// findnode is a query for nodes close to the given target.
 	findnode struct {
 		Target     NodeID // doesn't need to be an actual public key
 		Expiration uint64
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	// reply to findnode
 	neighbors struct {
 		Nodes      []rpcNode
 		Expiration uint64
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	rpcNode struct {
@@ -522,7 +530,8 @@ func decodePacket(buf []byte) (packet, NodeID, []byte, error) {
 	default:
 		return nil, fromID, hash, fmt.Errorf("unknown type: %d", ptype)
 	}
-	err = rlp.DecodeBytes(sigdata[1:], req)
+	s := rlp.NewStream(bytes.NewReader(sigdata[1:]), 0)
+	err = s.Decode(req)
 	return req, fromID, hash, err
 }
 
