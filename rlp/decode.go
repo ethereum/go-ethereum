@@ -63,8 +63,9 @@ type Decoder interface {
 // must contain an element for each decoded field. Decode returns an
 // error if there are too few or too many elements.
 //
-// The decoding of struct fields honours two struct tags, "nil" and
-// "..". The "nil" tag applies to pointer-typed fields and changes the
+// The decoding of struct fields honours two struct tags, "tail" and
+// "nil". For an explanation of "tail", see the example.
+// The "nil" tag applies to pointer-typed fields and changes the
 // decoding rules for the field such that input values of size zero
 // decode as a nil pointer. This tag can be useful when decoding
 // recursive types.
@@ -283,8 +284,8 @@ func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
 		dec = func(s *Stream, val reflect.Value) error {
 			return decodeListArray(s, val, etypeinfo.decoder)
 		}
-	case tag.dotdot:
-		// A slice with .. tag can occur as the last field
+	case tag.tail:
+		// A slice with "tail" tag can occur as the last field
 		// of a struct and is upposed to swallow all remaining
 		// list elements. The struct decoder already called s.List,
 		// proceed directly to decoding the elements.

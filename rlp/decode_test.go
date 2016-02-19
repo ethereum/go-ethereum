@@ -312,19 +312,24 @@ type recstruct struct {
 	Child *recstruct `rlp:"nil"`
 }
 
-type invalidDotDot1 struct {
-	A uint `rlp:".."`
+type invalidTail1 struct {
+	A uint `rlp:"tail"`
 	B string
 }
 
-type invalidDotDot2 struct {
+type invalidTail2 struct {
 	A uint
-	B string `rlp:".."`
+	B string `rlp:"tail"`
 }
 
-type dotdotRaw struct {
-	A      uint
-	DotDot []RawValue `rlp:".."`
+type tailRaw struct {
+	A    uint
+	Tail []RawValue `rlp:"tail"`
+}
+
+type tailUint struct {
+	A    uint
+	Tail []uint `rlp:"tail"`
 }
 
 var (
@@ -454,20 +459,35 @@ var decodeTests = []decodeTest{
 	},
 	{
 		input: "C0",
-		ptr:   new(invalidDotDot1),
-		error: "rlp: invalid struct tag \"..\" for rlp.invalidDotDot1.A (must be on last field)",
+		ptr:   new(invalidTail1),
+		error: "rlp: invalid struct tag \"tail\" for rlp.invalidTail1.A (must be on last field)",
 	},
 	{
 		input: "C0",
-		ptr:   new(invalidDotDot2),
-		error: "rlp: invalid struct tag \"..\" for rlp.invalidDotDot2.B (field type is not slice)",
+		ptr:   new(invalidTail2),
+		error: "rlp: invalid struct tag \"tail\" for rlp.invalidTail2.B (field type is not slice)",
+	},
+	{
+		input: "C50102C20102",
+		ptr:   new(tailUint),
+		error: "rlp: expected input string or byte for uint, decoding into (rlp.tailUint).Tail[1]",
 	},
 
-	// struct tag ".."
+	// struct tag "tail"
 	{
 		input: "C3010203",
-		ptr:   new(dotdotRaw),
-		value: dotdotRaw{A: 1, DotDot: []RawValue{unhex("02"), unhex("03")}},
+		ptr:   new(tailRaw),
+		value: tailRaw{A: 1, Tail: []RawValue{unhex("02"), unhex("03")}},
+	},
+	{
+		input: "C20102",
+		ptr:   new(tailRaw),
+		value: tailRaw{A: 1, Tail: []RawValue{unhex("02")}},
+	},
+	{
+		input: "C101",
+		ptr:   new(tailRaw),
+		value: tailRaw{A: 1, Tail: []RawValue{}},
 	},
 
 	// RawValue

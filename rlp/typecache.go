@@ -38,10 +38,10 @@ type tags struct {
 	// rlp:"nil" controls whether empty input results in a nil pointer.
 	nilOK bool
 
-	// rlp:".." controls whether this field swallows additional list
+	// rlp:"tail" controls whether this field swallows additional list
 	// elements. It can only be set for the last field, which must be
-	// a slice type.
-	dotdot bool
+	// of slice type.
+	tail bool
 }
 
 type typekey struct {
@@ -97,14 +97,9 @@ type field struct {
 func structFields(typ reflect.Type) (fields []field, err error) {
 	for i := 0; i < typ.NumField(); i++ {
 		if f := typ.Field(i); f.PkgPath == "" { // exported
-			tags := parseStructTag(f.Tag.Get("rlp"))
-			if tags.dotdot {
-				if i != typ.NumField()-1 {
-					return nil, fmt.Errorf(`rlp: invalid struct tag ".." for %v.%s (must be on last field)`, typ, f.Name)
-				}
-				if f.Type.Kind() != reflect.Slice {
-					return nil, fmt.Errorf(`rlp: invalid struct tag ".." for %v.%s (field type is not slice)`, typ, f.Name)
-				}
+			tags, err := parseStructTag(typ, i)
+			if err != nil {
+				return nil, err
 			}
 			info, err := cachedTypeInfo1(f.Type, tags)
 			if err != nil {
@@ -116,11 +111,27 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 	return fields, nil
 }
 
-func parseStructTag(tag string) tags {
-	return tags{
-		nilOK:  strings.Contains(tag, "nil"),
-		dotdot: strings.Contains(tag, ".."),
+func parseStructTag(typ reflect.Type, fi int) (tags, error) {
+	f := typ.Field(fi)
+	var ts tags
+	for _, t := range strings.Split(f.Tag.Get("rlp"), ",") {
+		switch t = strings.TrimSpace(t); t {
+		case "":
+		case "nil":
+			ts.nilOK = true
+		case "tail":
+			ts.tail = true
+			if fi != typ.NumField()-1 {
+				return ts, fmt.Errorf(`rlp: invalid struct tag "tail" for %v.%s (must be on last field)`, typ, f.Name)
+			}
+			if f.Type.Kind() != reflect.Slice {
+				return ts, fmt.Errorf(`rlp: invalid struct tag "tail" for %v.%s (field type is not slice)`, typ, f.Name)
+			}
+		default:
+			return ts, fmt.Errorf("rlp: unknown struct tag %q on %v.%s", t, typ, f.Name)
+		}
 	}
+	return ts, nil
 }
 
 func genTypeInfo(typ reflect.Type, tags tags) (info *typeinfo, err error) {

@@ -513,7 +513,7 @@ func makeSliceWriter(typ reflect.Type, ts tags) (writer, error) {
 		return nil, err
 	}
 	writer := func(val reflect.Value, w *encbuf) error {
-		if !ts.dotdot {
+		if !ts.tail {
 			defer w.listEnd(w.list())
 		}
 		vlen := val.Len()
