@@ -12,10 +12,14 @@ func (self *_parser) parseIdentifier() *ast.Identifier {
 	literal := self.literal
 	idx := self.idx
 	self.next()
-	return &ast.Identifier{
+	comments := self.findComments(false)
+	exp := &ast.Identifier{
 		Name: literal,
 		Idx:  idx,
 	}
+
+	self.commentMap.AddComments(exp, comments, ast.TRAILING)
+	return exp
 }
 
 func (self *_parser) parsePrimaryExpression() ast.Expression {
@@ -196,11 +200,20 @@ func (self *_parser) parseVariableDeclarationList(var_ file.Idx) []ast.Expressio
 	var list []ast.Expression
 
 	for {
-		list = append(list, self.parseVariableDeclaration(&declarationList))
+		comments := self.findComments(false)
+
+		decl := self.parseVariableDeclaration(&declarationList)
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(decl, comments, ast.LEADING)
+			self.commentMap.AddComments(decl, self.findComments(false), ast.TRAILING)
+		}
+
+		list = append(list, decl)
 		if self.token != token.COMMA {
 			break
 		}
 		self.next()
+
 	}
 
 	self.scope.declare(&ast.VariableDeclaration{
@@ -211,10 +224,13 @@ func (self *_parser) parseVariableDeclarationList(var_ file.Idx) []ast.Expressio
 	return list
 }
 
-func (self *_parser) parseObjectPropertyKey() (string, string) {
+func (self *_parser) parseObjectPropertyKey() (string, string, []*ast.Comment) {
 	idx, tkn, literal := self.idx, self.token, self.literal
 	value := ""
 	self.next()
+
+	comments := self.findComments(false)
+
 	switch tkn {
 	case token.IDENTIFIER:
 		value = literal
@@ -238,15 +254,14 @@ func (self *_parser) parseObjectPropertyKey() (string, string) {
 			value = literal
 		}
 	}
-	return literal, value
+	return literal, value, comments
 }
 
 func (self *_parser) parseObjectProperty() ast.Property {
-
-	literal, value := self.parseObjectPropertyKey()
+	literal, value, comments := self.parseObjectPropertyKey()
 	if literal == "get" && self.token != token.COLON {
 		idx := self.idx
-		_, value := self.parseObjectPropertyKey()
+		_, value, _ := self.parseObjectPropertyKey()
 		parameterList := self.parseFunctionParameterList()
 
 		node := &ast.FunctionLiteral{
@@ -261,7 +276,7 @@ func (self *_parser) parseObjectProperty() ast.Property {
 		}
 	} else if literal == "set" && self.token != token.COLON {
 		idx := self.idx
-		_, value := self.parseObjectPropertyKey()
+		_, value, _ := self.parseObjectPropertyKey()
 		parameterList := self.parseFunctionParameterList()
 
 		node := &ast.FunctionLiteral{
@@ -277,63 +292,128 @@ func (self *_parser) parseObjectProperty() ast.Property {
 	}
 
 	self.expect(token.COLON)
+	comments2 := self.findComments(false)
 
-	return ast.Property{
+	exp := ast.Property{
 		Key:   value,
 		Kind:  "value",
 		Value: self.parseAssignmentExpression(),
 	}
+
+	if self.mode&StoreComments != 0 {
+		self.commentMap.AddComments(exp.Value, comments, ast.KEY)
+		self.commentMap.AddComments(exp.Value, comments2, ast.COLON)
+	}
+	return exp
 }
 
 func (self *_parser) parseObjectLiteral() ast.Expression {
 	var value []ast.Property
 	idx0 := self.expect(token.LEFT_BRACE)
+
+	var comments2 []*ast.Comment
 	for self.token != token.RIGHT_BRACE && self.token != token.EOF {
+
+		// Leading comments for object literal
+		comments := self.findComments(false)
 		property := self.parseObjectProperty()
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(property.Value, comments, ast.LEADING)
+			self.commentMap.AddComments(property.Value, comments2, ast.LEADING)
+		}
 		value = append(value, property)
 		if self.token == token.COMMA {
 			self.next()
+
+			// Find leading comments after trailing comma
+			comments2 = self.findComments(false)
 			continue
 		}
 	}
 	idx1 := self.expect(token.RIGHT_BRACE)
 
-	return &ast.ObjectLiteral{
+	exp := &ast.ObjectLiteral{
 		LeftBrace:  idx0,
 		RightBrace: idx1,
 		Value:      value,
 	}
+
+	if self.mode&StoreComments != 0 {
+		self.commentMap.AddComments(exp, comments2, ast.FINAL)
+	}
+	self.consumeComments(exp, ast.FINAL)
+
+	return exp
 }
 
 func (self *_parser) parseArrayLiteral() ast.Expression {
-
 	idx0 := self.expect(token.LEFT_BRACKET)
+	var comments2 []*ast.Comment
+	var comments []*ast.Comment
 	var value []ast.Expression
 	for self.token != token.RIGHT_BRACKET && self.token != token.EOF {
+		// Find leading comments for both empty and non-empty expressions
+		comments = self.findComments(false)
+
 		if self.token == token.COMMA {
 			self.next()
-			value = append(value, nil)
+
+			// This kind of comment requires a special empty expression node.
+			empty := &ast.EmptyExpression{self.idx, self.idx}
+
+			if self.mode&StoreComments != 0 {
+				self.commentMap.AddComments(empty, comments, ast.LEADING)
+				self.commentMap.AddComments(empty, comments2, ast.LEADING)
+			}
+
+			value = append(value, empty)
+
+			// This comment belongs to the following expression, or trailing
+			comments2 = self.findComments(false)
+
 			continue
 		}
-		value = append(value, self.parseAssignmentExpression())
+
+		exp := self.parseAssignmentExpression()
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(exp, comments, ast.LEADING)
+			self.commentMap.AddComments(exp, comments2, ast.LEADING)
+		}
+
+		value = append(value, exp)
 		if self.token != token.RIGHT_BRACKET {
 			self.expect(token.COMMA)
 		}
+
+		// This comment belongs to the following expression, or trailing
+		comments2 = self.findComments(false)
 	}
 	idx1 := self.expect(token.RIGHT_BRACKET)
 
-	return &ast.ArrayLiteral{
+	array := &ast.ArrayLiteral{
 		LeftBracket:  idx0,
 		RightBracket: idx1,
 		Value:        value,
 	}
+
+	// This is where comments after a possible trailing comma are added
+	if self.mode&StoreComments != 0 {
+		self.commentMap.AddComments(array, comments2, ast.FINAL)
+	}
+
+	return array
 }
 
 func (self *_parser) parseArgumentList() (argumentList []ast.Expression, idx0, idx1 file.Idx) {
 	idx0 = self.expect(token.LEFT_PARENTHESIS)
 	if self.token != token.RIGHT_PARENTHESIS {
 		for {
-			argumentList = append(argumentList, self.parseAssignmentExpression())
+			comments := self.findComments(false)
+			exp := self.parseAssignmentExpression()
+			if self.mode&StoreComments != 0 {
+				self.commentMap.AddComments(exp, comments, ast.LEADING)
+			}
+			argumentList = append(argumentList, exp)
 			if self.token != token.COMMA {
 				break
 			}
@@ -346,12 +426,17 @@ func (self *_parser) parseArgumentList() (argumentList []ast.Expression, idx0, i
 
 func (self *_parser) parseCallExpression(left ast.Expression) ast.Expression {
 	argumentList, idx0, idx1 := self.parseArgumentList()
-	return &ast.CallExpression{
+	exp := &ast.CallExpression{
 		Callee:           left,
 		LeftParenthesis:  idx0,
 		ArgumentList:     argumentList,
 		RightParenthesis: idx1,
 	}
+
+	if self.mode&StoreComments != 0 {
+		self.commentMap.AddComments(exp, self.findComments(false), ast.TRAILING)
+	}
+	return exp
 }
 
 func (self *_parser) parseDotMember(left ast.Expression) ast.Expression {
@@ -402,6 +487,11 @@ func (self *_parser) parseNewExpression() ast.Expression {
 		node.LeftParenthesis = idx0
 		node.RightParenthesis = idx1
 	}
+
+	if self.mode&StoreComments != 0 {
+		self.commentMap.AddComments(node, self.findComments(false), ast.TRAILING)
+	}
+
 	return node
 }
 
@@ -412,6 +502,10 @@ func (self *_parser) parseLeftHandSideExpression() ast.Expression {
 		left = self.parseNewExpression()
 	} else {
 		left = self.parsePrimaryExpression()
+	}
+
+	if self.mode&StoreComments != 0 {
+		self.commentMap.AddComments(left, self.findComments(false), ast.TRAILING)
 	}
 
 	for {
@@ -440,6 +534,10 @@ func (self *_parser) parseLeftHandSideExpressionAllowCall() ast.Expression {
 		left = self.parseNewExpression()
 	} else {
 		left = self.parsePrimaryExpression()
+	}
+
+	if self.mode&StoreComments != 0 {
+		self.commentMap.AddComments(left, self.findComments(false), ast.TRAILING)
 	}
 
 	for {
@@ -476,12 +574,18 @@ func (self *_parser) parsePostfixExpression() ast.Expression {
 			self.nextStatement()
 			return &ast.BadExpression{From: idx, To: self.idx}
 		}
-		return &ast.UnaryExpression{
+		exp := &ast.UnaryExpression{
 			Operator: tkn,
 			Idx:      idx,
 			Operand:  operand,
 			Postfix:  true,
 		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(exp, self.findComments(false), ast.TRAILING)
+		}
+
+		return exp
 	}
 
 	return operand
@@ -496,16 +600,30 @@ func (self *_parser) parseUnaryExpression() ast.Expression {
 		tkn := self.token
 		idx := self.idx
 		self.next()
-		return &ast.UnaryExpression{
+
+		comments := self.findComments(false)
+
+		exp := &ast.UnaryExpression{
 			Operator: tkn,
 			Idx:      idx,
 			Operand:  self.parseUnaryExpression(),
 		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(exp.Operand, comments, ast.LEADING)
+		}
+		return exp
 	case token.INCREMENT, token.DECREMENT:
 		tkn := self.token
 		idx := self.idx
 		self.next()
+
+		comments := self.findComments(false)
+
 		operand := self.parseUnaryExpression()
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(operand, comments, ast.LEADING)
+		}
 		switch operand.(type) {
 		case *ast.Identifier, *ast.DotExpression, *ast.BracketExpression:
 		default:
@@ -531,10 +649,17 @@ func (self *_parser) parseMultiplicativeExpression() ast.Expression {
 		self.token == token.REMAINDER {
 		tkn := self.token
 		self.next()
+
+		comments := self.findComments(false)
+
 		left = &ast.BinaryExpression{
 			Operator: tkn,
 			Left:     left,
 			Right:    next(),
+		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(left.(*ast.BinaryExpression).Right, comments, ast.LEADING)
 		}
 	}
 
@@ -548,10 +673,17 @@ func (self *_parser) parseAdditiveExpression() ast.Expression {
 	for self.token == token.PLUS || self.token == token.MINUS {
 		tkn := self.token
 		self.next()
+
+		comments := self.findComments(false)
+
 		left = &ast.BinaryExpression{
 			Operator: tkn,
 			Left:     left,
 			Right:    next(),
+		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(left.(*ast.BinaryExpression).Right, comments, ast.LEADING)
 		}
 	}
 
@@ -566,10 +698,17 @@ func (self *_parser) parseShiftExpression() ast.Expression {
 		self.token == token.UNSIGNED_SHIFT_RIGHT {
 		tkn := self.token
 		self.next()
+
+		comments := self.findComments(false)
+
 		left = &ast.BinaryExpression{
 			Operator: tkn,
 			Left:     left,
 			Right:    next(),
+		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(left.(*ast.BinaryExpression).Right, comments, ast.LEADING)
 		}
 	}
 
@@ -590,31 +729,55 @@ func (self *_parser) parseRelationalExpression() ast.Expression {
 	case token.LESS, token.LESS_OR_EQUAL, token.GREATER, token.GREATER_OR_EQUAL:
 		tkn := self.token
 		self.next()
-		return &ast.BinaryExpression{
+
+		comments := self.findComments(false)
+
+		exp := &ast.BinaryExpression{
 			Operator:   tkn,
 			Left:       left,
 			Right:      self.parseRelationalExpression(),
 			Comparison: true,
 		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(exp.Right, comments, ast.LEADING)
+		}
+		return exp
 	case token.INSTANCEOF:
 		tkn := self.token
 		self.next()
-		return &ast.BinaryExpression{
+
+		comments := self.findComments(false)
+
+		exp := &ast.BinaryExpression{
 			Operator: tkn,
 			Left:     left,
 			Right:    self.parseRelationalExpression(),
 		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(exp.Right, comments, ast.LEADING)
+		}
+		return exp
 	case token.IN:
 		if !allowIn {
 			return left
 		}
 		tkn := self.token
 		self.next()
-		return &ast.BinaryExpression{
+
+		comments := self.findComments(false)
+
+		exp := &ast.BinaryExpression{
 			Operator: tkn,
 			Left:     left,
 			Right:    self.parseRelationalExpression(),
 		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(exp.Right, comments, ast.LEADING)
+		}
+		return exp
 	}
 
 	return left
@@ -628,11 +791,18 @@ func (self *_parser) parseEqualityExpression() ast.Expression {
 		self.token == token.STRICT_EQUAL || self.token == token.STRICT_NOT_EQUAL {
 		tkn := self.token
 		self.next()
+
+		comments := self.findComments(false)
+
 		left = &ast.BinaryExpression{
 			Operator:   tkn,
 			Left:       left,
 			Right:      next(),
 			Comparison: true,
+		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(left.(*ast.BinaryExpression).Right, comments, ast.LEADING)
 		}
 	}
 
@@ -646,10 +816,17 @@ func (self *_parser) parseBitwiseAndExpression() ast.Expression {
 	for self.token == token.AND {
 		tkn := self.token
 		self.next()
+
+		comments := self.findComments(false)
+
 		left = &ast.BinaryExpression{
 			Operator: tkn,
 			Left:     left,
 			Right:    next(),
+		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(left.(*ast.BinaryExpression).Right, comments, ast.LEADING)
 		}
 	}
 
@@ -663,10 +840,17 @@ func (self *_parser) parseBitwiseExclusiveOrExpression() ast.Expression {
 	for self.token == token.EXCLUSIVE_OR {
 		tkn := self.token
 		self.next()
+
+		comments := self.findComments(false)
+
 		left = &ast.BinaryExpression{
 			Operator: tkn,
 			Left:     left,
 			Right:    next(),
+		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(left.(*ast.BinaryExpression).Right, comments, ast.LEADING)
 		}
 	}
 
@@ -680,10 +864,17 @@ func (self *_parser) parseBitwiseOrExpression() ast.Expression {
 	for self.token == token.OR {
 		tkn := self.token
 		self.next()
+
+		comments := self.findComments(false)
+
 		left = &ast.BinaryExpression{
 			Operator: tkn,
 			Left:     left,
 			Right:    next(),
+		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(left.(*ast.BinaryExpression).Right, comments, ast.LEADING)
 		}
 	}
 
@@ -697,10 +888,17 @@ func (self *_parser) parseLogicalAndExpression() ast.Expression {
 	for self.token == token.LOGICAL_AND {
 		tkn := self.token
 		self.next()
+
+		comments := self.findComments(false)
+
 		left = &ast.BinaryExpression{
 			Operator: tkn,
 			Left:     left,
 			Right:    next(),
+		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(left.(*ast.BinaryExpression).Right, comments, ast.LEADING)
 		}
 	}
 
@@ -714,10 +912,17 @@ func (self *_parser) parseLogicalOrExpression() ast.Expression {
 	for self.token == token.LOGICAL_OR {
 		tkn := self.token
 		self.next()
+
+		comments := self.findComments(false)
+
 		left = &ast.BinaryExpression{
 			Operator: tkn,
 			Left:     left,
 			Right:    next(),
+		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(left.(*ast.BinaryExpression).Right, comments, ast.LEADING)
 		}
 	}
 
@@ -729,13 +934,29 @@ func (self *_parser) parseConditionlExpression() ast.Expression {
 
 	if self.token == token.QUESTION_MARK {
 		self.next()
+
+		// Comments before the consequence
+		comments1 := self.findComments(false)
+
 		consequent := self.parseAssignmentExpression()
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(consequent, comments1, ast.LEADING)
+		}
+
 		self.expect(token.COLON)
-		return &ast.ConditionalExpression{
+
+		// Comments before the alternate
+		comments2 := self.findComments(false)
+		exp := &ast.ConditionalExpression{
 			Test:       left,
 			Consequent: consequent,
 			Alternate:  self.parseAssignmentExpression(),
 		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(exp.Alternate, comments2, ast.LEADING)
+		}
+		return exp
 	}
 
 	return left
@@ -783,17 +1004,30 @@ func (self *_parser) parseAssignmentExpression() ast.Expression {
 			self.nextStatement()
 			return &ast.BadExpression{From: idx, To: self.idx}
 		}
-		return &ast.AssignExpression{
+
+		comments := self.findComments(false)
+
+		exp := &ast.AssignExpression{
 			Left:     left,
 			Operator: operator,
 			Right:    self.parseAssignmentExpression(),
 		}
+
+		if self.mode&StoreComments != 0 {
+			self.commentMap.AddComments(exp.Right, comments, ast.LEADING)
+		}
+
+		return exp
 	}
 
 	return left
 }
 
 func (self *_parser) parseExpression() ast.Expression {
+
+	comments := self.findComments(false)
+	statementComments := self.fetchComments()
+
 	next := self.parseAssignmentExpression
 	left := next()
 
@@ -809,6 +1043,11 @@ func (self *_parser) parseExpression() ast.Expression {
 		return &ast.SequenceExpression{
 			Sequence: sequence,
 		}
+	}
+
+	if self.mode&StoreComments != 0 {
+		self.commentMap.AddComments(left, comments, ast.LEADING)
+		self.commentMap.AddComments(left, statementComments, ast.LEADING)
 	}
 
 	return left

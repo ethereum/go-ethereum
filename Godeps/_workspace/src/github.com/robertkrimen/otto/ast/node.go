@@ -86,6 +86,11 @@ type (
 		Identifier Identifier
 	}
 
+	EmptyExpression struct {
+		Begin file.Idx
+		End   file.Idx
+	}
+
 	FunctionLiteral struct {
 		Function      file.Idx
 		Name          *Identifier
@@ -185,6 +190,7 @@ func (*BracketExpression) _expressionNode()     {}
 func (*CallExpression) _expressionNode()        {}
 func (*ConditionalExpression) _expressionNode() {}
 func (*DotExpression) _expressionNode()         {}
+func (*EmptyExpression) _expressionNode()       {}
 func (*FunctionLiteral) _expressionNode()       {}
 func (*Identifier) _expressionNode()            {}
 func (*NewExpression) _expressionNode()         {}
@@ -399,6 +405,7 @@ func (self *BracketExpression) Idx0() file.Idx     { return self.Left.Idx0() }
 func (self *CallExpression) Idx0() file.Idx        { return self.Callee.Idx0() }
 func (self *ConditionalExpression) Idx0() file.Idx { return self.Test.Idx0() }
 func (self *DotExpression) Idx0() file.Idx         { return self.Left.Idx0() }
+func (self *EmptyExpression) Idx0() file.Idx       { return self.Begin }
 func (self *FunctionLiteral) Idx0() file.Idx       { return self.Function }
 func (self *Identifier) Idx0() file.Idx            { return self.Idx }
 func (self *NewExpression) Idx0() file.Idx         { return self.New }
@@ -447,6 +454,7 @@ func (self *BracketExpression) Idx1() file.Idx     { return self.RightBracket + 
 func (self *CallExpression) Idx1() file.Idx        { return self.RightParenthesis + 1 }
 func (self *ConditionalExpression) Idx1() file.Idx { return self.Test.Idx1() }
 func (self *DotExpression) Idx1() file.Idx         { return self.Identifier.Idx1() }
+func (self *EmptyExpression) Idx1() file.Idx       { return self.End }
 func (self *FunctionLiteral) Idx1() file.Idx       { return self.Body.Idx1() }
 func (self *Identifier) Idx1() file.Idx            { return file.Idx(int(self.Idx) + len(self.Name)) }
 func (self *NewExpression) Idx1() file.Idx         { return self.RightParenthesis + 1 }
