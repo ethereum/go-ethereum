@@ -69,6 +69,7 @@ type Config struct {
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
 	DatabaseCache      int
+	DatabaseHandles    int
 
 	NatSpec   bool
 	DocRoot   string
@@ -135,12 +136,8 @@ type Ethereum struct {
 }
 
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
-	// Let the database take 3/4 of the max open files (TODO figure out a way to get the actual limit of the open files)
-	const dbCount = 3
-	ethdb.OpenFileLimit = 128 / (dbCount + 1)
-
 	// Open the chain database and perform any upgrades needed
-	chainDb, err := ctx.OpenDatabase("chaindata", config.DatabaseCache)
+	chainDb, err := ctx.OpenDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +151,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	dappDb, err := ctx.OpenDatabase("dapp", config.DatabaseCache)
+	dappDb, err := ctx.OpenDatabase("dapp", config.DatabaseCache, config.DatabaseHandles)
 	if err != nil {
 		return nil, err
 	}
