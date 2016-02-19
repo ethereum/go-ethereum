@@ -139,7 +139,7 @@ var (
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
 		Usage: "Megabytes of memory allocated to internal caching (min 16MB / database forced)",
-		Value: 0,
+		Value: 128,
 	}
 	BlockchainVersionFlag = cli.IntFlag{
 		Name:  "blockchainversion",
@@ -513,6 +513,19 @@ func MakeGenesisBlock(ctx *cli.Context) string {
 	return string(data)
 }
 
+// MakeDatabaseHandles maxes out the number of allowed file handles per process
+// and returns the allowance.
+func MakeDatabaseHandles() int {
+	if err := raiseFdLimit(2048); err != nil {
+		Fatalf("Failed to raise file descriptor allowance: %v", err)
+	}
+	limit, err := getFdLimit()
+	if err != nil {
+		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
+	}
+	return limit / 2 // Leave half for networking and other stuff
+}
+
 // MakeAccountManager creates an account manager from set command line flags.
 func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 	// Create the keystore crypto primitive, light if requested
@@ -634,6 +647,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
 		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
+		DatabaseHandles:         MakeDatabaseHandles(),
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
 		AccountManager:          accman,
 		Etherbase:               MakeEtherbase(accman, ctx),
@@ -746,9 +760,10 @@ func SetupVM(ctx *cli.Context) {
 func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database) {
 	datadir := MustMakeDataDir(ctx)
 	cache := ctx.GlobalInt(CacheFlag.Name)
+	handles := MakeDatabaseHandles()
 
 	var err error
-	if chainDb, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "chaindata"), cache); err != nil {
+	if chainDb, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "chaindata"), cache, handles); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
 	if ctx.GlobalBool(OlympicFlag.Name) {
