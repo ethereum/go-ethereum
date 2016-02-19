@@ -262,6 +262,8 @@ func (h *encHandshake) staticSharedSecret(prv *ecdsa.PrivateKey) ([]byte, error)
 	return ecies.ImportECDSA(prv).GenerateShared(h.remotePub, sskLen, sskLen)
 }
 
+var configSendEIP = os.Getenv("RLPX_EIP8") != ""
+
 // initiatorEncHandshake negotiates a session token on conn.
 // it should be called on the dialing side of the connection.
 //
@@ -273,7 +275,7 @@ func initiatorEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, remoteID d
 		return s, err
 	}
 	var authPacket []byte
-	if os.Getenv("RLPX_EIP8") != "" {
+	if configSendEIP {
 		authPacket, err = sealEIP8(authMsg, h)
 	} else {
 		authPacket, err = authMsg.sealPlain(h)
