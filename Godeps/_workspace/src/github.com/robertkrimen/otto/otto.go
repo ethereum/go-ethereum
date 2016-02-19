@@ -363,6 +363,10 @@ func (self Otto) SetDebuggerHandler(fn func(vm *Otto)) {
 	self.runtime.debugger = fn
 }
 
+func (self Otto) SetRandomSource(fn func() float64) {
+	self.runtime.random = fn
+}
+
 // Context is a structure that contains information about the current execution
 // context.
 type Context struct {

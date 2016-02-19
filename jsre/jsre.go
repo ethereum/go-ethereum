@@ -18,8 +18,11 @@
 package jsre
 
 import (
+	crand "crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -70,6 +73,18 @@ func New(assetPath string) *JSRE {
 	return re
 }
 
+// randomSource returns a pseudo random value generator.
+func randomSource() *rand.Rand {
+	bytes := make([]byte, 8)
+	seed := time.Now().UnixNano()
+	if _, err := crand.Read(bytes); err == nil {
+		seed = int64(binary.LittleEndian.Uint64(bytes))
+	}
+
+	src := rand.NewSource(seed)
+	return rand.New(src)
+}
+
 // This function runs the main event loop from a goroutine that is started
 // when JSRE is created. Use Stop() before exiting to properly stop it.
 // The event loop processes vm access requests from the evalQueue in a
@@ -81,6 +96,9 @@ func New(assetPath string) *JSRE {
 // called from JS through an RPC call.
 func (self *JSRE) runEventLoop() {
 	vm := otto.New()
+	r := randomSource()
+	vm.SetRandomSource(r.Float64)
+
 	registry := map[*jsTimer]*jsTimer{}
 	ready := make(chan *jsTimer)
 

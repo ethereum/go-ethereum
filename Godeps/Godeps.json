@@ -84,7 +84,7 @@
 		},
 		{
 			"ImportPath": "github.com/robertkrimen/otto",
-			"Rev": "c21072f61b64b51ea58138ccacf0a85d54b9f07c"
+			"Rev": "53221230c215611a90762720c9042ac782ef74ee"
 		},
 		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",

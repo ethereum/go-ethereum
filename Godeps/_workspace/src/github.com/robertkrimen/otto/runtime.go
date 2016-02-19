@@ -55,6 +55,7 @@ type _runtime struct {
 	otto         *Otto
 	eval         *_object // The builtin eval, for determine indirect versus direct invocation
 	debugger     func(*Otto)
+	random       func() float64
 
 	labels []string // FIXME
 	lck    sync.Mutex

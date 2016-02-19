@@ -49,12 +49,13 @@ type Mode uint
 
 const (
 	IgnoreRegExpErrors Mode = 1 << iota // Ignore RegExp compatibility errors (allow backtracking)
+	StoreComments                       // Store the comments from source to the comments map
 )
 
 type _parser struct {
-	str      string
-	length   int
-	base     int
+	str    string
+	length int
+	base   int
 
 	chr       rune // The current character
 	chrOffset int  // The offset of current character
@@ -79,15 +80,22 @@ type _parser struct {
 	mode Mode
 
 	file *file.File
+
+	comments         []*ast.Comment
+	commentMap       *ast.CommentMap
+	skippedLineBreak bool
 }
 
 func _newParser(filename, src string, base int) *_parser {
 	return &_parser{
-		chr:    ' ', // This is set so we can start scanning by skipping whitespace
-		str:    src,
-		length: len(src),
-		base:   base,
-		file:   file.NewFile(filename, src, base),
+		chr:              ' ', // This is set so we can start scanning by skipping whitespace
+		str:              src,
+		length:           len(src),
+		base:             base,
+		file:             file.NewFile(filename, src, base),
+		comments:         make([]*ast.Comment, 0),
+		commentMap:       &ast.CommentMap{},
+		skippedLineBreak: false,
 	}
 }
 
@@ -184,6 +192,9 @@ func (self *_parser) parse() (*ast.Program, error) {
 	if false {
 		self.errors.Sort()
 	}
+
+	self.addCommentStatements(program, ast.FINAL)
+
 	return program, self.errors.Err()
 }
 
@@ -269,4 +280,64 @@ func (self *_parser) position(idx file.Idx) file.Position {
 	}
 
 	return position
+}
+
+// findComments finds the following comments.
+// Comments on the same line will be grouped together and returned.
+// After the first line break, comments will be added as statement comments.
+func (self *_parser) findComments(ignoreLineBreak bool) []*ast.Comment {
+	if self.mode&StoreComments == 0 {
+		return nil
+	}
+	comments := make([]*ast.Comment, 0)
+
+	newline := false
+
+	for self.implicitSemicolon == false || ignoreLineBreak {
+		if self.token != token.COMMENT {
+			break
+		}
+
+		comment := &ast.Comment{
+			Begin:    self.idx,
+			Text:     self.literal,
+			Position: ast.TBD,
+		}
+
+		newline = self.skippedLineBreak || newline
+
+		if newline && !ignoreLineBreak {
+			self.comments = append(self.comments, comment)
+		} else {
+			comments = append(comments, comment)
+		}
+
+		self.next()
+	}
+
+	return comments
+}
+
+// addCommentStatements will add the previously parsed, not positioned comments to the provided node
+func (self *_parser) addCommentStatements(node ast.Node, position ast.CommentPosition) {
+	if len(self.comments) > 0 {
+		self.commentMap.AddComments(node, self.comments, position)
+
+		// Reset comments
+		self.comments = make([]*ast.Comment, 0)
+	}
+}
+
+// fetchComments fetches the current comments, resets the slice and returns the comments
+func (self *_parser) fetchComments() (comments []*ast.Comment) {
+	comments = self.comments
+	self.comments = nil
+
+	return comments
+}
+
+// consumeComments consumes the current comments and appends them to the provided node
+func (self *_parser) consumeComments(node ast.Node, position ast.CommentPosition) {
+	self.commentMap.AddComments(node, self.comments, position)
+	self.comments = nil
 }
