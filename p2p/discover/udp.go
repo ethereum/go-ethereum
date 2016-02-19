@@ -68,7 +68,7 @@ type (
 		From, To   rpcEndpoint
 		Expiration uint64
 		// Ignore additional fields (for forward compatibility).
-		Rest []rlp.RawValue `rlp:".."`
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	// pong is the reply to ping.
@@ -81,7 +81,7 @@ type (
 		ReplyTok   []byte // This contains the hash of the ping packet.
 		Expiration uint64 // Absolute timestamp at which the packet becomes invalid.
 		// Ignore additional fields (for forward compatibility).
-		Rest []rlp.RawValue `rlp:".."`
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	// findnode is a query for nodes close to the given target.
@@ -89,7 +89,7 @@ type (
 		Target     NodeID // doesn't need to be an actual public key
 		Expiration uint64
 		// Ignore additional fields (for forward compatibility).
-		Rest []rlp.RawValue `rlp:".."`
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	// reply to findnode
@@ -97,7 +97,7 @@ type (
 		Nodes      []rpcNode
 		Expiration uint64
 		// Ignore additional fields (for forward compatibility).
-		Rest []rlp.RawValue `rlp:".."`
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	rpcNode struct {
