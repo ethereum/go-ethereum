@@ -27,7 +27,9 @@ import (
 // evaluated, callers need to make sure that evaluating line does not have side effects.
 func (jsre *JSRE) CompleteKeywords(line string) []string {
 	var results []string
-	jsre.do(func(vm *otto.Otto) { results = getCompletions(vm, line) })
+	jsre.Do(func(vm *otto.Otto) {
+		results = getCompletions(vm, line)
+	})
 	return results
 }
 

@@ -214,8 +214,8 @@ loop:
 	self.loopWg.Done()
 }
 
-// do schedules the given function on the event loop.
-func (self *JSRE) do(fn func(*otto.Otto)) {
+// Do executes the given function on the JS event loop.
+func (self *JSRE) Do(fn func(*otto.Otto)) {
 	done := make(chan bool)
 	req := &evalReq{fn, done}
 	self.evalQueue <- req
@@ -235,7 +235,7 @@ func (self *JSRE) Exec(file string) error {
 	if err != nil {
 		return err
 	}
-	self.do(func(vm *otto.Otto) { _, err = vm.Run(code) })
+	self.Do(func(vm *otto.Otto) { _, err = vm.Run(code) })
 	return err
 }
 
@@ -247,19 +247,19 @@ func (self *JSRE) Bind(name string, v interface{}) error {
 
 // Run runs a piece of JS code.
 func (self *JSRE) Run(code string) (v otto.Value, err error) {
-	self.do(func(vm *otto.Otto) { v, err = vm.Run(code) })
+	self.Do(func(vm *otto.Otto) { v, err = vm.Run(code) })
 	return v, err
 }
 
 // Get returns the value of a variable in the JS environment.
 func (self *JSRE) Get(ns string) (v otto.Value, err error) {
-	self.do(func(vm *otto.Otto) { v, err = vm.Get(ns) })
+	self.Do(func(vm *otto.Otto) { v, err = vm.Get(ns) })
 	return v, err
 }
 
 // Set assigns value v to a variable in the JS environment.
 func (self *JSRE) Set(ns string, v interface{}) (err error) {
-	self.do(func(vm *otto.Otto) { err = vm.Set(ns, v) })
+	self.Do(func(vm *otto.Otto) { err = vm.Set(ns, v) })
 	return err
 }
 
@@ -288,7 +288,7 @@ func (self *JSRE) loadScript(call otto.FunctionCall) otto.Value {
 // EvalAndPrettyPrint evaluates code and pretty prints the result to
 // standard output.
 func (self *JSRE) EvalAndPrettyPrint(code string) (err error) {
-	self.do(func(vm *otto.Otto) {
+	self.Do(func(vm *otto.Otto) {
 		var val otto.Value
 		val, err = vm.Run(code)
 		if err != nil {
@@ -302,7 +302,7 @@ func (self *JSRE) EvalAndPrettyPrint(code string) (err error) {
 
 // Compile compiles and then runs a piece of JS code.
 func (self *JSRE) Compile(filename string, src interface{}) (err error) {
-	self.do(func(vm *otto.Otto) { _, err = compileAndRun(vm, filename, src) })
+	self.Do(func(vm *otto.Otto) { _, err = compileAndRun(vm, filename, src) })
 	return err
 }
 
