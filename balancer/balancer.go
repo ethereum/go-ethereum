@@ -107,10 +107,10 @@ func (b *Balancer) Push(work Task) {
 func (b *Balancer) balance(work chan Task) {
 	for {
 		select {
-		case task := <-work: // get task
-			b.dispatch(task) // dispatch the tasks
 		case w := <-b.done: // worker is done
 			b.completed(w) // handle worker
+		case task := <-work: // get task
+			b.dispatch(task) // dispatch the tasks
 		}
 	}
 }

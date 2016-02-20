@@ -1122,7 +1122,12 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		tstart        = time.Now()
 
 		nonceChecked = make([]bool, len(chain))
+		txs          types.Transactions
 	)
+	for _, block := range chain {
+		txs = append(txs, block.Transactions()...)
+	}
+	balanceTxWork(self.balancer, txs)
 
 	// Start the parallel nonce verifier.
 	//nonceAbort, nonceResults := verifyNoncesFromBlocks(self.pow, chain)
