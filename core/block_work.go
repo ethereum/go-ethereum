@@ -13,7 +13,7 @@ type nonceResult struct {
 	valid bool
 }
 
-func balanceBlockWork(b *balancer.Balancer, blocks []*types.Block, checker pow.PoW) (chan nonceResult, chan struct{}) {
+func balanceBlockWork(b *balancer.Balancer, blocks []*types.Block, checker pow.PoW) chan nonceResult {
 	const workSize = 64
 
 	var (
@@ -36,16 +36,14 @@ func balanceBlockWork(b *balancer.Balancer, blocks []*types.Block, checker pow.P
 		b.Push(task)
 	}
 
-	donech := make(chan struct{})
 	// we aren't at all interested in the errors
 	// since we handle errors ourself.
 	go func() {
-		<-donech // wait for parent proc to finish
 		for i := 0; i < cap(errch); i++ {
 			<-errch
 		}
 		close(errch)
 	}()
 
-	return nonceResults, donech
+	return nonceResults
 }

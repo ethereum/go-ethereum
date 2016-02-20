@@ -23,11 +23,13 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/balancer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -147,6 +149,8 @@ type Downloader struct {
 	cancelCh   chan struct{} // Channel to cancel mid-flight syncs
 	cancelLock sync.RWMutex  // Lock to protect the cancel channel in delivers
 
+	balancer *balancer.Balancer // load balancer to balance out work
+
 	// Testing hooks
 	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run
 	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
@@ -190,6 +194,7 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, hasHeader headerCheckFn, ha
 		bodyWakeCh:       make(chan bool, 1),
 		receiptWakeCh:    make(chan bool, 1),
 		stateWakeCh:      make(chan bool, 1),
+		balancer:         balancer.New(runtime.NumCPU()),
 	}
 }
 
@@ -1516,6 +1521,36 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 	}
 }
 
+func balanceTxWork(b *balancer.Balancer, txs types.Transactions) {
+	const workSize = 64
+
+	errch := make(chan error, int(math.Ceil(float64(len(txs))/float64(workSize)))) // error channel (buffered)
+	for i := 0; i < len(txs); i += workSize {
+		max := int(math.Min(float64(i+workSize), float64(len(txs)))) // get max size...
+		batch := txs[i:max]                                          // ...and create batch
+
+		batchNo := i // batch number for task
+		// create new tasks
+		task := balancer.NewTask(func() error {
+			for i := 0; i < max-batchNo; i++ {
+				batch[i].FromFrontier()
+			}
+			return nil
+		}, errch)
+
+		b.Push(task)
+	}
+
+	// we aren't at all interested in the errors
+	// since we handle errors ourself.
+	go func() {
+		for i := 0; i < cap(errch); i++ {
+			<-errch
+		}
+		close(errch)
+	}()
+}
+
 // process takes fetch results from the queue and tries to import them into the
 // chain. The type of import operation will depend on the result contents.
 func (d *Downloader) process() error {
@@ -1542,9 +1577,12 @@ func (d *Downloader) process() error {
 			var (
 				blocks   = make([]*types.Block, 0, maxResultsProcess)
 				receipts = make([]types.Receipts, 0, maxResultsProcess)
+				txs      = make(types.Transactions, 0)
 			)
 			items := int(math.Min(float64(len(results)), float64(maxResultsProcess)))
 			for _, result := range results[:items] {
+				txs = append(txs, result.Transactions...)
+
 				switch {
 				case d.mode == FullSync:
 					blocks = append(blocks, types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles))
@@ -1555,6 +1593,7 @@ func (d *Downloader) process() error {
 					}
 				}
 			}
+			balanceTxWork(d.balancer, txs)
 			// Try to process the results, aborting if there's an error
 			var (
 				err   error

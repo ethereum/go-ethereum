@@ -1127,8 +1127,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	// Start the parallel nonce verifier.
 	//nonceAbort, nonceResults := verifyNoncesFromBlocks(self.pow, chain)
 	//defer close(nonceAbort)
-	nonceResults, donech := balanceBlockWork(self.balancer, chain, self.pow) // ...balance out work
-	defer close(donech)
+	nonceResults := balanceBlockWork(self.balancer, chain, self.pow) // ...balance out work
 
 	txcount := 0
 	for i, block := range chain {
