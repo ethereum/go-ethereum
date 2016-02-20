@@ -296,6 +296,12 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'chaindbProperty',
+			call: 'debug_chaindbProperty',
+			params: 1,
+			outputFormatter: console.log
+		}),
+		new web3._extend.Method({
 			name: 'metrics',
 			call: 'debug_metrics',
 			params: 1
