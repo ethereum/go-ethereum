@@ -28,7 +28,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/balancer"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -147,6 +149,8 @@ type Downloader struct {
 	cancelCh   chan struct{} // Channel to cancel mid-flight syncs
 	cancelLock sync.RWMutex  // Lock to protect the cancel channel in delivers
 
+	balancer *balancer.Balancer // load balancer to balance out work
+
 	// Testing hooks
 	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run
 	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
@@ -190,6 +194,7 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, hasHeader headerCheckFn, ha
 		bodyWakeCh:       make(chan bool, 1),
 		receiptWakeCh:    make(chan bool, 1),
 		stateWakeCh:      make(chan bool, 1),
+		balancer:         balancer.B,
 	}
 }
 
@@ -1542,9 +1547,12 @@ func (d *Downloader) process() error {
 			var (
 				blocks   = make([]*types.Block, 0, maxResultsProcess)
 				receipts = make([]types.Receipts, 0, maxResultsProcess)
+				txs      = make(types.Transactions, 0)
 			)
 			items := int(math.Min(float64(len(results)), float64(maxResultsProcess)))
 			for _, result := range results[:items] {
+				txs = append(txs, result.Transactions...)
+
 				switch {
 				case d.mode == FullSync:
 					blocks = append(blocks, types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles))
@@ -1555,6 +1563,7 @@ func (d *Downloader) process() error {
 					}
 				}
 			}
+			core.BalanceTxWork(d.balancer, txs)
 			// Try to process the results, aborting if there's an error
 			var (
 				err   error

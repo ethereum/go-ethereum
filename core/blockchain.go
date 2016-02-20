@@ -30,6 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/balancer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -113,6 +114,7 @@ type BlockChain struct {
 	rand      *mrand.Rand
 	processor Processor
 	validator Validator
+	balancer  *balancer.Balancer
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -137,6 +139,7 @@ func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*Bl
 		blockCache:   blockCache,
 		futureBlocks: futureBlocks,
 		pow:          pow,
+		balancer:     balancer.B,
 	}
 	// Seed a fast but crypto originating random generator
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
@@ -1120,10 +1123,8 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 
 		nonceChecked = make([]bool, len(chain))
 	)
-
 	// Start the parallel nonce verifier.
-	nonceAbort, nonceResults := verifyNoncesFromBlocks(self.pow, chain)
-	defer close(nonceAbort)
+	nonceResults := BalanceBlockWork(self.balancer, chain, self.pow)
 
 	txcount := 0
 	for i, block := range chain {
@@ -1252,6 +1253,8 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		}
 		stats.processed++
 	}
+	// close the bogus errch. errors are delivered using owned channel
+	//close(errch) // we don't need to bother with checking
 
 	if (stats.queued > 0 || stats.processed > 0 || stats.ignored > 0) && bool(glog.V(logger.Info)) {
 		tend := time.Since(tstart)
