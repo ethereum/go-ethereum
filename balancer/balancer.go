@@ -105,14 +105,18 @@ func (b *Balancer) Push(work Task) {
 }
 
 func (b *Balancer) balance(work chan Task) {
-	for {
-		select {
-		case w := <-b.done: // worker is done
+	go func() {
+		// worker is done
+		for w := range b.done {
 			b.completed(w) // handle worker
-		case task := <-work: // get task
+		}
+	}()
+	go func() {
+		// get task
+		for task := range work {
 			b.dispatch(task) // dispatch the tasks
 		}
-	}
+	}()
 }
 
 // dispatch dispatches the tasks to the least loaded worker.

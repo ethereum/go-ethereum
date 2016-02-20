@@ -2,6 +2,7 @@ package core
 
 import (
 	"math"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/balancer"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -18,7 +19,7 @@ func balanceTxWork(b *balancer.Balancer, txs types.Transactions) {
 		return
 	}
 
-	workSize := len(txs) / 4
+	workSize := len(txs) / runtime.GOMAXPROCS(0)
 
 	errch := make(chan error, int(math.Ceil(float64(len(txs))/float64(workSize)))) // error channel (buffered)
 	for i := 0; i < len(txs); i += workSize {
@@ -48,7 +49,7 @@ func balanceTxWork(b *balancer.Balancer, txs types.Transactions) {
 }
 
 func balanceBlockWork(b *balancer.Balancer, blocks []*types.Block, checker pow.PoW) chan nonceResult {
-	workSize := len(blocks) / 4
+	workSize := len(blocks) / runtime.GOMAXPROCS(0)
 
 	var (
 		nonceResults = make(chan nonceResult, len(blocks))                                      // the nonce result channel (buffered)

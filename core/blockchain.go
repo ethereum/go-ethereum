@@ -139,7 +139,7 @@ func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*Bl
 		blockCache:   blockCache,
 		futureBlocks: futureBlocks,
 		pow:          pow,
-		balancer:     balancer.New(runtime.NumCPU()),
+		balancer:     balancer.New(runtime.GOMAXPROCS(0)),
 	}
 	// Seed a fast but crypto originating random generator
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
