@@ -48,22 +48,6 @@ func FromHex(s string) []byte {
 	return nil
 }
 
-type Bytes []byte
-
-func (self Bytes) String() string {
-	return string(self)
-}
-
-func DeleteFromByteSlice(s [][]byte, hash []byte) [][]byte {
-	for i, h := range s {
-		if bytes.Compare(h, hash) == 0 {
-			return append(s[:i:i], s[i+1:]...)
-		}
-	}
-
-	return s
-}
-
 // Number to bytes
 //
 // Returns the number in bytes with the specified base
