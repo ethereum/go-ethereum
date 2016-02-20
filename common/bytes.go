@@ -154,7 +154,6 @@ func Hex2Bytes(str string) []byte {
 }
 
 func Hex2BytesFixed(str string, flen int) []byte {
-
 	h, _ := hex.DecodeString(str)
 	if len(h) == flen {
 		return h
@@ -167,7 +166,6 @@ func Hex2BytesFixed(str string, flen int) []byte {
 			return hh
 		}
 	}
-
 }
 
 func StringToByteFunc(str string, cb func(str string) []byte) (ret []byte) {
