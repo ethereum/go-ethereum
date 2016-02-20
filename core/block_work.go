@@ -2,7 +2,6 @@ package core
 
 import (
 	"math"
-	"runtime"
 
 	"github.com/ethereum/go-ethereum/balancer"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -14,12 +13,17 @@ type nonceResult struct {
 	valid bool
 }
 
-func balanceTxWork(b *balancer.Balancer, txs types.Transactions) {
+const taskCount = 20
+
+func BalanceTxWork(b *balancer.Balancer, txs types.Transactions) {
 	if len(txs) == 0 {
 		return
 	}
 
-	workSize := len(txs) / runtime.GOMAXPROCS(0)
+	workSize := len(txs) / taskCount
+	if workSize == 0 {
+		workSize = 1
+	}
 
 	errch := make(chan error, int(math.Ceil(float64(len(txs))/float64(workSize)))) // error channel (buffered)
 	for i := 0; i < len(txs); i += workSize {
@@ -48,8 +52,11 @@ func balanceTxWork(b *balancer.Balancer, txs types.Transactions) {
 	}()
 }
 
-func balanceBlockWork(b *balancer.Balancer, blocks []*types.Block, checker pow.PoW) chan nonceResult {
-	workSize := len(blocks) / runtime.GOMAXPROCS(0)
+func BalanceBlockWork(b *balancer.Balancer, blocks []*types.Block, checker pow.PoW) chan nonceResult {
+	workSize := len(blocks) / taskCount
+	if workSize == 0 {
+		workSize = 1
+	}
 
 	var (
 		nonceResults = make(chan nonceResult, len(blocks))                                      // the nonce result channel (buffered)
@@ -63,7 +70,14 @@ func balanceBlockWork(b *balancer.Balancer, blocks []*types.Block, checker pow.P
 		// create new tasks
 		task := balancer.NewTask(func() error {
 			for i := 0; i < max-batchNo; i++ {
-				nonceResults <- nonceResult{batchNo + i, checker.Verify(batch[i])}
+				valid := checker.Verify(batch[i])
+				for _, u := range batch[i].Uncles() {
+					if !checker.Verify(types.NewBlockWithHeader(u)) {
+						valid = false
+						break
+					}
+				}
+				nonceResults <- nonceResult{batchNo + i, valid}
 			}
 			return nil
 		}, errch)

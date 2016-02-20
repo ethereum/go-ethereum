@@ -139,7 +139,7 @@ func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*Bl
 		blockCache:   blockCache,
 		futureBlocks: futureBlocks,
 		pow:          pow,
-		balancer:     balancer.New(runtime.GOMAXPROCS(0)),
+		balancer:     balancer.B,
 	}
 	// Seed a fast but crypto originating random generator
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
@@ -1122,17 +1122,9 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		tstart        = time.Now()
 
 		nonceChecked = make([]bool, len(chain))
-		txs          types.Transactions
 	)
-	for _, block := range chain {
-		txs = append(txs, block.Transactions()...)
-	}
-	balanceTxWork(self.balancer, txs)
-
 	// Start the parallel nonce verifier.
-	//nonceAbort, nonceResults := verifyNoncesFromBlocks(self.pow, chain)
-	//defer close(nonceAbort)
-	nonceResults := balanceBlockWork(self.balancer, chain, self.pow) // ...balance out work
+	nonceResults := BalanceBlockWork(self.balancer, chain, self.pow)
 
 	txcount := 0
 	for i, block := range chain {

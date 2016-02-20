@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,6 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/balancer"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -194,7 +194,7 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, hasHeader headerCheckFn, ha
 		bodyWakeCh:       make(chan bool, 1),
 		receiptWakeCh:    make(chan bool, 1),
 		stateWakeCh:      make(chan bool, 1),
-		balancer:         balancer.New(runtime.NumCPU()),
+		balancer:         balancer.B,
 	}
 }
 
@@ -1521,36 +1521,6 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 	}
 }
 
-func balanceTxWork(b *balancer.Balancer, txs types.Transactions) {
-	const workSize = 64
-
-	errch := make(chan error, int(math.Ceil(float64(len(txs))/float64(workSize)))) // error channel (buffered)
-	for i := 0; i < len(txs); i += workSize {
-		max := int(math.Min(float64(i+workSize), float64(len(txs)))) // get max size...
-		batch := txs[i:max]                                          // ...and create batch
-
-		batchNo := i // batch number for task
-		// create new tasks
-		task := balancer.NewTask(func() error {
-			for i := 0; i < max-batchNo; i++ {
-				batch[i].FromFrontier()
-			}
-			return nil
-		}, errch)
-
-		b.Push(task)
-	}
-
-	// we aren't at all interested in the errors
-	// since we handle errors ourself.
-	go func() {
-		for i := 0; i < cap(errch); i++ {
-			<-errch
-		}
-		close(errch)
-	}()
-}
-
 // process takes fetch results from the queue and tries to import them into the
 // chain. The type of import operation will depend on the result contents.
 func (d *Downloader) process() error {
@@ -1593,7 +1563,7 @@ func (d *Downloader) process() error {
 					}
 				}
 			}
-			balanceTxWork(d.balancer, txs)
+			core.BalanceTxWork(d.balancer, txs)
 			// Try to process the results, aborting if there's an error
 			var (
 				err   error

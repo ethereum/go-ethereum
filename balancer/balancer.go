@@ -1,6 +1,11 @@
 package balancer
 
-import "container/heap"
+import (
+	"container/heap"
+	"runtime"
+)
+
+var B = New(runtime.GOMAXPROCS(0))
 
 // Task repsents a single batch of work offered to a worker.
 type Task struct {
@@ -40,7 +45,12 @@ type Pool []*Worker
 
 func (p Pool) Len() int           { return len(p) }
 func (p Pool) Less(i, j int) bool { return p[i].pending < p[j].pending }
-func (p Pool) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p Pool) Swap(i, j int) {
+	p[i].index = j // trade i<->j
+	p[j].index = i // trade j<->i
+
+	p[i], p[j] = p[j], p[i]
+}
 func (p *Pool) Push(x interface{}) {
 	w := x.(*Worker)  // cast the worker
 	w.index = len(*p) // assign the new index
@@ -71,30 +81,23 @@ type Balancer struct {
 func New(poolSize int) *Balancer {
 	balancer := &Balancer{
 		done: make(chan *Worker),
-		pool: make(Pool, poolSize),
 		work: make(chan Task),
+		pool: make(Pool, 0, poolSize),
 	}
-
-	operations := make(chan struct{}, poolSize)
-	defer close(operations)
+	heap.Init(&balancer.pool)
 
 	// fill the pool with the given pool size
 	for i := 0; i < poolSize; i++ {
 		// create new worker
-		balancer.pool[i] = &Worker{id: i, tasks: make(chan Task, 10)}
+		worker := &Worker{id: i, tasks: make(chan Task, 100)}
 		// spawn worker process
 		go func(i int) {
-			operations <- struct{}{}
-			balancer.pool[i].work(balancer.done)
+			worker.work(balancer.done)
 		}(i)
+		heap.Push(&balancer.pool, worker)
 	}
 	// spawn own balancer task
 	go balancer.balance(balancer.work)
-
-	// wait for workers to be operations
-	for i := 0; i < poolSize; i++ {
-		<-operations
-	}
 
 	return balancer
 }
@@ -105,18 +108,14 @@ func (b *Balancer) Push(work Task) {
 }
 
 func (b *Balancer) balance(work chan Task) {
-	go func() {
-		// worker is done
-		for w := range b.done {
+	for {
+		select {
+		case w := <-b.done: // worker is done
 			b.completed(w) // handle worker
-		}
-	}()
-	go func() {
-		// get task
-		for task := range work {
+		case task := <-work: // get task
 			b.dispatch(task) // dispatch the tasks
 		}
-	}()
+	}
 }
 
 // dispatch dispatches the tasks to the least loaded worker.
