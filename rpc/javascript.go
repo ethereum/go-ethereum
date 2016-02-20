@@ -328,6 +328,16 @@ web3._extend({
 			outputFormatter: console.log
 		}),
 		new web3._extend.Method({
+			name: 'memStats',
+			call: 'debug_memStats',
+			params: 0,
+		}),
+		new web3._extend.Method({
+			name: 'gcStats',
+			call: 'debug_gcStats',
+			params: 0,
+		}),
+		new web3._extend.Method({
 			name: 'cpuProfile',
 			call: 'debug_cpuProfile',
 			params: 2
