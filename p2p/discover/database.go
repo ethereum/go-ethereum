@@ -188,7 +188,7 @@ func (db *nodeDB) node(id NodeID) *Node {
 		glog.V(logger.Warn).Infof("failed to decode node RLP: %v", err)
 		return nil
 	}
-	node.sha = crypto.Sha3Hash(node.ID[:])
+	node.sha = crypto.Keccak256Hash(node.ID[:])
 	return node
 }
 

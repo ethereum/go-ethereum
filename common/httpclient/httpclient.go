@@ -74,7 +74,7 @@ func (self *HTTPClient) GetAuthContent(uri string, hash common.Hash) ([]byte, er
 	}
 
 	// check hash to authenticate content
-	chash := crypto.Sha3Hash(content)
+	chash := crypto.Keccak256Hash(content)
 	if chash != hash {
 		return nil, fmt.Errorf("content hash mismatch %x != %x (exp)", hash[:], chash[:])
 	}

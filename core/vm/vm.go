@@ -58,7 +58,7 @@ func (self *Vm) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	}
 
 	var (
-		codehash = crypto.Sha3Hash(contract.Code) // codehash is used when doing jump dest caching
+		codehash = crypto.Keccak256Hash(contract.Code) // codehash is used when doing jump dest caching
 		program  *Program
 	)
 	if EnableJit {

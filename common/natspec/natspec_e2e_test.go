@@ -238,11 +238,11 @@ func TestNatspecE2E(t *testing.T) {
 	// create a contractInfo file (mock cloud-deployed contract metadocs)
 	// incidentally this is the info for the HashReg contract itself
 	ioutil.WriteFile("/tmp/"+testFileName, []byte(testContractInfo), os.ModePerm)
-	dochash := crypto.Sha3Hash([]byte(testContractInfo))
+	dochash := crypto.Keccak256Hash([]byte(testContractInfo))
 
 	// take the codehash for the contract we wanna test
 	codeb := tf.xeth.CodeAtBytes(registrar.HashRegAddr)
-	codehash := crypto.Sha3Hash(codeb)
+	codehash := crypto.Keccak256Hash(codeb)
 
 	reg := registrar.New(tf.xeth)
 	_, err := reg.SetHashToHash(addr, codehash, dochash)

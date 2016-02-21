@@ -36,7 +36,7 @@ func TestGetAuthContent(t *testing.T) {
 	client := New(dir)
 
 	text := "test"
-	hash := crypto.Sha3Hash([]byte(text))
+	hash := crypto.Keccak256Hash([]byte(text))
 	if err := ioutil.WriteFile(path.Join(dir, "test.content"), []byte(text), os.ModePerm); err != nil {
 		t.Fatal("could not write test file", err)
 	}

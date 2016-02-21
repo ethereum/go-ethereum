@@ -448,7 +448,7 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, 
 		return nil, err
 	}
 	packet := b.Bytes()
-	sig, err := crypto.Sign(crypto.Sha3(packet[headSize:]), priv)
+	sig, err := crypto.Sign(crypto.Keccak256(packet[headSize:]), priv)
 	if err != nil {
 		glog.V(logger.Error).Infoln("could not sign packet:", err)
 		return nil, err
@@ -457,7 +457,7 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, 
 	// add the hash to the front. Note: this doesn't protect the
 	// packet in any way. Our public key will be part of this hash in
 	// The future.
-	copy(packet, crypto.Sha3(packet[macSize:]))
+	copy(packet, crypto.Keccak256(packet[macSize:]))
 	return packet, nil
 }
 
@@ -509,11 +509,11 @@ func decodePacket(buf []byte) (packet, NodeID, []byte, error) {
 		return nil, NodeID{}, nil, errPacketTooSmall
 	}
 	hash, sig, sigdata := buf[:macSize], buf[macSize:headSize], buf[headSize:]
-	shouldhash := crypto.Sha3(buf[macSize:])
+	shouldhash := crypto.Keccak256(buf[macSize:])
 	if !bytes.Equal(hash, shouldhash) {
 		return nil, NodeID{}, nil, errBadHash
 	}
-	fromID, err := recoverNodeID(crypto.Sha3(buf[headSize:]), sig)
+	fromID, err := recoverNodeID(crypto.Keccak256(buf[headSize:]), sig)
 	if err != nil {
 		return nil, NodeID{}, hash, err
 	}
@@ -575,7 +575,7 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte
 		// (which is a much bigger packet than findnode) to the victim.
 		return errUnknownNode
 	}
-	target := crypto.Sha3Hash(req.Target[:])
+	target := crypto.Keccak256Hash(req.Target[:])
 	t.mutex.Lock()
 	closest := t.closest(target, bucketSize).entries
 	t.mutex.Unlock()

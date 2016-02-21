@@ -73,7 +73,7 @@ func TestBloom9(t *testing.T) {
 func TestAddress(t *testing.T) {
 	block := &Block{}
 	block.Coinbase = common.Hex2Bytes("22341ae42d6dd7384bc8584e50419ea3ac75b83f")
-	fmt.Printf("%x\n", crypto.Sha3(block.Coinbase))
+	fmt.Printf("%x\n", crypto.Keccak256(block.Coinbase))
 
 	bin := CreateBloom(block)
 	fmt.Printf("bin = %x\n", common.LeftPadBytes(bin, 64))

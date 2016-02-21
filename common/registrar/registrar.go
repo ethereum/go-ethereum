@@ -68,7 +68,7 @@ const (
 )
 
 func abiSignature(s string) string {
-	return common.ToHex(crypto.Sha3([]byte(s))[:4])
+	return common.ToHex(crypto.Keccak256([]byte(s))[:4])
 }
 
 var (
@@ -401,7 +401,7 @@ func storageMapping(addr, key []byte) []byte {
 	data := make([]byte, 64)
 	copy(data[0:32], key[0:32])
 	copy(data[32:64], addr[0:32])
-	sha := crypto.Sha3(data)
+	sha := crypto.Keccak256(data)
 	return sha
 }
 

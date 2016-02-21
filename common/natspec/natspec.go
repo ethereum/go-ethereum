@@ -115,7 +115,7 @@ func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, client *httpc
 		err = fmt.Errorf("contract (%v) not found", contractAddress)
 		return
 	}
-	codehash := common.BytesToHash(crypto.Sha3(codeb))
+	codehash := common.BytesToHash(crypto.Keccak256(codeb))
 	// set up nameresolver with natspecreg + urlhint contract addresses
 	reg := registrar.New(xeth)
 
@@ -197,7 +197,7 @@ type userDoc struct {
 func (self *NatSpec) makeAbi2method(abiKey [8]byte) (meth *method) {
 	for signature, m := range self.userDoc.Methods {
 		name := strings.Split(signature, "(")[0]
-		hash := []byte(common.Bytes2Hex(crypto.Sha3([]byte(signature))))
+		hash := []byte(common.Bytes2Hex(crypto.Keccak256([]byte(signature))))
 		var key [8]byte
 		copy(key[:], hash[:8])
 		if bytes.Equal(key[:], abiKey[:]) {

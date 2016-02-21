@@ -101,7 +101,7 @@ func LogsBloom(logs vm.Logs) *big.Int {
 }
 
 func bloom9(b []byte) *big.Int {
-	b = crypto.Sha3(b[:])
+	b = crypto.Keccak256(b[:])
 
 	r := new(big.Int)
 

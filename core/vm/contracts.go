@@ -111,7 +111,7 @@ func ecrecoverFunc(in []byte) []byte {
 	}
 
 	// the first byte of pubkey is bitcoin heritage
-	return common.LeftPadBytes(crypto.Sha3(pubKey[1:])[12:], 32)
+	return common.LeftPadBytes(crypto.Keccak256(pubKey[1:])[12:], 32)
 }
 
 func memCpy(in []byte) []byte {

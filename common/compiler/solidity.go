@@ -220,7 +220,7 @@ func SaveInfo(info *ContractInfo, filename string) (contenthash common.Hash, err
 	if err != nil {
 		return
 	}
-	contenthash = common.BytesToHash(crypto.Sha3(infojson))
+	contenthash = common.BytesToHash(crypto.Keccak256(infojson))
 	err = ioutil.WriteFile(filename, infojson, 0600)
 	return
 }

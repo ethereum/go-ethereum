@@ -244,7 +244,7 @@ func TestMethodSignature(t *testing.T) {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
 	}
 
-	idexp := crypto.Sha3([]byte(exp))[:4]
+	idexp := crypto.Keccak256([]byte(exp))[:4]
 	if !bytes.Equal(m.Id(), idexp) {
 		t.Errorf("expected ids to match %x != %x", m.Id(), idexp)
 	}
@@ -264,7 +264,7 @@ func TestPack(t *testing.T) {
 		t.FailNow()
 	}
 
-	sig := crypto.Sha3([]byte("foo(uint32)"))[:4]
+	sig := crypto.Keccak256([]byte("foo(uint32)"))[:4]
 	sig = append(sig, make([]byte, 32)...)
 	sig[35] = 10
 
@@ -286,7 +286,7 @@ func TestMultiPack(t *testing.T) {
 		t.FailNow()
 	}
 
-	sig := crypto.Sha3([]byte("bar(uint32,uint16)"))[:4]
+	sig := crypto.Keccak256([]byte("bar(uint32,uint16)"))[:4]
 	sig = append(sig, make([]byte, 64)...)
 	sig[35] = 10
 	sig[67] = 11
@@ -309,7 +309,7 @@ func TestPackSlice(t *testing.T) {
 		t.FailNow()
 	}
 
-	sig := crypto.Sha3([]byte("slice(uint32[2])"))[:4]
+	sig := crypto.Keccak256([]byte("slice(uint32[2])"))[:4]
 	sig = append(sig, make([]byte, 64)...)
 	sig[35] = 1
 	sig[67] = 2
@@ -332,7 +332,7 @@ func TestPackSliceBig(t *testing.T) {
 		t.FailNow()
 	}
 
-	sig := crypto.Sha3([]byte("slice256(uint256[2])"))[:4]
+	sig := crypto.Keccak256([]byte("slice256(uint256[2])"))[:4]
 	sig = append(sig, make([]byte, 64)...)
 	sig[35] = 1
 	sig[67] = 2
