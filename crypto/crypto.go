@@ -60,6 +60,10 @@ func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	return h
 }
 
+// Deprecated: For backward compatibility as other packages depend on these
+func Sha3(data ...[]byte) []byte          { return Keccak256(data...) }
+func Sha3Hash(data ...[]byte) common.Hash { return Keccak256Hash(data...) }
+
 // Creates an ethereum address given the bytes and the nonce
 func CreateAddress(b common.Address, nonce uint64) common.Address {
 	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
