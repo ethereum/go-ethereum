@@ -52,7 +52,7 @@ func main() {
 	json.Unmarshal(content, &m)
 
 	filepath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "params", os.Args[2])
-	output, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE, os.ModePerm /*0777*/)
+	output, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		fatal("error opening file for writing %v\n", err)
 	}
