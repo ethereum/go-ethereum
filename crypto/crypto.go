@@ -68,7 +68,6 @@ func Sha3Hash(data ...[]byte) common.Hash { return Keccak256Hash(data...) }
 func CreateAddress(b common.Address, nonce uint64) common.Address {
 	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
 	return common.BytesToAddress(Keccak256(data)[12:])
-	//return Sha3(common.NewValue([]interface{}{b, nonce}).Encode())[12:]
 }
 
 func Sha256(data []byte) []byte {

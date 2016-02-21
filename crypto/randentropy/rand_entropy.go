@@ -19,8 +19,6 @@ package randentropy
 import (
 	crand "crypto/rand"
 	"io"
-
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
 var Reader io.Reader = &randEntropy{}
@@ -32,14 +30,6 @@ func (*randEntropy) Read(bytes []byte) (n int, err error) {
 	readBytes := GetEntropyCSPRNG(len(bytes))
 	copy(bytes, readBytes)
 	return len(bytes), nil
-}
-
-// TODO: copied from crypto.go , move to sha3 package?
-func Sha3(data []byte) []byte {
-	d := sha3.NewKeccak256()
-	d.Write(data)
-
-	return d.Sum(nil)
 }
 
 func GetEntropyCSPRNG(n int) []byte {
