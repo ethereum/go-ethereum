@@ -9,9 +9,9 @@ if [[ ! -z "$2" ]]; then
 fi
 
 if [ -f "$1" ]; then
-hash=`wget -q -O- --post-file="$1" http://localhost:$port/raw`
+hash=`wget -q -O- --post-file="$1" "http://localhost:$port/bzzr://"`
 mime=`mimetype -b "$1"`
-wget -q -O- --post-data="$delimiter\"hash\":\"$hash\",\"contentType\":\"$mime\"}]}" http://localhost:8500/raw
+wget -q -O- --post-data="$delimiter\"hash\":\"$hash\",\"contentType\":\"$mime\"}]}" "http://localhost:$port/bzzr://"
 echo
 
 else
@@ -28,7 +28,7 @@ do
 name=`echo "$path" | cut -c3-`
 [ _`basename "$name"` = "_$INDEX" ] && name=`dirname "$name"`
 echo -n "$delimiter"
-hash=`wget -q -O- --post-file="$path" http://localhost:$port/raw`
+hash=`wget -q -O- --post-file="$path" "http://localhost:$port/bzzr://"`
 mime=`mimetype -b "$path"`
 if [ "_$name" = '_.' ]; then
 echo -n "\"hash\":\"$hash\",\"contentType\":\"$mime\""
@@ -38,7 +38,7 @@ fi
 delimiter='},{'
 
 done
-echo -n '}]}') | wget -q -O- --post-data=`cat` http://localhost:$port/raw
+echo -n '}]}') | wget -q -O- --post-data=`cat` "http://localhost:$port/bzzr://"
 echo
 
 popd > /dev/null
