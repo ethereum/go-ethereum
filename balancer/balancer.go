@@ -2,7 +2,7 @@ package balancer
 
 import "container/heap"
 
-const maxTaskBuffer = 3000 // maximum amount of work a worker can have in its buffer
+var maxTaskBuffer = 3000 // maximum amount of work a worker can have in its buffer
 
 // Task repsents a single batch of work offered to a worker.
 type Task struct {
@@ -158,13 +158,14 @@ func (b *Balancer) dispatch(task Task) {
 	if len(w.tasks) == cap(w.tasks) {
 		heap.Push(&b.pool, w) // push full worker back to heap
 		// set the pending state (i.e. high load)
-		pending := (len(b.pool) - b.poolSize) * maxTaskBuffer
+		pending := (len(b.pool) - b.poolSize + 1) * maxTaskBuffer
 		// create the new temporary worker
 		worker := &Worker{
 			tasks:   make(chan Task, maxTaskBuffer),
 			temp:    true,
 			start:   pending,
 			pending: pending,
+			quit:    make(chan struct{}),
 		}
 		go worker.work(b.done) // spawn worker process
 		w = worker             // set new worker
