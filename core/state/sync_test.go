@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -42,7 +43,7 @@ func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 
 	// Fill it with some arbitrary data
 	accounts := []*testAccount{}
-	for i := byte(0); i < 255; i++ {
+	for i := byte(0); i < 96; i++ {
 		obj := state.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
 		acc := &testAccount{address: common.BytesToAddress([]byte{i})}
 
@@ -61,6 +62,9 @@ func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 	}
 	root, _ := state.Commit()
 
+	// Remove any potentially cached data from the test state creation
+	trie.ClearGlobalCache()
+
 	// Return the generated state
 	return db, root, accounts
 }
@@ -68,9 +72,18 @@ func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 // checkStateAccounts cross references a reconstructed state with an expected
 // account array.
 func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accounts []*testAccount) {
-	state, _ := New(root, db)
-	for i, acc := range accounts {
+	// Remove any potentially cached data from the state synchronisation
+	trie.ClearGlobalCache()
 
+	// Check root availability and state contents
+	state, err := New(root, db)
+	if err != nil {
+		t.Fatalf("failed to create state trie at %x: %v", root, err)
+	}
+	if err := checkStateConsistency(db, root); err != nil {
+		t.Fatalf("inconsistent state trie at %x: %v", root, err)
+	}
+	for i, acc := range accounts {
 		if balance := state.GetBalance(acc.address); balance.Cmp(acc.balance) != 0 {
 			t.Errorf("account %d: balance mismatch: have %v, want %v", i, balance, acc.balance)
 		}
@@ -81,6 +94,25 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accou
 			t.Errorf("account %d: code mismatch: have %x, want %x", i, code, acc.code)
 		}
 	}
+}
+
+// checkStateConsistency checks that all nodes in a state trie are indeed present.
+func checkStateConsistency(db ethdb.Database, root common.Hash) error {
+	// Remove any potentially cached data from the test state creation or previous checks
+	trie.ClearGlobalCache()
+
+	// Create and iterate a state trie rooted in a sub-node
+	if _, err := db.Get(root.Bytes()); err != nil {
+		return nil // Consider a non existent state consistent
+	}
+	state, err := New(root, db)
+	if err != nil {
+		return err
+	}
+	it := NewNodeIterator(state)
+	for it.Next() {
+	}
+	return it.Error
 }
 
 // Tests that an empty state is not scheduled for syncing.
@@ -235,4 +267,66 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 	}
 	// Cross check that the two states are in sync
 	checkStateAccounts(t, dstDb, srcRoot, srcAccounts)
+}
+
+// Tests that at any point in time during a sync, only complete sub-tries are in
+// the database.
+func TestIncompleteStateSync(t *testing.T) {
+	// Create a random state to copy
+	srcDb, srcRoot, srcAccounts := makeTestState()
+
+	// Create a destination state and sync with the scheduler
+	dstDb, _ := ethdb.NewMemDatabase()
+	sched := NewStateSync(srcRoot, dstDb)
+
+	added := []common.Hash{}
+	queue := append([]common.Hash{}, sched.Missing(1)...)
+	for len(queue) > 0 {
+		// Fetch a batch of state nodes
+		results := make([]trie.SyncResult, len(queue))
+		for i, hash := range queue {
+			data, err := srcDb.Get(hash.Bytes())
+			if err != nil {
+				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			}
+			results[i] = trie.SyncResult{hash, data}
+		}
+		// Process each of the state nodes
+		if index, err := sched.Process(results); err != nil {
+			t.Fatalf("failed to process result #%d: %v", index, err)
+		}
+		for _, result := range results {
+			added = append(added, result.Hash)
+		}
+		// Check that all known sub-tries in the synced state is complete
+		for _, root := range added {
+			// Skim through the accounts and make sure the root hash is not a code node
+			codeHash := false
+			for _, acc := range srcAccounts {
+				if bytes.Compare(root.Bytes(), crypto.Sha3(acc.code)) == 0 {
+					codeHash = true
+					break
+				}
+			}
+			// If the root is a real trie node, check consistency
+			if !codeHash {
+				if err := checkStateConsistency(dstDb, root); err != nil {
+					t.Fatalf("state inconsistent: %v", err)
+				}
+			}
+		}
+		// Fetch the next batch to retrieve
+		queue = append(queue[:0], sched.Missing(1)...)
+	}
+	// Sanity check that removing any node from the database is detected
+	for _, node := range added[1:] {
+		key := node.Bytes()
+		value, _ := dstDb.Get(key)
+
+		dstDb.Delete(key)
+		if err := checkStateConsistency(dstDb, added[0]); err == nil {
+			t.Fatalf("trie inconsistency not caught, missing: %x", key)
+		}
+		dstDb.Put(key, value)
+	}
 }

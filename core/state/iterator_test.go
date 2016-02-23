@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,53 +14,28 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package trie
+package state
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-func TestIterator(t *testing.T) {
-	trie := newEmpty()
-	vals := []struct{ k, v string }{
-		{"do", "verb"},
-		{"ether", "wookiedoo"},
-		{"horse", "stallion"},
-		{"shaman", "horse"},
-		{"doge", "coin"},
-		{"dog", "puppy"},
-		{"somethingveryoddindeedthis is", "myothernodedata"},
-	}
-	v := make(map[string]bool)
-	for _, val := range vals {
-		v[val.k] = false
-		trie.Update([]byte(val.k), []byte(val.v))
-	}
-	trie.Commit()
-
-	it := NewIterator(trie)
-	for it.Next() {
-		v[string(it.Key)] = true
-	}
-
-	for k, found := range v {
-		if !found {
-			t.Error("iterator didn't find", k)
-		}
-	}
-}
-
 // Tests that the node iterator indeed walks over the entire database contents.
 func TestNodeIteratorCoverage(t *testing.T) {
-	// Create some arbitrary test trie to iterate
-	db, trie, _ := makeTestTrie()
+	// Create some arbitrary test state to iterate
+	db, root, _ := makeTestState()
 
+	state, err := New(root, db)
+	if err != nil {
+		t.Fatalf("failed to create state trie at %x: %v", root, err)
+	}
 	// Gather all the node hashes found by the iterator
 	hashes := make(map[common.Hash]struct{})
-	for it := NewNodeIterator(trie); it.Next(); {
+	for it := NewNodeIterator(state); it.Next(); {
 		if it.Hash != (common.Hash{}) {
 			hashes[it.Hash] = struct{}{}
 		}
@@ -72,6 +47,9 @@ func TestNodeIteratorCoverage(t *testing.T) {
 		}
 	}
 	for _, key := range db.(*ethdb.MemDatabase).Keys() {
+		if bytes.HasPrefix(key, []byte("secure-key-")) {
+			continue
+		}
 		if _, ok := hashes[common.BytesToHash(key)]; !ok {
 			t.Errorf("state entry not reported %x", key)
 		}
