@@ -168,6 +168,10 @@ func (self *LDBDatabase) LDB() *leveldb.DB {
 
 // Meter configures the database metrics collectors and
 func (self *LDBDatabase) Meter(prefix string) {
+	// Short circuit metering if the metrics system is disabled
+	if !metrics.Enabled {
+		return
+	}
 	// Initialize all the metrics collector at the requested prefix
 	self.getTimer = metrics.NewTimer(prefix + "user/gets")
 	self.putTimer = metrics.NewTimer(prefix + "user/puts")
