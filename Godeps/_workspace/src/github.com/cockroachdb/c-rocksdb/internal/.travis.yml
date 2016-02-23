@@ -1,0 +1,43 @@
+sudo: false
+language: cpp
+
+matrix:
+  include:
+    - os: linux
+      compiler: clang
+      env: COMPILER=clang++-3.6
+      addons:
+         apt:
+            sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-precise-3.6']
+            packages: ['clang-3.6', 'clang-format-3.6', 'zlib1g-dev', 'libbz2-dev', 'libsnappy-dev', 'curl']
+    - os: osx
+      compiler: clang
+
+install:
+  # Build gflags
+  # TODO(noetzli): Remove when gflags available through Travis
+  - pushd /tmp/ && curl -L https://github.com/gflags/gflags/archive/v2.1.2.tar.gz -o gflags.tar.gz && tar xfz gflags.tar.gz && cd gflags-2.1.2 && cmake . && make && popd
+  # Download clang-format-diff.py to check source code formatting
+  - pushd /tmp/ && curl -L http://llvm.org/svn/llvm-project/cfe/trunk/tools/clang-format/clang-format-diff.py -o clang-format-diff.py && chmod +x clang-format-diff.py && popd
+
+before_script:
+  # Add gflags to include/library paths
+  # TODO(noetzli): Remove when gflags available through Travis
+  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/gflags-2.1.2/lib"
+  - export LIBRARY_PATH="$LIBRARY_PATH:/tmp/gflags-2.1.2/lib"
+  - export CPLUS_INCLUDE_PATH="$CPLUS_INCLUDE_PATH:/tmp/gflags-2.1.2/include"
+  - if [ -n "${COMPILER}" ]; then CXX=${COMPILER}; fi
+  - if [[ "${TRAVIS_OS_NAME}" == 'osx' ]]; then brew install gflags snappy; fi
+  - ulimit -n 2000 || true
+
+# Lousy hack to disable use and testing of fallocate, which doesn't behave quite
+# as EnvPosixTest::AllocateTest expects within the Travis OpenVZ environment.
+script:
+  - if [[ "${TRAVIS_OS_NAME}" == 'linux' ]]; then OPT=-DTRAVIS CLANG_FORMAT_DIFF=/tmp/clang-format-diff.py make format; fi
+  - OPT=-DTRAVIS V=1 make -j4 check && OPT=-DTRAVIS V=1 make clean jclean rocksdbjava jtest
+
+notifications:
+    email:
+      - leveldb@fb.com
+    webhooks:
+      - https://buildtimetrend.herokuapp.com/travis

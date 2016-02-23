@@ -1,0 +1,217 @@
+#!/bin/bash
+#
+#(c) 2004-present, Facebook, all rights reserved. 
+# See the LICENSE file for usage and distribution rights.
+#
+
+trap 'echo "Caught exception, dying"; exit' 1 2 3 15
+
+ME=`basename $0`
+SERVER=`hostname`
+
+#parameters used
+#
+Dump_Config=0
+DEBUG=
+OS=`/bin/uname -s`
+VMEM=
+RSS=
+CPU=
+VERBOSE=
+VAR=
+LIMIT=
+ACTION=
+N=
+WAIT=
+
+#
+#supported OS: Linux only for now. Easy to add
+#
+oscheck() {
+  case ${OS} in
+    Linux)
+     VMEM=vsz
+     RSS=rss
+     CPU=bsdtime
+     ;;
+    *)
+      die "Unsupported OS ${OS}. Send a bug report with OS you need supported. Thanks."
+      ;;
+  esac
+}
+
+
+verbose() {
+  if [ "x$DEBUG" != "x" ]; then
+    echo "$@" >&2
+  fi
+}
+
+warn() {
+  echo "$@" >&2
+}
+
+die() {
+    echo "ERROR: " "$@" >&2;
+    exit;
+}
+
+dump_config() {
+  cat <<EOCONFIG;
+$ME running on ${HOSTNAME} at `date`
+
+Configuration for this run:
+  PID to monitor     : ${PID}
+  Resource monitored : ${VAR}
+  Resource limit     : ${LIMIT}
+  Check every        : ${WAIT} seconds
+  No. of times run   : ${N}
+  What to do         : ${ACTION}
+EOCONFIG
+
+}
+
+usage() {
+  cat <<USAGE; exit
+$@
+
+Usage ${ME} -p pid [-x {VMEM|RSS|CPU}] -l limit [-a {warn|die|kill}] [-n cycles] [-w wait]
+
+Monitor a process for set of violations. Options:
+
+  -p: PID of process to monitor
+
+  -x: metric to sense. Currently only VMEM/RSS/CPU are supported. Defaults to VMEM
+
+  -l: what is the threshold/limit for the metric that is being sensed.
+    Examples: "-l 100m", "-l 1.5g" (for VMEM/RSS), "-l 5:04" 5:04 in BSDTIME for CPU
+    NOTE: defaults to 1GB
+
+  -a: action. Currently {warn|die|kill} are supported. 
+    The default action is to 'warn'. Here is the behavior:
+
+    warn: complain if usage exceeds threshold, but continue monitoring
+    kill: complain, kill the db_bench process and exit
+    die:  if usage exceeds threshold, die immediately
+
+  -n: number of cycles to monitor. Default is to monitor until PID no longer exists.
+
+  -w: wait time per cycle of monitoring. Default is 5 seconds.
+
+  -v: verbose messaging
+
+USAGE
+
+}
+
+#set default values if none given
+set_defaults_if_noopt_given() {
+
+  : ${VAR:=vsz}
+  : ${LIMIT:=1024000}
+  : ${WAIT:=5}
+  : ${N:=999999}
+  : ${ACTION:=warn}
+}
+
+validate_options() {
+  if [ "x$PID" = "x" -a $Dump_Config -ne 1 ]; then
+    usage "PID is mandatory"
+  fi
+}
+
+###### START
+
+
+  while getopts ":p:x:l:a:n:t:vhd" opt; do
+    case $opt in
+      d)
+          Dump_Config=1
+          ;;
+      h)
+          usage;
+          ;;
+      a)
+        ACTION=${OPTARG};
+        ;;
+      v)
+        DEBUG=1;
+        ;;
+      p)
+        PID=$OPTARG;
+        ;;
+      x)
+        VAR=$OPTARG;
+        ;;
+      l)
+        LIMIT=$OPTARG;
+        ;;
+      w)
+        WAIT=$OPTARG;
+        ;;
+      n)
+        N=$OPTARG;
+        ;;
+      \?) 
+        usage;
+        ;;
+    esac
+  done
+
+oscheck;
+set_defaults_if_noopt_given;
+validate_options;
+
+if [ $Dump_Config -eq 1 ]; then
+    dump_config;
+    exit;
+fi
+
+Done=0
+
+verbose "Trying ${N} times, Waiting ${WAIT} seconds each iteration";
+
+while [ $Done -eq 0 ]; do
+  VAL=`/bin/ps h -p $PID -o ${VAR} | perl -pe 'chomp; s/(.*)m/$1 * 1024/e; s/(.*)g/$1 * 1024 * 1024/e;'`
+  if [ ${VAL:=0} -eq 0 ]; then
+    warn "Process $PID ended without incident."
+    Done=1;
+    break;
+  fi
+
+  if [ $VAL -ge $LIMIT ]; then
+    Done=1;
+  else
+    echo "Value of '${VAR}' (${VAL}) is less than ${LIMIT} for PID ${PID}"
+    sleep $WAIT;
+  fi
+  if [ $Done -eq 1 ]; then
+
+    if [ "$ACTION" = "kill" ]; then
+        kill ${PID} || kill -3 ${PID}
+        exit;
+
+    elif [ "$ACTION" = "warn" ]; then
+
+      # go back to monitoring.
+
+      warn "`date` WARNING: ${VAR} breached threshold ${LIMIT}, actual is ${VAL}"
+      Done=0  #go back to monitoring
+
+    elif [ "$ACTION" = "die" ]; then
+      warn "WARNING: dying without killing process ${PID} on ${SERVER}"
+      warn "The process details are below: "
+      warn "`ps -p ${PID} -o pid,ppid,bsdtime,rss,vsz,cmd,args`"
+      warn ""
+
+      #should we send email/notify someone? TODO... for now, bail.
+
+      exit -1;
+
+    fi
+  else
+      :
+      #warn "INFO: PID $PID, $VAR = $VAL, limit ($LIMIT) not exceeded";
+  fi
+done
+

@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/diskdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -748,7 +749,7 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 	cache := ctx.GlobalInt(CacheFlag.Name)
 
 	var err error
-	if chainDb, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "chaindata"), cache); err != nil {
+	if chainDb, err = diskdb.New(filepath.Join(datadir, "chaindata"), cache, 128); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
 	if ctx.GlobalBool(OlympicFlag.Name) {

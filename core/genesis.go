@@ -96,7 +96,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 		return block, nil
 	}
 
-	if err := stateBatch.Write(); err != nil {
+	if err := stateBatch.Commit(); err != nil {
 		return nil, fmt.Errorf("cannot write state: %v", err)
 	}
 	if err := WriteTd(chainDb, block.Hash(), difficulty); err != nil {

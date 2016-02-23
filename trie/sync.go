@@ -263,7 +263,7 @@ func (s *TrieSync) commit(req *request, batch ethdb.Batch) (err error) {
 	if batch == nil {
 		batch = s.database.NewBatch()
 		defer func() {
-			err = batch.Write()
+			err = batch.Commit()
 		}()
 	}
 	// Write the node content to disk

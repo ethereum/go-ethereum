@@ -1,0 +1,12 @@
+diff --git a/internal/.gitignore b/internal/.gitignore
+index 8bba1b8..18dc43c 100644
+--- a/internal/.gitignore
++++ b/internal/.gitignore
+@@ -25,7 +25,6 @@ make_config.mk
+ ldb
+ manifest_dump
+ sst_dump
+-util/build_version.cc
+ build_tools/VALGRIND_LOGS/
+ coverage/COVERAGE_REPORT
+ .gdbhistory

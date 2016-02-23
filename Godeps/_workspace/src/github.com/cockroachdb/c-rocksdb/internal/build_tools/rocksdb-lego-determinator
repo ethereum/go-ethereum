@@ -1,0 +1,259 @@
+#!/bin/bash
+# This script is executed by Sandcastle
+# to determine next steps to run
+
+#
+# Helper variables
+#
+REPORT_EMAIL="'report': [
+    {
+        'type':'email',
+        'triggers':['fail'],
+        'emails':['leveldb@fb.com']
+    }
+]"
+
+CLEANUP_ENV="
+{
+  'name':'Cleanup environment',
+  'shell':'rm -rf /dev/shm/rocksdb && mkdir /dev/shm/rocksdb && make clean',
+  'user':'root'
+}"
+
+DEBUG="OPT=-g"
+SHM="TEST_TMPDIR=/dev/shm/rocksdb"
+GCC_481="ROCKSDB_FBCODE_BUILD_WITH_481=1"
+ASAN="COMPILE_WITH_ASAN=1"
+CLANG="USE_CLANG=1"
+LITE="OPT=-DROCKSDB_LITE"
+TSAN="COMPILE_WITH_TSAN=1"
+
+#
+# RocksDB unit test in parallel
+# Currently we always have noise in our parallel runs. This job is to help
+# manage the noise
+#
+PARALLEL_UNIT_TEST_COMMANDS="[
+    {
+        'name':'Rocksdb Parallel Unit Test',
+        'steps': [
+            $CLEANUP_ENV,
+            {
+                'name':'Build and test RocksDB debug version',
+                'shell':'$SHM $DEBUG make check 2>&1 > /dev/null || cat t/log-*',
+                'user':'root'
+            },
+            $CLEANUP_ENV,
+            {
+                'name':'Build and test RocksDB debug version under gcc-4.8.1',
+                'shell':'$SHM $GCC_481 $DEBUG make check 2>&1 > /dev/null || cat t/log-*',
+                'user':'root'
+            },
+        ],
+        $REPORT_EMAIL
+    }
+]"
+
+#
+# RocksDB unit test
+#
+UNIT_TEST_COMMANDS="[
+    {
+        'name':'Rocksdb Unit Test',
+        'steps': [
+            $CLEANUP_ENV,
+            {
+                'name':'Build and test RocksDB debug version',
+                'shell':'$SHM $DEBUG make J=1 check',
+                'user':'root'
+            },
+        ],
+        $REPORT_EMAIL
+    }
+]"
+
+#
+# RocksDB unit test on gcc-4.8.1
+#
+UNIT_TEST_COMMANDS_481="[
+    {
+        'name':'Rocksdb Unit Test on GCC 4.8.1',
+        'steps': [
+            $CLEANUP_ENV,
+            {
+                'name':'Build and test RocksDB debug version',
+                'shell':'$SHM $GCC_481 $DEBUG make J=1 check',
+                'user':'root'
+            },
+        ],
+        $REPORT_EMAIL
+    }
+]"
+
+#
+# RocksDB unit test with CLANG
+#
+CLANG_UNIT_TEST_COMMANDS="[
+    {
+        'name':'Rocksdb Unit Test',
+        'steps': [
+            $CLEANUP_ENV,
+            {
+                'name':'Build and test RocksDB debug',
+                'shell':'$CLANG $SHM $DEBUG make check',
+                'user':'root'
+            },
+        ],
+        $REPORT_EMAIL
+    }
+]"
+
+#
+# Build RocksDB lite
+#
+LITE_BUILD_COMMANDS="[
+    {
+        'name':'Rocksdb Lite build',
+        'steps': [
+            $CLEANUP_ENV,
+            {
+                'name':'Build RocksDB debug version',
+                'shell':'$LITE $DEBUG make J=1 static_lib',
+                'user':'root'
+            },
+        ],
+        $REPORT_EMAIL
+    }
+]"
+
+#
+# RocksDB stress/crash test
+#
+STRESS_CRASH_TEST_COMMANDS="[
+    {
+        'name':'Rocksdb Stress/Crash Test',
+        'steps': [
+            $CLEANUP_ENV,
+            {
+                'name':'Build and run RocksDB debug stress tests',
+                'shell':'$SHM $DEBUG make J=1 db_stress',
+                'user':'root'
+            },
+            {
+                'name':'Build and run RocksDB debug crash tests',
+                'shell':'$SHM $DEBUG make J=1 crash_test',
+                'user':'root'
+            }
+        ],
+        $REPORT_EMAIL
+    }
+]"
+
+
+#
+# RocksDB test under address sanitizer
+#
+ASAN_TEST_COMMANDS="[
+    {
+        'name':'Rocksdb Unit Test under ASAN',
+        'steps': [
+            $CLEANUP_ENV,
+            {
+                'name':'Test RocksDB debug under ASAN',
+                'shell':'set -o pipefail && $SHM $ASAN $DEBUG make J=1 asan_check |& /usr/facebook/ops/scripts/asan_symbolize.py -d',
+                'user':'root'
+            }
+        ],
+        $REPORT_EMAIL
+    }
+]"
+
+#
+# RocksDB crash testing under address sanitizer
+#
+ASAN_CRASH_TEST_COMMANDS="[
+    {
+        'name':'Rocksdb crash test under ASAN',
+        'steps': [
+            $CLEANUP_ENV,
+            {
+                'name':'Build and run RocksDB debug asan_crash_test',
+                'shell':'$SHM $DEBUG make J=1 asan_crash_test',
+                'user':'root'
+            },
+        ],
+        $REPORT_EMAIL
+    }
+]"
+
+#
+# RocksDB unit test under valgrind
+#
+VALGRIND_TEST_COMMANDS="[
+    {
+        'name':'Rocksdb Unit Test under valgrind',
+        'steps': [
+            $CLEANUP_ENV,
+            {
+                'name':'Run RocksDB debug unit tests',
+                'shell':'$SHM $DEBUG ./build_tools/valgrind_test.sh',
+                'user':'root'
+            },
+        ],
+        $REPORT_EMAIL
+    }
+]"
+
+#
+# RocksDB test under TSAN
+#
+TSAN_TEST_COMMANDS="[
+    {
+        'name':'Rocksdb Unit Test under TSAN',
+        'steps': [
+            $CLEANUP_ENV,
+            {
+                'name':'Run RocksDB debug unit test',
+                'shell':'set -o pipefail && $SHM $DEBUG $TSAN make J=1 check',
+                'user':'root'
+            },
+        ],
+        $REPORT_EMAIL
+    }
+]"
+
+case $1 in
+  punit)
+    echo $PARALLEL_UNIT_TEST_COMMANDS
+    ;;
+  unit)
+    echo $UNIT_TEST_COMMANDS
+    ;;
+  unit_481)
+    echo $UNIT_TEST_COMMANDS_481
+    ;;
+  clang_unit)
+    echo $CLANG_UNIT_TEST_COMMANDS
+    ;;
+  lite)
+    echo $LITE_BUILD_COMMANDS
+    ;;
+  stress_crash)
+    echo $STRESS_CRASH_TEST_COMMANDS
+    ;;
+  asan)
+    echo $ASAN_TEST_COMMANDS
+    ;;
+  asan_crash)
+    echo $ASAN_CRASH_TEST_COMMANDS
+    ;;
+  valgrind)
+    echo $VALGRIND_TEST_COMMANDS
+    ;;
+  tsan)
+    echo $TSAN_TEST_COMMANDS
+    ;;
+  *)
+    echo "Invalid determinator command"
+    ;;
+esac

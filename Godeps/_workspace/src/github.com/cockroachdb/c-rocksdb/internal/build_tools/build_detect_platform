@@ -1,0 +1,394 @@
+#!/bin/sh
+#
+# Detects OS we're compiling on and outputs a file specified by the first
+# argument, which in turn gets read while processing Makefile.
+#
+# The output will set the following variables:
+#   CC                          C Compiler path
+#   CXX                         C++ Compiler path
+#   PLATFORM_LDFLAGS            Linker flags
+#   JAVA_LDFLAGS                Linker flags for RocksDBJava
+#   JAVA_STATIC_LDFLAGS         Linker flags for RocksDBJava static build
+#   PLATFORM_SHARED_EXT         Extension for shared libraries
+#   PLATFORM_SHARED_LDFLAGS     Flags for building shared library
+#   PLATFORM_SHARED_CFLAGS      Flags for compiling objects for shared library
+#   PLATFORM_CCFLAGS            C compiler flags
+#   PLATFORM_CXXFLAGS           C++ compiler flags.  Will contain:
+#   PLATFORM_SHARED_VERSIONED   Set to 'true' if platform supports versioned
+#                               shared libraries, empty otherwise.
+#
+# The PLATFORM_CCFLAGS and PLATFORM_CXXFLAGS might include the following:
+#
+#       -DLEVELDB_PLATFORM_POSIX if cstdatomic is present
+#       -DLEVELDB_PLATFORM_NOATOMIC if it is not
+#       -DSNAPPY                    if the Snappy library is present
+#       -DLZ4                       if the LZ4 library is present
+#       -DZSTD                      if the ZSTD library is present
+#       -DNUMA                      if the NUMA library is present
+#
+# Using gflags in rocksdb:
+# Our project depends on gflags, which requires users to take some extra steps
+# before they can compile the whole repository:
+#   1. Install gflags. You may download it from here:
+#      https://code.google.com/p/gflags/
+#   2. Once install, add the include path/lib path for gflags to CPATH and
+#      LIBRARY_PATH respectively. If installed with default mode, the
+#      lib and include path will be /usr/local/lib and /usr/local/include
+# Mac user can do this by having brew installed and running brew install gflags
+
+OUTPUT=$1
+if test -z "$OUTPUT"; then
+  echo "usage: $0 <output-filename>" >&2
+  exit 1
+fi
+
+# we depend on C++11
+PLATFORM_CXXFLAGS="-std=c++11"
+# we currently depend on POSIX platform
+COMMON_FLAGS="-DROCKSDB_PLATFORM_POSIX"
+
+# Default to fbcode gcc on internal fb machines
+if [ -z "$ROCKSDB_NO_FBCODE" -a -d /mnt/gvfs/third-party ]; then
+    FBCODE_BUILD="true"
+    # If we're compiling with TSAN we need pic build
+    PIC_BUILD=$COMPILE_WITH_TSAN
+    if [ -z "$ROCKSDB_FBCODE_BUILD_WITH_481" ]; then
+      source "$PWD/build_tools/fbcode_config.sh"
+    else
+      # we need this to build with MySQL. Don't use for other purposes.
+      source "$PWD/build_tools/fbcode_config4.8.1.sh"
+    fi
+fi
+
+# Delete existing output, if it exists
+rm -f "$OUTPUT"
+touch "$OUTPUT"
+
+if test -z "$CC"; then
+   CC=cc
+fi
+
+if test -z "$CXX"; then
+    CXX=g++
+fi
+
+# Detect OS
+if test -z "$TARGET_OS"; then
+    TARGET_OS=`uname -s`
+fi
+
+if test -z "$TARGET_ARCHITECTURE"; then
+    TARGET_ARCHITECTURE=`uname -m`
+fi
+
+if test -z "$CLANG_SCAN_BUILD"; then
+    CLANG_SCAN_BUILD=scan-build
+fi
+
+if test -z "$CLANG_ANALYZER"; then
+    CLANG_ANALYZER=$(which clang++ 2> /dev/null)
+fi
+
+COMMON_FLAGS="$COMMON_FLAGS ${CFLAGS}"
+CROSS_COMPILE=
+PLATFORM_CCFLAGS=
+PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS"
+PLATFORM_SHARED_EXT="so"
+PLATFORM_SHARED_LDFLAGS="-Wl,--no-as-needed -shared -Wl,-soname -Wl,"
+PLATFORM_SHARED_CFLAGS="-fPIC"
+PLATFORM_SHARED_VERSIONED=true
+
+# generic port files (working on all platform by #ifdef) go directly in /port
+GENERIC_PORT_FILES=`cd "$ROCKSDB_ROOT"; find port -name '*.cc' | tr "\n" " "`
+
+# On GCC, we pick libc's memcmp over GCC's memcmp via -fno-builtin-memcmp
+case "$TARGET_OS" in
+    Darwin)
+        PLATFORM=OS_MACOSX
+        COMMON_FLAGS="$COMMON_FLAGS -DOS_MACOSX"
+        PLATFORM_SHARED_EXT=dylib
+        PLATFORM_SHARED_LDFLAGS="-dynamiclib -install_name "
+        # PORT_FILES=port/darwin/darwin_specific.cc
+        ;;
+    IOS)
+        PLATFORM=IOS
+        COMMON_FLAGS="$COMMON_FLAGS -DOS_MACOSX -DIOS_CROSS_COMPILE -DROCKSDB_LITE"
+        PLATFORM_SHARED_EXT=dylib
+        PLATFORM_SHARED_LDFLAGS="-dynamiclib -install_name "
+        CROSS_COMPILE=true
+        PLATFORM_SHARED_VERSIONED=
+        ;;
+    Linux)
+        PLATFORM=OS_LINUX
+        COMMON_FLAGS="$COMMON_FLAGS -DOS_LINUX"
+        if [ -z "$USE_CLANG" ]; then
+            COMMON_FLAGS="$COMMON_FLAGS -fno-builtin-memcmp"
+        fi
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lpthread -lrt"
+        # PORT_FILES=port/linux/linux_specific.cc
+        ;;
+    SunOS)
+        PLATFORM=OS_SOLARIS
+        COMMON_FLAGS="$COMMON_FLAGS -fno-builtin-memcmp -D_REENTRANT -DOS_SOLARIS"
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lpthread -lrt"
+        # PORT_FILES=port/sunos/sunos_specific.cc
+        ;;
+    FreeBSD)
+        PLATFORM=OS_FREEBSD
+        COMMON_FLAGS="$COMMON_FLAGS -fno-builtin-memcmp -D_REENTRANT -DOS_FREEBSD"
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lpthread"
+        # PORT_FILES=port/freebsd/freebsd_specific.cc
+        ;;
+    NetBSD)
+        PLATFORM=OS_NETBSD
+        COMMON_FLAGS="$COMMON_FLAGS -fno-builtin-memcmp -D_REENTRANT -DOS_NETBSD"
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lpthread -lgcc_s"
+        # PORT_FILES=port/netbsd/netbsd_specific.cc
+        ;;
+    OpenBSD)
+        PLATFORM=OS_OPENBSD
+        COMMON_FLAGS="$COMMON_FLAGS -fno-builtin-memcmp -D_REENTRANT -DOS_OPENBSD"
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -pthread"
+        # PORT_FILES=port/openbsd/openbsd_specific.cc
+        ;;
+    DragonFly)
+        PLATFORM=OS_DRAGONFLYBSD
+        COMMON_FLAGS="$COMMON_FLAGS -fno-builtin-memcmp -D_REENTRANT -DOS_DRAGONFLYBSD"
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lpthread"
+        # PORT_FILES=port/dragonfly/dragonfly_specific.cc
+        ;;
+    Cygwin)
+        PLATFORM=CYGWIN
+        PLATFORM_SHARED_CFLAGS=""
+        PLATFORM_CXXFLAGS="-std=gnu++11"
+        COMMON_FLAGS="$COMMON_FLAGS -DCYGWIN"
+        if [ -z "$USE_CLANG" ]; then
+            COMMON_FLAGS="$COMMON_FLAGS -fno-builtin-memcmp"
+        fi
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lpthread -lrt"
+        # PORT_FILES=port/linux/linux_specific.cc
+        ;;
+    OS_ANDROID_CROSSCOMPILE)
+        PLATFORM=OS_ANDROID
+	COMMON_FLAGS="$COMMON_FLAGS -fno-builtin-memcmp -D_REENTRANT -DOS_ANDROID -DLEVELDB_PLATFORM_POSIX"
+	PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS "  # All pthread features are in the Android C library
+        # PORT_FILES=port/android/android.cc
+        CROSS_COMPILE=true
+        ;;
+    *)
+        echo "Unknown platform!" >&2
+        exit 1
+esac
+
+PLATFORM_CXXFLAGS="$PLATFORM_CXXFLAGS ${CXXFLAGS}"
+JAVA_LDFLAGS="$PLATFORM_LDFLAGS"
+JAVA_STATIC_LDFLAGS="$PLATFORM_LDFLAGS"
+
+if [ "$CROSS_COMPILE" = "true" -o "$FBCODE_BUILD" = "true" ]; then
+    # Cross-compiling; do not try any compilation tests.
+    # Also don't need any compilation tests if compiling on fbcode
+    true
+else
+    # Test whether fallocate is available
+    $CXX $CFLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
+      #include <fcntl.h>
+      #include <linux/falloc.h>
+      int main() {
+	int fd = open("/dev/null", 0);
+  fallocate(fd, FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE, 0, 1024);
+      }
+EOF
+    if [ "$?" = 0 ]; then
+        COMMON_FLAGS="$COMMON_FLAGS -DROCKSDB_FALLOCATE_PRESENT"
+    fi
+
+    # Test whether Snappy library is installed
+    # http://code.google.com/p/snappy/
+    $CXX $CFLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
+      #include <snappy.h>
+      int main() {}
+EOF
+    if [ "$?" = 0 ]; then
+        COMMON_FLAGS="$COMMON_FLAGS -DSNAPPY"
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lsnappy"
+        JAVA_LDFLAGS="$JAVA_LDFLAGS -lsnappy"
+    fi
+
+    # Test whether gflags library is installed
+    # http://code.google.com/p/gflags/
+    # check if the namespace is gflags
+    $CXX $CFLAGS -x c++ - -o /dev/null 2>/dev/null << EOF
+      #include <gflags/gflags.h>
+      using namespace gflags;
+      int main() {}
+EOF
+    if [ "$?" = 0 ]; then
+        COMMON_FLAGS="$COMMON_FLAGS -DGFLAGS=gflags"
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lgflags"
+    else
+      # check if namespace is google
+      $CXX $CFLAGS -x c++ - -o /dev/null 2>/dev/null << EOF
+        #include <gflags/gflags.h>
+        using namespace google;
+        int main() {}
+EOF
+      if [ "$?" = 0 ]; then
+          COMMON_FLAGS="$COMMON_FLAGS -DGFLAGS=google"
+          PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lgflags"
+      fi
+    fi
+
+    # Test whether zlib library is installed
+    $CXX $CFLAGS $COMMON_FLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
+      #include <zlib.h>
+      int main() {}
+EOF
+    if [ "$?" = 0 ]; then
+        COMMON_FLAGS="$COMMON_FLAGS -DZLIB"
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lz"
+        JAVA_LDFLAGS="$JAVA_LDFLAGS -lz"
+    fi
+
+    # Test whether bzip library is installed
+    $CXX $CFLAGS $COMMON_FLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
+      #include <bzlib.h>
+      int main() {}
+EOF
+    if [ "$?" = 0 ]; then
+        COMMON_FLAGS="$COMMON_FLAGS -DBZIP2"
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lbz2"
+        JAVA_LDFLAGS="$JAVA_LDFLAGS -lbz2"
+    fi
+
+    # Test whether lz4 library is installed
+    $CXX $CFLAGS $COMMON_FLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
+      #include <lz4.h>
+      #include <lz4hc.h>
+      int main() {}
+EOF
+    if [ "$?" = 0 ]; then
+        COMMON_FLAGS="$COMMON_FLAGS -DLZ4"
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -llz4"
+        JAVA_LDFLAGS="$JAVA_LDFLAGS -llz4"
+    fi
+
+    # Test whether zstd library is installed
+    $CXX $CFLAGS $COMMON_FLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
+      #include <zstd.h>
+      int main() {}
+EOF
+    if [ "$?" = 0 ]; then
+        COMMON_FLAGS="$COMMON_FLAGS -DZSTD"
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lzstd"
+        JAVA_LDFLAGS="$JAVA_LDFLAGS -lzstd"
+    fi
+
+    # Test whether numa is available
+    $CXX $CFLAGS -x c++ - -o /dev/null -lnuma 2>/dev/null  <<EOF
+      #include <numa.h>
+      #inlcude <numaif.h>
+      int main() {}
+EOF
+    if [ "$?" = 0 ]; then
+        COMMON_FLAGS="$COMMON_FLAGS -DNUMA"
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lnuma"
+        JAVA_LDFLAGS="$JAVA_LDFLAGS -lnuma"
+    fi
+
+    # Test whether jemalloc is available
+    if echo 'int main() {}' | $CXX $CFLAGS -x c++ - -o /dev/null -ljemalloc \
+      2>/dev/null; then 
+        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -ljemalloc"
+        JAVA_LDFLAGS="$JAVA_LDFLAGS -ljemalloc"
+    else
+        # jemalloc is not available. Let's try tcmalloc
+        if echo 'int main() {}' | $CXX $CFLAGS -x c++ - -o /dev/null \
+          -ltcmalloc 2>/dev/null; then 
+            PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -ltcmalloc"
+            JAVA_LDFLAGS="$JAVA_LDFLAGS -ltcmalloc"
+        fi
+    fi
+
+    # Test whether malloc_usable_size is available
+    $CXX $CFLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
+      #include <malloc.h>
+      int main() {
+        size_t res = malloc_usable_size(0);
+        return 0;
+      }
+EOF
+    if [ "$?" = 0 ]; then
+        COMMON_FLAGS="$COMMON_FLAGS -DROCKSDB_MALLOC_USABLE_SIZE"
+    fi
+fi
+
+# TODO(tec): Fix -Wshorten-64-to-32 errors on FreeBSD and enable the warning.
+# -Wshorten-64-to-32 breaks compilation on FreeBSD i386
+if ! [ "$TARGET_OS" = FreeBSD -a "$TARGET_ARCHITECTURE" = i386 ]; then
+  # Test whether -Wshorten-64-to-32 is available
+  $CXX $CFLAGS -x c++ - -o /dev/null -Wshorten-64-to-32 2>/dev/null  <<EOF
+    int main() {}
+EOF
+  if [ "$?" = 0 ]; then
+    COMMON_FLAGS="$COMMON_FLAGS -Wshorten-64-to-32"
+  fi
+fi
+
+# shall we use HDFS?
+
+if test "$USE_HDFS"; then
+  if test -z "$JAVA_HOME"; then
+    echo "JAVA_HOME has to be set for HDFS usage."
+    exit 1
+  fi
+  HDFS_CCFLAGS="$HDFS_CCFLAGS -I$JAVA_HOME/include -I$JAVA_HOME/include/linux -DUSE_HDFS"
+  HDFS_LDFLAGS="$HDFS_LDFLAGS -lhdfs -L$JAVA_HOME/jre/lib/amd64"
+  HDFS_LDFLAGS="$HDFS_LDFLAGS -L$JAVA_HOME/jre/lib/amd64/server -L$GLIBC_RUNTIME_PATH/lib"
+  HDFS_LDFLAGS="$HDFS_LDFLAGS -ldl -lverify -ljava -ljvm"
+  COMMON_FLAGS="$COMMON_FLAGS $HDFS_CCFLAGS"
+  PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS $HDFS_LDFLAGS"
+  JAVA_LDFLAGS="$JAVA_LDFLAGS $HDFS_LDFLAGS"
+fi
+
+if [ "$TARGET_OS" = FreeBSD -a "$TARGET_ARCHITECTURE" = i386 ]; then
+  # Intel SSE instructions breaks compilation on FreeBSD i386
+  unset USE_SSE
+fi
+
+if test "$USE_SSE"; then
+  # if Intel SSE instruction set is supported, set USE_SSE=1
+  COMMON_FLAGS="$COMMON_FLAGS -msse -msse4.2 "
+elif test -z "$PORTABLE"; then
+  COMMON_FLAGS="$COMMON_FLAGS -march=native "
+fi
+
+PLATFORM_CCFLAGS="$PLATFORM_CCFLAGS $COMMON_FLAGS"
+PLATFORM_CXXFLAGS="$PLATFORM_CXXFLAGS $COMMON_FLAGS"
+
+VALGRIND_VER="$VALGRIND_VER"
+
+ROCKSDB_MAJOR=`build_tools/version.sh major`
+ROCKSDB_MINOR=`build_tools/version.sh minor`
+ROCKSDB_PATCH=`build_tools/version.sh patch`
+
+echo "CC=$CC" >> "$OUTPUT"
+echo "CXX=$CXX" >> "$OUTPUT"
+echo "PLATFORM=$PLATFORM" >> "$OUTPUT"
+echo "PLATFORM_LDFLAGS=$PLATFORM_LDFLAGS" >> "$OUTPUT"
+echo "JAVA_LDFLAGS=$JAVA_LDFLAGS" >> "$OUTPUT"
+echo "JAVA_STATIC_LDFLAGS=$JAVA_STATIC_LDFLAGS" >> "$OUTPUT"
+echo "VALGRIND_VER=$VALGRIND_VER" >> "$OUTPUT"
+echo "PLATFORM_CCFLAGS=$PLATFORM_CCFLAGS" >> "$OUTPUT"
+echo "PLATFORM_CXXFLAGS=$PLATFORM_CXXFLAGS" >> "$OUTPUT"
+echo "PLATFORM_SHARED_CFLAGS=$PLATFORM_SHARED_CFLAGS" >> "$OUTPUT"
+echo "PLATFORM_SHARED_EXT=$PLATFORM_SHARED_EXT" >> "$OUTPUT"
+echo "PLATFORM_SHARED_LDFLAGS=$PLATFORM_SHARED_LDFLAGS" >> "$OUTPUT"
+echo "PLATFORM_SHARED_VERSIONED=$PLATFORM_SHARED_VERSIONED" >> "$OUTPUT"
+echo "EXEC_LDFLAGS=$EXEC_LDFLAGS" >> "$OUTPUT"
+echo "JEMALLOC_INCLUDE=$JEMALLOC_INCLUDE" >> "$OUTPUT"
+echo "JEMALLOC_LIB=$JEMALLOC_LIB" >> "$OUTPUT"
+echo "ROCKSDB_MAJOR=$ROCKSDB_MAJOR" >> "$OUTPUT"
+echo "ROCKSDB_MINOR=$ROCKSDB_MINOR" >> "$OUTPUT"
+echo "ROCKSDB_PATCH=$ROCKSDB_PATCH" >> "$OUTPUT"
+echo "CLANG_SCAN_BUILD=$CLANG_SCAN_BUILD" >> "$OUTPUT"
+echo "CLANG_ANALYZER=$CLANG_ANALYZER" >> "$OUTPUT"

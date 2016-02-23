@@ -1,0 +1,26 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Vagrantfile API/syntax version. Don't touch unless you know what you're doing!
+VAGRANTFILE_API_VERSION = "2"
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+
+  config.vm.define "linux32" do |linux32|
+    linux32.vm.box = "hansode/centos-5.6-i386"
+  end
+
+  config.vm.define "linux64" do |linux64|
+    linux64.vm.box = "hansode/centos-5.6-x86_64"
+  end
+
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 2048
+    v.cpus = 4
+  end
+
+  config.vm.provision :shell, path: "build-linux-centos.sh"
+  config.vm.synced_folder "../target", "/rocksdb-build"
+  config.vm.synced_folder "../..", "/rocksdb", type: "rsync"
+  config.vm.boot_timeout = 1200
+end

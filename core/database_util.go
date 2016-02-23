@@ -383,7 +383,7 @@ func WriteTransactions(db ethdb.Database, block *types.Block) error {
 		}
 	}
 	// Write the scheduled data into the database
-	if err := batch.Write(); err != nil {
+	if err := batch.Commit(); err != nil {
 		glog.Fatalf("failed to store transactions into database: %v", err)
 		return err
 	}
@@ -406,7 +406,7 @@ func WriteReceipts(db ethdb.Database, receipts types.Receipts) error {
 		}
 	}
 	// Write the scheduled data into the database
-	if err := batch.Write(); err != nil {
+	if err := batch.Commit(); err != nil {
 		glog.Fatalf("failed to store receipts into database: %v", err)
 		return err
 	}
@@ -501,7 +501,7 @@ func WriteMipmapBloom(db ethdb.Database, number uint64, receipts types.Receipts)
 		}
 		batch.Put(key, bloom.Bytes())
 	}
-	if err := batch.Write(); err != nil {
+	if err := batch.Commit(); err != nil {
 		return fmt.Errorf("mipmap write fail for: %d: %v", number, err)
 	}
 	return nil

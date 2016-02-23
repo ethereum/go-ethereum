@@ -18,7 +18,6 @@
 package eth
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
 	"os"
@@ -38,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/diskdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -134,16 +134,12 @@ type Ethereum struct {
 }
 
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
-	// Let the database take 3/4 of the max open files (TODO figure out a way to get the actual limit of the open files)
-	const dbCount = 3
-	ethdb.OpenFileLimit = 128 / (dbCount + 1)
-
 	// Open the chain database and perform any upgrades needed
-	chainDb, err := ctx.OpenDatabase("chaindata", config.DatabaseCache)
+	chainDb, err := ctx.OpenDatabase("chaindata", config.DatabaseCache, 128)
 	if err != nil {
 		return nil, err
 	}
-	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
+	if db, ok := chainDb.(*diskdb.Database); ok {
 		db.Meter("eth/db/chaindata/")
 	}
 	if err := upgradeChainDatabase(chainDb); err != nil {
@@ -153,11 +149,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	dappDb, err := ctx.OpenDatabase("dapp", config.DatabaseCache)
+	dappDb, err := ctx.OpenDatabase("dapp", 16, 16)
 	if err != nil {
 		return nil, err
 	}
-	if db, ok := dappDb.(*ethdb.LDBDatabase); ok {
+	if db, ok := dappDb.(*diskdb.Database); ok {
 		db.Meter("eth/db/dapp/")
 	}
 	glog.V(logger.Info).Infof("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId)
@@ -493,59 +489,59 @@ func dagFiles(epoch uint64) (string, string) {
 // upgradeChainDatabase ensures that the chain database stores block split into
 // separate header and body entries.
 func upgradeChainDatabase(db ethdb.Database) error {
-	// Short circuit if the head block is stored already as separate header and body
-	data, err := db.Get([]byte("LastBlock"))
-	if err != nil {
-		return nil
-	}
-	head := common.BytesToHash(data)
+	/*	// Short circuit if the head block is stored already as separate header and body
+		data, err := db.Get([]byte("LastBlock"))
+		if err != nil {
+			return nil
+		}
+		head := common.BytesToHash(data)
 
-	if block := core.GetBlockByHashOld(db, head); block == nil {
-		return nil
-	}
-	// At least some of the database is still the old format, upgrade (skip the head block!)
-	glog.V(logger.Info).Info("Old database detected, upgrading...")
+		if block := core.GetBlockByHashOld(db, head); block == nil {
+			return nil
+		}
+		// At least some of the database is still the old format, upgrade (skip the head block!)
+		glog.V(logger.Info).Info("Old database detected, upgrading...")
 
-	if db, ok := db.(*ethdb.LDBDatabase); ok {
-		blockPrefix := []byte("block-hash-")
-		for it := db.NewIterator(); it.Next(); {
-			// Skip anything other than a combined block
-			if !bytes.HasPrefix(it.Key(), blockPrefix) {
-				continue
+		if db, ok := db.(*ethdb.LDBDatabase); ok {
+			blockPrefix := []byte("block-hash-")
+			for it := db.NewIterator(); it.Next(); {
+				// Skip anything other than a combined block
+				if !bytes.HasPrefix(it.Key(), blockPrefix) {
+					continue
+				}
+				// Skip the head block (merge last to signal upgrade completion)
+				if bytes.HasSuffix(it.Key(), head.Bytes()) {
+					continue
+				}
+				// Load the block, split and serialize (order!)
+				block := core.GetBlockByHashOld(db, common.BytesToHash(bytes.TrimPrefix(it.Key(), blockPrefix)))
+
+				if err := core.WriteTd(db, block.Hash(), block.DeprecatedTd()); err != nil {
+					return err
+				}
+				if err := core.WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+					return err
+				}
+				if err := core.WriteHeader(db, block.Header()); err != nil {
+					return err
+				}
+				if err := db.Delete(it.Key()); err != nil {
+					return err
+				}
 			}
-			// Skip the head block (merge last to signal upgrade completion)
-			if bytes.HasSuffix(it.Key(), head.Bytes()) {
-				continue
-			}
-			// Load the block, split and serialize (order!)
-			block := core.GetBlockByHashOld(db, common.BytesToHash(bytes.TrimPrefix(it.Key(), blockPrefix)))
+			// Lastly, upgrade the head block, disabling the upgrade mechanism
+			current := core.GetBlockByHashOld(db, head)
 
-			if err := core.WriteTd(db, block.Hash(), block.DeprecatedTd()); err != nil {
+			if err := core.WriteTd(db, current.Hash(), current.DeprecatedTd()); err != nil {
 				return err
 			}
-			if err := core.WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+			if err := core.WriteBody(db, current.Hash(), &types.Body{current.Transactions(), current.Uncles()}); err != nil {
 				return err
 			}
-			if err := core.WriteHeader(db, block.Header()); err != nil {
+			if err := core.WriteHeader(db, current.Header()); err != nil {
 				return err
 			}
-			if err := db.Delete(it.Key()); err != nil {
-				return err
-			}
-		}
-		// Lastly, upgrade the head block, disabling the upgrade mechanism
-		current := core.GetBlockByHashOld(db, head)
-
-		if err := core.WriteTd(db, current.Hash(), current.DeprecatedTd()); err != nil {
-			return err
-		}
-		if err := core.WriteBody(db, current.Hash(), &types.Body{current.Transactions(), current.Uncles()}); err != nil {
-			return err
-		}
-		if err := core.WriteHeader(db, current.Header()); err != nil {
-			return err
-		}
-	}
+		}*/
 	return nil
 }
 

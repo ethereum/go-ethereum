@@ -1,0 +1,35 @@
+language: c
+compiler: gcc
+script: make test-travis
+before_install:
+  - sudo apt-get update  -qq
+  - sudo apt-get install -qq gcc-arm-linux-gnueabi
+  - sudo apt-get install -qq clang
+  - sudo apt-get install -qq g++-multilib
+  - sudo apt-get install -qq gcc-multilib
+  - sudo apt-get install -qq valgrind
+  - sudo apt-get install -qq python3
+
+env:
+  - LZ4_TRAVIS_CI_ENV=travis-install
+  - LZ4_TRAVIS_CI_ENV=examples
+  - LZ4_TRAVIS_CI_ENV=cmake
+  - LZ4_TRAVIS_CI_ENV=clangtest
+  - LZ4_TRAVIS_CI_ENV=sanitize
+  - LZ4_TRAVIS_CI_ENV=staticAnalyze
+  - LZ4_TRAVIS_CI_ENV=gpptest
+  - LZ4_TRAVIS_CI_ENV=armtest
+  - LZ4_TRAVIS_CI_ENV=versionsTest
+  - LZ4_TRAVIS_CI_ENV=test-lz4
+  - LZ4_TRAVIS_CI_ENV=test-lz4c
+  - LZ4_TRAVIS_CI_ENV=test-lz4c32
+  - LZ4_TRAVIS_CI_ENV=test-fullbench
+  - LZ4_TRAVIS_CI_ENV=test-fullbench32
+  - LZ4_TRAVIS_CI_ENV=test-fuzzer
+  - LZ4_TRAVIS_CI_ENV=test-fuzzer32
+  - LZ4_TRAVIS_CI_ENV=test-frametest
+  - LZ4_TRAVIS_CI_ENV=test-frametest32
+  - LZ4_TRAVIS_CI_ENV=test-mem
+
+matrix:
+  fast_finish: true
