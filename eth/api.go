@@ -762,7 +762,7 @@ type RPCTransaction struct {
 
 // newRPCPendingTransaction returns a pending transaction that will serialize to the RPC representation
 func newRPCPendingTransaction(tx *types.Transaction) *RPCTransaction {
-	from, _ := tx.From()
+	from, _ := tx.FromFrontier()
 
 	return &RPCTransaction{
 		From:     from,
@@ -780,7 +780,7 @@ func newRPCPendingTransaction(tx *types.Transaction) *RPCTransaction {
 func newRPCTransactionFromBlockIndex(b *types.Block, txIndex int) (*RPCTransaction, error) {
 	if txIndex >= 0 && txIndex < len(b.Transactions()) {
 		tx := b.Transactions()[txIndex]
-		from, err := tx.From()
+		from, err := tx.FromFrontier()
 		if err != nil {
 			return nil, err
 		}
@@ -970,7 +970,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (ma
 		return nil, nil
 	}
 
-	from, err := tx.From()
+	from, err := tx.FromFrontier()
 	if err != nil {
 		glog.V(logger.Debug).Infof("%v\n", err)
 		return nil, nil
@@ -1084,7 +1084,7 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(encodedTx string) (string,
 	}
 
 	if tx.To() == nil {
-		from, err := tx.From()
+		from, err := tx.FromFrontier()
 		if err != nil {
 			return "", err
 		}
@@ -1190,7 +1190,7 @@ type SignTransactionResult struct {
 }
 
 func newTx(t *types.Transaction) *Tx {
-	from, _ := t.From()
+	from, _ := t.FromFrontier()
 	return &Tx{
 		tx:       t,
 		To:       t.To(),
@@ -1263,7 +1263,7 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 	pending := s.txPool.GetTransactions()
 	transactions := make([]*RPCTransaction, 0)
 	for _, tx := range pending {
-		if from, _ := tx.From(); accountSet.Has(from) {
+		if from, _ := tx.FromFrontier(); accountSet.Has(from) {
 			transactions = append(transactions, newRPCPendingTransaction(tx))
 		}
 	}
@@ -1298,7 +1298,7 @@ func (s *PublicTransactionPoolAPI) NewPendingTransactions() (rpc.Subscription, e
 		}
 
 		tx := transaction.(core.TxPreEvent)
-		if from, err := tx.Tx.From(); err == nil {
+		if from, err := tx.Tx.FromFrontier(); err == nil {
 			if accountSet.Has(from) {
 				return tx.Tx.Hash()
 			}
@@ -1315,7 +1315,7 @@ func (s *PublicTransactionPoolAPI) Resend(tx *Tx, gasPrice, gasLimit *rpc.HexNum
 
 	pending := s.txPool.GetTransactions()
 	for _, p := range pending {
-		if pFrom, err := p.From(); err == nil && pFrom == tx.From && p.SigHash() == tx.tx.SigHash() {
+		if pFrom, err := p.FromFrontier(); err == nil && pFrom == tx.From && p.SigHash() == tx.tx.SigHash() {
 			if gasPrice == nil {
 				gasPrice = rpc.NewHexNumber(tx.tx.GasPrice())
 			}
@@ -1589,7 +1589,7 @@ func (s *PrivateDebugAPI) doReplayTransaction(txHash common.Hash) ([]vm.StructLo
 		return nil, nil, nil, err
 	}
 
-	txFrom, err := tx.From()
+	txFrom, err := tx.FromFrontier()
 
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("Unable to create transaction sender")
