@@ -43,6 +43,11 @@ var (
 	genesis     = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000))
 )
 
+// Reduce the block cache limit, otherwise the tests will be very heavy.
+func init() {
+	blockCacheLimit = 1024
+}
+
 // makeChain creates a chain of n blocks starting at and including parent.
 // the returned hash chain is ordered head->parent. In addition, every 3rd block
 // contains a transaction and every 5th an uncle to allow testing correct block
