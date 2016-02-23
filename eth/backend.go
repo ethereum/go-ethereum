@@ -44,6 +44,8 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/pow"
+	"github.com/ethereum/go-ethereum/pow/multipow"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -105,7 +107,7 @@ type Ethereum struct {
 	txPool          *core.TxPool
 	blockchain      *core.BlockChain
 	accountManager  *accounts.Manager
-	pow             *ethash.Ethash
+	pow             pow.PoW
 	protocolManager *ProtocolManager
 	SolcPath        string
 	solc            *compiler.Solidity
@@ -219,7 +221,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			return nil, err
 		}
 	} else {
-		eth.pow = ethash.New()
+		eth.pow = multipow.New(func() pow.PoW { return ethash.New() }, 5)
 	}
 	//genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
 	eth.blockchain, err = core.NewBlockChain(chainDb, eth.pow, eth.EventMux())
