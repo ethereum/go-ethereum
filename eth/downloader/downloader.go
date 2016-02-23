@@ -571,8 +571,14 @@ func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
 			// Check if a common ancestor was found
 			finished = true
 			for i := len(hashes) - 1; i >= 0; i-- {
+				// Skip any headers that underflow/overflow our requested set
+				header := d.getHeader(hashes[i])
+				if header == nil || header.Number.Int64() < from || header.Number.Uint64() > head {
+					continue
+				}
+				// Otherwise check if we already know the header or not
 				if d.hasBlockAndState(hashes[i]) {
-					number, hash = uint64(from)+uint64(i), hashes[i]
+					number, hash = header.Number.Uint64(), header.Hash()
 					break
 				}
 			}
@@ -990,12 +996,28 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 			// Make sure the peer actually gave something valid
 			headers := packet.(*headerPack).headers
 			if len(headers) == 0 {
-				glog.V(logger.Debug).Infof("%v: empty head header set", p)
+				glog.V(logger.Warn).Infof("%v: empty head header set", p)
 				return 0, errEmptyHeaderSet
+			}
+			// Make sure the peer's reply conforms to the request
+			for i := 0; i < len(headers); i++ {
+				if number := headers[i].Number.Int64(); number != from+int64(i) {
+					glog.V(logger.Warn).Infof("%v: head header set (item %d) broke chain ordering: requested %d, got %d", p, i, from+int64(i), number)
+					return 0, errInvalidChain
+				}
+				if i > 0 && headers[i-1].Hash() != headers[i].ParentHash {
+					glog.V(logger.Warn).Infof("%v: head header set (item %d) broke chain ancestry: expected [%x], got [%x]", p, i, headers[i-1].Hash().Bytes()[:4], headers[i].ParentHash[:4])
+					return 0, errInvalidChain
+				}
 			}
 			// Check if a common ancestor was found
 			finished = true
 			for i := len(headers) - 1; i >= 0; i-- {
+				// Skip any headers that underflow/overflow our requested set
+				if headers[i].Number.Int64() < from || headers[i].Number.Uint64() > head {
+					continue
+				}
+				// Otherwise check if we already know the header or not
 				if (d.mode != LightSync && d.hasBlockAndState(headers[i].Hash())) || (d.mode == LightSync && d.hasHeader(headers[i].Hash())) {
 					number, hash = headers[i].Number.Uint64(), headers[i].Hash()
 					break
@@ -1206,6 +1228,10 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 					frequency = 1
 				}
 				if n, err := d.insertHeaders(headers, frequency); err != nil {
+					// If some headers were inserted, add them too to the rollback list
+					if n > 0 {
+						rollback = append(rollback, headers[:n]...)
+					}
 					glog.V(logger.Debug).Infof("%v: invalid header #%d [%x…]: %v", p, headers[n].Number, headers[n].Hash().Bytes()[:4], err)
 					return errInvalidChain
 				}
