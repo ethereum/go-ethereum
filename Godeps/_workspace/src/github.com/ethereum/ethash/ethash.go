@@ -75,6 +75,7 @@ func defaultDir() string {
 // and automatic memory management.
 type cache struct {
 	epoch uint64
+	used  time.Time
 	test  bool
 
 	gen sync.Once // ensures cache is only generated once.
@@ -104,14 +105,13 @@ func freeCache(cache *cache) {
 	cache.ptr = nil
 }
 
-// Light implements the Verify half of the proof of work.
-// It uses a small in-memory cache to verify the nonces
-// found by Full.
+// Light implements the Verify half of the proof of work. It uses a few small
+// in-memory caches to verify the nonces found by Full.
 type Light struct {
-	test    bool       // if set use a smaller cache size
-	mu      sync.Mutex // protects current
-	current *cache     // last cache which was generated.
-	// TODO: keep multiple caches.
+	test      bool              // if set use a smaller cache size
+	mu        sync.Mutex        // protects the per-epoch map of DAGs
+	caches    map[uint64]*cache // currently cached verification DAGs
+	NumCaches int               // Maximum number of DAGs to cache before eviction (only init, don't modify)
 }
 
 // Verify checks whether the block's nonce is valid.
@@ -173,16 +173,36 @@ func hashToH256(in common.Hash) C.ethash_h256_t {
 func (l *Light) getCache(blockNum uint64) *cache {
 	var c *cache
 	epoch := blockNum / epochLength
-	// Update or reuse the last cache.
+
+	// If we have a PoW for that epoch, use that
 	l.mu.Lock()
-	if l.current != nil && l.current.epoch == epoch {
-		c = l.current
-	} else {
-		c = &cache{epoch: epoch, test: l.test}
-		l.current = c
+	if l.caches == nil {
+		l.caches = make(map[uint64]*cache)
 	}
+	if l.NumCaches == 0 {
+		l.NumCaches = 3
+	}
+	c = l.caches[epoch]
+	if c == nil {
+		// No cached DAG, evict the oldest if the cache limit was reached
+		if len(l.caches) >= l.NumCaches {
+			var evict *cache
+			for _, cache := range l.caches {
+				if evict == nil || evict.used.After(cache.used) {
+					evict = cache
+				}
+			}
+			glog.V(logger.Info).Infof("Evicting DAG for epoch %d in favour of epoch %d", evict.epoch, epoch)
+			delete(l.caches, evict.epoch)
+		}
+		// Create and return a new DAG for the epoch
+		c = &cache{epoch: epoch, test: l.test}
+		l.caches[epoch] = c
+	}
+	c.used = time.Now()
 	l.mu.Unlock()
-	// Wait for the cache to finish generating.
+
+	// Wait for generation finish and return the cache
 	c.generate()
 	return c
 }
@@ -362,9 +382,13 @@ type Ethash struct {
 }
 
 // New creates an instance of the proof of work.
-// A single instance of Light is shared across all instances
-// created with New.
 func New() *Ethash {
+	return &Ethash{new(Light), &Full{turbo: true}}
+}
+
+// NewShared creates an instance of the proof of work., where a single instance
+// of the Light cache is shared across all instances created with NewShared.
+func NewShared() *Ethash {
 	return &Ethash{sharedLight, &Full{turbo: true}}
 }
 

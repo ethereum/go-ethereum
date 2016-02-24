@@ -20,8 +20,8 @@
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",
-			"Comment": "v23.1-238-g9401881",
-			"Rev": "9401881ab040d1a3b0ae9e4780a115bc284a8a1a"
+			"Comment": "v23.1-240-ga524c9f",
+			"Rev": "a524c9f7d55cb8925567dc201b44ba555862056d"
 		},
 		{
 			"ImportPath": "github.com/fatih/color",
@@ -41,7 +41,35 @@
 			"Rev": "a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4"
 		},
 		{
+			"ImportPath": "github.com/hashicorp/golang-lru/simplelru",
+			"Rev": "a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4"
+		},
+		{
 			"ImportPath": "github.com/huin/goupnp",
+			"Rev": "46bde78b11f3f021f2a511df138be9e2fc7506e8"
+		},
+		{
+			"ImportPath": "github.com/huin/goupnp/dcps/internetgateway1",
+			"Rev": "46bde78b11f3f021f2a511df138be9e2fc7506e8"
+		},
+		{
+			"ImportPath": "github.com/huin/goupnp/dcps/internetgateway2",
+			"Rev": "46bde78b11f3f021f2a511df138be9e2fc7506e8"
+		},
+		{
+			"ImportPath": "github.com/huin/goupnp/httpu",
+			"Rev": "46bde78b11f3f021f2a511df138be9e2fc7506e8"
+		},
+		{
+			"ImportPath": "github.com/huin/goupnp/scpd",
+			"Rev": "46bde78b11f3f021f2a511df138be9e2fc7506e8"
+		},
+		{
+			"ImportPath": "github.com/huin/goupnp/soap",
+			"Rev": "46bde78b11f3f021f2a511df138be9e2fc7506e8"
+		},
+		{
+			"ImportPath": "github.com/huin/goupnp/ssdp",
 			"Rev": "46bde78b11f3f021f2a511df138be9e2fc7506e8"
 		},
 		{
@@ -87,7 +115,75 @@
 			"Rev": "53221230c215611a90762720c9042ac782ef74ee"
 		},
 		{
+			"ImportPath": "github.com/robertkrimen/otto/ast",
+			"Rev": "53221230c215611a90762720c9042ac782ef74ee"
+		},
+		{
+			"ImportPath": "github.com/robertkrimen/otto/dbg",
+			"Rev": "53221230c215611a90762720c9042ac782ef74ee"
+		},
+		{
+			"ImportPath": "github.com/robertkrimen/otto/file",
+			"Rev": "53221230c215611a90762720c9042ac782ef74ee"
+		},
+		{
+			"ImportPath": "github.com/robertkrimen/otto/parser",
+			"Rev": "53221230c215611a90762720c9042ac782ef74ee"
+		},
+		{
+			"ImportPath": "github.com/robertkrimen/otto/registry",
+			"Rev": "53221230c215611a90762720c9042ac782ef74ee"
+		},
+		{
+			"ImportPath": "github.com/robertkrimen/otto/token",
+			"Rev": "53221230c215611a90762720c9042ac782ef74ee"
+		},
+		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",
+			"Rev": "e7e6f5b5ef25adb580feac515f9ccec514d0bda8"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb/cache",
+			"Rev": "e7e6f5b5ef25adb580feac515f9ccec514d0bda8"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb/comparer",
+			"Rev": "e7e6f5b5ef25adb580feac515f9ccec514d0bda8"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb/errors",
+			"Rev": "e7e6f5b5ef25adb580feac515f9ccec514d0bda8"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb/filter",
+			"Rev": "e7e6f5b5ef25adb580feac515f9ccec514d0bda8"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb/iterator",
+			"Rev": "e7e6f5b5ef25adb580feac515f9ccec514d0bda8"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb/journal",
+			"Rev": "e7e6f5b5ef25adb580feac515f9ccec514d0bda8"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb/memdb",
+			"Rev": "e7e6f5b5ef25adb580feac515f9ccec514d0bda8"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb/opt",
+			"Rev": "e7e6f5b5ef25adb580feac515f9ccec514d0bda8"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb/storage",
+			"Rev": "e7e6f5b5ef25adb580feac515f9ccec514d0bda8"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb/table",
+			"Rev": "e7e6f5b5ef25adb580feac515f9ccec514d0bda8"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb/util",
 			"Rev": "e7e6f5b5ef25adb580feac515f9ccec514d0bda8"
 		},
 		{
@@ -111,6 +207,14 @@
 			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
 		},
 		{
+			"ImportPath": "golang.org/x/net/html/atom",
+			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
+		},
+		{
+			"ImportPath": "golang.org/x/net/html/charset",
+			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
+		},
+		{
 			"ImportPath": "golang.org/x/net/websocket",
 			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
 		},
@@ -120,6 +224,42 @@
 		},
 		{
 			"ImportPath": "golang.org/x/text/encoding",
+			"Rev": "09761194ac5034a97b2bfad4f5b896b0ac350b3e"
+		},
+		{
+			"ImportPath": "golang.org/x/text/encoding/charmap",
+			"Rev": "09761194ac5034a97b2bfad4f5b896b0ac350b3e"
+		},
+		{
+			"ImportPath": "golang.org/x/text/encoding/htmlindex",
+			"Rev": "09761194ac5034a97b2bfad4f5b896b0ac350b3e"
+		},
+		{
+			"ImportPath": "golang.org/x/text/encoding/internal",
+			"Rev": "09761194ac5034a97b2bfad4f5b896b0ac350b3e"
+		},
+		{
+			"ImportPath": "golang.org/x/text/encoding/internal/identifier",
+			"Rev": "09761194ac5034a97b2bfad4f5b896b0ac350b3e"
+		},
+		{
+			"ImportPath": "golang.org/x/text/encoding/japanese",
+			"Rev": "09761194ac5034a97b2bfad4f5b896b0ac350b3e"
+		},
+		{
+			"ImportPath": "golang.org/x/text/encoding/korean",
+			"Rev": "09761194ac5034a97b2bfad4f5b896b0ac350b3e"
+		},
+		{
+			"ImportPath": "golang.org/x/text/encoding/simplifiedchinese",
+			"Rev": "09761194ac5034a97b2bfad4f5b896b0ac350b3e"
+		},
+		{
+			"ImportPath": "golang.org/x/text/encoding/traditionalchinese",
+			"Rev": "09761194ac5034a97b2bfad4f5b896b0ac350b3e"
+		},
+		{
+			"ImportPath": "golang.org/x/text/encoding/unicode",
 			"Rev": "09761194ac5034a97b2bfad4f5b896b0ac350b3e"
 		},
 		{
