@@ -74,6 +74,7 @@ type Config struct {
 	DocRoot   string
 	AutoDAG   bool
 	PowTest   bool
+	PowShared bool
 	ExtraData []byte
 
 	AccountManager *accounts.Manager
@@ -211,14 +212,18 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
 		httpclient:              httpclient.New(config.DocRoot),
 	}
-
-	if config.PowTest {
+	switch {
+	case config.PowTest:
 		glog.V(logger.Info).Infof("ethash used in test mode")
 		eth.pow, err = ethash.NewForTesting()
 		if err != nil {
 			return nil, err
 		}
-	} else {
+	case config.PowShared:
+		glog.V(logger.Info).Infof("ethash used in shared mode")
+		eth.pow = ethash.NewShared()
+
+	default:
 		eth.pow = ethash.New()
 	}
 	//genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)

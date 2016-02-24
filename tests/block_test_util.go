@@ -178,6 +178,7 @@ func runBlockTest(test *BlockTest) error {
 		TestGenesisBlock: test.Genesis,
 		Etherbase:        common.Address{},
 		AccountManager:   am,
+		PowShared:        true,
 	}
 	ethereum, err := eth.New(&node.ServiceContext{EventMux: new(event.TypeMux)}, cfg)
 	if err != nil {
