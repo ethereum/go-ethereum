@@ -48,22 +48,6 @@ func FromHex(s string) []byte {
 	return nil
 }
 
-type Bytes []byte
-
-func (self Bytes) String() string {
-	return string(self)
-}
-
-func DeleteFromByteSlice(s [][]byte, hash []byte) [][]byte {
-	for i, h := range s {
-		if bytes.Compare(h, hash) == 0 {
-			return append(s[:i:i], s[i+1:]...)
-		}
-	}
-
-	return s
-}
-
 // Number to bytes
 //
 // Returns the number in bytes with the specified base
@@ -154,7 +138,6 @@ func Hex2Bytes(str string) []byte {
 }
 
 func Hex2BytesFixed(str string, flen int) []byte {
-
 	h, _ := hex.DecodeString(str)
 	if len(h) == flen {
 		return h
@@ -167,7 +150,6 @@ func Hex2BytesFixed(str string, flen int) []byte {
 			return hh
 		}
 	}
-
 }
 
 func StringToByteFunc(str string, cb func(str string) []byte) (ret []byte) {

@@ -40,7 +40,7 @@ var (
 	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 
 	// This is the known hash of an empty state trie entry.
-	emptyState = crypto.Sha3Hash(nil)
+	emptyState = crypto.Keccak256Hash(nil)
 )
 
 // ClearGlobalCache clears the global trie cache

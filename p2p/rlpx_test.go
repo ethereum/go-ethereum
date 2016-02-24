@@ -267,8 +267,8 @@ func TestRLPXFrameFake(t *testing.T) {
 	buf := new(bytes.Buffer)
 	hash := fakeHash([]byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1})
 	rw := newRLPXFrameRW(buf, secrets{
-		AES:        crypto.Sha3(),
-		MAC:        crypto.Sha3(),
+		AES:        crypto.Keccak256(),
+		MAC:        crypto.Keccak256(),
 		IngressMAC: hash,
 		EgressMAC:  hash,
 	})

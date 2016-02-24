@@ -316,7 +316,7 @@ func opMulmod(instr instruction, pc *uint64, env Environment, contract *Contract
 
 func opSha3(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
 	offset, size := stack.pop(), stack.pop()
-	hash := crypto.Sha3(memory.Get(offset.Int64(), size.Int64()))
+	hash := crypto.Keccak256(memory.Get(offset.Int64(), size.Int64()))
 
 	stack.push(common.BytesToBig(hash))
 }

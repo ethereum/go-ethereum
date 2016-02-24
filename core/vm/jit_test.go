@@ -189,7 +189,7 @@ func (self *Env) Db() Database             { return nil }
 func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
 func (self *Env) VmType() Type             { return StdVmTy }
 func (self *Env) GetHash(n uint64) common.Hash {
-	return common.BytesToHash(crypto.Sha3([]byte(big.NewInt(int64(n)).String())))
+	return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
 }
 func (self *Env) AddLog(log *Log) {
 }

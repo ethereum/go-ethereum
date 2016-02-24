@@ -72,5 +72,5 @@ func (m Method) String() string {
 }
 
 func (m Method) Id() []byte {
-	return crypto.Sha3([]byte(m.Sig()))[:4]
+	return crypto.Keccak256([]byte(m.Sig()))[:4]
 }

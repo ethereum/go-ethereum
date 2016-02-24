@@ -200,7 +200,7 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 	self.data.timestamp = self.env.Time()
 	self.data.code = getDataPtr(code)
 	self.data.codeSize = uint64(len(code))
-	self.data.codeHash = hash2llvm(crypto.Sha3(code)) // TODO: Get already computed hash?
+	self.data.codeHash = hash2llvm(crypto.Keccak256(code)) // TODO: Get already computed hash?
 
 	jit := C.evmjit_create()
 	retCode := C.evmjit_run(jit, unsafe.Pointer(&self.data), unsafe.Pointer(self))
@@ -242,7 +242,7 @@ func (self *JitVm) Env() Environment {
 //export env_sha3
 func env_sha3(dataPtr *byte, length uint64, resultPtr unsafe.Pointer) {
 	data := llvm2bytesRef(dataPtr, length)
-	hash := crypto.Sha3(data)
+	hash := crypto.Keccak256(data)
 	result := (*i256)(resultPtr)
 	*result = hash2llvm(hash)
 }

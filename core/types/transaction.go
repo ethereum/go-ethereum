@@ -202,7 +202,7 @@ func doFrom(tx *Transaction, homestead bool) (common.Address, error) {
 		return common.Address{}, err
 	}
 	var addr common.Address
-	copy(addr[:], crypto.Sha3(pubkey[1:])[12:])
+	copy(addr[:], crypto.Keccak256(pubkey[1:])[12:])
 	tx.from.Store(addr)
 	return addr, nil
 }

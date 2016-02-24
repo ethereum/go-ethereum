@@ -31,7 +31,7 @@ type Topic [4]byte
 // Note, empty topics are considered the wildcard, and cannot be used in messages.
 func NewTopic(data []byte) Topic {
 	prefix := [4]byte{}
-	copy(prefix[:], crypto.Sha3(data)[:4])
+	copy(prefix[:], crypto.Keccak256(data)[:4])
 	return Topic(prefix)
 }
 

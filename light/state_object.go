@@ -29,7 +29,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-var emptyCodeHash = crypto.Sha3(nil)
+var emptyCodeHash = crypto.Keccak256(nil)
 
 // Code represents a contract code in binary form
 type Code []byte
@@ -220,7 +220,7 @@ func (self *StateObject) Code() []byte {
 // SetCode sets the contract code
 func (self *StateObject) SetCode(code []byte) {
 	self.code = code
-	self.codeHash = crypto.Sha3(code)
+	self.codeHash = crypto.Keccak256(code)
 	self.dirty = true
 }
 

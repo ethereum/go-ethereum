@@ -396,7 +396,7 @@ multiply7 = Multiply7.at(contractaddress);
 	if sol != nil && solcVersion != sol.Version() {
 		modContractInfo := versionRE.ReplaceAll(contractInfo, []byte(`"compilerVersion":"`+sol.Version()+`"`))
 		fmt.Printf("modified contractinfo:\n%s\n", modContractInfo)
-		contentHash = `"` + common.ToHex(crypto.Sha3([]byte(modContractInfo))) + `"`
+		contentHash = `"` + common.ToHex(crypto.Keccak256([]byte(modContractInfo))) + `"`
 	}
 	if checkEvalJSON(t, repl, `filename = "/tmp/info.json"`, `"/tmp/info.json"`) != nil {
 		return

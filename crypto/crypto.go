@@ -43,7 +43,7 @@ import (
 	"golang.org/x/crypto/ripemd160"
 )
 
-func Sha3(data ...[]byte) []byte {
+func Keccak256(data ...[]byte) []byte {
 	d := sha3.NewKeccak256()
 	for _, b := range data {
 		d.Write(b)
@@ -51,7 +51,7 @@ func Sha3(data ...[]byte) []byte {
 	return d.Sum(nil)
 }
 
-func Sha3Hash(data ...[]byte) (h common.Hash) {
+func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	d := sha3.NewKeccak256()
 	for _, b := range data {
 		d.Write(b)
@@ -60,11 +60,14 @@ func Sha3Hash(data ...[]byte) (h common.Hash) {
 	return h
 }
 
+// Deprecated: For backward compatibility as other packages depend on these
+func Sha3(data ...[]byte) []byte          { return Keccak256(data...) }
+func Sha3Hash(data ...[]byte) common.Hash { return Keccak256Hash(data...) }
+
 // Creates an ethereum address given the bytes and the nonce
 func CreateAddress(b common.Address, nonce uint64) common.Address {
 	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
-	return common.BytesToAddress(Sha3(data)[12:])
-	//return Sha3(common.NewValue([]interface{}{b, nonce}).Encode())[12:]
+	return common.BytesToAddress(Keccak256(data)[12:])
 }
 
 func Sha256(data []byte) []byte {
@@ -265,7 +268,7 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	if err != nil {
 		return nil, err
 	}
-	ethPriv := Sha3(plainText)
+	ethPriv := Keccak256(plainText)
 	ecKey := ToECDSA(ethPriv)
 	key = &Key{
 		Id:         nil,
@@ -330,7 +333,7 @@ func PKCS7Unpad(in []byte) []byte {
 
 func PubkeyToAddress(p ecdsa.PublicKey) common.Address {
 	pubBytes := FromECDSAPub(&p)
-	return common.BytesToAddress(Sha3(pubBytes[1:])[12:])
+	return common.BytesToAddress(Keccak256(pubBytes[1:])[12:])
 }
 
 func zeroBytes(bytes []byte) {

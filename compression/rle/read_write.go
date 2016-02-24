@@ -31,8 +31,8 @@ const (
 	tokenToken             = 0xff
 )
 
-var empty = crypto.Sha3([]byte(""))
-var emptyList = crypto.Sha3([]byte{0x80})
+var empty = crypto.Keccak256([]byte(""))
+var emptyList = crypto.Keccak256([]byte{0x80})
 
 func Decompress(dat []byte) ([]byte, error) {
 	buf := new(bytes.Buffer)

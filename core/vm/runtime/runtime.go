@@ -67,7 +67,7 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.GetHashFn == nil {
 		cfg.GetHashFn = func(n uint64) common.Hash {
-			return common.BytesToHash(crypto.Sha3([]byte(new(big.Int).SetUint64(n).String())))
+			return common.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 		}
 	}
 }

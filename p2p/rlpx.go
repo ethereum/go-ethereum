@@ -232,12 +232,12 @@ func (h *encHandshake) secrets(auth, authResp []byte) (secrets, error) {
 	}
 
 	// derive base secrets from ephemeral key agreement
-	sharedSecret := crypto.Sha3(ecdheSecret, crypto.Sha3(h.respNonce, h.initNonce))
-	aesSecret := crypto.Sha3(ecdheSecret, sharedSecret)
+	sharedSecret := crypto.Keccak256(ecdheSecret, crypto.Keccak256(h.respNonce, h.initNonce))
+	aesSecret := crypto.Keccak256(ecdheSecret, sharedSecret)
 	s := secrets{
 		RemoteID: h.remoteID,
 		AES:      aesSecret,
-		MAC:      crypto.Sha3(ecdheSecret, aesSecret),
+		MAC:      crypto.Keccak256(ecdheSecret, aesSecret),
 	}
 
 	// setup sha3 instances for the MACs
@@ -426,7 +426,7 @@ func (h *encHandshake) makeAuthResp() (msg *authRespV4, err error) {
 func (msg *authMsgV4) sealPlain(h *encHandshake) ([]byte, error) {
 	buf := make([]byte, authMsgLen)
 	n := copy(buf, msg.Signature[:])
-	n += copy(buf[n:], crypto.Sha3(exportPubkey(&h.randomPrivKey.PublicKey)))
+	n += copy(buf[n:], crypto.Keccak256(exportPubkey(&h.randomPrivKey.PublicKey)))
 	n += copy(buf[n:], msg.InitiatorPubkey[:])
 	n += copy(buf[n:], msg.Nonce[:])
 	buf[n] = 0 // token-flag

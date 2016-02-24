@@ -86,7 +86,7 @@ func (api *PrivateRegistarAPI) Register(sender common.Address, addr common.Addre
 	}
 
 	codeb := state.GetCode(addr)
-	codeHash := common.BytesToHash(crypto.Sha3(codeb))
+	codeHash := common.BytesToHash(crypto.Keccak256(codeb))
 	contentHash := common.HexToHash(contentHashHex)
 
 	_, err = registrar.New(api.be).SetHashToHash(sender, codeHash, contentHash)

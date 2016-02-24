@@ -530,12 +530,12 @@ func (*preminedTestnet) ping(toid NodeID, toaddr *net.UDPAddr) error { return ni
 // various distances to the given target.
 func (n *preminedTestnet) mine(target NodeID) {
 	n.target = target
-	n.targetSha = crypto.Sha3Hash(n.target[:])
+	n.targetSha = crypto.Keccak256Hash(n.target[:])
 	found := 0
 	for found < bucketSize*10 {
 		k := newkey()
 		id := PubkeyID(&k.PublicKey)
-		sha := crypto.Sha3Hash(id[:])
+		sha := crypto.Keccak256Hash(id[:])
 		ld := logdist(n.targetSha, sha)
 		if len(n.dists[ld]) < bucketSize {
 			n.dists[ld] = append(n.dists[ld], id)

@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-var emptyCodeHash = crypto.Sha3(nil)
+var emptyCodeHash = crypto.Keccak256(nil)
 
 type Code []byte
 
@@ -225,7 +225,7 @@ func (self *StateObject) Code() []byte {
 
 func (self *StateObject) SetCode(code []byte) {
 	self.code = code
-	self.codeHash = crypto.Sha3(code)
+	self.codeHash = crypto.Keccak256(code)
 	self.dirty = true
 }
 

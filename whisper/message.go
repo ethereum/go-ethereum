@@ -146,7 +146,7 @@ func (self *Message) decrypt(key *ecdsa.PrivateKey) error {
 
 // hash calculates the SHA3 checksum of the message flags and payload.
 func (self *Message) hash() []byte {
-	return crypto.Sha3(append([]byte{self.Flags}, self.Payload...))
+	return crypto.Keccak256(append([]byte{self.Flags}, self.Payload...))
 }
 
 // bytes flattens the message contents (flags, signature and payload) into a

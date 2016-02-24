@@ -53,7 +53,7 @@ func (req *TrieRequest) StoreResult(db ethdb.Database) {
 // storeProof stores the new trie nodes obtained from a merkle proof in the database
 func storeProof(db ethdb.Database, proof []rlp.RawValue) {
 	for _, buf := range proof {
-		hash := crypto.Sha3(buf)
+		hash := crypto.Keccak256(buf)
 		val, _ := db.Get(hash)
 		if val == nil {
 			db.Put(hash, buf)
@@ -78,7 +78,7 @@ func (req *NodeDataRequest) StoreResult(db ethdb.Database) {
 	db.Put(req.hash[:], req.GetData())
 }
 
-var sha3_nil = crypto.Sha3Hash(nil)
+var sha3_nil = crypto.Keccak256Hash(nil)
 
 // retrieveNodeData tries to retrieve node data with the given hash from the network
 func retrieveNodeData(ctx context.Context, odr OdrBackend, hash common.Hash) ([]byte, error) {

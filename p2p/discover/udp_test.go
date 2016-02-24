@@ -286,7 +286,7 @@ func TestUDP_findnode(t *testing.T) {
 	// put a few nodes into the table. their exact
 	// distribution shouldn't matter much, altough we need to
 	// take care not to overflow any bucket.
-	targetHash := crypto.Sha3Hash(testTarget[:])
+	targetHash := crypto.Keccak256Hash(testTarget[:])
 	nodes := &nodesByDistance{target: targetHash}
 	for i := 0; i < bucketSize; i++ {
 		nodes.push(nodeAtDistance(test.table.self.sha, i+2), bucketSize)

@@ -96,7 +96,7 @@ type Program struct {
 // NewProgram returns a new JIT program
 func NewProgram(code []byte) *Program {
 	program := &Program{
-		Id:           crypto.Sha3Hash(code),
+		Id:           crypto.Keccak256Hash(code),
 		mapping:      make(map[uint64]uint64),
 		destinations: make(map[uint64]struct{}),
 		code:         code,
